@@ -1,0 +1,57 @@
+bases:
+  # - github.com/virtengine/virtengine/_docs/kustomize/virtengined?ref=boz/kustomize
+  - ../../../../_docs/kustomize/virtengine-node
+
+namespace: virtengine-services
+
+configMapGenerator:
+
+  ##
+  # cosmos-sdk app config (app.toml) overrides
+  ##
+  - name: virtengine-app-config
+    behavior: merge
+    literals:
+      # - pruning=syncable
+
+  ##
+  # tendermint node config (config.toml) overrides
+  ##
+  - name: virtengine-config
+    behavior: merge
+    literals:
+      # - moniker=node0
+
+  - name: virtengine-data
+    behavior: merge
+    files:
+      - cache/config/genesis.json
+
+secretGenerator:
+  - name: virtengine-keys
+    behavior: replace
+    files:
+      - cache/config/node_key.json
+      - cache/config/priv_validator_key.json
+      - cache/data/priv_validator_state.json
+
+patchesJson6902:
+
+  ##
+  #  Configure gateway host in `gateway-host.yaml`.  This
+  #  will be the hostname for rpc over port 80.
+  ##
+
+  - path: gateway-host.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: virtengine-node
+  - path: docker-image.yaml
+    target:
+      kind: Deployment
+      group: apps
+      name: virtengine-node
+      version: v1
+

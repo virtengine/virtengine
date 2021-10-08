@@ -1,0 +1,10 @@
+host: https://localhost:8443
+attributes:
+  - key: region
+    value: us-west
+  - key: host
+    value: DET-IO Pty. Ltd.
+  - key: email
+    value: jonathan@det.io
+  - key: website
+    value: https://virtengine.com
