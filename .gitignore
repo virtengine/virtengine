@@ -1,0 +1,27 @@
+# etc
+*.DS_Store
+
+#vendor
+/vendor
+
+# dev artifacts
+/devdata
+
+# chain data
+*.tsd
+
+# test artifacts
+debug.test
+
+dist
+
+#IDE
+.idea/
+*.iml
+coverage.txt
+
+/.cache
+/.release-env
+/.docker-creds
+
+/tmp-swagger-gen

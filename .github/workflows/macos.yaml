@@ -1,0 +1,26 @@
+name: macos
+
+on:
+  push:
+    branches:
+      - master
+      - mainnet/main
+
+env:
+  MAINNET: ${{ github.ref == 'refs/heads/mainnet/main'}}
+
+jobs:
+  build-bins:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - shell: bash
+        run: |
+          while IFS='' read -r LINE || [ -n "${LINE}" ]; do
+            echo "$LINE" >> $GITHUB_ENV;
+          done < .makerc
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "${{ env.GOLANG_VERSION }}"
+      - run: make bins
+      - run: make test

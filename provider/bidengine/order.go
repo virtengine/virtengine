@@ -8,6 +8,9 @@ import (
 
 	lifecycle "github.com/boz/go-lifecycle"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/tendermint/tendermint/libs/log"
 	"github.com/virtengine/virtengine/provider/cluster"
 	ctypes "github.com/virtengine/virtengine/provider/cluster/types"
 	"github.com/virtengine/virtengine/provider/event"
@@ -18,9 +21,6 @@ import (
 	atypes "github.com/virtengine/virtengine/x/audit/types"
 	dtypes "github.com/virtengine/virtengine/x/deployment/types"
 	mtypes "github.com/virtengine/virtengine/x/market/types"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/tendermint/tendermint/libs/log"
 )
 
 // order manages bidding and general lifecycle handling of an order.
@@ -411,7 +411,13 @@ func (o *order) shouldBid(group *dtypes.Group) (bool, error) {
 
 	// does provider have required attributes?
 	if !group.GroupSpec.MatchAttributes(o.session.Provider().Attributes) {
-		o.log.Debug("unable to fulfill: incompatible attributes")
+		o.log.Debug("unable to fulfill: incompatible provider attributes")
+		return false, nil
+	}
+
+	// does order have required attributes?
+	if !o.cfg.Attributes.SubsetOf(group.GroupSpec.Requirements.Attributes) {
+		o.log.Debug("unable to fulfill: incompatible order attributes")
 		return false, nil
 	}
 

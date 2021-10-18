@@ -1,0 +1,74 @@
+name: simulation tests
+on:
+  push:
+    branches:
+      - master
+      - mainnet/main
+  pull_request:
+    branches:
+      - master
+      - mainnet/main
+
+env:
+  MAINNET: ${{ github.ref == 'refs/heads/mainnet/main' || github.base_ref == 'refs/heads/mainnet/main' }}
+
+jobs:
+  cleanup-runs:
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/master' && github.ref != 'refs/heads/mainnet/main'
+    steps:
+      - uses: rokroskar/workflow-run-cleanup-action@master
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+  test-sim-nondeterminism:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: c-py/action-dotenv-to-setenv@v3
+        with:
+          env-file: .makerc
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "${{ env.GOLANG_VERSION }}"
+      - name: test-sim-nondeterminism
+        run: make test-sim-nondeterminism
+
+  test-sim-import-export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: c-py/action-dotenv-to-setenv@v3
+        with:
+          env-file: .makerc
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "${{ env.GOLANG_VERSION }}"
+      - name: test-sim-import-export
+        run: make test-sim-import-export
+
+  test-sim-after-import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: c-py/action-dotenv-to-setenv@v3
+        with:
+          env-file: .makerc
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "${{ env.GOLANG_VERSION }}"
+      - name: test-sim-after-import
+        run: make test-sim-after-import
+
+  test-sim-fullapp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: c-py/action-dotenv-to-setenv@v3
+        with:
+          env-file: .makerc
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "${{ env.GOLANG_VERSION }}"
+      - name: test-sim-fullapp
+        run: make test-sim-fullapp

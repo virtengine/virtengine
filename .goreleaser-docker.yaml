@@ -1,0 +1,33 @@
+env:
+  - GO111MODULE=on
+  - CGO_ENABLED=1
+builds:
+  - id: virtengine-linux-amd64
+    binary: virtengine
+    main: ./cmd/virtengine
+    goarch:
+      - amd64
+    goos:
+      - linux
+    env:
+      - CC=gcc
+      - CXX=g++
+    flags:
+      - -trimpath
+      - -mod=readonly
+      - -a
+      - "{{ .Env.BUILD_FLAGS }}"
+    ldflags:
+      - "{{ .Env.LD_FLAGS }}"
+      - -extldflags "-lc -lrt -lpthread --static"
+dockers:
+  - ids:
+      - virtengine-linux-amd64
+    dockerfile: _build/Dockerfile.virtengine
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - 'ghcr.io/virtengine/virtengine:latest'
+
+archives:
+  - format: binary
