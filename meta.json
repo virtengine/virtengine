@@ -1,0 +1,54 @@
+{
+    "upgrades": {
+        "v0.24.0": {
+            "skipped": false,
+            "from_binary": "v0.22.8",
+            "from_version": "v0.22.0"
+        },
+        "v0.26.0": {
+            "skipped": false,
+            "from_binary": "v0.24.2",
+            "from_version": "v0.24.0"
+        },
+        "v0.28.0": {
+            "skipped": false,
+            "from_binary": "v0.26.2",
+            "from_version": "v0.26.0"
+        },
+        "v0.30.0": {
+            "skipped": false,
+            "from_binary": "v0.28.2",
+            "from_version": "v0.28.0"
+        },
+        "v0.32.0": {
+            "skipped": false,
+            "from_binary": "v0.30.3",
+            "from_version": "v0.30.0"
+        },
+        "v0.34.0": {
+            "skipped": false,
+            "from_binary": "v0.32.3",
+            "from_version": "v0.32.0"
+        },
+        "v0.36.0": {
+            "skipped": false,
+            "from_binary": "v0.34.1",
+            "from_version": "v0.34.0"
+        },
+        "v0.38.0": {
+            "skipped": false,
+            "from_binary": "v0.36.3-rc9",
+            "from_version": "v0.36.0"
+        },
+        "v1.0.0": {
+            "skipped": false,
+            "from_binary": "v0.38.6-rc2",
+            "from_version": "v0.38.0"
+        },
+        "v1.1.0": {
+            "skipped": false,
+            "from_binary": "v1.0.4",
+            "from_version": "v1.0.0"
+        }
+    }
+}

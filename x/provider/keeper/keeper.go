@@ -1,14 +1,17 @@
 package keeper
 
 import (
+	"cosmossdk.io/store/prefix"
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/virtengine/virtengine/x/provider/types"
+	types "pkg.akt.dev/go/node/provider/v1beta4"
 )
 
 type IKeeper interface {
-	Codec() codec.BinaryMarshaler
+	Codec() codec.BinaryCodec
+	StoreKey() storetypes.StoreKey
 	Get(ctx sdk.Context, id sdk.Address) (types.Provider, bool)
 	Create(ctx sdk.Context, provider types.Provider) error
 	WithProviders(ctx sdk.Context, fn func(types.Provider) bool)
@@ -19,12 +22,12 @@ type IKeeper interface {
 
 // Keeper of the provider store
 type Keeper struct {
-	skey sdk.StoreKey
-	cdc  codec.BinaryMarshaler
+	skey storetypes.StoreKey
+	cdc  codec.BinaryCodec
 }
 
 // NewKeeper creates and returns an instance for Provider keeper
-func NewKeeper(cdc codec.BinaryMarshaler, skey sdk.StoreKey) IKeeper {
+func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey) IKeeper {
 	return Keeper{
 		skey: skey,
 		cdc:  cdc,
@@ -36,14 +39,19 @@ func (k Keeper) NewQuerier() Querier {
 }
 
 // Codec returns keeper codec
-func (k Keeper) Codec() codec.BinaryMarshaler {
+func (k Keeper) Codec() codec.BinaryCodec {
 	return k.cdc
+}
+
+// StoreKey returns store key
+func (k Keeper) StoreKey() storetypes.StoreKey {
+	return k.skey
 }
 
 // Get returns a provider with given provider id
 func (k Keeper) Get(ctx sdk.Context, id sdk.Address) (types.Provider, bool) {
 	store := ctx.KVStore(k.skey)
-	key := providerKey(id)
+	key := ProviderKey(id)
 
 	if !store.Has(key) {
 		return types.Provider{}, false
@@ -51,7 +59,7 @@ func (k Keeper) Get(ctx sdk.Context, id sdk.Address) (types.Provider, bool) {
 
 	buf := store.Get(key)
 	var val types.Provider
-	k.cdc.MustUnmarshalBinaryBare(buf, &val)
+	k.cdc.MustUnmarshal(buf, &val)
 	return val, true
 }
 
@@ -63,29 +71,38 @@ func (k Keeper) Create(ctx sdk.Context, provider types.Provider) error {
 		return err
 	}
 
-	key := providerKey(owner)
+	key := ProviderKey(owner)
 
 	if store.Has(key) {
 		return types.ErrProviderExists
 	}
 
-	store.Set(key, k.cdc.MustMarshalBinaryBare(&provider))
+	store.Set(key, k.cdc.MustMarshal(&provider))
 
-	ctx.EventManager().EmitEvent(
-		types.EventProviderCreated{Owner: owner}.ToSDKEvent(),
+	err = ctx.EventManager().EmitTypedEvent(
+		&types.EventProviderCreated{
+			Owner: owner.String(),
+		},
 	)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // WithProviders iterates all providers
 func (k Keeper) WithProviders(ctx sdk.Context, fn func(types.Provider) bool) {
-	store := ctx.KVStore(k.skey)
+	store := prefix.NewStore(ctx.KVStore(k.skey), types.ProviderPrefix())
+
 	iter := store.Iterator(nil, nil)
-	defer iter.Close()
+	defer func() {
+		_ = iter.Close()
+	}()
 	for ; iter.Valid(); iter.Next() {
 		var val types.Provider
-		k.cdc.MustUnmarshalBinaryBare(iter.Value(), &val)
+		k.cdc.MustUnmarshal(iter.Value(), &val)
 		if stop := fn(val); stop {
 			break
 		}
@@ -100,21 +117,27 @@ func (k Keeper) Update(ctx sdk.Context, provider types.Provider) error {
 		return err
 	}
 
-	key := providerKey(owner)
+	key := ProviderKey(owner)
 
 	if !store.Has(key) {
 		return types.ErrProviderNotFound
 	}
-	store.Set(key, k.cdc.MustMarshalBinaryBare(&provider))
+	store.Set(key, k.cdc.MustMarshal(&provider))
 
-	ctx.EventManager().EmitEvent(
-		types.EventProviderUpdated{Owner: owner}.ToSDKEvent(),
+	err = ctx.EventManager().EmitTypedEvent(
+		&types.EventProviderUpdated{
+			Owner: owner.String(),
+		},
 	)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // Delete delete a provider
-func (k Keeper) Delete(ctx sdk.Context, id sdk.Address) {
+func (k Keeper) Delete(_ sdk.Context, _ sdk.Address) {
 	panic("TODO")
 }

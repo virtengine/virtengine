@@ -1,4 +1,4 @@
-host: https://virtengine.network
+host: https://virtengine.com
 attributes:
   - key: region
     value: sfo

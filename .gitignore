@@ -19,9 +19,18 @@ dist
 .idea/
 *.iml
 coverage.txt
+.vscode
 
 /.cache
 /.release-env
 /.docker-creds
 
 /tmp-swagger-gen
+
+# go workspaces
+/go.work
+/go.work.sum
+
+/.editorconfig
+
+dev.env

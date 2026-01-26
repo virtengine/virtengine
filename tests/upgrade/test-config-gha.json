@@ -1,0 +1,10 @@
+{
+    "chain-id": "localvirtengine",
+    "validators": [
+        ".virtengine0"
+    ],
+    "work": {
+        "home": ".virtengine0",
+        "key": "validator0"
+    }
+}

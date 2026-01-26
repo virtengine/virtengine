@@ -4,78 +4,89 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/spf13/cobra"
+
+	"cosmossdk.io/core/appmodule"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
-	"github.com/gorilla/mux"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 
-	"github.com/virtengine/virtengine/x/deployment/client/cli"
-	"github.com/virtengine/virtengine/x/deployment/client/rest"
-	"github.com/virtengine/virtengine/x/deployment/handler"
-	"github.com/virtengine/virtengine/x/deployment/keeper"
-	"github.com/virtengine/virtengine/x/deployment/simulation"
-	"github.com/virtengine/virtengine/x/deployment/types"
+	v1 "pkg.akt.dev/go/node/deployment/v1"
+	types "pkg.akt.dev/go/node/deployment/v1beta4"
+	"pkg.akt.dev/go/node/migrate"
 
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sim "github.com/cosmos/cosmos-sdk/types/simulation"
-	abci "github.com/tendermint/tendermint/abci/types"
+	"pkg.akt.dev/node/x/deployment/handler"
+	"pkg.akt.dev/node/x/deployment/keeper"
+	"pkg.akt.dev/node/x/deployment/simulation"
 )
 
 // type check to ensure the interface is properly implemented
 var (
-	_ module.AppModule           = AppModule{}
-	_ module.AppModuleBasic      = AppModuleBasic{}
-	_ module.AppModuleSimulation = AppModuleSimulation{}
+	_ module.AppModuleBasic   = AppModuleBasic{}
+	_ module.HasGenesisBasics = AppModuleBasic{}
+
+	_ appmodule.AppModule        = AppModule{}
+	_ module.HasConsensusVersion = AppModule{}
+	_ module.HasGenesis          = AppModule{}
+	_ module.HasServices         = AppModule{}
+
+	_ module.AppModuleSimulation = AppModule{}
 )
 
 // AppModuleBasic defines the basic application module used by the deployment module.
 type AppModuleBasic struct {
-	cdc codec.Marshaler
+	cdc codec.Codec
+}
+
+// AppModule implements an application module for the deployment module.
+type AppModule struct {
+	AppModuleBasic
+	keeper      keeper.IKeeper
+	mkeeper     handler.MarketKeeper
+	ekeeper     handler.EscrowKeeper
+	coinKeeper  bankkeeper.Keeper
+	authzKeeper handler.AuthzKeeper
+	acckeeper   govtypes.AccountKeeper
 }
 
 // Name returns deployment module's name
 func (AppModuleBasic) Name() string {
-	return types.ModuleName
+	return v1.ModuleName
 }
 
 // RegisterLegacyAminoCodec registers the deployment module's types for the given codec.
 func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	types.RegisterLegacyAminoCodec(cdc)
+	types.RegisterLegacyAminoCodec(cdc) // nolint staticcheck
 }
 
 // RegisterInterfaces registers the module's interface types
 func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	types.RegisterInterfaces(registry)
+
+	migrate.RegisterDeploymentInterfaces(registry)
 }
 
 // DefaultGenesis returns default genesis state as raw bytes for the deployment
 // module.
-func (AppModuleBasic) DefaultGenesis(cdc codec.JSONMarshaler) json.RawMessage {
+func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
 	return cdc.MustMarshalJSON(DefaultGenesisState())
 }
 
-// ValidateGenesis does validation check of the Genesis and returns error incase of failure
-func (AppModuleBasic) ValidateGenesis(cdc codec.JSONMarshaler, config client.TxEncodingConfig, bz json.RawMessage) error {
+// ValidateGenesis does validation check of the Genesis and returns error in case of failure
+func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingConfig, bz json.RawMessage) error {
 	var data types.GenesisState
 	err := cdc.UnmarshalJSON(bz, &data)
 	if err != nil {
-		return errors.Errorf("failed to unmarshal %s genesis state: %v", types.ModuleName, err)
+		return fmt.Errorf("failed to unmarshal %s genesis state: %v", v1.ModuleName, err)
 	}
 	return ValidateGenesis(&data)
-}
-
-// RegisterRESTRoutes registers rest routes for this module
-func (AppModuleBasic) RegisterRESTRoutes(clientCtx client.Context, rtr *mux.Router) {
-	rest.RegisterRoutes(clientCtx, rtr, StoreKey)
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the deployment module.
@@ -88,133 +99,103 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetQueryCmd get the root query command of this module
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return cli.GetQueryCmd()
+	panic("virtengine modules do not export cli commands via cosmos interface")
 }
 
 // GetTxCmd get the root tx command of this module
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	return cli.GetTxCmd(StoreKey)
-}
-
-// GetQueryClient returns a new query client for this module
-func (AppModuleBasic) GetQueryClient(clientCtx client.Context) types.QueryClient {
-	return types.NewQueryClient(clientCtx)
-}
-
-// AppModule implements an application module for the deployment module.
-type AppModule struct {
-	AppModuleBasic
-	keeper     keeper.IKeeper
-	mkeeper    handler.MarketKeeper
-	ekeeper    handler.EscrowKeeper
-	coinKeeper bankkeeper.Keeper
+	panic("virtengine modules do not export cli commands via cosmos interface")
 }
 
 // NewAppModule creates a new AppModule Object
-func NewAppModule(cdc codec.Marshaler, k keeper.IKeeper, mkeeper handler.MarketKeeper, ekeeper handler.EscrowKeeper, bankKeeper bankkeeper.Keeper) AppModule {
+func NewAppModule(
+	cdc codec.Codec,
+	k keeper.IKeeper,
+	mkeeper handler.MarketKeeper,
+	ekeeper handler.EscrowKeeper,
+	acckeeper govtypes.AccountKeeper,
+	bankKeeper bankkeeper.Keeper,
+	authzKeeper handler.AuthzKeeper,
+) AppModule {
 	return AppModule{
 		AppModuleBasic: AppModuleBasic{cdc: cdc},
 		keeper:         k,
 		mkeeper:        mkeeper,
 		ekeeper:        ekeeper,
+		acckeeper:      acckeeper,
 		coinKeeper:     bankKeeper,
+		authzKeeper:    authzKeeper,
 	}
 }
 
 // Name returns the deployment module name
 func (AppModule) Name() string {
-	return types.ModuleName
+	return v1.ModuleName
 }
 
-// RegisterInvariants registers module invariants
-func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {}
+// IsOnePerModuleType implements the depinject.OnePerModuleType interface.
+func (am AppModule) IsOnePerModuleType() {}
 
-// Route returns the message routing key for the deployment module
-func (am AppModule) Route() sdk.Route {
-	return sdk.NewRoute(types.RouterKey, handler.NewHandler(am.keeper, am.mkeeper, am.ekeeper))
-}
-
-// QuerierRoute returns the deployment module's querier route name.
-func (am AppModule) QuerierRoute() string {
-	return ""
-}
-
-// LegacyQuerierHandler returns the sdk.Querier for deployment module
-func (am AppModule) LegacyQuerierHandler(_ *codec.LegacyAmino) sdk.Querier {
-	return nil
-}
+// IsAppModule implements the appmodule.AppModule interface.
+func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), handler.NewServer(am.keeper, am.mkeeper, am.ekeeper))
+
 	querier := am.keeper.NewQuerier()
+
 	types.RegisterQueryServer(cfg.QueryServer(), querier)
 }
 
 // BeginBlock performs no-op
-func (am AppModule) BeginBlock(_ sdk.Context, _ abci.RequestBeginBlock) {}
+func (am AppModule) BeginBlock(_ context.Context) error {
+	return nil
+}
 
 // EndBlock returns the end blocker for the deployment module. It returns no validator
 // updates.
-func (am AppModule) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
-	return []abci.ValidatorUpdate{}
+func (am AppModule) EndBlock(_ context.Context) error {
+	return nil
 }
 
 // InitGenesis performs genesis initialization for the deployment module. It returns
 // no validator updates.
-func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONMarshaler, data json.RawMessage) []abci.ValidatorUpdate {
+func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	var genesisState types.GenesisState
 	cdc.MustUnmarshalJSON(data, &genesisState)
-	return InitGenesis(ctx, am.keeper, &genesisState)
+
+	InitGenesis(ctx, am.keeper, &genesisState)
 }
 
 // ExportGenesis returns the exported genesis state as raw bytes for the deployment
 // module.
-func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONMarshaler) json.RawMessage {
+func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := ExportGenesis(ctx, am.keeper)
 	return cdc.MustMarshalJSON(gs)
 }
 
-// AppModuleSimulation implements an application simulation module for the deployment module.
-type AppModuleSimulation struct {
-	keeper  keeper.IKeeper
-	akeeper govtypes.AccountKeeper
-	bkeeper bankkeeper.Keeper
-}
-
-// NewAppModuleSimulation creates a new AppModuleSimulation instance
-func NewAppModuleSimulation(k keeper.IKeeper, akeeper govtypes.AccountKeeper, bankKeeper bankkeeper.Keeper) AppModuleSimulation {
-	return AppModuleSimulation{
-		keeper:  k,
-		akeeper: akeeper,
-		bkeeper: bankKeeper,
-	}
+// ConsensusVersion implements module.AppModule#ConsensusVersion
+func (am AppModule) ConsensusVersion() uint64 {
+	return 5
 }
 
 // AppModuleSimulation functions
 
 // GenerateGenesisState creates a randomized GenState of the staking module.
-func (AppModuleSimulation) GenerateGenesisState(simState *module.SimulationState) {
+func (AppModule) GenerateGenesisState(simState *module.SimulationState) {
 	simulation.RandomizedGenState(simState)
 }
 
-// ProposalContents doesn't return any content functions for governance proposals.
-func (AppModuleSimulation) ProposalContents(_ module.SimulationState) []sim.WeightedProposalContent {
-	return nil
+// ProposalMsgs returns msgs used for governance proposals for simulations.
+func (AppModule) ProposalMsgs(_ module.SimulationState) []simtypes.WeightedProposalMsg {
+	return simulation.ProposalMsgs()
 }
 
-// RandomizedParams creates randomized staking param changes for the simulator.
-func (AppModuleSimulation) RandomizedParams(r *rand.Rand) []sim.ParamChange {
-	return nil
-}
+// RegisterStoreDecoder registers a decoder for take module's types.
+func (am AppModule) RegisterStoreDecoder(_ simtypes.StoreDecoderRegistry) {}
 
-// RegisterStoreDecoder registers a decoder for staking module's types
-func (AppModuleSimulation) RegisterStoreDecoder(sdr sdk.StoreDecoderRegistry) {
-	// sdr[StoreKey] = simulation.DecodeStore
-}
-
-// WeightedOperations returns the all the staking module operations with their respective weights.
-func (am AppModuleSimulation) WeightedOperations(simState module.SimulationState) []sim.WeightedOperation {
-	return simulation.WeightedOperations(simState.AppParams, simState.Cdc,
-		am.akeeper, am.bkeeper, am.keeper)
+// WeightedOperations doesn't return any take module operation.
+func (am AppModule) WeightedOperations(simState module.SimulationState) []simtypes.WeightedOperation {
+	return simulation.WeightedOperations(simState.AppParams, simState.Cdc, am.acckeeper, am.coinKeeper, am.keeper)
 }

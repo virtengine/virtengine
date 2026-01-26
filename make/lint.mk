@@ -1,35 +1,30 @@
-SUBLINTERS = deadcode \
+SUBLINTERS = unused \
 			misspell \
-			goerr113 \
 			gofmt \
 			gocritic \
 			goconst \
 			ineffassign \
 			unparam \
 			staticcheck \
-			golint \
+			revive \
 			gosec \
-			scopelint \
+			exportloopref \
 			prealloc
 # TODO: ^ gochecknoglobals
 
-# Execute the same lint methods as configured in .github/workflows/tests.yaml
-# Clear feedback from each method as it fails.
-.PHONY: test-sublinters
-test-sublinters: $(patsubst %, test-sublinter-%,$(SUBLINTERS))
+.PHONY: lint-go
+lint-go: $(GOLANGCI_LINT)
+	$(GOLANGCI_LINT_RUN) ./... --issues-exit-code=0 --timeout=10m
 
-.PHONY: test-lint-all
-test-lint-all:
-	$(GOLANGCI_LINT) ./... --issues-exit-code=0 --deadline=10m
-
-.PHONY: test-sublinter-misspell
-test-sublinter-misspell:
-	$(LINT) misspell --no-config
-
-.PHONY: test-sublinter-ineffassign
-test-sublinter-ineffassign:
-	$(LINT) ineffassign --no-config
-
-.PHONY: test-sublinter-%
-test-sublinter-%:
+.PHONY: lint-go-%
+lint-go-%: $(GOLANGCI_LINT)
 	$(LINT) $*
+
+.PHONY: lint-shell
+lint-shell:
+	docker run --rm \
+	--volume ${PWD}:/shellcheck \
+	--entrypoint sh \
+	koalaman/shellcheck-alpine:stable \
+	-x /shellcheck/script/shellcheck.sh
+

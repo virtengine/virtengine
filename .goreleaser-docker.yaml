@@ -1,33 +1,84 @@
+---
+version: 2
+dist: ./.cache/goreleaser/docker
 env:
   - GO111MODULE=on
   - CGO_ENABLED=1
+before:
+  hooks:
+    - apt update
+    - apt install -y pkg-config libudev-dev:amd64 libudev-dev:arm64
 builds:
   - id: virtengine-linux-amd64
     binary: virtengine
     main: ./cmd/virtengine
+    env:
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
     goarch:
       - amd64
     goos:
       - linux
-    env:
-      - CC=gcc
-      - CXX=g++
     flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
       - -trimpath
-      - -mod=readonly
-      - -a
-      - "{{ .Env.BUILD_FLAGS }}"
     ldflags:
-      - "{{ .Env.LD_FLAGS }}"
-      - -extldflags "-lc -lrt -lpthread --static"
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+      - -extldflags "-lc -lrt -lpthread"
+  - id: virtengine-linux-arm64
+    binary: virtengine
+    main: ./cmd/virtengine
+    goarch:
+      - arm64
+    goos:
+      - linux
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
+      - -trimpath
+    ldflags:
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+      - -extldflags "-lc -lrt -lpthread"
 dockers:
-  - ids:
-      - virtengine-linux-amd64
-    dockerfile: _build/Dockerfile.virtengine
-    goos: linux
+  - dockerfile: _build/Dockerfile.virtengine
+    use: buildx
     goarch: amd64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url={{.GitURL}}
+      - --label=org.opencontainers.image.source={{.GitURL}}
+      - --label=org.opencontainers.image.version={{ .Version }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
     image_templates:
-      - 'ghcr.io/virtengine/virtengine:latest'
+      - '{{ .Env.DOCKER_IMAGE }}:latest-amd64'
+  - dockerfile: _build/Dockerfile.virtengine
+    use: buildx
+    goarch: arm64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/arm64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url={{.GitURL}}
+      - --label=org.opencontainers.image.source={{.GitURL}}
+      - --label=org.opencontainers.image.version={{ .Version }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:latest-arm64'
 
 archives:
-  - format: binary
+  - formats:
+      - binary

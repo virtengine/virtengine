@@ -1,128 +1,74 @@
 package testutil
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"math/rand"
-	"strings"
-	"testing"
-	"time"
+	"os"
 
-	"github.com/cosmos/cosmos-sdk/baseapp"
-	"github.com/cosmos/cosmos-sdk/crypto/hd"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	"cosmossdk.io/log"
+	pruningtypes "cosmossdk.io/store/pruning/types"
+	dbm "github.com/cosmos/cosmos-db"
+	bam "github.com/cosmos/cosmos-sdk/baseapp"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
-	"github.com/cosmos/cosmos-sdk/testutil/network"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	tmrand "github.com/tendermint/tendermint/libs/rand"
-	dbm "github.com/tendermint/tm-db"
+	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 
-	"github.com/cosmos/cosmos-sdk/simapp"
+	cflags "pkg.akt.dev/go/cli/flags"
+	"pkg.akt.dev/go/sdkutil"
 
-	"github.com/virtengine/virtengine/app"
-	"github.com/virtengine/virtengine/types"
+	"pkg.akt.dev/node/app"
+	"pkg.akt.dev/node/testutil/network"
 )
 
-func RandRangeInt(min, max int) int {
-	return rand.Intn(max-min) + min // nolint: gosec
-}
-
-func RandRangeUint(min, max uint) uint {
-	val := rand.Uint64() // nolint: gosec
-	val %= uint64(max - min)
-	val += uint64(min)
-	return uint(val)
-}
-
-func RandRangeUint64(min, max uint64) uint64 {
-	val := rand.Uint64() // nolint: gosec
-	val %= max - min
-	val += min
-	return val
-}
-
-func ResourceUnits(_ testing.TB) types.ResourceUnits {
-	return types.ResourceUnits{
-		CPU: &types.CPU{
-			Units: types.NewResourceValue(uint64(RandCPUUnits())),
-		},
-		Memory: &types.Memory{
-			Quantity: types.NewResourceValue(RandMemoryQuantity()),
-		},
-		Storage: &types.Storage{
-			Quantity: types.NewResourceValue(RandStorageQuantity()),
-		},
+// NewTestNetworkFixture returns a new simapp AppConstructor for network simulation tests
+func NewTestNetworkFixture(opts ...network.TestnetFixtureOption) network.TestFixture {
+	dir, err := os.MkdirTemp("", "simapp")
+	if err != nil {
+		panic(fmt.Sprintf("failed creating temporary directory: %v", err))
 	}
-}
+	defer func() {
+		_ = os.RemoveAll(dir)
+	}()
 
-func NewApp(val network.Validator) servertypes.Application {
-	return app.NewApp(
-		val.Ctx.Logger, dbm.NewMemDB(), nil, true, 0, make(map[int64]bool), val.Ctx.Config.RootDir,
-		simapp.EmptyAppOptions{},
-		baseapp.SetPruning(storetypes.NewPruningOptionsFromString(val.AppConfig.Pruning)),
-		baseapp.SetMinGasPrices(val.AppConfig.MinGasPrices),
+	cfgOpts := &network.TestnetFixtureOptions{}
+
+	for _, opt := range opts {
+		opt(cfgOpts)
+	}
+
+	if cfgOpts.EncCfg.InterfaceRegistry == nil {
+		cfgOpts.EncCfg = sdkutil.MakeEncodingConfig()
+		app.ModuleBasics().RegisterInterfaces(cfgOpts.EncCfg.InterfaceRegistry)
+	}
+
+	tapp := app.NewApp(
+		log.NewNopLogger(),
+		dbm.NewMemDB(),
+		nil,
+		true,
+		0,
+		make(map[int64]bool),
+		cfgOpts.EncCfg,
+		simtestutil.NewAppOptionsWithFlagHome(dir),
 	)
-}
 
-// DefaultConfig returns a default configuration suitable for nearly all
-// testing requirements.
-func DefaultConfig() network.Config {
-	encCfg := app.MakeEncodingConfig()
-	origGenesisState := app.ModuleBasics().DefaultGenesis(encCfg.Marshaler)
-
-	genesisState := make(map[string]json.RawMessage)
-	for k, v := range origGenesisState {
-		data, err := v.MarshalJSON()
-		if err != nil {
-			panic(err)
-		}
-
-		buf := &bytes.Buffer{}
-		_, err = buf.Write(data)
-		if err != nil {
-			panic(err)
-		}
-
-		stringData := buf.String()
-		stringDataAfter := strings.ReplaceAll(stringData, `"stake"`, `"uve"`)
-		if stringData == stringDataAfter {
-			genesisState[k] = v
-			continue
-		}
-
-		var val map[string]interface{}
-		err = json.Unmarshal(buf.Bytes(), &val)
-		if err != nil {
-			panic(err)
-		}
-
-		replacementV := json.RawMessage(stringDataAfter)
-		genesisState[k] = replacementV
-
+	appCtr := func(val network.ValidatorI) servertypes.Application {
+		return app.NewApp(
+			val.GetCtx().Logger,
+			dbm.NewMemDB(),
+			nil,
+			true,
+			0,
+			make(map[int64]bool),
+			cfgOpts.EncCfg,
+			simtestutil.NewAppOptionsWithFlagHome(val.GetCtx().Config.RootDir),
+			bam.SetPruning(pruningtypes.NewPruningOptionsFromString(val.GetAppConfig().Pruning)),
+			bam.SetMinGasPrices(val.GetAppConfig().MinGasPrices),
+			bam.SetChainID(val.GetCtx().Viper.GetString(cflags.FlagChainID)),
+		)
 	}
 
-	return network.Config{
-		Codec:             encCfg.Marshaler,
-		TxConfig:          encCfg.TxConfig,
-		LegacyAmino:       encCfg.Amino,
-		InterfaceRegistry: encCfg.InterfaceRegistry,
-		AccountRetriever:  authtypes.AccountRetriever{},
-		AppConstructor:    NewApp,
-		GenesisState:      genesisState,
-		TimeoutCommit:     2 * time.Second,
-		ChainID:           "chain-" + tmrand.NewRand().Str(6),
-		NumValidators:     4,
-		BondDenom:         CoinDenom,
-		MinGasPrices:      fmt.Sprintf("0.000006%s", CoinDenom),
-		AccountTokens:     sdk.TokensFromConsensusPower(1000000000000),
-		StakingTokens:     sdk.TokensFromConsensusPower(100000),
-		BondedTokens:      sdk.TokensFromConsensusPower(100),
-		PruningStrategy:   storetypes.PruningOptionNothing,
-		CleanupDir:        true,
-		SigningAlgo:       string(hd.Secp256k1Type),
-		KeyringOptions:    []keyring.Option{},
+	return network.TestFixture{
+		AppConstructor: appCtr,
+		GenesisState:   app.NewDefaultGenesisState(tapp.AppCodec()),
+		EncodingConfig: cfgOpts.EncCfg,
 	}
 }

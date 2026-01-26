@@ -2,29 +2,38 @@ package app
 
 import (
 	"encoding/json"
-	"log"
+	"math/rand"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	logger "github.com/tendermint/tendermint/libs/log"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	dbm "github.com/tendermint/tm-db"
+	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
+	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
+	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	"github.com/spf13/viper"
+	"pkg.akt.dev/go/sdkutil"
+
+	abci "github.com/cometbft/cometbft/abci/types"
+	cmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+
+	"cosmossdk.io/log"
+	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	"github.com/cosmos/cosmos-sdk/simapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	"github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/cosmos/cosmos-sdk/x/staking"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 // ExportAppStateAndValidators exports the state of the application for a genesis
 // file.
 func (app *VirtEngineApp) ExportAppStateAndValidators(
-	forZeroHeight bool, jailAllowedAddrs []string,
+	forZeroHeight bool,
+	jailAllowedAddrs []string,
+	modulesToExport []string,
 ) (servertypes.ExportedApp, error) {
-
 	// as if they could withdraw from the start of the next block
-	ctx := app.NewContext(true, tmproto.Header{Height: app.LastBlockHeight()})
+	ctx := app.NewContextLegacy(true, cmproto.Header{Height: app.LastBlockHeight()})
 
 	// We export at last height + 1, because that's the height at which
 	// Tendermint will start InitChain.
@@ -35,58 +44,74 @@ func (app *VirtEngineApp) ExportAppStateAndValidators(
 		app.prepForZeroHeightGenesis(ctx, jailAllowedAddrs)
 	}
 
-	genState := app.mm.ExportGenesis(ctx, app.appCodec)
+	genState, err := app.MM.ExportGenesisForModules(ctx, app.cdc, modulesToExport)
+	if err != nil {
+		return servertypes.ExportedApp{}, err
+	}
+
 	appState, err := json.MarshalIndent(genState, "", "  ")
 	if err != nil {
 		return servertypes.ExportedApp{}, err
 	}
 
-	validators, err := staking.WriteValidators(ctx, app.keeper.staking)
+	validators, err := staking.WriteValidators(ctx, app.Keepers.Cosmos.Staking)
 	if err != nil {
 		return servertypes.ExportedApp{}, err
 	}
+
 	return servertypes.ExportedApp{
 		AppState:        appState,
 		Validators:      validators,
 		Height:          height,
-		ConsensusParams: app.BaseApp.GetConsensusParams(ctx),
+		ConsensusParams: app.GetConsensusParams(ctx),
 	}, nil
 }
 
-// prepare for fresh start at zero height
-// NOTE zero height genesis is a temporary feature which will be deprecated
-//      in favour of export at a block height
+// prepForZeroHeightGenesis prepare for fresh start at zero height
+// NOTE zero height genesis is a temporary feature that will be deprecated
+//
+//	in favour of export at a block height
 func (app *VirtEngineApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []string) {
-	applyAllowedAddrs := false
-
-	// Check if there is a allowed address list
-	if len(jailAllowedAddrs) > 0 {
-		applyAllowedAddrs = true
-	}
+	// Check if there is an allowed address list
+	applyAllowedAddrs := len(jailAllowedAddrs) > 0
 
 	allowedAddrsMap := make(map[string]bool)
 
 	for _, addr := range jailAllowedAddrs {
 		_, err := sdk.ValAddressFromBech32(addr)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		allowedAddrsMap[addr] = true
 	}
 
-	/* Just to be safe, assert the invariants on current state. */
-	app.keeper.crisis.AssertInvariants(ctx)
-
 	/* Handle fee distribution state. */
 
 	// withdraw all validator commission
-	app.keeper.staking.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) (stop bool) {
-		_, _ = app.keeper.distr.WithdrawValidatorCommission(ctx, val.GetOperator())
+	err := app.Keepers.Cosmos.Staking.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) (stop bool) {
+		valBz, err := app.Keepers.Cosmos.Staking.ValidatorAddressCodec().StringToBytes(val.GetOperator())
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = app.Keepers.Cosmos.Distr.WithdrawValidatorCommission(ctx, valBz)
+		if err != nil {
+			if !errorsmod.IsOf(err, distrtypes.ErrNoValidatorCommission) {
+				panic(err)
+			}
+		}
 		return false
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	// withdraw all delegator rewards
-	dels := app.keeper.staking.GetAllDelegations(ctx)
+	dels, err := app.Keepers.Cosmos.Staking.GetAllDelegations(ctx)
+	if err != nil {
+		panic(err)
+	}
+
 	for _, delegation := range dels {
 		valAddr, err := sdk.ValAddressFromBech32(delegation.ValidatorAddress)
 		if err != nil {
@@ -97,30 +122,51 @@ func (app *VirtEngineApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedA
 		if err != nil {
 			panic(err)
 		}
-		_, _ = app.keeper.distr.WithdrawDelegationRewards(ctx, delAddr, valAddr)
+		_, _ = app.Keepers.Cosmos.Distr.WithdrawDelegationRewards(ctx, delAddr, valAddr)
 	}
 
 	// clear validator slash events
-	app.keeper.distr.DeleteAllValidatorSlashEvents(ctx)
+	app.Keepers.Cosmos.Distr.DeleteAllValidatorSlashEvents(ctx)
 
 	// clear validator historical rewards
-	app.keeper.distr.DeleteAllValidatorHistoricalRewards(ctx)
+	app.Keepers.Cosmos.Distr.DeleteAllValidatorHistoricalRewards(ctx)
 
 	// set context height to zero
 	height := ctx.BlockHeight()
 	ctx = ctx.WithBlockHeight(0)
 
 	// reinitialize all validators
-	app.keeper.staking.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) (stop bool) {
-		// donate any unwithdrawn outstanding reward fraction tokens to the community pool
-		scraps := app.keeper.distr.GetValidatorOutstandingRewardsCoins(ctx, val.GetOperator())
-		feePool := app.keeper.distr.GetFeePool(ctx)
-		feePool.CommunityPool = feePool.CommunityPool.Add(scraps...)
-		app.keeper.distr.SetFeePool(ctx, feePool)
+	err = app.Keepers.Cosmos.Staking.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) (stop bool) {
+		valBz, err := sdk.ValAddressFromBech32(val.GetOperator())
+		if err != nil {
+			panic(err)
+		}
 
-		app.keeper.distr.Hooks().AfterValidatorCreated(ctx, val.GetOperator())
+		// donate any unwithdrawn outstanding reward fraction tokens to the community pool
+		scraps, err := app.Keepers.Cosmos.Distr.GetValidatorOutstandingRewardsCoins(ctx, valBz)
+		if err != nil {
+			panic(err)
+		}
+
+		feePool, err := app.Keepers.Cosmos.Distr.FeePool.Get(ctx)
+		if err != nil {
+			panic(err)
+		}
+
+		feePool.CommunityPool = feePool.CommunityPool.Add(scraps...)
+		err = app.Keepers.Cosmos.Distr.FeePool.Set(ctx, feePool)
+		if err != nil {
+			panic(err)
+		}
+
+		if err := app.Keepers.Cosmos.Distr.Hooks().AfterValidatorCreated(ctx, valBz); err != nil {
+			panic(err)
+		}
 		return false
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	// reinitialize all delegations
 	for _, del := range dels {
@@ -133,8 +179,15 @@ func (app *VirtEngineApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedA
 		if err != nil {
 			panic(err)
 		}
-		app.keeper.distr.Hooks().BeforeDelegationCreated(ctx, delAddr, valAddr)
-		app.keeper.distr.Hooks().AfterDelegationModified(ctx, delAddr, valAddr)
+		err = app.Keepers.Cosmos.Distr.Hooks().BeforeDelegationCreated(ctx, delAddr, valAddr)
+		if err != nil {
+			panic(err)
+		}
+
+		err = app.Keepers.Cosmos.Distr.Hooks().AfterDelegationModified(ctx, delAddr, valAddr)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// reset context height
@@ -143,34 +196,48 @@ func (app *VirtEngineApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedA
 	/* Handle staking state. */
 
 	// iterate through redelegations, reset creation height
-	app.keeper.staking.IterateRedelegations(ctx, func(_ int64, red stakingtypes.Redelegation) (stop bool) {
+	err = app.Keepers.Cosmos.Staking.IterateRedelegations(ctx, func(_ int64, red stakingtypes.Redelegation) (stop bool) {
 		for i := range red.Entries {
 			red.Entries[i].CreationHeight = 0
 		}
-		app.keeper.staking.SetRedelegation(ctx, red)
+		err = app.Keepers.Cosmos.Staking.SetRedelegation(ctx, red)
+		if err != nil {
+			panic(err)
+		}
 		return false
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	// iterate through unbonding delegations, reset creation height
-	app.keeper.staking.IterateUnbondingDelegations(ctx, func(_ int64, ubd stakingtypes.UnbondingDelegation) (stop bool) {
+	err = app.Keepers.Cosmos.Staking.IterateUnbondingDelegations(ctx, func(_ int64, ubd stakingtypes.UnbondingDelegation) (stop bool) {
 		for i := range ubd.Entries {
 			ubd.Entries[i].CreationHeight = 0
 		}
-		app.keeper.staking.SetUnbondingDelegation(ctx, ubd)
+		err = app.Keepers.Cosmos.Staking.SetUnbondingDelegation(ctx, ubd)
+		if err != nil {
+			panic(err)
+		}
 		return false
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	// Iterate through validators by power descending, reset bond heights, and
 	// update bond intra-tx counters.
-	store := ctx.KVStore(app.keys[stakingtypes.StoreKey])
-	iter := sdk.KVStoreReversePrefixIterator(store, stakingtypes.ValidatorsKey)
+
+	store := ctx.KVStore(app.GetKey(stakingtypes.StoreKey))
+	iter := storetypes.KVStoreReversePrefixIterator(store, stakingtypes.ValidatorsKey)
+
 	counter := int16(0)
 
 	for ; iter.Valid(); iter.Next() {
-		addr := sdk.ValAddress(iter.Key()[1:])
-		validator, found := app.keeper.staking.GetValidator(ctx, addr)
-		if !found {
-			panic("expected validator, not found")
+		addr := sdk.ValAddress(stakingtypes.AddressFromValidatorsKey(iter.Key()))
+		validator, err := app.Keepers.Cosmos.Staking.GetValidator(ctx, addr)
+		if err != nil {
+			panic(err)
 		}
 
 		validator.UnbondingHeight = 0
@@ -178,48 +245,102 @@ func (app *VirtEngineApp) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedA
 			validator.Jailed = true
 		}
 
-		app.keeper.staking.SetValidator(ctx, validator)
+		err = app.Keepers.Cosmos.Staking.SetValidator(ctx, validator)
+		if err != nil {
+			panic(err)
+		}
 		counter++
 	}
 
-	iter.Close()
+	_ = iter.Close()
 
-	_, _ = app.keeper.staking.ApplyAndReturnValidatorSetUpdates(ctx)
+	_, err = app.Keepers.Cosmos.Staking.ApplyAndReturnValidatorSetUpdates(ctx)
+	if err != nil {
+		panic(err)
+	}
 
 	/* Handle slashing state. */
 
 	// reset start height on signing infos
-	app.keeper.slashing.IterateValidatorSigningInfos(
+	err = app.Keepers.Cosmos.Slashing.IterateValidatorSigningInfos(
 		ctx,
 		func(addr sdk.ConsAddress, info slashingtypes.ValidatorSigningInfo) (stop bool) {
 			info.StartHeight = 0
-			app.keeper.slashing.SetValidatorSigningInfo(ctx, addr, info)
+			err = app.Keepers.Cosmos.Slashing.SetValidatorSigningInfo(ctx, addr, info)
+			if err != nil {
+				panic(err)
+			}
 			return false
 		},
 	)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // Setup initializes a new VirtEngineApp. A Nop logger is set in VirtEngineApp.
-func Setup(isCheckTx bool) *VirtEngineApp {
+func Setup(opts ...SetupAppOption) *VirtEngineApp {
+	cfg := &setupAppOptions{
+		encCfg:  sdkutil.MakeEncodingConfig(),
+		home:    DefaultHome,
+		checkTx: false,
+		chainID: "virtengine-1",
+	}
+
+	ModuleBasics().RegisterInterfaces(cfg.encCfg.InterfaceRegistry)
+
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	db := dbm.NewMemDB()
 
-	// TODO: make this configurable via config or flag.
-	app := NewApp(logger.NewNopLogger(), db, nil, true, 5, map[int64]bool{}, DefaultHome, simapp.EmptyAppOptions{})
-	if !isCheckTx {
-		// init chain must be called to stop deliverState from being nil
-		genesisState := NewDefaultGenesisState()
-		stateBytes, err := json.MarshalIndent(genesisState, "", "  ")
+	appOpts := viper.New()
+
+	appOpts.Set("home", cfg.home)
+
+	r := rand.New(rand.NewSource(0)) // nolint: gosec
+	genTime := simulation.RandTimestamp(r)
+
+	appOpts.Set("GenesisTime", genTime)
+
+	app := NewApp(
+		log.NewNopLogger(),
+		db,
+		nil,
+		true,
+		5,
+		map[int64]bool{},
+		cfg.encCfg,
+		appOpts,
+		baseapp.SetChainID(cfg.chainID),
+	)
+
+	if !cfg.checkTx {
+		var state GenesisState
+		if cfg.genesisFn == nil {
+			// init chain must be called to stop deliverState from being nil
+			state = NewDefaultGenesisState(app.AppCodec())
+		} else {
+			state = cfg.genesisFn(app.cdc)
+		}
+
+		stateBytes, err := json.MarshalIndent(state, "", "  ")
 		if err != nil {
 			panic(err)
 		}
 
 		// Initialize the chain
-		app.InitChain(
-			abci.RequestInitChain{
+		_, err = app.InitChain(
+			&abci.RequestInitChain{
 				Validators:    []abci.ValidatorUpdate{},
 				AppStateBytes: stateBytes,
+				ChainId:       cfg.chainID,
 			},
 		)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return app

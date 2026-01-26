@@ -3,12 +3,13 @@ package keeper
 import (
 	"context"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/virtengine/virtengine/x/audit/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
+
+	types "pkg.akt.dev/go/node/audit/v1"
 )
 
 // Querier is used as Keeper will have duplicate methods if used directly, and gRPC names take precedence over keeper
@@ -26,15 +27,15 @@ func (q Querier) AllProvidersAttributes(
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	var providers types.Providers
+	var providers types.AuditedProviders
 	ctx := sdk.UnwrapSDKContext(c)
 
 	store := ctx.KVStore(q.skey)
 
-	pageRes, err := sdkquery.Paginate(store, req.Pagination, func(key []byte, value []byte) error {
-		var provider types.Provider
+	pageRes, err := sdkquery.Paginate(store, req.Pagination, func(_ []byte, value []byte) error {
+		var provider types.AuditedProvider
 
-		err := q.cdc.UnmarshalBinaryBare(value, &provider)
+		err := q.cdc.Unmarshal(value, &provider)
 		if err != nil {
 			return err
 		}
@@ -107,7 +108,7 @@ func (q Querier) ProviderAuditorAttributes(
 	}
 
 	return &types.QueryProvidersResponse{
-		Providers:  types.Providers{provider},
+		Providers:  types.AuditedProviders{provider},
 		Pagination: nil,
 	}, nil
 }
@@ -120,15 +121,15 @@ func (q Querier) AuditorAttributes(
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	var providers types.Providers
+	var providers types.AuditedProviders
 	ctx := sdk.UnwrapSDKContext(c)
 
 	store := ctx.KVStore(q.skey)
 
-	pageRes, err := sdkquery.Paginate(store, req.Pagination, func(key []byte, value []byte) error {
-		var provider types.Provider
+	pageRes, err := sdkquery.Paginate(store, req.Pagination, func(_ []byte, value []byte) error {
+		var provider types.AuditedProvider
 
-		err := q.cdc.UnmarshalBinaryBare(value, &provider)
+		err := q.cdc.Unmarshal(value, &provider)
 		if err != nil {
 			return err
 		}

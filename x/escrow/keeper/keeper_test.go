@@ -3,224 +3,430 @@ package keeper_test
 import (
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/virtengine/virtengine/testutil"
-	"github.com/virtengine/virtengine/testutil/state"
-	"github.com/virtengine/virtengine/x/escrow/keeper"
-	"github.com/virtengine/virtengine/x/escrow/keeper/mocks"
-	"github.com/virtengine/virtengine/x/escrow/types"
+	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"pkg.akt.dev/go/node/escrow/module"
+	etypes "pkg.akt.dev/go/node/escrow/types/v1"
+	"pkg.akt.dev/go/testutil"
+
+	"pkg.akt.dev/node/testutil/state"
 )
 
+type kTestSuite struct {
+	*state.TestSuite
+}
+
+func Test_AccountSettlement(t *testing.T) {
+	ssuite := state.SetupTestSuite(t)
+	ctx := ssuite.Context()
+
+	bkeeper := ssuite.BankKeeper()
+	ekeeper := ssuite.EscrowKeeper()
+
+	lid := testutil.LeaseID(t)
+	did := lid.DeploymentID()
+
+	aid := did.ToEscrowAccountID()
+	pid := lid.ToEscrowPaymentID()
+
+	aowner := testutil.AccAddress(t)
+
+	amt := testutil.VECoin(t, 1000)
+	powner := testutil.AccAddress(t)
+	rate := testutil.VECoin(t, 10)
+
+	// create an account
+	bkeeper.
+		On("SendCoinsFromAccountToModule", ctx, aowner, module.ModuleName, sdk.NewCoins(amt)).
+		Return(nil).Once()
+	assert.NoError(t, ekeeper.AccountCreate(ctx, aid, aowner, []etypes.Depositor{{
+		Owner:   aowner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}}))
+
+	{
+		acct, err := ekeeper.GetAccount(ctx, aid)
+		require.NoError(t, err)
+		require.Equal(t, ctx.BlockHeight(), acct.State.SettledAt)
+	}
+
+	// create payment
+	err := ekeeper.PaymentCreate(ctx, pid, powner, sdk.NewDecCoinFromCoin(rate))
+	assert.NoError(t, err)
+
+	blkdelta := int64(10)
+	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + blkdelta)
+	// trigger settlement by closing the account,
+	// 2% is take rate, which in this test equals 2
+	// 98 uakt is payment amount
+	// 900 uakt must be returned to the aowner
+
+	bkeeper.
+		On("SendCoinsFromModuleToModule", ctx, module.ModuleName, distrtypes.ModuleName, sdk.NewCoins(testutil.VECoin(t, 2))).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, powner, sdk.NewCoins(testutil.VECoin(t, (rate.Amount.Int64()*10)-2))).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, aowner, sdk.NewCoins(testutil.VECoin(t, amt.Amount.Int64()-(rate.Amount.Int64()*10)))).
+		Return(nil).Once()
+	err = ekeeper.AccountClose(ctx, aid)
+	assert.NoError(t, err)
+
+	acct, err := ekeeper.GetAccount(ctx, aid)
+	require.NoError(t, err)
+	require.Equal(t, ctx.BlockHeight(), acct.State.SettledAt)
+	require.Equal(t, etypes.StateClosed, acct.State.State)
+	require.Equal(t, testutil.VEDecCoin(t, rate.Amount.Int64()*ctx.BlockHeight()), acct.State.Transferred[0])
+}
+
 func Test_AccountCreate(t *testing.T) {
-	ctx, keeper, bkeeper := setupKeeper(t)
-	id := genAccountID(t)
+	ssuite := state.SetupTestSuite(t)
+	ctx := ssuite.Context()
+
+	bkeeper := ssuite.BankKeeper()
+	ekeeper := ssuite.EscrowKeeper()
+
+	id := testutil.DeploymentID(t).ToEscrowAccountID()
+
 	owner := testutil.AccAddress(t)
-	amt := testutil.VirtEngineCoinRandom(t)
-	amt2 := testutil.VirtEngineCoinRandom(t)
+	amt := testutil.VECoinRandom(t)
+	amt2 := testutil.VECoinRandom(t)
 
 	// create account
 	bkeeper.
-		On("SendCoinsFromAccountToModule", ctx, owner, types.ModuleName, sdk.NewCoins(amt)).
-		Return(nil)
-	assert.NoError(t, keeper.AccountCreate(ctx, id, owner, amt))
+		On("SendCoinsFromAccountToModule", mock.Anything, owner, module.ModuleName, sdk.NewCoins(amt)).
+		Return(nil).Once()
+	assert.NoError(t, ekeeper.AccountCreate(ctx, id, owner, []etypes.Depositor{{
+		Owner:   owner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}}))
 
 	// deposit more tokens
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 10)
 	bkeeper.
-		On("SendCoinsFromAccountToModule", ctx, owner, types.ModuleName, sdk.NewCoins(amt2)).
-		Return(nil)
-	assert.NoError(t, keeper.AccountDeposit(ctx, id, amt2))
+		On("SendCoinsFromAccountToModule", mock.Anything, owner, module.ModuleName, sdk.NewCoins(amt2)).
+		Return(nil).Once()
+
+	assert.NoError(t, ekeeper.AccountDeposit(ctx, id, []etypes.Depositor{{
+		Owner:   owner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt2),
+	}}))
 
 	// close account
+	// each deposit is it's own send
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 10)
 	bkeeper.
-		On("SendCoinsFromModuleToAccount", ctx, types.ModuleName, owner, sdk.NewCoins(amt.Add(amt2))).
-		Return(nil)
-	assert.NoError(t, keeper.AccountClose(ctx, id))
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, owner, sdk.NewCoins(amt)).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, owner, sdk.NewCoins(amt2)).
+		Return(nil).Once()
+
+	assert.NoError(t, ekeeper.AccountClose(ctx, id))
 
 	// no deposits after closed
-	assert.Error(t, keeper.AccountDeposit(ctx, id, amt))
+	assert.Error(t, ekeeper.AccountDeposit(ctx, id, []etypes.Depositor{{
+		Owner:   owner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}}))
 
 	// no re-creating account
-	assert.Error(t, keeper.AccountCreate(ctx, id, owner, amt))
+	assert.Error(t, ekeeper.AccountCreate(ctx, id, owner, []etypes.Depositor{{
+		Owner:   owner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}}))
 }
 
 func Test_PaymentCreate(t *testing.T) {
-	ctx, keeper, bkeeper := setupKeeper(t)
-	aid := genAccountID(t)
+	ssuite := state.SetupTestSuite(t)
+	ctx := ssuite.Context()
+
+	bkeeper := ssuite.BankKeeper()
+	ekeeper := ssuite.EscrowKeeper()
+
+	lid := testutil.LeaseID(t)
+	did := lid.DeploymentID()
+
+	aid := did.ToEscrowAccountID()
+	pid := lid.ToEscrowPaymentID()
+
 	aowner := testutil.AccAddress(t)
 
-	amt := testutil.VirtEngineCoin(t, 1000)
-	pid := testutil.Name(t, "payment")
+	amt := testutil.VECoin(t, 1000)
 	powner := testutil.AccAddress(t)
-	rate := testutil.VirtEngineCoin(t, 10)
+	rate := testutil.VECoin(t, 10)
 
 	// create account
 	bkeeper.
-		On("SendCoinsFromAccountToModule", ctx, aowner, types.ModuleName, sdk.NewCoins(amt)).
-		Return(nil)
-	assert.NoError(t, keeper.AccountCreate(ctx, aid, aowner, amt))
+		On("SendCoinsFromAccountToModule", ctx, aowner, module.ModuleName, sdk.NewCoins(amt)).
+		Return(nil).Once()
+	assert.NoError(t, ekeeper.AccountCreate(ctx, aid, aowner, []etypes.Depositor{{
+		Owner:   aowner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}}))
 
 	{
-		acct, err := keeper.GetAccount(ctx, aid)
+		acct, err := ekeeper.GetAccount(ctx, aid)
 		require.NoError(t, err)
-		require.Equal(t, ctx.BlockHeight(), acct.SettledAt)
+		require.Equal(t, ctx.BlockHeight(), acct.State.SettledAt)
 	}
 
 	// create payment
-	assert.NoError(t, keeper.PaymentCreate(ctx, aid, pid, powner, rate))
+	err := ekeeper.PaymentCreate(ctx, pid, powner, sdk.NewDecCoinFromCoin(rate))
+	assert.NoError(t, err)
 
 	// withdraw some funds
 	blkdelta := int64(10)
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + blkdelta)
 	bkeeper.
-		On("SendCoinsFromModuleToAccount", ctx, types.ModuleName, powner, sdk.NewCoins(testutil.VirtEngineCoin(t, rate.Amount.Int64()*blkdelta))).
-		Return(nil)
-	assert.NoError(t, keeper.PaymentWithdraw(ctx, aid, pid))
+		On("SendCoinsFromModuleToModule", mock.Anything, module.ModuleName, distrtypes.ModuleName, sdk.NewCoins(testutil.VECoin(t, 2))).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, powner, sdk.NewCoins(testutil.VECoin(t, (rate.Amount.Int64()*blkdelta)-2))).
+		Return(nil).Once()
+	err = ekeeper.PaymentWithdraw(ctx, pid)
+	assert.NoError(t, err)
 
 	{
-		acct, err := keeper.GetAccount(ctx, aid)
+		acct, err := ekeeper.GetAccount(ctx, aid)
 		require.NoError(t, err)
-		require.Equal(t, ctx.BlockHeight(), acct.SettledAt)
+		require.Equal(t, ctx.BlockHeight(), acct.State.SettledAt)
 
-		require.Equal(t, types.AccountOpen, acct.State)
-		require.Equal(t, testutil.VirtEngineCoin(t, amt.Amount.Int64()-rate.Amount.Int64()*ctx.BlockHeight()), acct.Balance)
-		require.Equal(t, testutil.VirtEngineCoin(t, rate.Amount.Int64()*ctx.BlockHeight()), acct.Transferred)
+		require.Equal(t, etypes.StateOpen, acct.State.State)
+		require.Equal(t, testutil.VEDecCoin(t, amt.Amount.Int64()-rate.Amount.Int64()*ctx.BlockHeight()), sdk.NewDecCoinFromDec(acct.State.Funds[0].Denom, acct.State.Funds[0].Amount))
+		require.Equal(t, testutil.VEDecCoin(t, rate.Amount.Int64()*ctx.BlockHeight()), acct.State.Transferred[0])
 
-		payment, err := keeper.GetPayment(ctx, aid, pid)
+		payment, err := ekeeper.GetPayment(ctx, pid)
 		require.NoError(t, err)
 
-		require.Equal(t, types.PaymentOpen, payment.State)
-		require.Equal(t, testutil.VirtEngineCoin(t, rate.Amount.Int64()*ctx.BlockHeight()), payment.Withdrawn)
-		require.Equal(t, testutil.VirtEngineCoin(t, 0), payment.Balance)
+		require.Equal(t, etypes.StateOpen, payment.State.State)
+		require.Equal(t, testutil.VECoin(t, rate.Amount.Int64()*ctx.BlockHeight()), payment.State.Withdrawn)
+		require.Equal(t, testutil.VEDecCoin(t, 0), payment.State.Balance)
 	}
 
 	// close payment
 	blkdelta = 20
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + blkdelta)
 	bkeeper.
-		On("SendCoinsFromModuleToAccount", ctx, types.ModuleName, powner, sdk.NewCoins(testutil.VirtEngineCoin(t, rate.Amount.Int64()*blkdelta))).
-		Return(nil)
-	assert.NoError(t, keeper.PaymentClose(ctx, aid, pid))
+		On("SendCoinsFromModuleToModule", mock.Anything, module.ModuleName, distrtypes.ModuleName, sdk.NewCoins(testutil.VECoin(t, 4))).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", ctx, module.ModuleName, powner, sdk.NewCoins(testutil.VECoin(t, (rate.Amount.Int64()*blkdelta)-4))).
+		Return(nil).Once()
+	assert.NoError(t, ekeeper.PaymentClose(ctx, pid))
 
 	{
-		acct, err := keeper.GetAccount(ctx, aid)
+		acct, err := ekeeper.GetAccount(ctx, aid)
 		require.NoError(t, err)
-		require.Equal(t, ctx.BlockHeight(), acct.SettledAt)
+		require.Equal(t, ctx.BlockHeight(), acct.State.SettledAt)
 
-		require.Equal(t, types.AccountOpen, acct.State)
-		require.Equal(t, testutil.VirtEngineCoin(t, amt.Amount.Int64()-rate.Amount.Int64()*ctx.BlockHeight()), acct.Balance)
-		require.Equal(t, testutil.VirtEngineCoin(t, rate.Amount.Int64()*ctx.BlockHeight()), acct.Transferred)
+		require.Equal(t, etypes.StateOpen, acct.State.State)
+		require.Equal(t, testutil.VEDecCoin(t, amt.Amount.Int64()-rate.Amount.Int64()*ctx.BlockHeight()), sdk.NewDecCoinFromDec(acct.State.Funds[0].Denom, acct.State.Funds[0].Amount))
+		require.Equal(t, testutil.VEDecCoin(t, rate.Amount.Int64()*ctx.BlockHeight()), acct.State.Transferred[0])
 
-		payment, err := keeper.GetPayment(ctx, aid, pid)
+		payment, err := ekeeper.GetPayment(ctx, pid)
 		require.NoError(t, err)
 
-		require.Equal(t, types.PaymentClosed, payment.State)
-		require.Equal(t, testutil.VirtEngineCoin(t, rate.Amount.Int64()*ctx.BlockHeight()), payment.Withdrawn)
-		require.Equal(t, testutil.VirtEngineCoin(t, 0), payment.Balance)
+		require.Equal(t, etypes.StateClosed, payment.State.State)
+		require.Equal(t, testutil.VECoin(t, rate.Amount.Int64()*ctx.BlockHeight()), payment.State.Withdrawn)
+		require.Equal(t, testutil.VEDecCoin(t, 0), payment.State.Balance)
 	}
 
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 30)
 
 	// can't withdraw from a closed payment
-	assert.Error(t, keeper.PaymentWithdraw(ctx, aid, pid))
+	assert.Error(t, ekeeper.PaymentWithdraw(ctx, pid))
 
 	// can't re-created a closed payment
-	assert.Error(t, keeper.PaymentCreate(ctx, aid, pid, powner, rate))
+	assert.Error(t, ekeeper.PaymentCreate(ctx, pid, powner, sdk.NewDecCoinFromCoin(rate)))
 
 	// closing the account transfers all remaining funds
 	bkeeper.
-		On("SendCoinsFromModuleToAccount", ctx, types.ModuleName, aowner, sdk.NewCoins(testutil.VirtEngineCoin(t, amt.Amount.Int64()-rate.Amount.Int64()*30))).
-		Return(nil)
-	assert.NoError(t, keeper.AccountClose(ctx, aid))
+		On("SendCoinsFromModuleToAccount", ctx, module.ModuleName, aowner, sdk.NewCoins(testutil.VECoin(t, amt.Amount.Int64()-rate.Amount.Int64()*30))).
+		Return(nil).Once()
+	err = ekeeper.AccountClose(ctx, aid)
+	assert.NoError(t, err)
 }
 
-func Test_Payment_Overdraw(t *testing.T) {
-	ctx, keeper, bkeeper := setupKeeper(t)
-	aid := genAccountID(t)
-	aowner := testutil.AccAddress(t)
-	amt := testutil.VirtEngineCoin(t, 1000)
-	pid := testutil.Name(t, "payment")
-	powner := testutil.AccAddress(t)
-	rate := testutil.VirtEngineCoin(t, 10)
+func Test_Overdraft(t *testing.T) {
+	ssuite := state.SetupTestSuite(t)
+	ctx := ssuite.Context()
 
-	// create account
+	bkeeper := ssuite.BankKeeper()
+	ekeeper := ssuite.EscrowKeeper()
+
+	lid := testutil.LeaseID(t)
+	did := lid.DeploymentID()
+
+	aid := did.ToEscrowAccountID()
+	pid := lid.ToEscrowPaymentID()
+
+	aowner := testutil.AccAddress(t)
+	amt := testutil.VECoin(t, 1000)
+	powner := testutil.AccAddress(t)
+	rate := testutil.VECoin(t, 10)
+
+	// create the account
 	bkeeper.
-		On("SendCoinsFromAccountToModule", ctx, aowner, types.ModuleName, sdk.NewCoins(amt)).
-		Return(nil)
-	assert.NoError(t, keeper.AccountCreate(ctx, aid, aowner, amt))
+		On("SendCoinsFromAccountToModule", ctx, aowner, module.ModuleName, sdk.NewCoins(amt)).
+		Return(nil).Once()
+	err := ekeeper.AccountCreate(ctx, aid, aowner, []etypes.Depositor{{
+		Owner:   aowner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}})
+
+	require.NoError(t, err)
 
 	// create payment
-	assert.NoError(t, keeper.PaymentCreate(ctx, aid, pid, powner, rate))
+	err = ekeeper.PaymentCreate(ctx, pid, powner, sdk.NewDecCoinFromCoin(rate))
+	require.NoError(t, err)
 
-	// withdraw some funds
-	blkdelta := int64(1000/10 + 1)
+	// withdraw after 105 blocks
+	// account is expected to be overdrafted for 50uakt, i.e. balance must show -50
+	blkdelta := int64(1000/10 + 5)
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + blkdelta)
 	bkeeper.
-		On("SendCoinsFromModuleToAccount", ctx, types.ModuleName, powner, sdk.NewCoins(testutil.VirtEngineCoin(t, 1000))).
-		Return(nil)
-	assert.NoError(t, keeper.PaymentWithdraw(ctx, aid, pid))
+		On("SendCoinsFromModuleToModule", mock.Anything, module.ModuleName, distrtypes.ModuleName, sdk.NewCoins(testutil.VECoin(t, 20))).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, powner, sdk.NewCoins(testutil.VECoin(t, 980))).
+		Return(nil).Once()
 
-	{
-		acct, err := keeper.GetAccount(ctx, aid)
-		require.NoError(t, err)
-		assert.Equal(t, ctx.BlockHeight(), acct.SettledAt)
+	err = ekeeper.PaymentWithdraw(ctx, pid)
+	require.NoError(t, err)
 
-		assert.Equal(t, types.AccountOverdrawn, acct.State)
-		assert.Equal(t, testutil.VirtEngineCoin(t, 0), acct.Balance)
-		assert.Equal(t, amt, acct.Transferred)
+	acct, err := ekeeper.GetAccount(ctx, aid)
+	require.NoError(t, err)
+	require.Equal(t, ctx.BlockHeight(), acct.State.SettledAt)
 
-		payment, err := keeper.GetPayment(ctx, aid, pid)
-		assert.NoError(t, err)
+	expectedOverdraft := sdkmath.LegacyNewDec(50)
 
-		assert.Equal(t, types.PaymentOverdrawn, payment.State)
-		assert.Equal(t, amt, payment.Withdrawn)
-		assert.Equal(t, testutil.VirtEngineCoin(t, 0), payment.Balance)
-	}
+	require.Equal(t, etypes.StateOverdrawn, acct.State.State)
+	require.True(t, acct.State.Funds[0].Amount.IsNegative())
+	require.Equal(t, sdk.NewDecCoins(sdk.NewDecCoinFromCoin(amt)), acct.State.Transferred)
+	require.Equal(t, expectedOverdraft, acct.State.Funds[0].Amount.Abs())
 
+	payment, err := ekeeper.GetPayment(ctx, pid)
+	require.NoError(t, err)
+
+	require.Equal(t, etypes.StateOverdrawn, payment.State.State)
+	require.Equal(t, amt, payment.State.Withdrawn)
+	require.Equal(t, testutil.VEDecCoin(t, 0), payment.State.Balance)
+	require.Equal(t, expectedOverdraft, payment.State.Unsettled.Amount)
+
+	// account close will should not return an error when trying to close when overdrafted
+	// it will try to settle, as there were no deposits state must not change
+	err = ekeeper.AccountClose(ctx, aid)
+	assert.NoError(t, err)
+
+	acct, err = ekeeper.GetAccount(ctx, aid)
+	require.NoError(t, err)
+
+	require.Equal(t, etypes.StateOverdrawn, acct.State.State)
+	require.True(t, acct.State.Funds[0].Amount.IsNegative())
+	require.Equal(t, sdk.NewDecCoins(sdk.NewDecCoinFromCoin(amt)), acct.State.Transferred)
+	require.Equal(t, expectedOverdraft, acct.State.Funds[0].Amount.Abs())
+
+	// attempting to close account 2nd time should not change the state
+	err = ekeeper.AccountClose(ctx, aid)
+	assert.NoError(t, err)
+
+	acct, err = ekeeper.GetAccount(ctx, aid)
+	require.NoError(t, err)
+
+	require.Equal(t, etypes.StateOverdrawn, acct.State.State)
+	require.True(t, acct.State.Funds[0].Amount.IsNegative())
+	require.Equal(t, sdk.NewDecCoins(sdk.NewDecCoinFromCoin(amt)), acct.State.Transferred)
+	require.Equal(t, expectedOverdraft, acct.State.Funds[0].Amount.Abs())
+
+	payment, err = ekeeper.GetPayment(ctx, pid)
+	require.NoError(t, err)
+
+	require.Equal(t, etypes.StateOverdrawn, payment.State.State)
+	require.Equal(t, amt, payment.State.Withdrawn)
+	require.Equal(t, testutil.VEDecCoin(t, 0), payment.State.Balance)
+
+	// deposit more funds into account
+	// this will trigger settlement and payoff if the deposit balance is sufficient
+	// 1st transfer: actual deposit of 1000uakt
+	// 2nd transfer: take rate 1uakt = 50 * 0.02
+	// 3rd transfer: payment withdraw of 49uakt
+	// 4th transfer: return a remainder of 950uakt to the owner
+	bkeeper.
+		On("SendCoinsFromAccountToModule", ctx, aowner, module.ModuleName, sdk.NewCoins(amt)).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToModule", mock.Anything, module.ModuleName, distrtypes.ModuleName, sdk.NewCoins(testutil.VECoin(t, 1))).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, powner, sdk.NewCoins(testutil.VECoin(t, 49))).
+		Return(nil).Once().
+		On("SendCoinsFromModuleToAccount", mock.Anything, module.ModuleName, aowner, sdk.NewCoins(testutil.VECoin(t, 950))).
+		Return(nil).Once()
+
+	err = ekeeper.AccountDeposit(ctx, aid, []etypes.Depositor{{
+		Owner:   aowner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}})
+	assert.NoError(t, err)
+
+	acct, err = ekeeper.GetAccount(ctx, aid)
+	assert.NoError(t, err)
+
+	require.Equal(t, etypes.StateClosed, acct.State.State)
+	require.Equal(t, acct.State.Funds[0].Amount, sdkmath.LegacyZeroDec())
+
+	payment, err = ekeeper.GetPayment(ctx, pid)
+	require.NoError(t, err)
+	require.Equal(t, etypes.StateClosed, payment.State.State)
 }
 
 func Test_PaymentCreate_later(t *testing.T) {
-	ctx, keeper, bkeeper := setupKeeper(t)
-	aid := genAccountID(t)
+	ssuite := state.SetupTestSuite(t)
+	ctx := ssuite.Context()
+
+	bkeeper := ssuite.BankKeeper()
+	ekeeper := ssuite.EscrowKeeper()
+
+	lid := testutil.LeaseID(t)
+	did := lid.DeploymentID()
+
+	aid := did.ToEscrowAccountID()
+	pid := lid.ToEscrowPaymentID()
+
 	aowner := testutil.AccAddress(t)
 
-	amt := testutil.VirtEngineCoin(t, 1000)
-	pid := testutil.Name(t, "payment")
+	amt := testutil.VECoin(t, 1000)
 	powner := testutil.AccAddress(t)
-	rate := testutil.VirtEngineCoin(t, 10)
+	rate := testutil.VECoin(t, 10)
 
 	// create account
 	bkeeper.
-		On("SendCoinsFromAccountToModule", ctx, aowner, types.ModuleName, sdk.NewCoins(amt)).
+		On("SendCoinsFromAccountToModule", ctx, aowner, module.ModuleName, sdk.NewCoins(amt)).
 		Return(nil)
-	assert.NoError(t, keeper.AccountCreate(ctx, aid, aowner, amt))
+	assert.NoError(t, ekeeper.AccountCreate(ctx, aid, aowner, []etypes.Depositor{{
+		Owner:   aowner.String(),
+		Height:  ctx.BlockHeight(),
+		Balance: sdk.NewDecCoinFromCoin(amt),
+	}}))
 
 	blkdelta := int64(10)
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + blkdelta)
 
 	// create payment
-	assert.NoError(t, keeper.PaymentCreate(ctx, aid, pid, powner, rate))
+	assert.NoError(t, ekeeper.PaymentCreate(ctx, pid, powner, sdk.NewDecCoinFromCoin(rate)))
+
+	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1)
 
 	{
-		acct, err := keeper.GetAccount(ctx, aid)
+		acct, err := ekeeper.GetAccount(ctx, aid)
 		require.NoError(t, err)
-		require.Equal(t, ctx.BlockHeight(), acct.SettledAt)
+		require.Equal(t, ctx.BlockHeight()-1, acct.State.SettledAt)
 	}
-}
-
-func genAccountID(t testing.TB) types.AccountID {
-	t.Helper()
-	return types.AccountID{
-		Scope: "test",
-		XID:   testutil.Name(t, "acct"),
-	}
-}
-
-func setupKeeper(t testing.TB) (sdk.Context, keeper.Keeper, *mocks.BankKeeper) {
-	t.Helper()
-	ssuite := state.SetupTestSuite(t)
-	return ssuite.Context(), ssuite.EscrowKeeper(), ssuite.BankKeeper()
 }

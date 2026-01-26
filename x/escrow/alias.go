@@ -1,10 +1,12 @@
 package escrow
 
-import "github.com/virtengine/virtengine/x/escrow/types"
+import (
+	"pkg.akt.dev/go/node/escrow/module"
+)
 
 const (
 	// StoreKey represents storekey of deployment module
-	StoreKey = types.StoreKey
+	StoreKey = module.StoreKey
 	// ModuleName represents current module name
-	ModuleName = types.ModuleName
+	ModuleName = module.ModuleName
 )

@@ -1,80 +1,67 @@
 APP_DIR               := ./app
 
-GOBIN                 := $(shell go env GOPATH)/bin
+GOBIN                 ?= $(shell go env GOPATH)/bin
 
 KIND_APP_IP           ?= $(shell make -sC _run/kube kind-k8s-ip)
 KIND_APP_PORT         ?= $(shell make -sC _run/kube app-http-port)
 KIND_VARS             ?= KUBE_INGRESS_IP="$(KIND_APP_IP)" KUBE_INGRESS_PORT="$(KIND_APP_PORT)"
 
-UNAME_OS              := $(shell uname -s)
-UNAME_ARCH            := $(shell uname -m)
-
 include make/init.mk
 
-.DEFAULT_GOAL         := $(VIRTENGINE)
+.DEFAULT_GOAL         := bins
 
 DOCKER_RUN            := docker run --rm -v $(shell pwd):/workspace -w /workspace
-DOCKER_BUF            := $(DOCKER_RUN) bufbuild/buf:$(BUF_VERSION)
-DOCKER_CLANG          := $(DOCKER_RUN) tendermintdev/docker-build-proto
-GOLANGCI_LINT          = $(DOCKER_RUN) --network none golangci/golangci-lint:$(GOLANGCI_LINT_VERSION)-alpine golangci-lint run
-LINT                   = $(GOLANGCI_LINT) ./... --disable-all --deadline=5m --enable
-TEST_DOCKER_REPO      := virtengine/virtenginetest
+GOLANGCI_LINT_RUN     := $(GOLANGCI_LINT) run
+LINT                   = $(GOLANGCI_LINT_RUN) ./... --disable-all --deadline=5m --enable
 
-GORELEASER_CONFIG      = .goreleaser.yaml
+GORELEASER_CONFIG     ?= .goreleaser.yaml
 
 GIT_HEAD_COMMIT_LONG  := $(shell git log -1 --format='%H')
 GIT_HEAD_COMMIT_SHORT := $(shell git rev-parse --short HEAD)
 GIT_HEAD_ABBREV       := $(shell git rev-parse --abbrev-ref HEAD)
 
-GORELEASER_TAG       ?= $(shell git describe --tags --abbrev=0)
-GORELEASER_IS_PREREL ?= $(shell $(ROOT_DIR)/script/is_prerelease.sh "$(GORELEASER_TAG)")
+IS_PREREL             := $(shell $(ROOT_DIR)/script/is_prerelease.sh "$(RELEASE_TAG)" && echo "true" || echo "false")
+IS_MAINNET            := $(shell $(ROOT_DIR)/script/mainnet-from-tag.sh "$(RELEASE_TAG)" && echo "true" || echo "false")
+IS_STABLE             ?= false
 
-# BUILD_TAGS are for builds withing this makefile
-# GORELEASER_BUILD_TAGS are for goreleaser only
-# Setting mainnet flag based on env value
-# export MAINNET=true to set build tag mainnet
-ifeq ($(MAINNET),true)
-	BUILD_MAINNET=mainnet
-	BUILD_TAGS=osusergo,netgo,ledger,mainnet,static_build
-	GORELEASER_BUILD_TAGS=$(BUILD_TAGS)
-else
-	BUILD_TAGS=osusergo,netgo,ledger,static_build
-	GORELEASER_BUILD_TAGS=$(BUILD_TAGS),testnet
+GO_LINKMODE            ?= external
+GOMOD                  ?= readonly
+BUILD_TAGS             ?= osusergo,netgo,hidraw,ledger
+GORELEASER_STRIP_FLAGS ?=
+
+ifeq ($(IS_MAINNET), true)
+	ifeq ($(IS_PREREL), false)
+		IS_STABLE                  := true
+	endif
 endif
 
-ifeq ($(GORELEASER_IS_PREREL),false)
-	GORELEASER_HOMEBREW_NAME=virtengine
-	GORELEASER_HOMEBREW_CUSTOM=
-else
-	GORELEASER_HOMEBREW_NAME="virtengine-edge"
-	GORELEASER_HOMEBREW_CUSTOM=keg_only :unneeded, \"This is testnet release. Run brew install virtengine/tap/virtengine to install mainnet version\"
+ifneq (,$(findstring cgotrace,$(BUILD_OPTIONS)))
+	BUILD_TAGS := $(BUILD_TAGS),cgotrace
 endif
 
-GORELEASER_FLAGS    = -tags="$(GORELEASER_BUILD_TAGS)"
-GORELEASER_LD_FLAGS = -s -w -X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
+GORELEASER_BUILD_VARS := \
+-X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
 -X github.com/cosmos/cosmos-sdk/version.AppName=virtengine \
--X github.com/cosmos/cosmos-sdk/version.BuildTags="$(GORELEASER_BUILD_TAGS)" \
--X github.com/cosmos/cosmos-sdk/version.Version=$(GORELEASER_TAG) \
+-X github.com/cosmos/cosmos-sdk/version.BuildTags=\"$(BUILD_TAGS)\" \
+-X github.com/cosmos/cosmos-sdk/version.Version=$(RELEASE_TAG) \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
-ldflags = -X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
+ldflags = -linkmode=$(GO_LINKMODE) -X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
 -X github.com/cosmos/cosmos-sdk/version.AppName=virtengine \
--X "github.com/cosmos/cosmos-sdk/version.BuildTags=$(BUILD_TAGS)" \
+-X github.com/cosmos/cosmos-sdk/version.BuildTags="$(BUILD_TAGS)" \
 -X github.com/cosmos/cosmos-sdk/version.Version=$(shell git describe --tags | sed 's/^v//') \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
 # check for nostrip option
 ifeq (,$(findstring nostrip,$(BUILD_OPTIONS)))
-	ldflags += -s -w
+	ldflags                += -s -w
+	GORELEASER_STRIP_FLAGS += -s -w
 endif
+
 ldflags += $(LDFLAGS)
 ldflags := $(strip $(ldflags))
 
-BUILD_FLAGS := -mod=readonly -tags "$(BUILD_TAGS)" -ldflags '$(ldflags)'
-# check for nostrip option
-ifeq (,$(findstring nostrip,$(BUILD_OPTIONS)))
-	BUILD_FLAGS += -trimpath
-endif
+BUILD_FLAGS := -mod=$(GOMOD) -tags='$(BUILD_TAGS)' -ldflags '$(ldflags)'
 
 .PHONY: all
 all: build bins
@@ -83,12 +70,10 @@ all: build bins
 clean: cache-clean
 	rm -f $(BINS)
 
-include make/proto.mk
 include make/releasing.mk
 include make/mod.mk
 include make/lint.mk
 include make/test-integration.mk
 include make/test-simulation.mk
 include make/tools.mk
-include make/environment.mk
 include make/codegen.mk

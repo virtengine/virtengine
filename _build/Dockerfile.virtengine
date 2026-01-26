@@ -1,4 +1,5 @@
-FROM debian:buster
+FROM ubuntu:noble
+LABEL "org.opencontainers.image.source"="https://github.com/virtengine-network/node"
 
 COPY ./virtengine /bin/
 

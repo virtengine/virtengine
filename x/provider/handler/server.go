@@ -3,19 +3,18 @@ package handler
 import (
 	"context"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/pkg/errors"
+	errorsmod "cosmossdk.io/errors"
 
-	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
-	mtypes "github.com/virtengine/virtengine/x/market/types"
-	"github.com/virtengine/virtengine/x/provider/keeper"
-	"github.com/virtengine/virtengine/x/provider/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	types "pkg.akt.dev/go/node/provider/v1beta4"
+
+	mkeeper "pkg.akt.dev/node/x/market/keeper"
+	"pkg.akt.dev/node/x/provider/keeper"
 )
 
 var (
 	// ErrInternal defines registered error code for internal error
-	ErrInternal = sdkerrors.Register(types.ModuleName, 10, "internal error")
+	ErrInternal = errorsmod.Register(types.ModuleName, 10, "internal error")
 )
 
 type msgServer struct {
@@ -41,11 +40,11 @@ func (ms msgServer) CreateProvider(goCtx context.Context, msg *types.MsgCreatePr
 	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
 
 	if _, ok := ms.provider.Get(ctx, owner); ok {
-		return nil, errors.Wrapf(types.ErrProviderExists, "id: %s", msg.Owner)
+		return nil, types.ErrProviderExists.Wrapf("id: %s", msg.Owner)
 	}
 
 	if err := ms.provider.Create(ctx, types.Provider(*msg)); err != nil {
-		return nil, sdkerrors.Wrapf(ErrInternal, "err: %v", err)
+		return nil, ErrInternal.Wrapf("err: %v", err)
 	}
 
 	return &types.MsgCreateProviderResponse{}, nil
@@ -60,38 +59,13 @@ func (ms msgServer) UpdateProvider(goCtx context.Context, msg *types.MsgUpdatePr
 	}
 
 	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
-	prov, found := ms.provider.Get(ctx, owner)
+	_, found := ms.provider.Get(ctx, owner)
 	if !found {
-		return nil, errors.Wrapf(types.ErrProviderNotFound, "id: %s", msg.Owner)
-	}
-
-	// all filtering code below is madness!. should make an index to not melt the cpu
-	// TODO: use WithActiveLeases, filter by lease.Provider
-	ms.market.WithLeases(ctx, func(lease mtypes.Lease) bool {
-		if prov.Owner == lease.ID().Provider && (lease.State == mtypes.LeaseActive) {
-			var order mtypes.Order
-			order, found = ms.market.GetOrder(ctx, lease.ID().OrderID())
-			if !found {
-				err = errors.Wrapf(ErrInternal,
-					"order \"%s\" for lease \"%s\" has not been found",
-					order.ID(),
-					lease.ID())
-				return true
-			}
-			if !order.MatchAttributes(msg.Attributes) {
-				err = types.ErrIncompatibleAttributes
-				return true
-			}
-		}
-		return false
-	})
-
-	if err != nil {
-		return nil, err
+		return nil, types.ErrProviderNotFound.Wrapf("id: %s", msg.Owner)
 	}
 
 	if err := ms.provider.Update(ctx, types.Provider(*msg)); err != nil {
-		return nil, sdkerrors.Wrapf(ErrInternal, "err: %v", err)
+		return nil, errorsmod.Wrapf(ErrInternal, "err: %v", err)
 	}
 
 	return &types.MsgUpdateProviderResponse{}, nil
@@ -110,5 +84,5 @@ func (ms msgServer) DeleteProvider(goCtx context.Context, msg *types.MsgDeletePr
 	}
 
 	// TODO: cancel leases
-	return nil, sdkerrors.Wrapf(ErrInternal, "NOTIMPLEMENTED")
+	return nil, ErrInternal.Wrap("NOTIMPLEMENTED")
 }

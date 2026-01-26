@@ -1,44 +1,33 @@
----
-name: Pull Request
-about: Submit a pull request
-title: ''
-labels: ''
-assignees: '@boz @gosuri'
-
----
-
-<!--- Provide a general summary of your changes in the Title above -->
+<!--
+The default pull request template is for types feat, fix, or refactor.
+For other templates, add one of the following parameters to the url:
+- template=docs.md
+- template=other.md
+-->
 
 ## Description
-<!--- Describe your changes in detail -->
 
-## Motivation and Context
-<!--- Why is this change required? What problem does it solve? -->
-<!--- If it fixes an open issue, please link to the issue here. -->
-- [ ] I have raised an issue to propose this change ([required](https://github.com/virtengine/virtengine/blob/master/CONTRIBUTING.md))
-- [ ] My issue has received approval from the maintainers or lead with the `design/approved` label
+Closes: #XXXX
 
+<!-- Add a description of the changes that this PR introduces and the files that
+are the most critical to review. -->
 
-## How Has This Been Tested?
-<!--- Please describe in detail how you tested your changes. -->
-<!--- Include details of your testing environment, and the tests you ran to -->
-<!--- see how your change affects other areas of the code, etc. -->
+---
 
+### Author Checklist
 
-## Types of changes
-<!--- What types of changes does your code introduce? Put an `x` in all the boxes that apply: -->
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+*All items are required. Please add a note to the item if the item is not applicable and
+please add links to any relevant follow-up issues.*
 
+I have...
 
-## Checklist:
-<!--- Go over all the following points, and put an `x` in all the boxes that apply. -->
-<!--- If you're unsure about any of these, don't hesitate to ask. We're here to help! -->
-- [ ] My code follows the code style of this project.
-- [ ] My change requires a change to the documentation.
-- [ ] I have updated the documentation accordingly.
-- [ ] I've read the [CONTRIBUTION](https://github.com/virtengine/virtengine/blob/master/CONTRIBUTING.md) guide
-- [ ] I have signed-off my commits with `git commit -s`
-- [ ] I have added tests to cover my changes.
-- [ ] All new and existing tests passed.
+- [ ] included the correct [type prefix](https://github.com/commitizen/conventional-commit-types/blob/v3.0.0/index.json) in the PR title
+- [ ] added `!` to the type prefix if API or client breaking change
+- [ ] targeted the correct branch (see [PR Targeting](https://github.com/virtengine/node/blob/main/CONTRIBUTING.md#paperwork-for-pull-requests))
+- [ ] provided a link to the relevant issue or specification
+- [ ] included the necessary unit and integration [tests](https://github.com/virtengine/blob/main/CONTRIBUTING.md#testing)
+- [ ] added a changelog entry to `CHANGELOG.md`
+- [ ] included comments for [documenting Go code](https://blog.golang.org/godoc)
+- [ ] updated the relevant documentation or specification
+- [ ] reviewed "Files changed" and left comments if necessary
+- [ ] confirmed all CI checks have passed

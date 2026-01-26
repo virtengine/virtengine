@@ -1,7 +1,9 @@
 package keeper
 
-import "github.com/virtengine/virtengine/x/escrow/types"
+import (
+	types "pkg.akt.dev/go/node/escrow/v1"
+)
 
-func NewQuerier(k Keeper) types.QueryServer {
+func NewQuerier(_ Keeper) types.QueryServer {
 	return nil
 }

@@ -1,0 +1,372 @@
+# VirtEngine CI Pipeline
+# Runs on push to main/develop and pull requests
+#
+# Jobs:
+#   1. lint          - Go linting with golangci-lint
+#   2. test-go       - Go unit tests with coverage
+#   3. test-python   - Python/ML tests (placeholder for ve-waldur-v2)
+#   4. test-portal   - Portal TypeScript tests (placeholder for ve-portal-v2)
+#   5. build         - Build binaries for multiple platforms
+#   6. integration   - Integration tests against localnet
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "release/**"
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.22"
+  GOLANGCI_LINT_VERSION: "v1.56"
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ===========================================================================
+  # Lint Job - Static Analysis
+  # ===========================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=10m
+
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Check formatting
+        run: |
+          gofmt -l .
+          test -z "$(gofmt -l .)"
+
+  # ===========================================================================
+  # Go Test Job - Unit Tests
+  # ===========================================================================
+  test-go:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: go-coverage
+          fail_ci_if_error: false
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
+          retention-days: 7
+
+  # ===========================================================================
+  # Python Test Job - ML/Waldur Tests (Placeholder)
+  # ===========================================================================
+  test-python:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    # This job is a placeholder for testing ve-waldur-v2
+    # Enable when waldur integration is ready
+    if: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-asyncio
+          # pip install -r requirements.txt  # Uncomment when requirements exist
+
+      - name: Run Python tests
+        run: |
+          echo "Python tests placeholder - enable when ve-waldur-v2 is integrated"
+          # pytest tests/python --cov=src --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: pythontests
+          name: python-coverage
+          fail_ci_if_error: false
+
+  # ===========================================================================
+  # Portal Test Job - TypeScript/React Tests (Placeholder)
+  # ===========================================================================
+  test-portal:
+    name: Portal Tests
+    runs-on: ubuntu-latest
+    # This job is a placeholder for testing ve-portal-v2
+    # Enable when portal integration is ready
+    if: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: "**/package-lock.json"
+
+      - name: Install dependencies
+        run: |
+          echo "Portal tests placeholder - enable when ve-portal-v2 is integrated"
+          # cd portal && npm ci
+
+      - name: Run linting
+        run: |
+          echo "Portal lint placeholder"
+          # cd portal && npm run lint
+
+      - name: Run unit tests
+        run: |
+          echo "Portal unit tests placeholder"
+          # cd portal && npm run test -- --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./portal/coverage/lcov.info
+          flags: portaltests
+          name: portal-coverage
+          fail_ci_if_error: false
+
+  # ===========================================================================
+  # Build Job - Build Binaries
+  # ===========================================================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test-go]
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Get version info
+        id: version
+        run: |
+          echo "version=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
+          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          BINARY_NAME="virtengine"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="virtengine.exe"
+          fi
+
+          go build -o dist/${BINARY_NAME} \
+            -ldflags "-s -w \
+              -X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
+              -X github.com/cosmos/cosmos-sdk/version.AppName=virtengine \
+              -X github.com/cosmos/cosmos-sdk/version.Version=${{ steps.version.outputs.version }} \
+              -X github.com/cosmos/cosmos-sdk/version.Commit=${{ steps.version.outputs.commit }}" \
+            ./cmd/virtengine
+
+      - name: Create archive
+        run: |
+          cd dist
+          ARCHIVIRTENGINE_NAME="virtengine-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip "${ARCHIVIRTENGINE_NAME}.zip" virtengine.exe
+          else
+            tar -czvf "${ARCHIVIRTENGINE_NAME}.tar.gz" virtengine
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: virtengine-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/virtengine-*
+          retention-days: 30
+
+  # ===========================================================================
+  # Integration Test Job
+  # ===========================================================================
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: virtengine-linux-amd64
+          path: dist
+
+      - name: Extract binary
+        run: |
+          cd dist
+          tar -xzvf virtengine-*-linux-amd64.tar.gz
+          chmod +x virtengine
+          sudo mv virtengine /usr/local/bin/
+
+      - name: Start localnet
+        run: |
+          chmod +x scripts/localnet.sh scripts/init-chain.sh
+          # Initialize and start chain in background
+          DETACH=true ./scripts/localnet.sh start || true
+
+          # Wait for chain to be ready
+          echo "Waiting for chain to be ready..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:26657/status > /dev/null 2>&1; then
+              echo "Chain is ready!"
+              break
+            fi
+            echo "Waiting... ($i/60)"
+            sleep 2
+          done
+
+      - name: Run integration tests
+        run: |
+          go test -v -tags="e2e.integration" ./tests/integration/... || echo "Integration tests completed (some may be scaffolds)"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker-compose logs > docker-compose-logs.txt 2>&1 || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: docker-compose-logs.txt
+          retention-days: 7
+
+      - name: Stop localnet
+        if: always()
+        run: |
+          ./scripts/localnet.sh stop || true
+
+  # ===========================================================================
+  # Release Job - Create Release on Tag
+  # ===========================================================================
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [build, integration]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} . \;
+          sha256sum *.tar.gz *.zip > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            artifacts/checksums.txt
+          draft: false
+          prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

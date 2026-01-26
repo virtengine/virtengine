@@ -1,8 +1,9 @@
 package provider
 
 import (
-	"github.com/virtengine/virtengine/x/provider/keeper"
-	"github.com/virtengine/virtengine/x/provider/types"
+	types "pkg.akt.dev/go/node/provider/v1beta4"
+
+	"pkg.akt.dev/node/x/provider/keeper"
 )
 
 const (

@@ -1,15 +1,16 @@
 package market
 
 import (
-	"github.com/virtengine/virtengine/x/market/keeper"
-	"github.com/virtengine/virtengine/x/market/types"
+	v1 "pkg.akt.dev/go/node/market/v1"
+
+	"pkg.akt.dev/node/x/market/keeper"
 )
 
 const (
 	// StoreKey represents storekey of market module
-	StoreKey = types.StoreKey
+	StoreKey = v1.StoreKey
 	// ModuleName represents current module name
-	ModuleName = types.ModuleName
+	ModuleName = v1.ModuleName
 )
 
 type (

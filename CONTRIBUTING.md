@@ -6,7 +6,7 @@ Guidelines for contributing.
 
 ### How can I get involved?
 
-The [Discourse forum](https://forum.virtengine.network/) is the best place to keep up to date with the project and to get help contributing. Here we exchange ideas, ask questions and chat about VirtEngine.
+The [Discourse forum](https://forum.virtengine.com/) is the best place to keep up to date with the project and to get help contributing. Here we exchange ideas, ask questions and chat about VirtEngine.
 
 There are a number of areas where contributions can be accepted:
 
@@ -20,7 +20,7 @@ There are a number of areas where contributions can be accepted:
 * Manage, triage and research Issues and Pull Requests
 * Engage with the growing community by providing technical support on Slack/GitHub
 * Create docs, guides and write blogs
-* Speak at meet-ups, conferences or by helping folks with VirtEngine [on the Discourse forum](https://forum.virtengine.network/)
+* Speak at meet-ups, conferences or by helping folks with VirtEngine [on the Discourse forum](https://forum.virtengine.com/)
 
 This is just a short list of ideas, if you have other ideas for contributing please make a suggestion.
 
@@ -28,7 +28,7 @@ This is just a short list of ideas, if you have other ideas for contributing ple
 
 #### I've found a typo
 
-* A Pull Request is not necessary. Raise an [Issue](https://github.com/virtengine/virtengine/issues) and we'll fix it as soon as we can.
+* A Pull Request is not necessary. Raise an [Issue](https://github.com/virtengine/support/issues) and we'll fix it as soon as we can.
 
 #### I have a (great) idea
 
@@ -57,79 +57,13 @@ Every effort will be made to work with contributors who do not follow the proces
 
 #### Paperwork for Pull Requests
 
-Please read this whole guide and make sure you agree to the Developer Certificate of Origin (DCO) agreement (included below):
+Ensure that you base and target your PR on the `main` branch.
+All feature additions and all bug fixes must be targeted against main. Exception is for bug fixes which are only related to a released version. In that case, the related bug fix PRs must target against the release branch.
+If needed, we backport a commit from main to a release branch (excluding consensus breaking feature, API breaking and similar).
 
-* See guidelines on commit messages (below)
-* Sign-off your commits (`git commit --signoff` or `-s`)
-* Complete the whole template for issues and pull requests
-* [Reference addressed issues](https://help.github.com/articles/closing-issues-using-keywords/) in the PR description & commit messages - use 'Fixes #IssueNo'
-* Always give instructions for testing
-* Provide us CLI commands and output or screenshots where you can
+#### Testing
 
-##### Commit messages
-
-The first line of the commit message is the *subject*, this should be followed by a blank line and then a message describing the intent and purpose of the commit.
-The first line MUST comply with conventional commits approach.
-```
-<type>[optional scope]: <description>
-
-[body]
-```
-
-The type field MUST be one of the following:
-```
-fix, feat, build, chore, ci, docs, style, refactor, perf, test
-```
-
-The body MAY include module/list of modules it affects.
-```
-feat: read virtengine config from some config system
-
-cmd/virtengine
-```
-The specification can be found [here](https://www.conventionalcommits.org/en/v1.0.0/#specification).
-
-* When you run `git commit` make sure you sign-off the commit by typing `git commit --signoff` or `git commit -s`
-* The commit subject-line should start with an uppercase letter
-* The commit subject-line should not exceed 72 characters in length
-* The commit subject-line should not end with punctuation (., etc)
-
-> Note: please do not use the GitHub suggestions feature, since it will not allow your commits to be signed-off.
-
-When giving a commit body:
-* Leave a blank line after the subject-line
-* Make sure all lines are wrapped to 72 characters
-
-Here's an example that would be accepted:
-
-```
-keys: add import and export functions (#386)
-
-add display public key only for key show add display private key only
-for key show new command `key import` add import private key import private
-key when running providers
-
-Signed-off-by: Greg Osuri <me@gregosuri.com>
-```
-
-Some invalid examples:
-
-```
-(feat) Add page about X to documentation
-```
-
-> This example does not follow the convention by adding a custom scheme of `(feat)`
-
-```
-Update the documentation for page X so including fixing A, B, C and D and F.
-```
-
-> This example will be truncated in the GitHub UI and via `git log --oneline`
-
-
-If you would like to ammend your commit follow this guide: [Git: Rewriting History](https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History)
-
-#### Unit testing with Golang
+Tests can be executed by running `make test` at the top level of the Cosmos SDK repository.
 
 Please follow style guide on [this blog post](https://blog.alexellis.io/golang-writing-unit-tests/) from [The Go Programming Language](https://www.amazon.co.uk/Programming-Language-Addison-Wesley-Professional-Computing/dp/0134190440)
 
@@ -143,7 +77,7 @@ at the very beginning of the test, and it will fail the test if it detects gorou
 
 #### I have a question, a suggestion or need help
 
-If you have a simple question you can [join the VirtEngine community](https://virtengine.network/community) and ask there, but please bear in mind that contributors may live in a different timezone or be working to a different timeline to you. If you have an urgent request then let them know about this.
+If you have a simple question you can [join the VirtEngine community](https://virtengine.com/community) and ask there, but please bear in mind that contributors may live in a different timezone or be working to a different timeline to you. If you have an urgent request then let them know about this.
 
 If you have a deeply technical request or need help debugging your application then you should prepare a simple, public GitHub repository with the minimum amount of code required to reproduce the issue.
 
@@ -215,11 +149,11 @@ How are credentials managed for quay.io and the Docker Hub? These credentials ar
 
 ## Governance
 
-VirtEngine Network is an independent open-source project which was created by the Overclock Labs, Inc in 2017. The project is maintained and developed by a number of regular volunteers and a wider community of open-source developers.
+VirtEngine is an independent open-source project which was created by the Overclock Labs, Inc in 2017. The project is maintained and developed by a number of regular volunteers and a wider community of open-source developers.
 
-Overclock Labs hosts and sponsors the development and maintenance of VirtEngine Network. Overclock Labs provides professional services, consultation and support. Contact us at [virtengine.network/contact](https://virtengine.network/contact) to find out more.
+Overclock Labs hosts and sponsors the development and maintenance of VirtEngine. Overclock Labs provides professional services, consultation and support. Contact us at [virtengine.com/contact](https://virtengine.com/contact) to find out more.
 
-VirtEngine Network &trade; is a registered trademark of Overclock Labs.
+VirtEngine &trade; is a registered trademark of Overclock Labs.
 
 #### Project Lead
 
@@ -229,7 +163,7 @@ Some duties include:
 
 * Setting overall technical & community leadership
 * Engaging end-user community to advocate needs of end-users and to capture case-studies
-* Defining and curating roadmap for VirtEngine Network
+* Defining and curating roadmap for VirtEngine
 * Building a community and team of contributors
 * Community & media briefings, out-bound communications, partnerships, relationship management and events
 
@@ -250,7 +184,7 @@ The Core Team includes:
 - Daniel Ceballos (@dceballos)
 - Boz Menzalji (@bmenzalji)
 
-The Core Team have the ear of the Project Lead. They help with strategy, project maintenance, community management, and make a regular commitment of time to the project on a weekly basis. The Core Team will usually be responsible for, or be a subject-matter-expert (SME) for a sub-system of VirtEngine Network. Core Team may be granted write (push) access to one or more sub-systems.
+The Core Team have the ear of the Project Lead. They help with strategy, project maintenance, community management, and make a regular commitment of time to the project on a weekly basis. The Core Team will usually be responsible for, or be a subject-matter-expert (SME) for a sub-system of VirtEngine. Core Team may be granted write (push) access to one or more sub-systems.
 
 The Core Team gain access to a private *core* channel and are required to participate on a regular basis.
 
@@ -276,7 +210,7 @@ The Members Team are contributors who are well-known to the community with a tra
 Members Team Perks:
 * access to a private Slack channel
 * profile posted on the Team page of the VirtEngine website
-* membership of the GitHub organizations virtengine
+* membership of the GitHub organization VirtEngine
 
 Upon request and subject to availability:
 * 1:1 coaching & mentorship
@@ -309,7 +243,7 @@ If you would like invites, sign-up to Slack and pick "Yes" to Community Events a
 
 ## Branding guidelines
 
-For press, branding, logos and marks see the [VirtEngine Network website](https://virtengine.network/brand).
+For press, branding, logos and marks see the [VirtEngine website](https://virtengine.com/brand).
 
 ## Community
 
@@ -317,16 +251,16 @@ This project is written in Golang but many of the community contributions so far
 
 ### Chat
 
-There is a forum which you are welcome to join to discuss VirtEngine Network, Kubernetes, Serverless, FaaS, Blockchain.
+There is a forum which you are welcome to join to discuss VirtEngine, Kubernetes, Serverless, FaaS, Blockchain.
 
-[Join discourse here](https://forum.virtengine.network/)
+[Join discourse here](https://forum.virtengine.com/)
 
 [Join Discord here](https://discord.com/invite/DxftX67)
 
 
 ### Roadmap
 
-* Browse open issues in [overclock/virtengine](https://github.com/virtengine/virtengine/issues)
+* Browse open issues in [support](https://github.com/virtengine/support/issues)
 
 ## License
 
@@ -339,7 +273,7 @@ It is important to state that you retain copyright for your contributions, but a
 Please add a Copyright notice to new files you add where this is not already present.
 
 ```
-// Copyright (c) VirtEngine Network Author(s) 2019. All rights reserved.
+// Copyright (c) VirtEngine Author(s) 2019. All rights reserved.
 // Licensed under the Apache 2.0 license. See LICENSE file in the project root for full license information.
 ```
 

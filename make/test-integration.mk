@@ -1,54 +1,34 @@
-COVER_PACKAGES = $(shell go list ./... | grep -v mock)
-# This is statically specified in the vagrant configuration
-KUBE_NODE_IP ?= 172.18.8.101
-###############################################################################
-###                           Integration                                   ###
-###############################################################################
+COVER_PACKAGES = $(shell go list ./... | grep -v mock | paste -sd, -)
 
-INTEGRATION_VARS := TEST_INTEGRATION=true
-
-test-e2e-integration:
-	# Assumes cluster created: `make -s -C _run/kube kind-cluster-create`
-	$(KIND_VARS) $(INTEGRATION_VARS) go test -count=1 -mod=readonly -p 4 -tags "e2e $(BUILD_MAINNET)" -v ./integration/... -run TestIntegrationTestSuite
-
-test-e2e-integration-k8s:
-	$(INTEGRATION_VARS) KUBE_NODE_IP="$(KUBE_NODE_IP)" KUBE_INGRESS_IP=127.0.0.1 KUBE_INGRESS_PORT=10080 go test -count=1 -mod=readonly -p 4 -tags "e2e $(BUILD_MAINNET)" -v ./integration/... -run TestIntegrationTestSuite
-
-test-query-app:
-	 $(INTEGRATION_VARS) $(KIND_VARS) go test -mod=readonly -p 4 -tags "e2e integration $(BUILD_MAINNET)" -v ./integration/... -run TestQueryApp
-
-test-k8s-integration:
-	# ASSUMES:
-	# 1. cluster created - `kind create cluster`
-	# 2. cluster setup   - ./script/setup-kind.sh
-	go test -count=1 -v -tags k8s_integration ./pkg/apis/virtengine.network/v1
-	go test -count=1 -v -tags k8s_integration ./provider/cluster/kube
-
+TEST_MODULES ?= $(shell $(GO) list ./... | grep -v '/mocks')
 
 ###############################################################################
 ###                           Misc tests                                    ###
 ###############################################################################
 
-shellcheck:
-	docker run --rm \
-	--volume ${PWD}:/shellcheck \
-	--entrypoint sh \
-	koalaman/shellcheck-alpine:stable \
-	-x /shellcheck/script/shellcheck.sh
-
+.PHONY: test
 test:
-	$(GO) test -tags=$(BUILD_MAINNET) -timeout 300s ./...
+	$(GO_TEST) -v -timeout 600s $(TEST_MODULES)
 
+.PHONY: test-nocache
 test-nocache:
-	$(GO) test -tags=$(BUILD_MAINNET) -count=1 ./...
+	$(GO_TEST) -count=1 $(TEST_MODULES)
 
+.PHONY: test-full
 test-full:
-	$(GO) test -tags=$(BUILD_MAINNET) -race ./...
+	$(GO_TEST) -v -tags=$(BUILD_TAGS) $(TEST_MODULES)
 
+.PHONY: test-integration
+test-integration:
+	$(GO_TEST) -v -tags="e2e.integration" $(TEST_MODULES)
+
+.PHONY: test-coverage
 test-coverage:
-	$(GO) test -tags=$(BUILD_MAINNET) -coverprofile=coverage.txt \
+	$(GO_TEST) -tags=$(BUILD_MAINNET) -coverprofile=coverage.txt \
 		-covermode=count \
-		-coverpkg=$(COVER_PACKAGES)
+		-coverpkg="$(COVER_PACKAGES)" \
+		./...
 
+.PHONY: test-vet
 test-vet:
-	$(GO) vet ./...
+	$(GO_VET) ./...

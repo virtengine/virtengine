@@ -1,30 +1,38 @@
 package handler_test
 
 import (
+	"errors"
 	"sort"
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/store"
+	"github.com/stretchr/testify/require"
+
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
+	storetypes "cosmossdk.io/store/types"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdktestdata "github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	dbm "github.com/tendermint/tm-db"
+	testutilmod "github.com/cosmos/cosmos-sdk/types/module/testutil"
 
-	"github.com/virtengine/virtengine/testutil"
-	"github.com/virtengine/virtengine/x/audit/handler"
-	"github.com/virtengine/virtengine/x/audit/keeper"
-	"github.com/virtengine/virtengine/x/audit/types"
+	types "pkg.akt.dev/go/node/audit/v1"
+
+	"pkg.akt.dev/go/testutil"
+
+	"pkg.akt.dev/node/x/audit/handler"
+	"pkg.akt.dev/node/x/audit/keeper"
 )
 
 type testSuite struct {
 	t       testing.TB
-	ms      sdk.CommitMultiStore
+	ms      store.CommitMultiStore
 	ctx     sdk.Context
 	keeper  keeper.Keeper
-	handler sdk.Handler
+	handler baseapp.MsgServiceHandler
 }
 
 func setupTestSuite(t *testing.T) *testSuite {
@@ -32,18 +40,21 @@ func setupTestSuite(t *testing.T) *testSuite {
 		t: t,
 	}
 
-	aKey := sdk.NewTransientStoreKey(types.StoreKey)
+	cfg := testutilmod.MakeTestEncodingConfig()
+	cdc := cfg.Codec
+
+	aKey := storetypes.NewTransientStoreKey(types.StoreKey)
 
 	db := dbm.NewMemDB()
-	suite.ms = store.NewCommitMultiStore(db)
-	suite.ms.MountStoreWithDB(aKey, sdk.StoreTypeIAVL, db)
+	suite.ms = store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	suite.ms.MountStoreWithDB(aKey, storetypes.StoreTypeIAVL, db)
 
 	err := suite.ms.LoadLatestVersion()
 	require.NoError(t, err)
 
 	suite.ctx = sdk.NewContext(suite.ms, tmproto.Header{}, true, testutil.Logger(t))
 
-	suite.keeper = keeper.NewKeeper(types.ModuleCdc, aKey)
+	suite.keeper = keeper.NewKeeper(cdc, aKey)
 
 	suite.handler = handler.NewHandler(suite.keeper)
 
@@ -189,14 +200,14 @@ func TestProviderDeleteAttribute(t *testing.T) {
 	require.Equal(t, prov, msgSignProviderAttributesToResponse(msg))
 }
 
-func msgSignProviderAttributesToResponse(msg *types.MsgSignProviderAttributes) types.Providers {
+func msgSignProviderAttributesToResponse(msg *types.MsgSignProviderAttributes) types.AuditedProviders {
 	// create handler sorts attributes, so do we to ensure same order
 
 	sort.SliceStable(msg.Attributes, func(i, j int) bool {
 		return msg.Attributes[i].Key < msg.Attributes[j].Key
 	})
 
-	return types.Providers{
+	return types.AuditedProviders{
 		{
 			Owner:      msg.Owner,
 			Auditor:    msg.Auditor,

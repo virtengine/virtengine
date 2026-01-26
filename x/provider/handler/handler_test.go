@@ -1,22 +1,24 @@
 package handler_test
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdktestdata "github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 
-	"github.com/virtengine/virtengine/testutil"
-	"github.com/virtengine/virtengine/testutil/state"
-	virtenginetypes "github.com/virtengine/virtengine/types"
-	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
-	"github.com/virtengine/virtengine/x/provider/handler"
+	types "pkg.akt.dev/go/node/provider/v1beta4"
+	vetypes "pkg.akt.dev/go/node/types/attributes/v1"
+	"pkg.akt.dev/go/testutil"
 
-	"github.com/virtengine/virtengine/x/provider/keeper"
-	"github.com/virtengine/virtengine/x/provider/types"
+	"pkg.akt.dev/node/testutil/state"
+	mkeeper "pkg.akt.dev/node/x/market/keeper"
+	"pkg.akt.dev/node/x/provider/handler"
+	"pkg.akt.dev/node/x/provider/keeper"
 )
 
 const (
@@ -28,7 +30,7 @@ type testSuite struct {
 	ctx     sdk.Context
 	keeper  keeper.IKeeper
 	mkeeper mkeeper.IKeeper
-	handler sdk.Handler
+	handler baseapp.MsgServiceHandler
 }
 
 func setupTestSuite(t *testing.T) *testSuite {
@@ -66,13 +68,14 @@ func TestProviderCreate(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("ensure event created", func(t *testing.T) {
+		ev, err := sdk.ParseTypedEvent(res.Events[0])
+		require.NoError(t, err)
 
-		iev := testutil.ParseProviderEvent(t, res.Events)
-		require.IsType(t, types.EventProviderCreated{}, iev)
+		require.IsType(t, &types.EventProviderCreated{}, ev)
 
-		dev := iev.(types.EventProviderCreated)
+		dev := ev.(*types.EventProviderCreated)
 
-		require.Equal(t, msg.Owner, dev.Owner.String())
+		require.Equal(t, msg.Owner, dev.Owner)
 	})
 
 	res, err = suite.handler(suite.ctx, msg)
@@ -87,7 +90,7 @@ func TestProviderCreateWithInfo(t *testing.T) {
 	msg := &types.MsgCreateProvider{
 		Owner:   testutil.AccAddress(t).String(),
 		HostURI: testutil.ProviderHostname(t),
-		Info: types.ProviderInfo{
+		Info: types.Info{
 			EMail:   emailValid,
 			Website: testutil.Hostname(t),
 		},
@@ -98,13 +101,14 @@ func TestProviderCreateWithInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("ensure event created", func(t *testing.T) {
+		ev, err := sdk.ParseTypedEvent(res.Events[0])
+		require.NoError(t, err)
 
-		iev := testutil.ParseProviderEvent(t, res.Events)
-		require.IsType(t, types.EventProviderCreated{}, iev)
+		require.IsType(t, &types.EventProviderCreated{}, ev)
 
-		dev := iev.(types.EventProviderCreated)
+		dev := ev.(*types.EventProviderCreated)
 
-		require.Equal(t, msg.Owner, dev.Owner.String())
+		require.Equal(t, msg.Owner, dev.Owner)
 	})
 
 	res, err = suite.handler(suite.ctx, msg)
@@ -126,7 +130,7 @@ func TestProviderCreateWithDuplicated(t *testing.T) {
 
 	res, err := suite.handler(suite.ctx, msg)
 	require.Nil(t, res)
-	require.EqualError(t, err, virtenginetypes.ErrAttributesDuplicateKeys.Error())
+	require.EqualError(t, err, vetypes.ErrAttributesDuplicateKeys.Error())
 }
 
 func TestProviderUpdateWithDuplicated(t *testing.T) {
@@ -151,7 +155,7 @@ func TestProviderUpdateWithDuplicated(t *testing.T) {
 
 	res, err := suite.handler(suite.ctx, updateMsg)
 	require.Nil(t, res)
-	require.EqualError(t, err, virtenginetypes.ErrAttributesDuplicateKeys.Error())
+	require.EqualError(t, err, vetypes.ErrAttributesDuplicateKeys.Error())
 }
 
 func TestProviderUpdateExisting(t *testing.T) {
@@ -177,12 +181,14 @@ func TestProviderUpdateExisting(t *testing.T) {
 	res, err := suite.handler(suite.ctx, updateMsg)
 
 	t.Run("ensure event created", func(t *testing.T) {
-		iev := testutil.ParseProviderEvent(t, res.Events[1:])
-		require.IsType(t, types.EventProviderUpdated{}, iev)
+		ev, err := sdk.ParseTypedEvent(res.Events[1])
+		require.NoError(t, err)
 
-		dev := iev.(types.EventProviderUpdated)
+		require.IsType(t, &types.EventProviderUpdated{}, ev)
 
-		require.Equal(t, updateMsg.Owner, dev.Owner.String())
+		dev := ev.(*types.EventProviderUpdated)
+
+		require.Equal(t, updateMsg.Owner, dev.Owner)
 	})
 
 	require.NoError(t, err)
@@ -222,41 +228,10 @@ func TestProviderUpdateAttributes(t *testing.T) {
 	err := suite.keeper.Create(suite.ctx, types.Provider(*createMsg))
 	require.NoError(t, err)
 
-	group := testutil.DeploymentGroup(t, testutil.DeploymentID(t), 0)
-
-	group.GroupSpec.Resources = testutil.Resources(t)
-	group.GroupSpec.Requirements = virtenginetypes.PlacementRequirements{
-		Attributes: createMsg.Attributes,
-	}
-
-	order, err := suite.mkeeper.CreateOrder(suite.ctx, group.ID(), group.GroupSpec)
-	require.NoError(t, err)
-
-	price := testutil.Coin(t)
-
-	bid, err := suite.mkeeper.CreateBid(suite.ctx, order.ID(), addr, price)
-	require.NoError(t, err)
-
-	suite.mkeeper.CreateLease(suite.ctx, bid)
-
+	updateMsg.Attributes = nil
 	res, err := suite.handler(suite.ctx, updateMsg)
 	require.NoError(t, err)
 	require.NotNil(t, res)
-
-	t.Run("ensure event created", func(t *testing.T) {
-
-		iev := testutil.ParseProviderEvent(t, res.Events[4:])
-		require.IsType(t, types.EventProviderUpdated{}, iev)
-
-		dev := iev.(types.EventProviderUpdated)
-
-		require.Equal(t, updateMsg.Owner, dev.Owner.String())
-	})
-
-	updateMsg.Attributes = nil
-	res, err = suite.handler(suite.ctx, updateMsg)
-	require.Error(t, err, types.ErrIncompatibleAttributes.Error())
-	require.Nil(t, res)
 }
 
 func TestProviderDeleteExisting(t *testing.T) {
@@ -281,7 +256,7 @@ func TestProviderDeleteExisting(t *testing.T) {
 	require.EqualError(t, err, "NOTIMPLEMENTED: "+handler.ErrInternal.Error())
 	require.True(t, errors.Is(err, handler.ErrInternal))
 
-	t.Run("ensure event created", func(t *testing.T) {
+	t.Run("ensure event created", func(_ *testing.T) {
 		// TODO: this should emit a ProviderDelete
 	})
 }

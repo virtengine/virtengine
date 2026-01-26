@@ -1,0 +1,200 @@
+# VirtEngine Local Development Environment
+# One-command startup: docker-compose up -d
+#
+# Services:
+#   - virtengine-node: Cosmos SDK blockchain node (single validator)
+#   - waldur: Resource management service (placeholder)
+#   - portal: Web UI service (placeholder)
+#   - provider-daemon: Provider service daemon (placeholder)
+
+version: "3.9"
+
+networks:
+  virtengine-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  chain-data:
+    driver: local
+  waldur-data:
+    driver: local
+  portal-data:
+    driver: local
+  provider-data:
+    driver: local
+
+services:
+  # =============================================================================
+  # VirtEngine Chain Node (Single Validator)
+  # =============================================================================
+  virtengine-node:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.virtengine
+    container_name: virtengine-node
+    hostname: virtengine-node
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.10
+    ports:
+      - "26656:26656"   # P2P
+      - "26657:26657"   # RPC
+      - "1317:1317"     # REST API
+      - "9090:9090"     # gRPC
+      - "9091:9091"     # gRPC-Web
+    volumes:
+      - chain-data:/root/.virtengine
+      - ./scripts:/scripts:ro
+    environment:
+      - CHAIN_ID=virtengine-localnet-1
+      - MONIKER=localvalidator
+      - KEYRING_BACKEND=test
+    entrypoint: ["/scripts/init-chain.sh"]
+    command: ["virtengine-localnet-1", "virtengine1test000000000000000000000000000test"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # =============================================================================
+  # Waldur - Resource Management Service (Placeholder)
+  # External repo: ve-waldur-v2
+  # =============================================================================
+  waldur:
+    image: python:3.11-slim
+    container_name: waldur
+    hostname: waldur
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.20
+    ports:
+      - "8080:8080"   # Waldur API
+    volumes:
+      - waldur-data:/app/data
+    environment:
+      - VIRTENGINE_NODE_URL=http://virtengine-node:26657
+      - VIRTENGINE_GRPC_URL=virtengine-node:9090
+      - DATABASE_URL=sqlite:///app/data/waldur.db
+      - LOG_LEVEL=debug
+    # Placeholder command - replace with actual waldur startup
+    command: >
+      sh -c "echo 'Waldur placeholder service starting...' &&
+             echo 'Waiting for virtengine-node...' &&
+             sleep 5 &&
+             python -m http.server 8080"
+    depends_on:
+      virtengine-node:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # =============================================================================
+  # Portal - Web UI Service (Placeholder)
+  # External repo: ve-portal-v2
+  # =============================================================================
+  portal:
+    image: node:20-alpine
+    container_name: portal
+    hostname: portal
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.30
+    ports:
+      - "3000:3000"   # Portal web UI
+    volumes:
+      - portal-data:/app/data
+    environment:
+      - NEXT_PUBLIC_CHAIN_RPC_URL=http://localhost:26657
+      - NEXT_PUBLIC_CHAIN_REST_URL=http://localhost:1317
+      - NEXT_PUBLIC_WALDUR_API_URL=http://localhost:8080
+      - NODE_ENV=development
+    working_dir: /app
+    # Placeholder command - replace with actual portal startup
+    command: >
+      sh -c "echo 'Portal placeholder service starting...' &&
+             echo 'Waiting for dependencies...' &&
+             sleep 10 &&
+             npx serve -l 3000 -s /app/data || (echo 'Placeholder server' && sleep infinity)"
+    depends_on:
+      - virtengine-node
+      - waldur
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # =============================================================================
+  # Provider Daemon - Marketplace Provider Service (Placeholder)
+  # =============================================================================
+  provider-daemon:
+    image: golang:1.22-alpine
+    container_name: provider-daemon
+    hostname: provider-daemon
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.40
+    ports:
+      - "8443:8443"   # Provider API
+      - "8444:8444"   # Provider gRPC
+    volumes:
+      - provider-data:/root/.provider
+      - ./scripts:/scripts:ro
+    environment:
+      - VIRTENGINE_NODE_URL=http://virtengine-node:26657
+      - VIRTENGINE_GRPC_URL=virtengine-node:9090
+      - PROVIDER_HOST=provider-daemon
+      - PROVIDER_PORT=8443
+      - LOG_LEVEL=debug
+    # Placeholder command - replace with actual provider daemon
+    command: >
+      sh -c "echo 'Provider daemon placeholder starting...' &&
+             echo 'Waiting for virtengine-node...' &&
+             sleep 10 &&
+             echo 'Provider daemon ready (placeholder)' &&
+             sleep infinity"
+    depends_on:
+      virtengine-node:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # Test Runner - For running integration tests
+  # =============================================================================
+  test-runner:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.test
+    container_name: test-runner
+    hostname: test-runner
+    networks:
+      - virtengine-net
+    volumes:
+      - .:/workspace:ro
+      - ./tests:/workspace/tests
+    environment:
+      - VIRTENGINE_NODE_URL=http://virtengine-node:26657
+      - VIRTENGINE_GRPC_URL=virtengine-node:9090
+      - WALDUR_API_URL=http://waldur:8080
+      - PORTAL_URL=http://portal:3000
+    working_dir: /workspace
+    command: ["echo", "Test runner ready. Use: docker-compose run test-runner go test ./tests/integration/..."]
+    depends_on:
+      - virtengine-node
+      - waldur
+      - portal
+      - provider-daemon
+    profiles:
+      - test

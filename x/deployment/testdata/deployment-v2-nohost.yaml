@@ -3,7 +3,7 @@ version: "2.0"
 
 services:
   web:
-    image: quay.io/virtengine/demo-app
+    image: ghcr.io/virtengine/demo-app
     expose:
       - port: 80
         to:
@@ -24,7 +24,7 @@ profiles:
     global:
       pricing:
         web:
-          denom: uve
+          denom: uakt
           amount: 10
 
 deployment:

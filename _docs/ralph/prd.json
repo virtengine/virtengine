@@ -1,0 +1,1654 @@
+{
+  "branchName": "virtengine/prd-mvp-to-ga",
+  "taskDescription": "Define and implement VirtEngine end-to-end: a Cosmos-SDK-based hybrid blockchain with (1) decentralized identity verification (VEID) producing an on-chain identity trust score, (2) on-chain MFA gating for sensitive transactions, (3) an on-chain Cloud Marketplace integrated with Waldur and encrypted sensitive payloads, (4) Provider Daemon(s) that bid on orders, provision workloads via orchestration APIs (Kubernetes/SLURM), and record signed usage on-chain, and (5) a decentralized distributed computing 'Supercomputer' via SLURM clusters controlled through blockchain modules and marketplace flows.",
+  "projectContext": {
+    "blockchainFramework": "Cosmos SDK (Tendermint consensus, PoS staking validators also operate Identity Network)",
+    "primaryLanguages": [
+      "Golang (Cosmos SDK modules, provider daemon, orchestration adapters)",
+      "Python (TensorFlow model training, evaluation, data pipelines)",
+      "TypeScript (Web UI, API client SDKs)",
+      "Django/Python (Waldur services and plugins; existing codebase integration)"
+    ],
+    "repos": [
+      "virtengine/virtengine (Cosmos chain + custom modules based on virtengine source)",
+      "virtengine/ve-waldur-v2 (Waldur marketplace integration)",
+      "virtengine/ve-portal-v2 (React portal/admin UI)",
+      "virtengine/tendermint (consensus base as referenced)"
+    ],
+    "buildCommand": {
+      "cosmosChain": "make build (or go build ./...)",
+      "cosmosTests": "go test ./...",
+      "providerDaemon": "go test ./... && go build ./cmd/...",
+      "mlTraining": "python -m pip install -r requirements.txt && python -m pytest",
+      "portal": "pnpm install && pnpm build",
+      "waldur": "docker compose up -d && python -m pytest"
+    },
+    "testCommand": {
+      "unit": [
+        "go test ./... (chain/modules/daemon)",
+        "python -m pytest (ml + waldur)",
+        "pnpm test (portal)"
+      ],
+      "integration": [
+        "spin up localnet + waldur via docker compose; run e2e order->bid->provision->usage->settlement",
+        "identity upload -> validator decrypt -> ML scoring -> consensus recheck -> score committed"
+      ]
+    },
+    "nonFunctionalTargets": {
+      "security": [
+        "All sensitive on-chain payloads use public-key encryption to intended recipient; encrypted in transit & at rest",
+        "Approved-client + user file signatures enforced for identity scope uploads",
+        "MFA required for configured sensitive transactions (account recovery, processing transactions, key rotation)"
+      ],
+      "reliability": [
+        "No single point of failure for identity verification or order fulfilment (validator + daemon redundancy)",
+        "Idempotent state transitions for orders/provisioning"
+      ],
+      "performance": [
+        "Identity scoring must complete within block proposal window or use async workflow with on-chain pending->finalized status",
+        "Provider daemon must handle burst order events and backpressure orchestration APIs"
+      ],
+      "compliance": [
+        "Role-based access control + encryption supports privacy constraints while allowing public ledger transparency"
+      ]
+    }
+  },
+  "projectContextFromSpec": {
+    "coreComponents": [
+      "VE Blockchain (Cosmos SDK chain)",
+      "VE Identification (VEID) with ML scoring 0-100",
+      "On-chain MFA module for sensitive actions",
+      "Encryption subsystem (public key encryption; encrypted in transit/at rest; sensitive data never plaintext on public ledger)",
+      "Cloud Marketplace (Waldur-backed) with on-chain orders/offerings + encrypted payloads",
+      "Provider Daemon (bids, provisions via orchestration APIs like Kubernetes/SLURM, records usage on-chain with signatures)",
+      "Staking network (validators also operate Identity Network and recompute identity verification during consensus)",
+      "Benchmarking daemon (records provider metrics on-chain)"
+    ],
+    "roles": [
+      "GenesisAccount",
+      "Administrator",
+      "Moderator",
+      "Staker/Validator",
+      "ServiceProvider",
+      "Customer",
+      "SupportAgent"
+    ],
+    "sensitiveDataExamples": [
+      "ID documents/scopes",
+      "order configuration/details (credentials, IPs, secrets)",
+      "support requests",
+      "resource details and account settings",
+      "owned organizations, team members, audit logs"
+    ]
+  },
+  "releasePhases": [
+    {
+      "phase": "0 - Program Setup & Architecture Baseline",
+      "outcomes": [
+        "Single source of truth architecture, threat model, and module boundaries",
+        "Local devnet + CI baseline for chain, waldur, portal, daemon"
+      ]
+    },
+    {
+      "phase": "1 - Chain Foundation (Accounts, Roles, Tokens, Encryption, MFA scaffolding)",
+      "outcomes": [
+        "Hybrid role model & permissions",
+        "Encryption primitives + on-chain storage formats",
+        "MFA gating framework wired into transaction routing"
+      ]
+    },
+    {
+      "phase": "2 - VEID v1 (Identity scopes upload, approved-client signatures, ML scoring, consensus verification)",
+      "outcomes": [
+        "Identity score 0-100 written into blocks",
+        "Validators recompute score during consensus and validate file signatures"
+      ]
+    },
+    {
+      "phase": "3 - Cloud Marketplace v1 (Orders/Offerings, Waldur bridge, encrypted payload flows)",
+      "outcomes": [
+        "Users can place orders; providers can list offerings",
+        "Sensitive marketplace payloads encrypted to recipients"
+      ]
+    },
+    {
+      "phase": "4 - Provider Daemon v1 (Bid engine + Kubernetes provisioning + on-chain usage)",
+      "outcomes": [
+        "Automated provisioning from won leases",
+        "Signed usage/status records written on-chain"
+      ]
+    },
+    {
+      "phase": "5 - Supercomputer v1 (SLURM clusters via marketplace; HPC jobs accounting)",
+      "outcomes": [
+        "Batch compute scheduling via SLURM",
+        "Rewards distribution based on on-chain usage"
+      ]
+    },
+    {
+      "phase": "6 - Benchmarking & Marketplace Trust Signals",
+      "outcomes": [
+        "Provider performance metrics recorded on-chain",
+        "UI comparisons for users; fraud signals integration"
+      ]
+    },
+    {
+      "phase": "7 - Portal, Admin, Ops Hardening",
+      "outcomes": [
+        "Full UI flows: onboarding, identity, marketplace, HPC, admin moderation",
+        "Observability, audits, incident playbooks"
+      ]
+    },
+    {
+      "phase": "8 - GA Readiness",
+      "outcomes": [
+        "Security audit + load testing",
+        "Mainnet genesis + validator onboarding plan",
+        "Docs + SDKs"
+      ]
+    }
+  ],
+  "userStories": [
+    {
+      "id": "VE-000",
+      "title": "Phase 0 - Define system boundaries, data classifications, and threat model",
+      "description": "Create an authoritative architecture + security baseline for VEID + Marketplace + Provider Daemon + Supercomputer, including sensitive data classification and encryption/MFA requirements.",
+      "acceptanceCriteria": [
+        "Architecture doc maps modules: VEID, MFA, Encryption, Marketplace, Provider Daemon, SLURM/HPC, Benchmarking, Role model",
+        "Sensitive data list and handling rules are defined (on-chain encrypted; in transit + at rest encrypted)",
+        "Threat model includes: key theft, malicious provider, fraudulent identity uploads, replay attacks, validator collusion, rogue approved client",
+        "Defines which transactions are 'sensitive' and require MFA gating",
+        "Defines SLAs for identity scoring and provisioning state transitions"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Derive requirements from accepted claims: validator decrypt+ML score+write to block; consensus validators recompute and verify approved-client signatures; MFA gating; provider daemon orchestration + on-chain usage; encryption with public key for intended recipient."
+    },
+    {
+      "id": "VE-001",
+      "title": "Phase 0 - rename all references in virtengine source code to 'VirtEngine'",
+      "description": "Rename everything in the virtengine source code to use 'VirtEngine' instead.",
+      "acceptanceCriteria": [
+        "virtengine only mentioned in the readme as a source",
+        "No reference to virtengine naming conventions, for e.g. : 'virtengine_DEVCACHE_BASE' becomes 'VIRTENGINE_DEVCACHE_BASE' etc.",
+        "virtengine -> VirtEngine, virtengine -> VE, virtengine -> ve, etc, akt.io -> source.virtengine.com in all code, comments, documentation, and scripts",
+        "Can build and run the VirtEngine binary"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Ensure can be succesfully run."
+    },
+    {
+      "id": "VE-002",
+      "title": "Phase 0 - Local devnet + CI pipeline for chain, waldur, portal, daemon",
+      "description": "Stand up reproducible local environment to run end-to-end flows.",
+      "acceptanceCriteria": [
+        "One-command localnet starts: Cosmos chain, waldur, portal, provider daemon, and test identities",
+        "CI runs: go test, python tests, portal unit tests; publishes artifacts",
+        "Integration test suite can submit identity scope upload and observe identity score committed to chain state",
+        "Integration test suite can create marketplace offering + order and observe daemon bid/provision simulation"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Use docker compose for waldur/portal dependencies. Add chain localnet scripts and deterministic seeds."
+    },
+    {
+      "id": "VE-100",
+      "title": "Phase 1 - Implement hybrid role model and permissions in chain state",
+      "description": "Implement roles and state transitions for accounts (active/suspended/terminated) with governance/admin controls.",
+      "acceptanceCriteria": [
+        "Chain stores role assignments for GenesisAccount, Administrator, Moderator, Staker/Validator, ServiceProvider, Customer, SupportAgent",
+        "GenesisAccount can nominate roles and set account states; administrators can manage states within defined bounds",
+        "Role-gated queries and message handlers enforce access restrictions",
+        "Audit events emitted on role/state change (on-chain event log)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Even if access bypassed, encrypted payloads must remain unreadable without recipient private keys."
+    },
+    {
+      "id": "VE-101",
+      "title": "Phase 1 - Implement on-chain public-key encryption primitives and payload envelope format",
+      "description": "Create a canonical encrypted payload structure for all sensitive fields stored on-chain and integrate into module message types.",
+      "acceptanceCriteria": [
+        "Payload envelope supports: recipient public key(s), ciphertext, nonce/iv, algorithm id/version, sender signature",
+        "All sensitive fields in orders/offerings/identity scopes/support requests are stored only as encrypted payload envelopes",
+        "Encryption applied before writing to state; decryption only possible off-chain by recipient with private key (or by selected validator for identity verification flow)",
+        "Transport security enforced for APIs (TLS) and at-rest encryption documented for off-chain stores"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Aligns with requirement: sensitive data encrypted using public key encryption, decryptable only with corresponding private key; encrypted in transit and at rest."
+    },
+    {
+      "id": "VE-102",
+      "title": "Phase 1 - MFA module scaffolding: factors registry, policies, and transaction gating hooks",
+      "description": "Implement the on-chain MFA policy engine that can require multiple factors for sensitive transactions.",
+      "acceptanceCriteria": [
+        "MFA module stores per-account MFA policy configuration and factor enrollments (without storing raw secrets on-chain)",
+        "Sensitive transaction types are defined and routed through MFA checks",
+        "Supports factor combinations policy (e.g., SMS+FIDO2, VEID+FIDO2) and 'trusted browser' reduction rule",
+        "Account recovery and key-rotation paths require multiple MFA factors per policy"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "MFA requirement is explicitly claimed; implement as chain-enforced gate rather than purely UI-level."
+    },
+    {
+      "id": "VE-103",
+      "title": "Phase 1 - Token module integration for payments, staking rewards, and settlement hooks",
+      "description": "Wire VE token accounting into marketplace payments and validator/provider rewards.",
+      "acceptanceCriteria": [
+        "VE token transfers support marketplace escrow/settlement flows",
+        "Staking rewards can be distributed based on on-chain usage records",
+        "Provider rewards can be distributed based on signed usage records",
+        "All token-affecting operations are included in audit/event logs"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Keep settlement logic modular so marketplace and HPC can share the same accounting base."
+    },
+    {
+      "id": "VE-200",
+      "title": "Phase 2 - VEID module: identity scope types, upload transaction, and encrypted storage",
+      "description": "Define identity scopes (documents, biometrics, face video/photo, SSO metadata pointers, email/SMS proofs, domain verification) and implement upload transaction storing encrypted scopes on-chain.",
+      "acceptanceCriteria": [
+        "VEID module defines scope schemas and versioning",
+        "Upload tx accepts encrypted scope payloads plus signatures (approved client + user signature) and metadata (salt, device info)",
+        "State stores: scope references, upload timestamps, verification status, latest identity score",
+        "Rejected if signatures invalid or client not approved by chain config"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Approved-client signature requirement and client allowlist are explicitly claimed."
+    },
+    {
+      "id": "VE-201",
+      "title": "Phase 2 - Chain config: approved client (interface) allowlist and signature verification",
+      "description": "Implement on-chain configuration for approved clients and enforce signature checks at both proposal and consensus validation paths.",
+      "acceptanceCriteria": [
+        "Config module stores approved client public keys and version constraints",
+        "VEID upload tx validates: (1) client signature over payload hash, (2) user signature, (3) metadata salt binding",
+        "Consensus validators re-verify signatures during block validation",
+        "Governance/admin workflow to add/remove approved clients is implemented and audited"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Matches requirement: verify signatures of uploaded files to confirm processing by approved client and user signature; allowlist controlled in blockchain configuration."
+    },
+    {
+      "id": "VE-202",
+      "title": "Phase 2 - Validator identity verification pipeline: decrypt scopes and compute ML trust score during block proposal",
+      "description": "Implement the block-proposing validator flow for identity verification requests: decrypt uploaded scopes with validator private key, compute identity trust score, and include result in proposed block.",
+      "acceptanceCriteria": [
+        "Block proposer detects identity verification requests in tx set and triggers VEID verification routine",
+        "Encrypted identity scopes are decrypted using node private key (or designated identity key) for verification computation",
+        "ML scoring returns deterministic score (0-100) and verification status structure; stored in block/state",
+        "Timeout/failure behavior is defined (e.g., set status=Pending/Failed with reason code) without halting chain"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is explicitly required by accepted claims: proposer decrypts and computes score, writes score/status into proposed block."
+    },
+    {
+      "id": "VE-203",
+      "title": "Phase 2 - Consensus validator recomputation: deterministic scoring and block vote rules",
+      "description": "Ensure consensus validators recompute identity verification using the same ML algorithm/dataset and validate proposed score before voting.",
+      "acceptanceCriteria": [
+        "Consensus validators re-run identity verification computations on the same decrypted identity data (or validated secure computation path)",
+        "Validators compare computed score/status to proposer�s and reject block if mismatch beyond defined tolerance (ideally exact match)",
+        "Dataset/model version is included in verification record; validators must run same version to vote",
+        "All nodes log verification decision metrics for auditability"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Explicitly required: consensus validators perform identity verification computations using same ML algorithms and trained dataset; commit score upon consensus."
+    },
+    {
+      "id": "VE-204",
+      "title": "Phase 2 - ML pipeline v1: training dataset ingestion, preprocessing, evaluation, and export",
+      "description": "Build the TensorFlow training pipeline for face detection/embeddings + doc OCR signals + metadata features to output a trust score.",
+      "acceptanceCriteria": [
+        "Dataset ingestion supports multiple doc types and face samples; anonymization/handling documented",
+        "Preprocessing includes: orientation correction, perspective transform, text region detection, OCR extraction, face embedding generation",
+        "Model evaluation outputs repeatable metrics; model artifacts are versioned and reproducible",
+        "Exported model supports TensorFlow-Go inference with fixed inputs/outputs"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Spec describes face detection, embeddings, OCR pipeline, ensemble approaches; ensure determinism for consensus recomputation."
+    },
+    {
+      "id": "VE-205",
+      "title": "Phase 2 - TensorFlow-Go inference integration in Cosmos module",
+      "description": "Integrate TensorFlow inference into Go-based VEID module using TensorFlow-Go API.",
+      "acceptanceCriteria": [
+        "Chain build includes TensorFlow-Go runtime dependencies (or sidecar inference service with deterministic results if direct embed is impractical)",
+        "VEID module can call inference with encrypted/decrypted scope inputs and metadata signals",
+        "Inference call is bounded (timeouts, memory caps) and returns structured score + reason codes",
+        "Unit tests cover: valid inference, invalid inputs, timeout behavior, deterministic outputs"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "If inference runs out-of-process, consensus determinism must still hold (e.g., deterministic container image + hash pinned)."
+    },
+    {
+      "id": "VE-206",
+      "title": "Phase 2 - Identity score persistence and query APIs",
+      "description": "Store identity verification status/score in chain state and expose query endpoints for other modules and UI.",
+      "acceptanceCriteria": [
+        "State includes: current score (0-100), status (Unknown/Pending/Verified/Rejected), model version, timestamps",
+        "Query endpoints allow: fetch score/status by account, fetch verification history, fetch required scopes per offering type",
+        "Other modules (Marketplace, MFA policies) can gate actions based on score/status"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Marketplace access gating depends on identity verification status/score."
+    },
+    {
+      "id": "VE-207",
+      "title": "Phase 2 - Mobile capture protocol v1: salt-binding + anti-gallery replay",
+      "description": "Define and implement the client capture protocol: each upload embeds per-upload salt and client signature to prove it came from an approved capture interface.",
+      "acceptanceCriteria": [
+        "Capture client generates per-upload salt and binds it into file metadata and signed payload hash",
+        "Client signs upload payload with approved client key; user signs with account key",
+        "Server/chain validation rejects missing salt binding or invalid signatures",
+        "Protocol spec includes key rotation strategy for approved clients"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Spec states salt is added into metadata to prevent gallery uploads; accepted claims require approved-client signature verification."
+    },
+    {
+      "id": "VE-208",
+      "title": "Phase 0 - VEID flow spec: Registration vs Authentication vs Authorization states",
+      "description": "Codify VEID�s three-layer lifecycle (Registration, Authentication, Authorization) into explicit account tiers and permitted actions, matching the technical report�s model.",
+      "acceptanceCriteria": [
+        "Define account tier/state machine: Unverified (registered) -> Verified (authenticated) -> Authorized-for-sensitive-actions (per-MFA policy)",
+        "Define marketplace capability matrix per tier (e.g., Unverified can browse but cannot place gated orders; Verified can purchase offerings that meet identity threshold; Authorization required for high-risk actions)",
+        "Define which actions are 'Authorization-sensitive' (high-value purchases, key rotation, recovery, provider registration, withdrawals)",
+        "Document how VEID score (0-100) impacts gating and which minimum thresholds apply to which action categories",
+        "Architecture doc updated with these flows and referenced by Marketplace and MFA modules"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This mirrors the report�s separation of registration, identity verification (score), and authorization (biometric/MFA for sensitive actions)."
+    },
+    {
+      "id": "VE-209",
+      "title": "Phase 2 - Identity Wallet primitive: user-controlled identity bundle + key binding",
+      "description": "Implement the VEID 'Identity Wallet' concept as a first-class on-chain identity container referencing encrypted scopes and derived features, bound to the user�s account key(s).",
+      "acceptanceCriteria": [
+        "On-chain identity wallet record references: encrypted scope envelopes, derived feature hashes (embeddings/doc-field hashes), verification history, and current score/status",
+        "Wallet is cryptographically bound to user account (user signature required for updates)",
+        "Wallet supports scope-level consent toggles and revocation flags (without revealing scope contents publicly)",
+        "Query endpoints return only non-sensitive metadata + status/score; encrypted blobs remain opaque",
+        "Unit tests cover: create, update, revoke, and permission checks"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Aligns with report�s �Identity Wallet� as the user-controlled store of identity credentials."
+    },
+    {
+      "id": "VE-210",
+      "title": "Phase 2 - Capture UX v1: guided document + selfie capture (quality checks + feedback loop)",
+      "description": "Build the first-pass capture experience (portal/Waldur-integrated and/or approved mobile capture client) with image quality validation and user feedback guidance before upload.",
+      "acceptanceCriteria": [
+        "Client UX provides capture guidance (flat surface, lighting, parallel camera, preview/crop/rotate/retake)",
+        "Quality validation implemented client-side and/or server-side: minimum resolution, brightness/contrast range, skew/perspective check (edge/line detection), and blur/noise detection",
+        "If validation fails, user receives actionable feedback and must re-capture",
+        "Metadata stripping is performed on captured images prior to encryption/upload (EXIF/GPS removed)",
+        "Capture output is packaged with per-upload salt binding + approved-client signature + user signature (compatible with VE-207/VE-201 signature rules)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is directly based on the report�s acquisition/validation/feedback-loop approach, plus your approved-client signature requirement."
+    },
+    {
+      "id": "VE-211",
+      "title": "Phase 2 - Facial verification pipeline v1: DeepFace-based compare + decision thresholds",
+      "description": "Implement face verification using a pretrained DeepFace model (or equivalent) with deterministic version pinning, producing similarity scores and pass/fail decisions.",
+      "acceptanceCriteria": [
+        "Pipeline supports: selfie/live camera frames vs (a) extracted ID-document face and/or (b) previously enrolled face reference",
+        "Preprocessing steps implemented explicitly or via library: standard resolution, optional grayscale, histogram equalization (CLAHE), noise reduction, face detect/align/crop, normalization",
+        "Verification outputs: similarity score, confidence %, chosen model name/version, and decision (match/no-match)",
+        "Decision engine supports configurable thresholds (e.g., 90% match) and emits reason codes for failure/borderline cases",
+        "Determinism controls: pin exact container image + model weights hash; enforce CPU-only deterministic ops; record model hash in verification record",
+        "Unit tests cover: boundary thresholds, invalid images, no-face-detected, and deterministic repeated runs"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The report explicitly proposes DeepFace and threshold-based decision-making with fallback mechanisms."
+    },
+    {
+      "id": "VE-212",
+      "title": "Phase 2 - Borderline identity fallback: trigger secondary verification (MFA/biometric/OTP)",
+      "description": "When facial verification confidence is borderline, require a secondary factor path rather than hard failing identity verification.",
+      "acceptanceCriteria": [
+        "Define 'borderline band' around the primary threshold (e.g., 85�90%) and store it in chain params",
+        "If borderline, verification status becomes 'NeedsAdditionalFactor' (not Rejected) and requires an MFA challenge to proceed",
+        "Supported fallback challenges: OTP (email/SMS) and/or biometric factor (FIDO2/WebAuthn) depending on enrolled factors",
+        "Chain records an auditable event showing fallback triggered and which factor class satisfied it (without storing secrets)",
+        "Integration test: borderline face match -> MFA challenge -> verified outcome"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This directly mirrors the report�s recommended fallback mechanisms for near-threshold cases."
+    },
+    {
+      "id": "VE-213",
+      "title": "Phase 2 - ID document preprocessing v1: standardization, orientation, perspective correction",
+      "description": "Implement the document preprocessing pipeline needed for reliable OCR and region detection.",
+      "acceptanceCriteria": [
+        "Standardize format (e.g., PNG) and size/resolution inputs for downstream detection",
+        "Apply brightness/contrast normalization (histogram equalization / CLAHE) and sharpness enhancement where needed",
+        "Apply noise reduction (Gaussian/median/bilateral) and perspective correction using corner detection + four-point transform",
+        "Detect and correct orientation by scanning rotations; choose angle with best face/text detection probability",
+        "Outputs a canonical 'normalized_document_image' artifact (not stored plaintext on-chain; only encrypted or derived features)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Matches the report�s detailed preprocessing and rotation/perspective steps."
+    },
+    {
+      "id": "VE-214",
+      "title": "Phase 2 - Text ROI detection v1: CRAFT integration",
+      "description": "Integrate CRAFT (Character-Region Awareness for Text detection) to identify text regions of interest (ROI) in identity documents before OCR.",
+      "acceptanceCriteria": [
+        "CRAFT inference identifies character boxes + affinity scores and produces word/line ROI bounding boxes",
+        "ROI outputs include bounding boxes + confidence and are linked to the canonical normalized document image",
+        "Post-processing includes thresholding and non-max suppression to stabilize detections",
+        "ROI outputs are versioned and reproducible; suite version recorded with verification record",
+        "Unit tests cover ROI stability on representative sample documents"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The report explicitly proposes CRAFT for ROI detection prior to OCR."
+    },
+    {
+      "id": "VE-215",
+      "title": "Phase 2 - OCR extraction v1: Tesseract on ROIs + structured field parsing",
+      "description": "Run Tesseract OCR on detected ROIs and parse document fields into structured outputs used by the identity scoring system.",
+      "acceptanceCriteria": [
+        "Each ROI is cropped precisely (rect-sub-pix or equivalent), converted to grayscale, and thresholded for OCR",
+        "Tesseract configuration supports doc types and limited character sets (whitelists) where applicable",
+        "Post-processing corrects predictable OCR errors and extracts structured fields (e.g., name, surname, DOB, ID number) with confidence scores",
+        "Store only hashed/derived field values on-chain (or encrypted field values if needed), never plaintext PII",
+        "Unit tests cover parsing and common OCR failure cases"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The report recommends ROI cropping + Tesseract + post-processing to structure extracted identity fields."
+    },
+    {
+      "id": "VE-216",
+      "title": "Phase 2 - Face extraction from ID document v1: U-Net segmentation",
+      "description": "Extract the face region from an identity document image using a U-Net segmentation model to enable selfie-to-ID matching.",
+      "acceptanceCriteria": [
+        "U-Net model inference produces a segmentation mask for the face region",
+        "Post-process mask into a clean binary face region using dilation/erosion and thresholding",
+        "Compute bounding box from mask and crop the ID face ROI reliably across supported doc templates",
+        "Export extracted ID-face ROI as an encrypted artifact or derive embeddings immediately and discard raw image per minimization policy",
+        "Unit tests cover segmentation success/failure and mask robustness on varied lighting/quality"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The report details U-Net-based segmentation specifically for face extraction from ID documents."
+    },
+    {
+      "id": "VE-217",
+      "title": "Phase 2 - Derived-feature minimization: store embeddings/hashes instead of raw biometrics",
+      "description": "Reduce sensitive exposure by retaining derived features (face embeddings, document field hashes) and minimizing retention of raw images where possible.",
+      "acceptanceCriteria": [
+        "Face pipeline produces embeddings and stores only (a) embedding hash on-chain and (b) encrypted embedding payload to intended recipients where required",
+        "Raw captured images are not stored on-chain in plaintext; if stored off-chain, they must be encrypted and retention-limited",
+        "Verification record references the derived features used (hashes) so validators can recompute consistently",
+        "Data lifecycle rules define when raw artifacts are discarded and how derived features are retained",
+        "Security review confirms no PII/biometric images leak to logs or public chain state"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Matches the report�s minimization/feature extraction guidance."
+    },
+    {
+      "id": "VE-218",
+      "title": "Phase 2 - Storage architecture for identity artifacts: encrypted off-chain + on-chain references",
+      "description": "Implement a scalable storage strategy for identity artifacts that respects blockchain size constraints: encrypted off-chain storage (Waldur DB and/or IPFS) with on-chain content-addressed references.",
+      "acceptanceCriteria": [
+        "Define artifact store interface supporting: put/get by content hash, encryption envelope, retention tags",
+        "Support backend A: Waldur backend DB/object store (encrypted at rest) with authenticated retrieval",
+        "Support backend B: IPFS (optional v1) storing encrypted chunks; on-chain stores the CID + envelope metadata",
+        "Retrieval reconstructs fragmented artifacts deterministically (chunk ordering defined by CID manifest)",
+        "Integration tests demonstrate: upload -> store off-chain -> commit reference on-chain -> validator fetch/decrypt for scoring"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The report explicitly discusses centralized (Waldur DB) and decentralized (IPFS) retrieval approaches and blockchain size constraints."
+    },
+    {
+      "id": "VE-219",
+      "title": "Phase 2 - Deterministic identity verification runtime: pinned containers + reproducible builds",
+      "description": "Ensure identity verification computations are deterministic across validators by standardizing the execution environment for DeepFace/CRAFT/Tesseract/U-Net pipelines.",
+      "acceptanceCriteria": [
+        "Provide a single pinned OCI image for the identity pipeline (CPU deterministic) with model weight hashes included",
+        "Chain records the pipeline image hash + model hashes in verification record; validators must run identical versions to vote",
+        "A conformance test suite verifies deterministic outputs across multiple machines (same inputs -> same outputs)",
+        "Provide operational docs for validators: how to install/run the pipeline and verify hashes",
+        "Integration test: proposer computes verification -> another validator recomputes and matches exactly"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This bridges the report�s ML choices with your consensus requirement that validators recompute identically."
+    },
+    {
+      "id": "VE-220",
+      "title": "Phase 2 - VEID scoring model v1: feature fusion from doc OCR + face match + metadata",
+      "description": "Formalize the identity trust score (0-100) as a deterministic fusion of evidence: document verification signals, OCR confidence, face similarity, and capture metadata checks.",
+      "acceptanceCriteria": [
+        "Define scoring inputs and weights (versioned): face similarity score, OCR field confidence, doc integrity checks, salt-binding check, liveness/capture checks (if present)",
+        "Output score is deterministic with reason codes and evidence summary (non-sensitive)",
+        "Score version recorded in verification state; history retains past versions and transitions",
+        "Unit tests cover scoring boundaries and invariants (e.g., missing doc -> cap score, missing selfie -> fail or require fallback)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The report discusses multi-scope verification culminating in a score out of 100."
+    },
+    {
+      "id": "VE-221",
+      "title": "Phase 3 - Authorization policy: high-value purchase threshold triggers biometric/MFA requirement",
+      "description": "Implement the report�s authorization concept: high-stakes operations (e.g., purchase above a user-defined threshold) must require biometric/MFA before the on-chain action is accepted.",
+      "acceptanceCriteria": [
+        "User can configure an 'authorization threshold' policy for purchases/transactions (on-chain param stored in MFA module state)",
+        "Marketplace order placement checks threshold and requires additional factors if exceeded",
+        "If authorization not satisfied, transaction fails with explicit reason and no partial state changes",
+        "Portal/Waldur UX prompts for required factors and submits the appropriate MFA proof flow before order tx",
+        "Audit events record which policy triggered and that authorization was satisfied"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This directly implements the report�s authorization layer for high-stakes actions."
+    },
+    {
+      "id": "VE-222",
+      "title": "Phase 2 - SSO verification scope v1: OAuth proof capture + linkage to VEID wallet",
+      "description": "Add a VEID scope for authorized online accounts (SSO) and store verifiable linkage proofs (without exposing tokens).",
+      "acceptanceCriteria": [
+        "Support at least one SSO provider flow in v1 (Google/Microsoft/Facebook as configured) producing a verifiable linkage record",
+        "Store only minimal proof metadata on-chain (issuer, subject hash, timestamp, nonce), and encrypt any sensitive claims off-chain",
+        "Linkage is bound to the user account signature and can be revoked",
+        "VEID scoring model can incorporate SSO linkage as an optional signal (versioned weighting)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "The report lists SSO as a VEID scope used for streamlined access and identity confidence."
+    },
+    {
+      "id": "VE-223",
+      "title": "Phase 2 - Domain verification scope v1: provider/org proof-of-domain",
+      "description": "Implement domain verification as a VEID scope for providers/organizations, enabling trust for marketplace listings.",
+      "acceptanceCriteria": [
+        "Domain verification workflow supports at least one proof method (DNS TXT or HTTP well-known), producing a signed verification record",
+        "Store public domain association metadata on-chain; encrypt any sensitive proof artifacts if stored",
+        "Marketplace provider registration can require domain verification for certain provider categories",
+        "Revocation supported (domain ownership change) with audit trail"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "The report includes domain verification as a supported scope."
+    },
+    {
+      "id": "VE-224",
+      "title": "Phase 2 - Email verification scope v1: proof of control + anti-replay",
+      "description": "Implement email verification as a VEID scope with proof-of-control and replay resistance.",
+      "acceptanceCriteria": [
+        "Verification issues challenge nonce, requires proof response, and stores verification record on-chain",
+        "Replay prevention: nonces are one-time and expire; proofs are signature-bound to account",
+        "VEID scoring model can incorporate email verification as a low-weight signal"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "The report lists email verification as a scope and mentions OTP mechanisms."
+    },
+    {
+      "id": "VE-225",
+      "title": "Phase 1/2 - Security controls: tokenization/pseudonymization + retention policy enforcement",
+      "description": "Implement privacy-by-design controls recommended in the technical report: tokenization/pseudonymization, strict retention, and secure auditing for identity data flows.",
+      "acceptanceCriteria": [
+        "Define and implement retention windows per artifact type (raw images, derived embeddings, OCR outputs) with automated expiry enforcement",
+        "Any externally referenced identity artifacts are tokenized (public systems see only non-descriptive tokens, not raw data)",
+        "Pseudonymized identifiers are used in logs and telemetry; no raw PII in logs",
+        "At-rest encryption enforced for off-chain storage; in-transit TLS required for all retrieval APIs",
+        "Security tests validate: metadata stripping, no PII leakage, retention deletion runs"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The report explicitly recommends encryption, tokenization/pseudonymization, and lifecycle management strategies."
+    },
+    {
+      "id": "VE-226",
+      "title": "Phase 2 - VEID integration into Waldur: upload UI + service hooks (if Waldur is used as capture path)",
+      "description": "If Waldur remains part of the onboarding surface, implement identity upload UI and service hooks to route capture artifacts into VEID signing/encryption and on-chain submission.",
+      "acceptanceCriteria": [
+        "Waldur UI includes identity document upload + preview/crop/rotate and face capture entry points (or deep-links to approved mobile capture)",
+        "Waldur backend integrates with approved-client signing and encrypts payloads before sending on-chain",
+        "User receives clear verification state updates (Pending/Verified/Rejected/NeedsAdditionalFactor) within Waldur and portal",
+        "Integration test: Waldur upload -> on-chain scope stored -> validator scoring -> state visible in Waldur"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The report explicitly positions VEID as integrated with Waldur."
+    },
+    {
+      "id": "VE-227",
+      "title": "Phase 1/2 - Quantum risk posture: cryptography agility plan for VEID envelopes",
+      "description": "Add cryptography agility so VEID encryption/signature algorithms can be upgraded (including post-quantum options) without breaking chain state.",
+      "acceptanceCriteria": [
+        "Encryption envelope includes algorithm id/version and supports multiple schemes under a single abstraction",
+        "Key rotation procedures include algorithm migration steps (old+new valid during transition window)",
+        "Document a roadmap for post-quantum readiness (design-level in v1, implementation in vNext)",
+        "Unit tests confirm envelope parsing works across algorithm versions"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "The report discusses future quantum risks and the need for post-quantum cryptography planning."
+    },
+    {
+      "id": "VE-228",
+      "title": "Phase 0 - TEE security model for VEID consensus verification",
+      "description": "Define the Trusted Execution Environment (TEE) threat model and the consensus-safe design for enclave-only decryption and scoring, including which TEEs are supported (e.g., SGX, SEV-SNP) and the trust assumptions.",
+      "acceptanceCriteria": [
+        "Threat model explicitly covers: malicious host OS, validator operator compromise, side-channel classes, replay attacks, enclave rollback, and attestation forgery",
+        "Define what 'never accessible by general code' means operationally (no plaintext in host memory, logs, IPC payloads, or disk; enclave boundary enforced)",
+        "Define the minimum enclave guarantees required for mainnet (remote attestation, sealed keys, measurement allowlist, debug disablement)",
+        "Define validator slashing/penalty policy triggers for enclave misbehavior (invalid attestation, missing recomputation, inconsistent scores)",
+        "Update architecture diagram: chain modules <-> enclave runtime boundary <-> ML pipeline"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is the baseline requirement to reconcile claim language ('decrypts with private key') with enclave-only decryption."
+    },
+    {
+      "id": "VE-229",
+      "title": "Phase 1 - On-chain Enclave Registry module for validator identity processing",
+      "description": "Implement a Cosmos module to register and query validator VEID enclave identities (attestation + keys) so clients can encrypt identity payloads specifically to enclave public keys.",
+      "acceptanceCriteria": [
+        "State stores per-validator enclave identity record: enclaVIRTENGINE_measurement_hash, enclaVIRTENGINE_enc_pubkey, enclaVIRTENGINE_sign_pubkey, attestation_quote, attestation_chain, epoch/expiry",
+        "MsgRegisterEnclaveIdentity only executable by validator operator key; updates are audited via events",
+        "Governance-controlled allowlist of approved enclave measurements (and optional minimum TEE version constraints)",
+        "Queries support: get active validator enclave keys, get committee subset keys (if committee mode enabled), get measurement allowlist",
+        "Validation rejects: expired attestations, non-allowlisted measurements, malformed quote chains"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is required for encrypting identity data to the trusted execution env rather than to a general-purpose node key."
+    },
+    {
+      "id": "VE-230",
+      "title": "Phase 1 - Encrypted envelope upgrade: multi-recipient encryption for validator enclaves",
+      "description": "Extend the encrypted payload envelope format to support encrypting identity data to the enclave keys of multiple validators (so each can recompute within TEE during consensus).",
+      "acceptanceCriteria": [
+        "Envelope supports: payload_ciphertext + per-recipient wrapped_key entries (recipient_id -> wrapped_key) and algorithm/version metadata",
+        "Recipient list supports either: (A) full active validator set, or (B) designated identity committee subset (configurable)",
+        "Envelope includes sender signatures (approved client + user) as already required",
+        "Serialization format is deterministic and consensus-safe (stable ordering, canonical encoding)",
+        "Unit tests: same inputs produce identical envelope bytes across platforms"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Consensus validators must recompute; they can only do so if payloads are encrypted to their enclaves."
+    },
+    {
+      "id": "VE-231",
+      "title": "Phase 2 - Enclave Runtime v1: decrypt+score API with sealed keys (no plaintext escape)",
+      "description": "Implement the VEID enclave service that receives ciphertext, performs decryption and ML scoring inside the enclave, and returns only an enclave-signed result (score/status/evidence hashes).",
+      "acceptanceCriteria": [
+        "Enclave generates its decryption private key inside enclave and seals it; host cannot export it",
+        "Host-side code can only submit ciphertext + metadata; enclave returns score/status + reason codes + evidence hashes + enclave signature",
+        "Enclave scrubs plaintext buffers after use; no debug logging of sensitive content; deny-by-default for any host read primitives",
+        "Enclave exposes bounded runtime controls (timeouts, max input sizes) to protect block proposal windows",
+        "Integration test verifies: plaintext never appears outside enclave boundary (no host memory buffers, no logs, no disk writes)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is the concrete implementation of 'identity data remains sandboxed'."
+    },
+    {
+      "id": "VE-232",
+      "title": "Phase 2 - Attested scoring output: include enclave signature + measurement linkage in block",
+      "description": "Require that every identity score written into a proposed block carries an enclave-signed attestation payload proving it was computed inside an approved enclave measurement.",
+      "acceptanceCriteria": [
+        "VEID verification record stored on-chain includes: score/status, model/version hashes, enclaVIRTENGINE_measurement_hash, enclaVIRTENGINE_signed_result, attestation_reference (or quote hash)",
+        "Consensus validation checks that enclaVIRTENGINE_measurement_hash is allowlisted and corresponds to registered validator enclave identity",
+        "Reject block if: missing enclave signature, invalid signature, measurement not allowlisted, or attestation expired",
+        "Events emitted: VEIDScoreComputedAttested, VEIDScoreRejectedAttestation"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Makes proposer scoring verifiable without revealing plaintext identity data."
+    },
+    {
+      "id": "VE-233",
+      "title": "Phase 2 - Consensus recomputation inside enclave: vote rule enforcement",
+      "description": "Update consensus verification path so validators recompute identity scores by calling their own enclave runtime and reject blocks with mismatched results.",
+      "acceptanceCriteria": [
+        "When proposed block contains VEID verification record, validator retrieves ciphertext and runs enclave recomputation locally (using its wrapped_key entry)",
+        "Validator compares recomputed score/status to proposer�s values and rejects block on mismatch (exact match required unless tolerance is explicitly defined)",
+        "Validator also verifies approved-client + user signatures as per claim requirements",
+        "Determinism strategy is enforced: pinned model/container hashes recorded and required for vote eligibility",
+        "Integration test: proposer computes score -> another validator recomputes inside enclave -> votes only if equal"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Directly implements the accepted claim�s 'consensus validators perform identity verification computations using the same ML algorithms and trained dataset'."
+    },
+    {
+      "id": "VE-234",
+      "title": "Phase 2 - Key lifecycle: enclave key rotation, epoching, and re-encryption policy",
+      "description": "Implement operational key lifecycle for validator enclaves, including rotation, expiry, and how clients select keys for encryption without breaking ongoing pending verifications.",
+      "acceptanceCriteria": [
+        "Validators can rotate enclave keys via MsgRotateEnclaveIdentity with overlap window (old+new valid for configured epochs)",
+        "Clients can query 'current valid key set' for the validator set/committee and include only those recipients",
+        "Define and implement behavior when validator set changes (new validators added): committee mode or key set update rules",
+        "Slashing/penalty conditions defined for validators that cannot recompute due to missing enclave availability",
+        "Docs: validator operator runbook for enclave updates and key rotation"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Without explicit lifecycle rules, 'encrypted to validator TEEs' becomes operationally brittle."
+    },
+    {
+      "id": "VE-235",
+      "title": "Phase 2 - Privacy and leakage controls: forbid plaintext identity material in host logs/telemetry",
+      "description": "Hard enforce 'no plaintext outside enclave' with code-level safeguards and CI checks across chain, bridge, and any identity services.",
+      "acceptanceCriteria": [
+        "Structured logging redaction rules added; encrypted blobs truncated; no dumps of request bodies",
+        "Static checks/linters fail builds if forbidden logging patterns exist in VEID path",
+        "Fuzz tests inject malformed identity payloads and confirm no error path leaks plaintext",
+        "Security test: memory inspection harness confirms no plaintext buffers in host process after enclave call returns",
+        "Incident procedure documented for suspected leakage"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Turns the requirement into enforceable engineering gates."
+    },
+    {
+      "id": "VE-300",
+      "title": "Phase 3 - Marketplace on-chain data model: offerings, orders, allocations, and states",
+      "description": "Define on-chain marketplace objects with explicit state machines for offerings and orders, with encrypted sensitive fields.",
+      "acceptanceCriteria": [
+        "Offerings include: provider id, public metadata, pricing, required identity level, encrypted provider secrets as needed",
+        "Orders include: customer id, offering id, public metadata, encrypted configuration, lifecycle states",
+        "Allocation record maps order -> selected provider upon acceptance/bid win",
+        "All sensitive fields are stored as encrypted payload envelopes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Accepted claims: orders and provider offerings include sensitive data stored encrypted for intended recipient; access depends on identification system."
+    },
+    {
+      "id": "VE-301",
+      "title": "Phase 3 - Marketplace gating: identity score requirement enforcement",
+      "description": "Enforce that certain offerings require verified identity status/score and block non-verified purchases.",
+      "acceptanceCriteria": [
+        "Offering can declare minimum identity score/status requirement",
+        "Order creation checks identity score/status and rejects if insufficient",
+        "UI/API surfaces reason and required steps to meet verification requirement",
+        "Providers can optionally require verified identity for all their offerings"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Explicitly claimed: marketplace enforces only accounts with verified identity may obtain certain offerings."
+    },
+    {
+      "id": "VE-302",
+      "title": "Phase 3 - Marketplace sensitive action gating via MFA module",
+      "description": "Integrate MFA checks into marketplace lifecycle actions (place order, approve/modify order, cancel, key rotation, withdrawal/settlement).",
+      "acceptanceCriteria": [
+        "Sensitive marketplace actions invoke MFA verification according to account policy",
+        "Trusted browser rule reduces required factors where applicable",
+        "MFA audit trail is recorded on-chain for each gated action",
+        "Failure states are explicit and do not create partial order state corruption"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "MFA gating is an on-chain requirement; not just UI."
+    },
+    {
+      "id": "VE-303",
+      "title": "Phase 3 - Waldur bridge module: synchronize public ledger data into Waldur and route actions back on-chain",
+      "description": "Implement a Cosmos module + service that syncs providers/users/offerings/orders public data to Waldur and listens to Waldur events to update on-chain state.",
+      "acceptanceCriteria": [
+        "Public ledger exports: offerings, public order state, provider profiles into Waldur",
+        "Waldur actions (provision, terminate, service desk ticket) create signed callbacks/events that translate into on-chain transactions",
+        "Bridge is idempotent and resilient (replay-safe, at-least-once processing without duplication)",
+        "Sensitive details remain encrypted on-chain and are only decrypted by intended recipients or provider daemon"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Spec: run Waldur as separate system, communicate via API; chain stores public info; sensitive data encrypted."
+    },
+    {
+      "id": "VE-304",
+      "title": "Phase 3 - Marketplace eventing: order created/allocated/updated emits daemon-consumable events",
+      "description": "Define chain events for provider daemon consumption and build subscription mechanism (RPC/WebSocket).",
+      "acceptanceCriteria": [
+        "Events emitted: OrderCreated, BidPlaced, AllocationCreated, ProvisionRequested, TerminateRequested, UsageUpdateRequested",
+        "Event payloads include only non-sensitive identifiers; sensitive data referenced via encrypted envelopes",
+        "Provider daemon can subscribe and resume from checkpoints",
+        "Tests cover event replay and idempotent handling"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Provider daemon must react to won leases/manifests per spec."
+    },
+    {
+      "id": "VE-400",
+      "title": "Phase 4 - Provider Daemon: key management and transaction signing",
+      "description": "Implement provider daemon signing for bids, status updates, and usage records, verifiable using provider public key.",
+      "acceptanceCriteria": [
+        "Daemon supports provider key storage strategy (hardware/ledger/non-custodial integration as feasible)",
+        "All on-chain submissions from daemon are signed and verifiable via provider public key",
+        "Chain verifies daemon signature on usage/status records",
+        "Rotation procedure exists without breaking verification"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Accepted claims: provider daemon returns digitally signed workload status/usage record verifiable using provider public key."
+    },
+    {
+      "id": "VE-401",
+      "title": "Phase 4 - Provider Daemon: bid engine and provider configuration watcher",
+      "description": "Implement daemon that queries orders and places bids based on provider pricing/config; updates dynamically without restart.",
+      "acceptanceCriteria": [
+        "Daemon reads provider config from on-chain state (pricing, capacity, supported offering types)",
+        "Bids are placed automatically for matching orders and recorded on-chain",
+        "Config updates are detected and applied at runtime",
+        "Rate limits and anti-spam rules prevent runaway bidding"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Spec describes bid engine and dynamic config updates."
+    },
+    {
+      "id": "VE-402",
+      "title": "Phase 4 - Provider Daemon: manifest parsing and validation",
+      "description": "Implement manifest schema(s) for provisioning requests and validate before invoking orchestration APIs.",
+      "acceptanceCriteria": [
+        "Manifest supports: VM/container specs, networking, storage, tags, region/latency constraints, lifecycle hooks",
+        "Validation rejects unsupported parameters and records reason on-chain",
+        "Manifests can be versioned; daemon supports at least v1",
+        "Unit tests cover edge cases and backward compatibility"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Spec references manifest parsing and deployment on behalf of users."
+    },
+    {
+      "id": "VE-403",
+      "title": "Phase 4 - Provider Daemon: Kubernetes orchestration adapter (v1)",
+      "description": "Provision workloads via Kubernetes API (as first orchestration integration) upon allocation events.",
+      "acceptanceCriteria": [
+        "Daemon can instantiate workload from manifest into Kubernetes (namespaced, least-privileged RBAC)",
+        "Daemon can terminate workloads and clean up resources",
+        "Daemon reports status transitions back on-chain (Provisioning -> Running -> Terminating -> Terminated/Failed)",
+        "Secrets handling: decrypted only as required; never logged; stored encrypted at rest on provider side"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Accepted claims require orchestration API such as Kubernetes or SLURM."
+    },
+    {
+      "id": "VE-404",
+      "title": "Phase 4 - Provider Daemon: usage metering + on-chain recording",
+      "description": "Track resource usage and post signed usage records to chain for settlement.",
+      "acceptanceCriteria": [
+        "Usage schema includes: order id, time window, cpu/mem/storage/network, job id (if applicable), pricing calc inputs",
+        "Usage record is signed by provider daemon key and verifiable on-chain",
+        "Periodic updates and final settlement record on termination are supported",
+        "Fraud checks: reject impossible usage deltas; flag anomalies for moderation"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Accepted claims: track and record usage of allocated resources on blockchain; settlement upon termination."
+    },
+    {
+      "id": "VE-500",
+      "title": "Phase 5 - SLURM cluster lifecycle module: define HPC offering type and job accounting schema",
+      "description": "Introduce HPC offerings and job lifecycle objects in marketplace and chain state.",
+      "acceptanceCriteria": [
+        "HPC offering includes: queue/partition options, pricing, required identity threshold, max runtime, preconfigured workloads list",
+        "Job request object includes: container/image, command, resources, data references, encrypted inputs/outputs pointers",
+        "Job accounting schema supports rewards distribution and billing"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Spec/claims: HPC module includes library of pre-configured workloads + custom workloads support."
+    },
+    {
+      "id": "VE-501",
+      "title": "Phase 5 - SLURM orchestration adapter in Provider Daemon (v1)",
+      "description": "Extend provider daemon to schedule workloads via SLURM for distributed computing / supercomputer use cases.",
+      "acceptanceCriteria": [
+        "Daemon can submit SLURM jobs on allocation event and track job id and status",
+        "Daemon reports job status and usage metrics on-chain with signature",
+        "Supports cancellation/termination with on-chain state integrity",
+        "Handles batch scheduling across selected nodes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Accepted claims: schedule workload via SLURM on selected nodes; record usage; distribute rewards."
+    },
+    {
+      "id": "VE-502",
+      "title": "Phase 5 - Decentralized SLURM cluster deployment via Kubernetes (bootstrap)",
+      "description": "Implement the cluster bootstrap automation: deploy SLURM controllers/workers across Kubernetes clusters and register into marketplace.",
+      "acceptanceCriteria": [
+        "SLURM cluster templates can be deployed via Kubernetes manifests/Helm",
+        "Nodes can join/leave without breaking scheduling; resilience documented",
+        "Cluster registration posts public metadata to chain; sensitive config encrypted",
+        "Integration tests: deploy cluster -> submit job -> observe completion and accounting"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Spec describes SLURM deployed across Kubernetes clusters; workload nodes added to existing clusters."
+    },
+    {
+      "id": "VE-503",
+      "title": "Phase 5 - Proximity-based mini-supercomputer clustering (v1 heuristic)",
+      "description": "Implement first-pass clustering logic for grouping closely connected nodes by latency/region and scheduling HPC tasks accordingly.",
+      "acceptanceCriteria": [
+        "Node metadata includes region + latency measurements (from benchmarking/daemon)",
+        "Scheduler prefers low-latency clusters for eligible jobs",
+        "Fallback routing exists when preferred cluster is saturated",
+        "Recorded decision trail for scheduling is queryable"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Spec describes clustering closely connected systems to build mini-supercomputers within distributed network."
+    },
+    {
+      "id": "VE-504",
+      "title": "Phase 5 - Rewards distribution for HPC contributors based on on-chain usage",
+      "description": "Distribute VE token rewards to nodes/providers for HPC workloads using metered usage records.",
+      "acceptanceCriteria": [
+        "Reward formula documented and implemented deterministically",
+        "Rewards issuance references signed usage records and job completion status",
+        "Disputes/anomalies can be flagged for moderation",
+        "Unit tests cover edge cases (partial failures, retries, termination mid-job)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Claimed: distribute rewards in tokens to contributing nodes based on on-chain usage data."
+    },
+    {
+      "id": "VE-600",
+      "title": "Phase 6 - Benchmarking daemon: provider performance metrics collection",
+      "description": "Implement a benchmarking daemon that measures provider cluster performance (compute, memory, disk, network, latency) and publishes signed benchmark results to the blockchain as transparent trust signals for marketplace discovery and scheduling.",
+      "acceptanceCriteria": [
+        "Benchmarking daemon runs as a provider-managed agent (container/systemd) with configurable schedule and on-demand challenge runs triggered by chain events",
+        "Collected metrics include at minimum: CPU (single/multi-core), memory bandwidth/latency, disk IO (read/write IOPS + throughput), network throughput + RTT/latency to reference endpoints, and optional GPU metrics when present",
+        "Each benchmark report includes: provider id, cluster id, node/region metadata, test suite version, timestamp, raw metric values, and a normalized summary score",
+        "Benchmark report is digitally signed by the provider benchmarking key and verifiable on-chain using the provider�s registered public key",
+        "Reports are posted to chain via a dedicated message type (e.g., MsgSubmitBenchmarks) and indexed for query by provider/offering/region",
+        "Daemon never logs or transmits any secrets; any configuration secrets used to reach endpoints are kept provider-side and encrypted at rest",
+        "Backpressure and retry logic prevents runaway submissions during network issues and ensures idempotent posting (same report hash cannot be submitted twice)",
+        "Unit tests cover metric parsing, signing/verification, idempotency, and error paths; integration test demonstrates posting metrics to devnet and querying them"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Benchmarking is a first-class marketplace trust signal and must be transparent and verifiable on-chain."
+    },
+    {
+      "id": "VE-601",
+      "title": "Phase 6 - Benchmarking on-chain module: metric schema, verification, and retention",
+      "description": "Create/extend a Cosmos module to store benchmark reports, verify signatures, apply retention rules, and expose query APIs for marketplace ranking and scheduling decisions.",
+      "acceptanceCriteria": [
+        "Defines canonical metric schema with versioning, including raw metrics + computed aggregates and suite metadata",
+        "Verifies benchmark report signatures using the provider public key registered in provider state",
+        "Rejects malformed reports, unknown providers, invalid signatures, or out-of-bounds metric values (basic sanity limits)",
+        "Supports retention policy: keep rolling window of N reports per cluster/offering type; older reports pruned deterministically",
+        "Emits events: BenchmarksSubmitted, BenchmarksRejected, BenchmarksPruned",
+        "Query endpoints support: list providers by region/metric, get provider history, get offering-scoped benchmark summaries",
+        "All benchmark data stored on-chain is non-sensitive; any sensitive endpoints or internal node addresses must be excluded or encrypted if required",
+        "Unit tests cover state transitions, pruning determinism, signature verification, and query correctness"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Keep schema stable and explicitly versioned to avoid breaking UI and ranking logic."
+    },
+    {
+      "id": "VE-602",
+      "title": "Phase 6 - Marketplace trust signals: provider reliability score computation",
+      "description": "Compute an on-chain (or deterministic off-chain but chain-verifiable) provider reliability score that blends benchmark results, uptime/incident signals, fulfillment success rate, and dispute rates to inform marketplace ordering and eligibility.",
+      "acceptanceCriteria": [
+        "Reliability score inputs are explicitly defined and deterministic: benchmark summary, provisioning success rate, mean time to provision, mean time between failures, dispute/anomaly flags",
+        "Score computation is reproducible and versioned (score_version stored with each computed score)",
+        "Score updates occur on benchmark submission and on major lifecycle events (provision success/fail, termination, dispute resolved)",
+        "Providers can query their score breakdown and contributing factors",
+        "Marketplace listing pages can request ranking keys (score + benchmarks) without requiring decryption of any sensitive payloads",
+        "Moderators/admins can flag providers to exclude from ranking (policy-based), with an auditable on-chain record",
+        "Unit tests validate deterministic computation and guard against division-by-zero, missing metrics, and extreme values"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "This is a trust layer; keep the formula transparent and verifiable."
+    },
+    {
+      "id": "VE-603",
+      "title": "Phase 6 - Benchmark challenge protocol: anti-gaming and anomaly detection hooks",
+      "description": "Add anti-gaming mechanisms: randomized challenge benchmarks, cross-validation, and anomaly flags that can be reviewed by moderators and used to reduce provider rank.",
+      "acceptanceCriteria": [
+        "Chain can emit BenchmarkChallengeRequested events targeting a provider/offering/cluster with a required suite version and deadline",
+        "Provider daemon/benchmarking daemon can execute the challenge suite and submit results signed by provider benchmarking key",
+        "On-chain validation checks freshness (deadline), suite hash/version, and signature integrity",
+        "Anomaly rules flag suspicious results (e.g., sudden unrealistic jumps, inconsistent CPU/memory ratios, repeated identical outputs) without blocking normal marketplace operations",
+        "Flags are recorded as on-chain events and exposed via query APIs for UI and moderation workflows",
+        "Providers can respond with an explanation artifact reference (encrypted to moderators) without disclosing secrets publicly",
+        "Integration test: challenge -> submit -> anomaly flag -> moderator review path is exercised end-to-end"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Keep enforcement non-destructive initially: flag and rank-reduce before hard bans."
+    },
+    {
+      "id": "VE-700",
+      "title": "Phase 7 - Portal foundation: authentication, wallets, and session model",
+      "description": "Implement the portal�s core auth flows for wallet-based login and optional SSO-based login, with secure session handling and chain RPC client integration.",
+      "acceptanceCriteria": [
+        "Portal supports wallet-based login (mnemonic/keypair) and establishes a signed session token for UI operations",
+        "Optional SSO login flow is supported where applicable and maps to a blockchain account binding flow",
+        "Session tokens are stored securely (httpOnly cookies or equivalent) and rotated; logout invalidates session",
+        "Portal integrates with chain RPC/WebSocket for event subscriptions and query APIs",
+        "All network traffic uses TLS; no sensitive material is ever logged client-side",
+        "Unit tests cover auth state machine; e2e test validates login -> fetch account profile -> subscribe to events"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Portal must be functional without exposing private keys; prefer non-custodial signing via wallet adapters where possible."
+    },
+    {
+      "id": "VE-701",
+      "title": "Phase 7 - Portal: VEID onboarding, identity score display, and re-verification prompts",
+      "description": "Implement portal screens for identity onboarding: status, score, required scopes, and guided workflows that deep-link to the approved capture client(s).",
+      "acceptanceCriteria": [
+        "Portal shows identity status (Unknown/Pending/Verified/Rejected) and score (0-100) with model version metadata",
+        "Portal lists required scopes per marketplace action (e.g., provider registration, high-trust offerings) and links to approved client capture instructions",
+        "Portal displays upload history and verification record summaries without revealing encrypted scope contents",
+        "When verification is Pending/Failed, portal shows reason codes and recommended next steps",
+        "Identity gating errors from marketplace/order flows are surfaced with clear remediation paths",
+        "Unit tests cover UI state mapping; e2e test verifies identity query -> status render -> gating message"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Identity scoring and status are on-chain and must be treated as the source of truth."
+    },
+    {
+      "id": "VE-702",
+      "title": "Phase 7 - Portal: MFA enrollment, policy configuration, and trusted browser UX",
+      "description": "Build portal UX for MFA: factor enrollment, policy configuration, trusted browser registration, and transaction-level prompts for MFA-gated actions.",
+      "acceptanceCriteria": [
+        "Portal supports enrollment flows for multiple factor types (e.g., OTP app, FIDO2/WebAuthn, SMS where supported, VEID biometric where supported)",
+        "Portal allows configuring MFA policies (required factor combinations) and shows which transaction types are considered sensitive",
+        "Trusted browser flow is supported and clearly indicates reduced-factor behavior; user can revoke trusted browsers",
+        "When a user attempts a sensitive action, portal prompts for required factors and only then submits the on-chain transaction",
+        "Portal displays an audit/history view of MFA-gated actions (from on-chain events)",
+        "Unit tests cover policy editing and factor states; e2e test covers a gated marketplace action requiring MFA"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "MFA gating is enforced by chain rules; portal must reflect chain responses faithfully."
+    },
+    {
+      "id": "VE-703",
+      "title": "Phase 7 - Portal: marketplace discovery, offering details, and checkout",
+      "description": "Implement the marketplace UI: browse offerings, compare providers using benchmark trust signals, place orders, and manage order lifecycle states.",
+      "acceptanceCriteria": [
+        "Marketplace list view supports filters (region, price, identity requirement, benchmark score) and sorting (reliability score, price, latency)",
+        "Offering detail view shows public metadata and clearly identifies which fields are encrypted/sensitive",
+        "Checkout flow validates identity score requirements before submitting an order transaction",
+        "Order details view shows lifecycle state transitions and chain events (created, bid placed, allocated, provisioning, running, terminated, failed)",
+        "Encrypted payloads are never displayed unless the viewer is the intended recipient and can decrypt locally; otherwise show placeholders",
+        "E2E test covers: browse -> select -> order -> observe events -> see allocation -> see provisioning state updates"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Use benchmark metrics to drive user decision-making and to support proximity-aware HPC scheduling UX."
+    },
+    {
+      "id": "VE-704",
+      "title": "Phase 7 - Portal: provider console (offerings, pricing, capacity, domain verification)",
+      "description": "Create provider-facing portal capabilities: register as provider, perform domain verification, manage offerings, pricing, and monitor bids/allocations/usage and settlements.",
+      "acceptanceCriteria": [
+        "Provider registration flow enforces identity + domain verification requirements before enabling marketplace listing",
+        "Provider can create/edit/publish offerings with identity gating requirements and public metadata",
+        "Provider can set pricing/capacity parameters and see them reflected in provider daemon configuration/state",
+        "Provider can monitor incoming orders, bids placed by daemon, allocations won/lost, and workload status",
+        "Provider can view usage records and settlement summaries, with drill-down to signed usage report hashes",
+        "E2E test covers: provider registers -> creates offering -> customer orders -> provider wins -> usage visible"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Provider operational transparency is key for marketplace adoption."
+    },
+    {
+      "id": "VE-705",
+      "title": "Phase 7 - Portal: Supercomputer/HPC UI (job submission, library workloads, outputs)",
+      "description": "Implement the HPC portal UX: browse preconfigured workloads, submit SLURM-backed jobs, track progress, and access outputs via encrypted references.",
+      "acceptanceCriteria": [
+        "Users can select a preconfigured workload template (v1 library) or submit a custom job manifest (v1 schema)",
+        "Job submission checks identity + MFA gating policies as required and posts a job request to chain",
+        "Portal tracks job status via chain events (queued, running, completed, failed, cancelled) and displays timestamps",
+        "Outputs are represented as encrypted pointers/references; only the job owner can decrypt and retrieve details",
+        "Users can cancel jobs; cancellation state is consistent across chain, provider daemon, and SLURM adapter",
+        "Integration test covers: submit -> schedule -> complete -> usage recorded -> rewards/settlement visible"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Keep outputs off-chain except encrypted references; never leak sensitive payloads in UI logs."
+    },
+    {
+      "id": "VE-706",
+      "title": "Phase 7 - Admin & moderation portal: roles, account states, offering controls, and audit trails",
+      "description": "Deliver admin and moderator tooling to manage roles, account states (active/suspended/terminated), offering states, dispute flags, and on-chain audit trails.",
+      "acceptanceCriteria": [
+        "Genesis/admin users can assign roles and change account states with full audit events and reason codes",
+        "Moderators can review anomaly flags (benchmarks, usage anomalies, identity fraud signals) and escalate actions",
+        "Admins can pause/unlist offerings and providers, with explicit state transitions and on-chain events",
+        "SupportAgent role can access assigned support workflows without accessing unrelated sensitive payloads",
+        "Portal provides audit log viewer (event-indexed) with robust filtering and export (non-sensitive only)",
+        "E2E test covers: admin changes account state -> user blocked -> audit event visible -> rollback possible per policy"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Even administrators should not be able to read encrypted payloads unless they are the intended recipient."
+    },
+    {
+      "id": "VE-707",
+      "title": "Phase 7 - Support requests end-to-end: encrypted tickets + Waldur service desk integration",
+      "description": "Implement support request flows where ticket content is encrypted on-chain, synchronized to Waldur service desk, and accessible only to authorized parties.",
+      "acceptanceCriteria": [
+        "Customer can create a support request referencing an order/resource; sensitive ticket body is encrypted to the intended recipient(s)",
+        "SupportAgent and provider can respond; responses are stored encrypted and linked to ticket thread state on-chain",
+        "Waldur bridge syncs public ticket metadata and state changes while keeping sensitive ticket bodies encrypted",
+        "Moderators can access only tickets they are authorized to handle (role + intended recipient encryption)",
+        "E2E test covers: create ticket -> provider reply -> state sync -> customer reads reply (decrypt locally)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Tickets are explicitly listed as sensitive data and must remain encrypted."
+    },
+    {
+      "id": "VE-708",
+      "title": "Phase 7 - Observability: chain, bridge, daemons, and orchestration adapters",
+      "description": "Implement unified observability (metrics, logs, traces) across chain nodes, Waldur bridge, provider daemon(s), benchmarking daemon(s), and orchestration adapters.",
+      "acceptanceCriteria": [
+        "Standardized structured logging across Go services and Python services with correlation IDs (order id, job id, tx hash)",
+        "Prometheus metrics exported for: chain performance, mempool, VEID verification timings, provider daemon bid/provision throughput, benchmark submission rate",
+        "Tracing across portal -> API -> chain tx submission -> daemon handlers where feasible",
+        "Dashboards include SLO views: identity verification latency, order provisioning latency, job completion latency, error budgets",
+        "Alert rules: validator health, daemon backlog, failed provisioning spikes, benchmark anomaly spikes",
+        "Runbook links included in dashboards"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Do not log plaintext sensitive payloads; scrub/omit encrypted blob contents from logs."
+    },
+    {
+      "id": "VE-709",
+      "title": "Phase 7 - Operational hardening: idempotent workflows, retries, and safe state machines",
+      "description": "Harden all cross-system workflows (chain <-> bridge <-> daemons <-> orchestration) for idempotency, replay-safety, and safe recovery from partial failures.",
+      "acceptanceCriteria": [
+        "All order/job lifecycle handlers are idempotent (replays do not create duplicate resources or double-billing)",
+        "Provider daemon persists checkpoints and resumes subscriptions without skipping events",
+        "Bridge implements at-least-once delivery with deduplication and replay-safe handlers",
+        "Explicit terminal states exist for orders/jobs (Completed/Terminated/Failed/Cancelled) with consistent settlement behavior",
+        "Chaos tests simulate: chain restart, daemon restart, network partition, orchestration API timeouts",
+        "Post-incident recovery procedures are documented and validated on staging"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is a GA-critical reliability milestone."
+    },
+    {
+      "id": "VE-800",
+      "title": "Phase 8 - Security audit readiness: cryptography, key management, and MFA enforcement review",
+      "description": "Prepare for third-party security assessment by hardening cryptographic envelope handling, key rotation procedures, and MFA/identity gating enforcement paths.",
+      "acceptanceCriteria": [
+        "Encryption envelope implementations are reviewed and consistent across modules and services; algorithms and versions are documented",
+        "Key rotation procedures exist for: provider daemon keys, approved client keys, validator identity keys, user account keys (account recovery flow)",
+        "MFA enforcement paths are tested for all designated sensitive transactions (including account recovery and processing transactions)",
+        "Identity upload signature checks (approved client + user) are tested and enforced in both proposal and consensus verification paths",
+        "Static analysis and dependency scanning pass for Go/Python/TS repos; critical findings resolved or accepted with documented risk",
+        "Security test suite includes replay tests, signature forgery tests, and malformed payload tests"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Treat consensus determinism and signature verification as top-tier audit items."
+    },
+    {
+      "id": "VE-801",
+      "title": "Phase 8 - Load & performance testing: identity scoring throughput, marketplace bursts, and HPC scheduling",
+      "description": "Execute load testing across the system to validate performance targets for identity scoring, order throughput, and daemon backpressure behavior.",
+      "acceptanceCriteria": [
+        "Load test scenario A: burst of identity scope uploads -> pending/finalized scoring -> chain stability maintained",
+        "Load test scenario B: burst of orders + bids -> allocations -> provisioning events -> consistent on-chain state transitions",
+        "Load test scenario C: HPC job submissions -> SLURM scheduling -> accounting updates -> reward distribution",
+        "Performance baselines documented: p95 identity verification latency, p95 order provisioning latency, daemon event lag",
+        "Resource limits (CPU/memory) defined for daemons and bridge services; backpressure validated",
+        "Bottlenecks identified and addressed; regression harness added to CI for critical benchmarks"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Ensure test artifacts are reproducible and can be re-run for future releases."
+    },
+    {
+      "id": "VE-802",
+      "title": "Phase 8 - Mainnet genesis, validator onboarding, and network parameterization",
+      "description": "Deliver mainnet readiness: genesis tooling, validator onboarding guide, and governance-controlled network parameters (including approved client allowlist and fees).",
+      "acceptanceCriteria": [
+        "Genesis generation tool produces deterministic genesis.json with initial roles, parameters, and module configs",
+        "Validator onboarding guide covers: staking setup, identity verification responsibilities, model/version pinning, monitoring",
+        "Governance/admin parameter controls implemented for: approved client allowlist, MFA-sensitive tx list, fees, retention windows",
+        "Upgrade strategy documented (software upgrades, parameter migrations, emergency halts if applicable)",
+        "Dry-run ceremony executed on a testnet environment and documented"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Validators also operate the identity network; onboarding must reflect that operational burden."
+    },
+    {
+      "id": "VE-803",
+      "title": "Phase 8 - Documentation & SDKs: developer, provider, and user guides",
+      "description": "Produce comprehensive documentation and client SDKs for interacting with VirtEngine (portal, chain modules, provider daemon integration, and Waldur bridge).",
+      "acceptanceCriteria": [
+        "Developer docs: module APIs, encryption envelope spec, event schema, transaction examples, local devnet instructions",
+        "Provider docs: daemon setup, Kubernetes/SLURM adapter configuration, key management, benchmarking setup, dispute handling",
+        "User docs: onboarding, VEID process, MFA setup, marketplace purchase flows, HPC job submission",
+        "SDKs delivered: TypeScript client for portal + chain, Go client for daemons/services, Python helpers for ML artifacts and integration tests",
+        "Docs include security guidance: never expose private keys, payload encryption rules, safe logging practices",
+        "Documentation published and versioned with release tags"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Docs are part of GA acceptance; keep them aligned with on-chain schemas and events."
+    },
+    {
+      "id": "VE-804",
+      "title": "Phase 8 - GA release checklist: SLOs, incident playbooks, and production readiness review",
+      "description": "Finalize GA readiness with operational checklists, SLOs, incident playbooks, and production readiness sign-off for each major subsystem.",
+      "acceptanceCriteria": [
+        "SLOs defined for: chain availability, identity scoring pipeline availability, marketplace order fulfillment, HPC job scheduling",
+        "Incident playbooks exist for: validator outage, identity scoring failure, provider daemon misbehavior, bridge failure, key compromise",
+        "On-call rotation expectations documented; escalation paths defined",
+        "Backup/restore plans validated for off-chain components (Waldur DB, portal state) and documented for chain state via standard node procedures",
+        "Final production readiness review completed with explicit go/no-go criteria and sign-offs"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "GA isn�t only features�operability and recovery matter as much as functionality."
+    },
+    {
+      "id": "VE-900",
+      "title": "Gap Phase - Mobile capture app: native camera integration",
+      "description": "Implement mobile app (iOS/Android) for capturing identity documents and facial biometrics (Patent Claim 2).",
+      "acceptanceCriteria": [
+        "Native mobile app for iOS and Android",
+        "Camera with real-time quality feedback",
+        "Liveness detection during facial capture",
+        "Gallery uploads blocked",
+        "Approved-client key signing"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Patent Claim 2: camera captures for identity documents and biometric facial recognition."
+    },
+    {
+      "id": "VE-901",
+      "title": "Gap Phase - Liveness detection: anti-spoofing",
+      "description": "Implement liveness detection to prevent photo/video replay attacks during facial biometric capture.",
+      "acceptanceCriteria": [
+        "Active liveness with challenges",
+        "Passive liveness analyzing texture/depth/motion",
+        "Detection of photos/screens/masks",
+        "Liveness score in VEID"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Patent describes biometric sensors requiring live capture."
+    },
+    {
+      "id": "VE-902",
+      "title": "Gap Phase - Barcode scanning: ID document validation",
+      "description": "Implement barcode/QR scanning for machine-readable data from identity documents.",
+      "acceptanceCriteria": [
+        "PDF417 scanning for driver licenses",
+        "MRZ parsing for passports",
+        "Cross-validation barcode vs OCR",
+        "Barcode in VEID scoring"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent mentions barcode scanning for ID data revalidation."
+    },
+    {
+      "id": "VE-903",
+      "title": "Gap Phase - MTCNN integration: face detection",
+      "description": "Integrate MTCNN for face detection and landmark localization.",
+      "acceptanceCriteria": [
+        "MTCNN in verification pipeline",
+        "Three-stage cascade: P-Net, R-Net, O-Net",
+        "Five-point landmarks",
+        "Face alignment"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent explicitly lists MTCNN as required neural network."
+    },
+    {
+      "id": "VE-904 (SKIP TASK)",
+      "title": "Gap Phase - Natural Language Interface: AI chat",
+      "description": "Implement LLM-powered AI chat agent for natural language interaction.",
+      "acceptanceCriteria": [
+        "LLM integration",
+        "Chat in portal and mobile",
+        "Human handoff",
+        "Audit logging"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent describes NLI with LLM capabilities."
+    },
+    {
+      "id": "VE-905 (SKIP TASK)",
+      "title": "Gap Phase - DEX integration: crypto-to-fiat",
+      "description": "Implement DEX services for token to fiat conversion (Patent Claim 4).",
+      "acceptanceCriteria": [
+        "DEX protocol integration",
+        "Token to stablecoin",
+        "Fiat off-ramp"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent Claim 4: DEX services and crypto to FIAT."
+    },
+    {
+      "id": "VE-906 (SKIP TASK)",
+      "title": "Gap Phase - Payment gateway: Visa/Mastercard",
+      "description": "Implement traditional payment processing via Visa/Mastercard.",
+      "acceptanceCriteria": [
+        "Payment gateway (Stripe/PayPal)",
+        "Card acceptance",
+        "PCI-DSS compliance"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent mentions Visa/Mastercard integration."
+    },
+    {
+      "id": "VE-907",
+      "title": "Gap Phase - Active Directory SSO",
+      "description": "Implement Active Directory integration for enterprise SSO.",
+      "acceptanceCriteria": [
+        "Azure AD via OIDC/SAML",
+        "On-prem AD via LDAP",
+        "Wallet binding"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent Claim 5 mentions Active Directory SSO."
+    },
+    {
+      "id": "VE-908 (SKIP TASK)",
+      "title": "Gap Phase - EduGAIN federation",
+      "description": "Implement EduGAIN for academic identity federation.",
+      "acceptanceCriteria": [
+        "SAML EduGAIN integration",
+        "Academic affiliation scope",
+        "HPC research workflows"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists EduGAIN as identity integration."
+    },
+    {
+      "id": "VE-909 (SKIP TASK)",
+      "title": "Gap Phase - Government data integration",
+      "description": "Integrate government data sources for identity verification.",
+      "acceptanceCriteria": [
+        "Government API adapters",
+        "Document validation services",
+        "Government scope"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent mentions Government Agency data."
+    },
+    {
+      "id": "VE-910",
+      "title": "Gap Phase - SMS verification scope - must be done in a decentralized manner - E.G. Validators trigger SMS",
+      "description": "Implement SMS-based phone verification as VEID scope.",
+      "acceptanceCriteria": [
+        "SMS OTP",
+        "Rate limiting",
+        "Phone hashing",
+        "VoIP detection"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent lists SMS Verification as VEID scope."
+    },
+    {
+      "id": "VE-911",
+      "title": "Gap Phase - Provider public reviews",
+      "description": "Implement public review system for provider services.",
+      "acceptanceCriteria": [
+        "Star rating and reviews",
+        "Verified order links",
+        "On-chain hash"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent describes public reviews on services."
+    },
+    {
+      "id": "VE-912",
+      "title": "Gap Phase - Fraud reporting flow",
+      "description": "Implement fraud reporting from providers to moderators.",
+      "acceptanceCriteria": [
+        "Fraud reports with evidence",
+        "Moderator queue",
+        "Audit trail"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent: providers report fraudulent activity."
+    },
+    {
+      "id": "VE-913",
+      "title": "Gap Phase - OpenStack adapter using Waldur",
+      "description": "Extend provider daemon for OpenStack orchestration.",
+      "acceptanceCriteria": [
+        "OpenStack API (Nova/Neutron/Cinder)",
+        "VM lifecycle",
+        "Network management"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent lists OpenStack as Private Cloud."
+    },
+    {
+      "id": "VE-914",
+      "title": "Gap Phase - VMware adapter using Waldur",
+      "description": "Extend provider daemon for VMware vSphere.",
+      "acceptanceCriteria": [
+        "vSphere API (govmomi)",
+        "VM lifecycle via vCenter",
+        "Template deployment"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists VMWare as Private Cloud."
+    },
+    {
+      "id": "VE-915",
+      "title": "Gap Phase - AWS adapter using Waldur",
+      "description": "Extend provider daemon for AWS.",
+      "acceptanceCriteria": [
+        "AWS SDK (EC2/VPC/EBS/S3)",
+        "EC2 lifecycle",
+        "Multi-region"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists AWS as Public Cloud."
+    },
+    {
+      "id": "VE-916",
+      "title": "Gap Phase - Azure adapter using Waldur",
+      "description": "Extend provider daemon for Microsoft Azure.",
+      "acceptanceCriteria": [
+        "Azure SDK (Compute/Network/Storage)",
+        "VM via ARM"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists Azure as Public Cloud."
+    },
+    {
+      "id": "VE-917",
+      "title": "Gap Phase - MOAB workload manager using Waldur",
+      "description": "Extend HPC module for MOAB scheduler.",
+      "acceptanceCriteria": ["MOAB API/CLI", "Job lifecycle", "VE rewards"],
+      "priority": 4,
+      "passes": false,
+      "notes": "Patent lists MOAB alongside SLURM."
+    },
+    {
+      "id": "VE-918",
+      "title": "Gap Phase - Open OnDemand using Waldur",
+      "description": "Integrate Open OnDemand for web-based HPC.",
+      "acceptanceCriteria": [
+        "OnDemand with SLURM",
+        "VEID SSO",
+        "Interactive apps"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Patent lists Open OnDemand."
+    },
+    {
+      "id": "VE-919",
+      "title": "Gap Phase - Jira Service Desk using Waldur",
+      "description": "Integrate Jira Service Desk for enterprise support.",
+      "acceptanceCriteria": ["Jira API", "Ticket creation", "SLA management"],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists Jira Service Desk."
+    },
+    {
+      "id": "VE-920",
+      "title": "Gap Phase - Ansible automation using Waldur",
+      "description": "Integrate Ansible for infrastructure provisioning.",
+      "acceptanceCriteria": [
+        "Ansible playbooks",
+        "Vault secrets",
+        "Deployment playbooks"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists Ansible."
+    },
+    {
+      "id": "VE-921",
+      "title": "Gap Phase - Staking rewards",
+      "description": "Implement staking rewards for validators.",
+      "acceptanceCriteria": [
+        "Reward calculation",
+        "Identity network rewards",
+        "Slashing"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent describes Staker rewards."
+    },
+    {
+      "id": "VE-922",
+      "title": "Gap Phase - Delegated staking",
+      "description": "Implement delegated staking for non-validators.",
+      "acceptanceCriteria": [
+        "Delegation to validators",
+        "Unbonding period",
+        "Proportional rewards"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent mentions shared wallet staking."
+    },
+    {
+      "id": "VE-923",
+      "title": "Gap Phase - GAN fraud detection",
+      "description": "Implement GAN-based synthetic image detection.",
+      "acceptanceCriteria": [
+        "GAN discriminator",
+        "Deepfake detection",
+        "VEID scoring"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists GANs."
+    },
+    {
+      "id": "VE-924",
+      "title": "Gap Phase - Autoencoder anomaly detection",
+      "description": "Implement autoencoder-based anomaly detection.",
+      "acceptanceCriteria": [
+        "Autoencoder model",
+        "Reconstruction error",
+        "VEID integration"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists Autoencoders."
+    },
+    {
+      "id": "VE-925",
+      "title": "Gap Phase - Hardware key MFA",
+      "description": "Implement certificate or hardware key MFA.",
+      "acceptanceCriteria": [
+        "X.509 certificates",
+        "Smart card/PIV",
+        "Revocation checking"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Patent lists Certificate/Hardware Key MFA."
+    },
+    {
+      "id": "VE-926",
+      "title": "Gap Phase - Ledger wallet",
+      "description": "Implement Ledger hardware wallet support.",
+      "acceptanceCriteria": [
+        "Ledger Nano S/X",
+        "Transaction signing",
+        "Address derivation"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Patent Claim 5 mentions Ledger."
+    },
+    {
+      "id": "VE-927",
+      "title": "Gap Phase - Mnemonic seed generation",
+      "description": "Implement BIP-39 mnemonic seed phrase generation.",
+      "acceptanceCriteria": [
+        "BIP-39 mnemonics (12/24 words)",
+        "Backup/recovery",
+        "BIP-44 derivation"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Patent mentions Mnemonic seed for non-custodial keys."
+    }
+  ]
+}

@@ -1,21 +1,41 @@
 package app
 
 import (
+	evidencetypes "cosmossdk.io/x/evidence/types"
+	"cosmossdk.io/x/feegrant"
+	upgradetypes "cosmossdk.io/x/upgrade/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
+	"github.com/cosmos/cosmos-sdk/x/authz"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	consensustypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
+	crisistypes "github.com/cosmos/cosmos-sdk/x/crisis/types"
+	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
+	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
+	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	transfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
+	ibchost "github.com/cosmos/ibc-go/v10/modules/core/exported"
 
-	"github.com/virtengine/virtengine/x/audit"
-	"github.com/virtengine/virtengine/x/cert"
-	"github.com/virtengine/virtengine/x/deployment"
-	"github.com/virtengine/virtengine/x/escrow"
-	ekeeper "github.com/virtengine/virtengine/x/escrow/keeper"
-	"github.com/virtengine/virtengine/x/market"
-	mhooks "github.com/virtengine/virtengine/x/market/hooks"
-	"github.com/virtengine/virtengine/x/provider"
+	audittypes "pkg.akt.dev/go/node/audit/v1"
+	taketypes "pkg.akt.dev/go/node/take/v1"
+
+	"pkg.akt.dev/node/x/audit"
+	"pkg.akt.dev/node/x/cert"
+	"pkg.akt.dev/node/x/deployment"
+	"pkg.akt.dev/node/x/escrow"
+	"pkg.akt.dev/node/x/market"
+	"pkg.akt.dev/node/x/provider"
+	"pkg.akt.dev/node/x/take"
 )
 
 func virtengineModuleBasics() []module.AppModuleBasic {
 	return []module.AppModuleBasic{
+		take.AppModuleBasic{},
 		escrow.AppModuleBasic{},
 		deployment.AppModuleBasic{},
 		market.AppModuleBasic{},
@@ -25,151 +45,38 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 	}
 }
 
-func virtengineKVStoreKeys() []string {
+// OrderInitGenesis returns module names in order for init genesis calls.
+// NOTE: The genutils module must occur after staking so that pools are
+// properly initialized with tokens from genesis accounts.
+// NOTE: Capability module must occur first so that it can initialize any capabilities
+// so that other modules that want to create or claim capabilities afterwards in InitChain
+// can do so safely.
+func OrderInitGenesis(_ []string) []string {
 	return []string{
-		escrow.StoreKey,
-		deployment.StoreKey,
-		market.StoreKey,
-		provider.StoreKey,
-		audit.StoreKey,
-		cert.StoreKey,
-	}
-}
-
-func virtengineSubspaces(k paramskeeper.Keeper) paramskeeper.Keeper {
-	k.Subspace(deployment.ModuleName)
-	k.Subspace(market.ModuleName)
-	return k
-}
-
-func (app *VirtEngineApp) setVirtEngineKeepers() {
-
-	app.keeper.escrow = ekeeper.NewKeeper(
-		app.appCodec,
-		app.keys[escrow.StoreKey],
-		app.keeper.bank,
-	)
-
-	app.keeper.deployment = deployment.NewKeeper(
-		app.appCodec,
-		app.keys[deployment.StoreKey],
-		app.GetSubspace(deployment.ModuleName),
-		app.keeper.escrow,
-	)
-
-	app.keeper.market = market.NewKeeper(
-		app.appCodec,
-		app.keys[market.StoreKey],
-		app.GetSubspace(market.ModuleName),
-		app.keeper.escrow,
-	)
-
-	hook := mhooks.New(app.keeper.deployment, app.keeper.market)
-
-	app.keeper.escrow.AddOnAccountClosedHook(hook.OnEscrowAccountClosed)
-	app.keeper.escrow.AddOnPaymentClosedHook(hook.OnEscrowPaymentClosed)
-
-	app.keeper.provider = provider.NewKeeper(
-		app.appCodec,
-		app.keys[provider.StoreKey],
-	)
-
-	app.keeper.audit = audit.NewKeeper(
-		app.appCodec,
-		app.keys[audit.StoreKey],
-	)
-
-	app.keeper.cert = cert.NewKeeper(
-		app.appCodec,
-		app.keys[cert.StoreKey],
-	)
-}
-
-func (app *VirtEngineApp) virtengineAppModules() []module.AppModule {
-	return []module.AppModule{
-
-		escrow.NewAppModule(
-			app.appCodec,
-			app.keeper.escrow,
-		),
-
-		deployment.NewAppModule(
-			app.appCodec,
-			app.keeper.deployment,
-			app.keeper.market,
-			app.keeper.escrow,
-			app.keeper.bank,
-		),
-
-		market.NewAppModule(
-			app.appCodec,
-			app.keeper.market,
-			app.keeper.escrow,
-			app.keeper.audit,
-			app.keeper.deployment,
-			app.keeper.provider,
-			app.keeper.bank,
-		),
-
-		provider.NewAppModule(
-			app.appCodec,
-			app.keeper.provider,
-			app.keeper.bank,
-			app.keeper.market,
-		),
-
-		audit.NewAppModule(
-			app.appCodec,
-			app.keeper.audit,
-		),
-
-		cert.NewAppModule(
-			app.appCodec,
-			app.keeper.cert,
-		),
-	}
-}
-
-func (app *VirtEngineApp) virtengineEndBlockModules() []string {
-	return []string{
-		deployment.ModuleName, market.ModuleName,
-	}
-}
-
-func (app *VirtEngineApp) virtengineInitGenesisOrder() []string {
-	return []string{
+		authtypes.ModuleName,
+		authz.ModuleName,
+		banktypes.ModuleName,
+		distrtypes.ModuleName,
+		stakingtypes.ModuleName,
+		slashingtypes.ModuleName,
+		govtypes.ModuleName,
+		vestingtypes.ModuleName,
+		paramstypes.ModuleName,
+		audittypes.ModuleName,
+		upgradetypes.ModuleName,
+		minttypes.ModuleName,
+		crisistypes.ModuleName,
+		ibchost.ModuleName,
+		evidencetypes.ModuleName,
+		transfertypes.ModuleName,
+		consensustypes.ModuleName,
+		feegrant.ModuleName,
 		cert.ModuleName,
+		taketypes.ModuleName,
 		escrow.ModuleName,
 		deployment.ModuleName,
 		provider.ModuleName,
 		market.ModuleName,
-	}
-}
-
-func (app *VirtEngineApp) virtengineSimModules() []module.AppModuleSimulation {
-	return []module.AppModuleSimulation{
-		deployment.NewAppModuleSimulation(
-			app.keeper.deployment,
-			app.keeper.acct,
-			app.keeper.bank,
-		),
-
-		market.NewAppModuleSimulation(
-			app.keeper.market,
-			app.keeper.acct,
-			app.keeper.deployment,
-			app.keeper.provider,
-			app.keeper.bank,
-		),
-
-		provider.NewAppModuleSimulation(
-			app.keeper.provider,
-			app.keeper.acct,
-			app.keeper.bank,
-		),
-
-		cert.NewAppModuleSimulation(
-			app.keeper.cert,
-		),
+		genutiltypes.ModuleName,
 	}
 }

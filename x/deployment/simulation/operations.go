@@ -1,37 +1,42 @@
 package simulation
 
 import (
+	"bytes"
+	"fmt"
 	"math/rand"
-
-	"github.com/pkg/errors"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/simapp/helpers"
-	simappparams "github.com/cosmos/cosmos-sdk/simapp/params"
+	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
+	deposit "pkg.akt.dev/go/node/types/deposit/v1"
+	"pkg.akt.dev/go/sdkutil"
 
-	appparams "github.com/virtengine/virtengine/app/params"
-	sdlv1 "github.com/virtengine/virtengine/sdl"
-	"github.com/virtengine/virtengine/x/deployment/keeper"
-	"github.com/virtengine/virtengine/x/deployment/types"
+	"pkg.akt.dev/go/node/deployment/v1"
+	"pkg.akt.dev/go/node/deployment/v1beta4"
+
+	sdlv1 "pkg.akt.dev/go/sdl"
+
+	appparams "pkg.akt.dev/node/app/params"
+	testsim "pkg.akt.dev/node/testutil/sim"
+	"pkg.akt.dev/node/x/deployment/keeper"
 )
 
 // Simulation operation weights constants
 const (
-	OpWeightMsgCreateDeployment = "op_weight_msg_create_deployment"
-	OpWeightMsgUpdateDeployment = "op_weight_msg_update_deployment"
-	OpWeightMsgCloseDeployment  = "op_weight_msg_close_deployment"
-	OpWeightMsgCloseGroup       = "op_weight_msg_close_group"
+	OpWeightMsgCreateDeployment = "op_weight_msg_create_deployment" // nolint gosec
+	OpWeightMsgUpdateDeployment = "op_weight_msg_update_deployment" // nolint gosec
+	OpWeightMsgCloseDeployment  = "op_weight_msg_close_deployment"  // nolint gosec
+	OpWeightMsgCloseGroup       = "op_weight_msg_close_group"       // nolint gosec
 )
 
 // WeightedOperations returns all the operations from the module with their respective weights
 func WeightedOperations(
-	appParams simtypes.AppParams, cdc codec.JSONMarshaler, ak govtypes.AccountKeeper,
+	appParams simtypes.AppParams, _ codec.JSONCodec, ak govtypes.AccountKeeper,
 	bk bankkeeper.Keeper, k keeper.IKeeper) simulation.WeightedOperations {
 	var (
 		weightMsgCreateDeployment int
@@ -41,25 +46,25 @@ func WeightedOperations(
 	)
 
 	appParams.GetOrGenerate(
-		cdc, OpWeightMsgCreateDeployment, &weightMsgCreateDeployment, nil, func(r *rand.Rand) {
+		OpWeightMsgCreateDeployment, &weightMsgCreateDeployment, nil, func(_ *rand.Rand) {
 			weightMsgCreateDeployment = appparams.DefaultWeightMsgCreateDeployment
 		},
 	)
 
 	appParams.GetOrGenerate(
-		cdc, OpWeightMsgUpdateDeployment, &weightMsgUpdateDeployment, nil, func(r *rand.Rand) {
+		OpWeightMsgUpdateDeployment, &weightMsgUpdateDeployment, nil, func(_ *rand.Rand) {
 			weightMsgUpdateDeployment = appparams.DefaultWeightMsgUpdateDeployment
 		},
 	)
 
 	appParams.GetOrGenerate(
-		cdc, OpWeightMsgCloseDeployment, &weightMsgCloseDeployment, nil, func(r *rand.Rand) {
+		OpWeightMsgCloseDeployment, &weightMsgCloseDeployment, nil, func(_ *rand.Rand) {
 			weightMsgCloseDeployment = appparams.DefaultWeightMsgCloseDeployment
 		},
 	)
 
 	appParams.GetOrGenerate(
-		cdc, OpWeightMsgCloseGroup, &weightMsgCloseGroup, nil, func(r *rand.Rand) {
+		OpWeightMsgCloseGroup, &weightMsgCloseGroup, nil, func(_ *rand.Rand) {
 			weightMsgCloseGroup = appparams.DefaultWeightMsgCloseGroup
 		},
 	)
@@ -90,70 +95,74 @@ func SimulateMsgCreateDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper
 		chainID string) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
 		simAccount, _ := simtypes.RandomAcc(r, accounts)
 
-		dID := types.DeploymentID{
+		params := k.GetParams(ctx)
+
+		dID := v1.DeploymentID{
 			Owner: simAccount.Address.String(),
-			DSeq:  uint64(ctx.BlockHeight()),
+			DSeq:  uint64(ctx.BlockHeight()), // nolint gosec
 		}
 
 		_, found := k.GetDeployment(ctx, dID)
 		if found {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCreateDeployment, "no deployment found"), nil, nil
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCreateDeployment{}).Type(), "no deployment found"), nil, nil
 		}
 
 		sdl, readError := sdlv1.ReadFile("../x/deployment/testdata/deployment.yaml")
 		if readError != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCreateDeployment, "unable to read config file"),
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCreateDeployment{}).Type(), "unable to read config file"),
 				nil, readError
 		}
 
 		groupSpecs, groupErr := sdl.DeploymentGroups()
 		if groupErr != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCreateDeployment, "unable to read groups"), nil, groupErr
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCreateDeployment{}).Type(), "unable to read groups"), nil, groupErr
 		}
-		sdlSum, err := sdlv1.Version(sdl)
+		sdlSum, err := sdl.Version()
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCreateDeployment, "error parsing deployment version sum"),
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCreateDeployment{}).Type(), "error parsing deployment version sum"),
 				nil, err
 		}
 
-		depositAmount := minDeposit
+		depositAmount := params.MinDeposits[0]
 		account := ak.GetAccount(ctx, simAccount.Address)
 		spendable := bk.SpendableCoins(ctx, account.GetAddress())
 
 		if spendable.AmountOf(depositAmount.Denom).LT(depositAmount.Amount.MulRaw(2)) {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCreateDeployment, "out of money"), nil, nil
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCreateDeployment{}).Type(), "out of money"), nil, nil
 		}
-		spendable = spendable.Sub(sdk.NewCoins(depositAmount))
+		spendable = spendable.Sub(depositAmount)
 
 		fees, err := simtypes.RandomFees(r, ctx, spendable)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCreateDeployment, "unable to generate fees"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCreateDeployment{}).Type(), "unable to generate fees"), nil, err
 		}
 
-		msg := types.NewMsgCreateDeployment(dID, make([]types.GroupSpec, 0, len(groupSpecs)), sdlSum, depositAmount)
+		msg := v1beta4.NewMsgCreateDeployment(dID, make([]v1beta4.GroupSpec, 0, len(groupSpecs)), sdlSum, deposit.Deposit{
+			Amount:  depositAmount,
+			Sources: deposit.Sources{deposit.SourceBalance},
+		})
 
-		for _, spec := range groupSpecs {
-			msg.Groups = append(msg.Groups, *spec)
-		}
+		msg.Groups = append(msg.Groups, groupSpecs...)
 
-		txGen := simappparams.MakeTestEncodingConfig().TxConfig
-		tx, err := helpers.GenTx(
+		txGen := sdkutil.MakeEncodingConfig().TxConfig
+		tx, err := simtestutil.GenSignedMockTx(
+			r,
 			txGen,
 			[]sdk.Msg{msg},
 			fees,
-			helpers.DefaultGenTxGas,
+			simtestutil.DefaultGenTxGas,
 			chainID,
 			[]uint64{account.GetAccountNumber()},
 			[]uint64{account.GetSequence()},
 			simAccount.PrivKey,
 		)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), "unable to generate mock tx"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), "unable to generate mock tx"), nil, err
 		}
 
-		_, _, err = app.Deliver(txGen.TxEncoder(), tx)
+		_, _, err = app.SimDeliver(txGen.TxEncoder(), tx)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), "create deployment - unable to deliver mock tx"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), "create deployment - unable to deliver mock tx"), nil, err
 		}
 
 		return simtypes.NewOperationMsg(msg, true, ""), nil, nil
@@ -164,51 +173,48 @@ func SimulateMsgCreateDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper
 func SimulateMsgUpdateDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper, k keeper.IKeeper) simtypes.Operation {
 	return func(r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accounts []simtypes.Account,
 		chainID string) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
-		var deployments []types.Deployment
+		var deployments []v1.Deployment
 
-		k.WithDeployments(ctx, func(deployment types.Deployment) bool {
-			deployments = append(deployments, deployment)
+		sdl, readError := sdlv1.ReadFile("../x/deployment/testdata/deployment-v2.yaml")
+		if readError != nil {
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgUpdateDeployment{}).Type(), "unable to read config file"), nil, readError
+		}
+
+		sdlSum, err := sdl.Version()
+		if err != nil {
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgUpdateDeployment{}).Type(), "error parsing deployment version sum"),
+				nil, err
+		}
+
+		k.WithDeployments(ctx, func(deployment v1.Deployment) bool {
+			// skip deployments that already have been updated
+			if !bytes.Equal(deployment.Hash, sdlSum) {
+				deployments = append(deployments, deployment)
+			}
 
 			return false
 		})
 
 		if len(deployments) == 0 {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "no deployments found"), nil, nil
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgUpdateDeployment{}).Type(), "no deployments found"), nil, nil
 		}
 
 		// Get random deployment
-		i := r.Intn(len(deployments))
-		deployment := deployments[i]
+		deployment := deployments[testsim.RandIdx(r, len(deployments)-1)]
 
-		if deployment.State != types.DeploymentActive {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "deployment closed"), nil, nil
+		if deployment.State != v1.DeploymentActive {
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgUpdateDeployment{}).Type(), "deployment closed"), nil, nil
 		}
 
-		owner, convertErr := sdk.AccAddressFromBech32(deployment.ID().Owner)
+		owner, convertErr := sdk.AccAddressFromBech32(deployment.ID.Owner)
 		if convertErr != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "error while converting address"), nil, convertErr
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgUpdateDeployment{}).Type(), "error while converting address"), nil, convertErr
 		}
 
 		simAccount, found := simtypes.FindAccount(accounts, owner)
 		if !found {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "unable to find deployment with given id"),
-				nil, errors.Errorf("deployment with %s not found", deployment.ID().Owner)
-		}
-
-		sdl, readError := sdlv1.ReadFile("../x/deployment/testdata/deployment-v2.yaml")
-		if readError != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "unable to read config file"), nil, readError
-		}
-
-		groupSpecs, groupErr := sdl.DeploymentGroups()
-		if groupErr != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "unable to parse groups"), nil, groupErr
-		}
-
-		sdlSum, err := sdlv1.Version(sdl)
-		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "error parsing deployment version sum"),
-				nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgUpdateDeployment{}).Type(), "unable to find deployment with given id"),
+				nil, fmt.Errorf("deployment with %s not found", deployment.ID.Owner)
 		}
 
 		account := ak.GetAccount(ctx, simAccount.Address)
@@ -216,33 +222,30 @@ func SimulateMsgUpdateDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper
 
 		fees, err := simtypes.RandomFees(r, ctx, spendable)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeUpdateDeployment, "unable to generate fees"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgUpdateDeployment{}).Type(), "unable to generate fees"), nil, err
 		}
 
-		msg := types.NewMsgUpdateDeployment(deployment.ID(), make([]types.GroupSpec, 0, len(groupSpecs)), sdlSum)
+		msg := v1beta4.NewMsgUpdateDeployment(deployment.ID, sdlSum)
 
-		for _, spec := range groupSpecs {
-			msg.Groups = append(msg.Groups, *spec)
-		}
-
-		txGen := simappparams.MakeTestEncodingConfig().TxConfig
-		tx, err := helpers.GenTx(
+		txGen := sdkutil.MakeEncodingConfig().TxConfig
+		tx, err := simtestutil.GenSignedMockTx(
+			r,
 			txGen,
 			[]sdk.Msg{msg},
 			fees,
-			helpers.DefaultGenTxGas,
+			simtestutil.DefaultGenTxGas,
 			chainID,
 			[]uint64{account.GetAccountNumber()},
 			[]uint64{account.GetSequence()},
 			simAccount.PrivKey,
 		)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), "unable to generate mock tx"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), "unable to generate mock tx"), nil, err
 		}
 
-		_, _, err = app.Deliver(txGen.TxEncoder(), tx)
+		_, _, err = app.SimDeliver(txGen.TxEncoder(), tx)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), "update deployment - unable to deliver mock tx"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), "update deployment - unable to deliver mock tx"), nil, err
 		}
 
 		return simtypes.NewOperationMsg(msg, true, ""), nil, nil
@@ -253,10 +256,10 @@ func SimulateMsgUpdateDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper
 func SimulateMsgCloseDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper, k keeper.IKeeper) simtypes.Operation {
 	return func(r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accounts []simtypes.Account,
 		chainID string) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
-		var deployments []types.Deployment
+		var deployments []v1.Deployment
 
-		k.WithDeployments(ctx, func(deployment types.Deployment) bool {
-			if deployment.State == types.DeploymentActive {
+		k.WithDeployments(ctx, func(deployment v1.Deployment) bool {
+			if deployment.State == v1.DeploymentActive {
 				deployments = append(deployments, deployment)
 			}
 
@@ -264,22 +267,21 @@ func SimulateMsgCloseDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper,
 		})
 
 		if len(deployments) == 0 {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseDeployment, "no deployments found"), nil, nil
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseDeployment{}).Type(), "no deployments found"), nil, nil
 		}
 
 		// Get random deployment
-		i := r.Intn(len(deployments))
-		deployment := deployments[i]
+		deployment := deployments[testsim.RandIdx(r, len(deployments)-1)]
 
-		owner, convertErr := sdk.AccAddressFromBech32(deployment.ID().Owner)
+		owner, convertErr := sdk.AccAddressFromBech32(deployment.ID.Owner)
 		if convertErr != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseDeployment, "error while converting address"), nil, convertErr
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseDeployment{}).Type(), "error while converting address"), nil, convertErr
 		}
 
 		simAccount, found := simtypes.FindAccount(accounts, owner)
 		if !found {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseDeployment, "unable to find deployment"), nil,
-				errors.Errorf("deployment with %s not found", deployment.ID().Owner)
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseDeployment{}).Type(), "unable to find deployment"), nil,
+				fmt.Errorf("deployment with %s not found", deployment.ID.Owner)
 		}
 
 		account := ak.GetAccount(ctx, simAccount.Address)
@@ -287,29 +289,30 @@ func SimulateMsgCloseDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper,
 
 		fees, err := simtypes.RandomFees(r, ctx, spendable)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseDeployment, "unable to generate fees"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseDeployment{}).Type(), "unable to generate fees"), nil, err
 		}
 
-		msg := types.NewMsgCloseDeployment(deployment.ID())
+		msg := v1beta4.NewMsgCloseDeployment(deployment.ID)
 
-		txGen := simappparams.MakeTestEncodingConfig().TxConfig
-		tx, err := helpers.GenTx(
+		txGen := sdkutil.MakeEncodingConfig().TxConfig
+		tx, err := simtestutil.GenSignedMockTx(
+			r,
 			txGen,
 			[]sdk.Msg{msg},
 			fees,
-			helpers.DefaultGenTxGas,
+			simtestutil.DefaultGenTxGas,
 			chainID,
 			[]uint64{account.GetAccountNumber()},
 			[]uint64{account.GetSequence()},
 			simAccount.PrivKey,
 		)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), "unable to generate mock tx"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), "unable to generate mock tx"), nil, err
 		}
 
-		_, _, err = app.Deliver(txGen.TxEncoder(), tx)
+		_, _, err = app.SimDeliver(txGen.TxEncoder(), tx)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), "close deployment - unable to deliver mock tx"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), "close deployment - unable to deliver mock tx"), nil, err
 		}
 
 		return simtypes.NewOperationMsg(msg, true, ""), nil, nil
@@ -320,10 +323,10 @@ func SimulateMsgCloseDeployment(ak govtypes.AccountKeeper, bk bankkeeper.Keeper,
 func SimulateMsgCloseGroup(ak govtypes.AccountKeeper, bk bankkeeper.Keeper, k keeper.IKeeper) simtypes.Operation {
 	return func(r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accounts []simtypes.Account,
 		chainID string) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
-		var deployments []types.Deployment
+		var deployments []v1.Deployment
 
-		k.WithDeployments(ctx, func(deployment types.Deployment) bool {
-			if deployment.State == types.DeploymentActive {
+		k.WithDeployments(ctx, func(deployment v1.Deployment) bool {
+			if deployment.State == v1.DeploymentActive {
 				deployments = append(deployments, deployment)
 			}
 
@@ -331,22 +334,21 @@ func SimulateMsgCloseGroup(ak govtypes.AccountKeeper, bk bankkeeper.Keeper, k ke
 		})
 
 		if len(deployments) == 0 {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseGroup, "no deplyments found"), nil, nil
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseGroup{}).Type(), "no deployments found"), nil, nil
 		}
 
 		// Get random deployment
-		i := r.Intn(len(deployments))
-		deployment := deployments[i]
+		deployment := deployments[testsim.RandIdx(r, len(deployments)-1)]
 
-		owner, convertErr := sdk.AccAddressFromBech32(deployment.ID().Owner)
+		owner, convertErr := sdk.AccAddressFromBech32(deployment.ID.Owner)
 		if convertErr != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseGroup, "error while converting address"), nil, convertErr
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseGroup{}).Type(), "error while converting address"), nil, convertErr
 		}
 
 		simAccount, found := simtypes.FindAccount(accounts, owner)
 		if !found {
-			err := errors.Errorf("deployment with %s not found", deployment.ID().Owner)
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseGroup, err.Error()), nil, err
+			err := fmt.Errorf("deployment with %s not found", deployment.ID.Owner)
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseGroup{}).Type(), err.Error()), nil, err
 		}
 
 		account := ak.GetAccount(ctx, simAccount.Address)
@@ -354,48 +356,48 @@ func SimulateMsgCloseGroup(ak govtypes.AccountKeeper, bk bankkeeper.Keeper, k ke
 
 		fees, err := simtypes.RandomFees(r, ctx, spendable)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseGroup, "unable to generate fees"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseGroup{}).Type(), "unable to generate fees"), nil, err
 		}
 
 		// Select Group to close
-		groups := k.GetGroups(ctx, deployment.ID())
+		groups := k.GetGroups(ctx, deployment.ID)
 		if len(groups) < 1 {
 			// No groups to close
-			err := errors.Errorf("no groups for deployment ID: %v", deployment.ID())
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseGroup, err.Error()), nil, err
+			err := fmt.Errorf("no groups for deployment ID: %v", deployment.ID)
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseGroup{}).Type(), err.Error()), nil, err
 		}
-		i = r.Intn(len(groups))
-		group := groups[i]
-		if group.State == types.GroupClosed {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseGroup, "group already closed"), nil, nil
+		group := groups[testsim.RandIdx(r, len(groups)-1)]
+		if group.State == v1beta4.GroupClosed {
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseGroup{}).Type(), "group already closed"), nil, nil
 		}
 
-		msg := types.NewMsgCloseGroup(group.ID())
+		msg := v1beta4.NewMsgCloseGroup(group.ID)
 
 		err = msg.ValidateBasic()
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, types.MsgTypeCloseGroup, "msg validation failure"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, (&v1beta4.MsgCloseGroup{}).Type(), "msg validation failure"), nil, err
 		}
 
-		txGen := simappparams.MakeTestEncodingConfig().TxConfig
-		tx, err := helpers.GenTx(
+		txGen := sdkutil.MakeEncodingConfig().TxConfig
+		tx, err := simtestutil.GenSignedMockTx(
+			r,
 			txGen,
 			[]sdk.Msg{msg},
 			fees,
-			helpers.DefaultGenTxGas,
+			simtestutil.DefaultGenTxGas,
 			chainID,
 			[]uint64{account.GetAccountNumber()},
 			[]uint64{account.GetSequence()},
 			simAccount.PrivKey,
 		)
 		if err != nil {
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), "close group - unable to generate mock tx"), nil, err
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), "close group - unable to generate mock tx"), nil, err
 		}
 
-		_, _, err = app.Deliver(txGen.TxEncoder(), tx)
+		_, _, err = app.SimDeliver(txGen.TxEncoder(), tx)
 		if err != nil {
-			err = errors.Wrapf(err, "%s: msg delivery error closing group: %v", types.ModuleName, group.ID())
-			return simtypes.NoOpMsg(types.ModuleName, msg.Type(), err.Error()), nil, err
+			err = fmt.Errorf("%w: %s: msg delivery error closing group: %v", err, v1.ModuleName, group.ID)
+			return simtypes.NoOpMsg(v1.ModuleName, msg.Type(), err.Error()), nil, err
 		}
 		return simtypes.NewOperationMsg(msg, true, "submitting MsgCloseGroup"), nil, nil
 	}

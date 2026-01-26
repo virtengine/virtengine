@@ -1,8 +1,9 @@
 package cert
 
 import (
-	"github.com/virtengine/virtengine/x/cert/keeper"
-	"github.com/virtengine/virtengine/x/cert/types"
+	types "pkg.akt.dev/go/node/cert/v1"
+
+	"pkg.akt.dev/node/x/cert/keeper"
 )
 
 const (

@@ -7,10 +7,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/virtengine/virtengine/testutil"
-	"github.com/virtengine/virtengine/testutil/state"
-	"github.com/virtengine/virtengine/x/provider/keeper"
-	"github.com/virtengine/virtengine/x/provider/types"
+	types "pkg.akt.dev/go/node/provider/v1beta4"
+	"pkg.akt.dev/go/testutil"
+
+	"pkg.akt.dev/node/testutil/state"
+	"pkg.akt.dev/node/x/provider/keeper"
 )
 
 func TestProviderCreate(t *testing.T) {

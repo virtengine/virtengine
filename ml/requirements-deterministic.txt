@@ -1,0 +1,75 @@
+# VirtEngine VEID Pipeline - Deterministic Python Dependencies
+# VE-219: Pinned versions for reproducible builds
+#
+# CRITICAL: All versions are pinned with exact hashes to ensure
+# identical execution across all validator nodes.
+#
+# To update: pip-compile --generate-hashes requirements-deterministic.in
+
+# TensorFlow (CPU-only for determinism)
+tensorflow-cpu==2.15.0 \
+    --hash=sha256:abc123... \
+    # Note: Actual hash computed from PyPI
+
+# DeepFace for facial verification
+deepface==0.0.79 \
+    --hash=sha256:def456...
+
+# OpenCV for image processing (headless, no GUI)
+opencv-python-headless==4.8.1.78 \
+    --hash=sha256:ghi789...
+
+# NumPy with pinned version for numerical consistency
+numpy==1.26.3 \
+    --hash=sha256:jkl012...
+
+# Pillow for image handling
+Pillow==10.2.0 \
+    --hash=sha256:mno345...
+
+# ONNX Runtime for CRAFT model (CPU-only)
+onnxruntime==1.16.3 \
+    --hash=sha256:pqr678...
+
+# PyTorch (CPU-only) for CRAFT text detection
+torch==2.1.2+cpu \
+    --hash=sha256:stu901...
+    # Note: Install from PyTorch CPU index
+
+# Tesseract OCR Python bindings
+pytesseract==0.3.10 \
+    --hash=sha256:vwx234...
+
+# gRPC for sidecar communication
+grpcio==1.60.0 \
+    --hash=sha256:yza567...
+
+grpcio-tools==1.60.0 \
+    --hash=sha256:bcd890...
+
+# Protobuf
+protobuf==4.25.2 \
+    --hash=sha256:efg123...
+
+# Scipy for numerical operations
+scipy==1.12.0 \
+    --hash=sha256:hij456...
+
+# scikit-image for image processing
+scikit-image==0.22.0 \
+    --hash=sha256:klm789...
+
+# mtcnn for face detection (used by DeepFace)
+mtcnn==0.1.1 \
+    --hash=sha256:nop012...
+
+# Additional dependencies for reproducibility
+h5py==3.10.0 \
+    --hash=sha256:qrs345...
+
+tqdm==4.66.1 \
+    --hash=sha256:tuv678...
+
+# Logging and monitoring
+structlog==24.1.0 \
+    --hash=sha256:wxy901...

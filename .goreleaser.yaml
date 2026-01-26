@@ -1,6 +1,14 @@
+---
+version: 2
+project_name: node
+dist: ./.cache/goreleaser/main
 env:
   - GO111MODULE=on
   - CGO_ENABLED=1
+before:
+  hooks:
+    - apt update
+    - apt install -y pkg-config libudev-dev:amd64 libudev-dev:arm64
 builds:
   - id: virtengine-darwin-amd64
     binary: virtengine
@@ -13,12 +21,13 @@ builds:
       - CC=o64-clang
       - CXX=o64-clang++
     flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
       - -trimpath
-      - -mod=readonly
-      - "{{ .Env.BUILD_FLAGS }}"
     ldflags:
-      - "{{ .Env.LD_FLAGS }}"
-      - -linkmode=external
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
   - id: virtengine-darwin-arm64
     binary: virtengine
     main: ./cmd/virtengine
@@ -30,27 +39,32 @@ builds:
       - CC=oa64-clang
       - CXX=oa64-clang++
     flags:
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
       - -trimpath
-      - -mod=readonly
-      - "{{ .Env.BUILD_FLAGS }}"
     ldflags:
-      - "{{ .Env.LD_FLAGS }}"
-      - -linkmode=external
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
   - id: virtengine-linux-amd64
     binary: virtengine
     main: ./cmd/virtengine
+    env:
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
     goarch:
       - amd64
     goos:
       - linux
     flags:
-      - "{{ .Env.BUILD_FLAGS }}"
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
       - -trimpath
-      - -mod=readonly
     ldflags:
-      - "{{ .Env.LD_FLAGS }}"
-      - -extldflags "-lc -lrt -lpthread --static"
-      - -linkmode=external
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+      - -extldflags "-lc -lrt -lpthread"
   - id: virtengine-linux-arm64
     binary: virtengine
     main: ./cmd/virtengine
@@ -62,71 +76,114 @@ builds:
       - CC=aarch64-linux-gnu-gcc
       - CXX=aarch64-linux-gnu-g++
     flags:
-      - "{{ .Env.BUILD_FLAGS }}"
+      - "-mod={{ .Env.MOD }}"
+      - "-tags={{ .Env.BUILD_TAGS }}"
       - -trimpath
-      - -mod=readonly
     ldflags:
-      - "{{ .Env.LD_FLAGS }}"
-      - -extldflags "-lc -lrt -lpthread --static"
-      - -linkmode=external
-  - id: virtengine-windows-amd64
-    binary: virtengine
-    main: ./cmd/virtengine
-    goarch:
-      - amd64
-    goos:
-      - windows
-    env:
-      - CC=x86_64-w64-mingw32-gcc
-      - CXX=x86_64-w64-mingw32-g++
-    flags:
-      - "{{ .Env.BUILD_FLAGS }}"
-      - -trimpath
-      - -mod=readonly
-      - -buildmode=exe
-    ldflags:
-      - "{{ .Env.LD_FLAGS }}"
-      - -linkmode=external
-archives:
-  - id: virtengine
-    builds:
+      - "{{ .Env.BUILD_VARS }}"
+      - "{{ .Env.STRIP_FLAGS }}"
+      - "-linkmode={{ .Env.LINKMODE }}"
+      - -extldflags "-lc -lrt -lpthread"
+universal_binaries:
+  - id: virtengine-darwin-universal
+    ids:
       - virtengine-darwin-amd64
       - virtengine-darwin-arm64
+    replace: true
+    name_template: "virtengine"
+archives:
+  - id: w/version
+    ids:
+      - virtengine-darwin-universal
       - virtengine-linux-amd64
       - virtengine-linux-arm64
-      - virtengine-windows-amd64
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    wrap_in_directory: true
-    format: zip
+    name_template: "virtengine_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+    formats:
+      - zip
+    files:
+      - none*
+  - id: wo/version
+    ids:
+      - virtengine-darwin-universal
+      - virtengine-linux-amd64
+      - virtengine-linux-arm64
+    name_template: "virtengine_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+    formats:
+      - zip
     files:
       - none*
 
+checksum:
+  # You can change the name of the checksums file.
+  # Default is `{{ .ProjectName }}_{{ .Version }}_checksums.txt`.
+  name_template: "virtengine_{{ .Version }}_checksums.txt"
+
 dockers:
-  - ids:
-      - virtengine-linux-amd64
-    dockerfile: _build/Dockerfile.virtengine
-    goos: linux
+  - dockerfile: _build/Dockerfile.virtengine
+    use: buildx
     goarch: amd64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url={{ .GitURL }}
+      - --label=org.opencontainers.image.source={{ .GitURL }}
+      - --label=org.opencontainers.image.version={{ replace .Version "+" "-" }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
     image_templates:
-      - 'ghcr.io/virtengine/virtengine:{{if eq .Env.MAINNET "true"}}stable{{else}}latest{{end}}'
-      - 'ghcr.io/virtengine/virtengine:{{ .ShortCommit }}'
-      - 'ghcr.io/virtengine/virtengine:{{ .Version }}'
-brews:
-  - name: "{{ .Env.HOMEBREW_NAME }}"
-    tap:
-      owner: virtengine
-      name: homebrew-tap
-    homepage: "https://virtengine.com"
-    description: "Blockchain-powered decentralized compute platform"
-    custom_block: |
-      {{ .Env.HOMEBREW_CUSTOM }}
-    install: |
-      bin.install "virtengine"
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{if eq .Env.STABLE "true"}}stable{{else}}latest{{end}}-amd64'
+  - dockerfile: _build/Dockerfile.virtengine
+    use: buildx
+    goarch: arm64
+    goos: linux
+    build_flag_templates:
+      - --platform=linux/arm64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }}
+      - --label=org.opencontainers.image.url={{ .GitURL }}
+      - --label=org.opencontainers.image.source={{ .GitURL }}
+      - --label=org.opencontainers.image.version={{ replace .Version "+" "-" }}
+      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+      - --label=org.opencontainers.image.revision={{ .FullCommit }}
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-arm64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-arm64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{if eq .Env.STABLE "true"}}stable{{else}}latest{{end}}-arm64'
+docker_manifests:
+  - name_template: "{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}"
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ .ShortCommit }}-arm64'
+  - name_template: '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}'
+    image_templates:
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-amd64'
+      - '{{ .Env.DOCKER_IMAGE }}:{{ replace .Version "+" "-" }}-arm64'
+  - name_template: "{{ .Env.DOCKER_IMAGE }}:latest"
+    image_templates:
+      - "{{ .Env.DOCKER_IMAGE }}:latest-amd64"
+      - "{{ .Env.DOCKER_IMAGE }}:latest-arm64"
 
 nfpms:
-  - vendor: "Overclock Labs Inc."
-    homepage: "http://virtengine.com"
-    maintainer: "VirtEngine Network <hello@virtengine.network>"
+  - id: w/version
+    vendor: "VirtEngine"
+    homepage: "https://virtengine.com"
+    maintainer: "VirtEngine <hello@virtengine.com>"
+    file_name_template: "virtengine_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - deb
+      - rpm
+    license: Apache 2.0
+  - id: wo/version
+    vendor: "VirtEngine"
+    homepage: "https://virtengine.com"
+    maintainer: "VirtEngine <hello@virtengine.com>"
+    file_name_template: "virtengine_{{ .Os }}_{{ .Arch }}"
     formats:
       - deb
       - rpm
@@ -135,6 +192,7 @@ nfpms:
 release:
   github:
     owner: virtengine
-    name: virtengine
+    name: node
   prerelease: auto
+  mode: replace
   draft: false

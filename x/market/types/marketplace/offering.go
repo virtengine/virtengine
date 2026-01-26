@@ -1,0 +1,408 @@
+// Package marketplace provides types for the marketplace on-chain module.
+//
+// VE-300: Marketplace on-chain data model: offerings, orders, allocations, and states
+// This file defines the Offering type with provider metadata, pricing, identity requirements,
+// and encrypted provider secrets.
+package marketplace
+
+import (
+	"crypto/sha256"
+	"fmt"
+	"time"
+)
+
+// OfferingState represents the lifecycle state of an offering
+type OfferingState uint8
+
+const (
+	// OfferingStateUnspecified represents an unspecified offering state
+	OfferingStateUnspecified OfferingState = 0
+
+	// OfferingStateActive indicates the offering is active and available for orders
+	OfferingStateActive OfferingState = 1
+
+	// OfferingStatePaused indicates the offering is temporarily paused
+	OfferingStatePaused OfferingState = 2
+
+	// OfferingStateSuspended indicates the offering is suspended by admin/moderator
+	OfferingStateSuspended OfferingState = 3
+
+	// OfferingStateDeprecated indicates the offering is deprecated (no new orders)
+	OfferingStateDeprecated OfferingState = 4
+
+	// OfferingStateTerminated indicates the offering is permanently terminated
+	OfferingStateTerminated OfferingState = 5
+)
+
+// OfferingStateNames maps offering states to human-readable names
+var OfferingStateNames = map[OfferingState]string{
+	OfferingStateUnspecified: "unspecified",
+	OfferingStateActive:      "active",
+	OfferingStatePaused:      "paused",
+	OfferingStateSuspended:   "suspended",
+	OfferingStateDeprecated:  "deprecated",
+	OfferingStateTerminated:  "terminated",
+}
+
+// String returns the string representation of an OfferingState
+func (s OfferingState) String() string {
+	if name, ok := OfferingStateNames[s]; ok {
+		return name
+	}
+	return fmt.Sprintf("unknown(%d)", s)
+}
+
+// IsValid returns true if the offering state is valid
+func (s OfferingState) IsValid() bool {
+	return s >= OfferingStateActive && s <= OfferingStateTerminated
+}
+
+// IsAcceptingOrders returns true if the offering can accept new orders
+func (s OfferingState) IsAcceptingOrders() bool {
+	return s == OfferingStateActive
+}
+
+// OfferingCategory represents the category of an offering
+type OfferingCategory string
+
+const (
+	// OfferingCategoryCompute represents compute/VM offerings
+	OfferingCategoryCompute OfferingCategory = "compute"
+
+	// OfferingCategoryStorage represents storage offerings
+	OfferingCategoryStorage OfferingCategory = "storage"
+
+	// OfferingCategoryNetwork represents network offerings
+	OfferingCategoryNetwork OfferingCategory = "network"
+
+	// OfferingCategoryHPC represents high-performance computing offerings
+	OfferingCategoryHPC OfferingCategory = "hpc"
+
+	// OfferingCategoryGPU represents GPU compute offerings
+	OfferingCategoryGPU OfferingCategory = "gpu"
+
+	// OfferingCategoryML represents machine learning offerings
+	OfferingCategoryML OfferingCategory = "ml"
+
+	// OfferingCategoryOther represents other/custom offerings
+	OfferingCategoryOther OfferingCategory = "other"
+)
+
+// PricingModel represents how an offering is priced
+type PricingModel string
+
+const (
+	// PricingModelHourly represents hourly pricing
+	PricingModelHourly PricingModel = "hourly"
+
+	// PricingModelDaily represents daily pricing
+	PricingModelDaily PricingModel = "daily"
+
+	// PricingModelMonthly represents monthly pricing
+	PricingModelMonthly PricingModel = "monthly"
+
+	// PricingModelUsageBased represents usage-based pricing
+	PricingModelUsageBased PricingModel = "usage_based"
+
+	// PricingModelFixed represents fixed/one-time pricing
+	PricingModelFixed PricingModel = "fixed"
+)
+
+// IdentityRequirement defines the identity verification requirements for an offering
+type IdentityRequirement struct {
+	// MinScore is the minimum VEID identity score required (0-100)
+	MinScore uint32 `json:"min_score"`
+
+	// RequiredStatus is the minimum identity status required
+	RequiredStatus string `json:"required_status"`
+
+	// RequireVerifiedEmail indicates if email verification is required
+	RequireVerifiedEmail bool `json:"require_verified_email"`
+
+	// RequireVerifiedDomain indicates if domain verification is required (for providers)
+	RequireVerifiedDomain bool `json:"require_verified_domain"`
+
+	// RequireMFA indicates if MFA must be enabled for orders
+	RequireMFA bool `json:"require_mfa"`
+}
+
+// DefaultIdentityRequirement returns the default identity requirement
+func DefaultIdentityRequirement() IdentityRequirement {
+	return IdentityRequirement{
+		MinScore:             0,
+		RequiredStatus:       "",
+		RequireVerifiedEmail: false,
+		RequireVerifiedDomain: false,
+		RequireMFA:           false,
+	}
+}
+
+// Validate validates the identity requirement
+func (r *IdentityRequirement) Validate() error {
+	if r.MinScore > 100 {
+		return fmt.Errorf("min_score cannot exceed 100: got %d", r.MinScore)
+	}
+	return nil
+}
+
+// IsSatisfiedBy checks if an account meets the identity requirements
+func (r *IdentityRequirement) IsSatisfiedBy(score uint32, status string, emailVerified, domainVerified, mfaEnabled bool) bool {
+	if score < r.MinScore {
+		return false
+	}
+	if r.RequiredStatus != "" && status != r.RequiredStatus {
+		return false
+	}
+	if r.RequireVerifiedEmail && !emailVerified {
+		return false
+	}
+	if r.RequireVerifiedDomain && !domainVerified {
+		return false
+	}
+	if r.RequireMFA && !mfaEnabled {
+		return false
+	}
+	return true
+}
+
+// PricingInfo defines the pricing structure for an offering
+type PricingInfo struct {
+	// Model is the pricing model
+	Model PricingModel `json:"model"`
+
+	// BasePrice is the base price in the smallest token denomination
+	BasePrice uint64 `json:"base_price"`
+
+	// Currency is the token denomination
+	Currency string `json:"currency"`
+
+	// UsageRates contains usage-based pricing rates (for usage_based model)
+	UsageRates map[string]uint64 `json:"usage_rates,omitempty"`
+
+	// MinimumCommitment is the minimum commitment period in seconds (0 = none)
+	MinimumCommitment int64 `json:"minimum_commitment,omitempty"`
+}
+
+// Validate validates the pricing info
+func (p *PricingInfo) Validate() error {
+	if p.Model == "" {
+		return fmt.Errorf("pricing model is required")
+	}
+	if p.Currency == "" {
+		return fmt.Errorf("currency is required")
+	}
+	return nil
+}
+
+// OfferingID is the unique identifier for an offering
+type OfferingID struct {
+	// ProviderAddress is the provider's blockchain address
+	ProviderAddress string `json:"provider_address"`
+
+	// Sequence is the provider-scoped sequential offering number
+	Sequence uint64 `json:"sequence"`
+}
+
+// String returns the string representation of the offering ID
+func (id OfferingID) String() string {
+	return fmt.Sprintf("%s/%d", id.ProviderAddress, id.Sequence)
+}
+
+// Validate validates the offering ID
+func (id OfferingID) Validate() error {
+	if id.ProviderAddress == "" {
+		return fmt.Errorf("provider address is required")
+	}
+	if id.Sequence == 0 {
+		return fmt.Errorf("sequence must be positive")
+	}
+	return nil
+}
+
+// Hash returns a unique hash of the offering ID
+func (id OfferingID) Hash() []byte {
+	h := sha256.New()
+	h.Write([]byte(id.String()))
+	return h.Sum(nil)
+}
+
+// EncryptedProviderSecrets holds encrypted provider secrets
+// These are stored on-chain but only decryptable by intended recipients
+type EncryptedProviderSecrets struct {
+	// EnvelopeRef is a reference to the encrypted envelope containing secrets
+	EnvelopeRef string `json:"envelope_ref"`
+
+	// Algorithm is the encryption algorithm used
+	Algorithm string `json:"algorithm"`
+
+	// RecipientKeyIDs are the key IDs that can decrypt this
+	RecipientKeyIDs []string `json:"recipient_key_ids"`
+
+	// Ciphertext is the encrypted secrets data
+	Ciphertext []byte `json:"ciphertext"`
+
+	// Nonce is the encryption nonce
+	Nonce []byte `json:"nonce"`
+}
+
+// Offering represents a marketplace offering from a provider
+type Offering struct {
+	// ID is the unique offering identifier
+	ID OfferingID `json:"id"`
+
+	// State is the current offering state
+	State OfferingState `json:"state"`
+
+	// Category is the offering category
+	Category OfferingCategory `json:"category"`
+
+	// Name is the public name of the offering
+	Name string `json:"name"`
+
+	// Description is the public description
+	Description string `json:"description"`
+
+	// Version is the offering version (semantic versioning)
+	Version string `json:"version"`
+
+	// Pricing contains the pricing information
+	Pricing PricingInfo `json:"pricing"`
+
+	// IdentityRequirement defines identity verification requirements
+	IdentityRequirement IdentityRequirement `json:"identity_requirement"`
+
+	// RequireMFAForOrders indicates if MFA is required for placing orders
+	RequireMFAForOrders bool `json:"require_mfa_for_orders"`
+
+	// PublicMetadata contains publicly visible metadata
+	PublicMetadata map[string]string `json:"public_metadata,omitempty"`
+
+	// EncryptedSecrets contains encrypted provider secrets (credentials, endpoints, etc.)
+	EncryptedSecrets *EncryptedProviderSecrets `json:"encrypted_secrets,omitempty"`
+
+	// Specifications contains technical specifications
+	Specifications map[string]string `json:"specifications,omitempty"`
+
+	// Tags are searchable tags
+	Tags []string `json:"tags,omitempty"`
+
+	// Regions are supported regions
+	Regions []string `json:"regions,omitempty"`
+
+	// CreatedAt is the creation timestamp
+	CreatedAt time.Time `json:"created_at"`
+
+	// UpdatedAt is the last update timestamp
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// ActivatedAt is when the offering became active
+	ActivatedAt *time.Time `json:"activated_at,omitempty"`
+
+	// TerminatedAt is when the offering was terminated
+	TerminatedAt *time.Time `json:"terminated_at,omitempty"`
+
+	// MaxConcurrentOrders is the maximum concurrent orders (0 = unlimited)
+	MaxConcurrentOrders uint32 `json:"max_concurrent_orders,omitempty"`
+
+	// TotalOrderCount is the total number of orders placed
+	TotalOrderCount uint64 `json:"total_order_count"`
+
+	// ActiveOrderCount is the current number of active orders
+	ActiveOrderCount uint64 `json:"actiVIRTENGINE_order_count"`
+}
+
+// NewOffering creates a new offering with required fields
+func NewOffering(id OfferingID, name string, category OfferingCategory, pricing PricingInfo) *Offering {
+	now := time.Now().UTC()
+	return &Offering{
+		ID:                  id,
+		State:               OfferingStateActive,
+		Category:            category,
+		Name:                name,
+		Pricing:             pricing,
+		IdentityRequirement: DefaultIdentityRequirement(),
+		PublicMetadata:      make(map[string]string),
+		Specifications:      make(map[string]string),
+		Tags:                make([]string, 0),
+		Regions:             make([]string, 0),
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+}
+
+// Validate validates the offering
+func (o *Offering) Validate() error {
+	if err := o.ID.Validate(); err != nil {
+		return fmt.Errorf("invalid offering ID: %w", err)
+	}
+
+	if !o.State.IsValid() {
+		return fmt.Errorf("invalid offering state: %s", o.State)
+	}
+
+	if o.Name == "" {
+		return fmt.Errorf("offering name is required")
+	}
+
+	if o.Category == "" {
+		return fmt.Errorf("offering category is required")
+	}
+
+	if err := o.Pricing.Validate(); err != nil {
+		return fmt.Errorf("invalid pricing: %w", err)
+	}
+
+	if err := o.IdentityRequirement.Validate(); err != nil {
+		return fmt.Errorf("invalid identity requirement: %w", err)
+	}
+
+	return nil
+}
+
+// CanAcceptOrder checks if the offering can accept new orders
+func (o *Offering) CanAcceptOrder() error {
+	if !o.State.IsAcceptingOrders() {
+		return fmt.Errorf("offering is not accepting orders: state=%s", o.State)
+	}
+
+	if o.MaxConcurrentOrders > 0 && o.ActiveOrderCount >= uint64(o.MaxConcurrentOrders) {
+		return fmt.Errorf("offering has reached maximum concurrent orders: %d", o.MaxConcurrentOrders)
+	}
+
+	return nil
+}
+
+// Hash returns a unique hash of the offering
+func (o *Offering) Hash() []byte {
+	h := sha256.New()
+	h.Write(o.ID.Hash())
+	h.Write([]byte(o.Name))
+	h.Write([]byte(o.Version))
+	h.Write([]byte(fmt.Sprintf("%d", o.State)))
+	return h.Sum(nil)
+}
+
+// Offerings is a slice of Offering
+type Offerings []Offering
+
+// Active returns only active offerings
+func (offerings Offerings) Active() Offerings {
+	result := make(Offerings, 0)
+	for _, o := range offerings {
+		if o.State == OfferingStateActive {
+			result = append(result, o)
+		}
+	}
+	return result
+}
+
+// ByProvider returns offerings for a specific provider
+func (offerings Offerings) ByProvider(providerAddress string) Offerings {
+	result := make(Offerings, 0)
+	for _, o := range offerings {
+		if o.ID.ProviderAddress == providerAddress {
+			result = append(result, o)
+		}
+	}
+	return result
+}

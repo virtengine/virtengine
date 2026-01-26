@@ -6,16 +6,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/cosmos-sdk/store"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
-	"github.com/tendermint/tendermint/libs/rand"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	dbm "github.com/tendermint/tm-db"
 
-	"github.com/virtengine/virtengine/testutil"
-	"github.com/virtengine/virtengine/x/audit/keeper"
-	"github.com/virtengine/virtengine/x/audit/types"
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
+	storetypes "cosmossdk.io/store/types"
+	"github.com/cometbft/cometbft/libs/rand"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	testutilmod "github.com/cosmos/cosmos-sdk/types/module/testutil"
+
+	types "pkg.akt.dev/go/node/audit/v1"
+	"pkg.akt.dev/go/testutil"
+
+	"pkg.akt.dev/node/x/audit/keeper"
 )
 
 func TestProviderCreate(t *testing.T) {
@@ -27,7 +33,7 @@ func TestProviderCreate(t *testing.T) {
 
 	foundProv, found := keeper.GetProviderAttributes(ctx, id.Owner)
 	require.True(t, found)
-	require.Equal(t, types.Providers{prov}, foundProv)
+	require.Equal(t, types.AuditedProviders{prov}, foundProv)
 }
 
 func TestProviderUpdateAppendNewAttributes(t *testing.T) {
@@ -53,7 +59,7 @@ func TestProviderUpdateAppendNewAttributes(t *testing.T) {
 
 	foundProv, found := keeper.GetProviderAttributes(ctx, id.Owner)
 	require.True(t, found)
-	require.Equal(t, types.Providers{prov}, foundProv)
+	require.Equal(t, types.AuditedProviders{prov}, foundProv)
 }
 
 func TestProviderUpdateOverrideAttributes(t *testing.T) {
@@ -76,7 +82,7 @@ func TestProviderUpdateOverrideAttributes(t *testing.T) {
 
 	foundProv, found := keeper.GetProviderAttributes(ctx, id.Owner)
 	require.True(t, found)
-	require.Equal(t, types.Providers{prov}, foundProv)
+	require.Equal(t, types.AuditedProviders{prov}, foundProv)
 }
 
 func TestProviderDeleteExistingAttributes(t *testing.T) {
@@ -100,7 +106,7 @@ func TestProviderDeleteExistingAttributes(t *testing.T) {
 
 	foundProv, found := keeper.GetProviderAttributes(ctx, id.Owner)
 	require.True(t, found)
-	require.Equal(t, types.Providers{prov}, foundProv)
+	require.Equal(t, types.AuditedProviders{prov}, foundProv)
 }
 
 func TestProviderDeleteNonExistingAttributes(t *testing.T) {
@@ -111,7 +117,7 @@ func TestProviderDeleteNonExistingAttributes(t *testing.T) {
 	require.NoError(t, err)
 
 	attr := testutil.Attributes(t)
-	keys := make([]string, len(attr))
+	keys := make([]string, 0, len(attr))
 
 	for _, entry := range attr {
 		keys = append(keys, entry.Key)
@@ -151,12 +157,19 @@ func TestKeeperCoder(t *testing.T) {
 
 func setupKeeper(t testing.TB) (sdk.Context, keeper.Keeper) {
 	t.Helper()
-	key := sdk.NewKVStoreKey(types.StoreKey)
+
+	cfg := testutilmod.MakeTestEncodingConfig()
+	cdc := cfg.Codec
+
+	key := storetypes.NewKVStoreKey(types.StoreKey)
 	db := dbm.NewMemDB()
-	ms := store.NewCommitMultiStore(db)
-	ms.MountStoreWithDB(key, sdk.StoreTypeIAVL, db)
+
+	ms := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	ms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, db)
+
 	err := ms.LoadLatestVersion()
 	require.NoError(t, err)
+
 	ctx := sdk.NewContext(ms, tmproto.Header{Time: time.Unix(0, 0)}, false, testutil.Logger(t))
-	return ctx, keeper.NewKeeper(types.ModuleCdc, key)
+	return ctx, keeper.NewKeeper(cdc, key)
 }

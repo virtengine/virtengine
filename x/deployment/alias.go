@@ -1,8 +1,9 @@
 package deployment
 
 import (
-	"github.com/virtengine/virtengine/x/deployment/keeper"
-	"github.com/virtengine/virtengine/x/deployment/types"
+	types "pkg.akt.dev/go/node/deployment/v1"
+
+	"pkg.akt.dev/node/x/deployment/keeper"
 )
 
 const (

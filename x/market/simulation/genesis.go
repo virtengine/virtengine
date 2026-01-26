@@ -1,12 +1,14 @@
 package simulation
 
 import (
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	"github.com/virtengine/virtengine/x/market/types"
+	mv1 "pkg.akt.dev/go/node/market/v1"
+
+	dtypes "pkg.akt.dev/go/node/deployment/v1beta4"
+	types "pkg.akt.dev/go/node/market/v1beta5"
 )
 
-var minDeposit = sdk.NewInt64Coin("stake", 1)
+var minDeposit, _ = dtypes.DefaultParams().MinDepositFor("uakt")
 
 // RandomizedGenState generates a random GenesisState for supply
 func RandomizedGenState(simState *module.SimulationState) {
@@ -17,5 +19,5 @@ func RandomizedGenState(simState *module.SimulationState) {
 		},
 	}
 
-	simState.GenState[types.ModuleName] = simState.Cdc.MustMarshalJSON(marketGenesis)
+	simState.GenState[mv1.ModuleName] = simState.Cdc.MustMarshalJSON(marketGenesis)
 }

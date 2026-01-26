@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	root "github.com/virtengine/virtengine/cmd/virtengine/cmd"
-	"github.com/spf13/cobra/doc"
 	"os"
+
+	"github.com/spf13/cobra/doc"
+	root "pkg.akt.dev/node/cmd/virtengine/cmd"
 )
 
 func main() {

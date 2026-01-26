@@ -1,4 +1,4 @@
-host: https://virtengine.virtengine.com
+host: https://test.provider.virtengine.com
 attributes:
   - key: region
     value: sfo

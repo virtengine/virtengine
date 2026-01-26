@@ -1,16 +1,20 @@
 package keeper
 
 import (
+	"fmt"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
+	etypes "pkg.akt.dev/go/node/escrow/types/v1"
+	"pkg.akt.dev/go/testutil"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/virtengine/virtengine/x/escrow/types"
 	"github.com/stretchr/testify/assert"
 )
 
-const denom = "xxx"
+const denom = "uakt"
 
-func TestSettleFullblocks(t *testing.T) {
+func TestSettleFullBlocks(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		cfg  distTestConfig
@@ -22,9 +26,7 @@ func TestSettleFullblocks(t *testing.T) {
 				balanceStart: 100,
 				rates:        []int64{1, 2},
 				balanceEnd:   85,
-				transferred:  []int64{5, 10},
-				remaining:    0,
-				overdrawn:    false,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(5), sdkmath.LegacyNewDec(10)},
 			},
 		},
 		{
@@ -34,9 +36,7 @@ func TestSettleFullblocks(t *testing.T) {
 				balanceStart: 100,
 				rates:        []int64{10, 10},
 				balanceEnd:   0,
-				transferred:  []int64{50, 50},
-				remaining:    0,
-				overdrawn:    false,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(50), sdkmath.LegacyNewDec(50)},
 			},
 		},
 		{
@@ -45,131 +45,98 @@ func TestSettleFullblocks(t *testing.T) {
 				blocks:       6,
 				balanceStart: 100,
 				rates:        []int64{10, 10},
-				balanceEnd:   0,
-				transferred:  []int64{50, 50},
-				remaining:    0,
-				overdrawn:    true,
+				balanceEnd:   -20,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(60), sdkmath.LegacyNewDec(40)},
 			},
 		},
 		{
-			name: "some left",
+			name: "plenty funds",
+			cfg: distTestConfig{
+				blocks:       5,
+				balanceStart: 100,
+				rates:        []int64{1, 2},
+				balanceEnd:   85,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(5), sdkmath.LegacyNewDec(10)},
+			},
+		},
+		{
+			name: "use all funds",
+			cfg: distTestConfig{
+				blocks:       5,
+				balanceStart: 200,
+				rates:        []int64{10, 10},
+				balanceEnd:   100,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(50), sdkmath.LegacyNewDec(50)},
+			},
+		},
+		{
+			name: "use all funds with some balance",
 			cfg: distTestConfig{
 				blocks:       6,
-				balanceStart: 90,
+				balanceStart: 200,
 				rates:        []int64{10, 10},
-				balanceEnd:   10,
-				transferred:  []int64{40, 40},
-				remaining:    10,
-				overdrawn:    true,
+				balanceEnd:   80,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(60), sdkmath.LegacyNewDec(60)},
+			},
+		},
+		{
+			name: "use all funds and balance",
+			cfg: distTestConfig{
+				blocks:       10,
+				balanceStart: 200,
+				rates:        []int64{10, 10},
+				balanceEnd:   0,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(100), sdkmath.LegacyNewDec(100)},
+			},
+		},
+		{
+			name: "overdrawn with all funds and balance used up",
+			cfg: distTestConfig{
+				blocks:       11,
+				balanceStart: 200,
+				rates:        []int64{10, 10},
+				balanceEnd:   -20,
+				transferred:  []sdkmath.LegacyDec{sdkmath.LegacyNewDec(110), sdkmath.LegacyNewDec(90)},
 			},
 		},
 	} {
-		account, payments, blocks, blockRate := setupDistTest(tt.cfg)
+		account, payments, blocks := setupDistTest(t, tt.cfg)
 
-		account, payments, overdrawn, remaining := accountSettleFullblocks(
-			account, payments, blocks, blockRate)
+		overdrawn := accountSettleFullBlocks(&account, payments, blocks)
+		assert.Equal(t, tt.cfg.balanceEnd < 0, overdrawn, tt.name)
 
-		assertCoinsEqual(t, sdk.NewInt64Coin(denom, tt.cfg.balanceEnd), account.Balance, tt.name)
+		assertAmountEqual(t, sdkmath.LegacyNewDec(tt.cfg.balanceEnd), account.State.Funds[0].Amount, tt.name)
 
-		for idx := range payments {
-			assert.Equal(t, sdk.NewInt64Coin(denom, tt.cfg.transferred[idx]), payments[idx].Balance, tt.name)
+		totalTransferred := sdkmath.LegacyZeroDec()
+		for _, transfer := range tt.cfg.transferred {
+			totalTransferred.AddMut(transfer)
 		}
 
-		assertCoinsEqual(t, sdk.NewInt64Coin(denom, tt.cfg.remaining), remaining, tt.name)
-		assert.Equal(t, tt.cfg.overdrawn, overdrawn, tt.name)
-	}
-}
+		assert.Equal(t, totalTransferred, account.State.Transferred[0].Amount, fmt.Sprintf("%s: deposit balance should be decremented by total transferred", tt.name))
 
-func TestSettleDistributeWeighted(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		cfg  distTestConfig
-	}{
-		{
-			name: "all goes - unbalanced",
-			cfg: distTestConfig{
-				balanceStart: 10,
-				rates:        []int64{20, 30},
-				balanceEnd:   0,
-				transferred:  []int64{4, 6},
-				remaining:    0,
-				overdrawn:    false,
-			},
-		},
-		{
-			name: "all goes - balanced",
-			cfg: distTestConfig{
-				balanceStart: 10,
-				rates:        []int64{30, 30},
-				balanceEnd:   0,
-				transferred:  []int64{5, 5},
-				remaining:    0,
-				overdrawn:    false,
-			},
-		},
-		{
-			name: "some left - unbalanced",
-			cfg: distTestConfig{
-				balanceStart: 10,
-				rates:        []int64{45, 55},
-				balanceEnd:   1,
-				transferred:  []int64{4, 5},
-				remaining:    1,
-				overdrawn:    false,
-			},
-		},
-	} {
-		account, payments, _, blockRate := setupDistTest(tt.cfg)
-
-		account, payments, remaining := accountSettleDistributeWeighted(
-			account, payments, blockRate, account.Balance)
-
-		assertCoinsEqual(t, sdk.NewInt64Coin(denom, tt.cfg.balanceEnd), account.Balance, tt.name)
+		totalPayments := sdkmath.LegacyZeroDec()
+		totalUnsettled := sdkmath.LegacyZeroDec()
 
 		for idx := range payments {
-			assert.Equal(t, sdk.NewInt64Coin(denom, tt.cfg.transferred[idx]), payments[idx].Balance, tt.name)
+			assert.Equal(t, sdk.NewDecCoinFromDec(denom, tt.cfg.transferred[idx]), payments[idx].State.Balance, tt.name)
+			totalPayments.AddMut(payments[idx].State.Balance.Amount)
+			totalPayments.AddMut(payments[idx].State.Unsettled.Amount)
+			totalUnsettled.AddMut(payments[idx].State.Unsettled.Amount)
 		}
 
-		assertCoinsEqual(t, sdk.NewInt64Coin(denom, tt.cfg.remaining), remaining, tt.name)
-	}
-}
+		// Check that funds were decremented by the total payments amount
+		expectedRemainingBalance := sdkmath.LegacyNewDec(tt.cfg.balanceStart).Sub(totalPayments)
 
-func TestSettleDistributeEvenly(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		cfg  distTestConfig
-	}{
-		{
-			name: "even",
-			cfg: distTestConfig{
-				balanceStart: 2,
-				rates:        []int64{20, 30},
-				balanceEnd:   0,
-				transferred:  []int64{1, 1},
-			},
-		},
-		{
-			name: "not even",
-			cfg: distTestConfig{
-				balanceStart: 3,
-				rates:        []int64{20, 30},
-				balanceEnd:   0,
-				transferred:  []int64{2, 1},
-			},
-		},
-	} {
-		account, payments, _, _ := setupDistTest(tt.cfg)
+		assert.Equal(t, expectedRemainingBalance, account.State.Funds[0].Amount, fmt.Sprintf("%s: deposit balance should be decremented by total payments", tt.name))
 
-		account, payments, remaining := accountSettleDistributeEvenly(
-			account, payments, account.Balance)
+		// Check unsettled amounts are tracked when overdrawn
+		if overdrawn {
+			// balance expected to be negative
+			assert.True(t, account.State.Funds[0].Amount.IsNegative())
 
-		assertCoinsEqual(t, sdk.NewInt64Coin(denom, tt.cfg.balanceEnd), account.Balance, tt.name)
-
-		for idx := range payments {
-			assert.Equal(t, sdk.NewInt64Coin(denom, tt.cfg.transferred[idx]), payments[idx].Balance, tt.name)
+			unsettledDiff := account.State.Funds[0].Amount.Add(totalUnsettled)
+			assert.Equal(t, sdkmath.LegacyZeroDec().String(), unsettledDiff.String())
 		}
-
-		assertCoinsEqual(t, sdk.NewInt64Coin(denom, tt.cfg.remaining), remaining, tt.name)
 	}
 }
 
@@ -178,33 +145,54 @@ type distTestConfig struct {
 	balanceStart int64
 	rates        []int64
 	balanceEnd   int64
-	transferred  []int64
-	remaining    int64
-	overdrawn    bool
+	transferred  []sdkmath.LegacyDec
 }
 
-func setupDistTest(cfg distTestConfig) (types.Account, []types.Payment, sdk.Int, sdk.Coin) {
-	account := types.Account{
-		Balance:     sdk.NewInt64Coin(denom, cfg.balanceStart),
-		Transferred: sdk.NewInt64Coin(denom, 0),
+func setupDistTest(t *testing.T, cfg distTestConfig) (account, []payment, sdkmath.Int) {
+	account := account{
+		Account: etypes.Account{
+			State: etypes.AccountState{
+				Funds: []etypes.Balance{
+					{
+						Denom:  denom,
+						Amount: sdkmath.LegacyNewDec(cfg.balanceStart),
+					},
+				},
+				Transferred: sdk.DecCoins{
+					sdk.NewInt64DecCoin(denom, 0),
+				},
+				Deposits: []etypes.Depositor{
+					{
+						Owner:   testutil.AccAddress(t).String(),
+						Height:  0,
+						Balance: sdk.NewDecCoinFromCoin(sdk.NewInt64Coin(denom, cfg.balanceStart)),
+					},
+				},
+			},
+		},
 	}
 
-	payments := make([]types.Payment, 0, len(cfg.rates))
+	payments := make([]payment, 0, len(cfg.rates))
 
 	blockRate := int64(0)
 
 	for _, rate := range cfg.rates {
 		blockRate += rate
-		payments = append(payments, types.Payment{
-			Rate:    sdk.NewInt64Coin(denom, rate),
-			Balance: sdk.NewInt64Coin(denom, 0),
+		payments = append(payments, payment{
+			Payment: etypes.Payment{
+				State: etypes.PaymentState{
+					Rate:      sdk.NewInt64DecCoin(denom, rate),
+					Balance:   sdk.NewInt64DecCoin(denom, 0),
+					Unsettled: sdk.NewInt64DecCoin(denom, 0),
+				},
+			},
 		})
 	}
 
-	return account, payments, sdk.NewInt(cfg.blocks), sdk.NewInt64Coin(denom, blockRate)
+	return account, payments, sdkmath.NewInt(cfg.blocks)
 }
 
-func assertCoinsEqual(t testing.TB, c1 sdk.Coin, c2 sdk.Coin, msg string) {
+func assertAmountEqual(t testing.TB, c1 sdkmath.LegacyDec, c2 sdkmath.LegacyDec, msg string) {
 	t.Helper()
 	if c1.IsZero() {
 		if !c2.IsZero() {

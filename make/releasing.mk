@@ -1,11 +1,36 @@
-GORELEASER_SKIP_VALIDATE ?= false
+GON_CONFIGFILE           ?= gon.json
 
-GON_CONFIGFILE ?= gon.json
+GORELEASER_VERBOSE       ?= false
+GORELEASER_IMAGE         := ghcr.io/goreleaser/goreleaser-cross:$(GOTOOLCHAIN_SEMVER)
+GORELEASER_RELEASE       ?= false
+GORELEASER_MOUNT_CONFIG  ?= false
+GORELEASER_SKIP          := $(subst $(COMMA),$(SPACE),$(GORELEASER_SKIP))
+RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/node
+#GORELEASER_MOD_MOUNT     ?= $(shell git config --get remote.origin.url | sed -r 's/.*(\@|\/\/)(.*)(\:|\/)([^:\/]*)\/([^\/\.]*)\.git/\2\/\4\/\5/' | tr -d '\n')
+GORELEASER_MOD_MOUNT     ?= $(shell cat $(ROOT_DIR)/.github/repo | tr -d '\n')
 
-ifeq ($(OS),Windows_NT)
-    DETECTED_OS := Windows
-else
-    DETECTED_OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
+RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/node
+
+GORELEASER_GOWORK        := $(GOWORK)
+
+ifneq ($(GOWORK), off)
+	GORELEASER_GOWORK    := /go/src/$(GORELEASER_MOD_MOUNT)/go.work
+endif
+
+ifneq ($(GORELEASER_RELEASE),true)
+	ifeq (,$(findstring publish,$(GORELEASER_SKIP)))
+		GORELEASER_SKIP += publish
+	endif
+
+	GITHUB_TOKEN=
+endif
+
+ifneq (,$(GORELEASER_SKIP))
+	GORELEASER_SKIP := --skip=$(subst $(SPACE),$(COMMA),$(strip $(GORELEASER_SKIP)))
+endif
+
+ifeq ($(GORELEASER_MOUNT_CONFIG),true)
+	GORELEASER_IMAGE := -v $(HOME)/.docker/config.json:/root/.docker/config.json $(GORELEASER_IMAGE)
 endif
 
 .PHONY: bins
@@ -13,79 +38,107 @@ bins: $(BINS)
 
 .PHONY: build
 build:
-	$(GO) build -a  ./...
+	$(GO_BUILD) -a  ./...
 
-$(VIRTENGINE): modvendor
-	$(GO) build -o $@ $(BUILD_FLAGS) ./cmd/virtengine
+.PHONY: $(VIRTENGINE)
+$(VIRTENGINE):
+	$(GO_BUILD) -o $@ $(BUILD_FLAGS) ./cmd/virtengine
 
 .PHONY: virtengine
 virtengine: $(VIRTENGINE)
 
 .PHONY: virtengine_docgen
 virtengine_docgen: $(VIRTENGINE_DEVCACHE)
-	$(GO) build -o $(VIRTENGINE_DEVCACHE_BIN)/virtengine_docgen $(BUILD_FLAGS) ./docgen
+	$(GO_BUILD) -o $(VIRTENGINE_DEVCACHE_BIN)/virtengine_docgen $(BUILD_FLAGS) ./docgen
 
 .PHONY: install
 install:
+	@echo installing virtengine
 	$(GO) install $(BUILD_FLAGS) ./cmd/virtengine
 
 .PHONY: image-minikube
 image-minikube:
 	eval $$(minikube docker-env) && docker-image
 
+.PHONY: test-bins
+test-bins:
+	docker run \
+		--rm \
+		-e STABLE=$(IS_STABLE) \
+		-e MOD="$(GOMOD)" \
+		-e BUILD_TAGS="$(BUILD_TAGS)" \
+		-e BUILD_VARS="$(GORELEASER_BUILD_VARS)" \
+		-e STRIP_FLAGS="$(GORELEASER_STRIP_FLAGS)" \
+		-e LINKMODE="$(GO_LINKMODE)" \
+		-e DOCKER_IMAGE=$(RELEASE_DOCKER_IMAGE) \
+		-e GOPATH=/go \
+		-e GOTOOLCHAIN="$(GOTOOLCHAIN)" \
+		-e GOWORK="$(GORELEASER_GOWORK)" \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v $(GOPATH):/go \
+		-v $(VIRTENGINE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
+		-w /go/src/$(GORELEASER_MOD_MOUNT) \
+		$(GORELEASER_IMAGE) \
+		-f .goreleaser-test-bins.yaml \
+		--verbose=$(GORELEASER_VERBOSE) \
+		--clean \
+		--skip=publish,validate \
+		--snapshot
+
 .PHONY: docker-image
 docker-image:
 	docker run \
 		--rm \
-		--privileged \
-		-e MAINNET=$(MAINNET) \
-		-e BUILD_FLAGS="$(GORELEASER_FLAGS)" \
-		-e LD_FLAGS="$(GORELEASER_LD_FLAGS)" \
-		-e GOLANG_VERSION="$(GOLANG_VERSION)" \
+		-e STABLE=$(IS_STABLE) \
+		-e MOD="$(GOMOD)" \
+		-e BUILD_TAGS="$(BUILD_TAGS)" \
+		-e BUILD_VARS="$(GORELEASER_BUILD_VARS)" \
+		-e STRIP_FLAGS="$(GORELEASER_STRIP_FLAGS)" \
+		-e LINKMODE="$(GO_LINKMODE)" \
+		-e DOCKER_IMAGE=$(RELEASE_DOCKER_IMAGE) \
+		-e GOPATH=/go \
+		-e GOTOOLCHAIN="$(GOTOOLCHAIN)" \
+		-e GOWORK="$(GORELEASER_GOWORK)" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
-		-v `pwd`:/go/src/github.com/virtengine/virtengine \
-		-w /go/src/github.com/virtengine/virtengine \
-		troian/golang-cross:${GOLANG_CROSS_VERSION}-linux-amd64 \
-		-f .goreleaser-docker.yaml --rm-dist --skip-validate --skip-publish --snapshot
+		-v $(GOPATH):/go \
+		-v $(VIRTENGINE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
+		-w /go/src/$(GORELEASER_MOD_MOUNT) \
+		$(GORELEASER_IMAGE) \
+		-f .goreleaser-docker.yaml \
+		--verbose=$(GORELEASER_VERBOSE) \
+		--clean \
+		--skip=publish,validate \
+		--snapshot
 
 .PHONY: gen-changelog
 gen-changelog: $(GIT_CHGLOG)
 	@echo "generating changelog to .cache/changelog"
-	./script/genchangelog.sh "$(GORELEASER_TAG)" .cache/changelog.md
-
-.PHONY: release-dry-run
-release-dry-run: modvendor gen-changelog
-	docker run \
-		--rm \
-		--privileged \
-		-e MAINNET=$(MAINNET) \
-		-e BUILD_FLAGS="$(GORELEASER_FLAGS)" \
-		-e LD_FLAGS="$(GORELEASER_LD_FLAGS)" \
-		-e HOMEBREW_NAME="$(GORELEASER_HOMEBREW_NAME)" \
-		-e HOMEBREW_CUSTOM="$(GORELEASER_HOMEBREW_CUSTOM)" \
-		-v /var/run/docker.sock:/var/run/docker.sock \
-		-v `pwd`:/go/src/github.com/virtengine/virtengine \
-		-w /go/src/github.com/virtengine/virtengine \
-		troian/golang-cross:${GOLANG_CROSS_VERSION} \
-		-f "$(GORELEASER_CONFIG)" --skip-validate=$(GORELEASER_SKIP_VALIDATE) --rm-dist --skip-publish --release-notes=/go/src/github.com/virtengine/virtengine/.cache/changelog.md
+	./script/genchangelog.sh "$(RELEASE_TAG)" .cache/changelog.md
 
 .PHONY: release
-release: modvendor gen-changelog
-	@if [ ! -f ".release-env" ]; then \
-		echo "\033[91m.release-env is required for release\033[0m";\
-		exit 1;\
-	fi
+release: gen-changelog
 	docker run \
 		--rm \
-		--privileged \
-		-e MAINNET=$(MAINNET) \
-		-e BUILD_FLAGS="$(GORELEASER_FLAGS)" \
-		-e LD_FLAGS="$(GORELEASER_LD_FLAGS)" \
-		-e HOMEBREW_NAME="$(GORELEASER_HOMEBREW_NAME)" \
-		-e HOMEBREW_CUSTOM="$(GORELEASER_HOMEBREW_CUSTOM)" \
-		--env-file .release-env \
+		-e STABLE=$(IS_STABLE) \
+		-e MOD="$(GOMOD)" \
+		-e BUILD_TAGS="$(BUILD_TAGS)" \
+		-e BUILD_VARS="$(GORELEASER_BUILD_VARS)" \
+		-e STRIP_FLAGS="$(GORELEASER_STRIP_FLAGS)" \
+		-e LINKMODE="$(GO_LINKMODE)" \
+		-e GITHUB_TOKEN="$(GITHUB_TOKEN)" \
+		-e GORELEASER_CURRENT_TAG="$(RELEASE_TAG)" \
+		-e DOCKER_IMAGE=$(RELEASE_DOCKER_IMAGE) \
+		-e GOTOOLCHAIN="$(GOTOOLCHAIN)" \
+		-e GOWORK="$(GORELEASER_GOWORK)" \
+		-e GOPATH=/go \
 		-v /var/run/docker.sock:/var/run/docker.sock \
-		-v `pwd`:/go/src/github.com/virtengine/virtengine \
-		-w /go/src/github.com/virtengine/virtengine \
-		troian/golang-cross:${GOLANG_CROSS_VERSION} \
-		-f "$(GORELEASER_CONFIG)" release --rm-dist --release-notes=/go/src/github.com/virtengine/virtengine/.cache/changelog.md
+		-v $(GOPATH):/go \
+		-v $(VIRTENGINE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
+		-w /go/src/$(GORELEASER_MOD_MOUNT) \
+		$(GORELEASER_IMAGE) \
+		-f "$(GORELEASER_CONFIG)" \
+		release \
+		$(GORELEASER_SKIP) \
+		--verbose=$(GORELEASER_VERBOSE) \
+		--clean \
+		--release-notes=/go/src/$(GORELEASER_MOD_MOUNT)/.cache/changelog.md

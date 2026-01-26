@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/virtengine/virtengine/x/provider/types"
+
+	types "pkg.akt.dev/go/node/provider/v1beta4"
 )
 
 type (

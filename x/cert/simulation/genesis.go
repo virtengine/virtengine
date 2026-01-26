@@ -3,7 +3,7 @@ package simulation
 import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 
-	"github.com/virtengine/virtengine/x/cert/types"
+	types "pkg.akt.dev/go/node/cert/v1"
 )
 
 func RandomizedGenState(simState *module.SimulationState) {

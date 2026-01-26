@@ -1,0 +1,15 @@
+# VirtEngine Barcode Scanning Module - Python Dependencies
+# VE-902: Barcode scanning for ID document validation
+
+# Core barcode detection (PDF417, QR, etc.)
+pyzbar==0.1.9
+
+# Image processing
+opencv-python-headless==4.8.1.78
+numpy>=1.26.0
+
+# OCR for MRZ detection (shared with ocr_extraction)
+pytesseract>=0.3.10
+
+# Pillow for image handling
+Pillow>=10.0.0

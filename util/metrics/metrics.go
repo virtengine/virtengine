@@ -1,9 +1,10 @@
 package metrics
 
 import (
-	"github.com/virtengine/virtengine/util/runner"
-	"github.com/prometheus/client_golang/prometheus"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"pkg.akt.dev/go/util/runner"
 )
 
 const SuccessLabel = "success"

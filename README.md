@@ -1,43 +1,35 @@
-# VirtEngine - Decentralized Compute Marketplace
+# VirtEngine - Decentralized Serverless Network
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/virtengine/virtengine)](https://goreportcard.com/report/github.com/virtengine/virtengine)
+![tests](https://github.com/virtengine/node/workflows/tests/badge.svg)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-[![VirtEngine](https://virtengine.com/engine/view/assets/img/logo/logo2.png)](#overview)
+VirtEngine is a secure, transparent, and decentralized cloud computing marketplace that connects those who need computing resources (tenants) with those that have computing capacity to lease (providers).
 
-[VirtEngine](https://virtengine.com) is a secure, transparent, and decentralized cloud computing marketplace that connects those who need computing resources (tenants) with those that have computing capacity to lease (providers).
+# Roadmap and contributing
 
-For a high-level overview of the VirtEngine protocol and network economics, check out the [whitepapers](https://virtengine.network/research); a detailed protocol definition can be 
-found in the [design documentation](https://docs.virtengine.network); and the target workload definition spec is [here](https://docs.virtengine.network/sdl).
+VirtEngine is written in Golang and is Apache 2.0 licensed - contributions are welcomed whether that means providing feedback, testing existing and new feature or hacking on the source.
+
+To become a contributor, please see the guide on [contributing](CONTRIBUTING.md)
 
 # Branching and Versioning
 
-The `master` branch contains new features and is under active development; the `mainnet/main` branch contains the current, stable release.
+The `main` branch contains new features and is under active development; the `mainnet/main` branch contains the current, stable release.
 
 * **stable** releases will have even minor numbers ( `v0.8.0` ) and be cut from the `mainnet/main` branch.
-* **unstable** releases will have odd minor numbers ( `v0.9.0` ) and be cut from the `master` branch.
+* **unstable** releases will have odd minor numbers ( `v0.9.0` ) and be cut from the `main` branch.
 
 ## VirtEngine Suite
 
-VirtEngine is a fork of the implementation of the [Akash Protocol](https://akash.network/l/whitepaper). VirtEngine is an actively-developed prototype currently focused on the distributed marketplace functionality.
+VirtEngine Suite is the reference implementation of the VirtEngine Protocol detailed in [patent AU2024203136B2](https://patents.google.com/patent/AU2024203136B2/). [VirtEngine](https://virtengine.com) is an actively-developed prototype currently focused on the distributed marketplace functionality with Proof-of-Identity baked into the protocol.
 
-The Suite is composed of one binary, `virtengine`, which contains a ([tendermint](https://github.com/tendermint/tendermint)-powered) blockchain node that
+The Suite is composed of one binary, `virtengine`, which contains a ([tendermint](https://github.com/cometbft/cometbft)-powered) blockchain node that
 implements the decentralized exchange as well as client functionality to access the exchange and network data in general.
+
+The basis of this repository includes some source code derived from the [Akash Protocol](https://akash.network/l/whitepaper)
 
 ## Get Started with VirtEngine
 
-The easiest way to get started with VirtEngine is by following the [Quick Start Guide](https://docs.virtengine.network/guides/deploy) to get started. 
-
-## Join the Community
-
-- [Join Developer Chat](https://discord.gg/6Rtn8aJkU4)
-- [Become a validator](https://virtengine.network/token)
-
-## Official blog and documentation
-
-- Read the documentation: [docs.virtengine.network](https://docs.virtengine.network)
-- Send a PR or raise an issue for the docs [virtengine/docs](https://github.com/virtengine/docs)
-- Read latest news and tutorials on the [Official Blog](https://blog.virtengine.network)
+The easiest way to get started with VirtEngine is by following the Quick Start Guide.
 
 # Supported platforms
 
@@ -52,7 +44,7 @@ Windows | amd64 | ⚠️ **Experimental**
 
 # Installing
 
-The [latest](https://github.com/virtengine/virtengine/releases/latest) binary release can be installed with [Homebrew](https://brew.sh/):
+The [latest](https://github.com/virtengine/node/releases/latest) binary release can be installed with [Homebrew](https://brew.sh/):
 
 ```sh
 $ brew tap virtengine/tap
@@ -62,36 +54,17 @@ $ brew install virtengine
 Or [GoDownloader](https://github.com/goreleaser/godownloader):
 
 ```sh
-$ curl -sSfL https://raw.githubusercontent.com/virtengine/virtengine/master/godownloader.sh | sh
+$ curl -sSfL https://raw.githubusercontent.com/virtengine/node/main/install.sh | sh
 ```
-
-Or install a specific version with [GoDownloader](https://github.com/goreleaser/godownloader)
-
-```sh
-$ curl -sSfL https://raw.githubusercontent.com/virtengine/virtengine/master/godownloader.sh | sh -s -- v0.7.8
-```
-
-# Roadmap and contributing
-
-VirtEngine is written in Golang and is Apache 2.0 licensed - contributions are welcomed whether that means providing feedback, testing existing and new feature or hacking on the source.
-
-To become a contributor, please see the guide on [contributing](CONTRIBUTING.md)
 
 ## Development environment
-VirtEngine is developed and tested with [golang 1.16.0+](https://golang.org/). 
+[This doc](_docs/development-environment.md) guides through setting up local development environment
+
+VirtEngine is developed and tested with [golang 1.21.0+](https://golang.org/). 
 Building requires a working [golang](https://golang.org/) installation, a properly set `GOPATH`, and `$GOPATH/bin` present in `$PATH`.
 It is also required to have C/C++ compiler installed (gcc/clang) as there are C dependencies in use (libusb/libhid)
 VirtEngine build process and examples are heavily tied to Makefile.
 
-VirtEngine also uses [direnv](https://direnv.net) to setup and seamlessly update environment. List of variables exported in root dir are listed in [.env](./.env)
-It sets local dir `.cache` to hold all temporary files and tools (except **kind** which installed ) required for development purposes.
-It is possible to set custom path to `.cache` with `VIRTENGINE_DEVCACHE` environment variable.
-All tools are referred as `makefile targets` and set as dependencies thus installed (to `.cache/bin`) only upon necessity.
-For example `protoc` installed only when `proto-gen` target called.
-
-## Credits
-
-VirtEngine is a fork from Akash Source Code, and aims to further the technology by providing much needed contributions. 
 
 ## Building from Source
 Command below will compile virtengine executable and put it into `.cache/bin`
@@ -108,9 +81,3 @@ the development and testing process.  We currently have three environments:
 * [Single node](_run/lite): simple (no workloads) single node running locally.
 * [Single node with workloads](_run/single): single node and provider running locally, running workloads within a virtual machine.
 * [full k8s](_run/kube): same as above but with node and provider running inside Kubernetes.
-
-## Swagger Doc Generation
-
-To generate API Documentation on code modification you must run:
-
-```make codegen```

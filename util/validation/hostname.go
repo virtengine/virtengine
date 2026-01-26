@@ -40,7 +40,7 @@ func IsDomainName(s string) bool {
 	// (absolute) input. We must therefore reserve space for the first and last
 	// labels' length octets in wire format, where they are necessary and the
 	// maximum total length is 255.
-	// So our _effective_ maximum is 253, but 254 is not rejected if the last
+	// So our _effectiVIRTENGINE_ maximum is 253, but 254 is not rejected if the last
 	// character is a dot.
 	l := len(s)
 	if l == 0 || l > 254 || l == 254 && s[l-1] != '.' {
