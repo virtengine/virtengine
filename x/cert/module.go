@@ -16,11 +16,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
-	types "pkg.akt.dev/go/node/cert/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 
-	"pkg.akt.dev/node/x/cert/handler"
-	"pkg.akt.dev/node/x/cert/keeper"
-	"pkg.akt.dev/node/x/cert/simulation"
+	"github.com/virtengine/virtengine/x/cert/handler"
+	"github.com/virtengine/virtengine/x/cert/keeper"
+	"github.com/virtengine/virtengine/x/cert/simulation"
 )
 
 var (

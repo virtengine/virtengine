@@ -1,0 +1,46 @@
+syntax = "proto3";
+package virtengine.deployment.v1beta4;
+
+import "gogoproto/gogo.proto";
+
+import "virtengine/deployment/v1/deployment.proto";
+
+import "virtengine/deployment/v1beta4/group.proto";
+import "virtengine/deployment/v1beta4/params.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4";
+
+// GenesisDeployment defines the basic genesis state used by deployment module.
+message GenesisDeployment {
+  // Deployments represents a deployment on the network.
+  virtengine.deployment.v1.Deployment deployment = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "deployment",
+    (gogoproto.moretags) = "yaml:\"deployment\""
+  ];
+
+  // Groups is a list of groups within a Deployment.
+  repeated Group groups = 2 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "Groups",
+    (gogoproto.jsontag)      = "groups",
+    (gogoproto.moretags)     = "yaml:\"groups\""
+  ];
+}
+
+// GenesisState stores slice of genesis deployment instance.
+message GenesisState {
+  // Deployments is a list of deployments on the network.
+  repeated GenesisDeployment deployments = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "deployments",
+    (gogoproto.moretags) = "yaml:\"deployments\""
+  ];
+
+  // Params defines the parameters for the x/deployment module.
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}

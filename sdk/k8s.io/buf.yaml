@@ -1,0 +1,9 @@
+version: v1
+name: buf.build/virtengine/provider-k8s
+deps:
+  - buf.build/cosmos/gogo-proto
+  - buf.build/cosmos/cosmos-proto
+lint:
+  use: []
+breaking:
+  use: []

@@ -1,0 +1,286 @@
+syntax = "proto3";
+package virtengine.bme.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/base/v1beta1/coin.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/bme/v1";
+
+// LedgerID uniquely identifies a ledger entry by block height and sequence number
+message LedgerID {
+  // height is the block height when the ledger entry was created
+  int64 height = 1 [
+    (gogoproto.jsontag)  = "height",
+    (gogoproto.moretags) = "yaml:\"height\""
+  ];
+
+  // sequence is the sequence number within the block (for ordering)
+  int64 sequence = 2 [
+    (gogoproto.jsontag)  = "sequence",
+    (gogoproto.moretags) = "yaml:\"sequence\""
+  ];
+}
+// CollateralRatio represents the current collateral ratio
+message CollateralRatio {
+  // ratio is CR = (VaultAKT * Price) / OutstandingACT
+  string ratio = 1 [
+    (cosmos_proto.scalar) = "cosmos.Dec",
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+    (gogoproto.nullable) = false
+  ];
+
+  // status indicates the current circuit breaker status
+  MintStatus status = 2;
+
+  // reference_price is the price used to calculate CR
+  string reference_price = 3 [
+    (cosmos_proto.scalar) = "cosmos.Dec",
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+    (gogoproto.nullable) = false
+  ];
+}
+
+// MintStatus indicates the current state of mint
+enum MintStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // MINT_STATUS_UNSPECIFIED is the default value
+  mint_status_unspecified = 0 [
+    (gogoproto.enumvalue_customname) = "MintStatusUnspecified"
+  ];
+
+  // MINT_STATUS_HEALTHY indicates normal operation (CR > warn threshold)
+  mint_status_healthy = 1 [
+    (gogoproto.enumvalue_customname) = "MintStatusHealthy"
+  ];
+
+  // MINT_STATUS_WARNING indicates CR is below warning threshold
+  mint_status_warning = 2 [
+    (gogoproto.enumvalue_customname) = "MintStatusWarning"
+  ];
+
+  // MINT_STATUS_HALT_CR indicates CR is below halt threshold, mints paused
+  mint_status_halt_cr = 3 [
+    (gogoproto.enumvalue_customname) = "MintStatusHaltCR"
+  ];
+
+  // MINT_STATUS_HALT_ORACLE indicates circuit breaker tripped due to unhealthy oracle price
+  mint_status_halt_oracle = 4 [
+    (gogoproto.enumvalue_customname) = "MintStatusHaltOracle"
+  ];
+}
+
+// State tracks net burn metrics since BME start
+message State {
+  // burned is the cumulative burn for tracked tokens
+  repeated cosmos.base.v1beta1.Coin balances = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+
+  // burned is the cumulative burn for tracked tokens
+  repeated cosmos.base.v1beta1.Coin total_burned = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+
+  // minted is the cumulative mint back for tracked tokens
+  repeated cosmos.base.v1beta1.Coin total_minted = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+
+  // remint_credits tracks available credits for reminting tokens
+  // (e.g., from previous burns that can be reminted without additional collateral)
+  repeated cosmos.base.v1beta1.Coin remint_credits = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
+}
+
+// CoinPrice represents a coin amount with its associated oracle price at a specific point in time
+message CoinPrice {
+  // coin is the token amount
+  cosmos.base.v1beta1.Coin coin = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "coin",
+    (gogoproto.moretags) = "yaml:\"coin\""
+  ];
+
+  // price (at oracle) of the coin at burn/mint event
+  string price = 2 [
+    (cosmos_proto.scalar)  = "cosmos.Dec",
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+    (gogoproto.nullable)   = false,
+    (gogoproto.jsontag)    = "price",
+    (gogoproto.moretags)   = "yaml:\"price\""
+  ];
+}
+
+// BurnMintPair represents a pair of burn and mint operations with their respective prices
+message BurnMintPair {
+  // burned is the coin burned
+  CoinPrice burned = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)    = "burned",
+    (gogoproto.moretags)   = "yaml:\"burned\""
+  ];
+
+  // minted is coin minted
+  CoinPrice minted = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag)  = "minted",
+    (gogoproto.moretags) = "yaml:\"minted\""
+  ];
+}
+
+// LedgerRecordStatus indicates the current state of a burn/mint ledger record
+enum LedgerRecordStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // LEDGER_RECORD_STATUS_INVALID is the default/uninitialized value
+  // This status should never appear in a valid ledger record
+  ledger_record_status_invalid = 0 [
+    (gogoproto.enumvalue_customname) = "LedgerRecordSatusInvalid"
+  ];
+
+  // LEDGER_RECORD_STATUS_PENDING indicates a burn/mint operation has been initiated
+  // but not yet executed (e.g., waiting for oracle price or circuit breaker clearance)
+  ledger_record_status_pending = 1 [
+    (gogoproto.enumvalue_customname) = "LedgerRecordSatusPending"
+  ];
+
+  // LEDGER_RECORD_STATUS_EXECUTED indicates the burn/mint operation has been
+  // successfully completed and tokens have been burned and minted
+  ledger_record_status_executed = 2 [
+    (gogoproto.enumvalue_customname) = "LedgerRecordSatusExecuted"
+  ];
+}
+
+// LedgerRecordID
+message LedgerRecordID {
+  // denom is the asset denomination
+  string denom = 1 [
+    (gogoproto.jsontag) = "denom",
+    (gogoproto.moretags) = "yaml:\"denom\""
+  ];
+
+  // to_denom is what denom swap to
+  string to_denom = 2 [
+    (gogoproto.jsontag) = "to_denom",
+    (gogoproto.moretags) = "yaml:\"to_denom\""
+  ];
+
+  string source = 3 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "source",
+    (gogoproto.moretags)  = "yaml:\"source\""
+  ];
+
+  int64 height = 4;
+  int64 sequence = 5;
+}
+
+// LedgerPendingRecord
+message LedgerPendingRecord {
+  // owner source of the coins to be burned
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // to destination of the minted coins.
+  // if minted coin is ACT, "to" must be same as signer
+  string to = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "to",
+    (gogoproto.moretags)  = "yaml:\"to\""
+  ];
+
+  // coins_to_burn
+  cosmos.base.v1beta1.Coin coins_to_burn = 3 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "CoinsToBurn",
+    (gogoproto.jsontag)    = "coins_to_burn",
+    (gogoproto.moretags)   = "yaml:\"coins_to_burn\""
+  ];
+
+  // denom_to_mint
+  string denom_to_mint = 4 [
+    (gogoproto.customname) = "DenomToMint",
+    (gogoproto.jsontag)    = "denom_to_mint",
+    (gogoproto.moretags)   = "yaml:\"denom_to_mint\""
+  ];
+}
+
+// LedgerRecord stores information of burn/mint event of token A burn to mint token B
+message LedgerRecord {
+  // burned_from source address of the tokens burned
+  string burned_from = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "burned_from",
+    (gogoproto.moretags)  = "yaml:\"burned_from\""
+  ];
+
+  // minted_to destination address of the tokens minted
+  string minted_to = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "minted_to",
+    (gogoproto.moretags)  = "yaml:\"minted_to\""
+  ];
+
+  // module is module account performing burn
+  string burner = 3 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "burner",
+    (gogoproto.moretags)  = "yaml:\"burner\""
+  ];
+
+  // module is module account performing mint
+  string minter = 4 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "minter",
+    (gogoproto.moretags)  = "yaml:\"minter\""
+  ];
+
+  // burned is the coin burned at price
+  CoinPrice burned = 5 [
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag)  = "burned",
+    (gogoproto.moretags) = "yaml:\"burned\""
+  ];
+
+  // minted is coin minted at price
+  CoinPrice minted = 6 [
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag)  = "minted",
+    (gogoproto.moretags) = "yaml:\"minted\""
+  ];
+
+  CoinPrice remint_credit_issued = 7 [
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag)  = "remint_credit_issued",
+    (gogoproto.moretags) = "yaml:\"remint_credit_issued\""
+  ];
+
+  CoinPrice remint_credit_accrued = 8 [
+    (gogoproto.nullable) = true,
+    (gogoproto.jsontag)  = "remint_credit_accrued",
+    (gogoproto.moretags) = "yaml:\"remint_credit_accrued\""
+  ];
+}
+
+// Status stores status of mint operations
+message Status {
+  MintStatus status = 1;
+  MintStatus previous_status = 2;
+
+  int64 epoch_height_diff = 3;
+}
+
+// MintEpoch stores information about mint epoch
+message MintEpoch {
+  int64 next_epoch = 1;
+}

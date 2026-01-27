@@ -4,9 +4,9 @@ import (
 	"context"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	types "pkg.akt.dev/go/node/escrow/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 
-	"pkg.akt.dev/node/x/escrow/keeper"
+	"github.com/virtengine/virtengine/x/escrow/keeper"
 )
 
 var _ types.MsgServer = msgServer{}

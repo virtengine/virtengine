@@ -6,8 +6,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/node/x/hpc/keeper"
-	"pkg.akt.dev/node/x/hpc/types"
+	"github.com/virtengine/virtengine/x/hpc/keeper"
+	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
 // VE-504: Rewards distribution for HPC contributors tests

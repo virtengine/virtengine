@@ -5,7 +5,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================

@@ -6,8 +6,8 @@ package fraud
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/fraud/keeper"
-	"pkg.akt.dev/node/x/fraud/types"
+	"github.com/virtengine/virtengine/x/fraud/keeper"
+	"github.com/virtengine/virtengine/x/fraud/types"
 )
 
 // InitGenesis initializes the fraud module's state from a provided genesis state

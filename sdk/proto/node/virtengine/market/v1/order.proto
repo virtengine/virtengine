@@ -1,0 +1,48 @@
+syntax = "proto3";
+package virtengine.market.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v1";
+
+// OrderId stores owner and all other seq numbers.
+message OrderID {
+  option (gogoproto.equal)            = true;
+  option (gogoproto.goproto_stringer) = false;
+
+  // Owner is the account bech32 address of the user who owns the deployment.
+  // It is a string representing a valid bech32 account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
+  // It is used to differentiate deployments created by the same owner.
+  uint64 dseq  = 2 [
+    (gogoproto.customname) = "DSeq",
+    (gogoproto.jsontag)    = "dseq",
+    (gogoproto.moretags)   = "yaml:\"dseq\""
+  ];
+
+  // Gseq (group sequence number) is a unique numeric identifier for the group.
+  // It is used to differentiate groups created by the same owner in a deployment.
+  uint32 gseq = 3 [
+    (gogoproto.customname) = "GSeq",
+    (gogoproto.jsontag)    = "gseq",
+    (gogoproto.moretags)   = "yaml:\"gseq\""
+  ];
+
+  // Oseq (order sequence) distinguishes multiple orders associated with a single deployment.
+  // Oseq is incremented when a lease associated with an existing deployment is closed, and a new order is generated.
+  uint32 oseq = 4 [
+    (gogoproto.customname) = "OSeq",
+    (gogoproto.jsontag)    = "oseq",
+    (gogoproto.moretags)   = "yaml:\"oseq\""
+  ];
+}

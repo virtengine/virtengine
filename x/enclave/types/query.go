@@ -66,7 +66,7 @@ type QueryKeyRotationRequest struct {
 // QueryKeyRotationResponse is the response for key rotation status
 type QueryKeyRotationResponse struct {
 	Rotation       *KeyRotationRecord `json:"rotation,omitempty"`
-	HasActiveRotation bool            `json:"has_actiVIRTENGINE_rotation"`
+	HasActiveRotation bool            `json:"has_active_rotation"`
 }
 
 // QueryValidKeySetRequest is the request for querying current valid key set

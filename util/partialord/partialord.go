@@ -3,7 +3,7 @@ package partialord
 import (
 	"sort"
 
-	"pkg.akt.dev/node/util/partialord/internal/dag"
+	"github.com/virtengine/virtengine/util/partialord/internal/dag"
 )
 
 type PartialOrdering struct {

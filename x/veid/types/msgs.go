@@ -3,7 +3,7 @@ package types
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	encryptiontypes "pkg.akt.dev/node/x/encryption/types"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // Message type constants
@@ -18,7 +18,6 @@ const (
 // Error message constants
 const (
 	errMsgInvalidSenderAddress = "invalid sender address"
-	errMsgScopeIDEmpty         = "scope_id cannot be empty"
 	errMsgInvalidAccountAddr   = "invalid account address"
 )
 

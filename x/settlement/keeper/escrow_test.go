@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"pkg.akt.dev/node/x/settlement/keeper"
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/keeper"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // MockBankKeeper is a mock implementation of the bank keeper

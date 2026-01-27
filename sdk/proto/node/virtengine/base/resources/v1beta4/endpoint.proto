@@ -1,0 +1,31 @@
+syntax = "proto3";
+package virtengine.base.resources.v1beta4;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/types/resources/v1beta4";
+
+// Endpoint describes a publicly accessible IP service.
+message Endpoint {
+  option (gogoproto.equal) = true;
+
+  // Kind describes how the endpoint is implemented when the lease is deployed.
+  enum Kind {
+    // Describes an endpoint that becomes a Kubernetes Ingress.
+    SHARED_HTTP = 0;
+    // Describes an endpoint that becomes a Kubernetes NodePort.
+    RANDOM_PORT = 1;
+    // Describes an endpoint that becomes a leased IP.
+    LEASED_IP = 2;
+  }
+
+  // Kind describes how the endpoint is implemented when the lease is deployed.
+  Kind kind = 1;
+
+  // SequenceNumber represents a sequence number for the Endpoint.
+  uint32 sequence_number = 2 [
+    (gogoproto.customname) = "SequenceNumber",
+    (gogoproto.jsontag)    = "sequence_number",
+    (gogoproto.moretags)   = "yaml:\"sequence_number\""
+  ];
+}

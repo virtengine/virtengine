@@ -8,7 +8,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 func TestEventEmission(t *testing.T) {

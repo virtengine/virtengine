@@ -11,18 +11,18 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-	emodule "pkg.akt.dev/go/node/escrow/module"
+	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	v1 "pkg.akt.dev/go/node/escrow/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 
-	"pkg.akt.dev/node/x/escrow/client/rest"
-	"pkg.akt.dev/node/x/escrow/handler"
-	"pkg.akt.dev/node/x/escrow/keeper"
+	"github.com/virtengine/virtengine/x/escrow/client/rest"
+	"github.com/virtengine/virtengine/x/escrow/handler"
+	"github.com/virtengine/virtengine/x/escrow/keeper"
 )
 
 var (

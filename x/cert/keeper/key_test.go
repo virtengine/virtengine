@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	types "pkg.akt.dev/go/node/cert/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 )
 
 func TestCertStateToPrefix(t *testing.T) {

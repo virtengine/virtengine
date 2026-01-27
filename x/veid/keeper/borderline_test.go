@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	mfakeeper "pkg.akt.dev/node/x/mfa/keeper"
-	mfatypes "pkg.akt.dev/node/x/mfa/types"
-	"pkg.akt.dev/node/x/veid/keeper"
-	"pkg.akt.dev/node/x/veid/types"
+	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	"github.com/virtengine/virtengine/x/veid/keeper"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // Test address constants

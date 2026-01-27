@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/node/x/mfa/types"
+	"github.com/virtengine/virtengine/x/mfa/types"
 )
 
 // ============================================================================

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/node/util/partialord"
+	"github.com/virtengine/virtengine/util/partialord"
 )
 
 func TestAPI(t *testing.T) {

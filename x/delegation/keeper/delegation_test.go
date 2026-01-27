@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"pkg.akt.dev/node/x/delegation/types"
+	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
 // DelegationOperationsTestSuite is the test suite for delegation operations

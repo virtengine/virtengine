@@ -9,9 +9,9 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 	sdksrv "github.com/cosmos/cosmos-sdk/server"
 	"golang.org/x/sync/errgroup"
-	cflags "pkg.akt.dev/go/cli/flags"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 
-	"pkg.akt.dev/node/util/server"
+	"github.com/virtengine/virtengine/util/server"
 )
 
 func openDB(rootDir string, backendType dbm.BackendType) (dbm.DB, error) {

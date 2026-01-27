@@ -7,9 +7,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
 
-	"pkg.akt.dev/go/node/deployment/v1"
-	"pkg.akt.dev/go/node/deployment/v1beta4"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
 
 const (

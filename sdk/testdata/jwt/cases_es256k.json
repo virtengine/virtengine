@@ -1,0 +1,76 @@
+[
+    {
+        "description": "ES256K - Valid Signature",
+        "tokenString": "eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJ2ZXJzaW9uIjoiIiwibGVhc2VzIjp7ImFjY2VzcyI6IiJ9fQ.fQFwGyhJDyF9i_zCX6IwJ43_arjs_1qJmxNSph6t8INMMZ7hBvrzwg0Ym8N06G7O_ZDw0mujQCfmOmR1jegnmA",
+        "expected": {
+            "alg": "ES256K",
+            "claims": {
+                "issuer": "bar"
+            }
+        },
+        "mustFail": false
+    },
+    {
+        "description": "ES256K - Invalid Signature",
+        "tokenString": "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NksifQ.eyJ2ZXJzaW9uIjoiIiwibGVhc2VzIjp7ImFjY2VzcyI6IiJ9fQ.MEQCIHoSJnmGlPaVQDqacx_2XlXEhhqtWceVopjomc2PJLtdAiAUTeGPoNYxZw0z8mgOnnIcjoxRuNDVZvybRZF3wR1l8W",
+        "expected": {
+            "alg": "ES256K",
+            "claims": {
+                "issuer": "bar"
+            }
+        },
+        "claims": {
+            "issuer": "bar"
+        },
+        "mustFail": true
+    },
+    {
+        "description": "ES256KADR36 - Valid Signature/with scoped claims",
+        "tokenString": "eyJhbGciOiJFUzI1NktBRFIzNiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJha2FzaDFxdWZhM3h6cmYzNHF2d3llamtodm5jNHBzZjQ5ZmZ0YXcwYXNtaCIsImV4cCI6MTc2MDQwNjc0MCwibmJmIjoxNzYwNDA0OTQwLCJpYXQiOjE3NjA0MDQ5NDAsInZlcnNpb24iOiJ2MSIsImxlYXNlcyI6eyJhY2Nlc3MiOiJzY29wZWQiLCJzY29wZSI6WyJzdGF0dXMiLCJzaGVsbCIsImV2ZW50cyIsImxvZ3MiXX19.dl8m8L0kExz2CCXvDXY65L0F3G7T21Zk5zfK_Ld78owfZrQbtNQW-FSsLtER2PFBwkEAgXgtrxl3kfImrEGLeg",
+        "expected": {
+            "alg": "ES256KADR36",
+            "claims": {
+                "iss": "virt1qufa3xzrf34qvwyejkhvnc4psf49fftaw0asmh",
+                "exp": 1760406740,
+                "iat": 1760404940,
+                "nbf": 1760404940,
+                "version": "v1",
+                "leases": {
+                    "access": "scoped",
+                    "scope": [
+                        "status",
+                        "shell",
+                        "events",
+                        "logs"
+                    ]
+                }
+            }
+        },
+        "mustFail": false
+    },
+    {
+        "description": "ES256KADR36 - Valid Signature / short",
+        "tokenString": "eyJhbGciOiJFUzI1NktBRFIzNiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoiIiwibGVhc2VzIjp7ImFjY2VzcyI6IiJ9fQ.22E6loqRf26cdpE-SqL2g1bN2utaFxNSEo-tFgbr8ZYpewJzy13Oo7xePj_WHgPJh6xpU9iw58TYyf5rEayTeA",
+        "expected": {
+            "alg": "ES256KADR36",
+            "claims": {
+                "issuer": "bar"
+            }
+        },
+        "mustFail": false
+    },
+    {
+        "description": "ES256KADR36 - Invalid Signature",
+        "tokenString": "eyJhbGciOiJFUzI1NktBUkQzNiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjoiIiwibGVhc2VzIjp7ImFjY2VzcyI6IiJ9fQ.FkLJICFkfXXT9rLZ8MLCKypKoLOoKIjxDIX-cyTiGklh-2sK5T2DTV0e1YVMhwQyeAN4qcgjm1gHSXdbS-xrYQ",
+        "expected": {
+            "alg": "ES256KADR36",
+            "claims": {
+                "issuer": "bar"
+            }
+        },
+        "claims": {
+            "issuer": "bar"
+        },
+        "mustFail": true
+    }
+]

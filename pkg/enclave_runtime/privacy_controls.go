@@ -1,4 +1,4 @@
-package enclaVIRTENGINE_runtime
+package enclave_runtime
 
 import (
 	"regexp"

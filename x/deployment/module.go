@@ -18,13 +18,13 @@ import (
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
-	v1 "pkg.akt.dev/go/node/deployment/v1"
-	types "pkg.akt.dev/go/node/deployment/v1beta4"
-	"pkg.akt.dev/go/node/migrate"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	"github.com/virtengine/virtengine/sdk/go/node/migrate"
 
-	"pkg.akt.dev/node/x/deployment/handler"
-	"pkg.akt.dev/node/x/deployment/keeper"
-	"pkg.akt.dev/node/x/deployment/simulation"
+	"github.com/virtengine/virtengine/x/deployment/handler"
+	"github.com/virtengine/virtengine/x/deployment/keeper"
+	"github.com/virtengine/virtengine/x/deployment/simulation"
 )
 
 // type check to ensure the interface is properly implemented

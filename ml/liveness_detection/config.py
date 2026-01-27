@@ -51,7 +51,7 @@ class ActiveChallengeConfig:
     
     # Blink detection settings
     blink_ear_threshold: float = 0.21  # Eye aspect ratio threshold
-    blink_consecutiVIRTENGINE_frames: int = 2  # Frames eye must be closed
+    blink_consecutive_frames: int = 2  # Frames eye must be closed
     blink_min_duration_ms: int = 50
     blink_max_duration_ms: int = 500
     
@@ -169,8 +169,8 @@ class ScoreConfig:
     """Configuration for liveness score computation."""
     
     # Component weights (must sum to 1.0)
-    actiVIRTENGINE_challenge_weight: float = 0.40
-    passiVIRTENGINE_analysis_weight: float = 0.35
+    active_challenge_weight: float = 0.40
+    passive_analysis_weight: float = 0.35
     spoof_detection_weight: float = 0.25
     
     # Thresholds
@@ -223,24 +223,24 @@ class LivenessConfig:
     
     # Debug settings
     debug_mode: bool = False
-    saVIRTENGINE_debug_frames: bool = False
+    save_debug_frames: bool = False
     
     def validate(self) -> bool:
         """Validate configuration values."""
         # Check weight sums
-        passiVIRTENGINE_weights = (
+        passive_weights = (
             self.passive.texture_weight +
             self.passive.depth_weight +
             self.passive.motion_weight +
             self.passive.reflection_weight +
             self.passive.moire_weight
         )
-        if abs(passiVIRTENGINE_weights - 1.0) > 0.001:
-            raise ValueError(f"Passive weights must sum to 1.0, got {passiVIRTENGINE_weights}")
+        if abs(passive_weights - 1.0) > 0.001:
+            raise ValueError(f"Passive weights must sum to 1.0, got {passive_weights}")
         
         score_weights = (
-            self.score.actiVIRTENGINE_challenge_weight +
-            self.score.passiVIRTENGINE_analysis_weight +
+            self.score.active_challenge_weight +
+            self.score.passive_analysis_weight +
             self.score.spoof_detection_weight
         )
         if abs(score_weights - 1.0) > 0.001:
@@ -282,7 +282,7 @@ def get_strict_config() -> LivenessConfig:
     return config
 
 
-def get_permissiVIRTENGINE_config() -> LivenessConfig:
+def get_permissive_config() -> LivenessConfig:
     """Get a permissive configuration for accessibility or low-risk scenarios."""
     config = LivenessConfig()
     

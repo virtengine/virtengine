@@ -3,7 +3,7 @@ package keeper
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/encryption/types"
+	"github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // Error message constants

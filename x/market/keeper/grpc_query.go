@@ -10,11 +10,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 
-	"pkg.akt.dev/go/node/market/v1"
-	types "pkg.akt.dev/go/node/market/v1beta5"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	"pkg.akt.dev/node/util/query"
-	"pkg.akt.dev/node/x/market/keeper/keys"
+	"github.com/virtengine/virtengine/util/query"
+	"github.com/virtengine/virtengine/x/market/keeper/keys"
 )
 
 // Querier is used as Keeper will have duplicate methods if used directly, and gRPC names take precedence over keeper

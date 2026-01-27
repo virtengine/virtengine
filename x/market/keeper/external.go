@@ -2,8 +2,8 @@ package keeper
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	escrowid "pkg.akt.dev/go/node/escrow/id/v1"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
 )
 
 type EscrowKeeper interface {

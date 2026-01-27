@@ -11,7 +11,7 @@ import (
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-	v1 "pkg.akt.dev/go/node/market/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -19,13 +19,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
-	types "pkg.akt.dev/go/node/market/v1beta5"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	akeeper "pkg.akt.dev/node/x/audit/keeper"
-	ekeeper "pkg.akt.dev/node/x/escrow/keeper"
-	"pkg.akt.dev/node/x/market/handler"
-	"pkg.akt.dev/node/x/market/keeper"
-	"pkg.akt.dev/node/x/market/simulation"
+	akeeper "github.com/virtengine/virtengine/x/audit/keeper"
+	ekeeper "github.com/virtengine/virtengine/x/escrow/keeper"
+	"github.com/virtengine/virtengine/x/market/handler"
+	"github.com/virtengine/virtengine/x/market/keeper"
+	"github.com/virtengine/virtengine/x/market/simulation"
 )
 
 // type check to ensure the interface is properly implemented

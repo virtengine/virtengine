@@ -167,7 +167,7 @@ func (s *CryptoSecurityTestSuite) TestNonceUniqueness() {
 	})
 
 	// Test: Nonces have sufficient entropy
-	s.Run("nonces_haVIRTENGINE_sufficient_entropy", func() {
+	s.Run("nonces_have_sufficient_entropy", func() {
 		nonce := generateTestNonce(s.T())
 
 		// Check that nonce isn't all zeros or all ones

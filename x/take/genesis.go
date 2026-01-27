@@ -3,9 +3,9 @@ package take
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	types "pkg.akt.dev/go/node/take/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
-	"pkg.akt.dev/node/x/take/keeper"
+	"github.com/virtengine/virtengine/x/take/keeper"
 )
 
 // ValidateGenesis does validation check of the Genesis and return error incase of failure

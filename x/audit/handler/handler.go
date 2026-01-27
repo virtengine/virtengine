@@ -7,9 +7,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	types "pkg.akt.dev/go/node/audit/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 
-	"pkg.akt.dev/node/x/audit/keeper"
+	"github.com/virtengine/virtengine/x/audit/keeper"
 )
 
 // NewHandler returns a handler for "provider" type messages.

@@ -6,13 +6,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"pkg.akt.dev/go/node/deployment/v1beta4"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 
-	types "pkg.akt.dev/go/node/deployment/v1"
-	"pkg.akt.dev/go/testutil"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/testutil/state"
-	"pkg.akt.dev/node/x/deployment/keeper"
+	"github.com/virtengine/virtengine/testutil/state"
+	"github.com/virtengine/virtengine/x/deployment/keeper"
 )
 
 func Test_Create(t *testing.T) {

@@ -19,10 +19,10 @@ import (
 	sdkserver "github.com/cosmos/cosmos-sdk/server"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 
-	cflags "pkg.akt.dev/go/cli/flags"
-	"pkg.akt.dev/go/sdkutil"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	virtengine "pkg.akt.dev/node/app"
+	virtengine "github.com/virtengine/virtengine/app"
 )
 
 type appCreator struct {

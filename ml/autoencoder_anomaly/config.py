@@ -139,7 +139,7 @@ class AnomalyScoringConfig:
     latent_distance_method: str = "mahalanobis"  # "euclidean", "mahalanobis"
     
     # Adaptive thresholds
-    use_adaptiVIRTENGINE_threshold: bool = False
+    use_adaptive_threshold: bool = False
     adaptation_rate: float = 0.01
 
 

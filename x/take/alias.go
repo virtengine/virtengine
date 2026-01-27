@@ -1,7 +1,7 @@
 package take
 
 import (
-	types "pkg.akt.dev/go/node/take/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 )
 
 const (

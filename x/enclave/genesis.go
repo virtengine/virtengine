@@ -3,8 +3,8 @@ package enclave
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/enclave/keeper"
-	"pkg.akt.dev/node/x/enclave/types"
+	"github.com/virtengine/virtengine/x/enclave/keeper"
+	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
 // InitGenesis initializes the enclave module's state from a genesis state.
@@ -84,9 +84,4 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 // ValidateGenesis validates the genesis state
 func ValidateGenesis(data *types.GenesisState) error {
 	return data.Validate()
-}
-
-// DefaultGenesisState returns the default genesis state
-func DefaultGenesisState() *types.GenesisState {
-	return types.DefaultGenesisState()
 }

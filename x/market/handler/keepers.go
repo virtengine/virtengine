@@ -9,14 +9,14 @@ import (
 	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
-	atypes "pkg.akt.dev/go/node/audit/v1"
-	dtypes "pkg.akt.dev/go/node/deployment/v1"
-	dbeta "pkg.akt.dev/go/node/deployment/v1beta4"
-	escrowid "pkg.akt.dev/go/node/escrow/id/v1"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
-	ptypes "pkg.akt.dev/go/node/provider/v1beta4"
+	atypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
+	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	dbeta "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
-	"pkg.akt.dev/node/x/market/keeper"
+	"github.com/virtengine/virtengine/x/market/keeper"
 )
 
 type EscrowKeeper interface {

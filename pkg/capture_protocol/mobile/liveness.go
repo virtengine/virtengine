@@ -110,10 +110,10 @@ type LivenessResult struct {
 	Mode LivenessMode `json:"mode"`
 
 	// PassiveResult contains passive detection results
-	PassiveResult *PassiveLivenessResult `json:"passiVIRTENGINE_result,omitempty"`
+	PassiveResult *PassiveLivenessResult `json:"passive_result,omitempty"`
 
 	// ActiveResult contains active challenge results
-	ActiveResult *ActiveLivenessResult `json:"actiVIRTENGINE_result,omitempty"`
+	ActiveResult *ActiveLivenessResult `json:"active_result,omitempty"`
 
 	// AntiSpoofingResult contains anti-spoofing analysis
 	AntiSpoofingResult AntiSpoofingResult `json:"anti_spoofing_result"`
@@ -383,7 +383,7 @@ type LivenessPhase string
 const (
 	LivenessPhaseInitializing  LivenessPhase = "initializing"
 	LivenessPhasePassive       LivenessPhase = "passive"
-	LivenessPhaseActiveChallenge LivenessPhase = "actiVIRTENGINE_challenge"
+	LivenessPhaseActiveChallenge LivenessPhase = "active_challenge"
 	LivenessPhaseProcessing    LivenessPhase = "processing"
 	LivenessPhaseComplete      LivenessPhase = "complete"
 	LivenessPhaseFailed        LivenessPhase = "failed"

@@ -10,7 +10,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // IKeeper defines the interface for the veid keeper

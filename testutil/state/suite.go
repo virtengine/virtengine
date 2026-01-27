@@ -19,22 +19,22 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	atypes "pkg.akt.dev/go/node/audit/v1"
-	dtypes "pkg.akt.dev/go/node/deployment/v1"
-	emodule "pkg.akt.dev/go/node/escrow/module"
-	mtypes "pkg.akt.dev/go/node/market/v1"
-	ptypes "pkg.akt.dev/go/node/provider/v1beta4"
-	ttypes "pkg.akt.dev/go/node/take/v1"
+	atypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
+	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
+	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	ttypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
-	"pkg.akt.dev/node/app"
-	emocks "pkg.akt.dev/node/testutil/cosmos/mocks"
-	akeeper "pkg.akt.dev/node/x/audit/keeper"
-	dkeeper "pkg.akt.dev/node/x/deployment/keeper"
-	ekeeper "pkg.akt.dev/node/x/escrow/keeper"
-	mhooks "pkg.akt.dev/node/x/market/hooks"
-	mkeeper "pkg.akt.dev/node/x/market/keeper"
-	pkeeper "pkg.akt.dev/node/x/provider/keeper"
-	tkeeper "pkg.akt.dev/node/x/take/keeper"
+	"github.com/virtengine/virtengine/app"
+	emocks "github.com/virtengine/virtengine/testutil/cosmos/mocks"
+	akeeper "github.com/virtengine/virtengine/x/audit/keeper"
+	dkeeper "github.com/virtengine/virtengine/x/deployment/keeper"
+	ekeeper "github.com/virtengine/virtengine/x/escrow/keeper"
+	mhooks "github.com/virtengine/virtengine/x/market/hooks"
+	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
+	pkeeper "github.com/virtengine/virtengine/x/provider/keeper"
+	tkeeper "github.com/virtengine/virtengine/x/take/keeper"
 )
 
 // TestSuite encapsulates a functional VirtEngine nodes data stores for

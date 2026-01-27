@@ -8,7 +8,7 @@ import (
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
 
-	types "pkg.akt.dev/go/node/market/v1beta5"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 )
 
 // Simulation operation weights constants

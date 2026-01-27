@@ -1,0 +1,82 @@
+syntax = "proto3";
+package virtengine.bme.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+
+import "cosmos_proto/cosmos.proto";
+
+import "virtengine/bme/v1/params.proto";
+import "virtengine/bme/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/bme/v1";
+
+// Query defines the gRPC querier service for the BME module
+service Query {
+  // Params returns the module parameters
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/bme/v1/params";
+  }
+
+  // VaultState returns the current vault state
+  rpc VaultState(QueryVaultStateRequest) returns (QueryVaultStateResponse) {
+    option (google.api.http).get = "/virtengine/bme/v1/vault";
+  }
+
+  // Status returns the current circuit breaker status
+  rpc Status(QueryStatusRequest) returns (QueryStatusResponse) {
+    option (google.api.http).get = "/virtengine/bme/v1/status";
+  }
+}
+
+// QueryParamsRequest is the request type for the Query/Params RPC method
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method
+message QueryParamsResponse {
+  Params params = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryVaultStateRequest is the request type for the Query/VaultState RPC method
+message QueryVaultStateRequest {}
+
+// QueryVaultStateResponse is the response type for the Query/VaultState RPC method
+message QueryVaultStateResponse {
+  State vault_state = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryStatusRequest is the request type for the circuit breaker status
+message QueryStatusRequest {}
+
+// QueryMintStatusResponse is the response type for the circuit breaker status
+message QueryStatusResponse {
+  // status is the current circuit breaker status
+  MintStatus status = 1;
+
+  // collateral_ratio is the current CR
+  string collateral_ratio = 2 [
+    (cosmos_proto.scalar) = "cosmos.Dec",
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+    (gogoproto.nullable) = false
+  ];
+
+  // warn_threshold is the warning threshold
+  string warn_threshold = 3 [
+    (cosmos_proto.scalar) = "cosmos.Dec",
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+    (gogoproto.nullable) = false
+  ];
+
+  // halt_threshold is the halt threshold
+  string halt_threshold = 4 [
+    (cosmos_proto.scalar) = "cosmos.Dec",
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
+    (gogoproto.nullable) = false
+  ];
+
+  // mints_allowed indicates if new ACT mints are allowed
+  bool mints_allowed = 5;
+
+  // refunds_allowed indicates if ACT refunds are allowed
+  bool refunds_allowed = 6;
+}

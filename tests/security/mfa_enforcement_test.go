@@ -58,7 +58,7 @@ func (s *MFAEnforcementTestSuite) TestSensitiveTransactionGating() {
 	}
 
 	// Test: Non-sensitive transactions don't require MFA
-	s.Run("non_sensitiVIRTENGINE_tx_no_mfa", func() {
+	s.Run("non_sensitive_tx_no_mfa", func() {
 		policy := &MFAPolicy{
 			SensitiveTxTypes: sensitiveTypes,
 			RequiredFactors:  1,

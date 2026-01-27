@@ -308,7 +308,7 @@ type Offering struct {
 	TotalOrderCount uint64 `json:"total_order_count"`
 
 	// ActiveOrderCount is the current number of active orders
-	ActiveOrderCount uint64 `json:"actiVIRTENGINE_order_count"`
+	ActiveOrderCount uint64 `json:"active_order_count"`
 }
 
 // NewOffering creates a new offering with required fields

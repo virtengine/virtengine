@@ -67,7 +67,7 @@ class TestFilterByConfidence:
         for roi in result:
             assert roi.confidence >= 0.85
     
-    def test_filter_keeps_all_aboVIRTENGINE_threshold(self, postprocessor, sample_text_rois):
+    def test_filter_keeps_all_above_threshold(self, postprocessor, sample_text_rois):
         """Test that all ROIs above threshold are kept."""
         result = postprocessor.filter_by_confidence(sample_text_rois, min_confidence=0.5)
         

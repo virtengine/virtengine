@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"pkg.akt.dev/go/cli"
-	clitestutil "pkg.akt.dev/go/cli/testutil"
+	"github.com/virtengine/virtengine/sdk/go/cli"
+	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
 
 	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
-	types "pkg.akt.dev/go/node/provider/v1beta4"
+	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
-	"pkg.akt.dev/node/testutil"
+	"github.com/virtengine/virtengine/testutil"
 )
 
 type providerGRPCRestTestSuite struct {

@@ -7,11 +7,11 @@ import (
 	"io"
 	"time"
 
-	certerrors "pkg.akt.dev/node/x/cert/errors"
+	certerrors "github.com/virtengine/virtengine/x/cert/errors"
 
 	"github.com/cosmos/cosmos-sdk/client"
 
-	ctypes "pkg.akt.dev/go/node/cert/v1"
+	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 )
 
 // LoadAndQueryCertificateForAccount wraps LoadAndQueryPEMForAccount and tls.X509KeyPair

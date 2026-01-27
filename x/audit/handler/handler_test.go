@@ -19,12 +19,12 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	testutilmod "github.com/cosmos/cosmos-sdk/types/module/testutil"
 
-	types "pkg.akt.dev/go/node/audit/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 
-	"pkg.akt.dev/go/testutil"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/x/audit/handler"
-	"pkg.akt.dev/node/x/audit/keeper"
+	"github.com/virtengine/virtengine/x/audit/handler"
+	"github.com/virtengine/virtengine/x/audit/keeper"
 )
 
 type testSuite struct {

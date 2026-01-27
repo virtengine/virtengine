@@ -242,7 +242,7 @@ type GalleryDetectionResult struct {
 	IsGalleryUpload bool `json:"is_gallery_upload"`
 
 	// IsLiveCapture indicates if image is from live camera
-	IsLiveCapture bool `json:"is_liVIRTENGINE_capture"`
+	IsLiveCapture bool `json:"is_live_capture"`
 
 	// Confidence is detection confidence (0-1)
 	Confidence float64 `json:"confidence"`

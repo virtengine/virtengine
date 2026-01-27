@@ -5,12 +5,7 @@ package slurm_adapter
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"sync"
 	"time"
 )
 
@@ -259,23 +254,23 @@ type SLURMClient interface {
 
 // PartitionInfo contains partition information
 type PartitionInfo struct {
-	Name         string   `json:"name"`
-	Nodes        int32    `json:"nodes"`
-	State        string   `json:"state"`
-	MaxTime      int64    `json:"max_time"`
-	DefaultTime  int64    `json:"default_time"`
-	MaxNodes     int32    `json:"max_nodes"`
-	Features     []string `json:"features,omitempty"`
+	Name        string   `json:"name"`
+	Nodes       int32    `json:"nodes"`
+	State       string   `json:"state"`
+	MaxTime     int64    `json:"max_time"`
+	DefaultTime int64    `json:"default_time"`
+	MaxNodes    int32    `json:"max_nodes"`
+	Features    []string `json:"features,omitempty"`
 }
 
 // NodeInfo contains node information
 type NodeInfo struct {
-	Name         string   `json:"name"`
-	State        string   `json:"state"`
-	CPUs         int32    `json:"cpus"`
-	MemoryMB     int64    `json:"memory_mb"`
-	GPUs         int32    `json:"gpus,omitempty"`
-	GPUType      string   `json:"gpu_type,omitempty"`
-	Partitions   []string `json:"partitions"`
-	Features     []string `json:"features,omitempty"`
+	Name       string   `json:"name"`
+	State      string   `json:"state"`
+	CPUs       int32    `json:"cpus"`
+	MemoryMB   int64    `json:"memory_mb"`
+	GPUs       int32    `json:"gpus,omitempty"`
+	GPUType    string   `json:"gpu_type,omitempty"`
+	Partitions []string `json:"partitions"`
+	Features   []string `json:"features,omitempty"`
 }

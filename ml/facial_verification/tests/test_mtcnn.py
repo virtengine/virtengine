@@ -716,7 +716,7 @@ class TestEdgeCases:
         # Should complete without error
         assert result.success is True
     
-    def test_negatiVIRTENGINE_bbox_handling(self, sample_landmarks):
+    def test_negative_bbox_handling(self, sample_landmarks):
         """Test handling of negative bbox values."""
         # MTCNN sometimes returns negative coordinates
         detection = MTCNNDetection(

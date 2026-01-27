@@ -3,10 +3,10 @@ package hooks
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	dv1 "pkg.akt.dev/go/node/deployment/v1"
-	dtypes "pkg.akt.dev/go/node/deployment/v1beta4"
-	mv1 "pkg.akt.dev/go/node/market/v1"
-	mtypes "pkg.akt.dev/go/node/market/v1beta5"
+	dv1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 )
 
 type DeploymentKeeper interface {

@@ -1,0 +1,189 @@
+syntax = "proto3";
+package virtengine.provider.v1;
+
+import "google/protobuf/timestamp.proto";
+import "gogoproto/gogo.proto";
+import "virtengine/inventory/v1/cluster.proto";
+import "k8s_io/apimachinery/pkg/api/resource/generated.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/provider/v1";
+
+// ResourceMetrics
+message ResourcesMetric {
+  k8s_io.apimachinery.pkg.api.resource.Quantity cpu = 1 [
+    (gogoproto.nullable)     = true,
+    (gogoproto.customname)   = "CPU",
+    (gogoproto.jsontag)      = "cpu",
+    (gogoproto.moretags)     = "yaml:\"cpu\""
+  ];
+
+  k8s_io.apimachinery.pkg.api.resource.Quantity memory = 2 [
+    (gogoproto.nullable)     = true,
+    (gogoproto.customname)   = "Memory",
+    (gogoproto.jsontag)      = "memory",
+    (gogoproto.moretags)     = "yaml:\"memory\""
+  ];
+
+  k8s_io.apimachinery.pkg.api.resource.Quantity gpu = 3 [
+    (gogoproto.nullable)     = true,
+    (gogoproto.castrepeated) = "GPUs",
+    (gogoproto.customname)   = "GPU",
+    (gogoproto.jsontag)      = "gpu",
+    (gogoproto.moretags)     = "yaml:\"gpu\""
+  ];
+
+  k8s_io.apimachinery.pkg.api.resource.Quantity ephemeral_storage = 4 [
+    (gogoproto.nullable)     = true,
+    (gogoproto.customname)   = "EphemeralStorage",
+    (gogoproto.jsontag)      = "ephemeral_storage",
+    (gogoproto.moretags)     = "yaml:\"ephemeral_storage\""
+  ];
+
+  map<string, k8s_io.apimachinery.pkg.api.resource.Quantity> storage = 5 [
+    (gogoproto.casttype)     = "Storage",
+    (gogoproto.customname)   = "Storage",
+    (gogoproto.jsontag)      = "storage",
+    (gogoproto.moretags)     = "yaml:\"storage\""
+  ];
+}
+
+// Leases
+message Leases {
+  uint32 active = 1 [
+    (gogoproto.customname)   = "Active",
+    (gogoproto.jsontag)      = "active",
+    (gogoproto.moretags)     = "yaml:\"active\""
+  ];
+}
+
+// ReservationsMetric
+message ReservationsMetric {
+  uint32 count = 1 [
+    (gogoproto.customname) = "Count",
+    (gogoproto.jsontag)    = "count",
+    (gogoproto.moretags)   = "yaml:\"count\""
+  ];
+
+  ResourcesMetric resources = 2 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "Resources",
+    (gogoproto.jsontag)    = "resources",
+    (gogoproto.moretags)   = "yaml:\"resources\""
+  ];
+}
+
+// Reservations
+message Reservations {
+  ReservationsMetric pending = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "Pending",
+    (gogoproto.jsontag)    = "pending",
+    (gogoproto.moretags)   = "yaml:\"pending\""
+  ];
+
+  ReservationsMetric active = 2 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "Active",
+    (gogoproto.jsontag)    = "active",
+    (gogoproto.moretags)   = "yaml:\"active\""
+  ];
+}
+
+// Inventory
+message Inventory {
+  virtengine.inventory.v1.Cluster cluster = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "Cluster",
+    (gogoproto.jsontag)    = "cluster",
+    (gogoproto.moretags)   = "yaml:\"cluster\""
+  ];
+
+  Reservations reservations = 2 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "Reservations",
+    (gogoproto.jsontag)    = "reservations",
+    (gogoproto.moretags)   = "yaml:\"reservations\""
+  ];
+}
+
+// ClusterStatus
+message ClusterStatus {
+  Leases leases = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "Leases",
+    (gogoproto.jsontag)    = "leases",
+    (gogoproto.moretags)   = "yaml:\"leases\""
+  ];
+
+  Inventory inventory = 2 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "Inventory",
+    (gogoproto.jsontag)    = "inventory",
+    (gogoproto.moretags)   = "yaml:\"inventory\""
+  ];
+}
+
+// BidEngineStatus
+message BidEngineStatus {
+  uint32 orders = 1 [
+    (gogoproto.customname) = "Orders",
+    (gogoproto.jsontag)    = "orders",
+    (gogoproto.moretags)   = "yaml:\"orders\""
+  ];
+}
+
+// ManifestStatus
+message ManifestStatus {
+  uint32 deployments = 1 [
+    (gogoproto.customname) = "Deployments",
+    (gogoproto.jsontag)    = "deployments",
+    (gogoproto.moretags)   = "yaml:\"deployments\""
+  ];
+}
+
+
+// Status
+message Status {
+  repeated string errors = 1 [
+    (gogoproto.customname) = "Errors",
+    (gogoproto.jsontag)    = "errors,omitempty",
+    (gogoproto.moretags)   = "yaml:\"errors,omitempty\""
+  ];
+
+  ClusterStatus cluster = 2 [
+    (gogoproto.nullable)   = true,
+    (gogoproto.customname) = "Cluster",
+    (gogoproto.jsontag)    = "cluster,omitempty",
+    (gogoproto.moretags)   = "yaml:\"cluster,omitempty\""
+  ];
+
+  BidEngineStatus bid_engine = 3 [
+    (gogoproto.nullable)   = true,
+    (gogoproto.customname) = "BidEngine",
+    (gogoproto.jsontag)    = "bid_engine,omitempty",
+    (gogoproto.moretags)   = "yaml:\"bid_engine,omitempty\""
+  ];
+
+  ManifestStatus manifest = 4 [
+    (gogoproto.nullable)   = true,
+    (gogoproto.customname) = "Manifest",
+    (gogoproto.jsontag)    = "manifest,omitempty",
+    (gogoproto.moretags)   = "yaml:\"manifest,omitempty\""
+  ];
+
+  repeated string public_hostnames = 5 [
+    (gogoproto.customname) = "PublicHostnames",
+    (gogoproto.jsontag)    = "public_hostnames",
+    (gogoproto.moretags)   = "yaml:\"public_hostnames\""
+  ];
+
+  google.protobuf.Timestamp timestamp = 6 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.stdtime)    = true,
+    (gogoproto.customname) = "Timestamp",
+    (gogoproto.jsontag)    = "timestamp",
+    (gogoproto.moretags)   = "yaml:\"timestamp\""
+  ];
+}
+
+

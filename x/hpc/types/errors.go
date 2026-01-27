@@ -10,65 +10,65 @@ import (
 // HPC module sentinel errors
 var (
 	// ErrInvalidCluster is returned when a cluster is invalid
-	ErrInvalidCluster = errors.Register(ModuleName, 2, "invalid cluster")
+	ErrInvalidCluster = errors.Register(ModuleName, 2100, "invalid cluster")
 
 	// ErrClusterNotFound is returned when a cluster is not found
-	ErrClusterNotFound = errors.Register(ModuleName, 3, "cluster not found")
+	ErrClusterNotFound = errors.Register(ModuleName, 2101, "cluster not found")
 
 	// ErrClusterAlreadyExists is returned when a cluster already exists
-	ErrClusterAlreadyExists = errors.Register(ModuleName, 4, "cluster already exists")
+	ErrClusterAlreadyExists = errors.Register(ModuleName, 2102, "cluster already exists")
 
 	// ErrInvalidOffering is returned when an offering is invalid
-	ErrInvalidOffering = errors.Register(ModuleName, 5, "invalid HPC offering")
+	ErrInvalidOffering = errors.Register(ModuleName, 2103, "invalid HPC offering")
 
 	// ErrOfferingNotFound is returned when an offering is not found
-	ErrOfferingNotFound = errors.Register(ModuleName, 6, "HPC offering not found")
+	ErrOfferingNotFound = errors.Register(ModuleName, 2104, "HPC offering not found")
 
 	// ErrInvalidJob is returned when a job is invalid
-	ErrInvalidJob = errors.Register(ModuleName, 7, "invalid HPC job")
+	ErrInvalidJob = errors.Register(ModuleName, 2105, "invalid HPC job")
 
 	// ErrJobNotFound is returned when a job is not found
-	ErrJobNotFound = errors.Register(ModuleName, 8, "HPC job not found")
+	ErrJobNotFound = errors.Register(ModuleName, 2106, "HPC job not found")
 
 	// ErrInvalidJobState is returned when a job state transition is invalid
-	ErrInvalidJobState = errors.Register(ModuleName, 9, "invalid job state transition")
+	ErrInvalidJobState = errors.Register(ModuleName, 2107, "invalid job state transition")
 
 	// ErrInsufficientIdentityScore is returned when identity score is too low
-	ErrInsufficientIdentityScore = errors.Register(ModuleName, 10, "insufficient identity score")
+	ErrInsufficientIdentityScore = errors.Register(ModuleName, 2108, "insufficient identity score")
 
 	// ErrInvalidNodeMetadata is returned when node metadata is invalid
-	ErrInvalidNodeMetadata = errors.Register(ModuleName, 11, "invalid node metadata")
+	ErrInvalidNodeMetadata = errors.Register(ModuleName, 2109, "invalid node metadata")
 
 	// ErrNodeNotFound is returned when a node is not found
-	ErrNodeNotFound = errors.Register(ModuleName, 12, "node not found")
+	ErrNodeNotFound = errors.Register(ModuleName, 2110, "node not found")
 
 	// ErrInvalidSchedulingDecision is returned when a scheduling decision is invalid
-	ErrInvalidSchedulingDecision = errors.Register(ModuleName, 13, "invalid scheduling decision")
+	ErrInvalidSchedulingDecision = errors.Register(ModuleName, 2111, "invalid scheduling decision")
 
 	// ErrNoAvailableCluster is returned when no cluster is available for scheduling
-	ErrNoAvailableCluster = errors.Register(ModuleName, 14, "no available cluster for job")
+	ErrNoAvailableCluster = errors.Register(ModuleName, 2112, "no available cluster for job")
 
 	// ErrInvalidReward is returned when a reward is invalid
-	ErrInvalidReward = errors.Register(ModuleName, 15, "invalid HPC reward")
+	ErrInvalidReward = errors.Register(ModuleName, 2113, "invalid HPC reward")
 
 	// ErrInvalidDispute is returned when a dispute is invalid
-	ErrInvalidDispute = errors.Register(ModuleName, 16, "invalid dispute")
+	ErrInvalidDispute = errors.Register(ModuleName, 2114, "invalid dispute")
 
 	// ErrDisputeNotFound is returned when a dispute is not found
-	ErrDisputeNotFound = errors.Register(ModuleName, 17, "dispute not found")
+	ErrDisputeNotFound = errors.Register(ModuleName, 2115, "dispute not found")
 
 	// ErrJobAccountingNotFound is returned when job accounting is not found
-	ErrJobAccountingNotFound = errors.Register(ModuleName, 18, "job accounting not found")
+	ErrJobAccountingNotFound = errors.Register(ModuleName, 2116, "job accounting not found")
 
 	// ErrInvalidJobAccounting is returned when job accounting is invalid
-	ErrInvalidJobAccounting = errors.Register(ModuleName, 19, "invalid job accounting")
+	ErrInvalidJobAccounting = errors.Register(ModuleName, 2117, "invalid job accounting")
 
 	// ErrUnauthorized is returned for unauthorized operations
-	ErrUnauthorized = errors.Register(ModuleName, 20, "unauthorized")
+	ErrUnauthorized = errors.Register(ModuleName, 2118, "unauthorized")
 
 	// ErrMaxRuntimeExceeded is returned when job exceeds max runtime
-	ErrMaxRuntimeExceeded = errors.Register(ModuleName, 21, "maximum runtime exceeded")
+	ErrMaxRuntimeExceeded = errors.Register(ModuleName, 2119, "maximum runtime exceeded")
 
 	// ErrInvalidWorkload is returned when a workload configuration is invalid
-	ErrInvalidWorkload = errors.Register(ModuleName, 22, "invalid workload configuration")
+	ErrInvalidWorkload = errors.Register(ModuleName, 2120, "invalid workload configuration")
 )

@@ -3,8 +3,8 @@ package mfa
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/mfa/keeper"
-	"pkg.akt.dev/node/x/mfa/types"
+	"github.com/virtengine/virtengine/x/mfa/keeper"
+	"github.com/virtengine/virtengine/x/mfa/types"
 )
 
 // InitGenesis initializes the mfa module's state from a genesis state.

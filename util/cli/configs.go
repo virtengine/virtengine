@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	cflags "pkg.akt.dev/go/cli/flags"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 
 	tmcfg "github.com/cometbft/cometbft/config"
 	tmlog "github.com/cometbft/cometbft/libs/log"

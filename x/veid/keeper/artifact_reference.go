@@ -3,9 +3,10 @@ package keeper
 import (
 	"encoding/json"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -100,7 +101,7 @@ func (k Keeper) GetArtifactReferencesByAccount(ctx sdk.Context, address sdk.AccA
 	prefix := types.ArtifactReferenceByAccountPrefixKey(address.Bytes())
 
 	refs := make([]*types.IdentityArtifactReference, 0)
-	iterator := sdk.KVStorePrefixIterator(store, prefix)
+	iterator := storetypes.KVStorePrefixIterator(store, prefix)
 	defer iterator.Close()
 
 	for ; iterator.Valid(); iterator.Next() {
@@ -211,7 +212,7 @@ func (k Keeper) HasArtifactByContentHash(ctx sdk.Context, contentHash []byte) bo
 // IterateArtifactReferences iterates over all artifact references
 func (k Keeper) IterateArtifactReferences(ctx sdk.Context, fn func(ref *types.IdentityArtifactReference) bool) {
 	store := ctx.KVStore(k.skey)
-	iterator := sdk.KVStorePrefixIterator(store, types.PrefixArtifactReference)
+	iterator := storetypes.KVStorePrefixIterator(store, types.PrefixArtifactReference)
 	defer iterator.Close()
 
 	for ; iterator.Valid(); iterator.Next() {
@@ -332,7 +333,7 @@ func (k Keeper) DeletePendingArtifactRetrieval(ctx sdk.Context, requestID string
 // IteratePendingArtifactRetrievals iterates over all pending retrieval requests
 func (k Keeper) IteratePendingArtifactRetrievals(ctx sdk.Context, fn func(retrieval *PendingArtifactRetrieval) bool) {
 	store := ctx.KVStore(k.skey)
-	iterator := sdk.KVStorePrefixIterator(store, types.PendingArtifactRetrievalPrefixKey())
+	iterator := storetypes.KVStorePrefixIterator(store, types.PendingArtifactRetrievalPrefixKey())
 	defer iterator.Close()
 
 	for ; iterator.Valid(); iterator.Next() {

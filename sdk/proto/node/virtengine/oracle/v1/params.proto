@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package virtengine.oracle.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/oracle/v1";
+
+// PythContractParams contains configuration for Pyth price feeds
+message PythContractParams {
+  option (gogoproto.equal) = true;
+  option (cosmos_proto.implements_interface) = "FeedContractConfig";
+
+  // akt_price_feed_id is the Pyth price feed identifier for AKT/USD
+  string akt_price_feed_id = 1;
+}
+
+// Params defines the parameters for the oracle module
+message Params {
+  option (gogoproto.equal) = true;
+  //  option (gogoproto.goproto_stringer) = false;
+
+  // sources addresses allowed to write prices into oracle module
+  // those are to be smartcontract addresses
+  repeated string sources = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "sources",
+    (gogoproto.moretags)  = "yaml:\"sources\""
+  ];
+
+  // Minimum number of price sources required (default: 2)
+  uint32 min_price_sources = 2;
+
+  // Maximum price staleness in blocks (default: 50 = ~ 5 minutes)
+  int64 max_price_staleness_blocks = 3;
+
+  // TWAP window in blocks (default: 50 = ~ 5 minutes)
+  int64 twap_window = 4;
+
+  // Maximum price deviation in basis points (default: 150 = 1.5%)
+  uint64 max_price_deviation_bps = 5;
+
+  // feed_contracts_params contains the configuration for the price feed contracts
+  repeated google.protobuf.Any feed_contracts_params = 6;
+}

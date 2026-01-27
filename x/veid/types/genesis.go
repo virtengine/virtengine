@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 // GenesisState is the genesis state for the veid module
 type GenesisState struct {
 	// IdentityRecords are the initial identity records
@@ -145,4 +147,19 @@ func (p Params) GetMinScoreForTier(tier IdentityTier) uint32 {
 		return score
 	}
 	return TierMinimumScore(tier)
+}
+
+// Proto message interface stubs for GenesisState
+func (*GenesisState) ProtoMessage() {}
+func (gs *GenesisState) Reset()     { *gs = GenesisState{} }
+func (gs *GenesisState) String() string {
+	return fmt.Sprintf("GenesisState{Records: %d, Scopes: %d, Clients: %d}",
+		len(gs.IdentityRecords), len(gs.Scopes), len(gs.ApprovedClients))
+}
+
+// Proto message interface stubs for Params
+func (*Params) ProtoMessage() {}
+func (p *Params) Reset()      { *p = Params{} }
+func (p *Params) String() string {
+	return fmt.Sprintf("Params{MaxScopesPerAccount: %d, MaxScopesPerType: %d}", p.MaxScopesPerAccount, p.MaxScopesPerType)
 }

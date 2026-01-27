@@ -5,7 +5,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/roles/types"
+	"github.com/virtengine/virtengine/x/roles/types"
 )
 
 // IKeeper defines the interface for the roles keeper
@@ -31,6 +31,10 @@ type IKeeper interface {
 	CanAssignRole(ctx sdk.Context, sender sdk.AccAddress, targetRole types.Role) bool
 	CanRevokeRole(ctx sdk.Context, sender sdk.AccAddress, targetRole types.Role) bool
 	CanModifyAccountState(ctx sdk.Context, sender sdk.AccAddress) bool
+
+	// Role checks for cross-module integration
+	IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool
+	IsModerator(ctx sdk.Context, addr sdk.AccAddress) bool
 
 	// Parameters
 	GetParams(ctx sdk.Context) types.Params
@@ -457,7 +461,27 @@ func (k Keeper) CanModifyAccountState(ctx sdk.Context, sender sdk.AccAddress) bo
 	return false
 }
 
-// NewQuerier returns a new Querier
-func (k Keeper) NewQuerier() Querier {
-	return Querier{Keeper: k}
+// IsAdmin checks if an address has admin privileges
+func (k Keeper) IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool {
+	// Check for Administrator role
+	if k.HasRole(ctx, addr, types.RoleAdministrator) {
+		return true
+	}
+	// Genesis accounts are also considered admins
+	return k.IsGenesisAccount(ctx, addr)
+}
+
+// IsModerator checks if an address has moderator privileges
+func (k Keeper) IsModerator(ctx sdk.Context, addr sdk.AccAddress) bool {
+	// Moderator or higher roles
+	if k.HasRole(ctx, addr, types.RoleModerator) {
+		return true
+	}
+	// Admins are also moderators
+	return k.IsAdmin(ctx, addr)
+}
+
+// NewGRPCQuerier returns a new GRPCQuerier
+func (k Keeper) NewGRPCQuerier() GRPCQuerier {
+	return GRPCQuerier{Keeper: k}
 }

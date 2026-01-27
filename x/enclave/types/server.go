@@ -1,6 +1,10 @@
 package types
 
-import "context"
+import (
+	"context"
+
+	"github.com/cosmos/gogoproto/grpc"
+)
 
 // MsgServer defines the Msg gRPC service interface
 type MsgServer interface {
@@ -42,4 +46,20 @@ type QueryServer interface {
 	ValidKeySet(context.Context, *QueryValidKeySetRequest) (*QueryValidKeySetResponse, error)
 	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
 	AttestedResult(context.Context, *QueryAttestedResultRequest) (*QueryAttestedResultResponse, error)
+}
+
+// RegisterMsgServer registers the MsgServer
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterMsgServer(s grpc.Server, impl MsgServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = impl
+}
+
+// RegisterQueryServer registers the QueryServer
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterQueryServer(s grpc.Server, impl QueryServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = impl
 }

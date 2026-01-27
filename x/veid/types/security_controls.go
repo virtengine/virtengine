@@ -219,7 +219,7 @@ type PseudonymizationConfig struct {
 	LastRotatedAt time.Time `json:"last_rotated_at"`
 
 	// PreservePrefix preserves a prefix of the original identifier
-	PreservePrefix int `json:"preserVIRTENGINE_prefix"`
+	PreservePrefix int `json:"preserve_prefix"`
 }
 
 // DefaultPseudonymizationConfig returns the default configuration

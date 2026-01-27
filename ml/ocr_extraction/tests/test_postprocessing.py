@@ -52,9 +52,9 @@ class TestOCRPostProcessor:
         result = processor.process("  Hello World  ")
         assert result == "Hello World"
     
-    def test_process_remoVIRTENGINE_newlines(self):
+    def test_process_remove_newlines(self):
         """Test newline removal."""
-        config = PostProcessingConfig(remoVIRTENGINE_newlines=True)
+        config = PostProcessingConfig(remove_newlines=True)
         processor = OCRPostProcessor(config)
         
         result = processor.process("Hello\nWorld\r\n")
@@ -248,7 +248,7 @@ class TestFactoryFunctions:
         corrector = create_id_corrector()
         
         assert corrector.config.convert_to_uppercase is True
-        assert corrector.config.remoVIRTENGINE_special_chars is True
+        assert corrector.config.remove_special_chars is True
     
     def test_create_mrz_corrector(self):
         """Test MRZ corrector factory."""
@@ -311,7 +311,7 @@ class TestEdgeCases:
     
     def test_mixed_line_endings(self):
         """Test processing mixed line endings."""
-        config = PostProcessingConfig(remoVIRTENGINE_newlines=True)
+        config = PostProcessingConfig(remove_newlines=True)
         processor = OCRPostProcessor(config)
         
         result = processor.process("Line1\nLine2\r\nLine3\rLine4")

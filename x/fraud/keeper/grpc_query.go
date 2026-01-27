@@ -8,7 +8,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/fraud/types"
+	"github.com/virtengine/virtengine/x/fraud/types"
 )
 
 // QueryServer implements the gRPC query service

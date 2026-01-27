@@ -11,15 +11,15 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
-	deposit "pkg.akt.dev/go/node/types/deposit/v1"
-	"pkg.akt.dev/go/sdkutil"
+	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	"pkg.akt.dev/go/node/market/v1"
-	types "pkg.akt.dev/go/node/market/v1beta5"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	appparams "pkg.akt.dev/node/app/params"
-	testsim "pkg.akt.dev/node/testutil/sim"
-	keepers "pkg.akt.dev/node/x/market/handler"
+	appparams "github.com/virtengine/virtengine/app/params"
+	testsim "github.com/virtengine/virtengine/testutil/sim"
+	keepers "github.com/virtengine/virtengine/x/market/handler"
 )
 
 // Simulation operation weights constants

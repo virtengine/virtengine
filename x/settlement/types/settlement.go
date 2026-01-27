@@ -174,7 +174,7 @@ func (s *SettlementRecord) Validate() error {
 	if s.ValidatorFee != nil && !s.ValidatorFee.IsZero() {
 		total = total.Add(s.ValidatorFee...)
 	}
-	if !total.IsEqual(s.TotalAmount) {
+	if !total.Equal(s.TotalAmount) {
 		return ErrInvalidSettlement.Wrap("provider_share + platform_fee + validator_fee must equal total_amount")
 	}
 

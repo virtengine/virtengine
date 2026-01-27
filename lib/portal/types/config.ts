@@ -127,7 +127,7 @@ export interface SessionConfigOptions {
 
   /**
    * Cookie name for session storage
-   * @default 'VIRTENGINE_session'
+   * @default 've_session'
    */
   cookieName?: string;
 
@@ -177,7 +177,7 @@ export const defaultLogger: PortalLogger = {
 /**
  * Sensitive field names that should never be logged
  */
-const SENSITIVIRTENGINE_FIELDS = new Set([
+const SENSITIVE_FIELDS = new Set([
   'password',
   'secret',
   'token',
@@ -208,8 +208,8 @@ function filterSensitive(
   const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(context)) {
     const lowerKey = key.toLowerCase();
-    const isSensitive = SENSITIVIRTENGINE_FIELDS.has(key) ||
-      Array.from(SENSITIVIRTENGINE_FIELDS).some(s => lowerKey.includes(s.toLowerCase()));
+    const isSensitive = SENSITIVE_FIELDS.has(key) ||
+      Array.from(SENSITIVE_FIELDS).some(s => lowerKey.includes(s.toLowerCase()));
 
     if (isSensitive) {
       filtered[key] = '[REDACTED]';
@@ -249,7 +249,7 @@ export const defaultPortalConfig: Partial<PortalConfig> = {
     tokenLifetimeSeconds: 3600,
     refreshThresholdSeconds: 300,
     autoRefresh: true,
-    cookieName: 'VIRTENGINE_session',
+    cookieName: 've_session',
     secureCookies: true,
   },
 };

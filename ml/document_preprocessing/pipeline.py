@@ -40,7 +40,7 @@ class PreprocessingResult:
     
     # Transformations applied
     rotation_applied: int  # Degrees (0, 90, 180, 270)
-    perspectiVIRTENGINE_corrected: bool
+    perspective_corrected: bool
     enhancements_applied: List[str]
     
     # Timing
@@ -50,7 +50,7 @@ class PreprocessingResult:
     success: bool = True
     error_message: Optional[str] = None
     orientation_result: Optional[OrientationResult] = None
-    perspectiVIRTENGINE_result: Optional[PerspectiveResult] = None
+    perspective_result: Optional[PerspectiveResult] = None
     final_size: Tuple[int, int] = (0, 0)  # (width, height)
     image_hash: Optional[str] = None
     
@@ -61,7 +61,7 @@ class PreprocessingResult:
             "original_size": self.original_size,
             "final_size": self.final_size,
             "rotation_applied": self.rotation_applied,
-            "perspectiVIRTENGINE_corrected": self.perspectiVIRTENGINE_corrected,
+            "perspective_corrected": self.perspective_corrected,
             "enhancements_applied": self.enhancements_applied,
             "processing_time_ms": self.processing_time_ms,
             "error_message": self.error_message,
@@ -99,7 +99,7 @@ class DocumentPreprocessingPipeline:
         self.enhancer = DocumentEnhancer(config)
         self.noise_reducer = NoiseReducer(config)
         self.orientation_detector = OrientationDetector(config)
-        self.perspectiVIRTENGINE_corrector = PerspectiveCorrector(config)
+        self.perspective_corrector = PerspectiveCorrector(config)
     
     def process(
         self,
@@ -123,9 +123,9 @@ class DocumentPreprocessingPipeline:
         # Track applied enhancements
         enhancements_applied = []
         rotation_applied = 0
-        perspectiVIRTENGINE_corrected = False
+        perspective_corrected = False
         orientation_result = None
-        perspectiVIRTENGINE_result = None
+        perspective_result = None
         
         # Validate input
         if image is None:
@@ -163,12 +163,12 @@ class DocumentPreprocessingPipeline:
                 orientation_result = self.orientation_detector.detect_orientation(image)
             
             # Step 3: Perspective correction
-            if self.config.correct_perspectiVIRTENGINE_first:
+            if self.config.correct_perspective_first:
                 logger.debug("Step 3: Detecting and correcting perspective")
-                image, perspectiVIRTENGINE_result = self.perspectiVIRTENGINE_corrector.correct_perspective(image)
-                perspectiVIRTENGINE_corrected = perspectiVIRTENGINE_result.corrected
-                if perspectiVIRTENGINE_corrected:
-                    enhancements_applied.append("perspectiVIRTENGINE_correction")
+                image, perspective_result = self.perspective_corrector.correct_perspective(image)
+                perspective_corrected = perspective_result.corrected
+                if perspective_corrected:
+                    enhancements_applied.append("perspective_correction")
                     # Re-standardize after perspective correction (size may have changed)
                     image = self.standardizer.standardize(image)
             
@@ -195,7 +195,7 @@ class DocumentPreprocessingPipeline:
             
             logger.info(
                 f"Preprocessing complete: {original_size} -> {final_size}, "
-                f"rotation={rotation_applied}°, perspective={perspectiVIRTENGINE_corrected}, "
+                f"rotation={rotation_applied}°, perspective={perspective_corrected}, "
                 f"time={processing_time_ms:.2f}ms"
             )
             
@@ -203,12 +203,12 @@ class DocumentPreprocessingPipeline:
                 normalized_image=image,
                 original_size=original_size,
                 rotation_applied=rotation_applied,
-                perspectiVIRTENGINE_corrected=perspectiVIRTENGINE_corrected,
+                perspective_corrected=perspective_corrected,
                 enhancements_applied=enhancements_applied,
                 processing_time_ms=processing_time_ms,
                 success=True,
                 orientation_result=orientation_result,
-                perspectiVIRTENGINE_result=perspectiVIRTENGINE_result,
+                perspective_result=perspective_result,
                 final_size=final_size,
                 image_hash=image_hash,
             )
@@ -263,7 +263,7 @@ class DocumentPreprocessingPipeline:
         original_size = (image.shape[1], image.shape[0])
         enhancements_applied = []
         rotation_applied = 0
-        perspectiVIRTENGINE_corrected = False
+        perspective_corrected = False
         
         try:
             if "standardize" in steps:
@@ -276,10 +276,10 @@ class DocumentPreprocessingPipeline:
                     enhancements_applied.append(f"rotate_{rotation_applied}")
             
             if "perspective" in steps:
-                image, result = self.perspectiVIRTENGINE_corrector.correct_perspective(image)
-                perspectiVIRTENGINE_corrected = result.corrected
-                if perspectiVIRTENGINE_corrected:
-                    enhancements_applied.append("perspectiVIRTENGINE_correction")
+                image, result = self.perspective_corrector.correct_perspective(image)
+                perspective_corrected = result.corrected
+                if perspective_corrected:
+                    enhancements_applied.append("perspective_correction")
             
             if "clahe" in steps:
                 image = self.enhancer.apply_clahe(image)
@@ -303,7 +303,7 @@ class DocumentPreprocessingPipeline:
                 normalized_image=image,
                 original_size=original_size,
                 rotation_applied=rotation_applied,
-                perspectiVIRTENGINE_corrected=perspectiVIRTENGINE_corrected,
+                perspective_corrected=perspective_corrected,
                 enhancements_applied=enhancements_applied,
                 processing_time_ms=processing_time_ms,
                 success=True,
@@ -336,7 +336,7 @@ class DocumentPreprocessingPipeline:
             normalized_image=np.array([]),
             original_size=(0, 0),
             rotation_applied=0,
-            perspectiVIRTENGINE_corrected=False,
+            perspective_corrected=False,
             enhancements_applied=[],
             processing_time_ms=processing_time_ms,
             success=False,

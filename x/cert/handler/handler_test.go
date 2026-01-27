@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 
@@ -19,11 +19,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	types "pkg.akt.dev/go/node/cert/v1"
-	"pkg.akt.dev/go/testutil"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/x/cert/handler"
-	"pkg.akt.dev/node/x/cert/keeper"
+	"github.com/virtengine/virtengine/x/cert/handler"
+	"github.com/virtengine/virtengine/x/cert/keeper"
 )
 
 type testSuite struct {

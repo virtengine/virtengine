@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"pkg.akt.dev/go/util/runner"
+	"github.com/virtengine/virtengine/sdk/go/util/runner"
 )
 
 const SuccessLabel = "success"

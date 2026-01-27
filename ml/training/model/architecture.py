@@ -254,7 +254,7 @@ class TrustScoreModel:
                         "model_{epoch:03d}_{val_loss:.4f}.keras"
                     ),
                     monitor="val_loss",
-                    saVIRTENGINE_best_only=self.config.saVIRTENGINE_best_only,
+                    save_best_only=self.config.save_best_only,
                     verbose=1,
                 )
             )

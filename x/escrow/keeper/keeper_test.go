@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/go/node/escrow/module"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
-	"pkg.akt.dev/go/testutil"
+	"github.com/virtengine/virtengine/sdk/go/node/escrow/module"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/testutil/state"
+	"github.com/virtengine/virtengine/testutil/state"
 )
 
 type kTestSuite struct {

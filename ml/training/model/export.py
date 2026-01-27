@@ -71,7 +71,7 @@ class ExportResult:
             "error_message": self.error_message,
         }
     
-    def saVIRTENGINE_metadata(self, filepath: str) -> None:
+    def save_metadata(self, filepath: str) -> None:
         """Save export metadata to JSON."""
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
         with open(filepath, 'w') as f:
@@ -189,7 +189,7 @@ class ModelExporter:
             
             # Save metadata
             metadata_path = os.path.join(versioned_path, "export_metadata.json")
-            result.saVIRTENGINE_metadata(metadata_path)
+            result.save_metadata(metadata_path)
             
             # Optionally quantize
             if self.config.quantize:

@@ -7,7 +7,7 @@ VE-901: Test passive analysis (texture, depth, motion).
 import pytest
 import numpy as np
 
-from ml.liveness_detection.passiVIRTENGINE_analysis import (
+from ml.liveness_detection.passive_analysis import (
     PassiveAnalyzer,
     PassiveAnalysisResult,
 )
@@ -156,7 +156,7 @@ class TestMotionAnalysis:
         # Static frames should have low motion or trigger no motion detected
         assert result.motion_score <= 0.5 or LivenessReasonCodes.NO_MOTION_DETECTED in result.reason_codes
     
-    def test_excessiVIRTENGINE_motion_detection(self, liveness_config, np_random):
+    def test_excessive_motion_detection(self, liveness_config, np_random):
         """Test detection of excessive motion."""
         analyzer = PassiveAnalyzer(liveness_config)
         

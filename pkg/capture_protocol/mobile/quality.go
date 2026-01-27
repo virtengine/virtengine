@@ -267,7 +267,7 @@ type QualityFeedback struct {
 	OverallScore int `json:"overall_score"`
 
 	// ActiveIssues are currently detected issues
-	ActiveIssues []QualityIssue `json:"actiVIRTENGINE_issues"`
+	ActiveIssues []QualityIssue `json:"active_issues"`
 
 	// Instruction is the current user guidance
 	Instruction string `json:"instruction"`
@@ -316,10 +316,10 @@ type GuidanceMessages struct {
 	HoldSteady string `json:"hold_steady"`
 
 	// MoveFurther - move device further away
-	MoveFurther string `json:"moVIRTENGINE_further"`
+	MoveFurther string `json:"move_further"`
 
 	// MoveCloser - move device closer
-	MoveCloser string `json:"moVIRTENGINE_closer"`
+	MoveCloser string `json:"move_closer"`
 
 	// MoreLight - need more light
 	MoreLight string `json:"more_light"`

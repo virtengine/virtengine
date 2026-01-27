@@ -223,7 +223,7 @@ class NoiseReducer:
         
         return float(sigma)
     
-    def adaptiVIRTENGINE_denoise(self, image: np.ndarray) -> np.ndarray:
+    def adaptive_denoise(self, image: np.ndarray) -> np.ndarray:
         """
         Apply adaptive noise reduction based on estimated noise level.
         

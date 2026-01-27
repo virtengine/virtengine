@@ -24,7 +24,7 @@ class TestDocumentPreprocessingPipeline:
         assert pipeline.enhancer is not None
         assert pipeline.noise_reducer is not None
         assert pipeline.orientation_detector is not None
-        assert pipeline.perspectiVIRTENGINE_corrector is not None
+        assert pipeline.perspective_corrector is not None
     
     def test_init_custom_config(self, document_config):
         """Test initialization with custom config."""
@@ -48,7 +48,7 @@ class TestDocumentPreprocessingPipeline:
         assert result.original_size is not None
         assert result.final_size is not None
         assert result.rotation_applied in [0, 90, 180, 270]
-        assert isinstance(result.perspectiVIRTENGINE_corrected, bool)
+        assert isinstance(result.perspective_corrected, bool)
         assert isinstance(result.enhancements_applied, list)
         assert result.processing_time_ms > 0
     
@@ -150,7 +150,7 @@ class TestDocumentPreprocessingPipeline:
         assert "original_size" in result_dict
         assert "final_size" in result_dict
         assert "rotation_applied" in result_dict
-        assert "perspectiVIRTENGINE_corrected" in result_dict
+        assert "perspective_corrected" in result_dict
         assert "enhancements_applied" in result_dict
         assert "processing_time_ms" in result_dict
 
@@ -178,17 +178,17 @@ class TestPipelineConfiguration:
         
         assert result.success is True
     
-    def test_perspectiVIRTENGINE_first_enabled(self, sample_document_image):
+    def test_perspective_first_enabled(self, sample_document_image):
         """Test with perspective correction first."""
         config = DocumentConfig()
-        config.correct_perspectiVIRTENGINE_first = True
+        config.correct_perspective_first = True
         
         pipeline = DocumentPreprocessingPipeline(config)
         result = pipeline.process(sample_document_image)
         
         assert result.success is True
     
-    def test_perspectiVIRTENGINE_disabled(self, sample_document_image):
+    def test_perspective_disabled(self, sample_document_image):
         """Test with perspective correction disabled."""
         config = DocumentConfig()
         config.perspective.enabled = False
@@ -197,7 +197,7 @@ class TestPipelineConfiguration:
         result = pipeline.process(sample_document_image)
         
         assert result.success is True
-        assert result.perspectiVIRTENGINE_corrected is False
+        assert result.perspective_corrected is False
     
     def test_noise_reduction_disabled(self, sample_document_image):
         """Test with noise reduction disabled."""
@@ -244,7 +244,7 @@ class TestPipelineDeterminism:
         # Results should be identical
         assert np.array_equal(result1.normalized_image, result2.normalized_image)
         assert result1.rotation_applied == result2.rotation_applied
-        assert result1.perspectiVIRTENGINE_corrected == result2.perspectiVIRTENGINE_corrected
+        assert result1.perspective_corrected == result2.perspective_corrected
         assert result1.enhancements_applied == result2.enhancements_applied
     
     def test_hash_consistency(self, pipeline, sample_document_image):

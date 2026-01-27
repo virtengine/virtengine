@@ -25,9 +25,9 @@ import (
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	types "pkg.akt.dev/go/node/cert/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 
-	certerrors "pkg.akt.dev/node/x/cert/errors"
+	certerrors "github.com/virtengine/virtengine/x/cert/errors"
 )
 
 var (

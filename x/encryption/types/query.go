@@ -1,5 +1,11 @@
 package types
 
+import (
+	"context"
+
+	"github.com/cosmos/gogoproto/grpc"
+)
+
 // QueryRecipientKeyRequest is the request for querying a recipient's public key
 type QueryRecipientKeyRequest struct {
 	Address string `json:"address"`
@@ -54,16 +60,19 @@ type QueryValidateEnvelopeResponse struct {
 
 // QueryServer is the query server interface
 type QueryServer interface {
-	RecipientKey(req *QueryRecipientKeyRequest) (*QueryRecipientKeyResponse, error)
-	KeyByFingerprint(req *QueryKeyByFingerprintRequest) (*QueryKeyByFingerprintResponse, error)
-	Params(req *QueryParamsRequest) (*QueryParamsResponse, error)
-	Algorithms(req *QueryAlgorithmsRequest) (*QueryAlgorithmsResponse, error)
-	ValidateEnvelope(req *QueryValidateEnvelopeRequest) (*QueryValidateEnvelopeResponse, error)
+	RecipientKey(ctx context.Context, req *QueryRecipientKeyRequest) (*QueryRecipientKeyResponse, error)
+	KeyByFingerprint(ctx context.Context, req *QueryKeyByFingerprintRequest) (*QueryKeyByFingerprintResponse, error)
+	Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error)
+	Algorithms(ctx context.Context, req *QueryAlgorithmsRequest) (*QueryAlgorithmsResponse, error)
+	ValidateEnvelope(ctx context.Context, req *QueryValidateEnvelopeRequest) (*QueryValidateEnvelopeResponse, error)
 }
 
 // RegisterQueryServer registers the QueryServer
-func RegisterQueryServer(s interface{ RegisterService(desc interface{}, impl interface{}) }, impl QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, impl)
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterQueryServer(s grpc.Server, impl QueryServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = impl
 }
 
 // _Query_serviceDesc is the grpc.ServiceDesc for Query service.

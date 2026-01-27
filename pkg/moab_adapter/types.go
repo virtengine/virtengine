@@ -453,7 +453,7 @@ type ClusterInfo struct {
 	IdleProcessors    int32  `json:"idle_processors"`
 	RunningJobs       int32  `json:"running_jobs"`
 	IdleJobs          int32  `json:"idle_jobs"`
-	ActiveReservations int32 `json:"actiVIRTENGINE_reservations"`
+	ActiveReservations int32 `json:"active_reservations"`
 }
 
 // ReservationInfo contains reservation information

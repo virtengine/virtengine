@@ -4,8 +4,8 @@
 package staking
 
 import (
-	"pkg.akt.dev/node/x/staking/keeper"
-	"pkg.akt.dev/node/x/staking/types"
+	"github.com/virtengine/virtengine/x/staking/keeper"
+	"github.com/virtengine/virtengine/x/staking/types"
 )
 
 const (

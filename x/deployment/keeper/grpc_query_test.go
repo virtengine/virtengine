@@ -12,17 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	deposit "pkg.akt.dev/go/node/types/deposit/v1"
+	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 
-	"pkg.akt.dev/go/node/deployment/v1"
-	"pkg.akt.dev/go/node/deployment/v1beta4"
-	eid "pkg.akt.dev/go/node/escrow/id/v1"
-	"pkg.akt.dev/go/testutil"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	eid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/app"
-	"pkg.akt.dev/node/testutil/state"
-	"pkg.akt.dev/node/x/deployment/keeper"
-	ekeeper "pkg.akt.dev/node/x/escrow/keeper"
+	"github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/testutil/state"
+	"github.com/virtengine/virtengine/x/deployment/keeper"
+	ekeeper "github.com/virtengine/virtengine/x/escrow/keeper"
 )
 
 type grpcTestSuite struct {

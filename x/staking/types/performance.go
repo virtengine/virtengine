@@ -55,7 +55,7 @@ type ValidatorPerformance struct {
 	DowntimeSeconds int64 `json:"downtime_seconds"`
 
 	// ConsecutiveMissedBlocks is the current streak of missed blocks
-	ConsecutiveMissedBlocks int64 `json:"consecutiVIRTENGINE_missed_blocks"`
+	ConsecutiveMissedBlocks int64 `json:"consecutive_missed_blocks"`
 
 	// LastProposedHeight is the last height where this validator proposed a block
 	LastProposedHeight int64 `json:"last_proposed_height"`

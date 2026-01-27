@@ -10,11 +10,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 
-	types "pkg.akt.dev/go/node/audit/v1"
-	"pkg.akt.dev/go/testutil"
+	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/app"
-	"pkg.akt.dev/node/x/audit/keeper"
+	"github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/x/audit/keeper"
 )
 
 type grpcTestSuite struct {

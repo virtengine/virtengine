@@ -23,19 +23,19 @@ import (
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	dv1 "pkg.akt.dev/go/node/deployment/v1"
-	dv1beta3 "pkg.akt.dev/go/node/deployment/v1beta3"
-	dv1beta "pkg.akt.dev/go/node/deployment/v1beta4"
-	ev1 "pkg.akt.dev/go/node/escrow/v1"
-	agovtypes "pkg.akt.dev/go/node/gov/v1beta3"
-	mv1 "pkg.akt.dev/go/node/market/v1"
-	mv1beta4 "pkg.akt.dev/go/node/market/v1beta4"
-	mv1beta "pkg.akt.dev/go/node/market/v1beta5"
-	astakingtypes "pkg.akt.dev/go/node/staking/v1beta3"
-	taketypes "pkg.akt.dev/go/node/take/v1"
+	dv1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	dv1beta3 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta3"
+	dv1beta "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	ev1 "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
+	agovtypes "github.com/virtengine/virtengine/sdk/go/node/gov/v1beta3"
+	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	mv1beta4 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta4"
+	mv1beta "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	astakingtypes "github.com/virtengine/virtengine/sdk/go/node/staking/v1beta3"
+	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
-	apptypes "pkg.akt.dev/node/app/types"
-	utypes "pkg.akt.dev/node/upgrades/types"
+	apptypes "github.com/virtengine/virtengine/app/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
 const (

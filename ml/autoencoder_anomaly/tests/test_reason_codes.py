@@ -28,8 +28,8 @@ class TestAnomalyReasonCodes:
     def test_reconstruction_codes_exist(self):
         """Test reconstruction error codes exist."""
         assert AnomalyReasonCodes.HIGH_RECONSTRUCTION_ERROR
-        assert AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD
-        assert AnomalyReasonCodes.MAE_ABOVIRTENGINE_THRESHOLD
+        assert AnomalyReasonCodes.MSE_ABOVE_THRESHOLD
+        assert AnomalyReasonCodes.MAE_ABOVE_THRESHOLD
         assert AnomalyReasonCodes.SSIM_BELOW_THRESHOLD
     
     def test_latent_codes_exist(self):
@@ -169,7 +169,7 @@ class TestReasonCodeDescriptions:
             assert details.description
             assert details.severity in ["info", "warning", "error"]
     
-    def test_success_codes_haVIRTENGINE_zero_impact(self):
+    def test_success_codes_have_zero_impact(self):
         """Test success codes have zero score impact."""
         success_codes = [
             AnomalyReasonCodes.NO_ANOMALY_DETECTED,
@@ -182,7 +182,7 @@ class TestReasonCodeDescriptions:
             if code in REASON_CODE_DESCRIPTIONS:
                 assert REASON_CODE_DESCRIPTIONS[code].score_impact == 0
     
-    def test_anomaly_codes_haVIRTENGINE_positiVIRTENGINE_impact(self):
+    def test_anomaly_codes_have_positive_impact(self):
         """Test anomaly codes have positive score impact."""
         if AnomalyReasonCodes.HIGH_RECONSTRUCTION_ERROR in REASON_CODE_DESCRIPTIONS:
             assert REASON_CODE_DESCRIPTIONS[
@@ -211,7 +211,7 @@ class TestAggregateReasonCodes:
     def test_multiple_codes(self):
         """Test aggregating multiple codes."""
         codes = [
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
             AnomalyReasonCodes.LATENT_OUTLIER,
             AnomalyReasonCodes.SSIM_BELOW_THRESHOLD,
         ]
@@ -223,8 +223,8 @@ class TestAggregateReasonCodes:
     def test_max_codes_limit(self):
         """Test max codes limit is respected."""
         codes = [
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
-            AnomalyReasonCodes.MAE_ABOVIRTENGINE_THRESHOLD,
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
+            AnomalyReasonCodes.MAE_ABOVE_THRESHOLD,
             AnomalyReasonCodes.SSIM_BELOW_THRESHOLD,
             AnomalyReasonCodes.LATENT_OUTLIER,
             AnomalyReasonCodes.HIGH_RECONSTRUCTION_ERROR,
@@ -238,9 +238,9 @@ class TestAggregateReasonCodes:
     def test_duplicates_removed(self):
         """Test duplicate codes are removed."""
         codes = [
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
         ]
         
         result = aggregate_reason_codes(codes)
@@ -251,7 +251,7 @@ class TestAggregateReasonCodes:
         """Test codes are ordered by severity (error first)."""
         codes = [
             AnomalyReasonCodes.NO_ANOMALY_DETECTED,  # info
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,  # warning
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,  # warning
             AnomalyReasonCodes.HIGH_RECONSTRUCTION_ERROR,  # error
         ]
         
@@ -281,7 +281,7 @@ class TestGetTotalScoreImpact:
         
         assert result == 0
     
-    def test_anomaly_codes_positiVIRTENGINE_impact(self):
+    def test_anomaly_codes_positive_impact(self):
         """Test anomaly codes have positive impact."""
         codes = [AnomalyReasonCodes.HIGH_RECONSTRUCTION_ERROR]
         
@@ -289,14 +289,14 @@ class TestGetTotalScoreImpact:
         
         assert result > 0
     
-    def test_cumulatiVIRTENGINE_impact(self):
+    def test_cumulative_impact(self):
         """Test impacts are cumulative."""
         single = get_total_score_impact(
-            [AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD]
+            [AnomalyReasonCodes.MSE_ABOVE_THRESHOLD]
         )
         double = get_total_score_impact([
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
-            AnomalyReasonCodes.MAE_ABOVIRTENGINE_THRESHOLD,
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
+            AnomalyReasonCodes.MAE_ABOVE_THRESHOLD,
         ])
         
         assert double > single
@@ -309,7 +309,7 @@ class TestGetTotalScoreImpact:
             AnomalyReasonCodes.LATENT_OUTLIER,
             AnomalyReasonCodes.MULTI_METRIC_ANOMALY,
             AnomalyReasonCodes.MAHALANOBIS_DISTANCE_HIGH,
-            AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
+            AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
             AnomalyReasonCodes.SSIM_BELOW_THRESHOLD,
         ]
         

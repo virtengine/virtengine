@@ -5,10 +5,10 @@ package rest
 // 	"strconv"
 //
 // 	sdk "github.com/cosmos/cosmos-sdk/types"
-// 	"pkg.akt.dev/go/node/market/v1"
-// 	"pkg.akt.dev/go/node/market/v1beta5"
+// 	"github.com/virtengine/virtengine/sdk/go/node/market/v1"
+// 	"github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 //
-// 	drest "pkg.akt.dev/node/x/deployment/client/rest"
+// 	drest "github.com/virtengine/virtengine/x/deployment/client/rest"
 // )
 //
 // // OrderIDFromRequest returns OrderID from parsing request

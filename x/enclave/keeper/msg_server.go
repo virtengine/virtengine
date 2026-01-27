@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/enclave/types"
+	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
 var _ types.MsgServer = msgServer{}

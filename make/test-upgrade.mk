@@ -1,20 +1,20 @@
-AP_RUN_DIR               := $(VIRTENGINE_RUN)/upgrade
+AP_RUN_DIR               := $(VE_RUN)/upgrade
 
-VIRTENGINE_INIT               := $(AP_RUN_DIR)/.virtengine-init
+VE_INIT               := $(AP_RUN_DIR)/.virtengine-init
 
-export VIRTENGINE_HOME
-export VIRTENGINE_KEYRING_BACKEND    = test
-export VIRTENGINE_GAS_ADJUSTMENT     = 2
-export VIRTENGINE_CHAIN_ID           = localvirtengine
-export VIRTENGINE_YES                = true
-export VIRTENGINE_GAS_PRICES         = 0.025uakt
-export VIRTENGINE_GAS                = auto
-export VIRTENGINE_STATESYNC_ENABLE   = false
-export VIRTENGINE_LOG_COLOR          = true
+export VE_HOME
+export VE_KEYRING_BACKEND    = test
+export VE_GAS_ADJUSTMENT     = 2
+export VE_CHAIN_ID           = localvirtengine
+export VE_YES                = true
+export VE_GAS_PRICES         = 0.025uakt
+export VE_GAS                = auto
+export VE_STATESYNC_ENABLE   = false
+export VE_LOG_COLOR          = true
 
 STATE_CONFIG            ?= $(ROOT_DIR)/tests/upgrade/testnet.json
 TEST_CONFIG             ?= test-config.json
-KEY_OPTS                := --keyring-backend=$(VIRTENGINE_KEYRING_BACKEND)
+KEY_OPTS                := --keyring-backend=$(VE_KEYRING_BACKEND)
 KEY_NAME                ?= validator
 UPGRADE_TO              ?= $(shell $(ROOT_DIR)/script/upgrades.sh upgrade-from-release $(RELEASE_TAG))
 UPGRADE_FROM            := $(shell cat $(ROOT_DIR)/meta.json | jq -r --arg name $(UPGRADE_TO) '.upgrades[$$name].from_version' | tr -d '\n')
@@ -42,7 +42,7 @@ REMOTE_TEST_HOST        ?=
 
 MAX_VALIDATORS          := $(shell cat $(TEST_CONFIG) | jq -r '.validators | length' | tr -d '\n')
 
-$(VIRTENGINE_INIT):
+$(VE_INIT):
 	$(ROOT_DIR)/script/upgrades.sh \
 		--workdir=$(AP_RUN_DIR) \
 		--gbv=$(GENESIS_BINARY_VERSION) \
@@ -57,7 +57,7 @@ $(VIRTENGINE_INIT):
 	touch $@
 
 .PHONY: init
-init: $(COSMOVISOR) $(VIRTENGINE_INIT)
+init: $(COSMOVISOR) $(VE_INIT)
 
 .PHONY: genesis
 genesis: $(GENESIS_DEST)
@@ -67,7 +67,7 @@ test: init
 	$(GO_TEST) -run "^\QTestUpgrade\E$$" -tags e2e.upgrade -timeout 180m -v -args \
 		-cosmovisor=$(COSMOVISOR) \
 		-workdir=$(AP_RUN_DIR)/validators \
-		-sourcesdir=$(VIRTENGINE_ROOT) \
+		-sourcesdir=$(VE_ROOT) \
 		-config=$(TEST_CONFIG) \
 		-upgrade-name=$(UPGRADE_TO) \
 		-upgrade-version="$(UPGRADE_BINARY_VERSION)" \

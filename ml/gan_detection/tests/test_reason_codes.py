@@ -158,7 +158,7 @@ class TestReasonCodeDetails:
 class TestReasonCodeDescriptions:
     """Tests for reason code descriptions."""
     
-    def test_all_codes_haVIRTENGINE_descriptions(self):
+    def test_all_codes_have_descriptions(self):
         """Test all reason codes have descriptions."""
         for code in GANReasonCodes:
             assert code in REASON_CODE_DESCRIPTIONS, f"Missing description for {code}"

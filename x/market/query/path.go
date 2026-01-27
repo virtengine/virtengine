@@ -6,9 +6,9 @@ import (
 	"strconv"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	v1 "pkg.akt.dev/go/node/market/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 
-	dpath "pkg.akt.dev/node/x/deployment/query"
+	dpath "github.com/virtengine/virtengine/x/deployment/query"
 )
 
 const (

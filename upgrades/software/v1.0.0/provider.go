@@ -8,11 +8,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
 	sdkmodule "github.com/cosmos/cosmos-sdk/types/module"
-	"pkg.akt.dev/go/node/migrate"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/node/migrate"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
-	pkeeper "pkg.akt.dev/node/x/provider/keeper"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
+	pkeeper "github.com/virtengine/virtengine/x/provider/keeper"
 )
 
 type providerMigrations struct {

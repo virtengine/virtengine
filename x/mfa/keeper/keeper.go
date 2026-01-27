@@ -3,13 +3,13 @@ package keeper
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"time"
+	"encoding/json"
 
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/mfa/types"
+	"github.com/virtengine/virtengine/x/mfa/types"
 )
 
 // IKeeper defines the interface for the mfa keeper
@@ -143,7 +143,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	}
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(&paramsStore{
+	bz, err := json.Marshal(&paramsStore{
 		DefaultSessionDuration:  params.DefaultSessionDuration,
 		MaxFactorsPerAccount:    params.MaxFactorsPerAccount,
 		MaxChallengeAttempts:    params.MaxChallengeAttempts,
@@ -170,7 +170,9 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 
 	var ps paramsStore
-	k.cdc.MustUnmarshalJSON(bz, &ps)
+	if err := json.Unmarshal(bz, &ps); err != nil {
+		return types.DefaultParams()
+	}
 	return types.Params{
 		DefaultSessionDuration:  ps.DefaultSessionDuration,
 		MaxFactorsPerAccount:    ps.MaxFactorsPerAccount,
@@ -243,7 +245,7 @@ func (k Keeper) EnrollFactor(ctx sdk.Context, enrollment *types.FactorEnrollment
 	store := ctx.KVStore(k.skey)
 	key := types.FactorEnrollmentKey(address, enrollment.FactorType, enrollment.FactorID)
 
-	bz, err := k.cdc.MarshalJSON(&factorEnrollmentStore{
+	bz, err := json.Marshal(&factorEnrollmentStore{
 		AccountAddress:   enrollment.AccountAddress,
 		FactorType:       enrollment.FactorType,
 		FactorID:         enrollment.FactorID,
@@ -294,7 +296,7 @@ func (k Keeper) RevokeFactor(ctx sdk.Context, address sdk.AccAddress, factorType
 	store := ctx.KVStore(k.skey)
 	key := types.FactorEnrollmentKey(address, factorType, factorID)
 
-	bz, err := k.cdc.MarshalJSON(&factorEnrollmentStore{
+	bz, err := json.Marshal(&factorEnrollmentStore{
 		AccountAddress:   enrollment.AccountAddress,
 		FactorType:       enrollment.FactorType,
 		FactorID:         enrollment.FactorID,
@@ -337,7 +339,7 @@ func (k Keeper) GetFactorEnrollment(ctx sdk.Context, address sdk.AccAddress, fac
 	}
 
 	var es factorEnrollmentStore
-	k.cdc.MustUnmarshalJSON(bz, &es)
+	json.Unmarshal(bz, &es)
 
 	return &types.FactorEnrollment{
 		AccountAddress:   es.AccountAddress,
@@ -365,7 +367,7 @@ func (k Keeper) GetFactorEnrollments(ctx sdk.Context, address sdk.AccAddress) []
 	var enrollments []types.FactorEnrollment
 	for ; iterator.Valid(); iterator.Next() {
 		var es factorEnrollmentStore
-		k.cdc.MustUnmarshalJSON(iterator.Value(), &es)
+		json.Unmarshal(iterator.Value(), &es)
 		enrollments = append(enrollments, types.FactorEnrollment{
 			AccountAddress:   es.AccountAddress,
 			FactorType:       es.FactorType,
@@ -436,7 +438,7 @@ func (k Keeper) SetMFAPolicy(ctx sdk.Context, policy *types.MFAPolicy) error {
 	store := ctx.KVStore(k.skey)
 	key := types.MFAPolicyKey(address)
 
-	bz, err := k.cdc.MarshalJSON(&mfaPolicyStore{
+	bz, err := json.Marshal(&mfaPolicyStore{
 		AccountAddress:     policy.AccountAddress,
 		RequiredFactors:    policy.RequiredFactors,
 		TrustedDeviceRule:  policy.TrustedDeviceRule,
@@ -475,7 +477,7 @@ func (k Keeper) GetMFAPolicy(ctx sdk.Context, address sdk.AccAddress) (*types.MF
 	}
 
 	var ps mfaPolicyStore
-	k.cdc.MustUnmarshalJSON(bz, &ps)
+	json.Unmarshal(bz, &ps)
 
 	return &types.MFAPolicy{
 		AccountAddress:     ps.AccountAddress,
@@ -540,7 +542,7 @@ func (k Keeper) CreateChallenge(ctx sdk.Context, challenge *types.Challenge) err
 
 	// Store the challenge
 	challengeKey := types.ChallengeKey(challenge.ChallengeID)
-	bz, err := k.cdc.MarshalJSON(&challengeStore{
+	bz, err := json.Marshal(&challengeStore{
 		ChallengeID:     challenge.ChallengeID,
 		AccountAddress:  challenge.AccountAddress,
 		FactorType:      challenge.FactorType,
@@ -589,7 +591,7 @@ func (k Keeper) GetChallenge(ctx sdk.Context, challengeID string) (*types.Challe
 	}
 
 	var cs challengeStore
-	k.cdc.MustUnmarshalJSON(bz, &cs)
+	json.Unmarshal(bz, &cs)
 
 	return &types.Challenge{
 		ChallengeID:     cs.ChallengeID,
@@ -619,7 +621,7 @@ func (k Keeper) UpdateChallenge(ctx sdk.Context, challenge *types.Challenge) err
 		return types.ErrChallengeNotFound.Wrapf("challenge %s not found", challenge.ChallengeID)
 	}
 
-	bz, err := k.cdc.MarshalJSON(&challengeStore{
+	bz, err := json.Marshal(&challengeStore{
 		ChallengeID:     challenge.ChallengeID,
 		AccountAddress:  challenge.AccountAddress,
 		FactorType:      challenge.FactorType,
@@ -880,7 +882,7 @@ func (k Keeper) updateFactorEnrollment(ctx sdk.Context, enrollment *types.Factor
 	store := ctx.KVStore(k.skey)
 	key := types.FactorEnrollmentKey(address, enrollment.FactorType, enrollment.FactorID)
 
-	bz, err := k.cdc.MarshalJSON(&factorEnrollmentStore{
+	bz, err := json.Marshal(&factorEnrollmentStore{
 		AccountAddress:   enrollment.AccountAddress,
 		FactorType:       enrollment.FactorType,
 		FactorID:         enrollment.FactorID,
@@ -937,7 +939,7 @@ func (k Keeper) CreateAuthorizationSession(ctx sdk.Context, session *types.Autho
 
 	// Store the session
 	sessionKey := types.AuthorizationSessionKey(session.SessionID)
-	bz, err := k.cdc.MarshalJSON(&sessionStore{
+	bz, err := json.Marshal(&sessionStore{
 		SessionID:         session.SessionID,
 		AccountAddress:    session.AccountAddress,
 		TransactionType:   session.TransactionType,
@@ -980,7 +982,7 @@ func (k Keeper) GetAuthorizationSession(ctx sdk.Context, sessionID string) (*typ
 	}
 
 	var ss sessionStore
-	k.cdc.MustUnmarshalJSON(bz, &ss)
+	json.Unmarshal(bz, &ss)
 
 	return &types.AuthorizationSession{
 		SessionID:         ss.SessionID,
@@ -1012,7 +1014,7 @@ func (k Keeper) UseAuthorizationSession(ctx sdk.Context, sessionID string) error
 	store := ctx.KVStore(k.skey)
 	key := types.AuthorizationSessionKey(sessionID)
 
-	bz, err := k.cdc.MarshalJSON(&sessionStore{
+	bz, err := json.Marshal(&sessionStore{
 		SessionID:         session.SessionID,
 		AccountAddress:    session.AccountAddress,
 		TransactionType:   session.TransactionType,
@@ -1117,7 +1119,7 @@ func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device
 		LastUsedAt:     now,
 	}
 
-	bz, err := k.cdc.MarshalJSON(&trustedDeviceStore{
+	bz, err := json.Marshal(&trustedDeviceStore{
 		AccountAddress: td.AccountAddress,
 		DeviceInfo:     td.DeviceInfo,
 		AddedAt:        td.AddedAt,
@@ -1174,7 +1176,7 @@ func (k Keeper) GetTrustedDevice(ctx sdk.Context, address sdk.AccAddress, finger
 	}
 
 	var ds trustedDeviceStore
-	k.cdc.MustUnmarshalJSON(bz, &ds)
+	json.Unmarshal(bz, &ds)
 
 	return &types.TrustedDevice{
 		AccountAddress: ds.AccountAddress,
@@ -1194,7 +1196,7 @@ func (k Keeper) GetTrustedDevices(ctx sdk.Context, address sdk.AccAddress) []typ
 	var devices []types.TrustedDevice
 	for ; iterator.Valid(); iterator.Next() {
 		var ds trustedDeviceStore
-		k.cdc.MustUnmarshalJSON(iterator.Value(), &ds)
+		json.Unmarshal(iterator.Value(), &ds)
 		devices = append(devices, types.TrustedDevice{
 			AccountAddress: ds.AccountAddress,
 			DeviceInfo:     ds.DeviceInfo,
@@ -1244,7 +1246,7 @@ func (k Keeper) SetSensitiveTxConfig(ctx sdk.Context, config *types.SensitiveTxC
 	store := ctx.KVStore(k.skey)
 	key := types.SensitiveTxConfigKey(config.TransactionType)
 
-	bz, err := k.cdc.MarshalJSON(&sensitiveTxConfigStore{
+	bz, err := json.Marshal(&sensitiveTxConfigStore{
 		TransactionType:             config.TransactionType,
 		Enabled:                     config.Enabled,
 		MinVEIDScore:                config.MinVEIDScore,
@@ -1274,7 +1276,7 @@ func (k Keeper) GetSensitiveTxConfig(ctx sdk.Context, txType types.SensitiveTran
 	}
 
 	var cs sensitiveTxConfigStore
-	k.cdc.MustUnmarshalJSON(bz, &cs)
+	json.Unmarshal(bz, &cs)
 
 	return &types.SensitiveTxConfig{
 		TransactionType:             cs.TransactionType,
@@ -1349,7 +1351,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; iterator.Valid(); iterator.Next() {
 		var ps mfaPolicyStore
-		k.cdc.MustUnmarshalJSON(iterator.Value(), &ps)
+		json.Unmarshal(iterator.Value(), &ps)
 		policies = append(policies, types.MFAPolicy{
 			AccountAddress:     ps.AccountAddress,
 			RequiredFactors:    ps.RequiredFactors,
@@ -1371,7 +1373,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; enrollmentIterator.Valid(); enrollmentIterator.Next() {
 		var es factorEnrollmentStore
-		k.cdc.MustUnmarshalJSON(enrollmentIterator.Value(), &es)
+		json.Unmarshal(enrollmentIterator.Value(), &es)
 		enrollments = append(enrollments, types.FactorEnrollment{
 			AccountAddress:   es.AccountAddress,
 			FactorType:       es.FactorType,
@@ -1395,7 +1397,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; deviceIterator.Valid(); deviceIterator.Next() {
 		var ds trustedDeviceStore
-		k.cdc.MustUnmarshalJSON(deviceIterator.Value(), &ds)
+		json.Unmarshal(deviceIterator.Value(), &ds)
 		devices = append(devices, types.TrustedDevice{
 			AccountAddress: ds.AccountAddress,
 			DeviceInfo:     ds.DeviceInfo,

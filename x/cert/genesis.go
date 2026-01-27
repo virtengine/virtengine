@@ -9,9 +9,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/cert/keeper"
+	"github.com/virtengine/virtengine/x/cert/keeper"
 
-	types "pkg.akt.dev/go/node/cert/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 )
 
 // ValidateGenesis does validation check of the Genesis and returns error in case of failure

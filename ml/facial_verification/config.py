@@ -261,7 +261,7 @@ BALANCED_CONFIG = VerificationConfig(
     reject_threshold=0.70,
 )
 
-PERMISSIVIRTENGINE_CONFIG = VerificationConfig(
+PERMISSIVE_CONFIG = VerificationConfig(
     model_name=ModelName.VGG_FACE,
     match_threshold=0.85,
     borderline_lower=0.75,

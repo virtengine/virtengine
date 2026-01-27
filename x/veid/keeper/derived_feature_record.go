@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -235,7 +236,7 @@ func (k Keeper) GetDerivedFeatureRecordsByAccount(ctx sdk.Context, address sdk.A
 
 	store := ctx.KVStore(k.skey)
 	prefix := types.DerivedFeatureRecordByAccountPrefixKey(address.Bytes())
-	iter := store.Iterator(prefix, sdk.PrefixEndBytes(prefix))
+	iter := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {

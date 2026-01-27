@@ -83,9 +83,9 @@ config = get_strict_config()
 
 ### Permissive Configuration
 ```python
-from ml.liveness_detection.config import get_permissiVIRTENGINE_config
+from ml.liveness_detection.config import get_permissive_config
 
-config = get_permissiVIRTENGINE_config()
+config = get_permissive_config()
 # Required challenges: blink only
 # Pass threshold: 0.60
 # Spoof threshold: 0.60

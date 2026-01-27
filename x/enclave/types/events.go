@@ -2,10 +2,10 @@ package types
 
 // Event types for enclave module
 const (
-	EventTypeEnclaveIdentityRegistered = "enclaVIRTENGINE_identity_registered"
-	EventTypeEnclaveIdentityUpdated    = "enclaVIRTENGINE_identity_updated"
-	EventTypeEnclaveIdentityRevoked    = "enclaVIRTENGINE_identity_revoked"
-	EventTypeEnclaveKeyRotated         = "enclaVIRTENGINE_key_rotated"
+	EventTypeEnclaveIdentityRegistered = "enclave_identity_registered"
+	EventTypeEnclaveIdentityUpdated    = "enclave_identity_updated"
+	EventTypeEnclaveIdentityRevoked    = "enclave_identity_revoked"
+	EventTypeEnclaveKeyRotated         = "enclave_key_rotated"
 	EventTypeKeyRotationCompleted      = "key_rotation_completed"
 	EventTypeMeasurementAdded          = "measurement_added"
 	EventTypeMeasurementRevoked        = "measurement_revoked"

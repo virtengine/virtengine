@@ -1,0 +1,59 @@
+syntax = "proto3";
+package virtengine.provider.v1beta4;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+
+import "virtengine/provider/v1beta4/provider.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4";
+
+// Query defines the gRPC querier service for the provider package.
+service Query {
+  // Providers queries providers
+  rpc Providers(QueryProvidersRequest) returns (QueryProvidersResponse) {
+    option (google.api.http).get = "/virtengine/provider/v1beta4/providers";
+  }
+
+  // Provider queries provider details
+  rpc Provider(QueryProviderRequest) returns (QueryProviderResponse) {
+    option (google.api.http).get = "/virtengine/provider/v1beta4/providers/{owner}";
+  }
+}
+
+// QueryProvidersRequest is request type for the Query/Providers RPC method
+message QueryProvidersRequest {
+  // Pagination is used to paginate the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryProvidersResponse is response type for the Query/Providers RPC method
+message QueryProvidersResponse {
+  // Providers is a list of providers on the network.
+  repeated Provider providers = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "Providers"
+  ];
+
+  // Pagination contains the information about response pagination.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryProviderRequest is request type for the Query/Provider RPC method
+message QueryProviderRequest {
+  // Owner is the bech32 address of the account of the provider.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1;
+}
+
+// QueryProviderResponse is response type for the Query/Provider RPC method.
+message QueryProviderResponse {
+  // Provider holds the representation of a provider on the network.
+  Provider provider = 1 [
+    (gogoproto.nullable) = false
+  ];
+}

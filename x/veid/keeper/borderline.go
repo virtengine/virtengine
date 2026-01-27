@@ -10,8 +10,8 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	mfatypes "pkg.akt.dev/node/x/mfa/types"
-	"pkg.akt.dev/node/x/veid/types"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================

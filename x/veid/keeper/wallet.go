@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -715,7 +716,7 @@ func (k Keeper) verifySignature(pubKey, message, signature []byte, context strin
 // WithWallets iterates over all identity wallets
 func (k Keeper) WithWallets(ctx sdk.Context, fn func(wallet *types.IdentityWallet) bool) {
 	store := ctx.KVStore(k.skey)
-	iter := store.Iterator(types.PrefixIdentityWallet, sdk.PrefixEndBytes(types.PrefixIdentityWallet))
+	iter := store.Iterator(types.PrefixIdentityWallet, storetypes.PrefixEndBytes(types.PrefixIdentityWallet))
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {

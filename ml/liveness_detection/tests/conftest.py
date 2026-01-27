@@ -155,7 +155,7 @@ def sample_face_regions(sample_face_region) -> List[Tuple[int, int, int, int]]:
 @pytest.fixture
 def sample_landmarks():
     """Create sample 68-point facial landmarks."""
-    from ml.liveness_detection.actiVIRTENGINE_challenges import LandmarkData
+    from ml.liveness_detection.active_challenges import LandmarkData
     
     # Generate synthetic 68-point landmarks
     landmarks = np.zeros((68, 2), dtype=np.float32)
@@ -226,7 +226,7 @@ def sample_landmarks():
 @pytest.fixture
 def sample_landmarks_sequence(sample_landmarks, np_random):
     """Create a sequence of landmarks with variations."""
-    from ml.liveness_detection.actiVIRTENGINE_challenges import LandmarkData
+    from ml.liveness_detection.active_challenges import LandmarkData
     
     sequence = []
     base_landmarks = sample_landmarks.full_landmarks.copy()
@@ -253,7 +253,7 @@ def sample_landmarks_sequence(sample_landmarks, np_random):
 @pytest.fixture
 def blink_landmarks_sequence(sample_landmarks, np_random):
     """Create landmarks sequence with a blink."""
-    from ml.liveness_detection.actiVIRTENGINE_challenges import LandmarkData
+    from ml.liveness_detection.active_challenges import LandmarkData
     
     sequence = []
     base_landmarks = sample_landmarks.full_landmarks.copy()
@@ -289,7 +289,7 @@ def blink_landmarks_sequence(sample_landmarks, np_random):
 @pytest.fixture
 def smile_landmarks_sequence(sample_landmarks, np_random):
     """Create landmarks sequence with a smile."""
-    from ml.liveness_detection.actiVIRTENGINE_challenges import LandmarkData
+    from ml.liveness_detection.active_challenges import LandmarkData
     
     sequence = []
     base_landmarks = sample_landmarks.full_landmarks.copy()
@@ -323,7 +323,7 @@ def smile_landmarks_sequence(sample_landmarks, np_random):
 @pytest.fixture
 def head_turn_landmarks_sequence(sample_landmarks, np_random):
     """Create landmarks sequence with a head turn."""
-    from ml.liveness_detection.actiVIRTENGINE_challenges import LandmarkData
+    from ml.liveness_detection.active_challenges import LandmarkData
     
     sequence = []
     
@@ -362,7 +362,7 @@ def strict_config():
 
 
 @pytest.fixture
-def permissiVIRTENGINE_config():
+def permissive_config():
     """Permissive liveness configuration for tests."""
-    from ml.liveness_detection.config import get_permissiVIRTENGINE_config
-    return get_permissiVIRTENGINE_config()
+    from ml.liveness_detection.config import get_permissive_config
+    return get_permissive_config()

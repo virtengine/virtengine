@@ -1,0 +1,22 @@
+syntax = "proto3";
+package virtengine.provider.v1beta4;
+
+import "cosmos/msg/v1/msg.proto";
+
+import "virtengine/provider/v1beta4/msg.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4";
+
+// Msg defines the provider Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // CreateProvider defines a method that creates a provider given the proper inputs.
+  rpc CreateProvider(MsgCreateProvider) returns (MsgCreateProviderResponse);
+
+  // UpdateProvider defines a method that updates a provider given the proper inputs.
+  rpc UpdateProvider(MsgUpdateProvider) returns (MsgUpdateProviderResponse);
+
+  // DeleteProvider defines a method that deletes a provider given the proper inputs.
+  rpc DeleteProvider(MsgDeleteProvider) returns (MsgDeleteProviderResponse);
+}

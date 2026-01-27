@@ -85,16 +85,16 @@ class MaskProcessor:
         if mask.max() > 1.0:
             mask = mask / 255.0
         
-        if self.config.use_adaptiVIRTENGINE_threshold:
+        if self.config.use_adaptive_threshold:
             # Convert to 8-bit for adaptive thresholding
             mask_8bit = (mask * 255).astype(np.uint8)
             binary = cv2.adaptiveThreshold(
                 mask_8bit,
                 255,
-                cv2.ADAPTIVIRTENGINE_THRESH_GAUSSIAN_C,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                 cv2.THRESH_BINARY,
-                self.config.adaptiVIRTENGINE_block_size,
-                self.config.adaptiVIRTENGINE_constant
+                self.config.adaptive_block_size,
+                self.config.adaptive_constant
             )
         else:
             # Simple binary threshold

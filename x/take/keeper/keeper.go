@@ -6,7 +6,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	types "pkg.akt.dev/go/node/take/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 )
 
 type IKeeper interface {

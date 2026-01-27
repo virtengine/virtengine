@@ -1,0 +1,54 @@
+---
+version: v2
+modules:
+  - path: proto/node
+    excludes:
+      - proto/node/virtengine/audit/v1beta3
+      - proto/node/virtengine/base/v1beta3
+      - proto/node/virtengine/cert/v1beta3
+      - proto/node/virtengine/deployment/v1beta3
+      - proto/node/virtengine/deployment/v1beta5
+      - proto/node/virtengine/escrow/v1beta3
+      - proto/node/virtengine/market/v1beta4
+      - proto/node/virtengine/market/v2beta1
+      - proto/node/virtengine/provider/v1beta3
+      - proto/node/virtengine/take/v1beta3
+    breaking:
+      use:
+        - FILE
+    lint:
+      use:
+        - STANDARD
+        - COMMENTS
+        - FILE_LOWER_SNAKE_CASE
+      except:
+        - UNARY_RPC
+        - COMMENT_FIELD
+  - path: proto/vendor
+    lint:
+      use: []
+    breaking:
+      use: []
+  - path: proto/provider
+    lint:
+      use:
+        - STANDARD
+        - COMMENTS
+        - FILE_LOWER_SNAKE_CASE
+      except:
+        - UNARY_RPC
+        - COMMENT_FIELD
+        - SERVICE_SUFFIX
+        - PACKAGE_VERSION_SUFFIX
+        - ENUM_VALUE_PREFIX
+        - ENUM_VALUE_UPPER_SNAKE_CASE
+        - ENUM_ZERO_VALUE_SUFFIX
+        - RPC_REQUEST_STANDARD_NAME
+deps:
+  - buf.build/cosmos/cosmos-sdk
+  - buf.build/cosmos/cosmos-proto  
+  - buf.build/cosmos/ibc
+  - buf.build/cosmos/ics23
+  - buf.build/googleapis/googleapis
+  - buf.build/protocolbuffers/wellknowntypes
+  - buf.build/cosmwasm/wasmd

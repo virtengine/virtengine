@@ -485,12 +485,18 @@ func ParseHDPath(path string) (*HDPathComponents, error) {
 		return nil, fmt.Errorf("invalid HD path: %w", err)
 	}
 
+	// Convert bool Change to uint32 (0 for external, 1 for internal/change)
+	var changeIndex uint32
+	if params.Change {
+		changeIndex = 1
+	}
+
 	// Extract components from params string
 	return &HDPathComponents{
 		Purpose:      44,
 		CoinType:     params.CoinType,
 		Account:      params.Account,
-		Change:       params.Change,
+		Change:       changeIndex,
 		AddressIndex: params.AddressIndex,
 	}, nil
 }

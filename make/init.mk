@@ -10,14 +10,14 @@ ifeq (, $(shell which direnv))
 $(error "No direnv in $(PATH), consider installing. https://direnv.net")
 endif
 
-ifneq (1, $(VIRTENGINE_DIRENV_SET))
+ifneq (1, $(VE_DIRENV_SET))
 $(error "no envrc detected. might need to run \"direnv allow\"")
 endif
 
-# VIRTENGINE_ROOT may not be set if environment does not support/use direnv
+# VE_ROOT may not be set if environment does not support/use direnv
 # in this case define it manually as well as all required env variables
-ifndef VIRTENGINE_ROOT
-$(error "VIRTENGINE_ROOT is not set. might need to run \"direnv allow\"")
+ifndef VE_ROOT
+$(error "VE_ROOT is not set. might need to run \"direnv allow\"")
 endif
 
 ifeq (, $(GOTOOLCHAIN))
@@ -36,8 +36,8 @@ else
 endif
 
 ifneq ($(GOWORK),off)
-#	ifeq ($(shell test -e $(VIRTENGINE_ROOT)/go.work && echo -n yes),yes)
-#		GOWORK=${VIRTENGINE_ROOT}/go.work
+#	ifeq ($(shell test -e $(VE_ROOT)/go.work && echo -n yes),yes)
+#		GOWORK=${VE_ROOT}/go.work
 #	else
 #		GOWORK=off
 #	endif
@@ -76,23 +76,23 @@ COSMOVISOR_VERSION           ?= v1.7.1
 # ==== Build tools version tracking ====
 # <TOOL>_VERSION_FILE points to the marker file for the installed version.
 # If <TOOL>_VERSION_FILE is changed, the binary will be re-downloaded.
-GIT_CHGLOG_VERSION_FILE          := $(VIRTENGINE_DEVCACHE_VERSIONS)/git-chglog/$(GIT_CHGLOG_VERSION)
-MOCKERY_VERSION_FILE             := $(VIRTENGINE_DEVCACHE_VERSIONS)/mockery/v$(MOCKERY_VERSION)
-GOLANGCI_LINT_VERSION_FILE       := $(VIRTENGINE_DEVCACHE_VERSIONS)/golangci-lint/$(GOLANGCI_LINT_VERSION)
-STATIK_VERSION_FILE              := $(VIRTENGINE_DEVCACHE_VERSIONS)/statik/$(STATIK_VERSION)
-COSMOVISOR_VERSION_FILE          := $(VIRTENGINE_DEVCACHE_VERSIONS)/cosmovisor/$(COSMOVISOR_VERSION)
-COSMOVISOR_DEBUG_VERSION_FILE    := $(VIRTENGINE_DEVCACHE_VERSIONS)/cosmovisor/debug/$(COSMOVISOR_VERSION)
+GIT_CHGLOG_VERSION_FILE          := $(VE_DEVCACHE_VERSIONS)/git-chglog/$(GIT_CHGLOG_VERSION)
+MOCKERY_VERSION_FILE             := $(VE_DEVCACHE_VERSIONS)/mockery/v$(MOCKERY_VERSION)
+GOLANGCI_LINT_VERSION_FILE       := $(VE_DEVCACHE_VERSIONS)/golangci-lint/$(GOLANGCI_LINT_VERSION)
+STATIK_VERSION_FILE              := $(VE_DEVCACHE_VERSIONS)/statik/$(STATIK_VERSION)
+COSMOVISOR_VERSION_FILE          := $(VE_DEVCACHE_VERSIONS)/cosmovisor/$(COSMOVISOR_VERSION)
+COSMOVISOR_DEBUG_VERSION_FILE    := $(VE_DEVCACHE_VERSIONS)/cosmovisor/debug/$(COSMOVISOR_VERSION)
 
 # ==== Build tools executables ====
-GIT_CHGLOG                       := $(VIRTENGINE_DEVCACHE_BIN)/git-chglog
-MOCKERY                          := $(VIRTENGINE_DEVCACHE_BIN)/mockery
+GIT_CHGLOG                       := $(VE_DEVCACHE_BIN)/git-chglog
+MOCKERY                          := $(VE_DEVCACHE_BIN)/mockery
 NPM                              := npm
-GOLANGCI_LINT                    := $(VIRTENGINE_DEVCACHE_BIN)/golangci-lint
-STATIK                           := $(VIRTENGINE_DEVCACHE_BIN)/statik
-COSMOVISOR                       := $(VIRTENGINE_DEVCACHE_BIN)/cosmovisor
-COSMOVISOR_DEBUG                 := $(VIRTENGINE_RUN_BIN)/cosmovisor
+GOLANGCI_LINT                    := $(VE_DEVCACHE_BIN)/golangci-lint
+STATIK                           := $(VE_DEVCACHE_BIN)/statik
+COSMOVISOR                       := $(VE_DEVCACHE_BIN)/cosmovisor
+COSMOVISOR_DEBUG                 := $(VE_RUN_BIN)/cosmovisor
 
 
 RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0)
 
-include $(VIRTENGINE_ROOT)/make/setup-cache.mk
+include $(VE_ROOT)/make/setup-cache.mk

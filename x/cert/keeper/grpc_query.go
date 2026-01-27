@@ -10,9 +10,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 
-	types "pkg.akt.dev/go/node/cert/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 
-	"pkg.akt.dev/node/util/query"
+	"github.com/virtengine/virtengine/util/query"
 )
 
 // Querier is used as Keeper will have duplicate methods if used directly, and gRPC names take precedence over keeper

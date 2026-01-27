@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package virtengine.take.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/take/v1";
+
+// DenomTakeRate describes take rate for specified denom.
+message DenomTakeRate {
+  // Denom is the denomination of the take rate (uakt, usdc, etc.).
+  string denom = 1 [
+    (gogoproto.customname) = "Denom",
+    (gogoproto.jsontag)    = "denom",
+    (gogoproto.moretags)   = "yaml:\"denom\""
+  ];
+
+  // Rate is the value of the take rate.
+  uint32 rate = 2 [
+    (gogoproto.customname) = "Rate",
+    (gogoproto.jsontag)    = "rate",
+    (gogoproto.moretags)   = "yaml:\"rate\""
+  ];
+}
+
+// Params defines the parameters for the x/take package.
+message Params {
+  // DenomTakeRates is a list of configured take rates.
+  repeated DenomTakeRate denom_take_rates = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "DenomTakeRates",
+    (gogoproto.customname)   = "DenomTakeRates",
+    (gogoproto.jsontag)      = "denom_take_rates",
+    (gogoproto.moretags)     = "yaml:\"denom_take_rates\""
+  ];
+
+  // DefaultTakeRate holds the default take rate.
+  uint32 default_take_rate = 2  [
+    (gogoproto.customname) = "DefaultTakeRate",
+    (gogoproto.jsontag)    = "default_take_rate",
+    (gogoproto.moretags)   = "yaml:\"default_take_rate\""
+  ];
+}

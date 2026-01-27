@@ -117,7 +117,7 @@ class OCRPostProcessor:
             result = self.normalize_whitespace(result)
         
         # Remove newlines
-        if self.config.remoVIRTENGINE_newlines:
+        if self.config.remove_newlines:
             result = result.replace("\n", " ").replace("\r", "")
         
         # Strip leading/trailing
@@ -135,8 +135,8 @@ class OCRPostProcessor:
             result = result.lower()
         
         # Remove special characters if configured
-        if self.config.remoVIRTENGINE_special_chars:
-            result = self._remoVIRTENGINE_special_chars(result)
+        if self.config.remove_special_chars:
+            result = self._remove_special_chars(result)
         
         # Apply custom replacements
         for old, new in self.config.custom_replacements.items():
@@ -352,7 +352,7 @@ class OCRPostProcessor:
             text = text.replace(old, new)
         return text
     
-    def _remoVIRTENGINE_special_chars(self, text: str) -> str:
+    def _remove_special_chars(self, text: str) -> str:
         """Remove special characters except allowed ones."""
         allowed = self.config.allowed_special_chars
         result = []
@@ -396,7 +396,7 @@ def create_name_corrector() -> OCRPostProcessor:
         enable_confusion_correction=True,
         normalize_whitespace=True,
         strip_leading_trailing=True,
-        remoVIRTENGINE_newlines=True,
+        remove_newlines=True,
         convert_to_uppercase=False,
     )
     return OCRPostProcessor(config)
@@ -408,9 +408,9 @@ def create_id_corrector() -> OCRPostProcessor:
         enable_confusion_correction=True,
         normalize_whitespace=True,
         strip_leading_trailing=True,
-        remoVIRTENGINE_newlines=True,
+        remove_newlines=True,
         convert_to_uppercase=True,
-        remoVIRTENGINE_special_chars=True,
+        remove_special_chars=True,
         allowed_special_chars="-",
     )
     return OCRPostProcessor(config)
@@ -422,7 +422,7 @@ def create_mrz_corrector() -> OCRPostProcessor:
         enable_confusion_correction=False,  # MRZ has its own corrections
         normalize_whitespace=False,  # Preserve structure
         strip_leading_trailing=True,
-        remoVIRTENGINE_newlines=True,
+        remove_newlines=True,
         convert_to_uppercase=True,
     )
     return OCRPostProcessor(config)

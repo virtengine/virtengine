@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	cflags "pkg.akt.dev/go/cli/flags"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"

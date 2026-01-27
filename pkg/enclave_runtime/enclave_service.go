@@ -1,4 +1,4 @@
-// Package enclaVIRTENGINE_runtime provides the interface and implementations for
+// Package enclave_runtime provides the interface and implementations for
 // Trusted Execution Environment (TEE) enclave operations.
 //
 // This package defines the enclave runtime service that receives encrypted
@@ -10,7 +10,7 @@
 // - Plaintext data never leaves the enclave boundary
 // - All results include cryptographic attestation
 // - Memory is scrubbed after processing
-package enclaVIRTENGINE_runtime
+package enclave_runtime
 
 import (
 	"context"
@@ -495,7 +495,7 @@ func generateSimulatedKey(seed string) []byte {
 }
 
 func generateSimulatedMeasurement() []byte {
-	h := sha256.Sum256([]byte("simulated_enclaVIRTENGINE_measurement_v1"))
+	h := sha256.Sum256([]byte("simulated_enclave_measurement_v1"))
 	return h[:]
 }
 

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	escrowid "pkg.akt.dev/go/node/escrow/id/v1"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
-	"pkg.akt.dev/go/node/escrow/v1beta3"
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/escrow/v1beta3"
 )
 
 const (

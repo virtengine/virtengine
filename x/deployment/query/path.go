@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	types "pkg.akt.dev/go/node/deployment/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
 )
 
 const (

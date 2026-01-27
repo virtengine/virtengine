@@ -5,7 +5,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	types "pkg.akt.dev/go/node/market/v1beta5"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 )
 
 // NewHandler returns a handler for "market" type messages

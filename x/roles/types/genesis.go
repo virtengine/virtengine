@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 // GenesisState is the genesis state for the roles module
 type GenesisState struct {
 	// GenesisAccounts are the accounts with GenesisAccount role
@@ -81,4 +83,15 @@ func (p Params) Validate() error {
 		return ErrInvalidRole.Wrap("max_roles_per_account must be greater than 0")
 	}
 	return nil
+}
+
+// ProtoMessage implements proto.Message
+func (*GenesisState) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (gs *GenesisState) Reset() { *gs = GenesisState{} }
+
+// String implements proto.Message
+func (gs *GenesisState) String() string {
+	return fmt.Sprintf("%+v", *gs)
 }

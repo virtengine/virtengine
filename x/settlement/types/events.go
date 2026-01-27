@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 // Event types for the settlement module
 const (
 	// Escrow events
@@ -172,3 +174,39 @@ type EventRewardsClaimed struct {
 	Source        string `json:"source,omitempty"`
 	ClaimedAt     int64  `json:"claimed_at"`
 }
+
+// ProtoMessage stubs for Event types
+func (*EventEscrowCreated) ProtoMessage()   {}
+func (*EventEscrowActivated) ProtoMessage() {}
+func (*EventEscrowReleased) ProtoMessage()  {}
+func (*EventEscrowRefunded) ProtoMessage()  {}
+func (*EventEscrowDisputed) ProtoMessage()  {}
+func (*EventEscrowExpired) ProtoMessage()   {}
+func (*EventRewardsDistributed) ProtoMessage() {}
+func (*EventRewardsClaimed) ProtoMessage()  {}
+func (*EventOrderSettled) ProtoMessage()    {}
+func (*EventUsageRecorded) ProtoMessage()   {}
+
+// Reset stubs for Event types
+func (e *EventEscrowCreated) Reset()   { *e = EventEscrowCreated{} }
+func (e *EventEscrowActivated) Reset() { *e = EventEscrowActivated{} }
+func (e *EventEscrowReleased) Reset()  { *e = EventEscrowReleased{} }
+func (e *EventEscrowRefunded) Reset()  { *e = EventEscrowRefunded{} }
+func (e *EventEscrowDisputed) Reset()  { *e = EventEscrowDisputed{} }
+func (e *EventEscrowExpired) Reset()   { *e = EventEscrowExpired{} }
+func (e *EventRewardsDistributed) Reset() { *e = EventRewardsDistributed{} }
+func (e *EventRewardsClaimed) Reset()  { *e = EventRewardsClaimed{} }
+func (e *EventOrderSettled) Reset()    { *e = EventOrderSettled{} }
+func (e *EventUsageRecorded) Reset()   { *e = EventUsageRecorded{} }
+
+// String stubs for Event types
+func (e *EventEscrowCreated) String() string   { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowActivated) String() string { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowReleased) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowRefunded) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowDisputed) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowExpired) String() string   { return fmt.Sprintf("%+v", *e) }
+func (e *EventRewardsDistributed) String() string { return fmt.Sprintf("%+v", *e) }
+func (e *EventRewardsClaimed) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventOrderSettled) String() string    { return fmt.Sprintf("%+v", *e) }
+func (e *EventUsageRecorded) String() string   { return fmt.Sprintf("%+v", *e) }

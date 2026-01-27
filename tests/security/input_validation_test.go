@@ -373,7 +373,7 @@ func (s *InputValidationTestSuite) TestBoundaryConditions() {
 	})
 
 	// Test: Negative-like patterns (in unsigned context)
-	s.Run("negatiVIRTENGINE_like_patterns", func() {
+	s.Run("negative_like_patterns", func() {
 		// In Go, uint64 can't be negative, but we test string inputs
 		err := validateAmountString("-100")
 		require.Error(s.T(), err, "negative amount string should be rejected")

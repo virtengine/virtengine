@@ -168,8 +168,9 @@ func (e *VerificationEvent) Validate() error {
 	return nil
 }
 
-// VerificationResult represents the result of a verification process
-type VerificationResult struct {
+// SimpleVerificationResult represents a simplified result of a verification process
+// Used for internal workflow tracking; see VerificationResult in verification_result.go for full result type
+type SimpleVerificationResult struct {
 	// Success indicates if verification was successful
 	Success bool `json:"success"`
 
@@ -198,9 +199,9 @@ type VerificationResult struct {
 	ValidatorConsensus uint32 `json:"validator_consensus,omitempty"`
 }
 
-// NewVerificationResult creates a new verification result
-func NewVerificationResult(success bool, status VerificationStatus, score uint32, scoreVersion string) *VerificationResult {
-	return &VerificationResult{
+// NewSimpleVerificationResult creates a new simplified verification result
+func NewSimpleVerificationResult(success bool, status VerificationStatus, score uint32, scoreVersion string) *SimpleVerificationResult {
+	return &SimpleVerificationResult{
 		Success:      success,
 		Status:       status,
 		Score:        score,
@@ -211,7 +212,7 @@ func NewVerificationResult(success bool, status VerificationStatus, score uint32
 }
 
 // Validate validates the verification result
-func (r *VerificationResult) Validate() error {
+func (r *SimpleVerificationResult) Validate() error {
 	if !IsValidVerificationStatus(r.Status) {
 		return ErrInvalidVerificationStatus.Wrapf("invalid status: %s", r.Status)
 	}

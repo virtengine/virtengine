@@ -10,7 +10,7 @@ import (
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/spf13/viper"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmproto "github.com/cometbft/cometbft/proto/tendermint/types"

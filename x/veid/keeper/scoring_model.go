@@ -13,7 +13,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -224,7 +224,7 @@ func (k Keeper) GetActiveScoringModel(ctx sdk.Context) (types.ScoringModelVersio
 	bz := store.Get(types.ActiveScoringModelKey())
 	if bz == nil {
 		// Return default if no active version set
-		return types.DefaultScoringModelVersion(), nil
+		return types.DefaultScoringModel(), nil
 	}
 
 	version := string(bz)
@@ -763,7 +763,7 @@ func (k Keeper) InitializeScoringModel(ctx sdk.Context) error {
 	}
 
 	// Create and store the default model
-	defaultModel := types.DefaultScoringModelVersion()
+	defaultModel := types.DefaultScoringModel()
 	defaultModel.CreatedAt = ctx.BlockTime()
 	defaultModel.ActivatedAt = &defaultModel.CreatedAt
 

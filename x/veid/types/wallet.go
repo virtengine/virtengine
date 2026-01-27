@@ -517,7 +517,7 @@ type PublicWalletInfo struct {
 	ScopeCount int `json:"scope_count"`
 
 	// ActiveScopeCount is the number of active scopes
-	ActiveScopeCount int `json:"actiVIRTENGINE_scope_count"`
+	ActiveScopeCount int `json:"active_scope_count"`
 
 	// LastVerificationAt is when the wallet was last verified
 	LastVerificationAt *time.Time `json:"last_verification_at,omitempty"`

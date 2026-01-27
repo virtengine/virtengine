@@ -1,0 +1,106 @@
+syntax = "proto3";
+package virtengine.deployment.v1;
+
+import "gogoproto/gogo.proto";
+
+import "virtengine/deployment/v1/deployment.proto";
+import "virtengine/deployment/v1/group.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/deployment/v1";
+
+// EventDeploymentCreated event is triggered when deployment is created on chain.
+// It contains all the information required to identify a deployment.
+message EventDeploymentCreated {
+  option (gogoproto.equal) = true;
+
+  // ID is the unique identifier of the deployment.
+  DeploymentID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  // Hash is an hashed representation of the deployment.
+  bytes hash = 2 [
+    (gogoproto.jsontag)   = "hash",
+    (gogoproto.moretags)  = "yaml:\"hash\""
+  ];
+}
+
+// EventDeploymentUpdated is triggered when deployment is updated on chain.
+// It contains all the information required to identify a deployment.
+message EventDeploymentUpdated {
+  option (gogoproto.equal) = true;
+
+  // ID is the unique identifier of the deployment.
+  DeploymentID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+
+  // Hash is an hashed representation of the deployment.
+  bytes hash = 2 [
+    (gogoproto.jsontag)   = "hash",
+    (gogoproto.moretags)  = "yaml:\"hash\""
+  ];
+}
+
+// EventDeploymentClosed is triggered when deployment is closed on chain.
+// It contains all the information required to identify a deployment.
+message EventDeploymentClosed {
+  option (gogoproto.equal) = true;
+
+  // ID is the unique identifier of the deployment.
+  DeploymentID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+}
+
+// EventGroupStarted is triggered when deployment group is started.
+// It contains all the information required to identify a group.
+message EventGroupStarted {
+  option (gogoproto.equal) = true;
+
+  // ID is the unique identifier of the group.
+  GroupID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+}
+
+// EventGroupPaused is triggered when deployment group is paused.
+// It contains all the information required to identify a group.
+message EventGroupPaused {
+  option (gogoproto.equal) = true;
+
+  // ID is the unique identifier of the group.
+  GroupID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+}
+
+// EventGroupClosed is triggered when deployment group is closed.
+// It contains all the information required to identify a group.
+message EventGroupClosed {
+  option (gogoproto.equal) = true;
+
+  // ID is the unique identifier of the group.
+  GroupID id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)    = "id",
+    (gogoproto.moretags)   = "yaml:\"id\""
+  ];
+}
+

@@ -8,13 +8,13 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmodule "github.com/cosmos/cosmos-sdk/types/module"
-	mv1 "pkg.akt.dev/go/node/market/v1"
-	mv1beta "pkg.akt.dev/go/node/market/v1beta5"
+	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	mv1beta "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	"pkg.akt.dev/go/node/migrate"
+	"github.com/virtengine/virtengine/sdk/go/node/migrate"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
-	mkeys "pkg.akt.dev/node/x/market/keeper/keys"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
+	mkeys "github.com/virtengine/virtengine/x/market/keeper/keys"
 )
 
 type marketMigrations struct {

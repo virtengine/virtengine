@@ -5,9 +5,9 @@ import (
 
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 	// nolint: revive
-	_ "pkg.akt.dev/node/upgrades"
+	_ "github.com/virtengine/virtengine/upgrades"
 )
 
 func (app *VirtEngineApp) registerUpgradeHandlers() error {

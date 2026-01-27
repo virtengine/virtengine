@@ -77,7 +77,7 @@ class TrainingResult:
             "config_hash": self.config_hash,
         }
     
-    def saVIRTENGINE_history(self, filepath: str) -> None:
+    def save_history(self, filepath: str) -> None:
         """Save training history to JSON."""
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
         with open(filepath, 'w') as f:
@@ -189,7 +189,7 @@ class ModelTrainer:
         result = self._build_result(model, history, training_time)
         
         # Save training result
-        self._saVIRTENGINE_result(result)
+        self._save_result(result)
         
         return result
     
@@ -245,7 +245,7 @@ class ModelTrainer:
         result = self._build_result(model, history, training_time)
         
         # Save training result
-        self._saVIRTENGINE_result(result)
+        self._save_result(result)
         
         return result
     
@@ -319,14 +319,14 @@ class ModelTrainer:
         config_str = json.dumps(self.config.to_dict(), sort_keys=True)
         return hashlib.sha256(config_str.encode()).hexdigest()[:16]
     
-    def _saVIRTENGINE_result(self, result: TrainingResult) -> None:
+    def _save_result(self, result: TrainingResult) -> None:
         """Save training result to disk."""
         output_dir = Path(self.config.model.checkpoint_dir or "training_output")
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Save history
         history_path = output_dir / "training_history.json"
-        result.saVIRTENGINE_history(str(history_path))
+        result.save_history(str(history_path))
         
         logger.info(f"Training completed in {result.training_time_seconds:.2f}s")
         logger.info(f"Best validation loss: {result.best_val_loss:.4f} at epoch {result.best_epoch}")

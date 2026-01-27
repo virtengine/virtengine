@@ -6,7 +6,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // DistributeStakingRewards distributes staking rewards for an epoch
@@ -283,7 +283,7 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, claimer sdk.AccAddress, source str
 	// For now, we just update the claimable rewards record
 
 	// Save updated rewards
-	if err := k.SetClaimableRewards(ctx, rewards); err != nil {
+	if err := k.SetClaimableRewards(ctx, claimer, rewards); err != nil {
 		return sdk.Coins{}, err
 	}
 

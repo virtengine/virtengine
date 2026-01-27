@@ -13,17 +13,17 @@ import (
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
-	deposit "pkg.akt.dev/go/node/types/deposit/v1"
-	"pkg.akt.dev/go/sdkutil"
+	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	"pkg.akt.dev/go/node/deployment/v1"
-	"pkg.akt.dev/go/node/deployment/v1beta4"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 
-	sdlv1 "pkg.akt.dev/go/sdl"
+	sdlv1 "github.com/virtengine/virtengine/sdk/go/sdl"
 
-	appparams "pkg.akt.dev/node/app/params"
-	testsim "pkg.akt.dev/node/testutil/sim"
-	"pkg.akt.dev/node/x/deployment/keeper"
+	appparams "github.com/virtengine/virtengine/app/params"
+	testsim "github.com/virtengine/virtengine/testutil/sim"
+	"github.com/virtengine/virtengine/x/deployment/keeper"
 )
 
 // Simulation operation weights constants

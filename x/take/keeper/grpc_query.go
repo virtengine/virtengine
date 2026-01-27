@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	types "pkg.akt.dev/go/node/take/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 )
 
 // Querier is used as Keeper will have duplicate methods if used directly, and gRPC names take precedence over keeper

@@ -1,18 +1,21 @@
 package keeper
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"time"
 
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	dtypes "pkg.akt.dev/go/node/deployment/v1"
-	dtypesBeta "pkg.akt.dev/go/node/deployment/v1beta4"
-	mv1 "pkg.akt.dev/go/node/market/v1"
-	types "pkg.akt.dev/go/node/market/v1beta5"
+	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	dtypesBeta "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	"pkg.akt.dev/node/x/market/keeper/keys"
+	"github.com/virtengine/virtengine/x/market/keeper/keys"
 )
 
 type IKeeper interface {
@@ -42,6 +45,13 @@ type IKeeper interface {
 	GetParams(ctx sdk.Context) (params types.Params)
 	SetParams(ctx sdk.Context, params types.Params) error
 	GetAuthority() string
+	// Additional methods for cross-module integration
+	GetOrderByID(ctx sdk.Context, orderID string) (interface{}, bool)
+	IsOrderCompleted(ctx sdk.Context, orderID string) bool
+	GetOrderCustomer(ctx sdk.Context, orderID string) string
+	GetOrderProvider(ctx sdk.Context, orderID string) string
+	GetOrderCompletedAt(ctx sdk.Context, orderID string) time.Time
+	GetOrderHash(ctx sdk.Context, orderID string) string
 }
 
 // Keeper of the market store
@@ -715,4 +725,103 @@ func (k Keeper) updateBid(ctx sdk.Context, bid types.Bid, currState types.Bid_St
 	if len(revKey) > 0 {
 		store.Set(revKey, data)
 	}
+}
+
+// GetOrderByID returns an order by its string ID
+// TODO: Implement proper string ID parsing
+func (k Keeper) GetOrderByID(ctx sdk.Context, orderID string) (interface{}, bool) {
+	// For now, search through all orders
+	var foundOrder types.Order
+	found := false
+	k.WithOrders(ctx, func(order types.Order) bool {
+		if order.ID.String() == orderID {
+			foundOrder = order
+			found = true
+			return true // stop iteration
+		}
+		return false
+	})
+	if found {
+		return foundOrder, true
+	}
+	return nil, false
+}
+
+// IsOrderCompleted checks if an order is in a completed state
+func (k Keeper) IsOrderCompleted(ctx sdk.Context, orderID string) bool {
+	orderIface, found := k.GetOrderByID(ctx, orderID)
+	if !found {
+		return false
+	}
+	order, ok := orderIface.(types.Order)
+	if !ok {
+		return false
+	}
+	return order.State == types.OrderClosed
+}
+
+// GetOrderCustomer returns the customer address for an order
+func (k Keeper) GetOrderCustomer(ctx sdk.Context, orderID string) string {
+	orderIface, found := k.GetOrderByID(ctx, orderID)
+	if !found {
+		return ""
+	}
+	order, ok := orderIface.(types.Order)
+	if !ok {
+		return ""
+	}
+	return order.ID.Owner
+}
+
+// GetOrderProvider returns the provider address for an order
+// Note: This requires looking up the lease for the order
+func (k Keeper) GetOrderProvider(ctx sdk.Context, orderID string) string {
+	orderIface, found := k.GetOrderByID(ctx, orderID)
+	if !found {
+		return ""
+	}
+	order, ok := orderIface.(types.Order)
+	if !ok {
+		return ""
+	}
+	// Find the active lease for this order
+	lease, found := k.LeaseForOrder(ctx, types.BidActive, order.ID)
+	if !found {
+		return ""
+	}
+	return lease.ID.Provider
+}
+
+// GetOrderCompletedAt returns when the order was completed
+// TODO: Track completion time in order state
+func (k Keeper) GetOrderCompletedAt(ctx sdk.Context, orderID string) time.Time {
+	orderIface, found := k.GetOrderByID(ctx, orderID)
+	if !found {
+		return time.Time{}
+	}
+	order, ok := orderIface.(types.Order)
+	if !ok {
+		return time.Time{}
+	}
+	if order.State == types.OrderClosed {
+		// For now, return current block time as approximation
+		// Real implementation would track when state changed
+		return ctx.BlockTime()
+	}
+	return time.Time{}
+}
+
+// GetOrderHash returns a hash of the order for verification
+func (k Keeper) GetOrderHash(ctx sdk.Context, orderID string) string {
+	orderIface, found := k.GetOrderByID(ctx, orderID)
+	if !found {
+		return ""
+	}
+	order, ok := orderIface.(types.Order)
+	if !ok {
+		return ""
+	}
+	// Hash the order ID as a simple implementation
+	hash := sha256.Sum256([]byte(order.ID.String()))
+	return hex.EncodeToString(hash[:])
 }

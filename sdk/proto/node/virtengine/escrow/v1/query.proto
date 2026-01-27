@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package virtengine.escrow.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+
+import "virtengine/escrow/types/v1/account.proto";
+import "virtengine/escrow/types/v1/payment.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/v1";
+
+// Query defines the gRPC querier service for the escrow package.
+service Query {
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // Accounts queries all accounts.
+  rpc Accounts(QueryAccountsRequest) returns (QueryAccountsResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/types/accounts";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // Payments queries all payments.
+  rpc Payments(QueryPaymentsRequest) returns (QueryPaymentsResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/types/payments";
+  }
+}
+
+// QueryAccountRequest is request type for the Query/Account RPC method.
+message QueryAccountsRequest {
+  // State represents the current state of an Account.
+  string state = 1;
+  // Scope holds the scope of the account.
+  string xid   = 2 [
+    (gogoproto.jsontag) = "xid",
+    (gogoproto.moretags) = "yaml:\"xid\"",
+    (gogoproto.customname) = "XID"
+  ];
+
+  // Pagination is used to paginate the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 5;
+}
+
+// QueryProvidersResponse is response type for the Query/Providers RPC method
+message QueryAccountsResponse {
+  // Accounts is a list of Account.
+  repeated virtengine.escrow.types.v1.Account accounts = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1.Accounts"
+  ];
+  // Pagination contains the information about response pagination.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryPaymentRequest is request type for the Query/Payment RPC method
+message QueryPaymentsRequest {
+  // State represents the current state of a Payment.
+  string state = 1;
+  string xid   = 2 [
+    (gogoproto.jsontag) = "xid",
+    (gogoproto.moretags) = "yaml:\"xid\"",
+    (gogoproto.customname) = "XID"
+  ];
+
+  // Pagination is used to paginate the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 6;
+}
+
+// QueryProvidersResponse is response type for the Query/Providers RPC method
+message QueryPaymentsResponse {
+  // Payments is a list of payments.
+  repeated virtengine.escrow.types.v1.Payment payments = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1.Payments"
+  ];
+
+  // Pagination contains the information about response pagination.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}

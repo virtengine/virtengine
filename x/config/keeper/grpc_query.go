@@ -3,7 +3,7 @@ package keeper
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/config/types"
+	"github.com/virtengine/virtengine/x/config/types"
 )
 
 // GRPCQuerier provides gRPC query capabilities

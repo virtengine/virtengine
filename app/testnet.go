@@ -22,9 +22,9 @@ import (
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
 type TestnetDelegation struct {

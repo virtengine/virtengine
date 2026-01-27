@@ -195,7 +195,10 @@ func runOnce(cmd *cobra.Command, args []string) error {
 
 	// For now, just print placeholder
 	fmt.Println("Benchmark completed successfully.")
-	fmt.Printf("Context deadline: %v\n", ctx.Deadline())
+	deadline, hasDeadline := ctx.Deadline()
+	if hasDeadline {
+		fmt.Printf("Context deadline: %v\n", deadline)
+	}
 
 	return nil
 }
@@ -208,16 +211,16 @@ func printVersion(cmd *cobra.Command, args []string) error {
 }
 
 type daemonConfig struct {
-	providerAddress   string
-	clusterID         string
-	region            string
-	chainEndpoint     string
-	scheduleInterval  time.Duration
-	challengeCheck    time.Duration
-	networkEndpoint   string
-	enableGPU         bool
-	keyPath           string
-	suiteVersion      string
+	providerAddress  string
+	clusterID        string
+	region           string
+	chainEndpoint    string
+	scheduleInterval time.Duration
+	challengeCheck   time.Duration
+	networkEndpoint  string
+	enableGPU        bool
+	keyPath          string
+	suiteVersion     string
 }
 
 func loadConfig(cmd *cobra.Command) (*daemonConfig, error) {
@@ -251,16 +254,16 @@ func loadConfig(cmd *cobra.Command) (*daemonConfig, error) {
 	}
 
 	return &daemonConfig{
-		providerAddress:   providerAddress,
-		clusterID:         clusterID,
-		region:            region,
-		chainEndpoint:     chainEndpoint,
-		scheduleInterval:  scheduleInterval,
-		challengeCheck:    challengeCheck,
-		networkEndpoint:   networkEndpoint,
-		enableGPU:         enableGPU,
-		keyPath:           keyPath,
-		suiteVersion:      suiteVersion,
+		providerAddress:  providerAddress,
+		clusterID:        clusterID,
+		region:           region,
+		chainEndpoint:    chainEndpoint,
+		scheduleInterval: scheduleInterval,
+		challengeCheck:   challengeCheck,
+		networkEndpoint:  networkEndpoint,
+		enableGPU:        enableGPU,
+		keyPath:          keyPath,
+		suiteVersion:     suiteVersion,
 	}, nil
 }
 

@@ -6,12 +6,12 @@ import (
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmodule "github.com/cosmos/cosmos-sdk/types/module"
-	types "pkg.akt.dev/go/node/audit/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 
-	"pkg.akt.dev/go/node/migrate"
+	"github.com/virtengine/virtengine/sdk/go/node/migrate"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
-	akeeper "pkg.akt.dev/node/x/audit/keeper"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
+	akeeper "github.com/virtengine/virtengine/x/audit/keeper"
 )
 
 type auditMigrations struct {

@@ -5,7 +5,7 @@ import "fmt"
 // Params defines the parameters for the enclave module
 type Params struct {
 	// MaxEnclaveKeysPerValidator is the maximum number of enclave keys a validator can have
-	MaxEnclaveKeysPerValidator uint32 `json:"max_enclaVIRTENGINE_keys_per_validator"`
+	MaxEnclaveKeysPerValidator uint32 `json:"max_enclave_keys_per_validator"`
 
 	// DefaultExpiryBlocks is the default number of blocks until enclave identity expires
 	DefaultExpiryBlocks int64 `json:"default_expiry_blocks"`
@@ -54,7 +54,7 @@ func DefaultParams() Params {
 // Validate validates the parameters
 func (p Params) Validate() error {
 	if p.MaxEnclaveKeysPerValidator == 0 {
-		return fmt.Errorf("max_enclaVIRTENGINE_keys_per_validator must be positive")
+		return fmt.Errorf("max_enclave_keys_per_validator must be positive")
 	}
 
 	if p.DefaultExpiryBlocks <= 0 {
@@ -107,7 +107,7 @@ func (p Params) IsTEETypeAllowed(teeType TEEType) bool {
 // GenesisState defines the enclave module's genesis state
 type GenesisState struct {
 	// EnclaveIdentities is the list of registered enclave identities
-	EnclaveIdentities []EnclaveIdentity `json:"enclaVIRTENGINE_identities"`
+	EnclaveIdentities []EnclaveIdentity `json:"enclave_identities"`
 
 	// MeasurementAllowlist is the list of approved enclave measurements
 	MeasurementAllowlist []MeasurementRecord `json:"measurement_allowlist"`
@@ -168,3 +168,12 @@ func (g *GenesisState) Validate() error {
 
 	return nil
 }
+
+// ProtoMessage implements proto.Message
+func (*GenesisState) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (g *GenesisState) Reset() { *g = GenesisState{} }
+
+// String implements proto.Message
+func (g *GenesisState) String() string { return fmt.Sprintf("%+v", *g) }

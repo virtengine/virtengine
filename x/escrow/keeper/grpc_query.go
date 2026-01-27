@@ -10,10 +10,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	types "pkg.akt.dev/go/node/escrow/types/v1"
-	"pkg.akt.dev/go/node/escrow/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 
-	"pkg.akt.dev/node/util/query"
+	"github.com/virtengine/virtengine/util/query"
 )
 
 // Querier is used as Keeper will have duplicate methods if used directly, and gRPC names take precedence over keeper

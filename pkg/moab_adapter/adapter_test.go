@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	moab "pkg.akt.dev/node/pkg/moab_adapter"
+	moab "github.com/virtengine/virtengine/pkg/moab_adapter"
 )
 
 // VE-917: MOAB workload manager adapter tests

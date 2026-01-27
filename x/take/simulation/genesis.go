@@ -3,7 +3,7 @@ package simulation
 import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 
-	types "pkg.akt.dev/go/node/take/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 )
 
 // RandomizedGenState generates a random GenesisState for supply

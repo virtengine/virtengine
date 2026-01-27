@@ -7,8 +7,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	types "pkg.akt.dev/go/node/audit/v1"
-	attrv1 "pkg.akt.dev/go/node/types/attributes/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
+	attrv1 "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 )
 
 type IKeeper interface {

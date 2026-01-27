@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/spf13/cobra"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
 
 var flagBech32Prefix = "prefix"

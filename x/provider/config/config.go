@@ -7,8 +7,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	ptypes "pkg.akt.dev/go/node/provider/v1beta4"
-	tattr "pkg.akt.dev/go/node/types/attributes/v1"
+	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	tattr "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 )
 
 var (

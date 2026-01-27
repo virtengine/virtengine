@@ -38,11 +38,12 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## [Unreleased]
 
-* (ibc-go) Use ibc v4.4.0 https://pkg.akt.dev/node/pull/1825
+* (ibc-go) Use ibc v4.4.0 
 
 ### Improvements
 
 * (sdk) Bump Cosmos SDK version to [v0.38.3](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.38.3)
+* (sdk) Bump Cosmos SDK version to [v0.53.5](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.53.5)
 
 ### Bug Fixes
 

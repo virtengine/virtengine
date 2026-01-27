@@ -7,7 +7,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -179,6 +179,14 @@ func (k Keeper) SetScoreWithDetails(
 	}
 
 	return nil
+}
+
+// GetVEIDScore returns the VEID score for an account address.
+// This method is used by other modules (e.g., MFA) to get the score.
+// Implements the VEIDKeeper interface expected by x/mfa.
+func (k Keeper) GetVEIDScore(ctx sdk.Context, address sdk.AccAddress) (uint32, bool) {
+	score, _, found := k.GetScore(ctx, address.String())
+	return score, found
 }
 
 // GetScore returns the score, status, and whether a score was found for an account
@@ -583,4 +591,30 @@ func (k Keeper) GetScoreStatistics(ctx sdk.Context) types.ScoreStatistics {
 	}
 
 	return stats
+}
+
+// GetValidatorVerificationCount returns the count of verifications performed by a validator
+// in the given block height range.
+// TODO: Implement actual verification count tracking per validator
+func (k Keeper) GetValidatorVerificationCount(ctx sdk.Context, validatorAddr string, startHeight, endHeight int64) int64 {
+	// Stub implementation - return 0 for now
+	// Real implementation would track verification counts per validator
+	_ = ctx
+	_ = validatorAddr
+	_ = startHeight
+	_ = endHeight
+	return 0
+}
+
+// GetValidatorAverageVerificationScore returns the average verification score for a validator
+// in the given block height range.
+// TODO: Implement actual average score tracking per validator
+func (k Keeper) GetValidatorAverageVerificationScore(ctx sdk.Context, validatorAddr string, startHeight, endHeight int64) int64 {
+	// Stub implementation - return 0 for now
+	// Real implementation would track verification scores per validator
+	_ = ctx
+	_ = validatorAddr
+	_ = startHeight
+	_ = endHeight
+	return 0
 }

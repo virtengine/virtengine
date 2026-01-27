@@ -10,7 +10,7 @@ import (
 	"cosmossdk.io/log"
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================

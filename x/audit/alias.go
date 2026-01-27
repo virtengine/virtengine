@@ -1,9 +1,9 @@
 package audit
 
 import (
-	types "pkg.akt.dev/go/node/audit/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 
-	"pkg.akt.dev/node/x/audit/keeper"
+	"github.com/virtengine/virtengine/x/audit/keeper"
 )
 
 const (

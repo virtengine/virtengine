@@ -16,7 +16,7 @@ import (
 	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/mfa/types"
+	"github.com/virtengine/virtengine/x/mfa/types"
 )
 
 type KeeperTestSuite struct {
@@ -419,7 +419,7 @@ func TestSensitiveTransactionDetection(t *testing.T) {
 		{"/cosmos.staking.v1beta1.MsgCreateValidator", types.SensitiveTxValidatorRegistration, true},
 		{"/cosmos.staking.v1beta1.MsgEditValidator", types.SensitiveTxValidatorUpdate, true},
 		{"/cosmos.gov.v1beta1.MsgSubmitProposal", types.SensitiveTxGovernanceProposal, true},
-		{"/pkg.akt.dev.provider.v1.MsgRegisterProvider", types.SensitiveTxProviderRegistration, true},
+		{"/virtengine.provider.v1.MsgRegisterProvider", types.SensitiveTxProviderRegistration, true},
 		{"/cosmos.bank.v1beta1.MsgSend", types.SensitiveTxNone, false}, // Regular transfer
 	}
 

@@ -1,7 +1,7 @@
 package escrow
 
 import (
-	"pkg.akt.dev/go/node/escrow/module"
+	"github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 )
 
 const (

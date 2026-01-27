@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"pkg.akt.dev/node/testutil"
+	"github.com/virtengine/virtengine/testutil"
 )
 
 func TestIntegrationGRPC(t *testing.T) {

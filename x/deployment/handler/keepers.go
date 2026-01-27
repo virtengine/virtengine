@@ -8,11 +8,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
 
-	types "pkg.akt.dev/go/node/deployment/v1"
-	"pkg.akt.dev/go/node/deployment/v1beta4"
-	escrowid "pkg.akt.dev/go/node/escrow/id/v1"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
-	mtypes "pkg.akt.dev/go/node/market/v1beta5"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 )
 
 // MarketKeeper Interface includes market methods

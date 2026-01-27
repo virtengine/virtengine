@@ -1,7 +1,7 @@
 package query
 
 import (
-	"pkg.akt.dev/go/node/market/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1"
 )
 
 // Client interface

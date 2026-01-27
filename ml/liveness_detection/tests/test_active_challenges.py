@@ -7,7 +7,7 @@ VE-901: Test active challenge detection (blink, smile, head turn).
 import pytest
 import numpy as np
 
-from ml.liveness_detection.actiVIRTENGINE_challenges import (
+from ml.liveness_detection.active_challenges import (
     ActiveChallengeDetector,
     ChallengeResult,
     LandmarkData,
@@ -213,14 +213,14 @@ class TestDetectAllChallenges:
         assert ChallengeType.BLINK in results
         assert ChallengeType.SMILE in results
     
-    def test_overall_actiVIRTENGINE_score(self, liveness_config, blink_landmarks_sequence):
+    def test_overall_active_score(self, liveness_config, blink_landmarks_sequence):
         """Test computing overall active liveness score."""
         detector = ActiveChallengeDetector(liveness_config)
         
         challenges = [ChallengeType.BLINK]
         results = detector.detect_all_challenges(challenges, blink_landmarks_sequence)
         
-        score, passed, reason_codes = detector.get_overall_actiVIRTENGINE_score(
+        score, passed, reason_codes = detector.get_overall_active_score(
             results,
             required_challenges=[ChallengeType.BLINK],
             optional_challenges=[]

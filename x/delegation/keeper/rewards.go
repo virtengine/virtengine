@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"math/big"
 
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/delegation/types"
+	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
 // DistributeValidatorRewardsToDelegators distributes a validator's rewards to their delegators
@@ -132,7 +133,7 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, delegatorAddr, validatorAddr strin
 		return nil, types.ErrInvalidDelegator.Wrapf("invalid delegator address: %v", err)
 	}
 
-	rewardCoins := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, sdk.NewIntFromBigInt(totalReward)))
+	rewardCoins := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, math.NewIntFromBigInt(totalReward)))
 
 	if k.bankKeeper != nil {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, rewardCoins); err != nil {
@@ -196,7 +197,7 @@ func (k Keeper) ClaimAllRewards(ctx sdk.Context, delegatorAddr string) (sdk.Coin
 		return nil, types.ErrInvalidDelegator.Wrapf("invalid delegator address: %v", err)
 	}
 
-	rewardCoins := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, sdk.NewIntFromBigInt(totalReward)))
+	rewardCoins := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, math.NewIntFromBigInt(totalReward)))
 
 	if k.bankKeeper != nil {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, rewardCoins); err != nil {

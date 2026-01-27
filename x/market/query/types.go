@@ -3,8 +3,8 @@ package query
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/go/node/market/v1"
-	"pkg.akt.dev/go/node/market/v1beta5"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 )
 
 type (

@@ -3,7 +3,7 @@
 package v1_1_0
 
 import (
-	utypes "pkg.akt.dev/node/upgrades/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
 func init() {

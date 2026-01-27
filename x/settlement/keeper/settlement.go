@@ -6,7 +6,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // SettleOrder settles an order based on usage records

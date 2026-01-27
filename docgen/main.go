@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra/doc"
-	root "pkg.akt.dev/node/cmd/virtengine/cmd"
+	root "github.com/virtengine/virtengine/cmd/virtengine/cmd"
 )
 
 func main() {

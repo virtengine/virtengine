@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 type msgServer struct {

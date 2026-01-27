@@ -18,12 +18,12 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	rosettaCmd "github.com/cosmos/rosetta/cmd"
 
-	"pkg.akt.dev/go/cli"
-	cflags "pkg.akt.dev/go/cli/flags"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/cli"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	"pkg.akt.dev/node/app"
-	"pkg.akt.dev/node/cmd/virtengine/cmd/testnetify"
+	"github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/cmd/virtengine/cmd/testnetify"
 )
 
 // NewRootCmd creates a new root command for virtengine. It is called once in the

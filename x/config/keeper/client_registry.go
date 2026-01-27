@@ -7,7 +7,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/config/types"
+	"github.com/virtengine/virtengine/x/config/types"
 )
 
 // ValidateClientSignature validates that a signature is from an approved client

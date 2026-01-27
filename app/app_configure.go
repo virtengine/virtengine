@@ -21,16 +21,16 @@ import (
 	transfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	ibchost "github.com/cosmos/ibc-go/v10/modules/core/exported"
 
-	audittypes "pkg.akt.dev/go/node/audit/v1"
-	taketypes "pkg.akt.dev/go/node/take/v1"
+	audittypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
+	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
-	"pkg.akt.dev/node/x/audit"
-	"pkg.akt.dev/node/x/cert"
-	"pkg.akt.dev/node/x/deployment"
-	"pkg.akt.dev/node/x/escrow"
-	"pkg.akt.dev/node/x/market"
-	"pkg.akt.dev/node/x/provider"
-	"pkg.akt.dev/node/x/take"
+	"github.com/virtengine/virtengine/x/audit"
+	"github.com/virtengine/virtengine/x/cert"
+	"github.com/virtengine/virtengine/x/deployment"
+	"github.com/virtengine/virtengine/x/escrow"
+	"github.com/virtengine/virtengine/x/market"
+	"github.com/virtengine/virtengine/x/provider"
+	"github.com/virtengine/virtengine/x/take"
 )
 
 func virtengineModuleBasics() []module.AppModuleBasic {

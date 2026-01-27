@@ -21,8 +21,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
-	"pkg.akt.dev/node/x/fraud/keeper"
-	"pkg.akt.dev/node/x/fraud/types"
+	"github.com/virtengine/virtengine/x/fraud/keeper"
+	"github.com/virtengine/virtengine/x/fraud/types"
 )
 
 var (

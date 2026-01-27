@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	ood "pkg.akt.dev/node/pkg/ood_adapter"
+	ood "github.com/virtengine/virtengine/pkg/ood_adapter"
 )
 
 // Common test paths

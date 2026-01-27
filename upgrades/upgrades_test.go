@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/mod/semver"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
 func TestUpgradesName(t *testing.T) {

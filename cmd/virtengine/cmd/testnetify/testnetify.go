@@ -37,10 +37,10 @@ import (
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 
-	cflags "pkg.akt.dev/go/cli/flags"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 
-	virtengine "pkg.akt.dev/node/app"
-	"pkg.akt.dev/node/util/server"
+	virtengine "github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/util/server"
 )
 
 // GetCmd uses the provided chainID and operatorAddress as well as the local private validator key to

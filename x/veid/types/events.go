@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 // Event types for the veid module
 const (
 	EventTypeScopeUploaded         = "scope_uploaded"
@@ -153,3 +155,67 @@ type EventVerificationFailed struct {
 	ReasonCodes    []string `json:"reason_codes"`
 	BlockHeight    int64    `json:"block_height"`
 }
+
+// ============================================================================
+// Proto.Message interface stubs for Event types
+// ============================================================================
+
+// EventScopeUploaded proto stubs
+func (*EventScopeUploaded) ProtoMessage()            {}
+func (m *EventScopeUploaded) Reset()                 { *m = EventScopeUploaded{} }
+func (m *EventScopeUploaded) String() string         { return fmt.Sprintf("%+v", *m) }
+
+// EventScopeRevoked proto stubs
+func (*EventScopeRevoked) ProtoMessage()             {}
+func (m *EventScopeRevoked) Reset()                  { *m = EventScopeRevoked{} }
+func (m *EventScopeRevoked) String() string          { return fmt.Sprintf("%+v", *m) }
+
+// EventScopeVerified proto stubs
+func (*EventScopeVerified) ProtoMessage()            {}
+func (m *EventScopeVerified) Reset()                 { *m = EventScopeVerified{} }
+func (m *EventScopeVerified) String() string         { return fmt.Sprintf("%+v", *m) }
+
+// EventScopeRejected proto stubs
+func (*EventScopeRejected) ProtoMessage()            {}
+func (m *EventScopeRejected) Reset()                 { *m = EventScopeRejected{} }
+func (m *EventScopeRejected) String() string         { return fmt.Sprintf("%+v", *m) }
+
+// EventStatusUpdated proto stubs
+func (*EventStatusUpdated) ProtoMessage()            {}
+func (m *EventStatusUpdated) Reset()                 { *m = EventStatusUpdated{} }
+func (m *EventStatusUpdated) String() string         { return fmt.Sprintf("%+v", *m) }
+
+// EventScoreUpdated proto stubs
+func (*EventScoreUpdated) ProtoMessage()             {}
+func (m *EventScoreUpdated) Reset()                  { *m = EventScoreUpdated{} }
+func (m *EventScoreUpdated) String() string          { return fmt.Sprintf("%+v", *m) }
+
+// EventIdentityCreated proto stubs
+func (*EventIdentityCreated) ProtoMessage()          {}
+func (m *EventIdentityCreated) Reset()               { *m = EventIdentityCreated{} }
+func (m *EventIdentityCreated) String() string       { return fmt.Sprintf("%+v", *m) }
+
+// EventIdentityLocked proto stubs
+func (*EventIdentityLocked) ProtoMessage()           {}
+func (m *EventIdentityLocked) Reset()                { *m = EventIdentityLocked{} }
+func (m *EventIdentityLocked) String() string        { return fmt.Sprintf("%+v", *m) }
+
+// EventIdentityUnlocked proto stubs
+func (*EventIdentityUnlocked) ProtoMessage()         {}
+func (m *EventIdentityUnlocked) Reset()              { *m = EventIdentityUnlocked{} }
+func (m *EventIdentityUnlocked) String() string      { return fmt.Sprintf("%+v", *m) }
+
+// EventVerificationRequested proto stubs
+func (*EventVerificationRequested) ProtoMessage()    {}
+func (m *EventVerificationRequested) Reset()         { *m = EventVerificationRequested{} }
+func (m *EventVerificationRequested) String() string { return fmt.Sprintf("%+v", *m) }
+
+// EventVerificationCompleted proto stubs
+func (*EventVerificationCompleted) ProtoMessage()    {}
+func (m *EventVerificationCompleted) Reset()         { *m = EventVerificationCompleted{} }
+func (m *EventVerificationCompleted) String() string { return fmt.Sprintf("%+v", *m) }
+
+// EventVerificationFailed proto stubs
+func (*EventVerificationFailed) ProtoMessage()       {}
+func (m *EventVerificationFailed) Reset()            { *m = EventVerificationFailed{} }
+func (m *EventVerificationFailed) String() string    { return fmt.Sprintf("%+v", *m) }

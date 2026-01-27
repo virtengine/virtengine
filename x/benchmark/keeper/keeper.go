@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"time"
 
 	"cosmossdk.io/log"
 	"cosmossdk.io/store/prefix"
@@ -17,7 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/benchmark/types"
+	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
 // IKeeper defines the interface for the Benchmark keeper
@@ -147,7 +146,8 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 
 // SubmitBenchmarks submits one or more benchmark reports
 func (k Keeper) SubmitBenchmarks(ctx sdk.Context, reports []types.BenchmarkReport) error {
-	params := k.GetParams(ctx)
+	// Get params for validation rules
+	_ = k.GetParams(ctx)
 
 	for _, report := range reports {
 		// Validate report

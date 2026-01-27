@@ -22,12 +22,12 @@ from ml.liveness_detection.config import (
     LivenessConfig,
     ChallengeType,
 )
-from ml.liveness_detection.actiVIRTENGINE_challenges import (
+from ml.liveness_detection.active_challenges import (
     ActiveChallengeDetector,
     ChallengeResult,
     LandmarkData,
 )
-from ml.liveness_detection.passiVIRTENGINE_analysis import (
+from ml.liveness_detection.passive_analysis import (
     PassiveAnalyzer,
     PassiveAnalysisResult,
 )
@@ -58,8 +58,8 @@ class LivenessResult:
     confidence: float
     
     # Component scores
-    actiVIRTENGINE_challenge_score: float = 0.0
-    passiVIRTENGINE_analysis_score: float = 0.0
+    active_challenge_score: float = 0.0
+    passive_analysis_score: float = 0.0
     spoof_detection_score: float = 0.0  # Inverted: 0 = spoof, 1 = not spoof
     
     # Model info
@@ -77,7 +77,7 @@ class LivenessResult:
     
     # Component results (optional, for detailed analysis)
     challenge_results: Optional[Dict[str, Any]] = None
-    passiVIRTENGINE_result: Optional[Dict[str, Any]] = None
+    passive_result: Optional[Dict[str, Any]] = None
     spoof_result: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> dict:
@@ -87,8 +87,8 @@ class LivenessResult:
             "decision": self.decision,
             "liveness_score": self.liveness_score,
             "confidence": self.confidence,
-            "actiVIRTENGINE_challenge_score": self.actiVIRTENGINE_challenge_score,
-            "passiVIRTENGINE_analysis_score": self.passiVIRTENGINE_analysis_score,
+            "active_challenge_score": self.active_challenge_score,
+            "passive_analysis_score": self.passive_analysis_score,
             "spoof_detection_score": self.spoof_detection_score,
             "model_version": self.model_version,
             "model_hash": self.model_hash,
@@ -159,7 +159,7 @@ class LivenessDetector:
         
         # Initialize components
         self._challenge_detector = ActiveChallengeDetector(self.config)
-        self._passiVIRTENGINE_analyzer = PassiveAnalyzer(self.config)
+        self._passive_analyzer = PassiveAnalyzer(self.config)
         self._spoof_detector = SpoofDetector(self.config)
         
         # Compute model hash for determinism verification
@@ -225,8 +225,8 @@ class LivenessDetector:
             ]
         
         # 1. Active challenge detection
-        actiVIRTENGINE_score = 0.0
-        actiVIRTENGINE_passed = True
+        active_score = 0.0
+        active_passed = True
         challenge_results = {}
         
         if landmarks and len(landmarks) >= self.config.active.min_frames_for_challenge:
@@ -242,26 +242,26 @@ class LivenessDetector:
             )
             
             # Compute active score
-            actiVIRTENGINE_score, actiVIRTENGINE_passed, actiVIRTENGINE_codes = (
-                self._challenge_detector.get_overall_actiVIRTENGINE_score(
+            active_score, active_passed, active_codes = (
+                self._challenge_detector.get_overall_active_score(
                     challenge_results,
                     required_challenges,
                     optional_challenges
                 )
             )
             
-            for code in actiVIRTENGINE_codes:
+            for code in active_codes:
                 reason_codes.append(code.value)
         else:
             # No landmarks available - rely on passive analysis
-            actiVIRTENGINE_score = 0.5  # Neutral
-            actiVIRTENGINE_passed = True  # Don't fail without landmarks
+            active_score = 0.5  # Neutral
+            active_passed = True  # Don't fail without landmarks
         
         # 2. Passive analysis
-        passiVIRTENGINE_result = self._passiVIRTENGINE_analyzer.analyze(frames, face_regions)
-        passiVIRTENGINE_score = passiVIRTENGINE_result.combined_score
+        passive_result = self._passive_analyzer.analyze(frames, face_regions)
+        passive_score = passive_result.combined_score
         
-        for code in passiVIRTENGINE_result.reason_codes:
+        for code in passive_result.reason_codes:
             reason_codes.append(code.value)
         
         # 3. Spoof detection
@@ -276,13 +276,13 @@ class LivenessDetector:
         # 4. Combine scores
         weights = self.config.score
         combined_score = (
-            actiVIRTENGINE_score * weights.actiVIRTENGINE_challenge_weight +
-            passiVIRTENGINE_score * weights.passiVIRTENGINE_analysis_weight +
+            active_score * weights.active_challenge_weight +
+            passive_score * weights.passive_analysis_weight +
             spoof_score * weights.spoof_detection_weight
         )
         
         # Apply penalties
-        if not actiVIRTENGINE_passed:
+        if not active_passed:
             if len(required_challenges) > 1:
                 combined_score -= weights.multiple_challenge_fail_penalty
             else:
@@ -292,13 +292,13 @@ class LivenessDetector:
             combined_score -= weights.spoof_detected_penalty
         
         # Apply bonuses
-        if actiVIRTENGINE_passed and all(
+        if active_passed and all(
             challenge_results.get(c, ChallengeResult(c, False, 0.0)).passed
             for c in required_challenges + optional_challenges
         ):
             combined_score += weights.all_challenges_pass_bonus
         
-        if passiVIRTENGINE_result.motion_score > 0.7:
+        if passive_result.motion_score > 0.7:
             combined_score += weights.natural_motion_bonus
         
         # Clamp to [0, 1]
@@ -313,14 +313,14 @@ class LivenessDetector:
             is_live = False
             decision = "spoof"
             reason_codes.append(LivenessReasonCodes.SPOOF_HIGH_CONFIDENCE.value)
-        elif combined_score >= threshold and actiVIRTENGINE_passed and not spoof_result.is_spoof:
+        elif combined_score >= threshold and active_passed and not spoof_result.is_spoof:
             is_live = True
             decision = "live"
             if combined_score >= high_threshold:
                 reason_codes.append(LivenessReasonCodes.HIGH_CONFIDENCE_LIVE.value)
             else:
                 reason_codes.append(LivenessReasonCodes.LIVENESS_CONFIRMED.value)
-        elif combined_score >= low_threshold and actiVIRTENGINE_passed:
+        elif combined_score >= low_threshold and active_passed:
             is_live = False
             decision = "uncertain"
         else:
@@ -348,8 +348,8 @@ class LivenessDetector:
             decision=decision,
             liveness_score=combined_score,
             confidence=confidence,
-            actiVIRTENGINE_challenge_score=actiVIRTENGINE_score,
-            passiVIRTENGINE_analysis_score=passiVIRTENGINE_score,
+            active_challenge_score=active_score,
+            passive_analysis_score=passive_score,
             spoof_detection_score=spoof_score,
             model_version=self.MODEL_VERSION,
             model_hash=self._model_hash,
@@ -362,7 +362,7 @@ class LivenessDetector:
             result.challenge_results = {
                 str(k.value): v.to_dict() for k, v in challenge_results.items()
             }
-            result.passiVIRTENGINE_result = passiVIRTENGINE_result.to_dict()
+            result.passive_result = passive_result.to_dict()
             result.spoof_result = spoof_result.to_dict()
         
         return result
@@ -425,11 +425,11 @@ class LivenessDetector:
             Tuple of (liveness_score, reason_codes)
         """
         regions = [face_region] if face_region else None
-        passiVIRTENGINE_result = self._passiVIRTENGINE_analyzer.analyze([frame], regions)
+        passive_result = self._passive_analyzer.analyze([frame], regions)
         
-        reason_codes = [code.value for code in passiVIRTENGINE_result.reason_codes]
+        reason_codes = [code.value for code in passive_result.reason_codes]
         
-        return passiVIRTENGINE_result.combined_score, reason_codes
+        return passive_result.combined_score, reason_codes
     
     def validate_challenge_sequence(
         self,
@@ -466,13 +466,13 @@ def create_detector(config_type: str = "default") -> LivenessDetector:
     from ml.liveness_detection.config import (
         get_default_config,
         get_strict_config,
-        get_permissiVIRTENGINE_config,
+        get_permissive_config,
     )
     
     if config_type == "strict":
         config = get_strict_config()
     elif config_type == "permissive":
-        config = get_permissiVIRTENGINE_config()
+        config = get_permissive_config()
     else:
         config = get_default_config()
     

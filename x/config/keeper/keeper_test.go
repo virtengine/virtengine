@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"pkg.akt.dev/node/x/config/types"
+	"github.com/virtengine/virtengine/x/config/types"
 )
 
 // Test constants

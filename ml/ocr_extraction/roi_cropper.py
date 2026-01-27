@@ -316,23 +316,23 @@ class ROICropper:
                 255,
                 cv2.THRESH_BINARY + cv2.THRESH_OTSU
             )
-        elif method == ThresholdingMethod.ADAPTIVIRTENGINE_MEAN:
+        elif method == ThresholdingMethod.ADAPTIVE_MEAN:
             result = cv2.adaptiveThreshold(
                 gray,
                 255,
-                cv2.ADAPTIVIRTENGINE_THRESH_MEAN_C,
+                cv2.ADAPTIVE_THRESH_MEAN_C,
                 cv2.THRESH_BINARY,
-                self.config.adaptiVIRTENGINE_block_size,
-                self.config.adaptiVIRTENGINE_c
+                self.config.adaptive_block_size,
+                self.config.adaptive_c
             )
-        elif method == ThresholdingMethod.ADAPTIVIRTENGINE_GAUSSIAN:
+        elif method == ThresholdingMethod.ADAPTIVE_GAUSSIAN:
             result = cv2.adaptiveThreshold(
                 gray,
                 255,
-                cv2.ADAPTIVIRTENGINE_THRESH_GAUSSIAN_C,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                 cv2.THRESH_BINARY,
-                self.config.adaptiVIRTENGINE_block_size,
-                self.config.adaptiVIRTENGINE_c
+                self.config.adaptive_block_size,
+                self.config.adaptive_c
             )
         else:
             result = gray

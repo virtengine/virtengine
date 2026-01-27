@@ -3,8 +3,8 @@ package settlement
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/settlement/keeper"
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/keeper"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // InitGenesis initializes the settlement module's state from a provided genesis state.
@@ -13,12 +13,12 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 	k.SetParams(ctx, data.Params)
 
 	// Import escrow accounts
-	for _, escrow := range data.Escrows {
+	for _, escrow := range data.EscrowAccounts {
 		k.SetEscrow(ctx, escrow)
 	}
 
 	// Import settlement records
-	for _, settlement := range data.Settlements {
+	for _, settlement := range data.SettlementRecords {
 		k.SetSettlement(ctx, settlement)
 	}
 
@@ -46,14 +46,14 @@ func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 	// Set the next sequences from the highest existing IDs
 	var maxEscrowSeq, maxSettlementSeq, maxUsageSeq, maxDistributionSeq uint64
 
-	for _, escrow := range data.Escrows {
+	for _, escrow := range data.EscrowAccounts {
 		seq := extractSequenceFromID(escrow.EscrowID)
 		if seq > maxEscrowSeq {
 			maxEscrowSeq = seq
 		}
 	}
 
-	for _, settlement := range data.Settlements {
+	for _, settlement := range data.SettlementRecords {
 		seq := extractSequenceFromID(settlement.SettlementID)
 		if seq > maxSettlementSeq {
 			maxSettlementSeq = seq
@@ -129,12 +129,12 @@ func ExportGenesis(ctx sdk.Context, k keeper.IKeeper) *types.GenesisState {
 	})
 
 	return &types.GenesisState{
-		Params:               params,
-		Escrows:              escrows,
-		Settlements:          settlements,
-		UsageRecords:         usageRecords,
-		RewardDistributions:  rewardDistributions,
-		ClaimableRewards:     claimableRewards,
+		Params:              params,
+		EscrowAccounts:      escrows,
+		SettlementRecords:   settlements,
+		UsageRecords:        usageRecords,
+		RewardDistributions: rewardDistributions,
+		ClaimableRewards:    claimableRewards,
 	}
 }
 

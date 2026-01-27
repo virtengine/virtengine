@@ -309,7 +309,7 @@ function build_bins() {
 		archive="${archive}_linux_$GOARCH"
 	fi
 
-	unzip -o "${VIRTENGINE_DEVCACHE}/goreleaser/test-bins/${archive}.zip" -d "$upgrade_bin"
+	unzip -o "${VE_DEVCACHE}/goreleaser/test-bins/${archive}.zip" -d "$upgrade_bin"
 	chmod +x "$genesis_bin/virtengine"
 	chmod +x "$upgrade_bin/virtengine"
 }
@@ -367,23 +367,23 @@ function init() {
 
 		cat >"$valdir/.envrc" <<EOL
 PATH_add "\$(pwd)/cosmovisor/current/bin"
-VIRTENGINE_HOME="\$(pwd)"
-VIRTENGINE_FROM=validator0
-VIRTENGINE_GAS=auto
-VIRTENGINE_MINIMUM_GAS_PRICES=0.0025uakt
-VIRTENGINE_NODE=tcp://127.0.0.1:26657
-VIRTENGINE_CHAIN_ID=localvirtengine
-VIRTENGINE_KEYRING_BACKEND=test
-VIRTENGINE_SIGN_MODE=direct
+VE_HOME="\$(pwd)"
+VE_FROM=validator0
+VE_GAS=auto
+VE_MINIMUM_GAS_PRICES=0.0025uakt
+VE_NODE=tcp://127.0.0.1:26657
+VE_CHAIN_ID=localvirtengine
+VE_KEYRING_BACKEND=test
+VE_SIGN_MODE=direct
 
-export VIRTENGINE_HOME
-export VIRTENGINE_FROM
-export VIRTENGINE_GAS
-export VIRTENGINE_MINIMUM_GAS_PRICES
-export VIRTENGINE_NODE
-export VIRTENGINE_CHAIN_ID
-export VIRTENGINE_KEYRING_BACKEND
-export VIRTENGINE_SIGN_MODE
+export VE_HOME
+export VE_FROM
+export VE_GAS
+export VE_MINIMUM_GAS_PRICES
+export VE_NODE
+export VE_CHAIN_ID
+export VE_KEYRING_BACKEND
+export VE_SIGN_MODE
 EOL
 
 		cat >"$valdir/validator.json" <<EOL

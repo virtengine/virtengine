@@ -290,7 +290,7 @@ func ocspRevocationReasonToString(reason int) string {
 	case ocsp.CertificateHold:
 		return "certificate_hold"
 	case ocsp.RemoveFromCRL:
-		return "remoVIRTENGINE_from_crl"
+		return "remove_from_crl"
 	case ocsp.PrivilegeWithdrawn:
 		return "privilege_withdrawn"
 	case ocsp.AACompromise:
@@ -410,7 +410,7 @@ func crlRevocationReasonToString(reason int) string {
 	case 6:
 		return "certificate_hold"
 	case 8:
-		return "remoVIRTENGINE_from_crl"
+		return "remove_from_crl"
 	case 9:
 		return "privilege_withdrawn"
 	case 10:

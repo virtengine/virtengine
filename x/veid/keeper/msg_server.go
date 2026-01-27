@@ -3,7 +3,7 @@ package keeper
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // Error message constants
@@ -300,6 +300,149 @@ func (ms msgServer) UpdateScore(ctx sdk.Context, msg *types.MsgUpdateScore) (*ty
 		NewTier:        updatedRecord.Tier,
 		UpdatedAt:      ctx.BlockTime().Unix(),
 	}, nil
+}
+
+// CreateIdentityWallet handles creating a new identity wallet
+func (ms msgServer) CreateIdentityWallet(ctx sdk.Context, msg *types.MsgCreateIdentityWallet) (*types.MsgCreateIdentityWalletResponse, error) {
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	wallet, err := ms.keeper.CreateWallet(ctx, sender, msg.BindingSignature, msg.BindingPubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.MsgCreateIdentityWalletResponse{
+		WalletID:  wallet.WalletID,
+		CreatedAt: ctx.BlockTime().Unix(),
+	}, nil
+}
+
+// AddScopeToWallet handles adding a scope reference to a wallet
+func (ms msgServer) AddScopeToWallet(ctx sdk.Context, msg *types.MsgAddScopeToWallet) (*types.MsgAddScopeToWalletResponse, error) {
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	// Create scope reference from message
+	scopeRef := types.ScopeReference{
+		ScopeID:      msg.ScopeID,
+		ScopeType:    msg.ScopeType,
+		EnvelopeHash: msg.EnvelopeHash,
+		AddedAt:      ctx.BlockTime(),
+	}
+
+	if err := ms.keeper.AddScopeToWallet(ctx, sender, scopeRef, msg.UserSignature); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgAddScopeToWalletResponse{
+		ScopeID: msg.ScopeID,
+		AddedAt: ctx.BlockTime().Unix(),
+	}, nil
+}
+
+// RevokeScopeFromWallet handles revoking a scope from a wallet
+func (ms msgServer) RevokeScopeFromWallet(ctx sdk.Context, msg *types.MsgRevokeScopeFromWallet) (*types.MsgRevokeScopeFromWalletResponse, error) {
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	if err := ms.keeper.RevokeScopeFromWallet(ctx, sender, msg.ScopeID, msg.Reason, msg.UserSignature); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgRevokeScopeFromWalletResponse{
+		ScopeID:   msg.ScopeID,
+		RevokedAt: ctx.BlockTime().Unix(),
+	}, nil
+}
+
+// UpdateConsentSettings handles updating consent settings
+func (ms msgServer) UpdateConsentSettings(ctx sdk.Context, msg *types.MsgUpdateConsentSettings) (*types.MsgUpdateConsentSettingsResponse, error) {
+	_, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	// TODO: Implement consent settings update with proper ConsentUpdateRequest
+	// The keeper.UpdateConsent expects a types.ConsentUpdateRequest parameter
+	return &types.MsgUpdateConsentSettingsResponse{
+		UpdatedAt:      ctx.BlockTime().Unix(),
+		ConsentVersion: 0,
+	}, nil
+}
+
+// RebindWallet handles rebinding a wallet to a new address
+func (ms msgServer) RebindWallet(ctx sdk.Context, msg *types.MsgRebindWallet) (*types.MsgRebindWalletResponse, error) {
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	if err := ms.keeper.RebindWallet(ctx, sender, msg.NewBindingPubKey, msg.NewBindingSignature, msg.OldSignature); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgRebindWalletResponse{
+		ReboundAt: ctx.BlockTime().Unix(),
+	}, nil
+}
+
+// UpdateDerivedFeatures handles updating derived features
+func (ms msgServer) UpdateDerivedFeatures(ctx sdk.Context, msg *types.MsgUpdateDerivedFeatures) (*types.MsgUpdateDerivedFeaturesResponse, error) {
+	_, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	accountAddr, err := sdk.AccAddressFromBech32(msg.AccountAddress)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap("invalid account address")
+	}
+
+	update := msg.ToDerivedFeaturesUpdate()
+	if err := ms.keeper.UpdateDerivedFeatures(ctx, accountAddr, update); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateDerivedFeaturesResponse{
+		UpdatedAt: ctx.BlockTime().Unix(),
+	}, nil
+}
+
+// CompleteBorderlineFallback handles completing a borderline fallback verification
+func (ms msgServer) CompleteBorderlineFallback(ctx sdk.Context, msg *types.MsgCompleteBorderlineFallback) (*types.MsgCompleteBorderlineFallbackResponse, error) {
+	_, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
+	}
+
+	// TODO: Implement using borderline keeper methods
+	// The keeper.CompleteBorderlineFallback method needs to be defined
+	return &types.MsgCompleteBorderlineFallbackResponse{
+		FallbackID:  "",
+		FinalStatus: types.VerificationStatusPending,
+		FactorClass: "",
+	}, nil
+}
+
+// UpdateBorderlineParams handles updating borderline parameters (governance)
+func (ms msgServer) UpdateBorderlineParams(ctx sdk.Context, msg *types.MsgUpdateBorderlineParams) (*types.MsgUpdateBorderlineParamsResponse, error) {
+	// Authority check - only governance can update borderline params
+	if msg.Authority != ms.keeper.GetAuthority() {
+		return nil, types.ErrUnauthorized.Wrapf("invalid authority; expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
+	}
+
+	if err := ms.keeper.SetBorderlineParams(ctx, msg.Params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateBorderlineParamsResponse{}, nil
 }
 
 // MsgServerWithContext wraps msgServer for gRPC context handling

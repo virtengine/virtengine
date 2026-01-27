@@ -11,9 +11,9 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/kv"
 
-	types "pkg.akt.dev/go/node/cert/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 
-	"pkg.akt.dev/node/util/validation"
+	"github.com/virtengine/virtengine/util/validation"
 )
 
 const (

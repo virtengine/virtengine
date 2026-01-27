@@ -627,10 +627,10 @@ class AnomalyScorer:
         
         # Reconstruction-based codes
         if reconstruction_metrics.mse > recon_cfg.mse_threshold:
-            codes.append(AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD)
+            codes.append(AnomalyReasonCodes.MSE_ABOVE_THRESHOLD)
         
         if reconstruction_metrics.mae > recon_cfg.mae_threshold:
-            codes.append(AnomalyReasonCodes.MAE_ABOVIRTENGINE_THRESHOLD)
+            codes.append(AnomalyReasonCodes.MAE_ABOVE_THRESHOLD)
         
         if reconstruction_metrics.ssim < recon_cfg.ssim_threshold:
             codes.append(AnomalyReasonCodes.SSIM_BELOW_THRESHOLD)

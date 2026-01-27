@@ -11,11 +11,11 @@ import (
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 
-	cflags "pkg.akt.dev/go/cli/flags"
-	"pkg.akt.dev/go/sdkutil"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	"pkg.akt.dev/node/app"
-	"pkg.akt.dev/node/testutil/network"
+	"github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/testutil/network"
 )
 
 // NewTestNetworkFixture returns a new simapp AppConstructor for network simulation tests

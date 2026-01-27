@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	_ "pkg.akt.dev/go/sdkutil"
+	_ "github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	"pkg.akt.dev/node/cmd/virtengine/cmd"
+	"github.com/virtengine/virtengine/cmd/virtengine/cmd"
 )
 
 // In main we call the rootCmd

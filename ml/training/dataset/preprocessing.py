@@ -45,7 +45,7 @@ class PreprocessedSample:
     
     # Quality indicators from preprocessing
     document_orientation_corrected: bool = False
-    document_perspectiVIRTENGINE_corrected: bool = False
+    document_perspective_corrected: bool = False
     
     # Status
     success: bool = True
@@ -163,7 +163,7 @@ class DatasetPreprocessor:
             # Preprocess document image
             document_image = None
             doc_orientation_corrected = False
-            doc_perspectiVIRTENGINE_corrected = False
+            doc_perspective_corrected = False
             
             if sample.document_image is not None:
                 doc_result = self._preprocess_document_image(
@@ -171,7 +171,7 @@ class DatasetPreprocessor:
                 )
                 document_image = doc_result['image']
                 doc_orientation_corrected = doc_result.get('orientation_corrected', False)
-                doc_perspectiVIRTENGINE_corrected = doc_result.get('perspectiVIRTENGINE_corrected', False)
+                doc_perspective_corrected = doc_result.get('perspective_corrected', False)
                 preprocessing_applied.extend(doc_result.get('applied', []))
             
             # Preprocess selfie image
@@ -192,7 +192,7 @@ class DatasetPreprocessor:
                 preprocessing_applied=preprocessing_applied,
                 processing_time_ms=processing_time,
                 document_orientation_corrected=doc_orientation_corrected,
-                document_perspectiVIRTENGINE_corrected=doc_perspectiVIRTENGINE_corrected,
+                document_perspective_corrected=doc_perspective_corrected,
                 success=True,
             )
             
@@ -216,7 +216,7 @@ class DatasetPreprocessor:
         applied = []
         result_image = image.copy()
         orientation_corrected = False
-        perspectiVIRTENGINE_corrected = False
+        perspective_corrected = False
         
         # Apply document preprocessing pipeline if available
         if self._doc_pipeline and self.config.apply_orientation_correction:
@@ -225,7 +225,7 @@ class DatasetPreprocessor:
                 if doc_result.success:
                     result_image = doc_result.normalized_image
                     orientation_corrected = doc_result.rotation_applied != 0
-                    perspectiVIRTENGINE_corrected = doc_result.perspectiVIRTENGINE_corrected
+                    perspective_corrected = doc_result.perspective_corrected
                     applied.extend(doc_result.enhancements_applied)
             except Exception as e:
                 logger.warning(f"Document preprocessing failed: {e}")
@@ -245,7 +245,7 @@ class DatasetPreprocessor:
         return {
             'image': result_image,
             'orientation_corrected': orientation_corrected,
-            'perspectiVIRTENGINE_corrected': perspectiVIRTENGINE_corrected,
+            'perspective_corrected': perspective_corrected,
             'applied': applied,
         }
     

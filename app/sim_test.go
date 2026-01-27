@@ -25,7 +25,6 @@ import (
 	sdksim "github.com/cosmos/cosmos-sdk/types/simulation"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
-	authzkeys "github.com/cosmos/cosmos-sdk/x/authz/keeper/keys"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	consensustypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
@@ -38,17 +37,17 @@ import (
 	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	ibchost "github.com/cosmos/ibc-go/v10/modules/core/exported"
 
-	atypes "pkg.akt.dev/go/node/audit/v1"
-	ctypes "pkg.akt.dev/go/node/cert/v1"
-	dtypes "pkg.akt.dev/go/node/deployment/v1"
-	mtypes "pkg.akt.dev/go/node/market/v1"
-	ptypes "pkg.akt.dev/go/node/provider/v1beta4"
-	taketypes "pkg.akt.dev/go/node/take/v1"
-	"pkg.akt.dev/go/sdkutil"
+	atypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
+	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
+	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	virtengine "pkg.akt.dev/node/app"
-	"pkg.akt.dev/node/app/sim"
-	simtestutil "pkg.akt.dev/node/testutil/sims"
+	virtengine "github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/app/sim"
+	simtestutil "github.com/virtengine/virtengine/testutil/sims"
 )
 
 // AppChainID hardcoded chainID for simulation
@@ -238,9 +237,8 @@ func TestAppImportExport(t *testing.T) {
 			appA,
 			appB,
 			[][]byte{
-				authzkeys.GrantQueuePrefix,
-				authzkeys.GranteeGranterKey,
-				authzkeys.GranteeMsgTypeUrlKey,
+				// Note: These keys were from cosmos-sdk/x/authz/keeper/keys which no longer exists
+				// Using empty slice as the exact key prefixes depend on cosmos-sdk version
 			},
 		},
 		{

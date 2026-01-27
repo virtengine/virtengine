@@ -187,16 +187,16 @@ class TestNoiseEstimation:
 class TestAdaptiveDenoising:
     """Tests for adaptive denoising."""
     
-    def test_adaptiVIRTENGINE_denoise_low_noise(self, noise_reducer, small_document_image):
+    def test_adaptive_denoise_low_noise(self, noise_reducer, small_document_image):
         """Test adaptive denoising on low-noise image."""
-        result = noise_reducer.adaptiVIRTENGINE_denoise(small_document_image)
+        result = noise_reducer.adaptive_denoise(small_document_image)
         
         assert result is not None
         # Low noise should result in minimal denoising
     
-    def test_adaptiVIRTENGINE_denoise_high_noise(self, noise_reducer, noisy_document_image):
+    def test_adaptive_denoise_high_noise(self, noise_reducer, noisy_document_image):
         """Test adaptive denoising on high-noise image."""
-        result = noise_reducer.adaptiVIRTENGINE_denoise(noisy_document_image)
+        result = noise_reducer.adaptive_denoise(noisy_document_image)
         
         assert result is not None
         # High noise should result in stronger denoising

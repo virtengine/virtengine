@@ -24,7 +24,7 @@ type RatingDistribution struct {
 	FourStar uint64 `json:"four_star"`
 
 	// FiveStar is the count of 5-star reviews
-	FiveStar uint64 `json:"fiVIRTENGINE_star"`
+	FiveStar uint64 `json:"five_star"`
 }
 
 // Total returns the total number of reviews

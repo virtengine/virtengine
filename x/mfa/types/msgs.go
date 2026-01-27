@@ -1,27 +1,29 @@
 package types
 
 import (
+	"context"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // MsgServer is the server API for the MFA module's messages
 type MsgServer interface {
 	// EnrollFactor enrolls a new MFA factor
-	EnrollFactor(ctx sdk.Context, msg *MsgEnrollFactor) (*MsgEnrollFactorResponse, error)
+	EnrollFactor(ctx context.Context, msg *MsgEnrollFactor) (*MsgEnrollFactorResponse, error)
 	// RevokeFactor revokes an enrolled factor
-	RevokeFactor(ctx sdk.Context, msg *MsgRevokeFactor) (*MsgRevokeFactorResponse, error)
+	RevokeFactor(ctx context.Context, msg *MsgRevokeFactor) (*MsgRevokeFactorResponse, error)
 	// SetMFAPolicy sets the MFA policy for an account
-	SetMFAPolicy(ctx sdk.Context, msg *MsgSetMFAPolicy) (*MsgSetMFAPolicyResponse, error)
+	SetMFAPolicy(ctx context.Context, msg *MsgSetMFAPolicy) (*MsgSetMFAPolicyResponse, error)
 	// CreateChallenge creates an MFA challenge
-	CreateChallenge(ctx sdk.Context, msg *MsgCreateChallenge) (*MsgCreateChallengeResponse, error)
+	CreateChallenge(ctx context.Context, msg *MsgCreateChallenge) (*MsgCreateChallengeResponse, error)
 	// VerifyChallenge verifies an MFA challenge response
-	VerifyChallenge(ctx sdk.Context, msg *MsgVerifyChallenge) (*MsgVerifyChallengeResponse, error)
+	VerifyChallenge(ctx context.Context, msg *MsgVerifyChallenge) (*MsgVerifyChallengeResponse, error)
 	// AddTrustedDevice adds a trusted device
-	AddTrustedDevice(ctx sdk.Context, msg *MsgAddTrustedDevice) (*MsgAddTrustedDeviceResponse, error)
+	AddTrustedDevice(ctx context.Context, msg *MsgAddTrustedDevice) (*MsgAddTrustedDeviceResponse, error)
 	// RemoveTrustedDevice removes a trusted device
-	RemoveTrustedDevice(ctx sdk.Context, msg *MsgRemoveTrustedDevice) (*MsgRemoveTrustedDeviceResponse, error)
+	RemoveTrustedDevice(ctx context.Context, msg *MsgRemoveTrustedDevice) (*MsgRemoveTrustedDeviceResponse, error)
 	// UpdateSensitiveTxConfig updates sensitive transaction configuration
-	UpdateSensitiveTxConfig(ctx sdk.Context, msg *MsgUpdateSensitiveTxConfig) (*MsgUpdateSensitiveTxConfigResponse, error)
+	UpdateSensitiveTxConfig(ctx context.Context, msg *MsgUpdateSensitiveTxConfig) (*MsgUpdateSensitiveTxConfigResponse, error)
 }
 
 // MsgEnrollFactor is the message for enrolling a new factor

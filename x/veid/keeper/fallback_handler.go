@@ -6,8 +6,8 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	mfatypes "pkg.akt.dev/node/x/mfa/types"
-	"pkg.akt.dev/node/x/veid/types"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -120,11 +120,11 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 		"borderline_score", fallbackRecord.BorderlineScore,
 	)
 
-	// Update identity record status if it exists
+	// Update identity record tier if it exists (after successful MFA fallback)
 	if record, found := k.GetIdentityRecord(ctx, address); found {
-		record.Status = types.IdentityStatusVerified
+		record.Tier = types.IdentityTierVerified
 		if err := k.SetIdentityRecord(ctx, record); err != nil {
-			k.Logger(ctx).Error("failed to update identity record status", "error", err)
+			k.Logger(ctx).Error("failed to update identity record tier", "error", err)
 		}
 	}
 

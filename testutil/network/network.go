@@ -46,10 +46,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	cflags "pkg.akt.dev/go/cli/flags"
-	"pkg.akt.dev/go/sdkutil"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	"pkg.akt.dev/node/app"
+	"github.com/virtengine/virtengine/app"
 )
 
 const (

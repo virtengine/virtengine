@@ -1,8 +1,8 @@
 package config
 
 import (
-	"pkg.akt.dev/node/x/config/keeper"
-	"pkg.akt.dev/node/x/config/types"
+	"github.com/virtengine/virtengine/x/config/keeper"
+	"github.com/virtengine/virtengine/x/config/types"
 )
 
 // Module aliases

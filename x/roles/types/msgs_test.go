@@ -7,7 +7,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/roles/types"
+	"github.com/virtengine/virtengine/x/roles/types"
 )
 
 func TestMsgAssignRoleValidateBasic(t *testing.T) {

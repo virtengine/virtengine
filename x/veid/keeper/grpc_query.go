@@ -5,7 +5,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // Error message constants
@@ -117,23 +117,16 @@ func (q GRPCQuerier) VerificationHistory(ctx sdk.Context, req *types.QueryVerifi
 		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
 	}
 
-	address, err := sdk.AccAddressFromBech32(req.AccountAddress)
+	_, err := sdk.AccAddressFromBech32(req.AccountAddress)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	limit := req.Limit
-	if limit == 0 {
-		limit = 100 // Default limit
-	}
-	if limit > 1000 {
-		limit = 1000 // Max limit
-	}
-
-	events := q.Keeper.GetVerificationHistory(ctx, address, limit)
-
+	// TODO: Convert VerificationEvent to PublicVerificationHistoryEntry
+	// For now, return empty entries
 	return &types.QueryVerificationHistoryResponse{
-		Events: events,
+		Entries:    []types.PublicVerificationHistoryEntry{},
+		TotalCount: 0,
 	}, nil
 }
 
@@ -165,5 +158,126 @@ func (q GRPCQuerier) Params(ctx sdk.Context, req *types.QueryParamsRequest) (*ty
 
 	return &types.QueryParamsResponse{
 		Params: params,
+	}, nil
+}
+
+// IdentityWallet returns the identity wallet for an address
+func (q GRPCQuerier) IdentityWallet(ctx sdk.Context, req *types.QueryIdentityWalletRequest) (*types.QueryIdentityWalletResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	if req.AccountAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+	}
+
+	address, err := sdk.AccAddressFromBech32(req.AccountAddress)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+	}
+
+	// Get public wallet info
+	publicInfo, found := q.Keeper.GetWalletPublicMetadata(ctx, address)
+	if !found {
+		return &types.QueryIdentityWalletResponse{
+			Wallet: nil,
+			Found:  false,
+		}, nil
+	}
+
+	return &types.QueryIdentityWalletResponse{
+		Wallet: &publicInfo,
+		Found:  true,
+	}, nil
+}
+
+// WalletScopes returns the scopes for a wallet
+func (q GRPCQuerier) WalletScopes(ctx sdk.Context, req *types.QueryWalletScopesRequest) (*types.QueryWalletScopesResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	if req.AccountAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+	}
+
+	_, err := sdk.AccAddressFromBech32(req.AccountAddress)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+	}
+
+	// TODO: Implement GetWalletScopes keeper method
+	return &types.QueryWalletScopesResponse{
+		Scopes:      []types.WalletScopeInfo{},
+		TotalCount:  0,
+		ActiveCount: 0,
+	}, nil
+}
+
+// ConsentSettings returns the consent settings for an address
+func (q GRPCQuerier) ConsentSettings(ctx sdk.Context, req *types.QueryConsentSettingsRequest) (*types.QueryConsentSettingsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	if req.AccountAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+	}
+
+	_, err := sdk.AccAddressFromBech32(req.AccountAddress)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+	}
+
+	// TODO: Implement GetConsentSettings keeper method
+	// Return empty consent settings response
+	return &types.QueryConsentSettingsResponse{
+		ScopeConsents:  []types.PublicConsentInfo{},
+		ConsentVersion: 0,
+		LastUpdatedAt:  0,
+	}, nil
+}
+
+// DerivedFeatures returns the derived features for an address
+func (q GRPCQuerier) DerivedFeatures(ctx sdk.Context, req *types.QueryDerivedFeaturesRequest) (*types.QueryDerivedFeaturesResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	if req.AccountAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+	}
+
+	_, err := sdk.AccAddressFromBech32(req.AccountAddress)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+	}
+
+	// TODO: Implement full derived features query
+	return &types.QueryDerivedFeaturesResponse{
+		Features: nil,
+		Found:    false,
+	}, nil
+}
+
+// DerivedFeatureHashes returns the derived feature hashes for an address
+func (q GRPCQuerier) DerivedFeatureHashes(ctx sdk.Context, req *types.QueryDerivedFeatureHashesRequest) (*types.QueryDerivedFeatureHashesResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	if req.AccountAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+	}
+
+	_, err := sdk.AccAddressFromBech32(req.AccountAddress)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+	}
+
+	// TODO: Implement consent-gated feature hash retrieval
+	return &types.QueryDerivedFeatureHashesResponse{
+		Allowed:      false,
+		DenialReason: "not implemented",
 	}, nil
 }

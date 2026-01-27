@@ -881,8 +881,8 @@ type ScoringHistoryEntry struct {
 // Default Scoring Model
 // ============================================================================
 
-// DefaultScoringModelVersion returns the default v1 scoring model
-func DefaultScoringModelVersion() ScoringModelVersion {
+// DefaultScoringModel returns the default v1 scoring model
+func DefaultScoringModel() ScoringModelVersion {
 	now := time.Now()
 	return ScoringModelVersion{
 		Version:     DefaultScoringModelVersion,

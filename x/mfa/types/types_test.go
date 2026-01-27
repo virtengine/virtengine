@@ -176,7 +176,7 @@ func TestKnownSensitiveMsgTypes(t *testing.T) {
 	// Verify key message types are properly mapped
 	require.Contains(t, KnownSensitiveMsgTypes, "/cosmos.staking.v1beta1.MsgCreateValidator")
 	require.Contains(t, KnownSensitiveMsgTypes, "/cosmos.gov.v1beta1.MsgSubmitProposal")
-	require.Contains(t, KnownSensitiveMsgTypes, "/pkg.akt.dev.provider.v1.MsgRegisterProvider")
+	require.Contains(t, KnownSensitiveMsgTypes, "/virtengine.provider.v1.MsgRegisterProvider")
 
 	// Verify correct mapping
 	require.Equal(t, SensitiveTxValidatorRegistration, KnownSensitiveMsgTypes["/cosmos.staking.v1beta1.MsgCreateValidator"])

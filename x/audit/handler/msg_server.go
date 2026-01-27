@@ -5,9 +5,9 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	types "pkg.akt.dev/go/node/audit/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 
-	"pkg.akt.dev/node/x/audit/keeper"
+	"github.com/virtengine/virtengine/x/audit/keeper"
 )
 
 type msgServer struct {

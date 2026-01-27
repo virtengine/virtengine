@@ -6,7 +6,7 @@ package keeper
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/staking/types"
+	"github.com/virtengine/virtengine/x/staking/types"
 )
 
 // BeginBlocker is called at the beginning of every block

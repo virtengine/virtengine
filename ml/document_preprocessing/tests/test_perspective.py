@@ -48,15 +48,15 @@ class TestPerspectiveCorrector:
         corrector = PerspectiveCorrector(document_config)
         assert corrector.config == document_config
     
-    def test_correct_perspectiVIRTENGINE_returns_result(self, perspectiVIRTENGINE_corrector, sample_document_image):
+    def test_correct_perspective_returns_result(self, perspective_corrector, sample_document_image):
         """Test that correct_perspective returns proper result."""
-        corrected, result = perspectiVIRTENGINE_corrector.correct_perspective(sample_document_image)
+        corrected, result = perspective_corrector.correct_perspective(sample_document_image)
         
         assert isinstance(result, PerspectiveResult)
         assert corrected is not None
         assert isinstance(corrected, np.ndarray)
     
-    def test_correct_perspectiVIRTENGINE_disabled(self, document_config, sample_document_image):
+    def test_correct_perspective_disabled(self, document_config, sample_document_image):
         """Test behavior when perspective correction is disabled."""
         document_config.perspective.enabled = False
         corrector = PerspectiveCorrector(document_config)
@@ -66,9 +66,9 @@ class TestPerspectiveCorrector:
         assert result.corrected is False
         assert np.array_equal(corrected, sample_document_image)
     
-    def test_detect_document_corners(self, perspectiVIRTENGINE_corrector, sample_document_image):
+    def test_detect_document_corners(self, perspective_corrector, sample_document_image):
         """Test corner detection."""
-        corners, confidence = perspectiVIRTENGINE_corrector.detect_document_corners(sample_document_image)
+        corners, confidence = perspective_corrector.detect_document_corners(sample_document_image)
         
         # May or may not find corners depending on image content
         if corners is not None:
@@ -76,7 +76,7 @@ class TestPerspectiveCorrector:
             assert all(isinstance(c, Point) for c in corners)
             assert 0.0 <= confidence <= 1.0
     
-    def test_four_point_transform(self, perspectiVIRTENGINE_corrector, sample_document_image):
+    def test_four_point_transform(self, perspective_corrector, sample_document_image):
         """Test four-point perspective transform."""
         # Define corners manually
         height, width = sample_document_image.shape[:2]
@@ -87,13 +87,13 @@ class TestPerspectiveCorrector:
             Point(40, height - 60),
         ]
         
-        result = perspectiVIRTENGINE_corrector.four_point_transform(sample_document_image, corners)
+        result = perspective_corrector.four_point_transform(sample_document_image, corners)
         
         assert result is not None
         assert isinstance(result, np.ndarray)
         assert len(result.shape) == 3
     
-    def test_manual_correction(self, perspectiVIRTENGINE_corrector, sample_document_image):
+    def test_manual_correction(self, perspective_corrector, sample_document_image):
         """Test manual perspective correction with tuple corners."""
         height, width = sample_document_image.shape[:2]
         corners = [
@@ -103,14 +103,14 @@ class TestPerspectiveCorrector:
             (40, height - 60),
         ]
         
-        result = perspectiVIRTENGINE_corrector.manual_correction(sample_document_image, corners)
+        result = perspective_corrector.manual_correction(sample_document_image, corners)
         
         assert result is not None
         assert isinstance(result, np.ndarray)
     
-    def test_perspectiVIRTENGINE_on_distorted_image(self, perspectiVIRTENGINE_corrector, perspectiVIRTENGINE_distorted_image):
+    def test_perspective_on_distorted_image(self, perspective_corrector, perspective_distorted_image):
         """Test perspective correction on distorted image."""
-        corrected, result = perspectiVIRTENGINE_corrector.correct_perspective(perspectiVIRTENGINE_distorted_image)
+        corrected, result = perspective_corrector.correct_perspective(perspective_distorted_image)
         
         # The distorted image should be detected and potentially corrected
         assert corrected is not None
@@ -120,7 +120,7 @@ class TestPerspectiveCorrector:
 class TestCornerOrdering:
     """Tests for corner ordering functionality."""
     
-    def test_order_corners(self, perspectiVIRTENGINE_corrector):
+    def test_order_corners(self, perspective_corrector):
         """Test that corners are ordered correctly."""
         # Create unordered corners
         corners = [
@@ -130,14 +130,14 @@ class TestCornerOrdering:
             Point(100, 400),  # Bottom-left
         ]
         
-        ordered = perspectiVIRTENGINE_corrector._order_corners(corners)
+        ordered = perspective_corrector._order_corners(corners)
         
         # Check ordering: TL, TR, BR, BL
         assert ordered[0].x < ordered[1].x  # TL.x < TR.x
         assert ordered[0].y < ordered[3].y  # TL.y < BL.y
         assert ordered[2].x > ordered[3].x  # BR.x > BL.x
     
-    def test_order_corners_already_ordered(self, perspectiVIRTENGINE_corrector):
+    def test_order_corners_already_ordered(self, perspective_corrector):
         """Test ordering already-ordered corners."""
         corners = [
             Point(100, 100),  # TL
@@ -146,7 +146,7 @@ class TestCornerOrdering:
             Point(100, 400),  # BL
         ]
         
-        ordered = perspectiVIRTENGINE_corrector._order_corners(corners)
+        ordered = perspective_corrector._order_corners(corners)
         
         # Should maintain order
         assert ordered[0].x == 100 and ordered[0].y == 100
@@ -156,7 +156,7 @@ class TestCornerOrdering:
 class TestNeedsCorrection:
     """Tests for needs_correction logic."""
     
-    def test_needs_correction_rectangular(self, perspectiVIRTENGINE_corrector):
+    def test_needs_correction_rectangular(self, perspective_corrector):
         """Test that rectangular corners don't need correction."""
         # Perfect rectangle
         corners = [
@@ -166,12 +166,12 @@ class TestNeedsCorrection:
             Point(0, 100),
         ]
         
-        needs = perspectiVIRTENGINE_corrector._needs_correction(corners, (100, 100, 3))
+        needs = perspective_corrector._needs_correction(corners, (100, 100, 3))
         
         # Perfect rectangle shouldn't need correction
         assert needs is False
     
-    def test_needs_correction_distorted(self, perspectiVIRTENGINE_corrector):
+    def test_needs_correction_distorted(self, perspective_corrector):
         """Test that distorted corners need correction."""
         # Distorted quadrilateral
         corners = [
@@ -181,7 +181,7 @@ class TestNeedsCorrection:
             Point(5, 95),
         ]
         
-        needs = perspectiVIRTENGINE_corrector._needs_correction(corners, (100, 100, 3))
+        needs = perspective_corrector._needs_correction(corners, (100, 100, 3))
         
         # Distorted shape should need correction
         assert needs is True
@@ -212,7 +212,7 @@ class TestPerspectiveConfiguration:
         
         assert corrected is not None
     
-    def test_output_margin(self, perspectiVIRTENGINE_corrector, sample_document_image):
+    def test_output_margin(self, perspective_corrector, sample_document_image):
         """Test that output margin is applied."""
         height, width = sample_document_image.shape[:2]
         corners = [
@@ -222,8 +222,8 @@ class TestPerspectiveConfiguration:
             Point(0, height - 1),
         ]
         
-        margin = perspectiVIRTENGINE_corrector.persp_config.output_margin
-        result = perspectiVIRTENGINE_corrector.four_point_transform(sample_document_image, corners)
+        margin = perspective_corrector.persp_config.output_margin
+        result = perspective_corrector.four_point_transform(sample_document_image, corners)
         
         # Output should include margin
         assert result.shape[0] >= height + 2 * margin - 2
@@ -233,27 +233,27 @@ class TestPerspectiveConfiguration:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
     
-    def test_no_corners_found(self, perspectiVIRTENGINE_corrector):
+    def test_no_corners_found(self, perspective_corrector):
         """Test handling when no corners are found."""
         # Uniform image has no edges
         uniform = np.ones((400, 600, 3), dtype=np.uint8) * 200
         
-        corners, confidence = perspectiVIRTENGINE_corrector.detect_document_corners(uniform)
+        corners, confidence = perspective_corrector.detect_document_corners(uniform)
         
         # Should return None for no corners
         assert corners is None or confidence < 0.1
     
-    def test_small_image(self, perspectiVIRTENGINE_corrector):
+    def test_small_image(self, perspective_corrector):
         """Test with small image."""
         small = np.ones((100, 100, 3), dtype=np.uint8) * 200
         cv2.rectangle(small, (10, 10), (90, 90), (50, 50, 50), 2)
         
-        corners, confidence = perspectiVIRTENGINE_corrector.detect_document_corners(small)
+        corners, confidence = perspective_corrector.detect_document_corners(small)
         
         # Should handle small images gracefully
         assert corners is None or isinstance(corners, list)
     
-    def test_non_convex_contour_ignored(self, perspectiVIRTENGINE_corrector, np_random):
+    def test_non_convex_contour_ignored(self, perspective_corrector, np_random):
         """Test that non-convex contours are ignored."""
         # Create image with complex shape
         image = np.ones((400, 600, 3), dtype=np.uint8) * 240
@@ -266,7 +266,7 @@ class TestEdgeCases:
         ], dtype=np.int32)
         cv2.polylines(image, [pts], True, (50, 50, 50), 2)
         
-        corners, confidence = perspectiVIRTENGINE_corrector.detect_document_corners(image)
+        corners, confidence = perspective_corrector.detect_document_corners(image)
         
         # Non-convex shapes should not be detected as document corners
         # (result depends on implementation details)

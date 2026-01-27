@@ -34,3 +34,5 @@ coverage.txt
 /.editorconfig
 
 dev.env
+
+*.exe

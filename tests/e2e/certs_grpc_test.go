@@ -7,13 +7,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
-	"pkg.akt.dev/go/cli"
-	clitestutil "pkg.akt.dev/go/cli/testutil"
+	"github.com/virtengine/virtengine/sdk/go/cli"
+	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
 
 	"github.com/stretchr/testify/require"
-	types "pkg.akt.dev/go/node/cert/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 
-	"pkg.akt.dev/node/testutil"
+	"github.com/virtengine/virtengine/testutil"
 )
 
 type certsGRPCRestTestSuite struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	encryptiontypes "pkg.akt.dev/node/x/encryption/types"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // ScopeType represents the type of identity scope

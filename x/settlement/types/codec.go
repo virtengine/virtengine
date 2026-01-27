@@ -6,6 +6,7 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
+	"github.com/cosmos/gogoproto/grpc"
 )
 
 var (
@@ -55,7 +56,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgClaimRewards{},
 	)
 
-	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	// TODO: Enable when protobuf generation is complete
+	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = msgservice.RegisterMsgServiceDesc
 }
 
 // _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
@@ -225,4 +228,20 @@ type QueryParamsRequest struct{}
 // QueryParamsResponse is the response for querying module parameters
 type QueryParamsResponse struct {
 	Params Params `json:"params"`
+}
+
+// RegisterMsgServer registers the MsgServer
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterMsgServer(s grpc.Server, impl MsgServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = impl
+}
+
+// RegisterQueryServer registers the QueryServer
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterQueryServer(s grpc.Server, impl QueryServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = impl
 }

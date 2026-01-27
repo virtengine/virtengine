@@ -63,7 +63,7 @@ def orientation_detector(document_config):
 
 
 @pytest.fixture
-def perspectiVIRTENGINE_corrector(document_config):
+def perspective_corrector(document_config):
     """Perspective corrector instance."""
     from ml.document_preprocessing.perspective import PerspectiveCorrector
     return PerspectiveCorrector(document_config)
@@ -206,7 +206,7 @@ def rotated_document_image(sample_document_image) -> np.ndarray:
 
 
 @pytest.fixture
-def perspectiVIRTENGINE_distorted_image(np_random) -> np.ndarray:
+def perspective_distorted_image(np_random) -> np.ndarray:
     """Create a document image with perspective distortion."""
     import cv2
     

@@ -7,97 +7,18 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"pkg.akt.dev/node/x/roles/types"
+	"github.com/virtengine/virtengine/x/roles/types"
 )
 
 // Error message constant
 const errMsgEmptyRequest = "empty request"
 
-// Querier is used as Keeper will have duplicate methods if used directly
-type Querier struct {
-	Keeper
-}
-
-var _ types.QueryServer = Querier{}
-
-// AccountRoles returns all roles assigned to an account
-func (q Querier) AccountRoles(req *types.QueryAccountRolesRequest) (*types.QueryAccountRolesResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
-	}
-
-	addr, err := sdk.AccAddressFromBech32(req.Address)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap(err.Error())
-	}
-
-	// Note: This method needs a context, but the interface doesn't provide one
-	// In a real implementation, this would use gRPC context
-	return &types.QueryAccountRolesResponse{
-		Address: req.Address,
-		Roles:   nil, // Would be populated with ctx
-	}, nil
-}
-
-// RoleMembers returns all accounts with a specific role
-func (q Querier) RoleMembers(req *types.QueryRoleMembersRequest) (*types.QueryRoleMembersResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
-	}
-
-	role, err := types.RoleFromString(req.Role)
-	if err != nil {
-		return nil, types.ErrInvalidRole.Wrap(err.Error())
-	}
-
-	return &types.QueryRoleMembersResponse{
-		Role:    role.String(),
-		Members: nil, // Would be populated with ctx
-	}, nil
-}
-
-// AccountState returns the state of an account
-func (q Querier) AccountState(req *types.QueryAccountStateRequest) (*types.QueryAccountStateResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
-	}
-
-	_, err := sdk.AccAddressFromBech32(req.Address)
-	if err != nil {
-		return nil, types.ErrInvalidAddress.Wrap(err.Error())
-	}
-
-	return &types.QueryAccountStateResponse{
-		AccountState: types.AccountStateRecord{},
-	}, nil
-}
-
-// GenesisAccounts returns all genesis accounts
-func (q Querier) GenesisAccounts(req *types.QueryGenesisAccountsRequest) (*types.QueryGenesisAccountsResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
-	}
-
-	return &types.QueryGenesisAccountsResponse{
-		Addresses: nil, // Would be populated with ctx
-	}, nil
-}
-
-// Params returns the module parameters
-func (q Querier) Params(req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
-	}
-
-	return &types.QueryParamsResponse{
-		Params: types.DefaultParams(),
-	}, nil
-}
-
 // GRPCQuerier implements the gRPC query interface with proper context handling
 type GRPCQuerier struct {
 	Keeper
 }
+
+var _ types.QueryServer = GRPCQuerier{}
 
 // AccountRoles returns all roles assigned to an account
 func (q GRPCQuerier) AccountRoles(c context.Context, req *types.QueryAccountRolesRequest) (*types.QueryAccountRolesResponse, error) {

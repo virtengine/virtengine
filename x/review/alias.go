@@ -4,8 +4,8 @@
 package review
 
 import (
-	"pkg.akt.dev/node/x/review/keeper"
-	"pkg.akt.dev/node/x/review/types"
+	"github.com/virtengine/virtengine/x/review/keeper"
+	"github.com/virtengine/virtengine/x/review/types"
 )
 
 // Module name and store key constants

@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	encryptiontypes "pkg.akt.dev/node/x/encryption/types"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // ============================================================================

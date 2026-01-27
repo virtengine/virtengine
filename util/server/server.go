@@ -11,7 +11,7 @@ import (
 	tmtypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/spf13/cast"
-	cflags "pkg.akt.dev/go/cli/flags"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"

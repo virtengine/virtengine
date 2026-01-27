@@ -26,7 +26,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgRevokeMeasurement{},
 	)
 
-	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	// TODO: Enable when protobuf generation is complete
+	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = msgservice.RegisterMsgServiceDesc
 }
 
 // MsgService descriptor for enclave module messages

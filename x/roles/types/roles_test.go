@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/node/x/roles/types"
+	"github.com/virtengine/virtengine/x/roles/types"
 )
 
 func TestRoleIsValid(t *testing.T) {

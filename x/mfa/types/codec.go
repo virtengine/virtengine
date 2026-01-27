@@ -6,6 +6,7 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
+	"github.com/cosmos/gogoproto/grpc"
 )
 
 var (
@@ -43,7 +44,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgUpdateSensitiveTxConfig{},
 	)
 
-	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	// TODO: Enable when protobuf generation is complete
+	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = msgservice.RegisterMsgServiceDesc
 }
 
 // _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
@@ -74,4 +77,45 @@ var _Msg_serviceDesc = struct {
 	},
 	Streams:  []struct{}{},
 	Metadata: "virtengine/mfa/v1/tx.proto",
+}
+
+// _Query_serviceDesc is the grpc.ServiceDesc for Query service.
+var _Query_serviceDesc = struct {
+	ServiceName string
+	HandlerType interface{}
+	Methods     []struct {
+		MethodName string
+		Handler    interface{}
+	}
+	Streams  []struct{}
+	Metadata interface{}
+}{
+	ServiceName: "virtengine.mfa.v1.Query",
+	HandlerType: (*QueryServer)(nil),
+	Methods: []struct {
+		MethodName string
+		Handler    interface{}
+	}{
+		{MethodName: "Params", Handler: nil},
+		{MethodName: "MFAPolicy", Handler: nil},
+		{MethodName: "AccountFactors", Handler: nil},
+	},
+	Streams:  []struct{}{},
+	Metadata: "virtengine/mfa/v1/query.proto",
+}
+
+// RegisterMsgServer registers the MsgServer implementation with the grpc.Server.
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterMsgServer(s grpc.Server, srv MsgServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = srv
+}
+
+// RegisterQueryServer registers the QueryServer implementation with the grpc.Server.
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterQueryServer(s grpc.Server, srv QueryServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = srv
 }

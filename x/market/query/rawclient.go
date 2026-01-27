@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
-	v1 "pkg.akt.dev/go/node/market/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 )
 
 // RawClient interface

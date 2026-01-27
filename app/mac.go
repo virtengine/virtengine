@@ -7,7 +7,7 @@ import (
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
-	emodule "pkg.akt.dev/go/node/escrow/module"
+	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 )
 
 func ModuleAccountPerms() map[string][]string {

@@ -179,7 +179,7 @@ export interface ModerationConsequence {
   /**
    * Consequence type
    */
-  type: 'warning' | 'suspend' | 'ban' | 'remoVIRTENGINE_content';
+  type: 'warning' | 'suspend' | 'ban' | 'remove_content';
 
   /**
    * Target ID

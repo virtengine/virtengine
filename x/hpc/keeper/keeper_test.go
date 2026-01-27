@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"pkg.akt.dev/node/x/hpc/keeper"
-	"pkg.akt.dev/node/x/hpc/types"
+	"github.com/virtengine/virtengine/x/hpc/keeper"
+	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
 // KeeperTestSuite defines the test suite for HPC keeper

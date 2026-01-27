@@ -153,7 +153,7 @@ func (r *RewardDistribution) Validate() error {
 	}
 
 	// Validate total matches
-	if !calculatedTotal.IsEqual(r.TotalRewards) {
+	if !calculatedTotal.Equal(r.TotalRewards) {
 		return ErrInvalidReward.Wrap("total_rewards must equal sum of recipient amounts")
 	}
 

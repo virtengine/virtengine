@@ -105,7 +105,7 @@ class TestROICropper:
     
     def test_prepare_for_ocr_thresholding_adaptive(self, sample_image, sample_roi):
         """Test adaptive thresholding."""
-        config = CropperConfig(thresholding=ThresholdingMethod.ADAPTIVIRTENGINE_GAUSSIAN)
+        config = CropperConfig(thresholding=ThresholdingMethod.ADAPTIVE_GAUSSIAN)
         cropper = ROICropper(config)
         
         crop = cropper.crop_roi(sample_image, sample_roi)
@@ -224,7 +224,7 @@ class TestCropperConfig:
         config = CropperConfig(
             margin_pixels=20,
             margin_fraction=0.15,
-            thresholding=ThresholdingMethod.ADAPTIVIRTENGINE_MEAN,
+            thresholding=ThresholdingMethod.ADAPTIVE_MEAN,
             scale_to_height=48,
         )
         assert config.margin_pixels == 20

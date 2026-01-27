@@ -456,7 +456,7 @@ type CaptureSourceType string
 
 const (
 	// CaptureSourceLiveCamera indicates live camera capture
-	CaptureSourceLiveCamera CaptureSourceType = "liVIRTENGINE_camera"
+	CaptureSourceLiveCamera CaptureSourceType = "live_camera"
 
 	// CaptureSourceGallery indicates gallery upload (blocked)
 	CaptureSourceGallery CaptureSourceType = "gallery"

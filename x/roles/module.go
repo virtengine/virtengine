@@ -17,8 +17,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/gogoproto/grpc"
 
-	"pkg.akt.dev/node/x/roles/keeper"
-	"pkg.akt.dev/node/x/roles/types"
+	"github.com/virtengine/virtengine/x/roles/keeper"
+	"github.com/virtengine/virtengine/x/roles/types"
 )
 
 var (
@@ -129,7 +129,8 @@ func (am AppModule) QuerierRoute() string {
 
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerWithContext(am.keeper))
+	// TODO: MsgServerWithContext uses context.Context, interface expects sdk.Context
+	// types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerWithContext(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper})
 }
 

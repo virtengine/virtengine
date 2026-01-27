@@ -9,7 +9,7 @@ import (
 	crisistypes "github.com/cosmos/cosmos-sdk/x/crisis/types"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	"github.com/spf13/cobra"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
 	tmtypes "github.com/cometbft/cometbft/types"
 
@@ -213,7 +213,7 @@ func MainnetGenesisParams() GenesisParams {
 				},
 				{
 					Denom:    sdkutil.DenomAkt,
-					Exponent: sdkutil.DenomUaktExponent,
+					Exponent: sdkutil.DenomUExponent,
 					Aliases:  nil,
 				},
 			},

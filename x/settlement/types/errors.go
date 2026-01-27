@@ -5,94 +5,95 @@ import (
 )
 
 // Error codes for the settlement module
+// NOTE: Error codes start at 100 to avoid conflicts with Cosmos SDK core, IBC-Go, and CosmWasm modules
 var (
 	// ErrInvalidEscrow is returned when an escrow is malformed
-	ErrInvalidEscrow = errorsmod.Register(ModuleName, 1, "invalid escrow")
+	ErrInvalidEscrow = errorsmod.Register(ModuleName, 1500, "invalid escrow")
 
 	// ErrEscrowNotFound is returned when an escrow is not found
-	ErrEscrowNotFound = errorsmod.Register(ModuleName, 2, "escrow not found")
+	ErrEscrowNotFound = errorsmod.Register(ModuleName, 1501, "escrow not found")
 
 	// ErrEscrowExists is returned when an escrow already exists
-	ErrEscrowExists = errorsmod.Register(ModuleName, 3, "escrow already exists")
+	ErrEscrowExists = errorsmod.Register(ModuleName, 1502, "escrow already exists")
 
 	// ErrInvalidStateTransition is returned when a state transition is invalid
-	ErrInvalidStateTransition = errorsmod.Register(ModuleName, 4, "invalid state transition")
+	ErrInvalidStateTransition = errorsmod.Register(ModuleName, 1503, "invalid state transition")
 
 	// ErrInsufficientFunds is returned when there are insufficient funds
-	ErrInsufficientFunds = errorsmod.Register(ModuleName, 5, "insufficient funds")
+	ErrInsufficientFunds = errorsmod.Register(ModuleName, 1504, "insufficient funds")
 
 	// ErrUnauthorized is returned when an action is unauthorized
-	ErrUnauthorized = errorsmod.Register(ModuleName, 6, "unauthorized")
+	ErrUnauthorized = errorsmod.Register(ModuleName, 1505, "unauthorized")
 
 	// ErrInvalidSettlement is returned when a settlement is malformed
-	ErrInvalidSettlement = errorsmod.Register(ModuleName, 7, "invalid settlement")
+	ErrInvalidSettlement = errorsmod.Register(ModuleName, 1506, "invalid settlement")
 
 	// ErrSettlementNotFound is returned when a settlement is not found
-	ErrSettlementNotFound = errorsmod.Register(ModuleName, 8, "settlement not found")
+	ErrSettlementNotFound = errorsmod.Register(ModuleName, 1507, "settlement not found")
 
 	// ErrSettlementExists is returned when a settlement already exists
-	ErrSettlementExists = errorsmod.Register(ModuleName, 9, "settlement already exists")
+	ErrSettlementExists = errorsmod.Register(ModuleName, 1508, "settlement already exists")
 
 	// ErrInvalidReward is returned when a reward is malformed
-	ErrInvalidReward = errorsmod.Register(ModuleName, 10, "invalid reward")
+	ErrInvalidReward = errorsmod.Register(ModuleName, 1509, "invalid reward")
 
 	// ErrRewardNotFound is returned when a reward distribution is not found
-	ErrRewardNotFound = errorsmod.Register(ModuleName, 11, "reward distribution not found")
+	ErrRewardNotFound = errorsmod.Register(ModuleName, 1510, "reward distribution not found")
 
 	// ErrNoClaimableRewards is returned when there are no claimable rewards
-	ErrNoClaimableRewards = errorsmod.Register(ModuleName, 12, "no claimable rewards")
+	ErrNoClaimableRewards = errorsmod.Register(ModuleName, 1511, "no claimable rewards")
 
 	// ErrInvalidUsageRecord is returned when a usage record is malformed
-	ErrInvalidUsageRecord = errorsmod.Register(ModuleName, 13, "invalid usage record")
+	ErrInvalidUsageRecord = errorsmod.Register(ModuleName, 1512, "invalid usage record")
 
 	// ErrUsageRecordNotFound is returned when a usage record is not found
-	ErrUsageRecordNotFound = errorsmod.Register(ModuleName, 14, "usage record not found")
+	ErrUsageRecordNotFound = errorsmod.Register(ModuleName, 1513, "usage record not found")
 
 	// ErrUsageRecordExists is returned when a usage record already exists
-	ErrUsageRecordExists = errorsmod.Register(ModuleName, 15, "usage record already exists")
+	ErrUsageRecordExists = errorsmod.Register(ModuleName, 1514, "usage record already exists")
 
 	// ErrUsageAlreadySettled is returned when usage has already been settled
-	ErrUsageAlreadySettled = errorsmod.Register(ModuleName, 16, "usage already settled")
+	ErrUsageAlreadySettled = errorsmod.Register(ModuleName, 1515, "usage already settled")
 
 	// ErrInvalidCondition is returned when a release condition is invalid
-	ErrInvalidCondition = errorsmod.Register(ModuleName, 17, "invalid release condition")
+	ErrInvalidCondition = errorsmod.Register(ModuleName, 1516, "invalid release condition")
 
 	// ErrConditionsNotMet is returned when release conditions are not met
-	ErrConditionsNotMet = errorsmod.Register(ModuleName, 18, "release conditions not met")
+	ErrConditionsNotMet = errorsmod.Register(ModuleName, 1517, "release conditions not met")
 
 	// ErrEscrowExpired is returned when an escrow has expired
-	ErrEscrowExpired = errorsmod.Register(ModuleName, 19, "escrow has expired")
+	ErrEscrowExpired = errorsmod.Register(ModuleName, 1518, "escrow has expired")
 
 	// ErrEscrowNotActive is returned when an escrow is not active
-	ErrEscrowNotActive = errorsmod.Register(ModuleName, 20, "escrow not active")
+	ErrEscrowNotActive = errorsmod.Register(ModuleName, 1519, "escrow not active")
 
 	// ErrOrderNotFound is returned when an order is not found
-	ErrOrderNotFound = errorsmod.Register(ModuleName, 21, "order not found")
+	ErrOrderNotFound = errorsmod.Register(ModuleName, 1520, "order not found")
 
 	// ErrInvalidAddress is returned when an address is invalid
-	ErrInvalidAddress = errorsmod.Register(ModuleName, 22, "invalid address")
+	ErrInvalidAddress = errorsmod.Register(ModuleName, 1521, "invalid address")
 
 	// ErrInvalidAmount is returned when an amount is invalid
-	ErrInvalidAmount = errorsmod.Register(ModuleName, 23, "invalid amount")
+	ErrInvalidAmount = errorsmod.Register(ModuleName, 1522, "invalid amount")
 
 	// ErrEscrowDisputed is returned when an escrow is in disputed state
-	ErrEscrowDisputed = errorsmod.Register(ModuleName, 24, "escrow is disputed")
+	ErrEscrowDisputed = errorsmod.Register(ModuleName, 1523, "escrow is disputed")
 
 	// ErrInvalidSignature is returned when a signature is invalid
-	ErrInvalidSignature = errorsmod.Register(ModuleName, 25, "invalid signature")
+	ErrInvalidSignature = errorsmod.Register(ModuleName, 1524, "invalid signature")
 
 	// ErrInvalidParams is returned when module parameters are invalid
-	ErrInvalidParams = errorsmod.Register(ModuleName, 26, "invalid params")
+	ErrInvalidParams = errorsmod.Register(ModuleName, 1525, "invalid params")
 
 	// ErrRewardClaimFailed is returned when reward claim fails
-	ErrRewardClaimFailed = errorsmod.Register(ModuleName, 27, "reward claim failed")
+	ErrRewardClaimFailed = errorsmod.Register(ModuleName, 1526, "reward claim failed")
 
 	// ErrInvalidEpoch is returned when an epoch number is invalid
-	ErrInvalidEpoch = errorsmod.Register(ModuleName, 28, "invalid epoch")
+	ErrInvalidEpoch = errorsmod.Register(ModuleName, 1527, "invalid epoch")
 
 	// ErrDistributionFailed is returned when distribution fails
-	ErrDistributionFailed = errorsmod.Register(ModuleName, 29, "distribution failed")
+	ErrDistributionFailed = errorsmod.Register(ModuleName, 1528, "distribution failed")
 
 	// ErrLeaseNotFound is returned when a lease is not found
-	ErrLeaseNotFound = errorsmod.Register(ModuleName, 30, "lease not found")
+	ErrLeaseNotFound = errorsmod.Register(ModuleName, 1529, "lease not found")
 )

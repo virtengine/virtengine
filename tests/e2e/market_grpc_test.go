@@ -13,13 +13,13 @@ import (
 	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/go/node/market/v1"
-	"pkg.akt.dev/go/node/market/v1beta5"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	"pkg.akt.dev/go/cli"
-	clitestutil "pkg.akt.dev/go/cli/testutil"
+	"github.com/virtengine/virtengine/sdk/go/cli"
+	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
 
-	"pkg.akt.dev/node/testutil"
+	"github.com/virtengine/virtengine/testutil"
 )
 
 type marketGRPCRestTestSuite struct {

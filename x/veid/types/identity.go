@@ -238,9 +238,9 @@ func TierMinimumScore(tier IdentityTier) uint32 {
 	}
 }
 
-// IdentityWallet represents a user-controlled identity bundle with key binding
-// This is used for portable identity across applications
-type IdentityWallet struct {
+// SimpleIdentityWallet represents a simplified identity wallet for portable identity
+// See IdentityWallet in wallet.go for the full on-chain wallet type
+type SimpleIdentityWallet struct {
 	// WalletID is the unique identifier for this wallet
 	WalletID string `json:"wallet_id"`
 
@@ -260,9 +260,9 @@ type IdentityWallet struct {
 	Active bool `json:"active"`
 }
 
-// NewIdentityWallet creates a new identity wallet
-func NewIdentityWallet(walletID, ownerAddress, identityRecordAddress, pubKeyFingerprint string, createdAt time.Time) *IdentityWallet {
-	return &IdentityWallet{
+// NewSimpleIdentityWallet creates a new simplified identity wallet
+func NewSimpleIdentityWallet(walletID, ownerAddress, identityRecordAddress, pubKeyFingerprint string, createdAt time.Time) *SimpleIdentityWallet {
+	return &SimpleIdentityWallet{
 		WalletID:              walletID,
 		OwnerAddress:          ownerAddress,
 		IdentityRecordAddress: identityRecordAddress,
@@ -272,8 +272,8 @@ func NewIdentityWallet(walletID, ownerAddress, identityRecordAddress, pubKeyFing
 	}
 }
 
-// Validate validates the identity wallet
-func (w *IdentityWallet) Validate() error {
+// Validate validates the simplified identity wallet
+func (w *SimpleIdentityWallet) Validate() error {
 	if w.WalletID == "" {
 		return ErrInvalidWallet.Wrap("wallet_id cannot be empty")
 	}

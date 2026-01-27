@@ -8,7 +8,7 @@ import (
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/nacl/box"
 
-	"pkg.akt.dev/node/x/encryption/types"
+	"github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // Algorithm represents an encryption algorithm implementation

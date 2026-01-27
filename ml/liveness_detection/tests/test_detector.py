@@ -84,7 +84,7 @@ class TestLivenessDetector:
         )
         
         assert isinstance(result, LivenessResult)
-        assert result.actiVIRTENGINE_challenge_score > 0.0
+        assert result.active_challenge_score > 0.0
     
     def test_detect_with_face_regions(
         self,
@@ -111,7 +111,7 @@ class TestLivenessDetector:
             include_details=True,
         )
         
-        assert result.passiVIRTENGINE_result is not None
+        assert result.passive_result is not None
         assert result.spoof_result is not None
     
     def test_detect_static_sequence(self, liveness_config, static_frame_sequence):
@@ -147,8 +147,8 @@ class TestLivenessResult:
             decision="live",
             liveness_score=0.85,
             confidence=0.9,
-            actiVIRTENGINE_challenge_score=0.8,
-            passiVIRTENGINE_analysis_score=0.85,
+            active_challenge_score=0.8,
+            passive_analysis_score=0.85,
             spoof_detection_score=0.9,
             model_version="1.0.0",
             model_hash="abc123",
@@ -247,7 +247,7 @@ class TestCreateDetector:
         assert detector is not None
         assert detector.config.score.pass_threshold == 0.85
     
-    def test_create_permissiVIRTENGINE_detector(self):
+    def test_create_permissive_detector(self):
         """Test creating permissive detector."""
         detector = create_detector("permissive")
         
@@ -302,8 +302,8 @@ class TestComponentScores:
         
         result = detector.detect(sample_frame_sequence)
         
-        assert 0.0 <= result.actiVIRTENGINE_challenge_score <= 1.0
-        assert 0.0 <= result.passiVIRTENGINE_analysis_score <= 1.0
+        assert 0.0 <= result.active_challenge_score <= 1.0
+        assert 0.0 <= result.passive_analysis_score <= 1.0
         assert 0.0 <= result.spoof_detection_score <= 1.0
         assert 0.0 <= result.liveness_score <= 1.0
     

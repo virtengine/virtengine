@@ -55,7 +55,7 @@ describe('Admin Types', () => {
       
       // Provider permissions
       expect(AdminPermission.ViewProviders).toBe('view_providers');
-      expect(AdminPermission.ApproveProviders).toBe('approVIRTENGINE_providers');
+      expect(AdminPermission.ApproveProviders).toBe('approve_providers');
       expect(AdminPermission.SuspendProviders).toBe('suspend_providers');
       
       // Content moderation
@@ -258,7 +258,7 @@ describe('Admin Context Behavior', () => {
         super_admin: ['*'],
         admin: [
           'view_users', 'edit_users', 'ban_users',
-          'view_providers', 'approVIRTENGINE_providers', 'suspend_providers',
+          'view_providers', 'approve_providers', 'suspend_providers',
           'view_content', 'moderate_content',
           'view_tickets', 'handle_tickets', 'escalate_tickets',
           'view_audit_logs', 'manage_roles',

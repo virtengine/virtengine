@@ -88,7 +88,7 @@ class PassiveAnalyzer:
             config: Liveness configuration. Uses defaults if not provided.
         """
         self.config = config or LivenessConfig()
-        self.passiVIRTENGINE_config = self.config.passive
+        self.passive_config = self.config.passive
     
     def analyze(
         self,
@@ -147,11 +147,11 @@ class PassiveAnalyzer:
         
         # Combine scores with weights
         combined_score = (
-            texture_score * self.passiVIRTENGINE_config.texture_weight +
-            depth_score * self.passiVIRTENGINE_config.depth_weight +
-            motion_score * self.passiVIRTENGINE_config.motion_weight +
-            reflection_score * self.passiVIRTENGINE_config.reflection_weight +
-            (1.0 - moire_score) * self.passiVIRTENGINE_config.moire_weight  # Invert moire (high = bad)
+            texture_score * self.passive_config.texture_weight +
+            depth_score * self.passive_config.depth_weight +
+            motion_score * self.passive_config.motion_weight +
+            reflection_score * self.passive_config.reflection_weight +
+            (1.0 - moire_score) * self.passive_config.moire_weight  # Invert moire (high = bad)
         )
         
         # Determine if live
@@ -234,8 +234,8 @@ class PassiveAnalyzer:
         
         # Score based on texture properties
         # Real faces have moderate variance and low uniformity
-        variance_score = min(1.0, avg_variance / (self.passiVIRTENGINE_config.texture_variance_threshold * 100))
-        uniformity_penalty = max(0.0, (avg_uniformity - self.passiVIRTENGINE_config.texture_uniformity_threshold) / 0.6)
+        variance_score = min(1.0, avg_variance / (self.passive_config.texture_variance_threshold * 100))
+        uniformity_penalty = max(0.0, (avg_uniformity - self.passive_config.texture_uniformity_threshold) / 0.6)
         
         texture_score = max(0.0, variance_score - uniformity_penalty)
         
@@ -343,10 +343,10 @@ class PassiveAnalyzer:
         
         # Score based on depth properties
         # Real faces have more gradient variation
-        gradient_score = min(1.0, avg_gradient_var / (self.passiVIRTENGINE_config.depth_gradient_threshold * 1000))
+        gradient_score = min(1.0, avg_gradient_var / (self.passive_config.depth_gradient_threshold * 1000))
         
         # Check for flatness
-        if avg_depth_var < self.passiVIRTENGINE_config.depth_min_variation:
+        if avg_depth_var < self.passive_config.depth_min_variation:
             flatness_penalty = 0.3
             reason_codes.append(LivenessReasonCodes.FLAT_DEPTH_DETECTED)
         else:
@@ -375,7 +375,7 @@ class PassiveAnalyzer:
         reason_codes = []
         details = {}
         
-        if len(frames) < self.passiVIRTENGINE_config.motion_min_frames:
+        if len(frames) < self.passive_config.motion_min_frames:
             return 0.5, [], {"insufficient_frames": True}
         
         # Compute frame differences
@@ -410,10 +410,10 @@ class PassiveAnalyzer:
         motion_std = np.std(frame_diffs)
         
         # Check for motion presence
-        if avg_motion < self.passiVIRTENGINE_config.motion_natural_variation_min:
+        if avg_motion < self.passive_config.motion_natural_variation_min:
             reason_codes.append(LivenessReasonCodes.NO_MOTION_DETECTED)
             motion_score = 0.2
-        elif avg_motion > self.passiVIRTENGINE_config.motion_natural_variation_max:
+        elif avg_motion > self.passive_config.motion_natural_variation_max:
             reason_codes.append(LivenessReasonCodes.UNNATURAL_MOTION)
             motion_score = 0.3
         else:
@@ -423,7 +423,7 @@ class PassiveAnalyzer:
         # Check motion consistency (natural motion has variation)
         if motion_std > 0:
             consistency = min(1.0, motion_std / avg_motion)
-            if consistency < self.passiVIRTENGINE_config.motion_consistency_threshold:
+            if consistency < self.passive_config.motion_consistency_threshold:
                 motion_score = min(motion_score, 0.6)
         
         details = {
@@ -476,7 +476,7 @@ class PassiveAnalyzer:
         
         # Real faces have some natural specular reflection
         # Too much or too little is suspicious
-        if avg_specular > self.passiVIRTENGINE_config.reflection_specular_threshold:
+        if avg_specular > self.passive_config.reflection_specular_threshold:
             reason_codes.append(LivenessReasonCodes.REFLECTION_ANOMALY)
             reflection_score = 0.4
         elif avg_specular < 0.001:
@@ -529,7 +529,7 @@ class PassiveAnalyzer:
             center_row, center_col = rows // 2, cols // 2
             
             # Create mask for moire frequency band
-            low, high = self.passiVIRTENGINE_config.moire_frequency_bands
+            low, high = self.passive_config.moire_frequency_bands
             low = min(low, min(rows, cols) // 4)
             high = min(high, min(rows, cols) // 2)
             
@@ -551,12 +551,12 @@ class PassiveAnalyzer:
         avg_moire = np.mean(moire_scores)
         
         # High moire score indicates screen display
-        if avg_moire > self.passiVIRTENGINE_config.moire_energy_threshold:
+        if avg_moire > self.passive_config.moire_energy_threshold:
             reason_codes.append(LivenessReasonCodes.MOIRE_PATTERN_DETECTED)
         
         details = {
             "avg_moire_score": float(avg_moire),
-            "threshold": self.passiVIRTENGINE_config.moire_energy_threshold,
+            "threshold": self.passive_config.moire_energy_threshold,
         }
         
         return avg_moire, reason_codes, details
@@ -621,10 +621,10 @@ class PassiveAnalyzer:
         avg_ratio = np.mean(high_freq_ratios)
         
         # Check for anomalies
-        if avg_ratio > self.passiVIRTENGINE_config.frequency_high_threshold:
+        if avg_ratio > self.passive_config.frequency_high_threshold:
             reason_codes.append(LivenessReasonCodes.FREQUENCY_ANOMALY)
             freq_score = 0.4
-        elif avg_ratio < self.passiVIRTENGINE_config.frequency_low_threshold:
+        elif avg_ratio < self.passive_config.frequency_low_threshold:
             # Too smooth (possibly blurred or compressed)
             freq_score = 0.5
         else:

@@ -292,9 +292,9 @@ class TestBoundaryThresholds:
         decision, _, _ = engine.evaluate(0.96)
         assert decision == "match"
     
-    def test_permissiVIRTENGINE_thresholds(self, permissiVIRTENGINE_config):
+    def test_permissive_thresholds(self, permissive_config):
         """Test permissive configuration thresholds."""
-        engine = VerificationDecisionEngine(permissiVIRTENGINE_config)
+        engine = VerificationDecisionEngine(permissive_config)
         
         # 0.86 should be a match with permissive config
         decision, _, _ = engine.evaluate(0.86)

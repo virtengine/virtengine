@@ -3,8 +3,8 @@ package encryption
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/encryption/keeper"
-	"pkg.akt.dev/node/x/encryption/types"
+	"github.com/virtengine/virtengine/x/encryption/keeper"
+	"github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // InitGenesis initializes the encryption module's state from a genesis state.

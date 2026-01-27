@@ -1,7 +1,7 @@
 package keeper
 
 import (
-	types "pkg.akt.dev/go/node/escrow/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 )
 
 func NewQuerier(_ Keeper) types.QueryServer {

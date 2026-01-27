@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+    "rust"
+]
+
+[workspace.dependencies]
+chrono               = { version = "0.4.27", default-features = false }
+cosmwasm-std         = { version = "3.0.2", features = [ "abort", "cosmwasm_1_2", "cosmwasm_1_3", "cosmwasm_1_4", "cosmwasm_2_0", "iterator", "stargate" ] }
+prost                = { version = "0.13.5", features = [ "prost-derive" ] }
+prost-types          = { version = "0.13.5"}
+quote                = { version = "1.0.20" }
+regex                = { version = "1.11.1" }
+schemars             = { version = "1.0.4" }
+serde                = { version = "1.0.196", default-features = false, features = [ "derive" ] }
+serde-cw-value       = { version = "0.7.0" }

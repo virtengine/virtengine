@@ -194,7 +194,7 @@ sha256sum ~/.virtengine/config/genesis.json
                 "challenge_timeout": "300s",
                 "session_timeout": "900s",
                 "max_factors_per_account": 10,
-                "sensitiVIRTENGINE_tx_types": [
+                "sensitive_tx_types": [
                     "ACCOUNT_RECOVERY",
                     "KEY_ROTATION",
                     "HIGH_VALUE_TRANSFER",
@@ -272,7 +272,7 @@ These parameters can be changed via governance proposals after launch:
 | Parameter | Initial Value | Description |
 |-----------|--------------|-------------|
 | `veid.approved_clients` | See above | Approved client allowlist |
-| `mfa.sensitiVIRTENGINE_tx_types` | See above | Transactions requiring MFA |
+| `mfa.sensitive_tx_types` | See above | Transactions requiring MFA |
 | `market.marketplace_fee_rate` | 2.5% | Platform fee rate |
 | `encryption.allowed_algorithms` | X25519-XSalsa20-Poly1305 | Allowed encryption algorithms |
 | `hpc.reward_distribution_delay` | 100 blocks | Delay before HPC rewards |

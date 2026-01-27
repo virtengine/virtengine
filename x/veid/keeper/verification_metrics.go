@@ -7,7 +7,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -411,7 +411,6 @@ func finalizeAggregation(agg *VerificationMetricsAggregated, totalComputeTime, t
 	if agg.MinComputeTimeMs < 0 {
 		agg.MinComputeTimeMs = 0
 	}
-}
 }
 
 // abs returns the absolute value of an int32

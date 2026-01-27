@@ -16,10 +16,10 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	testutilmod "github.com/cosmos/cosmos-sdk/types/module/testutil"
 
-	types "pkg.akt.dev/go/node/cert/v1"
-	"pkg.akt.dev/go/testutil"
+	types "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/x/cert/keeper"
+	"github.com/virtengine/virtengine/x/cert/keeper"
 )
 
 func TestCertKeeperCreate(t *testing.T) {

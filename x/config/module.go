@@ -15,10 +15,9 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	"github.com/cosmos/gogoproto/grpc"
 
-	"pkg.akt.dev/node/x/config/keeper"
-	"pkg.akt.dev/node/x/config/types"
+	"github.com/virtengine/virtengine/x/config/keeper"
+	"github.com/virtengine/virtengine/x/config/types"
 )
 
 var (
@@ -130,12 +129,6 @@ func (am AppModule) QuerierRoute() string {
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerWithContext(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper})
-}
-
-// RegisterQueryService registers a GRPC query service to respond to the
-// module-specific GRPC queries.
-func (am AppModule) RegisterQueryService(server grpc.Server) {
-	types.RegisterQueryServer(server, keeper.GRPCQuerier{Keeper: am.keeper})
 }
 
 // BeginBlock performs no-op

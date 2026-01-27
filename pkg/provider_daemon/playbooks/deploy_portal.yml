@@ -184,7 +184,7 @@
       notify:
         - test nginx
         - reload nginx
-      when: remoVIRTENGINE_default_site | default(true)
+      when: remove_default_site | default(true)
 
     # SSL/TLS Configuration
     - name: Obtain Let's Encrypt certificate

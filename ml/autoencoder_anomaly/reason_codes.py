@@ -23,8 +23,8 @@ class AnomalyReasonCodes(str, Enum):
     
     # Reconstruction error codes
     HIGH_RECONSTRUCTION_ERROR = "HIGH_RECONSTRUCTION_ERROR"
-    MSE_ABOVIRTENGINE_THRESHOLD = "MSE_ABOVIRTENGINE_THRESHOLD"
-    MAE_ABOVIRTENGINE_THRESHOLD = "MAE_ABOVIRTENGINE_THRESHOLD"
+    MSE_ABOVE_THRESHOLD = "MSE_ABOVE_THRESHOLD"
+    MAE_ABOVE_THRESHOLD = "MAE_ABOVE_THRESHOLD"
     SSIM_BELOW_THRESHOLD = "SSIM_BELOW_THRESHOLD"
     PERCEPTUAL_LOSS_HIGH = "PERCEPTUAL_LOSS_HIGH"
     
@@ -75,8 +75,8 @@ class AnomalyReasonCodes(str, Enum):
             cls.LATENT_NORMAL, cls.ALL_CHECKS_PASSED
         }
         reconstruction_codes = {
-            cls.HIGH_RECONSTRUCTION_ERROR, cls.MSE_ABOVIRTENGINE_THRESHOLD,
-            cls.MAE_ABOVIRTENGINE_THRESHOLD, cls.SSIM_BELOW_THRESHOLD,
+            cls.HIGH_RECONSTRUCTION_ERROR, cls.MSE_ABOVE_THRESHOLD,
+            cls.MAE_ABOVE_THRESHOLD, cls.SSIM_BELOW_THRESHOLD,
             cls.PERCEPTUAL_LOSS_HIGH
         }
         patch_codes = {
@@ -199,15 +199,15 @@ REASON_CODE_DESCRIPTIONS: Dict[AnomalyReasonCodes, ReasonCodeDetails] = {
         category="reconstruction",
         score_impact=2000,
     ),
-    AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD: ReasonCodeDetails(
-        code=AnomalyReasonCodes.MSE_ABOVIRTENGINE_THRESHOLD,
+    AnomalyReasonCodes.MSE_ABOVE_THRESHOLD: ReasonCodeDetails(
+        code=AnomalyReasonCodes.MSE_ABOVE_THRESHOLD,
         description="Mean squared error above threshold",
         severity="warning",
         category="reconstruction",
         score_impact=1000,
     ),
-    AnomalyReasonCodes.MAE_ABOVIRTENGINE_THRESHOLD: ReasonCodeDetails(
-        code=AnomalyReasonCodes.MAE_ABOVIRTENGINE_THRESHOLD,
+    AnomalyReasonCodes.MAE_ABOVE_THRESHOLD: ReasonCodeDetails(
+        code=AnomalyReasonCodes.MAE_ABOVE_THRESHOLD,
         description="Mean absolute error above threshold",
         severity="warning",
         category="reconstruction",

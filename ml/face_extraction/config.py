@@ -70,9 +70,9 @@ class MaskProcessingConfig:
     
     # Thresholding
     threshold: float = 0.5
-    use_adaptiVIRTENGINE_threshold: bool = False
-    adaptiVIRTENGINE_block_size: int = 11
-    adaptiVIRTENGINE_constant: int = 2
+    use_adaptive_threshold: bool = False
+    adaptive_block_size: int = 11
+    adaptive_constant: int = 2
     
     # Morphological operations
     apply_morphology: bool = True
@@ -166,7 +166,7 @@ class FaceExtractionConfig:
     
     # Logging and debugging
     debug_mode: bool = False
-    saVIRTENGINE_debug_images: bool = False
+    save_debug_images: bool = False
     debug_output_dir: Optional[str] = None
     
     # Quality thresholds

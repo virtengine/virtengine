@@ -15,11 +15,11 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	types "pkg.akt.dev/go/node/take/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
-	"pkg.akt.dev/node/x/take/handler"
-	"pkg.akt.dev/node/x/take/keeper"
-	"pkg.akt.dev/node/x/take/simulation"
+	"github.com/virtengine/virtengine/x/take/handler"
+	"github.com/virtengine/virtengine/x/take/keeper"
+	"github.com/virtengine/virtengine/x/take/simulation"
 )
 
 var (

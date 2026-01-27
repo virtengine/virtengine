@@ -83,7 +83,7 @@ class LivenessReasonCodes(str, Enum):
             cls.EYEBROW_RAISE_NOT_DETECTED, cls.CHALLENGE_TIMEOUT,
             cls.CHALLENGE_INCOMPLETE
         }
-        passiVIRTENGINE_codes = {
+        passive_codes = {
             cls.UNNATURAL_TEXTURE, cls.FLAT_DEPTH_DETECTED,
             cls.NO_MOTION_DETECTED, cls.UNNATURAL_MOTION,
             cls.REFLECTION_ANOMALY, cls.MOIRE_PATTERN_DETECTED,
@@ -109,7 +109,7 @@ class LivenessReasonCodes(str, Enum):
             return "success"
         elif code in challenge_codes:
             return "challenge"
-        elif code in passiVIRTENGINE_codes:
+        elif code in passive_codes:
             return "passive"
         elif code in spoof_codes:
             return "spoof"

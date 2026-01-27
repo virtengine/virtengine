@@ -119,7 +119,7 @@ class ActiveChallengeDetector:
             config: Liveness configuration. Uses defaults if not provided.
         """
         self.config = config or LivenessConfig()
-        self.actiVIRTENGINE_config = self.config.active
+        self.active_config = self.config.active
         
         # State tracking
         self._landmark_history: List[LandmarkData] = []
@@ -157,7 +157,7 @@ class ActiveChallengeDetector:
         """
         sequence = landmarks_sequence or self._landmark_history
         
-        if len(sequence) < self.actiVIRTENGINE_config.min_frames_for_challenge:
+        if len(sequence) < self.active_config.min_frames_for_challenge:
             return ChallengeResult(
                 challenge_type=challenge_type,
                 passed=False,
@@ -238,8 +238,8 @@ class ActiveChallengeDetector:
         A blink is detected when EAR drops below threshold for
         consecutive frames, then returns above threshold.
         """
-        threshold = self.actiVIRTENGINE_config.blink_ear_threshold
-        min_frames = self.actiVIRTENGINE_config.blink_consecutiVIRTENGINE_frames
+        threshold = self.active_config.blink_ear_threshold
+        min_frames = self.active_config.blink_consecutive_frames
         
         # Compute EAR for each frame
         ear_values = []
@@ -264,16 +264,16 @@ class ActiveChallengeDetector:
         blink_detected = False
         blink_frame = None
         blink_duration = 0.0
-        consecutiVIRTENGINE_closed = 0
+        consecutive_closed = 0
         blink_start_frame = None
         
         for i, ear in enumerate(ear_values):
             if ear < threshold:
-                if consecutiVIRTENGINE_closed == 0:
+                if consecutive_closed == 0:
                     blink_start_frame = i
-                consecutiVIRTENGINE_closed += 1
+                consecutive_closed += 1
             else:
-                if consecutiVIRTENGINE_closed >= min_frames:
+                if consecutive_closed >= min_frames:
                     # Blink completed
                     blink_detected = True
                     blink_frame = blink_start_frame
@@ -284,13 +284,13 @@ class ActiveChallengeDetector:
                         end_ts = sequence[i].timestamp_ms
                         blink_duration = end_ts - start_ts
                     break
-                consecutiVIRTENGINE_closed = 0
+                consecutive_closed = 0
         
         # Validate blink duration
         reason_codes = []
         if blink_detected:
-            min_duration = self.actiVIRTENGINE_config.blink_min_duration_ms
-            max_duration = self.actiVIRTENGINE_config.blink_max_duration_ms
+            min_duration = self.active_config.blink_min_duration_ms
+            max_duration = self.active_config.blink_max_duration_ms
             
             if blink_duration < min_duration:
                 blink_detected = False
@@ -347,8 +347,8 @@ class ActiveChallengeDetector:
         A smile is detected when the mouth width to height ratio
         exceeds the threshold for sufficient duration.
         """
-        ratio_threshold = self.actiVIRTENGINE_config.smile_lip_corner_ratio
-        min_duration = self.actiVIRTENGINE_config.smile_min_duration_ms
+        ratio_threshold = self.active_config.smile_lip_corner_ratio
+        min_duration = self.active_config.smile_min_duration_ms
         
         # Compute mouth ratios
         ratios = []
@@ -429,9 +429,9 @@ class ActiveChallengeDetector:
         
         Detects left or right head turn based on yaw angle changes.
         """
-        angle_threshold = self.actiVIRTENGINE_config.head_turn_angle_threshold
-        max_angle = self.actiVIRTENGINE_config.head_turn_max_angle
-        min_duration = self.actiVIRTENGINE_config.head_turn_min_duration_ms
+        angle_threshold = self.active_config.head_turn_angle_threshold
+        max_angle = self.active_config.head_turn_max_angle
+        min_duration = self.active_config.head_turn_min_duration_ms
         
         is_left = challenge_type == ChallengeType.HEAD_TURN_LEFT
         
@@ -520,8 +520,8 @@ class ActiveChallengeDetector:
         
         Detects vertical head movement based on pitch angle changes.
         """
-        angle_threshold = self.actiVIRTENGINE_config.head_nod_angle_threshold
-        min_duration = self.actiVIRTENGINE_config.head_nod_min_duration_ms
+        angle_threshold = self.active_config.head_nod_angle_threshold
+        min_duration = self.active_config.head_nod_min_duration_ms
         
         # Get pitch angles
         pitch_angles = [lm.pose_pitch for lm in sequence]
@@ -596,8 +596,8 @@ class ActiveChallengeDetector:
         
         Measures the vertical distance between eyebrows and eyes.
         """
-        threshold = self.actiVIRTENGINE_config.eyebrow_raise_threshold
-        min_duration = self.actiVIRTENGINE_config.eyebrow_raise_min_duration_ms
+        threshold = self.active_config.eyebrow_raise_threshold
+        min_duration = self.active_config.eyebrow_raise_min_duration_ms
         
         # Compute eyebrow-eye distances
         distances = []
@@ -638,15 +638,15 @@ class ActiveChallengeDetector:
         
         for i, dist in enumerate(distances):
             if baseline != 0:
-                relatiVIRTENGINE_change = (dist - baseline) / abs(baseline)
+                relative_change = (dist - baseline) / abs(baseline)
             else:
-                relatiVIRTENGINE_change = 0.0
+                relative_change = 0.0
             
-            if abs(relatiVIRTENGINE_change) > max_change:
-                max_change = abs(relatiVIRTENGINE_change)
+            if abs(relative_change) > max_change:
+                max_change = abs(relative_change)
             
             # Eyebrow raise increases the distance (more negative in image coords)
-            if relatiVIRTENGINE_change > threshold:
+            if relative_change > threshold:
                 raise_detected = True
                 raise_frame = i
                 break
@@ -671,7 +671,7 @@ class ActiveChallengeDetector:
             },
         )
     
-    def get_overall_actiVIRTENGINE_score(
+    def get_overall_active_score(
         self,
         results: Dict[ChallengeType, ChallengeResult],
         required_challenges: List[ChallengeType],

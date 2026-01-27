@@ -4,19 +4,18 @@
 package keeper
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"cosmossdk.io/log"
-	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/hpc/types"
+	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
 // IKeeper defines the interface for the HPC keeper
@@ -105,10 +104,10 @@ type IKeeper interface {
 
 // BankKeeper defines the expected bank keeper interface
 type BankKeeper interface {
-	SendCoins(ctx sdk.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error
-	SendCoinsFromModuleToAccount(ctx sdk.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
-	SendCoinsFromAccountToModule(ctx sdk.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
-	SpendableCoins(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins
+	SendCoins(ctx context.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error
+	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
+	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
+	SpendableCoins(ctx context.Context, addr sdk.AccAddress) sdk.Coins
 }
 
 // Keeper implements the HPC module keeper

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 
-	"pkg.akt.dev/node/util/validation"
+	"github.com/virtengine/virtengine/util/validation"
 )
 
 var (

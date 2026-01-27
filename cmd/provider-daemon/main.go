@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	provider_daemon "pkg.akt.dev/node/pkg/provider_daemon"
+	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
 )
 
 const (
@@ -171,87 +171,52 @@ func runStart(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Metrics Address: %s\n", viper.GetString(FlagMetricsAddr))
 
 	// Initialize key manager (VE-400)
-	keyManager := provider_daemon.NewKeyManager()
+	keyDir := viper.GetString(FlagProviderKeyDir)
+	keyConfig := provider_daemon.KeyManagerConfig{
+		StorageType: provider_daemon.KeyStorageTypeFile,
+		KeyDir:      keyDir,
+	}
+	if keyDir == "" {
+		keyConfig.StorageType = provider_daemon.KeyStorageTypeMemory
+	}
+	keyManager, err := provider_daemon.NewKeyManager(keyConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create key manager: %w", err)
+	}
+
+	// Unlock key manager (use empty passphrase for memory storage)
+	if err := keyManager.Unlock(""); err != nil {
+		return fmt.Errorf("failed to unlock key manager: %w", err)
+	}
 	fmt.Println("  Key Manager: initialized")
 
-	// Load or generate provider key
-	keyName := viper.GetString(FlagProviderKey)
-	keyDir := viper.GetString(FlagProviderKeyDir)
-	if keyDir != "" {
-		// Import key from file
-		keyPath := keyDir + "/" + keyName + ".key"
-		if _, err := os.Stat(keyPath); err == nil {
-			data, err := os.ReadFile(keyPath)
-			if err != nil {
-				return fmt.Errorf("failed to read key file: %w", err)
-			}
-			if err := keyManager.ImportKey(ctx, keyName, data); err != nil {
-				return fmt.Errorf("failed to import key: %w", err)
-			}
-			fmt.Printf("  Provider Key: loaded from %s\n", keyPath)
-		} else {
-			// Generate new key
-			if err := keyManager.GenerateKey(ctx, keyName, provider_daemon.KeyStorageFile, map[string]string{
-				"path": keyPath,
-			}); err != nil {
-				return fmt.Errorf("failed to generate key: %w", err)
-			}
-			fmt.Printf("  Provider Key: generated at %s\n", keyPath)
-		}
-	} else {
-		// Use memory storage for development
-		if err := keyManager.GenerateKey(ctx, keyName, provider_daemon.KeyStorageMemory, nil); err != nil {
-			return fmt.Errorf("failed to generate key: %w", err)
-		}
-		fmt.Println("  Provider Key: generated (memory only - for development)")
-	}
-
-	// Get provider ID from key
-	key, err := keyManager.GetKey(keyName)
+	// Generate provider key
+	providerAddress := viper.GetString(FlagProviderKey) // Use key name as provider address for now
+	key, err := keyManager.GenerateKey(providerAddress)
 	if err != nil {
-		return fmt.Errorf("failed to get provider key: %w", err)
+		return fmt.Errorf("failed to generate provider key: %w", err)
 	}
-	providerID := key.PublicKeyHex()
+	providerID := key.PublicKey
 	fmt.Printf("  Provider ID: %s...\n", providerID[:16])
 
 	// Initialize bid engine (VE-401)
-	configChan := make(chan provider_daemon.ProviderConfig, 1)
-	orderChan := make(chan provider_daemon.Order, 100)
-	bidResultChan := make(chan provider_daemon.BidResult, 100)
-
-	bidEngine := provider_daemon.NewBidEngine(provider_daemon.BidEngineConfig{
-		ProviderID:      providerID,
-		ConfigChan:      configChan,
-		OrderChan:       orderChan,
-		BidResultChan:   bidResultChan,
-		PerMinuteLimit:  viper.GetInt(FlagBidRateLimitMinute),
-		PerHourLimit:    viper.GetInt(FlagBidRateLimitHour),
-	})
-
-	// Load initial config
-	initialConfig := provider_daemon.ProviderConfig{
-		ProviderID: providerID,
-		Capacity: provider_daemon.CapacityConfig{
-			TotalCPU:    1000000, // 1000 cores
-			TotalMemory: 1024 * 1024 * 1024 * 1024, // 1 TB
-			TotalGPU:    100,
-			UsedCPU:     0,
-			UsedMemory:  0,
-			UsedGPU:     0,
-		},
-		Pricing: provider_daemon.PricingConfig{
-			CPURate:     "0.001",
-			MemoryRate:  "0.0001",
-			StorageRate: "0.00001",
-			GPURate:     "0.01",
-		},
-		Regions:  []string{"us-east", "us-west", "eu-west"},
-		Tags:     []string{"gpu", "ssd", "trusted"},
-		Enabled:  true,
+	bidEngineConfig := provider_daemon.BidEngineConfig{
+		ProviderAddress:    providerAddress,
+		MaxBidsPerMinute:   viper.GetInt(FlagBidRateLimitMinute),
+		MaxBidsPerHour:     viper.GetInt(FlagBidRateLimitHour),
+		MaxConcurrentBids:  5,
+		BidRetryDelay:      time.Second * 5,
+		MaxBidRetries:      3,
+		ConfigPollInterval: time.Second * 30,
+		OrderPollInterval:  time.Second * 5,
 	}
-	configChan <- initialConfig
 
-	bidEngine.Start(ctx)
+	// Note: chainClient would be initialized with actual RPC connection in production
+	bidEngine := provider_daemon.NewBidEngine(bidEngineConfig, keyManager, nil)
+
+	if err := bidEngine.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start bid engine: %w", err)
+	}
 	fmt.Println("  Bid Engine: started")
 
 	// Initialize Kubernetes adapter (VE-403)
@@ -271,10 +236,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 		RecordChan: recordChan,
 	})
 
-	usageMeter.Start(ctx)
+	if err := usageMeter.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start usage meter: %w", err)
+	}
 	fmt.Println("  Usage Meter: started")
 
 	// Start background workers
+	bidResultChan := bidEngine.GetBidResults()
 	go handleBidResults(ctx, bidResultChan)
 	go handleStatusUpdates(ctx, statusUpdateChan)
 	go handleUsageRecords(ctx, recordChan)
@@ -364,20 +332,27 @@ func initKeyCmd() *cobra.Command {
 				return fmt.Errorf("failed to create key directory: %w", err)
 			}
 
-			ctx := context.Background()
-			keyManager := provider_daemon.NewKeyManager()
+			keyConfig := provider_daemon.KeyManagerConfig{
+				StorageType: provider_daemon.KeyStorageTypeFile,
+				KeyDir:      keyDir,
+			}
+			keyManager, err := provider_daemon.NewKeyManager(keyConfig)
+			if err != nil {
+				return fmt.Errorf("failed to create key manager: %w", err)
+			}
 
-			keyPath := keyDir + "/" + keyName + ".key"
-			if err := keyManager.GenerateKey(ctx, keyName, provider_daemon.KeyStorageFile, map[string]string{
-				"path": keyPath,
-			}); err != nil {
+			if err := keyManager.Unlock(""); err != nil {
+				return fmt.Errorf("failed to unlock key manager: %w", err)
+			}
+
+			key, err := keyManager.GenerateKey(keyName)
+			if err != nil {
 				return fmt.Errorf("failed to generate key: %w", err)
 			}
 
-			key, _ := keyManager.GetKey(keyName)
 			fmt.Printf("Generated key '%s'\n", keyName)
-			fmt.Printf("  Path: %s\n", keyPath)
-			fmt.Printf("  Public Key: %s\n", key.PublicKeyHex())
+			fmt.Printf("  Key ID: %s\n", key.KeyID)
+			fmt.Printf("  Public Key: %s\n", key.PublicKey)
 
 			return nil
 		},

@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	uttypes "pkg.akt.dev/node/tests/upgrade/types"
+	uttypes "github.com/virtengine/virtengine/tests/upgrade/types"
 )
 
 func init() {

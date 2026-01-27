@@ -3,8 +3,8 @@ package veid
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/keeper"
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/keeper"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // InitGenesis initializes the veid module's state from a genesis state.
@@ -97,7 +97,4 @@ func ValidateGenesis(data *types.GenesisState) error {
 	return data.Validate()
 }
 
-// DefaultGenesisState returns the default genesis state
-func DefaultGenesisState() *types.GenesisState {
-	return types.DefaultGenesisState()
-}
+// NOTE: DefaultGenesisState is defined in alias.go as an alias to types.DefaultGenesisState

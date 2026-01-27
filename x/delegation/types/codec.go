@@ -32,7 +32,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgClaimAllRewards{},
 	)
 
-	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	// TODO: Enable when protobuf generation is complete
+	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = msgservice.RegisterMsgServiceDesc
 }
 
 // _Msg_serviceDesc is a placeholder for the message service descriptor

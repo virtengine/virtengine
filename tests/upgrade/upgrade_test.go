@@ -31,11 +31,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	// init sdk config
-	_ "pkg.akt.dev/go/sdkutil"
+	_ "github.com/virtengine/virtengine/sdk/go/sdkutil"
 
-	"pkg.akt.dev/node/pubsub"
-	uttypes "pkg.akt.dev/node/tests/upgrade/types"
-	"pkg.akt.dev/node/util/cli"
+	"github.com/virtengine/virtengine/pubsub"
+	uttypes "github.com/virtengine/virtengine/tests/upgrade/types"
+	"github.com/virtengine/virtengine/util/cli"
 )
 
 const (
@@ -366,20 +366,20 @@ func TestUpgrade(t *testing.T) {
 			bin: genesisBin,
 			env: []string{
 				fmt.Sprintf("HOME=%s", *workdir),
-				fmt.Sprintf("VIRTENGINE_HOME=%s", homedir),
-				fmt.Sprintf("VIRTENGINE_NODE=tcp://127.0.0.1:26657"),
-				fmt.Sprintf("VIRTENGINE_KEYRING_BACKEND=test"),
-				fmt.Sprintf("VIRTENGINE_BROADCAST_MODE=block"),
-				fmt.Sprintf("VIRTENGINE_CHAIN_ID=%s", cfg.ChainID),
-				fmt.Sprintf("VIRTENGINE_FROM=%s", cfg.Work.Key),
-				fmt.Sprintf("VIRTENGINE_GAS_PRICES=0.0025uakt"),
-				fmt.Sprintf("VIRTENGINE_GAS_ADJUSTMENT=2"),
-				fmt.Sprintf("VIRTENGINE_P2P_PEX=false"),
-				fmt.Sprintf("VIRTENGINE_MINIMUM_GAS_PRICES=0.0025uakt"),
-				//fmt.Sprintf("VIRTENGINE_GAS=auto"),
+				fmt.Sprintf("VE_HOME=%s", homedir),
+				fmt.Sprintf("VE_NODE=tcp://127.0.0.1:26657"),
+				fmt.Sprintf("VE_KEYRING_BACKEND=test"),
+				fmt.Sprintf("VE_BROADCAST_MODE=block"),
+				fmt.Sprintf("VE_CHAIN_ID=%s", cfg.ChainID),
+				fmt.Sprintf("VE_FROM=%s", cfg.Work.Key),
+				fmt.Sprintf("VE_GAS_PRICES=0.0025uakt"),
+				fmt.Sprintf("VE_GAS_ADJUSTMENT=2"),
+				fmt.Sprintf("VE_P2P_PEX=false"),
+				fmt.Sprintf("VE_MINIMUM_GAS_PRICES=0.0025uakt"),
+				//fmt.Sprintf("VE_GAS=auto"),
 				// auto is failing with rpc error: code = Unknown desc = unknown query path: unknown request
-				fmt.Sprintf("VIRTENGINE_GAS=500000"),
-				fmt.Sprintf("VIRTENGINE_YES=true"),
+				fmt.Sprintf("VE_GAS=500000"),
+				fmt.Sprintf("VE_YES=true"),
 			},
 		}
 
@@ -403,7 +403,7 @@ func TestUpgrade(t *testing.T) {
 			postUpgradeParams.FromAddress = addr
 		}
 
-		cmdr.env = append(cmdr.env, fmt.Sprintf("VIRTENGINE_OUTPUT=json"))
+		cmdr.env = append(cmdr.env, fmt.Sprintf("VE_OUTPUT=json"))
 
 		if *upgradeVersion == "local" {
 			upgradeBin := fmt.Sprintf("%s/cosmovisor/upgrades/%s/bin/virtengine", homedir, *upgradeName)
@@ -463,39 +463,39 @@ func TestUpgrade(t *testing.T) {
 			env: []string{
 				fmt.Sprintf("DAEMON_HOME=%s", params.homedir),
 				fmt.Sprintf("HOME=%s", *workdir),
-				fmt.Sprintf("VIRTENGINE_HOME=%s", params.homedir),
-				fmt.Sprintf("VIRTENGINE_CHAIN_ID=%s", cfg.ChainID),
-				fmt.Sprintf("VIRTENGINE_P2P_PERSISTENT_PEERS=%s", strings.Join(persistentPeers, ",")),
-				fmt.Sprintf("VIRTENGINE_P2P_UNCONDITIONAL_PEER_IDS=%s", strings.Join(unconditionalPeerIDs, ",")),
-				fmt.Sprintf("VIRTENGINE_P2P_LADDR=tcp://%s:%d", listenAddr, params.p2pPort),
-				fmt.Sprintf("VIRTENGINE_RPC_LADDR=tcp://%s:%d", listenAddr, params.rpc.port),
-				fmt.Sprintf("VIRTENGINE_RPC_GRPC_LADDR=tcp://%s:%d", listenAddr, params.rpc.grpc),
-				fmt.Sprintf("VIRTENGINE_RPC_PPROF_LADDR=%s:%d", listenAddr, params.pprofPort),
-				fmt.Sprintf("VIRTENGINE_GRPC_ADDRESS=%s:%d", listenAddr, params.grpcPort),
-				fmt.Sprintf("VIRTENGINE_GRPC_WEB_ADDRESS=%s:%d", listenAddr, params.grpcWebPort),
-				fmt.Sprintf("VIRTENGINE_API_ADDRESS=tcp://%s:%d", listenAddr, params.apiPort),
+				fmt.Sprintf("VE_HOME=%s", params.homedir),
+				fmt.Sprintf("VE_CHAIN_ID=%s", cfg.ChainID),
+				fmt.Sprintf("VE_P2P_PERSISTENT_PEERS=%s", strings.Join(persistentPeers, ",")),
+				fmt.Sprintf("VE_P2P_UNCONDITIONAL_PEER_IDS=%s", strings.Join(unconditionalPeerIDs, ",")),
+				fmt.Sprintf("VE_P2P_LADDR=tcp://%s:%d", listenAddr, params.p2pPort),
+				fmt.Sprintf("VE_RPC_LADDR=tcp://%s:%d", listenAddr, params.rpc.port),
+				fmt.Sprintf("VE_RPC_GRPC_LADDR=tcp://%s:%d", listenAddr, params.rpc.grpc),
+				fmt.Sprintf("VE_RPC_PPROF_LADDR=%s:%d", listenAddr, params.pprofPort),
+				fmt.Sprintf("VE_GRPC_ADDRESS=%s:%d", listenAddr, params.grpcPort),
+				fmt.Sprintf("VE_GRPC_WEB_ADDRESS=%s:%d", listenAddr, params.grpcWebPort),
+				fmt.Sprintf("VE_API_ADDRESS=tcp://%s:%d", listenAddr, params.apiPort),
 				"DAEMON_Name=virtengine",
 				"DAEMON_RESTART_AFTER_UPGRADE=true",
 				"DAEMON_ALLOW_DOWNLOAD_BINARIES=true",
 				"DAEMON_RESTART_DELAY=3s",
 				"COSMOVISOR_COLOR_LOGS=false",
 				"UNSAFE_SKIP_BACKUP=true",
-				"VIRTENGINE_KEYRING_BACKEND=test",
-				"VIRTENGINE_P2P_PEX=false",
-				"VIRTENGINE_P2P_ADDR_BOOK_STRICT=false",
-				"VIRTENGINE_P2P_ALLOW_DUPLICATE_IP=true",
-				"VIRTENGINE_P2P_SEEDS=",
-				"VIRTENGINE_MINIMUM_GAS_PRICES=0.0025uakt",
-				"VIRTENGINE_FAST_SYNC=false",
-				"VIRTENGINE_LOG_COLOR=false",
-				"VIRTENGINE_LOG_TIMESTAMP=",
-				"VIRTENGINE_LOG_FORMAT=plain",
-				"VIRTENGINE_STATESYNC_ENABLE=false",
-				"VIRTENGINE_TX_INDEX_INDEXER=null",
-				"VIRTENGINE_GRPC_ENABLE=true",
-				"VIRTENGINE_GRPC_WEB_ENABLE=true",
-				"VIRTENGINE_API_ENABLE=true",
-				"VIRTENGINE_PRUNING=nothing",
+				"VE_KEYRING_BACKEND=test",
+				"VE_P2P_PEX=false",
+				"VE_P2P_ADDR_BOOK_STRICT=false",
+				"VE_P2P_ALLOW_DUPLICATE_IP=true",
+				"VE_P2P_SEEDS=",
+				"VE_MINIMUM_GAS_PRICES=0.0025uakt",
+				"VE_FAST_SYNC=false",
+				"VE_LOG_COLOR=false",
+				"VE_LOG_TIMESTAMP=",
+				"VE_LOG_FORMAT=plain",
+				"VE_STATESYNC_ENABLE=false",
+				"VE_TX_INDEX_INDEXER=null",
+				"VE_GRPC_ENABLE=true",
+				"VE_GRPC_WEB_ENABLE=true",
+				"VE_API_ENABLE=true",
+				"VE_PRUNING=nothing",
 			},
 		}
 	}

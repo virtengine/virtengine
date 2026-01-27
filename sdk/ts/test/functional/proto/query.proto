@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package akash.test.functional;
+
+service Query {
+  rpc GetBlock(GetBlockRequest) returns (GetBlockResponse);
+
+  // GetBlockByHeight is deprecated. Use GetBlock instead.
+  rpc GetBlockByHeight(GetBlockByHeightRequest) returns (GetBlockByHeightResponse) {
+    option deprecated = true;
+  };
+}
+
+message GetBlockRequest {
+  string height = 1;
+}
+
+message GetBlockResponse {
+  string height = 1;
+}
+
+message GetBlockByHeightRequest {
+  string height = 1;
+}
+
+message GetBlockByHeightResponse {
+  string height = 1;
+}

@@ -6,13 +6,11 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"time"
 
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/benchmark/types"
+	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
 // CreateChallenge creates a new benchmark challenge

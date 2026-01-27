@@ -7,8 +7,8 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/hpc/keeper"
-	"pkg.akt.dev/node/x/hpc/types"
+	"github.com/virtengine/virtengine/x/hpc/keeper"
+	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
 // InitGenesis initializes the HPC module's state from a provided genesis state.
@@ -172,11 +172,6 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 		DecisionSequence:    maxDecisionSeq + 1,
 		DisputeSequence:     maxDisputeSeq + 1,
 	}
-}
-
-// DefaultGenesisState returns the default genesis state
-func DefaultGenesisState() *types.GenesisState {
-	return types.DefaultGenesisState()
 }
 
 // ValidateGenesis validates the genesis state

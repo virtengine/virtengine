@@ -5,9 +5,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	types "pkg.akt.dev/go/node/deployment/v1beta4"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 
-	"pkg.akt.dev/node/x/deployment/keeper"
+	"github.com/virtengine/virtengine/x/deployment/keeper"
 )
 
 // NewHandler returns a handler for "deployment" type messages

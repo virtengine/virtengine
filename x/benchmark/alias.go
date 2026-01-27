@@ -2,8 +2,8 @@
 package benchmark
 
 import (
-	"pkg.akt.dev/node/x/benchmark/keeper"
-	"pkg.akt.dev/node/x/benchmark/types"
+	"github.com/virtengine/virtengine/x/benchmark/keeper"
+	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
 const (

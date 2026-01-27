@@ -12,7 +12,7 @@ type GenesisState struct {
 	FactorEnrollments []FactorEnrollment `json:"factor_enrollments"`
 
 	// SensitiveTxConfigs are the sensitive transaction configurations
-	SensitiveTxConfigs []SensitiveTxConfig `json:"sensitiVIRTENGINE_tx_configs"`
+	SensitiveTxConfigs []SensitiveTxConfig `json:"sensitive_tx_configs"`
 
 	// TrustedDevices are the initial trusted devices
 	TrustedDevices []TrustedDevice `json:"trusted_devices"`

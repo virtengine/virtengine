@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	encryptioncrypto "pkg.akt.dev/node/x/encryption/crypto"
-	"pkg.akt.dev/node/x/veid/types"
+	encryptioncrypto "github.com/virtengine/virtengine/x/encryption/crypto"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================

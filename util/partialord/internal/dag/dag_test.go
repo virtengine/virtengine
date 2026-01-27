@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"pkg.akt.dev/node/util/partialord/internal/dag"
+	"github.com/virtengine/virtengine/util/partialord/internal/dag"
 )
 
 type edge struct {

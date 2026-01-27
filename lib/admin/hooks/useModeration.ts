@@ -83,7 +83,7 @@ type ModerationAction =
   | { type: 'SET_SELECTED'; payload: ModerationItem | null }
   | { type: 'SET_STATS'; payload: ModerationStats }
   | { type: 'UPDATE_ITEM'; payload: ModerationItem }
-  | { type: 'REMOVIRTENGINE_ITEM'; payload: string }
+  | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'SET_ERROR'; payload: Error | null };
 
 /**
@@ -113,7 +113,7 @@ function moderationReducer(
           state.selectedItem?.id === updated.id ? updated : state.selectedItem,
       };
     }
-    case 'REMOVIRTENGINE_ITEM':
+    case 'REMOVE_ITEM':
       return {
         ...state,
         queue: state.queue.filter((item) => item.id !== action.payload),
@@ -219,7 +219,7 @@ export function ModerationProvider({ children }: ModerationProviderProps): JSX.E
       }
 
       // Remove from queue as it's no longer pending
-      dispatch({ type: 'REMOVIRTENGINE_ITEM', payload: itemId });
+      dispatch({ type: 'REMOVE_ITEM', payload: itemId });
     },
     []
   );

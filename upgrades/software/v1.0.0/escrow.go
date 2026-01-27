@@ -8,11 +8,11 @@ import (
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmodule "github.com/cosmos/cosmos-sdk/types/module"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
-	"pkg.akt.dev/go/node/migrate"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/migrate"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
-	ekeeper "pkg.akt.dev/node/x/escrow/keeper"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
+	ekeeper "github.com/virtengine/virtengine/x/escrow/keeper"
 )
 
 type escrowMigrations struct {

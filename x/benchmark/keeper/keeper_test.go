@@ -21,7 +21,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/benchmark/types"
+	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
 // mockProviderKeeper is a mock implementation of ProviderKeeper

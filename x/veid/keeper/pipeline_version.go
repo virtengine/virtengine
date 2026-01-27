@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // Common error message formats for marshaling operations
@@ -171,7 +172,7 @@ func (k Keeper) RegisterPipelineVersion(
 func (k Keeper) ListPipelineVersions(ctx sdk.Context) []*types.PipelineVersion {
 	store := ctx.KVStore(k.skey)
 	prefix := types.PipelineVersionPrefixKey()
-	iterator := sdk.KVStorePrefixIterator(store, prefix)
+	iterator := storetypes.KVStorePrefixIterator(store, prefix)
 	defer iterator.Close()
 
 	versions := make([]*types.PipelineVersion, 0)
@@ -492,7 +493,7 @@ func (k Keeper) GetConformanceTestResult(ctx sdk.Context, testID string) (*Confo
 func (k Keeper) ListConformanceTestResults(ctx sdk.Context) []*ConformanceTestResult {
 	store := ctx.KVStore(k.skey)
 	prefix := types.PipelineConformanceResultPrefixKey()
-	iterator := sdk.KVStorePrefixIterator(store, prefix)
+	iterator := storetypes.KVStorePrefixIterator(store, prefix)
 	defer iterator.Close()
 
 	results := make([]*ConformanceTestResult, 0)
@@ -506,3 +507,12 @@ func (k Keeper) ListConformanceTestResults(ctx sdk.Context) []*ConformanceTestRe
 
 	return results
 }
+
+// ============================================================================
+// Proto.Message interface stubs for ConformanceTestResult
+// ============================================================================
+
+// ConformanceTestResult proto stubs
+func (*ConformanceTestResult) ProtoMessage()            {}
+func (m *ConformanceTestResult) Reset()                 { *m = ConformanceTestResult{} }
+func (m *ConformanceTestResult) String() string         { return fmt.Sprintf("%+v", *m) }

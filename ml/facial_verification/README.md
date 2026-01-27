@@ -98,7 +98,7 @@ verifier = FaceVerifier(config)
 from ml.facial_verification.config import (
     DEFAULT_CONFIG,       # Balanced defaults
     HIGH_SECURITY_CONFIG, # Strict thresholds (95%+)
-    PERMISSIVIRTENGINE_CONFIG,    # Relaxed thresholds (85%+)
+    PERMISSIVE_CONFIG,    # Relaxed thresholds (85%+)
 )
 ```
 

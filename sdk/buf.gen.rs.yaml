@@ -1,0 +1,29 @@
+---
+version: v2
+managed:
+  enabled: true
+plugins:
+  # Generate core Rust protobuf types using prost
+  - remote: buf.build/community/neoeinstein-prost:v0.4.0
+    out: rs/src/gen/node
+    opt:
+      - bytes=.
+      - compile_well_known_types
+      - extern_path=.google.protobuf=::pbjson_types
+      - file_descriptor_set
+
+  # Generate serde implementations for JSON serialization
+  - remote: buf.build/community/neoeinstein-prost-serde:v0.3.1
+    out: rs/src/gen/node
+    opt:
+      - no_include
+
+  # Generate tonic gRPC service stubs for service definitions
+  - remote: buf.build/community/neoeinstein-tonic:v0.4.1
+    out: rs/src/gen/node
+    opt:
+      - compile_well_known_types
+      - extern_path=.google.protobuf=::pbjson_types
+
+inputs:
+  - directory: proto

@@ -494,7 +494,7 @@ func (um *UsageMeter) createUsageRecord(metering *WorkloadMetering, metrics *Res
 		hash := record.Hash()
 		sig, err := um.keyManager.Sign(hash)
 		if err == nil {
-			record.Signature = hex.EncodeToString(sig.Signature)
+			record.Signature = sig.Signature // Already hex-encoded string
 		}
 	}
 
@@ -543,9 +543,9 @@ type FraudChecker struct {
 // NewFraudChecker creates a new fraud checker with default settings
 func NewFraudChecker() *FraudChecker {
 	return &FraudChecker{
-		maxCPUUsageRatio:       2.0,   // Can't use more than 2x allocated
-		maxMemoryUsageRatio:    1.5,   // Can't use more than 1.5x allocated
-		maxNetworkAnomalyRatio: 10.0,  // Network can't be 10x abnormal
+		maxCPUUsageRatio:       2.0,  // Can't use more than 2x allocated
+		maxMemoryUsageRatio:    1.5,  // Can't use more than 1.5x allocated
+		maxNetworkAnomalyRatio: 10.0, // Network can't be 10x abnormal
 		minRecordDuration:      time.Minute,
 		maxRecordDuration:      25 * time.Hour, // Slightly more than a day
 	}
@@ -588,7 +588,7 @@ func (fc *FraudChecker) CheckRecord(record *UsageRecord, allocatedResources *Res
 			if expectedCPU > 0 {
 				cpuRatio := float64(record.Metrics.CPUMilliSeconds) / float64(expectedCPU)
 				if cpuRatio > fc.maxCPUUsageRatio {
-					result.Flags = append(result.Flags, "EXCESSIVIRTENGINE_CPU_USAGE")
+					result.Flags = append(result.Flags, "EXCESSIVE_CPU_USAGE")
 					result.Score += 40
 					result.Details["cpu_ratio"] = cpuRatio
 				}
@@ -599,7 +599,7 @@ func (fc *FraudChecker) CheckRecord(record *UsageRecord, allocatedResources *Res
 			if expectedMemory > 0 {
 				memoryRatio := float64(record.Metrics.MemoryByteSeconds) / float64(expectedMemory)
 				if memoryRatio > fc.maxMemoryUsageRatio {
-					result.Flags = append(result.Flags, "EXCESSIVIRTENGINE_MEMORY_USAGE")
+					result.Flags = append(result.Flags, "EXCESSIVE_MEMORY_USAGE")
 					result.Score += 40
 					result.Details["memory_ratio"] = memoryRatio
 				}
@@ -614,7 +614,7 @@ func (fc *FraudChecker) CheckRecord(record *UsageRecord, allocatedResources *Res
 		record.Metrics.NetworkBytesIn < 0 ||
 		record.Metrics.NetworkBytesOut < 0 ||
 		record.Metrics.GPUSeconds < 0 {
-		result.Flags = append(result.Flags, "NEGATIVIRTENGINE_METRICS")
+		result.Flags = append(result.Flags, "NEGATIVE_METRICS")
 		result.Score += 100
 	}
 

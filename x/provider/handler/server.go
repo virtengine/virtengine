@@ -6,10 +6,10 @@ import (
 	errorsmod "cosmossdk.io/errors"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	types "pkg.akt.dev/go/node/provider/v1beta4"
+	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
-	mkeeper "pkg.akt.dev/node/x/market/keeper"
-	"pkg.akt.dev/node/x/provider/keeper"
+	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
+	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
 var (

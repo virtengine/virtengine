@@ -17,7 +17,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/review/types"
+	"github.com/virtengine/virtengine/x/review/types"
 )
 
 // mockMarketKeeper is a mock implementation of MarketKeeper

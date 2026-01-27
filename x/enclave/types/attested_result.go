@@ -34,10 +34,10 @@ type AttestedScoringResult struct {
 	EvidenceHashes [][]byte `json:"evidence_hashes,omitempty"`
 
 	// EnclaveMeasurementHash is the measurement of the enclave that computed this
-	EnclaveMeasurementHash []byte `json:"enclaVIRTENGINE_measurement_hash"`
+	EnclaveMeasurementHash []byte `json:"enclave_measurement_hash"`
 
 	// EnclaveSignature is the signature from the enclave signing key
-	EnclaveSignature []byte `json:"enclaVIRTENGINE_signature"`
+	EnclaveSignature []byte `json:"enclave_signature"`
 
 	// AttestationReference is a reference to the attestation quote (hash or ID)
 	AttestationReference []byte `json:"attestation_reference"`
@@ -191,7 +191,7 @@ type VoteEligibilityCheck struct {
 	Reason string `json:"reason,omitempty"`
 
 	// EnclaveAvailable indicates if the enclave runtime is available
-	EnclaveAvailable bool `json:"enclaVIRTENGINE_available"`
+	EnclaveAvailable bool `json:"enclave_available"`
 
 	// MeasurementAllowlisted indicates if the enclave measurement is allowlisted
 	MeasurementAllowlisted bool `json:"measurement_allowlisted"`

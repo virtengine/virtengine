@@ -139,7 +139,7 @@ Common reason codes for audit trail:
 
 - `NO_ANOMALY_DETECTED` - Input is normal
 - `HIGH_RECONSTRUCTION_ERROR` - Overall reconstruction failed
-- `MSE_ABOVIRTENGINE_THRESHOLD` - Mean squared error exceeded
+- `MSE_ABOVE_THRESHOLD` - Mean squared error exceeded
 - `SSIM_BELOW_THRESHOLD` - Structural similarity too low
 - `LATENT_OUTLIER` - Latent representation is an outlier
 - `MULTI_METRIC_ANOMALY` - Multiple metrics indicate anomaly

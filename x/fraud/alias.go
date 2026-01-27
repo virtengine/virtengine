@@ -4,8 +4,8 @@
 package fraud
 
 import (
-	"pkg.akt.dev/node/x/fraud/keeper"
-	"pkg.akt.dev/node/x/fraud/types"
+	"github.com/virtengine/virtengine/x/fraud/keeper"
+	"github.com/virtengine/virtengine/x/fraud/types"
 )
 
 // Module constants
@@ -96,8 +96,7 @@ const (
 
 // Function aliases
 var (
-	NewKeeper     = keeper.NewKeeper
-	NewAppModule  = NewAppModule
+	NewKeeper = keeper.NewKeeper
 
 	// Genesis
 	DefaultGenesisState = types.DefaultGenesisState

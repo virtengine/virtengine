@@ -1,0 +1,58 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`protoc-gen-customtype-patches plugin generates \`Set\` instance with all the types that have reference to fields with custom type option 1`] = `
+"import type * as _protos_customtype from "../protos/customtype.ts";
+import { LegacyDec } from "../../encoding/customTypes/LegacyDec.ts";
+
+const p = {
+  "akash.test.functional.PetOwner"(value: _protos_customtype.PetOwner | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.pet != null) newValue.pet = p["akash.test.functional.Pet"](value.pet, transformType);
+    return newValue;
+  },
+  "akash.test.functional.Pet"(value: _protos_customtype.Pet | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.value?.case === "dog") {
+      newValue.dog = {
+        ...value.value,
+        value: p["akash.test.functional.Dog"](value.value.value, transformType)
+      };
+    }
+    return newValue;
+  },
+  "akash.test.functional.Dog"(value: _protos_customtype.Dog | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.name != null) newValue.name = LegacyDec[transformType](value.name);
+    return newValue;
+  },
+  "akash.test.functional.PetClub"(value: _protos_customtype.PetClub | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.members) newValue.members = value.members.map((item) => p["akash.test.functional.PetOwner"](item, transformType)!);
+    if (value.allDogs) newValue.allDogs = value.allDogs.map((item) => p["akash.test.functional.Dog"](item, transformType)!);
+    if (value.ownerToDog) {
+      newValue.ownerToDog = {};
+      Object.keys(value.ownerToDog).forEach(k => newValue.ownerToDog[k] = p["akash.test.functional.Dog"](value.ownerToDog[k], transformType)!);
+    }
+    return newValue;
+  },
+  "akash.test.functional.PetClubItemsQueryResponse"(value: _protos_customtype.PetClubItemsQueryResponse | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.items) newValue.items = value.items.map((item) => p["akash.test.functional.PetClub"](item, transformType)!);
+    return newValue;
+  },
+  "akash.test.functional.Money"(value: _protos_customtype.Money | undefined | null, transformType: 'encode' | 'decode') {
+    if (value == null) return;
+    const newValue = { ...value };
+    if (value.amount != null) newValue.amount = LegacyDec[transformType](value.amount);
+    return newValue;
+  }
+};
+
+export const patches = p;
+"
+`;

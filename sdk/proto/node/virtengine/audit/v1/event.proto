@@ -1,0 +1,62 @@
+syntax = "proto3";
+package virtengine.audit.v1;
+
+import "gogoproto/gogo.proto";
+
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/audit/v1";
+
+// EventTrustedAuditorCreated defines an SDK message for when a trusted auditor is created.
+message EventTrustedAuditorCreated {
+  option (gogoproto.equal) = true;
+
+  // Owner is the account bech32 address of the provider.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // Auditor is the account address of the auditor.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string auditor = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "auditor",
+    (gogoproto.moretags)  = "yaml:\"auditor\""
+  ];
+}
+
+// EventTrustedAuditorDeleted defines an event for when a trusted auditor is deleted.
+message EventTrustedAuditorDeleted {
+  option (gogoproto.equal) = true;
+
+  // Owner is the account bech32 address of the provider.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // Auditor is the account address of the auditor.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string auditor = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "auditor",
+    (gogoproto.moretags)  = "yaml:\"auditor\""
+  ];
+}

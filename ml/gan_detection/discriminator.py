@@ -278,11 +278,11 @@ class CNNDiscriminator:
                     for j in range(out_w):
                         y_start = i * stride
                         x_start = j * stride
-                        receptiVIRTENGINE_field = x[
+                        receptive_field = x[
                             b, :, y_start:y_start+kh, x_start:x_start+kw
                         ]
                         output[b, oc, i, j] = np.sum(
-                            receptiVIRTENGINE_field * weights[oc]
+                            receptive_field * weights[oc]
                         )
         
         return output

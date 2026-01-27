@@ -6,7 +6,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	types "pkg.akt.dev/go/node/provider/v1beta4"
+	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
 
 type IKeeper interface {
@@ -18,6 +18,10 @@ type IKeeper interface {
 	Update(ctx sdk.Context, provider types.Provider) error
 	Delete(ctx sdk.Context, id sdk.Address)
 	NewQuerier() Querier
+	// Additional methods for cross-module integration
+	ProviderExists(ctx sdk.Context, providerAddr sdk.AccAddress) bool
+	GetProviderPublicKey(ctx sdk.Context, providerAddr sdk.AccAddress) ([]byte, bool)
+	IsProvider(ctx sdk.Context, addr sdk.AccAddress) bool
 }
 
 // Keeper of the provider store
@@ -140,4 +144,28 @@ func (k Keeper) Update(ctx sdk.Context, provider types.Provider) error {
 // Delete delete a provider
 func (k Keeper) Delete(_ sdk.Context, _ sdk.Address) {
 	panic("TODO")
+}
+
+// ProviderExists checks if a provider exists
+func (k Keeper) ProviderExists(ctx sdk.Context, providerAddr sdk.AccAddress) bool {
+	_, exists := k.Get(ctx, providerAddr)
+	return exists
+}
+
+// GetProviderPublicKey returns the public key for a provider
+// TODO: Implement actual public key storage/retrieval
+func (k Keeper) GetProviderPublicKey(ctx sdk.Context, providerAddr sdk.AccAddress) ([]byte, bool) {
+	provider, exists := k.Get(ctx, providerAddr)
+	if !exists {
+		return nil, false
+	}
+	// For now, return nil public key with found=true if provider exists
+	// Actual implementation would retrieve stored public key
+	_ = provider
+	return nil, true
+}
+
+// IsProvider checks if an address is a registered provider
+func (k Keeper) IsProvider(ctx sdk.Context, addr sdk.AccAddress) bool {
+	return k.ProviderExists(ctx, addr)
 }

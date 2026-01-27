@@ -257,7 +257,7 @@ class DataAugmentation:
     def _augment_perspective(self, image: np.ndarray) -> np.ndarray:
         """Apply perspective transform."""
         # Simplified perspective - just use slight skew
-        strength = self.config.perspectiVIRTENGINE_strength
+        strength = self.config.perspective_strength
         
         try:
             from scipy.ndimage import affine_transform

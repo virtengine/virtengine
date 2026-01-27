@@ -1,8 +1,8 @@
 package mfa
 
 import (
-	"pkg.akt.dev/node/x/mfa/keeper"
-	"pkg.akt.dev/node/x/mfa/types"
+	"github.com/virtengine/virtengine/x/mfa/keeper"
+	"github.com/virtengine/virtengine/x/mfa/types"
 )
 
 const (

@@ -3,8 +3,8 @@ package simulation
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	"pkg.akt.dev/go/node/deployment/v1"
-	types "pkg.akt.dev/go/node/deployment/v1beta4"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 )
 
 var (

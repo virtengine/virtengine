@@ -46,8 +46,8 @@ class ThresholdingMethod(str, Enum):
     BINARY = "binary"
     BINARY_INV = "binary_inv"
     OTSU = "otsu"
-    ADAPTIVIRTENGINE_MEAN = "adaptiVIRTENGINE_mean"
-    ADAPTIVIRTENGINE_GAUSSIAN = "adaptiVIRTENGINE_gaussian"
+    ADAPTIVE_MEAN = "adaptive_mean"
+    ADAPTIVE_GAUSSIAN = "adaptive_gaussian"
 
 
 @dataclass
@@ -127,8 +127,8 @@ class CropperConfig:
     convert_grayscale: bool = True
     thresholding: ThresholdingMethod = ThresholdingMethod.OTSU
     threshold_value: int = 127  # For binary thresholding
-    adaptiVIRTENGINE_block_size: int = 11  # For adaptive thresholding
-    adaptiVIRTENGINE_c: int = 2  # Constant subtracted for adaptive
+    adaptive_block_size: int = 11  # For adaptive thresholding
+    adaptive_c: int = 2  # Constant subtracted for adaptive
     
     # Deskew small rotations
     deskew_enabled: bool = True
@@ -169,8 +169,8 @@ class PostProcessingConfig:
     convert_to_lowercase: bool = False
     
     # Remove specific characters
-    remoVIRTENGINE_newlines: bool = True
-    remoVIRTENGINE_special_chars: bool = False
+    remove_newlines: bool = True
+    remove_special_chars: bool = False
     allowed_special_chars: str = "-/. '"
     
     # Custom replacements (applied after other corrections)
@@ -246,7 +246,7 @@ class OCRExtractionConfig:
     parallel_processing: bool = False  # Process ROIs in parallel
     
     # Debug settings
-    saVIRTENGINE_intermediate_crops: bool = False
+    save_intermediate_crops: bool = False
     intermediate_crop_path: str = "/tmp/ocr_crops"
     
     # Document type specific Tesseract configs

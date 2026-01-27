@@ -1,9 +1,9 @@
 package market
 
 import (
-	v1 "pkg.akt.dev/go/node/market/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 
-	"pkg.akt.dev/node/x/market/keeper"
+	"github.com/virtengine/virtengine/x/market/keeper"
 )
 
 const (

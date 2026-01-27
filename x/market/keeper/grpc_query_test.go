@@ -13,12 +13,12 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 
-	types "pkg.akt.dev/go/node/market/v1"
-	"pkg.akt.dev/go/node/market/v1beta5"
-	"pkg.akt.dev/go/testutil"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/testutil/state"
-	"pkg.akt.dev/node/x/market/keeper"
+	"github.com/virtengine/virtengine/testutil/state"
+	"github.com/virtengine/virtengine/x/market/keeper"
 )
 
 type grpcTestSuite struct {

@@ -2,11 +2,11 @@ package simulation
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"pkg.akt.dev/go/node/market/v1beta5"
+	"github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	ptypes "pkg.akt.dev/go/node/provider/v1beta4"
+	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
-	keepers "pkg.akt.dev/node/x/market/handler"
+	keepers "github.com/virtengine/virtengine/x/market/handler"
 )
 
 func getOrdersWithState(ctx sdk.Context, ks keepers.Keepers, state v1beta5.Order_State) v1beta5.Orders {

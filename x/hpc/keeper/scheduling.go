@@ -8,12 +8,11 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"time"
 
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/hpc/types"
+	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
 // FixedPointScale is the scale for fixed-point arithmetic (6 decimals)
@@ -373,29 +372,25 @@ func SortCandidatesByScore(candidates []types.ClusterCandidate) []types.ClusterC
 	result := make([]types.ClusterCandidate, len(candidates))
 	copy(result, candidates)
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Score > result[j].Score
+		scoreI := parseFixedPoint(result[i].CombinedScore)
+		scoreJ := parseFixedPoint(result[j].CombinedScore)
+		return scoreI > scoreJ
 	})
 	return result
 }
 
-// CalculateAverageLatency calculates average latency for a specific region
-func CalculateAverageLatency(measurements []types.LatencyMeasurement, targetRegion string) uint64 {
-	var total uint64
-	var count uint64
+// CalculateAverageLatency calculates average latency from measurements
+func CalculateAverageLatency(measurements []types.LatencyMeasurement) int64 {
+	if len(measurements) == 0 {
+		return 0
+	}
 
+	var total int64
 	for _, m := range measurements {
-		if m.TargetRegion == targetRegion {
-			total += m.LatencyMs
-			count++
-		}
+		total += m.LatencyMs
 	}
 
-	if count == 0 {
-		// Return max uint64 to indicate no data
-		return 0xFFFFFFFFFFFFFFFF
-	}
-
-	return total / count
+	return total / int64(len(measurements))
 }
 
 // FilterEligibleClusters filters clusters that meet job resource requirements
@@ -404,22 +399,12 @@ func FilterEligibleClusters(clusters []types.HPCCluster, resources types.JobReso
 
 	for _, cluster := range clusters {
 		// Skip non-active clusters
-		if cluster.Status != types.ClusterStatusActive {
+		if cluster.State != types.ClusterStateActive {
 			continue
 		}
 
-		// Check CPU capacity
-		if cluster.TotalCPUCores < resources.CPUCores {
-			continue
-		}
-
-		// Check memory capacity
-		if cluster.TotalMemoryMB < resources.MemoryMB {
-			continue
-		}
-
-		// Check GPU capacity
-		if resources.GPUs > 0 && cluster.TotalGPUs < resources.GPUs {
+		// Check node capacity (use available nodes)
+		if cluster.AvailableNodes < resources.Nodes {
 			continue
 		}
 

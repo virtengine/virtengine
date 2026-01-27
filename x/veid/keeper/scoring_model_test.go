@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"pkg.akt.dev/node/x/veid/keeper"
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/keeper"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // Test address constants for scoring model tests

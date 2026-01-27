@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/veid/types"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // ============================================================================
@@ -368,7 +369,7 @@ func (k Keeper) CleanupExpiredEnvelopes(ctx sdk.Context) int {
 	store := ctx.KVStore(k.skey)
 	
 	// Iterate over all envelopes and check expiry
-	iter := store.Iterator(types.PrefixEmbeddingEnvelope, sdk.PrefixEndBytes(types.PrefixEmbeddingEnvelope))
+	iter := store.Iterator(types.PrefixEmbeddingEnvelope, storetypes.PrefixEndBytes(types.PrefixEmbeddingEnvelope))
 	defer iter.Close()
 	
 	var toDelete []string

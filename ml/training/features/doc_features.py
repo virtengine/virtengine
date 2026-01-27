@@ -43,7 +43,7 @@ class DocumentFeatures:
     
     # Preprocessing indicators
     orientation_corrected: bool = False
-    perspectiVIRTENGINE_corrected: bool = False
+    perspective_corrected: bool = False
     
     # Overall quality
     overall_quality_score: float = 0.0
@@ -66,7 +66,7 @@ class DocumentFeatures:
             float(self.has_barcode),
             self.document_bounds_confidence,
             float(self.orientation_corrected),
-            float(self.perspectiVIRTENGINE_corrected),
+            float(self.perspective_corrected),
             self.overall_quality_score,
         ], dtype=np.float32)
 
@@ -96,7 +96,7 @@ class DocumentFeatureExtractor:
         self,
         document_image: Optional[np.ndarray],
         orientation_corrected: bool = False,
-        perspectiVIRTENGINE_corrected: bool = False,
+        perspective_corrected: bool = False,
     ) -> DocumentFeatures:
         """
         Extract document features from an image.
@@ -104,14 +104,14 @@ class DocumentFeatureExtractor:
         Args:
             document_image: Preprocessed document image
             orientation_corrected: Whether orientation was corrected
-            perspectiVIRTENGINE_corrected: Whether perspective was corrected
+            perspective_corrected: Whether perspective was corrected
             
         Returns:
             DocumentFeatures containing quality metrics
         """
         features = DocumentFeatures(
             orientation_corrected=orientation_corrected,
-            perspectiVIRTENGINE_corrected=perspectiVIRTENGINE_corrected,
+            perspective_corrected=perspective_corrected,
         )
         
         if document_image is None:

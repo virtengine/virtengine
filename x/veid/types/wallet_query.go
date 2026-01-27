@@ -32,7 +32,7 @@ type QueryWalletScopesRequest struct {
 	StatusFilter string `json:"status_filter,omitempty"`
 
 	// ActiveOnly filters to only active scopes
-	ActiveOnly bool `json:"actiVIRTENGINE_only,omitempty"`
+	ActiveOnly bool `json:"active_only,omitempty"`
 }
 
 // QueryWalletScopesResponse is the response for QueryWalletScopes
@@ -44,7 +44,7 @@ type QueryWalletScopesResponse struct {
 	TotalCount int `json:"total_count"`
 
 	// ActiveCount is the number of active scopes
-	ActiveCount int `json:"actiVIRTENGINE_count"`
+	ActiveCount int `json:"active_count"`
 }
 
 // QueryConsentSettingsRequest is the request for QueryConsentSettings

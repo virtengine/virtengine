@@ -439,7 +439,7 @@ func TestFraudCheckerExcessiveCPU(t *testing.T) {
 
 	result := checker.CheckRecord(record, allocated)
 	assert.False(t, result.Valid)
-	assert.Contains(t, result.Flags, "EXCESSIVIRTENGINE_CPU_USAGE")
+	assert.Contains(t, result.Flags, "EXCESSIVE_CPU_USAGE")
 }
 
 func TestFraudCheckerNegativeMetrics(t *testing.T) {
@@ -455,7 +455,7 @@ func TestFraudCheckerNegativeMetrics(t *testing.T) {
 
 	result := checker.CheckRecord(record, nil)
 	assert.False(t, result.Valid)
-	assert.Contains(t, result.Flags, "NEGATIVIRTENGINE_METRICS")
+	assert.Contains(t, result.Flags, "NEGATIVE_METRICS")
 }
 
 func TestFraudCheckerZeroDurationWithUsage(t *testing.T) {

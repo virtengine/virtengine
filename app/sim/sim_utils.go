@@ -14,7 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/runtime"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 
-	virtengine "pkg.akt.dev/node/app"
+	virtengine "github.com/virtengine/virtengine/app"
 )
 
 // SetupSimulation creates the config, db (levelDB), temporary directory and logger for

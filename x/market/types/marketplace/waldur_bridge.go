@@ -519,7 +519,7 @@ type WaldurProviderExport struct {
 	Domain string `json:"domain,omitempty"`
 
 	// ActiveOfferingCount is the number of active offerings
-	ActiveOfferingCount uint32 `json:"actiVIRTENGINE_offering_count"`
+	ActiveOfferingCount uint32 `json:"active_offering_count"`
 
 	// TotalOrderCount is the total orders fulfilled
 	TotalOrderCount uint64 `json:"total_order_count"`

@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -160,3 +162,21 @@ func (msg MsgUpdateBorderlineParams) ValidateBasic() error {
 
 // MsgUpdateBorderlineParamsResponse is the response for MsgUpdateBorderlineParams
 type MsgUpdateBorderlineParamsResponse struct{}
+
+// ProtoMessage stubs for borderline message types
+func (*MsgCompleteBorderlineFallback) ProtoMessage() {}
+func (*MsgCompleteBorderlineFallbackResponse) ProtoMessage() {}
+func (*MsgUpdateBorderlineParams) ProtoMessage() {}
+func (*MsgUpdateBorderlineParamsResponse) ProtoMessage() {}
+
+// Reset stubs for borderline message types
+func (m *MsgCompleteBorderlineFallback) Reset() { *m = MsgCompleteBorderlineFallback{} }
+func (m *MsgCompleteBorderlineFallbackResponse) Reset() { *m = MsgCompleteBorderlineFallbackResponse{} }
+func (m *MsgUpdateBorderlineParams) Reset() { *m = MsgUpdateBorderlineParams{} }
+func (m *MsgUpdateBorderlineParamsResponse) Reset() { *m = MsgUpdateBorderlineParamsResponse{} }
+
+// String stubs for borderline message types
+func (m *MsgCompleteBorderlineFallback) String() string { return fmt.Sprintf("%+v", *m) }
+func (m *MsgCompleteBorderlineFallbackResponse) String() string { return fmt.Sprintf("%+v", *m) }
+func (m *MsgUpdateBorderlineParams) String() string { return fmt.Sprintf("%+v", *m) }
+func (m *MsgUpdateBorderlineParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }

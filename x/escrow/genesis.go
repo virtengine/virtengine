@@ -7,13 +7,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	eid "pkg.akt.dev/go/node/escrow/id/v1"
-	emodule "pkg.akt.dev/go/node/escrow/module"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
+	eid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
 
-	"pkg.akt.dev/node/x/escrow/keeper"
+	"github.com/virtengine/virtengine/x/escrow/keeper"
 
-	types "pkg.akt.dev/go/node/escrow/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 )
 
 // ValidateGenesis does validation check of the Genesis and returns an error in case of failure

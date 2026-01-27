@@ -107,7 +107,7 @@ class PreprocessingConfig:
     
     # Document preprocessing
     apply_orientation_correction: bool = True
-    apply_perspectiVIRTENGINE_correction: bool = True
+    apply_perspective_correction: bool = True
     apply_enhancement: bool = True
     
     # OCR preprocessing
@@ -135,7 +135,7 @@ class AugmentationConfig:
     rotation_range: Tuple[float, float] = (-5.0, 5.0)  # Degrees
     blur_kernel_range: Tuple[int, int] = (3, 7)
     noise_std_range: Tuple[float, float] = (0.01, 0.05)
-    perspectiVIRTENGINE_strength: float = 0.1
+    perspective_strength: float = 0.1
     jpeg_quality_range: Tuple[int, int] = (70, 95)
     
     # Augmentation probability
@@ -231,7 +231,7 @@ class ModelConfig:
     
     # Checkpointing
     checkpoint_dir: str = "checkpoints"
-    saVIRTENGINE_best_only: bool = True
+    save_best_only: bool = True
     
     # Logging
     tensorboard_log_dir: str = "logs/tensorboard"
@@ -328,13 +328,13 @@ class TrainingConfig:
         from dataclasses import asdict
         return asdict(self)
     
-    def saVIRTENGINE_yaml(self, yaml_path: str) -> None:
+    def save_yaml(self, yaml_path: str) -> None:
         """Save configuration to YAML file."""
         Path(yaml_path).parent.mkdir(parents=True, exist_ok=True)
         with open(yaml_path, 'w') as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False)
     
-    def saVIRTENGINE_json(self, json_path: str) -> None:
+    def save_json(self, json_path: str) -> None:
         """Save configuration to JSON file."""
         Path(json_path).parent.mkdir(parents=True, exist_ok=True)
         with open(json_path, 'w') as f:

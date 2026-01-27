@@ -155,7 +155,7 @@ func (r *HPCRewardRecord) Validate() error {
 		calculatedTotal = calculatedTotal.Add(recipient.Amount...)
 	}
 
-	if !calculatedTotal.IsEqual(r.TotalReward) {
+	if !calculatedTotal.Equal(r.TotalReward) {
 		return ErrInvalidReward.Wrap("recipient amounts must sum to total_reward")
 	}
 

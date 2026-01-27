@@ -5,7 +5,6 @@ package benchmark_daemon
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -140,12 +139,12 @@ type BenchmarkMetrics struct {
 	MemoryScore         int64 `json:"memory_score"`
 
 	// Disk metrics
-	DiskReadIOPS           int64 `json:"disk_read_iops"`
-	DiskWriteIOPS          int64 `json:"disk_write_iops"`
-	DiskReadThroughputMBps int64 `json:"disk_read_throughput_mbps"`
+	DiskReadIOPS            int64 `json:"disk_read_iops"`
+	DiskWriteIOPS           int64 `json:"disk_write_iops"`
+	DiskReadThroughputMBps  int64 `json:"disk_read_throughput_mbps"`
 	DiskWriteThroughputMBps int64 `json:"disk_write_throughput_mbps"`
-	DiskTotalStorageGB     int64 `json:"disk_total_storage_gb"`
-	DiskScore              int64 `json:"disk_score"`
+	DiskTotalStorageGB      int64 `json:"disk_total_storage_gb"`
+	DiskScore               int64 `json:"disk_score"`
 
 	// Network metrics
 	NetworkThroughputMbps int64  `json:"network_throughput_mbps"`
@@ -155,12 +154,12 @@ type BenchmarkMetrics struct {
 	NetworkScore          int64  `json:"network_score"`
 
 	// GPU metrics (optional)
-	GPUPresent           bool   `json:"gpu_present"`
-	GPUDeviceCount       int32  `json:"gpu_device_count,omitempty"`
-	GPUDeviceType        string `json:"gpu_device_type,omitempty"`
-	GPUTotalMemoryGB     int64  `json:"gpu_total_memory_gb,omitempty"`
-	GPUComputeScore      int64  `json:"gpu_compute_score,omitempty"`
-	GPUMemoryBandwidthGBps int64 `json:"gpu_memory_bandwidth_gbps,omitempty"`
+	GPUPresent             bool   `json:"gpu_present"`
+	GPUDeviceCount         int32  `json:"gpu_device_count,omitempty"`
+	GPUDeviceType          string `json:"gpu_device_type,omitempty"`
+	GPUTotalMemoryGB       int64  `json:"gpu_total_memory_gb,omitempty"`
+	GPUComputeScore        int64  `json:"gpu_compute_score,omitempty"`
+	GPUMemoryBandwidthGBps int64  `json:"gpu_memory_bandwidth_gbps,omitempty"`
 }
 
 // ChainClient is an interface for chain interactions
@@ -202,16 +201,16 @@ type KeySigner interface {
 
 // BenchmarkDaemon is the main benchmark daemon
 type BenchmarkDaemon struct {
-	config  BenchmarkDaemonConfig
-	client  ChainClient
-	runner  BenchmarkRunner
-	signer  KeySigner
+	config BenchmarkDaemonConfig
+	client ChainClient
+	runner BenchmarkRunner
+	signer KeySigner
 
-	running       bool
-	runningMu     sync.RWMutex
-	stopCh        chan struct{}
-	inProgress    bool
-	inProgressMu  sync.Mutex
+	running      bool
+	runningMu    sync.RWMutex
+	stopCh       chan struct{}
+	inProgress   bool
+	inProgressMu sync.Mutex
 
 	// Tracking for rate limiting
 	lastSubmit    time.Time
@@ -457,11 +456,11 @@ func (d *BenchmarkDaemon) createReportJSON(result *BenchmarkResult) json.RawMess
 		"metrics": map[string]interface{}{
 			"schema_version": "1.0.0",
 			"cpu": map[string]interface{}{
-				"single_core_score":  result.Metrics.CPUSingleCoreScore,
-				"multi_core_score":   result.Metrics.CPUMultiCoreScore,
-				"core_count":         result.Metrics.CPUCoreCount,
-				"thread_count":       result.Metrics.CPUThreadCount,
-				"base_frequency_mhz": result.Metrics.CPUBaseFreqMHz,
+				"single_core_score":   result.Metrics.CPUSingleCoreScore,
+				"multi_core_score":    result.Metrics.CPUMultiCoreScore,
+				"core_count":          result.Metrics.CPUCoreCount,
+				"thread_count":        result.Metrics.CPUThreadCount,
+				"base_frequency_mhz":  result.Metrics.CPUBaseFreqMHz,
 				"boost_frequency_mhz": result.Metrics.CPUBoostFreqMHz,
 			},
 			"memory": map[string]interface{}{
@@ -471,12 +470,12 @@ func (d *BenchmarkDaemon) createReportJSON(result *BenchmarkResult) json.RawMess
 				"score":          result.Metrics.MemoryScore,
 			},
 			"disk": map[string]interface{}{
-				"read_iops":            result.Metrics.DiskReadIOPS,
-				"write_iops":           result.Metrics.DiskWriteIOPS,
-				"read_throughput_mbps": result.Metrics.DiskReadThroughputMBps,
+				"read_iops":             result.Metrics.DiskReadIOPS,
+				"write_iops":            result.Metrics.DiskWriteIOPS,
+				"read_throughput_mbps":  result.Metrics.DiskReadThroughputMBps,
 				"write_throughput_mbps": result.Metrics.DiskWriteThroughputMBps,
-				"total_storage_gb":     result.Metrics.DiskTotalStorageGB,
-				"score":                result.Metrics.DiskScore,
+				"total_storage_gb":      result.Metrics.DiskTotalStorageGB,
+				"score":                 result.Metrics.DiskScore,
 			},
 			"network": map[string]interface{}{
 				"throughput_mbps":    result.Metrics.NetworkThroughputMbps,

@@ -17,7 +17,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/review/types"
+	"github.com/virtengine/virtengine/x/review/types"
 )
 
 // IKeeper defines the interface for the Review keeper

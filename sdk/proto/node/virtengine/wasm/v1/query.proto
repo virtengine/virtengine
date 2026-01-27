@@ -1,0 +1,30 @@
+syntax = "proto3";
+package virtengine.wasm.v1;
+
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "amino/amino.proto";
+
+import "virtengine/wasm/v1/params.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/wasm/v1";
+
+// QueryParamsRequest is the request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method.
+message QueryParamsResponse {
+    // params defines the parameters of the module.
+    Params params = 1 [
+        (gogoproto.nullable)   = false,
+        (amino.dont_omitempty) = true
+    ];
+}
+
+// Query defines the gRPC querier service of the wasm package.
+service Query {
+    // Params returns the total set of minting parameters.
+    rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+        option (google.api.http).get = "/virtengine/wasm/v1/params";
+    }
+}

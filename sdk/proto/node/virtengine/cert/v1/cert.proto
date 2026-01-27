@@ -1,0 +1,73 @@
+syntax = "proto3";
+package virtengine.cert.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/cert/v1";
+
+// State is an enum which refers to state of the certificate.
+enum State {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // Prefix should start with 0 in enum. So declaring dummy state.
+  invalid = 0 [
+    (gogoproto.enumvalue_customname) = "CertificateStateInvalid"
+  ];
+  // CertificateValid denotes state for deployment active.
+  valid = 1 [
+    (gogoproto.enumvalue_customname) = "CertificateValid"
+  ];
+  // CertificateRevoked denotes state for deployment closed.
+  revoked = 2 [
+    (gogoproto.enumvalue_customname) = "CertificateRevoked"
+  ];
+}
+
+// ID stores owner and sequence number.
+message ID {
+  option (gogoproto.equal) = false;
+  option (gogoproto.goproto_stringer) = false;
+
+  // Owner is the account address of the user who owns the certificate.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // Serial is a sequence number for the certificate.
+  string serial = 2 [
+    (gogoproto.jsontag)  = "serial",
+    (gogoproto.moretags) = "yaml:\"serial\""
+  ];
+}
+
+// Certificate stores state, certificate and it's public key.
+// The certificate is required for several transactions including deployment of a workload to verify the identity of the tenant and secure the deployment.
+message Certificate {
+
+  // State is the state of the certificate.
+  // CertificateValid denotes state for deployment active.
+  // CertificateRevoked denotes state for deployment closed.
+  State state = 2 [
+    (gogoproto.jsontag) = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+
+  // Cert holds the bytes of the certificate.
+  bytes cert = 3 [
+    (gogoproto.jsontag) = "cert",
+    (gogoproto.moretags) = "yaml:\"cert\""
+  ];
+
+  // PubKey holds the public key of the certificate.
+  bytes pubkey = 4 [
+    (gogoproto.jsontag) = "pubkey",
+    (gogoproto.moretags) = "yaml:\"pubkey\""
+  ];
+}

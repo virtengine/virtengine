@@ -45,7 +45,7 @@ prefix = [
 ## Cache
 
 Build environment will create `.cache` directory in the root of source-tree. We use it to install specific versions of temporary build tools. Refer to `make/setup-cache.mk` for exact list.
-It is possible to set custom path to `.cache` with `VIRTENGINE_DEVCACHE` environment variable.
+It is possible to set custom path to `.cache` with `VE_DEVCACHE` environment variable.
 
 All tools are referred as `makefile targets` and set as dependencies thus installed (to `.cache/bin`) only upon necessity.
 For example `protoc` installed only when `proto-gen` target called.
@@ -68,18 +68,18 @@ Following are added to `make/init.mk`
     ```makefile
     MODVENDOR_VERSION                  ?= v0.3.0
     ```
-2. Add variable tracking version file `<NAME>_VERSION_FILE := $(VIRTENGINE_DEVCACHE_VERSIONS)/<tool>/$(<TOOL>)` to the `# ==== Build tools version tracking ====` section
+2. Add variable tracking version file `<NAME>_VERSION_FILE := $(VE_DEVCACHE_VERSIONS)/<tool>/$(<TOOL>)` to the `# ==== Build tools version tracking ====` section
     ```makefile
-    MODVENDOR_VERSION_FILE             := $(VIRTENGINE_DEVCACHE_VERSIONS)/modvendor/$(MODVENDOR)
+    MODVENDOR_VERSION_FILE             := $(VE_DEVCACHE_VERSIONS)/modvendor/$(MODVENDOR)
     ```
 3. Add variable referencing executable to the `# ==== Build tools executables ====` section
     ```makefile
-    MODVENDOR                          := $(VIRTENGINE_DEVCACHE_VERSIONS)/bin/modvendor
+    MODVENDOR                          := $(VE_DEVCACHE_VERSIONS)/bin/modvendor
     ```
 
 4. Add installation rules. Following template is used followed by the example
     ```makefile
-    $(<TOOL>_VERSION_FILE): $(VIRTENGINE_DEVCACHE)
+    $(<TOOL>_VERSION_FILE): $(VE_DEVCACHE)
     	@echo "installing <tool> $(<TOOL>_VERSION) ..."
     	rm -f $(<TOOL>)      # remove current binary if exists
     	# installation procedure depends on distribution type. Check make/setup-cache.mk for various examples
@@ -92,10 +92,10 @@ Following are added to `make/init.mk`
     Following are added to `make/setup-cache.mk`
 
     ```makefile
-    $(MODVENDOR_VERSION_FILE): $(VIRTENGINE_DEVCACHE)
+    $(MODVENDOR_VERSION_FILE): $(VE_DEVCACHE)
     	@echo "installing modvendor $(MODVENDOR_VERSION) ..."
     	rm -f $(MODVENDOR)
-    	GOBIN=$(VIRTENGINE_DEVCACHE_BIN) $(GO) install github.com/goware/modvendor@$(MODVENDOR_VERSION)
+    	GOBIN=$(VE_DEVCACHE_BIN) $(GO) install github.com/goware/modvendor@$(MODVENDOR_VERSION)
     	rm -rf "$(dir $@)"
     	mkdir -p "$(dir $@)"
     	touch $@

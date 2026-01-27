@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
-	types "pkg.akt.dev/go/node/provider/v1beta4"
+	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
 
 func ProviderKey(id sdk.Address) []byte {

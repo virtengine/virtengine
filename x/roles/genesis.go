@@ -3,8 +3,8 @@ package roles
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/roles/keeper"
-	"pkg.akt.dev/node/x/roles/types"
+	"github.com/virtengine/virtengine/x/roles/keeper"
+	"github.com/virtengine/virtengine/x/roles/types"
 )
 
 // InitGenesis initializes the roles module's state from a genesis state.

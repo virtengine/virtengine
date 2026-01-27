@@ -1,0 +1,18 @@
+syntax = "proto3";
+package virtengine.cert.v1;
+
+import "cosmos/msg/v1/msg.proto";
+
+import "virtengine/cert/v1/msg.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/cert/v1";
+
+// Msg defines the provider Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // CreateCertificate defines a method to create new certificate given proper inputs.
+  rpc CreateCertificate(MsgCreateCertificate) returns(MsgCreateCertificateResponse);
+  // RevokeCertificate defines a method to revoke the certificate.
+  rpc RevokeCertificate(MsgRevokeCertificate) returns(MsgRevokeCertificateResponse);
+}

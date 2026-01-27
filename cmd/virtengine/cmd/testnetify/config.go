@@ -12,7 +12,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	virtengine "pkg.akt.dev/node/app"
+	virtengine "github.com/virtengine/virtengine/app"
 )
 
 type PrivValidatorKey struct {

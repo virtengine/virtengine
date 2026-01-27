@@ -188,10 +188,10 @@ def high_security_config():
 
 
 @pytest.fixture
-def permissiVIRTENGINE_config():
+def permissive_config():
     """Permissive verification configuration."""
-    from ml.facial_verification.config import PERMISSIVIRTENGINE_CONFIG
-    return PERMISSIVIRTENGINE_CONFIG
+    from ml.facial_verification.config import PERMISSIVE_CONFIG
+    return PERMISSIVE_CONFIG
 
 
 @pytest.fixture

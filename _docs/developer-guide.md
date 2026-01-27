@@ -250,7 +250,7 @@ All sensitive data on VirtEngine uses the Encrypted Payload Envelope format:
 ### Creating an Envelope (Go)
 
 ```go
-import "pkg.akt.dev/node/x/encryption/crypto"
+import "github.com/virtengine/virtengine/x/encryption/crypto"
 
 // Generate sender key pair
 senderKP, _ := crypto.GenerateKeyPair()
@@ -287,7 +287,7 @@ const envelope = await createEnvelope({
 ### Decrypting an Envelope
 
 ```go
-import "pkg.akt.dev/node/x/encryption/crypto"
+import "github.com/virtengine/virtengine/x/encryption/crypto"
 
 algorithm, _ := crypto.GetAlgorithm(envelope.AlgorithmID)
 
@@ -602,7 +602,7 @@ msg := &types.MsgCreateOrder{
 ### Safe Logging Practices
 
 ```go
-import "pkg.akt.dev/node/pkg/observability"
+import "github.com/virtengine/virtengine/pkg/observability"
 
 // Use structured logging with redaction
 logger := observability.NewLogger(observability.Config{

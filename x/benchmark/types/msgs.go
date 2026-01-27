@@ -14,7 +14,7 @@ const (
 	TypeMsgRespondChallenge     = "respond_challenge"
 	TypeMsgFlagProvider         = "flag_provider"
 	TypeMsgUnflagProvider       = "unflag_provider"
-	TypeMsgResolveAnomalyFlag   = "resolVIRTENGINE_anomaly_flag"
+	TypeMsgResolveAnomalyFlag   = "resolve_anomaly_flag"
 	TypeMsgUpdateReliability    = "update_reliability"
 )
 

@@ -13,15 +13,15 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
-	dv1beta "pkg.akt.dev/go/node/deployment/v1beta4"
-	mv1beta "pkg.akt.dev/go/node/market/v1beta5"
+	dv1beta "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	mv1beta "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
-	escrowid "pkg.akt.dev/go/node/escrow/id/v1"
-	"pkg.akt.dev/go/node/escrow/module"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
-	ev1 "pkg.akt.dev/go/node/escrow/v1"
-	types "pkg.akt.dev/go/node/market/v1"
-	deposit "pkg.akt.dev/go/node/types/deposit/v1"
+	escrowid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/escrow/module"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	ev1 "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 )
 
 type AccountHook func(sdk.Context, etypes.Account) error

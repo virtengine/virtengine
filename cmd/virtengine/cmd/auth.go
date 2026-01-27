@@ -11,7 +11,7 @@ import (
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 
-	ajwt "pkg.akt.dev/go/util/jwt"
+	ajwt "github.com/virtengine/virtengine/sdk/go/util/jwt"
 )
 
 const (

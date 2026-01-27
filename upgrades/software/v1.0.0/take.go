@@ -6,7 +6,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmodule "github.com/cosmos/cosmos-sdk/types/module"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
 type takeMigrations struct {

@@ -1,0 +1,54 @@
+syntax = "proto3";
+package virtengine.inventory.v1;
+
+import "gogoproto/gogo.proto";
+
+import "virtengine/inventory/v1/resourcepair.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/inventory/v1";
+
+// leave it commented for now. having it as true used to cause issues with GRPC reflection.
+// it seems to work for now
+//option (gogoproto.gogoproto_import) = false;
+
+// CPUInfo reports CPU details
+message CPUInfo {
+  string id = 1 [
+    (gogoproto.customname)   = "ID",
+    (gogoproto.jsontag)      = "id",
+    (gogoproto.moretags)     = "yaml:\"id\""
+  ];
+  string vendor = 2 [
+    (gogoproto.customname)   = "Vendor",
+    (gogoproto.jsontag)      = "vendor",
+    (gogoproto.moretags)     = "yaml:\"vendor\""
+  ];
+  string model = 3 [
+    (gogoproto.customname)   = "Model",
+    (gogoproto.jsontag)      = "model",
+    (gogoproto.moretags)     = "yaml:\"model\""
+  ];
+  uint32 vcores = 4 [
+    (gogoproto.customname)   = "Vcores",
+    (gogoproto.jsontag)      = "vcores",
+    (gogoproto.moretags)     = "yaml:\"vcores\""
+  ];
+}
+
+// CPU reports CPU inventory details
+message CPU {
+  ResourcePair quantity = 1 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.customname)   = "Quantity",
+    (gogoproto.jsontag)      = "quantity",
+    (gogoproto.moretags)     = "yaml:\"quantity\""
+  ];
+
+  repeated CPUInfo info = 2 [
+    (gogoproto.nullable)     = false,
+    (gogoproto.castrepeated) = "CPUInfoS",
+    (gogoproto.customname)   = "Info",
+    (gogoproto.jsontag)      = "info",
+    (gogoproto.moretags)     = "yaml:\"info\""
+  ];
+}

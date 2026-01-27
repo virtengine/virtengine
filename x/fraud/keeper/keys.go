@@ -4,7 +4,7 @@
 package keeper
 
 import (
-	"pkg.akt.dev/node/x/fraud/types"
+	"github.com/virtengine/virtengine/x/fraud/types"
 )
 
 // Key prefixes for store operations

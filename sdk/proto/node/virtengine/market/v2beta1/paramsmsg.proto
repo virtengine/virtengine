@@ -1,0 +1,36 @@
+syntax = "proto3";
+package virtengine.market.v2beta1;
+
+import "gogoproto/gogo.proto";
+
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+
+import "virtengine/market/v2beta1/params.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v2beta1";
+
+// MsgUpdateParams is the Msg/UpdateParams request type.
+//
+// Since: akash v1.0.0
+message MsgUpdateParams {
+    option (cosmos.msg.v1.signer) = "authority";
+
+    // authority is the address of the governance account.
+    string authority = 1 [
+        (cosmos_proto.scalar) = "cosmos.AddressString"
+    ];
+
+    // params defines the x/deployment parameters to update.
+    //
+    // NOTE: All parameters must be supplied.
+    Params params = 2 [
+        (gogoproto.nullable) = false
+    ];
+}
+
+// MsgUpdateParamsResponse defines the response structure for executing a
+// MsgUpdateParams message.
+//
+// Since: akash v1.0.0
+message MsgUpdateParamsResponse {}

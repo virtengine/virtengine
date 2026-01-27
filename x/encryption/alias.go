@@ -1,8 +1,8 @@
 package encryption
 
 import (
-	"pkg.akt.dev/node/x/encryption/keeper"
-	"pkg.akt.dev/node/x/encryption/types"
+	"github.com/virtengine/virtengine/x/encryption/keeper"
+	"github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // Alias types for external access
@@ -34,7 +34,6 @@ var (
 	NewKeeper                    = keeper.NewKeeper
 	NewMsgServerImpl             = keeper.NewMsgServerImpl
 	NewEncryptedPayloadEnvelope  = types.NewEncryptedPayloadEnvelope
-	DefaultGenesisState          = types.DefaultGenesisState
 	DefaultParams                = types.DefaultParams
 	ComputeKeyFingerprint        = types.ComputeKeyFingerprint
 	SupportedAlgorithms          = types.SupportedAlgorithms

@@ -20,13 +20,13 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/cosmos/gogoproto/jsonpb"
 
-	cflags "pkg.akt.dev/go/cli/flags"
-	aclient "pkg.akt.dev/go/node/client/discovery"
-	cltypes "pkg.akt.dev/go/node/client/types"
-	cclient "pkg.akt.dev/go/node/client/v1beta3"
-	sdktestutil "pkg.akt.dev/go/testutil"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	aclient "github.com/virtengine/virtengine/sdk/go/node/client/discovery"
+	cltypes "github.com/virtengine/virtengine/sdk/go/node/client/types"
+	cclient "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
+	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/testutil/network"
+	"github.com/virtengine/virtengine/testutil/network"
 )
 
 type NetworkTestSuite struct {

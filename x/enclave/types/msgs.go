@@ -6,8 +6,8 @@ import (
 
 // Message types for enclave module
 const (
-	TypeMsgRegisterEnclaveIdentity = "register_enclaVIRTENGINE_identity"
-	TypeMsgRotateEnclaveIdentity   = "rotate_enclaVIRTENGINE_identity"
+	TypeMsgRegisterEnclaveIdentity = "register_enclave_identity"
+	TypeMsgRotateEnclaveIdentity   = "rotate_enclave_identity"
 	TypeMsgUpdateParams            = "update_params"
 )
 

@@ -183,3 +183,12 @@ func (p Params) Validate() error {
 
 	return nil
 }
+
+// ProtoMessage implements proto.Message
+func (*GenesisState) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (gs *GenesisState) Reset() { *gs = GenesisState{} }
+
+// String implements proto.Message
+func (gs *GenesisState) String() string { return fmt.Sprintf("%+v", *gs) }

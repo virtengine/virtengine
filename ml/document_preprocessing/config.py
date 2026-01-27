@@ -198,11 +198,11 @@ class DocumentConfig:
     
     # Pipeline order control
     correct_orientation_first: bool = True
-    correct_perspectiVIRTENGINE_first: bool = True
+    correct_perspective_first: bool = True
     
     # Debug/logging
     debug_mode: bool = False
-    saVIRTENGINE_intermediate_images: bool = False
+    save_intermediate_images: bool = False
     
     # Determinism settings for blockchain consensus
     random_seed: int = 42

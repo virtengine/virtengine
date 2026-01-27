@@ -3,14 +3,15 @@ package keeper
 import (
 	"bytes"
 	"encoding/hex"
-	"time"
+	"encoding/json"
 
 	"cosmossdk.io/log"
+	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/enclave/types"
+	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
 // IKeeper defines the interface for the enclave keeper
@@ -55,21 +56,21 @@ type IKeeper interface {
 	VerifyEnclaveSignature(ctx sdk.Context, result *types.AttestedScoringResult) error
 
 	// Codec and store
-	Codec() codec.BinaryCodec
+	Codec() codec.Codec
 	StoreKey() storetypes.StoreKey
 }
 
 // Keeper of the enclave store
 type Keeper struct {
 	skey storetypes.StoreKey
-	cdc  codec.BinaryCodec
+	cdc  codec.Codec
 
 	// The address capable of executing governance messages
 	authority string
 }
 
 // NewKeeper creates and returns an instance for enclave keeper
-func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, authority string) Keeper {
+func NewKeeper(cdc codec.Codec, skey storetypes.StoreKey, authority string) Keeper {
 	return Keeper{
 		cdc:       cdc,
 		skey:      skey,
@@ -78,7 +79,7 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, authority string
 }
 
 // Codec returns keeper codec
-func (k Keeper) Codec() codec.BinaryCodec {
+func (k Keeper) Codec() codec.Codec {
 	return k.cdc
 }
 
@@ -108,7 +109,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	}
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(&params)
+	bz, err := json.Marshal(&params)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 
 	var params types.Params
-	if err := k.cdc.UnmarshalJSON(bz, &params); err != nil {
+	if err := json.Unmarshal(bz, &params); err != nil {
 		return types.DefaultParams()
 	}
 	return params
@@ -181,7 +182,7 @@ func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.Enclave
 
 	// Store the identity
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(identity)
+	bz, err := json.Marshal(identity)
 	if err != nil {
 		return err
 	}
@@ -199,7 +200,7 @@ func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.Enclave
 			sdk.NewAttribute(types.AttributeKeyTEEType, string(identity.TEEType)),
 			sdk.NewAttribute(types.AttributeKeyMeasurementHash, hex.EncodeToString(identity.MeasurementHash)),
 			sdk.NewAttribute(types.AttributeKeyEncryptionKeyID, fingerprint),
-			sdk.NewAttribute(types.AttributeKeyExpiryHeight, sdk.NewInt(identity.ExpiryHeight).String()),
+			sdk.NewAttribute(types.AttributeKeyExpiryHeight, math.NewInt(identity.ExpiryHeight).String()),
 		),
 	)
 
@@ -215,7 +216,7 @@ func (k Keeper) GetEnclaveIdentity(ctx sdk.Context, validatorAddr sdk.AccAddress
 	}
 
 	var identity types.EnclaveIdentity
-	if err := k.cdc.UnmarshalJSON(bz, &identity); err != nil {
+	if err := json.Unmarshal(bz, &identity); err != nil {
 		return nil, false
 	}
 	return &identity, true
@@ -251,7 +252,7 @@ func (k Keeper) UpdateEnclaveIdentity(ctx sdk.Context, identity *types.EnclaveId
 
 	// Store updated identity
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(identity)
+	bz, err := json.Marshal(identity)
 	if err != nil {
 		return err
 	}
@@ -280,7 +281,7 @@ func (k Keeper) RevokeEnclaveIdentity(ctx sdk.Context, validatorAddr sdk.AccAddr
 	identity.UpdatedAt = ctx.BlockTime()
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(identity)
+	bz, err := json.Marshal(identity)
 	if err != nil {
 		return err
 	}
@@ -322,7 +323,7 @@ func (k Keeper) InitiateKeyRotation(ctx sdk.Context, rotation *types.KeyRotation
 	rotation.InitiatedAt = ctx.BlockTime()
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(rotation)
+	bz, err := json.Marshal(rotation)
 	if err != nil {
 		return err
 	}
@@ -342,8 +343,8 @@ func (k Keeper) InitiateKeyRotation(ctx sdk.Context, rotation *types.KeyRotation
 			sdk.NewAttribute(types.AttributeKeyValidator, rotation.ValidatorAddress),
 			sdk.NewAttribute(types.AttributeKeyOldKeyFingerprint, rotation.OldKeyFingerprint),
 			sdk.NewAttribute(types.AttributeKeyNewKeyFingerprint, rotation.NewKeyFingerprint),
-			sdk.NewAttribute(types.AttributeKeyOverlapStartHeight, sdk.NewInt(rotation.OverlapStartHeight).String()),
-			sdk.NewAttribute(types.AttributeKeyOverlapEndHeight, sdk.NewInt(rotation.OverlapEndHeight).String()),
+			sdk.NewAttribute(types.AttributeKeyOverlapStartHeight, math.NewInt(rotation.OverlapStartHeight).String()),
+			sdk.NewAttribute(types.AttributeKeyOverlapEndHeight, math.NewInt(rotation.OverlapEndHeight).String()),
 		),
 	)
 
@@ -362,7 +363,7 @@ func (k Keeper) CompleteKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddres
 	rotation.CompletedAt = &now
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(rotation)
+	bz, err := json.Marshal(rotation)
 	if err != nil {
 		return err
 	}
@@ -396,7 +397,7 @@ func (k Keeper) GetActiveKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddre
 
 	for ; iterator.Valid(); iterator.Next() {
 		var rotation types.KeyRotationRecord
-		if err := k.cdc.UnmarshalJSON(iterator.Value(), &rotation); err != nil {
+		if err := json.Unmarshal(iterator.Value(), &rotation); err != nil {
 			continue
 		}
 
@@ -421,7 +422,7 @@ func (k Keeper) AddMeasurement(ctx sdk.Context, measurement *types.MeasurementRe
 	measurement.AddedAt = ctx.BlockTime()
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(measurement)
+	bz, err := json.Marshal(measurement)
 	if err != nil {
 		return err
 	}
@@ -449,7 +450,7 @@ func (k Keeper) GetMeasurement(ctx sdk.Context, measurementHash []byte) (*types.
 	}
 
 	var measurement types.MeasurementRecord
-	if err := k.cdc.UnmarshalJSON(bz, &measurement); err != nil {
+	if err := json.Unmarshal(bz, &measurement); err != nil {
 		return nil, false
 	}
 	return &measurement, true
@@ -468,7 +469,7 @@ func (k Keeper) RevokeMeasurement(ctx sdk.Context, measurementHash []byte, reaso
 	measurement.RevokedByProposal = proposalID
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(measurement)
+	bz, err := json.Marshal(measurement)
 	if err != nil {
 		return err
 	}
@@ -631,7 +632,7 @@ func (k Keeper) SetAttestedResult(ctx sdk.Context, result *types.AttestedScoring
 	}
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.MarshalJSON(result)
+	bz, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
@@ -643,7 +644,7 @@ func (k Keeper) SetAttestedResult(ctx sdk.Context, result *types.AttestedScoring
 			types.EventTypeVEIDScoreComputedAttested,
 			sdk.NewAttribute(types.AttributeKeyScopeID, result.ScopeID),
 			sdk.NewAttribute(types.AttributeKeyAccountAddress, result.AccountAddress),
-			sdk.NewAttribute(types.AttributeKeyScore, sdk.NewInt(int64(result.Score)).String()),
+			sdk.NewAttribute(types.AttributeKeyScore, math.NewInt(int64(result.Score)).String()),
 			sdk.NewAttribute(types.AttributeKeyStatus, result.Status),
 			sdk.NewAttribute(types.AttributeKeyMeasurementHash, result.MeasurementHashHex()),
 			sdk.NewAttribute(types.AttributeKeyValidator, result.ValidatorAddress),
@@ -662,7 +663,7 @@ func (k Keeper) GetAttestedResult(ctx sdk.Context, blockHeight int64, scopeID st
 	}
 
 	var result types.AttestedScoringResult
-	if err := k.cdc.UnmarshalJSON(bz, &result); err != nil {
+	if err := json.Unmarshal(bz, &result); err != nil {
 		return nil, false
 	}
 	return &result, true
@@ -751,7 +752,7 @@ func (k Keeper) WithEnclaveIdentities(ctx sdk.Context, fn func(identity types.En
 
 	for ; iterator.Valid(); iterator.Next() {
 		var identity types.EnclaveIdentity
-		if err := k.cdc.UnmarshalJSON(iterator.Value(), &identity); err != nil {
+		if err := json.Unmarshal(iterator.Value(), &identity); err != nil {
 			continue
 		}
 
@@ -769,7 +770,7 @@ func (k Keeper) WithMeasurements(ctx sdk.Context, fn func(measurement types.Meas
 
 	for ; iterator.Valid(); iterator.Next() {
 		var measurement types.MeasurementRecord
-		if err := k.cdc.UnmarshalJSON(iterator.Value(), &measurement); err != nil {
+		if err := json.Unmarshal(iterator.Value(), &measurement); err != nil {
 			continue
 		}
 

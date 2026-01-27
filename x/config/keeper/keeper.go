@@ -8,7 +8,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/config/types"
+	"github.com/virtengine/virtengine/x/config/types"
 )
 
 // IKeeper defines the interface for the config keeper

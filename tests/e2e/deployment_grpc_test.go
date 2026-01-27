@@ -9,12 +9,12 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
-	"pkg.akt.dev/go/cli"
-	clitestutil "pkg.akt.dev/go/cli/testutil"
-	v1 "pkg.akt.dev/go/node/deployment/v1"
-	"pkg.akt.dev/go/node/deployment/v1beta4"
+	"github.com/virtengine/virtengine/sdk/go/cli"
+	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 
-	"pkg.akt.dev/node/testutil"
+	"github.com/virtengine/virtengine/testutil"
 )
 
 type deploymentGRPCRestTestSuite struct {

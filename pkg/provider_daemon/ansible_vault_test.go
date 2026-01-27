@@ -481,7 +481,7 @@ func TestAnsibleVaultRoundTrip(t *testing.T) {
 	// Test with realistic secrets
 	secrets := map[string]string{
 		"db_password":       "postgres_super_secret_123!",
-		"api_key":           "sk_liVIRTENGINE_abcdef1234567890",
+		"api_key":           "sk_live_abcdef1234567890",
 		"ssh_private_key":   "-----BEGIN RSA PRIVATE KEY-----\nMIIEpA...",
 		"aws_access_key":    "AKIAIOSFODNN7EXAMPLE",
 		"aws_secret_key":    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",

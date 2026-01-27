@@ -11,8 +11,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rakyll/statik/fs"
 	"github.com/spf13/cast"
-	emodule "pkg.akt.dev/go/node/escrow/module"
-	"pkg.akt.dev/go/sdkutil"
+	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	tmjson "github.com/cometbft/cometbft/libs/json"
@@ -60,18 +60,18 @@ import (
 	ibchost "github.com/cosmos/ibc-go/v10/modules/core/exported"
 	ibctm "github.com/cosmos/ibc-go/v10/modules/light-clients/07-tendermint"
 
-	cflags "pkg.akt.dev/go/cli/flags"
-	audittypes "pkg.akt.dev/go/node/audit/v1"
-	certtypes "pkg.akt.dev/go/node/cert/v1"
-	deploymenttypes "pkg.akt.dev/go/node/deployment/v1"
-	markettypes "pkg.akt.dev/go/node/market/v1"
-	providertypes "pkg.akt.dev/go/node/provider/v1beta4"
-	taketypes "pkg.akt.dev/go/node/take/v1"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	audittypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
+	certtypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
+	deploymenttypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	markettypes "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
-	apptypes "pkg.akt.dev/node/app/types"
-	utypes "pkg.akt.dev/node/upgrades/types"
+	apptypes "github.com/virtengine/virtengine/app/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 	// unnamed import of statik for swagger UI support
-	_ "pkg.akt.dev/node/client/docs/statik"
+	_ "github.com/virtengine/virtengine/client/docs/statik"
 )
 
 const (

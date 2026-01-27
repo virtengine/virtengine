@@ -385,7 +385,7 @@ func MnemonicToEntropy(mnemonic string) ([]byte, error) {
 		return nil, fmt.Errorf(errMsgInvalidMnemonic)
 	}
 
-	entropy, err := bip39.MnemonicToByteArray(mnemonic, true)
+	entropy, err := bip39.MnemonicToByteArray(mnemonic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract entropy: %w", err)
 	}
@@ -462,12 +462,13 @@ func NormalizeMnemonic(mnemonic string) string {
 
 // GetWordList returns the BIP-39 English word list
 func GetWordList() []string {
-	return bip39.GetWordList()
+	// Use bip39 library's wordlist
+	return bip39.WordList
 }
 
 // IsValidWord checks if a word is in the BIP-39 word list
 func IsValidWord(word string) bool {
-	wordList := bip39.GetWordList()
+	wordList := bip39.WordList
 	for _, w := range wordList {
 		if w == word {
 			return true

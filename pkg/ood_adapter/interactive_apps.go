@@ -186,7 +186,7 @@ type ResourceUsage struct {
 	TotalMemoryGB int32         `json:"total_memory_gb"`
 	TotalGPUs     int32         `json:"total_gpus"`
 	TotalHours    float64       `json:"total_hours"`
-	ActiveSessions int          `json:"actiVIRTENGINE_sessions"`
+	ActiveSessions int          `json:"active_sessions"`
 }
 
 // GetUserResourceUsage gets resource usage for a user

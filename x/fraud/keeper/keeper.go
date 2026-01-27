@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"time"
 
 	"cosmossdk.io/log"
 	"cosmossdk.io/store/prefix"
@@ -18,7 +17,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/fraud/types"
+	"github.com/virtengine/virtengine/x/fraud/types"
+	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 )
 
 // IKeeper defines the interface for the Fraud keeper
@@ -78,7 +78,7 @@ type IKeeper interface {
 
 // RolesKeeper defines the expected roles keeper interface
 type RolesKeeper interface {
-	HasRole(ctx sdk.Context, address sdk.AccAddress, role interface{}) bool
+	HasRole(ctx sdk.Context, address sdk.AccAddress, role rolestypes.Role) bool
 	IsModerator(ctx sdk.Context, addr sdk.AccAddress) bool
 	IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool
 }
@@ -216,7 +216,7 @@ func (k Keeper) IsProvider(ctx sdk.Context, addr sdk.AccAddress) bool {
 		return k.providerKeeper.IsProvider(ctx, addr)
 	}
 	// Fallback: check roles
-	return k.rolesKeeper != nil && k.rolesKeeper.HasRole(ctx, addr, "service_provider")
+	return k.rolesKeeper != nil && k.rolesKeeper.HasRole(ctx, addr, rolestypes.RoleServiceProvider)
 }
 
 // IsModerator checks if an address has moderator role

@@ -1,0 +1,75 @@
+syntax = "proto3";
+package virtengine.escrow.types.v1;
+
+import "cosmos/base/v1beta1/coin.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+
+import "virtengine/escrow/id/v1/id.proto";
+import "virtengine/escrow/types/v1/state.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1";
+
+// Payment stores state for a payment.
+message PaymentState {
+  // Owner is the account bech32 address of the user who owns the deployment.
+  // It is a string representing a valid bech32 account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // State represents the state of the Payment.
+  State state = 2 [
+    (gogoproto.jsontag) = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+
+  // Rate holds the rate of the Payment.
+  cosmos.base.v1beta1.DecCoin rate = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "rate",
+    (gogoproto.moretags) = "yaml:\"rate\""
+  ];
+
+  // Balance is the current available coins.
+  cosmos.base.v1beta1.DecCoin balance = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "balance",
+    (gogoproto.moretags) = "yaml:\"balance\""
+  ];
+
+  // Unsettled is the amount needed to settle payment if account is overdrawn
+  cosmos.base.v1beta1.DecCoin unsettled = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "unsettled",
+    (gogoproto.moretags) = "yaml:\"unsettled\""
+  ];
+
+  // Withdrawn corresponds to the amount of coins withdrawn by the Payment.
+  cosmos.base.v1beta1.Coin withdrawn = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "withdrawn",
+    (gogoproto.moretags) = "yaml:\"withdrawn\""
+  ];
+}
+
+// Payment
+message Payment {
+  virtengine.escrow.id.v1.Payment id = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.customname) = "ID",
+    (gogoproto.jsontag)  = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+
+  PaymentState state = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+}

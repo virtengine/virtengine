@@ -207,7 +207,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Save configuration
-    config.saVIRTENGINE_json(str(output_dir / "config.json"))
+    config.save_json(str(output_dir / "config.json"))
     
     # Export only mode
     if args.export_only:

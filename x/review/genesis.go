@@ -6,8 +6,8 @@ package review
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/review/keeper"
-	"pkg.akt.dev/node/x/review/types"
+	"github.com/virtengine/virtengine/x/review/keeper"
+	"github.com/virtengine/virtengine/x/review/types"
 )
 
 // InitGenesis initializes the review module's state from a provided genesis state

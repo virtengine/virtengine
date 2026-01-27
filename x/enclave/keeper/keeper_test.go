@@ -16,8 +16,8 @@ import (
 	"github.com/cosmos/iavl"
 	dbm "github.com/cosmos/cosmos-db"
 
-	"pkg.akt.dev/node/x/enclave/keeper"
-	"pkg.akt.dev/node/x/enclave/types"
+	"github.com/virtengine/virtengine/x/enclave/keeper"
+	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
 type testEnv struct {
@@ -265,7 +265,7 @@ func TestKeeper_AttestedResult(t *testing.T) {
 		MeasurementHash:   []byte("measurement_hash_32_bytes_padded"),
 		ModelVersionHash:  []byte("model_version_hash_32_bytes_pad0"),
 		InputHash:         []byte("input_hash_32_bytes_padded______"),
-		EnclaveSignature:  []byte("enclaVIRTENGINE_signature"),
+		EnclaveSignature:  []byte("enclave_signature"),
 		BlockHeight:       100,
 		Timestamp:         time.Now().Unix(),
 	}

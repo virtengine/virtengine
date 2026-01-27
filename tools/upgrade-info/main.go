@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	utilcli "pkg.akt.dev/node/util/cli"
+	utilcli "github.com/virtengine/virtengine/util/cli"
 )
 
 func main() {

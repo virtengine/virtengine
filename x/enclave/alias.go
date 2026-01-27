@@ -1,8 +1,8 @@
 package enclave
 
 import (
-	"pkg.akt.dev/node/x/enclave/keeper"
-	"pkg.akt.dev/node/x/enclave/types"
+	"github.com/virtengine/virtengine/x/enclave/keeper"
+	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
 // Module aliases for external use

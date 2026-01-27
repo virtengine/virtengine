@@ -1,0 +1,45 @@
+syntax = "proto3";
+package akash.test.functional;
+
+import "gogoproto/gogo.proto";
+
+message PetOwner {
+  bytes id = 1 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Int"
+  ];
+  Pet pet = 2;
+}
+
+message Pet {
+  oneof value {
+    Dog dog = 2;
+    Cat cat = 3;
+  }
+}
+
+message PetClub {
+  repeated PetOwner members = 1;
+  repeated Dog all_dogs = 3;
+  map<string, Dog> ownerToDog = 4;
+}
+
+message PetClubItemsQueryResponse {
+  repeated PetClub items = 1;
+}
+
+message Dog {
+  string name = 1 [
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec"
+  ];
+}
+
+message Cat {
+  string name = 1;
+}
+
+message Money {
+  string currency = 1;
+  string amount = 2 [
+    (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec"
+  ];
+}

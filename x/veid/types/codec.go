@@ -57,7 +57,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgUpdateBorderlineParams{},
 	)
 
-	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	// TODO: Enable when protobuf generation is complete
+	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = msgservice.RegisterMsgServiceDesc
 }
 
 // _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
@@ -200,12 +202,14 @@ type QueryScopesByTypeResponse struct {
 	Scopes []IdentityScope `json:"scopes"`
 }
 
-type QueryVerificationHistoryRequest struct {
+// SimpleQueryVerificationHistoryRequest is a simplified verification history query
+type SimpleQueryVerificationHistoryRequest struct {
 	AccountAddress string `json:"account_address"`
 	Limit          uint32 `json:"limit,omitempty"`
 }
 
-type QueryVerificationHistoryResponse struct {
+// SimpleQueryVerificationHistoryResponse is a simplified verification history response
+type SimpleQueryVerificationHistoryResponse struct {
 	Events []VerificationEvent `json:"events"`
 }
 

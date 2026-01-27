@@ -4,12 +4,12 @@ package e2e
 
 import (
 	"github.com/stretchr/testify/require"
-	clitestutil "pkg.akt.dev/go/cli/testutil"
+	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
 
-	"pkg.akt.dev/node/testutil"
+	"github.com/virtengine/virtengine/testutil"
 
-	"pkg.akt.dev/go/cli"
-	utiltls "pkg.akt.dev/go/util/tls"
+	"github.com/virtengine/virtengine/sdk/go/cli"
+	utiltls "github.com/virtengine/virtengine/sdk/go/util/tls"
 )
 
 const certTestHost = "foobar.dev"

@@ -8,10 +8,10 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
-	v1 "pkg.akt.dev/go/node/deployment/v1"
-	types "pkg.akt.dev/go/node/deployment/v1beta4"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 
-	"pkg.akt.dev/node/x/deployment/keeper"
+	"github.com/virtengine/virtengine/x/deployment/keeper"
 )
 
 var _ types.MsgServer = msgServer{}

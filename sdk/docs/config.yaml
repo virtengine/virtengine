@@ -1,0 +1,28 @@
+---
+swagger: '2.0'
+info:
+  title: "virtengine - gRPC Gateway docs"
+  description: "A REST interface for state queries"
+  version: "1.0.0"
+apis:
+  - url: "./.cache/tmp/swagger-gen/virtengine/audit/v1/query.swagger.json"
+  - url: "./.cache/tmp/swagger-gen/virtengine/cert/v1/query.swagger.json"
+  - url: "./.cache/tmp/swagger-gen/virtengine/deployment/v1beta4/query.swagger.json"
+    operationIds:
+      rename:
+        Params: DeploymentParams
+  - url: "./.cache/tmp/swagger-gen/virtengine/deployment/v1beta4/service.swagger.json"
+  - url: "./.cache/tmp/swagger-gen/virtengine/market/v1beta5/query.swagger.json"
+    operationIds:
+      rename:
+        Params: MarketParams
+  - url: "./.cache/tmp/swagger-gen/virtengine/market/v1beta5/service.swagger.json"
+  - url: "./.cache/tmp/swagger-gen/virtengine/provider/v1beta4/query.swagger.json"
+  - url: "./.cache/tmp/swagger-gen/virtengine/take/v1/query.swagger.json"
+    operationIds:
+      rename:
+        Params: TakeParams
+  - url: "./.cache/tmp/swagger-gen/virtengine/take/v1/service.swagger.json"
+  - url: "./go/vendor/github.com/cosmos/cosmos-sdk/client/docs/swagger-ui/swagger.yaml"
+    dereference:
+      circular: "ignore"

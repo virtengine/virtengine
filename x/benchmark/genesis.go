@@ -4,8 +4,8 @@ package benchmark
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/benchmark/keeper"
-	"pkg.akt.dev/node/x/benchmark/types"
+	"github.com/virtengine/virtengine/x/benchmark/keeper"
+	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
 // InitGenesis initializes the benchmark module's state from a genesis state.

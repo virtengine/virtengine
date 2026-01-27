@@ -6,8 +6,8 @@ package staking
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/staking/keeper"
-	"pkg.akt.dev/node/x/staking/types"
+	"github.com/virtengine/virtengine/x/staking/keeper"
+	"github.com/virtengine/virtengine/x/staking/types"
 )
 
 // InitGenesis initializes the staking module's state from a genesis state

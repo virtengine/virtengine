@@ -1,5 +1,11 @@
 package types
 
+import (
+	"context"
+
+	"github.com/cosmos/gogoproto/grpc"
+)
+
 // QueryAccountRolesRequest is the request for QueryAccountRoles
 type QueryAccountRolesRequest struct {
 	Address string `json:"address"`
@@ -68,11 +74,11 @@ type PageResponse struct {
 
 // QueryServer is the interface for the query server
 type QueryServer interface {
-	AccountRoles(req *QueryAccountRolesRequest) (*QueryAccountRolesResponse, error)
-	RoleMembers(req *QueryRoleMembersRequest) (*QueryRoleMembersResponse, error)
-	AccountState(req *QueryAccountStateRequest) (*QueryAccountStateResponse, error)
-	GenesisAccounts(req *QueryGenesisAccountsRequest) (*QueryGenesisAccountsResponse, error)
-	Params(req *QueryParamsRequest) (*QueryParamsResponse, error)
+	AccountRoles(ctx context.Context, req *QueryAccountRolesRequest) (*QueryAccountRolesResponse, error)
+	RoleMembers(ctx context.Context, req *QueryRoleMembersRequest) (*QueryRoleMembersResponse, error)
+	AccountState(ctx context.Context, req *QueryAccountStateRequest) (*QueryAccountStateResponse, error)
+	GenesisAccounts(ctx context.Context, req *QueryGenesisAccountsRequest) (*QueryGenesisAccountsResponse, error)
+	Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error)
 }
 
 // _Query_serviceDesc is the grpc.ServiceDesc for Query service.
@@ -103,6 +109,9 @@ var _Query_serviceDesc = struct {
 }
 
 // RegisterQueryServer registers the QueryServer
-func RegisterQueryServer(s interface{ RegisterService(desc interface{}, impl interface{}) }, impl QueryServer) {
-	s.RegisterService(&_Query_serviceDesc, impl)
+// This is a stub implementation until proper protobuf generation is set up.
+func RegisterQueryServer(s grpc.Server, impl QueryServer) {
+	// Registration is a no-op for now since we don't have proper protobuf generated code
+	_ = s
+	_ = impl
 }

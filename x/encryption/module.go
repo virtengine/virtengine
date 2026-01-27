@@ -17,8 +17,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/gogoproto/grpc"
 
-	"pkg.akt.dev/node/x/encryption/keeper"
-	"pkg.akt.dev/node/x/encryption/types"
+	"github.com/virtengine/virtengine/x/encryption/keeper"
+	"github.com/virtengine/virtengine/x/encryption/types"
 )
 
 var (

@@ -11,14 +11,14 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	types "pkg.akt.dev/go/node/provider/v1beta4"
-	vetypes "pkg.akt.dev/go/node/types/attributes/v1"
-	"pkg.akt.dev/go/testutil"
+	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	vetypes "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
-	"pkg.akt.dev/node/testutil/state"
-	mkeeper "pkg.akt.dev/node/x/market/keeper"
-	"pkg.akt.dev/node/x/provider/handler"
-	"pkg.akt.dev/node/x/provider/keeper"
+	"github.com/virtengine/virtengine/testutil/state"
+	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
+	"github.com/virtengine/virtengine/x/provider/handler"
+	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
 const (

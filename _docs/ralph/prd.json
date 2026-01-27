@@ -170,7 +170,7 @@
       "description": "Rename everything in the virtengine source code to use 'VirtEngine' instead.",
       "acceptanceCriteria": [
         "virtengine only mentioned in the readme as a source",
-        "No reference to virtengine naming conventions, for e.g. : 'virtengine_DEVCACHE_BASE' becomes 'VIRTENGINE_DEVCACHE_BASE' etc.",
+        "No reference to virtengine naming conventions, for e.g. : 'virtengine_DEVCACHE_BASE' becomes 'VE_DEVCACHE_BASE' etc.",
         "virtengine -> VirtEngine, virtengine -> VE, virtengine -> ve, etc, akt.io -> source.virtengine.com in all code, comments, documentation, and scripts",
         "Can build and run the VirtEngine binary"
       ],
@@ -673,7 +673,7 @@
       "title": "Phase 1 - On-chain Enclave Registry module for validator identity processing",
       "description": "Implement a Cosmos module to register and query validator VEID enclave identities (attestation + keys) so clients can encrypt identity payloads specifically to enclave public keys.",
       "acceptanceCriteria": [
-        "State stores per-validator enclave identity record: enclaVIRTENGINE_measurement_hash, enclaVIRTENGINE_enc_pubkey, enclaVIRTENGINE_sign_pubkey, attestation_quote, attestation_chain, epoch/expiry",
+        "State stores per-validator enclave identity record: enclave_measurement_hash, enclave_enc_pubkey, enclave_sign_pubkey, attestation_quote, attestation_chain, epoch/expiry",
         "MsgRegisterEnclaveIdentity only executable by validator operator key; updates are audited via events",
         "Governance-controlled allowlist of approved enclave measurements (and optional minimum TEE version constraints)",
         "Queries support: get active validator enclave keys, get committee subset keys (if committee mode enabled), get measurement allowlist",
@@ -718,8 +718,8 @@
       "title": "Phase 2 - Attested scoring output: include enclave signature + measurement linkage in block",
       "description": "Require that every identity score written into a proposed block carries an enclave-signed attestation payload proving it was computed inside an approved enclave measurement.",
       "acceptanceCriteria": [
-        "VEID verification record stored on-chain includes: score/status, model/version hashes, enclaVIRTENGINE_measurement_hash, enclaVIRTENGINE_signed_result, attestation_reference (or quote hash)",
-        "Consensus validation checks that enclaVIRTENGINE_measurement_hash is allowlisted and corresponds to registered validator enclave identity",
+        "VEID verification record stored on-chain includes: score/status, model/version hashes, enclave_measurement_hash, enclave_signed_result, attestation_reference (or quote hash)",
+        "Consensus validation checks that enclave_measurement_hash is allowlisted and corresponds to registered validator enclave identity",
         "Reject block if: missing enclave signature, invalid signature, measurement not allowlisted, or attestation expired",
         "Events emitted: VEIDScoreComputedAttested, VEIDScoreRejectedAttestation"
       ],

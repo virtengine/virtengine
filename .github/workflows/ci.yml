@@ -247,11 +247,11 @@ jobs:
       - name: Create archive
         run: |
           cd dist
-          ARCHIVIRTENGINE_NAME="virtengine-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          ARCHIVE_NAME="virtengine-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip "${ARCHIVIRTENGINE_NAME}.zip" virtengine.exe
+            zip "${ARCHIVE_NAME}.zip" virtengine.exe
           else
-            tar -czvf "${ARCHIVIRTENGINE_NAME}.tar.gz" virtengine
+            tar -czvf "${ARCHIVE_NAME}.tar.gz" virtengine
           fi
 
       - name: Upload build artifact

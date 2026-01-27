@@ -37,7 +37,9 @@ func RegisterInterfaces(registry types.InterfaceRegistry) {
 		&MsgUpdateParams{},
 	)
 
-	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	// TODO: Enable when protobuf generation is complete
+	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = msgservice.RegisterMsgServiceDesc
 }
 
 // _Msg_serviceDesc is the gRPC service descriptor for Msg service

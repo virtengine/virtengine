@@ -8,12 +8,12 @@ import (
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmodule "github.com/cosmos/cosmos-sdk/types/module"
-	dv1 "pkg.akt.dev/go/node/deployment/v1"
-	dv1beta "pkg.akt.dev/go/node/deployment/v1beta4"
-	"pkg.akt.dev/go/node/migrate"
+	dv1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	dv1beta "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	"github.com/virtengine/virtengine/sdk/go/node/migrate"
 
-	utypes "pkg.akt.dev/node/upgrades/types"
-	dkeeper "pkg.akt.dev/node/x/deployment/keeper"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
+	dkeeper "github.com/virtengine/virtengine/x/deployment/keeper"
 )
 
 type deploymentsMigrations struct {

@@ -35,7 +35,7 @@ if result.success:
     normalized = result.normalized_image
     print(f"Processed in {result.processing_time_ms:.2f}ms")
     print(f"Rotation applied: {result.rotation_applied}°")
-    print(f"Perspective corrected: {result.perspectiVIRTENGINE_corrected}")
+    print(f"Perspective corrected: {result.perspective_corrected}")
     print(f"Enhancements: {result.enhancements_applied}")
 ```
 

@@ -32,11 +32,11 @@ from ml.liveness_detection.detector import (
     LivenessDetector,
     LivenessResult,
 )
-from ml.liveness_detection.actiVIRTENGINE_challenges import (
+from ml.liveness_detection.active_challenges import (
     ActiveChallengeDetector,
     ChallengeResult,
 )
-from ml.liveness_detection.passiVIRTENGINE_analysis import (
+from ml.liveness_detection.passive_analysis import (
     PassiveAnalyzer,
     PassiveAnalysisResult,
 )

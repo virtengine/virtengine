@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
-	etypes "pkg.akt.dev/go/node/escrow/types/v1"
-	"pkg.akt.dev/go/testutil"
+	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"

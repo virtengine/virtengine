@@ -14,7 +14,7 @@ const (
 	TypeMsgSubmitFraudReport   = "submit_fraud_report"
 	TypeMsgAssignModerator     = "assign_moderator"
 	TypeMsgUpdateReportStatus  = "update_report_status"
-	TypeMsgResolveFraudReport  = "resolVIRTENGINE_fraud_report"
+	TypeMsgResolveFraudReport  = "resolve_fraud_report"
 	TypeMsgRejectFraudReport   = "reject_fraud_report"
 	TypeMsgEscalateFraudReport = "escalate_fraud_report"
 	TypeMsgUpdateParams        = "update_params"

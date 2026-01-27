@@ -1839,14 +1839,18 @@ func (aa *AWSAdapter) configureSecurityGroupRules(ctx context.Context, sgID stri
 			protocol = "tcp"
 		}
 
+		portNum := port.ContainerPort
+		if port.ExternalPort != 0 {
+			portNum = port.ExternalPort
+		}
 		rules = append(rules, SecurityGroupRuleSpec{
 			SecurityGroupID: sgID,
 			Direction:       "ingress",
 			Protocol:        protocol,
-			PortRangeMin:    port.Port,
-			PortRangeMax:    port.Port,
+			PortRangeMin:    int(portNum),
+			PortRangeMax:    int(portNum),
 			RemoteIPPrefix:  "0.0.0.0/0", // Allow from anywhere - can be restricted
-			Description:     fmt.Sprintf("Allow %s port %d", protocol, port.Port),
+			Description:     fmt.Sprintf("Allow %s port %d", protocol, portNum),
 		})
 	}
 

@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	slurm "pkg.akt.dev/node/pkg/slurm_adapter"
+	slurm "github.com/virtengine/virtengine/pkg/slurm_adapter"
 )
 
 // VE-501: SLURM orchestration adapter tests

@@ -1,7 +1,6 @@
 package enclave
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -17,8 +16,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/gogoproto/grpc"
 
-	"pkg.akt.dev/node/x/enclave/keeper"
-	"pkg.akt.dev/node/x/enclave/types"
+	"github.com/virtengine/virtengine/x/enclave/keeper"
+	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
 var (

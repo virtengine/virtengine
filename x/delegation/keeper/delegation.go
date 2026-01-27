@@ -8,9 +8,10 @@ import (
 	"math/big"
 	"time"
 
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/delegation/types"
+	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
 // Delegate delegates tokens from a delegator to a validator
@@ -424,7 +425,7 @@ func (k Keeper) CompleteUnbonding(ctx sdk.Context, unbondingID string) error {
 
 		if k.bankKeeper != nil {
 			params := k.GetParams(ctx)
-			coins := sdk.NewCoins(sdk.NewCoin(params.StakeDenom, sdk.NewIntFromBigInt(completedAmount)))
+			coins := sdk.NewCoins(sdk.NewCoin(params.StakeDenom, math.NewIntFromBigInt(completedAmount)))
 			if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, coins); err != nil {
 				return fmt.Errorf("failed to return tokens: %w", err)
 			}

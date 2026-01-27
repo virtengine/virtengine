@@ -48,8 +48,8 @@ $(VIRTENGINE):
 virtengine: $(VIRTENGINE)
 
 .PHONY: virtengine_docgen
-virtengine_docgen: $(VIRTENGINE_DEVCACHE)
-	$(GO_BUILD) -o $(VIRTENGINE_DEVCACHE_BIN)/virtengine_docgen $(BUILD_FLAGS) ./docgen
+virtengine_docgen: $(VE_DEVCACHE)
+	$(GO_BUILD) -o $(VE_DEVCACHE_BIN)/virtengine_docgen $(BUILD_FLAGS) ./docgen
 
 .PHONY: install
 install:
@@ -76,7 +76,7 @@ test-bins:
 		-e GOWORK="$(GORELEASER_GOWORK)" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(GOPATH):/go \
-		-v $(VIRTENGINE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
+		-v $(VE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
 		-w /go/src/$(GORELEASER_MOD_MOUNT) \
 		$(GORELEASER_IMAGE) \
 		-f .goreleaser-test-bins.yaml \
@@ -101,7 +101,7 @@ docker-image:
 		-e GOWORK="$(GORELEASER_GOWORK)" \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(GOPATH):/go \
-		-v $(VIRTENGINE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
+		-v $(VE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
 		-w /go/src/$(GORELEASER_MOD_MOUNT) \
 		$(GORELEASER_IMAGE) \
 		-f .goreleaser-docker.yaml \
@@ -133,7 +133,7 @@ release: gen-changelog
 		-e GOPATH=/go \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(GOPATH):/go \
-		-v $(VIRTENGINE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
+		-v $(VE_ROOT):/go/src/$(GORELEASER_MOD_MOUNT) \
 		-w /go/src/$(GORELEASER_MOD_MOUNT) \
 		$(GORELEASER_IMAGE) \
 		-f "$(GORELEASER_CONFIG)" \

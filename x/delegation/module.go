@@ -18,8 +18,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
-	"pkg.akt.dev/node/x/delegation/keeper"
-	"pkg.akt.dev/node/x/delegation/types"
+	"github.com/virtengine/virtengine/x/delegation/keeper"
+	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
 var (

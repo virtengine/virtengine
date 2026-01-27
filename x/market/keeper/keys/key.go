@@ -6,12 +6,12 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/address"
-	mv1beta4 "pkg.akt.dev/go/node/market/v1beta4"
+	mv1beta4 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta4"
 
-	dtypes "pkg.akt.dev/go/node/deployment/v1"
-	types "pkg.akt.dev/go/node/market/v1"
-	mv1beta "pkg.akt.dev/go/node/market/v1beta5"
-	"pkg.akt.dev/go/sdkutil"
+	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	types "github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	mv1beta "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
 
 const (

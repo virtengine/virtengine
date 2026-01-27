@@ -3,7 +3,7 @@ package config
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/config/types"
+	"github.com/virtengine/virtengine/x/config/types"
 )
 
 // InitGenesis initializes the genesis state for the config module

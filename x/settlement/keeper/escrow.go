@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // CreateEscrow creates a new escrow account for an order
@@ -339,57 +339,7 @@ func (k Keeper) DisputeEscrow(ctx sdk.Context, escrowID string, reason string) e
 }
 
 // ProcessExpiredEscrows processes all expired escrows
-func (k Keeper) ProcessExpiredEscrows(ctx sdk.Context) {
-	// Check pending and active escrows for expiry
-	states := []types.EscrowState{types.EscrowStatePending, types.EscrowStateActive}
-
-	for _, state := range states {
-		k.WithEscrowsByState(ctx, state, func(escrow types.EscrowAccount) bool {
-			if escrow.CheckExpiry(ctx.BlockTime()) {
-				oldState := escrow.State
-
-				// Refund remaining balance to depositor
-				if !escrow.Balance.IsZero() {
-					depositor, err := sdk.AccAddressFromBech32(escrow.Depositor)
-					if err == nil {
-						if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleAccountName, depositor, escrow.Balance); err != nil {
-							k.Logger(ctx).Error("failed to refund expired escrow", "error", err, "escrow_id", escrow.EscrowID)
-						}
-					}
-				}
-
-				escrow.Balance = sdk.NewCoins()
-				if err := k.SetEscrow(ctx, escrow); err != nil {
-					k.Logger(ctx).Error("failed to save expired escrow", "error", err, "escrow_id", escrow.EscrowID)
-				}
-
-				k.updateEscrowState(ctx, escrow, oldState)
-
-				// Emit event
-				_ = ctx.EventManager().EmitTypedEvent(&types.EventEscrowExpired{
-					EscrowID:  escrow.EscrowID,
-					OrderID:   escrow.OrderID,
-					Balance:   escrow.Balance.String(),
-					ExpiredAt: ctx.BlockTime().Unix(),
-				})
-
-				k.Logger(ctx).Info("escrow expired",
-					"escrow_id", escrow.EscrowID,
-				)
-			}
-			return false
-		})
-	}
-}
-
-// ProcessExpiredEscrows processes all expired escrows (interface method)
 func (k Keeper) ProcessExpiredEscrows(ctx sdk.Context) error {
-	k.processExpiredEscrowsInternal(ctx)
-	return nil
-}
-
-// processExpiredEscrowsInternal is the internal implementation
-func (k Keeper) processExpiredEscrowsInternal(ctx sdk.Context) {
 	// Check pending and active escrows for expiry
 	states := []types.EscrowState{types.EscrowStatePending, types.EscrowStateActive}
 
@@ -430,6 +380,7 @@ func (k Keeper) processExpiredEscrowsInternal(ctx sdk.Context) {
 			return false
 		})
 	}
+	return nil
 }
 
 // SatisfyTimelockConditions satisfies timelock conditions (interface method - iterates all escrows)

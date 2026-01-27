@@ -21,8 +21,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
-	"pkg.akt.dev/node/x/review/keeper"
-	"pkg.akt.dev/node/x/review/types"
+	"github.com/virtengine/virtengine/x/review/keeper"
+	"github.com/virtengine/virtengine/x/review/types"
 )
 
 var (

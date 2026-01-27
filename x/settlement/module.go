@@ -15,8 +15,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
-	"pkg.akt.dev/node/x/settlement/keeper"
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/keeper"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 var (
@@ -107,7 +107,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper.(keeper.Keeper)))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper.(keeper.Keeper)})
 }
 

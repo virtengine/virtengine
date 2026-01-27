@@ -1,8 +1,8 @@
 package settlement
 
 import (
-	"pkg.akt.dev/node/x/settlement/keeper"
-	"pkg.akt.dev/node/x/settlement/types"
+	"github.com/virtengine/virtengine/x/settlement/keeper"
+	"github.com/virtengine/virtengine/x/settlement/types"
 )
 
 // Type aliases for external use
@@ -70,8 +70,7 @@ type (
 
 // Constants aliases
 const (
-	// Module name
-	ModuleName = types.ModuleName
+	// Module constants
 	RouterKey  = types.RouterKey
 	StoreKey   = types.StoreKey
 
@@ -96,30 +95,26 @@ const (
 	RewardSourceProvider     = types.RewardSourceProvider
 
 	// Release condition types
-	ReleaseConditionTimelock       = types.ReleaseConditionTimelock
-	ReleaseConditionSignature      = types.ReleaseConditionSignature
-	ReleaseConditionUsageThreshold = types.ReleaseConditionUsageThreshold
-	ReleaseConditionVerification   = types.ReleaseConditionVerification
-	ReleaseConditionMultisig       = types.ReleaseConditionMultisig
+	ConditionTypeTimelock       = types.ConditionTypeTimelock
+	ConditionTypeSignature      = types.ConditionTypeSignature
+	ConditionTypeUsageThreshold = types.ConditionTypeUsageThreshold
+	ConditionTypeVerification   = types.ConditionTypeVerification
+	ConditionTypeMultisig       = types.ConditionTypeMultisig
 )
 
 // Variable aliases
 var (
 	// Key functions
-	EscrowKey                = types.EscrowKey
-	EscrowByOrderKey         = types.EscrowByOrderKey
-	EscrowByStateKey         = types.EscrowByStateKey
-	SettlementKey            = types.SettlementKey
-	SettlementByOrderKey     = types.SettlementByOrderKey
-	UsageRecordKey           = types.UsageRecordKey
-	UsageByOrderKey          = types.UsageByOrderKey
-	RewardDistributionKey    = types.RewardDistributionKey
-	RewardsByEpochKey        = types.RewardsByEpochKey
-	ClaimableRewardsKey      = types.ClaimableRewardsKey
-	NextEscrowSequenceKey    = types.NextEscrowSequenceKey
-	NextSettlementSequenceKey = types.NextSettlementSequenceKey
-	NextUsageSequenceKey     = types.NextUsageSequenceKey
-	NextDistributionSequenceKey = types.NextDistributionSequenceKey
+	EscrowKey             = types.EscrowKey
+	EscrowByOrderKey      = types.EscrowByOrderKey
+	EscrowByStateKey      = types.EscrowByStateKey
+	SettlementKey         = types.SettlementKey
+	SettlementByOrderKey  = types.SettlementByOrderKey
+	UsageRecordKey        = types.UsageRecordKey
+	UsageByOrderKey       = types.UsageByOrderKey
+	RewardDistributionKey = types.RewardDistributionKey
+	RewardByEpochKey      = types.RewardByEpochKey
+	ClaimableRewardsKey   = types.ClaimableRewardsKey
 
 	// Codec functions
 	RegisterLegacyAminoCodec = types.RegisterLegacyAminoCodec
@@ -131,8 +126,8 @@ var (
 
 	// Error variables
 	ErrEscrowNotFound         = types.ErrEscrowNotFound
-	ErrEscrowAlreadyExists    = types.ErrEscrowAlreadyExists
-	ErrInvalidEscrowState     = types.ErrInvalidEscrowState
+	ErrEscrowExists           = types.ErrEscrowExists
+	ErrInvalidStateTransition = types.ErrInvalidStateTransition
 	ErrSettlementNotFound     = types.ErrSettlementNotFound
 	ErrUsageRecordNotFound    = types.ErrUsageRecordNotFound
 	ErrRewardNotFound         = types.ErrRewardNotFound

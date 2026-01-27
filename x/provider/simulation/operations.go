@@ -5,7 +5,7 @@ import (
 	"math/rand"
 
 	cerrors "cosmossdk.io/errors"
-	"pkg.akt.dev/go/sdkutil"
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -17,12 +17,12 @@ import (
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
 
-	types "pkg.akt.dev/go/node/provider/v1beta4"
+	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
-	appparams "pkg.akt.dev/node/app/params"
-	testsim "pkg.akt.dev/node/testutil/sim"
-	"pkg.akt.dev/node/x/provider/config"
-	"pkg.akt.dev/node/x/provider/keeper"
+	appparams "github.com/virtengine/virtengine/app/params"
+	testsim "github.com/virtengine/virtengine/testutil/sim"
+	"github.com/virtengine/virtengine/x/provider/config"
+	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
 // Simulation operation weights constants

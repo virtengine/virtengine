@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package virtengine.discovery.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/client";
+
+// ClientInfo is the akash specific client info.
+message ClientInfo {
+  // ApiVersion is the version of the API running on the client.
+  string api_version = 1 [
+    (gogoproto.customname) = "ApiVersion",
+    (gogoproto.jsontag)    = "api_version",
+    (gogoproto.moretags)   = "yaml:\"api_version\""
+  ];
+}

@@ -1,0 +1,22 @@
+syntax = "proto3";
+package virtengine.oracle.v1;
+
+import "cosmos/msg/v1/msg.proto";
+
+import "virtengine/oracle/v1/msgs.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/oracle/v1";
+
+// Msg defines the oracle Msg service for managing price feeds
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // AddPriceEntry adds a new price entry for a denomination from an authorized source
+  rpc AddPriceEntry(MsgAddPriceEntry) returns (MsgAddPriceEntryResponse);
+
+  // UpdateParams defines a governance operation for updating the x/wasm module
+  // parameters. The authority is hard-coded to the x/gov module account.
+  //
+  // Since: akash v2.0.0
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}

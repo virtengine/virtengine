@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	encryptiontypes "pkg.akt.dev/node/x/encryption/types"
-	"pkg.akt.dev/node/x/veid/keeper"
-	"pkg.akt.dev/node/x/veid/types"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
+	"github.com/virtengine/virtengine/x/veid/keeper"
+	"github.com/virtengine/virtengine/x/veid/types"
 )
 
 // Test constants for address and scope identifiers

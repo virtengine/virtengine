@@ -1,0 +1,88 @@
+syntax = "proto3";
+package virtengine.audit.v1;
+
+import "gogoproto/gogo.proto";
+
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+
+import "virtengine/base/attributes/v1/attribute.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/audit/v1";
+
+// MsgSignProviderAttributes defines an SDK message for signing a provider attributes.
+message MsgSignProviderAttributes {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "auditor";
+
+  // Owner is the account bech32 address of the provider.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // Auditor is the account address of the auditor.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string auditor = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "auditor",
+    (gogoproto.moretags)  = "yaml:\"auditor\""
+  ];
+
+  // Attributes holds a list of key-value pairs of provider attributes to be audited.
+  // Attributes are arbitrary values that a provider exposes.
+  repeated virtengine.base.attributes.v1.Attribute attributes = 3 [
+    (gogoproto.castrepeated) = "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1.Attributes",
+    (gogoproto.nullable)     = false,
+    (gogoproto.jsontag)      = "attributes",
+    (gogoproto.moretags)     = "yaml:\"attributes\""
+  ];
+}
+
+// MsgSignProviderAttributesResponse defines the Msg/CreateProvider response type.
+message MsgSignProviderAttributesResponse {}
+
+// MsgDeleteProviderAttributes defined the Msg/DeleteProviderAttributes
+message MsgDeleteProviderAttributes {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "auditor";
+
+  // Owner is the account bech32 address of the provider.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+
+  // Auditor is the account address of the auditor.
+  // It is a string representing a valid account address.
+  //
+  // Example:
+  //   "akash1..."
+  string auditor = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "auditor",
+    (gogoproto.moretags)  = "yaml:\"auditor\""
+  ];
+
+  // Keys holds a list of keys of audited provider attributes to delete from the audit.
+  repeated string keys = 3 [
+    (gogoproto.jsontag)  = "keys",
+    (gogoproto.moretags) = "yaml:\"keys\""
+  ];
+}
+
+// MsgDeleteProviderAttributesResponse defines the Msg/ProviderAttributes response type.
+message MsgDeleteProviderAttributesResponse {}

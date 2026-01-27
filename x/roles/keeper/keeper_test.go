@@ -16,8 +16,8 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/roles/keeper"
-	"pkg.akt.dev/node/x/roles/types"
+	"github.com/virtengine/virtengine/x/roles/keeper"
+	"github.com/virtengine/virtengine/x/roles/types"
 )
 
 func setupKeeper(t testing.TB) (sdk.Context, keeper.Keeper) {

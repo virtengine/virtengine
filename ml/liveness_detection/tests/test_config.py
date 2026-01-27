@@ -14,7 +14,7 @@ from ml.liveness_detection.config import (
     ChallengeType,
     get_default_config,
     get_strict_config,
-    get_permissiVIRTENGINE_config,
+    get_permissive_config,
 )
 
 
@@ -48,14 +48,14 @@ class TestLivenessConfig:
         config = LivenessConfig()
         
         total = (
-            config.score.actiVIRTENGINE_challenge_weight +
-            config.score.passiVIRTENGINE_analysis_weight +
+            config.score.active_challenge_weight +
+            config.score.passive_analysis_weight +
             config.score.spoof_detection_weight
         )
         
         assert abs(total - 1.0) < 0.001
     
-    def test_config_passiVIRTENGINE_weights_sum_to_one(self):
+    def test_config_passive_weights_sum_to_one(self):
         """Test that passive weights sum to 1.0."""
         config = LivenessConfig()
         
@@ -72,14 +72,14 @@ class TestLivenessConfig:
     def test_invalid_score_weights(self):
         """Test validation fails with invalid score weights."""
         config = LivenessConfig()
-        config.score.actiVIRTENGINE_challenge_weight = 0.5
-        config.score.passiVIRTENGINE_analysis_weight = 0.5
+        config.score.active_challenge_weight = 0.5
+        config.score.passive_analysis_weight = 0.5
         config.score.spoof_detection_weight = 0.5  # Sum = 1.5
         
         with pytest.raises(ValueError, match="Score weights must sum to 1.0"):
             config.validate()
     
-    def test_invalid_passiVIRTENGINE_weights(self):
+    def test_invalid_passive_weights(self):
         """Test validation fails with invalid passive weights."""
         config = LivenessConfig()
         config.passive.texture_weight = 0.5
@@ -116,7 +116,7 @@ class TestActiveChallengeConfig:
         config = ActiveChallengeConfig()
         
         assert config.blink_ear_threshold == 0.21
-        assert config.blink_consecutiVIRTENGINE_frames == 2
+        assert config.blink_consecutive_frames == 2
         assert config.blink_min_duration_ms == 50
         assert config.blink_max_duration_ms == 500
     
@@ -171,9 +171,9 @@ class TestConfigPresets:
         assert config.score.pass_threshold == 0.85
         assert len(config.required_challenges) >= 2
     
-    def test_get_permissiVIRTENGINE_config(self):
+    def test_get_permissive_config(self):
         """Test permissive config preset."""
-        config = get_permissiVIRTENGINE_config()
+        config = get_permissive_config()
         
         assert config.validate() is True
         assert config.score.pass_threshold == 0.60

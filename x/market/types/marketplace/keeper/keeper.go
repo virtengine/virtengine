@@ -14,7 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"pkg.akt.dev/node/x/market/types/marketplace"
+	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
 // VEIDKeeper defines the interface for the VEID keeper
@@ -961,6 +961,11 @@ type MarketplaceEventWrapper struct {
 	BlockHeight int64  `json:"block_height"`
 	Sequence    uint64 `json:"sequence"`
 }
+
+// Proto.Message interface stubs for MarketplaceEventWrapper
+func (m *MarketplaceEventWrapper) ProtoMessage()  {}
+func (m *MarketplaceEventWrapper) Reset()         { *m = MarketplaceEventWrapper{} }
+func (m *MarketplaceEventWrapper) String() string { return fmt.Sprintf("%+v", *m) }
 
 // GetEventSequence returns the current event sequence
 func (k Keeper) GetEventSequence(ctx sdk.Context) uint64 {
