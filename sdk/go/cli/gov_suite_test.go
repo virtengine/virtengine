@@ -66,7 +66,7 @@ func (s *GovCLITestSuite) SetupSuite() {
 			WithTitle("Text Proposal 1").
 			WithDescription("Where is the title!?").
 			WithProposalType(v1beta1.ProposalTypeText).
-			WithDeposit(sdk.NewCoin("uakt", cli.DefaultMinDepositTokens)).
+			WithDeposit(sdk.NewCoin("uve", cli.DefaultMinDepositTokens)).
 			WithBroadcastModeSync().
 			WithSkipConfirm()...)
 	s.Require().NoError(err)
@@ -116,7 +116,7 @@ func (s *GovCLITestSuite) SetupSuite() {
 			WithTitle("Text Proposal 3").
 			WithDescription("Where is the title!?").
 			WithProposalType(v1beta1.ProposalTypeText).
-			WithDeposit(sdk.NewCoin("uakt", cli.DefaultMinDepositTokens)).
+			WithDeposit(sdk.NewCoin("uve", cli.DefaultMinDepositTokens)).
 			WithBroadcastModeSync().
 			WithSkipConfirm()...)
 	s.Require().NoError(err)

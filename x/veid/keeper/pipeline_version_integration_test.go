@@ -9,6 +9,7 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
 	"cosmossdk.io/log"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
@@ -272,7 +273,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	_, err := keeper.RegisterPipelineVersion(
 		ctx,
 		"1.0.0",
-		"sha256:v1hash000000000000000000000000000000000000000000000000000000000",
+		"sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
 	)
@@ -298,7 +299,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	_, err = keeper.RegisterPipelineVersion(
 		ctx,
 		"2.0.0",
-		"sha256:v2hash000000000000000000000000000000000000000000000000000000000",
+		"sha256:b1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0b1b2",
 		"ghcr.io/virtengine/veid-pipeline:v2.0.0",
 		manifest,
 	)
@@ -311,7 +312,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	if !found {
 		t.Fatal("v2.0.0 should exist")
 	}
-	if v2.Status != types.PipelineVersionStatusPending {
+	if v2.Status != string(types.PipelineVersionStatusPending) {
 		t.Errorf("v2.0.0 should be pending, got %s", v2.Status)
 	}
 
@@ -335,7 +336,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	if !found {
 		t.Fatal("v1.0.0 should still exist")
 	}
-	if v1.Status != types.PipelineVersionStatusDeprecated {
+	if v1.Status != string(types.PipelineVersionStatusDeprecated) {
 		t.Errorf("v1.0.0 should be deprecated, got %s", v1.Status)
 	}
 
@@ -343,7 +344,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	err = keeper.VerifyPipelineVersion(
 		ctx,
 		"1.0.0", // Old version
-		"sha256:v1hash000000000000000000000000000000000000000000000000000000000",
+		"sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
 		manifest.ManifestHash,
 	)
 	if err == nil {
@@ -354,7 +355,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	err = keeper.VerifyPipelineVersion(
 		ctx,
 		"2.0.0",
-		"sha256:v2hash000000000000000000000000000000000000000000000000000000000",
+		"sha256:b1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0b1b2",
 		manifest.ManifestHash,
 	)
 	if err != nil {
@@ -439,7 +440,7 @@ func setupPipelineIntegrationTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 
 	db := dbm.NewMemDB()
-	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), nil)
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	if err != nil {
@@ -461,20 +462,20 @@ func setupPipelineIntegrationTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 }
 
 func createIntegrationTestManifest(t *testing.T) types.ModelManifest {
-	models := map[string]types.ModelInfo{
-		"deepface_facenet512": {
+	models := []types.ModelInfo{
+		{
 			Name:        "deepface_facenet512",
 			Version:     "1.0.0",
 			WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			Framework:   "tensorflow",
-			Purpose:     types.ModelPurposeFaceRecognition,
+			Purpose:     string(types.ModelPurposeFaceRecognition),
 		},
-		"craft_text_detection": {
+		{
 			Name:        "craft_text_detection",
 			Version:     "1.0.0",
 			WeightsHash: "sha256:b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
 			Framework:   "pytorch",
-			Purpose:     types.ModelPurposeTextDetection,
+			Purpose:     string(types.ModelPurposeTextDetection),
 		},
 	}
 

@@ -29,7 +29,7 @@ func (p *Params) ParamSetPairs() paramtypes.ParamSetPairs {
 func DefaultParams() Params {
 	return Params{
 		MinDeposits: sdk.Coins{
-			sdk.NewCoin("uakt", sdk.NewInt(500000)),
+			sdk.NewCoin("uve", sdk.NewInt(500000)),
 		},
 	}
 }
@@ -85,8 +85,8 @@ func validateMinDeposits(i interface{}) error {
 		}
 	}
 
-	if _, exists := check["uakt"]; !exists {
-		return errorsmod.Wrapf(ErrInvalidParam, "Min Deposits - uakt not given: %#v", vals)
+	if _, exists := check["uve"]; !exists {
+		return errorsmod.Wrapf(ErrInvalidParam, "Min Deposits - uve not given: %#v", vals)
 	}
 
 	return nil

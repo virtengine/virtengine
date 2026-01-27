@@ -81,7 +81,7 @@ profiles:
       pricing:
         # The name of the service
         web:
-          denom: uakt
+          denom: uve
           amount: 10000
 
 # The deployment section defines how to deploy the services. It is a mapping of service name to deployment configuration.
@@ -104,7 +104,7 @@ const deploymentMessage: TxInput<MsgCreateDeployment> = {
   hash: await sdl.manifestVersion(),
   deposit: {
     amount: {
-      denom: "uakt",
+      denom: "uve",
       amount: "500000",
     },
     sources: [Source.balance],

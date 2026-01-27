@@ -67,7 +67,7 @@ func (s *OracleCLITestSuite) SetupSuite() {
 	s.addrs = make([]sdk.AccAddress, 1)
 	s.addrs[0] = val[0].Address
 
-	// Feed initial price data for uakt/usd
+	// Feed initial price data for uve/usd
 	cmd := cli.GetTxOracleFeedPriceCmd()
 	_, err := clitestutil.ExecTestCLICmd(
 		s.ctx,
@@ -317,7 +317,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceWithGasSettings() {
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
-				WithGasPrices("0.025uakt"),
+				WithGasPrices("0.025uve"),
 			false,
 		},
 	}

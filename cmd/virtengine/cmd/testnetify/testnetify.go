@@ -117,7 +117,7 @@ you want to test the upgrade handler itself.
 					cfg.Accounts[i].Balances = sdktypes.NewCoins(acc.Balances...)
 				} else {
 					cfg.Accounts[i].Balances = sdktypes.NewCoins(
-						sdktypes.NewInt64Coin("uakt", 10000000000000),
+						sdktypes.NewInt64Coin("uve", 10000000000000),
 						sdktypes.NewInt64Coin("ibc/12C6A0C374171B595A0A9E18B83FA09D295FB1F2D8C6DAA3AC28683471752D84", 1000000000000), // axlUSDC
 					)
 				}

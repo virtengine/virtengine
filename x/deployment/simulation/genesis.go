@@ -3,12 +3,12 @@ package simulation
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 )
 
 var (
-	minDeposit, _ = types.DefaultParams().MinDepositFor("uakt")
+	minDeposit, _ = types.DefaultParams().MinDepositFor("uve")
 )
 
 // RandomizedGenState generates a random GenesisState for supply

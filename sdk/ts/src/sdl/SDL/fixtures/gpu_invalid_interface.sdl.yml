@@ -43,7 +43,7 @@ profiles:
           - VirtEngine1124123123
       pricing:
         web:
-          denom: uakt
+          denom: uve
           amount: 50
 deployment:
   web:

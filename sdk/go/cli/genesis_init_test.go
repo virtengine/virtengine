@@ -147,7 +147,7 @@ func TestInitDefaultBondDenom(t *testing.T) {
 	cmd.SetArgs([]string{
 		"appnode-test",
 		fmt.Sprintf("--%s=%s", cflags.FlagHome, home),
-		fmt.Sprintf("--%s=uakt", genutilcli.FlagDefaultBondDenom),
+		fmt.Sprintf("--%s=uve", genutilcli.FlagDefaultBondDenom),
 	})
 	require.NoError(t, cmd.ExecuteContext(ctx))
 }

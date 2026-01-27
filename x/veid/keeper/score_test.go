@@ -4,10 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -16,11 +20,11 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
-// Test address constants
-const (
-	testScoreAddress1 = "virtengine1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwx"
-	testScoreAddress2 = "virtengine1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwy"
-	testScoreAddress3 = "virtengine1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwz"
+// Test address variables - valid bech32 addresses
+var (
+	testScoreAddress1 = sdk.AccAddress([]byte("score_address1______")).String()
+	testScoreAddress2 = sdk.AccAddress([]byte("score_address2______")).String()
+	testScoreAddress3 = sdk.AccAddress([]byte("score_address3______")).String()
 )
 
 type ScoreKeeperTestSuite struct {
@@ -55,9 +59,18 @@ func (s *ScoreKeeperTestSuite) SetupTest() {
 }
 
 func (s *ScoreKeeperTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey) sdk.Context {
-	db := runtime.NewKVStoreService(storeKey)
-	_ = db
-	ctx := sdk.Context{}.WithBlockTime(time.Now()).WithBlockHeight(100)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	if err != nil {
+		s.T().Fatalf("failed to load latest version: %v", err)
+	}
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
 	return ctx
 }
 
@@ -172,7 +185,6 @@ func (s *ScoreKeeperTestSuite) TestScoreHistoryPaginated() {
 	// Get first page
 	page1 := s.keeper.GetScoreHistoryPaginated(s.ctx, testScoreAddress1, 5, 0)
 	s.Require().Len(page1, 5)
-
 
 	// Get second page
 	page2 := s.keeper.GetScoreHistoryPaginated(s.ctx, testScoreAddress1, 5, 5)
@@ -327,9 +339,9 @@ func (s *ScoreKeeperTestSuite) TestCheckEligibilityAccountNotFound() {
 
 func (s *ScoreKeeperTestSuite) TestGetRequiredScopesForOffering() {
 	testCases := []struct {
-		offeringType   types.OfferingType
-		expectedScore  uint32
-		expectedMFA    bool
+		offeringType  types.OfferingType
+		expectedScore uint32
+		expectedMFA   bool
 	}{
 		{types.OfferingTypeBasic, 50, false},
 		{types.OfferingTypeStandard, 70, false},

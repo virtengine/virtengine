@@ -43,7 +43,7 @@ profiles:
         region: us-west
       pricing:
         grafana:
-          denom: uakt
+          denom: uve
           amount: 1000
 deployment:
   grafana:

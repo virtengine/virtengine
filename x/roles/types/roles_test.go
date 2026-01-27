@@ -126,3 +126,89 @@ func TestAllRoles(t *testing.T) {
 		require.True(t, role.IsValid())
 	}
 }
+
+func TestRoleCanRevokeRole(t *testing.T) {
+	// CanRevokeRole should have same permissions as CanAssignRole
+	require.True(t, types.RoleGenesisAccount.CanRevokeRole(types.RoleAdministrator))
+	require.True(t, types.RoleGenesisAccount.CanRevokeRole(types.RoleCustomer))
+	require.True(t, types.RoleAdministrator.CanRevokeRole(types.RoleCustomer))
+	require.False(t, types.RoleAdministrator.CanRevokeRole(types.RoleGenesisAccount))
+	require.False(t, types.RoleCustomer.CanRevokeRole(types.RoleCustomer))
+}
+
+func TestRoleCanModifyAccountState(t *testing.T) {
+	tests := []struct {
+		role     types.Role
+		expected bool
+	}{
+		{types.RoleGenesisAccount, true},
+		{types.RoleAdministrator, true},
+		{types.RoleModerator, false},
+		{types.RoleValidator, false},
+		{types.RoleServiceProvider, false},
+		{types.RoleCustomer, false},
+		{types.RoleSupportAgent, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.role.String(), func(t *testing.T) {
+			require.Equal(t, tc.expected, tc.role.CanModifyAccountState())
+		})
+	}
+}
+
+func TestRoleUnknownString(t *testing.T) {
+	unknownRole := types.Role(99)
+	require.Contains(t, unknownRole.String(), "unknown")
+	require.Contains(t, unknownRole.String(), "99")
+}
+
+func TestRoleAssignment_Validate(t *testing.T) {
+	tests := []struct {
+		name        string
+		assignment  types.RoleAssignment
+		expectError bool
+	}{
+		{
+			name: "valid assignment",
+			assignment: types.RoleAssignment{
+				Address:    "cosmos1abc123",
+				Role:       types.RoleCustomer,
+				AssignedBy: "cosmos1admin",
+				AssignedAt: 12345,
+			},
+			expectError: false,
+		},
+		{
+			name: "empty address",
+			assignment: types.RoleAssignment{
+				Address:    "",
+				Role:       types.RoleCustomer,
+				AssignedBy: "cosmos1admin",
+				AssignedAt: 12345,
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid role",
+			assignment: types.RoleAssignment{
+				Address:    "cosmos1abc123",
+				Role:       types.RoleUnspecified,
+				AssignedBy: "cosmos1admin",
+				AssignedAt: 12345,
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.assignment.Validate()
+			if tc.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

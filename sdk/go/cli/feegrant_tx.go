@@ -44,9 +44,9 @@ func GetTxFeegrantGrantCmd() *cobra.Command {
 				`Grant authorization to pay fees from your address.
 
 Examples:
-%s tx %s grant akash1skjw... --spend-limit 100uakt --from <granter> --expiration 2022-01-30T15:04:05Z or
-%s tx %s grant akash1skjw... --spend-limit 100uakt --from <granter> --period 3600 --period-limit 10stake --expiration 2022-01-30T15:04:05Z or
-%s tx %s grant akash1skjw... --spend-limit 100uakt --from <granter> --expiration 2022-01-30T15:04:05Z
+%s tx %s grant akash1skjw... --spend-limit 100uve --from <granter> --expiration 2022-01-30T15:04:05Z or
+%s tx %s grant akash1skjw... --spend-limit 100uve --from <granter> --period 3600 --period-limit 10stake --expiration 2022-01-30T15:04:05Z or
+%s tx %s grant akash1skjw... --spend-limit 100uve --from <granter> --expiration 2022-01-30T15:04:05Z
 	--allowed-messages "/cosmos.gov.v1beta1.MsgSubmitProposal,/cosmos.gov.v1beta1.MsgVote"
 				`, version.AppName, feegrant.ModuleName, version.AppName, feegrant.ModuleName, version.AppName, feegrant.ModuleName,
 			),

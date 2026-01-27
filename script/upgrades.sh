@@ -370,7 +370,7 @@ PATH_add "\$(pwd)/cosmovisor/current/bin"
 VE_HOME="\$(pwd)"
 VE_FROM=validator0
 VE_GAS=auto
-VE_MINIMUM_GAS_PRICES=0.0025uakt
+VE_MINIMUM_GAS_PRICES=0.0025uve
 VE_NODE=tcp://127.0.0.1:26657
 VE_CHAIN_ID=localvirtengine
 VE_KEYRING_BACKEND=test
@@ -389,7 +389,7 @@ EOL
 		cat >"$valdir/validator.json" <<EOL
 {
 	"pubkey": $($VIRTENGINE --home="$valdir" tendermint show-validator),
-	"amount": "1000000uakt",
+	"amount": "1000000uve",
 	"moniker": "$(jq -rc '.moniker' <<<"$val")",
 	"commission-rate": "0.1",
 	"commission-max-rate": "0.2",

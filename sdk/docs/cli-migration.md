@@ -97,14 +97,14 @@ VirtEngine tx authz revoke <virt1…> /virtengine.escrow.v1.MsgAccountDeposit
 
 **Before (v0.38.x)**:
 ```bash
-VirtEngine tx deployment deposit 5000000uakt \
+VirtEngine tx deployment deposit 5000000uve \
   --dseq=<deployment_sequence> \
   --from=<owner_address>
 ```
 
 **After (v1.0.0)**:
 ```bash
-VirtEngine tx escrow deposit deployment 5000000uakt \
+VirtEngine tx escrow deposit deployment 5000000uve \
   --dseq=<deployment_sequence> \
   --from=<owner_address>
 ```
@@ -119,7 +119,7 @@ VirtEngine tx escrow deposit deployment 5000000uakt \
 
 **`tx escrow deposit deployment [amount]`**
 - **Purpose**: Deposit funds to an escrow account for a deployment
-- **Usage**: `VirtEngine tx escrow deposit deployment 5000000uakt --dseq=<dseq> --from=<owner>`
+- **Usage**: `VirtEngine tx escrow deposit deployment 5000000uve --dseq=<dseq> --from=<owner>`
 - **Flags**:
   - `--dseq` - Deployment sequence number
   - `--gseq` - Group sequence number (optional)
@@ -300,10 +300,10 @@ VirtEngine genesis validate [file]
 VirtEngine init mynode --chain-id=testnet-1
 
 # Add genesis account
-VirtEngine add-genesis-account virt1... 1000000uakt
+VirtEngine add-genesis-account virt1... 1000000uve
 
 # Generate genesis transaction
-VirtEngine gentx mykey 1000000uakt --chain-id=testnet-1
+VirtEngine gentx mykey 1000000uve --chain-id=testnet-1
 
 # Collect genesis transactions
 VirtEngine collect-gentxs
@@ -318,10 +318,10 @@ VirtEngine validate-genesis
 VirtEngine genesis init mynode --chain-id=testnet-1
 
 # Add genesis account
-VirtEngine genesis add-account virt1... 1000000uakt
+VirtEngine genesis add-account virt1... 1000000uve
 
 # Generate genesis transaction
-VirtEngine genesis gentx mykey 1000000uakt --chain-id=testnet-1
+VirtEngine genesis gentx mykey 1000000uve --chain-id=testnet-1
 
 # Collect genesis transactions
 VirtEngine genesis collect

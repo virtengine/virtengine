@@ -26,10 +26,10 @@ type MarketplaceIntegrationTestSuite struct {
 	suite.Suite
 
 	// Chain connection
-	nodeURL  string
-	grpcURL  string
-	chainID  string
-	
+	nodeURL string
+	grpcURL string
+	chainID string
+
 	// Service URLs
 	providerURL string
 
@@ -117,11 +117,11 @@ func (s *MarketplaceIntegrationTestSuite) TestCreateMarketplaceOffering() {
 	offering := TestResourceOffering{
 		ProviderAddress: providerAccount.Address,
 		Resources: ResourceSpec{
-			CPU:     4000,     // 4 CPU cores (millicores)
-			Memory:  8589934592, // 8 GB
+			CPU:     4000,         // 4 CPU cores (millicores)
+			Memory:  8589934592,   // 8 GB
 			Storage: 107374182400, // 100 GB
 		},
-		PricePerBlock: "10uakt",
+		PricePerBlock: "10uve",
 	}
 	s.T().Logf("  Offering: %d mCPU, %d bytes memory", offering.Resources.CPU, offering.Resources.Memory)
 	// TODO: Submit offering transaction
@@ -157,7 +157,7 @@ func (s *MarketplaceIntegrationTestSuite) TestCreateOrderAndReceiveBid() {
 	tenantAccount := TestTenantAccount{
 		Name:    "test-tenant",
 		Address: "virtengine1tenant1234567890123456789012345678",
-		Balance: "10000000uakt",
+		Balance: "10000000uve",
 	}
 	s.T().Logf("  Tenant: %s with %s", tenantAccount.Address, tenantAccount.Balance)
 
@@ -169,14 +169,14 @@ func (s *MarketplaceIntegrationTestSuite) TestCreateOrderAndReceiveBid() {
 			{
 				Name: "web",
 				Resources: ResourceSpec{
-					CPU:     1000,     // 1 CPU core
-					Memory:  536870912, // 512 MB
+					CPU:     1000,       // 1 CPU core
+					Memory:  536870912,  // 512 MB
 					Storage: 1073741824, // 1 GB
 				},
 				Count: 1,
 			},
 		},
-		Deposit: "5000000uakt",
+		Deposit: "5000000uve",
 	}
 	s.T().Logf("  Deployment groups: %d", len(deployment.Groups))
 

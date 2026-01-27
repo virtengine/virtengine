@@ -423,7 +423,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 
 	// owner's balance should be deducted for fees correctly
 	curOwnerBal := s.getAccountBalance(s.addrDeployer)
-	s.Require().Equal(ownerBal.SubRaw(fees.GetFee().AmountOf("uakt").Int64()), curOwnerBal)
+	s.Require().Equal(ownerBal.SubRaw(fees.GetFee().AmountOf("uve").Int64()), curOwnerBal)
 
 	ownerBal = curOwnerBal
 
@@ -447,7 +447,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 
 	// owner's balance should be deducted correctly
 	curOwnerBal = s.getAccountBalance(s.addrDeployer)
-	s.Require().Equal(ownerBal.Sub(s.defaultDeposit.Amount).SubRaw(fees.GetFee().AmountOf("uakt").Int64()), curOwnerBal)
+	s.Require().Equal(ownerBal.Sub(s.defaultDeposit.Amount).SubRaw(fees.GetFee().AmountOf("uve").Int64()), curOwnerBal)
 	ownerBal = curOwnerBal
 
 	// depositing additional funds from the funder's account should work
@@ -528,7 +528,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 	fees = clitestutil.GetTxFees(ctx, s.T(), s.cctx, res.Bytes())
 
 	s.Require().Equal(prevFunderBal.Add(s.defaultDeposit.Amount.MulRaw(2)), s.getAccountBalance(s.addrFunder))
-	s.Require().Equal(ownerBal.Add(s.defaultDeposit.Amount).SubRaw(fees.GetFee().AmountOf("uakt").Int64()), s.getAccountBalance(s.addrDeployer))
+	s.Require().Equal(ownerBal.Add(s.defaultDeposit.Amount).SubRaw(fees.GetFee().AmountOf("uve").Int64()), s.getAccountBalance(s.addrDeployer))
 }
 
 func (s *deploymentIntegrationTestSuite) getAccountBalance(address sdk.AccAddress) sdkmath.Int {

@@ -651,7 +651,13 @@ func (k Keeper) ComputeAndRecordScore(
 
 	// Get previous score and model version for transition tracking
 	prevScore, _, _ := k.GetScore(ctx, accountAddr)
-	prevModelVersion := k.GetActiveScoringModelVersion(ctx)
+	
+	// Get the previous model version from score history (not from active model)
+	var prevModelVersion string
+	history := k.GetScoreHistory(ctx, accountAddr)
+	if len(history) > 0 {
+		prevModelVersion = history[0].ModelVersion // Most recent score's model version
+	}
 
 	// Compute score with active model
 	summary, err := k.ComputeScoreWithModel(ctx, inputs, "")

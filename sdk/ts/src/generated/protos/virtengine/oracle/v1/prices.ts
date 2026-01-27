@@ -12,7 +12,7 @@ import { Timestamp } from "../../../google/protobuf/timestamp.ts";
 
 /** DataID uniquely identifies a price pair by asset and base denomination */
 export interface DataID {
-  /** denom is the asset denomination (e.g., "uakt") */
+  /** denom is the asset denomination (e.g., "uve") */
   denom: string;
   /** base_denom is the base denomination for the price pair (e.g., "usd") */
   baseDenom: string;

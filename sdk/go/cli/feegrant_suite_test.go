@@ -71,7 +71,7 @@ func (s *FeegrantCLITestSuite) SetupSuite() {
 	s.createGrant(granter, grantee)
 
 	grant, err := feegrant.NewGrant(granter, grantee, &feegrant.BasicAllowance{
-		SpendLimit: sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(100))),
+		SpendLimit: sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100))),
 	})
 	s.Require().NoError(err)
 

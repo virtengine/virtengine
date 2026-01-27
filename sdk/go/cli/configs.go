@@ -244,8 +244,8 @@ func InterceptConfigsPreRunHandler(
 	serverCtx.Logger = logger
 
 	if serverCtx.Viper.GetString("minimum-gas-prices") == "" {
-		logger.Warn("minimum-gas-prices is not set. applying default value 0.0025uakt. To disable this warning set minimum-gas-prices to non empty value in either app.toml, via environment variable or cli flag")
-		serverCtx.Viper.Set("minimum-gas-prices", "0.0025uakt")
+		logger.Warn("minimum-gas-prices is not set. applying default value 0.0025uve. To disable this warning set minimum-gas-prices to non empty value in either app.toml, via environment variable or cli flag")
+		serverCtx.Viper.Set("minimum-gas-prices", "0.0025uve")
 	}
 
 	return server.SetCmdServerContext(cmd, serverCtx)
@@ -364,7 +364,7 @@ func interceptConfigs(rootViper *viper.Viper, customAppTemplate string, customCo
 			config.WriteConfigFile(appCfgFilePath, customConfig)
 		} else {
 			appConf, err := config.ParseConfig(rootViper)
-			appConf.MinGasPrices = "0.0025uakt"
+			appConf.MinGasPrices = "0.0025uve"
 			appConf.API.Enable = true
 			appConf.API.Address = "tcp://localhost:1317"
 

@@ -31,7 +31,7 @@ func DefaultParams() Params {
 		DefaultTakeRate: 20,
 		DenomTakeRates: DenomTakeRates{
 			{
-				Denom: "uakt",
+				Denom: "uve",
 				Rate:  2,
 			},
 		},
@@ -80,9 +80,9 @@ func validateDenomTakeRates(i interface{}) error {
 		}
 	}
 
-	// uakt must always be present
-	if _, exists := check["uakt"]; !exists {
-		return fmt.Errorf("invalid Denom Take Rate - uakt must be present")
+	// uve must always be present
+	if _, exists := check["uve"]; !exists {
+		return fmt.Errorf("invalid Denom Take Rate - uve must be present")
 	}
 
 	return nil

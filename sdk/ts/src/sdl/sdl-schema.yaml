@@ -50,7 +50,7 @@ definitions:
             minimum: 0
             description: Positive number
       denom:
-        pattern: '^(uakt|ibc/.*)$'
+        pattern: '^(uve|ibc/.*)$'
         type: string
     required:
       - denom

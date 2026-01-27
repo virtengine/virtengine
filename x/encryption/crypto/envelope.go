@@ -342,15 +342,17 @@ func ValidateEnvelopeSignature(envelope *types.EncryptedPayloadEnvelope) (bool, 
 }
 
 // signEnvelope creates a signature for the envelope
-// This uses a simplified HMAC-style signature with the private key
-func signEnvelope(envelope *types.EncryptedPayloadEnvelope, privateKey *[32]byte) ([]byte, error) {
+// This uses a simplified binding scheme with the public key (not a true signature).
+// Note: In production, use Ed25519 for proper signatures.
+func signEnvelope(envelope *types.EncryptedPayloadEnvelope, _ *[32]byte) ([]byte, error) {
 	payload := envelope.SigningPayload()
 
-	// Create signature: H(payload || privateKey)
+	// Create binding: H(payload || publicKey)
+	// This binds the ciphertext to the sender's public key for integrity.
 	// Note: In production, use Ed25519 for proper signatures
 	h := sha256.New()
 	h.Write(payload)
-	h.Write(privateKey[:])
+	h.Write(envelope.SenderPubKey)
 
 	return h.Sum(nil), nil
 }

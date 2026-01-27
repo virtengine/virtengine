@@ -1649,6 +1649,183 @@
       "priority": 1,
       "passes": false,
       "notes": "Patent mentions Mnemonic seed for non-custodial keys."
+    },
+    {
+      "id": "VE-1000",
+      "title": "BLOCKER - Complete module registration in app/app.go to enable node startup",
+      "description": "Fix panic on node startup: 'all modules must be defined when setting SetOrderBeginBlockers'. Missing modules: benchmark, config, encryption, fraud, hpc, mfa, review, roles, settlement, veid, virt_delegation, virt_staking.",
+      "acceptanceCriteria": [
+        "All missing modules registered in app/modules.go",
+        "SetOrderBeginBlockers includes all modules",
+        "SetOrderEndBlockers includes all modules",
+        "SetOrderInitGenesis includes all modules",
+        "Node starts successfully with 'virtengine start'",
+        "Can execute 'virtengine status' and get valid response",
+        "Genesis validation passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Critical blocker preventing any integration testing. See HEALTH_CHECK.md Section 5."
+    },
+    {
+      "id": "VE-1001",
+      "title": "Fix x/veid/keeper tests for Cosmos SDK v0.53 Context API",
+      "description": "Update x/veid/keeper test files to use Cosmos SDK v0.53 Context struct instead of interface. Tests currently fail with 'cannot use nil as sdk.Context value' and 'sdk.Context{}.WithKVStore undefined'.",
+      "acceptanceCriteria": [
+        "x/veid/keeper/consensus_verifier_test.go compiles and passes",
+        "x/veid/keeper/wallet_test.go compiles and passes",
+        "x/veid/keeper/pipeline_version_test.go compiles and passes",
+        "All tests use proper sdk.Context creation (sdk.UnwrapSDKContext or testutil helpers)",
+        "No use of deprecated WithKVStore method",
+        "go test ./x/veid/keeper/... passes with 0 failures"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Cosmos SDK v0.53 changed Context from interface to struct. See x/veid/keeper/*_test.go compilation errors."
+    },
+    {
+      "id": "VE-1002",
+      "title": "Restore missing testutil.VECoin* helper functions",
+      "description": "x/market/keeper and x/escrow/keeper tests fail with 'undefined: testutil.VECoin, testutil.VECoinRandom, testutil.VEDecCoin, testutil.VEDecCoinRandom'. Implement these helper functions in testutil package.",
+      "acceptanceCriteria": [
+        "testutil.VECoin(amount int64) sdk.Coin implemented",
+        "testutil.VECoinRandom(min, max int64) sdk.Coin implemented",
+        "testutil.VEDecCoin(amount string) sdk.DecCoin implemented",
+        "testutil.VEDecCoinRandom(min, max string) sdk.DecCoin implemented",
+        "All helpers use VirtEngine token denomination (uve or uve)",
+        "x/market/keeper/keeper_test.go compiles and passes",
+        "x/escrow/keeper/keeper_test.go compiles and passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "These were likely removed during virtengine->VirtEngine rename. See x/market/keeper/keeper_test.go and x/escrow/keeper/keeper_test.go errors."
+    },
+    {
+      "id": "VE-1003",
+      "title": "Fix provider daemon test struct field mismatches",
+      "description": "Provider daemon tests fail with 'unknown field Port in struct literal', 'not enough arguments to NewKeyManager', 'undefined: KeyStorageMemory'. Update tests to match current API signatures.",
+      "acceptanceCriteria": [
+        "pkg/provider_daemon/aws_adapter_test.go compiles (fix PortSpec usage)",
+        "pkg/provider_daemon/openstack_adapter_test.go compiles (fix PortInfo.AdminStateUp)",
+        "pkg/provider_daemon/usage_meter_test.go compiles (fix NewKeyManager signature)",
+        "pkg/provider_daemon/vmware_adapter_test.go compiles (fix initialization cycles)",
+        "KeyStorageMemory constant or equivalent defined",
+        "go test ./pkg/provider_daemon/... passes with 0 build failures"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "API changes in provider daemon structs broke tests. See pkg/provider_daemon/*_test.go compilation errors."
+    },
+    {
+      "id": "VE-1004",
+      "title": "Fix x/encryption type tests for crypto agility",
+      "description": "x/encryption/types tests fail with 'undefined: types.AlgorithmIDNaClBox, types.NISTSecurityLevel128, types.AlgorithmIDMLKEM768' and 'not enough arguments to types.NewAlgorithmSpec'.",
+      "acceptanceCriteria": [
+        "x/encryption/types/crypto_agility_test.go compiles",
+        "All algorithm ID constants defined (AlgorithmIDNaClBox, AlgorithmIDMLKEM768, AlgorithmIDHybridNaClMLKEM)",
+        "All security level constants defined (NISTSecurityLevel128, NISTSecurityLevel192)",
+        "NewAlgorithmSpec signature matches test usage",
+        "AlgorithmSpecVersion defined",
+        "go test ./x/encryption/types/... passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Crypto agility constants and function signatures missing. See x/encryption/types/crypto_agility_test.go."
+    },
+    {
+      "id": "VE-1005",
+      "title": "Fix x/encryption/crypto mnemonic tests",
+      "description": "x/encryption/crypto tests fail with initialization cycles and 'declared and not used: expectedPath' in mnemonic_test.go.",
+      "acceptanceCriteria": [
+        "testMnemonic12 and testMnemonic24 initialization cycles resolved",
+        "expectedPath variable properly used or removed",
+        "x/encryption/crypto/mnemonic_test.go compiles",
+        "go test ./x/encryption/crypto/... passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Variable initialization cycles in test setup. See x/encryption/crypto/mnemonic_test.go."
+    },
+    {
+      "id": "VE-1006",
+      "title": "Add comprehensive test coverage to reach 80%+ code coverage",
+      "description": "Current test pass rate is 21/45+ packages (47%). Add missing test files and expand test coverage for all modules, especially those with 0 tests.",
+      "acceptanceCriteria": [
+        "All packages in x/* have test files with >70% coverage",
+        "All packages in pkg/* have test files with >70% coverage",
+        "go test ./... passes with 40+ packages (90%+ pass rate)",
+        "go test -cover ./... shows 80%+ overall coverage",
+        "No [no test files] packages in critical modules (veid, market, escrow, encryption, mfa, provider_daemon)",
+        "Add tests for: util/cli, cmd/*, app/params, app/sim"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Many packages have no tests. See HEALTH_CHECK.md test summary showing only 21/45+ passing."
+    },
+    {
+      "id": "VE-1007",
+      "title": "Fix remaining test compilation errors in pkg/* packages",
+      "description": "Several pkg packages fail to compile tests: pkg/capture_protocol, pkg/enclave_runtime, pkg/jira, pkg/moab_adapter, pkg/observability, pkg/slurm_adapter.",
+      "acceptanceCriteria": [
+        "pkg/capture_protocol tests compile and pass",
+        "pkg/enclave_runtime tests compile and pass",
+        "pkg/jira tests compile and pass",
+        "pkg/moab_adapter tests compile and pass",
+        "pkg/observability tests compile and pass",
+        "pkg/slurm_adapter tests compile and pass",
+        "go test ./pkg/... passes with 0 build failures"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "These packages currently show [build failed] in test output. Investigate specific compilation errors for each."
+    },
+    {
+      "id": "VE-1008",
+      "title": "Fix SDK generated proto test compilation errors",
+      "description": "SDK proto packages under sdk/github.com/virtengine/virtengine/sdk/go/* fail to compile tests. These appear to be incorrectly generated or in wrong location.",
+      "acceptanceCriteria": [
+        "SDK protos generated to correct location (sdk/go/*, not sdk/github.com/...)",
+        "All inventory/v1, manifest/v2beta3, node/*/v1 proto tests compile",
+        "Update buf generation paths if needed",
+        "go test ./sdk/... passes with 0 build failures"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Proto files seem to be in wrong path (sdk/github.com/... instead of sdk/go/...). May need buf.gen.gogo.yaml path fixes."
+    },
+    {
+      "id": "VE-1009",
+      "title": "Create integration test suite for node startup and basic operations",
+      "description": "Once module registration is fixed (VE-1000), create integration tests that verify node can start, accept transactions, and query state.",
+      "acceptanceCriteria": [
+        "Integration test starts node programmatically",
+        "Test creates test accounts and queries balances",
+        "Test submits bank send transaction and verifies state change",
+        "Test queries module parameters for veid, market, escrow, encryption, mfa",
+        "Test verifies all modules are registered and responding",
+        "Integration test runs in CI/CD pipeline",
+        "Test cleanup properly stops node and removes test data"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Depends on VE-1000. Currently cannot test node operations because it won't start. See tests/e2e/ or tests/integration/."
+    },
+    {
+      "id": "VE-1010",
+      "title": "Document test execution and debugging workflow",
+      "description": "Create comprehensive testing documentation for developers including unit test patterns, integration test setup, and debugging failing tests.",
+      "acceptanceCriteria": [
+        "Document test commands in TESTING.md or developer guide",
+        "Document how to run specific module tests",
+        "Document how to run tests with coverage reporting",
+        "Document common test failures and fixes (Context API, testutil, etc)",
+        "Document integration test setup and localnet requirements",
+        "Add examples of writing tests following project conventions",
+        "Update HEALTH_CHECK.md with resolved issues"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Will help onboard developers and prevent regression of fixed tests. Reference HEALTH_CHECK.md for baseline."
     }
   ]
 }

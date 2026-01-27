@@ -10,7 +10,7 @@ import (
 var _ paramtypes.ParamSet = (*Params)(nil)
 
 var (
-	DefaultBidMinDeposit        = sdk.NewCoin("uakt", sdkmath.NewInt(500000))
+	DefaultBidMinDeposit        = sdk.NewCoin("uve", sdkmath.NewInt(500000))
 	defaultOrderMaxBids  uint32 = 20
 	maxOrderMaxBids      uint32 = 500
 )

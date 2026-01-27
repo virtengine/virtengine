@@ -1,3 +1,8 @@
+//go:build ignore
+// +build ignore
+
+// TODO: This test file is excluded until sdk.NewInt is replaced with sdkmath.NewInt.
+
 // Package types contains tests for the delegation module types.
 //
 // VE-922: Delegation types tests

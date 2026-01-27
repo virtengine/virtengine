@@ -25,6 +25,6 @@ export const USDC_IBC_DENOMS: Record<NetworkId, string> = {
 };
 
 /**
- * The denomination for the AKT token.
+ * The denomination for the VE (VirtEngine) token.
  */
-export const AKT_DENOM = "uakt";
+export const VE_DENOM = "uve";

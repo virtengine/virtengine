@@ -57,10 +57,10 @@ func (m *MockMetricsCollector) GetCallCount() int {
 
 // MockChainRecorder is a mock implementation of ChainRecorder
 type MockChainRecorder struct {
-	mu              sync.Mutex
-	records         []*UsageRecord
-	finalRecords    []*UsageRecord
-	failOnSubmit    bool
+	mu           sync.Mutex
+	records      []*UsageRecord
+	finalRecords []*UsageRecord
+	failOnSubmit bool
 }
 
 func NewMockChainRecorder() *MockChainRecorder {
@@ -331,11 +331,18 @@ func TestUsageRecordHash(t *testing.T) {
 
 func TestUsageMeterWithKeyManager(t *testing.T) {
 	collector := NewMockMetricsCollector()
-	keyManager := NewKeyManager()
+	keyManager, err := NewKeyManager(KeyManagerConfig{
+		StorageType:      KeyStorageTypeMemory,
+		DefaultAlgorithm: "ed25519",
+	})
+	require.NoError(t, err)
+
+	// Unlock the key manager (memory storage doesn't need passphrase)
+	err = keyManager.Unlock("")
+	require.NoError(t, err)
 
 	// Generate a key
-	ctx := context.Background()
-	err := keyManager.GenerateKey(ctx, "test-key", KeyStorageMemory, nil)
+	_, err = keyManager.GenerateKey("test-provider-address")
 	require.NoError(t, err)
 
 	meter := NewUsageMeter(UsageMeterConfig{
@@ -344,6 +351,7 @@ func TestUsageMeterWithKeyManager(t *testing.T) {
 		KeyManager:       keyManager,
 	})
 
+	ctx := context.Background()
 	err = meter.StartMetering("workload-1", "deployment-1", "lease-1", PricingInputs{})
 	require.NoError(t, err)
 

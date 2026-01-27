@@ -20,10 +20,10 @@ func TestPricing(t *testing.T) {
 		value sdk.DecCoin
 		err   bool
 	}{
-		{"amount: 1\ndenom: uakt", sdk.NewDecCoin("uakt", math.NewInt(1)), false},
-		{"amount: -1\ndenom: uakt", sdk.NewDecCoin("uakt", math.NewInt(1)), true},
-		{"amount: 0.7\ndenom: uakt", sdk.NewDecCoinFromDec("uakt", lessThanOne), false},
-		{"amount: -0.7\ndenom: uakt", sdk.NewDecCoin("uakt", math.NewInt(0)), true},
+		{"amount: 1\ndenom: uve", sdk.NewDecCoin("uve", math.NewInt(1)), false},
+		{"amount: -1\ndenom: uve", sdk.NewDecCoin("uve", math.NewInt(1)), true},
+		{"amount: 0.7\ndenom: uve", sdk.NewDecCoinFromDec("uve", lessThanOne), false},
+		{"amount: -0.7\ndenom: uve", sdk.NewDecCoin("uve", math.NewInt(0)), true},
 	}
 
 	for idx, test := range tests {

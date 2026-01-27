@@ -12,7 +12,7 @@ option go_package = "github.com/virtengine/virtengine/sdk/go/node/oracle/v1";
 
 // DataID uniquely identifies a price pair by asset and base denomination
 message DataID {
-  // denom is the asset denomination (e.g., "uakt")
+  // denom is the asset denomination (e.g., "uve")
   string denom = 1 [
     (gogoproto.jsontag) = "denom",
     (gogoproto.moretags) = "yaml:\"denom\""

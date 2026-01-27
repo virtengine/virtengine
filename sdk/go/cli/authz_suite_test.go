@@ -84,7 +84,7 @@ func (s *AuthzCLITestSuite) SetupSuite() {
 	// create a proposal with deposit
 	_, err := govclitestutil.MsgSubmitLegacyProposal(s.cctx, val[0].Address.String(),
 		"Text Proposal 1", "Where is the title!?", govv1beta1.ProposalTypeText,
-		fmt.Sprintf("--%s=%s", cflags.FlagDeposit, sdk.NewCoin("uakt", govv1.DefaultMinDepositTokens).String()))
+		fmt.Sprintf("--%s=%s", cflags.FlagDeposit, sdk.NewCoin("uve", govv1.DefaultMinDepositTokens).String()))
 	s.Require().NoError(err)
 
 	// Create new account in the keyring.
@@ -99,7 +99,7 @@ func (s *AuthzCLITestSuite) SetupSuite() {
 		cli.TestFlags().With(
 			s.grantee[1].String(),
 			"send").
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithFrom(val[0].Address.String()).
 			WithSkipConfirm().
 			WithBroadcastModeSync().
@@ -121,7 +121,7 @@ func (s *AuthzCLITestSuite) SetupSuite() {
 		cli.TestFlags().With(
 			s.grantee[2].String(),
 			"send").
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithFrom(val[0].Address.String()).
 			WithSkipConfirm().
 			WithBroadcastModeSync().
@@ -146,7 +146,7 @@ func (s *AuthzCLITestSuite) SetupSuite() {
 				s.grantee[2].String(),
 				"send",
 			).
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithFrom(val[0].Address.String()).
 			WithSkipConfirm().
 			WithBroadcastModeSync().
@@ -180,7 +180,7 @@ func (s *AuthzCLITestSuite) msgSendExec(grantee sdk.AccAddress) {
 				grantee.String(),
 				val[0].Address.String(),
 				sdk.NewCoins(
-					sdk.NewCoin("uakt", sdkmath.NewInt(200)),
+					sdk.NewCoin("uve", sdkmath.NewInt(200)),
 				).String(),
 			).
 			WithSkipConfirm().
@@ -212,7 +212,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"grantee_addr",
 					"send",
 				).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithFrom("granter").
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
@@ -225,7 +225,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"grantee_addr",
 					"send",
 				).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithFrom(val[0].Address.String()).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
@@ -251,7 +251,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					grantee.String(),
 					"send",
 				).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithFrom(val[0].Address.String()).
 				WithExpiration(fmt.Sprintf("%d", pastHour)),
 			true,
@@ -265,10 +265,10 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"generic",
 				).
 				WithMsgType("invalid-msg-type").
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			false,
 			"",
@@ -281,11 +281,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"delegate",
 				).
 				WithAllowedValidators(sdk.ValAddress(s.addrs[0]).String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
 			"invalid denom",
@@ -302,7 +302,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
 			"invalid denom",
@@ -319,7 +319,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
 			"invalid denom",
@@ -336,7 +336,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
 			"invalid denom",
@@ -349,11 +349,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"delegate",
 				).
 				WithAllowedValidators(sdk.ValAddress(s.addrs[0]).String()).
-				WithSpendLimit("100uakt,20xyz").
+				WithSpendLimit("100uve,20xyz").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
 			"invalid decimal coin expression",
@@ -375,11 +375,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					grantee.String(),
 					"send",
 				).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			false,
 			"",
@@ -392,11 +392,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"send",
 				).
 				WithAllowList(s.grantee[1].String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			false,
 			"",
@@ -409,11 +409,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"send",
 				).
 				WithAllowList(fmt.Sprintf("%s,%s", s.grantee[1], s.grantee[1])).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
 			"duplicate address",
@@ -426,11 +426,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"generic",
 				).
 				WithMsgType(typeMsgVote).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			false,
 			"",
@@ -443,11 +443,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 					"generic",
 				).
 				WithMsgType(typeMsgVote).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(grantee.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
 			"grantee and granter should be different",
@@ -461,11 +461,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantAuthorization() {
 				).
 				WithMsgType(typeMsgVote).
 				WithSignMode(cflags.SignModeLegacyAminoJSON).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			false,
 			"",
@@ -502,11 +502,11 @@ func (s *AuthzCLITestSuite) TestCmdRevokeAuthorizations() {
 				grantee.String(),
 				"send",
 			).
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithExpiration(fmt.Sprintf("%d", twoHours))...,
 	)
 	s.Require().NoError(err)
@@ -521,11 +521,11 @@ func (s *AuthzCLITestSuite) TestCmdRevokeAuthorizations() {
 				"generic",
 			).
 			WithMsgType(typeMsgVote).
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithExpiration(fmt.Sprintf("%d", twoHours))...,
 	)
 	s.Require().NoError(err)
@@ -540,11 +540,11 @@ func (s *AuthzCLITestSuite) TestCmdRevokeAuthorizations() {
 				"generic",
 			).
 			WithMsgType(typeMsgSubmitProposal).
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithExpiration(fmt.Sprintf("%d", twoHours)).
 			WithSignMode(cflags.SignModeLegacyAminoJSON)...,
 	)
@@ -588,7 +588,7 @@ func (s *AuthzCLITestSuite) TestCmdRevokeAuthorizations() {
 				).
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithBroadcastModeSync(),
 			&sdk.TxResponse{},
 			false,
@@ -602,7 +602,7 @@ func (s *AuthzCLITestSuite) TestCmdRevokeAuthorizations() {
 				).
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithBroadcastModeSync(),
 			&sdk.TxResponse{},
 			false,
@@ -616,7 +616,7 @@ func (s *AuthzCLITestSuite) TestCmdRevokeAuthorizations() {
 				).
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithBroadcastModeSync().
 				WithSignMode(cflags.SignModeLegacyAminoJSON),
 			&sdk.TxResponse{},
@@ -657,7 +657,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantDepositAuthorization() {
 					"grantee_addr",
 					"deposit",
 				).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithFrom("granter").
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
@@ -670,7 +670,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantDepositAuthorization() {
 					"grantee_addr",
 					"deposit",
 				).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithFrom(val[0].Address.String()).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			true,
@@ -712,14 +712,14 @@ func (s *AuthzCLITestSuite) TestCLITxGrantDepositAuthorization() {
 					"deposit",
 				).
 				WithScope([]string{"deployment"}).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithFrom(val[0].Address.String()).
 				WithExpiration(fmt.Sprintf("%d", pastHour)),
 			true,
 			"",
 		},
 		{
-			"Valid tx deposit authorization (uakt)",
+			"Valid tx deposit authorization (uve)",
 			cli.TestFlags().
 				With(
 					grantee.String(),
@@ -727,11 +727,11 @@ func (s *AuthzCLITestSuite) TestCLITxGrantDepositAuthorization() {
 				).
 				WithMsgType(typeMsgDeposit).
 				WithScope([]string{"deployment"}).
-				WithSpendLimit("1000000uakt").
+				WithSpendLimit("1000000uve").
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			false,
 			"",
@@ -749,7 +749,7 @@ func (s *AuthzCLITestSuite) TestCLITxGrantDepositAuthorization() {
 				WithSkipConfirm().
 				WithFrom(val[0].Address.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithExpiration(fmt.Sprintf("%d", twoHours)),
 			false,
 			"",
@@ -789,7 +789,7 @@ func (s *AuthzCLITestSuite) TestExecAuthorizationWithExpiration() {
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithExpiration(fmt.Sprintf("%d", tenSeconds))...,
 	)
 	s.Require().NoError(err)
@@ -808,7 +808,7 @@ func (s *AuthzCLITestSuite) TestExecAuthorizationWithExpiration() {
 			With(execMsg.Name()).
 			WithFrom(grantee.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithSkipConfirm()...,
 	)
 	s.Require().NoError(err)
@@ -833,7 +833,7 @@ func (s *AuthzCLITestSuite) TestNewExecGenericAuthorized() {
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithExpiration(fmt.Sprintf("%d", twoHours))...,
 	)
 
@@ -875,7 +875,7 @@ func (s *AuthzCLITestSuite) TestNewExecGenericAuthorized() {
 				With(execMsg.Name()).
 				WithFrom(grantee.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithSkipConfirm(),
 			&sdk.TxResponse{},
 			false,
@@ -886,7 +886,7 @@ func (s *AuthzCLITestSuite) TestNewExecGenericAuthorized() {
 				With(execMsg.Name()).
 				WithFrom(grantee.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithSkipConfirm().
 				WithSignMode(cflags.SignModeLegacyAminoJSON),
 			&sdk.TxResponse{},
@@ -924,7 +924,7 @@ func (s *AuthzCLITestSuite) TestNewExecGrantAuthorized() {
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithExpiration(fmt.Sprintf("%d", twoHours))...,
 	)
 	s.Require().NoError(err)
@@ -943,7 +943,7 @@ func (s *AuthzCLITestSuite) TestNewExecGrantAuthorized() {
 			).
 			WithSkipConfirm().
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithGenerateOnly()...,
 	)
 	s.Require().NoError(err)
@@ -962,7 +962,7 @@ func (s *AuthzCLITestSuite) TestNewExecGrantAuthorized() {
 				With(execMsg.Name()).
 				WithFrom(grantee.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithSkipConfirm(),
 			false,
 			"",
@@ -973,7 +973,7 @@ func (s *AuthzCLITestSuite) TestNewExecGrantAuthorized() {
 				With(execMsg.Name()).
 				WithFrom(grantee.String()).
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 				WithSkipConfirm(),
 			false,
 			"",
@@ -1018,18 +1018,18 @@ func (s *AuthzCLITestSuite) TestExecSendAuthzWithAllowList() {
 				grantee.String(),
 				"send",
 			).
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithExpiration(fmt.Sprintf("%d", twoHours)).
 			WithAllowList(allowedAddr.String())...,
 	)
 	s.Require().NoError(err)
 
 	tokens := sdk.NewCoins(
-		sdk.NewCoin("uakt", sdkmath.NewInt(12)),
+		sdk.NewCoin("uve", sdkmath.NewInt(12)),
 	)
 
 	validGeneratedTx, err := clitestutil.ExecSend(
@@ -1042,7 +1042,7 @@ func (s *AuthzCLITestSuite) TestExecSendAuthzWithAllowList() {
 				tokens.String()).
 			WithSkipConfirm().
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithGenerateOnly()...,
 	)
 	s.Require().NoError(err)
@@ -1059,7 +1059,7 @@ func (s *AuthzCLITestSuite) TestExecSendAuthzWithAllowList() {
 				tokens.String()).
 			WithSkipConfirm().
 			WithBroadcastModeSync().
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			WithGenerateOnly()...,
 	)
 
@@ -1072,7 +1072,7 @@ func (s *AuthzCLITestSuite) TestExecSendAuthzWithAllowList() {
 		With(execMsg.Name()).
 		WithFrom(grantee.String()).
 		WithBroadcastModeSync().
-		WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 		WithSkipConfirm()
 
 	var response sdk.TxResponse
@@ -1085,7 +1085,7 @@ func (s *AuthzCLITestSuite) TestExecSendAuthzWithAllowList() {
 		With(execMsg1.Name()).
 		WithFrom(grantee.String()).
 		WithBroadcastModeSync().
-		WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 		WithSkipConfirm()
 
 	out, err = clitestutil.ExecAuthorization(s.ctx, s.cctx, args...)

@@ -37,8 +37,8 @@ func GetTxBMEBurnMintCmd() *cobra.Command {
 This allows burning AKT to mint ACT, or burning unused ACT back to AKT.
 
 Example:
-  $ akash tx bme burn-mint 1000000uakt uact --from mykey
-  $ akash tx bme burn-mint 500000uact uakt --from mykey`,
+  $ akash tx bme burn-mint 1000000uve uact --from mykey
+  $ akash tx bme burn-mint 500000uact uve --from mykey`,
 		Args:              cobra.ExactArgs(2),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -93,7 +93,7 @@ func GetTxBMEMintACTCmd() *cobra.Command {
 		Short: "Mint ACT by burning AKT",
 		Long: `
 Example:
-  $ akash tx bme mint-act 500000uakt --from mykey`,
+  $ akash tx bme mint-act 500000uve --from mykey`,
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {

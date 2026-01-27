@@ -15,7 +15,7 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 	eid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
-	"github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	"github.com/virtengine/virtengine/sdk/go/testutil"
@@ -72,12 +72,12 @@ func TestGRPCQueryAccounts(t *testing.T) {
 				Owner: did1.Owner,
 				State: types.StateOpen,
 				Transferred: sdk.DecCoins{
-					sdk.NewDecCoin("uakt", sdkmath.ZeroInt()),
+					sdk.NewDecCoin("uve", sdkmath.ZeroInt()),
 				},
 				SettledAt: 0,
 				Funds: []types.Balance{
 					{
-						Denom:  "uakt",
+						Denom:  "uve",
 						Amount: sdkmath.LegacyNewDec(500000),
 					},
 				},
@@ -86,7 +86,7 @@ func TestGRPCQueryAccounts(t *testing.T) {
 						Owner:   did1.Owner,
 						Height:  0,
 						Source:  deposit.SourceBalance,
-						Balance: sdk.NewDecCoin("uakt", sdkmath.NewInt(500000)),
+						Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(500000)),
 					},
 				},
 			},
@@ -175,7 +175,7 @@ func TestGRPCQueryPayments(t *testing.T) {
 	did1 := lid1.DeploymentID()
 
 	_ = suite.createEscrowAccount(did1)
-	pid1 := suite.createEscrowPayment(lid1, sdk.NewDecCoin("uakt", sdkmath.NewInt(1)))
+	pid1 := suite.createEscrowPayment(lid1, sdk.NewDecCoin("uve", sdkmath.NewInt(1)))
 
 	expPayments1 := types.Payments{
 		{
@@ -183,10 +183,10 @@ func TestGRPCQueryPayments(t *testing.T) {
 			State: types.PaymentState{
 				Owner:     lid1.Provider,
 				State:     types.StateOpen,
-				Rate:      sdk.NewDecCoin("uakt", sdkmath.NewInt(1)),
-				Balance:   sdk.NewDecCoin("uakt", sdkmath.NewInt(0)),
-				Unsettled: sdk.NewDecCoin("uakt", sdkmath.ZeroInt()),
-				Withdrawn: sdk.NewCoin("uakt", sdkmath.NewInt(0)),
+				Rate:      sdk.NewDecCoin("uve", sdkmath.NewInt(1)),
+				Balance:   sdk.NewDecCoin("uve", sdkmath.NewInt(0)),
+				Unsettled: sdk.NewDecCoin("uve", sdkmath.ZeroInt()),
+				Withdrawn: sdk.NewCoin("uve", sdkmath.NewInt(0)),
 			},
 		},
 	}
@@ -285,7 +285,7 @@ func (suite *grpcTestSuite) createEscrowAccount(id dv1.DeploymentID) eid.Account
 	require.NoError(suite.t, err)
 
 	aid := id.ToEscrowAccountID()
-	defaultDeposit, err := v1beta4.DefaultParams().MinDepositFor("uakt")
+	defaultDeposit, err := v1beta4.DefaultParams().MinDepositFor("uve")
 	require.NoError(suite.t, err)
 
 	msg := &v1beta4.MsgCreateDeployment{

@@ -19,7 +19,7 @@ import (
 )
 
 func (s *GenesisCLITestSuite) TestGenTxCmd() {
-	amount := sdk.NewCoin("uakt", sdkmath.NewInt(12))
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(12))
 
 	tests := []struct {
 		name         string

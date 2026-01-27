@@ -24,7 +24,7 @@ import {
 
 import type { TxClient, TxRaw } from "../TxClient.ts";
 
-const DEFAULT_AVERAGE_GAS_PRICE = "0.025uakt";
+const DEFAULT_AVERAGE_GAS_PRICE = "0.025uve";
 const DEFAULT_GAS_MULTIPLIER = 1.3;
 
 export function createGenericStargateClient(options: WithSigner<BaseGenericStargateClientOptions>): StargateTxClient {
@@ -157,7 +157,7 @@ export interface BaseGenericStargateClientOptions {
    */
   gasMultiplier?: number;
   /**
-   * @default "0.025uakt"
+   * @default "0.025uve"
    */
   defaultGasPrice?: string;
   /**

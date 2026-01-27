@@ -4,7 +4,7 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DenomTakeRate {
-    /// Denom is the denomination of the take rate (uakt, usdc, etc.).
+    /// Denom is the denomination of the take rate (uve, usdc, etc.).
     #[prost(string, tag="1")]
     pub denom: ::prost::alloc::string::String,
     /// Rate is the value of the take rate.

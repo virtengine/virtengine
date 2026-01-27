@@ -286,8 +286,8 @@ func InitVirtEngineAppForTestnet(
 	}
 	govParams.ExpeditedVotingPeriod = &tcfg.Gov.VotingParams.ExpeditedVotePeriod.Duration
 	govParams.VotingPeriod = &tcfg.Gov.VotingParams.VotingPeriod.Duration
-	govParams.MinDeposit = sdk.NewCoins(sdk.NewInt64Coin(sdkutil.DenomUakt, 100000000))
-	govParams.ExpeditedMinDeposit = sdk.NewCoins(sdk.NewInt64Coin(sdkutil.DenomUakt, 150000000))
+	govParams.MinDeposit = sdk.NewCoins(sdk.NewInt64Coin(sdkutil.Denomuve, 100000000))
+	govParams.ExpeditedMinDeposit = sdk.NewCoins(sdk.NewInt64Coin(sdkutil.Denomuve, 150000000))
 
 	err = app.Keepers.Cosmos.Gov.Params.Set(ctx, govParams)
 	if err != nil {

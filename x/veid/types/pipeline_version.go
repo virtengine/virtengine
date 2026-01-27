@@ -21,41 +21,41 @@ import (
 // same pipeline version to produce reproducible verification results.
 type PipelineVersion struct {
 	// Version is the semantic version of the pipeline (e.g., "1.0.0")
-	Version string `json:"version"`
+	Version string `json:"version" protobuf:"bytes,1,opt,name=version,proto3"`
 
 	// ImageHash is the SHA256 hash of the OCI container image
 	// Format: sha256:<64-char-hex>
-	ImageHash string `json:"image_hash"`
+	ImageHash string `json:"image_hash" protobuf:"bytes,2,opt,name=image_hash,json=imageHash,proto3"`
 
 	// ImageRef is the full OCI image reference (e.g., "ghcr.io/virtengine/veid-pipeline:v1.0.0")
-	ImageRef string `json:"image_ref"`
+	ImageRef string `json:"image_ref" protobuf:"bytes,3,opt,name=image_ref,json=imageRef,proto3"`
 
 	// ModelManifest contains hashes of all ML model weights
-	ModelManifest ModelManifest `json:"model_manifest"`
+	ModelManifest ModelManifest `json:"model_manifest" protobuf:"bytes,4,opt,name=model_manifest,json=modelManifest,proto3"`
 
 	// CreatedAt is when this pipeline version was registered
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3,stdtime"`
 
 	// CreatedAtHeight is the block height when registered
-	CreatedAtHeight int64 `json:"created_at_height"`
+	CreatedAtHeight int64 `json:"created_at_height" protobuf:"varint,6,opt,name=created_at_height,json=createdAtHeight,proto3"`
 
 	// ActivatedAt is when this pipeline version became active (nil if pending)
-	ActivatedAt *time.Time `json:"activated_at,omitempty"`
+	ActivatedAt *time.Time `json:"activated_at,omitempty" protobuf:"bytes,7,opt,name=activated_at,json=activatedAt,proto3,stdtime"`
 
 	// ActivatedAtHeight is the block height when activated (0 if pending)
-	ActivatedAtHeight int64 `json:"activated_at_height,omitempty"`
+	ActivatedAtHeight int64 `json:"activated_at_height,omitempty" protobuf:"varint,8,opt,name=activated_at_height,json=activatedAtHeight,proto3"`
 
 	// DeprecatedAt is when this pipeline version was deprecated (nil if active)
-	DeprecatedAt *time.Time `json:"deprecated_at,omitempty"`
+	DeprecatedAt *time.Time `json:"deprecated_at,omitempty" protobuf:"bytes,9,opt,name=deprecated_at,json=deprecatedAt,proto3,stdtime"`
 
 	// Status is the current status of the pipeline version
-	Status PipelineVersionStatus `json:"status"`
+	Status string `json:"status" protobuf:"bytes,10,opt,name=status,proto3"`
 
 	// MinimumValidatorVersion is the minimum validator software version required
-	MinimumValidatorVersion string `json:"minimum_validator_version,omitempty"`
+	MinimumValidatorVersion string `json:"minimum_validator_version,omitempty" protobuf:"bytes,11,opt,name=minimum_validator_version,json=minimumValidatorVersion,proto3"`
 
 	// DeterminismConfig contains configuration for deterministic execution
-	DeterminismConfig PipelineDeterminismConfig `json:"determinism_config"`
+	DeterminismConfig PipelineDeterminismConfig `json:"determinism_config" protobuf:"bytes,12,opt,name=determinism_config,json=determinismConfig,proto3"`
 }
 
 // PipelineVersionStatus represents the status of a pipeline version
@@ -102,43 +102,43 @@ func IsValidPipelineVersionStatus(status PipelineVersionStatus) bool {
 // ModelManifest contains versioned hashes for all ML models used in the pipeline
 type ModelManifest struct {
 	// Version is the manifest format version
-	Version string `json:"version"`
+	Version string `json:"version" protobuf:"bytes,1,opt,name=version,proto3"`
 
-	// Models is a map of model name to ModelInfo
-	Models map[string]ModelInfo `json:"models"`
+	// Models is a list of model info (keyed by Name field)
+	Models []ModelInfo `json:"models" protobuf:"bytes,2,rep,name=models,proto3"`
 
 	// ManifestHash is the combined hash of all model hashes
-	ManifestHash string `json:"manifest_hash"`
+	ManifestHash string `json:"manifest_hash" protobuf:"bytes,3,opt,name=manifest_hash,json=manifestHash,proto3"`
 
 	// CreatedAt is when the manifest was created
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt time.Time `json:"created_at" protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3,stdtime"`
 }
 
 // ModelInfo contains information about a single ML model
 type ModelInfo struct {
 	// Name is the model name (e.g., "deepface_facenet512")
-	Name string `json:"name"`
+	Name string `json:"name" protobuf:"bytes,1,opt,name=name,proto3"`
 
 	// Version is the model version (e.g., "1.0.0")
-	Version string `json:"version"`
+	Version string `json:"version" protobuf:"bytes,2,opt,name=version,proto3"`
 
 	// WeightsHash is the SHA256 hash of the model weights file
-	WeightsHash string `json:"weights_hash"`
+	WeightsHash string `json:"weights_hash" protobuf:"bytes,3,opt,name=weights_hash,json=weightsHash,proto3"`
 
 	// ConfigHash is the SHA256 hash of the model configuration
-	ConfigHash string `json:"config_hash,omitempty"`
+	ConfigHash string `json:"config_hash,omitempty" protobuf:"bytes,4,opt,name=config_hash,json=configHash,proto3"`
 
 	// Framework is the ML framework used (e.g., "tensorflow", "onnx")
-	Framework string `json:"framework"`
+	Framework string `json:"framework" protobuf:"bytes,5,opt,name=framework,proto3"`
 
 	// InputShape describes the expected input tensor shape
-	InputShape []int `json:"input_shape,omitempty"`
+	InputShape []int32 `json:"input_shape,omitempty" protobuf:"varint,6,rep,packed,name=input_shape,json=inputShape,proto3"`
 
 	// OutputShape describes the output tensor shape
-	OutputShape []int `json:"output_shape,omitempty"`
+	OutputShape []int32 `json:"output_shape,omitempty" protobuf:"varint,7,rep,packed,name=output_shape,json=outputShape,proto3"`
 
 	// Purpose describes what the model is used for
-	Purpose ModelPurpose `json:"purpose"`
+	Purpose string `json:"purpose" protobuf:"bytes,8,opt,name=purpose,proto3"`
 }
 
 // ModelPurpose describes the purpose of a model in the pipeline
@@ -177,25 +177,25 @@ const (
 // PipelineDeterminismConfig contains configuration for deterministic execution
 type PipelineDeterminismConfig struct {
 	// RandomSeed is the fixed random seed for all operations
-	RandomSeed int64 `json:"random_seed"`
+	RandomSeed int64 `json:"random_seed" protobuf:"varint,1,opt,name=random_seed,json=randomSeed,proto3"`
 
 	// ForceCPU ensures CPU-only execution (GPUs can introduce non-determinism)
-	ForceCPU bool `json:"force_cpu"`
+	ForceCPU bool `json:"force_cpu" protobuf:"varint,2,opt,name=force_cpu,json=forceCpu,proto3"`
 
 	// SingleThread disables multi-threading for determinism
-	SingleThread bool `json:"single_thread"`
+	SingleThread bool `json:"single_thread" protobuf:"varint,3,opt,name=single_thread,json=singleThread,proto3"`
 
 	// FloatPrecision is the number of decimal places for float comparisons
-	FloatPrecision int `json:"float_precision"`
+	FloatPrecision int32 `json:"float_precision" protobuf:"varint,4,opt,name=float_precision,json=floatPrecision,proto3"`
 
 	// TensorFlowDeterministic enables TensorFlow deterministic mode
-	TensorFlowDeterministic bool `json:"tensorflow_deterministic"`
+	TensorFlowDeterministic bool `json:"tensorflow_deterministic" protobuf:"varint,5,opt,name=tensorflow_deterministic,json=tensorflowDeterministic,proto3"`
 
 	// DisableCUDNN disables cuDNN which can be non-deterministic
-	DisableCUDNN bool `json:"disable_cudnn"`
+	DisableCUDNN bool `json:"disable_cudnn" protobuf:"varint,6,opt,name=disable_cudnn,json=disableCudnn,proto3"`
 
 	// ONNXDeterministic enables ONNX runtime deterministic mode
-	ONNXDeterministic bool `json:"onnx_deterministic"`
+	ONNXDeterministic bool `json:"onnx_deterministic" protobuf:"varint,7,opt,name=onnx_deterministic,json=onnxDeterministic,proto3"`
 }
 
 // DefaultPipelineDeterminismConfig returns the default determinism configuration
@@ -220,34 +220,28 @@ func DefaultPipelineDeterminismConfig() PipelineDeterminismConfig {
 // result to enable consensus verification.
 type PipelineExecutionRecord struct {
 	// PipelineVersion is the version of the pipeline used
-	PipelineVersion string `json:"pipeline_version"`
+	PipelineVersion string `json:"pipeline_version" protobuf:"bytes,1,opt,name=pipeline_version,json=pipelineVersion,proto3"`
 
 	// PipelineImageHash is the SHA256 hash of the OCI image used
-	PipelineImageHash string `json:"pipeline_image_hash"`
+	PipelineImageHash string `json:"pipeline_image_hash" protobuf:"bytes,2,opt,name=pipeline_image_hash,json=pipelineImageHash,proto3"`
 
 	// ModelManifestHash is the combined hash of all model hashes
-	ModelManifestHash string `json:"model_manifest_hash"`
-
-	// IndividualModelHashes maps model name to its weights hash
-	IndividualModelHashes map[string]string `json:"individual_model_hashes"`
+	ModelManifestHash string `json:"model_manifest_hash" protobuf:"bytes,3,opt,name=model_manifest_hash,json=modelManifestHash,proto3"`
 
 	// ExecutedAt is when the pipeline was executed
-	ExecutedAt time.Time `json:"executed_at"`
+	ExecutedAt time.Time `json:"executed_at" protobuf:"bytes,4,opt,name=executed_at,json=executedAt,proto3,stdtime"`
 
 	// ExecutionDurationMs is how long execution took in milliseconds
-	ExecutionDurationMs int64 `json:"execution_duration_ms"`
+	ExecutionDurationMs int64 `json:"execution_duration_ms" protobuf:"varint,5,opt,name=execution_duration_ms,json=executionDurationMs,proto3"`
 
 	// DeterminismVerified indicates if determinism checks passed
-	DeterminismVerified bool `json:"determinism_verified"`
+	DeterminismVerified bool `json:"determinism_verified" protobuf:"varint,6,opt,name=determinism_verified,json=determinismVerified,proto3"`
 
 	// InputHash is the SHA256 hash of all inputs (for consensus)
-	InputHash string `json:"input_hash"`
+	InputHash string `json:"input_hash" protobuf:"bytes,7,opt,name=input_hash,json=inputHash,proto3"`
 
 	// OutputHash is the SHA256 hash of all outputs (for consensus)
-	OutputHash string `json:"output_hash"`
-
-	// IntermediateHashes contains hashes of intermediate outputs per model
-	IntermediateHashes map[string]string `json:"intermediate_hashes,omitempty"`
+	OutputHash string `json:"output_hash" protobuf:"bytes,8,opt,name=output_hash,json=outputHash,proto3"`
 }
 
 // ============================================================================
@@ -295,7 +289,7 @@ func (pv *PipelineVersion) Validate() error {
 		return ErrInvalidPipelineVersion.Wrapf("invalid model manifest: %v", err)
 	}
 
-	if !IsValidPipelineVersionStatus(pv.Status) {
+	if !IsValidPipelineVersionStatus(PipelineVersionStatus(pv.Status)) {
 		return ErrInvalidPipelineVersion.Wrapf("invalid status: %s", pv.Status)
 	}
 
@@ -312,12 +306,17 @@ func (mm *ModelManifest) Validate() error {
 		return fmt.Errorf("manifest must contain at least one model")
 	}
 
-	for name, model := range mm.Models {
-		if model.Name != name {
-			return fmt.Errorf("model name mismatch: key=%s, name=%s", name, model.Name)
+	seen := make(map[string]bool)
+	for _, model := range mm.Models {
+		if model.Name == "" {
+			return fmt.Errorf("model name cannot be empty")
 		}
+		if seen[model.Name] {
+			return fmt.Errorf("duplicate model name: %s", model.Name)
+		}
+		seen[model.Name] = true
 		if err := model.Validate(); err != nil {
-			return fmt.Errorf("invalid model %s: %w", name, err)
+			return fmt.Errorf("invalid model %s: %w", model.Name, err)
 		}
 	}
 
@@ -368,14 +367,20 @@ func (mm *ModelManifest) ComputeHash() string {
 
 	// Get sorted model names for deterministic ordering
 	names := make([]string, 0, len(mm.Models))
-	for name := range mm.Models {
-		names = append(names, name)
+	for _, model := range mm.Models {
+		names = append(names, model.Name)
 	}
 	sort.Strings(names)
 
+	// Create a lookup map for getting model by name
+	modelByName := make(map[string]ModelInfo)
+	for _, model := range mm.Models {
+		modelByName[model.Name] = model
+	}
+
 	// Hash each model's info
 	for _, name := range names {
-		model := mm.Models[name]
+		model := modelByName[name]
 		h.Write([]byte(name))
 		h.Write([]byte(model.Version))
 		h.Write([]byte(model.WeightsHash))
@@ -417,13 +422,13 @@ func NewPipelineVersion(
 		ModelManifest:     modelManifest,
 		CreatedAt:         createdAt,
 		CreatedAtHeight:   createdAtHeight,
-		Status:            PipelineVersionStatusPending,
+		Status:            string(PipelineVersionStatusPending),
 		DeterminismConfig: DefaultPipelineDeterminismConfig(),
 	}
 }
 
 // NewModelManifest creates a new ModelManifest
-func NewModelManifest(version string, models map[string]ModelInfo, createdAt time.Time) *ModelManifest {
+func NewModelManifest(version string, models []ModelInfo, createdAt time.Time) *ModelManifest {
 	mm := &ModelManifest{
 		Version:   version,
 		Models:    models,
@@ -446,7 +451,7 @@ func NewModelInfo(
 		Version:     version,
 		WeightsHash: weightsHash,
 		Framework:   framework,
-		Purpose:     purpose,
+		Purpose:     string(purpose),
 	}
 }
 
@@ -458,12 +463,10 @@ func NewPipelineExecutionRecord(
 	executedAt time.Time,
 ) *PipelineExecutionRecord {
 	return &PipelineExecutionRecord{
-		PipelineVersion:       pipelineVersion,
-		PipelineImageHash:     pipelineImageHash,
-		ModelManifestHash:     modelManifestHash,
-		IndividualModelHashes: make(map[string]string),
-		ExecutedAt:            executedAt,
-		IntermediateHashes:    make(map[string]string),
+		PipelineVersion:   pipelineVersion,
+		PipelineImageHash: pipelineImageHash,
+		ModelManifestHash: modelManifestHash,
+		ExecutedAt:        executedAt,
 	}
 }
 
@@ -523,17 +526,6 @@ func CompareExecutionRecords(a, b *PipelineExecutionRecord) *PipelineComparisonR
 		result.Match = false
 		result.Differences = append(result.Differences,
 			fmt.Sprintf("output hash mismatch: %s vs %s", a.OutputHash, b.OutputHash))
-	}
-
-	// Compare intermediate hashes
-	for name, hashA := range a.IntermediateHashes {
-		if hashB, ok := b.IntermediateHashes[name]; ok {
-			if hashA != hashB {
-				result.Match = false
-				result.Differences = append(result.Differences,
-					fmt.Sprintf("intermediate hash mismatch for %s: %s vs %s", name, hashA, hashB))
-			}
-		}
 	}
 
 	return result

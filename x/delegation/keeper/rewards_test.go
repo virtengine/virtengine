@@ -22,6 +22,15 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// Valid bech32 test addresses (must be 20 bytes for proper encoding)
+var (
+	testValidatorAddr  = sdk.AccAddress([]byte("validator_address___")).String()
+	testDelegator1Addr = sdk.AccAddress([]byte("delegator1_address__")).String()
+	testDelegator2Addr = sdk.AccAddress([]byte("delegator2_address__")).String()
+	testValidator1Addr = sdk.AccAddress([]byte("validator1_address__")).String()
+	testValidator2Addr = sdk.AccAddress([]byte("validator2_address__")).String()
+)
+
 // RewardsTestSuite is the test suite for reward distribution
 type RewardsTestSuite struct {
 	suite.Suite
@@ -162,8 +171,8 @@ func (s *RewardsTestSuite) TestDistributeRewardsNoDelegations() {
 
 // TestClaimRewards tests claiming rewards from a specific validator
 func (s *RewardsTestSuite) TestClaimRewards() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
+	delegatorAddr := testDelegator1Addr
+	validatorAddr := testValidatorAddr
 
 	// Create unclaimed rewards for multiple epochs
 	reward1 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())
@@ -178,8 +187,9 @@ func (s *RewardsTestSuite) TestClaimRewards() {
 	claimedCoins, err := s.keeper.ClaimRewards(s.ctx, delegatorAddr, validatorAddr)
 	s.Require().NoError(err)
 
-	// Verify claimed amount
-	s.Require().Len(claimedCoins, 0) // No bank keeper, so no actual coins
+	// Verify claimed amount (100000 + 200000 = 300000)
+	s.Require().Equal(1, len(claimedCoins))
+	s.Require().Equal("300000uve", claimedCoins.String())
 
 	// Verify rewards are marked as claimed
 	r1, _ := s.keeper.GetDelegatorReward(s.ctx, delegatorAddr, validatorAddr, 1)
@@ -193,9 +203,9 @@ func (s *RewardsTestSuite) TestClaimRewards() {
 
 // TestClaimAllRewards tests claiming all rewards from all validators
 func (s *RewardsTestSuite) TestClaimAllRewards() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validator1 := "cosmos1validator1111111111111111"
-	validator2 := "cosmos1validator2222222222222222"
+	delegatorAddr := testDelegator1Addr
+	validator1 := testValidator1Addr
+	validator2 := testValidator2Addr
 
 	// Create rewards from multiple validators
 	reward1 := types.NewDelegatorReward(delegatorAddr, validator1, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())

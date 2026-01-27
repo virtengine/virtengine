@@ -19,7 +19,7 @@ import (
 	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 
-	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
 	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
 	ev1 "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
@@ -51,7 +51,7 @@ type testSuite struct {
 }
 
 func setupTestSuite(t *testing.T) *testSuite {
-	defaultDeposit, err := v1beta4.DefaultParams().MinDepositFor("uakt")
+	defaultDeposit, err := v1beta4.DefaultParams().MinDepositFor("uve")
 	require.NoError(t, err)
 
 	owner := testutil.AccAddress(t)
@@ -113,7 +113,7 @@ func setupTestSuite(t *testing.T) *testSuite {
 
 	bankKeeper.
 		On("SpendableCoin", mock.Anything, mock.Anything, mock.Anything).
-		Return(sdk.NewInt64Coin("uakt", 10000000))
+		Return(sdk.NewInt64Coin("uve", 10000000))
 
 	keepers := state.Keepers{
 		Authz: authzKeeper,

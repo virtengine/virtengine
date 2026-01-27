@@ -8,7 +8,7 @@ import (
 const (
 	DenomAkt  = "akt"  // 1akt
 	DenomMakt = "makt" // 10^-3akt
-	DenomUakt = "uakt" // 10^-6akt
+	Denomuve  = "uve"  // 10^-6akt
 
 	DenomAct  = "act"  // 1act
 	DenomMact = "mact" // 10^-3act
@@ -18,7 +18,7 @@ const (
 	DenomMusd = "musd" // 10^-3act
 	DenomUusd = "uusd" // 10^-6act
 
-	BondDenom = DenomUakt
+	BondDenom = Denomuve
 
 	DenomMExponent = 3
 	DenomUExponent = 6
@@ -36,7 +36,7 @@ const (
 func init() {
 	aktUnit := math.LegacyOneDec()                           // 1 (base denom unit)
 	maktUnit := math.LegacyNewDecWithPrec(1, DenomMExponent) // 10^-6 (micro)
-	uaktUnit := math.LegacyNewDecWithPrec(1, DenomUExponent) // 10^-6 (micro)
+	uveUnit := math.LegacyNewDecWithPrec(1, DenomUExponent)  // 10^-6 (micro)
 
 	actUnit := math.LegacyOneDec()                           // 1 (base denom unit)
 	mactUnit := math.LegacyNewDecWithPrec(1, DenomMExponent) // 10^-6 (micro)
@@ -56,7 +56,7 @@ func init() {
 		panic(err)
 	}
 
-	err = sdktypes.RegisterDenom(DenomUakt, uaktUnit)
+	err = sdktypes.RegisterDenom(Denomuve, uveUnit)
 	if err != nil {
 		panic(err)
 	}

@@ -7,10 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
@@ -36,14 +40,18 @@ func setupWalletTest(t *testing.T) *testWalletSetup {
 	// Create store key
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 
-	// Create store service using runtime
-	storeService := runtime.NewKVStoreService(storeKey)
+	// Create in-memory store
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	require.NoError(t, err)
 
 	// Create context with store
-	ctx := sdk.Context{}.WithKVStore(storeService.OpenKVStore(sdk.Context{}))
-
-	// For testing, we need a proper context with block time
-	ctx = ctx.WithBlockTime(time.Now()).WithBlockHeight(100)
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
 
 	// Create keeper
 	keeper := NewKeeper(cdc, storeKey, "authority")
@@ -390,6 +398,7 @@ func TestUpdateConsent_GlobalSettings(t *testing.T) {
 	shareWithProviders := true
 	shareForVerification := true
 	update := types.ConsentUpdateRequest{
+		GrantConsent: true, // Must set this to match the signature
 		GlobalSettings: &types.GlobalConsentUpdate{
 			ShareWithProviders:   &shareWithProviders,
 			ShareForVerification: &shareForVerification,

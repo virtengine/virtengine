@@ -98,10 +98,10 @@ profiles:
       #https://docs.virtengine.network/providers/VirtEngine-audited-attributes
       pricing:
         wordpress:
-          denom: uakt
+          denom: uve
           amount: 10000
         db:
-          denom: uakt
+          denom: uve
           amount: 10000
 deployment:
   wordpress:

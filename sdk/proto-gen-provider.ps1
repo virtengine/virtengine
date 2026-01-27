@@ -57,7 +57,7 @@ $protocCmd = @(".cache\bin\protoc") + $includes + $goOpts + $protoFilesRelative
 Write-Host "Running: protoc $($includes -join ' ') $($goOpts -join ' ') [provider protos]"
 
 try {
-    & $protocCmd[0] $protocCmd[1..($protocCmd.Length-1)]
+    & $protocCmd[0] $protocCmd[1..($protocCmd.Length - 1)]
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ Provider Go protos generated successfully" -ForegroundColor Green
@@ -72,11 +72,13 @@ try {
         # Count generated files
         $generatedFiles = Get-ChildItem -Path $outDir -Filter *.pb.go -Recurse
         Write-Host "✓ Generated $($generatedFiles.Count) Go files in $outDir" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "✗ protoc failed with exit code $LASTEXITCODE" -ForegroundColor Red
         exit 1
     }
-} catch {
+}
+catch {
     Write-Host "✗ Error running protoc: $_" -ForegroundColor Red
     exit 1
 }

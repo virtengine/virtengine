@@ -14,42 +14,42 @@ import (
 
 // VMware test constants
 const (
-	testVMwareProviderID    = "vmware-provider-123"
-	testVMwareDeploymentID  = "vmware-deployment-1"
-	testVMwareLeaseID       = "vmware-lease-1"
-	testVMwareName          = "test-vmware-vm"
-	testVMwareDatacenter    = "DC1"
-	testVMwareCluster       = "Cluster1"
-	testVMwareDatastore     = "Datastore1"
-	testVMwareNetwork       = "VM Network"
-	testVMwareTemplate      = testVMwareTemplate
-	testVMwareResourcePool  = "Resources"
-	testVMwareCentosTemplate = testVMwareCentosTemplate
-	testVMwareResourcePrefix = testVMwareResourcePrefix
-	testVMwareNonexistentID  = testVMwareNonexistentID
-	testVMwareTaskFmt        = testVMwareTaskFmt
-	testVMwareTaskNotFound   = testVMwareTaskNotFound
+	testVMwareProviderID     = "vmware-provider-123"
+	testVMwareDeploymentID   = "vmware-deployment-1"
+	testVMwareLeaseID        = "vmware-lease-1"
+	testVMwareName           = "test-vmware-vm"
+	testVMwareDatacenter     = "DC1"
+	testVMwareCluster        = "Cluster1"
+	testVMwareDatastore      = "Datastore1"
+	testVMwareNetwork        = "VM Network"
+	testVMwareTemplate       = "ubuntu-22.04-template"
+	testVMwareResourcePool   = "Resources"
+	testVMwareCentosTemplate = "centos-8-template"
+	testVMwareResourcePrefix = "virtengine-"
+	testVMwareNonexistentID  = "nonexistent-vm-id"
+	testVMwareTaskFmt        = "task-%d"
+	testVMwareTaskNotFound   = "task-not-found"
 )
 
 // MockVSphereClient is a mock implementation of VSphereClient
 type MockVSphereClient struct {
-	mu               sync.Mutex
-	vms              map[string]*VSphereVMInfo
-	templates        []VSphereTemplateInfo
-	datacenters      []VSphereDatacenterInfo
-	clusters         []VSphereClusterInfo
-	resourcePools    []VSphereResourcePoolInfo
-	datastores       []VSphereDatastoreInfo
-	networks         []VSphereNetworkInfo
-	tasks            map[string]*VSphereTaskInfo
-	snapshots        map[string][]VSphereSnapshotInfo
-	failOnCreate     bool
-	failOnPower      bool
-	failOnDelete     bool
-	failOnTask       bool
-	vmCounter        int
-	taskCounter      int
-	snapshotCounter  int
+	mu              sync.Mutex
+	vms             map[string]*VSphereVMInfo
+	templates       []VSphereTemplateInfo
+	datacenters     []VSphereDatacenterInfo
+	clusters        []VSphereClusterInfo
+	resourcePools   []VSphereResourcePoolInfo
+	datastores      []VSphereDatastoreInfo
+	networks        []VSphereNetworkInfo
+	tasks           map[string]*VSphereTaskInfo
+	snapshots       map[string][]VSphereSnapshotInfo
+	failOnCreate    bool
+	failOnPower     bool
+	failOnDelete    bool
+	failOnTask      bool
+	vmCounter       int
+	taskCounter     int
+	snapshotCounter int
 }
 
 func NewMockVSphereClient() *MockVSphereClient {
@@ -927,8 +927,8 @@ func createTestVMwareManifest() *Manifest {
 				Type:  "vm",
 				Image: testVMwareTemplate,
 				Resources: ResourceSpec{
-					CPU:     2000, // 2 cores in millicores
-					Memory:  4 * 1024 * 1024 * 1024, // 4GB in bytes
+					CPU:     2000,                    // 2 cores in millicores
+					Memory:  4 * 1024 * 1024 * 1024,  // 4GB in bytes
 					Storage: 50 * 1024 * 1024 * 1024, // 50GB in bytes
 				},
 				Ports: []PortSpec{
@@ -1708,7 +1708,3 @@ func BenchmarkVMwareAdapterListVMs(b *testing.B) {
 		_ = adapter.ListVMs()
 	}
 }
-
-
-
-

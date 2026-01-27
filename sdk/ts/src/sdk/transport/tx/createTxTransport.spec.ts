@@ -42,7 +42,7 @@ describe(createTxTransport.name, () => {
       const afterSign = jest.fn();
       const afterBroadcast = jest.fn();
       const fee: StdFee = {
-        amount: [{ denom: "uakt", amount: "100000" }],
+        amount: [{ denom: "uve", amount: "100000" }],
         gas: "100000",
       };
       const client = createMockTxClient({

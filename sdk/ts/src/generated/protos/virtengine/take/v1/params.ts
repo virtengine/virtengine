@@ -10,7 +10,7 @@ import Long from "long";
 
 /** DenomTakeRate describes take rate for specified denom. */
 export interface DenomTakeRate {
-  /** Denom is the denomination of the take rate (uakt, usdc, etc.). */
+  /** Denom is the denomination of the take rate (uve, usdc, etc.). */
   denom: string;
   /** Rate is the value of the take rate. */
   rate: number;

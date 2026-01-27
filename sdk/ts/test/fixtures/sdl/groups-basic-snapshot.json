@@ -13,7 +13,7 @@
         "count": 1,
         "price": {
           "amount": "1000",
-          "denom": "uakt"
+          "denom": "uve"
         },
         "resource": {
           "cpu": {

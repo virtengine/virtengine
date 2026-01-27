@@ -261,7 +261,7 @@ func (up *upgrade) UpgradeHandler() upgradetypes.UpgradeHandler {
 		gparams.MinInitialDepositRatio = dparams.MinInitialDepositRate.String()
 
 		// min deposit for an expedited proposal is set to 2000AKT
-		gparams.ExpeditedMinDeposit = sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(2000000000)))
+		gparams.ExpeditedMinDeposit = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(2000000000)))
 		gparams.ExpeditedThreshold = sdkmath.LegacyNewDecWithPrec(667, 3).String()
 
 		eVotePeriod := time.Hour * 24

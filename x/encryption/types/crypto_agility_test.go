@@ -15,6 +15,8 @@ import (
 // ============================================================================
 
 func TestAlgorithmSpec_Validate(t *testing.T) {
+	now := time.Now()
+
 	tests := []struct {
 		name    string
 		spec    *types.AlgorithmSpec
@@ -23,81 +25,99 @@ func TestAlgorithmSpec_Validate(t *testing.T) {
 		{
 			name: "valid classical algorithm",
 			spec: types.NewAlgorithmSpec(
-				types.AlgorithmIDNaClBox,
-				"NaCl Box",
+				"X25519-XSALSA20-POLY1305",
+				1,
 				types.AlgorithmFamilyClassical,
-				types.NISTSecurityLevel128,
-				true,
+				"NaCl Box",
+				32,
+				24,
+				now,
 			),
 			wantErr: false,
 		},
 		{
 			name: "valid post-quantum algorithm",
 			spec: types.NewAlgorithmSpec(
-				types.AlgorithmIDMLKEM768,
 				"ML-KEM-768",
+				1,
 				types.AlgorithmFamilyPostQuantum,
-				types.NISTSecurityLevel192,
-				false,
+				"ML-KEM-768",
+				32,
+				24,
+				now,
 			),
 			wantErr: false,
 		},
 		{
 			name: "valid hybrid algorithm",
 			spec: types.NewAlgorithmSpec(
-				types.AlgorithmIDHybridNaClMLKEM,
-				"NaCl + ML-KEM Hybrid",
+				"HYBRID-NACL-MLKEM",
+				1,
 				types.AlgorithmFamilyHybrid,
-				types.NISTSecurityLevel192,
-				false,
+				"NaCl + ML-KEM Hybrid",
+				32,
+				24,
+				now,
 			),
 			wantErr: false,
 		},
 		{
 			name: "invalid - empty algorithm ID",
 			spec: &types.AlgorithmSpec{
-				Version:       types.AlgorithmSpecVersion,
-				AlgorithmID:   "",
-				Name:          "Test Algorithm",
-				Family:        types.AlgorithmFamilyClassical,
-				SecurityLevel: types.NISTSecurityLevel128,
-				IsDefault:     false,
+				Version:        1,
+				ID:             "",
+				Description:    "Test Algorithm",
+				Family:         types.AlgorithmFamilyClassical,
+				KeySizeBytes:   32,
+				NonceSizeBytes: 24,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty name",
+			name: "invalid - zero version",
 			spec: &types.AlgorithmSpec{
-				Version:       types.AlgorithmSpecVersion,
-				AlgorithmID:   "test-algo",
-				Name:          "",
-				Family:        types.AlgorithmFamilyClassical,
-				SecurityLevel: types.NISTSecurityLevel128,
-				IsDefault:     false,
+				Version:        0,
+				ID:             "test-algo",
+				Description:    "Test Algorithm",
+				Family:         types.AlgorithmFamilyClassical,
+				KeySizeBytes:   32,
+				NonceSizeBytes: 24,
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid - invalid family",
 			spec: &types.AlgorithmSpec{
-				Version:       types.AlgorithmSpecVersion,
-				AlgorithmID:   "test-algo",
-				Name:          "Test Algorithm",
-				Family:        "invalid",
-				SecurityLevel: types.NISTSecurityLevel128,
-				IsDefault:     false,
+				Version:        1,
+				ID:             "test-algo",
+				Description:    "Test Algorithm",
+				Family:         "invalid",
+				KeySizeBytes:   32,
+				NonceSizeBytes: 24,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - invalid security level",
+			name: "invalid - zero key size",
 			spec: &types.AlgorithmSpec{
-				Version:       types.AlgorithmSpecVersion,
-				AlgorithmID:   "test-algo",
-				Name:          "Test Algorithm",
-				Family:        types.AlgorithmFamilyClassical,
-				SecurityLevel: 999,
-				IsDefault:     false,
+				Version:        1,
+				ID:             "test-algo",
+				Description:    "Test Algorithm",
+				Family:         types.AlgorithmFamilyClassical,
+				KeySizeBytes:   0,
+				NonceSizeBytes: 24,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - zero nonce size",
+			spec: &types.AlgorithmSpec{
+				Version:        1,
+				ID:             "test-algo",
+				Description:    "Test Algorithm",
+				Family:         types.AlgorithmFamilyClassical,
+				KeySizeBytes:   32,
+				NonceSizeBytes: 0,
 			},
 			wantErr: true,
 		},
@@ -125,93 +145,109 @@ func TestAlgorithmFamilies(t *testing.T) {
 	assert.False(t, types.IsValidAlgorithmFamily("invalid"), "IsValidAlgorithmFamily should return false for invalid family")
 }
 
-func TestSecurityLevels(t *testing.T) {
-	// Test all levels are valid
-	for _, level := range types.AllSecurityLevels() {
-		assert.True(t, types.IsValidSecurityLevel(level), "AllSecurityLevels returned invalid level: %d", level)
+func TestAlgorithmStatuses(t *testing.T) {
+	// Test all statuses are valid
+	for _, status := range types.AllAlgorithmStatuses() {
+		assert.True(t, types.IsValidAlgorithmStatus(status), "AllAlgorithmStatuses returned invalid status: %s", status)
 	}
 
-	// Test invalid level
-	assert.False(t, types.IsValidSecurityLevel(999), "IsValidSecurityLevel should return false for invalid level")
+	// Test invalid status
+	assert.False(t, types.IsValidAlgorithmStatus("invalid"), "IsValidAlgorithmStatus should return false for invalid status")
 }
 
-func TestAgilityMetadata_Validate(t *testing.T) {
+func TestAlgorithmSpec_IsUsable(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
 		name     string
-		metadata *types.AgilityMetadata
-		wantErr  bool
+		status   types.AlgorithmStatus
+		expected bool
 	}{
-		{
-			name: "valid metadata",
-			metadata: types.NewAgilityMetadata(
-				"envelope-123",
-				types.AlgorithmIDNaClBox,
-				1,
-				now,
-			),
-			wantErr: false,
-		},
-		{
-			name: "valid metadata with fallback",
-			metadata: func() *types.AgilityMetadata {
-				m := types.NewAgilityMetadata(
-					"envelope-123",
-					types.AlgorithmIDMLKEM768,
-					2,
-					now,
-				)
-				m.FallbackAlgorithm = types.AlgorithmIDNaClBox
-				return m
-			}(),
-			wantErr: false,
-		},
-		{
-			name: "invalid - empty envelope ID",
-			metadata: &types.AgilityMetadata{
-				Version:          types.AgilityMetadataVersion,
-				EnvelopeID:       "",
-				AlgorithmID:      types.AlgorithmIDNaClBox,
-				AlgorithmVersion: 1,
-				CreatedAt:        now,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - empty algorithm ID",
-			metadata: &types.AgilityMetadata{
-				Version:          types.AgilityMetadataVersion,
-				EnvelopeID:       "envelope-123",
-				AlgorithmID:      "",
-				AlgorithmVersion: 1,
-				CreatedAt:        now,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - zero algorithm version",
-			metadata: &types.AgilityMetadata{
-				Version:          types.AgilityMetadataVersion,
-				EnvelopeID:       "envelope-123",
-				AlgorithmID:      types.AlgorithmIDNaClBox,
-				AlgorithmVersion: 0,
-				CreatedAt:        now,
-			},
-			wantErr: true,
-		},
+		{"approved is usable", types.AlgorithmStatusApproved, true},
+		{"recommended is usable", types.AlgorithmStatusRecommended, true},
+		{"experimental is not usable", types.AlgorithmStatusExperimental, false},
+		{"deprecated is not usable", types.AlgorithmStatusDeprecated, false},
+		{"disabled is not usable", types.AlgorithmStatusDisabled, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.metadata.Validate()
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
+			spec := types.NewAlgorithmSpec("test", 1, types.AlgorithmFamilyClassical, "test", 32, 24, now)
+			spec.Status = tt.status
+			assert.Equal(t, tt.expected, spec.IsUsable())
 		})
 	}
+}
+
+func TestAlgorithmSpec_IsDecryptable(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name     string
+		status   types.AlgorithmStatus
+		expected bool
+	}{
+		{"approved is decryptable", types.AlgorithmStatusApproved, true},
+		{"recommended is decryptable", types.AlgorithmStatusRecommended, true},
+		{"experimental is decryptable", types.AlgorithmStatusExperimental, true},
+		{"deprecated is decryptable", types.AlgorithmStatusDeprecated, true},
+		{"disabled is not decryptable", types.AlgorithmStatusDisabled, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := types.NewAlgorithmSpec("test", 1, types.AlgorithmFamilyClassical, "test", 32, 24, now)
+			spec.Status = tt.status
+			assert.Equal(t, tt.expected, spec.IsDecryptable())
+		})
+	}
+}
+
+func TestAgilityMetadata(t *testing.T) {
+	now := time.Now()
+
+	// Test creating new metadata
+	metadata := types.NewAgilityMetadata(
+		types.AlgorithmX25519XSalsa20Poly1305,
+		1,
+		types.AlgorithmFamilyClassical,
+		now,
+	)
+
+	require.NotNil(t, metadata)
+	assert.Equal(t, types.AlgorithmX25519XSalsa20Poly1305, metadata.AlgorithmID)
+	assert.Equal(t, uint32(1), metadata.AlgorithmVersion)
+	assert.Equal(t, types.AlgorithmFamilyClassical, metadata.AlgorithmFamily)
+	assert.True(t, metadata.MigrationEligible)
+}
+
+func TestAgilityMetadata_SetHybridAlgorithm(t *testing.T) {
+	now := time.Now()
+
+	metadata := types.NewAgilityMetadata(
+		types.AlgorithmX25519XSalsa20Poly1305,
+		1,
+		types.AlgorithmFamilyClassical,
+		now,
+	)
+
+	// Set hybrid algorithm
+	metadata.SetHybridAlgorithm("ML-KEM-768", 1)
+
+	assert.Equal(t, "ML-KEM-768", metadata.HybridAlgorithmID)
+	assert.Equal(t, uint32(1), metadata.HybridAlgorithmVersion)
+	assert.Equal(t, types.AlgorithmFamilyHybrid, metadata.AlgorithmFamily)
+}
+
+func TestKeyRotationReasons(t *testing.T) {
+	// Test all reasons are valid
+	reasons := types.AllKeyRotationReasons()
+	require.NotEmpty(t, reasons)
+
+	// Should include common rotation reasons
+	assert.Contains(t, reasons, types.KeyRotationScheduled)
+	assert.Contains(t, reasons, types.KeyRotationAlgorithmMigration)
+	assert.Contains(t, reasons, types.KeyRotationCompromise)
 }
 
 func TestKeyRotationRecord_Validate(t *testing.T) {
@@ -226,113 +262,60 @@ func TestKeyRotationRecord_Validate(t *testing.T) {
 			name: "valid rotation record",
 			record: types.NewKeyRotationRecord(
 				"rotation-123",
-				"envelope-123",
-				types.AlgorithmIDNaClBox,
-				types.AlgorithmIDMLKEM768,
-				types.RotationReasonUpgrade,
+				"virtengine1address123",
+				types.KeyRotationScheduled,
+				types.AlgorithmX25519XSalsa20Poly1305,
+				1,
+				"ML-KEM-768",
+				1,
+				"old-fingerprint",
+				"new-fingerprint",
 				now,
-			),
-			wantErr: false,
-		},
-		{
-			name: "valid rotation for expiry",
-			record: types.NewKeyRotationRecord(
-				"rotation-456",
-				"envelope-456",
-				types.AlgorithmIDNaClBox,
-				types.AlgorithmIDNaClBox,
-				types.RotationReasonExpiry,
-				now,
+				30,
 			),
 			wantErr: false,
 		},
 		{
 			name: "invalid - empty rotation ID",
 			record: &types.KeyRotationRecord{
-				Version:          types.KeyRotationVersion,
-				RotationID:       "",
-				EnvelopeID:       "envelope-123",
-				OldAlgorithm:     types.AlgorithmIDNaClBox,
-				NewAlgorithm:     types.AlgorithmIDMLKEM768,
-				Reason:           types.RotationReasonUpgrade,
-				RotatedAt:        now,
-				Status:           types.RotationStatusPending,
-				ReEncryptionDone: false,
+				RotationID:     "",
+				AccountAddress: "virtengine1address123",
+				OldAlgorithmID: types.AlgorithmX25519XSalsa20Poly1305,
+				NewAlgorithmID: "ML-KEM-768",
+				InitiatedAt:    now,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty envelope ID",
+			name: "invalid - empty account address",
 			record: &types.KeyRotationRecord{
-				Version:          types.KeyRotationVersion,
-				RotationID:       "rotation-123",
-				EnvelopeID:       "",
-				OldAlgorithm:     types.AlgorithmIDNaClBox,
-				NewAlgorithm:     types.AlgorithmIDMLKEM768,
-				Reason:           types.RotationReasonUpgrade,
-				RotatedAt:        now,
-				Status:           types.RotationStatusPending,
-				ReEncryptionDone: false,
+				RotationID:     "rotation-123",
+				AccountAddress: "",
+				OldAlgorithmID: types.AlgorithmX25519XSalsa20Poly1305,
+				NewAlgorithmID: "ML-KEM-768",
+				InitiatedAt:    now,
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid - empty old algorithm",
 			record: &types.KeyRotationRecord{
-				Version:          types.KeyRotationVersion,
-				RotationID:       "rotation-123",
-				EnvelopeID:       "envelope-123",
-				OldAlgorithm:     "",
-				NewAlgorithm:     types.AlgorithmIDMLKEM768,
-				Reason:           types.RotationReasonUpgrade,
-				RotatedAt:        now,
-				Status:           types.RotationStatusPending,
-				ReEncryptionDone: false,
+				RotationID:     "rotation-123",
+				AccountAddress: "virtengine1address123",
+				OldAlgorithmID: "",
+				NewAlgorithmID: "ML-KEM-768",
+				InitiatedAt:    now,
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid - empty new algorithm",
 			record: &types.KeyRotationRecord{
-				Version:          types.KeyRotationVersion,
-				RotationID:       "rotation-123",
-				EnvelopeID:       "envelope-123",
-				OldAlgorithm:     types.AlgorithmIDNaClBox,
-				NewAlgorithm:     "",
-				Reason:           types.RotationReasonUpgrade,
-				RotatedAt:        now,
-				Status:           types.RotationStatusPending,
-				ReEncryptionDone: false,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - invalid reason",
-			record: &types.KeyRotationRecord{
-				Version:          types.KeyRotationVersion,
-				RotationID:       "rotation-123",
-				EnvelopeID:       "envelope-123",
-				OldAlgorithm:     types.AlgorithmIDNaClBox,
-				NewAlgorithm:     types.AlgorithmIDMLKEM768,
-				Reason:           "invalid",
-				RotatedAt:        now,
-				Status:           types.RotationStatusPending,
-				ReEncryptionDone: false,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - invalid status",
-			record: &types.KeyRotationRecord{
-				Version:          types.KeyRotationVersion,
-				RotationID:       "rotation-123",
-				EnvelopeID:       "envelope-123",
-				OldAlgorithm:     types.AlgorithmIDNaClBox,
-				NewAlgorithm:     types.AlgorithmIDMLKEM768,
-				Reason:           types.RotationReasonUpgrade,
-				RotatedAt:        now,
-				Status:           "invalid",
-				ReEncryptionDone: false,
+				RotationID:     "rotation-123",
+				AccountAddress: "virtengine1address123",
+				OldAlgorithmID: types.AlgorithmX25519XSalsa20Poly1305,
+				NewAlgorithmID: "",
+				InitiatedAt:    now,
 			},
 			wantErr: true,
 		},
@@ -350,352 +333,117 @@ func TestKeyRotationRecord_Validate(t *testing.T) {
 	}
 }
 
-func TestRotationReasons(t *testing.T) {
-	// Test all reasons are valid
-	for _, reason := range types.AllRotationReasons() {
-		assert.True(t, types.IsValidRotationReason(reason), "AllRotationReasons returned invalid reason: %s", reason)
-	}
-
-	// Test invalid reason
-	assert.False(t, types.IsValidRotationReason("invalid"), "IsValidRotationReason should return false for invalid reason")
-}
-
-func TestRotationStatuses(t *testing.T) {
-	// Test all statuses are valid
-	for _, status := range types.AllRotationStatuses() {
-		assert.True(t, types.IsValidRotationStatus(status), "AllRotationStatuses returned invalid status: %s", status)
-	}
-
-	// Test invalid status
-	assert.False(t, types.IsValidRotationStatus("invalid"), "IsValidRotationStatus should return false for invalid status")
-}
-
-func TestPostQuantumRoadmap_Validate(t *testing.T) {
+func TestKeyRotationRecord_IsInTransition(t *testing.T) {
 	now := time.Now()
 
-	tests := []struct {
-		name    string
-		roadmap *types.PostQuantumRoadmap
-		wantErr bool
-	}{
-		{
-			name: "valid roadmap",
-			roadmap: types.NewPostQuantumRoadmap(
-				"roadmap-1",
-				"VEID Post-Quantum Migration",
-				1,
-			),
-			wantErr: false,
-		},
-		{
-			name: "valid roadmap with phases",
-			roadmap: func() *types.PostQuantumRoadmap {
-				r := types.NewPostQuantumRoadmap(
-					"roadmap-1",
-					"VEID Post-Quantum Migration",
-					1,
-				)
-				r.Phases = []types.RoadmapPhase{
-					{
-						PhaseID:     "phase-1",
-						Name:        "Assessment",
-						Description: "Assess current cryptographic usage",
-						Status:      types.PhaseStatusActive,
-						StartDate:   now,
-						EndDate:     now.Add(90 * 24 * time.Hour),
-					},
-				}
-				return r
-			}(),
-			wantErr: false,
-		},
-		{
-			name: "invalid - empty roadmap ID",
-			roadmap: &types.PostQuantumRoadmap{
-				Version:        types.RoadmapVersion,
-				RoadmapID:      "",
-				Name:           "Test Roadmap",
-				CurrentVersion: 1,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - empty name",
-			roadmap: &types.PostQuantumRoadmap{
-				Version:        types.RoadmapVersion,
-				RoadmapID:      "roadmap-1",
-				Name:           "",
-				CurrentVersion: 1,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - zero version",
-			roadmap: &types.PostQuantumRoadmap{
-				Version:        types.RoadmapVersion,
-				RoadmapID:      "roadmap-1",
-				Name:           "Test Roadmap",
-				CurrentVersion: 0,
-			},
-			wantErr: true,
-		},
-	}
+	record := types.NewKeyRotationRecord(
+		"rotation-123",
+		"virtengine1address123",
+		types.KeyRotationScheduled,
+		types.AlgorithmX25519XSalsa20Poly1305,
+		1,
+		"ML-KEM-768",
+		1,
+		"old-fp",
+		"new-fp",
+		now,
+		30,
+	)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.roadmap.Validate()
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
+	// Set to in-transition status
+	record.Status = types.KeyRotationStatusInTransition
+
+	// Should be in transition now
+	assert.True(t, record.IsInTransition(now))
+
+	// Should not be in transition after window ends
+	assert.False(t, record.IsInTransition(now.AddDate(0, 2, 0)))
 }
 
-func TestRoadmapPhase_Validate(t *testing.T) {
+func TestKeyRotationRecord_MarkCompleted(t *testing.T) {
 	now := time.Now()
 
-	tests := []struct {
-		name    string
-		phase   *types.RoadmapPhase
-		wantErr bool
-	}{
-		{
-			name: "valid phase",
-			phase: &types.RoadmapPhase{
-				PhaseID:     "phase-1",
-				Name:        "Assessment",
-				Description: "Assess cryptographic usage",
-				Status:      types.PhaseStatusPlanned,
-				StartDate:   now,
-				EndDate:     now.Add(90 * 24 * time.Hour),
-			},
-			wantErr: false,
-		},
-		{
-			name: "invalid - empty phase ID",
-			phase: &types.RoadmapPhase{
-				PhaseID:     "",
-				Name:        "Assessment",
-				Description: "description",
-				Status:      types.PhaseStatusPlanned,
-				StartDate:   now,
-				EndDate:     now.Add(90 * 24 * time.Hour),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - empty name",
-			phase: &types.RoadmapPhase{
-				PhaseID:     "phase-1",
-				Name:        "",
-				Description: "description",
-				Status:      types.PhaseStatusPlanned,
-				StartDate:   now,
-				EndDate:     now.Add(90 * 24 * time.Hour),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - invalid status",
-			phase: &types.RoadmapPhase{
-				PhaseID:     "phase-1",
-				Name:        "Assessment",
-				Description: "description",
-				Status:      "invalid",
-				StartDate:   now,
-				EndDate:     now.Add(90 * 24 * time.Hour),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - end before start",
-			phase: &types.RoadmapPhase{
-				PhaseID:     "phase-1",
-				Name:        "Assessment",
-				Description: "description",
-				Status:      types.PhaseStatusPlanned,
-				StartDate:   now,
-				EndDate:     now.Add(-24 * time.Hour),
-			},
-			wantErr: true,
-		},
-	}
+	record := types.NewKeyRotationRecord(
+		"rotation-123",
+		"virtengine1address123",
+		types.KeyRotationScheduled,
+		types.AlgorithmX25519XSalsa20Poly1305,
+		1,
+		"ML-KEM-768",
+		1,
+		"old-fp",
+		"new-fp",
+		now,
+		30,
+	)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.phase.Validate()
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
+	completedAt := now.Add(time.Hour)
+	record.MarkCompleted(completedAt)
+
+	assert.Equal(t, types.KeyRotationStatusCompleted, record.Status)
+	require.NotNil(t, record.CompletedAt)
+	assert.Equal(t, completedAt, *record.CompletedAt)
 }
 
-func TestPhaseStatuses(t *testing.T) {
-	// Test all statuses are valid
-	for _, status := range types.AllPhaseStatuses() {
-		assert.True(t, types.IsValidPhaseStatus(status), "AllPhaseStatuses returned invalid status: %s", status)
+func TestPostQuantumReadinessLevels(t *testing.T) {
+	// Test all readiness levels exist
+	levels := []types.PostQuantumReadinessLevel{
+		types.PQReadinessNone,
+		types.PQReadinessPlanned,
+		types.PQReadinessHybrid,
+		types.PQReadinessFull,
 	}
 
-	// Test invalid status
-	assert.False(t, types.IsValidPhaseStatus("invalid"), "IsValidPhaseStatus should return false for invalid status")
-}
-
-func TestDefaultAlgorithmRegistry(t *testing.T) {
-	registry := types.DefaultAlgorithmRegistry()
-
-	require.NotEmpty(t, registry, "DefaultAlgorithmRegistry should return at least one algorithm")
-
-	// Validate all default algorithms
-	for _, spec := range registry {
-		err := spec.Validate()
-		require.NoError(t, err, "Default algorithm %s should be valid", spec.AlgorithmID)
+	for _, level := range levels {
+		assert.NotEmpty(t, string(level))
 	}
-
-	// Check specific algorithms exist
-	algoMap := make(map[string]*types.AlgorithmSpec)
-	for _, spec := range registry {
-		algoMap[spec.AlgorithmID] = spec
-	}
-
-	// NaCl Box should exist and be default
-	naclBox, exists := algoMap[types.AlgorithmIDNaClBox]
-	require.True(t, exists, "NaCl Box algorithm should exist")
-	assert.True(t, naclBox.IsDefault, "NaCl Box should be the default algorithm")
-	assert.Equal(t, types.AlgorithmFamilyClassical, naclBox.Family, "NaCl Box should be classical family")
-
-	// ML-KEM-768 should exist
-	mlkem, exists := algoMap[types.AlgorithmIDMLKEM768]
-	require.True(t, exists, "ML-KEM-768 algorithm should exist")
-	assert.Equal(t, types.AlgorithmFamilyPostQuantum, mlkem.Family, "ML-KEM-768 should be post-quantum family")
-	assert.False(t, mlkem.IsDefault, "ML-KEM-768 should not be default yet")
 }
 
 func TestDefaultPostQuantumRoadmap(t *testing.T) {
-	roadmap := types.DefaultPostQuantumRoadmap()
+	now := time.Now()
 
-	err := roadmap.Validate()
-	require.NoError(t, err, "Default roadmap should be valid")
+	roadmap := types.DefaultPostQuantumRoadmap(now)
 
-	assert.NotEmpty(t, roadmap.Phases, "Roadmap should have phases")
+	require.NotNil(t, roadmap)
+	assert.Equal(t, types.CryptoAgilityVersion, roadmap.Version)
+	assert.Equal(t, types.PQReadinessPlanned, roadmap.CurrentLevel)
+	assert.Equal(t, types.PQReadinessFull, roadmap.TargetLevel)
+	assert.NotEmpty(t, roadmap.PlannedMilestones)
+	assert.NotEmpty(t, roadmap.RecommendedAlgorithms)
+	assert.Contains(t, roadmap.RecommendedAlgorithms, "ML-KEM-768")
+}
 
-	// Check phases are valid
-	for _, phase := range roadmap.Phases {
-		err := phase.Validate()
-		require.NoError(t, err, "Phase %s should be valid", phase.PhaseID)
+func TestDefaultAlgorithmRegistry(t *testing.T) {
+	now := time.Now()
+
+	registry := types.DefaultAlgorithmRegistry(now)
+
+	require.NotEmpty(t, registry)
+
+	// Should contain the primary algorithm
+	var foundPrimary bool
+	for _, spec := range registry {
+		if spec.ID == types.AlgorithmX25519XSalsa20Poly1305 {
+			foundPrimary = true
+			assert.Equal(t, types.AlgorithmFamilyClassical, spec.Family)
+			assert.Equal(t, types.AlgorithmStatusRecommended, spec.Status)
+		}
 	}
-
-	// Check expected phases exist
-	phaseMap := make(map[string]*types.RoadmapPhase)
-	for i := range roadmap.Phases {
-		phaseMap[roadmap.Phases[i].PhaseID] = &roadmap.Phases[i]
-	}
-
-	assert.Contains(t, phaseMap, "assessment", "Roadmap should have assessment phase")
-	assert.Contains(t, phaseMap, "hybrid-testing", "Roadmap should have hybrid-testing phase")
-	assert.Contains(t, phaseMap, "migration", "Roadmap should have migration phase")
+	assert.True(t, foundPrimary, "Registry should contain primary algorithm")
 }
 
-func TestKeyRotationRecord_Complete(t *testing.T) {
-	now := time.Now()
+func TestAlgorithmConstants(t *testing.T) {
+	// Test algorithm ID constants are properly defined
+	assert.Equal(t, "X25519-XSALSA20-POLY1305", types.AlgorithmX25519XSalsa20Poly1305)
+	assert.Equal(t, "AGE-X25519", types.AlgorithmAgeX25519)
 
-	record := types.NewKeyRotationRecord(
-		"rotation-123",
-		"envelope-123",
-		types.AlgorithmIDNaClBox,
-		types.AlgorithmIDMLKEM768,
-		types.RotationReasonUpgrade,
-		now,
-	)
+	// Test compatibility aliases
+	assert.Equal(t, types.AlgorithmX25519XSalsa20Poly1305, types.AlgorithmIDNaClBox)
+	assert.Equal(t, "ML-KEM-768", types.AlgorithmIDMLKEM768)
+	assert.Equal(t, "HYBRID-NACL-MLKEM", types.AlgorithmIDHybridNaClMLKEM)
 
-	assert.Equal(t, types.RotationStatusPending, record.Status, "New record should have pending status")
-	assert.False(t, record.ReEncryptionDone, "ReEncryptionDone should be false initially")
-
-	// Complete the rotation
-	completeTime := now.Add(1 * time.Hour)
-	record.Complete(completeTime)
-
-	assert.Equal(t, types.RotationStatusCompleted, record.Status, "Status should be completed")
-	assert.True(t, record.ReEncryptionDone, "ReEncryptionDone should be true")
-	require.NotNil(t, record.CompletedAt, "CompletedAt should be set")
-	assert.True(t, record.CompletedAt.Equal(completeTime), "CompletedAt should be set to complete time")
-}
-
-func TestKeyRotationRecord_Fail(t *testing.T) {
-	now := time.Now()
-
-	record := types.NewKeyRotationRecord(
-		"rotation-123",
-		"envelope-123",
-		types.AlgorithmIDNaClBox,
-		types.AlgorithmIDMLKEM768,
-		types.RotationReasonUpgrade,
-		now,
-	)
-
-	// Fail the rotation
-	failTime := now.Add(1 * time.Hour)
-	record.Fail("Algorithm not supported", failTime)
-
-	assert.Equal(t, types.RotationStatusFailed, record.Status, "Status should be failed")
-	assert.Equal(t, "Algorithm not supported", record.ErrorMessage, "Error message should be set")
-	assert.False(t, record.ReEncryptionDone, "ReEncryptionDone should still be false")
-}
-
-func TestAgilityMetadata_NeedsRotation(t *testing.T) {
-	now := time.Now()
-
-	// Not deprecated, no rotation needed
-	metadata := types.NewAgilityMetadata(
-		"envelope-123",
-		types.AlgorithmIDNaClBox,
-		1,
-		now,
-	)
-
-	assert.False(t, metadata.NeedsRotation(), "Non-deprecated algorithm should not need rotation")
-
-	// Deprecated algorithm needs rotation
-	metadata.IsDeprecated = true
-
-	assert.True(t, metadata.NeedsRotation(), "Deprecated algorithm should need rotation")
-}
-
-func TestAlgorithmSpec_IsQuantumSafe(t *testing.T) {
-	// Classical algorithm is not quantum-safe
-	classical := types.NewAlgorithmSpec(
-		types.AlgorithmIDNaClBox,
-		"NaCl Box",
-		types.AlgorithmFamilyClassical,
-		types.NISTSecurityLevel128,
-		true,
-	)
-
-	assert.False(t, classical.IsQuantumSafe(), "Classical algorithm should not be quantum-safe")
-
-	// Hybrid algorithm is quantum-safe
-	hybrid := types.NewAlgorithmSpec(
-		types.AlgorithmIDHybridNaClMLKEM,
-		"NaCl + ML-KEM Hybrid",
-		types.AlgorithmFamilyHybrid,
-		types.NISTSecurityLevel192,
-		false,
-	)
-
-	assert.True(t, hybrid.IsQuantumSafe(), "Hybrid algorithm should be quantum-safe")
-
-	// Post-quantum algorithm is quantum-safe
-	pq := types.NewAlgorithmSpec(
-		types.AlgorithmIDMLKEM768,
-		"ML-KEM-768",
-		types.AlgorithmFamilyPostQuantum,
-		types.NISTSecurityLevel192,
-		false,
-	)
-
-	assert.True(t, pq.IsQuantumSafe(), "Post-quantum algorithm should be quantum-safe")
+	// Test NIST security levels
+	assert.Equal(t, 128, types.NISTSecurityLevel128)
+	assert.Equal(t, 192, types.NISTSecurityLevel192)
+	assert.Equal(t, 256, types.NISTSecurityLevel256)
 }

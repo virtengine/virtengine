@@ -236,7 +236,7 @@ exports[`SDL SDL WordPress Deployment Groups should generate the correct deploym
         "count": 1,
         "price": {
           "amount": "10000",
-          "denom": "uakt",
+          "denom": "uve",
         },
         "resource": {
           "cpu": {
@@ -330,7 +330,7 @@ exports[`SDL SDL WordPress Deployment Groups should generate the correct deploym
         "count": 1,
         "price": {
           "amount": "10000",
-          "denom": "uakt",
+          "denom": "uve",
         },
         "resource": {
           "cpu": {
@@ -498,7 +498,7 @@ exports[`SDL SDL v3 Resource Groups should create v3 resource groups: Groups mat
         "count": 2,
         "price": {
           "amount": "50",
-          "denom": "uakt",
+          "denom": "uve",
         },
         "resource": {
           "cpu": {

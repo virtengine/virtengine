@@ -283,7 +283,7 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 		cli.TestFlags().
 			WithFrom(addr.String()).
 			WithOrderID(createdOrder.ID).
-			WithDeposit(sdk.NewCoin("uakt", sdk.NewInt(5000000))).
+			WithDeposit(sdk.NewCoin("uve", sdk.NewInt(5000000))).
 			WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdk.MustNewDecFromStr("1.1"))).
 			WithSkipConfirm().
 			WithGasAutoFlags().

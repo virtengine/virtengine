@@ -8,7 +8,7 @@ import (
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 )
 
-var minDeposit, _ = dtypes.DefaultParams().MinDepositFor("uakt")
+var minDeposit, _ = dtypes.DefaultParams().MinDepositFor("uve")
 
 // RandomizedGenState generates a random GenesisState for supply
 func RandomizedGenState(simState *module.SimulationState) {

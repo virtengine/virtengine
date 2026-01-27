@@ -95,7 +95,7 @@ func (k Keeper) SetActivePipelineVersion(ctx sdk.Context, version string) error 
 
 	// Update the version status to active
 	now := ctx.BlockTime()
-	pv.Status = types.PipelineVersionStatusActive
+	pv.Status = string(types.PipelineVersionStatusActive)
 	pv.ActivatedAt = &now
 	pv.ActivatedAtHeight = ctx.BlockHeight()
 
@@ -122,7 +122,7 @@ func (k Keeper) ActivatePipelineVersion(ctx sdk.Context, version string) error {
 	currentActive, err := k.GetActivePipelineVersion(ctx)
 	if err == nil && currentActive != nil {
 		now := ctx.BlockTime()
-		currentActive.Status = types.PipelineVersionStatusDeprecated
+		currentActive.Status = string(types.PipelineVersionStatusDeprecated)
 		currentActive.DeprecatedAt = &now
 		if err := k.SetPipelineVersion(ctx, currentActive); err != nil {
 			return fmt.Errorf("failed to deprecate current version: %w", err)
@@ -427,34 +427,31 @@ func (k Keeper) RecordPipelineExecution(
 // ConformanceTestResult represents the result of a conformance test
 type ConformanceTestResult struct {
 	// TestID is the unique identifier for this test
-	TestID string `json:"test_id"`
+	TestID string `json:"test_id" protobuf:"bytes,1,opt,name=test_id,json=testId,proto3"`
 
 	// PipelineVersion is the version being tested
-	PipelineVersion string `json:"pipeline_version"`
+	PipelineVersion string `json:"pipeline_version" protobuf:"bytes,2,opt,name=pipeline_version,json=pipelineVersion,proto3"`
 
 	// TestInputHash is the hash of the test inputs
-	TestInputHash string `json:"test_input_hash"`
+	TestInputHash string `json:"test_input_hash" protobuf:"bytes,3,opt,name=test_input_hash,json=testInputHash,proto3"`
 
 	// ExpectedOutputHash is the expected output hash
-	ExpectedOutputHash string `json:"expected_output_hash"`
+	ExpectedOutputHash string `json:"expected_output_hash" protobuf:"bytes,4,opt,name=expected_output_hash,json=expectedOutputHash,proto3"`
 
 	// ActualOutputHash is the actual output hash
-	ActualOutputHash string `json:"actual_output_hash"`
+	ActualOutputHash string `json:"actual_output_hash" protobuf:"bytes,5,opt,name=actual_output_hash,json=actualOutputHash,proto3"`
 
 	// Passed indicates if the test passed
-	Passed bool `json:"passed"`
+	Passed bool `json:"passed" protobuf:"varint,6,opt,name=passed,proto3"`
 
 	// ValidatorAddress is the validator that ran the test
-	ValidatorAddress string `json:"validator_address"`
+	ValidatorAddress string `json:"validator_address" protobuf:"bytes,7,opt,name=validator_address,json=validatorAddress,proto3"`
 
 	// TestedAt is when the test was run
-	TestedAt time.Time `json:"tested_at"`
+	TestedAt time.Time `json:"tested_at" protobuf:"bytes,8,opt,name=tested_at,json=testedAt,proto3,stdtime"`
 
 	// BlockHeight is the block at which the test was run
-	BlockHeight int64 `json:"block_height"`
-
-	// Details contains additional test details
-	Details map[string]string `json:"details,omitempty"`
+	BlockHeight int64 `json:"block_height" protobuf:"varint,9,opt,name=block_height,json=blockHeight,proto3"`
 }
 
 // SetConformanceTestResult stores a conformance test result

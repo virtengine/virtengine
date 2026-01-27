@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -435,7 +437,15 @@ func TestX509Validator_ValidateCertificate(t *testing.T) {
 		result := validator.ValidateCertificate(cert)
 		assert.True(t, result.Valid)
 		assert.NotEmpty(t, result.Warnings)
-		assert.Contains(t, result.Warnings[0], "expires in")
+		// Check that at least one warning contains "expires in" (may not be first due to self-signed warning)
+		var foundExpirationWarning bool
+		for _, w := range result.Warnings {
+			if strings.Contains(w, "expires in") {
+				foundExpirationWarning = true
+				break
+			}
+		}
+		assert.True(t, foundExpirationWarning, "expected warning about expiration, got: %v", result.Warnings)
 	})
 }
 
@@ -837,11 +847,11 @@ func TestVerifyRSASignature(t *testing.T) {
 
 	// Sign with RSA PKCS#1 v1.5 SHA-256
 	hash := sha256.Sum256(data)
-	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, 0, hash[:])
+	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash[:])
 	require.NoError(t, err)
 
 	t.Run("valid signature", func(t *testing.T) {
-		err := verifyRSAPKCS1(cert.PublicKey, hash[:], signature, 0)
+		err := verifyRSAPKCS1(cert.PublicKey, data, signature, crypto.SHA256)
 		assert.NoError(t, err)
 	})
 
@@ -850,12 +860,12 @@ func TestVerifyRSASignature(t *testing.T) {
 		copy(badSignature, signature)
 		badSignature[0] ^= 0xFF // Corrupt the signature
 
-		err := verifyRSAPKCS1(cert.PublicKey, hash[:], badSignature, 0)
+		err := verifyRSAPKCS1(cert.PublicKey, data, badSignature, crypto.SHA256)
 		assert.Error(t, err)
 	})
 
 	t.Run("wrong key type", func(t *testing.T) {
-		err := verifyRSAPKCS1("not a key", data, signature, 0)
+		err := verifyRSAPKCS1("not a key", data, signature, crypto.SHA256)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "expected RSA")
 	})
@@ -874,12 +884,12 @@ func TestVerifyECDSASignature(t *testing.T) {
 	signature := append(r.Bytes(), s.Bytes()...)
 
 	t.Run("valid signature raw format", func(t *testing.T) {
-		err := verifyECDSA(cert.PublicKey, hash[:], signature, 0)
+		err := verifyECDSA(cert.PublicKey, data, signature, crypto.SHA256)
 		assert.NoError(t, err)
 	})
 
 	t.Run("wrong key type", func(t *testing.T) {
-		err := verifyECDSA("not a key", data, signature, 0)
+		err := verifyECDSA("not a key", data, signature, crypto.SHA256)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "expected ECDSA")
 	})

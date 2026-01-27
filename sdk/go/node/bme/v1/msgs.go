@@ -41,8 +41,8 @@ func (msg MsgSeedVault) ValidateBasic() error {
 	if !msg.Amount.IsValid() || !msg.Amount.IsPositive() {
 		return ErrInvalidAmount.Wrap("amount must be positive")
 	}
-	if msg.Amount.Denom != "uakt" {
-		return ErrInvalidDenom.Wrapf("expected uakt, got %s", msg.Amount.Denom)
+	if msg.Amount.Denom != "uve" {
+		return ErrInvalidDenom.Wrapf("expected uve, got %s", msg.Amount.Denom)
 	}
 	return nil
 }

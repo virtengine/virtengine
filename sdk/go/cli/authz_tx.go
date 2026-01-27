@@ -57,7 +57,7 @@ func GetTxAuthzGrantAuthorizationCmd() *cobra.Command {
 			fmt.Sprintf(`create a new grant authorization to an address to execute a transaction on your behalf:
 
 Examples:
- $ %[1]s tx %[2]s grant akash1skjw.. send --spend-limit=1000uakt --from=<granter>
+ $ %[1]s tx %[2]s grant akash1skjw.. send --spend-limit=1000uve --from=<granter>
  $ %[1]s tx %[2]s grant akash1skjw.. generic --msg-type=/cosmos.gov.v1.MsgVote --from=<granter>
 	`, version.AppName, authz.ModuleName)),
 		Args:              cobra.ExactArgs(2),

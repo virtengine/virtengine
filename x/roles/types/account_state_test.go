@@ -134,3 +134,57 @@ func TestDefaultAccountStateRecord(t *testing.T) {
 	require.Equal(t, types.AccountStateActive, record.State)
 	require.Equal(t, "account created", record.Reason)
 }
+
+func TestAccountStateRecord_Validate(t *testing.T) {
+	testCases := []struct {
+		name        string
+		record      types.AccountStateRecord
+		expectError bool
+	}{
+		{
+			name: "valid record",
+			record: types.AccountStateRecord{
+				Address:       "cosmos1abc123",
+				State:         types.AccountStateActive,
+				Reason:        "test reason",
+				ModifiedBy:    "cosmos1admin",
+				ModifiedAt:    12345,
+				PreviousState: types.AccountStateActive,
+			},
+			expectError: false,
+		},
+		{
+			name: "empty address",
+			record: types.AccountStateRecord{
+				Address: "",
+				State:   types.AccountStateActive,
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid state",
+			record: types.AccountStateRecord{
+				Address: "cosmos1abc123",
+				State:   types.AccountStateUnspecified,
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.record.Validate()
+			if tc.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAccountState_UnknownString(t *testing.T) {
+	unknownState := types.AccountState(99)
+	require.Contains(t, unknownState.String(), "unknown")
+	require.Contains(t, unknownState.String(), "99")
+}

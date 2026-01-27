@@ -35,7 +35,7 @@ func (s *BankCLITestSuite) TestSendTxCmd() {
 					accounts[0].Address.String(),
 					accounts[0].Address.String(),
 					sdk.NewCoins(
-						sdk.NewCoin("uakt", sdkmath.NewInt(10)),
+						sdk.NewCoin("uve", sdkmath.NewInt(10)),
 						sdk.NewCoin("photon", sdkmath.NewInt(40)),
 					).String()).
 				Append(commonArgs),
@@ -51,7 +51,7 @@ func (s *BankCLITestSuite) TestSendTxCmd() {
 					accounts[0].Address.String(),
 					sdk.AccAddress{}.String(),
 					sdk.NewCoins(
-						sdk.NewCoin("uakt", sdkmath.NewInt(10)),
+						sdk.NewCoin("uve", sdkmath.NewInt(10)),
 						sdk.NewCoin("photon", sdkmath.NewInt(40)),
 					).String()).
 				Append(commonArgs),
@@ -114,7 +114,7 @@ func (s *BankCLITestSuite) TestMultiSendTxCmd() {
 					accounts[1].Address.String(),
 					accounts[2].Address.String(),
 					sdk.NewCoins(
-						sdk.NewCoin("uakt", sdkmath.NewInt(10)),
+						sdk.NewCoin("uve", sdkmath.NewInt(10)),
 						sdk.NewCoin("photon", sdkmath.NewInt(40))).String()).
 				Append(commonArgs),
 			false,
@@ -130,7 +130,7 @@ func (s *BankCLITestSuite) TestMultiSendTxCmd() {
 					accounts[1].Address.String(),
 					accounts[2].Address.String(),
 					sdk.NewCoins(
-						sdk.NewCoin("uakt", sdkmath.NewInt(10)),
+						sdk.NewCoin("uve", sdkmath.NewInt(10)),
 						sdk.NewCoin("photon", sdkmath.NewInt(40))).String()).
 				Append(commonArgs),
 
@@ -147,7 +147,7 @@ func (s *BankCLITestSuite) TestMultiSendTxCmd() {
 					accounts[1].Address.String(),
 					"bar",
 					sdk.NewCoins(
-						sdk.NewCoin("uakt", sdkmath.NewInt(10)),
+						sdk.NewCoin("uve", sdkmath.NewInt(10)),
 						sdk.NewCoin("photon", sdkmath.NewInt(40))).String()).
 				Append(commonArgs),
 			true,

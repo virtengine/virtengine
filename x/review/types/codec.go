@@ -7,7 +7,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
 )
 
@@ -28,14 +27,20 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the module interface types
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgSubmitReview{},
-		&MsgDeleteReview{},
-		&MsgUpdateParams{},
-	)
-
-	// TODO: Enable when protobuf generation is complete
+	// NOTE: These are stub message types without proper protobuf generation.
+	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
+	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
+	//
+	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
+	//
+	// registry.RegisterImplementations((*sdk.Msg)(nil),
+	//     &MsgSubmitReview{},
+	//     &MsgDeleteReview{},
+	//     &MsgUpdateParams{},
+	// )
+	//
 	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = registry // suppress unused variable warning
 	_ = msgservice.RegisterMsgServiceDesc
 }
 

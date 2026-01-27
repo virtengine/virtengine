@@ -6231,7 +6231,7 @@ paths:
                         denom:
                           type: string
                           description: >-
-                            Denom is the denomination of the take rate (uakt,
+                            Denom is the denomination of the take rate (uve,
                             usdc, etc.).
                         rate:
                           type: integer
@@ -53370,7 +53370,7 @@ definitions:
     properties:
       denom:
         type: string
-        description: Denom is the denomination of the take rate (uakt, usdc, etc.).
+        description: Denom is the denomination of the take rate (uve, usdc, etc.).
       rate:
         type: integer
         format: int64
@@ -53386,7 +53386,7 @@ definitions:
           properties:
             denom:
               type: string
-              description: Denom is the denomination of the take rate (uakt, usdc, etc.).
+              description: Denom is the denomination of the take rate (uve, usdc, etc.).
             rate:
               type: integer
               format: int64
@@ -53413,7 +53413,7 @@ definitions:
                 denom:
                   type: string
                   description: >-
-                    Denom is the denomination of the take rate (uakt, usdc,
+                    Denom is the denomination of the take rate (uve, usdc,
                     etc.).
                 rate:
                   type: integer

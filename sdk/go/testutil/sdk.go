@@ -29,26 +29,26 @@ func DecCoin(t testing.TB) sdk.DecCoin {
 func AkashCoinRandom(t testing.TB) sdk.Coin {
 	t.Helper()
 	amt := sdkmath.NewInt(int64(RandRangeInt(1, 1000)))
-	return sdk.NewCoin(sdkutil.DenomUakt, amt)
+	return sdk.NewCoin(sdkutil.Denomuve, amt)
 }
 
 // AkashCoin provides simple interface to the Akash sdk.Coin type.
 func AkashCoin(t testing.TB, amount int64) sdk.Coin {
 	t.Helper()
 	amt := sdkmath.NewInt(amount)
-	return sdk.NewCoin(sdkutil.DenomUakt, amt)
+	return sdk.NewCoin(sdkutil.Denomuve, amt)
 }
 
 func AkashDecCoin(t testing.TB, amount int64) sdk.DecCoin {
 	t.Helper()
 	amt := sdkmath.NewInt(amount)
-	return sdk.NewDecCoin(sdkutil.DenomUakt, amt)
+	return sdk.NewDecCoin(sdkutil.Denomuve, amt)
 }
 
 func AkashDecCoinRandom(t testing.TB) sdk.DecCoin {
 	t.Helper()
 	amt := sdkmath.NewInt(int64(RandRangeInt(1, 1000)))
-	return sdk.NewDecCoin(sdkutil.DenomUakt, amt)
+	return sdk.NewDecCoin(sdkutil.Denomuve, amt)
 }
 
 // ACTCoinRandom provides simple interface to the ACT sdk.Coin type.

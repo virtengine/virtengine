@@ -5304,7 +5304,7 @@ Since: VirtEngine v1.0.0 | |
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `denom` | [string](#string) |  | denom is the asset denomination (e.g., "uakt") |
+ | `denom` | [string](#string) |  | denom is the asset denomination (e.g., "uve") |
  | `base_denom` | [string](#string) |  | base_denom is the base denomination for the price pair (e.g., "usd") |
  
  
@@ -6240,7 +6240,7 @@ Example: "virt1..." |
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `denom` | [string](#string) |  | Denom is the denomination of the take rate (uakt, usdc, etc.). |
+ | `denom` | [string](#string) |  | Denom is the denomination of the take rate (uve, usdc, etc.). |
  | `rate` | [uint32](#uint32) |  | Rate is the value of the take rate. |
  
  

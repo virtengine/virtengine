@@ -20,7 +20,7 @@ CHAIN_ID="${1:-virtengine-localnet-1}"
 GENESIS_ACCOUNT="${2:-}"
 HOME_DIR="${HOME}/.virtengine"
 KEYRING_BACKEND="${KEYRING_BACKEND:-test}"
-DENOM="${DENOM:-uakt}"
+DENOM="${DENOM:-uve}"
 MONIKER="${MONIKER:-localvalidator}"
 
 # Token amounts

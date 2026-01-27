@@ -192,7 +192,7 @@ func TestSubmitBenchmarks(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1test123456789"
+	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -217,7 +217,7 @@ func TestSubmitBenchmarks_DuplicateRejection(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1test123456789"
+	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -345,10 +345,11 @@ func TestChallenge(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1test123456789"
+	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
 	mockProvider.AddProvider(providerAddr, pub)
 
 	challenge := &types.BenchmarkChallenge{
+		ChallengeID:          "test-challenge-1",
 		ProviderAddress:      providerAddr,
 		ClusterID:            "test-cluster-1",
 		RequiredSuiteVersion: "1.0.0",
@@ -373,6 +374,8 @@ func TestChallenge(t *testing.T) {
 	// Respond to challenge
 	report := createTestReport(t, providerAddr, pub, priv)
 	report.ReportID = "challenge-response-1"
+	report.ChallengeID = challenge.ChallengeID // Set before signing - keeper sets this too
+	signReport(t, &report, priv)               // Re-sign after changes
 
 	err = keeper.RespondToChallenge(ctx, challenge.ChallengeID, report, "")
 	if err != nil {
@@ -390,10 +393,11 @@ func TestChallenge_Expired(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1test123456789"
+	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
 	mockProvider.AddProvider(providerAddr, pub)
 
 	challenge := &types.BenchmarkChallenge{
+		ChallengeID:          "test-challenge-expired",
 		ProviderAddress:      providerAddr,
 		ClusterID:            "test-cluster-1",
 		RequiredSuiteVersion: "1.0.0",
@@ -522,10 +526,10 @@ func TestAnomalyDetection_RepeatedOutput(t *testing.T) {
 func TestProviderFlag(t *testing.T) {
 	keeper, ctx, _, mockRoles := setupKeeper(t)
 
-	moderatorAddr := "cosmos1moderator123"
+	moderatorAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
 	mockRoles.AddModerator(moderatorAddr)
 
-	providerAddr := "cosmos1provider123"
+	providerAddr := "cosmos1w3jhxapddamtrt6saykt3pqad4gg3p2c72a4ld"
 
 	flag := &types.ProviderFlag{
 		ProviderAddress: providerAddr,

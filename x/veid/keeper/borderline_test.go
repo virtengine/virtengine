@@ -4,31 +4,34 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	"github.com/virtengine/virtengine/x/veid/keeper"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
-// Test address constants
-const (
-	testBorderlineAddress = "virtengine1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5test"
+// Test address variables - valid bech32 addresses
+var (
+	testBorderlineAddress = sdk.AccAddress([]byte("borderline_address__")).String()
 )
 
 // MockMFAKeeper is a mock implementation of MFAKeeper for testing
 type MockMFAKeeper struct {
-	challenges     map[string]*mfatypes.Challenge
-	enrollments    map[string][]mfatypes.FactorEnrollment
-	params         mfatypes.Params
-	verifyResult   bool
-	verifyErr      error
+	challenges   map[string]*mfatypes.Challenge
+	enrollments  map[string][]mfatypes.FactorEnrollment
+	params       mfatypes.Params
+	verifyResult bool
+	verifyErr    error
 }
 
 func NewMockMFAKeeper() *MockMFAKeeper {
@@ -127,7 +130,18 @@ func (s *BorderlineFallbackTestSuite) SetupTest() {
 }
 
 func (s *BorderlineFallbackTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey) sdk.Context {
-	ctx := sdk.Context{}.WithBlockTime(time.Now()).WithBlockHeight(100)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	if err != nil {
+		s.T().Fatalf("failed to load latest version: %v", err)
+	}
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
 	return ctx
 }
 

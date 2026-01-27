@@ -24,7 +24,7 @@ func TestPipelineVersionValidation(t *testing.T) {
 				ImageHash:         "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				ImageRef:          "ghcr.io/virtengine/veid-pipeline:v1.0.0",
 				ModelManifest:     *validManifest,
-				Status:            PipelineVersionStatusPending,
+				Status:            string(PipelineVersionStatusPending),
 				DeterminismConfig: DefaultPipelineDeterminismConfig(),
 			},
 			expectError: false,
@@ -36,7 +36,7 @@ func TestPipelineVersionValidation(t *testing.T) {
 				ImageHash:         "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				ImageRef:          "ghcr.io/virtengine/veid-pipeline:v1.0.0",
 				ModelManifest:     *validManifest,
-				Status:            PipelineVersionStatusPending,
+				Status:            string(PipelineVersionStatusPending),
 				DeterminismConfig: DefaultPipelineDeterminismConfig(),
 			},
 			expectError: true,
@@ -49,7 +49,7 @@ func TestPipelineVersionValidation(t *testing.T) {
 				ImageHash:         "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				ImageRef:          "ghcr.io/virtengine/veid-pipeline:v1.0.0",
 				ModelManifest:     *validManifest,
-				Status:            PipelineVersionStatusPending,
+				Status:            string(PipelineVersionStatusPending),
 				DeterminismConfig: DefaultPipelineDeterminismConfig(),
 			},
 			expectError: true,
@@ -62,7 +62,7 @@ func TestPipelineVersionValidation(t *testing.T) {
 				ImageHash:         "",
 				ImageRef:          "ghcr.io/virtengine/veid-pipeline:v1.0.0",
 				ModelManifest:     *validManifest,
-				Status:            PipelineVersionStatusPending,
+				Status:            string(PipelineVersionStatusPending),
 				DeterminismConfig: DefaultPipelineDeterminismConfig(),
 			},
 			expectError: true,
@@ -75,7 +75,7 @@ func TestPipelineVersionValidation(t *testing.T) {
 				ImageHash:         "invalid-hash",
 				ImageRef:          "ghcr.io/virtengine/veid-pipeline:v1.0.0",
 				ModelManifest:     *validManifest,
-				Status:            PipelineVersionStatusPending,
+				Status:            string(PipelineVersionStatusPending),
 				DeterminismConfig: DefaultPipelineDeterminismConfig(),
 			},
 			expectError: true,
@@ -88,7 +88,7 @@ func TestPipelineVersionValidation(t *testing.T) {
 				ImageHash:         "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				ImageRef:          "",
 				ModelManifest:     *validManifest,
-				Status:            PipelineVersionStatusPending,
+				Status:            string(PipelineVersionStatusPending),
 				DeterminismConfig: DefaultPipelineDeterminismConfig(),
 			},
 			expectError: true,
@@ -114,7 +114,7 @@ func TestPipelineVersionValidation(t *testing.T) {
 				ImageHash:         "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				ImageRef:          "ghcr.io/virtengine/veid-pipeline:v1.0.0",
 				ModelManifest:     *validManifest,
-				Status:            PipelineVersionStatusActive,
+				Status:            string(PipelineVersionStatusActive),
 				DeterminismConfig: DefaultPipelineDeterminismConfig(),
 			},
 			expectError: false,
@@ -158,8 +158,8 @@ func TestModelManifestValidation(t *testing.T) {
 			name: "empty version",
 			manifest: &ModelManifest{
 				Version: "",
-				Models: map[string]ModelInfo{
-					"deepface": createValidModelInfo("deepface"),
+				Models: []ModelInfo{
+					createValidModelInfo("deepface"),
 				},
 			},
 			expectError: true,
@@ -169,27 +169,27 @@ func TestModelManifestValidation(t *testing.T) {
 			name: "no models",
 			manifest: &ModelManifest{
 				Version: "1.0.0",
-				Models:  map[string]ModelInfo{},
+				Models:  []ModelInfo{},
 			},
 			expectError: true,
 			errorMsg:    "must contain at least one model",
 		},
 		{
-			name: "model name mismatch",
+			name: "model with empty name",
 			manifest: &ModelManifest{
 				Version: "1.0.0",
-				Models: map[string]ModelInfo{
-					"deepface": {
-						Name:        "wrong_name",
+				Models: []ModelInfo{
+					{
+						Name:        "",
 						Version:     "1.0.0",
 						WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 						Framework:   "tensorflow",
-						Purpose:     ModelPurposeFaceRecognition,
+					Purpose:     string(ModelPurposeFaceRecognition),
 					},
 				},
 			},
 			expectError: true,
-			errorMsg:    "model name mismatch",
+			errorMsg:    "model name cannot be empty",
 		},
 	}
 
@@ -226,7 +226,7 @@ func TestModelInfoValidation(t *testing.T) {
 				Version:     "1.0.0",
 				WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 				Framework:   "tensorflow",
-				Purpose:     ModelPurposeFaceRecognition,
+				Purpose:     string(ModelPurposeFaceRecognition),
 			},
 			expectError: false,
 		},
@@ -321,13 +321,18 @@ func TestManifestHashComputation(t *testing.T) {
 		t.Errorf("identical manifests should produce same hash: %s vs %s", hash1, hash2)
 	}
 
-	// Modify one manifest
-	manifest2.Models["deepface"] = ModelInfo{
-		Name:        "deepface",
-		Version:     "1.0.1", // Changed version
-		WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-		Framework:   "tensorflow",
-		Purpose:     ModelPurposeFaceRecognition,
+	// Modify one manifest - find and update the deepface model
+	for i, model := range manifest2.Models {
+		if model.Name == "deepface" {
+			manifest2.Models[i] = ModelInfo{
+				Name:        "deepface",
+				Version:     "1.0.1", // Changed version
+				WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+				Framework:   "tensorflow",
+				Purpose:     string(ModelPurposeFaceRecognition),
+			}
+			break
+		}
 	}
 
 	hash3 := manifest2.ComputeHash()
@@ -518,10 +523,10 @@ func TestExecutionRecordKeys(t *testing.T) {
 // Helper functions
 
 func createValidModelManifest(createdAt time.Time) *ModelManifest {
-	models := map[string]ModelInfo{
-		"deepface": createValidModelInfo("deepface"),
-		"craft":    createValidModelInfo("craft"),
-		"unet":     createValidModelInfo("unet"),
+	models := []ModelInfo{
+		createValidModelInfo("deepface"),
+		createValidModelInfo("craft"),
+		createValidModelInfo("unet"),
 	}
 	return NewModelManifest("1.0.0", models, createdAt)
 }
@@ -532,7 +537,7 @@ func createValidModelInfo(name string) ModelInfo {
 		Version:     "1.0.0",
 		WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		Framework:   "tensorflow",
-		Purpose:     ModelPurposeFaceRecognition,
+		Purpose:     string(ModelPurposeFaceRecognition),
 	}
 }
 

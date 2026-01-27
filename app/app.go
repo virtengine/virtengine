@@ -68,8 +68,23 @@ import (
 	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
+	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
+	configtypes "github.com/virtengine/virtengine/x/config/types"
+	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
+	enclavetypes "github.com/virtengine/virtengine/x/enclave/types"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
+	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
+	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	reviewtypes "github.com/virtengine/virtengine/x/review/types"
+	rolestypes "github.com/virtengine/virtengine/x/roles/types"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
+	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
+	veidtypes "github.com/virtengine/virtengine/x/veid/types"
+
 	apptypes "github.com/virtengine/virtengine/app/types"
 	utypes "github.com/virtengine/virtengine/upgrades/types"
+
 	// unnamed import of statik for swagger UI support
 	_ "github.com/virtengine/virtengine/client/docs/statik"
 )
@@ -289,6 +304,20 @@ func orderBeginBlockers(_ []string) []string {
 		ibctm.ModuleName,
 		ibchost.ModuleName,
 		feegrant.ModuleName,
+		// VirtEngine patent modules (AU2024203136A1)
+		veidtypes.ModuleName,
+		mfatypes.ModuleName,
+		encryptiontypes.ModuleName,
+		rolestypes.ModuleName,
+		configtypes.ModuleName,
+		hpctypes.ModuleName,
+		benchmarktypes.ModuleName,
+		enclavetypes.ModuleName,
+		settlementtypes.ModuleName,
+		fraudtypes.ModuleName,
+		reviewtypes.ModuleName,
+		delegationtypes.ModuleName,
+		virtstakingtypes.ModuleName,
 	}
 }
 
@@ -318,6 +347,22 @@ func OrderEndBlockers(_ []string) []string {
 		transfertypes.ModuleName,
 		ibchost.ModuleName,
 		feegrant.ModuleName,
+		consensusparamtypes.ModuleName,
+		ibctm.ModuleName,
+		// VirtEngine patent modules (AU2024203136A1)
+		veidtypes.ModuleName,
+		mfatypes.ModuleName,
+		encryptiontypes.ModuleName,
+		rolestypes.ModuleName,
+		configtypes.ModuleName,
+		hpctypes.ModuleName,
+		benchmarktypes.ModuleName,
+		enclavetypes.ModuleName,
+		settlementtypes.ModuleName,
+		fraudtypes.ModuleName,
+		reviewtypes.ModuleName,
+		delegationtypes.ModuleName,
+		virtstakingtypes.ModuleName,
 	}
 }
 

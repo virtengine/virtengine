@@ -11,7 +11,7 @@ import (
 	"github.com/virtengine/virtengine/testutil"
 )
 
-var DefaultDeposit = sdk.NewCoin("uakt", sdk.NewInt(5000000))
+var DefaultDeposit = sdk.NewCoin("uve", sdk.NewInt(5000000))
 
 func TestIntegrationCLI(t *testing.T) {
 	di := &deploymentIntegrationTestSuite{}

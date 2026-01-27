@@ -325,12 +325,12 @@ type BidEngine struct {
 	chainClient ChainClient
 	rateLimiter *RateLimiter
 
-	running   bool
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	mu        sync.RWMutex
-	configMu  sync.RWMutex
+	running  bool
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	mu       sync.RWMutex
+	configMu sync.RWMutex
 
 	// Channels for coordination
 	orderChan  chan Order
@@ -612,7 +612,7 @@ func (be *BidEngine) processBid(order Order) BidResult {
 	}
 
 	// Sign the bid
-	bidData := fmt.Sprintf("%s:%s:%s:%s", bid.BidID, bid.OrderID, bid.Price, bid.CreatedAt.Unix())
+	bidData := fmt.Sprintf("%s:%s:%s:%d", bid.BidID, bid.OrderID, bid.Price, bid.CreatedAt.Unix())
 	sig, err := be.keyManager.Sign([]byte(bidData))
 	if err != nil {
 		result.Error = fmt.Errorf("failed to sign bid: %w", err)

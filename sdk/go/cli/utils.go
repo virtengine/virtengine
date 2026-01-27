@@ -38,14 +38,14 @@ func DetectDeploymentDeposit(ctx context.Context, flags *pflag.FlagSet, cl aclie
 
 		// always default to AKT
 		for _, sCoin := range resp.Params.MinDeposits {
-			if sCoin.Denom == "uakt" {
+			if sCoin.Denom == "uve" {
 				depositStr = fmt.Sprintf("%s%s", sCoin.Amount, sCoin.Denom)
 				break
 			}
 		}
 
 		if depositStr == "" {
-			return sdk.Coin{}, fmt.Errorf("couldn't query default deposit amount for uAKT")
+			return sdk.Coin{}, fmt.Errorf("couldn't query default deposit amount for uve")
 		}
 	} else {
 		depositStr, err = flags.GetString(cflags.FlagDeposit)

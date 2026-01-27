@@ -156,8 +156,8 @@ When using '--dry-run' a key name cannot be used, only a bech32 address.`,
 			// amount to be send from the from address
 			var amount sdk.Coins
 			if split {
-				// user input: 1000uakt to send to 3 addresses
-				// actual: 333stake to each address (=> 999uakt actually sent)
+				// user input: 1000uve to send to 3 addresses
+				// actual: 333stake to each address (=> 999uve actually sent)
 				amount = sendCoins.MulInt(totalAddrs)
 			} else {
 				amount = coins.MulInt(totalAddrs)

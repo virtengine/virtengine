@@ -358,7 +358,7 @@ func interceptConfigs(rootViper *viper.Viper, customAppTemplate string, customCo
 			config.WriteConfigFile(appCfgFilePath, customConfig)
 		} else {
 			appConf, err := config.ParseConfig(rootViper)
-			appConf.MinGasPrices = "0.025uakt"
+			appConf.MinGasPrices = "0.025uve"
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse %s: %w", appCfgFilePath, err)
 			}

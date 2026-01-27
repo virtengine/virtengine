@@ -126,7 +126,7 @@ func (df FlagsSet) WithGasAuto() FlagsSet {
 	copy(res, df)
 
 	res = append(res, fmt.Sprintf("--%s=%s", cflags.FlagGas, cflags.GasFlagAuto))
-	res = append(res, fmt.Sprintf("--%s=0.0025uakt", cflags.FlagGasPrices))
+	res = append(res, fmt.Sprintf("--%s=0.0025uve", cflags.FlagGasPrices))
 	res = append(res, fmt.Sprintf("--%s=1.5", cflags.FlagGasAdjustment))
 
 	return res

@@ -1012,14 +1012,16 @@ func (m *MockLedgerDevice) generateMockSignature(req *LedgerSignRequest) (*Ledge
 	// Create mock DER signature (this is NOT a valid signature)
 	// Real signatures come from the device's secure element
 	mockSig := make([]byte, 71)
-	mockSig[0] = 0x30                     // DER sequence
-	mockSig[1] = 0x45                     // Length
-	mockSig[2] = 0x02                     // Integer type
-	mockSig[3] = 0x21                     // r length
-	copy(mockSig[4:36], msgHash[:])       // r value
-	mockSig[36] = 0x02                    // Integer type
-	mockSig[37] = 0x20                    // s length
-	copy(mockSig[38:70], req.HDPath[:32]) // s value (truncated path as placeholder)
+	mockSig[0] = 0x30                 // DER sequence
+	mockSig[1] = 0x45                 // Length
+	mockSig[2] = 0x02                 // Integer type
+	mockSig[3] = 0x21                 // r length
+	copy(mockSig[4:36], msgHash[:])   // r value
+	mockSig[36] = 0x02                // Integer type
+	mockSig[37] = 0x20                // s length
+	// Hash the HD path to get a deterministic 32-byte value for the s component
+	pathHash := sha256Hash([]byte(req.HDPath))
+	copy(mockSig[38:70], pathHash[:]) // s value (hash of path as placeholder)
 
 	// Get the mock public key for this path
 	addr, _ := m.generateMockAddress(req.HDPath, false)

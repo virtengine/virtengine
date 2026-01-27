@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/virtengine/virtengine/x/veid/types"
@@ -278,7 +277,7 @@ func (s *ScoringModelTestSuite) TestScoringInputs_ComputeInputHash_DifferentInpu
 // ============================================================================
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_FullInputs() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	inputs := createFullValidInputs()
 
 	summary, err := types.ComputeDeterministicScore(inputs, model)
@@ -291,7 +290,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_FullInputs() {
 }
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_MissingSelfie_RequiredFails() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Config.RequireSelfie = true
 	model.Config.AllowFallbackOnMissingSelfie = false
 
@@ -307,7 +306,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_MissingSelfie_Requ
 }
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_MissingSelfie_FallbackAllowed() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Config.RequireSelfie = true
 	model.Config.AllowFallbackOnMissingSelfie = true
 	model.Thresholds.MissingSelfieMaxScore = 30
@@ -324,7 +323,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_MissingSelfie_Fall
 }
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_MissingDocument_Capped() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Config.RequireDocument = true
 	model.Config.AllowFallbackOnMissingDoc = true
 	model.Thresholds.MissingDocMaxScore = 30
@@ -340,7 +339,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_MissingDocument_Ca
 }
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_LowFaceSimilarity() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Thresholds.MinFaceSimilarity = 8000 // 80%
 
 	inputs := createFullValidInputs()
@@ -352,7 +351,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_LowFaceSimilarity(
 }
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_ScoreBoundaries() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 
 	// Test minimum boundary
 	inputs := types.ScoringInputs{
@@ -389,7 +388,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_ScoreBoundaries() 
 }
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_Determinism() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	inputs := createFullValidInputs()
 
 	// Compute multiple times
@@ -409,7 +408,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_Determinism() {
 }
 
 func (s *ScoringModelTestSuite) TestComputeDeterministicScore_InvalidInputs() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	inputs := types.ScoringInputs{
 		FaceSimilarity: types.FaceSimilarityInput{
 			SimilarityScore: 20000, // Invalid - exceeds max
@@ -439,7 +438,7 @@ func (s *ScoringModelTestSuite) TestComputeDeterministicScore_InvalidModel() {
 // ============================================================================
 
 func (s *ScoringModelTestSuite) TestEvidenceSummary_ReasonCodes() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Thresholds.RequiredForPass = 80 // High threshold
 
 	inputs := createFullValidInputs()
@@ -454,7 +453,7 @@ func (s *ScoringModelTestSuite) TestEvidenceSummary_ReasonCodes() {
 }
 
 func (s *ScoringModelTestSuite) TestEvidenceSummary_Contributions() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	inputs := createFullValidInputs()
 
 	summary, err := types.ComputeDeterministicScore(inputs, model)
@@ -483,7 +482,7 @@ func (s *ScoringModelTestSuite) TestToBasisPoints() {
 	s.Require().Equal(uint32(0), types.ToBasisPoints(0.0))
 	s.Require().Equal(uint32(5000), types.ToBasisPoints(0.5))
 	s.Require().Equal(uint32(10000), types.ToBasisPoints(1.0))
-	s.Require().Equal(uint32(0), types.ToBasisPoints(-0.5)) // Negative clamped
+	s.Require().Equal(uint32(0), types.ToBasisPoints(-0.5))    // Negative clamped
 	s.Require().Equal(uint32(10000), types.ToBasisPoints(1.5)) // Over 1 clamped
 }
 
@@ -499,7 +498,7 @@ func (s *ScoringModelTestSuite) TestFromBasisPoints() {
 // ============================================================================
 
 func (s *ScoringModelTestSuite) TestScoringModelVersion_Validate() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	s.Require().NoError(model.Validate())
 
 	// Empty version
@@ -508,7 +507,7 @@ func (s *ScoringModelTestSuite) TestScoringModelVersion_Validate() {
 }
 
 func (s *ScoringModelTestSuite) TestScoringModelVersion_ComputeModelHash() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	hash1 := model.ComputeModelHash()
 	hash2 := model.ComputeModelHash()
 

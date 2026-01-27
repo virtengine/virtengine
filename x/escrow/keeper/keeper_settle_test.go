@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const denom = "uakt"
+const denom = "uve"
 
 func TestSettleFullBlocks(t *testing.T) {
 	for _, tt := range []struct {

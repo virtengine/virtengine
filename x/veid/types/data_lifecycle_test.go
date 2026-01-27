@@ -17,7 +17,7 @@ import (
 func TestRetentionPolicy_Duration(t *testing.T) {
 	now := time.Now()
 	durationSeconds := int64(7 * 24 * 60 * 60) // 7 days
-	
+
 	policy := types.NewRetentionPolicyDuration(
 		"policy-001",
 		durationSeconds,
@@ -43,7 +43,7 @@ func TestRetentionPolicy_BlockCount(t *testing.T) {
 	now := time.Now()
 	blockCount := int64(1000)
 	createdAtBlock := int64(500)
-	
+
 	policy := types.NewRetentionPolicyBlockCount(
 		"policy-002",
 		blockCount,
@@ -64,7 +64,7 @@ func TestRetentionPolicy_BlockCount(t *testing.T) {
 
 func TestRetentionPolicy_Indefinite(t *testing.T) {
 	now := time.Now()
-	
+
 	policy := types.NewRetentionPolicyIndefinite(
 		"policy-003",
 		now,
@@ -82,7 +82,7 @@ func TestRetentionPolicy_Indefinite(t *testing.T) {
 
 func TestRetentionPolicy_UntilRevoked(t *testing.T) {
 	now := time.Now()
-	
+
 	policy := types.NewRetentionPolicyUntilRevoked(
 		"policy-004",
 		now,
@@ -100,7 +100,7 @@ func TestRetentionPolicy_UntilRevoked(t *testing.T) {
 
 func TestRetentionPolicy_IsExpired(t *testing.T) {
 	now := time.Now()
-	
+
 	// Test duration-based expiry
 	expiredPolicy := types.NewRetentionPolicyDuration(
 		"policy-expired",
@@ -112,9 +112,9 @@ func TestRetentionPolicy_IsExpired(t *testing.T) {
 	// Manually set to expired
 	expiredTime := now.Add(-time.Hour)
 	expiredPolicy.ExpiresAt = &expiredTime
-	
+
 	assert.True(t, expiredPolicy.IsExpired(now))
-	
+
 	// Test non-expired policy
 	futureTime := now.Add(24 * time.Hour)
 	activePolicy := &types.RetentionPolicy{
@@ -122,7 +122,7 @@ func TestRetentionPolicy_IsExpired(t *testing.T) {
 		ExpiresAt:     &futureTime,
 	}
 	assert.False(t, activePolicy.IsExpired(now))
-	
+
 	// Indefinite policies never expire
 	indefinitePolicy := types.NewRetentionPolicyIndefinite("policy-indef", now, 100)
 	assert.False(t, indefinitePolicy.IsExpired(now))
@@ -131,12 +131,13 @@ func TestRetentionPolicy_IsExpired(t *testing.T) {
 
 func TestRetentionPolicy_IsExpiredAtBlock(t *testing.T) {
 	now := time.Now()
-	
+
 	policy := types.NewRetentionPolicyBlockCount(
 		"policy-block",
 		1000,
 		now,
 		500,
+		true, // deleteOnExpiry
 	)
 
 	// Should expire at block 1500
@@ -148,7 +149,7 @@ func TestRetentionPolicy_IsExpiredAtBlock(t *testing.T) {
 func TestRetentionPolicy_Extend(t *testing.T) {
 	now := time.Now()
 	durationSeconds := int64(7 * 24 * 60 * 60)
-	
+
 	policy := types.NewRetentionPolicyDuration(
 		"policy-extend",
 		durationSeconds,
@@ -156,7 +157,7 @@ func TestRetentionPolicy_Extend(t *testing.T) {
 		100,
 		true,
 	)
-	
+
 	originalExpiry := *policy.ExpiresAt
 
 	// Should be able to extend
@@ -259,10 +260,10 @@ func TestDataLifecycleRules_RawImageNotOnChain(t *testing.T) {
 
 	// Raw images should NEVER be allowed on-chain
 	assert.False(t, rules.CanStoreOnChain(types.ArtifactTypeRawImage))
-	
+
 	// Raw images must be encrypted
 	assert.True(t, rules.RequiresEncryption(types.ArtifactTypeRawImage))
-	
+
 	// Raw images should be deleted after verification
 	assert.True(t, rules.ShouldDeleteAfterVerification(types.ArtifactTypeRawImage))
 }
@@ -272,10 +273,10 @@ func TestDataLifecycleRules_FaceEmbeddingHashOnChain(t *testing.T) {
 
 	// Face embedding hashes CAN be stored on-chain
 	assert.True(t, rules.CanStoreOnChain(types.ArtifactTypeFaceEmbedding))
-	
+
 	// Raw embeddings still need encryption (off-chain)
 	assert.True(t, rules.RequiresEncryption(types.ArtifactTypeFaceEmbedding))
-	
+
 	// Should NOT be deleted after verification (we keep the hash)
 	assert.False(t, rules.ShouldDeleteAfterVerification(types.ArtifactTypeFaceEmbedding))
 }
@@ -285,7 +286,7 @@ func TestDataLifecycleRules_DocumentHashOnChain(t *testing.T) {
 
 	// Document hashes can be on-chain
 	assert.True(t, rules.CanStoreOnChain(types.ArtifactTypeDocumentHash))
-	
+
 	// Hashes don't need encryption
 	assert.False(t, rules.RequiresEncryption(types.ArtifactTypeDocumentHash))
 }
@@ -330,21 +331,21 @@ func TestDataLifecycleRules_CreateRetentionPolicy(t *testing.T) {
 
 func TestArtifactType_Validation(t *testing.T) {
 	validTypes := types.AllArtifactTypes()
-	
+
 	for _, at := range validTypes {
 		assert.True(t, types.IsValidArtifactType(at))
 	}
-	
+
 	assert.False(t, types.IsValidArtifactType("invalid"))
 	assert.False(t, types.IsValidArtifactType(""))
 }
 
 func TestRetentionType_Validation(t *testing.T) {
 	validTypes := types.AllRetentionTypes()
-	
+
 	for _, rt := range validTypes {
 		assert.True(t, types.IsValidRetentionType(rt))
 	}
-	
+
 	assert.False(t, types.IsValidRetentionType("invalid"))
 }

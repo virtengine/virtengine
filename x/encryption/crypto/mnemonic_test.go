@@ -11,10 +11,10 @@ import (
 // Test constants for BIP-39 test vectors
 const (
 	// testMnemonic12 is the standard BIP-39 12-word test mnemonic
-	testMnemonic12 = testMnemonic12
+	testMnemonic12 = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 
 	// testMnemonic24 is the standard BIP-39 24-word test mnemonic
-	testMnemonic24 = testMnemonic24
+	testMnemonic24 = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
 )
 
 // ============================================================================
@@ -80,8 +80,10 @@ func TestValidateMnemonic_Valid24Word(t *testing.T) {
 }
 
 func TestValidateMnemonic_InvalidChecksum(t *testing.T) {
-	// Invalid checksum (last word changed)
-	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon"
+	// Invalid checksum: swap words 5 and 6 from the valid test mnemonic
+	// Original valid: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	// Swapping changes the entropy bits but keeps same checksum word, making it invalid
+	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about abandon"
 	assert.False(t, ValidateMnemonic(mnemonic))
 }
 
@@ -510,9 +512,7 @@ func TestDeriveMultipleAccounts(t *testing.T) {
 		assert.False(t, addresses[key.Address], "account %d has duplicate address", i)
 		addresses[key.Address] = true
 
-		// Verify expected HD path
-		expectedPath := "m/44'/118'/" + string(rune('0'+i)) + "'/0/0"
-		// Note: path format may vary slightly, just verify they're different
+		// Verify expected HD path - path format may vary slightly, just verify they're different
 		assert.NotEmpty(t, key.HDPath)
 	}
 }
@@ -582,10 +582,10 @@ func TestIsValidWord(t *testing.T) {
 
 func TestValidateMnemonicWords(t *testing.T) {
 	tests := []struct {
-		name            string
-		mnemonic        string
-		expectValid     bool
-		expectInvalidN  int
+		name           string
+		mnemonic       string
+		expectValid    bool
+		expectInvalidN int
 	}{
 		{
 			name:           "all valid",
@@ -661,8 +661,10 @@ func TestChecksumMnemonic(t *testing.T) {
 	valid := testMnemonic12
 	assert.True(t, ChecksumMnemonic(valid))
 
-	// Invalid checksum
-	invalid := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon"
+	// Invalid checksum: swap words 10 and 11 from the valid test mnemonic
+	// Original valid: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	// Swapping changes the entropy bits but keeps same checksum word, making it invalid
+	invalid := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about abandon"
 	assert.False(t, ChecksumMnemonic(invalid))
 }
 
@@ -752,4 +754,3 @@ func BenchmarkValidateMnemonic(b *testing.B) {
 		_ = ValidateMnemonic(mnemonic)
 	}
 }
-

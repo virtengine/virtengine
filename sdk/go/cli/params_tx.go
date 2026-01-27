@@ -48,7 +48,7 @@ Where proposal.json contains:
       "value": 105
     }
   ],
-  "deposit": "1000uakt"
+  "deposit": "1000uve"
 }
 `,
 				version.AppName,

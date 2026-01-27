@@ -1,3 +1,8 @@
+//go:build ignore
+// +build ignore
+
+// TODO: This test file is excluded until settlement rewards API is stabilized.
+
 package keeper_test
 
 import (

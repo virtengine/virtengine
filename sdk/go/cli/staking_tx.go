@@ -379,7 +379,7 @@ func GetTxStakingRedelegateCmd() *cobra.Command {
 			fmt.Sprintf(`Redelegate an amount of illiquid staking tokens from one validator to another.
 
 Example:
-$ %s tx staking redelegate %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj %s1l2rsakp388kuv9k8qzq6lrm9taddae7fpx59wm 100uakt --from mykey
+$ %s tx staking redelegate %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj %s1l2rsakp388kuv9k8qzq6lrm9taddae7fpx59wm 100uve --from mykey
 `,
 				version.AppName, bech32PrefixValAddr, bech32PrefixValAddr,
 			),
@@ -441,7 +441,7 @@ func GetTxStakingUnbondCmd() *cobra.Command {
 			fmt.Sprintf(`Unbond an amount of bonded shares from a validator.
 
 Example:
-$ %s tx staking unbond %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj 100uakt --from mykey
+$ %s tx staking unbond %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj 100uve --from mykey
 `,
 				version.AppName, bech32PrefixValAddr,
 			),
@@ -496,12 +496,12 @@ func GetTxStakingCancelUnbondingDelegationCmd() *cobra.Command {
 			fmt.Sprintf(`Cancel Unbonding Delegation and delegate back to the validator.
 
 Example:
-$ %s tx staking cancel-unbond %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj 100uakt 2 --from mykey
+$ %s tx staking cancel-unbond %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj 100uve 2 --from mykey
 `,
 				version.AppName, bech32PrefixValAddr,
 			),
 		),
-		Example: fmt.Sprintf(`$ %s tx staking cancel-unbond %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj 100uakt 2 --from mykey`,
+		Example: fmt.Sprintf(`$ %s tx staking cancel-unbond %s1gghjut3ccd8ay0zduzj64hwre2fxs9ldmqhffj 100uve 2 --from mykey`,
 			version.AppName, bech32PrefixValAddr),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {

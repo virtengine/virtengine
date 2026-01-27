@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 
-	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
 	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 	eid "github.com/virtengine/virtengine/sdk/go/node/escrow/id/v1"
 	"github.com/virtengine/virtengine/sdk/go/testutil"
@@ -619,7 +619,7 @@ func (suite *grpcTestSuite) createEscrowAccount(id v1.DeploymentID) eid.Account 
 	require.NoError(suite.t, err)
 
 	eid := id.ToEscrowAccountID()
-	defaultDeposit, err := v1beta4.DefaultParams().MinDepositFor("uakt")
+	defaultDeposit, err := v1beta4.DefaultParams().MinDepositFor("uve")
 	require.NoError(suite.t, err)
 
 	msg := &v1beta4.MsgCreateDeployment{

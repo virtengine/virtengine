@@ -125,7 +125,7 @@ func WithGas(val cltypes.GasSetting) BroadcastOption {
 }
 
 // WithGasPrices returns a BroadcastOption that sets the gas price configuration for the transaction.
-// Gas price is a string of the amount. E.g. "0.25uakt".
+// Gas price is a string of the amount. E.g. "0.25uve".
 func WithGasPrices(val string) BroadcastOption {
 	return func(options *BroadcastOptions) error {
 		options.gasPrices = new(string)

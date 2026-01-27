@@ -28,7 +28,7 @@
         "pricing": {
           "web": {
             "amount": 1000,
-            "denom": "uakt"
+            "denom": "uve"
           }
         }
       }

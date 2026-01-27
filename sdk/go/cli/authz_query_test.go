@@ -26,13 +26,13 @@ func (s *AuthzCLITestSuite) TestQueryAuthorizations() {
 		s.cctx,
 		cli.TestFlags().
 			With(grantee.String(), "send").
-			WithSpendLimit("100uakt").
+			WithSpendLimit("100uve").
 			WithSkipConfirm().
 			WithFrom(val[0].Address.String()).
 			WithBroadcastModeSync().
 			WithExpiration(fmt.Sprintf("%d", twoHours)).
 			WithSignMode("direct").
-			WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10))))...,
+			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10))))...,
 	)
 	s.Require().NoError(err)
 
@@ -101,12 +101,12 @@ func (s *AuthzCLITestSuite) TestQueryAuthorization() {
 		s.cctx,
 		grantee.String(),
 		"send",
-		fmt.Sprintf("--%s=100uakt", cflags.FlagSpendLimit),
+		fmt.Sprintf("--%s=100uve", cflags.FlagSpendLimit),
 		fmt.Sprintf("--%s=true", cflags.FlagSkipConfirmation),
 		fmt.Sprintf("--%s=%s", cflags.FlagFrom, val[0].Address),
 		fmt.Sprintf("--%s=%s", cflags.FlagBroadcastMode, cflags.BroadcastSync),
 		fmt.Sprintf("--%s=%d", cflags.FlagExpiration, twoHours),
-		fmt.Sprintf("--%s=%s", cflags.FlagFees, sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10))).String()),
+		fmt.Sprintf("--%s=%s", cflags.FlagFees, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10))).String()),
 	)
 	s.Require().NoError(err)
 

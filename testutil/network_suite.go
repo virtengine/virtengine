@@ -108,7 +108,7 @@ func (nts *NetworkTestSuite) SetupSuite() {
 		cctx,
 		cltypes.WithGas(cltypes.GasSetting{Simulate: true}),
 		cltypes.WithGasAdjustment(1.5),
-		cltypes.WithGasPrices("0.0025uakt"),
+		cltypes.WithGasPrices("0.0025uve"),
 	)
 	require.NoError(nts.T(), err)
 

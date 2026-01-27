@@ -340,20 +340,20 @@ func (m *MockEC2Client) DescribeAvailabilityZones(ctx context.Context) ([]EC2Ava
 
 // MockVPCClient is a mock implementation of VPCClient
 type MockVPCClient struct {
-	mu                  sync.Mutex
-	vpcs                map[string]*VPCInfo
-	subnets             map[string]*AWSSubnetInfo
-	securityGroups      map[string]*AWSSecurityGroupInfo
-	elasticIPs          map[string]*ElasticIPInfo
-	internetGateways    map[string]*InternetGatewayInfo
-	natGateways         map[string]*NATGatewayInfo
-	routeTables         map[string]*RouteTableInfo
-	vpcCounter          int
-	subnetCounter       int
-	sgCounter           int
-	eipCounter          int
-	failOnCreate        bool
-	failOnAction        bool
+	mu               sync.Mutex
+	vpcs             map[string]*VPCInfo
+	subnets          map[string]*AWSSubnetInfo
+	securityGroups   map[string]*AWSSecurityGroupInfo
+	elasticIPs       map[string]*ElasticIPInfo
+	internetGateways map[string]*InternetGatewayInfo
+	natGateways      map[string]*NATGatewayInfo
+	routeTables      map[string]*RouteTableInfo
+	vpcCounter       int
+	subnetCounter    int
+	sgCounter        int
+	eipCounter       int
+	failOnCreate     bool
+	failOnAction     bool
 }
 
 func NewMockVPCClient() *MockVPCClient {
@@ -877,13 +877,13 @@ func (m *MockVPCClient) DescribeAddresses(ctx context.Context, allocationIDs []s
 
 // MockEBSClient is a mock implementation of EBSClient
 type MockEBSClient struct {
-	mu             sync.Mutex
-	volumes        map[string]*EBSVolumeInfo
-	snapshots      map[string]*EBSSnapshotInfo
-	volumeCounter  int
+	mu              sync.Mutex
+	volumes         map[string]*EBSVolumeInfo
+	snapshots       map[string]*EBSSnapshotInfo
+	volumeCounter   int
 	snapshotCounter int
-	failOnCreate   bool
-	failOnAction   bool
+	failOnCreate    bool
+	failOnAction    bool
 }
 
 func NewMockEBSClient() *MockEBSClient {
@@ -1331,12 +1331,12 @@ func createTestAWSManifest() *Manifest {
 				Name:  "web-service",
 				Image: testAWSAMIID,
 				Resources: ResourceSpec{
-					CPU:    2000,                    // 2 cores
+					CPU:    2000,                   // 2 cores
 					Memory: 4 * 1024 * 1024 * 1024, // 4GB
 				},
 				Ports: []PortSpec{
-					{Port: 80, Protocol: "tcp"},
-					{Port: 443, Protocol: "tcp"},
+					{ContainerPort: 80, Protocol: "tcp"},
+					{ContainerPort: 443, Protocol: "tcp"},
 				},
 			},
 		},

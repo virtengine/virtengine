@@ -17,12 +17,12 @@ fi
 rm -rf ~/.virtengine
 
 # Build genesis file incl account for passed address
-coins="100000000000uakt"
+coins="100000000000uve"
 virtengine genesis init "$CHAINID" --chain-id "$CHAINID"
 virtengine keys add validator --keyring-backend="test"
 virtengine genesis add-account "$(virtengine keys show validator -a --keyring-backend="test")" $coins
 virtengine genesis add-account "$GENACCT" $coins
-virtengine genesis gentx validator 10000000000uakt --keyring-backend="test" --chain-id "$CHAINID" --min-self-delegation="1"
+virtengine genesis gentx validator 10000000000uve --keyring-backend="test" --chain-id "$CHAINID" --min-self-delegation="1"
 virtengine genesis collect
 
 # Set proper defaults and change ports

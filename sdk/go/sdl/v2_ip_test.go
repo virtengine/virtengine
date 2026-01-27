@@ -239,7 +239,7 @@ profiles:
     global:
       pricing:
         web:
-          denom: uakt
+          denom: uve
           amount: 10
 
 deployment:

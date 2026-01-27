@@ -45,7 +45,7 @@ func genesisFilterTokens(from GenesisState) GenesisState {
 		}
 
 		stringData := buf.String()
-		stringDataAfter := strings.ReplaceAll(stringData, `"stake"`, `"uakt"`)
+		stringDataAfter := strings.ReplaceAll(stringData, `"stake"`, `"uve"`)
 		if stringData == stringDataAfter {
 			genesisState[k] = v
 			continue

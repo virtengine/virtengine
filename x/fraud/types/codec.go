@@ -27,18 +27,24 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the interfaces for the module
 func RegisterInterfaces(registry types.InterfaceRegistry) {
-	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgSubmitFraudReport{},
-		&MsgAssignModerator{},
-		&MsgUpdateReportStatus{},
-		&MsgResolveFraudReport{},
-		&MsgRejectFraudReport{},
-		&MsgEscalateFraudReport{},
-		&MsgUpdateParams{},
-	)
-
-	// TODO: Enable when protobuf generation is complete
+	// NOTE: These are stub message types without proper protobuf generation.
+	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
+	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
+	//
+	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
+	//
+	// registry.RegisterImplementations((*sdk.Msg)(nil),
+	//     &MsgSubmitFraudReport{},
+	//     &MsgAssignModerator{},
+	//     &MsgUpdateReportStatus{},
+	//     &MsgResolveFraudReport{},
+	//     &MsgRejectFraudReport{},
+	//     &MsgEscalateFraudReport{},
+	//     &MsgUpdateParams{},
+	// )
+	//
 	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = registry // suppress unused variable warning
 	_ = msgservice.RegisterMsgServiceDesc
 }
 
@@ -55,9 +61,12 @@ var _Msg_serviceDesc = struct {
 }{
 	ServiceName: "virtengine.fraud.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
-	Methods:     []struct{ MethodName string; Handler interface{} }{},
-	Streams:     []struct{}{},
-	Metadata:    "virtengine/fraud/v1/tx.proto",
+	Methods: []struct {
+		MethodName string
+		Handler    interface{}
+	}{},
+	Streams:  []struct{}{},
+	Metadata: "virtengine/fraud/v1/tx.proto",
 }
 
 // MsgServer is the server API for Msg service

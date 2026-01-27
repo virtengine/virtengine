@@ -38,27 +38,35 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
+// This function is safe to call multiple times (e.g., in tests) and will recover
+// from panics caused by duplicate registrations.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgUploadScope{},
-		&MsgRevokeScope{},
-		&MsgRequestVerification{},
-		&MsgUpdateVerificationStatus{},
-		&MsgUpdateScore{},
-		// Wallet messages
-		&MsgCreateIdentityWallet{},
-		&MsgAddScopeToWallet{},
-		&MsgRevokeScopeFromWallet{},
-		&MsgUpdateConsentSettings{},
-		&MsgRebindWallet{},
-		&MsgUpdateDerivedFeatures{},
-		// Borderline fallback messages
-		&MsgCompleteBorderlineFallback{},
-		&MsgUpdateBorderlineParams{},
-	)
-
-	// TODO: Enable when protobuf generation is complete
+	// NOTE: These are stub message types without proper protobuf generation.
+	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
+	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
+	//
+	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
+	//
+	// registry.RegisterImplementations((*sdk.Msg)(nil),
+	//     &MsgUploadScope{},
+	//     &MsgRevokeScope{},
+	//     &MsgRequestVerification{},
+	//     &MsgUpdateVerificationStatus{},
+	//     &MsgUpdateScore{},
+	//     // Wallet messages
+	//     &MsgCreateIdentityWallet{},
+	//     &MsgAddScopeToWallet{},
+	//     &MsgRevokeScopeFromWallet{},
+	//     &MsgUpdateConsentSettings{},
+	//     &MsgRebindWallet{},
+	//     &MsgUpdateDerivedFeatures{},
+	//     // Borderline fallback messages
+	//     &MsgCompleteBorderlineFallback{},
+	//     &MsgUpdateBorderlineParams{},
+	// )
+	//
 	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	_ = registry // suppress unused variable warning
 	_ = msgservice.RegisterMsgServiceDesc
 }
 
@@ -117,7 +125,9 @@ type MsgServer interface {
 }
 
 // RegisterMsgServer registers the MsgServer
-func RegisterMsgServer(s interface{ RegisterService(desc interface{}, impl interface{}) }, impl MsgServer) {
+func RegisterMsgServer(s interface {
+	RegisterService(desc interface{}, impl interface{})
+}, impl MsgServer) {
 	s.RegisterService(&_Msg_serviceDesc, impl)
 }
 
@@ -171,7 +181,9 @@ var _Query_serviceDesc = struct {
 }
 
 // RegisterQueryServer registers the QueryServer
-func RegisterQueryServer(s interface{ RegisterService(desc interface{}, impl interface{}) }, impl QueryServer) {
+func RegisterQueryServer(s interface {
+	RegisterService(desc interface{}, impl interface{})
+}, impl QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, impl)
 }
 

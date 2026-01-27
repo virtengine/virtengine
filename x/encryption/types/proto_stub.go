@@ -61,3 +61,13 @@ func (m *EventKeyUpdated) String() string { return fmt.Sprintf("%+v", *m) }
 func (m *GenesisState) ProtoMessage()  {}
 func (m *GenesisState) Reset()         { *m = GenesisState{} }
 func (m *GenesisState) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface stubs for Params
+func (m *Params) ProtoMessage()  {}
+func (m *Params) Reset()         { *m = Params{} }
+func (m *Params) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface stubs for RecipientKeyRecord
+func (m *RecipientKeyRecord) ProtoMessage()  {}
+func (m *RecipientKeyRecord) Reset()         { *m = RecipientKeyRecord{} }
+func (m *RecipientKeyRecord) String() string { return fmt.Sprintf("%+v", *m) }

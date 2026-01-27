@@ -10,7 +10,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
-	"github.com/virtengine/virtengine/sdk/go/node/market/v1"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	deposit "github.com/virtengine/virtengine/sdk/go/node/types/deposit/v1"
 	"github.com/virtengine/virtengine/sdk/go/testutil"
@@ -279,7 +279,7 @@ func createLease(t testing.TB, suite *state.TestSuite) v1.LeaseID {
 	owner, err := sdk.AccAddressFromBech32(bid.ID.Owner)
 	require.NoError(t, err)
 
-	defaultDeposit, err := dtypes.DefaultParams().MinDepositFor("uakt")
+	defaultDeposit, err := dtypes.DefaultParams().MinDepositFor("uve")
 	require.NoError(t, err)
 
 	msg := &dtypes.MsgCreateDeployment{

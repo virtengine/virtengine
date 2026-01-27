@@ -5,14 +5,14 @@ import { faker } from "@faker-js/faker";
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import { createGroups, createManifest, createSdlJson, createSdlYml } from "@test/helpers/sdl";
 
-import { AKT_DENOM, SANDBOX_ID, USDC_IBC_DENOMS } from "../../network/config.ts";
+import { VE_DENOM, SANDBOX_ID, USDC_IBC_DENOMS } from "../../network/config.ts";
 import type { v2ServiceImageCredentials } from "../types.ts";
 import { SDL } from "./SDL.ts";
 import { SdlValidationError } from "./SdlValidationError.ts";
 
 describe("SDL", () => {
   describe("profiles placement pricing denomination", () => {
-    it.each([AKT_DENOM, USDC_IBC_DENOMS[SANDBOX_ID]])("should resolve a group with a valid \"%s\" denomination", (denom) => {
+    it.each([VE_DENOM, USDC_IBC_DENOMS[SANDBOX_ID]])("should resolve a group with a valid \"%s\" denomination", (denom) => {
       const sdl = SDL.fromString(
         createSdlYml({
           "profiles.placement.dcloud.pricing.web.denom": { $set: denom },
@@ -36,7 +36,7 @@ describe("SDL", () => {
       });
 
       expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(
-        new SdlValidationError("Invalid format: \"denom\" at \"/profiles/placement/dcloud/pricing/web\" does not match pattern \"^(uakt|ibc/.*)$\""),
+        new SdlValidationError("Invalid format: \"denom\" at \"/profiles/placement/dcloud/pricing/web\" does not match pattern \"^(uve|ibc/.*)$\""),
       );
 
       const anotherYaml = createSdlYml({
@@ -44,7 +44,7 @@ describe("SDL", () => {
       });
 
       expect(() => SDL.fromString(anotherYaml, "beta3", "sandbox")).toThrow(
-        new SdlValidationError(`Invalid denom: "ibc/1234567890" at path "/profiles/placement/dcloud/pricing/web/denom". Only "uakt" and "ibc/12C6A0C374171B595A0A9E18B83FA09D295FB1F2D8C6DAA3AC28683471752D84" are supported.`),
+        new SdlValidationError(`Invalid denom: "ibc/1234567890" at path "/profiles/placement/dcloud/pricing/web/denom". Only "uve" and "ibc/12C6A0C374171B595A0A9E18B83FA09D295FB1F2D8C6DAA3AC28683471752D84" are supported.`),
       );
     });
   });
@@ -534,7 +534,7 @@ describe("SDL", () => {
               - virt18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
           pricing:
             minesweeper:
-              denom: uakt
+              denom: uve
               amount: 10000
     deployment:
       minesweeper:
@@ -668,7 +668,7 @@ describe("SDL", () => {
               ],
             },
             price: {
-              denom: "uakt",
+              denom: "uve",
               amount: "10000",
             },
             count: 1,
@@ -768,7 +768,7 @@ describe("SDL", () => {
               - virt18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
           pricing:
             tetris:
-              denom: uakt
+              denom: uve
               amount: 10000
     deployment:
       tetris:
@@ -906,7 +906,7 @@ describe("SDL", () => {
               - virt1124123123
           pricing:
             web:
-              denom: uakt
+              denom: uve
               amount: 50
     deployment:
       web:
@@ -1013,7 +1013,7 @@ describe("SDL", () => {
               - virt18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
           pricing:
             tetris:
-              denom: uakt
+              denom: uve
               amount: 10000
     deployment:
       tetris:
@@ -1118,7 +1118,7 @@ describe("SDL", () => {
               - virt18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
           pricing:
             tetris:
-              denom: uakt
+              denom: uve
               amount: 10000
     deployment:
       tetris-main:
@@ -1246,7 +1246,7 @@ describe("SDL", () => {
               - virt18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
           pricing:
             tetris:
-              denom: uakt
+              denom: uve
               amount: 10000
     deployment:
       tetris:
@@ -1359,7 +1359,7 @@ describe("SDL", () => {
               ],
             },
             price: {
-              denom: "uakt",
+              denom: "uve",
               amount: "10000",
             },
             count: 1,
@@ -1439,7 +1439,7 @@ describe("SDL", () => {
               - virt18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
           pricing:
             tetris:
-              denom: uakt
+              denom: uve
               amount: 10000
     deployment:
       tetris:
@@ -1501,7 +1501,7 @@ describe("SDL", () => {
               id: 1,
             },
             price: {
-              denom: "uakt",
+              denom: "uve",
               amount: "10000",
             },
             count: 1,

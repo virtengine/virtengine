@@ -30,7 +30,7 @@ profiles:
    dcloud:
      pricing:
        web:
-         denom: uakt
+         denom: uve
          amount: 1000
  
 deployment:

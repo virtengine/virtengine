@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
-	storetypes "cosmossdk.io/store/types"
-	"github.com/cosmos/cosmos-sdk/codec"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	"cosmossdk.io/store"
 	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
+	storetypes "cosmossdk.io/store/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/veid/types"
 )
@@ -22,7 +22,7 @@ func setupPipelineTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 
 	db := dbm.NewMemDB()
-	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), nil)
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	if err != nil {
@@ -47,29 +47,29 @@ func setupPipelineTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 
 // createTestModelManifest creates a test model manifest
 func createTestModelManifest(t *testing.T) types.ModelManifest {
-	models := map[string]types.ModelInfo{
-		"deepface_facenet512": {
+	models := []types.ModelInfo{
+		{
 			Name:        "deepface_facenet512",
 			Version:     "1.0.0",
 			WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			Framework:   "tensorflow",
-			Purpose:     types.ModelPurposeFaceRecognition,
-			InputShape:  []int{1, 160, 160, 3},
-			OutputShape: []int{1, 512},
+			Purpose:     string(types.ModelPurposeFaceRecognition),
+			InputShape:  []int32{1, 160, 160, 3},
+			OutputShape: []int32{1, 512},
 		},
-		"craft_text_detection": {
+		{
 			Name:        "craft_text_detection",
 			Version:     "1.0.0",
 			WeightsHash: "sha256:b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
 			Framework:   "pytorch",
-			Purpose:     types.ModelPurposeTextDetection,
+			Purpose:     string(types.ModelPurposeTextDetection),
 		},
-		"unet_face_extraction": {
+		{
 			Name:        "unet_face_extraction",
 			Version:     "1.0.0",
 			WeightsHash: "sha256:c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
 			Framework:   "tensorflow",
-			Purpose:     types.ModelPurposeFaceExtraction,
+			Purpose:     string(types.ModelPurposeFaceExtraction),
 		},
 	}
 
@@ -98,7 +98,7 @@ func TestPipelineVersionRegistration(t *testing.T) {
 		t.Errorf("expected version 1.0.0, got %s", pv.Version)
 	}
 
-	if pv.Status != types.PipelineVersionStatusPending {
+	if pv.Status != string(types.PipelineVersionStatusPending) {
 		t.Errorf("expected status pending, got %s", pv.Status)
 	}
 
@@ -184,7 +184,7 @@ func TestActivePipelineVersion(t *testing.T) {
 		t.Errorf("expected active version 1.0.0, got %s", active.Version)
 	}
 
-	if active.Status != types.PipelineVersionStatusActive {
+	if active.Status != string(types.PipelineVersionStatusActive) {
 		t.Errorf("expected status active, got %s", active.Status)
 	}
 
@@ -240,7 +240,7 @@ func TestPipelineVersionSuccession(t *testing.T) {
 		t.Fatal("v1.0.0 should still exist")
 	}
 
-	if v1.Status != types.PipelineVersionStatusDeprecated {
+	if v1.Status != string(types.PipelineVersionStatusDeprecated) {
 		t.Errorf("expected v1.0.0 status deprecated, got %s", v1.Status)
 	}
 

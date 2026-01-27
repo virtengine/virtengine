@@ -8,7 +8,7 @@ option go_package = "github.com/virtengine/virtengine/sdk/go/node/take/v1";
 
 // DenomTakeRate describes take rate for specified denom.
 message DenomTakeRate {
-  // Denom is the denomination of the take rate (uakt, usdc, etc.).
+  // Denom is the denomination of the take rate (uve, usdc, etc.).
   string denom = 1 [
     (gogoproto.customname) = "Denom",
     (gogoproto.jsontag)    = "denom",

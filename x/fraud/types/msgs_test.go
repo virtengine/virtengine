@@ -27,8 +27,8 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "valid message",
 			msg: &MsgSubmitFraudReport{
-				Reporter:      "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
-				ReportedParty: "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
+				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 				Category:      FraudCategoryFakeIdentity,
 				Description:   validDescription,
 				Evidence:      validEvidence,
@@ -39,7 +39,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			name: "invalid reporter address",
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "invalid",
-				ReportedParty: "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 				Category:      FraudCategoryFakeIdentity,
 				Description:   validDescription,
 				Evidence:      validEvidence,
@@ -49,7 +49,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "invalid reported party address",
 			msg: &MsgSubmitFraudReport{
-				Reporter:      "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "invalid",
 				Category:      FraudCategoryFakeIdentity,
 				Description:   validDescription,
@@ -60,8 +60,8 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "self report",
 			msg: &MsgSubmitFraudReport{
-				Reporter:      "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
-				ReportedParty: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
+				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				Category:      FraudCategoryFakeIdentity,
 				Description:   validDescription,
 				Evidence:      validEvidence,
@@ -71,8 +71,8 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "invalid category",
 			msg: &MsgSubmitFraudReport{
-				Reporter:      "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
-				ReportedParty: "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
+				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 				Category:      FraudCategoryUnspecified,
 				Description:   validDescription,
 				Evidence:      validEvidence,
@@ -82,8 +82,8 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "description too short",
 			msg: &MsgSubmitFraudReport{
-				Reporter:      "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
-				ReportedParty: "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
+				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 				Category:      FraudCategoryFakeIdentity,
 				Description:   "short",
 				Evidence:      validEvidence,
@@ -93,8 +93,8 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "description too long",
 			msg: &MsgSubmitFraudReport{
-				Reporter:      "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
-				ReportedParty: "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
+				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 				Category:      FraudCategoryFakeIdentity,
 				Description:   strings.Repeat("a", MaxDescriptionLength+1),
 				Evidence:      validEvidence,
@@ -104,8 +104,8 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "missing evidence",
 			msg: &MsgSubmitFraudReport{
-				Reporter:      "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
-				ReportedParty: "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
+				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 				Category:      FraudCategoryFakeIdentity,
 				Description:   validDescription,
 				Evidence:      []EncryptedEvidence{},
@@ -126,7 +126,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 
 func TestMsgSubmitFraudReport_GetSigners(t *testing.T) {
 	msg := &MsgSubmitFraudReport{
-		Reporter: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+		Reporter: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 	}
 
 	signers := msg.GetSigners()
@@ -158,9 +158,9 @@ func TestMsgAssignModerator_ValidateBasic(t *testing.T) {
 		{
 			name: "valid message",
 			msg: &MsgAssignModerator{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
-				AssignTo:  "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				AssignTo:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 			},
 			wantErr: false,
 		},
@@ -169,23 +169,23 @@ func TestMsgAssignModerator_ValidateBasic(t *testing.T) {
 			msg: &MsgAssignModerator{
 				Moderator: "invalid",
 				ReportID:  "fraud-report-1",
-				AssignTo:  "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				AssignTo:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty report ID",
 			msg: &MsgAssignModerator{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "",
-				AssignTo:  "cosmos1qqqqszqgpqyqszqgpqyqszqgpqyqszqgpax7d8",
+				AssignTo:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid assign_to address",
 			msg: &MsgAssignModerator{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
 				AssignTo:  "invalid",
 			},
@@ -212,7 +212,7 @@ func TestMsgUpdateReportStatus_ValidateBasic(t *testing.T) {
 		{
 			name: "valid message",
 			msg: &MsgUpdateReportStatus{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
 				NewStatus: FraudReportStatusReviewing,
 			},
@@ -230,7 +230,7 @@ func TestMsgUpdateReportStatus_ValidateBasic(t *testing.T) {
 		{
 			name: "empty report ID",
 			msg: &MsgUpdateReportStatus{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "",
 				NewStatus: FraudReportStatusReviewing,
 			},
@@ -239,7 +239,7 @@ func TestMsgUpdateReportStatus_ValidateBasic(t *testing.T) {
 		{
 			name: "invalid status",
 			msg: &MsgUpdateReportStatus{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
 				NewStatus: FraudReportStatusUnspecified,
 			},
@@ -266,7 +266,7 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "valid message",
 			msg: &MsgResolveFraudReport{
-				Moderator:  "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:   "fraud-report-1",
 				Resolution: ResolutionTypeWarning,
 				Notes:      "User has been warned",
@@ -285,7 +285,7 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "empty report ID",
 			msg: &MsgResolveFraudReport{
-				Moderator:  "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:   "",
 				Resolution: ResolutionTypeWarning,
 			},
@@ -294,7 +294,7 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "invalid resolution",
 			msg: &MsgResolveFraudReport{
-				Moderator:  "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:   "fraud-report-1",
 				Resolution: ResolutionTypeUnspecified,
 			},
@@ -303,7 +303,7 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "notes too long",
 			msg: &MsgResolveFraudReport{
-				Moderator:  "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:   "fraud-report-1",
 				Resolution: ResolutionTypeWarning,
 				Notes:      strings.Repeat("a", MaxResolutionNotesLength+1),
@@ -331,7 +331,7 @@ func TestMsgRejectFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "valid message",
 			msg: &MsgRejectFraudReport{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
 				Notes:     "No evidence of fraud",
 			},
@@ -348,7 +348,7 @@ func TestMsgRejectFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "empty report ID",
 			msg: &MsgRejectFraudReport{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "",
 			},
 			wantErr: true,
@@ -356,7 +356,7 @@ func TestMsgRejectFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "notes too long",
 			msg: &MsgRejectFraudReport{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
 				Notes:     strings.Repeat("a", MaxResolutionNotesLength+1),
 			},
@@ -383,7 +383,7 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "valid message",
 			msg: &MsgEscalateFraudReport{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
 				Reason:    "Requires admin review",
 			},
@@ -401,7 +401,7 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "empty report ID",
 			msg: &MsgEscalateFraudReport{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "",
 				Reason:    "Requires admin review",
 			},
@@ -410,7 +410,7 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 		{
 			name: "empty reason",
 			msg: &MsgEscalateFraudReport{
-				Moderator: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportID:  "fraud-report-1",
 				Reason:    "",
 			},
@@ -437,7 +437,7 @@ func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
 		{
 			name: "valid message",
 			msg: &MsgUpdateParams{
-				Authority: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Authority: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				Params:    DefaultParams(),
 			},
 			wantErr: false,
@@ -453,7 +453,7 @@ func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
 		{
 			name: "invalid params",
 			msg: &MsgUpdateParams{
-				Authority: "cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgp5xf2c9",
+				Authority: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				Params: Params{
 					MinDescriptionLength: 5, // Invalid
 				},

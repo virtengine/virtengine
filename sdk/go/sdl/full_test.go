@@ -53,7 +53,7 @@ profiles:
       pricing:
         web:
           amount: 1
-          denom: uakt
+          denom: uve
 deployment:
   web:
     westcoast:

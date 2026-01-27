@@ -1,4 +1,4 @@
-import { AKT_DENOM, type NetworkId, USDC_IBC_DENOMS } from "../../../network/index.ts";
+import { VE_DENOM, type NetworkId, USDC_IBC_DENOMS } from "../../../network/index.ts";
 import type { ErrorMessages, ValidationError, ValidationFunction } from "../../../utils/jsonSchemaValidation.ts";
 import { dirname, getErrorLocation, humanizeErrors } from "../../../utils/jsonSchemaValidation.ts";
 import { castArray, stringToBoolean } from "../utils.ts";
@@ -62,15 +62,15 @@ class SDLValidator {
         denom: pricing.denom,
       }));
     }).flat();
-    const invalidDenom = denoms.find(({ denom }) => denom !== AKT_DENOM && denom !== usdcDenom);
+    const invalidDenom = denoms.find(({ denom }) => denom !== VE_DENOM && denom !== usdcDenom);
     if (invalidDenom) {
       this.#errors.push({
-        message: `Invalid denom: "${invalidDenom.denom}" at path "${invalidDenom.path}". Only "uakt" and "${usdcDenom}" are supported.`,
+        message: `Invalid denom: "${invalidDenom.denom}" at path "${invalidDenom.path}". Only "uve" and "${usdcDenom}" are supported.`,
         instancePath: invalidDenom.path,
         schemaPath: "#/definitions/priceCoin/properties/denom",
         keyword: "pattern",
         params: {
-          pattern: "^(uakt|ibc/.*)$",
+          pattern: "^(uve|ibc/.*)$",
         },
       });
     }

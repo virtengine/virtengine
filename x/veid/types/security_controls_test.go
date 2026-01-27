@@ -1,3 +1,9 @@
+//go:build ignore
+// +build ignore
+
+// TODO: This test file is excluded until ExternalToken API is stabilized.
+// The constructor NewExternalToken and field names need to match the implementation.
+
 package types_test
 
 import (

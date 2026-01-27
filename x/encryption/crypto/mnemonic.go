@@ -122,8 +122,15 @@ func GenerateMnemonic(size MnemonicSize) (string, error) {
 }
 
 // ValidateMnemonic validates that a mnemonic is a valid BIP-39 mnemonic
+// including both word validity and checksum verification
 func ValidateMnemonic(mnemonic string) bool {
-	return bip39.IsMnemonicValid(mnemonic)
+	// First do quick validation (word count and word list)
+	if !bip39.IsMnemonicValid(mnemonic) {
+		return false
+	}
+	// MnemonicToByteArray validates the checksum
+	_, err := bip39.MnemonicToByteArray(mnemonic)
+	return err == nil
 }
 
 // MnemonicWordCount returns the number of words in a mnemonic
@@ -385,10 +392,32 @@ func MnemonicToEntropy(mnemonic string) ([]byte, error) {
 		return nil, fmt.Errorf(errMsgInvalidMnemonic)
 	}
 
-	entropy, err := bip39.MnemonicToByteArray(mnemonic)
+	// Get full byte array including checksum
+	fullBytes, err := bip39.MnemonicToByteArray(mnemonic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract entropy: %w", err)
 	}
+
+	// Strip the checksum byte(s) to get pure entropy
+	// 12 words = 132 bits (128 entropy + 4 checksum) = 17 bytes, need first 16
+	// 24 words = 264 bits (256 entropy + 8 checksum) = 33 bytes, need first 32
+	wordCount := MnemonicWordCount(mnemonic)
+	var entropyLen int
+	switch wordCount {
+	case 12:
+		entropyLen = 16 // 128 bits
+	case 24:
+		entropyLen = 32 // 256 bits
+	default:
+		return nil, fmt.Errorf("unsupported mnemonic word count: %d", wordCount)
+	}
+
+	if len(fullBytes) < entropyLen {
+		return nil, fmt.Errorf("insufficient entropy bytes: got %d, need %d", len(fullBytes), entropyLen)
+	}
+
+	entropy := make([]byte, entropyLen)
+	copy(entropy, fullBytes[:entropyLen])
 
 	return entropy, nil
 }
@@ -444,7 +473,7 @@ func DeriveMultipleAccounts(mnemonic string, startIndex, count uint32) ([]*Deriv
 
 // ChecksumMnemonic verifies that a mnemonic has a valid checksum
 func ChecksumMnemonic(mnemonic string) bool {
-	return bip39.IsMnemonicValid(mnemonic)
+	return ValidateMnemonic(mnemonic)
 }
 
 // NormalizeMnemonic normalizes a mnemonic by removing extra whitespace

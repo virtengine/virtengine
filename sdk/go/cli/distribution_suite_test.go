@@ -501,7 +501,7 @@ func (s *DistributionCLITestSuite) TestNewWithdrawRewardsCmd() {
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))),
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))),
 			true,
 			nil,
 			[]string{},
@@ -515,7 +515,7 @@ func (s *DistributionCLITestSuite) TestNewWithdrawRewardsCmd() {
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))),
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))),
 			false,
 			&sdk.TxResponse{},
 			[]string{
@@ -532,7 +532,7 @@ func (s *DistributionCLITestSuite) TestNewWithdrawRewardsCmd() {
 				WithSkipConfirm().
 				WithBroadcastModeSync().
 				WithCommission().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))),
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))),
 			false,
 			&sdk.TxResponse{},
 			[]string{
@@ -571,7 +571,7 @@ func (s *DistributionCLITestSuite) TestNewSetWithdrawAddrCmd() {
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))),
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))),
 			true, nil,
 		},
 		{
@@ -581,7 +581,7 @@ func (s *DistributionCLITestSuite) TestNewSetWithdrawAddrCmd() {
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))),
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))),
 			false, &sdk.TxResponse{},
 		},
 	}
@@ -615,17 +615,17 @@ func (s *DistributionCLITestSuite) TestNewFundCommunityPoolCmd() {
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))),
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))),
 			true, nil,
 		},
 		{
 			"valid transaction",
 			cli.TestFlags().
-				With(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(5431))).String()).
+				With(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(5431))).String()).
 				WithFrom(val[0].Address.String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
-				WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))),
+				WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))),
 			false, &sdk.TxResponse{},
 		},
 	}

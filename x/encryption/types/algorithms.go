@@ -13,7 +13,32 @@ const (
 	// AlgorithmAgeX25519 is an alternative using the age encryption format
 	// Reserved for future implementation
 	AlgorithmAgeX25519 = "AGE-X25519"
+
+	// Convenience aliases for test code compatibility
+	// AlgorithmIDNaClBox is an alias for the NaCl box algorithm
+	AlgorithmIDNaClBox = AlgorithmX25519XSalsa20Poly1305
+
+	// AlgorithmIDMLKEM768 is a placeholder for future post-quantum algorithm
+	AlgorithmIDMLKEM768 = "ML-KEM-768"
+
+	// AlgorithmIDHybridNaClMLKEM is a placeholder for future hybrid algorithm
+	AlgorithmIDHybridNaClMLKEM = "HYBRID-NACL-MLKEM"
 )
+
+// NIST security levels for algorithm categorization
+const (
+	// NISTSecurityLevel128 corresponds to 128-bit classical security
+	NISTSecurityLevel128 = 128
+
+	// NISTSecurityLevel192 corresponds to 192-bit classical security
+	NISTSecurityLevel192 = 192
+
+	// NISTSecurityLevel256 corresponds to 256-bit classical security
+	NISTSecurityLevel256 = 256
+)
+
+// AlgorithmSpecVersion is the current version of the algorithm spec format
+const AlgorithmSpecVersion uint32 = 1
 
 // Algorithm version for future upgrades
 const (

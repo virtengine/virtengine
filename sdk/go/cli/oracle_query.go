@@ -68,7 +68,7 @@ func GetOraclePricesCmd() *cobra.Command {
 
 	cflags.AddQueryFlagsToCmd(cmd)
 	cflags.AddPaginationFlagsToCmd(cmd, "prices")
-	cmd.Flags().String(cflags.FlagAssetDenom, "", "Filter by asset denomination (e.g., uakt)")
+	cmd.Flags().String(cflags.FlagAssetDenom, "", "Filter by asset denomination (e.g., uve)")
 	cmd.Flags().String(cflags.FlagBaseDenom, "", "Filter by base denomination (e.g., usd)")
 
 	return cmd

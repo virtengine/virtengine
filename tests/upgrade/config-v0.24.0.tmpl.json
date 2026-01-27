@@ -6,7 +6,7 @@
                 "address": "{{ (ds "account_address") }}",
                 "pubkey": {{ (ds "account_pubkey") }},
                 "coins": [
-                    "2000000000000000uakt"
+                    "2000000000000000uve"
                 ]
             }
         ]
@@ -26,7 +26,7 @@
                     {
                         "address": "{{ (ds "account_address") }}",
                         "coins": [
-                            "1950000000000000uakt"
+                            "1950000000000000uve"
                         ]
                     }
                 ]

@@ -4,7 +4,7 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DataId {
-    /// denom is the asset denomination (e.g., "uakt")
+    /// denom is the asset denomination (e.g., "uve")
     #[prost(string, tag="1")]
     pub denom: ::prost::alloc::string::String,
     /// base_denom is the base denomination for the price pair (e.g., "usd")

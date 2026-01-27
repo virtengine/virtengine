@@ -3,7 +3,7 @@ import { merge } from "lodash";
 
 import type { DeepPartial } from "../../../encoding/typeEncodingHelpers.ts";
 import type { NetworkId } from "../../../network/index.ts";
-import { AKT_DENOM, USDC_IBC_DENOMS } from "../../../network/index.ts";
+import { VE_DENOM, USDC_IBC_DENOMS } from "../../../network/index.ts";
 import { type SDLInput, validateSDL } from "./validateSDL.ts";
 
 describe(validateSDL.name, () => {
@@ -160,7 +160,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -252,7 +252,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                other: { amount: "1000", denom: AKT_DENOM },
+                other: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -333,7 +333,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -379,7 +379,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -427,7 +427,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -475,7 +475,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -503,7 +503,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -537,7 +537,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -571,7 +571,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -605,7 +605,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -631,7 +631,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -747,8 +747,8 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
-                api: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
+                api: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -872,8 +872,8 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
-                api: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
+                api: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -924,8 +924,8 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
-                api: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
+                api: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1378,7 +1378,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1421,7 +1421,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1522,7 +1522,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1560,7 +1560,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1598,7 +1598,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1637,7 +1637,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1676,7 +1676,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1715,7 +1715,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1757,7 +1757,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1797,7 +1797,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1830,7 +1830,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1870,7 +1870,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1911,7 +1911,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1947,7 +1947,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -1982,7 +1982,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -2022,7 +2022,7 @@ describe(validateSDL.name, () => {
         message: expect.stringContaining("\"denom\""),
       }));
       expect(errors).toContainEqual(expect.objectContaining({
-        message: expect.stringContaining("pattern \"^(uakt|ibc/.*)$\""),
+        message: expect.stringContaining("pattern \"^(uve|ibc/.*)$\""),
       }));
     });
 
@@ -2087,7 +2087,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { denom: AKT_DENOM },
+                web: { denom: VE_DENOM },
               },
             },
           },
@@ -2150,7 +2150,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -2193,7 +2193,7 @@ describe(validateSDL.name, () => {
           placement: {
             dcloud: {
               pricing: {
-                web: { amount: "1000", denom: AKT_DENOM },
+                web: { amount: "1000", denom: VE_DENOM },
               },
             },
           },
@@ -2245,7 +2245,7 @@ describe(validateSDL.name, () => {
             pricing: {
               web: {
                 amount: "1000",
-                denom: AKT_DENOM,
+                denom: VE_DENOM,
               },
             },
           },

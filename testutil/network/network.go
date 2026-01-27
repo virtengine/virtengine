@@ -622,7 +622,7 @@ func DefaultConfig(factory TestFixtureFactory, opts ...ConfigOption) Config {
 
 	fixture.GenesisState = genesisState
 
-	const coinDenom = "uakt"
+	const coinDenom = "uve"
 	return Config{
 		Codec:             fixture.EncodingConfig.Codec,
 		TxConfig:          fixture.EncodingConfig.TxConfig,

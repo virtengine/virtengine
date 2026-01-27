@@ -4,22 +4,25 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/virtengine/virtengine/x/veid/keeper"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
-// Test address constants for scoring model tests
-const (
-	testScoringModelAddress1 = "virtengine1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwx"
-	testScoringModelAddress2 = "virtengine1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5z5tpwy"
+// Test address constants for scoring model tests - valid bech32 addresses
+var (
+	testScoringModelAddress1 = sdk.AccAddress([]byte("scoring_addr1_______")).String()
+	testScoringModelAddress2 = sdk.AccAddress([]byte("scoring_addr2_______")).String()
 )
 
 // ============================================================================
@@ -58,9 +61,18 @@ func (s *ScoringModelKeeperTestSuite) SetupTest() {
 }
 
 func (s *ScoringModelKeeperTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey) sdk.Context {
-	db := runtime.NewKVStoreService(storeKey)
-	_ = db
-	ctx := sdk.Context{}.WithBlockTime(time.Now()).WithBlockHeight(100)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	if err != nil {
+		s.T().Fatalf("failed to load latest version: %v", err)
+	}
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
 	return ctx
 }
 
@@ -69,7 +81,7 @@ func (s *ScoringModelKeeperTestSuite) createContextWithStore(storeKey *storetype
 // ============================================================================
 
 func (s *ScoringModelKeeperTestSuite) TestSetAndGetScoringModelVersion() {
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Version = "1.0.0"
 	model.Description = "Test model"
 
@@ -108,7 +120,7 @@ func (s *ScoringModelKeeperTestSuite) TestSetScoringModelVersion_InvalidWeights(
 func (s *ScoringModelKeeperTestSuite) TestListScoringModelVersions() {
 	// Store multiple versions
 	for _, version := range []string{"1.0.0", "1.1.0", "2.0.0"} {
-		model := types.DefaultScoringModelVersion()
+		model := types.DefaultScoringModel()
 		model.Version = version
 		err := s.keeper.SetScoringModelVersion(s.ctx, model)
 		s.Require().NoError(err)
@@ -134,7 +146,7 @@ func (s *ScoringModelKeeperTestSuite) TestListScoringModelVersions() {
 
 func (s *ScoringModelKeeperTestSuite) TestSetAndGetActiveScoringModel() {
 	// Store a model first
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Version = "1.0.0"
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
@@ -163,7 +175,7 @@ func (s *ScoringModelKeeperTestSuite) TestGetActiveScoringModel_Default() {
 
 func (s *ScoringModelKeeperTestSuite) TestGetActiveScoringModelVersion() {
 	// Store and activate a model
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Version = "2.0.0"
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
@@ -322,17 +334,17 @@ func (s *ScoringModelKeeperTestSuite) TestStoreAndGetEvidenceSummary() {
 		ModelVersion: "1.0.0",
 		Contributions: []types.FeatureContribution{
 			{
-				FeatureName:    types.FeatureNameFaceSimilarity,
-				RawScore:       8500,
-				Weight:         3000,
-				WeightedScore:  2550,
+				FeatureName:     types.FeatureNameFaceSimilarity,
+				RawScore:        8500,
+				Weight:          3000,
+				WeightedScore:   2550,
 				PassedThreshold: true,
 			},
 			{
-				FeatureName:    types.FeatureNameOCRConfidence,
-				RawScore:       7800,
-				Weight:         2500,
-				WeightedScore:  1950,
+				FeatureName:     types.FeatureNameOCRConfidence,
+				RawScore:        7800,
+				Weight:          2500,
+				WeightedScore:   1950,
 				PassedThreshold: true,
 			},
 		},
@@ -375,7 +387,7 @@ func (s *ScoringModelKeeperTestSuite) TestGetEvidenceSummary_NotFound() {
 
 func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel() {
 	// Store a model
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Version = "1.0.0"
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
@@ -419,7 +431,7 @@ func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel() {
 
 func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel_UseActive() {
 	// Store and activate a model
-	model := types.DefaultScoringModelVersion()
+	model := types.DefaultScoringModel()
 	model.Version = "2.0.0"
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
@@ -572,10 +584,10 @@ func (s *ScoringModelKeeperTestSuite) TestFullScoringFlow_VersionTransition() {
 	firstScore := summary1.FinalScore
 
 	// Upgrade to v2
-	modelV2 := types.DefaultScoringModelVersion()
+	modelV2 := types.DefaultScoringModel()
 	modelV2.Version = "2.0.0"
 	modelV2.Weights.FaceSimilarityWeight = 4000 // Increase face weight
-	modelV2.Weights.CaptureQualityWeight = 0     // Remove capture quality weight
+	modelV2.Weights.CaptureQualityWeight = 0    // Remove capture quality weight
 	// Rebalance weights to sum to 10000
 	modelV2.Weights.OCRConfidenceWeight = 2000
 	modelV2.Weights.DocIntegrityWeight = 2000

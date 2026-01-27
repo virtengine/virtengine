@@ -115,8 +115,8 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // paramsStore is the stored format of params
 type paramsStore struct {
-	MaxRolesPerAccount uint32 `json:"max_roles_per_account"`
-	AllowSelfRevoke    bool   `json:"allow_self_revoke"`
+	MaxRolesPerAccount uint32 `protobuf:"varint,1,opt,name=max_roles_per_account,json=maxRolesPerAccount,proto3" json:"max_roles_per_account"`
+	AllowSelfRevoke    bool   `protobuf:"varint,2,opt,name=allow_self_revoke,json=allowSelfRevoke,proto3" json:"allow_self_revoke"`
 }
 
 // AssignRole assigns a role to an account
@@ -287,8 +287,8 @@ func (k Keeper) GetRoleMembers(ctx sdk.Context, role types.Role) []types.RoleAss
 
 // roleAssignmentStore is the stored format of a role assignment
 type roleAssignmentStore struct {
-	AssignedBy string `json:"assigned_by"`
-	AssignedAt int64  `json:"assigned_at"`
+	AssignedBy string `protobuf:"bytes,1,opt,name=assigned_by,json=assignedBy,proto3" json:"assigned_by"`
+	AssignedAt int64  `protobuf:"varint,2,opt,name=assigned_at,json=assignedAt,proto3" json:"assigned_at"`
 }
 
 // SetAccountState sets the state of an account
@@ -320,11 +320,11 @@ func (k Keeper) SetAccountState(ctx sdk.Context, address sdk.AccAddress, state t
 	}
 
 	record := accountStateStore{
-		State:         uint8(state),
+		State:         uint32(state),
 		Reason:        reason,
 		ModifiedBy:    modifiedBy.String(),
 		ModifiedAt:    ctx.BlockTime().Unix(),
-		PreviousState: uint8(previousState),
+		PreviousState: uint32(previousState),
 	}
 
 	bz, err := k.cdc.Marshal(&record)
@@ -383,11 +383,11 @@ func (k Keeper) IsAccountOperational(ctx sdk.Context, address sdk.AccAddress) bo
 
 // accountStateStore is the stored format of an account state
 type accountStateStore struct {
-	State         uint8  `json:"state"`
-	Reason        string `json:"reason"`
-	ModifiedBy    string `json:"modified_by"`
-	ModifiedAt    int64  `json:"modified_at"`
-	PreviousState uint8  `json:"previous_state"`
+	State         uint32 `protobuf:"varint,1,opt,name=state,proto3" json:"state"`
+	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason"`
+	ModifiedBy    string `protobuf:"bytes,3,opt,name=modified_by,json=modifiedBy,proto3" json:"modified_by"`
+	ModifiedAt    int64  `protobuf:"varint,4,opt,name=modified_at,json=modifiedAt,proto3" json:"modified_at"`
+	PreviousState uint32 `protobuf:"varint,5,opt,name=previous_state,json=previousState,proto3" json:"previous_state"`
 }
 
 // IsGenesisAccount checks if an account is a genesis account

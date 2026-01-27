@@ -387,6 +387,11 @@ func isValidSemver(version string) bool {
 		return false
 	}
 
+	// If there's a pre-release part, it must not be empty
+	if len(parts) == 2 && parts[1] == "" {
+		return false
+	}
+
 	versionNumbers := parts[0]
 	numParts := strings.Split(versionNumbers, ".")
 	if len(numParts) != 3 {

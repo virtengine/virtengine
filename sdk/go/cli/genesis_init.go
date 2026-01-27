@@ -193,7 +193,7 @@ func GetGenesisInitCmd(mbm module.BasicManager, defaultNodeHome string) *cobra.C
 	cmd.Flags().BoolP(cflags.FlagOverwrite, "o", false, "overwrite the genesis.json file")
 	cmd.Flags().Bool(cflags.FlagRecover, false, "provide seed phrase to recover existing key instead of creating")
 	cmd.Flags().String(cflags.FlagChainID, "", "genesis file chain-id, if left blank will be randomly created")
-	cmd.Flags().String(cflags.FlagDefaultBondDenom, "uakt", "genesis file default denomination, if left blank default value is 'uakt'")
+	cmd.Flags().String(cflags.FlagDefaultBondDenom, "uve", "genesis file default denomination, if left blank default value is 'uve'")
 	cmd.Flags().Int64(cflags.FlagInitHeight, 1, "specify the initial block height at genesis")
 	cmd.Flags().String(cflags.FlagConsensusKeyAlgo, ed25519.KeyType, "algorithm to use for the consensus key")
 

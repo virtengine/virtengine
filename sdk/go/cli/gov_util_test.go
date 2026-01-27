@@ -155,13 +155,13 @@ func TestParseSubmitProposal(t *testing.T) {
 			"@type": "/cosmos.bank.v1beta1.MsgSend",
 			"from_address": "%s",
 			"to_address": "%s",
-			"amount":[{"denom": "uakt","amount": "10"}]
+			"amount":[{"denom": "uve","amount": "10"}]
 		},
 		{
 			"@type": "/cosmos.staking.v1beta1.MsgDelegate",
 			"delegator_address": "%s",
 			"validator_address": "%s",
-			"amount":{"denom": "uakt","amount": "10"}
+			"amount":{"denom": "uve","amount": "10"}
 		},
 		{
 			"@type": "/cosmos.gov.v1.MsgExecLegacyContent",
@@ -201,12 +201,12 @@ func TestParseSubmitProposal(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, addr.String(), msg1.FromAddress)
 	require.Equal(t, addr.String(), msg1.ToAddress)
-	require.Equal(t, sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10))), msg1.Amount)
+	require.Equal(t, sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10))), msg1.Amount)
 	msg2, ok := msgs[1].(*stakingtypes.MsgDelegate)
 	require.True(t, ok)
 	require.Equal(t, addr.String(), msg2.DelegatorAddress)
 	require.Equal(t, addr.String(), msg2.ValidatorAddress)
-	require.Equal(t, sdk.NewCoin("uakt", sdkmath.NewInt(10)), msg2.Amount)
+	require.Equal(t, sdk.NewCoin("uve", sdkmath.NewInt(10)), msg2.Amount)
 	msg3, ok := msgs[2].(*v1.MsgExecLegacyContent)
 	require.True(t, ok)
 	require.Equal(t, addr.String(), msg3.Authority)

@@ -25,15 +25,15 @@ const (
 
 // MockNovaClient is a mock implementation of NovaClient
 type MockNovaClient struct {
-	mu             sync.Mutex
-	servers        map[string]*ServerInfo
-	flavors        []FlavorInfo
-	images         []ImageInfo
-	attachedVols   map[string][]string // serverID -> volumeIDs
-	failOnCreate   bool
-	failOnAction   bool
-	serverCounter  int
-	quotas         *QuotaInfo
+	mu            sync.Mutex
+	servers       map[string]*ServerInfo
+	flavors       []FlavorInfo
+	images        []ImageInfo
+	attachedVols  map[string][]string // serverID -> volumeIDs
+	failOnCreate  bool
+	failOnAction  bool
+	serverCounter int
+	quotas        *QuotaInfo
 }
 
 func NewMockNovaClient() *MockNovaClient {
@@ -352,20 +352,20 @@ func (m *MockNovaClient) GetServerByID(serverID string) *ServerInfo {
 
 // MockNeutronClient is a mock implementation of NeutronClient
 type MockNeutronClient struct {
-	mu              sync.Mutex
-	networks        map[string]*NetworkInfo
-	subnets         map[string]*SubnetInfo
-	routers         map[string]*RouterInfo
-	floatingIPs     map[string]*FloatingIPInfo
-	securityGroups  map[string]*SecurityGroupInfo
-	ports           map[string]*PortInfo
-	failOnCreate    bool
-	networkCounter  int
-	subnetCounter   int
-	routerCounter   int
-	fipCounter      int
-	sgCounter       int
-	portCounter     int
+	mu             sync.Mutex
+	networks       map[string]*NetworkInfo
+	subnets        map[string]*SubnetInfo
+	routers        map[string]*RouterInfo
+	floatingIPs    map[string]*FloatingIPInfo
+	securityGroups map[string]*SecurityGroupInfo
+	ports          map[string]*PortInfo
+	failOnCreate   bool
+	networkCounter int
+	subnetCounter  int
+	routerCounter  int
+	fipCounter     int
+	sgCounter      int
+	portCounter    int
 }
 
 func NewMockNeutronClient() *MockNeutronClient {
@@ -675,7 +675,6 @@ func (m *MockNeutronClient) CreatePort(ctx context.Context, spec *PortCreateSpec
 		FixedIPs:       spec.FixedIPs,
 		SecurityGroups: spec.SecurityGroups,
 		Status:         "ACTIVE",
-		AdminStateUp:   spec.AdminStateUp,
 	}
 
 	m.ports[portID] = port
@@ -899,13 +898,13 @@ func TestOpenStackAdapterDeployVM(t *testing.T) {
 	statusChan := make(chan VMStatusUpdate, 100)
 
 	adapter := NewOpenStackAdapter(OpenStackAdapterConfig{
-		Nova:             nova,
-		Neutron:          neutron,
-		Cinder:           cinder,
-		ProviderID:       "provider-123",
-		ResourcePrefix:   "test",
+		Nova:              nova,
+		Neutron:           neutron,
+		Cinder:            cinder,
+		ProviderID:        "provider-123",
+		ResourcePrefix:    "test",
 		ExternalNetworkID: "ext-net-1",
-		StatusUpdateChan: statusChan,
+		StatusUpdateChan:  statusChan,
 	})
 
 	manifest := &Manifest{

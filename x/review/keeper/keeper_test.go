@@ -181,7 +181,7 @@ func createTestReview(t *testing.T, reviewerAddr, providerAddr, orderID string, 
 	}
 
 	review, err := types.NewReview(
-		types.ReviewID{ProviderAddress: providerAddr, Sequence: 0}, // Sequence will be set by keeper
+		types.ReviewID{ProviderAddress: providerAddr, Sequence: 1}, // Sequence must be positive, keeper may reassign
 		reviewerAddr,
 		providerAddr,
 		orderRef,
@@ -692,9 +692,10 @@ func TestGetReviewByOrder(t *testing.T) {
 func TestDeleteReview(t *testing.T) {
 	k, ctx, mockMarket, mockRoles := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
-	moderatorAddr := "cosmos1moderator12345678901234567890123456"
+	// Generate valid bech32 addresses for testing
+	reviewerAddr := sdk.AccAddress([]byte("reviewer_address____")).String()
+	providerAddr := sdk.AccAddress([]byte("provider_address____")).String()
+	moderatorAddr := sdk.AccAddress([]byte("moderator_address___")).String()
 	orderID := "order-delete"
 
 	mockMarket.AddCompletedOrder(orderID, reviewerAddr, providerAddr)
@@ -1072,6 +1073,10 @@ func TestTopProvidersByRating(t *testing.T) {
 
 // Test: Message validation
 func TestMsgSubmitReviewValidation(t *testing.T) {
+	// Generate valid bech32 addresses for testing
+	validReviewer := sdk.AccAddress([]byte("reviewer_address____")).String()
+	validProvider := sdk.AccAddress([]byte("provider_address____")).String()
+
 	testCases := []struct {
 		name      string
 		msg       *types.MsgSubmitReview
@@ -1080,9 +1085,9 @@ func TestMsgSubmitReviewValidation(t *testing.T) {
 		{
 			name: "valid message",
 			msg: types.NewMsgSubmitReview(
-				"cosmos1reviewer123456789012345678901234567890",
+				validReviewer,
 				"order-123",
-				"cosmos1provider123456789012345678901234567890",
+				validProvider,
 				5,
 				"This is a valid review with enough characters.",
 			),
@@ -1093,7 +1098,7 @@ func TestMsgSubmitReviewValidation(t *testing.T) {
 			msg: types.NewMsgSubmitReview(
 				"",
 				"order-123",
-				"cosmos1provider123456789012345678901234567890",
+				validProvider,
 				5,
 				"This is a valid review with enough characters.",
 			),
@@ -1102,9 +1107,9 @@ func TestMsgSubmitReviewValidation(t *testing.T) {
 		{
 			name: "invalid rating",
 			msg: types.NewMsgSubmitReview(
-				"cosmos1reviewer123456789012345678901234567890",
+				validReviewer,
 				"order-123",
-				"cosmos1provider123456789012345678901234567890",
+				validProvider,
 				0,
 				"This is a valid review with enough characters.",
 			),
@@ -1113,9 +1118,9 @@ func TestMsgSubmitReviewValidation(t *testing.T) {
 		{
 			name: "text too short",
 			msg: types.NewMsgSubmitReview(
-				"cosmos1reviewer123456789012345678901234567890",
+				validReviewer,
 				"order-123",
-				"cosmos1provider123456789012345678901234567890",
+				validProvider,
 				5,
 				"Short",
 			),

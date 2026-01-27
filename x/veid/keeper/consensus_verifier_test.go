@@ -8,10 +8,31 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
+	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/x/veid/types"
 )
+
+// createTestContext creates a minimal SDK context for testing
+func createTestContext(t *testing.T) sdk.Context {
+	t.Helper()
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	storeKey := storetypes.NewKVStoreKey("test")
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	require.NoError(t, err)
+	return sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
+}
 
 // ============================================================================
 // Mock ML Scorer for Testing
@@ -402,8 +423,9 @@ func TestValidateModelVersion_Match(t *testing.T) {
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
+	ctx := createTestContext(t)
 
-	err := cv.ValidateModelVersion(nil, "v1.0.0")
+	err := cv.ValidateModelVersion(ctx, "v1.0.0")
 	require.NoError(t, err, "should pass when versions match")
 }
 
@@ -414,8 +436,9 @@ func TestValidateModelVersion_Mismatch(t *testing.T) {
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
+	ctx := createTestContext(t)
 
-	err := cv.ValidateModelVersion(nil, "v2.0.0")
+	err := cv.ValidateModelVersion(ctx, "v2.0.0")
 	require.Error(t, err, "should fail when versions don't match")
 	require.Contains(t, err.Error(), "model version mismatch")
 }
@@ -427,8 +450,9 @@ func TestValidateModelVersion_UnhealthyScorer(t *testing.T) {
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
+	ctx := createTestContext(t)
 
-	err := cv.ValidateModelVersion(nil, "v1.0.0")
+	err := cv.ValidateModelVersion(ctx, "v1.0.0")
 	require.Error(t, err, "should fail when scorer is not healthy")
 	require.Contains(t, err.Error(), "not healthy")
 }

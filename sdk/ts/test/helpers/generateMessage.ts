@@ -108,7 +108,7 @@ function guessFakeValue(field: Field): unknown {
   if (lowerName.includes("username")) return faker.internet.userName();
   if (lowerName.includes("password")) return faker.internet.password();
   if (lowerName.includes("avatar")) return faker.image.avatar();
-  if (lowerName.includes("denom")) return "uakt";
+  if (lowerName.includes("denom")) return "uve";
   if (lowerName.includes("amount") || lowerName.includes("commission") || lowerName.includes("price") || lowerName.includes("rate")) {
     return faker.number.float({ min: 0, max: 1000000 }).toString();
   }

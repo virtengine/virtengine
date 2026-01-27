@@ -46,7 +46,8 @@ modules:
         - RPC_REQUEST_STANDARD_NAME
 deps:
   - buf.build/cosmos/cosmos-sdk
-  - buf.build/cosmos/cosmos-proto  
+  - buf.build/cosmos/cosmos-proto
+  - buf.build/cosmos/gogo-proto
   - buf.build/cosmos/ibc
   - buf.build/cosmos/ics23
   - buf.build/googleapis/googleapis

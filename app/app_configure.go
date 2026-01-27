@@ -25,12 +25,38 @@ import (
 	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
 	"github.com/virtengine/virtengine/x/audit"
+	"github.com/virtengine/virtengine/x/benchmark"
+	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
 	"github.com/virtengine/virtengine/x/cert"
+	"github.com/virtengine/virtengine/x/config"
+	configtypes "github.com/virtengine/virtengine/x/config/types"
+	"github.com/virtengine/virtengine/x/delegation"
+	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
 	"github.com/virtengine/virtengine/x/deployment"
+	"github.com/virtengine/virtengine/x/enclave"
+	enclavetypes "github.com/virtengine/virtengine/x/enclave/types"
+	"github.com/virtengine/virtengine/x/encryption"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/escrow"
+	"github.com/virtengine/virtengine/x/fraud"
+	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
+	"github.com/virtengine/virtengine/x/hpc"
+	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"github.com/virtengine/virtengine/x/market"
+	"github.com/virtengine/virtengine/x/mfa"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	"github.com/virtengine/virtengine/x/provider"
+	"github.com/virtengine/virtengine/x/review"
+	reviewtypes "github.com/virtengine/virtengine/x/review/types"
+	"github.com/virtengine/virtengine/x/roles"
+	rolestypes "github.com/virtengine/virtengine/x/roles/types"
+	"github.com/virtengine/virtengine/x/settlement"
+	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
+	virtstaking "github.com/virtengine/virtengine/x/staking"
+	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
 	"github.com/virtengine/virtengine/x/take"
+	"github.com/virtengine/virtengine/x/veid"
+	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
 func virtengineModuleBasics() []module.AppModuleBasic {
@@ -42,6 +68,20 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		provider.AppModuleBasic{},
 		audit.AppModuleBasic{},
 		cert.AppModuleBasic{},
+		// VirtEngine patent modules (AU2024203136A1)
+		encryption.AppModuleBasic{},
+		roles.AppModuleBasic{},
+		veid.AppModuleBasic{},
+		mfa.AppModuleBasic{},
+		config.AppModuleBasic{},
+		hpc.AppModuleBasic{},
+		benchmark.AppModuleBasic{},
+		enclave.AppModuleBasic{},
+		settlement.AppModuleBasic{},
+		fraud.AppModuleBasic{},
+		review.AppModuleBasic{},
+		delegation.AppModuleBasic{},
+		virtstaking.AppModuleBasic{},
 	}
 }
 
@@ -77,6 +117,20 @@ func OrderInitGenesis(_ []string) []string {
 		deployment.ModuleName,
 		provider.ModuleName,
 		market.ModuleName,
+		// VirtEngine patent modules (AU2024203136A1)
+		encryptiontypes.ModuleName,
+		rolestypes.ModuleName,
+		veidtypes.ModuleName,
+		mfatypes.ModuleName,
+		configtypes.ModuleName,
+		hpctypes.ModuleName,
+		benchmarktypes.ModuleName,
+		enclavetypes.ModuleName,
+		settlementtypes.ModuleName,
+		fraudtypes.ModuleName,
+		reviewtypes.ModuleName,
+		delegationtypes.ModuleName,
+		virtstakingtypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 }

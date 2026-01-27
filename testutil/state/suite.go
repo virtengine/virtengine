@@ -80,7 +80,7 @@ func SetupTestSuiteWithKeepers(t testing.TB, keepers Keepers) *TestSuite {
 		// to make sure escrow balance values are tracked correctly
 		bkeeper.
 			On("SpendableCoin", mock.Anything, mock.Anything, mock.Anything).
-			Return(sdk.NewInt64Coin("uakt", 10000000))
+			Return(sdk.NewInt64Coin("uve", 10000000))
 
 		keepers.Bank = bkeeper
 	}

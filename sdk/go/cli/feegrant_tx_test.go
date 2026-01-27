@@ -31,11 +31,11 @@ func (s *FeegrantCLITestSuite) createGrant(granter, grantee sdk.Address) {
 			grantee.String(),
 		).
 		WithFrom(granter.String()).
-		WithSpendLimit(sdk.NewCoin("uakt", sdkmath.NewInt(100)).String()).
+		WithSpendLimit(sdk.NewCoin("uve", sdkmath.NewInt(100)).String()).
 		WithExpiration(getFormattedExpiration(oneYear)).
 		WithBroadcastModeSync().
 		WithSkipConfirm().
-		WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(100))))
+		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100))))
 
 	out, err := clitestutil.ExecTestCLICmd(s.ctx, s.cctx, cli.GetTxFeegrantGrantCmd(), args...)
 	s.Require().NoError(err)
@@ -57,7 +57,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 	commonArgs := cli.TestFlags().
 		WithBroadcastModeSync().
 		WithSkipConfirm().
-		WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10))))
+		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10))))
 
 	testCases := []struct {
 		name         string
@@ -74,7 +74,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"wrong_grantee",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				Append(commonArgs),
 			true, 0, nil,
 		},
@@ -85,7 +85,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash16dun6ehcc86e03wreqqww89ey569wuj4em572w",
 				).
 				WithFrom("invalid_granter").
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				Append(commonArgs),
 			true, 0, nil,
 		},
@@ -96,7 +96,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1nph3cfzk6trsmfxkeu943nvach5qw4vwas7t09",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				Append(commonArgs),
 			false, 0, &sdk.TxResponse{},
 		},
@@ -107,7 +107,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash16dun6ehcc86e03wreqqww89ey569wuj45qeen5",
 				).
 				WithFrom(fromName).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				Append(commonArgs),
 			false, 0, &sdk.TxResponse{},
 		},
@@ -118,7 +118,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1v57fx2l2rt6ehujuu99u2fw05779m5e23ac9nd",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithSignMode(cflags.SignModeLegacyAminoJSON).
 				Append(commonArgs),
 			false, 0, &sdk.TxResponse{},
@@ -140,7 +140,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash16dlc38dcqt0uralyd8hksxyrny6kaeqflhlfcw",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				Append(commonArgs),
 			false, 0, &sdk.TxResponse{},
 		},
@@ -161,7 +161,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					alreadyExistedGrantee.String(),
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				Append(commonArgs),
 			false, 18, &sdk.TxResponse{},
 		},
@@ -172,8 +172,8 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1nph3cfzk6trsmfxkeu943nvach5qw4vwstnvkl",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
-				WithPeriodLimit("10uakt").
+				WithSpendLimit("100uve").
+				WithPeriodLimit("10uve").
 				WithExpiration(getFormattedExpiration(tenHours)).
 				Append(commonArgs),
 			true, 0, nil,
@@ -185,7 +185,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1nph3cfzk6trsmfxkeu943nvach5qw4vwstnvkl",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
+				WithSpendLimit("100uve").
 				WithPeriod(tenHours).
 				WithExpiration(getFormattedExpiration(tenHours)).
 				Append(commonArgs),
@@ -198,8 +198,8 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1nph3cfzk6trsmfxkeu943nvach5qw4vwstnvkl",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
-				WithPeriodLimit("10uakt").
+				WithSpendLimit("100uve").
+				WithPeriodLimit("10uve").
 				WithPeriod(tenHours).
 				WithExpiration(getFormattedExpiration(oneHour)).
 				Append(commonArgs),
@@ -212,8 +212,8 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1nph3cfzk6trsmfxkeu943nvach5qw4vwas7t09",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
-				WithPeriodLimit("10uakt").
+				WithSpendLimit("100uve").
+				WithPeriodLimit("10uve").
 				WithPeriod(oneHour).
 				WithExpiration(getFormattedExpiration(tenHours)).
 				Append(commonArgs),
@@ -226,7 +226,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1vevyks8pthkscvgazc97qyfjt40m6g9x5ueyaa",
 				).
 				WithFrom(granter.String()).
-				WithPeriodLimit("10uakt").
+				WithPeriodLimit("10uve").
 				WithPeriod(oneHour).
 				WithExpiration(getFormattedExpiration(tenHours)).
 				Append(commonArgs),
@@ -239,8 +239,8 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1vevyks8pthkscvgazc97qyfjt40m6g9x5ueyaa",
 				).
 				WithFrom(granter.String()).
-				WithSpendLimit("100uakt").
-				WithPeriodLimit("10uakt").
+				WithSpendLimit("100uve").
+				WithPeriodLimit("10uve").
 				WithPeriod(oneHour).
 				Append(commonArgs),
 			false, 0, &sdk.TxResponse{},
@@ -252,7 +252,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash12nyk4pcf4arshznkpz882e4l4ts0lt0avu47d0",
 				).
 				WithFrom(granter.String()).
-				WithPeriodLimit("10uakt").
+				WithPeriodLimit("10uve").
 				WithPeriod(oneHour).
 				Append(commonArgs),
 			false, 0, &sdk.TxResponse{},
@@ -264,7 +264,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 					"akash1vevyks8pthkscvgazc97qyfjt40m6g9xe85ry8",
 				).
 				WithFrom(granter.String()).
-				WithPeriodLimit("10uakt").
+				WithPeriodLimit("10uve").
 				WithPeriod(oneHour).
 				WithExpiration("invalid").
 				Append(commonArgs),
@@ -293,7 +293,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdRevokeFeegrant() {
 	commonArgs := cli.TestFlags().
 		WithBroadcastModeSync().
 		WithSkipConfirm().
-		WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10))))
+		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10))))
 
 	// Create new fee grant specifically to test amino.
 	aminoGrantee, err := sdk.AccAddressFromBech32("akash16ydaqh0fcnh4qt7a3jme4mmztm2qel5atrvfk4")
@@ -376,7 +376,7 @@ func (s *FeegrantCLITestSuite) TestTxWithFeeGrant() {
 	pub, err := k.GetPubKey()
 	s.Require().NoError(err)
 	grantee := sdk.AccAddress(pub.Address())
-	fee := sdk.NewCoin("uakt", sdkmath.NewInt(100))
+	fee := sdk.NewCoin("uve", sdkmath.NewInt(100))
 
 	args := cli.TestFlags().
 		With(
@@ -386,7 +386,7 @@ func (s *FeegrantCLITestSuite) TestTxWithFeeGrant() {
 		WithBroadcastModeSync().
 		WithSkipConfirm().
 		WithSpendLimit(fee.String()).
-		WithFees(sdk.NewCoins(sdk.NewCoin("uakt", sdkmath.NewInt(10)))).
+		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 		WithExpiration(getFormattedExpiration(oneYear))
 
 	var res sdk.TxResponse
@@ -454,7 +454,7 @@ func (s *FeegrantCLITestSuite) TestFilteredFeeAllowance() {
 		WithSkipConfirm().
 		WithFees(sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))))
 
-	spendLimit := sdk.NewCoin("uakt", sdkmath.NewInt(1000))
+	spendLimit := sdk.NewCoin("uve", sdkmath.NewInt(1000))
 
 	allowMsgs := strings.Join([]string{sdk.MsgTypeURL(&govv1beta1.MsgSubmitProposal{}), sdk.MsgTypeURL(&govv1.MsgVoteWeighted{})}, ",")
 
@@ -564,7 +564,7 @@ func (s *FeegrantCLITestSuite) TestFilteredFeeAllowance() {
 				sArgs := cli.TestFlags().
 					With("akash14cm33pvnrv2497tyt8sp9yavhmw83nwel2kgqa").
 					WithFrom(grantee.String()).
-					WithSpendLimit("100uakt").
+					WithSpendLimit("100uve").
 					WithFeeGranter(granter).
 					Append(args)
 
