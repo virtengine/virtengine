@@ -134,6 +134,26 @@ enum WalletStatus {
   WALLET_STATUS_EXPIRED = 4 [(gogoproto.enumvalue_customname) = "WalletStatusExpired"];
 }
 
+// ScopeRefStatus represents the status of a scope reference within a wallet
+enum ScopeRefStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // SCOPE_REF_STATUS_UNSPECIFIED indicates an unspecified status
+  SCOPE_REF_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "ScopeRefStatusUnspecified"];
+  
+  // SCOPE_REF_STATUS_ACTIVE indicates the scope reference is active
+  SCOPE_REF_STATUS_ACTIVE = 1 [(gogoproto.enumvalue_customname) = "ScopeRefStatusActive"];
+  
+  // SCOPE_REF_STATUS_REVOKED indicates the scope reference has been revoked
+  SCOPE_REF_STATUS_REVOKED = 2 [(gogoproto.enumvalue_customname) = "ScopeRefStatusRevoked"];
+  
+  // SCOPE_REF_STATUS_EXPIRED indicates the scope reference has expired
+  SCOPE_REF_STATUS_EXPIRED = 3 [(gogoproto.enumvalue_customname) = "ScopeRefStatusExpired"];
+  
+  // SCOPE_REF_STATUS_PENDING indicates the scope is pending verification
+  SCOPE_REF_STATUS_PENDING = 4 [(gogoproto.enumvalue_customname) = "ScopeRefStatusPending"];
+}
+
 // EncryptedPayloadEnvelope is the canonical encrypted payload structure
 // for all sensitive fields stored on-chain.
 message EncryptedPayloadEnvelope {
@@ -675,5 +695,380 @@ message Params {
   uint32 verification_expiry_days = 7 [
     (gogoproto.jsontag) = "verification_expiry_days",
     (gogoproto.moretags) = "yaml:\"verification_expiry_days\""
+  ];
+}
+
+// ============================================================================
+// Additional State Types (VE-2000-B)
+// ============================================================================
+
+// DerivedFeatures contains hashes of derived features from identity scopes.
+// These are used for verification matching without revealing the underlying data.
+// All hashes are SHA-256 (32 bytes) for consistency.
+message DerivedFeatures {
+  option (gogoproto.equal) = true;
+
+  // FaceEmbeddingHash is the SHA-256 hash of the face embedding vector.
+  // The actual embedding is stored encrypted; this hash allows matching.
+  bytes face_embedding_hash = 1 [
+    (gogoproto.jsontag) = "face_embedding_hash",
+    (gogoproto.moretags) = "yaml:\"face_embedding_hash\""
+  ];
+
+  // DocFieldHashes contains hashes of extracted document fields.
+  // Keys are field names: "name_hash", "dob_hash", "doc_number_hash", etc.
+  map<string, bytes> doc_field_hashes = 2 [
+    (gogoproto.jsontag) = "doc_field_hashes",
+    (gogoproto.moretags) = "yaml:\"doc_field_hashes\""
+  ];
+
+  // BiometricHash is the hash of biometric data (fingerprint, voice, etc.)
+  bytes biometric_hash = 3 [
+    (gogoproto.jsontag) = "biometric_hash",
+    (gogoproto.moretags) = "yaml:\"biometric_hash\""
+  ];
+
+  // LivenessProofHash is the hash of liveness detection proof
+  bytes liveness_proof_hash = 4 [
+    (gogoproto.jsontag) = "liveness_proof_hash",
+    (gogoproto.moretags) = "yaml:\"liveness_proof_hash\""
+  ];
+
+  // LastComputedAt is when these features were last computed (Unix timestamp)
+  int64 last_computed_at = 5 [
+    (gogoproto.jsontag) = "last_computed_at",
+    (gogoproto.moretags) = "yaml:\"last_computed_at\""
+  ];
+
+  // ModelVersion is the ML model version used to compute these features
+  string model_version = 6 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+
+  // ComputedBy is the validator address that computed these features
+  string computed_by = 7 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "computed_by",
+    (gogoproto.moretags) = "yaml:\"computed_by\""
+  ];
+
+  // BlockHeight is the block height when features were computed
+  int64 block_height = 8 [
+    (gogoproto.jsontag) = "block_height",
+    (gogoproto.moretags) = "yaml:\"block_height\""
+  ];
+
+  // FeatureVersion tracks the derived features schema version
+  uint32 feature_version = 9 [
+    (gogoproto.jsontag) = "feature_version",
+    (gogoproto.moretags) = "yaml:\"feature_version\""
+  ];
+}
+
+// ScopeReference represents a reference to an encrypted scope within a wallet.
+// This is a more detailed reference than ScopeRef, containing wallet-specific metadata.
+message ScopeReference {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the unique identifier of the scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // ScopeType indicates what kind of identity data this scope contains
+  ScopeType scope_type = 2 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // EnvelopeHash is the SHA-256 hash of the encrypted envelope.
+  // This allows verification without exposing the encrypted content.
+  bytes envelope_hash = 3 [
+    (gogoproto.jsontag) = "envelope_hash",
+    (gogoproto.moretags) = "yaml:\"envelope_hash\""
+  ];
+
+  // AddedAt is when this scope was added to the wallet (Unix timestamp)
+  int64 added_at = 4 [
+    (gogoproto.jsontag) = "added_at",
+    (gogoproto.moretags) = "yaml:\"added_at\""
+  ];
+
+  // Status is the current status of this scope reference
+  ScopeRefStatus status = 5 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // ConsentGranted indicates if consent has been granted for this scope
+  bool consent_granted = 6 [
+    (gogoproto.jsontag) = "consent_granted",
+    (gogoproto.moretags) = "yaml:\"consent_granted\""
+  ];
+
+  // RevocationReason is the reason for revocation (if revoked)
+  string revocation_reason = 7 [
+    (gogoproto.jsontag) = "revocation_reason",
+    (gogoproto.moretags) = "yaml:\"revocation_reason\""
+  ];
+
+  // RevokedAt is when this scope was revoked (Unix timestamp, 0 if not revoked)
+  int64 revoked_at = 8 [
+    (gogoproto.jsontag) = "revoked_at",
+    (gogoproto.moretags) = "yaml:\"revoked_at\""
+  ];
+
+  // ExpiresAt is when this scope reference expires (Unix timestamp, 0 for no expiry)
+  int64 expires_at = 9 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+}
+
+// ScopeConsent represents consent configuration for a specific scope.
+// This tracks per-scope consent settings within a wallet.
+message ScopeConsent {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the identifier of the scope this consent applies to
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Granted indicates if consent is currently granted
+  bool granted = 2 [
+    (gogoproto.jsontag) = "granted",
+    (gogoproto.moretags) = "yaml:\"granted\""
+  ];
+
+  // GrantedAt is when consent was granted (Unix timestamp, 0 if never granted)
+  int64 granted_at = 3 [
+    (gogoproto.jsontag) = "granted_at",
+    (gogoproto.moretags) = "yaml:\"granted_at\""
+  ];
+
+  // RevokedAt is when consent was revoked (Unix timestamp, 0 if not revoked)
+  int64 revoked_at = 4 [
+    (gogoproto.jsontag) = "revoked_at",
+    (gogoproto.moretags) = "yaml:\"revoked_at\""
+  ];
+
+  // ExpiresAt is when this consent expires (Unix timestamp, 0 for no expiration)
+  int64 expires_at = 5 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  // Purpose describes the purpose for which consent was granted
+  string purpose = 6 [
+    (gogoproto.jsontag) = "purpose",
+    (gogoproto.moretags) = "yaml:\"purpose\""
+  ];
+
+  // GrantedToProviders lists specific providers consent was granted to.
+  // Empty means consent is general (not provider-specific).
+  repeated string granted_to_providers = 7 [
+    (gogoproto.jsontag) = "granted_to_providers",
+    (gogoproto.moretags) = "yaml:\"granted_to_providers\""
+  ];
+
+  // Restrictions contains any restrictions on this consent
+  repeated string restrictions = 8 [
+    (gogoproto.jsontag) = "restrictions",
+    (gogoproto.moretags) = "yaml:\"restrictions\""
+  ];
+}
+
+// VerificationHistoryEntry represents a single verification event in the wallet's history.
+// This tracks score and status changes over time for audit purposes.
+message VerificationHistoryEntry {
+  option (gogoproto.equal) = true;
+
+  // EntryID is a unique identifier for this history entry
+  string entry_id = 1 [
+    (gogoproto.jsontag) = "entry_id",
+    (gogoproto.moretags) = "yaml:\"entry_id\""
+  ];
+
+  // Timestamp is when this verification occurred (Unix timestamp)
+  int64 timestamp = 2 [
+    (gogoproto.jsontag) = "timestamp",
+    (gogoproto.moretags) = "yaml:\"timestamp\""
+  ];
+
+  // BlockHeight is the block height when this was recorded
+  int64 block_height = 3 [
+    (gogoproto.jsontag) = "block_height",
+    (gogoproto.moretags) = "yaml:\"block_height\""
+  ];
+
+  // PreviousScore is the score before this verification
+  uint32 previous_score = 4 [
+    (gogoproto.jsontag) = "previous_score",
+    (gogoproto.moretags) = "yaml:\"previous_score\""
+  ];
+
+  // NewScore is the score after this verification
+  uint32 new_score = 5 [
+    (gogoproto.jsontag) = "new_score",
+    (gogoproto.moretags) = "yaml:\"new_score\""
+  ];
+
+  // PreviousStatus is the status before this verification
+  AccountStatus previous_status = 6 [
+    (gogoproto.jsontag) = "previous_status",
+    (gogoproto.moretags) = "yaml:\"previous_status\""
+  ];
+
+  // NewStatus is the status after this verification
+  AccountStatus new_status = 7 [
+    (gogoproto.jsontag) = "new_status",
+    (gogoproto.moretags) = "yaml:\"new_status\""
+  ];
+
+  // ScopesEvaluated lists the scope IDs that were evaluated
+  repeated string scopes_evaluated = 8 [
+    (gogoproto.jsontag) = "scopes_evaluated",
+    (gogoproto.moretags) = "yaml:\"scopes_evaluated\""
+  ];
+
+  // ModelVersion is the ML model version used for this verification
+  string model_version = 9 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+
+  // ValidatorAddress is the address of the validator that performed this verification
+  string validator_address = 10 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // Reason is an optional reason/description for this verification
+  string reason = 11 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// IdentityWallet represents a user-controlled identity container.
+// This is the first-class on-chain identity primitive that references
+// encrypted scopes and derived features, bound to the user's account key(s).
+message IdentityWallet {
+  option (gogoproto.equal) = true;
+
+  // WalletID is the unique identifier for this wallet.
+  // Typically derived from the account address.
+  string wallet_id = 1 [
+    (gogoproto.jsontag) = "wallet_id",
+    (gogoproto.moretags) = "yaml:\"wallet_id\""
+  ];
+
+  // AccountAddress is the blockchain address bound to this wallet
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // CreatedAt is when this wallet was created (Unix timestamp)
+  int64 created_at = 3 [
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+
+  // UpdatedAt is when this wallet was last updated (Unix timestamp)
+  int64 updated_at = 4 [
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+
+  // Status is the current status of the wallet
+  WalletStatus status = 5 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // ScopeRefs are references to encrypted scope envelopes.
+  // These are opaque references - the actual encrypted data is stored separately.
+  repeated ScopeReference scope_refs = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scope_refs",
+    (gogoproto.moretags) = "yaml:\"scope_refs\""
+  ];
+
+  // DerivedFeatures contains hashes of derived features for verification matching
+  DerivedFeatures derived_features = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "derived_features",
+    (gogoproto.moretags) = "yaml:\"derived_features\""
+  ];
+
+  // CurrentScore is the current identity verification score (0-100)
+  uint32 current_score = 8 [
+    (gogoproto.jsontag) = "current_score",
+    (gogoproto.moretags) = "yaml:\"current_score\""
+  ];
+
+  // ScoreStatus is the current verification status
+  AccountStatus score_status = 9 [
+    (gogoproto.jsontag) = "score_status",
+    (gogoproto.moretags) = "yaml:\"score_status\""
+  ];
+
+  // VerificationHistory contains the history of verification events
+  repeated VerificationHistoryEntry verification_history = 10 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "verification_history",
+    (gogoproto.moretags) = "yaml:\"verification_history\""
+  ];
+
+  // ConsentSettings contains the consent configuration for this wallet
+  ConsentSettings consent_settings = 11 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "consent_settings",
+    (gogoproto.moretags) = "yaml:\"consent_settings\""
+  ];
+
+  // ScopeConsents contains per-scope consent settings (key is scopeID)
+  map<string, ScopeConsent> scope_consents = 12 [
+    (gogoproto.jsontag) = "scope_consents",
+    (gogoproto.moretags) = "yaml:\"scope_consents\""
+  ];
+
+  // BindingSignature is the user's signature over (WalletID + AccountAddress).
+  // This cryptographically binds the wallet to the user's account.
+  bytes binding_signature = 13 [
+    (gogoproto.jsontag) = "binding_signature",
+    (gogoproto.moretags) = "yaml:\"binding_signature\""
+  ];
+
+  // BindingPubKey is the public key used to create the binding signature.
+  // This is captured at wallet creation and updated on key rotation.
+  bytes binding_pub_key = 14 [
+    (gogoproto.jsontag) = "binding_pub_key",
+    (gogoproto.moretags) = "yaml:\"binding_pub_key\""
+  ];
+
+  // LastBindingAt is when the wallet was last bound/rebound (Unix timestamp)
+  int64 last_binding_at = 15 [
+    (gogoproto.jsontag) = "last_binding_at",
+    (gogoproto.moretags) = "yaml:\"last_binding_at\""
+  ];
+
+  // Tier is the current identity tier based on score
+  IdentityTier tier = 16 [
+    (gogoproto.jsontag) = "tier",
+    (gogoproto.moretags) = "yaml:\"tier\""
+  ];
+
+  // Metadata contains additional wallet metadata
+  map<string, string> metadata = 17 [
+    (gogoproto.jsontag) = "metadata",
+    (gogoproto.moretags) = "yaml:\"metadata\""
   ];
 }

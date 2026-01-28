@@ -123,3 +123,4 @@ func (m *MsgUpdateDerivedFeatures) String() string { return fmt.Sprintf("%+v", *
 func (m *MsgUpdateDerivedFeaturesResponse) ProtoMessage()  {}
 func (m *MsgUpdateDerivedFeaturesResponse) Reset()         { *m = MsgUpdateDerivedFeaturesResponse{} }
 func (m *MsgUpdateDerivedFeaturesResponse) String() string { return fmt.Sprintf("%+v", *m) }
+

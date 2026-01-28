@@ -2,100 +2,111 @@ package types
 
 import (
 	errorsmod "cosmossdk.io/errors"
+
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 )
 
-// Error codes for the veid module (range: 100-199)
-// NOTE: Error codes start at 100 to avoid conflicts with Cosmos SDK core, IBC-Go, and CosmWasm modules
+// Error codes for the veid module (range: 1000-1199)
+// Errors 1000-1029 are defined in sdk/go/node/veid/v1/errors.go and aliased here
+// to avoid duplicate registration. Errors 1030+ are defined only here.
 var (
+	// ============================================================================
+	// Core Errors (aliased from SDK - codes 1000-1029)
+	// ============================================================================
+
 	// ErrInvalidAddress is returned when an address is invalid
-	ErrInvalidAddress = errorsmod.Register(ModuleName, 1000, "invalid address")
+	ErrInvalidAddress = veidv1.ErrInvalidAddress
 
 	// ErrInvalidScope is returned when a scope is malformed
-	ErrInvalidScope = errorsmod.Register(ModuleName, 1001, "invalid scope")
+	ErrInvalidScope = veidv1.ErrInvalidScope
 
 	// ErrInvalidScopeType is returned when a scope type is invalid
-	ErrInvalidScopeType = errorsmod.Register(ModuleName, 1002, "invalid scope type")
+	ErrInvalidScopeType = veidv1.ErrInvalidScopeType
 
 	// ErrInvalidScopeVersion is returned when a scope version is invalid
-	ErrInvalidScopeVersion = errorsmod.Register(ModuleName, 1003, "invalid scope version")
+	ErrInvalidScopeVersion = veidv1.ErrInvalidScopeVersion
 
 	// ErrInvalidPayload is returned when an encrypted payload is invalid
-	ErrInvalidPayload = errorsmod.Register(ModuleName, 1004, "invalid encrypted payload")
+	ErrInvalidPayload = veidv1.ErrInvalidPayload
 
 	// ErrInvalidSalt is returned when a salt is invalid
-	ErrInvalidSalt = errorsmod.Register(ModuleName, 1005, "invalid salt")
+	ErrInvalidSalt = veidv1.ErrInvalidSalt
 
 	// ErrSaltAlreadyUsed is returned when a salt has already been used
-	ErrSaltAlreadyUsed = errorsmod.Register(ModuleName, 1006, "salt already used")
+	ErrSaltAlreadyUsed = veidv1.ErrSaltAlreadyUsed
 
 	// ErrInvalidDeviceInfo is returned when device information is invalid
-	ErrInvalidDeviceInfo = errorsmod.Register(ModuleName, 1007, "invalid device info")
+	ErrInvalidDeviceInfo = veidv1.ErrInvalidDeviceInfo
 
 	// ErrInvalidClientID is returned when a client ID is invalid
-	ErrInvalidClientID = errorsmod.Register(ModuleName, 1008, "invalid client ID")
+	ErrInvalidClientID = veidv1.ErrInvalidClientID
 
 	// ErrClientNotApproved is returned when a client is not approved
-	ErrClientNotApproved = errorsmod.Register(ModuleName, 1009, "client not approved")
+	ErrClientNotApproved = veidv1.ErrClientNotApproved
 
 	// ErrInvalidClientSignature is returned when a client signature is invalid
-	ErrInvalidClientSignature = errorsmod.Register(ModuleName, 1010, "invalid client signature")
+	ErrInvalidClientSignature = veidv1.ErrInvalidClientSignature
 
 	// ErrInvalidUserSignature is returned when a user signature is invalid
-	ErrInvalidUserSignature = errorsmod.Register(ModuleName, 1011, "invalid user signature")
+	ErrInvalidUserSignature = veidv1.ErrInvalidUserSignature
 
 	// ErrInvalidPayloadHash is returned when a payload hash is invalid
-	ErrInvalidPayloadHash = errorsmod.Register(ModuleName, 1012, "invalid payload hash")
+	ErrInvalidPayloadHash = veidv1.ErrInvalidPayloadHash
 
 	// ErrInvalidVerificationStatus is returned when a verification status is invalid
-	ErrInvalidVerificationStatus = errorsmod.Register(ModuleName, 1013, "invalid verification status")
+	ErrInvalidVerificationStatus = veidv1.ErrInvalidVerificationStatus
 
 	// ErrInvalidVerificationEvent is returned when a verification event is invalid
-	ErrInvalidVerificationEvent = errorsmod.Register(ModuleName, 1014, "invalid verification event")
+	ErrInvalidVerificationEvent = veidv1.ErrInvalidVerificationEvent
 
 	// ErrInvalidScore is returned when an identity score is invalid
-	ErrInvalidScore = errorsmod.Register(ModuleName, 1015, "invalid score")
+	ErrInvalidScore = veidv1.ErrInvalidScore
 
 	// ErrInvalidTier is returned when an identity tier is invalid
-	ErrInvalidTier = errorsmod.Register(ModuleName, 1016, "invalid tier")
+	ErrInvalidTier = veidv1.ErrInvalidTier
 
 	// ErrInvalidIdentityRecord is returned when an identity record is invalid
-	ErrInvalidIdentityRecord = errorsmod.Register(ModuleName, 1017, "invalid identity record")
+	ErrInvalidIdentityRecord = veidv1.ErrInvalidIdentityRecord
 
 	// ErrInvalidWallet is returned when an identity wallet is invalid
-	ErrInvalidWallet = errorsmod.Register(ModuleName, 1018, "invalid identity wallet")
+	ErrInvalidWallet = veidv1.ErrInvalidWallet
 
 	// ErrScopeNotFound is returned when a scope is not found
-	ErrScopeNotFound = errorsmod.Register(ModuleName, 1019, "scope not found")
+	ErrScopeNotFound = veidv1.ErrScopeNotFound
 
 	// ErrIdentityRecordNotFound is returned when an identity record is not found
-	ErrIdentityRecordNotFound = errorsmod.Register(ModuleName, 1020, "identity record not found")
+	ErrIdentityRecordNotFound = veidv1.ErrIdentityRecordNotFound
 
 	// ErrScopeAlreadyExists is returned when a scope already exists
-	ErrScopeAlreadyExists = errorsmod.Register(ModuleName, 1021, "scope already exists")
+	ErrScopeAlreadyExists = veidv1.ErrScopeAlreadyExists
 
 	// ErrScopeRevoked is returned when trying to use a revoked scope
-	ErrScopeRevoked = errorsmod.Register(ModuleName, 1022, "scope has been revoked")
+	ErrScopeRevoked = veidv1.ErrScopeRevoked
 
 	// ErrScopeExpired is returned when trying to use an expired scope
-	ErrScopeExpired = errorsmod.Register(ModuleName, 1023, "scope has expired")
+	ErrScopeExpired = veidv1.ErrScopeExpired
 
 	// ErrUnauthorized is returned when the sender is not authorized
-	ErrUnauthorized = errorsmod.Register(ModuleName, 1024, "unauthorized")
+	ErrUnauthorized = veidv1.ErrUnauthorized
 
 	// ErrInvalidStatusTransition is returned when an invalid status transition is attempted
-	ErrInvalidStatusTransition = errorsmod.Register(ModuleName, 1025, "invalid status transition")
+	ErrInvalidStatusTransition = veidv1.ErrInvalidStatusTransition
 
 	// ErrIdentityLocked is returned when trying to modify a locked identity
-	ErrIdentityLocked = errorsmod.Register(ModuleName, 1026, "identity is locked")
+	ErrIdentityLocked = veidv1.ErrIdentityLocked
 
 	// ErrMaxScopesExceeded is returned when the maximum number of scopes is exceeded
-	ErrMaxScopesExceeded = errorsmod.Register(ModuleName, 1027, "maximum scopes exceeded")
+	ErrMaxScopesExceeded = veidv1.ErrMaxScopesExceeded
 
 	// ErrVerificationInProgress is returned when verification is already in progress
-	ErrVerificationInProgress = errorsmod.Register(ModuleName, 1028, "verification already in progress")
+	ErrVerificationInProgress = veidv1.ErrVerificationInProgress
 
 	// ErrValidatorOnly is returned when a non-validator attempts a validator-only action
-	ErrValidatorOnly = errorsmod.Register(ModuleName, 1029, "action restricted to validators")
+	ErrValidatorOnly = veidv1.ErrValidatorOnly
+
+	// ============================================================================
+	// Extended Errors (defined here - codes 1030+)
+	// ============================================================================
 
 	// ErrSignatureMismatch is returned when signatures don't match expected values
 	ErrSignatureMismatch = errorsmod.Register(ModuleName, 1030, "signature mismatch")

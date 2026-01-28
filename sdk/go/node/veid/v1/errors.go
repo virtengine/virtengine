@@ -4,8 +4,8 @@ import (
 	errorsmod "cosmossdk.io/errors"
 )
 
-// Error codes for the veid module (range: 100-199)
-// NOTE: Error codes start at 100 to avoid conflicts with Cosmos SDK core, IBC-Go, and CosmWasm modules
+// Error codes for the veid module (range: 1000-1099)
+// These are the canonical error definitions. x/veid/types re-exports these.
 var (
 	// ErrInvalidAddress is returned when an address is invalid
 	ErrInvalidAddress = errorsmod.Register(ModuleName, 1000, "invalid address")

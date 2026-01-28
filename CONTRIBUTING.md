@@ -4,26 +4,6 @@
 
 Guidelines for contributing.
 
-### How can I get involved?
-
-The [Discourse forum](https://forum.virtengine.com/) is the best place to keep up to date with the project and to get help contributing. Here we exchange ideas, ask questions and chat about VirtEngine.
-
-There are a number of areas where contributions can be accepted:
-
-* Write Golang code for the CLI, VirtEngine Node (tendermint) and VirtEngine Provider Manager (Kubernetes)
-* Write features for the front-end UI (JS, HTML, CSS)
-* Write sample functions in any language
-* Review pull requests
-* Test out new features or work-in-progress
-* Get involved in design reviews, request-for-comments (RFCs) and technical proof-of-concepts (PoCs)
-* Help release and package VirtEngine including the helm chart, compose files, `kubectl` YAML, marketplaces and stores
-* Manage, triage and research Issues and Pull Requests
-* Engage with the growing community by providing technical support on Slack/GitHub
-* Create docs, guides and write blogs
-* Speak at meet-ups, conferences or by helping folks with VirtEngine [on the Discourse forum](https://forum.virtengine.com/)
-
-This is just a short list of ideas, if you have other ideas for contributing please make a suggestion.
-
 ### I want to contribute on GitHub
 
 #### I've found a typo
@@ -87,7 +67,7 @@ If you feel there is an issue with VirtEngine or were unable to get the help you
 
 * What kind of support can I expect for free?
 
-    If you are using one of the Open Source projects within the virtengine repository, then help is offered on a good-will basis by volunteers. You can also request help from employees of Overclock Labs, Inc who host the VirtEngine testnet.
+    If you are using one of the Open Source projects within the virtengine repository, then help is offered on a good-will basis by volunteers. You can also request help from employees of DET-IO Pty. Ltd. who host the VirtEngine testnet.
 
     Please be respectful of volunteer time, it is often limited to evenings and weekends. The person you are requesting help from may not reside in your timezone.
 
@@ -121,7 +101,7 @@ If you feel there is an issue with VirtEngine or were unable to get the help you
 
 * What if I need more than that?
 
-    If you're a company using any of these projects, you can get the following through a support agreement with Overclock Labs, Inc so that the time can be paid for to help your business.
+    If you're a company using any of these projects, you can get the following through a support agreement with DET-IO Pty. Ltd. so that the time can be paid for to help your business.
 
     A support agreement can be tailored to your needs, you may benefit from support, if you need any of the following:
 
@@ -149,11 +129,9 @@ How are credentials managed for quay.io and the Docker Hub? These credentials ar
 
 ## Governance
 
-VirtEngine is an independent open-source project which was created by the Overclock Labs, Inc in 2017. The project is maintained and developed by a number of regular volunteers and a wider community of open-source developers.
+VirtEngine is an independent open-source project which was created by the DET-IO Pty. Ltd. in 2016. The project is maintained and developed by DET-IO Pty. Ltd.
 
-Overclock Labs hosts and sponsors the development and maintenance of VirtEngine. Overclock Labs provides professional services, consultation and support. Contact us at [virtengine.com/contact](https://virtengine.com/contact) to find out more.
-
-VirtEngine &trade; is a registered trademark of Overclock Labs.
+DET-IO hosts and sponsors the development and maintenance of VirtEngine. DET-IO provides professional services, consultation and support. Contact us at [virtengine.com/contact](https://virtengine.com/contact) to find out more.
 
 #### Project Lead
 
@@ -172,91 +150,15 @@ Some duties include:
 In the VirtEngine community there are three levels of structure or maintainership:
 
 * Core Team (GitHub org)
-* Members Team (GitHub org)
 * The rest of the community.
 
 #### Core Team
 
-The Core Team includes:
-
-- Greg Osuri (@gosuri)
-- Adam Bozanich (@abozanich)
-- Daniel Ceballos (@dceballos)
-- Boz Menzalji (@bmenzalji)
-
-The Core Team have the ear of the Project Lead. They help with strategy, project maintenance, community management, and make a regular commitment of time to the project on a weekly basis. The Core Team will usually be responsible for, or be a subject-matter-expert (SME) for a sub-system of VirtEngine. Core Team may be granted write (push) access to one or more sub-systems.
-
-The Core Team gain access to a private *core* channel and are required to participate on a regular basis.
-
-The Core Team have the same expectations and perks of the Membership Team, in addition will need to keep in close contact with the rest of the Core Team and the Project Lead.
-
-* Core Team are expected to attend 1:1 video conferencing calls with the Project Lead up to once per week
-* Core Team members will notify the Project Lead and Core Team of any leave of a week or more and set a status in Slack of "away".
-
-Core Team attend all project meetings and calls. Allowances will be made for timezones and other commitments.
-
-#### Members Team
-
-The Members Team are contributors who are well-known to the community with a track record of:
-
-* fixing, testing and triaging issues and PRs
-* offering support to the project
-* providing feedback and being available to help where needed
-* testing and reviewing pull requests
-* joining contributor meetings and supporting new contributors
-
-> Note: An essential skill for being in a team is communication. If you cannot communicate with your team on a regular basis, then membership may not be for you and you are welcome to contribute as community.
-
-Members Team Perks:
-* access to a private Slack channel
-* profile posted on the Team page of the VirtEngine website
-* membership of the GitHub organization VirtEngine
-
-Upon request and subject to availability:
-* 1:1 coaching & mentorship
-* help with speaking opportunities and CfP submissions
-* help with CV, resume and LinkedIn profile
-* review, and promotion of blogs and tutorials on social media
-
-The Members Team are expected to:
-
-* participate in the members channel and engage with the topics
-* participate in community Zoom calls (when possible within your timezone)
-* make regular contributions to the project codebase
-* comment on and engage with project proposals
-* attend occasional 1:1 meetings with members of the Core Team or the Project Lead
-
-This group is intended to be an active team that shares the load and collaborates together. This means engaging in topics on Chat, encouraging other teammates, sharing ideas, helping the users and raising issues with the Core Team.
-
-#### Community/project meetings and calls
-
-The community calls are held on Zoom on a regular basis with invitations sent out via email ahead of time.
-
-General format:
-
-- Project updates/briefing
-- Round-table intros/updates
-- Demos of features/new work from community
-- Q&A
-
-If you would like invites, sign-up to Slack and pick "Yes" to Community Events and Updates.
-
-## Branding guidelines
-
-For press, branding, logos and marks see the [VirtEngine website](https://virtengine.com/brand).
+The VirtEngine system was designed and is primarily being led by Jonathan Philipos.
 
 ## Community
 
 This project is written in Golang but many of the community contributions so far have been through blogging, speaking engagements, helping to test and drive the backlog of VirtEngine. If you'd like to help in any way then that would be more than welcome whatever your level of experience.
-
-### Chat
-
-There is a forum which you are welcome to join to discuss VirtEngine, Kubernetes, Serverless, FaaS, Blockchain.
-
-[Join discourse here](https://forum.virtengine.com/)
-
-[Join Discord here](https://discord.com/invite/DxftX67)
-
 
 ### Roadmap
 

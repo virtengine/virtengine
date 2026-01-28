@@ -2306,22 +2306,155 @@
     },
     {
       "id": "VE-2000",
-      "title": "PROD: Generate proper protobufs for VEID module",
-      "description": "Replace hand-written proto stubs in x/veid/types/ with properly generated protobuf code to ensure consensus-safe serialization.",
+      "title": "PROD: Generate proper protobufs for VEID module (Parent Task)",
+      "description": "Replace hand-written proto stubs in x/veid/types/ with properly generated protobuf code to ensure consensus-safe serialization. This is a parent task broken into subtasks VE-2000-A through VE-2000-H.",
       "acceptanceCriteria": [
-        "Create proto/virtengine/veid/v1/types.proto with all message definitions",
-        "Create proto/virtengine/veid/v1/tx.proto with all Msg definitions",
-        "Create proto/virtengine/veid/v1/query.proto with all Query definitions",
-        "Run buf generate to create Go bindings",
-        "Remove x/veid/types/proto_stub.go",
-        "Update x/veid/types/codec.go to use generated RegisterInterfaces",
+        "All subtasks VE-2000-A through VE-2000-H completed",
+        "x/veid/types/proto_stub.go removed",
         "All VEID messages serialize/deserialize correctly",
         "go build ./... passes",
         "Existing VEID tests pass with generated types"
       ],
       "priority": 0,
       "passes": false,
-      "notes": "CRITICAL: Proto stubs cause serialization mismatches between nodes. This is a consensus-breaking issue."
+      "notes": "CRITICAL: Proto stubs cause serialization mismatches between nodes. This is a consensus-breaking issue. Broken into 8 subtasks for manageability."
+    },
+    {
+      "id": "VE-2000-A",
+      "title": "VEID Proto: Audit existing proto files and generated code",
+      "description": "Audit existing proto files in sdk/proto/node/virtengine/veid/v1/ and generated Go code in sdk/go/node/veid/v1/ to understand current state.",
+      "acceptanceCriteria": [
+        "Document all message types in existing proto files (tx.proto, types.proto, query.proto, genesis.proto)",
+        "Document all message types in x/veid/types/ that need proto definitions",
+        "Identify gaps between proto definitions and x/veid/types structs",
+        "Create mapping document showing which x/veid/types structs map to which proto messages",
+        "Verify buf generate works with existing proto files",
+        "Document any missing proto definitions needed"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Discovery task. Proto files already exist at sdk/proto/node/virtengine/veid/v1/. Need to understand the gap."
+    },
+    {
+      "id": "VE-2000-B",
+      "title": "VEID Proto: Complete missing message definitions in types.proto",
+      "description": "Add any missing message definitions to sdk/proto/node/virtengine/veid/v1/types.proto based on gap analysis.",
+      "acceptanceCriteria": [
+        "All state types from x/veid/types/*.go have proto equivalents",
+        "Identity, IdentityWallet, Scope types defined",
+        "VerificationRequest, VerificationResult types defined",
+        "Score, DerivedFeatures types defined",
+        "BorderlineCase, BorderlineParams types defined",
+        "All enums properly defined with gogoproto annotations",
+        "Proto file compiles with buf lint"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Depends on VE-2000-A audit results."
+    },
+    {
+      "id": "VE-2000-C",
+      "title": "VEID Proto: Complete missing Msg definitions in tx.proto",
+      "description": "Ensure all transaction messages are properly defined in sdk/proto/node/virtengine/veid/v1/tx.proto.",
+      "acceptanceCriteria": [
+        "All Msg types from x/veid/types/msgs.go have proto equivalents",
+        "All Msg types from x/veid/types/wallet_msgs.go have proto equivalents",
+        "All Msg types from x/veid/types/borderline_msgs.go have proto equivalents",
+        "MsgUploadScope, MsgRevokeScope, MsgRequestVerification defined",
+        "MsgUpdateVerificationStatus, MsgUpdateScore defined",
+        "MsgCreateIdentityWallet, MsgAddScopeToWallet, MsgRevokeScopeFromWallet defined",
+        "MsgUpdateConsentSettings, MsgRebindWallet, MsgUpdateDerivedFeatures defined",
+        "MsgCompleteBorderlineFallback, MsgUpdateBorderlineParams defined",
+        "All Response types defined",
+        "Proto file compiles with buf lint"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Depends on VE-2000-A. Most messages appear to exist already based on current tx.proto."
+    },
+    {
+      "id": "VE-2000-D",
+      "title": "VEID Proto: Complete query service definitions in query.proto",
+      "description": "Ensure all query methods are properly defined in sdk/proto/node/virtengine/veid/v1/query.proto.",
+      "acceptanceCriteria": [
+        "All query types from x/veid/types/score_query.go have proto equivalents",
+        "All query types from x/veid/types/wallet_query.go have proto equivalents",
+        "QueryIdentity, QueryScope, QueryVerificationStatus requests/responses defined",
+        "QueryScore, QueryTier requests/responses defined",
+        "QueryIdentityWallet, QueryIdentityWalletByAddress requests/responses defined",
+        "QueryBorderlineCase, QueryBorderlineParams requests/responses defined",
+        "Proto file compiles with buf lint"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Depends on VE-2000-A."
+    },
+    {
+      "id": "VE-2000-E",
+      "title": "VEID Proto: Run buf generate and verify generated Go code",
+      "description": "Run buf generate to create Go bindings and verify they compile correctly.",
+      "acceptanceCriteria": [
+        "buf generate completes successfully for veid protos",
+        "Generated *.pb.go files are created in sdk/go/node/veid/v1/",
+        "Generated code compiles: go build ./sdk/go/node/veid/v1/...",
+        "Generated types have correct gogoproto annotations",
+        "gRPC service stubs are generated for Msg and Query services"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Depends on VE-2000-B, VE-2000-C, VE-2000-D."
+    },
+    {
+      "id": "VE-2000-F",
+      "title": "VEID Proto: Update x/veid/types to use generated types",
+      "description": "Refactor x/veid/types/ to import and use generated proto types from sdk/go/node/veid/v1/ instead of hand-written structs.",
+      "acceptanceCriteria": [
+        "Create type aliases in x/veid/types/ pointing to generated types",
+        "OR embed generated types in wrapper structs with additional methods",
+        "Update x/veid/types/msgs.go to use generated MsgUploadScope etc.",
+        "Update x/veid/types/wallet_msgs.go to use generated wallet messages",
+        "Update x/veid/types/identity.go to use generated Identity type",
+        "Update x/veid/types/scope.go to use generated Scope type",
+        "Update x/veid/types/score.go to use generated Score type",
+        "Remove hand-written struct definitions that duplicate proto messages",
+        "go build ./x/veid/... passes"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Major refactoring task. Depends on VE-2000-E. This is the largest subtask."
+    },
+    {
+      "id": "VE-2000-G",
+      "title": "VEID Proto: Update codec.go and remove proto_stub.go",
+      "description": "Update x/veid/types/codec.go to use generated RegisterInterfaces and remove proto_stub.go.",
+      "acceptanceCriteria": [
+        "Remove x/veid/types/proto_stub.go entirely",
+        "Update x/veid/types/codec.go to register generated types",
+        "RegisterInterfaces uses generated proto types",
+        "RegisterLegacyAminoCodec properly configured",
+        "All message types properly registered for amino/protobuf encoding",
+        "go build ./x/veid/... passes"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Depends on VE-2000-F."
+    },
+    {
+      "id": "VE-2000-H",
+      "title": "VEID Proto: Update keeper and run integration tests",
+      "description": "Update x/veid/keeper to work with new generated types and verify all tests pass.",
+      "acceptanceCriteria": [
+        "Update x/veid/keeper/keeper.go for any type changes",
+        "Update x/veid/keeper/grpc_query.go for generated query types",
+        "Update x/veid/keeper/msg_server.go for generated message types",
+        "All unit tests in x/veid/... pass",
+        "All integration tests involving VEID pass",
+        "Serialization/deserialization tests verify consensus safety",
+        "go test ./x/veid/... passes with no failures"
+      ],
+      "priority": 0,
+      "passes": false,
+      "notes": "Final validation task. Depends on VE-2000-F, VE-2000-G."
     },
     {
       "id": "VE-2001",

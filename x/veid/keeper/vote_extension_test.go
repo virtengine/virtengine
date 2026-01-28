@@ -328,13 +328,16 @@ func TestVoteExtension_Empty(t *testing.T) {
 // ============================================================================
 
 func TestVoteExtension_Timestamp(t *testing.T) {
-	before := time.Now().UTC()
+	// NewVoteExtension uses a deterministic timestamp (Unix epoch) for consensus safety
 	extension := NewVoteExtension(1000, "virt1val123", "v1.0.0")
-	after := time.Now().UTC()
 
-	require.False(t, extension.Timestamp.IsZero())
-	require.True(t, extension.Timestamp.Equal(before) || extension.Timestamp.After(before))
-	require.True(t, extension.Timestamp.Equal(after) || extension.Timestamp.Before(after))
+	// The default timestamp should be Unix epoch (zero time)
+	require.True(t, extension.Timestamp.Equal(time.Unix(0, 0).UTC()))
+
+	// Test NewVoteExtensionWithTime with custom timestamp
+	customTime := time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC)
+	extensionWithTime := NewVoteExtensionWithTime(1000, "virt1val123", "v1.0.0", customTime)
+	require.True(t, extensionWithTime.Timestamp.Equal(customTime))
 }
 
 // ============================================================================

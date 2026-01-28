@@ -11,7 +11,14 @@ option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
 
 // Query defines the gRPC querier service for the veid module
 service Query {
-  // Identity queries an identity record by account address
+  // IdentityRecord queries an identity record by account address
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc IdentityRecord(QueryIdentityRecordRequest) returns (QueryIdentityRecordResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/identity_record/{account_address}";
+  }
+
+  // Identity queries an identity record by account address (alias for IdentityRecord)
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc Identity(QueryIdentityRequest) returns (QueryIdentityResponse) {
@@ -22,7 +29,7 @@ service Query {
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc Scope(QueryScopeRequest) returns (QueryScopeResponse) {
-    option (google.api.http).get = "/virtengine/veid/v1/scope/{scope_id}";
+    option (google.api.http).get = "/virtengine/veid/v1/scope/{account_address}/{scope_id}";
   }
 
   // Scopes queries all scopes for an account
@@ -30,6 +37,13 @@ service Query {
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc Scopes(QueryScopesRequest) returns (QueryScopesResponse) {
     option (google.api.http).get = "/virtengine/veid/v1/scopes/{account_address}";
+  }
+
+  // ScopesByType queries all scopes of a specific type for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ScopesByType(QueryScopesByTypeRequest) returns (QueryScopesByTypeResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/scopes/{account_address}/type/{scope_type}";
   }
 
   // IdentityScore queries the identity score for an account
@@ -65,6 +79,20 @@ service Query {
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc ConsentSettings(QueryConsentSettingsRequest) returns (QueryConsentSettingsResponse) {
     option (google.api.http).get = "/virtengine/veid/v1/consent/{account_address}";
+  }
+
+  // DerivedFeatures queries derived features metadata for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc DerivedFeatures(QueryDerivedFeaturesRequest) returns (QueryDerivedFeaturesResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/derived_features/{account_address}";
+  }
+
+  // DerivedFeatureHashes queries derived feature hashes for an account (consent-gated)
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc DerivedFeatureHashes(QueryDerivedFeatureHashesRequest) returns (QueryDerivedFeatureHashesResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/derived_feature_hashes/{account_address}";
   }
 
   // VerificationHistory queries verification history for an account
@@ -121,10 +149,36 @@ message QueryIdentityResponse {
   ];
 }
 
+// QueryIdentityRecordRequest is the request for the IdentityRecord query
+message QueryIdentityRecordRequest {
+  // AccountAddress is the account to query
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// QueryIdentityRecordResponse is the response for the IdentityRecord query
+message QueryIdentityRecordResponse {
+  // Record is the identity record
+  IdentityRecord record = 1 [
+    (gogoproto.jsontag) = "record",
+    (gogoproto.moretags) = "yaml:\"record\""
+  ];
+}
+
 // QueryScopeRequest is the request for the Scope query
 message QueryScopeRequest {
+  // AccountAddress is the account that owns the scope
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
   // ScopeID is the scope to query
-  string scope_id = 1 [
+  string scope_id = 2 [
     (gogoproto.jsontag) = "scope_id",
     (gogoproto.moretags) = "yaml:\"scope_id\""
   ];
@@ -181,6 +235,32 @@ message QueryScopesResponse {
 
   // Pagination is the pagination response
   cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryScopesByTypeRequest is the request for the ScopesByType query
+message QueryScopesByTypeRequest {
+  // AccountAddress is the account to query scopes for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ScopeType is the type of scopes to filter by
+  ScopeType scope_type = 2 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+}
+
+// QueryScopesByTypeResponse is the response for the ScopesByType query
+message QueryScopesByTypeResponse {
+  // Scopes is the list of identity scopes of the specified type
+  repeated IdentityScope scopes = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scopes",
+    (gogoproto.moretags) = "yaml:\"scopes\""
+  ];
 }
 
 // QueryIdentityScoreRequest is the request for the IdentityScore query
@@ -585,8 +665,17 @@ message QueryVerificationHistoryRequest {
     (gogoproto.moretags) = "yaml:\"account_address\""
   ];
 
-  // Pagination is the pagination options
-  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+  // Limit is the maximum number of entries to return
+  uint32 limit = 2 [
+    (gogoproto.jsontag) = "limit",
+    (gogoproto.moretags) = "yaml:\"limit\""
+  ];
+
+  // Offset is the number of entries to skip
+  uint32 offset = 3 [
+    (gogoproto.jsontag) = "offset",
+    (gogoproto.moretags) = "yaml:\"offset\""
+  ];
 }
 
 // QueryVerificationHistoryResponse is the response for the VerificationHistory query
@@ -603,9 +692,6 @@ message QueryVerificationHistoryResponse {
     (gogoproto.jsontag) = "total_count",
     (gogoproto.moretags) = "yaml:\"total_count\""
   ];
-
-  // Pagination is the pagination response
-  cosmos.base.query.v1beta1.PageResponse pagination = 3;
 }
 
 // QueryApprovedClientsRequest is the request for the ApprovedClients query
@@ -656,5 +742,143 @@ message QueryBorderlineParamsResponse {
     (gogoproto.nullable) = false,
     (gogoproto.jsontag) = "params",
     (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// ============================================================================
+// Derived Features Query Types
+// ============================================================================
+
+// PublicDerivedFeaturesInfo contains non-sensitive derived features metadata
+message PublicDerivedFeaturesInfo {
+  // HasFaceEmbedding indicates if face embedding hash exists
+  bool has_face_embedding = 1 [
+    (gogoproto.jsontag) = "has_face_embedding",
+    (gogoproto.moretags) = "yaml:\"has_face_embedding\""
+  ];
+
+  // HasBiometric indicates if biometric hash exists
+  bool has_biometric = 2 [
+    (gogoproto.jsontag) = "has_biometric",
+    (gogoproto.moretags) = "yaml:\"has_biometric\""
+  ];
+
+  // HasLivenessProof indicates if liveness proof hash exists
+  bool has_liveness_proof = 3 [
+    (gogoproto.jsontag) = "has_liveness_proof",
+    (gogoproto.moretags) = "yaml:\"has_liveness_proof\""
+  ];
+
+  // DocFieldKeys lists which document fields have hashes
+  repeated string doc_field_keys = 4 [
+    (gogoproto.jsontag) = "doc_field_keys",
+    (gogoproto.moretags) = "yaml:\"doc_field_keys\""
+  ];
+
+  // LastComputedAt is when features were last computed (Unix timestamp)
+  int64 last_computed_at = 5 [
+    (gogoproto.jsontag) = "last_computed_at",
+    (gogoproto.moretags) = "yaml:\"last_computed_at\""
+  ];
+
+  // ModelVersion is the model version used
+  string model_version = 6 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+
+  // FeatureVersion is the schema version
+  uint32 feature_version = 7 [
+    (gogoproto.jsontag) = "feature_version",
+    (gogoproto.moretags) = "yaml:\"feature_version\""
+  ];
+}
+
+// QueryDerivedFeaturesRequest is the request for the DerivedFeatures query
+message QueryDerivedFeaturesRequest {
+  // AccountAddress is the account to query features for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// QueryDerivedFeaturesResponse is the response for the DerivedFeatures query
+message QueryDerivedFeaturesResponse {
+  // Features contains non-sensitive derived features information
+  PublicDerivedFeaturesInfo features = 1 [
+    (gogoproto.jsontag) = "features",
+    (gogoproto.moretags) = "yaml:\"features\""
+  ];
+
+  // Found indicates if features were found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryDerivedFeatureHashesRequest is the request for the DerivedFeatureHashes query
+// This is used for verification matching by authorized parties
+message QueryDerivedFeatureHashesRequest {
+  // AccountAddress is the account to query hashes for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Requester is the address requesting the hashes
+  string requester = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "requester",
+    (gogoproto.moretags) = "yaml:\"requester\""
+  ];
+
+  // Purpose describes why the hashes are being requested
+  string purpose = 3 [
+    (gogoproto.jsontag) = "purpose",
+    (gogoproto.moretags) = "yaml:\"purpose\""
+  ];
+}
+
+// QueryDerivedFeatureHashesResponse is the response for the DerivedFeatureHashes query
+// Only returned if consent allows sharing
+message QueryDerivedFeatureHashesResponse {
+  // Allowed indicates if the request was allowed based on consent
+  bool allowed = 1 [
+    (gogoproto.jsontag) = "allowed",
+    (gogoproto.moretags) = "yaml:\"allowed\""
+  ];
+
+  // DenialReason is set if Allowed is false
+  string denial_reason = 2 [
+    (gogoproto.jsontag) = "denial_reason",
+    (gogoproto.moretags) = "yaml:\"denial_reason\""
+  ];
+
+  // FaceEmbeddingHash is the face embedding hash (if consented)
+  bytes face_embedding_hash = 3 [
+    (gogoproto.jsontag) = "face_embedding_hash",
+    (gogoproto.moretags) = "yaml:\"face_embedding_hash\""
+  ];
+
+  // DocFieldHashes are document field hashes (if consented)
+  map<string, bytes> doc_field_hashes = 4 [
+    (gogoproto.jsontag) = "doc_field_hashes",
+    (gogoproto.moretags) = "yaml:\"doc_field_hashes\""
+  ];
+
+  // BiometricHash is the biometric hash (if consented)
+  bytes biometric_hash = 5 [
+    (gogoproto.jsontag) = "biometric_hash",
+    (gogoproto.moretags) = "yaml:\"biometric_hash\""
+  ];
+
+  // ModelVersion is the model version used
+  string model_version = 6 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
   ];
 }
