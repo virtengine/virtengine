@@ -241,6 +241,43 @@ func (m *ChunkManifest) RootHashHex() string {
 	return hex.EncodeToString(m.RootHash)
 }
 
+// Serialize serializes the manifest to bytes for storage
+// Uses a simple binary format: version + totalSize + chunkSize + chunkCount + rootHash + chunks
+func (m *ChunkManifest) Serialize() []byte {
+	// Estimate size: header (4+8+8+4+32) + chunks (4+32+8+8+variable string per chunk)
+	buf := make([]byte, 0, 56+len(m.Chunks)*100)
+
+	// Write header
+	buf = appendUint32(buf, m.Version)
+	buf = appendUint64(buf, m.TotalSize)
+	buf = appendUint64(buf, m.ChunkSize)
+	buf = appendUint32(buf, m.ChunkCount)
+	buf = append(buf, m.RootHash...)
+
+	// Write chunks
+	for _, chunk := range m.Chunks {
+		buf = appendUint32(buf, chunk.Index)
+		buf = append(buf, chunk.Hash...)
+		buf = appendUint64(buf, chunk.Size)
+		buf = appendUint64(buf, chunk.Offset)
+		buf = appendUint32(buf, uint32(len(chunk.BackendRef)))
+		buf = append(buf, []byte(chunk.BackendRef)...)
+	}
+
+	return buf
+}
+
+// appendUint32 appends a uint32 to a byte slice in big-endian format
+func appendUint32(buf []byte, v uint32) []byte {
+	return append(buf, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+}
+
+// appendUint64 appends a uint64 to a byte slice in big-endian format
+func appendUint64(buf []byte, v uint64) []byte {
+	return append(buf, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
+		byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+}
+
 // Validate validates the chunk manifest
 func (m *ChunkManifest) Validate() error {
 	if m.Version == 0 {

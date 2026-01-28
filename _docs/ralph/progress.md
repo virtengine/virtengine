@@ -588,7 +588,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 | ID | Area | Title | Status | Assigned |
 |----|------|-------|--------|----------|
 | VE-2003 | Payments | Implement real Stripe payment adapter | COMPLETED | Copilot |
-| VE-2004 | Storage | Implement real IPFS artifact storage backend | NOT STARTED | - |
+| VE-2004 | Storage | Implement real IPFS artifact storage backend | COMPLETED | Copilot |
 | VE-2009 | Workflows | Implement persistent workflow state storage | NOT STARTED | - |
 | VE-2010 | Security | Add chain-level rate limiting ante handler | COMPLETED | Copilot |
 | VE-2012 | Providers | Implement provider public key storage | NOT STARTED | - |

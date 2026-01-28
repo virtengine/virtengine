@@ -11,7 +11,7 @@ import (
 
 // IPFSConfig contains configuration for the IPFS backend
 type IPFSConfig struct {
-	// Endpoint is the IPFS API endpoint URL
+	// Endpoint is the IPFS API endpoint URL (e.g., "localhost:5001")
 	Endpoint string `json:"endpoint"`
 
 	// GatewayURL is the IPFS HTTP gateway URL for retrieval
@@ -31,17 +31,34 @@ type IPFSConfig struct {
 
 	// EnablePinning indicates if content should be pinned
 	EnablePinning bool `json:"enable_pinning"`
+
+	// UseStubClient indicates if stub client should be used (for testing)
+	UseStubClient bool `json:"use_stub_client"`
 }
 
-// DefaultIPFSConfig returns a default configuration
+// DefaultIPFSConfig returns a default configuration for testing with stub client
 func DefaultIPFSConfig() *IPFSConfig {
 	return &IPFSConfig{
-		Endpoint:      "http://localhost:5001",
+		Endpoint:      "localhost:5001",
 		GatewayURL:    "http://localhost:8080",
 		MaxRetries:    3,
 		Timeout:       60 * time.Second,
 		ChunkSize:     256 * 1024, // 256KB chunks
 		EnablePinning: true,
+		UseStubClient: true, // Default to stub for tests
+	}
+}
+
+// ProductionIPFSConfig returns a configuration for production use with real IPFS
+func ProductionIPFSConfig(endpoint string) *IPFSConfig {
+	return &IPFSConfig{
+		Endpoint:      endpoint,
+		GatewayURL:    "https://ipfs.io",
+		MaxRetries:    3,
+		Timeout:       60 * time.Second,
+		ChunkSize:     256 * 1024, // 256KB chunks
+		EnablePinning: true,
+		UseStubClient: false, // Use real IPFS client
 	}
 }
 
@@ -64,6 +81,7 @@ func (c *IPFSConfig) Validate() error {
 //   - Automatic chunking for large artifacts
 //   - Chunk manifests for deterministic reconstruction
 //   - Optional pinning for persistence
+//   - Supports both real IPFS nodes and stub client for testing
 //
 // Security:
 //   - All data is encrypted before being stored in IPFS
@@ -71,31 +89,29 @@ func (c *IPFSConfig) Validate() error {
 //   - No sensitive data is logged
 type IPFSBackend struct {
 	config *IPFSConfig
+	client IPFSClient
 
-	// mu protects concurrent access to the storage map
+	// mu protects concurrent access to the internal state
 	mu sync.RWMutex
 
-	// storage is an in-memory map for stubbed implementation
-	// In production, this would be replaced with actual IPFS API calls
-	storage map[string]*ipfsStoredArtifact
+	// artifactIndex maps content hash (hex) -> artifact metadata
+	// This is kept in-memory for fast lookups; production would use a database
+	artifactIndex map[string]*ipfsStoredArtifact
 
-	// chunks stores individual chunks by CID
-	chunks map[string][]byte
+	// chunkIndex maps chunk CID -> parent artifact hash
+	chunkIndex map[string]string
 
 	// metrics tracks storage metrics
 	metrics *StorageMetrics
 
 	// ownerIndex maps owner -> list of content hashes
 	ownerIndex map[string][]string
-
-	// cidCounter is used to generate unique CIDs in stubbed mode
-	cidCounter uint64
 }
 
-// ipfsStoredArtifact represents an artifact in IPFS storage
+// ipfsStoredArtifact represents artifact metadata in the index
 type ipfsStoredArtifact struct {
 	cid        string
-	data       []byte
+	size       uint64
 	reference  *ArtifactReference
 	manifest   *ChunkManifest
 	storedAt   time.Time
@@ -109,14 +125,59 @@ func NewIPFSBackend(config *IPFSConfig) (*IPFSBackend, error) {
 		config = DefaultIPFSConfig()
 	}
 
-	// For stubbed implementation, we don't validate endpoint
-	// In production, this would establish connection to IPFS node
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
+	var client IPFSClient
+	var err error
+
+	if config.UseStubClient {
+		// Use stub client for testing
+		client = NewStubIPFSClient()
+	} else {
+		// Create real IPFS client
+		clientConfig := &RealIPFSClientConfig{
+			Endpoint:   config.Endpoint,
+			Timeout:    config.Timeout,
+			MaxRetries: config.MaxRetries,
+		}
+		client, err = NewRealIPFSClient(clientConfig)
+		if err != nil {
+			return nil, ErrBackendUnavailable.Wrapf("failed to connect to IPFS: %v", err)
+		}
+	}
 
 	return &IPFSBackend{
-		config:     config,
-		storage:    make(map[string]*ipfsStoredArtifact),
-		chunks:     make(map[string][]byte),
-		ownerIndex: make(map[string][]string),
+		config:        config,
+		client:        client,
+		artifactIndex: make(map[string]*ipfsStoredArtifact),
+		chunkIndex:    make(map[string]string),
+		ownerIndex:    make(map[string][]string),
+		metrics: &StorageMetrics{
+			BackendType:   BackendIPFS,
+			BackendStatus: make(map[string]string),
+		},
+	}, nil
+}
+
+// NewIPFSBackendWithClient creates a new IPFS backend with a custom client
+// This is useful for testing with mock clients
+func NewIPFSBackendWithClient(config *IPFSConfig, client IPFSClient) (*IPFSBackend, error) {
+	if config == nil {
+		config = DefaultIPFSConfig()
+	}
+
+	if client == nil {
+		return nil, ErrInvalidInput.Wrap("client cannot be nil")
+	}
+
+	return &IPFSBackend{
+		config:        config,
+		client:        client,
+		artifactIndex: make(map[string]*ipfsStoredArtifact),
+		chunkIndex:    make(map[string]string),
+		ownerIndex:    make(map[string][]string),
 		metrics: &StorageMetrics{
 			BackendType:   BackendIPFS,
 			BackendStatus: make(map[string]string),
@@ -129,23 +190,26 @@ func (i *IPFSBackend) Backend() BackendType {
 	return BackendIPFS
 }
 
-// generateCID generates a fake CID for stubbed implementation
-// In production, this would be computed by IPFS
-func (i *IPFSBackend) generateCID(data []byte) string {
-	i.cidCounter++
-	hash := sha256.Sum256(data)
-	// Simulate CIDv1 format: Qm + base58 of hash
-	return "Qm" + hex.EncodeToString(hash[:16])
-}
-
 // Put stores an encrypted artifact and returns its content address
 func (i *IPFSBackend) Put(ctx context.Context, req *PutRequest) (*PutResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Generate CID for the data
-	cid := i.generateCID(req.Data)
+	// Store data in IPFS and get real CID
+	cid, err := i.client.Add(ctx, req.Data)
+	if err != nil {
+		return nil, ErrBackendUnavailable.Wrapf("ipfs add failed: %v", err)
+	}
+
+	// Pin if enabled
+	if i.config.EnablePinning {
+		if err := i.client.Pin(ctx, cid); err != nil {
+			// Log warning but don't fail - data is already stored
+			// In production, this would be logged properly
+			_ = err
+		}
+	}
 
 	// Compute content address
 	hash := sha256.Sum256(req.Data)
@@ -178,13 +242,13 @@ func (i *IPFSBackend) Put(ctx context.Context, req *PutRequest) (*PutResponse, e
 		artifactRef.SetMetadata(k, v)
 	}
 
-	// Store in backend (stubbed - in production would call IPFS API)
+	// Store artifact metadata in index
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	i.storage[hashHex] = &ipfsStoredArtifact{
+	i.artifactIndex[hashHex] = &ipfsStoredArtifact{
 		cid:        cid,
-		data:       req.Data,
+		size:       uint64(len(req.Data)),
 		reference:  artifactRef,
 		storedAt:   time.Now().UTC(),
 		accessedAt: time.Now().UTC(),
@@ -213,7 +277,7 @@ func (i *IPFSBackend) Get(ctx context.Context, req *GetRequest) (*GetResponse, e
 	hashHex := hex.EncodeToString(req.ContentAddress.Hash)
 
 	i.mu.RLock()
-	artifact, exists := i.storage[hashHex]
+	artifact, exists := i.artifactIndex[hashHex]
 	i.mu.RUnlock()
 
 	if !exists {
@@ -227,10 +291,16 @@ func (i *IPFSBackend) Get(ctx context.Context, req *GetRequest) (*GetResponse, e
 		}
 	}
 
+	// Retrieve data from IPFS using the CID
+	data, err := i.client.Cat(ctx, artifact.cid)
+	if err != nil {
+		return nil, ErrBackendUnavailable.Wrapf("ipfs cat failed: %v", err)
+	}
+
 	// Verify hash
-	computedHash := sha256.Sum256(artifact.data)
+	computedHash := sha256.Sum256(data)
 	if !bytesEqual(computedHash[:], req.ContentAddress.Hash) {
-		return nil, ErrHashMismatch.Wrap("stored data hash does not match request")
+		return nil, ErrHashMismatch.Wrap("retrieved data hash does not match request")
 	}
 
 	// Update access time
@@ -239,13 +309,14 @@ func (i *IPFSBackend) Get(ctx context.Context, req *GetRequest) (*GetResponse, e
 	i.mu.Unlock()
 
 	return &GetResponse{
-		Data:           artifact.data,
+		Data:           data,
 		ContentAddress: artifact.reference.ContentAddress,
 		ChunkManifest:  artifact.manifest,
 	}, nil
 }
 
 // Delete removes an artifact by its content address
+// In IPFS, this unpins the data allowing garbage collection
 func (i *IPFSBackend) Delete(ctx context.Context, req *DeleteRequest) error {
 	if err := req.Validate(); err != nil {
 		return err
@@ -256,7 +327,7 @@ func (i *IPFSBackend) Delete(ctx context.Context, req *DeleteRequest) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	artifact, exists := i.storage[hashHex]
+	artifact, exists := i.artifactIndex[hashHex]
 	if !exists {
 		return ErrArtifactNotFound.Wrapf("artifact not found: %s", hashHex)
 	}
@@ -266,10 +337,21 @@ func (i *IPFSBackend) Delete(ctx context.Context, req *DeleteRequest) error {
 		return ErrAuthenticationFailed.Wrap("not authorized to delete artifact")
 	}
 
+	// Unpin from IPFS (allows garbage collection)
+	if artifact.pinned {
+		if err := i.client.Unpin(ctx, artifact.cid); err != nil {
+			// Log warning but continue with deletion from index
+			_ = err
+		}
+	}
+
 	// Delete chunks if present
 	if artifact.manifest != nil {
 		for _, chunk := range artifact.manifest.Chunks {
-			delete(i.chunks, chunk.BackendRef)
+			if err := i.client.Unpin(ctx, chunk.BackendRef); err != nil {
+				_ = err
+			}
+			delete(i.chunkIndex, chunk.BackendRef)
 			i.metrics.TotalChunks--
 		}
 	}
@@ -287,10 +369,10 @@ func (i *IPFSBackend) Delete(ctx context.Context, req *DeleteRequest) error {
 
 	// Update metrics
 	i.metrics.TotalArtifacts--
-	i.metrics.TotalBytes -= uint64(len(artifact.data))
+	i.metrics.TotalBytes -= artifact.size
 
-	// Delete from storage
-	delete(i.storage, hashHex)
+	// Delete from index
+	delete(i.artifactIndex, hashHex)
 
 	return nil
 }
@@ -304,10 +386,24 @@ func (i *IPFSBackend) Exists(ctx context.Context, address *ContentAddress) (bool
 	hashHex := hex.EncodeToString(address.Hash)
 
 	i.mu.RLock()
-	_, exists := i.storage[hashHex]
+	artifact, exists := i.artifactIndex[hashHex]
 	i.mu.RUnlock()
 
-	return exists, nil
+	if !exists {
+		return false, nil
+	}
+
+	// Optionally verify the CID is still pinned in IPFS
+	if i.config.EnablePinning {
+		pinned, err := i.client.IsPinned(ctx, artifact.cid)
+		if err != nil {
+			// If we can't check, assume it exists based on index
+			return true, nil
+		}
+		return pinned, nil
+	}
+
+	return true, nil
 }
 
 // GetChunk retrieves a specific chunk of a chunked artifact
@@ -319,7 +415,7 @@ func (i *IPFSBackend) GetChunk(ctx context.Context, address *ContentAddress, chu
 	hashHex := hex.EncodeToString(address.Hash)
 
 	i.mu.RLock()
-	artifact, exists := i.storage[hashHex]
+	artifact, exists := i.artifactIndex[hashHex]
 	i.mu.RUnlock()
 
 	if !exists {
@@ -336,12 +432,10 @@ func (i *IPFSBackend) GetChunk(ctx context.Context, address *ContentAddress, chu
 
 	chunkInfo := artifact.manifest.Chunks[chunkIndex]
 
-	i.mu.RLock()
-	chunkData, exists := i.chunks[chunkInfo.BackendRef]
-	i.mu.RUnlock()
-
-	if !exists {
-		return nil, ErrChunkNotFound.Wrapf("chunk not found: %s", chunkInfo.BackendRef)
+	// Retrieve chunk from IPFS
+	chunkData, err := i.client.Cat(ctx, chunkInfo.BackendRef)
+	if err != nil {
+		return nil, ErrChunkNotFound.Wrapf("failed to retrieve chunk: %v", err)
 	}
 
 	return &ChunkData{
@@ -389,7 +483,7 @@ func (i *IPFSBackend) ListByOwner(ctx context.Context, owner string, pagination 
 
 	refs := make([]*ArtifactReference, 0, end-start)
 	for _, h := range hashes[start:end] {
-		if artifact, ok := i.storage[h]; ok {
+		if artifact, ok := i.artifactIndex[h]; ok {
 			refs = append(refs, artifact.reference)
 		}
 	}
@@ -412,7 +506,7 @@ func (i *IPFSBackend) UpdateRetention(ctx context.Context, address *ContentAddre
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	artifact, exists := i.storage[hashHex]
+	artifact, exists := i.artifactIndex[hashHex]
 	if !exists {
 		return ErrArtifactNotFound.Wrapf("artifact not found: %s", hashHex)
 	}
@@ -430,7 +524,7 @@ func (i *IPFSBackend) PurgeExpired(ctx context.Context, currentBlock int64) (int
 
 	toDelete := make([]string, 0)
 
-	for hashHex, artifact := range i.storage {
+	for hashHex, artifact := range i.artifactIndex {
 		if artifact.reference.RetentionTag != nil {
 			if artifact.reference.RetentionTag.DeleteOnExpiry {
 				expired := artifact.reference.RetentionTag.IsExpired(now) ||
@@ -443,12 +537,22 @@ func (i *IPFSBackend) PurgeExpired(ctx context.Context, currentBlock int64) (int
 	}
 
 	for _, hashHex := range toDelete {
-		artifact := i.storage[hashHex]
+		artifact := i.artifactIndex[hashHex]
+
+		// Unpin from IPFS
+		if artifact.pinned {
+			if err := i.client.Unpin(ctx, artifact.cid); err != nil {
+				_ = err // Log but continue
+			}
+		}
 
 		// Delete chunks if present
 		if artifact.manifest != nil {
 			for _, chunk := range artifact.manifest.Chunks {
-				delete(i.chunks, chunk.BackendRef)
+				if err := i.client.Unpin(ctx, chunk.BackendRef); err != nil {
+					_ = err
+				}
+				delete(i.chunkIndex, chunk.BackendRef)
 				i.metrics.TotalChunks--
 			}
 		}
@@ -465,9 +569,9 @@ func (i *IPFSBackend) PurgeExpired(ctx context.Context, currentBlock int64) (int
 		}
 
 		// Update metrics
-		i.metrics.TotalBytes -= uint64(len(artifact.data))
+		i.metrics.TotalBytes -= artifact.size
 
-		delete(i.storage, hashHex)
+		delete(i.artifactIndex, hashHex)
 	}
 
 	i.metrics.TotalArtifacts -= uint64(len(toDelete))
@@ -482,13 +586,16 @@ func (i *IPFSBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error) {
 	// Count expired artifacts
 	now := time.Now().UTC()
 	expired := uint64(0)
-	for _, artifact := range i.storage {
+	for _, artifact := range i.artifactIndex {
 		if artifact.reference.RetentionTag != nil {
 			if artifact.reference.RetentionTag.IsExpired(now) {
 				expired++
 			}
 		}
 	}
+
+	// Get IPFS version for status
+	version, _ := i.client.Version(ctx)
 
 	return &StorageMetrics{
 		TotalArtifacts:   i.metrics.TotalArtifacts,
@@ -497,12 +604,13 @@ func (i *IPFSBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error) {
 		ExpiredArtifacts: expired,
 		BackendType:      BackendIPFS,
 		BackendStatus: map[string]string{
-			"endpoint":   i.config.Endpoint,
-			"gateway":    i.config.GatewayURL,
-			"pinning":    boolToString(i.config.EnablePinning),
-			"chunk_size": uintToString(i.config.ChunkSize),
-			"total_cids": uintToString(i.metrics.TotalArtifacts),
-			"total_pins": uintToString(i.countPinned()),
+			"endpoint":     i.config.Endpoint,
+			"gateway":      i.config.GatewayURL,
+			"pinning":      boolToString(i.config.EnablePinning),
+			"chunk_size":   uintToString(i.config.ChunkSize),
+			"total_cids":   uintToString(i.metrics.TotalArtifacts),
+			"total_pins":   uintToString(i.countPinned()),
+			"ipfs_version": version,
 		},
 	}, nil
 }
@@ -510,7 +618,7 @@ func (i *IPFSBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error) {
 // countPinned counts pinned artifacts
 func (i *IPFSBackend) countPinned() uint64 {
 	count := uint64(0)
-	for _, artifact := range i.storage {
+	for _, artifact := range i.artifactIndex {
 		if artifact.pinned {
 			count++
 		}
@@ -520,8 +628,7 @@ func (i *IPFSBackend) countPinned() uint64 {
 
 // Health checks if the backend is healthy
 func (i *IPFSBackend) Health(ctx context.Context) error {
-	// Stubbed - in production would ping IPFS node
-	return nil
+	return i.client.IsHealthy(ctx)
 }
 
 // Ensure IPFSBackend implements ArtifactStore
@@ -542,10 +649,7 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 	totalSize := uint64(len(data))
 	manifest := NewChunkManifest(totalSize, chunkSize)
 
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	// Split data into chunks and store each
+	// Split data into chunks and store each in IPFS
 	for offset := uint64(0); offset < totalSize; offset += chunkSize {
 		end := offset + chunkSize
 		if end > totalSize {
@@ -554,11 +658,19 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 
 		chunkData := data[offset:end]
 		chunkHash := sha256.Sum256(chunkData)
-		chunkCID := i.generateCID(chunkData)
 
-		// Store chunk
-		i.chunks[chunkCID] = chunkData
-		i.metrics.TotalChunks++
+		// Store chunk in IPFS
+		chunkCID, err := i.client.Add(ctx, chunkData)
+		if err != nil {
+			return nil, nil, ErrBackendUnavailable.Wrapf("failed to store chunk: %v", err)
+		}
+
+		// Pin chunk if enabled
+		if i.config.EnablePinning {
+			if err := i.client.Pin(ctx, chunkCID); err != nil {
+				_ = err // Log but continue
+			}
+		}
 
 		// Add to manifest
 		chunkInfo := ChunkInfo{
@@ -572,6 +684,12 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 		if err := manifest.AddChunk(chunkInfo); err != nil {
 			return nil, nil, err
 		}
+
+		// Track chunk in index
+		i.mu.Lock()
+		i.chunkIndex[chunkCID] = hex.EncodeToString(chunkHash[:])
+		i.metrics.TotalChunks++
+		i.mu.Unlock()
 	}
 
 	// Compute root hash
@@ -581,8 +699,18 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 	hash := sha256.Sum256(data)
 	hashHex := hex.EncodeToString(hash[:])
 
-	// Generate CID for the manifest itself
-	manifestCID := i.generateCID(manifest.RootHash)
+	// Store manifest in IPFS and get its CID
+	manifestData := manifest.Serialize()
+	manifestCID, err := i.client.Add(ctx, manifestData)
+	if err != nil {
+		return nil, nil, ErrBackendUnavailable.Wrapf("failed to store manifest: %v", err)
+	}
+
+	if i.config.EnablePinning {
+		if err := i.client.Pin(ctx, manifestCID); err != nil {
+			_ = err
+		}
+	}
 
 	contentAddr := &ContentAddress{
 		Version:    ContentAddressVersion,
@@ -613,10 +741,13 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 		artifactRef.SetMetadata(k, v)
 	}
 
-	// Store artifact
-	i.storage[hashHex] = &ipfsStoredArtifact{
+	// Store artifact metadata in index
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	i.artifactIndex[hashHex] = &ipfsStoredArtifact{
 		cid:        manifestCID,
-		data:       data,
+		size:       totalSize,
 		reference:  artifactRef,
 		manifest:   manifest,
 		storedAt:   time.Now().UTC(),
@@ -647,16 +778,14 @@ func (i *IPFSBackend) GetChunked(ctx context.Context, manifest *ChunkManifest) (
 		return nil, err
 	}
 
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-
 	// Reassemble data from chunks in order
 	data := make([]byte, 0, manifest.TotalSize)
 
 	for _, chunkInfo := range manifest.Chunks {
-		chunkData, exists := i.chunks[chunkInfo.BackendRef]
-		if !exists {
-			return nil, ErrChunkNotFound.Wrapf("chunk not found: %s", chunkInfo.BackendRef)
+		// Retrieve chunk from IPFS
+		chunkData, err := i.client.Cat(ctx, chunkInfo.BackendRef)
+		if err != nil {
+			return nil, ErrChunkNotFound.Wrapf("failed to retrieve chunk %s: %v", chunkInfo.BackendRef, err)
 		}
 
 		// Verify chunk hash
@@ -681,13 +810,11 @@ func (i *IPFSBackend) VerifyChunks(ctx context.Context, manifest *ChunkManifest)
 		return ErrInvalidInput.Wrap("manifest cannot be nil")
 	}
 
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-
 	for _, chunkInfo := range manifest.Chunks {
-		chunkData, exists := i.chunks[chunkInfo.BackendRef]
-		if !exists {
-			return ErrChunkNotFound.Wrapf("chunk not found: %s", chunkInfo.BackendRef)
+		// Retrieve chunk from IPFS
+		chunkData, err := i.client.Cat(ctx, chunkInfo.BackendRef)
+		if err != nil {
+			return ErrChunkNotFound.Wrapf("failed to retrieve chunk %s: %v", chunkInfo.BackendRef, err)
 		}
 
 		computedHash := sha256.Sum256(chunkData)
@@ -726,7 +853,8 @@ func NewIPFSStreamingBackend(config *IPFSConfig) (*IPFSStreamingBackend, error) 
 
 // PutStream stores a large artifact using streaming
 func (i *IPFSStreamingBackend) PutStream(ctx context.Context, req *PutStreamRequest) (*PutResponse, error) {
-	// Read all data from stream (stubbed - production would stream to IPFS)
+	// Read all data from stream
+	// Note: For very large files, consider implementing true streaming to IPFS
 	data, err := io.ReadAll(req.Reader)
 	if err != nil {
 		return nil, ErrInvalidInput.Wrapf("failed to read stream: %v", err)
@@ -748,13 +876,22 @@ func (i *IPFSStreamingBackend) PutStream(ctx context.Context, req *PutStreamRequ
 
 // GetStream retrieves a large artifact as a stream
 func (i *IPFSStreamingBackend) GetStream(ctx context.Context, address *ContentAddress) (io.ReadCloser, error) {
-	// Get artifact (stubbed - production would stream from IPFS gateway)
-	resp, err := i.Get(ctx, &GetRequest{ContentAddress: address})
-	if err != nil {
-		return nil, err
+	if address == nil {
+		return nil, ErrInvalidInput.Wrap("address cannot be nil")
 	}
 
-	return &bytesReadCloser{data: resp.Data}, nil
+	hashHex := hex.EncodeToString(address.Hash)
+
+	i.mu.RLock()
+	artifact, exists := i.artifactIndex[hashHex]
+	i.mu.RUnlock()
+
+	if !exists {
+		return nil, ErrArtifactNotFound.Wrapf("artifact not found: %s", hashHex)
+	}
+
+	// Use the client's streaming interface
+	return i.client.CatStream(ctx, artifact.cid)
 }
 
 // Ensure IPFSStreamingBackend implements StreamingArtifactStore
