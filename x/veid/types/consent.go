@@ -38,6 +38,11 @@ type ScopeConsent struct {
 
 // NewScopeConsent creates a new scope consent
 func NewScopeConsent(scopeID string, granted bool, purpose string) *ScopeConsent {
+	return NewScopeConsentAt(scopeID, granted, purpose, time.Unix(0, 0))
+}
+
+// NewScopeConsentAt creates a new scope consent with a caller-provided timestamp
+func NewScopeConsentAt(scopeID string, granted bool, purpose string, now time.Time) *ScopeConsent {
 	consent := &ScopeConsent{
 		ScopeID:            scopeID,
 		Granted:            granted,
@@ -46,8 +51,8 @@ func NewScopeConsent(scopeID string, granted bool, purpose string) *ScopeConsent
 		Restrictions:       make([]string, 0),
 	}
 	if granted {
-		now := time.Now()
-		consent.GrantedAt = &now
+		timestamp := now
+		consent.GrantedAt = &timestamp
 	}
 	return consent
 }
@@ -67,12 +72,12 @@ func (sc *ScopeConsent) Validate() error {
 }
 
 // IsActive checks if the consent is currently active (granted and not expired)
-func (sc *ScopeConsent) IsActive() bool {
+func (sc *ScopeConsent) IsActive(now time.Time) bool {
 	if !sc.Granted {
 		return false
 	}
 
-	if sc.ExpiresAt != nil && time.Now().After(*sc.ExpiresAt) {
+	if sc.ExpiresAt != nil && now.After(*sc.ExpiresAt) {
 		return false
 	}
 
@@ -81,9 +86,14 @@ func (sc *ScopeConsent) IsActive() bool {
 
 // Grant grants consent with the given purpose and optional expiration
 func (sc *ScopeConsent) Grant(purpose string, expiresAt *time.Time) {
-	now := time.Now()
+	sc.GrantAt(purpose, expiresAt, time.Unix(0, 0))
+}
+
+// GrantAt grants consent with a caller-provided timestamp
+func (sc *ScopeConsent) GrantAt(purpose string, expiresAt *time.Time, now time.Time) {
 	sc.Granted = true
-	sc.GrantedAt = &now
+	timestamp := now
+	sc.GrantedAt = &timestamp
 	sc.RevokedAt = nil
 	sc.Purpose = purpose
 	sc.ExpiresAt = expiresAt
@@ -91,9 +101,14 @@ func (sc *ScopeConsent) Grant(purpose string, expiresAt *time.Time) {
 
 // Revoke revokes the consent
 func (sc *ScopeConsent) Revoke() {
-	now := time.Now()
+	sc.RevokeAt(time.Unix(0, 0))
+}
+
+// RevokeAt revokes the consent with a caller-provided timestamp
+func (sc *ScopeConsent) RevokeAt(now time.Time) {
 	sc.Granted = false
-	sc.RevokedAt = &now
+	timestamp := now
+	sc.RevokedAt = &timestamp
 }
 
 // AddProviderGrant adds a provider-specific consent grant
@@ -118,8 +133,8 @@ func (sc *ScopeConsent) RemoveProviderGrant(providerAddress string) bool {
 }
 
 // IsGrantedToProvider checks if consent is granted to a specific provider
-func (sc *ScopeConsent) IsGrantedToProvider(providerAddress string) bool {
-	if !sc.IsActive() {
+func (sc *ScopeConsent) IsGrantedToProvider(providerAddress string, now time.Time) bool {
+	if !sc.IsActive(now) {
 		return false
 	}
 
@@ -166,13 +181,18 @@ type ConsentSettings struct {
 
 // NewConsentSettings creates new consent settings with secure defaults
 func NewConsentSettings() ConsentSettings {
+	return NewConsentSettingsAt(time.Unix(0, 0))
+}
+
+// NewConsentSettingsAt creates new consent settings with a caller-provided timestamp
+func NewConsentSettingsAt(now time.Time) ConsentSettings {
 	return ConsentSettings{
 		ScopeConsents:              make(map[string]ScopeConsent),
 		ShareWithProviders:         false, // Secure default: no sharing
 		ShareForVerification:       false, // Secure default: explicit opt-in required
 		AllowReVerification:        false, // Secure default: explicit opt-in required
 		AllowDerivedFeatureSharing: false, // Secure default: no feature sharing
-		LastUpdatedAt:              time.Now(),
+		LastUpdatedAt:              now,
 		ConsentVersion:             1,
 	}
 }
@@ -192,8 +212,13 @@ func (cs *ConsentSettings) Validate() error {
 
 // SetScopeConsent sets consent for a specific scope
 func (cs *ConsentSettings) SetScopeConsent(consent ScopeConsent) {
+	cs.SetScopeConsentAt(consent, time.Unix(0, 0))
+}
+
+// SetScopeConsentAt sets consent for a specific scope with a caller-provided timestamp
+func (cs *ConsentSettings) SetScopeConsentAt(consent ScopeConsent, now time.Time) {
 	cs.ScopeConsents[consent.ScopeID] = consent
-	cs.LastUpdatedAt = time.Now()
+	cs.LastUpdatedAt = now
 	cs.ConsentVersion++
 }
 
@@ -204,7 +229,13 @@ func (cs *ConsentSettings) GetScopeConsent(scopeID string) (ScopeConsent, bool) 
 }
 
 // GrantScopeConsent grants consent for a scope
+
 func (cs *ConsentSettings) GrantScopeConsent(scopeID string, purpose string, expiresAt *time.Time) {
+	cs.GrantScopeConsentAt(scopeID, purpose, expiresAt, time.Unix(0, 0))
+}
+
+// GrantScopeConsentAt grants consent for a scope with a caller-provided timestamp
+func (cs *ConsentSettings) GrantScopeConsentAt(scopeID string, purpose string, expiresAt *time.Time, now time.Time) {
 	consent, found := cs.ScopeConsents[scopeID]
 	if !found {
 		consent = ScopeConsent{
@@ -213,45 +244,61 @@ func (cs *ConsentSettings) GrantScopeConsent(scopeID string, purpose string, exp
 			Restrictions:       make([]string, 0),
 		}
 	}
-	consent.Grant(purpose, expiresAt)
+	consent.GrantAt(purpose, expiresAt, now)
 	cs.ScopeConsents[scopeID] = consent
-	cs.LastUpdatedAt = time.Now()
+	cs.LastUpdatedAt = now
 	cs.ConsentVersion++
 }
 
 // RevokeScopeConsent revokes consent for a scope
 func (cs *ConsentSettings) RevokeScopeConsent(scopeID string) bool {
+	return cs.RevokeScopeConsentAt(scopeID, time.Unix(0, 0))
+}
+
+// RevokeScopeConsentAt revokes consent for a scope with a caller-provided timestamp
+func (cs *ConsentSettings) RevokeScopeConsentAt(scopeID string, now time.Time) bool {
 	consent, found := cs.ScopeConsents[scopeID]
 	if !found {
 		return false
 	}
-	consent.Revoke()
+	consent.RevokeAt(now)
 	cs.ScopeConsents[scopeID] = consent
-	cs.LastUpdatedAt = time.Now()
+	cs.LastUpdatedAt = now
 	cs.ConsentVersion++
 	return true
 }
 
 // IsScopeConsentActive checks if consent is active for a scope
+
 func (cs *ConsentSettings) IsScopeConsentActive(scopeID string) bool {
+	return cs.IsScopeConsentActiveAt(scopeID, time.Unix(0, 0))
+}
+
+// IsScopeConsentActiveAt checks if consent is active for a scope with a caller-provided timestamp
+func (cs *ConsentSettings) IsScopeConsentActiveAt(scopeID string, now time.Time) bool {
 	consent, found := cs.ScopeConsents[scopeID]
 	if !found {
 		return false
 	}
-	return consent.IsActive()
+	return consent.IsActive(now)
 }
 
 // RevokeAll revokes all consents
 func (cs *ConsentSettings) RevokeAll() {
+	cs.RevokeAllAt(time.Unix(0, 0))
+}
+
+// RevokeAllAt revokes all consents with a caller-provided timestamp
+func (cs *ConsentSettings) RevokeAllAt(now time.Time) {
 	for scopeID, consent := range cs.ScopeConsents {
-		consent.Revoke()
+		consent.RevokeAt(now)
 		cs.ScopeConsents[scopeID] = consent
 	}
 	cs.ShareWithProviders = false
 	cs.ShareForVerification = false
 	cs.AllowReVerification = false
 	cs.AllowDerivedFeatureSharing = false
-	cs.LastUpdatedAt = time.Now()
+	cs.LastUpdatedAt = now
 	cs.ConsentVersion++
 }
 
@@ -262,19 +309,35 @@ func (cs *ConsentSettings) SetGlobalSettings(
 	allowReVerification bool,
 	allowDerivedFeatureSharing bool,
 ) {
+	cs.SetGlobalSettingsAt(shareWithProviders, shareForVerification, allowReVerification, allowDerivedFeatureSharing, time.Unix(0, 0))
+}
+
+// SetGlobalSettingsAt updates global consent settings with a caller-provided timestamp
+func (cs *ConsentSettings) SetGlobalSettingsAt(
+	shareWithProviders bool,
+	shareForVerification bool,
+	allowReVerification bool,
+	allowDerivedFeatureSharing bool,
+	now time.Time,
+) {
 	cs.ShareWithProviders = shareWithProviders
 	cs.ShareForVerification = shareForVerification
 	cs.AllowReVerification = allowReVerification
 	cs.AllowDerivedFeatureSharing = allowDerivedFeatureSharing
-	cs.LastUpdatedAt = time.Now()
+	cs.LastUpdatedAt = now
 	cs.ConsentVersion++
 }
 
 // GetActiveConsents returns all active scope consents
 func (cs *ConsentSettings) GetActiveConsents() []ScopeConsent {
+	return cs.GetActiveConsentsAt(time.Unix(0, 0))
+}
+
+// GetActiveConsentsAt returns all active scope consents with a caller-provided timestamp
+func (cs *ConsentSettings) GetActiveConsentsAt(now time.Time) []ScopeConsent {
 	var active []ScopeConsent
 	for _, consent := range cs.ScopeConsents {
-		if consent.IsActive() {
+		if consent.IsActive(now) {
 			active = append(active, consent)
 		}
 	}
@@ -309,12 +372,17 @@ type GlobalConsentUpdate struct {
 
 // ApplyConsentUpdate applies a consent update request to consent settings
 func (cs *ConsentSettings) ApplyConsentUpdate(update ConsentUpdateRequest) {
+	cs.ApplyConsentUpdateAt(update, time.Unix(0, 0))
+}
+
+// ApplyConsentUpdateAt applies a consent update request with a caller-provided timestamp
+func (cs *ConsentSettings) ApplyConsentUpdateAt(update ConsentUpdateRequest, now time.Time) {
 	// Apply scope-specific consent
 	if update.ScopeID != "" {
 		if update.GrantConsent {
-			cs.GrantScopeConsent(update.ScopeID, update.Purpose, update.ExpiresAt)
+			cs.GrantScopeConsentAt(update.ScopeID, update.Purpose, update.ExpiresAt, now)
 		} else {
-			cs.RevokeScopeConsent(update.ScopeID)
+			cs.RevokeScopeConsentAt(update.ScopeID, now)
 		}
 	}
 
@@ -333,7 +401,7 @@ func (cs *ConsentSettings) ApplyConsentUpdate(update ConsentUpdateRequest) {
 		if gs.AllowDerivedFeatureSharing != nil {
 			cs.AllowDerivedFeatureSharing = *gs.AllowDerivedFeatureSharing
 		}
-		cs.LastUpdatedAt = time.Now()
+		cs.LastUpdatedAt = now
 		cs.ConsentVersion++
 	}
 }

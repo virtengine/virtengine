@@ -380,19 +380,22 @@ func TestOrderSetState_Extended(t *testing.T) {
 	t.Run("valid state transition", func(t *testing.T) {
 		order := NewOrder(validOrderID, validOfferingID, 1000, 1)
 		order.State = OrderStateOpen
+		now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
-		err := order.SetState(OrderStateMatched, "Provider selected")
+		err := order.SetStateAt(OrderStateMatched, "Provider selected", now)
 		require.NoError(t, err)
 		assert.Equal(t, OrderStateMatched, order.State)
 		assert.Equal(t, "Provider selected", order.StateReason)
 		assert.NotNil(t, order.MatchedAt)
+		assert.Equal(t, now, *order.MatchedAt)
 	})
 
 	t.Run("invalid state transition", func(t *testing.T) {
 		order := NewOrder(validOrderID, validOfferingID, 1000, 1)
 		order.State = OrderStatePendingPayment
+		now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
-		err := order.SetState(OrderStateActive, "Invalid transition")
+		err := order.SetStateAt(OrderStateActive, "Invalid transition", now)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid state transition")
 	})
@@ -400,19 +403,23 @@ func TestOrderSetState_Extended(t *testing.T) {
 	t.Run("transition sets ActivatedAt", func(t *testing.T) {
 		order := NewOrder(validOrderID, validOfferingID, 1000, 1)
 		order.State = OrderStateProvisioning
+		now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
-		err := order.SetState(OrderStateActive, "Activated")
+		err := order.SetStateAt(OrderStateActive, "Activated", now)
 		require.NoError(t, err)
 		assert.NotNil(t, order.ActivatedAt)
+		assert.Equal(t, now, *order.ActivatedAt)
 	})
 
 	t.Run("transition sets TerminatedAt", func(t *testing.T) {
 		order := NewOrder(validOrderID, validOfferingID, 1000, 1)
 		order.State = OrderStatePendingTermination
+		now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
-		err := order.SetState(OrderStateTerminated, "Completed")
+		err := order.SetStateAt(OrderStateTerminated, "Completed", now)
 		require.NoError(t, err)
 		assert.NotNil(t, order.TerminatedAt)
+		assert.Equal(t, now, *order.TerminatedAt)
 	})
 }
 

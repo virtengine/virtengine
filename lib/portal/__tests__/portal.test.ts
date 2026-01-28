@@ -2,7 +2,7 @@
  * Portal Library Tests
  * VE-700 - VE-705: Testing portal utilities and hooks
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 // Mock crypto.subtle for testing
 const mockCrypto = {
@@ -30,8 +30,26 @@ const mockCrypto = {
   },
 };
 
-// @ts-expect-error - mocking global crypto
-global.crypto = mockCrypto;
+const originalCrypto = globalThis.crypto;
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: mockCrypto,
+    configurable: true,
+  });
+});
+
+afterAll(() => {
+  if (originalCrypto) {
+    Object.defineProperty(globalThis, 'crypto', {
+      value: originalCrypto,
+      configurable: true,
+    });
+  } else {
+    // @ts-expect-error - cleanup mocked global
+    delete globalThis.crypto;
+  }
+});
 
 describe('Validation Utilities', () => {
   const {

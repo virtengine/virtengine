@@ -76,6 +76,8 @@ func TestCreateAndOpenEnvelope(t *testing.T) {
 	assert.Equal(t, types.EnvelopeVersion, envelope.Version)
 	assert.Equal(t, types.AlgorithmX25519XSalsa20Poly1305, envelope.AlgorithmID)
 	assert.Len(t, envelope.RecipientKeyIDs, 1)
+	assert.Len(t, envelope.RecipientPublicKeys, 1)
+	assert.Equal(t, recipient.PublicKey[:], envelope.RecipientPublicKeys[0])
 	assert.Len(t, envelope.Nonce, types.XSalsa20NonceSize)
 	assert.NotEmpty(t, envelope.Ciphertext)
 	assert.NotEmpty(t, envelope.SenderSignature)
@@ -174,6 +176,7 @@ func TestCreateMultiRecipientEnvelope(t *testing.T) {
 	assert.Equal(t, types.EnvelopeVersion, envelope.Version)
 	assert.Len(t, envelope.RecipientKeyIDs, 3)
 	assert.Len(t, envelope.EncryptedKeys, 3)
+	assert.Len(t, envelope.RecipientPublicKeys, 3)
 
 	// Check mode metadata
 	mode, ok := envelope.GetMetadata("_mode")

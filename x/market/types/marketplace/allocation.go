@@ -305,7 +305,12 @@ type Allocation struct {
 
 // NewAllocation creates a new allocation
 func NewAllocation(id AllocationID, offeringID OfferingID, providerAddress string, bidID BidID, acceptedPrice uint64) *Allocation {
-	now := time.Now().UTC()
+	return NewAllocationAt(id, offeringID, providerAddress, bidID, acceptedPrice, time.Unix(0, 0))
+}
+
+// NewAllocationAt creates a new allocation at a specific time
+func NewAllocationAt(id AllocationID, offeringID OfferingID, providerAddress string, bidID BidID, acceptedPrice uint64, now time.Time) *Allocation {
+	createdAt := now.UTC()
 	return &Allocation{
 		ID:               id,
 		OfferingID:       offeringID,
@@ -316,8 +321,8 @@ func NewAllocation(id AllocationID, offeringID OfferingID, providerAddress strin
 		PublicMetadata:   make(map[string]string),
 		ServiceEndpoints: make(map[string]string),
 		TotalUsage:       make(map[string]uint64),
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		CreatedAt:        createdAt,
+		UpdatedAt:        createdAt,
 	}
 }
 
@@ -348,18 +353,23 @@ func (a *Allocation) Validate() error {
 
 // SetState transitions the allocation to a new state
 func (a *Allocation) SetState(newState AllocationState, reason string) error {
+	return a.SetStateAt(newState, reason, time.Unix(0, 0))
+}
+
+// SetStateAt transitions the allocation to a new state at a specific time
+func (a *Allocation) SetStateAt(newState AllocationState, reason string, now time.Time) error {
 	a.State = newState
 	a.StateReason = reason
-	a.UpdatedAt = time.Now().UTC()
+	updatedAt := now.UTC()
+	a.UpdatedAt = updatedAt
 
-	now := time.Now().UTC()
 	switch newState {
 	case AllocationStateAccepted:
-		a.AcceptedAt = &now
+		a.AcceptedAt = &updatedAt
 	case AllocationStateActive:
-		a.ActivatedAt = &now
+		a.ActivatedAt = &updatedAt
 	case AllocationStateTerminated, AllocationStateFailed, AllocationStateRejected:
-		a.TerminatedAt = &now
+		a.TerminatedAt = &updatedAt
 	}
 
 	return nil

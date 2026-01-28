@@ -215,12 +215,12 @@ func (sr *ScopeReference) Validate() error {
 }
 
 // IsActive checks if the scope reference is active
-func (sr *ScopeReference) IsActive() bool {
+func (sr *ScopeReference) IsActive(now time.Time) bool {
 	if sr.Status != ScopeRefStatusActive {
 		return false
 	}
 
-	if sr.ExpiresAt != nil && time.Now().After(*sr.ExpiresAt) {
+	if sr.ExpiresAt != nil && now.After(*sr.ExpiresAt) {
 		return false
 	}
 
@@ -303,7 +303,7 @@ func NewIdentityWallet(
 		CurrentScore:        0,
 		ScoreStatus:         AccountStatusUnknown,
 		VerificationHistory: make([]VerificationHistoryEntry, 0),
-		ConsentSettings:     NewConsentSettings(),
+		ConsentSettings:     NewConsentSettingsAt(createdAt),
 		BindingSignature:    bindingSignature,
 		BindingPubKey:       bindingPubKey,
 		LastBindingAt:       createdAt,
@@ -375,17 +375,17 @@ func GetWalletBindingMessage(walletID, accountAddress string) []byte {
 }
 
 // AddScopeReference adds a scope reference to the wallet
-func (w *IdentityWallet) AddScopeReference(ref ScopeReference) {
+func (w *IdentityWallet) AddScopeReference(ref ScopeReference, updatedAt time.Time) {
 	// Check if scope already exists, update if so
 	for i, existing := range w.ScopeRefs {
 		if existing.ScopeID == ref.ScopeID {
 			w.ScopeRefs[i] = ref
-			w.UpdatedAt = time.Now()
+			w.UpdatedAt = updatedAt
 			return
 		}
 	}
 	w.ScopeRefs = append(w.ScopeRefs, ref)
-	w.UpdatedAt = time.Now()
+	w.UpdatedAt = updatedAt
 }
 
 // GetScopeReference returns a scope reference by ID
@@ -406,7 +406,7 @@ func (w *IdentityWallet) RevokeScopeReference(scopeID string, reason string, rev
 			w.ScopeRefs[i].RevocationReason = reason
 			w.ScopeRefs[i].RevokedAt = &revokedAt
 			w.ScopeRefs[i].ConsentGranted = false
-			w.UpdatedAt = time.Now()
+			w.UpdatedAt = revokedAt
 			return true
 		}
 	}
@@ -414,10 +414,10 @@ func (w *IdentityWallet) RevokeScopeReference(scopeID string, reason string, rev
 }
 
 // GetActiveScopeRefs returns all active scope references
-func (w *IdentityWallet) GetActiveScopeRefs() []ScopeReference {
+func (w *IdentityWallet) GetActiveScopeRefs(now time.Time) []ScopeReference {
 	var active []ScopeReference
 	for _, ref := range w.ScopeRefs {
-		if ref.IsActive() {
+		if ref.IsActive(now) {
 			active = append(active, ref)
 		}
 	}
@@ -436,17 +436,17 @@ func (w *IdentityWallet) GetScopeRefsByType(scopeType ScopeType) []ScopeReferenc
 }
 
 // AddVerificationHistoryEntry adds a verification event to the history
-func (w *IdentityWallet) AddVerificationHistoryEntry(entry VerificationHistoryEntry) {
+func (w *IdentityWallet) AddVerificationHistoryEntry(entry VerificationHistoryEntry, updatedAt time.Time) {
 	w.VerificationHistory = append(w.VerificationHistory, entry)
-	w.UpdatedAt = time.Now()
+	w.UpdatedAt = updatedAt
 }
 
 // UpdateScore updates the wallet's current score and status
-func (w *IdentityWallet) UpdateScore(score uint32, status AccountStatus) {
+func (w *IdentityWallet) UpdateScore(score uint32, status AccountStatus, updatedAt time.Time) {
 	w.CurrentScore = score
 	w.ScoreStatus = status
 	w.Tier = TierFromScore(score, status)
-	w.UpdatedAt = time.Now()
+	w.UpdatedAt = updatedAt
 }
 
 // TierFromScore determines the identity tier from score and status
@@ -530,7 +530,7 @@ type PublicWalletInfo struct {
 }
 
 // ToPublicInfo converts an IdentityWallet to PublicWalletInfo
-func (w *IdentityWallet) ToPublicInfo() PublicWalletInfo {
+func (w *IdentityWallet) ToPublicInfo(now time.Time) PublicWalletInfo {
 	var lastVerification *time.Time
 	if len(w.VerificationHistory) > 0 {
 		lastVerification = &w.VerificationHistory[len(w.VerificationHistory)-1].Timestamp
@@ -546,7 +546,7 @@ func (w *IdentityWallet) ToPublicInfo() PublicWalletInfo {
 		ScoreStatus:                 w.ScoreStatus,
 		Tier:                        w.Tier,
 		ScopeCount:                  len(w.ScopeRefs),
-		ActiveScopeCount:            len(w.GetActiveScopeRefs()),
+		ActiveScopeCount:            len(w.GetActiveScopeRefs(now)),
 		LastVerificationAt:          lastVerification,
 		ConsentShareWithProviders:   w.ConsentSettings.ShareWithProviders,
 		ConsentShareForVerification: w.ConsentSettings.ShareForVerification,

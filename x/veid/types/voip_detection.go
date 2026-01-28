@@ -353,7 +353,7 @@ func (m *MockVoIPDetector) LookupCarrier(phoneNumber string, phoneHashRef string
 		RiskLevel:       VoIPRiskLow,
 		RiskScore:       10,
 		LookupProvider:  m.providerName,
-		LookupTimestamp: time.Now(),
+		LookupTimestamp: time.Unix(0, 0),
 		Success:         true,
 	}, nil
 }

@@ -2,6 +2,8 @@ package types
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 )
 
 // Wallet message type constants
@@ -411,6 +413,12 @@ type MsgRebindWallet struct {
 
 	// OldSignature proves ownership of the old key (signs the new pub key)
 	OldSignature []byte `json:"old_signature"`
+
+	// MFAProof is proof of MFA for key rotation
+	MFAProof *mfatypes.MFAProof `json:"mfa_proof,omitempty"`
+
+	// DeviceFingerprint is the client device fingerprint (optional)
+	DeviceFingerprint string `json:"device_fingerprint,omitempty"`
 }
 
 // NewMsgRebindWallet creates a new MsgRebindWallet
@@ -451,6 +459,11 @@ func (msg MsgRebindWallet) ValidateBasic() error {
 	if len(msg.OldSignature) == 0 {
 		return ErrInvalidUserSignature.Wrap("old_signature cannot be empty")
 	}
+	if msg.MFAProof != nil {
+		if err := msg.MFAProof.Validate(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -465,6 +478,16 @@ func (msg MsgRebindWallet) GetSigners() []sdk.AccAddress {
 func (msg MsgRebindWallet) GetSignBytes() []byte {
 	bz := ModuleCdc.MustMarshalJSON(&msg)
 	return sdk.MustSortJSON(bz)
+}
+
+// GetMFAProof returns the MFA proof for gating.
+func (msg MsgRebindWallet) GetMFAProof() *mfatypes.MFAProof {
+	return msg.MFAProof
+}
+
+// GetDeviceFingerprint returns the device fingerprint for gating.
+func (msg MsgRebindWallet) GetDeviceFingerprint() string {
+	return msg.DeviceFingerprint
 }
 
 // MsgRebindWalletResponse is the response for MsgRebindWallet

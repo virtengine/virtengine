@@ -409,8 +409,7 @@ func (k Keeper) AddScopeToWallet(
 	}
 
 	// Add the scope reference
-	wallet.AddScopeReference(scopeRef)
-	wallet.UpdatedAt = ctx.BlockTime()
+	wallet.AddScopeReference(scopeRef, ctx.BlockTime())
 
 	// Save the wallet
 	if err := k.SetWallet(ctx, wallet); err != nil {
@@ -456,7 +455,7 @@ func (k Keeper) RevokeScopeFromWallet(
 	}
 
 	// Also revoke consent for this scope
-	wallet.ConsentSettings.RevokeScopeConsent(scopeID)
+	wallet.ConsentSettings.RevokeScopeConsentAt(scopeID, ctx.BlockTime())
 
 	// Save the wallet
 	if err := k.SetWallet(ctx, wallet); err != nil {
@@ -491,7 +490,7 @@ func (k Keeper) UpdateConsent(
 	}
 
 	// Apply the consent update
-	wallet.ConsentSettings.ApplyConsentUpdate(update)
+	wallet.ConsentSettings.ApplyConsentUpdateAt(update, ctx.BlockTime())
 	wallet.UpdatedAt = ctx.BlockTime()
 
 	// Save the wallet
@@ -590,7 +589,7 @@ func (k Keeper) GetWalletPublicMetadata(ctx sdk.Context, accountAddr sdk.AccAddr
 	if !found {
 		return types.PublicWalletInfo{}, false
 	}
-	return wallet.ToPublicInfo(), true
+	return wallet.ToPublicInfo(ctx.BlockTime()), true
 }
 
 // UpdateWalletScore updates the wallet's score and adds a verification history entry
@@ -627,8 +626,8 @@ func (k Keeper) UpdateWalletScore(
 	}
 
 	// Update score and add history
-	wallet.UpdateScore(newScore, newStatus)
-	wallet.AddVerificationHistoryEntry(entry)
+	wallet.UpdateScore(newScore, newStatus, ctx.BlockTime())
+	wallet.AddVerificationHistoryEntry(entry, ctx.BlockTime())
 
 	// Save the wallet
 	if err := k.SetWallet(ctx, wallet); err != nil {

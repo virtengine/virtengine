@@ -242,8 +242,9 @@ func NewApp(
 			SignModeHandler: encodingConfig.TxConfig.SignModeHandler(),
 			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 		},
-		CDC:       app.cdc,
-		GovKeeper: app.Keepers.Cosmos.Gov,
+		CDC:             app.cdc,
+		GovKeeper:       app.Keepers.Cosmos.Gov,
+		MFAGatingKeeper: &app.Keepers.VirtEngine.MFA,
 	}
 
 	anteHandler, err := NewAnteHandler(anteOpts)

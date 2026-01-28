@@ -24,9 +24,16 @@ type EncryptedPayloadEnvelope struct {
 	// e.g., "X25519-XSALSA20-POLY1305" or "AGE-X25519"
 	AlgorithmID string `json:"algorithm_id"`
 
+	// AlgorithmVersion is the version of the algorithm used
+	AlgorithmVersion uint32 `json:"algorithm_version"`
+
 	// RecipientKeyIDs are the fingerprints of intended recipients' public keys
 	// Used to identify which key can decrypt this envelope
 	RecipientKeyIDs []string `json:"recipient_key_ids"`
+
+	// RecipientPublicKeys are the public keys for intended recipients
+	// Optional for on-chain storage; if provided, must align with RecipientKeyIDs
+	RecipientPublicKeys [][]byte `json:"recipient_public_keys,omitempty"`
 
 	// EncryptedKeys contains the data encryption key encrypted for each recipient
 	// Index corresponds to RecipientKeyIDs index
@@ -55,9 +62,14 @@ type EncryptedPayloadEnvelope struct {
 
 // NewEncryptedPayloadEnvelope creates a new envelope with defaults
 func NewEncryptedPayloadEnvelope() *EncryptedPayloadEnvelope {
+	algInfo, err := GetAlgorithmInfo(DefaultAlgorithm())
+	if err != nil {
+		algInfo = AlgorithmInfo{Version: AlgorithmVersionV1}
+	}
 	return &EncryptedPayloadEnvelope{
 		Version:         EnvelopeVersion,
 		AlgorithmID:     DefaultAlgorithm(),
+		AlgorithmVersion: algInfo.Version,
 		RecipientKeyIDs: make([]string, 0),
 		Metadata:        make(map[string]string),
 	}
@@ -78,6 +90,10 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 		return ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not supported", e.AlgorithmID)
 	}
 
+	if e.AlgorithmVersion == 0 {
+		return ErrInvalidEnvelope.Wrap("algorithm version cannot be zero")
+	}
+
 	if len(e.RecipientKeyIDs) == 0 {
 		return ErrInvalidEnvelope.Wrap("at least one recipient required")
 	}
@@ -94,10 +110,19 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 		return ErrInvalidEnvelope.Wrap("sender public key required")
 	}
 
+	if len(e.SenderSignature) == 0 {
+		return ErrInvalidEnvelope.Wrap("sender signature required")
+	}
+
 	// Validate algorithm-specific parameters
 	algInfo, err := GetAlgorithmInfo(e.AlgorithmID)
 	if err != nil {
 		return err
+	}
+
+	if e.AlgorithmVersion != algInfo.Version {
+		return ErrUnsupportedVersion.Wrapf("algorithm version %d not supported for %s (expected %d)",
+			e.AlgorithmVersion, e.AlgorithmID, algInfo.Version)
 	}
 
 	if len(e.Nonce) != algInfo.NonceSize {
@@ -108,6 +133,22 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 	if len(e.SenderPubKey) != algInfo.KeySize {
 		return ErrInvalidEnvelope.Wrapf("sender public key size mismatch: expected %d, got %d",
 			algInfo.KeySize, len(e.SenderPubKey))
+	}
+
+	if len(e.RecipientPublicKeys) > 0 {
+		if len(e.RecipientPublicKeys) != len(e.RecipientKeyIDs) {
+			return ErrInvalidEnvelope.Wrap("recipient public keys must align with recipient key IDs")
+		}
+		for i, pubKey := range e.RecipientPublicKeys {
+			if len(pubKey) != algInfo.KeySize {
+				return ErrInvalidEnvelope.Wrapf("recipient public key size mismatch at index %d: expected %d, got %d",
+					i, algInfo.KeySize, len(pubKey))
+			}
+			fingerprint := ComputeKeyFingerprint(pubKey)
+			if fingerprint != e.RecipientKeyIDs[i] {
+				return ErrInvalidEnvelope.Wrapf("recipient key id mismatch at index %d", i)
+			}
+		}
 	}
 
 	return nil
@@ -123,6 +164,9 @@ func (e *EncryptedPayloadEnvelope) SigningPayload() []byte {
 
 	// Include algorithm
 	h.Write([]byte(e.AlgorithmID))
+
+	// Include algorithm version
+	h.Write([]byte{byte(e.AlgorithmVersion >> 24), byte(e.AlgorithmVersion >> 16), byte(e.AlgorithmVersion >> 8), byte(e.AlgorithmVersion)})
 
 	// Include ciphertext
 	h.Write(e.Ciphertext)

@@ -101,13 +101,25 @@ var _Query_serviceDesc = struct {
 		MethodName string
 		Handler    interface{}
 	}{
-		{MethodName: "Params", Handler: nil},
-		{MethodName: "MFAPolicy", Handler: nil},
-		{MethodName: "AccountFactors", Handler: nil},
+		{MethodName: "GetMFAPolicy", Handler: nil},
+		{MethodName: "GetFactorEnrollments", Handler: nil},
+		{MethodName: "GetFactorEnrollment", Handler: nil},
+		{MethodName: "GetChallenge", Handler: nil},
+		{MethodName: "GetPendingChallenges", Handler: nil},
+		{MethodName: "GetAuthorizationSession", Handler: nil},
+		{MethodName: "GetTrustedDevices", Handler: nil},
+		{MethodName: "GetSensitiveTxConfig", Handler: nil},
+		{MethodName: "GetAllSensitiveTxConfigs", Handler: nil},
+		{MethodName: "GetParams", Handler: nil},
+		{MethodName: "IsMFARequired", Handler: nil},
 	},
 	Streams:  []struct{}{},
 	Metadata: "virtengine/mfa/v1/query.proto",
 }
+
+// registeredQueryServer holds the registered QueryServer for the module.
+// This enables query functionality even without protobuf-generated gRPC code.
+var registeredQueryServer QueryServer
 
 // RegisterMsgServer registers the MsgServer implementation with the grpc.Server.
 // This is a stub implementation until proper protobuf generation is set up.
@@ -118,9 +130,13 @@ func RegisterMsgServer(s grpc.Server, srv MsgServer) {
 }
 
 // RegisterQueryServer registers the QueryServer implementation with the grpc.Server.
-// This is a stub implementation until proper protobuf generation is set up.
+// This stores the server for query handling until proper protobuf generation is set up.
 func RegisterQueryServer(s grpc.Server, srv QueryServer) {
-	// Registration is a no-op for now since we don't have proper protobuf generated code
-	_ = s
-	_ = srv
+	registeredQueryServer = srv
+	_ = s // Server registration requires protobuf-generated code
+}
+
+// GetRegisteredQueryServer returns the registered QueryServer, if any.
+func GetRegisteredQueryServer() QueryServer {
+	return registeredQueryServer
 }

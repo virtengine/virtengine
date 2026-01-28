@@ -64,12 +64,22 @@ func NewVoteExtension(
 	validatorAddress string,
 	modelVersion string,
 ) *VoteExtension {
+	return NewVoteExtensionWithTime(height, validatorAddress, modelVersion, time.Unix(0, 0))
+}
+
+// NewVoteExtensionWithTime creates a new vote extension with a deterministic timestamp
+func NewVoteExtensionWithTime(
+	height int64,
+	validatorAddress string,
+	modelVersion string,
+	timestamp time.Time,
+) *VoteExtension {
 	return &VoteExtension{
 		Version:             VoteExtensionVersion,
 		Height:              height,
 		ValidatorAddress:    validatorAddress,
 		VerificationResults: make([]VoteExtensionResult, 0),
-		Timestamp:           time.Now().UTC(),
+		Timestamp:           timestamp.UTC(),
 		ModelVersion:        modelVersion,
 	}
 }
@@ -153,7 +163,7 @@ func (k *Keeper) ExtendVote(
 	}
 
 	// Create vote extension
-	extension := NewVoteExtension(req.Height, validatorAddr, modelVersion)
+	extension := NewVoteExtensionWithTime(req.Height, validatorAddr, modelVersion, ctx.BlockTime())
 
 	// Get pending verification results for this block
 	// These are results that were computed during block processing

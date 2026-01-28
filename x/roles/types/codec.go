@@ -1,10 +1,11 @@
 package types
 
 import (
+	"context"
+
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
 	"github.com/cosmos/gogoproto/grpc"
 )
@@ -75,10 +76,10 @@ var _Msg_serviceDesc = struct {
 
 // MsgServer is the interface for the message server
 type MsgServer interface {
-	AssignRole(ctx sdk.Context, msg *MsgAssignRole) (*MsgAssignRoleResponse, error)
-	RevokeRole(ctx sdk.Context, msg *MsgRevokeRole) (*MsgRevokeRoleResponse, error)
-	SetAccountState(ctx sdk.Context, msg *MsgSetAccountState) (*MsgSetAccountStateResponse, error)
-	NominateAdmin(ctx sdk.Context, msg *MsgNominateAdmin) (*MsgNominateAdminResponse, error)
+	AssignRole(ctx context.Context, msg *MsgAssignRole) (*MsgAssignRoleResponse, error)
+	RevokeRole(ctx context.Context, msg *MsgRevokeRole) (*MsgRevokeRoleResponse, error)
+	SetAccountState(ctx context.Context, msg *MsgSetAccountState) (*MsgSetAccountStateResponse, error)
+	NominateAdmin(ctx context.Context, msg *MsgNominateAdmin) (*MsgNominateAdminResponse, error)
 }
 
 // RegisterMsgServer registers the MsgServer

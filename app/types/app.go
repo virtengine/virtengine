@@ -703,6 +703,7 @@ func virtengineKVStoreKeys() []string {
 func transientStoreKeys() []string {
 	return []string{
 		paramstypes.TStoreKey,
+		RateLimitTStoreKey,
 	}
 }
 

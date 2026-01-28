@@ -1,0 +1,52 @@
+syntax = "proto3";
+package virtengine.veid.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/veid/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
+
+// GenesisState defines the veid module's genesis state
+message GenesisState {
+  // IdentityRecords are the initial identity records
+  repeated IdentityRecord identity_records = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "identity_records",
+    (gogoproto.moretags) = "yaml:\"identity_records\""
+  ];
+
+  // Scopes are the initial identity scopes
+  repeated IdentityScope scopes = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scopes",
+    (gogoproto.moretags) = "yaml:\"scopes\""
+  ];
+
+  // ApprovedClients are the initially approved clients
+  repeated ApprovedClient approved_clients = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "approved_clients",
+    (gogoproto.moretags) = "yaml:\"approved_clients\""
+  ];
+
+  // Params are the module parameters
+  Params params = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+
+  // Scores are the initial identity scores
+  repeated IdentityScore scores = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scores",
+    (gogoproto.moretags) = "yaml:\"scores\""
+  ];
+
+  // BorderlineParams are the borderline fallback parameters
+  BorderlineParams borderline_params = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "borderline_params",
+    (gogoproto.moretags) = "yaml:\"borderline_params\""
+  ];
+}

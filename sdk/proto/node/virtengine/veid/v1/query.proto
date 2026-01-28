@@ -1,0 +1,660 @@
+syntax = "proto3";
+package virtengine.veid.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "virtengine/veid/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
+
+// Query defines the gRPC querier service for the veid module
+service Query {
+  // Identity queries an identity record by account address
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Identity(QueryIdentityRequest) returns (QueryIdentityResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/identity/{account_address}";
+  }
+
+  // Scope queries a specific scope by ID
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Scope(QueryScopeRequest) returns (QueryScopeResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/scope/{scope_id}";
+  }
+
+  // Scopes queries all scopes for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Scopes(QueryScopesRequest) returns (QueryScopesResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/scopes/{account_address}";
+  }
+
+  // IdentityScore queries the identity score for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc IdentityScore(QueryIdentityScoreRequest) returns (QueryIdentityScoreResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/score/{account_address}";
+  }
+
+  // IdentityStatus queries the identity status for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc IdentityStatus(QueryIdentityStatusRequest) returns (QueryIdentityStatusResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/status/{account_address}";
+  }
+
+  // IdentityWallet queries an identity wallet by account address
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc IdentityWallet(QueryIdentityWalletRequest) returns (QueryIdentityWalletResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/wallet/{account_address}";
+  }
+
+  // WalletScopes queries all scope references in a wallet
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc WalletScopes(QueryWalletScopesRequest) returns (QueryWalletScopesResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/wallet/{account_address}/scopes";
+  }
+
+  // ConsentSettings queries consent settings for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ConsentSettings(QueryConsentSettingsRequest) returns (QueryConsentSettingsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/consent/{account_address}";
+  }
+
+  // VerificationHistory queries verification history for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc VerificationHistory(QueryVerificationHistoryRequest) returns (QueryVerificationHistoryResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/history/{account_address}";
+  }
+
+  // ApprovedClients queries all approved clients
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ApprovedClients(QueryApprovedClientsRequest) returns (QueryApprovedClientsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/clients";
+  }
+
+  // Params queries the module parameters
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/params";
+  }
+
+  // BorderlineParams queries the borderline parameters
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc BorderlineParams(QueryBorderlineParamsRequest) returns (QueryBorderlineParamsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/borderline_params";
+  }
+}
+
+// QueryIdentityRequest is the request for the Identity query
+message QueryIdentityRequest {
+  // AccountAddress is the account to query
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// QueryIdentityResponse is the response for the Identity query
+message QueryIdentityResponse {
+  // Identity is the identity record
+  IdentityRecord identity = 1 [
+    (gogoproto.jsontag) = "identity",
+    (gogoproto.moretags) = "yaml:\"identity\""
+  ];
+
+  // Found indicates if the identity was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryScopeRequest is the request for the Scope query
+message QueryScopeRequest {
+  // ScopeID is the scope to query
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+}
+
+// QueryScopeResponse is the response for the Scope query
+message QueryScopeResponse {
+  // Scope is the identity scope
+  IdentityScope scope = 1 [
+    (gogoproto.jsontag) = "scope",
+    (gogoproto.moretags) = "yaml:\"scope\""
+  ];
+
+  // Found indicates if the scope was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryScopesRequest is the request for the Scopes query
+message QueryScopesRequest {
+  // AccountAddress is the account to query scopes for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ScopeType is an optional filter by scope type
+  ScopeType scope_type = 2 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // StatusFilter is an optional filter by verification status
+  VerificationStatus status_filter = 3 [
+    (gogoproto.jsontag) = "status_filter",
+    (gogoproto.moretags) = "yaml:\"status_filter\""
+  ];
+
+  // Pagination is the pagination options
+  cosmos.base.query.v1beta1.PageRequest pagination = 4;
+}
+
+// QueryScopesResponse is the response for the Scopes query
+message QueryScopesResponse {
+  // Scopes is the list of identity scopes
+  repeated IdentityScope scopes = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scopes",
+    (gogoproto.moretags) = "yaml:\"scopes\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryIdentityScoreRequest is the request for the IdentityScore query
+message QueryIdentityScoreRequest {
+  // AccountAddress is the account to query the score for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// QueryIdentityScoreResponse is the response for the IdentityScore query
+message QueryIdentityScoreResponse {
+  // Score is the identity score details
+  IdentityScore score = 1 [
+    (gogoproto.jsontag) = "score",
+    (gogoproto.moretags) = "yaml:\"score\""
+  ];
+
+  // Found indicates if a score was found for the account
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryIdentityStatusRequest is the request for the IdentityStatus query
+message QueryIdentityStatusRequest {
+  // AccountAddress is the account to query the status for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// QueryIdentityStatusResponse is the response for the IdentityStatus query
+message QueryIdentityStatusResponse {
+  // AccountAddress is the queried address
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Status is the current verification status
+  AccountStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // Tier is the current identity tier
+  IdentityTier tier = 3 [
+    (gogoproto.jsontag) = "tier",
+    (gogoproto.moretags) = "yaml:\"tier\""
+  ];
+
+  // Score is the current score
+  uint32 score = 4 [
+    (gogoproto.jsontag) = "score",
+    (gogoproto.moretags) = "yaml:\"score\""
+  ];
+
+  // ModelVersion is the ML model version used
+  string model_version = 5 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+
+  // LastUpdatedAt is when the status was last updated (Unix timestamp)
+  int64 last_updated_at = 6 [
+    (gogoproto.jsontag) = "last_updated_at",
+    (gogoproto.moretags) = "yaml:\"last_updated_at\""
+  ];
+
+  // Found indicates if the account exists
+  bool found = 7 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryIdentityWalletRequest is the request for the IdentityWallet query
+message QueryIdentityWalletRequest {
+  // AccountAddress is the account to query the wallet for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// PublicWalletInfo contains non-sensitive wallet information
+message PublicWalletInfo {
+  // WalletID is the wallet identifier
+  string wallet_id = 1 [
+    (gogoproto.jsontag) = "wallet_id",
+    (gogoproto.moretags) = "yaml:\"wallet_id\""
+  ];
+
+  // AccountAddress is the owner's address
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Status is the wallet status
+  WalletStatus status = 3 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // Score is the current identity score
+  uint32 score = 4 [
+    (gogoproto.jsontag) = "score",
+    (gogoproto.moretags) = "yaml:\"score\""
+  ];
+
+  // Tier is the current identity tier
+  IdentityTier tier = 5 [
+    (gogoproto.jsontag) = "tier",
+    (gogoproto.moretags) = "yaml:\"tier\""
+  ];
+
+  // ScopeCount is the number of scopes in the wallet
+  int32 scope_count = 6 [
+    (gogoproto.jsontag) = "scope_count",
+    (gogoproto.moretags) = "yaml:\"scope_count\""
+  ];
+
+  // VerifiedScopeCount is the number of verified scopes
+  int32 verified_scope_count = 7 [
+    (gogoproto.jsontag) = "verified_scope_count",
+    (gogoproto.moretags) = "yaml:\"verified_scope_count\""
+  ];
+
+  // CreatedAt is when the wallet was created (Unix timestamp)
+  int64 created_at = 8 [
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+
+  // LastUpdatedAt is when the wallet was last updated (Unix timestamp)
+  int64 last_updated_at = 9 [
+    (gogoproto.jsontag) = "last_updated_at",
+    (gogoproto.moretags) = "yaml:\"last_updated_at\""
+  ];
+}
+
+// QueryIdentityWalletResponse is the response for the IdentityWallet query
+message QueryIdentityWalletResponse {
+  // Wallet contains non-sensitive wallet information
+  PublicWalletInfo wallet = 1 [
+    (gogoproto.jsontag) = "wallet",
+    (gogoproto.moretags) = "yaml:\"wallet\""
+  ];
+
+  // Found indicates if the wallet was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// WalletScopeInfo represents non-sensitive scope information in a wallet
+message WalletScopeInfo {
+  // ScopeID is the scope identifier
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // ScopeType indicates what kind of identity data this scope contains
+  ScopeType scope_type = 2 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // Status is the current verification status
+  VerificationStatus status = 3 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // AddedAt is when the scope was added (Unix timestamp)
+  int64 added_at = 4 [
+    (gogoproto.jsontag) = "added_at",
+    (gogoproto.moretags) = "yaml:\"added_at\""
+  ];
+
+  // VerifiedAt is when the scope was verified (Unix timestamp)
+  int64 verified_at = 5 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+
+  // ExpiresAt is when the verification expires (Unix timestamp)
+  int64 expires_at = 6 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  // ConsentGranted indicates if consent is granted for this scope
+  bool consent_granted = 7 [
+    (gogoproto.jsontag) = "consent_granted",
+    (gogoproto.moretags) = "yaml:\"consent_granted\""
+  ];
+}
+
+// QueryWalletScopesRequest is the request for the WalletScopes query
+message QueryWalletScopesRequest {
+  // AccountAddress is the account to query scopes for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ScopeType is an optional filter by scope type
+  ScopeType scope_type = 2 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // StatusFilter is an optional filter by verification status
+  VerificationStatus status_filter = 3 [
+    (gogoproto.jsontag) = "status_filter",
+    (gogoproto.moretags) = "yaml:\"status_filter\""
+  ];
+
+  // ActiveOnly filters to only active scopes
+  bool active_only = 4 [
+    (gogoproto.jsontag) = "active_only",
+    (gogoproto.moretags) = "yaml:\"active_only\""
+  ];
+}
+
+// QueryWalletScopesResponse is the response for the WalletScopes query
+message QueryWalletScopesResponse {
+  // Scopes contains non-sensitive scope information
+  repeated WalletScopeInfo scopes = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scopes",
+    (gogoproto.moretags) = "yaml:\"scopes\""
+  ];
+
+  // TotalCount is the total number of scopes in the wallet
+  int32 total_count = 2 [
+    (gogoproto.jsontag) = "total_count",
+    (gogoproto.moretags) = "yaml:\"total_count\""
+  ];
+
+  // ActiveCount is the number of active scopes
+  int32 active_count = 3 [
+    (gogoproto.jsontag) = "active_count",
+    (gogoproto.moretags) = "yaml:\"active_count\""
+  ];
+}
+
+// QueryConsentSettingsRequest is the request for the ConsentSettings query
+message QueryConsentSettingsRequest {
+  // AccountAddress is the account to query consent for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ScopeID is an optional filter for specific scope consent
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+}
+
+// PublicConsentInfo represents non-sensitive consent information
+message PublicConsentInfo {
+  // ScopeID is the scope identifier
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Granted indicates if consent is granted
+  bool granted = 2 [
+    (gogoproto.jsontag) = "granted",
+    (gogoproto.moretags) = "yaml:\"granted\""
+  ];
+
+  // IsActive indicates if consent is currently active
+  bool is_active = 3 [
+    (gogoproto.jsontag) = "is_active",
+    (gogoproto.moretags) = "yaml:\"is_active\""
+  ];
+
+  // Purpose is the consent purpose
+  string purpose = 4 [
+    (gogoproto.jsontag) = "purpose",
+    (gogoproto.moretags) = "yaml:\"purpose\""
+  ];
+
+  // ExpiresAt is when consent expires (Unix timestamp)
+  int64 expires_at = 5 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+}
+
+// QueryConsentSettingsResponse is the response for the ConsentSettings query
+message QueryConsentSettingsResponse {
+  // GlobalSettings contains global consent settings
+  ConsentSettings global_settings = 1 [
+    (gogoproto.jsontag) = "global_settings",
+    (gogoproto.moretags) = "yaml:\"global_settings\""
+  ];
+
+  // ScopeConsents contains per-scope consent info
+  repeated PublicConsentInfo scope_consents = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scope_consents",
+    (gogoproto.moretags) = "yaml:\"scope_consents\""
+  ];
+
+  // ConsentVersion is the current consent version
+  uint32 consent_version = 3 [
+    (gogoproto.jsontag) = "consent_version",
+    (gogoproto.moretags) = "yaml:\"consent_version\""
+  ];
+
+  // LastUpdatedAt is when consent was last updated (Unix timestamp)
+  int64 last_updated_at = 4 [
+    (gogoproto.jsontag) = "last_updated_at",
+    (gogoproto.moretags) = "yaml:\"last_updated_at\""
+  ];
+}
+
+// PublicVerificationHistoryEntry represents non-sensitive verification history
+message PublicVerificationHistoryEntry {
+  // EntryID is the entry identifier
+  string entry_id = 1 [
+    (gogoproto.jsontag) = "entry_id",
+    (gogoproto.moretags) = "yaml:\"entry_id\""
+  ];
+
+  // Timestamp is when this verification occurred (Unix timestamp)
+  int64 timestamp = 2 [
+    (gogoproto.jsontag) = "timestamp",
+    (gogoproto.moretags) = "yaml:\"timestamp\""
+  ];
+
+  // BlockHeight is the block height
+  int64 block_height = 3 [
+    (gogoproto.jsontag) = "block_height",
+    (gogoproto.moretags) = "yaml:\"block_height\""
+  ];
+
+  // PreviousScore is the score before verification
+  uint32 previous_score = 4 [
+    (gogoproto.jsontag) = "previous_score",
+    (gogoproto.moretags) = "yaml:\"previous_score\""
+  ];
+
+  // NewScore is the score after verification
+  uint32 new_score = 5 [
+    (gogoproto.jsontag) = "new_score",
+    (gogoproto.moretags) = "yaml:\"new_score\""
+  ];
+
+  // PreviousStatus is the status before verification
+  AccountStatus previous_status = 6 [
+    (gogoproto.jsontag) = "previous_status",
+    (gogoproto.moretags) = "yaml:\"previous_status\""
+  ];
+
+  // NewStatus is the status after verification
+  AccountStatus new_status = 7 [
+    (gogoproto.jsontag) = "new_status",
+    (gogoproto.moretags) = "yaml:\"new_status\""
+  ];
+
+  // ScopeCount is the number of scopes evaluated
+  int32 scope_count = 8 [
+    (gogoproto.jsontag) = "scope_count",
+    (gogoproto.moretags) = "yaml:\"scope_count\""
+  ];
+
+  // ModelVersion is the model version used
+  string model_version = 9 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+}
+
+// QueryVerificationHistoryRequest is the request for the VerificationHistory query
+message QueryVerificationHistoryRequest {
+  // AccountAddress is the account to query history for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Pagination is the pagination options
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryVerificationHistoryResponse is the response for the VerificationHistory query
+message QueryVerificationHistoryResponse {
+  // Entries contains verification history entries
+  repeated PublicVerificationHistoryEntry entries = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "entries",
+    (gogoproto.moretags) = "yaml:\"entries\""
+  ];
+
+  // TotalCount is the total number of entries
+  int32 total_count = 2 [
+    (gogoproto.jsontag) = "total_count",
+    (gogoproto.moretags) = "yaml:\"total_count\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 3;
+}
+
+// QueryApprovedClientsRequest is the request for the ApprovedClients query
+message QueryApprovedClientsRequest {
+  // ActiveOnly filters to only active clients
+  bool active_only = 1 [
+    (gogoproto.jsontag) = "active_only",
+    (gogoproto.moretags) = "yaml:\"active_only\""
+  ];
+
+  // Pagination is the pagination options
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryApprovedClientsResponse is the response for the ApprovedClients query
+message QueryApprovedClientsResponse {
+  // Clients is the list of approved clients
+  repeated ApprovedClient clients = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "clients",
+    (gogoproto.moretags) = "yaml:\"clients\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryParamsRequest is the request for the Params query
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response for the Params query
+message QueryParamsResponse {
+  // Params are the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// QueryBorderlineParamsRequest is the request for the BorderlineParams query
+message QueryBorderlineParamsRequest {}
+
+// QueryBorderlineParamsResponse is the response for the BorderlineParams query
+message QueryBorderlineParamsResponse {
+  // Params are the borderline parameters
+  BorderlineParams params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}

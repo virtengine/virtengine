@@ -9,6 +9,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"time"
+
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // OrderState represents the lifecycle state of an order
@@ -148,23 +150,34 @@ func (id OrderID) Hash() []byte {
 // EncryptedOrderConfiguration holds encrypted order configuration
 // This contains sensitive data only accessible to provider and customer
 type EncryptedOrderConfiguration struct {
-	// EnvelopeRef is a reference to the encrypted envelope
-	EnvelopeRef string `json:"envelope_ref"`
+	// Envelope contains the encrypted order configuration
+	Envelope encryptiontypes.EncryptedPayloadEnvelope `json:"envelope"`
 
-	// Algorithm is the encryption algorithm used
-	Algorithm string `json:"algorithm"`
+	// EnvelopeRef optionally points to the stored envelope in off-chain storage
+	EnvelopeRef string `json:"envelope_ref,omitempty"`
 
-	// CustomerKeyID is the customer's key that can decrypt
-	CustomerKeyID string `json:"customer_key_id"`
+	// CustomerKeyID is the customer's key fingerprint that can decrypt
+	CustomerKeyID string `json:"customer_key_id,omitempty"`
 
-	// ProviderKeyID is the provider's key that can decrypt (set after allocation)
+	// ProviderKeyID is the provider's key fingerprint that can decrypt (set after allocation)
 	ProviderKeyID string `json:"provider_key_id,omitempty"`
+}
 
-	// Ciphertext is the encrypted configuration data
-	Ciphertext []byte `json:"ciphertext"`
+// Validate validates the encrypted order configuration
+func (c *EncryptedOrderConfiguration) Validate() error {
+	if err := c.Envelope.Validate(); err != nil {
+		return fmt.Errorf("invalid envelope: %w", err)
+	}
 
-	// Nonce is the encryption nonce
-	Nonce []byte `json:"nonce"`
+	if c.CustomerKeyID != "" && !c.Envelope.IsRecipient(c.CustomerKeyID) {
+		return fmt.Errorf("customer key id not present in envelope recipients")
+	}
+
+	if c.ProviderKeyID != "" && !c.Envelope.IsRecipient(c.ProviderKeyID) {
+		return fmt.Errorf("provider key id not present in envelope recipients")
+	}
+
+	return nil
 }
 
 // OrderGatingResult captures the result of identity/MFA gating checks
@@ -253,7 +266,12 @@ type Order struct {
 
 // NewOrder creates a new order with required fields
 func NewOrder(id OrderID, offeringID OfferingID, maxBidPrice uint64, quantity uint32) *Order {
-	now := time.Now().UTC()
+	return NewOrderAt(id, offeringID, maxBidPrice, quantity, time.Unix(0, 0))
+}
+
+// NewOrderAt creates a new order with a caller-provided timestamp
+func NewOrderAt(id OrderID, offeringID OfferingID, maxBidPrice uint64, quantity uint32, now time.Time) *Order {
+	createdAt := now.UTC()
 	return &Order{
 		ID:                id,
 		OfferingID:        offeringID,
@@ -261,8 +279,8 @@ func NewOrder(id OrderID, offeringID OfferingID, maxBidPrice uint64, quantity ui
 		PublicMetadata:    make(map[string]string),
 		RequestedQuantity: quantity,
 		MaxBidPrice:       maxBidPrice,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		CreatedAt:         createdAt,
+		UpdatedAt:         createdAt,
 	}
 }
 
@@ -284,16 +302,27 @@ func (o *Order) Validate() error {
 		return fmt.Errorf("requested quantity must be positive")
 	}
 
+	if o.EncryptedConfig != nil {
+		if err := o.EncryptedConfig.Validate(); err != nil {
+			return fmt.Errorf("invalid encrypted configuration: %w", err)
+		}
+	}
+
 	return nil
 }
 
 // CanAcceptBid checks if the order can accept new bids
 func (o *Order) CanAcceptBid() error {
+	return o.CanAcceptBidAt(time.Unix(0, 0))
+}
+
+// CanAcceptBidAt checks if the order can accept new bids at a specific time
+func (o *Order) CanAcceptBidAt(now time.Time) error {
 	if o.State != OrderStateOpen {
 		return fmt.Errorf("order is not open for bids: state=%s", o.State)
 	}
 
-	if o.ExpiresAt != nil && time.Now().After(*o.ExpiresAt) {
+	if o.ExpiresAt != nil && now.After(*o.ExpiresAt) {
 		return fmt.Errorf("order has expired")
 	}
 
@@ -302,22 +331,27 @@ func (o *Order) CanAcceptBid() error {
 
 // SetState transitions the order to a new state
 func (o *Order) SetState(newState OrderState, reason string) error {
+	return o.SetStateAt(newState, reason, time.Unix(0, 0))
+}
+
+// SetStateAt transitions the order to a new state at a specific time
+func (o *Order) SetStateAt(newState OrderState, reason string, now time.Time) error {
 	if !o.State.CanTransitionTo(newState) {
 		return fmt.Errorf("invalid state transition: %s -> %s", o.State, newState)
 	}
 
 	o.State = newState
 	o.StateReason = reason
-	o.UpdatedAt = time.Now().UTC()
+	updatedAt := now.UTC()
+	o.UpdatedAt = updatedAt
 
-	now := time.Now().UTC()
 	switch newState {
 	case OrderStateMatched:
-		o.MatchedAt = &now
+		o.MatchedAt = &updatedAt
 	case OrderStateActive:
-		o.ActivatedAt = &now
+		o.ActivatedAt = &updatedAt
 	case OrderStateTerminated, OrderStateFailed, OrderStateCancelled:
-		o.TerminatedAt = &now
+		o.TerminatedAt = &updatedAt
 	}
 
 	return nil

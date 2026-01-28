@@ -91,7 +91,9 @@ func CreateEnvelope(plaintext []byte, recipientPublicKey []byte, senderKeyPair *
 	envelope := &types.EncryptedPayloadEnvelope{
 		Version:         types.EnvelopeVersion,
 		AlgorithmID:     types.AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion: types.AlgorithmVersionV1,
 		RecipientKeyIDs: []string{recipientFingerprint},
+		RecipientPublicKeys: [][]byte{append([]byte(nil), recipientPublicKey...)},
 		Nonce:           nonce[:],
 		Ciphertext:      ciphertext,
 		SenderPubKey:    senderKeyPair.PublicKey[:],
@@ -146,6 +148,7 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 	// Encrypt DEK for each recipient
 	recipientKeyIDs := make([]string, len(recipientPublicKeys))
 	encryptedKeys := make([][]byte, len(recipientPublicKeys))
+	recipientPubKeys := make([][]byte, len(recipientPublicKeys))
 
 	for i, recipientPubKey := range recipientPublicKeys {
 		if len(recipientPubKey) != 32 {
@@ -166,13 +169,16 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 		encryptedKeys[i] = encryptedDEK
 
 		recipientKeyIDs[i] = types.ComputeKeyFingerprint(recipientPubKey)
+		recipientPubKeys[i] = append([]byte(nil), recipientPubKey...)
 	}
 
 	// Create envelope
 	envelope := &types.EncryptedPayloadEnvelope{
 		Version:         types.EnvelopeVersion,
 		AlgorithmID:     types.AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion: types.AlgorithmVersionV1,
 		RecipientKeyIDs: recipientKeyIDs,
+		RecipientPublicKeys: recipientPubKeys,
 		EncryptedKeys:   encryptedKeys,
 		Nonce:           dataNonce[:],
 		Ciphertext:      ciphertext,

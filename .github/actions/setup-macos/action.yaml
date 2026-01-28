@@ -19,7 +19,7 @@ runs:
     - name: Detect required Go version
       shell: bash
       run: |
-        toolchain=$(./script/tools.sh gotoolchain | sed 's/^go//')
+        toolchain=$(bash ./script/tools.sh gotoolchain | sed 's/^go//')
         if [ -z "$toolchain" ]; then
             echo "Error: Failed to detect Go version from script/tools.sh" >&2
             exit 1
@@ -53,7 +53,7 @@ runs:
         echo "VIRTENGINE=${ROOT_DIR}/.cache/bin/virtengine" >> $GITHUB_ENV
         
         # Go toolchain settings
-        toolchain=$(./script/tools.sh gotoolchain)
+        toolchain=$(bash ./script/tools.sh gotoolchain)
         echo "GOTOOLCHAIN=${toolchain}" >> $GITHUB_ENV
         toolchain_semver=$(echo "${toolchain}" | sed 's/go*/v/' | tr -d '\n')
         echo "GOTOOLCHAIN_SEMVER=${toolchain_semver}" >> $GITHUB_ENV

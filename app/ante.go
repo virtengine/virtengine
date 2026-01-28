@@ -1,18 +1,25 @@
 package app
 
 import (
+	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	govkeeper "github.com/cosmos/cosmos-sdk/x/gov/keeper"
+
+	apptypes "github.com/virtengine/virtengine/app/types"
+	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 )
 
 // HandlerOptions extends the SDK's AnteHandler options
 type HandlerOptions struct {
 	ante.HandlerOptions
-	CDC       codec.BinaryCodec
-	GovKeeper *govkeeper.Keeper
+	CDC             codec.BinaryCodec
+	GovKeeper       *govkeeper.Keeper
+	MFAGatingKeeper *mfakeeper.Keeper
+	RateLimitParams apptypes.RateLimitParams
+	Logger          log.Logger
 }
 
 // NewAnteHandler returns an AnteHandler that checks and increments sequence
@@ -39,12 +46,29 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		return nil, sdkerrors.ErrLogic.Wrap("virtengine governance keeper is required for ante builder")
 	}
 
+	if options.MFAGatingKeeper == nil {
+		return nil, sdkerrors.ErrLogic.Wrap("virtengine MFA keeper is required for ante builder")
+	}
+
 	if options.FeegrantKeeper == nil {
 		return nil, sdkerrors.ErrLogic.Wrap("virtengine feegrant keeper is required for ante builder")
 	}
 
+	// Get rate limit params, using defaults if not provided
+	rateLimitParams := options.RateLimitParams
+	if rateLimitParams.MaxTxPerBlockPerAccount == 0 {
+		rateLimitParams = apptypes.DefaultRateLimitParams()
+	}
+
+	// Get logger for rate limiting
+	rateLimitLogger := options.Logger
+	if rateLimitLogger == nil {
+		rateLimitLogger = log.NewNopLogger()
+	}
+
 	anteDecorators := []sdk.AnteDecorator{
 		ante.NewSetUpContextDecorator(), // outermost AnteDecorator. SetUpContext must be called first
+		NewRateLimitDecorator(rateLimitParams, rateLimitLogger), // Rate limiting early to block spam before expensive ops
 		ante.NewValidateBasicDecorator(),
 		ante.NewTxTimeoutHeightDecorator(),
 		ante.NewValidateMemoDecorator(options.AccountKeeper),
@@ -54,6 +78,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewValidateSigCountDecorator(options.AccountKeeper),
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
+		NewMFAGatingDecorator(*options.MFAGatingKeeper),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 	}
 

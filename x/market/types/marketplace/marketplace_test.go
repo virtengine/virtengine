@@ -264,9 +264,10 @@ func TestOrder_SetState(t *testing.T) {
 		1,
 	)
 	order.State = OrderStateOpen
+	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Valid transition
-	err := order.SetState(OrderStateMatched, "bid accepted")
+	err := order.SetStateAt(OrderStateMatched, "bid accepted", now)
 	if err != nil {
 		t.Errorf("Order.SetState() unexpected error: %v", err)
 	}
@@ -278,7 +279,7 @@ func TestOrder_SetState(t *testing.T) {
 	}
 
 	// Invalid transition
-	err = order.SetState(OrderStatePendingPayment, "invalid")
+	err = order.SetStateAt(OrderStatePendingPayment, "invalid", now)
 	if err == nil {
 		t.Error("Order.SetState() expected error for invalid transition")
 	}
@@ -777,23 +778,25 @@ func TestWaldurSyncRecord_NeedsSync(t *testing.T) {
 }
 
 func TestWaldurCallback_Validate(t *testing.T) {
-	validCallback := NewWaldurCallback(
+	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	validCallback := NewWaldurCallbackAt(
 		ActionTypeProvision,
 		"waldur123",
 		SyncTypeAllocation,
 		"allocation123",
+		now,
 	)
 	validCallback.Signature = []byte("signature")
 
-	err := validCallback.Validate()
+	err := validCallback.ValidateAt(now)
 	if err != nil {
 		t.Errorf("WaldurCallback.Validate() unexpected error: %v", err)
 	}
 
 	// Test expired callback
 	expiredCallback := *validCallback
-	expiredCallback.ExpiresAt = time.Now().Add(-time.Hour)
-	err = expiredCallback.Validate()
+	expiredCallback.ExpiresAt = now.Add(-time.Hour)
+	err = expiredCallback.ValidateAt(now)
 	if err == nil {
 		t.Error("WaldurCallback.Validate() expected error for expired callback")
 	}
@@ -801,7 +804,7 @@ func TestWaldurCallback_Validate(t *testing.T) {
 	// Test missing signature
 	noSigCallback := *validCallback
 	noSigCallback.Signature = nil
-	err = noSigCallback.Validate()
+	err = noSigCallback.ValidateAt(now)
 	if err == nil {
 		t.Error("WaldurCallback.Validate() expected error for missing signature")
 	}
@@ -809,21 +812,22 @@ func TestWaldurCallback_Validate(t *testing.T) {
 
 func TestProcessedNonces(t *testing.T) {
 	nonces := NewProcessedNonces(time.Hour)
+	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Initially not processed
-	if nonces.IsProcessed("nonce1") {
+	if nonces.IsProcessedAt("nonce1", now) {
 		t.Error("ProcessedNonces.IsProcessed() should return false for new nonce")
 	}
 
 	// Mark as processed
-	nonces.MarkProcessed("nonce1")
-	if !nonces.IsProcessed("nonce1") {
+	nonces.MarkProcessedAt("nonce1", now)
+	if !nonces.IsProcessedAt("nonce1", now) {
 		t.Error("ProcessedNonces.IsProcessed() should return true after marking")
 	}
 
 	// Test cleanup (manually expire)
-	nonces.Nonces["expired_nonce"] = time.Now().Add(-time.Hour)
-	nonces.Cleanup()
+	nonces.Nonces["expired_nonce"] = now.Add(-time.Hour)
+	nonces.CleanupAt(now)
 	if _, exists := nonces.Nonces["expired_nonce"]; exists {
 		t.Error("ProcessedNonces.Cleanup() should remove expired nonces")
 	}

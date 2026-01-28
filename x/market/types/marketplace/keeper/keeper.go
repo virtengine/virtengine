@@ -198,8 +198,6 @@ func (k Keeper) GetParams(ctx sdk.Context) marketplace.Params {
 }
 
 // ============================================================================
-// Offerings
-// ============================================================================
 
 // CreateOffering creates a new offering
 func (k Keeper) CreateOffering(ctx sdk.Context, offering *marketplace.Offering) error {
@@ -225,7 +223,7 @@ func (k Keeper) CreateOffering(ctx sdk.Context, offering *marketplace.Offering) 
 		EventType:   marketplace.EventOfferingCreated,
 		EventID:     fmt.Sprintf("evt_offering_created_%s_%d", offering.ID.String(), k.IncrementEventSequence(ctx)),
 		BlockHeight: ctx.BlockHeight(),
-		Timestamp:   time.Now().UTC(),
+		Timestamp:   ctx.BlockTime().UTC(),
 		Sequence:    k.GetEventSequence(ctx),
 	}
 	return k.EmitMarketplaceEvent(ctx, event)
@@ -261,7 +259,7 @@ func (k Keeper) UpdateOffering(ctx sdk.Context, offering *marketplace.Offering) 
 		return marketplace.ErrOfferingNotFound
 	}
 
-	offering.UpdatedAt = time.Now().UTC()
+	offering.UpdatedAt = ctx.BlockTime().UTC()
 	bz, err := json.Marshal(offering)
 	if err != nil {
 		return err
@@ -277,7 +275,7 @@ func (k Keeper) TerminateOffering(ctx sdk.Context, id marketplace.OfferingID, re
 		return marketplace.ErrOfferingNotFound
 	}
 
-	now := time.Now().UTC()
+	now := ctx.BlockTime().UTC()
 	offering.State = marketplace.OfferingStateTerminated
 	offering.TerminatedAt = &now
 	offering.UpdatedAt = now
@@ -375,7 +373,7 @@ func (k Keeper) CreateOrder(ctx sdk.Context, order *marketplace.Order) error {
 
 	// Emit event
 	seq := k.IncrementEventSequence(ctx)
-	event := marketplace.NewOrderCreatedEvent(order, ctx.BlockHeight(), seq)
+	event := marketplace.NewOrderCreatedEventAt(order, ctx.BlockHeight(), seq, ctx.BlockTime())
 	return k.EmitMarketplaceEvent(ctx, event)
 }
 
@@ -409,7 +407,7 @@ func (k Keeper) UpdateOrder(ctx sdk.Context, order *marketplace.Order) error {
 		return marketplace.ErrOrderNotFound
 	}
 
-	order.UpdatedAt = time.Now().UTC()
+	order.UpdatedAt = ctx.BlockTime().UTC()
 	bz, err := json.Marshal(order)
 	if err != nil {
 		return err
@@ -476,7 +474,7 @@ func (k Keeper) CreateBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) erro
 	}
 
 	// Check if order can accept bids
-	if err := order.CanAcceptBid(); err != nil {
+	if err := order.CanAcceptBidAt(ctx.BlockTime()); err != nil {
 		return err
 	}
 
@@ -492,7 +490,7 @@ func (k Keeper) CreateBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) erro
 		return marketplace.ErrBidExists
 	}
 
-	bid.CreatedAt = time.Now().UTC()
+	bid.CreatedAt = ctx.BlockTime().UTC()
 	bid.UpdatedAt = bid.CreatedAt
 	bid.State = marketplace.BidStateOpen
 
@@ -510,7 +508,7 @@ func (k Keeper) CreateBid(ctx sdk.Context, bid *marketplace.MarketplaceBid) erro
 
 	// Emit event
 	seq := k.IncrementEventSequence(ctx)
-	event := marketplace.NewBidPlacedEvent(bid, ctx.BlockHeight(), seq)
+	event := marketplace.NewBidPlacedEventAt(bid, ctx.BlockHeight(), seq, ctx.BlockTime())
 	return k.EmitMarketplaceEvent(ctx, event)
 }
 
@@ -553,12 +551,13 @@ func (k Keeper) AcceptBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.A
 		Sequence: 1, // First allocation for this order
 	}
 
-	allocation := marketplace.NewAllocation(
+	allocation := marketplace.NewAllocationAt(
 		allocationID,
 		order.OfferingID,
 		bid.ID.ProviderAddress,
 		bid.ID,
 		bid.Price,
+		ctx.BlockTime(),
 	)
 
 	if err := k.CreateAllocation(ctx, allocation); err != nil {
@@ -567,13 +566,13 @@ func (k Keeper) AcceptBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.A
 
 	// Update bid state
 	bid.State = marketplace.BidStateAccepted
-	bid.UpdatedAt = time.Now().UTC()
+	bid.UpdatedAt = ctx.BlockTime().UTC()
 	store := ctx.KVStore(k.skey)
 	bz, _ := json.Marshal(bid)
 	store.Set(marketplace.BidKey(bid.ID), bz)
 
 	// Update order state
-	if err := order.SetState(marketplace.OrderStateMatched, "bid accepted"); err != nil {
+	if err := order.SetStateAt(marketplace.OrderStateMatched, "bid accepted", ctx.BlockTime()); err != nil {
 		return nil, err
 	}
 	order.AllocatedProviderAddress = bid.ID.ProviderAddress
@@ -666,7 +665,7 @@ func (k Keeper) UpdateAllocation(ctx sdk.Context, allocation *marketplace.Alloca
 		return marketplace.ErrAllocationNotFound
 	}
 
-	allocation.UpdatedAt = time.Now().UTC()
+	allocation.UpdatedAt = ctx.BlockTime().UTC()
 	bz, err := json.Marshal(allocation)
 	if err != nil {
 		return err
@@ -879,7 +878,7 @@ func (k Keeper) SetWaldurSyncRecord(ctx sdk.Context, record *marketplace.WaldurS
 // ProcessWaldurCallback processes a Waldur callback
 func (k Keeper) ProcessWaldurCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
 	// Validate callback
-	if err := callback.Validate(); err != nil {
+	if err := callback.ValidateAt(ctx.BlockTime()); err != nil {
 		return marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
 	}
 
@@ -930,7 +929,7 @@ func (k Keeper) MarkNonceProcessed(ctx sdk.Context, nonce string) error {
 	key := marketplace.ProcessedNonceKey(nonce)
 
 	// Store with expiry timestamp
-	expiry := time.Now().Add(2 * time.Hour)
+	expiry := ctx.BlockTime().Add(2 * time.Hour)
 	bz, err := json.Marshal(expiry)
 	if err != nil {
 		return err
@@ -1014,7 +1013,7 @@ func (k Keeper) SetEventCheckpoint(ctx sdk.Context, checkpoint *marketplace.Even
 	store := ctx.KVStore(k.skey)
 	key := marketplace.EventCheckpointKey(checkpoint.SubscriberID)
 
-	checkpoint.UpdatedAt = time.Now().UTC()
+	checkpoint.UpdatedAt = ctx.BlockTime().UTC()
 	bz, err := json.Marshal(checkpoint)
 	if err != nil {
 		return err

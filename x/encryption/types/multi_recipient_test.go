@@ -233,6 +233,7 @@ func createValidMultiRecipientEnvelope() *MultiRecipientEnvelope {
 	return &MultiRecipientEnvelope{
 		Version:           MultiRecipientEnvelopeVersion,
 		AlgorithmID:       DefaultAlgorithm(),
+		AlgorithmVersion:  AlgorithmVersionV1,
 		RecipientMode:     RecipientModeFullValidatorSet,
 		PayloadCiphertext: []byte("encrypted_payload_data"),
 		PayloadNonce:      []byte("nonce12345678901234567890123456"),

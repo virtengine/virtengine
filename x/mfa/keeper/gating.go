@@ -118,6 +118,12 @@ func (h MFAGatingHooks) ValidateMFAProof(
 		return nil
 	}
 
+	// Apply trusted device reduction if allowed
+	_, reducedFactors := h.CanBypassMFA(ctx, account, txType, deviceFingerprint)
+	if reducedFactors != nil {
+		requiredCombinations = []types.FactorCombination{*reducedFactors}
+	}
+
 	// Check if verified factors satisfy any combination
 	match := checkFactorCombinations(requiredCombinations, session.VerifiedFactors)
 	if !match {

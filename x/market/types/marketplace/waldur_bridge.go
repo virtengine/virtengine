@@ -147,10 +147,15 @@ func (r *WaldurSyncRecord) NeedsSync() bool {
 
 // MarkSynced marks the entity as synced
 func (r *WaldurSyncRecord) MarkSynced(waldurID string, checksum string) {
-	now := time.Now().UTC()
+	r.MarkSyncedAt(waldurID, checksum, time.Unix(0, 0))
+}
+
+// MarkSyncedAt marks the entity as synced at a specific time
+func (r *WaldurSyncRecord) MarkSyncedAt(waldurID string, checksum string, now time.Time) {
+	updatedAt := now.UTC()
 	r.WaldurID = waldurID
 	r.State = SyncStateSynced
-	r.LastSyncedAt = &now
+	r.LastSyncedAt = &updatedAt
 	r.SyncVersion = r.ChainVersion
 	r.FailureCount = 0
 	r.LastError = ""
@@ -159,9 +164,14 @@ func (r *WaldurSyncRecord) MarkSynced(waldurID string, checksum string) {
 
 // MarkFailed marks sync as failed
 func (r *WaldurSyncRecord) MarkFailed(err string) {
-	now := time.Now().UTC()
+	r.MarkFailedAt(err, time.Unix(0, 0))
+}
+
+// MarkFailedAt marks sync as failed at a specific time
+func (r *WaldurSyncRecord) MarkFailedAt(err string, now time.Time) {
+	updatedAt := now.UTC()
 	r.State = SyncStateFailed
-	r.LastSyncAttemptAt = &now
+	r.LastSyncAttemptAt = &updatedAt
 	r.FailureCount++
 	r.LastError = err
 }
@@ -212,9 +222,13 @@ type WaldurCallback struct {
 
 // NewWaldurCallback creates a new Waldur callback
 func NewWaldurCallback(actionType WaldurActionType, waldurID string, chainEntityType WaldurSyncType, chainEntityID string) *WaldurCallback {
-	now := time.Now().UTC()
-	nonce := generateNonce()
+	return NewWaldurCallbackAt(actionType, waldurID, chainEntityType, chainEntityID, time.Unix(0, 0))
+}
 
+// NewWaldurCallbackAt creates a new Waldur callback at a specific time
+func NewWaldurCallbackAt(actionType WaldurActionType, waldurID string, chainEntityType WaldurSyncType, chainEntityID string, now time.Time) *WaldurCallback {
+	timestamp := now.UTC()
+	nonce := generateNonceAt(timestamp)
 	return &WaldurCallback{
 		ID:              fmt.Sprintf("wcb_%s_%s", chainEntityID, nonce[:8]),
 		ActionType:      actionType,
@@ -223,15 +237,20 @@ func NewWaldurCallback(actionType WaldurActionType, waldurID string, chainEntity
 		ChainEntityID:   chainEntityID,
 		Payload:         make(map[string]string),
 		Nonce:           nonce,
-		Timestamp:       now,
-		ExpiresAt:       now.Add(time.Hour), // 1 hour expiry
+		Timestamp:       timestamp,
+		ExpiresAt:       timestamp.Add(time.Hour), // 1 hour expiry
 	}
 }
 
 // generateNonce generates a random nonce
 func generateNonce() string {
-	now := time.Now().UnixNano()
-	h := sha256.Sum256([]byte(fmt.Sprintf("%d", now)))
+	return generateNonceAt(time.Unix(0, 0))
+}
+
+// generateNonceAt generates a nonce from a specific time
+func generateNonceAt(now time.Time) string {
+	seed := now.UTC().UnixNano()
+	h := sha256.Sum256([]byte(fmt.Sprintf("%d", seed)))
 	return hex.EncodeToString(h[:16])
 }
 
@@ -250,11 +269,21 @@ func (c *WaldurCallback) SigningPayload() []byte {
 
 // IsExpired returns true if the callback has expired
 func (c *WaldurCallback) IsExpired() bool {
-	return time.Now().After(c.ExpiresAt)
+	return c.IsExpiredAt(time.Unix(0, 0))
+}
+
+// IsExpiredAt returns true if the callback has expired at a specific time
+func (c *WaldurCallback) IsExpiredAt(now time.Time) bool {
+	return now.After(c.ExpiresAt)
 }
 
 // Validate validates the callback
 func (c *WaldurCallback) Validate() error {
+	return c.ValidateAt(time.Unix(0, 0))
+}
+
+// ValidateAt validates the callback at a specific time
+func (c *WaldurCallback) ValidateAt(now time.Time) error {
 	if c.ID == "" {
 		return fmt.Errorf("callback ID is required")
 	}
@@ -270,7 +299,7 @@ func (c *WaldurCallback) Validate() error {
 	if len(c.Signature) == 0 {
 		return fmt.Errorf("signature is required")
 	}
-	if c.IsExpired() {
+	if c.IsExpiredAt(now) {
 		return fmt.Errorf("callback has expired")
 	}
 	return nil
@@ -322,10 +351,16 @@ type WaldurCallbackRecord struct {
 
 // NewWaldurCallbackRecord creates a new callback record
 func NewWaldurCallbackRecord(callbackID string) *WaldurCallbackRecord {
+	return NewWaldurCallbackRecordAt(callbackID, time.Unix(0, 0))
+}
+
+// NewWaldurCallbackRecordAt creates a new callback record at a specific time
+func NewWaldurCallbackRecordAt(callbackID string, now time.Time) *WaldurCallbackRecord {
+	receivedAt := now.UTC()
 	return &WaldurCallbackRecord{
 		CallbackID: callbackID,
 		State:      CallbackStatePending,
-		ReceivedAt: time.Now().UTC(),
+		ReceivedAt: receivedAt,
 	}
 }
 
@@ -348,12 +383,17 @@ func NewProcessedNonces(maxAge time.Duration) *ProcessedNonces {
 
 // IsProcessed checks if a nonce has been processed
 func (p *ProcessedNonces) IsProcessed(nonce string) bool {
+	return p.IsProcessedAt(nonce, time.Unix(0, 0))
+}
+
+// IsProcessedAt checks if a nonce has been processed at a specific time
+func (p *ProcessedNonces) IsProcessedAt(nonce string, now time.Time) bool {
 	expiry, exists := p.Nonces[nonce]
 	if !exists {
 		return false
 	}
 	// Check if nonce record has expired
-	if time.Now().After(expiry) {
+	if now.After(expiry) {
 		delete(p.Nonces, nonce)
 		return false
 	}
@@ -362,12 +402,21 @@ func (p *ProcessedNonces) IsProcessed(nonce string) bool {
 
 // MarkProcessed marks a nonce as processed
 func (p *ProcessedNonces) MarkProcessed(nonce string) {
-	p.Nonces[nonce] = time.Now().Add(p.MaxAge)
+	p.MarkProcessedAt(nonce, time.Unix(0, 0))
+}
+
+// MarkProcessedAt marks a nonce as processed at a specific time
+func (p *ProcessedNonces) MarkProcessedAt(nonce string, now time.Time) {
+	p.Nonces[nonce] = now.Add(p.MaxAge)
 }
 
 // Cleanup removes expired nonces
 func (p *ProcessedNonces) Cleanup() {
-	now := time.Now()
+	p.CleanupAt(time.Unix(0, 0))
+}
+
+// CleanupAt removes expired nonces at a specific time
+func (p *ProcessedNonces) CleanupAt(now time.Time) {
 	for nonce, expiry := range p.Nonces {
 		if now.After(expiry) {
 			delete(p.Nonces, nonce)

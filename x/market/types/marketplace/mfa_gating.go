@@ -430,12 +430,17 @@ type MFAAuditRecord struct {
 
 // NewMFAAuditRecord creates a new MFA audit record
 func NewMFAAuditRecord(actionType MarketplaceActionType, accountAddress, challengeID string) *MFAAuditRecord {
+	return NewMFAAuditRecordAt(actionType, accountAddress, challengeID, time.Unix(0, 0))
+}
+
+// NewMFAAuditRecordAt creates a new MFA audit record at a specific time
+func NewMFAAuditRecordAt(actionType MarketplaceActionType, accountAddress, challengeID string, now time.Time) *MFAAuditRecord {
 	return &MFAAuditRecord{
 		ActionType:      actionType,
 		AccountAddress:  accountAddress,
 		ChallengeID:     challengeID,
 		FactorTypesUsed: make([]string, 0),
-		Timestamp:       time.Now().UTC(),
+		Timestamp:       now.UTC(),
 		AttemptCount:    1,
 	}
 }

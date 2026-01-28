@@ -1,0 +1,679 @@
+syntax = "proto3";
+package virtengine.veid.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
+
+// ScopeType represents the type of identity scope
+enum ScopeType {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // SCOPE_TYPE_UNSPECIFIED represents an unspecified scope type
+  SCOPE_TYPE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "ScopeTypeUnspecified"];
+  
+  // SCOPE_TYPE_ID_DOCUMENT represents government-issued ID documents
+  SCOPE_TYPE_ID_DOCUMENT = 1 [(gogoproto.enumvalue_customname) = "ScopeTypeIDDocument"];
+  
+  // SCOPE_TYPE_SELFIE represents a selfie photo for face verification
+  SCOPE_TYPE_SELFIE = 2 [(gogoproto.enumvalue_customname) = "ScopeTypeSelfie"];
+  
+  // SCOPE_TYPE_FACE_VIDEO represents a video for liveness detection
+  SCOPE_TYPE_FACE_VIDEO = 3 [(gogoproto.enumvalue_customname) = "ScopeTypeFaceVideo"];
+  
+  // SCOPE_TYPE_BIOMETRIC represents biometric data (fingerprint, voice, etc.)
+  SCOPE_TYPE_BIOMETRIC = 4 [(gogoproto.enumvalue_customname) = "ScopeTypeBiometric"];
+  
+  // SCOPE_TYPE_SSO_METADATA represents SSO provider metadata pointers
+  SCOPE_TYPE_SSO_METADATA = 5 [(gogoproto.enumvalue_customname) = "ScopeTypeSSOMetadata"];
+  
+  // SCOPE_TYPE_EMAIL_PROOF represents email verification proof
+  SCOPE_TYPE_EMAIL_PROOF = 6 [(gogoproto.enumvalue_customname) = "ScopeTypeEmailProof"];
+  
+  // SCOPE_TYPE_SMS_PROOF represents SMS/phone verification proof
+  SCOPE_TYPE_SMS_PROOF = 7 [(gogoproto.enumvalue_customname) = "ScopeTypeSMSProof"];
+  
+  // SCOPE_TYPE_DOMAIN_VERIFY represents domain ownership verification
+  SCOPE_TYPE_DOMAIN_VERIFY = 8 [(gogoproto.enumvalue_customname) = "ScopeTypeDomainVerify"];
+  
+  // SCOPE_TYPE_AD_SSO represents Active Directory SSO verification
+  SCOPE_TYPE_AD_SSO = 9 [(gogoproto.enumvalue_customname) = "ScopeTypeADSSO"];
+}
+
+// VerificationStatus represents the verification state of an identity scope
+enum VerificationStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // VERIFICATION_STATUS_UNKNOWN indicates an uninitialized or unknown status
+  VERIFICATION_STATUS_UNKNOWN = 0 [(gogoproto.enumvalue_customname) = "VerificationStatusUnknown"];
+  
+  // VERIFICATION_STATUS_PENDING indicates the scope is awaiting verification
+  VERIFICATION_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "VerificationStatusPending"];
+  
+  // VERIFICATION_STATUS_IN_PROGRESS indicates verification is actively being processed
+  VERIFICATION_STATUS_IN_PROGRESS = 2 [(gogoproto.enumvalue_customname) = "VerificationStatusInProgress"];
+  
+  // VERIFICATION_STATUS_VERIFIED indicates the scope has been successfully verified
+  VERIFICATION_STATUS_VERIFIED = 3 [(gogoproto.enumvalue_customname) = "VerificationStatusVerified"];
+  
+  // VERIFICATION_STATUS_REJECTED indicates the scope failed verification
+  VERIFICATION_STATUS_REJECTED = 4 [(gogoproto.enumvalue_customname) = "VerificationStatusRejected"];
+  
+  // VERIFICATION_STATUS_EXPIRED indicates the verification has expired
+  VERIFICATION_STATUS_EXPIRED = 5 [(gogoproto.enumvalue_customname) = "VerificationStatusExpired"];
+  
+  // VERIFICATION_STATUS_NEEDS_ADDITIONAL_FACTOR indicates borderline score requires MFA
+  VERIFICATION_STATUS_NEEDS_ADDITIONAL_FACTOR = 6 [(gogoproto.enumvalue_customname) = "VerificationStatusNeedsAdditionalFactor"];
+  
+  // VERIFICATION_STATUS_ADDITIONAL_FACTOR_PENDING indicates MFA challenge is in progress
+  VERIFICATION_STATUS_ADDITIONAL_FACTOR_PENDING = 7 [(gogoproto.enumvalue_customname) = "VerificationStatusAdditionalFactorPending"];
+}
+
+// IdentityTier represents the verification tier of an identity
+enum IdentityTier {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // IDENTITY_TIER_UNVERIFIED is the initial state with no verification
+  IDENTITY_TIER_UNVERIFIED = 0 [(gogoproto.enumvalue_customname) = "IdentityTierUnverified"];
+  
+  // IDENTITY_TIER_BASIC is for minimally verified identities (score 50-69)
+  IDENTITY_TIER_BASIC = 1 [(gogoproto.enumvalue_customname) = "IdentityTierBasic"];
+  
+  // IDENTITY_TIER_STANDARD is for standard verified identities (score 70-84)
+  IDENTITY_TIER_STANDARD = 2 [(gogoproto.enumvalue_customname) = "IdentityTierStandard"];
+  
+  // IDENTITY_TIER_PREMIUM is for premium verified identities (score 85-100)
+  IDENTITY_TIER_PREMIUM = 3 [(gogoproto.enumvalue_customname) = "IdentityTierPremium"];
+}
+
+// AccountStatus represents the overall account verification status
+enum AccountStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // ACCOUNT_STATUS_UNKNOWN indicates an uninitialized status
+  ACCOUNT_STATUS_UNKNOWN = 0 [(gogoproto.enumvalue_customname) = "AccountStatusUnknown"];
+  
+  // ACCOUNT_STATUS_PENDING indicates verification is in progress
+  ACCOUNT_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "AccountStatusPending"];
+  
+  // ACCOUNT_STATUS_IN_PROGRESS indicates active ML scoring
+  ACCOUNT_STATUS_IN_PROGRESS = 2 [(gogoproto.enumvalue_customname) = "AccountStatusInProgress"];
+  
+  // ACCOUNT_STATUS_VERIFIED indicates account is verified
+  ACCOUNT_STATUS_VERIFIED = 3 [(gogoproto.enumvalue_customname) = "AccountStatusVerified"];
+  
+  // ACCOUNT_STATUS_REJECTED indicates verification was rejected
+  ACCOUNT_STATUS_REJECTED = 4 [(gogoproto.enumvalue_customname) = "AccountStatusRejected"];
+  
+  // ACCOUNT_STATUS_EXPIRED indicates verification has expired
+  ACCOUNT_STATUS_EXPIRED = 5 [(gogoproto.enumvalue_customname) = "AccountStatusExpired"];
+  
+  // ACCOUNT_STATUS_NEEDS_ADDITIONAL_FACTOR indicates additional verification needed
+  ACCOUNT_STATUS_NEEDS_ADDITIONAL_FACTOR = 6 [(gogoproto.enumvalue_customname) = "AccountStatusNeedsAdditionalFactor"];
+}
+
+// WalletStatus represents the overall status of an identity wallet
+enum WalletStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // WALLET_STATUS_UNSPECIFIED indicates an unspecified status
+  WALLET_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "WalletStatusUnspecified"];
+  
+  // WALLET_STATUS_ACTIVE indicates the wallet is active and usable
+  WALLET_STATUS_ACTIVE = 1 [(gogoproto.enumvalue_customname) = "WalletStatusActive"];
+  
+  // WALLET_STATUS_SUSPENDED indicates the wallet is temporarily suspended
+  WALLET_STATUS_SUSPENDED = 2 [(gogoproto.enumvalue_customname) = "WalletStatusSuspended"];
+  
+  // WALLET_STATUS_REVOKED indicates the wallet has been revoked
+  WALLET_STATUS_REVOKED = 3 [(gogoproto.enumvalue_customname) = "WalletStatusRevoked"];
+  
+  // WALLET_STATUS_EXPIRED indicates the wallet verification has expired
+  WALLET_STATUS_EXPIRED = 4 [(gogoproto.enumvalue_customname) = "WalletStatusExpired"];
+}
+
+// EncryptedPayloadEnvelope is the canonical encrypted payload structure
+// for all sensitive fields stored on-chain.
+message EncryptedPayloadEnvelope {
+  option (gogoproto.equal) = true;
+
+  // Version is the envelope format version for future compatibility
+  uint32 version = 1 [
+    (gogoproto.jsontag) = "version",
+    (gogoproto.moretags) = "yaml:\"version\""
+  ];
+
+  // AlgorithmID identifies the encryption algorithm used
+  string algorithm_id = 2 [
+    (gogoproto.jsontag) = "algorithm_id",
+    (gogoproto.moretags) = "yaml:\"algorithm_id\""
+  ];
+
+  // AlgorithmVersion is the version of the algorithm used
+  uint32 algorithm_version = 3 [
+    (gogoproto.jsontag) = "algorithm_version",
+    (gogoproto.moretags) = "yaml:\"algorithm_version\""
+  ];
+
+  // RecipientKeyIDs are the fingerprints of intended recipients' public keys
+  repeated string recipient_key_ids = 4 [
+    (gogoproto.jsontag) = "recipient_key_ids",
+    (gogoproto.moretags) = "yaml:\"recipient_key_ids\""
+  ];
+
+  // RecipientPublicKeys are the public keys for intended recipients
+  repeated bytes recipient_public_keys = 5 [
+    (gogoproto.jsontag) = "recipient_public_keys",
+    (gogoproto.moretags) = "yaml:\"recipient_public_keys\""
+  ];
+
+  // EncryptedKeys contains the data encryption key encrypted for each recipient
+  repeated bytes encrypted_keys = 6 [
+    (gogoproto.jsontag) = "encrypted_keys",
+    (gogoproto.moretags) = "yaml:\"encrypted_keys\""
+  ];
+
+  // Nonce is the initialization vector / nonce for encryption
+  bytes nonce = 7 [
+    (gogoproto.jsontag) = "nonce",
+    (gogoproto.moretags) = "yaml:\"nonce\""
+  ];
+
+  // Ciphertext is the encrypted payload data
+  bytes ciphertext = 8 [
+    (gogoproto.jsontag) = "ciphertext",
+    (gogoproto.moretags) = "yaml:\"ciphertext\""
+  ];
+
+  // SenderSignature is the signature over the envelope contents
+  bytes sender_signature = 9 [
+    (gogoproto.jsontag) = "sender_signature",
+    (gogoproto.moretags) = "yaml:\"sender_signature\""
+  ];
+
+  // SenderPubKey is the sender's public key for signature verification
+  bytes sender_pub_key = 10 [
+    (gogoproto.jsontag) = "sender_pub_key",
+    (gogoproto.moretags) = "yaml:\"sender_pub_key\""
+  ];
+
+  // Metadata contains optional public or encrypted metadata
+  map<string, string> metadata = 11 [
+    (gogoproto.jsontag) = "metadata",
+    (gogoproto.moretags) = "yaml:\"metadata\""
+  ];
+}
+
+// UploadMetadata contains metadata about an identity scope upload
+message UploadMetadata {
+  option (gogoproto.equal) = true;
+
+  // Salt is a per-upload unique salt for cryptographic binding
+  bytes salt = 1 [
+    (gogoproto.jsontag) = "salt",
+    (gogoproto.moretags) = "yaml:\"salt\""
+  ];
+
+  // SaltHash is the SHA256 hash of the salt
+  bytes salt_hash = 2 [
+    (gogoproto.jsontag) = "salt_hash",
+    (gogoproto.moretags) = "yaml:\"salt_hash\""
+  ];
+
+  // DeviceFingerprint is a hash/identifier of the device used for upload
+  string device_fingerprint = 3 [
+    (gogoproto.jsontag) = "device_fingerprint",
+    (gogoproto.moretags) = "yaml:\"device_fingerprint\""
+  ];
+
+  // ClientID is the identifier of the approved client
+  string client_id = 4 [
+    (gogoproto.jsontag) = "client_id",
+    (gogoproto.moretags) = "yaml:\"client_id\""
+  ];
+
+  // ClientSignature is the cryptographic signature from the approved client
+  bytes client_signature = 5 [
+    (gogoproto.jsontag) = "client_signature",
+    (gogoproto.moretags) = "yaml:\"client_signature\""
+  ];
+
+  // UserSignature is the cryptographic signature from the user's account
+  bytes user_signature = 6 [
+    (gogoproto.jsontag) = "user_signature",
+    (gogoproto.moretags) = "yaml:\"user_signature\""
+  ];
+
+  // PayloadHash is the SHA256 hash of the encrypted payload
+  bytes payload_hash = 7 [
+    (gogoproto.jsontag) = "payload_hash",
+    (gogoproto.moretags) = "yaml:\"payload_hash\""
+  ];
+
+  // UploadNonce is a unique nonce for this upload session
+  bytes upload_nonce = 8 [
+    (gogoproto.jsontag) = "upload_nonce",
+    (gogoproto.moretags) = "yaml:\"upload_nonce\""
+  ];
+
+  // CaptureTimestamp is when the data was captured (Unix timestamp)
+  int64 capture_timestamp = 9 [
+    (gogoproto.jsontag) = "capture_timestamp",
+    (gogoproto.moretags) = "yaml:\"capture_timestamp\""
+  ];
+
+  // GeoHint is an optional geographic hint (coarse location)
+  string geo_hint = 10 [
+    (gogoproto.jsontag) = "geo_hint",
+    (gogoproto.moretags) = "yaml:\"geo_hint\""
+  ];
+}
+
+// ScopeRef is a lightweight reference to an identity scope
+message ScopeRef {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the unique identifier for the scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // ScopeType indicates what kind of identity data this scope contains
+  ScopeType scope_type = 2 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // Status is the current verification status
+  VerificationStatus status = 3 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // UploadedAt is when the scope was uploaded (Unix timestamp)
+  int64 uploaded_at = 4 [
+    (gogoproto.jsontag) = "uploaded_at",
+    (gogoproto.moretags) = "yaml:\"uploaded_at\""
+  ];
+
+  // VerifiedAt is when the scope was verified (Unix timestamp)
+  int64 verified_at = 5 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+
+  // ExpiresAt is when the verification expires (Unix timestamp)
+  int64 expires_at = 6 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+}
+
+// IdentityScope represents a single piece of identity information
+message IdentityScope {
+  option (gogoproto.equal) = true;
+
+  // ScopeID is the unique identifier for this scope
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // ScopeType indicates what kind of identity data this scope contains
+  ScopeType scope_type = 2 [
+    (gogoproto.jsontag) = "scope_type",
+    (gogoproto.moretags) = "yaml:\"scope_type\""
+  ];
+
+  // Version is the schema version for this scope
+  uint32 version = 3 [
+    (gogoproto.jsontag) = "version",
+    (gogoproto.moretags) = "yaml:\"version\""
+  ];
+
+  // EncryptedPayload contains the encrypted identity data
+  EncryptedPayloadEnvelope encrypted_payload = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "encrypted_payload",
+    (gogoproto.moretags) = "yaml:\"encrypted_payload\""
+  ];
+
+  // UploadMetadata contains metadata about the upload
+  UploadMetadata upload_metadata = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "upload_metadata",
+    (gogoproto.moretags) = "yaml:\"upload_metadata\""
+  ];
+
+  // Status is the current verification status
+  VerificationStatus status = 6 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // UploadedAt is when this scope was uploaded (Unix timestamp)
+  int64 uploaded_at = 7 [
+    (gogoproto.jsontag) = "uploaded_at",
+    (gogoproto.moretags) = "yaml:\"uploaded_at\""
+  ];
+
+  // VerifiedAt is when this scope was verified (Unix timestamp)
+  int64 verified_at = 8 [
+    (gogoproto.jsontag) = "verified_at",
+    (gogoproto.moretags) = "yaml:\"verified_at\""
+  ];
+
+  // ExpiresAt is when the verification expires (Unix timestamp)
+  int64 expires_at = 9 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  // OwnerAddress is the blockchain address that owns this scope
+  string owner_address = 10 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "owner_address",
+    (gogoproto.moretags) = "yaml:\"owner_address\""
+  ];
+}
+
+// IdentityRecord represents a user's complete identity record on-chain
+message IdentityRecord {
+  option (gogoproto.equal) = true;
+
+  // AccountAddress is the blockchain address that owns this identity
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ScopeRefs are lightweight references to the scopes owned by this identity
+  repeated ScopeRef scope_refs = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scope_refs",
+    (gogoproto.moretags) = "yaml:\"scope_refs\""
+  ];
+
+  // CurrentScore is the current identity score (0-100)
+  uint32 current_score = 3 [
+    (gogoproto.jsontag) = "current_score",
+    (gogoproto.moretags) = "yaml:\"current_score\""
+  ];
+
+  // ScoreVersion is the ML model version used to compute the current score
+  string score_version = 4 [
+    (gogoproto.jsontag) = "score_version",
+    (gogoproto.moretags) = "yaml:\"score_version\""
+  ];
+
+  // LastVerifiedAt is when the identity was last verified (Unix timestamp)
+  int64 last_verified_at = 5 [
+    (gogoproto.jsontag) = "last_verified_at",
+    (gogoproto.moretags) = "yaml:\"last_verified_at\""
+  ];
+
+  // CreatedAt is when this identity record was created (Unix timestamp)
+  int64 created_at = 6 [
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+
+  // UpdatedAt is when this identity record was last updated (Unix timestamp)
+  int64 updated_at = 7 [
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+
+  // Tier is the current identity tier based on score
+  IdentityTier tier = 8 [
+    (gogoproto.jsontag) = "tier",
+    (gogoproto.moretags) = "yaml:\"tier\""
+  ];
+
+  // Flags contains any flags on this identity
+  repeated string flags = 9 [
+    (gogoproto.jsontag) = "flags",
+    (gogoproto.moretags) = "yaml:\"flags\""
+  ];
+
+  // Locked indicates if the identity is locked
+  bool locked = 10 [
+    (gogoproto.jsontag) = "locked",
+    (gogoproto.moretags) = "yaml:\"locked\""
+  ];
+
+  // LockedReason is the reason for locking
+  string locked_reason = 11 [
+    (gogoproto.jsontag) = "locked_reason",
+    (gogoproto.moretags) = "yaml:\"locked_reason\""
+  ];
+}
+
+// IdentityScore represents the current identity score for an account
+message IdentityScore {
+  option (gogoproto.equal) = true;
+
+  // AccountAddress is the blockchain address this score belongs to
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Score is the current identity score (0-100)
+  uint32 score = 2 [
+    (gogoproto.jsontag) = "score",
+    (gogoproto.moretags) = "yaml:\"score\""
+  ];
+
+  // Status is the current account verification status
+  AccountStatus status = 3 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // Tier is the identity tier based on score
+  IdentityTier tier = 4 [
+    (gogoproto.jsontag) = "tier",
+    (gogoproto.moretags) = "yaml:\"tier\""
+  ];
+
+  // ModelVersion is the ML model version used
+  string model_version = 5 [
+    (gogoproto.jsontag) = "model_version",
+    (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+
+  // LastUpdatedAt is when the score was last updated (Unix timestamp)
+  int64 last_updated_at = 6 [
+    (gogoproto.jsontag) = "last_updated_at",
+    (gogoproto.moretags) = "yaml:\"last_updated_at\""
+  ];
+
+  // BlockHeight is the block height when score was computed
+  int64 block_height = 7 [
+    (gogoproto.jsontag) = "block_height",
+    (gogoproto.moretags) = "yaml:\"block_height\""
+  ];
+}
+
+// ConsentSettings represents consent configuration for an identity wallet
+message ConsentSettings {
+  option (gogoproto.equal) = true;
+
+  // ShareWithProviders allows providers to access non-sensitive identity metadata
+  bool share_with_providers = 1 [
+    (gogoproto.jsontag) = "share_with_providers",
+    (gogoproto.moretags) = "yaml:\"share_with_providers\""
+  ];
+
+  // ShareForVerification allows the identity to be used for verification requests
+  bool share_for_verification = 2 [
+    (gogoproto.jsontag) = "share_for_verification",
+    (gogoproto.moretags) = "yaml:\"share_for_verification\""
+  ];
+
+  // AllowReVerification allows the identity to be re-verified without explicit request
+  bool allow_re_verification = 3 [
+    (gogoproto.jsontag) = "allow_re_verification",
+    (gogoproto.moretags) = "yaml:\"allow_re_verification\""
+  ];
+
+  // AllowDerivedFeatureSharing allows sharing of derived feature hashes
+  bool allow_derived_feature_sharing = 4 [
+    (gogoproto.jsontag) = "allow_derived_feature_sharing",
+    (gogoproto.moretags) = "yaml:\"allow_derived_feature_sharing\""
+  ];
+
+  // ConsentVersion tracks consent settings version for audit
+  uint32 consent_version = 5 [
+    (gogoproto.jsontag) = "consent_version",
+    (gogoproto.moretags) = "yaml:\"consent_version\""
+  ];
+
+  // LastUpdatedAt is when consent was last updated (Unix timestamp)
+  int64 last_updated_at = 6 [
+    (gogoproto.jsontag) = "last_updated_at",
+    (gogoproto.moretags) = "yaml:\"last_updated_at\""
+  ];
+}
+
+// GlobalConsentUpdate represents an update to global consent settings
+message GlobalConsentUpdate {
+  option (gogoproto.equal) = true;
+
+  // ShareWithProviders update
+  bool share_with_providers = 1;
+  
+  // ShareForVerification update
+  bool share_for_verification = 2;
+  
+  // AllowReVerification update
+  bool allow_re_verification = 3;
+  
+  // AllowDerivedFeatureSharing update
+  bool allow_derived_feature_sharing = 4;
+}
+
+// BorderlineParams contains parameters for borderline score handling
+message BorderlineParams {
+  option (gogoproto.equal) = true;
+
+  // LowerThreshold is the lower threshold for borderline scores
+  uint32 lower_threshold = 1 [
+    (gogoproto.jsontag) = "lower_threshold",
+    (gogoproto.moretags) = "yaml:\"lower_threshold\""
+  ];
+
+  // UpperThreshold is the upper threshold for borderline scores
+  uint32 upper_threshold = 2 [
+    (gogoproto.jsontag) = "upper_threshold",
+    (gogoproto.moretags) = "yaml:\"upper_threshold\""
+  ];
+
+  // MfaTimeoutBlocks is how long MFA challenge is valid
+  int64 mfa_timeout_blocks = 3 [
+    (gogoproto.jsontag) = "mfa_timeout_blocks",
+    (gogoproto.moretags) = "yaml:\"mfa_timeout_blocks\""
+  ];
+
+  // RequiredFactors is the number of MFA factors required
+  uint32 required_factors = 4 [
+    (gogoproto.jsontag) = "required_factors",
+    (gogoproto.moretags) = "yaml:\"required_factors\""
+  ];
+}
+
+// ApprovedClient represents an approved client application
+message ApprovedClient {
+  option (gogoproto.equal) = true;
+
+  // ClientID is the unique identifier for the client
+  string client_id = 1 [
+    (gogoproto.jsontag) = "client_id",
+    (gogoproto.moretags) = "yaml:\"client_id\""
+  ];
+
+  // Name is the human-readable name of the client
+  string name = 2 [
+    (gogoproto.jsontag) = "name",
+    (gogoproto.moretags) = "yaml:\"name\""
+  ];
+
+  // PublicKey is the client's public key for signature verification
+  bytes public_key = 3 [
+    (gogoproto.jsontag) = "public_key",
+    (gogoproto.moretags) = "yaml:\"public_key\""
+  ];
+
+  // Active indicates if the client is currently active
+  bool active = 4 [
+    (gogoproto.jsontag) = "active",
+    (gogoproto.moretags) = "yaml:\"active\""
+  ];
+
+  // CreatedAt is when the client was registered (Unix timestamp)
+  int64 created_at = 5 [
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+
+  // DeactivatedAt is when the client was deactivated (Unix timestamp)
+  int64 deactivated_at = 6 [
+    (gogoproto.jsontag) = "deactivated_at",
+    (gogoproto.moretags) = "yaml:\"deactivated_at\""
+  ];
+}
+
+// Params defines the parameters for the veid module
+message Params {
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.equal) = true;
+  option (amino.name) = "virtengine/x/veid/Params";
+
+  // MaxScopesPerAccount is the maximum number of scopes per account
+  uint32 max_scopes_per_account = 1 [
+    (gogoproto.jsontag) = "max_scopes_per_account",
+    (gogoproto.moretags) = "yaml:\"max_scopes_per_account\""
+  ];
+
+  // MaxScopesPerType is the maximum number of scopes per type per account
+  uint32 max_scopes_per_type = 2 [
+    (gogoproto.jsontag) = "max_scopes_per_type",
+    (gogoproto.moretags) = "yaml:\"max_scopes_per_type\""
+  ];
+
+  // SaltMinBytes is the minimum salt size in bytes
+  uint32 salt_min_bytes = 3 [
+    (gogoproto.jsontag) = "salt_min_bytes",
+    (gogoproto.moretags) = "yaml:\"salt_min_bytes\""
+  ];
+
+  // SaltMaxBytes is the maximum salt size in bytes
+  uint32 salt_max_bytes = 4 [
+    (gogoproto.jsontag) = "salt_max_bytes",
+    (gogoproto.moretags) = "yaml:\"salt_max_bytes\""
+  ];
+
+  // RequireClientSignature determines if client signatures are mandatory
+  bool require_client_signature = 5 [
+    (gogoproto.jsontag) = "require_client_signature",
+    (gogoproto.moretags) = "yaml:\"require_client_signature\""
+  ];
+
+  // RequireUserSignature determines if user signatures are mandatory
+  bool require_user_signature = 6 [
+    (gogoproto.jsontag) = "require_user_signature",
+    (gogoproto.moretags) = "yaml:\"require_user_signature\""
+  ];
+
+  // VerificationExpiryDays is how long a verification is valid (in days)
+  uint32 verification_expiry_days = 7 [
+    (gogoproto.jsontag) = "verification_expiry_days",
+    (gogoproto.moretags) = "yaml:\"verification_expiry_days\""
+  ];
+}

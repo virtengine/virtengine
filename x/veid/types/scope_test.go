@@ -114,9 +114,11 @@ func createValidEnvelope() encryptiontypes.EncryptedPayloadEnvelope {
 	return encryptiontypes.EncryptedPayloadEnvelope{
 		Version:         1,
 		AlgorithmID:     encryptiontypes.AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion: encryptiontypes.AlgorithmVersionV1,
 		RecipientKeyIDs: []string{"key-fingerprint-001"},
 		Nonce:           make([]byte, encryptiontypes.XSalsa20NonceSize),
 		Ciphertext:      []byte("encrypted-data-placeholder"),
+		SenderSignature: []byte("sender-signature"),
 		SenderPubKey:    make([]byte, encryptiontypes.X25519PublicKeySize),
 	}
 }

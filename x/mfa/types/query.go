@@ -1,39 +1,44 @@
 package types
 
-// QueryServer is the server API for the MFA module's queries
+import (
+	"context"
+)
+
+// QueryServer is the server API for the MFA module's queries.
+// All methods follow Cosmos SDK gRPC patterns with context.Context as first parameter.
 type QueryServer interface {
 	// GetMFAPolicy returns the MFA policy for an account
-	GetMFAPolicy(address string) (*MFAPolicy, error)
+	GetMFAPolicy(context.Context, *QueryMFAPolicyRequest) (*QueryMFAPolicyResponse, error)
 
 	// GetFactorEnrollments returns all factor enrollments for an account
-	GetFactorEnrollments(address string) ([]FactorEnrollment, error)
+	GetFactorEnrollments(context.Context, *QueryFactorEnrollmentsRequest) (*QueryFactorEnrollmentsResponse, error)
 
 	// GetFactorEnrollment returns a specific factor enrollment
-	GetFactorEnrollment(address string, factorType FactorType, factorID string) (*FactorEnrollment, error)
+	GetFactorEnrollment(context.Context, *QueryFactorEnrollmentRequest) (*QueryFactorEnrollmentResponse, error)
 
 	// GetChallenge returns a challenge by ID
-	GetChallenge(challengeID string) (*Challenge, error)
+	GetChallenge(context.Context, *QueryChallengeRequest) (*QueryChallengeResponse, error)
 
 	// GetPendingChallenges returns pending challenges for an account
-	GetPendingChallenges(address string) ([]Challenge, error)
+	GetPendingChallenges(context.Context, *QueryPendingChallengesRequest) (*QueryPendingChallengesResponse, error)
 
 	// GetAuthorizationSession returns an authorization session by ID
-	GetAuthorizationSession(sessionID string) (*AuthorizationSession, error)
+	GetAuthorizationSession(context.Context, *QueryAuthorizationSessionRequest) (*QueryAuthorizationSessionResponse, error)
 
 	// GetTrustedDevices returns trusted devices for an account
-	GetTrustedDevices(address string) ([]TrustedDevice, error)
+	GetTrustedDevices(context.Context, *QueryTrustedDevicesRequest) (*QueryTrustedDevicesResponse, error)
 
 	// GetSensitiveTxConfig returns the configuration for a sensitive tx type
-	GetSensitiveTxConfig(txType SensitiveTransactionType) (*SensitiveTxConfig, error)
+	GetSensitiveTxConfig(context.Context, *QuerySensitiveTxConfigRequest) (*QuerySensitiveTxConfigResponse, error)
 
 	// GetAllSensitiveTxConfigs returns all sensitive tx configurations
-	GetAllSensitiveTxConfigs() ([]SensitiveTxConfig, error)
+	GetAllSensitiveTxConfigs(context.Context, *QueryAllSensitiveTxConfigsRequest) (*QueryAllSensitiveTxConfigsResponse, error)
 
 	// GetParams returns the module parameters
-	GetParams() Params
+	GetParams(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
 
 	// IsMFARequired checks if MFA is required for a transaction
-	IsMFARequired(address string, txType SensitiveTransactionType) (bool, []FactorCombination, error)
+	IsMFARequired(context.Context, *QueryMFARequiredRequest) (*QueryMFARequiredResponse, error)
 }
 
 // QueryMFAPolicyRequest is the request for QueryMFAPolicy
@@ -115,4 +120,34 @@ type QueryParamsRequest struct{}
 // QueryParamsResponse is the response for QueryParams
 type QueryParamsResponse struct {
 	Params Params `json:"params"`
+}
+
+// QueryFactorEnrollmentRequest is the request for GetFactorEnrollment
+type QueryFactorEnrollmentRequest struct {
+	Address    string     `json:"address"`
+	FactorType FactorType `json:"factor_type"`
+	FactorID   string     `json:"factor_id"`
+}
+
+// QueryFactorEnrollmentResponse is the response for GetFactorEnrollment
+type QueryFactorEnrollmentResponse struct {
+	Enrollment *FactorEnrollment `json:"enrollment"`
+}
+
+// QueryAuthorizationSessionRequest is the request for GetAuthorizationSession
+type QueryAuthorizationSessionRequest struct {
+	SessionID string `json:"session_id"`
+}
+
+// QueryAuthorizationSessionResponse is the response for GetAuthorizationSession
+type QueryAuthorizationSessionResponse struct {
+	Session *AuthorizationSession `json:"session"`
+}
+
+// QueryAllSensitiveTxConfigsRequest is the request for GetAllSensitiveTxConfigs
+type QueryAllSensitiveTxConfigsRequest struct{}
+
+// QueryAllSensitiveTxConfigsResponse is the response for GetAllSensitiveTxConfigs
+type QueryAllSensitiveTxConfigsResponse struct {
+	Configs []SensitiveTxConfig `json:"configs"`
 }

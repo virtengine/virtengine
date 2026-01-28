@@ -13,6 +13,14 @@ type GRPCQuerier struct {
 	Keeper
 }
 
+// Ensure GRPCQuerier implements QueryServer interface
+var _ types.QueryServer = GRPCQuerier{}
+
+// NewQuerier returns a new GRPCQuerier instance
+func NewQuerier(keeper Keeper) types.QueryServer {
+	return GRPCQuerier{Keeper: keeper}
+}
+
 // GetMFAPolicy returns the MFA policy for an account
 func (q GRPCQuerier) GetMFAPolicy(goCtx context.Context, req *types.QueryMFAPolicyRequest) (*types.QueryMFAPolicyResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
@@ -158,5 +166,49 @@ func (q GRPCQuerier) IsMFARequired(goCtx context.Context, req *types.QueryMFAReq
 		Required:           true,
 		FactorCombinations: requiredFactors,
 		MinVEIDScore:       policy.VEIDThreshold,
+	}, nil
+}
+
+// GetFactorEnrollment returns a specific factor enrollment
+func (q GRPCQuerier) GetFactorEnrollment(goCtx context.Context, req *types.QueryFactorEnrollmentRequest) (*types.QueryFactorEnrollmentResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	address, err := sdk.AccAddressFromBech32(req.Address)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrapf("invalid address: %v", err)
+	}
+
+	enrollment, found := q.Keeper.GetFactorEnrollment(ctx, address, req.FactorType, req.FactorID)
+	if !found {
+		return nil, types.ErrEnrollmentNotFound.Wrapf("factor %s/%s not found for address %s", req.FactorType, req.FactorID, req.Address)
+	}
+
+	return &types.QueryFactorEnrollmentResponse{
+		Enrollment: enrollment,
+	}, nil
+}
+
+// GetAuthorizationSession returns an authorization session by ID
+func (q GRPCQuerier) GetAuthorizationSession(goCtx context.Context, req *types.QueryAuthorizationSessionRequest) (*types.QueryAuthorizationSessionResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	session, found := q.Keeper.GetAuthorizationSession(ctx, req.SessionID)
+	if !found {
+		return nil, types.ErrSessionNotFound.Wrapf("session %s not found", req.SessionID)
+	}
+
+	return &types.QueryAuthorizationSessionResponse{
+		Session: session,
+	}, nil
+}
+
+// GetAllSensitiveTxConfigs returns all sensitive tx configurations
+func (q GRPCQuerier) GetAllSensitiveTxConfigs(goCtx context.Context, req *types.QueryAllSensitiveTxConfigsRequest) (*types.QueryAllSensitiveTxConfigsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	configs := q.Keeper.GetAllSensitiveTxConfigs(ctx)
+
+	return &types.QueryAllSensitiveTxConfigsResponse{
+		Configs: configs,
 	}, nil
 }

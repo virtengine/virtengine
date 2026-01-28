@@ -1,0 +1,37 @@
+syntax = "proto3";
+package virtengine.roles.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/roles/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/roles/v1";
+
+// GenesisState defines the roles module's genesis state
+message GenesisState {
+  // GenesisAccounts are the accounts with GenesisAccount role
+  repeated string genesis_accounts = 1 [
+    (gogoproto.jsontag) = "genesis_accounts",
+    (gogoproto.moretags) = "yaml:\"genesis_accounts\""
+  ];
+
+  // RoleAssignments are the initial role assignments
+  repeated RoleAssignment role_assignments = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "role_assignments",
+    (gogoproto.moretags) = "yaml:\"role_assignments\""
+  ];
+
+  // AccountStates are the initial account states
+  repeated AccountStateRecord account_states = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "account_states",
+    (gogoproto.moretags) = "yaml:\"account_states\""
+  ];
+
+  // Params are the module parameters
+  Params params = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}

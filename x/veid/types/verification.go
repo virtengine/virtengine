@@ -201,12 +201,17 @@ type SimpleVerificationResult struct {
 
 // NewSimpleVerificationResult creates a new simplified verification result
 func NewSimpleVerificationResult(success bool, status VerificationStatus, score uint32, scoreVersion string) *SimpleVerificationResult {
+	return NewSimpleVerificationResultAt(success, status, score, scoreVersion, time.Unix(0, 0))
+}
+
+// NewSimpleVerificationResultAt creates a new simplified verification result with a deterministic timestamp
+func NewSimpleVerificationResultAt(success bool, status VerificationStatus, score uint32, scoreVersion string, processedAt time.Time) *SimpleVerificationResult {
 	return &SimpleVerificationResult{
 		Success:      success,
 		Status:       status,
 		Score:        score,
 		ScoreVersion: scoreVersion,
-		ProcessedAt:  time.Now(),
+		ProcessedAt:  processedAt,
 		Flags:        make([]string, 0),
 	}
 }

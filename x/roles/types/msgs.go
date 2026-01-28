@@ -2,6 +2,8 @@ package types
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 )
 
 // Error message constants
@@ -126,6 +128,12 @@ type MsgSetAccountState struct {
 	Address string `json:"address"`
 	State   string `json:"state"`
 	Reason  string `json:"reason"`
+
+	// MFAProof is proof of MFA for sensitive account recovery operations
+	MFAProof *mfatypes.MFAProof `json:"mfa_proof,omitempty"`
+
+	// DeviceFingerprint is the client device fingerprint (optional)
+	DeviceFingerprint string `json:"device_fingerprint,omitempty"`
 }
 
 // NewMsgSetAccountState creates a new MsgSetAccountState
@@ -155,6 +163,11 @@ func (msg MsgSetAccountState) ValidateBasic() error {
 	if _, err := AccountStateFromString(msg.State); err != nil {
 		return ErrInvalidAccountState.Wrap(err.Error())
 	}
+	if msg.MFAProof != nil {
+		if err := msg.MFAProof.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -168,6 +181,16 @@ func (msg MsgSetAccountState) GetSigners() []sdk.AccAddress {
 func (msg MsgSetAccountState) GetSignBytes() []byte {
 	bz := ModuleCdc.MustMarshalJSON(&msg)
 	return sdk.MustSortJSON(bz)
+}
+
+// GetMFAProof returns the MFA proof for gating.
+func (msg MsgSetAccountState) GetMFAProof() *mfatypes.MFAProof {
+	return msg.MFAProof
+}
+
+// GetDeviceFingerprint returns the device fingerprint for gating.
+func (msg MsgSetAccountState) GetDeviceFingerprint() string {
+	return msg.DeviceFingerprint
 }
 
 // MsgNominateAdmin is the message for nominating an administrator (GenesisAccount only)

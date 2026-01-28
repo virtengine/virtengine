@@ -27,7 +27,9 @@ func NewMsgServerImpl(k Keeper) types.MsgServer {
 var _ types.MsgServer = msgServer{}
 
 // AssignRole assigns a role to an account
-func (ms msgServer) AssignRole(ctx sdk.Context, msg *types.MsgAssignRole) (*types.MsgAssignRoleResponse, error) {
+func (ms msgServer) AssignRole(goCtx context.Context, msg *types.MsgAssignRole) (*types.MsgAssignRoleResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -66,7 +68,9 @@ func (ms msgServer) AssignRole(ctx sdk.Context, msg *types.MsgAssignRole) (*type
 }
 
 // RevokeRole revokes a role from an account
-func (ms msgServer) RevokeRole(ctx sdk.Context, msg *types.MsgRevokeRole) (*types.MsgRevokeRoleResponse, error) {
+func (ms msgServer) RevokeRole(goCtx context.Context, msg *types.MsgRevokeRole) (*types.MsgRevokeRoleResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -118,7 +122,9 @@ func (ms msgServer) RevokeRole(ctx sdk.Context, msg *types.MsgRevokeRole) (*type
 }
 
 // SetAccountState sets the state of an account
-func (ms msgServer) SetAccountState(ctx sdk.Context, msg *types.MsgSetAccountState) (*types.MsgSetAccountStateResponse, error) {
+func (ms msgServer) SetAccountState(goCtx context.Context, msg *types.MsgSetAccountState) (*types.MsgSetAccountStateResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -158,7 +164,9 @@ func (ms msgServer) SetAccountState(ctx sdk.Context, msg *types.MsgSetAccountSta
 }
 
 // NominateAdmin nominates an account as an administrator (GenesisAccount only)
-func (ms msgServer) NominateAdmin(ctx sdk.Context, msg *types.MsgNominateAdmin) (*types.MsgNominateAdminResponse, error) {
+func (ms msgServer) NominateAdmin(goCtx context.Context, msg *types.MsgNominateAdmin) (*types.MsgNominateAdminResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -194,40 +202,4 @@ func (ms msgServer) NominateAdmin(ctx sdk.Context, msg *types.MsgNominateAdmin) 
 	}
 
 	return &types.MsgNominateAdminResponse{}, nil
-}
-
-// MsgServerWithContext wraps msgServer for gRPC context handling
-type MsgServerWithContext struct {
-	ms msgServer
-}
-
-// NewMsgServerWithContext creates a new MsgServerWithContext
-func NewMsgServerWithContext(k Keeper) *MsgServerWithContext {
-	return &MsgServerWithContext{
-		ms: msgServer{keeper: k},
-	}
-}
-
-// AssignRole handles the MsgAssignRole message with context
-func (m *MsgServerWithContext) AssignRole(goCtx context.Context, msg *types.MsgAssignRole) (*types.MsgAssignRoleResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-	return m.ms.AssignRole(ctx, msg)
-}
-
-// RevokeRole handles the MsgRevokeRole message with context
-func (m *MsgServerWithContext) RevokeRole(goCtx context.Context, msg *types.MsgRevokeRole) (*types.MsgRevokeRoleResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-	return m.ms.RevokeRole(ctx, msg)
-}
-
-// SetAccountState handles the MsgSetAccountState message with context
-func (m *MsgServerWithContext) SetAccountState(goCtx context.Context, msg *types.MsgSetAccountState) (*types.MsgSetAccountStateResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-	return m.ms.SetAccountState(ctx, msg)
-}
-
-// NominateAdmin handles the MsgNominateAdmin message with context
-func (m *MsgServerWithContext) NominateAdmin(goCtx context.Context, msg *types.MsgNominateAdmin) (*types.MsgNominateAdminResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
-	return m.ms.NominateAdmin(ctx, msg)
 }

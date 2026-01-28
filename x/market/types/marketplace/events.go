@@ -186,13 +186,18 @@ type OrderCreatedEvent struct {
 
 // NewOrderCreatedEvent creates a new OrderCreatedEvent
 func NewOrderCreatedEvent(order *Order, blockHeight int64, sequence uint64) *OrderCreatedEvent {
-	now := time.Now().UTC()
+	return NewOrderCreatedEventAt(order, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewOrderCreatedEventAt creates a new OrderCreatedEvent at a specific time
+func NewOrderCreatedEventAt(order *Order, blockHeight int64, sequence uint64, now time.Time) *OrderCreatedEvent {
+	timestamp := now.UTC()
 	return &OrderCreatedEvent{
 		BaseMarketplaceEvent: BaseMarketplaceEvent{
 			EventType:   EventOrderCreated,
 			EventID:     fmt.Sprintf("evt_order_created_%s_%d", order.ID.String(), sequence),
 			BlockHeight: blockHeight,
-			Timestamp:   now,
+			Timestamp:   timestamp,
 			Sequence:    sequence,
 		},
 		OrderID:         order.ID.String(),
@@ -228,13 +233,18 @@ type BidPlacedEvent struct {
 
 // NewBidPlacedEvent creates a new BidPlacedEvent
 func NewBidPlacedEvent(bid *MarketplaceBid, blockHeight int64, sequence uint64) *BidPlacedEvent {
-	now := time.Now().UTC()
+	return NewBidPlacedEventAt(bid, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewBidPlacedEventAt creates a new BidPlacedEvent at a specific time
+func NewBidPlacedEventAt(bid *MarketplaceBid, blockHeight int64, sequence uint64, now time.Time) *BidPlacedEvent {
+	timestamp := now.UTC()
 	return &BidPlacedEvent{
 		BaseMarketplaceEvent: BaseMarketplaceEvent{
 			EventType:   EventBidPlaced,
 			EventID:     fmt.Sprintf("evt_bid_placed_%s_%d", bid.ID.String(), sequence),
 			BlockHeight: blockHeight,
-			Timestamp:   now,
+			Timestamp:   timestamp,
 			Sequence:    sequence,
 		},
 		BidID:           bid.ID.String(),
@@ -273,13 +283,18 @@ type AllocationCreatedEvent struct {
 
 // NewAllocationCreatedEvent creates a new AllocationCreatedEvent
 func NewAllocationCreatedEvent(allocation *Allocation, customerAddress string, blockHeight int64, sequence uint64) *AllocationCreatedEvent {
-	now := time.Now().UTC()
+	return NewAllocationCreatedEventAt(allocation, customerAddress, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewAllocationCreatedEventAt creates a new AllocationCreatedEvent at a specific time
+func NewAllocationCreatedEventAt(allocation *Allocation, customerAddress string, blockHeight int64, sequence uint64, now time.Time) *AllocationCreatedEvent {
+	timestamp := now.UTC()
 	return &AllocationCreatedEvent{
 		BaseMarketplaceEvent: BaseMarketplaceEvent{
 			EventType:   EventAllocationCreated,
 			EventID:     fmt.Sprintf("evt_allocation_created_%s_%d", allocation.ID.String(), sequence),
 			BlockHeight: blockHeight,
-			Timestamp:   now,
+			Timestamp:   timestamp,
 			Sequence:    sequence,
 		},
 		AllocationID:    allocation.ID.String(),
@@ -314,13 +329,18 @@ type ProvisionRequestedEvent struct {
 
 // NewProvisionRequestedEvent creates a new ProvisionRequestedEvent
 func NewProvisionRequestedEvent(allocation *Allocation, encryptedConfigRef string, blockHeight int64, sequence uint64) *ProvisionRequestedEvent {
-	now := time.Now().UTC()
+	return NewProvisionRequestedEventAt(allocation, encryptedConfigRef, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewProvisionRequestedEventAt creates a new ProvisionRequestedEvent at a specific time
+func NewProvisionRequestedEventAt(allocation *Allocation, encryptedConfigRef string, blockHeight int64, sequence uint64, now time.Time) *ProvisionRequestedEvent {
+	timestamp := now.UTC()
 	return &ProvisionRequestedEvent{
 		BaseMarketplaceEvent: BaseMarketplaceEvent{
 			EventType:   EventProvisionRequested,
 			EventID:     fmt.Sprintf("evt_provision_req_%s_%d", allocation.ID.String(), sequence),
 			BlockHeight: blockHeight,
-			Timestamp:   now,
+			Timestamp:   timestamp,
 			Sequence:    sequence,
 		},
 		AllocationID:       allocation.ID.String(),
@@ -356,13 +376,18 @@ type TerminateRequestedEvent struct {
 
 // NewTerminateRequestedEvent creates a new TerminateRequestedEvent
 func NewTerminateRequestedEvent(allocationID, orderID, providerAddress, requestedBy, reason string, immediate bool, blockHeight int64, sequence uint64) *TerminateRequestedEvent {
-	now := time.Now().UTC()
+	return NewTerminateRequestedEventAt(allocationID, orderID, providerAddress, requestedBy, reason, immediate, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewTerminateRequestedEventAt creates a new TerminateRequestedEvent at a specific time
+func NewTerminateRequestedEventAt(allocationID, orderID, providerAddress, requestedBy, reason string, immediate bool, blockHeight int64, sequence uint64, now time.Time) *TerminateRequestedEvent {
+	timestamp := now.UTC()
 	return &TerminateRequestedEvent{
 		BaseMarketplaceEvent: BaseMarketplaceEvent{
 			EventType:   EventTerminateRequested,
 			EventID:     fmt.Sprintf("evt_terminate_req_%s_%d", allocationID, sequence),
 			BlockHeight: blockHeight,
-			Timestamp:   now,
+			Timestamp:   timestamp,
 			Sequence:    sequence,
 		},
 		AllocationID:    allocationID,
@@ -396,13 +421,18 @@ type UsageUpdateRequestedEvent struct {
 
 // NewUsageUpdateRequestedEvent creates a new UsageUpdateRequestedEvent
 func NewUsageUpdateRequestedEvent(allocationID, providerAddress, requestType string, blockHeight int64, sequence uint64) *UsageUpdateRequestedEvent {
-	now := time.Now().UTC()
+	return NewUsageUpdateRequestedEventAt(allocationID, providerAddress, requestType, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewUsageUpdateRequestedEventAt creates a new UsageUpdateRequestedEvent at a specific time
+func NewUsageUpdateRequestedEventAt(allocationID, providerAddress, requestType string, blockHeight int64, sequence uint64, now time.Time) *UsageUpdateRequestedEvent {
+	timestamp := now.UTC()
 	return &UsageUpdateRequestedEvent{
 		BaseMarketplaceEvent: BaseMarketplaceEvent{
 			EventType:   EventUsageUpdateRequested,
 			EventID:     fmt.Sprintf("evt_usage_req_%s_%d", allocationID, sequence),
 			BlockHeight: blockHeight,
-			Timestamp:   now,
+			Timestamp:   timestamp,
 			Sequence:    sequence,
 		},
 		AllocationID:    allocationID,
@@ -436,13 +466,18 @@ type OrderStateChangedEvent struct {
 
 // NewOrderStateChangedEvent creates a new OrderStateChangedEvent
 func NewOrderStateChangedEvent(order *Order, oldState OrderState, reason string, blockHeight int64, sequence uint64) *OrderStateChangedEvent {
-	now := time.Now().UTC()
+	return NewOrderStateChangedEventAt(order, oldState, reason, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewOrderStateChangedEventAt creates a new OrderStateChangedEvent at a specific time
+func NewOrderStateChangedEventAt(order *Order, oldState OrderState, reason string, blockHeight int64, sequence uint64, now time.Time) *OrderStateChangedEvent {
+	timestamp := now.UTC()
 	return &OrderStateChangedEvent{
 		BaseMarketplaceEvent: BaseMarketplaceEvent{
 			EventType:   EventOrderStateChanged,
 			EventID:     fmt.Sprintf("evt_order_state_%s_%d", order.ID.String(), sequence),
 			BlockHeight: blockHeight,
-			Timestamp:   now,
+			Timestamp:   timestamp,
 			Sequence:    sequence,
 		},
 		OrderID:         order.ID.String(),
@@ -487,10 +522,15 @@ func NewEventCheckpoint(subscriberID string) *EventCheckpoint {
 
 // Update updates the checkpoint with the latest event
 func (c *EventCheckpoint) Update(event MarketplaceEvent) {
+	c.UpdateAt(event, time.Unix(0, 0))
+}
+
+// UpdateAt updates the checkpoint with the latest event at a specific time
+func (c *EventCheckpoint) UpdateAt(event MarketplaceEvent, now time.Time) {
 	c.LastSequence = event.GetSequence()
 	c.LastBlockHeight = event.GetBlockHeight()
 	c.LastEventID = event.GetEventID()
-	c.UpdatedAt = time.Now().UTC()
+	c.UpdatedAt = now.UTC()
 }
 
 // EventSubscription represents an event subscription
@@ -522,6 +562,11 @@ type EventSubscription struct {
 
 // NewProviderDaemonSubscription creates a subscription for a provider daemon
 func NewProviderDaemonSubscription(providerAddress string) *EventSubscription {
+	return NewProviderDaemonSubscriptionAt(providerAddress, time.Unix(0, 0))
+}
+
+// NewProviderDaemonSubscriptionAt creates a subscription for a provider daemon at a specific time
+func NewProviderDaemonSubscriptionAt(providerAddress string, now time.Time) *EventSubscription {
 	return &EventSubscription{
 		SubscriberID:    fmt.Sprintf("provider_daemon_%s", providerAddress),
 		ProviderAddress: providerAddress,
@@ -535,7 +580,7 @@ func NewProviderDaemonSubscription(providerAddress string) *EventSubscription {
 		},
 		FilterByProvider: providerAddress,
 		Active:           true,
-		CreatedAt:        time.Now().UTC(),
+		CreatedAt:        now.UTC(),
 	}
 }
 

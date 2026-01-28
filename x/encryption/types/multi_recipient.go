@@ -47,6 +47,9 @@ type MultiRecipientEnvelope struct {
 	// AlgorithmID identifies the payload encryption algorithm
 	AlgorithmID string `json:"algorithm_id"`
 
+	// AlgorithmVersion is the version of the payload encryption algorithm
+	AlgorithmVersion uint32 `json:"algorithm_version"`
+
 	// RecipientMode specifies how recipients were selected
 	RecipientMode RecipientMode `json:"recipient_mode"`
 
@@ -81,9 +84,14 @@ type MultiRecipientEnvelope struct {
 
 // NewMultiRecipientEnvelope creates a new multi-recipient envelope with defaults
 func NewMultiRecipientEnvelope() *MultiRecipientEnvelope {
+	algInfo, err := GetAlgorithmInfo(DefaultAlgorithm())
+	if err != nil {
+		algInfo = AlgorithmInfo{Version: AlgorithmVersionV1}
+	}
 	return &MultiRecipientEnvelope{
 		Version:       MultiRecipientEnvelopeVersion,
 		AlgorithmID:   DefaultAlgorithm(),
+		AlgorithmVersion: algInfo.Version,
 		RecipientMode: RecipientModeFullValidatorSet,
 		WrappedKeys:   make([]WrappedKeyEntry, 0),
 		Metadata:      make(map[string]string),
@@ -105,6 +113,10 @@ func (e *MultiRecipientEnvelope) Validate() error {
 
 	if !IsAlgorithmSupported(e.AlgorithmID) {
 		return ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not supported", e.AlgorithmID)
+	}
+
+	if e.AlgorithmVersion == 0 {
+		return ErrInvalidEnvelope.Wrap("algorithm version cannot be zero")
 	}
 
 	if len(e.PayloadCiphertext) == 0 {
@@ -150,6 +162,16 @@ func (e *MultiRecipientEnvelope) Validate() error {
 
 	if len(e.UserPubKey) == 0 {
 		return ErrInvalidEnvelope.Wrap("user public key required")
+	}
+
+	algInfo, err := GetAlgorithmInfo(e.AlgorithmID)
+	if err != nil {
+		return err
+	}
+
+	if e.AlgorithmVersion != algInfo.Version {
+		return ErrUnsupportedVersion.Wrapf("algorithm version %d not supported for %s (expected %d)",
+			e.AlgorithmVersion, e.AlgorithmID, algInfo.Version)
 	}
 
 	return nil
@@ -201,6 +223,9 @@ func (e *MultiRecipientEnvelope) SigningPayload() []byte {
 	// Include algorithm
 	h.Write([]byte(e.AlgorithmID))
 
+	// Include algorithm version
+	h.Write([]byte{byte(e.AlgorithmVersion >> 24), byte(e.AlgorithmVersion >> 16), byte(e.AlgorithmVersion >> 8), byte(e.AlgorithmVersion)})
+
 	// Include recipient mode
 	h.Write([]byte(e.RecipientMode))
 
@@ -243,6 +268,7 @@ func (e *MultiRecipientEnvelope) DeterministicBytes() ([]byte, error) {
 	sorted := &MultiRecipientEnvelope{
 		Version:           e.Version,
 		AlgorithmID:       e.AlgorithmID,
+		AlgorithmVersion:  e.AlgorithmVersion,
 		RecipientMode:     e.RecipientMode,
 		PayloadCiphertext: e.PayloadCiphertext,
 		PayloadNonce:      e.PayloadNonce,
@@ -288,6 +314,9 @@ func NewMultiRecipientEnvelopeBuilder() *MultiRecipientEnvelopeBuilder {
 // WithAlgorithm sets the algorithm
 func (b *MultiRecipientEnvelopeBuilder) WithAlgorithm(algorithmID string) *MultiRecipientEnvelopeBuilder {
 	b.envelope.AlgorithmID = algorithmID
+	if algInfo, err := GetAlgorithmInfo(algorithmID); err == nil {
+		b.envelope.AlgorithmVersion = algInfo.Version
+	}
 	return b
 }
 

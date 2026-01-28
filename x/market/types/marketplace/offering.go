@@ -9,6 +9,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"time"
+
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // OfferingState represents the lifecycle state of an offering
@@ -229,20 +231,29 @@ func (id OfferingID) Hash() []byte {
 // EncryptedProviderSecrets holds encrypted provider secrets
 // These are stored on-chain but only decryptable by intended recipients
 type EncryptedProviderSecrets struct {
-	// EnvelopeRef is a reference to the encrypted envelope containing secrets
-	EnvelopeRef string `json:"envelope_ref"`
+	// Envelope contains the encrypted provider secrets
+	Envelope encryptiontypes.EncryptedPayloadEnvelope `json:"envelope"`
 
-	// Algorithm is the encryption algorithm used
-	Algorithm string `json:"algorithm"`
+	// EnvelopeRef optionally points to the stored envelope in off-chain storage
+	EnvelopeRef string `json:"envelope_ref,omitempty"`
 
-	// RecipientKeyIDs are the key IDs that can decrypt this
-	RecipientKeyIDs []string `json:"recipient_key_ids"`
+	// RecipientKeyIDs are the key IDs that can decrypt this (optional redundancy)
+	RecipientKeyIDs []string `json:"recipient_key_ids,omitempty"`
+}
 
-	// Ciphertext is the encrypted secrets data
-	Ciphertext []byte `json:"ciphertext"`
+// Validate validates the encrypted provider secrets
+func (s *EncryptedProviderSecrets) Validate() error {
+	if err := s.Envelope.Validate(); err != nil {
+		return fmt.Errorf("invalid envelope: %w", err)
+	}
 
-	// Nonce is the encryption nonce
-	Nonce []byte `json:"nonce"`
+	for _, keyID := range s.RecipientKeyIDs {
+		if !s.Envelope.IsRecipient(keyID) {
+			return fmt.Errorf("recipient key id not present in envelope recipients: %s", keyID)
+		}
+	}
+
+	return nil
 }
 
 // Offering represents a marketplace offering from a provider
@@ -313,7 +324,12 @@ type Offering struct {
 
 // NewOffering creates a new offering with required fields
 func NewOffering(id OfferingID, name string, category OfferingCategory, pricing PricingInfo) *Offering {
-	now := time.Now().UTC()
+	return NewOfferingAt(id, name, category, pricing, time.Unix(0, 0))
+}
+
+// NewOfferingAt creates a new offering with a caller-provided timestamp
+func NewOfferingAt(id OfferingID, name string, category OfferingCategory, pricing PricingInfo, now time.Time) *Offering {
+	createdAt := now.UTC()
 	return &Offering{
 		ID:                  id,
 		State:               OfferingStateActive,
@@ -325,8 +341,8 @@ func NewOffering(id OfferingID, name string, category OfferingCategory, pricing 
 		Specifications:      make(map[string]string),
 		Tags:                make([]string, 0),
 		Regions:             make([]string, 0),
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		CreatedAt:           createdAt,
+		UpdatedAt:           createdAt,
 	}
 }
 
@@ -354,6 +370,12 @@ func (o *Offering) Validate() error {
 
 	if err := o.IdentityRequirement.Validate(); err != nil {
 		return fmt.Errorf("invalid identity requirement: %w", err)
+	}
+
+	if o.EncryptedSecrets != nil {
+		if err := o.EncryptedSecrets.Validate(); err != nil {
+			return fmt.Errorf("invalid encrypted secrets: %w", err)
+		}
 	}
 
 	return nil

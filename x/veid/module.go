@@ -135,16 +135,14 @@ func (am AppModule) QuerierRoute() string {
 
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// TODO: Fix interface mismatch between cfg.MsgServer()/cfg.QueryServer() and generated code
-	// types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerWithContext(am.keeper))
-	// types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper})
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.GRPCQuerier{Keeper: am.keeper})
 }
 
 // RegisterQueryService registers a GRPC query service to respond to the
 // module-specific GRPC queries.
 func (am AppModule) RegisterQueryService(server grpc.Server) {
-	// TODO: Fix interface mismatch between server and generated RegisterQueryServer
-	// types.RegisterQueryServer(server, keeper.GRPCQuerier{Keeper: am.keeper})
+	types.RegisterQueryServer(server, keeper.GRPCQuerier{Keeper: am.keeper})
 }
 
 // BeginBlock performs no-op
