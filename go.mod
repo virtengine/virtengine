@@ -36,6 +36,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/pseudomuto/protoc-gen-doc v1.5.1
 	github.com/rakyll/statik v0.1.7
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/regen-network/cosmos-proto v0.3.1
 	github.com/rs/zerolog v1.34.0
 	github.com/russellhaering/goxmldsig v1.5.0
@@ -165,6 +166,7 @@ require (
 	github.com/desertbit/timer v1.0.1 // indirect
 	github.com/dgraph-io/badger/v4 v4.6.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.1.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dvsekhvalnov/jose2go v1.8.0 // indirect

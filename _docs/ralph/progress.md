@@ -62,7 +62,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 | pkg/inference | TensorFlow scorer | **Needs model deployment** | **80%** | 🟡 Model not deployed |
 | pkg/capture_protocol | Crypto, salt-binding | Production-ready | **85%** | ✅ Ready |
 | pkg/observability | Logging, redaction | Production-ready | **90%** | ✅ Ready |
-| pkg/workflow | State machine | Production-ready (needs persistent store) | **85%** | 🟡 In-memory only |
+| pkg/workflow | State machine, persistent storage, recovery | Redis + memory backends | **95%** | ✅ Ready |
 | pkg/provider_daemon | Kubernetes adapter, bid engine | Production-ready with testing | **85%** | ✅ Mostly ready |
 
 ---
@@ -117,6 +117,50 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 ---
 
 **Completion Date:** 2026-01-28
+
+**VE-2009 Persistent Workflow State Storage (2026-01-28):**
+- Implemented persistent workflow state storage with Redis backend
+- **Critical Production Fix**: Workflows now survive restarts instead of losing all in-progress state
+- Created `pkg/workflow/store.go` with complete WorkflowStore interface:
+  - `WorkflowState` - Complete workflow execution state with status, steps, data, metadata
+  - `WorkflowStatus` - Enum: pending, running, paused, completed, failed, cancelled
+  - `StateFilter` - Filter for listing workflows by status, name, time range
+  - `HistoryEvent` - Complete audit trail of all workflow events
+  - `HistoryEventType` - 13 event types for comprehensive tracking
+  - `WorkflowStoreConfig` - Configuration for backend selection (memory, redis, postgres)
+- Created `pkg/workflow/memory_store.go` - In-memory backend for testing:
+  - Thread-safe with sync.RWMutex
+  - Deep copy isolation to prevent external mutation
+  - Automatic TTL-based cleanup for completed workflows
+  - Full support for checkpoints and history
+- Created `pkg/workflow/redis_store.go` - Production Redis backend:
+  - Redis connection pooling with github.com/redis/go-redis/v9
+  - Atomic operations using Redis pipelines
+  - ZSET indexing for efficient workflow listing
+  - Configurable TTL for state and history retention
+  - Cleanup utilities for old completed workflows
+- Created `pkg/workflow/engine.go` - Workflow orchestration engine:
+  - `NewEngine()` - Creates engine with configurable backend
+  - `RegisterWorkflow()` - Register workflow definitions
+  - `StartWorkflow()` - Start new workflow execution
+  - `RecoverWorkflows()` - **Automatic recovery on restart**
+  - `PauseWorkflow()`/`ResumeWorkflow()` - Pause/resume support
+  - `CancelWorkflow()` - Graceful cancellation
+  - Background execution with goroutine management
+  - Step-level retry with exponential backoff
+  - Checkpoint-based recovery from last successful step
+- Created comprehensive test suite in `pkg/workflow/store_test.go`:
+  - 25+ test cases covering all store operations
+  - Concurrent access safety tests
+  - Deep copy isolation verification
+  - Recovery scenario testing
+  - State transition tests
+  - Complex data type persistence
+- Dependency added: `github.com/redis/go-redis/v9 v9.7.0`
+- Files created: `store.go`, `memory_store.go`, `redis_store.go`, `engine.go`, `store_test.go`
+- All tests pass: `go test -v ./pkg/workflow/...`
+- Build verified: `go build ./...`
+- **Status**: COMPLETED
 
 **VE-2003 Real Stripe Payment Adapter (2026-01-28):**
 - Implemented real Stripe SDK integration replacing stub/fake payment processing
@@ -589,7 +633,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 |----|------|-------|--------|----------|
 | VE-2003 | Payments | Implement real Stripe payment adapter | COMPLETED | Copilot |
 | VE-2004 | Storage | Implement real IPFS artifact storage backend | COMPLETED | Copilot |
-| VE-2009 | Workflows | Implement persistent workflow state storage | NOT STARTED | - |
+| VE-2009 | Workflows | Implement persistent workflow state storage | COMPLETED | Copilot |
 | VE-2010 | Security | Add chain-level rate limiting ante handler | COMPLETED | Copilot |
 | VE-2012 | Providers | Implement provider public key storage | COMPLETED | Copilot |
 | VE-2014 | Testing | Enable and fix disabled test suites | NOT STARTED | - |
