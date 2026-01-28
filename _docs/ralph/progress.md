@@ -49,7 +49,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 |---------|-------------|----------------|---------|-------------------|
 | pkg/enclave_runtime | Types, interfaces | **ALL TEE code is simulated** | **20%** | 🔴 No actual enclave security |
 | pkg/govdata | Types, audit logging, consent | **ALL gov APIs return mock "approved"** | **25%** | 🔴 Fake identity verification |
-| pkg/edugain | Types, session management | **SAML verification always passes** | **30%** | 🔴 Auth bypass possible |
+| pkg/edugain | Types, session mgmt, **XML-DSig verification** | XML encryption decryption | **70%** | 🟡 Encryption not implemented |
 | pkg/payment | Types, rate limiting | **Stripe/Adyen return fake IDs** | **35%** | 🔴 No real payments |
 | pkg/dex | Types, interfaces, config | **ALL DEX adapters return fake data** | **35%** | 🔴 No real trading |
 | pkg/nli | Classifier, response generator | **OpenAI/Anthropic return "not implemented"** | **40%** | 🟡 No AI functionality |
@@ -80,7 +80,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 | Severity | Issue | Location | Impact |
 |----------|-------|----------|--------|
 | 🔴 CRITICAL | No real TEE implementation | pkg/enclave_runtime | Identity data exposed in plaintext |
-| 🔴 CRITICAL | SAML signature verification always passes | pkg/edugain | Authentication bypass |
+| ✅ FIXED | ~~SAML signature verification always passes~~ | pkg/edugain | Fixed in VE-2005 |
 | 🔴 CRITICAL | Gov data verification always approves | pkg/govdata | Fake identity verification |
 | 🟡 HIGH | Proto stubs in VEID | x/veid/types/proto_stub.go | Serialization mismatch risk |
 | 🟡 HIGH | time.Now() in consensus code | x/veid/types | Non-deterministic state |
@@ -556,7 +556,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 | VE-2000 | Protos | Generate proper protobufs for VEID module | NOT STARTED | - |
 | VE-2001 | Protos | Generate proper protobufs for Roles module | COMPLETED | Copilot |
 | VE-2002 | Protos | Generate proper protobufs for MFA module | COMPLETED | Copilot |
-| VE-2005 | Security | Implement XML-DSig verification for EduGAIN SAML | NOT STARTED | - |
+| VE-2005 | Security | Implement XML-DSig verification for EduGAIN SAML | COMPLETED | Copilot |
 | VE-2011 | Security | Implement provider.Delete() method (fix panic) | COMPLETED | Copilot |
 | VE-2013 | Security | Add validator authorization for VEID verification updates | COMPLETED | Copilot |
 

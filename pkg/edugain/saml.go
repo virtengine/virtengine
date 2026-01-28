@@ -688,10 +688,17 @@ func parseIssuerFromXML(data []byte) (string, error) {
 
 // verifyXMLSignatureWithCert verifies XML signature with a certificate
 func verifyXMLSignatureWithCert(xmlData []byte, certBase64 string) (bool, error) {
-	// Placeholder - production would use proper XML-DSig verification
-	_ = xmlData
-	_ = certBase64
-	return true, nil
+	// VE-2005: Real XML-DSig verification using goxmldsig
+	if len(xmlData) == 0 {
+		return false, fmt.Errorf("empty XML data")
+	}
+
+	if certBase64 == "" {
+		return false, fmt.Errorf("empty certificate")
+	}
+
+	// Use the new verification implementation
+	return VerifySAMLSignature(xmlData, []string{certBase64})
 }
 
 // decryptXMLEncryption decrypts XML encryption

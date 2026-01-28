@@ -632,11 +632,8 @@ func parseFederationFromEntityID(entityID string) string {
 	return "EduGAIN"
 }
 
-// verifyXMLSignature verifies an XML signature (placeholder)
+// verifyXMLSignature verifies an XML signature
 func verifyXMLSignature(data, cert []byte) (bool, error) {
-	// This would use proper XML-DSig verification
-	// For production, use github.com/russellhaering/goxmldsig or similar
-	_ = data
-	_ = cert
-	return true, nil
+	// VE-2005: Real XML-DSig verification using goxmldsig
+	return VerifyXMLSignatureWithCertBytes(data, cert)
 }
