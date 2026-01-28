@@ -536,6 +536,10 @@ func (app *App) InitNormalKeepers(
 	// Set MFA keeper on VEID for circular dependency resolution
 	app.Keepers.VirtEngine.VEID.SetMFAKeeper(app.Keepers.VirtEngine.MFA)
 
+	// Set staking keeper on VEID for validator authorization (VE-2013)
+	// This enables validator-only operations like UpdateVerificationStatus and UpdateScore
+	app.Keepers.VirtEngine.VEID.SetStakingKeeper(app.Keepers.Cosmos.Staking)
+
 	app.Keepers.VirtEngine.HPC = hpckeeper.NewKeeper(
 		cdc,
 		app.keys[hpctypes.StoreKey],

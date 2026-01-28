@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"time"
@@ -9,6 +10,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	"github.com/virtengine/virtengine/x/veid/types"
 )
@@ -52,6 +54,13 @@ type IKeeper interface {
 	StoreKey() storetypes.StoreKey
 }
 
+// StakingKeeper defines the interface for the cosmos staking keeper that veid needs
+// for validator authorization checks on verification updates
+type StakingKeeper interface {
+	// GetValidator returns the validator with the given operator address
+	GetValidator(ctx context.Context, addr sdk.ValAddress) (stakingtypes.Validator, error)
+}
+
 // Keeper of the veid store
 type Keeper struct {
 	skey storetypes.StoreKey
@@ -64,6 +73,10 @@ type Keeper struct {
 	// mfaKeeper is the MFA keeper reference for borderline fallback operations
 	// This is set via SetMFAKeeper after module initialization to avoid circular imports
 	mfaKeeper MFAKeeper
+
+	// stakingKeeper is the staking keeper reference for validator authorization
+	// This is set via SetStakingKeeper after module initialization
+	stakingKeeper StakingKeeper
 }
 
 // NewKeeper creates and returns an instance for veid keeper
@@ -93,6 +106,34 @@ func (k Keeper) GetAuthority() string {
 // Logger returns a module-specific logger
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+types.ModuleName)
+}
+
+// SetStakingKeeper sets the staking keeper reference for validator authorization
+func (k *Keeper) SetStakingKeeper(stakingKeeper StakingKeeper) {
+	k.stakingKeeper = stakingKeeper
+}
+
+// IsValidator checks if the given account address is a bonded validator
+// This is used to authorize validator-only operations like UpdateVerificationStatus and UpdateScore
+func (k Keeper) IsValidator(ctx sdk.Context, addr sdk.AccAddress) bool {
+	if k.stakingKeeper == nil {
+		// If staking keeper is not set, deny authorization for safety
+		k.Logger(ctx).Error("staking keeper not set, denying validator authorization")
+		return false
+	}
+
+	// Convert account address to validator address
+	valAddr := sdk.ValAddress(addr)
+
+	// Get the validator
+	validator, err := k.stakingKeeper.GetValidator(ctx, valAddr)
+	if err != nil {
+		// Validator not found
+		return false
+	}
+
+	// Check if validator is bonded (active)
+	return validator.IsBonded()
 }
 
 // ============================================================================

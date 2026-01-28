@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"context"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/veid/types"
@@ -24,7 +26,9 @@ func NewMsgServerImpl(k Keeper) types.MsgServer {
 var _ types.MsgServer = msgServer{}
 
 // UploadScope handles uploading a new identity scope
-func (ms msgServer) UploadScope(ctx sdk.Context, msg *types.MsgUploadScope) (*types.MsgUploadScopeResponse, error) {
+func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope) (*types.MsgUploadScopeResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -91,7 +95,9 @@ func (ms msgServer) UploadScope(ctx sdk.Context, msg *types.MsgUploadScope) (*ty
 }
 
 // RevokeScope handles revoking an identity scope
-func (ms msgServer) RevokeScope(ctx sdk.Context, msg *types.MsgRevokeScope) (*types.MsgRevokeScopeResponse, error) {
+func (ms msgServer) RevokeScope(goCtx context.Context, msg *types.MsgRevokeScope) (*types.MsgRevokeScopeResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -124,7 +130,9 @@ func (ms msgServer) RevokeScope(ctx sdk.Context, msg *types.MsgRevokeScope) (*ty
 }
 
 // RequestVerification handles requesting verification for a scope
-func (ms msgServer) RequestVerification(ctx sdk.Context, msg *types.MsgRequestVerification) (*types.MsgRequestVerificationResponse, error) {
+func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgRequestVerification) (*types.MsgRequestVerificationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -179,7 +187,9 @@ func (ms msgServer) RequestVerification(ctx sdk.Context, msg *types.MsgRequestVe
 }
 
 // UpdateVerificationStatus handles validators updating verification status
-func (ms msgServer) UpdateVerificationStatus(ctx sdk.Context, msg *types.MsgUpdateVerificationStatus) (*types.MsgUpdateVerificationStatusResponse, error) {
+func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.MsgUpdateVerificationStatus) (*types.MsgUpdateVerificationStatusResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -190,9 +200,11 @@ func (ms msgServer) UpdateVerificationStatus(ctx sdk.Context, msg *types.MsgUpda
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidAccountAddr)
 	}
 
-	// TODO: Validate that sender is a validator
-	// This would check against the staking module's validator set
-	// For now, we allow any sender for development purposes
+	// Validate that sender is a bonded validator
+	// Only validators can submit verification status updates
+	if !ms.keeper.IsValidator(ctx, sender) {
+		return nil, types.ErrUnauthorized.Wrap("only validators can submit verification updates")
+	}
 
 	// Get current scope for previous status
 	scope, found := ms.keeper.GetScope(ctx, accountAddr, msg.ScopeID)
@@ -246,7 +258,9 @@ func (ms msgServer) UpdateVerificationStatus(ctx sdk.Context, msg *types.MsgUpda
 }
 
 // UpdateScore handles validators updating identity score
-func (ms msgServer) UpdateScore(ctx sdk.Context, msg *types.MsgUpdateScore) (*types.MsgUpdateScoreResponse, error) {
+func (ms msgServer) UpdateScore(goCtx context.Context, msg *types.MsgUpdateScore) (*types.MsgUpdateScoreResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -257,9 +271,11 @@ func (ms msgServer) UpdateScore(ctx sdk.Context, msg *types.MsgUpdateScore) (*ty
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidAccountAddr)
 	}
 
-	// TODO: Validate that sender is a validator
-	// This would check against the staking module's validator set
-	_ = sender
+	// Validate that sender is a bonded validator
+	// Only validators can submit ML score updates
+	if !ms.keeper.IsValidator(ctx, sender) {
+		return nil, types.ErrUnauthorized.Wrap("only validators can submit ML score updates")
+	}
 
 	// Get current record for previous values
 	record, found := ms.keeper.GetIdentityRecord(ctx, accountAddr)
@@ -303,7 +319,9 @@ func (ms msgServer) UpdateScore(ctx sdk.Context, msg *types.MsgUpdateScore) (*ty
 }
 
 // CreateIdentityWallet handles creating a new identity wallet
-func (ms msgServer) CreateIdentityWallet(ctx sdk.Context, msg *types.MsgCreateIdentityWallet) (*types.MsgCreateIdentityWalletResponse, error) {
+func (ms msgServer) CreateIdentityWallet(goCtx context.Context, msg *types.MsgCreateIdentityWallet) (*types.MsgCreateIdentityWalletResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -321,7 +339,9 @@ func (ms msgServer) CreateIdentityWallet(ctx sdk.Context, msg *types.MsgCreateId
 }
 
 // AddScopeToWallet handles adding a scope reference to a wallet
-func (ms msgServer) AddScopeToWallet(ctx sdk.Context, msg *types.MsgAddScopeToWallet) (*types.MsgAddScopeToWalletResponse, error) {
+func (ms msgServer) AddScopeToWallet(goCtx context.Context, msg *types.MsgAddScopeToWallet) (*types.MsgAddScopeToWalletResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -346,7 +366,9 @@ func (ms msgServer) AddScopeToWallet(ctx sdk.Context, msg *types.MsgAddScopeToWa
 }
 
 // RevokeScopeFromWallet handles revoking a scope from a wallet
-func (ms msgServer) RevokeScopeFromWallet(ctx sdk.Context, msg *types.MsgRevokeScopeFromWallet) (*types.MsgRevokeScopeFromWalletResponse, error) {
+func (ms msgServer) RevokeScopeFromWallet(goCtx context.Context, msg *types.MsgRevokeScopeFromWallet) (*types.MsgRevokeScopeFromWalletResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -363,7 +385,9 @@ func (ms msgServer) RevokeScopeFromWallet(ctx sdk.Context, msg *types.MsgRevokeS
 }
 
 // UpdateConsentSettings handles updating consent settings
-func (ms msgServer) UpdateConsentSettings(ctx sdk.Context, msg *types.MsgUpdateConsentSettings) (*types.MsgUpdateConsentSettingsResponse, error) {
+func (ms msgServer) UpdateConsentSettings(goCtx context.Context, msg *types.MsgUpdateConsentSettings) (*types.MsgUpdateConsentSettingsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	_, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -378,7 +402,9 @@ func (ms msgServer) UpdateConsentSettings(ctx sdk.Context, msg *types.MsgUpdateC
 }
 
 // RebindWallet handles rebinding a wallet to a new address
-func (ms msgServer) RebindWallet(ctx sdk.Context, msg *types.MsgRebindWallet) (*types.MsgRebindWalletResponse, error) {
+func (ms msgServer) RebindWallet(goCtx context.Context, msg *types.MsgRebindWallet) (*types.MsgRebindWalletResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -394,7 +420,9 @@ func (ms msgServer) RebindWallet(ctx sdk.Context, msg *types.MsgRebindWallet) (*
 }
 
 // UpdateDerivedFeatures handles updating derived features
-func (ms msgServer) UpdateDerivedFeatures(ctx sdk.Context, msg *types.MsgUpdateDerivedFeatures) (*types.MsgUpdateDerivedFeaturesResponse, error) {
+func (ms msgServer) UpdateDerivedFeatures(goCtx context.Context, msg *types.MsgUpdateDerivedFeatures) (*types.MsgUpdateDerivedFeaturesResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	_, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -416,7 +444,9 @@ func (ms msgServer) UpdateDerivedFeatures(ctx sdk.Context, msg *types.MsgUpdateD
 }
 
 // CompleteBorderlineFallback handles completing a borderline fallback verification
-func (ms msgServer) CompleteBorderlineFallback(ctx sdk.Context, msg *types.MsgCompleteBorderlineFallback) (*types.MsgCompleteBorderlineFallbackResponse, error) {
+func (ms msgServer) CompleteBorderlineFallback(goCtx context.Context, msg *types.MsgCompleteBorderlineFallback) (*types.MsgCompleteBorderlineFallbackResponse, error) {
+	_ = sdk.UnwrapSDKContext(goCtx)
+
 	_, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -432,7 +462,9 @@ func (ms msgServer) CompleteBorderlineFallback(ctx sdk.Context, msg *types.MsgCo
 }
 
 // UpdateBorderlineParams handles updating borderline parameters (governance)
-func (ms msgServer) UpdateBorderlineParams(ctx sdk.Context, msg *types.MsgUpdateBorderlineParams) (*types.MsgUpdateBorderlineParamsResponse, error) {
+func (ms msgServer) UpdateBorderlineParams(goCtx context.Context, msg *types.MsgUpdateBorderlineParams) (*types.MsgUpdateBorderlineParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Authority check - only governance can update borderline params
 	if msg.Authority != ms.keeper.GetAuthority() {
 		return nil, types.ErrUnauthorized.Wrapf("invalid authority; expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
