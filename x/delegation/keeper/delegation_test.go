@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until sdk.NewInt is replaced with sdkmath.NewInt.
-
 // Package keeper implements the delegation module keeper tests.
 //
 // VE-922: Delegation operation tests
@@ -13,6 +8,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
 	"cosmossdk.io/store"
 	"cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
@@ -25,6 +21,14 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/virtengine/virtengine/x/delegation/types"
+)
+
+// Test address constants - valid bech32 addresses for delegation_test
+var (
+	delTestDelegatorAddr = sdk.AccAddress([]byte("deltest_delegator_01")).String()
+	delTestValidatorAddr = sdk.AccAddress([]byte("deltest_validator_01")).String()
+	delTestValidator2Addr = sdk.AccAddress([]byte("deltest_validator_02")).String()
+	delTestValidator3Addr = sdk.AccAddress([]byte("deltest_validator_03")).String()
 )
 
 // DelegationOperationsTestSuite is the test suite for delegation operations
@@ -73,9 +77,9 @@ func TestDelegationOperationsTestSuite(t *testing.T) {
 
 // TestDelegateBasic tests basic delegation
 func (s *DelegationOperationsTestSuite) TestDelegateBasic() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(2000000)) // 2 tokens
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(2000000)) // 2 tokens
 
 	// Delegate
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, validatorAddr, amount)
@@ -96,10 +100,10 @@ func (s *DelegationOperationsTestSuite) TestDelegateBasic() {
 
 // TestDelegateIncrease tests increasing an existing delegation
 func (s *DelegationOperationsTestSuite) TestDelegateIncrease() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	amount1 := sdk.NewCoin("uve", sdk.NewInt(1000000)) // 1 token
-	amount2 := sdk.NewCoin("uve", sdk.NewInt(2000000)) // 2 tokens
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount1 := sdk.NewCoin("uve", sdkmath.NewInt(1000000)) // 1 token
+	amount2 := sdk.NewCoin("uve", sdkmath.NewInt(2000000)) // 2 tokens
 
 	// First delegation
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, validatorAddr, amount1)
@@ -125,9 +129,9 @@ func (s *DelegationOperationsTestSuite) TestDelegateIncrease() {
 
 // TestDelegateMinimumAmount tests minimum delegation amount enforcement
 func (s *DelegationOperationsTestSuite) TestDelegateMinimumAmount() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(100)) // Below minimum
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(100)) // Below minimum
 
 	// Should fail with minimum amount error
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, validatorAddr, amount)
@@ -137,8 +141,8 @@ func (s *DelegationOperationsTestSuite) TestDelegateMinimumAmount() {
 
 // TestDelegateMaxValidators tests max validators per delegator enforcement
 func (s *DelegationOperationsTestSuite) TestDelegateMaxValidators() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(1000000))
+	delegatorAddr := delTestDelegatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
 
 	// Set max validators to 2 for testing
 	params := s.keeper.GetParams(s.ctx)
@@ -147,29 +151,29 @@ func (s *DelegationOperationsTestSuite) TestDelegateMaxValidators() {
 	s.Require().NoError(err)
 
 	// Delegate to first validator
-	err = s.keeper.Delegate(s.ctx, delegatorAddr, "cosmos1validator1", amount)
+	err = s.keeper.Delegate(s.ctx, delegatorAddr, delTestValidatorAddr, amount)
 	s.Require().NoError(err)
 
 	// Delegate to second validator
-	err = s.keeper.Delegate(s.ctx, delegatorAddr, "cosmos1validator2", amount)
+	err = s.keeper.Delegate(s.ctx, delegatorAddr, delTestValidator2Addr, amount)
 	s.Require().NoError(err)
 
 	// Third validator should fail
-	err = s.keeper.Delegate(s.ctx, delegatorAddr, "cosmos1validator3", amount)
+	err = s.keeper.Delegate(s.ctx, delegatorAddr, delTestValidator3Addr, amount)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "max validators")
 
 	// But increasing existing delegation should work
-	err = s.keeper.Delegate(s.ctx, delegatorAddr, "cosmos1validator1", amount)
+	err = s.keeper.Delegate(s.ctx, delegatorAddr, delTestValidatorAddr, amount)
 	s.Require().NoError(err)
 }
 
 // TestUndelegate tests basic undelegation
 func (s *DelegationOperationsTestSuite) TestUndelegate() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	delegateAmount := sdk.NewCoin("uve", sdk.NewInt(3000000))   // 3 tokens
-	undelegateAmount := sdk.NewCoin("uve", sdk.NewInt(1000000)) // 1 token
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	delegateAmount := sdk.NewCoin("uve", sdkmath.NewInt(3000000))   // 3 tokens
+	undelegateAmount := sdk.NewCoin("uve", sdkmath.NewInt(1000000)) // 1 token
 
 	// First delegate
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, validatorAddr, delegateAmount)
@@ -197,9 +201,9 @@ func (s *DelegationOperationsTestSuite) TestUndelegate() {
 
 // TestUndelegateAll tests undelegating entire delegation
 func (s *DelegationOperationsTestSuite) TestUndelegateAll() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(2000000))
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(2000000))
 
 	// Delegate
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, validatorAddr, amount)
@@ -216,9 +220,9 @@ func (s *DelegationOperationsTestSuite) TestUndelegateAll() {
 
 // TestUndelegateNotFound tests undelegating non-existent delegation
 func (s *DelegationOperationsTestSuite) TestUndelegateNotFound() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(1000000))
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
 
 	// Should fail
 	_, err := s.keeper.Undelegate(s.ctx, delegatorAddr, validatorAddr, amount)
@@ -228,11 +232,11 @@ func (s *DelegationOperationsTestSuite) TestUndelegateNotFound() {
 
 // TestRedelegate tests basic redelegation
 func (s *DelegationOperationsTestSuite) TestRedelegate() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	srcValidator := "cosmos1validator1111111111111111"
-	dstValidator := "cosmos1validator2222222222222222"
-	delegateAmount := sdk.NewCoin("uve", sdk.NewInt(3000000))
-	redelegateAmount := sdk.NewCoin("uve", sdk.NewInt(1000000))
+	delegatorAddr := delTestDelegatorAddr
+	srcValidator := delTestValidatorAddr
+	dstValidator := delTestValidator2Addr
+	delegateAmount := sdk.NewCoin("uve", sdkmath.NewInt(3000000))
+	redelegateAmount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
 
 	// First delegate to source validator
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, srcValidator, delegateAmount)
@@ -264,9 +268,9 @@ func (s *DelegationOperationsTestSuite) TestRedelegate() {
 
 // TestRedelegateSelfDelegation tests that self-redelegation is prevented
 func (s *DelegationOperationsTestSuite) TestRedelegateSelfDelegation() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(1000000))
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
 
 	// Delegate
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, validatorAddr, amount)
@@ -280,12 +284,12 @@ func (s *DelegationOperationsTestSuite) TestRedelegateSelfDelegation() {
 
 // TestRedelegateTransitive tests that transitive redelegation is prevented
 func (s *DelegationOperationsTestSuite) TestRedelegateTransitive() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validator1 := "cosmos1validator1111111111111111"
-	validator2 := "cosmos1validator2222222222222222"
+	delegatorAddr := delTestDelegatorAddr
+	validator1 := delTestValidatorAddr
+	validator2 := delTestValidator2Addr
 	validator3 := "cosmos1validator3333333333333333"
-	amount := sdk.NewCoin("uve", sdk.NewInt(2000000))
-	redAmount := sdk.NewCoin("uve", sdk.NewInt(1000000))
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(2000000))
+	redAmount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
 
 	// Delegate to validator1
 	err := s.keeper.Delegate(s.ctx, delegatorAddr, validator1, amount)
@@ -308,9 +312,9 @@ func (s *DelegationOperationsTestSuite) TestRedelegateTransitive() {
 
 // TestRedelegateMaxRedelegations tests max redelegations enforcement
 func (s *DelegationOperationsTestSuite) TestRedelegateMaxRedelegations() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(10000000))
-	redAmount := sdk.NewCoin("uve", sdk.NewInt(1000000))
+	delegatorAddr := delTestDelegatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(10000000))
+	redAmount := sdk.NewCoin("uve", sdkmath.NewInt(1000000))
 
 	// Set max redelegations to 2
 	params := s.keeper.GetParams(s.ctx)
@@ -341,8 +345,8 @@ func (s *DelegationOperationsTestSuite) TestRedelegateMaxRedelegations() {
 
 // TestCompleteUnbonding tests completing an unbonding delegation
 func (s *DelegationOperationsTestSuite) TestCompleteUnbonding() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
 
 	// Create a mature unbonding delegation
 	pastTime := s.ctx.BlockTime().Add(-1 * time.Hour)
@@ -371,9 +375,9 @@ func (s *DelegationOperationsTestSuite) TestCompleteUnbonding() {
 
 // TestCompleteRedelegation tests completing a redelegation
 func (s *DelegationOperationsTestSuite) TestCompleteRedelegation() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	srcValidator := "cosmos1validator1111111111111111"
-	dstValidator := "cosmos1validator2222222222222222"
+	delegatorAddr := delTestDelegatorAddr
+	srcValidator := delTestValidatorAddr
+	dstValidator := delTestValidator2Addr
 
 	// Create a mature redelegation
 	pastTime := s.ctx.BlockTime().Add(-1 * time.Hour)
@@ -403,9 +407,9 @@ func (s *DelegationOperationsTestSuite) TestCompleteRedelegation() {
 
 // TestUnbondingPeriod tests that unbonding period is correctly applied
 func (s *DelegationOperationsTestSuite) TestUnbondingPeriod() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
-	amount := sdk.NewCoin("uve", sdk.NewInt(2000000))
+	delegatorAddr := delTestDelegatorAddr
+	validatorAddr := delTestValidatorAddr
+	amount := sdk.NewCoin("uve", sdkmath.NewInt(2000000))
 
 	// Set unbonding period to 7 days
 	params := s.keeper.GetParams(s.ctx)

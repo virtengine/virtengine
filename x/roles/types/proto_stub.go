@@ -26,6 +26,11 @@ func (m *MsgNominateAdmin) ProtoMessage()  {}
 func (m *MsgNominateAdmin) Reset()         { *m = MsgNominateAdmin{} }
 func (m *MsgNominateAdmin) String() string { return fmt.Sprintf("%+v", *m) }
 
+// Proto.Message interface stubs for MsgUpdateParams
+func (m *MsgUpdateParams) ProtoMessage()  {}
+func (m *MsgUpdateParams) Reset()         { *m = MsgUpdateParams{} }
+func (m *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *m) }
+
 // Response type stubs
 
 // Proto.Message interface stubs for MsgAssignRoleResponse
@@ -47,6 +52,11 @@ func (m *MsgSetAccountStateResponse) String() string { return fmt.Sprintf("%+v",
 func (m *MsgNominateAdminResponse) ProtoMessage()  {}
 func (m *MsgNominateAdminResponse) Reset()         { *m = MsgNominateAdminResponse{} }
 func (m *MsgNominateAdminResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface stubs for MsgUpdateParamsResponse
+func (m *MsgUpdateParamsResponse) ProtoMessage()  {}
+func (m *MsgUpdateParamsResponse) Reset()         { *m = MsgUpdateParamsResponse{} }
+func (m *MsgUpdateParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }
 
 // Event type stubs
 

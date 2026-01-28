@@ -23,6 +23,7 @@ const (
 	errInvalidPublicKeyType     uint32 = 21
 	errPublicKeyNotFound        uint32 = 22
 	errInvalidRotationSignature uint32 = 23
+	errProviderHasActiveLeases  uint32 = 24
 )
 
 var (
@@ -64,4 +65,7 @@ var (
 
 	// ErrInvalidRotationSignature invalid signature for key rotation
 	ErrInvalidRotationSignature = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidRotationSignature, codes.InvalidArgument, "invalid rotation signature")
+
+	// ErrProviderHasActiveLeases cannot delete provider with active leases
+	ErrProviderHasActiveLeases = sdkerrors.RegisterWithGRPCCode(ModuleName, errProviderHasActiveLeases, codes.FailedPrecondition, "provider has active leases")
 )

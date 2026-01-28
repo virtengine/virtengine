@@ -79,10 +79,21 @@ func (ms msgServer) DeleteProvider(goCtx context.Context, msg *types.MsgDeletePr
 		return nil, err
 	}
 
+	// Verify provider exists
 	if _, ok := ms.provider.Get(ctx, owner); !ok {
 		return nil, types.ErrProviderNotFound
 	}
 
-	// TODO: cancel leases
-	return nil, ErrInternal.Wrap("NOTIMPLEMENTED")
+	// Check if provider has active leases - cannot delete if leases exist
+	if ms.market.ProviderHasActiveLeases(ctx, owner) {
+		return nil, types.ErrProviderHasActiveLeases.Wrapf("provider %s has active leases", msg.Owner)
+	}
+
+	// Delete the provider (this also emits EventProviderDeleted)
+	ms.provider.Delete(ctx, owner)
+
+	// Also clean up provider public key if exists
+	ms.provider.DeleteProviderPublicKey(ctx, owner)
+
+	return &types.MsgDeleteProviderResponse{}, nil
 }

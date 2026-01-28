@@ -52,6 +52,8 @@ type IKeeper interface {
 	GetOrderProvider(ctx sdk.Context, orderID string) string
 	GetOrderCompletedAt(ctx sdk.Context, orderID string) time.Time
 	GetOrderHash(ctx sdk.Context, orderID string) string
+	// ProviderHasActiveLeases checks if a provider has any active leases
+	ProviderHasActiveLeases(ctx sdk.Context, provider sdk.AccAddress) bool
 }
 
 // Keeper of the market store
@@ -824,4 +826,21 @@ func (k Keeper) GetOrderHash(ctx sdk.Context, orderID string) string {
 	// Hash the order ID as a simple implementation
 	hash := sha256.Sum256([]byte(order.ID.String()))
 	return hex.EncodeToString(hash[:])
+}
+
+// ProviderHasActiveLeases checks if a provider has any active leases.
+// This is used to prevent provider deletion while leases are active.
+func (k Keeper) ProviderHasActiveLeases(ctx sdk.Context, provider sdk.AccAddress) bool {
+	providerAddr := provider.String()
+	hasActive := false
+
+	k.WithLeases(ctx, func(lease mv1.Lease) bool {
+		if lease.ID.Provider == providerAddr && lease.State == mv1.LeaseActive {
+			hasActive = true
+			return true // stop iteration
+		}
+		return false // continue
+	})
+
+	return hasActive
 }

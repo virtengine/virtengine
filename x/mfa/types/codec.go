@@ -4,8 +4,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
 	"github.com/cosmos/gogoproto/grpc"
+
+	mfav1 "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
 )
 
 var (
@@ -20,123 +23,46 @@ func init() {
 // RegisterLegacyAminoCodec registers the necessary interfaces and concrete types
 // on the provided LegacyAmino codec. These types are used for Amino JSON serialization.
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	legacy.RegisterAminoMsg(cdc, &MsgEnrollFactor{}, "mfa/MsgEnrollFactor")
-	legacy.RegisterAminoMsg(cdc, &MsgRevokeFactor{}, "mfa/MsgRevokeFactor")
-	legacy.RegisterAminoMsg(cdc, &MsgSetMFAPolicy{}, "mfa/MsgSetMFAPolicy")
-	legacy.RegisterAminoMsg(cdc, &MsgCreateChallenge{}, "mfa/MsgCreateChallenge")
-	legacy.RegisterAminoMsg(cdc, &MsgVerifyChallenge{}, "mfa/MsgVerifyChallenge")
-	legacy.RegisterAminoMsg(cdc, &MsgAddTrustedDevice{}, "mfa/MsgAddTrustedDevice")
-	legacy.RegisterAminoMsg(cdc, &MsgRemoveTrustedDevice{}, "mfa/MsgRemoveTrustedDevice")
-	legacy.RegisterAminoMsg(cdc, &MsgUpdateSensitiveTxConfig{}, "mfa/MsgUpdateSensitiveTxConfig")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgEnrollFactor{}, "mfa/MsgEnrollFactor")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgRevokeFactor{}, "mfa/MsgRevokeFactor")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgSetMFAPolicy{}, "mfa/MsgSetMFAPolicy")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgCreateChallenge{}, "mfa/MsgCreateChallenge")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgVerifyChallenge{}, "mfa/MsgVerifyChallenge")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgAddTrustedDevice{}, "mfa/MsgAddTrustedDevice")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgRemoveTrustedDevice{}, "mfa/MsgRemoveTrustedDevice")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgUpdateSensitiveTxConfig{}, "mfa/MsgUpdateSensitiveTxConfig")
+	legacy.RegisterAminoMsg(cdc, &mfav1.MsgUpdateParams{}, "mfa/MsgUpdateParams")
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// NOTE: These are stub message types without proper protobuf generation.
-	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
-	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
-	//
-	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
-	//
-	// registry.RegisterImplementations((*sdk.Msg)(nil),
-	//     &MsgEnrollFactor{},
-	//     &MsgRevokeFactor{},
-	//     &MsgSetMFAPolicy{},
-	//     &MsgCreateChallenge{},
-	//     &MsgVerifyChallenge{},
-	//     &MsgAddTrustedDevice{},
-	//     &MsgRemoveTrustedDevice{},
-	//     &MsgUpdateSensitiveTxConfig{},
-	// )
-	//
-	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
-	_ = registry // suppress unused variable warning
-	_ = msgservice.RegisterMsgServiceDesc
-}
+	// Register generated proto message types with the interface registry
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&mfav1.MsgEnrollFactor{},
+		&mfav1.MsgRevokeFactor{},
+		&mfav1.MsgSetMFAPolicy{},
+		&mfav1.MsgCreateChallenge{},
+		&mfav1.MsgVerifyChallenge{},
+		&mfav1.MsgAddTrustedDevice{},
+		&mfav1.MsgRemoveTrustedDevice{},
+		&mfav1.MsgUpdateSensitiveTxConfig{},
+		&mfav1.MsgUpdateParams{},
+	)
 
-// _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
-var _Msg_serviceDesc = struct {
-	ServiceName string
-	HandlerType interface{}
-	Methods     []struct {
-		MethodName string
-		Handler    interface{}
-	}
-	Streams  []struct{}
-	Metadata interface{}
-}{
-	ServiceName: "virtengine.mfa.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []struct {
-		MethodName string
-		Handler    interface{}
-	}{
-		{MethodName: "EnrollFactor", Handler: nil},
-		{MethodName: "RevokeFactor", Handler: nil},
-		{MethodName: "SetMFAPolicy", Handler: nil},
-		{MethodName: "CreateChallenge", Handler: nil},
-		{MethodName: "VerifyChallenge", Handler: nil},
-		{MethodName: "AddTrustedDevice", Handler: nil},
-		{MethodName: "RemoveTrustedDevice", Handler: nil},
-		{MethodName: "UpdateSensitiveTxConfig", Handler: nil},
-	},
-	Streams:  []struct{}{},
-	Metadata: "virtengine/mfa/v1/tx.proto",
+	// Register the Msg service descriptor for proper gRPC routing
+	msgservice.RegisterMsgServiceDesc(registry, &mfav1.Msg_serviceDesc)
 }
-
-// _Query_serviceDesc is the grpc.ServiceDesc for Query service.
-var _Query_serviceDesc = struct {
-	ServiceName string
-	HandlerType interface{}
-	Methods     []struct {
-		MethodName string
-		Handler    interface{}
-	}
-	Streams  []struct{}
-	Metadata interface{}
-}{
-	ServiceName: "virtengine.mfa.v1.Query",
-	HandlerType: (*QueryServer)(nil),
-	Methods: []struct {
-		MethodName string
-		Handler    interface{}
-	}{
-		{MethodName: "GetMFAPolicy", Handler: nil},
-		{MethodName: "GetFactorEnrollments", Handler: nil},
-		{MethodName: "GetFactorEnrollment", Handler: nil},
-		{MethodName: "GetChallenge", Handler: nil},
-		{MethodName: "GetPendingChallenges", Handler: nil},
-		{MethodName: "GetAuthorizationSession", Handler: nil},
-		{MethodName: "GetTrustedDevices", Handler: nil},
-		{MethodName: "GetSensitiveTxConfig", Handler: nil},
-		{MethodName: "GetAllSensitiveTxConfigs", Handler: nil},
-		{MethodName: "GetParams", Handler: nil},
-		{MethodName: "IsMFARequired", Handler: nil},
-	},
-	Streams:  []struct{}{},
-	Metadata: "virtengine/mfa/v1/query.proto",
-}
-
-// registeredQueryServer holds the registered QueryServer for the module.
-// This enables query functionality even without protobuf-generated gRPC code.
-var registeredQueryServer QueryServer
 
 // RegisterMsgServer registers the MsgServer implementation with the grpc.Server.
-// This is a stub implementation until proper protobuf generation is set up.
+// This delegates to the generated proto registration function.
 func RegisterMsgServer(s grpc.Server, srv MsgServer) {
-	// Registration is a no-op for now since we don't have proper protobuf generated code
-	_ = s
-	_ = srv
+	// Wrap the local MsgServer to match the generated interface
+	mfav1.RegisterMsgServer(s, NewMsgServerAdapter(srv))
 }
 
 // RegisterQueryServer registers the QueryServer implementation with the grpc.Server.
-// This stores the server for query handling until proper protobuf generation is set up.
+// This delegates to the generated proto registration function.
 func RegisterQueryServer(s grpc.Server, srv QueryServer) {
-	registeredQueryServer = srv
-	_ = s // Server registration requires protobuf-generated code
-}
-
-// GetRegisteredQueryServer returns the registered QueryServer, if any.
-func GetRegisteredQueryServer() QueryServer {
-	return registeredQueryServer
+	// Wrap the local QueryServer to match the generated interface
+	mfav1.RegisterQueryServer(s, NewQueryServerAdapter(srv))
 }

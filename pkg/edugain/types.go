@@ -75,6 +75,12 @@ var (
 
 	// ErrVEIDIntegrationFailed is returned when VEID integration fails
 	ErrVEIDIntegrationFailed = errors.New("VEID integration failed")
+
+	// ErrWeakSignatureAlgorithm is returned when a weak signature algorithm (e.g., SHA-1) is used
+	ErrWeakSignatureAlgorithm = errors.New("weak signature algorithm detected: SHA-1 is not allowed")
+
+	// ErrWeakDigestAlgorithm is returned when a weak digest algorithm (e.g., SHA-1) is used
+	ErrWeakDigestAlgorithm = errors.New("weak digest algorithm detected: SHA-1 is not allowed")
 )
 
 // ============================================================================

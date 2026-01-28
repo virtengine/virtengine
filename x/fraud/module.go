@@ -114,9 +114,11 @@ func (am AppModule) Name() string {
 
 // RegisterServices registers module services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
+	// Register MsgServer for transaction handling
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+
 	// Register query server
-	queryServer := keeper.NewQueryServer(am.keeper)
-	_ = queryServer // Will be registered when proto is generated
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServer(am.keeper))
 }
 
 // RegisterInvariants registers module invariants

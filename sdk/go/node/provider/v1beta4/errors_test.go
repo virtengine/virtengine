@@ -72,6 +72,12 @@ func TestErrorGRPCStatusCodes(t *testing.T) {
 			expectedGRPCCode: codes.Internal,
 			expectedABCICode: 9,
 		},
+		{
+			name:             "provider_has_active_leases",
+			err:              v1beta4.ErrProviderHasActiveLeases,
+			expectedGRPCCode: codes.FailedPrecondition,
+			expectedABCICode: 24,
+		},
 	}
 
 	for _, tt := range tests {

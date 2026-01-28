@@ -233,8 +233,19 @@ func (c *RealIPFSClient) IsHealthy(ctx context.Context) error {
 // Ensure RealIPFSClient implements IPFSClient
 var _ IPFSClient = (*RealIPFSClient)(nil)
 
-// StubIPFSClient implements IPFSClient using in-memory storage
-// This is used for testing without a real IPFS node
+// StubIPFSClient implements IPFSClient using in-memory storage.
+// This is used for testing without a real IPFS node.
+//
+// WARNING: This client generates FAKE CIDs that are NOT valid IPFS CIDs.
+// The stub CIDs use a "Qm" prefix followed by hex-encoded hash bytes,
+// which differs from real CIDv0 format (base58-encoded multihash).
+//
+// NEVER use StubIPFSClient in production:
+//   - Data is stored in-memory and lost on restart
+//   - Generated CIDs are not valid IPFS content identifiers
+//   - CID validation will reject stub CIDs in production mode
+//
+// For production, use RealIPFSClient with a real IPFS node.
 type StubIPFSClient struct {
 	mu         sync.RWMutex
 	storage    map[string][]byte
@@ -242,7 +253,8 @@ type StubIPFSClient struct {
 	cidCounter uint64
 }
 
-// NewStubIPFSClient creates a new stub IPFS client for testing
+// NewStubIPFSClient creates a new stub IPFS client for testing.
+// WARNING: This is for testing only. See StubIPFSClient documentation.
 func NewStubIPFSClient() *StubIPFSClient {
 	return &StubIPFSClient{
 		storage: make(map[string][]byte),
@@ -250,15 +262,20 @@ func NewStubIPFSClient() *StubIPFSClient {
 	}
 }
 
-// generateCID generates a deterministic CID for stubbed implementation
+// generateCID generates a deterministic FAKE CID for the stub implementation.
+// This is NOT a valid IPFS CID - it uses hex encoding instead of base58.
+// The format is: "Qm" + 32 hex characters (16 bytes of SHA256 hash).
+// Real CIDv0 uses base58-encoded multihash which includes non-hex characters.
 func (c *StubIPFSClient) generateCID(data []byte) string {
 	c.cidCounter++
 	hash := sha256.Sum256(data)
-	// Simulate CIDv0 format: Qm + base58-like encoding
+	// Generate a FAKE CID: Qm + hex encoding (NOT real base58)
+	// This is intentionally distinguishable from real CIDs
 	return "Qm" + hex.EncodeToString(hash[:16])
 }
 
-// Add adds data to in-memory storage and returns a fake CID
+// Add adds data to in-memory storage and returns a FAKE CID.
+// WARNING: The CID returned is NOT a valid IPFS CID.
 func (c *StubIPFSClient) Add(_ context.Context, data []byte) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

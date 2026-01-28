@@ -114,7 +114,8 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Message server and query server registration would go here
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	// Query server registration will be added when query service is implemented
 }
 
 // InitGenesis performs genesis initialization for the HPC module.

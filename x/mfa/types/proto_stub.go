@@ -1,7 +1,8 @@
 // Package types contains proto.Message stub implementations for the mfa module.
 //
-// These are temporary stub implementations until proper protobuf generation is set up.
-// They implement the proto.Message interface required by Cosmos SDK.
+// These implement the proto.Message interface for the local message types
+// to support Amino JSON serialization. The actual proto types are in
+// sdk/go/node/mfa/v1/*.pb.go.
 package types
 
 import "fmt"

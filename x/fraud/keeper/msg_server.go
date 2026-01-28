@@ -4,6 +4,8 @@
 package keeper
 
 import (
+	"context"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/fraud/types"
@@ -28,7 +30,9 @@ func NewMsgServerImpl(k Keeper) types.MsgServer {
 var _ types.MsgServer = msgServer{}
 
 // SubmitFraudReport handles submitting a new fraud report
-func (ms msgServer) SubmitFraudReport(ctx sdk.Context, msg *types.MsgSubmitFraudReport) (*types.MsgSubmitFraudReportResponse, error) {
+func (ms msgServer) SubmitFraudReport(goCtx context.Context, msg *types.MsgSubmitFraudReport) (*types.MsgSubmitFraudReportResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate reporter address
 	reporterAddr, err := sdk.AccAddressFromBech32(msg.Reporter)
 	if err != nil {
@@ -72,7 +76,9 @@ func (ms msgServer) SubmitFraudReport(ctx sdk.Context, msg *types.MsgSubmitFraud
 }
 
 // AssignModerator handles assigning a moderator to a fraud report
-func (ms msgServer) AssignModerator(ctx sdk.Context, msg *types.MsgAssignModerator) (*types.MsgAssignModeratorResponse, error) {
+func (ms msgServer) AssignModerator(goCtx context.Context, msg *types.MsgAssignModerator) (*types.MsgAssignModeratorResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate moderator address
 	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
 	if err != nil {
@@ -99,7 +105,9 @@ func (ms msgServer) AssignModerator(ctx sdk.Context, msg *types.MsgAssignModerat
 }
 
 // UpdateReportStatus handles updating the status of a fraud report
-func (ms msgServer) UpdateReportStatus(ctx sdk.Context, msg *types.MsgUpdateReportStatus) (*types.MsgUpdateReportStatusResponse, error) {
+func (ms msgServer) UpdateReportStatus(goCtx context.Context, msg *types.MsgUpdateReportStatus) (*types.MsgUpdateReportStatusResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate moderator address
 	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
 	if err != nil {
@@ -126,7 +134,9 @@ func (ms msgServer) UpdateReportStatus(ctx sdk.Context, msg *types.MsgUpdateRepo
 }
 
 // ResolveFraudReport handles resolving a fraud report
-func (ms msgServer) ResolveFraudReport(ctx sdk.Context, msg *types.MsgResolveFraudReport) (*types.MsgResolveFraudReportResponse, error) {
+func (ms msgServer) ResolveFraudReport(goCtx context.Context, msg *types.MsgResolveFraudReport) (*types.MsgResolveFraudReportResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate moderator address
 	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
 	if err != nil {
@@ -153,7 +163,9 @@ func (ms msgServer) ResolveFraudReport(ctx sdk.Context, msg *types.MsgResolveFra
 }
 
 // RejectFraudReport handles rejecting a fraud report
-func (ms msgServer) RejectFraudReport(ctx sdk.Context, msg *types.MsgRejectFraudReport) (*types.MsgRejectFraudReportResponse, error) {
+func (ms msgServer) RejectFraudReport(goCtx context.Context, msg *types.MsgRejectFraudReport) (*types.MsgRejectFraudReportResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate moderator address
 	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
 	if err != nil {
@@ -179,7 +191,9 @@ func (ms msgServer) RejectFraudReport(ctx sdk.Context, msg *types.MsgRejectFraud
 }
 
 // EscalateFraudReport handles escalating a fraud report
-func (ms msgServer) EscalateFraudReport(ctx sdk.Context, msg *types.MsgEscalateFraudReport) (*types.MsgEscalateFraudReportResponse, error) {
+func (ms msgServer) EscalateFraudReport(goCtx context.Context, msg *types.MsgEscalateFraudReport) (*types.MsgEscalateFraudReportResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate moderator address
 	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
 	if err != nil {
@@ -206,7 +220,9 @@ func (ms msgServer) EscalateFraudReport(ctx sdk.Context, msg *types.MsgEscalateF
 }
 
 // UpdateParams handles updating module parameters (governance only)
-func (ms msgServer) UpdateParams(ctx sdk.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate authority address
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return nil, types.ErrInvalidReporter.Wrap(errMsgInvalidAuthorityAddr)

@@ -287,6 +287,16 @@ func (v *XMLDSigVerifier) verifyElementSignature(element *etree.Element, ctx *ds
 		}
 	}
 
+	// VE-2005: Validate that weak algorithms are not used
+	if isWeakSignatureAlgorithm(result.SignatureAlgorithm) {
+		result.Error = ErrWeakSignatureAlgorithm
+		return result
+	}
+	if isWeakDigestAlgorithm(result.DigestAlgorithm) {
+		result.Error = ErrWeakDigestAlgorithm
+		return result
+	}
+
 	// Validate the signature using goxmldsig
 	validatedElement, err := ctx.Validate(element)
 	if err != nil {
@@ -556,4 +566,100 @@ func VerifyXMLSignatureWithCertBytes(xmlData, certBytes []byte) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// ============================================================================
+// Algorithm Validation (VE-2005)
+// ============================================================================
+
+// SHA-1 algorithm URIs that are considered weak and MUST be rejected
+const (
+	// SignatureAlgorithmRSASHA1 is RSA-SHA1 signature algorithm (WEAK - DO NOT USE)
+	SignatureAlgorithmRSASHA1 = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
+
+	// SignatureAlgorithmDSASHA1 is DSA-SHA1 signature algorithm (WEAK - DO NOT USE)
+	SignatureAlgorithmDSASHA1 = "http://www.w3.org/2000/09/xmldsig#dsa-sha1"
+
+	// DigestAlgorithmSHA1 is SHA-1 digest algorithm (WEAK - DO NOT USE)
+	DigestAlgorithmSHA1 = "http://www.w3.org/2000/09/xmldsig#sha1"
+)
+
+// Allowed strong algorithms
+const (
+	// SignatureAlgorithmRSASHA256 is RSA-SHA256 signature algorithm
+	SignatureAlgorithmRSASHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+
+	// SignatureAlgorithmRSASHA384 is RSA-SHA384 signature algorithm
+	SignatureAlgorithmRSASHA384 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384"
+
+	// SignatureAlgorithmRSASHA512 is RSA-SHA512 signature algorithm
+	SignatureAlgorithmRSASHA512 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"
+
+	// SignatureAlgorithmECDSASHA256 is ECDSA-SHA256 signature algorithm
+	SignatureAlgorithmECDSASHA256 = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"
+
+	// SignatureAlgorithmECDSASHA384 is ECDSA-SHA384 signature algorithm
+	SignatureAlgorithmECDSASHA384 = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha384"
+
+	// SignatureAlgorithmECDSASHA512 is ECDSA-SHA512 signature algorithm
+	SignatureAlgorithmECDSASHA512 = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha512"
+
+	// DigestAlgorithmSHA256 is SHA-256 digest algorithm
+	DigestAlgorithmSHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
+
+	// DigestAlgorithmSHA384 is SHA-384 digest algorithm
+	DigestAlgorithmSHA384 = "http://www.w3.org/2001/04/xmldsig-more#sha384"
+
+	// DigestAlgorithmSHA512 is SHA-512 digest algorithm
+	DigestAlgorithmSHA512 = "http://www.w3.org/2001/04/xmlenc#sha512"
+)
+
+// weakSignatureAlgorithms is a set of signature algorithms that are not allowed
+var weakSignatureAlgorithms = map[string]bool{
+	SignatureAlgorithmRSASHA1: true,
+	SignatureAlgorithmDSASHA1: true,
+}
+
+// weakDigestAlgorithms is a set of digest algorithms that are not allowed
+var weakDigestAlgorithms = map[string]bool{
+	DigestAlgorithmSHA1: true,
+}
+
+// isWeakSignatureAlgorithm checks if the signature algorithm is weak (SHA-1 based)
+func isWeakSignatureAlgorithm(algorithm string) bool {
+	if algorithm == "" {
+		return false // No algorithm specified, let validation handle it
+	}
+	return weakSignatureAlgorithms[algorithm]
+}
+
+// isWeakDigestAlgorithm checks if the digest algorithm is weak (SHA-1)
+func isWeakDigestAlgorithm(algorithm string) bool {
+	if algorithm == "" {
+		return false // No algorithm specified, let validation handle it
+	}
+	return weakDigestAlgorithms[algorithm]
+}
+
+// IsAllowedSignatureAlgorithm checks if a signature algorithm is allowed
+func IsAllowedSignatureAlgorithm(algorithm string) bool {
+	allowedAlgorithms := map[string]bool{
+		SignatureAlgorithmRSASHA256:   true,
+		SignatureAlgorithmRSASHA384:   true,
+		SignatureAlgorithmRSASHA512:   true,
+		SignatureAlgorithmECDSASHA256: true,
+		SignatureAlgorithmECDSASHA384: true,
+		SignatureAlgorithmECDSASHA512: true,
+	}
+	return allowedAlgorithms[algorithm]
+}
+
+// IsAllowedDigestAlgorithm checks if a digest algorithm is allowed
+func IsAllowedDigestAlgorithm(algorithm string) bool {
+	allowedAlgorithms := map[string]bool{
+		DigestAlgorithmSHA256: true,
+		DigestAlgorithmSHA384: true,
+		DigestAlgorithmSHA512: true,
+	}
+	return allowedAlgorithms[algorithm]
 }

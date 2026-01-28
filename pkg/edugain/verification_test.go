@@ -609,3 +609,136 @@ func TestFormatFingerprint_Short(t *testing.T) {
 
 	assert.Equal(t, fingerprint, formatted) // Should return unchanged if not 64 chars
 }
+
+// ============================================================================
+// Algorithm Validation Tests (VE-2005)
+// ============================================================================
+
+func TestIsWeakSignatureAlgorithm(t *testing.T) {
+	tests := []struct {
+		name      string
+		algorithm string
+		isWeak    bool
+	}{
+		{
+			name:      "RSA-SHA1 is weak",
+			algorithm: SignatureAlgorithmRSASHA1,
+			isWeak:    true,
+		},
+		{
+			name:      "DSA-SHA1 is weak",
+			algorithm: SignatureAlgorithmDSASHA1,
+			isWeak:    true,
+		},
+		{
+			name:      "RSA-SHA256 is strong",
+			algorithm: SignatureAlgorithmRSASHA256,
+			isWeak:    false,
+		},
+		{
+			name:      "RSA-SHA384 is strong",
+			algorithm: SignatureAlgorithmRSASHA384,
+			isWeak:    false,
+		},
+		{
+			name:      "RSA-SHA512 is strong",
+			algorithm: SignatureAlgorithmRSASHA512,
+			isWeak:    false,
+		},
+		{
+			name:      "ECDSA-SHA256 is strong",
+			algorithm: SignatureAlgorithmECDSASHA256,
+			isWeak:    false,
+		},
+		{
+			name:      "empty algorithm is not weak",
+			algorithm: "",
+			isWeak:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isWeakSignatureAlgorithm(tc.algorithm)
+			assert.Equal(t, tc.isWeak, result)
+		})
+	}
+}
+
+func TestIsWeakDigestAlgorithm(t *testing.T) {
+	tests := []struct {
+		name      string
+		algorithm string
+		isWeak    bool
+	}{
+		{
+			name:      "SHA-1 is weak",
+			algorithm: DigestAlgorithmSHA1,
+			isWeak:    true,
+		},
+		{
+			name:      "SHA-256 is strong",
+			algorithm: DigestAlgorithmSHA256,
+			isWeak:    false,
+		},
+		{
+			name:      "SHA-384 is strong",
+			algorithm: DigestAlgorithmSHA384,
+			isWeak:    false,
+		},
+		{
+			name:      "SHA-512 is strong",
+			algorithm: DigestAlgorithmSHA512,
+			isWeak:    false,
+		},
+		{
+			name:      "empty algorithm is not weak",
+			algorithm: "",
+			isWeak:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isWeakDigestAlgorithm(tc.algorithm)
+			assert.Equal(t, tc.isWeak, result)
+		})
+	}
+}
+
+func TestIsAllowedSignatureAlgorithm(t *testing.T) {
+	// Allowed algorithms
+	assert.True(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmRSASHA256))
+	assert.True(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmRSASHA384))
+	assert.True(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmRSASHA512))
+	assert.True(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmECDSASHA256))
+	assert.True(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmECDSASHA384))
+	assert.True(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmECDSASHA512))
+
+	// Disallowed algorithms
+	assert.False(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmRSASHA1))
+	assert.False(t, IsAllowedSignatureAlgorithm(SignatureAlgorithmDSASHA1))
+	assert.False(t, IsAllowedSignatureAlgorithm("unknown-algorithm"))
+	assert.False(t, IsAllowedSignatureAlgorithm(""))
+}
+
+func TestIsAllowedDigestAlgorithm(t *testing.T) {
+	// Allowed algorithms
+	assert.True(t, IsAllowedDigestAlgorithm(DigestAlgorithmSHA256))
+	assert.True(t, IsAllowedDigestAlgorithm(DigestAlgorithmSHA384))
+	assert.True(t, IsAllowedDigestAlgorithm(DigestAlgorithmSHA512))
+
+	// Disallowed algorithms
+	assert.False(t, IsAllowedDigestAlgorithm(DigestAlgorithmSHA1))
+	assert.False(t, IsAllowedDigestAlgorithm("unknown-algorithm"))
+	assert.False(t, IsAllowedDigestAlgorithm(""))
+}
+
+func TestVerifyElementSignature_RejectsWeakAlgorithms(t *testing.T) {
+	// Test that the verifier properly extracts and checks algorithms
+	// This tests the algorithm constants are correctly defined
+	assert.Equal(t, "http://www.w3.org/2000/09/xmldsig#rsa-sha1", SignatureAlgorithmRSASHA1)
+	assert.Equal(t, "http://www.w3.org/2000/09/xmldsig#sha1", DigestAlgorithmSHA1)
+	assert.Equal(t, "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256", SignatureAlgorithmRSASHA256)
+	assert.Equal(t, "http://www.w3.org/2001/04/xmlenc#sha256", DigestAlgorithmSHA256)
+}

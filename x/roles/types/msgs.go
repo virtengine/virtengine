@@ -24,6 +24,7 @@ var (
 	_ sdk.Msg = &MsgRevokeRole{}
 	_ sdk.Msg = &MsgSetAccountState{}
 	_ sdk.Msg = &MsgNominateAdmin{}
+	_ sdk.Msg = &MsgUpdateParams{}
 )
 
 // MsgAssignRole is the message for assigning a role to an account
@@ -236,6 +237,46 @@ func (msg MsgNominateAdmin) GetSignBytes() []byte {
 	return sdk.MustSortJSON(bz)
 }
 
+// MsgUpdateParams is the message for updating module parameters (governance only)
+type MsgUpdateParams struct {
+	Authority string `json:"authority"`
+	Params    Params `json:"params"`
+}
+
+// NewMsgUpdateParams creates a new MsgUpdateParams
+func NewMsgUpdateParams(authority string, params Params) *MsgUpdateParams {
+	return &MsgUpdateParams{
+		Authority: authority,
+		Params:    params,
+	}
+}
+
+// Route returns the route for the message
+func (msg MsgUpdateParams) Route() string { return RouterKey }
+
+// Type returns the type for the message
+func (msg MsgUpdateParams) Type() string { return "update_params" }
+
+// ValidateBasic validates the message
+func (msg MsgUpdateParams) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return ErrInvalidAddress.Wrap("invalid authority address")
+	}
+	return msg.Params.Validate()
+}
+
+// GetSigners returns the signers for the message
+func (msg MsgUpdateParams) GetSigners() []sdk.AccAddress {
+	signer, _ := sdk.AccAddressFromBech32(msg.Authority)
+	return []sdk.AccAddress{signer}
+}
+
+// GetSignBytes returns the sign bytes for the message
+func (msg MsgUpdateParams) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(&msg)
+	return sdk.MustSortJSON(bz)
+}
+
 // MsgAssignRoleResponse is the response for MsgAssignRole
 type MsgAssignRoleResponse struct{}
 
@@ -247,3 +288,6 @@ type MsgSetAccountStateResponse struct{}
 
 // MsgNominateAdminResponse is the response for MsgNominateAdmin
 type MsgNominateAdminResponse struct{}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+type MsgUpdateParamsResponse struct{}

@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until sdk.NewInt is replaced with sdkmath.NewInt.
-
 // Package types contains tests for the delegation module types.
 //
 // VE-922: Delegation types tests
@@ -12,9 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/stretchr/testify/require"
+)
+
+// Test address constants - valid bech32 addresses
+var (
+	testDelegatorAddr1 = sdk.AccAddress([]byte("delegator_address_01")).String()
+	testDelegatorAddr2 = sdk.AccAddress([]byte("delegator_address_02")).String()
+	testValidatorAddr1 = sdk.AccAddress([]byte("validator_address_01")).String()
+	testValidatorAddr2 = sdk.AccAddress([]byte("validator_address_02")).String()
 )
 
 // TestDelegationValidation tests delegation validation
@@ -29,8 +32,8 @@ func TestDelegationValidation(t *testing.T) {
 		{
 			name: "valid delegation",
 			delegation: Delegation{
-				DelegatorAddress: "cosmos1delegator123",
-				ValidatorAddress: "cosmos1validator456",
+				DelegatorAddress: testDelegatorAddr1,
+				ValidatorAddress: testValidatorAddr1,
 				Shares:           "1000000000000000000",
 				InitialAmount:    "1000000",
 				CreatedAt:        now,
@@ -43,7 +46,7 @@ func TestDelegationValidation(t *testing.T) {
 			name: "empty delegator",
 			delegation: Delegation{
 				DelegatorAddress: "",
-				ValidatorAddress: "cosmos1validator456",
+				ValidatorAddress: testValidatorAddr1,
 				Shares:           "1000000000000000000",
 				InitialAmount:    "1000000",
 			},
@@ -52,7 +55,7 @@ func TestDelegationValidation(t *testing.T) {
 		{
 			name: "empty validator",
 			delegation: Delegation{
-				DelegatorAddress: "cosmos1delegator123",
+				DelegatorAddress: testDelegatorAddr1,
 				ValidatorAddress: "",
 				Shares:           "1000000000000000000",
 				InitialAmount:    "1000000",
@@ -62,8 +65,8 @@ func TestDelegationValidation(t *testing.T) {
 		{
 			name: "negative shares",
 			delegation: Delegation{
-				DelegatorAddress: "cosmos1delegator123",
-				ValidatorAddress: "cosmos1validator456",
+				DelegatorAddress: testDelegatorAddr1,
+				ValidatorAddress: testValidatorAddr1,
 				Shares:           "-1000",
 				InitialAmount:    "1000000",
 			},
@@ -72,8 +75,8 @@ func TestDelegationValidation(t *testing.T) {
 		{
 			name: "invalid shares format",
 			delegation: Delegation{
-				DelegatorAddress: "cosmos1delegator123",
-				ValidatorAddress: "cosmos1validator456",
+				DelegatorAddress: testDelegatorAddr1,
+				ValidatorAddress: testValidatorAddr1,
 				Shares:           "not-a-number",
 				InitialAmount:    "1000000",
 			},
@@ -487,9 +490,9 @@ func TestMsgDelegateValidation(t *testing.T) {
 		{
 			name: "valid message",
 			msg: NewMsgDelegate(
-				"cosmos1qperwt9wrnkg39mvs5g6ys",
-				"cosmos1validator123456789abc",
-				sdk.NewCoin("uve", sdk.NewInt(1000000)),
+				testDelegatorAddr1,
+				testValidatorAddr1,
+				sdk.NewCoin("uve", sdkmath.NewInt(1000000)),
 			),
 			expectError: false,
 		},
@@ -497,17 +500,17 @@ func TestMsgDelegateValidation(t *testing.T) {
 			name: "invalid delegator",
 			msg: NewMsgDelegate(
 				"invalid",
-				"cosmos1validator123456789abc",
-				sdk.NewCoin("uve", sdk.NewInt(1000000)),
+				testValidatorAddr1,
+				sdk.NewCoin("uve", sdkmath.NewInt(1000000)),
 			),
 			expectError: true,
 		},
 		{
 			name: "zero amount",
 			msg: NewMsgDelegate(
-				"cosmos1qperwt9wrnkg39mvs5g6ys",
-				"cosmos1validator123456789abc",
-				sdk.NewCoin("uve", sdk.NewInt(0)),
+				testDelegatorAddr1,
+				testValidatorAddr1,
+				sdk.NewCoin("uve", sdkmath.NewInt(0)),
 			),
 			expectError: true,
 		},
@@ -535,20 +538,20 @@ func TestMsgRedelegateValidation(t *testing.T) {
 		{
 			name: "valid message",
 			msg: NewMsgRedelegate(
-				"cosmos1qperwt9wrnkg39mvs5g6ys",
-				"cosmos1validator111111111111",
-				"cosmos1validator222222222222",
-				sdk.NewCoin("uve", sdk.NewInt(1000000)),
+				testDelegatorAddr1,
+				testValidatorAddr1,
+				testValidatorAddr2,
+				sdk.NewCoin("uve", sdkmath.NewInt(1000000)),
 			),
 			expectError: false,
 		},
 		{
 			name: "same source and destination",
 			msg: NewMsgRedelegate(
-				"cosmos1qperwt9wrnkg39mvs5g6ys",
-				"cosmos1validator111111111111",
-				"cosmos1validator111111111111",
-				sdk.NewCoin("uve", sdk.NewInt(1000000)),
+				testDelegatorAddr1,
+				testValidatorAddr1,
+				testValidatorAddr1,
+				sdk.NewCoin("uve", sdkmath.NewInt(1000000)),
 			),
 			expectError: true,
 		},

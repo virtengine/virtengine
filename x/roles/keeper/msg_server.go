@@ -203,3 +203,25 @@ func (ms msgServer) NominateAdmin(goCtx context.Context, msg *types.MsgNominateA
 
 	return &types.MsgNominateAdminResponse{}, nil
 }
+
+// UpdateParams updates the module parameters (governance only)
+func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Verify authority matches the module's expected authority
+	if ms.keeper.GetAuthority() != msg.Authority {
+		return nil, types.ErrUnauthorized.Wrapf("invalid authority; expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
+	}
+
+	// Validate params
+	if err := msg.Params.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Set the new params
+	if err := ms.keeper.SetParams(ctx, msg.Params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateParamsResponse{}, nil
+}

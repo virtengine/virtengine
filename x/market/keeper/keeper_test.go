@@ -364,6 +364,30 @@ func createOrder(t testing.TB, ctx sdk.Context, keeper keeper.IKeeper) (types.Or
 	return order, group.GroupSpec
 }
 
+func Test_ProviderHasActiveLeases(t *testing.T) {
+	_, keeper, suite := setupKeeper(t)
+	ctx := suite.Context()
+
+	// Provider with no leases should return false
+	providerWithNoLeases := testutil.AccAddress(t)
+	hasActive := keeper.ProviderHasActiveLeases(ctx, providerWithNoLeases)
+	require.False(t, hasActive, "provider with no leases should return false")
+
+	// Create a lease for a specific provider
+	leaseID := createLease(t, suite)
+	leaseProvider, err := sdk.AccAddressFromBech32(leaseID.Provider)
+	require.NoError(t, err)
+
+	// Provider with active lease should return true
+	hasActive = keeper.ProviderHasActiveLeases(ctx, leaseProvider)
+	require.True(t, hasActive, "provider with active lease should return true")
+
+	// A different provider should still return false
+	differentProvider := testutil.AccAddress(t)
+	hasActive = keeper.ProviderHasActiveLeases(ctx, differentProvider)
+	require.False(t, hasActive, "different provider should return false")
+}
+
 func setupKeeper(t testing.TB) (sdk.Context, keeper.IKeeper, *state.TestSuite) {
 	t.Helper()
 

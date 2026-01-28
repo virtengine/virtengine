@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until MockRolesKeeper interface is aligned.
-
 // Package keeper contains tests for the Fraud module keeper.
 //
 // VE-912: Fraud reporting flow - Keeper tests
@@ -23,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/fraud/types"
+	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 )
 
 // MockRolesKeeper implements a mock roles keeper for testing
@@ -40,13 +36,15 @@ func NewMockRolesKeeper() *MockRolesKeeper {
 	}
 }
 
-func (m *MockRolesKeeper) HasRole(ctx sdk.Context, address sdk.AccAddress, role interface{}) bool {
-	roleStr, ok := role.(string)
-	if !ok {
-		return false
-	}
-	if roleStr == "service_provider" {
+func (m *MockRolesKeeper) HasRole(ctx sdk.Context, address sdk.AccAddress, role rolestypes.Role) bool {
+	if role == rolestypes.RoleServiceProvider {
 		return m.providers[address.String()]
+	}
+	if role == rolestypes.RoleModerator {
+		return m.moderators[address.String()]
+	}
+	if role == rolestypes.RoleAdministrator {
+		return m.admins[address.String()]
 	}
 	return false
 }

@@ -23,6 +23,36 @@ func TestIPFSBackend(t *testing.T) {
 		}
 	})
 
+	t.Run("ProductionConfig_RejectsStubCIDs", func(t *testing.T) {
+		// Verify that production configuration would reject stub CIDs
+		prodConfig := ProductionIPFSConfig("localhost:5001")
+
+		// Production config should have CID validation enabled
+		if !prodConfig.ValidateCIDs {
+			t.Error("expected production config to have CID validation enabled")
+		}
+		if prodConfig.UseStubClient {
+			t.Error("expected production config to not use stub client")
+		}
+
+		// Create a validator with production settings
+		prodValidator := NewCIDValidator()
+		stubCID := "Qm0123456789abcdef0123456789abcdef"
+
+		// Stub CID should be rejected
+		err := prodValidator.ValidateCID(stubCID)
+		if err == nil {
+			t.Error("expected production validator to reject stub CID")
+		}
+
+		// Real CID should be accepted
+		realCID := "QmRf22bZar3WKmojipms22PkXH1MZGmvsqzQtuSvQE3uhm"
+		err = prodValidator.ValidateCID(realCID)
+		if err != nil {
+			t.Errorf("expected production validator to accept real CID: %v", err)
+		}
+	})
+
 	t.Run("Put_Get_Exists", func(t *testing.T) {
 		backend, _ := NewIPFSBackend(DefaultIPFSConfig())
 
@@ -52,9 +82,11 @@ func TestIPFSBackend(t *testing.T) {
 			t.Errorf("expected backend %s, got %s", BackendIPFS, resp.ContentAddress.Backend)
 		}
 
-		// Check CID format (stubbed)
+		// Check CID format - stub client generates fake CIDs with "Qm" + hex
+		// Note: This is NOT a valid IPFS CID format. Real CIDs use base58.
+		// The stub client is for testing only.
 		if len(resp.ContentAddress.BackendRef) < 2 || resp.ContentAddress.BackendRef[:2] != "Qm" {
-			t.Errorf("expected CID to start with Qm, got %s", resp.ContentAddress.BackendRef)
+			t.Errorf("expected stub CID to start with Qm, got %s", resp.ContentAddress.BackendRef)
 		}
 
 		// Exists

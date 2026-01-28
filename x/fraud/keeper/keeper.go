@@ -241,6 +241,13 @@ func (k Keeper) IsAdmin(ctx sdk.Context, addr sdk.AccAddress) bool {
 
 // SubmitFraudReport submits a new fraud report
 func (k Keeper) SubmitFraudReport(ctx sdk.Context, report *types.FraudReport) error {
+	// Assign sequence ID if not set (before validation)
+	if report.ID == "" {
+		seq := k.GetNextFraudReportSequence(ctx)
+		report.ID = fmt.Sprintf("fraud-report-%d", seq)
+		k.SetNextFraudReportSequence(ctx, seq+1)
+	}
+
 	if err := report.Validate(); err != nil {
 		return err
 	}
@@ -252,13 +259,6 @@ func (k Keeper) SubmitFraudReport(ctx sdk.Context, report *types.FraudReport) er
 	}
 	if !k.IsProvider(ctx, reporterAddr) {
 		return types.ErrUnauthorizedReporter
-	}
-
-	// Assign sequence ID if not set
-	if report.ID == "" {
-		seq := k.GetNextFraudReportSequence(ctx)
-		report.ID = fmt.Sprintf("fraud-report-%d", seq)
-		k.SetNextFraudReportSequence(ctx, seq+1)
 	}
 
 	// Store the report

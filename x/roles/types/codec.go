@@ -1,13 +1,13 @@
 package types
 
 import (
-	"context"
-
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
-	"github.com/cosmos/gogoproto/grpc"
+
+	rolesv1 "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
 )
 
 var (
@@ -22,70 +22,21 @@ func init() {
 // RegisterLegacyAminoCodec registers the necessary interfaces and concrete types
 // on the provided LegacyAmino codec. These types are used for Amino JSON serialization.
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	legacy.RegisterAminoMsg(cdc, &MsgAssignRole{}, "roles/MsgAssignRole")
-	legacy.RegisterAminoMsg(cdc, &MsgRevokeRole{}, "roles/MsgRevokeRole")
-	legacy.RegisterAminoMsg(cdc, &MsgSetAccountState{}, "roles/MsgSetAccountState")
-	legacy.RegisterAminoMsg(cdc, &MsgNominateAdmin{}, "roles/MsgNominateAdmin")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgAssignRole{}, "roles/MsgAssignRole")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgRevokeRole{}, "roles/MsgRevokeRole")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgSetAccountState{}, "roles/MsgSetAccountState")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgNominateAdmin{}, "roles/MsgNominateAdmin")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgUpdateParams{}, "roles/MsgUpdateParams")
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// NOTE: These are stub message types without proper protobuf generation.
-	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
-	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
-	//
-	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
-	//
-	// registry.RegisterImplementations((*sdk.Msg)(nil),
-	//     &MsgAssignRole{},
-	//     &MsgRevokeRole{},
-	//     &MsgSetAccountState{},
-	//     &MsgNominateAdmin{},
-	// )
-	//
-	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
-	_ = registry // suppress unused variable warning
-	_ = msgservice.RegisterMsgServiceDesc
-}
-
-// _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
-var _Msg_serviceDesc = struct {
-	ServiceName string
-	HandlerType interface{}
-	Methods     []struct {
-		MethodName string
-		Handler    interface{}
-	}
-	Streams  []struct{}
-	Metadata interface{}
-}{
-	ServiceName: "virtengine.roles.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []struct {
-		MethodName string
-		Handler    interface{}
-	}{
-		{MethodName: "AssignRole", Handler: nil},
-		{MethodName: "RevokeRole", Handler: nil},
-		{MethodName: "SetAccountState", Handler: nil},
-		{MethodName: "NominateAdmin", Handler: nil},
-	},
-	Streams:  []struct{}{},
-	Metadata: "virtengine/roles/v1/msg.proto",
-}
-
-// MsgServer is the interface for the message server
-type MsgServer interface {
-	AssignRole(ctx context.Context, msg *MsgAssignRole) (*MsgAssignRoleResponse, error)
-	RevokeRole(ctx context.Context, msg *MsgRevokeRole) (*MsgRevokeRoleResponse, error)
-	SetAccountState(ctx context.Context, msg *MsgSetAccountState) (*MsgSetAccountStateResponse, error)
-	NominateAdmin(ctx context.Context, msg *MsgNominateAdmin) (*MsgNominateAdminResponse, error)
-}
-
-// RegisterMsgServer registers the MsgServer
-// This is a stub implementation until proper protobuf generation is set up.
-func RegisterMsgServer(s grpc.Server, impl MsgServer) {
-	// Registration is a no-op for now since we don't have proper protobuf generated code
-	_ = s
-	_ = impl
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&rolesv1.MsgAssignRole{},
+		&rolesv1.MsgRevokeRole{},
+		&rolesv1.MsgSetAccountState{},
+		&rolesv1.MsgNominateAdmin{},
+		&rolesv1.MsgUpdateParams{},
+	)
+	msgservice.RegisterMsgServiceDesc(registry, &rolesv1.Msg_serviceDesc)
 }

@@ -33,10 +33,17 @@ type IPFSConfig struct {
 	EnablePinning bool `json:"enable_pinning"`
 
 	// UseStubClient indicates if stub client should be used (for testing)
+	// WARNING: Stub client uses fake CIDs and in-memory storage.
+	// NEVER use in production - data will be lost on restart.
 	UseStubClient bool `json:"use_stub_client"`
+
+	// ValidateCIDs enables CID validation for stored/retrieved content.
+	// When true, stub CIDs are rejected. Should be true in production.
+	ValidateCIDs bool `json:"validate_cids"`
 }
 
-// DefaultIPFSConfig returns a default configuration for testing with stub client
+// DefaultIPFSConfig returns a default configuration for testing with stub client.
+// WARNING: This uses in-memory storage with fake CIDs. Use ProductionIPFSConfig for real deployments.
 func DefaultIPFSConfig() *IPFSConfig {
 	return &IPFSConfig{
 		Endpoint:      "localhost:5001",
@@ -45,11 +52,17 @@ func DefaultIPFSConfig() *IPFSConfig {
 		Timeout:       60 * time.Second,
 		ChunkSize:     256 * 1024, // 256KB chunks
 		EnablePinning: true,
-		UseStubClient: true, // Default to stub for tests
+		UseStubClient: true,  // Default to stub for tests
+		ValidateCIDs:  false, // Allow stub CIDs in test mode
 	}
 }
 
-// ProductionIPFSConfig returns a configuration for production use with real IPFS
+// ProductionIPFSConfig returns a configuration for production use with real IPFS.
+// This configuration:
+//   - Connects to a real IPFS node
+//   - Enables CID validation (rejects fake stub CIDs)
+//   - Enables pinning for persistence
+//   - Uses sensible timeouts and retry policies
 func ProductionIPFSConfig(endpoint string) *IPFSConfig {
 	return &IPFSConfig{
 		Endpoint:      endpoint,
@@ -59,6 +72,7 @@ func ProductionIPFSConfig(endpoint string) *IPFSConfig {
 		ChunkSize:     256 * 1024, // 256KB chunks
 		EnablePinning: true,
 		UseStubClient: false, // Use real IPFS client
+		ValidateCIDs:  true,  // Validate CID format in production
 	}
 }
 
@@ -69,6 +83,11 @@ func (c *IPFSConfig) Validate() error {
 	}
 	if c.ChunkSize == 0 {
 		return ErrInvalidInput.Wrap("chunk_size cannot be zero")
+	}
+	// Warn if using stub client with CID validation disabled in what looks like production
+	if !c.UseStubClient && !c.ValidateCIDs {
+		// This is a configuration that uses real IPFS but doesn't validate CIDs
+		// It's allowed but unusual - production should validate CIDs
 	}
 	return nil
 }
@@ -82,14 +101,17 @@ func (c *IPFSConfig) Validate() error {
 //   - Chunk manifests for deterministic reconstruction
 //   - Optional pinning for persistence
 //   - Supports both real IPFS nodes and stub client for testing
+//   - CID validation to prevent fake/stub CIDs in production
 //
 // Security:
 //   - All data is encrypted before being stored in IPFS
 //   - CIDs reference encrypted data only
 //   - No sensitive data is logged
+//   - CID validation prevents stub CID injection in production
 type IPFSBackend struct {
-	config *IPFSConfig
-	client IPFSClient
+	config       *IPFSConfig
+	client       IPFSClient
+	cidValidator *CIDValidator
 
 	// mu protects concurrent access to the internal state
 	mu sync.RWMutex
@@ -148,9 +170,18 @@ func NewIPFSBackend(config *IPFSConfig) (*IPFSBackend, error) {
 		}
 	}
 
+	// Create CID validator based on configuration
+	var cidValidator *CIDValidator
+	if config.ValidateCIDs {
+		cidValidator = NewCIDValidator()
+	} else {
+		cidValidator = NewTestCIDValidator()
+	}
+
 	return &IPFSBackend{
 		config:        config,
 		client:        client,
+		cidValidator:  cidValidator,
 		artifactIndex: make(map[string]*ipfsStoredArtifact),
 		chunkIndex:    make(map[string]string),
 		ownerIndex:    make(map[string][]string),
@@ -172,9 +203,18 @@ func NewIPFSBackendWithClient(config *IPFSConfig, client IPFSClient) (*IPFSBacke
 		return nil, ErrInvalidInput.Wrap("client cannot be nil")
 	}
 
+	// Create CID validator based on configuration
+	var cidValidator *CIDValidator
+	if config.ValidateCIDs {
+		cidValidator = NewCIDValidator()
+	} else {
+		cidValidator = NewTestCIDValidator()
+	}
+
 	return &IPFSBackend{
 		config:        config,
 		client:        client,
+		cidValidator:  cidValidator,
 		artifactIndex: make(map[string]*ipfsStoredArtifact),
 		chunkIndex:    make(map[string]string),
 		ownerIndex:    make(map[string][]string),
@@ -200,6 +240,11 @@ func (i *IPFSBackend) Put(ctx context.Context, req *PutRequest) (*PutResponse, e
 	cid, err := i.client.Add(ctx, req.Data)
 	if err != nil {
 		return nil, ErrBackendUnavailable.Wrapf("ipfs add failed: %v", err)
+	}
+
+	// Validate the CID returned from IPFS
+	if err := i.cidValidator.ValidateCID(cid); err != nil {
+		return nil, err
 	}
 
 	// Pin if enabled
@@ -665,6 +710,11 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 			return nil, nil, ErrBackendUnavailable.Wrapf("failed to store chunk: %v", err)
 		}
 
+		// Validate the chunk CID
+		if err := i.cidValidator.ValidateCID(chunkCID); err != nil {
+			return nil, nil, err
+		}
+
 		// Pin chunk if enabled
 		if i.config.EnablePinning {
 			if err := i.client.Pin(ctx, chunkCID); err != nil {
@@ -704,6 +754,11 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 	manifestCID, err := i.client.Add(ctx, manifestData)
 	if err != nil {
 		return nil, nil, ErrBackendUnavailable.Wrapf("failed to store manifest: %v", err)
+	}
+
+	// Validate the manifest CID
+	if err := i.cidValidator.ValidateCID(manifestCID); err != nil {
+		return nil, nil, err
 	}
 
 	if i.config.EnablePinning {

@@ -117,7 +117,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Message server will be registered here when proto definitions are added
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.
