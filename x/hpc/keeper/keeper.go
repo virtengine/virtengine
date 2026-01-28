@@ -174,6 +174,31 @@ func (k Keeper) incrementSequence(ctx sdk.Context, key []byte) uint64 {
 	return seq
 }
 
+// GetNextClusterSequence gets and increments the next cluster sequence
+func (k Keeper) GetNextClusterSequence(ctx sdk.Context) uint64 {
+	return k.incrementSequence(ctx, types.SequenceKeyCluster)
+}
+
+// GetNextOfferingSequence gets and increments the next offering sequence
+func (k Keeper) GetNextOfferingSequence(ctx sdk.Context) uint64 {
+	return k.incrementSequence(ctx, types.SequenceKeyOffering)
+}
+
+// GetNextJobSequence gets and increments the next job sequence
+func (k Keeper) GetNextJobSequence(ctx sdk.Context) uint64 {
+	return k.incrementSequence(ctx, types.SequenceKeyJob)
+}
+
+// GetNextDecisionSequence gets and increments the next decision sequence
+func (k Keeper) GetNextDecisionSequence(ctx sdk.Context) uint64 {
+	return k.incrementSequence(ctx, types.SequenceKeyDecision)
+}
+
+// GetNextDisputeSequence gets and increments the next dispute sequence
+func (k Keeper) GetNextDisputeSequence(ctx sdk.Context) uint64 {
+	return k.incrementSequence(ctx, types.SequenceKeyDispute)
+}
+
 // SetNextClusterSequence sets the next cluster sequence
 func (k Keeper) SetNextClusterSequence(ctx sdk.Context, seq uint64) {
 	k.setNextSequence(ctx, types.SequenceKeyCluster, seq)

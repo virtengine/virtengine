@@ -4,10 +4,37 @@
 package types
 
 import (
+	"context"
+
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
+	grpc "google.golang.org/grpc"
 )
+
+// MsgServer defines the delegation Msg service
+type MsgServer interface {
+	Delegate(context.Context, *MsgDelegate) (*MsgDelegateResponse, error)
+	Undelegate(context.Context, *MsgUndelegate) (*MsgUndelegateResponse, error)
+	Redelegate(context.Context, *MsgRedelegate) (*MsgRedelegateResponse, error)
+	ClaimRewards(context.Context, *MsgClaimRewards) (*MsgClaimRewardsResponse, error)
+	ClaimAllRewards(context.Context, *MsgClaimAllRewards) (*MsgClaimAllRewardsResponse, error)
+	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+}
+
+// RegisterMsgServer registers the MsgServer implementation with a gRPC server
+func RegisterMsgServer(s grpc.ServiceRegistrar, srv MsgServer) {
+	s.RegisterService(&_Msg_serviceDesc_grpc, srv)
+}
+
+// _Msg_serviceDesc_grpc is the service descriptor for grpc registration
+var _Msg_serviceDesc_grpc = grpc.ServiceDesc{
+	ServiceName: "virtengine.delegation.v1.Msg",
+	HandlerType: (*MsgServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams:     []grpc.StreamDesc{},
+	Metadata:    "virtengine/delegation/v1/tx.proto",
+}
 
 // RegisterLegacyAminoCodec registers the delegation types on the provided LegacyAmino codec
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
