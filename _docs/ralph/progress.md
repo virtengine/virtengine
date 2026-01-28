@@ -1,10 +1,125 @@
-## STATUS: ALL TASKS COMPLETE ✅
+## STATUS: ⚠️ TASKS COMPLETE - NOT PRODUCTION READY
 
-**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks (14 done)**
+**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks (14 done) | VE-2000 IN PROGRESS**
+
+---
+
+## 🔴 CRITICAL: PRODUCTION GAP ANALYSIS
+
+**Assessment Date:** 2026-01-28  
+**Target Scale:** 1,000,000 nodes  
+**Overall Status:** 🔴 **NOT PRODUCTION READY** - See [PRODUCTION_GAP_ANALYSIS.md](PRODUCTION_GAP_ANALYSIS.md)
+
+### Executive Summary
+
+Many tasks were "completed" as **interface scaffolding and stub implementations**, not production-ready integrations. This table shows the HONEST status of every major component:
+
+---
+
+### Chain Modules (x/) Reality Check
+
+| Module | Keeper | MsgServer | QueryServer | Verdict | Production Blocker |
+|--------|--------|-----------|-------------|---------|-------------------|
+| x/veid | ✅ | ✅ | ✅ | **45%** | Proto stubs, consensus safety issues |
+| x/roles | ✅ | ✅ | ✅ | **45%** | Proto stubs, limited tests |
+| x/mfa | ✅ | ✅ | ✅ | **55%** | Proto stubs, limited tests |
+| x/market | ✅ | ✅ | ✅ | **85%** | Production-ready with testing |
+| x/escrow | ✅ | ✅ | ✅ | **85%** | Production-ready with testing |
+| x/settlement | ✅ | ✅ | ✅ | **85%** | Production-ready with testing |
+| x/encryption | ✅ | ✅ | ✅ | **85%** | Production-ready with testing |
+| x/deployment | ✅ | ✅ | ✅ | **80%** | Production-ready with testing |
+| x/provider | ✅ | ✅ | ✅ | **75%** | Production-ready with testing |
+| x/cert | ✅ | ✅ | ✅ | **85%** | Production-ready |
+| x/take | ✅ | ✅ | ✅ | **85%** | Production-ready |
+| x/config | ✅ | ✅ | ✅ | **85%** | Production-ready |
+| x/hpc | ✅ | ⚠️ | ⚠️ | **55%** | Interface issues |
+| x/staking | ⚠️ | ⚠️ | ⚠️ | **55%** | Interface issues |
+| x/delegation | ✅ | ⚠️ | ⚠️ | **50%** | Tests disabled |
+| x/fraud | ✅ | ⚠️ | ⚠️ | **50%** | Tests disabled |
+| x/review | ✅ | ⚠️ | ⚠️ | **50%** | Tests disabled |
+| x/benchmark | ✅ | ⚠️ | ✅ | **60%** | Interface issues |
+| x/enclave | ✅ | ✅ | ✅ | **70%** | Minimal tests |
+| x/audit | ✅ | ✅ | ✅ | **70%** | Minimal tests |
+
+---
+
+### Off-Chain Packages (pkg/) Reality Check
+
+| Package | What's Real | What's Stubbed | Verdict | Production Blocker |
+|---------|-------------|----------------|---------|-------------------|
+| pkg/enclave_runtime | Types, interfaces | **ALL TEE code is simulated** | **20%** | 🔴 No actual enclave security |
+| pkg/govdata | Types, audit logging, consent | **ALL gov APIs return mock "approved"** | **25%** | 🔴 Fake identity verification |
+| pkg/edugain | Types, session management | **SAML verification always passes** | **30%** | 🔴 Auth bypass possible |
+| pkg/payment | Types, rate limiting | **Stripe/Adyen return fake IDs** | **35%** | 🔴 No real payments |
+| pkg/dex | Types, interfaces, config | **ALL DEX adapters return fake data** | **35%** | 🔴 No real trading |
+| pkg/nli | Classifier, response generator | **OpenAI/Anthropic return "not implemented"** | **40%** | 🟡 No AI functionality |
+| pkg/jira | Types, webhook handlers | **No actual Jira API calls** | **40%** | 🟡 No ticketing |
+| pkg/moab_adapter | Types, state machines | **No real MOAB RPC client** | **40%** | 🟡 No HPC scheduling |
+| pkg/ood_adapter | Types, auth framework | **No real Open OnDemand calls** | **40%** | 🟡 No HPC portals |
+| pkg/slurm_adapter | Types, SSH stubs | **Basic SSH only, no SLURM CLI** | **50%** | 🟡 Limited HPC |
+| pkg/artifact_store | Types, IPFS interface | **In-memory only, no real pinning** | **55%** | 🟡 Data loss on restart |
+| pkg/benchmark_daemon | Synthetic tests | **Needs real hardware benchmarks** | **70%** | 🟡 Limited benchmarks |
+| pkg/inference | TensorFlow scorer | **Needs model deployment** | **80%** | 🟡 Model not deployed |
+| pkg/capture_protocol | Crypto, salt-binding | Production-ready | **85%** | ✅ Ready |
+| pkg/observability | Logging, redaction | Production-ready | **90%** | ✅ Ready |
+| pkg/workflow | State machine | Production-ready (needs persistent store) | **85%** | 🟡 In-memory only |
+| pkg/provider_daemon | Kubernetes adapter, bid engine | Production-ready with testing | **85%** | ✅ Mostly ready |
+
+---
+
+### Consensus-Safety Issues Found
+
+| Location | Issue | Impact |
+|----------|-------|--------|
+| x/veid/types/proto_stub.go | Hand-written proto stubs | **Serialization may differ across nodes** |
+
+---
+
+### Security Vulnerabilities Found
+
+| Severity | Issue | Location | Impact |
+|----------|-------|----------|--------|
+| 🔴 CRITICAL | No real TEE implementation | pkg/enclave_runtime | Identity data exposed in plaintext |
+| 🔴 CRITICAL | SAML signature verification always passes | pkg/edugain | Authentication bypass |
+| 🔴 CRITICAL | Gov data verification always approves | pkg/govdata | Fake identity verification |
+| 🟡 HIGH | Proto stubs in VEID | x/veid/types/proto_stub.go | Serialization mismatch risk |
+| 🟡 HIGH | time.Now() in consensus code | x/veid/types | Non-deterministic state |
+| 🟡 HIGH | Mock payment IDs | pkg/payment | No payment validation |
+
+---
+
+### What "Complete" Actually Means
+
+| Task Category | Interpretation | Reality |
+|--------------|----------------|---------|
+| VE-904 NLI | "Implemented" | Interface + mock backend only; real LLMs return "not implemented" |
+| VE-905 DEX | "Implemented" | Interface + types only; adapters return fake tx hashes |
+| VE-906 Payment | "Implemented" | Interface + types only; Stripe/Adyen adapters are stubs |
+| VE-908 EduGAIN | "Implemented" | Interface + session mgmt; SAML verification is a stub |
+| VE-909 GovData | "Implemented" | Interface + audit logging; ALL verification returns mock data |
+| VE-228 TEE Security | "Implemented" | Documentation only; SimulatedEnclaveService is NOT secure |
+| VE-231 Enclave Runtime | "Implemented" | Interface defined; NO REAL SGX/SEV IMPLEMENTATION |
+
+---
+
+### Remediation Effort Estimate
+
+| Phase | Work Required | Duration | Priority |
+|-------|--------------|----------|----------|
+| **Phase 1: Enable Core Services** | Fix VEID/Roles/MFA gRPC registration | 1-2 weeks | P0 |
+| **Phase 2: Consensus Safety** | Replace time.Now(), generate protos | 1 week | P0 |
+| **Phase 3: Real TEE** | Intel SGX or AMD SEV-SNP integration | 4-6 weeks | P0 |
+| **Phase 4: Real Integrations** | Payment, DEX, Gov APIs | 6-8 weeks | P1 |
+| **Phase 5: Scale Testing** | 1M node load testing | 4 weeks | P1 |
+
+**Total estimated time to production: 3-6 months with dedicated team**
+
+---
 
 **Completion Date:** 2026-01-28
 
 **Final Session Accomplishments (2026-01-28):**
+- ✅ VE-1016: Build-bins job fixed (Cosmos SDK v0.50+ GetSigners API migration in ante_mfa.go)
 - ✅ VE-1015: Unit tests CI job fixed (CGO_ENABLED, PATH for setup-ubuntu)
 - ✅ VE-1019: Simulation tests fixed (BondDenom, MinDeposits, proto codec, authz queue)
 - ✅ VE-1020: Network upgrade names fixed (semver.sh exit codes)
@@ -17,6 +132,34 @@
 - ✅ VE-906: Payment gateway implemented (pkg/payment/)
 - ✅ VE-908: EduGAIN federation implemented (pkg/edugain/)
 - ✅ VE-909: Government data integration implemented (pkg/govdata/)
+- ✅ VE-101 verification: Added algorithm version to payload envelopes; marketplace secrets/configs now use envelopes only
+- 🔄 VE-2000: VEID proto files created (types.proto, tx.proto, query.proto, genesis.proto)
+
+**VE-2000 VEID Protobuf Generation (2026-01-28):**
+- Created proper protobuf definitions for the VEID identity verification module
+- **Consensus-Safety Critical**: Replaces hand-written proto stubs with proper .proto definitions
+- Proto files created in `sdk/proto/node/virtengine/veid/v1/`:
+  - `types.proto`: Core types (ScopeType, VerificationStatus, IdentityTier, AccountStatus, WalletStatus enums; EncryptedPayloadEnvelope, UploadMetadata, ScopeRef, IdentityScope, IdentityRecord, IdentityScore, ConsentSettings, BorderlineParams, ApprovedClient, Params messages)
+  - `tx.proto`: All 14 Msg types (MsgUploadScope, MsgRevokeScope, MsgRequestVerification, MsgUpdateVerificationStatus, MsgUpdateScore, MsgCreateIdentityWallet, MsgAddScopeToWallet, MsgRevokeScopeFromWallet, MsgUpdateConsentSettings, MsgRebindWallet, MsgUpdateDerivedFeatures, MsgCompleteBorderlineFallback, MsgUpdateBorderlineParams, MsgUpdateParams) with responses
+  - `query.proto`: All 12 Query types (QueryIdentity, QueryScope, QueryScopes, QueryIdentityScore, QueryIdentityStatus, QueryIdentityWallet, QueryWalletScopes, QueryConsentSettings, QueryVerificationHistory, QueryApprovedClients, QueryParams, QueryBorderlineParams) with HTTP annotations
+  - `genesis.proto`: GenesisState with identity_records, scopes, approved_clients, params, scores, borderline_params
+- Uses proper Cosmos SDK proto patterns:
+  - cosmos.msg.v1.signer annotation for all Msg types
+  - cosmos_proto.scalar for bech32 addresses
+  - gogoproto options for JSON/YAML tags
+  - amino.name for backward compatibility
+- Proto files build successfully with `buf build`
+- **Next steps**: Run `make proto-gen-go` to generate Go code; update x/veid/types to use generated types
+- **Status**: IN PROGRESS (proto files created, code generation pending)
+
+**VE-1016 Build-Bins Fix (2026-01-28):**
+- Root cause: `app/ante_mfa.go` used `msg.GetSigners()` which was removed from `sdk.Msg` interface in Cosmos SDK v0.50+
+- Fixed: Changed `firstSigner()` to accept `signing.SigVerifiableTx` instead of `sdk.Msg`
+- Fixed: Updated `AnteHandle()` to cast transaction to `signing.SigVerifiableTx` and pass to `checkMFAGating()`
+- Fixed: Added import for `github.com/cosmos/cosmos-sdk/x/auth/signing`
+- Fixed: Updated `GetSigners()` call to handle the `([][]byte, error)` return type from new SDK
+- Files modified: `app/ante_mfa.go`
+- Verified: `go build ./...` now passes completely
 
 **VE-909 Government Data Integration (2026-01-28):**
 - Created `pkg/govdata/` package for government data source integration
@@ -34,6 +177,10 @@
 **VE-100 Verification Update (2026-01-28):**
 - Confirmed RoleMembers and GenesisAccounts queries remain public for transparency
 - Removed requester fields/checks and aligned tests accordingly
+
+**VE-101 Verification Update (2026-01-28):**
+- Verified encrypted envelope fields for VEID + marketplace secrets/config payloads
+- Support request encryption is implemented off-chain (VE-707), no on-chain support module present
 
 **VE-906 Payment Gateway Integration (2026-01-28):**
 - Created `pkg/payment/` package for Visa/Mastercard payment gateway integration
@@ -77,6 +224,25 @@
 - Fixed `.github/actions/setup-ubuntu/action.yaml`: Added step to add cache bin to GITHUB_PATH
 - Fixed `.github/actions/setup-ubuntu/action.yaml`: Added step to set CGO_ENABLED=1 for ledger support
 - Tests now have proper environment for building with ledger tag
+
+**VE-102 Verification Update (2026-01-28):**
+- Added MFA proof hooks for account recovery (`MsgSetAccountState`) and wallet key rotation (`MsgRebindWallet`).
+- Implemented ante-level MFA gating for recovery/key-rotation paths using MFA policy checks and trusted-device reduction.
+- Preserved factor enrollment storage without raw secrets; MFA policy factor combinations already supported.
+
+**Consensus Safety Update (2026-01-28):**
+- Removed non-deterministic `time.Now()` usage from wallet updates, consent settings, vote extensions, verification results, mock VoIP lookups, and marketplace offering construction.
+- Remaining `time.Now()` usage is in tests only; on-chain paths now use deterministic timestamps.
+
+**Provider Delete Fix (2026-01-28):**
+- Implemented provider deletion in `x/provider/keeper/keeper.go` to remove store entries and emit `EventProviderDeleted`.
+- Fixed type conversion bug: Changed `sdk.AccAddress(id)` to `sdk.AccAddress(id.Bytes())` for interface-to-concrete conversion.
+- Updated `TestProviderDeleteExisting` test to verify deletion works correctly instead of expecting a panic.
+- Added `TestProviderDeleteNonExisting` test to verify deleting non-existent provider is a safe no-op.
+- Delete method is idempotent: calling Delete on non-existent provider silently returns without error.
+
+**VEID Wallet Query Update (2026-01-28):**
+- Implemented wallet scopes, consent settings, verification history, derived features, and derived feature hashes gRPC queries with filtering and deterministic timestamps.
 
 **VE-1021 Dispatch Jobs Fix (2026-01-28):**
 - Root cause: dispatch.yaml workflow was missing RELEASE_TAG setup (used undefined env var)
@@ -218,7 +384,7 @@
 | VE-001 | 0     | Rename all references in VirtEngine source code to 'VirtEngine'                                | 1        | Done        | 2025-01-15            |
 | VE-002 | 0     | Local devnet + CI pipeline for chain, waldur, portal, daemon                               | 1        | Done        | 2026-01-24 16:00 UTC  |
 | VE-100 | 1     | Implement hybrid role model and permissions in chain state                                 | 1        | Done        | 2026-01-24 18:30 UTC  |
-| VE-101 | 1     | Implement on-chain public-key encryption primitives and payload envelope format            | 1        | Done        | 2026-01-24 22:00 UTC  |
+| VE-101 | 1     | Implement on-chain public-key encryption primitives and payload envelope format            | 1        | Done        | 2026-01-28 14:00 UTC  |
 | VE-102 | 1     | MFA module scaffolding: factors registry, policies, and transaction gating hooks           | 1        | Done        | 2026-01-25 09:00 UTC  |
 | VE-103 | 1     | Token module integration for payments, staking rewards, and settlement hooks               | 2        | Done        | 2026-01-25 20:00 UTC  |
 | VE-200 | 2     | VEID module: identity scope types, upload transaction, and encrypted storage               | 1        | Done        | 2026-01-24 23:30 UTC  |
@@ -359,12 +525,78 @@
 | VE-1023 | CI/CD | Fix CI / Lint job (Go version alignment)                                                  | 1        | Done        | 2026-01-28 UTC        |
 | VE-1024 | CI/CD | Consolidate duplicate workflow definitions                                                | 3        | Done        | 2026-01-28 UTC        |
 
+---
+
+## 🚀 PRODUCTION READINESS TASKS (VE-2000 Series)
+
+**Created:** 2026-01-28
+**Purpose:** Replace scaffolding with real implementations to achieve production readiness
+
+### Priority 0 (CRITICAL - Consensus & Security)
+
+| ID | Area | Title | Status | Assigned |
+|----|------|-------|--------|----------|
+| VE-2000 | Protos | Generate proper protobufs for VEID module | NOT STARTED | - |
+| VE-2001 | Protos | Generate proper protobufs for Roles module | NOT STARTED | - |
+| VE-2002 | Protos | Generate proper protobufs for MFA module | NOT STARTED | - |
+| VE-2005 | Security | Implement XML-DSig verification for EduGAIN SAML | NOT STARTED | - |
+| VE-2011 | Security | Implement provider.Delete() method (fix panic) | COMPLETED | Copilot |
+| VE-2013 | Security | Add validator authorization for VEID verification updates | NOT STARTED | - |
+
+### Priority 1 (HIGH - Core Infrastructure)
+
+| ID | Area | Title | Status | Assigned |
+|----|------|-------|--------|----------|
+| VE-2003 | Payments | Implement real Stripe payment adapter | NOT STARTED | - |
+| VE-2004 | Storage | Implement real IPFS artifact storage backend | NOT STARTED | - |
+| VE-2009 | Workflows | Implement persistent workflow state storage | NOT STARTED | - |
+| VE-2010 | Security | Add chain-level rate limiting ante handler | NOT STARTED | - |
+| VE-2012 | Providers | Implement provider public key storage | NOT STARTED | - |
+| VE-2014 | Testing | Enable and fix disabled test suites | NOT STARTED | - |
+| VE-2022 | Security | Security audit preparation | NOT STARTED | - |
+| VE-2023 | TEE | TEE integration planning and proof-of-concept | NOT STARTED | - |
+
+### Priority 2 (MEDIUM - Feature Completion)
+
+| ID | Area | Title | Status | Assigned |
+|----|------|-------|--------|----------|
+| VE-2006 | GovData | Implement real government data API adapters | NOT STARTED | - |
+| VE-2007 | DEX | Implement real DEX integration (Osmosis) | NOT STARTED | - |
+| VE-2015 | VEID | Implement missing VEID query methods | NOT STARTED | - |
+| VE-2016 | Benchmark | Add MsgServer registration for benchmark module | NOT STARTED | - |
+| VE-2017 | Delegation | Add MsgServer registration for delegation module | NOT STARTED | - |
+| VE-2018 | Fraud | Add MsgServer registration for fraud module | NOT STARTED | - |
+| VE-2019 | HPC | Add MsgServer registration for HPC module | NOT STARTED | - |
+| VE-2020 | HPC | Implement real SLURM adapter | NOT STARTED | - |
+| VE-2021 | Testing | Load testing infrastructure for 1M node scale | NOT STARTED | - |
+
+### Priority 3 (LOWER - Nice to Have)
+
+| ID | Area | Title | Status | Assigned |
+|----|------|-------|--------|----------|
+| VE-2008 | NLI | Implement at least one LLM backend for NLI | NOT STARTED | - |
+
+---
+
+### Effort Estimates for Production Tasks
+
+| Priority | Task Count | Estimated Effort | Cumulative Time |
+|----------|------------|------------------|-----------------|
+| P0 (Critical) | 6 tasks | 2-3 weeks | 2-3 weeks |
+| P1 (High) | 8 tasks | 4-6 weeks | 6-9 weeks |
+| P2 (Medium) | 9 tasks | 4-6 weeks | 10-15 weeks |
+| P3 (Lower) | 1 task | 1 week | 11-16 weeks |
+
+**Total Estimated Time to Production: 3-4 months with dedicated effort**
+
+---
+
 **Failing CI Jobs Analysis (2026-01-28):**
 
 | Failing Job                          | Root Cause                                      | Fix Task | Status |
 |--------------------------------------|------------------------------------------------|----------|--------|
 | CI / Lint                            | Go version mismatch (1.22 vs project version)   | VE-1023  | Fixed  |
-| tests / build-bins                   | Missing CGO deps + direnv env vars not set      | VE-1016  | Fixed  |
+| tests / build-bins                   | Missing CGO deps + direnv env vars not set + Cosmos SDK v0.50+ GetSigners API | VE-1016  | Fixed  |
 | tests / build-macos                  | Missing env vars + CGO linkmode issues          | VE-1017  | Fixed  |
 | tools / check-yml-files              | 22 .yml files need renaming to .yaml            | VE-1012  | Fixed  |
 | tools / conventional commits         | Commit messages not following convention        | VE-1022  | Fixed  |

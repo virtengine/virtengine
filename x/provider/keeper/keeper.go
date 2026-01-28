@@ -141,9 +141,31 @@ func (k Keeper) Update(ctx sdk.Context, provider types.Provider) error {
 	return nil
 }
 
-// Delete delete a provider
-func (k Keeper) Delete(_ sdk.Context, _ sdk.Address) {
-	panic("TODO")
+// Delete deletes a provider from the store and emits a deletion event.
+// If the provider does not exist, this is a no-op.
+func (k Keeper) Delete(ctx sdk.Context, id sdk.Address) {
+	store := ctx.KVStore(k.skey)
+	key := ProviderKey(id)
+
+	if !store.Has(key) {
+		return
+	}
+
+	// Retrieve provider before deletion to get the owner address for the event
+	provider, found := k.Get(ctx, id)
+	store.Delete(key)
+
+	// Use provider.Owner if available, otherwise derive from id bytes
+	owner := sdk.AccAddress(id.Bytes()).String()
+	if found && provider.Owner != "" {
+		owner = provider.Owner
+	}
+
+	_ = ctx.EventManager().EmitTypedEvent(
+		&types.EventProviderDeleted{
+			Owner: owner,
+		},
+	)
 }
 
 // ProviderExists checks if a provider exists

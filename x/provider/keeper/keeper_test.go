@@ -62,13 +62,30 @@ func TestProviderDeleteExisting(t *testing.T) {
 	owner, err := sdk.AccAddressFromBech32(prov.Owner)
 	require.NoError(t, err)
 
-	require.Panics(t, func() {
-		keeper.Delete(ctx, owner)
-	})
-
+	// Verify provider exists before deletion
 	foundProv, found := keeper.Get(ctx, owner)
 	require.True(t, found)
 	require.Equal(t, prov, foundProv)
+
+	// Delete the provider
+	keeper.Delete(ctx, owner)
+
+	// Verify provider no longer exists after deletion
+	_, found = keeper.Get(ctx, owner)
+	require.False(t, found, "provider should not exist after deletion")
+}
+
+func TestProviderDeleteNonExisting(t *testing.T) {
+	ctx, keeper := setupKeeper(t)
+	prov := testutil.Provider(t)
+
+	owner, err := sdk.AccAddressFromBech32(prov.Owner)
+	require.NoError(t, err)
+
+	// Deleting non-existent provider should be a no-op (no panic)
+	require.NotPanics(t, func() {
+		keeper.Delete(ctx, owner)
+	})
 }
 
 func TestProviderUpdateNonExisting(t *testing.T) {
