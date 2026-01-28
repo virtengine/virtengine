@@ -113,37 +113,37 @@ type ResolutionCheck struct {
 // BrightnessCheck represents brightness validation
 type BrightnessCheck struct {
 	Passed    bool    `json:"passed"`
-	Value     float64 `json:"value"`      // Average brightness (0-255)
-	MinLimit  int     `json:"min_limit"`  // Minimum threshold
-	MaxLimit  int     `json:"max_limit"`  // Maximum threshold
-	IsDark    bool    `json:"is_dark"`    // Too dark
-	IsBright  bool    `json:"is_bright"`  // Too bright
-	Histogram []int   `json:"histogram"`  // 8-bin brightness histogram
+	Value     float64 `json:"value"`     // Average brightness (0-255)
+	MinLimit  int     `json:"min_limit"` // Minimum threshold
+	MaxLimit  int     `json:"max_limit"` // Maximum threshold
+	IsDark    bool    `json:"is_dark"`   // Too dark
+	IsBright  bool    `json:"is_bright"` // Too bright
+	Histogram []int   `json:"histogram"` // 8-bin brightness histogram
 }
 
 // BlurCheck represents blur/sharpness validation
 type BlurCheck struct {
-	Passed           bool    `json:"passed"`
+	Passed            bool    `json:"passed"`
 	LaplacianVariance float64 `json:"laplacian_variance"` // Higher = sharper
-	Threshold        float64 `json:"threshold"`
-	IsBlurry         bool    `json:"is_blurry"`
+	Threshold         float64 `json:"threshold"`
+	IsBlurry          bool    `json:"is_blurry"`
 }
 
 // SkewCheck represents document skew validation
 type SkewCheck struct {
-	Passed        bool    `json:"passed"`
-	AngleDegrees  float64 `json:"angle_degrees"`   // Detected skew angle
-	MaxAllowed    float64 `json:"max_allowed"`     // Maximum allowed angle
-	IsSkewed      bool    `json:"is_skewed"`
+	Passed         bool    `json:"passed"`
+	AngleDegrees   float64 `json:"angle_degrees"` // Detected skew angle
+	MaxAllowed     float64 `json:"max_allowed"`   // Maximum allowed angle
+	IsSkewed       bool    `json:"is_skewed"`
 	RotationNeeded float64 `json:"rotation_needed"` // Suggested rotation
 }
 
 // GlareCheck represents glare/reflection detection
 type GlareCheck struct {
-	Passed          bool      `json:"passed"`
-	GlarePercentage float64   `json:"glare_percentage"` // % of image with glare
-	MaxAllowed      float64   `json:"max_allowed"`
-	GlareRegions    []Region  `json:"glare_regions,omitempty"` // Detected glare areas
+	Passed          bool     `json:"passed"`
+	GlarePercentage float64  `json:"glare_percentage"` // % of image with glare
+	MaxAllowed      float64  `json:"max_allowed"`
+	GlareRegions    []Region `json:"glare_regions,omitempty"` // Detected glare areas
 }
 
 // Region represents a rectangular region in an image
@@ -165,20 +165,20 @@ type NoiseCheck struct {
 // FocusCheck represents focus/sharpness validation
 type FocusCheck struct {
 	Passed      bool    `json:"passed"`
-	FocusScore  float64 `json:"focus_score"`   // Focus quality (0-100)
+	FocusScore  float64 `json:"focus_score"` // Focus quality (0-100)
 	MinRequired float64 `json:"min_required"`
 	IsFocused   bool    `json:"is_focused"`
 }
 
 // DocumentCheck represents document detection validation
 type DocumentCheck struct {
-	Passed          bool      `json:"passed"`
-	Detected        bool      `json:"detected"`
-	Confidence      float64   `json:"confidence"`      // Detection confidence (0-1)
-	BoundingBox     *Region   `json:"bounding_box,omitempty"`
-	Corners         []Point   `json:"corners,omitempty"` // Four corners if detected
-	CoveragePercent float64   `json:"coverage_percent"` // % of frame covered
-	MinCoverage     float64   `json:"min_coverage"`     // Required coverage
+	Passed          bool    `json:"passed"`
+	Detected        bool    `json:"detected"`
+	Confidence      float64 `json:"confidence"` // Detection confidence (0-1)
+	BoundingBox     *Region `json:"bounding_box,omitempty"`
+	Corners         []Point `json:"corners,omitempty"` // Four corners if detected
+	CoveragePercent float64 `json:"coverage_percent"`  // % of frame covered
+	MinCoverage     float64 `json:"min_coverage"`      // Required coverage
 }
 
 // Point represents a 2D point
@@ -189,14 +189,14 @@ type Point struct {
 
 // FaceCheck represents face detection validation
 type FaceCheck struct {
-	Passed           bool    `json:"passed"`
-	Detected         bool    `json:"detected"`
-	Confidence       float64 `json:"confidence"`
-	BoundingBox      *Region `json:"bounding_box,omitempty"`
-	FaceCount        int     `json:"face_count"`        // Number of faces detected
-	IsCentered       bool    `json:"is_centered"`
-	IsCorrectSize    bool    `json:"is_correct_size"`
-	FaceSizePercent  float64 `json:"face_size_percent"` // % of frame
+	Passed             bool    `json:"passed"`
+	Detected           bool    `json:"detected"`
+	Confidence         float64 `json:"confidence"`
+	BoundingBox        *Region `json:"bounding_box,omitempty"`
+	FaceCount          int     `json:"face_count"` // Number of faces detected
+	IsCentered         bool    `json:"is_centered"`
+	IsCorrectSize      bool    `json:"is_correct_size"`
+	FaceSizePercent    float64 `json:"face_size_percent"` // % of frame
 	MinFaceSizePercent float64 `json:"min_face_size_percent"`
 	MaxFaceSizePercent float64 `json:"max_face_size_percent"`
 }
@@ -226,21 +226,21 @@ type QualityIssue struct {
 type QualityIssueType string
 
 const (
-	QualityIssueBlur          QualityIssueType = "blur"
-	QualityIssueDark          QualityIssueType = "dark"
-	QualityIssueBright        QualityIssueType = "bright"
-	QualityIssueSkew          QualityIssueType = "skew"
-	QualityIssueResolution    QualityIssueType = "resolution"
-	QualityIssueGlare         QualityIssueType = "glare"
-	QualityIssueNoise         QualityIssueType = "noise"
-	QualityIssuePartial       QualityIssueType = "partial"
-	QualityIssueReflection    QualityIssueType = "reflection"
-	QualityIssueNoDocument    QualityIssueType = "no_document"
-	QualityIssueNoFace        QualityIssueType = "no_face"
+	QualityIssueBlur            QualityIssueType = "blur"
+	QualityIssueDark            QualityIssueType = "dark"
+	QualityIssueBright          QualityIssueType = "bright"
+	QualityIssueSkew            QualityIssueType = "skew"
+	QualityIssueResolution      QualityIssueType = "resolution"
+	QualityIssueGlare           QualityIssueType = "glare"
+	QualityIssueNoise           QualityIssueType = "noise"
+	QualityIssuePartial         QualityIssueType = "partial"
+	QualityIssueReflection      QualityIssueType = "reflection"
+	QualityIssueNoDocument      QualityIssueType = "no_document"
+	QualityIssueNoFace          QualityIssueType = "no_face"
 	QualityIssueFaceNotCentered QualityIssueType = "face_not_centered"
-	QualityIssueFaceTooSmall  QualityIssueType = "face_too_small"
-	QualityIssueFaceTooLarge  QualityIssueType = "face_too_large"
-	QualityIssueMultipleFaces QualityIssueType = "multiple_faces"
+	QualityIssueFaceTooSmall    QualityIssueType = "face_too_small"
+	QualityIssueFaceTooLarge    QualityIssueType = "face_too_large"
+	QualityIssueMultipleFaces   QualityIssueType = "multiple_faces"
 )
 
 // QualityIssueSeverity represents issue severity levels

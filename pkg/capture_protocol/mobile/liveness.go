@@ -381,10 +381,10 @@ type LivenessState struct {
 type LivenessPhase string
 
 const (
-	LivenessPhaseInitializing  LivenessPhase = "initializing"
-	LivenessPhasePassive       LivenessPhase = "passive"
+	LivenessPhaseInitializing    LivenessPhase = "initializing"
+	LivenessPhasePassive         LivenessPhase = "passive"
 	LivenessPhaseActiveChallenge LivenessPhase = "active_challenge"
-	LivenessPhaseProcessing    LivenessPhase = "processing"
-	LivenessPhaseComplete      LivenessPhase = "complete"
-	LivenessPhaseFailed        LivenessPhase = "failed"
+	LivenessPhaseProcessing      LivenessPhase = "processing"
+	LivenessPhaseComplete        LivenessPhase = "complete"
+	LivenessPhaseFailed          LivenessPhase = "failed"
 )

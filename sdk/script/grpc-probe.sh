@@ -2,9 +2,9 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-akash_api=$(realpath "$SCRIPT_DIR/../")
+virtengine_api=$(realpath "$SCRIPT_DIR/../")
 
-if [ ! -d "${akash_api}/vendor" ]; then
+if [ ! -d "${virtengine_api}/vendor" ]; then
     echo "for script to work run \"make modvendor\""
     exit 1
 fi
@@ -84,14 +84,15 @@ while getopts ":$short_opts-:" o; do
 done
 shift "$((OPTIND - 1))"
 
+
 grpcurl \
-	"$mode" \
-	-use-reflection \
-	-proto="${akash_api}/proto/provider/akash/inventory/v1/service.proto" \
-	-proto="${akash_api}/proto/provider/akash/provider/v1/service.proto" \
-	-import-path="${akash_api}/proto/provider" \
-	-import-path="${akash_api}/proto/node" \
-	-import-path="${akash_api}/vendor/github.com/cosmos/cosmos-sdk/third_party/proto" \
-	-import-path="${akash_api}/vendor" \
+    "$mode" \
+    -use-reflection \
+    -proto="${virtengine_api}/proto/provider/virtengine/inventory/v1/service.proto" \
+    -proto="${virtengine_api}/proto/provider/virtengine/provider/v1/service.proto" \
+    -import-path="${virtengine_api}/proto/provider" \
+    -import-path="${virtengine_api}/proto/node" \
+    -import-path="${virtengine_api}/vendor/github.com/cosmos/cosmos-sdk/third_party/proto" \
+    -import-path="${virtengine_api}/vendor" \
 	"$host" \
 	"$@"

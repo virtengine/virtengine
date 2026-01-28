@@ -1,26 +1,18 @@
 package simulation
 
 import (
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	v1 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
-)
-
-var (
-	minDeposit, _ = types.DefaultParams().MinDepositFor("uve")
 )
 
 // RandomizedGenState generates a random GenesisState for supply
 func RandomizedGenState(simState *module.SimulationState) {
 	// numDeployments := simulation.RandIntBetween(simState.Rand, 0, len(simState.Accounts))
 
+	// Use DefaultParams which includes both uve and uact as required by validation
 	deploymentGenesis := &types.GenesisState{
-		Params: types.Params{
-			MinDeposits: sdk.Coins{
-				minDeposit,
-			},
-		},
+		Params: types.DefaultParams(),
 		// Deployments: make([]types.GenesisDeployment, 0, numDeployments),
 	}
 

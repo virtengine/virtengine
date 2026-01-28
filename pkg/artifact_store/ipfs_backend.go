@@ -497,12 +497,12 @@ func (i *IPFSBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error) {
 		ExpiredArtifacts: expired,
 		BackendType:      BackendIPFS,
 		BackendStatus: map[string]string{
-			"endpoint":    i.config.Endpoint,
-			"gateway":     i.config.GatewayURL,
-			"pinning":     boolToString(i.config.EnablePinning),
-			"chunk_size":  uintToString(i.config.ChunkSize),
-			"total_cids":  uintToString(i.metrics.TotalArtifacts),
-			"total_pins":  uintToString(i.countPinned()),
+			"endpoint":   i.config.Endpoint,
+			"gateway":    i.config.GatewayURL,
+			"pinning":    boolToString(i.config.EnablePinning),
+			"chunk_size": uintToString(i.config.ChunkSize),
+			"total_cids": uintToString(i.metrics.TotalArtifacts),
+			"total_pins": uintToString(i.countPinned()),
 		},
 	}, nil
 }
@@ -562,6 +562,7 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 
 		// Add to manifest
 		chunkInfo := ChunkInfo{
+			//nolint:gosec // G115: offset/chunkSize bounded by chunk count
 			Index:      uint32(offset / chunkSize),
 			Hash:       chunkHash[:],
 			Size:       uint64(len(chunkData)),

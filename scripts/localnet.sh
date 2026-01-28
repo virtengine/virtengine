@@ -34,7 +34,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.yml"
+COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.yaml"
 
 CHAIN_ID="${CHAIN_ID:-virtengine-localnet-1}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
@@ -206,9 +206,11 @@ cmd_status() {
         log_success "Chain RPC: Healthy"
         
         # Get chain info
-        local chain_info=$(curl -sf http://localhost:26657/status 2>/dev/null)
+        local chain_info
+        chain_info=$(curl -sf http://localhost:26657/status 2>/dev/null)
         if [ -n "$chain_info" ]; then
-            local latest_height=$(echo "$chain_info" | grep -o '"latest_block_height":"[0-9]*"' | grep -o '[0-9]*' | head -1)
+            local latest_height
+            latest_height=$(echo "$chain_info" | grep -o '"latest_block_height":"[0-9]*"' | grep -o '[0-9]*' | head -1)
             if [ -n "$latest_height" ]; then
                 echo "    Latest Block Height: ${latest_height}"
             fi

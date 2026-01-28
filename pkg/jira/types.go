@@ -334,7 +334,7 @@ type WebhookEvent struct {
 
 // Changelog represents issue field changes
 type Changelog struct {
-	ID    string           `json:"id"`
+	ID    string          `json:"id"`
 	Items []ChangelogItem `json:"items"`
 }
 

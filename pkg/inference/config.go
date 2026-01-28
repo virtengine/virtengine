@@ -112,10 +112,8 @@ func (c *InferenceConfig) Validate() error {
 		if c.SidecarTimeout <= 0 {
 			return fmt.Errorf("sidecar_timeout must be positive")
 		}
-	} else {
-		if c.ModelPath == "" {
-			return fmt.Errorf("model_path is required when not using sidecar")
-		}
+	} else if c.ModelPath == "" {
+		return fmt.Errorf("model_path is required when not using sidecar")
 	}
 
 	if c.Timeout <= 0 {

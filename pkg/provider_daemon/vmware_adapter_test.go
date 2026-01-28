@@ -938,7 +938,7 @@ func createTestVMwareManifest() *Manifest {
 			},
 		},
 		Networks: []NetworkSpec{
-			{Name: "default", Type: "standard"},
+			{Name: "default", Type: "private"},
 		},
 		Volumes: []VolumeSpec{
 			{Name: "data", Type: "persistent", Size: 100 * 1024 * 1024 * 1024}, // 100GB

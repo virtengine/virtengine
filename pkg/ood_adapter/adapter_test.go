@@ -84,7 +84,7 @@ func TestVEIDSSOAuthentication(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Create valid token
 	token := &ood.VEIDToken{
@@ -112,7 +112,7 @@ func TestVEIDSSOAuthenticationFailure(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Test with nil token
 	err = adapter.AuthenticateUser(ctx, "veid1test", nil)
@@ -142,7 +142,7 @@ func TestListInteractiveApps(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	apps, err := adapter.ListAvailableApps(ctx)
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestLaunchJupyterSession(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	spec := &ood.InteractiveAppSpec{
 		AppType: ood.AppTypeJupyter,
@@ -207,7 +207,7 @@ func TestLaunchRStudioSession(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	spec := &ood.InteractiveAppSpec{
 		AppType: ood.AppTypeRStudio,
@@ -240,7 +240,7 @@ func TestLaunchVirtualDesktop(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	spec := &ood.InteractiveAppSpec{
 		AppType: ood.AppTypeVNCDesktop,
@@ -274,7 +274,7 @@ func TestSessionLifecycle(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Launch session
 	spec := &ood.InteractiveAppSpec{
@@ -321,7 +321,7 @@ func TestGetUserSessions(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	veidAddress := "veid1testuser"
 
@@ -358,7 +358,7 @@ func TestFileBrowsing(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// List files
 	files, err := adapter.ListFiles(ctx, "/home")
@@ -392,7 +392,7 @@ func TestFileBrowsingDisabled(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// All file operations should fail
 	_, err = adapter.ListFiles(ctx, "/home")
@@ -421,7 +421,7 @@ func TestJobComposition(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// List templates
 	templates, err := adapter.ListJobTemplates(ctx)
@@ -465,7 +465,7 @@ func TestSessionStatusReport(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Launch session
 	spec := &ood.InteractiveAppSpec{
@@ -676,7 +676,7 @@ func TestInteractiveAppsManager(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	manager := ood.NewInteractiveAppsManager(adapter)
 
@@ -759,7 +759,7 @@ func TestQuotaValidation(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	manager := ood.NewInteractiveAppsManager(adapter)
 	quota := ood.DefaultAppQuota()

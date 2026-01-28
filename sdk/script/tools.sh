@@ -142,8 +142,8 @@ function run_gotest() {
 
 	modules=("$1")
 
-	if [ -z "$AKASH_ROOT" ]; then
-		echo "AKASH_ROOT environment variable is not set"
+	if [ -z "$VIRTENGINE_ROOT" ]; then
+		echo "VIRTENGINE_ROOT environment variable is not set"
 		exit 1
 	fi
 
@@ -185,8 +185,8 @@ function run_gocoverage() {
 
 	modules=("$1")
 
-	if [ -z "$AKASH_ROOT" ]; then
-		echo "AKASH_ROOT environment variable is not set"
+	if [ -z "$VIRTENGINE_ROOT" ]; then
+		echo "VIRTENGINE_ROOT environment variable is not set"
 		exit 1
 	fi
 
@@ -205,7 +205,7 @@ function run_gocoverage() {
 		coverpkgs=$(go list ${3} | grep -v mock | paste -sd, -)
 
 		local coverprofile
-		coverprofile="$AKASH_ROOT/coverage-$(echo "$module" | tr '/' '-').txt"
+		coverprofile="$VIRTENGINE_ROOT/coverage-$(echo "$module" | tr '/' '-').txt"
 
 		# shellcheck disable=SC2086
 		go test ${2} -coverprofile="$coverprofile" \
@@ -252,8 +252,8 @@ function run_go_mod_tidy() {
 
 	modules=("$1")
 
-	if [ -z "$AKASH_ROOT" ]; then
-		echo "AKASH_ROOT environment variable is not set"
+	if [ -z "$VIRTENGINE_ROOT" ]; then
+		echo "VIRTENGINE_ROOT environment variable is not set"
 		exit 1
 	fi
 

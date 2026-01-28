@@ -520,7 +520,6 @@ function prepare_state() {
 
 	local rvaldir
 	local rpid
-	local VIRTENGINEversion
 	local VIRTENGINE
 	VIRTENGINE=$validators_dir/.virtengine0/cosmovisor/genesis/bin/virtengine
 
@@ -533,7 +532,8 @@ function prepare_state() {
 		echo "starting testnet validator"
 		$VIRTENGINE start --home="$rvaldir" >/dev/null 2>&1 & rpid=$!
 
-		virtengineversion=$($VIRTENGINE version)
+		# Log the version for debugging
+		$VIRTENGINE version >/dev/null 2>&1 || true
 
 		sleep 10
 
@@ -547,8 +547,11 @@ function prepare_state() {
 
 			valjsonfile="$valdir/validator.json"
 
+			local virtengineversion
+			virtengineversion=$($VIRTENGINE version 2>/dev/null || echo "v0.0.0")
+
 			if [[ $cnt -gt 0 ]]; then
-				if [[ $($semver compare "$VIRTENGINEversion" v1.0.0-rc0) -ge 0 ]]; then
+				if [[ $($semver compare "$virtengineversion" v1.0.0-rc0) -ge 0 ]]; then
 					$VIRTENGINE tx staking create-validator "$valjsonfile" --home="$rvaldir" --from="validator$cnt" --yes
 				else
 					valjson=$(cat "$valjsonfile")

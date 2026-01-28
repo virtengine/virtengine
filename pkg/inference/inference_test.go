@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// Test constants
+const (
+	testSidecarAddress = "localhost:50051"
+)
+
 // ============================================================================
 // Test Configuration
 // ============================================================================
@@ -59,7 +64,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "sidecar with invalid timeout",
 			modifyFunc: func(c *InferenceConfig) {
 				c.UseSidecar = true
-				c.SidecarAddress = "localhost:50051"
+				c.SidecarAddress = testSidecarAddress
 				c.SidecarTimeout = 0
 			},
 			expectError: true,
@@ -401,15 +406,15 @@ func TestModelLoaderWithTempModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
 	// Create minimal model files
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -443,15 +448,15 @@ func TestModelHashComputation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
 	// Create model files with known content
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test content"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test content"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -495,14 +500,14 @@ func TestScorerWithValidInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -513,7 +518,7 @@ func TestScorerWithValidInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	if !scorer.IsHealthy() {
 		t.Error("scorer should be healthy")
@@ -553,14 +558,14 @@ func TestScorerWithInvalidInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -571,7 +576,7 @@ func TestScorerWithInvalidInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	// Test with invalid face embedding dimension
 	inputs := createTestInputs()
@@ -591,14 +596,14 @@ func TestScorerTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -610,7 +615,7 @@ func TestScorerTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	inputs := createTestInputs()
 
@@ -644,14 +649,14 @@ func TestScorerDeterministicOutputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -663,7 +668,7 @@ func TestScorerDeterministicOutputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	inputs := createTestInputs()
 
@@ -698,14 +703,14 @@ func TestScorerStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -716,13 +721,13 @@ func TestScorerStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	inputs := createTestInputs()
 
 	// Run a few inferences
 	for i := 0; i < 3; i++ {
-		scorer.ComputeScore(inputs)
+		_, _ = scorer.ComputeScore(inputs)
 	}
 
 	stats := scorer.GetStats()
@@ -743,13 +748,13 @@ func TestScorerStats(t *testing.T) {
 func TestSidecarClientCreation(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.UseSidecar = true
-	config.SidecarAddress = "localhost:50051"
+	config.SidecarAddress = testSidecarAddress
 
 	client, err := NewSidecarClient(config)
 	if err != nil {
 		t.Fatalf("failed to create sidecar client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if !client.IsHealthy() {
 		t.Error("sidecar client should be healthy after creation")
@@ -759,13 +764,13 @@ func TestSidecarClientCreation(t *testing.T) {
 func TestSidecarClientInference(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.UseSidecar = true
-	config.SidecarAddress = "localhost:50051"
+	config.SidecarAddress = testSidecarAddress
 
 	client, err := NewSidecarClient(config)
 	if err != nil {
 		t.Fatalf("failed to create sidecar client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	inputs := createTestInputs()
 
@@ -793,14 +798,14 @@ func TestNewScorer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		t.Fatalf("failed to create model dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -811,7 +816,7 @@ func TestNewScorer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	if !scorer.IsHealthy() {
 		t.Error("scorer should be healthy")
@@ -821,13 +826,13 @@ func TestNewScorer(t *testing.T) {
 func TestNewScorerSidecar(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.UseSidecar = true
-	config.SidecarAddress = "localhost:50051"
+	config.SidecarAddress = testSidecarAddress
 
 	scorer, err := NewScorer(config)
 	if err != nil {
 		t.Fatalf("failed to create sidecar scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	if !scorer.IsHealthy() {
 		t.Error("sidecar scorer should be healthy")
@@ -893,7 +898,7 @@ func BenchmarkFeatureExtraction(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		extractor.ExtractFeatures(inputs)
+		_, _ = extractor.ExtractFeatures(inputs)
 	}
 }
 
@@ -913,14 +918,14 @@ func BenchmarkInference(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	modelDir := filepath.Join(tempDir, "model")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
 		b.Fatalf("failed to create model dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
 		b.Fatalf("failed to create model file: %v", err)
 	}
 
@@ -931,12 +936,12 @@ func BenchmarkInference(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to create scorer: %v", err)
 	}
-	defer scorer.Close()
+	defer func() { _ = scorer.Close() }()
 
 	inputs := createTestInputs()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		scorer.ComputeScore(inputs)
+		_, _ = scorer.ComputeScore(inputs)
 	}
 }

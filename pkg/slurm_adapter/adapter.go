@@ -90,7 +90,10 @@ func (r *JobStatusReport) Hash() []byte {
 		ExitCode:        r.ExitCode,
 		Timestamp:       r.Timestamp.Unix(),
 	}
-	bytes, _ := json.Marshal(data)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
 	hash := sha256.Sum256(bytes)
 	return hash[:]
 }

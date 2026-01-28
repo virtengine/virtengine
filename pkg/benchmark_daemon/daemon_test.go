@@ -277,7 +277,7 @@ func TestBenchmarkDaemon_RunBenchmark(t *testing.T) {
 
 	ctx := context.Background()
 	_ = daemon.Start(ctx)
-	defer daemon.Stop()
+	defer func() { _ = daemon.Stop() }()
 
 	// Wait for initial benchmark
 	time.Sleep(time.Millisecond * 100)
@@ -321,7 +321,7 @@ func TestBenchmarkDaemon_SubmissionRetry(t *testing.T) {
 
 	ctx := context.Background()
 	_ = daemon.Start(ctx)
-	defer daemon.Stop()
+	defer func() { _ = daemon.Stop() }()
 
 	time.Sleep(time.Millisecond * 100)
 
@@ -357,7 +357,7 @@ func TestBenchmarkDaemon_BenchmarkError(t *testing.T) {
 
 	ctx := context.Background()
 	_ = daemon.Start(ctx)
-	defer daemon.Stop()
+	defer func() { _ = daemon.Stop() }()
 
 	time.Sleep(time.Millisecond * 100)
 
@@ -409,7 +409,7 @@ func TestBenchmarkDaemon_ResultsHistory(t *testing.T) {
 
 	ctx := context.Background()
 	_ = daemon.Start(ctx)
-	defer daemon.Stop()
+	defer func() { _ = daemon.Stop() }()
 
 	time.Sleep(time.Millisecond * 100)
 

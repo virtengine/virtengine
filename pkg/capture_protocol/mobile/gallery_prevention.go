@@ -205,10 +205,13 @@ func (p *CaptureOriginProof) ComputeProofHash() []byte {
 
 	// Timestamps
 	tb := make([]byte, 8)
+	//nolint:gosec // G115: UnixNano timestamp safe for uint64
 	binary.BigEndian.PutUint64(tb, uint64(p.CaptureTimestamp.UnixNano()))
 	h.Write(tb)
+	//nolint:gosec // G115: UnixNano timestamp safe for uint64
 	binary.BigEndian.PutUint64(tb, uint64(p.SystemTimestamp.UnixNano()))
 	h.Write(tb)
+	//nolint:gosec // G115: MonotonicTimestamp is positive
 	binary.BigEndian.PutUint64(tb, uint64(p.MonotonicTimestamp))
 	h.Write(tb)
 
@@ -549,16 +552,14 @@ func (v *GalleryPreventionValidator) validateHardwareBinding(
 				Severity:    SeveritySuspicious,
 			})
 			result.Confidence *= 0.7
-		} else {
+		} else if binding.IOSProof.PhotoID == "" {
 			// Validate iOS-specific fields
-			if binding.IOSProof.PhotoID == "" {
-				result.Indicators = append(result.Indicators, GalleryIndicator{
-					Type:        IndicatorMissingCameraData,
-					Description: "Missing photo ID from AVFoundation",
-					Severity:    SeveritySuspicious,
-				})
-				result.Confidence *= 0.9
-			}
+			result.Indicators = append(result.Indicators, GalleryIndicator{
+				Type:        IndicatorMissingCameraData,
+				Description: "Missing photo ID from AVFoundation",
+				Severity:    SeveritySuspicious,
+			})
+			result.Confidence *= 0.9
 		}
 
 	case PlatformAndroid:
@@ -569,16 +570,14 @@ func (v *GalleryPreventionValidator) validateHardwareBinding(
 				Severity:    SeveritySuspicious,
 			})
 			result.Confidence *= 0.7
-		} else {
+		} else if binding.AndroidProof.SensorTimestamp == 0 {
 			// Validate Android-specific fields
-			if binding.AndroidProof.SensorTimestamp == 0 {
-				result.Indicators = append(result.Indicators, GalleryIndicator{
-					Type:        IndicatorMissingCameraData,
-					Description: "Missing sensor timestamp from Camera2",
-					Severity:    SeveritySuspicious,
-				})
-				result.Confidence *= 0.9
-			}
+			result.Indicators = append(result.Indicators, GalleryIndicator{
+				Type:        IndicatorMissingCameraData,
+				Description: "Missing sensor timestamp from Camera2",
+				Severity:    SeveritySuspicious,
+			})
+			result.Confidence *= 0.9
 		}
 
 	default:

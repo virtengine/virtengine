@@ -37,7 +37,7 @@ func TestScrubString(t *testing.T) {
 func TestScrubString_Nil(t *testing.T) {
 	// Should not panic on nil
 	ScrubString(nil)
-	
+
 	// Should not panic on empty string
 	s := ""
 	ScrubString(&s)
@@ -106,8 +106,8 @@ func TestSecureContext(t *testing.T) {
 	buf1 := ctx.AllocateBuffer(100)
 	buf2 := ctx.AllocateBuffer(200)
 
-	buf1.Write([]byte("data1"))
-	buf2.Write([]byte("data2"))
+	_, _ = buf1.Write([]byte("data1"))
+	_, _ = buf2.Write([]byte("data2"))
 
 	cleanupCalled := false
 	ctx.RegisterCleanup(func() {
@@ -136,7 +136,7 @@ func TestProcessingScope(t *testing.T) {
 		defer scope.Complete()
 
 		buf := scope.AllocateBuffer(100)
-		buf.Write([]byte("processing data"))
+		_, _ = buf.Write([]byte("processing data"))
 
 		scope.OnExit(func() {
 			exitCalled = true
@@ -195,7 +195,7 @@ func TestProcessingScope_MultipleBuffers(t *testing.T) {
 	buffers := make([]*SensitiveBuffer, 10)
 	for i := range buffers {
 		buffers[i] = scope.AllocateBuffer(100)
-		buffers[i].Write([]byte("data"))
+		_, _ = buffers[i].Write([]byte("data"))
 	}
 
 	// Verify all buffers work

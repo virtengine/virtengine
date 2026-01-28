@@ -1354,7 +1354,7 @@ if field is nil resource is not present in the given data-structure
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `ratio` | [string](#string) |  | ratio is CR = (VaultAKT * Price) / OutstandingACT |
+| `ratio` | [string](#string) |  | ratio is CR = (VaultVE * Price) / OutstandingACT |
  | `status` | [MintStatus](#virtengine.bme.v1.MintStatus) |  | status indicates the current circuit breaker status |
  | `reference_price` | [string](#string) |  | reference_price is the price used to calculate CR |
  
@@ -1567,12 +1567,12 @@ if field is nil resource is not present in the given data-structure
  <a name="virtengine.bme.v1.EventVaultSeeded"></a>
 
  ### EventVaultSeeded
- EventVaultSeeded is emitted when the vault is seeded with AKT
+EventVaultSeeded is emitted when the vault is seeded with VE
 
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the AKT amount added to vault |
+| `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the VE amount added to vault |
  | `source` | [string](#string) |  | source is where the funds came from |
  | `new_vault_balance` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | new_vault_balance is the new vault balance |
  
@@ -1737,7 +1737,7 @@ if field is nil resource is not present in the given data-structure
 
  ### MsgBurnACT
  MsgMintACT defines the message for burning one token to mint another
-Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+Allows burning VE to mint ACT, or burning unused ACT back to VE
 
  
  | Field | Type | Label | Description |
@@ -1771,7 +1771,7 @@ Allows burning AKT to mint ACT, or burning unused ACT back to AKT
 
  ### MsgBurnMint
  MsgBurnMint defines the message for burning one token to mint another
-Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+Allows burning VE to mint ACT, or burning unused ACT back to VE
 
  
  | Field | Type | Label | Description |
@@ -1806,7 +1806,7 @@ Allows burning AKT to mint ACT, or burning unused ACT back to AKT
 
  ### MsgMintACT
  MsgMintACT defines the message for burning one token to mint another
-Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+Allows burning VE to mint ACT, or burning unused ACT back to VE
 
  
  | Field | Type | Label | Description |
@@ -1839,14 +1839,14 @@ Allows burning AKT to mint ACT, or burning unused ACT back to AKT
  <a name="virtengine.bme.v1.MsgSeedVault"></a>
 
  ### MsgSeedVault
- MsgSeedVault defines the message for seeding the BME vault with AKT
+MsgSeedVault defines the message for seeding the BME vault with VE
 This is used to provide an initial volatility buffer
 
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
  | `authority` | [string](#string) |  | authority is the address that controls the module (governance) |
- | `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the AKT amount to seed the vault with |
+| `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the VE amount to seed the vault with |
  | `source` | [string](#string) |  | source is the source of funds (e.g., community pool) |
  
  
@@ -1862,7 +1862,7 @@ This is used to provide an initial volatility buffer
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `vault_akt` | [string](#string) |  | vault_akt is the new vault AKT balance |
+| `vault_akt` | [string](#string) |  | vault_akt is the new vault VE balance |
  
  
 
@@ -2035,7 +2035,7 @@ maintaining collateral ratios and enforcing circuit breaker rules.
  | Method Name | Request Type | Response Type | Description | HTTP Verb | Endpoint |
  | ----------- | ------------ | ------------- | ------------| ------- | -------- |
  | `UpdateParams` | [MsgUpdateParams](#virtengine.bme.v1.MsgUpdateParams) | [MsgUpdateParamsResponse](#virtengine.bme.v1.MsgUpdateParamsResponse) | UpdateParams updates the module parameters. This operation can only be performed through governance proposals. | |
- | `BurnMint` | [MsgBurnMint](#virtengine.bme.v1.MsgBurnMint) | [MsgBurnMintResponse](#virtengine.bme.v1.MsgBurnMintResponse) | BurnMint allows users to burn one token and mint another at current oracle prices. Typically used to burn unused ACT tokens back to AKT. The operation may be delayed or rejected based on circuit breaker status. | |
+| `BurnMint` | [MsgBurnMint](#virtengine.bme.v1.MsgBurnMint) | [MsgBurnMintResponse](#virtengine.bme.v1.MsgBurnMintResponse) | BurnMint allows users to burn one token and mint another at current oracle prices. Typically used to burn unused ACT tokens back to VE. The operation may be delayed or rejected based on circuit breaker status. | |
  | `MintACT` | [MsgMintACT](#virtengine.bme.v1.MsgMintACT) | [MsgMintACTResponse](#virtengine.bme.v1.MsgMintACTResponse) | MintACT mints ACT tokens by burning the specified source token. The mint amount is calculated based on current oracle prices and the collateral ratio. May be halted if circuit breaker is triggered. | |
  | `BurnACT` | [MsgBurnACT](#virtengine.bme.v1.MsgBurnACT) | [MsgBurnACTResponse](#virtengine.bme.v1.MsgBurnACTResponse) | BurnACT burns ACT tokens and mints the specified destination token. The burn operation uses remint credits when available, otherwise requires adequate collateral backing based on oracle prices. | |
  
@@ -5579,7 +5579,7 @@ It also represents a single data point in TWAP history
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `akt_price_feed_id` | [string](#string) |  | akt_price_feed_id is the Pyth price feed identifier for AKT/USD |
+| `akt_price_feed_id` | [string](#string) |  | akt_price_feed_id is the Pyth price feed identifier for VE/USD |
  
  
 

@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -62,7 +63,7 @@ func (c *VEIDAuthClient) Initialize(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch OIDC configuration: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("OIDC configuration request failed with status: %d", resp.StatusCode)
@@ -98,7 +99,7 @@ func (c *VEIDAuthClient) GetAuthorizationURL(state string, redirectURI string) s
 // ExchangeCodeForToken exchanges an authorization code for tokens
 func (c *VEIDAuthClient) ExchangeCodeForToken(ctx context.Context, code string, redirectURI string) (*VEIDToken, error) {
 	if c.endpoints == nil {
-		return nil, fmt.Errorf(errOIDCNotInitialized)
+		return nil, errors.New(errOIDCNotInitialized)
 	}
 
 	// Note: code is sensitive, never log it
@@ -115,7 +116,7 @@ func (c *VEIDAuthClient) ExchangeCodeForToken(ctx context.Context, code string, 
 // RefreshToken refreshes an expired token
 func (c *VEIDAuthClient) RefreshToken(ctx context.Context, refreshToken string) (*VEIDToken, error) {
 	if c.endpoints == nil {
-		return nil, fmt.Errorf(errOIDCNotInitialized)
+		return nil, errors.New(errOIDCNotInitialized)
 	}
 
 	// Note: refreshToken is sensitive, never log it
@@ -131,7 +132,7 @@ func (c *VEIDAuthClient) RefreshToken(ctx context.Context, refreshToken string) 
 // ValidateToken validates a token and returns user info
 func (c *VEIDAuthClient) ValidateToken(ctx context.Context, accessToken string) (*VEIDToken, error) {
 	if c.endpoints == nil {
-		return nil, fmt.Errorf(errOIDCNotInitialized)
+		return nil, errors.New(errOIDCNotInitialized)
 	}
 
 	// Note: accessToken is sensitive, never log it
@@ -146,7 +147,7 @@ func (c *VEIDAuthClient) ValidateToken(ctx context.Context, accessToken string) 
 	if err != nil {
 		return nil, fmt.Errorf("userinfo request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("userinfo request failed with status: %d", resp.StatusCode)
@@ -196,7 +197,7 @@ func (c *VEIDAuthClient) RevokeToken(ctx context.Context, token string) error {
 	if err != nil {
 		return fmt.Errorf("revocation request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("revocation failed with status: %d", resp.StatusCode)
@@ -218,7 +219,7 @@ func (c *VEIDAuthClient) doTokenRequest(ctx context.Context, data url.Values) (*
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

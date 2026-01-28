@@ -27,7 +27,7 @@ func TestSimulatedEnclaveService_Initialize(t *testing.T) {
 func TestSimulatedEnclaveService_Score(t *testing.T) {
 	svc := NewSimulatedEnclaveService()
 	config := DefaultRuntimeConfig()
-	
+
 	if err := svc.Initialize(config); err != nil {
 		t.Fatalf("Initialize() error: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestSimulatedEnclaveService_ScoreTimeout(t *testing.T) {
 	svc := NewSimulatedEnclaveService()
 	config := DefaultRuntimeConfig()
 	config.MaxExecutionTimeMs = 1 // Very short timeout
-	
+
 	if err := svc.Initialize(config); err != nil {
 		t.Fatalf("Initialize() error: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestSimulatedEnclaveService_ScoreTimeout(t *testing.T) {
 
 func TestSimulatedEnclaveService_GetKeys(t *testing.T) {
 	svc := NewSimulatedEnclaveService()
-	
+
 	// Before initialization
 	_, err := svc.GetEncryptionPubKey()
 	if err != ErrEnclaveNotInitialized {
@@ -222,7 +222,7 @@ func TestSimulatedEnclaveService_GetKeys(t *testing.T) {
 
 func TestSimulatedEnclaveService_RotateKeys(t *testing.T) {
 	svc := NewSimulatedEnclaveService()
-	
+
 	if err := svc.Initialize(DefaultRuntimeConfig()); err != nil {
 		t.Fatalf("Initialize() error: %v", err)
 	}
@@ -248,13 +248,13 @@ func TestSimulatedEnclaveService_RotateKeys(t *testing.T) {
 
 func TestSimulatedEnclaveService_GenerateAttestation(t *testing.T) {
 	svc := NewSimulatedEnclaveService()
-	
+
 	if err := svc.Initialize(DefaultRuntimeConfig()); err != nil {
 		t.Fatalf("Initialize() error: %v", err)
 	}
 
 	reportData := []byte("user_provided_report_data")
-	
+
 	quote, err := svc.GenerateAttestation(reportData)
 	if err != nil {
 		t.Fatalf("GenerateAttestation() error: %v", err)
@@ -267,7 +267,7 @@ func TestSimulatedEnclaveService_GenerateAttestation(t *testing.T) {
 
 func TestSimulatedEnclaveService_Shutdown(t *testing.T) {
 	svc := NewSimulatedEnclaveService()
-	
+
 	if err := svc.Initialize(DefaultRuntimeConfig()); err != nil {
 		t.Fatalf("Initialize() error: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestSimulatedEnclaveService_Shutdown(t *testing.T) {
 func TestSimulatedEnclaveService_DeterministicScoring(t *testing.T) {
 	svc1 := NewSimulatedEnclaveService()
 	svc2 := NewSimulatedEnclaveService()
-	
+
 	if err := svc1.Initialize(DefaultRuntimeConfig()); err != nil {
 		t.Fatalf("Initialize() error: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestSimulatedEnclaveService_DeterministicScoring(t *testing.T) {
 
 func TestSimulatedEnclaveService_Status(t *testing.T) {
 	svc := NewSimulatedEnclaveService()
-	
+
 	// Before init
 	status := svc.GetStatus()
 	if status.Initialized {

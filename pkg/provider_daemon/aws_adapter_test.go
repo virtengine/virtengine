@@ -1325,10 +1325,11 @@ func createTestAWSAdapter() (*AWSAdapter, *MockEC2Client, *MockVPCClient, *MockE
 func createTestAWSManifest() *Manifest {
 	return &Manifest{
 		Name:    testAWSInstanceName,
-		Version: "1.0",
+		Version: ManifestVersionV1, // Use the proper version constant "v1"
 		Services: []ServiceSpec{
 			{
 				Name:  "web-service",
+				Type:  "container", // Required field
 				Image: testAWSAMIID,
 				Resources: ResourceSpec{
 					CPU:    2000,                   // 2 cores

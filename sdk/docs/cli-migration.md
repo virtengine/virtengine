@@ -56,13 +56,13 @@ VirtEngine tx market bid create --deposit-sources=grant
 
 **Before (v0.38.x)**:
 ```bash
-VirtEngine tx deployment authz grant <grantee_address> 50akt
+VirtEngine tx deployment authz grant <grantee_address> 50uve
 ```
 
 **After (v1.0.0)**:
 ```bash
 VirtEngine tx authz grant <grantee_address> deposit \
-  --spend-limit=50akt \
+  --spend-limit=50uve \
   --scope=deployment
 ```
 

@@ -11,24 +11,24 @@ import (
 // SensitivePatterns defines patterns that indicate sensitive identity data
 var SensitivePatterns = []string{
 	// Personal identifiers
-	`\b\d{3}-\d{2}-\d{4}\b`,                    // SSN pattern
-	`\b\d{9}\b`,                                 // Passport/ID numbers
-	`\b[A-Z]{1,2}\d{6,9}\b`,                     // Various ID formats
-	
+	`\b\d{3}-\d{2}-\d{4}\b`, // SSN pattern
+	`\b\d{9}\b`,             // Passport/ID numbers
+	`\b[A-Z]{1,2}\d{6,9}\b`, // Various ID formats
+
 	// Biometric indicators
 	`face_embedding`,
 	`biometric_data`,
 	`fingerprint`,
 	`iris_scan`,
-	
+
 	// Document content
 	`document_ocr`,
 	`extracted_text`,
 	`id_document`,
-	
+
 	// Address patterns (simplified)
 	`\b\d+\s+\w+\s+(street|st|avenue|ave|road|rd|drive|dr)\b`,
-	
+
 	// Email patterns (for identity context)
 	`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`,
 }
@@ -44,11 +44,11 @@ var ForbiddenLogPatterns = []string{
 	`log\.(Debug|Info|Warn|Error|Fatal)\(.*document_content`,
 	`log\.(Debug|Info|Warn|Error|Fatal)\(.*face_image`,
 	`log\.(Debug|Info|Warn|Error|Fatal)\(.*selfie`,
-	
+
 	// Printf-style sensitive data
 	`fmt\.(Print|Printf|Println)\(.*plaintext`,
 	`fmt\.(Print|Printf|Println)\(.*decrypted`,
-	
+
 	// Structured logging with sensitive fields
 	`\.With\("plaintext"`,
 	`\.With\("decrypted"`,
@@ -60,13 +60,13 @@ var ForbiddenLogPatterns = []string{
 type RedactionRule struct {
 	// Name is the rule identifier
 	Name string
-	
+
 	// Pattern is the regex pattern to match
 	Pattern *regexp.Regexp
-	
+
 	// Replacement is what to replace matches with
 	Replacement string
-	
+
 	// TruncateLength truncates the field to this length (0 for no truncation)
 	TruncateLength int
 }
@@ -74,11 +74,6 @@ type RedactionRule struct {
 // DefaultRedactionRules returns the default set of redaction rules
 func DefaultRedactionRules() []RedactionRule {
 	return []RedactionRule{
-		{
-			Name:        "encrypted_blob",
-			Pattern:     regexp.MustCompile(`([A-Za-z0-9+/]{64,})`),
-			Replacement: "[ENCRYPTED_BLOB_REDACTED]",
-		},
 		{
 			Name:        "base64_data",
 			Pattern:     regexp.MustCompile(`data:[^;]+;base64,[A-Za-z0-9+/=]+`),
@@ -88,6 +83,11 @@ func DefaultRedactionRules() []RedactionRule {
 			Name:        "hex_data",
 			Pattern:     regexp.MustCompile(`0x[A-Fa-f0-9]{64,}`),
 			Replacement: "[HEX_DATA_REDACTED]",
+		},
+		{
+			Name:        "encrypted_blob",
+			Pattern:     regexp.MustCompile(`([A-Za-z0-9+/]{64,})`),
+			Replacement: "[ENCRYPTED_BLOB_REDACTED]",
 		},
 		{
 			Name:        "request_body",
@@ -163,7 +163,8 @@ func TruncateForLogging(input string, maxLength int) string {
 
 // IsSensitiveField checks if a field name indicates sensitive data
 func IsSensitiveField(fieldName string) bool {
-	sensitiveFields := []string{
+	// Exact sensitive patterns (checked with Contains)
+	sensitivePatterns := []string{
 		"plaintext",
 		"decrypted",
 		"identity",
@@ -175,7 +176,6 @@ func IsSensitiveField(fieldName string) bool {
 		"ssn",
 		"passport",
 		"id_number",
-		"address",
 		"phone",
 		"email",
 		"dob",
@@ -185,13 +185,59 @@ func IsSensitiveField(fieldName string) bool {
 		"seed",
 		"mnemonic",
 	}
-	
+
+	// Address-related patterns that ARE sensitive (personal addresses)
+	// but NOT blockchain addresses like validator_address, account_address
+	sensitiveAddressPatterns := []string{
+		"home_address",
+		"mailing_address",
+		"street_address",
+		"postal_address",
+		"physical_address",
+		"residential_address",
+		"billing_address",
+		"shipping_address",
+	}
+
 	lowerField := strings.ToLower(fieldName)
-	for _, sensitive := range sensitiveFields {
+
+	// Check general sensitive patterns
+	for _, sensitive := range sensitivePatterns {
 		if strings.Contains(lowerField, sensitive) {
 			return true
 		}
 	}
+
+	// Check specific address patterns (must match specific personal address types)
+	for _, pattern := range sensitiveAddressPatterns {
+		if strings.Contains(lowerField, pattern) {
+			return true
+		}
+	}
+
+	// Check for standalone "address" that is not prefixed by blockchain-related terms
+	if strings.Contains(lowerField, "address") {
+		// Safe blockchain-related address patterns
+		safeAddressPrefixes := []string{
+			"validator_address",
+			"account_address",
+			"wallet_address",
+			"contract_address",
+			"operator_address",
+			"delegator_address",
+			"provider_address",
+			"from_address",
+			"to_address",
+			"sender_address",
+			"recipient_address",
+		}
+		for _, safe := range safeAddressPrefixes {
+			if strings.Contains(lowerField, safe) {
+				return false
+			}
+		}
+	}
+
 	return false
 }
 
@@ -200,7 +246,7 @@ func IsSensitiveField(fieldName string) bool {
 type MemoryCanary struct {
 	// Pattern is the byte pattern to search for
 	Pattern []byte
-	
+
 	// Description describes what this canary represents
 	Description string
 }
@@ -227,16 +273,16 @@ func DefaultMemoryCanaries() []MemoryCanary {
 type StaticAnalysisCheck struct {
 	// Name is the check identifier
 	Name string
-	
+
 	// Description explains what the check looks for
 	Description string
-	
+
 	// Pattern is the regex pattern that should NOT appear
 	Pattern *regexp.Regexp
-	
+
 	// Severity is the severity level (error, warning)
 	Severity string
-	
+
 	// PathPatterns limits the check to files matching these patterns
 	PathPatterns []string
 }
@@ -291,19 +337,19 @@ func GetStaticAnalysisChecks() []StaticAnalysisCheck {
 type LeakageIncidentReport struct {
 	// Timestamp is when the incident was detected
 	Timestamp int64
-	
+
 	// Source describes where the potential leak was detected
 	Source string
-	
+
 	// Description describes the incident
 	Description string
-	
+
 	// Severity is the severity level
 	Severity string
-	
+
 	// StackTrace contains the stack trace if available
 	StackTrace string
-	
+
 	// Remediation suggests remediation steps
 	Remediation string
 }

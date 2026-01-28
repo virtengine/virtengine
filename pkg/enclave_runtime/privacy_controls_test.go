@@ -10,9 +10,9 @@ func TestLogRedactor_Redact(t *testing.T) {
 	redactor := NewLogRedactor()
 
 	tests := []struct {
-		name     string
-		input    string
-		contains string
+		name        string
+		input       string
+		contains    string
 		notContains string
 	}{
 		{
@@ -34,20 +34,20 @@ func TestLogRedactor_Redact(t *testing.T) {
 			contains:    "[REDACTED]",
 		},
 		{
-			name:        "preserves safe content",
-			input:       `user logged in successfully`,
-			contains:    "user logged in successfully",
+			name:     "preserves safe content",
+			input:    `user logged in successfully`,
+			contains: "user logged in successfully",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := redactor.Redact(tt.input)
-			
+
 			if tt.notContains != "" && strings.Contains(result, tt.notContains) {
 				t.Errorf("result should not contain %q, got %q", tt.notContains, result)
 			}
-			
+
 			if tt.contains != "" && !strings.Contains(result, tt.contains) {
 				t.Errorf("result should contain %q, got %q", tt.contains, result)
 			}
@@ -162,7 +162,7 @@ func TestIsSensitiveField(t *testing.T) {
 
 func TestDefaultMemoryCanaries(t *testing.T) {
 	canaries := DefaultMemoryCanaries()
-	
+
 	if len(canaries) == 0 {
 		t.Error("expected at least one memory canary")
 	}
@@ -179,7 +179,7 @@ func TestDefaultMemoryCanaries(t *testing.T) {
 
 func TestGetStaticAnalysisChecks(t *testing.T) {
 	checks := GetStaticAnalysisChecks()
-	
+
 	if len(checks) == 0 {
 		t.Error("expected at least one static analysis check")
 	}
@@ -257,10 +257,10 @@ func TestIncidentProcedureDocumented(t *testing.T) {
 
 func TestLogRedactor_RedactBytes(t *testing.T) {
 	redactor := NewLogRedactor()
-	
+
 	input := []byte(`{"body": "sensitive content"}`)
 	result := redactor.RedactBytes(input)
-	
+
 	if strings.Contains(string(result), "sensitive content") {
 		t.Error("should have redacted sensitive content from bytes")
 	}
@@ -276,10 +276,10 @@ func TestNewLogRedactorWithRules(t *testing.T) {
 	}
 
 	redactor := NewLogRedactorWithRules(customRules)
-	
+
 	input := "Found SECRET_12345 in data"
 	result := redactor.Redact(input)
-	
+
 	if strings.Contains(result, "SECRET_12345") {
 		t.Error("should have applied custom redaction rule")
 	}

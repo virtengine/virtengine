@@ -416,16 +416,16 @@ type MOABClient interface {
 
 // QueueInfo contains queue (class) information
 type QueueInfo struct {
-	Name           string   `json:"name"`
-	State          string   `json:"state"`
-	MaxNodes       int32    `json:"max_nodes"`
-	MaxWalltime    int64    `json:"max_walltime"`
-	DefaultNodes   int32    `json:"default_nodes"`
-	Priority       int32    `json:"priority"`
-	Features       []string `json:"features,omitempty"`
-	IdleJobs       int32    `json:"idle_jobs"`
-	RunningJobs    int32    `json:"running_jobs"`
-	HeldJobs       int32    `json:"held_jobs"`
+	Name         string   `json:"name"`
+	State        string   `json:"state"`
+	MaxNodes     int32    `json:"max_nodes"`
+	MaxWalltime  int64    `json:"max_walltime"`
+	DefaultNodes int32    `json:"default_nodes"`
+	Priority     int32    `json:"priority"`
+	Features     []string `json:"features,omitempty"`
+	IdleJobs     int32    `json:"idle_jobs"`
+	RunningJobs  int32    `json:"running_jobs"`
+	HeldJobs     int32    `json:"held_jobs"`
 }
 
 // NodeInfo contains node information
@@ -444,26 +444,26 @@ type NodeInfo struct {
 
 // ClusterInfo contains cluster information
 type ClusterInfo struct {
-	Name              string `json:"name"`
-	TotalNodes        int32  `json:"total_nodes"`
-	IdleNodes         int32  `json:"idle_nodes"`
-	BusyNodes         int32  `json:"busy_nodes"`
-	DownNodes         int32  `json:"down_nodes"`
-	TotalProcessors   int32  `json:"total_processors"`
-	IdleProcessors    int32  `json:"idle_processors"`
-	RunningJobs       int32  `json:"running_jobs"`
-	IdleJobs          int32  `json:"idle_jobs"`
-	ActiveReservations int32 `json:"active_reservations"`
+	Name               string `json:"name"`
+	TotalNodes         int32  `json:"total_nodes"`
+	IdleNodes          int32  `json:"idle_nodes"`
+	BusyNodes          int32  `json:"busy_nodes"`
+	DownNodes          int32  `json:"down_nodes"`
+	TotalProcessors    int32  `json:"total_processors"`
+	IdleProcessors     int32  `json:"idle_processors"`
+	RunningJobs        int32  `json:"running_jobs"`
+	IdleJobs           int32  `json:"idle_jobs"`
+	ActiveReservations int32  `json:"active_reservations"`
 }
 
 // ReservationInfo contains reservation information
 type ReservationInfo struct {
-	Name      string     `json:"name"`
-	StartTime time.Time  `json:"start_time"`
-	EndTime   time.Time  `json:"end_time"`
-	Nodes     []string   `json:"nodes"`
-	Owner     string     `json:"owner"`
-	State     string     `json:"state"`
+	Name      string    `json:"name"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	Nodes     []string  `json:"nodes"`
+	Owner     string    `json:"owner"`
+	State     string    `json:"state"`
 }
 
 // JobStatusReport contains job status for on-chain reporting
@@ -513,7 +513,10 @@ func (r *JobStatusReport) Hash() []byte {
 		ExitCode:        r.ExitCode,
 		Timestamp:       r.Timestamp.Unix(),
 	}
-	bytes, _ := json.Marshal(data)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
 	hash := sha256.Sum256(bytes)
 	return hash[:]
 }

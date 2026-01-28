@@ -93,8 +93,8 @@ func (b *TicketBridge) CreateFromSupportRequest(ctx context.Context, req *VirtEn
 	}
 
 	// Build labels
-	labels := make([]string, len(b.config.Labels))
-	copy(labels, b.config.Labels)
+	labels := make([]string, 0, len(b.config.Labels)+1)
+	labels = append(labels, b.config.Labels...)
 	labels = append(labels, "category:"+req.Category)
 
 	// Create issue request
@@ -103,7 +103,7 @@ func (b *TicketBridge) CreateFromSupportRequest(ctx context.Context, req *VirtEn
 			Project: Project{
 				Key: b.config.ProjectKey,
 			},
-			Summary: fmt.Sprintf("[%s] %s", req.TicketNumber, req.Subject),
+			Summary:     fmt.Sprintf("[%s] %s", req.TicketNumber, req.Subject),
 			Description: description,
 			IssueType: IssueTypeField{
 				Name: string(b.config.DefaultIssueType),

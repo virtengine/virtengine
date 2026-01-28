@@ -374,7 +374,7 @@ func (d *BenchmarkDaemon) handlePendingChallenges(ctx context.Context) {
 }
 
 // runAndSubmitBenchmark runs a benchmark and submits it to the chain
-func (d *BenchmarkDaemon) runAndSubmitBenchmark(ctx context.Context, challengeID string) (*BenchmarkResult, error) {
+func (d *BenchmarkDaemon) runAndSubmitBenchmark(ctx context.Context, _ string) (*BenchmarkResult, error) {
 	startTime := time.Now()
 
 	result := &BenchmarkResult{

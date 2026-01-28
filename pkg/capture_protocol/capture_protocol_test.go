@@ -13,11 +13,11 @@ import (
 
 // Test constants
 const (
-	testClientID      = "test-client-001"
-	testClientName    = "Test Mobile App"
-	testDeviceID      = "device-fingerprint-abc123"
-	testSessionID     = "session-uuid-xyz789"
-	testUserAddress   = "virtengine1abc123def456"
+	testClientID    = "test-client-001"
+	testClientName  = "Test Mobile App"
+	testDeviceID    = "device-fingerprint-abc123"
+	testSessionID   = "session-uuid-xyz789"
+	testUserAddress = "virtengine1abc123def456"
 )
 
 // TestSaltValidation tests salt validation logic
@@ -163,19 +163,21 @@ func TestReplayPrevention(t *testing.T) {
 	})
 
 	t.Run("expired salts are cleaned up", func(t *testing.T) {
-		fixedTime := time.Now()
+		// Use a pointer to time so that both validator and cache see updates
+		currentTime := time.Now()
+		timeSource := func() time.Time { return currentTime }
+		
 		sv := NewSaltValidator(
-			WithReplayWindow(1 * time.Second),
-			WithTimeSource(func() time.Time { return fixedTime }),
+			WithReplayWindow(1*time.Second),
+			WithTimeSource(timeSource),
 		)
 
 		salt := generateRandomSalt(t, 32)
 		_ = sv.RecordUsedSalt(salt)
 		assert.True(t, sv.IsSaltUsed(salt))
 
-		// Advance time past replay window
-		fixedTime = fixedTime.Add(2 * time.Second)
-		sv.now = func() time.Time { return fixedTime }
+		// Advance time past replay window - update the variable that the closure references
+		currentTime = currentTime.Add(2 * time.Second)
 
 		// Salt should now be considered not used (expired)
 		assert.False(t, sv.IsSaltUsed(salt))

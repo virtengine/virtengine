@@ -56,14 +56,14 @@ func (dc *DeterminismController) GetTensorFlowEnvVars() map[string]string {
 		// Use single thread for determinism
 		"OMP_NUM_THREADS": "1",
 		// TensorFlow determinism settings
-		"TF_DETERMINISTIC_OPS":       "1",
-		"TF_CUDNN_DETERMINISTIC":     "1",
-		"TF_USE_CUDNN_AUTOTUNE":      "0",
-		"TF_ENABLE_ONEDNN_OPTS":      "0",
-		"TF_CPP_MIN_LOG_LEVEL":       "2",
-		"TF_FORCE_GPU_ALLOW_GROWTH":  "false",
-		"TF_XLA_FLAGS":               "--tf_xla_auto_jit=-1",
-		"PYTHONHASHSEED":             fmt.Sprintf("%d", dc.randomSeed),
+		"TF_DETERMINISTIC_OPS":      "1",
+		"TF_CUDNN_DETERMINISTIC":    "1",
+		"TF_USE_CUDNN_AUTOTUNE":     "0",
+		"TF_ENABLE_ONEDNN_OPTS":     "0",
+		"TF_CPP_MIN_LOG_LEVEL":      "2",
+		"TF_FORCE_GPU_ALLOW_GROWTH": "false",
+		"TF_XLA_FLAGS":              "--tf_xla_auto_jit=-1",
+		"PYTHONHASHSEED":            fmt.Sprintf("%d", dc.randomSeed),
 	}
 
 	if dc.forceCPU {
@@ -129,6 +129,7 @@ func (dc *DeterminismController) ComputeInputHash(inputs *ScoreInputs) string {
 	h.Write([]byte(inputs.Metadata.AccountAddress))
 
 	blockHeightBytes := make([]byte, 8)
+	//nolint:gosec // G115: BlockHeight is a bounded blockchain block number
 	binary.BigEndian.PutUint64(blockHeightBytes, uint64(inputs.Metadata.BlockHeight))
 	h.Write(blockHeightBytes)
 
@@ -185,6 +186,7 @@ func (dc *DeterminismController) ComputeInputHash(inputs *ScoreInputs) string {
 	}
 
 	scopeCountBytes := make([]byte, 4)
+	//nolint:gosec // G115: ScopeCount is a bounded small count value
 	binary.BigEndian.PutUint32(scopeCountBytes, uint32(inputs.ScopeCount))
 	h.Write(scopeCountBytes)
 
@@ -245,7 +247,7 @@ func (dc *DeterminismController) writeFloat32(h interface{ Write([]byte) (int, e
 	bits := math.Float32bits(float32(rounded))
 	bytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(bytes, bits)
-	h.Write(bytes)
+	_, _ = h.Write(bytes)
 }
 
 // ============================================================================

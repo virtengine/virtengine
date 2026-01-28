@@ -3,7 +3,7 @@
 # VE-920: Ansible automation for VirtEngine infrastructure
 #
 # Usage:
-#   ansible-playbook -i inventory.ini deploy_portal.yml --ask-vault-pass
+#   ansible-playbook -i inventory.ini deploy_portal.yaml --ask-vault-pass
 
 - name: Deploy VirtEngine Portal
   hosts: portal_servers

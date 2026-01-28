@@ -3,9 +3,9 @@
 # VE-920: Ansible automation for VirtEngine infrastructure
 #
 # Usage:
-#   ansible-playbook -i inventory.ini deploy_virtengine_node.yml
-#   ansible-playbook -i inventory.ini deploy_virtengine_node.yml --tags "install"
-#   ansible-playbook -i inventory.ini deploy_virtengine_node.yml --check
+#   ansible-playbook -i inventory.ini deploy_virtengine_node.yaml
+#   ansible-playbook -i inventory.ini deploy_virtengine_node.yaml --tags "install"
+#   ansible-playbook -i inventory.ini deploy_virtengine_node.yaml --check
 
 - name: Deploy VirtEngine Blockchain Node
   hosts: virtengine_nodes

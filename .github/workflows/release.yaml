@@ -78,10 +78,14 @@ jobs:
           path: |
             .cache/run/upgrade/validators/logs/.virtengine*.log
 
+  # Notify homebrew-tap repository about the new release
+  # Requires GORELEASER_ACCESS_TOKEN secret to be configured (see dispatch.yaml for setup instructions)
   notify-homebrew:
     runs-on: ubuntu-latest
     needs:
       - publish
+    # Skip if GORELEASER_ACCESS_TOKEN is not configured
+    if: ${{ secrets.GORELEASER_ACCESS_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:

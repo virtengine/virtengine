@@ -36,7 +36,8 @@ type SidecarClient struct {
 
 	// client is the gRPC service client
 	// Note: Would be the generated protobuf client
-	client interface{}
+	// nolint:unused // Placeholder for actual gRPC client
+	grpcClient interface{}
 
 	// mu protects client state
 	mu sync.RWMutex
@@ -120,6 +121,8 @@ func (sc *SidecarClient) connect() error {
 }
 
 // refreshModelInfo fetches model version and hash from sidecar
+//
+//nolint:unparam // error return preserved for future gRPC implementation
 func (sc *SidecarClient) refreshModelInfo() error {
 	// Note: Actual gRPC call would happen here
 	// resp, err := sc.client.GetModelInfo(ctx, &inferencepb.GetModelInfoRequest{})
@@ -237,7 +240,7 @@ func (sc *SidecarClient) ComputeScoreWithContext(ctx context.Context, inputs *Sc
 }
 
 // callSidecar makes the actual gRPC call to the inference sidecar
-func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, inputs *ScoreInputs) (*ScoreResult, error) {
+func (sc *SidecarClient) callSidecar(_ context.Context, features []float32, inputs *ScoreInputs) (*ScoreResult, error) {
 	// Note: Actual gRPC call would happen here
 	// req := &inferencepb.InferenceRequest{
 	//     Features:   features,
@@ -265,7 +268,7 @@ func (sc *SidecarClient) callSidecar(ctx context.Context, features []float32, in
 }
 
 // simulateSidecarResponse simulates sidecar response for testing
-func (sc *SidecarClient) simulateSidecarResponse(features []float32, inputs *ScoreInputs) (*ScoreResult, error) {
+func (sc *SidecarClient) simulateSidecarResponse(features []float32, _ *ScoreInputs) (*ScoreResult, error) {
 	// Compute a deterministic score based on features
 	var sum float32
 	var count float32
@@ -286,11 +289,11 @@ func (sc *SidecarClient) simulateSidecarResponse(features []float32, inputs *Sco
 	score := uint32(rawScore)
 
 	result := &ScoreResult{
-		Score:      score,
-		RawScore:   rawScore,
-		Confidence: computeConfidence(rawScore),
-		OutputHash: sc.determinism.ComputeOutputHash([]float32{rawScore}),
-		ReasonCodes: make([]string, 0),
+		Score:                score,
+		RawScore:             rawScore,
+		Confidence:           computeConfidence(rawScore),
+		OutputHash:           sc.determinism.ComputeOutputHash([]float32{rawScore}),
+		ReasonCodes:          make([]string, 0),
 		FeatureContributions: sc.extractor.ComputeFeatureContributions(features),
 	}
 

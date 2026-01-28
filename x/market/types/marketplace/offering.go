@@ -129,11 +129,11 @@ type IdentityRequirement struct {
 // DefaultIdentityRequirement returns the default identity requirement
 func DefaultIdentityRequirement() IdentityRequirement {
 	return IdentityRequirement{
-		MinScore:             0,
-		RequiredStatus:       "",
-		RequireVerifiedEmail: false,
+		MinScore:              0,
+		RequiredStatus:        "",
+		RequireVerifiedEmail:  false,
 		RequireVerifiedDomain: false,
-		RequireMFA:           false,
+		RequireMFA:            false,
 	}
 }
 
@@ -378,7 +378,7 @@ func (o *Offering) Hash() []byte {
 	h.Write(o.ID.Hash())
 	h.Write([]byte(o.Name))
 	h.Write([]byte(o.Version))
-	h.Write([]byte(fmt.Sprintf("%d", o.State)))
+	_, _ = fmt.Fprintf(h, "%d", o.State)
 	return h.Sum(nil)
 }
 

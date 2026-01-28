@@ -79,14 +79,14 @@ type Config struct {
 // DefaultConfig returns sensible defaults
 func DefaultConfig() Config {
 	return Config{
-		ServiceName:    "virtengine",
-		ServiceVersion: "unknown",
-		Environment:    "development",
-		LogLevel:       LevelInfo,
-		LogFormat:      "json",
-		MetricsEnabled: true,
-		MetricsPort:    9090,
-		TracingEnabled: false,
+		ServiceName:       "virtengine",
+		ServiceVersion:    "unknown",
+		Environment:       "development",
+		LogLevel:          LevelInfo,
+		LogFormat:         "json",
+		MetricsEnabled:    true,
+		MetricsPort:       9090,
+		TracingEnabled:    false,
 		TracingSampleRate: 0.1,
 		SensitiveFields: []string{
 			"password",

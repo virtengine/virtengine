@@ -413,7 +413,7 @@ func TestCalculateBidPriceMaxPriceExceeded(t *testing.T) {
 	}
 
 	order := Order{
-		MaxPrice: "30",
+		MaxPrice: "25", // Lower than calculated price (5*2 + 5*2 + 5*2 = 30)
 		Requirements: ResourceRequirements{
 			CPUCores:  2,
 			MemoryGB:  2,

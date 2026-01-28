@@ -276,10 +276,10 @@ type DocumentCaptureParams struct {
 
 // SelfieCaptureParams contains selfie capture parameters
 type SelfieCaptureParams struct {
-	EnableLiveness    bool
-	LivenessConfig    *LivenessConfiguration
-	SessionID         string
-	Timeout           time.Duration
+	EnableLiveness bool
+	LivenessConfig *LivenessConfiguration
+	SessionID      string
+	Timeout        time.Duration
 }
 
 // CaptureWorkflowEvent represents a workflow event
@@ -293,19 +293,19 @@ type CaptureWorkflowEvent struct {
 type CaptureWorkflowEventType string
 
 const (
-	WorkflowEventCameraReady      CaptureWorkflowEventType = "camera_ready"
-	WorkflowEventQualityUpdate    CaptureWorkflowEventType = "quality_update"
-	WorkflowEventReadyToCapture   CaptureWorkflowEventType = "ready_to_capture"
-	WorkflowEventCaptureStarted   CaptureWorkflowEventType = "capture_started"
-	WorkflowEventCaptureComplete  CaptureWorkflowEventType = "capture_complete"
-	WorkflowEventLivenessStarted  CaptureWorkflowEventType = "liveness_started"
+	WorkflowEventCameraReady       CaptureWorkflowEventType = "camera_ready"
+	WorkflowEventQualityUpdate     CaptureWorkflowEventType = "quality_update"
+	WorkflowEventReadyToCapture    CaptureWorkflowEventType = "ready_to_capture"
+	WorkflowEventCaptureStarted    CaptureWorkflowEventType = "capture_started"
+	WorkflowEventCaptureComplete   CaptureWorkflowEventType = "capture_complete"
+	WorkflowEventLivenessStarted   CaptureWorkflowEventType = "liveness_started"
 	WorkflowEventLivenessChallenge CaptureWorkflowEventType = "liveness_challenge"
-	WorkflowEventLivenessComplete CaptureWorkflowEventType = "liveness_complete"
-	WorkflowEventSigningStarted   CaptureWorkflowEventType = "signing_started"
-	WorkflowEventSigningComplete  CaptureWorkflowEventType = "signing_complete"
-	WorkflowEventComplete         CaptureWorkflowEventType = "complete"
-	WorkflowEventError            CaptureWorkflowEventType = "error"
-	WorkflowEventCancelled        CaptureWorkflowEventType = "cancelled"
+	WorkflowEventLivenessComplete  CaptureWorkflowEventType = "liveness_complete"
+	WorkflowEventSigningStarted    CaptureWorkflowEventType = "signing_started"
+	WorkflowEventSigningComplete   CaptureWorkflowEventType = "signing_complete"
+	WorkflowEventComplete          CaptureWorkflowEventType = "complete"
+	WorkflowEventError             CaptureWorkflowEventType = "error"
+	WorkflowEventCancelled         CaptureWorkflowEventType = "cancelled"
 )
 
 // CaptureWorkflowResult contains the complete workflow result

@@ -483,7 +483,7 @@ func TestIPFSStreamingBackend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get stream error: %v", err)
 		}
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		// Read all
 		buf := make([]byte, 1024)

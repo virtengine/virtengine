@@ -43,8 +43,9 @@ func ScrubFixedSize[T any](data *T) {
 		return
 	}
 	size := unsafe.Sizeof(*data)
+	//nolint:gosec // G103: unsafe is intentional for low-level memory scrubbing of sensitive data
 	ptr := unsafe.Pointer(data)
-	
+
 	// Zero the memory
 	bytes := (*[1 << 30]byte)(ptr)[:size:size]
 	for i := range bytes {
@@ -138,12 +139,12 @@ func (sc *SecureContext) Destroy() {
 	for i := len(sc.cleanup) - 1; i >= 0; i-- {
 		sc.cleanup[i]()
 	}
-	
+
 	// Destroy all buffers
 	for _, buf := range sc.buffers {
 		buf.Destroy()
 	}
-	
+
 	sc.buffers = nil
 	sc.cleanup = nil
 }
@@ -151,17 +152,18 @@ func (sc *SecureContext) Destroy() {
 // ProcessingScope represents a scope for processing sensitive data
 // with automatic cleanup via defer
 type ProcessingScope struct {
-	ctx     *SecureContext
-	onExit  func()
+	ctx    *SecureContext
+	onExit func()
 }
 
 // NewProcessingScope creates a new processing scope
 // Usage:
-//   scope := NewProcessingScope()
-//   defer scope.Complete()
-//   buf := scope.AllocateBuffer(1024)
-//   // use buffer...
-//   // buffer is automatically scrubbed when Complete() is called
+//
+//	scope := NewProcessingScope()
+//	defer scope.Complete()
+//	buf := scope.AllocateBuffer(1024)
+//	// use buffer...
+//	// buffer is automatically scrubbed when Complete() is called
 func NewProcessingScope() *ProcessingScope {
 	return &ProcessingScope{
 		ctx: NewSecureContext(),

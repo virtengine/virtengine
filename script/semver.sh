@@ -5,6 +5,7 @@ set -o errexit -o nounset -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
+# shellcheck source=./semver_funcs.sh
 source "$SCRIPT_DIR/semver_funcs.sh"
 
 PROG=semver

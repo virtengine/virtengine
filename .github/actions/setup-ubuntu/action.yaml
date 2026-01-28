@@ -1,5 +1,6 @@
 ---
 name: setup-ubuntu
+description: 'Setup Ubuntu environment for VirtEngine CI builds'
 runs:
   using: 'composite'
   steps:
@@ -16,7 +17,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y make direnv unzip lz4 wget curl npm jq pv coreutils libudev-dev
+        sudo apt-get install -y make direnv unzip lz4 wget curl npm jq pv coreutils libudev-dev build-essential gcc
     - name: Setup npm
       uses: actions/setup-node@v4
       with:
@@ -38,3 +39,41 @@ runs:
       uses: HatsuneMiku3939/direnv-action@v1
       with:
         masks: ''
+    - name: Ensure environment variables are set
+      shell: bash
+      run: |
+        # Fallback environment setup if direnv didn't set variables
+        ROOT_DIR=$(pwd)
+        if [ -z "$VE_ROOT" ]; then
+          echo "VE_ROOT=${ROOT_DIR}" >> $GITHUB_ENV
+          echo "VE_DIRENV_SET=1" >> $GITHUB_ENV
+        fi
+        if [ -z "$VIRTENGINE_ROOT" ]; then
+          echo "VIRTENGINE_ROOT=${ROOT_DIR}" >> $GITHUB_ENV
+        fi
+        if [ -z "$VE_DEVCACHE" ]; then
+          echo "VE_DEVCACHE=${ROOT_DIR}/.cache" >> $GITHUB_ENV
+          echo "VE_DEVCACHE_BIN=${ROOT_DIR}/.cache/bin" >> $GITHUB_ENV
+          echo "VE_DEVCACHE_VERSIONS=${ROOT_DIR}/.cache/versions" >> $GITHUB_ENV
+          echo "VE_DEVCACHE_INCLUDE=${ROOT_DIR}/.cache/include" >> $GITHUB_ENV
+          echo "VE_DEVCACHE_NODE_MODULES=${ROOT_DIR}/.cache" >> $GITHUB_ENV
+          echo "VE_RUN=${ROOT_DIR}/.cache/run" >> $GITHUB_ENV
+          echo "VE_RUN_BIN=${ROOT_DIR}/.cache/run/bin" >> $GITHUB_ENV
+        fi
+        if [ -z "$VIRTENGINE" ]; then
+          echo "VIRTENGINE=${ROOT_DIR}/.cache/bin/virtengine" >> $GITHUB_ENV
+        fi
+        if [ -z "$GOTOOLCHAIN" ]; then
+          toolchain=$(./script/tools.sh gotoolchain)
+          echo "GOTOOLCHAIN=${toolchain}" >> $GITHUB_ENV
+        fi
+        # Create cache directories
+        mkdir -p "${ROOT_DIR}/.cache/bin" "${ROOT_DIR}/.cache/versions" "${ROOT_DIR}/.cache/include" "${ROOT_DIR}/.cache/run/bin"
+    - name: Add cache bin to PATH
+      shell: bash
+      run: |
+        ROOT_DIR=$(pwd)
+        echo "${VE_DEVCACHE_BIN:-${ROOT_DIR}/.cache/bin}" >> $GITHUB_PATH
+    - name: Set CGO_ENABLED for ledger support
+      shell: bash
+      run: echo "CGO_ENABLED=1" >> $GITHUB_ENV

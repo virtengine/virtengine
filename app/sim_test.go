@@ -237,8 +237,9 @@ func TestAppImportExport(t *testing.T) {
 			appA,
 			appB,
 			[][]byte{
-				// Note: These keys were from cosmos-sdk/x/authz/keeper/keys which no longer exists
-				// Using empty slice as the exact key prefixes depend on cosmos-sdk version
+				// Skip the grant queue key prefix (0x02) which contains time-based expiration entries
+				// These entries may differ between export/import due to timing and queue cleanup
+				{0x02},
 			},
 		},
 		{

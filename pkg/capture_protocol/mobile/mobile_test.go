@@ -705,6 +705,6 @@ func BenchmarkGalleryPreventionValidation(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		validator.ValidateCaptureOrigin(proof, imageData)
+		_, _ = validator.ValidateCaptureOrigin(proof, imageData)
 	}
 }

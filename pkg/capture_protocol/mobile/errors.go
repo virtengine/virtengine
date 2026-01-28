@@ -11,12 +11,12 @@ import (
 // Error codes for mobile capture
 const (
 	// Camera errors (2001-2099)
-	ErrCodeCameraPermissionDenied  = "CAMERA_PERMISSION_DENIED"
-	ErrCodeCameraNotFound          = "CAMERA_NOT_FOUND"
-	ErrCodeCameraNotReadable       = "CAMERA_NOT_READABLE"
-	ErrCodeCameraOverconstrained   = "CAMERA_OVERCONSTRAINED"
-	ErrCodeCameraSecurityError     = "CAMERA_SECURITY_ERROR"
-	ErrCodeCameraSessionFailed     = "CAMERA_SESSION_FAILED"
+	ErrCodeCameraPermissionDenied = "CAMERA_PERMISSION_DENIED"
+	ErrCodeCameraNotFound         = "CAMERA_NOT_FOUND"
+	ErrCodeCameraNotReadable      = "CAMERA_NOT_READABLE"
+	ErrCodeCameraOverconstrained  = "CAMERA_OVERCONSTRAINED"
+	ErrCodeCameraSecurityError    = "CAMERA_SECURITY_ERROR"
+	ErrCodeCameraSessionFailed    = "CAMERA_SESSION_FAILED"
 
 	// Capture errors (2101-2199)
 	ErrCodeCaptureTimeout          = "CAPTURE_TIMEOUT"
@@ -40,11 +40,11 @@ const (
 	ErrCodeSpoofingDetected        = "SPOOFING_DETECTED"
 
 	// Signing errors (2401-2499)
-	ErrCodeClientSigningFailed     = "CLIENT_SIGNING_FAILED"
-	ErrCodeUserSigningFailed       = "USER_SIGNING_FAILED"
-	ErrCodeKeyNotAvailable         = "KEY_NOT_AVAILABLE"
-	ErrCodeHardwareKeyRequired     = "HARDWARE_KEY_REQUIRED"
-	ErrCodeBiometricRequired       = "BIOMETRIC_REQUIRED"
+	ErrCodeClientSigningFailed = "CLIENT_SIGNING_FAILED"
+	ErrCodeUserSigningFailed   = "USER_SIGNING_FAILED"
+	ErrCodeKeyNotAvailable     = "KEY_NOT_AVAILABLE"
+	ErrCodeHardwareKeyRequired = "HARDWARE_KEY_REQUIRED"
+	ErrCodeBiometricRequired   = "BIOMETRIC_REQUIRED"
 
 	// Device errors (2501-2599)
 	ErrCodeDeviceFingerprintInvalid = "DEVICE_FINGERPRINT_INVALID"
@@ -52,12 +52,12 @@ const (
 	ErrCodeOSVersionTooOld          = "OS_VERSION_TOO_OLD"
 
 	// Quality errors (2601-2699)
-	ErrCodeQualityResolutionLow    = "QUALITY_RESOLUTION_LOW"
-	ErrCodeQualityTooDark          = "QUALITY_TOO_DARK"
-	ErrCodeQualityTooBright        = "QUALITY_TOO_BRIGHT"
-	ErrCodeQualityTooBlurry        = "QUALITY_TOO_BLURRY"
-	ErrCodeQualityTooSkewed        = "QUALITY_TOO_SKEWED"
-	ErrCodeQualityGlareDetected    = "QUALITY_GLARE_DETECTED"
+	ErrCodeQualityResolutionLow = "QUALITY_RESOLUTION_LOW"
+	ErrCodeQualityTooDark       = "QUALITY_TOO_DARK"
+	ErrCodeQualityTooBright     = "QUALITY_TOO_BRIGHT"
+	ErrCodeQualityTooBlurry     = "QUALITY_TOO_BLURRY"
+	ErrCodeQualityTooSkewed     = "QUALITY_TOO_SKEWED"
+	ErrCodeQualityGlareDetected = "QUALITY_GLARE_DETECTED"
 )
 
 // MobileError represents a mobile capture error

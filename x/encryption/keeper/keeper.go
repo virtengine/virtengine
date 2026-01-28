@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"encoding/json"
+
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -80,7 +82,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	}
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.Marshal(&paramsStore{
+	bz, err := json.Marshal(&paramsStore{
 		MaxRecipientsPerEnvelope: params.MaxRecipientsPerEnvelope,
 		MaxKeysPerAccount:        params.MaxKeysPerAccount,
 		AllowedAlgorithms:        params.AllowedAlgorithms,
@@ -102,7 +104,9 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 	}
 
 	var ps paramsStore
-	k.cdc.MustUnmarshal(bz, &ps)
+	if err := json.Unmarshal(bz, &ps); err != nil {
+		return types.DefaultParams()
+	}
 	return types.Params{
 		MaxRecipientsPerEnvelope: ps.MaxRecipientsPerEnvelope,
 		MaxKeysPerAccount:        ps.MaxKeysPerAccount,
@@ -166,7 +170,7 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 		Label:          label,
 	}
 
-	bz, err := k.cdc.Marshal(&record)
+	bz, err := json.Marshal(&record)
 	if err != nil {
 		return "", err
 	}
@@ -192,7 +196,9 @@ func (k Keeper) RevokeRecipientKey(ctx sdk.Context, address sdk.AccAddress, keyF
 	}
 
 	var record recipientKeyStore
-	k.cdc.MustUnmarshal(bz, &record)
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.ErrKeyNotFound.Wrapf("failed to unmarshal key record: %v", err)
+	}
 
 	// Verify fingerprint matches
 	if record.KeyFingerprint != keyFingerprint {
@@ -207,7 +213,7 @@ func (k Keeper) RevokeRecipientKey(ctx sdk.Context, address sdk.AccAddress, keyF
 	// Mark as revoked
 	record.RevokedAt = ctx.BlockTime().Unix()
 
-	bz, err := k.cdc.Marshal(&record)
+	bz, err := json.Marshal(&record)
 	if err != nil {
 		return err
 	}
@@ -229,7 +235,9 @@ func (k Keeper) UpdateKeyLabel(ctx sdk.Context, address sdk.AccAddress, keyFinge
 	}
 
 	var record recipientKeyStore
-	k.cdc.MustUnmarshal(bz, &record)
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.ErrKeyNotFound.Wrapf("failed to unmarshal key record: %v", err)
+	}
 
 	// Verify fingerprint matches
 	if record.KeyFingerprint != keyFingerprint {
@@ -239,7 +247,7 @@ func (k Keeper) UpdateKeyLabel(ctx sdk.Context, address sdk.AccAddress, keyFinge
 	// Update label
 	record.Label = label
 
-	bz, err := k.cdc.Marshal(&record)
+	bz, err := json.Marshal(&record)
 	if err != nil {
 		return err
 	}
@@ -260,7 +268,9 @@ func (k Keeper) GetRecipientKeys(ctx sdk.Context, address sdk.AccAddress) []type
 	}
 
 	var record recipientKeyStore
-	k.cdc.MustUnmarshal(bz, &record)
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return nil
+	}
 
 	return []types.RecipientKeyRecord{{
 		Address:        record.Address,
@@ -290,7 +300,9 @@ func (k Keeper) GetRecipientKeyByFingerprint(ctx sdk.Context, fingerprint string
 	}
 
 	var record recipientKeyStore
-	k.cdc.MustUnmarshal(bz, &record)
+	if err := json.Unmarshal(bz, &record); err != nil {
+		return types.RecipientKeyRecord{}, false
+	}
 
 	// Verify fingerprint matches
 	if record.KeyFingerprint != fingerprint {
@@ -382,7 +394,9 @@ func (k Keeper) WithRecipientKeys(ctx sdk.Context, fn func(record types.Recipien
 
 	for ; iter.Valid(); iter.Next() {
 		var record recipientKeyStore
-		k.cdc.MustUnmarshal(iter.Value(), &record)
+		if err := json.Unmarshal(iter.Value(), &record); err != nil {
+			continue
+		}
 
 		keyRecord := types.RecipientKeyRecord{
 			Address:        record.Address,

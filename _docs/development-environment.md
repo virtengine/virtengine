@@ -244,7 +244,7 @@ docker-compose logs virtengine-node
 ```
 
 **Port conflicts:**
-Edit `docker-compose.yml` to change port mappings if you have conflicts with existing services.
+Edit `docker-compose.yaml` to change port mappings if you have conflicts with existing services.
 
 **Windows (WSL2):**
 Run all commands from within WSL2. Ensure Docker Desktop is configured to use WSL2 backend.

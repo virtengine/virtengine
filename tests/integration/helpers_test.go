@@ -3,9 +3,20 @@
 package integration
 
 import (
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/cosmos-sdk/codec"
+
+	"github.com/virtengine/virtengine/app"
+	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
 // =============================================================================
@@ -63,6 +74,58 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// =============================================================================
+// VEID Integration Helpers
+// =============================================================================
+
+type veidTestClient struct {
+	ClientID   string
+	PrivateKey ed25519.PrivateKey
+	PublicKey  ed25519.PublicKey
+}
+
+func newVEIDTestClient() veidTestClient {
+	seed := sha256.Sum256([]byte("virtengine-veid-approved-client"))
+	privKey := ed25519.NewKeyFromSeed(seed[:])
+	pubKey := privKey.Public().(ed25519.PublicKey)
+
+	return veidTestClient{
+		ClientID:   "test-capture-client",
+		PrivateKey: privKey,
+		PublicKey:  pubKey,
+	}
+}
+
+func genesisWithVEIDApprovedClient(t testing.TB, cdc codec.Codec, client veidTestClient) app.GenesisState {
+	t.Helper()
+
+	genesis := app.NewDefaultGenesisState(cdc)
+
+	var veidGenesis veidtypes.GenesisState
+	require.NoError(t, json.Unmarshal(genesis[veidtypes.ModuleName], &veidGenesis))
+
+	veidGenesis.ApprovedClients = append(veidGenesis.ApprovedClients, veidtypes.ApprovedClient{
+		ClientID:     client.ClientID,
+		Name:         "Integration Test Capture Client",
+		PublicKey:    client.PublicKey,
+		Algorithm:    "ed25519",
+		Active:       true,
+		RegisteredAt: time.Unix(0, 0).Unix(),
+		Metadata: map[string]string{
+			"purpose": "integration-tests",
+		},
+	})
+
+	veidGenesis.Params.RequireClientSignature = true
+	veidGenesis.Params.RequireUserSignature = true
+
+	updated, err := json.Marshal(&veidGenesis)
+	require.NoError(t, err)
+	genesis[veidtypes.ModuleName] = updated
+
+	return genesis
 }
 
 // =============================================================================

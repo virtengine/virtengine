@@ -79,7 +79,7 @@ func TestJobSubmission(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	jobSpec := moab.MOABJobSpec{
 		JobName:       testJobName,
@@ -118,7 +118,7 @@ func TestJobSubmissionWithDefaults(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Job spec without queue and account - should use defaults
 	jobSpec := moab.MOABJobSpec{
@@ -145,7 +145,7 @@ func TestJobSubmissionValidation(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	testCases := []struct {
 		name        string
@@ -265,7 +265,7 @@ func TestJobCancellation(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit a job first
 	jobSpec := moab.MOABJobSpec{
@@ -278,7 +278,7 @@ func TestJobCancellation(t *testing.T) {
 		Arguments:     []string{"3600"},
 	}
 
-	job, err := adapter.SubmitJob(ctx, testCancelJobID, &jobSpec)
+	_, err = adapter.SubmitJob(ctx, testCancelJobID, &jobSpec)
 	require.NoError(t, err)
 
 	// Cancel the job
@@ -286,7 +286,7 @@ func TestJobCancellation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify job is cancelled
-	job, err = adapter.GetJobStatus(ctx, testCancelJobID)
+	job, err := adapter.GetJobStatus(ctx, testCancelJobID)
 	require.NoError(t, err)
 	require.Equal(t, moab.MOABJobStateCancelled, job.State)
 }
@@ -301,7 +301,7 @@ func TestJobHoldRelease(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit a job
 	jobSpec := moab.MOABJobSpec{
@@ -346,7 +346,7 @@ func TestJobStatusTracking(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit a job
 	jobSpec := moab.MOABJobSpec{
@@ -390,7 +390,7 @@ func TestListQueues(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	queues, err := adapter.ListQueues(ctx)
 	require.NoError(t, err)
@@ -416,7 +416,7 @@ func TestListNodes(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	nodes, err := adapter.ListNodes(ctx)
 	require.NoError(t, err)
@@ -443,7 +443,7 @@ func TestGetClusterInfo(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	info, err := adapter.GetClusterInfo(ctx)
 	require.NoError(t, err)
@@ -463,7 +463,7 @@ func TestJobNotFoundError(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Try to get status of non-existent job
 	_, err = adapter.GetJobStatus(ctx, "ve-nonexistent")
@@ -510,7 +510,7 @@ func TestStatusReportCreation(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit a job
 	jobSpec := moab.MOABJobSpec{
@@ -557,7 +557,7 @@ func TestJobLifecycleCallbacks(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit a job
 	jobSpec := moab.MOABJobSpec{
@@ -594,7 +594,7 @@ func TestVERewardsIntegration(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit a job
 	jobSpec := moab.MOABJobSpec{
@@ -698,14 +698,14 @@ func TestMapToVirtEngineState(t *testing.T) {
 func TestCalculateJobCost(t *testing.T) {
 	metrics := &moab.MOABUsageMetrics{
 		WallClockSeconds: 3600,
-		CPUTimeSeconds:   14400, // 4 cores * 1 hour
+		CPUTimeSeconds:   14400,                  // 4 cores * 1 hour
 		MaxRSSBytes:      8 * 1024 * 1024 * 1024, // 8 GB
-		GPUSeconds:       3600, // 1 GPU * 1 hour
+		GPUSeconds:       3600,                   // 1 GPU * 1 hour
 	}
 
-	cpuRate := 0.10   // $0.10 per CPU-hour
-	gpuRate := 2.00   // $2.00 per GPU-hour
-	memRate := 0.01   // $0.01 per GB-hour
+	cpuRate := 0.10 // $0.10 per CPU-hour
+	gpuRate := 2.00 // $2.00 per GPU-hour
+	memRate := 0.01 // $0.01 per GB-hour
 
 	cost := moab.CalculateJobCost(metrics, cpuRate, gpuRate, memRate)
 
@@ -727,7 +727,7 @@ func TestGetAllJobs(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit multiple jobs
 	for i := 1; i <= 3; i++ {
@@ -757,7 +757,7 @@ func TestGetJobsByQueue(t *testing.T) {
 	ctx := context.Background()
 	err := adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Submit jobs to different queues
 	batchSpec := moab.MOABJobSpec{

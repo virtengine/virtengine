@@ -83,7 +83,7 @@ func NewSaltValidator(opts ...SaltValidatorOption) *SaltValidator {
 
 	// Initialize cache if not set by options
 	if sv.usedSalts == nil {
-		sv.usedSalts = newSaltCache(100000, sv.replayWindow)
+		sv.usedSalts = newSaltCacheWithTimeSource(100000, sv.replayWindow, sv.now)
 	}
 
 	return sv
@@ -274,20 +274,25 @@ func isWeakSalt(salt []byte) bool {
 
 // saltCache is a thread-safe cache for tracking used salts
 type saltCache struct {
-	mu       sync.RWMutex
-	entries  map[[32]byte]time.Time
-	maxSize  int
-	ttl      time.Duration
-	now      func() time.Time
+	mu      sync.RWMutex
+	entries map[[32]byte]time.Time
+	maxSize int
+	ttl     time.Duration
+	now     func() time.Time
 }
 
 // newSaltCache creates a new salt cache
 func newSaltCache(maxSize int, ttl time.Duration) *saltCache {
+	return newSaltCacheWithTimeSource(maxSize, ttl, time.Now)
+}
+
+// newSaltCacheWithTimeSource creates a new salt cache with a custom time source
+func newSaltCacheWithTimeSource(maxSize int, ttl time.Duration, now func() time.Time) *saltCache {
 	return &saltCache{
 		entries: make(map[[32]byte]time.Time),
 		maxSize: maxSize,
 		ttl:     ttl,
-		now:     time.Now,
+		now:     now,
 	}
 }
 

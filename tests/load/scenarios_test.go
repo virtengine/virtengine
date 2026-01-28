@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	mathrand "math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -474,35 +475,35 @@ func NewMockChainClient() *MockChainClient {
 
 func (c *MockChainClient) SubmitIdentityUpload(payload *IdentityPayload) (string, error) {
 	// Simulate processing delay
-	time.Sleep(time.Duration(50+rand.Intn(100)) * time.Millisecond)
+	time.Sleep(time.Duration(50+mathrand.IntN(100)) * time.Millisecond)
 	id := atomic.AddInt64(&c.identityCounter, 1)
 	return fmt.Sprintf("identity_%d", id), nil
 }
 
 func (c *MockChainClient) SubmitOrder(order *MarketplaceOrder) (string, error) {
-	time.Sleep(time.Duration(100+rand.Intn(200)) * time.Millisecond)
+	time.Sleep(time.Duration(100+mathrand.IntN(200)) * time.Millisecond)
 	id := atomic.AddInt64(&c.orderCounter, 1)
 	return fmt.Sprintf("order_%d", id), nil
 }
 
 func (c *MockChainClient) SubmitBid(orderID string, bid *ProviderBid) (string, error) {
-	time.Sleep(time.Duration(50+rand.Intn(100)) * time.Millisecond)
+	time.Sleep(time.Duration(50+mathrand.IntN(100)) * time.Millisecond)
 	return "bid_" + orderID, nil
 }
 
 func (c *MockChainClient) AllocateOrder(orderID string) (string, error) {
-	time.Sleep(time.Duration(100+rand.Intn(200)) * time.Millisecond)
+	time.Sleep(time.Duration(100+mathrand.IntN(200)) * time.Millisecond)
 	return "alloc_" + orderID, nil
 }
 
 func (c *MockChainClient) SubmitHPCJob(job *HPCJob) (string, error) {
-	time.Sleep(time.Duration(50+rand.Intn(100)) * time.Millisecond)
+	time.Sleep(time.Duration(50+mathrand.IntN(100)) * time.Millisecond)
 	id := atomic.AddInt64(&c.jobCounter, 1)
 	return fmt.Sprintf("job_%d", id), nil
 }
 
 func (c *MockChainClient) WaitForJobScheduled(jobID string, timeout time.Duration) (string, error) {
-	time.Sleep(time.Duration(100+rand.Intn(200)) * time.Millisecond)
+	time.Sleep(time.Duration(100+mathrand.IntN(200)) * time.Millisecond)
 	return "scheduled", nil
 }
 

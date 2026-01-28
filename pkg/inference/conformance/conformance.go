@@ -56,15 +56,15 @@ type TestVector struct {
 type TestCategory string
 
 const (
-	TestCategoryFaceDetection     TestCategory = "face_detection"
-	TestCategoryFaceRecognition   TestCategory = "face_recognition"
-	TestCategoryFaceVerification  TestCategory = "face_verification"
-	TestCategoryTextDetection     TestCategory = "text_detection"
-	TestCategoryOCR               TestCategory = "ocr"
-	TestCategoryDocumentQuality   TestCategory = "document_quality"
-	TestCategoryFaceExtraction    TestCategory = "face_extraction"
-	TestCategoryIdentityScoring   TestCategory = "identity_scoring"
-	TestCategoryEndToEnd          TestCategory = "end_to_end"
+	TestCategoryFaceDetection    TestCategory = "face_detection"
+	TestCategoryFaceRecognition  TestCategory = "face_recognition"
+	TestCategoryFaceVerification TestCategory = "face_verification"
+	TestCategoryTextDetection    TestCategory = "text_detection"
+	TestCategoryOCR              TestCategory = "ocr"
+	TestCategoryDocumentQuality  TestCategory = "document_quality"
+	TestCategoryFaceExtraction   TestCategory = "face_extraction"
+	TestCategoryIdentityScoring  TestCategory = "identity_scoring"
+	TestCategoryEndToEnd         TestCategory = "end_to_end"
 )
 
 // ============================================================================
@@ -342,6 +342,7 @@ func (tr *TestRunner) RunTest(vector *TestVector) *TestResult {
 // loadTestInput loads test input data from the test data directory
 func (tr *TestRunner) loadTestInput(vectorID string) ([]byte, error) {
 	path := filepath.Join(tr.testDataDir, vectorID+".bin")
+	//nolint:gosec // G304: path is constructed from trusted test data directory
 	return os.ReadFile(path)
 }
 
@@ -401,6 +402,7 @@ func (sr *SuiteResult) ToJSON() ([]byte, error) {
 
 // LoadTestSuite loads a test suite from a JSON file
 func LoadTestSuite(path string) (*TestSuite, error) {
+	//nolint:gosec // G304: path is provided by trusted caller/configuration
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read test suite: %w", err)
@@ -414,7 +416,10 @@ func LoadTestSuite(path string) (*TestSuite, error) {
 	// Verify suite integrity
 	expectedHash := suite.SuiteHash
 	suite.SuiteHash = "" // Clear for hash computation
-	suiteData, _ := json.Marshal(suite)
+	suiteData, err := json.Marshal(suite)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal suite for hash: %w", err)
+	}
 	actualHash := computeHash(suiteData)
 
 	if expectedHash != "" && actualHash != expectedHash {
@@ -527,8 +532,10 @@ func GetDefaultTestSuite(pipelineVersion string) *TestSuite {
 	}
 
 	// Compute suite hash
-	suiteData, _ := json.Marshal(suite)
-	suite.SuiteHash = computeHash(suiteData)
+	suiteData, err := json.Marshal(suite)
+	if err == nil {
+		suite.SuiteHash = computeHash(suiteData)
+	}
 
 	return suite
 }

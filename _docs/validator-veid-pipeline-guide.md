@@ -93,7 +93,7 @@ docker inspect --format='{{.RepoDigests}}' ghcr.io/virtengine/veid-pipeline:v1.0
 Query the current active pipeline version from the chain:
 
 ```bash
-# Using virtengine CLI
+# Using VirtEngine CLI
 virtengine query veid active-pipeline-version
 
 # Expected output:

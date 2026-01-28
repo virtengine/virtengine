@@ -781,9 +781,9 @@ func (k Keeper) CheckMFAGating(ctx sdk.Context, actionType marketplace.Marketpla
 		DeviceFingerprint: deviceFingerprint,
 		LastMFAVerifiedAt: lastMFA,
 		AccountMFAPolicy: &marketplace.AccountMFAPolicy{
-			Enabled:            hasFactors,
+			Enabled:             hasFactors,
 			RequireForHighValue: true,
-			HighValueThreshold: 1000000,
+			HighValueThreshold:  1000000,
 		},
 	}
 

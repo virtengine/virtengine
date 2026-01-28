@@ -35,15 +35,15 @@ func NewMockMOABClient() *MockMOABClient {
 		jobs: make(map[string]*MOABJob),
 		queues: []QueueInfo{
 			{
-				Name:           "batch",
-				State:          "Active",
-				MaxNodes:       100,
-				MaxWalltime:    86400,
-				DefaultNodes:   1,
-				Priority:       1000,
-				IdleJobs:       5,
-				RunningJobs:    10,
-				HeldJobs:       2,
+				Name:         "batch",
+				State:        "Active",
+				MaxNodes:     100,
+				MaxWalltime:  86400,
+				DefaultNodes: 1,
+				Priority:     1000,
+				IdleJobs:     5,
+				RunningJobs:  10,
+				HeldJobs:     2,
 			},
 			{
 				Name:        "gpu",
@@ -83,15 +83,15 @@ func NewMockMOABClient() *MockMOABClient {
 			{Name: "gpu002", State: "Busy", Processors: 32, MemoryMB: 512000, GPUs: 8, GPUType: "nvidia-a100", Features: []string{"gpu", "nvidia"}, Load: 0.9, AllocatedCPU: 28, AllocatedMem: 450000},
 		},
 		clusterInfo: &ClusterInfo{
-			Name:              "virtengine-hpc",
-			TotalNodes:        6,
-			IdleNodes:         3,
-			BusyNodes:         3,
-			DownNodes:         0,
-			TotalProcessors:   320,
-			IdleProcessors:    160,
-			RunningJobs:       22,
-			IdleJobs:          10,
+			Name:               "virtengine-hpc",
+			TotalNodes:         6,
+			IdleNodes:          3,
+			BusyNodes:          3,
+			DownNodes:          0,
+			TotalProcessors:    320,
+			IdleProcessors:     160,
+			RunningJobs:        22,
+			IdleJobs:           10,
 			ActiveReservations: 2,
 		},
 		nextJobID: 10000,
@@ -440,6 +440,11 @@ func (c *MockMOABClient) SimulateJobCompletion(moabJobID string, exitCode int32)
 	}
 
 	now := time.Now()
+	// Ensure StartTime is set if not already set
+	if job.StartTime == nil {
+		startTime := now.Add(-1 * time.Second) // Started 1 second ago
+		job.StartTime = &startTime
+	}
 	job.EndTime = &now
 	job.ExitCode = exitCode
 
@@ -505,10 +510,10 @@ func min(a, b int) int {
 
 // MockRewardsIntegration is a mock rewards integration for testing
 type MockRewardsIntegration struct {
-	mu           sync.Mutex
-	completions  []*VERewardsData
-	rewardRates  map[string]float64
-	recordError  error
+	mu          sync.Mutex
+	completions []*VERewardsData
+	rewardRates map[string]float64
+	recordError error
 }
 
 // NewMockRewardsIntegration creates a new mock rewards integration

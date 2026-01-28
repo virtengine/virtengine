@@ -409,9 +409,9 @@ function command_validate {
 
 	if [[ "$1" =~ $SEMVER_REGEX ]]; then
 		echo "valid"
+		exit 0
 	else
 		echo "invalid"
+		exit 1
 	fi
-
-	exit 0
 }

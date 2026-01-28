@@ -94,12 +94,12 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagMetricsAddr, ":9090", "Metrics listen address")
 
 	// Bind to viper
-	viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
-	viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
-	viper.BindPFlag(FlagProviderKey, rootCmd.PersistentFlags().Lookup(FlagProviderKey))
-	viper.BindPFlag(FlagProviderKeyDir, rootCmd.PersistentFlags().Lookup(FlagProviderKeyDir))
-	viper.BindPFlag(FlagListenAddr, rootCmd.PersistentFlags().Lookup(FlagListenAddr))
-	viper.BindPFlag(FlagMetricsAddr, rootCmd.PersistentFlags().Lookup(FlagMetricsAddr))
+	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
+	_ = viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
+	_ = viper.BindPFlag(FlagProviderKey, rootCmd.PersistentFlags().Lookup(FlagProviderKey))
+	_ = viper.BindPFlag(FlagProviderKeyDir, rootCmd.PersistentFlags().Lookup(FlagProviderKeyDir))
+	_ = viper.BindPFlag(FlagListenAddr, rootCmd.PersistentFlags().Lookup(FlagListenAddr))
+	_ = viper.BindPFlag(FlagMetricsAddr, rootCmd.PersistentFlags().Lookup(FlagMetricsAddr))
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())
@@ -147,11 +147,11 @@ func startCmd() *cobra.Command {
 	cmd.Flags().Int(FlagBidRateLimitHour, 100, "Maximum bids per hour")
 	cmd.Flags().String(FlagResourcePrefix, "ve", "Prefix for Kubernetes resources")
 
-	viper.BindPFlag(FlagKubeconfig, cmd.Flags().Lookup(FlagKubeconfig))
-	viper.BindPFlag(FlagMeteringInterval, cmd.Flags().Lookup(FlagMeteringInterval))
-	viper.BindPFlag(FlagBidRateLimitMinute, cmd.Flags().Lookup(FlagBidRateLimitMinute))
-	viper.BindPFlag(FlagBidRateLimitHour, cmd.Flags().Lookup(FlagBidRateLimitHour))
-	viper.BindPFlag(FlagResourcePrefix, cmd.Flags().Lookup(FlagResourcePrefix))
+	_ = viper.BindPFlag(FlagKubeconfig, cmd.Flags().Lookup(FlagKubeconfig))
+	_ = viper.BindPFlag(FlagMeteringInterval, cmd.Flags().Lookup(FlagMeteringInterval))
+	_ = viper.BindPFlag(FlagBidRateLimitMinute, cmd.Flags().Lookup(FlagBidRateLimitMinute))
+	_ = viper.BindPFlag(FlagBidRateLimitHour, cmd.Flags().Lookup(FlagBidRateLimitHour))
+	_ = viper.BindPFlag(FlagResourcePrefix, cmd.Flags().Lookup(FlagResourcePrefix))
 
 	return cmd
 }
@@ -404,6 +404,7 @@ func validateManifestCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filePath := args[0]
 
+			//nolint:gosec // G304: filePath is a user-provided CLI argument for manifest validation
 			data, err := os.ReadFile(filePath)
 			if err != nil {
 				return fmt.Errorf("failed to read manifest: %w", err)

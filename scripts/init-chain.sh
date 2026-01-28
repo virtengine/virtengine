@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # VirtEngine Chain Initialization Script
 # Initializes the chain with test accounts for local development
@@ -31,6 +31,16 @@ TEST_ACCOUNT_COINS="100000000000${DENOM}"
 # Test accounts to create
 TEST_ACCOUNTS="alice bob charlie provider operator"
 
+# Deterministic mnemonics for localnet test accounts (DO NOT USE IN PRODUCTION)
+# Override with environment variables: VE_MNEMONIC_VALIDATOR, VE_MNEMONIC_ALICE, etc.
+declare -A DEFAULT_MNEMONICS
+DEFAULT_MNEMONICS[validator]="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+DEFAULT_MNEMONICS[alice]="legal winner thank year wave sausage worth useful legal winner thank yellow"
+DEFAULT_MNEMONICS[bob]="letter advice cage absurd amount doctor acoustic avoid letter advice cage above"
+DEFAULT_MNEMONICS[charlie]="zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong"
+DEFAULT_MNEMONICS[provider]="gravity machine north sort system female filter attitude volume fold club stay feature office ecology stable narrow fog"
+DEFAULT_MNEMONICS[operator]="hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay"
+
 log() {
     echo "[init-chain] $1"
 }
@@ -57,19 +67,39 @@ init_chain() {
 }
 
 # Create validator account
+create_key_with_mnemonic() {
+    local account="$1"
+    local mnemonic_var
+    local mnemonic
+
+    mnemonic_var="VE_MNEMONIC_${account^^}"
+    mnemonic="${!mnemonic_var}"
+
+    if [ -z "${mnemonic}" ]; then
+        mnemonic="${DEFAULT_MNEMONICS[$account]}"
+    fi
+
+    if [ -z "${mnemonic}" ]; then
+        error "No mnemonic found for account '${account}'"
+    fi
+
+    printf "%s\n" "${mnemonic}" | virtengine keys add "${account}" --recover --keyring-backend="${KEYRING_BACKEND}"
+}
+
 create_validator() {
     log "Creating validator account..."
 
-    virtengine keys add validator --keyring-backend="${KEYRING_BACKEND}"
+    create_key_with_mnemonic validator
 
-    local validator_addr=$(virtengine keys show validator -a --keyring-backend="${KEYRING_BACKEND}")
+    local validator_addr
+    validator_addr=$(virtengine keys show validator -a --keyring-backend="${KEYRING_BACKEND}")
     log "Validator address: ${validator_addr}"
 
     # Add validator to genesis
-    virtengine genesis add-account "${validator_addr}" ${VALIDATOR_COINS}
+    virtengine genesis add-account "${validator_addr}" "${VALIDATOR_COINS}"
 
     # Create genesis transaction
-    virtengine genesis gentx validator ${VALIDATOR_STAKE} \
+    virtengine genesis gentx validator "${VALIDATOR_STAKE}" \
         --keyring-backend="${KEYRING_BACKEND}" \
         --chain-id="${CHAIN_ID}" \
         --min-self-delegation="1"
@@ -81,19 +111,20 @@ create_test_accounts() {
 
     for account in ${TEST_ACCOUNTS}; do
         log "Creating account: ${account}"
-        virtengine keys add "${account}" --keyring-backend="${KEYRING_BACKEND}"
+        create_key_with_mnemonic "${account}"
 
-        local addr=$(virtengine keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
+        local addr
+        addr=$(virtengine keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
         log "  ${account} address: ${addr}"
 
         # Add to genesis
-        virtengine genesis add-account "${addr}" ${TEST_ACCOUNT_COINS}
+        virtengine genesis add-account "${addr}" "${TEST_ACCOUNT_COINS}"
     done
 
     # Add genesis account if provided
     if [ -n "${GENESIS_ACCOUNT}" ]; then
         log "Adding genesis account: ${GENESIS_ACCOUNT}"
-        virtengine genesis add-account "${GENESIS_ACCOUNT}" ${TEST_ACCOUNT_COINS}
+        virtengine genesis add-account "${GENESIS_ACCOUNT}" "${TEST_ACCOUNT_COINS}"
     fi
 }
 
@@ -125,7 +156,7 @@ configure_node() {
         sed -i.bak 's/address = "0.0.0.0:9090"/address = "0.0.0.0:9090"/g' "${config_dir}/app.toml"
 
         # Set minimum gas prices
-        sed -i.bak 's/minimum-gas-prices = ""/minimum-gas-prices = "0.025'${DENOM}'"/g' "${config_dir}/app.toml"
+        sed -i.bak "s/minimum-gas-prices = \"\"/minimum-gas-prices = \"0.025${DENOM}\"/g" "${config_dir}/app.toml"
     fi
 
     # Cleanup backup files
@@ -144,27 +175,30 @@ export_account_info() {
 
     local accounts_file="${HOME_DIR}/test-accounts.json"
 
-    echo "{" > "${accounts_file}"
-    echo '  "accounts": {' >> "${accounts_file}"
+    {
+        echo "{"
+        echo '  "accounts": {'
 
-    local first=true
-    for account in validator ${TEST_ACCOUNTS}; do
-        local addr=$(virtengine keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
+        local first=true
+        local addr
+        for account in validator ${TEST_ACCOUNTS}; do
+            addr=$(virtengine keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
 
-        if [ "${first}" = "true" ]; then
-            first=false
-        else
-            echo "," >> "${accounts_file}"
-        fi
+            if [ "${first}" = "true" ]; then
+                first=false
+            else
+                echo ","
+            fi
 
-        printf '    "%s": "%s"' "${account}" "${addr}" >> "${accounts_file}"
-    done
+            printf '    "%s": "%s"' "${account}" "${addr}"
+        done
 
-    echo "" >> "${accounts_file}"
-    echo "  }," >> "${accounts_file}"
-    echo '  "chain_id": "'${CHAIN_ID}'",' >> "${accounts_file}"
-    echo '  "denom": "'${DENOM}'"' >> "${accounts_file}"
-    echo "}" >> "${accounts_file}"
+        echo ""
+        echo "  },"
+        echo "  \"chain_id\": \"${CHAIN_ID}\","
+        echo "  \"denom\": \"${DENOM}\""
+        echo "}"
+    } > "${accounts_file}"
 
     log "Account info exported to: ${accounts_file}"
     cat "${accounts_file}"

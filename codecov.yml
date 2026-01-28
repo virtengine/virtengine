@@ -1,19 +1,14 @@
 ignore:
   - "**/*.pb.go"
   - "**/*.pb.gw.go"
-  - "**/mocks/.*"
-  - "**/kubernetes_mock/.*"
-  - "pkg"
+  - "**/mocks/**"
+  - "**/kubernetes_mock/**"
+  - "**/testutil/**"
+  - "**/cmd/**"
+  - "vendor/**"
 comment: false
 codecov:
   require_ci_to_pass: true
-parsers:
-  gcov:
-    branch_detection:
-      loop: yes
-      macro: no
-      method: no
-      conditional: yes
 coverage:
   range: 40..100
   round: down
@@ -21,5 +16,11 @@ coverage:
   status:
     project:
       default:
+        target: auto
+        threshold: 1%
         if_not_found: success
         if_ci_failed: error
+    patch:
+      default:
+        target: 50%
+        if_not_found: success

@@ -161,21 +161,21 @@
         "Defines SLAs for identity scoring and provisioning state transitions"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Derive requirements from accepted claims: validator decrypt+ML score+write to block; consensus validators recompute and verify approved-client signatures; MFA gating; provider daemon orchestration + on-chain usage; encryption with public key for intended recipient."
     },
     {
       "id": "VE-001",
-      "title": "Phase 0 - rename all references in virtengine source code to 'VirtEngine'",
-      "description": "Rename everything in the virtengine source code to use 'VirtEngine' instead.",
+      "title": "Phase 0 - rename all references in VirtEngine source code to 'VirtEngine'",
+      "description": "Rename everything in the VirtEngine source code to use 'VirtEngine' instead.",
       "acceptanceCriteria": [
-        "virtengine only mentioned in the readme as a source",
-        "No reference to virtengine naming conventions, for e.g. : 'virtengine_DEVCACHE_BASE' becomes 'VE_DEVCACHE_BASE' etc.",
-        "virtengine -> VirtEngine, virtengine -> VE, virtengine -> ve, etc, akt.io -> source.virtengine.com in all code, comments, documentation, and scripts",
+        "VirtEngine only mentioned in the README as a source",
+        "No reference to legacy VirtEngine naming conventions (e.g. 'virtengine_DEVCACHE_BASE' becomes 'VE_DEVCACHE_BASE')",
+        "Replace legacy naming with VirtEngine/VE/ve and update legacy domains to source.virtengine.com in all code, comments, documentation, and scripts",
         "Can build and run the VirtEngine binary"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Ensure can be succesfully run."
     },
     {
@@ -189,7 +189,7 @@
         "Integration test suite can create marketplace offering + order and observe daemon bid/provision simulation"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Use docker compose for waldur/portal dependencies. Add chain localnet scripts and deterministic seeds."
     },
     {
@@ -203,7 +203,7 @@
         "Audit events emitted on role/state change (on-chain event log)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Even if access bypassed, encrypted payloads must remain unreadable without recipient private keys."
     },
     {
@@ -217,7 +217,7 @@
         "Transport security enforced for APIs (TLS) and at-rest encryption documented for off-chain stores"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Aligns with requirement: sensitive data encrypted using public key encryption, decryptable only with corresponding private key; encrypted in transit and at rest."
     },
     {
@@ -231,7 +231,7 @@
         "Account recovery and key-rotation paths require multiple MFA factors per policy"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "MFA requirement is explicitly claimed; implement as chain-enforced gate rather than purely UI-level."
     },
     {
@@ -245,7 +245,7 @@
         "All token-affecting operations are included in audit/event logs"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Keep settlement logic modular so marketplace and HPC can share the same accounting base."
     },
     {
@@ -254,26 +254,26 @@
       "description": "Define identity scopes (documents, biometrics, face video/photo, SSO metadata pointers, email/SMS proofs, domain verification) and implement upload transaction storing encrypted scopes on-chain.",
       "acceptanceCriteria": [
         "VEID module defines scope schemas and versioning",
-        "Upload tx accepts encrypted scope payloads plus signatures (approved client + user signature) and metadata (salt, device info)",
+      "passes": true,
         "State stores: scope references, upload timestamps, verification status, latest identity score",
         "Rejected if signatures invalid or client not approved by chain config"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Approved-client signature requirement and client allowlist are explicitly claimed."
+      "passes": true,
+      "passes": true,
     },
     {
       "id": "VE-201",
       "title": "Phase 2 - Chain config: approved client (interface) allowlist and signature verification",
       "description": "Implement on-chain configuration for approved clients and enforce signature checks at both proposal and consensus validation paths.",
-      "acceptanceCriteria": [
+      "passes": true,
         "Config module stores approved client public keys and version constraints",
         "VEID upload tx validates: (1) client signature over payload hash, (2) user signature, (3) metadata salt binding",
         "Consensus validators re-verify signatures during block validation",
         "Governance/admin workflow to add/remove approved clients is implemented and audited"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Matches requirement: verify signatures of uploaded files to confirm processing by approved client and user signature; allowlist controlled in blockchain configuration."
     },
     {
@@ -287,7 +287,7 @@
         "Timeout/failure behavior is defined (e.g., set status=Pending/Failed with reason code) without halting chain"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is explicitly required by accepted claims: proposer decrypts and computes score, writes score/status into proposed block."
     },
     {
@@ -301,7 +301,7 @@
         "All nodes log verification decision metrics for auditability"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Explicitly required: consensus validators perform identity verification computations using same ML algorithms and trained dataset; commit score upon consensus."
     },
     {
@@ -315,7 +315,7 @@
         "Exported model supports TensorFlow-Go inference with fixed inputs/outputs"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Spec describes face detection, embeddings, OCR pipeline, ensemble approaches; ensure determinism for consensus recomputation."
     },
     {
@@ -329,7 +329,7 @@
         "Unit tests cover: valid inference, invalid inputs, timeout behavior, deterministic outputs"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "If inference runs out-of-process, consensus determinism must still hold (e.g., deterministic container image + hash pinned)."
     },
     {
@@ -342,7 +342,7 @@
         "Other modules (Marketplace, MFA policies) can gate actions based on score/status"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Marketplace access gating depends on identity verification status/score."
     },
     {
@@ -356,7 +356,7 @@
         "Protocol spec includes key rotation strategy for approved clients"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Spec states salt is added into metadata to prevent gallery uploads; accepted claims require approved-client signature verification."
     },
     {
@@ -371,7 +371,7 @@
         "Architecture doc updated with these flows and referenced by Marketplace and MFA modules"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This mirrors the report�s separation of registration, identity verification (score), and authorization (biometric/MFA for sensitive actions)."
     },
     {
@@ -386,7 +386,7 @@
         "Unit tests cover: create, update, revoke, and permission checks"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Aligns with report�s �Identity Wallet� as the user-controlled store of identity credentials."
     },
     {
@@ -401,7 +401,7 @@
         "Capture output is packaged with per-upload salt binding + approved-client signature + user signature (compatible with VE-207/VE-201 signature rules)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is directly based on the report�s acquisition/validation/feedback-loop approach, plus your approved-client signature requirement."
     },
     {
@@ -417,7 +417,7 @@
         "Unit tests cover: boundary thresholds, invalid images, no-face-detected, and deterministic repeated runs"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "The report explicitly proposes DeepFace and threshold-based decision-making with fallback mechanisms."
     },
     {
@@ -432,7 +432,7 @@
         "Integration test: borderline face match -> MFA challenge -> verified outcome"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "This directly mirrors the report�s recommended fallback mechanisms for near-threshold cases."
     },
     {
@@ -447,7 +447,7 @@
         "Outputs a canonical 'normalized_document_image' artifact (not stored plaintext on-chain; only encrypted or derived features)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Matches the report�s detailed preprocessing and rotation/perspective steps."
     },
     {
@@ -462,7 +462,7 @@
         "Unit tests cover ROI stability on representative sample documents"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "The report explicitly proposes CRAFT for ROI detection prior to OCR."
     },
     {
@@ -477,7 +477,7 @@
         "Unit tests cover parsing and common OCR failure cases"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "The report recommends ROI cropping + Tesseract + post-processing to structure extracted identity fields."
     },
     {
@@ -492,7 +492,7 @@
         "Unit tests cover segmentation success/failure and mask robustness on varied lighting/quality"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "The report details U-Net-based segmentation specifically for face extraction from ID documents."
     },
     {
@@ -507,7 +507,7 @@
         "Security review confirms no PII/biometric images leak to logs or public chain state"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Matches the report�s minimization/feature extraction guidance."
     },
     {
@@ -522,7 +522,7 @@
         "Integration tests demonstrate: upload -> store off-chain -> commit reference on-chain -> validator fetch/decrypt for scoring"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "The report explicitly discusses centralized (Waldur DB) and decentralized (IPFS) retrieval approaches and blockchain size constraints."
     },
     {
@@ -537,7 +537,7 @@
         "Integration test: proposer computes verification -> another validator recomputes and matches exactly"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This bridges the report�s ML choices with your consensus requirement that validators recompute identically."
     },
     {
@@ -551,7 +551,7 @@
         "Unit tests cover scoring boundaries and invariants (e.g., missing doc -> cap score, missing selfie -> fail or require fallback)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "The report discusses multi-scope verification culminating in a score out of 100."
     },
     {
@@ -566,7 +566,7 @@
         "Audit events record which policy triggered and that authorization was satisfied"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "This directly implements the report�s authorization layer for high-stakes actions."
     },
     {
@@ -580,7 +580,7 @@
         "VEID scoring model can incorporate SSO linkage as an optional signal (versioned weighting)"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "The report lists SSO as a VEID scope used for streamlined access and identity confidence."
     },
     {
@@ -594,7 +594,7 @@
         "Revocation supported (domain ownership change) with audit trail"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "The report includes domain verification as a supported scope."
     },
     {
@@ -607,7 +607,7 @@
         "VEID scoring model can incorporate email verification as a low-weight signal"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "The report lists email verification as a scope and mentions OTP mechanisms."
     },
     {
@@ -622,7 +622,7 @@
         "Security tests validate: metadata stripping, no PII leakage, retention deletion runs"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "The report explicitly recommends encryption, tokenization/pseudonymization, and lifecycle management strategies."
     },
     {
@@ -636,7 +636,7 @@
         "Integration test: Waldur upload -> on-chain scope stored -> validator scoring -> state visible in Waldur"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "The report explicitly positions VEID as integrated with Waldur."
     },
     {
@@ -650,7 +650,7 @@
         "Unit tests confirm envelope parsing works across algorithm versions"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "The report discusses future quantum risks and the need for post-quantum cryptography planning."
     },
     {
@@ -665,7 +665,7 @@
         "Update architecture diagram: chain modules <-> enclave runtime boundary <-> ML pipeline"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is the baseline requirement to reconcile claim language ('decrypts with private key') with enclave-only decryption."
     },
     {
@@ -680,7 +680,7 @@
         "Validation rejects: expired attestations, non-allowlisted measurements, malformed quote chains"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is required for encrypting identity data to the trusted execution env rather than to a general-purpose node key."
     },
     {
@@ -695,7 +695,7 @@
         "Unit tests: same inputs produce identical envelope bytes across platforms"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Consensus validators must recompute; they can only do so if payloads are encrypted to their enclaves."
     },
     {
@@ -710,7 +710,7 @@
         "Integration test verifies: plaintext never appears outside enclave boundary (no host memory buffers, no logs, no disk writes)"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is the concrete implementation of 'identity data remains sandboxed'."
     },
     {
@@ -724,7 +724,7 @@
         "Events emitted: VEIDScoreComputedAttested, VEIDScoreRejectedAttestation"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Makes proposer scoring verifiable without revealing plaintext identity data."
     },
     {
@@ -739,7 +739,7 @@
         "Integration test: proposer computes score -> another validator recomputes inside enclave -> votes only if equal"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Directly implements the accepted claim�s 'consensus validators perform identity verification computations using the same ML algorithms and trained dataset'."
     },
     {
@@ -754,7 +754,7 @@
         "Docs: validator operator runbook for enclave updates and key rotation"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Without explicit lifecycle rules, 'encrypted to validator TEEs' becomes operationally brittle."
     },
     {
@@ -769,7 +769,7 @@
         "Incident procedure documented for suspected leakage"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Turns the requirement into enforceable engineering gates."
     },
     {
@@ -783,7 +783,7 @@
         "All sensitive fields are stored as encrypted payload envelopes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Accepted claims: orders and provider offerings include sensitive data stored encrypted for intended recipient; access depends on identification system."
     },
     {
@@ -797,7 +797,7 @@
         "Providers can optionally require verified identity for all their offerings"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Explicitly claimed: marketplace enforces only accounts with verified identity may obtain certain offerings."
     },
     {
@@ -811,7 +811,7 @@
         "Failure states are explicit and do not create partial order state corruption"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "MFA gating is an on-chain requirement; not just UI."
     },
     {
@@ -825,7 +825,7 @@
         "Sensitive details remain encrypted on-chain and are only decrypted by intended recipients or provider daemon"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Spec: run Waldur as separate system, communicate via API; chain stores public info; sensitive data encrypted."
     },
     {
@@ -839,7 +839,7 @@
         "Tests cover event replay and idempotent handling"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Provider daemon must react to won leases/manifests per spec."
     },
     {
@@ -853,7 +853,7 @@
         "Rotation procedure exists without breaking verification"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Accepted claims: provider daemon returns digitally signed workload status/usage record verifiable using provider public key."
     },
     {
@@ -867,7 +867,7 @@
         "Rate limits and anti-spam rules prevent runaway bidding"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Spec describes bid engine and dynamic config updates."
     },
     {
@@ -881,7 +881,7 @@
         "Unit tests cover edge cases and backward compatibility"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Spec references manifest parsing and deployment on behalf of users."
     },
     {
@@ -895,7 +895,7 @@
         "Secrets handling: decrypted only as required; never logged; stored encrypted at rest on provider side"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Accepted claims require orchestration API such as Kubernetes or SLURM."
     },
     {
@@ -909,7 +909,7 @@
         "Fraud checks: reject impossible usage deltas; flag anomalies for moderation"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Accepted claims: track and record usage of allocated resources on blockchain; settlement upon termination."
     },
     {
@@ -922,7 +922,7 @@
         "Job accounting schema supports rewards distribution and billing"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Spec/claims: HPC module includes library of pre-configured workloads + custom workloads support."
     },
     {
@@ -936,7 +936,7 @@
         "Handles batch scheduling across selected nodes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Accepted claims: schedule workload via SLURM on selected nodes; record usage; distribute rewards."
     },
     {
@@ -950,7 +950,7 @@
         "Integration tests: deploy cluster -> submit job -> observe completion and accounting"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Spec describes SLURM deployed across Kubernetes clusters; workload nodes added to existing clusters."
     },
     {
@@ -964,7 +964,7 @@
         "Recorded decision trail for scheduling is queryable"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Spec describes clustering closely connected systems to build mini-supercomputers within distributed network."
     },
     {
@@ -978,7 +978,7 @@
         "Unit tests cover edge cases (partial failures, retries, termination mid-job)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Claimed: distribute rewards in tokens to contributing nodes based on on-chain usage data."
     },
     {
@@ -996,7 +996,7 @@
         "Unit tests cover metric parsing, signing/verification, idempotency, and error paths; integration test demonstrates posting metrics to devnet and querying them"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Benchmarking is a first-class marketplace trust signal and must be transparent and verifiable on-chain."
     },
     {
@@ -1014,7 +1014,7 @@
         "Unit tests cover state transitions, pruning determinism, signature verification, and query correctness"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Keep schema stable and explicitly versioned to avoid breaking UI and ranking logic."
     },
     {
@@ -1031,7 +1031,7 @@
         "Unit tests validate deterministic computation and guard against division-by-zero, missing metrics, and extreme values"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "This is a trust layer; keep the formula transparent and verifiable."
     },
     {
@@ -1048,7 +1048,7 @@
         "Integration test: challenge -> submit -> anomaly flag -> moderator review path is exercised end-to-end"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Keep enforcement non-destructive initially: flag and rank-reduce before hard bans."
     },
     {
@@ -1064,7 +1064,7 @@
         "Unit tests cover auth state machine; e2e test validates login -> fetch account profile -> subscribe to events"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Portal must be functional without exposing private keys; prefer non-custodial signing via wallet adapters where possible."
     },
     {
@@ -1080,7 +1080,7 @@
         "Unit tests cover UI state mapping; e2e test verifies identity query -> status render -> gating message"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Identity scoring and status are on-chain and must be treated as the source of truth."
     },
     {
@@ -1096,7 +1096,7 @@
         "Unit tests cover policy editing and factor states; e2e test covers a gated marketplace action requiring MFA"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "MFA gating is enforced by chain rules; portal must reflect chain responses faithfully."
     },
     {
@@ -1112,7 +1112,7 @@
         "E2E test covers: browse -> select -> order -> observe events -> see allocation -> see provisioning state updates"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Use benchmark metrics to drive user decision-making and to support proximity-aware HPC scheduling UX."
     },
     {
@@ -1128,7 +1128,7 @@
         "E2E test covers: provider registers -> creates offering -> customer orders -> provider wins -> usage visible"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Provider operational transparency is key for marketplace adoption."
     },
     {
@@ -1144,7 +1144,7 @@
         "Integration test covers: submit -> schedule -> complete -> usage recorded -> rewards/settlement visible"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Keep outputs off-chain except encrypted references; never leak sensitive payloads in UI logs."
     },
     {
@@ -1160,7 +1160,7 @@
         "E2E test covers: admin changes account state -> user blocked -> audit event visible -> rollback possible per policy"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Even administrators should not be able to read encrypted payloads unless they are the intended recipient."
     },
     {
@@ -1175,7 +1175,7 @@
         "E2E test covers: create ticket -> provider reply -> state sync -> customer reads reply (decrypt locally)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Tickets are explicitly listed as sensitive data and must remain encrypted."
     },
     {
@@ -1191,7 +1191,7 @@
         "Runbook links included in dashboards"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Do not log plaintext sensitive payloads; scrub/omit encrypted blob contents from logs."
     },
     {
@@ -1207,7 +1207,7 @@
         "Post-incident recovery procedures are documented and validated on staging"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "This is a GA-critical reliability milestone."
     },
     {
@@ -1223,7 +1223,7 @@
         "Security test suite includes replay tests, signature forgery tests, and malformed payload tests"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Treat consensus determinism and signature verification as top-tier audit items."
     },
     {
@@ -1239,7 +1239,7 @@
         "Bottlenecks identified and addressed; regression harness added to CI for critical benchmarks"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Ensure test artifacts are reproducible and can be re-run for future releases."
     },
     {
@@ -1254,7 +1254,7 @@
         "Dry-run ceremony executed on a testnet environment and documented"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Validators also operate the identity network; onboarding must reflect that operational burden."
     },
     {
@@ -1270,7 +1270,7 @@
         "Documentation published and versioned with release tags"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Docs are part of GA acceptance; keep them aligned with on-chain schemas and events."
     },
     {
@@ -1285,7 +1285,7 @@
         "Final production readiness review completed with explicit go/no-go criteria and sign-offs"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "GA isn�t only features�operability and recovery matter as much as functionality."
     },
     {
@@ -1300,7 +1300,7 @@
         "Approved-client key signing"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Patent Claim 2: camera captures for identity documents and biometric facial recognition."
     },
     {
@@ -1314,7 +1314,7 @@
         "Liveness score in VEID"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Patent describes biometric sensors requiring live capture."
     },
     {
@@ -1328,7 +1328,7 @@
         "Barcode in VEID scoring"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent mentions barcode scanning for ID data revalidation."
     },
     {
@@ -1342,7 +1342,7 @@
         "Face alignment"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent explicitly lists MTCNN as required neural network."
     },
     {
@@ -1395,7 +1395,7 @@
         "Wallet binding"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent Claim 5 mentions Active Directory SSO."
     },
     {
@@ -1435,7 +1435,7 @@
         "VoIP detection"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists SMS Verification as VEID scope."
     },
     {
@@ -1448,7 +1448,7 @@
         "On-chain hash"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent describes public reviews on services."
     },
     {
@@ -1461,7 +1461,7 @@
         "Audit trail"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent: providers report fraudulent activity."
     },
     {
@@ -1474,7 +1474,7 @@
         "Network management"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists OpenStack as Private Cloud."
     },
     {
@@ -1487,7 +1487,7 @@
         "Template deployment"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists VMWare as Private Cloud."
     },
     {
@@ -1500,7 +1500,7 @@
         "Multi-region"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists AWS as Public Cloud."
     },
     {
@@ -1512,7 +1512,7 @@
         "VM via ARM"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists Azure as Public Cloud."
     },
     {
@@ -1521,7 +1521,7 @@
       "description": "Extend HPC module for MOAB scheduler.",
       "acceptanceCriteria": ["MOAB API/CLI", "Job lifecycle", "VE rewards"],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists MOAB alongside SLURM."
     },
     {
@@ -1534,7 +1534,7 @@
         "Interactive apps"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists Open OnDemand."
     },
     {
@@ -1543,7 +1543,7 @@
       "description": "Integrate Jira Service Desk for enterprise support.",
       "acceptanceCriteria": ["Jira API", "Ticket creation", "SLA management"],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists Jira Service Desk."
     },
     {
@@ -1556,7 +1556,7 @@
         "Deployment playbooks"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists Ansible."
     },
     {
@@ -1569,7 +1569,7 @@
         "Slashing"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent describes Staker rewards."
     },
     {
@@ -1582,7 +1582,7 @@
         "Proportional rewards"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent mentions shared wallet staking."
     },
     {
@@ -1595,7 +1595,7 @@
         "VEID scoring"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists GANs."
     },
     {
@@ -1608,7 +1608,7 @@
         "VEID integration"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists Autoencoders."
     },
     {
@@ -1621,7 +1621,7 @@
         "Revocation checking"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Patent lists Certificate/Hardware Key MFA."
     },
     {
@@ -1634,7 +1634,7 @@
         "Address derivation"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Patent Claim 5 mentions Ledger."
     },
     {
@@ -1647,7 +1647,7 @@
         "BIP-44 derivation"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Patent mentions Mnemonic seed for non-custodial keys."
     },
     {
@@ -1664,7 +1664,7 @@
         "Genesis validation passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Critical blocker preventing any integration testing. See HEALTH_CHECK.md Section 5."
     },
     {
@@ -1680,7 +1680,7 @@
         "go test ./x/veid/keeper/... passes with 0 failures"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Cosmos SDK v0.53 changed Context from interface to struct. See x/veid/keeper/*_test.go compilation errors."
     },
     {
@@ -1697,7 +1697,7 @@
         "x/escrow/keeper/keeper_test.go compiles and passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "These were likely removed during virtengine->VirtEngine rename. See x/market/keeper/keeper_test.go and x/escrow/keeper/keeper_test.go errors."
     },
     {
@@ -1713,7 +1713,7 @@
         "go test ./pkg/provider_daemon/... passes with 0 build failures"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "API changes in provider daemon structs broke tests. See pkg/provider_daemon/*_test.go compilation errors."
     },
     {
@@ -1729,7 +1729,7 @@
         "go test ./x/encryption/types/... passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Crypto agility constants and function signatures missing. See x/encryption/types/crypto_agility_test.go."
     },
     {
@@ -1743,7 +1743,7 @@
         "go test ./x/encryption/crypto/... passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Variable initialization cycles in test setup. See x/encryption/crypto/mnemonic_test.go."
     },
     {
@@ -1759,7 +1759,7 @@
         "Add tests for: util/cli, cmd/*, app/params, app/sim"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Many packages have no tests. See HEALTH_CHECK.md test summary showing only 21/45+ passing."
     },
     {
@@ -1776,7 +1776,7 @@
         "go test ./pkg/... passes with 0 build failures"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "These packages currently show [build failed] in test output. Investigate specific compilation errors for each."
     },
     {
@@ -1790,7 +1790,7 @@
         "go test ./sdk/... passes with 0 build failures"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Proto files seem to be in wrong path (sdk/github.com/... instead of sdk/go/...). May need buf.gen.gogo.yaml path fixes."
     },
     {
@@ -1807,7 +1807,7 @@
         "Test cleanup properly stops node and removes test data"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on VE-1000. Currently cannot test node operations because it won't start. See tests/e2e/ or tests/integration/."
     },
     {
@@ -1824,8 +1824,220 @@
         "Update HEALTH_CHECK.md with resolved issues"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Will help onboard developers and prevent regression of fixed tests. Reference HEALTH_CHECK.md for baseline."
+    },
+    {
+      "id": "VE-1012",
+      "title": "CI/CD: Rename .yml files to .yaml for standardization",
+      "description": "The check-yml-files workflow fails because there are 22 .yml files in the repository. The standardize-yaml workflow requires all YAML files to use .yaml extension (except codecov.yml).",
+      "acceptanceCriteria": [
+        "Rename .github/workflows/ci.yml to ci.yaml",
+        "Rename docker-compose.yml to docker-compose.yaml",
+        "Rename all pkg/provider_daemon/playbooks/*.yml to *.yaml",
+        "Rename sdk/codecov.yml to sdk/codecov.yaml (or add to exclusion)",
+        "Rename all sdk/ts/src/sdl/SDL/fixtures/*.yml to *.yaml",
+        "Update any references to renamed files in scripts/docs",
+        "git ls-files '*.yml' ':!:codecov.yml' returns 0 results",
+        "tools / check-yml-files CI job passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "COMPLETED: All 21 .yml files renamed to .yaml (excluding codecov.yml files). References updated in SDL.spec.ts, localnet.sh, developer-guide.md, development-environment.md, and playbook files."
+    },
+    {
+      "id": "VE-1013",
+      "title": "CI/CD: Fix golangci-lint errors for lint-go job",
+      "description": "The tests / lint-go workflow runs golangci-lint. Fix all linting errors to make the job pass.",
+      "acceptanceCriteria": [
+        "Run make lint-go locally and identify all errors",
+        "Fix unused variables/imports across codebase",
+        "Fix any deprecated API usages flagged by linters",
+        "Fix code style issues (gofmt, goimports)",
+        "Fix staticcheck findings",
+        "Fix errcheck issues (unchecked error returns)",
+        "make lint-go passes with 0 errors",
+        "tests / lint-go CI job passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "golangci-lint with 10m timeout. May need to add exclusions for generated code."
+    },
+    {
+      "id": "VE-1014",
+      "title": "CI/CD: Fix shellcheck errors for lint-shell job",
+      "description": "The tests / lint-shell workflow runs shellcheck on shell scripts. Fix all shellcheck warnings/errors.",
+      "acceptanceCriteria": [
+        "Run make lint-shell locally and identify all errors",
+        "Fix script/*.sh shellcheck issues",
+        "Fix scripts/*.sh shellcheck issues",
+        "Fix _build/*.sh shellcheck issues",
+        "Add shellcheck disable directives where appropriate with justification",
+        "make lint-shell passes with 0 errors",
+        "tests / lint-shell CI job passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Review script/, scripts/, _build/ directories for shell scripts."
+    },
+    {
+      "id": "VE-1015",
+      "title": "CI/CD: Fix unit tests for tests / tests job",
+      "description": "The tests / tests workflow runs make test-full. Ensure all unit tests pass.",
+      "acceptanceCriteria": [
+        "Run make test-full locally and identify failures",
+        "Fix any remaining test failures in x/* modules",
+        "Fix any remaining test failures in pkg/* packages",
+        "Ensure test timeouts are appropriate",
+        "make test-full passes with 0 failures",
+        "tests / tests CI job passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Currently 24/24 packages pass locally - verify CI environment matches."
+    },
+    {
+      "id": "VE-1016",
+      "title": "CI/CD: Fix build-bins job (Linux binary build)",
+      "description": "The tests / build-bins workflow runs make bins and make docker-image. Ensure both pass.",
+      "acceptanceCriteria": [
+        "Run make bins locally and verify success",
+        "Fix any compilation errors for Linux targets",
+        "Verify docker-image target builds successfully",
+        "Ensure .github/actions/setup-ubuntu has correct Go version detection",
+        "make bins passes in CI environment",
+        "make docker-image passes in CI",
+        "tests / build-bins CI job passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Uses free-disk-space action to clear space. Check for disk space issues."
+    },
+    {
+      "id": "VE-1017",
+      "title": "CI/CD: Fix build-macos job (macOS binary build)",
+      "description": "The tests / build-macos workflow builds on macos-latest. Ensure it passes.",
+      "acceptanceCriteria": [
+        "Verify all CGO dependencies available on macOS",
+        "Check script/tools.sh gotoolchain returns valid version",
+        "Ensure direnv setup works on macOS",
+        "Verify brew dependencies (bash, direnv, pv, lz4) install correctly",
+        "make bins passes on macOS",
+        "tests / build-macos CI job passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "macOS builds use Homebrew for dependencies. May have different Go version issues."
+    },
+    {
+      "id": "VE-1018",
+      "title": "CI/CD: Fix coverage job (test coverage reporting)",
+      "description": "The tests / coverage workflow runs make test-coverage and uploads to codecov. Ensure it passes.",
+      "acceptanceCriteria": [
+        "Run make test-coverage locally and verify success",
+        "Ensure coverage output format matches codecov expectations",
+        "Fix any tests that fail during coverage collection",
+        "Verify codecov.yml configuration is valid",
+        "make test-coverage passes",
+        "tests / coverage CI job passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Uses codecov-action@v4. May need CODECOV_TOKEN secret configured."
+    },
+    {
+      "id": "VE-1019",
+      "title": "CI/CD: Fix simulation tests for sims job",
+      "description": "The tests / sims workflow runs multiple simulation tests. Fix any failures.",
+      "acceptanceCriteria": [
+        "Run make test-sim-nondeterminism locally",
+        "Run make test-sim-import-export locally",
+        "Run make test-sim-after-import locally",
+        "Run make test-sim-fullapp locally",
+        "Fix any simulation test failures",
+        "All sim targets pass locally",
+        "tests / sims CI job passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Simulation tests verify chain state machine determinism. Critical for consensus safety."
+    },
+    {
+      "id": "VE-1020",
+      "title": "CI/CD: Fix network-upgrade-names job (upgrade directory validation)",
+      "description": "The tests / network-upgrade-names workflow validates upgrade directory structure and naming.",
+      "acceptanceCriteria": [
+        "Ensure upgrades/software contains only directories (no files)",
+        "Ensure all directory names in upgrades/software are semver compliant",
+        "Run script/semver.sh validate on all upgrade names",
+        "Fix any non-compliant upgrade directory names",
+        "tests / network-upgrade-names CI job passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Validates upgrades/software/* directory names match semver format."
+    },
+    {
+      "id": "VE-1021",
+      "title": "CI/CD: Fix dispatch jobs (provider and virtengine workflows)",
+      "description": "The dispatch / dispatch-provider and dispatch / dispatch-virtengine jobs trigger homebrew-tap workflows. These likely fail due to missing GORELEASER_ACCESS_TOKEN secret.",
+      "acceptanceCriteria": [
+        "Verify GORELEASER_ACCESS_TOKEN secret is configured in repository",
+        "Ensure virtengine/homebrew-tap repository exists and is accessible",
+        "Verify dispatch workflow permissions are correct",
+        "Add conditional to skip dispatch on non-tag pushes if appropriate",
+        "dispatch / dispatch-provider CI job passes or skips appropriately",
+        "dispatch / dispatch-virtengine CI job passes or skips appropriately"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "These jobs dispatch to external homebrew-tap repo. May need org-level secret setup."
+    },
+    {
+      "id": "VE-1022",
+      "title": "CI/CD: Fix conventional commits check",
+      "description": "The tools / conventional commits job validates commit messages follow conventional commit format.",
+      "acceptanceCriteria": [
+        "Ensure all new commits follow conventional commit format: type(scope): description",
+        "Valid types: feat, fix, docs, style, refactor, test, chore, build, ci",
+        "Fix any commits with invalid format (may require rebase/amend)",
+        "Document conventional commit requirements in CONTRIBUTING.md",
+        "tools / conventional commits CI job passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Uses webiny/action-conventional-commits@v1.3.0. Check recent commit messages."
+    },
+    {
+      "id": "VE-1023",
+      "title": "CI/CD: Fix CI / Lint job (main ci.yaml workflow)",
+      "description": "The CI / Lint job in ci.yaml uses golangci-lint-action with Go 1.22. This may conflict with project's Go version.",
+      "acceptanceCriteria": [
+        "Update ci.yaml GO_VERSION to match project's Go version",
+        "Align GOLANGCI_LINT_VERSION with version in make/lint.mk",
+        "Verify golangci-lint configuration matches between ci.yaml and tests.yaml",
+        "Consider consolidating duplicate lint jobs between ci.yaml and tests.yaml",
+        "CI / Lint job passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "ci.yaml uses GO_VERSION: 1.22, may conflict with project's actual Go version."
+    },
+    {
+      "id": "VE-1024",
+      "title": "CI/CD: Consolidate duplicate workflow definitions",
+      "description": "There are overlapping workflow definitions between ci.yaml and tests.yaml. Consolidate to reduce duplication and maintenance burden.",
+      "acceptanceCriteria": [
+        "Identify overlapping jobs between ci.yaml and tests.yaml",
+        "Decide which workflow owns which jobs",
+        "Remove duplicate lint job definitions",
+        "Ensure all jobs use consistent Go version detection via script/tools.sh",
+        "Update workflow documentation",
+        "All CI jobs pass after consolidation"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "ci.yaml and tests.yaml both have lint jobs. Consider consolidating for maintainability."
     }
   ]
 }

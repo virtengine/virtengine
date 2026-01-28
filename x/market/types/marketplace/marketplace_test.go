@@ -636,10 +636,10 @@ func TestMFAGatingChecker_Check(t *testing.T) {
 	oldMFA := now.Add(-2 * time.Hour)
 
 	tests := []struct {
-		name       string
-		ctx        *MFAGatingContext
-		required   bool
-		satisfied  bool
+		name      string
+		ctx       *MFAGatingContext
+		required  bool
+		satisfied bool
 	}{
 		{
 			name: "trusted device reduces requirement",

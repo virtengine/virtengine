@@ -370,7 +370,7 @@ func (a *Allocation) Hash() []byte {
 	h := sha256.New()
 	h.Write(a.ID.Hash())
 	h.Write([]byte(a.ProviderAddress))
-	h.Write([]byte(fmt.Sprintf("%d", a.State)))
+	_, _ = fmt.Fprintf(h, "%d", a.State)
 	return h.Sum(nil)
 }
 

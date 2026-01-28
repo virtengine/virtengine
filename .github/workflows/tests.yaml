@@ -18,27 +18,25 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - name: Install dependencies
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup environment
+        uses: ./.github/actions/setup-macos
+      - name: Build binaries
+        run: make bins
+      - name: Verify binaries
         run: |
-          brew install bash direnv pv lz4
-          sudo chsh -s "$(brew --prefix)/bin/bash"
-      - name: Hook direnv to bash
-        run: echo 'eval "$(direnv hook bash)"' >> $HOME/.bashrc
-      - uses: actions/checkout@v4
-      - run: git fetch --prune --unshallow
-      - name: Detect required Go version
-        run: |
-          toolchain=$(./script/tools.sh gotoolchain | sed 's/go*//')
-          echo "GOVERSION=${toolchain}" >> $GITHUB_ENV
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GOVERSION }}"
-          check-latest: true
-      - name: Setup direnv
-        run: |
-          direnv allow
-          direnv export gha >> "$GITHUB_ENV"
-      - run: make bins
+          echo "=== Verifying macOS binaries ==="
+          ls -la .cache/bin/ || echo "Cache bin directory not found"
+          if [ -f ".cache/bin/virtengine" ]; then
+            echo "virtengine binary exists"
+            file .cache/bin/virtengine
+            ./.cache/bin/virtengine version || echo "Version check skipped"
+          else
+            echo "Warning: virtengine binary not found in .cache/bin/"
+            # Check if it was built elsewhere
+            find . -name "virtengine" -type f 2>/dev/null | head -5
+          fi
 
   build-bins:
     runs-on: ubuntu-latest
@@ -57,6 +55,18 @@ jobs:
           large-packages: true # large packages (llvm, php, mysql, etc). Saves ~5.3GB. Total CI impact: +60s (not used in build)
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+      - name: Verify build environment
+        shell: bash
+        run: |
+          echo "=== Build environment verification ==="
+          echo "VE_ROOT: ${VE_ROOT:-NOT SET}"
+          echo "VE_DIRENV_SET: ${VE_DIRENV_SET:-NOT SET}"
+          echo "GOTOOLCHAIN: ${GOTOOLCHAIN:-NOT SET}"
+          echo "VIRTENGINE: ${VIRTENGINE:-NOT SET}"
+          # Ensure cache directories exist
+          mkdir -p .cache/bin .cache/versions .cache/include .cache/run/bin
+          # Verify GCC is available for CGO
+          gcc --version | head -1
       - run: make bins
       - run: make docker-image
 
@@ -74,8 +84,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-ubuntu
-      - run: make test-coverage
-      - uses: codecov/codecov-action@v4
+      - name: Run tests with coverage
+        run: make test-coverage
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.txt
+          flags: unittests
+          name: virtengine-coverage
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   lint-go:
     runs-on: ubuntu-latest

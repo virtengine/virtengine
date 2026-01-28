@@ -101,11 +101,11 @@ func (m *InteractiveAppsManager) LaunchCustomApp(ctx context.Context, virtEngine
 
 // GetSessionInfo returns detailed session information
 type SessionInfo struct {
-	Session      *OODSession `json:"session"`
-	ConnectURL   string      `json:"connect_url"`
-	IsConnected  bool        `json:"is_connected"`
+	Session       *OODSession   `json:"session"`
+	ConnectURL    string        `json:"connect_url"`
+	IsConnected   bool          `json:"is_connected"`
 	TimeRemaining time.Duration `json:"time_remaining"`
-	AppName      string      `json:"app_name"`
+	AppName       string        `json:"app_name"`
 }
 
 // GetSessionInfo gets detailed information about a session
@@ -123,7 +123,7 @@ func (m *InteractiveAppsManager) GetSessionInfo(ctx context.Context, sessionID s
 	}
 
 	if session.ExpiresAt.After(time.Now()) {
-		info.TimeRemaining = session.ExpiresAt.Sub(time.Now())
+		info.TimeRemaining = time.Until(session.ExpiresAt)
 	}
 
 	return info, nil
@@ -182,11 +182,11 @@ func (m *InteractiveAppsManager) GetActiveSessionsByApp(ctx context.Context, app
 
 // GetUserResourceUsage calculates total resource usage for a user
 type ResourceUsage struct {
-	TotalCPUs     int32         `json:"total_cpus"`
-	TotalMemoryGB int32         `json:"total_memory_gb"`
-	TotalGPUs     int32         `json:"total_gpus"`
-	TotalHours    float64       `json:"total_hours"`
-	ActiveSessions int          `json:"active_sessions"`
+	TotalCPUs      int32   `json:"total_cpus"`
+	TotalMemoryGB  int32   `json:"total_memory_gb"`
+	TotalGPUs      int32   `json:"total_gpus"`
+	TotalHours     float64 `json:"total_hours"`
+	ActiveSessions int     `json:"active_sessions"`
 }
 
 // GetUserResourceUsage gets resource usage for a user
@@ -240,23 +240,23 @@ func (m *InteractiveAppsManager) ConfigureJupyterSession(session *OODSession, co
 
 // AppQuota represents resource quotas for interactive apps
 type AppQuota struct {
-	MaxCPUs           int32 `json:"max_cpus"`
-	MaxMemoryGB       int32 `json:"max_memory_gb"`
-	MaxGPUs           int32 `json:"max_gpus"`
-	MaxConcurrentSessions int `json:"max_concurrent_sessions"`
-	MaxHoursPerSession int32 `json:"max_hours_per_session"`
-	MaxHoursPerDay    int32 `json:"max_hours_per_day"`
+	MaxCPUs               int32 `json:"max_cpus"`
+	MaxMemoryGB           int32 `json:"max_memory_gb"`
+	MaxGPUs               int32 `json:"max_gpus"`
+	MaxConcurrentSessions int   `json:"max_concurrent_sessions"`
+	MaxHoursPerSession    int32 `json:"max_hours_per_session"`
+	MaxHoursPerDay        int32 `json:"max_hours_per_day"`
 }
 
 // DefaultAppQuota returns default quotas
 func DefaultAppQuota() *AppQuota {
 	return &AppQuota{
-		MaxCPUs:             32,
-		MaxMemoryGB:         256,
-		MaxGPUs:             4,
+		MaxCPUs:               32,
+		MaxMemoryGB:           256,
+		MaxGPUs:               4,
 		MaxConcurrentSessions: 3,
-		MaxHoursPerSession:  24,
-		MaxHoursPerDay:      48,
+		MaxHoursPerSession:    24,
+		MaxHoursPerDay:        48,
 	}
 }
 

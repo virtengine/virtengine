@@ -126,6 +126,19 @@ The architecture prioritizes:
 
 ---
 
+### Module Map (On-Chain vs Off-Chain)
+
+| Capability | On-Chain Module | Off-Chain Component | Notes |
+|-----------|-----------------|---------------------|-------|
+| Identity Verification | `x/veid` | ML scoring service | Encrypted identity scopes stored on-chain; validators decrypt and score deterministically |
+| MFA Gating | `x/mfa` | MFA factor providers | MFA policies enforced on-chain; factor verification can be off-chain |
+| Encryption | `x/encryption` | Client/validator crypto libs | Canonical envelope format and key metadata |
+| Marketplace | `x/market`, `x/escrow` | Waldur services | Orders/offerings + escrow settlement; sensitive fields encrypted |
+| Provider Operations | `x/provider` | Provider daemon | Bids, provisioning, and signed usage submission |
+| Supercomputer/HPC | `x/hpc` | SLURM/Kubernetes adapters | HPC workloads and lifecycle tracking |
+| Benchmarking | `x/benchmark` | Benchmarking daemon | Provider performance metrics submission |
+| Role Model | `x/roles` | Admin tooling | Role assignments, account states, and RBAC |
+
 ## Module Interactions
 
 ### Module Dependency Graph

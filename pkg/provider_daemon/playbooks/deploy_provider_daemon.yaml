@@ -3,8 +3,8 @@
 # VE-920: Ansible automation for VirtEngine infrastructure
 #
 # Usage:
-#   ansible-playbook -i inventory.ini deploy_provider_daemon.yml --ask-vault-pass
-#   ansible-playbook -i inventory.ini deploy_provider_daemon.yml --vault-password-file vault.txt
+#   ansible-playbook -i inventory.ini deploy_provider_daemon.yaml --ask-vault-pass
+#   ansible-playbook -i inventory.ini deploy_provider_daemon.yaml --vault-password-file vault.txt
 
 - name: Deploy VirtEngine Provider Daemon
   hosts: provider_daemons

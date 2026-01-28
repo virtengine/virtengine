@@ -249,7 +249,7 @@ func (up *upgrade) UpgradeHandler() upgradetypes.UpgradeHandler {
 		}
 
 		up.log.Info(fmt.Sprintf("migrating param agov.MinInitialDepositRate to gov.MinInitialDepositRatio"))
-		up.log.Info(fmt.Sprintf("setting gov.ExpeditedMinDeposit to 2000akt"))
+		up.log.Info(fmt.Sprintf("setting gov.ExpeditedMinDeposit to 2000000000uve (2000 VE)"))
 		up.log.Info(fmt.Sprintf("setting gov.ExpeditedThreshold to 67%%"))
 
 		// Migrate governance min deposit parameter to builtin gov params
@@ -260,7 +260,7 @@ func (up *upgrade) UpgradeHandler() upgradetypes.UpgradeHandler {
 
 		gparams.MinInitialDepositRatio = dparams.MinInitialDepositRate.String()
 
-		// min deposit for an expedited proposal is set to 2000AKT
+		// min deposit for an expedited proposal is set to 2000 VE (2000000000 uve)
 		gparams.ExpeditedMinDeposit = sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(2000000000)))
 		gparams.ExpeditedThreshold = sdkmath.LegacyNewDecWithPrec(667, 3).String()
 

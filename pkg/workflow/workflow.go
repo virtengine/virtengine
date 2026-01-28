@@ -167,17 +167,17 @@ type IdempotencyKey string
 func GenerateIdempotencyKey(data ...interface{}) IdempotencyKey {
 	hasher := sha256.New()
 	for _, d := range data {
-		hasher.Write([]byte(fmt.Sprintf("%v", d)))
+		_, _ = fmt.Fprintf(hasher, "%v", d)
 	}
 	return IdempotencyKey(hex.EncodeToString(hasher.Sum(nil))[:32])
 }
 
 // IdempotentHandler wraps a handler with idempotency checking
 type IdempotentHandler struct {
-	mu        sync.RWMutex
-	store     IdempotencyStore
-	ttl       time.Duration
-	onReplay  func(key IdempotencyKey, result interface{})
+	mu       sync.RWMutex
+	store    IdempotencyStore
+	ttl      time.Duration
+	onReplay func(key IdempotencyKey, result interface{})
 }
 
 // IdempotencyStore stores idempotency records
@@ -361,14 +361,14 @@ func (s *InMemoryIdempotencyStore) cleanup() {
 
 // Checkpoint represents a workflow checkpoint
 type Checkpoint struct {
-	ID        string
+	ID         string
 	WorkflowID string
-	Step      string
-	Data      interface{}
-	Status    CheckpointStatus
-	Error     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Step       string
+	Data       interface{}
+	Status     CheckpointStatus
+	Error      string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // CheckpointStatus represents checkpoint status
@@ -398,9 +398,9 @@ type CheckpointStore interface {
 
 // WorkflowRunner runs a workflow with checkpoints
 type WorkflowRunner struct {
-	store    CheckpointStore
-	steps    []WorkflowStep
-	onError  func(ctx context.Context, step string, err error) error
+	store   CheckpointStore
+	steps   []WorkflowStep
+	onError func(ctx context.Context, step string, err error) error
 }
 
 // WorkflowStep represents a step in a workflow
@@ -434,7 +434,7 @@ func (r *WorkflowRunner) OnError(fn func(ctx context.Context, step string, err e
 
 // Run executes the workflow
 func (r *WorkflowRunner) Run(ctx context.Context, workflowID string, initialData interface{}) error {
-	var data interface{} = initialData
+	data := initialData
 	completedSteps := make([]string, 0)
 
 	for _, step := range r.steps {
@@ -526,6 +526,7 @@ func (r *WorkflowRunner) executeStep(ctx context.Context, step WorkflowStep, dat
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
+		//nolint:gosec // G115: attempt is bounded by maxAttempts configuration
 		case <-time.After(time.Duration(1<<uint(attempt)) * 100 * time.Millisecond):
 		}
 	}

@@ -2,7 +2,6 @@ package artifact_store
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"testing"
 	"time"
@@ -572,9 +571,4 @@ func TestDeleteRequest(t *testing.T) {
 			t.Error("expected error for empty requesting_account")
 		}
 	})
-}
-
-// Helper function to create test context
-func testContext() context.Context {
-	return context.Background()
 }

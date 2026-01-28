@@ -221,7 +221,7 @@ func TestKeyManagerListKeys(t *testing.T) {
 func TestKeyManagerNeedsRotation(t *testing.T) {
 	config := DefaultKeyManagerConfig()
 	config.StorageType = KeyStorageTypeMemory
-	config.KeyRotationDays = 1 // 1 day for testing
+	config.KeyRotationDays = 30 // 30 days for testing (must be > 7 to be outside rotation window)
 	km, err := NewKeyManager(config)
 	require.NoError(t, err)
 	err = km.Unlock("")
@@ -236,7 +236,7 @@ func TestKeyManagerNeedsRotation(t *testing.T) {
 	_, err = km.GenerateKey("provider1")
 	require.NoError(t, err)
 
-	// Fresh key shouldn't need rotation
+	// Fresh key shouldn't need rotation (30 days is well outside 7-day rotation window)
 	needsRotation, err = km.NeedsRotation()
 	require.NoError(t, err)
 	assert.False(t, needsRotation)

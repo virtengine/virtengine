@@ -7,20 +7,20 @@ import (
 // Error codes for the capture protocol
 const (
 	// Salt errors (1001-1099)
-	ErrCodeSaltEmpty              = "SALT_EMPTY"
-	ErrCodeSaltTooShort           = "SALT_TOO_SHORT"
-	ErrCodeSaltTooLong            = "SALT_TOO_LONG"
-	ErrCodeSaltWeak               = "SALT_WEAK"
-	ErrCodeSaltExpired            = "SALT_EXPIRED"
-	ErrCodeSaltFromFuture         = "SALT_FROM_FUTURE"
-	ErrCodeSaltReplayed           = "SALT_REPLAYED"
-	ErrCodeSaltMismatch           = "SALT_MISMATCH"
+	ErrCodeSaltEmpty      = "SALT_EMPTY"
+	ErrCodeSaltTooShort   = "SALT_TOO_SHORT"
+	ErrCodeSaltTooLong    = "SALT_TOO_LONG"
+	ErrCodeSaltWeak       = "SALT_WEAK"
+	ErrCodeSaltExpired    = "SALT_EXPIRED"
+	ErrCodeSaltFromFuture = "SALT_FROM_FUTURE"
+	ErrCodeSaltReplayed   = "SALT_REPLAYED"
+	ErrCodeSaltMismatch   = "SALT_MISMATCH"
 
 	// Binding errors (1101-1199)
-	ErrCodeBindingHashMissing     = "BINDING_HASH_MISSING"
-	ErrCodeBindingHashMismatch    = "BINDING_HASH_MISMATCH"
-	ErrCodeBindingSaltMismatch    = "BINDING_SALT_MISMATCH"
-	ErrCodeBindingDeviceIDMissing = "BINDING_DEVICE_ID_MISSING"
+	ErrCodeBindingHashMissing      = "BINDING_HASH_MISSING"
+	ErrCodeBindingHashMismatch     = "BINDING_HASH_MISMATCH"
+	ErrCodeBindingSaltMismatch     = "BINDING_SALT_MISMATCH"
+	ErrCodeBindingDeviceIDMissing  = "BINDING_DEVICE_ID_MISSING"
 	ErrCodeBindingSessionIDMissing = "BINDING_SESSION_ID_MISSING"
 
 	// Client signature errors (1201-1299)
@@ -32,30 +32,30 @@ const (
 	ErrCodeClientKeyMismatch      = "CLIENT_KEY_MISMATCH"
 
 	// User signature errors (1301-1399)
-	ErrCodeUserSignatureMissing   = "USER_SIGNATURE_MISSING"
-	ErrCodeUserSignatureInvalid   = "USER_SIGNATURE_INVALID"
-	ErrCodeUserPublicKeyMissing   = "USER_PUBLIC_KEY_MISSING"
-	ErrCodeUserAddressMismatch    = "USER_ADDRESS_MISMATCH"
+	ErrCodeUserSignatureMissing = "USER_SIGNATURE_MISSING"
+	ErrCodeUserSignatureInvalid = "USER_SIGNATURE_INVALID"
+	ErrCodeUserPublicKeyMissing = "USER_PUBLIC_KEY_MISSING"
+	ErrCodeUserAddressMismatch  = "USER_ADDRESS_MISMATCH"
 
 	// Signature chain errors (1401-1499)
-	ErrCodeAlgorithmMismatch      = "ALGORITHM_MISMATCH"
-	ErrCodeSignedDataMismatch     = "SIGNED_DATA_MISMATCH"
-	ErrCodeSignatureChainBroken   = "SIGNATURE_CHAIN_BROKEN"
+	ErrCodeAlgorithmMismatch    = "ALGORITHM_MISMATCH"
+	ErrCodeSignedDataMismatch   = "SIGNED_DATA_MISMATCH"
+	ErrCodeSignatureChainBroken = "SIGNATURE_CHAIN_BROKEN"
 
 	// Version errors (1501-1599)
-	ErrCodeVersionMissing         = "VERSION_MISSING"
-	ErrCodeVersionUnsupported     = "VERSION_UNSUPPORTED"
+	ErrCodeVersionMissing     = "VERSION_MISSING"
+	ErrCodeVersionUnsupported = "VERSION_UNSUPPORTED"
 
 	// Metadata errors (1601-1699)
-	ErrCodeMetadataClientIDMissing        = "METADATA_CLIENT_ID_MISSING"
-	ErrCodeMetadataClientIDMismatch       = "METADATA_CLIENT_ID_MISMATCH"
+	ErrCodeMetadataClientIDMissing          = "METADATA_CLIENT_ID_MISSING"
+	ErrCodeMetadataClientIDMismatch         = "METADATA_CLIENT_ID_MISMATCH"
 	ErrCodeMetadataDeviceFingerprintMissing = "METADATA_DEVICE_FINGERPRINT_MISSING"
-	ErrCodeMetadataSessionIDMissing       = "METADATA_SESSION_ID_MISSING"
-	ErrCodeMetadataSessionIDMismatch      = "METADATA_SESSION_ID_MISMATCH"
+	ErrCodeMetadataSessionIDMissing         = "METADATA_SESSION_ID_MISSING"
+	ErrCodeMetadataSessionIDMismatch        = "METADATA_SESSION_ID_MISMATCH"
 
 	// Replay/timing errors (1701-1799)
-	ErrCodePayloadExpired         = "PAYLOAD_EXPIRED"
-	ErrCodePayloadFromFuture      = "PAYLOAD_FROM_FUTURE"
+	ErrCodePayloadExpired    = "PAYLOAD_EXPIRED"
+	ErrCodePayloadFromFuture = "PAYLOAD_FROM_FUTURE"
 )
 
 // ProtocolError represents an error in the capture protocol

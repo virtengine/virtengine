@@ -62,8 +62,11 @@ func (r *DefaultBenchmarkRunner) RunBenchmarks(ctx context.Context, config Bench
 }
 
 // runCPUBenchmarks runs CPU benchmark tests
+//
+//nolint:unparam // error return preserved for future extensibility
 func (r *DefaultBenchmarkRunner) runCPUBenchmarks(ctx context.Context, metrics *BenchmarkMetrics) error {
 	// Get basic CPU info
+	//nolint:gosec // G115: NumCPU returns small positive int, safe for int32
 	metrics.CPUCoreCount = int32(runtime.NumCPU())
 	metrics.CPUThreadCount = metrics.CPUCoreCount // Simplified
 
@@ -84,7 +87,7 @@ func (r *DefaultBenchmarkRunner) runCPUBenchmarks(ctx context.Context, metrics *
 }
 
 // runSyntheticCPUTest runs a synthetic CPU benchmark
-func (r *DefaultBenchmarkRunner) runSyntheticCPUTest(ctx context.Context, threads int) int64 {
+func (r *DefaultBenchmarkRunner) runSyntheticCPUTest(_ context.Context, threads int) int64 {
 	// Simple synthetic benchmark: compute iterations per second
 	const testDuration = time.Second * 2
 
@@ -98,7 +101,7 @@ func (r *DefaultBenchmarkRunner) runSyntheticCPUTest(ctx context.Context, thread
 				// Simple compute work
 				x := int64(1)
 				for j := 0; j < 10000; j++ {
-					x = (x * 1103515245 + 12345) & 0x7fffffff
+					x = (x*1103515245 + 12345) & 0x7fffffff
 				}
 				count++
 			}
@@ -115,6 +118,8 @@ func (r *DefaultBenchmarkRunner) runSyntheticCPUTest(ctx context.Context, thread
 }
 
 // runMemoryBenchmarks runs memory benchmark tests
+//
+//nolint:unparam // error return preserved for future extensibility
 func (r *DefaultBenchmarkRunner) runMemoryBenchmarks(ctx context.Context, metrics *BenchmarkMetrics) error {
 	// Get total memory (simplified - would use platform-specific APIs)
 	metrics.MemoryTotalGB = 64 // Default fallback
@@ -137,7 +142,7 @@ func (r *DefaultBenchmarkRunner) runMemoryBenchmarks(ctx context.Context, metric
 }
 
 // runMemoryBandwidthTest runs a memory bandwidth test
-func (r *DefaultBenchmarkRunner) runMemoryBandwidthTest(ctx context.Context) int64 {
+func (r *DefaultBenchmarkRunner) runMemoryBandwidthTest(_ context.Context) int64 {
 	// Allocate test buffer
 	const bufferSize = 64 * 1024 * 1024 // 64MB
 	buffer := make([]byte, bufferSize)
@@ -163,7 +168,7 @@ func (r *DefaultBenchmarkRunner) runMemoryBandwidthTest(ctx context.Context) int
 }
 
 // runMemoryLatencyTest runs a memory latency test
-func (r *DefaultBenchmarkRunner) runMemoryLatencyTest(ctx context.Context) int64 {
+func (r *DefaultBenchmarkRunner) runMemoryLatencyTest(_ context.Context) int64 {
 	// Simple latency test using random access
 	const size = 1024 * 1024 // 1M elements
 	data := make([]int, size)
@@ -191,6 +196,8 @@ func (r *DefaultBenchmarkRunner) runMemoryLatencyTest(ctx context.Context) int64
 }
 
 // runDiskBenchmarks runs disk I/O benchmark tests
+//
+//nolint:unparam // error return preserved for future extensibility
 func (r *DefaultBenchmarkRunner) runDiskBenchmarks(ctx context.Context, metrics *BenchmarkMetrics) error {
 	// Default values - in production would use actual disk benchmarks
 	metrics.DiskTotalStorageGB = 1000
@@ -219,6 +226,8 @@ func (r *DefaultBenchmarkRunner) runDiskIOTest(ctx context.Context) (readIOPS, w
 }
 
 // runNetworkBenchmarks runs network benchmark tests
+//
+//nolint:unparam // error return preserved for future extensibility
 func (r *DefaultBenchmarkRunner) runNetworkBenchmarks(ctx context.Context, metrics *BenchmarkMetrics, endpoint string) error {
 	metrics.NetworkEndpoint = endpoint
 
@@ -305,7 +314,9 @@ func (r *DefaultBenchmarkRunner) runPacketLossTest(ctx context.Context, endpoint
 }
 
 // runGPUBenchmarks runs GPU benchmark tests
-func (r *DefaultBenchmarkRunner) runGPUBenchmarks(ctx context.Context, metrics *BenchmarkMetrics) error {
+//
+//nolint:unparam // error return preserved for future extensibility
+func (r *DefaultBenchmarkRunner) runGPUBenchmarks(_ context.Context, metrics *BenchmarkMetrics) error {
 	// Check if GPU is present (simplified)
 	// In production, would use nvidia-smi or similar
 

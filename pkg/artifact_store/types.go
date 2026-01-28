@@ -193,6 +193,7 @@ type ChunkManifest struct {
 
 // NewChunkManifest creates a new chunk manifest
 func NewChunkManifest(totalSize, chunkSize uint64) *ChunkManifest {
+	//nolint:gosec // G115: chunkCount is bounded by reasonable file sizes
 	chunkCount := uint32((totalSize + chunkSize - 1) / chunkSize)
 	return &ChunkManifest{
 		Version:    ChunkManifestVersion,
@@ -206,9 +207,11 @@ func NewChunkManifest(totalSize, chunkSize uint64) *ChunkManifest {
 
 // AddChunk adds a chunk to the manifest
 func (m *ChunkManifest) AddChunk(chunk ChunkInfo) error {
+	//nolint:gosec // G115: len(m.Chunks) bounded by m.ChunkCount
 	if uint32(len(m.Chunks)) >= m.ChunkCount {
 		return ErrInvalidChunkManifest.Wrap("cannot add more chunks than declared count")
 	}
+	//nolint:gosec // G115: len(m.Chunks) bounded by m.ChunkCount
 	if chunk.Index != uint32(len(m.Chunks)) {
 		return ErrInvalidChunkManifest.Wrapf("expected chunk index %d, got %d", len(m.Chunks), chunk.Index)
 	}
@@ -255,6 +258,7 @@ func (m *ChunkManifest) Validate() error {
 	if m.ChunkCount == 0 {
 		return ErrInvalidChunkManifest.Wrap("chunk_count cannot be zero")
 	}
+	//nolint:gosec // G115: len(m.Chunks) bounded by m.ChunkCount
 	if uint32(len(m.Chunks)) != m.ChunkCount {
 		return ErrInvalidChunkManifest.Wrapf("chunk count mismatch: got %d, want %d", len(m.Chunks), m.ChunkCount)
 	}
@@ -265,6 +269,7 @@ func (m *ChunkManifest) Validate() error {
 	// Validate individual chunks
 	var totalChunkSize uint64
 	for i, chunk := range m.Chunks {
+		//nolint:gosec // G115: i bounded by m.ChunkCount
 		if chunk.Index != uint32(i) {
 			return ErrInvalidChunkManifest.Wrapf("chunk %d has wrong index %d", i, chunk.Index)
 		}

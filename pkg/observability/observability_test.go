@@ -9,11 +9,28 @@ import (
 	"testing"
 )
 
+// Test constants
+const (
+	testLogFormatJSON = "json"
+	// Use field names that are NOT in the default sensitive fields list
+	testFieldKey      = "request_id"
+	testFieldValue    = "abc123"
+)
+
+// helper to get map keys for debugging
+func keysOf(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 func TestLogger(t *testing.T) {
 	t.Run("logs at correct level", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.LogLevel = LevelInfo
-		cfg.LogFormat = "json"
+		cfg.LogFormat = testLogFormatJSON
 
 		logger := newDefaultLogger(cfg)
 		var buf bytes.Buffer
@@ -37,7 +54,7 @@ func TestLogger(t *testing.T) {
 
 	t.Run("redacts sensitive fields", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.LogFormat = "json"
+		cfg.LogFormat = testLogFormatJSON
 
 		logger := newDefaultLogger(cfg)
 		var buf bytes.Buffer
@@ -70,25 +87,26 @@ func TestLogger(t *testing.T) {
 
 	t.Run("outputs JSON format", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.LogFormat = "json"
+		cfg.LogFormat = testLogFormatJSON
 
 		logger := newDefaultLogger(cfg)
 		var buf bytes.Buffer
 		logger.output = &buf
 
-		logger.Info("test message", String("key", "value"))
+		logger.Info("test message", String(testFieldKey, testFieldValue))
 
+		output := buf.String()
 		var parsed map[string]interface{}
-		err := json.Unmarshal(buf.Bytes(), &parsed)
+		err := json.Unmarshal([]byte(output), &parsed)
 		if err != nil {
-			t.Errorf("output should be valid JSON: %v", err)
+			t.Errorf("output should be valid JSON: %v, got: %q", err, output)
 		}
 
 		if parsed["msg"] != "test message" {
-			t.Error("message not found in output")
+			t.Errorf("message not found in output, got: %v", parsed["msg"])
 		}
-		if parsed["key"] != "value" {
-			t.Error("field not found in output")
+		if parsed[testFieldKey] != testFieldValue {
+			t.Errorf("field %q not found or has wrong value in output, expected %q, got %v", testFieldKey, testFieldValue, parsed[testFieldKey])
 		}
 	})
 
@@ -100,7 +118,7 @@ func TestLogger(t *testing.T) {
 		var buf bytes.Buffer
 		logger.output = &buf
 
-		logger.Info("test message", String("key", "value"))
+		logger.Info("test message", String(testFieldKey, testFieldValue))
 
 		output := buf.String()
 		if !strings.Contains(output, "INFO") {
@@ -109,14 +127,16 @@ func TestLogger(t *testing.T) {
 		if !strings.Contains(output, "test message") {
 			t.Error("message not in output")
 		}
-		if !strings.Contains(output, "key=value") {
-			t.Error("field not in output")
+		// Check for the field in format "request_id=abc123"
+		expectedField := testFieldKey + "=" + testFieldValue
+		if !strings.Contains(output, expectedField) {
+			t.Errorf("field not in output, expected %q in %q", expectedField, output)
 		}
 	})
 
 	t.Run("with adds fields", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.LogFormat = "json"
+		cfg.LogFormat = testLogFormatJSON
 
 		logger := newDefaultLogger(cfg)
 		var buf bytes.Buffer
@@ -136,36 +156,36 @@ func TestLogger(t *testing.T) {
 
 func TestFields(t *testing.T) {
 	t.Run("String field", func(t *testing.T) {
-		f := String("key", "value")
-		if f.Key != "key" || f.Value != "value" {
+		f := String(testFieldKey, testFieldValue)
+		if f.Key != testFieldKey || f.Value != testFieldValue {
 			t.Error("String field incorrect")
 		}
 	})
 
 	t.Run("Int field", func(t *testing.T) {
-		f := Int("key", 42)
-		if f.Key != "key" || f.Value != 42 {
+		f := Int(testFieldKey, 42)
+		if f.Key != testFieldKey || f.Value != 42 {
 			t.Error("Int field incorrect")
 		}
 	})
 
 	t.Run("Int64 field", func(t *testing.T) {
-		f := Int64("key", 9223372036854775807)
-		if f.Key != "key" {
+		f := Int64(testFieldKey, 9223372036854775807)
+		if f.Key != testFieldKey {
 			t.Error("Int64 field incorrect")
 		}
 	})
 
 	t.Run("Float64 field", func(t *testing.T) {
-		f := Float64("key", 3.14)
-		if f.Key != "key" || f.Value != 3.14 {
+		f := Float64(testFieldKey, 3.14)
+		if f.Key != testFieldKey || f.Value != 3.14 {
 			t.Error("Float64 field incorrect")
 		}
 	})
 
 	t.Run("Bool field", func(t *testing.T) {
-		f := Bool("key", true)
-		if f.Key != "key" || f.Value != true {
+		f := Bool(testFieldKey, true)
+		if f.Key != testFieldKey || f.Value != true {
 			t.Error("Bool field incorrect")
 		}
 	})
@@ -280,14 +300,14 @@ func TestTracer(t *testing.T) {
 		tracer := newDefaultTracer(cfg)
 
 		_, span := tracer.Start(context.Background(), "test-span",
-			WithAttributes(String("key", "value")),
+			WithAttributes(String(testFieldKey, testFieldValue)),
 		)
 		defer span.End()
 
 		span.SetAttribute("another_key", "another_value")
 
 		ds := span.(*defaultSpan)
-		if ds.attrs["key"] != "value" {
+		if ds.attrs[testFieldKey] != testFieldValue {
 			t.Error("initial attribute not set")
 		}
 		if ds.attrs["another_key"] != "another_value" {
@@ -398,7 +418,7 @@ func TestNoopImplementations(t *testing.T) {
 	t.Run("noop tracer doesn't panic", func(t *testing.T) {
 		tracer := &noopTracer{}
 		ctx, span := tracer.Start(context.Background(), "test")
-		span.SetAttribute("key", "value")
+		span.SetAttribute(testFieldKey, testFieldValue)
 		span.AddEvent("event")
 		span.SetStatus(StatusOK, "ok")
 		span.RecordError(nil)

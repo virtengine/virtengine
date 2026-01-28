@@ -13,11 +13,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/kv"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
+
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
 
 // SetupSimulation creates the config, db (levelDB), temporary directory and logger for the simulation tests.
@@ -62,7 +63,7 @@ func BuildSimulationOperations(app runtime.AppI, cdc codec.JSONCodec, config sim
 		AppParams: make(simtypes.AppParams),
 		Cdc:       cdc,
 		TxConfig:  txConfig,
-		BondDenom: sdk.DefaultBondDenom,
+		BondDenom: sdkutil.BondDenom,
 	}
 
 	if config.ParamsFile != "" {

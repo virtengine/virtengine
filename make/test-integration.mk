@@ -24,10 +24,10 @@ test-integration:
 
 .PHONY: test-coverage
 test-coverage:
-	$(GO_TEST) -tags=$(BUILD_MAINNET) -coverprofile=coverage.txt \
-		-covermode=count \
-		-coverpkg="$(COVER_PACKAGES)" \
-		./...
+	CGO_ENABLED=1 $(GO_TEST) -tags=$(BUILD_TAGS) -coverprofile=coverage.txt \
+		-covermode=atomic \
+		-timeout=20m \
+		$(TEST_MODULES)
 
 .PHONY: test-vet
 test-vet:

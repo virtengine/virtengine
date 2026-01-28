@@ -133,7 +133,7 @@ func (h *WebhookHandler) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	// Verify signature if required
 	if h.config.RequireSignature {
@@ -164,7 +164,7 @@ func (h *WebhookHandler) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
 // HandleEvent processes a webhook event

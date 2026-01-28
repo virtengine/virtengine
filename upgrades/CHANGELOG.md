@@ -81,20 +81,20 @@ Upgrade x/stores keys to improve read performance of certain modules as describe
 
 1. Extend authz implementation for DeploymentDeposit to allow grantee re-use of unspent funds.
     - Example of previous behavior:
-      Deployment authz granted from account B (grantor) to account A (grantee) in amount of 5AKT.
-      Deployment is created with authorized spend and deposit amount of 3AKT.
-      Deployment spends 1.5AKT and lease was closed. 1.5AKT remainder is returned to the grantor, and authorization has 2AKT left to spend
+    Deployment authz granted from account B (grantor) to account A (grantee) in amount of 5VE.
+    Deployment is created with authorized spend and deposit amount of 3VE.
+    Deployment spends 1.5VE and lease was closed. 1.5VE remainder is returned to the grantor, and authorization has 2VE left to spend
     - Example of new behavior:
-      Deployment authz granted from account B (grantor) to account A (grantee) in amount of 5AKT.
-      Deployment is created with authorized spend and deposit amount of 3AKT.Deployment spends 1.5AKT and lease was closed.
-      1.5AKT remainder is returned to the grantor, and authorization is updated and has 3.5AKT left to spend.
+    Deployment authz granted from account B (grantor) to account A (grantee) in amount of 5VE.
+    Deployment is created with authorized spend and deposit amount of 3VE. Deployment spends 1.5VE and lease was closed.
+    1.5VE remainder is returned to the grantor, and authorization is updated and has 3.5VE left to spend.
 2. Don’t allow multiple grants from different grantors to be used for deposit on same deployment.
    This issue may lead to a case where all remaining funds after deployment is closed are returned to last grantor.
    Such use case has been guarded against and only one authz depositor will be allowed per deployment
 
 ##### v0.32.0
 
-1. remove checking if provider has active leases during provider update transactions. This check was iterating thru all existing leases on the network causing gas and thus transaction fees go to up to 3AKT which is way above desired values. Initial intention of check was to prevent provider changing attributes that is in use by active leases. virtengine Network team will reintroduce check by adding secondary indexes in future network upgrades.
+1. remove checking if provider has active leases during provider update transactions. This check was iterating thru all existing leases on the network causing gas and thus transaction fees go to up to 3VE which is way above desired values. Initial intention of check was to prevent provider changing attributes that is in use by active leases. VirtEngine Network team will reintroduce check by adding secondary indexes in future network upgrades.
 2. remove secondary index for market store which was never user.
 
 - Migrations
@@ -130,7 +130,7 @@ Upgrade x/stores keys to improve read performance of certain modules as describe
    Proposal originator must deposit at least **Minimum Initial Deposit** for proposal transaction to succeed. Default value is set to 40% of MinDeposit.
 4. Fix dangling Escrow Payments. Some escrow payments remain in open state when actual escrow account is closed.
 5. Deployment store is updated with `v1beta3/ResourceUnits` (added GPU unit)
-   Migrate `MinDeposit` param to `MinDeposits`, allowing deployments to be paid in non-akt currencies.
+    Migrate `MinDeposit` param to `MinDeposits`, allowing deployments to be paid in non-uve currencies.
 6. Market store is updated with `v1beta3/ResourceUnits` (added GPU unit)
 7. Introduce **Take Pay**
 
@@ -165,7 +165,7 @@ Upgrade x/stores keys to improve read performance of certain modules as describe
 
 ##### v0.15.0 (upgrade name `virtengine_v0.15.0_cosmos_v0.44.x`)
 
-1. Introduce virtengine marketplace
+1. Introduce VirtEngine marketplace
 2. Migrate store prefixes from v0.38/v0.39 to 0.40
 
 - Stores

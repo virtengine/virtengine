@@ -15,7 +15,7 @@ import (
 
 // Common error format strings
 const (
-	errFmtWrapped           = "%w: %v"
+	errFmtWrapped             = "%w: %v"
 	errFmtFileBrowserDisabled = "%w: file browser is disabled"
 )
 
@@ -117,7 +117,10 @@ func (r *SessionStatusReport) Hash() []byte {
 		VEIDAddress:         r.VEIDAddress,
 		Timestamp:           r.Timestamp.Unix(),
 	}
-	bytes, _ := json.Marshal(data)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
 	hash := sha256.Sum256(bytes)
 	return hash[:]
 }

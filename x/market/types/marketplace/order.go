@@ -328,7 +328,7 @@ func (o *Order) Hash() []byte {
 	h := sha256.New()
 	h.Write(o.ID.Hash())
 	h.Write(o.OfferingID.Hash())
-	h.Write([]byte(fmt.Sprintf("%d", o.State)))
+	_, _ = fmt.Fprintf(h, "%d", o.State)
 	return h.Sum(nil)
 }
 

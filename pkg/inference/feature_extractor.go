@@ -82,7 +82,7 @@ func (fe *FeatureExtractor) ExtractFeatures(inputs *ScoreInputs) ([]float32, err
 	offset = fe.extractOCRFeatures(features, offset, inputs)
 
 	// 4. Metadata features (16 dimensions)
-	offset = fe.extractMetadataFeatures(features, offset, inputs)
+	_ = fe.extractMetadataFeatures(features, offset, inputs)
 
 	// 5. Padding (remaining dimensions)
 	// Already initialized to 0.0
@@ -210,7 +210,7 @@ func (fe *FeatureExtractor) extractMetadataFeatures(features []float32, offset i
 
 	// Block height normalized (for temporal features)
 	// Normalize to a reasonable range
-	normalizedHeight := float32(inputs.Metadata.BlockHeight % 1000000) / 1000000.0
+	normalizedHeight := float32(inputs.Metadata.BlockHeight%1000000) / 1000000.0
 	features[offset+10] = normalizedHeight
 
 	// Remaining metadata features (padding)

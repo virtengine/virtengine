@@ -100,11 +100,11 @@ func (s *TensorFlowScorer) ComputeScoreWithContext(ctx context.Context, inputs *
 
 	// Create result with defaults
 	result := &ScoreResult{
-		Score:        0,
-		Confidence:   0.0,
-		ModelVersion: s.GetModelVersion(),
-		ModelHash:    s.GetModelHash(),
-		ReasonCodes:  make([]string, 0),
+		Score:         0,
+		Confidence:    0.0,
+		ModelVersion:  s.GetModelVersion(),
+		ModelHash:     s.GetModelHash(),
+		ReasonCodes:   make([]string, 0),
 		ComputeTimeMs: 0,
 	}
 
@@ -164,9 +164,9 @@ func (s *TensorFlowScorer) ComputeScoreWithContext(ctx context.Context, inputs *
 // runInference performs the actual inference
 func (s *TensorFlowScorer) runInference(inputs *ScoreInputs) (*ScoreResult, error) {
 	result := &ScoreResult{
-		ModelVersion: s.GetModelVersion(),
-		ModelHash:    s.GetModelHash(),
-		ReasonCodes:  make([]string, 0),
+		ModelVersion:         s.GetModelVersion(),
+		ModelHash:            s.GetModelHash(),
+		ReasonCodes:          make([]string, 0),
 		FeatureContributions: make(map[string]float32),
 	}
 
@@ -276,7 +276,7 @@ func (s *TensorFlowScorer) addReasonCodes(result *ScoreResult, inputs *ScoreInpu
 func computeConfidence(rawScore float32) float32 {
 	// Scores near 0 or 100 are more confident
 	// Scores near 50 are less confident
-	distanceFromMiddle := absFloat32(rawScore - 50) / 50.0
+	distanceFromMiddle := absFloat32(rawScore-50) / 50.0
 	confidence := 0.5 + (distanceFromMiddle * 0.4)
 	if confidence > 0.95 {
 		confidence = 0.95

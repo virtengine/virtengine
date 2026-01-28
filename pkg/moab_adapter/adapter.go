@@ -69,17 +69,17 @@ const (
 
 // MOABAdapter implements the MOAB workload manager adapter
 type MOABAdapter struct {
-	config            MOABConfig
-	client            MOABClient
-	signer            JobSigner
+	config             MOABConfig
+	client             MOABClient
+	signer             JobSigner
 	rewardsIntegration RewardsIntegration
-	mu                sync.RWMutex
-	jobs              map[string]*MOABJob // MOAB job ID -> job
-	jobMapping        map[string]string   // VirtEngine job ID -> MOAB job ID
-	running           bool
-	stopCh            chan struct{}
-	callbacks         []JobLifecycleCallback
-	clusterID         string
+	mu                 sync.RWMutex
+	jobs               map[string]*MOABJob // MOAB job ID -> job
+	jobMapping         map[string]string   // VirtEngine job ID -> MOAB job ID
+	running            bool
+	stopCh             chan struct{}
+	callbacks          []JobLifecycleCallback
+	clusterID          string
 }
 
 // NewMOABAdapter creates a new MOAB adapter
@@ -335,6 +335,14 @@ func (a *MOABAdapter) GetJobStatus(ctx context.Context, virtEngineJobID string) 
 	// Preserve VirtEngineJobID
 	updatedJob.VirtEngineJobID = virtEngineJobID
 
+	// Fetch accounting data for completed jobs
+	if isTerminalState(updatedJob.State) && updatedJob.UsageMetrics == nil {
+		metrics, err := a.client.GetJobAccounting(ctx, moabJobID)
+		if err == nil {
+			updatedJob.UsageMetrics = metrics
+		}
+	}
+
 	// Update cached job
 	a.mu.Lock()
 	a.jobs[moabJobID] = updatedJob
@@ -426,11 +434,14 @@ func (a *MOABAdapter) CreateVERewardsData(job *MOABJob, customerAddress string) 
 		return nil, fmt.Errorf("job timing information incomplete")
 	}
 
-	completionStatus := "completed"
-	if job.State == MOABJobStateFailed {
+	var completionStatus string
+	switch job.State {
+	case MOABJobStateFailed:
 		completionStatus = "failed"
-	} else if job.State == MOABJobStateCancelled {
+	case MOABJobStateCancelled:
 		completionStatus = "cancelled"
+	default:
+		completionStatus = "completed"
 	}
 
 	a.mu.RLock()
@@ -470,7 +481,12 @@ func (a *MOABAdapter) RecordJobForRewards(ctx context.Context, job *MOABJob, cus
 
 // pollJobs polls for job status updates
 func (a *MOABAdapter) pollJobs() {
-	ticker := time.NewTicker(a.config.JobPollInterval)
+	// Use default poll interval if not set
+	pollInterval := a.config.JobPollInterval
+	if pollInterval <= 0 {
+		pollInterval = 15 * time.Second // Default to 15 seconds
+	}
+	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	for {

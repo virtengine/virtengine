@@ -24,6 +24,8 @@ import (
 	simcli "github.com/cosmos/cosmos-sdk/x/simulation/client/cli"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/cosmos/gogoproto/proto"
+
+	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
 
 // Simulation parameter constants
@@ -225,7 +227,7 @@ func AppStateRandomizedFn(
 		Accounts:     accs,
 		InitialStake: initialStake,
 		NumBonded:    numInitiallyBonded,
-		BondDenom:    sdk.DefaultBondDenom,
+		BondDenom:    sdkutil.BondDenom,
 		GenTimestamp: genesisTimestamp,
 	}
 

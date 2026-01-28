@@ -417,8 +417,8 @@ func createMultiRecipientTestEnvelope(t *testing.T, plaintext []byte, recipientP
 	encryptedKeys := make([][]byte, len(recipientPubKeys))
 	recipientKeyIDs := make([]string, len(recipientPubKeys))
 	for i, pubKey := range recipientPubKeys {
-		keyNonce := generateTestNonce(t)
-		encryptedKeys[i] = simulateEncryption(dek[:], pubKey, sender.PrivateKey[:], keyNonce[:])
+		// Use the main envelope nonce for key encryption (ensures decryption can succeed)
+		encryptedKeys[i] = simulateEncryption(dek[:], pubKey, sender.PrivateKey[:], nonce[:])
 		recipientKeyIDs[i] = computeKeyFingerprint(pubKey)
 	}
 
@@ -495,8 +495,10 @@ func simulateEncryption(plaintext, recipientPubKey, senderPrivKey, nonce []byte)
 	for i, b := range plaintext {
 		result[i] = b ^ key[i%len(key)] ^ nonce[i%len(nonce)]
 	}
-	// Add fake auth tag
-	copy(result[len(plaintext):], sha256Hash(result[:len(plaintext)])[:16])
+	// Compute auth tag using key (simulates Poly1305)
+	tagData := append(result[:len(plaintext)], key...)
+	tagData = append(tagData, nonce...)
+	copy(result[len(plaintext):], sha256Hash(tagData)[:16])
 	return result
 }
 
@@ -507,15 +509,18 @@ func simulateDecryption(ciphertext, senderPubKey, recipientPrivKey, nonce []byte
 
 	key := deriveKey(senderPubKey, recipientPrivKey)
 	dataLen := len(ciphertext) - 16
+
+	// Verify auth tag using key (simulates Poly1305 verification)
+	tagData := append(ciphertext[:dataLen], key...)
+	tagData = append(tagData, nonce...)
+	expectedTag := sha256Hash(tagData)[:16]
+	if !bytes.Equal(expectedTag, ciphertext[dataLen:]) {
+		return nil, NewDecryptionError("authentication failed")
+	}
+
 	result := make([]byte, dataLen)
 	for i := 0; i < dataLen; i++ {
 		result[i] = ciphertext[i] ^ key[i%len(key)] ^ nonce[i%len(nonce)]
-	}
-
-	// Verify auth tag
-	expectedTag := sha256Hash(ciphertext[:dataLen])[:16]
-	if !bytes.Equal(expectedTag, ciphertext[dataLen:]) {
-		return nil, NewDecryptionError("authentication failed")
 	}
 
 	return result, nil
@@ -526,7 +531,10 @@ func simulateSymmetricEncryption(plaintext, key, nonce []byte) []byte {
 	for i, b := range plaintext {
 		result[i] = b ^ key[i%len(key)] ^ nonce[i%len(nonce)]
 	}
-	copy(result[len(plaintext):], sha256Hash(result[:len(plaintext)])[:16])
+	// Compute auth tag using key (simulates Poly1305)
+	tagData := append(result[:len(plaintext)], key...)
+	tagData = append(tagData, nonce...)
+	copy(result[len(plaintext):], sha256Hash(tagData)[:16])
 	return result
 }
 
@@ -536,14 +544,18 @@ func simulateSymmetricDecryption(ciphertext, key, nonce []byte) ([]byte, error) 
 	}
 
 	dataLen := len(ciphertext) - 16
+
+	// Verify auth tag using key (simulates Poly1305 verification)
+	tagData := append(ciphertext[:dataLen], key...)
+	tagData = append(tagData, nonce...)
+	expectedTag := sha256Hash(tagData)[:16]
+	if !bytes.Equal(expectedTag, ciphertext[dataLen:]) {
+		return nil, NewDecryptionError("authentication failed")
+	}
+
 	result := make([]byte, dataLen)
 	for i := 0; i < dataLen; i++ {
 		result[i] = ciphertext[i] ^ key[i%len(key)] ^ nonce[i%len(nonce)]
-	}
-
-	expectedTag := sha256Hash(ciphertext[:dataLen])[:16]
-	if !bytes.Equal(expectedTag, ciphertext[dataLen:]) {
-		return nil, NewDecryptionError("authentication failed")
 	}
 
 	return result, nil

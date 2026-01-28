@@ -169,11 +169,8 @@ func (s *Service) CreateTicket(ctx context.Context, req *VirtEngineSupportReques
 		return nil, fmt.Errorf("jira service: failed to create ticket: %w", err)
 	}
 
-	// Start SLA tracking
-	if err := s.slaTracker.StartTracking(req.TicketID, issue.Key, req.Priority, req.CreatedAt); err != nil {
-		// Log but don't fail the ticket creation
-		// This is a non-critical error
-	}
+	// Start SLA tracking (non-critical, errors are silently ignored)
+	_ = s.slaTracker.StartTracking(req.TicketID, issue.Key, req.Priority, req.CreatedAt)
 
 	return issue, nil
 }

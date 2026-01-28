@@ -449,7 +449,7 @@ virtengine query market order order_456
 
 ```bash
 # Start full stack
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yaml up -d
 
 # Components started:
 # - Chain node (port 26657, 9090, 1317)

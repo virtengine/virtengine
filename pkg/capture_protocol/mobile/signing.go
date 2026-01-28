@@ -445,6 +445,7 @@ func constantTimeEqual(a, b []byte) bool {
 	}
 	var result byte
 	for i := 0; i < len(a); i++ {
+		//nolint:gosec // G602: length equality verified above
 		result |= a[i] ^ b[i]
 	}
 	return result == 0

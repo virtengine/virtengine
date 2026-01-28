@@ -91,17 +91,17 @@ func (ml *ModelLoader) Load() (*TFModel, error) {
 	// Create TF model struct
 	// Note: Actual TensorFlow session creation is handled by TFModel.Initialize()
 	model := &TFModel{
-		modelPath:    modelPath,
-		modelHash:    computedHash,
-		version:      ml.getVersion(metadata),
-		metadata:     metadata,
-		config:       ml.config,
-		determinism:  ml.determinism,
-		isLoaded:     false,
-		inputName:    ml.getInputName(metadata),
-		outputName:   ml.getOutputName(metadata),
-		inputShape:   metadata.InputShape,
-		outputShape:  metadata.OutputShape,
+		modelPath:   modelPath,
+		modelHash:   computedHash,
+		version:     ml.getVersion(metadata),
+		metadata:    metadata,
+		config:      ml.config,
+		determinism: ml.determinism,
+		isLoaded:    false,
+		inputName:   ml.getInputName(metadata),
+		outputName:  ml.getOutputName(metadata),
+		inputShape:  metadata.InputShape,
+		outputShape: metadata.OutputShape,
 	}
 
 	// Initialize the TensorFlow session
@@ -152,15 +152,16 @@ func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 	// If still not found, return default metadata
 	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
 		return &ModelMetadata{
-			Version:    ml.config.ModelVersion,
-			InputName:  "features",
-			OutputName: "trust_score",
-			InputShape: []int64{-1, TotalFeatureDim},
+			Version:     ml.config.ModelVersion,
+			InputName:   "features",
+			OutputName:  "trust_score",
+			InputShape:  []int64{-1, TotalFeatureDim},
 			OutputShape: []int64{-1, 1},
 		}, nil
 	}
 
 	// Read and parse metadata
+	//nolint:gosec // G304: metadataPath is from trusted model directory configuration
 	data, err := os.ReadFile(metadataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata file: %w", err)
@@ -281,11 +282,12 @@ func (ml *ModelLoader) computeModelHash(modelPath string) (string, error) {
 		}
 
 		// Read and hash file contents
+		//nolint:gosec // G304: path is from trusted model directory
 		file, err := os.Open(path)
 		if err != nil {
 			return fmt.Errorf("failed to open %s: %w", path, err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		if _, err := io.Copy(h, file); err != nil {
 			return fmt.Errorf("failed to hash %s: %w", path, err)
@@ -349,7 +351,7 @@ func (m *TFModel) Initialize() error {
 
 	// Apply environment variables
 	for key, value := range m.determinism.GetTensorFlowEnvVars() {
-		os.Setenv(key, value)
+		_ = os.Setenv(key, value)
 	}
 
 	// Note: Actual TensorFlow model loading would happen here

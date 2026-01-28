@@ -286,6 +286,81 @@ signature certifies that you wrote the patch or otherwise have the right to pass
 it on as an open-source patch. The rules are pretty simple: if you can certify
 the below (from [developercertificate.org](http://developercertificate.org/)):
 
+### Commit Message Format
+
+We use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages. This ensures a consistent commit history and enables automatic changelog generation.
+
+#### Format
+
+```
+type(scope): description
+
+[optional body]
+
+[optional footer(s)]
+```
+
+#### Types
+
+| Type       | Description                                           |
+|------------|-------------------------------------------------------|
+| `feat`     | A new feature                                         |
+| `fix`      | A bug fix                                             |
+| `docs`     | Documentation only changes                            |
+| `style`    | Changes that do not affect the meaning of the code    |
+| `refactor` | Code change that neither fixes a bug nor adds feature |
+| `perf`     | Performance improvement                               |
+| `test`     | Adding missing tests or correcting existing tests     |
+| `build`    | Changes affecting build system or external deps       |
+| `ci`       | Changes to CI configuration files and scripts         |
+| `chore`    | Other changes that don't modify src or test files     |
+| `revert`   | Reverts a previous commit                             |
+
+#### Scopes (Optional)
+
+Use module names as scopes when applicable:
+
+- **Blockchain modules:** `veid`, `mfa`, `encryption`, `market`, `escrow`, `roles`, `hpc`
+- **Infrastructure:** `provider`, `sdk`, `cli`, `app`
+- **Development:** `deps`, `ci`, `api`, `ml`, `tests`
+
+#### Examples
+
+```bash
+# Feature with scope
+feat(veid): add identity verification flow
+
+# Bug fix with scope
+fix(market): resolve bid race condition
+
+# Documentation without scope
+docs: update contributing guidelines
+
+# Breaking change (note the !)
+feat(api)!: change response format for provider endpoints
+
+# Dependency update
+chore(deps): bump cosmos-sdk to v0.53.1
+
+# With body and footer
+fix(escrow): handle timeout edge case
+
+The escrow module was not properly handling timeouts when
+the provider went offline during lease finalization.
+
+Closes #123
+```
+
+#### Local Validation
+
+Install commitlint for local validation:
+
+```bash
+npm install --save-dev @commitlint/cli @commitlint/config-conventional
+```
+
+The repository includes a `commitlint.config.js` with project-specific rules.
+
 ```
 Developer Certificate of Origin
 Version 1.1

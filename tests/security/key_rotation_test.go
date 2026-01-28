@@ -604,10 +604,11 @@ func (r *ValidatorKeyRegistry) RequiresRotation(addr string, currentHeight int64
 }
 
 type UserAccount struct {
-	id          string
-	primaryKey  []byte
-	recoveryKey []byte
-	keyHistory  []*KeyHistoryEntry
+	id              string
+	primaryKey      []byte
+	recoveryKey     []byte
+	keyHistory      []*KeyHistoryEntry
+	pendingRotation *KeyRotationRequest
 }
 
 type KeyHistoryEntry struct {
@@ -654,11 +655,13 @@ func (a *UserAccount) SetRecoveryKey(key []byte) {
 }
 
 func (a *UserAccount) InitiateKeyRotation(newKey []byte) *KeyRotationRequest {
-	return &KeyRotationRequest{
+	req := &KeyRotationRequest{
 		ID:     "rotation_" + a.id,
 		Status: "mfa_required",
 		NewKey: newKey,
 	}
+	a.pendingRotation = req
+	return req
 }
 
 func (a *UserAccount) CompleteKeyRotation(requestID string, mfaToken string) error {
@@ -666,7 +669,11 @@ func (a *UserAccount) CompleteKeyRotation(requestID string, mfaToken string) err
 	if mfaToken == "" {
 		return &KeyRotationError{Message: "MFA required"}
 	}
-	// Would look up the request and get the new key
+	// Apply the pending rotation
+	if a.pendingRotation != nil && a.pendingRotation.ID == requestID {
+		a.SetPrimaryKey(a.pendingRotation.NewKey)
+		a.pendingRotation = nil
+	}
 	return nil
 }
 

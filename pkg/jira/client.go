@@ -196,7 +196,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	if err != nil {
 		return nil, 0, fmt.Errorf("jira: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

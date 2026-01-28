@@ -64,7 +64,7 @@ function gen_rust() {
 function gen_pulsar() {
 	gen buf.gen.pulsar.yaml
 
-	cp -r pulsar/akash/* go/node/
+	cp -r pulsar/virtengine/* go/node/
 }
 
 function gen_ts() {
@@ -80,7 +80,7 @@ function gen_ts() {
 function gen_doc() {
 	local workdir
 
-	workdir=$AKASH_DEVCACHE_TMP/swagger-gen
+	workdir=$VIRTENGINE_DEVCACHE_TMP/swagger-gen
 
 	function cleanup {
 		rm -rf "$workdir"

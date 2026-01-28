@@ -18,18 +18,18 @@ const (
 
 // MockOODClient is a mock implementation of OODClient for testing
 type MockOODClient struct {
-	mu             sync.RWMutex
-	connected      bool
-	authenticated  map[string]bool
-	sessions       map[string]*OODSession
-	apps           []InteractiveApp
-	files          map[string][]FileInfo
-	templates      []JobTemplate
-	nextSessionID  int
-	failConnect    bool
-	failAuth       bool
-	failLaunch     bool
-	failTerminate  bool
+	mu            sync.RWMutex
+	connected     bool
+	authenticated map[string]bool
+	sessions      map[string]*OODSession
+	apps          []InteractiveApp
+	files         map[string][]FileInfo
+	templates     []JobTemplate
+	nextSessionID int
+	failConnect   bool
+	failAuth      bool
+	failLaunch    bool
+	failTerminate bool
 }
 
 // NewMockOODClient creates a new mock OOD client

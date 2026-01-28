@@ -151,11 +151,11 @@ func (l *defaultLogger) outputJSON(fields []Field) {
 
 	bytes, err := json.Marshal(data)
 	if err != nil {
-		fmt.Fprintf(l.output, `{"error":"failed to marshal log: %v"}`+"\n", err)
+		_, _ = fmt.Fprintf(l.output, `{"error":"failed to marshal log: %v"}`+"\n", err)
 		return
 	}
 
-	fmt.Fprintln(l.output, string(bytes))
+	_, _ = fmt.Fprintln(l.output, string(bytes))
 }
 
 func (l *defaultLogger) outputText(level Level, msg string, fields []Field) {
@@ -173,10 +173,10 @@ func (l *defaultLogger) outputText(level Level, msg string, fields []Field) {
 		b.WriteString(" ")
 		b.WriteString(f.Key)
 		b.WriteString("=")
-		fmt.Fprintf(&b, "%v", f.Value)
+		_, _ = fmt.Fprintf(&b, "%v", f.Value)
 	}
 
-	fmt.Fprintln(l.output, b.String())
+	_, _ = fmt.Fprintln(l.output, b.String())
 }
 
 func (l *defaultLogger) Debug(msg string, fields ...Field) { l.log(LevelDebug, msg, fields...) }
@@ -535,14 +535,14 @@ func (m *noopMetrics) Summary(name, help string, objectives map[float64]float64,
 
 type noopCounter struct{}
 
-func (c *noopCounter) Inc(labels ...string)              {}
+func (c *noopCounter) Inc(labels ...string)                {}
 func (c *noopCounter) Add(value float64, labels ...string) {}
 
 type noopGauge struct{}
 
 func (g *noopGauge) Set(value float64, labels ...string) {}
-func (g *noopGauge) Inc(labels ...string)              {}
-func (g *noopGauge) Dec(labels ...string)              {}
+func (g *noopGauge) Inc(labels ...string)                {}
+func (g *noopGauge) Dec(labels ...string)                {}
 func (g *noopGauge) Add(value float64, labels ...string) {}
 func (g *noopGauge) Sub(value float64, labels ...string) {}
 
@@ -565,9 +565,9 @@ func (t *noopTracer) Inject(ctx context.Context, carrier Carrier) error         
 
 type noopSpan struct{}
 
-func (s *noopSpan) End()                                      {}
+func (s *noopSpan) End()                                          {}
 func (s *noopSpan) SetStatus(code StatusCode, description string) {}
 func (s *noopSpan) SetAttribute(key string, value interface{})    {}
-func (s *noopSpan) RecordError(err error)                        {}
+func (s *noopSpan) RecordError(err error)                         {}
 func (s *noopSpan) AddEvent(name string, attrs ...Field)          {}
 func (s *noopSpan) SpanContext() SpanContext                      { return SpanContext{} }

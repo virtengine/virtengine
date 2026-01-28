@@ -5,7 +5,8 @@
 set -e
 
 # Setup environment
-export VIRTENGINE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VIRTENGINE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export VIRTENGINE_ROOT
 export VIRTENGINE_DEVCACHE="$VIRTENGINE_ROOT/sdk/.cache"
 export VIRTENGINE_DEVCACHE_BIN="$VIRTENGINE_DEVCACHE/bin"
 export VIRTENGINE_DEVCACHE_VERSIONS="$VIRTENGINE_DEVCACHE/versions"
