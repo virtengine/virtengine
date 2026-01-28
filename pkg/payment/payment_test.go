@@ -616,7 +616,8 @@ func TestService_ConversionService(t *testing.T) {
 // ============================================================================
 
 func TestStripeAdapter(t *testing.T) {
-	adapter, err := NewStripeAdapter(StripeConfig{
+	// Use stub adapter for unit tests (no network calls)
+	adapter, err := NewStripeStubAdapter(StripeConfig{
 		SecretKey: "sk_test_xxx",
 	})
 	require.NoError(t, err)
@@ -627,7 +628,7 @@ func TestStripeAdapter(t *testing.T) {
 }
 
 func TestStripeAdapter_InvalidConfig(t *testing.T) {
-	_, err := NewStripeAdapter(StripeConfig{})
+	_, err := NewStripeStubAdapter(StripeConfig{})
 	assert.ErrorIs(t, err, ErrGatewayNotConfigured)
 }
 

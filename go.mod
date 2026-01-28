@@ -43,6 +43,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
+	github.com/stripe/stripe-go/v80 v80.2.1
 	github.com/virtengine/virtengine/sdk/go v0.0.0-00010101000000-000000000000
 	go.step.sm/crypto v0.76.0
 	golang.org/x/crypto v0.47.0

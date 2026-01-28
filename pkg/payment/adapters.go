@@ -1,6 +1,7 @@
 // Package payment provides payment gateway integration for Visa/Mastercard.
 //
 // VE-906: Payment gateway integration for fiat-to-crypto onramp
+// VE-2003: Real Stripe SDK integration (see stripe_adapter.go)
 package payment
 
 import (
@@ -16,52 +17,85 @@ import (
 )
 
 // ============================================================================
-// Stripe Adapter
+// Stripe Adapter Factory
 // ============================================================================
 
-// stripeAdapter implements the Gateway interface for Stripe
-type stripeAdapter struct {
+// NewStripeGateway creates a Stripe gateway adapter.
+// If useRealSDK is true, it returns the real Stripe SDK adapter (stripe_adapter.go).
+// If false, it returns the stub adapter for testing without real API calls.
+//
+// For production use, always set useRealSDK to true.
+// The stub adapter is ONLY for unit tests where you don't want network calls.
+func NewStripeGateway(config StripeConfig, useRealSDK bool) (Gateway, error) {
+	if useRealSDK {
+		return NewRealStripeAdapter(config)
+	}
+	return NewStripeStubAdapter(config)
+}
+
+// ============================================================================
+// Stripe Stub Adapter (DEPRECATED - Use NewRealStripeAdapter for production)
+// ============================================================================
+
+// stripeStubAdapter is a STUB implementation for testing only.
+// DEPRECATED: Use StripeAdapter (stripe_adapter.go) for production.
+//
+// WARNING: This adapter returns FAKE customer IDs (cus_xxx) and payment intents.
+// NO REAL PAYMENTS ARE PROCESSED. Do NOT use in production!
+type stripeStubAdapter struct {
 	config     StripeConfig
 	httpClient *http.Client
 	baseURL    string
 }
 
-// NewStripeAdapter creates a new Stripe gateway adapter
-func NewStripeAdapter(config StripeConfig) (Gateway, error) {
+// NewStripeStubAdapter creates a STUB Stripe adapter for testing.
+// DEPRECATED: Use NewRealStripeAdapter for production.
+//
+// WARNING: This returns fake payment data. For production, use NewStripeGateway(config, true)
+// or NewRealStripeAdapter(config).
+func NewStripeStubAdapter(config StripeConfig) (Gateway, error) {
 	if config.SecretKey == "" {
 		return nil, ErrGatewayNotConfigured
 	}
 
 	baseURL := "https://api.stripe.com/v1"
 
-	return &stripeAdapter{
+	return &stripeStubAdapter{
 		config:     config,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    baseURL,
 	}, nil
 }
 
-func (a *stripeAdapter) Name() string {
+// NewStripeAdapter creates a new Stripe gateway adapter.
+// DEPRECATED: This now returns the REAL Stripe SDK adapter.
+// For explicit control, use NewStripeGateway(config, useRealSDK) instead.
+func NewStripeAdapter(config StripeConfig) (Gateway, error) {
+	// VE-2003: Now returns the real Stripe SDK adapter by default
+	return NewRealStripeAdapter(config)
+}
+
+func (a *stripeStubAdapter) Name() string {
 	return "Stripe"
 }
 
-func (a *stripeAdapter) Type() GatewayType {
+func (a *stripeStubAdapter) Type() GatewayType {
 	return GatewayStripe
 }
 
-func (a *stripeAdapter) IsHealthy(ctx context.Context) bool {
+func (a *stripeStubAdapter) IsHealthy(ctx context.Context) bool {
 	// Check API connectivity by listing balance
 	// In production, make actual API call
 	return a.config.SecretKey != ""
 }
 
-func (a *stripeAdapter) Close() error {
+func (a *stripeStubAdapter) Close() error {
 	return nil
 }
 
 // ---- Customer Management ----
 
-func (a *stripeAdapter) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
+func (a *stripeStubAdapter) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
 	// In production, this would make actual Stripe API call
 	// POST https://api.stripe.com/v1/customers
 	customer := Customer{
@@ -76,7 +110,7 @@ func (a *stripeAdapter) CreateCustomer(ctx context.Context, req CreateCustomerRe
 	return customer, nil
 }
 
-func (a *stripeAdapter) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
+func (a *stripeStubAdapter) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
 	// GET https://api.stripe.com/v1/customers/{id}
 	if !strings.HasPrefix(customerID, "cus_") {
 		return Customer{}, ErrPaymentIntentNotFound
@@ -84,7 +118,7 @@ func (a *stripeAdapter) GetCustomer(ctx context.Context, customerID string) (Cus
 	return Customer{ID: customerID}, nil
 }
 
-func (a *stripeAdapter) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
+func (a *stripeStubAdapter) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
 	// POST https://api.stripe.com/v1/customers/{id}
 	customer, err := a.GetCustomer(ctx, customerID)
 	if err != nil {
@@ -113,14 +147,14 @@ func (a *stripeAdapter) UpdateCustomer(ctx context.Context, customerID string, r
 	return customer, nil
 }
 
-func (a *stripeAdapter) DeleteCustomer(ctx context.Context, customerID string) error {
+func (a *stripeStubAdapter) DeleteCustomer(ctx context.Context, customerID string) error {
 	// DELETE https://api.stripe.com/v1/customers/{id}
 	return nil
 }
 
 // ---- Payment Methods ----
 
-func (a *stripeAdapter) AttachPaymentMethod(ctx context.Context, customerID string, token CardToken) (string, error) {
+func (a *stripeStubAdapter) AttachPaymentMethod(ctx context.Context, customerID string, token CardToken) (string, error) {
 	// POST https://api.stripe.com/v1/payment_methods/{id}/attach
 	if token.Token == "" {
 		return "", ErrInvalidCardToken
@@ -128,19 +162,19 @@ func (a *stripeAdapter) AttachPaymentMethod(ctx context.Context, customerID stri
 	return token.Token, nil
 }
 
-func (a *stripeAdapter) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
+func (a *stripeStubAdapter) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
 	// POST https://api.stripe.com/v1/payment_methods/{id}/detach
 	return nil
 }
 
-func (a *stripeAdapter) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
+func (a *stripeStubAdapter) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
 	// GET https://api.stripe.com/v1/payment_methods?customer={id}&type=card
 	return nil, nil
 }
 
 // ---- Payment Intents ----
 
-func (a *stripeAdapter) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
+func (a *stripeStubAdapter) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
 	// POST https://api.stripe.com/v1/payment_intents
 	intent := PaymentIntent{
 		ID:                  fmt.Sprintf("pi_%d", time.Now().UnixNano()),
@@ -166,7 +200,7 @@ func (a *stripeAdapter) CreatePaymentIntent(ctx context.Context, req PaymentInte
 	return intent, nil
 }
 
-func (a *stripeAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
+func (a *stripeStubAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
 	// GET https://api.stripe.com/v1/payment_intents/{id}
 	if !strings.HasPrefix(paymentIntentID, "pi_") {
 		return PaymentIntent{}, ErrPaymentIntentNotFound
@@ -178,7 +212,7 @@ func (a *stripeAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID st
 	}, nil
 }
 
-func (a *stripeAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
+func (a *stripeStubAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
 	// POST https://api.stripe.com/v1/payment_intents/{id}/confirm
 	intent, err := a.GetPaymentIntent(ctx, paymentIntentID)
 	if err != nil {
@@ -193,7 +227,7 @@ func (a *stripeAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentI
 	return intent, nil
 }
 
-func (a *stripeAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
+func (a *stripeStubAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
 	// POST https://api.stripe.com/v1/payment_intents/{id}/cancel
 	intent, err := a.GetPaymentIntent(ctx, paymentIntentID)
 	if err != nil {
@@ -206,7 +240,7 @@ func (a *stripeAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID
 	return intent, nil
 }
 
-func (a *stripeAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
+func (a *stripeStubAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
 	// POST https://api.stripe.com/v1/payment_intents/{id}/capture
 	intent, err := a.GetPaymentIntent(ctx, paymentIntentID)
 	if err != nil {
@@ -226,7 +260,7 @@ func (a *stripeAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentI
 
 // ---- Refunds ----
 
-func (a *stripeAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
+func (a *stripeStubAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
 	// POST https://api.stripe.com/v1/refunds
 	intent, err := a.GetPaymentIntent(ctx, req.PaymentIntentID)
 	if err != nil {
@@ -251,7 +285,7 @@ func (a *stripeAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Re
 	return refund, nil
 }
 
-func (a *stripeAdapter) GetRefund(ctx context.Context, refundID string) (Refund, error) {
+func (a *stripeStubAdapter) GetRefund(ctx context.Context, refundID string) (Refund, error) {
 	// GET https://api.stripe.com/v1/refunds/{id}
 	if !strings.HasPrefix(refundID, "re_") {
 		return Refund{}, ErrRefundNotAllowed
@@ -264,7 +298,7 @@ func (a *stripeAdapter) GetRefund(ctx context.Context, refundID string) (Refund,
 
 // ---- Webhooks ----
 
-func (a *stripeAdapter) ValidateWebhook(payload []byte, signature string) error {
+func (a *stripeStubAdapter) ValidateWebhook(payload []byte, signature string) error {
 	if a.config.WebhookSecret == "" {
 		return ErrWebhookSignatureInvalid
 	}
@@ -297,7 +331,7 @@ func (a *stripeAdapter) ValidateWebhook(payload []byte, signature string) error 
 	return nil
 }
 
-func (a *stripeAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
+func (a *stripeStubAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
 	var event struct {
 		ID      string          `json:"id"`
 		Type    string          `json:"type"`
