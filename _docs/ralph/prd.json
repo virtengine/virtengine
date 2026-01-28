@@ -70,29 +70,35 @@
     ],
     "moduleCompletionMatrix": {
       "chainModules": {
-        "x/veid": {"completion": 25, "blocker": "MsgServer/QueryServer disabled"},
-        "x/roles": {"completion": 35, "blocker": "MsgServer disabled"},
-        "x/mfa": {"completion": 40, "blocker": "QueryServer disabled"},
-        "x/market": {"completion": 85, "blocker": null},
-        "x/escrow": {"completion": 85, "blocker": null},
-        "x/settlement": {"completion": 85, "blocker": null},
-        "x/encryption": {"completion": 85, "blocker": null},
-        "x/deployment": {"completion": 80, "blocker": null},
-        "x/provider": {"completion": 75, "blocker": null},
-        "x/cert": {"completion": 85, "blocker": null},
-        "x/hpc": {"completion": 55, "blocker": "Interface issues"}
+        "x/veid": {
+          "completion": 25,
+          "blocker": "MsgServer/QueryServer disabled"
+        },
+        "x/roles": { "completion": 35, "blocker": "MsgServer disabled" },
+        "x/mfa": { "completion": 40, "blocker": "QueryServer disabled" },
+        "x/market": { "completion": 85, "blocker": null },
+        "x/escrow": { "completion": 85, "blocker": null },
+        "x/settlement": { "completion": 85, "blocker": null },
+        "x/encryption": { "completion": 85, "blocker": null },
+        "x/deployment": { "completion": 80, "blocker": null },
+        "x/provider": { "completion": 75, "blocker": null },
+        "x/cert": { "completion": 85, "blocker": null },
+        "x/hpc": { "completion": 55, "blocker": "Interface issues" }
       },
       "offchainPackages": {
-        "pkg/enclave_runtime": {"completion": 20, "blocker": "No real TEE"},
-        "pkg/govdata": {"completion": 25, "blocker": "All mock data"},
-        "pkg/edugain": {"completion": 30, "blocker": "SAML stub"},
-        "pkg/payment": {"completion": 35, "blocker": "Mock payments"},
-        "pkg/dex": {"completion": 35, "blocker": "Mock trading"},
-        "pkg/nli": {"completion": 40, "blocker": "No LLM backend"},
-        "pkg/provider_daemon": {"completion": 85, "blocker": null},
-        "pkg/inference": {"completion": 80, "blocker": "Model deployment needed"},
-        "pkg/capture_protocol": {"completion": 85, "blocker": null},
-        "pkg/observability": {"completion": 90, "blocker": null}
+        "pkg/enclave_runtime": { "completion": 20, "blocker": "No real TEE" },
+        "pkg/govdata": { "completion": 25, "blocker": "All mock data" },
+        "pkg/edugain": { "completion": 30, "blocker": "SAML stub" },
+        "pkg/payment": { "completion": 35, "blocker": "Mock payments" },
+        "pkg/dex": { "completion": 35, "blocker": "Mock trading" },
+        "pkg/nli": { "completion": 40, "blocker": "No LLM backend" },
+        "pkg/provider_daemon": { "completion": 85, "blocker": null },
+        "pkg/inference": {
+          "completion": 80,
+          "blocker": "Model deployment needed"
+        },
+        "pkg/capture_protocol": { "completion": 85, "blocker": null },
+        "pkg/observability": { "completion": 90, "blocker": null }
       }
     },
     "remediationPhases": [
@@ -101,35 +107,53 @@
         "name": "Enable Core Services",
         "duration": "1-2 weeks",
         "priority": "P0",
-        "tasks": ["Fix VEID MsgServer/QueryServer", "Fix Roles MsgServer", "Fix MFA QueryServer"]
+        "tasks": [
+          "Fix VEID MsgServer/QueryServer",
+          "Fix Roles MsgServer",
+          "Fix MFA QueryServer"
+        ]
       },
       {
         "phase": 2,
         "name": "Consensus Safety",
         "duration": "1 week",
         "priority": "P0",
-        "tasks": ["Replace time.Now() with ctx.BlockTime()", "Generate proper proto files"]
+        "tasks": [
+          "Replace time.Now() with ctx.BlockTime()",
+          "Generate proper proto files"
+        ]
       },
       {
         "phase": 3,
         "name": "Real TEE Implementation",
         "duration": "4-6 weeks",
         "priority": "P0",
-        "tasks": ["Intel SGX or AMD SEV-SNP integration", "Attestation verification"]
+        "tasks": [
+          "Intel SGX or AMD SEV-SNP integration",
+          "Attestation verification"
+        ]
       },
       {
         "phase": 4,
         "name": "Real Integrations",
         "duration": "6-8 weeks",
         "priority": "P1",
-        "tasks": ["Payment gateway (Stripe)", "DEX integration", "Government APIs"]
+        "tasks": [
+          "Payment gateway (Stripe)",
+          "DEX integration",
+          "Government APIs"
+        ]
       },
       {
         "phase": 5,
         "name": "Scale Testing",
         "duration": "4 weeks",
         "priority": "P1",
-        "tasks": ["1M node load testing", "Chaos engineering", "Performance optimization"]
+        "tasks": [
+          "1M node load testing",
+          "Chaos engineering",
+          "Performance optimization"
+        ]
       }
     ]
   },

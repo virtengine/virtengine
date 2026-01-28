@@ -37,7 +37,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 | x/delegation | ✅ | ⚠️ | ⚠️ | **50%** | Tests disabled |
 | x/fraud | ✅ | ⚠️ | ⚠️ | **50%** | Tests disabled |
 | x/review | ✅ | ⚠️ | ⚠️ | **50%** | Tests disabled |
-| x/benchmark | ✅ | ⚠️ | ✅ | **60%** | Interface issues |
+| x/benchmark | ✅ | ✅ | ✅ | **75%** | MsgServer implemented (VE-2016) |
 | x/enclave | ✅ | ✅ | ✅ | **70%** | Minimal tests |
 | x/audit | ✅ | ✅ | ✅ | **70%** | Minimal tests |
 
@@ -647,7 +647,7 @@ Many tasks were "completed" as **interface scaffolding and stub implementations*
 | VE-2006 | GovData | Implement real government data API adapters | NOT STARTED | - |
 | VE-2007 | DEX | Implement real DEX integration (Osmosis) | NOT STARTED | - |
 | VE-2015 | VEID | Implement missing VEID query methods | NOT STARTED | - |
-| VE-2016 | Benchmark | Add MsgServer registration for benchmark module | NOT STARTED | - |
+| VE-2016 | Benchmark | Add MsgServer registration for benchmark module | **COMPLETED** | 2026-01-28 |
 | VE-2017 | Delegation | Add MsgServer registration for delegation module | NOT STARTED | - |
 | VE-2018 | Fraud | Add MsgServer registration for fraud module | NOT STARTED | - |
 | VE-2019 | HPC | Add MsgServer registration for HPC module | NOT STARTED | - |

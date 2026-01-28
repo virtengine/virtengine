@@ -25,6 +25,7 @@ import (
 var (
 	_ module.AppModuleBasic = AppModuleBasic{}
 	_ module.AppModule      = AppModule{}
+	_ module.HasServices    = AppModule{}
 
 	_ appmodule.AppModule       = AppModule{}
 	_ appmodule.HasBeginBlocker = AppModule{}
@@ -114,7 +115,9 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	// Message server and query server registration would go here
+	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	// Query server registration would go here when implemented
+	// types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
 }
 
 // InitGenesis performs genesis initialization for the Benchmark module.

@@ -15,11 +15,7 @@ import (
 
 // CreateChallenge creates a new benchmark challenge
 func (k Keeper) CreateChallenge(ctx sdk.Context, challenge *types.BenchmarkChallenge) error {
-	if err := challenge.Validate(); err != nil {
-		return fmt.Errorf("invalid challenge: %w", err)
-	}
-
-	// Check provider exists
+	// Check provider exists first
 	providerAddr, err := sdk.AccAddressFromBech32(challenge.ProviderAddress)
 	if err != nil {
 		return types.ErrUnknownProvider.Wrapf("invalid address: %v", err)
@@ -29,11 +25,16 @@ func (k Keeper) CreateChallenge(ctx sdk.Context, challenge *types.BenchmarkChall
 		return types.ErrUnknownProvider.Wrapf("provider not found: %s", challenge.ProviderAddress)
 	}
 
-	// Generate challenge ID if not set
+	// Generate challenge ID if not set (before validation)
 	if challenge.ChallengeID == "" {
 		seq := k.GetNextChallengeSequence(ctx)
 		challenge.ChallengeID = fmt.Sprintf("challenge-%d", seq)
 		k.SetNextChallengeSequence(ctx, seq+1)
+	}
+
+	// Now validate with ChallengeID set
+	if err := challenge.Validate(); err != nil {
+		return fmt.Errorf("invalid challenge: %w", err)
 	}
 
 	// Set defaults
