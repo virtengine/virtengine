@@ -121,11 +121,33 @@ The chosen tool for vendoring code in the project is [dep](https://github.com/go
 
 ### How are releases made?
 
-Releases are made by the *Project Lead* on a regular basis and when deemed necessary. If you want to request a new release then mention this on your PR or Issue.
+For detailed release management procedures, see [RELEASE.md](./RELEASE.md).
 
-Releases are cut with `git` tags and a successful Travis build results in new binary artifacts and Docker images being published to the Docker Hub and Quay.io. See the "Build" badge on each GitHub README file for more.
+**Quick Summary:**
 
-How are credentials managed for quay.io and the Docker Hub? These credentials are maintained by the *Project Lead*.
+1. **Branching Strategy:**
+   - `main` branch for development (odd minor versions like v0.9.x)
+   - `mainnet/main` branch for production (even minor versions like v0.10.x)
+
+2. **Release Process:**
+   - Release candidates are published for community testing (e.g., v0.10.0-rc.1)
+   - After validation, stable releases are tagged (e.g., v0.10.0)
+   - GitHub Actions triggers GoReleaser to build and publish
+
+3. **Artifacts Published:**
+   - GitHub Releases: binaries for Linux (amd64, arm64) and macOS (universal)
+   - Docker images: `ghcr.io/virtengine/node:<version>`
+   - Homebrew: `virtengine/homebrew-tap` (mainnet stable releases only)
+
+4. **Requesting a Release:**
+   - For bug fixes: mention urgency in your PR
+   - For features: coordinate with release manager via GitHub Issue
+   - For emergency fixes: contact core team directly
+
+See also:
+- [RELEASE.md](./RELEASE.md) - Complete release management process
+- [_docs/version-control.md](./_docs/version-control.md) - Version control practices
+- [ADR-001: Network Upgrades](./_docs/adr/adr-001-network-upgrades.md) - Network upgrade implementation
 
 ## Governance
 
