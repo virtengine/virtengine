@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until provider daemon types compilation errors are fixed.
-
 package daemon
 
 import (
@@ -264,7 +259,7 @@ func TestPerformUsageFraudChecks(t *testing.T) {
 
 	t.Run("impossible CPU fails check", func(t *testing.T) {
 		record := baseRecord
-		record.CPUMillicores = 2000 * 1000 // 2000 cores
+		record.ResourceUsage.CPUMillicores = 2000 * 1000 // 2000 cores
 		flags := PerformUsageFraudChecks(record, nil)
 		assert.False(t, flags.OverallPassed)
 
@@ -281,7 +276,7 @@ func TestPerformUsageFraudChecks(t *testing.T) {
 
 	t.Run("impossible memory fails check", func(t *testing.T) {
 		record := baseRecord
-		record.MemoryBytesMax = 20 * 1024 * 1024 * 1024 * 1024 // 20TB
+		record.ResourceUsage.MemoryBytesMax = 20 * 1024 * 1024 * 1024 * 1024 // 20TB
 		flags := PerformUsageFraudChecks(record, nil)
 		assert.False(t, flags.OverallPassed)
 
@@ -303,7 +298,7 @@ func TestPerformUsageFraudChecks(t *testing.T) {
 		record.RecordID = "record-2"
 		record.TimeWindow.StartTime = now
 		record.TimeWindow.EndTime = now.Add(1 * time.Hour)
-		record.CPUMillicores = 200000 // 200x increase
+		record.ResourceUsage.CPUMillicores = 200000 // 200x increase
 
 		flags := PerformUsageFraudChecks(record, &prevRecord)
 		assert.True(t, flags.FlaggedForReview)

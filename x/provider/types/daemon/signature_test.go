@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until provider daemon types compilation errors are fixed.
-
 package daemon
 
 import (
