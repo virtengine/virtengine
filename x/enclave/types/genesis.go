@@ -33,6 +33,18 @@ type Params struct {
 
 	// CommitteeSize is the size of the identity committee (if committee mode enabled)
 	CommitteeSize uint32 `json:"committee_size,omitempty"`
+
+	// CommitteeEpochBlocks is the number of blocks per committee epoch
+	CommitteeEpochBlocks int64 `json:"committee_epoch_blocks,omitempty"`
+
+	// EnableMeasurementCleanup enables automatic cleanup of expired measurements
+	EnableMeasurementCleanup bool `json:"enable_measurement_cleanup"`
+
+	// MaxRegistrationsPerBlock limits registrations per block (0 = unlimited)
+	MaxRegistrationsPerBlock uint32 `json:"max_registrations_per_block"`
+
+	// RegistrationCooldownBlocks enforces cooldown between re-registrations
+	RegistrationCooldownBlocks int64 `json:"registration_cooldown_blocks"`
 }
 
 // DefaultParams returns the default enclave parameters
@@ -48,6 +60,10 @@ func DefaultParams() Params {
 		MaxAttestationAge:          10000,                                    // ~14 hours
 		EnableCommitteeMode:        false,
 		CommitteeSize:              0,
+		CommitteeEpochBlocks:       10000,                                    // ~14 hours per epoch
+		EnableMeasurementCleanup:   false,                                    // Disabled by default
+		MaxRegistrationsPerBlock:   0,                                        // Unlimited by default
+		RegistrationCooldownBlocks: 0,                                        // No cooldown by default
 	}
 }
 

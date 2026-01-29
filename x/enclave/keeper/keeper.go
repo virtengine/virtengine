@@ -152,6 +152,11 @@ func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.Enclave
 		return types.ErrEnclaveIdentityExists
 	}
 
+	// Check rate limits
+	if err := k.CheckRegistrationRateLimit(ctx, validatorAddr); err != nil {
+		return err
+	}
+
 	// Validate TEE type is allowed
 	params := k.GetParams(ctx)
 	if !params.IsTEETypeAllowed(identity.TEEType) {
@@ -191,6 +196,10 @@ func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.Enclave
 	// Store key fingerprint index
 	fingerprint := identity.KeyFingerprint()
 	store.Set(types.EnclaveKeyByFingerprintKey([]byte(fingerprint)), validatorAddr)
+
+	// Update rate limit tracking
+	k.IncrementBlockRegistrationCount(ctx)
+	k.RecordValidatorRegistration(ctx, validatorAddr)
 
 	// Emit event
 	ctx.EventManager().EmitEvent(
@@ -385,6 +394,9 @@ func (k Keeper) CompleteKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddres
 		),
 	)
 
+	// Record metrics
+	k.RecordKeyRotationCompleted()
+
 	return nil
 }
 
@@ -516,23 +528,7 @@ func (k Keeper) GetActiveValidatorEnclaveKeys(ctx sdk.Context) []types.EnclaveId
 	return identities
 }
 
-// GetCommitteeEnclaveKeys returns enclave keys for the identity committee
-func (k Keeper) GetCommitteeEnclaveKeys(ctx sdk.Context, epoch uint64) []types.EnclaveIdentity {
-	params := k.GetParams(ctx)
-	if !params.EnableCommitteeMode {
-		return k.GetActiveValidatorEnclaveKeys(ctx)
-	}
-
-	// For committee mode, select a subset based on epoch
-	// This is a simplified implementation - production would use deterministic selection
-	allKeys := k.GetActiveValidatorEnclaveKeys(ctx)
-	if uint32(len(allKeys)) <= params.CommitteeSize {
-		return allKeys
-	}
-
-	// Select first CommitteeSize validators (production would use proper selection algorithm)
-	return allKeys[:params.CommitteeSize]
-}
+// GetCommitteeEnclaveKeys is now implemented in committee.go with deterministic selection
 
 // GetMeasurementAllowlist returns all measurements in the allowlist
 func (k Keeper) GetMeasurementAllowlist(ctx sdk.Context, teeType string, includeRevoked bool) []types.MeasurementRecord {

@@ -62,4 +62,13 @@ var (
 
 	// ErrInvalidQuoteVersion is returned when the quote version is not supported
 	ErrInvalidQuoteVersion = errors.Register(ModuleName, 1918, "unsupported quote version")
+
+	// ErrRegistrationRateLimit is returned when registration rate limit is exceeded
+	ErrRegistrationRateLimit = errors.Register(ModuleName, 1919, "registration rate limit exceeded")
+
+	// ErrRegistrationCooldown is returned when validator is in cooldown period
+	ErrRegistrationCooldown = errors.Register(ModuleName, 1920, "validator in registration cooldown period")
+
+	// ErrTooManyRegistrations is returned when block registration limit is exceeded
+	ErrTooManyRegistrations = errors.Register(ModuleName, 1921, "too many registrations in block")
 )
