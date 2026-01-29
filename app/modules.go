@@ -199,6 +199,8 @@ func appModules(
 			app.Keepers.Cosmos.Acct,
 			app.Keepers.Cosmos.Bank,
 			app.Keepers.VirtEngine.Market,
+			app.Keepers.VirtEngine.VEID,
+			app.Keepers.VirtEngine.MFA,
 		),
 		audit.NewAppModule(
 			app.cdc,
@@ -390,6 +392,8 @@ func appSimModules(
 			app.Keepers.Cosmos.Acct,
 			app.Keepers.Cosmos.Bank,
 			app.Keepers.VirtEngine.Market,
+			app.Keepers.VirtEngine.VEID,
+			app.Keepers.VirtEngine.MFA,
 		),
 
 		cert.NewAppModule(
