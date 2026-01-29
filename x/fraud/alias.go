@@ -1,6 +1,7 @@
 // Package fraud implements the Fraud module for VirtEngine.
 //
 // VE-912: Fraud reporting flow - Module aliases
+// VE-3053: Fixed to use proto-generated types
 package fraud
 
 import (
@@ -16,29 +17,29 @@ const (
 	QuerierRoute = types.QuerierRoute
 )
 
-// Type aliases
+// Type aliases - local types from x/fraud/types
 type (
 	Keeper = keeper.Keeper
 
-	// Genesis types
+	// Genesis types (local)
 	GenesisState = types.GenesisState
 	Params       = types.Params
 
-	// Fraud report types
+	// Fraud report types (local)
 	FraudReport       = types.FraudReport
 	FraudReportStatus = types.FraudReportStatus
 	FraudCategory     = types.FraudCategory
 	ResolutionType    = types.ResolutionType
 	EncryptedEvidence = types.EncryptedEvidence
 
-	// Audit types
+	// Audit types (local)
 	FraudAuditLog = types.FraudAuditLog
 	AuditAction   = types.AuditAction
 
-	// Queue types
+	// Queue types (local)
 	ModeratorQueueEntry = types.ModeratorQueueEntry
 
-	// Message types
+	// Message types (proto-generated, re-exported from types)
 	MsgSubmitFraudReport   = types.MsgSubmitFraudReport
 	MsgAssignModerator     = types.MsgAssignModerator
 	MsgUpdateReportStatus  = types.MsgUpdateReportStatus
@@ -48,7 +49,7 @@ type (
 	MsgUpdateParams        = types.MsgUpdateParams
 )
 
-// Status constants
+// Status constants (local)
 const (
 	FraudReportStatusUnspecified = types.FraudReportStatusUnspecified
 	FraudReportStatusSubmitted   = types.FraudReportStatusSubmitted
@@ -58,7 +59,7 @@ const (
 	FraudReportStatusEscalated   = types.FraudReportStatusEscalated
 )
 
-// Category constants
+// Category constants (local)
 const (
 	FraudCategoryUnspecified             = types.FraudCategoryUnspecified
 	FraudCategoryFakeIdentity            = types.FraudCategoryFakeIdentity
@@ -71,7 +72,7 @@ const (
 	FraudCategoryOther                   = types.FraudCategoryOther
 )
 
-// Resolution constants
+// Resolution constants (local)
 const (
 	ResolutionTypeUnspecified = types.ResolutionTypeUnspecified
 	ResolutionTypeWarning     = types.ResolutionTypeWarning
@@ -81,7 +82,7 @@ const (
 	ResolutionTypeNoAction    = types.ResolutionTypeNoAction
 )
 
-// Audit action constants
+// Audit action constants (local)
 const (
 	AuditActionUnspecified    = types.AuditActionUnspecified
 	AuditActionSubmitted      = types.AuditActionSubmitted
@@ -101,15 +102,6 @@ var (
 	// Genesis
 	DefaultGenesisState = types.DefaultGenesisState
 	DefaultParams       = types.DefaultParams
-
-	// Messages
-	NewMsgSubmitFraudReport   = types.NewMsgSubmitFraudReport
-	NewMsgAssignModerator     = types.NewMsgAssignModerator
-	NewMsgUpdateReportStatus  = types.NewMsgUpdateReportStatus
-	NewMsgResolveFraudReport  = types.NewMsgResolveFraudReport
-	NewMsgRejectFraudReport   = types.NewMsgRejectFraudReport
-	NewMsgEscalateFraudReport = types.NewMsgEscalateFraudReport
-	NewMsgUpdateParams        = types.NewMsgUpdateParams
 
 	// Types
 	NewFraudReport          = types.NewFraudReport

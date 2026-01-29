@@ -64,6 +64,8 @@ FROM base AS python-deps
 
 WORKDIR /app
 
+VOLUME ["/tmp"]
+
 # Copy requirements file with pinned versions
 COPY ml/requirements-deterministic.txt requirements.txt
 
@@ -128,23 +130,57 @@ COPY pkg/inference/sidecar/ pkg/inference/sidecar/
 # =============================================================================
 # Stage 5: Final Image
 # =============================================================================
-FROM app AS final
+FROM base AS runtime-deps
 
-# Create non-root user for security
-RUN useradd -m -s /bin/bash veid && \
-    chown -R veid:veid /app
+RUN set -e; \
+    mkdir -p /runtime-libs; \
+    ldd /usr/bin/tesseract | awk '{print $3}' | grep -E '^/' | xargs -r -I '{}' cp --parents '{}' /runtime-libs; \
+    ldd /usr/bin/python3 | awk '{print $3}' | grep -E '^/' | xargs -r -I '{}' cp --parents '{}' /runtime-libs; \
+    for lib in \
+      /usr/lib/x86_64-linux-gnu/libglib-2.0.so.* \
+      /usr/lib/x86_64-linux-gnu/libSM.so.* \
+      /usr/lib/x86_64-linux-gnu/libXext.so.* \
+      /usr/lib/x86_64-linux-gnu/libXrender.so.* \
+      /usr/lib/x86_64-linux-gnu/libGL.so.* \
+      /usr/lib/x86_64-linux-gnu/libgomp.so.* \
+      /usr/lib/x86_64-linux-gnu/libpng16.so.* \
+      /usr/lib/x86_64-linux-gnu/libjpeg.so.* \
+      /usr/lib/x86_64-linux-gnu/libtiff.so.* \
+      /usr/lib/x86_64-linux-gnu/libwebp.so.* \
+      /usr/lib/x86_64-linux-gnu/libopenjp2.so.* \
+      /usr/lib/x86_64-linux-gnu/libicui18n.so.* \
+      /usr/lib/x86_64-linux-gnu/libicuuc.so.* \
+      /usr/lib/x86_64-linux-gnu/libicudata.so.* \
+      /usr/lib/x86_64-linux-gnu/libstdc++.so.* \
+      /usr/lib/x86_64-linux-gnu/libgcc_s.so.*; \
+    do \
+      if [ -e "$lib" ]; then cp --parents "$lib" /runtime-libs; fi; \
+    done
 
-USER veid
+FROM gcr.io/distroless/python3-debian12 AS final
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV HOME=/app
 
 WORKDIR /app
 
+COPY --from=runtime-deps /runtime-libs/ /
+COPY --from=base /usr/bin/tesseract /usr/bin/tesseract
+COPY --from=base /usr/share/tesseract-ocr /usr/share/tesseract-ocr
+COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=python-deps /usr/local/bin /usr/local/bin
+COPY --from=app --chown=nonroot:nonroot /app /app
+
+USER nonroot
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import ml.pipeline_runner; print('healthy')" || exit 1
+    CMD ["python3", "-c", "import ml.pipeline_runner; print('healthy')"]
 
 # Expose gRPC port for sidecar communication
 EXPOSE 50051
 
 # Default entrypoint runs the inference sidecar
-ENTRYPOINT ["python", "-m", "ml.pipeline_runner"]
+ENTRYPOINT ["python3", "-m", "ml.pipeline_runner"]
 CMD ["--mode=sidecar", "--port=50051", "--deterministic=true"]

@@ -1,6 +1,7 @@
 // Package keeper implements the Fraud module keeper.
 //
 // VE-912: Fraud reporting flow - gRPC query handlers
+// VE-3053: Fixed to implement proto-generated QueryServer interface
 package keeper
 
 import (
@@ -11,144 +12,175 @@ import (
 	"github.com/virtengine/virtengine/x/fraud/types"
 )
 
-// QueryServer implements the gRPC query service
-type QueryServer struct {
+// queryServer implements the gRPC query service
+type queryServer struct {
 	Keeper
 }
 
 // NewQueryServer creates a new gRPC query server
-func NewQueryServer(k Keeper) QueryServer {
-	return QueryServer{Keeper: k}
+func NewQueryServer(k Keeper) types.QueryServerImpl {
+	return &queryServer{Keeper: k}
 }
 
+var _ types.QueryServerImpl = (*queryServer)(nil)
+
+// Params returns the module parameters
+func (q *queryServer) Params(ctx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	params := q.GetParams(sdkCtx)
+
+	return &types.QueryParamsResponse{
+		Params: *types.ParamsToProto(&params),
+	}, nil
+}
+
+// Ensure QueryServer implements types.QueryServer
+var _ types.QueryServer = QueryServer{}
+
 // FraudReport returns a fraud report by ID
-func (q QueryServer) FraudReport(ctx context.Context, req *QueryFraudReportRequest) (*QueryFraudReportResponse, error) {
+func (q *queryServer) FraudReport(ctx context.Context, req *types.QueryFraudReportRequest) (*types.QueryFraudReportResponse, error) {
 	if req == nil {
 		return nil, types.ErrInvalidReportID.Wrap("request is nil")
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	report, found := q.GetFraudReport(sdkCtx, req.ReportID)
+	report, found := q.GetFraudReport(sdkCtx, req.ReportId)
 	if !found {
 		return nil, types.ErrReportNotFound
 	}
 
-	return &QueryFraudReportResponse{Report: report}, nil
+	return &types.QueryFraudReportResponse{
+		Report: *types.FraudReportToProto(&report),
+	}, nil
 }
 
-// FraudReportsByReporter returns all fraud reports by a reporter
-func (q QueryServer) FraudReportsByReporter(ctx context.Context, req *QueryFraudReportsByReporterRequest) (*QueryFraudReportsByReporterResponse, error) {
+// FraudReports returns all fraud reports with optional filters
+func (q *queryServer) FraudReports(ctx context.Context, req *types.QueryFraudReportsRequest) (*types.QueryFraudReportsResponse, error) {
+	if req == nil {
+		return nil, types.ErrInvalidReportID.Wrap("request is nil")
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	var localReports []types.FraudReport
+
+	// Apply filters
+	if req.Status != types.FraudReportStatusPBUnspecified {
+		status := types.FraudReportStatusFromProto(req.Status)
+		localReports = q.GetFraudReportsByStatus(sdkCtx, status)
+	} else {
+		// Get all reports
+		q.WithFraudReports(sdkCtx, func(report types.FraudReport) bool {
+			// Apply category filter if specified
+			if req.Category != types.FraudCategoryPBUnspecified {
+				if report.Category == types.FraudCategoryFromProto(req.Category) {
+					localReports = append(localReports, report)
+				}
+			} else {
+				localReports = append(localReports, report)
+			}
+			return false
+		})
+	}
+
+	// Convert to proto types
+	protoReports := make([]types.FraudReportPB, len(localReports))
+	for i, r := range localReports {
+		protoReports[i] = *types.FraudReportToProto(&r)
+	}
+
+	return &types.QueryFraudReportsResponse{
+		Reports: protoReports,
+	}, nil
+}
+
+// FraudReportsByReporter returns fraud reports submitted by a reporter
+func (q *queryServer) FraudReportsByReporter(ctx context.Context, req *types.QueryFraudReportsByReporterRequest) (*types.QueryFraudReportsByReporterResponse, error) {
 	if req == nil {
 		return nil, types.ErrInvalidReporter.Wrap("request is nil")
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	reports := q.GetFraudReportsByReporter(sdkCtx, req.Reporter)
+	localReports := q.GetFraudReportsByReporter(sdkCtx, req.Reporter)
 
-	return &QueryFraudReportsByReporterResponse{Reports: reports}, nil
+	// Convert to proto types
+	protoReports := make([]types.FraudReportPB, len(localReports))
+	for i, r := range localReports {
+		protoReports[i] = *types.FraudReportToProto(&r)
+	}
+
+	return &types.QueryFraudReportsByReporterResponse{
+		Reports: protoReports,
+	}, nil
 }
 
-// FraudReportsByReportedParty returns all fraud reports against a party
-func (q QueryServer) FraudReportsByReportedParty(ctx context.Context, req *QueryFraudReportsByReportedPartyRequest) (*QueryFraudReportsByReportedPartyResponse, error) {
+// FraudReportsByReportedParty returns fraud reports against a reported party
+func (q *queryServer) FraudReportsByReportedParty(ctx context.Context, req *types.QueryFraudReportsByReportedPartyRequest) (*types.QueryFraudReportsByReportedPartyResponse, error) {
 	if req == nil {
 		return nil, types.ErrInvalidReportedParty.Wrap("request is nil")
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	reports := q.GetFraudReportsByReportedParty(sdkCtx, req.ReportedParty)
+	localReports := q.GetFraudReportsByReportedParty(sdkCtx, req.ReportedParty)
 
-	return &QueryFraudReportsByReportedPartyResponse{Reports: reports}, nil
-}
-
-// FraudReportsByStatus returns all fraud reports with a specific status
-func (q QueryServer) FraudReportsByStatus(ctx context.Context, req *QueryFraudReportsByStatusRequest) (*QueryFraudReportsByStatusResponse, error) {
-	if req == nil {
-		return nil, types.ErrInvalidStatus.Wrap("request is nil")
+	// Convert to proto types
+	protoReports := make([]types.FraudReportPB, len(localReports))
+	for i, r := range localReports {
+		protoReports[i] = *types.FraudReportToProto(&r)
 	}
 
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	reports := q.GetFraudReportsByStatus(sdkCtx, req.Status)
-
-	return &QueryFraudReportsByStatusResponse{Reports: reports}, nil
+	return &types.QueryFraudReportsByReportedPartyResponse{
+		Reports: protoReports,
+	}, nil
 }
 
-// ModeratorQueue returns the moderator queue
-func (q QueryServer) ModeratorQueue(ctx context.Context, req *QueryModeratorQueueRequest) (*QueryModeratorQueueResponse, error) {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	entries := q.GetModeratorQueue(sdkCtx)
-
-	return &QueryModeratorQueueResponse{Entries: entries}, nil
-}
-
-// AuditLogs returns audit logs for a report
-func (q QueryServer) AuditLogs(ctx context.Context, req *QueryAuditLogsRequest) (*QueryAuditLogsResponse, error) {
+// AuditLog returns the audit log for a report
+func (q *queryServer) AuditLog(ctx context.Context, req *types.QueryAuditLogRequest) (*types.QueryAuditLogResponse, error) {
 	if req == nil {
 		return nil, types.ErrInvalidReportID.Wrap("request is nil")
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	logs := q.GetAuditLogsForReport(sdkCtx, req.ReportID)
+	localLogs := q.GetAuditLogsForReport(sdkCtx, req.ReportId)
 
-	return &QueryAuditLogsResponse{Logs: logs}, nil
+	// Convert to proto types
+	protoLogs := make([]types.FraudAuditLogPB, len(localLogs))
+	for i, l := range localLogs {
+		protoLogs[i] = *types.FraudAuditLogToProto(&l)
+	}
+
+	return &types.QueryAuditLogResponse{
+		AuditLogs: protoLogs,
+	}, nil
 }
 
-// Params returns the module parameters
-func (q QueryServer) Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error) {
+// ModeratorQueue returns the moderator queue entries
+func (q *queryServer) ModeratorQueue(ctx context.Context, req *types.QueryModeratorQueueRequest) (*types.QueryModeratorQueueResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	params := q.GetParams(sdkCtx)
+	localEntries := q.GetModeratorQueue(sdkCtx)
 
-	return &QueryParamsResponse{Params: params}, nil
-}
+	// Filter by category and assigned_to if specified
+	var filteredEntries []types.ModeratorQueueEntry
+	for _, entry := range localEntries {
+		if req != nil && req.Category != types.FraudCategoryPBUnspecified {
+			if entry.Category != types.FraudCategoryFromProto(req.Category) {
+				continue
+			}
+		}
+		if req != nil && req.AssignedTo != "" {
+			if entry.AssignedTo != req.AssignedTo {
+				continue
+			}
+		}
+		filteredEntries = append(filteredEntries, entry)
+	}
 
-// Query request/response types
-type QueryFraudReportRequest struct {
-	ReportID string `json:"report_id"`
-}
+	// Convert to proto types
+	protoEntries := make([]types.ModeratorQueueEntryPB, len(filteredEntries))
+	for i, e := range filteredEntries {
+		protoEntries[i] = *types.ModeratorQueueEntryToProto(&e)
+	}
 
-type QueryFraudReportResponse struct {
-	Report types.FraudReport `json:"report"`
-}
-
-type QueryFraudReportsByReporterRequest struct {
-	Reporter string `json:"reporter"`
-}
-
-type QueryFraudReportsByReporterResponse struct {
-	Reports []types.FraudReport `json:"reports"`
-}
-
-type QueryFraudReportsByReportedPartyRequest struct {
-	ReportedParty string `json:"reported_party"`
-}
-
-type QueryFraudReportsByReportedPartyResponse struct {
-	Reports []types.FraudReport `json:"reports"`
-}
-
-type QueryFraudReportsByStatusRequest struct {
-	Status types.FraudReportStatus `json:"status"`
-}
-
-type QueryFraudReportsByStatusResponse struct {
-	Reports []types.FraudReport `json:"reports"`
-}
-
-type QueryModeratorQueueRequest struct{}
-
-type QueryModeratorQueueResponse struct {
-	Entries []types.ModeratorQueueEntry `json:"entries"`
-}
-
-type QueryAuditLogsRequest struct {
-	ReportID string `json:"report_id"`
-}
-
-type QueryAuditLogsResponse struct {
-	Logs []types.FraudAuditLog `json:"logs"`
-}
-
-type QueryParamsRequest struct{}
-
-type QueryParamsResponse struct {
-	Params types.Params `json:"params"`
+	return &types.QueryModeratorQueueResponse{
+		QueueEntries: protoEntries,
+	}, nil
 }

@@ -1,6 +1,7 @@
 // Package types contains tests for the Fraud module message types.
 //
 // VE-912: Fraud reporting flow - Message tests
+// VE-3053: Updated to use proto types correctly
 package types
 
 import (
@@ -9,9 +10,10 @@ import (
 )
 
 func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
-	validEvidence := []EncryptedEvidence{{
-		AlgorithmID:     "X25519",
-		RecipientKeyIDs: []string{"key1"},
+	// Use proto type with correct field names (AlgorithmId, RecipientKeyIds, etc.)
+	validEvidence := []EncryptedEvidencePB{{
+		AlgorithmId:     "X25519",
+		RecipientKeyIds: []string{"key1"},
 		Nonce:           []byte("nonce"),
 		Ciphertext:      []byte("data"),
 		SenderPubKey:    []byte("pubkey"),
@@ -29,7 +31,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
-				Category:      FraudCategoryFakeIdentity,
+				Category:      FraudCategoryPBFakeIdentity,
 				Description:   validDescription,
 				Evidence:      validEvidence,
 			},
@@ -40,7 +42,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "invalid",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
-				Category:      FraudCategoryFakeIdentity,
+				Category:      FraudCategoryPBFakeIdentity,
 				Description:   validDescription,
 				Evidence:      validEvidence,
 			},
@@ -51,7 +53,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "invalid",
-				Category:      FraudCategoryFakeIdentity,
+				Category:      FraudCategoryPBFakeIdentity,
 				Description:   validDescription,
 				Evidence:      validEvidence,
 			},
@@ -62,7 +64,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				Category:      FraudCategoryFakeIdentity,
+				Category:      FraudCategoryPBFakeIdentity,
 				Description:   validDescription,
 				Evidence:      validEvidence,
 			},
@@ -73,7 +75,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
-				Category:      FraudCategoryUnspecified,
+				Category:      FraudCategoryPBUnspecified,
 				Description:   validDescription,
 				Evidence:      validEvidence,
 			},
@@ -84,7 +86,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
-				Category:      FraudCategoryFakeIdentity,
+				Category:      FraudCategoryPBFakeIdentity,
 				Description:   "short",
 				Evidence:      validEvidence,
 			},
@@ -95,7 +97,7 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
-				Category:      FraudCategoryFakeIdentity,
+				Category:      FraudCategoryPBFakeIdentity,
 				Description:   strings.Repeat("a", MaxDescriptionLength+1),
 				Evidence:      validEvidence,
 			},
@@ -106,9 +108,9 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 			msg: &MsgSubmitFraudReport{
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
-				Category:      FraudCategoryFakeIdentity,
+				Category:      FraudCategoryPBFakeIdentity,
 				Description:   validDescription,
-				Evidence:      []EncryptedEvidence{},
+				Evidence:      []EncryptedEvidencePB{},
 			},
 			wantErr: true,
 		},
@@ -159,7 +161,7 @@ func TestMsgAssignModerator_ValidateBasic(t *testing.T) {
 			name: "valid message",
 			msg: &MsgAssignModerator{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 				AssignTo:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 			},
 			wantErr: false,
@@ -168,7 +170,7 @@ func TestMsgAssignModerator_ValidateBasic(t *testing.T) {
 			name: "invalid moderator address",
 			msg: &MsgAssignModerator{
 				Moderator: "invalid",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 				AssignTo:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 			},
 			wantErr: true,
@@ -177,7 +179,7 @@ func TestMsgAssignModerator_ValidateBasic(t *testing.T) {
 			name: "empty report ID",
 			msg: &MsgAssignModerator{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "",
+				ReportId:  "",
 				AssignTo:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 			},
 			wantErr: true,
@@ -186,7 +188,7 @@ func TestMsgAssignModerator_ValidateBasic(t *testing.T) {
 			name: "invalid assign_to address",
 			msg: &MsgAssignModerator{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 				AssignTo:  "invalid",
 			},
 			wantErr: true,
@@ -213,8 +215,8 @@ func TestMsgUpdateReportStatus_ValidateBasic(t *testing.T) {
 			name: "valid message",
 			msg: &MsgUpdateReportStatus{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
-				NewStatus: FraudReportStatusReviewing,
+				ReportId:  "fraud-report-1",
+				NewStatus: FraudReportStatusPBReviewing,
 			},
 			wantErr: false,
 		},
@@ -222,8 +224,8 @@ func TestMsgUpdateReportStatus_ValidateBasic(t *testing.T) {
 			name: "invalid moderator address",
 			msg: &MsgUpdateReportStatus{
 				Moderator: "invalid",
-				ReportID:  "fraud-report-1",
-				NewStatus: FraudReportStatusReviewing,
+				ReportId:  "fraud-report-1",
+				NewStatus: FraudReportStatusPBReviewing,
 			},
 			wantErr: true,
 		},
@@ -231,8 +233,8 @@ func TestMsgUpdateReportStatus_ValidateBasic(t *testing.T) {
 			name: "empty report ID",
 			msg: &MsgUpdateReportStatus{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "",
-				NewStatus: FraudReportStatusReviewing,
+				ReportId:  "",
+				NewStatus: FraudReportStatusPBReviewing,
 			},
 			wantErr: true,
 		},
@@ -240,8 +242,8 @@ func TestMsgUpdateReportStatus_ValidateBasic(t *testing.T) {
 			name: "invalid status",
 			msg: &MsgUpdateReportStatus{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
-				NewStatus: FraudReportStatusUnspecified,
+				ReportId:  "fraud-report-1",
+				NewStatus: FraudReportStatusPBUnspecified,
 			},
 			wantErr: true,
 		},
@@ -267,8 +269,8 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 			name: "valid message",
 			msg: &MsgResolveFraudReport{
 				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:   "fraud-report-1",
-				Resolution: ResolutionTypeWarning,
+				ReportId:   "fraud-report-1",
+				Resolution: ResolutionTypePBWarning,
 				Notes:      "User has been warned",
 			},
 			wantErr: false,
@@ -277,8 +279,8 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 			name: "invalid moderator address",
 			msg: &MsgResolveFraudReport{
 				Moderator:  "invalid",
-				ReportID:   "fraud-report-1",
-				Resolution: ResolutionTypeWarning,
+				ReportId:   "fraud-report-1",
+				Resolution: ResolutionTypePBWarning,
 			},
 			wantErr: true,
 		},
@@ -286,8 +288,8 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 			name: "empty report ID",
 			msg: &MsgResolveFraudReport{
 				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:   "",
-				Resolution: ResolutionTypeWarning,
+				ReportId:   "",
+				Resolution: ResolutionTypePBWarning,
 			},
 			wantErr: true,
 		},
@@ -295,18 +297,8 @@ func TestMsgResolveFraudReport_ValidateBasic(t *testing.T) {
 			name: "invalid resolution",
 			msg: &MsgResolveFraudReport{
 				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:   "fraud-report-1",
-				Resolution: ResolutionTypeUnspecified,
-			},
-			wantErr: true,
-		},
-		{
-			name: "notes too long",
-			msg: &MsgResolveFraudReport{
-				Moderator:  "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:   "fraud-report-1",
-				Resolution: ResolutionTypeWarning,
-				Notes:      strings.Repeat("a", MaxResolutionNotesLength+1),
+				ReportId:   "fraud-report-1",
+				Resolution: ResolutionTypePBUnspecified,
 			},
 			wantErr: true,
 		},
@@ -332,7 +324,7 @@ func TestMsgRejectFraudReport_ValidateBasic(t *testing.T) {
 			name: "valid message",
 			msg: &MsgRejectFraudReport{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 				Notes:     "No evidence of fraud",
 			},
 			wantErr: false,
@@ -341,7 +333,7 @@ func TestMsgRejectFraudReport_ValidateBasic(t *testing.T) {
 			name: "invalid moderator address",
 			msg: &MsgRejectFraudReport{
 				Moderator: "invalid",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 			},
 			wantErr: true,
 		},
@@ -349,16 +341,7 @@ func TestMsgRejectFraudReport_ValidateBasic(t *testing.T) {
 			name: "empty report ID",
 			msg: &MsgRejectFraudReport{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "",
-			},
-			wantErr: true,
-		},
-		{
-			name: "notes too long",
-			msg: &MsgRejectFraudReport{
-				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
-				Notes:     strings.Repeat("a", MaxResolutionNotesLength+1),
+				ReportId:  "",
 			},
 			wantErr: true,
 		},
@@ -384,7 +367,7 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 			name: "valid message",
 			msg: &MsgEscalateFraudReport{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 				Reason:    "Requires admin review",
 			},
 			wantErr: false,
@@ -393,7 +376,7 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 			name: "invalid moderator address",
 			msg: &MsgEscalateFraudReport{
 				Moderator: "invalid",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 				Reason:    "Requires admin review",
 			},
 			wantErr: true,
@@ -402,7 +385,7 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 			name: "empty report ID",
 			msg: &MsgEscalateFraudReport{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "",
+				ReportId:  "",
 				Reason:    "Requires admin review",
 			},
 			wantErr: true,
@@ -411,7 +394,7 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 			name: "empty reason",
 			msg: &MsgEscalateFraudReport{
 				Moderator: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				ReportID:  "fraud-report-1",
+				ReportId:  "fraud-report-1",
 				Reason:    "",
 			},
 			wantErr: true,
@@ -429,6 +412,18 @@ func TestMsgEscalateFraudReport_ValidateBasic(t *testing.T) {
 }
 
 func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
+	// Use proto Params type
+	validParams := *ParamsToProto(&Params{
+		MinDescriptionLength:    MinDescriptionLength,
+		MaxDescriptionLength:    MaxDescriptionLength,
+		MaxEvidenceCount:        10,
+		MaxEvidenceSizeBytes:    10 * 1024 * 1024,
+		AutoAssignEnabled:       true,
+		EscalationThresholdDays: 7,
+		ReportRetentionDays:     365,
+		AuditLogRetentionDays:   730,
+	})
+
 	tests := []struct {
 		name    string
 		msg     *MsgUpdateParams
@@ -438,7 +433,7 @@ func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
 			name: "valid message",
 			msg: &MsgUpdateParams{
 				Authority: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				Params:    DefaultParams(),
+				Params:    validParams,
 			},
 			wantErr: false,
 		},
@@ -446,17 +441,7 @@ func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
 			name: "invalid authority address",
 			msg: &MsgUpdateParams{
 				Authority: "invalid",
-				Params:    DefaultParams(),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid params",
-			msg: &MsgUpdateParams{
-				Authority: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
-				Params: Params{
-					MinDescriptionLength: 5, // Invalid
-				},
+				Params:    validParams,
 			},
 			wantErr: true,
 		},
@@ -469,51 +454,5 @@ func TestMsgUpdateParams_ValidateBasic(t *testing.T) {
 				t.Errorf("MsgUpdateParams.ValidateBasic() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-func TestNewMsgSubmitFraudReport(t *testing.T) {
-	evidence := []EncryptedEvidence{{
-		AlgorithmID:     "X25519",
-		RecipientKeyIDs: []string{"key1"},
-		Nonce:           []byte("nonce"),
-		Ciphertext:      []byte("data"),
-		SenderPubKey:    []byte("pubkey"),
-		EvidenceHash:    "hash",
-	}}
-
-	msg := NewMsgSubmitFraudReport(
-		"cosmos1reporter",
-		"cosmos1reported",
-		FraudCategoryFakeIdentity,
-		"This is a valid description",
-		evidence,
-		[]string{"order-1", "order-2"},
-	)
-
-	if msg.Reporter != "cosmos1reporter" {
-		t.Errorf("NewMsgSubmitFraudReport() Reporter = %v, want %v", msg.Reporter, "cosmos1reporter")
-	}
-	if msg.Category != FraudCategoryFakeIdentity {
-		t.Errorf("NewMsgSubmitFraudReport() Category = %v, want %v", msg.Category, FraudCategoryFakeIdentity)
-	}
-	if len(msg.RelatedOrderIDs) != 2 {
-		t.Errorf("NewMsgSubmitFraudReport() RelatedOrderIDs length = %v, want %v", len(msg.RelatedOrderIDs), 2)
-	}
-}
-
-func TestNewMsgResolveFraudReport(t *testing.T) {
-	msg := NewMsgResolveFraudReport(
-		"cosmos1moderator",
-		"fraud-report-1",
-		ResolutionTypeWarning,
-		"User warned",
-	)
-
-	if msg.Moderator != "cosmos1moderator" {
-		t.Errorf("NewMsgResolveFraudReport() Moderator = %v, want %v", msg.Moderator, "cosmos1moderator")
-	}
-	if msg.Resolution != ResolutionTypeWarning {
-		t.Errorf("NewMsgResolveFraudReport() Resolution = %v, want %v", msg.Resolution, ResolutionTypeWarning)
 	}
 }

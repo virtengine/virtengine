@@ -2,7 +2,7 @@
 # > docker build -t gaia .
 # > docker run -it -p 46657:46657 -p 46656:46656 -v ~/.gaiad:/root/.gaiad -v ~/.gaiacli:/root/.gaiacli gaia gaiad init
 # > docker run -it -p 46657:46657 -p 46656:46656 -v ~/.gaiad:/root/.gaiad -v ~/.gaiacli:/root/.gaiacli gaia gaiad start
-FROM golang:alpine AS build-env
+FROM golang:1.25.5-alpine AS build-env
 
 # Set up dependencies
 ENV PACKAGES curl make git libc-dev bash gcc linux-headers eudev-dev python2
@@ -18,18 +18,27 @@ RUN apk add --no-cache $PACKAGES && \
     make install
 
 # Final image
-FROM alpine:edge
+FROM alpine:3.20
 
 # Install ca-certificates
-RUN apk add --update ca-certificates
-WORKDIR /root
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S virtengine && \
+    adduser -S -G virtengine -u 10001 virtengine && \
+    mkdir -p /var/lib/virtengine && \
+    chown -R virtengine:virtengine /var/lib/virtengine
+
+ENV HOME=/var/lib/virtengine
+WORKDIR /var/lib/virtengine
+VOLUME ["/var/lib/virtengine", "/tmp"]
 
 # Copy over binaries from the build-env
 COPY --from=build-env /go/bin/virtengine /usr/bin/virtengine
 
-COPY ./_build/single-node.sh .
+COPY ./_build/single-node.sh /usr/local/bin/single-node.sh
 
 EXPOSE 26657
 
-ENTRYPOINT [ "./single-node.sh" ]
+USER 10001:10001
+
+ENTRYPOINT [ "/usr/local/bin/single-node.sh" ]
 # NOTE: to run this image, docker run -d -p 26657:26657 ./single-node.sh {{chain_id}} {{genesis_account}}

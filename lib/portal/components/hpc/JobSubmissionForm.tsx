@@ -5,6 +5,7 @@
 import * as React from 'react';
 import { useHPC } from '../../hooks/useHPC';
 import { formatTokenAmount, formatDuration } from '../../utils/format';
+import { sanitizePlainText, sanitizeJsonInput } from '../../utils/security';
 import type { WorkloadTemplate, JobManifest, JobPriceQuote } from '../../types/hpc';
 
 /**
@@ -100,9 +101,30 @@ export function JobSubmissionForm({
     setError(null);
 
     try {
+      const sanitizedName = sanitizePlainText(name, { maxLength: 120 });
+      if (!sanitizedName) {
+        setError('Job name is required');
+        return;
+      }
+
+      let sanitizedEncryptedInputs: Record<string, unknown> | null = null;
+      if (encryptedInputs && encryptedInputs.trim()) {
+        try {
+          sanitizedEncryptedInputs = sanitizeJsonInput(encryptedInputs, {
+            maxDepth: 4,
+            maxKeyLength: 64,
+            maxStringLength: 4096,
+            escapeHtmlStrings: false,
+          });
+        } catch {
+          setError('Encrypted inputs must be valid JSON');
+          return;
+        }
+      }
+
       const manifest: JobManifest = {
         templateId: selectedTemplate.id,
-        name,
+        name: sanitizedName,
         resources: {
           cpu,
           memory,
@@ -110,7 +132,7 @@ export function JobSubmissionForm({
         },
         maxDurationSeconds: duration,
         requiresTee,
-        encryptedInputs: encryptedInputs ? JSON.parse(encryptedInputs) : undefined,
+        encryptedInputs: sanitizedEncryptedInputs || undefined,
       };
 
       // Start submission to get pending job

@@ -1,6 +1,77 @@
-## STATUS: 🔴 IN PROGRESS - Gap Resolution Phase
+## STATUS: 🔴 IN PROGRESS - Production Readiness Phase
 
-**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks | 24 Production Tasks (VE-2000 series) | 4 TEE Hardware Integration Tasks COMPLETED | 23 VEID Gap Resolution Tasks COMPLETED | 17 NEW Gap Tasks Added (VE-3050-3063) | 8 Gap Tasks COMPLETED**
+**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks | 24 Production Tasks (VE-2000 series) | 4 TEE Hardware Integration Tasks COMPLETED | 23 VEID Gap Resolution Tasks COMPLETED | 17 NEW Gap Tasks Added (VE-3050-3063) | 8 Gap Tasks COMPLETED | 28 Spec-Driven Tasks Identified**
+
+---
+
+## NEW: Specification-Driven Production Readiness Analysis (2026-01-30)
+
+### Summary
+
+Deep analysis of `veid-flow-spec.md` and `prd.json` (VE-200 through VE-804) identified 28 detailed implementation tasks organized into 10 categories. Full details in: `_docs/ralph/production-readiness-tasks.md`
+
+### Critical Implementation Gaps
+
+| Category             | Gap                                          | Impact                                     |
+| -------------------- | -------------------------------------------- | ------------------------------------------ |
+| **TEE Enclave**      | Only SimulatedEnclaveService exists          | BLOCKER - No real secure enclave           |
+| **Proto Generation** | Hand-written stubs in x/veid, x/mfa, x/roles | BLOCKER - No proper Cosmos SDK integration |
+| **VEID Tier Logic**  | Tier transitions not implemented             | Core identity gating broken                |
+| **MFA Enforcement**  | Sensitive action gating incomplete           | Security gaps                              |
+| **Marketplace VEID** | Order score gating not enforced              | Identity verification bypassed             |
+
+### New Spec-Driven Tasks
+
+| Category  | Task ID         | Title                                             | Priority | Status      |
+| --------- | --------------- | ------------------------------------------------- | -------- | ----------- |
+| VEID Core | VEID-CORE-001   | Implement VEID Tier Transition Logic              | CRITICAL | Not Started |
+| VEID Core | VEID-CORE-002   | Implement Identity Scope Scoring Algorithm        | CRITICAL | Not Started |
+| VEID Core | VEID-CORE-003   | Implement Identity Wallet On-Chain Primitive      | HIGH     | Not Started |
+| VEID Core | VEID-CORE-004   | Implement Capture Protocol Salt-Binding           | HIGH     | Not Started |
+| MFA Core  | MFA-CORE-001    | Implement MFA Challenge Verification Flows        | CRITICAL | Not Started |
+| MFA Core  | MFA-CORE-002    | Implement Authorization Session Management        | HIGH     | Not Started |
+| MFA Core  | MFA-CORE-003    | Implement Sensitive Transaction Gating            | CRITICAL | Not Started |
+| TEE Impl  | TEE-IMPL-001    | Implement SGX Enclave Service                     | CRITICAL | Not Started |
+| TEE Impl  | TEE-IMPL-002    | Implement SEV-SNP Enclave Service                 | HIGH     | Not Started |
+| TEE Impl  | TEE-IMPL-003    | Implement Enclave Registry On-Chain Module        | CRITICAL | Not Started |
+| TEE Impl  | TEE-IMPL-004    | Multi-Recipient Encryption for Validator Enclaves | CRITICAL | Not Started |
+| Market    | MARKET-VEID-001 | Implement Order VEID Score Gating                 | HIGH     | Not Started |
+| Market    | MARKET-VEID-002 | Implement Provider VEID Registration Check        | HIGH     | Not Started |
+| Market    | MARKET-VEID-003 | Implement Validator VEID Registration Check       | CRITICAL | Not Started |
+| Proto     | PROTO-GEN-001   | Complete VEID Proto Generation                    | CRITICAL | Not Started |
+| Proto     | PROTO-GEN-002   | Complete MFA Proto Generation                     | CRITICAL | Not Started |
+| Proto     | PROTO-GEN-003   | Complete Staking Extension Proto                  | HIGH     | Not Started |
+| Proto     | PROTO-GEN-004   | Complete HPC Proto Generation                     | HIGH     | Not Started |
+| GovData   | GOVDATA-001     | Implement AAMVA Production Adapter                | CRITICAL | Not Started |
+| GovData   | GOVDATA-002     | Add Additional Jurisdiction Adapters              | HIGH     | Not Started |
+| ML Det    | ML-DET-001      | Pin TensorFlow-Go Determinism                     | CRITICAL | Not Started |
+| ML Det    | ML-DET-002      | DeepFace Pipeline Determinism                     | HIGH     | Not Started |
+| Testing   | TEST-001        | E2E VEID Onboarding Flow                          | HIGH     | Not Started |
+| Testing   | TEST-002        | E2E MFA Gating Flow                               | HIGH     | Not Started |
+| Testing   | TEST-003        | E2E Provider Daemon Flow                          | HIGH     | Not Started |
+| Ante      | ANTE-001        | Complete VEID Decorator                           | CRITICAL | Not Started |
+| Events    | EVENTS-001      | Implement Complete VEID Events                    | HIGH     | Not Started |
+| Events    | EVENTS-002      | Implement Marketplace Events for Provider Daemon  | HIGH     | Not Started |
+
+### Module Completion Matrix (Updated from Spec Analysis)
+
+| Module              | Completion | Key Gaps                                              |
+| ------------------- | ---------- | ----------------------------------------------------- |
+| x/veid              | 25%        | Proto stubs, tier transition logic, scoring algorithm |
+| x/mfa               | 40%        | Proto stubs, factor verification, session management  |
+| x/roles             | 35%        | Proto stubs, role assignment governance               |
+| x/market            | 85%        | VEID gating integration, score enforcement            |
+| x/escrow            | 85%        | Settlement automation                                 |
+| pkg/enclave_runtime | 20%        | Only SimulatedEnclaveService - no real TEE            |
+| pkg/govdata         | 25%        | Mock adapters only - need real API integration        |
+| pkg/edugain         | 30%        | SAML verification exists, needs hardening             |
+| pkg/payment         | 35%        | Stripe adapter exists but incomplete                  |
+
+### Next Steps
+
+1. **vibe-kanban unavailable** - tasks documented in `production-readiness-tasks.md`
+2. **Priority order**: TEE → Proto Generation → VEID Core → MFA Core
+3. **When kanban available**: Import 28 tasks with full implementation paths
 
 ---
 
