@@ -210,6 +210,44 @@ class FieldParserConfig:
 
 
 @dataclass
+class CenterMatchingConfig:
+    """
+    Configuration for center-based field matching.
+    
+    This enables U-Net mask regions to be matched to OCR text boxes
+    by comparing their center positions. Ported from RMIT OCR_Document_Scan
+    intern project (2023).
+    
+    Task Reference: VE-3041 - Port Center-Matching Algorithm
+    """
+    
+    # Enable center matching mode (alternative to label-based parsing)
+    enabled: bool = False
+    
+    # Maximum normalized distance (0-1) for valid match
+    # Lower values require closer matches
+    distance_threshold: float = 0.15
+    
+    # Distance threshold for merging horizontally adjacent text boxes
+    merge_threshold: float = 0.02
+    
+    # Minimum OCR confidence to consider a text box
+    min_confidence: float = 0.5
+    
+    # Use mask-weighted centroid instead of bounding box center
+    use_weighted_center: bool = True
+    
+    # Pixel distance for finding adjacent boxes (for box extension)
+    neighbor_distance_pixels: float = 50.0
+    
+    # Maximum number of mask regions to extract from U-Net output
+    max_mask_regions: int = 10
+    
+    # Minimum contour area for mask region extraction
+    min_mask_area: int = 100
+
+
+@dataclass
 class HashingConfig:
     """Configuration for field hashing."""
     
@@ -240,6 +278,7 @@ class OCRExtractionConfig:
     postprocessing: PostProcessingConfig = field(default_factory=PostProcessingConfig)
     field_parser: FieldParserConfig = field(default_factory=FieldParserConfig)
     hashing: HashingConfig = field(default_factory=HashingConfig)
+    center_matching: CenterMatchingConfig = field(default_factory=CenterMatchingConfig)
     
     # Pipeline settings
     max_rois_per_image: int = 100

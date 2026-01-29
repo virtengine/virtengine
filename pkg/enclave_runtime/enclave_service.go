@@ -221,6 +221,38 @@ type EnclaveService interface {
 	Shutdown() error
 }
 
+// HardwareAwareEnclaveService extends EnclaveService with hardware status methods
+type HardwareAwareEnclaveService interface {
+	EnclaveService
+
+	// IsHardwareEnabled returns true if real TEE hardware is being used
+	IsHardwareEnabled() bool
+
+	// GetHardwareMode returns the configured hardware mode
+	GetHardwareMode() HardwareMode
+}
+
+// HardwareEnclaveConfig holds the configuration for creating hardware-aware enclave services
+type HardwareEnclaveConfig struct {
+	// Type specifies which TEE platform to use
+	Type AttestationType
+
+	// HardwareMode controls hardware vs simulation behavior
+	HardwareMode HardwareMode
+
+	// SGX-specific configuration
+	SGXConfig *SGXEnclaveConfig
+
+	// SEV-SNP-specific configuration
+	SEVConfig *SEVSNPConfig
+
+	// Nitro-specific configuration
+	NitroConfig *NitroEnclaveConfig
+
+	// Runtime configuration
+	RuntimeConfig RuntimeConfig
+}
+
 // EnclaveStatus represents the status of the enclave
 type EnclaveStatus struct {
 	// Initialized indicates if the enclave is initialized

@@ -359,6 +359,9 @@ type EnclaveManager struct {
 	backends map[string]*EnclaveBackend
 	running  bool
 
+	// Hardware capabilities
+	hardwareCapabilities *HardwareCapabilities
+
 	// Round-robin state
 	rrIndex int
 	rrMu    sync.Mutex
@@ -382,12 +385,16 @@ func NewEnclaveManager(config EnclaveManagerConfig) (*EnclaveManager, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
+	// Detect hardware capabilities
+	caps := DetectHardware()
+
 	return &EnclaveManager{
-		config:          config,
-		backends:        make(map[string]*EnclaveBackend),
-		pendingRequests: make(map[string]struct{}),
-		stopCh:          make(chan struct{}),
-		rng:             rand.New(rand.NewSource(time.Now().UnixNano())),
+		config:               config,
+		backends:             make(map[string]*EnclaveBackend),
+		pendingRequests:      make(map[string]struct{}),
+		stopCh:               make(chan struct{}),
+		rng:                  rand.New(rand.NewSource(time.Now().UnixNano())),
+		hardwareCapabilities: &caps,
 	}, nil
 }
 
@@ -461,6 +468,7 @@ func (m *EnclaveManager) ListBackends() []*EnclaveBackend {
 }
 
 // SelectBackend selects the best available backend based on the configured strategy.
+// Backends with real hardware are preferred over simulation backends.
 func (m *EnclaveManager) SelectBackend() (*EnclaveBackend, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -470,20 +478,100 @@ func (m *EnclaveManager) SelectBackend() (*EnclaveBackend, error) {
 		return nil, ErrNoBackendsAvailable
 	}
 
+	// Separate hardware-enabled and simulation backends
+	var hardwareBackends, simulationBackends []*EnclaveBackend
+	for _, b := range available {
+		if m.isBackendHardwareEnabled(b) {
+			hardwareBackends = append(hardwareBackends, b)
+		} else {
+			simulationBackends = append(simulationBackends, b)
+		}
+	}
+
+	// Prefer hardware backends
+	selectionPool := hardwareBackends
+	if len(selectionPool) == 0 {
+		selectionPool = simulationBackends
+	}
+
 	switch m.config.SelectionStrategy {
 	case StrategyPriority:
-		return m.selectByPriority(available), nil
+		return m.selectByPriority(selectionPool), nil
 	case StrategyRoundRobin:
-		return m.selectRoundRobin(available), nil
+		return m.selectRoundRobin(selectionPool), nil
 	case StrategyLeastLoaded:
-		return m.selectLeastLoaded(available), nil
+		return m.selectLeastLoaded(selectionPool), nil
 	case StrategyWeighted:
-		return m.selectWeighted(available), nil
+		return m.selectWeighted(selectionPool), nil
 	case StrategyLatency:
-		return m.selectByLatency(available), nil
+		return m.selectByLatency(selectionPool), nil
 	default:
-		return m.selectByPriority(available), nil
+		return m.selectByPriority(selectionPool), nil
 	}
+}
+
+// isBackendHardwareEnabled checks if a backend is using real hardware
+func (m *EnclaveManager) isBackendHardwareEnabled(backend *EnclaveBackend) bool {
+	// Check if the service implements IsHardwareEnabled
+	type hardwareChecker interface {
+		IsHardwareEnabled() bool
+	}
+	if hc, ok := backend.Service.(hardwareChecker); ok {
+		return hc.IsHardwareEnabled()
+	}
+	// Non-simulated types without the interface are assumed to be hardware-enabled
+	return backend.Type != AttestationTypeSimulated
+}
+
+// GetHardwareCapabilities returns the detected hardware capabilities
+func (m *EnclaveManager) GetHardwareCapabilities() HardwareCapabilities {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.hardwareCapabilities == nil {
+		return HardwareCapabilities{}
+	}
+	return *m.hardwareCapabilities
+}
+
+// RefreshHardwareCapabilities re-detects hardware capabilities
+func (m *EnclaveManager) RefreshHardwareCapabilities() HardwareCapabilities {
+	caps := RefreshHardwareDetection()
+	m.mu.Lock()
+	m.hardwareCapabilities = &caps
+	m.mu.Unlock()
+	return caps
+}
+
+// GetPreferredBackendType returns the preferred backend type based on hardware detection
+func (m *EnclaveManager) GetPreferredBackendType() AttestationType {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.hardwareCapabilities == nil {
+		return AttestationTypeSimulated
+	}
+	return m.hardwareCapabilities.PreferredBackend
+}
+
+// LogHardwareStatus logs the hardware status of all backends
+func (m *EnclaveManager) LogHardwareStatus() {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	fmt.Printf("=== Enclave Manager Hardware Status ===\n")
+	if m.hardwareCapabilities != nil {
+		fmt.Printf("Hardware Detection: %s\n", m.hardwareCapabilities.String())
+		fmt.Printf("Preferred Backend: %s\n", m.hardwareCapabilities.PreferredBackend)
+	}
+	fmt.Printf("Registered Backends:\n")
+	for id, b := range m.backends {
+		hwEnabled := m.isBackendHardwareEnabled(b)
+		mode := "simulation"
+		if hwEnabled {
+			mode = "hardware"
+		}
+		fmt.Printf("  - %s (%s): %s mode, health=%s\n", id, b.Type, mode, b.Health)
+	}
+	fmt.Printf("========================================\n")
 }
 
 // getAvailableBackends returns all backends that can accept requests.

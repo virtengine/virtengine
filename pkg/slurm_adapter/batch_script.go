@@ -59,14 +59,14 @@ type BatchScriptBuilder struct {
 // NewBatchScriptBuilder creates a new BatchScriptBuilder with default settings
 func NewBatchScriptBuilder() *BatchScriptBuilder {
 	return &BatchScriptBuilder{
-		environment:    make(map[string]string),
-		modules:        make([]string, 0),
-		moduleCommands: make([]string, 0),
-		constraints:    make([]string, 0),
-		setupCommands:  make([]string, 0),
-		mainCommands:   make([]string, 0),
-		cleanupCommands: make([]string, 0),
-		headerComments: make([]string, 0),
+		environment:      make(map[string]string),
+		modules:          make([]string, 0),
+		moduleCommands:   make([]string, 0),
+		constraints:      make([]string, 0),
+		setupCommands:    make([]string, 0),
+		mainCommands:     make([]string, 0),
+		cleanupCommands:  make([]string, 0),
+		headerComments:   make([]string, 0),
 		containerOptions: make([]string, 0),
 	}
 }
@@ -74,47 +74,47 @@ func NewBatchScriptBuilder() *BatchScriptBuilder {
 // FromJobSpec creates a BatchScriptBuilder from a SLURMJobSpec
 func FromJobSpec(spec *SLURMJobSpec) *BatchScriptBuilder {
 	b := NewBatchScriptBuilder()
-	
+
 	b.SetJobName(spec.JobName)
 	b.SetPartition(spec.Partition)
 	b.SetNodes(spec.Nodes)
 	b.SetCPUsPerTask(spec.CPUsPerNode)
 	b.SetMemoryMB(spec.MemoryMB)
 	b.SetTimeLimitMinutes(spec.TimeLimit)
-	
+
 	if spec.GPUs > 0 {
 		b.SetGPUs(spec.GPUs, spec.GPUType)
 	}
-	
+
 	if spec.WorkingDirectory != "" {
 		b.SetWorkingDir(spec.WorkingDirectory)
 	}
-	
+
 	if spec.OutputDirectory != "" {
 		b.SetOutput(fmt.Sprintf("%s/%%j.out", spec.OutputDirectory))
 		b.SetError(fmt.Sprintf("%s/%%j.err", spec.OutputDirectory))
 	}
-	
+
 	if spec.Exclusive {
 		b.SetExclusive(true)
 	}
-	
+
 	for _, c := range spec.Constraints {
 		b.AddConstraint(c)
 	}
-	
+
 	for k, v := range spec.Environment {
 		b.SetEnv(k, v)
 	}
-	
+
 	if spec.ContainerImage != "" {
 		b.SetContainerImage(spec.ContainerImage)
 	}
-	
+
 	if spec.Command != "" {
 		b.AddCommand(spec.Command, spec.Arguments...)
 	}
-	
+
 	return b
 }
 
@@ -420,7 +420,7 @@ func (b *BatchScriptBuilder) Build() string {
 			containerCmd += " " + opt
 		}
 		containerCmd += " " + b.containerImage
-		
+
 		for _, cmd := range b.mainCommands {
 			sb.WriteString(fmt.Sprintf("%s %s\n", containerCmd, cmd))
 		}
@@ -600,9 +600,9 @@ type BatchScriptOptions struct {
 // DefaultBatchScriptOptions returns default batch script options
 func DefaultBatchScriptOptions() BatchScriptOptions {
 	return BatchScriptOptions{
-		UseModulePurge: false,
+		UseModulePurge:  false,
 		EnableProfiling: false,
-		EnableTiming: false,
-		StrictMode: true,
+		EnableTiming:    false,
+		StrictMode:      true,
 	}
 }

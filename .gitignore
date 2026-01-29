@@ -34,6 +34,29 @@ coverage.txt
 /.editorconfig
 
 dev.env
+.env
+.env.*
 
 *.exe
 /.testchain
+/temp
+
+# ML model weights (large binary files)
+ml/*/weights/*.pt
+ml/*/weights/*.pth
+!ml/*/weights/.gitkeep
+
+# Python caches/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+venv/
+.venv/

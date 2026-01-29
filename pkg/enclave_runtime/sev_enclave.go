@@ -47,25 +47,25 @@ const (
 	SNPSignatureSize = 512
 
 	// Guest policy flags
-	SNPPolicyNoDebug       = 0x0001
-	SNPPolicyNoKeyShare    = 0x0002
-	SNPPolicySingleSocket  = 0x0010
-	SNPPolicySMTAllowed    = 0x0020
+	SNPPolicyNoDebug        = 0x0001
+	SNPPolicyNoKeyShare     = 0x0002
+	SNPPolicySingleSocket   = 0x0010
+	SNPPolicySMTAllowed     = 0x0020
 	SNPPolicyMigrationAgent = 0x0040
 
 	// Platform info flags
-	SNPPlatformSMTEnabled = 0x0001
+	SNPPlatformSMTEnabled  = 0x0001
 	SNPPlatformTSMEEnabled = 0x0002
 )
 
 // SNPGuestPolicy represents the SNP guest policy
 type SNPGuestPolicy struct {
-	ABIMinor   uint8
-	ABIMajor   uint8
-	SMT        bool    // Allow SMT (simultaneous multi-threading)
+	ABIMinor       uint8
+	ABIMajor       uint8
+	SMT            bool // Allow SMT (simultaneous multi-threading)
 	MigrationAgent bool // Allow migration
-	Debug      bool    // Allow debug (MUST be false for production)
-	SingleSocket bool  // Restrict to single socket
+	Debug          bool // Allow debug (MUST be false for production)
+	SingleSocket   bool // Restrict to single socket
 }
 
 // ToUint64 serializes the policy to a uint64
@@ -119,17 +119,17 @@ type SNPChipID [64]byte
 // SNPAttestationReport represents an SNP attestation report
 type SNPAttestationReport struct {
 	// Header fields
-	Version         uint32
-	GuestSVN        uint32
-	Policy          SNPGuestPolicy
-	FamilyID        [16]byte
-	ImageID         [16]byte
+	Version  uint32
+	GuestSVN uint32
+	Policy   SNPGuestPolicy
+	FamilyID [16]byte
+	ImageID  [16]byte
 
 	// TCB information
-	CurrentTCB      SNPTCBVersion
-	PlatformInfo    uint64
+	CurrentTCB       SNPTCBVersion
+	PlatformInfo     uint64
 	AuthorKeyEnabled uint32
-	Reserved1       uint32
+	Reserved1        uint32
 
 	// Measurements
 	LaunchDigest    SNPLaunchDigest
@@ -144,7 +144,7 @@ type SNPAttestationReport struct {
 	ChipID          SNPChipID
 
 	// Signature
-	Signature       [512]byte
+	Signature [512]byte
 }
 
 // Validate performs basic validation of the SNP report
@@ -169,21 +169,25 @@ type SEVSNPEnclaveServiceImpl struct {
 	// Configuration
 	config        SEVSNPConfig
 	runtimeConfig RuntimeConfig
+	hardwareMode  HardwareMode
+
+	// Hardware backend (nil if using simulation)
+	hardwareBackend *SEVHardwareBackend
 
 	// State
-	initialized   bool
-	startTime     time.Time
-	activeReqs    int
-	totalProc     uint64
-	currentEpoch  uint64
-	lastError     string
+	initialized  bool
+	startTime    time.Time
+	activeReqs   int
+	totalProc    uint64
+	currentEpoch uint64
+	lastError    string
 
 	// Simulated CVM state (in real impl, these are inside the confidential VM)
 	launchDigest   SNPLaunchDigest
 	chipID         SNPChipID
 	guestPolicy    SNPGuestPolicy
 	currentTCB     SNPTCBVersion
-	vcekPrivateKey []byte  // Simulated VCEK (Versioned Chip Endorsement Key)
+	vcekPrivateKey []byte // Simulated VCEK (Versioned Chip Endorsement Key)
 	encryptionKey  []byte
 	signingKey     []byte
 	encryptPubKey  []byte
@@ -198,6 +202,11 @@ var _ EnclaveService = (*SEVSNPEnclaveServiceImpl)(nil)
 // This is a POC implementation that simulates SEV-SNP operations.
 // For production use, this must be replaced with actual /dev/sev-guest ioctls.
 func NewSEVSNPEnclaveServiceImpl(config SEVSNPConfig) (*SEVSNPEnclaveServiceImpl, error) {
+	return NewSEVSNPEnclaveServiceImplWithMode(config, HardwareModeAuto)
+}
+
+// NewSEVSNPEnclaveServiceImplWithMode creates a new SEV-SNP enclave service with explicit hardware mode
+func NewSEVSNPEnclaveServiceImplWithMode(config SEVSNPConfig, mode HardwareMode) (*SEVSNPEnclaveServiceImpl, error) {
 	if config.Endpoint == "" {
 		return nil, errors.New("endpoint required for SEV-SNP service")
 	}
@@ -207,10 +216,34 @@ func NewSEVSNPEnclaveServiceImpl(config SEVSNPConfig) (*SEVSNPEnclaveServiceImpl
 		fmt.Println("WARNING: SEV-SNP debug policy allowed - NOT SECURE FOR PRODUCTION")
 	}
 
-	return &SEVSNPEnclaveServiceImpl{
+	svc := &SEVSNPEnclaveServiceImpl{
 		config:       config,
 		currentEpoch: 1,
-	}, nil
+		hardwareMode: mode,
+	}
+
+	// Initialize hardware backend based on mode
+	if mode != HardwareModeSimulate {
+		backend := NewSEVHardwareBackend()
+		if backend.IsAvailable() {
+			if err := backend.Initialize(); err == nil {
+				svc.hardwareBackend = backend
+				fmt.Println("INFO: SEV-SNP hardware backend initialized successfully")
+			} else if mode == HardwareModeRequire {
+				return nil, fmt.Errorf("SEV-SNP hardware required but initialization failed: %w", err)
+			} else {
+				fmt.Printf("INFO: SEV-SNP hardware initialization failed, using simulation: %v\n", err)
+			}
+		} else if mode == HardwareModeRequire {
+			return nil, fmt.Errorf("%w: SEV-SNP hardware required but not available", ErrHardwareNotAvailable)
+		} else {
+			fmt.Println("INFO: SEV-SNP hardware not available, using simulation mode")
+		}
+	} else {
+		fmt.Println("INFO: SEV-SNP running in forced simulation mode")
+	}
+
+	return svc, nil
 }
 
 // =============================================================================
@@ -340,6 +373,17 @@ func (s *SEVSNPEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byt
 		return nil, errors.New("report data too large")
 	}
 
+	// Use hardware backend if available
+	if s.hardwareBackend != nil {
+		attestation, err := s.hardwareBackend.GetAttestation(reportData)
+		if err != nil {
+			s.lastError = fmt.Sprintf("hardware attestation failed: %v", err)
+			// Fall back to simulation
+		} else {
+			return attestation, nil
+		}
+	}
+
 	// TODO: Real SEV-SNP implementation would:
 	// 1. Open /dev/sev-guest
 	// 2. Send SNP_GUEST_REQUEST ioctl with MSG_REPORT_REQ
@@ -428,6 +472,42 @@ func (s *SEVSNPEnclaveServiceImpl) GetPlatformType() PlatformType {
 // IsPlatformSecure returns true (SEV-SNP is secure when debug is disabled)
 func (s *SEVSNPEnclaveServiceImpl) IsPlatformSecure() bool {
 	return !s.guestPolicy.Debug
+}
+
+// IsHardwareEnabled returns true if real SEV-SNP hardware is being used
+func (s *SEVSNPEnclaveServiceImpl) IsHardwareEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.hardwareBackend != nil
+}
+
+// GetHardwareMode returns the configured hardware mode
+func (s *SEVSNPEnclaveServiceImpl) GetHardwareMode() HardwareMode {
+	return s.hardwareMode
+}
+
+// DeriveKey derives a key from the SEV-SNP root of trust
+func (s *SEVSNPEnclaveServiceImpl) DeriveKey(context []byte, keySize int) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if !s.initialized {
+		return nil, ErrEnclaveNotInitialized
+	}
+
+	// Use hardware backend if available
+	if s.hardwareBackend != nil {
+		key, err := s.hardwareBackend.DeriveKey(context, keySize)
+		if err != nil {
+			s.lastError = fmt.Sprintf("hardware key derivation failed: %v", err)
+			// Fall back to simulation
+		} else {
+			return key, nil
+		}
+	}
+
+	// Simulated key derivation
+	return s.hkdfDerive(s.vcekPrivateKey, s.launchDigest[:], context, keySize), nil
 }
 
 // GetChipID returns the unique chip identifier
@@ -550,8 +630,8 @@ func (s *SEVSNPEnclaveServiceImpl) GenerateExtendedReport(reportData []byte) ([]
 
 	// POC: Return simulated certificate chain
 	vcek, _ := s.FetchVCEKCertificate()
-	ask := sha256Bytes([]byte("AMD_SEV_SIGNING_KEY"))  // AMD SEV Signing Key
-	ark := sha256Bytes([]byte("AMD_ROOT_KEY"))          // AMD Root Key
+	ask := sha256Bytes([]byte("AMD_SEV_SIGNING_KEY")) // AMD SEV Signing Key
+	ark := sha256Bytes([]byte("AMD_ROOT_KEY"))        // AMD Root Key
 
 	certChain := [][]byte{vcek, ask, ark}
 
@@ -577,11 +657,11 @@ func (s *SEVSNPEnclaveServiceImpl) simulateCVMInitialization() error {
 
 	// Set guest policy (production settings)
 	s.guestPolicy = SNPGuestPolicy{
-		ABIMinor:     0,
-		ABIMajor:     1,
-		SMT:          true,
-		Debug:        s.config.AllowDebugPolicy, // Should be false in production
-		SingleSocket: false,
+		ABIMinor:       0,
+		ABIMajor:       1,
+		SMT:            true,
+		Debug:          s.config.AllowDebugPolicy, // Should be false in production
+		SingleSocket:   false,
 		MigrationAgent: false,
 	}
 
@@ -701,14 +781,14 @@ func (s *SEVSNPEnclaveServiceImpl) signInsideCVM(payload []byte) []byte {
 func (s *SEVSNPEnclaveServiceImpl) simulateSNPReportGeneration(reportData []byte) ([]byte, error) {
 	// Build attestation report
 	report := &SNPAttestationReport{
-		Version:          SNPReportVersion,
-		GuestSVN:         1,
-		Policy:           s.guestPolicy,
-		CurrentTCB:       s.currentTCB,
-		ReportedTCB:      s.currentTCB,
-		PlatformInfo:     SNPPlatformSMTEnabled,
-		LaunchDigest:     s.launchDigest,
-		ChipID:           s.chipID,
+		Version:      SNPReportVersion,
+		GuestSVN:     1,
+		Policy:       s.guestPolicy,
+		CurrentTCB:   s.currentTCB,
+		ReportedTCB:  s.currentTCB,
+		PlatformInfo: SNPPlatformSMTEnabled,
+		LaunchDigest: s.launchDigest,
+		ChipID:       s.chipID,
 	}
 
 	// Copy report data

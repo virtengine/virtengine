@@ -53,9 +53,9 @@ const (
 	SGXKeyPolicyNoISVSVN  = 0x0004
 
 	// Attribute flags
-	SGXFlagInitted    = 0x0001
-	SGXFlagDebug      = 0x0002
-	SGXFlagMode64Bit  = 0x0004
+	SGXFlagInitted      = 0x0001
+	SGXFlagDebug        = 0x0002
+	SGXFlagMode64Bit    = 0x0004
 	SGXFlagProvisionKey = 0x0010
 )
 
@@ -80,32 +80,32 @@ func (a SGXAttributes) IsDebug() bool {
 
 // SGXReportBody represents the body of an SGX report
 type SGXReportBody struct {
-	CPUSVN      [16]byte
-	MiscSelect  uint32
-	Reserved1   [12]byte
+	CPUSVN       [16]byte
+	MiscSelect   uint32
+	Reserved1    [12]byte
 	ISVExtProdID [16]byte
-	Attributes  SGXAttributes
-	MREnclave   SGXMeasurement
-	Reserved2   [32]byte
-	MRSigner    SGXMeasurement
-	Reserved3   [32]byte
-	ConfigID    [64]byte
-	ISVProdID   uint16
-	ISVSVN      uint16
-	ConfigSVN   uint16
-	Reserved4   [42]byte
-	ISVFamilyID [16]byte
-	ReportData  [64]byte
+	Attributes   SGXAttributes
+	MREnclave    SGXMeasurement
+	Reserved2    [32]byte
+	MRSigner     SGXMeasurement
+	Reserved3    [32]byte
+	ConfigID     [64]byte
+	ISVProdID    uint16
+	ISVSVN       uint16
+	ConfigSVN    uint16
+	Reserved4    [42]byte
+	ISVFamilyID  [16]byte
+	ReportData   [64]byte
 }
 
 // SGXQuoteHeader represents the header of a DCAP quote
 type SGXQuoteHeader struct {
-	Version      uint16
-	AttKeyType   uint16
-	TEEType      uint32
-	Reserved     uint32
-	QEVendorID   [16]byte
-	UserData     [20]byte
+	Version    uint16
+	AttKeyType uint16
+	TEEType    uint32
+	Reserved   uint32
+	QEVendorID [16]byte
+	UserData   [20]byte
 }
 
 // SGXQuote represents a full DCAP attestation quote
@@ -127,23 +127,27 @@ type SGXEnclaveServiceImpl struct {
 	// Configuration
 	config        SGXEnclaveConfig
 	runtimeConfig RuntimeConfig
+	hardwareMode  HardwareMode
+
+	// Hardware backend (nil if using simulation)
+	hardwareBackend *SGXHardwareBackend
 
 	// State
-	initialized   bool
-	startTime     time.Time
-	activeReqs    int
-	totalProc     uint64
-	currentEpoch  uint64
-	lastError     string
+	initialized  bool
+	startTime    time.Time
+	activeReqs   int
+	totalProc    uint64
+	currentEpoch uint64
+	lastError    string
 
 	// Simulated enclave state (in real impl, these are inside SGX)
-	mrEnclave      SGXMeasurement
-	mrSigner       SGXMeasurement
-	sealKey        []byte
-	encryptionKey  []byte
-	signingKey     []byte
-	encryptPubKey  []byte
-	signingPubKey  []byte
+	mrEnclave     SGXMeasurement
+	mrSigner      SGXMeasurement
+	sealKey       []byte
+	encryptionKey []byte
+	signingKey    []byte
+	encryptPubKey []byte
+	signingPubKey []byte
 }
 
 // Compile-time interface check
@@ -154,6 +158,11 @@ var _ EnclaveService = (*SGXEnclaveServiceImpl)(nil)
 // This is a POC implementation that simulates SGX operations.
 // For production use, this must be replaced with actual SGX SDK calls.
 func NewSGXEnclaveServiceImpl(config SGXEnclaveConfig) (*SGXEnclaveServiceImpl, error) {
+	return NewSGXEnclaveServiceImplWithMode(config, HardwareModeAuto)
+}
+
+// NewSGXEnclaveServiceImplWithMode creates a new SGX enclave service with explicit hardware mode
+func NewSGXEnclaveServiceImplWithMode(config SGXEnclaveConfig, mode HardwareMode) (*SGXEnclaveServiceImpl, error) {
 	if config.EnclavePath == "" {
 		return nil, errors.New("enclave path required")
 	}
@@ -164,10 +173,34 @@ func NewSGXEnclaveServiceImpl(config SGXEnclaveConfig) (*SGXEnclaveServiceImpl, 
 		fmt.Println("WARNING: SGX debug mode enabled - NOT SECURE FOR PRODUCTION")
 	}
 
-	return &SGXEnclaveServiceImpl{
+	svc := &SGXEnclaveServiceImpl{
 		config:       config,
 		currentEpoch: 1,
-	}, nil
+		hardwareMode: mode,
+	}
+
+	// Initialize hardware backend based on mode
+	if mode != HardwareModeSimulate {
+		backend := NewSGXHardwareBackend()
+		if backend.IsAvailable() {
+			if err := backend.Initialize(); err == nil {
+				svc.hardwareBackend = backend
+				fmt.Println("INFO: SGX hardware backend initialized successfully")
+			} else if mode == HardwareModeRequire {
+				return nil, fmt.Errorf("SGX hardware required but initialization failed: %w", err)
+			} else {
+				fmt.Printf("INFO: SGX hardware initialization failed, using simulation: %v\n", err)
+			}
+		} else if mode == HardwareModeRequire {
+			return nil, fmt.Errorf("%w: SGX hardware required but not available", ErrHardwareNotAvailable)
+		} else {
+			fmt.Println("INFO: SGX hardware not available, using simulation mode")
+		}
+	} else {
+		fmt.Println("INFO: SGX running in forced simulation mode")
+	}
+
+	return svc, nil
 }
 
 // =============================================================================
@@ -297,6 +330,17 @@ func (s *SGXEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byte, 
 		return nil, errors.New("report data too large")
 	}
 
+	// Use hardware backend if available
+	if s.hardwareBackend != nil {
+		quote, err := s.hardwareBackend.GetAttestation(reportData)
+		if err != nil {
+			s.lastError = fmt.Sprintf("hardware attestation failed: %v", err)
+			// Fall back to simulation
+		} else {
+			return quote, nil
+		}
+	}
+
 	// TODO: Real SGX implementation would:
 	// 1. ECALL to generate report for QE target info
 	// 2. Call sgx_qe_get_quote() to get DCAP quote
@@ -399,6 +443,18 @@ func (s *SGXEnclaveServiceImpl) IsPlatformSecure() bool {
 	return !s.config.Debug
 }
 
+// IsHardwareEnabled returns true if real SGX hardware is being used
+func (s *SGXEnclaveServiceImpl) IsHardwareEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.hardwareBackend != nil
+}
+
+// GetHardwareMode returns the configured hardware mode
+func (s *SGXEnclaveServiceImpl) GetHardwareMode() HardwareMode {
+	return s.hardwareMode
+}
+
 // GenerateDCAPReport generates an SGX report for the Quote Enclave
 func (s *SGXEnclaveServiceImpl) GenerateDCAPReport(targetInfo []byte, reportData []byte) ([]byte, error) {
 	s.mu.RLock()
@@ -424,6 +480,17 @@ func (s *SGXEnclaveServiceImpl) SealData(plaintext []byte, aad []byte) ([]byte, 
 		return nil, ErrEnclaveNotInitialized
 	}
 
+	// Use hardware backend if available
+	if s.hardwareBackend != nil {
+		sealed, err := s.hardwareBackend.Seal(plaintext)
+		if err != nil {
+			s.lastError = fmt.Sprintf("hardware seal failed: %v", err)
+			// Fall back to simulation
+		} else {
+			return sealed, nil
+		}
+	}
+
 	// TODO: Real SGX implementation would call sgx_seal_data()
 	// This encrypts data with a key derived from enclave measurement
 
@@ -442,6 +509,17 @@ func (s *SGXEnclaveServiceImpl) UnsealData(sealed []byte) ([]byte, []byte, error
 
 	if !s.initialized {
 		return nil, nil, ErrEnclaveNotInitialized
+	}
+
+	// Use hardware backend if available
+	if s.hardwareBackend != nil {
+		plaintext, err := s.hardwareBackend.Unseal(sealed)
+		if err != nil {
+			s.lastError = fmt.Sprintf("hardware unseal failed: %v", err)
+			// Fall back to simulation
+		} else {
+			return plaintext, nil, nil
+		}
 	}
 
 	// TODO: Real SGX implementation would call sgx_unseal_data()
@@ -692,12 +770,12 @@ func (s *SGXEnclaveServiceImpl) simulateSealData(plaintext []byte, aad []byte) (
 
 	// Build sealed blob
 	sealed := make([]byte, 0, 64+len(ciphertext)+16)
-	sealed = append(sealed, []byte("SEAL")...)           // Magic
-	sealed = append(sealed, 0x01, 0x00)                  // Version
-	sealed = append(sealed, byte(PlatformSGX[0]), 0x00)  // Platform
-	sealed = append(sealed, s.mrEnclave[:]...)           // Measurement
-	sealed = append(sealed, nonce...)                    // Nonce
-	sealed = append(sealed, ciphertext...)               // Ciphertext
+	sealed = append(sealed, []byte("SEAL")...)          // Magic
+	sealed = append(sealed, 0x01, 0x00)                 // Version
+	sealed = append(sealed, byte(PlatformSGX[0]), 0x00) // Platform
+	sealed = append(sealed, s.mrEnclave[:]...)          // Measurement
+	sealed = append(sealed, nonce...)                   // Nonce
+	sealed = append(sealed, ciphertext...)              // Ciphertext
 
 	// Auth tag (simulated)
 	tag := sha256.Sum256(append(sealed, aad...))

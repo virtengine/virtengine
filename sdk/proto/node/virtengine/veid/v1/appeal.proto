@@ -1,0 +1,434 @@
+syntax = "proto3";
+package virtengine.veid.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
+
+// =============================================================================
+// Appeal Status Enum
+// =============================================================================
+
+// AppealStatus represents the current state of an appeal
+enum AppealStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // APPEAL_STATUS_UNSPECIFIED is the default unspecified status
+  APPEAL_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "AppealStatusUnspecified"];
+  
+  // APPEAL_STATUS_PENDING indicates the appeal has been submitted and awaits review
+  APPEAL_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "AppealStatusPending"];
+  
+  // APPEAL_STATUS_REVIEWING indicates an arbitrator has claimed the appeal for review
+  APPEAL_STATUS_REVIEWING = 2 [(gogoproto.enumvalue_customname) = "AppealStatusReviewing"];
+  
+  // APPEAL_STATUS_APPROVED indicates the appeal was approved
+  APPEAL_STATUS_APPROVED = 3 [(gogoproto.enumvalue_customname) = "AppealStatusApproved"];
+  
+  // APPEAL_STATUS_REJECTED indicates the appeal was rejected
+  APPEAL_STATUS_REJECTED = 4 [(gogoproto.enumvalue_customname) = "AppealStatusRejected"];
+  
+  // APPEAL_STATUS_WITHDRAWN indicates the submitter withdrew their appeal
+  APPEAL_STATUS_WITHDRAWN = 5 [(gogoproto.enumvalue_customname) = "AppealStatusWithdrawn"];
+  
+  // APPEAL_STATUS_EXPIRED indicates the appeal expired without resolution
+  APPEAL_STATUS_EXPIRED = 6 [(gogoproto.enumvalue_customname) = "AppealStatusExpired"];
+}
+
+// =============================================================================
+// Appeal Record
+// =============================================================================
+
+// AppealRecord tracks an appeal against a verification decision
+message AppealRecord {
+  option (gogoproto.equal) = true;
+
+  // AppealID is the unique identifier for this appeal
+  string appeal_id = 1 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+
+  // AccountAddress is the address of the account filing the appeal
+  string account_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // ScopeID is the scope whose verification decision is being appealed
+  string scope_id = 3 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // OriginalStatus is the verification status that prompted the appeal
+  string original_status = 4 [
+    (gogoproto.jsontag) = "original_status",
+    (gogoproto.moretags) = "yaml:\"original_status\""
+  ];
+
+  // OriginalScore is the verification score at the time of appeal
+  uint32 original_score = 5 [
+    (gogoproto.jsontag) = "original_score",
+    (gogoproto.moretags) = "yaml:\"original_score\""
+  ];
+
+  // AppealReason is the user's explanation for why they are appealing
+  string appeal_reason = 6 [
+    (gogoproto.jsontag) = "appeal_reason",
+    (gogoproto.moretags) = "yaml:\"appeal_reason\""
+  ];
+
+  // EvidenceHashes are hashes of supporting evidence documents
+  repeated string evidence_hashes = 7 [
+    (gogoproto.jsontag) = "evidence_hashes",
+    (gogoproto.moretags) = "yaml:\"evidence_hashes\""
+  ];
+
+  // SubmittedAt is the block height when the appeal was submitted
+  int64 submitted_at = 8 [
+    (gogoproto.jsontag) = "submitted_at",
+    (gogoproto.moretags) = "yaml:\"submitted_at\""
+  ];
+
+  // SubmittedAtTime is the Unix timestamp when the appeal was submitted
+  int64 submitted_at_time = 9 [
+    (gogoproto.jsontag) = "submitted_at_time",
+    (gogoproto.moretags) = "yaml:\"submitted_at_time\""
+  ];
+
+  // Status is the current status of the appeal
+  AppealStatus status = 10 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // ReviewerAddress is the address of the arbitrator reviewing the appeal
+  string reviewer_address = 11 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "reviewer_address",
+    (gogoproto.moretags) = "yaml:\"reviewer_address\""
+  ];
+
+  // ClaimedAt is the block height when the appeal was claimed for review
+  int64 claimed_at = 12 [
+    (gogoproto.jsontag) = "claimed_at",
+    (gogoproto.moretags) = "yaml:\"claimed_at\""
+  ];
+
+  // ReviewedAt is the block height when the appeal was resolved
+  int64 reviewed_at = 13 [
+    (gogoproto.jsontag) = "reviewed_at",
+    (gogoproto.moretags) = "yaml:\"reviewed_at\""
+  ];
+
+  // ReviewedAtTime is the Unix timestamp when the appeal was resolved
+  int64 reviewed_at_time = 14 [
+    (gogoproto.jsontag) = "reviewed_at_time",
+    (gogoproto.moretags) = "yaml:\"reviewed_at_time\""
+  ];
+
+  // ResolutionReason is the arbitrator's explanation for the decision
+  string resolution_reason = 15 [
+    (gogoproto.jsontag) = "resolution_reason",
+    (gogoproto.moretags) = "yaml:\"resolution_reason\""
+  ];
+
+  // ScoreAdjustment is the adjustment to the verification score
+  int32 score_adjustment = 16 [
+    (gogoproto.jsontag) = "score_adjustment",
+    (gogoproto.moretags) = "yaml:\"score_adjustment\""
+  ];
+
+  // AppealNumber tracks which appeal this is for the scope (1st, 2nd, 3rd)
+  uint32 appeal_number = 17 [
+    (gogoproto.jsontag) = "appeal_number",
+    (gogoproto.moretags) = "yaml:\"appeal_number\""
+  ];
+}
+
+// =============================================================================
+// Appeal Parameters
+// =============================================================================
+
+// AppealParams defines the parameters for the appeal system
+message AppealParams {
+  option (gogoproto.equal) = true;
+
+  // AppealWindowBlocks is how long after rejection can user appeal
+  int64 appeal_window_blocks = 1 [
+    (gogoproto.jsontag) = "appeal_window_blocks",
+    (gogoproto.moretags) = "yaml:\"appeal_window_blocks\""
+  ];
+
+  // MaxAppealsPerScope is the maximum appeals allowed per scope
+  uint32 max_appeals_per_scope = 2 [
+    (gogoproto.jsontag) = "max_appeals_per_scope",
+    (gogoproto.moretags) = "yaml:\"max_appeals_per_scope\""
+  ];
+
+  // MinAppealReasonLength is the minimum characters for appeal reason
+  uint32 min_appeal_reason_length = 3 [
+    (gogoproto.jsontag) = "min_appeal_reason_length",
+    (gogoproto.moretags) = "yaml:\"min_appeal_reason_length\""
+  ];
+
+  // ReviewTimeoutBlocks is how long an appeal can stay in reviewing status
+  int64 review_timeout_blocks = 4 [
+    (gogoproto.jsontag) = "review_timeout_blocks",
+    (gogoproto.moretags) = "yaml:\"review_timeout_blocks\""
+  ];
+
+  // Enabled indicates whether the appeal system is active
+  bool enabled = 5 [
+    (gogoproto.jsontag) = "enabled",
+    (gogoproto.moretags) = "yaml:\"enabled\""
+  ];
+
+  // RequireEscrowDeposit indicates whether appeals require a deposit
+  bool require_escrow_deposit = 6 [
+    (gogoproto.jsontag) = "require_escrow_deposit",
+    (gogoproto.moretags) = "yaml:\"require_escrow_deposit\""
+  ];
+
+  // EscrowDepositAmount is the deposit amount required (in base units)
+  int64 escrow_deposit_amount = 7 [
+    (gogoproto.jsontag) = "escrow_deposit_amount",
+    (gogoproto.moretags) = "yaml:\"escrow_deposit_amount\""
+  ];
+}
+
+// =============================================================================
+// Appeal Summary
+// =============================================================================
+
+// AppealSummary provides a summary of appeals for an account
+message AppealSummary {
+  option (gogoproto.equal) = true;
+
+  // TotalAppeals is the total number of appeals
+  uint32 total_appeals = 1 [
+    (gogoproto.jsontag) = "total_appeals",
+    (gogoproto.moretags) = "yaml:\"total_appeals\""
+  ];
+
+  // PendingAppeals is the number of pending appeals
+  uint32 pending_appeals = 2 [
+    (gogoproto.jsontag) = "pending_appeals",
+    (gogoproto.moretags) = "yaml:\"pending_appeals\""
+  ];
+
+  // ApprovedAppeals is the number of approved appeals
+  uint32 approved_appeals = 3 [
+    (gogoproto.jsontag) = "approved_appeals",
+    (gogoproto.moretags) = "yaml:\"approved_appeals\""
+  ];
+
+  // RejectedAppeals is the number of rejected appeals
+  uint32 rejected_appeals = 4 [
+    (gogoproto.jsontag) = "rejected_appeals",
+    (gogoproto.moretags) = "yaml:\"rejected_appeals\""
+  ];
+
+  // WithdrawnAppeals is the number of withdrawn appeals
+  uint32 withdrawn_appeals = 5 [
+    (gogoproto.jsontag) = "withdrawn_appeals",
+    (gogoproto.moretags) = "yaml:\"withdrawn_appeals\""
+  ];
+}
+
+// =============================================================================
+// Appeal Messages
+// =============================================================================
+
+// MsgSubmitAppeal is the message to submit an appeal against a verification decision
+message MsgSubmitAppeal {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "submitter";
+  option (amino.name) = "veid/MsgSubmitAppeal";
+
+  // Submitter is the account address submitting the appeal (must own the scope)
+  string submitter = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "submitter",
+    (gogoproto.moretags) = "yaml:\"submitter\""
+  ];
+
+  // ScopeID is the scope whose verification decision is being appealed
+  string scope_id = 2 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Reason is the explanation for why the submitter is appealing
+  string reason = 3 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+
+  // EvidenceHashes are hashes of supporting evidence documents
+  repeated string evidence_hashes = 4 [
+    (gogoproto.jsontag) = "evidence_hashes",
+    (gogoproto.moretags) = "yaml:\"evidence_hashes\""
+  ];
+}
+
+// MsgSubmitAppealResponse is the response for MsgSubmitAppeal
+message MsgSubmitAppealResponse {
+  // AppealID is the unique identifier for the created appeal
+  string appeal_id = 1 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+
+  // Status is the initial status of the appeal
+  AppealStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // AppealNumber is which appeal this is for the scope
+  uint32 appeal_number = 3 [
+    (gogoproto.jsontag) = "appeal_number",
+    (gogoproto.moretags) = "yaml:\"appeal_number\""
+  ];
+
+  // SubmittedAt is the block height when submitted
+  int64 submitted_at = 4 [
+    (gogoproto.jsontag) = "submitted_at",
+    (gogoproto.moretags) = "yaml:\"submitted_at\""
+  ];
+}
+
+// MsgClaimAppeal is the message for an arbitrator to claim an appeal for review
+message MsgClaimAppeal {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "reviewer";
+  option (amino.name) = "veid/MsgClaimAppeal";
+
+  // Reviewer is the arbitrator claiming the appeal
+  string reviewer = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "reviewer",
+    (gogoproto.moretags) = "yaml:\"reviewer\""
+  ];
+
+  // AppealID is the appeal being claimed
+  string appeal_id = 2 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+}
+
+// MsgClaimAppealResponse is the response for MsgClaimAppeal
+message MsgClaimAppealResponse {
+  // AppealID is the claimed appeal ID
+  string appeal_id = 1 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+
+  // ClaimedAt is the block height when claimed
+  int64 claimed_at = 2 [
+    (gogoproto.jsontag) = "claimed_at",
+    (gogoproto.moretags) = "yaml:\"claimed_at\""
+  ];
+}
+
+// MsgResolveAppeal is the message to resolve an appeal
+message MsgResolveAppeal {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "resolver";
+  option (amino.name) = "veid/MsgResolveAppeal";
+
+  // Resolver is the arbitrator resolving the appeal
+  string resolver = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "resolver",
+    (gogoproto.moretags) = "yaml:\"resolver\""
+  ];
+
+  // AppealID is the appeal being resolved
+  string appeal_id = 2 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+
+  // Resolution is the resolution status (approved or rejected)
+  AppealStatus resolution = 3 [
+    (gogoproto.jsontag) = "resolution",
+    (gogoproto.moretags) = "yaml:\"resolution\""
+  ];
+
+  // Reason is the explanation for the resolution decision
+  string reason = 4 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+
+  // ScoreAdjustment is the adjustment to the verification score
+  int32 score_adjustment = 5 [
+    (gogoproto.jsontag) = "score_adjustment",
+    (gogoproto.moretags) = "yaml:\"score_adjustment\""
+  ];
+}
+
+// MsgResolveAppealResponse is the response for MsgResolveAppeal
+message MsgResolveAppealResponse {
+  // AppealID is the resolved appeal ID
+  string appeal_id = 1 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+
+  // Resolution is the final resolution status
+  AppealStatus resolution = 2 [
+    (gogoproto.jsontag) = "resolution",
+    (gogoproto.moretags) = "yaml:\"resolution\""
+  ];
+
+  // ResolvedAt is the block height when resolved
+  int64 resolved_at = 3 [
+    (gogoproto.jsontag) = "resolved_at",
+    (gogoproto.moretags) = "yaml:\"resolved_at\""
+  ];
+}
+
+// MsgWithdrawAppeal allows the submitter to withdraw their appeal
+message MsgWithdrawAppeal {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "submitter";
+  option (amino.name) = "veid/MsgWithdrawAppeal";
+
+  // Submitter is the original appeal submitter
+  string submitter = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "submitter",
+    (gogoproto.moretags) = "yaml:\"submitter\""
+  ];
+
+  // AppealID is the appeal to withdraw
+  string appeal_id = 2 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+}
+
+// MsgWithdrawAppealResponse is the response for MsgWithdrawAppeal
+message MsgWithdrawAppealResponse {
+  // AppealID is the withdrawn appeal ID
+  string appeal_id = 1 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+
+  // WithdrawnAt is the block height when withdrawn
+  int64 withdrawn_at = 2 [
+    (gogoproto.jsontag) = "withdrawn_at",
+    (gogoproto.moretags) = "yaml:\"withdrawn_at\""
+  ];
+}

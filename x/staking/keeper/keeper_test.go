@@ -1,8 +1,3 @@
-// tests re-enabled
-
-
-// TODO: This test file is excluded until staking keeper compilation errors are fixed.
-
 // Package keeper implements the staking module keeper tests.
 //
 // VE-921: Staking rewards keeper tests

@@ -348,9 +348,14 @@ func TestIsValidOfferingType(t *testing.T) {
 
 func TestAllOfferingTypes(t *testing.T) {
 	offeringTypes := types.AllOfferingTypes()
-	assert.Len(t, offeringTypes, 5)
+	assert.Len(t, offeringTypes, 10) // 5 original + 5 infrastructure types (TEE, HPC, GPU, Compute, Storage)
 	assert.Contains(t, offeringTypes, types.OfferingTypeBasic)
 	assert.Contains(t, offeringTypes, types.OfferingTypeValidator)
+	assert.Contains(t, offeringTypes, types.OfferingTypeTEE)
+	assert.Contains(t, offeringTypes, types.OfferingTypeHPC)
+	assert.Contains(t, offeringTypes, types.OfferingTypeGPU)
+	assert.Contains(t, offeringTypes, types.OfferingTypeCompute)
+	assert.Contains(t, offeringTypes, types.OfferingTypeStorage)
 }
 
 func TestGetRequiredScopesForOffering(t *testing.T) {

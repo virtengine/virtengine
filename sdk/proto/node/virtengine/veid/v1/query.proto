@@ -6,6 +6,9 @@ import "google/api/annotations.proto";
 import "cosmos_proto/cosmos.proto";
 import "cosmos/base/query/v1beta1/pagination.proto";
 import "virtengine/veid/v1/types.proto";
+import "virtengine/veid/v1/appeal.proto";
+import "virtengine/veid/v1/compliance.proto";
+import "virtengine/veid/v1/model.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
 
@@ -121,6 +124,109 @@ service Query {
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
   rpc BorderlineParams(QueryBorderlineParamsRequest) returns (QueryBorderlineParamsResponse) {
     option (google.api.http).get = "/virtengine/veid/v1/borderline_params";
+  }
+
+  // ==========================================================================
+  // Appeal Queries (VE-3020)
+  // ==========================================================================
+
+  // Appeal queries a specific appeal by ID
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Appeal(QueryAppealRequest) returns (QueryAppealResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/appeal/{appeal_id}";
+  }
+
+  // Appeals queries all appeals for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc Appeals(QueryAppealsRequest) returns (QueryAppealsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/appeals/{account_address}";
+  }
+
+  // AppealsByScope queries all appeals for a specific scope
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc AppealsByScope(QueryAppealsByScopeRequest) returns (QueryAppealsByScopeResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/appeals/scope/{scope_id}";
+  }
+
+  // AppealParams queries the appeal system parameters
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc AppealParams(QueryAppealParamsRequest) returns (QueryAppealParamsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/appeal_params";
+  }
+
+  // ==========================================================================
+  // Compliance Queries (VE-3021)
+  // ==========================================================================
+
+  // ComplianceStatus queries the compliance status for an account
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ComplianceStatus(QueryComplianceStatusRequest) returns (QueryComplianceStatusResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/compliance/{account_address}";
+  }
+
+  // ComplianceProvider queries a specific compliance provider
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ComplianceProvider(QueryComplianceProviderRequest) returns (QueryComplianceProviderResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/compliance_provider/{provider_id}";
+  }
+
+  // ComplianceProviders queries all compliance providers
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ComplianceProviders(QueryComplianceProvidersRequest) returns (QueryComplianceProvidersResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/compliance_providers";
+  }
+
+  // ComplianceParams queries the compliance parameters
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ComplianceParams(QueryComplianceParamsRequest) returns (QueryComplianceParamsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/compliance_params";
+  }
+
+  // ==========================================================================
+  // Model Versioning Queries (VE-3007)
+  // ==========================================================================
+
+  // ModelVersion queries the active model for a given type
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ModelVersion(QueryModelVersionRequest) returns (QueryModelVersionResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/model/{model_type}";
+  }
+
+  // ActiveModels queries all active models
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ActiveModels(QueryActiveModelsRequest) returns (QueryActiveModelsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/models";
+  }
+
+  // ModelHistory queries the version history for a model type
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ModelHistory(QueryModelHistoryRequest) returns (QueryModelHistoryResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/model/{model_type}/history";
+  }
+
+  // ValidatorModelSync queries a validator's model sync status
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ValidatorModelSync(QueryValidatorModelSyncRequest) returns (QueryValidatorModelSyncResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/validator_model_sync/{validator_address}";
+  }
+
+  // ModelParams queries the model management parameters
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc ModelParams(QueryModelParamsRequest) returns (QueryModelParamsResponse) {
+    option (google.api.http).get = "/virtengine/veid/v1/model_params";
   }
 }
 
@@ -880,5 +986,299 @@ message QueryDerivedFeatureHashesResponse {
   string model_version = 6 [
     (gogoproto.jsontag) = "model_version",
     (gogoproto.moretags) = "yaml:\"model_version\""
+  ];
+}
+
+// ============================================================================
+// Appeal Query Types (VE-3020)
+// ============================================================================
+
+// QueryAppealRequest is the request for the Appeal query
+message QueryAppealRequest {
+  // AppealID is the appeal to query
+  string appeal_id = 1 [
+    (gogoproto.jsontag) = "appeal_id",
+    (gogoproto.moretags) = "yaml:\"appeal_id\""
+  ];
+}
+
+// QueryAppealResponse is the response for the Appeal query
+message QueryAppealResponse {
+  // Appeal is the appeal record
+  AppealRecord appeal = 1 [
+    (gogoproto.jsontag) = "appeal",
+    (gogoproto.moretags) = "yaml:\"appeal\""
+  ];
+
+  // Found indicates if the appeal was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryAppealsRequest is the request for the Appeals query
+message QueryAppealsRequest {
+  // AccountAddress is the account to query appeals for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryAppealsResponse is the response for the Appeals query
+message QueryAppealsResponse {
+  // Appeals is the list of appeal records
+  repeated AppealRecord appeals = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "appeals",
+    (gogoproto.moretags) = "yaml:\"appeals\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryAppealsByScopeRequest is the request for the AppealsByScope query
+message QueryAppealsByScopeRequest {
+  // ScopeID is the scope to query appeals for
+  string scope_id = 1 [
+    (gogoproto.jsontag) = "scope_id",
+    (gogoproto.moretags) = "yaml:\"scope_id\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryAppealsByScopeResponse is the response for the AppealsByScope query
+message QueryAppealsByScopeResponse {
+  // Appeals is the list of appeal records
+  repeated AppealRecord appeals = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "appeals",
+    (gogoproto.moretags) = "yaml:\"appeals\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryAppealParamsRequest is the request for the AppealParams query
+message QueryAppealParamsRequest {}
+
+// QueryAppealParamsResponse is the response for the AppealParams query
+message QueryAppealParamsResponse {
+  // Params are the appeal parameters
+  AppealParams params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// ============================================================================
+// Compliance Query Types (VE-3021)
+// ============================================================================
+
+// QueryComplianceStatusRequest is the request for the ComplianceStatus query
+message QueryComplianceStatusRequest {
+  // AccountAddress is the account to query compliance for
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+}
+
+// QueryComplianceStatusResponse is the response for the ComplianceStatus query
+message QueryComplianceStatusResponse {
+  // Record is the compliance record
+  ComplianceRecord record = 1 [
+    (gogoproto.jsontag) = "record",
+    (gogoproto.moretags) = "yaml:\"record\""
+  ];
+
+  // Found indicates if the record was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryComplianceProviderRequest is the request for the ComplianceProvider query
+message QueryComplianceProviderRequest {
+  // ProviderID is the provider to query
+  string provider_id = 1 [
+    (gogoproto.jsontag) = "provider_id",
+    (gogoproto.moretags) = "yaml:\"provider_id\""
+  ];
+}
+
+// QueryComplianceProviderResponse is the response for the ComplianceProvider query
+message QueryComplianceProviderResponse {
+  // Provider is the compliance provider
+  ComplianceProvider provider = 1 [
+    (gogoproto.jsontag) = "provider",
+    (gogoproto.moretags) = "yaml:\"provider\""
+  ];
+
+  // Found indicates if the provider was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryComplianceProvidersRequest is the request for the ComplianceProviders query
+message QueryComplianceProvidersRequest {
+  // ActiveOnly filters to only return active providers
+  bool active_only = 1 [
+    (gogoproto.jsontag) = "active_only",
+    (gogoproto.moretags) = "yaml:\"active_only\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryComplianceProvidersResponse is the response for the ComplianceProviders query
+message QueryComplianceProvidersResponse {
+  // Providers is the list of compliance providers
+  repeated ComplianceProvider providers = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "providers",
+    (gogoproto.moretags) = "yaml:\"providers\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryComplianceParamsRequest is the request for the ComplianceParams query
+message QueryComplianceParamsRequest {}
+
+// QueryComplianceParamsResponse is the response for the ComplianceParams query
+message QueryComplianceParamsResponse {
+  // Params are the compliance parameters
+  ComplianceParams params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// ============================================================================
+// Model Versioning Query Types (VE-3007)
+// ============================================================================
+
+// QueryModelVersionRequest is the request for the ModelVersion query
+message QueryModelVersionRequest {
+  // ModelType is the type of model to query
+  string model_type = 1 [
+    (gogoproto.jsontag) = "model_type",
+    (gogoproto.moretags) = "yaml:\"model_type\""
+  ];
+}
+
+// QueryModelVersionResponse is the response for the ModelVersion query
+message QueryModelVersionResponse {
+  // ModelInfo is the model information
+  MLModelInfo model_info = 1 [
+    (gogoproto.jsontag) = "model_info",
+    (gogoproto.moretags) = "yaml:\"model_info\""
+  ];
+
+  // Found indicates if the model was found
+  bool found = 2 [
+    (gogoproto.jsontag) = "found",
+    (gogoproto.moretags) = "yaml:\"found\""
+  ];
+}
+
+// QueryActiveModelsRequest is the request for the ActiveModels query
+message QueryActiveModelsRequest {}
+
+// QueryActiveModelsResponse is the response for the ActiveModels query
+message QueryActiveModelsResponse {
+  // State is the current model version state
+  ModelVersionState state = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+
+  // Models is the list of active ML models
+  repeated MLModelInfo models = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "models",
+    (gogoproto.moretags) = "yaml:\"models\""
+  ];
+}
+
+// QueryModelHistoryRequest is the request for the ModelHistory query
+message QueryModelHistoryRequest {
+  // ModelType is the type of model to query history for
+  string model_type = 1 [
+    (gogoproto.jsontag) = "model_type",
+    (gogoproto.moretags) = "yaml:\"model_type\""
+  ];
+
+  // Pagination is optional pagination parameters
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryModelHistoryResponse is the response for the ModelHistory query
+message QueryModelHistoryResponse {
+  // History is the list of model version changes
+  repeated ModelVersionHistory history = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "history",
+    (gogoproto.moretags) = "yaml:\"history\""
+  ];
+
+  // Pagination is the pagination response
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryValidatorModelSyncRequest is the request for the ValidatorModelSync query
+message QueryValidatorModelSyncRequest {
+  // ValidatorAddress is the validator to query
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+}
+
+// QueryValidatorModelSyncResponse is the response for the ValidatorModelSync query
+message QueryValidatorModelSyncResponse {
+  // Report is the validator's model version report
+  ValidatorModelReport report = 1 [
+    (gogoproto.jsontag) = "report",
+    (gogoproto.moretags) = "yaml:\"report\""
+  ];
+
+  // IsSynced indicates if the validator is synced with consensus
+  bool is_synced = 2 [
+    (gogoproto.jsontag) = "is_synced",
+    (gogoproto.moretags) = "yaml:\"is_synced\""
+  ];
+}
+
+// QueryModelParamsRequest is the request for the ModelParams query
+message QueryModelParamsRequest {}
+
+// QueryModelParamsResponse is the response for the ModelParams query
+message QueryModelParamsResponse {
+  // Params are the model management parameters
+  ModelParams params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
   ];
 }

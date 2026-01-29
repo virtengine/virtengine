@@ -1,0 +1,655 @@
+syntax = "proto3";
+package virtengine.veid.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
+
+// =============================================================================
+// Model Type Enum
+// =============================================================================
+
+// ModelType represents the type of ML model
+enum ModelType {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // MODEL_TYPE_UNSPECIFIED is the default unspecified type
+  MODEL_TYPE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "ModelTypeUnspecified"];
+  
+  // MODEL_TYPE_TRUST_SCORE is the trust score calculation model
+  MODEL_TYPE_TRUST_SCORE = 1 [(gogoproto.enumvalue_customname) = "ModelTypeTrustScore"];
+  
+  // MODEL_TYPE_FACE_VERIFICATION is the facial verification model
+  MODEL_TYPE_FACE_VERIFICATION = 2 [(gogoproto.enumvalue_customname) = "ModelTypeFaceVerification"];
+  
+  // MODEL_TYPE_LIVENESS is the liveness detection model
+  MODEL_TYPE_LIVENESS = 3 [(gogoproto.enumvalue_customname) = "ModelTypeLiveness"];
+  
+  // MODEL_TYPE_GAN_DETECTION is the GAN-generated image detection model
+  MODEL_TYPE_GAN_DETECTION = 4 [(gogoproto.enumvalue_customname) = "ModelTypeGANDetection"];
+  
+  // MODEL_TYPE_OCR is the OCR extraction model
+  MODEL_TYPE_OCR = 5 [(gogoproto.enumvalue_customname) = "ModelTypeOCR"];
+}
+
+// =============================================================================
+// Model Status Enum
+// =============================================================================
+
+// ModelStatus represents the lifecycle status of a model
+enum ModelStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // MODEL_STATUS_UNSPECIFIED is the default unspecified status
+  MODEL_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "ModelStatusUnspecified"];
+  
+  // MODEL_STATUS_PENDING indicates the model is pending activation
+  MODEL_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "ModelStatusPending"];
+  
+  // MODEL_STATUS_ACTIVE indicates the model is currently active
+  MODEL_STATUS_ACTIVE = 2 [(gogoproto.enumvalue_customname) = "ModelStatusActive"];
+  
+  // MODEL_STATUS_DEPRECATED indicates the model has been deprecated
+  MODEL_STATUS_DEPRECATED = 3 [(gogoproto.enumvalue_customname) = "ModelStatusDeprecated"];
+  
+  // MODEL_STATUS_REVOKED indicates the model has been revoked
+  MODEL_STATUS_REVOKED = 4 [(gogoproto.enumvalue_customname) = "ModelStatusRevoked"];
+}
+
+// =============================================================================
+// Model Proposal Status Enum
+// =============================================================================
+
+// ModelProposalStatus represents the status of a model update proposal
+enum ModelProposalStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // MODEL_PROPOSAL_STATUS_UNSPECIFIED is the default unspecified status
+  MODEL_PROPOSAL_STATUS_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "ModelProposalStatusUnspecified"];
+  
+  // MODEL_PROPOSAL_STATUS_PENDING indicates the proposal is pending
+  MODEL_PROPOSAL_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "ModelProposalStatusPending"];
+  
+  // MODEL_PROPOSAL_STATUS_APPROVED indicates the proposal was approved
+  MODEL_PROPOSAL_STATUS_APPROVED = 2 [(gogoproto.enumvalue_customname) = "ModelProposalStatusApproved"];
+  
+  // MODEL_PROPOSAL_STATUS_REJECTED indicates the proposal was rejected
+  MODEL_PROPOSAL_STATUS_REJECTED = 3 [(gogoproto.enumvalue_customname) = "ModelProposalStatusRejected"];
+  
+  // MODEL_PROPOSAL_STATUS_ACTIVATED indicates the model has been activated
+  MODEL_PROPOSAL_STATUS_ACTIVATED = 4 [(gogoproto.enumvalue_customname) = "ModelProposalStatusActivated"];
+  
+  // MODEL_PROPOSAL_STATUS_EXPIRED indicates the proposal has expired
+  MODEL_PROPOSAL_STATUS_EXPIRED = 5 [(gogoproto.enumvalue_customname) = "ModelProposalStatusExpired"];
+}
+
+// =============================================================================
+// ML Model Info
+// =============================================================================
+
+// MLModelInfo describes a registered ML model for version tracking
+message MLModelInfo {
+  option (gogoproto.equal) = true;
+
+  // ModelID is the unique identifier for this model
+  string model_id = 1 [
+    (gogoproto.jsontag) = "model_id",
+    (gogoproto.moretags) = "yaml:\"model_id\""
+  ];
+
+  // Name is the human-readable name of the model
+  string name = 2 [
+    (gogoproto.jsontag) = "name",
+    (gogoproto.moretags) = "yaml:\"name\""
+  ];
+
+  // Version is the semantic version of the model (e.g., "1.0.0")
+  string version = 3 [
+    (gogoproto.jsontag) = "version",
+    (gogoproto.moretags) = "yaml:\"version\""
+  ];
+
+  // ModelType is the type of model (e.g., "face_verification")
+  string model_type = 4 [
+    (gogoproto.jsontag) = "model_type",
+    (gogoproto.moretags) = "yaml:\"model_type\""
+  ];
+
+  // SHA256Hash is the SHA256 hash of the model binary
+  string sha256_hash = 5 [
+    (gogoproto.jsontag) = "sha256_hash",
+    (gogoproto.moretags) = "yaml:\"sha256_hash\""
+  ];
+
+  // Description is a human-readable description of the model
+  string description = 6 [
+    (gogoproto.jsontag) = "description",
+    (gogoproto.moretags) = "yaml:\"description\""
+  ];
+
+  // ActivatedAt is the block height when this model was activated
+  int64 activated_at = 7 [
+    (gogoproto.jsontag) = "activated_at",
+    (gogoproto.moretags) = "yaml:\"activated_at\""
+  ];
+
+  // RegisteredAt is the block height when this model was registered
+  int64 registered_at = 8 [
+    (gogoproto.jsontag) = "registered_at",
+    (gogoproto.moretags) = "yaml:\"registered_at\""
+  ];
+
+  // RegisteredBy is the address that registered this model
+  string registered_by = 9 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "registered_by",
+    (gogoproto.moretags) = "yaml:\"registered_by\""
+  ];
+
+  // GovernanceID is the governance proposal ID that approved this model
+  uint64 governance_id = 10 [
+    (gogoproto.jsontag) = "governance_id",
+    (gogoproto.moretags) = "yaml:\"governance_id\""
+  ];
+
+  // Status is the current status of the model
+  ModelStatus status = 11 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+}
+
+// =============================================================================
+// Model Version State
+// =============================================================================
+
+// ModelVersionState tracks the current active model versions for consensus
+message ModelVersionState {
+  option (gogoproto.equal) = true;
+
+  // TrustScoreModel is the active model ID for trust scoring
+  string trust_score_model = 1 [
+    (gogoproto.jsontag) = "trust_score_model",
+    (gogoproto.moretags) = "yaml:\"trust_score_model\""
+  ];
+
+  // FaceVerificationModel is the active model ID for face verification
+  string face_verification_model = 2 [
+    (gogoproto.jsontag) = "face_verification_model",
+    (gogoproto.moretags) = "yaml:\"face_verification_model\""
+  ];
+
+  // LivenessModel is the active model ID for liveness detection
+  string liveness_model = 3 [
+    (gogoproto.jsontag) = "liveness_model",
+    (gogoproto.moretags) = "yaml:\"liveness_model\""
+  ];
+
+  // GANDetectionModel is the active model ID for GAN detection
+  string gan_detection_model = 4 [
+    (gogoproto.jsontag) = "gan_detection_model",
+    (gogoproto.moretags) = "yaml:\"gan_detection_model\""
+  ];
+
+  // OCRModel is the active model ID for OCR extraction
+  string ocr_model = 5 [
+    (gogoproto.jsontag) = "ocr_model",
+    (gogoproto.moretags) = "yaml:\"ocr_model\""
+  ];
+
+  // LastUpdated is the block height when state was last updated
+  int64 last_updated = 6 [
+    (gogoproto.jsontag) = "last_updated",
+    (gogoproto.moretags) = "yaml:\"last_updated\""
+  ];
+}
+
+// =============================================================================
+// Model Update Proposal
+// =============================================================================
+
+// ModelUpdateProposal for governance-controlled model updates
+message ModelUpdateProposal {
+  option (gogoproto.equal) = true;
+
+  // Title is the proposal title
+  string title = 1 [
+    (gogoproto.jsontag) = "title",
+    (gogoproto.moretags) = "yaml:\"title\""
+  ];
+
+  // Description is the detailed proposal description
+  string description = 2 [
+    (gogoproto.jsontag) = "description",
+    (gogoproto.moretags) = "yaml:\"description\""
+  ];
+
+  // ModelType is the type of model being updated
+  string model_type = 3 [
+    (gogoproto.jsontag) = "model_type",
+    (gogoproto.moretags) = "yaml:\"model_type\""
+  ];
+
+  // NewModelID is the ID of the new model to activate
+  string new_model_id = 4 [
+    (gogoproto.jsontag) = "new_model_id",
+    (gogoproto.moretags) = "yaml:\"new_model_id\""
+  ];
+
+  // NewModelHash is the SHA256 hash of the new model
+  string new_model_hash = 5 [
+    (gogoproto.jsontag) = "new_model_hash",
+    (gogoproto.moretags) = "yaml:\"new_model_hash\""
+  ];
+
+  // ActivationDelay is the number of blocks to wait after approval
+  int64 activation_delay = 6 [
+    (gogoproto.jsontag) = "activation_delay",
+    (gogoproto.moretags) = "yaml:\"activation_delay\""
+  ];
+
+  // ProposedAt is the block height when proposal was submitted
+  int64 proposed_at = 7 [
+    (gogoproto.jsontag) = "proposed_at",
+    (gogoproto.moretags) = "yaml:\"proposed_at\""
+  ];
+
+  // ProposerAddress is the address that submitted the proposal
+  string proposer_address = 8 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "proposer_address",
+    (gogoproto.moretags) = "yaml:\"proposer_address\""
+  ];
+
+  // Status is the current status of the proposal
+  ModelProposalStatus status = 9 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // GovernanceID is the governance proposal ID (set when submitted to gov)
+  uint64 governance_id = 10 [
+    (gogoproto.jsontag) = "governance_id",
+    (gogoproto.moretags) = "yaml:\"governance_id\""
+  ];
+
+  // ActivationHeight is the block height when activation should occur
+  int64 activation_height = 11 [
+    (gogoproto.jsontag) = "activation_height",
+    (gogoproto.moretags) = "yaml:\"activation_height\""
+  ];
+}
+
+// =============================================================================
+// Model Version History
+// =============================================================================
+
+// ModelVersionHistory tracks model version changes
+message ModelVersionHistory {
+  option (gogoproto.equal) = true;
+
+  // HistoryID is the unique identifier for this history entry
+  string history_id = 1 [
+    (gogoproto.jsontag) = "history_id",
+    (gogoproto.moretags) = "yaml:\"history_id\""
+  ];
+
+  // ModelType is the type of model that was changed
+  string model_type = 2 [
+    (gogoproto.jsontag) = "model_type",
+    (gogoproto.moretags) = "yaml:\"model_type\""
+  ];
+
+  // OldModelID is the previous model ID (empty if first model)
+  string old_model_id = 3 [
+    (gogoproto.jsontag) = "old_model_id",
+    (gogoproto.moretags) = "yaml:\"old_model_id\""
+  ];
+
+  // NewModelID is the new model ID
+  string new_model_id = 4 [
+    (gogoproto.jsontag) = "new_model_id",
+    (gogoproto.moretags) = "yaml:\"new_model_id\""
+  ];
+
+  // OldModelHash is the previous model hash
+  string old_model_hash = 5 [
+    (gogoproto.jsontag) = "old_model_hash",
+    (gogoproto.moretags) = "yaml:\"old_model_hash\""
+  ];
+
+  // NewModelHash is the new model hash
+  string new_model_hash = 6 [
+    (gogoproto.jsontag) = "new_model_hash",
+    (gogoproto.moretags) = "yaml:\"new_model_hash\""
+  ];
+
+  // ChangedAt is the block height when the change occurred
+  int64 changed_at = 7 [
+    (gogoproto.jsontag) = "changed_at",
+    (gogoproto.moretags) = "yaml:\"changed_at\""
+  ];
+
+  // GovernanceID is the governance proposal ID that approved this change
+  uint64 governance_id = 8 [
+    (gogoproto.jsontag) = "governance_id",
+    (gogoproto.moretags) = "yaml:\"governance_id\""
+  ];
+
+  // ProposerAddress is the address that proposed this change
+  string proposer_address = 9 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "proposer_address",
+    (gogoproto.moretags) = "yaml:\"proposer_address\""
+  ];
+
+  // Reason is the reason for the change
+  string reason = 10 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// =============================================================================
+// Validator Model Report
+// =============================================================================
+
+// ValidatorModelReport represents a validator's reported model versions
+message ValidatorModelReport {
+  option (gogoproto.equal) = true;
+
+  // ValidatorAddress is the validator's operator address
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // ModelVersions maps model type to SHA256 hash
+  map<string, string> model_versions = 2 [
+    (gogoproto.jsontag) = "model_versions",
+    (gogoproto.moretags) = "yaml:\"model_versions\""
+  ];
+
+  // ReportedAt is the block height when this report was submitted
+  int64 reported_at = 3 [
+    (gogoproto.jsontag) = "reported_at",
+    (gogoproto.moretags) = "yaml:\"reported_at\""
+  ];
+
+  // LastVerified is the block height when versions were last verified
+  int64 last_verified = 4 [
+    (gogoproto.jsontag) = "last_verified",
+    (gogoproto.moretags) = "yaml:\"last_verified\""
+  ];
+
+  // IsSynced indicates if all model versions match consensus
+  bool is_synced = 5 [
+    (gogoproto.jsontag) = "is_synced",
+    (gogoproto.moretags) = "yaml:\"is_synced\""
+  ];
+
+  // MismatchedModels lists model types with version mismatches
+  repeated string mismatched_models = 6 [
+    (gogoproto.jsontag) = "mismatched_models",
+    (gogoproto.moretags) = "yaml:\"mismatched_models\""
+  ];
+}
+
+// =============================================================================
+// Model Parameters
+// =============================================================================
+
+// ModelParams contains parameters for model management
+message ModelParams {
+  option (gogoproto.equal) = true;
+
+  // RequiredModelTypes lists model types that must be registered
+  repeated string required_model_types = 1 [
+    (gogoproto.jsontag) = "required_model_types",
+    (gogoproto.moretags) = "yaml:\"required_model_types\""
+  ];
+
+  // ActivationDelayBlocks is the default delay for model activation
+  int64 activation_delay_blocks = 2 [
+    (gogoproto.jsontag) = "activation_delay_blocks",
+    (gogoproto.moretags) = "yaml:\"activation_delay_blocks\""
+  ];
+
+  // MaxModelAgeDays is the maximum age of a model before requiring update
+  int32 max_model_age_days = 3 [
+    (gogoproto.jsontag) = "max_model_age_days",
+    (gogoproto.moretags) = "yaml:\"max_model_age_days\""
+  ];
+
+  // AllowedRegistrars lists addresses allowed to register models
+  repeated string allowed_registrars = 4 [
+    (gogoproto.jsontag) = "allowed_registrars",
+    (gogoproto.moretags) = "yaml:\"allowed_registrars\""
+  ];
+
+  // ValidatorSyncGracePeriod is blocks allowed for validators to sync
+  int64 validator_sync_grace_period = 5 [
+    (gogoproto.jsontag) = "validator_sync_grace_period",
+    (gogoproto.moretags) = "yaml:\"validator_sync_grace_period\""
+  ];
+
+  // ModelUpdateQuorum is the minimum voting power for model updates
+  uint32 model_update_quorum = 6 [
+    (gogoproto.jsontag) = "model_update_quorum",
+    (gogoproto.moretags) = "yaml:\"model_update_quorum\""
+  ];
+
+  // EnableGovernanceUpdates enables governance-controlled updates
+  bool enable_governance_updates = 7 [
+    (gogoproto.jsontag) = "enable_governance_updates",
+    (gogoproto.moretags) = "yaml:\"enable_governance_updates\""
+  ];
+}
+
+// =============================================================================
+// Model Messages
+// =============================================================================
+
+// MsgRegisterModel registers a new ML model
+message MsgRegisterModel {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgRegisterModel";
+
+  // Authority is the address authorized to register models
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // ModelInfo contains the model information
+  MLModelInfo model_info = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "model_info",
+    (gogoproto.moretags) = "yaml:\"model_info\""
+  ];
+}
+
+// MsgRegisterModelResponse is the response for MsgRegisterModel
+message MsgRegisterModelResponse {
+  // ModelID is the registered model's ID
+  string model_id = 1 [
+    (gogoproto.jsontag) = "model_id",
+    (gogoproto.moretags) = "yaml:\"model_id\""
+  ];
+
+  // Status is the initial model status
+  ModelStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+}
+
+// MsgProposeModelUpdate proposes updating active model via governance
+message MsgProposeModelUpdate {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "proposer";
+  option (amino.name) = "veid/MsgProposeModelUpdate";
+
+  // Proposer is the address proposing the update
+  string proposer = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "proposer",
+    (gogoproto.moretags) = "yaml:\"proposer\""
+  ];
+
+  // Proposal contains the update proposal details
+  ModelUpdateProposal proposal = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "proposal",
+    (gogoproto.moretags) = "yaml:\"proposal\""
+  ];
+}
+
+// MsgProposeModelUpdateResponse is the response for MsgProposeModelUpdate
+message MsgProposeModelUpdateResponse {
+  // ProposalID is the governance proposal ID
+  uint64 proposal_id = 1 [
+    (gogoproto.jsontag) = "proposal_id",
+    (gogoproto.moretags) = "yaml:\"proposal_id\""
+  ];
+}
+
+// MsgReportModelVersion reports validator's model versions
+message MsgReportModelVersion {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "validator_address";
+  option (amino.name) = "veid/MsgReportModelVersion";
+
+  // ValidatorAddress is the validator's operator address
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // ModelVersions maps model type to SHA256 hash
+  map<string, string> model_versions = 2 [
+    (gogoproto.jsontag) = "model_versions",
+    (gogoproto.moretags) = "yaml:\"model_versions\""
+  ];
+}
+
+// MsgReportModelVersionResponse is the response for MsgReportModelVersion
+message MsgReportModelVersionResponse {
+  // IsSynced indicates if all models match consensus
+  bool is_synced = 1 [
+    (gogoproto.jsontag) = "is_synced",
+    (gogoproto.moretags) = "yaml:\"is_synced\""
+  ];
+
+  // MismatchedModels lists any models that don't match
+  repeated string mismatched_models = 2 [
+    (gogoproto.jsontag) = "mismatched_models",
+    (gogoproto.moretags) = "yaml:\"mismatched_models\""
+  ];
+}
+
+// MsgActivateModel activates a pending model after governance approval
+message MsgActivateModel {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgActivateModel";
+
+  // Authority is the address authorized to activate models
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // ModelType is the type of model to activate
+  string model_type = 2 [
+    (gogoproto.jsontag) = "model_type",
+    (gogoproto.moretags) = "yaml:\"model_type\""
+  ];
+
+  // ModelID is the ID of the model to activate
+  string model_id = 3 [
+    (gogoproto.jsontag) = "model_id",
+    (gogoproto.moretags) = "yaml:\"model_id\""
+  ];
+
+  // GovernanceID is the governance proposal ID
+  uint64 governance_id = 4 [
+    (gogoproto.jsontag) = "governance_id",
+    (gogoproto.moretags) = "yaml:\"governance_id\""
+  ];
+}
+
+// MsgActivateModelResponse is the response for MsgActivateModel
+message MsgActivateModelResponse {
+  // ActivatedAt is the block height when activated
+  int64 activated_at = 1 [
+    (gogoproto.jsontag) = "activated_at",
+    (gogoproto.moretags) = "yaml:\"activated_at\""
+  ];
+}
+
+// MsgDeprecateModel deprecates a model
+message MsgDeprecateModel {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgDeprecateModel";
+
+  // Authority is the address authorized to deprecate models
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // ModelID is the ID of the model to deprecate
+  string model_id = 2 [
+    (gogoproto.jsontag) = "model_id",
+    (gogoproto.moretags) = "yaml:\"model_id\""
+  ];
+
+  // Reason is the reason for deprecation
+  string reason = 3 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// MsgDeprecateModelResponse is the response for MsgDeprecateModel
+message MsgDeprecateModelResponse {}
+
+// MsgRevokeModel revokes a model
+message MsgRevokeModel {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgRevokeModel";
+
+  // Authority is the address authorized to revoke models
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // ModelID is the ID of the model to revoke
+  string model_id = 2 [
+    (gogoproto.jsontag) = "model_id",
+    (gogoproto.moretags) = "yaml:\"model_id\""
+  ];
+
+  // Reason is the reason for revocation
+  string reason = 3 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// MsgRevokeModelResponse is the response for MsgRevokeModel
+message MsgRevokeModelResponse {}

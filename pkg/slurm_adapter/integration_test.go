@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package slurm_adapter_test
@@ -222,7 +223,7 @@ func TestIntegration_JobAccounting(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		job, err = client.GetJobStatus(ctx, jobID)
 		require.NoError(t, err)
-		
+
 		if job.State == slurm.SLURMJobStateCompleted ||
 			job.State == slurm.SLURMJobStateFailed ||
 			job.State == slurm.SLURMJobStateCancelled {

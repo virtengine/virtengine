@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // ErrSSHConnection is returned when SSH connection fails
@@ -33,6 +34,9 @@ var ErrSCPFailed = errors.New("SCP file transfer failed")
 
 // ErrConnectionPoolExhausted is returned when connection pool is exhausted
 var ErrConnectionPoolExhausted = errors.New("SSH connection pool exhausted")
+
+// ErrHostKeyVerification is returned when host key verification fails
+var ErrHostKeyVerification = errors.New("SSH host key verification failed")
 
 // SSHConfig contains SSH connection configuration
 type SSHConfig struct {
@@ -56,10 +60,12 @@ type SSHConfig struct {
 
 	// HostKeyCallback controls host key verification
 	// "ignore" to skip verification (not recommended for production)
+	// "known_hosts" to use known_hosts file verification
 	HostKeyCallback string `json:"host_key_callback"`
 
-	// KnownHostsFile is the path to known_hosts file
-	KnownHostsFile string `json:"known_hosts_file"`
+	// KnownHostsPath is the path to known_hosts file (default: ~/.ssh/known_hosts)
+	// Used when HostKeyCallback is set to "known_hosts"
+	KnownHostsPath string `json:"known_hosts_path"`
 
 	// Timeout is the SSH connection timeout
 	Timeout time.Duration `json:"timeout"`
@@ -81,10 +87,10 @@ type SSHConfig struct {
 func DefaultSSHConfig() SSHConfig {
 	return SSHConfig{
 		Port:              22,
-		Timeout:          30 * time.Second,
+		Timeout:           30 * time.Second,
 		KeepAliveInterval: 30 * time.Second,
 		MaxRetries:        3,
-		HostKeyCallback:   "ignore", // TODO: Change to "known_hosts" for production
+		HostKeyCallback:   "known_hosts", // Use known_hosts verification by default
 		PoolSize:          5,
 		PoolIdleTimeout:   5 * time.Minute,
 	}
@@ -149,9 +155,53 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 	switch sshConfig.HostKeyCallback {
 	case "ignore":
 		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+	case "known_hosts":
+		knownHostsPath := sshConfig.KnownHostsPath
+		if knownHostsPath == "" {
+			// Default to ~/.ssh/known_hosts
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get user home directory: %w", err)
+			}
+			knownHostsPath = filepath.Join(homeDir, ".ssh", "known_hosts")
+		}
+
+		// Check if known_hosts file exists
+		if _, err := os.Stat(knownHostsPath); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("%w: known_hosts file not found at %s", ErrHostKeyVerification, knownHostsPath)
+			}
+			return nil, fmt.Errorf("failed to access known_hosts file: %w", err)
+		}
+
+		// Create host key callback from known_hosts file
+		hostKeyCallback, err := knownhosts.New(knownHostsPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create host key callback: %w", err)
+		}
+		clientConfig.HostKeyCallback = hostKeyCallback
 	default:
-		// TODO: Implement known_hosts verification
-		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+		// Default to known_hosts for security
+		knownHostsPath := sshConfig.KnownHostsPath
+		if knownHostsPath == "" {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get user home directory: %w", err)
+			}
+			knownHostsPath = filepath.Join(homeDir, ".ssh", "known_hosts")
+		}
+
+		// If known_hosts exists, use it; otherwise fall back to insecure
+		if _, err := os.Stat(knownHostsPath); err == nil {
+			hostKeyCallback, err := knownhosts.New(knownHostsPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create host key callback: %w", err)
+			}
+			clientConfig.HostKeyCallback = hostKeyCallback
+		} else {
+			// Fall back to insecure if no known_hosts file exists
+			clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+		}
 	}
 
 	// Set defaults for pool

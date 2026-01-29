@@ -149,8 +149,9 @@ func (k Keeper) verifyMFAChallengeCompleted(ctx sdk.Context, challengeID string)
 	return nil
 }
 
-// determineFactorClass determines the security class of the satisfied factors
-func (k Keeper) determineFactorClass(factorsSatisfied []string) string {
+// DetermineFactorClass determines the security class of the satisfied factors
+// Returns "high", "medium", or "low" based on the security level of the factors
+func (k Keeper) DetermineFactorClass(factorsSatisfied []string) string {
 	hasHigh := false
 	hasMedium := false
 
@@ -176,6 +177,11 @@ func (k Keeper) determineFactorClass(factorsSatisfied []string) string {
 		return "medium"
 	}
 	return "low"
+}
+
+// determineFactorClass is the private version for internal use
+func (k Keeper) determineFactorClass(factorsSatisfied []string) string {
+	return k.DetermineFactorClass(factorsSatisfied)
 }
 
 // ============================================================================

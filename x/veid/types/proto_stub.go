@@ -124,3 +124,31 @@ func (m *MsgUpdateDerivedFeaturesResponse) ProtoMessage()  {}
 func (m *MsgUpdateDerivedFeaturesResponse) Reset()         { *m = MsgUpdateDerivedFeaturesResponse{} }
 func (m *MsgUpdateDerivedFeaturesResponse) String() string { return fmt.Sprintf("%+v", *m) }
 
+// ============================================================================
+// Compliance Messages (from msgs_compliance.go) - VE-3021
+// ============================================================================
+
+// Proto.Message interface stubs for MsgSubmitComplianceCheck
+func (m *MsgSubmitComplianceCheck) ProtoMessage()  {}
+func (m *MsgSubmitComplianceCheck) Reset()         { *m = MsgSubmitComplianceCheck{} }
+func (m *MsgSubmitComplianceCheck) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface stubs for MsgAttestCompliance
+func (m *MsgAttestCompliance) ProtoMessage()  {}
+func (m *MsgAttestCompliance) Reset()         { *m = MsgAttestCompliance{} }
+func (m *MsgAttestCompliance) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface stubs for MsgUpdateComplianceParams
+func (m *MsgUpdateComplianceParams) ProtoMessage()  {}
+func (m *MsgUpdateComplianceParams) Reset()         { *m = MsgUpdateComplianceParams{} }
+func (m *MsgUpdateComplianceParams) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface stubs for MsgRegisterComplianceProvider
+func (m *MsgRegisterComplianceProvider) ProtoMessage()  {}
+func (m *MsgRegisterComplianceProvider) Reset()         { *m = MsgRegisterComplianceProvider{} }
+func (m *MsgRegisterComplianceProvider) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface stubs for MsgDeactivateComplianceProvider
+func (m *MsgDeactivateComplianceProvider) ProtoMessage()  {}
+func (m *MsgDeactivateComplianceProvider) Reset()         { *m = MsgDeactivateComplianceProvider{} }
+func (m *MsgDeactivateComplianceProvider) String() string { return fmt.Sprintf("%+v", *m) }

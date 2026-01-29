@@ -78,6 +78,7 @@ type IKeeper interface {
 	GetBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.MarketplaceBid, bool)
 	AcceptBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.Allocation, error)
 	WithBidsForOrder(ctx sdk.Context, orderID marketplace.OrderID, fn func(marketplace.MarketplaceBid) bool)
+	WithBids(ctx sdk.Context, fn func(marketplace.MarketplaceBid) bool)
 
 	// Allocations
 	CreateAllocation(ctx sdk.Context, allocation *marketplace.Allocation) error
@@ -89,12 +90,14 @@ type IKeeper interface {
 	CheckIdentityGating(ctx sdk.Context, offering *marketplace.Offering, customerAddress sdk.AccAddress) error
 	GetProviderIdentitySettings(ctx sdk.Context, providerAddress string) (*marketplace.ProviderIdentitySettings, bool)
 	SetProviderIdentitySettings(ctx sdk.Context, providerAddress string, settings *marketplace.ProviderIdentitySettings) error
+	WithProviderSettings(ctx sdk.Context, fn func(address string, settings marketplace.ProviderIdentitySettings) bool)
 
 	// MFA Gating (VE-302)
 	CheckMFAGating(ctx sdk.Context, actionType marketplace.MarketplaceActionType, accountAddress sdk.AccAddress, value uint64, deviceFingerprint string) (*marketplace.MFAGatingResult, error)
 	RecordMFAAudit(ctx sdk.Context, record *marketplace.MFAAuditRecord) error
 	GetMFAActionConfig(ctx sdk.Context, actionType marketplace.MarketplaceActionType) (*marketplace.MFAActionConfig, bool)
 	SetMFAActionConfig(ctx sdk.Context, config *marketplace.MFAActionConfig) error
+	WithMFAActionConfigs(ctx sdk.Context, fn func(config marketplace.MFAActionConfig) bool)
 
 	// Waldur Bridge (VE-303)
 	GetWaldurSyncRecord(ctx sdk.Context, entityType marketplace.WaldurSyncType, entityID string) (*marketplace.WaldurSyncRecord, bool)
@@ -1069,7 +1072,24 @@ func (k Keeper) MarkNonceProcessed(ctx sdk.Context, nonce string) error {
 
 // EmitMarketplaceEvent emits a marketplace event
 func (k Keeper) EmitMarketplaceEvent(ctx sdk.Context, event marketplace.MarketplaceEvent) error {
-	// Emit SDK event for subscription
+	payloadJSON, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	attributes := []sdk.Attribute{
+		sdk.NewAttribute("event_type", string(event.GetEventType())),
+		sdk.NewAttribute("event_id", event.GetEventID()),
+		sdk.NewAttribute("block_height", fmt.Sprintf("%d", event.GetBlockHeight())),
+		sdk.NewAttribute("sequence", fmt.Sprintf("%d", event.GetSequence())),
+		sdk.NewAttribute("payload_json", string(payloadJSON)),
+	}
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent("marketplace_event", attributes...),
+	)
+
+	// Emit SDK event for subscription (legacy typed event)
 	return ctx.EventManager().EmitTypedEvent(&MarketplaceEventWrapper{
 		EventType:   string(event.GetEventType()),
 		EventID:     event.GetEventID(),

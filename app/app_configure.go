@@ -43,6 +43,8 @@ import (
 	"github.com/virtengine/virtengine/x/hpc"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	"github.com/virtengine/virtengine/x/market"
+	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
+	"github.com/virtengine/virtengine/x/marketplace"
 	"github.com/virtengine/virtengine/x/mfa"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	"github.com/virtengine/virtengine/x/provider"
@@ -65,6 +67,7 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		escrow.AppModuleBasic{},
 		deployment.AppModuleBasic{},
 		market.AppModuleBasic{},
+		marketplace.AppModuleBasic{},
 		provider.AppModuleBasic{},
 		audit.AppModuleBasic{},
 		cert.AppModuleBasic{},
@@ -117,6 +120,7 @@ func OrderInitGenesis(_ []string) []string {
 		deployment.ModuleName,
 		provider.ModuleName,
 		market.ModuleName,
+		marketplacetypes.ModuleName,
 		// VirtEngine patent modules (AU2024203136A1)
 		encryptiontypes.ModuleName,
 		rolestypes.ModuleName,

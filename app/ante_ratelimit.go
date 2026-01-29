@@ -35,11 +35,11 @@ type rateLimitMetrics struct {
 }
 
 // NewRateLimitDecorator creates a new rate limit decorator with the given parameters
-func NewRateLimitDecorator(params apptypes.RateLimitParams, logger log.Logger) RateLimitDecorator {
+func NewRateLimitDecorator(params apptypes.RateLimitParams, logger log.Logger) *RateLimitDecorator {
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
-	return RateLimitDecorator{
+	return &RateLimitDecorator{
 		store:   apptypes.NewTransientRateLimitStore(params),
 		logger:  logger.With("module", "ante-ratelimit"),
 		metrics: &rateLimitMetrics{},
@@ -47,7 +47,7 @@ func NewRateLimitDecorator(params apptypes.RateLimitParams, logger log.Logger) R
 }
 
 // AnteHandle implements sdk.AnteDecorator
-func (rld RateLimitDecorator) AnteHandle(
+func (rld *RateLimitDecorator) AnteHandle(
 	ctx sdk.Context,
 	tx sdk.Tx,
 	simulate bool,
@@ -122,7 +122,7 @@ func (rld RateLimitDecorator) AnteHandle(
 }
 
 // getSigners extracts signer addresses from a transaction
-func (rld RateLimitDecorator) getSigners(tx sdk.Tx) ([]sdk.AccAddress, error) {
+func (rld *RateLimitDecorator) getSigners(tx sdk.Tx) ([]sdk.AccAddress, error) {
 	sigTx, ok := tx.(signing.SigVerifiableTx)
 	if !ok {
 		return nil, nil // Not a signable tx, skip
@@ -143,7 +143,7 @@ func (rld RateLimitDecorator) getSigners(tx sdk.Tx) ([]sdk.AccAddress, error) {
 }
 
 // checkBlockLimit checks if the total block transaction limit has been reached
-func (rld RateLimitDecorator) checkBlockLimit(ctx sdk.Context, params apptypes.RateLimitParams) error {
+func (rld *RateLimitDecorator) checkBlockLimit(ctx sdk.Context, params apptypes.RateLimitParams) error {
 	rld.mu.RLock()
 	currentCount := rld.store.GetTotalTxCount()
 	rld.mu.RUnlock()
@@ -166,7 +166,7 @@ func (rld RateLimitDecorator) checkBlockLimit(ctx sdk.Context, params apptypes.R
 }
 
 // checkAccountLimit checks if an account has exceeded its per-block transaction limit
-func (rld RateLimitDecorator) checkAccountLimit(ctx sdk.Context, addr sdk.AccAddress, params apptypes.RateLimitParams) error {
+func (rld *RateLimitDecorator) checkAccountLimit(ctx sdk.Context, addr sdk.AccAddress, params apptypes.RateLimitParams) error {
 	rld.mu.RLock()
 	currentCount := rld.store.GetAccountTxCount(addr)
 	rld.mu.RUnlock()
@@ -190,7 +190,7 @@ func (rld RateLimitDecorator) checkAccountLimit(ctx sdk.Context, addr sdk.AccAdd
 }
 
 // checkVEIDLimit checks if the global VEID transaction limit has been reached
-func (rld RateLimitDecorator) checkVEIDLimit(ctx sdk.Context, params apptypes.RateLimitParams) error {
+func (rld *RateLimitDecorator) checkVEIDLimit(ctx sdk.Context, params apptypes.RateLimitParams) error {
 	rld.mu.RLock()
 	currentCount := rld.store.GetVEIDTxCount()
 	rld.mu.RUnlock()
@@ -213,7 +213,7 @@ func (rld RateLimitDecorator) checkVEIDLimit(ctx sdk.Context, params apptypes.Ra
 }
 
 // isVEIDTransaction checks if a transaction contains VEID-related messages
-func (rld RateLimitDecorator) isVEIDTransaction(tx sdk.Tx) bool {
+func (rld *RateLimitDecorator) isVEIDTransaction(tx sdk.Tx) bool {
 	msgs := tx.GetMsgs()
 	for _, msg := range msgs {
 		switch msg.(type) {
@@ -253,7 +253,7 @@ func isVEIDTypeURL(typeURL string) bool {
 }
 
 // recordBlockedMetric records a blocked transaction metric
-func (rld RateLimitDecorator) recordBlockedMetric(reason string) {
+func (rld *RateLimitDecorator) recordBlockedMetric(reason string) {
 	rld.metrics.mu.Lock()
 	defer rld.metrics.mu.Unlock()
 
@@ -274,7 +274,7 @@ func (rld RateLimitDecorator) recordBlockedMetric(reason string) {
 }
 
 // emitRateLimitEvent emits a rate limit event to the context
-func (rld RateLimitDecorator) emitRateLimitEvent(ctx sdk.Context, account, reason string, current, limit uint64) {
+func (rld *RateLimitDecorator) emitRateLimitEvent(ctx sdk.Context, account, reason string, current, limit uint64) {
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			"rate_limit_exceeded",
@@ -288,7 +288,7 @@ func (rld RateLimitDecorator) emitRateLimitEvent(ctx sdk.Context, account, reaso
 }
 
 // GetMetrics returns the current rate limiting metrics
-func (rld RateLimitDecorator) GetMetrics() apptypes.RateLimitMetrics {
+func (rld *RateLimitDecorator) GetMetrics() apptypes.RateLimitMetrics {
 	rld.metrics.mu.Lock()
 	defer rld.metrics.mu.Unlock()
 

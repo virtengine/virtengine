@@ -352,6 +352,219 @@ var (
 	// PrefixSMSDeliveryResult is the prefix for SMS delivery results
 	// Key: PrefixSMSDeliveryResult | challenge_id -> SMSDeliveryResult
 	PrefixSMSDeliveryResult = []byte{0x4C}
+
+	// ============================================================================
+	// Appeal System Keys (VE-3020)
+	// ============================================================================
+
+	// PrefixAppeal is the prefix for appeal record storage
+	// Key: PrefixAppeal | appeal_id -> AppealRecord
+	PrefixAppeal = []byte{0x4D}
+
+	// PrefixAppealByAccount is the prefix for appeal lookup by account
+	// Key: PrefixAppealByAccount | address | appeal_id -> bool
+	PrefixAppealByAccount = []byte{0x4E}
+
+	// PrefixAppealByScope is the prefix for appeal lookup by scope
+	// Key: PrefixAppealByScope | address | scope_id | appeal_number -> appeal_id
+	PrefixAppealByScope = []byte{0x4F}
+
+	// PrefixPendingAppeals is the prefix for pending appeals queue
+	// Key: PrefixPendingAppeals | submitted_at | appeal_id -> bool
+	PrefixPendingAppeals = []byte{0x50}
+
+	// PrefixAppealParams is the prefix for appeal system parameters
+	// Key: PrefixAppealParams -> AppealParams
+	PrefixAppealParams = []byte{0x51}
+
+	// PrefixAuthorizedResolver is the prefix for authorized appeal resolvers
+	// Key: PrefixAuthorizedResolver | address -> bool
+	PrefixAuthorizedResolver = []byte{0x52}
+
+	// PrefixAppealScopeCount is the prefix for tracking appeal count per scope
+	// Key: PrefixAppealScopeCount | address | scope_id -> uint32
+	PrefixAppealScopeCount = []byte{0x53}
+
+	// ============================================================================
+	// Compliance System Keys (VE-3021)
+	// ============================================================================
+
+	// PrefixComplianceRecord is the prefix for compliance record storage
+	// Key: PrefixComplianceRecord | address -> ComplianceRecord
+	PrefixComplianceRecord = []byte{0x54}
+
+	// PrefixComplianceParams is the prefix for compliance system parameters
+	// Key: PrefixComplianceParams -> ComplianceParams
+	PrefixComplianceParams = []byte{0x55}
+
+	// PrefixComplianceProvider is the prefix for compliance provider storage
+	// Key: PrefixComplianceProvider | provider_id -> ComplianceProvider
+	PrefixComplianceProvider = []byte{0x56}
+
+	// PrefixComplianceProviderByAddress is the prefix for provider lookup by address
+	// Key: PrefixComplianceProviderByAddress | address -> provider_id
+	PrefixComplianceProviderByAddress = []byte{0x57}
+
+	// PrefixPendingComplianceCheck is the prefix for pending compliance checks
+	// Key: PrefixPendingComplianceCheck | expires_at | address -> bool
+	PrefixPendingComplianceCheck = []byte{0x58}
+
+	// PrefixComplianceAttestation is the prefix for compliance attestations
+	// Key: PrefixComplianceAttestation | address | validator_address -> ComplianceAttestation
+	PrefixComplianceAttestation = []byte{0x59}
+
+	// PrefixBlockedAddress is the prefix for blocked address tracking
+	// Key: PrefixBlockedAddress | address -> BlockReason
+	PrefixBlockedAddress = []byte{0x5A}
+
+	// ============================================================================
+	// Model Versioning Keys (VE-3007)
+	// ============================================================================
+
+	// PrefixModelInfo is the prefix for model info storage
+	// Key: PrefixModelInfo | model_id -> ModelInfo
+	PrefixModelInfo = []byte{0x5B}
+
+	// PrefixModelInfoByType is the prefix for model lookup by type
+	// Key: PrefixModelInfoByType | model_type | model_id -> bool
+	PrefixModelInfoByType = []byte{0x5C}
+
+	// PrefixModelVersionState is the prefix for model version state
+	// Key: PrefixModelVersionState -> ModelVersionState
+	PrefixModelVersionState = []byte{0x5D}
+
+	// PrefixModelUpdateProposal is the prefix for model update proposals
+	// Key: PrefixModelUpdateProposal | model_type -> ModelUpdateProposal
+	PrefixModelUpdateProposal = []byte{0x5E}
+
+	// PrefixModelVersionHistory is the prefix for model version history
+	// Key: PrefixModelVersionHistory | model_type | block_height -> ModelVersionHistory
+	PrefixModelVersionHistory = []byte{0x5F}
+
+	// PrefixValidatorModelReport is the prefix for validator model reports
+	// Key: PrefixValidatorModelReport | validator_address -> ValidatorModelReport
+	PrefixValidatorModelReport = []byte{0x60}
+
+	// PrefixModelParams is the prefix for model management parameters
+	// Key: PrefixModelParams -> ModelParams
+	PrefixModelParams = []byte{0x61}
+
+	// PrefixPendingModelActivation is the prefix for pending model activations
+	// Key: PrefixPendingModelActivation | activation_height | model_type -> ModelUpdateProposal
+	PrefixPendingModelActivation = []byte{0x62}
+
+	// ============================================================================
+	// Delegation Keys (VE-3024: Identity Delegation and Proxy System)
+	// ============================================================================
+
+	// PrefixDelegation is the prefix for delegation record storage
+	// Key: PrefixDelegation | delegation_id -> DelegationRecord
+	PrefixDelegation = []byte{0x63}
+
+	// PrefixDelegationByDelegator is the prefix for delegation lookup by delegator
+	// Key: PrefixDelegationByDelegator | delegator_address | delegation_id -> bool
+	PrefixDelegationByDelegator = []byte{0x64}
+
+	// PrefixDelegationByDelegate is the prefix for delegation lookup by delegate
+	// Key: PrefixDelegationByDelegate | delegate_address | delegation_id -> bool
+	PrefixDelegationByDelegate = []byte{0x65}
+
+	// PrefixDelegationExpiry is the prefix for delegation expiry index
+	// Key: PrefixDelegationExpiry | expires_at | delegation_id -> bool
+	PrefixDelegationExpiry = []byte{0x66}
+
+	// PrefixDelegationParams is the prefix for delegation module parameters
+	// Key: PrefixDelegationParams -> DelegationParams
+	PrefixDelegationParams = []byte{0x67}
+
+	// ============================================================================
+	// Verifiable Credential Keys (VE-3025: W3C VC issuance)
+	// ============================================================================
+
+	// PrefixCredential is the prefix for verifiable credential storage
+	// Key: PrefixCredential | credential_id -> CredentialRecord
+	PrefixCredential = []byte{0x68}
+
+	// PrefixCredentialBySubject is the prefix for credential lookup by subject
+	// Key: PrefixCredentialBySubject | subject_address | credential_id -> bool
+	PrefixCredentialBySubject = []byte{0x69}
+
+	// PrefixCredentialByIssuer is the prefix for credential lookup by issuer
+	// Key: PrefixCredentialByIssuer | issuer_address | credential_id -> bool
+	PrefixCredentialByIssuer = []byte{0x6A}
+
+	// PrefixCredentialByType is the prefix for credential lookup by type
+	// Key: PrefixCredentialByType | credential_type | credential_id -> bool
+	PrefixCredentialByType = []byte{0x6B}
+
+	// PrefixCredentialExpiry is the prefix for credential expiry index
+	// Key: PrefixCredentialExpiry | expires_at | credential_id -> bool
+	PrefixCredentialExpiry = []byte{0x6C}
+
+	// PrefixRevokedCredential is the prefix for revoked credentials
+	// Key: PrefixRevokedCredential | credential_id -> revocation timestamp
+	PrefixRevokedCredential = []byte{0x6D}
+
+	// PrefixCredentialParams is the prefix for credential module parameters
+	// Key: PrefixCredentialParams -> CredentialParams
+	PrefixCredentialParams = []byte{0x6E}
+
+	// ============================================================================
+	// Score Decay Keys (VE-3026: Trust Score Decay Mechanism)
+	// ============================================================================
+
+	// PrefixDecayPolicy is the prefix for decay policy storage
+	// Key: PrefixDecayPolicy | policy_id -> DecayPolicy
+	PrefixDecayPolicy = []byte{0x6F}
+
+	// PrefixScoreSnapshot is the prefix for score snapshot storage
+	// Key: PrefixScoreSnapshot | address -> ScoreSnapshot
+	PrefixScoreSnapshot = []byte{0x70}
+
+	// PrefixActivityRecord is the prefix for activity record storage
+	// Key: PrefixActivityRecord | address | timestamp -> ActivityRecord
+	PrefixActivityRecord = []byte{0x71}
+
+	// ============================================================================
+	// Biometric Hash Keys (VE-3030: Biometric Template Secure Hashing)
+	// ============================================================================
+
+	// PrefixBiometricHash is the prefix for biometric hash storage
+	// Key: PrefixBiometricHash | address | hash_id -> BiometricHashProto
+	// SECURITY: Only stores irreversible hashes, NEVER raw biometric data
+	PrefixBiometricHash = []byte{0x72}
+
+	// PrefixBiometricHashByType is the prefix for biometric hash lookup by type
+	// Key: PrefixBiometricHashByType | address | template_type | hash_id -> bool
+	PrefixBiometricHashByType = []byte{0x73}
+
+	// PrefixBiometricAudit is the prefix for biometric operation audit log
+	// Key: PrefixBiometricAudit | address | timestamp | hash_id -> BiometricAuditProto
+	PrefixBiometricAudit = []byte{0x74}
+
+	// ============================================================================
+	// Geographic Restriction Keys (VE-3032: Geographic Restriction Rules)
+	// ============================================================================
+
+	// PrefixGeoPolicy is the prefix for geo restriction policy storage
+	// Key: PrefixGeoPolicy | policy_id -> GeoRestrictionPolicy
+	PrefixGeoPolicy = []byte{0x75}
+
+	// PrefixGeoPolicyByPriority is the prefix for policy lookup by priority
+	// Key: PrefixGeoPolicyByPriority | priority (big-endian) | policy_id -> bool
+	PrefixGeoPolicyByPriority = []byte{0x76}
+
+	// PrefixGeoCheckResult is the prefix for geo check result cache
+	// Key: PrefixGeoCheckResult | address -> GeoCheckResult
+	PrefixGeoCheckResult = []byte{0x77}
+
+	// PrefixGeoRestrictionParams is the prefix for geo restriction parameters
+	// Key: PrefixGeoRestrictionParams -> GeoRestrictionParams
+	PrefixGeoRestrictionParams = []byte{0x78}
+
+	// PrefixBlockedCountryIndex is the prefix for blocked country lookup index
+	// Key: PrefixBlockedCountryIndex | country_code -> []policy_id
+	PrefixBlockedCountryIndex = []byte{0x79}
 )
 
 // IdentityRecordKey returns the store key for an identity record
@@ -1085,6 +1298,118 @@ func SMSGlobalRateLimitKey() []byte {
 	return PrefixSMSGlobalRateLimit
 }
 
+// ============================================================================
+// Appeal Key Functions (VE-3020)
+// ============================================================================
+
+// AppealKey returns the store key for an appeal record
+func AppealKey(appealID string) []byte {
+	appealIDBytes := []byte(appealID)
+	key := make([]byte, 0, len(PrefixAppeal)+len(appealIDBytes))
+	key = append(key, PrefixAppeal...)
+	key = append(key, appealIDBytes...)
+	return key
+}
+
+// AppealPrefixKey returns the prefix for all appeal records
+func AppealPrefixKey() []byte {
+	return PrefixAppeal
+}
+
+// AppealByAccountKey returns the store key for appeal lookup by account
+func AppealByAccountKey(address []byte, appealID string) []byte {
+	appealIDBytes := []byte(appealID)
+	key := make([]byte, 0, len(PrefixAppealByAccount)+len(address)+1+len(appealIDBytes))
+	key = append(key, PrefixAppealByAccount...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, appealIDBytes...)
+	return key
+}
+
+// AppealByAccountPrefixKey returns the prefix for all appeals of an account
+func AppealByAccountPrefixKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixAppealByAccount)+len(address)+1)
+	key = append(key, PrefixAppealByAccount...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// AppealByScopeKey returns the store key for appeal lookup by scope
+func AppealByScopeKey(address []byte, scopeID string, appealNumber uint32) []byte {
+	scopeIDBytes := []byte(scopeID)
+	key := make([]byte, 0, len(PrefixAppealByScope)+len(address)+1+len(scopeIDBytes)+5)
+	key = append(key, PrefixAppealByScope...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, scopeIDBytes...)
+	key = append(key, byte('/'))
+	key = append(key, byte(appealNumber>>24), byte(appealNumber>>16), byte(appealNumber>>8), byte(appealNumber))
+	return key
+}
+
+// AppealByScopePrefixKey returns the prefix for all appeals of a scope
+func AppealByScopePrefixKey(address []byte, scopeID string) []byte {
+	scopeIDBytes := []byte(scopeID)
+	key := make([]byte, 0, len(PrefixAppealByScope)+len(address)+1+len(scopeIDBytes)+1)
+	key = append(key, PrefixAppealByScope...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, scopeIDBytes...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// PendingAppealKey returns the store key for pending appeal queue entry
+func PendingAppealKey(submittedAt int64, appealID string) []byte {
+	appealIDBytes := []byte(appealID)
+	key := make([]byte, 0, len(PrefixPendingAppeals)+8+1+len(appealIDBytes))
+	key = append(key, PrefixPendingAppeals...)
+	// Big-endian timestamp for proper ordering
+	key = append(key,
+		byte(submittedAt>>56), byte(submittedAt>>48), byte(submittedAt>>40), byte(submittedAt>>32),
+		byte(submittedAt>>24), byte(submittedAt>>16), byte(submittedAt>>8), byte(submittedAt),
+	)
+	key = append(key, byte('/'))
+	key = append(key, appealIDBytes...)
+	return key
+}
+
+// PendingAppealPrefixKey returns the prefix for all pending appeals
+func PendingAppealPrefixKey() []byte {
+	return PrefixPendingAppeals
+}
+
+// AppealParamsKey returns the store key for appeal parameters
+func AppealParamsKey() []byte {
+	return PrefixAppealParams
+}
+
+// AuthorizedResolverKey returns the store key for an authorized resolver
+func AuthorizedResolverKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixAuthorizedResolver)+len(address))
+	key = append(key, PrefixAuthorizedResolver...)
+	key = append(key, address...)
+	return key
+}
+
+// AuthorizedResolverPrefixKey returns the prefix for all authorized resolvers
+func AuthorizedResolverPrefixKey() []byte {
+	return PrefixAuthorizedResolver
+}
+
+// AppealScopeCountKey returns the store key for appeal count per scope
+func AppealScopeCountKey(address []byte, scopeID string) []byte {
+	scopeIDBytes := []byte(scopeID)
+	key := make([]byte, 0, len(PrefixAppealScopeCount)+len(address)+1+len(scopeIDBytes))
+	key = append(key, PrefixAppealScopeCount...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, scopeIDBytes...)
+	return key
+}
+
 // ValidatorSMSGatewayKey returns the store key for a validator SMS gateway
 func ValidatorSMSGatewayKey(validatorAddress []byte) []byte {
 	key := make([]byte, 0, len(PrefixValidatorSMSGateway)+len(validatorAddress))
@@ -1114,4 +1439,537 @@ func SMSDeliveryResultKey(challengeID string) []byte {
 	key = append(key, PrefixSMSDeliveryResult...)
 	key = append(key, challengeIDBytes...)
 	return key
+}
+
+// ============================================================================
+// Compliance System Key Functions (VE-3021)
+// ============================================================================
+
+// ComplianceRecordKey returns the store key for a compliance record
+func ComplianceRecordKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixComplianceRecord)+len(address))
+	key = append(key, PrefixComplianceRecord...)
+	key = append(key, address...)
+	return key
+}
+
+// ComplianceRecordPrefixKey returns the prefix for all compliance records
+func ComplianceRecordPrefixKey() []byte {
+	return PrefixComplianceRecord
+}
+
+// ComplianceParamsKey returns the store key for compliance parameters
+func ComplianceParamsKey() []byte {
+	return PrefixComplianceParams
+}
+
+// ComplianceProviderKey returns the store key for a compliance provider
+func ComplianceProviderKey(providerID string) []byte {
+	providerIDBytes := []byte(providerID)
+	key := make([]byte, 0, len(PrefixComplianceProvider)+len(providerIDBytes))
+	key = append(key, PrefixComplianceProvider...)
+	key = append(key, providerIDBytes...)
+	return key
+}
+
+// ComplianceProviderPrefixKey returns the prefix for all compliance providers
+func ComplianceProviderPrefixKey() []byte {
+	return PrefixComplianceProvider
+}
+
+// ComplianceProviderByAddressKey returns the store key for provider lookup by address
+func ComplianceProviderByAddressKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixComplianceProviderByAddress)+len(address))
+	key = append(key, PrefixComplianceProviderByAddress...)
+	key = append(key, address...)
+	return key
+}
+
+// PendingComplianceCheckKey returns the store key for pending compliance check
+func PendingComplianceCheckKey(expiresAt int64, address []byte) []byte {
+	key := make([]byte, 0, len(PrefixPendingComplianceCheck)+8+1+len(address))
+	key = append(key, PrefixPendingComplianceCheck...)
+	// Big-endian timestamp for proper ordering
+	key = append(key,
+		byte(expiresAt>>56), byte(expiresAt>>48), byte(expiresAt>>40), byte(expiresAt>>32),
+		byte(expiresAt>>24), byte(expiresAt>>16), byte(expiresAt>>8), byte(expiresAt),
+	)
+	key = append(key, byte('/'))
+	key = append(key, address...)
+	return key
+}
+
+// PendingComplianceCheckPrefixKey returns the prefix for all pending compliance checks
+func PendingComplianceCheckPrefixKey() []byte {
+	return PrefixPendingComplianceCheck
+}
+
+// ComplianceAttestationKey returns the store key for compliance attestation
+func ComplianceAttestationKey(address []byte, validatorAddress []byte) []byte {
+	key := make([]byte, 0, len(PrefixComplianceAttestation)+len(address)+1+len(validatorAddress))
+	key = append(key, PrefixComplianceAttestation...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, validatorAddress...)
+	return key
+}
+
+// ComplianceAttestationPrefixKey returns the prefix for all attestations of an address
+func ComplianceAttestationPrefixKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixComplianceAttestation)+len(address)+1)
+	key = append(key, PrefixComplianceAttestation...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// BlockedAddressKey returns the store key for a blocked address
+func BlockedAddressKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixBlockedAddress)+len(address))
+	key = append(key, PrefixBlockedAddress...)
+	key = append(key, address...)
+	return key
+}
+
+// BlockedAddressPrefixKey returns the prefix for all blocked addresses
+func BlockedAddressPrefixKey() []byte {
+	return PrefixBlockedAddress
+}
+
+// ============================================================================
+// Model Versioning Key Functions (VE-3007)
+// ============================================================================
+
+// ModelInfoKey returns the store key for a model info
+func ModelInfoKey(modelID string) []byte {
+	modelIDBytes := []byte(modelID)
+	key := make([]byte, 0, len(PrefixModelInfo)+len(modelIDBytes))
+	key = append(key, PrefixModelInfo...)
+	key = append(key, modelIDBytes...)
+	return key
+}
+
+// ModelInfoPrefixKey returns the prefix for all model info entries
+func ModelInfoPrefixKey() []byte {
+	return PrefixModelInfo
+}
+
+// ModelInfoByTypeKey returns the store key for model lookup by type
+func ModelInfoByTypeKey(modelType string, modelID string) []byte {
+	modelTypeBytes := []byte(modelType)
+	modelIDBytes := []byte(modelID)
+	key := make([]byte, 0, len(PrefixModelInfoByType)+len(modelTypeBytes)+1+len(modelIDBytes))
+	key = append(key, PrefixModelInfoByType...)
+	key = append(key, modelTypeBytes...)
+	key = append(key, byte('/'))
+	key = append(key, modelIDBytes...)
+	return key
+}
+
+// ModelInfoByTypePrefixKey returns the prefix for all models of a type
+func ModelInfoByTypePrefixKey(modelType string) []byte {
+	modelTypeBytes := []byte(modelType)
+	key := make([]byte, 0, len(PrefixModelInfoByType)+len(modelTypeBytes)+1)
+	key = append(key, PrefixModelInfoByType...)
+	key = append(key, modelTypeBytes...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// ModelVersionStateKey returns the store key for model version state
+func ModelVersionStateKey() []byte {
+	return PrefixModelVersionState
+}
+
+// ModelUpdateProposalKey returns the store key for a model update proposal
+func ModelUpdateProposalKey(modelType string) []byte {
+	modelTypeBytes := []byte(modelType)
+	key := make([]byte, 0, len(PrefixModelUpdateProposal)+len(modelTypeBytes))
+	key = append(key, PrefixModelUpdateProposal...)
+	key = append(key, modelTypeBytes...)
+	return key
+}
+
+// ModelUpdateProposalPrefixKey returns the prefix for all model update proposals
+func ModelUpdateProposalPrefixKey() []byte {
+	return PrefixModelUpdateProposal
+}
+
+// ModelVersionHistoryKey returns the store key for a model version history entry
+func ModelVersionHistoryKey(modelType string, blockHeight int64) []byte {
+	modelTypeBytes := []byte(modelType)
+	key := make([]byte, 0, len(PrefixModelVersionHistory)+len(modelTypeBytes)+9)
+	key = append(key, PrefixModelVersionHistory...)
+	key = append(key, modelTypeBytes...)
+	key = append(key, byte('/'))
+	key = append(key, encodeInt64(blockHeight)...)
+	return key
+}
+
+// ModelVersionHistoryPrefixKey returns the prefix for all history of a model type
+func ModelVersionHistoryPrefixKey(modelType string) []byte {
+	modelTypeBytes := []byte(modelType)
+	key := make([]byte, 0, len(PrefixModelVersionHistory)+len(modelTypeBytes)+1)
+	key = append(key, PrefixModelVersionHistory...)
+	key = append(key, modelTypeBytes...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// ValidatorModelReportKey returns the store key for a validator model report
+func ValidatorModelReportKey(validatorAddress string) []byte {
+	validatorBytes := []byte(validatorAddress)
+	key := make([]byte, 0, len(PrefixValidatorModelReport)+len(validatorBytes))
+	key = append(key, PrefixValidatorModelReport...)
+	key = append(key, validatorBytes...)
+	return key
+}
+
+// ValidatorModelReportPrefixKey returns the prefix for all validator model reports
+func ValidatorModelReportPrefixKey() []byte {
+	return PrefixValidatorModelReport
+}
+
+// ModelParamsKey returns the store key for model parameters
+func ModelParamsKey() []byte {
+	return PrefixModelParams
+}
+
+// PendingModelActivationKey returns the store key for a pending model activation
+func PendingModelActivationKey(activationHeight int64, modelType string) []byte {
+	modelTypeBytes := []byte(modelType)
+	key := make([]byte, 0, len(PrefixPendingModelActivation)+8+1+len(modelTypeBytes))
+	key = append(key, PrefixPendingModelActivation...)
+	key = append(key, encodeInt64(activationHeight)...)
+	key = append(key, byte('/'))
+	key = append(key, modelTypeBytes...)
+	return key
+}
+
+// PendingModelActivationPrefixKey returns the prefix for all pending activations
+func PendingModelActivationPrefixKey() []byte {
+	return PrefixPendingModelActivation
+}
+
+// PendingModelActivationByHeightPrefixKey returns prefix for pending activations at height
+func PendingModelActivationByHeightPrefixKey(activationHeight int64) []byte {
+	key := make([]byte, 0, len(PrefixPendingModelActivation)+9)
+	key = append(key, PrefixPendingModelActivation...)
+	key = append(key, encodeInt64(activationHeight)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// ============================================================================
+// Delegation Key Functions (VE-3024)
+// ============================================================================
+
+// DelegationKey returns the store key for a delegation record
+func DelegationKey(delegationID string) []byte {
+	idBytes := []byte(delegationID)
+	key := make([]byte, 0, len(PrefixDelegation)+len(idBytes))
+	key = append(key, PrefixDelegation...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// DelegationPrefixKey returns the prefix for all delegations
+func DelegationPrefixKey() []byte {
+	return PrefixDelegation
+}
+
+// DelegationByDelegatorKey returns the store key for delegation by delegator index
+func DelegationByDelegatorKey(delegatorAddress []byte, delegationID string) []byte {
+	idBytes := []byte(delegationID)
+	key := make([]byte, 0, len(PrefixDelegationByDelegator)+len(delegatorAddress)+1+len(idBytes))
+	key = append(key, PrefixDelegationByDelegator...)
+	key = append(key, delegatorAddress...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// DelegationByDelegatorPrefixKey returns the prefix for delegations by delegator
+func DelegationByDelegatorPrefixKey(delegatorAddress []byte) []byte {
+	key := make([]byte, 0, len(PrefixDelegationByDelegator)+len(delegatorAddress)+1)
+	key = append(key, PrefixDelegationByDelegator...)
+	key = append(key, delegatorAddress...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// DelegationByDelegateKey returns the store key for delegation by delegate index
+func DelegationByDelegateKey(delegateAddress []byte, delegationID string) []byte {
+	idBytes := []byte(delegationID)
+	key := make([]byte, 0, len(PrefixDelegationByDelegate)+len(delegateAddress)+1+len(idBytes))
+	key = append(key, PrefixDelegationByDelegate...)
+	key = append(key, delegateAddress...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// DelegationByDelegatePrefixKey returns the prefix for delegations by delegate
+func DelegationByDelegatePrefixKey(delegateAddress []byte) []byte {
+	key := make([]byte, 0, len(PrefixDelegationByDelegate)+len(delegateAddress)+1)
+	key = append(key, PrefixDelegationByDelegate...)
+	key = append(key, delegateAddress...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// DelegationExpiryKey returns the store key for delegation expiry index
+func DelegationExpiryKey(expiresAt int64, delegationID string) []byte {
+	idBytes := []byte(delegationID)
+	key := make([]byte, 0, len(PrefixDelegationExpiry)+8+1+len(idBytes))
+	key = append(key, PrefixDelegationExpiry...)
+	key = append(key, encodeInt64(expiresAt)...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// DelegationExpiryPrefixKey returns the prefix for all delegation expiries
+func DelegationExpiryPrefixKey() []byte {
+	return PrefixDelegationExpiry
+}
+
+// DelegationExpiryBeforePrefixKey returns the prefix for delegations expiring before timestamp
+func DelegationExpiryBeforePrefixKey(beforeTimestamp int64) []byte {
+	key := make([]byte, 0, len(PrefixDelegationExpiry)+9)
+	key = append(key, PrefixDelegationExpiry...)
+	key = append(key, encodeInt64(beforeTimestamp)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// DelegationParamsKey returns the store key for delegation parameters
+func DelegationParamsKey() []byte {
+	return PrefixDelegationParams
+}
+
+// ============================================================================
+// Verifiable Credential Key Functions (VE-3025)
+// ============================================================================
+
+// CredentialKey returns the store key for a credential record
+func CredentialKey(credentialID string) []byte {
+	idBytes := []byte(credentialID)
+	key := make([]byte, 0, len(PrefixCredential)+len(idBytes))
+	key = append(key, PrefixCredential...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// CredentialPrefixKey returns the prefix for all credentials
+func CredentialPrefixKey() []byte {
+	return PrefixCredential
+}
+
+// CredentialBySubjectKey returns the store key for credential by subject index
+func CredentialBySubjectKey(subjectAddress []byte, credentialID string) []byte {
+	idBytes := []byte(credentialID)
+	key := make([]byte, 0, len(PrefixCredentialBySubject)+len(subjectAddress)+1+len(idBytes))
+	key = append(key, PrefixCredentialBySubject...)
+	key = append(key, subjectAddress...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// CredentialBySubjectPrefixKey returns the prefix for credentials by subject
+func CredentialBySubjectPrefixKey(subjectAddress []byte) []byte {
+	key := make([]byte, 0, len(PrefixCredentialBySubject)+len(subjectAddress)+1)
+	key = append(key, PrefixCredentialBySubject...)
+	key = append(key, subjectAddress...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// CredentialByIssuerKey returns the store key for credential by issuer index
+func CredentialByIssuerKey(issuerAddress []byte, credentialID string) []byte {
+	idBytes := []byte(credentialID)
+	key := make([]byte, 0, len(PrefixCredentialByIssuer)+len(issuerAddress)+1+len(idBytes))
+	key = append(key, PrefixCredentialByIssuer...)
+	key = append(key, issuerAddress...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// CredentialByIssuerPrefixKey returns the prefix for credentials by issuer
+func CredentialByIssuerPrefixKey(issuerAddress []byte) []byte {
+	key := make([]byte, 0, len(PrefixCredentialByIssuer)+len(issuerAddress)+1)
+	key = append(key, PrefixCredentialByIssuer...)
+	key = append(key, issuerAddress...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// CredentialByTypeKey returns the store key for credential by type index
+func CredentialByTypeKey(credentialType string, credentialID string) []byte {
+	typeBytes := []byte(credentialType)
+	idBytes := []byte(credentialID)
+	key := make([]byte, 0, len(PrefixCredentialByType)+len(typeBytes)+1+len(idBytes))
+	key = append(key, PrefixCredentialByType...)
+	key = append(key, typeBytes...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// CredentialByTypePrefixKey returns the prefix for credentials by type
+func CredentialByTypePrefixKey(credentialType string) []byte {
+	typeBytes := []byte(credentialType)
+	key := make([]byte, 0, len(PrefixCredentialByType)+len(typeBytes)+1)
+	key = append(key, PrefixCredentialByType...)
+	key = append(key, typeBytes...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// CredentialExpiryKey returns the store key for credential expiry index
+func CredentialExpiryKey(expiresAt int64, credentialID string) []byte {
+	idBytes := []byte(credentialID)
+	key := make([]byte, 0, len(PrefixCredentialExpiry)+8+1+len(idBytes))
+	key = append(key, PrefixCredentialExpiry...)
+	key = append(key, encodeInt64(expiresAt)...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// CredentialExpiryPrefixKey returns the prefix for all credential expiries
+func CredentialExpiryPrefixKey() []byte {
+	return PrefixCredentialExpiry
+}
+
+// CredentialExpiryBeforePrefixKey returns the prefix for credentials expiring before timestamp
+func CredentialExpiryBeforePrefixKey(beforeTimestamp int64) []byte {
+	key := make([]byte, 0, len(PrefixCredentialExpiry)+9)
+	key = append(key, PrefixCredentialExpiry...)
+	key = append(key, encodeInt64(beforeTimestamp)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// RevokedCredentialKey returns the store key for a revoked credential
+func RevokedCredentialKey(credentialID string) []byte {
+	idBytes := []byte(credentialID)
+	key := make([]byte, 0, len(PrefixRevokedCredential)+len(idBytes))
+	key = append(key, PrefixRevokedCredential...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// RevokedCredentialPrefixKey returns the prefix for all revoked credentials
+func RevokedCredentialPrefixKey() []byte {
+	return PrefixRevokedCredential
+}
+
+// CredentialParamsKey returns the store key for credential parameters
+func CredentialParamsKey() []byte {
+	return PrefixCredentialParams
+}
+
+// ============================================================================
+// Score Decay Key Functions (VE-3026)
+// ============================================================================
+
+// DecayPolicyKey returns the store key for a decay policy
+func DecayPolicyKey(policyID string) []byte {
+	idBytes := []byte(policyID)
+	key := make([]byte, 0, len(PrefixDecayPolicy)+len(idBytes))
+	key = append(key, PrefixDecayPolicy...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// ScoreSnapshotKey returns the store key for a score snapshot
+func ScoreSnapshotKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixScoreSnapshot)+len(address))
+	key = append(key, PrefixScoreSnapshot...)
+	key = append(key, address...)
+	return key
+}
+
+// ActivityRecordKey returns the store key for an activity record
+func ActivityRecordKey(address []byte, timestampNano int64) []byte {
+	key := make([]byte, 0, len(PrefixActivityRecord)+len(address)+1+8)
+	key = append(key, PrefixActivityRecord...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, encodeInt64(timestampNano)...)
+	return key
+}
+
+// ActivityRecordPrefixKey returns the prefix for all activity records of an address
+func ActivityRecordPrefixKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixActivityRecord)+len(address)+1)
+	key = append(key, PrefixActivityRecord...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// ============================================================================
+// Geographic Restriction Key Functions (VE-3032)
+// ============================================================================
+
+// GeoPolicyKey returns the store key for a geo restriction policy
+func GeoPolicyKey(policyID string) []byte {
+	idBytes := []byte(policyID)
+	key := make([]byte, 0, len(PrefixGeoPolicy)+len(idBytes))
+	key = append(key, PrefixGeoPolicy...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// GeoPolicyPrefixKey returns the prefix for all geo restriction policies
+func GeoPolicyPrefixKey() []byte {
+	return PrefixGeoPolicy
+}
+
+// GeoPolicyByPriorityKey returns the store key for policy lookup by priority
+func GeoPolicyByPriorityKey(priority int32, policyID string) []byte {
+	idBytes := []byte(policyID)
+	key := make([]byte, 0, len(PrefixGeoPolicyByPriority)+4+1+len(idBytes))
+	key = append(key, PrefixGeoPolicyByPriority...)
+	// Encode priority as big-endian for proper ordering
+	key = append(key, byte(priority>>24), byte(priority>>16), byte(priority>>8), byte(priority))
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// GeoPolicyByPriorityPrefixKey returns the prefix for all policies by priority
+func GeoPolicyByPriorityPrefixKey() []byte {
+	return PrefixGeoPolicyByPriority
+}
+
+// GeoCheckResultKey returns the store key for a geo check result
+func GeoCheckResultKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixGeoCheckResult)+len(address))
+	key = append(key, PrefixGeoCheckResult...)
+	key = append(key, address...)
+	return key
+}
+
+// GeoRestrictionParamsKey returns the store key for geo restriction parameters
+func GeoRestrictionParamsKey() []byte {
+	return PrefixGeoRestrictionParams
+}
+
+// BlockedCountryIndexKey returns the store key for blocked country index
+func BlockedCountryIndexKey(countryCode string) []byte {
+	codeBytes := []byte(countryCode)
+	key := make([]byte, 0, len(PrefixBlockedCountryIndex)+len(codeBytes))
+	key = append(key, PrefixBlockedCountryIndex...)
+	key = append(key, codeBytes...)
+	return key
+}
+
+// BlockedCountryIndexPrefixKey returns the prefix for all blocked country indices
+func BlockedCountryIndexPrefixKey() []byte {
+	return PrefixBlockedCountryIndex
 }

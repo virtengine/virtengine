@@ -38,23 +38,37 @@ type Offering struct {
 
 // Order represents a marketplace order in Waldur
 type Order struct {
-	UUID        string    `json:"uuid"`
-	State       string    `json:"state"`
-	Type        string    `json:"type"`
-	ProjectUUID string    `json:"project_uuid"`
-	CreatedAt   time.Time `json:"created"`
-	ErrorMessage string   `json:"error_message"`
+	UUID         string    `json:"uuid"`
+	State        string    `json:"state"`
+	Type         string    `json:"type"`
+	ProjectUUID  string    `json:"project_uuid"`
+	CreatedAt    time.Time `json:"created"`
+	ErrorMessage string    `json:"error_message"`
+	ResourceUUID string    `json:"resource_uuid,omitempty"`
 }
 
 // Resource represents a marketplace resource in Waldur
 type Resource struct {
-	UUID          string    `json:"uuid"`
-	Name          string    `json:"name"`
-	State         string    `json:"state"`
-	OfferingUUID  string    `json:"offering_uuid"`
-	ProjectUUID   string    `json:"project_uuid"`
-	ResourceType  string    `json:"resource_type"`
-	CreatedAt     time.Time `json:"created"`
+	UUID         string    `json:"uuid"`
+	Name         string    `json:"name"`
+	State        string    `json:"state"`
+	OfferingUUID string    `json:"offering_uuid"`
+	ProjectUUID  string    `json:"project_uuid"`
+	ResourceType string    `json:"resource_type"`
+	CreatedAt    time.Time `json:"created"`
+}
+
+// CreateOrderRequest contains parameters for creating a marketplace order.
+type CreateOrderRequest struct {
+	OfferingUUID   string
+	ProjectUUID    string
+	CallbackURL    string
+	RequestComment string
+	Attributes     map[string]interface{}
+	Limits         map[string]int
+	Type           string
+	Name           string
+	Description    string
 }
 
 // ListOfferingsParams contains parameters for listing offerings
@@ -313,6 +327,171 @@ func (m *MarketplaceClient) GetOrder(ctx context.Context, orderUUID string) (*Or
 	})
 
 	return order, err
+}
+
+// CreateOrder creates a marketplace order via Waldur.
+func (m *MarketplaceClient) CreateOrder(ctx context.Context, req CreateOrderRequest) (*Order, error) {
+	if req.OfferingUUID == "" || req.ProjectUUID == "" {
+		return nil, fmt.Errorf("offering UUID and project UUID are required")
+	}
+
+	var order *Order
+
+	err := m.client.doWithRetry(ctx, func() error {
+		body := client.MarketplaceOrdersCreateJSONRequestBody{
+			Offering: req.OfferingUUID,
+			Project:  req.ProjectUUID,
+		}
+
+		if req.CallbackURL != "" {
+			body.CallbackUrl = &req.CallbackURL
+		}
+		if req.RequestComment != "" {
+			body.RequestComment = &req.RequestComment
+		}
+		if len(req.Limits) > 0 {
+			body.Limits = &req.Limits
+		}
+		if req.Type != "" {
+			orderType := client.RequestTypes(req.Type)
+			body.Type = &orderType
+		}
+
+		if req.Name != "" || req.Description != "" || len(req.Attributes) > 0 {
+			attrs := client.GenericOrderAttributes{
+				AdditionalProperties: map[string]interface{}{},
+			}
+			if req.Name != "" {
+				attrs.Name = &req.Name
+			}
+			if req.Description != "" {
+				attrs.Description = &req.Description
+			}
+			for key, value := range req.Attributes {
+				attrs.AdditionalProperties[key] = value
+			}
+			orderAttrs := client.OrderCreateRequest_Attributes{}
+			if err := orderAttrs.FromGenericOrderAttributes(attrs); err != nil {
+				return err
+			}
+			body.Attributes = &orderAttrs
+		}
+
+		resp, err := m.client.api.MarketplaceOrdersCreateWithResponse(ctx, body)
+		if err != nil {
+			return err
+		}
+
+		if resp.StatusCode() != http.StatusCreated {
+			return mapHTTPError(resp.StatusCode(), resp.Body)
+		}
+
+		if resp.JSON201 == nil {
+			return ErrInvalidResponse
+		}
+
+		order = mapOrderDetails(resp.JSON201)
+		return nil
+	})
+
+	return order, err
+}
+
+// ApproveOrderByProvider approves a pending order as provider.
+func (m *MarketplaceClient) ApproveOrderByProvider(ctx context.Context, orderUUID string) error {
+	if orderUUID == "" {
+		return fmt.Errorf("order UUID is required")
+	}
+
+	return m.client.doWithRetry(ctx, func() error {
+		uuidType := uuid.MustParse(orderUUID)
+		resp, err := m.client.api.MarketplaceOrdersApproveByProviderWithResponse(ctx, uuidType)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode() != http.StatusOK {
+			return mapHTTPError(resp.StatusCode(), resp.Body)
+		}
+		return nil
+	})
+}
+
+// SetOrderBackendID sets backend ID for the order.
+func (m *MarketplaceClient) SetOrderBackendID(ctx context.Context, orderUUID string, backendID string) error {
+	if orderUUID == "" || backendID == "" {
+		return fmt.Errorf("order UUID and backend ID are required")
+	}
+
+	return m.client.doWithRetry(ctx, func() error {
+		uuidType := uuid.MustParse(orderUUID)
+		body := client.MarketplaceOrdersSetBackendIdJSONRequestBody{
+			BackendId: &backendID,
+		}
+		resp, err := m.client.api.MarketplaceOrdersSetBackendIdWithResponse(ctx, uuidType, body)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode() != http.StatusOK {
+			return mapHTTPError(resp.StatusCode(), resp.Body)
+		}
+		return nil
+	})
+}
+
+// TerminateResource requests termination of a marketplace resource.
+func (m *MarketplaceClient) TerminateResource(ctx context.Context, resourceUUID string, attributes map[string]interface{}) error {
+	if resourceUUID == "" {
+		return fmt.Errorf("resource UUID is required")
+	}
+
+	return m.client.doWithRetry(ctx, func() error {
+		uuidType := uuid.MustParse(resourceUUID)
+		body := client.MarketplaceResourcesTerminateJSONRequestBody{}
+		if len(attributes) > 0 {
+			body.Attributes = attributes
+		}
+
+		resp, err := m.client.api.MarketplaceResourcesTerminateWithResponse(ctx, uuidType, body)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusAccepted {
+			return mapHTTPError(resp.StatusCode(), resp.Body)
+		}
+		return nil
+	})
+}
+
+func mapOrderDetails(details *client.OrderDetails) *Order {
+	if details == nil {
+		return nil
+	}
+
+	order := &Order{}
+	if details.Uuid != nil {
+		order.UUID = details.Uuid.String()
+	}
+	if details.State != nil {
+		order.State = string(*details.State)
+	}
+	if details.Type != nil {
+		order.Type = string(*details.Type)
+	}
+	if details.ProjectUuid != nil {
+		order.ProjectUUID = details.ProjectUuid.String()
+	}
+	if details.Created != nil {
+		order.CreatedAt = *details.Created
+	}
+	if details.ErrorMessage != nil {
+		order.ErrorMessage = *details.ErrorMessage
+	}
+	if details.MarketplaceResourceUuid != nil {
+		order.ResourceUUID = details.MarketplaceResourceUuid.String()
+	} else if details.ResourceUuid != nil {
+		order.ResourceUUID = details.ResourceUuid.String()
+	}
+	return order
 }
 
 // ListResourcesParams contains parameters for listing resources

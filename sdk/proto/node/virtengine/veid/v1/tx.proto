@@ -6,6 +6,9 @@ import "cosmos_proto/cosmos.proto";
 import "cosmos/msg/v1/msg.proto";
 import "amino/amino.proto";
 import "virtengine/veid/v1/types.proto";
+import "virtengine/veid/v1/appeal.proto";
+import "virtengine/veid/v1/compliance.proto";
+import "virtengine/veid/v1/model.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
 
@@ -54,6 +57,63 @@ service Msg {
   
   // UpdateParams updates module parameters (governance only)
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // ==========================================================================
+  // Appeal Messages (VE-3020)
+  // ==========================================================================
+  
+  // SubmitAppeal submits an appeal against a verification decision
+  rpc SubmitAppeal(MsgSubmitAppeal) returns (MsgSubmitAppealResponse);
+  
+  // ClaimAppeal allows an arbitrator to claim an appeal for review
+  rpc ClaimAppeal(MsgClaimAppeal) returns (MsgClaimAppealResponse);
+  
+  // ResolveAppeal resolves an appeal (arbitrator/governance only)
+  rpc ResolveAppeal(MsgResolveAppeal) returns (MsgResolveAppealResponse);
+  
+  // WithdrawAppeal allows the submitter to withdraw their appeal
+  rpc WithdrawAppeal(MsgWithdrawAppeal) returns (MsgWithdrawAppealResponse);
+
+  // ==========================================================================
+  // Compliance Messages (VE-3021)
+  // ==========================================================================
+  
+  // SubmitComplianceCheck submits external compliance check results
+  rpc SubmitComplianceCheck(MsgSubmitComplianceCheck) returns (MsgSubmitComplianceCheckResponse);
+  
+  // AttestCompliance allows validators to attest compliance status
+  rpc AttestCompliance(MsgAttestCompliance) returns (MsgAttestComplianceResponse);
+  
+  // UpdateComplianceParams updates compliance configuration (gov only)
+  rpc UpdateComplianceParams(MsgUpdateComplianceParams) returns (MsgUpdateComplianceParamsResponse);
+  
+  // RegisterComplianceProvider registers a new compliance provider (gov only)
+  rpc RegisterComplianceProvider(MsgRegisterComplianceProvider) returns (MsgRegisterComplianceProviderResponse);
+  
+  // DeactivateComplianceProvider deactivates a compliance provider (gov only)
+  rpc DeactivateComplianceProvider(MsgDeactivateComplianceProvider) returns (MsgDeactivateComplianceProviderResponse);
+
+  // ==========================================================================
+  // Model Versioning Messages (VE-3007)
+  // ==========================================================================
+  
+  // RegisterModel registers a new ML model (authorized only)
+  rpc RegisterModel(MsgRegisterModel) returns (MsgRegisterModelResponse);
+  
+  // ProposeModelUpdate proposes updating active model via governance
+  rpc ProposeModelUpdate(MsgProposeModelUpdate) returns (MsgProposeModelUpdateResponse);
+  
+  // ReportModelVersion reports validator's model versions
+  rpc ReportModelVersion(MsgReportModelVersion) returns (MsgReportModelVersionResponse);
+  
+  // ActivateModel activates a pending model after governance approval
+  rpc ActivateModel(MsgActivateModel) returns (MsgActivateModelResponse);
+  
+  // DeprecateModel deprecates a model
+  rpc DeprecateModel(MsgDeprecateModel) returns (MsgDeprecateModelResponse);
+  
+  // RevokeModel revokes a model
+  rpc RevokeModel(MsgRevokeModel) returns (MsgRevokeModelResponse);
 }
 
 // MsgUploadScope is the message for uploading an identity scope

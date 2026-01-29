@@ -10,12 +10,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -55,6 +59,72 @@ const (
 
 	// FlagMetricsAddr is the metrics listen address
 	FlagMetricsAddr = "metrics"
+
+	// FlagWaldurEnabled toggles Waldur bridge
+	FlagWaldurEnabled = "waldur-enabled"
+
+	// FlagWaldurBaseURL is Waldur API base URL
+	FlagWaldurBaseURL = "waldur-base-url"
+
+	// FlagWaldurToken is Waldur API token
+	FlagWaldurToken = "waldur-token"
+
+	// FlagWaldurProjectUUID is Waldur project UUID
+	FlagWaldurProjectUUID = "waldur-project-uuid"
+
+	// FlagWaldurOfferingMap is path to offering map JSON
+	FlagWaldurOfferingMap = "waldur-offering-map"
+
+	// FlagWaldurCallbackSinkDir is directory for callback files
+	FlagWaldurCallbackSinkDir = "waldur-callback-sink-dir"
+
+	// FlagWaldurStateFile is path to state file
+	FlagWaldurStateFile = "waldur-state-file"
+
+	// FlagWaldurCheckpointFile is path to checkpoint file
+	FlagWaldurCheckpointFile = "waldur-checkpoint-file"
+
+	// FlagWaldurOrderCallbackURL is optional callback URL for Waldur order
+	FlagWaldurOrderCallbackURL = "waldur-order-callback-url"
+
+	// FlagWaldurChainSubmit enables on-chain Waldur callback submission
+	FlagWaldurChainSubmit = "waldur-chain-submit"
+
+	// FlagWaldurChainKey is the key name for on-chain Waldur callbacks
+	FlagWaldurChainKey = "waldur-chain-key"
+
+	// FlagWaldurChainKeyringBackend is the keyring backend for on-chain callbacks
+	FlagWaldurChainKeyringBackend = "waldur-chain-keyring-backend"
+
+	// FlagWaldurChainKeyringDir is the keyring dir for on-chain callbacks
+	FlagWaldurChainKeyringDir = "waldur-chain-keyring-dir"
+
+	// FlagWaldurChainKeyringPassphrase is the keyring passphrase for on-chain callbacks
+	FlagWaldurChainKeyringPassphrase = "waldur-chain-keyring-passphrase"
+
+	// FlagWaldurChainGRPC is the gRPC endpoint for on-chain callbacks
+	FlagWaldurChainGRPC = "waldur-chain-grpc"
+
+	// FlagWaldurChainGas is the gas setting for on-chain callbacks ("auto" or number)
+	FlagWaldurChainGas = "waldur-chain-gas"
+
+	// FlagWaldurChainGasPrices is the gas prices string for on-chain callbacks
+	FlagWaldurChainGasPrices = "waldur-chain-gas-prices"
+
+	// FlagWaldurChainFees is the fees string for on-chain callbacks
+	FlagWaldurChainFees = "waldur-chain-fees"
+
+	// FlagWaldurChainGasAdjustment is the gas adjustment for on-chain callbacks
+	FlagWaldurChainGasAdjustment = "waldur-chain-gas-adjustment"
+
+	// FlagWaldurChainBroadcastTimeout is the broadcast timeout for on-chain callbacks
+	FlagWaldurChainBroadcastTimeout = "waldur-chain-broadcast-timeout"
+
+	// FlagMarketplaceEventQuery is the marketplace event query
+	FlagMarketplaceEventQuery = "marketplace-event-query"
+
+	// FlagCometWS is the CometBFT websocket endpoint
+	FlagCometWS = "comet-ws"
 )
 
 var (
@@ -92,6 +162,28 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagProviderKeyDir, "", "Directory containing provider keys")
 	rootCmd.PersistentFlags().String(FlagListenAddr, ":8080", "API listen address")
 	rootCmd.PersistentFlags().String(FlagMetricsAddr, ":9090", "Metrics listen address")
+	rootCmd.PersistentFlags().Bool(FlagWaldurEnabled, false, "Enable Waldur provider bridge")
+	rootCmd.PersistentFlags().String(FlagWaldurBaseURL, "", "Waldur API base URL")
+	rootCmd.PersistentFlags().String(FlagWaldurToken, "", "Waldur API token")
+	rootCmd.PersistentFlags().String(FlagWaldurProjectUUID, "", "Waldur project UUID")
+	rootCmd.PersistentFlags().String(FlagWaldurOfferingMap, "", "Path to Waldur offering map JSON")
+	rootCmd.PersistentFlags().String(FlagWaldurCallbackSinkDir, "data/callbacks", "Directory for Waldur callback files")
+	rootCmd.PersistentFlags().String(FlagWaldurStateFile, "data/waldur_bridge_state.json", "Waldur bridge state file path")
+	rootCmd.PersistentFlags().String(FlagWaldurCheckpointFile, "data/marketplace_checkpoint.json", "Marketplace checkpoint file path")
+	rootCmd.PersistentFlags().String(FlagWaldurOrderCallbackURL, "", "Callback URL to include in Waldur order")
+	rootCmd.PersistentFlags().Bool(FlagWaldurChainSubmit, false, "Submit Waldur callbacks on-chain via MsgWaldurCallback")
+	rootCmd.PersistentFlags().String(FlagWaldurChainKey, "", "Key name for on-chain Waldur callback submissions")
+	rootCmd.PersistentFlags().String(FlagWaldurChainKeyringBackend, "test", "Keyring backend for on-chain callback submissions")
+	rootCmd.PersistentFlags().String(FlagWaldurChainKeyringDir, "", "Keyring directory for on-chain callback submissions")
+	rootCmd.PersistentFlags().String(FlagWaldurChainKeyringPassphrase, "", "Keyring passphrase for on-chain callback submissions")
+	rootCmd.PersistentFlags().String(FlagWaldurChainGRPC, "localhost:9090", "gRPC endpoint for on-chain callback submissions")
+	rootCmd.PersistentFlags().String(FlagWaldurChainGas, "auto", "Gas setting for on-chain callback submissions (auto or number)")
+	rootCmd.PersistentFlags().String(FlagWaldurChainGasPrices, "", "Gas prices for on-chain callback submissions")
+	rootCmd.PersistentFlags().String(FlagWaldurChainFees, "", "Fees for on-chain callback submissions")
+	rootCmd.PersistentFlags().Float64(FlagWaldurChainGasAdjustment, 1.2, "Gas adjustment for on-chain callback submissions")
+	rootCmd.PersistentFlags().Duration(FlagWaldurChainBroadcastTimeout, 30*time.Second, "Broadcast timeout for on-chain callback submissions")
+	rootCmd.PersistentFlags().String(FlagMarketplaceEventQuery, "", "Marketplace event query for CometBFT subscription")
+	rootCmd.PersistentFlags().String(FlagCometWS, "/websocket", "CometBFT websocket endpoint path")
 
 	// Bind to viper
 	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
@@ -100,6 +192,28 @@ func init() {
 	_ = viper.BindPFlag(FlagProviderKeyDir, rootCmd.PersistentFlags().Lookup(FlagProviderKeyDir))
 	_ = viper.BindPFlag(FlagListenAddr, rootCmd.PersistentFlags().Lookup(FlagListenAddr))
 	_ = viper.BindPFlag(FlagMetricsAddr, rootCmd.PersistentFlags().Lookup(FlagMetricsAddr))
+	_ = viper.BindPFlag(FlagWaldurEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurEnabled))
+	_ = viper.BindPFlag(FlagWaldurBaseURL, rootCmd.PersistentFlags().Lookup(FlagWaldurBaseURL))
+	_ = viper.BindPFlag(FlagWaldurToken, rootCmd.PersistentFlags().Lookup(FlagWaldurToken))
+	_ = viper.BindPFlag(FlagWaldurProjectUUID, rootCmd.PersistentFlags().Lookup(FlagWaldurProjectUUID))
+	_ = viper.BindPFlag(FlagWaldurOfferingMap, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingMap))
+	_ = viper.BindPFlag(FlagWaldurCallbackSinkDir, rootCmd.PersistentFlags().Lookup(FlagWaldurCallbackSinkDir))
+	_ = viper.BindPFlag(FlagWaldurStateFile, rootCmd.PersistentFlags().Lookup(FlagWaldurStateFile))
+	_ = viper.BindPFlag(FlagWaldurCheckpointFile, rootCmd.PersistentFlags().Lookup(FlagWaldurCheckpointFile))
+	_ = viper.BindPFlag(FlagWaldurOrderCallbackURL, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCallbackURL))
+	_ = viper.BindPFlag(FlagWaldurChainSubmit, rootCmd.PersistentFlags().Lookup(FlagWaldurChainSubmit))
+	_ = viper.BindPFlag(FlagWaldurChainKey, rootCmd.PersistentFlags().Lookup(FlagWaldurChainKey))
+	_ = viper.BindPFlag(FlagWaldurChainKeyringBackend, rootCmd.PersistentFlags().Lookup(FlagWaldurChainKeyringBackend))
+	_ = viper.BindPFlag(FlagWaldurChainKeyringDir, rootCmd.PersistentFlags().Lookup(FlagWaldurChainKeyringDir))
+	_ = viper.BindPFlag(FlagWaldurChainKeyringPassphrase, rootCmd.PersistentFlags().Lookup(FlagWaldurChainKeyringPassphrase))
+	_ = viper.BindPFlag(FlagWaldurChainGRPC, rootCmd.PersistentFlags().Lookup(FlagWaldurChainGRPC))
+	_ = viper.BindPFlag(FlagWaldurChainGas, rootCmd.PersistentFlags().Lookup(FlagWaldurChainGas))
+	_ = viper.BindPFlag(FlagWaldurChainGasPrices, rootCmd.PersistentFlags().Lookup(FlagWaldurChainGasPrices))
+	_ = viper.BindPFlag(FlagWaldurChainFees, rootCmd.PersistentFlags().Lookup(FlagWaldurChainFees))
+	_ = viper.BindPFlag(FlagWaldurChainGasAdjustment, rootCmd.PersistentFlags().Lookup(FlagWaldurChainGasAdjustment))
+	_ = viper.BindPFlag(FlagWaldurChainBroadcastTimeout, rootCmd.PersistentFlags().Lookup(FlagWaldurChainBroadcastTimeout))
+	_ = viper.BindPFlag(FlagMarketplaceEventQuery, rootCmd.PersistentFlags().Lookup(FlagMarketplaceEventQuery))
+	_ = viper.BindPFlag(FlagCometWS, rootCmd.PersistentFlags().Lookup(FlagCometWS))
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())
@@ -191,13 +305,57 @@ func runStart(cmd *cobra.Command, args []string) error {
 	fmt.Println("  Key Manager: initialized")
 
 	// Generate provider key
-	providerAddress := viper.GetString(FlagProviderKey) // Use key name as provider address for now
-	key, err := keyManager.GenerateKey(providerAddress)
+	providerKeyName := viper.GetString(FlagProviderKey)
+	providerAddress := providerKeyName
+	key, err := keyManager.GenerateKey(providerKeyName)
 	if err != nil {
 		return fmt.Errorf("failed to generate provider key: %w", err)
 	}
 	providerID := key.PublicKey
 	fmt.Printf("  Provider ID: %s...\n", providerID[:16])
+
+	var callbackSink provider_daemon.CallbackSink
+	var usageReporter provider_daemon.UsageReporter
+
+	if viper.GetBool(FlagWaldurEnabled) && viper.GetBool(FlagWaldurChainSubmit) {
+		chainKeyName := viper.GetString(FlagWaldurChainKey)
+		if chainKeyName == "" {
+			chainKeyName = providerKeyName
+		}
+
+		gasSetting, err := parseGasSetting(viper.GetString(FlagWaldurChainGas))
+		if err != nil {
+			return fmt.Errorf("invalid waldur chain gas: %w", err)
+		}
+
+		chainCfg := provider_daemon.ChainCallbackSinkConfig{
+			ChainID:           viper.GetString(FlagChainID),
+			NodeURI:           viper.GetString(FlagNode),
+			GRPCEndpoint:      viper.GetString(FlagWaldurChainGRPC),
+			KeyName:           chainKeyName,
+			KeyringBackend:    viper.GetString(FlagWaldurChainKeyringBackend),
+			KeyringDir:        viper.GetString(FlagWaldurChainKeyringDir),
+			KeyringPassphrase: viper.GetString(FlagWaldurChainKeyringPassphrase),
+			GasSetting:        gasSetting,
+			GasPrices:         viper.GetString(FlagWaldurChainGasPrices),
+			Fees:              viper.GetString(FlagWaldurChainFees),
+			GasAdjustment:     viper.GetFloat64(FlagWaldurChainGasAdjustment),
+			BroadcastTimeout:  viper.GetDuration(FlagWaldurChainBroadcastTimeout),
+		}
+
+		sink, err := provider_daemon.NewChainCallbackSink(ctx, chainCfg)
+		if err != nil {
+			return fmt.Errorf("failed to create on-chain callback sink: %w", err)
+		}
+		callbackSink = sink
+		providerAddress = sink.SenderAddress()
+	}
+
+	if viper.GetBool(FlagWaldurEnabled) {
+		if _, err := sdk.AccAddressFromBech32(providerAddress); err != nil {
+			return fmt.Errorf("provider address must be bech32 when Waldur is enabled: %w", err)
+		}
+	}
 
 	// Initialize bid engine (VE-401)
 	bidEngineConfig := provider_daemon.BidEngineConfig{
@@ -228,6 +386,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize usage meter (VE-404)
 	recordChan := make(chan *provider_daemon.UsageRecord, 100)
+	usageStore := provider_daemon.NewUsageSnapshotStore()
+	usageReporter = usageStore
 
 	usageMeter := provider_daemon.NewUsageMeter(provider_daemon.UsageMeterConfig{
 		ProviderID: providerID,
@@ -241,11 +401,47 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("  Usage Meter: started")
 
+	// Initialize Waldur bridge (VE-2040+)
+	if viper.GetBool(FlagWaldurEnabled) {
+		offeringMap, err := loadOfferingMap(viper.GetString(FlagWaldurOfferingMap))
+		if err != nil {
+			return fmt.Errorf("failed to load waldur offering map: %w", err)
+		}
+
+		bridgeCfg := provider_daemon.DefaultWaldurBridgeConfig()
+		bridgeCfg.Enabled = true
+		bridgeCfg.ProviderAddress = providerAddress
+		bridgeCfg.ProviderID = providerID
+		bridgeCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
+		bridgeCfg.CometWS = viper.GetString(FlagCometWS)
+		bridgeCfg.EventQuery = viper.GetString(FlagMarketplaceEventQuery)
+		bridgeCfg.CallbackSinkDir = viper.GetString(FlagWaldurCallbackSinkDir)
+		bridgeCfg.StateFile = viper.GetString(FlagWaldurStateFile)
+		bridgeCfg.CheckpointFile = viper.GetString(FlagWaldurCheckpointFile)
+		bridgeCfg.WaldurBaseURL = viper.GetString(FlagWaldurBaseURL)
+		bridgeCfg.WaldurToken = viper.GetString(FlagWaldurToken)
+		bridgeCfg.WaldurProjectUUID = viper.GetString(FlagWaldurProjectUUID)
+		bridgeCfg.WaldurOfferingMap = offeringMap
+		bridgeCfg.OrderCallbackURL = viper.GetString(FlagWaldurOrderCallbackURL)
+
+		waldurBridge, err := provider_daemon.NewWaldurBridge(bridgeCfg, keyManager, callbackSink, usageReporter)
+		if err != nil {
+			return fmt.Errorf("failed to create waldur bridge: %w", err)
+		}
+
+		go func() {
+			if err := waldurBridge.Start(ctx); err != nil {
+				fmt.Printf("[WALDUR] bridge stopped: %v\n", err)
+			}
+		}()
+		fmt.Println("  Waldur Bridge: started")
+	}
+
 	// Start background workers
 	bidResultChan := bidEngine.GetBidResults()
 	go handleBidResults(ctx, bidResultChan)
 	go handleStatusUpdates(ctx, statusUpdateChan)
-	go handleUsageRecords(ctx, recordChan)
+	go handleUsageRecords(ctx, recordChan, usageStore)
 
 	fmt.Println("\nProvider daemon is running. Press Ctrl+C to stop.")
 
@@ -299,12 +495,15 @@ func handleStatusUpdates(ctx context.Context, ch <-chan provider_daemon.Workload
 	}
 }
 
-func handleUsageRecords(ctx context.Context, ch <-chan *provider_daemon.UsageRecord) {
+func handleUsageRecords(ctx context.Context, ch <-chan *provider_daemon.UsageRecord, usageStore *provider_daemon.UsageSnapshotStore) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case record := <-ch:
+			if usageStore != nil {
+				usageStore.Track(record)
+			}
 			fmt.Printf("[USAGE] Workload %s: CPU=%dms, Mem=%d bytes\n",
 				record.WorkloadID,
 				record.Metrics.CPUMilliSeconds,
@@ -465,4 +664,40 @@ func versionCmd() *cobra.Command {
 			fmt.Println("  Features: VE-400, VE-401, VE-402, VE-403, VE-404")
 		},
 	}
+}
+
+func loadOfferingMap(path string) (map[string]string, error) {
+	if path == "" {
+		return map[string]string{}, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func parseGasSetting(value string) (provider_daemon.GasSetting, error) {
+	if strings.EqualFold(value, "auto") || value == "" {
+		return provider_daemon.GasSetting{Simulate: true}, nil
+	}
+	gas, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return provider_daemon.GasSetting{}, err
+	}
+	return provider_daemon.GasSetting{Gas: gas}, nil
+}
+
+func normalizeCometRPC(node string) string {
+	if strings.HasPrefix(node, "tcp://") {
+		return "http://" + strings.TrimPrefix(node, "tcp://")
+	}
+	if strings.HasPrefix(node, "http://") || strings.HasPrefix(node, "https://") {
+		return node
+	}
+	return "http://" + node
 }

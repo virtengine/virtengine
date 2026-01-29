@@ -406,22 +406,47 @@ func (k Keeper) HasActiveFactorOfType(ctx sdk.Context, address sdk.AccAddress, f
 	return len(k.GetActiveFactorsByType(ctx, address, factorType)) > 0
 }
 
+// IsMFAEnabled checks if MFA is enabled for an account.
+// MFA is considered enabled if the account has an active MFA policy with at least one enrolled factor.
+func (k Keeper) IsMFAEnabled(ctx sdk.Context, address sdk.AccAddress) (bool, error) {
+	// Check if account has an MFA policy
+	policy, found := k.GetMFAPolicy(ctx, address)
+	if !found {
+		return false, nil
+	}
+
+	// Policy exists but may not be enabled
+	if !policy.Enabled {
+		return false, nil
+	}
+
+	// Check if account has at least one active factor
+	enrollments := k.GetFactorEnrollments(ctx, address)
+	for _, enrollment := range enrollments {
+		if enrollment.Status == types.EnrollmentStatusActive {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // ============================================================================
 // MFA Policy
 // ============================================================================
 
 // mfaPolicyStore is the stored format of an MFA policy
 type mfaPolicyStore struct {
-	AccountAddress     string                    `json:"account_address"`
-	RequiredFactors    []types.FactorCombination `json:"required_factors"`
+	AccountAddress     string                     `json:"account_address"`
+	RequiredFactors    []types.FactorCombination  `json:"required_factors"`
 	TrustedDeviceRule  *types.TrustedDevicePolicy `json:"trusted_device_rule,omitempty"`
-	RecoveryFactors    []types.FactorCombination `json:"recovery_factors,omitempty"`
-	KeyRotationFactors []types.FactorCombination `json:"key_rotation_factors,omitempty"`
-	SessionDuration    int64                     `json:"session_duration"`
-	VEIDThreshold      uint32                    `json:"veid_threshold,omitempty"`
-	Enabled            bool                      `json:"enabled"`
-	CreatedAt          int64                     `json:"created_at"`
-	UpdatedAt          int64                     `json:"updated_at"`
+	RecoveryFactors    []types.FactorCombination  `json:"recovery_factors,omitempty"`
+	KeyRotationFactors []types.FactorCombination  `json:"key_rotation_factors,omitempty"`
+	SessionDuration    int64                      `json:"session_duration"`
+	VEIDThreshold      uint32                     `json:"veid_threshold,omitempty"`
+	Enabled            bool                       `json:"enabled"`
+	CreatedAt          int64                      `json:"created_at"`
+	UpdatedAt          int64                      `json:"updated_at"`
 }
 
 // SetMFAPolicy sets the MFA policy for an account
@@ -510,21 +535,21 @@ func (k Keeper) DeleteMFAPolicy(ctx sdk.Context, address sdk.AccAddress) error {
 
 // challengeStore is the stored format of a challenge
 type challengeStore struct {
-	ChallengeID     string                        `json:"challenge_id"`
-	AccountAddress  string                        `json:"account_address"`
-	FactorType      types.FactorType              `json:"factor_type"`
-	FactorID        string                        `json:"factor_id"`
+	ChallengeID     string                         `json:"challenge_id"`
+	AccountAddress  string                         `json:"account_address"`
+	FactorType      types.FactorType               `json:"factor_type"`
+	FactorID        string                         `json:"factor_id"`
 	TransactionType types.SensitiveTransactionType `json:"transaction_type"`
-	Status          types.ChallengeStatus         `json:"status"`
-	ChallengeData   []byte                        `json:"challenge_data,omitempty"`
-	CreatedAt       int64                         `json:"created_at"`
-	ExpiresAt       int64                         `json:"expires_at"`
-	VerifiedAt      int64                         `json:"verified_at,omitempty"`
-	AttemptCount    uint32                        `json:"attempt_count"`
-	MaxAttempts     uint32                        `json:"max_attempts"`
-	Nonce           string                        `json:"nonce"`
-	SessionID       string                        `json:"session_id,omitempty"`
-	Metadata        *types.ChallengeMetadata      `json:"metadata,omitempty"`
+	Status          types.ChallengeStatus          `json:"status"`
+	ChallengeData   []byte                         `json:"challenge_data,omitempty"`
+	CreatedAt       int64                          `json:"created_at"`
+	ExpiresAt       int64                          `json:"expires_at"`
+	VerifiedAt      int64                          `json:"verified_at,omitempty"`
+	AttemptCount    uint32                         `json:"attempt_count"`
+	MaxAttempts     uint32                         `json:"max_attempts"`
+	Nonce           string                         `json:"nonce"`
+	SessionID       string                         `json:"session_id,omitempty"`
+	Metadata        *types.ChallengeMetadata       `json:"metadata,omitempty"`
 }
 
 // CreateChallenge creates a new MFA challenge

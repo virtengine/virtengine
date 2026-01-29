@@ -132,6 +132,58 @@ type SimulatedEnclaveService struct {
 
 ---
 
+
+## Waldur Integration: State Mapping + Callback Schema
+
+### State Mapping (VirtEngine <-> Waldur)
+
+| VirtEngine Entity | VirtEngine State | Waldur Entity | Waldur State | Notes |
+|---|---|---|---|---|
+| Offering | active | Offering | active | Provider publishes offering in Waldur; sync back as metadata |
+| Order | open | Order | pending | Order created on-chain; Waldur order created by provider daemon |
+| Order | matched | Order | approved | Provider approves order in Waldur after bid acceptance |
+| Allocation | pending | Resource | provisioning | Allocation created on-chain triggers provisioning |
+| Allocation | provisioning | Resource | provisioning | Waldur provisioning in progress |
+| Allocation | active | Resource | provisioned | Resource live; on-chain allocation active |
+| Allocation | terminating | Resource | terminating | Termination requested |
+| Allocation | terminated | Resource | terminated | Resource removed |
+| Allocation | failed/rejected | Resource | failed/rejected | Failure mapping |
+
+**Determinism rule:** On-chain state is authoritative; Waldur is a control-plane executor. On-chain transitions only occur from signed callbacks.
+
+### Waldur Callback Schema (Provider Daemon -> Chain)
+
+**Required fields** (JSON over gRPC/REST or internal tx payload):
+```json
+{
+  "id": "wcb_allocation_abc123_8f4e2c1a",
+  "action_type": "provision|terminate|status_update|usage_report",
+  "waldur_id": "UUID",
+  "chain_entity_type": "allocation",
+  "chain_entity_id": "customer/1/1",
+  "payload": {
+    "state": "provisioning|active|failed|terminated",
+    "reason": "string",
+    "encrypted_config_ref": "ipfs://... or object://...",
+    "usage_period_start": "unix",
+    "usage_period_end": "unix",
+    "usage": { "cpu_hours": "123", "gpu_hours": "4", "ram_gb_hours": "512" }
+  },
+  "signer_id": "provider_addr_or_key_id",
+  "nonce": "unique_nonce",
+  "timestamp": "unix",
+  "expires_at": "unix",
+  "signature": "base64(ed25519(sig(payload)))"
+}
+```
+
+**Validation rules:**
+1. Signature must verify against provider public key on-chain.
+2. Nonce must be unique and unexpired.
+3. `chain_entity_id` must exist and be owned by provider.
+4. Action must map to a valid state transition.
+
+---
 ## Scalability Assessment (1M Nodes)
 
 ### Memory/Storage Bottlenecks
@@ -234,3 +286,4 @@ type SimulatedEnclaveService struct {
 **Estimated effort to production-ready:** 3-6 months with dedicated team
 
 **Recommendation:** Do NOT deploy to mainnet until Phase 1 and Phase 2 are complete.
+

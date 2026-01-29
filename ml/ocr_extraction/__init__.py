@@ -51,6 +51,36 @@ from ml.ocr_extraction.field_parser import (
 from ml.ocr_extraction.field_hasher import FieldHasher
 from ml.ocr_extraction.pipeline import OCRExtractionPipeline, OCRExtractionResult
 
+# OCR Engine abstraction layer (VE-3043)
+from ml.ocr_extraction.ocr_engines import (
+    OCREngine,
+    OCREngineConfig,
+    OCRResult as UnifiedOCRResult,
+    BoundingBox as OCRBoundingBox,
+    EasyOCREngine,
+    EasyOCRConfig,
+    TesseractEngine,
+    TesseractEngineConfig,
+    FallbackChainEngine,
+    FallbackChainConfig,
+    FallbackResult,
+    OCREngineType,
+    create_default_chain,
+)
+
+# Document type configuration (VE-3047)
+from ml.ocr_extraction.document_config import (
+    DocumentConfigLoader,
+    DocumentTypeDefinition,
+    FieldDefinition,
+    get_document_type,
+    validate_field,
+)
+from ml.ocr_extraction.config_validator import (
+    validate_config,
+    validate_config_string,
+)
+
 __version__ = "1.0.0"
 __all__ = [
     # Config
@@ -74,9 +104,32 @@ __all__ = [
     "DocumentFieldParser",
     "ParsedField",
     "ValidationStatus",
+    # Document Config (VE-3047)
+    "DocumentConfigLoader",
+    "DocumentTypeDefinition",
+    "FieldDefinition",
+    "get_document_type",
+    "validate_field",
+    "validate_config",
+    "validate_config_string",
     # Hashing
     "FieldHasher",
     # Pipeline
     "OCRExtractionPipeline",
     "OCRExtractionResult",
+    # OCR Engines (VE-3043)
+    "OCREngine",
+    "OCREngineConfig",
+    "UnifiedOCRResult",
+    "OCRBoundingBox",
+    "EasyOCREngine",
+    "EasyOCRConfig",
+    "TesseractEngine",
+    "TesseractEngineConfig",
+    "FallbackChainEngine",
+    "FallbackChainConfig",
+    "FallbackResult",
+    "OCREngineType",
+    "create_default_chain",
 ]
+

@@ -348,11 +348,11 @@ func TestFormatTimeLimit(t *testing.T) {
 		{60, "01:00:00"},
 		{90, "01:30:00"},
 		{120, "02:00:00"},
-		{1440, "1-00:00:00"},    // 24 hours
-		{2880, "2-00:00:00"},    // 48 hours
-		{4320, "3-00:00:00"},    // 72 hours
-		{1500, "1-01:00:00"},    // 25 hours
-		{10080, "7-00:00:00"},   // 1 week
+		{1440, "1-00:00:00"},  // 24 hours
+		{2880, "2-00:00:00"},  // 48 hours
+		{4320, "3-00:00:00"},  // 72 hours
+		{1500, "1-01:00:00"},  // 25 hours
+		{10080, "7-00:00:00"}, // 1 week
 	}
 
 	for _, tc := range tests {
@@ -403,7 +403,7 @@ func TestBatchScriptBuilder_SetTimeLimit(t *testing.T) {
 
 func TestDefaultBatchScriptOptions(t *testing.T) {
 	opts := DefaultBatchScriptOptions()
-	
+
 	assert.False(t, opts.UseModulePurge)
 	assert.False(t, opts.EnableProfiling)
 	assert.False(t, opts.EnableTiming)

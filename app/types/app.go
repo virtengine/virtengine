@@ -89,6 +89,8 @@ import (
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	mhooks "github.com/virtengine/virtengine/x/market/hooks"
 	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
+	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
+	marketplacekeeper "github.com/virtengine/virtengine/x/market/types/marketplace/keeper"
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	pkeeper "github.com/virtengine/virtengine/x/provider/keeper"
@@ -132,27 +134,28 @@ type AppKeepers struct {
 	}
 
 	VirtEngine struct {
-		Escrow     ekeeper.Keeper
-		Deployment dkeeper.IKeeper
-		Take       tkeeper.IKeeper
-		Market     mkeeper.IKeeper
-		Provider   pkeeper.IKeeper
-		Audit      akeeper.Keeper
-		Cert       ckeeper.Keeper
+		Escrow      ekeeper.Keeper
+		Deployment  dkeeper.IKeeper
+		Take        tkeeper.IKeeper
+		Market      mkeeper.IKeeper
+		Marketplace marketplacekeeper.IKeeper
+		Provider    pkeeper.IKeeper
+		Audit       akeeper.Keeper
+		Cert        ckeeper.Keeper
 		// VirtEngine patent-specific modules (AU2024203136A1)
-		Encryption   encryptionkeeper.Keeper
-		Roles        roleskeeper.Keeper
-		VEID         veidkeeper.Keeper
-		MFA          mfakeeper.Keeper
-		Config       configkeeper.Keeper
-		HPC          hpckeeper.Keeper
-		Benchmark    benchkeeper.Keeper
-		Enclave      enclavekeeper.Keeper
-		Settlement   settlementkeeper.Keeper
-		Fraud        fraudkeeper.Keeper
-		Review       reviewkeeper.Keeper
-		Delegation   delegationkeeper.Keeper
-		VirtStaking  virtstakingkeeper.Keeper
+		Encryption  encryptionkeeper.Keeper
+		Roles       roleskeeper.Keeper
+		VEID        veidkeeper.Keeper
+		MFA         mfakeeper.Keeper
+		Config      configkeeper.Keeper
+		HPC         hpckeeper.Keeper
+		Benchmark   benchkeeper.Keeper
+		Enclave     enclavekeeper.Keeper
+		Settlement  settlementkeeper.Keeper
+		Fraud       fraudkeeper.Keeper
+		Review      reviewkeeper.Keeper
+		Delegation  delegationkeeper.Keeper
+		VirtStaking virtstakingkeeper.Keeper
 	}
 
 	Modules struct {
@@ -533,6 +536,19 @@ func (app *App) InitNormalKeepers(
 		app.Keepers.VirtEngine.Roles,
 	)
 
+	marketplaceVEID := newMarketplaceVEIDAdapter(app.Keepers.VirtEngine.VEID)
+	marketplaceMFA := newMarketplaceMFAAdapter(app.Keepers.VirtEngine.MFA)
+	marketplaceProvider := newMarketplaceProviderAdapter(app.Keepers.VirtEngine.Provider)
+
+	app.Keepers.VirtEngine.Marketplace = marketplacekeeper.NewKeeper(
+		cdc,
+		app.keys[marketplacetypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		marketplaceVEID,
+		marketplaceMFA,
+		marketplaceProvider,
+	)
+
 	// Set MFA keeper on VEID for circular dependency resolution
 	app.Keepers.VirtEngine.VEID.SetMFAKeeper(app.Keepers.VirtEngine.MFA)
 
@@ -680,6 +696,7 @@ func virtengineKVStoreKeys() []string {
 		emodule.StoreKey,
 		dtypes.StoreKey,
 		mtypes.StoreKey,
+		"mktplace", // marketplace module - renamed to avoid "market" prefix collision
 		ptypes.StoreKey,
 		atypes.StoreKey,
 		ctypes.StoreKey,

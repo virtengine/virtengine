@@ -58,3 +58,25 @@ func ParseAllocationID(value string) (AllocationID, error) {
 	}
 	return id, nil
 }
+
+// ParseOfferingID parses an OfferingID from its string form ("provider/sequence").
+func ParseOfferingID(value string) (OfferingID, error) {
+	parts := strings.Split(value, "/")
+	if len(parts) != 2 {
+		return OfferingID{}, fmt.Errorf("invalid offering id format: %s", value)
+	}
+
+	seq, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return OfferingID{}, fmt.Errorf("invalid offering sequence: %w", err)
+	}
+
+	id := OfferingID{
+		ProviderAddress: parts[0],
+		Sequence:        seq,
+	}
+	if err := id.Validate(); err != nil {
+		return OfferingID{}, err
+	}
+	return id, nil
+}

@@ -13,10 +13,10 @@ import (
 
 // Error message constants
 const (
-	errMsgEmptyRequest           = "empty request"
-	errMsgAccountAddressEmpty    = "account address cannot be empty"
-	errMsgInvalidAccountAddress  = "invalid account address"
-	errMsgScopeIDEmpty           = "scope_id cannot be empty"
+	errMsgEmptyRequest          = "empty request"
+	errMsgAccountAddressEmpty   = "account address cannot be empty"
+	errMsgInvalidAccountAddress = "invalid account address"
+	errMsgScopeIDEmpty          = "scope_id cannot be empty"
 )
 
 // GRPCQuerier is used as Keeper will have duplicate methods if used directly
@@ -463,4 +463,91 @@ func buildPublicVerificationEntry(entry types.VerificationHistoryEntry) types.Pu
 		ScopeCount:     len(entry.ScopesEvaluated),
 		ModelVersion:   entry.ModelVersion,
 	}
+}
+
+// ============================================================================
+// Appeal Queries (VE-3020)
+// ============================================================================
+
+// Appeal returns a specific appeal by ID
+func (q GRPCQuerier) Appeal(goCtx context.Context, req *types.QueryAppealRequest) (*types.QueryAppealResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	if req.AppealID == "" {
+		return nil, status.Error(codes.InvalidArgument, "appeal_id cannot be empty")
+	}
+
+	appeal, found := q.Keeper.GetAppeal(ctx, req.AppealID)
+	if !found {
+		return &types.QueryAppealResponse{Appeal: nil}, nil
+	}
+
+	return &types.QueryAppealResponse{Appeal: appeal}, nil
+}
+
+// AppealsByAccount returns all appeals for an account
+func (q GRPCQuerier) AppealsByAccount(goCtx context.Context, req *types.QueryAppealsByAccountRequest) (*types.QueryAppealsByAccountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	if req.AccountAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
+	}
+
+	_, err := sdk.AccAddressFromBech32(req.AccountAddress)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
+	}
+
+	appeals := q.Keeper.GetAppealsByAccount(ctx, req.AccountAddress)
+	summary := q.Keeper.GetAppealSummary(ctx, req.AccountAddress)
+
+	return &types.QueryAppealsByAccountResponse{
+		Appeals: appeals,
+		Summary: summary,
+	}, nil
+}
+
+// PendingAppeals returns all pending appeals (for reviewers)
+func (q GRPCQuerier) PendingAppeals(goCtx context.Context, req *types.QueryPendingAppealsRequest) (*types.QueryPendingAppealsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	appeals := q.Keeper.GetPendingAppeals(ctx)
+
+	// Apply limit if specified
+	limit := int(req.Limit)
+	if limit > 0 && len(appeals) > limit {
+		appeals = appeals[:limit]
+	}
+
+	return &types.QueryPendingAppealsResponse{
+		Appeals: appeals,
+		Total:   uint32(len(appeals)),
+	}, nil
+}
+
+// AppealParams returns the appeal system parameters
+func (q GRPCQuerier) AppealParams(goCtx context.Context, req *types.QueryAppealParamsRequest) (*types.QueryAppealParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+
+	params := q.Keeper.GetAppealParams(ctx)
+
+	return &types.QueryAppealParamsResponse{
+		Params: params,
+	}, nil
 }

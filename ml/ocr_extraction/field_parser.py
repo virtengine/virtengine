@@ -3,17 +3,46 @@ Document field parser for structured extraction.
 
 This module parses OCR results into structured fields
 for various document types (ID cards, passports, driver's licenses).
+
+Supports three parsing modes:
+1. Label-based: Extracts fields using regex patterns on OCR text
+2. Center-matching: Matches U-Net mask regions to OCR text boxes by center position
+   (ported from RMIT OCR_Document_Scan intern project, VE-3041)
+3. Config-based: Uses configurable document type definitions from YAML
+   (VE-3047 - Generalize Document Type Configuration)
+
+The config-based mode allows adding new document types without code changes
+by defining field patterns, label text, and validation rules in document_types.yaml.
 """
 
 import re
+import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, date
 
-from ml.ocr_extraction.config import FieldParserConfig, DocumentType
+import numpy as np
+
+from ml.ocr_extraction.config import FieldParserConfig, DocumentType, CenterMatchingConfig
 from ml.ocr_extraction.tesseract_wrapper import OCRResult
 from ml.ocr_extraction.postprocessing import OCRPostProcessor
+from ml.ocr_extraction.center_matching import (
+    BoundingBox,
+    MaskRegion,
+    CenterMatcher,
+    CenterMatchingConfig as CenterMatcherConfig,
+    MatchResult,
+    extract_mask_regions_from_unet,
+    convert_ocr_boxes,
+)
+from ml.ocr_extraction.document_config import (
+    DocumentConfigLoader,
+    DocumentTypeDefinition,
+    FieldDefinition,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ValidationStatus(str, Enum):
@@ -230,15 +259,43 @@ class DocumentFieldParser:
         ],
     }
     
-    def __init__(self, config: Optional[FieldParserConfig] = None):
+    def __init__(
+        self,
+        config: Optional[FieldParserConfig] = None,
+        center_matching_config: Optional[CenterMatchingConfig] = None,
+    ):
         """
         Initialize field parser.
         
         Args:
             config: Parser configuration. Uses defaults if None.
+            center_matching_config: Center matching configuration for U-Net mode.
+                                   If provided, enables center matching mode.
         """
         self.config = config or FieldParserConfig()
         self.postprocessor = OCRPostProcessor()
+        self.center_matching_config = center_matching_config
+        
+        # Initialize document config loader for config-based parsing (VE-3047)
+        try:
+            self._doc_config = DocumentConfigLoader.get_instance()
+        except FileNotFoundError:
+            logger.warning(
+                "document_types.yaml not found, config-based parsing disabled"
+            )
+            self._doc_config = None
+        
+        # Initialize center matcher if config provided
+        if center_matching_config and center_matching_config.enabled:
+            self._center_matcher = CenterMatcher(CenterMatcherConfig(
+                distance_threshold=center_matching_config.distance_threshold,
+                merge_threshold=center_matching_config.merge_threshold,
+                min_confidence=center_matching_config.min_confidence,
+                use_weighted_center=center_matching_config.use_weighted_center,
+                neighbor_distance_pixels=center_matching_config.neighbor_distance_pixels,
+            ))
+        else:
+            self._center_matcher = None
     
     def parse(
         self,
@@ -264,6 +321,229 @@ class DocumentFieldParser:
         
         parser = parsers.get(document_type, self.parse_generic)
         return parser(ocr_results)
+    
+    def parse_with_config(
+        self,
+        ocr_results: List[OCRResult],
+        document_type_id: str,
+    ) -> Dict[str, ParsedField]:
+        """
+        Parse OCR results using configurable document type definitions.
+        
+        This method uses document_types.yaml for field definitions,
+        allowing new document types to be added without code changes.
+        
+        Task Reference: VE-3047 - Generalize Document Type Configuration
+        
+        Args:
+            ocr_results: List of OCR results from ROIs
+            document_type_id: Document type identifier from config
+                             (e.g., "passport", "turkish_id", "us_drivers_license")
+        
+        Returns:
+            Dictionary of parsed fields
+        
+        Raises:
+            ValueError: If document type is not found in configuration
+        
+        Example:
+            parser = DocumentFieldParser()
+            fields = parser.parse_with_config(ocr_results, "turkish_id")
+        """
+        if self._doc_config is None:
+            raise ValueError(
+                "Document configuration not loaded. "
+                "Ensure document_types.yaml exists."
+            )
+        
+        doc_type_def = self._doc_config.get_document_type(document_type_id)
+        if doc_type_def is None:
+            available = self._doc_config.list_document_types()
+            raise ValueError(
+                f"Unknown document type: '{document_type_id}'. "
+                f"Available types: {available}"
+            )
+        
+        fields = {}
+        all_text = self._combine_text(ocr_results)
+        
+        # Extract fields using label-based matching from config
+        for field_name, field_def in doc_type_def.fields.items():
+            result = self._extract_field_with_config(
+                field_def, all_text, ocr_results
+            )
+            if result:
+                fields[field_name] = result
+        
+        # Apply heuristic fallbacks for common fields if not found
+        fields = self._apply_heuristic_fallbacks(fields, ocr_results, doc_type_def)
+        
+        return fields
+    
+    def _extract_field_with_config(
+        self,
+        field_def: FieldDefinition,
+        all_text: str,
+        ocr_results: List[OCRResult],
+    ) -> Optional[ParsedField]:
+        """
+        Extract a field using its configuration definition.
+        
+        Uses label text from config to find field values in OCR text.
+        
+        Args:
+            field_def: Field definition from config
+            all_text: Combined OCR text
+            ocr_results: Original OCR results
+        
+        Returns:
+            ParsedField if found, None otherwise
+        """
+        # Try label-based extraction if labels are defined
+        if field_def.label_text:
+            for label in field_def.label_text:
+                # Build pattern from label
+                escaped_label = re.escape(label)
+                pattern = rf"{escaped_label}[:\s]*(.+?)(?:\n|$)"
+                
+                match = re.search(pattern, all_text, re.IGNORECASE)
+                if match:
+                    value = match.group(1).strip()
+                    if value:
+                        return self._create_parsed_field(
+                            field_def, value, ocr_results
+                        )
+        
+        # Try pattern matching if pattern is defined
+        if field_def.pattern:
+            # Search for pattern in text
+            matches = re.findall(field_def.pattern, all_text)
+            if matches:
+                value = matches[0] if isinstance(matches[0], str) else matches[0][0]
+                return self._create_parsed_field(
+                    field_def, value, ocr_results
+                )
+        
+        return None
+    
+    def _create_parsed_field(
+        self,
+        field_def: FieldDefinition,
+        raw_value: str,
+        ocr_results: List[OCRResult],
+    ) -> ParsedField:
+        """
+        Create a ParsedField from extracted value and field definition.
+        
+        Args:
+            field_def: Field definition from config
+            raw_value: Extracted raw value
+            ocr_results: Original OCR results for confidence calculation
+        
+        Returns:
+            ParsedField with validation applied
+        """
+        # Post-process value
+        processed_value = self.postprocessor.process(raw_value, field_def.name)
+        
+        # Validate against pattern
+        if field_def.pattern and field_def.matches_pattern(processed_value):
+            validation_status = ValidationStatus.VALID
+        elif field_def.pattern:
+            validation_status = ValidationStatus.UNCERTAIN
+        else:
+            validation_status = ValidationStatus.VALID
+        
+        # Find source ROIs
+        source_rois = self._find_source_rois(raw_value, ocr_results)
+        confidence = self._calculate_confidence(raw_value, ocr_results)
+        
+        return ParsedField(
+            field_name=field_def.name,
+            value=processed_value,
+            confidence=confidence,
+            source_roi_ids=source_rois,
+            validation_status=validation_status,
+            raw_value=raw_value,
+        )
+    
+    def _apply_heuristic_fallbacks(
+        self,
+        fields: Dict[str, ParsedField],
+        ocr_results: List[OCRResult],
+        doc_type_def: DocumentTypeDefinition,
+    ) -> Dict[str, ParsedField]:
+        """
+        Apply heuristic extraction for missing fields.
+        
+        Args:
+            fields: Already extracted fields
+            ocr_results: OCR results
+            doc_type_def: Document type definition
+        
+        Returns:
+            Updated fields dictionary
+        """
+        # Check for name fields
+        name_fields = {"full_name", "name", "surname", "given_names", "adi", "soyadi"}
+        has_name = any(f in fields for f in name_fields)
+        
+        if not has_name:
+            name_field = self._extract_name_heuristic(ocr_results)
+            if name_field:
+                fields["full_name"] = name_field
+        
+        # Check for date of birth
+        dob_fields = {"date_of_birth", "dogum_tarihi", "dob", "dbb"}
+        has_dob = any(f in fields for f in dob_fields)
+        
+        if not has_dob:
+            dob_field = self._extract_date_heuristic(ocr_results, "date_of_birth")
+            if dob_field:
+                fields["date_of_birth"] = dob_field
+        
+        # Check for document number
+        id_fields = {"document_number", "tc_kimlik_no", "licence_number", "daq"}
+        has_id = any(f in fields for f in id_fields)
+        
+        if not has_id:
+            id_field = self._extract_id_number_heuristic(ocr_results)
+            if id_field:
+                fields["document_number"] = id_field
+        
+        return fields
+    
+    def get_available_document_types(self) -> List[str]:
+        """
+        Get list of available document types from configuration.
+        
+        Returns:
+            List of document type identifiers
+        """
+        if self._doc_config is None:
+            return []
+        return self._doc_config.list_document_types()
+    
+    def validate_extracted_fields(
+        self,
+        document_type_id: str,
+        fields: Dict[str, ParsedField],
+    ) -> Tuple[bool, List[str]]:
+        """
+        Validate extracted fields against document type configuration.
+        
+        Args:
+            document_type_id: Document type identifier
+            fields: Dictionary of extracted fields
+        
+        Returns:
+            Tuple of (all_valid, list_of_errors)
+        """
+        if self._doc_config is None:
+            return True, []
+        
+        field_values = {name: f.value for name, f in fields.items()}
+        return self._doc_config.validate_document(document_type_id, field_values)
     
     def parse_id_card(
         self,
@@ -432,6 +712,171 @@ class DocumentFieldParser:
         
         return fields
     
+    def parse_with_center_matching(
+        self,
+        unet_mask: np.ndarray,
+        ocr_boxes: List[BoundingBox],
+        img_width: int,
+        img_height: int,
+        class_names: Optional[List[str]] = None,
+    ) -> Dict[str, ParsedField]:
+        """
+        Parse fields using U-Net mask to OCR box center matching.
+        
+        This is an alternative to label-based parsing that uses spatial
+        matching instead of text pattern matching. Ported from RMIT
+        OCR_Document_Scan intern project (2023).
+        
+        The algorithm:
+        1. Extract mask regions from U-Net output
+        2. Convert mask centers to normalized ratios
+        3. Convert OCR box centers to normalized ratios
+        4. Match each mask region to nearest OCR box
+        5. Return matched text as field values
+        
+        Args:
+            unet_mask: Binary mask from U-Net segmentation model
+            ocr_boxes: List of detected OCR text boxes with labels
+            img_width: Image width in pixels
+            img_height: Image height in pixels
+            class_names: Optional list of field names for each mask class
+                        (e.g., ["surname", "given_names", "date_of_birth"])
+        
+        Returns:
+            Dictionary of parsed fields
+            
+        Raises:
+            RuntimeError: If center matching is not enabled
+        
+        Task Reference: VE-3041 - Port Center-Matching Algorithm
+        """
+        if self._center_matcher is None:
+            raise RuntimeError(
+                "Center matching not enabled. Initialize parser with "
+                "center_matching_config to use this method."
+            )
+        
+        fields = {}
+        
+        # Extract mask regions from U-Net output
+        max_regions = (
+            self.center_matching_config.max_mask_regions
+            if self.center_matching_config
+            else 10
+        )
+        min_area = (
+            self.center_matching_config.min_mask_area
+            if self.center_matching_config
+            else 100
+        )
+        
+        mask_regions = extract_mask_regions_from_unet(
+            unet_mask,
+            class_names=class_names,
+            min_area=min_area,
+            max_regions=max_regions
+        )
+        
+        if not mask_regions:
+            return fields
+        
+        # Optionally merge adjacent OCR boxes
+        merged_boxes = self._center_matcher.merge_adjacent_boxes(
+            ocr_boxes, img_width, img_height
+        )
+        
+        # Match mask regions to OCR boxes
+        match_results = self._center_matcher.match_masks_to_boxes(
+            mask_regions,
+            merged_boxes,
+            img_width,
+            img_height
+        )
+        
+        # Convert matches to ParsedField objects
+        for result in match_results:
+            if result.is_matched and result.matched_box:
+                field_name = result.mask_region.class_name
+                text_value = result.matched_box.label or ""
+                
+                # Post-process the extracted text
+                processed_value = self.postprocessor.process(text_value, field_name)
+                
+                # Validate the field
+                validation = self._validate_field(field_name, processed_value)
+                
+                fields[field_name] = ParsedField(
+                    field_name=field_name,
+                    value=processed_value,
+                    confidence=result.confidence * result.matched_box.confidence,
+                    source_roi_ids=[],
+                    validation_status=validation,
+                    raw_value=text_value,
+                )
+        
+        return fields
+    
+    def parse_with_mask_regions(
+        self,
+        mask_regions: List[MaskRegion],
+        ocr_boxes: List[BoundingBox],
+        img_width: int,
+        img_height: int,
+    ) -> Dict[str, ParsedField]:
+        """
+        Parse fields using pre-extracted mask regions.
+        
+        Use this method when you already have MaskRegion objects
+        (e.g., from a custom mask extraction pipeline).
+        
+        Args:
+            mask_regions: Pre-extracted mask regions with class names
+            ocr_boxes: List of detected OCR text boxes
+            img_width: Image width in pixels
+            img_height: Image height in pixels
+            
+        Returns:
+            Dictionary of parsed fields
+        """
+        if self._center_matcher is None:
+            raise RuntimeError(
+                "Center matching not enabled. Initialize parser with "
+                "center_matching_config to use this method."
+            )
+        
+        fields = {}
+        
+        # Merge adjacent boxes
+        merged_boxes = self._center_matcher.merge_adjacent_boxes(
+            ocr_boxes, img_width, img_height
+        )
+        
+        # Match and convert
+        match_results = self._center_matcher.match_masks_to_boxes(
+            mask_regions,
+            merged_boxes,
+            img_width,
+            img_height
+        )
+        
+        for result in match_results:
+            if result.is_matched and result.matched_box:
+                field_name = result.mask_region.class_name
+                text_value = result.matched_box.label or ""
+                processed_value = self.postprocessor.process(text_value, field_name)
+                validation = self._validate_field(field_name, processed_value)
+                
+                fields[field_name] = ParsedField(
+                    field_name=field_name,
+                    value=processed_value,
+                    confidence=result.confidence * result.matched_box.confidence,
+                    source_roi_ids=[],
+                    validation_status=validation,
+                    raw_value=text_value,
+                )
+        
+        return fields
+
     def _combine_text(self, ocr_results: List[OCRResult]) -> str:
         """Combine all OCR results into single text."""
         return "\n".join(r.text for r in ocr_results if r.text)

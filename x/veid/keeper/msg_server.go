@@ -468,19 +468,57 @@ func (ms msgServer) UpdateDerivedFeatures(goCtx context.Context, msg *types.MsgU
 
 // CompleteBorderlineFallback handles completing a borderline fallback verification
 func (ms msgServer) CompleteBorderlineFallback(goCtx context.Context, msg *types.MsgCompleteBorderlineFallback) (*types.MsgCompleteBorderlineFallbackResponse, error) {
-	_ = sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	_, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
 
-	// TODO: Implement using borderline keeper methods
-	// The keeper.CompleteBorderlineFallback method needs to be defined
+	// Find the fallback record by challenge ID
+	fallbackRecord, found := ms.keeper.GetBorderlineFallbackByChallenge(ctx, msg.ChallengeID)
+	if !found {
+		return nil, types.ErrBorderlineFallbackNotFound.Wrapf("no fallback found for challenge %s", msg.ChallengeID)
+	}
+
+	// Verify the sender matches the account in the fallback record
+	if fallbackRecord.AccountAddress != msg.Sender {
+		return nil, types.ErrUnauthorized.Wrap("sender does not match fallback account")
+	}
+
+	// Handle the borderline fallback completion
+	err = ms.keeper.HandleBorderlineFallbackCompleted(
+		ctx,
+		msg.Sender,
+		msg.ChallengeID,
+		msg.FactorsSatisfied,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve the updated fallback record for response
+	updatedFallback, _ := ms.keeper.GetBorderlineFallbackRecord(ctx, fallbackRecord.FallbackID)
+
+	// Determine factor class from satisfied factors
+	factorClass := ms.keeper.DetermineFactorClass(msg.FactorsSatisfied)
+
+	// Emit completion event (using SDK event since typed events not available)
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			types.EventTypeBorderlineFallbackCompleted,
+			sdk.NewAttribute(types.AttributeKeyAccountAddress, msg.Sender),
+			sdk.NewAttribute(types.AttributeKeyFallbackID, fallbackRecord.FallbackID),
+			sdk.NewAttribute(types.AttributeKeyChallengeID, msg.ChallengeID),
+			sdk.NewAttribute(types.AttributeKeyFactorClass, factorClass),
+			sdk.NewAttribute(types.AttributeKeyFinalStatus, string(types.VerificationStatusVerified)),
+		),
+	)
+
 	return &types.MsgCompleteBorderlineFallbackResponse{
-		FallbackID:  "",
-		FinalStatus: types.VerificationStatusPending,
-		FactorClass: "",
+		FallbackID:  updatedFallback.FallbackID,
+		FinalStatus: updatedFallback.FinalVerificationStatus,
+		FactorClass: factorClass,
 	}, nil
 }
 

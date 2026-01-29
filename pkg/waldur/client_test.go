@@ -67,7 +67,7 @@ func TestNewClient(t *testing.T) {
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	
+
 	if cfg.Timeout == 0 {
 		t.Error("DefaultConfig() timeout should not be zero")
 	}
@@ -545,7 +545,7 @@ func TestMarketplaceClient_WaitForOrderCompletion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		state := "executing"
 		if attempts >= 3 {
 			state = "done"

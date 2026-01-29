@@ -1,0 +1,528 @@
+syntax = "proto3";
+package virtengine.veid.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/veid/v1";
+
+// =============================================================================
+// Compliance Status Enum
+// =============================================================================
+
+// ComplianceStatus represents the compliance state of an identity
+enum ComplianceStatus {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // COMPLIANCE_STATUS_UNKNOWN indicates no compliance check has been performed
+  COMPLIANCE_STATUS_UNKNOWN = 0 [(gogoproto.enumvalue_customname) = "ComplianceStatusUnknown"];
+  
+  // COMPLIANCE_STATUS_PENDING indicates compliance check is in progress
+  COMPLIANCE_STATUS_PENDING = 1 [(gogoproto.enumvalue_customname) = "ComplianceStatusPending"];
+  
+  // COMPLIANCE_STATUS_CLEARED indicates identity passed all compliance checks
+  COMPLIANCE_STATUS_CLEARED = 2 [(gogoproto.enumvalue_customname) = "ComplianceStatusCleared"];
+  
+  // COMPLIANCE_STATUS_FLAGGED indicates identity has been flagged for review
+  COMPLIANCE_STATUS_FLAGGED = 3 [(gogoproto.enumvalue_customname) = "ComplianceStatusFlagged"];
+  
+  // COMPLIANCE_STATUS_BLOCKED indicates identity is blocked from transactions
+  COMPLIANCE_STATUS_BLOCKED = 4 [(gogoproto.enumvalue_customname) = "ComplianceStatusBlocked"];
+  
+  // COMPLIANCE_STATUS_EXPIRED indicates compliance check has expired
+  COMPLIANCE_STATUS_EXPIRED = 5 [(gogoproto.enumvalue_customname) = "ComplianceStatusExpired"];
+}
+
+// =============================================================================
+// Compliance Check Type Enum
+// =============================================================================
+
+// ComplianceCheckType defines what type of compliance check
+enum ComplianceCheckType {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // COMPLIANCE_CHECK_SANCTION_LIST checks against global sanction lists
+  COMPLIANCE_CHECK_SANCTION_LIST = 0 [(gogoproto.enumvalue_customname) = "ComplianceCheckSanctionList"];
+  
+  // COMPLIANCE_CHECK_PEP checks for Politically Exposed Person status
+  COMPLIANCE_CHECK_PEP = 1 [(gogoproto.enumvalue_customname) = "ComplianceCheckPEP"];
+  
+  // COMPLIANCE_CHECK_ADVERSE_MEDIA checks for negative news coverage
+  COMPLIANCE_CHECK_ADVERSE_MEDIA = 2 [(gogoproto.enumvalue_customname) = "ComplianceCheckAdverseMedia"];
+  
+  // COMPLIANCE_CHECK_GEOGRAPHIC checks geographic restrictions
+  COMPLIANCE_CHECK_GEOGRAPHIC = 3 [(gogoproto.enumvalue_customname) = "ComplianceCheckGeographic"];
+  
+  // COMPLIANCE_CHECK_WATCHLIST checks against custom watchlists
+  COMPLIANCE_CHECK_WATCHLIST = 4 [(gogoproto.enumvalue_customname) = "ComplianceCheckWatchlist"];
+  
+  // COMPLIANCE_CHECK_DOCUMENT_VERIFICATION verifies identity documents
+  COMPLIANCE_CHECK_DOCUMENT_VERIFICATION = 5 [(gogoproto.enumvalue_customname) = "ComplianceCheckDocumentVerification"];
+  
+  // COMPLIANCE_CHECK_AML_RISK assesses anti-money laundering risk
+  COMPLIANCE_CHECK_AML_RISK = 6 [(gogoproto.enumvalue_customname) = "ComplianceCheckAMLRisk"];
+}
+
+// =============================================================================
+// Compliance Check Result
+// =============================================================================
+
+// ComplianceCheckResult stores result of a single compliance check
+message ComplianceCheckResult {
+  option (gogoproto.equal) = true;
+
+  // CheckType indicates what kind of check was performed
+  ComplianceCheckType check_type = 1 [
+    (gogoproto.jsontag) = "check_type",
+    (gogoproto.moretags) = "yaml:\"check_type\""
+  ];
+
+  // Passed indicates whether the check passed
+  bool passed = 2 [
+    (gogoproto.jsontag) = "passed",
+    (gogoproto.moretags) = "yaml:\"passed\""
+  ];
+
+  // Details provides additional context about the check result
+  string details = 3 [
+    (gogoproto.jsontag) = "details",
+    (gogoproto.moretags) = "yaml:\"details\""
+  ];
+
+  // MatchScore indicates confidence of any matches found (0-100)
+  int32 match_score = 4 [
+    (gogoproto.jsontag) = "match_score",
+    (gogoproto.moretags) = "yaml:\"match_score\""
+  ];
+
+  // CheckedAt is the Unix timestamp when the check was performed
+  int64 checked_at = 5 [
+    (gogoproto.jsontag) = "checked_at",
+    (gogoproto.moretags) = "yaml:\"checked_at\""
+  ];
+
+  // ProviderID identifies the compliance provider that performed the check
+  string provider_id = 6 [
+    (gogoproto.jsontag) = "provider_id",
+    (gogoproto.moretags) = "yaml:\"provider_id\""
+  ];
+
+  // ReferenceID is the provider's reference for this check
+  string reference_id = 7 [
+    (gogoproto.jsontag) = "reference_id",
+    (gogoproto.moretags) = "yaml:\"reference_id\""
+  ];
+}
+
+// =============================================================================
+// Compliance Attestation
+// =============================================================================
+
+// ComplianceAttestation is a validator attestation of compliance status
+message ComplianceAttestation {
+  option (gogoproto.equal) = true;
+
+  // ValidatorAddress is the address of the attesting validator
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // AttestedAt is the Unix timestamp when attestation was made
+  int64 attested_at = 2 [
+    (gogoproto.jsontag) = "attested_at",
+    (gogoproto.moretags) = "yaml:\"attested_at\""
+  ];
+
+  // ExpiresAt is the Unix timestamp when this attestation expires
+  int64 expires_at = 3 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  // AttestationType describes what is being attested
+  string attestation_type = 4 [
+    (gogoproto.jsontag) = "attestation_type",
+    (gogoproto.moretags) = "yaml:\"attestation_type\""
+  ];
+
+  // AttestationHash is a hash of the attestation data for verification
+  string attestation_hash = 5 [
+    (gogoproto.jsontag) = "attestation_hash",
+    (gogoproto.moretags) = "yaml:\"attestation_hash\""
+  ];
+}
+
+// =============================================================================
+// Compliance Record
+// =============================================================================
+
+// ComplianceRecord stores the complete compliance status for an identity
+message ComplianceRecord {
+  option (gogoproto.equal) = true;
+
+  // AccountAddress is the blockchain address of the identity
+  string account_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "account_address",
+    (gogoproto.moretags) = "yaml:\"account_address\""
+  ];
+
+  // Status is the overall compliance status
+  ComplianceStatus status = 2 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // CheckResults contains results of individual compliance checks
+  repeated ComplianceCheckResult check_results = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "check_results",
+    (gogoproto.moretags) = "yaml:\"check_results\""
+  ];
+
+  // LastCheckedAt is the Unix timestamp of the last compliance check
+  int64 last_checked_at = 4 [
+    (gogoproto.jsontag) = "last_checked_at",
+    (gogoproto.moretags) = "yaml:\"last_checked_at\""
+  ];
+
+  // ExpiresAt is the Unix timestamp when the compliance record expires
+  int64 expires_at = 5 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+
+  // RiskScore is the overall risk score (0-100, lower is better)
+  int32 risk_score = 6 [
+    (gogoproto.jsontag) = "risk_score",
+    (gogoproto.moretags) = "yaml:\"risk_score\""
+  ];
+
+  // RestrictedRegions lists regions where this identity is restricted
+  repeated string restricted_regions = 7 [
+    (gogoproto.jsontag) = "restricted_regions",
+    (gogoproto.moretags) = "yaml:\"restricted_regions\""
+  ];
+
+  // Attestations contains validator attestations of compliance
+  repeated ComplianceAttestation attestations = 8 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "attestations",
+    (gogoproto.moretags) = "yaml:\"attestations\""
+  ];
+
+  // CreatedAt is when this record was first created
+  int64 created_at = 9 [
+    (gogoproto.jsontag) = "created_at",
+    (gogoproto.moretags) = "yaml:\"created_at\""
+  ];
+
+  // UpdatedAt is when this record was last updated
+  int64 updated_at = 10 [
+    (gogoproto.jsontag) = "updated_at",
+    (gogoproto.moretags) = "yaml:\"updated_at\""
+  ];
+
+  // Notes contains any additional notes about the compliance status
+  string notes = 11 [
+    (gogoproto.jsontag) = "notes",
+    (gogoproto.moretags) = "yaml:\"notes\""
+  ];
+}
+
+// =============================================================================
+// Compliance Parameters
+// =============================================================================
+
+// ComplianceParams configures the compliance module behavior
+message ComplianceParams {
+  option (gogoproto.equal) = true;
+
+  // RequireSanctionCheck indicates if sanction list check is mandatory
+  bool require_sanction_check = 1 [
+    (gogoproto.jsontag) = "require_sanction_check",
+    (gogoproto.moretags) = "yaml:\"require_sanction_check\""
+  ];
+
+  // RequirePEPCheck indicates if PEP check is mandatory
+  bool require_pep_check = 2 [
+    (gogoproto.jsontag) = "require_pep_check",
+    (gogoproto.moretags) = "yaml:\"require_pep_check\""
+  ];
+
+  // CheckExpiryBlocks is how long compliance checks remain valid
+  int64 check_expiry_blocks = 3 [
+    (gogoproto.jsontag) = "check_expiry_blocks",
+    (gogoproto.moretags) = "yaml:\"check_expiry_blocks\""
+  ];
+
+  // RiskScoreThreshold is the maximum allowed risk score (0-100)
+  int32 risk_score_threshold = 4 [
+    (gogoproto.jsontag) = "risk_score_threshold",
+    (gogoproto.moretags) = "yaml:\"risk_score_threshold\""
+  ];
+
+  // RestrictedCountries is list of ISO country codes that are restricted
+  repeated string restricted_countries = 5 [
+    (gogoproto.jsontag) = "restricted_countries",
+    (gogoproto.moretags) = "yaml:\"restricted_countries\""
+  ];
+
+  // MinAttestationsRequired is minimum validator attestations needed
+  int32 min_attestations_required = 6 [
+    (gogoproto.jsontag) = "min_attestations_required",
+    (gogoproto.moretags) = "yaml:\"min_attestations_required\""
+  ];
+
+  // EnableAutoExpiry enables automatic expiration of compliance records
+  bool enable_auto_expiry = 7 [
+    (gogoproto.jsontag) = "enable_auto_expiry",
+    (gogoproto.moretags) = "yaml:\"enable_auto_expiry\""
+  ];
+
+  // RequireDocumentVerification indicates if document verification is mandatory
+  bool require_document_verification = 8 [
+    (gogoproto.jsontag) = "require_document_verification",
+    (gogoproto.moretags) = "yaml:\"require_document_verification\""
+  ];
+}
+
+// =============================================================================
+// Compliance Provider
+// =============================================================================
+
+// ComplianceProvider represents an authorized external compliance provider
+message ComplianceProvider {
+  option (gogoproto.equal) = true;
+
+  // ProviderID is the unique identifier for this provider
+  string provider_id = 1 [
+    (gogoproto.jsontag) = "provider_id",
+    (gogoproto.moretags) = "yaml:\"provider_id\""
+  ];
+
+  // Name is the human-readable name of the provider
+  string name = 2 [
+    (gogoproto.jsontag) = "name",
+    (gogoproto.moretags) = "yaml:\"name\""
+  ];
+
+  // ProviderAddress is the blockchain address authorized to submit checks
+  string provider_address = 3 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "provider_address",
+    (gogoproto.moretags) = "yaml:\"provider_address\""
+  ];
+
+  // SupportedCheckTypes lists which check types this provider can perform
+  repeated ComplianceCheckType supported_check_types = 4 [
+    (gogoproto.jsontag) = "supported_check_types",
+    (gogoproto.moretags) = "yaml:\"supported_check_types\""
+  ];
+
+  // IsActive indicates if this provider is currently active
+  bool is_active = 5 [
+    (gogoproto.jsontag) = "is_active",
+    (gogoproto.moretags) = "yaml:\"is_active\""
+  ];
+
+  // RegisteredAt is when this provider was registered
+  int64 registered_at = 6 [
+    (gogoproto.jsontag) = "registered_at",
+    (gogoproto.moretags) = "yaml:\"registered_at\""
+  ];
+
+  // LastActiveAt is when this provider last submitted a check
+  int64 last_active_at = 7 [
+    (gogoproto.jsontag) = "last_active_at",
+    (gogoproto.moretags) = "yaml:\"last_active_at\""
+  ];
+}
+
+// =============================================================================
+// Compliance Messages
+// =============================================================================
+
+// MsgSubmitComplianceCheck submits external compliance check results
+message MsgSubmitComplianceCheck {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider_address";
+  option (amino.name) = "veid/MsgSubmitComplianceCheck";
+
+  // ProviderAddress is the address of the compliance provider
+  string provider_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "provider_address",
+    (gogoproto.moretags) = "yaml:\"provider_address\""
+  ];
+
+  // TargetAddress is the address being checked
+  string target_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "target_address",
+    (gogoproto.moretags) = "yaml:\"target_address\""
+  ];
+
+  // CheckResults contains the compliance check results
+  repeated ComplianceCheckResult check_results = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "check_results",
+    (gogoproto.moretags) = "yaml:\"check_results\""
+  ];
+
+  // ProviderID is the ID of the compliance provider
+  string provider_id = 4 [
+    (gogoproto.jsontag) = "provider_id",
+    (gogoproto.moretags) = "yaml:\"provider_id\""
+  ];
+}
+
+// MsgSubmitComplianceCheckResponse is the response for MsgSubmitComplianceCheck
+message MsgSubmitComplianceCheckResponse {
+  // Status is the updated compliance status
+  ComplianceStatus status = 1 [
+    (gogoproto.jsontag) = "status",
+    (gogoproto.moretags) = "yaml:\"status\""
+  ];
+
+  // RiskScore is the updated risk score
+  int32 risk_score = 2 [
+    (gogoproto.jsontag) = "risk_score",
+    (gogoproto.moretags) = "yaml:\"risk_score\""
+  ];
+}
+
+// MsgAttestCompliance allows validators to attest compliance status
+message MsgAttestCompliance {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "validator_address";
+  option (amino.name) = "veid/MsgAttestCompliance";
+
+  // ValidatorAddress is the address of the attesting validator
+  string validator_address = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "validator_address",
+    (gogoproto.moretags) = "yaml:\"validator_address\""
+  ];
+
+  // TargetAddress is the address being attested
+  string target_address = 2 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "target_address",
+    (gogoproto.moretags) = "yaml:\"target_address\""
+  ];
+
+  // AttestationType describes what is being attested
+  string attestation_type = 3 [
+    (gogoproto.jsontag) = "attestation_type",
+    (gogoproto.moretags) = "yaml:\"attestation_type\""
+  ];
+
+  // ExpiryBlocks is how long until this attestation expires (in blocks)
+  int64 expiry_blocks = 4 [
+    (gogoproto.jsontag) = "expiry_blocks",
+    (gogoproto.moretags) = "yaml:\"expiry_blocks\""
+  ];
+}
+
+// MsgAttestComplianceResponse is the response for MsgAttestCompliance
+message MsgAttestComplianceResponse {
+  // AttestedAt is the block height when attested
+  int64 attested_at = 1 [
+    (gogoproto.jsontag) = "attested_at",
+    (gogoproto.moretags) = "yaml:\"attested_at\""
+  ];
+
+  // ExpiresAt is when the attestation expires
+  int64 expires_at = 2 [
+    (gogoproto.jsontag) = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+}
+
+// MsgUpdateComplianceParams updates compliance configuration (gov only)
+message MsgUpdateComplianceParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgUpdateComplianceParams";
+
+  // Authority is the address that is authorized to update params (x/gov)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Params are the new compliance parameters
+  ComplianceParams params = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+}
+
+// MsgUpdateComplianceParamsResponse is the response for MsgUpdateComplianceParams
+message MsgUpdateComplianceParamsResponse {}
+
+// MsgRegisterComplianceProvider registers a new compliance provider
+message MsgRegisterComplianceProvider {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgRegisterComplianceProvider";
+
+  // Authority is the address that is authorized to register providers (x/gov)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // Provider is the compliance provider to register
+  ComplianceProvider provider = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "provider",
+    (gogoproto.moretags) = "yaml:\"provider\""
+  ];
+}
+
+// MsgRegisterComplianceProviderResponse is the response for MsgRegisterComplianceProvider
+message MsgRegisterComplianceProviderResponse {
+  // ProviderID is the registered provider's ID
+  string provider_id = 1 [
+    (gogoproto.jsontag) = "provider_id",
+    (gogoproto.moretags) = "yaml:\"provider_id\""
+  ];
+}
+
+// MsgDeactivateComplianceProvider deactivates a compliance provider
+message MsgDeactivateComplianceProvider {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "veid/MsgDeactivateComplianceProvider";
+
+  // Authority is the address that is authorized to deactivate providers (x/gov)
+  string authority = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "authority",
+    (gogoproto.moretags) = "yaml:\"authority\""
+  ];
+
+  // ProviderID is the ID of the provider to deactivate
+  string provider_id = 2 [
+    (gogoproto.jsontag) = "provider_id",
+    (gogoproto.moretags) = "yaml:\"provider_id\""
+  ];
+
+  // Reason is the reason for deactivation
+  string reason = 3 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+}
+
+// MsgDeactivateComplianceProviderResponse is the response for MsgDeactivateComplianceProvider
+message MsgDeactivateComplianceProviderResponse {}

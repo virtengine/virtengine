@@ -75,6 +75,7 @@ import (
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	fraudtypes "github.com/virtengine/virtengine/x/fraud/types"
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
@@ -288,6 +289,7 @@ func orderBeginBlockers(_ []string) []string {
 		providertypes.ModuleName,
 		certtypes.ModuleName,
 		markettypes.ModuleName,
+		marketplacetypes.ModuleName,
 		audittypes.ModuleName,
 		genutiltypes.ModuleName,
 		vestingtypes.ModuleName,
@@ -334,6 +336,7 @@ func OrderEndBlockers(_ []string) []string {
 		providertypes.ModuleName,
 		certtypes.ModuleName,
 		markettypes.ModuleName,
+		marketplacetypes.ModuleName,
 		audittypes.ModuleName,
 		genutiltypes.ModuleName,
 		vestingtypes.ModuleName,

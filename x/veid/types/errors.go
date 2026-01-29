@@ -435,4 +435,180 @@ var (
 
 	// ErrCountryNotAllowed is returned when phone country is not allowed
 	ErrCountryNotAllowed = errorsmod.Register(ModuleName, 1129, "phone number country not allowed")
+
+	// ============================================================================
+	// Delegation Errors (VE-3024)
+	// ============================================================================
+
+	// ErrInvalidDelegation is returned when a delegation is malformed or invalid
+	ErrInvalidDelegation = errorsmod.Register(ModuleName, 1140, "invalid delegation")
+
+	// ErrDelegationNotFound is returned when a delegation is not found
+	ErrDelegationNotFound = errorsmod.Register(ModuleName, 1141, "delegation not found")
+
+	// ErrDelegationExpired is returned when a delegation has expired
+	ErrDelegationExpired = errorsmod.Register(ModuleName, 1142, "delegation has expired")
+
+	// ErrDelegationRevoked is returned when a delegation has been revoked
+	ErrDelegationRevoked = errorsmod.Register(ModuleName, 1143, "delegation has been revoked")
+
+	// ErrDelegationExhausted is returned when a delegation has no uses remaining
+	ErrDelegationExhausted = errorsmod.Register(ModuleName, 1144, "delegation has no uses remaining")
+
+	// ErrDelegationAlreadyRevoked is returned when trying to revoke an already revoked delegation
+	ErrDelegationAlreadyRevoked = errorsmod.Register(ModuleName, 1145, "delegation already revoked")
+
+	// ErrDelegationPermissionDenied is returned when delegation lacks required permission
+	ErrDelegationPermissionDenied = errorsmod.Register(ModuleName, 1146, "delegation does not grant required permission")
+
+	// ErrDelegationUnauthorized is returned when operation is not authorized for delegation
+	ErrDelegationUnauthorized = errorsmod.Register(ModuleName, 1147, "unauthorized delegation operation")
+
+	// ErrDelegationAlreadyExists is returned when trying to create a duplicate delegation
+	ErrDelegationAlreadyExists = errorsmod.Register(ModuleName, 1148, "delegation already exists")
+
+	// ============================================================================
+	// Verifiable Credential Errors (VE-3025)
+	// ============================================================================
+
+	// ErrInvalidCredential is returned when a verifiable credential is malformed or invalid
+	ErrInvalidCredential = errorsmod.Register(ModuleName, 1150, "invalid verifiable credential")
+
+	// ErrCredentialNotFound is returned when a credential is not found
+	ErrCredentialNotFound = errorsmod.Register(ModuleName, 1151, "credential not found")
+
+	// ErrCredentialExpired is returned when a credential has expired
+	ErrCredentialExpired = errorsmod.Register(ModuleName, 1152, "credential has expired")
+
+	// ErrCredentialRevoked is returned when a credential has been revoked
+	ErrCredentialRevoked = errorsmod.Register(ModuleName, 1153, "credential has been revoked")
+
+	// ErrCredentialAlreadyRevoked is returned when trying to revoke an already revoked credential
+	ErrCredentialAlreadyRevoked = errorsmod.Register(ModuleName, 1154, "credential already revoked")
+
+	// ErrInvalidProof is returned when a credential proof is invalid
+	ErrInvalidProof = errorsmod.Register(ModuleName, 1155, "invalid credential proof")
+
+	// ErrProofVerificationFailed is returned when proof verification fails
+	ErrProofVerificationFailed = errorsmod.Register(ModuleName, 1156, "proof verification failed")
+
+	// ErrCredentialUnauthorized is returned when operation is not authorized for credential
+	ErrCredentialUnauthorized = errorsmod.Register(ModuleName, 1157, "unauthorized credential operation")
+
+	// ErrCredentialAlreadyExists is returned when trying to create a duplicate credential
+	ErrCredentialAlreadyExists = errorsmod.Register(ModuleName, 1158, "credential already exists")
+
+	// ErrInvalidIssuer is returned when the credential issuer is invalid or unauthorized
+	ErrInvalidIssuer = errorsmod.Register(ModuleName, 1159, "invalid or unauthorized issuer")
+
+	// ============================================================================
+	// Privacy-Preserving Proof Errors (VE-3029)
+	// Error codes: 1170-1189
+	// ============================================================================
+
+	// ErrInvalidProofRequest is returned when a proof request is malformed or invalid
+	ErrInvalidProofRequest = errorsmod.Register(ModuleName, 1170, "invalid proof request")
+
+	// ErrProofRequestNotFound is returned when a proof request is not found
+	ErrProofRequestNotFound = errorsmod.Register(ModuleName, 1171, "proof request not found")
+
+	// ErrProofRequestExpired is returned when a proof request has expired
+	ErrProofRequestExpired = errorsmod.Register(ModuleName, 1172, "proof request has expired")
+
+	// ErrProofNotFound is returned when a proof is not found
+	ErrProofNotFound = errorsmod.Register(ModuleName, 1173, "proof not found")
+
+	// ErrProofExpired is returned when a proof has expired
+	ErrProofExpired = errorsmod.Register(ModuleName, 1174, "proof has expired")
+
+	// ErrInvalidClaimType is returned when a claim type is invalid
+	ErrInvalidClaimType = errorsmod.Register(ModuleName, 1175, "invalid claim type")
+
+	// ErrClaimNotAvailable is returned when a requested claim is not available for the subject
+	ErrClaimNotAvailable = errorsmod.Register(ModuleName, 1176, "claim not available for subject")
+
+	// ErrInvalidProofScheme is returned when a proof scheme is invalid or unsupported
+	ErrInvalidProofScheme = errorsmod.Register(ModuleName, 1177, "invalid or unsupported proof scheme")
+
+	// ErrProofGenerationFailed is returned when proof generation fails
+	ErrProofGenerationFailed = errorsmod.Register(ModuleName, 1178, "proof generation failed")
+
+	// ErrInvalidNonce is returned when a nonce is invalid or already used
+	ErrInvalidNonce = errorsmod.Register(ModuleName, 1179, "invalid or reused nonce")
+
+	// ErrCommitmentMismatch is returned when commitment verification fails
+	ErrCommitmentMismatch = errorsmod.Register(ModuleName, 1180, "commitment mismatch")
+
+	// ErrInsufficientVerificationLevel is returned when subject lacks required verification
+	ErrInsufficientVerificationLevel = errorsmod.Register(ModuleName, 1181, "insufficient verification level for claim")
+
+	// ============================================================================
+	// Biometric Hash Errors (VE-3030)
+	// Error codes: 1190-1199
+	// ============================================================================
+
+	// ErrInvalidBiometricTemplate is returned when a biometric template is invalid
+	ErrInvalidBiometricTemplate = errorsmod.Register(ModuleName, 1190, "invalid biometric template")
+
+	// ErrBiometricHashFailed is returned when biometric hashing fails
+	ErrBiometricHashFailed = errorsmod.Register(ModuleName, 1191, "biometric hash operation failed")
+
+	// ErrBiometricHashNotFound is returned when a biometric hash is not found
+	ErrBiometricHashNotFound = errorsmod.Register(ModuleName, 1192, "biometric hash not found")
+
+	// ErrBiometricMatchFailed is returned when biometric matching fails
+	ErrBiometricMatchFailed = errorsmod.Register(ModuleName, 1193, "biometric match operation failed")
+
+	// ErrBiometricVersionMismatch is returned when biometric hash versions are incompatible
+	ErrBiometricVersionMismatch = errorsmod.Register(ModuleName, 1194, "biometric hash version mismatch")
+
+	// ============================================================================
+	// Geographic Restriction Errors (VE-3032)
+	// Error codes: 1200-1219
+	// ============================================================================
+
+	// ErrGeoRestrictionInvalid is returned when a geographic restriction is invalid
+	ErrGeoRestrictionInvalid = errorsmod.Register(ModuleName, 1200, "invalid geographic restriction")
+
+	// ErrGeoPolicyNotFound is returned when a geo restriction policy is not found
+	ErrGeoPolicyNotFound = errorsmod.Register(ModuleName, 1201, "geo restriction policy not found")
+
+	// ErrGeoPolicyAlreadyExists is returned when a geo restriction policy already exists
+	ErrGeoPolicyAlreadyExists = errorsmod.Register(ModuleName, 1202, "geo restriction policy already exists")
+
+	// ErrGeoCheckFailed is returned when a geographic compliance check fails
+	ErrGeoCheckFailed = errorsmod.Register(ModuleName, 1203, "geographic compliance check failed")
+
+	// ErrGeoLocationBlocked is returned when a location is blocked by policy
+	ErrGeoLocationBlocked = errorsmod.Register(ModuleName, 1204, "location blocked by geo restriction policy")
+
+	// ErrGeoIPMismatch is returned when IP geolocation doesn't match document country
+	ErrGeoIPMismatch = errorsmod.Register(ModuleName, 1205, "IP geolocation mismatch with document country")
+
+	// ErrGeoCountryBlocked is returned when a specific country is blocked
+	ErrGeoCountryBlocked = errorsmod.Register(ModuleName, 1206, "country is blocked by geo restriction policy")
+
+	// ErrGeoRegionBlocked is returned when a specific region is blocked
+	ErrGeoRegionBlocked = errorsmod.Register(ModuleName, 1207, "region is blocked by geo restriction policy")
+
+	// ErrGeoRestrictionDisabled is returned when geo restriction system is disabled
+	ErrGeoRestrictionDisabled = errorsmod.Register(ModuleName, 1208, "geographic restriction system is disabled")
+
+	// ErrMaxGeoPoliciesExceeded is returned when max policies limit is exceeded
+	ErrMaxGeoPoliciesExceeded = errorsmod.Register(ModuleName, 1209, "maximum geo restriction policies exceeded")
+
+	// ErrGeoPolicyInactive is returned when trying to use an inactive policy
+	ErrGeoPolicyInactive = errorsmod.Register(ModuleName, 1210, "geo restriction policy is not active")
+
+	// ErrInvalidCountryCode is returned when an ISO 3166 country code is invalid
+	ErrInvalidCountryCode = errorsmod.Register(ModuleName, 1211, "invalid ISO 3166-1 alpha-2 country code")
+
+	// ErrInvalidRegionCode is returned when an ISO 3166-2 region code is invalid
+	ErrInvalidRegionCode = errorsmod.Register(ModuleName, 1212, "invalid ISO 3166-2 region code")
+
+	// ErrGeoLocationNotFound is returned when geo location data is not found for user
+	ErrGeoLocationNotFound = errorsmod.Register(ModuleName, 1213, "geographic location not found for user")
+
+	// ErrGeoParamsInvalid is returned when geo restriction parameters are invalid
+	ErrGeoParamsInvalid = errorsmod.Register(ModuleName, 1214, "invalid geo restriction parameters")
 )

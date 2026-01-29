@@ -44,6 +44,7 @@ import (
 	"github.com/virtengine/virtengine/x/fraud"
 	"github.com/virtengine/virtengine/x/hpc"
 	"github.com/virtengine/virtengine/x/market"
+	"github.com/virtengine/virtengine/x/marketplace"
 	"github.com/virtengine/virtengine/x/mfa"
 	"github.com/virtengine/virtengine/x/provider"
 	"github.com/virtengine/virtengine/x/review"
@@ -187,6 +188,10 @@ func appModules(
 			app.Keepers.Cosmos.Acct,
 			app.Keepers.Cosmos.Authz,
 			app.Keepers.Cosmos.Bank,
+		),
+		marketplace.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.Marketplace,
 		),
 		provider.NewAppModule(
 			app.cdc,
@@ -373,6 +378,10 @@ func appSimModules(
 			app.Keepers.Cosmos.Acct,
 			app.Keepers.Cosmos.Authz,
 			app.Keepers.Cosmos.Bank,
+		),
+		marketplace.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.Marketplace,
 		),
 
 		provider.NewAppModule(

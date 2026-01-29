@@ -423,8 +423,8 @@ func TestSNPTCBVersion_ToUint64(t *testing.T) {
 	assert.NotEqual(t, uint64(0), uint64Val)
 
 	// Verify individual byte positions
-	assert.Equal(t, uint8(2), uint8(uint64Val&0xFF))       // BootLoader at byte 0
-	assert.Equal(t, uint8(0), uint8((uint64Val>>8)&0xFF))  // TEE at byte 1
+	assert.Equal(t, uint8(2), uint8(uint64Val&0xFF))      // BootLoader at byte 0
+	assert.Equal(t, uint8(0), uint8((uint64Val>>8)&0xFF)) // TEE at byte 1
 }
 
 func TestSNPLaunchDigest_String(t *testing.T) {

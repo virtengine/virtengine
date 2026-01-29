@@ -9,7 +9,7 @@ import (
 )
 
 // ModuleName is the module name
-const ModuleName = "marketplace"
+const ModuleName = "mktplace"
 
 // StoreKey is the store key
 const StoreKey = ModuleName

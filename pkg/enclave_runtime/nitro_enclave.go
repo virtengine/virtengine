@@ -305,6 +305,10 @@ type NitroEnclaveServiceImpl struct {
 	// Configuration
 	config        NitroEnclaveConfig
 	runtimeConfig RuntimeConfig
+	hardwareMode  HardwareMode
+
+	// Hardware backend (nil if using simulation)
+	hardwareBackend *NitroHardwareBackend
 
 	// State
 	initialized  bool
@@ -335,6 +339,11 @@ var _ EnclaveService = (*NitroEnclaveServiceImpl)(nil)
 // This is a POC implementation that simulates Nitro Enclave operations.
 // For production use, this must be replaced with actual nitro-cli and NSM calls.
 func NewNitroEnclaveServiceImpl(config NitroEnclaveConfig) (*NitroEnclaveServiceImpl, error) {
+	return NewNitroEnclaveServiceImplWithMode(config, HardwareModeAuto)
+}
+
+// NewNitroEnclaveServiceImplWithMode creates a new Nitro enclave service with explicit hardware mode
+func NewNitroEnclaveServiceImplWithMode(config NitroEnclaveConfig, mode HardwareMode) (*NitroEnclaveServiceImpl, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
@@ -345,11 +354,35 @@ func NewNitroEnclaveServiceImpl(config NitroEnclaveConfig) (*NitroEnclaveService
 		fmt.Println("WARNING: Nitro enclave debug mode enabled - NOT SECURE FOR PRODUCTION")
 	}
 
-	return &NitroEnclaveServiceImpl{
+	svc := &NitroEnclaveServiceImpl{
 		config:       config,
 		currentEpoch: 1,
 		enclaveState: NitroEnclaveStateStopped,
-	}, nil
+		hardwareMode: mode,
+	}
+
+	// Initialize hardware backend based on mode
+	if mode != HardwareModeSimulate {
+		backend := NewNitroHardwareBackend()
+		if backend.IsAvailable() {
+			if err := backend.Initialize(); err == nil {
+				svc.hardwareBackend = backend
+				fmt.Println("INFO: Nitro hardware backend initialized successfully")
+			} else if mode == HardwareModeRequire {
+				return nil, fmt.Errorf("Nitro hardware required but initialization failed: %w", err)
+			} else {
+				fmt.Printf("INFO: Nitro hardware initialization failed, using simulation: %v\n", err)
+			}
+		} else if mode == HardwareModeRequire {
+			return nil, fmt.Errorf("%w: Nitro hardware required but not available", ErrHardwareNotAvailable)
+		} else {
+			fmt.Println("INFO: Nitro hardware not available, using simulation mode")
+		}
+	} else {
+		fmt.Println("INFO: Nitro running in forced simulation mode")
+	}
+
+	return svc, nil
 }
 
 // =============================================================================
@@ -492,6 +525,17 @@ func (n *NitroEnclaveServiceImpl) GenerateAttestation(reportData []byte) ([]byte
 		return nil, errors.New("report data too large")
 	}
 
+	// Use hardware backend if available
+	if n.hardwareBackend != nil {
+		attestation, err := n.hardwareBackend.GetAttestation(reportData)
+		if err != nil {
+			n.lastError = fmt.Sprintf("hardware attestation failed: %v", err)
+			// Fall back to simulation
+		} else {
+			return attestation, nil
+		}
+	}
+
 	// TODO: Real Nitro implementation would:
 	// 1. Open /dev/nsm (Nitro Security Module)
 	// 2. Send GetAttestation request with user_data and public_key
@@ -594,6 +638,45 @@ func (n *NitroEnclaveServiceImpl) GetPlatformType() PlatformType {
 // IsPlatformSecure returns true (Nitro is secure when not in debug mode)
 func (n *NitroEnclaveServiceImpl) IsPlatformSecure() bool {
 	return !n.config.DebugMode
+}
+
+// IsHardwareEnabled returns true if real Nitro hardware is being used
+func (n *NitroEnclaveServiceImpl) IsHardwareEnabled() bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.hardwareBackend != nil
+}
+
+// GetHardwareMode returns the configured hardware mode
+func (n *NitroEnclaveServiceImpl) GetHardwareMode() HardwareMode {
+	return n.hardwareMode
+}
+
+// LaunchEnclave launches a Nitro enclave using the hardware backend
+func (n *NitroEnclaveServiceImpl) LaunchEnclave(ctx context.Context) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.hardwareBackend != nil {
+		config := NitroHWEnclaveConfig{
+			EIFPath:   n.config.EnclaveImagePath,
+			CPUCount:  n.config.CPUCount,
+			MemoryMB:  int64(n.config.MemoryMB),
+			DebugMode: n.config.DebugMode,
+			VsockPort: n.config.VsockPort,
+		}
+		_, err := n.hardwareBackend.RunAndConnect(ctx, config)
+		if err != nil {
+			n.lastError = fmt.Sprintf("hardware enclave launch failed: %v", err)
+			return err
+		}
+		enclaveID, _ := n.hardwareBackend.GetEnclaveInfo()
+		n.enclaveID = enclaveID
+		return nil
+	}
+
+	// Simulated launch
+	return n.simulateEnclaveStart()
 }
 
 // GetEnclaveID returns the enclave instance ID

@@ -59,6 +59,11 @@ type MsgServer interface {
 	// Borderline fallback operations
 	CompleteBorderlineFallback(ctx context.Context, msg *MsgCompleteBorderlineFallback) (*MsgCompleteBorderlineFallbackResponse, error)
 	UpdateBorderlineParams(ctx context.Context, msg *MsgUpdateBorderlineParams) (*MsgUpdateBorderlineParamsResponse, error)
+	// Appeal operations (VE-3020)
+	SubmitAppeal(ctx context.Context, msg *MsgSubmitAppeal) (*MsgSubmitAppealResponse, error)
+	ClaimAppeal(ctx context.Context, msg *MsgClaimAppeal) (*MsgClaimAppealResponse, error)
+	ResolveAppeal(ctx context.Context, msg *MsgResolveAppeal) (*MsgResolveAppealResponse, error)
+	WithdrawAppeal(ctx context.Context, msg *MsgWithdrawAppeal) (*MsgWithdrawAppealResponse, error)
 }
 
 // RegisterMsgServer registers the MsgServer implementation with the grpc.Server.
@@ -84,6 +89,11 @@ var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "UpdateDerivedFeatures", Handler: _Msg_UpdateDerivedFeatures_Handler},
 		{MethodName: "CompleteBorderlineFallback", Handler: _Msg_CompleteBorderlineFallback_Handler},
 		{MethodName: "UpdateBorderlineParams", Handler: _Msg_UpdateBorderlineParams_Handler},
+		// Appeal operations (VE-3020)
+		{MethodName: "SubmitAppeal", Handler: _Msg_SubmitAppeal_Handler},
+		{MethodName: "ClaimAppeal", Handler: _Msg_ClaimAppeal_Handler},
+		{MethodName: "ResolveAppeal", Handler: _Msg_ResolveAppeal_Handler},
+		{MethodName: "WithdrawAppeal", Handler: _Msg_WithdrawAppeal_Handler},
 	},
 	Streams:  []ggrpc.StreamDesc{},
 	Metadata: "virtengine/veid/v1/msg.proto",
@@ -271,6 +281,66 @@ func _Msg_UpdateBorderlineParams_Handler(srv interface{}, ctx context.Context, d
 	})
 }
 
+// ============================================================================
+// Appeal Message Handlers (VE-3020)
+// ============================================================================
+
+func _Msg_SubmitAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgSubmitAppeal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).SubmitAppeal(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/SubmitAppeal"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).SubmitAppeal(ctx, req.(*MsgSubmitAppeal))
+	})
+}
+
+func _Msg_ClaimAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgClaimAppeal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ClaimAppeal(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/ClaimAppeal"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ClaimAppeal(ctx, req.(*MsgClaimAppeal))
+	})
+}
+
+func _Msg_ResolveAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgResolveAppeal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ResolveAppeal(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/ResolveAppeal"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ResolveAppeal(ctx, req.(*MsgResolveAppeal))
+	})
+}
+
+func _Msg_WithdrawAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgWithdrawAppeal)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).WithdrawAppeal(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/WithdrawAppeal"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).WithdrawAppeal(ctx, req.(*MsgWithdrawAppeal))
+	})
+}
+
 // QueryServer is the interface for the query server
 type QueryServer interface {
 	IdentityRecord(ctx context.Context, req *QueryIdentityRecordRequest) (*QueryIdentityRecordResponse, error)
@@ -285,6 +355,11 @@ type QueryServer interface {
 	ConsentSettings(ctx context.Context, req *QueryConsentSettingsRequest) (*QueryConsentSettingsResponse, error)
 	DerivedFeatures(ctx context.Context, req *QueryDerivedFeaturesRequest) (*QueryDerivedFeaturesResponse, error)
 	DerivedFeatureHashes(ctx context.Context, req *QueryDerivedFeatureHashesRequest) (*QueryDerivedFeatureHashesResponse, error)
+	// Appeal queries (VE-3020)
+	Appeal(ctx context.Context, req *QueryAppealRequest) (*QueryAppealResponse, error)
+	AppealsByAccount(ctx context.Context, req *QueryAppealsByAccountRequest) (*QueryAppealsByAccountResponse, error)
+	PendingAppeals(ctx context.Context, req *QueryPendingAppealsRequest) (*QueryPendingAppealsResponse, error)
+	AppealParams(ctx context.Context, req *QueryAppealParamsRequest) (*QueryAppealParamsResponse, error)
 }
 
 // _Query_serviceDesc is the grpc.ServiceDesc for Query service.
@@ -537,4 +612,49 @@ type QueryParamsRequest struct{}
 
 type QueryParamsResponse struct {
 	Params Params `json:"params"`
+}
+
+// ============================================================================
+// Appeal Query Types (VE-3020)
+// ============================================================================
+
+// QueryAppealRequest is the request for querying a specific appeal
+type QueryAppealRequest struct {
+	AppealID string `json:"appeal_id"`
+}
+
+// QueryAppealResponse is the response for querying a specific appeal
+type QueryAppealResponse struct {
+	Appeal *AppealRecord `json:"appeal,omitempty"`
+}
+
+// QueryAppealsByAccountRequest is the request for querying appeals by account
+type QueryAppealsByAccountRequest struct {
+	AccountAddress string `json:"account_address"`
+}
+
+// QueryAppealsByAccountResponse is the response for querying appeals by account
+type QueryAppealsByAccountResponse struct {
+	Appeals []*AppealRecord `json:"appeals"`
+	Summary *AppealSummary  `json:"summary,omitempty"`
+}
+
+// QueryPendingAppealsRequest is the request for querying pending appeals
+type QueryPendingAppealsRequest struct {
+	// Limit is the maximum number of results to return
+	Limit uint32 `json:"limit,omitempty"`
+}
+
+// QueryPendingAppealsResponse is the response for querying pending appeals
+type QueryPendingAppealsResponse struct {
+	Appeals []*AppealRecord `json:"appeals"`
+	Total   uint32          `json:"total"`
+}
+
+// QueryAppealParamsRequest is the request for querying appeal parameters
+type QueryAppealParamsRequest struct{}
+
+// QueryAppealParamsResponse is the response for querying appeal parameters
+type QueryAppealParamsResponse struct {
+	Params AppealParams `json:"params"`
 }

@@ -281,6 +281,21 @@ const (
 
 	// OfferingTypeValidator represents validator registration
 	OfferingTypeValidator OfferingType = "validator"
+
+	// OfferingTypeTEE represents TEE (Trusted Execution Environment) offerings
+	OfferingTypeTEE OfferingType = "tee"
+
+	// OfferingTypeHPC represents high-performance computing offerings
+	OfferingTypeHPC OfferingType = "hpc"
+
+	// OfferingTypeGPU represents GPU compute offerings
+	OfferingTypeGPU OfferingType = "gpu"
+
+	// OfferingTypeCompute represents general compute offerings
+	OfferingTypeCompute OfferingType = "compute"
+
+	// OfferingTypeStorage represents storage offerings
+	OfferingTypeStorage OfferingType = "storage"
 )
 
 // AllOfferingTypes returns all valid offering types
@@ -291,6 +306,11 @@ func AllOfferingTypes() []OfferingType {
 		OfferingTypePremium,
 		OfferingTypeProvider,
 		OfferingTypeValidator,
+		OfferingTypeTEE,
+		OfferingTypeHPC,
+		OfferingTypeGPU,
+		OfferingTypeCompute,
+		OfferingTypeStorage,
 	}
 }
 
