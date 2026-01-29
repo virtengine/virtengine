@@ -387,7 +387,13 @@ class FaceDetector:
         
         # Apply rotation
         h, w = image.shape[:2]
-        aligned = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_LINEAR)
+        aligned = cv2.warpAffine(
+            image,
+            M,
+            (w, h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REPLICATE,
+        )
         
         # Crop the aligned face
         return self.crop(aligned, detection, target_size)

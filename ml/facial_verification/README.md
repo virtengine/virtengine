@@ -49,6 +49,23 @@ print(f"Similarity: {result.similarity_score:.2%}")
 print(f"Reason codes: {result.reason_codes}")
 ```
 
+## Preprocessing Steps (Deterministic)
+
+The preprocessing pipeline is fixed-order and parameterized from `PreprocessingConfig`
+defaults unless overridden:
+
+1. **Resize + center pad** to `target_resolution=(224, 224)` while preserving aspect
+   ratio; pad with zeros to the exact target size.
+2. **Optional grayscale** conversion (`use_grayscale=False` by default), then converted
+   back to 3-channel BGR for model compatibility.
+3. **CLAHE** on luminance (LAB L channel) when enabled (`apply_clahe=True`), with
+   `clahe_clip_limit=2.0` and `clahe_tile_grid_size=(8, 8)`.
+4. **Noise reduction** (`noise_reduction=True`) using `bilateral` by default with
+   `bilateral_d=9`, `bilateral_sigma_color=75.0`, `bilateral_sigma_space=75.0`.
+   (If `gaussian`, uses `gaussian_kernel_size=(5, 5)`.)
+5. **Pixel normalization** (`pixel_normalization="minmax"` by default):
+   min-max scaling to [0, 1]. Other supported modes: `zscore` and `fixed` (ImageNet).
+
 ## Configuration
 
 ### Default Thresholds
@@ -175,6 +192,8 @@ controller.ensure_deterministic()
 3. **Deterministic Ops**: TensorFlow deterministic operations enabled
 4. **Model Hash**: Weights hash verified before verification
 5. **Result Hash**: SHA256 of canonical result for consensus
+6. **Alignment Determinism**: Landmark template alignment uses deterministic least-squares
+   (no RANSAC) when `use_deterministic_ops=True`.
 
 ## Testing
 
