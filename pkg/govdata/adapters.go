@@ -37,6 +37,46 @@ func createAdapter(config AdapterConfig) (DataSourceAdapter, error) {
 		return newTaxAuthorityAdapter(config), nil
 	case DataSourceImmigration:
 		return newImmigrationAdapter(config), nil
+	case DataSourceDVS:
+		// Australia Document Verification Service
+		dvsConfig, ok, err := loadDVSConfigFromEnv(config)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return NewDVSDMVAdapter(config, dvsConfig)
+		}
+		return newDMVAdapter(config), nil
+	case DataSourceGovUK:
+		// UK GOV.UK Verify
+		govUKConfig, ok, err := loadGovUKConfigFromEnv(config)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return NewGovUKAdapter(config, govUKConfig)
+		}
+		return newNationalRegistryAdapter(config), nil
+	case DataSourceEIDAS:
+		// EU eIDAS
+		eidasConfig, ok, err := loadEIDASConfigFromEnv(config)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return NewEIDASAdapter(config, eidasConfig)
+		}
+		return newNationalRegistryAdapter(config), nil
+	case DataSourcePCTF:
+		// Canada PCTF
+		pctfConfig, ok, err := loadPCTFConfigFromEnv(config)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return NewPCTFAdapter(config, pctfConfig)
+		}
+		return newDMVAdapter(config), nil
 	default:
 		return nil, fmt.Errorf("unsupported adapter type: %s", config.Type)
 	}

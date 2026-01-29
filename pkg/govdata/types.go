@@ -163,13 +163,26 @@ const (
 
 	// DataSourceImmigration is an immigration authority
 	DataSourceImmigration DataSourceType = "immigration"
+
+	// DataSourceDVS is Australia's Document Verification Service
+	DataSourceDVS DataSourceType = "dvs"
+
+	// DataSourceGovUK is UK's GOV.UK Verify service
+	DataSourceGovUK DataSourceType = "govuk_verify"
+
+	// DataSourceEIDAS is EU's eIDAS framework
+	DataSourceEIDAS DataSourceType = "eidas"
+
+	// DataSourcePCTF is Canada's Pan-Canadian Trust Framework
+	DataSourcePCTF DataSourceType = "pctf"
 )
 
 // IsValid checks if the data source type is valid
 func (dst DataSourceType) IsValid() bool {
 	switch dst {
 	case DataSourceDMV, DataSourcePassport, DataSourceVitalRecords,
-		DataSourceNationalRegistry, DataSourceTaxAuthority, DataSourceImmigration:
+		DataSourceNationalRegistry, DataSourceTaxAuthority, DataSourceImmigration,
+		DataSourceDVS, DataSourceGovUK, DataSourceEIDAS, DataSourcePCTF:
 		return true
 	default:
 		return false
