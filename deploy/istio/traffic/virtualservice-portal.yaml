@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: portal
+  namespace: virtengine
+spec:
+  hosts:
+    - portal.virtengine.svc.cluster.local
+  http:
+    - timeout: 15s
+      retries:
+        attempts: 3
+        perTryTimeout: 3s
+        retryOn: gateway-error,connect-failure,refused-stream,reset,5xx
+      route:
+        - destination:
+            host: portal.virtengine.svc.cluster.local
