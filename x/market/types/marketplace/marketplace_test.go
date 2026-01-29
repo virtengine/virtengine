@@ -1010,6 +1010,117 @@ func TestNewProviderDaemonSubscription(t *testing.T) {
 	}
 }
 
+func TestNewUsageUpdateRequestedEvent(t *testing.T) {
+	event := NewUsageUpdateRequestedEvent("alloc_123", "cosmos1provider", "periodic", 100, 5)
+
+	if event.EventType != EventUsageUpdateRequested {
+		t.Errorf("UsageUpdateRequestedEvent.EventType = %s, want %s", event.EventType, EventUsageUpdateRequested)
+	}
+	if event.BlockHeight != 100 {
+		t.Errorf("UsageUpdateRequestedEvent.BlockHeight = %d, want 100", event.BlockHeight)
+	}
+	if event.Sequence != 5 {
+		t.Errorf("UsageUpdateRequestedEvent.Sequence = %d, want 5", event.Sequence)
+	}
+	if event.AllocationID != "alloc_123" {
+		t.Errorf("UsageUpdateRequestedEvent.AllocationID = %s, want alloc_123", event.AllocationID)
+	}
+	if event.ProviderAddress != "cosmos1provider" {
+		t.Errorf("UsageUpdateRequestedEvent.ProviderAddress = %s, want cosmos1provider", event.ProviderAddress)
+	}
+	if event.RequestType != "periodic" {
+		t.Errorf("UsageUpdateRequestedEvent.RequestType = %s, want periodic", event.RequestType)
+	}
+	if event.EventID == "" {
+		t.Error("UsageUpdateRequestedEvent.EventID should not be empty")
+	}
+}
+
+func TestNewProvisionRequestedEvent(t *testing.T) {
+	allocation := NewAllocation(
+		AllocationID{
+			OrderID:  OrderID{CustomerAddress: "cosmos1abc", Sequence: 1},
+			Sequence: 1,
+		},
+		OfferingID{ProviderAddress: "cosmos1xyz", Sequence: 1},
+		"cosmos1xyz",
+		BidID{
+			OrderID:         OrderID{CustomerAddress: "cosmos1abc", Sequence: 1},
+			ProviderAddress: "cosmos1xyz",
+			Sequence:        1,
+		},
+		1000,
+	)
+
+	event := NewProvisionRequestedEvent(allocation, "encrypted_config_ref_123", 100, 5)
+
+	if event.EventType != EventProvisionRequested {
+		t.Errorf("ProvisionRequestedEvent.EventType = %s, want %s", event.EventType, EventProvisionRequested)
+	}
+	if event.BlockHeight != 100 {
+		t.Errorf("ProvisionRequestedEvent.BlockHeight = %d, want 100", event.BlockHeight)
+	}
+	if event.Sequence != 5 {
+		t.Errorf("ProvisionRequestedEvent.Sequence = %d, want 5", event.Sequence)
+	}
+	if event.AllocationID != allocation.ID.String() {
+		t.Errorf("ProvisionRequestedEvent.AllocationID = %s, want %s", event.AllocationID, allocation.ID.String())
+	}
+	if event.ProviderAddress != "cosmos1xyz" {
+		t.Errorf("ProvisionRequestedEvent.ProviderAddress = %s, want cosmos1xyz", event.ProviderAddress)
+	}
+	if event.EncryptedConfigRef != "encrypted_config_ref_123" {
+		t.Errorf("ProvisionRequestedEvent.EncryptedConfigRef = %s, want encrypted_config_ref_123", event.EncryptedConfigRef)
+	}
+	if event.EventID == "" {
+		t.Error("ProvisionRequestedEvent.EventID should not be empty")
+	}
+}
+
+func TestNewTerminateRequestedEvent(t *testing.T) {
+	event := NewTerminateRequestedEvent(
+		"alloc_123",
+		"order_456",
+		"cosmos1provider",
+		"cosmos1customer",
+		"user requested termination",
+		true,
+		100,
+		5,
+	)
+
+	if event.EventType != EventTerminateRequested {
+		t.Errorf("TerminateRequestedEvent.EventType = %s, want %s", event.EventType, EventTerminateRequested)
+	}
+	if event.BlockHeight != 100 {
+		t.Errorf("TerminateRequestedEvent.BlockHeight = %d, want 100", event.BlockHeight)
+	}
+	if event.Sequence != 5 {
+		t.Errorf("TerminateRequestedEvent.Sequence = %d, want 5", event.Sequence)
+	}
+	if event.AllocationID != "alloc_123" {
+		t.Errorf("TerminateRequestedEvent.AllocationID = %s, want alloc_123", event.AllocationID)
+	}
+	if event.OrderID != "order_456" {
+		t.Errorf("TerminateRequestedEvent.OrderID = %s, want order_456", event.OrderID)
+	}
+	if event.ProviderAddress != "cosmos1provider" {
+		t.Errorf("TerminateRequestedEvent.ProviderAddress = %s, want cosmos1provider", event.ProviderAddress)
+	}
+	if event.RequestedBy != "cosmos1customer" {
+		t.Errorf("TerminateRequestedEvent.RequestedBy = %s, want cosmos1customer", event.RequestedBy)
+	}
+	if event.Reason != "user requested termination" {
+		t.Errorf("TerminateRequestedEvent.Reason = %s, want 'user requested termination'", event.Reason)
+	}
+	if !event.Immediate {
+		t.Error("TerminateRequestedEvent.Immediate should be true")
+	}
+	if event.EventID == "" {
+		t.Error("TerminateRequestedEvent.EventID should not be empty")
+	}
+}
+
 // ============================================================================
 // Genesis Tests
 // ============================================================================
