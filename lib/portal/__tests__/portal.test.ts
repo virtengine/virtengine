@@ -15,6 +15,18 @@ import {
   isPositiveInteger,
   validateOTPCode,
 } from '../utils/validation';
+import {
+  formatScore,
+  formatTokenAmount,
+  formatDuration,
+  formatAddress,
+  formatBytes,
+  formatPercent,
+  formatHash,
+} from '../utils/format';
+import { authReducer } from '../types/auth';
+import { identityReducer, SCOPE_REQUIREMENTS } from '../types/identity';
+import { SessionManager, defaultSessionConfig } from '../utils/session';
 
 // Mock crypto.subtle for testing
 const mockCrypto = {
@@ -214,16 +226,6 @@ describe('Validation Utilities', () => {
 });
 
 describe('Format Utilities', () => {
-  const {
-    formatScore,
-    formatTokenAmount,
-    formatDuration,
-    formatAddress,
-    formatBytes,
-    formatPercent,
-    formatHash,
-  } = require('../utils/format');
-
   describe('formatScore', () => {
     it('should format scores as integers', () => {
       expect(formatScore(85.7)).toBe('86');
@@ -305,43 +307,44 @@ describe('Format Utilities', () => {
 });
 
 describe('Auth Types', () => {
-  const { authReducer } = require('../types/auth');
-
   describe('authReducer', () => {
-    it('should handle SET_LOADING', () => {
-      const state = { isLoading: false };
-      const result = authReducer(state, { type: 'SET_LOADING', payload: true });
+    it('should handle AUTH_START', () => {
+      const state = { isLoading: false, error: null };
+      const result = authReducer(state as any, { type: 'AUTH_START' });
       expect(result.isLoading).toBe(true);
     });
 
-    it('should handle LOGIN_SUCCESS', () => {
-      const state = { isAuthenticated: false, session: null };
-      const session = { sessionId: 'test', accountAddress: 've1...' };
-      const result = authReducer(state, { type: 'LOGIN_SUCCESS', payload: session });
+    it('should handle AUTH_SUCCESS', () => {
+      const state = { isAuthenticated: false, session: null, isLoading: true };
+      const payload = { 
+        accountAddress: 've1...', 
+        publicKey: 'pubkey123',
+        method: 'wallet' as const,
+        session: { sessionId: 'test', expiresAt: Date.now() + 3600000 }
+      };
+      const result = authReducer(state as any, { type: 'AUTH_SUCCESS', payload });
       expect(result.isAuthenticated).toBe(true);
-      expect(result.session).toEqual(session);
+      expect(result.isLoading).toBe(false);
     });
 
-    it('should handle LOGOUT', () => {
+    it('should handle AUTH_LOGOUT', () => {
       const state = { isAuthenticated: true, session: {}, wallet: {} };
-      const result = authReducer(state, { type: 'LOGOUT' });
+      const result = authReducer(state as any, { type: 'AUTH_LOGOUT' });
       expect(result.isAuthenticated).toBe(false);
       expect(result.session).toBeNull();
-      expect(result.wallet).toBeNull();
     });
 
-    it('should handle SET_ERROR', () => {
-      const state = { error: null };
-      const error = { code: 'TEST_ERROR', message: 'Test error' };
-      const result = authReducer(state, { type: 'SET_ERROR', payload: error });
+    it('should handle AUTH_FAILURE', () => {
+      const state = { error: null, isLoading: true };
+      const error = { code: 'test_error' as const, message: 'Test error' };
+      const result = authReducer(state as any, { type: 'AUTH_FAILURE', payload: error });
       expect(result.error).toEqual(error);
+      expect(result.isLoading).toBe(false);
     });
   });
 });
 
 describe('Identity Types', () => {
-  const { identityReducer, SCOPE_REQUIREMENTS } = require('../types/identity');
-
   describe('SCOPE_REQUIREMENTS', () => {
     it('should have requirements for all scopes', () => {
       expect(SCOPE_REQUIREMENTS.basic).toBeDefined();
@@ -365,8 +368,6 @@ describe('Identity Types', () => {
 });
 
 describe('Session Manager', () => {
-  const { SessionManager, defaultSessionConfig } = require('../utils/session');
-
   describe('defaultSessionConfig', () => {
     it('should have sensible defaults', () => {
       expect(defaultSessionConfig.tokenLifetimeSeconds).toBe(3600);

@@ -459,3 +459,58 @@ export const initialIdentityState: IdentityState = {
   verificationRecords: [],
   error: null,
 };
+
+/**
+ * Identity event types for reducer
+ */
+export type IdentityEvent =
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_STATUS'; payload: IdentityStatus }
+  | { type: 'SET_SCORE'; payload: IdentityScore }
+  | { type: 'ADD_SCOPE'; payload: VerificationScope }
+  | { type: 'SET_ERROR'; payload: IdentityError | null }
+  | { type: 'RESET' };
+
+/**
+ * Identity reducer
+ */
+export function identityReducer(state: IdentityState, event: IdentityEvent): IdentityState {
+  switch (event.type) {
+    case 'SET_LOADING':
+      return { ...state, isLoading: event.payload };
+    case 'SET_STATUS':
+      return { ...state, status: event.payload };
+    case 'SET_SCORE':
+      return { ...state, score: event.payload };
+    case 'ADD_SCOPE':
+      return { ...state, completedScopes: [...state.completedScopes, event.payload] };
+    case 'SET_ERROR':
+      return { ...state, error: event.payload };
+    case 'RESET':
+      return initialIdentityState;
+    default:
+      return state;
+  }
+}
+
+/**
+ * Scope requirements by tier level
+ */
+export const SCOPE_REQUIREMENTS = {
+  basic: {
+    minimumScore: 10,
+    requiredScopes: ['email'] as VerificationScopeType[],
+  },
+  standard: {
+    minimumScore: 40,
+    requiredScopes: ['email', 'id_document'] as VerificationScopeType[],
+  },
+  enhanced: {
+    minimumScore: 70,
+    requiredScopes: ['email', 'id_document', 'selfie'] as VerificationScopeType[],
+  },
+  provider: {
+    minimumScore: 85,
+    requiredScopes: ['email', 'id_document', 'selfie', 'domain'] as VerificationScopeType[],
+  },
+};
