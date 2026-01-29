@@ -1,3 +1,5 @@
+# QUALITY-001: Code Coverage Configuration
+# Target: 90%+ for unit tests, 85%+ for integration tests
 ignore:
   - "**/*.pb.go"
   - "**/*.pb.gw.go"
@@ -6,21 +8,101 @@ ignore:
   - "**/testutil/**"
   - "**/cmd/**"
   - "vendor/**"
-comment: false
+  - "**/simulation/**"
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+  require_base: true
+  require_head: true
 codecov:
   require_ci_to_pass: true
+  notify:
+    after_n_builds: 1
 coverage:
-  range: 40..100
+  range: 70..100
   round: down
   precision: 2
   status:
     project:
       default:
-        target: auto
-        threshold: 1%
+        # Target 90% coverage for the overall project
+        target: 90%
+        threshold: 2%
         if_not_found: success
         if_ci_failed: error
+        # Prevent coverage regression
+        only_pulls: false
+      # Separate target for x/ modules (critical path)
+      x-modules:
+        paths:
+          - "x/**"
+        target: 90%
+        threshold: 1%
+        if_not_found: success
+      # Separate target for pkg/ (off-chain services)
+      pkg:
+        paths:
+          - "pkg/**"
+        target: 85%
+        threshold: 2%
+        if_not_found: success
     patch:
       default:
-        target: 50%
+        # All new code must have 90% coverage
+        target: 90%
         if_not_found: success
+        only_pulls: true
+      # Critical modules require 95% patch coverage
+      critical:
+        paths:
+          - "x/veid/**"
+          - "x/mfa/**"
+          - "x/encryption/**"
+          - "x/escrow/**"
+        target: 95%
+        if_not_found: success
+# Component-level coverage tracking
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 2%
+  individual_components:
+    - component_id: x-veid
+      name: "x/veid - Identity Verification"
+      paths:
+        - "x/veid/**"
+    - component_id: x-mfa
+      name: "x/mfa - Multi-Factor Auth"
+      paths:
+        - "x/mfa/**"
+    - component_id: x-encryption
+      name: "x/encryption - Cryptography"
+      paths:
+        - "x/encryption/**"
+    - component_id: x-market
+      name: "x/market - Marketplace"
+      paths:
+        - "x/market/**"
+    - component_id: x-escrow
+      name: "x/escrow - Escrow"
+      paths:
+        - "x/escrow/**"
+    - component_id: x-fraud
+      name: "x/fraud - Fraud Detection"
+      paths:
+        - "x/fraud/**"
+    - component_id: x-hpc
+      name: "x/hpc - HPC Scheduling"
+      paths:
+        - "x/hpc/**"
+    - component_id: pkg-provider
+      name: "pkg/provider_daemon - Provider Services"
+      paths:
+        - "pkg/provider_daemon/**"
+    - component_id: pkg-inference
+      name: "pkg/inference - ML Inference"
+      paths:
+        - "pkg/inference/**"
