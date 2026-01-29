@@ -25,3 +25,8 @@ func ProviderPrefix() []byte {
 func ProviderPublicKeyPrefix() []byte {
 	return []byte{0x02}
 }
+
+// DomainVerificationPrefix returns the key prefix for domain verification storage
+func DomainVerificationPrefix() []byte {
+	return []byte{0x03}
+}

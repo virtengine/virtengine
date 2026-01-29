@@ -26,6 +26,14 @@ const (
 	errProviderHasActiveLeases  uint32 = 24
 )
 
+// Domain verification error codes start at 30
+const (
+	errInvalidDomain               uint32 = 30
+	errDomainVerificationNotFound  uint32 = 31
+	errDomainVerificationFailed    uint32 = 32
+	errDomainVerificationExpired   uint32 = 33
+)
+
 var (
 	// ErrInvalidProviderURI register error code for invalid provider uri
 	ErrInvalidProviderURI = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidProviderURI, codes.InvalidArgument, "invalid provider: invalid host uri")
@@ -68,4 +76,18 @@ var (
 
 	// ErrProviderHasActiveLeases cannot delete provider with active leases
 	ErrProviderHasActiveLeases = sdkerrors.RegisterWithGRPCCode(ModuleName, errProviderHasActiveLeases, codes.FailedPrecondition, "provider has active leases")
+
+	// Domain verification errors
+	
+	// ErrInvalidDomain invalid domain format
+	ErrInvalidDomain = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidDomain, codes.InvalidArgument, "invalid domain")
+	
+	// ErrDomainVerificationNotFound domain verification record not found
+	ErrDomainVerificationNotFound = sdkerrors.RegisterWithGRPCCode(ModuleName, errDomainVerificationNotFound, codes.NotFound, "domain verification not found")
+	
+	// ErrDomainVerificationFailed domain verification failed (DNS check)
+	ErrDomainVerificationFailed = sdkerrors.RegisterWithGRPCCode(ModuleName, errDomainVerificationFailed, codes.FailedPrecondition, "domain verification failed")
+	
+	// ErrDomainVerificationExpired domain verification token expired
+	ErrDomainVerificationExpired = sdkerrors.RegisterWithGRPCCode(ModuleName, errDomainVerificationExpired, codes.DeadlineExceeded, "domain verification token expired")
 )
