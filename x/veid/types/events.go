@@ -17,6 +17,14 @@ const (
 	EventTypeVerificationMetrics   = "verification_metrics"
 	EventTypeConsensusVerification = "consensus_verification"
 	EventTypeVoteExtension         = "vote_extension"
+
+	// Spec-defined VEID events (per veid-flow-spec.md)
+	EventTypeVerificationSubmitted = "veid_verification_submitted"
+	EventTypeVerificationCompleted = "veid_verification_completed"
+	EventTypeTierChanged           = "veid_tier_changed"
+	EventTypeAuthorizationGranted  = "veid_authorization_granted"
+	EventTypeAuthorizationConsumed = "veid_authorization_consumed"
+	EventTypeAuthorizationExpired  = "veid_authorization_expired"
 )
 
 // Event attribute keys
@@ -47,6 +55,14 @@ const (
 	AttributeKeyProposerScore     = "proposer_score"
 	AttributeKeyComputedScore     = "computed_score"
 	AttributeKeyInputHashMatch    = "input_hash_match"
+
+	// Spec-defined attribute keys (per veid-flow-spec.md)
+	AttributeKeyAccount     = "account"
+	AttributeKeyOldTier     = "old_tier"
+	AttributeKeyNewTier     = "new_tier"
+	AttributeKeySessionID   = "session_id"
+	AttributeKeyAction      = "action"
+	AttributeKeyFactorsUsed = "factors_used"
 )
 
 // EventScopeUploaded is emitted when a new identity scope is uploaded
@@ -156,6 +172,56 @@ type EventVerificationFailed struct {
 	BlockHeight    int64    `json:"block_height"`
 }
 
+// EventVerificationSubmitted is emitted when a verification is submitted (spec-defined)
+type EventVerificationSubmitted struct {
+	Account     string `json:"account"`
+	ScopeID     string `json:"scope_id"`
+	ScopeType   string `json:"scope_type"`
+	RequestID   string `json:"request_id"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventTierChanged is emitted when an account's tier changes (spec-defined)
+type EventTierChanged struct {
+	Account     string `json:"account"`
+	OldTier     string `json:"old_tier"`
+	NewTier     string `json:"new_tier"`
+	Score       uint32 `json:"score"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventAuthorizationGranted is emitted when MFA authorization is granted (spec-defined)
+type EventAuthorizationGranted struct {
+	Account     string   `json:"account"`
+	SessionID   string   `json:"session_id"`
+	Action      string   `json:"action"`
+	FactorsUsed []string `json:"factors_used"`
+	ExpiresAt   int64    `json:"expires_at"`
+	BlockHeight int64    `json:"block_height"`
+	Timestamp   int64    `json:"timestamp"`
+}
+
+// EventAuthorizationConsumed is emitted when an MFA authorization is consumed (spec-defined)
+type EventAuthorizationConsumed struct {
+	Account     string `json:"account"`
+	SessionID   string `json:"session_id"`
+	Action      string `json:"action"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventAuthorizationExpired is emitted when an MFA authorization expires (spec-defined)
+type EventAuthorizationExpired struct {
+	Account     string `json:"account"`
+	SessionID   string `json:"session_id"`
+	Action      string `json:"action"`
+	CreatedAt   int64  `json:"created_at"`
+	ExpiredAt   int64  `json:"expired_at"`
+	BlockHeight int64  `json:"block_height"`
+}
+
 // ============================================================================
 // Proto.Message interface stubs for Event types
 // ============================================================================
@@ -219,3 +285,28 @@ func (m *EventVerificationCompleted) String() string { return fmt.Sprintf("%+v",
 func (*EventVerificationFailed) ProtoMessage()       {}
 func (m *EventVerificationFailed) Reset()            { *m = EventVerificationFailed{} }
 func (m *EventVerificationFailed) String() string    { return fmt.Sprintf("%+v", *m) }
+
+// EventVerificationSubmitted proto stubs
+func (*EventVerificationSubmitted) ProtoMessage()    {}
+func (m *EventVerificationSubmitted) Reset()         { *m = EventVerificationSubmitted{} }
+func (m *EventVerificationSubmitted) String() string { return fmt.Sprintf("%+v", *m) }
+
+// EventTierChanged proto stubs
+func (*EventTierChanged) ProtoMessage()              {}
+func (m *EventTierChanged) Reset()                   { *m = EventTierChanged{} }
+func (m *EventTierChanged) String() string           { return fmt.Sprintf("%+v", *m) }
+
+// EventAuthorizationGranted proto stubs
+func (*EventAuthorizationGranted) ProtoMessage()     {}
+func (m *EventAuthorizationGranted) Reset()          { *m = EventAuthorizationGranted{} }
+func (m *EventAuthorizationGranted) String() string  { return fmt.Sprintf("%+v", *m) }
+
+// EventAuthorizationConsumed proto stubs
+func (*EventAuthorizationConsumed) ProtoMessage()    {}
+func (m *EventAuthorizationConsumed) Reset()         { *m = EventAuthorizationConsumed{} }
+func (m *EventAuthorizationConsumed) String() string { return fmt.Sprintf("%+v", *m) }
+
+// EventAuthorizationExpired proto stubs
+func (*EventAuthorizationExpired) ProtoMessage()     {}
+func (m *EventAuthorizationExpired) Reset()          { *m = EventAuthorizationExpired{} }
+func (m *EventAuthorizationExpired) String() string  { return fmt.Sprintf("%+v", *m) }

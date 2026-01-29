@@ -48,6 +48,15 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 		}
 		k.removeFromPendingFallbackQueue(ctx, fallbackRecord)
 		k.emitBorderlineFallbackExpiredEvent(ctx, fallbackRecord)
+
+		// Emit spec-defined authorization expired event (per veid-flow-spec.md)
+		_ = k.EmitAuthorizationExpiredEvent(
+			ctx,
+			fallbackRecord.AccountAddress,
+			fallbackRecord.FallbackID,
+			"verification_fallback",
+			fallbackRecord.CreatedAt,
+		)
 		return types.ErrBorderlineFallbackExpired
 	}
 
@@ -110,6 +119,17 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 
 	// Emit completion event
 	k.emitBorderlineFallbackCompletedEvent(ctx, fallbackRecord, factorsSatisfied, factorClass)
+
+	// Emit spec-defined authorization granted event (per veid-flow-spec.md)
+	// This is emitted when MFA successfully grants authorization for verification
+	_ = k.EmitAuthorizationGrantedEvent(
+		ctx,
+		accountAddr,
+		fallbackRecord.FallbackID,
+		"verification_fallback",
+		factorsSatisfied,
+		0, // No expiry for completed fallback
+	)
 
 	k.Logger(ctx).Info("borderline fallback completed successfully",
 		"account", accountAddr,
@@ -271,6 +291,15 @@ func (k Keeper) ProcessExpiredFallbacks(ctx sdk.Context) int {
 			fallbackRecord.MarkExpired(now)
 			_ = k.setBorderlineFallbackRecord(ctx, fallbackRecord)
 			k.emitBorderlineFallbackExpiredEvent(ctx, fallbackRecord)
+
+			// Emit spec-defined authorization expired event (per veid-flow-spec.md)
+			_ = k.EmitAuthorizationExpiredEvent(
+				ctx,
+				fallbackRecord.AccountAddress,
+				fallbackRecord.FallbackID,
+				"verification_fallback",
+				fallbackRecord.CreatedAt,
+			)
 			expiredCount++
 		}
 

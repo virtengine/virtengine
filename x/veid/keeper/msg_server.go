@@ -169,12 +169,25 @@ func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgReq
 		return nil, err
 	}
 
-	// Emit event
+	// Emit legacy event for backwards compatibility
 	err = ctx.EventManager().EmitTypedEvent(&types.EventVerificationRequested{
 		AccountAddress: sender.String(),
 		ScopeID:        msg.ScopeID,
 		ScopeType:      string(scope.ScopeType),
 		RequestedAt:    ctx.BlockTime().Unix(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Emit spec-defined verification submitted event
+	err = ctx.EventManager().EmitTypedEvent(&types.EventVerificationSubmitted{
+		Account:     sender.String(),
+		ScopeID:     msg.ScopeID,
+		ScopeType:   string(scope.ScopeType),
+		RequestID:   msg.ScopeID, // Using scope ID as request ID for now
+		BlockHeight: ctx.BlockHeight(),
+		Timestamp:   ctx.BlockTime().Unix(),
 	})
 	if err != nil {
 		return nil, err
@@ -295,7 +308,7 @@ func (ms msgServer) UpdateScore(goCtx context.Context, msg *types.MsgUpdateScore
 	// Get updated record for new tier
 	updatedRecord, _ := ms.keeper.GetIdentityRecord(ctx, accountAddr)
 
-	// Emit event
+	// Emit legacy score updated event for backwards compatibility
 	err = ctx.EventManager().EmitTypedEvent(&types.EventScoreUpdated{
 		AccountAddress: msg.AccountAddress,
 		PreviousScore:  previousScore,
@@ -307,6 +320,21 @@ func (ms msgServer) UpdateScore(goCtx context.Context, msg *types.MsgUpdateScore
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Emit spec-defined tier changed event if tier actually changed
+	if previousTier != updatedRecord.Tier {
+		err = ctx.EventManager().EmitTypedEvent(&types.EventTierChanged{
+			Account:     msg.AccountAddress,
+			OldTier:     string(previousTier),
+			NewTier:     string(updatedRecord.Tier),
+			Score:       msg.NewScore,
+			BlockHeight: ctx.BlockHeight(),
+			Timestamp:   ctx.BlockTime().Unix(),
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &types.MsgUpdateScoreResponse{
