@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - base/namespace.yaml
+  - base/peer-authentication.yaml
+  - base/authorizationpolicy.yaml
+  - base/telemetry.yaml
+  - observability/namespace.yaml
+  - observability/otel-collector.yaml
+  - traffic/destinationrule-virtengine-node.yaml
+  - traffic/destinationrule-waldur.yaml
+  - traffic/destinationrule-portal.yaml
+  - traffic/destinationrule-provider-daemon.yaml
+  - traffic/virtualservice-virtengine-node.yaml
+  - traffic/virtualservice-waldur.yaml
+  - traffic/virtualservice-portal.yaml
+  - traffic/virtualservice-provider-daemon.yaml

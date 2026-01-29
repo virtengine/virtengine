@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: provider-daemon
+  namespace: virtengine
+spec:
+  hosts:
+    - provider-daemon.virtengine.svc.cluster.local
+  http:
+    - timeout: 10s
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: gateway-error,connect-failure,refused-stream,reset,5xx
+      route:
+        - destination:
+            host: provider-daemon.virtengine.svc.cluster.local
