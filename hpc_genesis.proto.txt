@@ -1,0 +1,103 @@
+syntax = "proto3";
+package virtengine.hpc.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/hpc/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/hpc/v1";
+
+// GenesisState defines the hpc module's genesis state
+message GenesisState {
+  // Params are the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+
+  // Clusters are the registered HPC clusters
+  repeated HPCCluster clusters = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "clusters",
+    (gogoproto.moretags) = "yaml:\"clusters\""
+  ];
+
+  // Offerings are the HPC offerings
+  repeated HPCOffering offerings = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "offerings",
+    (gogoproto.moretags) = "yaml:\"offerings\""
+  ];
+
+  // Jobs are the HPC jobs
+  repeated HPCJob jobs = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "jobs",
+    (gogoproto.moretags) = "yaml:\"jobs\""
+  ];
+
+  // JobAccountings are the job accounting records
+  repeated JobAccounting job_accountings = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "job_accountings",
+    (gogoproto.moretags) = "yaml:\"job_accountings\""
+  ];
+
+  // NodeMetadatas are the node metadata records
+  repeated NodeMetadata node_metadatas = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "node_metadatas",
+    (gogoproto.moretags) = "yaml:\"node_metadatas\""
+  ];
+
+  // SchedulingDecisions are the scheduling decision records
+  repeated SchedulingDecision scheduling_decisions = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "scheduling_decisions",
+    (gogoproto.moretags) = "yaml:\"scheduling_decisions\""
+  ];
+
+  // HPCRewards are the HPC reward records
+  repeated HPCRewardRecord hpc_rewards = 8 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "hpc_rewards",
+    (gogoproto.moretags) = "yaml:\"hpc_rewards\""
+  ];
+
+  // Disputes are the dispute records
+  repeated HPCDispute disputes = 9 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "disputes",
+    (gogoproto.moretags) = "yaml:\"disputes\""
+  ];
+
+  // ClusterSequence is the next cluster sequence
+  uint64 cluster_sequence = 10 [
+    (gogoproto.jsontag) = "cluster_sequence",
+    (gogoproto.moretags) = "yaml:\"cluster_sequence\""
+  ];
+
+  // OfferingSequence is the next offering sequence
+  uint64 offering_sequence = 11 [
+    (gogoproto.jsontag) = "offering_sequence",
+    (gogoproto.moretags) = "yaml:\"offering_sequence\""
+  ];
+
+  // JobSequence is the next job sequence
+  uint64 job_sequence = 12 [
+    (gogoproto.jsontag) = "job_sequence",
+    (gogoproto.moretags) = "yaml:\"job_sequence\""
+  ];
+
+  // DecisionSequence is the next decision sequence
+  uint64 decision_sequence = 13 [
+    (gogoproto.jsontag) = "decision_sequence",
+    (gogoproto.moretags) = "yaml:\"decision_sequence\""
+  ];
+
+  // DisputeSequence is the next dispute sequence
+  uint64 dispute_sequence = 14 [
+    (gogoproto.jsontag) = "dispute_sequence",
+    (gogoproto.moretags) = "yaml:\"dispute_sequence\""
+  ];
+}
