@@ -31,6 +31,11 @@ type IKeeper interface {
 	RotateProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress, newKey []byte, keyType string, signature []byte) error
 	DeleteProviderPublicKey(ctx sdk.Context, owner sdk.AccAddress)
 	WithProviderPublicKeys(ctx sdk.Context, fn func(sdk.AccAddress, types.ProviderPublicKeyRecord) bool)
+	// Domain verification methods
+	GenerateDomainVerificationToken(ctx sdk.Context, providerAddr sdk.AccAddress, domain string) (*DomainVerificationRecord, error)
+	VerifyProviderDomain(ctx sdk.Context, providerAddr sdk.AccAddress) error
+	GetDomainVerificationRecord(ctx sdk.Context, providerAddr sdk.AccAddress) (*DomainVerificationRecord, bool)
+	IsDomainVerified(ctx sdk.Context, providerAddr sdk.AccAddress) bool
 }
 
 // Keeper of the provider store

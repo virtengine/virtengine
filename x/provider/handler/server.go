@@ -8,24 +8,38 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
+	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
 	"github.com/virtengine/virtengine/x/provider/keeper"
+	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 )
 
 var (
 	// ErrInternal defines registered error code for internal error
 	ErrInternal = errorsmod.Register(types.ModuleName, 10, "internal error")
+	// ErrInsufficientVEIDScore defines error when VEID score is below required threshold
+	ErrInsufficientVEIDScore = errorsmod.Register(types.ModuleName, 11, "VEID score below required threshold for provider registration")
+	// ErrMFARequired defines error when MFA is required but not provided
+	ErrMFARequired = errorsmod.Register(types.ModuleName, 12, "MFA authorization required for provider registration")
 )
 
 type msgServer struct {
 	provider keeper.IKeeper
 	market   mkeeper.IKeeper
+	veid     veidkeeper.IKeeper
+	mfa      mfakeeper.IKeeper
 }
 
 // NewMsgServerImpl returns an implementation of the market MsgServer interface
 // for the provided Keeper.
-func NewMsgServerImpl(k keeper.IKeeper, mk mkeeper.IKeeper) types.MsgServer {
-	return &msgServer{provider: k, market: mk}
+func NewMsgServerImpl(k keeper.IKeeper, mk mkeeper.IKeeper, vk veidkeeper.IKeeper, mfak mfakeeper.IKeeper) types.MsgServer {
+	return &msgServer{
+		provider: k,
+		market:   mk,
+		veid:     vk,
+		mfa:      mfak,
+	}
 }
 
 var _ types.MsgServer = msgServer{}
@@ -41,6 +55,42 @@ func (ms msgServer) CreateProvider(goCtx context.Context, msg *types.MsgCreatePr
 
 	if _, ok := ms.provider.Get(ctx, owner); ok {
 		return nil, types.ErrProviderExists.Wrapf("id: %s", msg.Owner)
+	}
+
+	// MARKET-VEID-002: Check VEID score requirement
+	score, hasScore := ms.veid.GetVEIDScore(ctx, owner)
+	if !hasScore || score < 70 {
+		return nil, ErrInsufficientVEIDScore.Wrapf(
+			"provider registration requires VEID score ≥70, current score: %d",
+			score,
+		)
+	}
+
+	// MARKET-VEID-002: Verify MFA authorization for provider registration
+	// This is a sensitive transaction type that requires MFA approval
+	txType := mfatypes.SensitiveTxProviderRegistration
+	config, found := ms.mfa.GetSensitiveTxConfig(ctx, txType)
+	if found && config.Enabled {
+		// Check if there's a valid authorization session
+		// The MFA gating ante handler should have validated this, but we double-check here
+		// as defense in depth for this critical operation
+		sessions := ms.mfa.GetAccountSessions(ctx, owner)
+		hasValidSession := false
+		blockTime := ctx.BlockTime()
+		
+		for _, session := range sessions {
+			// Session must be valid, not yet used, and for provider registration
+			if session.IsValid(blockTime) && session.TransactionType == txType {
+				hasValidSession = true
+				break
+			}
+		}
+		
+		if !hasValidSession {
+			return nil, ErrMFARequired.Wrap(
+				"provider registration requires valid MFA authorization session",
+			)
+		}
 	}
 
 	if err := ms.provider.Create(ctx, types.Provider(*msg)); err != nil {
