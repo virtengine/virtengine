@@ -515,18 +515,23 @@ class MTCNNDetector:
         detected landmarks to a standard template.
         """
         # Get source landmarks as array
-        src_pts = landmarks.to_array()
+        src_pts = landmarks.to_array().astype(np.float32)
         
         # Scale template to target size
         template = ALIGNMENT_TEMPLATE_224.copy()
         template[:, 0] *= target_size[0]
         template[:, 1] *= target_size[1]
-        dst_pts = template
+        dst_pts = template.astype(np.float32)
         
         # Estimate similarity transformation
-        transform = cv2.estimateAffinePartial2D(
-            src_pts, dst_pts, method=cv2.RANSAC
-        )[0]
+        if self.config.use_deterministic_ops:
+            transform = cv2.estimateAffinePartial2D(
+                src_pts, dst_pts, method=0
+            )[0]
+        else:
+            transform = cv2.estimateAffinePartial2D(
+                src_pts, dst_pts, method=cv2.RANSAC
+            )[0]
         
         if transform is None:
             # Fallback to simple crop if transformation fails
@@ -756,11 +761,12 @@ class FaceAligner:
             src_pts = landmarks.astype(np.float32)
             if src_pts.shape == (10,):
                 src_pts = src_pts.reshape(5, 2)
+        src_pts = src_pts.astype(np.float32)
         
         if self.use_template:
-            # Similarity transformation
+            # Similarity transformation (deterministic least squares)
             transform = cv2.estimateAffinePartial2D(
-                src_pts, self.template, method=cv2.RANSAC
+                src_pts, self.template.astype(np.float32), method=0
             )[0]
             
             if transform is not None:

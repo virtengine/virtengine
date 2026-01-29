@@ -400,7 +400,7 @@ class FaceVerifier:
             confidence_percent=0.0,
             model_name=self.config.model_name.value,
             model_version=self.config.model_version,
-            model_hash=self._embedder.model_hash if self._embedder._initialized else "",
+            model_hash=self._embedder.model_hash,
             reason_codes=reason_codes,
             embeddings_hash="",
             result_hash="",
