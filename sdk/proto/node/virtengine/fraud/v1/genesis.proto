@@ -1,0 +1,45 @@
+syntax = "proto3";
+package virtengine.fraud.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/fraud/v1/types.proto";
+import "virtengine/fraud/v1/params.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/fraud/v1";
+
+// GenesisState defines the fraud module's genesis state
+message GenesisState {
+  // Params defines the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+
+  // Reports contains all fraud reports
+  repeated FraudReport reports = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "reports",
+    (gogoproto.moretags) = "yaml:\"reports\""
+  ];
+
+  // AuditLogs contains all audit log entries
+  repeated FraudAuditLog audit_logs = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "audit_logs",
+    (gogoproto.moretags) = "yaml:\"audit_logs\""
+  ];
+
+  // ModeratorQueue contains all queue entries
+  repeated ModeratorQueueEntry moderator_queue = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "moderator_queue",
+    (gogoproto.moretags) = "yaml:\"moderator_queue\""
+  ];
+
+  // NextReportID is the next report ID sequence number
+  uint64 next_report_id = 5 [
+    (gogoproto.jsontag) = "next_report_id",
+    (gogoproto.moretags) = "yaml:\"next_report_id\""
+  ];
+}

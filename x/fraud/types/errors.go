@@ -71,4 +71,10 @@ var (
 
 	// ErrInvalidEnvelope is returned when the encrypted evidence envelope is invalid
 	ErrInvalidEnvelope = errors.Register(ModuleName, 2020, "invalid encrypted evidence envelope")
+
+	// ErrInvalidEscalationReason is returned when escalation reason is missing or invalid
+	ErrInvalidEscalationReason = errors.Register(ModuleName, 2021, "invalid escalation reason")
+
+	// ErrInvalidAuthority is returned when the authority address is invalid
+	ErrInvalidAuthority = errors.Register(ModuleName, 2022, "invalid authority address")
 )

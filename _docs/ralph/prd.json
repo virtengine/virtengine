@@ -3804,6 +3804,23 @@
       "agent": "copilot_orchestrator"
     },
     {
+      "id": "VE-3063",
+      "title": "Fraud Module: Fix Proto Method Descriptor Registration",
+      "description": "Fix proto method descriptor panic in x/fraud module during RegisterServices",
+      "acceptanceCriteria": [
+        "Fix 'cannot find method descriptor virtengine.fraud.v1.Msg.SubmitFraudReport' panic",
+        "Ensure proper proto file generation for fraud module",
+        "Update codec.go registration if needed",
+        "All app initialization succeeds without proto panics",
+        "Escrow keeper tests pass"
+      ],
+      "priority": 1,
+      "status": "not-started",
+      "passes": false,
+      "module": "x/fraud",
+      "notes": "Discovered during escrow testing. Proto method descriptor missing - likely needs VE-3053 (proto generation) first."
+    },
+    {
       "id": "VE-3050",
       "title": "Test Re-enablement: Staking/MFA/Settlement/HPC/Escrow",
       "description": "Re-enable 20+ excluded test files across chain modules",
