@@ -2,6 +2,8 @@ package inference
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -105,6 +107,14 @@ func DefaultInferenceConfig() InferenceConfig {
 
 // Validate validates the inference configuration
 func (c *InferenceConfig) Validate() error {
+	// Normalize expected hash if provided
+	if c.ExpectedHash != "" {
+		c.ExpectedHash = normalizeExpectedHash(c.ExpectedHash)
+		if !isValidSHA256Hex(c.ExpectedHash) {
+			return fmt.Errorf("expected_hash must be 64 hex chars, got %s", c.ExpectedHash)
+		}
+	}
+
 	if c.UseSidecar {
 		if c.SidecarAddress == "" {
 			return fmt.Errorf("sidecar_address is required when use_sidecar is true")
@@ -134,6 +144,15 @@ func (c *InferenceConfig) Validate() error {
 
 	if c.FallbackScore > 100 {
 		return fmt.Errorf("fallback_score must be 0-100, got %d", c.FallbackScore)
+	}
+
+	if c.Deterministic {
+		if !c.ForceCPU {
+			return fmt.Errorf("force_cpu must be true when deterministic mode is enabled")
+		}
+		if c.ExpectedHash == "" {
+			return fmt.Errorf("expected_hash must be set when deterministic mode is enabled")
+		}
 	}
 
 	return nil
@@ -197,3 +216,15 @@ const (
 	// EnvInferenceForceCPU is the environment variable for CPU-only mode
 	EnvInferenceForceCPU = "VEID_INFERENCE_FORCE_CPU"
 )
+
+// normalizeExpectedHash strips optional sha256: prefix and normalizes casing.
+func normalizeExpectedHash(hash string) string {
+	trimmed := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(hash)), "sha256:")
+	return trimmed
+}
+
+var sha256HexRegex = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+func isValidSHA256Hex(hash string) bool {
+	return sha256HexRegex.MatchString(hash)
+}

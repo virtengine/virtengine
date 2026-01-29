@@ -103,7 +103,7 @@
 //
 //   - VEID_INFERENCE_MODEL_PATH: Path to SavedModel directory
 //   - VEID_INFERENCE_MODEL_VERSION: Expected model version
-//   - VEID_INFERENCE_MODEL_HASH: Expected SHA256 hash of model
+//   - VEID_INFERENCE_MODEL_HASH: Expected SHA256 hash of model (required in deterministic mode)
 //   - VEID_INFERENCE_TIMEOUT: Max inference time (e.g., "2s")
 //   - VEID_INFERENCE_USE_SIDECAR: Enable sidecar mode ("true"/"false")
 //   - VEID_INFERENCE_SIDECAR_ADDR: Sidecar gRPC address

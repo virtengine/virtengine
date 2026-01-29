@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -48,6 +50,10 @@ func (ml *ModelLoader) Load() (*TFModel, error) {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
+	if err := ml.config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid inference config: %w", err)
+	}
+
 	// Check if model path exists
 	modelPath := ml.config.ModelPath
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
@@ -68,12 +74,29 @@ func (ml *ModelLoader) Load() (*TFModel, error) {
 
 	// Verify hash if expected hash is configured
 	if ml.config.ExpectedHash != "" {
-		if computedHash != ml.config.ExpectedHash {
+		expectedHash := normalizeExpectedHash(ml.config.ExpectedHash)
+		if computedHash != expectedHash {
 			return nil, fmt.Errorf(
 				"model hash mismatch: expected %s, got %s",
-				ml.config.ExpectedHash,
+				expectedHash,
 				computedHash,
 			)
+		}
+	}
+
+	// Verify metadata hash if provided
+	if metadata.Hash != "" {
+		metaHash := normalizeExpectedHash(metadata.Hash)
+		if computedHash != metaHash {
+			return nil, fmt.Errorf("model metadata hash mismatch: expected %s, got %s", metaHash, computedHash)
+		}
+	}
+
+	// Validate deterministic ops if provided
+	if len(metadata.OpNames) > 0 {
+		ok, nonDet := ml.determinism.CheckModelDeterminism(metadata.OpNames)
+		if !ok {
+			return nil, fmt.Errorf("model uses non-deterministic ops: %s", strings.Join(nonDet, ", "))
 		}
 	}
 
@@ -176,6 +199,8 @@ func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 		OutputSignature map[string]interface{} `json:"output_signature"`
 		ExportTimestamp string                 `json:"export_timestamp"`
 		TFVersion       string                 `json:"tensorflow_version"`
+		OpNames         []string               `json:"op_names"`
+		Operations      []string               `json:"operations"`
 	}
 
 	if err := json.Unmarshal(data, &rawMetadata); err != nil {
@@ -214,6 +239,7 @@ func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 		OutputName:        outputName,
 		ExportTimestamp:   rawMetadata.ExportTimestamp,
 		TensorFlowVersion: rawMetadata.TFVersion,
+		OpNames:           mergeOpNames(rawMetadata.OpNames, rawMetadata.Operations),
 	}, nil
 }
 
@@ -231,6 +257,27 @@ func parseShape(shape []interface{}) []int64 {
 		}
 	}
 	return result
+}
+
+func mergeOpNames(primary []string, secondary []string) []string {
+	if len(primary) == 0 && len(secondary) == 0 {
+		return nil
+	}
+
+	opSet := make(map[string]struct{})
+	merged := make([]string, 0, len(primary)+len(secondary))
+	for _, op := range append(primary, secondary...) {
+		if op == "" {
+			continue
+		}
+		if _, seen := opSet[op]; seen {
+			continue
+		}
+		opSet[op] = struct{}{}
+		merged = append(merged, op)
+	}
+	sort.Strings(merged)
+	return merged
 }
 
 // getVersion returns the version string, preferring metadata over config
@@ -265,7 +312,8 @@ func (ml *ModelLoader) getOutputName(metadata *ModelMetadata) string {
 func (ml *ModelLoader) computeModelHash(modelPath string) (string, error) {
 	h := sha256.New()
 
-	// Walk through all files in the model directory
+	// Walk through all files in the model directory and sort for determinism
+	var files []string
 	err := filepath.Walk(modelPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -281,23 +329,28 @@ func (ml *ModelLoader) computeModelHash(modelPath string) (string, error) {
 			return nil
 		}
 
-		// Read and hash file contents
-		//nolint:gosec // G304: path is from trusted model directory
-		file, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("failed to open %s: %w", path, err)
-		}
-		defer func() { _ = file.Close() }()
-
-		if _, err := io.Copy(h, file); err != nil {
-			return fmt.Errorf("failed to hash %s: %w", path, err)
-		}
-
+		files = append(files, path)
 		return nil
 	})
 
 	if err != nil {
 		return "", err
+	}
+
+	sort.Strings(files)
+
+	for _, path := range files {
+		// Read and hash file contents
+		//nolint:gosec // G304: path is from trusted model directory
+		file, err := os.Open(path)
+		if err != nil {
+			return "", fmt.Errorf("failed to open %s: %w", path, err)
+		}
+		defer func() { _ = file.Close() }()
+
+		if _, err := io.Copy(h, file); err != nil {
+			return "", fmt.Errorf("failed to hash %s: %w", path, err)
+		}
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
