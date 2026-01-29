@@ -276,7 +276,7 @@ verify_image() {
     log_info "Running basic image verification..."
     
     # Verify image can start
-    docker run --rm "${FULL_IMAGE}" python -c "print('Image verification passed')" || {
+    docker run --rm "${FULL_IMAGE}" python3 -c "print('Image verification passed')" || {
         log_error "Image verification failed"
         exit 1
     }
