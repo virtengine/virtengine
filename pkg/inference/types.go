@@ -257,4 +257,7 @@ type ModelMetadata struct {
 
 	// TensorFlowVersion is the TF version used for export
 	TensorFlowVersion string
+
+	// OpNames lists TensorFlow operation names used by the model (if provided)
+	OpNames []string
 }

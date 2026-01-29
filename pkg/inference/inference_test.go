@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,15 +49,35 @@ func TestConfigValidation(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "valid config",
-			modifyFunc:  func(c *InferenceConfig) {},
+			name: "valid config",
+			modifyFunc: func(c *InferenceConfig) {
+				c.ExpectedHash = strings.Repeat("a", 64)
+			},
 			expectError: false,
+		},
+		{
+			name: "deterministic without expected hash",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Deterministic = true
+				c.ExpectedHash = ""
+			},
+			expectError: true,
+		},
+		{
+			name: "deterministic without force cpu",
+			modifyFunc: func(c *InferenceConfig) {
+				c.Deterministic = true
+				c.ForceCPU = false
+				c.ExpectedHash = strings.Repeat("a", 64)
+			},
+			expectError: true,
 		},
 		{
 			name: "sidecar without address",
 			modifyFunc: func(c *InferenceConfig) {
 				c.UseSidecar = true
 				c.SidecarAddress = ""
+				c.ExpectedHash = strings.Repeat("a", 64)
 			},
 			expectError: true,
 		},
@@ -66,6 +87,7 @@ func TestConfigValidation(t *testing.T) {
 				c.UseSidecar = true
 				c.SidecarAddress = testSidecarAddress
 				c.SidecarTimeout = 0
+				c.ExpectedHash = strings.Repeat("a", 64)
 			},
 			expectError: true,
 		},
@@ -74,6 +96,7 @@ func TestConfigValidation(t *testing.T) {
 			modifyFunc: func(c *InferenceConfig) {
 				c.UseSidecar = false
 				c.ModelPath = ""
+				c.ExpectedHash = strings.Repeat("a", 64)
 			},
 			expectError: true,
 		},
@@ -81,6 +104,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "invalid timeout",
 			modifyFunc: func(c *InferenceConfig) {
 				c.Timeout = 0
+				c.ExpectedHash = strings.Repeat("a", 64)
 			},
 			expectError: true,
 		},
@@ -88,6 +112,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "invalid memory limit",
 			modifyFunc: func(c *InferenceConfig) {
 				c.MaxMemoryMB = 0
+				c.ExpectedHash = strings.Repeat("a", 64)
 			},
 			expectError: true,
 		},
@@ -95,6 +120,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "invalid input dimension",
 			modifyFunc: func(c *InferenceConfig) {
 				c.ExpectedInputDim = 100
+				c.ExpectedHash = strings.Repeat("a", 64)
 			},
 			expectError: true,
 		},
@@ -102,6 +128,7 @@ func TestConfigValidation(t *testing.T) {
 			name: "invalid fallback score",
 			modifyFunc: func(c *InferenceConfig) {
 				c.FallbackScore = 150
+				c.ExpectedHash = strings.Repeat("a", 64)
 			},
 			expectError: true,
 		},
@@ -391,6 +418,7 @@ func TestTFDeterminismConfig(t *testing.T) {
 func TestModelLoaderWithMissingPath(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.ModelPath = "/nonexistent/path/to/model"
+	config.ExpectedHash = strings.Repeat("a", 64)
 
 	loader := NewModelLoader(config)
 
@@ -420,6 +448,7 @@ func TestModelLoaderWithTempModel(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
 
@@ -462,6 +491,7 @@ func TestModelHashComputation(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
 
 	loader := NewModelLoader(config)
 
@@ -490,6 +520,77 @@ func TestModelHashComputation(t *testing.T) {
 	}
 }
 
+func TestModelLoaderRejectsNonDeterministicOps(t *testing.T) {
+	// Create a temporary model directory
+	tempDir, err := os.MkdirTemp("", "test-nondet-ops-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	modelDir := filepath.Join(tempDir, "model")
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
+		t.Fatalf("failed to create model dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
+		t.Fatalf("failed to create model file: %v", err)
+	}
+
+	metadata := `{
+  "version": "v1.0.0",
+  "op_names": ["Conv2D", "MatMul"]
+}`
+	if err := os.WriteFile(filepath.Join(modelDir, "export_metadata.json"), []byte(metadata), 0600); err != nil {
+		t.Fatalf("failed to write metadata file: %v", err)
+	}
+
+	config := DefaultInferenceConfig()
+	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
+
+	loader := NewModelLoader(config)
+	_, err = loader.Load()
+	if err == nil {
+		t.Fatal("expected error for non-deterministic ops, got none")
+	}
+}
+
+func TestModelLoaderAcceptsDeterministicOps(t *testing.T) {
+	// Create a temporary model directory
+	tempDir, err := os.MkdirTemp("", "test-det-ops-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	modelDir := filepath.Join(tempDir, "model")
+	if err := os.MkdirAll(modelDir, 0750); err != nil {
+		t.Fatalf("failed to create model dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(modelDir, "saved_model.pb"), []byte("test"), 0600); err != nil {
+		t.Fatalf("failed to create model file: %v", err)
+	}
+
+	metadata := `{
+  "version": "v1.0.0",
+  "op_names": ["MatMul", "AddV2", "Relu"]
+}`
+	if err := os.WriteFile(filepath.Join(modelDir, "export_metadata.json"), []byte(metadata), 0600); err != nil {
+		t.Fatalf("failed to write metadata file: %v", err)
+	}
+
+	config := DefaultInferenceConfig()
+	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
+
+	loader := NewModelLoader(config)
+	if _, err = loader.Load(); err != nil {
+		t.Fatalf("unexpected error for deterministic ops: %v", err)
+	}
+}
+
 // ============================================================================
 // Test Scorer
 // ============================================================================
@@ -513,6 +614,7 @@ func TestScorerWithValidInputs(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
 	if err != nil {
@@ -571,6 +673,7 @@ func TestScorerWithInvalidInputs(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
 	if err != nil {
@@ -610,6 +713,7 @@ func TestScorerTimeout(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
 	config.Timeout = 1 * time.Nanosecond // Very short timeout
+	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
 	if err != nil {
@@ -663,6 +767,7 @@ func TestScorerDeterministicOutputs(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
 	config.Deterministic = true
+	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
 	if err != nil {
@@ -716,6 +821,7 @@ func TestScorerStats(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
 	if err != nil {
@@ -749,6 +855,7 @@ func TestSidecarClientCreation(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.UseSidecar = true
 	config.SidecarAddress = testSidecarAddress
+	config.ExpectedHash = strings.Repeat("a", 64)
 
 	client, err := NewSidecarClient(config)
 	if err != nil {
@@ -765,6 +872,7 @@ func TestSidecarClientInference(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.UseSidecar = true
 	config.SidecarAddress = testSidecarAddress
+	config.ExpectedHash = strings.Repeat("a", 64)
 
 	client, err := NewSidecarClient(config)
 	if err != nil {
@@ -811,6 +919,7 @@ func TestNewScorer(t *testing.T) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	setExpectedHashForModel(t, &config, modelDir)
 
 	scorer, err := NewScorer(config)
 	if err != nil {
@@ -827,6 +936,7 @@ func TestNewScorerSidecar(t *testing.T) {
 	config := DefaultInferenceConfig()
 	config.UseSidecar = true
 	config.SidecarAddress = testSidecarAddress
+	config.ExpectedHash = strings.Repeat("a", 64)
 
 	scorer, err := NewScorer(config)
 	if err != nil {
@@ -888,6 +998,16 @@ func createTestInputs() *ScoreInputs {
 	}
 }
 
+func setExpectedHashForModel(t testing.TB, config *InferenceConfig, modelDir string) {
+	t.Helper()
+	loader := NewModelLoader(*config)
+	hash, err := loader.computeModelHash(modelDir)
+	if err != nil {
+		t.Fatalf("failed to compute model hash: %v", err)
+	}
+	config.ExpectedHash = hash
+}
+
 // ============================================================================
 // Benchmark Tests
 // ============================================================================
@@ -931,6 +1051,7 @@ func BenchmarkInference(b *testing.B) {
 
 	config := DefaultInferenceConfig()
 	config.ModelPath = modelDir
+	setExpectedHashForModel(b, &config, modelDir)
 
 	scorer, err := NewTensorFlowScorer(config)
 	if err != nil {

@@ -1,0 +1,60 @@
+syntax = "proto3";
+package virtengine.staking.v1;
+
+import "gogoproto/gogo.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/staking/v1";
+
+// Params defines the parameters for the staking module
+message Params {
+  option (gogoproto.equal) = true;
+
+  // EpochLength is the number of blocks per reward epoch
+  uint64 epoch_length = 1 [(gogoproto.jsontag) = "epoch_length"];
+
+  // BaseRewardPerBlock is the base reward per block in smallest unit
+  int64 base_reward_per_block = 2 [(gogoproto.jsontag) = "base_reward_per_block"];
+
+  // VEIDRewardPool is the VEID verification reward pool per epoch
+  int64 veid_reward_pool = 3 [(gogoproto.jsontag) = "veid_reward_pool"];
+
+  // IdentityNetworkRewardPool is the identity network reward pool per epoch
+  int64 identity_network_reward_pool = 4 [(gogoproto.jsontag) = "identity_network_reward_pool"];
+
+  // DowntimeThreshold is the consecutive missed blocks before slashing
+  int64 downtime_threshold = 5 [(gogoproto.jsontag) = "downtime_threshold"];
+
+  // SignedBlocksWindow is the window size for tracking missed blocks
+  int64 signed_blocks_window = 6 [(gogoproto.jsontag) = "signed_blocks_window"];
+
+  // MinSignedPerWindow is the minimum percentage that must be signed (fixed-point)
+  int64 min_signed_per_window = 7 [(gogoproto.jsontag) = "min_signed_per_window"];
+
+  // SlashFractionDoubleSign is the slash fraction for double signing (fixed-point)
+  int64 slash_fraction_double_sign = 8 [(gogoproto.jsontag) = "slash_fraction_double_sign"];
+
+  // SlashFractionDowntime is the slash fraction for downtime (fixed-point)
+  int64 slash_fraction_downtime = 9 [(gogoproto.jsontag) = "slash_fraction_downtime"];
+
+  // SlashFractionInvalidAttestation is the slash fraction for invalid VEID attestation (fixed-point)
+  int64 slash_fraction_invalid_attestation = 10 [(gogoproto.jsontag) = "slash_fraction_invalid_attestation"];
+
+  // JailDurationDowntime is the jail duration for downtime (seconds)
+  int64 jail_duration_downtime = 11 [(gogoproto.jsontag) = "jail_duration_downtime"];
+
+  // JailDurationDoubleSign is the jail duration for double signing (seconds)
+  int64 jail_duration_double_sign = 12 [(gogoproto.jsontag) = "jail_duration_double_sign"];
+
+  // JailDurationInvalidAttestation is the jail duration for invalid attestation (seconds)
+  int64 jail_duration_invalid_attestation = 13 [(gogoproto.jsontag) = "jail_duration_invalid_attestation"];
+
+  // ScoreTolerance is the allowed score difference from consensus (fixed-point)
+  int64 score_tolerance = 14 [(gogoproto.jsontag) = "score_tolerance"];
+
+  // MaxMissedVEIDRecomputations is max missed recomputations before slash
+  int64 max_missed_veid_recomputations = 15 [(gogoproto.jsontag) = "max_missed_veid_recomputations"];
+
+  // RewardDenom is the denomination for rewards
+  string reward_denom = 16 [(gogoproto.jsontag) = "reward_denom"];
+}

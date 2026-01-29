@@ -766,3 +766,27 @@ class TestDeterminism:
         arr2 = sample_landmarks.to_array()
         
         np.testing.assert_array_equal(arr1, arr2)
+
+    def test_alignment_determinism_fixed_input(self):
+        """Test that alignment output is deterministic for fixed inputs."""
+        # Synthetic deterministic image
+        image = np.zeros((256, 256, 3), dtype=np.uint8)
+        image[:, :] = [128, 128, 128]
+        cv2.circle(image, (96, 112), 8, (255, 255, 255), -1)
+        cv2.circle(image, (160, 112), 8, (255, 255, 255), -1)
+        cv2.circle(image, (128, 144), 6, (200, 200, 200), -1)
+        cv2.line(image, (104, 176), (152, 176), (180, 120, 120), 2)
+
+        landmarks = FiveLandmarks(
+            left_eye=(96.0, 112.0),
+            right_eye=(160.0, 112.0),
+            nose=(128.0, 144.0),
+            mouth_left=(108.0, 176.0),
+            mouth_right=(148.0, 176.0),
+        )
+
+        aligner = FaceAligner(target_size=(224, 224), use_template=True)
+        aligned1 = aligner.align(image.copy(), landmarks)
+        aligned2 = aligner.align(image.copy(), landmarks)
+
+        np.testing.assert_array_equal(aligned1, aligned2)

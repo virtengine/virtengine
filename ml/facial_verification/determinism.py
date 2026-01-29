@@ -64,6 +64,9 @@ class DeterminismController:
         if self._determinism_config.deterministic_ops:
             self._enable_deterministic_ops()
         
+        # Set OpenCV-specific settings
+        self._configure_opencv()
+
         # Set TensorFlow-specific settings
         self._configure_tensorflow()
         
@@ -131,6 +134,21 @@ class DeterminismController:
             logger.warning("TensorFlow not available for configuration")
         except Exception as e:
             logger.warning(f"Error configuring TensorFlow: {e}")
+
+    def _configure_opencv(self) -> None:
+        """Configure OpenCV for deterministic execution."""
+        try:
+            import cv2
+
+            # Ensure single-threaded deterministic execution
+            cv2.setNumThreads(1)
+            cv2.setUseOptimized(False)
+
+            logger.debug("OpenCV configured for deterministic execution")
+        except ImportError:
+            logger.warning("OpenCV not available for configuration")
+        except Exception as e:
+            logger.warning(f"Error configuring OpenCV: {e}")
     
     def compute_result_hash(self, result: Any) -> str:
         """

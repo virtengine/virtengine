@@ -65,6 +65,11 @@ check_dependencies() {
     else
         SHA256_CMD="sha256sum"
     fi
+
+    if ! command -v python3 &> /dev/null; then
+        log_error "python3 is required to compute deterministic manifest hashes"
+        exit 1
+    fi
     
     log_success "All dependencies available"
 }
@@ -89,43 +94,49 @@ compute_model_hashes() {
     
     local models_dir="${ML_DIR}/models"
     local manifest_file="${OUTPUT_DIR}/model_manifest.json"
+    local allow_placeholders="${VEID_ALLOW_PLACEHOLDER_HASHES:-false}"
     
     # Check if models directory exists (may be placeholder in development)
     if [ ! -d "${models_dir}" ]; then
+        if [ "${allow_placeholders}" != "true" ]; then
+            log_error "Models directory not found. Set VEID_ALLOW_PLACEHOLDER_HASHES=true to allow placeholders."
+            exit 1
+        fi
+
         log_warn "Models directory not found, creating placeholder manifest"
         cat > "${manifest_file}" << EOF
 {
     "version": "1.0.0",
-    "models": {
-        "deepface_facenet512": {
+    "models": [
+        {
             "name": "deepface_facenet512",
             "version": "1.0.0",
             "weights_hash": "sha256:placeholder_hash_for_deepface_facenet512_model_weights",
             "framework": "tensorflow",
             "purpose": "face_recognition"
         },
-        "craft_text_detection": {
+        {
             "name": "craft_text_detection",
             "version": "1.0.0",
             "weights_hash": "sha256:placeholder_hash_for_craft_text_detection_model_weights",
             "framework": "pytorch",
             "purpose": "text_detection"
         },
-        "unet_face_extraction": {
+        {
             "name": "unet_face_extraction",
             "version": "1.0.0",
             "weights_hash": "sha256:placeholder_hash_for_unet_face_extraction_model_weights",
             "framework": "tensorflow",
             "purpose": "face_extraction"
         },
-        "identity_scorer_v1": {
+        {
             "name": "identity_scorer_v1",
             "version": "1.0.0",
             "weights_hash": "sha256:placeholder_hash_for_identity_scorer_model_weights",
             "framework": "tensorflow",
             "purpose": "identity_scoring"
         }
-    },
+    ],
     "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
@@ -152,40 +163,47 @@ EOF
         if [ -f "${models_dir}/identity_scorer_v1.h5" ]; then
             scorer_hash=$(compute_file_hash "${models_dir}/identity_scorer_v1.h5")
         fi
-        
+
+        if [ "${allow_placeholders}" != "true" ]; then
+            if [ -z "${deepface_hash}" ] || [ -z "${craft_hash}" ] || [ -z "${unet_hash}" ] || [ -z "${scorer_hash}" ]; then
+                log_error "Missing model weights. Set VEID_ALLOW_PLACEHOLDER_HASHES=true to allow placeholders."
+                exit 1
+            fi
+        fi
+
         cat > "${manifest_file}" << EOF
 {
     "version": "1.0.0",
-    "models": {
-        "deepface_facenet512": {
+    "models": [
+        {
             "name": "deepface_facenet512",
             "version": "1.0.0",
             "weights_hash": "sha256:${deepface_hash:-placeholder}",
             "framework": "tensorflow",
             "purpose": "face_recognition"
         },
-        "craft_text_detection": {
+        {
             "name": "craft_text_detection",
             "version": "1.0.0",
             "weights_hash": "sha256:${craft_hash:-placeholder}",
             "framework": "pytorch",
             "purpose": "text_detection"
         },
-        "unet_face_extraction": {
+        {
             "name": "unet_face_extraction",
             "version": "1.0.0",
             "weights_hash": "sha256:${unet_hash:-placeholder}",
             "framework": "tensorflow",
             "purpose": "face_extraction"
         },
-        "identity_scorer_v1": {
+        {
             "name": "identity_scorer_v1",
             "version": "1.0.0",
             "weights_hash": "sha256:${scorer_hash:-placeholder}",
             "framework": "tensorflow",
             "purpose": "identity_scoring"
         }
-    },
+    ],
     "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
@@ -193,8 +211,53 @@ EOF
     
     # Compute manifest hash
     local manifest_hash
-    manifest_hash=$(compute_file_hash "${manifest_file}")
+    manifest_hash=$(python3 - << 'PY' "${manifest_file}"
+import hashlib
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+
+version = data.get("version", "")
+models = data.get("models", [])
+
+model_by_name = {m["name"]: m for m in models}
+names = sorted(model_by_name.keys())
+
+h = hashlib.sha256()
+h.update(version.encode())
+for name in names:
+    model = model_by_name[name]
+    h.update(name.encode())
+    h.update(model.get("version", "").encode())
+    h.update(model.get("weights_hash", "").encode())
+    config_hash = model.get("config_hash", "")
+    if config_hash:
+        h.update(config_hash.encode())
+    h.update(model.get("framework", "").encode())
+
+print(h.hexdigest())
+PY
+)
     echo "${manifest_hash}" > "${OUTPUT_DIR}/manifest_hash.txt"
+
+    python3 - << 'PY' "${manifest_file}" "${manifest_hash}"
+import json
+import sys
+
+path = sys.argv[1]
+manifest_hash = sys.argv[2]
+with open(path, "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+
+data["manifest_hash"] = manifest_hash
+
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=4, sort_keys=False)
+    fh.write("\n")
+PY
     
     log_success "Model manifest created: ${manifest_file}"
     log_info "Manifest hash: ${manifest_hash}"
