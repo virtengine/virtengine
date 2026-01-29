@@ -25,6 +25,10 @@ volumes:
     driver: local
   provider-data:
     driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
 
 services:
   # =============================================================================
@@ -171,6 +175,101 @@ services:
     restart: unless-stopped
 
   # =============================================================================
+  # API Gateway - Kong (DB-less)
+  # =============================================================================
+  kong:
+    image: kong:3.6.1
+    container_name: kong
+    hostname: kong
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.50
+    ports:
+      - "8000:8000"   # API Gateway proxy
+      - "8001:8001"   # Admin API
+      - "8100:8100"   # Metrics (Prometheus)
+    volumes:
+      - ./config/kong/kong.yaml:/kong/declarative/kong.yaml:ro
+    environment:
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/kong/declarative/kong.yaml
+      - KONG_PROXY_LISTEN=0.0.0.0:8000
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+      - KONG_STATUS_LISTEN=0.0.0.0:8100
+      - KONG_LOG_LEVEL=info
+    depends_on:
+      - virtengine-node
+      - waldur
+      - provider-daemon
+      - api-portal
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # API Developer Portal (Swagger UI)
+  # =============================================================================
+  api-portal:
+    image: swaggerapi/swagger-ui:v5.17.14
+    container_name: api-portal
+    hostname: api-portal
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.51
+    ports:
+      - "3001:8080"   # Developer portal (Swagger UI)
+    volumes:
+      - ./sdk/docs/swagger-ui/swagger.yaml:/swagger/swagger.yaml:ro
+    environment:
+      - SWAGGER_JSON=/swagger/swagger.yaml
+      - BASE_URL=/portal
+    restart: unless-stopped
+
+  # =============================================================================
+  # API Analytics & Monitoring
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: prometheus
+    hostname: prometheus
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.52
+    ports:
+      - "9095:9090"   # Prometheus UI
+    volumes:
+      - ./config/kong/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    depends_on:
+      - kong
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:10.4.2
+    container_name: grafana
+    hostname: grafana
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.53
+    ports:
+      - "3002:3000"   # Grafana UI
+    volumes:
+      - ./config/kong/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # =============================================================================
   # Test Runner - For running integration tests
   # =============================================================================
   test-runner:
@@ -189,6 +288,7 @@ services:
       - VIRTENGINE_GRPC_URL=virtengine-node:9090
       - WALDUR_API_URL=http://waldur:8080
       - PORTAL_URL=http://portal:3000
+      - API_GATEWAY_URL=http://kong:8000
     working_dir: /workspace
     command: ["echo", "Test runner ready. Use: docker-compose run test-runner go test ./tests/integration/..."]
     depends_on:

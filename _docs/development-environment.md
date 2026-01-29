@@ -133,6 +133,11 @@ This starts the following services:
 | Waldur API | 8080 | Resource management (placeholder) |
 | Portal | 3000 | Web UI (placeholder) |
 | Provider Daemon | 8443 | Provider API (placeholder) |
+| API Gateway (Kong) | 8000 | Gateway proxy |
+| Kong Admin API | 8001 | Gateway management API |
+| Developer Portal | 3001 | Swagger UI docs |
+| Prometheus | 9095 | Metrics UI |
+| Grafana | 3002 | Dashboards |
 
 ### Localnet Commands
 
