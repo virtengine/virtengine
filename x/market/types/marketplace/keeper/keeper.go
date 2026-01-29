@@ -112,6 +112,7 @@ type IKeeper interface {
 	IncrementEventSequence(ctx sdk.Context) uint64
 	GetEventCheckpoint(ctx sdk.Context, subscriberID string) (*marketplace.EventCheckpoint, bool)
 	SetEventCheckpoint(ctx sdk.Context, checkpoint *marketplace.EventCheckpoint) error
+	RequestUsageUpdate(ctx sdk.Context, allocationID marketplace.AllocationID, requestType string) error
 
 	// Codec and store
 	Codec() codec.BinaryCodec
@@ -1165,4 +1166,27 @@ func (k Keeper) SetEventCheckpoint(ctx sdk.Context, checkpoint *marketplace.Even
 	}
 	store.Set(key, bz)
 	return nil
+}
+
+// RequestUsageUpdate requests a usage update for an allocation and emits UsageUpdateRequested event
+func (k Keeper) RequestUsageUpdate(ctx sdk.Context, allocationID marketplace.AllocationID, requestType string) error {
+	allocation, found := k.GetAllocation(ctx, allocationID)
+	if !found {
+		return marketplace.ErrAllocationNotFound
+	}
+
+	if allocation.State.IsTerminal() {
+		return marketplace.ErrInvalidStateTransition.Wrapf("allocation %s is in terminal state", allocationID.String())
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewUsageUpdateRequestedEventAt(
+		allocation.ID.String(),
+		allocation.ProviderAddress,
+		requestType,
+		ctx.BlockHeight(),
+		seq,
+		ctx.BlockTime(),
+	)
+	return k.EmitMarketplaceEvent(ctx, event)
 }
