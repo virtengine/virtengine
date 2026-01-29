@@ -90,7 +90,7 @@
     "jest-mock-extended": "^4.0.0",
     "json-schema-to-typescript": "^15.0.4",
     "lint-staged": "^15.4.3",
-    "lodash": "^4.17.21",
+    "lodash": "^4.17.23",
     "sort-json": "^2.0.1",
     "sort-package-json": "^3.0.0",
     "ts-jest": "^29.2.6",
