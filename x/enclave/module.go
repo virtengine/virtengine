@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	abci "github.com/cometbft/cometbft/abci/types"
 	"cosmossdk.io/core/appmodule"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -75,12 +76,19 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the enclave module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Register gRPC gateway routes when query client is available
+	// REST API routes will be automatically generated and registered once proper
+	// protobuf definitions are generated (see ENCLAVE-ENH-001 task).
+	// The gRPC-Gateway will expose all query endpoints as REST endpoints:
+	// - GET /virtengine/enclave/v1/identity/{validator_address}
+	// - GET /virtengine/enclave/v1/keys/active
+	// - GET /virtengine/enclave/v1/measurements
+	// - etc.
 }
 
 // RegisterGRPCRoutes registers the gRPC Gateway routes for the enclave module.
 func (AppModuleBasic) RegisterGRPCRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	// Register gRPC routes when query client is available
+	// gRPC routes will be automatically registered once proper
+	// protobuf definitions and service registration is complete.
 }
 
 // GetQueryCmd returns the root query command of this module
@@ -137,6 +145,17 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 	gs := ExportGenesis(ctx, am.keeper)
 	// Use standard JSON encoding for stub types until proper protobuf generation
 	return cdc.MustMarshalJSON(gs)
+}
+
+// BeginBlock performs begin block logic for the enclave module
+func (am AppModule) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) {
+	am.keeper.BeginBlocker(ctx)
+}
+
+// EndBlock performs end block logic for the enclave module
+func (am AppModule) EndBlock(ctx sdk.Context, req abci.RequestEndBlock) []abci.ValidatorUpdate {
+	am.keeper.EndBlocker(ctx)
+	return []abci.ValidatorUpdate{}
 }
 
 // GenerateGenesisState implements module.AppModuleSimulation

@@ -46,6 +46,9 @@ func (m msgServer) RegisterEnclaveIdentity(goCtx context.Context, msg *types.Msg
 		return nil, err
 	}
 
+	// Record metrics
+	m.keeper.RecordIdentityRegistration()
+
 	return &types.MsgRegisterEnclaveIdentityResponse{
 		KeyFingerprint: identity.KeyFingerprint(),
 		ExpiryHeight:   identity.ExpiryHeight,
@@ -147,6 +150,9 @@ func (m msgServer) ProposeMeasurement(goCtx context.Context, msg *types.MsgPropo
 		return nil, err
 	}
 
+	// Record metrics
+	m.keeper.RecordMeasurementProposal("add")
+
 	return &types.MsgProposeMeasurementResponse{
 		MeasurementHash: measurement.MeasurementHashHex(),
 	}, nil
@@ -165,6 +171,9 @@ func (m msgServer) RevokeMeasurement(goCtx context.Context, msg *types.MsgRevoke
 	if err := m.keeper.RevokeMeasurement(ctx, msg.MeasurementHash, msg.Reason, 0); err != nil {
 		return nil, err
 	}
+
+	// Record metrics
+	m.keeper.RecordMeasurementProposal("revoke")
 
 	return &types.MsgRevokeMeasurementResponse{}, nil
 }
