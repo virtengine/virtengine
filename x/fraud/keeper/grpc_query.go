@@ -21,8 +21,11 @@ func NewQueryServer(k Keeper) QueryServer {
 	return QueryServer{Keeper: k}
 }
 
+// Ensure QueryServer implements types.QueryServer
+var _ types.QueryServer = QueryServer{}
+
 // FraudReport returns a fraud report by ID
-func (q QueryServer) FraudReport(ctx context.Context, req *QueryFraudReportRequest) (*QueryFraudReportResponse, error) {
+func (q QueryServer) FraudReport(ctx context.Context, req *types.QueryFraudReportRequest) (*types.QueryFraudReportResponse, error) {
 	if req == nil {
 		return nil, types.ErrInvalidReportID.Wrap("request is nil")
 	}
@@ -33,35 +36,11 @@ func (q QueryServer) FraudReport(ctx context.Context, req *QueryFraudReportReque
 		return nil, types.ErrReportNotFound
 	}
 
-	return &QueryFraudReportResponse{Report: report}, nil
+	return &types.QueryFraudReportResponse{Report: &report}, nil
 }
 
-// FraudReportsByReporter returns all fraud reports by a reporter
-func (q QueryServer) FraudReportsByReporter(ctx context.Context, req *QueryFraudReportsByReporterRequest) (*QueryFraudReportsByReporterResponse, error) {
-	if req == nil {
-		return nil, types.ErrInvalidReporter.Wrap("request is nil")
-	}
-
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	reports := q.GetFraudReportsByReporter(sdkCtx, req.Reporter)
-
-	return &QueryFraudReportsByReporterResponse{Reports: reports}, nil
-}
-
-// FraudReportsByReportedParty returns all fraud reports against a party
-func (q QueryServer) FraudReportsByReportedParty(ctx context.Context, req *QueryFraudReportsByReportedPartyRequest) (*QueryFraudReportsByReportedPartyResponse, error) {
-	if req == nil {
-		return nil, types.ErrInvalidReportedParty.Wrap("request is nil")
-	}
-
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	reports := q.GetFraudReportsByReportedParty(sdkCtx, req.ReportedParty)
-
-	return &QueryFraudReportsByReportedPartyResponse{Reports: reports}, nil
-}
-
-// FraudReportsByStatus returns all fraud reports with a specific status
-func (q QueryServer) FraudReportsByStatus(ctx context.Context, req *QueryFraudReportsByStatusRequest) (*QueryFraudReportsByStatusResponse, error) {
+// FraudReports returns all fraud reports with optional status filter
+func (q QueryServer) FraudReports(ctx context.Context, req *types.QueryFraudReportsRequest) (*types.QueryFraudReportsResponse, error) {
 	if req == nil {
 		return nil, types.ErrInvalidStatus.Wrap("request is nil")
 	}
@@ -69,86 +48,65 @@ func (q QueryServer) FraudReportsByStatus(ctx context.Context, req *QueryFraudRe
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	reports := q.GetFraudReportsByStatus(sdkCtx, req.Status)
 
-	return &QueryFraudReportsByStatusResponse{Reports: reports}, nil
+	result := make([]*types.FraudReport, len(reports))
+	for i := range reports {
+		result[i] = &reports[i]
+	}
+
+	return &types.QueryFraudReportsResponse{Reports: result}, nil
 }
 
-// ModeratorQueue returns the moderator queue
-func (q QueryServer) ModeratorQueue(ctx context.Context, req *QueryModeratorQueueRequest) (*QueryModeratorQueueResponse, error) {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	entries := q.GetModeratorQueue(sdkCtx)
-
-	return &QueryModeratorQueueResponse{Entries: entries}, nil
-}
-
-// AuditLogs returns audit logs for a report
-func (q QueryServer) AuditLogs(ctx context.Context, req *QueryAuditLogsRequest) (*QueryAuditLogsResponse, error) {
+// FraudReportsByReporter returns all fraud reports by a reporter
+func (q QueryServer) FraudReportsByReporter(ctx context.Context, req *types.QueryFraudReportsByReporterRequest) (*types.QueryFraudReportsByReporterResponse, error) {
 	if req == nil {
-		return nil, types.ErrInvalidReportID.Wrap("request is nil")
+		return nil, types.ErrInvalidReporter.Wrap("request is nil")
 	}
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	logs := q.GetAuditLogsForReport(sdkCtx, req.ReportID)
+	reports := q.GetFraudReportsByReporter(sdkCtx, req.Reporter)
 
-	return &QueryAuditLogsResponse{Logs: logs}, nil
+	result := make([]*types.FraudReport, len(reports))
+	for i := range reports {
+		result[i] = &reports[i]
+	}
+
+	return &types.QueryFraudReportsByReporterResponse{Reports: result}, nil
+}
+
+// FraudReportsByReportedParty returns all fraud reports against a party
+func (q QueryServer) FraudReportsByReportedParty(ctx context.Context, req *types.QueryFraudReportsByReportedPartyRequest) (*types.QueryFraudReportsByReportedPartyResponse, error) {
+	if req == nil {
+		return nil, types.ErrInvalidReportedParty.Wrap("request is nil")
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	reports := q.GetFraudReportsByReportedParty(sdkCtx, req.ReportedParty)
+
+	result := make([]*types.FraudReport, len(reports))
+	for i := range reports {
+		result[i] = &reports[i]
+	}
+
+	return &types.QueryFraudReportsByReportedPartyResponse{Reports: result}, nil
+}
+
+// ModeratorQueue returns the moderator queue
+func (q QueryServer) ModeratorQueue(ctx context.Context, req *types.QueryModeratorQueueRequest) (*types.QueryModeratorQueueResponse, error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	entries := q.GetModeratorQueue(sdkCtx)
+
+	result := make([]*types.ModeratorQueueEntry, len(entries))
+	for i := range entries {
+		result[i] = &entries[i]
+	}
+
+	return &types.QueryModeratorQueueResponse{Entries: result}, nil
 }
 
 // Params returns the module parameters
-func (q QueryServer) Params(ctx context.Context, req *QueryParamsRequest) (*QueryParamsResponse, error) {
+func (q QueryServer) Params(ctx context.Context, req *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	params := q.GetParams(sdkCtx)
 
-	return &QueryParamsResponse{Params: params}, nil
-}
-
-// Query request/response types
-type QueryFraudReportRequest struct {
-	ReportID string `json:"report_id"`
-}
-
-type QueryFraudReportResponse struct {
-	Report types.FraudReport `json:"report"`
-}
-
-type QueryFraudReportsByReporterRequest struct {
-	Reporter string `json:"reporter"`
-}
-
-type QueryFraudReportsByReporterResponse struct {
-	Reports []types.FraudReport `json:"reports"`
-}
-
-type QueryFraudReportsByReportedPartyRequest struct {
-	ReportedParty string `json:"reported_party"`
-}
-
-type QueryFraudReportsByReportedPartyResponse struct {
-	Reports []types.FraudReport `json:"reports"`
-}
-
-type QueryFraudReportsByStatusRequest struct {
-	Status types.FraudReportStatus `json:"status"`
-}
-
-type QueryFraudReportsByStatusResponse struct {
-	Reports []types.FraudReport `json:"reports"`
-}
-
-type QueryModeratorQueueRequest struct{}
-
-type QueryModeratorQueueResponse struct {
-	Entries []types.ModeratorQueueEntry `json:"entries"`
-}
-
-type QueryAuditLogsRequest struct {
-	ReportID string `json:"report_id"`
-}
-
-type QueryAuditLogsResponse struct {
-	Logs []types.FraudAuditLog `json:"logs"`
-}
-
-type QueryParamsRequest struct{}
-
-type QueryParamsResponse struct {
-	Params types.Params `json:"params"`
+	return &types.QueryParamsResponse{Params: params}, nil
 }
