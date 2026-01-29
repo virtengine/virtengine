@@ -1,6 +1,7 @@
 // Package keeper implements the Fraud module keeper.
 //
 // VE-2018: MsgServer implementation for fraud module
+// VE-3053: Fixed to use proto-generated types correctly
 package keeper
 
 import (
@@ -23,14 +24,15 @@ type msgServer struct {
 }
 
 // NewMsgServerImpl returns an implementation of the fraud MsgServer interface
-func NewMsgServerImpl(k Keeper) types.MsgServer {
+// This returns a MsgServerImpl that can be wrapped by RegisterMsgServer.
+func NewMsgServerImpl(k Keeper) types.MsgServerImpl {
 	return &msgServer{keeper: k}
 }
 
-var _ types.MsgServer = msgServer{}
+var _ types.MsgServerImpl = (*msgServer)(nil)
 
 // SubmitFraudReport handles submitting a new fraud report
-func (ms msgServer) SubmitFraudReport(goCtx context.Context, msg *types.MsgSubmitFraudReport) (*types.MsgSubmitFraudReportResponse, error) {
+func (ms *msgServer) SubmitFraudReport(goCtx context.Context, msg *types.MsgSubmitFraudReport) (*types.MsgSubmitFraudReportResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate reporter address
@@ -44,14 +46,20 @@ func (ms msgServer) SubmitFraudReport(goCtx context.Context, msg *types.MsgSubmi
 		return nil, types.ErrUnauthorizedReporter
 	}
 
-	// Create the fraud report
+	// Convert proto evidence to local type
+	evidence := make([]types.EncryptedEvidence, len(msg.Evidence))
+	for i, e := range msg.Evidence {
+		evidence[i] = types.EncryptedEvidenceFromProto(&e)
+	}
+
+	// Create the fraud report using local types
 	report := &types.FraudReport{
 		Reporter:        msg.Reporter,
 		ReportedParty:   msg.ReportedParty,
-		Category:        msg.Category,
+		Category:        types.FraudCategoryFromProto(msg.Category),
 		Description:     msg.Description,
-		Evidence:        msg.Evidence,
-		RelatedOrderIDs: msg.RelatedOrderIDs,
+		Evidence:        evidence,
+		RelatedOrderIDs: msg.RelatedOrderIds,
 		Status:          types.FraudReportStatusSubmitted,
 		SubmittedAt:     ctx.BlockTime(),
 		UpdatedAt:       ctx.BlockTime(),
@@ -71,12 +79,12 @@ func (ms msgServer) SubmitFraudReport(goCtx context.Context, msg *types.MsgSubmi
 	)
 
 	return &types.MsgSubmitFraudReportResponse{
-		ReportID: report.ID,
+		ReportId: report.ID,
 	}, nil
 }
 
 // AssignModerator handles assigning a moderator to a fraud report
-func (ms msgServer) AssignModerator(goCtx context.Context, msg *types.MsgAssignModerator) (*types.MsgAssignModeratorResponse, error) {
+func (ms *msgServer) AssignModerator(goCtx context.Context, msg *types.MsgAssignModerator) (*types.MsgAssignModeratorResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate moderator address
@@ -91,12 +99,12 @@ func (ms msgServer) AssignModerator(goCtx context.Context, msg *types.MsgAssignM
 	}
 
 	// Assign moderator through the keeper
-	if err := ms.keeper.AssignModerator(ctx, msg.ReportID, msg.AssignTo); err != nil {
+	if err := ms.keeper.AssignModerator(ctx, msg.ReportId, msg.AssignTo); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("moderator assigned via message",
-		"report_id", msg.ReportID,
+		"report_id", msg.ReportId,
 		"moderator", msg.Moderator,
 		"assigned_to", msg.AssignTo,
 	)
@@ -105,7 +113,7 @@ func (ms msgServer) AssignModerator(goCtx context.Context, msg *types.MsgAssignM
 }
 
 // UpdateReportStatus handles updating the status of a fraud report
-func (ms msgServer) UpdateReportStatus(goCtx context.Context, msg *types.MsgUpdateReportStatus) (*types.MsgUpdateReportStatusResponse, error) {
+func (ms *msgServer) UpdateReportStatus(goCtx context.Context, msg *types.MsgUpdateReportStatus) (*types.MsgUpdateReportStatusResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate moderator address
@@ -119,13 +127,16 @@ func (ms msgServer) UpdateReportStatus(goCtx context.Context, msg *types.MsgUpda
 		return nil, types.ErrUnauthorizedModerator.Wrap("sender is not a moderator")
 	}
 
+	// Convert proto status to local type
+	newStatus := types.FraudReportStatusFromProto(msg.NewStatus)
+
 	// Update status through the keeper
-	if err := ms.keeper.UpdateReportStatus(ctx, msg.ReportID, msg.NewStatus, msg.Moderator, msg.Notes); err != nil {
+	if err := ms.keeper.UpdateReportStatus(ctx, msg.ReportId, newStatus, msg.Moderator, msg.Notes); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("report status updated via message",
-		"report_id", msg.ReportID,
+		"report_id", msg.ReportId,
 		"moderator", msg.Moderator,
 		"new_status", msg.NewStatus.String(),
 	)
@@ -134,7 +145,7 @@ func (ms msgServer) UpdateReportStatus(goCtx context.Context, msg *types.MsgUpda
 }
 
 // ResolveFraudReport handles resolving a fraud report
-func (ms msgServer) ResolveFraudReport(goCtx context.Context, msg *types.MsgResolveFraudReport) (*types.MsgResolveFraudReportResponse, error) {
+func (ms *msgServer) ResolveFraudReport(goCtx context.Context, msg *types.MsgResolveFraudReport) (*types.MsgResolveFraudReportResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate moderator address
@@ -148,13 +159,16 @@ func (ms msgServer) ResolveFraudReport(goCtx context.Context, msg *types.MsgReso
 		return nil, types.ErrUnauthorizedModerator.Wrap("sender is not a moderator")
 	}
 
+	// Convert proto resolution to local type
+	resolution := types.ResolutionTypeFromProto(msg.Resolution)
+
 	// Resolve report through the keeper
-	if err := ms.keeper.ResolveFraudReport(ctx, msg.ReportID, msg.Resolution, msg.Notes, msg.Moderator); err != nil {
+	if err := ms.keeper.ResolveFraudReport(ctx, msg.ReportId, resolution, msg.Notes, msg.Moderator); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("fraud report resolved via message",
-		"report_id", msg.ReportID,
+		"report_id", msg.ReportId,
 		"moderator", msg.Moderator,
 		"resolution", msg.Resolution.String(),
 	)
@@ -163,7 +177,7 @@ func (ms msgServer) ResolveFraudReport(goCtx context.Context, msg *types.MsgReso
 }
 
 // RejectFraudReport handles rejecting a fraud report
-func (ms msgServer) RejectFraudReport(goCtx context.Context, msg *types.MsgRejectFraudReport) (*types.MsgRejectFraudReportResponse, error) {
+func (ms *msgServer) RejectFraudReport(goCtx context.Context, msg *types.MsgRejectFraudReport) (*types.MsgRejectFraudReportResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate moderator address
@@ -178,12 +192,12 @@ func (ms msgServer) RejectFraudReport(goCtx context.Context, msg *types.MsgRejec
 	}
 
 	// Reject report through the keeper
-	if err := ms.keeper.RejectFraudReport(ctx, msg.ReportID, msg.Notes, msg.Moderator); err != nil {
+	if err := ms.keeper.RejectFraudReport(ctx, msg.ReportId, msg.Notes, msg.Moderator); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("fraud report rejected via message",
-		"report_id", msg.ReportID,
+		"report_id", msg.ReportId,
 		"moderator", msg.Moderator,
 	)
 
@@ -191,7 +205,7 @@ func (ms msgServer) RejectFraudReport(goCtx context.Context, msg *types.MsgRejec
 }
 
 // EscalateFraudReport handles escalating a fraud report
-func (ms msgServer) EscalateFraudReport(goCtx context.Context, msg *types.MsgEscalateFraudReport) (*types.MsgEscalateFraudReportResponse, error) {
+func (ms *msgServer) EscalateFraudReport(goCtx context.Context, msg *types.MsgEscalateFraudReport) (*types.MsgEscalateFraudReportResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate moderator address
@@ -206,12 +220,12 @@ func (ms msgServer) EscalateFraudReport(goCtx context.Context, msg *types.MsgEsc
 	}
 
 	// Escalate report through the keeper
-	if err := ms.keeper.EscalateFraudReport(ctx, msg.ReportID, msg.Reason, msg.Moderator); err != nil {
+	if err := ms.keeper.EscalateFraudReport(ctx, msg.ReportId, msg.Reason, msg.Moderator); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("fraud report escalated via message",
-		"report_id", msg.ReportID,
+		"report_id", msg.ReportId,
 		"moderator", msg.Moderator,
 		"reason", msg.Reason,
 	)
@@ -220,7 +234,7 @@ func (ms msgServer) EscalateFraudReport(goCtx context.Context, msg *types.MsgEsc
 }
 
 // UpdateParams handles updating module parameters (governance only)
-func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+func (ms *msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate authority address
@@ -233,8 +247,11 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 		return nil, types.ErrUnauthorizedModerator.Wrap("unauthorized: sender is not the module authority")
 	}
 
+	// Convert proto params to local type
+	params := types.ParamsFromProto(&msg.Params)
+
 	// Update params through the keeper
-	if err := ms.keeper.SetParams(ctx, msg.Params); err != nil {
+	if err := ms.keeper.SetParams(ctx, *params); err != nil {
 		return nil, err
 	}
 
