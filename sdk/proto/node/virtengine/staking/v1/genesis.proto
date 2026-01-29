@@ -1,0 +1,61 @@
+syntax = "proto3";
+package virtengine.staking.v1;
+
+import "gogoproto/gogo.proto";
+import "virtengine/staking/v1/params.proto";
+import "virtengine/staking/v1/types.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/staking/v1";
+
+// GenesisState is the genesis state for the staking module
+message GenesisState {
+  option (gogoproto.equal) = true;
+
+  // Params are the module parameters
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "params",
+    (gogoproto.moretags) = "yaml:\"params\""
+  ];
+
+  // ValidatorPerformances are the initial validator performances
+  repeated ValidatorPerformance validator_performances = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "validator_performances",
+    (gogoproto.moretags) = "yaml:\"validator_performances\""
+  ];
+
+  // SlashRecords are the initial slashing records
+  repeated SlashRecord slash_records = 3 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "slash_records",
+    (gogoproto.moretags) = "yaml:\"slash_records\""
+  ];
+
+  // RewardEpochs are the initial reward epochs
+  repeated RewardEpoch reward_epochs = 4 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "reward_epochs",
+    (gogoproto.moretags) = "yaml:\"reward_epochs\""
+  ];
+
+  // ValidatorRewards are the initial validator rewards
+  repeated ValidatorReward validator_rewards = 5 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "validator_rewards",
+    (gogoproto.moretags) = "yaml:\"validator_rewards\""
+  ];
+
+  // ValidatorSigningInfos are the initial signing infos
+  repeated ValidatorSigningInfo validator_signing_infos = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "validator_signing_infos",
+    (gogoproto.moretags) = "yaml:\"validator_signing_infos\""
+  ];
+
+  // CurrentEpoch is the current epoch number
+  uint64 current_epoch = 7 [(gogoproto.jsontag) = "current_epoch"];
+
+  // SlashSequence is the next slashing sequence number
+  uint64 slash_sequence = 8 [(gogoproto.jsontag) = "slash_sequence"];
+}

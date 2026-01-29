@@ -5,45 +5,29 @@ package types
 
 import (
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
+
+	stakingv1 "github.com/virtengine/virtengine/sdk/go/node/staking/v1"
 )
 
 // RegisterLegacyAminoCodec registers the staking types on the provided LegacyAmino codec
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	// Register messages
-	cdc.RegisterConcrete(&MsgUpdateParams{}, "virt_staking/UpdateParams", nil)
-	cdc.RegisterConcrete(&MsgSlashValidator{}, "virt_staking/SlashValidator", nil)
-	cdc.RegisterConcrete(&MsgUnjailValidator{}, "virt_staking/UnjailValidator", nil)
-	cdc.RegisterConcrete(&MsgRecordPerformance{}, "virt_staking/RecordPerformance", nil)
+	legacy.RegisterAminoMsg(cdc, &stakingv1.MsgUpdateParams{}, "virt_staking/UpdateParams")
+	legacy.RegisterAminoMsg(cdc, &stakingv1.MsgSlashValidator{}, "virt_staking/SlashValidator")
+	legacy.RegisterAminoMsg(cdc, &stakingv1.MsgUnjailValidator{}, "virt_staking/UnjailValidator")
+	legacy.RegisterAminoMsg(cdc, &stakingv1.MsgRecordPerformance{}, "virt_staking/RecordPerformance")
 }
 
 // RegisterInterfaces registers the staking types and interfaces
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// NOTE: These are stub message types without proper protobuf generation.
-	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
-	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
-	//
-	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
-	//
-	// registry.RegisterImplementations((*sdk.Msg)(nil),
-	//     &MsgUpdateParams{},
-	//     &MsgSlashValidator{},
-	//     &MsgUnjailValidator{},
-	//     &MsgRecordPerformance{},
-	// )
-	//
-	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
-	_ = registry // suppress unused variable warning
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&stakingv1.MsgUpdateParams{},
+		&stakingv1.MsgSlashValidator{},
+		&stakingv1.MsgUnjailValidator{},
+		&stakingv1.MsgRecordPerformance{},
+	)
+	msgservice.RegisterMsgServiceDesc(registry, &stakingv1.Msg_serviceDesc)
 }
-
-// _Msg_serviceDesc is a placeholder for the message service descriptor
-// NOTE: This is a stub - proper proto generation will create the real ServiceDesc
-var _Msg_serviceDesc = struct {
-	ServiceName string
-}{
-	ServiceName: "virtengine.staking.v1.Msg",
-}
-
-// Ensure msgservice import is used
-var _ = msgservice.RegisterMsgServiceDesc
