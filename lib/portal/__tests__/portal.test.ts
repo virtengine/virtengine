@@ -31,10 +31,30 @@ const mockCrypto = {
 };
 
 const originalCrypto = globalThis.crypto;
+const originalSessionStorage = (globalThis as any).sessionStorage;
+const mockSessionStorage = (() => {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+  };
+})();
 
 beforeAll(() => {
   Object.defineProperty(globalThis, 'crypto', {
     value: mockCrypto,
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: mockSessionStorage,
     configurable: true,
   });
 });
@@ -48,6 +68,16 @@ afterAll(() => {
   } else {
     // @ts-expect-error - cleanup mocked global
     delete globalThis.crypto;
+  }
+
+  if (originalSessionStorage) {
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      value: originalSessionStorage,
+      configurable: true,
+    });
+  } else {
+    // @ts-expect-error - cleanup mocked global
+    delete globalThis.sessionStorage;
   }
 });
 
@@ -214,6 +244,63 @@ describe('Validation Utilities', () => {
   });
 });
 
+describe('Security Utilities', () => {
+  const {
+    sanitizePlainText,
+    sanitizeDigits,
+    sanitizeJsonInput,
+  } = require('../utils/security');
+
+  it('should sanitize plain text inputs', () => {
+    const value = '<script>alert(1)</script>';
+    const result = sanitizePlainText(value);
+    expect(result).toContain('&lt;script&gt;');
+  });
+
+  it('should sanitize numeric inputs', () => {
+    expect(sanitizeDigits('12ab34', 6)).toBe('1234');
+  });
+
+  it('should sanitize JSON inputs and strip dangerous keys', () => {
+    const input = '{"__proto__":{"polluted":true},"safeKey":"ok"}';
+    const result = sanitizeJsonInput(input);
+    expect(result).toHaveProperty('safeKey');
+    expect(result).not.toHaveProperty('__proto__');
+  });
+});
+
+describe('OAuth Helpers', () => {
+  const {
+    createOAuthRequest,
+    persistOAuthRequest,
+    consumeOAuthRequest,
+    buildAuthorizationUrl,
+  } = require('../utils/oidc');
+
+  it('should create and consume OAuth request', async () => {
+    const request = await createOAuthRequest(60 * 1000);
+    persistOAuthRequest(request, 'test_oauth');
+    const consumed = consumeOAuthRequest(request.state, 'test_oauth');
+    expect(consumed.state).toBe(request.state);
+    expect(consumed.codeVerifier).toBe(request.codeVerifier);
+  });
+
+  it('should build authorization URL', async () => {
+    const request = await createOAuthRequest();
+    const url = buildAuthorizationUrl({
+      provider: 'oidc',
+      authorizationEndpoint: 'https://idp.example.com/auth',
+      tokenEndpoint: 'https://idp.example.com/token',
+      clientId: 'client-id',
+      redirectUri: 'https://app.example.com/callback',
+      scopes: ['openid', 'profile'],
+      accountBindingEndpoint: 'https://idp.example.com/bind',
+    }, request);
+    expect(url).toContain('response_type=code');
+    expect(url).toContain(`state=${request.state}`);
+  });
+});
+
 describe('Format Utilities', () => {
   const {
     formatScore,
@@ -306,36 +393,54 @@ describe('Format Utilities', () => {
 });
 
 describe('Auth Types', () => {
-  const { authReducer } = require('../types/auth');
+  const { authReducer, initialAuthState } = require('../types/auth');
 
   describe('authReducer', () => {
-    it('should handle SET_LOADING', () => {
-      const state = { isLoading: false };
-      const result = authReducer(state, { type: 'SET_LOADING', payload: true });
+    it('should handle AUTH_START', () => {
+      const result = authReducer(initialAuthState, { type: 'AUTH_START' });
       expect(result.isLoading).toBe(true);
+      expect(result.error).toBeNull();
     });
 
-    it('should handle LOGIN_SUCCESS', () => {
-      const state = { isAuthenticated: false, session: null };
-      const session = { sessionId: 'test', accountAddress: 've1...' };
-      const result = authReducer(state, { type: 'LOGIN_SUCCESS', payload: session });
+    it('should handle AUTH_SUCCESS', () => {
+      const session = {
+        sessionId: 'test-session',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 3600,
+        isTrustedBrowser: true,
+        deviceFingerprint: 'abc123',
+      };
+      const result = authReducer(initialAuthState, {
+        type: 'AUTH_SUCCESS',
+        payload: {
+          accountAddress: 've1abc',
+          publicKey: 'deadbeef',
+          method: 'wallet',
+          session,
+        },
+      });
       expect(result.isAuthenticated).toBe(true);
       expect(result.session).toEqual(session);
     });
 
-    it('should handle LOGOUT', () => {
-      const state = { isAuthenticated: true, session: {}, wallet: {} };
-      const result = authReducer(state, { type: 'LOGOUT' });
+    it('should handle AUTH_FAILURE', () => {
+      const result = authReducer(initialAuthState, {
+        type: 'AUTH_FAILURE',
+        payload: { code: 'invalid_credentials', message: 'nope' },
+      });
       expect(result.isAuthenticated).toBe(false);
-      expect(result.session).toBeNull();
-      expect(result.wallet).toBeNull();
+      expect(result.error?.code).toBe('invalid_credentials');
     });
 
-    it('should handle SET_ERROR', () => {
-      const state = { error: null };
-      const error = { code: 'TEST_ERROR', message: 'Test error' };
-      const result = authReducer(state, { type: 'SET_ERROR', payload: error });
-      expect(result.error).toEqual(error);
+    it('should handle AUTH_LOGOUT', () => {
+      const loggedInState = {
+        ...initialAuthState,
+        isAuthenticated: true,
+        accountAddress: 've1abc',
+      };
+      const result = authReducer(loggedInState, { type: 'AUTH_LOGOUT' });
+      expect(result.isAuthenticated).toBe(false);
+      expect(result.accountAddress).toBeNull();
     });
   });
 });

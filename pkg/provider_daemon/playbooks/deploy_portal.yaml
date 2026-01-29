@@ -113,16 +113,22 @@
           server {
               listen 80;
               server_name {{ portal_domain }};
+              server_tokens off;
 
               root {{ portal_root }};
               index index.html;
 
               # Security headers
+              add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
               add_header X-Frame-Options "SAMEORIGIN" always;
               add_header X-Content-Type-Options "nosniff" always;
               add_header X-XSS-Protection "1; mode=block" always;
               add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-              add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:;" always;
+              add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" always;
+              add_header X-Permitted-Cross-Domain-Policies "none" always;
+              add_header Cross-Origin-Opener-Policy "same-origin" always;
+              add_header Cross-Origin-Resource-Policy "same-site" always;
+              add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests; block-all-mixed-content;" always;
 
               # Gzip compression
               gzip on;

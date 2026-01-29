@@ -247,6 +247,11 @@ export interface JobManifest {
   inputRefs?: string[];
 
   /**
+   * Encrypted inputs payload (client-side encrypted JSON)
+   */
+  encryptedInputs?: Record<string, unknown>;
+
+  /**
    * Environment variables (will be encrypted)
    */
   environment?: Record<string, string>;

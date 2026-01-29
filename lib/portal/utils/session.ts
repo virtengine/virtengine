@@ -202,6 +202,11 @@ export class SessionManager {
     const response = await fetch(`${this.config.apiEndpoint}/csrf`, {
       method: 'GET',
       credentials: 'include',
+      cache: 'no-store',
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      headers: {
+        'Accept': 'application/json',
+      },
     });
 
     if (!response.ok) {
@@ -225,8 +230,12 @@ export class SessionManager {
     const response = await fetch(`${this.config.apiEndpoint}${path}`, {
       ...options,
       credentials: 'include', // Include httpOnly cookies
+      cache: options.cache ?? 'no-store',
+      referrerPolicy: options.referrerPolicy ?? 'strict-origin-when-cross-origin',
       headers: {
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
         [this.config.csrfHeader]: csrfToken,
         ...options.headers,
       },
@@ -240,8 +249,12 @@ export class SessionManager {
       const retryResponse = await fetch(`${this.config.apiEndpoint}${path}`, {
         ...options,
         credentials: 'include',
+        cache: options.cache ?? 'no-store',
+        referrerPolicy: options.referrerPolicy ?? 'strict-origin-when-cross-origin',
         headers: {
+          'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
           [this.config.csrfHeader]: newCsrfToken,
           ...options.headers,
         },
