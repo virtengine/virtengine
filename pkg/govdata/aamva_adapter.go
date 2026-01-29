@@ -14,8 +14,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -103,8 +107,14 @@ type AAMVAConfig struct {
 	// MaxRetries is the maximum number of retries
 	MaxRetries int `json:"max_retries"`
 
+	// RetryBackoff is the base backoff duration for retries
+	RetryBackoff time.Duration `json:"retry_backoff"`
+
 	// RateLimitPerMinute is the max requests per minute
 	RateLimitPerMinute int `json:"rate_limit_per_minute"`
+
+	// BaseURL overrides the default AAMVA API URL (used for proxies/tests)
+	BaseURL string `json:"base_url"`
 
 	// SupportedStates lists the states enabled for DLDV
 	SupportedStates []string `json:"supported_states"`
@@ -122,6 +132,7 @@ func DefaultAAMVAConfig() AAMVAConfig {
 		Environment:        AAMVAEnvironmentSandbox,
 		Timeout:            30 * time.Second,
 		MaxRetries:         3,
+		RetryBackoff:       500 * time.Millisecond,
 		RateLimitPerMinute: 60,
 		AuditEnabled:       true,
 		// All US states and territories
@@ -162,74 +173,74 @@ func (c *AAMVAConfig) Validate() error {
 
 // AAMVADLDVRequest represents a DLDV verification request
 type AAMVADLDVRequest struct {
-	XMLName      xml.Name `xml:"dldvRequest"`
-	OrgID        string   `xml:"orgId"`
-	Permission   string   `xml:"permissionCode"`
-	Transaction  string   `xml:"transactionType"`
-	MessageID    string   `xml:"messageId"`
-	Timestamp    string   `xml:"timestamp"`
-	
+	XMLName     xml.Name `xml:"dldvRequest"`
+	OrgID       string   `xml:"orgId"`
+	Permission  string   `xml:"permissionCode"`
+	Transaction string   `xml:"transactionType"`
+	MessageID   string   `xml:"messageId"`
+	Timestamp   string   `xml:"timestamp"`
+
 	// Driver Information
-	State        string   `xml:"state"`
-	LicenseNumber string  `xml:"licenseNumber"`
-	FirstName    string   `xml:"firstName,omitempty"`
-	MiddleName   string   `xml:"middleName,omitempty"`
-	LastName     string   `xml:"lastName,omitempty"`
-	DateOfBirth  string   `xml:"dateOfBirth,omitempty"`
-	
+	State         string `xml:"state"`
+	LicenseNumber string `xml:"licenseNumber"`
+	FirstName     string `xml:"firstName,omitempty"`
+	MiddleName    string `xml:"middleName,omitempty"`
+	LastName      string `xml:"lastName,omitempty"`
+	DateOfBirth   string `xml:"dateOfBirth,omitempty"`
+
 	// Optional Address Verification
-	AddressLine1 string   `xml:"addressLine1,omitempty"`
-	AddressLine2 string   `xml:"addressLine2,omitempty"`
-	City         string   `xml:"city,omitempty"`
-	ZipCode      string   `xml:"zipCode,omitempty"`
-	
+	AddressLine1 string `xml:"addressLine1,omitempty"`
+	AddressLine2 string `xml:"addressLine2,omitempty"`
+	City         string `xml:"city,omitempty"`
+	ZipCode      string `xml:"zipCode,omitempty"`
+
 	// Optional Photo Request (DLDV Plus)
-	RequestPhoto bool     `xml:"requestPhoto,omitempty"`
+	RequestPhoto bool `xml:"requestPhoto,omitempty"`
 }
 
 // AAMVADLDVResponse represents a DLDV verification response
 type AAMVADLDVResponse struct {
-	XMLName       xml.Name `xml:"dldvResponse"`
-	MessageID     string   `xml:"messageId"`
-	ResponseCode  string   `xml:"responseCode"`
-	ResponseText  string   `xml:"responseText"`
-	Timestamp     string   `xml:"timestamp"`
-	
+	XMLName      xml.Name `xml:"dldvResponse"`
+	MessageID    string   `xml:"messageId"`
+	ResponseCode string   `xml:"responseCode"`
+	ResponseText string   `xml:"responseText"`
+	Timestamp    string   `xml:"timestamp"`
+
 	// Match Results
-	OverallMatch     string `xml:"overallMatch"`
-	LicenseMatch     string `xml:"licenseMatch"`
-	FirstNameMatch   string `xml:"firstNameMatch"`
-	MiddleNameMatch  string `xml:"middleNameMatch"`
-	LastNameMatch    string `xml:"lastNameMatch"`
-	DOBMatch         string `xml:"dobMatch"`
-	AddressMatch     string `xml:"addressMatch"`
-	
+	OverallMatch    string `xml:"overallMatch"`
+	LicenseMatch    string `xml:"licenseMatch"`
+	FirstNameMatch  string `xml:"firstNameMatch"`
+	MiddleNameMatch string `xml:"middleNameMatch"`
+	LastNameMatch   string `xml:"lastNameMatch"`
+	DOBMatch        string `xml:"dobMatch"`
+	AddressMatch    string `xml:"addressMatch"`
+
 	// License Status
-	LicenseStatus    string `xml:"licenseStatus"`
-	LicenseClass     string `xml:"licenseClass"`
-	ExpirationDate   string `xml:"expirationDate"`
-	IssuedDate       string `xml:"issuedDate"`
-	
+	LicenseStatus  string `xml:"licenseStatus"`
+	LicenseClass   string `xml:"licenseClass"`
+	ExpirationDate string `xml:"expirationDate"`
+	IssuedDate     string `xml:"issuedDate"`
+
 	// Restrictions/Endorsements
-	Restrictions     string `xml:"restrictions,omitempty"`
-	Endorsements     string `xml:"endorsements,omitempty"`
-	
+	Restrictions string `xml:"restrictions,omitempty"`
+	Endorsements string `xml:"endorsements,omitempty"`
+
 	// Photo (DLDV Plus only)
-	PhotoBase64      string `xml:"photo,omitempty"`
-	
+	PhotoBase64 string `xml:"photo,omitempty"`
+
 	// Error Information
-	ErrorCode        string `xml:"errorCode,omitempty"`
-	ErrorMessage     string `xml:"errorMessage,omitempty"`
+	ErrorCode    string `xml:"errorCode,omitempty"`
+	ErrorMessage string `xml:"errorMessage,omitempty"`
 }
 
 // AAMVAMatchResult represents match outcome values
 type AAMVAMatchResult string
 
 const (
-	AAMVAMatchYes       AAMVAMatchResult = "Y"  // Exact match
-	AAMVAMatchNo        AAMVAMatchResult = "N"  // No match
-	AAMVAMatchPartial   AAMVAMatchResult = "P"  // Partial match
-	AAMVAMatchNoData    AAMVAMatchResult = "U"  // Unable to verify (no data)
+	AAMVAMatchYes     AAMVAMatchResult = "Y" // Exact match
+	AAMVAMatchNo      AAMVAMatchResult = "N" // No match
+	AAMVAMatchPartial AAMVAMatchResult = "P" // Partial match
+	AAMVAMatchNoData  AAMVAMatchResult = "U" // Unable to verify (no data)
 )
 
 // AAMVALicenseStatus represents license status values
@@ -255,14 +266,28 @@ type AAMVADMVAdapter struct {
 	accessToken string
 	tokenExpiry time.Time
 	mu          sync.RWMutex
-	
+
 	// Rate limiting
-	requestCount   int
-	windowStart    time.Time
+	requestCount int
+	windowStart  time.Time
 }
 
 // NewAAMVADMVAdapter creates a new AAMVA DMV adapter
 func NewAAMVADMVAdapter(baseConfig AdapterConfig, aamvaConfig AAMVAConfig) (*AAMVADMVAdapter, error) {
+	if aamvaConfig.Timeout <= 0 {
+		if baseConfig.Timeout > 0 {
+			aamvaConfig.Timeout = baseConfig.Timeout
+		} else {
+			aamvaConfig.Timeout = 30 * time.Second
+		}
+	}
+	if aamvaConfig.RetryBackoff <= 0 {
+		aamvaConfig.RetryBackoff = 500 * time.Millisecond
+	}
+	if aamvaConfig.RateLimitPerMinute <= 0 {
+		aamvaConfig.RateLimitPerMinute = 60
+	}
+
 	if err := aamvaConfig.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid AAMVA config: %w", err)
 	}
@@ -288,10 +313,20 @@ func NewAAMVADMVAdapter(baseConfig AdapterConfig, aamvaConfig AAMVAConfig) (*AAM
 
 // baseURL returns the AAMVA API base URL
 func (a *AAMVADMVAdapter) baseURL() string {
+	if a.config.BaseURL != "" {
+		return strings.TrimRight(a.config.BaseURL, "/")
+	}
 	if a.config.Environment == AAMVAEnvironmentProduction {
 		return AAMVAProductionURL
 	}
 	return AAMVASandboxURL
+}
+
+func (a *AAMVADMVAdapter) logf(format string, args ...interface{}) {
+	if !a.config.AuditEnabled {
+		return
+	}
+	log.Printf("[govdata/aamva] "+format, args...)
 }
 
 // authenticate obtains an OAuth access token
@@ -306,9 +341,6 @@ func (a *AAMVADMVAdapter) authenticate(ctx context.Context) error {
 
 	// Request new token
 	authURL := a.baseURL() + "/oauth/token"
-	
-	reqBody := fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s",
-		a.config.ClientID, "[REDACTED]") // Never log actual secret
 
 	req, err := http.NewRequestWithContext(ctx, "POST", authURL, strings.NewReader(
 		fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s",
@@ -318,6 +350,9 @@ func (a *AAMVADMVAdapter) authenticate(ctx context.Context) error {
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if a.config.APIKey != "" {
+		req.Header.Set("X-API-Key", a.config.APIKey)
+	}
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
@@ -326,8 +361,9 @@ func (a *AAMVADMVAdapter) authenticate(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%w: status %d: %s", ErrAAMVAAuthentication, resp.StatusCode, string(body))
+		_, _ = io.Copy(io.Discard, resp.Body)
+		httpErr := &aamvaHTTPError{statusCode: resp.StatusCode}
+		return fmt.Errorf("%w: %v", ErrAAMVAAuthentication, httpErr)
 	}
 
 	var tokenResp struct {
@@ -340,11 +376,18 @@ func (a *AAMVADMVAdapter) authenticate(ctx context.Context) error {
 		return fmt.Errorf("failed to parse auth response: %w", err)
 	}
 
+	if tokenResp.AccessToken == "" {
+		return fmt.Errorf("%w: empty access token", ErrAAMVAAuthentication)
+	}
+
 	a.accessToken = tokenResp.AccessToken
 	// Set expiry with buffer for safety
-	a.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn-60) * time.Second)
-
-	_ = reqBody // silence unused variable warning
+	bufferedExpiry := tokenResp.ExpiresIn - 60
+	if bufferedExpiry < 0 {
+		bufferedExpiry = 0
+	}
+	a.tokenExpiry = time.Now().Add(time.Duration(bufferedExpiry) * time.Second)
+	a.logf("auth token refreshed expires_in=%ds", tokenResp.ExpiresIn)
 
 	return nil
 }
@@ -355,7 +398,7 @@ func (a *AAMVADMVAdapter) checkRateLimit() error {
 	defer a.mu.Unlock()
 
 	now := time.Now()
-	
+
 	// Reset window if expired
 	if now.Sub(a.windowStart) > time.Minute {
 		a.windowStart = now
@@ -385,16 +428,16 @@ func (a *AAMVADMVAdapter) isStateSupported(state string) bool {
 func (a *AAMVADMVAdapter) validateLicenseNumber(state, licenseNumber string) error {
 	// State-specific license number validation patterns
 	patterns := map[string]*regexp.Regexp{
-		"CA": regexp.MustCompile(`^[A-Z]\d{7}$`),                    // California: 1 letter + 7 digits
-		"TX": regexp.MustCompile(`^\d{8}$`),                          // Texas: 8 digits
-		"FL": regexp.MustCompile(`^[A-Z]\d{12}$`),                   // Florida: 1 letter + 12 digits
-		"NY": regexp.MustCompile(`^\d{9}$`),                          // New York: 9 digits
-		"PA": regexp.MustCompile(`^\d{8}$`),                          // Pennsylvania: 8 digits
-		"IL": regexp.MustCompile(`^[A-Z]\d{11,12}$`),                // Illinois: 1 letter + 11-12 digits
-		"OH": regexp.MustCompile(`^[A-Z]{2}\d{6}$`),                  // Ohio: 2 letters + 6 digits
-		"GA": regexp.MustCompile(`^\d{9}$`),                          // Georgia: 9 digits
-		"NC": regexp.MustCompile(`^\d{1,12}$`),                       // North Carolina: 1-12 digits
-		"MI": regexp.MustCompile(`^[A-Z]\d{10,12}$`),                 // Michigan: 1 letter + 10-12 digits
+		"CA": regexp.MustCompile(`^[A-Z]\d{7}$`),     // California: 1 letter + 7 digits
+		"TX": regexp.MustCompile(`^\d{8}$`),          // Texas: 8 digits
+		"FL": regexp.MustCompile(`^[A-Z]\d{12}$`),    // Florida: 1 letter + 12 digits
+		"NY": regexp.MustCompile(`^\d{9}$`),          // New York: 9 digits
+		"PA": regexp.MustCompile(`^\d{8}$`),          // Pennsylvania: 8 digits
+		"IL": regexp.MustCompile(`^[A-Z]\d{11,12}$`), // Illinois: 1 letter + 11-12 digits
+		"OH": regexp.MustCompile(`^[A-Z]{2}\d{6}$`),  // Ohio: 2 letters + 6 digits
+		"GA": regexp.MustCompile(`^\d{9}$`),          // Georgia: 9 digits
+		"NC": regexp.MustCompile(`^\d{1,12}$`),       // North Carolina: 1-12 digits
+		"MI": regexp.MustCompile(`^[A-Z]\d{10,12}$`), // Michigan: 1 letter + 10-12 digits
 	}
 
 	// If no specific pattern, use general validation
@@ -418,6 +461,18 @@ func (a *AAMVADMVAdapter) generateMessageID(requestID string) string {
 	h := hmac.New(sha256.New, []byte(a.config.OrgID))
 	h.Write([]byte(requestID + time.Now().Format(time.RFC3339Nano)))
 	return base64.URLEncoding.EncodeToString(h.Sum(nil))[:32]
+}
+
+type aamvaHTTPError struct {
+	statusCode int
+	retryAfter time.Duration
+}
+
+func (e *aamvaHTTPError) Error() string {
+	if e.retryAfter > 0 {
+		return fmt.Sprintf("AAMVA HTTP error: status %d (retry-after %s)", e.statusCode, e.retryAfter)
+	}
+	return fmt.Sprintf("AAMVA HTTP error: status %d", e.statusCode)
 }
 
 // Verify performs AAMVA DLDV verification
@@ -445,29 +500,16 @@ func (a *AAMVADMVAdapter) Verify(ctx context.Context, req *VerificationRequest) 
 		return nil, err
 	}
 
-	// Check rate limit
-	if err := a.checkRateLimit(); err != nil {
-		return nil, err
-	}
-
-	// Authenticate
-	if err := a.authenticate(ctx); err != nil {
-		a.recordError(err)
-		return nil, err
-	}
-
 	// Build AAMVA request
 	transType := AAMVATransactionDLDV
 	if a.config.EnableDLDVPlus {
 		transType = AAMVATransactionDLDVP
 	}
 
-	dldvReq := &AAMVADLDVRequest{
+	baseReq := &AAMVADLDVRequest{
 		OrgID:         a.config.OrgID,
 		Permission:    a.config.PermissionCode,
 		Transaction:   transType,
-		MessageID:     a.generateMessageID(req.RequestID),
-		Timestamp:     time.Now().UTC().Format(time.RFC3339),
 		State:         state,
 		LicenseNumber: req.Fields.DocumentNumber,
 		FirstName:     req.Fields.FirstName,
@@ -477,27 +519,117 @@ func (a *AAMVADMVAdapter) Verify(ctx context.Context, req *VerificationRequest) 
 	}
 
 	if !req.Fields.DateOfBirth.IsZero() {
-		dldvReq.DateOfBirth = req.Fields.DateOfBirth.Format("2006-01-02")
+		baseReq.DateOfBirth = req.Fields.DateOfBirth.Format("2006-01-02")
 	}
 
 	// Address verification if provided
 	if req.Fields.Address != nil && req.Fields.Address.Street != "" {
-		dldvReq.AddressLine1 = req.Fields.Address.Street
-		dldvReq.City = req.Fields.Address.City
-		dldvReq.ZipCode = req.Fields.Address.PostalCode
+		baseReq.AddressLine1 = req.Fields.Address.Street
+		baseReq.City = req.Fields.Address.City
+		baseReq.ZipCode = req.Fields.Address.PostalCode
 	}
 
-	// Serialize request
-	xmlData, err := xml.MarshalIndent(dldvReq, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal DLDV request: %w", err)
+	var lastErr error
+	for attempt := 0; attempt <= a.config.MaxRetries; attempt++ {
+		if err := a.checkRateLimit(); err != nil {
+			return nil, err
+		}
+
+		if err := a.authenticate(ctx); err != nil {
+			a.recordError(err)
+			if a.shouldRetry(ctx, err, 0) && attempt < a.config.MaxRetries {
+				a.logf("auth retrying attempt=%d request_id=%s jurisdiction=%s", attempt+1, req.RequestID, req.Jurisdiction)
+				if err := a.sleepWithBackoff(ctx, attempt, 0, 0); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			return nil, err
+		}
+
+		dldvReq := *baseReq
+		dldvReq.MessageID = a.generateMessageID(req.RequestID)
+		dldvReq.Timestamp = time.Now().UTC().Format(time.RFC3339)
+
+		xmlData, err := xml.MarshalIndent(&dldvReq, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal DLDV request: %w", err)
+		}
+
+		a.logf("verify attempt=%d request_id=%s jurisdiction=%s document_type=%s message_id=%s",
+			attempt+1, req.RequestID, req.Jurisdiction, req.DocumentType, dldvReq.MessageID)
+
+		dldvResp, statusCode, err := a.doVerifyRequest(ctx, xmlData, dldvReq.MessageID)
+		if err != nil {
+			lastErr = err
+			a.recordError(err)
+
+			if a.shouldRetry(ctx, err, statusCode) && attempt < a.config.MaxRetries {
+				a.logf("verify retrying attempt=%d request_id=%s jurisdiction=%s error=%v", attempt+1, req.RequestID, req.Jurisdiction, err)
+				retryAfter := a.retryAfterDuration(err)
+				if err := a.sleepWithBackoff(ctx, attempt, statusCode, retryAfter); err != nil {
+					return nil, err
+				}
+				continue
+			}
+
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				return nil, ErrAAMVATimeout
+			}
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				return nil, ErrAAMVATimeout
+			}
+			if statusCode == http.StatusTooManyRequests {
+				return nil, ErrAAMVARateLimit
+			}
+			if statusCode == http.StatusUnauthorized {
+				return nil, ErrAAMVAAuthentication
+			}
+			return nil, fmt.Errorf("%w: %v", ErrAAMVARequestFailed, err)
+		}
+
+		if !a.isResponseUsable(dldvResp) {
+			err := fmt.Errorf("%w: response_code=%s error_code=%s", ErrAAMVARequestFailed, dldvResp.ResponseCode, dldvResp.ErrorCode)
+			a.recordError(err)
+			lastErr = err
+			if a.shouldRetry(ctx, err, statusCode) && attempt < a.config.MaxRetries {
+				if err := a.sleepWithBackoff(ctx, attempt, statusCode, 0); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			return nil, err
+		}
+
+		verificationResp := a.convertResponse(req, dldvResp)
+		if dldvResp.ResponseCode != "" && dldvResp.ResponseCode != "0000" {
+			if dldvResp.ResponseText != "" {
+				verificationResp.Warnings = append(verificationResp.Warnings, "AAMVA response: "+strings.TrimSpace(dldvResp.ResponseText))
+			} else {
+				verificationResp.Warnings = append(verificationResp.Warnings, "AAMVA response code: "+dldvResp.ResponseCode)
+			}
+		}
+
+		latency := time.Since(startTime)
+		a.recordSuccess(latency)
+		a.logf("verify success request_id=%s jurisdiction=%s status=%s response_code=%s latency_ms=%d",
+			req.RequestID, req.Jurisdiction, verificationResp.Status, dldvResp.ResponseCode, latency.Milliseconds())
+
+		return verificationResp, nil
 	}
 
-	// Make API request
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, ErrAAMVARequestFailed
+}
+
+func (a *AAMVADMVAdapter) doVerifyRequest(ctx context.Context, xmlData []byte, messageID string) (*AAMVADLDVResponse, int, error) {
 	apiURL := a.baseURL() + "/verify"
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(xmlData))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	a.mu.RLock()
@@ -506,47 +638,123 @@ func (a *AAMVADMVAdapter) Verify(ctx context.Context, req *VerificationRequest) 
 
 	httpReq.Header.Set("Content-Type", "application/xml")
 	httpReq.Header.Set("Authorization", "Bearer "+token)
-	httpReq.Header.Set("X-AAMVA-MessageID", dldvReq.MessageID)
+	httpReq.Header.Set("X-AAMVA-MessageID", messageID)
+	if a.config.APIKey != "" {
+		httpReq.Header.Set("X-API-Key", a.config.APIKey)
+	}
 
 	resp, err := a.httpClient.Do(httpReq)
 	if err != nil {
-		a.recordError(err)
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, ErrAAMVATimeout
+		if ctx.Err() != nil {
+			return nil, 0, ctx.Err()
 		}
-		return nil, fmt.Errorf("%w: %v", ErrAAMVARequestFailed, err)
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
-	// Handle HTTP errors
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, ErrAAMVARateLimit
-	}
 	if resp.StatusCode == http.StatusUnauthorized {
-		// Clear token and retry once
 		a.mu.Lock()
 		a.accessToken = ""
 		a.mu.Unlock()
-		return nil, ErrAAMVAAuthentication
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%w: status %d: %s", ErrAAMVARequestFailed, resp.StatusCode, string(body))
+		return nil, resp.StatusCode, &aamvaHTTPError{statusCode: resp.StatusCode}
 	}
 
-	// Parse response
+	if resp.StatusCode != http.StatusOK {
+		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, resp.StatusCode, &aamvaHTTPError{statusCode: resp.StatusCode, retryAfter: retryAfter}
+	}
+
 	var dldvResp AAMVADLDVResponse
 	if err := xml.NewDecoder(resp.Body).Decode(&dldvResp); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrAAMVAInvalidResponse, err)
+		return nil, resp.StatusCode, fmt.Errorf("%w: %v", ErrAAMVAInvalidResponse, err)
 	}
 
-	// Convert AAMVA response to our format
-	verificationResp := a.convertResponse(req, &dldvResp)
-	
-	latency := time.Since(startTime)
-	a.recordSuccess(latency)
+	return &dldvResp, resp.StatusCode, nil
+}
 
-	return verificationResp, nil
+func (a *AAMVADMVAdapter) isResponseUsable(resp *AAMVADLDVResponse) bool {
+	if resp == nil {
+		return false
+	}
+	if resp.OverallMatch != "" || resp.LicenseMatch != "" || resp.FirstNameMatch != "" || resp.LastNameMatch != "" || resp.DOBMatch != "" {
+		return true
+	}
+	if resp.ResponseCode == "" && resp.ErrorCode == "" {
+		return false
+	}
+	if resp.ResponseCode != "" && resp.ResponseCode != "0000" && resp.ErrorCode != "" {
+		return false
+	}
+	return true
+}
+
+func (a *AAMVADMVAdapter) shouldRetry(ctx context.Context, err error, statusCode int) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	if statusCode == http.StatusTooManyRequests || statusCode == http.StatusUnauthorized {
+		return true
+	}
+	if statusCode >= 500 && statusCode <= 599 {
+		return true
+	}
+	var httpErr *aamvaHTTPError
+	if errors.As(err, &httpErr) {
+		if httpErr.statusCode == http.StatusTooManyRequests || httpErr.statusCode == http.StatusUnauthorized {
+			return true
+		}
+		if httpErr.statusCode >= 500 && httpErr.statusCode <= 599 {
+			return true
+		}
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Temporary() || netErr.Timeout()
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	return false
+}
+
+func (a *AAMVADMVAdapter) retryAfterDuration(err error) time.Duration {
+	var httpErr *aamvaHTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.retryAfter
+	}
+	return 0
+}
+
+func (a *AAMVADMVAdapter) sleepWithBackoff(ctx context.Context, attempt int, statusCode int, retryAfter time.Duration) error {
+	if retryAfter > 0 {
+		a.logf("retrying after server backoff=%s", retryAfter)
+		timer := time.NewTimer(retryAfter)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return nil
+		}
+	}
+
+	backoff := a.config.RetryBackoff * (1 << attempt)
+	jitter := time.Duration(time.Now().UnixNano() % int64(backoff/2+1))
+	sleepFor := backoff + jitter
+	if sleepFor <= 0 {
+		sleepFor = 100 * time.Millisecond
+	}
+	a.logf("retrying with backoff=%s status=%d", sleepFor, statusCode)
+
+	timer := time.NewTimer(sleepFor)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // convertResponse converts AAMVA response to our VerificationResponse
@@ -557,6 +765,19 @@ func (a *AAMVADMVAdapter) convertResponse(req *VerificationRequest, dldvResp *AA
 		Jurisdiction:   req.Jurisdiction,
 		VerifiedAt:     time.Now(),
 		FieldResults:   make(map[string]FieldVerificationResult),
+	}
+
+	if dldvResp.ResponseCode != "" && dldvResp.ResponseCode != "0000" {
+		resp.ErrorCode = dldvResp.ResponseCode
+		if dldvResp.ResponseText != "" {
+			resp.ErrorMessage = strings.TrimSpace(dldvResp.ResponseText)
+		}
+	}
+	if dldvResp.ErrorCode != "" {
+		resp.ErrorCode = dldvResp.ErrorCode
+		if dldvResp.ErrorMessage != "" {
+			resp.ErrorMessage = strings.TrimSpace(dldvResp.ErrorMessage)
+		}
 	}
 
 	// Determine overall status from AAMVA response
@@ -657,6 +878,161 @@ func (a *AAMVADMVAdapter) convertFieldMatch(match string) FieldVerificationResul
 	}
 
 	return result
+}
+
+func parseRetryAfter(value string) time.Duration {
+	if value == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+		if secs <= 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+	if t, err := http.ParseTime(value); err == nil {
+		if time.Until(t) > 0 {
+			return time.Until(t)
+		}
+	}
+	return 0
+}
+
+// loadAAMVAConfigFromEnv loads AAMVA configuration from environment variables.
+// Returns (config, true, nil) if AAMVA is configured, (zero, false, nil) if not configured.
+func loadAAMVAConfigFromEnv(baseConfig AdapterConfig) (AAMVAConfig, bool, error) {
+	cfg := DefaultAAMVAConfig()
+
+	get := func(key string) string {
+		return strings.TrimSpace(os.Getenv(key))
+	}
+
+	configured := false
+	enabledFlagSet := false
+
+	if val := get("AAMVA_ENABLED"); val != "" {
+		enabledFlagSet = true
+		enabled, err := strconv.ParseBool(val)
+		if err != nil {
+			return AAMVAConfig{}, true, fmt.Errorf("invalid AAMVA_ENABLED: %w", err)
+		}
+		if !enabled {
+			return AAMVAConfig{}, false, nil
+		}
+		configured = true
+	}
+
+	if val := get("AAMVA_ENVIRONMENT"); val != "" {
+		cfg.Environment = val
+	}
+	if val := get("AAMVA_BASE_URL"); val != "" {
+		cfg.BaseURL = val
+	}
+	if val := get("AAMVA_ORG_ID"); val != "" {
+		cfg.OrgID = val
+		configured = true
+	}
+	if val := get("AAMVA_PERMISSION_CODE"); val != "" {
+		cfg.PermissionCode = val
+		configured = true
+	}
+	if val := get("AAMVA_CLIENT_ID"); val != "" {
+		cfg.ClientID = val
+		configured = true
+	}
+	if val := get("AAMVA_CLIENT_SECRET"); val != "" {
+		cfg.ClientSecret = val
+		configured = true
+	}
+	if val := get("AAMVA_API_KEY"); val != "" {
+		cfg.APIKey = val
+	}
+	if val := get("AAMVA_MAX_RETRIES"); val != "" {
+		parsed, err := strconv.Atoi(val)
+		if err != nil {
+			return AAMVAConfig{}, true, fmt.Errorf("invalid AAMVA_MAX_RETRIES: %w", err)
+		}
+		cfg.MaxRetries = parsed
+	}
+	if val := get("AAMVA_RATE_LIMIT_PER_MINUTE"); val != "" {
+		parsed, err := strconv.Atoi(val)
+		if err != nil {
+			return AAMVAConfig{}, true, fmt.Errorf("invalid AAMVA_RATE_LIMIT_PER_MINUTE: %w", err)
+		}
+		cfg.RateLimitPerMinute = parsed
+	}
+	if val := get("AAMVA_TIMEOUT"); val != "" {
+		if dur, err := time.ParseDuration(val); err == nil {
+			cfg.Timeout = dur
+		} else if secs, err := strconv.Atoi(val); err == nil {
+			cfg.Timeout = time.Duration(secs) * time.Second
+		} else {
+			return AAMVAConfig{}, true, fmt.Errorf("invalid AAMVA_TIMEOUT: %w", err)
+		}
+	}
+	if val := get("AAMVA_RETRY_BACKOFF"); val != "" {
+		if dur, err := time.ParseDuration(val); err == nil {
+			cfg.RetryBackoff = dur
+		} else if ms, err := strconv.Atoi(val); err == nil {
+			cfg.RetryBackoff = time.Duration(ms) * time.Millisecond
+		} else {
+			return AAMVAConfig{}, true, fmt.Errorf("invalid AAMVA_RETRY_BACKOFF: %w", err)
+		}
+	}
+	if val := get("AAMVA_ENABLE_DLDV_PLUS"); val != "" {
+		parsed, err := strconv.ParseBool(val)
+		if err != nil {
+			return AAMVAConfig{}, true, fmt.Errorf("invalid AAMVA_ENABLE_DLDV_PLUS: %w", err)
+		}
+		cfg.EnableDLDVPlus = parsed
+	}
+	if val := get("AAMVA_AUDIT_ENABLED"); val != "" {
+		parsed, err := strconv.ParseBool(val)
+		if err != nil {
+			return AAMVAConfig{}, true, fmt.Errorf("invalid AAMVA_AUDIT_ENABLED: %w", err)
+		}
+		cfg.AuditEnabled = parsed
+	}
+	if val := get("AAMVA_SUPPORTED_STATES"); val != "" {
+		rawStates := strings.Split(val, ",")
+		var states []string
+		for _, s := range rawStates {
+			if trimmed := strings.TrimSpace(strings.ToUpper(s)); trimmed != "" {
+				states = append(states, trimmed)
+			}
+		}
+		if len(states) > 0 {
+			cfg.SupportedStates = states
+		}
+	}
+
+	// Allow adapter config to provide network settings and optional key material.
+	if cfg.BaseURL == "" && baseConfig.Endpoint != "" {
+		cfg.BaseURL = baseConfig.Endpoint
+	}
+	if cfg.Timeout == 0 && baseConfig.Timeout > 0 {
+		cfg.Timeout = baseConfig.Timeout
+	}
+	if cfg.RateLimitPerMinute == 0 && baseConfig.RateLimit > 0 {
+		cfg.RateLimitPerMinute = baseConfig.RateLimit
+	}
+	if cfg.APIKey == "" && baseConfig.APIKey != "" {
+		cfg.APIKey = baseConfig.APIKey
+	}
+	if cfg.ClientSecret == "" && baseConfig.APISecret != "" {
+		cfg.ClientSecret = baseConfig.APISecret
+	}
+
+	// If no AAMVA-related env vars and no required fields, treat as not configured.
+	if !configured && !enabledFlagSet && cfg.OrgID == "" && cfg.PermissionCode == "" && cfg.ClientID == "" && cfg.ClientSecret == "" {
+		return AAMVAConfig{}, false, nil
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return AAMVAConfig{}, true, err
+	}
+
+	return cfg, true, nil
 }
 
 // ============================================================================

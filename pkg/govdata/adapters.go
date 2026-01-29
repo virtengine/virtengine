@@ -19,6 +19,13 @@ import (
 func createAdapter(config AdapterConfig) (DataSourceAdapter, error) {
 	switch config.Type {
 	case DataSourceDMV:
+		aamvaConfig, ok, err := loadAAMVAConfigFromEnv(config)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return NewAAMVADMVAdapter(config, aamvaConfig)
+		}
 		return newDMVAdapter(config), nil
 	case DataSourcePassport:
 		return newPassportAdapter(config), nil
@@ -41,17 +48,17 @@ func createAdapter(config AdapterConfig) (DataSourceAdapter, error) {
 
 // baseAdapter provides common functionality for all adapters
 type baseAdapter struct {
-	config           AdapterConfig
-	available        bool
-	lastCheck        time.Time
-	lastSuccess      *time.Time
-	lastError        error
-	errorCount       int
-	totalRequests    int64
-	successRequests  int64
-	totalLatency     time.Duration
-	mu               sync.RWMutex
-	httpClient       *http.Client
+	config          AdapterConfig
+	available       bool
+	lastCheck       time.Time
+	lastSuccess     *time.Time
+	lastError       error
+	errorCount      int
+	totalRequests   int64
+	successRequests int64
+	totalLatency    time.Duration
+	mu              sync.RWMutex
+	httpClient      *http.Client
 }
 
 // newBaseAdapter creates a new base adapter
