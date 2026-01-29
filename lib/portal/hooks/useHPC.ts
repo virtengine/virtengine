@@ -19,6 +19,7 @@ import type {
 } from '../types/hpc';
 import { initialHPCState } from '../types/hpc';
 import type { QueryClient, ChainEvent } from '../types/chain';
+import { sanitizePlainText, sanitizeObject } from '../utils/security';
 
 interface HPCContextValue {
   state: HPCState;
@@ -205,11 +206,47 @@ export function HPCProvider({
   }, [state.workloadTemplates]);
 
   const updateJobManifest = useCallback((manifestUpdate: Partial<JobManifest>) => {
+    const sanitizedUpdate: Partial<JobManifest> = { ...manifestUpdate };
+
+    if (typeof manifestUpdate.name === 'string') {
+      sanitizedUpdate.name = sanitizePlainText(manifestUpdate.name, { maxLength: 120 });
+    }
+
+    if (typeof manifestUpdate.description === 'string') {
+      sanitizedUpdate.description = sanitizePlainText(manifestUpdate.description, { maxLength: 500 });
+    }
+
+    if (typeof manifestUpdate.command === 'string') {
+      sanitizedUpdate.command = sanitizePlainText(manifestUpdate.command, { maxLength: 300 });
+    }
+
+    if (typeof manifestUpdate.image === 'string') {
+      sanitizedUpdate.image = sanitizePlainText(manifestUpdate.image, { maxLength: 200 });
+    }
+
+    if (manifestUpdate.environment) {
+      sanitizedUpdate.environment = sanitizeObject(manifestUpdate.environment, {
+        maxDepth: 2,
+        maxKeyLength: 64,
+        maxStringLength: 256,
+        escapeHtmlStrings: false,
+      }) as Record<string, string>;
+    }
+
+    if (manifestUpdate.parameters) {
+      sanitizedUpdate.parameters = sanitizeObject(manifestUpdate.parameters, {
+        maxDepth: 2,
+        maxKeyLength: 64,
+        maxStringLength: 256,
+        escapeHtmlStrings: false,
+      }) as Record<string, string | number | boolean>;
+    }
+
     setState(prev => ({
       ...prev,
       submission: prev.submission ? {
         ...prev.submission,
-        manifest: { ...prev.submission.manifest, ...manifestUpdate },
+        manifest: { ...prev.submission.manifest, ...sanitizedUpdate },
       } : null,
     }));
   }, []);

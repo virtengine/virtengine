@@ -195,5 +195,8 @@ export { WebSocketClient } from './utils/websocket-client';
 
 export { formatScore, formatTokenAmount, formatDuration, formatTimestamp } from './utils/format';
 export { validateAddress, validateMnemonic, isValidScore } from './utils/validation';
+export { sanitizePlainText, sanitizeDigits, sanitizeJsonInput, sanitizeObject } from './utils/security';
 export { encryptPayload, decryptPayload } from './utils/encryption';
 export type { EncryptionResult, DecryptionResult } from './utils/encryption';
+export { createOAuthRequest, persistOAuthRequest, consumeOAuthRequest, buildAuthorizationUrl, createPKCE } from './utils/oidc';
+export type { OAuthRequest } from './utils/oidc';
