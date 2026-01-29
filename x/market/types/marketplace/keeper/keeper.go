@@ -906,14 +906,139 @@ func (k Keeper) ProcessWaldurCallback(ctx sdk.Context, callback *marketplace.Wal
 
 // processProvisionCallback handles provision callbacks
 func (k Keeper) processProvisionCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
-	// Implementation would update allocation state and emit provision event
-	return nil
+	if callback.ChainEntityType != marketplace.SyncTypeAllocation {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("unexpected entity type: %s", callback.ChainEntityType)
+	}
+
+	allocationID, err := marketplace.ParseAllocationID(callback.ChainEntityID)
+	if err != nil {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
+	}
+
+	allocation, found := k.GetAllocation(ctx, allocationID)
+	if !found {
+		return marketplace.ErrAllocationNotFound.Wrapf("allocation %s not found", callback.ChainEntityID)
+	}
+
+	if allocation.State.IsTerminal() {
+		return marketplace.ErrInvalidStateTransition.Wrapf("allocation %s already terminal", allocationID.String())
+	}
+
+	order, found := k.GetOrder(ctx, allocationID.OrderID)
+	if !found {
+		return marketplace.ErrOrderNotFound.Wrapf("order %s not found", allocationID.OrderID.String())
+	}
+
+	reason := "provision requested by waldur"
+	if value, ok := callback.Payload["reason"]; ok && value != "" {
+		reason = value
+	}
+
+	if allocation.State != marketplace.AllocationStateProvisioning && allocation.State != marketplace.AllocationStateActive {
+		if err := allocation.SetStateAt(marketplace.AllocationStateProvisioning, reason, ctx.BlockTime()); err != nil {
+			return err
+		}
+		if err := k.UpdateAllocation(ctx, allocation); err != nil {
+			return err
+		}
+	}
+
+	if order.State != marketplace.OrderStateProvisioning && order.State != marketplace.OrderStateActive {
+		if err := order.SetStateAt(marketplace.OrderStateProvisioning, reason, ctx.BlockTime()); err != nil {
+			return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+		}
+		if err := k.UpdateOrder(ctx, order); err != nil {
+			return err
+		}
+	}
+
+	encryptedConfigRef := ""
+	if value, ok := callback.Payload["encrypted_config_ref"]; ok && value != "" {
+		encryptedConfigRef = value
+	} else if order.EncryptedConfig != nil {
+		encryptedConfigRef = order.EncryptedConfig.EnvelopeRef
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewProvisionRequestedEventAt(allocation, encryptedConfigRef, ctx.BlockHeight(), seq, ctx.BlockTime())
+	return k.EmitMarketplaceEvent(ctx, event)
 }
 
 // processTerminateCallback handles terminate callbacks
 func (k Keeper) processTerminateCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
-	// Implementation would update allocation state and emit terminate event
-	return nil
+	if callback.ChainEntityType != marketplace.SyncTypeAllocation {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("unexpected entity type: %s", callback.ChainEntityType)
+	}
+
+	allocationID, err := marketplace.ParseAllocationID(callback.ChainEntityID)
+	if err != nil {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
+	}
+
+	allocation, found := k.GetAllocation(ctx, allocationID)
+	if !found {
+		return marketplace.ErrAllocationNotFound.Wrapf("allocation %s not found", callback.ChainEntityID)
+	}
+
+	if allocation.State.IsTerminal() {
+		return marketplace.ErrInvalidStateTransition.Wrapf("allocation %s already terminal", allocationID.String())
+	}
+
+	order, found := k.GetOrder(ctx, allocationID.OrderID)
+	if !found {
+		return marketplace.ErrOrderNotFound.Wrapf("order %s not found", allocationID.OrderID.String())
+	}
+
+	reason := "termination requested by waldur"
+	if value, ok := callback.Payload["reason"]; ok && value != "" {
+		reason = value
+	}
+
+	immediate := false
+	if value, ok := callback.Payload["immediate"]; ok {
+		immediate = value == "true" || value == "1"
+	}
+
+	targetAllocationState := marketplace.AllocationStateTerminating
+	if immediate {
+		targetAllocationState = marketplace.AllocationStateTerminated
+	}
+
+	if err := allocation.SetStateAt(targetAllocationState, reason, ctx.BlockTime()); err != nil {
+		return err
+	}
+	if err := k.UpdateAllocation(ctx, allocation); err != nil {
+		return err
+	}
+
+	switch {
+	case immediate && order.State == marketplace.OrderStatePendingTermination:
+		if err := order.SetStateAt(marketplace.OrderStateTerminated, reason, ctx.BlockTime()); err != nil {
+			return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+		}
+	case order.State != marketplace.OrderStatePendingTermination && order.State != marketplace.OrderStateTerminated:
+		if err := order.SetStateAt(marketplace.OrderStatePendingTermination, reason, ctx.BlockTime()); err != nil {
+			return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+		}
+	}
+
+	if err := k.UpdateOrder(ctx, order); err != nil {
+		return err
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewTerminateRequestedEventAt(
+		allocation.ID.String(),
+		order.ID.String(),
+		allocation.ProviderAddress,
+		callback.SignerID,
+		reason,
+		immediate,
+		ctx.BlockHeight(),
+		seq,
+		ctx.BlockTime(),
+	)
+	return k.EmitMarketplaceEvent(ctx, event)
 }
 
 // IsNonceProcessed checks if a nonce has been processed

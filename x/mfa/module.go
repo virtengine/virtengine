@@ -57,11 +57,7 @@ func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) 
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
 	// Use standard JSON encoding for stub types until proper protobuf generation
 	defaultGenesis := types.DefaultGenesisState()
-	bz, err := json.Marshal(defaultGenesis)
-	if err != nil {
-		panic(err)
-	}
-	return bz
+	return cdc.MustMarshalJSON(defaultGenesis)
 }
 
 // ValidateGenesis performs genesis state validation for the mfa module.
@@ -71,7 +67,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 	}
 	// Use standard JSON decoding for stub types until proper protobuf generation
 	var data types.GenesisState
-	if err := json.Unmarshal(bz, &data); err != nil {
+	if err := cdc.UnmarshalJSON(bz, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %v", types.ModuleName, err)
 	}
 
@@ -163,7 +159,7 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	// Use standard JSON decoding for stub types until proper protobuf generation
 	var genesisState types.GenesisState
-	if err := json.Unmarshal(data, &genesisState); err != nil {
+	if err := cdc.UnmarshalJSON(data, &genesisState); err != nil {
 		panic(fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err))
 	}
 	am.keeper.InitGenesis(ctx, &genesisState)
@@ -173,11 +169,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := am.keeper.ExportGenesis(ctx)
 	// Use standard JSON encoding for stub types until proper protobuf generation
-	bz, err := json.Marshal(gs)
-	if err != nil {
-		panic(err)
-	}
-	return bz
+	return cdc.MustMarshalJSON(gs)
 }
 
 // ConsensusVersion returns the mfa module's consensus version.
@@ -199,3 +191,5 @@ func (am AppModule) RegisterStoreDecoder(sdr simtypes.StoreDecoderRegistry) {
 func (am AppModule) WeightedOperations(simState module.SimulationState) []simtypes.WeightedOperation {
 	return nil
 }
+
+

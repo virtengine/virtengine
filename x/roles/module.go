@@ -57,11 +57,7 @@ func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) 
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
 	// Use standard JSON encoding for stub types until proper protobuf generation
 	defaultGenesis := types.DefaultGenesisState()
-	bz, err := json.Marshal(defaultGenesis)
-	if err != nil {
-		panic(err)
-	}
-	return bz
+	return cdc.MustMarshalJSON(defaultGenesis)
 }
 
 // ValidateGenesis performs genesis state validation for the roles module.
@@ -71,7 +67,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 	}
 	// Use standard JSON decoding for stub types until proper protobuf generation
 	var data types.GenesisState
-	if err := json.Unmarshal(bz, &data); err != nil {
+	if err := cdc.UnmarshalJSON(bz, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %v", types.ModuleName, err)
 	}
 
@@ -159,7 +155,7 @@ func (am AppModule) EndBlock(_ context.Context) error {
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
 	// Use standard JSON decoding for stub types until proper protobuf generation
 	var genesisState types.GenesisState
-	if err := json.Unmarshal(data, &genesisState); err != nil {
+	if err := cdc.UnmarshalJSON(data, &genesisState); err != nil {
 		panic(fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err))
 	}
 	InitGenesis(ctx, am.keeper, &genesisState)
@@ -169,11 +165,7 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := ExportGenesis(ctx, am.keeper)
 	// Use standard JSON encoding for stub types until proper protobuf generation
-	bz, err := json.Marshal(gs)
-	if err != nil {
-		panic(err)
-	}
-	return bz
+	return cdc.MustMarshalJSON(gs)
 }
 
 // ConsensusVersion implements module.AppModule#ConsensusVersion
@@ -195,3 +187,5 @@ func (am AppModule) WeightedOperations(_ module.SimulationState) []simtypes.Weig
 func (AppModule) GenerateGenesisState(_ *module.SimulationState) {
 	// Simulation genesis state generation not implemented
 }
+
+

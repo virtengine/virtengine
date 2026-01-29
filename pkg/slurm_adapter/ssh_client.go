@@ -5,12 +5,14 @@ package slurm_adapter
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,6 +27,12 @@ var ErrSSHConnection = errors.New("SSH connection failed")
 
 // ErrCommandFailed is returned when a SLURM command fails
 var ErrCommandFailed = errors.New("SLURM command failed")
+
+// ErrSCPFailed is returned when SCP file transfer fails
+var ErrSCPFailed = errors.New("SCP file transfer failed")
+
+// ErrConnectionPoolExhausted is returned when connection pool is exhausted
+var ErrConnectionPoolExhausted = errors.New("SSH connection pool exhausted")
 
 // SSHConfig contains SSH connection configuration
 type SSHConfig struct {
@@ -61,6 +69,12 @@ type SSHConfig struct {
 
 	// MaxRetries is the maximum number of reconnection attempts
 	MaxRetries int `json:"max_retries"`
+
+	// PoolSize is the number of connections in the pool (default: 5)
+	PoolSize int `json:"pool_size"`
+
+	// PoolIdleTimeout is how long idle connections are kept (default: 5m)
+	PoolIdleTimeout time.Duration `json:"pool_idle_timeout"`
 }
 
 // DefaultSSHConfig returns default SSH configuration
@@ -71,19 +85,33 @@ func DefaultSSHConfig() SSHConfig {
 		KeepAliveInterval: 30 * time.Second,
 		MaxRetries:        3,
 		HostKeyCallback:   "ignore", // TODO: Change to "known_hosts" for production
+		PoolSize:          5,
+		PoolIdleTimeout:   5 * time.Minute,
 	}
+}
+
+// pooledConnection represents a connection in the pool
+type pooledConnection struct {
+	client   *ssh.Client
+	lastUsed time.Time
+	inUse    bool
 }
 
 // SSHSLURMClient implements SLURMClient using SSH to execute SLURM commands
 type SSHSLURMClient struct {
 	config     SSHConfig
 	sshConfig  *ssh.ClientConfig
-	client     *ssh.Client
 	mu         sync.RWMutex
 	connected  bool
 	jobs       map[string]*SLURMJob // Local cache for job tracking
 	clusterName string
 	defaultPartition string
+
+	// Connection pool
+	pool      []*pooledConnection
+	poolMu    sync.Mutex
+	poolCond  *sync.Cond
+	poolClose chan struct{}
 }
 
 // NewSSHSLURMClient creates a new SSH-based SLURM client
@@ -126,77 +154,235 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 	}
 
-	return &SSHSLURMClient{
+	// Set defaults for pool
+	poolSize := sshConfig.PoolSize
+	if poolSize <= 0 {
+		poolSize = 5
+	}
+
+	client := &SSHSLURMClient{
 		config:          sshConfig,
 		sshConfig:       clientConfig,
 		jobs:            make(map[string]*SLURMJob),
 		clusterName:     clusterName,
 		defaultPartition: defaultPartition,
-	}, nil
+		pool:            make([]*pooledConnection, 0, poolSize),
+		poolClose:       make(chan struct{}),
+	}
+	client.poolCond = sync.NewCond(&client.poolMu)
+
+	return client, nil
 }
 
-// Connect establishes SSH connection to the SLURM login node
+// Connect establishes SSH connection pool to the SLURM login node
 func (c *SSHSLURMClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.connected && c.client != nil {
+	if c.connected {
 		return nil
 	}
 
+	// Initialize connection pool
+	poolSize := c.config.PoolSize
+	if poolSize <= 0 {
+		poolSize = 5
+	}
+
 	addr := fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)
-	
+
+	// Create initial connection to verify connectivity
+	client, err := c.dialWithRetry(ctx, addr)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrSSHConnection, err)
+	}
+
+	// Test connection with a simple SLURM command
+	session, err := client.NewSession()
+	if err != nil {
+		client.Close()
+		return fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	_, err = session.CombinedOutput("squeue --version")
+	session.Close()
+	if err != nil {
+		client.Close()
+		return fmt.Errorf("failed to verify SLURM: %w", err)
+	}
+
+	// Add first connection to pool
+	c.poolMu.Lock()
+	c.pool = append(c.pool, &pooledConnection{
+		client:   client,
+		lastUsed: time.Now(),
+		inUse:    false,
+	})
+	c.poolMu.Unlock()
+
+	c.connected = true
+
+	// Start idle connection cleanup goroutine
+	go c.cleanupIdleConnections()
+
+	return nil
+}
+
+// dialWithRetry attempts to dial with retries
+func (c *SSHSLURMClient) dialWithRetry(ctx context.Context, addr string) (*ssh.Client, error) {
 	var client *ssh.Client
 	var err error
-	
+
 	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 
 		client, err = ssh.Dial("tcp", addr, c.sshConfig)
 		if err == nil {
-			break
+			return client, nil
 		}
-		
+
 		if attempt < c.config.MaxRetries {
 			time.Sleep(time.Second * time.Duration(attempt+1))
 		}
 	}
 
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrSSHConnection, err)
-	}
-
-	c.client = client
-	c.connected = true
-
-	// Test connection with a simple SLURM command
-	output, err := c.runCommand(ctx, "squeue --version")
-	if err != nil {
-		c.Disconnect()
-		return fmt.Errorf("failed to verify SLURM: %w", err)
-	}
-
-	// Log SLURM version (for debugging)
-	_ = output
-
-	return nil
+	return nil, err
 }
 
-// Disconnect closes the SSH connection
+// acquireConnection gets a connection from the pool or creates a new one
+func (c *SSHSLURMClient) acquireConnection(ctx context.Context) (*ssh.Client, error) {
+	c.poolMu.Lock()
+	defer c.poolMu.Unlock()
+
+	poolSize := c.config.PoolSize
+	if poolSize <= 0 {
+		poolSize = 5
+	}
+
+	// Try to find an available connection
+	for _, pc := range c.pool {
+		if !pc.inUse && pc.client != nil {
+			pc.inUse = true
+			pc.lastUsed = time.Now()
+			return pc.client, nil
+		}
+	}
+
+	// Create new connection if pool not full
+	if len(c.pool) < poolSize {
+		addr := fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)
+		client, err := c.dialWithRetry(ctx, addr)
+		if err != nil {
+			return nil, err
+		}
+		c.pool = append(c.pool, &pooledConnection{
+			client:   client,
+			lastUsed: time.Now(),
+			inUse:    true,
+		})
+		return client, nil
+	}
+
+	// Wait for a connection to become available
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		for _, pc := range c.pool {
+			if !pc.inUse && pc.client != nil {
+				pc.inUse = true
+				pc.lastUsed = time.Now()
+				return pc.client, nil
+			}
+		}
+
+		// Wait with timeout
+		c.poolCond.Wait()
+	}
+}
+
+// releaseConnection returns a connection to the pool
+func (c *SSHSLURMClient) releaseConnection(client *ssh.Client) {
+	c.poolMu.Lock()
+	defer c.poolMu.Unlock()
+
+	for _, pc := range c.pool {
+		if pc.client == client {
+			pc.inUse = false
+			pc.lastUsed = time.Now()
+			c.poolCond.Signal()
+			return
+		}
+	}
+}
+
+// cleanupIdleConnections removes idle connections from the pool
+func (c *SSHSLURMClient) cleanupIdleConnections() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	idleTimeout := c.config.PoolIdleTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = 5 * time.Minute
+	}
+
+	for {
+		select {
+		case <-c.poolClose:
+			return
+		case <-ticker.C:
+			c.poolMu.Lock()
+			now := time.Now()
+			keepPool := make([]*pooledConnection, 0, len(c.pool))
+			
+			for _, pc := range c.pool {
+				// Keep at least one connection
+				if len(keepPool) == 0 || pc.inUse || now.Sub(pc.lastUsed) < idleTimeout {
+					keepPool = append(keepPool, pc)
+				} else {
+					// Close idle connection
+					if pc.client != nil {
+						pc.client.Close()
+					}
+				}
+			}
+			c.pool = keepPool
+			c.poolMu.Unlock()
+		}
+	}
+}
+
+// Disconnect closes all SSH connections in the pool
 func (c *SSHSLURMClient) Disconnect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.client != nil {
-		err := c.client.Close()
-		c.client = nil
-		c.connected = false
-		return err
+	if !c.connected {
+		return nil
 	}
+
+	// Signal cleanup goroutine to stop
+	close(c.poolClose)
+
+	// Close all connections in pool
+	c.poolMu.Lock()
+	for _, pc := range c.pool {
+		if pc.client != nil {
+			pc.client.Close()
+		}
+	}
+	c.pool = nil
+	c.poolMu.Unlock()
+
+	c.connected = false
+	c.poolClose = make(chan struct{}) // Reset for potential reconnect
+	
 	return nil
 }
 
@@ -204,16 +390,22 @@ func (c *SSHSLURMClient) Disconnect() error {
 func (c *SSHSLURMClient) IsConnected() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.connected && c.client != nil
+	return c.connected
 }
 
 // runCommand executes a command via SSH and returns the output
 func (c *SSHSLURMClient) runCommand(ctx context.Context, cmd string) (string, error) {
-	if c.client == nil {
+	if !c.IsConnected() {
 		return "", ErrSLURMNotConnected
 	}
 
-	session, err := c.client.NewSession()
+	client, err := c.acquireConnection(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer c.releaseConnection(client)
+
+	session, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create SSH session: %w", err)
 	}
@@ -240,6 +432,126 @@ func (c *SSHSLURMClient) runCommand(ctx context.Context, cmd string) (string, er
 	return string(output), err
 }
 
+// runCommandWithTimeout executes a command with a specific timeout
+func (c *SSHSLURMClient) runCommandWithTimeout(ctx context.Context, cmd string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return c.runCommand(ctx, cmd)
+}
+
+// SCPUpload uploads a file to the remote host via SCP
+func (c *SSHSLURMClient) SCPUpload(ctx context.Context, localPath, remotePath string) error {
+	if !c.IsConnected() {
+		return ErrSLURMNotConnected
+	}
+
+	// Read local file
+	content, err := os.ReadFile(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to read local file: %w", err)
+	}
+
+	return c.SCPUploadBytes(ctx, content, remotePath, 0644)
+}
+
+// SCPUploadBytes uploads bytes to a remote file via SCP
+func (c *SSHSLURMClient) SCPUploadBytes(ctx context.Context, content []byte, remotePath string, mode os.FileMode) error {
+	if !c.IsConnected() {
+		return ErrSLURMNotConnected
+	}
+
+	client, err := c.acquireConnection(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer c.releaseConnection(client)
+
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+
+	// Get just the filename for SCP protocol
+	filename := filepath.Base(remotePath)
+	dir := filepath.Dir(remotePath)
+
+	// Prepare content with SCP protocol
+	go func() {
+		w, _ := session.StdinPipe()
+		defer w.Close()
+		fmt.Fprintf(w, "C%04o %d %s\n", mode, len(content), filename)
+		w.Write(content)
+		fmt.Fprint(w, "\x00")
+	}()
+
+	// Run scp command
+	cmd := fmt.Sprintf("scp -t %s", dir)
+	if err := session.Run(cmd); err != nil {
+		return fmt.Errorf("%w: %v", ErrSCPFailed, err)
+	}
+
+	return nil
+}
+
+// SCPDownload downloads a file from the remote host via SCP
+func (c *SSHSLURMClient) SCPDownload(ctx context.Context, remotePath, localPath string) error {
+	if !c.IsConnected() {
+		return ErrSLURMNotConnected
+	}
+
+	content, err := c.SCPDownloadBytes(ctx, remotePath)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(localPath, content, 0644)
+}
+
+// SCPDownloadBytes downloads a file from the remote host as bytes
+func (c *SSHSLURMClient) SCPDownloadBytes(ctx context.Context, remotePath string) ([]byte, error) {
+	if !c.IsConnected() {
+		return nil, ErrSLURMNotConnected
+	}
+
+	client, err := c.acquireConnection(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer c.releaseConnection(client)
+
+	session, err := client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+
+	// Use cat for simple file download
+	cmd := fmt.Sprintf("cat %q", remotePath)
+	output, err := session.CombinedOutput(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrSCPFailed, err)
+	}
+
+	return output, nil
+}
+
+// WriteRemoteFile writes content to a remote file using heredoc
+func (c *SSHSLURMClient) WriteRemoteFile(ctx context.Context, remotePath string, content []byte, mode os.FileMode) error {
+	if !c.IsConnected() {
+		return ErrSLURMNotConnected
+	}
+
+	// Use heredoc approach which is more reliable than SCP
+	cmd := fmt.Sprintf(`cat > %q << 'VIRTENGINE_EOF'
+%s
+VIRTENGINE_EOF
+chmod %04o %q`, remotePath, string(content), mode, remotePath)
+
+	_, err := c.runCommand(ctx, cmd)
+	return err
+}
+
 // SubmitJob submits a job to SLURM using sbatch
 func (c *SSHSLURMClient) SubmitJob(ctx context.Context, spec *SLURMJobSpec) (string, error) {
 	c.mu.Lock()
@@ -253,8 +565,14 @@ func (c *SSHSLURMClient) SubmitJob(ctx context.Context, spec *SLURMJobSpec) (str
 		return "", err
 	}
 
-	// Generate SLURM batch script
-	script := c.generateBatchScript(spec)
+	// Generate SLURM batch script using BatchScriptBuilder
+	builder := FromJobSpec(spec)
+	if spec.Partition == "" && c.defaultPartition != "" {
+		builder.SetPartition(c.defaultPartition)
+	}
+	builder.AddHeaderComment(fmt.Sprintf("Generated by VirtEngine SLURM Adapter"))
+	builder.AddHeaderComment(fmt.Sprintf("Cluster: %s", c.clusterName))
+	script := builder.Build()
 
 	// Create temporary script file and submit
 	// Using heredoc approach to avoid file creation
@@ -262,7 +580,10 @@ func (c *SSHSLURMClient) SubmitJob(ctx context.Context, spec *SLURMJobSpec) (str
 %s
 SLURM_SCRIPT_EOF`, script)
 
+	c.mu.Unlock() // Unlock before running command
 	output, err := c.runCommand(ctx, submitCmd)
+	c.mu.Lock() // Re-lock after command
+	
 	if err != nil {
 		return "", fmt.Errorf("%w: %v - %s", ErrJobSubmissionFailed, err, output)
 	}
@@ -293,69 +614,57 @@ SLURM_SCRIPT_EOF`, script)
 	return jobID, nil
 }
 
-// generateBatchScript creates a SLURM batch script from the job spec
-func (c *SSHSLURMClient) generateBatchScript(spec *SLURMJobSpec) string {
-	var sb strings.Builder
-
-	sb.WriteString("#!/bin/bash\n")
-	sb.WriteString(fmt.Sprintf("#SBATCH --job-name=%s\n", spec.JobName))
-
-	partition := spec.Partition
-	if partition == "" {
-		partition = c.defaultPartition
-	}
-	sb.WriteString(fmt.Sprintf("#SBATCH --partition=%s\n", partition))
-
-	sb.WriteString(fmt.Sprintf("#SBATCH --nodes=%d\n", spec.Nodes))
-	sb.WriteString(fmt.Sprintf("#SBATCH --cpus-per-task=%d\n", spec.CPUsPerNode))
-	sb.WriteString(fmt.Sprintf("#SBATCH --mem=%dM\n", spec.MemoryMB))
-	sb.WriteString(fmt.Sprintf("#SBATCH --time=%d\n", spec.TimeLimit))
-
-	if spec.GPUs > 0 {
-		if spec.GPUType != "" {
-			sb.WriteString(fmt.Sprintf("#SBATCH --gres=gpu:%s:%d\n", spec.GPUType, spec.GPUs))
-		} else {
-			sb.WriteString(fmt.Sprintf("#SBATCH --gres=gpu:%d\n", spec.GPUs))
-		}
+// SubmitJobFromScript submits a pre-built batch script to SLURM
+func (c *SSHSLURMClient) SubmitJobFromScript(ctx context.Context, script string) (string, error) {
+	if !c.IsConnected() {
+		return "", ErrSLURMNotConnected
 	}
 
-	if spec.WorkingDirectory != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --chdir=%s\n", spec.WorkingDirectory))
+	submitCmd := fmt.Sprintf(`cat << 'SLURM_SCRIPT_EOF' | sbatch --parsable
+%s
+SLURM_SCRIPT_EOF`, script)
+
+	output, err := c.runCommand(ctx, submitCmd)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v - %s", ErrJobSubmissionFailed, err, output)
 	}
 
-	if spec.OutputDirectory != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --output=%s/%%j.out\n", spec.OutputDirectory))
-		sb.WriteString(fmt.Sprintf("#SBATCH --error=%s/%%j.err\n", spec.OutputDirectory))
+	jobID := strings.TrimSpace(output)
+	if strings.Contains(jobID, ";") {
+		parts := strings.Split(jobID, ";")
+		jobID = parts[0]
 	}
 
-	if spec.Exclusive {
-		sb.WriteString("#SBATCH --exclusive\n")
+	if jobID == "" || !isNumeric(jobID) {
+		return "", fmt.Errorf("%w: unexpected sbatch output: %s", ErrJobSubmissionFailed, output)
 	}
 
-	for _, constraint := range spec.Constraints {
-		sb.WriteString(fmt.Sprintf("#SBATCH --constraint=%s\n", constraint))
+	return jobID, nil
+}
+
+// SubmitJobFromFile submits a job script file that exists on the remote system
+func (c *SSHSLURMClient) SubmitJobFromFile(ctx context.Context, scriptPath string) (string, error) {
+	if !c.IsConnected() {
+		return "", ErrSLURMNotConnected
 	}
 
-	sb.WriteString("\n# Environment variables\n")
-	for key, value := range spec.Environment {
-		sb.WriteString(fmt.Sprintf("export %s=%q\n", key, value))
+	cmd := fmt.Sprintf("sbatch --parsable %q", scriptPath)
+	output, err := c.runCommand(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v - %s", ErrJobSubmissionFailed, err, output)
 	}
 
-	sb.WriteString("\n# Job execution\n")
-	if spec.ContainerImage != "" {
-		// Use Singularity/Apptainer for containerized workloads
-		sb.WriteString(fmt.Sprintf("singularity exec %s ", spec.ContainerImage))
+	jobID := strings.TrimSpace(output)
+	if strings.Contains(jobID, ";") {
+		parts := strings.Split(jobID, ";")
+		jobID = parts[0]
 	}
 
-	if spec.Command != "" {
-		sb.WriteString(spec.Command)
-		for _, arg := range spec.Arguments {
-			sb.WriteString(fmt.Sprintf(" %q", arg))
-		}
-		sb.WriteString("\n")
+	if jobID == "" || !isNumeric(jobID) {
+		return "", fmt.Errorf("%w: unexpected sbatch output: %s", ErrJobSubmissionFailed, output)
 	}
 
-	return sb.String()
+	return jobID, nil
 }
 
 // CancelJob cancels a SLURM job using scancel
@@ -856,7 +1165,8 @@ func isNumeric(s string) bool {
 // Compile-time check that SSHSLURMClient implements SLURMClient
 var _ SLURMClient = (*SSHSLURMClient)(nil)
 
-// Silence unused import warning
+// Silence unused import warnings (used in SCP operations and JSON parsing)
 var _ = regexp.MustCompile
 var _ io.Reader = nil
 var _ = json.Marshal
+var _ = bytes.NewBuffer

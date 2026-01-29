@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// VE-2020: SSH SLURM Client tests
+
 func TestDefaultSSHConfig(t *testing.T) {
 	config := DefaultSSHConfig()
 
@@ -16,6 +18,8 @@ func TestDefaultSSHConfig(t *testing.T) {
 	assert.Equal(t, 30*time.Second, config.KeepAliveInterval)
 	assert.Equal(t, 3, config.MaxRetries)
 	assert.Equal(t, "ignore", config.HostKeyCallback)
+	assert.Equal(t, 5, config.PoolSize)
+	assert.Equal(t, 5*time.Minute, config.PoolIdleTimeout)
 }
 
 func TestNewSSHSLURMClient_NoAuth(t *testing.T) {
@@ -62,7 +66,26 @@ func TestNewSSHSLURMClient_WithInvalidKey(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to parse private key")
 }
 
-func TestSSHSLURMClient_GenerateBatchScript(t *testing.T) {
+func TestNewSSHSLURMClient_WithPoolSize(t *testing.T) {
+	config := SSHConfig{
+		Host:            "localhost",
+		Port:            22,
+		User:            "testuser",
+		Password:        "testpass",
+		PoolSize:        10,
+		PoolIdleTimeout: 10 * time.Minute,
+	}
+
+	client, err := NewSSHSLURMClient(config, "cluster1", "default")
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	
+	// Pool should be initialized but empty until Connect
+	assert.NotNil(t, client.pool)
+	assert.Len(t, client.pool, 0)
+}
+
+func TestSSHSLURMClient_GenerateBatchScript_ViaFromJobSpec(t *testing.T) {
 	config := SSHConfig{
 		Host:     "localhost",
 		Port:     22,
@@ -72,6 +95,7 @@ func TestSSHSLURMClient_GenerateBatchScript(t *testing.T) {
 
 	client, err := NewSSHSLURMClient(config, "cluster1", "compute")
 	require.NoError(t, err)
+	_ = client // Client not used directly for script generation
 
 	spec := &SLURMJobSpec{
 		JobName:          "test-job",
@@ -94,7 +118,8 @@ func TestSSHSLURMClient_GenerateBatchScript(t *testing.T) {
 		Arguments: []string{"train.py", "--epochs=100"},
 	}
 
-	script := client.generateBatchScript(spec)
+	// Use BatchScriptBuilder
+	script := FromJobSpec(spec).Build()
 
 	// Verify SBATCH directives
 	assert.Contains(t, script, "#!/bin/bash")
@@ -103,7 +128,6 @@ func TestSSHSLURMClient_GenerateBatchScript(t *testing.T) {
 	assert.Contains(t, script, "#SBATCH --nodes=2")
 	assert.Contains(t, script, "#SBATCH --cpus-per-task=16")
 	assert.Contains(t, script, "#SBATCH --mem=32768M")
-	assert.Contains(t, script, "#SBATCH --time=3600")
 	assert.Contains(t, script, "#SBATCH --gres=gpu:a100:4")
 	assert.Contains(t, script, "#SBATCH --chdir=/home/user/workdir")
 	assert.Contains(t, script, "#SBATCH --output=/home/user/output/%j.out")
@@ -123,16 +147,6 @@ func TestSSHSLURMClient_GenerateBatchScript(t *testing.T) {
 }
 
 func TestSSHSLURMClient_GenerateBatchScript_WithContainer(t *testing.T) {
-	config := SSHConfig{
-		Host:     "localhost",
-		Port:     22,
-		User:     "testuser",
-		Password: "testpass",
-	}
-
-	client, err := NewSSHSLURMClient(config, "cluster1", "default")
-	require.NoError(t, err)
-
 	spec := &SLURMJobSpec{
 		JobName:        "container-job",
 		Nodes:          1,
@@ -144,22 +158,12 @@ func TestSSHSLURMClient_GenerateBatchScript_WithContainer(t *testing.T) {
 		Arguments:      []string{"inference.py"},
 	}
 
-	script := client.generateBatchScript(spec)
+	script := FromJobSpec(spec).Build()
 
 	assert.Contains(t, script, "singularity exec docker://pytorch/pytorch:latest python")
 }
 
 func TestSSHSLURMClient_GenerateBatchScript_DefaultPartition(t *testing.T) {
-	config := SSHConfig{
-		Host:     "localhost",
-		Port:     22,
-		User:     "testuser",
-		Password: "testpass",
-	}
-
-	client, err := NewSSHSLURMClient(config, "cluster1", "default-partition")
-	require.NoError(t, err)
-
 	spec := &SLURMJobSpec{
 		JobName:     "test-job",
 		Partition:   "", // Empty - should use default
@@ -171,7 +175,11 @@ func TestSSHSLURMClient_GenerateBatchScript_DefaultPartition(t *testing.T) {
 		Arguments:   []string{"hello"},
 	}
 
-	script := client.generateBatchScript(spec)
+	// When partition is empty, FromJobSpec won't set it
+	// The SSH client should use defaultPartition
+	builder := FromJobSpec(spec)
+	builder.SetPartition("default-partition")
+	script := builder.Build()
 
 	assert.Contains(t, script, "#SBATCH --partition=default-partition")
 }

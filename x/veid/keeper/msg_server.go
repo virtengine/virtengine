@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -388,16 +389,38 @@ func (ms msgServer) RevokeScopeFromWallet(goCtx context.Context, msg *types.MsgR
 func (ms msgServer) UpdateConsentSettings(goCtx context.Context, msg *types.MsgUpdateConsentSettings) (*types.MsgUpdateConsentSettingsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	_, err := sdk.AccAddressFromBech32(msg.Sender)
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
 
-	// TODO: Implement consent settings update with proper ConsentUpdateRequest
-	// The keeper.UpdateConsent expects a types.ConsentUpdateRequest parameter
+	// Convert Unix timestamp to *time.Time if provided
+	var expiresAt *time.Time
+	if msg.ExpiresAt != nil && *msg.ExpiresAt > 0 {
+		t := time.Unix(*msg.ExpiresAt, 0)
+		expiresAt = &t
+	}
+
+	update := types.ConsentUpdateRequest{
+		ScopeID:        msg.ScopeID,
+		GrantConsent:   msg.GrantConsent,
+		Purpose:        msg.Purpose,
+		ExpiresAt:      expiresAt,
+		GlobalSettings: msg.GlobalSettings,
+	}
+
+	if err := ms.keeper.UpdateConsent(ctx, sender, update, msg.UserSignature); err != nil {
+		return nil, err
+	}
+
+	wallet, found := ms.keeper.GetWallet(ctx, sender)
+	if !found {
+		return nil, types.ErrWalletNotFound.Wrap("wallet not found after consent update")
+	}
+
 	return &types.MsgUpdateConsentSettingsResponse{
 		UpdatedAt:      ctx.BlockTime().Unix(),
-		ConsentVersion: 0,
+		ConsentVersion: wallet.ConsentSettings.ConsentVersion,
 	}, nil
 }
 

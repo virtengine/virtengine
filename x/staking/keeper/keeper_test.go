@@ -1,5 +1,5 @@
-//go:build ignore
-// +build ignore
+// tests re-enabled
+
 
 // TODO: This test file is excluded until staking keeper compilation errors are fixed.
 
@@ -222,7 +222,7 @@ func (s *StakingKeeperTestSuite) TestValidatorReward() {
 	retrieved, found := s.keeper.GetValidatorReward(s.ctx, validatorAddr, 1)
 	s.Require().True(found)
 	s.Require().Equal(int64(9000), retrieved.PerformanceScore)
-	s.Require().True(retrieved.TotalReward.IsEqual(sdk.NewCoins(sdk.NewInt64Coin("uve", 1800))))
+	s.Require().True(retrieved.TotalReward.Equal(sdk.NewCoins(sdk.NewInt64Coin("uve", 1800))))
 }
 
 // TestSlashRecord tests slashing record management
