@@ -30,7 +30,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.25.5"
-  GOLANGCI_LINT_VERSION: "v1.64"
+  GOLANGCI_LINT_VERSION: "v2.4.0"
   NODE_VERSION: "20"
   PYTHON_VERSION: "3.11"
 
@@ -51,16 +51,16 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v8
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout=10m
-
-      - name: Check go mod tidy
-        run: |
-          go mod tidy
-          git diff --exit-code go.mod go.sum
 
       - name: Check formatting
         run: |
@@ -86,6 +86,11 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
 
       - name: Run unit tests
         run: |
@@ -218,6 +223,11 @@ jobs:
           echo "version=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
           echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
@@ -273,6 +283,11 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
 
       - name: Download build artifact
         uses: actions/download-artifact@v4

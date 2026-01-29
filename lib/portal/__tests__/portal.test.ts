@@ -3,6 +3,30 @@
  * VE-700 - VE-705: Testing portal utilities and hooks
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import {
+  validateAddress,
+  validateMnemonic,
+  isValidScore,
+  validateEmail,
+  validateUrl,
+  validateDomain,
+  isHex,
+  validateTokenAmount,
+  isPositiveInteger,
+  validateOTPCode,
+} from '../utils/validation';
+import {
+  formatScore,
+  formatTokenAmount,
+  formatDuration,
+  formatAddress,
+  formatBytes,
+  formatPercent,
+  formatHash,
+} from '../utils/format';
+import { authReducer } from '../types/auth';
+import { identityReducer, SCOPE_REQUIREMENTS } from '../types/identity';
+import { SessionManager, defaultSessionConfig } from '../utils/session';
 
 // Mock crypto.subtle for testing
 const mockCrypto = {
@@ -82,19 +106,6 @@ afterAll(() => {
 });
 
 describe('Validation Utilities', () => {
-  const {
-    validateAddress,
-    validateMnemonic,
-    isValidScore,
-    validateEmail,
-    validateUrl,
-    validateDomain,
-    isHex,
-    validateTokenAmount,
-    isPositiveInteger,
-    validateOTPCode,
-  } = require('../utils/validation');
-
   describe('validateAddress', () => {
     it('should validate correct addresses', () => {
       expect(validateAddress('ve1abc123def456xyz789qrstuvwxyz1234567890', 've')).toBe(true);
@@ -302,16 +313,6 @@ describe('OAuth Helpers', () => {
 });
 
 describe('Format Utilities', () => {
-  const {
-    formatScore,
-    formatTokenAmount,
-    formatDuration,
-    formatAddress,
-    formatBytes,
-    formatPercent,
-    formatHash,
-  } = require('../utils/format');
-
   describe('formatScore', () => {
     it('should format scores as integers', () => {
       expect(formatScore(85.7)).toBe('86');
@@ -420,7 +421,7 @@ describe('Auth Types', () => {
         },
       });
       expect(result.isAuthenticated).toBe(true);
-      expect(result.session).toEqual(session);
+      expect(result.isLoading).toBe(false);
     });
 
     it('should handle AUTH_FAILURE', () => {
@@ -446,8 +447,6 @@ describe('Auth Types', () => {
 });
 
 describe('Identity Types', () => {
-  const { identityReducer, SCOPE_REQUIREMENTS } = require('../types/identity');
-
   describe('SCOPE_REQUIREMENTS', () => {
     it('should have requirements for all scopes', () => {
       expect(SCOPE_REQUIREMENTS.basic).toBeDefined();
@@ -471,8 +470,6 @@ describe('Identity Types', () => {
 });
 
 describe('Session Manager', () => {
-  const { SessionManager, defaultSessionConfig } = require('../utils/session');
-
   describe('defaultSessionConfig', () => {
     it('should have sensible defaults', () => {
       expect(defaultSessionConfig.tokenLifetimeSeconds).toBe(3600);

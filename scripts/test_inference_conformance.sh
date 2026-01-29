@@ -24,7 +24,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Paths
 ML_CONFORMANCE_DIR="${PROJECT_ROOT}/ml/conformance"
-PKG_INFERENCE_DIR="${PROJECT_ROOT}/pkg/inference"
+export PKG_INFERENCE_DIR="${PROJECT_ROOT}/pkg/inference"
 TEST_VECTORS_FILE="${ML_CONFORMANCE_DIR}/test_vectors.json"
 GO_OUTPUTS_FILE="${PROJECT_ROOT}/tmp/go_inference_outputs.json"
 
@@ -142,9 +142,7 @@ verify_go_outputs() {
     
     cd "${PROJECT_ROOT}"
     
-    ${PYTHON_CMD} -m ml.conformance.verify_go_output "${go_outputs_file}" --verbose
-    
-    if [[ $? -eq 0 ]]; then
+    if ${PYTHON_CMD} -m ml.conformance.verify_go_output "${go_outputs_file}" --verbose; then
         print_success "All outputs match!"
     else
         print_error "Output verification failed"

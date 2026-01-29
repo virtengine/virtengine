@@ -204,6 +204,65 @@ These contain types for: audit, cert, deployment, escrow, gov, market, provider,
 - `main` - active development (odd minor versions like v0.9.x)
 - `mainnet/main` - stable releases (even minor versions like v0.8.x)
 
+## Commit Message Conventions
+
+VirtEngine uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for all commit messages and PR titles.
+
+### Format
+
+```
+type(scope): description
+```
+
+### Valid Types
+
+- `feat` - New feature
+- `fix` - Bug fix
+- `docs` - Documentation only
+- `style` - Code style (formatting, semicolons, etc.)
+- `refactor` - Code refactoring
+- `perf` - Performance improvements
+- `test` - Adding or updating tests
+- `build` - Build system or dependencies
+- `ci` - CI/CD configuration
+- `chore` - Other changes (maintenance)
+- `revert` - Reverting a previous commit
+
+### Valid Scopes
+
+- `veid` - Identity verification module
+- `mfa` - Multi-factor authentication module
+- `encryption` - Encryption module
+- `market` - Marketplace module
+- `escrow` - Escrow module
+- `roles` - Roles module
+- `hpc` - HPC module
+- `provider` - Provider daemon
+- `sdk` - SDK packages
+- `cli` - CLI commands
+- `app` - Application wiring
+- `deps` - Dependencies
+- `ci` - CI/CD
+- `api` - API changes
+
+### Examples
+
+```bash
+feat(veid): add identity verification flow
+fix(market): resolve bid race condition
+docs: update contributing guidelines
+chore(deps): bump cosmos-sdk to v0.53.1
+ci: fix failing CI checks
+```
+
+### Breaking Changes
+
+Add `!` after type/scope for breaking changes:
+
+```bash
+feat(api)!: change response format
+```
+
 ## Common Pitfalls
 
 1. **Don't use standard `make` on macOS** - requires GNU Make 4+ (install via Homebrew)

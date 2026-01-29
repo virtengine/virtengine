@@ -22,6 +22,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup environment
         uses: ./.github/actions/setup-macos
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - name: Build binaries
         run: make bins
       - name: Verify binaries
@@ -67,6 +71,10 @@ jobs:
           mkdir -p .cache/bin .cache/versions .cache/include .cache/run/bin
           # Verify GCC is available for CGO
           gcc --version | head -1
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - run: make bins
       - run: make docker-image
 
@@ -77,6 +85,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - run: make test-full
 
   coverage:
@@ -84,6 +96,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-ubuntu
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - name: Run tests with coverage
         run: make test-coverage
       - name: Upload coverage to Codecov
@@ -105,6 +121,10 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
       - run: make deps-tidy
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - run: make lint-go
 
   lint-shell:
@@ -126,6 +146,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - name: test-sim-nondeterminism
         run: make test-sim-nondeterminism
       - name: test-sim-import-export
@@ -146,6 +170,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -198,6 +226,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
+      - name: Sync dependencies
+        run: |
+          go mod tidy
+          go mod vendor
       - name: Setup docker user
         run: |
           DOCKER_IDU=$(id -u)
