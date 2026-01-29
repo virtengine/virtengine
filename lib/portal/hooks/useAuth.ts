@@ -19,6 +19,7 @@ import type {
 } from '../types/auth';
 import { initialAuthState, authReducer } from '../types/auth';
 import { SessionManager } from '../utils/session';
+import { consumeOAuthRequest } from '../utils/oidc';
 import { MnemonicWallet, KeypairWallet, WalletAdapter } from '../utils/wallet';
 import type { Wallet } from '../types/wallet';
 
@@ -49,6 +50,9 @@ export interface AuthProviderProps {
     clientId: string;
     redirectUri: string;
     accountBindingEndpoint: string;
+    stateStorageKey?: string;
+    enforceState?: boolean;
+    enforcePKCE?: boolean;
   };
   onSessionExpired?: () => void;
 }
@@ -172,9 +176,28 @@ export function AuthProvider({
     dispatch({ type: 'AUTH_START' });
 
     try {
+      const storedRequest = consumeOAuthRequest(
+        credentials.state,
+        ssoConfig.stateStorageKey
+      );
+
+      if (ssoConfig.enforceState && !storedRequest) {
+        throw new Error('Invalid or missing OAuth state');
+      }
+
+      if (storedRequest) {
+        if (ssoConfig.enforcePKCE && storedRequest.codeVerifier !== credentials.codeVerifier) {
+          throw new Error('Invalid PKCE verifier');
+        }
+        if (storedRequest.nonce !== credentials.nonce) {
+          throw new Error('Invalid nonce');
+        }
+      }
+
       // Exchange authorization code for tokens
       const tokenResponse = await fetch(ssoConfig.tokenEndpoint, {
         method: 'POST',
+        credentials: 'omit',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'authorization_code',
@@ -194,6 +217,7 @@ export function AuthProvider({
       // Bind SSO identity to blockchain account
       const bindingResponse = await fetch(ssoConfig.accountBindingEndpoint, {
         method: 'POST',
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${tokens.access_token}`,

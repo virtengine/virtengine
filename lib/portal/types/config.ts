@@ -101,6 +101,24 @@ export interface SSOConfig {
    * Account binding endpoint (maps SSO to blockchain account)
    */
   accountBindingEndpoint: string;
+
+  /**
+   * Session storage key for state/nonce tracking
+   * @default 've_sso_request'
+   */
+  stateStorageKey?: string;
+
+  /**
+   * Enforce state validation against stored request
+   * @default false
+   */
+  enforceState?: boolean;
+
+  /**
+   * Enforce PKCE verifier validation against stored request
+   * @default false
+   */
+  enforcePKCE?: boolean;
 }
 
 /**
@@ -289,6 +307,9 @@ export function validatePortalConfig(config: PortalConfig): string[] {
     }
     if (!config.ssoConfig.redirectUri) {
       errors.push('ssoConfig.redirectUri is required');
+    }
+    if (config.ssoConfig.enforcePKCE && !config.ssoConfig.tokenEndpoint) {
+      errors.push('ssoConfig.tokenEndpoint is required when enforcePKCE is true');
     }
   }
 

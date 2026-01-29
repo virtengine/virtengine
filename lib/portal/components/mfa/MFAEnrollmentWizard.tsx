@@ -4,6 +4,7 @@
  */
 import * as React from 'react';
 import { useMFA } from '../../hooks/useMFA';
+import { sanitizeDigits } from '../../utils/security';
 import type { MFAFactorType, MFAEnrollment } from '../../types/mfa';
 
 /**
@@ -337,7 +338,7 @@ function FactorVerification({
           type="text"
           className="mfa-wizard__input"
           value={code}
-          onChange={(e) => onCodeChange(e.target.value)}
+          onChange={(e) => onCodeChange(sanitizeDigits(e.target.value, 6))}
           placeholder="Enter 6-digit code"
           maxLength={6}
           pattern="[0-9]*"
