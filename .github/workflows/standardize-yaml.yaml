@@ -13,4 +13,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: check-yml-count
         run: |
-          if [[ $(git ls-files '*.yml' ':!:codecov.yml' | wc -l) -ne 0 ]]; then git ls-files '*.yml' ':!:codecov.yml' && exit 1;fi
+          # Skip sdk/codecov.yml if it exists (legacy - replaced by sdk/codecov.yaml)
+          yml_files=$(git ls-files '*.yml' ':!:codecov.yml' ':!:sdk/codecov.yml')
+          if [[ -n "$yml_files" ]]; then echo "$yml_files" && exit 1; fi

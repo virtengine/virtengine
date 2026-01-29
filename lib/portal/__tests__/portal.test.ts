@@ -3,6 +3,18 @@
  * VE-700 - VE-705: Testing portal utilities and hooks
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import {
+  validateAddress,
+  validateMnemonic,
+  isValidScore,
+  validateEmail,
+  validateUrl,
+  validateDomain,
+  isHex,
+  validateTokenAmount,
+  isPositiveInteger,
+  validateOTPCode,
+} from '../utils/validation';
 
 // Mock crypto.subtle for testing
 const mockCrypto = {
@@ -52,19 +64,6 @@ afterAll(() => {
 });
 
 describe('Validation Utilities', () => {
-  const {
-    validateAddress,
-    validateMnemonic,
-    isValidScore,
-    validateEmail,
-    validateUrl,
-    validateDomain,
-    isHex,
-    validateTokenAmount,
-    isPositiveInteger,
-    validateOTPCode,
-  } = require('../utils/validation');
-
   describe('validateAddress', () => {
     it('should validate correct addresses', () => {
       expect(validateAddress('ve1abc123def456xyz789qrstuvwxyz1234567890', 've')).toBe(true);
