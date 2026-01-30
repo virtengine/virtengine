@@ -276,8 +276,20 @@ func GenerateWalletID(accountAddress string) string {
 	return fmt.Sprintf("wallet_%x", hash[:16])
 }
 
-// CreateWallet creates a new identity wallet for an account
+// CreateIdentityWallet creates a new identity wallet for an account.
+// This is the public interface method name per VE-209 spec.
+func (k Keeper) CreateIdentityWallet(ctx sdk.Context, accountAddr sdk.AccAddress, bindingSignature, bindingPubKey []byte) (*types.IdentityWallet, error) {
+	return k.createWalletInternal(ctx, accountAddr, bindingSignature, bindingPubKey)
+}
+
+// CreateWallet creates a new identity wallet for an account.
+// Deprecated: Use CreateIdentityWallet instead.
 func (k Keeper) CreateWallet(ctx sdk.Context, accountAddr sdk.AccAddress, bindingSignature, bindingPubKey []byte) (*types.IdentityWallet, error) {
+	return k.createWalletInternal(ctx, accountAddr, bindingSignature, bindingPubKey)
+}
+
+// createWalletInternal implements wallet creation logic
+func (k Keeper) createWalletInternal(ctx sdk.Context, accountAddr sdk.AccAddress, bindingSignature, bindingPubKey []byte) (*types.IdentityWallet, error) {
 	// Check if wallet already exists
 	if _, found := k.GetWallet(ctx, accountAddr); found {
 		return nil, types.ErrWalletAlreadyExists.Wrap("wallet already exists for this account")
