@@ -50,4 +50,10 @@ var (
 
 	// ErrAlreadyExists is returned when an artifact already exists
 	ErrAlreadyExists = errors.Register("artifact_store", 2514, "artifact already exists")
+
+	// ErrNotFound is returned when a resource is not found
+	ErrNotFound = errors.Register("artifact_store", 2515, "resource not found")
+
+	// ErrInvalidState is returned when an operation is invalid for the current state
+	ErrInvalidState = errors.Register("artifact_store", 2516, "invalid state")
 )
