@@ -13,11 +13,18 @@ Welcome to the VirtEngine SRE documentation. This comprehensive guide establishe
 
 ### Reliability Engineering
 6. [Reliability Testing Framework](RELIABILITY_TESTING.md) - Chaos engineering, load testing, and gamedays
-7. [Incident Response Process](INCIDENT_RESPONSE.md) - Incident management and response procedures
+
+### Incident Management (OPS-001)
+7. [Incident Response Process](INCIDENT_RESPONSE.md) - Comprehensive incident management and response procedures
+8. [Escalation Procedures](ESCALATION_PROCEDURES.md) - Escalation matrix and decision trees
+9. [Communication Templates](COMMUNICATION_TEMPLATES.md) - Standardized incident communication
+10. [Incident Drills and Simulations](INCIDENT_DRILLS.md) - Gameday exercises and response training
+11. [On-Call Rotation Setup](ON_CALL_ROTATION.md) - On-call structure and management
+12. [Incident Metrics and Tracking](INCIDENT_METRICS.md) - KPIs, dashboards, and continuous improvement
 
 ### Templates and Tools
-8. [Blameless Postmortem Template](templates/postmortem_template.md) - Post-incident analysis template
-9. [SRE Training Guide](SRE_TRAINING.md) - Onboarding and continuous education
+13. [Blameless Postmortem Template](templates/postmortem_template.md) - Post-incident analysis template
+14. [SRE Training Guide](SRE_TRAINING.md) - Onboarding and continuous education
 
 ---
 
@@ -27,14 +34,19 @@ Welcome to the VirtEngine SRE documentation. This comprehensive guide establishe
 
 **First Day Checklist**:
 - [ ] Read [Incident Response Process](INCIDENT_RESPONSE.md)
+- [ ] Review [On-Call Rotation Setup](ON_CALL_ROTATION.md)
+- [ ] Review [Escalation Procedures](ESCALATION_PROCEDURES.md)
+- [ ] Read [Communication Templates](COMMUNICATION_TEMPLATES.md)
 - [ ] Review [SLI/SLO/SLA Framework](SLI_SLO_SLA.md)
 - [ ] Access granted to all monitoring systems
 - [ ] PagerDuty configured and tested
 - [ ] Slack incident channels joined
-- [ ] Shadow at least one shift
+- [ ] Shadow at least two on-call shifts
+- [ ] Complete incident response drill
 
 **Key Resources**:
 - Monitoring Dashboard: https://grafana.virtengine.com/d/sre-overview
+- Incident Metrics: https://grafana.virtengine.com/d/incident-metrics
 - Alert Rules: `/etc/prometheus/alerts/`
 - On-Call Schedule: https://virtengine.pagerduty.com
 - Runbooks: `docs/sre/runbooks/`
@@ -45,10 +57,14 @@ Welcome to the VirtEngine SRE documentation. This comprehensive guide establishe
 - 6+ months as on-call engineer
 - IC training completed
 - Shadowed 3+ incidents
+- Completed incident commander drills
 
 **Key Resources**:
 - [Incident Response Process](INCIDENT_RESPONSE.md#roles-and-responsibilities)
+- [Escalation Procedures](ESCALATION_PROCEDURES.md)
+- [Communication Templates](COMMUNICATION_TEMPLATES.md)
 - [Postmortem Template](templates/postmortem_template.md)
+- [Incident Drills](INCIDENT_DRILLS.md)
 - Incident Command Training: `docs/sre/training/incident-commander.md`
 
 ### For Developers
@@ -290,6 +306,7 @@ VirtEngine's SRE maturity journey:
 - ✅ Establish toil management framework
 - ✅ Create capacity planning process
 - ✅ Define performance budgets
+- ✅ Comprehensive incident response procedures (OPS-001)
 - ⚠️ Launch chaos engineering program (In Progress)
 
 ### Q2 2026
@@ -416,13 +433,16 @@ VirtEngine's SRE maturity journey:
 
 **Weekly**:
 - Monday: SRE sync (1 hour)
+- Monday: On-call handoff (15-30 min)
 - Wednesday: Load testing (staging)
 - Friday: Toil review (30 min)
 
 **Monthly**:
 - First Monday: Service review (2 hours)
+- Week 3: Incident response drill (1-2 hours)
 - Last Friday: Gameday exercise (2 hours)
 - Monthly: Chaos engineering (production, off-hours)
+- Monthly: Incident metrics review
 
 **Quarterly**:
 - Quarterly planning session (half day)
@@ -506,9 +526,9 @@ Automation ROI = Time Saved / Time Invested
 ---
 
 **Document Owner**: SRE Team
-**Last Updated**: 2026-01-29
-**Version**: 1.0.0
-**Next Review**: 2026-04-29
+**Last Updated**: 2026-01-30
+**Version**: 1.1.0
+**Next Review**: 2026-04-30
 
 ---
 
