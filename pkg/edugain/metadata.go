@@ -56,10 +56,10 @@ func (m *metadataService) Refresh(ctx context.Context) error {
 
 	if !needsRefresh && m.config.MetadataCache.StaleWhileRevalidate {
 		// Async refresh in background
-		verrors.SafeGo("", func() {
-			defer func() { }() // WG Done if needed
+		verrors.SafeGo("edugain-metadata", func() {
+			defer func() {}() // WG Done if needed
 			_ = m.doRefresh(context.Background())
-		}()
+		})
 		return nil
 	}
 

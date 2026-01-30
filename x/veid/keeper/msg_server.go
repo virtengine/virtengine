@@ -6,6 +6,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
@@ -59,11 +60,14 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 		return nil, err
 	}
 
+	// Convert proto envelope to local type
+	localPayload := encryptedPayloadFromProto(&msg.EncryptedPayload)
+
 	// Create the scope
 	scope := types.NewIdentityScope(
 		msg.ScopeId,
-		msg.ScopeType,
-		msg.EncryptedPayload,
+		types.ScopeTypeFromProto(msg.ScopeType),
+		localPayload,
 		*metadata,
 		ctx.BlockTime(),
 	)
@@ -77,7 +81,7 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 	err = ctx.EventManager().EmitTypedEvent(&types.EventScopeUploaded{
 		AccountAddress:    sender.String(),
 		ScopeID:           msg.ScopeId,
-		ScopeType:         string(msg.ScopeType),
+		ScopeType:         string(types.ScopeTypeFromProto(msg.ScopeType)),
 		Version:           types.ScopeSchemaVersion,
 		ClientID:          msg.ClientId,
 		PayloadHash:       metadata.PayloadHashHex(),
@@ -90,7 +94,7 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 
 	return &types.MsgUploadScopeResponse{
 		ScopeId:    msg.ScopeId,
-		Status:     types.VerificationStatusPending,
+		Status:     types.VerificationStatusPBPending,
 		UploadedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
@@ -195,7 +199,7 @@ func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgReq
 
 	return &types.MsgRequestVerificationResponse{
 		ScopeId:     msg.ScopeId,
-		Status:      types.VerificationStatusInProgress,
+		Status:      types.VerificationStatusPBInProgress,
 		RequestedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
@@ -227,12 +231,15 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	}
 	previousStatus := scope.Status
 
+	// Convert proto status to local type
+	localNewStatus := types.VerificationStatusFromProto(msg.NewStatus)
+
 	// Update verification status
 	err = ms.keeper.UpdateVerificationStatus(
 		ctx,
 		accountAddr,
 		msg.ScopeId,
-		msg.NewStatus,
+		localNewStatus,
 		msg.Reason,
 		sender.String(),
 	)
@@ -241,7 +248,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	}
 
 	// Emit appropriate event
-	if msg.NewStatus == types.VerificationStatusVerified {
+	if msg.NewStatus == types.VerificationStatusPBVerified {
 		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeVerified{
 			AccountAddress:   msg.AccountAddress,
 			ScopeID:          msg.ScopeId,
@@ -249,7 +256,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 			ValidatorAddress: sender.String(),
 			VerifiedAt:       ctx.BlockTime().Unix(),
 		})
-	} else if msg.NewStatus == types.VerificationStatusRejected {
+	} else if msg.NewStatus == types.VerificationStatusPBRejected {
 		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeRejected{
 			AccountAddress:   msg.AccountAddress,
 			ScopeID:          msg.ScopeId,
@@ -265,7 +272,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 
 	return &types.MsgUpdateVerificationStatusResponse{
 		ScopeId:        msg.ScopeId,
-		PreviousStatus: previousStatus,
+		PreviousStatus: types.VerificationStatusToProto(previousStatus),
 		NewStatus:      msg.NewStatus,
 		UpdatedAt:      ctx.BlockTime().Unix(),
 	}, nil
@@ -341,8 +348,8 @@ func (ms msgServer) UpdateScore(goCtx context.Context, msg *types.MsgUpdateScore
 		AccountAddress: msg.AccountAddress,
 		PreviousScore:  previousScore,
 		NewScore:       msg.NewScore,
-		PreviousTier:   previousTier,
-		NewTier:        updatedRecord.Tier,
+		PreviousTier:   types.IdentityTierToProto(previousTier),
+		NewTier:        types.IdentityTierToProto(updatedRecord.Tier),
 		UpdatedAt:      ctx.BlockTime().Unix(),
 	}, nil
 }
@@ -379,7 +386,7 @@ func (ms msgServer) AddScopeToWallet(goCtx context.Context, msg *types.MsgAddSco
 	// Create scope reference from message
 	scopeRef := types.ScopeReference{
 		ScopeID:      msg.ScopeId,
-		ScopeType:    msg.ScopeType,
+		ScopeType:    types.ScopeTypeFromProto(msg.ScopeType),
 		EnvelopeHash: msg.EnvelopeHash,
 		AddedAt:      ctx.BlockTime(),
 	}
@@ -424,9 +431,20 @@ func (ms msgServer) UpdateConsentSettings(goCtx context.Context, msg *types.MsgU
 
 	// Convert Unix timestamp to *time.Time if provided
 	var expiresAt *time.Time
-	if msg.ExpiresAt != nil && *msg.ExpiresAt > 0 {
-		t := time.Unix(*msg.ExpiresAt, 0)
+	if msg.ExpiresAt > 0 {
+		t := time.Unix(msg.ExpiresAt, 0)
 		expiresAt = &t
+	}
+
+	// Convert proto GlobalSettings to local type
+	var globalSettings *types.GlobalConsentUpdate
+	if msg.GlobalSettings != nil {
+		globalSettings = &types.GlobalConsentUpdate{
+			ShareWithProviders:         boolPtrFromBool(msg.GlobalSettings.ShareWithProviders),
+			ShareForVerification:       boolPtrFromBool(msg.GlobalSettings.ShareForVerification),
+			AllowReVerification:        boolPtrFromBool(msg.GlobalSettings.AllowReVerification),
+			AllowDerivedFeatureSharing: boolPtrFromBool(msg.GlobalSettings.AllowDerivedFeatureSharing),
+		}
 	}
 
 	update := types.ConsentUpdateRequest{
@@ -434,7 +452,7 @@ func (ms msgServer) UpdateConsentSettings(goCtx context.Context, msg *types.MsgU
 		GrantConsent:   msg.GrantConsent,
 		Purpose:        msg.Purpose,
 		ExpiresAt:      expiresAt,
-		GlobalSettings: msg.GlobalSettings,
+		GlobalSettings: globalSettings,
 	}
 
 	if err := ms.keeper.UpdateConsent(ctx, sender, update, msg.UserSignature); err != nil {
@@ -450,6 +468,11 @@ func (ms msgServer) UpdateConsentSettings(goCtx context.Context, msg *types.MsgU
 		UpdatedAt:      ctx.BlockTime().Unix(),
 		ConsentVersion: wallet.ConsentSettings.ConsentVersion,
 	}, nil
+}
+
+// boolPtrFromBool converts a bool to *bool for optional settings
+func boolPtrFromBool(b bool) *bool {
+	return &b
 }
 
 // RebindWallet handles rebinding a wallet to a new address
@@ -474,7 +497,7 @@ func (ms msgServer) RebindWallet(goCtx context.Context, msg *types.MsgRebindWall
 func (ms msgServer) UpdateDerivedFeatures(goCtx context.Context, msg *types.MsgUpdateDerivedFeatures) (*types.MsgUpdateDerivedFeaturesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	_, err := sdk.AccAddressFromBech32(msg.Sender)
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
@@ -484,7 +507,15 @@ func (ms msgServer) UpdateDerivedFeatures(goCtx context.Context, msg *types.MsgU
 		return nil, types.ErrInvalidAddress.Wrap("invalid account address")
 	}
 
-	update := msg.ToDerivedFeaturesUpdate()
+	update := &types.DerivedFeaturesUpdate{
+		AccountAddress:    msg.AccountAddress,
+		FaceEmbeddingHash: msg.FaceEmbeddingHash,
+		DocFieldHashes:    msg.DocFieldHashes,
+		BiometricHash:     msg.BiometricHash,
+		LivenessProofHash: msg.LivenessProofHash,
+		ModelVersion:      msg.ModelVersion,
+		ValidatorAddress:  sender.String(),
+	}
 	if err := ms.keeper.UpdateDerivedFeatures(ctx, accountAddr, update); err != nil {
 		return nil, err
 	}
@@ -575,5 +606,30 @@ type MsgServerWithContext struct {
 func NewMsgServerWithContext(k Keeper) MsgServerWithContext {
 	return MsgServerWithContext{
 		msgServer: msgServer{keeper: k},
+	}
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+// encryptedPayloadFromProto converts a proto EncryptedPayloadEnvelope to local type
+func encryptedPayloadFromProto(protoPayload *types.EncryptedPayloadEnvelopePB) encryptiontypes.EncryptedPayloadEnvelope {
+	if protoPayload == nil {
+		return encryptiontypes.EncryptedPayloadEnvelope{}
+	}
+
+	return encryptiontypes.EncryptedPayloadEnvelope{
+		Version:             protoPayload.Version,
+		AlgorithmID:         protoPayload.AlgorithmId,
+		AlgorithmVersion:    protoPayload.AlgorithmVersion,
+		RecipientKeyIDs:     protoPayload.RecipientKeyIds,
+		RecipientPublicKeys: protoPayload.RecipientPublicKeys,
+		EncryptedKeys:       protoPayload.EncryptedKeys,
+		Nonce:               protoPayload.Nonce,
+		Ciphertext:          protoPayload.Ciphertext,
+		SenderSignature:     protoPayload.SenderSignature,
+		SenderPubKey:        protoPayload.SenderPubKey,
+		Metadata:            protoPayload.Metadata,
 	}
 }

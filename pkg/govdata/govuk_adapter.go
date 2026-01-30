@@ -4,7 +4,6 @@
 package govdata
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"context"
 	"crypto/hmac"

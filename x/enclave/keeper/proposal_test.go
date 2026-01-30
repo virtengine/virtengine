@@ -66,7 +66,7 @@ func TestAddMeasurementProposalHandler(t *testing.T) {
 
 	measurement, found := k.GetMeasurement(ctx, hash)
 	require.True(t, found)
-	require.Equal(t, types.TEETypeSGX, measurement.TEEType)
+	require.Equal(t, types.TEETypeSGX, measurement.TeeType)
 	require.Equal(t, int64(150), measurement.ExpiryHeight)
 	require.False(t, measurement.Revoked)
 }

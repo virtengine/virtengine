@@ -4,7 +4,6 @@
 package edugain
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -23,12 +22,12 @@ import (
 
 // sessionManager implements the SessionManager interface
 type sessionManager struct {
-	config        Config
-	sessions      map[string]*Session        // sessionID -> Session
-	walletIndex   map[string][]string        // walletAddress -> sessionIDs
-	assertionIDs  map[string]time.Time       // assertionID -> expiry (for replay detection)
-	signingKey    []byte
-	mu            sync.RWMutex
+	config       Config
+	sessions     map[string]*Session  // sessionID -> Session
+	walletIndex  map[string][]string  // walletAddress -> sessionIDs
+	assertionIDs map[string]time.Time // assertionID -> expiry (for replay detection)
+	signingKey   []byte
+	mu           sync.RWMutex
 }
 
 // newSessionManager creates a new session manager
@@ -283,9 +282,9 @@ func (m *sessionManager) GetStats(ctx context.Context) (*SessionStats, error) {
 	defer m.mu.RUnlock()
 
 	stats := &SessionStats{
-		TotalSessions:   len(m.sessions),
-		UniqueWallets:   len(m.walletIndex),
-		ByInstitution:   make(map[string]int),
+		TotalSessions: len(m.sessions),
+		UniqueWallets: len(m.walletIndex),
+		ByInstitution: make(map[string]int),
 	}
 
 	now := time.Now()

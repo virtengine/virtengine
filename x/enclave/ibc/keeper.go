@@ -501,8 +501,8 @@ func (k IBCKeeper) GetActiveIdentitiesForQuery(ctx sdk.Context, query QueryEncla
 		}
 		identity, found := k.enclaveKeeper.GetEnclaveIdentity(ctx, validatorAddr)
 		if found {
-			if query.IncludeExpired || !identity.IsExpired(currentHeight) {
-				if query.TEEType == "" || string(identity.TEEType) == query.TEEType {
+			if query.IncludeExpired || !types.IsIdentityExpired(identity, currentHeight) {
+				if query.TEEType == "" || string(identity.TeeType) == query.TEEType {
 					identities = append(identities, *identity)
 				}
 			}
@@ -512,10 +512,10 @@ func (k IBCKeeper) GetActiveIdentitiesForQuery(ctx sdk.Context, query QueryEncla
 
 	// Return all matching identities
 	k.enclaveKeeper.WithEnclaveIdentities(ctx, func(identity types.EnclaveIdentity) bool {
-		if !query.IncludeExpired && identity.IsExpired(currentHeight) {
+		if !query.IncludeExpired && types.IsIdentityExpired(&identity, currentHeight) {
 			return false
 		}
-		if query.TEEType != "" && string(identity.TEEType) != query.TEEType {
+		if query.TEEType != "" && string(identity.TeeType) != query.TEEType {
 			return false
 		}
 		if identity.Status == types.EnclaveIdentityStatusActive ||
@@ -571,7 +571,7 @@ func (k IBCKeeper) ProcessSyncMeasurement(
 			sdk.NewAttribute(AttributeKeyMeasurementHash, hex.EncodeToString(sync.Measurement.MeasurementHash)),
 			sdk.NewAttribute(AttributeKeySourceChainID, sync.SourceChainID),
 			sdk.NewAttribute(AttributeKeySourceChannel, channelID),
-			sdk.NewAttribute(AttributeKeyTEEType, string(sync.Measurement.TEEType)),
+			sdk.NewAttribute(AttributeKeyTEEType, string(sync.Measurement.TeeType)),
 		),
 	)
 

@@ -1,5 +1,5 @@
 # VirtEngine CI Pipeline - Consolidated (INFRA-003)
-# 
+#
 # This is the SINGLE source of truth for CI. Previously split across:
 # - ci.yaml (this file)
 # - tests.yaml (removed - was duplicate)
@@ -98,9 +98,9 @@ jobs:
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
-          scandir: './scripts'
+          scandir: "./scripts"
           severity: warning
-        continue-on-error: true  # Don't fail CI on shell lint warnings
+        continue-on-error: true # Don't fail CI on shell lint warnings
 
   # ===========================================================================
   # Go Test Job - Unit Tests
@@ -163,7 +163,7 @@ jobs:
           files: ./coverage.out
           flags: unittests
           name: go-coverage
-          fail_ci_if_error: true  # INFRA-003: Fail if coverage upload fails
+          fail_ci_if_error: true # INFRA-003: Fail if coverage upload fails
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -180,7 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if Python test files exist
     if: hashFiles('tests/python/**/*.py') != ''
-    continue-on-error: true  # Don't fail CI if Python tests fail
+    continue-on-error: true # Don't fail CI if Python tests fail
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -217,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if portal package.json exists
     if: hashFiles('lib/portal/package.json') != ''
-    continue-on-error: true  # Don't fail CI if Portal tests fail
+    continue-on-error: true # Don't fail CI if Portal tests fail
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -576,7 +576,7 @@ jobs:
     # Only run on main branch or tags - sims are slow
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mainnet/main' || startsWith(github.ref, 'refs/tags/v')
     needs: test-go
-    continue-on-error: true  # Don't block release on sim failures
+    continue-on-error: true # Don't block release on sim failures
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -608,7 +608,7 @@ jobs:
     # Only run on version tags
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, test-go]
-    continue-on-error: true  # Don't block release on upgrade test failures
+    continue-on-error: true # Don't block release on upgrade test failures
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

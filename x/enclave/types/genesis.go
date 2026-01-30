@@ -24,7 +24,6 @@ func DefaultParams() v1.Params {
 		EnableMeasurementCleanup:   false,                                                              // Disabled by default
 		MaxRegistrationsPerBlock:   0,                                                                  // Unlimited by default
 		RegistrationCooldownBlocks: 0,                                                                  // No cooldown by default
-		HealthCheckParams:          DefaultHealthCheckParams(),
 	}
 }
 
@@ -68,10 +67,6 @@ func ValidateParams(p *v1.Params) error {
 		return fmt.Errorf("committee_size must be positive when committee mode is enabled")
 	}
 
-	if err := p.HealthCheckParams.Validate(); err != nil {
-		return fmt.Errorf("invalid health check params: %w", err)
-	}
-
 	return nil
 }
 
@@ -88,11 +83,10 @@ func IsTEETypeAllowed(p *v1.Params, teeType v1.TEEType) bool {
 // DefaultGenesisState returns the default genesis state
 func DefaultGenesisState() *v1.GenesisState {
 	return &v1.GenesisState{
-		EnclaveIdentities:     []v1.EnclaveIdentity{},
-		MeasurementAllowlist:  []v1.MeasurementRecord{},
-		KeyRotations:          []v1.KeyRotationRecord{},
-		EnclaveHealthStatuses: []EnclaveHealthStatus{},
-		Params:                DefaultParams(),
+		EnclaveIdentities:    []v1.EnclaveIdentity{},
+		MeasurementAllowlist: []v1.MeasurementRecord{},
+		KeyRotations:         []v1.KeyRotationRecord{},
+		Params:               DefaultParams(),
 	}
 }
 
@@ -131,18 +125,6 @@ func ValidateGenesis(g *v1.GenesisState) error {
 		if err := ValidateKeyRotationRecord(&rotation); err != nil {
 			return fmt.Errorf("invalid key rotation at index %d: %w", i, err)
 		}
-	}
-
-	seenHealthValidators := make(map[string]bool)
-	for i, health := range g.EnclaveHealthStatuses {
-		if err := health.Validate(); err != nil {
-			return fmt.Errorf("invalid health status at index %d: %w", i, err)
-		}
-
-		if seenHealthValidators[health.ValidatorAddress] {
-			return fmt.Errorf("duplicate health status for validator %s", health.ValidatorAddress)
-		}
-		seenHealthValidators[health.ValidatorAddress] = true
 	}
 
 	return nil

@@ -73,7 +73,7 @@ func TestCalculateStatus(t *testing.T) {
 }
 
 func TestManagerRegisterBudget(t *testing.T) {
-	obs := observability.NewNoop()
+	obs := observability.NewNoopObservability()
 	manager := NewManager(obs)
 
 	cfg := BudgetConfig{
@@ -104,7 +104,7 @@ func TestManagerRegisterBudget(t *testing.T) {
 }
 
 func TestManagerRecordDowntime(t *testing.T) {
-	obs := observability.NewNoop()
+	obs := observability.NewNoopObservability()
 	manager := NewManager(obs)
 
 	cfg := BudgetConfig{
@@ -150,7 +150,7 @@ func TestManagerRecordDowntime(t *testing.T) {
 }
 
 func TestManagerRecordFailure(t *testing.T) {
-	obs := observability.NewNoop()
+	obs := observability.NewNoopObservability()
 	manager := NewManager(obs)
 
 	cfg := BudgetConfig{
@@ -175,7 +175,7 @@ func TestManagerRecordFailure(t *testing.T) {
 }
 
 func TestManagerResetBudget(t *testing.T) {
-	obs := observability.NewNoop()
+	obs := observability.NewNoopObservability()
 	manager := NewManager(obs)
 
 	cfg := BudgetConfig{
@@ -209,7 +209,7 @@ func TestManagerResetBudget(t *testing.T) {
 }
 
 func TestManagerGetAllBudgets(t *testing.T) {
-	obs := observability.NewNoop()
+	obs := observability.NewNoopObservability()
 	manager := NewManager(obs)
 
 	configs := []BudgetConfig{
@@ -295,7 +295,7 @@ func TestBudgetGetSummary(t *testing.T) {
 }
 
 func TestAutoReset(t *testing.T) {
-	obs := observability.NewNoop()
+	obs := observability.NewNoopObservability()
 	manager := NewManager(obs)
 
 	// Create a budget with a very short period (1 second for testing)
@@ -349,7 +349,7 @@ func TestCalculateBurnRate(t *testing.T) {
 }
 
 func BenchmarkRecordDowntime(b *testing.B) {
-	obs := observability.NewNoop()
+	obs := observability.NewNoopObservability()
 	manager := NewManager(obs)
 
 	cfg := BudgetConfig{
@@ -367,3 +367,4 @@ func BenchmarkRecordDowntime(b *testing.B) {
 		_ = manager.RecordDowntime("bench-service", "SLO-BENCH-001", 1*time.Second)
 	}
 }
+

@@ -9,4 +9,10 @@ if [[ $# -ne 1 ]]; then
 	exit 1
 fi
 
-[[ -n $("${SCRIPT_DIR}"/semver.sh get prerel "$1") ]] && exit 0 || exit 1
+if [[ -z "$1" ]]; then
+	echo "empty version tag"
+	exit 1
+fi
+
+prerel=$("${SCRIPT_DIR}"/semver.sh get prerel "$1" 2>/dev/null) || exit 1
+[[ -n "$prerel" ]] && exit 0 || exit 1

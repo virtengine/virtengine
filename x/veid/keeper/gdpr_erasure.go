@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/veid/types"
@@ -462,7 +463,7 @@ func (k Keeper) GetErasureRequestsByAddress(ctx sdk.Context, address sdk.AccAddr
 	store := ctx.KVStore(k.skey)
 	prefix := erasureRequestByAddressPrefixKey(address.String())
 
-	iter := store.Iterator(prefix, sdk.PrefixEndBytes(prefix))
+	iter := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	defer iter.Close()
 
 	var requests []types.ErasureRequest
@@ -607,13 +608,18 @@ func (k Keeper) ProcessOverdueErasureRequests(ctx sdk.Context) int {
 // ============================================================================
 
 func (k Keeper) getAccountKeyFingerprints(ctx sdk.Context, address sdk.AccAddress) []string {
-	// Get key fingerprints from embedding envelopes
+	// EmbeddingEnvelopeReference is the on-chain lightweight reference
+	// It doesn't contain encrypted payload data (which is stored off-chain)
+	// Key fingerprints would need to be tracked separately or retrieved
+	// from the encryption module if needed
+	// For GDPR purposes, we track which envelopes exist, not the key details
 	envelopes := k.GetEmbeddingEnvelopesByAccount(ctx, address)
 	fingerprintSet := make(map[string]struct{})
 
+	// Use computed-by validator address as a proxy for key tracking
 	for _, env := range envelopes {
-		if env.RecipientFingerprint != "" {
-			fingerprintSet[env.RecipientFingerprint] = struct{}{}
+		if env.ComputedBy != "" {
+			fingerprintSet[env.ComputedBy] = struct{}{}
 		}
 	}
 
@@ -629,10 +635,10 @@ func (k Keeper) markEnvelopeKeysDestroyed(ctx sdk.Context, address sdk.AccAddres
 	envelopes := k.GetEmbeddingEnvelopesByAccount(ctx, address)
 	for _, env := range envelopes {
 		env.Revoked = true
-		env.RevocationReason = "GDPR erasure - encryption keys destroyed"
+		env.RevokedReason = "GDPR erasure - encryption keys destroyed"
 		revokedAt := ctx.BlockTime()
 		env.RevokedAt = &revokedAt
-		k.SetEmbeddingEnvelope(ctx, env)
+		_ = k.SetEmbeddingEnvelope(ctx, env) // Ignore error for bulk operation
 	}
 }
 

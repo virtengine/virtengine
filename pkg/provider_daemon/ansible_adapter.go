@@ -987,10 +987,9 @@ func (a *AnsibleAdapter) ExecutePlaybookAsync(ctx context.Context, playbook *Pla
 	a.mu.Unlock()
 
 	verrors.SafeGo("", func() {
-
-		defer func() { }() // WG Done if needed
+		defer func() {}() // WG Done if needed
 		_, _ = a.ExecutePlaybook(ctx, playbook, inventory, options)
-	}()
+	})
 
 	return executionID, nil
 }

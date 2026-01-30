@@ -101,7 +101,7 @@ func (c *MockSLURMClient) SubmitJob(ctx context.Context, spec *SLURMJobSpec) (st
 
 	// Simulate job starting after a short delay
 	verrors.SafeGo("", func() {
-		defer func() { }() // WG Done if needed
+		defer func() {}() // WG Done if needed
 		time.Sleep(100 * time.Millisecond)
 		c.mu.Lock()
 		if j, exists := c.jobs[jobID]; exists && j.State == SLURMJobStatePending {
@@ -111,7 +111,7 @@ func (c *MockSLURMClient) SubmitJob(ctx context.Context, spec *SLURMJobSpec) (st
 			j.NodeList = []string{"node001"}
 		}
 		c.mu.Unlock()
-	}()
+	})
 
 	return jobID, nil
 }

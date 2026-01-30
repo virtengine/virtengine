@@ -90,10 +90,13 @@ Example:
 			if err != nil {
 				return err
 			}
-			teeType := enclavetypes.TEEType(teeTypeStr)
-			if !enclavetypes.IsValidTEEType(teeType) {
+			// Parse TEE type string to enum value
+			teeTypeKey := "TEE_TYPE_" + teeTypeStr
+			teeTypeVal, ok := enclavetypes.TEEType_value[teeTypeKey]
+			if !ok || teeTypeVal == 0 {
 				return fmt.Errorf("invalid TEE type: %s (valid: SGX, SEV-SNP, NITRO, TRUSTZONE)", teeTypeStr)
 			}
+			teeType := enclavetypes.TEEType(teeTypeVal)
 
 			// Get measurement hash
 			measurementHashHex, err := cmd.Flags().GetString(FlagMeasurementHash)
@@ -169,19 +172,15 @@ Example:
 
 			msg := &enclavetypes.MsgRegisterEnclaveIdentity{
 				ValidatorAddress: cctx.GetFromAddress().String(),
-				TEEType:          teeType,
+				TeeType:          teeType,
 				MeasurementHash:  measurementHash,
 				SignerHash:       signerHash,
 				EncryptionPubKey: encryptionPubKey,
 				SigningPubKey:    signingPubKey,
 				AttestationQuote: attestationQuote,
-				ISVProdID:        isvProdID,
-				ISVSVN:           isvSVN,
+				IsvProdId:        uint32(isvProdID),
+				IsvSvn:           uint32(isvSVN),
 				QuoteVersion:     quoteVersion,
-			}
-
-			if err := msg.ValidateBasic(); err != nil {
-				return err
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -314,12 +313,8 @@ Example:
 				NewSigningPubKey:    newSigningPubKey,
 				NewAttestationQuote: newAttestationQuote,
 				NewMeasurementHash:  newMeasurementHash,
-				NewISVSVN:           newISVSVN,
+				NewIsvSvn:           uint32(newISVSVN),
 				OverlapBlocks:       overlapBlocks,
-			}
-
-			if err := msg.ValidateBasic(); err != nil {
-				return err
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -395,10 +390,13 @@ Example:
 			if err != nil {
 				return err
 			}
-			teeType := enclavetypes.TEEType(teeTypeStr)
-			if !enclavetypes.IsValidTEEType(teeType) {
+			// Parse TEE type string to enum value
+			teeTypeKey := "TEE_TYPE_" + teeTypeStr
+			teeTypeVal, ok := enclavetypes.TEEType_value[teeTypeKey]
+			if !ok || teeTypeVal == 0 {
 				return fmt.Errorf("invalid TEE type: %s", teeTypeStr)
 			}
+			teeType := enclavetypes.TEEType(teeTypeVal)
 
 			// Get description
 			description, err := cmd.Flags().GetString(FlagDescription)
@@ -418,14 +416,10 @@ Example:
 			msg := &enclavetypes.MsgProposeMeasurement{
 				Authority:       cctx.GetFromAddress().String(),
 				MeasurementHash: measurementHash,
-				TEEType:         teeType,
+				TeeType:         teeType,
 				Description:     description,
-				MinISVSVN:       minISVSVN,
+				MinIsvSvn:       uint32(minISVSVN),
 				ExpiryBlocks:    expiryBlocks,
-			}
-
-			if err := msg.ValidateBasic(); err != nil {
-				return err
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -504,10 +498,6 @@ Example:
 				Authority:       cctx.GetFromAddress().String(),
 				MeasurementHash: measurementHash,
 				Reason:          reason,
-			}
-
-			if err := msg.ValidateBasic(); err != nil {
-				return err
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})

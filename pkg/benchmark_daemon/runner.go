@@ -96,7 +96,7 @@ func (r *DefaultBenchmarkRunner) runSyntheticCPUTest(_ context.Context, threads 
 
 	for i := 0; i < threads; i++ {
 		verrors.SafeGo("", func() {
-			defer func() { }() // WG Done if needed
+			defer func() {}() // WG Done if needed
 			var count int64
 			deadline := time.Now().Add(testDuration)
 			for time.Now().Before(deadline) {
@@ -108,7 +108,7 @@ func (r *DefaultBenchmarkRunner) runSyntheticCPUTest(_ context.Context, threads 
 				count++
 			}
 			resultCh <- count
-		}()
+		})
 	}
 
 	var total int64

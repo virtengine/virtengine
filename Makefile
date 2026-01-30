@@ -49,7 +49,7 @@ GORELEASER_BUILD_VARS := \
 ldflags = -linkmode=$(GO_LINKMODE) -X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
 -X github.com/cosmos/cosmos-sdk/version.AppName=virtengine \
 -X github.com/cosmos/cosmos-sdk/version.BuildTags="$(BUILD_TAGS)" \
--X github.com/cosmos/cosmos-sdk/version.Version=$(shell git describe --tags | sed 's/^v//') \
+-X github.com/cosmos/cosmos-sdk/version.Version=$(shell git describe --tags 2>/dev/null | sed 's/^v//' || echo "0.0.0") \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
 # check for nostrip option
@@ -77,3 +77,4 @@ include make/test-integration.mk
 include make/test-simulation.mk
 include make/tools.mk
 include make/codegen.mk
+include make/hooks.mk

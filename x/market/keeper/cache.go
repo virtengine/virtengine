@@ -416,7 +416,14 @@ func (ck *CachedMarketKeeper) CreateLease(ctx sdk.Context, bid types.Bid) error 
 	if err == nil {
 		ck.cache.InvalidateBid(bid.ID)
 		// Invalidate order cache as well since order state changes
-		ck.cache.InvalidateOrder(mv1.OrderID(bid.ID))
+		// Extract OrderID from BidID (common fields: Owner, DSeq, GSeq, OSeq)
+		orderID := mv1.OrderID{
+			Owner: bid.ID.Owner,
+			DSeq:  bid.ID.DSeq,
+			GSeq:  bid.ID.GSeq,
+			OSeq:  bid.ID.OSeq,
+		}
+		ck.cache.InvalidateOrder(orderID)
 	}
 	return err
 }

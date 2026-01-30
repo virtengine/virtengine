@@ -6,7 +6,17 @@
       "Bash(ls:*)",
       "Bash(gh api:*)",
       "Bash(go vet:*)",
-      "Bash(*)"
+      "Bash(*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(go:*)",
+      "Bash(make:*)",
+      "Bash(cd:*)",
+      "Bash(go mod vendor:*)",
+      "Bash(bash script/mainnet-from-tag.sh:*)",
+      "Bash(bash:*)",
+      "Bash(git config:*)",
+      "Bash(make check-hooks:*)"
     ]
   }
 }

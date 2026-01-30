@@ -1,9 +1,9 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -148,7 +148,7 @@ func (k Keeper) GetDomainVerificationRecord(ctx sdk.Context, providerAddr sdk.Ac
 	}
 
 	var record DomainVerificationRecord
-	if err := k.cdc.UnmarshalJSON(bz, &record); err != nil {
+	if err := json.Unmarshal(bz, &record); err != nil {
 		return nil, false
 	}
 
@@ -165,7 +165,7 @@ func (k Keeper) setDomainVerificationRecord(ctx sdk.Context, record *DomainVerif
 	store := ctx.KVStore(k.skey)
 	key := DomainVerificationKey(providerAddr)
 
-	bz, err := k.cdc.MarshalJSON(record)
+	bz, err := json.Marshal(record)
 	if err != nil {
 		return types.ErrInternal.Wrapf("failed to marshal verification record: %v", err)
 	}

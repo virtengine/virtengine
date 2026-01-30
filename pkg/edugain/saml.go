@@ -4,7 +4,6 @@
 package edugain
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"compress/flate"
 	"context"
 	"crypto/rand"
@@ -23,11 +22,11 @@ import (
 
 // samlProvider implements the SAMLProvider interface
 type samlProvider struct {
-	config          Config
-	signingCert     []byte
-	signingKey      []byte
-	encryptionCert  []byte
-	encryptionKey   []byte
+	config         Config
+	signingCert    []byte
+	signingKey     []byte
+	encryptionCert []byte
+	encryptionKey  []byte
 }
 
 // newSAMLProvider creates a new SAML provider
@@ -59,9 +58,9 @@ func (s *samlProvider) GetMetadata() ([]byte, error) {
 			},
 			AssertionConsumerServices: []AssertionConsumerService{
 				{
-					Binding:  SAMLBindingHTTPPOST,
-					Location: s.config.AssertionConsumerServiceURL,
-					Index:    0,
+					Binding:   SAMLBindingHTTPPOST,
+					Location:  s.config.AssertionConsumerServiceURL,
+					Index:     0,
 					IsDefault: true,
 				},
 				{
@@ -543,13 +542,13 @@ type SPMetadata struct {
 
 // SPSSODescriptor represents SP SSO descriptor
 type SPSSODescriptor struct {
-	AuthnRequestsSigned          bool                        `xml:"AuthnRequestsSigned,attr"`
-	WantAssertionsSigned         bool                        `xml:"WantAssertionsSigned,attr"`
-	ProtocolSupportEnumeration   string                      `xml:"protocolSupportEnumeration,attr"`
-	KeyDescriptors               []KeyDescriptor             `xml:"KeyDescriptor,omitempty"`
-	NameIDFormats                []string                    `xml:"NameIDFormat"`
-	AssertionConsumerServices    []AssertionConsumerService  `xml:"AssertionConsumerService"`
-	SingleLogoutServices         []SingleLogoutService       `xml:"SingleLogoutService,omitempty"`
+	AuthnRequestsSigned        bool                       `xml:"AuthnRequestsSigned,attr"`
+	WantAssertionsSigned       bool                       `xml:"WantAssertionsSigned,attr"`
+	ProtocolSupportEnumeration string                     `xml:"protocolSupportEnumeration,attr"`
+	KeyDescriptors             []KeyDescriptor            `xml:"KeyDescriptor,omitempty"`
+	NameIDFormats              []string                   `xml:"NameIDFormat"`
+	AssertionConsumerServices  []AssertionConsumerService `xml:"AssertionConsumerService"`
+	SingleLogoutServices       []SingleLogoutService      `xml:"SingleLogoutService,omitempty"`
 }
 
 // AssertionConsumerService represents an ACS endpoint
@@ -594,13 +593,13 @@ type EncryptedAssertion struct {
 
 // SAMLAssertionXML represents a SAML assertion
 type SAMLAssertionXML struct {
-	XMLName            xml.Name            `xml:"Assertion"`
-	ID                 string              `xml:"ID,attr"`
-	IssueInstant       string              `xml:"IssueInstant,attr"`
-	Issuer             string              `xml:"Issuer"`
-	Subject            SAMLSubject         `xml:"Subject"`
-	Conditions         SAMLConditions      `xml:"Conditions"`
-	AuthnStatement     SAMLAuthnStatement  `xml:"AuthnStatement"`
+	XMLName            xml.Name               `xml:"Assertion"`
+	ID                 string                 `xml:"ID,attr"`
+	IssueInstant       string                 `xml:"IssueInstant,attr"`
+	Issuer             string                 `xml:"Issuer"`
+	Subject            SAMLSubject            `xml:"Subject"`
+	Conditions         SAMLConditions         `xml:"Conditions"`
+	AuthnStatement     SAMLAuthnStatement     `xml:"AuthnStatement"`
 	AttributeStatement SAMLAttributeStatement `xml:"AttributeStatement"`
 }
 

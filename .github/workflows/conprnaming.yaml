@@ -1,0 +1,61 @@
+---
+name: conventional-pr-naming
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches:
+      - main
+      - mainnet/main
+
+jobs:
+  conventional-pr-naming:
+    name: conventional pr naming
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR title (for PRs)
+        if: github.event_name == 'pull_request'
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          scopes: |
+            veid
+            mfa
+            encryption
+            market
+            escrow
+            roles
+            hpc
+            provider
+            sdk
+            cli
+            app
+            deps
+            ci
+            api
+          requireScope: false
+          subjectPattern: ^[a-z].+$
+          subjectPatternError: |
+            The subject "{subject}" must start with a lowercase letter.
+            Example: "feat(veid): add identity verification"
+          wip: true
+          validateSingleCommit: false
+          validateSingleCommitMatchesPrTitle: false

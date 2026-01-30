@@ -136,7 +136,7 @@ type SyncMeasurementPacket struct {
 
 // Validate validates the sync packet
 func (p SyncMeasurementPacket) Validate() error {
-	if err := p.Measurement.Validate(); err != nil {
+	if err := types.ValidateMeasurementRecord(&p.Measurement); err != nil {
 		return fmt.Errorf("invalid measurement: %w", err)
 	}
 	if p.SourceChainID == "" {

@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
@@ -746,7 +745,7 @@ func (k Keeper) VerifyEnclaveSignature(ctx sdk.Context, result *types.AttestedSc
 	}
 
 	// Verify signature over SHA-256 hash of canonical payload
-	payload := result.SigningPayload()
+	payload := types.SigningPayload(result)
 	signature := result.EnclaveSignature
 
 	switch len(identity.SigningPubKey) {

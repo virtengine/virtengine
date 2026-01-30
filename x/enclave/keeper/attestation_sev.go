@@ -3,7 +3,6 @@ package keeper
 import (
 	"bytes"
 	"crypto/sha256"
-	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	enclave "github.com/virtengine/virtengine/pkg/enclave_runtime"

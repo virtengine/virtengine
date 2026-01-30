@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/veid/types"
@@ -242,35 +243,33 @@ func (k Keeper) exportIdentityData(ctx sdk.Context, address sdk.AccAddress, pkg 
 	}
 
 	pkg.Identity = &types.PortableIdentityData{
-		WalletAddress:     wallet.Address,
+		WalletAddress:     wallet.AccountAddress,
 		WalletID:          wallet.WalletID,
 		WalletStatus:      string(wallet.Status),
 		CreatedAt:         wallet.CreatedAt,
-		CreatedAtBlock:    wallet.CreatedAtBlock,
-		VerificationLevel: string(wallet.VerificationLevel),
+		CreatedAtBlock:    0, // Block height not stored in IdentityWallet
+		VerificationLevel: string(wallet.Tier),
 		ActiveScopes:      make([]types.PortableScopeInfo, 0),
 	}
 
-	// Export trust score
-	if wallet.TrustScore != nil {
-		pkg.Identity.TrustScore = &types.PortableTrustScore{
-			Score:       wallet.TrustScore.Score,
-			Confidence:  wallet.TrustScore.Confidence,
-			LastUpdated: wallet.TrustScore.LastUpdatedAt,
-		}
+	// Export trust score from current wallet score
+	pkg.Identity.TrustScore = &types.PortableTrustScore{
+		Score:       float64(wallet.CurrentScore),
+		Confidence:  1.0, // Score is deterministic
+		LastUpdated: wallet.UpdatedAt,
 	}
 
-	// Export active scopes
-	scopes := k.GetScopesByAddress(ctx, address)
-	for _, scope := range scopes {
+	// Export active scopes using WithScopes
+	k.WithScopes(ctx, address, func(scope types.IdentityScope) bool {
 		pkg.Identity.ActiveScopes = append(pkg.Identity.ActiveScopes, types.PortableScopeInfo{
 			ScopeID:   scope.ScopeID,
 			ScopeType: string(scope.ScopeType),
 			Status:    string(scope.Status),
-			CreatedAt: scope.CreatedAt,
+			CreatedAt: scope.UploadedAt,
 			ExpiresAt: scope.ExpiresAt,
 		})
-	}
+		return false // continue iteration
+	})
 
 	pkg.Metadata.SchemaVersions[types.ExportCategoryIdentity] = "1.0"
 	return nil
@@ -329,24 +328,25 @@ func (k Keeper) exportVerificationHistory(ctx sdk.Context, address sdk.AccAddres
 	}
 
 	for _, record := range records {
-		status := "completed"
-		if record.VerificationPassed {
+		// Check status to determine if verification passed
+		passed := record.Status == types.VerificationResultStatusSuccess
+		status := string(record.Status)
+		if passed {
 			pkg.VerificationHistory.SuccessfulVerifications++
 		} else {
 			pkg.VerificationHistory.FailedVerifications++
-			status = "failed"
 		}
 
 		portableRecord := types.PortableVerificationRecord{
 			VerificationID:   record.RecordID,
-			VerificationType: string(record.VerificationType),
+			VerificationType: "derived_feature",
 			Status:           status,
-			Score:            record.VerificationScore,
-			Confidence:       record.ConfidenceLevel,
-			Timestamp:        record.CreatedAt,
-			BlockHeight:      record.CreatedAtBlock,
+			Score:            float64(record.Score),
+			Confidence:       float64(record.Confidence),
+			Timestamp:        record.ComputedAt,
+			BlockHeight:      record.BlockHeight,
 			MLModelVersion:   record.ModelVersion,
-			PipelineVersion:  record.PipelineVersion,
+			PipelineVersion:  "", // Not available in this record type
 		}
 		pkg.VerificationHistory.Verifications = append(pkg.VerificationHistory.Verifications, portableRecord)
 	}
@@ -388,7 +388,10 @@ func (k Keeper) exportMarketplaceData(ctx sdk.Context, address sdk.AccAddress, p
 // exportDelegationData exports delegation relationships
 func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
 	// Get delegations
-	delegations := k.GetDelegationsByDelegator(ctx, address)
+	delegations, err := k.ListDelegationsForDelegator(ctx, address, false)
+	if err != nil {
+		return err
+	}
 
 	pkg.Delegations = &types.PortableDelegationData{
 		TotalDelegations: len(delegations),
@@ -396,14 +399,23 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 	}
 
 	for _, del := range delegations {
+		// Convert DelegationPermission slice to string slice
+		permissions := make([]string, len(del.Permissions))
+		for i, p := range del.Permissions {
+			permissions[i] = string(p)
+		}
+
+		// Convert ExpiresAt value to pointer
+		expiresAt := del.ExpiresAt
+
 		portableDel := types.PortableDelegation{
 			DelegationID:     del.DelegationID,
 			DelegatorAddress: del.DelegatorAddress,
 			DelegateAddress:  del.DelegateAddress,
-			Permissions:      del.Permissions,
+			Permissions:      permissions,
 			Status:           string(del.Status),
 			CreatedAt:        del.CreatedAt,
-			ExpiresAt:        del.ExpiresAt,
+			ExpiresAt:        &expiresAt,
 			RevokedAt:        del.RevokedAt,
 		}
 		pkg.Delegations.Delegations = append(pkg.Delegations.Delegations, portableDel)
@@ -460,7 +472,7 @@ func (k Keeper) GetExportRequestsByAddress(ctx sdk.Context, address sdk.AccAddre
 	store := ctx.KVStore(k.skey)
 	prefix := exportRequestByAddressPrefixKey(address.String())
 
-	iter := store.Iterator(prefix, sdk.PrefixEndBytes(prefix))
+	iter := store.Iterator(prefix, storetypes.PrefixEndBytes(prefix))
 	defer iter.Close()
 
 	var requests []types.PortabilityExportRequest

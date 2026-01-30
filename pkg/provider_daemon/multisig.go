@@ -5,7 +5,6 @@
 package provider_daemon
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -606,14 +605,6 @@ func combineSignatures(signatures []CollectedSignature) []byte {
 	}
 
 	return combined
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // WeightedMultiSigKey extends MultiSigKey for weighted multisig schemes

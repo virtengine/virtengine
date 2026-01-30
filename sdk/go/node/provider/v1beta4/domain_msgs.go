@@ -1,6 +1,7 @@
 package v1beta4
 
 import (
+	"fmt"
 	"reflect"
 
 	cerrors "cosmossdk.io/errors"
@@ -27,6 +28,17 @@ func init() {
 type MsgGenerateDomainVerificationToken struct {
 	Owner  string `json:"owner" yaml:"owner"`
 	Domain string `json:"domain" yaml:"domain"`
+}
+
+// ProtoMessage implements proto.Message
+func (*MsgGenerateDomainVerificationToken) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (msg *MsgGenerateDomainVerificationToken) Reset() { *msg = MsgGenerateDomainVerificationToken{} }
+
+// String implements proto.Message
+func (msg *MsgGenerateDomainVerificationToken) String() string {
+	return fmt.Sprintf("MsgGenerateDomainVerificationToken{Owner: %s, Domain: %s}", msg.Owner, msg.Domain)
 }
 
 // NewMsgGenerateDomainVerificationToken creates a new MsgGenerateDomainVerificationToken instance
@@ -68,9 +80,33 @@ type MsgGenerateDomainVerificationTokenResponse struct {
 	ExpiresAt int64  `json:"expires_at" yaml:"expires_at"`
 }
 
+// ProtoMessage implements proto.Message
+func (*MsgGenerateDomainVerificationTokenResponse) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (msg *MsgGenerateDomainVerificationTokenResponse) Reset() {
+	*msg = MsgGenerateDomainVerificationTokenResponse{}
+}
+
+// String implements proto.Message
+func (msg *MsgGenerateDomainVerificationTokenResponse) String() string {
+	return fmt.Sprintf("MsgGenerateDomainVerificationTokenResponse{Token: %s, ExpiresAt: %d}", msg.Token, msg.ExpiresAt)
+}
+
 // MsgVerifyProviderDomain defines message for verifying provider domain
 type MsgVerifyProviderDomain struct {
 	Owner string `json:"owner" yaml:"owner"`
+}
+
+// ProtoMessage implements proto.Message
+func (*MsgVerifyProviderDomain) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (msg *MsgVerifyProviderDomain) Reset() { *msg = MsgVerifyProviderDomain{} }
+
+// String implements proto.Message
+func (msg *MsgVerifyProviderDomain) String() string {
+	return fmt.Sprintf("MsgVerifyProviderDomain{Owner: %s}", msg.Owner)
 }
 
 // NewMsgVerifyProviderDomain creates a new MsgVerifyProviderDomain instance
@@ -105,6 +141,17 @@ func (msg *MsgVerifyProviderDomain) GetSigners() []sdk.AccAddress {
 // MsgVerifyProviderDomainResponse defines the response
 type MsgVerifyProviderDomainResponse struct {
 	Verified bool `json:"verified" yaml:"verified"`
+}
+
+// ProtoMessage implements proto.Message
+func (*MsgVerifyProviderDomainResponse) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (msg *MsgVerifyProviderDomainResponse) Reset() { *msg = MsgVerifyProviderDomainResponse{} }
+
+// String implements proto.Message
+func (msg *MsgVerifyProviderDomainResponse) String() string {
+	return fmt.Sprintf("MsgVerifyProviderDomainResponse{Verified: %t}", msg.Verified)
 }
 
 // ============= GetSignBytes =============

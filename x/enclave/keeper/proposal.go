@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -44,9 +43,9 @@ func handleAddMeasurementProposal(ctx sdk.Context, k Keeper, proposal *types.Add
 
 	measurement := &types.MeasurementRecord{
 		MeasurementHash: proposal.MeasurementHash,
-		TEEType:         proposal.TEEType,
+		TeeType:         proposal.TEEType,
 		Description:     proposal.Description,
-		MinISVSVN:       proposal.MinISVSVN,
+		MinIsvSvn:       uint32(proposal.MinISVSVN),
 		ExpiryHeight:    expiryHeight,
 	}
 

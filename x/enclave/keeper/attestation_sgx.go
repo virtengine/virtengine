@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -34,12 +33,12 @@ func (k Keeper) verifySGXAttestation(ctx sdk.Context, identity *types.EnclaveIde
 		return types.ErrAttestationInvalid.Wrap("MRSIGNER does not match signer hash")
 	}
 
-	if identity.ISVProdID != 0 && identity.ISVProdID != quote.Report.ISVProdID {
-		return types.ErrAttestationInvalid.Wrapf("ISVProdID mismatch: got %d expected %d", quote.Report.ISVProdID, identity.ISVProdID)
+	if identity.IsvProdId != 0 && uint16(identity.IsvProdId) != quote.Report.ISVProdID {
+		return types.ErrAttestationInvalid.Wrapf("ISVProdID mismatch: got %d expected %d", quote.Report.ISVProdID, identity.IsvProdId)
 	}
 
-	if identity.ISVSVN != 0 && identity.ISVSVN != quote.Report.ISVSVN {
-		return types.ErrAttestationInvalid.Wrapf("ISVSVN mismatch: got %d expected %d", quote.Report.ISVSVN, identity.ISVSVN)
+	if identity.IsvSvn != 0 && uint16(identity.IsvSvn) != quote.Report.ISVSVN {
+		return types.ErrAttestationInvalid.Wrapf("ISVSVN mismatch: got %d expected %d", quote.Report.ISVSVN, identity.IsvSvn)
 	}
 
 	if err := k.verifySGXCryptographic(ctx, identity, quote); err != nil {

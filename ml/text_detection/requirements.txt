@@ -2,15 +2,15 @@
 # Pin exact versions for deterministic builds
 
 # Deep Learning Framework
-torch==2.0.1
-torchvision==0.15.2
+torch==2.6.0
+torchvision==0.21.0
 
 # CRAFT Text Detector
 craft-text-detector==0.4.3
 
 # Image Processing
 opencv-python==4.8.0.74
-Pillow==10.0.0
+Pillow==10.3.0
 
 # Numerical Computing
 numpy==1.24.3
@@ -25,4 +25,4 @@ pytest-xdist==3.3.1
 mypy==1.4.1
 
 # Utilities
-tqdm==4.65.0
+tqdm==4.66.3

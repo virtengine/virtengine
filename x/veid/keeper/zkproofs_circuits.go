@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"

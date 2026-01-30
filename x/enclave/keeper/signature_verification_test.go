@@ -50,7 +50,7 @@ func TestVerifyEnclaveSignature_Ed25519_Valid(t *testing.T) {
 	// Create enclave identity
 	identity := &types.EnclaveIdentity{
 		ValidatorAddress: result.ValidatorAddress,
-		TEEType:          types.TEETypeSGX,
+		TeeType:          types.TEETypeSGX,
 		MeasurementHash:  result.EnclaveMeasurementHash,
 		SigningPubKey:    pubKey,
 		Status:           types.EnclaveIdentityStatusActive,

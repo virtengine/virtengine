@@ -6,6 +6,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/x/auth/signing"
 	govkeeper "github.com/cosmos/cosmos-sdk/x/gov/keeper"
 
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
@@ -58,13 +59,27 @@ func (d VEIDDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, nex
 		return next(ctx, tx, simulate)
 	}
 
+	// Get signers from transaction
+	sigTx, ok := tx.(signing.SigVerifiableTx)
+	if !ok {
+		return next(ctx, tx, simulate)
+	}
+	signerBytes, err := sigTx.GetSigners()
+	if err != nil {
+		return ctx, sdkerrors.ErrUnauthorized.Wrapf("failed to get signers: %v", err)
+	}
+
+	signers := make([]sdk.AccAddress, len(signerBytes))
+	for i, signerBz := range signerBytes {
+		signers[i] = sdk.AccAddress(signerBz)
+	}
+
 	for _, msg := range msgs {
 		if isGovernanceMsgTypeURL(sdk.MsgTypeURL(msg)) {
 			continue
 		}
 
 		requirement := d.getMessageRequirement(ctx, msg)
-		signers := msg.GetSigners()
 		for _, signer := range signers {
 			if d.isGovernanceAuthority(signer) {
 				continue
@@ -208,16 +223,17 @@ func (d VEIDDecorator) emitValidatorIdentityEvent(
 	requiredScore uint32,
 	governanceApproved bool,
 ) error {
-	return ctx.EventManager().EmitEvent(
+	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			stakingtypes.EventTypeValidatorIdentityVerified,
 			sdk.NewAttribute(stakingtypes.AttributeKeyValidatorAddress, signer.String()),
 			sdk.NewAttribute(stakingtypes.AttributeKeyVEIDScore, fmt.Sprintf("%d", score)),
-			sdk.NewAttribute(veidtypes.AttributeKeyStatus, status.String()),
+			sdk.NewAttribute(veidtypes.AttributeKeyStatus, string(status)),
 			sdk.NewAttribute(stakingtypes.AttributeKeyRequiredScore, fmt.Sprintf("%d", requiredScore)),
 			sdk.NewAttribute(stakingtypes.AttributeKeyGovernanceApproved, fmt.Sprintf("%t", governanceApproved)),
 		),
 	)
+	return nil
 }
 
 func (d VEIDDecorator) isGovernanceAuthority(signer sdk.AccAddress) bool {

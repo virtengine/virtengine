@@ -120,13 +120,6 @@ var (
 	NewVerificationResult   = types.NewVerificationResult
 	NewScopeRef             = types.NewScopeRef
 
-	// Messages
-	NewMsgUploadScope                  = types.NewMsgUploadScope
-	NewMsgRevokeScope                  = types.NewMsgRevokeScope
-	NewMsgRequestVerification          = types.NewMsgRequestVerification
-	NewMsgUpdateVerificationStatus     = types.NewMsgUpdateVerificationStatus
-	NewMsgUpdateScore                  = types.NewMsgUpdateScore
-
 	// Validation
 	IsValidScopeType          = types.IsValidScopeType
 	IsValidVerificationStatus = types.IsValidVerificationStatus

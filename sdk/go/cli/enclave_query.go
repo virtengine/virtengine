@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -12,6 +11,7 @@ import (
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	aclient "github.com/virtengine/virtengine/sdk/go/node/client"
 	enclavetypes "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 )
 
@@ -160,7 +160,7 @@ Example:
 			includeRevoked, _ := cmd.Flags().GetBool(FlagIncludeRevoked)
 
 			req := &enclavetypes.QueryMeasurementAllowlistRequest{
-				TEEType:        teeType,
+				TeeType:        teeType,
 				IncludeRevoked: includeRevoked,
 			}
 
@@ -214,13 +214,8 @@ Example:
 				return fmt.Errorf("measurement hash is required")
 			}
 
-			measurementHash, err := hex.DecodeString(measurementHashHex)
-			if err != nil {
-				return fmt.Errorf("invalid measurement hash hex: %w", err)
-			}
-
 			req := &enclavetypes.QueryMeasurementRequest{
-				MeasurementHash: measurementHash,
+				MeasurementHash: measurementHashHex,
 			}
 
 			res, err := queryMeasurement(ctx, cl, req)
@@ -401,7 +396,7 @@ Example:
 
 			req := &enclavetypes.QueryAttestedResultRequest{
 				BlockHeight: blockHeight,
-				ScopeID:     scopeID,
+				ScopeId:     scopeID,
 			}
 
 			res, err := queryAttestedResult(ctx, cl, req)
@@ -428,12 +423,12 @@ Example:
 
 // MustQueryClientFromContext is an alias for MustLightClientFromContext
 // that provides enclave query functionality
-func MustQueryClientFromContext(ctx context.Context) LightClient {
+func MustQueryClientFromContext(ctx context.Context) aclient.LightClient {
 	return MustLightClientFromContext(ctx)
 }
 
 // queryEnclaveIdentity queries an enclave identity
-func queryEnclaveIdentity(ctx context.Context, cl LightClient, req *enclavetypes.QueryEnclaveIdentityRequest) (*enclavetypes.QueryEnclaveIdentityResponse, error) {
+func queryEnclaveIdentity(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryEnclaveIdentityRequest) (*enclavetypes.QueryEnclaveIdentityResponse, error) {
 	// This uses the standard REST/gRPC query path
 	// The actual implementation would use cl.Query().Enclave().EnclaveIdentity(ctx, req)
 	// For now, we simulate via the ABCIQuery interface
@@ -458,7 +453,7 @@ func queryEnclaveIdentity(ctx context.Context, cl LightClient, req *enclavetypes
 }
 
 // queryActiveValidatorEnclaveKeys queries all active validator enclave keys
-func queryActiveValidatorEnclaveKeys(ctx context.Context, cl LightClient, req *enclavetypes.QueryActiveValidatorEnclaveKeysRequest) (*enclavetypes.QueryActiveValidatorEnclaveKeysResponse, error) {
+func queryActiveValidatorEnclaveKeys(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryActiveValidatorEnclaveKeysRequest) (*enclavetypes.QueryActiveValidatorEnclaveKeysResponse, error) {
 	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/ActiveValidatorEnclaveKeys")
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
@@ -479,7 +474,7 @@ func queryActiveValidatorEnclaveKeys(ctx context.Context, cl LightClient, req *e
 }
 
 // queryMeasurementAllowlist queries the measurement allowlist
-func queryMeasurementAllowlist(ctx context.Context, cl LightClient, req *enclavetypes.QueryMeasurementAllowlistRequest) (*enclavetypes.QueryMeasurementAllowlistResponse, error) {
+func queryMeasurementAllowlist(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryMeasurementAllowlistRequest) (*enclavetypes.QueryMeasurementAllowlistResponse, error) {
 	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/MeasurementAllowlist")
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
@@ -500,7 +495,7 @@ func queryMeasurementAllowlist(ctx context.Context, cl LightClient, req *enclave
 }
 
 // queryMeasurement queries a specific measurement
-func queryMeasurement(ctx context.Context, cl LightClient, req *enclavetypes.QueryMeasurementRequest) (*enclavetypes.QueryMeasurementResponse, error) {
+func queryMeasurement(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryMeasurementRequest) (*enclavetypes.QueryMeasurementResponse, error) {
 	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/Measurement")
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
@@ -521,7 +516,7 @@ func queryMeasurement(ctx context.Context, cl LightClient, req *enclavetypes.Que
 }
 
 // queryKeyRotation queries key rotation status
-func queryKeyRotation(ctx context.Context, cl LightClient, req *enclavetypes.QueryKeyRotationRequest) (*enclavetypes.QueryKeyRotationResponse, error) {
+func queryKeyRotation(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryKeyRotationRequest) (*enclavetypes.QueryKeyRotationResponse, error) {
 	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/KeyRotation")
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
@@ -542,7 +537,7 @@ func queryKeyRotation(ctx context.Context, cl LightClient, req *enclavetypes.Que
 }
 
 // queryEnclaveParams queries module parameters
-func queryEnclaveParams(ctx context.Context, cl LightClient, req *enclavetypes.QueryParamsRequest) (*enclavetypes.QueryParamsResponse, error) {
+func queryEnclaveParams(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryParamsRequest) (*enclavetypes.QueryParamsResponse, error) {
 	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/Params")
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
@@ -563,7 +558,7 @@ func queryEnclaveParams(ctx context.Context, cl LightClient, req *enclavetypes.Q
 }
 
 // queryValidKeySet queries the valid key set
-func queryValidKeySet(ctx context.Context, cl LightClient, req *enclavetypes.QueryValidKeySetRequest) (*enclavetypes.QueryValidKeySetResponse, error) {
+func queryValidKeySet(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryValidKeySetRequest) (*enclavetypes.QueryValidKeySetResponse, error) {
 	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/ValidKeySet")
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
@@ -584,7 +579,7 @@ func queryValidKeySet(ctx context.Context, cl LightClient, req *enclavetypes.Que
 }
 
 // queryAttestedResult queries an attested result
-func queryAttestedResult(ctx context.Context, cl LightClient, req *enclavetypes.QueryAttestedResultRequest) (*enclavetypes.QueryAttestedResultResponse, error) {
+func queryAttestedResult(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryAttestedResultRequest) (*enclavetypes.QueryAttestedResultResponse, error) {
 	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/AttestedResult")
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
@@ -605,7 +600,7 @@ func queryAttestedResult(ctx context.Context, cl LightClient, req *enclavetypes.
 }
 
 // abciQuery performs an ABCI query using the client context
-func abciQuery(_ context.Context, cl LightClient, path string, data []byte) ([]byte, error) {
+func abciQuery(_ context.Context, cl aclient.LightClient, path string, data []byte) ([]byte, error) {
 	cctx := cl.ClientContext()
 	resp, err := cctx.QueryABCI(abci.RequestQuery{
 		Path: path,
@@ -631,3 +626,4 @@ func printJSON(cmd *cobra.Command, v interface{}) error {
 	cmd.Println(string(out))
 	return nil
 }
+

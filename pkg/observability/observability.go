@@ -7,7 +7,6 @@
 package observability
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"time"
 )
@@ -103,6 +102,31 @@ func DefaultConfig() Config {
 			"encrypted",
 		},
 	}
+}
+
+// Observability is a convenience interface that provides common logging and metrics
+// methods used throughout the codebase. It wraps Observer for simpler usage patterns.
+type Observability interface {
+	// LogInfo logs at info level with key-value pairs
+	LogInfo(ctx context.Context, msg string, keysAndValues ...interface{})
+
+	// LogWarn logs at warn level with key-value pairs
+	LogWarn(ctx context.Context, msg string, keysAndValues ...interface{})
+
+	// LogError logs at error level with key-value pairs
+	LogError(ctx context.Context, msg string, keysAndValues ...interface{})
+
+	// LogDebug logs at debug level with key-value pairs
+	LogDebug(ctx context.Context, msg string, keysAndValues ...interface{})
+
+	// RecordGauge records a gauge metric
+	RecordGauge(ctx context.Context, name string, value float64, labels map[string]string)
+
+	// RecordHistogram records a histogram metric
+	RecordHistogram(ctx context.Context, name string, value float64, labels map[string]string)
+
+	// RecordCounter increments a counter metric
+	RecordCounter(ctx context.Context, name string, value float64, labels map[string]string)
 }
 
 // Observer is the main observability interface

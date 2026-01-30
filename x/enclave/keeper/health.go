@@ -1,10 +1,10 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"encoding/json"
 	"fmt"
-	"time"
+
+	storetypes "cosmossdk.io/store/types"
 
 	"github.com/virtengine/virtengine/x/enclave/types"
 
@@ -13,7 +13,7 @@ import (
 
 // GetEnclaveHealthStatus retrieves the health status for a validator
 func (k Keeper) GetEnclaveHealthStatus(ctx sdk.Context, validatorAddr sdk.AccAddress) (types.EnclaveHealthStatus, bool) {
-	store := ctx.KVStore(k.storeKey)
+	store := ctx.KVStore(k.StoreKey())
 	key := types.EnclaveHealthKey(validatorAddr.Bytes())
 
 	bz := store.Get(key)
@@ -42,7 +42,7 @@ func (k Keeper) SetEnclaveHealthStatus(ctx sdk.Context, health types.EnclaveHeal
 		return fmt.Errorf("invalid validator address: %w", err)
 	}
 
-	store := ctx.KVStore(k.storeKey)
+	store := ctx.KVStore(k.StoreKey())
 	key := types.EnclaveHealthKey(validatorAddr.Bytes())
 
 	bz, err := json.Marshal(health)
@@ -86,8 +86,7 @@ func (k Keeper) UpdateHealthStatus(ctx sdk.Context, validatorAddr sdk.AccAddress
 		return types.ErrHealthStatusNotFound
 	}
 
-	params := k.GetParams(ctx)
-	healthParams := params.HealthCheckParams
+	healthParams := k.GetHealthCheckParams(ctx)
 
 	previousStatus := health.Status
 	newStatus := healthParams.EvaluateHealth(&health, ctx.BlockTime(), ctx.BlockHeight())
@@ -209,8 +208,8 @@ func (k Keeper) RecordSignatureSuccess(ctx sdk.Context, validatorAddr sdk.AccAdd
 
 // GetAllHealthStatuses retrieves all health statuses
 func (k Keeper) GetAllHealthStatuses(ctx sdk.Context) []types.EnclaveHealthStatus {
-	store := ctx.KVStore(k.storeKey)
-	iterator := sdk.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
+	store := ctx.KVStore(k.StoreKey())
+	iterator := storetypes.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
 	defer iterator.Close()
 
 	var statuses []types.EnclaveHealthStatus
@@ -230,8 +229,8 @@ func (k Keeper) GetAllHealthStatuses(ctx sdk.Context) []types.EnclaveHealthStatu
 func (k Keeper) GetHealthyEnclaves(ctx sdk.Context) []sdk.AccAddress {
 	var healthyValidators []sdk.AccAddress
 
-	store := ctx.KVStore(k.storeKey)
-	iterator := sdk.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
+	store := ctx.KVStore(k.StoreKey())
+	iterator := storetypes.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
 	defer iterator.Close()
 
 	for ; iterator.Valid(); iterator.Next() {
@@ -258,8 +257,8 @@ func (k Keeper) GetHealthyEnclaves(ctx sdk.Context) []sdk.AccAddress {
 func (k Keeper) GetUnhealthyEnclaves(ctx sdk.Context) []sdk.AccAddress {
 	var unhealthyValidators []sdk.AccAddress
 
-	store := ctx.KVStore(k.storeKey)
-	iterator := sdk.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
+	store := ctx.KVStore(k.StoreKey())
+	iterator := storetypes.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
 	defer iterator.Close()
 
 	for ; iterator.Valid(); iterator.Next() {
@@ -284,15 +283,14 @@ func (k Keeper) GetUnhealthyEnclaves(ctx sdk.Context) []sdk.AccAddress {
 
 // CheckHeartbeatTimeout checks if validators have missed heartbeats and updates their status
 func (k Keeper) CheckHeartbeatTimeout(ctx sdk.Context) error {
-	params := k.GetParams(ctx)
-	healthParams := params.HealthCheckParams
+	healthParams := k.GetHealthCheckParams(ctx)
 
-	store := ctx.KVStore(k.storeKey)
-	iterator := sdk.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
+	store := ctx.KVStore(k.StoreKey())
+	iterator := storetypes.KVStorePrefixIterator(store, types.PrefixEnclaveHealth)
 	defer iterator.Close()
 
 	currentTime := ctx.BlockTime()
-	currentHeight := ctx.BlockHeight()
+	_ = ctx.BlockHeight() // Reserved for future use
 
 	for ; iterator.Valid(); iterator.Next() {
 		var health types.EnclaveHealthStatus
@@ -339,10 +337,20 @@ func (k Keeper) IsEnclaveHealthy(ctx sdk.Context, validatorAddr sdk.AccAddress) 
 	return health.IsHealthy()
 }
 
-// GetHealthCheckParams retrieves the health check parameters from the module params
+// GetHealthCheckParams retrieves the health check parameters from the store
 func (k Keeper) GetHealthCheckParams(ctx sdk.Context) types.HealthCheckParams {
-	params := k.GetParams(ctx)
-	return params.HealthCheckParams
+	store := ctx.KVStore(k.StoreKey())
+	bz := store.Get(types.PrefixHealthCheckParams)
+	if bz == nil {
+		return types.DefaultHealthCheckParams()
+	}
+
+	var healthParams types.HealthCheckParams
+	if err := json.Unmarshal(bz, &healthParams); err != nil {
+		ctx.Logger().Error("failed to unmarshal health check params", "error", err)
+		return types.DefaultHealthCheckParams()
+	}
+	return healthParams
 }
 
 // SetHealthCheckParams updates the health check parameters
@@ -351,9 +359,12 @@ func (k Keeper) SetHealthCheckParams(ctx sdk.Context, healthParams types.HealthC
 		return err
 	}
 
-	params := k.GetParams(ctx)
-	params.HealthCheckParams = healthParams
-	k.SetParams(ctx, params)
+	store := ctx.KVStore(k.StoreKey())
+	bz, err := json.Marshal(healthParams)
+	if err != nil {
+		return fmt.Errorf("failed to marshal health check params: %w", err)
+	}
+	store.Set(types.PrefixHealthCheckParams, bz)
 
 	return nil
 }

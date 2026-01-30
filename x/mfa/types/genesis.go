@@ -1,5 +1,7 @@
 package types
 
+import "fmt"
+
 // GenesisState is the genesis state for the mfa module
 type GenesisState struct {
 	// Params are the module parameters
@@ -16,6 +18,18 @@ type GenesisState struct {
 
 	// TrustedDevices are the initial trusted devices
 	TrustedDevices []TrustedDevice `json:"trusted_devices"`
+}
+
+// ProtoMessage implements proto.Message
+func (*GenesisState) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (g *GenesisState) Reset() { *g = GenesisState{} }
+
+// String implements proto.Message
+func (g *GenesisState) String() string {
+	return fmt.Sprintf("GenesisState{Params: %+v, Policies: %d, Enrollments: %d}",
+		g.Params, len(g.MFAPolicies), len(g.FactorEnrollments))
 }
 
 // TrustedDevice represents a stored trusted device record

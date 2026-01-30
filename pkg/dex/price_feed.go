@@ -219,8 +219,8 @@ func (p *priceFeedImpl) fetchFromSources(ctx context.Context, baseSymbol, quoteS
 		}
 
 		wg.Add(1)
-		verrors.SafeGo("func", func() {
-			func(src PriceSource) {
+		src := source // capture loop variable
+		verrors.SafeGo("price-feed", func() {
 			defer wg.Done()
 			price, err := src.GetPrice(ctx, baseSymbol, quoteSymbol)
 			if err != nil {
@@ -231,7 +231,7 @@ func (p *priceFeedImpl) fetchFromSources(ctx context.Context, baseSymbol, quoteS
 				prices = append(prices, price)
 				mu.Unlock()
 			}
-		}(source)
+		})
 	}
 
 	wg.Wait()
@@ -320,8 +320,10 @@ func (p *priceFeedImpl) notifySubscribers(key string, price Price) {
 	p.subsMu.RUnlock()
 
 	for _, cb := range callbacks {
-		verrors.SafeGo("cb", func() {
-			cb(price)
+		callback := cb // capture loop variable
+		verrors.SafeGo("price-notify", func() {
+			callback(price)
+		})
 	}
 }
 

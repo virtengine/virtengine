@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // SLURMAdapter implements the SLURM orchestration adapter

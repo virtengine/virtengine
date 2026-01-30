@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	storetypes "cosmossdk.io/store/types"
+
 	"github.com/virtengine/virtengine/x/enclave/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -43,7 +45,7 @@ func (k Keeper) ProcessHeartbeat(ctx sdk.Context, msg types.MsgEnclaveHeartbeat)
 	}
 
 	// Verify heartbeat signature
-	if err := k.VerifyHeartbeatSignature(ctx, identity, msg); err != nil {
+	if err := k.VerifyHeartbeatSignature(ctx, *identity, msg); err != nil {
 		// Record signature failure
 		if recordErr := k.RecordSignatureFailure(ctx, validatorAddr); recordErr != nil {
 			ctx.Logger().Error("failed to record signature failure", "error", recordErr)
@@ -58,7 +60,7 @@ func (k Keeper) ProcessHeartbeat(ctx sdk.Context, msg types.MsgEnclaveHeartbeat)
 
 	// Process optional attestation proof
 	if len(msg.AttestationProof) > 0 {
-		if err := k.ProcessHeartbeatAttestation(ctx, identity, msg.AttestationProof); err != nil {
+		if err := k.ProcessHeartbeatAttestation(ctx, *identity, msg.AttestationProof); err != nil {
 			// Record attestation failure
 			if recordErr := k.RecordAttestationFailure(ctx, validatorAddr); recordErr != nil {
 				ctx.Logger().Error("failed to record attestation failure", "error", recordErr)
@@ -138,7 +140,7 @@ func (k Keeper) ValidateHeartbeatTimestamp(ctx sdk.Context, timestamp time.Time)
 
 // ValidateHeartbeatNonce checks if the nonce has been used before
 func (k Keeper) ValidateHeartbeatNonce(ctx sdk.Context, validatorAddr sdk.AccAddress, nonce uint64) error {
-	store := ctx.KVStore(k.storeKey)
+	store := ctx.KVStore(k.StoreKey())
 	nonceKey := k.heartbeatNonceKey(validatorAddr, nonce)
 
 	if store.Has(nonceKey) {
@@ -150,7 +152,7 @@ func (k Keeper) ValidateHeartbeatNonce(ctx sdk.Context, validatorAddr sdk.AccAdd
 
 // StoreHeartbeatNonce stores a used nonce
 func (k Keeper) StoreHeartbeatNonce(ctx sdk.Context, validatorAddr sdk.AccAddress, nonce uint64) error {
-	store := ctx.KVStore(k.storeKey)
+	store := ctx.KVStore(k.StoreKey())
 	nonceKey := k.heartbeatNonceKey(validatorAddr, nonce)
 
 	// Store nonce with expiry timestamp (keep for 24 hours)
@@ -248,18 +250,18 @@ func (k Keeper) ProcessHeartbeatAttestation(ctx sdk.Context, identity types.Encl
 	// Parse and verify attestation based on TEE type
 	switch identity.TeeType {
 	case types.TEETypeSGX:
-		return k.verifySGXAttestation(ctx, identity, attestationProof)
+		return k.verifySGXHeartbeatAttestation(ctx, identity, attestationProof)
 	case types.TEETypeSEVSNP:
-		return k.verifySEVSNPAttestation(ctx, identity, attestationProof)
+		return k.verifySEVSNPHeartbeatAttestation(ctx, identity, attestationProof)
 	case types.TEETypeNitro:
-		return k.verifyNitroAttestation(ctx, identity, attestationProof)
+		return k.verifyNitroHeartbeatAttestation(ctx, identity, attestationProof)
 	default:
 		return fmt.Errorf("unsupported TEE type for attestation: %s", identity.TeeType)
 	}
 }
 
-// verifySGXAttestation verifies an SGX DCAP attestation quote
-func (k Keeper) verifySGXAttestation(ctx sdk.Context, identity types.EnclaveIdentity, attestationProof []byte) error {
+// verifySGXHeartbeatAttestation verifies an SGX DCAP attestation quote for heartbeat
+func (k Keeper) verifySGXHeartbeatAttestation(ctx sdk.Context, identity types.EnclaveIdentity, attestationProof []byte) error {
 	// Parse the SGX DCAP quote
 	quote, err := types.ParseSGXDCAPQuoteV3(attestationProof)
 	if err != nil {
@@ -283,15 +285,15 @@ func (k Keeper) verifySGXAttestation(ctx sdk.Context, identity types.EnclaveIden
 	}
 
 	// Verify measurement is in the allowlist
-	if !k.IsMeasurementAllowlisted(ctx, identity.MeasurementHash) {
+	if !k.IsMeasurementAllowed(ctx, identity.MeasurementHash, ctx.BlockHeight()) {
 		return types.ErrMeasurementNotAllowlisted
 	}
 
 	return nil
 }
 
-// verifySEVSNPAttestation verifies an SEV-SNP attestation report
-func (k Keeper) verifySEVSNPAttestation(ctx sdk.Context, identity types.EnclaveIdentity, attestationProof []byte) error {
+// verifySEVSNPHeartbeatAttestation verifies an SEV-SNP attestation report for heartbeat
+func (k Keeper) verifySEVSNPHeartbeatAttestation(ctx sdk.Context, identity types.EnclaveIdentity, attestationProof []byte) error {
 	// Parse the SEV-SNP report
 	report, err := types.ParseSEVSNPReport(attestationProof)
 	if err != nil {
@@ -315,15 +317,15 @@ func (k Keeper) verifySEVSNPAttestation(ctx sdk.Context, identity types.EnclaveI
 	}
 
 	// Verify measurement is in the allowlist
-	if !k.IsMeasurementAllowlisted(ctx, identity.MeasurementHash) {
+	if !k.IsMeasurementAllowed(ctx, identity.MeasurementHash, ctx.BlockHeight()) {
 		return types.ErrMeasurementNotAllowlisted
 	}
 
 	return nil
 }
 
-// verifyNitroAttestation verifies an AWS Nitro attestation document
-func (k Keeper) verifyNitroAttestation(ctx sdk.Context, identity types.EnclaveIdentity, attestationProof []byte) error {
+// verifyNitroHeartbeatAttestation verifies an AWS Nitro attestation document for heartbeat
+func (k Keeper) verifyNitroHeartbeatAttestation(ctx sdk.Context, identity types.EnclaveIdentity, attestationProof []byte) error {
 	// Nitro attestation documents are CBOR-encoded COSE Sign1 structures
 	// Minimum size check for a valid CBOR structure
 	if len(attestationProof) < 100 {
@@ -336,7 +338,7 @@ func (k Keeper) verifyNitroAttestation(ctx sdk.Context, identity types.EnclaveId
 	// Full COSE signature verification requires AWS Nitro root CA chain
 
 	// Verify measurement is in the allowlist
-	if !k.IsMeasurementAllowlisted(ctx, identity.MeasurementHash) {
+	if !k.IsMeasurementAllowed(ctx, identity.MeasurementHash, ctx.BlockHeight()) {
 		return types.ErrMeasurementNotAllowlisted
 	}
 
@@ -345,9 +347,9 @@ func (k Keeper) verifyNitroAttestation(ctx sdk.Context, identity types.EnclaveId
 
 // CleanupExpiredNonces removes expired heartbeat nonces
 func (k Keeper) CleanupExpiredNonces(ctx sdk.Context) {
-	store := ctx.KVStore(k.storeKey)
+	store := ctx.KVStore(k.StoreKey())
 	prefix := []byte{0x09} // Heartbeat nonce prefix
-	iterator := sdk.KVStorePrefixIterator(store, prefix)
+	iterator := storetypes.KVStorePrefixIterator(store, prefix)
 	defer iterator.Close()
 
 	currentTime := ctx.BlockTime()

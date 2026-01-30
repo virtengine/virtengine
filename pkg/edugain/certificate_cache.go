@@ -4,7 +4,6 @@
 package edugain
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -82,7 +81,7 @@ const (
 // CertificateCache provides a thread-safe cache for IdP certificates
 type CertificateCache struct {
 	config       CertificateCacheConfig
-	certificates map[string]*CachedCertificate       // key: fingerprint
+	certificates map[string]*CachedCertificate            // key: fingerprint
 	byEntityID   map[string]map[string]*CachedCertificate // key: entityID -> fingerprint -> cert
 	trustAnchors []*x509.Certificate
 	mu           sync.RWMutex
@@ -398,14 +397,14 @@ func (c *CertificateCache) Stats() CertificateCacheStats {
 	}
 
 	return CertificateCacheStats{
-		TotalCached:   len(c.certificates),
-		ExpiredCount:  expired,
+		TotalCached:    len(c.certificates),
+		ExpiredCount:   expired,
 		ValidatedCount: validated,
-		EntityCount:   len(c.byEntityID),
-		FromMetadata:  fromMetadata,
-		FromSAML:      fromSAML,
-		MaxSize:       c.config.MaxSize,
-		TTL:           c.config.TTL,
+		EntityCount:    len(c.byEntityID),
+		FromMetadata:   fromMetadata,
+		FromSAML:       fromSAML,
+		MaxSize:        c.config.MaxSize,
+		TTL:            c.config.TTL,
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 
+	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
@@ -79,7 +80,10 @@ Where proposal.json contains:
 				return err
 			}
 
-			teeType := types.TEEType(strings.ToUpper(strings.TrimSpace(proposal.TEEType)))
+			teeType, err := parseTEEType(proposal.TEEType)
+			if err != nil {
+				return err
+			}
 			content := types.NewAddMeasurementProposal(
 				proposal.Title,
 				proposal.Description,
@@ -257,4 +261,25 @@ func decodeMeasurementHash(input string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("measurement hash must be 32-byte hex or base64")
+}
+
+// parseTEEType parses a TEE type string into the corresponding enum value.
+// Accepts formats like "SGX", "SEV_SNP", "NITRO", "TRUSTZONE" (case-insensitive).
+func parseTEEType(s string) (types.TEEType, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(s))
+	if normalized == "" {
+		return types.TEETypeUnspecified, fmt.Errorf("tee_type cannot be empty")
+	}
+
+	// Try direct lookup with TEE_TYPE_ prefix
+	if val, ok := v1.TEEType_value["TEE_TYPE_"+normalized]; ok {
+		return types.TEEType(val), nil
+	}
+
+	// Try exact match (e.g., "TEE_TYPE_SGX")
+	if val, ok := v1.TEEType_value[normalized]; ok {
+		return types.TEEType(val), nil
+	}
+
+	return types.TEETypeUnspecified, fmt.Errorf("invalid tee_type: %s, valid values are: SGX, SEV_SNP, NITRO, TRUSTZONE", s)
 }

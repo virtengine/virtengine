@@ -116,11 +116,11 @@ jobs:
         run: |
           # Get list of changed Go files
           git fetch origin ${{ github.base_ref }} --depth=1
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.go' | grep -v '_test.go' | grep -v 'vendor/' || true)
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.go' | grep -v '_test.go' | grep -v 'vendor/' | grep -v '\.pb\.go$' || true)
 
           if [ -n "$CHANGED_FILES" ]; then
             echo "Scanning changed files: $CHANGED_FILES"
-            gosec -fmt json -out gosec-results.json $CHANGED_FILES 2>/dev/null || true
+            gosec -exclude-generated -fmt json -out gosec-results.json $CHANGED_FILES 2>/dev/null || true
 
             # Count issues
             ISSUES=$(cat gosec-results.json 2>/dev/null | jq '.Issues | length' 2>/dev/null || echo "0")

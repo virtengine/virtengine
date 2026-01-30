@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"crypto/x509"
 	"encoding/json"
@@ -21,7 +20,7 @@ const (
 
 // verifyAttestation performs platform-specific cryptographic verification.
 func (k Keeper) verifyAttestation(ctx sdk.Context, identity *types.EnclaveIdentity, measurement *types.MeasurementRecord) error {
-	switch identity.TEEType {
+	switch identity.TeeType {
 	case types.TEETypeSGX:
 		return k.verifySGXAttestation(ctx, identity, measurement)
 	case types.TEETypeSEVSNP:
@@ -29,7 +28,7 @@ func (k Keeper) verifyAttestation(ctx sdk.Context, identity *types.EnclaveIdenti
 	case types.TEETypeNitro:
 		return k.verifyNitroAttestation(ctx, identity, measurement)
 	default:
-		return types.ErrAttestationInvalid.Wrapf("unsupported TEE type: %s", identity.TEEType)
+		return types.ErrAttestationInvalid.Wrapf("unsupported TEE type: %s", identity.TeeType)
 	}
 }
 

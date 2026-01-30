@@ -3,6 +3,7 @@ package keeper
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -166,7 +167,7 @@ func (k Keeper) SetSSOLinkage(ctx sdk.Context, linkage *types.SSOLinkageMetadata
 	store := ctx.KVStore(k.skey)
 	key := k.ssoLinkageKey(linkage.LinkageID)
 
-	bz, err := k.cdc.MarshalJSON(linkage)
+	bz, err := json.Marshal(linkage)
 	if err != nil {
 		return fmt.Errorf("failed to marshal SSO linkage: %w", err)
 	}
@@ -186,7 +187,7 @@ func (k Keeper) GetSSOLinkage(ctx sdk.Context, linkageID string) (*types.SSOLink
 	}
 
 	var linkage types.SSOLinkageMetadata
-	if err := k.cdc.UnmarshalJSON(bz, &linkage); err != nil {
+	if err := json.Unmarshal(bz, &linkage); err != nil {
 		k.Logger(ctx).Error("failed to unmarshal SSO linkage", "error", err)
 		return nil, false
 	}
@@ -253,7 +254,7 @@ func (k Keeper) IterateSSOLinkages(ctx sdk.Context, fn func(linkage *types.SSOLi
 
 	for ; iter.Valid(); iter.Next() {
 		var linkage types.SSOLinkageMetadata
-		if err := k.cdc.UnmarshalJSON(iter.Value(), &linkage); err != nil {
+		if err := json.Unmarshal(iter.Value(), &linkage); err != nil {
 			continue
 		}
 		if fn(&linkage) {
@@ -271,7 +272,7 @@ func (k Keeper) SetSSONonceRecord(ctx sdk.Context, record *types.SSONonceRecord)
 	store := ctx.KVStore(k.skey)
 	key := k.ssoNonceKey(record.NonceHash)
 
-	bz, err := k.cdc.MarshalJSON(record)
+	bz, err := json.Marshal(record)
 	if err != nil {
 		k.Logger(ctx).Error("failed to marshal SSO nonce record", "error", err)
 		return
@@ -296,7 +297,7 @@ func (k Keeper) GetSSONonceRecord(ctx sdk.Context, nonceHash string) (*types.SSO
 	}
 
 	var record types.SSONonceRecord
-	if err := k.cdc.UnmarshalJSON(bz, &record); err != nil {
+	if err := json.Unmarshal(bz, &record); err != nil {
 		return nil, false
 	}
 

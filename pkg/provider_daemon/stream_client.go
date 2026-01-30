@@ -9,6 +9,7 @@ import (
 	"time"
 
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
@@ -210,7 +211,7 @@ func (s *CometEventSubscriber) subscriptionLoop(ctx context.Context, subscriberI
 }
 
 // processEvents reads events from the subscription channel.
-func (s *CometEventSubscriber) processEvents(ctx context.Context, sub <-chan tmtypes.ResultEvent, eventCh chan<- MarketplaceEvent) {
+func (s *CometEventSubscriber) processEvents(ctx context.Context, sub <-chan ctypes.ResultEvent, eventCh chan<- MarketplaceEvent) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -259,7 +260,7 @@ func (s *CometEventSubscriber) processEvents(ctx context.Context, sub <-chan tmt
 }
 
 // parseEvent converts a CometBFT event to MarketplaceEvent.
-func (s *CometEventSubscriber) parseEvent(msg tmtypes.ResultEvent) (MarketplaceEvent, error) {
+func (s *CometEventSubscriber) parseEvent(msg ctypes.ResultEvent) (MarketplaceEvent, error) {
 	event := MarketplaceEvent{
 		Timestamp: time.Now().UTC(),
 		Data:      make(map[string]interface{}),

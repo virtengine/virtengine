@@ -29,6 +29,12 @@ type AddMeasurementProposal struct {
 	ExpiryBlocks    int64   `json:"expiry_blocks,omitempty"`
 }
 
+// ProtoMessage implements proto.Message
+func (*AddMeasurementProposal) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (p *AddMeasurementProposal) Reset() { *p = AddMeasurementProposal{} }
+
 // NewAddMeasurementProposal creates a new AddMeasurementProposal.
 func NewAddMeasurementProposal(title, description string, measurementHash []byte, teeType TEEType, minISVSVN uint16, expiryBlocks int64) *AddMeasurementProposal {
 	return &AddMeasurementProposal{
@@ -98,6 +104,12 @@ type RevokeMeasurementProposal struct {
 	MeasurementHash []byte `json:"measurement_hash"`
 	Reason          string `json:"reason"`
 }
+
+// ProtoMessage implements proto.Message
+func (*RevokeMeasurementProposal) ProtoMessage() {}
+
+// Reset implements proto.Message
+func (p *RevokeMeasurementProposal) Reset() { *p = RevokeMeasurementProposal{} }
 
 // NewRevokeMeasurementProposal creates a new RevokeMeasurementProposal.
 func NewRevokeMeasurementProposal(title, description string, measurementHash []byte, reason string) *RevokeMeasurementProposal {

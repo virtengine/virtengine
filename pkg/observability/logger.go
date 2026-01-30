@@ -2,7 +2,6 @@
 package observability
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -572,3 +571,154 @@ func (s *noopSpan) SetAttribute(key string, value interface{})    {}
 func (s *noopSpan) RecordError(err error)                         {}
 func (s *noopSpan) AddEvent(name string, attrs ...Field)          {}
 func (s *noopSpan) SpanContext() SpanContext                      { return SpanContext{} }
+
+// ============================================================================
+// Observability Convenience Wrapper
+// ============================================================================
+
+// defaultObservability implements the Observability interface
+type defaultObservability struct {
+	observer Observer
+	gauges   map[string]Gauge
+	counters map[string]Counter
+	histos   map[string]Histogram
+	mu       sync.RWMutex
+}
+
+// NewObservability creates a new Observability instance wrapping an Observer
+func NewObservability(obs Observer) Observability {
+	return &defaultObservability{
+		observer: obs,
+		gauges:   make(map[string]Gauge),
+		counters: make(map[string]Counter),
+		histos:   make(map[string]Histogram),
+	}
+}
+
+// NewNoopObservability creates a no-op Observability for testing
+func NewNoopObservability() Observability {
+	return &noopObservability{}
+}
+
+// LogInfo logs at info level with key-value pairs
+func (o *defaultObservability) LogInfo(ctx context.Context, msg string, keysAndValues ...interface{}) {
+	fields := kvToFields(keysAndValues...)
+	o.observer.Logger().WithContext(ctx).Info(msg, fields...)
+}
+
+// LogWarn logs at warn level with key-value pairs
+func (o *defaultObservability) LogWarn(ctx context.Context, msg string, keysAndValues ...interface{}) {
+	fields := kvToFields(keysAndValues...)
+	o.observer.Logger().WithContext(ctx).Warn(msg, fields...)
+}
+
+// LogError logs at error level with key-value pairs
+func (o *defaultObservability) LogError(ctx context.Context, msg string, keysAndValues ...interface{}) {
+	fields := kvToFields(keysAndValues...)
+	o.observer.Logger().WithContext(ctx).Error(msg, fields...)
+}
+
+// LogDebug logs at debug level with key-value pairs
+func (o *defaultObservability) LogDebug(ctx context.Context, msg string, keysAndValues ...interface{}) {
+	fields := kvToFields(keysAndValues...)
+	o.observer.Logger().WithContext(ctx).Debug(msg, fields...)
+}
+
+// RecordGauge records a gauge metric
+func (o *defaultObservability) RecordGauge(ctx context.Context, name string, value float64, labels map[string]string) {
+	if o.observer.Metrics() == nil {
+		return
+	}
+	o.mu.Lock()
+	gauge, exists := o.gauges[name]
+	if !exists {
+		labelKeys := make([]string, 0, len(labels))
+		for k := range labels {
+			labelKeys = append(labelKeys, k)
+		}
+		gauge = o.observer.Metrics().Gauge(name, name, labelKeys...)
+		o.gauges[name] = gauge
+	}
+	o.mu.Unlock()
+
+	labelValues := make([]string, 0, len(labels))
+	for _, v := range labels {
+		labelValues = append(labelValues, v)
+	}
+	gauge.Set(value, labelValues...)
+}
+
+// RecordHistogram records a histogram metric
+func (o *defaultObservability) RecordHistogram(ctx context.Context, name string, value float64, labels map[string]string) {
+	if o.observer.Metrics() == nil {
+		return
+	}
+	o.mu.Lock()
+	histo, exists := o.histos[name]
+	if !exists {
+		labelKeys := make([]string, 0, len(labels))
+		for k := range labels {
+			labelKeys = append(labelKeys, k)
+		}
+		histo = o.observer.Metrics().Histogram(name, name, nil, labelKeys...)
+		o.histos[name] = histo
+	}
+	o.mu.Unlock()
+
+	labelValues := make([]string, 0, len(labels))
+	for _, v := range labels {
+		labelValues = append(labelValues, v)
+	}
+	histo.Observe(value, labelValues...)
+}
+
+// RecordCounter increments a counter metric
+func (o *defaultObservability) RecordCounter(ctx context.Context, name string, value float64, labels map[string]string) {
+	if o.observer.Metrics() == nil {
+		return
+	}
+	o.mu.Lock()
+	counter, exists := o.counters[name]
+	if !exists {
+		labelKeys := make([]string, 0, len(labels))
+		for k := range labels {
+			labelKeys = append(labelKeys, k)
+		}
+		counter = o.observer.Metrics().Counter(name, name, labelKeys...)
+		o.counters[name] = counter
+	}
+	o.mu.Unlock()
+
+	labelValues := make([]string, 0, len(labels))
+	for _, v := range labels {
+		labelValues = append(labelValues, v)
+	}
+	counter.Add(value, labelValues...)
+}
+
+// kvToFields converts key-value pairs to Fields
+func kvToFields(keysAndValues ...interface{}) []Field {
+	fields := make([]Field, 0, len(keysAndValues)/2)
+	for i := 0; i < len(keysAndValues)-1; i += 2 {
+		key, ok := keysAndValues[i].(string)
+		if !ok {
+			key = fmt.Sprintf("%v", keysAndValues[i])
+		}
+		fields = append(fields, Any(key, keysAndValues[i+1]))
+	}
+	return fields
+}
+
+// noopObservability is a no-op implementation of Observability
+type noopObservability struct{}
+
+func (o *noopObservability) LogInfo(ctx context.Context, msg string, keysAndValues ...interface{})  {}
+func (o *noopObservability) LogWarn(ctx context.Context, msg string, keysAndValues ...interface{})  {}
+func (o *noopObservability) LogError(ctx context.Context, msg string, keysAndValues ...interface{}) {}
+func (o *noopObservability) LogDebug(ctx context.Context, msg string, keysAndValues ...interface{}) {}
+func (o *noopObservability) RecordGauge(ctx context.Context, name string, value float64, labels map[string]string) {
+}
+func (o *noopObservability) RecordHistogram(ctx context.Context, name string, value float64, labels map[string]string) {
+}
+func (o *noopObservability) RecordCounter(ctx context.Context, name string, value float64, labels map[string]string) {
+}

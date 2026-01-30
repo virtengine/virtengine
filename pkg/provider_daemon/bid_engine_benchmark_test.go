@@ -219,6 +219,25 @@ func (e *MockBidEngine) matchOrder(order Order) bool {
 	return true
 }
 
+func (e *MockBidEngine) calculateBidPrice(order Order, config *ProviderConfig) (string, error) {
+	// Simulate price calculation based on order requirements
+	time.Sleep(2 * time.Microsecond) // Minimal delay for calculation
+
+	// Calculate base price from requirements
+	req := order.Requirements
+	cpuPrice := float64(req.CPUCores) * 0.1        // per core
+	memPrice := float64(req.MemoryGB) * 0.05       // per GB
+	storagePrice := float64(req.StorageGB) * 0.01  // per GB
+	gpuPrice := float64(req.GPUs) * 1.0            // per GPU
+
+	basePrice := cpuPrice + memPrice + storagePrice + gpuPrice
+
+	// Apply markup
+	finalPrice := basePrice * (1 + config.Pricing.BidMarkupPercent/100)
+
+	return fmt.Sprintf("%.6fuvirt", finalPrice), nil
+}
+
 func (e *MockBidEngine) signBid(orderID, price string) (string, error) {
 	// Simulate cryptographic signing
 	time.Sleep(5 * time.Microsecond) // Minimal delay for signing
@@ -226,7 +245,14 @@ func (e *MockBidEngine) signBid(orderID, price string) (string, error) {
 	// Generate bid ID
 	idBytes := make([]byte, 8)
 	rand.Read(idBytes)
-	bidID := fmt.Sprintf("bid-%s-%s-%s", orderID, e.config.ProviderAddress[:8], hex.EncodeToString(idBytes))
+	
+	providerPrefix := "provider"
+	if len(e.config.ProviderAddress) >= 8 {
+		providerPrefix = e.config.ProviderAddress[:8]
+	} else if len(e.config.ProviderAddress) > 0 {
+		providerPrefix = e.config.ProviderAddress
+	}
+	bidID := fmt.Sprintf("bid-%s-%s-%s", orderID, providerPrefix, hex.EncodeToString(idBytes))
 
 	return bidID, nil
 }

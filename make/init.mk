@@ -93,6 +93,6 @@ COSMOVISOR                       := $(VE_DEVCACHE_BIN)/cosmovisor
 COSMOVISOR_DEBUG                 := $(VE_RUN_BIN)/cosmovisor
 
 
-RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0)
+RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 
 include $(VE_ROOT)/make/setup-cache.mk

@@ -440,10 +440,3 @@ func (m *HPCJobMapper) determineOODAppType(job *hpctypes.HPCJob) ood_adapter.Int
 	// Default to custom app type for batch jobs
 	return ood_adapter.AppTypeCustom
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

@@ -216,7 +216,7 @@ func (h PacketHandler) handleEnclaveIdentityAck(
 				EventTypeFederatedIdentityReceived,
 				sdk.NewAttribute(AttributeKeyValidatorAddress, identity.ValidatorAddress),
 				sdk.NewAttribute(AttributeKeySourceChainID, response.ChainID),
-				sdk.NewAttribute(AttributeKeyTEEType, string(identity.TEEType)),
+				sdk.NewAttribute(AttributeKeyTEEType, string(identity.TeeType)),
 				sdk.NewAttribute(AttributeKeyMeasurementHash, hex.EncodeToString(identity.MeasurementHash)),
 			),
 		)
@@ -293,7 +293,7 @@ func (h PacketHandler) VerifyFederatedIdentity(ctx sdk.Context, identity Federat
 	}
 
 	// Validate the identity
-	if err := identity.Identity.Validate(); err != nil {
+	if err := types.ValidateEnclaveIdentity(&identity.Identity); err != nil {
 		return err
 	}
 

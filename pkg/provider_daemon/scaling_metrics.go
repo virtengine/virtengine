@@ -208,70 +208,70 @@ var (
 	)
 )
 
-// MetricsCollector provides methods to update scaling metrics
-type MetricsCollector struct {
+// ScalingMetricsCollector provides methods to update scaling metrics
+type ScalingMetricsCollector struct {
 	instanceID string
 }
 
-// NewMetricsCollector creates a new metrics collector for the given instance
-func NewMetricsCollector(instanceID string) *MetricsCollector {
-	return &MetricsCollector{
+// NewScalingMetricsCollector creates a new metrics collector for the given instance
+func NewScalingMetricsCollector(instanceID string) *ScalingMetricsCollector {
+	return &ScalingMetricsCollector{
 		instanceID: instanceID,
 	}
 }
 
 // RecordOrderReceived increments the orders received counter
-func (m *MetricsCollector) RecordOrderReceived() {
+func (m *ScalingMetricsCollector) RecordOrderReceived() {
 	providerDaemonOrdersReceived.WithLabelValues(m.instanceID).Inc()
 }
 
 // RecordOrderProcessed increments the orders processed counter
-func (m *MetricsCollector) RecordOrderProcessed(status string) {
+func (m *ScalingMetricsCollector) RecordOrderProcessed(status string) {
 	providerDaemonOrdersProcessed.WithLabelValues(m.instanceID, status).Inc()
 }
 
 // RecordOrderSkipped increments the orders skipped counter
-func (m *MetricsCollector) RecordOrderSkipped(reason string) {
+func (m *ScalingMetricsCollector) RecordOrderSkipped(reason string) {
 	providerDaemonOrdersSkipped.WithLabelValues(m.instanceID, reason).Inc()
 }
 
 // RecordBidSubmitted increments the bids submitted counter
-func (m *MetricsCollector) RecordBidSubmitted() {
+func (m *ScalingMetricsCollector) RecordBidSubmitted() {
 	providerDaemonBidsSubmitted.WithLabelValues(m.instanceID).Inc()
 }
 
 // RecordBidFailed increments the bids failed counter
-func (m *MetricsCollector) RecordBidFailed(errorType string) {
+func (m *ScalingMetricsCollector) RecordBidFailed(errorType string) {
 	providerDaemonBidsFailed.WithLabelValues(m.instanceID, errorType).Inc()
 }
 
 // SetPendingOrders sets the current pending orders gauge
-func (m *MetricsCollector) SetPendingOrders(count float64) {
+func (m *ScalingMetricsCollector) SetPendingOrders(count float64) {
 	providerDaemonPendingOrders.WithLabelValues(m.instanceID).Set(count)
 }
 
 // SetActiveLeases sets the current active leases gauge
-func (m *MetricsCollector) SetActiveLeases(count float64) {
+func (m *ScalingMetricsCollector) SetActiveLeases(count float64) {
 	providerDaemonActiveLeases.WithLabelValues(m.instanceID).Set(count)
 }
 
 // RecordClaimConflict increments the claim conflicts counter
-func (m *MetricsCollector) RecordClaimConflict() {
+func (m *ScalingMetricsCollector) RecordClaimConflict() {
 	providerDaemonClaimConflicts.WithLabelValues(m.instanceID).Inc()
 }
 
 // ObserveBidDuration records the duration of a bid operation
-func (m *MetricsCollector) ObserveBidDuration(seconds float64, status string) {
+func (m *ScalingMetricsCollector) ObserveBidDuration(seconds float64, status string) {
 	providerDaemonBidDuration.WithLabelValues(m.instanceID, status).Observe(seconds)
 }
 
 // SetPartitionAssignment records partition assignment info
-func (m *MetricsCollector) SetPartitionAssignment(partition, totalInstances string) {
+func (m *ScalingMetricsCollector) SetPartitionAssignment(partition, totalInstances string) {
 	providerDaemonPartitionAssignment.WithLabelValues(m.instanceID, partition, totalInstances).Set(1)
 }
 
 // SetInstanceInfo records instance metadata
-func (m *MetricsCollector) SetInstanceInfo(partitionMode string, dedupEnabled bool) {
+func (m *ScalingMetricsCollector) SetInstanceInfo(partitionMode string, dedupEnabled bool) {
 	dedupStr := "false"
 	if dedupEnabled {
 		dedupStr = "true"
@@ -280,7 +280,7 @@ func (m *MetricsCollector) SetInstanceInfo(partitionMode string, dedupEnabled bo
 }
 
 // SetHealthy sets the healthy status of this instance
-func (m *MetricsCollector) SetHealthy(healthy bool) {
+func (m *ScalingMetricsCollector) SetHealthy(healthy bool) {
 	val := float64(0)
 	if healthy {
 		val = 1

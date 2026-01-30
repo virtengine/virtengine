@@ -4,7 +4,6 @@
 package edugain
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"sync"
@@ -39,7 +38,7 @@ func (v *veidIntegrator) CreateScope(ctx context.Context, session *Session) (*VE
 	}
 
 	// Generate scope ID
-	scopeID := fmt.Sprintf("edugain-%s-%d", hashString(session.WalletAddress+session.InstitutionID)[:16], time.Now().UnixNano())
+	scopeID := fmt.Sprintf("edugain-%s-%d", hashString(session.WalletAddress + session.InstitutionID)[:16], time.Now().UnixNano())
 
 	// Compute score contribution
 	scoreContribution := v.ComputeScoreContribution(&session.Attributes)

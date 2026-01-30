@@ -8,7 +8,7 @@
 #   GORELEASER_ACCESS_TOKEN - Personal Access Token (PAT) with permissions:
 #     - repo (Full control of private repositories)
 #     - workflow (Update GitHub Action workflows)
-#   
+#
 #   To configure:
 #   1. Go to GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
 #   2. Create a new token with access to virtengine/homebrew-tap repository
@@ -28,14 +28,15 @@ defaults:
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"  # Only trigger on version tags (v1.0.0, v1.0.0-rc1, etc.)
+      - "v[0-9]+.[0-9]+.[0-9]+*" # Only trigger on version tags (v1.0.0, v1.0.0-rc1, etc.)
 
 jobs:
   # Consolidated dispatch job using matrix strategy
   dispatch-homebrew:
     runs-on: ubuntu-latest
     # Skip if GORELEASER_ACCESS_TOKEN is not configured
-    if: ${{ secrets.GORELEASER_ACCESS_TOKEN != '' }}
+    env:
+      HAS_TOKEN: ${{ secrets.GORELEASER_ACCESS_TOKEN != '' }}
     strategy:
       matrix:
         include:

@@ -1,5 +1,11 @@
 # VirtEngine repo guide for agents
 
+## CRITICAL
+
+ALWAYS Take down a task and break it down into parallel chunks, use SUBAGENTS to implement these chunks and work on tasks longer than you think are needed to accomodate edge case scenarios, testing, ensuring it works, implementing connecting logic and ensuring high quality of standards.
+
+ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task is fully completed and ready for merge. This is non negotiable.
+
 ## Overview
 
 - Primary language: Go (Cosmos SDK-based chain + services).

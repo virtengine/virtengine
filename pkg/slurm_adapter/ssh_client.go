@@ -466,14 +466,14 @@ func (c *SSHSLURMClient) runCommand(ctx context.Context, cmd string) (string, er
 	// Handle context cancellation
 	done := make(chan struct{})
 	verrors.SafeGo("", func() {
-		defer func() { }() // WG Done if needed
+		defer func() {}() // WG Done if needed
 		select {
 		case <-ctx.Done():
 			session.Signal(ssh.SIGTERM)
 			session.Close()
 		case <-done:
 		}
-	}()
+	})
 
 	output, err := session.CombinedOutput(cmd)
 	close(done)
@@ -531,13 +531,13 @@ func (c *SSHSLURMClient) SCPUploadBytes(ctx context.Context, content []byte, rem
 
 	// Prepare content with SCP protocol
 	verrors.SafeGo("", func() {
-		defer func() { }() // WG Done if needed
+		defer func() {}() // WG Done if needed
 		w, _ := session.StdinPipe()
 		defer w.Close()
 		fmt.Fprintf(w, "C%04o %d %s\n", mode, len(content), filename)
 		w.Write(content)
 		fmt.Fprint(w, "\x00")
-	}()
+	})
 
 	// Run scp command
 	cmd := fmt.Sprintf("scp -t %s", dir)

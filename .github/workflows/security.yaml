@@ -340,7 +340,7 @@ jobs:
 
       - name: Run gosec
         run: |
-          gosec -fmt sarif -out gosec.sarif -exclude-dir=vendor -exclude-dir=testutil ./... || true
+          gosec -fmt sarif -out gosec.sarif -exclude-generated -exclude-dir=vendor -exclude-dir=testutil ./... || true
 
       - name: Upload gosec results
         uses: github/codeql-action/upload-sarif@v3

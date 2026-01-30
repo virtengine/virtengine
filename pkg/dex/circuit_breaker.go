@@ -81,12 +81,12 @@ func (cb *circuitBreaker) trip() {
 
 	// Schedule automatic reset after cooldown
 	verrors.SafeGo("", func() {
-		defer func() { }() // WG Done if needed
+		defer func() {}() // WG Done if needed
 		time.Sleep(cb.cfg.CooldownPeriod)
 		cb.mu.Lock()
 		defer cb.mu.Unlock()
 		cb.reset()
-	}()
+	})
 }
 
 // reset resets the circuit breaker

@@ -34,9 +34,6 @@ func (q *queryServer) Params(ctx context.Context, req *types.QueryParamsRequest)
 	}, nil
 }
 
-// Ensure QueryServer implements types.QueryServer
-var _ types.QueryServer = QueryServer{}
-
 // FraudReport returns a fraud report by ID
 func (q *queryServer) FraudReport(ctx context.Context, req *types.QueryFraudReportRequest) (*types.QueryFraudReportResponse, error) {
 	if req == nil {

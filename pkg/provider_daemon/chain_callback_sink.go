@@ -1,8 +1,8 @@
 package provider_daemon
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -178,7 +178,20 @@ func (s *ChainCallbackSink) Submit(ctx context.Context, callback *marketplacetyp
 		return fmt.Errorf("callback signer mismatch: %s != %s", callback.SignerID, s.sender)
 	}
 
-	msg := marketplacetypes.NewMsgWaldurCallback(s.sender, callback)
+	// Serialize payload to JSON string
+	payloadBytes, err := json.Marshal(callback.Payload)
+	if err != nil {
+		return fmt.Errorf("marshal callback payload: %w", err)
+	}
+
+	msg := marketplacetypes.NewMsgWaldurCallback(
+		s.sender,
+		string(callback.ActionType),
+		callback.ChainEntityID,
+		string(callback.ChainEntityType),
+		string(payloadBytes),
+		callback.Signature,
+	)
 	resp, err := s.client.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg}, s.opts...)
 	if err != nil {
 		return err
