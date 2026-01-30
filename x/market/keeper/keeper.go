@@ -54,6 +54,9 @@ type IKeeper interface {
 	GetOrderHash(ctx sdk.Context, orderID string) string
 	// ProviderHasActiveLeases checks if a provider has any active leases
 	ProviderHasActiveLeases(ctx sdk.Context, provider sdk.AccAddress) bool
+	// VEID Gating (VE-301: Marketplace gating)
+	CheckVEIDGating(ctx sdk.Context, customerAddr sdk.AccAddress, requirements VEIDGatingRequirements) (*VEIDGatingResult, error)
+	SetVEIDKeeper(veidKeeper VEIDKeeper)
 }
 
 // Keeper of the market store
@@ -64,16 +67,27 @@ type Keeper struct {
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
 	authority string
+	// veidKeeper is the VEID module keeper for identity gating checks.
+	// This is optional and can be set after initialization via SetVEIDKeeper.
+	// VE-301: Marketplace gating
+	veidKeeper VEIDKeeper
 }
 
 // NewKeeper creates and returns an instance for Market keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, ekeeper EscrowKeeper, authority string) IKeeper {
-	return Keeper{
+	return &Keeper{
 		skey:      skey,
 		cdc:       cdc,
 		ekeeper:   ekeeper,
 		authority: authority,
 	}
+}
+
+// SetVEIDKeeper sets the VEID keeper for identity gating checks.
+// This is called during app initialization to wire in the VEID module.
+// VE-301: Marketplace gating
+func (k *Keeper) SetVEIDKeeper(veidKeeper VEIDKeeper) {
+	k.veidKeeper = veidKeeper
 }
 
 func (k Keeper) NewQuerier() Querier {
@@ -120,12 +134,41 @@ func (k Keeper) GetParams(ctx sdk.Context) (p types.Params) {
 	return p
 }
 
-// CreateOrder creates a new order with given group id and specifications. It returns created order
+// CreateOrder creates a new order with given group id and specifications. It returns created order.
+// VE-301: This function now performs VEID gating checks if a VEIDKeeper is configured.
 func (k Keeper) CreateOrder(ctx sdk.Context, gid dtypes.GroupID, spec dtypesBeta.GroupSpec) (types.Order, error) {
 	store := ctx.KVStore(k.skey)
 
+	// VE-301: Check VEID gating requirements before creating order
+	// The owner (customer) address is extracted from the GroupID
+	customerAddr, err := sdk.AccAddressFromBech32(gid.Owner)
+	if err != nil {
+		return types.Order{}, fmt.Errorf("invalid owner address in group ID: %w", err)
+	}
+
+	// Get VEID gating requirements from params or use defaults
+	requirements := k.getVEIDGatingRequirementsForOrder(ctx)
+
+	// Perform VEID gating check if requirements are non-zero
+	if k.veidKeeper != nil && !isZeroRequirements(requirements) {
+		result, gatingErr := k.CheckVEIDGating(ctx, customerAddr, requirements)
+		if gatingErr != nil {
+			ctx.Logger().Info("VEID gating failed for order creation",
+				"owner", gid.Owner,
+				"score", result.CustomerScore,
+				"tier", result.CustomerTier,
+				"failures", len(result.FailureReasons),
+			)
+			return types.Order{}, gatingErr
+		}
+		ctx.Logger().Debug("VEID gating passed for order creation",
+			"owner", gid.Owner,
+			"score", result.CustomerScore,
+			"tier", result.CustomerTier,
+		)
+	}
+
 	oseq := uint32(1)
-	var err error
 
 	k.WithOrdersForGroup(ctx, gid, types.OrderActive, func(_ types.Order) bool {
 		err = mv1.ErrOrderActive
@@ -172,6 +215,32 @@ func (k Keeper) CreateOrder(ctx sdk.Context, gid dtypes.GroupID, spec dtypesBeta
 	}
 
 	return order, nil
+}
+
+// getVEIDGatingRequirementsForOrder returns the VEID gating requirements for order creation.
+// This reads from market params if available, otherwise returns defaults.
+// VE-301: Marketplace gating
+func (k Keeper) getVEIDGatingRequirementsForOrder(ctx sdk.Context) VEIDGatingRequirements {
+	// For now, return defaults. In a future iteration, this could read from
+	// market params to allow governance to set minimum requirements.
+	// params := k.GetParams(ctx)
+	// if params.VEIDGatingEnabled {
+	//     return VEIDGatingRequirements{
+	//         MinCustomerScore:        params.MinCustomerScore,
+	//         MinCustomerTier:         params.MinCustomerTier,
+	//         RequireVerifiedStatus:   params.RequireVerifiedStatus,
+	//         RequireUnlockedIdentity: true,
+	//     }
+	// }
+	return DefaultVEIDGatingRequirements()
+}
+
+// isZeroRequirements checks if the requirements are effectively empty (no gating).
+func isZeroRequirements(req VEIDGatingRequirements) bool {
+	return req.MinCustomerScore == 0 &&
+		req.MinCustomerTier == 0 &&
+		len(req.RequiredScopes) == 0 &&
+		!req.RequireVerifiedStatus
 }
 
 // CreateBid creates a bid for a order with given orderID, price for bid and provider
