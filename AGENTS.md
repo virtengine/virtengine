@@ -1,11 +1,13 @@
 # VirtEngine repo guide for agents
 
 ## Overview
+
 - Primary language: Go (Cosmos SDK-based chain + services).
 - Secondary components: Python ML pipelines and SDKs.
 - Repo includes chain modules (`x/*`), shared packages (`pkg/*`), app wiring (`app/`), CLI (`cmd/`), ML tooling (`ml/`), and SDKs (`sdk/`).
 
 ## Key paths
+
 - `app/`: app configuration and module wiring.
 - `cmd/`: binaries (e.g., `provider-daemon`).
 - `x/`: blockchain modules (keepers, types, msgs).
@@ -16,27 +18,36 @@
 - `scripts/`: localnet and utility scripts.
 
 ## Environment & tooling
+
 - Go 1.21.0+ for core builds; localnet/testing docs mention Go 1.22+.
 - `make` is required; repo uses a `.cache` toolchain under the repo root.
 - `direnv` is used for environment management; see `_docs/development-environment.md`.
 - CGO dependencies exist (libusb/libhid), so a C/C++ compiler is required.
 
 ## Build
+
 ```bash
 make virtengine
 ```
+
 Build outputs go to `.cache/bin`.
 
 ## Tests
+
 Unit tests:
+
 ```bash
 go test ./x/... ./pkg/...
 ```
+
 Integration tests:
+
 ```bash
 go test -tags="e2e.integration" ./tests/integration/...
 ```
+
 E2E tests:
+
 ```bash
 make test-integration
 ```
@@ -44,20 +55,25 @@ make test-integration
 For detailed guidance, see `_docs/testing-guide.md`.
 
 ## Localnet (integration environment)
+
 ```bash
 ./scripts/localnet.sh start
 ./scripts/localnet.sh test
 ```
+
 Windows users should run localnet in WSL2 as noted in `_docs/development-environment.md`.
 
 ## Contribution rules
+
 - Target PRs against `main` unless a release-branch bug fix.
 - Use Conventional Commits; sign-off required (`git commit -s`).
 - Add copyright headers to new files when missing.
 - Follow proposal process for new features per `CONTRIBUTING.md`.
 
 ## Commit instructions
+
 Conventional Commits format:
+
 ```
 type(scope): description
 ```
@@ -67,6 +83,7 @@ Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`
 Valid scopes: `veid`, `mfa`, `encryption`, `market`, `escrow`, `roles`, `hpc`, `provider`, `sdk`, `cli`, `app`, `deps`, `ci`, `api`
 
 Examples:
+
 ```
 feat(veid): add identity verification flow
 fix(market): resolve bid race condition
@@ -75,10 +92,144 @@ chore(deps): bump cosmos-sdk to v0.53.1
 ```
 
 Breaking changes: add `!` after type/scope
+
 ```
 feat(api)!: change response format
 ```
 
 ## Repository hygiene
+
 - Do not commit generated caches or large binaries (ML weights live under `ml/*/weights/` and should stay out of git).
 - Prefer existing make targets/scripts; avoid reimplementing workflows.
+
+## MCP Servers & Tool Usage
+
+VirtEngine integrates several Model Context Protocol (MCP) servers for enhanced development capabilities. Use these tools when appropriate for your task:
+
+### Context7 - Library Documentation
+
+**When to use:**
+
+- Looking up documentation for any programming library or framework
+- Need code examples for specific APIs (Cosmos SDK, TensorFlow, gRPC, etc.)
+- Understanding third-party dependencies or their usage patterns
+- Researching best practices for libraries used in the project
+
+**Examples:**
+
+- "How do I use Cosmos SDK's keeper pattern?"
+- "Show me TensorFlow deterministic ops configuration"
+- "What's the correct way to implement IBC message handlers?"
+
+### GitHub MCP Server
+
+**When to use:**
+
+- Creating or managing issues and pull requests
+- Searching for code patterns across GitHub repositories
+- Reviewing PR diffs, comments, and reviews
+- Managing branches, commits, and releases
+- Searching for issues, PRs, or code in VirtEngine or related repos
+
+**Examples:**
+
+- "Create an issue for the identity verification bug"
+- "Search for usage of EncryptionEnvelope across the codebase"
+- "Show me recent PRs to the mainnet/main branch"
+- "Find implementations of IKeeper interface in Cosmos SDK repos"
+
+### Playwright MCP - Browser Automation & Testing
+
+**When to use:**
+
+- Testing web UIs or frontend components
+- Automating browser-based workflows (e.g., testing provider dashboard)
+- Scraping documentation or web content for development
+- E2E testing scenarios involving web interfaces
+
+**Examples:**
+
+- "Test the provider registration flow in the web UI"
+- "Automate checking the validator dashboard"
+- "Verify the VEID identity upload workflow"
+
+### Vibe-Kanban - Task & Project Management
+
+**When to use:**
+
+- Creating or updating tasks/tickets for development work
+- Listing project tasks and their status
+- Starting workspace sessions for specific tasks
+- Managing repositories and their scripts (setup, cleanup, dev server)
+
+**Examples:**
+
+- "Create a task for implementing HPC module tests"
+- "List all in-progress tasks"
+- "Update the VEID encryption task to completed"
+
+### Exa - Web Search & Code Context
+
+**When to use:**
+
+- Searching the web for up-to-date information (APIs, protocols, security advisories)
+- Finding code examples or implementations from public sources
+- Researching new technologies or approaches not in local documentation
+- Getting real-time context about external dependencies or standards
+
+**Examples:**
+
+- "Search for recent Cosmos SDK v0.53 migration guides"
+- "Find examples of X25519 encryption in Go"
+- "Look up the latest CometBFT security advisories"
+
+### Chrome DevTools MCP
+
+**When to use:**
+
+- Debugging browser-based components or frontends
+- Inspecting network requests from web clients
+- Profiling performance of web UIs
+- Capturing console logs or errors from browser environments
+
+**Examples:**
+
+- "Inspect the network requests when connecting to the provider daemon"
+- "Profile the provider dashboard page load performance"
+- "Capture console errors from the identity verification UI"
+
+### Dev Manager MCP
+
+**When to use:**
+
+- Managing development environment setup
+- Coordinating multi-service local development
+- Handling development server lifecycles
+- Managing development tooling and configurations
+
+**Examples:**
+
+- "Set up the development environment for provider daemon"
+- "Start all required services for local testing"
+- "Configure the development environment for ML pipeline work"
+
+### General MCP Usage Guidelines
+
+1. **Choose the right tool:** Select the MCP server that best matches your task's domain
+2. **Combine when needed:** Some tasks may benefit from multiple MCP servers (e.g., GitHub + Context7 for researching API usage in other repos)
+3. **Respect rate limits:** If one tool is rate-limited, switch to alternatives or manual approaches
+4. **Security first:** Never expose sensitive data (API keys, private keys, credentials) through MCP tools
+5. **Verify results:** Always validate outputs from MCP tools, especially for code examples or documentation
+
+### Task-to-Tool Mapping
+
+| Task Domain               | Primary Tool             | Secondary Tool   |
+| ------------------------- | ------------------------ | ---------------- |
+| Library/API Documentation | Context7                 | Exa (web search) |
+| GitHub Operations         | GitHub MCP               | -                |
+| Task Management           | Vibe-Kanban              | -                |
+| Web Testing               | Playwright               | Chrome DevTools  |
+| Research/Discovery        | Exa                      | Context7         |
+| Development Setup         | Dev Manager              | -                |
+| Code Search (external)    | GitHub MCP (search_code) | Exa              |
+| Browser Debugging         | Chrome DevTools          | Playwright       |
