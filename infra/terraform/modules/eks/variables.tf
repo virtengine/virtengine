@@ -1,8 +1,17 @@
-# Variables for VirtEngine EKS Module
+# EKS Module Variables
 
 variable "cluster_name" {
   description = "Name of the EKS cluster"
   type        = string
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, staging, prod."
+  }
 }
 
 variable "kubernetes_version" {
@@ -11,183 +20,108 @@ variable "kubernetes_version" {
   default     = "1.29"
 }
 
-variable "private_subnet_ids" {
-  description = "List of private subnet IDs for the EKS cluster"
-  type        = list(string)
-}
-
-variable "public_subnet_ids" {
-  description = "List of public subnet IDs for the EKS cluster"
-  type        = list(string)
-}
-
-variable "cluster_security_group_id" {
-  description = "Security group ID for the EKS cluster"
+variable "vpc_id" {
+  description = "ID of the VPC"
   type        = string
 }
 
-variable "endpoint_private_access" {
-  description = "Enable private API server endpoint"
-  type        = bool
-  default     = true
+variable "subnet_ids" {
+  description = "List of subnet IDs for the EKS cluster"
+  type        = list(string)
 }
 
-variable "endpoint_public_access" {
+variable "enable_public_endpoint" {
   description = "Enable public API server endpoint"
   type        = bool
   default     = true
 }
 
 variable "public_access_cidrs" {
-  description = "List of CIDRs allowed to access public API endpoint"
+  description = "CIDR blocks allowed to access the public endpoint"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
 
-variable "enabled_cluster_log_types" {
-  description = "List of control plane log types to enable"
+variable "enabled_log_types" {
+  description = "List of EKS control plane log types to enable"
   type        = list(string)
   default     = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 }
 
-variable "cluster_log_retention_days" {
+variable "log_retention_days" {
   description = "Number of days to retain EKS control plane logs"
   type        = number
   default     = 30
 }
 
-variable "kms_key_arn" {
-  description = "ARN of KMS key for secrets encryption (if not provided, a new key is created)"
-  type        = string
-  default     = ""
+variable "node_groups" {
+  description = "Map of EKS managed node group configurations"
+  type = map(object({
+    instance_types = list(string)
+    capacity_type  = string
+    disk_size      = number
+    desired_size   = number
+    max_size       = number
+    min_size       = number
+    labels         = map(string)
+    taints = list(object({
+      key    = string
+      value  = string
+      effect = string
+    }))
+  }))
+  default = {
+    system = {
+      instance_types = ["t3.medium"]
+      capacity_type  = "ON_DEMAND"
+      disk_size      = 50
+      desired_size   = 2
+      max_size       = 4
+      min_size       = 1
+      labels         = {}
+      taints         = []
+    }
+  }
 }
 
-# System Node Group Configuration
-variable "system_node_instance_types" {
-  description = "Instance types for system node group"
-  type        = list(string)
-  default     = ["t3.large"]
+variable "enable_ssm_access" {
+  description = "Enable SSM access to nodes"
+  type        = bool
+  default     = false
 }
 
-variable "system_node_disk_size" {
-  description = "Disk size in GB for system nodes"
-  type        = number
-  default     = 50
-}
-
-variable "system_node_desired_size" {
-  description = "Desired number of system nodes"
-  type        = number
-  default     = 2
-}
-
-variable "system_node_max_size" {
-  description = "Maximum number of system nodes"
-  type        = number
-  default     = 4
-}
-
-variable "system_node_min_size" {
-  description = "Minimum number of system nodes"
-  type        = number
-  default     = 2
-}
-
-# Application Node Group Configuration
-variable "app_node_instance_types" {
-  description = "Instance types for application node group"
-  type        = list(string)
-  default     = ["m5.xlarge", "m5.2xlarge"]
-}
-
-variable "app_node_capacity_type" {
-  description = "Capacity type for application nodes (ON_DEMAND or SPOT)"
-  type        = string
-  default     = "ON_DEMAND"
-}
-
-variable "app_node_disk_size" {
-  description = "Disk size in GB for application nodes"
-  type        = number
-  default     = 100
-}
-
-variable "app_node_desired_size" {
-  description = "Desired number of application nodes"
-  type        = number
-  default     = 3
-}
-
-variable "app_node_max_size" {
-  description = "Maximum number of application nodes"
-  type        = number
-  default     = 10
-}
-
-variable "app_node_min_size" {
-  description = "Minimum number of application nodes"
-  type        = number
-  default     = 2
-}
-
-# Chain Node Group Configuration
-variable "chain_node_instance_types" {
-  description = "Instance types for chain node group"
-  type        = list(string)
-  default     = ["m5.2xlarge"]
-}
-
-variable "chain_node_disk_size" {
-  description = "Disk size in GB for chain nodes (needs space for blockchain data)"
-  type        = number
-  default     = 500
-}
-
-variable "chain_node_desired_size" {
-  description = "Desired number of chain nodes"
-  type        = number
-  default     = 3
-}
-
-variable "chain_node_max_size" {
-  description = "Maximum number of chain nodes"
-  type        = number
-  default     = 5
-}
-
-variable "chain_node_min_size" {
-  description = "Minimum number of chain nodes"
-  type        = number
-  default     = 3
-}
-
-# EKS Addon Versions
-variable "vpc_cni_addon_version" {
+variable "vpc_cni_version" {
   description = "Version of the VPC CNI addon"
   type        = string
-  default     = "v1.16.0-eksbuild.1"
+  default     = null
 }
 
-variable "coredns_addon_version" {
+variable "coredns_version" {
   description = "Version of the CoreDNS addon"
   type        = string
-  default     = "v1.11.1-eksbuild.4"
+  default     = null
 }
 
-variable "kube_proxy_addon_version" {
+variable "kube_proxy_version" {
   description = "Version of the kube-proxy addon"
   type        = string
-  default     = "v1.29.0-eksbuild.1"
+  default     = null
 }
 
-variable "ebs_csi_addon_version" {
+variable "enable_ebs_csi_driver" {
+  description = "Enable EBS CSI driver addon"
+  type        = bool
+  default     = true
+}
+
+variable "ebs_csi_driver_version" {
   description = "Version of the EBS CSI driver addon"
   type        = string
-  default     = "v1.28.0-eksbuild.1"
+  default     = null
 }
 
 variable "tags" {
-  description = "Additional tags to apply to all resources"
+  description = "Additional tags for all resources"
   type        = map(string)
   default     = {}
 }

@@ -1,0 +1,195 @@
+# VirtEngine Node Base Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: virtengine-node
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: blockchain
+    app.kubernetes.io/part-of: virtengine
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virtengine-node
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: virtengine-node
+        app.kubernetes.io/component: blockchain
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "26660"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: virtengine-node
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: virtengine-node
+          image: virtengine/node:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: p2p
+              containerPort: 26656
+              protocol: TCP
+            - name: rpc
+              containerPort: 26657
+              protocol: TCP
+            - name: rest
+              containerPort: 1317
+              protocol: TCP
+            - name: grpc
+              containerPort: 9090
+              protocol: TCP
+            - name: grpc-web
+              containerPort: 9091
+              protocol: TCP
+            - name: prometheus
+              containerPort: 26660
+              protocol: TCP
+          env:
+            - name: CHAIN_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: virtengine-node-config
+                  key: chain-id
+            - name: MONIKER
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: 2000m
+              memory: 8Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/virtengine
+            - name: config
+              mountPath: /etc/virtengine
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: rpc
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: rpc
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: virtengine-node-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: virtengine-node
+                topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node
+  labels:
+    app.kubernetes.io/name: virtengine-node
+spec:
+  type: ClusterIP
+  ports:
+    - name: p2p
+      port: 26656
+      targetPort: p2p
+    - name: rpc
+      port: 26657
+      targetPort: rpc
+    - name: rest
+      port: 1317
+      targetPort: rest
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+    - name: grpc-web
+      port: 9091
+      targetPort: grpc-web
+  selector:
+    app.kubernetes.io/name: virtengine-node
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node-p2p
+  labels:
+    app.kubernetes.io/name: virtengine-node
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  ports:
+    - name: p2p
+      port: 26656
+      targetPort: p2p
+  selector:
+    app.kubernetes.io/name: virtengine-node
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: virtengine-node
+  annotations:
+    eks.amazonaws.com/role-arn: ""  # Set via overlay
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: virtengine-node-config
+data:
+  chain-id: virtengine-1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: virtengine-node
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virtengine-node

@@ -1,4 +1,4 @@
-# Outputs for VirtEngine EKS Module
+# EKS Module Outputs
 
 output "cluster_id" {
   description = "ID of the EKS cluster"
@@ -30,14 +30,19 @@ output "cluster_version" {
   value       = aws_eks_cluster.main.version
 }
 
-output "cluster_platform_version" {
-  description = "Platform version of the EKS cluster"
-  value       = aws_eks_cluster.main.platform_version
+output "cluster_security_group_id" {
+  description = "Security group ID for the cluster"
+  value       = aws_security_group.cluster.id
 }
 
-output "cluster_oidc_issuer_url" {
-  description = "OIDC issuer URL for the cluster"
-  value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
+output "cluster_iam_role_arn" {
+  description = "IAM role ARN of the EKS cluster"
+  value       = aws_iam_role.cluster.arn
+}
+
+output "node_iam_role_arn" {
+  description = "IAM role ARN for the EKS node groups"
+  value       = aws_iam_role.node.arn
 }
 
 output "oidc_provider_arn" {
@@ -45,37 +50,30 @@ output "oidc_provider_arn" {
   value       = aws_iam_openid_connect_provider.eks.arn
 }
 
-output "cluster_role_arn" {
-  description = "ARN of the EKS cluster IAM role"
-  value       = aws_iam_role.cluster.arn
-}
-
-output "node_group_role_arn" {
-  description = "ARN of the EKS node group IAM role"
-  value       = aws_iam_role.node_group.arn
-}
-
-output "system_node_group_id" {
-  description = "ID of the system node group"
-  value       = aws_eks_node_group.system.id
-}
-
-output "application_node_group_id" {
-  description = "ID of the application node group"
-  value       = aws_eks_node_group.application.id
-}
-
-output "chain_node_group_id" {
-  description = "ID of the chain node group"
-  value       = aws_eks_node_group.chain.id
+output "oidc_provider_url" {
+  description = "URL of the OIDC provider for IRSA"
+  value       = aws_iam_openid_connect_provider.eks.url
 }
 
 output "kms_key_arn" {
   description = "ARN of the KMS key used for secrets encryption"
-  value       = var.kms_key_arn != "" ? var.kms_key_arn : aws_kms_key.eks[0].arn
+  value       = aws_kms_key.eks.arn
 }
 
-output "kubeconfig_command" {
-  description = "Command to update kubeconfig"
-  value       = "aws eks update-kubeconfig --region $(aws configure get region) --name ${aws_eks_cluster.main.name}"
+output "node_groups" {
+  description = "Map of node group names to their resources"
+  value = {
+    for k, v in aws_eks_node_group.main : k => {
+      arn    = v.arn
+      status = v.status
+    }
+  }
 }
+
+# Kubeconfig helper output
+output "kubeconfig_command" {
+  description = "AWS CLI command to update kubeconfig"
+  value       = "aws eks update-kubeconfig --region ${data.aws_region.current.name} --name ${aws_eks_cluster.main.name}"
+}
+
+data "aws_region" "current" {}

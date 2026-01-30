@@ -1,0 +1,111 @@
+# Automated Rollback Configuration
+# These resources configure automatic rollback behavior
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: automated-rollback
+  namespace: virtengine
+spec:
+  metrics:
+    # Monitor error rate
+    - name: error-rate
+      interval: 1m
+      count: 5
+      successCondition: result[0] < 0.01  # Less than 1% error rate
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{status=~"5..",namespace="virtengine"}[5m])) /
+            sum(rate(http_requests_total{namespace="virtengine"}[5m]))
+    # Monitor latency
+    - name: latency-p99
+      interval: 1m
+      count: 5
+      successCondition: result[0] < 1.0  # P99 latency under 1 second
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{namespace="virtengine"}[5m])) by (le))
+    # Monitor pod restarts
+    - name: pod-restarts
+      interval: 2m
+      count: 5
+      successCondition: result[0] < 3
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(increase(kube_pod_container_status_restarts_total{namespace="virtengine"}[10m]))
+---
+# Rollback webhook notification
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rollback-notification
+  namespace: virtengine
+data:
+  slack-template: |
+    {
+      "channel": "#virtengine-alerts",
+      "username": "ArgoCD Rollouts",
+      "icon_emoji": ":warning:",
+      "attachments": [
+        {
+          "color": "danger",
+          "title": "Rollback Triggered",
+          "fields": [
+            {"title": "Application", "value": "{{ .rollout.metadata.name }}", "short": true},
+            {"title": "Namespace", "value": "{{ .rollout.metadata.namespace }}", "short": true},
+            {"title": "Revision", "value": "{{ .rollout.status.currentPodHash }}", "short": true},
+            {"title": "Reason", "value": "{{ .analysisRun.status.message }}", "short": false}
+          ]
+        }
+      ]
+    }
+---
+# Rollback policy for production
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: production-rollback-policy
+  namespace: virtengine
+spec:
+  metrics:
+    # Critical: Block consensus failure
+    - name: consensus-health
+      interval: 30s
+      count: 20
+      successCondition: result[0] > 0.9  # 90% of validators online
+      failureLimit: 1  # Immediate rollback on consensus failure
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            virtengine_consensus_validators_online / virtengine_consensus_validators_total
+    # Critical: Chain halt detection
+    - name: block-production
+      interval: 1m
+      count: 10
+      successCondition: result[0] > 0  # Blocks being produced
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            increase(virtengine_consensus_block_height[5m])
+    # Standard: API availability
+    - name: api-availability
+      interval: 30s
+      count: 20
+      successCondition: result[0] > 0.99  # 99% availability
+      failureLimit: 3
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(up{job="virtengine-node"}) / count(up{job="virtengine-node"})
