@@ -74,6 +74,21 @@ const (
 	MOABJobStateFailed MOABJobState = "Failed"
 )
 
+// SSHHostKeyCallback defines the SSH host key verification mode
+type SSHHostKeyCallback string
+
+const (
+	// SSHHostKeyKnownHosts uses a known_hosts file for verification
+	SSHHostKeyKnownHosts SSHHostKeyCallback = "known_hosts"
+
+	// SSHHostKeyPinned uses a pinned public key for verification
+	SSHHostKeyPinned SSHHostKeyCallback = "pinned"
+
+	// SSHHostKeyInsecure disables host key verification (NOT RECOMMENDED)
+	// Only use for testing or when other security measures are in place
+	SSHHostKeyInsecure SSHHostKeyCallback = "insecure"
+)
+
 // MOABConfig configures the MOAB adapter
 type MOABConfig struct {
 	// ServerHost is the MOAB server hostname
@@ -114,21 +129,37 @@ type MOABConfig struct {
 
 	// WaldurEndpoint is the Waldur API endpoint
 	WaldurEndpoint string `json:"waldur_endpoint,omitempty"`
+
+	// SSHHostKeyCallback defines the host key verification mode
+	// Options: "known_hosts" (default), "pinned", "insecure"
+	// SECURITY: "insecure" disables MITM protection - use only for testing
+	SSHHostKeyCallback SSHHostKeyCallback `json:"ssh_host_key_callback"`
+
+	// SSHKnownHostsPath is the path to the known_hosts file
+	// Used when SSHHostKeyCallback is "known_hosts"
+	// Defaults to ~/.ssh/known_hosts if empty
+	SSHKnownHostsPath string `json:"ssh_known_hosts_path,omitempty"`
+
+	// SSHHostPublicKey is the pinned host public key (base64 encoded)
+	// Used when SSHHostKeyCallback is "pinned"
+	// Format: "ssh-rsa AAAA..." or "ssh-ed25519 AAAA..."
+	SSHHostPublicKey string `json:"ssh_host_public_key,omitempty"`
 }
 
 // DefaultMOABConfig returns the default MOAB configuration
 func DefaultMOABConfig() MOABConfig {
 	return MOABConfig{
-		ServerHost:        "moab-server",
-		ServerPort:        42559,
-		UseTLS:            true,
-		AuthMethod:        "password",
-		DefaultQueue:      "batch",
-		DefaultAccount:    "default",
-		JobPollInterval:   time.Second * 15,
-		ConnectionTimeout: time.Second * 30,
-		MaxRetries:        3,
-		WaldurIntegration: true,
+		ServerHost:         "moab-server",
+		ServerPort:         42559,
+		UseTLS:             true,
+		AuthMethod:         "password",
+		DefaultQueue:       "batch",
+		DefaultAccount:     "default",
+		JobPollInterval:    time.Second * 15,
+		ConnectionTimeout:  time.Second * 30,
+		MaxRetries:         3,
+		WaldurIntegration:  true,
+		SSHHostKeyCallback: SSHHostKeyKnownHosts,
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -23,6 +25,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // ProductionMOABClient implements the MOABClient interface for real MOAB clusters.
@@ -38,13 +41,14 @@ type ProductionMOABClient struct {
 
 // sshConnectionPool manages a pool of SSH connections
 type sshConnectionPool struct {
-	mu          sync.Mutex
-	config      MOABConfig
-	authMethod  ssh.AuthMethod
-	connections chan *sshConnection
-	maxSize     int
-	idleTimeout time.Duration
-	closed      bool
+	mu              sync.Mutex
+	config          MOABConfig
+	authMethod      ssh.AuthMethod
+	hostKeyCallback ssh.HostKeyCallback
+	connections     chan *sshConnection
+	maxSize         int
+	idleTimeout     time.Duration
+	closed          bool
 }
 
 // sshConnection represents a pooled SSH connection
