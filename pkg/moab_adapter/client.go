@@ -117,6 +117,81 @@ func (c *ProductionMOABClient) setupAuth() (ssh.AuthMethod, error) {
 	}
 }
 
+// setupHostKeyCallback creates an SSH host key callback based on configuration.
+// SECURITY: This is critical for MITM protection. The callback mode determines
+// how the server's host key is verified during SSH handshake.
+func (c *ProductionMOABClient) setupHostKeyCallback() (ssh.HostKeyCallback, error) {
+	switch c.config.SSHHostKeyCallback {
+	case SSHHostKeyInsecure:
+		// SECURITY WARNING: This disables host key verification and is vulnerable to MITM attacks.
+		// Only use for testing or when other security measures (e.g., VPN, private network) are in place.
+		return ssh.InsecureIgnoreHostKey(), nil
+
+	case SSHHostKeyPinned:
+		// Use a pinned public key for verification
+		if c.config.SSHHostPublicKey == "" {
+			return nil, errors.New("SSH host key verification requires SSHHostPublicKey when using 'pinned' mode")
+		}
+		return createPinnedKeyCallback(c.config.SSHHostPublicKey)
+
+	case SSHHostKeyKnownHosts, "":
+		// Default: Use known_hosts file
+		knownHostsPath := c.config.SSHKnownHostsPath
+		if knownHostsPath == "" {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get user home directory for known_hosts: %w", err)
+			}
+			knownHostsPath = filepath.Join(homeDir, ".ssh", "known_hosts")
+		}
+
+		// Check if known_hosts file exists
+		if _, err := os.Stat(knownHostsPath); err != nil {
+			return nil, fmt.Errorf("SSH host key verification requires known_hosts file at %s (set SSHHostKeyCallback to 'insecure' to disable, NOT RECOMMENDED): %w", knownHostsPath, err)
+		}
+
+		hostKeyCallback, err := knownhosts.New(knownHostsPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create host key callback from known_hosts: %w", err)
+		}
+		return hostKeyCallback, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported SSH host key callback mode: %s (valid options: known_hosts, pinned, insecure)", c.config.SSHHostKeyCallback)
+	}
+}
+
+// createPinnedKeyCallback creates a host key callback that verifies against a pinned public key.
+// The key should be in the standard SSH public key format: "ssh-rsa AAAA..." or "ssh-ed25519 AAAA..."
+func createPinnedKeyCallback(pinnedKey string) (ssh.HostKeyCallback, error) {
+	// Parse the pinned key - it should be in authorized_keys format
+	parts := strings.Fields(pinnedKey)
+	if len(parts) < 2 {
+		return nil, errors.New("invalid pinned SSH host key format: expected 'key-type base64-key [comment]'")
+	}
+
+	keyData, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode pinned SSH host key: %w", err)
+	}
+
+	publicKey, err := ssh.ParsePublicKey(keyData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse pinned SSH host key: %w", err)
+	}
+
+	// Return a callback that verifies the server's key matches the pinned key
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		if key.Type() != publicKey.Type() {
+			return fmt.Errorf("SSH host key type mismatch: expected %s, got %s", publicKey.Type(), key.Type())
+		}
+		if !bytes.Equal(key.Marshal(), publicKey.Marshal()) {
+			return fmt.Errorf("SSH host key mismatch for %s: possible MITM attack", hostname)
+		}
+		return nil
+	}, nil
+}
+
 // Connect connects to the MOAB server
 func (c *ProductionMOABClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
@@ -126,6 +201,12 @@ func (c *ProductionMOABClient) Connect(ctx context.Context) error {
 		return nil
 	}
 
+	// Setup host key callback for MITM protection
+	hostKeyCallback, err := c.setupHostKeyCallback()
+	if err != nil {
+		return fmt.Errorf("failed to setup SSH host key verification: %w", err)
+	}
+
 	// Create connection pool
 	poolSize := 5
 	if c.config.MaxRetries > 0 {
@@ -133,11 +214,12 @@ func (c *ProductionMOABClient) Connect(ctx context.Context) error {
 	}
 
 	pool := &sshConnectionPool{
-		config:      c.config,
-		authMethod:  c.authMethod,
-		connections: make(chan *sshConnection, poolSize),
-		maxSize:     poolSize,
-		idleTimeout: 5 * time.Minute,
+		config:          c.config,
+		authMethod:      c.authMethod,
+		hostKeyCallback: hostKeyCallback,
+		connections:     make(chan *sshConnection, poolSize),
+		maxSize:         poolSize,
+		idleTimeout:     5 * time.Minute,
 	}
 
 	// Create initial connection to verify connectivity
@@ -502,7 +584,7 @@ func (p *sshConnectionPool) createConnection(ctx context.Context) (*sshConnectio
 	sshConfig := &ssh.ClientConfig{
 		User:            p.config.Username,
 		Auth:            []ssh.AuthMethod{p.authMethod},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Use known_hosts
+		HostKeyCallback: p.hostKeyCallback,
 		Timeout:         p.config.ConnectionTimeout,
 	}
 
