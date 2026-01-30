@@ -8,6 +8,7 @@
 package enclave_runtime
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"errors"
 	"fmt"
 	"os"

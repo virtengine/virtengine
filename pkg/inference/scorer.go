@@ -1,6 +1,7 @@
 package inference
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"sync"
@@ -116,7 +117,9 @@ func (s *TensorFlowScorer) ComputeScoreWithContext(ctx context.Context, inputs *
 	errChan := make(chan error, 1)
 	resultChan := make(chan *ScoreResult, 1)
 
-	go func() {
+	verrors.SafeGo("", func() {
+
+		defer func() { }() // WG Done if needed
 		res, err := s.runInference(inputs)
 		if err != nil {
 			errChan <- err

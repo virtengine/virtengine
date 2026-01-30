@@ -4,6 +4,7 @@
 package dex
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -79,7 +80,8 @@ func (cb *circuitBreaker) trip() {
 	cb.tripped.Store(true)
 
 	// Schedule automatic reset after cooldown
-	go func() {
+	verrors.SafeGo("", func() {
+		defer func() { }() // WG Done if needed
 		time.Sleep(cb.cfg.CooldownPeriod)
 		cb.mu.Lock()
 		defer cb.mu.Unlock()

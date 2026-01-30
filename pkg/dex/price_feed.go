@@ -4,6 +4,7 @@
 package dex
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"sort"
 	"sync"
@@ -218,7 +219,8 @@ func (p *priceFeedImpl) fetchFromSources(ctx context.Context, baseSymbol, quoteS
 		}
 
 		wg.Add(1)
-		go func(src PriceSource) {
+		verrors.SafeGo("func", func() {
+			func(src PriceSource) {
 			defer wg.Done()
 			price, err := src.GetPrice(ctx, baseSymbol, quoteSymbol)
 			if err != nil {
@@ -318,7 +320,8 @@ func (p *priceFeedImpl) notifySubscribers(key string, price Price) {
 	p.subsMu.RUnlock()
 
 	for _, cb := range callbacks {
-		go cb(price)
+		verrors.SafeGo("cb", func() {
+			cb(price)
 	}
 }
 

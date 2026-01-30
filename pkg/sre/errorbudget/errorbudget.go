@@ -8,6 +8,7 @@
 package errorbudget
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -331,7 +332,8 @@ func (m *Manager) AutoReset(ctx context.Context) {
 
 // StartAutoResetDaemon starts a background goroutine that auto-resets budgets
 func (m *Manager) StartAutoResetDaemon(ctx context.Context, checkInterval time.Duration) {
-	go func() {
+	verrors.SafeGo("", func() {
+		defer func() { }() // WG Done if needed
 		ticker := time.NewTicker(checkInterval)
 		defer ticker.Stop()
 

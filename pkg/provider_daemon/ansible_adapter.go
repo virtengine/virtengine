@@ -4,6 +4,7 @@
 package provider_daemon
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -985,7 +986,9 @@ func (a *AnsibleAdapter) ExecutePlaybookAsync(ctx context.Context, playbook *Pla
 	a.executions[executionID] = result
 	a.mu.Unlock()
 
-	go func() {
+	verrors.SafeGo("", func() {
+
+		defer func() { }() // WG Done if needed
 		_, _ = a.ExecutePlaybook(ctx, playbook, inventory, options)
 	}()
 

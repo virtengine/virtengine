@@ -4,6 +4,7 @@
 package edugain
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"

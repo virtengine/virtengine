@@ -6,6 +6,7 @@
 package conformance
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"

@@ -12,6 +12,7 @@
 package enclave_runtime
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"

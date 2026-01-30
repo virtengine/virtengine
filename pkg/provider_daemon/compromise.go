@@ -7,17 +7,21 @@ package provider_daemon
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
-// ErrKeyCompromised is returned when a key is determined to be compromised
-var ErrKeyCompromised = errors.New("key has been compromised")
+// Sentinel errors for key compromise
+var (
+	// ErrKeyCompromised is returned when a key is determined to be compromised
+	ErrKeyCompromised = verrors.ErrRevoked
 
-// ErrCompromiseAlreadyReported is returned when a compromise was already reported
-var ErrCompromiseAlreadyReported = errors.New("compromise already reported for this key")
+	// ErrCompromiseAlreadyReported is returned when a compromise was already reported
+	ErrCompromiseAlreadyReported = verrors.ErrConflict
+)
 
 // CompromiseIndicator represents a type of compromise indicator
 type CompromiseIndicator string
@@ -380,9 +384,11 @@ func (d *CompromiseDetector) createEvent(keyID string, indicator CompromiseIndic
 
 	d.events[eventID] = event
 
-	// Send alert if webhook configured
+	// Send alert if webhook configured with panic recovery
 	if d.config.AlertWebhookURL != "" {
-		go d.sendAlert(event)
+		verrors.SafeGo("provider-daemon:compromise-alert", func() {
+			d.sendAlert(event)
+		})
 	}
 
 	return event

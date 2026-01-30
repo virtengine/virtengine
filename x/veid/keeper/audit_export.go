@@ -6,6 +6,7 @@
 package keeper
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"

@@ -24,6 +24,7 @@
 package enclave_runtime
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"

@@ -1,0 +1,291 @@
+# VirtEngine Error Alerting Rules
+
+groups:
+  - name: virtengine_errors
+    interval: 30s
+    rules:
+      # High error rate across all modules
+      - alert: HighErrorRate
+        expr: rate(virtengine_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 10/sec) for module {{ $labels.module }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/high-error-rate"
+
+      # Critical error rate
+      - alert: CriticalErrorRate
+        expr: rate(virtengine_errors_total[5m]) > 50
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 50/sec) for module {{ $labels.module }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/critical-error-rate"
+
+      # High rate of critical severity errors
+      - alert: HighCriticalErrorRate
+        expr: rate(virtengine_errors_total{severity="critical"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High rate of critical errors"
+          description: "Critical error rate is {{ $value }} errors/sec for module {{ $labels.module }}, code {{ $labels.code }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/critical-errors"
+
+      # Panic recovery
+      - alert: PanicRecovered
+        expr: increase(virtengine_panics_recovered_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Panic recovered in {{ $labels.context }}"
+          description: "{{ $value }} panic(s) recovered in context {{ $labels.context }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/panic-recovery"
+
+      # Frequent panics
+      - alert: FrequentPanics
+        expr: rate(virtengine_panics_recovered_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Frequent panics in {{ $labels.context }}"
+          description: "Panic rate is {{ $value }}/sec in context {{ $labels.context }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/frequent-panics"
+
+  - name: virtengine_module_errors
+    interval: 30s
+    rules:
+      # VEID module errors
+      - alert: VEIDMLInferenceFailureRate
+        expr: rate(virtengine_errors_total{module="veid",code="1036"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High VEID ML inference failure rate"
+          description: "VEID ML inference failing at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-ml-failures"
+
+      - alert: VEIDVerificationTimeout
+        expr: rate(virtengine_errors_total{module="veid",code="1037"}[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High VEID verification timeout rate"
+          description: "VEID verification timing out at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-timeouts"
+
+      # MFA module errors
+      - alert: MFAHighFailureRate
+        expr: rate(virtengine_errors_total{module="mfa",code="1213"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High MFA verification failure rate"
+          description: "MFA verification failing at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/mfa-failures"
+
+      - alert: MFAMaxAttemptsExceeded
+        expr: rate(virtengine_errors_total{module="mfa",code="1211"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of MFA max attempts exceeded"
+          description: "Users exceeding MFA attempts at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/mfa-brute-force"
+
+      # Encryption module errors
+      - alert: EncryptionFailureRate
+        expr: rate(virtengine_errors_total{module="encryption",code=~"1309|1310"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High encryption/decryption failure rate"
+          description: "Encryption operations failing at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/encryption-failures"
+
+      # Market module errors
+      - alert: MarketHighOrderFailureRate
+        expr: rate(virtengine_errors_total{module="market",category="internal"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High market order failure rate"
+          description: "Market internal errors at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/market-failures"
+
+      # Provider daemon errors
+      - alert: ProviderDaemonExternalServiceFailures
+        expr: rate(virtengine_errors_total{module="provider_daemon",code="150"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High provider daemon external service failure rate"
+          description: "External services failing at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/provider-external-failures"
+
+      # Inference module errors
+      - alert: InferenceHighFailureRate
+        expr: rate(virtengine_errors_total{module="inference",category="internal"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High ML inference failure rate"
+          description: "ML inference failing at {{ $value }} errors/sec"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/inference-failures"
+
+      - alert: InferenceNonDeterministicResults
+        expr: increase(virtengine_errors_total{module="inference",code="261"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Non-deterministic ML inference detected"
+          description: "{{ $value }} non-deterministic inference results in last 10m"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/inference-non-deterministic"
+
+  - name: virtengine_error_categories
+    interval: 30s
+    rules:
+      # High validation error rate (might indicate client issues)
+      - alert: HighValidationErrorRate
+        expr: rate(virtengine_errors_total{category="validation"}[5m]) > 5
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "High validation error rate"
+          description: "Validation errors at {{ $value }} errors/sec for module {{ $labels.module }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/high-validation-errors"
+
+      # High unauthorized error rate (security concern)
+      - alert: HighUnauthorizedErrorRate
+        expr: rate(virtengine_errors_total{category="unauthorized"}[5m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High unauthorized error rate"
+          description: "Unauthorized errors at {{ $value }} errors/sec for module {{ $labels.module }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/unauthorized-access-attempts"
+
+      # High external service error rate
+      - alert: HighExternalServiceErrorRate
+        expr: rate(virtengine_errors_total{category="external"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High external service error rate"
+          description: "External service errors at {{ $value }} errors/sec for module {{ $labels.module }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/external-service-degradation"
+
+      # High timeout rate
+      - alert: HighTimeoutRate
+        expr: rate(virtengine_errors_total{category="timeout"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High timeout rate"
+          description: "Timeouts at {{ $value }} errors/sec for module {{ $labels.module }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/high-timeout-rate"
+
+      # Rate limit errors (capacity planning)
+      - alert: RateLimitErrorsDetected
+        expr: rate(virtengine_errors_total{category="rate_limit"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Rate limit errors detected"
+          description: "Rate limit errors at {{ $value }} errors/sec for module {{ $labels.module }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/rate-limit-capacity"
+
+  - name: virtengine_retryable_errors
+    interval: 30s
+    rules:
+      # High retryable error rate (system degradation)
+      - alert: HighRetryableErrorRate
+        expr: rate(virtengine_retryable_errors_total[5m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High retryable error rate"
+          description: "Retryable errors at {{ $value }} errors/sec for module {{ $labels.module }}, category {{ $labels.category }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/system-degradation"
+
+# Runbook Templates
+
+## High Error Rate
+1. Check recent deployments or configuration changes
+2. Review error logs for common patterns
+3. Check dependent services health
+4. Scale resources if needed
+5. Roll back if issue started after deployment
+
+## Critical Error Rate
+1. Page on-call engineer
+2. Check system health dashboard
+3. Identify failing component
+4. Consider emergency rollback
+5. Escalate to platform team if infrastructure issue
+
+## Panic Recovery
+1. Check logs for panic stack trace
+2. Identify root cause
+3. Fix code or configuration
+4. Deploy fix
+5. Add test to prevent recurrence
+
+## VEID ML Failures
+1. Check ML model status and version
+2. Verify model files are accessible
+3. Check GPU/CPU resources
+4. Review inference logs
+5. Restart inference service if needed
+
+## MFA Brute Force
+1. Check for suspicious IP addresses
+2. Review authentication logs
+3. Consider rate limiting
+4. Alert security team
+5. Block malicious IPs if needed
+
+## Encryption Failures
+1. Check key management service status
+2. Verify key accessibility
+3. Check HSM connectivity
+4. Review encryption logs
+5. Escalate to security team
+
+## External Service Degradation
+1. Check external service status pages
+2. Review connection logs
+3. Verify network connectivity
+4. Check timeout configurations
+5. Consider circuit breaker activation
+6. Contact external service support
+
+## Non-Deterministic Inference
+1. CRITICAL: Stop affected validators immediately
+2. Check determinism configuration
+3. Verify model versions match across validators
+4. Review TensorFlow/model settings
+5. Run determinism tests
+6. Escalate to ML team

@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"

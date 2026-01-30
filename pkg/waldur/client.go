@@ -5,6 +5,7 @@
 package waldur
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"errors"
 	"fmt"

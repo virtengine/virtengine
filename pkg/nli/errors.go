@@ -1,6 +1,9 @@
 package nli
 
-import "errors"
+import (
+	"errors"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
+)
 
 // Service errors
 var (

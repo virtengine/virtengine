@@ -4,6 +4,7 @@
 package provider_daemon
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"

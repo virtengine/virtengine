@@ -4,6 +4,7 @@
 package keeper
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
