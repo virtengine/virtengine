@@ -1,10 +1,12 @@
 // Package provider_daemon implements the provider daemon for VirtEngine.
 //
 // VE-401: Provider Daemon bid engine and provider configuration watcher
+// PROVIDER-STREAM-001: Event streaming support with polling fallback
 package provider_daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -329,6 +331,11 @@ type BidEngine struct {
 	chainClient ChainClient
 	rateLimiter *RateLimiter
 
+	// Streaming support (PROVIDER-STREAM-001)
+	eventSubscriber EventSubscriber
+	streamingMode   bool
+	fallbackActive  bool
+
 	running  bool
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -365,6 +372,20 @@ func NewBidEngine(
 	}
 }
 
+// NewBidEngineWithStreaming creates a bid engine with streaming support.
+// This is the preferred constructor for PROVIDER-STREAM-001.
+func NewBidEngineWithStreaming(
+	config BidEngineConfig,
+	keyManager *KeyManager,
+	chainClient ChainClient,
+	subscriber EventSubscriber,
+) *BidEngine {
+	be := NewBidEngine(config, keyManager, chainClient)
+	be.eventSubscriber = subscriber
+	be.streamingMode = subscriber != nil
+	return be
+}
+
 // Start starts the bid engine
 func (be *BidEngine) Start(ctx context.Context) error {
 	be.mu.Lock()
@@ -384,14 +405,27 @@ func (be *BidEngine) Start(ctx context.Context) error {
 
 	// Start workers with panic recovery
 	be.wg.Add(3)
+
+	// PROVIDER-STREAM-001: Use streaming for config when available
 	verrors.SafeGo("provider-daemon:config-watcher", func() {
 		defer be.wg.Done()
-		be.configWatcher()
+		if be.streamingMode && be.eventSubscriber != nil {
+			be.configStreamWatcher()
+		} else {
+			be.configWatcher()
+		}
 	})
+
+	// PROVIDER-STREAM-001: Use streaming for orders when available
 	verrors.SafeGo("provider-daemon:order-watcher", func() {
 		defer be.wg.Done()
-		be.orderWatcher()
+		if be.streamingMode && be.eventSubscriber != nil {
+			be.orderStreamWatcher()
+		} else {
+			be.orderWatcher()
+		}
 	})
+
 	verrors.SafeGo("provider-daemon:bid-worker", func() {
 		defer be.wg.Done()
 		be.bidWorker()
@@ -413,6 +447,12 @@ func (be *BidEngine) Stop() {
 	if be.cancel != nil {
 		be.cancel()
 	}
+
+	// Close event subscriber if streaming mode (PROVIDER-STREAM-001)
+	if be.eventSubscriber != nil {
+		_ = be.eventSubscriber.Close()
+	}
+
 	be.wg.Wait()
 }
 
@@ -559,6 +599,152 @@ func (be *BidEngine) matchOrder(order Order, config *ProviderConfig) bool {
 	}
 
 	return true
+}
+
+// configStreamWatcher watches for config updates via streaming (PROVIDER-STREAM-001).
+// Falls back to polling if streaming fails.
+func (be *BidEngine) configStreamWatcher() {
+	configCh, err := be.eventSubscriber.SubscribeConfig(be.ctx, be.config.ProviderAddress)
+	if err != nil {
+		// Fallback to polling mode
+		be.mu.Lock()
+		be.fallbackActive = true
+		be.mu.Unlock()
+		be.configWatcher()
+		return
+	}
+
+	// Use a ticker for health checks and fallback detection
+	healthTicker := time.NewTicker(time.Second * 30)
+	defer healthTicker.Stop()
+
+	for {
+		select {
+		case <-be.ctx.Done():
+			return
+
+		case event, ok := <-configCh:
+			if !ok {
+				// Channel closed, fall back to polling
+				be.mu.Lock()
+				be.fallbackActive = true
+				be.mu.Unlock()
+				be.configWatcher()
+				return
+			}
+
+			if event.Config != nil {
+				be.configMu.Lock()
+				oldVersion := uint64(0)
+				if be.provConfig != nil {
+					oldVersion = be.provConfig.Version
+				}
+				if event.Config.Version > oldVersion {
+					be.provConfig = event.Config
+				}
+				be.configMu.Unlock()
+			}
+
+		case <-healthTicker.C:
+			// Check if streaming is healthy
+			status := be.eventSubscriber.Status()
+			if !status.Connected && !be.fallbackActive {
+				// Streaming disconnected, fall back to polling temporarily
+				be.mu.Lock()
+				be.fallbackActive = true
+				be.mu.Unlock()
+				// Do a single poll to stay current
+				_ = be.refreshConfig()
+			}
+		}
+	}
+}
+
+// orderStreamWatcher watches for new orders via streaming (PROVIDER-STREAM-001).
+// Falls back to polling if streaming fails.
+func (be *BidEngine) orderStreamWatcher() {
+	orderCh, err := be.eventSubscriber.SubscribeOrders(be.ctx, be.config.ProviderAddress)
+	if err != nil {
+		// Fallback to polling mode
+		be.mu.Lock()
+		be.fallbackActive = true
+		be.mu.Unlock()
+		be.orderWatcher()
+		return
+	}
+
+	// Use a ticker for health checks and fallback recovery
+	healthTicker := time.NewTicker(time.Second * 30)
+	defer healthTicker.Stop()
+
+	for {
+		select {
+		case <-be.ctx.Done():
+			return
+
+		case event, ok := <-orderCh:
+			if !ok {
+				// Channel closed, fall back to polling
+				be.mu.Lock()
+				be.fallbackActive = true
+				be.mu.Unlock()
+				be.orderWatcher()
+				return
+			}
+
+			// Only process order_created events
+			if event.Type != EventTypeOrderCreated {
+				continue
+			}
+
+			be.configMu.RLock()
+			config := be.provConfig
+			be.configMu.RUnlock()
+
+			if config == nil || !config.Active {
+				continue
+			}
+
+			if be.matchOrder(event.Order, config) {
+				select {
+				case be.orderChan <- event.Order:
+				default:
+					// Channel full, skip this order
+				}
+			}
+
+		case <-healthTicker.C:
+			// Check if streaming is healthy
+			status := be.eventSubscriber.Status()
+			if !status.Connected && !be.fallbackActive {
+				// Streaming disconnected, poll once as fallback
+				_ = be.pollOrders()
+			}
+		}
+	}
+}
+
+// IsStreamingMode returns true if the engine is using event streaming.
+func (be *BidEngine) IsStreamingMode() bool {
+	be.mu.RLock()
+	defer be.mu.RUnlock()
+	return be.streamingMode
+}
+
+// IsFallbackActive returns true if polling fallback is currently active.
+func (be *BidEngine) IsFallbackActive() bool {
+	be.mu.RLock()
+	defer be.mu.RUnlock()
+	return be.fallbackActive
+}
+
+// StreamStatus returns the event subscriber status if streaming is enabled.
+func (be *BidEngine) StreamStatus() *SubscriberStatus {
+	if be.eventSubscriber == nil {
+		return nil
+	}
+	status := be.eventSubscriber.Status()
+	return &status
 }
 
 // bidWorker processes orders and places bids
