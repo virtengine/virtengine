@@ -1,8 +1,11 @@
 package types
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
+	"sort"
 )
 
 // EnvelopeVersion is the current envelope format version
@@ -40,6 +43,10 @@ type EncryptedPayloadEnvelope struct {
 	// For single-recipient NaCl box, this may be empty (key derived from DH)
 	EncryptedKeys [][]byte `json:"encrypted_keys,omitempty"`
 
+	// WrappedKeys contains per-recipient wrapped DEKs keyed by recipient ID
+	// This is the preferred multi-recipient representation for validator enclaves
+	WrappedKeys []WrappedKeyEntry `json:"wrapped_keys,omitempty"`
+
 	// Nonce is the initialization vector / nonce for encryption
 	// Must be unique for each encryption with the same key
 	Nonce []byte `json:"nonce"`
@@ -67,11 +74,11 @@ func NewEncryptedPayloadEnvelope() *EncryptedPayloadEnvelope {
 		algInfo = AlgorithmInfo{Version: AlgorithmVersionV1}
 	}
 	return &EncryptedPayloadEnvelope{
-		Version:         EnvelopeVersion,
-		AlgorithmID:     DefaultAlgorithm(),
+		Version:          EnvelopeVersion,
+		AlgorithmID:      DefaultAlgorithm(),
 		AlgorithmVersion: algInfo.Version,
-		RecipientKeyIDs: make([]string, 0),
-		Metadata:        make(map[string]string),
+		RecipientKeyIDs:  make([]string, 0),
+		Metadata:         make(map[string]string),
 	}
 }
 
@@ -151,6 +158,33 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 		}
 	}
 
+	if len(e.EncryptedKeys) > 0 && len(e.EncryptedKeys) != len(e.RecipientKeyIDs) {
+		return ErrInvalidEnvelope.Wrap("encrypted keys must align with recipient key IDs")
+	}
+
+	if len(e.WrappedKeys) > 0 {
+		seenRecipients := make(map[string]bool)
+		recipientSet := make(map[string]bool)
+		for _, id := range e.RecipientKeyIDs {
+			recipientSet[id] = true
+		}
+		for i, entry := range e.WrappedKeys {
+			if entry.RecipientID == "" {
+				return ErrInvalidEnvelope.Wrapf("wrapped key entry %d has empty recipient ID", i)
+			}
+			if len(entry.WrappedKey) == 0 {
+				return ErrInvalidEnvelope.Wrapf("wrapped key entry %d has empty wrapped key", i)
+			}
+			if seenRecipients[entry.RecipientID] {
+				return ErrInvalidEnvelope.Wrapf("duplicate recipient ID: %s", entry.RecipientID)
+			}
+			seenRecipients[entry.RecipientID] = true
+			if !recipientSet[entry.RecipientID] {
+				return ErrInvalidEnvelope.Wrapf("wrapped key recipient not in recipient key IDs: %s", entry.RecipientID)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -174,7 +208,7 @@ func (e *EncryptedPayloadEnvelope) SigningPayload() []byte {
 	// Include nonce
 	h.Write(e.Nonce)
 
-	// Include all recipient key IDs
+	// Include all recipient key IDs in the provided order
 	for _, kid := range e.RecipientKeyIDs {
 		h.Write([]byte(kid))
 	}
@@ -223,6 +257,93 @@ func (e *EncryptedPayloadEnvelope) GetMetadata(key string) (string, bool) {
 	}
 	val, ok := e.Metadata[key]
 	return val, ok
+}
+
+// DeterministicBytes returns a canonical byte representation for consensus safety.
+// The serialization is deterministic and stable regardless of recipient ordering.
+func (e *EncryptedPayloadEnvelope) DeterministicBytes() ([]byte, error) {
+	if e == nil {
+		return nil, ErrInvalidEnvelope.Wrap("envelope cannot be nil")
+	}
+
+	recipientPubKeys := make(map[string][]byte)
+	if len(e.RecipientPublicKeys) == len(e.RecipientKeyIDs) {
+		for i, id := range e.RecipientKeyIDs {
+			recipientPubKeys[id] = e.RecipientPublicKeys[i]
+		}
+	}
+
+	encryptedKeys := make(map[string][]byte)
+	if len(e.EncryptedKeys) == len(e.RecipientKeyIDs) {
+		for i, id := range e.RecipientKeyIDs {
+			encryptedKeys[id] = e.EncryptedKeys[i]
+		}
+	}
+
+	wrappedKeys := make(map[string]WrappedKeyEntry)
+	for _, entry := range e.WrappedKeys {
+		wrappedKeys[entry.RecipientID] = entry
+	}
+
+	recipientIDs := make([]string, len(e.RecipientKeyIDs))
+	copy(recipientIDs, e.RecipientKeyIDs)
+	sort.Strings(recipientIDs)
+
+	var buf bytes.Buffer
+	writeUint32 := func(v uint32) {
+		_ = binary.Write(&buf, binary.BigEndian, v)
+	}
+	writeBytes := func(b []byte) {
+		writeUint32(uint32(len(b)))
+		buf.Write(b)
+	}
+	writeString := func(s string) {
+		writeBytes([]byte(s))
+	}
+
+	writeUint32(e.Version)
+	writeString(e.AlgorithmID)
+	writeUint32(e.AlgorithmVersion)
+	writeBytes(e.Nonce)
+	writeBytes(e.Ciphertext)
+	writeBytes(e.SenderPubKey)
+	writeBytes(e.SenderSignature)
+
+	writeUint32(uint32(len(recipientIDs)))
+	for _, id := range recipientIDs {
+		writeString(id)
+		writeBytes(recipientPubKeys[id])
+		writeBytes(encryptedKeys[id])
+
+		entry, ok := wrappedKeys[id]
+		if ok {
+			writeBytes(entry.WrappedKey)
+			writeString(entry.Algorithm)
+			writeBytes(entry.EphemeralPubKey)
+		} else {
+			writeBytes(nil)
+			writeString("")
+			writeBytes(nil)
+		}
+	}
+
+	if len(e.Metadata) == 0 {
+		writeUint32(0)
+		return buf.Bytes(), nil
+	}
+
+	keys := make([]string, 0, len(e.Metadata))
+	for k := range e.Metadata {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	writeUint32(uint32(len(keys)))
+	for _, k := range keys {
+		writeString(k)
+		writeString(e.Metadata[k])
+	}
+
+	return buf.Bytes(), nil
 }
 
 // RecipientKeyRecord represents a registered public key for receiving encrypted data

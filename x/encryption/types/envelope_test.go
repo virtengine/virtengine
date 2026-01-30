@@ -32,29 +32,29 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "valid envelope",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
-				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
+				Version:             1,
+				AlgorithmID:         AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmVersion:    AlgorithmVersionV1,
+				RecipientKeyIDs:     []string{validRecipientID},
 				RecipientPublicKeys: [][]byte{validRecipientKey},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				Nonce:               make([]byte, XSalsa20NonceSize),
+				Ciphertext:          []byte("encrypted data"),
+				SenderSignature:     []byte("signature"),
+				SenderPubKey:        make([]byte, X25519PublicKeySize),
 			},
 			expectErr: false,
 		},
 		{
 			name: "zero version",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         0,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          0,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "version cannot be zero",
@@ -62,14 +62,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "unsupported version",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         999,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          999,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "not supported",
@@ -77,14 +77,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "unsupported algorithm",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     "UNKNOWN-ALGO",
+				Version:          1,
+				AlgorithmID:      "UNKNOWN-ALGO",
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "not supported",
@@ -92,14 +92,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "no recipients",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "at least one recipient",
@@ -107,14 +107,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "empty nonce",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           []byte{},
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            []byte{},
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "nonce cannot be empty",
@@ -122,14 +122,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "wrong nonce size",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           make([]byte, 16), // Wrong size
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            make([]byte, 16), // Wrong size
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "nonce size mismatch",
@@ -137,14 +137,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "empty ciphertext",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte{},
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte{},
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "ciphertext cannot be empty",
@@ -152,14 +152,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "empty sender public key",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte("signature"),
-				SenderPubKey:    []byte{},
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     []byte{},
 			},
 			expectErr: true,
 			errMsg:    "sender public key required",
@@ -167,14 +167,14 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "missing sender signature",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
-				Nonce:           make([]byte, XSalsa20NonceSize),
-				Ciphertext:      []byte("encrypted data"),
-				SenderSignature: []byte{},
-				SenderPubKey:    make([]byte, X25519PublicKeySize),
+				RecipientKeyIDs:  []string{validRecipientID},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte{},
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
 			errMsg:    "sender signature required",
@@ -182,18 +182,55 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 		{
 			name: "recipient public key mismatch",
 			envelope: &EncryptedPayloadEnvelope{
-				Version:         1,
-				AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
-				AlgorithmVersion: AlgorithmVersionV1,
-				RecipientKeyIDs: []string{validRecipientID},
+				Version:             1,
+				AlgorithmID:         AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmVersion:    AlgorithmVersionV1,
+				RecipientKeyIDs:     []string{validRecipientID},
 				RecipientPublicKeys: [][]byte{make([]byte, X25519PublicKeySize)},
+				Nonce:               make([]byte, XSalsa20NonceSize),
+				Ciphertext:          []byte("encrypted data"),
+				SenderSignature:     []byte("signature"),
+				SenderPubKey:        make([]byte, X25519PublicKeySize),
+			},
+			expectErr: true,
+			errMsg:    "recipient key id mismatch",
+		},
+		{
+			name: "encrypted keys length mismatch",
+			envelope: &EncryptedPayloadEnvelope{
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmVersion: AlgorithmVersionV1,
+				RecipientKeyIDs:  []string{validRecipientID},
+				EncryptedKeys:    [][]byte{[]byte("key1"), []byte("key2")},
+				Nonce:            make([]byte, XSalsa20NonceSize),
+				Ciphertext:       []byte("encrypted data"),
+				SenderSignature:  []byte("signature"),
+				SenderPubKey:     make([]byte, X25519PublicKeySize),
+			},
+			expectErr: true,
+			errMsg:    "encrypted keys must align",
+		},
+		{
+			name: "wrapped key recipient missing",
+			envelope: &EncryptedPayloadEnvelope{
+				Version:          1,
+				AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmVersion: AlgorithmVersionV1,
+				RecipientKeyIDs:  []string{validRecipientID},
+				WrappedKeys: []WrappedKeyEntry{
+					{
+						RecipientID: "missing-id",
+						WrappedKey:  []byte("wrapped"),
+					},
+				},
 				Nonce:           make([]byte, XSalsa20NonceSize),
 				Ciphertext:      []byte("encrypted data"),
 				SenderSignature: []byte("signature"),
 				SenderPubKey:    make([]byte, X25519PublicKeySize),
 			},
 			expectErr: true,
-			errMsg:    "recipient key id mismatch",
+			errMsg:    "wrapped key recipient not in recipient key IDs",
 		},
 	}
 
@@ -212,13 +249,13 @@ func TestEncryptedPayloadEnvelope_Validate(t *testing.T) {
 
 func TestEncryptedPayloadEnvelope_SigningPayload(t *testing.T) {
 	envelope := &EncryptedPayloadEnvelope{
-		Version:         1,
-		AlgorithmID:     AlgorithmX25519XSalsa20Poly1305,
+		Version:          1,
+		AlgorithmID:      AlgorithmX25519XSalsa20Poly1305,
 		AlgorithmVersion: AlgorithmVersionV1,
-		RecipientKeyIDs: []string{"key1", "key2"},
-		Nonce:           []byte("test-nonce-24-bytes!"),
-		Ciphertext:      []byte("test ciphertext"),
-		SenderPubKey:    make([]byte, 32),
+		RecipientKeyIDs:  []string{"key1", "key2"},
+		Nonce:            []byte("test-nonce-24-bytes!"),
+		Ciphertext:       []byte("test ciphertext"),
+		SenderPubKey:     make([]byte, 32),
 	}
 
 	payload1 := envelope.SigningPayload()
@@ -269,6 +306,65 @@ func TestEncryptedPayloadEnvelope_Metadata(t *testing.T) {
 	// Empty key should error
 	err = envelope.AddMetadata("", "value")
 	require.Error(t, err)
+}
+
+func TestEncryptedPayloadEnvelope_DeterministicBytes(t *testing.T) {
+	key1 := make([]byte, X25519PublicKeySize)
+	key2 := make([]byte, X25519PublicKeySize)
+	key1[0] = 1
+	key2[0] = 2
+
+	fp1 := ComputeKeyFingerprint(key1)
+	fp2 := ComputeKeyFingerprint(key2)
+
+	envelope1 := &EncryptedPayloadEnvelope{
+		Version:             1,
+		AlgorithmID:         AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion:    AlgorithmVersionV1,
+		RecipientKeyIDs:     []string{fp1, fp2},
+		RecipientPublicKeys: [][]byte{key1, key2},
+		EncryptedKeys:       [][]byte{[]byte("dek1"), []byte("dek2")},
+		WrappedKeys: []WrappedKeyEntry{
+			{RecipientID: fp1, WrappedKey: []byte("wrapped1")},
+			{RecipientID: fp2, WrappedKey: []byte("wrapped2")},
+		},
+		Nonce:           make([]byte, XSalsa20NonceSize),
+		Ciphertext:      []byte("ciphertext"),
+		SenderSignature: []byte("signature"),
+		SenderPubKey:    make([]byte, X25519PublicKeySize),
+		Metadata: map[string]string{
+			"z": "last",
+			"a": "first",
+		},
+	}
+
+	envelope2 := &EncryptedPayloadEnvelope{
+		Version:             1,
+		AlgorithmID:         AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion:    AlgorithmVersionV1,
+		RecipientKeyIDs:     []string{fp2, fp1},
+		RecipientPublicKeys: [][]byte{key2, key1},
+		EncryptedKeys:       [][]byte{[]byte("dek2"), []byte("dek1")},
+		WrappedKeys: []WrappedKeyEntry{
+			{RecipientID: fp2, WrappedKey: []byte("wrapped2")},
+			{RecipientID: fp1, WrappedKey: []byte("wrapped1")},
+		},
+		Nonce:           make([]byte, XSalsa20NonceSize),
+		Ciphertext:      []byte("ciphertext"),
+		SenderSignature: []byte("signature"),
+		SenderPubKey:    make([]byte, X25519PublicKeySize),
+		Metadata: map[string]string{
+			"a": "first",
+			"z": "last",
+		},
+	}
+
+	bytes1, err := envelope1.DeterministicBytes()
+	require.NoError(t, err)
+	bytes2, err := envelope2.DeterministicBytes()
+	require.NoError(t, err)
+
+	assert.Equal(t, bytes1, bytes2)
 }
 
 func TestRecipientKeyRecord_Validate(t *testing.T) {
