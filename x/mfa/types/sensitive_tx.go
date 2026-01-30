@@ -329,13 +329,12 @@ func GetDefaultSensitiveTxConfigs() []SensitiveTxConfig {
 			MinVEIDScore:    70,
 			RequiredFactorCombinations: []FactorCombination{
 				{Factors: []FactorType{FactorTypeVEID, FactorTypeFIDO2}},
-				{Factors: []FactorType{FactorTypeVEID, FactorTypeTOTP}},
 			},
 			SessionDuration:             30 * 60,
 			IsSingleUse:                 false,
-			AllowTrustedDeviceReduction: true,
+			AllowTrustedDeviceReduction: false,
 			ValueThreshold:              "1000", // 1,000 VE tokens
-			Description:                 "High-value orders (>1,000 VE) require VEID + strong factor",
+			Description:                 "High-value orders (>1,000 VE) require VEID + FIDO2",
 		},
 		{
 			TransactionType: SensitiveTxGovernanceProposal,
@@ -410,23 +409,24 @@ func GetDefaultSensitiveTxConfigs() []SensitiveTxConfig {
 // KnownSensitiveMsgTypes maps Cosmos SDK message type URLs to sensitive transaction types
 var KnownSensitiveMsgTypes = map[string]SensitiveTransactionType{
 	// Account operations
-	"/virtengine.roles.v1.MsgSetAccountState":  SensitiveTxAccountRecovery,
-	"/virtengine.auth.v1.MsgRotateKeys":        SensitiveTxKeyRotation,
-	"/virtengine.auth.v1.MsgDeleteAccount":     SensitiveTxAccountDeletion,
-	"/virtengine.mfa.v1.MsgDisableMFA":         SensitiveTxTwoFactorDisable,
-	"/virtengine.auth.v1.MsgUpdateEmail":       SensitiveTxPrimaryEmailChange,
-	"/virtengine.auth.v1.MsgUpdatePhone":       SensitiveTxPhoneNumberChange,
+	"/virtengine.roles.v1.MsgSetAccountState": SensitiveTxAccountRecovery,
+	"/virtengine.auth.v1.MsgRotateKeys":       SensitiveTxKeyRotation,
+	"/virtengine.auth.v1.MsgDeleteAccount":    SensitiveTxAccountDeletion,
+	"/virtengine.mfa.v1.MsgDisableMFA":        SensitiveTxTwoFactorDisable,
+	"/virtengine.auth.v1.MsgUpdateEmail":      SensitiveTxPrimaryEmailChange,
+	"/virtengine.auth.v1.MsgUpdatePhone":      SensitiveTxPhoneNumberChange,
 
 	// Role operations
-	"/virtengine.roles.v1.MsgAssignRole":   SensitiveTxRoleAssignment,
+	"/virtengine.roles.v1.MsgAssignRole":    SensitiveTxRoleAssignment,
 	"/virtengine.roles.v1.MsgNominateAdmin": SensitiveTxRoleAssignment,
 
 	// Provider/Validator operations
-	"/virtengine.provider.v1.MsgCreateProvider":   SensitiveTxProviderRegistration,
-	"/cosmos.staking.v1beta1.MsgCreateValidator":  SensitiveTxValidatorRegistration,
+	"/virtengine.provider.v1.MsgCreateProvider":      SensitiveTxProviderRegistration,
+	"/virtengine.provider.v1beta4.MsgCreateProvider": SensitiveTxProviderRegistration,
+	"/cosmos.staking.v1beta1.MsgCreateValidator":     SensitiveTxValidatorRegistration,
 
 	// Governance
-	"/cosmos.gov.v1.MsgSubmitProposal":    SensitiveTxGovernanceProposal,
+	"/cosmos.gov.v1.MsgSubmitProposal":      SensitiveTxGovernanceProposal,
 	"/cosmos.gov.v1beta1.MsgSubmitProposal": SensitiveTxGovernanceProposal,
 }
 
