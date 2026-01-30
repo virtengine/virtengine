@@ -26,7 +26,6 @@ import (
 var (
 	testValidatorAddr  = sdk.AccAddress([]byte("validator_address___")).String()
 	testDelegator1Addr = sdk.AccAddress([]byte("delegator1_address__")).String()
-	testDelegator2Addr = sdk.AccAddress([]byte("delegator2_address__")).String()
 	testValidator1Addr = sdk.AccAddress([]byte("validator1_address__")).String()
 	testValidator2Addr = sdk.AccAddress([]byte("validator2_address__")).String()
 )

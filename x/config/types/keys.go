@@ -107,12 +107,3 @@ func encodeInt64(n int64) []byte {
 		byte(n),
 	}
 }
-
-// decodeInt64 decodes big-endian bytes to int64
-func decodeInt64(b []byte) int64 {
-	if len(b) != 8 {
-		return 0
-	}
-	return int64(b[0])<<56 | int64(b[1])<<48 | int64(b[2])<<40 | int64(b[3])<<32 |
-		int64(b[4])<<24 | int64(b[5])<<16 | int64(b[6])<<8 | int64(b[7])
-}

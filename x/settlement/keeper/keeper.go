@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"cosmossdk.io/log"
@@ -748,15 +747,6 @@ func (k Keeper) calculateCurrentEpoch(ctx sdk.Context) uint64 {
 		return 1
 	}
 	return uint64(ctx.BlockHeight()) / params.StakingRewardEpochLength
-}
-
-// parseAmount parses a string amount to sdk.Coins
-func parseAmount(denom string, amountStr string) (sdk.Coins, error) {
-	amount, err := strconv.ParseInt(amountStr, 10, 64)
-	if err != nil {
-		return sdk.Coins{}, err
-	}
-	return sdk.NewCoins(sdk.NewCoin(denom, sdkmath.NewInt(amount))), nil
 }
 
 // ============================================================================

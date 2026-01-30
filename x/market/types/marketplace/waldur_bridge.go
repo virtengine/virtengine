@@ -7,7 +7,6 @@ package marketplace
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"time"
 )
@@ -242,16 +241,11 @@ func NewWaldurCallbackAt(actionType WaldurActionType, waldurID string, chainEnti
 	}
 }
 
-// generateNonce generates a random nonce
-func generateNonce() string {
-	return generateNonceAt(time.Unix(0, 0))
-}
-
 // generateNonceAt generates a nonce from a specific time
 func generateNonceAt(now time.Time) string {
 	seed := now.UTC().UnixNano()
 	h := sha256.Sum256([]byte(fmt.Sprintf("%d", seed)))
-	return hex.EncodeToString(h[:16])
+	return fmt.Sprintf("%x", h[:16])
 }
 
 // SigningPayload returns the payload to be signed

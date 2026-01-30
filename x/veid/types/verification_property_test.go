@@ -487,30 +487,6 @@ func computeReachableStatuses(start types.VerificationStatus) map[types.Verifica
 	return reachable
 }
 
-// detectCycle checks if there's a cycle in the transition graph that doesn't
-// go through the excluded status.
-func detectCycle(start types.VerificationStatus, visited map[types.VerificationStatus]bool, exclude types.VerificationStatus) bool {
-	if visited[start] {
-		return true
-	}
-
-	visited[start] = true
-
-	for _, target := range types.AllVerificationStatuses() {
-		if target == exclude {
-			continue
-		}
-		if start.CanTransitionTo(target) {
-			if detectCycle(target, visited, exclude) {
-				return true
-			}
-		}
-	}
-
-	delete(visited, start)
-	return false
-}
-
 // detectCycleExcluding checks if there's a cycle in the transition graph
 // that doesn't use any of the excluded edges (valid cycle paths).
 func detectCycleExcluding(start types.VerificationStatus, visited map[types.VerificationStatus]bool, excludedEdges map[types.VerificationStatus]map[types.VerificationStatus]bool) bool {

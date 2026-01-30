@@ -15,7 +15,6 @@ import (
 // Test address constants - valid bech32 addresses
 var (
 	testDelegatorAddr1 = sdk.AccAddress([]byte("delegator_address_01")).String()
-	testDelegatorAddr2 = sdk.AccAddress([]byte("delegator_address_02")).String()
 	testValidatorAddr1 = sdk.AccAddress([]byte("validator_address_01")).String()
 	testValidatorAddr2 = sdk.AccAddress([]byte("validator_address_02")).String()
 )
