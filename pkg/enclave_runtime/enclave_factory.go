@@ -402,12 +402,50 @@ func MustCreateService() EnclaveService {
 }
 
 // CreateProductionService creates a service configured for production use
-// It requires real hardware and fails if none is available
+// It requires real hardware and fails if none is available.
+// This function uses the global production configuration loaded from environment
+// variables and enforces production security policies.
 func CreateProductionService() (EnclaveService, error) {
-	factory := NewEnclaveFactoryWithConfig(EnclaveFactoryConfig{
-		HardwareMode:  HardwareModeRequire,
-		RuntimeConfig: DefaultRuntimeConfig(),
-	})
+	// Load production configuration from environment
+	config := GetGlobalProductionConfig()
+	if config == nil {
+		// Fall back to default production config
+		defaultConfig := DefaultProductionConfig()
+		config = &defaultConfig
+	}
+
+	// Validate configuration for production readiness
+	if config.Mode == TEEModeProduction {
+		ready, issues := config.IsProductionReady()
+		if !ready {
+			fmt.Printf("WARNING: Production config has issues: %v\n", issues)
+		}
+	}
+
+	// Create factory from production config
+	factory, err := config.CreateFactory()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create production factory: %w", err)
+	}
+
+	return factory.CreateService()
+}
+
+// CreateProductionServiceWithConfig creates a production service with explicit config
+func CreateProductionServiceWithConfig(config *ProductionConfig) (EnclaveService, error) {
+	if config == nil {
+		return nil, fmt.Errorf("production config cannot be nil")
+	}
+
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid production config: %w", err)
+	}
+
+	factory, err := config.CreateFactory()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create factory: %w", err)
+	}
+
 	return factory.CreateService()
 }
 
@@ -436,9 +474,16 @@ func IsHardwareAvailable() bool {
 // PrintHardwareStatus prints the current hardware status to stdout
 func PrintHardwareStatus() {
 	caps := DetectHardware()
+	config := GetGlobalProductionConfig()
+
 	fmt.Println("=== VirtEngine TEE Hardware Status ===")
 	fmt.Printf("Hardware Available: %v\n", caps.HasAnyHardware())
 	fmt.Printf("Preferred Platform: %s\n", caps.PreferredBackend)
+	if config != nil {
+		fmt.Printf("TEE Mode: %s\n", config.Mode)
+		fmt.Printf("Require Hardware: %v\n", config.RequireHardware)
+		fmt.Printf("Allow Debug: %v\n", config.AllowDebug)
+	}
 	fmt.Println()
 
 	if caps.SGXAvailable {
@@ -481,5 +526,55 @@ func PrintHardwareStatus() {
 			fmt.Printf("  - %s\n", err)
 		}
 	}
+
+	// Production readiness check
+	if config != nil {
+		ready, issues := config.IsProductionReady()
+		fmt.Println()
+		if ready {
+			fmt.Println("Production Ready: YES")
+		} else {
+			fmt.Println("Production Ready: NO")
+			for _, issue := range issues {
+				fmt.Printf("  - %s\n", issue)
+			}
+		}
+	}
+
 	fmt.Println("======================================")
+}
+
+// =============================================================================
+// Production Mode Integration
+// =============================================================================
+
+// InitializeProductionTEE initializes TEE services for production deployment
+// This is the main entry point for production deployments
+func InitializeProductionTEE() (*ProductionEnclaveService, error) {
+	// Load configuration from environment
+	config, err := LoadProductionConfigFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load production config: %w", err)
+	}
+
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid production config: %w", err)
+	}
+
+	// Check production readiness
+	if config.Mode == TEEModeProduction {
+		ready, issues := config.IsProductionReady()
+		if !ready {
+			return nil, fmt.Errorf("production config not ready: %v", issues)
+		}
+
+		// Verify hardware is available
+		if err := RequireProductionHardware(); err != nil {
+			return nil, err
+		}
+	}
+
+	// Create production service
+	return NewProductionEnclaveService(config)
 }
