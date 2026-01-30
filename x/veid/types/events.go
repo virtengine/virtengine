@@ -486,3 +486,132 @@ func (m *EventNonceUsed) String() string             { return fmt.Sprintf("%+v",
 func (*EventAttestationVerified) ProtoMessage()      {}
 func (m *EventAttestationVerified) Reset()           { *m = EventAttestationVerified{} }
 func (m *EventAttestationVerified) String() string   { return fmt.Sprintf("%+v", *m) }
+
+// ============================================================================
+// SSO/OIDC Linkage Events (VE-4B)
+// ============================================================================
+
+// SSO linkage event types
+const (
+	EventTypeSSOLinkageCreated     = "sso_linkage_created"
+	EventTypeSSOLinkageRevoked     = "sso_linkage_revoked"
+	EventTypeSSOLinkageUpdated     = "sso_linkage_updated"
+	EventTypeSSOLinkageExpired     = "sso_linkage_expired"
+	EventTypeSSOChallengeCreated   = "sso_challenge_created"
+	EventTypeSSOChallengeCompleted = "sso_challenge_completed"
+	EventTypeSSOChallengeFailed    = "sso_challenge_failed"
+	EventTypeSSONonceUsed          = "sso_nonce_used"
+)
+
+// SSO linkage event attribute keys
+const (
+	AttributeKeyLinkageID     = "linkage_id"
+	AttributeKeyProvider      = "provider"
+	AttributeKeyIssuer        = "issuer"
+	AttributeKeySSOChallengeID = "sso_challenge_id"
+	AttributeKeySubjectHash   = "subject_hash"
+	AttributeKeyEmailDomain   = "email_domain"
+	AttributeKeyTenantID      = "tenant_id"
+	AttributeKeyFailureReason = "failure_reason"
+)
+
+// EventSSOLinkageCreated is emitted when an SSO linkage is created
+type EventSSOLinkageCreated struct {
+	Account      string `json:"account"`
+	LinkageID    string `json:"linkage_id"`
+	Provider     string `json:"provider"`
+	Issuer       string `json:"issuer"`
+	SubjectHash  string `json:"subject_hash"`
+	EmailDomain  string `json:"email_domain,omitempty"`
+	BlockHeight  int64  `json:"block_height"`
+	Timestamp    int64  `json:"timestamp"`
+}
+
+// EventSSOLinkageRevoked is emitted when an SSO linkage is revoked
+type EventSSOLinkageRevoked struct {
+	Account     string `json:"account"`
+	LinkageID   string `json:"linkage_id"`
+	Provider    string `json:"provider"`
+	Reason      string `json:"reason"`
+	RevokedBy   string `json:"revoked_by"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventSSOLinkageUpdated is emitted when an SSO linkage is updated
+type EventSSOLinkageUpdated struct {
+	Account      string `json:"account"`
+	LinkageID    string `json:"linkage_id"`
+	Provider     string `json:"provider"`
+	UpdateType   string `json:"update_type"`
+	BlockHeight  int64  `json:"block_height"`
+	Timestamp    int64  `json:"timestamp"`
+}
+
+// EventSSOLinkageExpired is emitted when an SSO linkage expires
+type EventSSOLinkageExpired struct {
+	Account     string `json:"account"`
+	LinkageID   string `json:"linkage_id"`
+	Provider    string `json:"provider"`
+	CreatedAt   int64  `json:"created_at"`
+	ExpiredAt   int64  `json:"expired_at"`
+	BlockHeight int64  `json:"block_height"`
+}
+
+// EventSSOChallengeCreated is emitted when an SSO challenge is created
+type EventSSOChallengeCreated struct {
+	Account     string `json:"account"`
+	ChallengeID string `json:"challenge_id"`
+	Provider    string `json:"provider"`
+	ExpiresAt   int64  `json:"expires_at"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventSSOChallengeCompleted is emitted when an SSO challenge is completed
+type EventSSOChallengeCompleted struct {
+	Account     string `json:"account"`
+	ChallengeID string `json:"challenge_id"`
+	Provider    string `json:"provider"`
+	LinkageID   string `json:"linkage_id"`
+	Score       uint32 `json:"score"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventSSOChallengeFailed is emitted when an SSO challenge fails
+type EventSSOChallengeFailed struct {
+	Account       string `json:"account"`
+	ChallengeID   string `json:"challenge_id"`
+	Provider      string `json:"provider"`
+	FailureReason string `json:"failure_reason"`
+	Timestamp     int64  `json:"timestamp"`
+}
+
+// Proto stubs for SSO linkage events
+
+func (*EventSSOLinkageCreated) ProtoMessage()         {}
+func (m *EventSSOLinkageCreated) Reset()              { *m = EventSSOLinkageCreated{} }
+func (m *EventSSOLinkageCreated) String() string      { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSSOLinkageRevoked) ProtoMessage()         {}
+func (m *EventSSOLinkageRevoked) Reset()              { *m = EventSSOLinkageRevoked{} }
+func (m *EventSSOLinkageRevoked) String() string      { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSSOLinkageUpdated) ProtoMessage()         {}
+func (m *EventSSOLinkageUpdated) Reset()              { *m = EventSSOLinkageUpdated{} }
+func (m *EventSSOLinkageUpdated) String() string      { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSSOLinkageExpired) ProtoMessage()         {}
+func (m *EventSSOLinkageExpired) Reset()              { *m = EventSSOLinkageExpired{} }
+func (m *EventSSOLinkageExpired) String() string      { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSSOChallengeCreated) ProtoMessage()       {}
+func (m *EventSSOChallengeCreated) Reset()            { *m = EventSSOChallengeCreated{} }
+func (m *EventSSOChallengeCreated) String() string    { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSSOChallengeCompleted) ProtoMessage()     {}
+func (m *EventSSOChallengeCompleted) Reset()          { *m = EventSSOChallengeCompleted{} }
+func (m *EventSSOChallengeCompleted) String() string  { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSSOChallengeFailed) ProtoMessage()        {}
+func (m *EventSSOChallengeFailed) Reset()             { *m = EventSSOChallengeFailed{} }
+func (m *EventSSOChallengeFailed) String() string     { return fmt.Sprintf("%+v", *m) }

@@ -695,4 +695,32 @@ var (
 
 	// ErrMaxAttestationsExceeded is returned when maximum attestations limit is exceeded
 	ErrMaxAttestationsExceeded = errorsmod.Register(ModuleName, 1255, "maximum attestations exceeded")
+
+	// ============================================================================
+	// SSO/OIDC Linkage Errors (VE-4B)
+	// ============================================================================
+
+	// ErrDuplicateLinkage is returned when an SSO linkage already exists for an account/provider pair
+	ErrDuplicateLinkage = errorsmod.Register(ModuleName, 1260, "duplicate SSO linkage")
+
+	// ErrLinkageNotFound is returned when an SSO linkage cannot be found
+	ErrLinkageNotFound = errorsmod.Register(ModuleName, 1261, "SSO linkage not found")
+
+	// ErrLinkageExpired is returned when an SSO linkage has expired
+	ErrLinkageExpired = errorsmod.Register(ModuleName, 1262, "SSO linkage expired")
+
+	// ErrJWKSFetchFailed is returned when JWKS fetching fails
+	ErrJWKSFetchFailed = errorsmod.Register(ModuleName, 1264, "JWKS fetch failed")
+
+	// ErrTokenValidationFailed is returned when OIDC token validation fails
+	ErrTokenValidationFailed = errorsmod.Register(ModuleName, 1265, "OIDC token validation failed")
+
+	// ErrChallengeNotFound is returned when an SSO challenge cannot be found
+	ErrChallengeNotFound = errorsmod.Register(ModuleName, 1266, "SSO challenge not found")
+
+	// ErrChallengeExpired is returned when an SSO challenge has expired
+	ErrChallengeExpired = errorsmod.Register(ModuleName, 1267, "SSO challenge expired")
+
+	// ErrInvalidChallengeState is returned when challenge state is invalid
+	ErrInvalidChallengeState = errorsmod.Register(ModuleName, 1268, "invalid challenge state")
 )
