@@ -673,6 +673,26 @@ var (
 	// PrefixAttestationParams is the prefix for attestation module parameters
 	// Key: PrefixAttestationParams -> AttestationParams
 	PrefixAttestationParams = []byte{0x8A}
+
+	// ============================================================================
+	// SSO/OIDC Nonce Tracking Keys (VE-4B: SSO Verification Service)
+	// ============================================================================
+
+	// PrefixSSONonce is the prefix for SSO nonce tracking
+	// Key: PrefixSSONonce | nonce_hash -> SSONonceRecord
+	PrefixSSONonce = []byte{0x8B}
+
+	// PrefixSSONonceByAccount is the prefix for SSO nonce lookup by account
+	// Key: PrefixSSONonceByAccount | account_address | nonce_hash -> bool
+	PrefixSSONonceByAccount = []byte{0x8C}
+
+	// PrefixSSONonceByProvider is the prefix for SSO nonce lookup by provider
+	// Key: PrefixSSONonceByProvider | provider | nonce_hash -> bool
+	PrefixSSONonceByProvider = []byte{0x8D}
+
+	// PrefixSSONonceExpiry is the prefix for SSO nonce expiry index
+	// Key: PrefixSSONonceExpiry | expires_at | nonce_hash -> bool
+	PrefixSSONonceExpiry = []byte{0x8E}
 )
 
 // IdentityRecordKey returns the store key for an identity record
