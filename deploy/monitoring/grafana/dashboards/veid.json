@@ -12,10 +12,22 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "changes(virtengine_veid_model_version[5m]) > 0",
+        "iconColor": "purple",
+        "name": "Model Updates",
+        "tagKeys": "version",
+        "titleFormat": "Model Update"
       }
     ]
   },
-  "description": "VirtEngine Marketplace Dashboard - Orders, Bids, and Leases",
+  "description": "VirtEngine Identity (VEID) Module Monitoring Dashboard",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -40,10 +52,10 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": true,
-      "title": "Provider Dashboard",
+      "title": "SLO Overview",
       "tooltip": "",
       "type": "link",
-      "url": "/d/provider/provider"
+      "url": "/d/slo-overview/slo-overview"
     }
   ],
   "panels": [
@@ -93,7 +105,7 @@
       "id": 2,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -110,11 +122,11 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(virtengine_marketplace_orders_active)",
+          "expr": "sum(increase(virtengine_veid_verifications_total[24h]))",
           "refId": "A"
         }
       ],
-      "title": "Active Orders",
+      "title": "Verifications (24h)",
       "type": "stat"
     },
     {
@@ -134,10 +146,18 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.95
+              },
+              {
+                "color": "red",
+                "value": 0.99
               }
             ]
           },
-          "unit": "short"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -167,11 +187,11 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(virtengine_marketplace_leases_active)",
+          "expr": "sum(rate(virtengine_veid_verifications_total{status=\"success\"}[1h])) / sum(rate(virtengine_veid_verifications_total[1h]))",
           "refId": "A"
         }
       ],
-      "title": "Active Leases",
+      "title": "Success Rate (1h)",
       "type": "stat"
     },
     {
@@ -191,10 +211,18 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 5
               }
             ]
           },
-          "unit": "short"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -207,7 +235,7 @@
       "id": 4,
       "options": {
         "colorMode": "value",
-        "graphMode": "none",
+        "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -224,11 +252,11 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(virtengine_marketplace_providers_active)",
+          "expr": "histogram_quantile(0.95, sum(rate(virtengine_veid_verification_duration_seconds_bucket[5m])) by (le))",
           "refId": "A"
         }
       ],
-      "title": "Active Providers",
+      "title": "Verification P95 Latency",
       "type": "stat"
     },
     {
@@ -248,10 +276,18 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
               }
             ]
           },
-          "unit": "currencyUSD"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -281,11 +317,11 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(virtengine_escrow_balance_total)",
+          "expr": "sum(increase(virtengine_veid_inference_non_deterministic_total[1h]))",
           "refId": "A"
         }
       ],
-      "title": "Total Escrow Balance",
+      "title": "Non-Deterministic (1h)",
       "type": "stat"
     },
     {
@@ -305,18 +341,10 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 120
               }
             ]
           },
-          "unit": "s"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -329,7 +357,7 @@
       "id": 6,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -346,11 +374,11 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(virtengine_marketplace_order_fill_time_seconds_bucket[1h])) by (le))",
+          "expr": "sum(virtengine_veid_active_scopes)",
           "refId": "A"
         }
       ],
-      "title": "Order Fill Time P95",
+      "title": "Active Scopes",
       "type": "stat"
     },
     {
@@ -370,18 +398,10 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.9
-              },
-              {
-                "color": "red",
-                "value": 0.95
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -394,7 +414,7 @@
       "id": 7,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -411,11 +431,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(virtengine_marketplace_orders_filled_total[1h])) / sum(rate(virtengine_marketplace_orders_total[1h]))",
+          "expr": "virtengine_veid_model_version",
+          "legendFormat": "Model v{{version}}",
           "refId": "A"
         }
       ],
-      "title": "Order Fill Rate",
+      "title": "Model Version",
       "type": "stat"
     },
     {
@@ -428,7 +449,7 @@
       },
       "id": 8,
       "panels": [],
-      "title": "Orders & Bids",
+      "title": "Verification Pipeline",
       "type": "row"
     },
     {
@@ -512,101 +533,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(virtengine_marketplace_orders_total[5m])) by (state)",
-          "legendFormat": "{{state}}",
+          "expr": "sum(rate(virtengine_veid_verifications_total[5m])) by (status)",
+          "legendFormat": "{{status}}",
           "refId": "A"
         }
       ],
-      "title": "Order Rate by State",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 6
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum(rate(virtengine_marketplace_bids_total[5m])) by (state)",
-          "legendFormat": "{{state}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Bid Rate by State",
+      "title": "Verification Rate by Status",
       "type": "timeseries"
     },
     {
@@ -661,11 +593,11 @@
               },
               {
                 "color": "yellow",
-                "value": 60
+                "value": 2
               },
               {
                 "color": "red",
-                "value": 120
+                "value": 5
               }
             ]
           },
@@ -676,10 +608,10 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 14
+        "x": 12,
+        "y": 6
       },
-      "id": 11,
+      "id": 10,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -698,7 +630,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(virtengine_marketplace_order_fill_time_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(virtengine_veid_verification_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -707,7 +639,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.90, sum(rate(virtengine_marketplace_order_fill_time_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(rate(virtengine_veid_verification_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "P90",
           "refId": "B"
         },
@@ -716,7 +648,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(virtengine_marketplace_order_fill_time_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(virtengine_veid_verification_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "P95",
           "refId": "C"
         },
@@ -725,13 +657,26 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(virtengine_marketplace_order_fill_time_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(virtengine_veid_verification_duration_seconds_bucket[5m])) by (le))",
           "legendFormat": "P99",
           "refId": "D"
         }
       ],
-      "title": "Order Fill Time Distribution",
+      "title": "Verification Latency Distribution",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 11,
+      "panels": [],
+      "title": "ML Inference",
+      "type": "row"
     },
     {
       "datasource": {
@@ -772,7 +717,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "mappings": [],
@@ -782,18 +727,26 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
               }
             ]
           },
-          "unit": "short"
+          "unit": "s"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 14
+        "x": 0,
+        "y": 15
       },
       "id": 12,
       "options": {
@@ -814,13 +767,269 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(virtengine_marketplace_bids_per_order) by (quantile)",
-          "legendFormat": "Bids per Order ({{quantile}})",
+          "expr": "histogram_quantile(0.95, sum(rate(virtengine_veid_inference_duration_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "{{model}} P95",
           "refId": "A"
         }
       ],
-      "title": "Bids per Order",
+      "title": "ML Inference Latency by Model",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(virtengine_veid_inference_non_deterministic_total[5m])) by (model)",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Non-Deterministic Inference Events",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(virtengine_veid_inference_total[24h])) by (model)",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Inference by Model Type (24h)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Score"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 23
+      },
+      "id": 15,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk(10, virtengine_veid_verification_score)",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Verification Scores",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "Value": "Score",
+              "verification_id": "Verification ID"
+            }
+          }
+        }
+      ],
+      "type": "table"
     },
     {
       "collapsed": false,
@@ -828,11 +1037,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 31
       },
-      "id": 13,
+      "id": 16,
       "panels": [],
-      "title": "Leases & Deployments",
+      "title": "Scopes & Encryption",
       "type": "row"
     },
     {
@@ -895,9 +1104,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 32
       },
-      "id": 14,
+      "id": 17,
       "options": {
         "legend": {
           "calcs": ["lastNotNull"],
@@ -916,12 +1125,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(virtengine_marketplace_leases_active) by (state)",
-          "legendFormat": "{{state}}",
+          "expr": "sum(virtengine_veid_active_scopes) by (scope_type)",
+          "legendFormat": "{{scope_type}}",
           "refId": "A"
         }
       ],
-      "title": "Active Leases by State",
+      "title": "Active Scopes by Type",
       "type": "timeseries"
     },
     {
@@ -976,7 +1185,7 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -984,9 +1193,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 32
       },
-      "id": 15,
+      "id": 18,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -1005,12 +1214,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg(virtengine_marketplace_lease_duration_seconds) by (provider)",
-          "legendFormat": "{{provider}}",
+          "expr": "sum(rate(virtengine_veid_encryption_operations_total[5m])) by (operation)",
+          "legendFormat": "{{operation}}",
           "refId": "A"
         }
       ],
-      "title": "Average Lease Duration by Provider",
+      "title": "Encryption Operations",
       "type": "timeseries"
     },
     {
@@ -1019,276 +1228,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 31
-      },
-      "id": 16,
-      "panels": [],
-      "title": "Provider Performance",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Success Rate"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "gradient",
-                  "type": "gauge"
-                }
-              },
-              {
-                "id": "unit",
-                "value": "percentunit"
-              },
-              {
-                "id": "max",
-                "value": 1
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "red",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 0.9
-                    },
-                    {
-                      "color": "green",
-                      "value": 0.95
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Active Leases"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "basic",
-                  "type": "gauge"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 32
-      },
-      "id": 17,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Active Leases"
-          }
-        ]
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "virtengine_marketplace_leases_active",
-          "format": "table",
-          "instant": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum(rate(virtengine_provider_deployment_success_total[24h])) by (provider) / sum(rate(virtengine_provider_deployments_total[24h])) by (provider)",
-          "format": "table",
-          "instant": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Provider Leaderboard",
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true
-            },
-            "renameByName": {
-              "Value #A": "Active Leases",
-              "Value #B": "Success Rate",
-              "provider": "Provider"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 42
-      },
-      "id": 18,
-      "panels": [],
-      "title": "Escrow & Payments",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 43
+        "y": 40
       },
       "id": 19,
-      "options": {
-        "legend": {
-          "calcs": ["lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum(virtengine_escrow_balance_total) by (state)",
-          "legendFormat": "{{state}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Escrow Balance by State",
-      "type": "timeseries"
+      "panels": [],
+      "title": "Failures & Errors",
+      "type": "row"
     },
     {
       "datasource": {
@@ -1307,8 +1252,8 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
+            "drawStyle": "bars",
+            "fillOpacity": 100,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -1316,8 +1261,8 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1326,7 +1271,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1342,15 +1287,15 @@
               }
             ]
           },
-          "unit": "currencyUSD"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 43
+        "x": 0,
+        "y": 41
       },
       "id": 20,
       "options": {
@@ -1371,18 +1316,107 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(virtengine_escrow_payments_total[1h])) by (type)",
-          "legendFormat": "{{type}}",
+          "expr": "sum(increase(virtengine_veid_verification_failures_total[1h])) by (reason)",
+          "legendFormat": "{{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Escrow Payments (1h)",
+      "title": "Verification Failures by Reason",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 41
+      },
+      "id": 21,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(virtengine_veid_signature_validation_failures_total[1h])) by (failure_type)",
+          "legendFormat": "{{failure_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Signature Validation Failures",
       "type": "timeseries"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 38,
-  "tags": ["virtengine", "marketplace", "orders", "leases"],
+  "tags": ["virtengine", "veid", "identity"],
   "templating": {
     "list": []
   },
@@ -1392,8 +1426,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Marketplace",
-  "uid": "marketplace",
+  "title": "VEID Module",
+  "uid": "veid",
   "version": 1,
   "weekStart": ""
 }
