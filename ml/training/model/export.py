@@ -165,6 +165,9 @@ class ModelExporter:
             # Get model size
             model_size = self._get_directory_size(model_path)
             
+            # Extract TensorFlow operation names for determinism verification
+            operations = self._extract_operations(model_path)
+            
             # Build result
             result = ExportResult(
                 model_path=model_path,
@@ -187,9 +190,9 @@ class ModelExporter:
                 success=True,
             )
             
-            # Save metadata
+            # Save metadata with operations list
             metadata_path = os.path.join(versioned_path, "export_metadata.json")
-            result.save_metadata(metadata_path)
+            self._save_extended_metadata(result, operations, metadata_path)
             
             # Optionally quantize
             if self.config.quantize:
@@ -274,6 +277,44 @@ class ModelExporter:
                 filepath = os.path.join(root, filename)
                 total_size += os.path.getsize(filepath)
         return total_size
+    
+    def _extract_operations(self, model_path: str) -> list:
+        """
+        Extract TensorFlow operation names from SavedModel.
+        
+        Used for determinism verification in Go runtime.
+        """
+        operations = []
+        try:
+            loaded_model = tf.saved_model.load(model_path)
+            
+            if hasattr(loaded_model, 'signatures'):
+                for sig_name, sig in loaded_model.signatures.items():
+                    if hasattr(sig, 'graph'):
+                        for op in sig.graph.get_operations():
+                            if op.type not in operations:
+                                operations.append(op.type)
+            
+            operations = sorted(set(operations))
+            logger.info(f"Extracted {len(operations)} unique operation types")
+        except Exception as e:
+            logger.warning(f"Could not extract operations: {e}")
+        
+        return operations
+    
+    def _save_extended_metadata(
+        self,
+        result: ExportResult,
+        operations: list,
+        filepath: str
+    ) -> None:
+        """Save extended metadata including operations list."""
+        metadata = result.to_dict()
+        metadata['operations'] = operations
+        
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, 'w') as f:
+            json.dump(metadata, f, indent=2)
     
     def _quantize_model(self, model_path: str, result: ExportResult) -> None:
         """Apply quantization to the exported model."""
