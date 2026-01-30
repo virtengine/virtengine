@@ -44,6 +44,10 @@ const (
 	EventTypeVerificationCompleted EventType = "verification_completed"
 	EventTypeVerificationFailed    EventType = "verification_failed"
 	EventTypeVerificationAborted   EventType = "verification_aborted"
+	EventTypeVerificationInitiated EventType = "verification_initiated"
+	EventTypeVerificationCancelled EventType = "verification_cancelled"
+	EventTypeResendRequested       EventType = "resend_requested"
+	EventTypeWebhookReceived       EventType = "webhook_received"
 
 	// Rate Limiting Events
 	EventTypeRateLimitExceeded EventType = "rate_limit_exceeded"
