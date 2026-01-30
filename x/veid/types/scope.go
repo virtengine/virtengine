@@ -98,6 +98,11 @@ func ScopeTypeWeight(scopeType ScopeType) uint32 {
 	}
 }
 
+// String returns the string representation of a ScopeType
+func (s ScopeType) String() string {
+	return string(s)
+}
+
 // ScopeTypeDescription returns a human-readable description
 func ScopeTypeDescription(scopeType ScopeType) string {
 	switch scopeType {
