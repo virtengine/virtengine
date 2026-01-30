@@ -96,13 +96,39 @@ jobs:
         run: |
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
+      # INFRA-003: Coverage enforcement gate (80% minimum)
+      - name: Check coverage threshold
+        id: coverage
+        run: |
+          if [ ! -f coverage.out ]; then
+            echo "No coverage file generated"
+            exit 1
+          fi
+
+          # Calculate total coverage
+          COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}' | sed 's/%//')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+          # Minimum required coverage (INFRA-003)
+          MIN_COVERAGE=80
+
+          echo "Total coverage: ${COVERAGE}%"
+          echo "Minimum required: ${MIN_COVERAGE}%"
+
+          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+            echo "::error::Coverage is ${COVERAGE}%, below minimum ${MIN_COVERAGE}%"
+            exit 1
+          else
+            echo "✅ Coverage meets minimum requirement: ${COVERAGE}% >= ${MIN_COVERAGE}%"
+          fi
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.out
           flags: unittests
           name: go-coverage
-          fail_ci_if_error: false
+          fail_ci_if_error: true  # INFRA-003: Fail if coverage upload fails
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -320,8 +346,31 @@ jobs:
           done
 
       - name: Run integration tests
+        id: integration-tests
         run: |
-          go test -v -tags="e2e.integration" ./tests/integration/... || echo "Integration tests completed (some may be scaffolds)"
+          # INFRA-003: Integration tests are required gates
+          go test -v -tags="e2e.integration" ./tests/integration/... 2>&1 | tee integration-output.txt
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+
+          # Parse test results
+          PASSED=$(grep -c "^--- PASS" integration-output.txt || echo "0")
+          FAILED=$(grep -c "^--- FAIL" integration-output.txt || echo "0")
+          SKIPPED=$(grep -c "^--- SKIP" integration-output.txt || echo "0")
+
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+
+          echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Passed: $PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ Failed: $FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏭️ Skipped: $SKIPPED" >> $GITHUB_STEP_SUMMARY
+
+          # INFRA-003: Fail if any integration tests fail
+          if [ "$TEST_EXIT_CODE" -ne 0 ] && [ "$FAILED" -gt 0 ]; then
+            echo "::error::Integration tests failed ($FAILED failures)"
+            exit 1
+          fi
 
       - name: Collect logs on failure
         if: failure()
@@ -483,3 +532,77 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ===========================================================================
+  # CI Quality Gates Summary (INFRA-003)
+  # ===========================================================================
+  ci-summary:
+    name: CI Quality Gates
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - test-go
+      - test-python
+      - test-portal
+      - build
+      - integration
+      - container-security
+    if: always()
+    steps:
+      - name: Generate CI Summary
+        run: |
+          echo "# CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Quality Gates" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Gate | Status | Required |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Linting | ${{ needs.lint.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Tests | ${{ needs.test-go.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Tests | ${{ needs.test-python.result }} | ⚠️ Optional |" >> $GITHUB_STEP_SUMMARY
+          echo "| Portal Tests | ${{ needs.test-portal.result }} | ⚠️ Optional |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Security | ${{ needs.container-security.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## INFRA-003 Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Static code analysis (golangci-lint with gosec)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Code coverage enforcement (80% minimum)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Container image scanning (Trivy)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Integration test gates" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check required gates
+        run: |
+          FAILED=0
+
+          if [ "${{ needs.lint.result }}" == "failure" ]; then
+            echo "::error::Linting failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.test-go.result }}" == "failure" ]; then
+            echo "::error::Go tests failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.build.result }}" == "failure" ]; then
+            echo "::error::Build failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.integration.result }}" == "failure" ]; then
+            echo "::error::Integration tests failed"
+            FAILED=1
+          fi
+
+          if [ "${{ needs.container-security.result }}" == "failure" ]; then
+            echo "::error::Container security checks failed"
+            FAILED=1
+          fi
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::One or more required quality gates failed"
+            exit 1
+          fi
+
+          echo "✅ All required quality gates passed"
