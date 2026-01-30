@@ -310,3 +310,179 @@ func (m *EventAuthorizationConsumed) String() string { return fmt.Sprintf("%+v",
 func (*EventAuthorizationExpired) ProtoMessage()     {}
 func (m *EventAuthorizationExpired) Reset()          { *m = EventAuthorizationExpired{} }
 func (m *EventAuthorizationExpired) String() string  { return fmt.Sprintf("%+v", *m) }
+
+// ============================================================================
+// Verification Attestation Events (VE-1B)
+// ============================================================================
+
+// Attestation event types
+const (
+	EventTypeAttestationCreated     = "attestation_created"
+	EventTypeAttestationRevoked     = "attestation_revoked"
+	EventTypeAttestationExpired     = "attestation_expired"
+	EventTypeSignerKeyRegistered    = "signer_key_registered"
+	EventTypeSignerKeyActivated     = "signer_key_activated"
+	EventTypeSignerKeyRevoked       = "signer_key_revoked"
+	EventTypeSignerKeyRotated       = "signer_key_rotated"
+	EventTypeNonceUsed              = "nonce_used"
+	EventTypeAttestationVerified    = "attestation_verified"
+)
+
+// Attestation event attribute keys
+const (
+	AttributeKeyAttestationID     = "attestation_id"
+	AttributeKeyAttestationType   = "attestation_type"
+	AttributeKeyIssuerID          = "issuer_id"
+	AttributeKeyIssuerFingerprint = "issuer_fingerprint"
+	AttributeKeySubjectAddress    = "subject_address"
+	AttributeKeyNonceHash         = "nonce_hash"
+	// Note: AttributeKeyExpiresAt already defined in borderline_events.go
+	AttributeKeyKeyID             = "key_id"
+	AttributeKeyKeyFingerprint    = "key_fingerprint"
+	AttributeKeyKeyState          = "key_state"
+	AttributeKeySignerID          = "signer_id"
+	AttributeKeyRotationID        = "rotation_id"
+	AttributeKeyOldKeyID          = "old_key_id"
+	AttributeKeyNewKeyID          = "new_key_id"
+	AttributeKeyRevocationReason  = "revocation_reason"
+	AttributeKeyConfidence        = "confidence"
+)
+
+// EventAttestationCreated is emitted when a verification attestation is created
+type EventAttestationCreated struct {
+	AttestationID   string `json:"attestation_id"`
+	AttestationType string `json:"attestation_type"`
+	IssuerID        string `json:"issuer_id"`
+	IssuerFP        string `json:"issuer_fingerprint"`
+	SubjectAddress  string `json:"subject_address"`
+	Score           uint32 `json:"score"`
+	Confidence      uint32 `json:"confidence"`
+	ExpiresAt       int64  `json:"expires_at"`
+	BlockHeight     int64  `json:"block_height"`
+	Timestamp       int64  `json:"timestamp"`
+}
+
+// EventAttestationRevoked is emitted when an attestation is revoked
+type EventAttestationRevoked struct {
+	AttestationID  string `json:"attestation_id"`
+	IssuerID       string `json:"issuer_id"`
+	SubjectAddress string `json:"subject_address"`
+	Reason         string `json:"reason"`
+	RevokedBy      string `json:"revoked_by"`
+	BlockHeight    int64  `json:"block_height"`
+	Timestamp      int64  `json:"timestamp"`
+}
+
+// EventAttestationExpired is emitted when an attestation expires
+type EventAttestationExpired struct {
+	AttestationID  string `json:"attestation_id"`
+	IssuerID       string `json:"issuer_id"`
+	SubjectAddress string `json:"subject_address"`
+	CreatedAt      int64  `json:"created_at"`
+	ExpiredAt      int64  `json:"expired_at"`
+	BlockHeight    int64  `json:"block_height"`
+}
+
+// EventSignerKeyRegistered is emitted when a new signer key is registered
+type EventSignerKeyRegistered struct {
+	KeyID       string `json:"key_id"`
+	SignerID    string `json:"signer_id"`
+	Fingerprint string `json:"fingerprint"`
+	Algorithm   string `json:"algorithm"`
+	State       string `json:"state"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventSignerKeyActivated is emitted when a signer key becomes active
+type EventSignerKeyActivated struct {
+	KeyID       string `json:"key_id"`
+	SignerID    string `json:"signer_id"`
+	Fingerprint string `json:"fingerprint"`
+	ExpiresAt   int64  `json:"expires_at"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventSignerKeyRevoked is emitted when a signer key is revoked
+type EventSignerKeyRevoked struct {
+	KeyID       string `json:"key_id"`
+	SignerID    string `json:"signer_id"`
+	Fingerprint string `json:"fingerprint"`
+	Reason      string `json:"reason"`
+	RevokedBy   string `json:"revoked_by"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// EventSignerKeyRotated is emitted when a signer key rotation completes
+type EventSignerKeyRotated struct {
+	RotationID        string `json:"rotation_id"`
+	SignerID          string `json:"signer_id"`
+	OldKeyID          string `json:"old_key_id"`
+	OldKeyFingerprint string `json:"old_key_fingerprint"`
+	NewKeyID          string `json:"new_key_id"`
+	NewKeyFingerprint string `json:"new_key_fingerprint"`
+	Reason            string `json:"reason"`
+	BlockHeight       int64  `json:"block_height"`
+	Timestamp         int64  `json:"timestamp"`
+}
+
+// EventNonceUsed is emitted when an attestation nonce is consumed
+type EventNonceUsed struct {
+	NonceHash       string `json:"nonce_hash"`
+	IssuerFP        string `json:"issuer_fingerprint"`
+	AttestationID   string `json:"attestation_id"`
+	AttestationType string `json:"attestation_type"`
+	BlockHeight     int64  `json:"block_height"`
+	Timestamp       int64  `json:"timestamp"`
+}
+
+// EventAttestationVerified is emitted when an attestation signature is verified
+type EventAttestationVerified struct {
+	AttestationID  string `json:"attestation_id"`
+	IssuerID       string `json:"issuer_id"`
+	SubjectAddress string `json:"subject_address"`
+	KeyID          string `json:"key_id"`
+	Valid          bool   `json:"valid"`
+	BlockHeight    int64  `json:"block_height"`
+	Timestamp      int64  `json:"timestamp"`
+}
+
+// Proto stubs for attestation events
+
+func (*EventAttestationCreated) ProtoMessage()       {}
+func (m *EventAttestationCreated) Reset()            { *m = EventAttestationCreated{} }
+func (m *EventAttestationCreated) String() string    { return fmt.Sprintf("%+v", *m) }
+
+func (*EventAttestationRevoked) ProtoMessage()       {}
+func (m *EventAttestationRevoked) Reset()            { *m = EventAttestationRevoked{} }
+func (m *EventAttestationRevoked) String() string    { return fmt.Sprintf("%+v", *m) }
+
+func (*EventAttestationExpired) ProtoMessage()       {}
+func (m *EventAttestationExpired) Reset()            { *m = EventAttestationExpired{} }
+func (m *EventAttestationExpired) String() string    { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSignerKeyRegistered) ProtoMessage()      {}
+func (m *EventSignerKeyRegistered) Reset()           { *m = EventSignerKeyRegistered{} }
+func (m *EventSignerKeyRegistered) String() string   { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSignerKeyActivated) ProtoMessage()       {}
+func (m *EventSignerKeyActivated) Reset()            { *m = EventSignerKeyActivated{} }
+func (m *EventSignerKeyActivated) String() string    { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSignerKeyRevoked) ProtoMessage()         {}
+func (m *EventSignerKeyRevoked) Reset()              { *m = EventSignerKeyRevoked{} }
+func (m *EventSignerKeyRevoked) String() string      { return fmt.Sprintf("%+v", *m) }
+
+func (*EventSignerKeyRotated) ProtoMessage()         {}
+func (m *EventSignerKeyRotated) Reset()              { *m = EventSignerKeyRotated{} }
+func (m *EventSignerKeyRotated) String() string      { return fmt.Sprintf("%+v", *m) }
+
+func (*EventNonceUsed) ProtoMessage()                {}
+func (m *EventNonceUsed) Reset()                     { *m = EventNonceUsed{} }
+func (m *EventNonceUsed) String() string             { return fmt.Sprintf("%+v", *m) }
+
+func (*EventAttestationVerified) ProtoMessage()      {}
+func (m *EventAttestationVerified) Reset()           { *m = EventAttestationVerified{} }
+func (m *EventAttestationVerified) String() string   { return fmt.Sprintf("%+v", *m) }

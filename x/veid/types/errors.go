@@ -643,4 +643,56 @@ var (
 
 	// ErrBorderlineFallbackFailed is returned when borderline fallback fails
 	ErrBorderlineFallbackFailed = veidv1.ErrBorderlineFallbackFailed
+
+	// ============================================================================
+	// Verification Attestation Errors (VE-1B)
+	// Error codes: 1240-1259
+	// ============================================================================
+
+	// ErrInvalidAttestation is returned when an attestation is malformed or invalid
+	ErrInvalidAttestation = errorsmod.Register(ModuleName, 1240, "invalid verification attestation")
+
+	// ErrAttestationNotFound is returned when an attestation is not found
+	ErrAttestationNotFound = errorsmod.Register(ModuleName, 1241, "attestation not found")
+
+	// ErrAttestationExpired is returned when an attestation has expired
+	ErrAttestationExpired = errorsmod.Register(ModuleName, 1242, "attestation has expired")
+
+	// ErrAttestationRevoked is returned when an attestation has been revoked
+	ErrAttestationRevoked = errorsmod.Register(ModuleName, 1243, "attestation has been revoked")
+
+	// ErrInvalidSignerKey is returned when a signer key is invalid
+	ErrInvalidSignerKey = errorsmod.Register(ModuleName, 1244, "invalid signer key")
+
+	// ErrSignerKeyNotFound is returned when a signer key is not found
+	ErrSignerKeyNotFound = errorsmod.Register(ModuleName, 1245, "signer key not found")
+
+	// ErrSignerKeyRevoked is returned when a signer key has been revoked
+	ErrSignerKeyRevoked = errorsmod.Register(ModuleName, 1246, "signer key has been revoked")
+
+	// ErrSignerKeyExpired is returned when a signer key has expired
+	ErrSignerKeyExpired = errorsmod.Register(ModuleName, 1247, "signer key has expired")
+
+	// Note: ErrNonceAlreadyUsed already defined at code 1089
+
+	// ErrNonceExpired is returned when an attestation nonce has expired
+	ErrNonceExpired = errorsmod.Register(ModuleName, 1249, "nonce has expired")
+
+	// ErrInvalidTimestamp is returned when an attestation timestamp is invalid
+	ErrInvalidTimestamp = errorsmod.Register(ModuleName, 1250, "invalid attestation timestamp")
+
+	// ErrSignerNotRegistered is returned when the signer is not registered
+	ErrSignerNotRegistered = errorsmod.Register(ModuleName, 1251, "signer is not registered")
+
+	// ErrKeyRotationInProgress is returned when key rotation is already in progress
+	ErrKeyRotationInProgress = errorsmod.Register(ModuleName, 1252, "key rotation already in progress")
+
+	// ErrKeyRotationFailed is returned when key rotation fails
+	ErrKeyRotationFailed = errorsmod.Register(ModuleName, 1253, "key rotation failed")
+
+	// ErrAttestationSignatureInvalid is returned when attestation signature verification fails
+	ErrAttestationSignatureInvalid = errorsmod.Register(ModuleName, 1254, "attestation signature verification failed")
+
+	// ErrMaxAttestationsExceeded is returned when maximum attestations limit is exceeded
+	ErrMaxAttestationsExceeded = errorsmod.Register(ModuleName, 1255, "maximum attestations exceeded")
 )

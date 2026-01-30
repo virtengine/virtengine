@@ -609,6 +609,70 @@ var (
 	// PrefixValidatorStatsHistory is the prefix for validator stats history by epoch
 	// Key: PrefixValidatorStatsHistory | validator_address | epoch -> ValidatorStatsHistoryEntry
 	PrefixValidatorStatsHistory = []byte{0x7B}
+
+	// ============================================================================
+	// Verification Attestation Keys (VE-1B: Attestation Schema)
+	// ============================================================================
+
+	// PrefixAttestation is the prefix for verification attestation storage
+	// Key: PrefixAttestation | attestation_id -> VerificationAttestation
+	PrefixAttestation = []byte{0x7C}
+
+	// PrefixAttestationBySubject is the prefix for attestation lookup by subject
+	// Key: PrefixAttestationBySubject | subject_address | attestation_id -> bool
+	PrefixAttestationBySubject = []byte{0x7D}
+
+	// PrefixAttestationByIssuer is the prefix for attestation lookup by issuer
+	// Key: PrefixAttestationByIssuer | issuer_fingerprint | attestation_id -> bool
+	PrefixAttestationByIssuer = []byte{0x7E}
+
+	// PrefixAttestationByType is the prefix for attestation lookup by type
+	// Key: PrefixAttestationByType | attestation_type | attestation_id -> bool
+	PrefixAttestationByType = []byte{0x7F}
+
+	// PrefixAttestationExpiry is the prefix for attestation expiry index
+	// Key: PrefixAttestationExpiry | expires_at | attestation_id -> bool
+	PrefixAttestationExpiry = []byte{0x80}
+
+	// PrefixAttestationNonce is the prefix for attestation nonce tracking
+	// Key: PrefixAttestationNonce | nonce_hash -> NonceRecord
+	PrefixAttestationNonce = []byte{0x81}
+
+	// PrefixAttestationNonceByIssuer is the prefix for nonce lookup by issuer
+	// Key: PrefixAttestationNonceByIssuer | issuer_fingerprint | nonce_hash -> bool
+	PrefixAttestationNonceByIssuer = []byte{0x82}
+
+	// PrefixSignerKey is the prefix for signer key storage
+	// Key: PrefixSignerKey | key_id -> SignerKeyInfo
+	PrefixSignerKey = []byte{0x83}
+
+	// PrefixSignerKeyByFingerprint is the prefix for signer key lookup by fingerprint
+	// Key: PrefixSignerKeyByFingerprint | fingerprint -> key_id
+	PrefixSignerKeyByFingerprint = []byte{0x84}
+
+	// PrefixSignerKeyBySigner is the prefix for signer key lookup by signer
+	// Key: PrefixSignerKeyBySigner | signer_id | key_id -> bool
+	PrefixSignerKeyBySigner = []byte{0x85}
+
+	// PrefixSignerRegistry is the prefix for signer registry
+	// Key: PrefixSignerRegistry | signer_id -> SignerRegistryEntry
+	PrefixSignerRegistry = []byte{0x86}
+
+	// PrefixKeyRotation is the prefix for key rotation records
+	// Key: PrefixKeyRotation | rotation_id -> KeyRotationRecord
+	PrefixKeyRotation = []byte{0x87}
+
+	// PrefixKeyRotationBySigner is the prefix for key rotation lookup by signer
+	// Key: PrefixKeyRotationBySigner | signer_id | rotation_id -> bool
+	PrefixKeyRotationBySigner = []byte{0x88}
+
+	// PrefixNonceHistory is the prefix for nonce usage history (audit trail)
+	// Key: PrefixNonceHistory | used_at | nonce_hash -> NonceHistoryEntry
+	PrefixNonceHistory = []byte{0x89}
+
+	// PrefixAttestationParams is the prefix for attestation module parameters
+	// Key: PrefixAttestationParams -> AttestationParams
+	PrefixAttestationParams = []byte{0x8A}
 )
 
 // IdentityRecordKey returns the store key for an identity record
