@@ -71,4 +71,22 @@ var (
 
 	// ErrTooManyRegistrations is returned when block registration limit is exceeded
 	ErrTooManyRegistrations = errors.Register(ModuleName, 1921, "too many registrations in block")
+
+	// ErrEnclaveUnhealthy is returned when an enclave is marked as unhealthy
+	ErrEnclaveUnhealthy = errors.Register(ModuleName, 1922, "enclave is unhealthy")
+
+	// ErrHealthStatusNotFound is returned when health status is not found for a validator
+	ErrHealthStatusNotFound = errors.Register(ModuleName, 1923, "health status not found")
+
+	// ErrInvalidHeartbeat is returned when a heartbeat message is invalid
+	ErrInvalidHeartbeat = errors.Register(ModuleName, 1924, "invalid heartbeat")
+
+	// ErrHeartbeatSignatureInvalid is returned when heartbeat signature verification fails
+	ErrHeartbeatSignatureInvalid = errors.Register(ModuleName, 1925, "invalid heartbeat signature")
+
+	// ErrHeartbeatReplay is returned when a heartbeat nonce is reused
+	ErrHeartbeatReplay = errors.Register(ModuleName, 1926, "heartbeat replay detected")
+
+	// ErrInvalidHealthCheckParams is returned when health check parameters are invalid
+	ErrInvalidHealthCheckParams = errors.Register(ModuleName, 1927, "invalid health check parameters")
 )

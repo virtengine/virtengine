@@ -95,3 +95,33 @@ type QueryAttestedResultRequest struct {
 type QueryAttestedResultResponse struct {
 	Result *AttestedScoringResult `json:"result,omitempty" yaml:"result"`
 }
+
+// QueryEnclaveHealthRequest is the request for querying enclave health status
+type QueryEnclaveHealthRequest struct {
+	ValidatorAddress string `json:"validator_address"`
+}
+
+// QueryEnclaveHealthResponse is the response for enclave health status
+type QueryEnclaveHealthResponse struct {
+	HealthStatus *EnclaveHealthStatus `json:"health_status,omitempty"`
+}
+
+// QueryAllHealthStatusesRequest is the request for querying all health statuses
+type QueryAllHealthStatusesRequest struct {
+	// StatusFilter optionally filters by health status (healthy, degraded, unhealthy)
+	StatusFilter string `json:"status_filter,omitempty"`
+}
+
+// QueryAllHealthStatusesResponse is the response for all health statuses
+type QueryAllHealthStatusesResponse struct {
+	HealthStatuses []EnclaveHealthStatus `json:"health_statuses"`
+	TotalCount     int                   `json:"total_count"`
+}
+
+// QueryHealthCheckParamsRequest is the request for querying health check parameters
+type QueryHealthCheckParamsRequest struct{}
+
+// QueryHealthCheckParamsResponse is the response for health check parameters
+type QueryHealthCheckParamsResponse struct {
+	Params HealthCheckParams `json:"params"`
+}

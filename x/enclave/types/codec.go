@@ -16,6 +16,7 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&v1.MsgProposeMeasurement{}, "enclave/MsgProposeMeasurement", nil)
 	cdc.RegisterConcrete(&v1.MsgRevokeMeasurement{}, "enclave/MsgRevokeMeasurement", nil)
 	cdc.RegisterConcrete(&v1.MsgUpdateParams{}, "enclave/MsgUpdateParams", nil)
+	cdc.RegisterConcrete(&MsgEnclaveHeartbeat{}, "enclave/MsgEnclaveHeartbeat", nil)
 }
 
 // RegisterInterfaces registers the interfaces for the enclave module
