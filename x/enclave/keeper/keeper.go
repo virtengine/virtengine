@@ -704,8 +704,12 @@ func (k Keeper) ValidateAttestation(ctx sdk.Context, identity *types.EnclaveIden
 		)
 	}
 
-	// In production, this would verify the attestation quote cryptographically
-	// against the platform root of trust
+	if err := k.verifyAttestation(ctx, identity, measurement); err != nil {
+		k.RecordAttestationVerification(false)
+		return err
+	}
+
+	k.RecordAttestationVerification(true)
 	return nil
 }
 
