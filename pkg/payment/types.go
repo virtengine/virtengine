@@ -752,3 +752,347 @@ type ConversionQuote struct {
 func (q ConversionQuote) IsExpired() bool {
 	return time.Now().After(q.ExpiresAt)
 }
+
+// ============================================================================
+// Conversion Ledger Types (PAY-002)
+// ============================================================================
+
+// ConversionStatus represents the status of a conversion execution
+type ConversionStatus string
+
+const (
+	// ConversionStatusPending indicates conversion is pending execution
+	ConversionStatusPending ConversionStatus = "pending"
+
+	// ConversionStatusExecuting indicates conversion is being executed
+	ConversionStatusExecuting ConversionStatus = "executing"
+
+	// ConversionStatusCompleted indicates conversion completed successfully
+	ConversionStatusCompleted ConversionStatus = "completed"
+
+	// ConversionStatusFailed indicates conversion failed
+	ConversionStatusFailed ConversionStatus = "failed"
+
+	// ConversionStatusRefunded indicates conversion was refunded
+	ConversionStatusRefunded ConversionStatus = "refunded"
+
+	// ConversionStatusReconciling indicates conversion needs manual reconciliation
+	ConversionStatusReconciling ConversionStatus = "reconciling"
+)
+
+// IsFinal checks if the status is a terminal state
+func (s ConversionStatus) IsFinal() bool {
+	switch s {
+	case ConversionStatusCompleted, ConversionStatusFailed, ConversionStatusRefunded:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsRetryable checks if conversion can be retried
+func (s ConversionStatus) IsRetryable() bool {
+	switch s {
+	case ConversionStatusPending, ConversionStatusFailed, ConversionStatusReconciling:
+		return true
+	default:
+		return false
+	}
+}
+
+// ConversionErrorCode categorizes conversion failures
+type ConversionErrorCode string
+
+const (
+	// ConversionErrorNone indicates no error
+	ConversionErrorNone ConversionErrorCode = ""
+
+	// ConversionErrorQuoteExpired indicates quote expired before execution
+	ConversionErrorQuoteExpired ConversionErrorCode = "quote_expired"
+
+	// ConversionErrorPaymentNotSucceeded indicates payment was not successful
+	ConversionErrorPaymentNotSucceeded ConversionErrorCode = "payment_not_succeeded"
+
+	// ConversionErrorInsufficientTreasury indicates treasury has insufficient funds
+	ConversionErrorInsufficientTreasury ConversionErrorCode = "insufficient_treasury"
+
+	// ConversionErrorTransferFailed indicates on-chain transfer failed
+	ConversionErrorTransferFailed ConversionErrorCode = "transfer_failed"
+
+	// ConversionErrorInvalidAddress indicates destination address is invalid
+	ConversionErrorInvalidAddress ConversionErrorCode = "invalid_address"
+
+	// ConversionErrorDuplicate indicates duplicate execution attempt
+	ConversionErrorDuplicate ConversionErrorCode = "duplicate"
+
+	// ConversionErrorInternal indicates internal system error
+	ConversionErrorInternal ConversionErrorCode = "internal_error"
+)
+
+// IsRetryable checks if the error is retryable
+func (e ConversionErrorCode) IsRetryable() bool {
+	switch e {
+	case ConversionErrorInsufficientTreasury, ConversionErrorTransferFailed, ConversionErrorInternal:
+		return true
+	default:
+		return false
+	}
+}
+
+// ConversionLedgerEntry represents a conversion execution record with full audit trail
+type ConversionLedgerEntry struct {
+	// ID is the unique ledger entry ID
+	ID string `json:"id"`
+
+	// IdempotencyKey prevents duplicate executions
+	IdempotencyKey string `json:"idempotency_key"`
+
+	// QuoteID is the associated conversion quote
+	QuoteID string `json:"quote_id"`
+
+	// PaymentIntentID is the payment that funded this conversion
+	PaymentIntentID string `json:"payment_intent_id"`
+
+	// Status is the current conversion status
+	Status ConversionStatus `json:"status"`
+
+	// FiatAmount is the fiat amount converted
+	FiatAmount Amount `json:"fiat_amount"`
+
+	// CryptoAmount is the crypto amount transferred
+	CryptoAmount sdkmath.Int `json:"crypto_amount"`
+
+	// CryptoDenom is the cryptocurrency denomination
+	CryptoDenom string `json:"crypto_denom"`
+
+	// DestinationAddress is the blockchain address receiving funds
+	DestinationAddress string `json:"destination_address"`
+
+	// TreasuryAddress is the treasury address funds were sent from
+	TreasuryAddress string `json:"treasury_address,omitempty"`
+
+	// TxHash is the on-chain transaction hash (when completed)
+	TxHash string `json:"tx_hash,omitempty"`
+
+	// BlockHeight is the block height of the transfer (when completed)
+	BlockHeight int64 `json:"block_height,omitempty"`
+
+	// ErrorCode categorizes any failure
+	ErrorCode ConversionErrorCode `json:"error_code,omitempty"`
+
+	// ErrorMessage provides detailed error information
+	ErrorMessage string `json:"error_message,omitempty"`
+
+	// RetryCount tracks retry attempts
+	RetryCount int `json:"retry_count"`
+
+	// MaxRetries is the maximum retry attempts
+	MaxRetries int `json:"max_retries"`
+
+	// LastRetryAt is when the last retry was attempted
+	LastRetryAt *time.Time `json:"last_retry_at,omitempty"`
+
+	// NextRetryAt is when the next retry should be attempted
+	NextRetryAt *time.Time `json:"next_retry_at,omitempty"`
+
+	// ConversionRate is the rate used for conversion
+	ConversionRate ConversionRate `json:"conversion_rate"`
+
+	// Fee is the conversion fee charged
+	Fee Amount `json:"fee"`
+
+	// CustomerID is the payment customer ID
+	CustomerID string `json:"customer_id,omitempty"`
+
+	// Metadata is additional context data
+	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// CreatedAt is when the entry was created
+	CreatedAt time.Time `json:"created_at"`
+
+	// UpdatedAt is when the entry was last updated
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// CompletedAt is when conversion completed (success or final failure)
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+}
+
+// NewConversionLedgerEntry creates a new ledger entry from a quote and payment
+func NewConversionLedgerEntry(
+	id string,
+	idempotencyKey string,
+	quote ConversionQuote,
+	paymentIntentID string,
+	maxRetries int,
+) *ConversionLedgerEntry {
+	now := time.Now()
+	return &ConversionLedgerEntry{
+		ID:                 id,
+		IdempotencyKey:     idempotencyKey,
+		QuoteID:            quote.ID,
+		PaymentIntentID:    paymentIntentID,
+		Status:             ConversionStatusPending,
+		FiatAmount:         quote.FiatAmount,
+		CryptoAmount:       quote.CryptoAmount,
+		CryptoDenom:        quote.CryptoDenom,
+		DestinationAddress: quote.DestinationAddress,
+		ConversionRate:     quote.Rate,
+		Fee:                quote.Fee,
+		RetryCount:         0,
+		MaxRetries:         maxRetries,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		Metadata:           make(map[string]string),
+	}
+}
+
+// MarkExecuting transitions to executing state
+func (e *ConversionLedgerEntry) MarkExecuting() error {
+	if e.Status != ConversionStatusPending && e.Status != ConversionStatusReconciling {
+		return errors.New("cannot execute: invalid status transition")
+	}
+	e.Status = ConversionStatusExecuting
+	e.UpdatedAt = time.Now()
+	return nil
+}
+
+// MarkCompleted transitions to completed state
+func (e *ConversionLedgerEntry) MarkCompleted(txHash string, blockHeight int64, treasuryAddr string) {
+	now := time.Now()
+	e.Status = ConversionStatusCompleted
+	e.TxHash = txHash
+	e.BlockHeight = blockHeight
+	e.TreasuryAddress = treasuryAddr
+	e.ErrorCode = ConversionErrorNone
+	e.ErrorMessage = ""
+	e.UpdatedAt = now
+	e.CompletedAt = &now
+}
+
+// MarkFailed transitions to failed state
+func (e *ConversionLedgerEntry) MarkFailed(errCode ConversionErrorCode, errMsg string) {
+	now := time.Now()
+	e.Status = ConversionStatusFailed
+	e.ErrorCode = errCode
+	e.ErrorMessage = errMsg
+	e.UpdatedAt = now
+	e.CompletedAt = &now
+}
+
+// MarkForRetry schedules a retry with exponential backoff
+func (e *ConversionLedgerEntry) MarkForRetry(errCode ConversionErrorCode, errMsg string, baseDelay time.Duration) bool {
+	if e.RetryCount >= e.MaxRetries {
+		e.MarkFailed(errCode, errMsg)
+		return false
+	}
+
+	e.RetryCount++
+	now := time.Now()
+	e.LastRetryAt = &now
+	e.ErrorCode = errCode
+	e.ErrorMessage = errMsg
+	e.Status = ConversionStatusPending
+	e.UpdatedAt = now
+
+	// Exponential backoff: baseDelay * 2^(retryCount-1)
+	delay := baseDelay * time.Duration(1<<(e.RetryCount-1))
+	nextRetry := now.Add(delay)
+	e.NextRetryAt = &nextRetry
+
+	return true
+}
+
+// MarkReconciling transitions to reconciling state for manual intervention
+func (e *ConversionLedgerEntry) MarkReconciling(errCode ConversionErrorCode, errMsg string) {
+	e.Status = ConversionStatusReconciling
+	e.ErrorCode = errCode
+	e.ErrorMessage = errMsg
+	e.UpdatedAt = time.Now()
+}
+
+// MarkRefunded transitions to refunded state
+func (e *ConversionLedgerEntry) MarkRefunded() {
+	now := time.Now()
+	e.Status = ConversionStatusRefunded
+	e.UpdatedAt = now
+	e.CompletedAt = &now
+}
+
+// CanRetry checks if this entry can be retried
+func (e *ConversionLedgerEntry) CanRetry() bool {
+	if !e.Status.IsRetryable() {
+		return false
+	}
+	if e.RetryCount >= e.MaxRetries {
+		return false
+	}
+	if e.NextRetryAt != nil && time.Now().Before(*e.NextRetryAt) {
+		return false
+	}
+	return e.ErrorCode.IsRetryable()
+}
+
+// IsReadyForExecution checks if entry is ready to execute
+func (e *ConversionLedgerEntry) IsReadyForExecution() bool {
+	if e.Status != ConversionStatusPending {
+		return false
+	}
+	if e.NextRetryAt != nil && time.Now().Before(*e.NextRetryAt) {
+		return false
+	}
+	return true
+}
+
+// ConversionExecutionRequest is a request to execute a conversion
+type ConversionExecutionRequest struct {
+	// Quote is the conversion quote to execute
+	Quote ConversionQuote `json:"quote"`
+
+	// PaymentIntentID is the successful payment funding this conversion
+	PaymentIntentID string `json:"payment_intent_id"`
+
+	// IdempotencyKey prevents duplicate executions
+	IdempotencyKey string `json:"idempotency_key"`
+
+	// Metadata is additional context
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+// ConversionExecutionResult is the result of a conversion execution
+type ConversionExecutionResult struct {
+	// LedgerEntry is the created/updated ledger entry
+	LedgerEntry *ConversionLedgerEntry `json:"ledger_entry"`
+
+	// Success indicates if the conversion was successful
+	Success bool `json:"success"`
+
+	// TxHash is the transaction hash if successful
+	TxHash string `json:"tx_hash,omitempty"`
+
+	// Error is the error if failed
+	Error error `json:"-"`
+
+	// ErrorCode is the error category
+	ErrorCode ConversionErrorCode `json:"error_code,omitempty"`
+
+	// AlreadyCompleted indicates this was a duplicate idempotent request
+	AlreadyCompleted bool `json:"already_completed"`
+}
+
+// TreasuryTransferResult is the result of a treasury transfer operation
+type TreasuryTransferResult struct {
+	// TxHash is the transaction hash
+	TxHash string `json:"tx_hash"`
+
+	// BlockHeight is the block height
+	BlockHeight int64 `json:"block_height"`
+
+	// TreasuryAddress is the source address
+	TreasuryAddress string `json:"treasury_address"`
+
+	// Success indicates if transfer succeeded
+	Success bool `json:"success"`
+
+	// Error is any error that occurred
+	Error error `json:"-"`
+}

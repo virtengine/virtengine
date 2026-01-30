@@ -249,6 +249,104 @@ type ConversionQuoteRequest struct {
 }
 
 // ============================================================================
+// Treasury Transfer Interface (PAY-002)
+// ============================================================================
+
+// TreasuryTransfer handles on-chain crypto transfers from treasury
+type TreasuryTransfer interface {
+	// SendFromTreasury transfers crypto from treasury to destination
+	SendFromTreasury(ctx context.Context, req TreasuryTransferRequest) (*TreasuryTransferResult, error)
+
+	// GetTreasuryBalance returns the treasury balance for a given denom
+	GetTreasuryBalance(ctx context.Context, denom string) (TreasuryBalance, error)
+
+	// ValidateAddress validates a blockchain address
+	ValidateAddress(ctx context.Context, address string) error
+}
+
+// TreasuryTransferRequest is a request to transfer from treasury
+type TreasuryTransferRequest struct {
+	// DestinationAddress is the recipient address
+	DestinationAddress string `json:"destination_address"`
+
+	// Amount is the amount to transfer (in smallest units)
+	Amount int64 `json:"amount"`
+
+	// Denom is the token denomination
+	Denom string `json:"denom"`
+
+	// Memo is an optional transaction memo
+	Memo string `json:"memo,omitempty"`
+
+	// IdempotencyKey prevents duplicate transfers
+	IdempotencyKey string `json:"idempotency_key"`
+}
+
+// TreasuryBalance represents treasury balance for a denom
+type TreasuryBalance struct {
+	// Denom is the token denomination
+	Denom string `json:"denom"`
+
+	// Available is the available balance
+	Available int64 `json:"available"`
+
+	// Reserved is the reserved balance (pending transfers)
+	Reserved int64 `json:"reserved"`
+
+	// Total is the total balance
+	Total int64 `json:"total"`
+}
+
+// ============================================================================
+// Conversion Executor Interface (PAY-002)
+// ============================================================================
+
+// ConversionExecutor handles conversion execution with idempotency
+type ConversionExecutor interface {
+	// ExecuteConversion executes a conversion with idempotency guarantees
+	ExecuteConversion(ctx context.Context, req ConversionExecutionRequest) (*ConversionExecutionResult, error)
+
+	// GetLedgerEntry retrieves a ledger entry by ID
+	GetLedgerEntry(ctx context.Context, id string) (*ConversionLedgerEntry, error)
+
+	// GetLedgerEntryByIdempotencyKey retrieves a ledger entry by idempotency key
+	GetLedgerEntryByIdempotencyKey(ctx context.Context, key string) (*ConversionLedgerEntry, error)
+
+	// RetryFailedConversion retries a failed conversion
+	RetryFailedConversion(ctx context.Context, id string) (*ConversionExecutionResult, error)
+
+	// ReconcileConversion manually reconciles a stuck conversion
+	ReconcileConversion(ctx context.Context, id string, txHash string, blockHeight int64) error
+
+	// RefundConversion refunds a failed conversion
+	RefundConversion(ctx context.Context, id string, reason string) error
+
+	// ListPendingConversions lists conversions ready for execution
+	ListPendingConversions(ctx context.Context) ([]*ConversionLedgerEntry, error)
+
+	// ListConversionsForReconciliation lists conversions needing manual reconciliation
+	ListConversionsForReconciliation(ctx context.Context) ([]*ConversionLedgerEntry, error)
+}
+
+// ConversionLedgerStore persists conversion ledger entries
+type ConversionLedgerStore interface {
+	// Save saves or updates a ledger entry
+	Save(ctx context.Context, entry *ConversionLedgerEntry) error
+
+	// GetByID retrieves an entry by ID
+	GetByID(ctx context.Context, id string) (*ConversionLedgerEntry, error)
+
+	// GetByIdempotencyKey retrieves an entry by idempotency key
+	GetByIdempotencyKey(ctx context.Context, key string) (*ConversionLedgerEntry, error)
+
+	// ListByStatus lists entries by status
+	ListByStatus(ctx context.Context, status ConversionStatus) ([]*ConversionLedgerEntry, error)
+
+	// ListPendingReadyForExecution lists pending entries ready for execution
+	ListPendingReadyForExecution(ctx context.Context) ([]*ConversionLedgerEntry, error)
+}
+
+// ============================================================================
 // Payment Service Interface
 // ============================================================================
 
