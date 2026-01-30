@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/enclave/types"
@@ -98,7 +99,7 @@ func (k Keeper) updateExpiredIdentities(ctx sdk.Context) {
 		}
 
 		// Check if identity has expired
-		if identity.IsExpired(currentHeight) {
+		if types.IsIdentityExpired(&identity, currentHeight) {
 			identity.Status = types.EnclaveIdentityStatusExpired
 			if err := k.UpdateEnclaveIdentity(ctx, &identity); err != nil {
 				k.Logger(ctx).Error(
@@ -119,7 +120,7 @@ func (k Keeper) updateExpiredIdentities(ctx sdk.Context) {
 					sdk.NewEvent(
 						types.EventTypeEnclaveIdentityExpired,
 						sdk.NewAttribute(types.AttributeKeyValidator, identity.ValidatorAddress),
-						sdk.NewAttribute(types.AttributeKeyExpiryHeight, sdk.NewInt(identity.ExpiryHeight).String()),
+						sdk.NewAttribute(types.AttributeKeyExpiryHeight, math.NewInt(identity.ExpiryHeight).String()),
 					),
 				)
 			}
@@ -160,7 +161,7 @@ func (k Keeper) cleanupExpiredMeasurements(ctx sdk.Context) {
 
 		k.Logger(ctx).Debug(
 			"cleaned up expired measurement",
-			"measurement", measurement.MeasurementHashHex(),
+			"measurement", types.MeasurementHashHex(measurement.MeasurementHash),
 			"expiry_height", measurement.ExpiryHeight,
 		)
 

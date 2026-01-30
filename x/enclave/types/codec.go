@@ -3,52 +3,31 @@ package types
 import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 )
 
 // RegisterLegacyAminoCodec registers the necessary interfaces and types
 // for the enclave module on the provided LegacyAmino codec.
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	cdc.RegisterConcrete(&MsgRegisterEnclaveIdentity{}, "enclave/MsgRegisterEnclaveIdentity", nil)
-	cdc.RegisterConcrete(&MsgRotateEnclaveIdentity{}, "enclave/MsgRotateEnclaveIdentity", nil)
-	cdc.RegisterConcrete(&MsgProposeMeasurement{}, "enclave/MsgProposeMeasurement", nil)
-	cdc.RegisterConcrete(&MsgRevokeMeasurement{}, "enclave/MsgRevokeMeasurement", nil)
+	cdc.RegisterConcrete(&v1.MsgRegisterEnclaveIdentity{}, "enclave/MsgRegisterEnclaveIdentity", nil)
+	cdc.RegisterConcrete(&v1.MsgRotateEnclaveIdentity{}, "enclave/MsgRotateEnclaveIdentity", nil)
+	cdc.RegisterConcrete(&v1.MsgProposeMeasurement{}, "enclave/MsgProposeMeasurement", nil)
+	cdc.RegisterConcrete(&v1.MsgRevokeMeasurement{}, "enclave/MsgRevokeMeasurement", nil)
+	cdc.RegisterConcrete(&v1.MsgUpdateParams{}, "enclave/MsgUpdateParams", nil)
 }
 
 // RegisterInterfaces registers the interfaces for the enclave module
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// NOTE: These are stub message types without proper protobuf generation.
-	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
-	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
-	//
-	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
-	//
-	// registry.RegisterImplementations(
-	//     (*sdk.Msg)(nil),
-	//     &MsgRegisterEnclaveIdentity{},
-	//     &MsgRotateEnclaveIdentity{},
-	//     &MsgProposeMeasurement{},
-	//     &MsgRevokeMeasurement{},
-	// )
-	//
-	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
-	_ = registry // suppress unused variable warning
-	_ = msgservice.RegisterMsgServiceDesc
-}
+	registry.RegisterImplementations(
+		(*sdk.Msg)(nil),
+		&v1.MsgRegisterEnclaveIdentity{},
+		&v1.MsgRotateEnclaveIdentity{},
+		&v1.MsgProposeMeasurement{},
+		&v1.MsgRevokeMeasurement{},
+		&v1.MsgUpdateParams{},
+	)
 
-// MsgService descriptor for enclave module messages
-var _Msg_serviceDesc = struct {
-	ServiceName string
-	HandlerType interface{}
-	Methods     []struct {
-		MethodName   string
-		Handler      interface{}
-		MethodDesc   interface{}
-		ServerStream bool
-		ClientStream bool
-	}
-	Streams  []interface{}
-	Metadata interface{}
-}{
-	ServiceName: "virtengine.enclave.v1.Msg",
+	msgservice.RegisterMsgServiceDesc(registry, &v1.Msg_serviceDesc)
 }

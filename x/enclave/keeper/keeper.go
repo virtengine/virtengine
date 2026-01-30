@@ -104,7 +104,7 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 
 // SetParams sets the module parameters
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
-	if err := params.Validate(); err != nil {
+	if err := types.ValidateParams(&params); err != nil {
 		return err
 	}
 
@@ -138,7 +138,7 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // RegisterEnclaveIdentity registers a new enclave identity for a validator
 func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.EnclaveIdentity) error {
-	if err := identity.Validate(); err != nil {
+	if err := types.ValidateEnclaveIdentity(identity); err != nil {
 		return err
 	}
 
@@ -159,8 +159,8 @@ func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.Enclave
 
 	// Validate TEE type is allowed
 	params := k.GetParams(ctx)
-	if !params.IsTEETypeAllowed(identity.TEEType) {
-		return types.ErrInvalidEnclaveIdentity.Wrapf("TEE type %s is not allowed", identity.TEEType)
+	if !types.IsTEETypeAllowed(&params, identity.TeeType) {
+		return types.ErrInvalidEnclaveIdentity.Wrapf("TEE type %s is not allowed", identity.TeeType.String())
 	}
 
 	// Validate measurement is allowlisted
@@ -194,7 +194,7 @@ func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.Enclave
 	store.Set(types.EnclaveIdentityKey(validatorAddr), bz)
 
 	// Store key fingerprint index
-	fingerprint := identity.KeyFingerprint()
+	fingerprint := types.KeyFingerprint(identity.EncryptionPubKey)
 	store.Set(types.EnclaveKeyByFingerprintKey([]byte(fingerprint)), validatorAddr)
 
 	// Update rate limit tracking
@@ -206,7 +206,7 @@ func (k Keeper) RegisterEnclaveIdentity(ctx sdk.Context, identity *types.Enclave
 		sdk.NewEvent(
 			types.EventTypeEnclaveIdentityRegistered,
 			sdk.NewAttribute(types.AttributeKeyValidator, identity.ValidatorAddress),
-			sdk.NewAttribute(types.AttributeKeyTEEType, string(identity.TEEType)),
+			sdk.NewAttribute(types.AttributeKeyTEEType, identity.TeeType.String()),
 			sdk.NewAttribute(types.AttributeKeyMeasurementHash, hex.EncodeToString(identity.MeasurementHash)),
 			sdk.NewAttribute(types.AttributeKeyEncryptionKeyID, fingerprint),
 			sdk.NewAttribute(types.AttributeKeyExpiryHeight, math.NewInt(identity.ExpiryHeight).String()),
@@ -233,7 +233,7 @@ func (k Keeper) GetEnclaveIdentity(ctx sdk.Context, validatorAddr sdk.AccAddress
 
 // UpdateEnclaveIdentity updates an existing enclave identity
 func (k Keeper) UpdateEnclaveIdentity(ctx sdk.Context, identity *types.EnclaveIdentity) error {
-	if err := identity.Validate(); err != nil {
+	if err := types.ValidateEnclaveIdentity(identity); err != nil {
 		return err
 	}
 
@@ -249,8 +249,8 @@ func (k Keeper) UpdateEnclaveIdentity(ctx sdk.Context, identity *types.EnclaveId
 	}
 
 	// Remove old fingerprint index if key changed
-	oldFingerprint := existing.KeyFingerprint()
-	newFingerprint := identity.KeyFingerprint()
+	oldFingerprint := types.KeyFingerprint(existing.EncryptionPubKey)
+	newFingerprint := types.KeyFingerprint(identity.EncryptionPubKey)
 	if oldFingerprint != newFingerprint {
 		store := ctx.KVStore(k.skey)
 		store.Delete(types.EnclaveKeyByFingerprintKey([]byte(oldFingerprint)))
@@ -314,7 +314,7 @@ func (k Keeper) RevokeEnclaveIdentity(ctx sdk.Context, validatorAddr sdk.AccAddr
 
 // InitiateKeyRotation starts a key rotation for a validator
 func (k Keeper) InitiateKeyRotation(ctx sdk.Context, rotation *types.KeyRotationRecord) error {
-	if err := rotation.Validate(); err != nil {
+	if err := types.ValidateKeyRotationRecord(rotation); err != nil {
 		return err
 	}
 
@@ -427,7 +427,7 @@ func (k Keeper) GetActiveKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddre
 
 // AddMeasurement adds a measurement to the allowlist
 func (k Keeper) AddMeasurement(ctx sdk.Context, measurement *types.MeasurementRecord) error {
-	if err := measurement.Validate(); err != nil {
+	if err := types.ValidateMeasurementRecord(measurement); err != nil {
 		return err
 	}
 
@@ -445,7 +445,7 @@ func (k Keeper) AddMeasurement(ctx sdk.Context, measurement *types.MeasurementRe
 		sdk.NewEvent(
 			types.EventTypeMeasurementAdded,
 			sdk.NewAttribute(types.AttributeKeyMeasurementHash, hex.EncodeToString(measurement.MeasurementHash)),
-			sdk.NewAttribute(types.AttributeKeyTEEType, string(measurement.TEEType)),
+			sdk.NewAttribute(types.AttributeKeyTEEType, measurement.TeeType.String()),
 			sdk.NewAttribute(types.AttributeKeyDescription, measurement.Description),
 		),
 	)
@@ -505,7 +505,7 @@ func (k Keeper) IsMeasurementAllowed(ctx sdk.Context, measurementHash []byte, cu
 	if !exists {
 		return false
 	}
-	return measurement.IsValid(currentHeight)
+	return types.IsMeasurementValid(measurement, currentHeight)
 }
 
 // ============================================================================
@@ -519,7 +519,7 @@ func (k Keeper) GetActiveValidatorEnclaveKeys(ctx sdk.Context) []types.EnclaveId
 
 	k.WithEnclaveIdentities(ctx, func(identity types.EnclaveIdentity) bool {
 		if identity.Status == types.EnclaveIdentityStatusActive &&
-			!identity.IsExpired(currentHeight) {
+			!types.IsIdentityExpired(&identity, currentHeight) {
 			identities = append(identities, identity)
 		}
 		return false
@@ -537,7 +537,7 @@ func (k Keeper) GetMeasurementAllowlist(ctx sdk.Context, teeType string, include
 
 	k.WithMeasurements(ctx, func(measurement types.MeasurementRecord) bool {
 		// Filter by TEE type if specified
-		if teeType != "" && string(measurement.TEEType) != teeType {
+		if teeType != "" && measurement.TeeType.String() != teeType {
 			return false
 		}
 
@@ -568,18 +568,18 @@ func (k Keeper) GetValidKeySet(ctx sdk.Context, forHeight int64) []types.Validat
 			return false
 		}
 
-		if identity.IsExpired(forHeight) {
+		if types.IsIdentityExpired(&identity, forHeight) {
 			return false
 		}
 
 		// Check if in rotation
 		validatorAddr, _ := sdk.AccAddressFromBech32(identity.ValidatorAddress)
 		rotation, hasRotation := k.GetActiveKeyRotation(ctx, validatorAddr)
-		isInRotation := hasRotation && rotation.IsInOverlapPeriod(forHeight)
+		isInRotation := hasRotation && types.IsInOverlapPeriod(rotation, forHeight)
 
 		keys = append(keys, types.ValidatorKeyInfo{
 			ValidatorAddress: identity.ValidatorAddress,
-			EncryptionKeyID:  identity.KeyFingerprint(),
+			EncryptionKeyId:  types.KeyFingerprint(identity.EncryptionPubKey),
 			EncryptionPubKey: identity.EncryptionPubKey,
 			MeasurementHash:  identity.MeasurementHash,
 			ExpiryHeight:     identity.ExpiryHeight,
@@ -598,7 +598,7 @@ func (k Keeper) GetValidKeySet(ctx sdk.Context, forHeight int64) []types.Validat
 
 // SetAttestedResult stores an attested scoring result
 func (k Keeper) SetAttestedResult(ctx sdk.Context, result *types.AttestedScoringResult) error {
-	if err := result.Validate(); err != nil {
+	if err := types.ValidateAttestedScoringResult(result); err != nil {
 		return err
 	}
 
@@ -607,8 +607,8 @@ func (k Keeper) SetAttestedResult(ctx sdk.Context, result *types.AttestedScoring
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
 				types.EventTypeVEIDScoreRejectedAttestation,
-				sdk.NewAttribute(types.AttributeKeyScopeID, result.ScopeID),
-				sdk.NewAttribute(types.AttributeKeyMeasurementHash, result.MeasurementHashHex()),
+				sdk.NewAttribute(types.AttributeKeyScopeID, result.ScopeId),
+				sdk.NewAttribute(types.AttributeKeyMeasurementHash, types.MeasurementHashHex(result.EnclaveMeasurementHash)),
 				sdk.NewAttribute(types.AttributeKeyReason, "measurement not allowlisted"),
 			),
 		)
@@ -620,7 +620,7 @@ func (k Keeper) SetAttestedResult(ctx sdk.Context, result *types.AttestedScoring
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
 				types.EventTypeVEIDScoreRejectedAttestation,
-				sdk.NewAttribute(types.AttributeKeyScopeID, result.ScopeID),
+				sdk.NewAttribute(types.AttributeKeyScopeID, result.ScopeId),
 				sdk.NewAttribute(types.AttributeKeyReason, "invalid enclave signature"),
 			),
 		)
@@ -632,17 +632,17 @@ func (k Keeper) SetAttestedResult(ctx sdk.Context, result *types.AttestedScoring
 	if err != nil {
 		return err
 	}
-	store.Set(types.AttestedResultKey(result.BlockHeight, result.ScopeID), bz)
+	store.Set(types.AttestedResultKey(result.BlockHeight, result.ScopeId), bz)
 
 	// Emit success event
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			types.EventTypeVEIDScoreComputedAttested,
-			sdk.NewAttribute(types.AttributeKeyScopeID, result.ScopeID),
+			sdk.NewAttribute(types.AttributeKeyScopeID, result.ScopeId),
 			sdk.NewAttribute(types.AttributeKeyAccountAddress, result.AccountAddress),
 			sdk.NewAttribute(types.AttributeKeyScore, math.NewInt(int64(result.Score)).String()),
 			sdk.NewAttribute(types.AttributeKeyStatus, result.Status),
-			sdk.NewAttribute(types.AttributeKeyMeasurementHash, result.MeasurementHashHex()),
+			sdk.NewAttribute(types.AttributeKeyMeasurementHash, types.MeasurementHashHex(result.EnclaveMeasurementHash)),
 			sdk.NewAttribute(types.AttributeKeyValidator, result.ValidatorAddress),
 		),
 	)
@@ -697,10 +697,10 @@ func (k Keeper) ValidateAttestation(ctx sdk.Context, identity *types.EnclaveIden
 		return types.ErrMeasurementNotAllowlisted
 	}
 
-	if identity.ISVSVN < measurement.MinISVSVN {
+	if identity.IsvSvn < measurement.MinIsvSvn {
 		return types.ErrISVSVNTooLow.Wrapf(
 			"ISVSVN %d is below minimum %d for measurement",
-			identity.ISVSVN, measurement.MinISVSVN,
+			identity.IsvSvn, measurement.MinIsvSvn,
 		)
 	}
 

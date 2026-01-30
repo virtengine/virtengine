@@ -24,7 +24,6 @@ func (s *GenesisTestSuite) TestDefaultGenesisState() {
 	genesis := types.DefaultGenesisState()
 
 	s.Require().NotNil(genesis)
-	s.Require().NotNil(genesis.Params)
 	s.Require().Empty(genesis.EnclaveIdentities)
 	s.Require().Empty(genesis.MeasurementAllowlist)
 	s.Require().Empty(genesis.KeyRotations)
@@ -40,18 +39,27 @@ func (s *GenesisTestSuite) TestValidateGenesis_Default() {
 // Test: ValidateGenesis with valid enclave identities
 func (s *GenesisTestSuite) TestValidateGenesis_ValidIdentities() {
 	now := time.Now().UTC()
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	genesis := &types.GenesisState{
 		Params: types.DefaultParams(),
 		EnclaveIdentities: []types.EnclaveIdentity{
 			{
-				EnclaveID:        "enclave-1",
 				ValidatorAddress: "cosmos1validator",
-				PublicKey:        []byte("public-key-bytes"),
-				EnclaveType:      types.EnclaveTypeSGX,
-				MeasurementHash:  "abc123hash",
-				Status:           types.EnclaveStatusActive,
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				SignerHash:       []byte("signer-hash"),
+				EncryptionPubKey: []byte("encryption-key"),
+				SigningPubKey:    []byte("signing-key"),
+				AttestationQuote: []byte("attestation-quote"),
+				IsvProdId:        1,
+				IsvSvn:           1,
+				QuoteVersion:     3,
+				DebugMode:        false,
+				ExpiryHeight:     1000,
 				RegisteredAt:     now,
-				LastAttestationAt: now,
+				Status:           types.EnclaveIdentityStatusActive,
 			},
 		},
 	}
@@ -63,15 +71,17 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidIdentities() {
 // Test: ValidateGenesis with valid measurements
 func (s *GenesisTestSuite) TestValidateGenesis_ValidMeasurements() {
 	now := time.Now().UTC()
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	genesis := &types.GenesisState{
 		Params: types.DefaultParams(),
 		MeasurementAllowlist: []types.MeasurementRecord{
 			{
-				MeasurementHash: "abc123hash",
-				EnclaveType:     types.EnclaveTypeSGX,
+				MeasurementHash: measurementHash,
+				TeeType:         types.TEETypeSGX,
 				Description:     "Production SGX enclave",
-				Status:          types.MeasurementStatusActive,
-				AddedBy:         "cosmos1admin",
+				MinIsvSvn:       1,
 				AddedAt:         now,
 			},
 		},
@@ -81,32 +91,22 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidMeasurements() {
 	s.Require().NoError(err)
 }
 
-// Test: ValidateGenesis with invalid identity - empty enclave ID
-func (s *GenesisTestSuite) TestValidateGenesis_InvalidIdentity_EmptyID() {
-	genesis := &types.GenesisState{
-		Params: types.DefaultParams(),
-		EnclaveIdentities: []types.EnclaveIdentity{
-			{
-				EnclaveID:        "", // Invalid
-				ValidatorAddress: "cosmos1validator",
-				PublicKey:        []byte("key"),
-			},
-		},
-	}
-
-	err := enclave.ValidateGenesis(genesis)
-	s.Require().Error(err)
-}
-
 // Test: ValidateGenesis with invalid identity - empty validator address
 func (s *GenesisTestSuite) TestValidateGenesis_InvalidIdentity_EmptyValidator() {
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	genesis := &types.GenesisState{
 		Params: types.DefaultParams(),
 		EnclaveIdentities: []types.EnclaveIdentity{
 			{
-				EnclaveID:        "enclave-1",
 				ValidatorAddress: "", // Invalid
-				PublicKey:        []byte("key"),
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: []byte("key"),
+				SigningPubKey:    []byte("key"),
+				AttestationQuote: []byte("quote"),
+				ExpiryHeight:     1000,
 			},
 		},
 	}
@@ -115,15 +115,22 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidIdentity_EmptyValidator() 
 	s.Require().Error(err)
 }
 
-// Test: ValidateGenesis with invalid identity - empty public key
-func (s *GenesisTestSuite) TestValidateGenesis_InvalidIdentity_EmptyPublicKey() {
+// Test: ValidateGenesis with invalid identity - empty encryption key
+func (s *GenesisTestSuite) TestValidateGenesis_InvalidIdentity_EmptyEncryptionKey() {
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	genesis := &types.GenesisState{
 		Params: types.DefaultParams(),
 		EnclaveIdentities: []types.EnclaveIdentity{
 			{
-				EnclaveID:        "enclave-1",
 				ValidatorAddress: "cosmos1validator",
-				PublicKey:        nil, // Invalid
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: nil, // Invalid
+				SigningPubKey:    []byte("key"),
+				AttestationQuote: []byte("quote"),
+				ExpiryHeight:     1000,
 			},
 		},
 	}
@@ -132,25 +139,36 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidIdentity_EmptyPublicKey() 
 	s.Require().Error(err)
 }
 
-// Test: ValidateGenesis with duplicate enclave IDs
+// Test: ValidateGenesis with duplicate validator addresses
 func (s *GenesisTestSuite) TestValidateGenesis_DuplicateIdentities() {
 	now := time.Now().UTC()
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	genesis := &types.GenesisState{
 		Params: types.DefaultParams(),
 		EnclaveIdentities: []types.EnclaveIdentity{
 			{
-				EnclaveID:        "enclave-1",
 				ValidatorAddress: "cosmos1validator1",
-				PublicKey:        []byte("key1"),
-				Status:           types.EnclaveStatusActive,
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: []byte("key1"),
+				SigningPubKey:    []byte("skey1"),
+				AttestationQuote: []byte("quote1"),
+				ExpiryHeight:     1000,
 				RegisteredAt:     now,
+				Status:           types.EnclaveIdentityStatusActive,
 			},
 			{
-				EnclaveID:        "enclave-1", // Duplicate
-				ValidatorAddress: "cosmos1validator2",
-				PublicKey:        []byte("key2"),
-				Status:           types.EnclaveStatusActive,
+				ValidatorAddress: "cosmos1validator1", // Duplicate
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: []byte("key2"),
+				SigningPubKey:    []byte("skey2"),
+				AttestationQuote: []byte("quote2"),
+				ExpiryHeight:     1000,
 				RegisteredAt:     now,
+				Status:           types.EnclaveIdentityStatusActive,
 			},
 		},
 	}
@@ -165,9 +183,9 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidMeasurement_EmptyHash() {
 		Params: types.DefaultParams(),
 		MeasurementAllowlist: []types.MeasurementRecord{
 			{
-				MeasurementHash: "", // Invalid
-				EnclaveType:     types.EnclaveTypeSGX,
-				Status:          types.MeasurementStatusActive,
+				MeasurementHash: nil, // Invalid
+				TeeType:         types.TEETypeSGX,
+				Description:     "Test",
 			},
 		},
 	}
@@ -179,19 +197,22 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidMeasurement_EmptyHash() {
 // Test: ValidateGenesis with duplicate measurement hashes
 func (s *GenesisTestSuite) TestValidateGenesis_DuplicateMeasurements() {
 	now := time.Now().UTC()
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	genesis := &types.GenesisState{
 		Params: types.DefaultParams(),
 		MeasurementAllowlist: []types.MeasurementRecord{
 			{
-				MeasurementHash: "abc123",
-				EnclaveType:     types.EnclaveTypeSGX,
-				Status:          types.MeasurementStatusActive,
+				MeasurementHash: measurementHash,
+				TeeType:         types.TEETypeSGX,
+				Description:     "First",
 				AddedAt:         now,
 			},
 			{
-				MeasurementHash: "abc123", // Duplicate
-				EnclaveType:     types.EnclaveTypeSGX,
-				Status:          types.MeasurementStatusActive,
+				MeasurementHash: measurementHash, // Duplicate
+				TeeType:         types.TEETypeSGX,
+				Description:     "Second",
 				AddedAt:         now,
 			},
 		},
@@ -205,40 +226,26 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateMeasurements() {
 func (s *GenesisTestSuite) TestDefaultParams() {
 	params := types.DefaultParams()
 
-	s.Require().NotNil(params)
-	s.Require().Greater(params.AttestationValiditySeconds, int64(0))
-	s.Require().Greater(params.KeyRotationGracePeriodSeconds, int64(0))
-	s.Require().Greater(params.MaxMeasurementsPerEnclave, uint32(0))
+	s.Require().Greater(params.MaxEnclaveKeysPerValidator, uint32(0))
+	s.Require().Greater(params.DefaultExpiryBlocks, int64(0))
+	s.Require().Greater(params.KeyRotationOverlapBlocks, int64(0))
+	s.Require().Greater(params.MinQuoteVersion, uint32(0))
+	s.Require().NotEmpty(params.AllowedTeeTypes)
 }
 
 // Test: Params validation - valid
 func (s *GenesisTestSuite) TestParamsValidation_Valid() {
 	params := types.DefaultParams()
-	err := params.Validate()
+	err := types.ValidateParams(&params)
 	s.Require().NoError(err)
-}
-
-// Test: Params validation - zero attestation validity
-func (s *GenesisTestSuite) TestParamsValidation_ZeroAttestationValidity() {
-	params := types.DefaultParams()
-	params.AttestationValiditySeconds = 0
-
-	err := params.Validate()
-	s.Require().Error(err)
-}
-
-// Test: Params validation - zero key rotation grace period
-func (s *GenesisTestSuite) TestParamsValidation_ZeroKeyRotationGrace() {
-	params := types.DefaultParams()
-	params.KeyRotationGracePeriodSeconds = 0
-
-	err := params.Validate()
-	s.Require().Error(err)
 }
 
 // Table-driven tests for enclave identity validation
 func TestEnclaveIdentityValidationTable(t *testing.T) {
 	now := time.Now().UTC()
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	tests := []struct {
 		name        string
 		identity    types.EnclaveIdentity
@@ -247,66 +254,70 @@ func TestEnclaveIdentityValidationTable(t *testing.T) {
 		{
 			name: "valid SGX identity",
 			identity: types.EnclaveIdentity{
-				EnclaveID:        "enclave-sgx-1",
 				ValidatorAddress: "cosmos1validator",
-				PublicKey:        []byte("public-key"),
-				EnclaveType:      types.EnclaveTypeSGX,
-				MeasurementHash:  "abc123",
-				Status:           types.EnclaveStatusActive,
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: []byte("public-key"),
+				SigningPubKey:    []byte("signing-key"),
+				AttestationQuote: []byte("quote"),
+				ExpiryHeight:     1000,
 				RegisteredAt:     now,
+				Status:           types.EnclaveIdentityStatusActive,
 			},
 			expectError: false,
 		},
 		{
-			name: "valid TDX identity",
+			name: "valid SEV-SNP identity",
 			identity: types.EnclaveIdentity{
-				EnclaveID:        "enclave-tdx-1",
 				ValidatorAddress: "cosmos1validator",
-				PublicKey:        []byte("public-key"),
-				EnclaveType:      types.EnclaveTypeTDX,
-				MeasurementHash:  "xyz789",
-				Status:           types.EnclaveStatusActive,
+				TeeType:          types.TEETypeSEVSNP,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: []byte("public-key"),
+				SigningPubKey:    []byte("signing-key"),
+				AttestationQuote: []byte("quote"),
+				ExpiryHeight:     1000,
 				RegisteredAt:     now,
+				Status:           types.EnclaveIdentityStatusActive,
 			},
 			expectError: false,
-		},
-		{
-			name: "valid SEV identity",
-			identity: types.EnclaveIdentity{
-				EnclaveID:        "enclave-sev-1",
-				ValidatorAddress: "cosmos1validator",
-				PublicKey:        []byte("public-key"),
-				EnclaveType:      types.EnclaveTypeSEV,
-				MeasurementHash:  "def456",
-				Status:           types.EnclaveStatusActive,
-				RegisteredAt:     now,
-			},
-			expectError: false,
-		},
-		{
-			name: "empty enclave ID",
-			identity: types.EnclaveIdentity{
-				EnclaveID:        "",
-				ValidatorAddress: "cosmos1validator",
-				PublicKey:        []byte("key"),
-			},
-			expectError: true,
 		},
 		{
 			name: "empty validator address",
 			identity: types.EnclaveIdentity{
-				EnclaveID:        "enclave-1",
 				ValidatorAddress: "",
-				PublicKey:        []byte("key"),
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: []byte("key"),
+				SigningPubKey:    []byte("key"),
+				AttestationQuote: []byte("quote"),
+				ExpiryHeight:     1000,
 			},
 			expectError: true,
 		},
 		{
-			name: "empty public key",
+			name: "empty encryption key",
 			identity: types.EnclaveIdentity{
-				EnclaveID:        "enclave-1",
 				ValidatorAddress: "cosmos1validator",
-				PublicKey:        nil,
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: nil,
+				SigningPubKey:    []byte("key"),
+				AttestationQuote: []byte("quote"),
+				ExpiryHeight:     1000,
+			},
+			expectError: true,
+		},
+		{
+			name: "debug mode enabled",
+			identity: types.EnclaveIdentity{
+				ValidatorAddress: "cosmos1validator",
+				TeeType:          types.TEETypeSGX,
+				MeasurementHash:  measurementHash,
+				EncryptionPubKey: []byte("key"),
+				SigningPubKey:    []byte("key"),
+				AttestationQuote: []byte("quote"),
+				DebugMode:        true, // Invalid for production
+				ExpiryHeight:     1000,
 			},
 			expectError: true,
 		},
@@ -314,7 +325,7 @@ func TestEnclaveIdentityValidationTable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.identity.Validate()
+			err := types.ValidateEnclaveIdentity(&tc.identity)
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
@@ -327,6 +338,9 @@ func TestEnclaveIdentityValidationTable(t *testing.T) {
 // Table-driven tests for measurement validation
 func TestMeasurementRecordValidationTable(t *testing.T) {
 	now := time.Now().UTC()
+	measurementHash := make([]byte, 32)
+	copy(measurementHash, []byte("test-measurement-hash-32-bytes!"))
+
 	tests := []struct {
 		name        string
 		measurement types.MeasurementRecord
@@ -335,11 +349,9 @@ func TestMeasurementRecordValidationTable(t *testing.T) {
 		{
 			name: "valid measurement",
 			measurement: types.MeasurementRecord{
-				MeasurementHash: "abc123hash",
-				EnclaveType:     types.EnclaveTypeSGX,
+				MeasurementHash: measurementHash,
+				TeeType:         types.TEETypeSGX,
 				Description:     "Production enclave",
-				Status:          types.MeasurementStatusActive,
-				AddedBy:         "cosmos1admin",
 				AddedAt:         now,
 			},
 			expectError: false,
@@ -347,27 +359,26 @@ func TestMeasurementRecordValidationTable(t *testing.T) {
 		{
 			name: "empty measurement hash",
 			measurement: types.MeasurementRecord{
-				MeasurementHash: "",
-				EnclaveType:     types.EnclaveTypeSGX,
-				Status:          types.MeasurementStatusActive,
+				MeasurementHash: nil,
+				TeeType:         types.TEETypeSGX,
+				Description:     "Test",
 			},
 			expectError: true,
 		},
 		{
-			name: "revoked measurement (valid)",
+			name: "invalid hash length",
 			measurement: types.MeasurementRecord{
-				MeasurementHash: "abc123hash",
-				EnclaveType:     types.EnclaveTypeSGX,
-				Status:          types.MeasurementStatusRevoked,
-				AddedAt:         now,
+				MeasurementHash: []byte("too-short"),
+				TeeType:         types.TEETypeSGX,
+				Description:     "Test",
 			},
-			expectError: false,
+			expectError: true,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.measurement.Validate()
+			err := types.ValidateMeasurementRecord(&tc.measurement)
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
@@ -388,43 +399,35 @@ func TestKeyRotationRecordValidationTable(t *testing.T) {
 		{
 			name: "valid key rotation",
 			rotation: types.KeyRotationRecord{
-				ValidatorAddress: "cosmos1validator",
-				EnclaveID:        "enclave-1",
-				OldPublicKey:     []byte("old-key"),
-				NewPublicKey:     []byte("new-key"),
-				Status:           types.RotationStatusPending,
-				InitiatedAt:      now,
-				GracePeriodEnd:   now.Add(24 * time.Hour),
+				ValidatorAddress:   "cosmos1validator",
+				OldKeyFingerprint:  "old-fingerprint",
+				NewKeyFingerprint:  "new-fingerprint",
+				OverlapStartHeight: 100,
+				OverlapEndHeight:   200,
+				Status:             types.KeyRotationStatusPending,
+				InitiatedAt:        now,
 			},
 			expectError: false,
 		},
 		{
 			name: "empty validator address",
 			rotation: types.KeyRotationRecord{
-				ValidatorAddress: "",
-				EnclaveID:        "enclave-1",
-				OldPublicKey:     []byte("old-key"),
-				NewPublicKey:     []byte("new-key"),
+				ValidatorAddress:   "",
+				OldKeyFingerprint:  "old",
+				NewKeyFingerprint:  "new",
+				OverlapStartHeight: 100,
+				OverlapEndHeight:   200,
 			},
 			expectError: true,
 		},
 		{
-			name: "empty enclave ID",
+			name: "invalid overlap period",
 			rotation: types.KeyRotationRecord{
-				ValidatorAddress: "cosmos1validator",
-				EnclaveID:        "",
-				OldPublicKey:     []byte("old-key"),
-				NewPublicKey:     []byte("new-key"),
-			},
-			expectError: true,
-		},
-		{
-			name: "empty new public key",
-			rotation: types.KeyRotationRecord{
-				ValidatorAddress: "cosmos1validator",
-				EnclaveID:        "enclave-1",
-				OldPublicKey:     []byte("old-key"),
-				NewPublicKey:     nil,
+				ValidatorAddress:   "cosmos1validator",
+				OldKeyFingerprint:  "old",
+				NewKeyFingerprint:  "new",
+				OverlapStartHeight: 200, // Start > End
+				OverlapEndHeight:   100,
 			},
 			expectError: true,
 		},
@@ -432,7 +435,7 @@ func TestKeyRotationRecordValidationTable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.rotation.Validate()
+			err := types.ValidateKeyRotationRecord(&tc.rotation)
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
@@ -442,72 +445,31 @@ func TestKeyRotationRecordValidationTable(t *testing.T) {
 	}
 }
 
-// Test: Complete genesis state with all entities
-func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
-	now := time.Now().UTC()
-	genesis := &types.GenesisState{
-		Params: types.DefaultParams(),
-		MeasurementAllowlist: []types.MeasurementRecord{
-			{
-				MeasurementHash: "sgx-measurement-1",
-				EnclaveType:     types.EnclaveTypeSGX,
-				Description:     "Production SGX",
-				Status:          types.MeasurementStatusActive,
-				AddedBy:         "cosmos1admin",
-				AddedAt:         now,
-			},
-		},
-		EnclaveIdentities: []types.EnclaveIdentity{
-			{
-				EnclaveID:        "enclave-1",
-				ValidatorAddress: "cosmos1validator",
-				PublicKey:        []byte("public-key-bytes"),
-				EnclaveType:      types.EnclaveTypeSGX,
-				MeasurementHash:  "sgx-measurement-1",
-				Status:           types.EnclaveStatusActive,
-				RegisteredAt:     now,
-				LastAttestationAt: now,
-			},
-		},
-		KeyRotations: []types.KeyRotationRecord{
-			{
-				ValidatorAddress: "cosmos1validator",
-				EnclaveID:        "enclave-1",
-				OldPublicKey:     []byte("old-key"),
-				NewPublicKey:     []byte("new-key"),
-				Status:           types.RotationStatusPending,
-				InitiatedAt:      now,
-				GracePeriodEnd:   now.Add(24 * time.Hour),
-			},
-		},
+// Test: TEE types
+func (s *GenesisTestSuite) TestTEETypes() {
+	validTypes := []types.TEEType{
+		types.TEETypeSGX,
+		types.TEETypeSEVSNP,
+		types.TEETypeNitro,
+		types.TEETypeTrustZone,
 	}
 
-	err := enclave.ValidateGenesis(genesis)
-	s.Require().NoError(err)
-}
-
-// Test: Enclave types enumeration
-func (s *GenesisTestSuite) TestEnclaveTypes() {
-	validTypes := []types.EnclaveType{
-		types.EnclaveTypeSGX,
-		types.EnclaveTypeTDX,
-		types.EnclaveTypeSEV,
-	}
-
-	for _, enclaveType := range validTypes {
-		s.Run(enclaveType.String(), func() {
-			s.Require().NotEmpty(enclaveType.String())
+	for _, teeType := range validTypes {
+		s.Run(teeType.String(), func() {
+			s.Require().NotEmpty(teeType.String())
+			s.Require().True(types.IsValidTEEType(teeType))
 		})
 	}
 }
 
-// Test: Enclave status enumeration
-func (s *GenesisTestSuite) TestEnclaveStatuses() {
-	validStatuses := []types.EnclaveStatus{
-		types.EnclaveStatusActive,
-		types.EnclaveStatusInactive,
-		types.EnclaveStatusRevoked,
-		types.EnclaveStatusExpired,
+// Test: EnclaveIdentityStatus values
+func (s *GenesisTestSuite) TestEnclaveIdentityStatuses() {
+	validStatuses := []types.EnclaveIdentityStatus{
+		types.EnclaveIdentityStatusActive,
+		types.EnclaveIdentityStatusPending,
+		types.EnclaveIdentityStatusExpired,
+		types.EnclaveIdentityStatusRevoked,
+		types.EnclaveIdentityStatusRotating,
 	}
 
 	for _, status := range validStatuses {
@@ -517,27 +479,13 @@ func (s *GenesisTestSuite) TestEnclaveStatuses() {
 	}
 }
 
-// Test: Measurement status enumeration
-func (s *GenesisTestSuite) TestMeasurementStatuses() {
-	validStatuses := []types.MeasurementStatus{
-		types.MeasurementStatusActive,
-		types.MeasurementStatusRevoked,
-	}
-
-	for _, status := range validStatuses {
-		s.Run(status.String(), func() {
-			s.Require().NotEmpty(status.String())
-		})
-	}
-}
-
-// Test: Key rotation status enumeration
+// Test: KeyRotationStatus values
 func (s *GenesisTestSuite) TestKeyRotationStatuses() {
-	validStatuses := []types.RotationStatus{
-		types.RotationStatusPending,
-		types.RotationStatusCompleted,
-		types.RotationStatusFailed,
-		types.RotationStatusCancelled,
+	validStatuses := []types.KeyRotationStatus{
+		types.KeyRotationStatusPending,
+		types.KeyRotationStatusActive,
+		types.KeyRotationStatusCompleted,
+		types.KeyRotationStatusCancelled,
 	}
 
 	for _, status := range validStatuses {

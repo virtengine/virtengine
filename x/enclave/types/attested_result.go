@@ -3,58 +3,13 @@ package types
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"time"
+
+	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 )
 
-// AttestedScoringResult represents an enclave-attested scoring output
-// that is included in blocks for consensus verification.
-type AttestedScoringResult struct {
-	// ScopeID is the identity scope that was scored
-	ScopeID string `json:"scope_id"`
-
-	// AccountAddress is the account that owns the identity
-	AccountAddress string `json:"account_address"`
-
-	// Score is the computed identity score (0-100)
-	Score uint32 `json:"score"`
-
-	// Status is the verification status
-	Status string `json:"status"`
-
-	// ReasonCodes are structured reason codes for the score
-	ReasonCodes []string `json:"reason_codes,omitempty"`
-
-	// ModelVersionHash is the hash of the ML model used
-	ModelVersionHash []byte `json:"model_version_hash"`
-
-	// InputHash is the hash of the input data (for determinism verification)
-	InputHash []byte `json:"input_hash"`
-
-	// EvidenceHashes are hashes of evidence artifacts (face embeddings, OCR, etc.)
-	EvidenceHashes [][]byte `json:"evidence_hashes,omitempty"`
-
-	// EnclaveMeasurementHash is the measurement of the enclave that computed this
-	EnclaveMeasurementHash []byte `json:"enclave_measurement_hash"`
-
-	// EnclaveSignature is the signature from the enclave signing key
-	EnclaveSignature []byte `json:"enclave_signature"`
-
-	// AttestationReference is a reference to the attestation quote (hash or ID)
-	AttestationReference []byte `json:"attestation_reference"`
-
-	// ValidatorAddress is the validator that produced this result
-	ValidatorAddress string `json:"validator_address"`
-
-	// BlockHeight is the block height where this result was produced
-	BlockHeight int64 `json:"block_height"`
-
-	// Timestamp is when this result was computed
-	Timestamp time.Time `json:"timestamp"`
-}
-
-// Validate validates the attested scoring result
-func (a *AttestedScoringResult) Validate() error {
-	if a.ScopeID == "" {
+// ValidateAttestedScoringResult validates the attested scoring result
+func ValidateAttestedScoringResult(a *v1.AttestedScoringResult) error {
+	if a.ScopeId == "" {
 		return ErrInvalidAttestedResult.Wrap("scope ID cannot be empty")
 	}
 
@@ -98,11 +53,11 @@ func (a *AttestedScoringResult) Validate() error {
 }
 
 // SigningPayload returns the bytes that should be signed by the enclave
-func (a *AttestedScoringResult) SigningPayload() []byte {
+func SigningPayload(a *v1.AttestedScoringResult) []byte {
 	h := sha256.New()
 
 	// Include scope ID
-	h.Write([]byte(a.ScopeID))
+	h.Write([]byte(a.ScopeId))
 
 	// Include account address
 	h.Write([]byte(a.AccountAddress))
@@ -138,24 +93,24 @@ func (a *AttestedScoringResult) SigningPayload() []byte {
 	return h.Sum(nil)
 }
 
-// Hash returns a unique identifier for this result
-func (a *AttestedScoringResult) Hash() []byte {
+// AttestedResultHash returns a unique identifier for this result
+func AttestedResultHash(a *v1.AttestedScoringResult) []byte {
 	h := sha256.New()
-	h.Write(a.SigningPayload())
+	h.Write(SigningPayload(a))
 	h.Write(a.EnclaveSignature)
 	return h.Sum(nil)
 }
 
 // MeasurementHashHex returns the enclave measurement hash as hex string
-func (a *AttestedScoringResult) MeasurementHashHex() string {
+func AttestedResultMeasurementHashHex(a *v1.AttestedScoringResult) string {
 	return hex.EncodeToString(a.EnclaveMeasurementHash)
 }
 
 // ConsensusVerificationRequest represents a request to verify a scoring result
-// during consensus.
+// during consensus. This type is kept locally as it's not in the proto.
 type ConsensusVerificationRequest struct {
 	// ProposedResult is the result proposed by the block proposer
-	ProposedResult *AttestedScoringResult `json:"proposed_result"`
+	ProposedResult *v1.AttestedScoringResult `json:"proposed_result"`
 
 	// EncryptedPayload is the encrypted identity data to recompute
 	EncryptedPayload []byte `json:"encrypted_payload"`
@@ -173,7 +128,7 @@ type ConsensusVerificationResponse struct {
 	Valid bool `json:"valid"`
 
 	// RecomputedResult is the result from local enclave recomputation
-	RecomputedResult *AttestedScoringResult `json:"recomputed_result,omitempty"`
+	RecomputedResult *v1.AttestedScoringResult `json:"recomputed_result,omitempty"`
 
 	// Reason is the reason for rejection (if not valid)
 	Reason string `json:"reason,omitempty"`

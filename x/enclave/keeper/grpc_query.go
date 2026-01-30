@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"encoding/hex"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -58,7 +59,7 @@ func (q queryServer) CommitteeEnclaveKeys(goCtx context.Context, req *types.Quer
 func (q queryServer) MeasurementAllowlist(goCtx context.Context, req *types.QueryMeasurementAllowlistRequest) (*types.QueryMeasurementAllowlistResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	measurements := q.keeper.GetMeasurementAllowlist(ctx, req.TEEType, req.IncludeRevoked)
+	measurements := q.keeper.GetMeasurementAllowlist(ctx, req.TeeType, req.IncludeRevoked)
 
 	return &types.QueryMeasurementAllowlistResponse{Measurements: measurements}, nil
 }
@@ -67,12 +68,18 @@ func (q queryServer) MeasurementAllowlist(goCtx context.Context, req *types.Quer
 func (q queryServer) Measurement(goCtx context.Context, req *types.QueryMeasurementRequest) (*types.QueryMeasurementResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	measurement, exists := q.keeper.GetMeasurement(ctx, req.MeasurementHash)
+	// Decode hex-encoded measurement hash
+	measurementHash, err := hex.DecodeString(req.MeasurementHash)
+	if err != nil {
+		return nil, types.ErrInvalidMeasurement.Wrapf("invalid measurement hash: %v", err)
+	}
+
+	measurement, exists := q.keeper.GetMeasurement(ctx, measurementHash)
 	if !exists {
 		return &types.QueryMeasurementResponse{Measurement: nil, IsAllowed: false}, nil
 	}
 
-	isAllowed := q.keeper.IsMeasurementAllowed(ctx, req.MeasurementHash, ctx.BlockHeight())
+	isAllowed := q.keeper.IsMeasurementAllowed(ctx, measurementHash, ctx.BlockHeight())
 
 	return &types.QueryMeasurementResponse{Measurement: measurement, IsAllowed: isAllowed}, nil
 }
@@ -107,7 +114,7 @@ func (q queryServer) ValidKeySet(goCtx context.Context, req *types.QueryValidKey
 
 	return &types.QueryValidKeySetResponse{
 		ValidatorKeys: keys,
-		TotalCount:    len(keys),
+		TotalCount:    int32(len(keys)),
 	}, nil
 }
 
@@ -124,7 +131,7 @@ func (q queryServer) Params(goCtx context.Context, req *types.QueryParamsRequest
 func (q queryServer) AttestedResult(goCtx context.Context, req *types.QueryAttestedResultRequest) (*types.QueryAttestedResultResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	result, _ := q.keeper.GetAttestedResult(ctx, req.BlockHeight, req.ScopeID)
+	result, _ := q.keeper.GetAttestedResult(ctx, req.BlockHeight, req.ScopeId)
 
 	return &types.QueryAttestedResultResponse{Result: result}, nil
 }

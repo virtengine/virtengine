@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"encoding/hex"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -28,15 +29,15 @@ func (m msgServer) RegisterEnclaveIdentity(goCtx context.Context, msg *types.Msg
 	// Create the enclave identity
 	identity := &types.EnclaveIdentity{
 		ValidatorAddress: msg.ValidatorAddress,
-		TEEType:          msg.TEEType,
+		TeeType:          msg.TeeType,
 		MeasurementHash:  msg.MeasurementHash,
 		SignerHash:       msg.SignerHash,
 		EncryptionPubKey: msg.EncryptionPubKey,
 		SigningPubKey:    msg.SigningPubKey,
 		AttestationQuote: msg.AttestationQuote,
 		AttestationChain: msg.AttestationChain,
-		ISVProdID:        msg.ISVProdID,
-		ISVSVN:           msg.ISVSVN,
+		IsvProdId:        msg.IsvProdId,
+		IsvSvn:           msg.IsvSvn,
 		QuoteVersion:     msg.QuoteVersion,
 		DebugMode:        false, // Always false for registration
 		ExpiryHeight:     ctx.BlockHeight() + params.DefaultExpiryBlocks,
@@ -50,7 +51,7 @@ func (m msgServer) RegisterEnclaveIdentity(goCtx context.Context, msg *types.Msg
 	m.keeper.RecordIdentityRegistration()
 
 	return &types.MsgRegisterEnclaveIdentityResponse{
-		KeyFingerprint: identity.KeyFingerprint(),
+		KeyFingerprint: types.KeyFingerprint(identity.EncryptionPubKey),
 		ExpiryHeight:   identity.ExpiryHeight,
 	}, nil
 }
@@ -74,7 +75,7 @@ func (m msgServer) RotateEnclaveIdentity(goCtx context.Context, msg *types.MsgRo
 	rotation := &types.KeyRotationRecord{
 		ValidatorAddress:   msg.ValidatorAddress,
 		Epoch:              existingIdentity.Epoch + 1,
-		OldKeyFingerprint:  existingIdentity.KeyFingerprint(),
+		OldKeyFingerprint:  types.KeyFingerprint(existingIdentity.EncryptionPubKey),
 		NewKeyFingerprint:  "", // Will be set after creating new identity
 		OverlapStartHeight: ctx.BlockHeight(),
 		OverlapEndHeight:   ctx.BlockHeight() + msg.OverlapBlocks,
@@ -88,15 +89,15 @@ func (m msgServer) RotateEnclaveIdentity(goCtx context.Context, msg *types.MsgRo
 
 	updatedIdentity := &types.EnclaveIdentity{
 		ValidatorAddress: msg.ValidatorAddress,
-		TEEType:          existingIdentity.TEEType,
+		TeeType:          existingIdentity.TeeType,
 		MeasurementHash:  newMeasurement,
 		SignerHash:       existingIdentity.SignerHash,
 		EncryptionPubKey: msg.NewEncryptionPubKey,
 		SigningPubKey:    msg.NewSigningPubKey,
 		AttestationQuote: msg.NewAttestationQuote,
 		AttestationChain: msg.NewAttestationChain,
-		ISVProdID:        existingIdentity.ISVProdID,
-		ISVSVN:           msg.NewISVSVN,
+		IsvProdId:        existingIdentity.IsvProdId,
+		IsvSvn:           msg.NewIsvSvn,
 		QuoteVersion:     existingIdentity.QuoteVersion,
 		DebugMode:        false,
 		Epoch:            existingIdentity.Epoch + 1,
@@ -105,7 +106,7 @@ func (m msgServer) RotateEnclaveIdentity(goCtx context.Context, msg *types.MsgRo
 		Status:           types.EnclaveIdentityStatusRotating,
 	}
 
-	rotation.NewKeyFingerprint = updatedIdentity.KeyFingerprint()
+	rotation.NewKeyFingerprint = types.KeyFingerprint(updatedIdentity.EncryptionPubKey)
 
 	// Initiate rotation
 	if err := m.keeper.InitiateKeyRotation(ctx, rotation); err != nil {
@@ -140,9 +141,9 @@ func (m msgServer) ProposeMeasurement(goCtx context.Context, msg *types.MsgPropo
 
 	measurement := &types.MeasurementRecord{
 		MeasurementHash: msg.MeasurementHash,
-		TEEType:         msg.TEEType,
+		TeeType:         msg.TeeType,
 		Description:     msg.Description,
-		MinISVSVN:       msg.MinISVSVN,
+		MinIsvSvn:       msg.MinIsvSvn,
 		ExpiryHeight:    expiryHeight,
 	}
 
@@ -154,7 +155,7 @@ func (m msgServer) ProposeMeasurement(goCtx context.Context, msg *types.MsgPropo
 	m.keeper.RecordMeasurementProposal("add")
 
 	return &types.MsgProposeMeasurementResponse{
-		MeasurementHash: measurement.MeasurementHashHex(),
+		MeasurementHash: hex.EncodeToString(measurement.MeasurementHash),
 	}, nil
 }
 
@@ -176,4 +177,26 @@ func (m msgServer) RevokeMeasurement(goCtx context.Context, msg *types.MsgRevoke
 	m.keeper.RecordMeasurementProposal("revoke")
 
 	return &types.MsgRevokeMeasurementResponse{}, nil
+}
+
+// UpdateParams handles MsgUpdateParams
+func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Check authority
+	if msg.Authority != m.keeper.GetAuthority() {
+		return nil, types.ErrUnauthorized.Wrapf("invalid authority: expected %s, got %s", m.keeper.GetAuthority(), msg.Authority)
+	}
+
+	// Validate params
+	if err := types.ValidateParams(&msg.Params); err != nil {
+		return nil, err
+	}
+
+	// Set params
+	if err := m.keeper.SetParams(ctx, msg.Params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateParamsResponse{}, nil
 }
