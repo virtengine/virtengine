@@ -8,9 +8,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
+	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
-	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
 	"github.com/virtengine/virtengine/x/provider/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 )
@@ -77,7 +77,7 @@ func (ms msgServer) CreateProvider(goCtx context.Context, msg *types.MsgCreatePr
 		sessions := ms.mfa.GetAccountSessions(ctx, owner)
 		hasValidSession := false
 		blockTime := ctx.BlockTime()
-		
+
 		for _, session := range sessions {
 			// Session must be valid, not yet used, and for provider registration
 			if session.IsValid(blockTime) && session.TransactionType == txType {
@@ -85,7 +85,7 @@ func (ms msgServer) CreateProvider(goCtx context.Context, msg *types.MsgCreatePr
 				break
 			}
 		}
-		
+
 		if !hasValidSession {
 			return nil, ErrMFARequired.Wrap(
 				"provider registration requires valid MFA authorization session",
@@ -146,4 +146,66 @@ func (ms msgServer) DeleteProvider(goCtx context.Context, msg *types.MsgDeletePr
 	ms.provider.DeleteProviderPublicKey(ctx, owner)
 
 	return &types.MsgDeleteProviderResponse{}, nil
+}
+
+func (ms msgServer) GenerateDomainVerificationToken(goCtx context.Context, msg *types.MsgGenerateDomainVerificationToken) (*types.MsgGenerateDomainVerificationTokenResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+
+	// Verify provider exists
+	if _, ok := ms.provider.Get(ctx, owner); !ok {
+		return nil, types.ErrProviderNotFound.Wrapf("provider not found: %s", msg.Owner)
+	}
+
+	// Generate verification token
+	record, err := ms.provider.GenerateDomainVerificationToken(ctx, owner, msg.Domain)
+	if err != nil {
+		return nil, err
+	}
+
+	// Emit event
+	_ = ctx.EventManager().EmitTypedEvent(
+		&types.EventProviderDomainVerificationStarted{
+			Owner:  msg.Owner,
+			Domain: msg.Domain,
+			Token:  record.Token,
+		},
+	)
+
+	return &types.MsgGenerateDomainVerificationTokenResponse{
+		Token:     record.Token,
+		ExpiresAt: record.ExpiresAt,
+	}, nil
+}
+
+func (ms msgServer) VerifyProviderDomain(goCtx context.Context, msg *types.MsgVerifyProviderDomain) (*types.MsgVerifyProviderDomainResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	owner, _ := sdk.AccAddressFromBech32(msg.Owner)
+
+	// Verify provider exists
+	if _, ok := ms.provider.Get(ctx, owner); !ok {
+		return nil, types.ErrProviderNotFound.Wrapf("provider not found: %s", msg.Owner)
+	}
+
+	// Perform domain verification
+	err := ms.provider.VerifyProviderDomain(ctx, owner)
+	if err != nil {
+		return &types.MsgVerifyProviderDomainResponse{
+			Verified: false,
+		}, err
+	}
+
+	return &types.MsgVerifyProviderDomainResponse{
+		Verified: true,
+	}, nil
 }
