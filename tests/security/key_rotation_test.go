@@ -363,11 +363,11 @@ type ProviderKeyManager struct {
 }
 
 type ManagedKey struct {
-	Key        []byte
-	Version    string
-	CreatedAt  time.Time
+	Key         []byte
+	Version     string
+	CreatedAt   time.Time
 	ActivatedAt *time.Time
-	RevokedAt  *time.Time
+	RevokedAt   *time.Time
 }
 
 func NewProviderKeyManager(providerID string) *ProviderKeyManager {
@@ -451,8 +451,8 @@ type ApprovedClientAllowlist struct {
 }
 
 type ApprovedClientKey struct {
-	Key   []byte
-	Label string
+	Key     []byte
+	Label   string
 	AddedAt time.Time
 }
 
@@ -521,12 +521,12 @@ type ValidatorKeyRecord struct {
 }
 
 type KeyUpdateProposal struct {
-	ID             string
-	ValidatorAddr  string
-	NewKey         []byte
-	Status         string
-	Confirmations  int
-	ProposedAt     time.Time
+	ID            string
+	ValidatorAddr string
+	NewKey        []byte
+	Status        string
+	Confirmations int
+	ProposedAt    time.Time
 }
 
 func NewValidatorKeyRegistry() *ValidatorKeyRegistry {

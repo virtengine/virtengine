@@ -303,10 +303,10 @@ func (s *MFAEnforcementTestSuite) TestRecoveryFlowEnforcement() {
 	// Test: Recovery requires multiple factors
 	s.Run("recovery_requires_multiple_factors", func() {
 		policy := &MFAPolicy{
-			SensitiveTxTypes:      []SensitiveTransactionType{TxTypeAccountRecovery},
-			RequiredFactors:       2, // Require 2 factors for recovery
-			AllowedFactorTypes:    []FactorType{FactorTypeTOTP, FactorTypeFIDO2, FactorTypeBackupCode},
-			RecoveryRequirements:  3, // Need 3 factors for recovery specifically
+			SensitiveTxTypes:     []SensitiveTransactionType{TxTypeAccountRecovery},
+			RequiredFactors:      2, // Require 2 factors for recovery
+			AllowedFactorTypes:   []FactorType{FactorTypeTOTP, FactorTypeFIDO2, FactorTypeBackupCode},
+			RecoveryRequirements: 3, // Need 3 factors for recovery specifically
 		}
 
 		recoveryReqs := policy.GetRecoveryRequirements()
@@ -349,13 +349,13 @@ func (s *MFAEnforcementTestSuite) TestRecoveryFlowEnforcement() {
 type SensitiveTransactionType string
 
 const (
-	TxTypeAccountRecovery     SensitiveTransactionType = "account_recovery"
-	TxTypeKeyRotation         SensitiveTransactionType = "key_rotation"
-	TxTypeHighValueTransfer   SensitiveTransactionType = "high_value_transfer"
+	TxTypeAccountRecovery      SensitiveTransactionType = "account_recovery"
+	TxTypeKeyRotation          SensitiveTransactionType = "key_rotation"
+	TxTypeHighValueTransfer    SensitiveTransactionType = "high_value_transfer"
 	TxTypeProviderRegistration SensitiveTransactionType = "provider_registration"
-	TxTypeIdentityScopeUpdate SensitiveTransactionType = "identity_scope_update"
-	TxTypeMFAPolicyChange     SensitiveTransactionType = "mfa_policy_change"
-	TxTypeDelegationChange    SensitiveTransactionType = "delegation_change"
+	TxTypeIdentityScopeUpdate  SensitiveTransactionType = "identity_scope_update"
+	TxTypeMFAPolicyChange      SensitiveTransactionType = "mfa_policy_change"
+	TxTypeDelegationChange     SensitiveTransactionType = "delegation_change"
 )
 
 type FactorType string
