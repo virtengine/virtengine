@@ -1,0 +1,243 @@
+# OpenTelemetry Collector Configuration for VirtEngine
+# This collector receives telemetry from VirtEngine services and routes to backends
+
+receivers:
+  # OTLP receiver for traces and metrics from VirtEngine services
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Prometheus receiver to scrape metrics from services
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 15s
+          static_configs:
+            - targets: ['localhost:8888']
+
+  # Host metrics for collector node
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      disk:
+      filesystem:
+      load:
+      memory:
+      network:
+      process:
+        include:
+          names: ['virtengined', 'provider-daemon']
+          match_type: regexp
+
+processors:
+  # Batch processor for efficient export
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+    send_batch_max_size: 1500
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 1000
+    spike_limit_mib: 200
+
+  # Add resource attributes
+  resource:
+    attributes:
+      - key: service.namespace
+        value: virtengine
+        action: upsert
+      - key: deployment.environment
+        value: ${DEPLOYMENT_ENV:-production}
+        action: upsert
+
+  # Add attributes from environment
+  resourcedetection:
+    detectors: [env, system, docker]
+    timeout: 5s
+    override: false
+
+  # Filter out health check spans
+  filter/healthchecks:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.target"] == "/health"'
+        - 'attributes["http.target"] == "/healthz"'
+        - 'attributes["http.target"] == "/ready"'
+        - 'attributes["http.target"] == "/metrics"'
+
+  # Tail-based sampling for traces
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 100000
+    expected_new_traces_per_sec: 100
+    policies:
+      # Always sample errors
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      # Always sample slow traces (>5s)
+      - name: latency-policy
+        type: latency
+        latency:
+          threshold_ms: 5000
+      # Sample VEID traces at higher rate
+      - name: veid-policy
+        type: string_attribute
+        string_attribute:
+          key: service.name
+          values: [virtengine-veid]
+          enabled_regex_matching: false
+      # Sample market/escrow traces
+      - name: market-policy
+        type: string_attribute
+        string_attribute:
+          key: service.name
+          values: [virtengine-market, virtengine-escrow]
+      # Probabilistic sampling for everything else
+      - name: probabilistic-policy
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+  # Span metrics processor - generate metrics from spans
+  spanmetrics:
+    metrics_exporter: prometheusremotewrite
+    latency_histogram_buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s]
+    dimensions:
+      - name: http.method
+      - name: http.status_code
+      - name: service.name
+    dimensions_cache_size: 1000
+    aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
+
+  # Transform processor for span manipulation
+  transform:
+    trace_statements:
+      - context: span
+        statements:
+          # Add computed attributes
+          - set(attributes["chain.module"], "veid") where attributes["rpc.method"] =~ ".*VEID.*"
+          - set(attributes["chain.module"], "market") where attributes["rpc.method"] =~ ".*Market.*"
+          - set(attributes["chain.module"], "escrow") where attributes["rpc.method"] =~ ".*Escrow.*"
+
+exporters:
+  # Export traces to Tempo
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Export metrics to Prometheus
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Export logs to Loki
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    labels:
+      resource:
+        service.name: "service_name"
+        service.namespace: "namespace"
+      attributes:
+        level: "level"
+        error.type: "error_type"
+
+  # Debug exporter for troubleshooting (disabled in production)
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # File exporter for audit logs
+  file/audit:
+    path: /var/log/otel/audit.log
+    rotation:
+      max_megabytes: 100
+      max_days: 30
+      max_backups: 10
+      localtime: true
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance profiling
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # zPages for debugging
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  # Memory ballast for GC tuning
+  memory_ballast:
+    size_mib: 512
+
+service:
+  extensions: [health_check, pprof, zpages, memory_ballast]
+  
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors: 
+        - memory_limiter
+        - filter/healthchecks
+        - resource
+        - resourcedetection
+        - transform
+        - tail_sampling
+        - spanmetrics
+        - batch
+      exporters: [otlp/tempo]
+
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus, hostmetrics]
+      processors:
+        - memory_limiter
+        - resource
+        - resourcedetection
+        - batch
+      exporters: [prometheusremotewrite]
+
+    # Logs pipeline
+    logs:
+      receivers: [otlp]
+      processors:
+        - memory_limiter
+        - resource
+        - resourcedetection
+        - batch
+      exporters: [loki]
+
+    # Audit logs pipeline (separate for compliance)
+    logs/audit:
+      receivers: [otlp]
+      processors:
+        - memory_limiter
+        - resource
+        - batch
+      exporters: [file/audit]
+
+  telemetry:
+    logs:
+      level: info
+      encoding: json
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888

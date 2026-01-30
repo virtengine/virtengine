@@ -1,0 +1,169 @@
+# VirtEngine Alertmanager Configuration
+# MONITOR-001: Alert routing and notification
+
+global:
+  resolve_timeout: 5m
+  # SMTP configuration (customize for your environment)
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_from: 'alertmanager@virtengine.io'
+  # smtp_auth_username: 'alertmanager'
+  # smtp_auth_password: '{{ SMTP_PASSWORD }}'
+
+  # Slack configuration (customize for your environment)
+  # slack_api_url: '{{ SLACK_WEBHOOK_URL }}'
+
+# Templates for alert notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Inhibition rules - suppress related alerts
+inhibit_rules:
+  # If node is down, suppress all other node alerts
+  - source_matchers:
+      - alertname="NodeDown"
+    target_matchers:
+      - service="virtengine-node"
+    equal: ['instance']
+
+  # If critical alert exists, suppress warnings for same service
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'service']
+
+  # If SLO budget is depleted, suppress slow burn alerts
+  - source_matchers:
+      - alertname=~".*BudgetCritical"
+    target_matchers:
+      - alertname=~".*BudgetBurning"
+    equal: ['slo_id']
+
+# Alert routing tree
+route:
+  # Default receiver
+  receiver: 'default-receiver'
+  
+  # Group alerts by alertname and service
+  group_by: ['alertname', 'service', 'tier']
+  
+  # Wait time before sending first notification
+  group_wait: 30s
+  
+  # Wait time before sending batch of new alerts
+  group_interval: 5m
+  
+  # Wait time before re-sending notifications
+  repeat_interval: 4h
+
+  # Child routes
+  routes:
+    # Critical alerts - immediate notification
+    - matchers:
+        - severity="critical"
+      receiver: 'critical-receiver'
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 1h
+      continue: true
+
+    # Tier 0 alerts - high priority
+    - matchers:
+        - tier="tier0"
+      receiver: 'tier0-receiver'
+      group_wait: 15s
+      group_interval: 2m
+      repeat_interval: 2h
+
+    # VEID non-determinism - page immediately
+    - matchers:
+        - alertname="VEIDInferenceNonDeterministic"
+      receiver: 'consensus-critical-receiver'
+      group_wait: 0s
+      repeat_interval: 5m
+
+    # Error budget alerts
+    - matchers:
+        - alert_type="error_budget"
+      receiver: 'slo-receiver'
+      group_by: ['slo_id']
+
+    # Marketplace alerts
+    - matchers:
+        - service="market"
+      receiver: 'marketplace-receiver'
+
+    # Provider daemon alerts
+    - matchers:
+        - service="provider-daemon"
+      receiver: 'provider-receiver'
+
+    # Watchdog alert - used for dead man's switch
+    - matchers:
+        - alertname="Watchdog"
+      receiver: 'watchdog-receiver'
+      repeat_interval: 1m
+
+# Receivers configuration
+receivers:
+  # Default receiver - logs to console
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+        send_resolved: true
+
+  # Critical alerts receiver
+  - name: 'critical-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts/critical'
+        send_resolved: true
+    # Uncomment for PagerDuty integration
+    # pagerduty_configs:
+    #   - service_key: '{{ PAGERDUTY_SERVICE_KEY }}'
+    #     severity: critical
+    # Uncomment for Slack integration
+    # slack_configs:
+    #   - channel: '#alerts-critical'
+    #     send_resolved: true
+    #     title: '{{ template "slack.virtengine.title" . }}'
+    #     text: '{{ template "slack.virtengine.text" . }}'
+
+  # Tier 0 receiver
+  - name: 'tier0-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts/tier0'
+        send_resolved: true
+
+  # Consensus critical receiver - for chain-breaking issues
+  - name: 'consensus-critical-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts/consensus'
+        send_resolved: true
+    # This should page multiple on-call engineers
+    # pagerduty_configs:
+    #   - service_key: '{{ PAGERDUTY_CONSENSUS_KEY }}'
+    #     severity: critical
+    #     description: 'CONSENSUS CRITICAL: {{ .CommonAnnotations.summary }}'
+
+  # SLO alerts receiver
+  - name: 'slo-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts/slo'
+        send_resolved: true
+
+  # Marketplace receiver
+  - name: 'marketplace-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts/marketplace'
+        send_resolved: true
+
+  # Provider daemon receiver
+  - name: 'provider-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts/provider'
+        send_resolved: true
+
+  # Watchdog receiver - for dead man's switch monitoring
+  - name: 'watchdog-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts/watchdog'

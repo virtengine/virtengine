@@ -4,7 +4,6 @@
 package payment
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/json"
 	"errors"

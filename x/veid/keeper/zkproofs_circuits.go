@@ -1,11 +1,10 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -202,32 +201,47 @@ func NewZKProofSystem() (*ZKProofSystem, error) {
 // Proof Generation Functions
 // ============================================================================
 
-// GenerateAgeRangeProofGroth16 generates a real Groth16 ZK-SNARK proof for age range
+// GenerateAgeRangeProofGroth16 generates a real Groth16 ZK-SNARK proof for age range.
+//
+// SECURITY NOTE: This function is designed for OFF-CHAIN use only. The salt parameter
+// must be generated off-chain using crypto/rand to ensure consensus safety. Validators
+// should NOT call this function directly; instead, proofs should be generated client-side
+// and only verification should happen on-chain.
+//
+// Parameters:
+//   - ctx: SDK context (used for block time)
+//   - dateOfBirth: Unix timestamp of date of birth (private witness)
+//   - ageThreshold: Minimum age to prove (public input)
+//   - salt: 32-byte random salt generated OFF-CHAIN (required for commitment)
+//   - nonce: Additional nonce for proof uniqueness
+//
+// Returns the proof bytes and commitment for on-chain verification.
 func (k Keeper) GenerateAgeRangeProofGroth16(
 	ctx sdk.Context,
 	dateOfBirth int64, // Unix timestamp
 	ageThreshold uint32,
-	satisfies bool,
+	salt []byte, // MUST be generated off-chain
 	nonce []byte,
 ) ([]byte, error) {
 	if k.zkSystem == nil {
 		return nil, fmt.Errorf("ZK proof system not initialized")
 	}
 
+	// Validate salt is provided (must be generated off-chain for consensus safety)
+	if len(salt) != 32 {
+		return nil, fmt.Errorf("salt must be exactly 32 bytes (provided off-chain)")
+	}
+
 	// Get current timestamp from block time
 	currentTimestamp := ctx.BlockTime().Unix()
 
-	// Generate salt for commitment
-	saltBytes := make([]byte, 32)
-	if _, err := rand.Read(saltBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate salt: %w", err)
-	}
-	salt := new(big.Int).SetBytes(saltBytes)
+	// Use provided salt (generated off-chain)
+	saltBigInt := new(big.Int).SetBytes(salt)
 
 	// Compute commitment: dateOfBirth * 1000000 + salt
 	commitment := new(big.Int).SetInt64(dateOfBirth)
 	commitment.Mul(commitment, big.NewInt(1000000))
-	commitment.Add(commitment, salt)
+	commitment.Add(commitment, saltBigInt)
 
 	// Create witness
 	witness := &AgeRangeCircuit{
@@ -235,7 +249,7 @@ func (k Keeper) GenerateAgeRangeProofGroth16(
 		CurrentTimestamp: currentTimestamp,
 		CommitmentHash:   commitment,
 		DateOfBirth:      dateOfBirth,
-		Salt:             salt,
+		Salt:             saltBigInt,
 	}
 
 	// Generate witness assignment
@@ -307,34 +321,49 @@ func (k Keeper) VerifyAgeRangeProofGroth16(
 	return true, nil
 }
 
-// GenerateScoreRangeProofGroth16 generates a real Groth16 ZK-SNARK proof for score range
+// GenerateScoreRangeProofGroth16 generates a real Groth16 ZK-SNARK proof for score range.
+//
+// SECURITY NOTE: This function is designed for OFF-CHAIN use only. The salt parameter
+// must be generated off-chain using crypto/rand to ensure consensus safety. Validators
+// should NOT call this function directly; instead, proofs should be generated client-side
+// and only verification should happen on-chain.
+//
+// Parameters:
+//   - actualScore: The actual score value (private witness)
+//   - scoreThreshold: Minimum score to prove (public input)
+//   - salt: 32-byte random salt generated OFF-CHAIN (required for commitment)
+//   - nonce: Additional nonce for proof uniqueness
+//
+// Returns the proof bytes and commitment for on-chain verification.
 func (k Keeper) GenerateScoreRangeProofGroth16(
 	actualScore uint32,
 	scoreThreshold uint32,
+	salt []byte, // MUST be generated off-chain
 	nonce []byte,
 ) ([]byte, []byte, error) {
 	if k.zkSystem == nil {
 		return nil, nil, fmt.Errorf("ZK proof system not initialized")
 	}
 
-	// Generate salt for commitment
-	saltBytes := make([]byte, 32)
-	if _, err := rand.Read(saltBytes); err != nil {
-		return nil, nil, fmt.Errorf("failed to generate salt: %w", err)
+	// Validate salt is provided (must be generated off-chain for consensus safety)
+	if len(salt) != 32 {
+		return nil, nil, fmt.Errorf("salt must be exactly 32 bytes (provided off-chain)")
 	}
-	salt := new(big.Int).SetBytes(saltBytes)
+
+	// Use provided salt (generated off-chain)
+	saltBigInt := new(big.Int).SetBytes(salt)
 
 	// Compute commitment: actualScore * 1000000 + salt
 	commitment := new(big.Int).SetUint64(uint64(actualScore))
 	commitment.Mul(commitment, big.NewInt(1000000))
-	commitment.Add(commitment, salt)
+	commitment.Add(commitment, saltBigInt)
 
 	// Create witness
 	witness := &ScoreRangeCircuit{
 		ScoreThreshold: scoreThreshold,
 		CommitmentHash: commitment,
 		ActualScore:    actualScore,
-		Salt:           salt,
+		Salt:           saltBigInt,
 	}
 
 	// Generate witness assignment

@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until RateLimitType API is stabilized.
-
 package types_test
 
 import (
@@ -456,7 +451,7 @@ func TestRateLimitCheckResult_Fields(t *testing.T) {
 }
 
 func TestRateLimitType_Values(t *testing.T) {
-	types := []types.RateLimitType{
+	rateLimitTypes := []types.RateLimitType{
 		types.RateLimitTypeAccount,
 		types.RateLimitTypePhone,
 		types.RateLimitTypeIP,
@@ -465,7 +460,7 @@ func TestRateLimitType_Values(t *testing.T) {
 
 	// Ensure all types are unique
 	seen := make(map[types.RateLimitType]bool)
-	for _, rt := range types {
+	for _, rt := range rateLimitTypes {
 		assert.False(t, seen[rt], "duplicate rate limit type: %s", rt)
 		seen[rt] = true
 	}

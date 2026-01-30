@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "VirtEngine Blockchain Health Dashboard",
+  "description": "VirtEngine SLO Overview - Error Budgets and SLI Tracking",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -26,9 +26,7 @@
       "tags": ["virtengine"],
       "targetBlank": false,
       "title": "VirtEngine Dashboards",
-      "tooltip": "",
-      "type": "dashboards",
-      "url": ""
+      "type": "dashboards"
     }
   ],
   "liveNow": false,
@@ -38,334 +36,104 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "panels": [],
-      "title": "Overview",
+      "title": "SLO Summary",
       "type": "row"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Current blockchain height",
+      "description": "Current node availability vs SLO target (99.95%)",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
+          "max": 100,
+          "min": 99,
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 99.9 },
+              { "color": "green", "value": 99.95 }
+            ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
       "id": 2,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
-      "pluginVersion": "10.4.2",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "virtengine_chain_block_height",
-          "legendFormat": "Block Height",
+          "expr": "avg_over_time(up{job=\"virtengine-node\"}[28d]) * 100",
+          "legendFormat": "Node Availability",
           "refId": "A"
         }
       ],
-      "title": "Block Height",
-      "type": "stat"
+      "title": "Node Availability (SLO: 99.95%)",
+      "type": "gauge"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Active validators in consensus",
+      "description": "API availability vs SLO target (99.90%)",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
+          "max": 100,
+          "min": 99,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "red", "value": null },
-              { "color": "yellow", "value": 3 },
-              { "color": "green", "value": 5 }
+              { "color": "yellow", "value": 99.5 },
+              { "color": "green", "value": 99.9 }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
       "id": 3,
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "virtengine_validator_active_count",
-          "legendFormat": "Active Validators",
+          "expr": "(sum(rate(virtengine_api_requests_total{status!~\"5..\"}[28d])) / sum(rate(virtengine_api_requests_total[28d]))) * 100",
+          "legendFormat": "API Availability",
           "refId": "A"
         }
       ],
-      "title": "Active Validators",
-      "type": "stat"
+      "title": "API Availability (SLO: 99.90%)",
+      "type": "gauge"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Transactions per second",
+      "description": "P95 transaction latency vs SLO target (<10s)",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "blue", "value": null },
-              { "color": "green", "value": 10 },
-              { "color": "yellow", "value": 50 }
-            ]
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
-      "id": 4,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "virtengine_tx_per_second",
-          "legendFormat": "TPS",
-          "refId": "A"
-        }
-      ],
-      "title": "Transactions/Second",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Pending transactions in mempool",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 500 },
-              { "color": "red", "value": 1000 }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
-      "id": 5,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "virtengine_tx_pool_size",
-          "legendFormat": "Mempool Size",
-          "refId": "A"
-        }
-      ],
-      "title": "Mempool Size",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Connected peers",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 3 },
-              { "color": "green", "value": 10 }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
-      "id": 6,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "virtengine_p2p_peer_count",
-          "legendFormat": "Peers",
-          "refId": "A"
-        }
-      ],
-      "title": "Connected Peers",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Node uptime status",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [
-            { "options": { "0": { "color": "red", "index": 1, "text": "DOWN" } }, "type": "value" },
-            { "options": { "1": { "color": "green", "index": 0, "text": "UP" } }, "type": "value" }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 1 }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
-      "id": 7,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "up{job=\"virtengine-node\"}",
-          "legendFormat": "Node Status",
-          "refId": "A"
-        }
-      ],
-      "title": "Node Status",
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
-      "id": 10,
-      "panels": [],
-      "title": "Block Production",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Block height over time",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
-      "id": 11,
-      "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "virtengine_chain_block_height",
-          "legendFormat": "Block Height",
-          "refId": "A"
-        }
-      ],
-      "title": "Block Height Over Time",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Time between blocks",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "line" }
-          },
-          "mappings": [],
+          "max": 15,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -378,40 +146,222 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
-      "id": 12,
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "id": 4,
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.95, sum(rate(virtengine_chain_block_latency_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "P95 Block Latency",
+          "expr": "histogram_quantile(0.95, sum(rate(virtengine_tx_latency_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P95 TX Latency",
           "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.50, sum(rate(virtengine_chain_block_latency_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "P50 Block Latency",
-          "refId": "B"
         }
       ],
-      "title": "Block Latency",
-      "type": "timeseries"
+      "title": "TX Latency P95 (SLO: <10s)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Provider deployment success rate vs SLO (99%)",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 95,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 98 },
+              { "color": "green", "value": 99 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "id": 5,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "(sum(rate(virtengine_provider_deployments_total{status=\"success\"}[28d])) / sum(rate(virtengine_provider_deployments_total[28d]))) * 100",
+          "legendFormat": "Deployment Success Rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Deployment Success (SLO: 99%)",
+      "type": "gauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 10,
+      "panels": [],
+      "title": "Error Budgets",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Remaining error budget for Tier 0 services (28-day window)",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 5 },
+              { "color": "yellow", "value": 25 },
+              { "color": "green", "value": 50 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "virtengine_slo_availability_budget_remaining{tier=\"tier0\"} * 100",
+          "legendFormat": "{{ service }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tier 0 Error Budget Remaining",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Remaining error budget for Tier 1 services",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 5 },
+              { "color": "yellow", "value": 25 },
+              { "color": "green", "value": 50 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "virtengine_slo_availability_budget_remaining{tier=\"tier1\"} * 100",
+          "legendFormat": "{{ service }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tier 1 Error Budget Remaining",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Current error budget burn rate",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2 },
+              { "color": "red", "value": 5 }
+            ]
+          },
+          "unit": "x"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "virtengine_slo_availability_burn_rate",
+          "legendFormat": "{{ service }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Error Budget Burn Rate",
+      "type": "stat"
     },
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
       "id": 20,
       "panels": [],
-      "title": "Transactions",
+      "title": "SLI Trends",
       "type": "row"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Transaction processing rate",
+      "description": "Availability over time",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -433,41 +383,49 @@
             "scaleDistribution": { "type": "linear" },
             "showPoints": "auto",
             "spanNulls": false,
-            "stacking": { "group": "A", "mode": "normal" },
-            "thresholdsStyle": { "mode": "off" }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
           },
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "ops"
+          "max": 100,
+          "min": 99,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 99.95 }
+            ]
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
       "id": 21,
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": { "calcs": ["mean", "min"], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(virtengine_tx_processed_total{status=\"success\"}[$__rate_interval]))",
-          "legendFormat": "Success",
+          "expr": "avg_over_time(up{job=\"virtengine-node\"}[1h]) * 100",
+          "legendFormat": "Node Availability",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(virtengine_tx_processed_total{status=\"failed\"}[$__rate_interval]))",
-          "legendFormat": "Failed",
+          "expr": "(sum(rate(virtengine_api_requests_total{status!~\"5..\"}[1h])) / sum(rate(virtengine_api_requests_total[1h]))) * 100",
+          "legendFormat": "API Availability",
           "refId": "B"
         }
       ],
-      "title": "Transaction Rate",
+      "title": "Availability SLI Trend",
       "type": "timeseries"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Transaction confirmation latency",
+      "description": "Latency percentiles over time",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -497,7 +455,6 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
               { "color": "red", "value": 10 }
             ]
           },
@@ -514,24 +471,24 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.95, sum(rate(virtengine_tx_latency_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "P95",
+          "expr": "histogram_quantile(0.50, sum(rate(virtengine_api_request_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "API P50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.99, sum(rate(virtengine_tx_latency_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "P99",
+          "expr": "histogram_quantile(0.95, sum(rate(virtengine_api_request_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "API P95",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.50, sum(rate(virtengine_tx_latency_seconds_bucket[$__rate_interval])) by (le))",
-          "legendFormat": "P50",
+          "expr": "histogram_quantile(0.99, sum(rate(virtengine_api_request_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "API P99",
           "refId": "C"
         }
       ],
-      "title": "Transaction Latency",
+      "title": "Latency SLI Trend",
       "type": "timeseries"
     },
     {
@@ -539,56 +496,12 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
       "id": 30,
       "panels": [],
-      "title": "Validators",
+      "title": "SLO Violations",
       "type": "row"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Validator uptime percentage",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 95 },
-              { "color": "green", "value": 99 }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-      "id": 31,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "10.4.2",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "virtengine_validator_uptime_percentage",
-          "legendFormat": "{{ validator }}",
-          "refId": "A"
-        }
-      ],
-      "title": "Validator Uptime",
-      "type": "gauge"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Missed blocks per validator",
+      "description": "SLO violations count by service and type",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -619,27 +532,27 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-      "id": 32,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 31,
       "options": {
-        "legend": { "calcs": ["sum"], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "increase(virtengine_validator_missed_blocks_total[$__rate_interval])",
-          "legendFormat": "{{ validator }}",
+          "expr": "increase(virtengine_slo_violations_total[$__rate_interval])",
+          "legendFormat": "{{ service }} - {{ slo_type }}",
           "refId": "A"
         }
       ],
-      "title": "Missed Blocks",
+      "title": "SLO Violations Over Time",
       "type": "timeseries"
     }
   ],
-  "refresh": "30s",
+  "refresh": "1m",
   "schemaVersion": 39,
-  "tags": ["virtengine", "blockchain", "chain-health"],
+  "tags": ["virtengine", "slo", "error-budget"],
   "templating": {
     "list": [
       {
@@ -659,11 +572,11 @@
       }
     ]
   },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": { "from": "now-7d", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "VirtEngine Chain Health",
-  "uid": "chain-health",
+  "title": "VirtEngine SLO Overview",
+  "uid": "slo-overview",
   "version": 1,
   "weekStart": ""
 }
