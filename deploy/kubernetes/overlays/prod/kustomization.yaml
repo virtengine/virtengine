@@ -117,3 +117,26 @@ images:
     newTag: v1.0.0  # Pin to specific version in prod
   - name: virtengine/provider-daemon
     newTag: v1.0.0
+  - name: virtengine/tee-enclave
+    newTag: v1.0.0  # TEE-HW-001: Production TEE enclave
+
+# TEE Enclave production patches (TEE-HW-001)
+patchesStrategicMerge:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: tee-enclave
+    spec:
+      replicas: 3
+      template:
+        spec:
+          containers:
+            - name: enclave
+              resources:
+                requests:
+                  cpu: "1000m"
+                  memory: "2Gi"
+                limits:
+                  cpu: "4000m"
+                  memory: "8Gi"

@@ -1,0 +1,437 @@
+# VirtEngine TEE Enclave Health Alert Rules
+# TEE-HW-001: Deploy TEE hardware & attestation in production
+#
+# Comprehensive monitoring for enclave health, attestation failures,
+# hardware availability, and security events.
+
+groups:
+  # =============================================================================
+  # Enclave Health Alerts
+  # =============================================================================
+  - name: virtengine_enclave_health
+    interval: 15s
+    rules:
+      # Enclave not initialized
+      - alert: EnclaveInitializationFailed
+        expr: virtengine_enclave_initialized == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: enclave
+        annotations:
+          summary: "CRITICAL: TEE enclave failed to initialize"
+          description: "Enclave on {{ $labels.pod }} has not initialized for 5 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-init-failure"
+          dashboard: "https://grafana.virtengine.com/d/tee-enclave"
+
+      # Enclave unhealthy
+      - alert: EnclaveUnhealthy
+        expr: virtengine_enclave_health_status != 1
+        for: 2m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: enclave
+        annotations:
+          summary: "TEE enclave is unhealthy"
+          description: "Enclave on {{ $labels.pod }} health check is failing"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-unhealthy"
+
+      # No hardware TEE detected in production
+      - alert: EnclaveNoHardwareInProduction
+        expr: |
+          virtengine_enclave_hardware_enabled == 0
+          and virtengine_enclave_mode == "production"
+        for: 0s
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: enclave
+        annotations:
+          summary: "CRITICAL: Production enclave running without hardware TEE"
+          description: "Enclave on {{ $labels.pod }} is in production mode but has no hardware TEE"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-no-hardware"
+
+      # Enclave restart rate high
+      - alert: EnclaveHighRestartRate
+        expr: |
+          increase(kube_pod_container_status_restarts_total{container="enclave"}[1h]) > 3
+        for: 5m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: enclave
+        annotations:
+          summary: "High enclave container restart rate"
+          description: "Enclave container {{ $labels.pod }} has restarted {{ $value }} times in 1 hour"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-restarts"
+
+      # All enclaves down
+      - alert: AllEnclavesDown
+        expr: |
+          sum(up{job="tee-enclave"}) == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: enclave
+        annotations:
+          summary: "CRITICAL: All TEE enclaves are down"
+          description: "No TEE enclave pods are responding"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/all-enclaves-down"
+
+      # Enclave replicas below minimum
+      - alert: EnclaveReplicasBelowMinimum
+        expr: |
+          kube_deployment_status_replicas_available{deployment="tee-enclave"} < 2
+        for: 5m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: enclave
+        annotations:
+          summary: "TEE enclave replicas below minimum"
+          description: "Only {{ $value }} enclave replicas available (minimum 2 required)"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-replicas-low"
+
+  # =============================================================================
+  # Attestation Alerts
+  # =============================================================================
+  - name: virtengine_attestation
+    interval: 15s
+    rules:
+      # Attestation verification failed
+      - alert: AttestationVerificationFailed
+        expr: |
+          increase(virtengine_enclave_attestation_failures_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: attestation
+        annotations:
+          summary: "CRITICAL: TEE attestation verification failed"
+          description: "Attestation failures detected on {{ $labels.pod }}: {{ $value }} in 5 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/attestation-failure"
+
+      # High attestation failure rate
+      - alert: AttestationFailureRateHigh
+        expr: |
+          rate(virtengine_enclave_attestation_failures_total[10m]) /
+          rate(virtengine_enclave_attestation_requests_total[10m]) > 0.01
+        for: 5m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: attestation
+        annotations:
+          summary: "High attestation failure rate"
+          description: "Attestation failure rate is {{ $value | humanizePercentage }} on {{ $labels.pod }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/attestation-rate-high"
+
+      # Remote attestation service unreachable
+      - alert: RemoteAttestationServiceDown
+        expr: |
+          virtengine_enclave_remote_attestation_up == 0
+        for: 2m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: attestation
+        annotations:
+          summary: "Remote attestation service unreachable"
+          description: "Cannot reach remote attestation service from {{ $labels.pod }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/remote-attestation-down"
+
+      # Unknown measurement detected
+      - alert: UnknownMeasurementDetected
+        expr: |
+          increase(virtengine_enclave_unknown_measurement_total[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: attestation
+        annotations:
+          summary: "CRITICAL: Unknown enclave measurement detected"
+          description: "Peer enclave has measurement not in allowlist"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/unknown-measurement"
+
+      # Attestation quote generation failed
+      - alert: AttestationQuoteGenerationFailed
+        expr: |
+          increase(virtengine_enclave_quote_generation_failures_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: attestation
+        annotations:
+          summary: "Attestation quote generation failed"
+          description: "Failed to generate attestation quote on {{ $labels.pod }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/quote-generation-failed"
+
+      # Certificate fetch failed
+      - alert: AttestationCertificateFetchFailed
+        expr: |
+          increase(virtengine_enclave_cert_fetch_failures_total[10m]) > 5
+        for: 2m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: attestation
+        annotations:
+          summary: "Failed to fetch attestation certificates"
+          description: "Cannot fetch certificates from PCCS/KDS on {{ $labels.pod }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/cert-fetch-failed"
+
+  # =============================================================================
+  # TCB Version Alerts
+  # =============================================================================
+  - name: virtengine_tcb
+    interval: 30s
+    rules:
+      # TCB version out of date
+      - alert: TCBVersionOutOfDate
+        expr: |
+          virtengine_enclave_tcb_version_current < virtengine_enclave_tcb_version_minimum
+        for: 0s
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: tcb
+        annotations:
+          summary: "CRITICAL: TCB version is below minimum"
+          description: "Node {{ $labels.node }} has TCB version below required minimum"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/tcb-out-of-date"
+
+      # TCB update available
+      - alert: TCBUpdateAvailable
+        expr: |
+          virtengine_enclave_tcb_version_current < virtengine_enclave_tcb_version_latest
+        for: 24h
+        labels:
+          severity: warning
+          service: tee-enclave
+          tier: tier1
+          category: tcb
+        annotations:
+          summary: "TCB update available"
+          description: "New TCB version available for node {{ $labels.node }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/tcb-update"
+
+      # Debug enclave in production
+      - alert: DebugEnclaveInProduction
+        expr: |
+          virtengine_enclave_debug_mode == 1
+          and virtengine_enclave_mode == "production"
+        for: 0s
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: security
+        annotations:
+          summary: "CRITICAL: Debug enclave detected in production"
+          description: "Enclave on {{ $labels.pod }} is running in debug mode in production environment"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/debug-enclave-production"
+
+  # =============================================================================
+  # Hardware Availability Alerts
+  # =============================================================================
+  - name: virtengine_tee_hardware
+    interval: 30s
+    rules:
+      # No TEE nodes available
+      - alert: NoTEENodesAvailable
+        expr: |
+          sum(kube_node_labels{label_virtengine_io_enclave_ready="true"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: hardware
+        annotations:
+          summary: "CRITICAL: No TEE-enabled nodes available"
+          description: "No nodes with TEE hardware are available in the cluster"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/no-tee-nodes"
+
+      # Nitro enclave node count low
+      - alert: NitroNodeCountLow
+        expr: |
+          sum(kube_node_labels{label_virtengine_io_tee_platform="nitro"}) < 2
+        for: 5m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: hardware
+        annotations:
+          summary: "Nitro enclave node count below minimum"
+          description: "Only {{ $value }} Nitro nodes available (minimum 2)"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/nitro-nodes-low"
+
+      # SEV-SNP node count low
+      - alert: SEVSNPNodeCountLow
+        expr: |
+          sum(kube_node_labels{label_virtengine_io_tee_platform="sev-snp"}) < 2
+          and sum(kube_node_labels{label_virtengine_io_tee_platform="sev-snp"}) > 0
+        for: 5m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: hardware
+        annotations:
+          summary: "SEV-SNP node count below minimum"
+          description: "Only {{ $value }} SEV-SNP nodes available (minimum 2)"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/sev-snp-nodes-low"
+
+      # SGX node count low
+      - alert: SGXNodeCountLow
+        expr: |
+          sum(kube_node_labels{label_virtengine_io_tee_platform="sgx"}) < 2
+          and sum(kube_node_labels{label_virtengine_io_tee_platform="sgx"}) > 0
+        for: 5m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: hardware
+        annotations:
+          summary: "SGX node count below minimum"
+          description: "Only {{ $value }} SGX nodes available (minimum 2)"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/sgx-nodes-low"
+
+      # Hardware error detected
+      - alert: TEEHardwareError
+        expr: |
+          increase(virtengine_enclave_hardware_errors_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: hardware
+        annotations:
+          summary: "CRITICAL: TEE hardware error detected"
+          description: "Hardware error on {{ $labels.pod }}: {{ $labels.error_type }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/tee-hardware-error"
+
+  # =============================================================================
+  # Performance Alerts
+  # =============================================================================
+  - name: virtengine_enclave_performance
+    interval: 30s
+    rules:
+      # High enclave request latency
+      - alert: EnclaveHighLatency
+        expr: |
+          histogram_quantile(0.99, rate(virtengine_enclave_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier1
+          category: performance
+        annotations:
+          summary: "High enclave request latency"
+          description: "P99 latency is {{ $value | humanizeDuration }} on {{ $labels.pod }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-latency"
+
+      # Enclave request queue full
+      - alert: EnclaveQueueFull
+        expr: |
+          virtengine_enclave_queue_length >= virtengine_enclave_max_concurrent_requests * 0.9
+        for: 2m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier1
+          category: performance
+        annotations:
+          summary: "Enclave request queue near capacity"
+          description: "Enclave queue at {{ $value | humanizePercentage }} capacity on {{ $labels.pod }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-queue-full"
+
+      # Memory pressure
+      - alert: EnclaveMemoryPressure
+        expr: |
+          container_memory_working_set_bytes{container="enclave"} /
+          container_spec_memory_limit_bytes{container="enclave"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: tee-enclave
+          tier: tier1
+          category: performance
+        annotations:
+          summary: "Enclave container under memory pressure"
+          description: "Enclave on {{ $labels.pod }} using {{ $value | humanizePercentage }} of memory limit"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/enclave-memory-pressure"
+
+  # =============================================================================
+  # Failover Alerts
+  # =============================================================================
+  - name: virtengine_enclave_failover
+    interval: 15s
+    rules:
+      # Primary TEE platform unavailable
+      - alert: PrimaryTEEPlatformDown
+        expr: |
+          sum(virtengine_enclave_platform_available{platform="nitro"}) == 0
+        for: 2m
+        labels:
+          severity: high
+          service: tee-enclave
+          tier: tier0
+          category: failover
+        annotations:
+          summary: "Primary TEE platform (Nitro) unavailable"
+          description: "Failover to secondary TEE platform may be in progress"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/tee-failover"
+
+      # Failover in progress
+      - alert: TEEFailoverInProgress
+        expr: |
+          virtengine_enclave_failover_active == 1
+        for: 0s
+        labels:
+          severity: warning
+          service: tee-enclave
+          tier: tier0
+          category: failover
+        annotations:
+          summary: "TEE platform failover in progress"
+          description: "Failover from {{ $labels.from_platform }} to {{ $labels.to_platform }}"
+          dashboard: "https://grafana.virtengine.com/d/tee-failover"
+
+      # Failover failed
+      - alert: TEEFailoverFailed
+        expr: |
+          increase(virtengine_enclave_failover_failures_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: tee-enclave
+          tier: tier0
+          category: failover
+        annotations:
+          summary: "CRITICAL: TEE platform failover failed"
+          description: "Failed to failover from {{ $labels.from_platform }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/failover-failed"

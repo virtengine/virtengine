@@ -330,3 +330,52 @@ resource "aws_cloudwatch_metric_alarm" "cluster_memory" {
 
   tags = local.common_tags
 }
+
+# -----------------------------------------------------------------------------
+# TEE Hardware Module (TEE-HW-001)
+# Provisions SGX/SEV-SNP/Nitro enclave nodes for production
+# -----------------------------------------------------------------------------
+module "tee_hardware" {
+  source = "../../modules/tee-hardware"
+
+  cluster_name    = local.cluster_name
+  aws_region      = var.aws_region
+  vpc_id          = module.vpc.vpc_id
+  subnet_ids      = module.vpc.private_subnet_ids
+  node_role_arn   = module.eks.node_role_arn
+  node_role_name  = module.eks.node_role_name
+  kms_key_arn     = module.eks.kms_key_arn
+
+  # Platform enablement
+  enable_nitro   = var.enable_tee_nitro
+  enable_sev_snp = var.enable_tee_sev_snp
+  enable_sgx     = var.enable_tee_sgx
+
+  # Nitro configuration
+  nitro_desired_size         = var.tee_nitro_desired_size
+  nitro_min_size             = 2
+  nitro_max_size             = 6
+  nitro_enclave_memory_mb    = 2048
+  nitro_enclave_cpu_count    = 2
+  nitro_enclave_image_sha384 = var.nitro_enclave_image_sha384
+
+  # SEV-SNP configuration (when enabled)
+  sev_snp_desired_size = 2
+  sev_snp_min_size     = 2
+  sev_snp_max_size     = 6
+
+  # SGX configuration (when enabled)
+  sgx_desired_size  = 2
+  sgx_min_size      = 2
+  sgx_max_size      = 6
+  sgx_pccs_endpoint = "https://pccs.virtengine.io/sgx/certification/v4/"
+
+  # Attestation configuration
+  measurement_allowlist = var.tee_measurement_allowlist
+  min_tcb_version       = "2.0.8.115"
+
+  # Alerting
+  alarm_sns_topic_arns = var.alarm_sns_topic_arns
+
+  tags = local.common_tags
+}
