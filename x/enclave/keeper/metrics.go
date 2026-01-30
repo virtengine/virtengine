@@ -210,7 +210,7 @@ func (k Keeper) RecordMetrics(ctx sdk.Context) {
 	measurementCounts := make(map[string]float64)
 	k.WithMeasurements(ctx, func(measurement types.MeasurementRecord) bool {
 		if !measurement.Revoked {
-			measurementCounts[measurement.TeeType.String()]++
+			measurementCounts[measurement.TEEType.String()]++
 		}
 		return false
 	})
