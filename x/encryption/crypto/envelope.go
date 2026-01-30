@@ -89,15 +89,15 @@ func CreateEnvelope(plaintext []byte, recipientPublicKey []byte, senderKeyPair *
 
 	// Create envelope
 	envelope := &types.EncryptedPayloadEnvelope{
-		Version:         types.EnvelopeVersion,
-		AlgorithmID:     types.AlgorithmX25519XSalsa20Poly1305,
-		AlgorithmVersion: types.AlgorithmVersionV1,
-		RecipientKeyIDs: []string{recipientFingerprint},
+		Version:             types.EnvelopeVersion,
+		AlgorithmID:         types.AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion:    types.AlgorithmVersionV1,
+		RecipientKeyIDs:     []string{recipientFingerprint},
 		RecipientPublicKeys: [][]byte{append([]byte(nil), recipientPublicKey...)},
-		Nonce:           nonce[:],
-		Ciphertext:      ciphertext,
-		SenderPubKey:    senderKeyPair.PublicKey[:],
-		Metadata:        make(map[string]string),
+		Nonce:               nonce[:],
+		Ciphertext:          ciphertext,
+		SenderPubKey:        senderKeyPair.PublicKey[:],
+		Metadata:            make(map[string]string),
 	}
 
 	// Generate signature over the signing payload
@@ -149,6 +149,7 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 	recipientKeyIDs := make([]string, len(recipientPublicKeys))
 	encryptedKeys := make([][]byte, len(recipientPublicKeys))
 	recipientPubKeys := make([][]byte, len(recipientPublicKeys))
+	wrappedKeys := make([]types.WrappedKeyEntry, len(recipientPublicKeys))
 
 	for i, recipientPubKey := range recipientPublicKeys {
 		if len(recipientPubKey) != 32 {
@@ -170,20 +171,25 @@ func CreateMultiRecipientEnvelope(plaintext []byte, recipientPublicKeys [][]byte
 
 		recipientKeyIDs[i] = types.ComputeKeyFingerprint(recipientPubKey)
 		recipientPubKeys[i] = append([]byte(nil), recipientPubKey...)
+		wrappedKeys[i] = types.WrappedKeyEntry{
+			RecipientID: recipientKeyIDs[i],
+			WrappedKey:  encryptedDEK,
+		}
 	}
 
 	// Create envelope
 	envelope := &types.EncryptedPayloadEnvelope{
-		Version:         types.EnvelopeVersion,
-		AlgorithmID:     types.AlgorithmX25519XSalsa20Poly1305,
-		AlgorithmVersion: types.AlgorithmVersionV1,
-		RecipientKeyIDs: recipientKeyIDs,
+		Version:             types.EnvelopeVersion,
+		AlgorithmID:         types.AlgorithmX25519XSalsa20Poly1305,
+		AlgorithmVersion:    types.AlgorithmVersionV1,
+		RecipientKeyIDs:     recipientKeyIDs,
 		RecipientPublicKeys: recipientPubKeys,
-		EncryptedKeys:   encryptedKeys,
-		Nonce:           dataNonce[:],
-		Ciphertext:      ciphertext,
-		SenderPubKey:    senderKeyPair.PublicKey[:],
-		Metadata:        make(map[string]string),
+		EncryptedKeys:       encryptedKeys,
+		WrappedKeys:         wrappedKeys,
+		Nonce:               dataNonce[:],
+		Ciphertext:          ciphertext,
+		SenderPubKey:        senderKeyPair.PublicKey[:],
+		Metadata:            make(map[string]string),
 	}
 
 	// Add metadata to indicate multi-recipient mode
@@ -262,12 +268,20 @@ func openMultiRecipientEnvelope(envelope *types.EncryptedPayloadEnvelope, recipi
 
 	// Find our encrypted DEK
 	var encryptedDEK []byte
-	for i, keyID := range envelope.RecipientKeyIDs {
-		if keyID == ourFingerprint {
-			if i < len(envelope.EncryptedKeys) {
-				encryptedDEK = envelope.EncryptedKeys[i]
-			}
+	for _, entry := range envelope.WrappedKeys {
+		if entry.RecipientID == ourFingerprint {
+			encryptedDEK = entry.WrappedKey
 			break
+		}
+	}
+	if encryptedDEK == nil {
+		for i, keyID := range envelope.RecipientKeyIDs {
+			if keyID == ourFingerprint {
+				if i < len(envelope.EncryptedKeys) {
+					encryptedDEK = envelope.EncryptedKeys[i]
+				}
+				break
+			}
 		}
 	}
 
