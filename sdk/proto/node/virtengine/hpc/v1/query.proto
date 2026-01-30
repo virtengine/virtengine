@@ -1,0 +1,169 @@
+syntax = "proto3";
+package virtengine.hpc.v1;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "virtengine/hpc/v1/tx.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/hpc/v1";
+
+// Query defines the gRPC querier service for the hpc module
+service Query {
+  // Params queries the module parameters
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/params";
+  }
+
+  // Cluster queries a cluster by ID
+  rpc Cluster(QueryClusterRequest) returns (QueryClusterResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/clusters/{cluster_id}";
+  }
+
+  // Clusters queries all clusters
+  rpc Clusters(QueryClustersRequest) returns (QueryClustersResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/clusters";
+  }
+
+  // ClustersByOwner queries clusters by owner
+  rpc ClustersByOwner(QueryClustersByOwnerRequest) returns (QueryClustersByOwnerResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/clusters/owner/{owner}";
+  }
+
+  // Offering queries an offering by ID
+  rpc Offering(QueryOfferingRequest) returns (QueryOfferingResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/offerings/{offering_id}";
+  }
+
+  // Offerings queries all offerings
+  rpc Offerings(QueryOfferingsRequest) returns (QueryOfferingsResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/offerings";
+  }
+
+  // OfferingsByCluster queries offerings by cluster
+  rpc OfferingsByCluster(QueryOfferingsByClusterRequest) returns (QueryOfferingsByClusterResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/offerings/cluster/{cluster_id}";
+  }
+
+  // Job queries a job by ID
+  rpc Job(QueryJobRequest) returns (QueryJobResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/jobs/{job_id}";
+  }
+
+  // Jobs queries all jobs
+  rpc Jobs(QueryJobsRequest) returns (QueryJobsResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/jobs";
+  }
+
+  // JobsBySubmitter queries jobs by submitter
+  rpc JobsBySubmitter(QueryJobsBySubmitterRequest) returns (QueryJobsBySubmitterResponse) {
+    option (google.api.http).get = "/virtengine/hpc/v1/jobs/submitter/{submitter}";
+  }
+}
+
+// QueryParamsRequest is the request type for the Query/Params RPC method
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method
+message QueryParamsResponse {
+  Params params = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryClusterRequest is the request type for the Query/Cluster RPC method
+message QueryClusterRequest {
+  string cluster_id = 1;
+}
+
+// QueryClusterResponse is the response type for the Query/Cluster RPC method
+message QueryClusterResponse {
+  Cluster cluster = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryClustersRequest is the request type for the Query/Clusters RPC method
+message QueryClustersRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryClustersResponse is the response type for the Query/Clusters RPC method
+message QueryClustersResponse {
+  repeated Cluster clusters = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryClustersByOwnerRequest is the request type for the Query/ClustersByOwner RPC method
+message QueryClustersByOwnerRequest {
+  string owner = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryClustersByOwnerResponse is the response type for the Query/ClustersByOwner RPC method
+message QueryClustersByOwnerResponse {
+  repeated Cluster clusters = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryOfferingRequest is the request type for the Query/Offering RPC method
+message QueryOfferingRequest {
+  string offering_id = 1;
+}
+
+// QueryOfferingResponse is the response type for the Query/Offering RPC method
+message QueryOfferingResponse {
+  Offering offering = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryOfferingsRequest is the request type for the Query/Offerings RPC method
+message QueryOfferingsRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryOfferingsResponse is the response type for the Query/Offerings RPC method
+message QueryOfferingsResponse {
+  repeated Offering offerings = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryOfferingsByClusterRequest is the request type for the Query/OfferingsByCluster RPC method
+message QueryOfferingsByClusterRequest {
+  string cluster_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryOfferingsByClusterResponse is the response type for the Query/OfferingsByCluster RPC method
+message QueryOfferingsByClusterResponse {
+  repeated Offering offerings = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryJobRequest is the request type for the Query/Job RPC method
+message QueryJobRequest {
+  string job_id = 1;
+}
+
+// QueryJobResponse is the response type for the Query/Job RPC method
+message QueryJobResponse {
+  Job job = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryJobsRequest is the request type for the Query/Jobs RPC method
+message QueryJobsRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryJobsResponse is the response type for the Query/Jobs RPC method
+message QueryJobsResponse {
+  repeated Job jobs = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryJobsBySubmitterRequest is the request type for the Query/JobsBySubmitter RPC method
+message QueryJobsBySubmitterRequest {
+  string submitter = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryJobsBySubmitterResponse is the response type for the Query/JobsBySubmitter RPC method
+message QueryJobsBySubmitterResponse {
+  repeated Job jobs = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
