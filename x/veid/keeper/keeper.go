@@ -32,6 +32,9 @@ type IKeeper interface {
 	UpdateVerificationStatus(ctx sdk.Context, address sdk.AccAddress, scopeID string, status types.VerificationStatus, reason string, validatorAddr string) error
 	UpdateScore(ctx sdk.Context, address sdk.AccAddress, score uint32, scoreVersion string) error
 
+	// Score retrieval
+	GetVEIDScore(ctx sdk.Context, address sdk.AccAddress) (uint32, bool)
+
 	// Signature validation
 	ValidateClientSignature(ctx sdk.Context, clientID string, signature []byte, payload []byte) error
 	ValidateUserSignature(ctx sdk.Context, address sdk.AccAddress, signature []byte, payload []byte) error

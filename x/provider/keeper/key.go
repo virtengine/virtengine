@@ -23,3 +23,11 @@ func ProviderPublicKeyKey(id sdk.Address) []byte {
 
 	return buf.Bytes()
 }
+
+// DomainVerificationKey returns the store key for a provider's domain verification record
+func DomainVerificationKey(id sdk.Address) []byte {
+	buf := bytes.NewBuffer(types.DomainVerificationPrefix())
+	buf.Write(address.MustLengthPrefix(id.Bytes()))
+
+	return buf.Bytes()
+}

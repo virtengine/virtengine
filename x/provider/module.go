@@ -20,10 +20,12 @@ import (
 
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
+	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
 	"github.com/virtengine/virtengine/x/provider/handler"
 	"github.com/virtengine/virtengine/x/provider/keeper"
 	"github.com/virtengine/virtengine/x/provider/simulation"
+	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 )
 
 // type check to ensure the interface is properly implemented
@@ -52,6 +54,8 @@ type AppModule struct {
 	acckeeper govtypes.AccountKeeper
 	bkeeper   bankkeeper.Keeper
 	mkeeper   mkeeper.IKeeper
+	vkeeper   veidkeeper.IKeeper
+	mfakeeper mfakeeper.IKeeper
 }
 
 // Name returns provider module's name
@@ -110,6 +114,8 @@ func NewAppModule(
 	acckeeper govtypes.AccountKeeper,
 	bkeeper bankkeeper.Keeper,
 	mkeeper mkeeper.IKeeper,
+	vkeeper veidkeeper.IKeeper,
+	mfakeeper mfakeeper.IKeeper,
 ) AppModule {
 	return AppModule{
 		AppModuleBasic: AppModuleBasic{cdc: cdc},
@@ -117,6 +123,8 @@ func NewAppModule(
 		acckeeper:      acckeeper,
 		bkeeper:        bkeeper,
 		mkeeper:        mkeeper,
+		vkeeper:        vkeeper,
+		mfakeeper:      mfakeeper,
 	}
 }
 
@@ -133,7 +141,7 @@ func (am AppModule) IsAppModule() {}
 
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), handler.NewMsgServerImpl(am.keeper, am.mkeeper))
+	types.RegisterMsgServer(cfg.MsgServer(), handler.NewMsgServerImpl(am.keeper, am.mkeeper, am.vkeeper, am.mfakeeper))
 	querier := am.keeper.NewQuerier()
 	types.RegisterQueryServer(cfg.QueryServer(), querier)
 }

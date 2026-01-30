@@ -82,6 +82,124 @@ func convertMsgUpdateSensitiveTxConfigFromProto(req *mfav1.MsgUpdateSensitiveTxC
 // Msg Conversion Functions (Local -> Proto)
 // =============================================================================
 
+func convertMsgEnrollFactorToProto(msg *MsgEnrollFactor) *mfav1.MsgEnrollFactor {
+	if msg == nil {
+		return nil
+	}
+	return &mfav1.MsgEnrollFactor{
+		Sender:                   msg.Sender,
+		FactorType:               mfav1.FactorType(msg.FactorType),
+		Label:                    msg.Label,
+		PublicIdentifier:         msg.PublicIdentifier,
+		Metadata:                 convertFactorMetadataToProto(msg.Metadata),
+		InitialVerificationProof: msg.InitialVerificationProof,
+	}
+}
+
+func convertMsgRevokeFactorToProto(msg *MsgRevokeFactor) *mfav1.MsgRevokeFactor {
+	if msg == nil {
+		return nil
+	}
+	return &mfav1.MsgRevokeFactor{
+		Sender:     msg.Sender,
+		FactorType: mfav1.FactorType(msg.FactorType),
+		FactorId:   msg.FactorID,
+		MfaProof:   convertMFAProofToProto(msg.MFAProof),
+	}
+}
+
+func convertMsgSetMFAPolicyToProto(msg *MsgSetMFAPolicy) *mfav1.MsgSetMFAPolicy {
+	if msg == nil {
+		return nil
+	}
+	policy := convertMFAPolicyToProto(&msg.Policy)
+	policyValue := mfav1.MFAPolicy{}
+	if policy != nil {
+		policyValue = *policy
+	}
+	return &mfav1.MsgSetMFAPolicy{
+		Sender:   msg.Sender,
+		Policy:   policyValue,
+		MfaProof: convertMFAProofToProto(msg.MFAProof),
+	}
+}
+
+func convertMsgCreateChallengeToProto(msg *MsgCreateChallenge) *mfav1.MsgCreateChallenge {
+	if msg == nil {
+		return nil
+	}
+	return &mfav1.MsgCreateChallenge{
+		Sender:          msg.Sender,
+		FactorType:      mfav1.FactorType(msg.FactorType),
+		FactorId:        msg.FactorID,
+		TransactionType: mfav1.SensitiveTransactionType(msg.TransactionType),
+		ClientInfo:      convertClientInfoToProto(msg.ClientInfo),
+	}
+}
+
+func convertMsgVerifyChallengeToProto(msg *MsgVerifyChallenge) *mfav1.MsgVerifyChallenge {
+	if msg == nil {
+		return nil
+	}
+	response := convertChallengeResponseToProto(msg.Response)
+	responseValue := mfav1.ChallengeResponse{}
+	if response != nil {
+		responseValue = *response
+	}
+	return &mfav1.MsgVerifyChallenge{
+		Sender:      msg.Sender,
+		ChallengeId: msg.ChallengeID,
+		Response:    responseValue,
+	}
+}
+
+func convertMsgAddTrustedDeviceToProto(msg *MsgAddTrustedDevice) *mfav1.MsgAddTrustedDevice {
+	if msg == nil {
+		return nil
+	}
+	deviceInfo := convertDeviceInfoToProto(&msg.DeviceInfo)
+	deviceInfoValue := mfav1.DeviceInfo{}
+	if deviceInfo != nil {
+		deviceInfoValue = *deviceInfo
+	}
+	proof := convertMFAProofToProto(msg.MFAProof)
+	proofValue := mfav1.MFAProof{}
+	if proof != nil {
+		proofValue = *proof
+	}
+	return &mfav1.MsgAddTrustedDevice{
+		Sender:     msg.Sender,
+		DeviceInfo: deviceInfoValue,
+		MfaProof:   proofValue,
+	}
+}
+
+func convertMsgRemoveTrustedDeviceToProto(msg *MsgRemoveTrustedDevice) *mfav1.MsgRemoveTrustedDevice {
+	if msg == nil {
+		return nil
+	}
+	return &mfav1.MsgRemoveTrustedDevice{
+		Sender:            msg.Sender,
+		DeviceFingerprint: msg.DeviceFingerprint,
+		MfaProof:          convertMFAProofToProto(msg.MFAProof),
+	}
+}
+
+func convertMsgUpdateSensitiveTxConfigToProto(msg *MsgUpdateSensitiveTxConfig) *mfav1.MsgUpdateSensitiveTxConfig {
+	if msg == nil {
+		return nil
+	}
+	config := convertSensitiveTxConfigToProto(&msg.Config)
+	configValue := mfav1.SensitiveTxConfig{}
+	if config != nil {
+		configValue = *config
+	}
+	return &mfav1.MsgUpdateSensitiveTxConfig{
+		Authority: msg.Authority,
+		Config:    configValue,
+	}
+}
+
 func convertMsgEnrollFactorResponseToProto(resp *MsgEnrollFactorResponse) *mfav1.MsgEnrollFactorResponse {
 	return &mfav1.MsgEnrollFactorResponse{
 		FactorId: resp.FactorID,
@@ -265,6 +383,22 @@ func convertMFAProofFromProtoDirect(proof *mfav1.MFAProof) *MFAProof {
 	}
 }
 
+func convertMFAProofToProto(proof *MFAProof) *mfav1.MFAProof {
+	if proof == nil {
+		return nil
+	}
+	factors := make([]mfav1.FactorType, len(proof.VerifiedFactors))
+	for i, f := range proof.VerifiedFactors {
+		factors[i] = mfav1.FactorType(f)
+	}
+	return &mfav1.MFAProof{
+		SessionId:       proof.SessionID,
+		VerifiedFactors: factors,
+		Timestamp:       proof.Timestamp,
+		Signature:       proof.Signature,
+	}
+}
+
 func convertMFAPolicyFromProto(policy *mfav1.MFAPolicy) MFAPolicy {
 	if policy == nil {
 		return MFAPolicy{}
@@ -416,6 +550,19 @@ func convertChallengeResponseFromProto(r *mfav1.ChallengeResponse) *ChallengeRes
 		FactorType:   FactorType(r.FactorType),
 		ResponseData: r.ResponseData,
 		ClientInfo:   convertClientInfoFromProto(r.ClientInfo),
+		Timestamp:    r.Timestamp,
+	}
+}
+
+func convertChallengeResponseToProto(r *ChallengeResponse) *mfav1.ChallengeResponse {
+	if r == nil {
+		return nil
+	}
+	return &mfav1.ChallengeResponse{
+		ChallengeId:  r.ChallengeID,
+		FactorType:   mfav1.FactorType(r.FactorType),
+		ResponseData: r.ResponseData,
+		ClientInfo:   convertClientInfoToProto(r.ClientInfo),
 		Timestamp:    r.Timestamp,
 	}
 }

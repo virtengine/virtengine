@@ -261,7 +261,8 @@ func (m *MsgEnrollFactor) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgEnrollFactor) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgEnrollFactorToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgEnrollFactor) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -280,7 +281,8 @@ func (m *MsgRevokeFactor) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgRevokeFactor) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgRevokeFactorToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgRevokeFactor) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -302,7 +304,8 @@ func (m *MsgSetMFAPolicy) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgSetMFAPolicy) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgSetMFAPolicyToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgSetMFAPolicy) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -318,7 +321,8 @@ func (m *MsgCreateChallenge) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgCreateChallenge) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgCreateChallengeToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgCreateChallenge) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -337,7 +341,8 @@ func (m *MsgVerifyChallenge) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgVerifyChallenge) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgVerifyChallengeToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgVerifyChallenge) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -359,7 +364,8 @@ func (m *MsgAddTrustedDevice) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgAddTrustedDevice) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgAddTrustedDeviceToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgAddTrustedDevice) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -381,7 +387,8 @@ func (m *MsgRemoveTrustedDevice) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgRemoveTrustedDevice) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgRemoveTrustedDeviceToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgRemoveTrustedDevice) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
@@ -400,7 +407,8 @@ func (m *MsgUpdateSensitiveTxConfig) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 func (m *MsgUpdateSensitiveTxConfig) GetSignBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(m))
+	protoMsg := convertMsgUpdateSensitiveTxConfigToProto(m)
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(protoMsg))
 }
 func (m *MsgUpdateSensitiveTxConfig) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Authority); err != nil {

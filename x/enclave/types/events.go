@@ -5,6 +5,7 @@ const (
 	EventTypeEnclaveIdentityRegistered = "enclave_identity_registered"
 	EventTypeEnclaveIdentityUpdated    = "enclave_identity_updated"
 	EventTypeEnclaveIdentityRevoked    = "enclave_identity_revoked"
+	EventTypeEnclaveIdentityExpired    = "enclave_identity_expired"
 	EventTypeEnclaveKeyRotated         = "enclave_key_rotated"
 	EventTypeKeyRotationCompleted      = "key_rotation_completed"
 	EventTypeMeasurementAdded          = "measurement_added"
