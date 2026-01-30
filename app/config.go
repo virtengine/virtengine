@@ -24,6 +24,8 @@ import (
 	"github.com/cosmos/ibc-go/v10/modules/apps/transfer"
 	ibc "github.com/cosmos/ibc-go/v10/modules/core"
 	ibclightclient "github.com/cosmos/ibc-go/v10/modules/light-clients/07-tendermint"
+
+	enclaveclient "github.com/virtengine/virtengine/x/enclave/client"
 )
 
 var mbasics = module.NewBasicManager(
@@ -45,6 +47,8 @@ var mbasics = module.NewBasicManager(
 		// governance functionality (voting)
 		gov.NewAppModuleBasic(
 			[]govclient.ProposalHandler{
+				enclaveclient.ProposalHandlerAddMeasurement,
+				enclaveclient.ProposalHandlerRevokeMeasurement,
 				paramsclient.ProposalHandler,
 			},
 		),
