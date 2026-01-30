@@ -31,7 +31,7 @@ type Config struct {
 	// MinConfidenceThreshold is the minimum confidence for intent classification
 	MinConfidenceThreshold float32 `json:"min_confidence_threshold"`
 
-	// RateLimitRequests is the max requests per minute per session
+	// RateLimitRequests is the max requests per minute per session (legacy, use DistributedRateLimiter)
 	RateLimitRequests int `json:"rate_limit_requests"`
 
 	// EnableQueryExecution enables blockchain query execution
@@ -51,6 +51,48 @@ type Config struct {
 
 	// LogLevel controls logging verbosity
 	LogLevel string `json:"log_level"`
+
+	// SessionStore configures the session store backend
+	SessionStore SessionStoreConfig `json:"session_store"`
+
+	// DistributedRateLimiter enables the distributed rate limiter from pkg/ratelimit
+	DistributedRateLimiter DistributedRateLimiterConfig `json:"distributed_rate_limiter"`
+
+	// MetricsNamespace is the namespace for Prometheus metrics
+	MetricsNamespace string `json:"metrics_namespace"`
+}
+
+// DistributedRateLimiterConfig configures distributed rate limiting
+type DistributedRateLimiterConfig struct {
+	// Enabled enables the distributed rate limiter
+	Enabled bool `json:"enabled"`
+
+	// RedisURL is the Redis connection URL
+	RedisURL string `json:"redis_url"`
+
+	// RedisPrefix is the key prefix for rate limit keys
+	RedisPrefix string `json:"redis_prefix"`
+
+	// RequestsPerMinute is the max requests per minute per session
+	RequestsPerMinute int `json:"requests_per_minute"`
+
+	// RequestsPerSecond is the max requests per second per session
+	RequestsPerSecond int `json:"requests_per_second"`
+
+	// BurstSize is the maximum burst size
+	BurstSize int `json:"burst_size"`
+}
+
+// DefaultDistributedRateLimiterConfig returns the default distributed rate limiter configuration
+func DefaultDistributedRateLimiterConfig() DistributedRateLimiterConfig {
+	return DistributedRateLimiterConfig{
+		Enabled:           false,
+		RedisURL:          "redis://localhost:6379/0",
+		RedisPrefix:       "virtengine:nli:ratelimit",
+		RequestsPerMinute: 60,
+		RequestsPerSecond: 5,
+		BurstSize:         10,
+	}
 }
 
 // Validate validates the configuration
@@ -115,6 +157,9 @@ func DefaultConfig() Config {
 		MaxTokens:              1024,
 		EnableSuggestions:      true,
 		LogLevel:               "info",
+		SessionStore:           DefaultSessionStoreConfig(),
+		DistributedRateLimiter: DefaultDistributedRateLimiterConfig(),
+		MetricsNamespace:       "virtengine",
 	}
 }
 
