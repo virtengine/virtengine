@@ -1,0 +1,157 @@
+# Grafana Tempo Configuration for VirtEngine Distributed Tracing
+# https://grafana.com/docs/tempo/latest/configuration/
+
+# Server configuration
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+  log_level: info
+
+# Distributor configuration (receives spans)
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+    jaeger:
+      protocols:
+        thrift_http:
+          endpoint: 0.0.0.0:14268
+        grpc:
+          endpoint: 0.0.0.0:14250
+        thrift_compact:
+          endpoint: 0.0.0.0:6831
+        thrift_binary:
+          endpoint: 0.0.0.0:6832
+    zipkin:
+      endpoint: 0.0.0.0:9411
+
+# Ingester configuration (writes to storage)
+ingester:
+  max_block_duration: 5m
+  max_block_bytes: 1073741824  # 1GB
+  trace_idle_period: 10s
+  flush_check_period: 10s
+  lifecycler:
+    ring:
+      kvstore:
+        store: memberlist
+      replication_factor: 1
+    final_sleep: 0s
+
+# Compactor configuration
+compactor:
+  compaction:
+    block_retention: 336h  # 14 days
+    compacted_block_retention: 1h
+    compaction_window: 1h
+    max_block_bytes: 5368709120  # 5GB
+    max_compaction_objects: 6000000
+  ring:
+    kvstore:
+      store: memberlist
+
+# Memberlist for distributed coordination
+memberlist:
+  join_members:
+    - tempo:7946
+
+# Storage configuration
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+    # For production, use S3 or GCS:
+    # backend: s3
+    # s3:
+    #   bucket: virtengine-traces
+    #   endpoint: s3.amazonaws.com
+    #   region: us-west-2
+    #   access_key: ${S3_ACCESS_KEY}
+    #   secret_key: ${S3_SECRET_KEY}
+    pool:
+      max_workers: 100
+      queue_depth: 10000
+
+# Query frontend configuration
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1073741824
+  trace_by_id:
+    duration_slo: 5s
+
+# Querier configuration
+querier:
+  frontend_worker:
+    frontend_address: tempo:9095
+  max_concurrent_queries: 20
+  search:
+    prefer_self: 10
+    external_hedge_requests_at: 8s
+    external_hedge_requests_up_to: 2
+
+# Metrics generator configuration
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: virtengine-production
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  traces_storage:
+    path: /var/tempo/generator/traces
+  processor:
+    service_graphs:
+      wait: 10s
+      max_items: 10000
+      workers: 10
+    span_metrics:
+      dimensions:
+        - service.name
+        - service.namespace
+        - span.kind
+        - status.code
+      intrinsic_dimensions:
+        status_code: true
+        status_message: false
+
+# Overrides configuration
+overrides:
+  defaults:
+    ingestion:
+      rate_limit_bytes: 15000000  # 15MB/s
+      burst_size_bytes: 20000000  # 20MB
+    search_tags_allow_list:
+      - service.name
+      - service.namespace
+      - http.method
+      - http.status_code
+      - http.url
+      - rpc.method
+      - rpc.service
+      - db.system
+      - db.name
+      - virtengine.module
+      - virtengine.operation
+      - virtengine.request_id
+    metrics_generator:
+      processors:
+        - service-graphs
+        - span-metrics
+    global:
+      max_traces_per_user: 10000
+    forwarders: []
+
+# Usage reporting
+usage_report:
+  reporting_enabled: false

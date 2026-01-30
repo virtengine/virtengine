@@ -1,0 +1,132 @@
+# Grafana Loki Configuration for VirtEngine Centralized Logging
+# https://grafana.com/docs/loki/latest/configuration/
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+  grpc_server_max_recv_msg_size: 104857600  # 100MB
+  grpc_server_max_send_msg_size: 104857600  # 100MB
+
+# Common configuration (shared across components)
+common:
+  path_prefix: /var/loki
+  storage:
+    filesystem:
+      chunks_directory: /var/loki/chunks
+      rules_directory: /var/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Query range configuration
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+# Schema configuration
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# Storage configuration
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /var/loki/tsdb-index
+    cache_location: /var/loki/tsdb-cache
+    cache_ttl: 24h
+  filesystem:
+    directory: /var/loki/chunks
+  # For production, use S3 or GCS:
+  # aws:
+  #   s3: s3://us-west-2/virtengine-logs
+  #   bucketnames: virtengine-logs
+  #   region: us-west-2
+  #   access_key_id: ${AWS_ACCESS_KEY_ID}
+  #   secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+  #   s3forcepathstyle: false
+
+# Ingester configuration
+ingester:
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+  chunk_idle_period: 5m
+  chunk_retain_period: 30s
+  max_transfer_retries: 0
+  wal:
+    enabled: true
+    dir: /var/loki/wal
+
+# Limits configuration
+limits_config:
+  enforce_metric_name: false
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h  # 1 week
+  max_entries_limit_per_query: 10000
+  max_global_streams_per_user: 10000
+  ingestion_rate_mb: 10
+  ingestion_burst_size_mb: 20
+  per_stream_rate_limit: 5MB
+  per_stream_rate_limit_burst: 15MB
+
+# Compactor configuration
+compactor:
+  working_directory: /var/loki/compactor
+  shared_store: filesystem
+  compaction_interval: 5m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+  delete_request_cancel_period: 24h
+
+# Retention configuration
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: 336h  # 14 days
+
+# Ruler configuration for alerting
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /var/loki/rules
+  rule_path: /var/loki/rules-temp
+  alertmanager_url: http://alertmanager:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+  enable_alertmanager_v2: true
+
+# Analytics configuration
+analytics:
+  reporting_enabled: false
+
+# Distributor configuration
+distributor:
+  ring:
+    kvstore:
+      store: inmemory
+
+# Querier configuration
+querier:
+  max_concurrent: 10
+  query_timeout: 5m
+  engine:
+    timeout: 5m
