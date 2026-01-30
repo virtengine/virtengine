@@ -66,8 +66,12 @@ export function IdentityScoreDisplay({
 
   if (!score) {
     return (
-      <div className={`identity-score identity-score--${size} identity-score--empty ${className}`}>
-        <div className="identity-score__circle">
+      <div 
+        className={`identity-score identity-score--${size} identity-score--empty ${className}`}
+        role="status"
+        aria-label="Identity not verified"
+      >
+        <div className="identity-score__circle" aria-hidden="true">
           <span className="identity-score__value">--</span>
         </div>
         <span className="identity-score__label">Not Verified</span>
@@ -87,11 +91,21 @@ export function IdentityScoreDisplay({
   };
 
   const { width, height, fontSize } = sizeMap[size];
+  const scoreValue = formatScore(score.overall);
 
   return (
-    <div className={`identity-score identity-score--${size} ${className}`}>
+    <div 
+      className={`identity-score identity-score--${size} ${className}`}
+      role="img"
+      aria-label={`Identity score: ${scoreValue} out of 100, rated ${label}`}
+    >
       <div className="identity-score__circle-container" style={{ width, height }}>
-        <svg viewBox="0 0 100 100" className="identity-score__svg">
+        <svg 
+          viewBox="0 0 100 100" 
+          className="identity-score__svg"
+          aria-hidden="true"
+          focusable="false"
+        >
           {/* Background circle */}
           <circle
             cx="50"
@@ -114,21 +128,21 @@ export function IdentityScoreDisplay({
             transform="rotate(-90 50 50)"
           />
         </svg>
-        <div className="identity-score__value-container">
+        <div className="identity-score__value-container" aria-hidden="true">
           <span 
             className="identity-score__value" 
             style={{ fontSize, color }}
           >
-            {formatScore(score.overall)}
+            {scoreValue}
           </span>
         </div>
       </div>
-      <span className="identity-score__label" style={{ color }}>
+      <span className="identity-score__label" style={{ color }} aria-hidden="true">
         {label}
       </span>
 
       {showComponents && (
-        <div className="identity-score__components">
+        <div className="identity-score__components" role="list" aria-label="Score components">
           <ScoreComponent label="Face Match" value={score.faceMatch} />
           <ScoreComponent label="Document" value={score.documentAuthenticity} />
           <ScoreComponent label="Liveness" value={score.liveness} />
@@ -201,18 +215,30 @@ interface ScoreComponentProps {
 
 function ScoreComponent({ label, value }: ScoreComponentProps): JSX.Element {
   const color = getScoreColor(value);
+  const scoreValue = formatScore(value);
 
   return (
-    <div className="score-component">
-      <span className="score-component__label">{label}</span>
-      <div className="score-component__bar">
+    <div 
+      className="score-component" 
+      role="listitem"
+      aria-label={`${label}: ${scoreValue} out of 100`}
+    >
+      <span className="score-component__label" aria-hidden="true">{label}</span>
+      <div 
+        className="score-component__bar"
+        role="progressbar"
+        aria-valuenow={value}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label} score`}
+      >
         <div 
           className="score-component__fill" 
           style={{ width: `${value}%`, backgroundColor: color }}
         />
       </div>
-      <span className="score-component__value" style={{ color }}>
-        {formatScore(value)}
+      <span className="score-component__value" style={{ color }} aria-hidden="true">
+        {scoreValue}
       </span>
 
       <style>{`

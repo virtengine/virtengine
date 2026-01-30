@@ -131,23 +131,54 @@ export function MFAEnrollmentWizard({
     onComplete?.();
   };
 
+  // A11Y: Step labels for screen readers
+  const stepLabels = {
+    select: 'Step 1 of 3: Select security method',
+    setup: 'Step 2 of 3: Set up authentication',
+    verify: 'Step 3 of 3: Verify setup',
+    complete: 'Setup complete',
+  };
+
   return (
-    <div className={`mfa-wizard ${className}`}>
+    <div 
+      className={`mfa-wizard ${className}`}
+      role="region"
+      aria-label="Multi-factor authentication enrollment"
+    >
       {/* Progress indicator */}
-      <div className="mfa-wizard__progress">
-        <div className={`mfa-wizard__progress-step ${step !== 'select' ? 'mfa-wizard__progress-step--done' : 'mfa-wizard__progress-step--active'}`}>
-          1. Select
-        </div>
-        <div className={`mfa-wizard__progress-step ${step === 'verify' || step === 'complete' ? 'mfa-wizard__progress-step--done' : step === 'setup' ? 'mfa-wizard__progress-step--active' : ''}`}>
-          2. Setup
-        </div>
-        <div className={`mfa-wizard__progress-step ${step === 'complete' ? 'mfa-wizard__progress-step--done' : step === 'verify' ? 'mfa-wizard__progress-step--active' : ''}`}>
-          3. Verify
-        </div>
+      <nav className="mfa-wizard__progress" aria-label="Enrollment progress">
+        <ol role="list" style={{ display: 'flex', justifyContent: 'space-between', listStyle: 'none', padding: 0, margin: 0 }}>
+          <li 
+            className={`mfa-wizard__progress-step ${step !== 'select' ? 'mfa-wizard__progress-step--done' : 'mfa-wizard__progress-step--active'}`}
+            aria-current={step === 'select' ? 'step' : undefined}
+          >
+            <span className="sr-only">{step !== 'select' ? 'Completed: ' : 'Current: '}</span>
+            1. Select
+          </li>
+          <li 
+            className={`mfa-wizard__progress-step ${step === 'verify' || step === 'complete' ? 'mfa-wizard__progress-step--done' : step === 'setup' ? 'mfa-wizard__progress-step--active' : ''}`}
+            aria-current={step === 'setup' ? 'step' : undefined}
+          >
+            <span className="sr-only">{step === 'verify' || step === 'complete' ? 'Completed: ' : step === 'setup' ? 'Current: ' : ''}</span>
+            2. Setup
+          </li>
+          <li 
+            className={`mfa-wizard__progress-step ${step === 'complete' ? 'mfa-wizard__progress-step--done' : step === 'verify' ? 'mfa-wizard__progress-step--active' : ''}`}
+            aria-current={step === 'verify' ? 'step' : undefined}
+          >
+            <span className="sr-only">{step === 'complete' ? 'Completed: ' : step === 'verify' ? 'Current: ' : ''}</span>
+            3. Verify
+          </li>
+        </ol>
+      </nav>
+
+      {/* Screen reader announcement for step changes */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {stepLabels[step]}
       </div>
 
       {/* Step content */}
-      <div className="mfa-wizard__content">
+      <div className="mfa-wizard__content" role="group" aria-label={stepLabels[step]}>
         {step === 'select' && (
           <FactorSelection
             factors={allowedFactors}
@@ -190,6 +221,7 @@ export function MFAEnrollmentWizard({
           <button
             className="mfa-wizard__button mfa-wizard__button--secondary"
             onClick={onCancel}
+            aria-label="Cancel MFA enrollment"
           >
             Cancel
           </button>
@@ -252,24 +284,30 @@ interface FactorSetupProps {
 function FactorSetup({ factorType, enrollment, onContinue }: FactorSetupProps): JSX.Element {
   return (
     <div className="mfa-wizard__step">
-      <h3 className="mfa-wizard__step-title">Set up {FACTOR_INFO[factorType].name}</h3>
+      <h3 className="mfa-wizard__step-title" id="setup-title">Set up {FACTOR_INFO[factorType].name}</h3>
 
       {factorType === 'totp' && enrollment.qrCode && (
         <div className="mfa-wizard__totp-setup">
-          <p className="mfa-wizard__step-description">
+          <p className="mfa-wizard__step-description" id="totp-desc">
             Scan this QR code with your authenticator app
           </p>
           <div className="mfa-wizard__qr-container">
             <img 
               src={enrollment.qrCode} 
-              alt="QR Code" 
+              alt="QR code for authenticator app setup. Use the manual code below if you cannot scan."
               className="mfa-wizard__qr"
             />
           </div>
           {enrollment.secret && (
-            <div className="mfa-wizard__secret">
-              <span className="mfa-wizard__secret-label">Or enter this code manually:</span>
-              <code className="mfa-wizard__secret-code">{enrollment.secret}</code>
+            <div className="mfa-wizard__secret" role="region" aria-label="Manual setup code">
+              <span className="mfa-wizard__secret-label" id="secret-label">Or enter this code manually:</span>
+              <code 
+                className="mfa-wizard__secret-code" 
+                aria-labelledby="secret-label"
+                tabIndex={0}
+              >
+                {enrollment.secret}
+              </code>
             </div>
           )}
         </div>
@@ -292,13 +330,14 @@ function FactorSetup({ factorType, enrollment, onContinue }: FactorSetupProps): 
           <p className="mfa-wizard__step-description">
             Insert your security key or prepare your device for biometric authentication
           </p>
-          <div className="mfa-wizard__fido-icon">🔐</div>
+          <div className="mfa-wizard__fido-icon" aria-hidden="true">🔐</div>
         </div>
       )}
 
       <button
         className="mfa-wizard__button mfa-wizard__button--primary"
         onClick={onContinue}
+        aria-describedby="setup-title"
       >
         Continue
       </button>
@@ -326,17 +365,26 @@ function FactorVerification({
   isLoading,
   error,
 }: FactorVerificationProps): JSX.Element {
+  const inputId = 'mfa-verification-code';
+  const errorId = 'mfa-verification-error';
+
   return (
     <div className="mfa-wizard__step">
-      <h3 className="mfa-wizard__step-title">Verify {FACTOR_INFO[factorType].name}</h3>
-      <p className="mfa-wizard__step-description">
+      <h3 className="mfa-wizard__step-title" id="verification-title">
+        Verify {FACTOR_INFO[factorType].name}
+      </h3>
+      <p className="mfa-wizard__step-description" id="verification-desc">
         Enter the verification code to complete setup
       </p>
 
-      <div className="mfa-wizard__verify-form">
+      <div className="mfa-wizard__verify-form" role="form" aria-labelledby="verification-title">
+        <label htmlFor={inputId} className="sr-only">
+          6-digit verification code
+        </label>
         <input
+          id={inputId}
           type="text"
-          className="mfa-wizard__input"
+          className={`mfa-wizard__input ${error ? 'mfa-wizard__input--error' : ''}`}
           value={code}
           onChange={(e) => onCodeChange(sanitizeDigits(e.target.value, 6))}
           placeholder="Enter 6-digit code"
@@ -344,18 +392,27 @@ function FactorVerification({
           pattern="[0-9]*"
           inputMode="numeric"
           autoComplete="one-time-code"
+          aria-describedby={error ? errorId : 'verification-desc'}
+          aria-invalid={error ? 'true' : undefined}
+          aria-required="true"
         />
 
         {error && (
-          <p className="mfa-wizard__error">{error}</p>
+          <p id={errorId} className="mfa-wizard__error" role="alert" aria-live="assertive">
+            <span aria-hidden="true">⚠ </span>
+            {error}
+          </p>
         )}
 
         <button
           className="mfa-wizard__button mfa-wizard__button--primary"
           onClick={onVerify}
           disabled={code.length !== 6 || isLoading}
+          aria-busy={isLoading}
+          aria-describedby="verification-desc"
         >
           {isLoading ? 'Verifying...' : 'Verify'}
+          {isLoading && <span className="sr-only">Please wait</span>}
         </button>
       </div>
     </div>
@@ -644,6 +701,12 @@ const wizardStyles = `
     cursor: pointer;
     transition: all 0.2s;
     border: none;
+    min-height: 44px; /* WCAG 2.5.5 target size */
+  }
+
+  .mfa-wizard__button:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
   }
 
   .mfa-wizard__button--primary {
@@ -676,5 +739,30 @@ const wizardStyles = `
     margin-top: 24px;
     padding-top: 24px;
     border-top: 1px solid #e5e7eb;
+  }
+
+  /* Screen reader only utility */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Input error state */
+  .mfa-wizard__input--error {
+    border-color: #dc2626;
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .mfa-wizard__button {
+      transition: none;
+    }
   }
 `;
