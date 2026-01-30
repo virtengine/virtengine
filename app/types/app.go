@@ -393,6 +393,10 @@ func (app *App) InitNormalKeepers(
 			govtypesv1.ProposalHandler,
 		).
 		AddRoute(
+			enclavetypes.RouterKey,
+			enclavekeeper.NewEnclaveProposalHandler(app.Keepers.VirtEngine.Enclave),
+		).
+		AddRoute(
 			paramproposal.RouterKey,
 			params.NewParamChangeProposalHandler(app.Keepers.Cosmos.Params),
 		)
