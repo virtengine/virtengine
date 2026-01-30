@@ -1,0 +1,195 @@
+{
+  "ticket_id": "019479b8-7c3d-7000-8001-000000000002",
+  "version": 1,
+  "category": "marketplace",
+  "priority": "high",
+  "tags": ["order", "billing", "provider"],
+  "status": "ASSIGNED",
+  "created_at": 1706620800,
+  "updated_at": 1706624400,
+  "customer_address": "virtengine1customer0abc123def456ghi789jkl012m",
+  "assigned_agent_addr": "virtengine1agent0000xyz012abc345def678ghi901",
+  "order_ref": {
+    "order_id": "order-12345-abcde",
+    "owner_addr": "virtengine1customer0abc123def456ghi789jkl012m",
+    "dseq": 1234567,
+    "gseq": 1,
+    "oseq": 1
+  },
+  "provider_ref": {
+    "provider_addr": "virtengine1provider0def789ghi012jkl345mno678",
+    "provider_name": "CloudProvider Inc.",
+    "lease_id": "lease-98765-fghij"
+  },
+  "deployment_ref": {
+    "deployment_id": "deploy-11111-aaaaa",
+    "owner_addr": "virtengine1customer0abc123def456ghi789jkl012m",
+    "dseq": 1234567
+  },
+  "subject": "Unexpected charges on marketplace order #12345",
+  "description_envelope": {
+    "version": 1,
+    "algorithm_id": "X25519-XSALSA20-POLY1305",
+    "algorithm_version": 1,
+    "recipient_key_ids": [
+      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "1234567890abcdef1234567890abcdef12345678"
+    ],
+    "wrapped_keys": [
+      {
+        "recipient_id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "wrapped_key": "Y3VzdG9tZXJXcmFwcGVkS2V5RGF0YQ==",
+        "algorithm": "X25519-XSALSA20-POLY1305"
+      },
+      {
+        "recipient_id": "1234567890abcdef1234567890abcdef12345678",
+        "wrapped_key": "YWdlbnRXcmFwcGVkS2V5RGF0YQ==",
+        "algorithm": "X25519-XSALSA20-POLY1305"
+      }
+    ],
+    "nonce": "bWFya2V0cGxhY2VOb25jZTEyMzQ1",
+    "ciphertext": "RW5jcnlwdGVkOiBJIHdhcyBjaGFyZ2VkIDEwMCBWRSBidXQgdGhlIHF1b3RlIHNhaWQgNTAgVkUuIFRoZSBwcm92aWRlciBzYXlzIHRoZXkgY2hhcmdlZCB0aGUgY29ycmVjdCBhbW91bnQgYnV0IG15IGJpbGwgc2hvd3Mgb3RoZXJ3aXNlLg==",
+    "sender_signature": "bWFya2V0cGxhY2VTaWduYXR1cmU=",
+    "sender_pub_key": "Y3VzdG9tZXJQdWJLZXk=",
+    "metadata": {
+      "content_type": "text/plain"
+    }
+  },
+  "messages": [
+    {
+      "message_id": "019479b8-7c3d-7001-8000-000000000001",
+      "sender_addr": "virtengine1agent0000xyz012abc345def678ghi901",
+      "sender_role": "support_agent",
+      "created_at": 1706624400,
+      "content_envelope": {
+        "version": 1,
+        "algorithm_id": "X25519-XSALSA20-POLY1305",
+        "algorithm_version": 1,
+        "recipient_key_ids": [
+          "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "1234567890abcdef1234567890abcdef12345678"
+        ],
+        "wrapped_keys": [
+          {
+            "recipient_id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "wrapped_key": "bWVzc2FnZUN1c3RvbWVyS2V5"
+          },
+          {
+            "recipient_id": "1234567890abcdef1234567890abcdef12345678",
+            "wrapped_key": "bWVzc2FnZUFnZW50S2V5"
+          }
+        ],
+        "nonce": "bXNnMU5vbmNlVmFsdWU=",
+        "ciphertext": "SGkgdGhhbmtzIGZvciBjb250YWN0aW5nIHN1cHBvcnQuIEkndmUgYXNzaWduZWQgdGhpcyB0aWNrZXQgdG8gbXlzZWxmIGFuZCB3aWxsIGludmVzdGlnYXRlIHRoZSBiaWxsaW5nIGRpc2NyZXBhbmN5Lg==",
+        "sender_signature": "YWdlbnRNc2dTaWduYXR1cmU=",
+        "sender_pub_key": "YWdlbnRQdWJLZXk="
+      },
+      "is_internal": false
+    },
+    {
+      "message_id": "019479b8-7c3d-7001-8000-000000000002",
+      "sender_addr": "virtengine1agent0000xyz012abc345def678ghi901",
+      "sender_role": "support_agent",
+      "created_at": 1706624500,
+      "content_envelope": {
+        "version": 1,
+        "algorithm_id": "X25519-XSALSA20-POLY1305",
+        "algorithm_version": 1,
+        "recipient_key_ids": [
+          "1234567890abcdef1234567890abcdef12345678",
+          "support_team_role_key_fingerprint1234567"
+        ],
+        "wrapped_keys": [
+          {
+            "recipient_id": "1234567890abcdef1234567890abcdef12345678",
+            "wrapped_key": "aW50ZXJuYWxBZ2VudEtleQ=="
+          },
+          {
+            "recipient_id": "support_team_role_key_fingerprint1234567",
+            "wrapped_key": "aW50ZXJuYWxUZWFtS2V5"
+          }
+        ],
+        "nonce": "aW50ZXJuYWxOb25jZQ==",
+        "ciphertext": "SW50ZXJuYWwgbm90ZTogQ2hlY2sgZXNjcm93IG1vZHVsZSBmb3IgdHJhbnNhY3Rpb24gaGlzdG9yeS4gTWF5IG5lZWQgdG8gZXNjYWxhdGUgdG8gYmlsbGluZyB0ZWFtLg==",
+        "sender_signature": "aW50ZXJuYWxTaWc=",
+        "sender_pub_key": "YWdlbnRQdWJLZXk="
+      },
+      "is_internal": true
+    }
+  ],
+  "attachments": [
+    {
+      "attachment_id": "019479b8-7c3d-7002-8000-000000000001",
+      "file_name": "billing_screenshot.png",
+      "content_type": "image/png",
+      "size_bytes": 245760,
+      "storage_location": "ipfs://QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+      "uploaded_at": 1706620800,
+      "uploaded_by": "virtengine1customer0abc123def456ghi789jkl012m",
+      "checksum_sha256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+      "key_envelope": {
+        "version": 1,
+        "algorithm_id": "X25519-XSALSA20-POLY1305",
+        "algorithm_version": 1,
+        "recipient_key_ids": [
+          "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "1234567890abcdef1234567890abcdef12345678"
+        ],
+        "wrapped_keys": [
+          {
+            "recipient_id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "wrapped_key": "YXR0YWNobWVudERFS0N1c3RvbWVy"
+          },
+          {
+            "recipient_id": "1234567890abcdef1234567890abcdef12345678",
+            "wrapped_key": "YXR0YWNobWVudERFS0FnZW50"
+          }
+        ],
+        "nonce": "YXR0YWNobWVudE5vbmNl",
+        "ciphertext": "QUVTLTI1Ni1HQ00gREVLIGZvciB0aGUgYXR0YWNobWVudA==",
+        "sender_signature": "YXR0YWNobWVudFNpZw==",
+        "sender_pub_key": "Y3VzdG9tZXJQdWJLZXk="
+      }
+    }
+  ],
+  "contact_envelope": {
+    "version": 1,
+    "algorithm_id": "X25519-XSALSA20-POLY1305",
+    "algorithm_version": 1,
+    "recipient_key_ids": [
+      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "1234567890abcdef1234567890abcdef12345678"
+    ],
+    "wrapped_keys": [
+      {
+        "recipient_id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "wrapped_key": "Y29udGFjdEN1c3RvbWVyS2V5"
+      },
+      {
+        "recipient_id": "1234567890abcdef1234567890abcdef12345678",
+        "wrapped_key": "Y29udGFjdEFnZW50S2V5"
+      }
+    ],
+    "nonce": "Y29udGFjdE5vbmNl",
+    "ciphertext": "eyJlbWFpbCI6ICJjdXN0b21lckBleGFtcGxlLmNvbSIsICJwaG9uZSI6ICIrMS01NTUtMTIzNDU2NyJ9",
+    "sender_signature": "Y29udGFjdFNpZw==",
+    "sender_pub_key": "Y3VzdG9tZXJQdWJLZXk=",
+    "metadata": {
+      "content_type": "application/json",
+      "pii_fields": "email,phone"
+    }
+  },
+  "retention_policy": {
+    "policy_id": "us_general",
+    "retention_days": 1825,
+    "delete_after_closed": true,
+    "archive_after_days": 90
+  },
+  "jurisdiction_code": "US-NY",
+  "consent_record_id": "consent-2024-01-30-abc123",
+  "metadata": {
+    "source": "mobile_app",
+    "app_version": "2.5.0",
+    "dispute_amount": "50 VE"
+  }
+}

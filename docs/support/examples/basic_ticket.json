@@ -1,0 +1,54 @@
+{
+  "ticket_id": "019479b8-7c3d-7000-8000-000000000001",
+  "version": 1,
+  "category": "technical",
+  "priority": "medium",
+  "tags": ["deployment", "connectivity"],
+  "status": "OPEN",
+  "created_at": 1706620800,
+  "updated_at": 1706620800,
+  "customer_address": "virtengine1abc123def456ghi789jkl012mno345pq",
+  "subject": "Unable to access deployed application",
+  "description_envelope": {
+    "version": 1,
+    "algorithm_id": "X25519-XSALSA20-POLY1305",
+    "algorithm_version": 1,
+    "recipient_key_ids": [
+      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5"
+    ],
+    "wrapped_keys": [
+      {
+        "recipient_id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        "wrapped_key": "base64EncodedWrappedKey1==",
+        "algorithm": "X25519-XSALSA20-POLY1305"
+      },
+      {
+        "recipient_id": "f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5",
+        "wrapped_key": "base64EncodedWrappedKey2==",
+        "algorithm": "X25519-XSALSA20-POLY1305"
+      }
+    ],
+    "nonce": "dW5pcXVlTm9uY2VWYWx1ZTEyMzQ1Ng==",
+    "ciphertext": "ZW5jcnlwdGVkRGVzY3JpcHRpb25Db250ZW50SGVyZQ==",
+    "sender_signature": "c2lnbmF0dXJlT2ZUaGVFbnZlbG9wZUNvbnRlbnRz",
+    "sender_pub_key": "c2VuZGVyUHVibGljS2V5Qnl0ZXM=",
+    "metadata": {
+      "content_type": "text/plain",
+      "_schema_version": "1.0.0"
+    }
+  },
+  "messages": [],
+  "attachments": [],
+  "retention_policy": {
+    "policy_id": "global",
+    "retention_days": 1095,
+    "delete_after_closed": true,
+    "archive_after_days": 90
+  },
+  "jurisdiction_code": "US",
+  "metadata": {
+    "source": "web_portal",
+    "browser": "Chrome/120.0"
+  }
+}
