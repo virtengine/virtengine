@@ -41,8 +41,32 @@ type NodeMetadata struct {
 	// Active indicates if the node is active
 	Active bool `json:"active"`
 
+	// State is the current node state (pending, active, stale, draining, offline, deregistered)
+	State NodeState `json:"state"`
+
+	// HealthStatus is the health status (healthy, degraded, unhealthy, draining, offline)
+	HealthStatus HealthStatus `json:"health_status"`
+
+	// AgentPubkey is the base64-encoded Ed25519 public key of the node agent
+	AgentPubkey string `json:"agent_pubkey,omitempty"`
+
+	// HardwareFingerprint is SHA256 hash of hardware identifiers for attestation
+	HardwareFingerprint string `json:"hardware_fingerprint,omitempty"`
+
+	// AgentVersion is the version of the node agent software
+	AgentVersion string `json:"agent_version,omitempty"`
+
+	// LastSequenceNumber is the last heartbeat sequence number received
+	LastSequenceNumber uint64 `json:"last_sequence_number"`
+
 	// LastHeartbeat is the last heartbeat time
 	LastHeartbeat time.Time `json:"last_heartbeat"`
+
+	// LastHealthyAt is when the node was last in healthy state
+	LastHealthyAt *time.Time `json:"last_healthy_at,omitempty"`
+
+	// StateChangedAt is when the state last changed
+	StateChangedAt time.Time `json:"state_changed_at"`
 
 	// JoinedAt is when the node joined the cluster
 	JoinedAt time.Time `json:"joined_at"`
@@ -50,8 +74,89 @@ type NodeMetadata struct {
 	// UpdatedAt is when metadata was last updated
 	UpdatedAt time.Time `json:"updated_at"`
 
+	// DeregisteredAt is when the node was deregistered (if applicable)
+	DeregisteredAt *time.Time `json:"deregistered_at,omitempty"`
+
+	// DeregistrationReason is why the node was deregistered
+	DeregistrationReason string `json:"deregistration_reason,omitempty"`
+
+	// Capacity contains current capacity snapshot from last heartbeat
+	Capacity *NodeCapacity `json:"capacity,omitempty"`
+
+	// Health contains current health snapshot from last heartbeat
+	Health *NodeHealth `json:"health,omitempty"`
+
+	// MissedHeartbeatCount is consecutive missed heartbeats
+	MissedHeartbeatCount int32 `json:"missed_heartbeat_count"`
+
+	// TotalHeartbeats is total heartbeats received since registration
+	TotalHeartbeats uint64 `json:"total_heartbeats"`
+
+	// TotalMissedHeartbeats is total missed heartbeats since registration
+	TotalMissedHeartbeats uint64 `json:"total_missed_heartbeats"`
+
 	// BlockHeight is when the metadata was recorded
 	BlockHeight int64 `json:"block_height"`
+}
+
+// NodeStateAuditEntry records a node state transition for audit trail
+type NodeStateAuditEntry struct {
+	// NodeID is the node identifier
+	NodeID string `json:"node_id"`
+
+	// ClusterID is the cluster identifier
+	ClusterID string `json:"cluster_id"`
+
+	// PreviousState is the state before transition
+	PreviousState NodeState `json:"previous_state"`
+
+	// NewState is the state after transition
+	NewState NodeState `json:"new_state"`
+
+	// Reason is why the state changed
+	Reason string `json:"reason"`
+
+	// TriggeredBy indicates who/what triggered the change (system, provider, heartbeat)
+	TriggeredBy string `json:"triggered_by"`
+
+	// Timestamp is when the transition occurred
+	Timestamp time.Time `json:"timestamp"`
+
+	// BlockHeight is when the transition was recorded
+	BlockHeight int64 `json:"block_height"`
+
+	// Details contains additional context
+	Details map[string]string `json:"details,omitempty"`
+}
+
+// ValidNodeStateTransitions defines allowed state transitions for nodes
+var ValidNodeStateTransitions = map[NodeState][]NodeState{
+	NodeStatePending:      {NodeStateActive, NodeStateOffline, NodeStateDeregistered},
+	NodeStateActive:       {NodeStateStale, NodeStateDraining, NodeStateOffline, NodeStateDeregistered},
+	NodeStateStale:        {NodeStateActive, NodeStateOffline, NodeStateDeregistered},
+	NodeStateDraining:     {NodeStateDrained, NodeStateOffline, NodeStateDeregistered},
+	NodeStateDrained:      {NodeStateActive, NodeStateOffline, NodeStateDeregistered},
+	NodeStateOffline:      {NodeStateActive, NodeStatePending, NodeStateDeregistered},
+	NodeStateDeregistered: {}, // Terminal state
+}
+
+// IsValidNodeStateTransition checks if a node state transition is valid
+func IsValidNodeStateTransition(from, to NodeState) bool {
+	allowed, ok := ValidNodeStateTransitions[from]
+	if !ok {
+		return false
+	}
+	for _, s := range allowed {
+		if s == to {
+			return true
+		}
+	}
+	return false
+}
+
+// IsTerminalNodeState checks if the node state is terminal
+func IsTerminalNodeState(s NodeState) bool {
+	return s == NodeStateDeregistered
 }
 
 // LatencyMeasurement contains latency measurement to another node

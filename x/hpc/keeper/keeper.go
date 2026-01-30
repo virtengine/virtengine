@@ -733,5 +733,21 @@ func (k Keeper) CheckClusterHealth(ctx sdk.Context) error {
 		return false
 	})
 
+	// Check for stale nodes and update cluster capacities
+	if err := k.CheckStaleNodes(ctx); err != nil {
+		k.Logger(ctx).Error("failed to check stale nodes", "error", err)
+	}
+
+	// Update cluster capacities based on active nodes
+	k.WithClusters(ctx, func(cluster types.HPCCluster) bool {
+		if cluster.State != types.ClusterStateDeregistered {
+			if err := k.UpdateClusterCapacity(ctx, cluster.ClusterID); err != nil {
+				k.Logger(ctx).Error("failed to update cluster capacity",
+					"cluster_id", cluster.ClusterID, "error", err)
+			}
+		}
+		return false
+	})
+
 	return nil
 }
