@@ -450,3 +450,272 @@ var ErrorCases = []struct {
 	{"ServerError", 500, "waldur server error", true},
 	{"ServiceUnavailable", 503, "waldur server error", true},
 }
+
+// =============================================================================
+// VE-3D: Ingestion Test Fixtures
+// =============================================================================
+
+// WaldurOfferingListResponseJSON is an example paginated list of Waldur offerings.
+const WaldurOfferingListResponseJSON = `[
+  {
+    "uuid": "550e8400-e29b-41d4-a716-446655440100",
+    "name": "Basic Compute Instance",
+    "description": "A basic compute instance with 2 vCPUs and 4GB RAM",
+    "type": "VirtEngine.Compute",
+    "state": "Active",
+    "category_uuid": "550e8400-e29b-41d4-a716-446655440200",
+    "customer_uuid": "550e8400-e29b-41d4-a716-446655440300",
+    "shared": true,
+    "billable": true,
+    "created": "2026-01-01T00:00:00Z"
+  },
+  {
+    "uuid": "550e8400-e29b-41d4-a716-446655440101",
+    "name": "HPC Cluster Access",
+    "description": "High-performance computing cluster with SLURM scheduling",
+    "type": "VirtEngine.HPC",
+    "state": "Active",
+    "category_uuid": "550e8400-e29b-41d4-a716-446655440201",
+    "customer_uuid": "550e8400-e29b-41d4-a716-446655440300",
+    "shared": true,
+    "billable": true,
+    "created": "2026-01-05T00:00:00Z"
+  },
+  {
+    "uuid": "550e8400-e29b-41d4-a716-446655440102",
+    "name": "Block Storage",
+    "description": "High-performance block storage for VMs",
+    "type": "VirtEngine.Storage",
+    "state": "Paused",
+    "category_uuid": "550e8400-e29b-41d4-a716-446655440202",
+    "customer_uuid": "550e8400-e29b-41d4-a716-446655440300",
+    "shared": true,
+    "billable": true,
+    "created": "2026-01-10T00:00:00Z"
+  }
+]`
+
+// WaldurOfferingDetailedJSON is an example detailed Waldur offering with all fields.
+const WaldurOfferingDetailedJSON = `{
+  "uuid": "550e8400-e29b-41d4-a716-446655440100",
+  "name": "Premium GPU Instance",
+  "description": "High-performance GPU instance for ML workloads",
+  "type": "VirtEngine.GPU",
+  "state": "Active",
+  "category_uuid": "550e8400-e29b-41d4-a716-446655440203",
+  "customer_uuid": "550e8400-e29b-41d4-a716-446655440300",
+  "shared": true,
+  "billable": true,
+  "backend_id": "ve1provider123/42",
+  "attributes": {
+    "tags": ["gpu", "ml", "cuda"],
+    "regions": ["us-west-2", "eu-central-1"],
+    "spec_vcpu": "32",
+    "spec_memory_gb": "256",
+    "spec_gpu_type": "A100",
+    "spec_gpu_count": "8",
+    "ve_min_identity_score": 50,
+    "ve_require_mfa": true,
+    "ve_max_concurrent_orders": 10
+  },
+  "components": [
+    {
+      "type": "usage",
+      "name": "base",
+      "measured_unit": "hour",
+      "billing_type": "usage",
+      "price": "12.500000"
+    },
+    {
+      "type": "usage",
+      "name": "gpu_hours",
+      "measured_unit": "gpu_hour",
+      "billing_type": "usage",
+      "price": "3.000000"
+    }
+  ],
+  "created": "2026-01-15T10:00:00Z"
+}`
+
+// IngestConfigFixture provides a test ingest configuration.
+var IngestConfigFixture = struct {
+	CategoryMap         map[string]string
+	TypeMap             map[string]string
+	RegionMap           map[string]string
+	CustomerProviderMap map[string]string
+	CurrencyDenominator uint64
+	DefaultCurrency     string
+	MinIdentityScore    uint32
+}{
+	CategoryMap: map[string]string{
+		"550e8400-e29b-41d4-a716-446655440200": "compute",
+		"550e8400-e29b-41d4-a716-446655440201": "hpc",
+		"550e8400-e29b-41d4-a716-446655440202": "storage",
+		"550e8400-e29b-41d4-a716-446655440203": "gpu",
+	},
+	TypeMap: map[string]string{
+		"VirtEngine.Compute": "compute",
+		"VirtEngine.Storage": "storage",
+		"VirtEngine.Network": "network",
+		"VirtEngine.HPC":     "hpc",
+		"VirtEngine.GPU":     "gpu",
+		"VirtEngine.ML":      "ml",
+		"VirtEngine.Generic": "other",
+	},
+	RegionMap: map[string]string{
+		"uuid-us-east-1":    "us-east-1",
+		"uuid-us-west-2":    "us-west-2",
+		"uuid-eu-west-1":    "eu-west-1",
+		"uuid-eu-central-1": "eu-central-1",
+	},
+	CustomerProviderMap: map[string]string{
+		"550e8400-e29b-41d4-a716-446655440300": "ve1testprovider123abc456def789",
+		"550e8400-e29b-41d4-a716-446655440301": "ve1testprovider987zyx654wvu321",
+	},
+	CurrencyDenominator: 1000000,
+	DefaultCurrency:     "uvirt",
+	MinIdentityScore:    0,
+}
+
+// IngestStateFixtureJSON is an example persisted ingestion state.
+const IngestStateFixtureJSON = `{
+  "waldur_customer_uuid": "550e8400-e29b-41d4-a716-446655440300",
+  "provider_address": "ve1testprovider123abc456def789",
+  "records": {
+    "550e8400-e29b-41d4-a716-446655440100": {
+      "waldur_uuid": "550e8400-e29b-41d4-a716-446655440100",
+      "chain_offering_id": "ve1testprovider123abc456def789/1",
+      "state": "ingested",
+      "waldur_checksum": "abc123def456",
+      "chain_version": 1,
+      "last_ingested_at": "2026-01-20T14:30:00Z",
+      "provider_address": "ve1testprovider123abc456def789",
+      "category": "compute",
+      "offering_name": "Basic Compute Instance",
+      "created_at": "2026-01-15T10:00:00Z"
+    },
+    "550e8400-e29b-41d4-a716-446655440101": {
+      "waldur_uuid": "550e8400-e29b-41d4-a716-446655440101",
+      "chain_offering_id": "ve1testprovider123abc456def789/2",
+      "state": "ingested",
+      "waldur_checksum": "def456ghi789",
+      "chain_version": 2,
+      "last_ingested_at": "2026-01-21T10:00:00Z",
+      "provider_address": "ve1testprovider123abc456def789",
+      "category": "hpc",
+      "offering_name": "HPC Cluster Access",
+      "created_at": "2026-01-05T00:00:00Z"
+    },
+    "550e8400-e29b-41d4-a716-446655440102": {
+      "waldur_uuid": "550e8400-e29b-41d4-a716-446655440102",
+      "state": "pending",
+      "provider_address": "ve1testprovider123abc456def789",
+      "category": "storage",
+      "offering_name": "Block Storage",
+      "created_at": "2026-01-10T00:00:00Z"
+    }
+  },
+  "dead_letter_queue": [],
+  "last_reconcile_at": "2026-01-30T12:00:00Z",
+  "last_ingest_at": "2026-01-30T11:00:00Z",
+  "metrics": {
+    "total_ingests": 5,
+    "successful_ingests": 4,
+    "failed_ingests": 1,
+    "dead_lettered": 0,
+    "skipped": 0,
+    "drift_detections": 1,
+    "reconciliations_run": 24,
+    "offerings_created": 2,
+    "offerings_updated": 2,
+    "offerings_deprecated": 0
+  },
+  "updated_at": "2026-01-30T12:00:00Z"
+}`
+
+// IngestAuditLogEntriesJSON provides sample audit log entries for testing.
+const IngestAuditLogEntriesJSON = `[
+  {
+    "timestamp": "2026-01-30T10:00:00Z",
+    "waldur_uuid": "550e8400-e29b-41d4-a716-446655440100",
+    "offering_name": "Basic Compute Instance",
+    "chain_offering_id": "ve1testprovider123abc456def789/1",
+    "action": "create",
+    "success": true,
+    "duration_ns": 1500000000,
+    "retry_count": 0,
+    "provider_address": "ve1testprovider123abc456def789",
+    "checksum": "abc123def456"
+  },
+  {
+    "timestamp": "2026-01-30T10:05:00Z",
+    "waldur_uuid": "550e8400-e29b-41d4-a716-446655440101",
+    "offering_name": "HPC Cluster Access",
+    "chain_offering_id": "ve1testprovider123abc456def789/2",
+    "action": "update",
+    "success": true,
+    "duration_ns": 800000000,
+    "retry_count": 0,
+    "provider_address": "ve1testprovider123abc456def789",
+    "checksum": "def456ghi789"
+  },
+  {
+    "timestamp": "2026-01-30T10:10:00Z",
+    "waldur_uuid": "550e8400-e29b-41d4-a716-446655440103",
+    "offering_name": "Legacy Service",
+    "action": "deprecate",
+    "success": true,
+    "duration_ns": 500000000,
+    "retry_count": 0,
+    "provider_address": "ve1testprovider123abc456def789"
+  }
+]`
+
+// IngestReconciliationTestCases provides test scenarios for reconciliation.
+var IngestReconciliationTestCases = []struct {
+	Name             string
+	WaldurChecksum   string
+	ChainChecksum    string
+	ExpectDrift      bool
+	ExpectAction     string
+}{
+	{"no drift", "abc123", "abc123", false, "skip"},
+	{"checksum mismatch", "abc123", "def456", true, "update"},
+	{"new offering", "", "abc123", true, "create"},
+	{"archived in waldur", "archived", "abc123", true, "deprecate"},
+}
+
+// IngestValidationTestCases provides test scenarios for offering validation.
+var IngestValidationTestCases = []struct {
+	Name           string
+	WaldurUUID     string
+	CustomerUUID   string
+	OfferingType   string
+	ExpectValid    bool
+	ExpectErrors   []string
+}{
+	{
+		"valid offering",
+		"550e8400-e29b-41d4-a716-446655440100",
+		"550e8400-e29b-41d4-a716-446655440300",
+		"VirtEngine.Compute",
+		true,
+		nil,
+	},
+	{
+		"missing UUID",
+		"",
+		"550e8400-e29b-41d4-a716-446655440300",
+		"VirtEngine.Compute",
+		false,
+		[]string{"UUID is required"},
+	},
+	{
+		"unmapped customer",
+		"550e8400-e29b-41d4-a716-446655440100",
+		"unknown-customer-uuid",
+		"VirtEngine.Compute",
+		false,
+		[]string{"customer UUID unknown-customer-uuid not mapped"},
+	},
+}
