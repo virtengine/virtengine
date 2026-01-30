@@ -5,9 +5,11 @@
 package waldur
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -342,6 +344,43 @@ func mapHTTPError(statusCode int, body []byte) error {
 	}
 
 	return nil
+}
+
+// doRequest performs a raw HTTP request to the Waldur API.
+// VE-2D: Added for provider offerings API which may not be in the generated client.
+func (c *Client) doRequest(ctx context.Context, method, path string, body []byte) ([]byte, int, error) {
+	url := c.config.BaseURL + path
+
+	var req *http.Request
+	var err error
+	if body != nil {
+		req, err = http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	} else {
+		req, err = http.NewRequestWithContext(ctx, method, url, nil)
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Token "+c.config.Token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	if c.config.UserAgent != "" {
+		req.Header.Set("User-Agent", c.config.UserAgent)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("read response: %w", err)
+	}
+
+	return respBody, resp.StatusCode, nil
 }
 
 // HealthCheck verifies the client can connect to Waldur
