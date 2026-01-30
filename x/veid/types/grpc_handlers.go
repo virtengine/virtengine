@@ -8,6 +8,8 @@ import (
 )
 
 // _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
+//
+//nolint:unused // Reserved for future gRPC registration
 var _Msg_serviceDesc = struct {
 	ServiceName string
 	HandlerType interface{}
@@ -363,6 +365,8 @@ type QueryServer interface {
 }
 
 // _Query_serviceDesc is the grpc.ServiceDesc for Query service.
+//
+//nolint:unused // Reserved for future gRPC registration
 var _Query_serviceDesc = struct {
 	ServiceName string
 	HandlerType interface{}

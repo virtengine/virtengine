@@ -160,7 +160,10 @@ func ParsePaymentKey(key []byte) (escrowid.Payment, etypes.State) {
 }
 
 func LegacyAccountKey(id v1beta3.AccountID) []byte {
-	// TODO: validate scope, xid
+	// Validate scope and xid are not empty
+	if id.Scope == "" || id.XID == "" {
+		return nil
+	}
 	buf := &bytes.Buffer{}
 
 	buf.Write(v1beta3.AccountKeyPrefix())
@@ -182,7 +185,10 @@ func keyWritePaymentPrefix(buf *bytes.Buffer, id v1beta3.AccountID) {
 }
 
 func LegacyPaymentKey(id v1beta3.AccountID, pid string) []byte {
-	// TODO: validate scope, xid, pid
+	// Validate scope, xid, and pid are not empty
+	if id.Scope == "" || id.XID == "" || pid == "" {
+		return nil
+	}
 	buf := &bytes.Buffer{}
 
 	keyWritePaymentPrefix(buf, id)
