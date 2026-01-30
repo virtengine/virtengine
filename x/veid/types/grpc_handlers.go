@@ -602,10 +602,16 @@ type QueryScopesByTypeResponse struct {
 	Scopes []IdentityScope `json:"scopes"`
 }
 
-type QueryApprovedClientsRequest struct{}
+type QueryApprovedClientsRequest struct {
+	// Limit specifies the maximum number of clients to return
+	Limit uint32 `json:"limit,omitempty"`
+	// Offset specifies the number of clients to skip
+	Offset uint32 `json:"offset,omitempty"`
+}
 
 type QueryApprovedClientsResponse struct {
-	Clients []ApprovedClient `json:"clients"`
+	Clients    []ApprovedClient `json:"clients"`
+	TotalCount uint32           `json:"total_count"`
 }
 
 type QueryParamsRequest struct{}
@@ -643,6 +649,8 @@ type QueryAppealsByAccountResponse struct {
 type QueryPendingAppealsRequest struct {
 	// Limit is the maximum number of results to return
 	Limit uint32 `json:"limit,omitempty"`
+	// Offset specifies the number of appeals to skip for pagination
+	Offset uint32 `json:"offset,omitempty"`
 }
 
 // QueryPendingAppealsResponse is the response for querying pending appeals

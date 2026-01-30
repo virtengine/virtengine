@@ -900,17 +900,17 @@ func (k Keeper) GetOrderHash(ctx sdk.Context, orderID string) string {
 
 // ProviderHasActiveLeases checks if a provider has any active leases.
 // This is used to prevent provider deletion while leases are active.
+// Uses the reverse index (provider → leases) for O(1) lookup instead of full scan.
 func (k Keeper) ProviderHasActiveLeases(ctx sdk.Context, provider sdk.AccAddress) bool {
-	providerAddr := provider.String()
-	hasActive := false
+	store := ctx.KVStore(k.skey)
 
-	k.WithLeases(ctx, func(lease mv1.Lease) bool {
-		if lease.ID.Provider == providerAddr && lease.State == mv1.LeaseActive {
-			hasActive = true
-			return true // stop iteration
-		}
-		return false // continue
-	})
+	// Use the reverse index to efficiently check for active leases by provider
+	prefix := keys.LeasesByProviderPrefix(keys.LeaseStateActivePrefix, provider)
+	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	defer func() {
+		_ = iter.Close()
+	}()
 
-	return hasActive
+	// If there's at least one entry, provider has active leases
+	return iter.Valid()
 }

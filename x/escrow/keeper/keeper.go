@@ -41,6 +41,14 @@ type Keeper interface {
 	PaymentClose(ctx sdk.Context, id escrowid.Payment) error
 	GetAccount(ctx sdk.Context, id escrowid.Account) (etypes.Account, error)
 	GetPayment(ctx sdk.Context, id escrowid.Payment) (etypes.Payment, error)
+	// GetAccountsBatch retrieves multiple accounts in a single batch operation.
+	// This is more efficient than calling GetAccount multiple times when fetching
+	// multiple accounts, as it reduces store access overhead.
+	GetAccountsBatch(ctx sdk.Context, ids []escrowid.Account) (map[string]etypes.Account, error)
+	// GetPaymentsBatch retrieves multiple payments in a single batch operation.
+	// This is more efficient than calling GetPayment multiple times when fetching
+	// multiple payments, as it reduces store access overhead.
+	GetPaymentsBatch(ctx sdk.Context, ids []escrowid.Payment) (map[string]etypes.Payment, error)
 	AddOnAccountClosedHook(AccountHook) Keeper
 	AddOnPaymentClosedHook(PaymentHook) Keeper
 	WithAccounts(sdk.Context, func(etypes.Account) bool)
@@ -715,6 +723,48 @@ func (k *keeper) GetPayment(ctx sdk.Context, id escrowid.Payment) (etypes.Paymen
 	}
 
 	return obj.Payment, nil
+}
+
+// GetAccountsBatch retrieves multiple accounts in a single batch operation.
+// Returns a map of account ID key string to Account. Accounts not found are omitted.
+func (k *keeper) GetAccountsBatch(ctx sdk.Context, ids []escrowid.Account) (map[string]etypes.Account, error) {
+	result := make(map[string]etypes.Account, len(ids))
+	store := ctx.KVStore(k.skey)
+
+	for _, id := range ids {
+		key := k.findAccount(ctx, &id)
+		if len(key) == 0 {
+			continue // Skip not found accounts
+		}
+
+		buf := store.Get(key)
+		obj := etypes.Account{ID: id}
+		k.cdc.MustUnmarshal(buf, &obj.State)
+		result[id.Key()] = obj
+	}
+
+	return result, nil
+}
+
+// GetPaymentsBatch retrieves multiple payments in a single batch operation.
+// Returns a map of payment ID key string to Payment. Payments not found are omitted.
+func (k *keeper) GetPaymentsBatch(ctx sdk.Context, ids []escrowid.Payment) (map[string]etypes.Payment, error) {
+	result := make(map[string]etypes.Payment, len(ids))
+	store := ctx.KVStore(k.skey)
+
+	for _, id := range ids {
+		key := k.findPayment(ctx, &id)
+		if len(key) == 0 {
+			continue // Skip not found payments
+		}
+
+		buf := store.Get(key)
+		obj := etypes.Payment{ID: id}
+		k.cdc.MustUnmarshal(buf, &obj.State)
+		result[id.Key()] = obj
+	}
+
+	return result, nil
 }
 
 func (k *keeper) getPayment(ctx sdk.Context, id escrowid.Payment) (*payment, error) {

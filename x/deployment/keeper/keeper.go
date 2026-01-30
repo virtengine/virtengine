@@ -18,6 +18,9 @@ type IKeeper interface {
 	GetDeployment(ctx sdk.Context, id v1.DeploymentID) (v1.Deployment, bool)
 	GetGroup(ctx sdk.Context, id v1.GroupID) (types.Group, bool)
 	GetGroups(ctx sdk.Context, id v1.DeploymentID) types.Groups
+	// GetGroupsBatch retrieves groups for multiple deployments in a single batch operation.
+	// This is more efficient than calling GetGroups multiple times, reducing store iteration overhead.
+	GetGroupsBatch(ctx sdk.Context, ids []v1.DeploymentID) map[string]types.Groups
 	Create(ctx sdk.Context, deployment v1.Deployment, groups []types.Group) error
 	UpdateDeployment(ctx sdk.Context, deployment v1.Deployment) error
 	CloseDeployment(ctx sdk.Context, deployment v1.Deployment) error
@@ -168,6 +171,41 @@ func (k Keeper) GetGroups(ctx sdk.Context, id v1.DeploymentID) types.Groups {
 	}
 
 	return vals
+}
+
+// GetGroupsBatch retrieves groups for multiple deployments in a single batch operation.
+// Returns a map of deployment ID string to its groups.
+func (k Keeper) GetGroupsBatch(ctx sdk.Context, ids []v1.DeploymentID) map[string]types.Groups {
+	result := make(map[string]types.Groups, len(ids))
+	store := ctx.KVStore(k.skey)
+
+	statePrefixes := [][]byte{
+		GroupStateOpenPrefix,
+		GroupStatePausedPrefix,
+		GroupStateInsufficientFundsPrefix,
+		GroupStateClosedPrefix,
+	}
+
+	for _, id := range ids {
+		var vals types.Groups
+
+		for _, statePrefix := range statePrefixes {
+			key := MustGroupsKey(statePrefix, id)
+			iter := storetypes.KVStorePrefixIterator(store, key)
+
+			for ; iter.Valid(); iter.Next() {
+				var val types.Group
+				k.cdc.MustUnmarshal(iter.Value(), &val)
+				vals = append(vals, val)
+			}
+
+			_ = iter.Close()
+		}
+
+		result[id.String()] = vals
+	}
+
+	return result
 }
 
 // Create creates a new deployment with given deployment and group specifications
