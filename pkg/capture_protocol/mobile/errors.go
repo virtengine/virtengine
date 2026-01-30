@@ -58,6 +58,15 @@ const (
 	ErrCodeQualityTooBlurry     = "QUALITY_TOO_BLURRY"
 	ErrCodeQualityTooSkewed     = "QUALITY_TOO_SKEWED"
 	ErrCodeQualityGlareDetected = "QUALITY_GLARE_DETECTED"
+
+	// Contract validation errors (2701-2799)
+	ErrCodeCaptureResolutionTooLow  = "CAPTURE_RESOLUTION_TOO_LOW"
+	ErrCodeCaptureResolutionTooHigh = "CAPTURE_RESOLUTION_TOO_HIGH"
+	ErrCodeCaptureFileTooLarge      = "CAPTURE_FILE_TOO_LARGE"
+	ErrCodeCaptureFormatInvalid     = "CAPTURE_FORMAT_INVALID"
+	ErrCodeCaptureCodecInvalid      = "CAPTURE_CODEC_INVALID"
+	ErrCodeCaptureFPSTooLow         = "CAPTURE_FPS_TOO_LOW"
+	ErrCodeCaptureDurationInvalid   = "CAPTURE_DURATION_INVALID"
 )
 
 // MobileError represents a mobile capture error
@@ -281,6 +290,50 @@ var (
 	ErrQualityGlareDetected = &MobileError{
 		Code:    ErrCodeQualityGlareDetected,
 		Message: "Glare detected on image",
+	}
+)
+
+// Contract validation errors
+var (
+	ErrCaptureResolutionTooLow = &MobileError{
+		Code:    ErrCodeCaptureResolutionTooLow,
+		Message: "Capture resolution is below minimum requirement",
+	}
+	ErrCaptureResolutionTooHigh = &MobileError{
+		Code:    ErrCodeCaptureResolutionTooHigh,
+		Message: "Capture resolution exceeds maximum allowed",
+	}
+	ErrCaptureFileTooLarge = &MobileError{
+		Code:    ErrCodeCaptureFileTooLarge,
+		Message: "Capture file size exceeds maximum allowed",
+	}
+	ErrCaptureFormatInvalid = &MobileError{
+		Code:    ErrCodeCaptureFormatInvalid,
+		Message: "Capture format is not supported",
+	}
+	ErrCaptureCodecInvalid = &MobileError{
+		Code:    ErrCodeCaptureCodecInvalid,
+		Message: "Video codec is not supported",
+	}
+	ErrCaptureFPSTooLow = &MobileError{
+		Code:    ErrCodeCaptureFPSTooLow,
+		Message: "Video frame rate is below minimum requirement",
+	}
+	ErrCaptureDurationInvalid = &MobileError{
+		Code:    ErrCodeCaptureDurationInvalid,
+		Message: "Video duration is outside allowed range",
+	}
+	ErrCaptureFrameRateTooLow = &MobileError{
+		Code:    ErrCodeCaptureFPSTooLow,
+		Message: "Video frame rate is below minimum requirement",
+	}
+	ErrCaptureDurationTooShort = &MobileError{
+		Code:    ErrCodeCaptureDurationInvalid,
+		Message: "Video duration is too short",
+	}
+	ErrCaptureDurationTooLong = &MobileError{
+		Code:    ErrCodeCaptureDurationInvalid,
+		Message: "Video duration is too long",
 	}
 )
 
