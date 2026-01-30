@@ -1,0 +1,319 @@
+# VirtEngine HPC Scheduling Alert Rules
+# Alerts for HPC job scheduling, execution, and provider resources
+
+groups:
+  # =============================================================================
+  # HPC Service Availability
+  # =============================================================================
+  - name: hpc_availability
+    interval: 30s
+    rules:
+      # HPC scheduler unavailable
+      - alert: HPCSchedulerUnavailable
+        expr: up{job="hpc-scheduler"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC scheduler unavailable"
+          description: "HPC scheduler service is down"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-scheduler-unavailable"
+          dashboard: "https://grafana.virtengine.com/d/hpc-scheduling"
+
+      # HPC submission availability
+      - alert: HPCSubmissionAvailabilityLow
+        expr: |
+          (
+            sum(rate(hpc_job_submissions_total{status="success"}[5m])) /
+            sum(rate(hpc_job_submissions_total[5m]))
+          ) < 0.99
+        for: 10m
+        labels:
+          severity: high
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC submission availability below SLO"
+          description: "HPC submission success rate is {{ $value | humanizePercentage }}, target is 99.0%"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-submission-low"
+
+  # =============================================================================
+  # Job Scheduling
+  # =============================================================================
+  - name: hpc_scheduling
+    interval: 30s
+    rules:
+      # Job scheduling latency high
+      - alert: HPCSchedulingLatencyHigh
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(hpc_job_scheduling_seconds_bucket[1h])) by (le)
+          ) > 900
+        for: 15m
+        labels:
+          severity: high
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC job scheduling P95 exceeds 15 minutes"
+          description: "Job scheduling P95 is {{ $value | humanizeDuration }}, target is < 15 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-scheduling-slow"
+
+      # Job queue backlog
+      - alert: HPCJobQueueBacklog
+        expr: hpc_jobs_pending > 50
+        for: 30m
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC job queue backlog"
+          description: "{{ $value }} jobs pending in queue"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-queue-backlog"
+
+      # Job queue critical
+      - alert: HPCJobQueueCritical
+        expr: hpc_jobs_pending > 200
+        for: 15m
+        labels:
+          severity: high
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC job queue critically high"
+          description: "{{ $value }} jobs pending, significant user impact"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-queue-critical"
+
+  # =============================================================================
+  # Job Execution
+  # =============================================================================
+  - name: hpc_execution
+    interval: 30s
+    rules:
+      # Job failure rate high
+      - alert: HPCJobFailureRateHigh
+        expr: |
+          rate(hpc_jobs_failed_total[1h]) /
+          rate(hpc_jobs_total[1h]) > 0.1
+        for: 30m
+        labels:
+          severity: high
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "High HPC job failure rate"
+          description: "{{ $value | humanizePercentage }} of jobs are failing"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-job-failures"
+
+      # Job timeout rate
+      - alert: HPCJobTimeoutRate
+        expr: |
+          rate(hpc_jobs_failed_total{reason="timeout"}[1h]) /
+          rate(hpc_jobs_total[1h]) > 0.05
+        for: 1h
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC job timeout rate elevated"
+          description: "{{ $value | humanizePercentage }} of jobs are timing out"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-job-timeouts"
+
+      # Job completion reliability
+      - alert: HPCJobCompletionReliabilityLow
+        expr: |
+          (
+            sum(rate(hpc_jobs_completed_total[24h])) /
+            sum(rate(hpc_jobs_started_total[24h]))
+          ) < 0.99
+        for: 1h
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC job completion reliability below SLO"
+          description: "Job completion rate is {{ $value | humanizePercentage }}, target is > 99%"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-completion-low"
+
+  # =============================================================================
+  # Provider-Specific Issues
+  # =============================================================================
+  - name: hpc_providers
+    interval: 60s
+    rules:
+      # Provider-specific high failure rate
+      - alert: HPCProviderHighFailureRate
+        expr: |
+          (
+            rate(hpc_jobs_failed_total[1h]) by (provider)
+          ) /
+          (
+            rate(hpc_jobs_total[1h]) by (provider)
+          ) > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "High HPC job failure rate for provider {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} has {{ $value | humanizePercentage }} failure rate"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-provider-failures"
+
+      # No HPC providers available
+      - alert: NoHPCProvidersAvailable
+        expr: hpc_providers_active == 0
+        for: 10m
+        labels:
+          severity: critical
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "No HPC providers available"
+          description: "No active HPC providers, job scheduling will fail"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/no-hpc-providers"
+
+      # HPC provider capacity low
+      - alert: HPCProviderCapacityLow
+        expr: |
+          (hpc_total_allocated_resources / hpc_total_available_resources) * 100 > 85
+        for: 30m
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC provider capacity running low"
+          description: "{{ $value | humanize }}% of HPC capacity is allocated"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-capacity-low"
+
+  # =============================================================================
+  # SLURM Backend (if applicable)
+  # =============================================================================
+  - name: hpc_slurm
+    interval: 30s
+    rules:
+      # SLURM controller unavailable
+      - alert: SLURMControllerUnavailable
+        expr: up{job="slurm"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: slurm
+          tier: tier2
+        annotations:
+          summary: "SLURM controller unavailable"
+          description: "SLURM slurmctld is not responding"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/slurm-unavailable"
+
+      # SLURM node down
+      - alert: SLURMNodeDown
+        expr: slurm_node_state{state="down"} > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: slurm
+          tier: tier2
+        annotations:
+          summary: "SLURM node(s) down"
+          description: "{{ $value }} SLURM nodes are in down state"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/slurm-node-down"
+
+      # SLURM queue wait time high
+      - alert: SLURMQueueWaitTimeHigh
+        expr: |
+          avg(slurm_queue_pending_time_seconds) > 1800
+        for: 30m
+        labels:
+          severity: warning
+          service: slurm
+          tier: tier2
+        annotations:
+          summary: "High SLURM queue wait time"
+          description: "Average queue wait time is {{ $value | humanizeDuration }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/slurm-queue-wait"
+
+  # =============================================================================
+  # GPU Resources
+  # =============================================================================
+  - name: hpc_gpu
+    interval: 30s
+    rules:
+      # GPU utilization low (might indicate issues)
+      - alert: HPCGPUUtilizationLow
+        expr: |
+          avg(hpc_gpu_utilization_percent) < 20 and
+          hpc_jobs_running{resource_type="gpu"} > 0
+        for: 30m
+        labels:
+          severity: info
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "Low GPU utilization for running jobs"
+          description: "Average GPU utilization is {{ $value | humanize }}% but jobs are running"
+
+      # GPU memory pressure
+      - alert: HPCGPUMemoryPressure
+        expr: |
+          (hpc_gpu_memory_used_bytes / hpc_gpu_memory_total_bytes) * 100 > 95
+        for: 10m
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "High GPU memory pressure"
+          description: "GPU memory usage is {{ $value | humanize }}%"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-gpu-memory"
+
+      # GPU temperature high
+      - alert: HPCGPUTemperatureHigh
+        expr: hpc_gpu_temperature_celsius > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "High GPU temperature"
+          description: "GPU temperature is {{ $value }}°C on {{ $labels.instance }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-gpu-temperature"
+
+  # =============================================================================
+  # Job Resource Usage
+  # =============================================================================
+  - name: hpc_resources
+    interval: 60s
+    rules:
+      # Resource over-allocation
+      - alert: HPCResourceOverAllocation
+        expr: |
+          (hpc_allocated_cpu / hpc_total_cpu) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "HPC CPU over-allocation"
+          description: "Allocated CPU exceeds physical capacity"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/hpc-overallocation"
+
+      # Job resource waste (allocated but unused)
+      - alert: HPCResourceWaste
+        expr: |
+          (1 - (hpc_used_cpu / hpc_allocated_cpu)) * 100 > 50
+        for: 1h
+        labels:
+          severity: info
+          service: hpc
+          tier: tier2
+        annotations:
+          summary: "High HPC resource waste"
+          description: "{{ $value | humanize }}% of allocated resources are unused"
