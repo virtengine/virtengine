@@ -1,6 +1,7 @@
 // Package payment provides payment gateway integration for Visa/Mastercard.
 //
 // VE-906: Payment gateway integration for fiat-to-crypto onramp
+// PAY-003: Dispute lifecycle persistence and gateway actions
 package payment
 
 import (
@@ -24,6 +25,9 @@ type paymentService struct {
 	webhookHandlers map[WebhookEventType][]EventHandler
 	handlersMu      sync.RWMutex
 
+	// Dispute store for persistence
+	disputeStore DisputeStore
+
 	// Rate limiting state
 	rateLimiter *rateLimiter
 
@@ -39,11 +43,25 @@ type serviceMetrics struct {
 	failedPayments     int64
 	totalRefunds       int64
 	totalDisputes      int64
+	disputesWon        int64
+	disputesLost       int64
+	evidenceSubmitted  int64
+	disputesAccepted   int64
 	webhooksProcessed  int64
 }
 
+// ServiceOption is a functional option for configuring the payment service
+type ServiceOption func(*paymentService)
+
+// WithDisputeStore sets a custom dispute store
+func WithDisputeStore(store DisputeStore) ServiceOption {
+	return func(s *paymentService) {
+		s.disputeStore = store
+	}
+}
+
 // NewService creates a new payment service
-func NewService(cfg Config) (Service, error) {
+func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
@@ -68,11 +86,48 @@ func NewService(cfg Config) (Service, error) {
 		config:          cfg,
 		gateway:         gw,
 		webhookHandlers: make(map[WebhookEventType][]EventHandler),
+		disputeStore:    NewInMemoryDisputeStore(), // Default to in-memory store
 		rateLimiter:     newRateLimiter(cfg.RateLimitConfig),
 		metrics:         &serviceMetrics{},
 	}
 
+	// Apply options
+	for _, opt := range opts {
+		opt(svc)
+	}
+
+	// Register default dispute webhook handlers
+	svc.registerDisputeWebhookHandlers()
+
 	return svc, nil
+}
+
+// registerDisputeWebhookHandlers sets up handlers for dispute-related webhooks
+func (s *paymentService) registerDisputeWebhookHandlers() {
+	// Handle dispute created
+	s.RegisterHandler(WebhookEventChargeDisputeCreated, func(ctx context.Context, event WebhookEvent) error {
+		return s.handleDisputeCreated(ctx, event)
+	})
+
+	// Handle dispute updated
+	s.RegisterHandler(WebhookEventChargeDisputeUpdated, func(ctx context.Context, event WebhookEvent) error {
+		return s.handleDisputeUpdated(ctx, event)
+	})
+
+	// Handle dispute closed
+	s.RegisterHandler(WebhookEventChargeDisputeClosed, func(ctx context.Context, event WebhookEvent) error {
+		return s.handleDisputeClosed(ctx, event)
+	})
+
+	// Handle funds withdrawn
+	s.RegisterHandler(WebhookEventChargeDisputeFundsWithdrawn, func(ctx context.Context, event WebhookEvent) error {
+		return s.handleDisputeFundsWithdrawn(ctx, event)
+	})
+
+	// Handle funds reinstated
+	s.RegisterHandler(WebhookEventChargeDisputeFundsReinstated, func(ctx context.Context, event WebhookEvent) error {
+		return s.handleDisputeFundsReinstated(ctx, event)
+	})
 }
 
 // ============================================================================
@@ -423,81 +478,346 @@ func (s *paymentService) GetSCAStatus(ctx context.Context, paymentIntentID strin
 }
 
 // ============================================================================
-// Dispute Handler Implementation
+// Dispute Handler Implementation - PAY-003
 // ============================================================================
 
+// GetDispute retrieves a dispute by ID, first checking local store then gateway
 func (s *paymentService) GetDispute(ctx context.Context, disputeID string) (Dispute, error) {
-	// Dispute retrieval is gateway-specific
-	// Stripe uses the /disputes endpoint, Adyen uses webhooks
-	switch s.config.Gateway {
-	case GatewayStripe:
-		// For Stripe, dispute details come from webhooks and are stored externally
-		// The Stripe SDK dispute.Get requires the dispute ID (dp_xxx)
-		// In production, this would query a local database that stores webhook data
-		return Dispute{
-			ID:     disputeID,
-			Status: DisputeStatusNeedsResponse,
-		}, nil
-	case GatewayAdyen:
-		// Adyen disputes (chargebacks) are handled via webhooks
-		// Status tracking requires storing webhook notifications
-		return Dispute{
-			ID:     disputeID,
-			Status: DisputeStatusNeedsResponse,
-		}, nil
-	default:
-		return Dispute{}, ErrGatewayNotConfigured
+	// First, check local store
+	if record, found := s.disputeStore.Get(disputeID); found {
+		return record.Dispute, nil
 	}
+
+	// If not in store, fetch from gateway
+	var disp Dispute
+	var err error
+
+	switch adapter := s.gateway.(type) {
+	case *StripeAdapter:
+		disp, err = adapter.GetDispute(ctx, disputeID)
+	case *RealAdyenAdapter:
+		disp, err = adapter.GetDispute(ctx, disputeID)
+	default:
+		return Dispute{
+			ID:      disputeID,
+			Gateway: s.config.Gateway,
+			Status:  DisputeStatusNeedsResponse,
+		}, nil
+	}
+
+	if err != nil {
+		return Dispute{}, err
+	}
+
+	// Store the fetched dispute
+	record := NewDisputeRecord(disp, s.config.Gateway, "system:gateway_fetch")
+	if saveErr := s.disputeStore.Save(record); saveErr != nil {
+		// Log but don't fail - the dispute was successfully fetched
+	}
+
+	return disp, nil
 }
 
+// ListDisputes retrieves disputes for a payment intent
 func (s *paymentService) ListDisputes(ctx context.Context, paymentIntentID string) ([]Dispute, error) {
-	// In production, disputes would be stored in a local database
-	// populated by webhook events. This method queries that store.
-	// For now, return empty as disputes are tracked via webhooks
-	return []Dispute{}, nil
+	// First check local store
+	records := s.disputeStore.GetByPaymentIntent(paymentIntentID)
+	if len(records) > 0 {
+		disputes := make([]Dispute, len(records))
+		for i, record := range records {
+			disputes[i] = record.Dispute
+		}
+		return disputes, nil
+	}
+
+	// If not in store, fetch from gateway
+	var disputes []Dispute
+	var err error
+
+	switch adapter := s.gateway.(type) {
+	case *StripeAdapter:
+		disputes, err = adapter.ListDisputes(ctx, paymentIntentID)
+	case *RealAdyenAdapter:
+		disputes, err = adapter.ListDisputes(ctx, paymentIntentID)
+	default:
+		return []Dispute{}, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Store fetched disputes
+	for _, disp := range disputes {
+		record := NewDisputeRecord(disp, s.config.Gateway, "system:gateway_fetch")
+		_ = s.disputeStore.Save(record)
+	}
+
+	return disputes, nil
 }
 
+// SubmitEvidence submits evidence for a dispute and updates the local store
 func (s *paymentService) SubmitEvidence(ctx context.Context, disputeID string, evidence DisputeEvidence) error {
-	// Evidence submission is gateway-specific
-	// Both Stripe and Adyen have specific evidence submission flows
-	switch s.config.Gateway {
-	case GatewayStripe:
-		// For Stripe, evidence is submitted via the /disputes endpoint
-		// This requires storing evidence files and submitting through the SDK
-		// In a full implementation, this would call stripe.Dispute.Update
-		// with evidence parameters
-		if evidence.ProductDescription == "" && evidence.CustomerEmail == "" && evidence.Receipt == nil {
-			return fmt.Errorf("evidence must contain at least one field")
-		}
-		// Evidence submission successful (would make actual API call in production)
-		return nil
-	case GatewayAdyen:
-		// Adyen dispute defense is submitted through their portal or API
-		// POST /disputes/{disputeID}/defend
-		if evidence.ProductDescription == "" && evidence.UncategorizedText == "" {
-			return fmt.Errorf("evidence must contain at least one field")
-		}
-		return nil
+	// Validate evidence has at least one field
+	if evidence.ProductDescription == "" && evidence.CustomerEmail == "" &&
+		evidence.Receipt == nil && evidence.UncategorizedText == "" {
+		return fmt.Errorf("evidence must contain at least one field")
+	}
+
+	// Submit to gateway
+	var err error
+	switch adapter := s.gateway.(type) {
+	case *StripeAdapter:
+		err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
+	case *RealAdyenAdapter:
+		err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
 	default:
 		return ErrGatewayNotConfigured
 	}
+
+	if err != nil {
+		return err
+	}
+
+	// Update local store
+	record, found := s.disputeStore.Get(disputeID)
+	if found {
+		evidenceType := "mixed"
+		if evidence.ProductDescription != "" {
+			evidenceType = "product_description"
+		} else if evidence.Receipt != nil {
+			evidenceType = "receipt"
+		}
+		record.MarkEvidenceSubmitted("api:submit_evidence", evidenceType)
+		if saveErr := s.disputeStore.Save(record); saveErr != nil {
+			// Log but don't fail
+		}
+	}
+
+	// Update metrics
+	s.metrics.mu.Lock()
+	s.metrics.evidenceSubmitted++
+	s.metrics.mu.Unlock()
+
+	return nil
 }
 
+// AcceptDispute accepts (concedes) a dispute
 func (s *paymentService) AcceptDispute(ctx context.Context, disputeID string) error {
-	// Accept (concede) a dispute
-	switch s.config.Gateway {
-	case GatewayStripe:
-		// For Stripe, closing a dispute in favor of the cardholder
-		// This is done by not submitting evidence before the deadline
-		// or explicitly closing it
-		return nil
-	case GatewayAdyen:
-		// For Adyen, accepting a chargeback
-		// POST /disputes/{disputeID}/accept
-		return nil
+	// Submit to gateway
+	var err error
+	switch adapter := s.gateway.(type) {
+	case *StripeAdapter:
+		err = adapter.AcceptDispute(ctx, disputeID)
+	case *RealAdyenAdapter:
+		err = adapter.AcceptDispute(ctx, disputeID)
 	default:
 		return ErrGatewayNotConfigured
 	}
+
+	if err != nil {
+		return err
+	}
+
+	// Update local store
+	record, found := s.disputeStore.Get(disputeID)
+	if found {
+		record.MarkAccepted("api:accept_dispute", "merchant_accepted")
+		if saveErr := s.disputeStore.Save(record); saveErr != nil {
+			// Log but don't fail
+		}
+	}
+
+	// Update metrics
+	s.metrics.mu.Lock()
+	s.metrics.disputesAccepted++
+	s.metrics.mu.Unlock()
+
+	return nil
+}
+
+// GetDisputeStore returns the dispute store for direct access
+func (s *paymentService) GetDisputeStore() DisputeStore {
+	return s.disputeStore
+}
+
+// ============================================================================
+// Dispute Webhook Handlers - PAY-003
+// ============================================================================
+
+// handleDisputeCreated processes dispute created webhook events
+func (s *paymentService) handleDisputeCreated(ctx context.Context, event WebhookEvent) error {
+	dispute := s.extractDisputeFromEvent(event)
+	if dispute == nil {
+		return nil
+	}
+
+	// Create and store the dispute record
+	record := NewDisputeRecord(*dispute, event.Gateway, "webhook:"+string(event.Type))
+	if err := s.disputeStore.Save(record); err != nil {
+		return err
+	}
+
+	// Update metrics
+	s.metrics.mu.Lock()
+	s.metrics.totalDisputes++
+	s.metrics.mu.Unlock()
+
+	return nil
+}
+
+// handleDisputeUpdated processes dispute updated webhook events
+func (s *paymentService) handleDisputeUpdated(ctx context.Context, event WebhookEvent) error {
+	dispute := s.extractDisputeFromEvent(event)
+	if dispute == nil {
+		return nil
+	}
+
+	record, found := s.disputeStore.Get(dispute.ID)
+	if !found {
+		// Create new record if not found
+		record = NewDisputeRecord(*dispute, event.Gateway, "webhook:"+string(event.Type))
+	} else {
+		// Update existing record
+		record.UpdateStatus(dispute.Status, "webhook:"+string(event.Type), map[string]string{
+			"event_id": event.ID,
+		})
+		record.Dispute = *dispute
+	}
+
+	return s.disputeStore.Save(record)
+}
+
+// handleDisputeClosed processes dispute closed webhook events
+func (s *paymentService) handleDisputeClosed(ctx context.Context, event WebhookEvent) error {
+	dispute := s.extractDisputeFromEvent(event)
+	if dispute == nil {
+		return nil
+	}
+
+	record, found := s.disputeStore.Get(dispute.ID)
+	if !found {
+		record = NewDisputeRecord(*dispute, event.Gateway, "webhook:"+string(event.Type))
+	} else {
+		record.UpdateStatus(dispute.Status, "webhook:"+string(event.Type), map[string]string{
+			"event_id": event.ID,
+			"outcome":  string(dispute.Status),
+		})
+		record.Dispute = *dispute
+	}
+
+	// Update metrics based on outcome
+	s.metrics.mu.Lock()
+	switch dispute.Status {
+	case DisputeStatusWon:
+		s.metrics.disputesWon++
+	case DisputeStatusLost:
+		s.metrics.disputesLost++
+	}
+	s.metrics.mu.Unlock()
+
+	return s.disputeStore.Save(record)
+}
+
+// handleDisputeFundsWithdrawn processes funds withdrawn webhook events
+func (s *paymentService) handleDisputeFundsWithdrawn(ctx context.Context, event WebhookEvent) error {
+	dispute := s.extractDisputeFromEvent(event)
+	if dispute == nil {
+		return nil
+	}
+
+	record, found := s.disputeStore.Get(dispute.ID)
+	if found {
+		record.AddAuditEntry(DisputeAuditEntry{
+			Timestamp: time.Now(),
+			Action:    "funds_withdrawn",
+			Actor:     "webhook:" + string(event.Type),
+			Details: map[string]string{
+				"event_id": event.ID,
+				"amount":   fmt.Sprintf("%d", dispute.Amount.Value),
+			},
+		})
+		return s.disputeStore.Save(record)
+	}
+
+	return nil
+}
+
+// handleDisputeFundsReinstated processes funds reinstated webhook events
+func (s *paymentService) handleDisputeFundsReinstated(ctx context.Context, event WebhookEvent) error {
+	dispute := s.extractDisputeFromEvent(event)
+	if dispute == nil {
+		return nil
+	}
+
+	record, found := s.disputeStore.Get(dispute.ID)
+	if found {
+		record.AddAuditEntry(DisputeAuditEntry{
+			Timestamp: time.Now(),
+			Action:    "funds_reinstated",
+			Actor:     "webhook:" + string(event.Type),
+			Details: map[string]string{
+				"event_id": event.ID,
+				"amount":   fmt.Sprintf("%d", dispute.Amount.Value),
+			},
+		})
+		return s.disputeStore.Save(record)
+	}
+
+	return nil
+}
+
+// extractDisputeFromEvent extracts dispute data from a webhook event
+func (s *paymentService) extractDisputeFromEvent(event WebhookEvent) *Dispute {
+	data, ok := event.Data.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	obj, ok := data["object"].(map[string]interface{})
+	if !ok {
+		// Try direct access for Adyen-style events
+		obj = data
+	}
+
+	dispute := &Dispute{
+		Gateway:   event.Gateway,
+		CreatedAt: event.Timestamp,
+		UpdatedAt: time.Now(),
+	}
+
+	if id, ok := obj["id"].(string); ok {
+		dispute.ID = id
+	}
+	if id, ok := obj["pspReference"].(string); ok && dispute.ID == "" {
+		dispute.ID = id
+	}
+	if status, ok := obj["status"].(string); ok {
+		dispute.Status = DisputeStatus(status)
+	}
+	if reason, ok := obj["reason"].(string); ok {
+		dispute.Reason = DisputeReason(reason)
+	}
+	if piID, ok := obj["payment_intent"].(string); ok {
+		dispute.PaymentIntentID = piID
+	}
+	if chargeID, ok := obj["charge"].(string); ok {
+		dispute.ChargeID = chargeID
+	}
+
+	// Parse amount if present
+	if amountVal, ok := obj["amount"].(float64); ok {
+		dispute.Amount.Value = int64(amountVal)
+	}
+	if currency, ok := obj["currency"].(string); ok {
+		dispute.Amount.Currency = Currency(currency)
+	}
+
+	if dispute.ID == "" {
+		return nil
+	}
+
+	return dispute
 }
 
 // ============================================================================

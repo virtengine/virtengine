@@ -607,7 +607,10 @@ const (
 	WebhookEventPaymentIntentProcessing   WebhookEventType = "payment_intent.processing"
 	WebhookEventChargeRefunded            WebhookEventType = "charge.refunded"
 	WebhookEventChargeDisputeCreated      WebhookEventType = "charge.dispute.created"
+	WebhookEventChargeDisputeUpdated      WebhookEventType = "charge.dispute.updated"
 	WebhookEventChargeDisputeClosed       WebhookEventType = "charge.dispute.closed"
+	WebhookEventChargeDisputeFundsWithdrawn  WebhookEventType = "charge.dispute.funds_withdrawn"
+	WebhookEventChargeDisputeFundsReinstated WebhookEventType = "charge.dispute.funds_reinstated"
 	WebhookEventPaymentMethodAttached     WebhookEventType = "payment_method.attached"
 	WebhookEventPaymentMethodDetached     WebhookEventType = "payment_method.detached"
 	WebhookEventCustomerCreated           WebhookEventType = "customer.created"
@@ -658,6 +661,16 @@ const (
 	DisputeStatusExpired          DisputeStatus = "expired"
 )
 
+// IsFinal returns true if the dispute is in a terminal state
+func (s DisputeStatus) IsFinal() bool {
+	switch s {
+	case DisputeStatusWon, DisputeStatusLost, DisputeStatusAccepted, DisputeStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
 // DisputeReason represents dispute reason
 type DisputeReason string
 
@@ -674,8 +687,14 @@ type Dispute struct {
 	// ID is the dispute ID
 	ID string `json:"id"`
 
+	// Gateway is which gateway processed this dispute
+	Gateway GatewayType `json:"gateway,omitempty"`
+
 	// PaymentIntentID is the disputed payment
 	PaymentIntentID string `json:"payment_intent_id"`
+
+	// ChargeID is the underlying charge/transaction ID
+	ChargeID string `json:"charge_id,omitempty"`
 
 	// Amount is the disputed amount
 	Amount Amount `json:"amount"`
@@ -695,8 +714,14 @@ type Dispute struct {
 	// NetworkReasonCode is the card network reason code
 	NetworkReasonCode string `json:"network_reason_code,omitempty"`
 
+	// Metadata is additional key-value metadata
+	Metadata map[string]string `json:"metadata,omitempty"`
+
 	// CreatedAt when dispute was opened
 	CreatedAt time.Time `json:"created_at"`
+
+	// UpdatedAt when dispute was last updated
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
 // ============================================================================

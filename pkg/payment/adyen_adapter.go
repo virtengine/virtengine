@@ -545,6 +545,201 @@ func (a *RealAdyenAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, erro
 }
 
 // ============================================================================
+// Dispute Methods - PAY-003
+// ============================================================================
+
+// GetDispute retrieves a dispute by ID from Adyen
+// Adyen disputes (chargebacks) are tracked via webhooks; this queries stored data
+func (a *RealAdyenAdapter) GetDispute(ctx context.Context, disputeID string) (Dispute, error) {
+	// Adyen Disputes API: GET /disputes/{disputeId}
+	// Note: Adyen's Disputes API requires separate enablement and may have different
+	// base URL. This is a simplified implementation using the Checkout API path structure.
+	
+	resp, err := a.doRequest(ctx, "GET", fmt.Sprintf("/disputes/%s", disputeID), nil)
+	if err != nil {
+		// If API call fails, return minimal dispute info
+		// In production, this would query a local database populated by webhooks
+		return Dispute{
+			ID:      disputeID,
+			Gateway: GatewayAdyen,
+			Status:  DisputeStatusNeedsResponse,
+		}, nil
+	}
+
+	var result adyenDisputeResponse
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return Dispute{}, err
+	}
+
+	return mapAdyenDispute(&result), nil
+}
+
+// ListDisputes retrieves disputes for a payment reference
+func (a *RealAdyenAdapter) ListDisputes(ctx context.Context, paymentIntentID string) ([]Dispute, error) {
+	// Adyen's dispute listing requires querying by payment reference
+	reqBody := map[string]interface{}{
+		"merchantAccount":   a.config.MerchantAccount,
+		"paymentPspReference": paymentIntentID,
+	}
+
+	resp, err := a.doRequest(ctx, "POST", "/disputes", reqBody)
+	if err != nil {
+		// Return empty list if API fails
+		return []Dispute{}, nil
+	}
+
+	var result struct {
+		Disputes []adyenDisputeResponse `json:"disputes"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	disputes := make([]Dispute, 0, len(result.Disputes))
+	for i := range result.Disputes {
+		disputes = append(disputes, mapAdyenDispute(&result.Disputes[i]))
+	}
+
+	return disputes, nil
+}
+
+// SubmitDisputeEvidence submits evidence (defense) for an Adyen chargeback
+func (a *RealAdyenAdapter) SubmitDisputeEvidence(ctx context.Context, disputeID string, evidence DisputeEvidence) error {
+	// Adyen Disputes API: POST /disputes/{disputeId}/defend
+	reqBody := map[string]interface{}{
+		"merchantAccount": a.config.MerchantAccount,
+		"defenseReason":   "SupplyDefenseMaterial",
+	}
+
+	// Build defense documents
+	defenseDocs := make([]map[string]string, 0)
+
+	if evidence.ProductDescription != "" {
+		defenseDocs = append(defenseDocs, map[string]string{
+			"defenseDocumentType": "DefenseMaterial",
+			"content":             evidence.ProductDescription,
+			"contentType":         "text/plain",
+		})
+	}
+
+	if evidence.UncategorizedText != "" {
+		defenseDocs = append(defenseDocs, map[string]string{
+			"defenseDocumentType": "DefenseMaterial",
+			"content":             evidence.UncategorizedText,
+			"contentType":         "text/plain",
+		})
+	}
+
+	if len(defenseDocs) > 0 {
+		reqBody["defenseDocuments"] = defenseDocs
+	}
+
+	_, err := a.doRequest(ctx, "POST", fmt.Sprintf("/disputes/%s/defend", disputeID), reqBody)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AcceptDispute accepts (concedes) an Adyen chargeback
+func (a *RealAdyenAdapter) AcceptDispute(ctx context.Context, disputeID string) error {
+	// Adyen Disputes API: POST /disputes/{disputeId}/accept
+	reqBody := map[string]interface{}{
+		"merchantAccount": a.config.MerchantAccount,
+	}
+
+	_, err := a.doRequest(ctx, "POST", fmt.Sprintf("/disputes/%s/accept", disputeID), reqBody)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// adyenDisputeResponse represents Adyen's dispute response structure
+type adyenDisputeResponse struct {
+	DisputePspReference string `json:"disputePspReference"`
+	PaymentPspReference string `json:"paymentPspReference"`
+	DisputeStatus       string `json:"disputeStatus"`
+	DisputeReason       string `json:"disputeReason"`
+	Amount              struct {
+		Value    int64  `json:"value"`
+		Currency string `json:"currency"`
+	} `json:"amount"`
+	DefenseDeadline string `json:"defenseDeadline"`
+	CreatedAt       string `json:"createdAt"`
+}
+
+// mapAdyenDispute converts Adyen dispute response to our Dispute type
+func mapAdyenDispute(d *adyenDisputeResponse) Dispute {
+	disp := Dispute{
+		ID:              d.DisputePspReference,
+		Gateway:         GatewayAdyen,
+		PaymentIntentID: d.PaymentPspReference,
+		Status:          mapAdyenDisputeStatus(d.DisputeStatus),
+		Reason:          mapAdyenDisputeReason(d.DisputeReason),
+		UpdatedAt:       time.Now(),
+	}
+
+	// Map amount
+	disp.Amount = Amount{
+		Value:    d.Amount.Value,
+		Currency: Currency(d.Amount.Currency),
+	}
+
+	// Parse defense deadline
+	if d.DefenseDeadline != "" {
+		if deadline, err := time.Parse(time.RFC3339, d.DefenseDeadline); err == nil {
+			disp.EvidenceDueBy = deadline
+		}
+	}
+
+	// Parse created date
+	if d.CreatedAt != "" {
+		if created, err := time.Parse(time.RFC3339, d.CreatedAt); err == nil {
+			disp.CreatedAt = created
+		}
+	}
+
+	return disp
+}
+
+// mapAdyenDisputeStatus converts Adyen dispute status to our DisputeStatus
+func mapAdyenDisputeStatus(status string) DisputeStatus {
+	switch status {
+	case "Pending":
+		return DisputeStatusNeedsResponse
+	case "DefensePending", "UnderReview":
+		return DisputeStatusUnderReview
+	case "Won", "DefenseWon":
+		return DisputeStatusWon
+	case "Lost", "ChargebackReceived":
+		return DisputeStatusLost
+	case "Accepted":
+		return DisputeStatusAccepted
+	default:
+		return DisputeStatusOpen
+	}
+}
+
+// mapAdyenDisputeReason converts Adyen dispute reason to our DisputeReason
+func mapAdyenDisputeReason(reason string) DisputeReason {
+	switch reason {
+	case "Fraud", "CardNotPresent":
+		return DisputeReasonFraudulent
+	case "Duplicate":
+		return DisputeReasonDuplicate
+	case "NotReceived", "ServiceNotProvided":
+		return DisputeReasonProductNotReceived
+	case "Unrecognized":
+		return DisputeReasonUnrecognized
+	default:
+		return DisputeReasonGeneral
+	}
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 

@@ -1,6 +1,7 @@
 // Package payment provides payment gateway integration for Visa/Mastercard.
 //
 // VE-2003: Real Stripe payment adapter implementation
+// PAY-003: Dispute lifecycle persistence and gateway actions
 package payment
 
 import (
@@ -13,6 +14,7 @@ import (
 
 	"github.com/stripe/stripe-go/v80"
 	"github.com/stripe/stripe-go/v80/customer"
+	"github.com/stripe/stripe-go/v80/dispute"
 	"github.com/stripe/stripe-go/v80/paymentintent"
 	"github.com/stripe/stripe-go/v80/paymentmethod"
 	"github.com/stripe/stripe-go/v80/refund"
@@ -496,6 +498,184 @@ func (a *StripeAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, error) 
 }
 
 // ============================================================================
+// Dispute Methods - PAY-003
+// ============================================================================
+
+// GetDispute retrieves a dispute by ID from Stripe
+func (a *StripeAdapter) GetDispute(ctx context.Context, disputeID string) (Dispute, error) {
+	params := &stripe.DisputeParams{}
+	params.Context = ctx
+
+	result, err := dispute.Get(disputeID, params)
+	if err != nil {
+		return Dispute{}, convertStripeError(err)
+	}
+
+	return mapStripeDispute(result), nil
+}
+
+// ListDisputes retrieves disputes for a payment intent
+func (a *StripeAdapter) ListDisputes(ctx context.Context, paymentIntentID string) ([]Dispute, error) {
+	params := &stripe.DisputeListParams{}
+	params.Context = ctx
+	params.PaymentIntent = stripe.String(paymentIntentID)
+
+	iter := dispute.List(params)
+	var disputes []Dispute
+
+	for iter.Next() {
+		d := iter.Dispute()
+		disputes = append(disputes, mapStripeDispute(d))
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, convertStripeError(err)
+	}
+
+	return disputes, nil
+}
+
+// SubmitDisputeEvidence submits evidence for a dispute
+func (a *StripeAdapter) SubmitDisputeEvidence(ctx context.Context, disputeID string, evidence DisputeEvidence) error {
+	params := &stripe.DisputeParams{}
+	params.Context = ctx
+
+	// Map evidence fields to Stripe's evidence structure
+	if evidence.ProductDescription != "" {
+		params.Evidence = &stripe.DisputeEvidenceParams{
+			ProductDescription: stripe.String(evidence.ProductDescription),
+		}
+	}
+	if evidence.CustomerEmail != "" {
+		if params.Evidence == nil {
+			params.Evidence = &stripe.DisputeEvidenceParams{}
+		}
+		params.Evidence.CustomerEmailAddress = stripe.String(evidence.CustomerEmail)
+	}
+	if evidence.CustomerPurchaseIP != "" {
+		if params.Evidence == nil {
+			params.Evidence = &stripe.DisputeEvidenceParams{}
+		}
+		params.Evidence.CustomerPurchaseIP = stripe.String(evidence.CustomerPurchaseIP)
+	}
+	if evidence.BillingAddress != "" {
+		if params.Evidence == nil {
+			params.Evidence = &stripe.DisputeEvidenceParams{}
+		}
+		params.Evidence.BillingAddress = stripe.String(evidence.BillingAddress)
+	}
+	if evidence.UncategorizedText != "" {
+		if params.Evidence == nil {
+			params.Evidence = &stripe.DisputeEvidenceParams{}
+		}
+		params.Evidence.UncategorizedText = stripe.String(evidence.UncategorizedText)
+	}
+
+	// Submit the evidence (doesn't mark as "submit" yet - needs explicit Submit=true)
+	params.Submit = stripe.Bool(true)
+
+	_, err := dispute.Update(disputeID, params)
+	if err != nil {
+		return convertStripeError(err)
+	}
+
+	return nil
+}
+
+// AcceptDispute accepts (concedes) a dispute in Stripe
+// This closes the dispute in favor of the cardholder
+func (a *StripeAdapter) AcceptDispute(ctx context.Context, disputeID string) error {
+	params := &stripe.DisputeParams{}
+	params.Context = ctx
+
+	_, err := dispute.Close(disputeID, params)
+	if err != nil {
+		return convertStripeError(err)
+	}
+
+	return nil
+}
+
+// mapStripeDispute converts a Stripe Dispute to our Dispute type
+func mapStripeDispute(d *stripe.Dispute) Dispute {
+	disp := Dispute{
+		ID:        d.ID,
+		Gateway:   GatewayStripe,
+		Status:    mapStripeDisputeStatus(d.Status),
+		Reason:    mapStripeDisputeReason(d.Reason),
+		CreatedAt: time.Unix(d.Created, 0),
+		UpdatedAt: time.Now(),
+	}
+
+	// Map amount
+	disp.Amount = Amount{
+		Value:    d.Amount,
+		Currency: Currency(d.Currency),
+	}
+
+	// Map charge -> payment intent relationship
+	if d.Charge != nil {
+		disp.ChargeID = d.Charge.ID
+	}
+	if d.PaymentIntent != nil {
+		disp.PaymentIntentID = d.PaymentIntent.ID
+	}
+
+	// Map evidence due date
+	if d.EvidenceDetails != nil && d.EvidenceDetails.DueBy > 0 {
+		disp.EvidenceDueBy = time.Unix(d.EvidenceDetails.DueBy, 0)
+	}
+
+	// Map network reason code
+	disp.NetworkReasonCode = d.NetworkReasonCode
+
+	// Check if refundable (only certain statuses allow refund)
+	disp.IsRefundable = d.Status == stripe.DisputeStatusNeedsResponse ||
+		d.Status == stripe.DisputeStatusWarningNeedsResponse
+
+	// Add metadata
+	if d.Metadata != nil {
+		disp.Metadata = d.Metadata
+	}
+
+	return disp
+}
+
+// mapStripeDisputeStatus converts Stripe dispute status to our DisputeStatus
+func mapStripeDisputeStatus(status stripe.DisputeStatus) DisputeStatus {
+	switch status {
+	case stripe.DisputeStatusNeedsResponse, stripe.DisputeStatusWarningNeedsResponse:
+		return DisputeStatusNeedsResponse
+	case stripe.DisputeStatusUnderReview, stripe.DisputeStatusWarningUnderReview:
+		return DisputeStatusUnderReview
+	case stripe.DisputeStatusWon:
+		return DisputeStatusWon
+	case stripe.DisputeStatusLost:
+		return DisputeStatusLost
+	case stripe.DisputeStatusWarningClosed:
+		return DisputeStatusAccepted
+	default:
+		return DisputeStatusOpen
+	}
+}
+
+// mapStripeDisputeReason converts Stripe dispute reason to our DisputeReason
+func mapStripeDisputeReason(reason stripe.DisputeReason) DisputeReason {
+	switch reason {
+	case stripe.DisputeReasonFraudulent:
+		return DisputeReasonFraudulent
+	case stripe.DisputeReasonDuplicate:
+		return DisputeReasonDuplicate
+	case stripe.DisputeReasonProductNotReceived:
+		return DisputeReasonProductNotReceived
+	case stripe.DisputeReasonUnrecognized:
+		return DisputeReasonUnrecognized
+	default:
+		return DisputeReasonGeneral
+	}
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -665,8 +845,14 @@ func mapStripeEventType(eventType string) WebhookEventType {
 		return WebhookEventChargeRefunded
 	case "charge.dispute.created":
 		return WebhookEventChargeDisputeCreated
+	case "charge.dispute.updated":
+		return WebhookEventChargeDisputeUpdated
 	case "charge.dispute.closed":
 		return WebhookEventChargeDisputeClosed
+	case "charge.dispute.funds_withdrawn":
+		return WebhookEventChargeDisputeFundsWithdrawn
+	case "charge.dispute.funds_reinstated":
+		return WebhookEventChargeDisputeFundsReinstated
 	case "customer.created":
 		return WebhookEventCustomerCreated
 	case "customer.updated":
