@@ -7,6 +7,8 @@ namespace: virtengine-prod
 resources:
   - ../../base
   - blue-green-service.yaml
+  - hpa-enhanced.yaml
+  - keda-scaledobject.yaml
 
 namePrefix: prod-
 

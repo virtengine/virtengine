@@ -6,6 +6,22 @@
 
 ---
 
+## Implementation Summary
+
+This document accompanies the SCALE-002 implementation which includes:
+
+| Component | File | Description |
+|-----------|------|-------------|
+| Bid Deduplication | `pkg/provider_daemon/scaling.go` | Distributed order partitioning and deduplication |
+| Scaling Metrics | `pkg/provider_daemon/scaling_metrics.go` | Prometheus metrics for scaling observability |
+| Enhanced HPA | `deploy/kubernetes/overlays/prod/hpa-enhanced.yaml` | Custom metrics-based autoscaling |
+| KEDA Scaler | `deploy/kubernetes/overlays/prod/keda-scaledobject.yaml` | Event-driven autoscaling |
+| State Sync Script | `scripts/state-sync-bootstrap.sh` | Fast validator bootstrap |
+| Scaling Alerts | `deploy/monitoring/prometheus/rules/scaling_alerts.yml` | Alerting for scaling issues |
+| Multi-Region Terraform | `infra/terraform/modules/scaling/main.tf` | Global load balancing infrastructure |
+
+---
+
 ## Table of Contents
 
 1. [Overview](#overview)
