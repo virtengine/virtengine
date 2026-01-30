@@ -47,6 +47,71 @@ Use the Makefile target for full end-to-end testing:
 make test-integration
 ```
 
+## Upgrade Testing
+
+VirtEngine upgrade testing is split into unit checks and multi-validator e2e drills.
+
+### Upgrade Handler Framework (Unit)
+
+- Upgrade handler tests live under `upgrades/software/*` and validate state migrations at the keeper/store level.
+- Upgrade test cases are defined in `tests/upgrade/test-cases.json` and validated by:
+
+```bash
+go test ./tests/upgrade
+```
+
+### Multi-Validator Upgrade Coordination (E2E)
+
+This runs a local multi-validator network and submits a software upgrade proposal:
+
+```bash
+make -C tests/upgrade test
+```
+
+Key inputs:
+- `tests/upgrade/test-cases.json` (module add/remove + migration expectations)
+- `tests/upgrade/test-config.json` (validator topology)
+- `tests/upgrade/testnet.json` (testnet state shaping for upgrade simulation)
+
+### Upgrade Simulation on Testnet State
+
+Use the upgrade harness to snapshot a network and replay an upgrade against the testnetified state:
+
+```bash
+make -C tests/upgrade prepare-state
+make -C tests/upgrade test
+```
+
+### Rollback Procedure Drill
+
+Simulate a failed upgrade and verify recovery:
+
+1. Run the e2e upgrade test with the upgrade binary missing or invalid.
+2. Confirm nodes halt at the upgrade height (cosmovisor logs show `UPGRADE NEEDED`).
+3. Restore the correct upgrade binary under `cosmovisor/upgrades/<name>/bin`.
+4. Restart validators and confirm block production resumes.
+
+### Emergency Upgrade Procedure
+
+For critical incidents requiring immediate action:
+
+1. Add a height patch via `upgrades/types.RegisterHeightPatch` and gate behavior by height.
+2. Cut a hotfix release and publish upgrade binaries.
+3. Submit a governance upgrade or coordinate a privileged upgrade window (test on the upgrade harness first).
+4. Validate post-upgrade invariants using the post-upgrade test worker in `tests/upgrade/types`.
+
+### Upgrade Failure Scenarios (Documented)
+
+- Missing or non-executable upgrade binary.
+- Store key changes without corresponding `StoreLoader` entries.
+- Migration handler panics or missing migration versions.
+- State migration errors (e.g., invalid params or missing subspaces).
+- Incompatible binary on a subset of validators (multi-validator desync).
+
+Expected outcomes:
+- Nodes halt at upgrade height or fail fast during migration.
+- Logs capture the failing module/migration and the chain does not continue in a partially-migrated state.
+
 ### Coverage
 
 Generate coverage reports:
