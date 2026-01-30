@@ -4,7 +4,7 @@
 # Deep Learning / Face Recognition
 deepface==0.0.79
 tensorflow==2.13.0
-keras==2.13.1
+keras==3.13.1
 
 # Face Detection
 mtcnn==0.1.1
