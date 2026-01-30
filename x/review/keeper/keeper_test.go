@@ -920,7 +920,7 @@ func TestProviderAggregationMethods(t *testing.T) {
 	}
 
 	// Remove a review
-	if err := agg.RemoveReview(5); err != nil {
+	if err := agg.RemoveReview(5, time.Now().UTC()); err != nil {
 		t.Fatalf("failed to remove review: %v", err)
 	}
 

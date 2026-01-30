@@ -189,7 +189,8 @@ func (k Keeper) VerifyOrderCompleted(ctx sdk.Context, orderID, customerAddr, pro
 			OrderID:         orderID,
 			CustomerAddress: customerAddr,
 			ProviderAddress: providerAddr,
-			CompletedAt:     time.Now().UTC().Add(-24 * time.Hour),
+			// BUGFIX-001: Use ctx.BlockTime() for consensus safety, even in test mock
+			CompletedAt:     ctx.BlockTime().UTC().Add(-24 * time.Hour),
 			OrderHash:       fmt.Sprintf("mock-hash-%s", orderID),
 		}, nil
 	}
@@ -460,12 +461,15 @@ func (k Keeper) UpdateProviderAggregation(ctx sdk.Context, providerAddr string, 
 		agg = *types.NewProviderAggregation(providerAddr)
 	}
 
+	blockTime := ctx.BlockTime().UTC()
 	if isAdd {
-		if err := agg.AddReview(rating, time.Now().UTC()); err != nil {
+		// BUGFIX-001: Use ctx.BlockTime() for consensus-safe time
+		if err := agg.AddReview(rating, blockTime); err != nil {
 			return err
 		}
 	} else {
-		if err := agg.RemoveReview(rating); err != nil {
+		// BUGFIX-001: Use ctx.BlockTime() for consensus-safe time
+		if err := agg.RemoveReview(rating, blockTime); err != nil {
 			return err
 		}
 	}

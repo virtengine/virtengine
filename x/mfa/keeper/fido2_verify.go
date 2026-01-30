@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"math/big"
-	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -68,11 +67,13 @@ type RegistrationResult struct {
 
 // VerifyRegistration verifies a FIDO2 registration (credential creation) response
 // Implements: https://www.w3.org/TR/webauthn-2/#sctn-registering-a-new-credential
+// BUGFIX-001: Added createdAt parameter to ensure consensus-safe timestamps
 func (v *FIDOVerifier) VerifyRegistration(
 	challenge []byte,
 	clientDataJSON []byte,
 	attestationObject []byte,
 	rpID string,
+	createdAt int64, // Block timestamp for consensus safety
 ) (*RegistrationResult, error) {
 	// Use provided rpID or fall back to configured
 	effectiveRPID := rpID
@@ -156,7 +157,7 @@ func (v *FIDOVerifier) VerifyRegistration(
 		SignatureCounter:  authData.SignCount,
 		AAGUID:            authData.AttestedCredential.AAGUID,
 		AttestationFormat: attestation.Fmt,
-		CreatedAt:         time.Now().Unix(),
+		CreatedAt:         createdAt, // BUGFIX-001: Use provided block timestamp
 		BackupEligible:    authData.Flags.HasFlag(types.AuthenticatorFlagBackupEligible),
 		BackupState:       authData.Flags.HasFlag(types.AuthenticatorFlagBackupState),
 	}
@@ -686,11 +687,13 @@ func (k Keeper) VerifyFIDO2Registration(
 	})
 
 	// Verify registration
+	// BUGFIX-001: Pass block timestamp for consensus safety
 	result, err := verifier.VerifyRegistration(
 		fido2Data.Challenge,
 		clientDataJSON,
 		attestationObject,
 		fido2Data.RelyingPartyID,
+		ctx.BlockTime().Unix(),
 	)
 	if err != nil {
 		challenge.AttemptCount++
