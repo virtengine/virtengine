@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -9,6 +10,9 @@ import (
 
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	roleskeeper "github.com/virtengine/virtengine/x/roles/keeper"
+	rolestypes "github.com/virtengine/virtengine/x/roles/types"
+	stakingtypes "github.com/virtengine/virtengine/x/staking/types"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
@@ -19,6 +23,7 @@ type VEIDDecorator struct {
 	mfaKeeper    mfakeeper.Keeper
 	govKeeper    *govkeeper.Keeper
 	govAuthority string
+	rolesKeeper  roleskeeper.Keeper
 }
 
 // NewVEIDDecorator creates a new VEID gating decorator.
@@ -26,6 +31,7 @@ func NewVEIDDecorator(
 	veidKeeper veidkeeper.Keeper,
 	mfaKeeper mfakeeper.Keeper,
 	govKeeper *govkeeper.Keeper,
+	rolesKeeper roleskeeper.Keeper,
 ) VEIDDecorator {
 	authority := ""
 	if govKeeper != nil {
@@ -37,6 +43,7 @@ func NewVEIDDecorator(
 		mfaKeeper:    mfaKeeper,
 		govKeeper:    govKeeper,
 		govAuthority: authority,
+		rolesKeeper:  rolesKeeper,
 	}
 }
 
@@ -73,11 +80,12 @@ func (d VEIDDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, nex
 }
 
 type veidMessageRequirement struct {
-	MinTier              int
-	MinScore             uint32
-	RequireAuthorization bool
-	SensitiveTxType      mfatypes.SensitiveTransactionType
-	Description          string
+	MinTier                   int
+	MinScore                  uint32
+	RequireAuthorization      bool
+	RequireGovernanceApproval bool
+	SensitiveTxType           mfatypes.SensitiveTransactionType
+	Description               string
 }
 
 func defaultMessageRequirement() veidMessageRequirement {
@@ -116,6 +124,9 @@ func (d VEIDDecorator) getMessageRequirement(ctx sdk.Context, msg sdk.Msg) veidM
 	requirement.RequireAuthorization = true
 	requirement.SensitiveTxType = txType
 	requirement.Description = config.Description
+	if txType == mfatypes.SensitiveTxValidatorRegistration {
+		requirement.RequireGovernanceApproval = true
+	}
 	return requirement
 }
 
@@ -125,16 +136,24 @@ func (d VEIDDecorator) checkVEIDRequirements(
 	requirement veidMessageRequirement,
 	msgTypeURL string,
 ) error {
-	if requirement.MinTier <= veidtypes.TierUnverified && requirement.MinScore == 0 {
+	if requirement.MinTier <= veidtypes.TierUnverified && requirement.MinScore == 0 && !requirement.RequireGovernanceApproval {
 		return nil
 	}
 
-	tier, tierErr := d.veidKeeper.GetAccountTier(ctx, signer.String())
-	if tierErr != nil {
-		tier = veidtypes.TierUnverified
+	needsTierCheck := requirement.MinTier > veidtypes.TierUnverified
+	needsScoreCheck := requirement.MinScore > 0
+	needsAuditEvent := requirement.SensitiveTxType == mfatypes.SensitiveTxValidatorRegistration
+
+	tier := veidtypes.TierUnverified
+	if needsTierCheck {
+		var tierErr error
+		tier, tierErr = d.veidKeeper.GetAccountTier(ctx, signer.String())
+		if tierErr != nil {
+			tier = veidtypes.TierUnverified
+		}
 	}
 
-	if requirement.MinTier > veidtypes.TierUnverified && tier < requirement.MinTier {
+	if needsTierCheck && tier < requirement.MinTier {
 		return sdkerrors.ErrUnauthorized.Wrapf(
 			"VEID tier %s below required %s for %s",
 			veidtypes.TierToString(tier),
@@ -143,27 +162,62 @@ func (d VEIDDecorator) checkVEIDRequirements(
 		)
 	}
 
-	if requirement.MinScore == 0 {
-		return nil
+	score := uint32(0)
+	status := veidtypes.AccountStatusUnknown
+	if needsScoreCheck || needsAuditEvent {
+		var found bool
+		score, status, found = d.veidKeeper.GetScore(ctx, signer.String())
+		if !found {
+			score = 0
+			status = veidtypes.AccountStatusUnknown
+		}
 	}
 
-	score, status, found := d.veidKeeper.GetScore(ctx, signer.String())
-	if !found {
-		score = 0
-		status = veidtypes.AccountStatusUnknown
+	if needsScoreCheck {
+		if !d.veidKeeper.IsScoreAboveThreshold(ctx, signer.String(), requirement.MinScore) {
+			return sdkerrors.ErrUnauthorized.Wrapf(
+				"VEID score %d (status %s) below required %d for %s",
+				score,
+				status,
+				requirement.MinScore,
+				requirement.actionLabel(msgTypeURL),
+			)
+		}
 	}
 
-	if !d.veidKeeper.IsScoreAboveThreshold(ctx, signer.String(), requirement.MinScore) {
-		return sdkerrors.ErrUnauthorized.Wrapf(
-			"VEID score %d (status %s) below required %d for %s",
-			score,
-			status,
-			requirement.MinScore,
-			requirement.actionLabel(msgTypeURL),
-		)
+	governanceApproved := true
+	if requirement.RequireGovernanceApproval {
+		governanceApproved = d.rolesKeeper.HasRole(ctx, signer, rolestypes.RoleValidator)
+		if !governanceApproved {
+			return sdkerrors.ErrUnauthorized.Wrap("governance approval required for validator registration")
+		}
+	}
+
+	if needsAuditEvent {
+		return d.emitValidatorIdentityEvent(ctx, signer, score, status, requirement.MinScore, governanceApproved)
 	}
 
 	return nil
+}
+
+func (d VEIDDecorator) emitValidatorIdentityEvent(
+	ctx sdk.Context,
+	signer sdk.AccAddress,
+	score uint32,
+	status veidtypes.AccountStatus,
+	requiredScore uint32,
+	governanceApproved bool,
+) error {
+	return ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			stakingtypes.EventTypeValidatorIdentityVerified,
+			sdk.NewAttribute(stakingtypes.AttributeKeyValidatorAddress, signer.String()),
+			sdk.NewAttribute(stakingtypes.AttributeKeyVEIDScore, fmt.Sprintf("%d", score)),
+			sdk.NewAttribute(veidtypes.AttributeKeyStatus, status.String()),
+			sdk.NewAttribute(stakingtypes.AttributeKeyRequiredScore, fmt.Sprintf("%d", requiredScore)),
+			sdk.NewAttribute(stakingtypes.AttributeKeyGovernanceApproved, fmt.Sprintf("%t", governanceApproved)),
+		),
+	)
 }
 
 func (d VEIDDecorator) isGovernanceAuthority(signer sdk.AccAddress) bool {

@@ -66,7 +66,8 @@ func (d MFAGatingDecorator) checkMFAGating(ctx sdk.Context, hooks mfakeeper.MFAG
 
 func isMFAEnforcedTx(transactionType mfatypes.SensitiveTransactionType) bool {
 	switch transactionType {
-	case mfatypes.SensitiveTxAccountRecovery, mfatypes.SensitiveTxKeyRotation:
+	case mfatypes.SensitiveTxAccountRecovery, mfatypes.SensitiveTxKeyRotation,
+		mfatypes.SensitiveTxValidatorRegistration:
 		return true
 	default:
 		return false

@@ -31,20 +31,25 @@ const (
 	// EventTypeDowntimeDetected is emitted when excessive downtime is detected
 	EventTypeDowntimeDetected = "downtime_detected"
 
+	// EventTypeValidatorIdentityVerified is emitted when validator identity checks pass
+	EventTypeValidatorIdentityVerified = "validator_identity_verified"
+
 	// Attribute keys
-	AttributeKeyValidatorAddress = "validator_address"
-	AttributeKeySlashReason      = "slash_reason"
-	AttributeKeySlashAmount      = "slash_amount"
-	AttributeKeySlashPercent     = "slash_percent"
-	AttributeKeyJailDuration     = "jail_duration"
-	AttributeKeyEpochNumber      = "epoch_number"
-	AttributeKeyTotalRewards     = "total_rewards"
-	AttributeKeyRecipientCount   = "recipient_count"
-	AttributeKeyPerformanceScore = "performance_score"
-	AttributeKeyUptimePercent    = "uptime_percent"
-	AttributeKeyBlocksProposed   = "blocks_proposed"
-	AttributeKeyBlocksMissed     = "blocks_missed"
-	AttributeKeyVEIDScore        = "veid_score"
+	AttributeKeyValidatorAddress   = "validator_address"
+	AttributeKeySlashReason        = "slash_reason"
+	AttributeKeySlashAmount        = "slash_amount"
+	AttributeKeySlashPercent       = "slash_percent"
+	AttributeKeyJailDuration       = "jail_duration"
+	AttributeKeyEpochNumber        = "epoch_number"
+	AttributeKeyTotalRewards       = "total_rewards"
+	AttributeKeyRecipientCount     = "recipient_count"
+	AttributeKeyPerformanceScore   = "performance_score"
+	AttributeKeyUptimePercent      = "uptime_percent"
+	AttributeKeyBlocksProposed     = "blocks_proposed"
+	AttributeKeyBlocksMissed       = "blocks_missed"
+	AttributeKeyVEIDScore          = "veid_score"
+	AttributeKeyRequiredScore      = "required_score"
+	AttributeKeyGovernanceApproved = "governance_approved"
 )
 
 // EventValidatorSlashed is emitted when a validator is slashed
