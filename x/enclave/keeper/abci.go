@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/enclave/types"
@@ -119,7 +120,7 @@ func (k Keeper) updateExpiredIdentities(ctx sdk.Context) {
 					sdk.NewEvent(
 						types.EventTypeEnclaveIdentityExpired,
 						sdk.NewAttribute(types.AttributeKeyValidator, identity.ValidatorAddress),
-						sdk.NewAttribute(types.AttributeKeyExpiryHeight, sdk.NewInt(identity.ExpiryHeight).String()),
+						sdk.NewAttribute(types.AttributeKeyExpiryHeight, math.NewInt(identity.ExpiryHeight).String()),
 					),
 				)
 			}
