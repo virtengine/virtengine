@@ -4,7 +4,6 @@
 package moab_adapter
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"errors"
 	"fmt"
@@ -181,8 +180,7 @@ func (c *MockMOABClient) SubmitJob(ctx context.Context, spec *MOABJobSpec) (stri
 	c.jobs[jobID] = job
 
 	// Simulate job starting after a short delay
-	verrors.SafeGo("", func() {
-		defer func() { }() // WG Done if needed
+	go func() {
 		time.Sleep(50 * time.Millisecond)
 		c.mu.Lock()
 		if j, exists := c.jobs[jobID]; exists && j.State == MOABJobStateIdle {
@@ -200,7 +198,6 @@ func (c *MockMOABClient) SubmitJob(ctx context.Context, spec *MOABJobSpec) (stri
 		}
 		c.mu.Unlock()
 	}()
-
 	return jobID, nil
 }
 
