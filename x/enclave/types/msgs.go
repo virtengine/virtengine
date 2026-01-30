@@ -216,9 +216,6 @@ func (m MsgRevokeMeasurement) ValidateBasic() error {
 	return nil
 }
 
-<<<<<<< HEAD
-// ValidateBasicMsgRevokeMeasurement performs basic validation
-=======
 // ValidateBasicMsgRegisterEnclaveIdentity performs basic validation for SDK CLI types.
 func ValidateBasicMsgRegisterEnclaveIdentity(m *v1.MsgRegisterEnclaveIdentity) error {
 	if m.ValidatorAddress == "" {
@@ -307,7 +304,6 @@ func ValidateBasicMsgProposeMeasurement(m *v1.MsgProposeMeasurement) error {
 }
 
 // ValidateBasicMsgRevokeMeasurement performs basic validation for SDK CLI types.
->>>>>>> 481fa029457ab6a2454257716c9bd2651a9bb202
 func ValidateBasicMsgRevokeMeasurement(m *v1.MsgRevokeMeasurement) error {
 	if m.Authority == "" {
 		return ErrInvalidMeasurement.Wrap("authority cannot be empty")
