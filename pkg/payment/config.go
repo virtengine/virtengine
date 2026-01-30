@@ -146,7 +146,13 @@ type ConversionConfig struct {
 	// CryptoDenom is the target cryptocurrency denomination
 	CryptoDenom string `json:"crypto_denom"`
 
-	// PriceFeedSource is the source for conversion rates
+	// PriceFeedSource is the source for conversion rates.
+	// Supported values: "coingecko", "chainlink", "pyth", "median", "weighted"
+	// - "coingecko": Use CoinGecko as primary source (free, rate-limited)
+	// - "chainlink": Use Chainlink oracle as primary source (decentralized)
+	// - "pyth": Use Pyth network as primary source (high-frequency)
+	// - "median": Use median price across all sources
+	// - "weighted": Use weighted average based on source confidence
 	PriceFeedSource string `json:"price_feed_source"`
 
 	// ConversionFeePercent is the fee percentage for conversion
@@ -157,6 +163,21 @@ type ConversionConfig struct {
 
 	// MinSlippagePercent is the minimum slippage tolerance
 	MinSlippagePercent float64 `json:"min_slippage_percent"`
+
+	// CoinGeckoAPIKey is the optional CoinGecko Pro API key
+	CoinGeckoAPIKey string `json:"coingecko_api_key,omitempty"`
+
+	// ChainlinkRPCURL is the Ethereum RPC URL for Chainlink feeds
+	ChainlinkRPCURL string `json:"chainlink_rpc_url,omitempty"`
+
+	// PythHermesURL is the Pyth Hermes API URL
+	PythHermesURL string `json:"pyth_hermes_url,omitempty"`
+
+	// CacheTTLSeconds is how long to cache prices (default: 30)
+	CacheTTLSeconds int `json:"cache_ttl_seconds,omitempty"`
+
+	// MaxPriceDeviation is the max allowed deviation between sources (0-1)
+	MaxPriceDeviation float64 `json:"max_price_deviation,omitempty"`
 }
 
 // DefaultConfig returns a Config with sensible defaults
