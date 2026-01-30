@@ -4,6 +4,7 @@
 package ood_adapter
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"sync"
@@ -269,7 +270,8 @@ func (c *MockOODClient) LaunchApp(ctx context.Context, spec *InteractiveAppSpec)
 	}
 
 	// Simulate session starting after a delay
-	go func() {
+	verrors.SafeGo("", func() {
+		defer func() { }() // WG Done if needed
 		time.Sleep(100 * time.Millisecond)
 		c.mu.Lock()
 		if s, ok := c.sessions[sessionID]; ok {

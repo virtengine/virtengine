@@ -7,6 +7,7 @@
 package observability
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"time"
 )

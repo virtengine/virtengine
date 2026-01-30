@@ -4,6 +4,7 @@
 package slurm_adapter
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bufio"
 	"bytes"
 	"context"
@@ -463,7 +464,8 @@ func (c *SSHSLURMClient) runCommand(ctx context.Context, cmd string) (string, er
 
 	// Handle context cancellation
 	done := make(chan struct{})
-	go func() {
+	verrors.SafeGo("", func() {
+		defer func() { }() // WG Done if needed
 		select {
 		case <-ctx.Done():
 			session.Signal(ssh.SIGTERM)
@@ -527,7 +529,8 @@ func (c *SSHSLURMClient) SCPUploadBytes(ctx context.Context, content []byte, rem
 	dir := filepath.Dir(remotePath)
 
 	// Prepare content with SCP protocol
-	go func() {
+	verrors.SafeGo("", func() {
+		defer func() { }() // WG Done if needed
 		w, _ := session.StdinPipe()
 		defer w.Close()
 		fmt.Fprintf(w, "C%04o %d %s\n", mode, len(content), filename)

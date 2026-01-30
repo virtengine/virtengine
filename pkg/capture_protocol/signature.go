@@ -1,6 +1,7 @@
 package capture_protocol
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"fmt"

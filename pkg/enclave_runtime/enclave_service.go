@@ -13,6 +13,7 @@
 package enclave_runtime
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -354,7 +355,8 @@ func (s *SimulatedEnclaveService) Score(ctx context.Context, request *ScoringReq
 
 	// Simulate processing
 	resultCh := make(chan *ScoringResult, 1)
-	go func() {
+	verrors.SafeGo("", func() {
+		defer func() { }() // WG Done if needed
 		result := s.simulateScoring(request)
 		result.ProcessingTimeMs = time.Since(startTime).Milliseconds()
 		resultCh <- result

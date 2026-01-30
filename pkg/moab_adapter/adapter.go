@@ -4,6 +4,7 @@
 package moab_adapter
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/hex"
 	"fmt"

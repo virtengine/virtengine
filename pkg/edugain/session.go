@@ -4,6 +4,7 @@
 package edugain
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"

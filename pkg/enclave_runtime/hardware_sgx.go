@@ -14,6 +14,7 @@
 package enclave_runtime
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"

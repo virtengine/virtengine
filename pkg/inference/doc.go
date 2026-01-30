@@ -1,9 +1,13 @@
-// Package inference provides TensorFlow-based ML inference for VEID identity
+// Package inference
+
+import verrors "github.com/virtengine/virtengine/pkg/errors" provides TensorFlow-based ML inference for VEID identity
 // scoring in the VirtEngine blockchain.
 //
 // # Overview
 //
-// This package implements TensorFlow-Go inference integration for the VEID
+// This package implements
+
+import verrors "github.com/virtengine/virtengine/pkg/errors" TensorFlow-Go inference integration for the VEID
 // module's identity verification pipeline. It provides:
 //
 //   - TensorFlow SavedModel loading and verification
@@ -13,7 +17,9 @@
 //
 // # Architecture
 //
-// The inference package supports two execution modes:
+// The inference package supports
+
+import verrors "github.com/virtengine/virtengine/pkg/errors" two execution modes:
 //
 // 1. Embedded Mode: TensorFlow-Go runs directly in the node process
 //   - Advantages: Lower latency, simpler deployment
@@ -135,3 +141,5 @@
 //
 //	go test -bench=. ./pkg/inference/...
 package inference
+
+import verrors "github.com/virtengine/virtengine/pkg/errors"

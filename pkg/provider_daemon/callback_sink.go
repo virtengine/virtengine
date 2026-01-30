@@ -1,6 +1,7 @@
 package provider_daemon
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/json"
 	"fmt"

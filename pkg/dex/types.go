@@ -4,6 +4,7 @@
 package dex
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"errors"
 	"time"
 

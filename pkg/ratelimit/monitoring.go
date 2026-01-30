@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"time"

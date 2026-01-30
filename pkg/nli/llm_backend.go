@@ -1,6 +1,7 @@
 package nli
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"context"
 	"encoding/json"

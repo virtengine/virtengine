@@ -1,6 +1,7 @@
 package artifact_store
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"context"
 	"crypto/sha256"

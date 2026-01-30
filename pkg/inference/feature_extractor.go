@@ -1,6 +1,7 @@
 package inference
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"fmt"
 	"math"
 )

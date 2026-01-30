@@ -4,6 +4,7 @@
 package benchmark_daemon
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"os/exec"
@@ -94,7 +95,8 @@ func (r *DefaultBenchmarkRunner) runSyntheticCPUTest(_ context.Context, threads 
 	resultCh := make(chan int64, threads)
 
 	for i := 0; i < threads; i++ {
-		go func() {
+		verrors.SafeGo("", func() {
+			defer func() { }() // WG Done if needed
 			var count int64
 			deadline := time.Now().Add(testDuration)
 			for time.Now().Before(deadline) {

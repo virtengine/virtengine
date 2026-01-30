@@ -4,6 +4,7 @@
 package slurm_adapter
 
 import (
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"errors"
 	"fmt"
@@ -98,7 +99,8 @@ func (c *MockSLURMClient) SubmitJob(ctx context.Context, spec *SLURMJobSpec) (st
 	c.jobs[jobID] = job
 
 	// Simulate job starting after a short delay
-	go func() {
+	verrors.SafeGo("", func() {
+		defer func() { }() // WG Done if needed
 		time.Sleep(100 * time.Millisecond)
 		c.mu.Lock()
 		if j, exists := c.jobs[jobID]; exists && j.State == SLURMJobStatePending {
