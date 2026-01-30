@@ -472,12 +472,10 @@ const EventTypeErasureRejected = "gdpr_erasure_rejected"
 // EventTypeKeyDestruction is emitted when encryption keys are destroyed
 const EventTypeKeyDestruction = "gdpr_key_destruction"
 
-// Erasure event attribute keys
+// Erasure event attribute keys - these complement those in events.go
 const (
-	AttributeKeyRequestID        = "request_id"
 	AttributeKeyRequesterAddress = "requester_address"
 	AttributeKeyCategories       = "categories"
-	AttributeKeyStatus           = "status"
 	AttributeKeyDeadline         = "deadline"
 	AttributeKeyRejectionReason  = "rejection_reason"
 	AttributeKeyRecordsAffected  = "records_affected"

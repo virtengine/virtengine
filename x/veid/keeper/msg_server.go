@@ -38,15 +38,15 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 	params := ms.keeper.GetParams(ctx)
 
 	// Validate client is approved
-	if params.RequireClientSignature && !ms.keeper.IsClientApproved(ctx, msg.ClientID) {
-		return nil, types.ErrClientNotApproved.Wrapf("client %s is not approved", msg.ClientID)
+	if params.RequireClientSignature && !ms.keeper.IsClientApproved(ctx, msg.ClientId) {
+		return nil, types.ErrClientNotApproved.Wrapf("client %s is not approved", msg.ClientId)
 	}
 
 	// Create upload metadata
 	metadata := types.NewUploadMetadata(
 		msg.Salt,
 		msg.DeviceFingerprint,
-		msg.ClientID,
+		msg.ClientId,
 		msg.ClientSignature,
 		msg.UserSignature,
 		msg.PayloadHash,
@@ -61,7 +61,7 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 
 	// Create the scope
 	scope := types.NewIdentityScope(
-		msg.ScopeID,
+		msg.ScopeId,
 		msg.ScopeType,
 		msg.EncryptedPayload,
 		*metadata,
@@ -76,10 +76,10 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 	// Emit event
 	err = ctx.EventManager().EmitTypedEvent(&types.EventScopeUploaded{
 		AccountAddress:    sender.String(),
-		ScopeID:           msg.ScopeID,
+		ScopeID:           msg.ScopeId,
 		ScopeType:         string(msg.ScopeType),
 		Version:           types.ScopeSchemaVersion,
-		ClientID:          msg.ClientID,
+		ClientID:          msg.ClientId,
 		PayloadHash:       metadata.PayloadHashHex(),
 		DeviceFingerprint: msg.DeviceFingerprint,
 		UploadedAt:        ctx.BlockTime().Unix(),
@@ -89,7 +89,7 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 	}
 
 	return &types.MsgUploadScopeResponse{
-		ScopeID:    msg.ScopeID,
+		ScopeId:    msg.ScopeId,
 		Status:     types.VerificationStatusPending,
 		UploadedAt: ctx.BlockTime().Unix(),
 	}, nil
@@ -105,17 +105,17 @@ func (ms msgServer) RevokeScope(goCtx context.Context, msg *types.MsgRevokeScope
 	}
 
 	// Revoke the scope
-	if err := ms.keeper.RevokeScope(ctx, sender, msg.ScopeID, msg.Reason); err != nil {
+	if err := ms.keeper.RevokeScope(ctx, sender, msg.ScopeId, msg.Reason); err != nil {
 		return nil, err
 	}
 
 	// Get scope for event data
-	scope, _ := ms.keeper.GetScope(ctx, sender, msg.ScopeID)
+	scope, _ := ms.keeper.GetScope(ctx, sender, msg.ScopeId)
 
 	// Emit event
 	err = ctx.EventManager().EmitTypedEvent(&types.EventScopeRevoked{
 		AccountAddress: sender.String(),
-		ScopeID:        msg.ScopeID,
+		ScopeID:        msg.ScopeId,
 		ScopeType:      string(scope.ScopeType),
 		Reason:         msg.Reason,
 		RevokedAt:      ctx.BlockTime().Unix(),
@@ -125,7 +125,7 @@ func (ms msgServer) RevokeScope(goCtx context.Context, msg *types.MsgRevokeScope
 	}
 
 	return &types.MsgRevokeScopeResponse{
-		ScopeID:   msg.ScopeID,
+		ScopeId:   msg.ScopeId,
 		RevokedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
@@ -140,27 +140,27 @@ func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgReq
 	}
 
 	// Get the scope
-	scope, found := ms.keeper.GetScope(ctx, sender, msg.ScopeID)
+	scope, found := ms.keeper.GetScope(ctx, sender, msg.ScopeId)
 	if !found {
-		return nil, types.ErrScopeNotFound.Wrapf("scope %s not found", msg.ScopeID)
+		return nil, types.ErrScopeNotFound.Wrapf("scope %s not found", msg.ScopeId)
 	}
 
 	// Check if scope can be verified
 	if !scope.CanBeVerified() {
 		if scope.Revoked {
-			return nil, types.ErrScopeRevoked.Wrapf("scope %s is revoked", msg.ScopeID)
+			return nil, types.ErrScopeRevoked.Wrapf("scope %s is revoked", msg.ScopeId)
 		}
 		if scope.Status == types.VerificationStatusInProgress {
-			return nil, types.ErrVerificationInProgress.Wrapf("verification already in progress for scope %s", msg.ScopeID)
+			return nil, types.ErrVerificationInProgress.Wrapf("verification already in progress for scope %s", msg.ScopeId)
 		}
-		return nil, types.ErrInvalidStatusTransition.Wrapf("scope %s cannot be verified in status %s", msg.ScopeID, scope.Status)
+		return nil, types.ErrInvalidStatusTransition.Wrapf("scope %s cannot be verified in status %s", msg.ScopeId, scope.Status)
 	}
 
 	// Update status to in progress
 	err = ms.keeper.UpdateVerificationStatus(
 		ctx,
 		sender,
-		msg.ScopeID,
+		msg.ScopeId,
 		types.VerificationStatusInProgress,
 		"verification requested",
 		"",
@@ -172,7 +172,7 @@ func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgReq
 	// Emit legacy event for backwards compatibility
 	err = ctx.EventManager().EmitTypedEvent(&types.EventVerificationRequested{
 		AccountAddress: sender.String(),
-		ScopeID:        msg.ScopeID,
+		ScopeID:        msg.ScopeId,
 		ScopeType:      string(scope.ScopeType),
 		RequestedAt:    ctx.BlockTime().Unix(),
 	})
@@ -183,9 +183,9 @@ func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgReq
 	// Emit spec-defined verification submitted event
 	err = ctx.EventManager().EmitTypedEvent(&types.EventVerificationSubmitted{
 		Account:     sender.String(),
-		ScopeID:     msg.ScopeID,
+		ScopeID:     msg.ScopeId,
 		ScopeType:   string(scope.ScopeType),
-		RequestID:   msg.ScopeID, // Using scope ID as request ID for now
+		RequestID:   msg.ScopeId, // Using scope ID as request ID for now
 		BlockHeight: ctx.BlockHeight(),
 		Timestamp:   ctx.BlockTime().Unix(),
 	})
@@ -194,7 +194,7 @@ func (ms msgServer) RequestVerification(goCtx context.Context, msg *types.MsgReq
 	}
 
 	return &types.MsgRequestVerificationResponse{
-		ScopeID:     msg.ScopeID,
+		ScopeId:     msg.ScopeId,
 		Status:      types.VerificationStatusInProgress,
 		RequestedAt: ctx.BlockTime().Unix(),
 	}, nil
@@ -221,9 +221,9 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	}
 
 	// Get current scope for previous status
-	scope, found := ms.keeper.GetScope(ctx, accountAddr, msg.ScopeID)
+	scope, found := ms.keeper.GetScope(ctx, accountAddr, msg.ScopeId)
 	if !found {
-		return nil, types.ErrScopeNotFound.Wrapf("scope %s not found", msg.ScopeID)
+		return nil, types.ErrScopeNotFound.Wrapf("scope %s not found", msg.ScopeId)
 	}
 	previousStatus := scope.Status
 
@@ -231,7 +231,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	err = ms.keeper.UpdateVerificationStatus(
 		ctx,
 		accountAddr,
-		msg.ScopeID,
+		msg.ScopeId,
 		msg.NewStatus,
 		msg.Reason,
 		sender.String(),
@@ -244,7 +244,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	if msg.NewStatus == types.VerificationStatusVerified {
 		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeVerified{
 			AccountAddress:   msg.AccountAddress,
-			ScopeID:          msg.ScopeID,
+			ScopeID:          msg.ScopeId,
 			ScopeType:        string(scope.ScopeType),
 			ValidatorAddress: sender.String(),
 			VerifiedAt:       ctx.BlockTime().Unix(),
@@ -252,7 +252,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	} else if msg.NewStatus == types.VerificationStatusRejected {
 		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeRejected{
 			AccountAddress:   msg.AccountAddress,
-			ScopeID:          msg.ScopeID,
+			ScopeID:          msg.ScopeId,
 			ScopeType:        string(scope.ScopeType),
 			Reason:           msg.Reason,
 			ValidatorAddress: sender.String(),
@@ -264,7 +264,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	}
 
 	return &types.MsgUpdateVerificationStatusResponse{
-		ScopeID:        msg.ScopeID,
+		ScopeId:        msg.ScopeId,
 		PreviousStatus: previousStatus,
 		NewStatus:      msg.NewStatus,
 		UpdatedAt:      ctx.BlockTime().Unix(),
@@ -362,7 +362,7 @@ func (ms msgServer) CreateIdentityWallet(goCtx context.Context, msg *types.MsgCr
 	}
 
 	return &types.MsgCreateIdentityWalletResponse{
-		WalletID:  wallet.WalletID,
+		WalletId:  wallet.WalletID,
 		CreatedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
@@ -378,7 +378,7 @@ func (ms msgServer) AddScopeToWallet(goCtx context.Context, msg *types.MsgAddSco
 
 	// Create scope reference from message
 	scopeRef := types.ScopeReference{
-		ScopeID:      msg.ScopeID,
+		ScopeID:      msg.ScopeId,
 		ScopeType:    msg.ScopeType,
 		EnvelopeHash: msg.EnvelopeHash,
 		AddedAt:      ctx.BlockTime(),
@@ -389,7 +389,7 @@ func (ms msgServer) AddScopeToWallet(goCtx context.Context, msg *types.MsgAddSco
 	}
 
 	return &types.MsgAddScopeToWalletResponse{
-		ScopeID: msg.ScopeID,
+		ScopeId: msg.ScopeId,
 		AddedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
@@ -403,12 +403,12 @@ func (ms msgServer) RevokeScopeFromWallet(goCtx context.Context, msg *types.MsgR
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
 
-	if err := ms.keeper.RevokeScopeFromWallet(ctx, sender, msg.ScopeID, msg.Reason, msg.UserSignature); err != nil {
+	if err := ms.keeper.RevokeScopeFromWallet(ctx, sender, msg.ScopeId, msg.Reason, msg.UserSignature); err != nil {
 		return nil, err
 	}
 
 	return &types.MsgRevokeScopeFromWalletResponse{
-		ScopeID:   msg.ScopeID,
+		ScopeId:   msg.ScopeId,
 		RevokedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
@@ -430,7 +430,7 @@ func (ms msgServer) UpdateConsentSettings(goCtx context.Context, msg *types.MsgU
 	}
 
 	update := types.ConsentUpdateRequest{
-		ScopeID:        msg.ScopeID,
+		ScopeID:        msg.ScopeId,
 		GrantConsent:   msg.GrantConsent,
 		Purpose:        msg.Purpose,
 		ExpiresAt:      expiresAt,

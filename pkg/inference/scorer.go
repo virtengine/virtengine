@@ -1,11 +1,12 @@
 package inference
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // ============================================================================
@@ -118,15 +119,14 @@ func (s *TensorFlowScorer) ComputeScoreWithContext(ctx context.Context, inputs *
 	resultChan := make(chan *ScoreResult, 1)
 
 	verrors.SafeGo("", func() {
-
-		defer func() { }() // WG Done if needed
+		defer func() {}() // WG Done if needed
 		res, err := s.runInference(inputs)
 		if err != nil {
 			errChan <- err
 			return
 		}
 		resultChan <- res
-	}()
+	})
 
 	// Wait for result or timeout
 	select {
