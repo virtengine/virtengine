@@ -1,0 +1,250 @@
+// Package billing provides billing and invoice types for the escrow module.
+package billing
+
+import (
+	"encoding/binary"
+	"fmt"
+)
+
+// Store key prefixes for billing types
+var (
+	// InvoicePrefix is the prefix for invoice storage
+	InvoicePrefix = []byte{0x01}
+
+	// InvoiceByProviderPrefix indexes invoices by provider
+	InvoiceByProviderPrefix = []byte{0x02}
+
+	// InvoiceByCustomerPrefix indexes invoices by customer
+	InvoiceByCustomerPrefix = []byte{0x03}
+
+	// InvoiceByStatusPrefix indexes invoices by status
+	InvoiceByStatusPrefix = []byte{0x04}
+
+	// InvoiceByEscrowPrefix indexes invoices by escrow ID
+	InvoiceByEscrowPrefix = []byte{0x05}
+
+	// DiscountPolicyPrefix is the prefix for discount policies
+	DiscountPolicyPrefix = []byte{0x10}
+
+	// CouponCodePrefix is the prefix for coupon codes
+	CouponCodePrefix = []byte{0x11}
+
+	// CouponByPolicyPrefix indexes coupons by policy
+	CouponByPolicyPrefix = []byte{0x12}
+
+	// LoyaltyProgramPrefix is the prefix for loyalty programs
+	LoyaltyProgramPrefix = []byte{0x13}
+
+	// CustomerLoyaltyPrefix is the prefix for customer loyalty
+	CustomerLoyaltyPrefix = []byte{0x14}
+
+	// TaxJurisdictionPrefix is the prefix for tax jurisdictions
+	TaxJurisdictionPrefix = []byte{0x20}
+
+	// CustomerTaxProfilePrefix is the prefix for customer tax profiles
+	CustomerTaxProfilePrefix = []byte{0x21}
+
+	// ProviderTaxProfilePrefix is the prefix for provider tax profiles
+	ProviderTaxProfilePrefix = []byte{0x22}
+
+	// PricingPolicyPrefix is the prefix for pricing policies
+	PricingPolicyPrefix = []byte{0x30}
+
+	// PricingPolicyByProviderPrefix indexes policies by provider
+	PricingPolicyByProviderPrefix = []byte{0x31}
+
+	// DisputeWindowPrefix is the prefix for dispute windows
+	DisputeWindowPrefix = []byte{0x40}
+
+	// DisputeByInvoicePrefix indexes disputes by invoice
+	DisputeByInvoicePrefix = []byte{0x41}
+
+	// DisputeByStatusPrefix indexes disputes by status
+	DisputeByStatusPrefix = []byte{0x42}
+
+	// SettlementConfigPrefix is the prefix for settlement config
+	SettlementConfigPrefix = []byte{0x50}
+
+	// SettlementHookResultPrefix is the prefix for hook results
+	SettlementHookResultPrefix = []byte{0x51}
+)
+
+// BuildInvoiceKey builds the key for an invoice
+func BuildInvoiceKey(invoiceID string) []byte {
+	return append(InvoicePrefix, []byte(invoiceID)...)
+}
+
+// ParseInvoiceKey parses an invoice key
+func ParseInvoiceKey(key []byte) (string, error) {
+	if len(key) <= len(InvoicePrefix) {
+		return "", fmt.Errorf("invalid invoice key length")
+	}
+	return string(key[len(InvoicePrefix):]), nil
+}
+
+// BuildInvoiceByProviderKey builds the index key for invoices by provider
+func BuildInvoiceByProviderKey(provider string, invoiceID string) []byte {
+	key := append(InvoiceByProviderPrefix, []byte(provider)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(invoiceID)...)
+}
+
+// BuildInvoiceByProviderPrefix builds the prefix for provider's invoices
+func BuildInvoiceByProviderPrefix(provider string) []byte {
+	key := append(InvoiceByProviderPrefix, []byte(provider)...)
+	return append(key, byte('/'))
+}
+
+// BuildInvoiceByCustomerKey builds the index key for invoices by customer
+func BuildInvoiceByCustomerKey(customer string, invoiceID string) []byte {
+	key := append(InvoiceByCustomerPrefix, []byte(customer)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(invoiceID)...)
+}
+
+// BuildInvoiceByCustomerPrefix builds the prefix for customer's invoices
+func BuildInvoiceByCustomerPrefix(customer string) []byte {
+	key := append(InvoiceByCustomerPrefix, []byte(customer)...)
+	return append(key, byte('/'))
+}
+
+// BuildInvoiceByStatusKey builds the index key for invoices by status
+func BuildInvoiceByStatusKey(status InvoiceStatus, invoiceID string) []byte {
+	key := append(InvoiceByStatusPrefix, byte(status))
+	key = append(key, byte('/'))
+	return append(key, []byte(invoiceID)...)
+}
+
+// BuildInvoiceByStatusPrefix builds the prefix for invoices by status
+func BuildInvoiceByStatusPrefix(status InvoiceStatus) []byte {
+	key := append(InvoiceByStatusPrefix, byte(status))
+	return append(key, byte('/'))
+}
+
+// BuildInvoiceByEscrowKey builds the index key for invoices by escrow
+func BuildInvoiceByEscrowKey(escrowID string, invoiceID string) []byte {
+	key := append(InvoiceByEscrowPrefix, []byte(escrowID)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(invoiceID)...)
+}
+
+// BuildInvoiceByEscrowPrefix builds the prefix for escrow's invoices
+func BuildInvoiceByEscrowPrefix(escrowID string) []byte {
+	key := append(InvoiceByEscrowPrefix, []byte(escrowID)...)
+	return append(key, byte('/'))
+}
+
+// BuildDiscountPolicyKey builds the key for a discount policy
+func BuildDiscountPolicyKey(policyID string) []byte {
+	return append(DiscountPolicyPrefix, []byte(policyID)...)
+}
+
+// BuildCouponCodeKey builds the key for a coupon code
+func BuildCouponCodeKey(code string) []byte {
+	return append(CouponCodePrefix, []byte(code)...)
+}
+
+// BuildCouponByPolicyKey builds the index key for coupons by policy
+func BuildCouponByPolicyKey(policyID string, code string) []byte {
+	key := append(CouponByPolicyPrefix, []byte(policyID)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(code)...)
+}
+
+// BuildLoyaltyProgramKey builds the key for a loyalty program
+func BuildLoyaltyProgramKey(programID string) []byte {
+	return append(LoyaltyProgramPrefix, []byte(programID)...)
+}
+
+// BuildCustomerLoyaltyKey builds the key for customer loyalty
+func BuildCustomerLoyaltyKey(customer string, programID string) []byte {
+	key := append(CustomerLoyaltyPrefix, []byte(customer)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(programID)...)
+}
+
+// BuildTaxJurisdictionKey builds the key for a tax jurisdiction
+func BuildTaxJurisdictionKey(countryCode string) []byte {
+	return append(TaxJurisdictionPrefix, []byte(countryCode)...)
+}
+
+// BuildTaxJurisdictionRegionKey builds the key for a regional tax jurisdiction
+func BuildTaxJurisdictionRegionKey(countryCode string, regionCode string) []byte {
+	key := append(TaxJurisdictionPrefix, []byte(countryCode)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(regionCode)...)
+}
+
+// BuildCustomerTaxProfileKey builds the key for a customer tax profile
+func BuildCustomerTaxProfileKey(customer string) []byte {
+	return append(CustomerTaxProfilePrefix, []byte(customer)...)
+}
+
+// BuildProviderTaxProfileKey builds the key for a provider tax profile
+func BuildProviderTaxProfileKey(provider string) []byte {
+	return append(ProviderTaxProfilePrefix, []byte(provider)...)
+}
+
+// BuildPricingPolicyKey builds the key for a pricing policy
+func BuildPricingPolicyKey(policyID string) []byte {
+	return append(PricingPolicyPrefix, []byte(policyID)...)
+}
+
+// BuildPricingPolicyByProviderKey builds the index key for policies by provider
+func BuildPricingPolicyByProviderKey(provider string, policyID string) []byte {
+	key := append(PricingPolicyByProviderPrefix, []byte(provider)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(policyID)...)
+}
+
+// BuildPricingPolicyByProviderPrefix builds the prefix for provider's policies
+func BuildPricingPolicyByProviderPrefix(provider string) []byte {
+	key := append(PricingPolicyByProviderPrefix, []byte(provider)...)
+	return append(key, byte('/'))
+}
+
+// BuildDisputeWindowKey builds the key for a dispute window
+func BuildDisputeWindowKey(windowID string) []byte {
+	return append(DisputeWindowPrefix, []byte(windowID)...)
+}
+
+// BuildDisputeByInvoiceKey builds the index key for disputes by invoice
+func BuildDisputeByInvoiceKey(invoiceID string, windowID string) []byte {
+	key := append(DisputeByInvoicePrefix, []byte(invoiceID)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(windowID)...)
+}
+
+// BuildDisputeByStatusKey builds the index key for disputes by status
+func BuildDisputeByStatusKey(status DisputeStatus, windowID string) []byte {
+	key := append(DisputeByStatusPrefix, byte(status))
+	key = append(key, byte('/'))
+	return append(key, []byte(windowID)...)
+}
+
+// BuildDisputeByStatusPrefix builds the prefix for disputes by status
+func BuildDisputeByStatusPrefix(status DisputeStatus) []byte {
+	key := append(DisputeByStatusPrefix, byte(status))
+	return append(key, byte('/'))
+}
+
+// BuildSettlementHookResultKey builds the key for a hook result
+func BuildSettlementHookResultKey(settlementID string, hookID string, timestamp int64) []byte {
+	key := append(SettlementHookResultPrefix, []byte(settlementID)...)
+	key = append(key, byte('/'))
+	key = append(key, []byte(hookID)...)
+	key = append(key, byte('/'))
+	
+	// Append timestamp as big-endian uint64
+	tsBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
+	return append(key, tsBytes...)
+}
+
+// InvoiceSequenceKey is the key for invoice number sequence
+var InvoiceSequenceKey = []byte("invoice_sequence")
+
+// NextInvoiceNumber generates the next invoice number
+func NextInvoiceNumber(currentSequence uint64, prefix string) string {
+	return fmt.Sprintf("%s-%08d", prefix, currentSequence+1)
+}
