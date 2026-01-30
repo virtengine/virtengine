@@ -1516,6 +1516,65 @@ virtengine enclave health-check --comprehensive
 
 ## Enclave Factory and Configuration
 
+### Production Mode Configuration via Environment Variables
+
+VirtEngine TEE adapters support configuration via environment variables for deployment flexibility:
+
+| Environment Variable | Values | Description |
+|---------------------|--------|-------------|
+| `VIRTENGINE_TEE_MODE` | `production`, `development`, `testing` | Operational mode |
+| `VIRTENGINE_TEE_PLATFORM` | `sgx`, `sev-snp`, `nitro` | Force specific platform |
+| `VIRTENGINE_TEE_REQUIRE_HARDWARE` | `true`, `false` | Fail if no hardware available |
+| `VIRTENGINE_TEE_ALLOW_DEBUG` | `true`, `false` | Allow debug enclaves (NEVER true in production) |
+| `VIRTENGINE_TEE_MEASUREMENT_ALLOWLIST` | File path | Path to trusted measurements JSON |
+| `VIRTENGINE_TEE_ATTESTATION_ENDPOINT` | URL | Remote attestation verification service |
+| `VIRTENGINE_TEE_CERT_CACHE_PATH` | Directory path | Certificate cache location |
+| `VIRTENGINE_TEE_MIN_TCB_VERSION` | `BL.TEE.SNP.UC` format | Minimum TCB version |
+
+**Production Deployment Example:**
+
+```bash
+# Set production environment
+export VIRTENGINE_TEE_MODE=production
+export VIRTENGINE_TEE_REQUIRE_HARDWARE=true
+export VIRTENGINE_TEE_ALLOW_DEBUG=false
+export VIRTENGINE_TEE_MEASUREMENT_ALLOWLIST=/etc/virtengine/measurements.json
+export VIRTENGINE_TEE_CERT_CACHE_PATH=/var/cache/virtengine/tee-certs
+export VIRTENGINE_TEE_MIN_TCB_VERSION=2.0.8.115
+
+# Start the service
+./virtengined start --config /etc/virtengine/config.toml
+```
+
+**Using Production Service Initializer:**
+
+```go
+import "github.com/virtengine/virtengine/pkg/enclave_runtime"
+
+// Initialize TEE for production deployment
+// This reads environment variables and validates configuration
+prodService, err := enclave_runtime.InitializeProductionTEE()
+if err != nil {
+    log.Fatalf("Failed to initialize production TEE: %v", err)
+}
+defer prodService.Shutdown()
+
+// Get the underlying enclave service
+service := prodService.GetService()
+
+// Check production status
+status := prodService.GetStatus()
+if !status.ProductionReady {
+    log.Printf("WARNING: Not production ready: %v", status.ProductionIssues)
+}
+
+// Verify attestation with configured policy
+result, err := prodService.VerifyAttestation(attestationBytes, nonce)
+if err != nil || !result.Valid {
+    log.Printf("Attestation verification failed: %v", result.Errors)
+}
+```
+
 ### Using the Enclave Factory
 
 The `enclave_runtime` package provides a factory for creating enclave services that automatically detects hardware capabilities and falls back to simulation when hardware is unavailable.

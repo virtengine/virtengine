@@ -13,7 +13,6 @@
 package enclave_runtime
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/sha512"

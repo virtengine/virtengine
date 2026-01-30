@@ -355,12 +355,12 @@ func (s *SimulatedEnclaveService) Score(ctx context.Context, request *ScoringReq
 
 	// Simulate processing
 	resultCh := make(chan *ScoringResult, 1)
-	verrors.SafeGo("", func() {
-		defer func() { }() // WG Done if needed
+	verrors.SafeGo("simulated-scoring", func() {
+		defer func() {}() // WG Done if needed
 		result := s.simulateScoring(request)
 		result.ProcessingTimeMs = time.Since(startTime).Milliseconds()
 		resultCh <- result
-	}()
+	})
 
 	select {
 	case <-timeoutCtx.Done():
