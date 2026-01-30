@@ -1,16 +1,12 @@
-# VirtEngine EKS Module
-# Provides EKS cluster with managed node groups for running VirtEngine workloads
+# VirtEngine EKS Cluster Module
+# Creates a production-ready EKS cluster with managed node groups
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.6.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
-    }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.25"
     }
     tls = {
       source  = "hashicorp/tls"
@@ -19,11 +15,48 @@ terraform {
   }
 }
 
+locals {
+  tags = merge(var.tags, {
+    Module      = "eks"
+    Environment = var.environment
+  })
+}
+
 # -----------------------------------------------------------------------------
-# Data Sources
+# EKS Cluster
 # -----------------------------------------------------------------------------
-data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
+resource "aws_eks_cluster" "main" {
+  name     = var.cluster_name
+  version  = var.kubernetes_version
+  role_arn = aws_iam_role.cluster.arn
+
+  vpc_config {
+    subnet_ids              = var.subnet_ids
+    endpoint_private_access = true
+    endpoint_public_access  = var.enable_public_endpoint
+    public_access_cidrs     = var.enable_public_endpoint ? var.public_access_cidrs : []
+    security_group_ids      = [aws_security_group.cluster.id]
+  }
+
+  encryption_config {
+    provider {
+      key_arn = aws_kms_key.eks.arn
+    }
+    resources = ["secrets"]
+  }
+
+  enabled_cluster_log_types = var.enabled_log_types
+
+  depends_on = [
+    aws_iam_role_policy_attachment.cluster_policy,
+    aws_iam_role_policy_attachment.cluster_vpc_controller,
+    aws_cloudwatch_log_group.eks,
+  ]
+
+  tags = merge(local.tags, {
+    Name = var.cluster_name
+  })
+}
 
 # -----------------------------------------------------------------------------
 # EKS Cluster IAM Role
@@ -42,51 +75,37 @@ resource "aws_iam_role" "cluster" {
     }]
   })
 
-  tags = var.tags
+  tags = local.tags
 }
 
-resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSClusterPolicy" {
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKSClusterPolicy"
+resource "aws_iam_role_policy_attachment" "cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
   role       = aws_iam_role.cluster.name
 }
 
-resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSVPCResourceController" {
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKSVPCResourceController"
+resource "aws_iam_role_policy_attachment" "cluster_vpc_controller" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
   role       = aws_iam_role.cluster.name
 }
 
 # -----------------------------------------------------------------------------
-# EKS Cluster
+# EKS Cluster Security Group
 # -----------------------------------------------------------------------------
-resource "aws_eks_cluster" "main" {
-  name     = var.cluster_name
-  version  = var.kubernetes_version
-  role_arn = aws_iam_role.cluster.arn
+resource "aws_security_group" "cluster" {
+  name        = "${var.cluster_name}-cluster-sg"
+  description = "Security group for EKS cluster control plane"
+  vpc_id      = var.vpc_id
 
-  vpc_config {
-    subnet_ids              = concat(var.private_subnet_ids, var.public_subnet_ids)
-    security_group_ids      = [var.cluster_security_group_id]
-    endpoint_private_access = var.endpoint_private_access
-    endpoint_public_access  = var.endpoint_public_access
-    public_access_cidrs     = var.public_access_cidrs
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
 
-  enabled_cluster_log_types = var.enabled_cluster_log_types
-
-  encryption_config {
-    provider {
-      key_arn = var.kms_key_arn != "" ? var.kms_key_arn : aws_kms_key.eks[0].arn
-    }
-    resources = ["secrets"]
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy,
-    aws_iam_role_policy_attachment.cluster_AmazonEKSVPCResourceController,
-  ]
-
-  tags = merge(var.tags, {
-    Name = var.cluster_name
+  tags = merge(local.tags, {
+    Name = "${var.cluster_name}-cluster-sg"
   })
 }
 
@@ -94,27 +113,91 @@ resource "aws_eks_cluster" "main" {
 # KMS Key for EKS Secrets Encryption
 # -----------------------------------------------------------------------------
 resource "aws_kms_key" "eks" {
-  count                   = var.kms_key_arn == "" ? 1 : 0
   description             = "KMS key for EKS cluster ${var.cluster_name} secrets encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
-  tags = merge(var.tags, {
-    Name = "${var.cluster_name}-eks-kms"
+  tags = merge(local.tags, {
+    Name = "${var.cluster_name}-eks-key"
   })
 }
 
 resource "aws_kms_alias" "eks" {
-  count         = var.kms_key_arn == "" ? 1 : 0
   name          = "alias/${var.cluster_name}-eks"
-  target_key_id = aws_kms_key.eks[0].key_id
+  target_key_id = aws_kms_key.eks.key_id
 }
 
 # -----------------------------------------------------------------------------
-# EKS Node Group IAM Role
+# CloudWatch Log Group for EKS
 # -----------------------------------------------------------------------------
-resource "aws_iam_role" "node_group" {
-  name = "${var.cluster_name}-node-group-role"
+resource "aws_cloudwatch_log_group" "eks" {
+  name              = "/aws/eks/${var.cluster_name}/cluster"
+  retention_in_days = var.log_retention_days
+
+  tags = local.tags
+}
+
+# -----------------------------------------------------------------------------
+# EKS Managed Node Groups
+# -----------------------------------------------------------------------------
+resource "aws_eks_node_group" "main" {
+  for_each = var.node_groups
+
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = each.key
+  node_role_arn   = aws_iam_role.node.arn
+  subnet_ids      = var.subnet_ids
+
+  instance_types = each.value.instance_types
+  capacity_type  = each.value.capacity_type
+  disk_size      = each.value.disk_size
+
+  scaling_config {
+    desired_size = each.value.desired_size
+    max_size     = each.value.max_size
+    min_size     = each.value.min_size
+  }
+
+  update_config {
+    max_unavailable_percentage = 25
+  }
+
+  labels = merge(
+    each.value.labels,
+    {
+      "virtengine.io/node-group" = each.key
+    }
+  )
+
+  dynamic "taint" {
+    for_each = each.value.taints
+    content {
+      key    = taint.value.key
+      value  = taint.value.value
+      effect = taint.value.effect
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_policy,
+    aws_iam_role_policy_attachment.node_cni_policy,
+    aws_iam_role_policy_attachment.node_ecr_policy,
+  ]
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
+
+  tags = merge(local.tags, {
+    Name = "${var.cluster_name}-${each.key}"
+  })
+}
+
+# -----------------------------------------------------------------------------
+# Node Group IAM Role
+# -----------------------------------------------------------------------------
+resource "aws_iam_role" "node" {
+  name = "${var.cluster_name}-node-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -127,289 +210,29 @@ resource "aws_iam_role" "node_group" {
     }]
   })
 
-  tags = var.tags
+  tags = local.tags
 }
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonEKSWorkerNodePolicy" {
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.node_group.name
+resource "aws_iam_role_policy_attachment" "node_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.node.name
 }
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonEKS_CNI_Policy" {
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.node_group.name
+resource "aws_iam_role_policy_attachment" "node_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.node.name
 }
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonEC2ContainerRegistryReadOnly" {
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.node_group.name
+resource "aws_iam_role_policy_attachment" "node_ecr_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.node.name
 }
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonSSMManagedInstanceCore" {
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
-  role       = aws_iam_role.node_group.name
-}
-
-# Custom policy for EBS CSI Driver
-resource "aws_iam_role_policy" "node_group_ebs" {
-  name = "${var.cluster_name}-node-group-ebs-policy"
-  role = aws_iam_role.node_group.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateSnapshot",
-          "ec2:AttachVolume",
-          "ec2:DetachVolume",
-          "ec2:ModifyVolume",
-          "ec2:DescribeAvailabilityZones",
-          "ec2:DescribeInstances",
-          "ec2:DescribeSnapshots",
-          "ec2:DescribeTags",
-          "ec2:DescribeVolumes",
-          "ec2:DescribeVolumesModifications"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateTags"
-        ]
-        Resource = [
-          "arn:${data.aws_partition.current.partition}:ec2:*:*:volume/*",
-          "arn:${data.aws_partition.current.partition}:ec2:*:*:snapshot/*"
-        ]
-        Condition = {
-          StringEquals = {
-            "ec2:CreateAction" = ["CreateVolume", "CreateSnapshot"]
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DeleteTags"
-        ]
-        Resource = [
-          "arn:${data.aws_partition.current.partition}:ec2:*:*:volume/*",
-          "arn:${data.aws_partition.current.partition}:ec2:*:*:snapshot/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateVolume"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "aws:RequestTag/ebs.csi.aws.com/cluster" = "true"
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateVolume"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "aws:RequestTag/CSIVolumeName" = "*"
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DeleteVolume"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "ec2:ResourceTag/ebs.csi.aws.com/cluster" = "true"
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DeleteVolume"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "ec2:ResourceTag/CSIVolumeName" = "*"
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DeleteSnapshot"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "ec2:ResourceTag/CSIVolumeSnapshotName" = "*"
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DeleteSnapshot"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "ec2:ResourceTag/ebs.csi.aws.com/cluster" = "true"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# -----------------------------------------------------------------------------
-# EKS Managed Node Groups
-# -----------------------------------------------------------------------------
-
-# System Node Group (for cluster addons, monitoring, etc.)
-resource "aws_eks_node_group" "system" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-system"
-  node_role_arn   = aws_iam_role.node_group.arn
-  subnet_ids      = var.private_subnet_ids
-
-  instance_types = var.system_node_instance_types
-  capacity_type  = "ON_DEMAND"
-  disk_size      = var.system_node_disk_size
-
-  scaling_config {
-    desired_size = var.system_node_desired_size
-    max_size     = var.system_node_max_size
-    min_size     = var.system_node_min_size
-  }
-
-  update_config {
-    max_unavailable_percentage = 25
-  }
-
-  labels = {
-    "node-type" = "system"
-  }
-
-  taint {
-    key    = "CriticalAddonsOnly"
-    value  = "true"
-    effect = "PREFER_NO_SCHEDULE"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.node_group_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_group_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.node_group_AmazonEC2ContainerRegistryReadOnly,
-  ]
-
-  tags = merge(var.tags, {
-    Name = "${var.cluster_name}-system"
-  })
-
-  lifecycle {
-    ignore_changes = [scaling_config[0].desired_size]
-  }
-}
-
-# Application Node Group (for VirtEngine workloads)
-resource "aws_eks_node_group" "application" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-application"
-  node_role_arn   = aws_iam_role.node_group.arn
-  subnet_ids      = var.private_subnet_ids
-
-  instance_types = var.app_node_instance_types
-  capacity_type  = var.app_node_capacity_type
-  disk_size      = var.app_node_disk_size
-
-  scaling_config {
-    desired_size = var.app_node_desired_size
-    max_size     = var.app_node_max_size
-    min_size     = var.app_node_min_size
-  }
-
-  update_config {
-    max_unavailable_percentage = 25
-  }
-
-  labels = {
-    "node-type" = "application"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.node_group_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_group_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.node_group_AmazonEC2ContainerRegistryReadOnly,
-  ]
-
-  tags = merge(var.tags, {
-    Name = "${var.cluster_name}-application"
-  })
-
-  lifecycle {
-    ignore_changes = [scaling_config[0].desired_size]
-  }
-}
-
-# Chain Node Group (for VirtEngine blockchain nodes)
-resource "aws_eks_node_group" "chain" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-chain"
-  node_role_arn   = aws_iam_role.node_group.arn
-  subnet_ids      = var.private_subnet_ids
-
-  instance_types = var.chain_node_instance_types
-  capacity_type  = "ON_DEMAND"  # Chain nodes need stability
-  disk_size      = var.chain_node_disk_size
-
-  scaling_config {
-    desired_size = var.chain_node_desired_size
-    max_size     = var.chain_node_max_size
-    min_size     = var.chain_node_min_size
-  }
-
-  update_config {
-    max_unavailable = 1  # Rolling updates for chain nodes
-  }
-
-  labels = {
-    "node-type"    = "chain"
-    "workload"     = "virtengine-node"
-  }
-
-  taint {
-    key    = "workload"
-    value  = "chain"
-    effect = "NO_SCHEDULE"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.node_group_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_group_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.node_group_AmazonEC2ContainerRegistryReadOnly,
-  ]
-
-  tags = merge(var.tags, {
-    Name = "${var.cluster_name}-chain"
-  })
-
-  lifecycle {
-    ignore_changes = [scaling_config[0].desired_size]
-  }
+# Additional policy for SSM (optional node access)
+resource "aws_iam_role_policy_attachment" "node_ssm_policy" {
+  count      = var.enable_ssm_access ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  role       = aws_iam_role.node.name
 }
 
 # -----------------------------------------------------------------------------
@@ -424,7 +247,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
   thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
 
-  tags = var.tags
+  tags = local.tags
 }
 
 # -----------------------------------------------------------------------------
@@ -433,47 +256,55 @@ resource "aws_iam_openid_connect_provider" "eks" {
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "vpc-cni"
-  addon_version               = var.vpc_cni_addon_version
+  addon_version               = var.vpc_cni_version
+  resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "aws_eks_addon" "coredns" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "coredns"
-  addon_version               = var.coredns_addon_version
+  addon_version               = var.coredns_version
+  resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  depends_on = [aws_eks_node_group.system]
+  depends_on = [aws_eks_node_group.main]
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "kube-proxy"
-  addon_version               = var.kube_proxy_addon_version
+  addon_version               = var.kube_proxy_version
+  resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "aws_eks_addon" "ebs_csi_driver" {
+  count = var.enable_ebs_csi_driver ? 1 : 0
+
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "aws-ebs-csi-driver"
-  addon_version               = var.ebs_csi_addon_version
-  service_account_role_arn    = aws_iam_role.ebs_csi_driver.arn
+  addon_version               = var.ebs_csi_driver_version
+  service_account_role_arn    = aws_iam_role.ebs_csi[0].arn
+  resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  depends_on = [aws_eks_node_group.system]
+  depends_on = [aws_eks_node_group.main]
 
-  tags = var.tags
+  tags = local.tags
 }
 
-# IAM Role for EBS CSI Driver
-resource "aws_iam_role" "ebs_csi_driver" {
-  name = "${var.cluster_name}-ebs-csi-driver-role"
+# EBS CSI Driver IAM Role
+resource "aws_iam_role" "ebs_csi" {
+  count = var.enable_ebs_csi_driver ? 1 : 0
+
+  name = "${var.cluster_name}-ebs-csi-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -492,20 +323,11 @@ resource "aws_iam_role" "ebs_csi_driver" {
     }]
   })
 
-  tags = var.tags
+  tags = local.tags
 }
 
-resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role       = aws_iam_role.ebs_csi_driver.name
-}
-
-# -----------------------------------------------------------------------------
-# CloudWatch Log Group for EKS Control Plane Logs
-# -----------------------------------------------------------------------------
-resource "aws_cloudwatch_log_group" "eks" {
-  name              = "/aws/eks/${var.cluster_name}/cluster"
-  retention_in_days = var.cluster_log_retention_days
-
-  tags = var.tags
+resource "aws_iam_role_policy_attachment" "ebs_csi" {
+  count      = var.enable_ebs_csi_driver ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi[0].name
 }

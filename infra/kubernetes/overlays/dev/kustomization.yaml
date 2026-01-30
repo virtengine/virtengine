@@ -1,0 +1,65 @@
+# Development Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: virtengine
+
+resources:
+  - ../../base
+
+namePrefix: dev-
+
+commonLabels:
+  environment: dev
+
+patches:
+  # Reduce resources for dev
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 4Gi
+  - target:
+      kind: Deployment
+      name: provider-daemon
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+  # Smaller storage for dev
+  - target:
+      kind: PersistentVolumeClaim
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 20Gi
+
+configMapGenerator:
+  - name: virtengine-node-config
+    behavior: merge
+    literals:
+      - chain-id=virtengine-dev-1
+  - name: provider-daemon-config
+    behavior: merge
+    literals:
+      - log-level=debug
+
+images:
+  - name: virtengine/node
+    newTag: dev
+  - name: virtengine/provider-daemon
+    newTag: dev
