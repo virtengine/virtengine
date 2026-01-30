@@ -465,14 +465,18 @@ func (k Keeper) ComputeIdentityScore(
 
 // getMLScorer returns the ML scorer instance
 // Returns TensorFlow scorer when VEID_USE_TENSORFLOW=true, otherwise stub
+// Prefers sidecar mode when VEID_INFERENCE_USE_SIDECAR=true for consensus safety
 func (k Keeper) getMLScorer() MLScorer {
 	config := DefaultMLScoringConfig()
 
 	// Use TensorFlow scorer if enabled (VE-205)
+	// Sidecar mode is preferred for production as it provides better isolation
+	// and determinism guarantees across validators
 	if config.UseTensorFlow && config.TensorFlowConfig != nil {
 		scorer, err := k.createTensorFlowScorer(config)
 		if err != nil {
 			// Fall back to stub on TensorFlow initialization error
+			// This ensures consensus continues even if inference setup fails
 			return NewStubMLScorer(config)
 		}
 		return scorer
@@ -482,6 +486,7 @@ func (k Keeper) getMLScorer() MLScorer {
 }
 
 // createTensorFlowScorer creates a TensorFlow-based scorer
+// Supports both embedded TensorFlow and sidecar modes
 func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error) {
 	tfConfig := config.TensorFlowConfig
 
@@ -513,6 +518,12 @@ func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error)
 	if err != nil {
 		return nil, err
 	}
+
+	// Update global metrics with model info
+	inference.GetGlobalMetricsCollector().SetModelInfo(
+		scorer.GetModelVersion(),
+		scorer.GetModelHash(),
+	)
 
 	// Wrap in adapter that implements MLScorer interface
 	return &TensorFlowScorerAdapter{

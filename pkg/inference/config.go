@@ -44,6 +44,9 @@ type InferenceConfig struct {
 	// SidecarTimeout is the timeout for sidecar RPC calls
 	SidecarTimeout time.Duration
 
+	// SidecarTLS enables TLS for sidecar connections
+	SidecarTLS bool
+
 	// Determinism Configuration
 	// Deterministic forces deterministic inference mode
 	Deterministic bool
@@ -65,9 +68,32 @@ type InferenceConfig struct {
 	// FallbackScore is the score returned when fallback is triggered
 	FallbackScore uint32
 
+	// FallbackConfidence is the confidence returned when fallback is triggered
+	FallbackConfidence float32
+
+	// Opt-in/Opt-out Configuration
+	// Enabled controls whether real inference is enabled (opt-in)
+	// When false, uses stub/simulated inference
+	Enabled bool
+
+	// RequireHashVerification requires output hash verification (consensus mode)
+	RequireHashVerification bool
+
+	// AllowFallbackToStub allows fallback to stub scorer if real inference fails
+	AllowFallbackToStub bool
+
+	// StrictDeterminism fails if determinism cannot be guaranteed
+	StrictDeterminism bool
+
 	// Logging Configuration
 	// LogInferenceDetails enables detailed inference logging
 	LogInferenceDetails bool
+
+	// LogInputHashes logs input hashes for debugging
+	LogInputHashes bool
+
+	// LogOutputHashes logs output hashes for debugging
+	LogOutputHashes bool
 }
 
 // DefaultInferenceConfig returns the default inference configuration
@@ -87,6 +113,7 @@ func DefaultInferenceConfig() InferenceConfig {
 		UseSidecar:     false,
 		SidecarAddress: "localhost:50051",
 		SidecarTimeout: 5 * time.Second,
+		SidecarTLS:     false,
 
 		// Determinism defaults
 		Deterministic: true,
@@ -99,9 +126,18 @@ func DefaultInferenceConfig() InferenceConfig {
 		// Fallback defaults
 		UseFallbackOnError: true,
 		FallbackScore:      0,
+		FallbackConfidence: 0.0,
+
+		// Opt-in/Opt-out defaults
+		Enabled:                 false, // Disabled by default, opt-in
+		RequireHashVerification: true,
+		AllowFallbackToStub:     true,
+		StrictDeterminism:       false,
 
 		// Logging defaults
 		LogInferenceDetails: false,
+		LogInputHashes:      false,
+		LogOutputHashes:     false,
 	}
 }
 
@@ -183,6 +219,35 @@ func (c InferenceConfig) WithDeterministic(deterministic bool) InferenceConfig {
 	return c
 }
 
+// WithEnabled returns a copy of the config with enabled status set
+func (c InferenceConfig) WithEnabled(enabled bool) InferenceConfig {
+	c.Enabled = enabled
+	return c
+}
+
+// WithStrictDeterminism returns a copy of the config with strict determinism set
+func (c InferenceConfig) WithStrictDeterminism(strict bool) InferenceConfig {
+	c.StrictDeterminism = strict
+	return c
+}
+
+// WithFallback returns a copy of the config with fallback settings
+func (c InferenceConfig) WithFallback(enabled bool, score uint32) InferenceConfig {
+	c.UseFallbackOnError = enabled
+	c.FallbackScore = score
+	return c
+}
+
+// IsRealInferenceEnabled returns true if real inference is enabled
+func (c InferenceConfig) IsRealInferenceEnabled() bool {
+	return c.Enabled && (c.UseSidecar || c.ModelPath != "")
+}
+
+// IsConsensusSafe returns true if the configuration is safe for consensus
+func (c InferenceConfig) IsConsensusSafe() bool {
+	return c.Deterministic && c.ForceCPU && c.RandomSeed == 42
+}
+
 // ============================================================================
 // Environment Variables
 // ============================================================================
@@ -215,6 +280,15 @@ const (
 
 	// EnvInferenceForceCPU is the environment variable for CPU-only mode
 	EnvInferenceForceCPU = "VEID_INFERENCE_FORCE_CPU"
+
+	// EnvInferenceEnabled is the environment variable for enabling real inference
+	EnvInferenceEnabled = "VEID_INFERENCE_ENABLED"
+
+	// EnvInferenceStrictDeterminism is the environment variable for strict determinism
+	EnvInferenceStrictDeterminism = "VEID_INFERENCE_STRICT_DETERMINISM"
+
+	// EnvInferenceFallbackScore is the environment variable for fallback score
+	EnvInferenceFallbackScore = "VEID_INFERENCE_FALLBACK_SCORE"
 )
 
 // normalizeExpectedHash strips optional sha256: prefix and normalizes casing.
