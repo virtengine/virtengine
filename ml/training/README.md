@@ -19,12 +19,21 @@ ml/training/
 ├── train.py              # Main training script
 ├── requirements.txt      # Python dependencies
 ├── README.md             # This file
+├── build_dataset.py      # CLI for dataset build pipeline
 ├── dataset/              # Data loading and preprocessing
 │   ├── __init__.py
 │   ├── ingestion.py      # Dataset loading from various formats
 │   ├── preprocessing.py  # Image preprocessing pipeline
 │   ├── augmentation.py   # Data augmentation
-│   └── anonymization.py  # PII anonymization
+│   ├── anonymization.py  # PII anonymization
+│   ├── connectors.py     # Data source connectors (local, S3, GCS, API)
+│   ├── synthetic.py      # Synthetic data generator for CI testing
+│   ├── storage.py        # PII-safe encrypted storage
+│   ├── labeling.py       # Labeling pipeline (heuristic + human review)
+│   ├── manifest.py       # Signed dataset manifests
+│   ├── splits.py         # Deterministic train/val/test splitting
+│   ├── lineage.py        # Dataset lineage tracking
+│   └── validation.py     # Schema and label validation
 ├── features/             # Feature extraction
 │   ├── __init__.py
 │   ├── face_features.py      # Face embedding extraction
@@ -43,7 +52,8 @@ ml/training/
     ├── conftest.py       # Pytest fixtures
     ├── test_dataset.py
     ├── test_features.py
-    └── test_training.py
+    ├── test_training.py
+    └── test_pipeline.py  # Tests for dataset pipeline components
 ```
 
 ## Installation
@@ -285,6 +295,52 @@ pytest ml/training/tests/ --cov=ml.training --cov-report=html
 # Run specific test file
 pytest ml/training/tests/test_training.py -v
 ```
+
+## Dataset Pipeline
+
+The module includes a production-grade dataset pipeline for building training datasets.
+See [docs/veid-dataset-runbook.md](../../docs/veid-dataset-runbook.md) for full documentation.
+
+### Quick Start
+
+```bash
+# Generate synthetic dataset for CI tests
+python -m ml.training.build_dataset synthetic \
+    --output data/synthetic/ci \
+    --profile ci_minimal
+
+# Build production dataset
+python -m ml.training.build_dataset build \
+    --source /data/veid/raw \
+    --output /data/veid/v1.0.0 \
+    --version 1.0.0 \
+    --sign
+
+# Validate dataset
+python -m ml.training.build_dataset validate \
+    --dataset /data/veid/v1.0.0 \
+    --report validation_report.json
+```
+
+### Pipeline Components
+
+- **Connectors**: Ingest data from local files, S3, GCS, or HTTP APIs
+- **Synthetic Generator**: Generate synthetic data for CI/dev testing
+- **Labeling**: Apply heuristic auto-labels and import human review labels
+- **Manifests**: Create signed manifests with content hashes
+- **Splits**: Deterministic train/val/test splitting with verification
+- **Validation**: Schema validation, label anomaly detection, quality checks
+- **Lineage**: Track data sources, transforms, and build information
+
+### Synthetic Data Profiles
+
+| Profile | Samples | Use Case |
+|---------|---------|----------|
+| ci_minimal | 30 | Fast CI tests |
+| ci_standard | 100 | Standard CI |
+| dev_small | 500 | Local development |
+| dev_medium | 2000 | Full development |
+| benchmark | 5000 | Benchmarking |
 
 ## License
 
