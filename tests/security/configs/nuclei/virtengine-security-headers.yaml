@@ -1,0 +1,54 @@
+id: virtengine-security-headers
+
+info:
+  name: VirtEngine - Missing Security Headers
+  author: VirtEngine Security Team
+  severity: info
+  description: Checks for missing security headers on VirtEngine endpoints
+  reference:
+    - PENETRATION_TESTING_PROGRAM.md#WMC-003
+  tags: virtengine,headers,security
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/api/v1/health"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "X-Frame-Options"
+        negative: true
+
+      - type: word
+        part: header
+        words:
+          - "X-Content-Type-Options"
+        negative: true
+
+      - type: word
+        part: header
+        words:
+          - "Content-Security-Policy"
+        negative: true
+
+      - type: word
+        part: header
+        words:
+          - "Strict-Transport-Security"
+        negative: true
+
+      - type: word
+        part: header
+        words:
+          - "X-XSS-Protection"
+        negative: true
+
+    extractors:
+      - type: kval
+        kval:
+          - Server
+          - X-Powered-By

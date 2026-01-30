@@ -87,7 +87,7 @@ func (s *InputValidationTestSuite) TestOverflowDetection() {
 	s.Run("large_amount_overflow_prevented", func() {
 		// Test values near uint64 max
 		maxUint64 := uint64(18446744073709551615)
-		
+
 		err := validateTransferAmount(maxUint64)
 		require.Error(s.T(), err, "max uint64 should be rejected as too large")
 	})
@@ -282,9 +282,9 @@ func (s *InputValidationTestSuite) TestEncodingValidation() {
 	// Test: Invalid UTF-8 rejected
 	s.Run("invalid_utf8_rejected", func() {
 		invalidBytes := [][]byte{
-			{0xff, 0xfe},             // Invalid UTF-8 sequence
-			{0x80, 0x81, 0x82},       // Continuation bytes without start
-			{0xc0, 0x80},             // Overlong encoding
+			{0xff, 0xfe},       // Invalid UTF-8 sequence
+			{0x80, 0x81, 0x82}, // Continuation bytes without start
+			{0xc0, 0x80},       // Overlong encoding
 		}
 
 		for i, b := range invalidBytes {
