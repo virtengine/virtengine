@@ -45,6 +45,28 @@ Based on comprehensive analysis of:
 
 ---
 
+## Dependency-Aware Parallelization Plan (Waves 1-6)
+
+Each wave contains tasks that can be executed in parallel without dependency conflicts. Any task listed with prerequisites must not run in the same wave as its dependencies.
+
+**Wave 1 (Foundations / Schemas)**  
+VEID-ML-010, VEID-VERIF-010, HPC-ARCH-001, MKP-WALDUR-010, BILL-ARCH-001, SUPPORT-ARCH-001
+
+**Wave 2 (Infrastructure Scaffolding)**  
+VEID-ML-001 (-> VEID-ML-010), VEID-VERIF-011 (-> VEID-VERIF-010), HPC-SLURM-001 (-> HPC-ARCH-001), MKP-WALDUR-001 (-> MKP-WALDUR-010), BILL-001 (-> BILL-ARCH-001), SUPPORT-001 (-> SUPPORT-ARCH-001)
+
+**Wave 3 (Core Integrations)**  
+VEID-ML-002 (-> VEID-ML-001), VEID-ML-004 (-> VEID-ML-010), HPC-NODE-001 (-> HPC-ARCH-001), MKP-WALDUR-002 (-> MKP-WALDUR-010), SUPPORT-002 (-> SUPPORT-001), VEID-VERIF-002 (-> VEID-VERIF-011)
+
+**Wave 4 (Runtime + Lifecycle)**  
+VEID-ML-003 (-> VEID-ML-002 + VEID-ML-004), VEID-VERIF-001 (-> VEID-VERIF-011), VEID-VERIF-003 (-> VEID-VERIF-011), HPC-ADAPTER-001 (-> HPC-SLURM-001), MKP-WALDUR-003 (-> MKP-WALDUR-001), VEID-VERIF-004 (-> VEID-ML-004 + VEID-VERIF-011)
+
+**Wave 5 (Usage, Billing, Routing)**  
+HPC-BILL-001 (-> HPC-ADAPTER-001 + BILL-001), HPC-ROUTE-001 (-> HPC-NODE-001 + HPC-ADAPTER-001), MKP-WALDUR-004 (-> MKP-WALDUR-003 + BILL-001), BILL-002 (-> BILL-001 + HPC-BILL-001 + MKP-WALDUR-004), PAY-004 (-> BILL-002 + VEID-VERIF-011), HPC-WORKLOAD-001 (-> HPC-ADAPTER-001)
+
+**Wave 6 (Determinism, E2E, Launch)**  
+ML-DET-001 (-> VEID-ML-003), E2E-VEID-001 (-> VEID-ML-003 + VEID-VERIF-001/002/003/004), E2E-PROVIDER-001 (-> HPC-ADAPTER-001 + HPC-BILL-001 + HPC-ROUTE-001 + MKP-WALDUR-003 + MKP-WALDUR-004), SEC-ML-001 (-> VEID-ML-003 + VEID-VERIF-001/002/003/004), BILL-RECON-001 (-> BILL-002 + PAY-004), LAUNCH-001 (-> Wave 6 completion)
+
 ## SPECIFICATION-DRIVEN IMPLEMENTATION TASKS
 
 ### Category 1: VEID Core Identity System (VE-200 series gaps)
@@ -344,6 +366,7 @@ Based on comprehensive analysis of:
 **Priority:** CRITICAL  
 **Spec Reference:** VE-219 - Deterministic identity verification runtime  
 **Current State:** pkg/inference has determinism config but needs validation
+**Depends on:** VEID-ML-003
 
 **Implementation Path:**
 
@@ -377,15 +400,16 @@ Based on comprehensive analysis of:
 
 ### Category 8: Testing Infrastructure
 
-#### TEST-001: E2E VEID Onboarding Flow
+#### E2E-VEID-001: E2E VEID Onboarding + Verification Flow
 
 **Priority:** HIGH
+**Depends on:** VEID-ML-003, VEID-VERIF-001, VEID-VERIF-002, VEID-VERIF-003, VEID-VERIF-004
 
 Test path: Create account → Upload scope → Validator score → Tier change → Order placement
 
 ---
 
-#### TEST-002: E2E MFA Gating Flow
+#### E2E-MFA-001: E2E MFA Gating Flow
 
 **Priority:** HIGH
 
@@ -393,9 +417,10 @@ Test path: Attempt sensitive action → MFA challenge → Complete factors → A
 
 ---
 
-#### TEST-003: E2E Provider Daemon Flow
+#### E2E-PROVIDER-001: E2E Provider Daemon Flow
 
 **Priority:** HIGH
+**Depends on:** HPC-ADAPTER-001, HPC-BILL-001, HPC-ROUTE-001, MKP-WALDUR-003, MKP-WALDUR-004
 
 Test path: Provider register → Order created → Bid placed → Allocation → Provision → Usage report
 
@@ -560,11 +585,27 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 ### Category 12: VEID ML Productionization (NEW)
 
+#### VEID-ML-010: Define ML Feature Schema + Data Contract
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - ML scoring inputs  
+**Current State:** Missing formal feature schema and data contract
+
+**Acceptance Criteria:**
+
+- Versioned feature schema covering all scope types (ID, selfie, liveness, SSO/SMS/email)
+- Deterministic normalization rules documented (units, ranges, defaults)
+- Consent/retention constraints mapped to schema fields
+- Training/inference contract tests added
+
+---
+
 #### VEID-ML-001: Build Production Training Dataset + Labeling Pipeline
 
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - TensorFlow ML identity scoring  
 **Current State:** ML pipeline code exists (`ml/training`), but no production dataset or labeling flow
+**Depends on:** VEID-ML-010
 
 **Acceptance Criteria:**
 
@@ -572,6 +613,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 - PII-safe storage, redaction, and access controls
 - Dataset versioning and provenance tracking
 - Train/validation/test split reproducibility
+- Synthetic dataset path for CI (no PII)
 
 ---
 
@@ -580,6 +622,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - VEID scoring 0-100  
 **Current State:** Export scripts exist but no SavedModel artifact in repo
+**Depends on:** VEID-ML-001
 
 **Acceptance Criteria:**
 
@@ -595,6 +638,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** CRITICAL  
 **Spec Reference:** VE-205 + deterministic inference requirements  
 **Current State:** `pkg/inference/sidecar.go` simulates responses; `StubMLScorer` used by default
+**Depends on:** VEID-ML-002, VEID-ML-004
 
 **Acceptance Criteria:**
 
@@ -610,6 +654,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - biometric + document verification  
 **Current State:** Feature extraction uses hash-derived placeholders
+**Depends on:** VEID-ML-010
 
 **Acceptance Criteria:**
 
@@ -622,11 +667,43 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 ### Category 13: VEID Verification Integrations (NEW)
 
+#### VEID-VERIF-010: Define Verification Attestation Schema + Signer Policy
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - verification attestations  
+**Current State:** No shared attestation schema or signer/key rotation policy
+
+**Acceptance Criteria:**
+
+- Attestation schema defined (issuer, subject, nonce, expiry, proofs)
+- Key rotation and signer policy documented
+- Replay protection requirements specified
+- On-chain linkage fields mapped to schema
+
+---
+
+#### VEID-VERIF-011: Verification Shared Infrastructure (Signer + Rate Limits)
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - verification service requirements  
+**Current State:** No shared signer/rate-limit/audit infrastructure
+**Depends on:** VEID-VERIF-010
+
+**Acceptance Criteria:**
+
+- Shared signer service implemented with rotation support
+- Rate limiting + abuse controls enabled
+- Audit logging for all verification actions
+- Secure key storage configured (HSM/Vault or equivalent)
+
+---
+
 #### VEID-VERIF-001: SSO/OIDC Verification Service
 
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - SSO verification  
 **Current State:** On-chain SSO metadata types exist; no verification service
+**Depends on:** VEID-VERIF-011
 
 **Acceptance Criteria:**
 
@@ -641,6 +718,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - email verification  
 **Current State:** Types exist; no delivery/attestation pipeline
+**Depends on:** VEID-VERIF-011
 
 **Acceptance Criteria:**
 
@@ -655,6 +733,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - SMS verification  
 **Current State:** Types exist; no gateway integration
+**Depends on:** VEID-VERIF-011
 
 **Acceptance Criteria:**
 
@@ -669,6 +748,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - mobile app document/biometric capture  
 **Current State:** Mobile capture pipeline not present in repo
+**Depends on:** VEID-VERIF-011, VEID-ML-004
 
 **Acceptance Criteria:**
 
@@ -680,11 +760,27 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 ### Category 14: HPC Supercomputer & SLURM (NEW)
 
+#### HPC-ARCH-001: Define Cluster Template + Node Agent Protocol
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - distributed HPC network  
+**Current State:** No formal cluster template or node agent protocol
+
+**Acceptance Criteria:**
+
+- Cluster template schema defined (partitions, QoS, GPU/CPU classes)
+- Node agent heartbeat + metrics payloads specified
+- On-chain metadata mapping documented
+- Security/authentication requirements defined
+
+---
+
 #### HPC-SLURM-001: Automate SLURM Deployment Across Kubernetes Clusters
 
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - SLURM deployment across K8s  
 **Current State:** No automation for SLURM cluster deployment
+**Depends on:** HPC-ARCH-001
 
 **Acceptance Criteria:**
 
@@ -699,6 +795,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - distributed node network  
 **Current State:** Node metadata exists on-chain; no provisioning pipeline
+**Depends on:** HPC-ARCH-001
 
 **Acceptance Criteria:**
 
@@ -713,6 +810,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - HPC workload manager integration  
 **Current State:** Adapters exist but unused by provider daemon
+**Depends on:** HPC-SLURM-001
 
 **Acceptance Criteria:**
 
@@ -727,6 +825,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - preconfigured SLURM workloads  
 **Current State:** No workload library exists
+**Depends on:** HPC-ADAPTER-001
 
 **Acceptance Criteria:**
 
@@ -741,6 +840,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - billing/invoicing + rewards  
 **Current State:** No end-to-end usage accounting or invoicing flow
+**Depends on:** HPC-ADAPTER-001, BILL-001
 
 **Acceptance Criteria:**
 
@@ -755,6 +855,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - routing + cluster selection  
 **Current State:** Scheduling decisions not enforced by provider daemon
+**Depends on:** HPC-NODE-001, HPC-ADAPTER-001
 
 **Acceptance Criteria:**
 
@@ -766,11 +867,27 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 ### Category 15: Marketplace & Waldur End-to-End (NEW)
 
+#### MKP-WALDUR-010: Define Chain <-> Waldur Mapping + Policy
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - marketplace listing  
+**Current State:** Mapping rules and policy are undocumented
+
+**Acceptance Criteria:**
+
+- Canonical field mapping documented for offerings/orders
+- Pricing/region/resource normalization rules defined
+- Lifecycle state machine alignment documented
+- Sync/reconciliation policies specified
+
+---
+
 #### MKP-WALDUR-001: Automated Offering Sync (Chain → Waldur)
 
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - marketplace listing  
 **Current State:** Manual `WaldurOfferingMap` required
+**Depends on:** MKP-WALDUR-010
 
 **Acceptance Criteria:**
 
@@ -785,6 +902,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - marketplace listing  
 **Current State:** No ingestion of Waldur service/VM catalogs
+**Depends on:** MKP-WALDUR-010
 
 **Acceptance Criteria:**
 
@@ -799,6 +917,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - purchase → provision → control  
 **Current State:** Only basic provisioning callbacks supported
+**Depends on:** MKP-WALDUR-001
 
 **Acceptance Criteria:**
 
@@ -813,6 +932,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - billing/invoicing  
 **Current State:** Usage reporting not wired to settlement
+**Depends on:** MKP-WALDUR-003, BILL-001
 
 **Acceptance Criteria:**
 
@@ -824,11 +944,27 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 ### Category 16: Support Requests & Service Desk (NEW)
 
+#### SUPPORT-ARCH-001: Define Support Ticket Schema + Encryption/Retention
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - support requests as encrypted data  
+**Current State:** No documented ticket schema or encryption/retention policy
+
+**Acceptance Criteria:**
+
+- Ticket schema defined (fields, states, roles)
+- Encryption envelope policy documented (recipients, rotation)
+- Retention/PII handling policy documented
+- Audit requirements specified
+
+---
+
 #### SUPPORT-001: On-Chain Support Request Module (Encrypted)
 
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - support requests as encrypted data  
 **Current State:** No support request module in chain
+**Depends on:** SUPPORT-ARCH-001
 
 **Acceptance Criteria:**
 
@@ -854,11 +990,27 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 ### Category 17: Billing & Invoicing (NEW)
 
+#### BILL-ARCH-001: Define Billing/Invoice Schema + Pricing Rules
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - billing/invoicing  
+**Current State:** No formal schema or pricing/rounding policy
+
+**Acceptance Criteria:**
+
+- Invoice schema and line-item model defined
+- Pricing/rounding/tax rules documented
+- Settlement hooks and dispute windows specified
+- Ledger persistence strategy documented
+
+---
+
 #### BILL-001: Invoice Generation + Ledger Persistence
 
 **Priority:** CRITICAL  
 **Spec Reference:** AU2024203136A1-LIVE - billing/invoicing  
 **Current State:** No invoice module or ledger records
+**Depends on:** BILL-ARCH-001
 
 **Acceptance Criteria:**
 
@@ -873,6 +1025,7 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - payment settlement  
 **Current State:** Settlement module not wired to usage billing
+**Depends on:** BILL-001, HPC-BILL-001, MKP-WALDUR-004
 
 **Acceptance Criteria:**
 
@@ -889,12 +1042,60 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 **Priority:** HIGH  
 **Spec Reference:** AU2024203136A1-LIVE - fiat conversion/PayPal  
 **Current State:** No off-ramp integration beyond gateway payments
+**Depends on:** BILL-002, VEID-VERIF-011
 
 **Acceptance Criteria:**
 
 - Off-ramp provider integration (PayPal/ACH or equivalent)
 - KYC/AML compliance hooks
 - Audit trail + reconciliation reporting
+
+---
+
+### Category 19: Hardening & Launch Readiness (NEW)
+
+#### SEC-ML-001: Security Review for ML/Verification Services
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - verification + ML pipeline  
+**Current State:** No targeted security review for ML/verification services
+**Depends on:** VEID-ML-003, VEID-VERIF-001, VEID-VERIF-002, VEID-VERIF-003, VEID-VERIF-004
+
+**Acceptance Criteria:**
+
+- Threat model updated for ML + verification services
+- Critical findings remediated
+- Security review evidence captured
+
+---
+
+#### BILL-RECON-001: Billing Reconciliation + Dispute Workflow
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - billing/invoicing  
+**Current State:** No reconciliation workflow between usage, invoices, and payouts
+**Depends on:** BILL-002, PAY-004
+
+**Acceptance Criteria:**
+
+- Reconciliation report matches usage and payout ledgers
+- Dispute workflow implemented with audit trail
+- Correction flow updates invoices deterministically
+
+---
+
+#### LAUNCH-001: Mainnet Launch Readiness + Go/No-Go
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - production readiness  
+**Current State:** No consolidated launch readiness checklist
+**Depends on:** E2E-VEID-001, E2E-PROVIDER-001, SEC-ML-001, BILL-RECON-001
+
+**Acceptance Criteria:**
+
+- Go/no-go checklist completed with sign-offs
+- Rollback/incident response plans validated
+- Launch runbook approved
 
 ---
 
@@ -905,17 +1106,18 @@ Total tasks identified for vibe-kanban import:
 | Category                             | Count | Priority      |
 | ------------------------------------ | ----- | ------------- |
 | Production Hardening & Integrations  | 8     | CRITICAL/HIGH |
-| VEID ML Productionization            | 4     | CRITICAL/HIGH |
-| VEID Verification Integrations       | 4     | HIGH          |
-| HPC Supercomputer & SLURM            | 6     | CRITICAL/HIGH |
-| Marketplace & Waldur End-to-End      | 4     | CRITICAL/HIGH |
-| Support Requests & Service Desk      | 2     | CRITICAL/HIGH |
-| Billing & Invoicing                  | 2     | CRITICAL/HIGH |
+| VEID ML Productionization            | 5     | CRITICAL/HIGH |
+| VEID Verification Integrations       | 6     | CRITICAL/HIGH |
+| HPC Supercomputer & SLURM            | 7     | CRITICAL/HIGH |
+| Marketplace & Waldur End-to-End      | 5     | CRITICAL/HIGH |
+| Support Requests & Service Desk      | 3     | CRITICAL/HIGH |
+| Billing & Invoicing                  | 3     | CRITICAL/HIGH |
 | Fiat Off-Ramp Integration            | 1     | HIGH          |
 | ML Determinism                       | 2     | CRITICAL/HIGH |
 | Testing (E2E)                        | 3     | HIGH          |
+| Hardening & Launch Readiness         | 3     | HIGH          |
 
-**Total: 36 detailed implementation tasks**
+**Total: 46 detailed implementation tasks**
 
 ---
 

@@ -26,8 +26,9 @@ Pillow==10.2.0
 onnxruntime==1.16.3
 
 # PyTorch (CPU-only) for CRAFT text detection
+# Install with: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.1.2+cpu
-# Note: Install from PyTorch CPU index
 
 # Tesseract OCR Python bindings
 pytesseract==0.3.10

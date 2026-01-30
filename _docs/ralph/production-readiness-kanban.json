@@ -1,6 +1,6 @@
 {
   "projectName": "VirtEngine Production Readiness - Military Grade",
-  "description": "Comprehensive task breakdown to achieve 100% production-ready status for VirtEngine blockchain. Updated 2026-01-30 - 68% complete.",
+  "description": "Comprehensive task breakdown to achieve 100% production-ready status for VirtEngine blockchain. Updated 2026-01-30 - 7% complete.",
   "targetDate": "2026-02-28",
   "columns": [
     {
@@ -36,6 +36,1116 @@
   ],
   "tasks": [
     {
+      "id": "VEID-ML-010",
+      "title": "1A feat(veid): define ML feature schema + data contract",
+      "description": "Define the canonical VEID ML feature schema and data contract across all scope types, including normalization, versioning, and consent/retention constraints.",
+      "category": "VEID ML",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Feature schema documented and versioned (inputs/outputs, ranges, units)",
+        "Data contract covers all scope types and consent/retention requirements",
+        "Training + inference pipeline mapping validated",
+        "Schema compatibility tests added"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "veid",
+        "ml",
+        "schema",
+        "governance"
+      ],
+      "column": "ready",
+      "parallelGroup": "1A"
+    },
+    {
+      "id": "VEID-VERIF-010",
+      "title": "1B feat(veid): define verification attestation schema + signer",
+      "description": "Define verification attestation payloads and signer/key rotation requirements for all VEID verification services.",
+      "category": "VEID Verification",
+      "priority": "P0-Critical",
+      "estimatedHours": 32,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Attestation schema defined (issuer, subject, nonce, expiry, proofs)",
+        "Key rotation and signer policy documented",
+        "Replay protection requirements specified",
+        "On-chain linkage fields mapped to schema"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "veid",
+        "verification",
+        "attestation",
+        "security"
+      ],
+      "column": "ready",
+      "parallelGroup": "1B"
+    },
+    {
+      "id": "HPC-ARCH-001",
+      "title": "1C feat(hpc): define cluster template + node agent protocol",
+      "description": "Define HPC cluster templates, node agent responsibilities, and heartbeat/metrics schemas required for on-chain scheduling.",
+      "category": "HPC",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Cluster template schema defined (partitions/QoS/resources)",
+        "Node agent heartbeat + metrics schema specified",
+        "On-chain metadata fields mapped to agent payloads",
+        "Security/auth requirements documented"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "hpc",
+        "schema",
+        "nodes"
+      ],
+      "column": "ready",
+      "parallelGroup": "1C"
+    },
+    {
+      "id": "MKP-WALDUR-010",
+      "title": "1D feat(market): define chain<->Waldur mapping + policy spec",
+      "description": "Define canonical mapping and policy rules between on-chain offerings/orders and Waldur services/VMs.",
+      "category": "Marketplace",
+      "priority": "P0-Critical",
+      "estimatedHours": 32,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Field-level mapping for offerings/orders documented",
+        "Pricing/region/resource normalization rules defined",
+        "Lifecycle state machine alignment documented",
+        "Sync/reconciliation policies specified"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "marketplace",
+        "waldur",
+        "mapping"
+      ],
+      "column": "ready",
+      "parallelGroup": "1D"
+    },
+    {
+      "id": "BILL-ARCH-001",
+      "title": "1E feat(escrow): define billing/invoice schema + pricing rules",
+      "description": "Define invoice schema, pricing/rounding rules, tax handling, and settlement hooks used across HPC and marketplace.",
+      "category": "Billing",
+      "priority": "P0-Critical",
+      "estimatedHours": 32,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Invoice schema and line-item model defined",
+        "Pricing/rounding/tax rules documented",
+        "Settlement hooks and dispute windows specified",
+        "Ledger persistence strategy documented"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "billing",
+        "invoicing",
+        "schema"
+      ],
+      "column": "ready",
+      "parallelGroup": "1E"
+    },
+    {
+      "id": "SUPPORT-ARCH-001",
+      "title": "1F feat(app): define support ticket schema + encryption/retention",
+      "description": "Define support ticket data model, encryption envelope policy, retention, and access controls.",
+      "category": "Support",
+      "priority": "P0-Critical",
+      "estimatedHours": 24,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Ticket schema defined (fields, states, access roles)",
+        "Encryption envelope and key recipients specified",
+        "Retention/PII handling policy documented",
+        "Audit/logging requirements specified"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "support",
+        "encryption",
+        "policy"
+      ],
+      "column": "ready",
+      "parallelGroup": "1F"
+    },
+    {
+      "description": "Create production-grade data ingestion and labeling pipeline for VEID identity scoring.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 120,
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "dataset",
+        "training"
+      ],
+      "acceptanceCriteria": [
+        "Production data ingestion and labeling process implemented",
+        "PII-safe storage and access controls enforced",
+        "Dataset versioning and provenance tracking",
+        "Reproducible train/validation/test splits"
+      ],
+      "id": "VEID-ML-001",
+      "parallelGroup": "2A",
+      "title": "2A feat(veid): build production VEID dataset + labeling pipeline",
+      "dependencies": [
+        "VEID-ML-010"
+      ]
+    },
+    {
+      "id": "VEID-VERIF-011",
+      "title": "2B feat(veid): build verification shared infra (signing/rate-limit/audit)",
+      "description": "Implement shared infrastructure for verification services: signer service, rate limiting, audit logging, and key storage.",
+      "category": "VEID Verification",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [
+        "VEID-VERIF-010"
+      ],
+      "acceptanceCriteria": [
+        "Signer service implemented with key rotation support",
+        "Rate limiting and abuse controls enabled",
+        "Audit logs emitted for all verification actions",
+        "Secure key storage configured (HSM/Vault or equivalent)"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "veid",
+        "verification",
+        "infra",
+        "security"
+      ],
+      "column": "backlog",
+      "parallelGroup": "2B"
+    },
+    {
+      "description": "Deploy and manage SLURM controllers/compute nodes across provider K8s clusters.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 120,
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "slurm",
+        "kubernetes"
+      ],
+      "acceptanceCriteria": [
+        "Automated SLURM controller/compute deployment on K8s",
+        "Cluster bootstrap + join/leave workflows",
+        "Provider-configurable cluster templates"
+      ],
+      "id": "HPC-SLURM-001",
+      "parallelGroup": "2C",
+      "title": "2C feat(hpc): automate SLURM deployment across Kubernetes clusters",
+      "dependencies": [
+        "HPC-ARCH-001"
+      ]
+    },
+    {
+      "description": "Sync on-chain offerings to Waldur automatically; remove manual offering map.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "waldur",
+        "sync"
+      ],
+      "acceptanceCriteria": [
+        "On-chain offering create/update triggers Waldur sync",
+        "Sync status stored on-chain with retries",
+        "Manual mapping removed"
+      ],
+      "id": "MKP-WALDUR-001",
+      "parallelGroup": "2D",
+      "title": "2D feat(market): automate offering sync from chain to Waldur",
+      "dependencies": [
+        "MKP-WALDUR-010"
+      ]
+    },
+    {
+      "description": "Generate usage-based invoices and persist immutable ledger records.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "category": "Billing",
+      "labels": [
+        "billing",
+        "invoices",
+        "ledger"
+      ],
+      "acceptanceCriteria": [
+        "Invoices generated for marketplace + HPC usage",
+        "Immutable invoice ledger records on-chain",
+        "Invoice export format (PDF/JSON)"
+      ],
+      "id": "BILL-001",
+      "parallelGroup": "2E",
+      "title": "2E feat(escrow): generate invoices and persist ledger records",
+      "dependencies": [
+        "BILL-ARCH-001"
+      ]
+    },
+    {
+      "description": "Implement encrypted support request module with access control and lifecycle events.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "category": "Support",
+      "labels": [
+        "support",
+        "encryption",
+        "tickets"
+      ],
+      "acceptanceCriteria": [
+        "Support request messages + encrypted payloads",
+        "Access control for support staff/customer",
+        "Lifecycle events for ticket state"
+      ],
+      "id": "SUPPORT-001",
+      "parallelGroup": "2F",
+      "title": "2F feat(app): add encrypted on-chain support request module",
+      "dependencies": [
+        "SUPPORT-ARCH-001"
+      ]
+    },
+    {
+      "description": "Train the VEID model and export a TensorFlow SavedModel with pinned hash/version.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "model",
+        "tensorflow"
+      ],
+      "acceptanceCriteria": [
+        "Model trained and exported as TensorFlow SavedModel",
+        "Model hash recorded and pinned",
+        "Artifact stored in approved registry/object store",
+        "On-chain model version updated"
+      ],
+      "id": "VEID-ML-002",
+      "parallelGroup": "3A",
+      "title": "3A feat(veid): train and export trust-score SavedModel",
+      "dependencies": [
+        "VEID-ML-001"
+      ]
+    },
+    {
+      "description": "Replace hash-based placeholders with real biometric/document feature extraction.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 80,
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "feature-extraction",
+        "ocr"
+      ],
+      "acceptanceCriteria": [
+        "Face embeddings extracted from selfie/video scopes",
+        "OCR + document quality features extracted",
+        "Liveness checks integrated",
+        "Feature pipeline aligned with training inputs"
+      ],
+      "id": "VEID-ML-004",
+      "parallelGroup": "3B",
+      "title": "3B feat(veid): implement feature extraction for face/OCR/liveness",
+      "dependencies": [
+        "VEID-ML-010"
+      ]
+    },
+    {
+      "description": "Provision HPC nodes and feed heartbeat/latency metrics into on-chain metadata.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "node",
+        "registration",
+        "latency"
+      ],
+      "acceptanceCriteria": [
+        "Node registration flow implemented",
+        "Heartbeat + capacity reporting",
+        "Latency measurement ingestion",
+        "Auto-deactivation on missed heartbeats"
+      ],
+      "id": "HPC-NODE-001",
+      "parallelGroup": "3C",
+      "title": "3C feat(hpc): add node registration and heartbeat pipeline",
+      "dependencies": [
+        "HPC-ARCH-001"
+      ]
+    },
+    {
+      "description": "Import Waldur service/VM listings into on-chain marketplace.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "waldur",
+        "listing"
+      ],
+      "acceptanceCriteria": [
+        "Waldur offerings imported into on-chain marketplace",
+        "Metadata + pricing normalized",
+        "Provider ownership validated"
+      ],
+      "id": "MKP-WALDUR-002",
+      "parallelGroup": "3D",
+      "title": "3D feat(market): ingest Waldur listings into on-chain marketplace",
+      "dependencies": [
+        "MKP-WALDUR-010"
+      ]
+    },
+    {
+      "description": "Bridge support request events to Jira/Waldur service desk with bi-directional sync.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 32,
+      "category": "Support",
+      "labels": [
+        "support",
+        "jira",
+        "waldur"
+      ],
+      "acceptanceCriteria": [
+        "Support request events create/update tickets",
+        "Bi-directional status sync",
+        "Audit trail for ticket actions"
+      ],
+      "id": "SUPPORT-002",
+      "parallelGroup": "3E",
+      "title": "3E feat(app): integrate Jira/Waldur service desk sync",
+      "dependencies": [
+        "SUPPORT-001"
+      ]
+    },
+    {
+      "description": "Implement email verification delivery and on-chain attestation pipeline.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 24,
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "email",
+        "verification"
+      ],
+      "acceptanceCriteria": [
+        "Email OTP/link delivery service implemented",
+        "Signed verification attestation submitted on-chain",
+        "Rate limiting + audit trail"
+      ],
+      "id": "VEID-VERIF-002",
+      "parallelGroup": "3F",
+      "title": "3F feat(veid): implement email verification delivery + attestation",
+      "dependencies": [
+        "VEID-VERIF-011"
+      ]
+    },
+    {
+      "description": "Replace simulated sidecar and stubbed scoring with real deterministic inference.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "inference",
+        "sidecar"
+      ],
+      "acceptanceCriteria": [
+        "Real gRPC sidecar or embedded TensorFlow inference implemented",
+        "Deterministic conformance tests across validators",
+        "Health checks and observability wired",
+        "Consensus input/output hashing validated"
+      ],
+      "id": "VEID-ML-003",
+      "parallelGroup": "4A",
+      "title": "4A feat(veid): implement real deterministic inference runtime",
+      "dependencies": [
+        "VEID-ML-002",
+        "VEID-ML-004"
+      ]
+    },
+    {
+      "description": "Implement SSO/OIDC verification service with signed attestations for on-chain linkage.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "sso",
+        "oidc"
+      ],
+      "acceptanceCriteria": [
+        "OIDC/SAML verification service implemented",
+        "Signed attestations submitted on-chain",
+        "Issuer configuration + replay protection",
+        "Revocation flows supported"
+      ],
+      "id": "VEID-VERIF-001",
+      "parallelGroup": "4B",
+      "title": "4B feat(veid): add SSO/OIDC verification service",
+      "dependencies": [
+        "VEID-VERIF-011"
+      ]
+    },
+    {
+      "description": "Integrate SMS gateway and anti-fraud checks for SMS verification.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 32,
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "sms",
+        "verification"
+      ],
+      "acceptanceCriteria": [
+        "SMS OTP delivery implemented",
+        "Signed verification attestation submitted on-chain",
+        "VoIP detection + resend throttling"
+      ],
+      "id": "VEID-VERIF-003",
+      "parallelGroup": "4C",
+      "title": "4C feat(veid): implement SMS verification delivery + anti-fraud",
+      "dependencies": [
+        "VEID-VERIF-011"
+      ]
+    },
+    {
+      "description": "Wire HPC adapters into provider daemon and post job lifecycle updates on-chain.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "slurm",
+        "moab",
+        "ood",
+        "provider-daemon"
+      ],
+      "acceptanceCriteria": [
+        "Provider daemon submits/monitors jobs via adapters",
+        "Job lifecycle updates posted on-chain",
+        "Secure credential management for HPC backends"
+      ],
+      "id": "HPC-ADAPTER-001",
+      "parallelGroup": "4D",
+      "title": "4D feat(provider): integrate SLURM/MOAB/OOD adapters with provider daemon",
+      "dependencies": [
+        "HPC-SLURM-001"
+      ]
+    },
+    {
+      "description": "Implement start/stop/resize/terminate via Waldur APIs and signed callbacks.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "waldur",
+        "lifecycle"
+      ],
+      "acceptanceCriteria": [
+        "Lifecycle operations supported via Waldur",
+        "Signed callbacks enforce on-chain transitions",
+        "Audit trail for lifecycle events"
+      ],
+      "id": "MKP-WALDUR-003",
+      "parallelGroup": "4E",
+      "title": "4E feat(market): implement resource lifecycle control via Waldur",
+      "dependencies": [
+        "MKP-WALDUR-001"
+      ]
+    },
+    {
+      "description": "Integrate mobile capture (document + selfie + liveness) with secure scope packaging.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 60,
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "mobile",
+        "biometric"
+      ],
+      "acceptanceCriteria": [
+        "Mobile capture pipeline integrated",
+        "Secure upload + encrypted scope packaging",
+        "Device attestation + capture protocol validation"
+      ],
+      "id": "VEID-VERIF-004",
+      "parallelGroup": "4F",
+      "title": "4F feat(veid): integrate mobile capture + biometric pipeline",
+      "dependencies": [
+        "VEID-ML-004",
+        "VEID-VERIF-011"
+      ]
+    },
+    {
+      "description": "Ingest HPC usage metrics and generate billing + reward distribution.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "billing",
+        "rewards"
+      ],
+      "acceptanceCriteria": [
+        "Usage metrics ingested from SLURM/MOAB/OOD",
+        "On-chain billing records generated",
+        "Reward distribution tied to usage metrics"
+      ],
+      "id": "HPC-BILL-001",
+      "parallelGroup": "5A",
+      "title": "5A feat(hpc): implement usage accounting to billing + rewards",
+      "dependencies": [
+        "HPC-ADAPTER-001",
+        "BILL-001"
+      ]
+    },
+    {
+      "description": "Ensure provider daemon enforces x/hpc scheduling decisions for job placement.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "routing",
+        "scheduling"
+      ],
+      "acceptanceCriteria": [
+        "Provider daemon consumes scheduling decisions",
+        "Job placement respects proximity/capacity scores",
+        "Fallback routing with audit reasons"
+      ],
+      "id": "HPC-ROUTE-001",
+      "parallelGroup": "5B",
+      "title": "5B feat(hpc): enforce on-chain scheduling in job placement",
+      "dependencies": [
+        "HPC-NODE-001",
+        "HPC-ADAPTER-001"
+      ]
+    },
+    {
+      "description": "Wire usage reporting to on-chain settlement and invoicing.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "usage",
+        "settlement"
+      ],
+      "acceptanceCriteria": [
+        "Provider daemon submits usage reports",
+        "Settlement module consumes usage",
+        "Invoice/payout events emitted"
+      ],
+      "id": "MKP-WALDUR-004",
+      "parallelGroup": "5C",
+      "title": "5C feat(market): wire usage reporting to settlement",
+      "dependencies": [
+        "MKP-WALDUR-003",
+        "BILL-001"
+      ]
+    },
+    {
+      "description": "Wire invoices to escrow settlement and provider payout flows.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "category": "Billing",
+      "labels": [
+        "billing",
+        "settlement",
+        "payout"
+      ],
+      "acceptanceCriteria": [
+        "Escrow release triggered by invoice settlement",
+        "Provider payouts + treasury accounting",
+        "Dispute holdbacks and resolution paths"
+      ],
+      "id": "BILL-002",
+      "parallelGroup": "5D",
+      "title": "5D feat(escrow): integrate settlement + payouts with invoicing",
+      "dependencies": [
+        "BILL-001",
+        "HPC-BILL-001",
+        "MKP-WALDUR-004"
+      ]
+    },
+    {
+      "description": "Implement fiat off-ramp integration (PayPal/ACH) for token-to-fiat payouts.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "category": "Payments",
+      "labels": [
+        "payment",
+        "fiat",
+        "paypal"
+      ],
+      "acceptanceCriteria": [
+        "Off-ramp provider integration implemented",
+        "KYC/AML compliance hooks",
+        "Audit trail + reconciliation reporting"
+      ],
+      "id": "PAY-004",
+      "parallelGroup": "5E",
+      "title": "5E feat(app): add fiat off-ramp integration (PayPal/ACH)",
+      "dependencies": [
+        "BILL-002",
+        "VEID-VERIF-011"
+      ]
+    },
+    {
+      "description": "Create a library of validated SLURM workload templates and custom workload packaging.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 60,
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "slurm",
+        "workloads"
+      ],
+      "acceptanceCriteria": [
+        "Validated SLURM job templates (MPI/GPU/batch)",
+        "Custom workload packaging + validation",
+        "Signed workload manifests stored in artifact store"
+      ],
+      "id": "HPC-WORKLOAD-001",
+      "parallelGroup": "5F",
+      "title": "5F feat(hpc): add preconfigured workload library + custom packaging",
+      "dependencies": [
+        "HPC-ADAPTER-001"
+      ]
+    },
+    {
+      "id": "E2E-VEID-001",
+      "title": "6B test(veid): E2E VEID onboarding + verification flows",
+      "description": "Automate end-to-end VEID onboarding and verification flows across SSO/email/SMS/mobile capture and ML scoring.",
+      "category": "Testing",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [
+        "VEID-ML-003",
+        "VEID-VERIF-001",
+        "VEID-VERIF-002",
+        "VEID-VERIF-003",
+        "VEID-VERIF-004"
+      ],
+      "acceptanceCriteria": [
+        "E2E flow validates scoring, tiering, and verification attestations",
+        "Failure cases tested (invalid proofs, expired OTP, low score)",
+        "CI job added for E2E VEID flow"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "testing",
+        "veid",
+        "e2e"
+      ],
+      "column": "backlog",
+      "parallelGroup": "6B"
+    },
+    {
+      "id": "E2E-PROVIDER-001",
+      "title": "6C test(provider): E2E HPC/marketplace provider flow",
+      "description": "Automate provider registration -> offer listing -> job execution -> usage reporting -> settlement.",
+      "category": "Testing",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [
+        "HPC-ADAPTER-001",
+        "HPC-BILL-001",
+        "HPC-ROUTE-001",
+        "MKP-WALDUR-003",
+        "MKP-WALDUR-004"
+      ],
+      "acceptanceCriteria": [
+        "Provider E2E flow executed in staging",
+        "Usage reports drive invoices and payouts",
+        "CI pipeline includes provider flow tests"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "testing",
+        "provider",
+        "e2e"
+      ],
+      "column": "backlog",
+      "parallelGroup": "6C"
+    },
+    {
+      "id": "SEC-ML-001",
+      "title": "6D test(veid): security review for ML/verification services",
+      "description": "Perform targeted security review for ML inference and verification services (attestation, signing, abuse controls).",
+      "category": "Security",
+      "priority": "P1-High",
+      "estimatedHours": 32,
+      "dependencies": [
+        "VEID-ML-003",
+        "VEID-VERIF-001",
+        "VEID-VERIF-002",
+        "VEID-VERIF-003",
+        "VEID-VERIF-004"
+      ],
+      "acceptanceCriteria": [
+        "Threat model updated for ML/verification services",
+        "Critical findings remediated",
+        "Security test evidence captured"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "security",
+        "veid",
+        "audit"
+      ],
+      "column": "backlog",
+      "parallelGroup": "6D"
+    },
+    {
+      "id": "BILL-RECON-001",
+      "title": "6E feat(escrow): billing reconciliation + dispute workflow",
+      "description": "Implement reconciliation reports, dispute windows, and correction workflows for invoices and payouts.",
+      "category": "Billing",
+      "priority": "P1-High",
+      "estimatedHours": 32,
+      "dependencies": [
+        "BILL-002",
+        "PAY-004"
+      ],
+      "acceptanceCriteria": [
+        "Reconciliation report matches provider usage and payout ledgers",
+        "Dispute workflow implemented with audit trail",
+        "Correction flow updates invoices and settlements deterministically"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "billing",
+        "reconciliation",
+        "disputes"
+      ],
+      "column": "backlog",
+      "parallelGroup": "6E"
+    },
+    {
+      "id": "LAUNCH-001",
+      "title": "6F chore(app): mainnet launch readiness + go/no-go",
+      "description": "Create and execute a mainnet launch readiness checklist including security, compliance, and operational sign-offs.",
+      "category": "Operations",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [
+        "E2E-VEID-001",
+        "E2E-PROVIDER-001",
+        "SEC-ML-001",
+        "BILL-RECON-001"
+      ],
+      "acceptanceCriteria": [
+        "Go/no-go checklist completed with sign-offs",
+        "Rollback/incident response plans validated",
+        "Launch runbook approved"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "launch",
+        "operations",
+        "readiness"
+      ],
+      "column": "backlog",
+      "parallelGroup": "6F"
+    },
+    {
+      "id": "UI-002",
+      "title": "Accessibility (WCAG 2.1 AA) Compliance",
+      "description": "Ensure portal meets WCAG 2.1 Level AA accessibility standards",
+      "category": "Frontend",
+      "priority": "P2-Medium",
+      "estimatedHours": 60,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Automated accessibility testing (axe, WAVE)",
+        "Keyboard navigation support",
+        "Screen reader compatibility",
+        "Color contrast compliance",
+        "ARIA labels and roles",
+        "Focus management",
+        "Accessibility audit and remediation",
+        "Accessibility testing in CI/CD"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "frontend",
+        "accessibility",
+        "wcag"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "DOCS-001",
+      "title": "API Documentation Generation",
+      "description": "Generate comprehensive API documentation for all modules",
+      "category": "Documentation",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [
+        "PROTO-001",
+        "PROTO-002",
+        "PROTO-003",
+        "PROTO-004"
+      ],
+      "acceptanceCriteria": [
+        "OpenAPI/Swagger specs for all gRPC endpoints",
+        "Interactive API docs (Swagger UI/Redoc)",
+        "Code examples for common operations",
+        "API versioning strategy documented",
+        "Rate limits and quotas documented",
+        "Authentication/authorization guide"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "documentation",
+        "api"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "UPGRADE-002",
+      "title": "Backwards Compatibility Testing",
+      "description": "Ensure backwards compatibility for API and protocol changes",
+      "category": "Upgrades",
+      "priority": "P1-High",
+      "estimatedHours": 32,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "API version compatibility matrix",
+        "Protocol version negotiation testing",
+        "Old client compatibility validation",
+        "Deprecation policy defined and enforced",
+        "Breaking change detection in CI/CD",
+        "Compatibility test suite",
+        "Migration guide for breaking changes",
+        "Version support lifecycle defined"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "upgrades",
+        "compatibility",
+        "versioning"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "PERF-003",
+      "title": "Caching Layer Implementation",
+      "description": "Implement intelligent caching for frequently accessed data",
+      "category": "Performance",
+      "priority": "P2-Medium",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "VEID score caching with TTL",
+        "Provider offering caching",
+        "Marketplace order/bid caching",
+        "Cache invalidation strategy",
+        "Cache hit rate monitoring",
+        "Distributed cache support (Redis) for multi-validator setup"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "performance",
+        "caching",
+        "redis"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "UPGRADE-001",
+      "title": "Chain Upgrade Framework Testing",
+      "description": "Comprehensive testing of chain upgrade mechanisms",
+      "category": "Upgrades",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Upgrade handler testing framework",
+        "Breaking change migration testing",
+        "State migration validation",
+        "Rollback procedure testing",
+        "Multi-validator upgrade coordination testing",
+        "Upgrade simulation on testnet",
+        "Upgrade failure scenarios documented",
+        "Emergency upgrade procedures"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "upgrades",
+        "testing",
+        "critical"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "QUALITY-003",
+      "title": "Chaos Engineering Program",
+      "description": "Implement chaos engineering to validate system resilience",
+      "category": "Quality",
+      "priority": "P2-Medium",
+      "estimatedHours": 80,
+      "dependencies": [
+        "SCALE-001"
+      ],
+      "acceptanceCriteria": [
+        "Chaos Mesh/Litmus integration",
+        "Network partition scenarios",
+        "Node failure scenarios",
+        "Resource exhaustion scenarios",
+        "Byzantine behavior simulation",
+        "Automated chaos experiments in staging",
+        "Resilience metrics and SLOs",
+        "Chaos engineering runbook"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "testing",
+        "resilience",
+        "chaos-engineering"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "INFRA-003",
+      "title": "CI/CD Pipeline Hardening",
+      "description": "Enhance CI/CD pipeline with security and quality gates",
+      "category": "Infrastructure",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Static code analysis (SonarQube, golangci-lint)",
+        "Dependency vulnerability scanning (Snyk, Dependabot)",
+        "Container image scanning (Trivy, Clair)",
+        "License compliance checking",
+        "Code coverage requirements (>80%)",
+        "Integration test gates",
+        "Security scanning in PR pipeline",
+        "Automated changelog generation"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "ci-cd",
+        "security",
+        "quality"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "QUALITY-001",
+      "title": "Code Coverage to 90%+",
+      "description": "Increase code coverage to military-grade 90%+ across all modules",
+      "category": "Quality",
+      "priority": "P1-High",
+      "estimatedHours": 120,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Unit test coverage >90% for all x/* modules",
+        "Integration test coverage >85%",
+        "E2E test coverage for critical user flows",
+        "Edge case and error path coverage",
+        "Coverage reports in CI/CD",
+        "Coverage regression prevention",
+        "Mutation testing for critical paths"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "testing",
+        "quality",
+        "coverage"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "REFACTOR-001",
+      "title": "Code Quality Refactoring - Technical Debt",
+      "description": "Address accumulated technical debt and code quality issues",
+      "category": "Refactoring",
+      "priority": "P2-Medium",
+      "estimatedHours": 80,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "All TODO comments triaged and addressed",
+        "All FIXME comments resolved",
+        "Deprecated APIs removed or migrated",
+        "Dead code elimination",
+        "Code duplication reduction (DRY principle)",
+        "Cyclomatic complexity reduction",
+        "SonarQube quality gate passed",
+        "Architectural decision records (ADRs) created"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "refactoring",
+        "technical-debt",
+        "code-quality"
+      ],
+      "column": "backlog"
+    },
+    {
       "id": "SECURITY-001",
       "title": "Complete Security Audit - Cryptographic Systems",
       "description": "Comprehensive security audit of all cryptographic implementations including ZK proofs, TEE attestation, encryption envelopes, and signature verification",
@@ -59,53 +1169,355 @@
       "column": "backlog"
     },
     {
-      "id": "SECURITY-002",
-      "title": "Implement Real TEE Enclave Service",
-      "description": "SGX, SEV-SNP, and Nitro enclave adapters implemented with EnclaveManager and attestation verification. Hardware deployment pending.",
-      "category": "Security",
-      "priority": "P0-Critical",
-      "estimatedHours": 80,
+      "id": "PROTO-001",
+      "title": "Complete VE-3023: VEID Protobuf Generation",
+      "description": "Finish VEID module protobuf generation and remove all proto stubs",
+      "category": "Core Modules",
+      "priority": "P1-High",
+      "estimatedHours": 24,
       "dependencies": [],
       "acceptanceCriteria": [
-        "Intel SGX SDK integrated OR AMD SEV-SNP support",
-        "Enclave attestation fully functional",
-        "Sensitive VEID data encrypted in enclave memory",
-        "Remote attestation working with validators",
-        "Production deployment guide for TEE hardware"
+        "All appeal, compliance, model proto files created",
+        "buf generate creates all *.pb.go files",
+        "Proto stubs completely removed",
+        "All VEID tests pass",
+        "No serialization warnings"
       ],
       "assignedTo": "Completed",
       "labels": [
-        "security",
-        "tee",
-        "sgx",
-        "sev-snp",
-        "completed"
+        "completed",
+        "protobuf",
+        "veid"
       ],
       "column": "done"
     },
     {
-      "id": "SECURITY-003",
-      "title": "Implement Real SAML Signature Verification",
-      "description": "goxmldsig XML-DSig verification implemented in pkg/edugain/saml_verifier.go (667 lines)",
+      "id": "BUGFIX-001",
+      "title": "Critical Bug Triage and Remediation",
+      "description": "Triage and fix all known critical and high-severity bugs",
+      "category": "Bug Fixes",
+      "priority": "P0-Critical",
+      "estimatedHours": 60,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "All P0 bugs fixed",
+        "All P1 bugs triaged and fixed or scheduled",
+        "Bug fix regression tests added",
+        "Root cause analysis for critical bugs",
+        "Bug fix validation in staging",
+        "Hotfix deployment procedures tested",
+        "Bug tracking and metrics",
+        "Bug SLA enforcement"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "bugfix",
+        "critical",
+        "quality"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "DATA-001",
+      "title": "Data Retention & Archival Strategy",
+      "description": "Implement data retention policies and archival mechanisms",
+      "category": "Data Management",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [
+        "COMPLIANCE-001"
+      ],
+      "acceptanceCriteria": [
+        "Data retention policies defined",
+        "Automated data archival process",
+        "Cold storage for historical data",
+        "Data retrieval procedures",
+        "Compliance with data retention regulations",
+        "Archive encryption and integrity",
+        "Archive testing and validation",
+        "Data lifecycle management documentation"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "data-management",
+        "compliance",
+        "archival"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "PERF-002",
+      "title": "Database Query Optimization",
+      "description": "Optimize all database queries and add proper indexing",
+      "category": "Performance",
+      "priority": "P1-High",
+      "estimatedHours": 32,
+      "dependencies": [
+        "PERF-001"
+      ],
+      "acceptanceCriteria": [
+        "All N+1 query problems identified and fixed",
+        "Cosmos SDK store key prefixes optimized",
+        "Query pagination implemented everywhere",
+        "Index strategy documented",
+        "Query plans analyzed for hot paths",
+        "Performance improvement validated with benchmarks"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "performance",
+        "database",
+        "optimization"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "TEE-HW-001",
+      "title": "Deploy TEE Hardware & Attestation in Production",
+      "description": "Provision SGX/SEV-SNP/Nitro hardware and validate production attestation with operational runbooks.",
       "category": "Security",
       "priority": "P0-Critical",
+      "estimatedHours": 80,
+      "dependencies": [
+        "SECURITY-002"
+      ],
+      "acceptanceCriteria": [
+        "Production SGX/SEV/Nitro hardware provisioned",
+        "Remote attestation verified end-to-end",
+        "Enclave health monitoring and alerts configured",
+        "Failover strategy across TEE types documented"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "security",
+        "tee",
+        "hardware"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "DOCS-004",
+      "title": "Developer Onboarding Guide",
+      "description": "Create comprehensive developer onboarding documentation",
+      "category": "Documentation",
+      "priority": "P2-Medium",
+      "estimatedHours": 32,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Development environment setup guide",
+        "Architecture overview with diagrams",
+        "Code contribution guidelines",
+        "Testing strategy and guidelines",
+        "Code review checklist",
+        "Module development guide",
+        "Common patterns and anti-patterns",
+        "Debugging guide"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "documentation",
+        "developer-experience"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "INFRA-002",
+      "title": "Disaster Recovery & Business Continuity",
+      "description": "Implement comprehensive DR/BC capabilities",
+      "category": "Infrastructure",
+      "priority": "P0-Critical",
+      "estimatedHours": 60,
+      "dependencies": [
+        "INFRA-001"
+      ],
+      "acceptanceCriteria": [
+        "Multi-region deployment capability",
+        "Automated backup procedures (chain state, keys)",
+        "RTO/RPO targets defined and tested",
+        "Failover testing procedures",
+        "Data replication strategy",
+        "Disaster recovery drills documented",
+        "Business continuity plan",
+        "Geographic redundancy validation"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "infrastructure",
+        "disaster-recovery",
+        "business-continuity"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "PAY-003",
+      "title": "Dispute Lifecycle Persistence & Gateway Actions",
+      "description": "Persist disputes and wire Stripe/Adyen dispute actions (submit evidence, accept, status updates).",
+      "category": "Payments",
+      "priority": "P1-High",
+      "estimatedHours": 24,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Dispute records persisted in store",
+        "Gateway dispute actions wired",
+        "Webhooks update dispute state",
+        "Audit trail for dispute actions"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "payment",
+        "disputes",
+        "webhooks"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "MOAB-SSH-001",
+      "title": "Enforce MOAB SSH Known Hosts Verification",
+      "description": "Replace InsecureIgnoreHostKey with known_hosts/pinned key verification.",
+      "category": "Security",
+      "priority": "P1-High",
       "estimatedHours": 16,
       "dependencies": [],
       "acceptanceCriteria": [
-        "XMLDSig signature verification implemented",
-        "Certificate chain validation to trusted CAs",
-        "Replay attack prevention (assertion conditions)",
-        "Assertion encryption support (if required)",
-        "Security tests for signature forgery attempts"
+        "Known_hosts or pinned key verification implemented",
+        "Configurable trust store per provider",
+        "Security tests for MITM protection"
       ],
-      "assignedTo": "Completed",
+      "assignedTo": null,
       "labels": [
         "security",
-        "saml",
-        "authentication",
-        "completed"
+        "ssh",
+        "moab"
       ],
-      "column": "done"
+      "column": "ready"
+    },
+    {
+      "id": "REFACTOR-002",
+      "title": "Error Handling Standardization",
+      "description": "Standardize error handling across all modules",
+      "category": "Refactoring",
+      "priority": "P2-Medium",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Error codes standardized across modules",
+        "Error messages follow consistent format",
+        "Error wrapping with context everywhere",
+        "Sentinel errors defined for common cases",
+        "Error handling best practices documented",
+        "Panic recovery in all goroutines",
+        "Error metrics and alerting",
+        "Client error handling guide"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "refactoring",
+        "error-handling",
+        "reliability"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "QUALITY-002",
+      "title": "Fuzz Testing Implementation",
+      "description": "Implement fuzz testing for all input validation and parsing",
+      "category": "Quality",
+      "priority": "P1-High",
+      "estimatedHours": 60,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Fuzz tests for all protobuf message parsing",
+        "Fuzz tests for cryptographic operations",
+        "Fuzz tests for VEID scope validation",
+        "Fuzz tests for marketplace order/bid validation",
+        "Fuzz tests for provider daemon input handling",
+        "OSS-Fuzz integration for continuous fuzzing",
+        "Corpus management and minimization",
+        "Crash/hang triage process"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "testing",
+        "security",
+        "fuzzing"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "COMPLIANCE-001",
+      "title": "GDPR Compliance Implementation",
+      "description": "Ensure full GDPR compliance for PII handling",
+      "category": "Compliance",
+      "priority": "P0-Critical",
+      "estimatedHours": 60,
+      "dependencies": [
+        "SECURITY-004"
+      ],
+      "acceptanceCriteria": [
+        "Data inventory and classification complete",
+        "Right to erasure (RTBF) implementation",
+        "Data portability support",
+        "Consent management implementation",
+        "Privacy by design validation",
+        "Data Processing Agreement (DPA) templates",
+        "Privacy impact assessment (PIA)",
+        "GDPR compliance audit"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "compliance",
+        "gdpr",
+        "privacy"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "SCALE-002",
+      "title": "Horizontal Scaling Architecture",
+      "description": "Design and implement horizontal scaling capabilities",
+      "category": "Scalability",
+      "priority": "P1-High",
+      "estimatedHours": 60,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Provider daemon horizontal scaling documented",
+        "Load balancer configuration for RPC endpoints",
+        "State sync optimization for new validators",
+        "Sharding strategy documented (if applicable)",
+        "Multi-region deployment guide",
+        "Auto-scaling policies defined"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "scalability",
+        "architecture",
+        "deployment"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "PAY-002",
+      "title": "Implement Conversion Execution & Treasury Transfer",
+      "description": "Execute conversion settlement on-chain and persist conversion ledger entries.",
+      "category": "Payments",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [
+        "PAY-001"
+      ],
+      "acceptanceCriteria": [
+        "On-chain transfer executed for conversion",
+        "Idempotent conversion execution",
+        "Ledger persistence with audit trail",
+        "Clear failure handling and reconciliation flow"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "payment",
+        "conversion",
+        "treasury"
+      ],
+      "column": "ready"
     },
     {
       "id": "SECURITY-004",
@@ -133,25 +1545,607 @@
       "column": "done"
     },
     {
-      "id": "PROTO-001",
-      "title": "Complete VE-3023: VEID Protobuf Generation",
-      "description": "Finish VEID module protobuf generation and remove all proto stubs",
-      "category": "Core Modules",
+      "id": "PAY-001",
+      "title": "Implement Real Price Feed Integration",
+      "description": "Replace placeholder conversion rates with real price feeds (CoinGecko/Chainlink/Pyth) with caching and retries.",
+      "category": "Payments",
+      "priority": "P0-Critical",
+      "estimatedHours": 24,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Price feeds queried from configured source(s)",
+        "Caching + retry logic implemented",
+        "Quote source and timestamp recorded",
+        "Failure fallback documented and monitored"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "payment",
+        "price-feed",
+        "conversion"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "SECURITY-003",
+      "title": "Implement Real SAML Signature Verification",
+      "description": "goxmldsig XML-DSig verification implemented in pkg/edugain/saml_verifier.go (667 lines)",
+      "category": "Security",
+      "priority": "P0-Critical",
+      "estimatedHours": 16,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "XMLDSig signature verification implemented",
+        "Certificate chain validation to trusted CAs",
+        "Replay attack prevention (assertion conditions)",
+        "Assertion encryption support (if required)",
+        "Security tests for signature forgery attempts"
+      ],
+      "assignedTo": "Completed",
+      "labels": [
+        "security",
+        "saml",
+        "authentication",
+        "completed"
+      ],
+      "column": "done"
+    },
+    {
+      "id": "SECURITY-002",
+      "title": "Implement Real TEE Enclave Service",
+      "description": "SGX, SEV-SNP, and Nitro enclave adapters implemented with EnclaveManager and attestation verification. Hardware deployment pending.",
+      "category": "Security",
+      "priority": "P0-Critical",
+      "estimatedHours": 80,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Intel SGX SDK integrated OR AMD SEV-SNP support",
+        "Enclave attestation fully functional",
+        "Sensitive VEID data encrypted in enclave memory",
+        "Remote attestation working with validators",
+        "Production deployment guide for TEE hardware"
+      ],
+      "assignedTo": "Completed",
+      "labels": [
+        "security",
+        "tee",
+        "sgx",
+        "sev-snp",
+        "completed"
+      ],
+      "column": "done"
+    },
+    {
+      "id": "ARTIFACT-001",
+      "title": "Implement Waldur Artifact Store Backend",
+      "description": "Replace stubbed Waldur artifact backend with real storage API integration (upload/download/pin/stream).",
+      "category": "Data Management",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Real Waldur storage API integration",
+        "Streaming upload/download for large artifacts",
+        "Auth and quota enforcement",
+        "Production config and health checks"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "artifact-store",
+        "waldur",
+        "storage"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "SCALE-001",
+      "title": "Load Testing - 1M Nodes Simulation",
+      "description": "Conduct load testing to validate 1M node target scale",
+      "category": "Scalability",
+      "priority": "P0-Critical",
+      "estimatedHours": 80,
+      "dependencies": [
+        "PERF-001",
+        "PERF-002"
+      ],
+      "acceptanceCriteria": [
+        "Load test scenarios for 1M validators",
+        "Marketplace with 100k active orders simulation",
+        "Provider daemon stress test (1k+ providers)",
+        "Network partition recovery testing",
+        "State sync testing at scale",
+        "Performance degradation analysis",
+        "Scaling recommendations documented"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "scalability",
+        "load-testing",
+        "stress-test"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "ECON-002",
+      "title": "Marketplace Economics Optimization",
+      "description": "Optimize marketplace pricing, fees, and incentives",
+      "category": "Economics",
+      "priority": "P2-Medium",
+      "estimatedHours": 40,
+      "dependencies": [
+        "ECON-001"
+      ],
+      "acceptanceCriteria": [
+        "Dynamic fee adjustment mechanism",
+        "Provider incentive alignment",
+        "Market maker incentives",
+        "Liquidity provision incentives",
+        "Price discovery mechanism optimization",
+        "Anti-manipulation safeguards",
+        "Market efficiency metrics",
+        "Economic attack simulations"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "economics",
+        "marketplace",
+        "optimization"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "NETWORK-002",
+      "title": "Network Partition Recovery Testing",
+      "description": "Test and validate network partition recovery mechanisms",
+      "category": "Networking",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [
+        "QUALITY-003"
+      ],
+      "acceptanceCriteria": [
+        "Network partition simulation scenarios",
+        "Consensus recovery validation",
+        "State sync after partition",
+        "Validator set changes during partition",
+        "Message replay prevention",
+        "Split-brain scenario testing",
+        "Network healing time metrics",
+        "Partition recovery runbook"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "networking",
+        "resilience",
+        "testing"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "NETWORK-001",
+      "title": "Network Security Hardening",
+      "description": "Implement comprehensive network security measures",
+      "category": "Networking",
+      "priority": "P0-Critical",
+      "estimatedHours": 60,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "P2P network encryption (Noise Protocol)",
+        "Peer authentication and authorization",
+        "DDoS mitigation strategies",
+        "Rate limiting at network layer",
+        "Sybil attack prevention",
+        "Eclipse attack prevention",
+        "Network topology optimization",
+        "Firewall rules and network segmentation",
+        "Intrusion detection system (IDS) integration"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "networking",
+        "security",
+        "p2p"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "MONITOR-001",
+      "title": "Observability Stack Implementation",
+      "description": "Implement comprehensive monitoring, logging, and alerting",
+      "category": "Observability",
+      "priority": "P0-Critical",
+      "estimatedHours": 60,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Prometheus metrics for all critical services",
+        "Grafana dashboards for chain health, VEID, marketplace",
+        "Distributed tracing with Jaeger/Tempo",
+        "Centralized logging with ELK/Loki",
+        "Alert rules for critical conditions",
+        "On-call runbook for common issues",
+        "SLA/SLO definitions and tracking"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "observability",
+        "monitoring",
+        "alerting",
+        "critical"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "DOCS-002",
+      "title": "Operator Runbooks",
+      "description": "Create comprehensive operational runbooks for production",
+      "category": "Documentation",
+      "priority": "P0-Critical",
+      "estimatedHours": 60,
+      "dependencies": [
+        "MONITOR-001"
+      ],
+      "acceptanceCriteria": [
+        "Validator setup and maintenance guide",
+        "Provider daemon operational procedures",
+        "Incident response playbooks",
+        "Disaster recovery procedures",
+        "Backup and restore procedures",
+        "Upgrade procedures (chain upgrades, hotfixes)",
+        "Common troubleshooting scenarios",
+        "Performance tuning guide"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "documentation",
+        "operations",
+        "runbooks"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "TRAINING-001",
+      "title": "Operator Training Program",
+      "description": "Create comprehensive training program for operators",
+      "category": "Training",
+      "priority": "P1-High",
+      "estimatedHours": 80,
+      "dependencies": [
+        "DOCS-002"
+      ],
+      "acceptanceCriteria": [
+        "Validator operator training curriculum",
+        "Provider daemon operator training",
+        "Security best practices training",
+        "Incident response training",
+        "Hands-on labs and simulations",
+        "Certification program",
+        "Training materials (videos, docs, exercises)",
+        "Quarterly refresher training schedule"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "training",
+        "operations",
+        "knowledge-transfer"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "PERF-001",
+      "title": "Performance Benchmarking Suite",
+      "description": "Create comprehensive performance benchmarks for all critical paths",
+      "category": "Performance",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Transaction throughput benchmarks (target: 10k TPS)",
+        "VEID verification latency benchmarks (target: <100ms)",
+        "Provider daemon bidding latency benchmarks",
+        "ZK proof generation benchmarks (documented)",
+        "Memory profiling for long-running processes",
+        "Baseline metrics established for regression detection"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "performance",
+        "benchmarking"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "UI-001",
+      "title": "Portal Security Hardening",
+      "description": "Harden portal security with comprehensive security measures",
+      "category": "Frontend",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Content Security Policy (CSP) implementation",
+        "XSS prevention validation",
+        "CSRF protection",
+        "Input sanitization everywhere",
+        "Secure authentication flow (OAuth2/OIDC)",
+        "Session management security",
+        "Security headers (HSTS, X-Frame-Options, etc.)",
+        "Frontend security audit"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "frontend",
+        "security",
+        "portal"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "INFRA-001",
+      "title": "Production Deployment Automation",
+      "description": "Automate production deployment with IaC and GitOps",
+      "category": "Infrastructure",
+      "priority": "P0-Critical",
+      "estimatedHours": 80,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Terraform/Pulumi IaC for all infrastructure",
+        "GitOps workflow with ArgoCD/Flux",
+        "Multi-environment support (dev, staging, prod)",
+        "Secrets management (Vault/AWS Secrets Manager)",
+        "Blue/green deployment support",
+        "Automated rollback procedures",
+        "Infrastructure testing (Terratest)",
+        "Cost optimization analysis"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "infrastructure",
+        "devops",
+        "automation"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "NLI-001",
+      "title": "Redis-Backed NLI Sessions & Rate Limiting",
+      "description": "Move NLI session state and rate limits to Redis for distributed scaling.",
+      "category": "Scalability",
       "priority": "P1-High",
       "estimatedHours": 24,
       "dependencies": [],
       "acceptanceCriteria": [
-        "All appeal, compliance, model proto files created",
-        "buf generate creates all *.pb.go files",
-        "Proto stubs completely removed",
-        "All VEID tests pass",
-        "No serialization warnings"
+        "Redis-backed session store with TTL",
+        "Distributed rate limiting (reuse pkg/ratelimit)",
+        "Metrics for session count and rate-limit hits"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "nli",
+        "redis",
+        "scalability"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "PROVIDER-STREAM-001",
+      "title": "Replace Provider Daemon Polling with Streaming",
+      "description": "Use WebSocket/gRPC event subscriptions for orders/config instead of polling loops.",
+      "category": "Scalability",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "WebSocket/gRPC subscriptions to chain events",
+        "Checkpointed replay on reconnect",
+        "Polling fallback only for recovery"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "provider-daemon",
+        "streaming",
+        "scalability"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "DOCS-003",
+      "title": "Security Compliance Documentation",
+      "description": "Document security controls and compliance requirements",
+      "category": "Documentation",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [
+        "SECURITY-001"
+      ],
+      "acceptanceCriteria": [
+        "Security architecture documentation",
+        "Threat model documentation (STRIDE)",
+        "Compliance matrix (GDPR, SOC2, ISO27001)",
+        "Data classification and handling guide",
+        "Encryption at rest/in transit documentation",
+        "Key management procedures",
+        "Incident response plan",
+        "Penetration test results and remediation"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "documentation",
+        "security",
+        "compliance"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "MONITOR-002",
+      "title": "Security Monitoring & Threat Detection",
+      "description": "Implement security-focused monitoring and threat detection",
+      "category": "Observability",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [
+        "MONITOR-001"
+      ],
+      "acceptanceCriteria": [
+        "Suspicious transaction pattern detection",
+        "Identity verification fraud detection metrics",
+        "Rate limiting breach alerts",
+        "Cryptographic operation anomaly detection",
+        "Provider daemon compromise detection",
+        "Security event audit log",
+        "Automated incident response playbooks"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "security",
+        "monitoring",
+        "threat-detection"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "COMPLIANCE-002",
+      "title": "SOC 2 Type II Certification Preparation",
+      "description": "Prepare for and achieve SOC 2 Type II certification",
+      "category": "Compliance",
+      "priority": "P1-High",
+      "estimatedHours": 120,
+      "dependencies": [
+        "SECURITY-001",
+        "MONITOR-001",
+        "DOCS-003"
+      ],
+      "acceptanceCriteria": [
+        "Control objectives defined and documented",
+        "Security controls implemented and tested",
+        "Continuous monitoring evidence collection",
+        "Audit readiness assessment",
+        "Gap analysis and remediation",
+        "Third-party auditor engagement",
+        "SOC 2 Type II report obtained",
+        "Continuous compliance program established"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "compliance",
+        "soc2",
+        "audit"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "DATA-002",
+      "title": "State Pruning Optimization",
+      "description": "Optimize blockchain state pruning for storage efficiency",
+      "category": "Data Management",
+      "priority": "P1-High",
+      "estimatedHours": 32,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Pruning strategy optimized for disk usage",
+        "Historical state query support maintained",
+        "Pruning configuration options",
+        "Snapshot management",
+        "State sync compatibility",
+        "Pruning performance benchmarks",
+        "Disk usage monitoring and alerting",
+        "State growth projections"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "data-management",
+        "optimization",
+        "storage"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "LEGAL-001",
+      "title": "Terms of Service & Privacy Policy",
+      "description": "Draft and review legal documents for production launch",
+      "category": "Legal",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [
+        "COMPLIANCE-001"
+      ],
+      "acceptanceCriteria": [
+        "Terms of Service drafted and reviewed",
+        "Privacy Policy drafted and reviewed",
+        "Cookie Policy (if applicable)",
+        "Acceptable Use Policy",
+        "Data Processing Agreements",
+        "Legal review completed",
+        "Multi-jurisdiction compliance validation",
+        "User consent mechanisms implemented"
+      ],
+      "assignedTo": "Legal Team",
+      "labels": [
+        "legal",
+        "compliance",
+        "documentation"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "ECON-001",
+      "title": "Tokenomics Model Validation",
+      "description": "Validate and optimize token economics model",
+      "category": "Economics",
+      "priority": "P1-High",
+      "estimatedHours": 60,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Economic simulation models created",
+        "Inflation/deflation dynamics analyzed",
+        "Staking reward optimization",
+        "Fee market analysis",
+        "Token distribution fairness analysis",
+        "Attack cost analysis (51% attack, spam, etc.)",
+        "Game theory analysis of incentives",
+        "Economic security audit"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "economics",
+        "tokenomics",
+        "game-theory"
+      ],
+      "column": "backlog"
+    },
+    {
+      "id": "COMPLETE-VE-3050",
+      "title": "VE-3050: Staking Keeper Test Re-enablement",
+      "description": "Already completed - move to done",
+      "category": "Testing",
+      "priority": "P1-High",
+      "estimatedHours": 0,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Tests passing"
       ],
       "assignedTo": "Completed",
       "labels": [
-        "completed",
-        "protobuf",
-        "veid"
+        "testing",
+        "completed"
+      ],
+      "column": "done"
+    },
+    {
+      "id": "COMPLETE-VE-3051",
+      "title": "VE-3051: Privacy Proofs Real Implementation",
+      "description": "Already completed - move to done",
+      "category": "Security",
+      "priority": "P2-Medium",
+      "estimatedHours": 0,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "ZK proofs implemented"
+      ],
+      "assignedTo": "Completed",
+      "labels": [
+        "security",
+        "cryptography",
+        "completed"
       ],
       "column": "done"
     },
@@ -275,973 +2269,6 @@
       "column": "ready"
     },
     {
-      "id": "TEST-003",
-      "title": "VE-3059: Payment Service Real Implementations",
-      "description": "Replace payment service stubs with real implementations",
-      "category": "Testing",
-      "priority": "P2-Medium",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Real payment validation implemented",
-        "Actual refund logic implemented",
-        "3D Secure callback handling complete",
-        "Adyen adapter real SDK integration",
-        "All payment service tests pass",
-        "Integration tests with sandbox APIs"
-      ],
-      "assignedTo": "Completed",
-      "labels": [
-        "adyen",
-        "completed",
-        "integration",
-        "payment"
-      ],
-      "column": "done"
-    },
-    {
-      "id": "PERF-001",
-      "title": "Performance Benchmarking Suite",
-      "description": "Create comprehensive performance benchmarks for all critical paths",
-      "category": "Performance",
-      "priority": "P1-High",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Transaction throughput benchmarks (target: 10k TPS)",
-        "VEID verification latency benchmarks (target: <100ms)",
-        "Provider daemon bidding latency benchmarks",
-        "ZK proof generation benchmarks (documented)",
-        "Memory profiling for long-running processes",
-        "Baseline metrics established for regression detection"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "performance",
-        "benchmarking"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "PERF-002",
-      "title": "Database Query Optimization",
-      "description": "Optimize all database queries and add proper indexing",
-      "category": "Performance",
-      "priority": "P1-High",
-      "estimatedHours": 32,
-      "dependencies": [
-        "PERF-001"
-      ],
-      "acceptanceCriteria": [
-        "All N+1 query problems identified and fixed",
-        "Cosmos SDK store key prefixes optimized",
-        "Query pagination implemented everywhere",
-        "Index strategy documented",
-        "Query plans analyzed for hot paths",
-        "Performance improvement validated with benchmarks"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "performance",
-        "database",
-        "optimization"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "PERF-003",
-      "title": "Caching Layer Implementation",
-      "description": "Implement intelligent caching for frequently accessed data",
-      "category": "Performance",
-      "priority": "P2-Medium",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "VEID score caching with TTL",
-        "Provider offering caching",
-        "Marketplace order/bid caching",
-        "Cache invalidation strategy",
-        "Cache hit rate monitoring",
-        "Distributed cache support (Redis) for multi-validator setup"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "performance",
-        "caching",
-        "redis"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "SCALE-001",
-      "title": "Load Testing - 1M Nodes Simulation",
-      "description": "Conduct load testing to validate 1M node target scale",
-      "category": "Scalability",
-      "priority": "P0-Critical",
-      "estimatedHours": 80,
-      "dependencies": [
-        "PERF-001",
-        "PERF-002"
-      ],
-      "acceptanceCriteria": [
-        "Load test scenarios for 1M validators",
-        "Marketplace with 100k active orders simulation",
-        "Provider daemon stress test (1k+ providers)",
-        "Network partition recovery testing",
-        "State sync testing at scale",
-        "Performance degradation analysis",
-        "Scaling recommendations documented"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "scalability",
-        "load-testing",
-        "stress-test"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "SCALE-002",
-      "title": "Horizontal Scaling Architecture",
-      "description": "Design and implement horizontal scaling capabilities",
-      "category": "Scalability",
-      "priority": "P1-High",
-      "estimatedHours": 60,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Provider daemon horizontal scaling documented",
-        "Load balancer configuration for RPC endpoints",
-        "State sync optimization for new validators",
-        "Sharding strategy documented (if applicable)",
-        "Multi-region deployment guide",
-        "Auto-scaling policies defined"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "scalability",
-        "architecture",
-        "deployment"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "MONITOR-001",
-      "title": "Observability Stack Implementation",
-      "description": "Implement comprehensive monitoring, logging, and alerting",
-      "category": "Observability",
-      "priority": "P0-Critical",
-      "estimatedHours": 60,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Prometheus metrics for all critical services",
-        "Grafana dashboards for chain health, VEID, marketplace",
-        "Distributed tracing with Jaeger/Tempo",
-        "Centralized logging with ELK/Loki",
-        "Alert rules for critical conditions",
-        "On-call runbook for common issues",
-        "SLA/SLO definitions and tracking"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "observability",
-        "monitoring",
-        "alerting",
-        "critical"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "MONITOR-002",
-      "title": "Security Monitoring & Threat Detection",
-      "description": "Implement security-focused monitoring and threat detection",
-      "category": "Observability",
-      "priority": "P0-Critical",
-      "estimatedHours": 40,
-      "dependencies": [
-        "MONITOR-001"
-      ],
-      "acceptanceCriteria": [
-        "Suspicious transaction pattern detection",
-        "Identity verification fraud detection metrics",
-        "Rate limiting breach alerts",
-        "Cryptographic operation anomaly detection",
-        "Provider daemon compromise detection",
-        "Security event audit log",
-        "Automated incident response playbooks"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "security",
-        "monitoring",
-        "threat-detection"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "DOCS-001",
-      "title": "API Documentation Generation",
-      "description": "Generate comprehensive API documentation for all modules",
-      "category": "Documentation",
-      "priority": "P1-High",
-      "estimatedHours": 40,
-      "dependencies": [
-        "PROTO-001",
-        "PROTO-002",
-        "PROTO-003",
-        "PROTO-004"
-      ],
-      "acceptanceCriteria": [
-        "OpenAPI/Swagger specs for all gRPC endpoints",
-        "Interactive API docs (Swagger UI/Redoc)",
-        "Code examples for common operations",
-        "API versioning strategy documented",
-        "Rate limits and quotas documented",
-        "Authentication/authorization guide"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "documentation",
-        "api"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "DOCS-002",
-      "title": "Operator Runbooks",
-      "description": "Create comprehensive operational runbooks for production",
-      "category": "Documentation",
-      "priority": "P0-Critical",
-      "estimatedHours": 60,
-      "dependencies": [
-        "MONITOR-001"
-      ],
-      "acceptanceCriteria": [
-        "Validator setup and maintenance guide",
-        "Provider daemon operational procedures",
-        "Incident response playbooks",
-        "Disaster recovery procedures",
-        "Backup and restore procedures",
-        "Upgrade procedures (chain upgrades, hotfixes)",
-        "Common troubleshooting scenarios",
-        "Performance tuning guide"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "documentation",
-        "operations",
-        "runbooks"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "DOCS-003",
-      "title": "Security Compliance Documentation",
-      "description": "Document security controls and compliance requirements",
-      "category": "Documentation",
-      "priority": "P0-Critical",
-      "estimatedHours": 40,
-      "dependencies": [
-        "SECURITY-001"
-      ],
-      "acceptanceCriteria": [
-        "Security architecture documentation",
-        "Threat model documentation (STRIDE)",
-        "Compliance matrix (GDPR, SOC2, ISO27001)",
-        "Data classification and handling guide",
-        "Encryption at rest/in transit documentation",
-        "Key management procedures",
-        "Incident response plan",
-        "Penetration test results and remediation"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "documentation",
-        "security",
-        "compliance"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "DOCS-004",
-      "title": "Developer Onboarding Guide",
-      "description": "Create comprehensive developer onboarding documentation",
-      "category": "Documentation",
-      "priority": "P2-Medium",
-      "estimatedHours": 32,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Development environment setup guide",
-        "Architecture overview with diagrams",
-        "Code contribution guidelines",
-        "Testing strategy and guidelines",
-        "Code review checklist",
-        "Module development guide",
-        "Common patterns and anti-patterns",
-        "Debugging guide"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "documentation",
-        "developer-experience"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "INFRA-001",
-      "title": "Production Deployment Automation",
-      "description": "Automate production deployment with IaC and GitOps",
-      "category": "Infrastructure",
-      "priority": "P0-Critical",
-      "estimatedHours": 80,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Terraform/Pulumi IaC for all infrastructure",
-        "GitOps workflow with ArgoCD/Flux",
-        "Multi-environment support (dev, staging, prod)",
-        "Secrets management (Vault/AWS Secrets Manager)",
-        "Blue/green deployment support",
-        "Automated rollback procedures",
-        "Infrastructure testing (Terratest)",
-        "Cost optimization analysis"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "infrastructure",
-        "devops",
-        "automation"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "INFRA-002",
-      "title": "Disaster Recovery & Business Continuity",
-      "description": "Implement comprehensive DR/BC capabilities",
-      "category": "Infrastructure",
-      "priority": "P0-Critical",
-      "estimatedHours": 60,
-      "dependencies": [
-        "INFRA-001"
-      ],
-      "acceptanceCriteria": [
-        "Multi-region deployment capability",
-        "Automated backup procedures (chain state, keys)",
-        "RTO/RPO targets defined and tested",
-        "Failover testing procedures",
-        "Data replication strategy",
-        "Disaster recovery drills documented",
-        "Business continuity plan",
-        "Geographic redundancy validation"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "infrastructure",
-        "disaster-recovery",
-        "business-continuity"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "INFRA-003",
-      "title": "CI/CD Pipeline Hardening",
-      "description": "Enhance CI/CD pipeline with security and quality gates",
-      "category": "Infrastructure",
-      "priority": "P1-High",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Static code analysis (SonarQube, golangci-lint)",
-        "Dependency vulnerability scanning (Snyk, Dependabot)",
-        "Container image scanning (Trivy, Clair)",
-        "License compliance checking",
-        "Code coverage requirements (>80%)",
-        "Integration test gates",
-        "Security scanning in PR pipeline",
-        "Automated changelog generation"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "ci-cd",
-        "security",
-        "quality"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "QUALITY-001",
-      "title": "Code Coverage to 90%+",
-      "description": "Increase code coverage to military-grade 90%+ across all modules",
-      "category": "Quality",
-      "priority": "P1-High",
-      "estimatedHours": 120,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Unit test coverage >90% for all x/* modules",
-        "Integration test coverage >85%",
-        "E2E test coverage for critical user flows",
-        "Edge case and error path coverage",
-        "Coverage reports in CI/CD",
-        "Coverage regression prevention",
-        "Mutation testing for critical paths"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "testing",
-        "quality",
-        "coverage"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "QUALITY-002",
-      "title": "Fuzz Testing Implementation",
-      "description": "Implement fuzz testing for all input validation and parsing",
-      "category": "Quality",
-      "priority": "P1-High",
-      "estimatedHours": 60,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Fuzz tests for all protobuf message parsing",
-        "Fuzz tests for cryptographic operations",
-        "Fuzz tests for VEID scope validation",
-        "Fuzz tests for marketplace order/bid validation",
-        "Fuzz tests for provider daemon input handling",
-        "OSS-Fuzz integration for continuous fuzzing",
-        "Corpus management and minimization",
-        "Crash/hang triage process"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "testing",
-        "security",
-        "fuzzing"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "QUALITY-003",
-      "title": "Chaos Engineering Program",
-      "description": "Implement chaos engineering to validate system resilience",
-      "category": "Quality",
-      "priority": "P2-Medium",
-      "estimatedHours": 80,
-      "dependencies": [
-        "SCALE-001"
-      ],
-      "acceptanceCriteria": [
-        "Chaos Mesh/Litmus integration",
-        "Network partition scenarios",
-        "Node failure scenarios",
-        "Resource exhaustion scenarios",
-        "Byzantine behavior simulation",
-        "Automated chaos experiments in staging",
-        "Resilience metrics and SLOs",
-        "Chaos engineering runbook"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "testing",
-        "resilience",
-        "chaos-engineering"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "COMPLIANCE-001",
-      "title": "GDPR Compliance Implementation",
-      "description": "Ensure full GDPR compliance for PII handling",
-      "category": "Compliance",
-      "priority": "P0-Critical",
-      "estimatedHours": 60,
-      "dependencies": [
-        "SECURITY-004"
-      ],
-      "acceptanceCriteria": [
-        "Data inventory and classification complete",
-        "Right to erasure (RTBF) implementation",
-        "Data portability support",
-        "Consent management implementation",
-        "Privacy by design validation",
-        "Data Processing Agreement (DPA) templates",
-        "Privacy impact assessment (PIA)",
-        "GDPR compliance audit"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "compliance",
-        "gdpr",
-        "privacy"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "COMPLIANCE-002",
-      "title": "SOC 2 Type II Certification Preparation",
-      "description": "Prepare for and achieve SOC 2 Type II certification",
-      "category": "Compliance",
-      "priority": "P1-High",
-      "estimatedHours": 120,
-      "dependencies": [
-        "SECURITY-001",
-        "MONITOR-001",
-        "DOCS-003"
-      ],
-      "acceptanceCriteria": [
-        "Control objectives defined and documented",
-        "Security controls implemented and tested",
-        "Continuous monitoring evidence collection",
-        "Audit readiness assessment",
-        "Gap analysis and remediation",
-        "Third-party auditor engagement",
-        "SOC 2 Type II report obtained",
-        "Continuous compliance program established"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "compliance",
-        "soc2",
-        "audit"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "REFACTOR-001",
-      "title": "Code Quality Refactoring - Technical Debt",
-      "description": "Address accumulated technical debt and code quality issues",
-      "category": "Refactoring",
-      "priority": "P2-Medium",
-      "estimatedHours": 80,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "All TODO comments triaged and addressed",
-        "All FIXME comments resolved",
-        "Deprecated APIs removed or migrated",
-        "Dead code elimination",
-        "Code duplication reduction (DRY principle)",
-        "Cyclomatic complexity reduction",
-        "SonarQube quality gate passed",
-        "Architectural decision records (ADRs) created"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "refactoring",
-        "technical-debt",
-        "code-quality"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "REFACTOR-002",
-      "title": "Error Handling Standardization",
-      "description": "Standardize error handling across all modules",
-      "category": "Refactoring",
-      "priority": "P2-Medium",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Error codes standardized across modules",
-        "Error messages follow consistent format",
-        "Error wrapping with context everywhere",
-        "Sentinel errors defined for common cases",
-        "Error handling best practices documented",
-        "Panic recovery in all goroutines",
-        "Error metrics and alerting",
-        "Client error handling guide"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "refactoring",
-        "error-handling",
-        "reliability"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "UPGRADE-001",
-      "title": "Chain Upgrade Framework Testing",
-      "description": "Comprehensive testing of chain upgrade mechanisms",
-      "category": "Upgrades",
-      "priority": "P0-Critical",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Upgrade handler testing framework",
-        "Breaking change migration testing",
-        "State migration validation",
-        "Rollback procedure testing",
-        "Multi-validator upgrade coordination testing",
-        "Upgrade simulation on testnet",
-        "Upgrade failure scenarios documented",
-        "Emergency upgrade procedures"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "upgrades",
-        "testing",
-        "critical"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "UPGRADE-002",
-      "title": "Backwards Compatibility Testing",
-      "description": "Ensure backwards compatibility for API and protocol changes",
-      "category": "Upgrades",
-      "priority": "P1-High",
-      "estimatedHours": 32,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "API version compatibility matrix",
-        "Protocol version negotiation testing",
-        "Old client compatibility validation",
-        "Deprecation policy defined and enforced",
-        "Breaking change detection in CI/CD",
-        "Compatibility test suite",
-        "Migration guide for breaking changes",
-        "Version support lifecycle defined"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "upgrades",
-        "compatibility",
-        "versioning"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "ECON-001",
-      "title": "Tokenomics Model Validation",
-      "description": "Validate and optimize token economics model",
-      "category": "Economics",
-      "priority": "P1-High",
-      "estimatedHours": 60,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Economic simulation models created",
-        "Inflation/deflation dynamics analyzed",
-        "Staking reward optimization",
-        "Fee market analysis",
-        "Token distribution fairness analysis",
-        "Attack cost analysis (51% attack, spam, etc.)",
-        "Game theory analysis of incentives",
-        "Economic security audit"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "economics",
-        "tokenomics",
-        "game-theory"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "ECON-002",
-      "title": "Marketplace Economics Optimization",
-      "description": "Optimize marketplace pricing, fees, and incentives",
-      "category": "Economics",
-      "priority": "P2-Medium",
-      "estimatedHours": 40,
-      "dependencies": [
-        "ECON-001"
-      ],
-      "acceptanceCriteria": [
-        "Dynamic fee adjustment mechanism",
-        "Provider incentive alignment",
-        "Market maker incentives",
-        "Liquidity provision incentives",
-        "Price discovery mechanism optimization",
-        "Anti-manipulation safeguards",
-        "Market efficiency metrics",
-        "Economic attack simulations"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "economics",
-        "marketplace",
-        "optimization"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "UI-001",
-      "title": "Portal Security Hardening",
-      "description": "Harden portal security with comprehensive security measures",
-      "category": "Frontend",
-      "priority": "P0-Critical",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Content Security Policy (CSP) implementation",
-        "XSS prevention validation",
-        "CSRF protection",
-        "Input sanitization everywhere",
-        "Secure authentication flow (OAuth2/OIDC)",
-        "Session management security",
-        "Security headers (HSTS, X-Frame-Options, etc.)",
-        "Frontend security audit"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "frontend",
-        "security",
-        "portal"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "UI-002",
-      "title": "Accessibility (WCAG 2.1 AA) Compliance",
-      "description": "Ensure portal meets WCAG 2.1 Level AA accessibility standards",
-      "category": "Frontend",
-      "priority": "P2-Medium",
-      "estimatedHours": 60,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Automated accessibility testing (axe, WAVE)",
-        "Keyboard navigation support",
-        "Screen reader compatibility",
-        "Color contrast compliance",
-        "ARIA labels and roles",
-        "Focus management",
-        "Accessibility audit and remediation",
-        "Accessibility testing in CI/CD"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "frontend",
-        "accessibility",
-        "wcag"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "NETWORK-001",
-      "title": "Network Security Hardening",
-      "description": "Implement comprehensive network security measures",
-      "category": "Networking",
-      "priority": "P0-Critical",
-      "estimatedHours": 60,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "P2P network encryption (Noise Protocol)",
-        "Peer authentication and authorization",
-        "DDoS mitigation strategies",
-        "Rate limiting at network layer",
-        "Sybil attack prevention",
-        "Eclipse attack prevention",
-        "Network topology optimization",
-        "Firewall rules and network segmentation",
-        "Intrusion detection system (IDS) integration"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "networking",
-        "security",
-        "p2p"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "NETWORK-002",
-      "title": "Network Partition Recovery Testing",
-      "description": "Test and validate network partition recovery mechanisms",
-      "category": "Networking",
-      "priority": "P1-High",
-      "estimatedHours": 40,
-      "dependencies": [
-        "QUALITY-003"
-      ],
-      "acceptanceCriteria": [
-        "Network partition simulation scenarios",
-        "Consensus recovery validation",
-        "State sync after partition",
-        "Validator set changes during partition",
-        "Message replay prevention",
-        "Split-brain scenario testing",
-        "Network healing time metrics",
-        "Partition recovery runbook"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "networking",
-        "resilience",
-        "testing"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "DATA-001",
-      "title": "Data Retention & Archival Strategy",
-      "description": "Implement data retention policies and archival mechanisms",
-      "category": "Data Management",
-      "priority": "P1-High",
-      "estimatedHours": 40,
-      "dependencies": [
-        "COMPLIANCE-001"
-      ],
-      "acceptanceCriteria": [
-        "Data retention policies defined",
-        "Automated data archival process",
-        "Cold storage for historical data",
-        "Data retrieval procedures",
-        "Compliance with data retention regulations",
-        "Archive encryption and integrity",
-        "Archive testing and validation",
-        "Data lifecycle management documentation"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "data-management",
-        "compliance",
-        "archival"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "DATA-002",
-      "title": "State Pruning Optimization",
-      "description": "Optimize blockchain state pruning for storage efficiency",
-      "category": "Data Management",
-      "priority": "P1-High",
-      "estimatedHours": 32,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Pruning strategy optimized for disk usage",
-        "Historical state query support maintained",
-        "Pruning configuration options",
-        "Snapshot management",
-        "State sync compatibility",
-        "Pruning performance benchmarks",
-        "Disk usage monitoring and alerting",
-        "State growth projections"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "data-management",
-        "optimization",
-        "storage"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "LEGAL-001",
-      "title": "Terms of Service & Privacy Policy",
-      "description": "Draft and review legal documents for production launch",
-      "category": "Legal",
-      "priority": "P0-Critical",
-      "estimatedHours": 40,
-      "dependencies": [
-        "COMPLIANCE-001"
-      ],
-      "acceptanceCriteria": [
-        "Terms of Service drafted and reviewed",
-        "Privacy Policy drafted and reviewed",
-        "Cookie Policy (if applicable)",
-        "Acceptable Use Policy",
-        "Data Processing Agreements",
-        "Legal review completed",
-        "Multi-jurisdiction compliance validation",
-        "User consent mechanisms implemented"
-      ],
-      "assignedTo": "Legal Team",
-      "labels": [
-        "legal",
-        "compliance",
-        "documentation"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "TRAINING-001",
-      "title": "Operator Training Program",
-      "description": "Create comprehensive training program for operators",
-      "category": "Training",
-      "priority": "P1-High",
-      "estimatedHours": 80,
-      "dependencies": [
-        "DOCS-002"
-      ],
-      "acceptanceCriteria": [
-        "Validator operator training curriculum",
-        "Provider daemon operator training",
-        "Security best practices training",
-        "Incident response training",
-        "Hands-on labs and simulations",
-        "Certification program",
-        "Training materials (videos, docs, exercises)",
-        "Quarterly refresher training schedule"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "training",
-        "operations",
-        "knowledge-transfer"
-      ],
-      "column": "backlog"
-    },
-    {
-      "id": "BUGFIX-001",
-      "title": "Critical Bug Triage and Remediation",
-      "description": "Triage and fix all known critical and high-severity bugs",
-      "category": "Bug Fixes",
-      "priority": "P0-Critical",
-      "estimatedHours": 60,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "All P0 bugs fixed",
-        "All P1 bugs triaged and fixed or scheduled",
-        "Bug fix regression tests added",
-        "Root cause analysis for critical bugs",
-        "Bug fix validation in staging",
-        "Hotfix deployment procedures tested",
-        "Bug tracking and metrics",
-        "Bug SLA enforcement"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "bugfix",
-        "critical",
-        "quality"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "COMPLETE-VE-3050",
-      "title": "VE-3050: Staking Keeper Test Re-enablement",
-      "description": "Already completed - move to done",
-      "category": "Testing",
-      "priority": "P1-High",
-      "estimatedHours": 0,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Tests passing"
-      ],
-      "assignedTo": "Completed",
-      "labels": [
-        "testing",
-        "completed"
-      ],
-      "column": "done"
-    },
-    {
-      "id": "COMPLETE-VE-3051",
-      "title": "VE-3051: Privacy Proofs Real Implementation",
-      "description": "Already completed - move to done",
-      "category": "Security",
-      "priority": "P2-Medium",
-      "estimatedHours": 0,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "ZK proofs implemented"
-      ],
-      "assignedTo": "Completed",
-      "labels": [
-        "security",
-        "cryptography",
-        "completed"
-      ],
-      "column": "done"
-    },
-    {
       "id": "COMPLETE-VE-3057",
       "title": "VE-3057: SLURM Known Hosts Verification",
       "description": "Already completed - move to done",
@@ -1275,6 +2302,31 @@
         "security",
         "tee",
         "completed"
+      ],
+      "column": "done"
+    },
+    {
+      "id": "TEST-003",
+      "title": "VE-3059: Payment Service Real Implementations",
+      "description": "Replace payment service stubs with real implementations",
+      "category": "Testing",
+      "priority": "P2-Medium",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Real payment validation implemented",
+        "Actual refund logic implemented",
+        "3D Secure callback handling complete",
+        "Adyen adapter real SDK integration",
+        "All payment service tests pass",
+        "Integration tests with sandbox APIs"
+      ],
+      "assignedTo": "Completed",
+      "labels": [
+        "adyen",
+        "completed",
+        "integration",
+        "payment"
       ],
       "column": "done"
     },
@@ -1331,725 +2383,22 @@
         "completed"
       ],
       "column": "done"
-    },
-    {
-      "id": "TEE-HW-001",
-      "title": "Deploy TEE Hardware & Attestation in Production",
-      "description": "Provision SGX/SEV-SNP/Nitro hardware and validate production attestation with operational runbooks.",
-      "category": "Security",
-      "priority": "P0-Critical",
-      "estimatedHours": 80,
-      "dependencies": [
-        "SECURITY-002"
-      ],
-      "acceptanceCriteria": [
-        "Production SGX/SEV/Nitro hardware provisioned",
-        "Remote attestation verified end-to-end",
-        "Enclave health monitoring and alerts configured",
-        "Failover strategy across TEE types documented"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "security",
-        "tee",
-        "hardware"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "PAY-001",
-      "title": "Implement Real Price Feed Integration",
-      "description": "Replace placeholder conversion rates with real price feeds (CoinGecko/Chainlink/Pyth) with caching and retries.",
-      "category": "Payments",
-      "priority": "P0-Critical",
-      "estimatedHours": 24,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Price feeds queried from configured source(s)",
-        "Caching + retry logic implemented",
-        "Quote source and timestamp recorded",
-        "Failure fallback documented and monitored"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "payment",
-        "price-feed",
-        "conversion"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "PAY-002",
-      "title": "Implement Conversion Execution & Treasury Transfer",
-      "description": "Execute conversion settlement on-chain and persist conversion ledger entries.",
-      "category": "Payments",
-      "priority": "P0-Critical",
-      "estimatedHours": 40,
-      "dependencies": [
-        "PAY-001"
-      ],
-      "acceptanceCriteria": [
-        "On-chain transfer executed for conversion",
-        "Idempotent conversion execution",
-        "Ledger persistence with audit trail",
-        "Clear failure handling and reconciliation flow"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "payment",
-        "conversion",
-        "treasury"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "PAY-003",
-      "title": "Dispute Lifecycle Persistence & Gateway Actions",
-      "description": "Persist disputes and wire Stripe/Adyen dispute actions (submit evidence, accept, status updates).",
-      "category": "Payments",
-      "priority": "P1-High",
-      "estimatedHours": 24,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Dispute records persisted in store",
-        "Gateway dispute actions wired",
-        "Webhooks update dispute state",
-        "Audit trail for dispute actions"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "payment",
-        "disputes",
-        "webhooks"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "ARTIFACT-001",
-      "title": "Implement Waldur Artifact Store Backend",
-      "description": "Replace stubbed Waldur artifact backend with real storage API integration (upload/download/pin/stream).",
-      "category": "Data Management",
-      "priority": "P1-High",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Real Waldur storage API integration",
-        "Streaming upload/download for large artifacts",
-        "Auth and quota enforcement",
-        "Production config and health checks"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "artifact-store",
-        "waldur",
-        "storage"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "NLI-001",
-      "title": "Redis-Backed NLI Sessions & Rate Limiting",
-      "description": "Move NLI session state and rate limits to Redis for distributed scaling.",
-      "category": "Scalability",
-      "priority": "P1-High",
-      "estimatedHours": 24,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Redis-backed session store with TTL",
-        "Distributed rate limiting (reuse pkg/ratelimit)",
-        "Metrics for session count and rate-limit hits"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "nli",
-        "redis",
-        "scalability"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "PROVIDER-STREAM-001",
-      "title": "Replace Provider Daemon Polling with Streaming",
-      "description": "Use WebSocket/gRPC event subscriptions for orders/config instead of polling loops.",
-      "category": "Scalability",
-      "priority": "P1-High",
-      "estimatedHours": 40,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "WebSocket/gRPC subscriptions to chain events",
-        "Checkpointed replay on reconnect",
-        "Polling fallback only for recovery"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "provider-daemon",
-        "streaming",
-        "scalability"
-      ],
-      "column": "ready"
-    },
-    {
-      "id": "MOAB-SSH-001",
-      "title": "Enforce MOAB SSH Known Hosts Verification",
-      "description": "Replace InsecureIgnoreHostKey with known_hosts/pinned key verification.",
-      "category": "Security",
-      "priority": "P1-High",
-      "estimatedHours": 16,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "Known_hosts or pinned key verification implemented",
-        "Configurable trust store per provider",
-        "Security tests for MITM protection"
-      ],
-      "assignedTo": null,
-      "labels": [
-        "security",
-        "ssh",
-        "moab"
-      ],
-      "column": "ready"
-    },
-    {
-      "description": "Create production-grade data ingestion and labeling pipeline for VEID identity scoring.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 120,
-      "title": "Build Production VEID Training Dataset + Labeling Pipeline",
-      "category": "VEID ML",
-      "labels": [
-        "veid",
-        "ml",
-        "dataset",
-        "training"
-      ],
-      "acceptanceCriteria": [
-        "Production data ingestion and labeling process implemented",
-        "PII-safe storage and access controls enforced",
-        "Dataset versioning and provenance tracking",
-        "Reproducible train/validation/test splits"
-      ],
-      "id": "VEID-ML-001",
-      "dependencies": []
-    },
-    {
-      "description": "Train the VEID model and export a TensorFlow SavedModel with pinned hash/version.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 80,
-      "title": "Train + Export TensorFlow SavedModel (Trust Score)",
-      "category": "VEID ML",
-      "labels": [
-        "veid",
-        "ml",
-        "model",
-        "tensorflow"
-      ],
-      "acceptanceCriteria": [
-        "Model trained and exported as TensorFlow SavedModel",
-        "Model hash recorded and pinned",
-        "Artifact stored in approved registry/object store",
-        "On-chain model version updated"
-      ],
-      "id": "VEID-ML-002",
-      "dependencies": [
-        "VEID-ML-001"
-      ]
-    },
-    {
-      "description": "Replace simulated sidecar and stubbed scoring with real deterministic inference.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 60,
-      "title": "Implement Real Inference Runtime (Sidecar/Embedded TF)",
-      "category": "VEID ML",
-      "labels": [
-        "veid",
-        "ml",
-        "inference",
-        "sidecar"
-      ],
-      "acceptanceCriteria": [
-        "Real gRPC sidecar or embedded TensorFlow inference implemented",
-        "Deterministic conformance tests across validators",
-        "Health checks and observability wired",
-        "Consensus input/output hashing validated"
-      ],
-      "id": "VEID-ML-003",
-      "dependencies": [
-        "VEID-ML-002"
-      ]
-    },
-    {
-      "description": "Replace hash-based placeholders with real biometric/document feature extraction.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 80,
-      "title": "Implement Real Feature Extraction (Face/OCR/Liveness)",
-      "category": "VEID ML",
-      "labels": [
-        "veid",
-        "ml",
-        "feature-extraction",
-        "ocr"
-      ],
-      "acceptanceCriteria": [
-        "Face embeddings extracted from selfie/video scopes",
-        "OCR + document quality features extracted",
-        "Liveness checks integrated",
-        "Feature pipeline aligned with training inputs"
-      ],
-      "id": "VEID-ML-004",
-      "dependencies": [
-        "VEID-ML-001",
-        "VEID-ML-002"
-      ]
-    },
-    {
-      "description": "Implement SSO/OIDC verification service with signed attestations for on-chain linkage.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 40,
-      "title": "SSO/OIDC Verification Service",
-      "category": "VEID Verification",
-      "labels": [
-        "veid",
-        "sso",
-        "oidc"
-      ],
-      "acceptanceCriteria": [
-        "OIDC/SAML verification service implemented",
-        "Signed attestations submitted on-chain",
-        "Issuer configuration + replay protection",
-        "Revocation flows supported"
-      ],
-      "id": "VEID-VERIF-001",
-      "dependencies": []
-    },
-    {
-      "description": "Implement email verification delivery and on-chain attestation pipeline.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 24,
-      "title": "Email Verification Delivery + Attestation",
-      "category": "VEID Verification",
-      "labels": [
-        "veid",
-        "email",
-        "verification"
-      ],
-      "acceptanceCriteria": [
-        "Email OTP/link delivery service implemented",
-        "Signed verification attestation submitted on-chain",
-        "Rate limiting + audit trail"
-      ],
-      "id": "VEID-VERIF-002",
-      "dependencies": []
-    },
-    {
-      "description": "Integrate SMS gateway and anti-fraud checks for SMS verification.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 32,
-      "title": "SMS Verification Delivery + Anti-Fraud",
-      "category": "VEID Verification",
-      "labels": [
-        "veid",
-        "sms",
-        "verification"
-      ],
-      "acceptanceCriteria": [
-        "SMS OTP delivery implemented",
-        "Signed verification attestation submitted on-chain",
-        "VoIP detection + resend throttling"
-      ],
-      "id": "VEID-VERIF-003",
-      "dependencies": []
-    },
-    {
-      "description": "Integrate mobile capture (document + selfie + liveness) with secure scope packaging.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 60,
-      "title": "Mobile Capture + Biometric Pipeline Integration",
-      "category": "VEID Verification",
-      "labels": [
-        "veid",
-        "mobile",
-        "biometric"
-      ],
-      "acceptanceCriteria": [
-        "Mobile capture pipeline integrated",
-        "Secure upload + encrypted scope packaging",
-        "Device attestation + capture protocol validation"
-      ],
-      "id": "VEID-VERIF-004",
-      "dependencies": []
-    },
-    {
-      "description": "Deploy and manage SLURM controllers/compute nodes across provider K8s clusters.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 120,
-      "title": "Automate SLURM Deployment Across Kubernetes Clusters",
-      "category": "HPC",
-      "labels": [
-        "hpc",
-        "slurm",
-        "kubernetes"
-      ],
-      "acceptanceCriteria": [
-        "Automated SLURM controller/compute deployment on K8s",
-        "Cluster bootstrap + join/leave workflows",
-        "Provider-configurable cluster templates"
-      ],
-      "id": "HPC-SLURM-001",
-      "dependencies": []
-    },
-    {
-      "description": "Provision HPC nodes and feed heartbeat/latency metrics into on-chain metadata.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 80,
-      "title": "Node Registration + Heartbeat Pipeline",
-      "category": "HPC",
-      "labels": [
-        "hpc",
-        "node",
-        "registration",
-        "latency"
-      ],
-      "acceptanceCriteria": [
-        "Node registration flow implemented",
-        "Heartbeat + capacity reporting",
-        "Latency measurement ingestion",
-        "Auto-deactivation on missed heartbeats"
-      ],
-      "id": "HPC-NODE-001",
-      "dependencies": [
-        "HPC-SLURM-001"
-      ]
-    },
-    {
-      "description": "Wire HPC adapters into provider daemon and post job lifecycle updates on-chain.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 80,
-      "title": "Integrate SLURM/MOAB/OOD Adapters with Provider Daemon",
-      "category": "HPC",
-      "labels": [
-        "hpc",
-        "slurm",
-        "moab",
-        "ood",
-        "provider-daemon"
-      ],
-      "acceptanceCriteria": [
-        "Provider daemon submits/monitors jobs via adapters",
-        "Job lifecycle updates posted on-chain",
-        "Secure credential management for HPC backends"
-      ],
-      "id": "HPC-ADAPTER-001",
-      "dependencies": [
-        "HPC-SLURM-001"
-      ]
-    },
-    {
-      "description": "Create a library of validated SLURM workload templates and custom workload packaging.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 60,
-      "title": "Preconfigured Workload Library + Custom Packaging",
-      "category": "HPC",
-      "labels": [
-        "hpc",
-        "slurm",
-        "workloads"
-      ],
-      "acceptanceCriteria": [
-        "Validated SLURM job templates (MPI/GPU/batch)",
-        "Custom workload packaging + validation",
-        "Signed workload manifests stored in artifact store"
-      ],
-      "id": "HPC-WORKLOAD-001",
-      "dependencies": []
-    },
-    {
-      "description": "Ingest HPC usage metrics and generate billing + reward distribution.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 80,
-      "title": "Usage Accounting → Billing + Rewards",
-      "category": "HPC",
-      "labels": [
-        "hpc",
-        "billing",
-        "rewards"
-      ],
-      "acceptanceCriteria": [
-        "Usage metrics ingested from SLURM/MOAB/OOD",
-        "On-chain billing records generated",
-        "Reward distribution tied to usage metrics"
-      ],
-      "id": "HPC-BILL-001",
-      "dependencies": [
-        "HPC-ADAPTER-001"
-      ]
-    },
-    {
-      "description": "Ensure provider daemon enforces x/hpc scheduling decisions for job placement.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 40,
-      "title": "Enforce On-Chain Scheduling in Job Placement",
-      "category": "HPC",
-      "labels": [
-        "hpc",
-        "routing",
-        "scheduling"
-      ],
-      "acceptanceCriteria": [
-        "Provider daemon consumes scheduling decisions",
-        "Job placement respects proximity/capacity scores",
-        "Fallback routing with audit reasons"
-      ],
-      "id": "HPC-ROUTE-001",
-      "dependencies": [
-        "HPC-NODE-001"
-      ]
-    },
-    {
-      "description": "Sync on-chain offerings to Waldur automatically; remove manual offering map.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 60,
-      "title": "Automated Offering Sync (Chain → Waldur)",
-      "category": "Marketplace",
-      "labels": [
-        "marketplace",
-        "waldur",
-        "sync"
-      ],
-      "acceptanceCriteria": [
-        "On-chain offering create/update triggers Waldur sync",
-        "Sync status stored on-chain with retries",
-        "Manual mapping removed"
-      ],
-      "id": "MKP-WALDUR-001",
-      "dependencies": []
-    },
-    {
-      "description": "Import Waldur service/VM listings into on-chain marketplace.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 40,
-      "title": "Listing Ingestion (Waldur → Chain)",
-      "category": "Marketplace",
-      "labels": [
-        "marketplace",
-        "waldur",
-        "listing"
-      ],
-      "acceptanceCriteria": [
-        "Waldur offerings imported into on-chain marketplace",
-        "Metadata + pricing normalized",
-        "Provider ownership validated"
-      ],
-      "id": "MKP-WALDUR-002",
-      "dependencies": [
-        "MKP-WALDUR-001"
-      ]
-    },
-    {
-      "description": "Implement start/stop/resize/terminate via Waldur APIs and signed callbacks.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 80,
-      "title": "Resource Lifecycle Control",
-      "category": "Marketplace",
-      "labels": [
-        "marketplace",
-        "waldur",
-        "lifecycle"
-      ],
-      "acceptanceCriteria": [
-        "Lifecycle operations supported via Waldur",
-        "Signed callbacks enforce on-chain transitions",
-        "Audit trail for lifecycle events"
-      ],
-      "id": "MKP-WALDUR-003",
-      "dependencies": [
-        "MKP-WALDUR-001"
-      ]
-    },
-    {
-      "description": "Wire usage reporting to on-chain settlement and invoicing.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 40,
-      "title": "Usage Reporting → Settlement",
-      "category": "Marketplace",
-      "labels": [
-        "marketplace",
-        "usage",
-        "settlement"
-      ],
-      "acceptanceCriteria": [
-        "Provider daemon submits usage reports",
-        "Settlement module consumes usage",
-        "Invoice/payout events emitted"
-      ],
-      "id": "MKP-WALDUR-004",
-      "dependencies": [
-        "MKP-WALDUR-003"
-      ]
-    },
-    {
-      "description": "Implement encrypted support request module with access control and lifecycle events.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 60,
-      "title": "On-Chain Support Request Module (Encrypted)",
-      "category": "Support",
-      "labels": [
-        "support",
-        "encryption",
-        "tickets"
-      ],
-      "acceptanceCriteria": [
-        "Support request messages + encrypted payloads",
-        "Access control for support staff/customer",
-        "Lifecycle events for ticket state"
-      ],
-      "id": "SUPPORT-001",
-      "dependencies": []
-    },
-    {
-      "description": "Bridge support request events to Jira/Waldur service desk with bi-directional sync.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 32,
-      "title": "Jira/Waldur Service Desk Integration",
-      "category": "Support",
-      "labels": [
-        "support",
-        "jira",
-        "waldur"
-      ],
-      "acceptanceCriteria": [
-        "Support request events create/update tickets",
-        "Bi-directional status sync",
-        "Audit trail for ticket actions"
-      ],
-      "id": "SUPPORT-002",
-      "dependencies": [
-        "SUPPORT-001"
-      ]
-    },
-    {
-      "description": "Generate usage-based invoices and persist immutable ledger records.",
-      "priority": "P0-Critical",
-      "assignedTo": null,
-      "column": "ready",
-      "estimatedHours": 60,
-      "title": "Invoice Generation + Ledger Persistence",
-      "category": "Billing",
-      "labels": [
-        "billing",
-        "invoices",
-        "ledger"
-      ],
-      "acceptanceCriteria": [
-        "Invoices generated for marketplace + HPC usage",
-        "Immutable invoice ledger records on-chain",
-        "Invoice export format (PDF/JSON)"
-      ],
-      "id": "BILL-001",
-      "dependencies": [
-        "HPC-BILL-001",
-        "MKP-WALDUR-004"
-      ]
-    },
-    {
-      "description": "Wire invoices to escrow settlement and provider payout flows.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 40,
-      "title": "Settlement + Payout Integration",
-      "category": "Billing",
-      "labels": [
-        "billing",
-        "settlement",
-        "payout"
-      ],
-      "acceptanceCriteria": [
-        "Escrow release triggered by invoice settlement",
-        "Provider payouts + treasury accounting",
-        "Dispute holdbacks and resolution paths"
-      ],
-      "id": "BILL-002",
-      "dependencies": [
-        "BILL-001"
-      ]
-    },
-    {
-      "description": "Implement fiat off-ramp integration (PayPal/ACH) for token-to-fiat payouts.",
-      "priority": "P1-High",
-      "assignedTo": null,
-      "column": "backlog",
-      "estimatedHours": 40,
-      "title": "Fiat Off-Ramp (PayPal/ACH) Integration",
-      "category": "Payments",
-      "labels": [
-        "payment",
-        "fiat",
-        "paypal"
-      ],
-      "acceptanceCriteria": [
-        "Off-ramp provider integration implemented",
-        "KYC/AML compliance hooks",
-        "Audit trail + reconciliation reporting"
-      ],
-      "id": "PAY-004",
-      "dependencies": [
-        "PAY-002"
-      ]
     }
   ],
   "metrics": {
-    "totalTasks": 83,
+    "totalTasks": 95,
     "completedTasks": 15,
     "inProgressTasks": 0,
-    "remainingTasks": 68,
-    "totalEstimatedHours": 3992.0,
+    "remainingTasks": 80,
+    "totalEstimatedHours": 4416.0,
     "completedHours": 328.0,
-    "criticalTasks": 31,
-    "highPriorityTasks": 38,
+    "criticalTasks": 38,
+    "highPriorityTasks": 43,
     "mediumPriorityTasks": 14,
-    "productionReadiness": "68%"
+    "productionReadiness": "7%"
   },
   "summary": {
-    "description": "Updated 2026-01-30: Spec-critical gaps identified (VEID ML pipeline, HPC SLURM automation, marketplace/Waldur end-to-end, support desk, billing/invoicing), plus hardening items (TEE hardware, payment conversion, artifact store, NLI sessions, provider streaming).",
+    "description": "Updated 2026-01-30: Dependency-aware execution waves added; foundational schemas, verification infra, and hardening tasks expanded for ML/HPC/marketplace/billing/support.",
     "keyFocusAreas": [
       "VEID ML Pipeline + Deterministic Inference",
       "HPC SLURM Automation + Node Registration",
@@ -2062,6 +2411,6 @@
       "Load Testing (1M node simulation)"
     ],
     "estimatedCompletionTime": "2-4 months for spec-critical gaps; 2-3 months for compliance",
-    "criticalPath": "VEID ML → HPC SLURM → Marketplace/Waldur → Billing/Support → TEE Hardware → Payment Conversion → Load Testing → SOC 2"
+    "criticalPath": "VEID ML -> HPC SLURM -> Marketplace/Waldur -> Billing/Support -> TEE Hardware -> Payment Conversion -> Load Testing -> SOC 2"
   }
 }

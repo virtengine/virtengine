@@ -1,37 +1,60 @@
-package keeper
+package keeper_test
 
 import (
 	"testing"
 
-	storetypes "cosmossdk.io/store/types"
-	"github.com/cosmos/cosmos-sdk/codec"
-	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1"
 	mv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
-	testutil "github.com/virtengine/virtengine/testutil/keeper"
+	"github.com/virtengine/virtengine/sdk/go/testutil"
+
+	"github.com/virtengine/virtengine/testutil/state"
+	"github.com/virtengine/virtengine/x/market/keeper"
 )
+
+func setupBenchKeeper(b *testing.B) (sdk.Context, keeper.IKeeper) {
+	b.Helper()
+
+	suite := state.SetupTestSuite(b)
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
+
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToAccount", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+	})
+
+	return suite.Context(), suite.MarketKeeper()
+}
 
 // BenchmarkProviderHasActiveLeases benchmarks the provider active lease check
 // using the secondary index vs full scan.
 func BenchmarkProviderHasActiveLeases(b *testing.B) {
-	ctx, keeper := testutil.MarketKeeper(b)
+	ctx, k := setupBenchKeeper(b)
 
 	// Create test provider address
 	provider := testutil.AccAddress(b)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keeper.ProviderHasActiveLeases(ctx, provider)
+		_ = k.ProviderHasActiveLeases(ctx, provider)
 	}
 }
 
 // BenchmarkGetOrder benchmarks single order retrieval
 func BenchmarkGetOrder(b *testing.B) {
-	ctx, keeper := testutil.MarketKeeper(b)
+	ctx, k := setupBenchKeeper(b)
 
 	// Create a test order
 	gid := dtypes.GroupID{
@@ -39,20 +62,20 @@ func BenchmarkGetOrder(b *testing.B) {
 		DSeq:  1,
 		GSeq:  1,
 	}
-	spec := testutil.DefaultGroupSpec()
+	spec := testutil.GroupSpec(b)
 
-	order, err := keeper.CreateOrder(ctx, gid, spec)
+	order, err := k.CreateOrder(ctx, gid, spec)
 	require.NoError(b, err)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keeper.GetOrder(ctx, order.ID)
+		_, _ = k.GetOrder(ctx, order.ID)
 	}
 }
 
 // BenchmarkWithOrders benchmarks full order iteration
 func BenchmarkWithOrders(b *testing.B) {
-	ctx, keeper := testutil.MarketKeeper(b)
+	ctx, k := setupBenchKeeper(b)
 
 	// Create multiple test orders
 	for i := 0; i < 100; i++ {
@@ -61,14 +84,14 @@ func BenchmarkWithOrders(b *testing.B) {
 			DSeq:  uint64(i + 1),
 			GSeq:  1,
 		}
-		spec := testutil.DefaultGroupSpec()
-		_, _ = keeper.CreateOrder(ctx, gid, spec)
+		spec := testutil.GroupSpec(b)
+		_, _ = k.CreateOrder(ctx, gid, spec)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		count := 0
-		keeper.WithOrders(ctx, func(order types.Order) bool {
+		k.WithOrders(ctx, func(order types.Order) bool {
 			count++
 			return false
 		})
@@ -77,7 +100,7 @@ func BenchmarkWithOrders(b *testing.B) {
 
 // BenchmarkWithBidsForOrder benchmarks bid iteration for a specific order
 func BenchmarkWithBidsForOrder(b *testing.B) {
-	ctx, keeper := testutil.MarketKeeper(b)
+	ctx, k := setupBenchKeeper(b)
 
 	// Create a test order
 	gid := dtypes.GroupID{
@@ -85,8 +108,8 @@ func BenchmarkWithBidsForOrder(b *testing.B) {
 		DSeq:  1,
 		GSeq:  1,
 	}
-	spec := testutil.DefaultGroupSpec()
-	order, err := keeper.CreateOrder(ctx, gid, spec)
+	spec := testutil.GroupSpec(b)
+	order, err := k.CreateOrder(ctx, gid, spec)
 	require.NoError(b, err)
 
 	// Create multiple bids for the order
@@ -100,13 +123,13 @@ func BenchmarkWithBidsForOrder(b *testing.B) {
 			BSeq:     uint32(i + 1),
 		}
 		price := sdk.NewDecCoin("uakt", sdk.NewInt(1000))
-		_, _ = keeper.CreateBid(ctx, bidID, price, types.ResourcesOffer{})
+		_, _ = k.CreateBid(ctx, bidID, price, types.ResourcesOffer{})
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		count := 0
-		keeper.WithBidsForOrder(ctx, order.ID, types.BidOpen, func(bid types.Bid) bool {
+		k.WithBidsForOrder(ctx, order.ID, types.BidOpen, func(bid types.Bid) bool {
 			count++
 			return false
 		})
@@ -115,7 +138,7 @@ func BenchmarkWithBidsForOrder(b *testing.B) {
 
 // BenchmarkBidCountForOrder benchmarks counting bids for an order
 func BenchmarkBidCountForOrder(b *testing.B) {
-	ctx, keeper := testutil.MarketKeeper(b)
+	ctx, k := setupBenchKeeper(b)
 
 	// Create a test order
 	gid := dtypes.GroupID{
@@ -123,8 +146,8 @@ func BenchmarkBidCountForOrder(b *testing.B) {
 		DSeq:  1,
 		GSeq:  1,
 	}
-	spec := testutil.DefaultGroupSpec()
-	order, err := keeper.CreateOrder(ctx, gid, spec)
+	spec := testutil.GroupSpec(b)
+	order, err := k.CreateOrder(ctx, gid, spec)
 	require.NoError(b, err)
 
 	// Create multiple bids
@@ -138,11 +161,11 @@ func BenchmarkBidCountForOrder(b *testing.B) {
 			BSeq:     uint32(i + 1),
 		}
 		price := sdk.NewDecCoin("uakt", sdk.NewInt(1000))
-		_, _ = keeper.CreateBid(ctx, bidID, price, types.ResourcesOffer{})
+		_, _ = k.CreateBid(ctx, bidID, price, types.ResourcesOffer{})
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keeper.BidCountForOrder(ctx, order.ID)
+		_ = k.BidCountForOrder(ctx, order.ID)
 	}
 }
