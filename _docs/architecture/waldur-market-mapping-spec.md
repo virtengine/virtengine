@@ -1253,7 +1253,198 @@ virtengine tx market clear-waldur-queue --cancel
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-01-30 | Added Waldur-to-Chain ingestion specification (VE-3D) |
 | 1.0.0 | 2026-01-30 | Initial specification |
+
+---
+
+## VE-3D: Waldur-to-Chain Ingestion
+
+This section documents the ingestion of Waldur offerings into the on-chain marketplace.
+
+### Overview
+
+The ingestion worker fetches offerings from Waldur's marketplace API and creates corresponding on-chain offerings, enabling decentralized visibility of Waldur-managed resources.
+
+### Architecture
+
+```
+Waldur Platform                    VirtEngine Chain
++-----------------+                +------------------+
+| Marketplace API |   Ingest       | x/market module  |
+| - Offerings     |--------------->| - Offerings      |
++-----------------+                +------------------+
+        |                                   ^
+        v                                   |
++-----------------+                +------------------+
+| pkg/waldur      |                | pkg/provider_    |
+| MarketplaceClient|               | daemon/          |
+|                 |--------------->| WaldurIngest     |
+|                 |                | Worker           |
++-----------------+                +------------------+
+```
+
+### Ingestion Workflow
+
+1. **Fetch**: Worker polls Waldur API with pagination and rate limiting
+2. **Validate**: Each offering is validated for required fields and provider mapping
+3. **Map**: Waldur fields are mapped to on-chain schema
+4. **Normalize**: Pricing, regions, and specs are normalized
+5. **Submit**: Offerings are created/updated on-chain via the OfferingSubmitter
+6. **Track**: Sync state is persisted for drift detection
+
+### Configuration
+
+```yaml
+waldur_ingest:
+  enabled: true
+  
+  # Provider mapping
+  provider_address: "virtengine1abc..."
+  waldur_customer_uuid: "550e8400-e29b-41d4-a716-..."
+  
+  # Schedules
+  ingest_interval_seconds: 3600   # Full ingest every hour
+  reconcile_interval_seconds: 300 # Reconcile every 5 minutes
+  reconcile_on_startup: true
+  
+  # Pagination and rate limiting
+  page_size: 50
+  rate_limit_per_second: 2.0
+  rate_limit_burst: 5
+  
+  # Retry policy
+  max_retries: 5
+  retry_backoff_seconds: 30
+  max_backoff_seconds: 3600
+  
+  # Filters
+  only_active_offerings: true
+  skip_shared_offerings: false
+  skip_non_billable_offerings: false
+  
+  # Mapping configuration
+  category_map:
+    "waldur-cat-uuid-1": "compute"
+    "waldur-cat-uuid-2": "storage"
+  customer_provider_map:
+    "waldur-customer-uuid": "virtengine1provider..."
+```
+
+### Field Mapping (Waldur → Chain)
+
+| Waldur Field | Chain Field | Transform |
+|--------------|-------------|-----------|
+| `uuid` | (tracking only) | Stored in IngestSyncRecord |
+| `name` | `Name` | Direct (max 255 chars) |
+| `description` | `Description` | Direct |
+| `type` | `Category` | Map via TypeMap config |
+| `state` | `State` | Map: Active→Active, Paused→Paused, Archived→Terminated |
+| `components[].price` | `Pricing.BasePrice` | Multiply by CurrencyDenominator |
+| `attributes.regions` | `Regions` | Direct array copy |
+| `attributes.tags` | `Tags` | Direct array copy |
+| `attributes.spec_*` | `Specifications` | Strip prefix |
+| `attributes.ve_min_identity_score` | `IdentityRequirement.MinScore` | Direct |
+| `attributes.ve_require_mfa` | `RequireMFAForOrders` | Direct |
+| `customer_uuid` | `ID.ProviderAddress` | Lookup via CustomerProviderMap |
+
+### Provider Ownership Validation
+
+Before ingestion, the worker validates:
+
+1. **Provider Mapping**: Waldur `customer_uuid` must be mapped to a valid provider address
+2. **Provider Registration**: Provider must be registered on-chain (if required)
+3. **VEID Score**: Provider must meet minimum identity score (if configured)
+
+```go
+// Validation flow
+validation := offering.Validate(cfg)
+if !validation.Valid {
+    state.MarkSkipped(waldurUUID, validation.Errors)
+    continue
+}
+if validation.NeedsProviderRegistration {
+    // Provider must register first
+    continue
+}
+```
+
+### State Tracking
+
+The `WaldurIngestState` tracks:
+
+- **Records**: Map of Waldur UUID → IngestRecord
+- **Dead Letter Queue**: Offerings that failed max retries
+- **Cursor**: Pagination state for resumable ingestion
+- **Metrics**: Ingestion statistics
+
+State is persisted to disk and survives restarts.
+
+### Drift Detection
+
+The reconciliation loop detects drift by:
+
+1. Comparing Waldur checksum with stored checksum
+2. Identifying offerings in `pending`, `out_of_sync`, or `retrying` states
+3. Re-queuing affected offerings for ingestion
+
+### Audit Logging
+
+All operations are logged via `WaldurIngestAuditLogger`:
+
+```json
+{
+  "timestamp": "2026-01-30T10:00:00Z",
+  "waldur_uuid": "550e8400-...",
+  "offering_name": "Basic Compute",
+  "action": "create",
+  "success": true,
+  "duration_ns": 1500000000,
+  "provider_address": "virtengine1..."
+}
+```
+
+### Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `waldur_ingests_total` | Counter | Total ingestion attempts |
+| `waldur_ingests_successful` | Counter | Successful ingestions |
+| `waldur_ingests_failed` | Counter | Failed ingestion attempts |
+| `waldur_ingests_dead_lettered` | Counter | Dead-lettered offerings |
+| `waldur_offerings_created` | Counter | Offerings created on-chain |
+| `waldur_offerings_updated` | Counter | Offerings updated on-chain |
+| `waldur_drift_detected` | Counter | Drift detections |
+| `waldur_ingest_duration_seconds` | Histogram | Ingestion duration |
+
+### Operational Commands
+
+```bash
+# Check ingestion status
+virtengine query market waldur-ingest-status
+
+# Force re-ingestion of specific offering
+virtengine tx market force-waldur-ingest --waldur-uuid <uuid>
+
+# Reprocess dead-lettered offerings
+virtengine tx market reprocess-dead-letter --waldur-uuid <uuid>
+
+# View ingestion metrics
+curl http://localhost:9090/metrics | grep waldur_ingest
+```
+
+### Error Handling
+
+| Error Type | Action | Retry |
+|------------|--------|-------|
+| Validation failed | Mark skipped | No |
+| Provider not mapped | Mark skipped | No |
+| Chain submission failed | Retry with backoff | Yes |
+| Rate limited | Wait and retry | Yes |
+| Network error | Retry with backoff | Yes |
+| Max retries exceeded | Move to dead letter | No |
+
+---
 
 ### References
 
@@ -1273,3 +1464,4 @@ virtengine tx market clear-waldur-queue --cancel
 | VEID | VirtEngine Identity - the on-chain identity verification system |
 | Sync Record | Tracks synchronization state between chain and Waldur |
 | Callback | An action initiated by Waldur that affects on-chain state |
+| Ingestion | The process of importing Waldur offerings onto the chain |
