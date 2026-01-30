@@ -1514,6 +1514,233 @@ virtengine enclave health-check --comprehensive
 
 ---
 
+## Enclave Factory and Configuration
+
+### Using the Enclave Factory
+
+The `enclave_runtime` package provides a factory for creating enclave services that automatically detects hardware capabilities and falls back to simulation when hardware is unavailable.
+
+**Basic Usage:**
+
+```go
+import "github.com/virtengine/virtengine/pkg/enclave_runtime"
+
+// Create a service with automatic platform detection
+service, err := enclave_runtime.CreateAutoService()
+if err != nil {
+    log.Fatalf("Failed to create enclave service: %v", err)
+}
+
+// Check if hardware is enabled
+if hwService, ok := service.(enclave_runtime.HardwareAwareEnclaveService); ok {
+    if hwService.IsHardwareEnabled() {
+        log.Printf("Running on real TEE hardware")
+    } else {
+        log.Printf("Running in simulation mode")
+    }
+}
+```
+
+**Production Service with Required Hardware:**
+
+```go
+// Create service that fails if hardware is unavailable
+service, err := enclave_runtime.CreateProductionService()
+if err != nil {
+    log.Fatalf("TEE hardware required: %v", err)
+}
+```
+
+**Platform-Specific Service:**
+
+```go
+// Create SGX-specific service
+sgxService, err := factory.CreateSGXService(enclave_runtime.HardwareModeRequire)
+
+// Create SEV-SNP service
+sevService, err := factory.CreateSEVSNPService(enclave_runtime.HardwareModeRequire)
+
+// Create Nitro service
+nitroService, err := factory.CreateNitroService(enclave_runtime.HardwareModeRequire)
+```
+
+### Configuration via app.toml
+
+Add enclave configuration to your `config/app.toml`:
+
+```toml
+[enclave]
+# Enable enclave runtime
+enabled = true
+
+# Platform: "auto", "sgx", "sev-snp", "nitro", or "simulated"
+platform = "auto"
+
+# Hardware mode: "auto", "require", or "simulate"
+mode = "require"
+
+# Allowed enclave measurements (hex-encoded)
+allowed_measurements = [
+    "abc123def456789...",  # Production enclave v1.0.0
+    "fed987654321cba..."   # Production enclave v1.0.1
+]
+
+# Attestation mode: "strict" (production) or "permissive" (testing)
+attestation_mode = "strict"
+
+# Attestation cache TTL in seconds
+attestation_cache_seconds = 300
+
+# gRPC endpoint for remote TEE service (optional)
+endpoint = "unix:///var/run/veid-enclave.sock"
+
+# Maximum concurrent scoring requests
+max_concurrent_requests = 4
+
+# Request timeout in milliseconds
+request_timeout_ms = 5000
+
+[enclave.sgx]
+enclave_path = "/opt/virtengine/enclaves/veid_scorer.signed.so"
+dcap_enabled = true
+max_epc_pages = 256
+debug = false
+
+[enclave.sev]
+endpoint = "unix:///var/run/veid-enclave.sock"
+cert_chain_path = "/opt/virtengine/certs/amd-sev"
+vcek_cache_path = "/var/cache/virtengine/vcek"
+min_tcb_version = "1.51"
+allow_debug_policy = false
+
+[enclave.nitro]
+enclave_image_path = "/opt/virtengine/enclaves/veid_scorer.eif"
+cpu_count = 2
+memory_mb = 2048
+vsock_port = 5000
+debug_mode = false
+```
+
+---
+
+## Remote Attestation Protocol
+
+### Overview
+
+The remote attestation protocol enables validators to verify that peer validators are running genuine TEE enclaves with approved measurements. This is critical for ensuring consensus safety when processing sensitive VEID data.
+
+### Protocol Flow
+
+```
+    Challenger (Validator A)              Responder (Validator B)
+    ========================              =======================
+           │                                       │
+           │  1. Generate Challenge                │
+           │  ─────────────────────────────────►   │
+           │  (challenge_id, nonce, timestamp)     │
+           │                                       │
+           │                                       │ 2. Generate Attestation
+           │                                       │    with nonce embedded
+           │                                       │
+           │  3. Send Response                     │
+           │  ◄─────────────────────────────────   │
+           │  (attestation, measurement, pubkey)   │
+           │                                       │
+           │ 4. Verify Response                    │
+           │    - Check attestation signature      │
+           │    - Verify nonce binding             │
+           │    - Check measurement allowlist      │
+           │                                       │
+```
+
+### Using the Remote Attestation Protocol
+
+**Setup:**
+
+```go
+import "github.com/virtengine/virtengine/pkg/enclave_runtime"
+
+// Create local enclave service
+enclaveService, _ := enclave_runtime.CreateAutoService()
+
+// Create attestation verifier
+verifier := enclave_runtime.NewSimpleAttestationVerifier()
+verifier.AddAllowedMeasurement([]byte{...})  // Add trusted measurements
+
+// Configure remote attestation
+config := enclave_runtime.DefaultRemoteAttestationConfig()
+config.AllowSimulated = false  // Require real hardware in production
+
+// Create protocol handler
+protocol := enclave_runtime.NewRemoteAttestationProtocol(
+    enclaveService,
+    verifier,
+    config,
+)
+```
+
+**Challenging a Peer:**
+
+```go
+// Generate challenge for peer validator
+request, err := protocol.GenerateChallenge("validator-xyz")
+if err != nil {
+    log.Fatalf("Failed to generate challenge: %v", err)
+}
+
+// Send request to peer (implementation-specific)
+response := sendToPeer(request)
+
+// Verify the response
+result, err := protocol.VerifyResponse(response)
+if err != nil {
+    log.Fatalf("Verification error: %v", err)
+}
+
+if result.Valid {
+    log.Printf("Peer %s verified with measurement %s", 
+        result.PeerID, result.MeasurementHex)
+} else {
+    log.Printf("Peer verification failed: %v", result.Errors)
+}
+```
+
+**Responding to Challenges:**
+
+```go
+// Handle incoming challenge
+response, err := protocol.HandleChallengeRequest(ctx, request, "my-validator-id")
+if err != nil {
+    return nil, err
+}
+
+// Send response back to challenger
+return response, nil
+```
+
+### Caching Verified Attestations
+
+```go
+// Create attestation cache (TTL: 24 hours, max 1000 entries)
+cache := enclave_runtime.NewValidatorAttestationCache(1000, 24*time.Hour)
+
+// Store successful verification
+cache.Set(result.PeerID, result)
+
+// Check if validator is trusted
+if cache.IsValidatorTrusted("validator-xyz") {
+    // Skip attestation, use cached result
+}
+
+// Get trusted measurement for a validator
+measurement, ok := cache.GetTrustedMeasurement("validator-xyz")
+
+// List all trusted validators
+trusted := cache.ListTrustedValidators()
+```
+
+---
+
 ## Additional Resources
 
 ### Vendor Documentation
