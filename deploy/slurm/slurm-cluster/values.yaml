@@ -1,0 +1,409 @@
+# VirtEngine SLURM Cluster Helm Chart Values
+# This values file drives SLURM cluster deployment on Kubernetes
+
+# -- Cluster identification
+cluster:
+  # -- Unique cluster identifier (required)
+  id: ""
+  # -- Human-readable cluster name
+  name: "slurm-cluster"
+  # -- Provider address for on-chain reporting
+  providerAddress: ""
+
+# -- Global settings
+global:
+  # -- Image registry
+  imageRegistry: "ghcr.io/virtengine"
+  # -- Image pull secrets
+  imagePullSecrets: []
+  # -- Storage class for persistent volumes
+  storageClass: ""
+  # -- SLURM version tag
+  slurmVersion: "23.02.7"
+
+# -- Munge authentication daemon
+munge:
+  # -- Enable munge deployment
+  enabled: true
+  image:
+    repository: slurm-munge
+    tag: ""  # Defaults to global.slurmVersion
+    pullPolicy: IfNotPresent
+  # -- Munge key (base64 encoded, auto-generated if empty)
+  key: ""
+  # -- Use existing secret for munge key
+  existingSecret: ""
+  # -- Secret key name within the secret
+  secretKeyName: "munge.key"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  # -- Node selector for munge pods
+  nodeSelector: {}
+  # -- Tolerations for munge pods
+  tolerations: []
+
+# -- SLURM controller daemon (slurmctld)
+controller:
+  # -- Enable controller deployment
+  enabled: true
+  # -- Number of controller replicas (1 for single, 2 for HA)
+  replicas: 1
+  image:
+    repository: slurm-controller
+    tag: ""
+    pullPolicy: IfNotPresent
+  # -- Controller configuration
+  config:
+    # -- Cluster name in slurm.conf
+    clusterName: "virtengine"
+    # -- Scheduler type (backfill, builtin, hold)
+    schedulerType: "sched/backfill"
+    # -- Select type (cons_tres, linear)
+    selectType: "select/cons_tres"
+    # -- Enable preemption
+    preemptMode: "REQUEUE"
+    # -- Priority type (multifactor, basic)
+    priorityType: "priority/multifactor"
+    # -- Priority weights
+    priorityWeightAge: 1000
+    priorityWeightFairshare: 10000
+    priorityWeightJobSize: 1000
+    priorityWeightPartition: 1000
+    priorityWeightQOS: 10000
+    # -- Accounting storage (none, slurmdbd)
+    accountingStorageType: "accounting_storage/slurmdbd"
+    # -- Job accounting gather type
+    jobAcctGatherType: "jobacct_gather/cgroup"
+    # -- Proctrack type
+    proctrackType: "proctrack/cgroup"
+    # -- Task plugin
+    taskPlugin: "task/cgroup,task/affinity"
+  # -- Persistent storage for state
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  # -- Liveness probe settings
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  # -- Readiness probe settings
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- SLURM database daemon (slurmdbd)
+database:
+  # -- Enable slurmdbd deployment
+  enabled: true
+  # -- Number of replicas
+  replicas: 1
+  image:
+    repository: slurm-dbd
+    tag: ""
+    pullPolicy: IfNotPresent
+  # -- Database configuration
+  config:
+    # -- Database host (internal MariaDB or external)
+    host: ""  # Defaults to internal MariaDB
+    port: 3306
+    name: "slurm_acct_db"
+    user: "slurm"
+    # -- Database password (auto-generated if empty)
+    password: ""
+    # -- Use existing secret for DB credentials
+    existingSecret: ""
+    secretPasswordKey: "password"
+  # -- Persistence for slurmdbd state
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+
+# -- Internal MariaDB for accounting database
+mariadb:
+  # -- Enable internal MariaDB
+  enabled: true
+  image:
+    repository: mariadb
+    tag: "10.11"
+    pullPolicy: IfNotPresent
+  # -- Root password (auto-generated if empty)
+  rootPassword: ""
+  # -- Use existing secret
+  existingSecret: ""
+  secretRootPasswordKey: "root-password"
+  # -- Persistence for database
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  nodeSelector: {}
+  tolerations: []
+
+# -- Compute node configuration
+compute:
+  # -- Enable compute node deployment
+  enabled: true
+  # -- Deployment type (statefulset or daemonset)
+  deploymentType: statefulset
+  # -- Number of compute node replicas (for statefulset)
+  replicas: 2
+  image:
+    repository: slurm-compute
+    tag: ""
+    pullPolicy: IfNotPresent
+  # -- Node configuration
+  config:
+    # -- CPUs per node (auto-detected if 0)
+    cpus: 0
+    # -- Memory per node in MB (auto-detected if 0)
+    memory: 0
+    # -- GPUs per node (auto-detected if 0)
+    gpus: 0
+    # -- GPU type (nvidia, amd)
+    gpuType: "nvidia"
+    # -- Scratch space path
+    tmpPath: "/tmp/slurm"
+    # -- SLURM features for this node class
+    features: []
+    # -- Weight for job scheduling
+    weight: 1
+  # -- Persistent scratch storage per node
+  persistence:
+    enabled: false
+    size: 100Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: ""  # Unlimited to allow full node utilization
+      memory: ""
+  # -- GPU resources
+  gpu:
+    enabled: false
+    # -- NVIDIA GPU count per node
+    count: 0
+    # -- GPU resource key (nvidia.com/gpu, amd.com/gpu)
+    resourceKey: "nvidia.com/gpu"
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 60
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- Node pools (additional compute node configurations)
+nodePools: []
+  # - name: gpu-nodes
+  #   replicas: 4
+  #   cpus: 64
+  #   memory: 256000
+  #   gpus: 8
+  #   gpuType: nvidia
+  #   features: ["gpu", "a100"]
+  #   nodeSelector:
+  #     node-type: gpu
+  #   tolerations:
+  #     - key: nvidia.com/gpu
+  #       operator: Exists
+  #       effect: NoSchedule
+
+# -- SLURM partitions
+partitions:
+  - name: normal
+    default: true
+    maxTime: "24:00:00"
+    defaultTime: "1:00:00"
+    maxNodes: 32
+    state: UP
+    nodes: "compute-[0-31]"  # Auto-generated based on compute.replicas
+  - name: debug
+    default: false
+    maxTime: "00:30:00"
+    defaultTime: "00:15:00"
+    maxNodes: 2
+    state: UP
+    priority: 10
+
+# -- QOS policies
+qos: []
+  # - name: normal
+  #   priority: 0
+  #   maxJobsPerUser: 100
+  #   maxWallDuration: "24:00:00"
+  # - name: premium
+  #   priority: 100
+  #   maxJobsPerUser: 50
+  #   maxWallDuration: "168:00:00"
+  #   usageFactor: 2.0
+
+# -- VirtEngine node agent sidecar
+nodeAgent:
+  # -- Enable node agent sidecar on compute nodes
+  enabled: true
+  image:
+    repository: virtengine-node-agent
+    tag: "0.9.1"
+    pullPolicy: IfNotPresent
+  # -- Agent configuration
+  config:
+    # -- Provider daemon endpoint
+    providerEndpoint: ""
+    # -- Heartbeat interval
+    heartbeatInterval: "30s"
+    # -- Metrics sampling interval
+    metricsInterval: "15s"
+  # -- TLS configuration
+  tls:
+    enabled: true
+    # -- Use existing secret for TLS certs
+    existingSecret: ""
+    # -- CA certificate
+    caCert: ""
+    # -- Client certificate
+    clientCert: ""
+    # -- Client key
+    clientKey: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# -- Network policies
+networkPolicy:
+  # -- Enable network policies
+  enabled: true
+  # -- Allow traffic from these namespaces
+  allowNamespaces: []
+  # -- Additional ingress rules
+  additionalIngress: []
+
+# -- Pod security
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# -- Container security
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# -- Service account
+serviceAccount:
+  # -- Create service account
+  create: true
+  # -- Service account name
+  name: ""
+  # -- Annotations for service account
+  annotations: {}
+
+# -- RBAC configuration
+rbac:
+  # -- Create RBAC resources
+  create: true
+
+# -- Prometheus metrics
+metrics:
+  # -- Enable Prometheus metrics
+  enabled: true
+  # -- ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+
+# -- Health check endpoints
+healthCheck:
+  # -- Port for health check endpoint
+  port: 8080
+  # -- Path for liveness check
+  livenessPath: /healthz
+  # -- Path for readiness check
+  readinessPath: /ready
+
+# -- Extra environment variables
+extraEnv: []
+
+# -- Extra volumes
+extraVolumes: []
+
+# -- Extra volume mounts
+extraVolumeMounts: []
+
+# -- Pod annotations
+podAnnotations: {}
+
+# -- Pod labels
+podLabels: {}
