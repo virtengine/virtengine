@@ -516,23 +516,46 @@ func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error)
 
 	// Wrap in adapter that implements MLScorer interface
 	return &TensorFlowScorerAdapter{
-		scorer: scorer,
-		config: config,
+		scorer:          scorer,
+		config:          config,
+		featurePipeline: NewFeatureExtractionPipeline(DefaultFeatureExtractionConfig()),
 	}, nil
 }
 
 // TensorFlowScorerAdapter adapts the inference.Scorer to MLScorer interface
 type TensorFlowScorerAdapter struct {
-	scorer inference.Scorer
-	config MLScoringConfig
+	scorer             inference.Scorer
+	config             MLScoringConfig
+	featurePipeline    *FeatureExtractionPipeline
 }
 
 // Score implements MLScorer.Score using TensorFlow inference
 func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, error) {
 	startTime := time.Now()
 
-	// Convert ScoringInput to inference.ScoreInputs
-	inferInputs := a.convertToInferenceInputs(input)
+	// Use the feature extraction pipeline to extract real features
+	features, err := a.featurePipeline.ExtractFeatures(
+		input.DecryptedScopes,
+		input.AccountAddress,
+		input.BlockHeight,
+		input.RequestTime,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check quality gates and collect reason codes
+	failedGates := GetFailedGates(features.QualityGateResults)
+	qualityReasonCodes := GetFailureReasonCodes(features.QualityGateResults)
+
+	// Convert extracted features to inference inputs
+	inferInputs := a.featurePipeline.ToScoreInputs(
+		features,
+		input.DecryptedScopes,
+		input.AccountAddress,
+		input.BlockHeight,
+		input.RequestTime,
+	)
 
 	// Run TensorFlow inference
 	result, err := a.scorer.ComputeScore(inferInputs)
@@ -551,146 +574,31 @@ func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, er
 		InputHash:      []byte(result.InputHash),
 	}
 
+	// Add quality gate failure reason codes
+	if len(failedGates) > 0 {
+		output.ReasonCodes = append(output.ReasonCodes, qualityReasonCodes...)
+		
+		// Apply score penalty for quality gate failures
+		penaltyRatio := float32(len(failedGates)) / float32(len(features.QualityGateResults))
+		penalizedScore := float32(output.Score) * (1.0 - penaltyRatio*0.3)
+		if penalizedScore < 0 {
+			penalizedScore = 0
+		}
+		output.Score = uint32(penalizedScore)
+	}
+
+	// Include liveness information in output
+	if features.LivenessDecision != "" && features.LivenessDecision != "live" {
+		if features.LivenessDecision == "spoof" {
+			output.ReasonCodes = append(output.ReasonCodes, types.ReasonCodeLivenessCheckFailed)
+			// Significant penalty for spoof detection
+			output.Score = output.Score * 50 / 100
+		} else if features.LivenessDecision == "uncertain" {
+			output.ReasonCodes = append(output.ReasonCodes, types.ReasonCodeLowConfidence)
+		}
+	}
+
 	return output, nil
-}
-
-// convertToInferenceInputs converts keeper inputs to inference inputs
-func (a *TensorFlowScorerAdapter) convertToInferenceInputs(input *ScoringInput) *inference.ScoreInputs {
-	// Extract face embedding and other features from decrypted scopes
-	var faceEmbedding []float32
-	var faceConfidence float32
-	var docQualityScore float32
-	var docQualityFeatures inference.DocQualityFeatures
-	ocrConfidences := make(map[string]float32)
-	ocrValidation := make(map[string]bool)
-	var scopeTypes []string
-
-	// Process each decrypted scope to extract features
-	for _, scope := range input.DecryptedScopes {
-		scopeTypes = append(scopeTypes, string(scope.ScopeType))
-
-		// In a real implementation, we would parse the plaintext to extract
-		// embeddings, quality scores, etc. For now, we use deterministic
-		// values based on content hash.
-		switch scope.ScopeType {
-		case types.ScopeTypeSelfie:
-			// Extract face embedding from selfie scope
-			faceEmbedding = a.extractFaceEmbedding(scope)
-			faceConfidence = a.computeConfidenceFromHash(scope.ContentHash)
-
-		case types.ScopeTypeIDDocument:
-			// Extract document quality and OCR from ID document
-			docQualityScore = a.computeQualityFromHash(scope.ContentHash)
-			docQualityFeatures = a.extractDocQualityFeatures(scope)
-			ocrConfidences, ocrValidation = a.extractOCRFeatures(scope)
-		}
-	}
-
-	// Ensure we have a valid face embedding
-	if faceEmbedding == nil {
-		faceEmbedding = make([]float32, inference.FaceEmbeddingDim)
-	}
-
-	return &inference.ScoreInputs{
-		FaceEmbedding:      faceEmbedding,
-		FaceConfidence:     faceConfidence,
-		DocQualityScore:    docQualityScore,
-		DocQualityFeatures: docQualityFeatures,
-		OCRConfidences:     ocrConfidences,
-		OCRFieldValidation: ocrValidation,
-		Metadata: inference.InferenceMetadata{
-			AccountAddress: input.AccountAddress,
-			BlockHeight:    input.BlockHeight,
-			BlockTime:      input.RequestTime,
-		},
-		ScopeTypes: scopeTypes,
-		ScopeCount: len(input.DecryptedScopes),
-	}
-}
-
-// extractFaceEmbedding extracts face embedding from scope content
-// In production, this would parse the actual embedding from the scope
-func (a *TensorFlowScorerAdapter) extractFaceEmbedding(scope DecryptedScope) []float32 {
-	embedding := make([]float32, inference.FaceEmbeddingDim)
-
-	// Generate deterministic embedding from content hash
-	// In production, this would be the actual face embedding
-	if len(scope.ContentHash) >= 4 {
-		seed := uint32(scope.ContentHash[0])<<24 | uint32(scope.ContentHash[1])<<16 |
-			uint32(scope.ContentHash[2])<<8 | uint32(scope.ContentHash[3])
-
-		for i := range embedding {
-			// Deterministic pseudo-random values based on hash
-			seed = seed*1103515245 + 12345
-			embedding[i] = float32(seed%1000) / 1000.0
-		}
-	}
-
-	return embedding
-}
-
-// computeConfidenceFromHash computes a confidence score from content hash
-func (a *TensorFlowScorerAdapter) computeConfidenceFromHash(hash []byte) float32 {
-	if len(hash) < 4 {
-		return 0.5
-	}
-	// Use hash bytes to generate deterministic confidence
-	val := uint32(hash[0])<<24 | uint32(hash[1])<<16 | uint32(hash[2])<<8 | uint32(hash[3])
-	return 0.5 + float32(val%50)/100.0 // Range: 0.5 - 1.0
-}
-
-// computeQualityFromHash computes quality score from content hash
-func (a *TensorFlowScorerAdapter) computeQualityFromHash(hash []byte) float32 {
-	if len(hash) < 4 {
-		return 0.5
-	}
-	val := uint32(hash[0])<<16 | uint32(hash[1])<<8 | uint32(hash[2])
-	return 0.6 + float32(val%40)/100.0 // Range: 0.6 - 1.0
-}
-
-// extractDocQualityFeatures extracts document quality features from scope
-func (a *TensorFlowScorerAdapter) extractDocQualityFeatures(scope DecryptedScope) inference.DocQualityFeatures {
-	hash := scope.ContentHash
-	if len(hash) < 8 {
-		return inference.DocQualityFeatures{
-			Sharpness:  0.8,
-			Brightness: 0.7,
-			Contrast:   0.75,
-			NoiseLevel: 0.1,
-			BlurScore:  0.15,
-		}
-	}
-
-	// Generate deterministic features from hash
-	return inference.DocQualityFeatures{
-		Sharpness:  0.7 + float32(hash[0]%30)/100.0,
-		Brightness: 0.6 + float32(hash[1]%40)/100.0,
-		Contrast:   0.65 + float32(hash[2]%35)/100.0,
-		NoiseLevel: float32(hash[3]%20) / 100.0,
-		BlurScore:  float32(hash[4]%25) / 100.0,
-	}
-}
-
-// extractOCRFeatures extracts OCR features from scope
-func (a *TensorFlowScorerAdapter) extractOCRFeatures(scope DecryptedScope) (map[string]float32, map[string]bool) {
-	confidences := make(map[string]float32)
-	validation := make(map[string]bool)
-
-	fields := inference.OCRFieldNames
-	hash := scope.ContentHash
-
-	for i, field := range fields {
-		// Generate deterministic confidence from hash
-		if len(hash) > i {
-			confidences[field] = 0.7 + float32(hash[i]%30)/100.0
-			validation[field] = hash[i]%10 > 2 // ~70% validation rate
-		} else {
-			confidences[field] = 0.8
-			validation[field] = true
-		}
-	}
-
-	return confidences, validation
 }
 
 // convertReasonCodes converts inference reason codes to types.ReasonCode
