@@ -5,6 +5,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	rolesv1 "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
 	"github.com/virtengine/virtengine/x/roles/types"
 )
 
@@ -86,7 +87,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 	}
 
 	store := ctx.KVStore(k.skey)
-	bz, err := k.cdc.Marshal(&paramsStore{
+	bz, err := k.cdc.Marshal(&rolesv1.ParamsStore{
 		MaxRolesPerAccount: params.MaxRolesPerAccount,
 		AllowSelfRevoke:    params.AllowSelfRevoke,
 	})
@@ -105,18 +106,12 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 		return types.DefaultParams()
 	}
 
-	var ps paramsStore
+	var ps rolesv1.ParamsStore
 	k.cdc.MustUnmarshal(bz, &ps)
 	return types.Params{
 		MaxRolesPerAccount: ps.MaxRolesPerAccount,
 		AllowSelfRevoke:    ps.AllowSelfRevoke,
 	}
-}
-
-// paramsStore is the stored format of params
-type paramsStore struct {
-	MaxRolesPerAccount uint32 `protobuf:"varint,1,opt,name=max_roles_per_account,json=maxRolesPerAccount,proto3" json:"max_roles_per_account"`
-	AllowSelfRevoke    bool   `protobuf:"varint,2,opt,name=allow_self_revoke,json=allowSelfRevoke,proto3" json:"allow_self_revoke"`
 }
 
 // AssignRole assigns a role to an account
@@ -139,7 +134,7 @@ func (k Keeper) AssignRole(ctx sdk.Context, address sdk.AccAddress, role types.R
 
 	store := ctx.KVStore(k.skey)
 
-	assignment := roleAssignmentStore{
+	assignment := rolesv1.RoleAssignmentStore{
 		AssignedBy: assignedBy.String(),
 		AssignedAt: ctx.BlockTime().Unix(),
 	}
@@ -237,7 +232,7 @@ func (k Keeper) GetAccountRoles(ctx sdk.Context, address sdk.AccAddress) []types
 		// Extract role from key (last byte)
 		roleValue := types.Role(key[len(key)-1])
 
-		var assignment roleAssignmentStore
+		var assignment rolesv1.RoleAssignmentStore
 		k.cdc.MustUnmarshal(iter.Value(), &assignment)
 
 		roles = append(roles, types.RoleAssignment{
@@ -270,7 +265,7 @@ func (k Keeper) GetRoleMembers(ctx sdk.Context, role types.Role) []types.RoleAss
 		assignmentKey := types.RoleAssignmentKey(addrBytes, role)
 		assignmentBz := store.Get(assignmentKey)
 		if assignmentBz != nil {
-			var assignment roleAssignmentStore
+			var assignment rolesv1.RoleAssignmentStore
 			k.cdc.MustUnmarshal(assignmentBz, &assignment)
 
 			members = append(members, types.RoleAssignment{
@@ -285,12 +280,6 @@ func (k Keeper) GetRoleMembers(ctx sdk.Context, role types.Role) []types.RoleAss
 	return members
 }
 
-// roleAssignmentStore is the stored format of a role assignment
-type roleAssignmentStore struct {
-	AssignedBy string `protobuf:"bytes,1,opt,name=assigned_by,json=assignedBy,proto3" json:"assigned_by"`
-	AssignedAt int64  `protobuf:"varint,2,opt,name=assigned_at,json=assignedAt,proto3" json:"assigned_at"`
-}
-
 // SetAccountState sets the state of an account
 func (k Keeper) SetAccountState(ctx sdk.Context, address sdk.AccAddress, state types.AccountState, reason string, modifiedBy sdk.AccAddress) error {
 	if !state.IsValid() {
@@ -303,7 +292,7 @@ func (k Keeper) SetAccountState(ctx sdk.Context, address sdk.AccAddress, state t
 	var previousState types.AccountState
 	existingBz := store.Get(key)
 	if existingBz != nil {
-		var existing accountStateStore
+		var existing rolesv1.AccountStateStore
 		k.cdc.MustUnmarshal(existingBz, &existing)
 		previousState = types.AccountState(existing.State)
 
@@ -319,7 +308,7 @@ func (k Keeper) SetAccountState(ctx sdk.Context, address sdk.AccAddress, state t
 		previousState = types.AccountStateUnspecified
 	}
 
-	record := accountStateStore{
+	record := rolesv1.AccountStateStore{
 		State:         uint32(state),
 		Reason:        reason,
 		ModifiedBy:    modifiedBy.String(),
@@ -358,7 +347,7 @@ func (k Keeper) GetAccountState(ctx sdk.Context, address sdk.AccAddress) (types.
 		return types.AccountStateRecord{}, false
 	}
 
-	var record accountStateStore
+	var record rolesv1.AccountStateStore
 	k.cdc.MustUnmarshal(bz, &record)
 
 	return types.AccountStateRecord{
@@ -379,15 +368,6 @@ func (k Keeper) IsAccountOperational(ctx sdk.Context, address sdk.AccAddress) bo
 		return true
 	}
 	return record.State.IsOperational()
-}
-
-// accountStateStore is the stored format of an account state
-type accountStateStore struct {
-	State         uint32 `protobuf:"varint,1,opt,name=state,proto3" json:"state"`
-	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason"`
-	ModifiedBy    string `protobuf:"bytes,3,opt,name=modified_by,json=modifiedBy,proto3" json:"modified_by"`
-	ModifiedAt    int64  `protobuf:"varint,4,opt,name=modified_at,json=modifiedAt,proto3" json:"modified_at"`
-	PreviousState uint32 `protobuf:"varint,5,opt,name=previous_state,json=previousState,proto3" json:"previous_state"`
 }
 
 // IsGenesisAccount checks if an account is a genesis account

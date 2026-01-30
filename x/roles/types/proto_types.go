@@ -123,3 +123,25 @@ type MsgServerPB = rolesv1.MsgServer
 
 // RegisterMsgServerPB registers the protobuf-generated MsgServer
 var RegisterMsgServerPB = rolesv1.RegisterMsgServer
+
+// QueryServerPB is the generated proto query server interface
+type QueryServerPB = rolesv1.QueryServer
+
+// RegisterQueryServerPB registers the protobuf-generated QueryServer
+var RegisterQueryServerPB = rolesv1.RegisterQueryServer
+
+// Query_serviceDesc is the gRPC service descriptor for the Query service
+var Query_serviceDesc = rolesv1.Query_serviceDesc
+
+// ============================================================================
+// Proto Type Aliases - Internal Store Types from store.pb.go
+// ============================================================================
+
+// ParamsStorePB is the generated proto type for internal params storage
+type ParamsStorePB = rolesv1.ParamsStore
+
+// RoleAssignmentStorePB is the generated proto type for internal role assignment storage
+type RoleAssignmentStorePB = rolesv1.RoleAssignmentStore
+
+// AccountStateStorePB is the generated proto type for internal account state storage
+type AccountStateStorePB = rolesv1.AccountStateStore

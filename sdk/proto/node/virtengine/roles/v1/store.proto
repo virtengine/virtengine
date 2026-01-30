@@ -1,0 +1,78 @@
+syntax = "proto3";
+package virtengine.roles.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/roles/v1";
+
+// ParamsStore is the internal storage format for module parameters
+message ParamsStore {
+  option (gogoproto.equal) = true;
+
+  // MaxRolesPerAccount is the maximum number of roles an account can have
+  uint32 max_roles_per_account = 1 [
+    (gogoproto.jsontag) = "max_roles_per_account",
+    (gogoproto.moretags) = "yaml:\"max_roles_per_account\""
+  ];
+
+  // AllowSelfRevoke determines if accounts can revoke their own roles
+  bool allow_self_revoke = 2 [
+    (gogoproto.jsontag) = "allow_self_revoke",
+    (gogoproto.moretags) = "yaml:\"allow_self_revoke\""
+  ];
+}
+
+// RoleAssignmentStore is the internal storage format for role assignments
+message RoleAssignmentStore {
+  option (gogoproto.equal) = true;
+
+  // AssignedBy is the address that assigned this role
+  string assigned_by = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "assigned_by",
+    (gogoproto.moretags) = "yaml:\"assigned_by\""
+  ];
+
+  // AssignedAt is the Unix timestamp when the role was assigned
+  int64 assigned_at = 2 [
+    (gogoproto.jsontag) = "assigned_at",
+    (gogoproto.moretags) = "yaml:\"assigned_at\""
+  ];
+}
+
+// AccountStateStore is the internal storage format for account states
+message AccountStateStore {
+  option (gogoproto.equal) = true;
+
+  // State is the current account state (as uint32 for storage)
+  uint32 state = 1 [
+    (gogoproto.jsontag) = "state",
+    (gogoproto.moretags) = "yaml:\"state\""
+  ];
+
+  // Reason is the reason for the current state
+  string reason = 2 [
+    (gogoproto.jsontag) = "reason",
+    (gogoproto.moretags) = "yaml:\"reason\""
+  ];
+
+  // ModifiedBy is the address that last modified the state
+  string modified_by = 3 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag) = "modified_by",
+    (gogoproto.moretags) = "yaml:\"modified_by\""
+  ];
+
+  // ModifiedAt is the Unix timestamp when the state was last modified
+  int64 modified_at = 4 [
+    (gogoproto.jsontag) = "modified_at",
+    (gogoproto.moretags) = "yaml:\"modified_at\""
+  ];
+
+  // PreviousState is the previous account state (as uint32 for storage)
+  uint32 previous_state = 5 [
+    (gogoproto.jsontag) = "previous_state",
+    (gogoproto.moretags) = "yaml:\"previous_state\""
+  ];
+}
