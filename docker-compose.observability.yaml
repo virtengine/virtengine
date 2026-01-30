@@ -1,0 +1,223 @@
+# VirtEngine Observability Stack
+# docker-compose -f docker-compose.observability.yaml up -d
+#
+# Components:
+#   - Prometheus: Metrics collection and alerting
+#   - Grafana: Dashboards and visualization
+#   - Tempo: Distributed tracing backend
+#   - Loki: Log aggregation
+#   - Promtail: Log shipping agent
+#   - Alertmanager: Alert routing and management
+
+version: "3.9"
+
+networks:
+  observability-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  tempo-data:
+    driver: local
+  loki-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+
+services:
+  # =============================================================================
+  # Prometheus - Metrics Collection
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: ve-prometheus
+    hostname: prometheus
+    networks:
+      observability-net:
+        ipv4_address: 172.29.0.10
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+      - "--web.enable-remote-write-receiver"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Alertmanager - Alert Routing
+  # =============================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: ve-alertmanager
+    hostname: alertmanager
+    networks:
+      observability-net:
+        ipv4_address: 172.29.0.11
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./deploy/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost:9093"
+      - "--cluster.listen-address="
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Grafana - Dashboards & Visualization
+  # =============================================================================
+  grafana:
+    image: grafana/grafana-oss:10.4.2
+    container_name: ve-grafana
+    hostname: grafana
+    networks:
+      observability-net:
+        ipv4_address: 172.29.0.12
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=virtengine
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-clock-panel
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor tempoSearch tempoBackendSearch
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Tempo - Distributed Tracing Backend
+  # =============================================================================
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: ve-tempo
+    hostname: tempo
+    networks:
+      observability-net:
+        ipv4_address: 172.29.0.13
+    ports:
+      - "3200:3200"   # Tempo HTTP
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "9411:9411"   # Zipkin
+      - "14268:14268" # Jaeger HTTP
+    volumes:
+      - ./deploy/monitoring/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    command:
+      - "-config.file=/etc/tempo/tempo.yaml"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Loki - Log Aggregation
+  # =============================================================================
+  loki:
+    image: grafana/loki:2.9.6
+    container_name: ve-loki
+    hostname: loki
+    networks:
+      observability-net:
+        ipv4_address: 172.29.0.14
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/monitoring/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    command:
+      - "-config.file=/etc/loki/loki.yaml"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Promtail - Log Shipping Agent
+  # =============================================================================
+  promtail:
+    image: grafana/promtail:2.9.6
+    container_name: ve-promtail
+    hostname: promtail
+    networks:
+      observability-net:
+        ipv4_address: 172.29.0.15
+    volumes:
+      - ./deploy/monitoring/promtail/promtail.yaml:/etc/promtail/promtail.yaml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command:
+      - "-config.file=/etc/promtail/promtail.yaml"
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # =============================================================================
+  # OTEL Collector (optional - for advanced routing)
+  # =============================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: ve-otel-collector
+    hostname: otel-collector
+    networks:
+      observability-net:
+        ipv4_address: 172.29.0.16
+    ports:
+      - "4319:4317"   # OTLP gRPC (alternate port to avoid conflict with Tempo)
+      - "4320:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+      - "8889:8889"   # Prometheus exporter
+    volumes:
+      - ./deploy/monitoring/otel/otel-collector.yaml:/etc/otel/config.yaml:ro
+    command:
+      - "--config=/etc/otel/config.yaml"
+    depends_on:
+      - tempo
+      - prometheus
+    restart: unless-stopped
+    profiles:
+      - full  # Only start with --profile full

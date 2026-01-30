@@ -1,13 +1,12 @@
-# VirtEngine Production Prometheus Configuration
-# Comprehensive metrics collection for all critical services
+# VirtEngine Prometheus Configuration
+# MONITOR-001: Comprehensive monitoring setup
 
 global:
   scrape_interval: 15s
-  scrape_timeout: 10s
   evaluation_interval: 15s
   external_labels:
-    cluster: virtengine-production
-    environment: production
+    cluster: 'virtengine-production'
+    environment: 'production'
 
 # Alertmanager configuration
 alerting:
@@ -15,286 +14,150 @@ alerting:
     - static_configs:
         - targets:
             - alertmanager:9093
-      scheme: http
-      timeout: 10s
-      api_version: v2
 
-# Rule files for alerting
+# Rule files
 rule_files:
-  - /etc/prometheus/alerts/*.yml
+  - /etc/prometheus/rules/*.yml
+  - /etc/prometheus/rules/*.yaml
 
-# Scrape configurations for all critical services
+# Scrape configurations
 scrape_configs:
   # =============================================================================
-  # Self-monitoring
+  # Prometheus self-monitoring
   # =============================================================================
-  - job_name: prometheus
+  - job_name: 'prometheus'
     static_configs:
-      - targets:
-          - localhost:9090
-    metrics_path: /metrics
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          tier: 'tier0'
 
   # =============================================================================
-  # VirtEngine Blockchain Nodes (CometBFT + Cosmos SDK)
+  # VirtEngine Chain Nodes
   # =============================================================================
-  - job_name: virtengine-node
-    metrics_path: /metrics
+  - job_name: 'virtengine-node'
     static_configs:
-      - targets:
-          - virtengine-node-0:26660
-          - virtengine-node-1:26660
-          - virtengine-node-2:26660
-          - virtengine-node-3:26660
+      - targets: ['virtengine-node:26660']
         labels:
-          service: virtengine-node
-          tier: tier0
+          service: 'virtengine-node'
+          tier: 'tier0'
+    metrics_path: /metrics
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
-        regex: (.+):26660
-        replacement: ${1}
+        regex: '([^:]+):\d+'
+        replacement: '${1}'
 
-  # CometBFT (Tendermint) metrics
-  - job_name: cometbft
-    metrics_path: /metrics
+  # CometBFT/Tendermint metrics
+  - job_name: 'cometbft'
     static_configs:
-      - targets:
-          - virtengine-node-0:26660
-          - virtengine-node-1:26660
-          - virtengine-node-2:26660
-          - virtengine-node-3:26660
+      - targets: ['virtengine-node:26660']
         labels:
-          service: cometbft
-          tier: tier0
-    metric_relabel_configs:
-      - source_labels: [__name__]
-        regex: "(tendermint_.*|cometbft_.*)"
-        action: keep
-
-  # =============================================================================
-  # Provider Daemon Services
-  # =============================================================================
-  - job_name: provider-daemon
+          service: 'cometbft'
+          tier: 'tier0'
     metrics_path: /metrics
-    scheme: https
-    tls_config:
-      insecure_skip_verify: true  # For self-signed certs in dev
+
+  # =============================================================================
+  # Provider Daemon
+  # =============================================================================
+  - job_name: 'provider-daemon'
     static_configs:
-      - targets:
-          - provider-daemon-0:8443
-          - provider-daemon-1:8443
-          - provider-daemon-2:8443
+      - targets: ['provider-daemon:9090']
         labels:
-          service: provider-daemon
-          tier: tier1
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        regex: (.+):8443
-        replacement: ${1}
-
-  # Kubernetes service discovery for provider daemons
-  - job_name: provider-daemon-k8s
-    kubernetes_sd_configs:
-      - role: pod
-        namespaces:
-          names:
-            - virtengine-providers
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_label_app]
-        action: keep
-        regex: provider-daemon
-      - source_labels: [__meta_kubernetes_namespace]
-        target_label: namespace
-      - source_labels: [__meta_kubernetes_pod_name]
-        target_label: pod
-      - source_labels: [__meta_kubernetes_pod_label_provider]
-        target_label: provider
-
-  # =============================================================================
-  # Benchmark Daemon Services
-  # =============================================================================
-  - job_name: benchmark-daemon
+          service: 'provider-daemon'
+          tier: 'tier1'
     metrics_path: /metrics
+
+  # =============================================================================
+  # Benchmark Daemon
+  # =============================================================================
+  - job_name: 'benchmark-daemon'
     static_configs:
-      - targets:
-          - benchmark-daemon-0:9100
-          - benchmark-daemon-1:9100
+      - targets: ['benchmark-daemon:9090']
         labels:
-          service: benchmark-daemon
-          tier: tier2
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        regex: (.+):9100
-        replacement: ${1}
+          service: 'benchmark-daemon'
+          tier: 'tier2'
+    metrics_path: /metrics
 
   # =============================================================================
   # API Gateway (Kong)
   # =============================================================================
-  - job_name: kong
+  - job_name: 'kong'
     static_configs:
-      - targets:
-          - kong:8100
+      - targets: ['kong:8100']
         labels:
-          service: kong
-          tier: tier1
+          service: 'kong'
+          tier: 'tier1'
 
   # =============================================================================
-  # ML Inference Services
+  # Grafana
   # =============================================================================
-  - job_name: ml-inference
-    metrics_path: /metrics
+  - job_name: 'grafana'
     static_configs:
-      - targets:
-          - ml-inference-0:8080
-          - ml-inference-1:8080
+      - targets: ['grafana:3000']
         labels:
-          service: ml-inference
-          tier: tier1
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        regex: (.+):8080
-        replacement: ${1}
+          service: 'grafana'
 
   # =============================================================================
-  # Database Services
+  # Tempo
   # =============================================================================
-  - job_name: postgres
+  - job_name: 'tempo'
     static_configs:
-      - targets:
-          - postgres-exporter:9187
+      - targets: ['tempo:3200']
         labels:
-          service: postgres
-          tier: tier1
+          service: 'tempo'
 
-  - job_name: redis
+  # =============================================================================
+  # Loki
+  # =============================================================================
+  - job_name: 'loki'
     static_configs:
-      - targets:
-          - redis-exporter:9121
+      - targets: ['loki:3100']
         labels:
-          service: redis
-          tier: tier1
+          service: 'loki'
 
   # =============================================================================
-  # Infrastructure Monitoring
+  # Alertmanager
   # =============================================================================
-  - job_name: node-exporter
+  - job_name: 'alertmanager'
     static_configs:
-      - targets:
-          - node-exporter:9100
+      - targets: ['alertmanager:9093']
         labels:
-          service: node-exporter
-
-  # Kubernetes service discovery for node exporters
-  - job_name: kubernetes-nodes
-    kubernetes_sd_configs:
-      - role: node
-    relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - target_label: __address__
-        replacement: kubernetes.default.svc:443
-      - source_labels: [__meta_kubernetes_node_name]
-        regex: (.+)
-        target_label: __metrics_path__
-        replacement: /api/v1/nodes/${1}/proxy/metrics
+          service: 'alertmanager'
 
   # =============================================================================
-  # Service Discovery (Kubernetes)
+  # Kubernetes Service Discovery (when running in K8s)
   # =============================================================================
-  - job_name: kubernetes-pods
-    kubernetes_sd_configs:
-      - role: pod
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-        action: keep
-        regex: true
-      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-        action: replace
-        target_label: __metrics_path__
-        regex: (.+)
-      - source_labels:
-          [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $1:$2
-        target_label: __address__
-      - action: labelmap
-        regex: __meta_kubernetes_pod_label_(.+)
-      - source_labels: [__meta_kubernetes_namespace]
-        action: replace
-        target_label: namespace
-      - source_labels: [__meta_kubernetes_pod_name]
-        action: replace
-        target_label: pod
+  # Uncomment for Kubernetes deployment
+  # - job_name: 'kubernetes-pods'
+  #   kubernetes_sd_configs:
+  #     - role: pod
+  #   relabel_configs:
+  #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+  #       action: keep
+  #       regex: true
+  #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+  #       action: replace
+  #       target_label: __metrics_path__
+  #       regex: (.+)
+  #     - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+  #       action: replace
+  #       regex: ([^:]+)(?::\d+)?;(\d+)
+  #       replacement: $1:$2
+  #       target_label: __address__
+  #     - action: labelmap
+  #       regex: __meta_kubernetes_pod_label_(.+)
+  #     - source_labels: [__meta_kubernetes_namespace]
+  #       action: replace
+  #       target_label: kubernetes_namespace
+  #     - source_labels: [__meta_kubernetes_pod_name]
+  #       action: replace
+  #       target_label: kubernetes_pod_name
 
-  # =============================================================================
-  # External Service Health Checks
-  # =============================================================================
-  - job_name: blackbox
-    metrics_path: /probe
-    params:
-      module: [http_2xx]
-    static_configs:
-      - targets:
-          - https://api.virtengine.com/health
-          - https://rpc.virtengine.com/health
-          - https://grpc.virtengine.com/grpc.health.v1.Health/Check
-        labels:
-          service: external-endpoints
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: blackbox-exporter:9115
-
-  # =============================================================================
-  # VEID Identity Service Metrics
-  # =============================================================================
-  - job_name: veid-scoring
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - veid-scoring-0:9090
-          - veid-scoring-1:9090
-        labels:
-          service: veid-scoring
-          tier: tier1
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        regex: (.+):9090
-        replacement: ${1}
-
-  # =============================================================================
-  # HPC Scheduler Metrics
-  # =============================================================================
-  - job_name: hpc-scheduler
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - hpc-scheduler:9100
-        labels:
-          service: hpc-scheduler
-          tier: tier2
-
-  # SLURM exporter (if using SLURM backend)
-  - job_name: slurm
-    static_configs:
-      - targets:
-          - slurm-exporter:9092
-        labels:
-          service: slurm
-
-# Remote write configuration (optional - for long-term storage)
+# Remote write for long-term storage (optional)
 # remote_write:
-#   - url: "https://prometheus-remote-write.example.com/api/v1/write"
-#     remote_timeout: 30s
+#   - url: "http://thanos-receive:10908/api/v1/receive"
 #     queue_config:
-#       capacity: 10000
-#       max_shards: 50
-#       max_samples_per_send: 5000
+#       max_samples_per_send: 10000
+#       max_shards: 200
+#       capacity: 2500

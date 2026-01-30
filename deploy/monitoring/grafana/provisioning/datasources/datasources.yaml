@@ -1,0 +1,84 @@
+# VirtEngine Grafana Datasources Provisioning
+# MONITOR-001: Auto-configure all data sources
+
+apiVersion: 1
+
+datasources:
+  # Prometheus - Primary metrics source
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.50.0
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+          urlDisplayLabel: View Trace
+
+  # Tempo - Distributed tracing
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    uid: tempo
+    editable: false
+    jsonData:
+      httpMethod: GET
+      tracesToLogs:
+        datasourceUid: loki
+        tags: ['job', 'service', 'container']
+        mappedTags: [{ key: 'service.name', value: 'service' }]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        filterByTraceID: true
+        filterBySpanID: true
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        tags: [{ key: 'service.name', value: 'service' }]
+        queries:
+          - name: Request Rate
+            query: 'sum(rate(virtengine_api_requests_total{service="$${__tags.service}"}[$__rate_interval]))'
+          - name: Error Rate
+            query: 'sum(rate(virtengine_api_requests_total{service="$${__tags.service}",status=~"5.."}[$__rate_interval]))'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      lokiSearch:
+        datasourceUid: loki
+      search:
+        hide: false
+
+  # Loki - Log aggregation
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    uid: loki
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"trace_id":"([^"]+)"'
+          url: '$${__value.raw}'
+          datasourceUid: tempo
+          urlDisplayLabel: View Trace
+
+  # Alertmanager
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    editable: false
+    jsonData:
+      implementation: prometheus
