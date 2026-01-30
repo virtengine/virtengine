@@ -165,6 +165,26 @@ type Params struct {
 
 	// MFAConfigs are the MFA action configurations
 	MFAConfigs []MFAActionConfig `json:"mfa_configs"`
+
+	// ECON-002: Marketplace Economics Parameters
+
+	// EconomicsParams are the marketplace economics parameters
+	EconomicsParams EconomicsParams `json:"economics_params"`
+
+	// ProviderIncentiveConfig is the provider incentive configuration
+	ProviderIncentiveConfig ProviderIncentiveConfig `json:"provider_incentive_config"`
+
+	// LiquidityIncentiveParams are the liquidity incentive parameters
+	LiquidityIncentiveParams LiquidityIncentiveParams `json:"liquidity_incentive_params"`
+
+	// PriceDiscoveryParams are the price discovery parameters
+	PriceDiscoveryParams PriceDiscoveryParams `json:"price_discovery_params"`
+
+	// SafeguardParams are the anti-manipulation safeguard parameters
+	SafeguardParams SafeguardParams `json:"safeguard_params"`
+
+	// MarketMetricsParams are the market metrics parameters
+	MarketMetricsParams MarketMetricsParams `json:"market_metrics_params"`
 }
 
 // DefaultParams returns default parameters
@@ -180,6 +200,13 @@ func DefaultParams() Params {
 		EnableWaldurBridge:           false,
 		WaldurConfig:                 DefaultWaldurBridgeConfig(),
 		MFAConfigs:                   DefaultMFAActionConfigs(),
+		// ECON-002: Marketplace Economics defaults
+		EconomicsParams:          DefaultEconomicsParams(),
+		ProviderIncentiveConfig:  DefaultProviderIncentiveConfig(),
+		LiquidityIncentiveParams: DefaultLiquidityIncentiveParams(),
+		PriceDiscoveryParams:     DefaultPriceDiscoveryParams(),
+		SafeguardParams:          DefaultSafeguardParams(),
+		MarketMetricsParams:      DefaultMarketMetricsParams(),
 	}
 }
 
@@ -196,6 +223,25 @@ func (p Params) Validate() error {
 	}
 	if p.DefaultIdentityScoreRequired > 100 {
 		return fmt.Errorf("default_identity_score_required cannot exceed 100")
+	}
+	// ECON-002: Validate economics parameters
+	if err := p.EconomicsParams.Validate(); err != nil {
+		return fmt.Errorf("invalid economics_params: %w", err)
+	}
+	if err := p.ProviderIncentiveConfig.Validate(); err != nil {
+		return fmt.Errorf("invalid provider_incentive_config: %w", err)
+	}
+	if err := p.LiquidityIncentiveParams.Validate(); err != nil {
+		return fmt.Errorf("invalid liquidity_incentive_params: %w", err)
+	}
+	if err := p.PriceDiscoveryParams.Validate(); err != nil {
+		return fmt.Errorf("invalid price_discovery_params: %w", err)
+	}
+	if err := p.SafeguardParams.Validate(); err != nil {
+		return fmt.Errorf("invalid safeguard_params: %w", err)
+	}
+	if err := p.MarketMetricsParams.Validate(); err != nil {
+		return fmt.Errorf("invalid market_metrics_params: %w", err)
 	}
 	return nil
 }
