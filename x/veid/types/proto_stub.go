@@ -1,7 +1,25 @@
 // Package types contains proto.Message stub implementations for the veid module.
 //
-// These are temporary stub implementations until proper protobuf generation is set up.
+// These are temporary stub implementations until proper protobuf message type aliases are set up.
 // They implement the proto.Message interface required by Cosmos SDK.
+//
+// TODO: Migrate these types to use proto-generated type aliases:
+//   - MsgUploadScope -> veidv1.MsgUploadScope
+//   - MsgRevokeScope -> veidv1.MsgRevokeScope
+//   - MsgRequestVerification -> veidv1.MsgRequestVerification
+//   - MsgUpdateVerificationStatus -> veidv1.MsgUpdateVerificationStatus
+//   - MsgUpdateScore -> veidv1.MsgUpdateScore
+//   - MsgCreateIdentityWallet -> veidv1.MsgCreateIdentityWallet
+//   - MsgAddScopeToWallet -> veidv1.MsgAddScopeToWallet
+//   - MsgRevokeScopeFromWallet -> veidv1.MsgRevokeScopeFromWallet
+//   - MsgUpdateConsentSettings -> veidv1.MsgUpdateConsentSettings
+//   - MsgRebindWallet -> veidv1.MsgRebindWallet
+//   - MsgUpdateDerivedFeatures -> veidv1.MsgUpdateDerivedFeatures
+//   - MsgSubmitComplianceCheck -> veidv1.MsgSubmitComplianceCheck
+//   - MsgAttestCompliance -> veidv1.MsgAttestCompliance
+//   - MsgUpdateComplianceParams -> veidv1.MsgUpdateComplianceParams
+//   - MsgRegisterComplianceProvider -> veidv1.MsgRegisterComplianceProvider
+//   - MsgDeactivateComplianceProvider -> veidv1.MsgDeactivateComplianceProvider
 package types
 
 import "fmt"

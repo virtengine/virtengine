@@ -1,6 +1,7 @@
 // Package types provides VEID module types.
 //
 // This file defines compliance-related error codes for the VEID module.
+// NOTE: Some error codes are aliased from veidv1 in errors.go - these are additional local errors.
 //
 // Task Reference: VE-3021 - KYC/AML Compliance Interface
 package types
@@ -10,10 +11,9 @@ import (
 )
 
 // Compliance error codes (range: 5000-5099)
+// NOTE: ErrComplianceCheckFailed, ErrNotComplianceProvider, ErrInsufficientAttestations,
+// ErrInvalidComplianceParams are defined as aliases in errors.go from veidv1
 var (
-	// ErrComplianceCheckFailed is returned when a compliance check fails
-	ErrComplianceCheckFailed = errorsmod.Register(ModuleName, 5001, "compliance check failed")
-
 	// ErrSanctionListMatch is returned when identity matches a sanction list
 	ErrSanctionListMatch = errorsmod.Register(ModuleName, 5002, "sanction list match detected")
 
@@ -32,20 +32,11 @@ var (
 	// ErrComplianceNotFound is returned when a compliance record is not found
 	ErrComplianceNotFound = errorsmod.Register(ModuleName, 5007, "compliance record not found")
 
-	// ErrNotComplianceProvider is returned when sender is not an authorized provider
-	ErrNotComplianceProvider = errorsmod.Register(ModuleName, 5008, "not authorized compliance provider")
-
-	// ErrInsufficientAttestations is returned when there are not enough validator attestations
-	ErrInsufficientAttestations = errorsmod.Register(ModuleName, 5009, "insufficient compliance attestations")
-
 	// ErrDuplicateAttestation is returned when a validator tries to attest twice
 	ErrDuplicateAttestation = errorsmod.Register(ModuleName, 5010, "validator has already attested")
 
 	// ErrComplianceRecordBlocked is returned when trying to modify a blocked record
 	ErrComplianceRecordBlocked = errorsmod.Register(ModuleName, 5011, "compliance record is blocked")
-
-	// ErrInvalidComplianceParams is returned when compliance parameters are invalid
-	ErrInvalidComplianceParams = errorsmod.Register(ModuleName, 5012, "invalid compliance parameters")
 
 	// ErrProviderAlreadyExists is returned when trying to register an existing provider
 	ErrProviderAlreadyExists = errorsmod.Register(ModuleName, 5013, "compliance provider already exists")

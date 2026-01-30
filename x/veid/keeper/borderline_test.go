@@ -191,9 +191,13 @@ func (s *BorderlineFallbackTestSuite) TestCheckBorderlineAndTriggerFallback_NoEn
 }
 
 func (s *BorderlineFallbackTestSuite) TestCheckBorderlineAndTriggerFallback_BorderlineDisabled() {
-	// Disable borderline
-	params := types.DefaultBorderlineParams()
-	params.Enabled = false
+	// Disable borderline by setting thresholds to zero width (lower == upper)
+	params := types.BorderlineParams{
+		LowerThreshold:   90,
+		UpperThreshold:   90, // No borderline band when lower == upper
+		MfaTimeoutBlocks: 100,
+		RequiredFactors:  1,
+	}
 	err := s.keeper.SetBorderlineParams(s.ctx, params)
 	s.Require().NoError(err)
 
@@ -314,12 +318,10 @@ func (s *BorderlineFallbackTestSuite) TestBorderlineFallbackFlow_HighSecurityFac
 
 func (s *BorderlineFallbackTestSuite) TestBorderlineParams_SetAndGet() {
 	params := types.BorderlineParams{
-		LowerThreshold:          80,
-		UpperThreshold:          92,
-		Enabled:                 true,
-		RequiredFactors:         []string{"totp", "fido2"},
-		ChallengeTimeoutSeconds: 600,
-		MinFactorsSatisfied:     1,
+		LowerThreshold:   80,
+		UpperThreshold:   92,
+		MfaTimeoutBlocks: 200, // Converted from seconds to blocks
+		RequiredFactors:  2,   // Number of factors required
 	}
 
 	err := s.keeper.SetBorderlineParams(s.ctx, params)
@@ -328,21 +330,20 @@ func (s *BorderlineFallbackTestSuite) TestBorderlineParams_SetAndGet() {
 	retrieved := s.keeper.GetBorderlineParams(s.ctx)
 	s.Require().Equal(params.LowerThreshold, retrieved.LowerThreshold)
 	s.Require().Equal(params.UpperThreshold, retrieved.UpperThreshold)
-	s.Require().Equal(params.Enabled, retrieved.Enabled)
+	s.Require().Equal(params.MfaTimeoutBlocks, retrieved.MfaTimeoutBlocks)
 	s.Require().Equal(params.RequiredFactors, retrieved.RequiredFactors)
 }
 
 func (s *BorderlineFallbackTestSuite) TestBorderlineParams_Validation() {
 	// Lower threshold > upper threshold should fail
 	invalidParams := types.BorderlineParams{
-		LowerThreshold:          95,
-		UpperThreshold:          85,
-		Enabled:                 true,
-		RequiredFactors:         []string{"totp"},
-		ChallengeTimeoutSeconds: 300,
+		LowerThreshold:   95,
+		UpperThreshold:   85,
+		MfaTimeoutBlocks: 100,
+		RequiredFactors:  1,
 	}
 
-	err := invalidParams.Validate()
+	err := types.ValidateBorderlineParams(invalidParams)
 	s.Require().Error(err)
 }
 
@@ -352,12 +353,12 @@ func (s *BorderlineFallbackTestSuite) TestBorderlineParams_IsScoreInBorderlineBa
 		UpperThreshold: 90,
 	}
 
-	s.Require().False(params.IsScoreInBorderlineBand(84)) // Below lower
-	s.Require().True(params.IsScoreInBorderlineBand(85))  // At lower bound
-	s.Require().True(params.IsScoreInBorderlineBand(87))  // In band
-	s.Require().True(params.IsScoreInBorderlineBand(89))  // In band
-	s.Require().False(params.IsScoreInBorderlineBand(90)) // At upper bound (excluded)
-	s.Require().False(params.IsScoreInBorderlineBand(91)) // Above upper
+	s.Require().False(types.IsScoreInBorderlineBand(params, 84)) // Below lower
+	s.Require().True(types.IsScoreInBorderlineBand(params, 85))  // At lower bound
+	s.Require().True(types.IsScoreInBorderlineBand(params, 87))  // In band
+	s.Require().True(types.IsScoreInBorderlineBand(params, 89))  // In band
+	s.Require().False(types.IsScoreInBorderlineBand(params, 90)) // At upper bound (excluded)
+	s.Require().False(types.IsScoreInBorderlineBand(params, 91)) // Above upper
 }
 
 // ============================================================================

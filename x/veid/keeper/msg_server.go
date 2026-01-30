@@ -504,9 +504,9 @@ func (ms msgServer) CompleteBorderlineFallback(goCtx context.Context, msg *types
 	}
 
 	// Find the fallback record by challenge ID
-	fallbackRecord, found := ms.keeper.GetBorderlineFallbackByChallenge(ctx, msg.ChallengeID)
+	fallbackRecord, found := ms.keeper.GetBorderlineFallbackByChallenge(ctx, msg.ChallengeId)
 	if !found {
-		return nil, types.ErrBorderlineFallbackNotFound.Wrapf("no fallback found for challenge %s", msg.ChallengeID)
+		return nil, types.ErrBorderlineFallbackNotFound.Wrapf("no fallback found for challenge %s", msg.ChallengeId)
 	}
 
 	// Verify the sender matches the account in the fallback record
@@ -518,7 +518,7 @@ func (ms msgServer) CompleteBorderlineFallback(goCtx context.Context, msg *types
 	err = ms.keeper.HandleBorderlineFallbackCompleted(
 		ctx,
 		msg.Sender,
-		msg.ChallengeID,
+		msg.ChallengeId,
 		msg.FactorsSatisfied,
 	)
 	if err != nil {
@@ -537,15 +537,15 @@ func (ms msgServer) CompleteBorderlineFallback(goCtx context.Context, msg *types
 			types.EventTypeBorderlineFallbackCompleted,
 			sdk.NewAttribute(types.AttributeKeyAccountAddress, msg.Sender),
 			sdk.NewAttribute(types.AttributeKeyFallbackID, fallbackRecord.FallbackID),
-			sdk.NewAttribute(types.AttributeKeyChallengeID, msg.ChallengeID),
+			sdk.NewAttribute(types.AttributeKeyChallengeID, msg.ChallengeId),
 			sdk.NewAttribute(types.AttributeKeyFactorClass, factorClass),
 			sdk.NewAttribute(types.AttributeKeyFinalStatus, string(types.VerificationStatusVerified)),
 		),
 	)
 
 	return &types.MsgCompleteBorderlineFallbackResponse{
-		FallbackID:  updatedFallback.FallbackID,
-		FinalStatus: updatedFallback.FinalVerificationStatus,
+		FallbackId:  updatedFallback.FallbackID,
+		FinalStatus: types.VerificationStatusToProto(updatedFallback.FinalVerificationStatus),
 		FactorClass: factorClass,
 	}, nil
 }

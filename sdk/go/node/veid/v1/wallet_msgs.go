@@ -146,10 +146,6 @@ func (msg *MsgUpdateConsentSettings) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
-	if msg.NewSettings == nil {
-		return ErrInvalidConsent.Wrap("new_settings cannot be nil")
-	}
-
 	if len(msg.UserSignature) == 0 {
 		return ErrInvalidUserSignature.Wrap("user_signature cannot be empty")
 	}
@@ -175,20 +171,20 @@ func (msg *MsgRebindWallet) Type() string { return TypeMsgRebindWallet }
 
 // ValidateBasic validates the message
 func (msg *MsgRebindWallet) ValidateBasic() error {
-	if _, err := sdk.AccAddressFromBech32(msg.CurrentOwner); err != nil {
-		return ErrInvalidAddress.Wrap("invalid current owner address")
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.NewOwner); err != nil {
-		return ErrInvalidAddress.Wrap("invalid new owner address")
+	if len(msg.NewBindingSignature) == 0 {
+		return ErrWalletBindingFailed.Wrap("new_binding_signature cannot be empty")
 	}
 
-	if len(msg.CurrentOwnerSignature) == 0 {
-		return ErrInvalidUserSignature.Wrap("current_owner_signature cannot be empty")
+	if len(msg.NewBindingPubKey) == 0 {
+		return ErrWalletBindingFailed.Wrap("new_binding_pub_key cannot be empty")
 	}
 
-	if len(msg.NewOwnerSignature) == 0 {
-		return ErrInvalidUserSignature.Wrap("new_owner_signature cannot be empty")
+	if len(msg.OldSignature) == 0 {
+		return ErrInvalidUserSignature.Wrap("old_signature cannot be empty")
 	}
 
 	return nil
@@ -196,7 +192,7 @@ func (msg *MsgRebindWallet) ValidateBasic() error {
 
 // GetSigners returns the signers for the message
 func (msg *MsgRebindWallet) GetSigners() []sdk.AccAddress {
-	signer, _ := sdk.AccAddressFromBech32(msg.CurrentOwner)
+	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{signer}
 }
 
@@ -216,8 +212,8 @@ func (msg *MsgUpdateDerivedFeatures) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
-	if msg.ScopeId == "" {
-		return ErrInvalidScope.Wrap("scope_id cannot be empty")
+	if _, err := sdk.AccAddressFromBech32(msg.AccountAddress); err != nil {
+		return ErrInvalidAddress.Wrap("invalid account_address")
 	}
 
 	return nil

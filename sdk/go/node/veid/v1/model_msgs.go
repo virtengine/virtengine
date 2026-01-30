@@ -39,10 +39,7 @@ func (msg *MsgRegisterModel) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid authority address")
 	}
 
-	if msg.ModelInfo == nil {
-		return ErrModelNotFound.Wrap("model_info cannot be nil")
-	}
-
+	// ModelInfo is a value type (not pointer)
 	if msg.ModelInfo.ModelId == "" {
 		return ErrModelNotFound.Wrap("model_id cannot be empty")
 	}
@@ -72,10 +69,7 @@ func (msg *MsgProposeModelUpdate) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid proposer address")
 	}
 
-	if msg.Proposal == nil {
-		return ErrModelNotFound.Wrap("proposal cannot be nil")
-	}
-
+	// Proposal is a value type (not pointer), validation is done via its own Validate method if needed
 	return nil
 }
 

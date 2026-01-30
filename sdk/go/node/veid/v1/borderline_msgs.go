@@ -64,10 +64,7 @@ func (msg *MsgUpdateBorderlineParams) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid authority address")
 	}
 
-	if msg.Params == nil {
-		return ErrBorderlineFallbackFailed.Wrap("params cannot be nil")
-	}
-
+	// Params is a value type (not pointer), validation is done via its own Validate method if needed
 	return nil
 }
 
@@ -93,10 +90,7 @@ func (msg *MsgUpdateParams) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid authority address")
 	}
 
-	if msg.Params == nil {
-		return ErrInvalidScope.Wrap("params cannot be nil")
-	}
-
+	// Params is a value type (not pointer), validation is done via its own Validate method if needed
 	return nil
 }
 

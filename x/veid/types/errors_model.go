@@ -1,6 +1,7 @@
 // Package types provides VEID module types.
 //
 // This file defines model versioning error codes for the VEID module.
+// NOTE: ErrModelNotFound is aliased from veidv1 in errors.go - these are additional local errors.
 //
 // Task Reference: VE-3007 - Model Versioning and Governance
 package types
@@ -10,10 +11,8 @@ import (
 )
 
 // Model versioning error codes (range: 6000-6099)
+// NOTE: ErrModelNotFound is defined as an alias in errors.go from veidv1
 var (
-	// ErrModelNotFound is returned when a model cannot be found
-	ErrModelNotFound = errorsmod.Register(ModuleName, 6001, "model not found")
-
 	// ErrModelHashMismatch is returned when a model hash doesn't match expected
 	ErrModelHashMismatch = errorsmod.Register(ModuleName, 6002, "model hash mismatch")
 
