@@ -32,3 +32,19 @@ test-coverage:
 .PHONY: test-vet
 test-vet:
 	$(GO_VET) ./...
+
+###############################################################################
+###                     Compatibility tests                                 ###
+###############################################################################
+
+.PHONY: test-compatibility
+test-compatibility:
+	@echo "Running compatibility tests..."
+	$(GO_TEST) -v -tags="e2e.compatibility" ./tests/compatibility/...
+	$(GO_TEST) -v ./pkg/compatibility/...
+
+.PHONY: test-compatibility-full
+test-compatibility-full:
+	@echo "Running full compatibility test suite..."
+	$(GO_TEST) -v -tags="e2e.compatibility" -coverprofile=coverage-compatibility.txt ./tests/compatibility/...
+	$(GO_TEST) -v -coverprofile=coverage-pkg-compatibility.txt ./pkg/compatibility/...

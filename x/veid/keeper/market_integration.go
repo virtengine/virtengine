@@ -463,9 +463,18 @@ func (k Keeper) checkParticipantEligibility(ctx sdk.Context, address sdk.AccAddr
 	if status.IsDelegated {
 		if !requirements.AllowDelegation {
 			result.AddValidationError("delegation not allowed for this market type")
-		} else if requirements.MaxDelegationAge > 0 {
-			// TODO: Check delegation age when delegation is being used
-			// This would require querying the delegation record
+		} else if requirements.MaxDelegationAge > 0 && status.DelegationID != "" {
+			// Check delegation age
+			delegation, found := k.GetDelegation(ctx, status.DelegationID)
+			if !found {
+				result.AddValidationError("delegation record not found")
+			} else {
+				delegationAge := ctx.BlockTime().Sub(delegation.CreatedAt)
+				if delegationAge > requirements.MaxDelegationAge {
+					result.AddValidationError(fmt.Sprintf("delegation is too old: %v > max %v",
+						delegationAge.Truncate(time.Hour), requirements.MaxDelegationAge.Truncate(time.Hour)))
+				}
+			}
 		}
 	}
 

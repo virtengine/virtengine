@@ -1,0 +1,84 @@
+# Staging Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: virtengine
+
+resources:
+  - ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+
+commonAnnotations:
+  prometheus.io/enabled: "true"
+
+patches:
+  # Service account annotations for IRSA
+  - target:
+      kind: ServiceAccount
+      name: virtengine-node
+    patch: |-
+      - op: replace
+        path: /metadata/annotations
+        value:
+          eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/virtengine-virtengine-node-staging
+  - target:
+      kind: ServiceAccount
+      name: provider-daemon
+    patch: |-
+      - op: replace
+        path: /metadata/annotations
+        value:
+          eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/virtengine-provider-daemon-staging
+  # Staging resource sizing
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            cpu: 2000m
+            memory: 8Gi
+  # Enable replicas for HA testing
+  - target:
+      kind: Deployment
+      name: virtengine-node
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  # Storage sizing for staging
+  - target:
+      kind: PersistentVolumeClaim
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 50Gi
+
+configMapGenerator:
+  - name: virtengine-node-config
+    behavior: merge
+    literals:
+      - chain-id=virtengine-staging-1
+  - name: provider-daemon-config
+    behavior: merge
+    literals:
+      - log-level=info
+
+images:
+  - name: virtengine/node
+    newTag: staging
+  - name: virtengine/provider-daemon
+    newTag: staging
+
+replicas:
+  - name: provider-daemon
+    count: 2

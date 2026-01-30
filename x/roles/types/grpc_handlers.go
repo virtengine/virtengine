@@ -117,6 +117,8 @@ func RegisterMsgServer(s grpc.Server, srv MsgServer) {
 
 // _Msg_serviceDesc_grpc is the proper grpc.ServiceDesc for Msg service.
 // This is used for direct gRPC registration without the adapter.
+//
+//nolint:unused // Reserved for direct gRPC registration
 var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 	ServiceName: "virtengine.roles.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
@@ -131,6 +133,10 @@ var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 	Metadata: "virtengine/roles/v1/tx.proto",
 }
 
+// The following handlers are used by _Msg_serviceDesc_grpc for direct gRPC registration.
+// They are marked unused because the service descriptor is reserved for future use.
+
+//nolint:unused // Handler for _Msg_serviceDesc_grpc
 func _Msg_AssignRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgAssignRole)
 	if err := dec(in); err != nil {
@@ -145,6 +151,7 @@ func _Msg_AssignRole_Handler(srv interface{}, ctx context.Context, dec func(inte
 	})
 }
 
+//nolint:unused // Handler for _Msg_serviceDesc_grpc
 func _Msg_RevokeRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgRevokeRole)
 	if err := dec(in); err != nil {
@@ -159,6 +166,7 @@ func _Msg_RevokeRole_Handler(srv interface{}, ctx context.Context, dec func(inte
 	})
 }
 
+//nolint:unused // Handler for _Msg_serviceDesc_grpc
 func _Msg_SetAccountState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgSetAccountState)
 	if err := dec(in); err != nil {
@@ -173,6 +181,7 @@ func _Msg_SetAccountState_Handler(srv interface{}, ctx context.Context, dec func
 	})
 }
 
+//nolint:unused // Handler for _Msg_serviceDesc_grpc
 func _Msg_NominateAdmin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgNominateAdmin)
 	if err := dec(in); err != nil {
@@ -187,6 +196,7 @@ func _Msg_NominateAdmin_Handler(srv interface{}, ctx context.Context, dec func(i
 	})
 }
 
+//nolint:unused // Handler for _Msg_serviceDesc_grpc
 func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgUpdateParams)
 	if err := dec(in); err != nil {

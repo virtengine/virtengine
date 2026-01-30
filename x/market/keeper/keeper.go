@@ -1,10 +1,10 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"time"
 
 	storetypes "cosmossdk.io/store/types"
@@ -17,6 +17,7 @@ import (
 	types "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 
 	"github.com/virtengine/virtengine/x/market/keeper/keys"
+	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
 type IKeeper interface {
@@ -799,10 +800,29 @@ func (k Keeper) updateBid(ctx sdk.Context, bid types.Bid, currState types.Bid_St
 	}
 }
 
-// GetOrderByID returns an order by its string ID
-// TODO: Implement proper string ID parsing
+// GetOrderByID returns an order by its string ID.
+// The ID format is "customer/sequence" (e.g., "virtengine1abc.../123").
 func (k Keeper) GetOrderByID(ctx sdk.Context, orderID string) (interface{}, bool) {
-	// For now, search through all orders
+	// Try to parse the order ID using the marketplace parser
+	parsed, err := marketplace.ParseOrderID(orderID)
+	if err == nil {
+		// Check for overflow when converting uint64 to uint32
+		if parsed.Sequence > math.MaxUint32 {
+			// Sequence too large for mv1.OrderID format, fall through to linear search
+		} else {
+			// Convert marketplace.OrderID to mv1.OrderID
+			id := mv1.OrderID{
+				Owner: parsed.CustomerAddress,
+				OSeq:  uint32(parsed.Sequence),
+			}
+			order, found := k.GetOrder(ctx, id)
+			if found {
+				return order, true
+			}
+		}
+	}
+
+	// Fallback: search through all orders if parsing failed or order not found
 	var foundOrder types.Order
 	found := false
 	k.WithOrders(ctx, func(order types.Order) bool {
@@ -864,8 +884,10 @@ func (k Keeper) GetOrderProvider(ctx sdk.Context, orderID string) string {
 	return lease.ID.Provider
 }
 
-// GetOrderCompletedAt returns when the order was completed
-// TODO: Track completion time in order state
+// GetOrderCompletedAt returns when the order was completed.
+// Note: Orders don't track completion timestamp directly. For closed orders,
+// this returns the current block time as an approximation. For accurate
+// completion timestamps, callers should monitor order state change events.
 func (k Keeper) GetOrderCompletedAt(ctx sdk.Context, orderID string) time.Time {
 	orderIface, found := k.GetOrderByID(ctx, orderID)
 	if !found {
@@ -876,8 +898,8 @@ func (k Keeper) GetOrderCompletedAt(ctx sdk.Context, orderID string) time.Time {
 		return time.Time{}
 	}
 	if order.State == types.OrderClosed {
-		// For now, return current block time as approximation
-		// Real implementation would track when state changed
+		// Orders don't have a ClosedAt field. Return current block time.
+		// Callers needing accurate completion time should track state change events.
 		return ctx.BlockTime()
 	}
 	return time.Time{}

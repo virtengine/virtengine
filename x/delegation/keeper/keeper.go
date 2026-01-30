@@ -126,8 +126,12 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 // Sequence Management
 // ============================================================================
 
+// Note: The following sequence functions are reserved for future use when
+// delegation IDs require unique identifiers. They are currently unused but
+// kept for API completeness.
+
 // getNextDelegationSequence returns and increments the delegation sequence
-func (k Keeper) getNextDelegationSequence(ctx sdk.Context) uint64 {
+func (k Keeper) getNextDelegationSequence(ctx sdk.Context) uint64 { //nolint:unused // Reserved for future use
 	store := ctx.KVStore(k.skey)
 	bz := store.Get(types.SequenceKeyDelegation)
 	seq := uint64(1)
@@ -141,7 +145,7 @@ func (k Keeper) getNextDelegationSequence(ctx sdk.Context) uint64 {
 }
 
 // getNextUnbondingSequence returns and increments the unbonding sequence
-func (k Keeper) getNextUnbondingSequence(ctx sdk.Context) uint64 {
+func (k Keeper) getNextUnbondingSequence(ctx sdk.Context) uint64 { //nolint:unused // Reserved for future use
 	store := ctx.KVStore(k.skey)
 	bz := store.Get(types.SequenceKeyUnbonding)
 	seq := uint64(1)
@@ -155,7 +159,7 @@ func (k Keeper) getNextUnbondingSequence(ctx sdk.Context) uint64 {
 }
 
 // getNextRedelegationSequence returns and increments the redelegation sequence
-func (k Keeper) getNextRedelegationSequence(ctx sdk.Context) uint64 {
+func (k Keeper) getNextRedelegationSequence(ctx sdk.Context) uint64 { //nolint:unused // Reserved for future use
 	store := ctx.KVStore(k.skey)
 	bz := store.Get(types.SequenceKeyRedelegation)
 	seq := uint64(1)

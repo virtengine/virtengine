@@ -597,6 +597,18 @@ var (
 	// PrefixBlockedCountryIndex is the prefix for blocked country lookup index
 	// Key: PrefixBlockedCountryIndex | country_code -> []policy_id
 	PrefixBlockedCountryIndex = []byte{0x79}
+
+	// ============================================================================
+	// Validator Statistics Keys (REFACTOR-001: Validator Verification Tracking)
+	// ============================================================================
+
+	// PrefixValidatorStats is the prefix for validator verification statistics
+	// Key: PrefixValidatorStats | validator_address -> ValidatorStatsStore
+	PrefixValidatorStats = []byte{0x7A}
+
+	// PrefixValidatorStatsHistory is the prefix for validator stats history by epoch
+	// Key: PrefixValidatorStatsHistory | validator_address | epoch -> ValidatorStatsHistoryEntry
+	PrefixValidatorStatsHistory = []byte{0x7B}
 )
 
 // IdentityRecordKey returns the store key for an identity record
@@ -2117,6 +2129,45 @@ func RestoredArchivalBeforeKey(beforeTimestamp int64) []byte {
 	key := make([]byte, 0, len(PrefixRestoredArchival)+9)
 	key = append(key, PrefixRestoredArchival...)
 	key = append(key, encodeInt64(beforeTimestamp)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// ============================================================================
+// Validator Statistics Key Functions (REFACTOR-001)
+// ============================================================================
+
+// ValidatorStatsKey returns the store key for validator statistics
+func ValidatorStatsKey(validatorAddress string) []byte {
+	addrBytes := []byte(validatorAddress)
+	key := make([]byte, 0, len(PrefixValidatorStats)+len(addrBytes))
+	key = append(key, PrefixValidatorStats...)
+	key = append(key, addrBytes...)
+	return key
+}
+
+// ValidatorStatsPrefixKey returns the prefix for all validator statistics
+func ValidatorStatsPrefixKey() []byte {
+	return PrefixValidatorStats
+}
+
+// ValidatorStatsHistoryKey returns the store key for validator stats at a specific epoch
+func ValidatorStatsHistoryKey(validatorAddress string, epoch int64) []byte {
+	addrBytes := []byte(validatorAddress)
+	key := make([]byte, 0, len(PrefixValidatorStatsHistory)+len(addrBytes)+1+8)
+	key = append(key, PrefixValidatorStatsHistory...)
+	key = append(key, addrBytes...)
+	key = append(key, byte('/'))
+	key = append(key, encodeInt64(epoch)...)
+	return key
+}
+
+// ValidatorStatsHistoryPrefixKey returns the prefix for all stats history of a validator
+func ValidatorStatsHistoryPrefixKey(validatorAddress string) []byte {
+	addrBytes := []byte(validatorAddress)
+	key := make([]byte, 0, len(PrefixValidatorStatsHistory)+len(addrBytes)+1)
+	key = append(key, PrefixValidatorStatsHistory...)
+	key = append(key, addrBytes...)
 	key = append(key, byte('/'))
 	return key
 }

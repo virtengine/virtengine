@@ -1,0 +1,25 @@
+# ArgoCD Installation and Configuration
+# Kustomization base for ArgoCD deployment
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  - install.yaml
+  - argocd-cm.yaml
+  - argocd-rbac-cm.yaml
+  - argocd-cmd-params-cm.yaml
+  - ingress.yaml
+  - projects/virtengine.yaml
+
+configMapGenerator:
+  - name: argocd-ssh-known-hosts-cm
+    namespace: argocd
+    files:
+      - ssh_known_hosts
+
+generatorOptions:
+  disableNameSuffixHash: true

@@ -1,0 +1,162 @@
+# Provider Daemon Blue/Green Rollout
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: provider-daemon
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: provider
+    app.kubernetes.io/part-of: virtengine
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: provider-daemon
+  strategy:
+    blueGreen:
+      activeService: provider-daemon-active
+      previewService: provider-daemon-preview
+      autoPromotionEnabled: true
+      autoPromotionSeconds: 300  # Auto-promote after 5 minutes if healthy
+      previewReplicaCount: 1
+      scaleDownDelaySeconds: 180
+      prePromotionAnalysis:
+        templates:
+          - templateName: provider-health-check
+        args:
+          - name: service-name
+            value: provider-daemon-preview
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: provider-daemon
+        app.kubernetes.io/component: provider
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8445"
+    spec:
+      serviceAccountName: provider-daemon
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: provider-daemon
+          image: virtengine/provider-daemon:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: api
+              containerPort: 8443
+            - name: grpc
+              containerPort: 8444
+            - name: metrics
+              containerPort: 8445
+          env:
+            - name: VIRTENGINE_NODE_URL
+              value: http://virtengine-node-active:26657
+            - name: VIRTENGINE_GRPC_URL
+              value: virtengine-node-active:9090
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          volumeMounts:
+            - name: data
+              mountPath: /root/.provider
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: provider-daemon-data
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: provider-daemon
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-daemon-active
+  namespace: virtengine
+spec:
+  type: ClusterIP
+  ports:
+    - name: api
+      port: 8443
+      targetPort: api
+    - name: grpc
+      port: 8444
+      targetPort: grpc
+  selector:
+    app.kubernetes.io/name: provider-daemon
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-daemon-preview
+  namespace: virtengine
+spec:
+  type: ClusterIP
+  ports:
+    - name: api
+      port: 8443
+      targetPort: api
+    - name: grpc
+      port: 8444
+      targetPort: grpc
+  selector:
+    app.kubernetes.io/name: provider-daemon
+---
+# Analysis Template for Provider Daemon
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: provider-health-check
+  namespace: virtengine
+spec:
+  args:
+    - name: service-name
+  metrics:
+    - name: http-health
+      interval: 10s
+      count: 20
+      successCondition: result == 200
+      failureLimit: 3
+      provider:
+        web:
+          url: "http://{{args.service-name}}.virtengine.svc.cluster.local:8443/health"
+          method: GET
+    - name: chain-connectivity
+      interval: 30s
+      count: 5
+      successCondition: result.connected == true
+      failureLimit: 2
+      provider:
+        web:
+          url: "http://{{args.service-name}}.virtengine.svc.cluster.local:8443/status"
+          jsonPath: "{.chain}"
