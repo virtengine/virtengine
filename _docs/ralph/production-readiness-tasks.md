@@ -11,12 +11,13 @@ Based on comprehensive analysis of:
 
 ### Critical Blockers Identified
 
-| Blocker ID | Description                                | Current Status                                                                       |
-| ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
-| BLOCK-004  | ✅ TEE Implementation Complete             | SGX, SEV-SNP, Nitro adapters + EnclaveManager + Attestation Verification implemented |
-| BLOCK-006  | ✅ SAML signature verification implemented | pkg/edugain/saml_verifier.go with goxmldsig (667 lines)                              |
-| BLOCK-007  | ✅ Government verification implemented     | pkg/govdata/aamva_adapter.go with DLDV API (1044 lines)                              |
-| BLOCK-008  | 🟡 Proto stubs remain (14 files)           | Hand-written ProtoMessage stubs in 14 modules need buf migration                     |
+| Blocker ID | Description                                 | Current Status                                                                                |
+| ---------- | ------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| BLOCK-004  | 🟡 TEE hardware deployment                  | SGX/SEV-SNP/Nitro adapters implemented; production hardware rollout pending                   |
+| BLOCK-009  | 🟡 Payment conversion & disputes            | Price feed integration, conversion execution, and dispute lifecycle persistence pending      |
+| BLOCK-010  | 🟡 Artifact store backend                   | Waldur artifact backend still stubbed (no real storage API integration)                       |
+| BLOCK-011  | 🟡 NLI session storage                      | In-memory sessions + rate limits; requires Redis/distributed backing                          |
+| BLOCK-012  | 🟡 Provider daemon event streaming          | Order/config polling still used; needs WebSocket/gRPC streaming for scale                     |
 
 ### Module Completion Matrix (Updated 2026-01-30)
 
@@ -24,13 +25,13 @@ Based on comprehensive analysis of:
 | ------------------- | ---------- | --------------------------------------------------------------------- |
 | x/veid              | 90%        | ✅ Tier transitions, scoring, wallet, salt-binding complete           |
 | x/mfa               | 90%        | ✅ Verification flows, session management, ante handler complete      |
-| x/roles             | 70%        | ✅ MsgServer/QueryServer enabled; proto stub remains                  |
+| x/roles             | 75%        | ✅ MsgServer/QueryServer enabled; proto generation complete           |
 | x/market            | 90%        | ✅ VEID gating integration complete                                   |
 | x/escrow            | 85%        | ✅ Settlement automation complete                                     |
 | pkg/enclave_runtime | 85%        | ✅ SGX/SEV-SNP/Nitro adapters + Manager (hardware deployment pending) |
 | pkg/govdata         | 95%        | ✅ AAMVA DLDV + DVS + eIDAS + GOV.UK adapters                         |
 | pkg/edugain         | 90%        | ✅ goxmldsig XML-DSig verification complete                           |
-| pkg/payment         | 90%        | ✅ Stripe SDK integration complete                                    |
+| pkg/payment         | 90%        | ✅ Stripe/Adyen gateways complete; conversion/dispute flows pending   |
 
 ---
 
@@ -86,21 +87,13 @@ Based on comprehensive analysis of:
 
 **Priority:** HIGH  
 **Spec Reference:** VE-207 - Mobile capture protocol  
-**Current State:** Salt validation stub exists
+**Current State:** ✅ **COMPLETED** - salt binding + signature validation implemented
 
-**Implementation Path:**
+**Evidence:**
 
-1. File: `x/veid/keeper/capture_validation.go` (new)
-2. Implement `ValidateSaltBinding(ctx, salt, metadata, payloadHash) error`
-3. Implement `ValidateClientSignature(ctx, clientID, sig, payload) error`
-4. Implement `ValidateUserSignature(ctx, addr, sig, payload) error`
-5. Update `UploadScope` to require all three validations
-
-**Acceptance Criteria:**
-
-- Per-upload salt bound into file metadata and signed payload hash
-- Server/chain validation rejects missing salt binding or invalid signatures
-- Protocol spec includes key rotation strategy for approved clients
+- `x/veid/keeper/capture_validation.go` implements `ValidateSaltBinding` + signature checks
+- `x/veid/keeper/keeper.go` enforces salt binding and client/user signatures on uploads
+- `x/veid/keeper/signature_crypto_test.go` covers salt binding validation paths
 
 ---
 
@@ -151,7 +144,7 @@ Based on comprehensive analysis of:
 
 ---
 
-### Category 3: TEE Enclave Integration (CRITICAL BLOCKER)
+### Category 3: TEE Enclave Integration (Implementation Complete)
 
 #### TEE-IMPL-001: Implement SGX Enclave Service
 
@@ -172,14 +165,13 @@ Based on comprehensive analysis of:
 
 **Priority:** HIGH  
 **Spec Reference:** VE-228 - TEE Security Model  
-**Current State:** Config exists but not implemented
+**Current State:** ✅ **COMPLETED** - SEV-SNP enclave service implemented
 
-**Implementation Path:**
+**Evidence:**
 
-1. File: `pkg/enclave_runtime/sev_enclave.go` (new)
-2. Implement using AMD SEV-SNP attestation SDK
-3. Same interface as SGXEnclaveService
-4. Remote attestation integration
+- `pkg/enclave_runtime/sev_enclave.go` production SEV-SNP implementation
+- `pkg/enclave_runtime/hardware_sev.go` + `crypto_sev.go` for attestation and crypto paths
+- `pkg/enclave_runtime/sev_enclave_test.go` for validation
 
 ---
 
@@ -187,24 +179,13 @@ Based on comprehensive analysis of:
 
 **Priority:** CRITICAL  
 **Spec Reference:** VE-229 - On-chain Enclave Registry  
-**Current State:** Not implemented
+**Current State:** ✅ **COMPLETED** - on-chain enclave registry implemented
 
-**Implementation Path:**
+**Evidence:**
 
-1. New module: `x/enclave/`
-2. Store per-validator enclave identity:
-   - enclave_measurement_hash
-   - enclave_enc_pubkey
-   - enclave_sign_pubkey
-   - attestation_quote
-3. Governance-controlled measurement allowlist
-4. MsgRegisterEnclaveIdentity, MsgRotateEnclaveIdentity
-
-**Acceptance Criteria:**
-
-- Validators can register enclave identities
-- Clients can query active validator enclave keys
-- Rejected: expired attestations, non-allowlisted measurements
+- `x/enclave/` module with keepers, msgs, and genesis
+- Measurement allowlist + governance proposal handlers in `x/enclave/keeper` and `x/enclave/client`
+- Protobufs generated under `sdk/proto/node/virtengine/enclave`
 
 ---
 
@@ -273,94 +254,77 @@ Based on comprehensive analysis of:
 
 ---
 
-### Category 5: Proto Generation (SYSTEMIC BLOCKER)
+### Category 5: Proto Generation (RESOLVED)
 
 #### PROTO-GEN-001: Complete VEID Proto Generation
 
 **Priority:** CRITICAL  
-**Spec Reference:** All VEID messages use stubs  
-**Current State:** Proto stubs in x/veid/types/proto_stub.go
+**Spec Reference:** VEID protobuf definitions  
+**Current State:** ✅ **COMPLETED** - VEID protos generated; stubs removed
 
-**Implementation Path:**
+**Evidence:**
 
-1. Create `proto/veid/` directory
-2. Define all message types:
-   - MsgUploadScope, MsgRevokeScope
-   - MsgRequestVerification, MsgUpdateVerificationStatus
-   - MsgUpdateScore
-   - MsgCreateIdentityWallet, MsgAddScopeToWallet
-3. Run `buf generate`
-4. Remove proto_stub.go
-
-**Acceptance Criteria:**
-
-- All VEID messages properly generated
-- Cosmos SDK autocli integration works
-- Build and tests pass
+- Protos under `sdk/proto/node/virtengine/veid/`
+- `x/veid/types/codec.go` uses generated registrations
 
 ---
 
 #### PROTO-GEN-002: Complete MFA Proto Generation
 
 **Priority:** CRITICAL  
-**Current State:** Proto stubs in x/mfa/types/
+**Current State:** ✅ **COMPLETED** - MFA protos generated; stubs removed
 
-**Implementation Path:**
+**Evidence:**
 
-1. Create `proto/mfa/` directory
-2. Define: MsgEnrollFactor, MsgRevokeFactor, MsgInitiateChallenge, etc.
-3. Run `buf generate`
+- Protos under `sdk/proto/node/virtengine/mfa/`
 
 ---
 
 #### PROTO-GEN-003: Complete Staking Extension Proto
 
 **Priority:** HIGH  
-**Current State:** Proto stubs in x/staking/types/codec.go
+**Current State:** ✅ **COMPLETED** - Staking extension protos generated
+
+**Evidence:**
+
+- Protos under `sdk/proto/node/virtengine/staking/`
 
 ---
 
 #### PROTO-GEN-004: Complete HPC Proto Generation
 
 **Priority:** HIGH  
-**Current State:** Proto stubs in x/hpc/types/codec.go
+**Current State:** ✅ **COMPLETED** - HPC protos generated
+
+**Evidence:**
+
+- Protos under `sdk/proto/node/virtengine/hpc/`
 
 ---
 
-### Category 6: Government Data Integration (BLOCKER)
+### Category 6: Government Data Integration (RESOLVED)
 
 #### GOVDATA-001: Implement AAMVA Production Adapter
 
 **Priority:** CRITICAL (BLOCKER)  
 **Spec Reference:** VE-909 - Government data integration  
-**Current State:** Mock adapter only
+**Current State:** ✅ **COMPLETED** - AAMVA production adapter implemented
 
-**Implementation Path:**
+**Evidence:**
 
-1. File: `pkg/govdata/aamva_adapter.go` - complete implementation
-2. Integrate with AAMVA DLDV service
-3. Handle all response codes and error cases
-4. Add comprehensive logging (no PII)
-
-**Acceptance Criteria:**
-
-- Real AAMVA API calls with proper error handling
-- Credential management via secrets
-- Rate limiting and retry logic
-- Audit trail for all verifications
+- `pkg/govdata/aamva_adapter.go` with DLDV integration
+- Rate limiting and audit logging in govdata service
 
 ---
 
 #### GOVDATA-002: Add Additional Jurisdiction Adapters
 
 **Priority:** HIGH
+**Current State:** ✅ **COMPLETED** - DVS, GOV.UK, eIDAS adapters implemented
 
-Implement adapters for:
+**Evidence:**
 
-- Australia (DVS)
-- UK (GOV.UK Verify)
-- EU (eIDAS)
-- Canada (PCTF)
+- `pkg/govdata/` includes DVS, GOV.UK, and eIDAS adapters
 
 ---
 
@@ -434,20 +398,12 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 **Priority:** CRITICAL  
 **Spec Reference:** veid-flow-spec.md - Ante Handler Integration  
-**Current State:** Partially implemented in app/ante.go
+**Current State:** ✅ **COMPLETED** - VEID ante decorator implemented
 
-**Implementation Path:**
+**Evidence:**
 
-1. File: `app/ante_veid.go` (new)
-2. Implement per-message requirement lookup
-3. Check tier and score thresholds
-4. Integrate with MFA decorator for authorization
-
-**Acceptance Criteria:**
-
-- All messages have defined requirements (or defaults)
-- Clear rejection messages
-- Bypass for genesis and governance
+- `app/ante_veid.go` enforces tier/score + MFA authorization requirements
+- Governance bypass and clear rejection messages implemented
 
 ---
 
@@ -457,15 +413,12 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 **Priority:** HIGH  
 **Spec Reference:** veid-flow-spec.md - Events section
+**Current State:** ✅ **COMPLETED** - VEID events defined and emitted
 
-Events to implement:
+**Evidence:**
 
-- EventTypeVerificationSubmitted
-- EventTypeVerificationCompleted
-- EventTypeTierChanged
-- EventTypeAuthorizationGranted
-- EventTypeAuthorizationConsumed
-- EventTypeAuthorizationExpired
+- `x/veid/types/events.go` defines typed events
+- `x/veid/keeper/events.go` and msg handlers emit typed events
 
 ---
 
@@ -473,15 +426,126 @@ Events to implement:
 
 **Priority:** HIGH  
 **Spec Reference:** VE-304
+**Current State:** ✅ **COMPLETED** - marketplace events implemented
 
-Events:
+**Evidence:**
 
-- OrderCreated
-- BidPlaced
-- AllocationCreated
-- ProvisionRequested
-- TerminateRequested
-- UsageUpdateRequested
+- `x/market/types/marketplace/events.go` defines events
+- `x/market/types/marketplace/keeper/keeper.go` emits events on state changes
+
+---
+
+### Category 11: Production Hardening & Integrations (NEW)
+
+#### TEE-HW-001: Deploy TEE Hardware & Attestation in Production
+
+**Priority:** CRITICAL  
+**Spec Reference:** VE-228/231 - TEE production deployment  
+**Current State:** Adapters implemented; production hardware rollout pending
+
+**Acceptance Criteria:**
+
+- SGX/SEV-SNP/Nitro hardware provisioned and attestation verified
+- Production runbooks and monitoring for enclave health
+- Failover strategy across TEE types documented
+
+---
+
+#### PAY-001: Implement Real Price Feed Integration
+
+**Priority:** CRITICAL  
+**Spec Reference:** VE-906 - Fiat-to-crypto onramp  
+**Current State:** Price feed placeholders in `pkg/payment/service.go`
+
+**Acceptance Criteria:**
+
+- Real price feed integration (CoinGecko/Chainlink/Pyth) with caching and retries
+- Deterministic conversion quotes with source attribution
+- Failure fallback documented and monitored
+
+---
+
+#### PAY-002: Implement Conversion Execution & Treasury Transfer
+
+**Priority:** CRITICAL  
+**Spec Reference:** VE-906 - Conversion execution  
+**Current State:** `ExecuteConversion` is a stub (no on-chain transfer)
+
+**Acceptance Criteria:**
+
+- Treasury transfer executed on-chain (MsgSend or dedicated module)
+- Idempotent conversion execution with ledger persistence
+- Clear failure handling and audit trail
+
+---
+
+#### PAY-003: Dispute Lifecycle Persistence & Gateway Actions
+
+**Priority:** HIGH  
+**Spec Reference:** Payment disputes (Stripe/Adyen)  
+**Current State:** Dispute retrieval/submit/accept are stubbed in `pkg/payment/service.go`
+
+**Acceptance Criteria:**
+
+- Dispute records persisted (DB or module store)
+- Stripe/Adyen dispute actions wired via gateway APIs
+- Webhook ingestion updates dispute state
+
+---
+
+#### ARTIFACT-001: Replace Waldur Artifact Store Stub
+
+**Priority:** HIGH  
+**Spec Reference:** VE-304 + artifact storage  
+**Current State:** `pkg/artifact_store/waldur_backend.go` uses stubbed in-memory storage
+
+**Acceptance Criteria:**
+
+- Real Waldur storage API integration (upload/download/pin)
+- Production auth and quota enforcement
+- Streaming support for large artifacts
+
+---
+
+#### NLI-001: Redis-Backed NLI Sessions & Rate Limiting
+
+**Priority:** HIGH  
+**Spec Reference:** VE-910 - NLI service scale  
+**Current State:** `pkg/nli/service.go` uses in-memory session and rate limit maps
+
+**Acceptance Criteria:**
+
+- Redis-backed session store with TTL and eviction policy
+- Distributed rate limiting (reuse `pkg/ratelimit`)
+- Metrics for session count and rate-limit hits
+
+---
+
+#### PROVIDER-STREAM-001: Replace Provider Daemon Polling with Streaming
+
+**Priority:** HIGH  
+**Spec Reference:** VE-304 - Provider daemon scale  
+**Current State:** `pkg/provider_daemon/bid_engine.go` polls orders/config on tickers
+
+**Acceptance Criteria:**
+
+- WebSocket/gRPC event subscriptions to chain events
+- Checkpointed replay on reconnect using existing checkpoint store
+- Polling fallback only for recovery
+
+---
+
+#### MOAB-SSH-001: Enforce SSH Known Hosts Verification
+
+**Priority:** HIGH  
+**Spec Reference:** HPC adapter security  
+**Current State:** `pkg/moab_adapter/client.go` uses `ssh.InsecureIgnoreHostKey()`
+
+**Acceptance Criteria:**
+
+- Host key verification via known_hosts or pinned keys
+- Configurable trust store per provider
+- Security tests for MITM protection
 
 ---
 
@@ -489,20 +553,13 @@ Events:
 
 Total tasks identified for vibe-kanban import:
 
-| Category           | Count | Priority      |
-| ------------------ | ----- | ------------- |
-| VEID Core          | 4     | CRITICAL/HIGH |
-| MFA Core           | 3     | CRITICAL/HIGH |
-| TEE Implementation | 4     | CRITICAL      |
-| Marketplace VEID   | 3     | HIGH/CRITICAL |
-| Proto Generation   | 4     | CRITICAL/HIGH |
-| Government Data    | 2     | CRITICAL/HIGH |
-| ML Determinism     | 2     | CRITICAL/HIGH |
-| Testing            | 3     | HIGH          |
-| Ante Handlers      | 1     | CRITICAL      |
-| Events             | 2     | HIGH          |
+| Category                             | Count | Priority      |
+| ------------------------------------ | ----- | ------------- |
+| Production Hardening & Integrations  | 8     | CRITICAL/HIGH |
+| ML Determinism                       | 2     | CRITICAL/HIGH |
+| Testing (E2E)                        | 3     | HIGH          |
 
-**Total: 28 detailed implementation tasks**
+**Total: 13 detailed implementation tasks**
 
 ---
 
@@ -515,5 +572,5 @@ Total tasks identified for vibe-kanban import:
 
 ---
 
-_Generated: $(date)_
+_Generated: 2026-01-30_
 _Based on: veid-flow-spec.md, prd.json VE-200 through VE-804_

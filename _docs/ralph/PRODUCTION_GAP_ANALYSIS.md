@@ -5,7 +5,7 @@
 **Assessment Date:** 2026-01-30  
 **Previous Assessment:** 2026-01-29  
 **Target Scale:** 1,000,000 nodes  
-**Assessment:** 🟢 **PRODUCTION READY** - Proto stub cleanup and TEE hardware deployment remaining
+**Assessment:** 🟡 **NEAR PRODUCTION READY** - TEE hardware deployment, payment conversion/dispute hardening, artifact store backend, distributed NLI sessions, and provider daemon event streaming remain
 
 This document provides a brutally honest, meticulous analysis of every module in the VirtEngine codebase, identifying the gap between current implementation and production-ready status for a system capable of handling 1 million nodes.
 
@@ -13,16 +13,20 @@ This document provides a brutally honest, meticulous analysis of every module in
 
 ## Critical Blockers Summary
 
-| Category                          | Count     | Impact                                                                                 |
-| --------------------------------- | --------- | -------------------------------------------------------------------------------------- |
-| 🟢 **Disabled gRPC Services**     | 0 modules | **Resolved (services enabled)**                                                        |
-| 🟡 **Proto Stubs (hand-written)** | 14 files  | **14 proto_stub.go files still present - need buf migration**                          |
-| 🟢 **Consensus Non-Determinism**  | Resolved  | **ctx.BlockTime() used; deterministic RNG seeded by block hash**                       |
-| 🟢 **TEE Implementation**         | Complete  | **SGX/SEV-SNP/Nitro adapters + Manager + Attestation (hardware deployment remaining)** |
-| 🟢 **Stub/Mock Implementations**  | Resolved  | **All key integrations now real: Stripe, Osmosis, AAMVA, OpenAI**                      |
-| 🟢 **In-Memory Only Storage**     | Resolved  | **Redis workflow storage implemented**                                                 |
-| 🟢 **VEID Core System**           | Complete  | **Tier transitions, scoring, identity wallet, salt-binding all implemented**           |
-| 🟢 **MFA Module**                 | Complete  | **Challenge verification, session management, ante handler gating all implemented**    |
+| Category                             | Count     | Impact                                                                                     |
+| ------------------------------------ | --------- | ------------------------------------------------------------------------------------------ |
+| 🟢 **Disabled gRPC Services**        | 0 modules | **Resolved (services enabled)**                                                            |
+| 🟢 **Proto Stubs (hand-written)**    | 0 files   | **Resolved (buf-generated protos; no proto_stub.go files remain)**                          |
+| 🟢 **Consensus Non-Determinism**     | Resolved  | **ctx.BlockTime() used; deterministic RNG seeded by block hash**                           |
+| 🟢 **TEE Implementation**            | Complete  | **SGX/SEV-SNP/Nitro adapters + Manager + Attestation (hardware deployment remaining)**     |
+| 🟢 **Stub/Mock Implementations**     | Resolved  | **Stripe, Osmosis, AAMVA, OpenAI, Jira, MOAB, Open OnDemand implemented**                   |
+| 🟢 **In-Memory Only Storage**        | Resolved  | **Redis workflow storage implemented**                                                     |
+| 🟢 **VEID Core System**              | Complete  | **Tier transitions, scoring, identity wallet, salt-binding all implemented**               |
+| 🟢 **MFA Module**                    | Complete  | **Challenge verification, session management, ante handler gating all implemented**        |
+| 🟡 **Payment Conversion & Disputes** | 3 gaps    | **Price feed, conversion execution, dispute lifecycle persistence not production-complete** |
+| 🟡 **Artifact Store Backend**        | 1 gap     | **Waldur artifact backend still stubbed; production storage integration required**         |
+| 🟡 **NLI Session Storage**           | 1 gap     | **In-memory sessions + rate limiting; needs Redis for scale**                              |
+| 🟡 **Provider Daemon Polling**       | 1 gap     | **Order/config polling; needs streaming for 1M-node scale**                                |
 
 ---
 
@@ -32,31 +36,17 @@ This document provides a brutally honest, meticulous analysis of every module in
 
 | Module      | MsgServer  | QueryServer | Status      | Impact                                                    |
 | ----------- | ---------- | ----------- | ----------- | --------------------------------------------------------- |
-| **x/veid**  | ✅ Enabled | ✅ Enabled  | ✅ RESOLVED | **gRPC services enabled; remaining proto/consensus work** |
-| **x/roles** | ✅ Enabled | ✅ Enabled  | ✅ RESOLVED | **gRPC services enabled; remaining proto/test work**      |
-| **x/mfa**   | ✅ Enabled | ✅ Enabled  | ✅ RESOLVED | **gRPC services enabled; remaining proto/test work**      |
+| **x/veid**  | ✅ Enabled | ✅ Enabled  | ✅ RESOLVED | **gRPC services enabled; proto generation complete** |
+| **x/roles** | ✅ Enabled | ✅ Enabled  | ✅ RESOLVED | **gRPC services enabled; proto generation complete** |
+| **x/mfa**   | ✅ Enabled | ✅ Enabled  | ✅ RESOLVED | **gRPC services enabled; proto generation complete** |
 
 **Evidence:** gRPC registration now enabled in module registration files.
 
-### 🟡 REMAINING: Proto Stub Files (14 files)
+### ✅ RESOLVED: Proto Stub Files (0 files)
 
-| Module           | Location                                                                | Status                           |
-| ---------------- | ----------------------------------------------------------------------- | -------------------------------- |
-| **x/veid**       | `x/veid/types/proto_stub.go`                                            | 🟡 Hand-written stub (173 lines) |
-| **x/roles**      | `x/roles/types/proto_stub.go`, `x/roles/keeper/proto_stub.go`           | 🟡 Hand-written stubs            |
-| **x/staking**    | `x/staking/types/proto_stub.go`                                         | 🟡 Hand-written stub             |
-| **x/settlement** | `x/settlement/types/proto_stub.go`                                      | 🟡 Hand-written stub             |
-| **x/review**     | `x/review/types/proto_stub.go`                                          | 🟡 Hand-written stub             |
-| **x/hpc**        | `x/hpc/types/proto_stub.go`                                             | 🟡 Hand-written stub             |
-| **x/encryption** | `x/encryption/types/proto_stub.go`, `x/encryption/keeper/proto_stub.go` | 🟡 Hand-written stubs            |
-| **x/delegation** | `x/delegation/types/proto_stub.go`                                      | 🟡 Hand-written stub             |
-| **x/config**     | `x/config/types/proto_stub.go`                                          | 🟡 Hand-written stub             |
-| **x/benchmark**  | `x/benchmark/types/proto_stub.go`, `x/benchmark/keeper/proto_stub.go`   | 🟡 Hand-written stubs            |
-| **x/market**     | `x/market/types/marketplace/proto_stub.go`                              | 🟡 Hand-written stub             |
+No `proto_stub.go` files remain. Protobufs are generated under `sdk/proto/node/virtengine/**` and module codecs use generated registrations.
 
-**Action Required:** Migrate all 14 proto_stub.go files to proper protobuf definitions via buf generate.
-
-### � RESOLVED: Consensus Determinism
+### ✅ RESOLVED: Consensus Determinism
 
 | Category                 | Status                    | Evidence                           |
 | ------------------------ | ------------------------- | ---------------------------------- |
@@ -117,19 +107,13 @@ w.UpdatedAt = ctx.BlockTime()  // From sdk.Context
 type SimulatedEnclaveService struct {
 ```
 
-### 🟡 STUB IMPLEMENTATIONS: Remaining Mock/Fake Data
+### 🟡 STUB/PARTIAL IMPLEMENTATIONS: Remaining Gaps
 
-| Package               | Status                                | Notes                                |
-| --------------------- | ------------------------------------- | ------------------------------------ |
-| **pkg/dex**           | 🟢 Osmosis adapter production-ready   | Real DEX integration via Osmosis SDK |
-| **pkg/payment**       | 🟢 Stripe SDK production-ready        | Live payment processing enabled      |
-| **pkg/govdata**       | 🟢 AAMVA DMV adapter production-ready | Real DMV verification API integrated |
-| **pkg/edugain**       | 🟢 XML-DSig verification implemented  | SAML signatures properly verified    |
-| **pkg/nli**           | 🟢 OpenAI backend production-ready    | Real AI chat with GPT-4 integration  |
-| **pkg/jira**          | 🟡 Types, webhook handlers            | No actual Jira API calls             |
-| **pkg/moab_adapter**  | 🟡 Types, state machines              | No real MOAB RPC client              |
-| **pkg/ood_adapter**   | 🟡 Types, auth framework              | No real Open OnDemand API calls      |
-| **pkg/slurm_adapter** | 🟢 SSH-based SLURM execution ready    | Full SLURM CLI integration via SSH   |
+| Package                | Status               | Notes                                                                                  |
+| ---------------------- | -------------------- | -------------------------------------------------------------------------------------- |
+| **pkg/artifact_store** | 🟡 Waldur backend     | IPFS client exists; Waldur backend still stubbed (no real storage API integration)     |
+| **pkg/payment**        | 🟡 Conversion/dispute | Gateway integrations exist; price feeds + conversion execution + dispute persistence   |
+| **pkg/nli**            | 🟡 In-memory sessions | Session state and rate limits are in-memory; needs Redis/distributed backing           |
 
 ### 🟢 PRODUCTION-READY: Working Implementations
 
@@ -141,7 +125,9 @@ type SimulatedEnclaveService struct {
 | **pkg/observability**    | 🟢 90% Ready | Structured logging with field redaction; metrics hooks              |
 | **pkg/workflow**         | 🟢 95% Ready | Redis persistent storage implemented; complete state machine        |
 | **pkg/waldur**           | 🟢 95% Ready | Official go-client wrapper with rate limiting and retry             |
-| **pkg/artifact_store**   | 🟡 60% Ready | Types good; IPFS backend needs real pinning service                 |
+| **pkg/jira**             | 🟢 85% Ready | Jira REST API client implemented; webhook handlers present          |
+| **pkg/moab_adapter**     | 🟢 80% Ready | SSH-based MOAB client with pooling; known_hosts hardening pending   |
+| **pkg/ood_adapter**      | 🟢 80% Ready | Open OnDemand REST/OAuth2 client; integration tests included        |
 | **pkg/benchmark_daemon** | 🟡 70% Ready | Synthetic tests work; needs real hardware benchmarks                |
 
 ---
@@ -236,11 +222,11 @@ type SimulatedEnclaveService struct {
 
 ### 🟡 REMAINING Security Issues
 
-| Issue                       | Location             | Risk                                     | Fix Priority                |
-| --------------------------- | -------------------- | ---------------------------------------- | --------------------------- |
-| **Proto stubs (14 files)**  | Multiple x/\*/types/ | Serialization risk if buf output differs | P1 - Migrate to buf         |
-| **TEE hardware deployment** | pkg/enclave_runtime  | POC adapters need production hardware    | P1 - Deploy on TEE hardware |
-| **Hardcoded test keys**     | Multiple test files  | Key exposure if deployed                 | P2 - Environment config     |
+| Issue                                    | Location                   | Risk                                  | Fix Priority                         |
+| ---------------------------------------- | -------------------------- | ------------------------------------- | ------------------------------------ |
+| **TEE hardware deployment**              | pkg/enclave_runtime        | POC adapters need production hardware | P1 - Deploy on TEE hardware          |
+| **MOAB SSH host key verification**       | pkg/moab_adapter/client.go | MITM risk if host keys are not pinned | P1 - Use known_hosts/pinning         |
+| **Hardcoded test keys**                  | Multiple test files        | Key exposure if deployed              | P2 - Environment config + guardrails |
 
 ---
 
@@ -261,27 +247,23 @@ type SimulatedEnclaveService struct {
 
 ## Remediation Roadmap
 
-### Phase 1: Proto Stub Migration (1-2 weeks) - IMMEDIATE
+### Phase 1: Production Hardening (1-3 weeks)
 
-1. **Migrate 14 proto_stub.go files to buf** - Replace hand-written ProtoMessage stubs
-2. **Validate serialization compatibility** - Ensure generated types match
-3. **Run full test suite** - Verify no regressions
+1. **Deploy TEE hardware (SGX/SEV/Nitro)** - Production attestation + operational runbooks
+2. **Payment conversion & disputes** - Real price feeds, conversion execution, dispute lifecycle persistence
+3. **Artifact store backend** - Replace Waldur stub with real storage API integration or deprecate backend
+4. **Distributed NLI + payment rate limiting** - Redis-backed sessions and shared rate limiter integration
+5. **Provider daemon event streaming** - Replace polling with WebSocket/gRPC subscriptions
+6. **MOAB SSH host key verification** - Known_hosts/pinning hardening
 
-### Phase 2: TEE Hardware Deployment (2-4 weeks)
-
-1. **Deploy SGX enclaves on Intel hardware** - Production attestation
-2. **Deploy SEV-SNP on AMD hardware** - Alternative TEE platform
-3. **Deploy Nitro on AWS** - Cloud TEE option
-4. **Security audit of enclave code paths** - External auditor
-
-### Phase 3: Production Hardening (4-8 weeks)
+### Phase 2: Scale & Performance (3-6 weeks)
 
 1. **Load testing to 1M nodes** - Performance benchmarks
 2. **Horizontal scaling for provider daemon** - Kubernetes operators
-3. **Real HPC integrations** - MOAB, Open OnDemand production clients
-4. **Production ML models** - Trained and validated models
+3. **Real hardware benchmarks** - Validate benchmark_daemon on production hardware
+4. **Async identity scoring** - Pending→finalized scoring pipeline for scale
 
-### Phase 4: Compliance & Launch (8-12 weeks)
+### Phase 3: Compliance & Launch (8-12 weeks)
 
 1. **SOC 2 Type II audit** - Compliance certification
 2. **GDPR validation** - PII handling audit
@@ -296,13 +278,13 @@ type SimulatedEnclaveService struct {
 
 1. ✅ **VEID Identity System** - Tier transitions, scoring algorithm, identity wallet, salt-binding all complete
 2. ✅ **MFA Module** - Challenge verification (TOTP/FIDO2), session management, ante handler gating all complete
-3. ✅ **TEE Infrastructure** - SGX, SEV-SNP, Nitro adapters with attestation verification (hardware deployment pending)
-4. ✅ **External Integrations** - Stripe payments, AAMVA DMV, Osmosis DEX, XML-DSig SAML all production-ready
+3. ✅ **TEE Infrastructure + Enclave Registry** - SGX/SEV-SNP/Nitro adapters + on-chain registry (hardware deployment pending)
+4. ✅ **External Integrations** - Stripe/Adyen payments, AAMVA DMV, Osmosis DEX, XML-DSig SAML, Jira, MOAB, OOD implemented
 5. ✅ **Marketplace Integration** - VEID gating for orders, provider registration, validator registration all implemented
-6. 🟡 **Proto Stubs** - 14 files remain using hand-written ProtoMessage implementations
+6. ✅ **Proto Stubs** - Removed; buf-generated protos in sdk/proto
 
-**Overall Production Readiness: 92%**
+**Overall Production Readiness: 93%**
 
-**Estimated effort to 100%:** 2-4 weeks for proto migration + TEE hardware deployment
+**Estimated effort to 100%:** 3-6 weeks for hardening + TEE hardware deployment; 2-3 months for compliance
 
-**Recommendation:** ✅ **APPROVED for testnet deployment.** Complete proto stub migration before mainnet launch.
+**Recommendation:** ✅ **APPROVED for testnet deployment.** Complete Phase 1 hardening before mainnet launch.

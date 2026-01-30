@@ -1,6 +1,6 @@
 {
   "projectName": "VirtEngine Production Readiness - Military Grade",
-  "description": "Comprehensive task breakdown to achieve 100% production-ready status for VirtEngine blockchain. Updated 2026-01-30 - 92% complete.",
+  "description": "Comprehensive task breakdown to achieve 100% production-ready status for VirtEngine blockchain. Updated 2026-01-30 - 93% complete.",
   "targetDate": "2026-02-28",
   "columns": [
     {
@@ -51,7 +51,11 @@
         "Side-channel attack resistance verified"
       ],
       "assignedTo": "Security Team",
-      "labels": ["security", "cryptography", "audit"],
+      "labels": [
+        "security",
+        "cryptography",
+        "audit"
+      ],
       "column": "backlog"
     },
     {
@@ -70,7 +74,13 @@
         "Production deployment guide for TEE hardware"
       ],
       "assignedTo": "Completed",
-      "labels": ["security", "tee", "sgx", "sev-snp", "completed"],
+      "labels": [
+        "security",
+        "tee",
+        "sgx",
+        "sev-snp",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -89,7 +99,12 @@
         "Security tests for signature forgery attempts"
       ],
       "assignedTo": "Completed",
-      "labels": ["security", "saml", "authentication", "completed"],
+      "labels": [
+        "security",
+        "saml",
+        "authentication",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -109,7 +124,12 @@
         "Rate limiting and cost management"
       ],
       "assignedTo": "Completed",
-      "labels": ["security", "identity", "government-api", "completed"],
+      "labels": [
+        "security",
+        "identity",
+        "government-api",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -127,9 +147,13 @@
         "All VEID tests pass",
         "No serialization warnings"
       ],
-      "assignedTo": null,
-      "labels": ["protobuf", "veid", "in-progress"],
-      "column": "in-progress"
+      "assignedTo": "Completed",
+      "labels": [
+        "completed",
+        "protobuf",
+        "veid"
+      ],
+      "column": "done"
     },
     {
       "id": "PROTO-002",
@@ -146,9 +170,13 @@
         "NOTE comments removed",
         "All tests pass"
       ],
-      "assignedTo": null,
-      "labels": ["protobuf", "delegation"],
-      "column": "ready"
+      "assignedTo": "Completed",
+      "labels": [
+        "completed",
+        "delegation",
+        "protobuf"
+      ],
+      "column": "done"
     },
     {
       "id": "PROTO-003",
@@ -165,9 +193,14 @@
         "Escrow keeper tests pass",
         "All fraud module tests pass"
       ],
-      "assignedTo": null,
-      "labels": ["protobuf", "fraud", "blocker"],
-      "column": "ready"
+      "assignedTo": "Completed",
+      "labels": [
+        "blocker",
+        "completed",
+        "fraud",
+        "protobuf"
+      ],
+      "column": "done"
     },
     {
       "id": "PROTO-004",
@@ -183,9 +216,13 @@
         "codec.go updated",
         "All HPC tests pass"
       ],
-      "assignedTo": null,
-      "labels": ["protobuf", "hpc"],
-      "column": "ready"
+      "assignedTo": "Completed",
+      "labels": [
+        "completed",
+        "hpc",
+        "protobuf"
+      ],
+      "column": "done"
     },
     {
       "id": "TEST-001",
@@ -194,7 +231,9 @@
       "category": "Testing",
       "priority": "P2-Medium",
       "estimatedHours": 24,
-      "dependencies": ["PROTO-001"],
+      "dependencies": [
+        "PROTO-001"
+      ],
       "acceptanceCriteria": [
         "voip_detection_test.go - CarrierType API stabilized",
         "waldur_integration_test.go - WaldurLinkRecord API fixed",
@@ -204,7 +243,11 @@
         "All 5 test files re-enabled and passing"
       ],
       "assignedTo": null,
-      "labels": ["testing", "veid", "api-stability"],
+      "labels": [
+        "testing",
+        "veid",
+        "api-stability"
+      ],
       "column": "backlog"
     },
     {
@@ -224,7 +267,11 @@
         "All market handler tests passing"
       ],
       "assignedTo": null,
-      "labels": ["testing", "market", "handler"],
+      "labels": [
+        "testing",
+        "market",
+        "handler"
+      ],
       "column": "ready"
     },
     {
@@ -243,9 +290,14 @@
         "All payment service tests pass",
         "Integration tests with sandbox APIs"
       ],
-      "assignedTo": null,
-      "labels": ["payment", "integration", "adyen"],
-      "column": "backlog"
+      "assignedTo": "Completed",
+      "labels": [
+        "adyen",
+        "completed",
+        "integration",
+        "payment"
+      ],
+      "column": "done"
     },
     {
       "id": "PERF-001",
@@ -264,7 +316,10 @@
         "Baseline metrics established for regression detection"
       ],
       "assignedTo": null,
-      "labels": ["performance", "benchmarking"],
+      "labels": [
+        "performance",
+        "benchmarking"
+      ],
       "column": "backlog"
     },
     {
@@ -274,7 +329,9 @@
       "category": "Performance",
       "priority": "P1-High",
       "estimatedHours": 32,
-      "dependencies": ["PERF-001"],
+      "dependencies": [
+        "PERF-001"
+      ],
       "acceptanceCriteria": [
         "All N+1 query problems identified and fixed",
         "Cosmos SDK store key prefixes optimized",
@@ -284,7 +341,11 @@
         "Performance improvement validated with benchmarks"
       ],
       "assignedTo": null,
-      "labels": ["performance", "database", "optimization"],
+      "labels": [
+        "performance",
+        "database",
+        "optimization"
+      ],
       "column": "backlog"
     },
     {
@@ -304,7 +365,11 @@
         "Distributed cache support (Redis) for multi-validator setup"
       ],
       "assignedTo": null,
-      "labels": ["performance", "caching", "redis"],
+      "labels": [
+        "performance",
+        "caching",
+        "redis"
+      ],
       "column": "backlog"
     },
     {
@@ -314,7 +379,10 @@
       "category": "Scalability",
       "priority": "P0-Critical",
       "estimatedHours": 80,
-      "dependencies": ["PERF-001", "PERF-002"],
+      "dependencies": [
+        "PERF-001",
+        "PERF-002"
+      ],
       "acceptanceCriteria": [
         "Load test scenarios for 1M validators",
         "Marketplace with 100k active orders simulation",
@@ -325,7 +393,11 @@
         "Scaling recommendations documented"
       ],
       "assignedTo": null,
-      "labels": ["scalability", "load-testing", "stress-test"],
+      "labels": [
+        "scalability",
+        "load-testing",
+        "stress-test"
+      ],
       "column": "backlog"
     },
     {
@@ -345,7 +417,11 @@
         "Auto-scaling policies defined"
       ],
       "assignedTo": null,
-      "labels": ["scalability", "architecture", "deployment"],
+      "labels": [
+        "scalability",
+        "architecture",
+        "deployment"
+      ],
       "column": "backlog"
     },
     {
@@ -366,7 +442,12 @@
         "SLA/SLO definitions and tracking"
       ],
       "assignedTo": null,
-      "labels": ["observability", "monitoring", "alerting", "critical"],
+      "labels": [
+        "observability",
+        "monitoring",
+        "alerting",
+        "critical"
+      ],
       "column": "backlog"
     },
     {
@@ -376,7 +457,9 @@
       "category": "Observability",
       "priority": "P0-Critical",
       "estimatedHours": 40,
-      "dependencies": ["MONITOR-001"],
+      "dependencies": [
+        "MONITOR-001"
+      ],
       "acceptanceCriteria": [
         "Suspicious transaction pattern detection",
         "Identity verification fraud detection metrics",
@@ -387,7 +470,11 @@
         "Automated incident response playbooks"
       ],
       "assignedTo": null,
-      "labels": ["security", "monitoring", "threat-detection"],
+      "labels": [
+        "security",
+        "monitoring",
+        "threat-detection"
+      ],
       "column": "backlog"
     },
     {
@@ -397,7 +484,12 @@
       "category": "Documentation",
       "priority": "P1-High",
       "estimatedHours": 40,
-      "dependencies": ["PROTO-001", "PROTO-002", "PROTO-003", "PROTO-004"],
+      "dependencies": [
+        "PROTO-001",
+        "PROTO-002",
+        "PROTO-003",
+        "PROTO-004"
+      ],
       "acceptanceCriteria": [
         "OpenAPI/Swagger specs for all gRPC endpoints",
         "Interactive API docs (Swagger UI/Redoc)",
@@ -407,7 +499,10 @@
         "Authentication/authorization guide"
       ],
       "assignedTo": null,
-      "labels": ["documentation", "api"],
+      "labels": [
+        "documentation",
+        "api"
+      ],
       "column": "backlog"
     },
     {
@@ -417,7 +512,9 @@
       "category": "Documentation",
       "priority": "P0-Critical",
       "estimatedHours": 60,
-      "dependencies": ["MONITOR-001"],
+      "dependencies": [
+        "MONITOR-001"
+      ],
       "acceptanceCriteria": [
         "Validator setup and maintenance guide",
         "Provider daemon operational procedures",
@@ -429,7 +526,11 @@
         "Performance tuning guide"
       ],
       "assignedTo": null,
-      "labels": ["documentation", "operations", "runbooks"],
+      "labels": [
+        "documentation",
+        "operations",
+        "runbooks"
+      ],
       "column": "backlog"
     },
     {
@@ -439,7 +540,9 @@
       "category": "Documentation",
       "priority": "P0-Critical",
       "estimatedHours": 40,
-      "dependencies": ["SECURITY-001"],
+      "dependencies": [
+        "SECURITY-001"
+      ],
       "acceptanceCriteria": [
         "Security architecture documentation",
         "Threat model documentation (STRIDE)",
@@ -451,7 +554,11 @@
         "Penetration test results and remediation"
       ],
       "assignedTo": null,
-      "labels": ["documentation", "security", "compliance"],
+      "labels": [
+        "documentation",
+        "security",
+        "compliance"
+      ],
       "column": "backlog"
     },
     {
@@ -473,7 +580,10 @@
         "Debugging guide"
       ],
       "assignedTo": null,
-      "labels": ["documentation", "developer-experience"],
+      "labels": [
+        "documentation",
+        "developer-experience"
+      ],
       "column": "backlog"
     },
     {
@@ -495,7 +605,11 @@
         "Cost optimization analysis"
       ],
       "assignedTo": null,
-      "labels": ["infrastructure", "devops", "automation"],
+      "labels": [
+        "infrastructure",
+        "devops",
+        "automation"
+      ],
       "column": "backlog"
     },
     {
@@ -505,7 +619,9 @@
       "category": "Infrastructure",
       "priority": "P0-Critical",
       "estimatedHours": 60,
-      "dependencies": ["INFRA-001"],
+      "dependencies": [
+        "INFRA-001"
+      ],
       "acceptanceCriteria": [
         "Multi-region deployment capability",
         "Automated backup procedures (chain state, keys)",
@@ -517,7 +633,11 @@
         "Geographic redundancy validation"
       ],
       "assignedTo": null,
-      "labels": ["infrastructure", "disaster-recovery", "business-continuity"],
+      "labels": [
+        "infrastructure",
+        "disaster-recovery",
+        "business-continuity"
+      ],
       "column": "backlog"
     },
     {
@@ -539,7 +659,11 @@
         "Automated changelog generation"
       ],
       "assignedTo": null,
-      "labels": ["ci-cd", "security", "quality"],
+      "labels": [
+        "ci-cd",
+        "security",
+        "quality"
+      ],
       "column": "backlog"
     },
     {
@@ -560,7 +684,11 @@
         "Mutation testing for critical paths"
       ],
       "assignedTo": null,
-      "labels": ["testing", "quality", "coverage"],
+      "labels": [
+        "testing",
+        "quality",
+        "coverage"
+      ],
       "column": "backlog"
     },
     {
@@ -582,7 +710,11 @@
         "Crash/hang triage process"
       ],
       "assignedTo": null,
-      "labels": ["testing", "security", "fuzzing"],
+      "labels": [
+        "testing",
+        "security",
+        "fuzzing"
+      ],
       "column": "backlog"
     },
     {
@@ -592,7 +724,9 @@
       "category": "Quality",
       "priority": "P2-Medium",
       "estimatedHours": 80,
-      "dependencies": ["SCALE-001"],
+      "dependencies": [
+        "SCALE-001"
+      ],
       "acceptanceCriteria": [
         "Chaos Mesh/Litmus integration",
         "Network partition scenarios",
@@ -604,7 +738,11 @@
         "Chaos engineering runbook"
       ],
       "assignedTo": null,
-      "labels": ["testing", "resilience", "chaos-engineering"],
+      "labels": [
+        "testing",
+        "resilience",
+        "chaos-engineering"
+      ],
       "column": "backlog"
     },
     {
@@ -614,7 +752,9 @@
       "category": "Compliance",
       "priority": "P0-Critical",
       "estimatedHours": 60,
-      "dependencies": ["SECURITY-004"],
+      "dependencies": [
+        "SECURITY-004"
+      ],
       "acceptanceCriteria": [
         "Data inventory and classification complete",
         "Right to erasure (RTBF) implementation",
@@ -626,7 +766,11 @@
         "GDPR compliance audit"
       ],
       "assignedTo": null,
-      "labels": ["compliance", "gdpr", "privacy"],
+      "labels": [
+        "compliance",
+        "gdpr",
+        "privacy"
+      ],
       "column": "backlog"
     },
     {
@@ -636,7 +780,11 @@
       "category": "Compliance",
       "priority": "P1-High",
       "estimatedHours": 120,
-      "dependencies": ["SECURITY-001", "MONITOR-001", "DOCS-003"],
+      "dependencies": [
+        "SECURITY-001",
+        "MONITOR-001",
+        "DOCS-003"
+      ],
       "acceptanceCriteria": [
         "Control objectives defined and documented",
         "Security controls implemented and tested",
@@ -648,7 +796,11 @@
         "Continuous compliance program established"
       ],
       "assignedTo": null,
-      "labels": ["compliance", "soc2", "audit"],
+      "labels": [
+        "compliance",
+        "soc2",
+        "audit"
+      ],
       "column": "backlog"
     },
     {
@@ -670,7 +822,11 @@
         "Architectural decision records (ADRs) created"
       ],
       "assignedTo": null,
-      "labels": ["refactoring", "technical-debt", "code-quality"],
+      "labels": [
+        "refactoring",
+        "technical-debt",
+        "code-quality"
+      ],
       "column": "backlog"
     },
     {
@@ -692,7 +848,11 @@
         "Client error handling guide"
       ],
       "assignedTo": null,
-      "labels": ["refactoring", "error-handling", "reliability"],
+      "labels": [
+        "refactoring",
+        "error-handling",
+        "reliability"
+      ],
       "column": "backlog"
     },
     {
@@ -714,7 +874,11 @@
         "Emergency upgrade procedures"
       ],
       "assignedTo": null,
-      "labels": ["upgrades", "testing", "critical"],
+      "labels": [
+        "upgrades",
+        "testing",
+        "critical"
+      ],
       "column": "backlog"
     },
     {
@@ -736,7 +900,11 @@
         "Version support lifecycle defined"
       ],
       "assignedTo": null,
-      "labels": ["upgrades", "compatibility", "versioning"],
+      "labels": [
+        "upgrades",
+        "compatibility",
+        "versioning"
+      ],
       "column": "backlog"
     },
     {
@@ -758,7 +926,11 @@
         "Economic security audit"
       ],
       "assignedTo": null,
-      "labels": ["economics", "tokenomics", "game-theory"],
+      "labels": [
+        "economics",
+        "tokenomics",
+        "game-theory"
+      ],
       "column": "backlog"
     },
     {
@@ -768,7 +940,9 @@
       "category": "Economics",
       "priority": "P2-Medium",
       "estimatedHours": 40,
-      "dependencies": ["ECON-001"],
+      "dependencies": [
+        "ECON-001"
+      ],
       "acceptanceCriteria": [
         "Dynamic fee adjustment mechanism",
         "Provider incentive alignment",
@@ -780,7 +954,11 @@
         "Economic attack simulations"
       ],
       "assignedTo": null,
-      "labels": ["economics", "marketplace", "optimization"],
+      "labels": [
+        "economics",
+        "marketplace",
+        "optimization"
+      ],
       "column": "backlog"
     },
     {
@@ -802,7 +980,11 @@
         "Frontend security audit"
       ],
       "assignedTo": null,
-      "labels": ["frontend", "security", "portal"],
+      "labels": [
+        "frontend",
+        "security",
+        "portal"
+      ],
       "column": "backlog"
     },
     {
@@ -824,7 +1006,11 @@
         "Accessibility testing in CI/CD"
       ],
       "assignedTo": null,
-      "labels": ["frontend", "accessibility", "wcag"],
+      "labels": [
+        "frontend",
+        "accessibility",
+        "wcag"
+      ],
       "column": "backlog"
     },
     {
@@ -847,7 +1033,11 @@
         "Intrusion detection system (IDS) integration"
       ],
       "assignedTo": null,
-      "labels": ["networking", "security", "p2p"],
+      "labels": [
+        "networking",
+        "security",
+        "p2p"
+      ],
       "column": "backlog"
     },
     {
@@ -857,7 +1047,9 @@
       "category": "Networking",
       "priority": "P1-High",
       "estimatedHours": 40,
-      "dependencies": ["QUALITY-003"],
+      "dependencies": [
+        "QUALITY-003"
+      ],
       "acceptanceCriteria": [
         "Network partition simulation scenarios",
         "Consensus recovery validation",
@@ -869,7 +1061,11 @@
         "Partition recovery runbook"
       ],
       "assignedTo": null,
-      "labels": ["networking", "resilience", "testing"],
+      "labels": [
+        "networking",
+        "resilience",
+        "testing"
+      ],
       "column": "backlog"
     },
     {
@@ -879,7 +1075,9 @@
       "category": "Data Management",
       "priority": "P1-High",
       "estimatedHours": 40,
-      "dependencies": ["COMPLIANCE-001"],
+      "dependencies": [
+        "COMPLIANCE-001"
+      ],
       "acceptanceCriteria": [
         "Data retention policies defined",
         "Automated data archival process",
@@ -891,7 +1089,11 @@
         "Data lifecycle management documentation"
       ],
       "assignedTo": null,
-      "labels": ["data-management", "compliance", "archival"],
+      "labels": [
+        "data-management",
+        "compliance",
+        "archival"
+      ],
       "column": "backlog"
     },
     {
@@ -913,7 +1115,11 @@
         "State growth projections"
       ],
       "assignedTo": null,
-      "labels": ["data-management", "optimization", "storage"],
+      "labels": [
+        "data-management",
+        "optimization",
+        "storage"
+      ],
       "column": "backlog"
     },
     {
@@ -923,7 +1129,9 @@
       "category": "Legal",
       "priority": "P0-Critical",
       "estimatedHours": 40,
-      "dependencies": ["COMPLIANCE-001"],
+      "dependencies": [
+        "COMPLIANCE-001"
+      ],
       "acceptanceCriteria": [
         "Terms of Service drafted and reviewed",
         "Privacy Policy drafted and reviewed",
@@ -935,7 +1143,11 @@
         "User consent mechanisms implemented"
       ],
       "assignedTo": "Legal Team",
-      "labels": ["legal", "compliance", "documentation"],
+      "labels": [
+        "legal",
+        "compliance",
+        "documentation"
+      ],
       "column": "backlog"
     },
     {
@@ -945,7 +1157,9 @@
       "category": "Training",
       "priority": "P1-High",
       "estimatedHours": 80,
-      "dependencies": ["DOCS-002"],
+      "dependencies": [
+        "DOCS-002"
+      ],
       "acceptanceCriteria": [
         "Validator operator training curriculum",
         "Provider daemon operator training",
@@ -957,7 +1171,11 @@
         "Quarterly refresher training schedule"
       ],
       "assignedTo": null,
-      "labels": ["training", "operations", "knowledge-transfer"],
+      "labels": [
+        "training",
+        "operations",
+        "knowledge-transfer"
+      ],
       "column": "backlog"
     },
     {
@@ -979,7 +1197,11 @@
         "Bug SLA enforcement"
       ],
       "assignedTo": null,
-      "labels": ["bugfix", "critical", "quality"],
+      "labels": [
+        "bugfix",
+        "critical",
+        "quality"
+      ],
       "column": "ready"
     },
     {
@@ -990,9 +1212,14 @@
       "priority": "P1-High",
       "estimatedHours": 0,
       "dependencies": [],
-      "acceptanceCriteria": ["Tests passing"],
+      "acceptanceCriteria": [
+        "Tests passing"
+      ],
       "assignedTo": "Completed",
-      "labels": ["testing", "completed"],
+      "labels": [
+        "testing",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -1003,9 +1230,15 @@
       "priority": "P2-Medium",
       "estimatedHours": 0,
       "dependencies": [],
-      "acceptanceCriteria": ["ZK proofs implemented"],
+      "acceptanceCriteria": [
+        "ZK proofs implemented"
+      ],
       "assignedTo": "Completed",
-      "labels": ["security", "cryptography", "completed"],
+      "labels": [
+        "security",
+        "cryptography",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -1016,9 +1249,14 @@
       "priority": "P1-High",
       "estimatedHours": 0,
       "dependencies": [],
-      "acceptanceCriteria": ["SSH security implemented"],
+      "acceptanceCriteria": [
+        "SSH security implemented"
+      ],
       "assignedTo": "Completed",
-      "labels": ["security", "completed"],
+      "labels": [
+        "security",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -1029,9 +1267,15 @@
       "priority": "P1-High",
       "estimatedHours": 0,
       "dependencies": [],
-      "acceptanceCriteria": ["Real attestation crypto"],
+      "acceptanceCriteria": [
+        "Real attestation crypto"
+      ],
       "assignedTo": "Completed",
-      "labels": ["security", "tee", "completed"],
+      "labels": [
+        "security",
+        "tee",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -1042,9 +1286,14 @@
       "priority": "P2-Medium",
       "estimatedHours": 0,
       "dependencies": [],
-      "acceptanceCriteria": ["Tests passing"],
+      "acceptanceCriteria": [
+        "Tests passing"
+      ],
       "assignedTo": "Completed",
-      "labels": ["testing", "completed"],
+      "labels": [
+        "testing",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -1055,9 +1304,14 @@
       "priority": "P1-High",
       "estimatedHours": 0,
       "dependencies": [],
-      "acceptanceCriteria": ["Build passing"],
+      "acceptanceCriteria": [
+        "Build passing"
+      ],
       "assignedTo": "Completed",
-      "labels": ["bugfix", "completed"],
+      "labels": [
+        "bugfix",
+        "completed"
+      ],
       "column": "done"
     },
     {
@@ -1068,35 +1322,218 @@
       "priority": "P1-High",
       "estimatedHours": 0,
       "dependencies": [],
-      "acceptanceCriteria": ["Store keys fixed"],
+      "acceptanceCriteria": [
+        "Store keys fixed"
+      ],
       "assignedTo": "Completed",
-      "labels": ["bugfix", "completed"],
+      "labels": [
+        "bugfix",
+        "completed"
+      ],
       "column": "done"
+    },
+    {
+      "id": "TEE-HW-001",
+      "title": "Deploy TEE Hardware & Attestation in Production",
+      "description": "Provision SGX/SEV-SNP/Nitro hardware and validate production attestation with operational runbooks.",
+      "category": "Security",
+      "priority": "P0-Critical",
+      "estimatedHours": 80,
+      "dependencies": [
+        "SECURITY-002"
+      ],
+      "acceptanceCriteria": [
+        "Production SGX/SEV/Nitro hardware provisioned",
+        "Remote attestation verified end-to-end",
+        "Enclave health monitoring and alerts configured",
+        "Failover strategy across TEE types documented"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "security",
+        "tee",
+        "hardware"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "PAY-001",
+      "title": "Implement Real Price Feed Integration",
+      "description": "Replace placeholder conversion rates with real price feeds (CoinGecko/Chainlink/Pyth) with caching and retries.",
+      "category": "Payments",
+      "priority": "P0-Critical",
+      "estimatedHours": 24,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Price feeds queried from configured source(s)",
+        "Caching + retry logic implemented",
+        "Quote source and timestamp recorded",
+        "Failure fallback documented and monitored"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "payment",
+        "price-feed",
+        "conversion"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "PAY-002",
+      "title": "Implement Conversion Execution & Treasury Transfer",
+      "description": "Execute conversion settlement on-chain and persist conversion ledger entries.",
+      "category": "Payments",
+      "priority": "P0-Critical",
+      "estimatedHours": 40,
+      "dependencies": [
+        "PAY-001"
+      ],
+      "acceptanceCriteria": [
+        "On-chain transfer executed for conversion",
+        "Idempotent conversion execution",
+        "Ledger persistence with audit trail",
+        "Clear failure handling and reconciliation flow"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "payment",
+        "conversion",
+        "treasury"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "PAY-003",
+      "title": "Dispute Lifecycle Persistence & Gateway Actions",
+      "description": "Persist disputes and wire Stripe/Adyen dispute actions (submit evidence, accept, status updates).",
+      "category": "Payments",
+      "priority": "P1-High",
+      "estimatedHours": 24,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Dispute records persisted in store",
+        "Gateway dispute actions wired",
+        "Webhooks update dispute state",
+        "Audit trail for dispute actions"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "payment",
+        "disputes",
+        "webhooks"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "ARTIFACT-001",
+      "title": "Implement Waldur Artifact Store Backend",
+      "description": "Replace stubbed Waldur artifact backend with real storage API integration (upload/download/pin/stream).",
+      "category": "Data Management",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Real Waldur storage API integration",
+        "Streaming upload/download for large artifacts",
+        "Auth and quota enforcement",
+        "Production config and health checks"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "artifact-store",
+        "waldur",
+        "storage"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "NLI-001",
+      "title": "Redis-Backed NLI Sessions & Rate Limiting",
+      "description": "Move NLI session state and rate limits to Redis for distributed scaling.",
+      "category": "Scalability",
+      "priority": "P1-High",
+      "estimatedHours": 24,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Redis-backed session store with TTL",
+        "Distributed rate limiting (reuse pkg/ratelimit)",
+        "Metrics for session count and rate-limit hits"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "nli",
+        "redis",
+        "scalability"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "PROVIDER-STREAM-001",
+      "title": "Replace Provider Daemon Polling with Streaming",
+      "description": "Use WebSocket/gRPC event subscriptions for orders/config instead of polling loops.",
+      "category": "Scalability",
+      "priority": "P1-High",
+      "estimatedHours": 40,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "WebSocket/gRPC subscriptions to chain events",
+        "Checkpointed replay on reconnect",
+        "Polling fallback only for recovery"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "provider-daemon",
+        "streaming",
+        "scalability"
+      ],
+      "column": "ready"
+    },
+    {
+      "id": "MOAB-SSH-001",
+      "title": "Enforce MOAB SSH Known Hosts Verification",
+      "description": "Replace InsecureIgnoreHostKey with known_hosts/pinned key verification.",
+      "category": "Security",
+      "priority": "P1-High",
+      "estimatedHours": 16,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Known_hosts or pinned key verification implemented",
+        "Configurable trust store per provider",
+        "Security tests for MITM protection"
+      ],
+      "assignedTo": null,
+      "labels": [
+        "security",
+        "ssh",
+        "moab"
+      ],
+      "column": "ready"
     }
   ],
   "metrics": {
-    "totalTasks": 73,
-    "completedTasks": 52,
-    "inProgressTasks": 4,
-    "remainingTasks": 17,
-    "totalEstimatedHours": 2412,
-    "completedHours": 1856,
+    "totalTasks": 60,
+    "completedTasks": 15,
+    "inProgressTasks": 0,
+    "remainingTasks": 45,
+    "totalEstimatedHours": 2584.0,
+    "completedHours": 328.0,
     "criticalTasks": 20,
-    "highPriorityTasks": 18,
-    "mediumPriorityTasks": 19,
-    "productionReadiness": "92%"
+    "highPriorityTasks": 26,
+    "mediumPriorityTasks": 14,
+    "productionReadiness": "93%"
   },
   "summary": {
-    "description": "Updated 2026-01-30: VirtEngine is 92% production ready. Core VEID, MFA, TEE, and external integrations complete. Remaining: Proto stub migration (14 files), TEE hardware deployment, and operational hardening.",
+    "description": "Updated 2026-01-30: Proto stubs resolved and core modules complete. Remaining gaps: TEE hardware deployment, payment conversion/dispute hardening, artifact store backend, distributed NLI sessions, and provider daemon streaming.",
     "keyFocusAreas": [
-      "Proto Stub Migration (14 files - 2 weeks)",
       "TEE Hardware Deployment (SGX/SEV/Nitro - 2-4 weeks)",
-      "Security Audit (External firm - 4 weeks)",
-      "Observability Stack (Production monitoring - 2 weeks)",
+      "Payment Conversion + Disputes (Price feed + execution - 2-3 weeks)",
+      "Artifact Store Backend (Waldur integration - 2-3 weeks)",
+      "Provider Daemon Streaming (Event subscriptions - 2 weeks)",
+      "Distributed NLI Sessions (Redis - 1-2 weeks)",
       "Load Testing (1M node simulation - 4 weeks)",
       "SOC 2 Certification (Compliance - 8-12 weeks)"
     ],
-    "estimatedCompletionTime": "2-4 weeks for proto migration + TEE hardware; 3 months for full compliance",
-    "criticalPath": "Proto Stubs → TEE Hardware → Security Audit → Load Testing → SOC 2 Certification"
+    "estimatedCompletionTime": "3-6 weeks for hardening + TEE hardware; 2-3 months for compliance",
+    "criticalPath": "TEE Hardware → Payment Conversion → Artifact Store → Provider Streaming → Load Testing → SOC 2 Certification"
   }
 }
