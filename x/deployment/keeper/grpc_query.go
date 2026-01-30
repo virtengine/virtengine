@@ -71,7 +71,8 @@ func (k Querier) Deployments(c context.Context, req *types.QueryDeploymentsReque
 		states = append(states, byte(v1.DeploymentClosed))
 	}
 
-	var deployments types.DeploymentResponses
+	// Phase 1: Collect matching deployments (without fetching related data)
+	var collectedDeployments []v1.Deployment
 	var pageRes *sdkquery.PageResponse
 
 	total := uint64(0)
@@ -108,18 +109,7 @@ func (k Querier) Deployments(c context.Context, req *types.QueryDeploymentsReque
 			// filter deployments with provided filters
 			if req.Filters.Accept(deployment, state) {
 				if accumulate {
-					account, err := k.ekeeper.GetAccount(ctx, deployment.ID.ToEscrowAccountID())
-					if err != nil {
-						return true, fmt.Errorf("%w: fetching escrow account for DeploymentID=%s", err, deployment.ID)
-					}
-
-					value := types.QueryDeploymentResponse{
-						Deployment:    deployment,
-						Groups:        k.GetGroups(ctx, deployment.ID),
-						EscrowAccount: account,
-					}
-
-					deployments = append(deployments, value)
+					collectedDeployments = append(collectedDeployments, deployment)
 					count++
 				}
 
@@ -141,13 +131,45 @@ func (k Querier) Deployments(c context.Context, req *types.QueryDeploymentsReque
 				if err != nil {
 					pageRes.Total = total
 					return &types.QueryDeploymentsResponse{
-						Deployments: deployments,
+						Deployments: nil,
 						Pagination:  pageRes,
 					}, status.Error(codes.Internal, err.Error())
 				}
 			}
 
 			break
+		}
+	}
+
+	// Phase 2: Batch fetch related data for all collected deployments
+	deployments := make(types.DeploymentResponses, 0, len(collectedDeployments))
+
+	if len(collectedDeployments) > 0 {
+		// Collect deployment IDs for batch operations
+		deploymentIDs := make([]v1.DeploymentID, len(collectedDeployments))
+
+		for i, d := range collectedDeployments {
+			deploymentIDs[i] = d.ID
+		}
+
+		// Batch fetch groups for all deployments
+		groupsMap := k.GetGroupsBatch(ctx, deploymentIDs)
+
+		// Build responses with batched data
+		// Note: Account fetching still happens individually as escrow accounts use different ID structure
+		for _, deployment := range collectedDeployments {
+			account, err := k.ekeeper.GetAccount(ctx, deployment.ID.ToEscrowAccountID())
+			if err != nil {
+				return nil, status.Error(codes.Internal, fmt.Sprintf("fetching escrow account for DeploymentID=%s: %v", deployment.ID, err))
+			}
+
+			groups := groupsMap[deployment.ID.String()]
+
+			deployments = append(deployments, types.QueryDeploymentResponse{
+				Deployment:    deployment,
+				Groups:        groups,
+				EscrowAccount: account,
+			})
 		}
 	}
 

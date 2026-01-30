@@ -335,6 +335,18 @@ func MustLeaseReverseKey(statePrefix []byte, id types.LeaseID) []byte {
 	return key
 }
 
+// LeasesByProviderPrefix returns the prefix for looking up leases by provider and state.
+// This enables efficient queries like "does this provider have any active leases?"
+func LeasesByProviderPrefix(statePrefix []byte, provider sdk.AccAddress) []byte {
+	lenPrefixedProvider := address.MustLengthPrefix(provider)
+
+	buf := bytes.NewBuffer(LeasePrefixReverse)
+	buf.Write(statePrefix)
+	buf.Write(lenPrefixedProvider)
+
+	return buf.Bytes()
+}
+
 func OrdersForGroupPrefix(statePrefix []byte, id dtypes.GroupID) []byte {
 	buf := bytes.NewBuffer(OrderPrefix)
 	buf.Write(statePrefix)

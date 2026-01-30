@@ -173,7 +173,7 @@ func (q GRPCQuerier) VerificationHistory(goCtx context.Context, req *types.Query
 	}, nil
 }
 
-// ApprovedClients returns all approved clients
+// ApprovedClients returns all approved clients with pagination support
 func (q GRPCQuerier) ApprovedClients(goCtx context.Context, req *types.QueryApprovedClientsRequest) (*types.QueryApprovedClientsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -181,15 +181,30 @@ func (q GRPCQuerier) ApprovedClients(goCtx context.Context, req *types.QueryAppr
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
-	var clients []types.ApprovedClient
+	// Default limit if not specified
+	limit := req.Limit
+	if limit == 0 {
+		limit = 100 // Default page size
+	}
+	if limit > 1000 {
+		limit = 1000 // Max page size
+	}
+
+	var allClients []types.ApprovedClient
+	totalCount := uint32(0)
 
 	q.Keeper.WithApprovedClients(ctx, func(client types.ApprovedClient) bool {
-		clients = append(clients, client)
+		totalCount++
+		// Apply offset and limit
+		if totalCount > req.Offset && uint32(len(allClients)) < limit {
+			allClients = append(allClients, client)
+		}
 		return false
 	})
 
 	return &types.QueryApprovedClientsResponse{
-		Clients: clients,
+		Clients:    allClients,
+		TotalCount: totalCount,
 	}, nil
 }
 
@@ -515,7 +530,7 @@ func (q GRPCQuerier) AppealsByAccount(goCtx context.Context, req *types.QueryApp
 	}, nil
 }
 
-// PendingAppeals returns all pending appeals (for reviewers)
+// PendingAppeals returns all pending appeals (for reviewers) with pagination support
 func (q GRPCQuerier) PendingAppeals(goCtx context.Context, req *types.QueryPendingAppealsRequest) (*types.QueryPendingAppealsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -523,17 +538,31 @@ func (q GRPCQuerier) PendingAppeals(goCtx context.Context, req *types.QueryPendi
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
-	appeals := q.Keeper.GetPendingAppeals(ctx)
+	allAppeals := q.Keeper.GetPendingAppeals(ctx)
+	total := uint32(len(allAppeals))
 
-	// Apply limit if specified
+	// Apply offset
+	offset := int(req.Offset)
+	if offset > len(allAppeals) {
+		offset = len(allAppeals)
+	}
+	appeals := allAppeals[offset:]
+
+	// Apply limit
 	limit := int(req.Limit)
-	if limit > 0 && len(appeals) > limit {
+	if limit <= 0 {
+		limit = 100 // Default page size
+	}
+	if limit > 1000 {
+		limit = 1000 // Max page size
+	}
+	if len(appeals) > limit {
 		appeals = appeals[:limit]
 	}
 
 	return &types.QueryPendingAppealsResponse{
 		Appeals: appeals,
-		Total:   uint32(len(appeals)),
+		Total:   total,
 	}, nil
 }
 
