@@ -361,15 +361,27 @@ func ValidateEnvelopeSignature(envelope *types.EncryptedPayloadEnvelope) (bool, 
 	return diff == 0, nil
 }
 
-// signEnvelope creates a signature for the envelope
-// This uses a simplified binding scheme with the public key (not a true signature).
-// Note: In production, use Ed25519 for proper signatures.
+// signEnvelope creates a signature binding for the envelope.
+//
+// SECURITY WARNING (SECURITY-001):
+// This implementation uses a SHA256 binding (H(payload || publicKey)) which provides
+// integrity binding but NOT authentication. Anyone with knowledge of the public key
+// can compute the same binding value.
+//
+// REMEDIATION REQUIRED: Replace with Ed25519 signature using sender's private key:
+//  1. Change signature to: Ed25519.Sign(privateKey, payload)
+//  2. Update CreateEnvelope to accept signing key
+//  3. Update ValidateEnvelopeSignature to use Ed25519.Verify
+//
+// Current limitations:
+//   - No proof of sender identity (anyone can forge "signatures")
+//   - Suitable only when sender authentication is not required
+//   - Must NOT be used for transaction authorization
 func signEnvelope(envelope *types.EncryptedPayloadEnvelope, _ *[32]byte) ([]byte, error) {
 	payload := envelope.SigningPayload()
 
 	// Create binding: H(payload || publicKey)
-	// This binds the ciphertext to the sender's public key for integrity.
-	// Note: In production, use Ed25519 for proper signatures
+	// WARNING: This is NOT a true signature - see security note above
 	h := sha256.New()
 	h.Write(payload)
 	h.Write(envelope.SenderPubKey)
@@ -377,10 +389,12 @@ func signEnvelope(envelope *types.EncryptedPayloadEnvelope, _ *[32]byte) ([]byte
 	return h.Sum(nil), nil
 }
 
-// computeSignature computes the expected signature for verification
+// computeSignature computes the expected signature for verification.
+//
+// SECURITY WARNING: See signEnvelope security notes. This function only verifies
+// integrity binding, not sender authentication.
 func computeSignature(payload, senderPubKey []byte) []byte {
-	// For verification, we can only check structure since we don't have private key
-	// This is a simplified scheme - in production use Ed25519
+	// WARNING: This is a simplified scheme - does not verify sender identity
 	h := sha256.New()
 	h.Write(payload)
 	h.Write(senderPubKey)

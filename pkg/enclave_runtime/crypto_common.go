@@ -110,8 +110,20 @@ func (v *CertificateChainVerifier) AddIntermediateCA(pemData []byte) error {
 }
 
 // getVerifyTime returns the time to use for verification.
+//
+// SECURITY WARNING (SECURITY-001):
+// If CurrentTime is not set, this falls back to time.Now() which is CONSENSUS-UNSAFE
+// for on-chain operations. The caller MUST set CurrentTime from ctx.BlockTime() for
+// consensus-critical paths. This fallback exists for off-chain utility usage only.
+//
+// In keeper code, always ensure CurrentTime is set:
+//
+//	verifier := NewCertificateChainVerifier()
+//	verifier.CurrentTime = ctx.BlockTime()
 func (v *CertificateChainVerifier) getVerifyTime() time.Time {
 	if v.CurrentTime.IsZero() {
+		// WARNING: Consensus-unsafe fallback for off-chain usage only
+		// On-chain code MUST set CurrentTime from ctx.BlockTime()
 		return time.Now()
 	}
 	return v.CurrentTime
