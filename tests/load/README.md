@@ -1,14 +1,31 @@
 # VirtEngine Load Testing Suite
 
-**Version:** 1.0.0  
-**Date:** 2026-01-24  
-**Task Reference:** VE-801
+**Version:** 1.1.0  
+**Date:** 2026-01-30  
+**Task Reference:** VE-801, SCALE-001
 
 ---
 
 ## Overview
 
-This directory contains load testing scenarios for the VirtEngine blockchain platform. These tests verify system performance under load for identity scoring, marketplace operations, and HPC scheduling.
+This directory contains load testing scenarios for the VirtEngine blockchain platform. These tests verify system performance under load for identity scoring, marketplace operations, HPC scheduling, and **production-scale simulations**.
+
+## Directory Structure
+
+```
+tests/load/
+├── k6/                    # k6 JavaScript load tests
+├── scale/                 # SCALE-001: Production scale tests (1M validators)
+│   ├── validator_scale_test.go
+│   ├── marketplace_scale_test.go
+│   ├── provider_stress_test.go
+│   ├── network_partition_test.go
+│   ├── state_sync_test.go
+│   ├── degradation_analysis_test.go
+│   └── README.md
+├── scenarios_test.go      # Standard load scenarios
+└── README.md              # This file
+```
 
 ## Test Scenarios
 
@@ -31,6 +48,15 @@ Tests the SLURM scheduling pipeline under load.
 - Queue management
 - Accounting updates
 - Reward distribution
+
+### Scenario D: Scale Testing (SCALE-001)
+Tests production-scale scenarios. See `scale/README.md` for details.
+- **1M Validators**: Validator set operations at 1M node scale
+- **100k Orders**: Marketplace with 100k concurrent orders
+- **1k+ Providers**: Provider daemon stress testing
+- **Network Partitions**: Partition and recovery testing
+- **State Sync**: Large state snapshot and sync operations
+- **Degradation Analysis**: Performance bottleneck identification
 
 ## Tools
 
@@ -87,6 +113,25 @@ go test -bench=. -benchtime=30s ./tests/load/...
 go test -bench=BenchmarkIdentityScoring -benchtime=1m ./tests/load/...
 ```
 
+### Scale Tests (SCALE-001)
+
+```bash
+# Run scale tests (short mode for CI)
+go test -v ./tests/load/scale/... -short
+
+# Run full scale tests (production simulation)
+go test -v ./tests/load/scale/... -timeout 30m
+
+# Run scale benchmarks
+go test -bench=. -benchtime=10s ./tests/load/scale/...
+
+# Run specific scale test
+go test -v ./tests/load/scale/... -run TestValidatorScaleBaseline
+
+# Run degradation analysis
+go test -v ./tests/load/scale/... -run TestComprehensiveDegradationReport
+```
+
 ## Performance Baselines
 
 | Metric | Target | Critical |
@@ -96,6 +141,18 @@ go test -bench=BenchmarkIdentityScoring -benchtime=1m ./tests/load/...
 | HPC job scheduling p95 latency | < 10s | < 30s |
 | Daemon event processing lag | < 100ms | < 500ms |
 | Chain throughput (TPS) | > 100 | > 50 |
+
+### Scale Test Baselines (SCALE-001)
+
+| Metric | Target | Critical |
+|--------|--------|----------|
+| 1M validator lookup P95 | < 10ms | < 50ms |
+| 100k order iteration | < 30s | < 60s |
+| 1k provider bid latency | < 100ms | < 250ms |
+| Partition recovery | < 30s | < 60s |
+| State sync rate | > 100MB/s | > 50MB/s |
+
+See `scale/SCALE_BASELINES.json` for complete baseline definitions.
 
 ## Resource Limits
 
