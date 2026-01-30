@@ -12,6 +12,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
@@ -31,6 +32,28 @@ type ComplianceKeeper interface {
 
 	// SetComplianceStatus updates the compliance status
 	SetComplianceStatus(ctx sdk.Context, record *types.ComplianceRecord) error
+}
+
+// ============================================================================
+// Proto Type Conversion Helpers
+// ============================================================================
+
+// protoCheckResultToLocal converts a proto ComplianceCheckResult to local type
+func protoCheckResultToLocal(result *veidv1.ComplianceCheckResult) types.ComplianceCheckResult {
+	return types.ComplianceCheckResult{
+		CheckType:   types.ComplianceCheckType(result.CheckType),
+		Passed:      result.Passed,
+		Details:     result.Details,
+		MatchScore:  result.MatchScore,
+		CheckedAt:   result.CheckedAt,
+		ProviderID:  result.ProviderId,
+		ReferenceID: result.ReferenceId,
+	}
+}
+
+// protoCheckTypeToLocal converts a proto ComplianceCheckType to local type
+func protoCheckTypeToLocal(ct veidv1.ComplianceCheckType) types.ComplianceCheckType {
+	return types.ComplianceCheckType(ct)
 }
 
 // ============================================================================
@@ -331,7 +354,8 @@ func (k Keeper) SubmitComplianceCheck(ctx sdk.Context, msg *types.MsgSubmitCompl
 
 	// Verify provider supports all submitted check types
 	for _, result := range msg.CheckResults {
-		if !provider.SupportsCheckType(result.CheckType) {
+		localCheckType := protoCheckTypeToLocal(result.CheckType)
+		if !provider.SupportsCheckType(localCheckType) {
 			return types.ErrUnsupportedCheckType.Wrapf("provider does not support check type: %s", result.CheckType)
 		}
 	}
@@ -353,7 +377,8 @@ func (k Keeper) SubmitComplianceCheck(ctx sdk.Context, msg *types.MsgSubmitCompl
 	// Add check results
 	allPassed := true
 	for _, result := range msg.CheckResults {
-		record.AddCheckResult(result, now)
+		localResult := protoCheckResultToLocal(&result)
+		record.AddCheckResult(localResult, now)
 
 		if !result.Passed {
 			allPassed = false
@@ -365,7 +390,7 @@ func (k Keeper) SubmitComplianceCheck(ctx sdk.Context, msg *types.MsgSubmitCompl
 				types.EventTypeComplianceChecked,
 				sdk.NewAttribute(types.AttributeKeyAccountAddress, msg.TargetAddress),
 				sdk.NewAttribute(types.AttributeKeyComplianceCheckType, result.CheckType.String()),
-				sdk.NewAttribute(types.AttributeKeyComplianceProvider, msg.ProviderID),
+				sdk.NewAttribute(types.AttributeKeyComplianceProvider, msg.ProviderId),
 			),
 		)
 	}

@@ -75,12 +75,12 @@ type ArchivalRecord struct {
 	// LastAccessedAt is when last accessed
 	LastAccessedAt *time.Time `json:"last_accessed_at,omitempty"`
 
-	// ComplianceStatus contains compliance-related metadata
-	ComplianceStatus *ComplianceStatus `json:"compliance_status,omitempty"`
+	// ArchivalComplianceStatus contains compliance-related metadata
+	ArchivalComplianceStatus *ArchivalComplianceStatus `json:"compliance_status,omitempty"`
 }
 
-// ComplianceStatus contains compliance-related status information
-type ComplianceStatus struct {
+// ArchivalComplianceStatus contains compliance-related status information
+type ArchivalComplianceStatus struct {
 	// LegalHold indicates if under legal hold
 	LegalHold bool `json:"legal_hold"`
 
@@ -136,7 +136,7 @@ func (r *ArchivalRecord) IsExpired(now time.Time) bool {
 
 // CanDelete checks if the archive can be deleted
 func (r *ArchivalRecord) CanDelete() bool {
-	if r.ComplianceStatus != nil && r.ComplianceStatus.LegalHold {
+	if r.ArchivalComplianceStatus != nil && r.ArchivalComplianceStatus.LegalHold {
 		return false
 	}
 	return true
