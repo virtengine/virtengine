@@ -13,40 +13,35 @@ import (
 	delegationv1 "github.com/virtengine/virtengine/sdk/go/node/delegation/v1"
 )
 
-// Type alias for MsgServer from generated proto
-type MsgServer = delegationv1.MsgServer
-
-// RegisterMsgServer registers the MsgServer implementation with a gRPC server
-var RegisterMsgServer = delegationv1.RegisterMsgServer
-
-// ModuleCdc is the codec for the module
-var ModuleCdc = codec.NewLegacyAmino()
+var (
+	amino     = codec.NewLegacyAmino()
+	ModuleCdc = codec.NewProtoCodec(cdctypes.NewInterfaceRegistry())
+)
 
 func init() {
-	RegisterLegacyAminoCodec(ModuleCdc)
+	RegisterLegacyAminoCodec(amino)
 }
 
 // RegisterLegacyAminoCodec registers the delegation types on the provided LegacyAmino codec
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	// Register messages
-	legacy.RegisterAminoMsg(cdc, &MsgUpdateParams{}, "virtengine/delegation/MsgUpdateParams")
-	legacy.RegisterAminoMsg(cdc, &MsgDelegate{}, "virtengine/delegation/MsgDelegate")
-	legacy.RegisterAminoMsg(cdc, &MsgUndelegate{}, "virtengine/delegation/MsgUndelegate")
-	legacy.RegisterAminoMsg(cdc, &MsgRedelegate{}, "virtengine/delegation/MsgRedelegate")
-	legacy.RegisterAminoMsg(cdc, &MsgClaimRewards{}, "virtengine/delegation/MsgClaimRewards")
-	legacy.RegisterAminoMsg(cdc, &MsgClaimAllRewards{}, "virtengine/delegation/MsgClaimAllRewards")
+	// Register messages using generated proto types
+	legacy.RegisterAminoMsg(cdc, &delegationv1.MsgDelegate{}, "delegation/MsgDelegate")
+	legacy.RegisterAminoMsg(cdc, &delegationv1.MsgUndelegate{}, "delegation/MsgUndelegate")
+	legacy.RegisterAminoMsg(cdc, &delegationv1.MsgRedelegate{}, "delegation/MsgRedelegate")
+	legacy.RegisterAminoMsg(cdc, &delegationv1.MsgClaimRewards{}, "delegation/MsgClaimRewards")
+	legacy.RegisterAminoMsg(cdc, &delegationv1.MsgClaimAllRewards{}, "delegation/MsgClaimAllRewards")
+	legacy.RegisterAminoMsg(cdc, &delegationv1.MsgUpdateParams{}, "delegation/MsgUpdateParams")
 }
 
 // RegisterInterfaces registers the delegation types and interfaces
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgUpdateParams{},
-		&MsgDelegate{},
-		&MsgUndelegate{},
-		&MsgRedelegate{},
-		&MsgClaimRewards{},
-		&MsgClaimAllRewards{},
+		&delegationv1.MsgDelegate{},
+		&delegationv1.MsgUndelegate{},
+		&delegationv1.MsgRedelegate{},
+		&delegationv1.MsgClaimRewards{},
+		&delegationv1.MsgClaimAllRewards{},
+		&delegationv1.MsgUpdateParams{},
 	)
-
 	msgservice.RegisterMsgServiceDesc(registry, &delegationv1.Msg_serviceDesc)
 }

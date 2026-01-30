@@ -19,6 +19,8 @@ const DefaultRewardDenom = "uve"
 // DistributeValidatorRewardsToDelegators distributes a validator's rewards to their delegators
 // This should be called after validator rewards are calculated in the staking module
 func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validatorAddr string, epoch uint64, validatorReward string) error {
+	params := k.GetParams(ctx)
+
 	rewardBig, ok := new(big.Int).SetString(validatorReward, 10)
 	if !ok || rewardBig.Sign() <= 0 {
 		return nil // No rewards to distribute
@@ -30,9 +32,9 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 		return nil // No delegations
 	}
 
-	// Calculate commission (goes to validator) using default commission rate
+	// Calculate commission (goes to validator) using params commission rate
 	// commission = validatorReward * commissionRate / BasisPointsMax
-	commission := new(big.Int).Mul(rewardBig, big.NewInt(DefaultValidatorCommissionRate))
+	commission := new(big.Int).Mul(rewardBig, big.NewInt(params.ValidatorCommissionRate))
 	commission.Div(commission, big.NewInt(BasisPointsMax))
 
 	// Distributable = validatorReward - commission
