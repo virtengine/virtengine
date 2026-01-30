@@ -1,0 +1,1 @@
+{"version":1,"algorithm_id":"X25519-XSALSA20-POLY1305","algorithm_version":1,"recipient_key_ids":["abcdef0123456789abcdef0123456789abcdef01"],"nonce":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","ciphertext":"ZW5jcnlwdGVkIGRhdGE=","sender_pub_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","sender_signature":"c2lnbmF0dXJl"}
