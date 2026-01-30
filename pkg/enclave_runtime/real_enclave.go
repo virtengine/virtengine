@@ -177,8 +177,11 @@ type SGXEnclaveService struct {
 var _ EnclaveService = (*SGXEnclaveService)(nil)
 
 // NewSGXEnclaveService creates a new SGX enclave service
-func NewSGXEnclaveService(config SGXEnclaveConfig) (*SGXEnclaveService, error) {
-	return nil, errors.New("SGX enclave not yet implemented - see _docs/tee-integration-plan.md")
+// NOTE: This now delegates to the full implementation in sgx_enclave.go
+// The stub type SGXEnclaveService is deprecated in favor of SGXEnclaveServiceImpl
+func NewSGXEnclaveService(config SGXEnclaveConfig) (EnclaveService, error) {
+	// Create and return the full SGX implementation
+	return NewSGXEnclaveServiceImpl(config)
 }
 
 // GetPlatformType returns PlatformSGX
@@ -272,8 +275,11 @@ type SEVSNPEnclaveService struct {
 var _ EnclaveService = (*SEVSNPEnclaveService)(nil)
 
 // NewSEVSNPEnclaveService creates a new SEV-SNP enclave service
-func NewSEVSNPEnclaveService(config SEVSNPConfig) (*SEVSNPEnclaveService, error) {
-	return nil, errors.New("SEV-SNP enclave not yet implemented - see _docs/tee-integration-plan.md")
+// NOTE: This now delegates to the full implementation in sev_enclave.go
+// The stub type SEVSNPEnclaveService is deprecated in favor of SEVSNPEnclaveServiceImpl
+func NewSEVSNPEnclaveService(config SEVSNPConfig) (EnclaveService, error) {
+	// Create and return the full SEV-SNP implementation
+	return NewSEVSNPEnclaveServiceImpl(config)
 }
 
 // GetPlatformType returns PlatformSEVSNP
