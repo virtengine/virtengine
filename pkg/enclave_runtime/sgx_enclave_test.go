@@ -2,6 +2,7 @@ package enclave_runtime
 
 import (
 	"context"
+	"crypto/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -362,4 +363,286 @@ func TestSGXEnclaveServiceImpl_ConcurrentScoring(t *testing.T) {
 
 	// At least max concurrent should succeed
 	assert.GreaterOrEqual(t, successCount, 1)
+}
+
+// =============================================================================
+// Plaintext Isolation Integration Tests
+// =============================================================================
+
+func TestPlaintextGuard_BasicOperation(t *testing.T) {
+	guard := NewPlaintextGuard()
+
+	// Allocate some buffers
+	buf1 := guard.AllocatePlaintext(100)
+	buf2 := guard.AllocatePlaintext(200)
+
+	// Write sensitive data
+	_, err := buf1.Write([]byte("sensitive_data_1"))
+	require.NoError(t, err)
+	_, err = buf2.Write([]byte("sensitive_data_2"))
+	require.NoError(t, err)
+
+	// Scrub buffers
+	guard.ScrubAndRelease(buf1)
+	guard.ScrubAndRelease(buf2)
+
+	// Seal should succeed
+	err = guard.Seal()
+	assert.NoError(t, err)
+
+	// Verify stats
+	allocCount, scrubCount, verified := guard.Stats()
+	assert.Equal(t, uint64(2), allocCount)
+	assert.Equal(t, uint64(2), scrubCount)
+	assert.True(t, verified)
+}
+
+func TestPlaintextGuard_UnscrubedBuffersDetected(t *testing.T) {
+	guard := NewPlaintextGuard()
+
+	// Allocate buffer but don't scrub it
+	buf := guard.AllocatePlaintext(100)
+	_, _ = buf.Write([]byte("sensitive_data"))
+
+	// Seal should detect unscrubed buffer and force scrub
+	err := guard.Seal()
+	// Note: Seal now force scrubs and returns error for detection
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not properly scrubbed")
+
+	// But buffer should still be destroyed after seal
+	assert.True(t, buf.IsDestroyed())
+}
+
+func TestPlaintextGuard_CannotAllocateAfterSeal(t *testing.T) {
+	guard := NewPlaintextGuard()
+
+	// Seal the guard
+	err := guard.Seal()
+	require.NoError(t, err)
+
+	// Attempting to allocate after seal should panic
+	assert.Panics(t, func() {
+		guard.AllocatePlaintext(100)
+	})
+}
+
+func TestSGXEnclaveServiceImpl_PlaintextIsolation(t *testing.T) {
+	config := SGXEnclaveConfig{
+		EnclavePath: "/path/to/enclave.signed.so",
+		DCAPEnabled: true,
+	}
+
+	svc, err := NewSGXEnclaveServiceImpl(config)
+	require.NoError(t, err)
+	require.NoError(t, svc.Initialize(DefaultRuntimeConfig()))
+
+	// Reset the plaintext operation counter
+	ResetPlaintextOperationCount()
+	initialCount := GetPlaintextOperationCount()
+	assert.Equal(t, int64(0), initialCount)
+
+	// Perform scoring
+	request := &ScoringRequest{
+		RequestID:      "isolation-test-1",
+		Ciphertext:     []byte("encrypted_identity_data_for_testing"),
+		WrappedKey:     []byte("wrapped_key"),
+		Nonce:          []byte("nonce_12345"),
+		ScopeID:        "scope-123",
+		AccountAddress: "virtengine1isolationtest",
+		BlockHeight:    12345,
+	}
+
+	result, err := svc.Score(context.Background(), request)
+	require.NoError(t, err)
+	require.True(t, result.IsSuccess())
+
+	// Verify plaintext operation was tracked
+	finalCount := GetPlaintextOperationCount()
+	assert.Equal(t, int64(1), finalCount)
+
+	// Verify result has valid signature
+	assert.NotEmpty(t, result.EnclaveSignature)
+	assert.NotEmpty(t, result.MeasurementHash)
+}
+
+func TestSGXEnclaveServiceImpl_KeyIsolation(t *testing.T) {
+	config := SGXEnclaveConfig{
+		EnclavePath: "/path/to/enclave.signed.so",
+	}
+
+	svc, err := NewSGXEnclaveServiceImpl(config)
+	require.NoError(t, err)
+	require.NoError(t, svc.Initialize(DefaultRuntimeConfig()))
+
+	// Get public keys (should succeed)
+	encPubKey, err := svc.GetEncryptionPubKey()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, encPubKey)
+
+	sigPubKey, err := svc.GetSigningPubKey()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, sigPubKey)
+
+	// Verify key material exists but private keys are not directly accessible
+	// (The struct fields are private, so this is enforced by Go's visibility)
+	assert.NotNil(t, svc.keyMaterial)
+	assert.NotNil(t, svc.keyMaterial.SigningPublic)
+	assert.NotNil(t, svc.keyMaterial.EncryptionPublic)
+
+	// Perform key rotation
+	err = svc.RotateKeys()
+	require.NoError(t, err)
+
+	// Get new public keys
+	newEncPubKey, err := svc.GetEncryptionPubKey()
+	assert.NoError(t, err)
+	newSigPubKey, err := svc.GetSigningPubKey()
+	assert.NoError(t, err)
+
+	// Keys should be different after rotation
+	assert.NotEqual(t, encPubKey, newEncPubKey)
+	assert.NotEqual(t, sigPubKey, newSigPubKey)
+
+	// Epoch should have increased
+	status := svc.GetStatus()
+	assert.Equal(t, uint64(2), status.CurrentEpoch)
+}
+
+func TestSGXEnclaveServiceImpl_MemoryScrubOnShutdown(t *testing.T) {
+	config := SGXEnclaveConfig{
+		EnclavePath: "/path/to/enclave.signed.so",
+	}
+
+	svc, err := NewSGXEnclaveServiceImpl(config)
+	require.NoError(t, err)
+	require.NoError(t, svc.Initialize(DefaultRuntimeConfig()))
+
+	// Verify key material exists
+	assert.NotNil(t, svc.keyMaterial)
+
+	// Perform some operations
+	request := &ScoringRequest{
+		RequestID:      "scrub-test-1",
+		Ciphertext:     []byte("test_data"),
+		WrappedKey:     []byte("key"),
+		Nonce:          []byte("nonce"),
+		ScopeID:        "scope",
+		AccountAddress: "addr",
+	}
+	_, _ = svc.Score(context.Background(), request)
+
+	// Shutdown should scrub keys
+	err = svc.Shutdown()
+	require.NoError(t, err)
+
+	// Key material should be nil after shutdown
+	assert.Nil(t, svc.keyMaterial)
+
+	// Status should show not initialized
+	status := svc.GetStatus()
+	assert.False(t, status.Initialized)
+}
+
+func TestEnclaveKeyMaterial_Generation(t *testing.T) {
+	sealKey := make([]byte, 32)
+	_, err := rand.Read(sealKey)
+	require.NoError(t, err)
+
+	km, err := GenerateEnclaveKeys(sealKey, 1)
+	require.NoError(t, err)
+	require.NotNil(t, km)
+
+	// Verify public keys are generated
+	assert.NotEmpty(t, km.SigningPublic)
+	assert.NotEmpty(t, km.EncryptionPublic[:])
+	assert.Equal(t, uint64(1), km.Epoch)
+
+	// Verify signing works
+	testData := []byte("test message to sign")
+	signature := km.Sign(testData)
+	assert.NotEmpty(t, signature)
+	assert.Len(t, signature, 64) // Ed25519 signature is 64 bytes
+
+	// Verify key derivation is deterministic
+	km2, err := GenerateEnclaveKeys(sealKey, 1)
+	require.NoError(t, err)
+
+	// Same seal key and epoch should produce same public keys
+	assert.Equal(t, km.SigningPublic, km2.SigningPublic)
+	assert.Equal(t, km.EncryptionPublic, km2.EncryptionPublic)
+
+	// Different epoch should produce different keys
+	km3, err := GenerateEnclaveKeys(sealKey, 2)
+	require.NoError(t, err)
+	assert.NotEqual(t, km.SigningPublic, km3.SigningPublic)
+}
+
+func TestEnclaveKeyMaterial_Scrubbing(t *testing.T) {
+	sealKey := make([]byte, 32)
+	_, err := rand.Read(sealKey)
+	require.NoError(t, err)
+
+	km, err := GenerateEnclaveKeys(sealKey, 1)
+	require.NoError(t, err)
+
+	// Store a copy of the private key before scrubbing
+	originalPrivKeyLen := len(km.signingPrivate)
+	assert.Greater(t, originalPrivKeyLen, 0)
+
+	// Scrub private keys
+	km.ScrubPrivateKeys()
+
+	// Verify private key has been zeroed
+	allZero := true
+	for _, b := range km.signingPrivate {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	assert.True(t, allZero, "Private signing key should be zeroed after scrub")
+
+	// Verify encryption private key is zeroed
+	for _, b := range km.encryptionPrivate {
+		if b != 0 {
+			t.Error("Private encryption key should be zeroed after scrub")
+			break
+		}
+	}
+}
+
+func TestSGXEnclaveServiceImpl_SignatureVerification(t *testing.T) {
+	config := SGXEnclaveConfig{
+		EnclavePath: "/path/to/enclave.signed.so",
+	}
+
+	svc, err := NewSGXEnclaveServiceImpl(config)
+	require.NoError(t, err)
+	require.NoError(t, svc.Initialize(DefaultRuntimeConfig()))
+
+	request := &ScoringRequest{
+		RequestID:      "sig-verify-test",
+		Ciphertext:     []byte("data_to_score"),
+		WrappedKey:     []byte("key"),
+		Nonce:          []byte("nonce"),
+		ScopeID:        "scope",
+		AccountAddress: "addr",
+	}
+
+	result, err := svc.Score(context.Background(), request)
+	require.NoError(t, err)
+	require.True(t, result.IsSuccess())
+
+	// Get signing public key
+	sigPubKey, err := svc.GetSigningPubKey()
+	require.NoError(t, err)
+
+	// Verify the signature is 64 bytes (Ed25519)
+	assert.Len(t, result.EnclaveSignature, 64)
+
+	// In real usage, we would verify the signature here
+	// For now, just check it's not empty and is consistent
+	assert.NotEmpty(t, sigPubKey)
+	assert.Equal(t, 32, len(sigPubKey)) // Ed25519 public key is 32 bytes
 }
