@@ -1,0 +1,501 @@
+# VirtEngine Security Alert Rules
+# MONITOR-002: Security-focused monitoring and threat detection
+
+groups:
+  # =============================================================================
+  # Transaction Security Alerts
+  # =============================================================================
+  - name: virtengine_transaction_security
+    interval: 15s
+    rules:
+      # Transaction replay attempt detected
+      - alert: TransactionReplayAttempt
+        expr: increase(virtengine_security_tx_replay_attempts_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: transaction
+        annotations:
+          summary: "CRITICAL: Transaction replay attempt detected"
+          description: "Transaction replay attempts detected in the last 5 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/tx-replay"
+          dashboard: "https://grafana.virtengine.com/d/security"
+
+      # High transaction velocity
+      - alert: TransactionVelocityAnomaly
+        expr: |
+          increase(virtengine_security_tx_anomalies_detected_total{type="velocity_minute"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: transaction
+        annotations:
+          summary: "High transaction velocity anomalies detected"
+          description: "Multiple accounts exceeding transaction velocity thresholds"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/tx-velocity"
+
+      # Suspicious transaction pattern
+      - alert: SuspiciousTransactionPattern
+        expr: |
+          sum(increase(virtengine_security_tx_suspicious_patterns_total[10m])) by (pattern_type) > 10
+        for: 5m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: transaction
+        annotations:
+          summary: "Suspicious transaction patterns detected"
+          description: "Pattern type {{ $labels.pattern_type }} detected {{ $value }} times in 10 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/suspicious-tx"
+
+  # =============================================================================
+  # Identity Verification Fraud Alerts
+  # =============================================================================
+  - name: virtengine_veid_fraud
+    interval: 15s
+    rules:
+      # Document tampering detected
+      - alert: VEIDDocumentTampering
+        expr: increase(virtengine_security_veid_tampering_attempts_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: veid
+          tier: tier0
+          category: fraud
+        annotations:
+          summary: "CRITICAL: Document tampering attempt detected"
+          description: "Identity document tampering has been detected"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-tampering"
+
+      # Identity replay attack
+      - alert: VEIDReplayAttack
+        expr: increase(virtengine_security_veid_replay_attempts_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: veid
+          tier: tier0
+          category: fraud
+        annotations:
+          summary: "CRITICAL: VEID replay attack detected"
+          description: "Identity verification replay attack detected"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-replay"
+
+      # Document forgery
+      - alert: VEIDDocumentForgery
+        expr: increase(virtengine_security_veid_document_forgery_total[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: veid
+          tier: tier0
+          category: fraud
+        annotations:
+          summary: "CRITICAL: Document forgery attempt detected"
+          description: "Potential forged identity document detected"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-forgery"
+
+      # Biometric mismatch rate high
+      - alert: VEIDBiometricMismatchRateHigh
+        expr: |
+          rate(virtengine_security_veid_biometric_mismatches_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: high
+          service: veid
+          tier: tier0
+          category: fraud
+        annotations:
+          summary: "High rate of biometric mismatches"
+          description: "Biometric mismatch rate is {{ $value | humanize }} per second"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-biometric"
+
+      # High fraud indicator rate
+      - alert: VEIDFraudIndicatorRateHigh
+        expr: |
+          sum(rate(virtengine_security_veid_fraud_indicators_total{severity="critical"}[10m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: veid
+          tier: tier0
+          category: fraud
+        annotations:
+          summary: "High rate of VEID fraud indicators"
+          description: "Critical fraud indicators detected at {{ $value | humanize }} per second"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-fraud"
+
+      # VEID verification failure spike
+      - alert: VEIDVerificationFailureSpike
+        expr: |
+          increase(virtengine_security_veid_verification_failures_total[5m]) > 
+          (avg_over_time(increase(virtengine_security_veid_verification_failures_total[5m])[1h:5m]) * 3)
+        for: 5m
+        labels:
+          severity: high
+          service: veid
+          tier: tier0
+          category: fraud
+        annotations:
+          summary: "VEID verification failure spike detected"
+          description: "Verification failures increased 3x above normal"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/veid-failures"
+
+  # =============================================================================
+  # Rate Limiting Security Alerts
+  # =============================================================================
+  - name: virtengine_ratelimit_security
+    interval: 15s
+    rules:
+      # High rate limit breaches
+      - alert: RateLimitBreachRateHigh
+        expr: |
+          sum(rate(virtengine_security_ratelimit_breaches_total[5m])) > 10
+        for: 2m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: ratelimit
+        annotations:
+          summary: "High rate of rate limit breaches"
+          description: "Rate limit breaches occurring at {{ $value | humanize }} per second"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/ratelimit-breach"
+
+      # DDoS indicators detected
+      - alert: DDoSIndicatorsDetected
+        expr: |
+          sum(increase(virtengine_security_ddos_indicators_total[5m])) > 5
+        for: 1m
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: ddos
+        annotations:
+          summary: "CRITICAL: DDoS indicators detected"
+          description: "Potential DDoS attack in progress"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/ddos-response"
+          dashboard: "https://grafana.virtengine.com/d/security"
+
+      # Rate limit bypass attempts
+      - alert: RateLimitBypassAttempts
+        expr: |
+          increase(virtengine_security_ratelimit_bypass_attempts_total[10m]) > 5
+        for: 0s
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: ratelimit
+        annotations:
+          summary: "CRITICAL: Rate limit bypass attempts detected"
+          description: "Possible rate limit evasion attempts"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/ratelimit-bypass"
+
+      # Brute force attack detected
+      - alert: BruteForceAttack
+        expr: |
+          sum(increase(virtengine_security_brute_force_attempts_total[5m])) by (target) > 10
+        for: 1m
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: bruteforce
+        annotations:
+          summary: "Brute force attack detected on {{ $labels.target }}"
+          description: "{{ $value }} brute force attempts in 5 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/brute-force"
+
+  # =============================================================================
+  # Cryptographic Security Alerts
+  # =============================================================================
+  - name: virtengine_crypto_security
+    interval: 15s
+    rules:
+      # Weak entropy detected
+      - alert: CryptoWeakEntropy
+        expr: increase(virtengine_security_crypto_weak_entropy_total[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: crypto
+        annotations:
+          summary: "CRITICAL: Weak entropy in cryptographic operation"
+          description: "Weak randomness detected in cryptographic key generation or encryption"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/crypto-entropy"
+
+      # Signature verification failures spike
+      - alert: CryptoSignatureFailureSpike
+        expr: |
+          sum(rate(virtengine_security_crypto_signature_failures_total[5m])) > 1
+        for: 2m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: crypto
+        annotations:
+          summary: "High signature verification failure rate"
+          description: "Signature failures at {{ $value | humanize }} per second"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/crypto-signature"
+
+      # Key misuse detected
+      - alert: CryptoKeyMisuse
+        expr: |
+          increase(virtengine_security_crypto_key_misuse_total[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: crypto
+        annotations:
+          summary: "CRITICAL: Cryptographic key misuse detected"
+          description: "Key misuse type: {{ $labels.misuse_type }}"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/crypto-misuse"
+
+      # Deprecated algorithm usage
+      - alert: CryptoDeprecatedAlgorithm
+        expr: |
+          increase(virtengine_security_crypto_algorithm_misuse_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: crypto
+        annotations:
+          summary: "Deprecated cryptographic algorithm in use"
+          description: "Applications are using deprecated cryptographic algorithms"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/crypto-deprecated"
+
+  # =============================================================================
+  # Provider Daemon Security Alerts
+  # =============================================================================
+  - name: virtengine_provider_security
+    interval: 15s
+    rules:
+      # Provider key compromise indicators
+      - alert: ProviderKeyCompromise
+        expr: |
+          increase(virtengine_security_provider_key_compromise_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: provider-daemon
+          tier: tier0
+          category: provider
+        annotations:
+          summary: "CRITICAL: Provider key compromise indicators detected"
+          description: "Potential provider key compromise"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/provider-key-compromise"
+
+      # Provider unauthorized access
+      - alert: ProviderUnauthorizedAccess
+        expr: |
+          increase(virtengine_security_provider_unauthorized_access_total[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: provider-daemon
+          tier: tier0
+          category: provider
+        annotations:
+          summary: "CRITICAL: Unauthorized provider access attempt"
+          description: "Unauthorized access attempt to provider daemon"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/provider-unauthorized"
+
+      # Provider anomalous activity
+      - alert: ProviderAnomalousActivity
+        expr: |
+          sum(rate(virtengine_security_provider_anomalous_activity_total[10m])) by (activity_type) > 0.1
+        for: 5m
+        labels:
+          severity: high
+          service: provider-daemon
+          tier: tier0
+          category: provider
+        annotations:
+          summary: "Anomalous provider activity: {{ $labels.activity_type }}"
+          description: "Provider showing anomalous {{ $labels.activity_type }} activity"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/provider-anomaly"
+
+      # Provider compromise indicators high
+      - alert: ProviderCompromiseIndicatorsHigh
+        expr: |
+          sum(increase(virtengine_security_provider_compromise_indicators_total{severity=~"high|critical"}[30m])) > 3
+        for: 5m
+        labels:
+          severity: critical
+          service: provider-daemon
+          tier: tier0
+          category: provider
+        annotations:
+          summary: "Multiple provider compromise indicators"
+          description: "{{ $value }} high/critical compromise indicators in 30 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/provider-compromise"
+
+  # =============================================================================
+  # Authentication & Authorization Alerts
+  # =============================================================================
+  - name: virtengine_auth_security
+    interval: 15s
+    rules:
+      # High authentication failure rate
+      - alert: AuthenticationFailureRateHigh
+        expr: |
+          sum(rate(virtengine_security_auth_failures_total[5m])) > 1
+        for: 2m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: auth
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Auth failures at {{ $value | humanize }} per second"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/auth-failures"
+
+      # Authorization violations
+      - alert: AuthorizationViolations
+        expr: |
+          increase(virtengine_security_authz_violations_total[10m]) > 5
+        for: 2m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: authz
+        annotations:
+          summary: "Authorization violations detected"
+          description: "{{ $value }} authorization violations in 10 minutes"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/authz-violations"
+
+      # Privilege escalation attempt
+      - alert: PrivilegeEscalationAttempt
+        expr: increase(virtengine_security_privilege_escalation_total[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: authz
+        annotations:
+          summary: "CRITICAL: Privilege escalation attempt detected"
+          description: "Potential privilege escalation attack"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/privilege-escalation"
+
+  # =============================================================================
+  # Overall Security Health Alerts
+  # =============================================================================
+  - name: virtengine_security_health
+    interval: 30s
+    rules:
+      # Active security incidents
+      - alert: SecurityIncidentsActive
+        expr: virtengine_security_incidents_active > 0
+        for: 5m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: incidents
+        annotations:
+          summary: "{{ $value }} active security incidents"
+          description: "There are active security incidents requiring attention"
+          dashboard: "https://grafana.virtengine.com/d/security"
+
+      # Critical security incidents
+      - alert: CriticalSecurityIncidents
+        expr: virtengine_security_incidents_active > 3
+        for: 1m
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: incidents
+        annotations:
+          summary: "CRITICAL: Multiple security incidents active"
+          description: "{{ $value }} security incidents are currently active"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/multiple-incidents"
+
+      # Threat level elevated
+      - alert: ThreatLevelElevated
+        expr: virtengine_security_threat_level >= 2
+        for: 2m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: threat
+        annotations:
+          summary: "Security threat level elevated"
+          description: "Current threat level: {{ $value }} (0=low, 1=medium, 2=high, 3=critical)"
+          dashboard: "https://grafana.virtengine.com/d/security"
+
+      # Threat level critical
+      - alert: ThreatLevelCritical
+        expr: virtengine_security_threat_level >= 3
+        for: 0s
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: threat
+        annotations:
+          summary: "CRITICAL: Security threat level critical"
+          description: "Threat level is CRITICAL - immediate action required"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/critical-threat"
+
+      # Security score degraded
+      - alert: SecurityScoreDegraded
+        expr: virtengine_security_security_score < 70
+        for: 5m
+        labels:
+          severity: warning
+          service: security
+          tier: tier0
+          category: health
+        annotations:
+          summary: "Security score degraded to {{ $value }}"
+          description: "Security score has fallen below acceptable threshold"
+          dashboard: "https://grafana.virtengine.com/d/security"
+
+      # Security score critical
+      - alert: SecurityScoreCritical
+        expr: virtengine_security_security_score < 40
+        for: 2m
+        labels:
+          severity: critical
+          service: security
+          tier: tier0
+          category: health
+        annotations:
+          summary: "CRITICAL: Security score at {{ $value }}"
+          description: "Security posture severely degraded"
+          runbook: "https://github.com/virtengine/virtengine/wiki/runbooks/security-score"
+
+      # High alert rate
+      - alert: SecurityAlertRateHigh
+        expr: |
+          sum(rate(virtengine_security_alerts_triggered_total[10m])) > 1
+        for: 5m
+        labels:
+          severity: high
+          service: security
+          tier: tier0
+          category: alerts
+        annotations:
+          summary: "High security alert rate"
+          description: "Security alerts triggering at {{ $value | humanize }} per second"
+          dashboard: "https://grafana.virtengine.com/d/security"
