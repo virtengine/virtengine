@@ -4,12 +4,13 @@
 package slurm_adapter
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // MockSLURMClient is a mock SLURM client for testing
