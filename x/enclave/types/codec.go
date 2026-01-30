@@ -4,6 +4,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
+	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 )
 
 // RegisterLegacyAminoCodec registers the necessary interfaces and types
@@ -13,6 +14,8 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgRotateEnclaveIdentity{}, "enclave/MsgRotateEnclaveIdentity", nil)
 	cdc.RegisterConcrete(&MsgProposeMeasurement{}, "enclave/MsgProposeMeasurement", nil)
 	cdc.RegisterConcrete(&MsgRevokeMeasurement{}, "enclave/MsgRevokeMeasurement", nil)
+	cdc.RegisterConcrete(&AddMeasurementProposal{}, "enclave/AddMeasurementProposal", nil)
+	cdc.RegisterConcrete(&RevokeMeasurementProposal{}, "enclave/RevokeMeasurementProposal", nil)
 }
 
 // RegisterInterfaces registers the interfaces for the enclave module
@@ -32,6 +35,12 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	// )
 	//
 	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
+	registry.RegisterImplementations(
+		(*govv1beta1.Content)(nil),
+		&AddMeasurementProposal{},
+		&RevokeMeasurementProposal{},
+	)
+
 	_ = registry // suppress unused variable warning
 	_ = msgservice.RegisterMsgServiceDesc
 }
