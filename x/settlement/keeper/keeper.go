@@ -50,6 +50,20 @@ type IKeeper interface {
 	GetRewardDistribution(ctx sdk.Context, distributionID string) (types.RewardDistribution, bool)
 	GetRewardsByEpoch(ctx sdk.Context, epoch uint64) []types.RewardDistribution
 
+	// Payout management
+	ExecutePayout(ctx sdk.Context, invoiceID string, settlementID string) (*types.PayoutRecord, error)
+	GetPayout(ctx sdk.Context, payoutID string) (types.PayoutRecord, bool)
+	GetPayoutByInvoice(ctx sdk.Context, invoiceID string) (types.PayoutRecord, bool)
+	GetPayoutBySettlement(ctx sdk.Context, settlementID string) (types.PayoutRecord, bool)
+	HoldPayout(ctx sdk.Context, payoutID string, disputeID string, reason string) error
+	ReleasePayoutHold(ctx sdk.Context, payoutID string) error
+	RefundPayout(ctx sdk.Context, payoutID string, reason string) error
+	ProcessPendingPayouts(ctx sdk.Context) error
+	RetryFailedPayouts(ctx sdk.Context) error
+	SetPayout(ctx sdk.Context, payout types.PayoutRecord) error
+	WithPayouts(ctx sdk.Context, fn func(types.PayoutRecord) bool)
+	WithPayoutsByState(ctx sdk.Context, state types.PayoutState, fn func(types.PayoutRecord) bool)
+
 	// Parameters
 	GetParams(ctx sdk.Context) types.Params
 	SetParams(ctx sdk.Context, params types.Params) error
@@ -67,6 +81,7 @@ type IKeeper interface {
 	SetNextSettlementSequence(ctx sdk.Context, seq uint64)
 	SetNextUsageSequence(ctx sdk.Context, seq uint64)
 	SetNextDistributionSequence(ctx sdk.Context, seq uint64)
+	SetNextPayoutSequence(ctx sdk.Context, seq uint64)
 
 	// Block hooks
 	ProcessExpiredEscrows(ctx sdk.Context) error
