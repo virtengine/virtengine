@@ -15,6 +15,10 @@ resources:
   - pdb.yaml
   - hpa.yaml
   - networkpolicy.yaml
+  # TEE Enclave resources (TEE-HW-001)
+  - tee-enclave-configmap.yaml
+  - tee-enclave-deployment.yaml
+  - tee-enclave-service.yaml
 
 configMapGenerator:
   - name: virtengine-config
@@ -28,3 +32,5 @@ images:
     newTag: latest
   - name: virtengine/provider-daemon
     newTag: latest
+  - name: virtengine/tee-enclave
+    newTag: 0.1.0
