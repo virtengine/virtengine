@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"context"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/encryption/types"
@@ -20,26 +22,28 @@ func NewMsgServerImpl(k Keeper) types.MsgServer {
 	return &msgServer{keeper: k}
 }
 
-var _ types.MsgServer = msgServer{}
+var _ types.MsgServer = &msgServer{}
 
 // RegisterRecipientKey registers a new recipient public key
-func (ms msgServer) RegisterRecipientKey(ctx sdk.Context, msg *types.MsgRegisterRecipientKey) (*types.MsgRegisterRecipientKeyResponse, error) {
+func (ms *msgServer) RegisterRecipientKey(goCtx context.Context, msg *types.MsgRegisterRecipientKey) (*types.MsgRegisterRecipientKeyResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
 
 	// Register the key
-	fingerprint, err := ms.keeper.RegisterRecipientKey(ctx, sender, msg.PublicKey, msg.AlgorithmID, msg.Label)
+	fingerprint, err := ms.keeper.RegisterRecipientKey(ctx, sender, msg.PublicKey, msg.AlgorithmId, msg.Label)
 	if err != nil {
 		return nil, err
 	}
 
 	// Emit event
-	err = ctx.EventManager().EmitTypedEvent(&types.EventKeyRegistered{
+	err = ctx.EventManager().EmitTypedEvent(&types.EventKeyRegisteredPB{
 		Address:      sender.String(),
 		Fingerprint:  fingerprint,
-		Algorithm:    msg.AlgorithmID,
+		Algorithm:    msg.AlgorithmId,
 		Label:        msg.Label,
 		RegisteredAt: ctx.BlockTime().Unix(),
 	})
@@ -53,7 +57,9 @@ func (ms msgServer) RegisterRecipientKey(ctx sdk.Context, msg *types.MsgRegister
 }
 
 // RevokeRecipientKey revokes a recipient's public key
-func (ms msgServer) RevokeRecipientKey(ctx sdk.Context, msg *types.MsgRevokeRecipientKey) (*types.MsgRevokeRecipientKeyResponse, error) {
+func (ms *msgServer) RevokeRecipientKey(goCtx context.Context, msg *types.MsgRevokeRecipientKey) (*types.MsgRevokeRecipientKeyResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -65,7 +71,7 @@ func (ms msgServer) RevokeRecipientKey(ctx sdk.Context, msg *types.MsgRevokeReci
 	}
 
 	// Emit event
-	err = ctx.EventManager().EmitTypedEvent(&types.EventKeyRevoked{
+	err = ctx.EventManager().EmitTypedEvent(&types.EventKeyRevokedPB{
 		Address:     sender.String(),
 		Fingerprint: msg.KeyFingerprint,
 		RevokedBy:   sender.String(),
@@ -79,7 +85,9 @@ func (ms msgServer) RevokeRecipientKey(ctx sdk.Context, msg *types.MsgRevokeReci
 }
 
 // UpdateKeyLabel updates a key's label
-func (ms msgServer) UpdateKeyLabel(ctx sdk.Context, msg *types.MsgUpdateKeyLabel) (*types.MsgUpdateKeyLabelResponse, error) {
+func (ms *msgServer) UpdateKeyLabel(goCtx context.Context, msg *types.MsgUpdateKeyLabel) (*types.MsgUpdateKeyLabelResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
@@ -101,7 +109,7 @@ func (ms msgServer) UpdateKeyLabel(ctx sdk.Context, msg *types.MsgUpdateKeyLabel
 	}
 
 	// Emit event
-	err = ctx.EventManager().EmitTypedEvent(&types.EventKeyUpdated{
+	err = ctx.EventManager().EmitTypedEvent(&types.EventKeyUpdatedPB{
 		Address:     sender.String(),
 		Fingerprint: msg.KeyFingerprint,
 		Field:       "label",
@@ -113,16 +121,4 @@ func (ms msgServer) UpdateKeyLabel(ctx sdk.Context, msg *types.MsgUpdateKeyLabel
 	}
 
 	return &types.MsgUpdateKeyLabelResponse{}, nil
-}
-
-// MsgServerWithContext wraps msgServer for gRPC context handling
-type MsgServerWithContext struct {
-	msgServer
-}
-
-// NewMsgServerWithContext returns a wrapped message server with context support
-func NewMsgServerWithContext(k Keeper) MsgServerWithContext {
-	return MsgServerWithContext{
-		msgServer: msgServer{keeper: k},
-	}
 }

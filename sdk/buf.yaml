@@ -26,11 +26,12 @@ modules:
         - COMMENT_FIELD
         - SERVICE_SUFFIX
         - RPC_REQUEST_STANDARD_NAME
-  - path: proto/vendor
-    lint:
-      use: []
-    breaking:
-      use: []
+# Vendor path disabled - enable when proto/vendor directory has .proto files
+#  - path: proto/vendor
+#    lint:
+#      use: []
+#    breaking:
+#      use: []
   - path: proto/provider
     lint:
       use:
