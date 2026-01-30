@@ -30,28 +30,33 @@ export interface IdentityStatusCardProps {
 
 /**
  * Status badge component
+ * A11Y: Uses role="status" for screen reader announcement
  */
 interface StatusBadgeProps {
   status: string;
 }
 
 function StatusBadge({ status }: StatusBadgeProps): JSX.Element {
-  const statusConfig: Record<string, { color: string; bg: string }> = {
-    verified: { color: '#166534', bg: '#dcfce7' },
-    pending: { color: '#854d0e', bg: '#fef9c3' },
-    expired: { color: '#991b1b', bg: '#fee2e2' },
-    failed: { color: '#991b1b', bg: '#fee2e2' },
-    none: { color: '#6b7280', bg: '#f3f4f6' },
+  // WCAG 2.1 AA compliant color combinations
+  const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
+    verified: { color: '#166534', bg: '#dcfce7', label: 'Status: Verified' },
+    pending: { color: '#854d0e', bg: '#fef9c3', label: 'Status: Pending verification' },
+    expired: { color: '#991b1b', bg: '#fee2e2', label: 'Status: Verification expired' },
+    failed: { color: '#991b1b', bg: '#fee2e2', label: 'Status: Verification failed' },
+    none: { color: '#4b5563', bg: '#f3f4f6', label: 'Status: Not verified' },
   };
 
   const config = statusConfig[status] || statusConfig.none;
+  const displayText = status.charAt(0).toUpperCase() + status.slice(1);
 
   return (
     <span
       className="status-badge"
       style={{ color: config.color, backgroundColor: config.bg }}
+      role="status"
+      aria-label={config.label}
     >
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+      {displayText}
       <style>{`
         .status-badge {
           display: inline-block;
@@ -79,8 +84,14 @@ export function IdentityStatusCard({
 
   if (isLoading) {
     return (
-      <div className={`identity-card identity-card--loading ${className}`}>
-        <div className="identity-card__skeleton" />
+      <div 
+        className={`identity-card identity-card--loading ${className}`}
+        role="status"
+        aria-label="Loading identity information"
+        aria-busy="true"
+      >
+        <div className="identity-card__skeleton" aria-hidden="true" />
+        <span className="sr-only">Loading identity information...</span>
         <style>{cardStyles}</style>
       </div>
     );
@@ -88,8 +99,15 @@ export function IdentityStatusCard({
 
   if (error) {
     return (
-      <div className={`identity-card identity-card--error ${className}`}>
-        <p className="identity-card__error">Failed to load identity: {error.message}</p>
+      <div 
+        className={`identity-card identity-card--error ${className}`}
+        role="alert"
+        aria-live="polite"
+      >
+        <p className="identity-card__error">
+          <span aria-hidden="true">⚠ </span>
+          Failed to load identity: {error.message}
+        </p>
         <style>{cardStyles}</style>
       </div>
     );
@@ -99,14 +117,15 @@ export function IdentityStatusCard({
     return (
       <div className={`identity-card identity-card--empty ${className}`}>
         <div className="identity-card__content">
-          <h3 className="identity-card__title">Verify Your Identity</h3>
-          <p className="identity-card__description">
+          <h3 className="identity-card__title" id="identity-card-title">Verify Your Identity</h3>
+          <p className="identity-card__description" id="identity-card-desc">
             Complete identity verification to unlock full platform features.
           </p>
           {onStartVerification && (
             <button
               className="identity-card__button identity-card__button--primary"
               onClick={onStartVerification}
+              aria-describedby="identity-card-desc"
             >
               Start Verification
             </button>
@@ -121,61 +140,77 @@ export function IdentityStatusCard({
   const currentScopeIndex = scopes.indexOf(identity.scope);
 
   return (
-    <div className={`identity-card ${className}`}>
+    <div 
+      className={`identity-card ${className}`}
+      role="region"
+      aria-labelledby="identity-status-heading"
+    >
       <div className="identity-card__header">
         <div className="identity-card__header-left">
-          <h3 className="identity-card__title">Identity Status</h3>
+          <h3 className="identity-card__title" id="identity-status-heading">Identity Status</h3>
           <StatusBadge status={status} />
         </div>
         <IdentityScoreDisplay score={identity.score} size="md" />
       </div>
 
-      <div className="identity-card__details">
+      <dl className="identity-card__details" aria-label="Identity details">
         <div className="identity-card__detail">
-          <span className="identity-card__detail-label">VEID</span>
-          <span className="identity-card__detail-value">
-            {formatAddress(identity.veid, 12)}
-          </span>
+          <dt className="identity-card__detail-label">VEID</dt>
+          <dd className="identity-card__detail-value">
+            <span aria-label={`VEID: ${identity.veid}`}>
+              {formatAddress(identity.veid, 12)}
+            </span>
+          </dd>
         </div>
         <div className="identity-card__detail">
-          <span className="identity-card__detail-label">Scope</span>
-          <span className="identity-card__detail-value identity-card__detail-value--scope">
+          <dt className="identity-card__detail-label">Scope</dt>
+          <dd className="identity-card__detail-value identity-card__detail-value--scope">
             {identity.scope.charAt(0).toUpperCase() + identity.scope.slice(1)}
-          </span>
+          </dd>
         </div>
         <div className="identity-card__detail">
-          <span className="identity-card__detail-label">Verified</span>
-          <span className="identity-card__detail-value">
-            {formatRelativeTime(identity.verifiedAt)}
-          </span>
+          <dt className="identity-card__detail-label">Verified</dt>
+          <dd className="identity-card__detail-value">
+            <time dateTime={new Date(identity.verifiedAt).toISOString()}>
+              {formatRelativeTime(identity.verifiedAt)}
+            </time>
+          </dd>
         </div>
         {identity.expiresAt && (
           <div className="identity-card__detail">
-            <span className="identity-card__detail-label">Expires</span>
-            <span className="identity-card__detail-value">
-              {formatRelativeTime(identity.expiresAt)}
-            </span>
+            <dt className="identity-card__detail-label">Expires</dt>
+            <dd className="identity-card__detail-value">
+              <time dateTime={new Date(identity.expiresAt).toISOString()}>
+                {formatRelativeTime(identity.expiresAt)}
+              </time>
+            </dd>
           </div>
         )}
-      </div>
+      </dl>
 
       {onUpgradeScope && currentScopeIndex < scopes.length - 1 && (
-        <div className="identity-card__upgrade">
-          <p className="identity-card__upgrade-text">
+        <div className="identity-card__upgrade" role="group" aria-label="Upgrade options">
+          <p className="identity-card__upgrade-text" id="upgrade-description">
             Upgrade to unlock more features
           </p>
-          <div className="identity-card__upgrade-options">
+          <div className="identity-card__upgrade-options" role="list">
             {scopes.slice(currentScopeIndex + 1).map((scope) => {
               const requirements = getScopeRequirements(scope);
+              const scopeLabel = scope.charAt(0).toUpperCase() + scope.slice(1);
+              const buttonId = `upgrade-${scope}`;
+              const descId = requirements.minimumScore ? `${buttonId}-desc` : undefined;
               return (
                 <button
                   key={scope}
+                  id={buttonId}
                   className="identity-card__button identity-card__button--outline"
                   onClick={() => onUpgradeScope(scope)}
+                  aria-describedby={descId}
+                  role="listitem"
                 >
-                  Upgrade to {scope.charAt(0).toUpperCase() + scope.slice(1)}
+                  Upgrade to {scopeLabel}
                   {requirements.minimumScore && (
-                    <span className="identity-card__button-hint">
+                    <span className="identity-card__button-hint" id={descId}>
                       Requires {requirements.minimumScore}+ score
                     </span>
                   )}

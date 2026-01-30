@@ -659,20 +659,50 @@ func (s *SignatureCryptoTestSuite) TestValidateSaltBinding() {
 		salt := make([]byte, 32)
 		_, err := rand.Read(salt)
 		s.Require().NoError(err)
+		payloadHash := sha256.Sum256([]byte("payload"))
+		metadata := types.UploadMetadata{
+			Salt:              salt,
+			SaltHash:          types.ComputeSaltHash(salt),
+			DeviceFingerprint: "test-device",
+			ClientID:          "test-client",
+			ClientSignature:   make([]byte, 64),
+			UserSignature:     make([]byte, 64),
+			PayloadHash:       payloadHash[:],
+		}
 
-		err = s.keeper.ValidateSaltBinding(s.ctx, salt)
+		err = s.keeper.ValidateSaltBinding(s.ctx, salt, &metadata, payloadHash[:])
 		s.NoError(err)
 	})
 
 	s.Run("empty salt rejected", func() {
-		err := s.keeper.ValidateSaltBinding(s.ctx, []byte{})
+		payloadHash := sha256.Sum256([]byte("payload"))
+		metadata := types.UploadMetadata{
+			Salt:              []byte{},
+			SaltHash:          nil,
+			DeviceFingerprint: "test-device",
+			ClientID:          "test-client",
+			ClientSignature:   make([]byte, 64),
+			UserSignature:     make([]byte, 64),
+			PayloadHash:       payloadHash[:],
+		}
+		err := s.keeper.ValidateSaltBinding(s.ctx, []byte{}, &metadata, payloadHash[:])
 		s.Error(err)
 		s.Contains(err.Error(), "cannot be empty")
 	})
 
 	s.Run("salt too short rejected", func() {
 		shortSalt := make([]byte, 8)
-		err := s.keeper.ValidateSaltBinding(s.ctx, shortSalt)
+		payloadHash := sha256.Sum256([]byte("payload"))
+		metadata := types.UploadMetadata{
+			Salt:              shortSalt,
+			SaltHash:          types.ComputeSaltHash(shortSalt),
+			DeviceFingerprint: "test-device",
+			ClientID:          "test-client",
+			ClientSignature:   make([]byte, 64),
+			UserSignature:     make([]byte, 64),
+			PayloadHash:       payloadHash[:],
+		}
+		err := s.keeper.ValidateSaltBinding(s.ctx, shortSalt, &metadata, payloadHash[:])
 		s.Error(err)
 		s.Contains(err.Error(), "at least")
 	})

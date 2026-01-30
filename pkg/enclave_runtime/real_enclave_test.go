@@ -138,7 +138,7 @@ func TestCreateEnclaveService_DefaultIsSimulated(t *testing.T) {
 	require.NotNil(t, svc)
 }
 
-func TestCreateEnclaveService_SGXNotImplemented(t *testing.T) {
+func TestCreateEnclaveService_SGX(t *testing.T) {
 	config := EnclaveConfig{
 		Platform: PlatformSGX,
 		SGXConfig: &SGXEnclaveConfig{
@@ -148,12 +148,15 @@ func TestCreateEnclaveService_SGXNotImplemented(t *testing.T) {
 	}
 
 	svc, err := CreateEnclaveService(config)
-	assert.Error(t, err)
-	assert.Nil(t, svc)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	assert.NoError(t, err)
+	assert.NotNil(t, svc)
+
+	// Verify it's the right type
+	_, ok := svc.(*SGXEnclaveServiceImpl)
+	assert.True(t, ok, "service should be SGXEnclaveServiceImpl")
 }
 
-func TestCreateEnclaveService_SEVSNPNotImplemented(t *testing.T) {
+func TestCreateEnclaveService_SEVSNP(t *testing.T) {
 	config := EnclaveConfig{
 		Platform: PlatformSEVSNP,
 		SEVSNPConfig: &SEVSNPConfig{
@@ -162,9 +165,12 @@ func TestCreateEnclaveService_SEVSNPNotImplemented(t *testing.T) {
 	}
 
 	svc, err := CreateEnclaveService(config)
-	assert.Error(t, err)
-	assert.Nil(t, svc)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	assert.NoError(t, err)
+	assert.NotNil(t, svc)
+
+	// Verify it's the right type
+	_, ok := svc.(*SEVSNPEnclaveServiceImpl)
+	assert.True(t, ok, "service should be SEVSNPEnclaveServiceImpl")
 }
 
 func TestCreateEnclaveService_NitroNotImplemented(t *testing.T) {

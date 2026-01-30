@@ -200,3 +200,78 @@ export { encryptPayload, decryptPayload } from './utils/encryption';
 export type { EncryptionResult, DecryptionResult } from './utils/encryption';
 export { createOAuthRequest, persistOAuthRequest, consumeOAuthRequest, buildAuthorizationUrl, createPKCE } from './utils/oidc';
 export type { OAuthRequest } from './utils/oidc';
+
+// ============================================================================
+// Accessibility (VE-UI-002)
+// ============================================================================
+
+export {
+  // Accessible components
+  SrOnly,
+  SkipLink,
+  AccessibleButton,
+  AccessibleInput,
+  AccessibleSelect,
+  AccessibleCheckbox,
+  AccessibleAlert,
+  AccessibleProgress,
+} from './components/accessible';
+
+export type {
+  SrOnlyProps,
+  SkipLinkProps,
+  AccessibleButtonProps,
+  AccessibleInputProps,
+  AccessibleSelectProps,
+  AccessibleCheckboxProps,
+  AccessibleAlertProps,
+  AccessibleProgressProps,
+} from './components/accessible';
+
+export {
+  // Accessibility utilities
+  generateA11yId,
+  announce,
+  clearAnnouncements,
+  initLiveRegions,
+  createFocusTrap,
+  getFocusableElements,
+  meetsContrastRequirement,
+  getContrastRatio,
+  hexToRgb,
+  getLuminance,
+  handleArrowNavigation,
+  manageRovingTabindex,
+  prefersReducedMotion,
+  prefersHighContrast,
+  srOnlyStyles,
+  focusVisibleStyles,
+  A11Y_COLORS,
+} from './utils/a11y';
+
+export type {
+  FocusTrap,
+  ArrowNavOptions,
+} from './utils/a11y';
+
+export {
+  // Accessibility testing utilities
+  runA11yTests,
+  expectNoA11yViolations,
+  checkContrastRatio,
+  checkFocusIndicator,
+  checkTouchTargetSize,
+  analyzeKeyboardNav,
+  validateAriaAttributes,
+  checkScreenReaderContent,
+  generateA11yReport,
+  formatViolations,
+  toHaveNoViolations,
+  WCAG_21_AA_CONFIG,
+} from './utils/a11y-testing';
+
+export type {
+  A11yTestConfig,
+  A11yReport,
+  KeyboardNavTestResult,
+} from './utils/a11y-testing';

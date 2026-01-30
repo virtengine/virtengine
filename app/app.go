@@ -247,6 +247,7 @@ func NewApp(
 		GovKeeper:       app.Keepers.Cosmos.Gov,
 		MFAGatingKeeper: &app.Keepers.VirtEngine.MFA,
 		VEIDKeeper:      &app.Keepers.VirtEngine.VEID,
+		RolesKeeper:     &app.Keepers.VirtEngine.Roles,
 	}
 
 	anteHandler, err := NewAnteHandler(anteOpts)

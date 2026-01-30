@@ -10,6 +10,7 @@ import (
 
 	apptypes "github.com/virtengine/virtengine/app/types"
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
+	roleskeeper "github.com/virtengine/virtengine/x/roles/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 )
 
@@ -20,6 +21,7 @@ type HandlerOptions struct {
 	GovKeeper       *govkeeper.Keeper
 	MFAGatingKeeper *mfakeeper.Keeper
 	VEIDKeeper      *veidkeeper.Keeper
+	RolesKeeper     *roleskeeper.Keeper
 	RateLimitParams apptypes.RateLimitParams
 	Logger          log.Logger
 }
@@ -56,6 +58,10 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		return nil, sdkerrors.ErrLogic.Wrap("virtengine VEID keeper is required for ante builder")
 	}
 
+	if options.RolesKeeper == nil {
+		return nil, sdkerrors.ErrLogic.Wrap("virtengine roles keeper is required for ante builder")
+	}
+
 	if options.FeegrantKeeper == nil {
 		return nil, sdkerrors.ErrLogic.Wrap("virtengine feegrant keeper is required for ante builder")
 	}
@@ -84,7 +90,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewValidateSigCountDecorator(options.AccountKeeper),
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
-		NewVEIDDecorator(*options.VEIDKeeper, *options.MFAGatingKeeper, options.GovKeeper),
+		NewVEIDDecorator(*options.VEIDKeeper, *options.MFAGatingKeeper, options.GovKeeper, *options.RolesKeeper),
 		NewMFAGatingDecorator(*options.MFAGatingKeeper),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 	}

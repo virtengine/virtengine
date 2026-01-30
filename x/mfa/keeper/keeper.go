@@ -42,6 +42,18 @@ type IKeeper interface {
 	DeleteAuthorizationSession(ctx sdk.Context, sessionID string) error
 	GetAccountSessions(ctx sdk.Context, address sdk.AccAddress) []types.AuthorizationSession
 
+	// Authorization session management (MFA-CORE-002)
+	HasValidAuthSession(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType) bool
+	HasValidAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType, deviceFingerprint string) bool
+	ConsumeAuthSession(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType) error
+	ConsumeAuthSessionWithDevice(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType, deviceFingerprint string) error
+	CreateAuthSessionForAction(ctx sdk.Context, address sdk.AccAddress, action types.SensitiveTransactionType, verifiedFactors []types.FactorType, deviceFingerprint string) (*types.AuthorizationSession, error)
+	GetValidSessionsForAccount(ctx sdk.Context, address sdk.AccAddress) []types.AuthorizationSession
+	CleanupExpiredSessions(ctx sdk.Context, address sdk.AccAddress) int
+	ValidateSessionForTransaction(ctx sdk.Context, sessionID string, address sdk.AccAddress, action types.SensitiveTransactionType, deviceFingerprint string) error
+	GetSessionDurationForAction(ctx sdk.Context, action types.SensitiveTransactionType) int64
+	IsActionSingleUse(ctx sdk.Context, action types.SensitiveTransactionType) bool
+
 	// Trusted devices
 	AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device *types.DeviceInfo) error
 	RemoveTrustedDevice(ctx sdk.Context, address sdk.AccAddress, fingerprint string) error
