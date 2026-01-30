@@ -129,7 +129,7 @@ func TestStripeIntegration_CreateCustomer(t *testing.T) {
 	defer cancel()
 
 	customer, err := adapter.CreateCustomer(ctx, CreateCustomerRequest{
-		Email:       "test@virtengine.io",
+		Email:       "test@virtengine.com",
 		Name:        "VE Integration Test",
 		VEIDAddress: "virtengine1test123",
 		Metadata: map[string]string{
@@ -139,7 +139,7 @@ func TestStripeIntegration_CreateCustomer(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, customer.ID)
 	assert.True(t, len(customer.ID) > 4 && customer.ID[:4] == "cus_")
-	assert.Equal(t, "test@virtengine.io", customer.Email)
+	assert.Equal(t, "test@virtengine.com", customer.Email)
 
 	// Cleanup: Delete the test customer
 	err = adapter.DeleteCustomer(ctx, customer.ID)
@@ -159,7 +159,7 @@ func TestStripeIntegration_CreatePaymentIntent(t *testing.T) {
 
 	// First create a customer
 	customer, err := adapter.CreateCustomer(ctx, CreateCustomerRequest{
-		Email:       "payment-test@virtengine.io",
+		Email:       "payment-test@virtengine.com",
 		VEIDAddress: "virtengine1paytest",
 	})
 	require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestStripeIntegration_CustomerLifecycle(t *testing.T) {
 
 	// Create
 	customer, err := adapter.CreateCustomer(ctx, CreateCustomerRequest{
-		Email:       "lifecycle-test@virtengine.io",
+		Email:       "lifecycle-test@virtengine.com",
 		Name:        "Lifecycle Test",
 		VEIDAddress: "virtengine1lifecycle",
 	})

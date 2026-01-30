@@ -5,6 +5,7 @@
 This guide covers deploying Trusted Execution Environment (TEE) infrastructure for VirtEngine validators. TEE enables secure identity verification by processing sensitive biometric and document data inside hardware-isolated enclaves.
 
 VirtEngine's VEID (Verified Identity) system requires TEE for:
+
 - **Facial verification** - Comparing live selfie against document photo
 - **Liveness detection** - Ensuring real person presence (not photo/video attack)
 - **Document OCR** - Extracting PII from identity documents
@@ -32,15 +33,15 @@ All sensitive operations occur inside enclaves where data is encrypted in memory
 
 ## TEE Platform Comparison
 
-| Feature | Intel SGX | AMD SEV-SNP | AWS Nitro |
-|---------|-----------|-------------|-----------|
-| Isolation | Enclave (process) | VM-level | VM-level |
-| Memory Protected | 128MB-512MB (PRM) | Full VM | Full VM |
-| Cloud Support | Limited | Azure, GCP | AWS Only |
-| On-Prem Support | Yes | Yes | No |
-| Attestation | DCAP, EPID | VCEK, ASK | NSM |
-| Ease of Deployment | Medium | Medium | Easy |
-| Recommended For | High-security | Private cloud | AWS validators |
+| Feature            | Intel SGX         | AMD SEV-SNP   | AWS Nitro      |
+| ------------------ | ----------------- | ------------- | -------------- |
+| Isolation          | Enclave (process) | VM-level      | VM-level       |
+| Memory Protected   | 128MB-512MB (PRM) | Full VM       | Full VM        |
+| Cloud Support      | Limited           | Azure, GCP    | AWS Only       |
+| On-Prem Support    | Yes               | Yes           | No             |
+| Attestation        | DCAP, EPID        | VCEK, ASK     | NSM            |
+| Ease of Deployment | Medium            | Medium        | Easy           |
+| Recommended For    | High-security     | Private cloud | AWS validators |
 
 ### Platform Selection Guidance
 
@@ -72,20 +73,22 @@ All sensitive operations occur inside enclaves where data is encrypted in memory
 
 ### Intel SGX
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| CPU | Intel Xeon E3 v6 | Intel Xeon Scalable 3rd gen+ |
-| EPC Memory | 64MB | 256MB+ |
-| System RAM | 16GB | 32GB+ |
-| Storage | 100GB SSD | 500GB NVMe |
-| Network | 1 Gbps | 10 Gbps |
+| Component  | Minimum          | Recommended                  |
+| ---------- | ---------------- | ---------------------------- |
+| CPU        | Intel Xeon E3 v6 | Intel Xeon Scalable 3rd gen+ |
+| EPC Memory | 64MB             | 256MB+                       |
+| System RAM | 16GB             | 32GB+                        |
+| Storage    | 100GB SSD        | 500GB NVMe                   |
+| Network    | 1 Gbps           | 10 Gbps                      |
 
 **BIOS Requirements:**
+
 - SGX enabled (not "Software Controlled")
 - Flexible Launch Control (FLC) enabled
 - Memory encryption enabled
 
 **Verify SGX Support:**
+
 ```bash
 # Check CPU support
 cpuid | grep -i sgx
@@ -101,18 +104,20 @@ dmesg | grep -i sgx
 
 ### AMD SEV-SNP
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| CPU | AMD EPYC 7003 (Milan) | AMD EPYC 9004 (Genoa) |
-| System RAM | 32GB | 64GB+ |
-| Storage | 200GB SSD | 1TB NVMe |
-| Network | 1 Gbps | 10 Gbps |
+| Component  | Minimum               | Recommended           |
+| ---------- | --------------------- | --------------------- |
+| CPU        | AMD EPYC 7003 (Milan) | AMD EPYC 9004 (Genoa) |
+| System RAM | 32GB                  | 64GB+                 |
+| Storage    | 200GB SSD             | 1TB NVMe              |
+| Network    | 1 Gbps                | 10 Gbps               |
 
 **Firmware Requirements:**
+
 - SEV-SNP capable firmware (version 1.51+)
 - PSP firmware updated to latest
 
 **Verify SNP Support:**
+
 ```bash
 # Check CPU support
 dmesg | grep -i sev
@@ -128,19 +133,21 @@ ls -la /dev/sev*
 
 ### AWS Nitro
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| Instance Type | c5.xlarge | c5.4xlarge or m5.4xlarge |
-| vCPUs | 4 | 16 |
-| Memory | 8GB | 64GB |
-| Enclave Memory | 2GB | 8GB |
-| EBS | 100GB gp3 | 500GB gp3 |
+| Component      | Minimum   | Recommended              |
+| -------------- | --------- | ------------------------ |
+| Instance Type  | c5.xlarge | c5.4xlarge or m5.4xlarge |
+| vCPUs          | 4         | 16                       |
+| Memory         | 8GB       | 64GB                     |
+| Enclave Memory | 2GB       | 8GB                      |
+| EBS            | 100GB gp3 | 500GB gp3                |
 
 **Instance Requirements:**
+
 - Nitro Enclave-enabled instance family (c5, m5, r5, c6i, m6i, etc.)
 - NOT supported: t3, t2, graviton (ARM), mac instances
 
 **Verify Nitro Support:**
+
 ```bash
 # Check if running on Nitro
 aws ec2 describe-instance-types --instance-types $(curl -s http://169.254.169.254/latest/meta-data/instance-type) \
@@ -197,6 +204,7 @@ sudo /opt/intel/sgx-dcap-pccs/install.sh
 ```
 
 **PCCS Configuration (`/opt/intel/sgx-dcap-pccs/config/default.json`):**
+
 ```json
 {
   "HTTPS_PORT": 8081,
@@ -250,6 +258,7 @@ make SGX=1 SGX_SIGN_KEY=enclave-key.pem
 ### Step 4: Run Enclave with VirtEngine Daemon
 
 **Enclave Service Configuration (`/etc/systemd/system/veid-enclave.service`):**
+
 ```ini
 [Unit]
 Description=VirtEngine VEID SGX Enclave
@@ -371,6 +380,7 @@ snpguest --version
 ### Step 4: Create Confidential VM
 
 **VM Configuration (`/etc/virtengine/snp-vm.xml`):**
+
 ```xml
 <domain type='kvm'>
   <name>veid-enclave</name>
@@ -492,6 +502,7 @@ aws ec2 run-instances \
 ```
 
 **Or via Terraform:**
+
 ```hcl
 resource "aws_instance" "virtengine_tee" {
   ami           = "ami-0abcdef1234567890"
@@ -572,14 +583,15 @@ nitro-cli build-enclave --docker-uri veid-enclave:latest --output-file veid_scor
 The enclave communicates with the parent instance via vsock (virtual socket).
 
 **Enclave Application Configuration:**
+
 ```yaml
 # /opt/virtengine/enclave/config.yaml
 server:
-  listen: "vsock://3:5000"  # CID 3 = enclave, port 5000
+  listen: "vsock://3:5000" # CID 3 = enclave, port 5000
   max_connections: 100
 
 parent:
-  cid: 3                    # Parent instance CID
+  cid: 3 # Parent instance CID
   health_port: 5001
 
 attestation:
@@ -592,14 +604,15 @@ logging:
 ```
 
 **Parent Instance Proxy (`/etc/virtengine/vsock-proxy.yaml`):**
+
 ```yaml
 proxy:
   listen: "unix:///var/run/virtengine/enclave.sock"
-  enclave_cid: 16           # Assigned when enclave starts
+  enclave_cid: 16 # Assigned when enclave starts
   enclave_port: 5000
-  
+
   timeout: 30s
-  max_message_size: 10485760  # 10MB
+  max_message_size: 10485760 # 10MB
 
 health_check:
   enabled: true
@@ -610,6 +623,7 @@ health_check:
 ### Step 5: Run Enclave as Systemd Service
 
 **Enclave Service (`/etc/systemd/system/veid-enclave.service`):**
+
 ```ini
 [Unit]
 Description=VirtEngine VEID Nitro Enclave
@@ -639,6 +653,7 @@ WantedBy=multi-user.target
 ```
 
 **vsock Proxy Service (`/etc/systemd/system/veid-vsock-proxy.service`):**
+
 ```ini
 [Unit]
 Description=VirtEngine VEID vsock Proxy
@@ -711,6 +726,7 @@ The Enclave Manager provides a unified interface across TEE platforms with autom
 ### Configuration File
 
 **`/etc/virtengine/enclave-manager.yaml`:**
+
 ```yaml
 # Enclave Manager Configuration
 # Manages multiple TEE backends with priority-based selection
@@ -718,16 +734,16 @@ The Enclave Manager provides a unified interface across TEE platforms with autom
 manager:
   # Selection strategy: priority, round-robin, least-loaded
   selection_strategy: priority
-  
+
   # Health check configuration
   health_check_interval: 30s
   health_check_timeout: 10s
-  
+
   # Failover settings
   enable_failover: true
   max_retries: 3
   retry_delay: 5s
-  
+
   # Circuit breaker
   circuit_breaker:
     enabled: true
@@ -772,10 +788,10 @@ backends:
 attestation:
   # Require fresh attestation for each request
   require_fresh: false
-  
+
   # Cache attestation reports
   cache_ttl: 3600s
-  
+
   # Verification settings
   verification:
     check_revocation: true
@@ -797,6 +813,7 @@ logging:
 ### Systemd Service
 
 **`/etc/systemd/system/enclave-manager.service`:**
+
 ```ini
 [Unit]
 Description=VirtEngine Enclave Manager
@@ -1031,6 +1048,7 @@ Import the VirtEngine TEE dashboard from `/opt/virtengine/monitoring/dashboards/
 ### Alert Rules
 
 **`/etc/prometheus/rules/tee-alerts.yml`:**
+
 ```yaml
 groups:
   - name: tee-alerts
@@ -1065,7 +1083,7 @@ groups:
           description: "Error rate is {{ $value | humanizePercentage }}"
 
       - alert: AttestationExpiring
-        expr: enclave_attestation_age_seconds > 82800  # 23 hours
+        expr: enclave_attestation_age_seconds > 82800 # 23 hours
         for: 30m
         labels:
           severity: warning
@@ -1086,6 +1104,7 @@ groups:
 ### Log Aggregation
 
 **Fluentd Configuration (`/etc/fluent/fluent.conf`):**
+
 ```
 <source>
   @type tail
@@ -1123,6 +1142,7 @@ groups:
 ### Intel SGX Issues
 
 #### Issue: "SGX device not found"
+
 ```bash
 # Check if SGX is enabled in BIOS
 cpuid | grep -i sgx
@@ -1142,6 +1162,7 @@ ls -la /dev/sgx*
 ```
 
 #### Issue: "AESM service failed to start"
+
 ```bash
 # Check AESM logs
 sudo journalctl -u aesmd -f
@@ -1155,6 +1176,7 @@ sudo systemctl restart aesmd
 ```
 
 #### Issue: "Quote generation failed - PCCS unreachable"
+
 ```bash
 # Test PCCS connectivity
 curl -k https://localhost:8081/sgx/certification/v4/rootcacrl
@@ -1168,6 +1190,7 @@ curl -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/pckcrl?c
 ```
 
 #### Issue: "Enclave signature verification failed"
+
 ```bash
 # Check enclave signature
 gramine-sgx-sigstruct-view veid_scoring.sig
@@ -1182,6 +1205,7 @@ gramine-sgx-sign --manifest veid_scoring.manifest --output veid_scoring.manifest
 ### AMD SEV-SNP Issues
 
 #### Issue: "SNP not available"
+
 ```bash
 # Check firmware version
 sudo dmesg | grep -i "sev-snp\|sev firmware"
@@ -1196,6 +1220,7 @@ cat /sys/module/kvm_amd/parameters/sev_snp
 ```
 
 #### Issue: "Failed to launch SNP guest"
+
 ```bash
 # Check available SNP ASIDs
 cat /sys/kernel/debug/sev/snp_asid_count
@@ -1208,6 +1233,7 @@ sudo journalctl -u libvirtd -f
 ```
 
 #### Issue: "Attestation verification failed"
+
 ```bash
 # Fetch fresh certificates
 snpguest fetch vcek der attestation.bin ./certs/ --force
@@ -1222,6 +1248,7 @@ snpguest display report attestation.bin
 ### AWS Nitro Issues
 
 #### Issue: "Enclave failed to start - insufficient resources"
+
 ```bash
 # Check allocated resources
 cat /etc/nitro_enclaves/allocator.yaml
@@ -1241,6 +1268,7 @@ nitro-cli describe-enclaves
 ```
 
 #### Issue: "vsock connection refused"
+
 ```bash
 # Check enclave is running
 nitro-cli describe-enclaves
@@ -1257,6 +1285,7 @@ cat /etc/virtengine/vsock-proxy.yaml
 ```
 
 #### Issue: "Attestation document invalid"
+
 ```bash
 # Get fresh attestation from enclave
 nitro-cli describe-enclaves | jq '.[] | .Measurements'
@@ -1271,6 +1300,7 @@ nitro-cli build-enclave --docker-uri veid-enclave:latest --output-file new-veid.
 ### General Issues
 
 #### Issue: "Enclave Manager failover not working"
+
 ```bash
 # Check circuit breaker status
 curl http://localhost:9090/metrics | grep circuit_breaker
@@ -1283,6 +1313,7 @@ virtengine enclave health --all
 ```
 
 #### Issue: "High latency on enclave requests"
+
 ```bash
 # Check enclave memory pressure
 # For SGX:
@@ -1302,6 +1333,7 @@ virtengine enclave profile --duration 60s --output profile.json
 ### Measurement Allowlist Management
 
 **Only allow production-signed enclaves:**
+
 ```bash
 # View current allowlist
 virtengine query veid enclave-allowlist
@@ -1328,6 +1360,7 @@ virtengine tx gov submit-proposal remove-enclave-measurement \
 ### Key Rotation Procedures
 
 **Rotate enclave signing key:**
+
 ```bash
 # Generate new signing key (HSM recommended)
 gramine-sgx-gen-private-key new-enclave-key.pem
@@ -1357,6 +1390,7 @@ sudo systemctl restart veid-enclave
 > **⚠️ WARNING:** Never run debug-mode enclaves in production!
 
 Debug mode enclaves:
+
 - Allow memory inspection by host
 - Do not provide confidentiality guarantees
 - Are rejected by on-chain attestation verification
@@ -1376,6 +1410,7 @@ nitro-cli run-enclave --eif-path veid_scoring.eif --cpu-count 2 --memory 2048
 **If enclave key or measurement is compromised:**
 
 1. **Immediate Actions (within 1 hour):**
+
    ```bash
    # Notify other validators via emergency channel
    # Submit emergency governance proposal to remove measurement
@@ -1385,12 +1420,13 @@ nitro-cli run-enclave --eif-path veid_scoring.eif --cpu-count 2 --memory 2048
      --from validator \
      --emergency \
      -y
-   
+
    # Stop local enclave
    sudo systemctl stop veid-enclave enclave-manager
    ```
 
 2. **Short-term (within 24 hours):**
+
    ```bash
    # Generate new signing key
    # Rebuild enclave with security patches
@@ -1497,10 +1533,10 @@ virtengine enclave health-check --comprehensive
 ### Community
 
 - **Discord:** #validators-tee channel
-- **Forum:** https://forum.virtengine.io/c/validators
+- **Forum:** https://forum.virtengine.com/c/validators
 - **GitHub Issues:** https://github.com/virtengine/virtengine/issues
 
 ---
 
-*Last updated: January 2026*
-*Document version: 1.0.0*
+_Last updated: January 2026_
+_Document version: 1.0.0_

@@ -480,6 +480,36 @@ func NewParamsPB() *ParamsPB {
 }
 
 // ============================================================================
+// Type Conversion Functions - AppealStatus
+// ============================================================================
+
+// AppealStatusPB is the protobuf-generated enum for appeal status
+type AppealStatusPB = veidv1.AppealStatus
+
+// Proto enum constants for AppealStatus
+const (
+	AppealStatusPBUnspecified = veidv1.AppealStatusUnspecified
+	AppealStatusPBPending     = veidv1.AppealStatusPending
+	AppealStatusPBReviewing   = veidv1.AppealStatusReviewing
+	AppealStatusPBApproved    = veidv1.AppealStatusApproved
+	AppealStatusPBRejected    = veidv1.AppealStatusRejected
+	AppealStatusPBWithdrawn   = veidv1.AppealStatusWithdrawn
+	AppealStatusPBExpired     = veidv1.AppealStatusExpired
+)
+
+// AppealStatusToProto converts local AppealStatus to proto enum
+func AppealStatusToProto(as AppealStatus) AppealStatusPB {
+	// Since both enums have the same underlying values, we can cast directly
+	return AppealStatusPB(as)
+}
+
+// AppealStatusFromProto converts proto enum to local AppealStatus
+func AppealStatusFromProto(as AppealStatusPB) AppealStatus {
+	// Since both enums have the same underlying values, we can cast directly
+	return AppealStatus(as)
+}
+
+// ============================================================================
 // Re-export Proto Msg Server Interface
 // ============================================================================
 

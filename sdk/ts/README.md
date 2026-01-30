@@ -15,8 +15,9 @@ To ensure stability of your own scripts, pin a specific version of the SDK in yo
 
 We are actively gathering developer feedback and improving the DX (Developer Experience).
 Please report any issues or suggestions via:
-* GitHub Issues (preferred)
-* [Discord](https://virtengine.io/docs/getting-started/technical-support/)
+
+- GitHub Issues (preferred)
+- [Discord](https://virtengine.com/docs/getting-started/technical-support/)
 
 To install the package, run:
 
@@ -37,12 +38,15 @@ This package supports commonjs and ESM environments.
 This implementation uses gRPC transport to fetch data from blockchain
 
 ```typescript
-import { createChainNodeSDK, createStargateClient } from "@virtengine/chain-sdk";
+import {
+  createChainNodeSDK,
+  createStargateClient,
+} from "@virtengine/chain-sdk";
 
 const mnemonic = "your mnemonic here";
 const signer = createStargateClient({
-  baseUrl: 'https://rpc.sandbox-2.aksh.pw:443', // blockchain rpc endpoint
-  signerMnemonic: mnemonic
+  baseUrl: "https://rpc.sandbox-2.aksh.pw:443", // blockchain rpc endpoint
+  signerMnemonic: mnemonic,
 });
 
 // endpoints can be found in https://github.com/virtengine/net
@@ -56,11 +60,13 @@ const chainSdk = createChainNodeSDK({
 });
 
 // Query deployments
-const deployments = await chainSdk.virtengine.deployment.v1beta4.getDeployments({
-  pagination: {
-    limit: 1,
+const deployments = await chainSdk.virtengine.deployment.v1beta4.getDeployments(
+  {
+    pagination: {
+      limit: 1,
+    },
   },
-});
+);
 
 console.log(deployments);
 ```
@@ -68,15 +74,20 @@ console.log(deployments);
 It's also possible to create `StargateClient` from a `DirectSecp256k1HdWallet` instance:
 
 ```ts
-import { createChainNodeSDK, createStargateClient } from "@virtengine/chain-sdk";
+import {
+  createChainNodeSDK,
+  createStargateClient,
+} from "@virtengine/chain-sdk";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 
 const mnemonic = "your mnemonic here";
-const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, { prefix: "virtengine" });
+const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, {
+  prefix: "virtengine",
+});
 
 const signer = createStargateClient({
-  baseUrl: 'https://rpc.sandbox-2.aksh.pw:443', // blockchain rpc endpoint
-  signer: wallet
+  baseUrl: "https://rpc.sandbox-2.aksh.pw:443", // blockchain rpc endpoint
+  signer: wallet,
 });
 ```
 
@@ -85,12 +96,15 @@ const signer = createStargateClient({
 This implementation can be used in both browser and nodejs, since it uses gRPC Gateway transport to fetch data from blockchain
 
 ```typescript
-import { createChainNodeWebSDK, type TxClient } from "@virtengine/chain-sdk/web";
+import {
+  createChainNodeWebSDK,
+  type TxClient,
+} from "@virtengine/chain-sdk/web";
 
 const wallet: TxClient = {
   async signAndBroadcast(messages, options) {
     // use web wallet object in browser exposed by corresponding extension to signAndBroadcast
-  }
+  },
 };
 const sdk = createChainNodeWebSDK({
   query: {
@@ -137,13 +151,15 @@ This is the recommended method for getting authorized access to your resources o
 
 ```ts
 import { Secp256k1HdWallet } from "@cosmjs/amino";
-import { JwtTokenManager } from "@virtengine/chain-sdk"
+import { JwtTokenManager } from "@virtengine/chain-sdk";
 
-const wallet = await Secp256k1HdWallet.fromMnemonic(mnemonic, { prefix: "virtengine" });
+const wallet = await Secp256k1HdWallet.fromMnemonic(mnemonic, {
+  prefix: "virtengine",
+});
 const accounts = await wallet.getAccounts();
 const tokenManager = new JwtTokenManager(wallet);
 
-// See https://virtengine.io/roadmap/aep-64/ for details
+// See https://virtengine.com/roadmap/aep-64/ for details
 const token = await tokenManager.generateToken({
   iss: accounts[0].address,
   exp: Math.floor(Date.now() / 1000) + 3600,
@@ -158,11 +174,14 @@ const lease = {
   gseq: 1,
   oseq: 1,
 };
-const leaseDetails = await fetch(`https://some-provider.url:8443/lease/${lease.dseq}/${lease.gseq}/${lease.oseq}/status`, {
-  headers: {
-    Authorization: `Bearer ${token}`
+const leaseDetails = await fetch(
+  `https://some-provider.url:8443/lease/${lease.dseq}/${lease.gseq}/${lease.oseq}/status`,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   },
-});
+);
 ```
 
 If the provider responds with a self-signed certificate, the client must validate it to ensure the provider's identity is correct.
@@ -173,27 +192,31 @@ If the provider responds with a self-signed certificate, the client must validat
 
 When a client interacts with the Provider API to access lease details, it must establish a TLS connection and present its client certificate pair. If no valid certificate is provided, the API will return an "Unauthenticated" error.
 
-It is essential to store the generated certificate on-chain, as the provider verifies its availability during authentication. See [the documentation](https://virtengine.io/docs/other-resources/authentication/) for additional details.
+It is essential to store the generated certificate on-chain, as the provider verifies its availability during authentication. See [the documentation](https://virtengine.com/docs/other-resources/authentication/) for additional details.
 
 **Generating a Client Certificate**
 
 ```ts
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
-import { certificateManager } from "@virtengine/chain-sdk"
-import { fetch, Agent } from 'undici'
+import { certificateManager } from "@virtengine/chain-sdk";
+import { fetch, Agent } from "undici";
 import { chainSdk } from "./chainSdk"; // chainSdk created in the example above
 
-const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, { prefix: "virtengine" });
+const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, {
+  prefix: "virtengine",
+});
 const accounts = await wallet.getAccounts();
 
 // Generate certificate pair (do this only once, then store and reuse the certificate)
-const clientCertPair = await certificateManager.generatePEM(accounts[0].address);
+const clientCertPair = await certificateManager.generatePEM(
+  accounts[0].address,
+);
 
 // Store certificate on-chain (one-time operation)
 await chainSdk.virtengine.cert.v1.createCertificate({
   owner: accounts[0].address,
-  cert: Buffer.from(clientCertPair.cert, 'utf-8'),
-  pubkey: Buffer.from(clientCertPair.publicKey, 'utf-8'),
+  cert: Buffer.from(clientCertPair.cert, "utf-8"),
+  pubkey: Buffer.from(clientCertPair.publicKey, "utf-8"),
 });
 
 // Use certificate for API requests
@@ -202,17 +225,21 @@ const lease = {
   gseq: 1,
   oseq: 1,
 };
-const leaseDetails = await fetch(`https://some-provider.url:8443/lease/${lease.dseq}/${lease.gseq}/${lease.oseq}/status`, {
-  dispatcher: new Agent({
-    connect: {
-      cert: clientCertPair.cert,
-      key: clientCertPair.privateKey
-    }
-  })
-});
+const leaseDetails = await fetch(
+  `https://some-provider.url:8443/lease/${lease.dseq}/${lease.gseq}/${lease.oseq}/status`,
+  {
+    dispatcher: new Agent({
+      connect: {
+        cert: clientCertPair.cert,
+        key: clientCertPair.privateKey,
+      },
+    }),
+  },
+);
 ```
 
 **Important Notes:**
+
 - Generate the certificate only once and reuse it while it's valid
 - Do not create a new certificate for every request
 - Verify the provider's identity when it responds with a self-signed certificate
@@ -222,9 +249,9 @@ const leaseDetails = await fetch(`https://some-provider.url:8443/lease/${lease.d
 The SDK supports **automatic retries** with exponential backoff for **query** requests in all SDKs. By default, retry is disabled. To enable it, pass `transportOptions.retry`. Afterwards, it will retry on the next gRPC failure codes:
 
 - 14 - `TransportError.Code.Unavailable`
-- 4  - `TransportError.Code.DeadlineExceeded`,
+- 4 - `TransportError.Code.DeadlineExceeded`,
 - 13 - `TransportError.Code.Internal`,
-- 2  - `TransportError.Code.Unknown`,
+- 2 - `TransportError.Code.Unknown`,
 
 **Example:**
 

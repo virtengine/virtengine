@@ -53,3 +53,35 @@ message EventProviderDeleted {
       (gogoproto.moretags)  = "yaml:\"owner\""
   ];
 }
+
+// EventProviderDomainVerificationStarted defines an SDK message for when domain verification begins
+message EventProviderDomainVerificationStarted {
+  option (gogoproto.equal) = true;
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string domain = 2 [
+    (gogoproto.jsontag)  = "domain",
+    (gogoproto.moretags) = "yaml:\"domain\""
+  ];
+  string token = 3 [
+    (gogoproto.jsontag)  = "token",
+    (gogoproto.moretags) = "yaml:\"token\""
+  ];
+}
+
+// EventProviderDomainVerified defines an SDK message for provider domain verified event
+message EventProviderDomainVerified {
+  option (gogoproto.equal) = true;
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string domain = 2 [
+    (gogoproto.jsontag)  = "domain",
+    (gogoproto.moretags) = "yaml:\"domain\""
+  ];
+}

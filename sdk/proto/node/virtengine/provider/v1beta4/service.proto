@@ -19,4 +19,10 @@ service Msg {
 
   // DeleteProvider defines a method that deletes a provider given the proper inputs.
   rpc DeleteProvider(MsgDeleteProvider) returns (MsgDeleteProviderResponse);
+
+  // GenerateDomainVerificationToken generates a verification token for a provider's domain.
+  rpc GenerateDomainVerificationToken(MsgGenerateDomainVerificationToken) returns (MsgGenerateDomainVerificationTokenResponse);
+
+  // VerifyProviderDomain verifies a provider's domain via DNS TXT record.
+  rpc VerifyProviderDomain(MsgVerifyProviderDomain) returns (MsgVerifyProviderDomainResponse);
 }

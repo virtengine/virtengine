@@ -98,3 +98,51 @@ message MsgDeleteProvider {
 
 // MsgDeleteProviderResponse defines the Msg/DeleteProvider response type.
 message MsgDeleteProviderResponse {}
+
+// MsgGenerateDomainVerificationToken defines an SDK message for generating a domain verification token
+message MsgGenerateDomainVerificationToken {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+  string domain = 2 [
+    (gogoproto.jsontag)  = "domain",
+    (gogoproto.moretags) = "yaml:\"domain\""
+  ];
+}
+
+// MsgGenerateDomainVerificationTokenResponse defines the Msg/GenerateDomainVerificationToken response type.
+message MsgGenerateDomainVerificationTokenResponse {
+  string token = 1 [
+    (gogoproto.jsontag)  = "token",
+    (gogoproto.moretags) = "yaml:\"token\""
+  ];
+  int64 expires_at = 2 [
+    (gogoproto.jsontag)  = "expires_at",
+    (gogoproto.moretags) = "yaml:\"expires_at\""
+  ];
+}
+
+// MsgVerifyProviderDomain defines an SDK message for verifying a provider's domain
+message MsgVerifyProviderDomain {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+
+  string owner = 1 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.jsontag)   = "owner",
+    (gogoproto.moretags)  = "yaml:\"owner\""
+  ];
+}
+
+// MsgVerifyProviderDomainResponse defines the Msg/VerifyProviderDomain response type.
+message MsgVerifyProviderDomainResponse {
+  bool verified = 1 [
+    (gogoproto.jsontag)  = "verified",
+    (gogoproto.moretags) = "yaml:\"verified\""
+  ];
+}
