@@ -418,6 +418,38 @@ var (
 	PrefixBlockedAddress = []byte{0x5A}
 
 	// ============================================================================
+	// Data Archival Keys (DATA-001)
+	// ============================================================================
+
+	// PrefixArchivalRecord is the prefix for archival record storage
+	// Key: PrefixArchivalRecord | archive_id -> ArchivalRecord
+	PrefixArchivalRecord = []byte{0x5B}
+
+	// PrefixArchivalRecordByOwner is the prefix for archival lookup by owner
+	// Key: PrefixArchivalRecordByOwner | owner | archive_id -> bool
+	PrefixArchivalRecordByOwner = []byte{0x5C}
+
+	// PrefixArchivalRecordByContentHash is the prefix for archival lookup by content hash
+	// Key: PrefixArchivalRecordByContentHash | content_hash -> archive_id
+	PrefixArchivalRecordByContentHash = []byte{0x5D}
+
+	// PrefixArchivalIndex is the prefix for archival index storage
+	// Key: PrefixArchivalIndex -> ArchivalIndex
+	PrefixArchivalIndex = []byte{0x5E}
+
+	// PrefixArchivalConfig is the prefix for archival configuration
+	// Key: PrefixArchivalConfig -> ArchivalConfig
+	PrefixArchivalConfig = []byte{0x5F}
+
+	// PrefixPendingArchival is the prefix for pending archival queue
+	// Key: PrefixPendingArchival | eligible_at_block | content_hash -> bool
+	PrefixPendingArchival = []byte{0x60}
+
+	// PrefixRestoredArchival is the prefix for tracking restored archives
+	// Key: PrefixRestoredArchival | archive_id | restore_expiry -> bool
+	PrefixRestoredArchival = []byte{0x61}
+
+	// ============================================================================
 	// Model Versioning Keys (VE-3007)
 	// ============================================================================
 
@@ -1972,4 +2004,119 @@ func BlockedCountryIndexKey(countryCode string) []byte {
 // BlockedCountryIndexPrefixKey returns the prefix for all blocked country indices
 func BlockedCountryIndexPrefixKey() []byte {
 	return PrefixBlockedCountryIndex
+}
+
+// ============================================================================
+// Data Archival Key Functions (DATA-001)
+// ============================================================================
+
+// ArchivalRecordKey returns the store key for an archival record
+func ArchivalRecordKey(archiveID string) []byte {
+	idBytes := []byte(archiveID)
+	key := make([]byte, 0, len(PrefixArchivalRecord)+len(idBytes))
+	key = append(key, PrefixArchivalRecord...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// ArchivalRecordPrefixKey returns the prefix for all archival records
+func ArchivalRecordPrefixKey() []byte {
+	return PrefixArchivalRecord
+}
+
+// ArchivalRecordByOwnerKey returns the store key for archival lookup by owner
+func ArchivalRecordByOwnerKey(owner []byte, archiveID string) []byte {
+	idBytes := []byte(archiveID)
+	key := make([]byte, 0, len(PrefixArchivalRecordByOwner)+len(owner)+1+len(idBytes))
+	key = append(key, PrefixArchivalRecordByOwner...)
+	key = append(key, owner...)
+	key = append(key, byte('/'))
+	key = append(key, idBytes...)
+	return key
+}
+
+// ArchivalRecordByOwnerPrefixKey returns the prefix for all archives of an owner
+func ArchivalRecordByOwnerPrefixKey(owner []byte) []byte {
+	key := make([]byte, 0, len(PrefixArchivalRecordByOwner)+len(owner)+1)
+	key = append(key, PrefixArchivalRecordByOwner...)
+	key = append(key, owner...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// ArchivalRecordByContentHashKey returns the store key for archival lookup by content hash
+func ArchivalRecordByContentHashKey(contentHash []byte) []byte {
+	key := make([]byte, 0, len(PrefixArchivalRecordByContentHash)+len(contentHash))
+	key = append(key, PrefixArchivalRecordByContentHash...)
+	key = append(key, contentHash...)
+	return key
+}
+
+// ArchivalIndexKey returns the store key for the archival index
+func ArchivalIndexKey() []byte {
+	return PrefixArchivalIndex
+}
+
+// ArchivalConfigKey returns the store key for archival configuration
+func ArchivalConfigKey() []byte {
+	return PrefixArchivalConfig
+}
+
+// PendingArchivalKey returns the store key for a pending archival entry
+func PendingArchivalKey(eligibleAtBlock int64, contentHash []byte) []byte {
+	key := make([]byte, 0, len(PrefixPendingArchival)+8+1+len(contentHash))
+	key = append(key, PrefixPendingArchival...)
+	key = append(key, encodeInt64(eligibleAtBlock)...)
+	key = append(key, byte('/'))
+	key = append(key, contentHash...)
+	return key
+}
+
+// PendingArchivalPrefixKey returns the prefix for all pending archival entries
+func PendingArchivalPrefixKey() []byte {
+	return PrefixPendingArchival
+}
+
+// PendingArchivalBeforeKey returns the prefix for pending archival entries eligible before a block
+func PendingArchivalBeforeKey(beforeBlock int64) []byte {
+	key := make([]byte, 0, len(PrefixPendingArchival)+9)
+	key = append(key, PrefixPendingArchival...)
+	key = append(key, encodeInt64(beforeBlock)...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// RestoredArchivalKey returns the store key for tracking restored archives
+func RestoredArchivalKey(archiveID string, restoreExpiry int64) []byte {
+	idBytes := []byte(archiveID)
+	key := make([]byte, 0, len(PrefixRestoredArchival)+len(idBytes)+1+8)
+	key = append(key, PrefixRestoredArchival...)
+	key = append(key, idBytes...)
+	key = append(key, byte('/'))
+	key = append(key, encodeInt64(restoreExpiry)...)
+	return key
+}
+
+// RestoredArchivalPrefixKey returns the prefix for all restored archives
+func RestoredArchivalPrefixKey() []byte {
+	return PrefixRestoredArchival
+}
+
+// RestoredArchivalByIDPrefixKey returns the prefix for all restore records of an archive
+func RestoredArchivalByIDPrefixKey(archiveID string) []byte {
+	idBytes := []byte(archiveID)
+	key := make([]byte, 0, len(PrefixRestoredArchival)+len(idBytes)+1)
+	key = append(key, PrefixRestoredArchival...)
+	key = append(key, idBytes...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// RestoredArchivalBeforeKey returns the prefix for restored archives expiring before timestamp
+func RestoredArchivalBeforeKey(beforeTimestamp int64) []byte {
+	key := make([]byte, 0, len(PrefixRestoredArchival)+9)
+	key = append(key, PrefixRestoredArchival...)
+	key = append(key, encodeInt64(beforeTimestamp)...)
+	key = append(key, byte('/'))
+	return key
 }
