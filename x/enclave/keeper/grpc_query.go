@@ -135,3 +135,53 @@ func (q queryServer) AttestedResult(goCtx context.Context, req *types.QueryAttes
 
 	return &types.QueryAttestedResultResponse{Result: result}, nil
 }
+
+// EnclaveHealth queries the health status of a validator's enclave
+func (q queryServer) EnclaveHealth(goCtx context.Context, req *types.QueryEnclaveHealthRequest) (*types.QueryEnclaveHealthResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	validatorAddr, err := sdk.AccAddressFromBech32(req.ValidatorAddress)
+	if err != nil {
+		return nil, types.ErrInvalidEnclaveIdentity.Wrapf("invalid validator address: %v", err)
+	}
+
+	health, exists := q.keeper.GetEnclaveHealthStatus(ctx, validatorAddr)
+	if !exists {
+		return &types.QueryEnclaveHealthResponse{HealthStatus: nil}, nil
+	}
+
+	return &types.QueryEnclaveHealthResponse{HealthStatus: &health}, nil
+}
+
+// AllHealthStatuses queries all enclave health statuses
+func (q queryServer) AllHealthStatuses(goCtx context.Context, req *types.QueryAllHealthStatusesRequest) (*types.QueryAllHealthStatusesResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	allStatuses := q.keeper.GetAllHealthStatuses(ctx)
+
+	// Apply status filter if provided
+	var filteredStatuses []types.EnclaveHealthStatus
+	if req.StatusFilter != "" {
+		for _, status := range allStatuses {
+			if status.Status.String() == req.StatusFilter {
+				filteredStatuses = append(filteredStatuses, status)
+			}
+		}
+	} else {
+		filteredStatuses = allStatuses
+	}
+
+	return &types.QueryAllHealthStatusesResponse{
+		HealthStatuses: filteredStatuses,
+		TotalCount:     len(filteredStatuses),
+	}, nil
+}
+
+// HealthCheckParams queries the health check parameters
+func (q queryServer) HealthCheckParams(goCtx context.Context, req *types.QueryHealthCheckParamsRequest) (*types.QueryHealthCheckParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	params := q.keeper.GetHealthCheckParams(ctx)
+
+	return &types.QueryHealthCheckParamsResponse{Params: params}, nil
+}

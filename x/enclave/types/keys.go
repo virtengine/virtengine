@@ -38,6 +38,13 @@ var (
 	// PrefixAttestedResult is the prefix for attested scoring results
 	// Key: PrefixAttestedResult | block_height | scope_id -> AttestedScoringResult
 	PrefixAttestedResult = []byte{0x06}
+
+	// PrefixEnclaveHealth is the prefix for enclave health status
+	// Key: PrefixEnclaveHealth | validator_address -> EnclaveHealthStatus
+	PrefixEnclaveHealth = []byte{0x07}
+
+	// PrefixHealthCheckParams is the prefix for health check parameters
+	PrefixHealthCheckParams = []byte{0x08}
 )
 
 // EnclaveIdentityKey returns the store key for a validator's enclave identity
@@ -94,4 +101,17 @@ func AttestedResultKey(blockHeight int64, scopeID string) []byte {
 	)
 	key = append(key, scopeIDBytes...)
 	return key
+}
+
+// EnclaveHealthKey returns the store key for an enclave health status
+func EnclaveHealthKey(validatorAddr []byte) []byte {
+	key := make([]byte, 0, len(PrefixEnclaveHealth)+len(validatorAddr))
+	key = append(key, PrefixEnclaveHealth...)
+	key = append(key, validatorAddr...)
+	return key
+}
+
+// HealthCheckParamsKey returns the store key for health check parameters
+func HealthCheckParamsKey() []byte {
+	return PrefixHealthCheckParams
 }

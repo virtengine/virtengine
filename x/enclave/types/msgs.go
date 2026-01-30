@@ -10,6 +10,7 @@ const (
 	TypeMsgRegisterEnclaveIdentity = "register_enclave_identity"
 	TypeMsgRotateEnclaveIdentity   = "rotate_enclave_identity"
 	TypeMsgUpdateParams            = "update_params"
+	TypeMsgEnclaveHeartbeat        = "enclave_heartbeat"
 )
 
 // ValidateBasicMsgRegisterEnclaveIdentity performs basic validation

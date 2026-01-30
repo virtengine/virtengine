@@ -13,6 +13,11 @@ const (
 	EventTypeVEIDScoreComputedAttested = "veid_score_computed_attested"
 	EventTypeVEIDScoreRejectedAttestation = "veid_score_rejected_attestation"
 	EventTypeConsensusVerificationFailed  = "consensus_verification_failed"
+	EventTypeEnclaveHeartbeatReceived    = "enclave_heartbeat_received"
+	EventTypeEnclaveHealthStatusChanged  = "enclave_health_status_changed"
+	EventTypeEnclaveHealthDegraded       = "enclave_health_degraded"
+	EventTypeEnclaveHealthUnhealthy      = "enclave_health_unhealthy"
+	EventTypeEnclaveHealthRecovered      = "enclave_health_recovered"
 )
 
 // Event attribute keys
@@ -39,4 +44,12 @@ const (
 	AttributeKeyProposedScore       = "proposed_score"
 	AttributeKeyComputedScore       = "computed_score"
 	AttributeKeyScoreDifference     = "score_difference"
+	AttributeKeyHealthStatus        = "health_status"
+	AttributeKeyPreviousStatus      = "previous_status"
+	AttributeKeyAttestationFailures = "attestation_failures"
+	AttributeKeySignatureFailures   = "signature_failures"
+	AttributeKeyMissedHeartbeats    = "missed_heartbeats"
+	AttributeKeyTotalHeartbeats     = "total_heartbeats"
+	AttributeKeyLastHeartbeat       = "last_heartbeat"
+	AttributeKeyLastAttestation     = "last_attestation"
 )
