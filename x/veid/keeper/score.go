@@ -593,28 +593,58 @@ func (k Keeper) GetScoreStatistics(ctx sdk.Context) types.ScoreStatistics {
 	return stats
 }
 
+// maxBlockRangeForMetrics is the maximum number of blocks to iterate for metrics queries.
+// This prevents performance issues from large range queries.
+const maxBlockRangeForMetrics = 10000
+
 // GetValidatorVerificationCount returns the count of verifications performed by a validator
-// in the given block height range.
-// TODO: Implement actual verification count tracking per validator
+// in the given block height range. For performance, the range is capped at maxBlockRangeForMetrics blocks.
 func (k Keeper) GetValidatorVerificationCount(ctx sdk.Context, validatorAddr string, startHeight, endHeight int64) int64 {
-	// Stub implementation - return 0 for now
-	// Real implementation would track verification counts per validator
-	_ = ctx
-	_ = validatorAddr
-	_ = startHeight
-	_ = endHeight
-	return 0
+	var count int64
+
+	// Cap the range to prevent performance issues
+	if endHeight-startHeight > maxBlockRangeForMetrics {
+		startHeight = endHeight - maxBlockRangeForMetrics
+	}
+
+	// Iterate through verification metrics in the block range
+	for height := startHeight; height <= endHeight; height++ {
+		metrics := k.GetBlockMetrics(ctx, height)
+		for _, m := range metrics {
+			if m.ValidatorAddress == validatorAddr {
+				count++
+			}
+		}
+	}
+
+	return count
 }
 
 // GetValidatorAverageVerificationScore returns the average verification score for a validator
-// in the given block height range.
-// TODO: Implement actual average score tracking per validator
+// in the given block height range. For performance, the range is capped at maxBlockRangeForMetrics blocks.
 func (k Keeper) GetValidatorAverageVerificationScore(ctx sdk.Context, validatorAddr string, startHeight, endHeight int64) int64 {
-	// Stub implementation - return 0 for now
-	// Real implementation would track verification scores per validator
-	_ = ctx
-	_ = validatorAddr
-	_ = startHeight
-	_ = endHeight
-	return 0
+	var totalScore int64
+	var count int64
+
+	// Cap the range to prevent performance issues
+	if endHeight-startHeight > maxBlockRangeForMetrics {
+		startHeight = endHeight - maxBlockRangeForMetrics
+	}
+
+	// Iterate through verification metrics in the block range
+	for height := startHeight; height <= endHeight; height++ {
+		metrics := k.GetBlockMetrics(ctx, height)
+		for _, m := range metrics {
+			if m.ValidatorAddress == validatorAddr {
+				totalScore += int64(m.ComputedScore)
+				count++
+			}
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return totalScore / count
 }

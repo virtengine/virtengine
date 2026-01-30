@@ -106,9 +106,95 @@ func (am AppModule) Name() string {
 }
 
 // RegisterInvariants registers the staking module invariants.
-// No invariants are registered for this module yet.
-func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
-	// TODO: Add invariants for validator performance and reward consistency
+func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
+	RegisterInvariants(ir, am.keeper)
+}
+
+// RegisterInvariants registers all staking module invariants
+func RegisterInvariants(ir sdk.InvariantRegistry, k keeper.Keeper) {
+	ir.RegisterRoute(types.ModuleName, "validator-performance-consistency",
+		ValidatorPerformanceConsistencyInvariant(k))
+	ir.RegisterRoute(types.ModuleName, "reward-non-negative",
+		RewardNonNegativeInvariant(k))
+}
+
+// ValidatorPerformanceConsistencyInvariant checks that validator performance records
+// have consistent data (uptime percentage between 0 and FixedPointScale, valid epoch numbers)
+func ValidatorPerformanceConsistencyInvariant(k keeper.Keeper) sdk.Invariant {
+	return func(ctx sdk.Context) (string, bool) {
+		var invalidRecords []string
+
+		k.WithValidatorPerformances(ctx, func(perf types.ValidatorPerformance) bool {
+			// Check uptime is valid (0-100% in fixed-point scale, i.e., 0 to FixedPointScale)
+			if uptimePercent := types.GetUptimePercent(&perf); uptimePercent < 0 || uptimePercent > types.FixedPointScale {
+				invalidRecords = append(invalidRecords,
+					fmt.Sprintf("validator %s has invalid uptime: %d (expected 0-%d)", perf.ValidatorAddress, uptimePercent, types.FixedPointScale))
+			}
+
+			// Check epoch number is positive
+			if perf.EpochNumber == 0 {
+				invalidRecords = append(invalidRecords,
+					fmt.Sprintf("validator %s has zero epoch number", perf.ValidatorAddress))
+			}
+
+			// Check overall score is computed correctly (0 to MaxPerformanceScore, i.e., 10000)
+			computedScore := types.ComputeOverallScore(&perf)
+			if computedScore < 0 || computedScore > types.MaxPerformanceScore {
+				invalidRecords = append(invalidRecords,
+					fmt.Sprintf("validator %s has invalid overall score: %d (expected 0-%d)", perf.ValidatorAddress, computedScore, types.MaxPerformanceScore))
+			}
+
+			return false // continue iteration
+		})
+
+		if len(invalidRecords) > 0 {
+			return sdk.FormatInvariant(types.ModuleName, "validator-performance-consistency",
+				fmt.Sprintf("found %d invalid validator performance records:\n%s",
+					len(invalidRecords), formatRecords(invalidRecords))), true
+		}
+
+		return sdk.FormatInvariant(types.ModuleName, "validator-performance-consistency",
+			"all validator performance records are consistent"), false
+	}
+}
+
+// RewardNonNegativeInvariant checks that all validator rewards are non-negative
+func RewardNonNegativeInvariant(k keeper.Keeper) sdk.Invariant {
+	return func(ctx sdk.Context) (string, bool) {
+		var invalidRewards []string
+
+		k.WithValidatorRewards(ctx, func(reward types.ValidatorReward) bool {
+			// Check total reward is non-negative
+			if reward.TotalReward.IsAnyNegative() {
+				invalidRewards = append(invalidRewards,
+					fmt.Sprintf("validator %s epoch %d has negative reward: %s",
+						reward.ValidatorAddress, reward.EpochNumber, reward.TotalReward.String()))
+			}
+
+			return false // continue iteration
+		})
+
+		if len(invalidRewards) > 0 {
+			return sdk.FormatInvariant(types.ModuleName, "reward-non-negative",
+				fmt.Sprintf("found %d negative rewards:\n%s",
+					len(invalidRewards), formatRecords(invalidRewards))), true
+		}
+
+		return sdk.FormatInvariant(types.ModuleName, "reward-non-negative",
+			"all validator rewards are non-negative"), false
+	}
+}
+
+// formatRecords formats a slice of record strings for invariant output
+func formatRecords(records []string) string {
+	result := ""
+	for i, r := range records {
+		if i > 0 {
+			result += "\n"
+		}
+		result += "  - " + r
+	}
+	return result
 }
 
 // RegisterServices registers module services.
