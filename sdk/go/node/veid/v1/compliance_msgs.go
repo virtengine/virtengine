@@ -107,10 +107,7 @@ func (msg *MsgUpdateComplianceParams) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid authority address")
 	}
 
-	if msg.Params == nil {
-		return ErrInvalidComplianceParams.Wrap("params cannot be nil")
-	}
-
+	// Params is a value type (not pointer), validation is done via its own Validate method if needed
 	return nil
 }
 
@@ -136,10 +133,7 @@ func (msg *MsgRegisterComplianceProvider) ValidateBasic() error {
 		return ErrInvalidAddress.Wrap("invalid authority address")
 	}
 
-	if msg.Provider == nil {
-		return ErrNotComplianceProvider.Wrap("provider cannot be nil")
-	}
-
+	// Provider is a value type (not pointer)
 	if msg.Provider.ProviderId == "" {
 		return ErrNotComplianceProvider.Wrap("provider_id cannot be empty")
 	}

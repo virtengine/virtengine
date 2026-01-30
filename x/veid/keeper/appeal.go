@@ -287,9 +287,9 @@ func (k Keeper) SubmitAppeal(ctx sdk.Context, msg *types.MsgSubmitAppeal) (*type
 	}
 
 	// Verify the scope exists and belongs to the submitter
-	scope, found := k.GetScope(ctx, submitter, msg.ScopeID)
+	scope, found := k.GetScope(ctx, submitter, msg.ScopeId)
 	if !found {
-		return nil, types.ErrScopeNotFound.Wrapf("scope %s not found", msg.ScopeID)
+		return nil, types.ErrScopeNotFound.Wrapf("scope %s not found", msg.ScopeId)
 	}
 
 	// Verify the scope was rejected (can only appeal rejections)
@@ -323,7 +323,7 @@ func (k Keeper) SubmitAppeal(ctx sdk.Context, msg *types.MsgSubmitAppeal) (*type
 	}
 
 	// Check max appeals per scope
-	currentCount := k.GetAppealCountForScope(ctx, submitter, msg.ScopeID)
+	currentCount := k.GetAppealCountForScope(ctx, submitter, msg.ScopeId)
 	if currentCount >= params.MaxAppealsPerScope {
 		return nil, types.ErrMaxAppealsExceeded.Wrapf(
 			"scope has %d appeals, maximum is %d",
@@ -333,7 +333,7 @@ func (k Keeper) SubmitAppeal(ctx sdk.Context, msg *types.MsgSubmitAppeal) (*type
 	}
 
 	// Check for existing pending appeal for this scope
-	existingAppeals := k.GetAppealsByScope(ctx, msg.Submitter, msg.ScopeID)
+	existingAppeals := k.GetAppealsByScope(ctx, msg.Submitter, msg.ScopeId)
 	for _, existing := range existingAppeals {
 		if existing.Status.IsActive() {
 			return nil, types.ErrAppealAlreadyExists.Wrapf(
@@ -344,10 +344,10 @@ func (k Keeper) SubmitAppeal(ctx sdk.Context, msg *types.MsgSubmitAppeal) (*type
 	}
 
 	// Increment appeal count and get appeal number
-	appealNumber := k.IncrementAppealCountForScope(ctx, submitter, msg.ScopeID)
+	appealNumber := k.IncrementAppealCountForScope(ctx, submitter, msg.ScopeId)
 
 	// Generate appeal ID
-	appealID := types.GenerateAppealID(msg.Submitter, msg.ScopeID, ctx.BlockHeight())
+	appealID := types.GenerateAppealID(msg.Submitter, msg.ScopeId, ctx.BlockHeight())
 
 	// Get current score for the account
 	var originalScore uint32
@@ -360,7 +360,7 @@ func (k Keeper) SubmitAppeal(ctx sdk.Context, msg *types.MsgSubmitAppeal) (*type
 	appeal := types.NewAppealRecord(
 		appealID,
 		msg.Submitter,
-		msg.ScopeID,
+		msg.ScopeId,
 		string(scope.Status),
 		originalScore,
 		msg.Reason,
@@ -379,7 +379,7 @@ func (k Keeper) SubmitAppeal(ctx sdk.Context, msg *types.MsgSubmitAppeal) (*type
 	if err := ctx.EventManager().EmitTypedEvent(&types.EventAppealSubmitted{
 		AppealID:       appealID,
 		AccountAddress: msg.Submitter,
-		ScopeID:        msg.ScopeID,
+		ScopeID:        msg.ScopeId,
 		OriginalStatus: string(scope.Status),
 		AppealNumber:   appealNumber,
 		EvidenceCount:  len(msg.EvidenceHashes),
@@ -398,9 +398,9 @@ func (k Keeper) ClaimAppeal(ctx sdk.Context, msg *types.MsgClaimAppeal) error {
 		return types.ErrNotAuthorizedResolver.Wrapf("address %s is not authorized", msg.Reviewer)
 	}
 
-	appeal, found := k.GetAppeal(ctx, msg.AppealID)
+	appeal, found := k.GetAppeal(ctx, msg.AppealId)
 	if !found {
-		return types.ErrAppealNotFound.Wrapf("appeal %s not found", msg.AppealID)
+		return types.ErrAppealNotFound.Wrapf("appeal %s not found", msg.AppealId)
 	}
 
 	// Set appeal to reviewing status
@@ -419,7 +419,7 @@ func (k Keeper) ClaimAppeal(ctx sdk.Context, msg *types.MsgClaimAppeal) error {
 
 	// Emit event
 	if err := ctx.EventManager().EmitTypedEvent(&types.EventAppealClaimed{
-		AppealID:        msg.AppealID,
+		AppealID:        msg.AppealId,
 		ReviewerAddress: msg.Reviewer,
 		ClaimedAt:       ctx.BlockHeight(),
 	}); err != nil {
@@ -436,9 +436,9 @@ func (k Keeper) ResolveAppeal(ctx sdk.Context, msg *types.MsgResolveAppeal) erro
 		return types.ErrNotAuthorizedResolver.Wrapf("address %s is not authorized", msg.Resolver)
 	}
 
-	appeal, found := k.GetAppeal(ctx, msg.AppealID)
+	appeal, found := k.GetAppeal(ctx, msg.AppealId)
 	if !found {
-		return types.ErrAppealNotFound.Wrapf("appeal %s not found", msg.AppealID)
+		return types.ErrAppealNotFound.Wrapf("appeal %s not found", msg.AppealId)
 	}
 
 	// If appeal is in reviewing status, verify the resolver is the one who claimed it
@@ -455,7 +455,7 @@ func (k Keeper) ResolveAppeal(ctx sdk.Context, msg *types.MsgResolveAppeal) erro
 
 	// Resolve the appeal
 	if err := appeal.Resolve(
-		msg.Resolution,
+		types.AppealStatusFromProto(msg.Resolution),
 		msg.Reason,
 		msg.ScoreAdjustment,
 		ctx.BlockHeight(),
@@ -479,18 +479,19 @@ func (k Keeper) ResolveAppeal(ctx sdk.Context, msg *types.MsgResolveAppeal) erro
 	}
 
 	// If approved and score adjustment is non-zero, apply score adjustment
-	if msg.Resolution == types.AppealStatusApproved && msg.ScoreAdjustment != 0 {
+	localResolution := types.AppealStatusFromProto(msg.Resolution)
+	if localResolution == types.AppealStatusApproved && msg.ScoreAdjustment != 0 {
 		if err := k.ApplyAppealScoreAdjustment(ctx, appeal); err != nil {
-			k.Logger(ctx).Error("failed to apply score adjustment", "error", err, "appeal_id", msg.AppealID)
+			k.Logger(ctx).Error("failed to apply score adjustment", "error", err, "appeal_id", msg.AppealId)
 		}
 	}
 
 	// Emit event
 	if err := ctx.EventManager().EmitTypedEvent(&types.EventAppealResolved{
-		AppealID:         msg.AppealID,
+		AppealID:         msg.AppealId,
 		AccountAddress:   appeal.AccountAddress,
 		ScopeID:          appeal.ScopeID,
-		Resolution:       msg.Resolution,
+		Resolution:       localResolution,
 		ResolutionReason: msg.Reason,
 		ScoreAdjustment:  msg.ScoreAdjustment,
 		ReviewerAddress:  msg.Resolver,
@@ -504,9 +505,9 @@ func (k Keeper) ResolveAppeal(ctx sdk.Context, msg *types.MsgResolveAppeal) erro
 
 // WithdrawAppeal withdraws a pending appeal
 func (k Keeper) WithdrawAppeal(ctx sdk.Context, msg *types.MsgWithdrawAppeal) error {
-	appeal, found := k.GetAppeal(ctx, msg.AppealID)
+	appeal, found := k.GetAppeal(ctx, msg.AppealId)
 	if !found {
-		return types.ErrAppealNotFound.Wrapf("appeal %s not found", msg.AppealID)
+		return types.ErrAppealNotFound.Wrapf("appeal %s not found", msg.AppealId)
 	}
 
 	// Verify the submitter owns the appeal
@@ -534,7 +535,7 @@ func (k Keeper) WithdrawAppeal(ctx sdk.Context, msg *types.MsgWithdrawAppeal) er
 
 	// Emit event
 	if err := ctx.EventManager().EmitTypedEvent(&types.EventAppealWithdrawn{
-		AppealID:       msg.AppealID,
+		AppealID:       msg.AppealId,
 		AccountAddress: appeal.AccountAddress,
 		ScopeID:        appeal.ScopeID,
 		WithdrawnAt:    ctx.BlockHeight(),

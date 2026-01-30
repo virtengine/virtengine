@@ -81,10 +81,15 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 
 	// Check minimum factors satisfied requirement
 	params := k.GetBorderlineParams(ctx)
-	if uint32(len(factorsSatisfied)) < params.MinFactorsSatisfied {
+	// RequiredFactors in proto is the minimum number of factors needed
+	minFactorsRequired := params.RequiredFactors
+	if minFactorsRequired == 0 {
+		minFactorsRequired = 1 // Default to at least 1 factor
+	}
+	if uint32(len(factorsSatisfied)) < minFactorsRequired {
 		return types.ErrMFAChallengeNotSatisfied.Wrapf(
 			"need at least %d factors, got %d",
-			params.MinFactorsSatisfied,
+			minFactorsRequired,
 			len(factorsSatisfied),
 		)
 	}

@@ -252,7 +252,7 @@ func (k Keeper) DetectBorderlineCase(
 	params := k.GetBorderlineParams(ctx)
 
 	// Check if score is in borderline band
-	if !params.IsScoreInBorderlineBand(score) {
+	if !types.IsScoreInBorderlineBand(params, score) {
 		return nil, false
 	}
 
@@ -281,7 +281,9 @@ func (k Keeper) DetectBorderlineCase(
 	}
 
 	now := ctx.BlockTime().Unix()
-	expiresAt := now + params.ChallengeTimeoutSeconds
+	// Convert MFA timeout blocks to seconds
+	challengeTimeoutSeconds := params.MfaTimeoutBlocks * 6
+	expiresAt := now + challengeTimeoutSeconds
 
 	borderlineCase := &BorderlineCase{
 		CaseID:         caseID,

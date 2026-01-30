@@ -461,8 +461,8 @@ func NewBorderlineParamsPB() *BorderlineParamsPB {
 	return &BorderlineParamsPB{
 		LowerThreshold:   DefaultBorderlineLowerThreshold,
 		UpperThreshold:   DefaultBorderlineUpperThreshold,
-		MfaTimeoutBlocks: DefaultBorderlineChallengeTimeoutSeconds / 6, // ~6s per block
-		RequiredFactors:  1,
+		MfaTimeoutBlocks: DefaultMfaTimeoutBlocks,
+		RequiredFactors:  DefaultRequiredFactors,
 	}
 }
 

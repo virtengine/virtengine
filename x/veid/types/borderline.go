@@ -5,7 +5,7 @@ import (
 )
 
 // ============================================================================
-// Borderline Params
+// Borderline Params - using proto-generated type from veidv1
 // ============================================================================
 
 // DefaultBorderlineLowerThreshold is 85% (scaled 0-100)
@@ -14,50 +14,25 @@ const DefaultBorderlineLowerThreshold uint32 = 85
 // DefaultBorderlineUpperThreshold is 90% (scaled 0-100)
 const DefaultBorderlineUpperThreshold uint32 = 90
 
-// DefaultBorderlineChallengeTimeoutSeconds is 5 minutes
-const DefaultBorderlineChallengeTimeoutSeconds int64 = 300
+// DefaultMfaTimeoutBlocks is 50 blocks (approximately 5 minutes at 6s/block)
+const DefaultMfaTimeoutBlocks int64 = 50
 
-// BorderlineParams defines the parameters for borderline identity verification
-// When facial verification confidence falls in the borderline band, MFA fallback is triggered
-type BorderlineParams struct {
-	// LowerThreshold is the lower bound of the borderline band (e.g., 85 = 85% similarity)
-	// Scores below this are rejected outright
-	LowerThreshold uint32 `json:"lower_threshold"`
-
-	// UpperThreshold is the upper bound of the borderline band (e.g., 90 = 90% similarity)
-	// Scores at or above this are verified directly
-	UpperThreshold uint32 `json:"upper_threshold"`
-
-	// Enabled indicates whether borderline fallback is active
-	// If false, scores below UpperThreshold are rejected
-	Enabled bool `json:"enabled"`
-
-	// RequiredFactors specifies which factor types can satisfy borderline verification
-	// e.g., ["totp", "fido2", "email", "sms"]
-	RequiredFactors []string `json:"required_factors"`
-
-	// ChallengeTimeoutSeconds is the duration in seconds for MFA challenge validity
-	ChallengeTimeoutSeconds int64 `json:"challenge_timeout_seconds"`
-
-	// MinFactorsSatisfied is the minimum number of factors that must be satisfied
-	// Defaults to 1 if not set
-	MinFactorsSatisfied uint32 `json:"min_factors_satisfied"`
-}
+// DefaultRequiredFactors is 1 MFA factor
+const DefaultRequiredFactors uint32 = 1
 
 // DefaultBorderlineParams returns the default borderline parameters
+// Uses the proto-generated BorderlineParams type via alias in borderline_msgs.go
 func DefaultBorderlineParams() BorderlineParams {
 	return BorderlineParams{
-		LowerThreshold:          DefaultBorderlineLowerThreshold,
-		UpperThreshold:          DefaultBorderlineUpperThreshold,
-		Enabled:                 true,
-		RequiredFactors:         []string{"totp", "fido2", "email", "sms"},
-		ChallengeTimeoutSeconds: DefaultBorderlineChallengeTimeoutSeconds,
-		MinFactorsSatisfied:     1,
+		LowerThreshold:   DefaultBorderlineLowerThreshold,
+		UpperThreshold:   DefaultBorderlineUpperThreshold,
+		MfaTimeoutBlocks: DefaultMfaTimeoutBlocks,
+		RequiredFactors:  DefaultRequiredFactors,
 	}
 }
 
-// Validate validates the borderline parameters
-func (p BorderlineParams) Validate() error {
+// ValidateBorderlineParams validates borderline parameters
+func ValidateBorderlineParams(p BorderlineParams) error {
 	if p.LowerThreshold > p.UpperThreshold {
 		return ErrInvalidParams.Wrap("lower_threshold cannot exceed upper_threshold")
 	}
@@ -66,38 +41,31 @@ func (p BorderlineParams) Validate() error {
 		return ErrInvalidParams.Wrapf("upper_threshold cannot exceed %d", MaxScore)
 	}
 
-	if p.LowerThreshold == 0 && p.UpperThreshold == 0 && p.Enabled {
-		return ErrInvalidParams.Wrap("thresholds cannot both be zero when enabled")
-	}
-
-	if p.Enabled && len(p.RequiredFactors) == 0 {
-		return ErrInvalidParams.Wrap("required_factors cannot be empty when enabled")
-	}
-
-	if p.ChallengeTimeoutSeconds <= 0 && p.Enabled {
-		return ErrInvalidParams.Wrap("challenge_timeout_seconds must be positive when enabled")
+	if p.MfaTimeoutBlocks <= 0 {
+		return ErrInvalidParams.Wrap("mfa_timeout_blocks must be positive")
 	}
 
 	return nil
 }
 
-// GetChallengeTimeout returns the challenge timeout as a duration
-func (p BorderlineParams) GetChallengeTimeout() time.Duration {
-	return time.Duration(p.ChallengeTimeoutSeconds) * time.Second
+// GetChallengeTimeoutFromBlocks returns the challenge timeout as a duration
+// Assumes approximately 6 seconds per block
+func GetChallengeTimeoutFromBlocks(blocks int64) time.Duration {
+	return time.Duration(blocks*6) * time.Second
 }
 
 // IsScoreInBorderlineBand checks if a score falls within the borderline band
-func (p BorderlineParams) IsScoreInBorderlineBand(score uint32) bool {
+func IsScoreInBorderlineBand(p BorderlineParams, score uint32) bool {
 	return score >= p.LowerThreshold && score < p.UpperThreshold
 }
 
 // IsScoreAboveUpperThreshold checks if a score is at or above the upper threshold
-func (p BorderlineParams) IsScoreAboveUpperThreshold(score uint32) bool {
+func IsScoreAboveUpperThreshold(p BorderlineParams, score uint32) bool {
 	return score >= p.UpperThreshold
 }
 
 // IsScoreBelowLowerThreshold checks if a score is below the lower threshold
-func (p BorderlineParams) IsScoreBelowLowerThreshold(score uint32) bool {
+func IsScoreBelowLowerThreshold(p BorderlineParams, score uint32) bool {
 	return score < p.LowerThreshold
 }
 

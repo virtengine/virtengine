@@ -75,53 +75,33 @@ type MsgRevokeModel = veidv1.MsgRevokeModel
 type MsgRevokeModelResponse = veidv1.MsgRevokeModelResponse
 
 // ============================================================================
-// Model Type Aliases - from proto-generated types
+// Proto-Generated Type Aliases for Serialization
+// These are used for MsgRegisterModel.ModelInfo field compatibility
 // ============================================================================
 
-// MLModelInfo contains information about an ML model.
-type MLModelInfo = veidv1.MLModelInfo
+// ProtoMLModelInfo is the proto-generated MLModelInfo type for serialization.
+type ProtoMLModelInfo = veidv1.MLModelInfo
 
-// ModelVersionState contains the state of a model version.
-type ModelVersionState = veidv1.ModelVersionState
-
-// ModelUpdateProposal contains a proposal to update a model.
-type ModelUpdateProposal = veidv1.ModelUpdateProposal
-
-// ModelVersionHistory contains the history of model versions.
-type ModelVersionHistory = veidv1.ModelVersionHistory
-
-// ValidatorModelReport contains a validator's model report.
-type ValidatorModelReport = veidv1.ValidatorModelReport
-
-// ModelParams contains model parameters.
-type ModelParams = veidv1.ModelParams
-
-// ModelType represents the type of model.
-type ModelType = veidv1.ModelType
-
-// ModelStatus represents the status of a model.
-type ModelStatus = veidv1.ModelStatus
-
-// ModelProposalStatus represents the status of a model proposal.
-type ModelProposalStatus = veidv1.ModelProposalStatus
+// ProtoModelUpdateProposal is the proto-generated ModelUpdateProposal for serialization.
+type ProtoModelUpdateProposal = veidv1.ModelUpdateProposal
 
 // ============================================================================
 // Model Constructor Functions
 // ============================================================================
 
 // NewMsgRegisterModel creates a new MsgRegisterModel.
-func NewMsgRegisterModel(authority string, info *MLModelInfo) *MsgRegisterModel {
+func NewMsgRegisterModel(authority string, info *ProtoMLModelInfo) *MsgRegisterModel {
 	return &MsgRegisterModel{
 		Authority: authority,
-		ModelInfo: info,
+		ModelInfo: *info,
 	}
 }
 
 // NewMsgProposeModelUpdate creates a new MsgProposeModelUpdate.
-func NewMsgProposeModelUpdate(proposer string, proposal *ModelUpdateProposal) *MsgProposeModelUpdate {
+func NewMsgProposeModelUpdate(proposer string, proposal *ProtoModelUpdateProposal) *MsgProposeModelUpdate {
 	return &MsgProposeModelUpdate{
 		Proposer: proposer,
-		Proposal: proposal,
+		Proposal: *proposal,
 	}
 }
 

@@ -48,30 +48,26 @@ func (k *Keeper) SetMFAKeeper(mfaKeeper MFAKeeper) {
 // Borderline Parameters Management
 // ============================================================================
 
-// borderlineParamsStore is the stored format of borderline params
+// borderlineParamsStore is the stored format of borderline params (matches proto structure)
 type borderlineParamsStore struct {
-	LowerThreshold          uint32   `json:"lower_threshold"`
-	UpperThreshold          uint32   `json:"upper_threshold"`
-	Enabled                 bool     `json:"enabled"`
-	RequiredFactors         []string `json:"required_factors"`
-	ChallengeTimeoutSeconds int64    `json:"challenge_timeout_seconds"`
-	MinFactorsSatisfied     uint32   `json:"min_factors_satisfied"`
+	LowerThreshold   uint32 `json:"lower_threshold"`
+	UpperThreshold   uint32 `json:"upper_threshold"`
+	MfaTimeoutBlocks int64  `json:"mfa_timeout_blocks"`
+	RequiredFactors  uint32 `json:"required_factors"`
 }
 
 // SetBorderlineParams sets the borderline parameters
 func (k Keeper) SetBorderlineParams(ctx sdk.Context, params types.BorderlineParams) error {
-	if err := params.Validate(); err != nil {
+	if err := types.ValidateBorderlineParams(params); err != nil {
 		return err
 	}
 
 	store := ctx.KVStore(k.skey)
 	bz, err := json.Marshal(&borderlineParamsStore{
-		LowerThreshold:          params.LowerThreshold,
-		UpperThreshold:          params.UpperThreshold,
-		Enabled:                 params.Enabled,
-		RequiredFactors:         params.RequiredFactors,
-		ChallengeTimeoutSeconds: params.ChallengeTimeoutSeconds,
-		MinFactorsSatisfied:     params.MinFactorsSatisfied,
+		LowerThreshold:   params.LowerThreshold,
+		UpperThreshold:   params.UpperThreshold,
+		MfaTimeoutBlocks: params.MfaTimeoutBlocks,
+		RequiredFactors:  params.RequiredFactors,
 	})
 	if err != nil {
 		return err
@@ -95,12 +91,10 @@ func (k Keeper) GetBorderlineParams(ctx sdk.Context) types.BorderlineParams {
 	}
 
 	return types.BorderlineParams{
-		LowerThreshold:          ps.LowerThreshold,
-		UpperThreshold:          ps.UpperThreshold,
-		Enabled:                 ps.Enabled,
-		RequiredFactors:         ps.RequiredFactors,
-		ChallengeTimeoutSeconds: ps.ChallengeTimeoutSeconds,
-		MinFactorsSatisfied:     ps.MinFactorsSatisfied,
+		LowerThreshold:   ps.LowerThreshold,
+		UpperThreshold:   ps.UpperThreshold,
+		MfaTimeoutBlocks: ps.MfaTimeoutBlocks,
+		RequiredFactors:  ps.RequiredFactors,
 	}
 }
 
@@ -119,7 +113,7 @@ func (k Keeper) CheckBorderlineAndTriggerFallback(
 	params := k.GetBorderlineParams(ctx)
 
 	// If score is at or above upper threshold, verified directly
-	if params.IsScoreAboveUpperThreshold(score) {
+	if types.IsScoreAboveUpperThreshold(params, score) {
 		k.Logger(ctx).Info("score above upper threshold, verified directly",
 			"account", accountAddr,
 			"score", score,
@@ -128,20 +122,8 @@ func (k Keeper) CheckBorderlineAndTriggerFallback(
 		return types.VerificationStatusVerified, nil
 	}
 
-	// If borderline is disabled, reject if below upper threshold
-	if !params.Enabled {
-		if score < params.UpperThreshold {
-			k.Logger(ctx).Info("borderline disabled, rejecting below threshold",
-				"account", accountAddr,
-				"score", score,
-				"upper_threshold", params.UpperThreshold,
-			)
-			return types.VerificationStatusRejected, nil
-		}
-	}
-
 	// If score is in borderline band, trigger MFA fallback
-	if params.IsScoreInBorderlineBand(score) {
+	if types.IsScoreInBorderlineBand(params, score) {
 		k.Logger(ctx).Info("score in borderline band, triggering fallback",
 			"account", accountAddr,
 			"score", score,
@@ -169,11 +151,6 @@ func (k Keeper) TriggerBorderlineFallback(
 ) (types.VerificationStatus, error) {
 	params := k.GetBorderlineParams(ctx)
 
-	// Validate borderline is enabled
-	if !params.Enabled {
-		return types.VerificationStatusRejected, types.ErrBorderlineDisabled
-	}
-
 	// Parse account address
 	address, err := sdk.AccAddressFromBech32(accountAddr)
 	if err != nil {
@@ -185,7 +162,8 @@ func (k Keeper) TriggerBorderlineFallback(
 		return types.VerificationStatusRejected, types.ErrNoEnrolledFactors.Wrap("MFA keeper not configured")
 	}
 
-	availableFactors := k.getAvailableFactorsForFallback(ctx, address, params.RequiredFactors)
+	// Get available factors based on required factor count
+	availableFactors := k.getAvailableFactorsForFallbackCount(ctx, address, params.RequiredFactors)
 	if len(availableFactors) == 0 {
 		k.Logger(ctx).Warn("no enrolled factors for borderline fallback",
 			"account", accountAddr,
@@ -212,14 +190,19 @@ func (k Keeper) TriggerBorderlineFallback(
 
 	// Create and store fallback record
 	now := ctx.BlockTime().Unix()
-	expiresAt := now + params.ChallengeTimeoutSeconds
+	// Convert MFA timeout blocks to seconds (approximately 6 seconds per block)
+	challengeTimeoutSeconds := params.MfaTimeoutBlocks * 6
+	expiresAt := now + challengeTimeoutSeconds
+
+	// Convert RequiredFactors count to factor type list
+	requiredFactorsList := k.getDefaultRequiredFactorsList()
 
 	fallbackRecord := types.NewBorderlineFallbackRecord(
 		fallbackID,
 		accountAddr,
 		borderlineScore,
 		challengeID,
-		params.RequiredFactors,
+		requiredFactorsList,
 		now,
 		expiresAt,
 		ctx.BlockHeight(),
@@ -233,7 +216,7 @@ func (k Keeper) TriggerBorderlineFallback(
 	k.addToPendingFallbackQueue(ctx, fallbackRecord)
 
 	// Emit borderline fallback triggered event
-	k.emitBorderlineFallbackTriggeredEvent(ctx, fallbackRecord, params.RequiredFactors)
+	k.emitBorderlineFallbackTriggeredEvent(ctx, fallbackRecord, requiredFactorsList)
 
 	k.Logger(ctx).Info("borderline fallback triggered",
 		"account", accountAddr,
@@ -244,6 +227,34 @@ func (k Keeper) TriggerBorderlineFallback(
 	)
 
 	return types.VerificationStatusNeedsAdditionalFactor, nil
+}
+
+// getDefaultRequiredFactorsList returns the default list of acceptable MFA factor types
+func (k Keeper) getDefaultRequiredFactorsList() []string {
+	return []string{"totp", "fido2", "email", "sms"}
+}
+
+// getAvailableFactorsForFallbackCount returns factor types based on required count
+func (k Keeper) getAvailableFactorsForFallbackCount(
+	ctx sdk.Context,
+	address sdk.AccAddress,
+	requiredCount uint32,
+) []mfatypes.FactorType {
+	var available []mfatypes.FactorType
+
+	// Check all default factor types
+	for _, factorName := range k.getDefaultRequiredFactorsList() {
+		factorType, err := mfatypes.FactorTypeFromString(factorName)
+		if err != nil {
+			continue
+		}
+
+		if k.mfaKeeper.HasActiveFactorOfType(ctx, address, factorType) {
+			available = append(available, factorType)
+		}
+	}
+
+	return available
 }
 
 // getAvailableFactorsForFallback returns the factor types that are both required
@@ -300,12 +311,14 @@ func (k Keeper) createBorderlineMFAChallenge(
 
 	// Create the MFA challenge
 	mfaParams := k.mfaKeeper.GetParams(ctx)
+	// Convert MFA timeout blocks to seconds
+	challengeTimeoutSeconds := params.MfaTimeoutBlocks * 6
 	challenge, err := mfatypes.NewChallenge(
 		address.String(),
 		factorType,
 		factorID,
 		mfatypes.SensitiveTxUnspecified, // Borderline verification isn't a standard sensitive tx
-		params.ChallengeTimeoutSeconds,
+		challengeTimeoutSeconds,
 		mfaParams.MaxChallengeAttempts,
 	)
 	if err != nil {

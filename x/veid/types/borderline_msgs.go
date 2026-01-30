@@ -50,7 +50,7 @@ func NewMsgCompleteBorderlineFallback(
 }
 
 // NewMsgUpdateBorderlineParams creates a new MsgUpdateBorderlineParams.
-func NewMsgUpdateBorderlineParams(authority string, params *BorderlineParams) *MsgUpdateBorderlineParams {
+func NewMsgUpdateBorderlineParams(authority string, params BorderlineParams) *MsgUpdateBorderlineParams {
 	return &MsgUpdateBorderlineParams{
 		Authority: authority,
 		Params:    params,

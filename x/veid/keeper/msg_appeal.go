@@ -29,8 +29,8 @@ func (ms msgServer) SubmitAppeal(goCtx context.Context, msg *types.MsgSubmitAppe
 	}
 
 	return &types.MsgSubmitAppealResponse{
-		AppealID:     appeal.AppealID,
-		Status:       appeal.Status,
+		AppealId:     appeal.AppealID,
+		Status:       types.AppealStatusToProto(appeal.Status),
 		AppealNumber: appeal.AppealNumber,
 		SubmittedAt:  appeal.SubmittedAt,
 	}, nil
@@ -51,7 +51,7 @@ func (ms msgServer) ClaimAppeal(goCtx context.Context, msg *types.MsgClaimAppeal
 	}
 
 	return &types.MsgClaimAppealResponse{
-		AppealID:  msg.AppealID,
+		AppealId:  msg.AppealId,
 		ClaimedAt: ctx.BlockHeight(),
 	}, nil
 }
@@ -71,7 +71,7 @@ func (ms msgServer) ResolveAppeal(goCtx context.Context, msg *types.MsgResolveAp
 	}
 
 	return &types.MsgResolveAppealResponse{
-		AppealID:   msg.AppealID,
+		AppealId:   msg.AppealId,
 		Resolution: msg.Resolution,
 		ResolvedAt: ctx.BlockHeight(),
 	}, nil
@@ -92,7 +92,7 @@ func (ms msgServer) WithdrawAppeal(goCtx context.Context, msg *types.MsgWithdraw
 	}
 
 	return &types.MsgWithdrawAppealResponse{
-		AppealID:    msg.AppealID,
+		AppealId:    msg.AppealId,
 		WithdrawnAt: ctx.BlockHeight(),
 	}, nil
 }
