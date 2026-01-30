@@ -24,6 +24,8 @@ modules:
       except:
         - UNARY_RPC
         - COMMENT_FIELD
+        - SERVICE_SUFFIX
+        - RPC_REQUEST_STANDARD_NAME
   - path: proto/vendor
     lint:
       use: []

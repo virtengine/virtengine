@@ -99,7 +99,7 @@ func (k Keeper) updateExpiredIdentities(ctx sdk.Context) {
 		}
 
 		// Check if identity has expired
-		if identity.IsExpired(currentHeight) {
+		if types.IsIdentityExpired(&identity, currentHeight) {
 			identity.Status = types.EnclaveIdentityStatusExpired
 			if err := k.UpdateEnclaveIdentity(ctx, &identity); err != nil {
 				k.Logger(ctx).Error(
@@ -161,7 +161,7 @@ func (k Keeper) cleanupExpiredMeasurements(ctx sdk.Context) {
 
 		k.Logger(ctx).Debug(
 			"cleaned up expired measurement",
-			"measurement", measurement.MeasurementHashHex(),
+			"measurement", types.MeasurementHashHex(measurement.MeasurementHash),
 			"expiry_height", measurement.ExpiryHeight,
 		)
 

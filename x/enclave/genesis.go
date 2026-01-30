@@ -83,5 +83,5 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 
 // ValidateGenesis validates the genesis state
 func ValidateGenesis(data *types.GenesisState) error {
-	return data.Validate()
+	return types.ValidateGenesis(data)
 }

@@ -122,7 +122,7 @@ func (k Keeper) RecordMetrics(ctx sdk.Context) {
 	// Count identities by status
 	statusCounts := make(map[string]float64)
 	k.WithEnclaveIdentities(ctx, func(identity types.EnclaveIdentity) bool {
-		statusCounts[string(identity.Status)]++
+		statusCounts[identity.Status.String()]++
 		return false
 	})
 
@@ -145,7 +145,7 @@ func (k Keeper) RecordMetrics(ctx sdk.Context) {
 	measurementCounts := make(map[string]float64)
 	k.WithMeasurements(ctx, func(measurement types.MeasurementRecord) bool {
 		if !measurement.Revoked {
-			measurementCounts[string(measurement.TEEType)]++
+			measurementCounts[measurement.TeeType.String()]++
 		}
 		return false
 	})

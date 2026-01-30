@@ -1,74 +1,34 @@
 package types
 
-import "fmt"
+import (
+	"encoding/hex"
+	"fmt"
 
-// Params defines the parameters for the enclave module
-type Params struct {
-	// MaxEnclaveKeysPerValidator is the maximum number of enclave keys a validator can have
-	MaxEnclaveKeysPerValidator uint32 `json:"max_enclave_keys_per_validator"`
-
-	// DefaultExpiryBlocks is the default number of blocks until enclave identity expires
-	DefaultExpiryBlocks int64 `json:"default_expiry_blocks"`
-
-	// KeyRotationOverlapBlocks is the default overlap period for key rotations
-	KeyRotationOverlapBlocks int64 `json:"key_rotation_overlap_blocks"`
-
-	// MinQuoteVersion is the minimum attestation quote version required
-	MinQuoteVersion uint32 `json:"min_quote_version"`
-
-	// AllowedTEETypes is the list of allowed TEE types
-	AllowedTEETypes []TEEType `json:"allowed_tee_types"`
-
-	// ScoreTolerance is the maximum allowed score difference for consensus
-	ScoreTolerance uint32 `json:"score_tolerance"`
-
-	// RequireAttestationChain indicates if attestation chain verification is required
-	RequireAttestationChain bool `json:"require_attestation_chain"`
-
-	// MaxAttestationAge is the maximum age of attestation in blocks
-	MaxAttestationAge int64 `json:"max_attestation_age"`
-
-	// EnableCommitteeMode enables committee-based identity processing
-	EnableCommitteeMode bool `json:"enable_committee_mode"`
-
-	// CommitteeSize is the size of the identity committee (if committee mode enabled)
-	CommitteeSize uint32 `json:"committee_size,omitempty"`
-
-	// CommitteeEpochBlocks is the number of blocks per committee epoch
-	CommitteeEpochBlocks int64 `json:"committee_epoch_blocks,omitempty"`
-
-	// EnableMeasurementCleanup enables automatic cleanup of expired measurements
-	EnableMeasurementCleanup bool `json:"enable_measurement_cleanup"`
-
-	// MaxRegistrationsPerBlock limits registrations per block (0 = unlimited)
-	MaxRegistrationsPerBlock uint32 `json:"max_registrations_per_block"`
-
-	// RegistrationCooldownBlocks enforces cooldown between re-registrations
-	RegistrationCooldownBlocks int64 `json:"registration_cooldown_blocks"`
-}
+	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
+)
 
 // DefaultParams returns the default enclave parameters
-func DefaultParams() Params {
-	return Params{
-		MaxEnclaveKeysPerValidator: 2,                                        // Allow current + rotating key
-		DefaultExpiryBlocks:        1000,                                     // ~1.5 hours at 5s blocks
-		KeyRotationOverlapBlocks:   100,                                      // ~8 minutes overlap
-		MinQuoteVersion:            3,                                        // DCAP v3 minimum
-		AllowedTEETypes:            []TEEType{TEETypeSGX, TEETypeSEVSNP, TEETypeNitro},
-		ScoreTolerance:             0,                                        // Exact match by default
+func DefaultParams() v1.Params {
+	return v1.Params{
+		MaxEnclaveKeysPerValidator: 2,                                                                  // Allow current + rotating key
+		DefaultExpiryBlocks:        1000,                                                               // ~1.5 hours at 5s blocks
+		KeyRotationOverlapBlocks:   100,                                                                // ~8 minutes overlap
+		MinQuoteVersion:            3,                                                                  // DCAP v3 minimum
+		AllowedTeeTypes:            []v1.TEEType{v1.TEETypeSGX, v1.TEETypeSEVSNP, v1.TEETypeNitro},
+		ScoreTolerance:             0,                                                                  // Exact match by default
 		RequireAttestationChain:    true,
-		MaxAttestationAge:          10000,                                    // ~14 hours
+		MaxAttestationAge:          10000,                                                              // ~14 hours
 		EnableCommitteeMode:        false,
 		CommitteeSize:              0,
-		CommitteeEpochBlocks:       10000,                                    // ~14 hours per epoch
-		EnableMeasurementCleanup:   false,                                    // Disabled by default
-		MaxRegistrationsPerBlock:   0,                                        // Unlimited by default
-		RegistrationCooldownBlocks: 0,                                        // No cooldown by default
+		CommitteeEpochBlocks:       10000,                                                              // ~14 hours per epoch
+		EnableMeasurementCleanup:   false,                                                              // Disabled by default
+		MaxRegistrationsPerBlock:   0,                                                                  // Unlimited by default
+		RegistrationCooldownBlocks: 0,                                                                  // No cooldown by default
 	}
 }
 
-// Validate validates the parameters
-func (p Params) Validate() error {
+// ValidateParams validates the parameters
+func ValidateParams(p *v1.Params) error {
 	if p.MaxEnclaveKeysPerValidator == 0 {
 		return fmt.Errorf("max_enclave_keys_per_validator must be positive")
 	}
@@ -85,11 +45,11 @@ func (p Params) Validate() error {
 		return fmt.Errorf("min_quote_version must be positive")
 	}
 
-	if len(p.AllowedTEETypes) == 0 {
+	if len(p.AllowedTeeTypes) == 0 {
 		return fmt.Errorf("allowed_tee_types cannot be empty")
 	}
 
-	for _, teeType := range p.AllowedTEETypes {
+	for _, teeType := range p.AllowedTeeTypes {
 		if !IsValidTEEType(teeType) {
 			return fmt.Errorf("invalid TEE type in allowed list: %s", teeType)
 		}
@@ -111,8 +71,8 @@ func (p Params) Validate() error {
 }
 
 // IsTEETypeAllowed checks if a TEE type is in the allowed list
-func (p Params) IsTEETypeAllowed(teeType TEEType) bool {
-	for _, allowed := range p.AllowedTEETypes {
+func IsTEETypeAllowed(p *v1.Params, teeType v1.TEEType) bool {
+	for _, allowed := range p.AllowedTeeTypes {
 		if allowed == teeType {
 			return true
 		}
@@ -120,40 +80,25 @@ func (p Params) IsTEETypeAllowed(teeType TEEType) bool {
 	return false
 }
 
-// GenesisState defines the enclave module's genesis state
-type GenesisState struct {
-	// EnclaveIdentities is the list of registered enclave identities
-	EnclaveIdentities []EnclaveIdentity `json:"enclave_identities"`
-
-	// MeasurementAllowlist is the list of approved enclave measurements
-	MeasurementAllowlist []MeasurementRecord `json:"measurement_allowlist"`
-
-	// KeyRotations is the list of active key rotations
-	KeyRotations []KeyRotationRecord `json:"key_rotations,omitempty"`
-
-	// Params is the module parameters
-	Params Params `json:"params"`
-}
-
 // DefaultGenesisState returns the default genesis state
-func DefaultGenesisState() *GenesisState {
-	return &GenesisState{
-		EnclaveIdentities:    []EnclaveIdentity{},
-		MeasurementAllowlist: []MeasurementRecord{},
-		KeyRotations:         []KeyRotationRecord{},
+func DefaultGenesisState() *v1.GenesisState {
+	return &v1.GenesisState{
+		EnclaveIdentities:    []v1.EnclaveIdentity{},
+		MeasurementAllowlist: []v1.MeasurementRecord{},
+		KeyRotations:         []v1.KeyRotationRecord{},
 		Params:               DefaultParams(),
 	}
 }
 
-// Validate validates the genesis state
-func (g *GenesisState) Validate() error {
-	if err := g.Params.Validate(); err != nil {
+// ValidateGenesis validates the genesis state
+func ValidateGenesis(g *v1.GenesisState) error {
+	if err := ValidateParams(&g.Params); err != nil {
 		return fmt.Errorf("invalid params: %w", err)
 	}
 
 	seenValidators := make(map[string]bool)
 	for i, identity := range g.EnclaveIdentities {
-		if err := identity.Validate(); err != nil {
+		if err := ValidateEnclaveIdentity(&identity); err != nil {
 			return fmt.Errorf("invalid enclave identity at index %d: %w", i, err)
 		}
 
@@ -165,11 +110,11 @@ func (g *GenesisState) Validate() error {
 
 	seenMeasurements := make(map[string]bool)
 	for i, measurement := range g.MeasurementAllowlist {
-		if err := measurement.Validate(); err != nil {
+		if err := ValidateMeasurementRecord(&measurement); err != nil {
 			return fmt.Errorf("invalid measurement at index %d: %w", i, err)
 		}
 
-		hashHex := measurement.MeasurementHashHex()
+		hashHex := hex.EncodeToString(measurement.MeasurementHash)
 		if seenMeasurements[hashHex] {
 			return fmt.Errorf("duplicate measurement in allowlist: %s", hashHex)
 		}
@@ -177,19 +122,10 @@ func (g *GenesisState) Validate() error {
 	}
 
 	for i, rotation := range g.KeyRotations {
-		if err := rotation.Validate(); err != nil {
+		if err := ValidateKeyRotationRecord(&rotation); err != nil {
 			return fmt.Errorf("invalid key rotation at index %d: %w", i, err)
 		}
 	}
 
 	return nil
 }
-
-// ProtoMessage implements proto.Message
-func (*GenesisState) ProtoMessage() {}
-
-// Reset implements proto.Message
-func (g *GenesisState) Reset() { *g = GenesisState{} }
-
-// String implements proto.Message
-func (g *GenesisState) String() string { return fmt.Sprintf("%+v", *g) }
