@@ -1,0 +1,208 @@
+{{- if .Values.database.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "slurm-cluster.database.serviceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slurm-cluster.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  serviceName: {{ include "slurm-cluster.database.serviceName" . }}
+  replicas: {{ .Values.database.replicas }}
+  selector:
+    matchLabels:
+      {{- include "slurm-cluster.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "slurm-cluster.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "slurm-cluster.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-munge
+          image: {{ include "slurm-cluster.munge.image" . }}
+          imagePullPolicy: {{ .Values.munge.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              cp /munge-key/{{ .Values.munge.secretKeyName }} /etc/munge/munge.key
+              chmod 400 /etc/munge/munge.key
+              chown munge:munge /etc/munge/munge.key
+          volumeMounts:
+            - name: munge-key
+              mountPath: /munge-key
+              readOnly: true
+            - name: munge-socket
+              mountPath: /etc/munge
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+        - name: wait-for-mariadb
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until nc -z {{ include "slurm-cluster.mariadb.serviceName" . }} 3306; do
+                echo "Waiting for MariaDB..."
+                sleep 5
+              done
+              echo "MariaDB is ready"
+      containers:
+        - name: munge
+          image: {{ include "slurm-cluster.munge.image" . }}
+          imagePullPolicy: {{ .Values.munge.image.pullPolicy }}
+          command:
+            - /usr/sbin/munged
+            - --foreground
+            - --key-file=/etc/munge/munge.key
+            - --socket=/run/munge/munge.socket.2
+          volumeMounts:
+            - name: munge-socket
+              mountPath: /etc/munge
+            - name: munge-run
+              mountPath: /run/munge
+          resources:
+            {{- toYaml .Values.munge.resources | nindent 12 }}
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+        - name: slurmdbd
+          image: {{ include "slurm-cluster.database.image" . }}
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          command:
+            - /usr/sbin/slurmdbd
+            - -D
+            - -vvv
+          ports:
+            - name: slurmdbd
+              containerPort: 6819
+              protocol: TCP
+          volumeMounts:
+            - name: slurm-config
+              mountPath: /etc/slurm
+              readOnly: true
+            - name: munge-run
+              mountPath: /run/munge
+            - name: slurmdbd-spool
+              mountPath: /var/spool/slurm
+            - name: slurm-log
+              mountPath: /var/log/slurm
+            - name: slurm-run
+              mountPath: /run/slurm
+          {{- if .Values.database.livenessProbe.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: slurmdbd
+            initialDelaySeconds: {{ .Values.database.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.database.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.database.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.database.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.database.readinessProbe.enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: slurmdbd
+            initialDelaySeconds: {{ .Values.database.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.database.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.database.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.database.readinessProbe.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.database.resources | nindent 12 }}
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+          env:
+            - name: SLURM_CONF
+              value: /etc/slurm/slurm.conf
+            - name: SLURMDBD_CONF
+              value: /etc/slurm/slurmdbd.conf
+            - name: STORAGE_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "slurm-cluster.database.secretName" . }}
+                  key: {{ .Values.database.config.secretPasswordKey }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: slurm-config
+          configMap:
+            name: {{ include "slurm-cluster.fullname" . }}-config
+        - name: munge-key
+          secret:
+            secretName: {{ include "slurm-cluster.munge.secretName" . }}
+        - name: munge-socket
+          emptyDir: {}
+        - name: munge-run
+          emptyDir: {}
+        - name: slurm-log
+          emptyDir: {}
+        - name: slurm-run
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.database.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.database.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: slurmdbd-spool
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- if .Values.database.persistence.storageClass }}
+        storageClassName: {{ .Values.database.persistence.storageClass }}
+        {{- else if .Values.global.storageClass }}
+        storageClassName: {{ .Values.global.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.database.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slurm-cluster.database.serviceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slurm-cluster.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 6819
+      targetPort: slurmdbd
+      protocol: TCP
+      name: slurmdbd
+  selector:
+    {{- include "slurm-cluster.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+{{- end }}
