@@ -167,7 +167,6 @@ func (m msgServer) RevokeMeasurement(goCtx context.Context, msg *types.MsgRevoke
 		return nil, types.ErrUnauthorized.Wrapf("invalid authority: expected %s, got %s", m.keeper.GetAuthority(), msg.Authority)
 	}
 
-	// In production, this would be tied to a governance proposal
 	if err := m.keeper.RevokeMeasurement(ctx, msg.MeasurementHash, msg.Reason, 0); err != nil {
 		return nil, err
 	}

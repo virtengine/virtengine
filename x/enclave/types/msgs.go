@@ -8,6 +8,8 @@ import (
 const (
 	TypeMsgRegisterEnclaveIdentity = "register_enclave_identity"
 	TypeMsgRotateEnclaveIdentity   = "rotate_enclave_identity"
+	TypeMsgProposeMeasurement      = "propose_measurement"
+	TypeMsgRevokeMeasurement       = "revoke_measurement"
 	TypeMsgUpdateParams            = "update_params"
 )
 
@@ -191,7 +193,7 @@ type MsgProposeMeasurement struct {
 func (m MsgProposeMeasurement) Route() string { return RouterKey }
 
 // Type returns the message type
-func (m MsgProposeMeasurement) Type() string { return "propose_measurement" }
+func (m MsgProposeMeasurement) Type() string { return TypeMsgProposeMeasurement }
 
 // GetSigners returns the signers
 func (m MsgProposeMeasurement) GetSigners() []sdk.AccAddress {
@@ -206,6 +208,10 @@ func (m MsgProposeMeasurement) GetSigners() []sdk.AccAddress {
 func (m MsgProposeMeasurement) ValidateBasic() error {
 	if m.Authority == "" {
 		return ErrInvalidMeasurement.Wrap("authority cannot be empty")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(m.Authority); err != nil {
+		return ErrInvalidMeasurement.Wrapf("invalid authority address: %v", err)
 	}
 
 	if len(m.MeasurementHash) != 32 {
@@ -239,7 +245,7 @@ type MsgRevokeMeasurement struct {
 func (m MsgRevokeMeasurement) Route() string { return RouterKey }
 
 // Type returns the message type
-func (m MsgRevokeMeasurement) Type() string { return "revoke_measurement" }
+func (m MsgRevokeMeasurement) Type() string { return TypeMsgRevokeMeasurement }
 
 // GetSigners returns the signers
 func (m MsgRevokeMeasurement) GetSigners() []sdk.AccAddress {
@@ -254,6 +260,10 @@ func (m MsgRevokeMeasurement) GetSigners() []sdk.AccAddress {
 func (m MsgRevokeMeasurement) ValidateBasic() error {
 	if m.Authority == "" {
 		return ErrInvalidMeasurement.Wrap("authority cannot be empty")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(m.Authority); err != nil {
+		return ErrInvalidMeasurement.Wrapf("invalid authority address: %v", err)
 	}
 
 	if len(m.MeasurementHash) != 32 {
