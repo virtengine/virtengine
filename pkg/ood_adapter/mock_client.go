@@ -4,7 +4,6 @@
 package ood_adapter
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"sync"
@@ -270,20 +269,24 @@ func (c *MockOODClient) LaunchApp(ctx context.Context, spec *InteractiveAppSpec)
 	}
 
 	// Simulate session starting after a delay
-	verrors.SafeGo("", func() {
-		defer func() { }() // WG Done if needed
+	go func(sid string, appType InteractiveAppType, counter int) {
+		defer func() {
+			if r := recover(); r != nil {
+				// Recovered from panic
+			}
+		}()
 		time.Sleep(100 * time.Millisecond)
 		c.mu.Lock()
-		if s, ok := c.sessions[sessionID]; ok {
+		if s, ok := c.sessions[sid]; ok {
 			s.State = SessionStateRunning
 			now := time.Now()
 			s.StartedAt = &now
-			s.ConnectURL = fmt.Sprintf("https://ondemand.example.com/node/compute-%d/%s", c.nextSessionID, spec.AppType)
-			s.Host = fmt.Sprintf("compute-%d", c.nextSessionID)
+			s.ConnectURL = fmt.Sprintf("https://ondemand.example.com/node/compute-%d/%s", counter, appType)
+			s.Host = fmt.Sprintf("compute-%d", counter)
 			s.Port = 8080
 		}
 		c.mu.Unlock()
-	}()
+	}(sessionID, spec.AppType, c.nextSessionID)
 
 	c.sessions[sessionID] = session
 	return session, nil

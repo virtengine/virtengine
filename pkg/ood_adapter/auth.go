@@ -4,7 +4,6 @@
 package ood_adapter
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
