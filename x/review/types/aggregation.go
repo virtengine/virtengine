@@ -116,15 +116,15 @@ type ProviderAggregation struct {
 }
 
 // NewProviderAggregation creates a new provider aggregation
+// BUGFIX-001: now parameter is passed in to ensure consensus safety (use ctx.BlockTime())
 func NewProviderAggregation(providerAddress string) *ProviderAggregation {
-	now := time.Now().UTC()
 	return &ProviderAggregation{
 		ProviderAddress: providerAddress,
 		TotalReviews:    0,
 		AverageRating:   0,
 		Distribution:    RatingDistribution{},
 		LastReviewAt:    time.Time{},
-		UpdatedAt:       now,
+		UpdatedAt:       time.Time{}, // Set by caller using blockchain time
 	}
 }
 
@@ -145,6 +145,7 @@ func (pa *ProviderAggregation) Validate() error {
 }
 
 // AddReview adds a review to the aggregation and recalculates the average
+// BUGFIX-001: reviewTime is used for both LastReviewAt and UpdatedAt for consensus safety
 func (pa *ProviderAggregation) AddReview(rating uint8, reviewTime time.Time) error {
 	if err := pa.Distribution.Add(rating); err != nil {
 		return err
@@ -153,13 +154,14 @@ func (pa *ProviderAggregation) AddReview(rating uint8, reviewTime time.Time) err
 	pa.TotalReviews++
 	pa.recalculateAverage()
 	pa.LastReviewAt = reviewTime
-	pa.UpdatedAt = time.Now().UTC()
+	pa.UpdatedAt = reviewTime // Use provided time for consensus safety
 
 	return nil
 }
 
 // RemoveReview removes a review from the aggregation and recalculates the average
-func (pa *ProviderAggregation) RemoveReview(rating uint8) error {
+// BUGFIX-001: updatedAt parameter ensures consensus safety (use ctx.BlockTime())
+func (pa *ProviderAggregation) RemoveReview(rating uint8, updatedAt time.Time) error {
 	if pa.TotalReviews == 0 {
 		return fmt.Errorf("cannot remove: no reviews exist")
 	}
@@ -170,7 +172,7 @@ func (pa *ProviderAggregation) RemoveReview(rating uint8) error {
 
 	pa.TotalReviews--
 	pa.recalculateAverage()
-	pa.UpdatedAt = time.Now().UTC()
+	pa.UpdatedAt = updatedAt
 
 	return nil
 }

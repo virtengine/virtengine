@@ -2,7 +2,7 @@ package keeper
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -41,7 +41,8 @@ func (m *msgServer) EnrollFactor(goCtx context.Context, msg *types.MsgEnrollFact
 	now := ctx.BlockTime().Unix()
 
 	// Generate factor ID based on factor type
-	factorID := generateFactorID(msg.FactorType, msg.PublicIdentifier, msg.Label)
+	// BUGFIX-001: Pass block timestamp for consensus-safe ID generation
+	factorID := generateFactorID(msg.FactorType, msg.PublicIdentifier, msg.Label, now)
 
 	enrollment := &types.FactorEnrollment{
 		AccountAddress:   msg.Sender,
@@ -410,13 +411,14 @@ func (m *msgServer) validateMFAProof(ctx sdk.Context, address sdk.AccAddress, pr
 }
 
 // generateFactorID generates a unique factor ID
-func generateFactorID(factorType types.FactorType, publicIdentifier []byte, label string) string {
-	// In production, this would use a proper hash function
-	// For now, use a combination of type and identifier
+// BUGFIX-001: Added blockTime parameter to ensure consensus-safe ID generation
+func generateFactorID(factorType types.FactorType, publicIdentifier []byte, label string, blockTime int64) string {
+	// Use public identifier if available, otherwise use label + block time
 	if len(publicIdentifier) > 0 {
 		return types.ComputeFactorFingerprint(factorType, publicIdentifier)
 	}
-	return types.ComputeFactorFingerprint(factorType, []byte(label+time.Now().String()))
+	// Use block timestamp for consensus safety
+	return types.ComputeFactorFingerprint(factorType, []byte(fmt.Sprintf("%s-%d", label, blockTime)))
 }
 
 // checkFactorsSatisfied checks if the verified factors satisfy any combination
