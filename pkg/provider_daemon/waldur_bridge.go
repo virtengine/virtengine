@@ -40,22 +40,46 @@ type WaldurBridgeConfig struct {
 	WaldurBaseURL      string
 	WaldurToken        string
 	WaldurProjectUUID  string
-	WaldurOfferingMap  map[string]string
-	OrderCallbackURL   string
+	// WaldurOfferingMap is DEPRECATED. Use OfferingSyncEnabled instead.
+	// When OfferingSyncEnabled is true, offerings are automatically synced from chain.
+	// This field is retained for backward compatibility and will be removed in a future version.
+	WaldurOfferingMap map[string]string
+	OrderCallbackURL  string
+
+	// VE-2D: Automatic offering sync configuration
+	// OfferingSyncEnabled enables automatic chain-to-Waldur offering synchronization.
+	// When enabled, WaldurOfferingMap is ignored and offerings are synced automatically.
+	OfferingSyncEnabled bool
+	// OfferingSyncStateFile is the path to persist offering sync state.
+	OfferingSyncStateFile string
+	// WaldurCustomerUUID is the Waldur customer/organization UUID for creating offerings.
+	WaldurCustomerUUID string
+	// WaldurCategoryMap maps VirtEngine offering categories to Waldur category UUIDs.
+	WaldurCategoryMap map[string]string
+	// OfferingSyncInterval is the reconciliation interval in seconds (default: 300).
+	OfferingSyncInterval int64
+	// OfferingSyncMaxRetries is the max retries before dead-lettering (default: 5).
+	OfferingSyncMaxRetries int
+	// OfferingSyncReconcileOnStartup triggers full reconciliation on start (default: true).
+	OfferingSyncReconcileOnStartup bool
 }
 
 // DefaultWaldurBridgeConfig returns a default configuration.
 func DefaultWaldurBridgeConfig() WaldurBridgeConfig {
 	return WaldurBridgeConfig{
-		EventBuffer:        100,
-		CallbackTTL:        time.Hour,
-		OperationTimeout:   45 * time.Second,
-		HealthCheckOnStart: true,
-		HealthCheckTimeout: 15 * time.Second,
-		CallbackSinkDir:    "data/callbacks",
-		StateFile:          "data/waldur_bridge_state.json",
-		CheckpointFile:     "data/marketplace_checkpoint.json",
-		CometWS:            "/websocket",
+		EventBuffer:                    100,
+		CallbackTTL:                    time.Hour,
+		OperationTimeout:               45 * time.Second,
+		HealthCheckOnStart:             true,
+		HealthCheckTimeout:             15 * time.Second,
+		CallbackSinkDir:                "data/callbacks",
+		StateFile:                      "data/waldur_bridge_state.json",
+		CheckpointFile:                 "data/marketplace_checkpoint.json",
+		CometWS:                        "/websocket",
+		OfferingSyncStateFile:          "data/offering_sync_state.json",
+		OfferingSyncInterval:           300,
+		OfferingSyncMaxRetries:         5,
+		OfferingSyncReconcileOnStartup: true,
 	}
 }
 
@@ -72,6 +96,9 @@ type WaldurBridge struct {
 	waldurClient    *waldur.Client
 	marketplace     *waldur.MarketplaceClient
 	rpcClient       *rpchttp.HTTP
+
+	// VE-2D: Offering sync worker for automatic chain-to-Waldur synchronization
+	offeringSyncWorker *OfferingSyncWorker
 }
 
 // NewWaldurBridge creates a Waldur bridge instance.
@@ -134,8 +161,11 @@ func (b *WaldurBridge) Start(ctx context.Context) error {
 	if b.cfg.WaldurToken == "" {
 		return fmt.Errorf("waldur token is required")
 	}
-	if err := b.validateOfferingMap(); err != nil {
-		return err
+	// VE-2D: Skip offering map validation when automatic sync is enabled
+	if !b.cfg.OfferingSyncEnabled {
+		if err := b.validateOfferingMap(); err != nil {
+			return err
+		}
 	}
 	if b.callbackSink == nil {
 		b.callbackSink = NewFileCallbackSink(b.cfg.CallbackSinkDir)
@@ -170,6 +200,35 @@ func (b *WaldurBridge) Start(ctx context.Context) error {
 		}
 	}
 
+	// VE-2D: Start offering sync worker if enabled
+	if b.cfg.OfferingSyncEnabled {
+		syncWorkerCfg := DefaultOfferingSyncWorkerConfig()
+		syncWorkerCfg.Enabled = true
+		syncWorkerCfg.ProviderAddress = b.cfg.ProviderAddress
+		syncWorkerCfg.CometRPC = b.cfg.CometRPC
+		syncWorkerCfg.CometWS = b.cfg.CometWS
+		syncWorkerCfg.SubscriberID = b.cfg.SubscriberID + "-offering-sync"
+		syncWorkerCfg.EventBuffer = b.cfg.EventBuffer
+		syncWorkerCfg.SyncIntervalSeconds = b.cfg.OfferingSyncInterval
+		syncWorkerCfg.ReconcileOnStartup = b.cfg.OfferingSyncReconcileOnStartup
+		syncWorkerCfg.MaxRetries = b.cfg.OfferingSyncMaxRetries
+		syncWorkerCfg.StateFilePath = b.cfg.OfferingSyncStateFile
+		syncWorkerCfg.WaldurCustomerUUID = b.cfg.WaldurCustomerUUID
+		syncWorkerCfg.WaldurCategoryMap = b.cfg.WaldurCategoryMap
+		syncWorkerCfg.OperationTimeout = b.cfg.OperationTimeout
+
+		syncWorker, err := NewOfferingSyncWorker(syncWorkerCfg, b.marketplace)
+		if err != nil {
+			return fmt.Errorf("create offering sync worker: %w", err)
+		}
+		b.offeringSyncWorker = syncWorker
+
+		if err := b.offeringSyncWorker.Start(ctx); err != nil {
+			return fmt.Errorf("start offering sync worker: %w", err)
+		}
+		log.Printf("[waldur-bridge] offering sync worker started")
+	}
+
 	rpc, err := rpchttp.New(b.cfg.CometRPC, b.cfg.CometWS)
 	if err != nil {
 		return fmt.Errorf("create rpc client: %w", err)
@@ -189,6 +248,10 @@ func (b *WaldurBridge) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			// VE-2D: Stop offering sync worker on shutdown
+			if b.offeringSyncWorker != nil {
+				_ = b.offeringSyncWorker.Stop()
+			}
 			return ctx.Err()
 		case msg := <-sub:
 			data, ok := msg.Data.(tmtypes.EventDataTx)
@@ -459,9 +522,32 @@ func (b *WaldurBridge) ensureAllocationMapping(ctx context.Context, event market
 		return b.refreshAllocationMapping(ctx, existing), nil
 	}
 
-	waldurOfferingUUID := b.cfg.WaldurOfferingMap[event.OfferingID]
+	// VE-2D: When automatic offering sync is enabled, look up the Waldur offering UUID from sync state
+	var waldurOfferingUUID string
+	if b.cfg.OfferingSyncEnabled && b.offeringSyncWorker != nil {
+		syncState := b.offeringSyncWorker.State()
+		if syncState != nil {
+			record := syncState.GetRecord(event.OfferingID)
+			if record != nil && record.WaldurUUID != "" {
+				waldurOfferingUUID = record.WaldurUUID
+			}
+		}
+		// If not in sync state, try to look up by backend ID
+		if waldurOfferingUUID == "" {
+			opCtx, cancel := b.operationContext(ctx)
+			defer cancel()
+			offering, err := b.marketplace.GetOfferingByBackendID(opCtx, event.OfferingID)
+			if err == nil && offering != nil {
+				waldurOfferingUUID = offering.UUID
+			}
+		}
+	} else {
+		// Legacy: use manual offering map
+		waldurOfferingUUID = b.cfg.WaldurOfferingMap[event.OfferingID]
+	}
+
 	if waldurOfferingUUID == "" {
-		return nil, fmt.Errorf("no waldur offering mapping for offering %s", event.OfferingID)
+		return nil, fmt.Errorf("no waldur offering mapping for offering %s (enable OfferingSyncEnabled or add to WaldurOfferingMap)", event.OfferingID)
 	}
 
 	attrs := map[string]interface{}{

@@ -125,6 +125,25 @@ const (
 
 	// FlagCometWS is the CometBFT websocket endpoint
 	FlagCometWS = "comet-ws"
+
+	// VE-2D: Automatic offering sync flags
+	// FlagWaldurOfferingSyncEnabled enables automatic offering sync
+	FlagWaldurOfferingSyncEnabled = "waldur-offering-sync-enabled"
+
+	// FlagWaldurOfferingSyncStateFile is the path for offering sync state
+	FlagWaldurOfferingSyncStateFile = "waldur-offering-sync-state-file"
+
+	// FlagWaldurCustomerUUID is the Waldur customer/org UUID for offerings
+	FlagWaldurCustomerUUID = "waldur-customer-uuid"
+
+	// FlagWaldurCategoryMap is path to category map JSON
+	FlagWaldurCategoryMap = "waldur-category-map"
+
+	// FlagWaldurOfferingSyncInterval is the reconciliation interval in seconds
+	FlagWaldurOfferingSyncInterval = "waldur-offering-sync-interval"
+
+	// FlagWaldurOfferingSyncMaxRetries is max retries before dead-letter
+	FlagWaldurOfferingSyncMaxRetries = "waldur-offering-sync-max-retries"
 )
 
 var (
@@ -166,7 +185,7 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagWaldurBaseURL, "", "Waldur API base URL")
 	rootCmd.PersistentFlags().String(FlagWaldurToken, "", "Waldur API token")
 	rootCmd.PersistentFlags().String(FlagWaldurProjectUUID, "", "Waldur project UUID")
-	rootCmd.PersistentFlags().String(FlagWaldurOfferingMap, "", "Path to Waldur offering map JSON")
+	rootCmd.PersistentFlags().String(FlagWaldurOfferingMap, "", "Path to Waldur offering map JSON (DEPRECATED: use --waldur-offering-sync-enabled)")
 	rootCmd.PersistentFlags().String(FlagWaldurCallbackSinkDir, "data/callbacks", "Directory for Waldur callback files")
 	rootCmd.PersistentFlags().String(FlagWaldurStateFile, "data/waldur_bridge_state.json", "Waldur bridge state file path")
 	rootCmd.PersistentFlags().String(FlagWaldurCheckpointFile, "data/marketplace_checkpoint.json", "Marketplace checkpoint file path")
@@ -184,6 +203,14 @@ func init() {
 	rootCmd.PersistentFlags().Duration(FlagWaldurChainBroadcastTimeout, 30*time.Second, "Broadcast timeout for on-chain callback submissions")
 	rootCmd.PersistentFlags().String(FlagMarketplaceEventQuery, "", "Marketplace event query for CometBFT subscription")
 	rootCmd.PersistentFlags().String(FlagCometWS, "/websocket", "CometBFT websocket endpoint path")
+
+	// VE-2D: Automatic offering sync flags
+	rootCmd.PersistentFlags().Bool(FlagWaldurOfferingSyncEnabled, false, "Enable automatic offering sync from chain to Waldur (replaces manual offering map)")
+	rootCmd.PersistentFlags().String(FlagWaldurOfferingSyncStateFile, "data/offering_sync_state.json", "Path for offering sync state file")
+	rootCmd.PersistentFlags().String(FlagWaldurCustomerUUID, "", "Waldur customer/organization UUID for creating offerings")
+	rootCmd.PersistentFlags().String(FlagWaldurCategoryMap, "", "Path to JSON file mapping offering categories to Waldur category UUIDs")
+	rootCmd.PersistentFlags().Int64(FlagWaldurOfferingSyncInterval, 300, "Offering sync reconciliation interval in seconds")
+	rootCmd.PersistentFlags().Int(FlagWaldurOfferingSyncMaxRetries, 5, "Max sync retries before dead-lettering")
 
 	// Bind to viper
 	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
@@ -214,6 +241,14 @@ func init() {
 	_ = viper.BindPFlag(FlagWaldurChainBroadcastTimeout, rootCmd.PersistentFlags().Lookup(FlagWaldurChainBroadcastTimeout))
 	_ = viper.BindPFlag(FlagMarketplaceEventQuery, rootCmd.PersistentFlags().Lookup(FlagMarketplaceEventQuery))
 	_ = viper.BindPFlag(FlagCometWS, rootCmd.PersistentFlags().Lookup(FlagCometWS))
+
+	// VE-2D: Bind offering sync flags
+	_ = viper.BindPFlag(FlagWaldurOfferingSyncEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncEnabled))
+	_ = viper.BindPFlag(FlagWaldurOfferingSyncStateFile, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncStateFile))
+	_ = viper.BindPFlag(FlagWaldurCustomerUUID, rootCmd.PersistentFlags().Lookup(FlagWaldurCustomerUUID))
+	_ = viper.BindPFlag(FlagWaldurCategoryMap, rootCmd.PersistentFlags().Lookup(FlagWaldurCategoryMap))
+	_ = viper.BindPFlag(FlagWaldurOfferingSyncInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncInterval))
+	_ = viper.BindPFlag(FlagWaldurOfferingSyncMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncMaxRetries))
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())

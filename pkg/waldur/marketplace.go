@@ -5,6 +5,7 @@ package waldur
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -646,4 +647,328 @@ func (m *MarketplaceClient) WaitForOrderCompletion(ctx context.Context, orderUUI
 			}
 		}
 	}
+}
+
+// ===============================================================================
+// VE-2D: Offering CRUD Operations for Automatic Sync
+// ===============================================================================
+
+// CreateOfferingRequest contains parameters for creating a Waldur offering.
+type CreateOfferingRequest struct {
+	// Name is the offering name (max 255 chars).
+	Name string `json:"name"`
+
+	// Description is the offering description.
+	Description string `json:"description,omitempty"`
+
+	// Type is the offering type (e.g., "VirtEngine.Compute").
+	Type string `json:"type"`
+
+	// State is the initial state (Active, Paused, Archived).
+	State string `json:"state,omitempty"`
+
+	// CategoryUUID is the Waldur category UUID.
+	CategoryUUID string `json:"category_uuid,omitempty"`
+
+	// CustomerUUID is the Waldur customer UUID (provider organization).
+	CustomerUUID string `json:"customer_uuid"`
+
+	// Shared indicates if the offering is publicly visible.
+	Shared bool `json:"shared"`
+
+	// Billable indicates if the offering is billable.
+	Billable bool `json:"billable"`
+
+	// BackendID is the on-chain offering ID for cross-reference.
+	BackendID string `json:"backend_id,omitempty"`
+
+	// Attributes contains additional offering attributes.
+	Attributes map[string]interface{} `json:"attributes,omitempty"`
+
+	// Components contains pricing components.
+	Components []PricingComponent `json:"components,omitempty"`
+}
+
+// UpdateOfferingRequest contains parameters for updating a Waldur offering.
+type UpdateOfferingRequest struct {
+	// Name is the updated offering name.
+	Name string `json:"name,omitempty"`
+
+	// Description is the updated description.
+	Description string `json:"description,omitempty"`
+
+	// Attributes contains updated attributes.
+	Attributes map[string]interface{} `json:"attributes,omitempty"`
+
+	// Components contains updated pricing components.
+	Components []PricingComponent `json:"components,omitempty"`
+}
+
+// PricingComponent represents a Waldur pricing component.
+type PricingComponent struct {
+	// Type is the component type (usage, fixed, one_time).
+	Type string `json:"type"`
+
+	// Name is the component name.
+	Name string `json:"name"`
+
+	// MeasuredUnit is the unit of measurement.
+	MeasuredUnit string `json:"measured_unit,omitempty"`
+
+	// BillingType is how billing is calculated.
+	BillingType string `json:"billing_type,omitempty"`
+
+	// Price is the price per unit as a string.
+	Price string `json:"price"`
+
+	// MinValue is the minimum value.
+	MinValue int64 `json:"min_value,omitempty"`
+
+	// MaxValue is the maximum value.
+	MaxValue int64 `json:"max_value,omitempty"`
+}
+
+// CreateOffering creates a new marketplace offering in Waldur.
+// VE-2D: Automatic offering sync from chain to Waldur.
+// Uses raw HTTP requests since provider offerings API may not be in the generated client.
+func (m *MarketplaceClient) CreateOffering(ctx context.Context, req CreateOfferingRequest) (*Offering, error) {
+	if req.Name == "" || req.CustomerUUID == "" {
+		return nil, fmt.Errorf("name and customer UUID are required")
+	}
+
+	var offering *Offering
+
+	err := m.client.doWithRetry(ctx, func() error {
+		// Build the request body as a simple map
+		body := map[string]interface{}{
+			"name":     req.Name,
+			"customer": req.CustomerUUID,
+			"shared":   req.Shared,
+			"billable": req.Billable,
+		}
+
+		if req.Description != "" {
+			body["description"] = req.Description
+		}
+		if req.Type != "" {
+			body["type"] = req.Type
+		}
+		if req.CategoryUUID != "" {
+			body["category"] = req.CategoryUUID
+		}
+		if req.BackendID != "" {
+			body["backend_id"] = req.BackendID
+		}
+		if len(req.Attributes) > 0 {
+			body["attributes"] = req.Attributes
+		}
+		if len(req.Components) > 0 {
+			body["components"] = req.Components
+		}
+
+		bodyBytes, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal request: %w", err)
+		}
+
+		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodPost, "/marketplace-provider-offerings/", bodyBytes)
+		if err != nil {
+			return err
+		}
+
+		if statusCode != http.StatusCreated && statusCode != http.StatusOK {
+			return mapHTTPError(statusCode, respBody)
+		}
+
+		// Parse response
+		var respData struct {
+			UUID        string `json:"uuid"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Type        string `json:"type"`
+			State       string `json:"state"`
+			Shared      bool   `json:"shared"`
+			Billable    bool   `json:"billable"`
+		}
+		if err := json.Unmarshal(respBody, &respData); err != nil {
+			return fmt.Errorf("unmarshal response: %w", err)
+		}
+
+		offering = &Offering{
+			UUID:        respData.UUID,
+			Name:        respData.Name,
+			Description: respData.Description,
+			Type:        respData.Type,
+			State:       respData.State,
+			Shared:      respData.Shared,
+			Billable:    respData.Billable,
+		}
+
+		return nil
+	})
+
+	return offering, err
+}
+
+// UpdateOffering updates an existing marketplace offering in Waldur.
+// VE-2D: Automatic offering sync from chain to Waldur.
+func (m *MarketplaceClient) UpdateOffering(ctx context.Context, offeringUUID string, req UpdateOfferingRequest) (*Offering, error) {
+	if offeringUUID == "" {
+		return nil, fmt.Errorf("offering UUID is required")
+	}
+
+	var offering *Offering
+
+	err := m.client.doWithRetry(ctx, func() error {
+		// Build the request body as a simple map - only include non-empty fields
+		body := make(map[string]interface{})
+
+		if req.Name != "" {
+			body["name"] = req.Name
+		}
+		if req.Description != "" {
+			body["description"] = req.Description
+		}
+		if len(req.Attributes) > 0 {
+			body["attributes"] = req.Attributes
+		}
+		if len(req.Components) > 0 {
+			body["components"] = req.Components
+		}
+
+		bodyBytes, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal request: %w", err)
+		}
+
+		path := fmt.Sprintf("/marketplace-provider-offerings/%s/", offeringUUID)
+		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodPatch, path, bodyBytes)
+		if err != nil {
+			return err
+		}
+
+		if statusCode != http.StatusOK {
+			return mapHTTPError(statusCode, respBody)
+		}
+
+		// Parse response
+		var respData struct {
+			UUID        string `json:"uuid"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Type        string `json:"type"`
+			State       string `json:"state"`
+			Shared      bool   `json:"shared"`
+			Billable    bool   `json:"billable"`
+		}
+		if err := json.Unmarshal(respBody, &respData); err != nil {
+			return fmt.Errorf("unmarshal response: %w", err)
+		}
+
+		offering = &Offering{
+			UUID:        respData.UUID,
+			Name:        respData.Name,
+			Description: respData.Description,
+			Type:        respData.Type,
+			State:       respData.State,
+			Shared:      respData.Shared,
+			Billable:    respData.Billable,
+		}
+
+		return nil
+	})
+
+	return offering, err
+}
+
+// SetOfferingState changes the state of a Waldur offering.
+// Valid actions: "activate", "pause", "archive".
+// VE-2D: Automatic offering sync from chain to Waldur.
+func (m *MarketplaceClient) SetOfferingState(ctx context.Context, offeringUUID string, action string) error {
+	if offeringUUID == "" || action == "" {
+		return fmt.Errorf("offering UUID and action are required")
+	}
+
+	validActions := map[string]bool{
+		"activate": true,
+		"pause":    true,
+		"archive":  true,
+	}
+	if !validActions[action] {
+		return fmt.Errorf("invalid offering state action: %s", action)
+	}
+
+	return m.client.doWithRetry(ctx, func() error {
+		path := fmt.Sprintf("/marketplace-provider-offerings/%s/%s/", offeringUUID, action)
+		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodPost, path, nil)
+		if err != nil {
+			return err
+		}
+
+		if statusCode != http.StatusOK && statusCode != http.StatusNoContent && statusCode != http.StatusAccepted {
+			return mapHTTPError(statusCode, respBody)
+		}
+
+		return nil
+	})
+}
+
+// GetOfferingByBackendID finds a Waldur offering by its backend ID (on-chain offering ID).
+// VE-2D: Used for sync reconciliation.
+// Uses raw HTTP since the generated client may not support backend_id filter.
+func (m *MarketplaceClient) GetOfferingByBackendID(ctx context.Context, backendID string) (*Offering, error) {
+	if backendID == "" {
+		return nil, fmt.Errorf("backend ID is required")
+	}
+
+	var offering *Offering
+
+	err := m.client.doWithRetry(ctx, func() error {
+		// Use raw HTTP request with backend_id query parameter
+		path := fmt.Sprintf("/marketplace-public-offerings/?backend_id=%s", backendID)
+		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodGet, path, nil)
+		if err != nil {
+			return err
+		}
+
+		if statusCode != http.StatusOK {
+			return mapHTTPError(statusCode, respBody)
+		}
+
+		// Parse response - Waldur returns an array
+		var offerings []struct {
+			UUID        string    `json:"uuid"`
+			Name        string    `json:"name"`
+			Description string    `json:"description"`
+			Type        string    `json:"type"`
+			State       string    `json:"state"`
+			Shared      bool      `json:"shared"`
+			Billable    bool      `json:"billable"`
+			Created     time.Time `json:"created"`
+		}
+		if err := json.Unmarshal(respBody, &offerings); err != nil {
+			return fmt.Errorf("unmarshal response: %w", err)
+		}
+
+		if len(offerings) == 0 {
+			return ErrNotFound
+		}
+
+		// Return the first matching offering
+		o := offerings[0]
+		offering = &Offering{
+			UUID:        o.UUID,
+			Name:        o.Name,
+			Description: o.Description,
+			Type:        o.Type,
+			State:       o.State,
+			Shared:      o.Shared,
+			Billable:    o.Billable,
+			CreatedAt:   o.Created,
+		}
+
+		return nil
+	})
+
+	return offering, err
 }
