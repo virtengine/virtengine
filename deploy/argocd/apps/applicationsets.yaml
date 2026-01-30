@@ -1,0 +1,208 @@
+# VirtEngine ApplicationSet
+# Automatically creates applications for each environment
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: virtengine
+  namespace: argocd
+spec:
+  generators:
+    # List generator for each environment
+    - list:
+        elements:
+          - env: dev
+            cluster: in-cluster
+            namespace: virtengine-dev
+            autoSync: true
+            prune: true
+            selfHeal: true
+            revision: main
+          - env: staging
+            cluster: in-cluster
+            namespace: virtengine-staging
+            autoSync: true
+            prune: true
+            selfHeal: true
+            revision: release/staging
+          - env: prod
+            cluster: in-cluster
+            namespace: virtengine-prod
+            autoSync: false
+            prune: false
+            selfHeal: false
+            revision: release/prod
+
+  template:
+    metadata:
+      name: 'virtengine-{{env}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: virtengine
+        app.kubernetes.io/instance: '{{env}}'
+        app.kubernetes.io/component: blockchain
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: virtengine-deployments
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: virtengine-alerts
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: virtengine-alerts
+    spec:
+      project: virtengine
+      
+      source:
+        repoURL: https://github.com/virtengine/virtengine.git
+        targetRevision: '{{revision}}'
+        path: deploy/kubernetes/overlays/{{env}}
+        
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{selfHeal}}'
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+          - ApplyOutOfSyncOnly=true
+          - Validate=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      
+      # Health checks
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas
+        - group: autoscaling
+          kind: HorizontalPodAutoscaler
+          jsonPointers:
+            - /spec/minReplicas
+            - /spec/maxReplicas
+---
+# Provider Daemon ApplicationSet
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: provider-daemon
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            cluster: in-cluster
+            namespace: virtengine-dev
+            autoSync: true
+            prune: true
+            selfHeal: true
+            revision: main
+          - env: staging
+            cluster: in-cluster
+            namespace: virtengine-staging
+            autoSync: true
+            prune: true
+            selfHeal: true
+            revision: release/staging
+          - env: prod
+            cluster: in-cluster
+            namespace: virtengine-prod
+            autoSync: false
+            prune: false
+            selfHeal: false
+            revision: release/prod
+
+  template:
+    metadata:
+      name: 'provider-daemon-{{env}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: provider-daemon
+        app.kubernetes.io/instance: '{{env}}'
+        app.kubernetes.io/component: provider
+        environment: '{{env}}'
+    spec:
+      project: virtengine
+      
+      source:
+        repoURL: https://github.com/virtengine/virtengine.git
+        targetRevision: '{{revision}}'
+        path: deploy/kubernetes/provider-daemon/overlays/{{env}}
+        
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: '{{prune}}'
+          selfHeal: '{{selfHeal}}'
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+---
+# Monitoring Stack ApplicationSet
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: monitoring
+            revision: main
+          - env: staging
+            namespace: monitoring
+            revision: release/staging
+          - env: prod
+            namespace: monitoring
+            revision: release/prod
+
+  template:
+    metadata:
+      name: 'monitoring-{{env}}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: monitoring
+        app.kubernetes.io/instance: '{{env}}'
+        environment: '{{env}}'
+    spec:
+      project: virtengine
+      
+      source:
+        repoURL: https://github.com/virtengine/virtengine.git
+        targetRevision: '{{revision}}'
+        path: deploy/monitoring/overlays/{{env}}
+        
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 1m

@@ -1,0 +1,83 @@
+# VirtEngine Node Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: blockchain
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "26660"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: virtengine-node
+  ports:
+    - name: p2p
+      port: 26656
+      targetPort: p2p
+      protocol: TCP
+    - name: rpc
+      port: 26657
+      targetPort: rpc
+      protocol: TCP
+    - name: rest
+      port: 1317
+      targetPort: rest
+      protocol: TCP
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+      protocol: TCP
+    - name: grpc-web
+      port: 9091
+      targetPort: grpc-web
+      protocol: TCP
+    - name: prometheus
+      port: 26660
+      targetPort: prometheus
+      protocol: TCP
+---
+# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node-headless
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: blockchain
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: virtengine-node
+  ports:
+    - name: p2p
+      port: 26656
+      targetPort: p2p
+---
+# External P2P service (for validators)
+apiVersion: v1
+kind: Service
+metadata:
+  name: virtengine-node-p2p
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+    app.kubernetes.io/component: blockchain
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: virtengine-node
+  ports:
+    - name: p2p
+      port: 26656
+      targetPort: p2p
+      protocol: TCP

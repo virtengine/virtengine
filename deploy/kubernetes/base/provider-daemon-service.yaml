@@ -1,0 +1,57 @@
+# Provider Daemon Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-daemon
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: provider
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: provider-daemon
+  ports:
+    - name: https
+      port: 8443
+      targetPort: https
+      protocol: TCP
+    - name: grpc
+      port: 8444
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9100
+      targetPort: metrics
+      protocol: TCP
+---
+# External service for provider API
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-daemon-external
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: provider
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: ""  # Add ACM cert ARN
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: provider-daemon
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+    - name: grpc
+      port: 8444
+      targetPort: grpc
+      protocol: TCP
