@@ -1,11 +1,14 @@
 // Package types contains types for the staking module.
 //
 // VE-921: Performance types for validator performance tracking
+// This file provides utility methods for ValidatorPerformance (generated proto type).
 package types
 
 import (
 	"fmt"
 	"time"
+
+	stakingv1 "github.com/virtengine/virtengine/sdk/go/node/staking/v1"
 )
 
 // FixedPointScale is the scale factor for fixed-point arithmetic (1e6)
@@ -16,66 +19,15 @@ const MaxPerformanceScore int64 = 10000
 
 // PerformanceWeight constants for reward calculation
 const (
-	WeightBlockProposal       int64 = 3000 // 30%
-	WeightVEIDVerification    int64 = 4000 // 40%
-	WeightUptime              int64 = 3000 // 30%
-	TotalWeight               int64 = 10000
+	WeightBlockProposal    int64 = 3000  // 30%
+	WeightVEIDVerification int64 = 4000  // 40%
+	WeightUptime           int64 = 3000  // 30%
+	TotalWeight            int64 = 10000
 )
 
-// ValidatorPerformance represents a validator's performance metrics
-type ValidatorPerformance struct {
-	// ValidatorAddress is the validator's blockchain address
-	ValidatorAddress string `json:"validator_address"`
-
-	// BlocksProposed is the number of blocks proposed in the current epoch
-	BlocksProposed int64 `json:"blocks_proposed"`
-
-	// BlocksExpected is the expected number of blocks based on stake weight
-	BlocksExpected int64 `json:"blocks_expected"`
-
-	// BlocksMissed is the number of missed blocks (when expected to sign)
-	BlocksMissed int64 `json:"blocks_missed"`
-
-	// TotalSignatures is the total number of blocks signed
-	TotalSignatures int64 `json:"total_signatures"`
-
-	// VEIDVerificationsCompleted is the number of VEID verifications completed
-	VEIDVerificationsCompleted int64 `json:"veid_verifications_completed"`
-
-	// VEIDVerificationsExpected is the expected VEID verifications based on committee selection
-	VEIDVerificationsExpected int64 `json:"veid_verifications_expected"`
-
-	// VEIDVerificationScore is the quality score for VEID verifications (0-10000)
-	VEIDVerificationScore int64 `json:"veid_verification_score"`
-
-	// UptimeSeconds is the total uptime in seconds
-	UptimeSeconds int64 `json:"uptime_seconds"`
-
-	// DowntimeSeconds is the total downtime in seconds
-	DowntimeSeconds int64 `json:"downtime_seconds"`
-
-	// ConsecutiveMissedBlocks is the current streak of missed blocks
-	ConsecutiveMissedBlocks int64 `json:"consecutive_missed_blocks"`
-
-	// LastProposedHeight is the last height where this validator proposed a block
-	LastProposedHeight int64 `json:"last_proposed_height"`
-
-	// LastSignedHeight is the last height where this validator signed
-	LastSignedHeight int64 `json:"last_signed_height"`
-
-	// EpochNumber is the epoch this performance record belongs to
-	EpochNumber uint64 `json:"epoch_number"`
-
-	// UpdatedAt is when this record was last updated
-	UpdatedAt time.Time `json:"updated_at"`
-
-	// OverallScore is the computed overall performance score (0-10000)
-	OverallScore int64 `json:"overall_score"`
-}
-
 // NewValidatorPerformance creates a new validator performance record
-func NewValidatorPerformance(validatorAddr string, epochNumber uint64) *ValidatorPerformance {
-	return &ValidatorPerformance{
+func NewValidatorPerformance(validatorAddr string, epochNumber uint64) *stakingv1.ValidatorPerformance {
+	return &stakingv1.ValidatorPerformance{
 		ValidatorAddress:       validatorAddr,
 		EpochNumber:            epochNumber,
 		VEIDVerificationScore:  MaxPerformanceScore, // Start with full score
@@ -83,8 +35,8 @@ func NewValidatorPerformance(validatorAddr string, epochNumber uint64) *Validato
 	}
 }
 
-// Validate validates the validator performance record
-func (vp *ValidatorPerformance) Validate() error {
+// ValidateValidatorPerformance validates the validator performance record
+func ValidateValidatorPerformance(vp *stakingv1.ValidatorPerformance) error {
 	if vp.ValidatorAddress == "" {
 		return fmt.Errorf("validator_address cannot be empty")
 	}
@@ -106,7 +58,7 @@ func (vp *ValidatorPerformance) Validate() error {
 
 // ComputeOverallScore computes the overall performance score deterministically
 // This uses integer arithmetic to ensure determinism across all nodes
-func (vp *ValidatorPerformance) ComputeOverallScore() int64 {
+func ComputeOverallScore(vp *stakingv1.ValidatorPerformance) int64 {
 	// Block proposal score (0-10000)
 	var blockScore int64
 	if vp.BlocksExpected > 0 {
@@ -143,12 +95,11 @@ func (vp *ValidatorPerformance) ComputeOverallScore() int64 {
 		veidScore*WeightVEIDVerification +
 		uptimeScore*WeightUptime) / TotalWeight
 
-	vp.OverallScore = overallScore
 	return overallScore
 }
 
 // GetUptimePercent returns the uptime percentage in fixed-point (1e6 scale)
-func (vp *ValidatorPerformance) GetUptimePercent() int64 {
+func GetUptimePercent(vp *stakingv1.ValidatorPerformance) int64 {
 	totalTime := vp.UptimeSeconds + vp.DowntimeSeconds
 	if totalTime == 0 {
 		return FixedPointScale // 100%
@@ -157,53 +108,32 @@ func (vp *ValidatorPerformance) GetUptimePercent() int64 {
 }
 
 // ShouldSlashForDowntime checks if the validator should be slashed for downtime
-func (vp *ValidatorPerformance) ShouldSlashForDowntime(threshold int64) bool {
+func ShouldSlashForDowntime(vp *stakingv1.ValidatorPerformance, threshold int64) bool {
 	return vp.ConsecutiveMissedBlocks >= threshold
 }
 
-// ValidatorSigningInfo contains validator signing information for slashing
-type ValidatorSigningInfo struct {
-	// ValidatorAddress is the validator's blockchain address
-	ValidatorAddress string `json:"validator_address"`
-
-	// StartHeight is the height at which validator started signing
-	StartHeight int64 `json:"start_height"`
-
-	// IndexOffset is the current index offset into the signed blocks window
-	IndexOffset int64 `json:"index_offset"`
-
-	// JailedUntil is the time until which the validator is jailed
-	JailedUntil time.Time `json:"jailed_until"`
-
-	// Tombstoned indicates if the validator has been tombstoned (permanently banned)
-	Tombstoned bool `json:"tombstoned"`
-
-	// MissedBlocksCounter is the counter for missed blocks in the current window
-	MissedBlocksCounter int64 `json:"missed_blocks_counter"`
-
-	// InfractionCount is the total number of infractions
-	InfractionCount int64 `json:"infraction_count"`
-}
-
 // NewValidatorSigningInfo creates a new signing info record
-func NewValidatorSigningInfo(validatorAddr string, startHeight int64) *ValidatorSigningInfo {
-	return &ValidatorSigningInfo{
+func NewValidatorSigningInfo(validatorAddr string, startHeight int64) *stakingv1.ValidatorSigningInfo {
+	return &stakingv1.ValidatorSigningInfo{
 		ValidatorAddress: validatorAddr,
 		StartHeight:      startHeight,
 	}
 }
 
 // IsTombstoned returns true if the validator is tombstoned
-func (vsi *ValidatorSigningInfo) IsTombstoned() bool {
+func IsTombstoned(vsi *stakingv1.ValidatorSigningInfo) bool {
 	return vsi.Tombstoned
 }
 
 // IsJailed returns true if the validator is currently jailed
-func (vsi *ValidatorSigningInfo) IsJailed(currentTime time.Time) bool {
-	return !vsi.JailedUntil.IsZero() && currentTime.Before(vsi.JailedUntil)
+func IsJailed(vsi *stakingv1.ValidatorSigningInfo, currentTime time.Time) bool {
+	if vsi.JailedUntil == nil {
+		return false
+	}
+	return !vsi.JailedUntil.IsZero() && currentTime.Before(*vsi.JailedUntil)
 }
 
 // IncrementInfractionCount increments the infraction count
-func (vsi *ValidatorSigningInfo) IncrementInfractionCount() {
+func IncrementInfractionCount(vsi *stakingv1.ValidatorSigningInfo) {
 	vsi.InfractionCount++
 }

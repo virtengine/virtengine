@@ -17,7 +17,10 @@ message Params {
   int64 base_reward_per_block = 2 [(gogoproto.jsontag) = "base_reward_per_block"];
 
   // VEIDRewardPool is the VEID verification reward pool per epoch
-  int64 veid_reward_pool = 3 [(gogoproto.jsontag) = "veid_reward_pool"];
+  int64 veid_reward_pool = 3 [
+    (gogoproto.jsontag) = "veid_reward_pool",
+    (gogoproto.customname) = "VEIDRewardPool"
+  ];
 
   // IdentityNetworkRewardPool is the identity network reward pool per epoch
   int64 identity_network_reward_pool = 4 [(gogoproto.jsontag) = "identity_network_reward_pool"];
@@ -53,7 +56,10 @@ message Params {
   int64 score_tolerance = 14 [(gogoproto.jsontag) = "score_tolerance"];
 
   // MaxMissedVEIDRecomputations is max missed recomputations before slash
-  int64 max_missed_veid_recomputations = 15 [(gogoproto.jsontag) = "max_missed_veid_recomputations"];
+  int64 max_missed_veid_recomputations = 15 [
+    (gogoproto.jsontag) = "max_missed_veid_recomputations",
+    (gogoproto.customname) = "MaxMissedVEIDRecomputations"
+  ];
 
   // RewardDenom is the denomination for rewards
   string reward_denom = 16 [(gogoproto.jsontag) = "reward_denom"];

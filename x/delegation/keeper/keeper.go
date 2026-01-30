@@ -21,6 +21,12 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// BasisPointsMax is 100% in basis points
+const BasisPointsMax int64 = 10000
+
+// DefaultValidatorCommissionRate is the default validator commission rate (10% = 1000 basis points)
+const DefaultValidatorCommissionRate int64 = 1000
+
 // BankKeeper defines the expected bank keeper interface
 type BankKeeper interface {
 	SendCoins(ctx context.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error
@@ -88,7 +94,7 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 
 // SetParams sets the module parameters
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
-	if err := params.Validate(); err != nil {
+	if err := types.ValidateParams(&params); err != nil {
 		return err
 	}
 
@@ -707,7 +713,7 @@ func (k Keeper) CalculateDelegatorProportion(ctx sdk.Context, delegatorAddr, val
 	}
 
 	// proportion = (delegatorShares * BasisPointsMax) / totalShares
-	proportion := new(big.Int).Mul(delegatorShares, big.NewInt(types.BasisPointsMax))
+	proportion := new(big.Int).Mul(delegatorShares, big.NewInt(BasisPointsMax))
 	proportion.Div(proportion, totalShares)
 
 	return proportion.Int64(), nil
@@ -716,8 +722,6 @@ func (k Keeper) CalculateDelegatorProportion(ctx sdk.Context, delegatorAddr, val
 // CalculateDelegatorRewardAmount calculates the reward amount for a delegator
 // based on their share proportion and validator commission
 func (k Keeper) CalculateDelegatorRewardAmount(ctx sdk.Context, delegatorAddr, validatorAddr string, validatorReward string) (string, error) {
-	params := k.GetParams(ctx)
-
 	proportion, err := k.CalculateDelegatorProportion(ctx, delegatorAddr, validatorAddr)
 	if err != nil {
 		return "0", err
@@ -728,17 +732,17 @@ func (k Keeper) CalculateDelegatorRewardAmount(ctx sdk.Context, delegatorAddr, v
 		return "0", nil
 	}
 
-	// Calculate commission (goes to validator)
+	// Calculate commission (goes to validator) using default commission rate
 	// commission = validatorReward * commissionRate / BasisPointsMax
-	commission := new(big.Int).Mul(rewardBig, big.NewInt(params.ValidatorCommissionRate))
-	commission.Div(commission, big.NewInt(types.BasisPointsMax))
+	commission := new(big.Int).Mul(rewardBig, big.NewInt(DefaultValidatorCommissionRate))
+	commission.Div(commission, big.NewInt(BasisPointsMax))
 
 	// Distributable = validatorReward - commission
 	distributable := new(big.Int).Sub(rewardBig, commission)
 
 	// Delegator reward = distributable * proportion / BasisPointsMax
 	delegatorReward := new(big.Int).Mul(distributable, big.NewInt(proportion))
-	delegatorReward.Div(delegatorReward, big.NewInt(types.BasisPointsMax))
+	delegatorReward.Div(delegatorReward, big.NewInt(BasisPointsMax))
 
 	return delegatorReward.String(), nil
 }

@@ -6,7 +6,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -129,7 +128,7 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 
 // SetParams sets the module parameters
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
-	if err := params.Validate(); err != nil {
+	if err := types.ValidateParams(&params); err != nil {
 		return err
 	}
 

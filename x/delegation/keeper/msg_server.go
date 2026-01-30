@@ -34,26 +34,26 @@ func (ms msgServer) Delegate(goCtx context.Context, msg *types.MsgDelegate) (*ty
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate delegator address
-	delegatorAddr, err := sdk.AccAddressFromBech32(msg.DelegatorAddress)
+	delegatorAddr, err := sdk.AccAddressFromBech32(msg.Delegator)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrap(errMsgInvalidDelegatorAddr)
 	}
 
 	// Validate validator address
-	_, err = sdk.AccAddressFromBech32(msg.ValidatorAddress)
+	_, err = sdk.AccAddressFromBech32(msg.Validator)
 	if err != nil {
 		return nil, types.ErrInvalidValidator.Wrap(errMsgInvalidValidatorAddr)
 	}
 
 	// Perform the delegation through the keeper
-	if err := ms.keeper.Delegate(ctx, msg.DelegatorAddress, msg.ValidatorAddress, msg.Amount); err != nil {
+	if err := ms.keeper.Delegate(ctx, msg.Delegator, msg.Validator, msg.Amount); err != nil {
 		return nil, err
 	}
 
 	// Emit event (keeper already emits event, but we log at msg level)
 	ms.keeper.Logger(ctx).Info("delegation message processed",
 		"delegator", delegatorAddr.String(),
-		"validator", msg.ValidatorAddress,
+		"validator", msg.Validator,
 		"amount", msg.Amount.String(),
 	)
 
@@ -65,26 +65,26 @@ func (ms msgServer) Undelegate(goCtx context.Context, msg *types.MsgUndelegate) 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate delegator address
-	delegatorAddr, err := sdk.AccAddressFromBech32(msg.DelegatorAddress)
+	delegatorAddr, err := sdk.AccAddressFromBech32(msg.Delegator)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrap(errMsgInvalidDelegatorAddr)
 	}
 
 	// Validate validator address
-	_, err = sdk.AccAddressFromBech32(msg.ValidatorAddress)
+	_, err = sdk.AccAddressFromBech32(msg.Validator)
 	if err != nil {
 		return nil, types.ErrInvalidValidator.Wrap(errMsgInvalidValidatorAddr)
 	}
 
 	// Perform the undelegation through the keeper
-	completionTime, err := ms.keeper.Undelegate(ctx, msg.DelegatorAddress, msg.ValidatorAddress, msg.Amount)
+	completionTime, err := ms.keeper.Undelegate(ctx, msg.Delegator, msg.Validator, msg.Amount)
 	if err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("undelegation message processed",
 		"delegator", delegatorAddr.String(),
-		"validator", msg.ValidatorAddress,
+		"validator", msg.Validator,
 		"amount", msg.Amount.String(),
 		"completion_time", completionTime.String(),
 	)
@@ -99,33 +99,33 @@ func (ms msgServer) Redelegate(goCtx context.Context, msg *types.MsgRedelegate) 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate delegator address
-	delegatorAddr, err := sdk.AccAddressFromBech32(msg.DelegatorAddress)
+	delegatorAddr, err := sdk.AccAddressFromBech32(msg.Delegator)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrap(errMsgInvalidDelegatorAddr)
 	}
 
 	// Validate source validator address
-	_, err = sdk.AccAddressFromBech32(msg.ValidatorSrcAddress)
+	_, err = sdk.AccAddressFromBech32(msg.SrcValidator)
 	if err != nil {
 		return nil, types.ErrInvalidValidator.Wrapf("invalid source validator address")
 	}
 
 	// Validate destination validator address
-	_, err = sdk.AccAddressFromBech32(msg.ValidatorDstAddress)
+	_, err = sdk.AccAddressFromBech32(msg.DstValidator)
 	if err != nil {
 		return nil, types.ErrInvalidValidator.Wrapf("invalid destination validator address")
 	}
 
 	// Perform the redelegation through the keeper
-	completionTime, err := ms.keeper.Redelegate(ctx, msg.DelegatorAddress, msg.ValidatorSrcAddress, msg.ValidatorDstAddress, msg.Amount)
+	completionTime, err := ms.keeper.Redelegate(ctx, msg.Delegator, msg.SrcValidator, msg.DstValidator, msg.Amount)
 	if err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("redelegation message processed",
 		"delegator", delegatorAddr.String(),
-		"src_validator", msg.ValidatorSrcAddress,
-		"dst_validator", msg.ValidatorDstAddress,
+		"src_validator", msg.SrcValidator,
+		"dst_validator", msg.DstValidator,
 		"amount", msg.Amount.String(),
 		"completion_time", completionTime.String(),
 	)
@@ -140,26 +140,26 @@ func (ms msgServer) ClaimRewards(goCtx context.Context, msg *types.MsgClaimRewar
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate delegator address
-	delegatorAddr, err := sdk.AccAddressFromBech32(msg.DelegatorAddress)
+	delegatorAddr, err := sdk.AccAddressFromBech32(msg.Delegator)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrap(errMsgInvalidDelegatorAddr)
 	}
 
 	// Validate validator address
-	_, err = sdk.AccAddressFromBech32(msg.ValidatorAddress)
+	_, err = sdk.AccAddressFromBech32(msg.Validator)
 	if err != nil {
 		return nil, types.ErrInvalidValidator.Wrap(errMsgInvalidValidatorAddr)
 	}
 
 	// Claim rewards through the keeper
-	rewards, err := ms.keeper.ClaimRewards(ctx, msg.DelegatorAddress, msg.ValidatorAddress)
+	rewards, err := ms.keeper.ClaimRewards(ctx, msg.Delegator, msg.Validator)
 	if err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("claim rewards message processed",
 		"delegator", delegatorAddr.String(),
-		"validator", msg.ValidatorAddress,
+		"validator", msg.Validator,
 		"amount", rewards.String(),
 	)
 
@@ -173,13 +173,13 @@ func (ms msgServer) ClaimAllRewards(goCtx context.Context, msg *types.MsgClaimAl
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate delegator address
-	delegatorAddr, err := sdk.AccAddressFromBech32(msg.DelegatorAddress)
+	delegatorAddr, err := sdk.AccAddressFromBech32(msg.Delegator)
 	if err != nil {
 		return nil, types.ErrInvalidDelegator.Wrap(errMsgInvalidDelegatorAddr)
 	}
 
 	// Claim all rewards through the keeper
-	rewards, err := ms.keeper.ClaimAllRewards(ctx, msg.DelegatorAddress)
+	rewards, err := ms.keeper.ClaimAllRewards(ctx, msg.Delegator)
 	if err != nil {
 		return nil, err
 	}

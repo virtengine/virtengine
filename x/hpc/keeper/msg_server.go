@@ -27,10 +27,10 @@ var _ types.MsgServer = msgServer{}
 func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegisterCluster) (*types.MsgRegisterClusterResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	// Validate owner address
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
 	if err != nil {
-		return nil, types.ErrInvalidCluster.Wrap("invalid provider address")
+		return nil, types.ErrInvalidCluster.Wrap("invalid owner address")
 	}
 
 	// Generate cluster ID
@@ -40,15 +40,11 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 	// Create the cluster
 	cluster := &types.HPCCluster{
 		ClusterID:       clusterID,
-		ProviderAddress: providerAddr.String(),
+		ProviderAddress: ownerAddr.String(),
 		Name:            msg.Name,
-		Description:     msg.Description,
 		Region:          msg.Region,
-		Partitions:      msg.Partitions,
-		TotalNodes:      msg.TotalNodes,
-		AvailableNodes:  msg.TotalNodes,
-		ClusterMetadata: msg.ClusterMetadata,
-		SLURMVersion:    msg.SLURMVersion,
+		TotalNodes:      int32(msg.TotalNodes),
+		AvailableNodes:  int32(msg.TotalNodes),
 		State:           types.ClusterStateActive,
 	}
 
@@ -59,55 +55,37 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 
 	ms.keeper.Logger(ctx).Info("HPC cluster registered",
 		"cluster_id", clusterID,
-		"provider", msg.ProviderAddress,
+		"owner", msg.Owner,
 		"name", msg.Name,
 	)
 
-	return &types.MsgRegisterClusterResponse{ClusterID: clusterID}, nil
+	return &types.MsgRegisterClusterResponse{ClusterId: clusterID}, nil
 }
 
 // UpdateCluster handles updating an HPC cluster
 func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateCluster) (*types.MsgUpdateClusterResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	// Validate owner address
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
 	if err != nil {
-		return nil, types.ErrInvalidCluster.Wrap("invalid provider address")
+		return nil, types.ErrInvalidCluster.Wrap("invalid owner address")
 	}
 
 	// Get existing cluster
-	cluster, found := ms.keeper.GetCluster(ctx, msg.ClusterID)
+	cluster, found := ms.keeper.GetCluster(ctx, msg.ClusterId)
 	if !found {
-		return nil, types.ErrClusterNotFound.Wrapf("cluster %s not found", msg.ClusterID)
+		return nil, types.ErrClusterNotFound.Wrapf("cluster %s not found", msg.ClusterId)
 	}
 
 	// Verify ownership
-	if cluster.ProviderAddress != providerAddr.String() {
+	if cluster.ProviderAddress != ownerAddr.String() {
 		return nil, types.ErrUnauthorized.Wrap("not the cluster owner")
 	}
 
 	// Apply updates
-	if msg.Name != "" {
-		cluster.Name = msg.Name
-	}
-	if msg.Description != "" {
-		cluster.Description = msg.Description
-	}
-	if msg.State != "" {
-		cluster.State = msg.State
-	}
-	if len(msg.Partitions) > 0 {
-		cluster.Partitions = msg.Partitions
-	}
 	if msg.TotalNodes > 0 {
-		cluster.TotalNodes = msg.TotalNodes
-	}
-	if msg.AvailableNodes >= 0 {
-		cluster.AvailableNodes = msg.AvailableNodes
-	}
-	if msg.ClusterMetadata.TotalCPUCores > 0 {
-		cluster.ClusterMetadata = msg.ClusterMetadata
+		cluster.TotalNodes = int32(msg.TotalNodes)
 	}
 
 	// Update the cluster
@@ -116,8 +94,8 @@ func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateClu
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC cluster updated",
-		"cluster_id", msg.ClusterID,
-		"provider", msg.ProviderAddress,
+		"cluster_id", msg.ClusterId,
+		"owner", msg.Owner,
 	)
 
 	return &types.MsgUpdateClusterResponse{}, nil
@@ -127,20 +105,20 @@ func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateClu
 func (ms msgServer) DeregisterCluster(goCtx context.Context, msg *types.MsgDeregisterCluster) (*types.MsgDeregisterClusterResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	// Validate owner address
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
 	if err != nil {
-		return nil, types.ErrInvalidCluster.Wrap("invalid provider address")
+		return nil, types.ErrInvalidCluster.Wrap("invalid owner address")
 	}
 
 	// Deregister the cluster
-	if err := ms.keeper.DeregisterCluster(ctx, msg.ClusterID, providerAddr); err != nil {
+	if err := ms.keeper.DeregisterCluster(ctx, msg.ClusterId, ownerAddr); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC cluster deregistered",
-		"cluster_id", msg.ClusterID,
-		"provider", msg.ProviderAddress,
+		"cluster_id", msg.ClusterId,
+		"owner", msg.Owner,
 	)
 
 	return &types.MsgDeregisterClusterResponse{}, nil
@@ -151,15 +129,15 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *types.MsgCreateOf
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	providerAddr, err := sdk.AccAddressFromBech32(msg.Provider)
 	if err != nil {
 		return nil, types.ErrInvalidOffering.Wrap("invalid provider address")
 	}
 
 	// Verify cluster ownership
-	cluster, found := ms.keeper.GetCluster(ctx, msg.ClusterID)
+	cluster, found := ms.keeper.GetCluster(ctx, msg.ClusterId)
 	if !found {
-		return nil, types.ErrClusterNotFound.Wrapf("cluster %s not found", msg.ClusterID)
+		return nil, types.ErrClusterNotFound.Wrapf("cluster %s not found", msg.ClusterId)
 	}
 	if cluster.ProviderAddress != providerAddr.String() {
 		return nil, types.ErrUnauthorized.Wrap("not the cluster owner")
@@ -171,19 +149,12 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *types.MsgCreateOf
 
 	// Create the offering
 	offering := &types.HPCOffering{
-		OfferingID:                offeringID,
-		ClusterID:                 msg.ClusterID,
-		ProviderAddress:           msg.ProviderAddress,
-		Name:                      msg.Name,
-		Description:               msg.Description,
-		QueueOptions:              msg.QueueOptions,
-		Pricing:                   msg.Pricing,
-		RequiredIdentityThreshold: msg.RequiredIdentityThreshold,
-		MaxRuntimeSeconds:         msg.MaxRuntimeSeconds,
-		PreconfiguredWorkloads:    msg.PreconfiguredWorkloads,
-		SupportsCustomWorkloads:   msg.SupportsCustomWorkloads,
-		Active:                    true,
-		CreatedAt:                 ctx.BlockTime(),
+		OfferingID:      offeringID,
+		ClusterID:       msg.ClusterId,
+		ProviderAddress: msg.Provider,
+		Name:            msg.Name,
+		Active:          true,
+		CreatedAt:       ctx.BlockTime(),
 	}
 
 	// Create the offering
@@ -193,11 +164,11 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *types.MsgCreateOf
 
 	ms.keeper.Logger(ctx).Info("HPC offering created",
 		"offering_id", offeringID,
-		"cluster_id", msg.ClusterID,
-		"provider", msg.ProviderAddress,
+		"cluster_id", msg.ClusterId,
+		"provider", msg.Provider,
 	)
 
-	return &types.MsgCreateOfferingResponse{OfferingID: offeringID}, nil
+	return &types.MsgCreateOfferingResponse{OfferingId: offeringID}, nil
 }
 
 // UpdateOffering handles updating an HPC offering
@@ -205,15 +176,15 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	providerAddr, err := sdk.AccAddressFromBech32(msg.Provider)
 	if err != nil {
 		return nil, types.ErrInvalidOffering.Wrap("invalid provider address")
 	}
 
 	// Get existing offering
-	offering, found := ms.keeper.GetOffering(ctx, msg.OfferingID)
+	offering, found := ms.keeper.GetOffering(ctx, msg.OfferingId)
 	if !found {
-		return nil, types.ErrOfferingNotFound.Wrapf("offering %s not found", msg.OfferingID)
+		return nil, types.ErrOfferingNotFound.Wrapf("offering %s not found", msg.OfferingId)
 	}
 
 	// Verify ownership
@@ -222,33 +193,7 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 	}
 
 	// Apply updates
-	if msg.Name != "" {
-		offering.Name = msg.Name
-	}
-	if msg.Description != "" {
-		offering.Description = msg.Description
-	}
-	if len(msg.QueueOptions) > 0 {
-		offering.QueueOptions = msg.QueueOptions
-	}
-	if msg.Pricing.BaseNodeHourPrice != "" {
-		offering.Pricing = msg.Pricing
-	}
-	if msg.RequiredIdentityThreshold > 0 {
-		offering.RequiredIdentityThreshold = msg.RequiredIdentityThreshold
-	}
-	if msg.MaxRuntimeSeconds > 0 {
-		offering.MaxRuntimeSeconds = msg.MaxRuntimeSeconds
-	}
-	if len(msg.PreconfiguredWorkloads) > 0 {
-		offering.PreconfiguredWorkloads = msg.PreconfiguredWorkloads
-	}
-	if msg.SupportsCustomWorkloads != nil {
-		offering.SupportsCustomWorkloads = *msg.SupportsCustomWorkloads
-	}
-	if msg.Active != nil {
-		offering.Active = *msg.Active
-	}
+	offering.Active = msg.Active
 	offering.UpdatedAt = ctx.BlockTime()
 
 	// Update the offering
@@ -257,8 +202,8 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC offering updated",
-		"offering_id", msg.OfferingID,
-		"provider", msg.ProviderAddress,
+		"offering_id", msg.OfferingId,
+		"provider", msg.Provider,
 	)
 
 	return &types.MsgUpdateOfferingResponse{}, nil
@@ -268,19 +213,19 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*types.MsgSubmitJobResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate customer address
-	customerAddr, err := sdk.AccAddressFromBech32(msg.CustomerAddress)
+	// Validate submitter address
+	submitterAddr, err := sdk.AccAddressFromBech32(msg.Submitter)
 	if err != nil {
-		return nil, types.ErrInvalidJob.Wrap("invalid customer address")
+		return nil, types.ErrInvalidJob.Wrap("invalid submitter address")
 	}
 
 	// Verify offering exists
-	offering, found := ms.keeper.GetOffering(ctx, msg.OfferingID)
+	offering, found := ms.keeper.GetOffering(ctx, msg.OfferingId)
 	if !found {
-		return nil, types.ErrOfferingNotFound.Wrapf("offering %s not found", msg.OfferingID)
+		return nil, types.ErrOfferingNotFound.Wrapf("offering %s not found", msg.OfferingId)
 	}
 	if !offering.Active {
-		return nil, types.ErrInvalidOffering.Wrapf("offering %s is not active", msg.OfferingID)
+		return nil, types.ErrInvalidOffering.Wrapf("offering %s is not active", msg.OfferingId)
 	}
 
 	// Generate job ID
@@ -289,20 +234,16 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 
 	// Create the job
 	job := &types.HPCJob{
-		JobID:                   jobID,
-		CustomerAddress:         customerAddr.String(),
-		OfferingID:              msg.OfferingID,
-		ClusterID:               offering.ClusterID,
-		ProviderAddress:         offering.ProviderAddress,
-		QueueName:               msg.QueueName,
-		WorkloadSpec:            msg.WorkloadSpec,
-		Resources:               msg.Resources,
-		DataReferences:          msg.DataReferences,
-		EncryptedInputsPointer:  msg.EncryptedInputsPointer,
-		EncryptedOutputsPointer: msg.EncryptedOutputsPointer,
-		MaxRuntimeSeconds:       msg.MaxRuntimeSeconds,
-		AgreedPrice:             msg.MaxPrice,
-		State:                   types.JobStatePending,
+		JobID:           jobID,
+		CustomerAddress: submitterAddr.String(),
+		OfferingID:      msg.OfferingId,
+		ClusterID:       offering.ClusterID,
+		ProviderAddress: offering.ProviderAddress,
+		Resources: types.JobResources{
+			Nodes: int32(msg.RequestedNodes),
+		},
+		MaxRuntimeSeconds: int64(msg.MaxDuration),
+		State:             types.JobStatePending,
 	}
 
 	// Submit the job
@@ -317,31 +258,31 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 
 	ms.keeper.Logger(ctx).Info("HPC job submitted",
 		"job_id", jobID,
-		"customer", msg.CustomerAddress,
-		"offering_id", msg.OfferingID,
+		"submitter", msg.Submitter,
+		"offering_id", msg.OfferingId,
 	)
 
-	return &types.MsgSubmitJobResponse{JobID: jobID}, nil
+	return &types.MsgSubmitJobResponse{JobId: jobID}, nil
 }
 
 // CancelJob handles cancelling an HPC job
 func (ms msgServer) CancelJob(goCtx context.Context, msg *types.MsgCancelJob) (*types.MsgCancelJobResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate requester address
-	requesterAddr, err := sdk.AccAddressFromBech32(msg.RequesterAddress)
+	// Validate sender address
+	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
-		return nil, types.ErrInvalidJob.Wrap("invalid requester address")
+		return nil, types.ErrInvalidJob.Wrap("invalid sender address")
 	}
 
 	// Cancel the job
-	if err := ms.keeper.CancelJob(ctx, msg.JobID, requesterAddr); err != nil {
+	if err := ms.keeper.CancelJob(ctx, msg.JobId, senderAddr); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC job cancelled",
-		"job_id", msg.JobID,
-		"requester", msg.RequesterAddress,
+		"job_id", msg.JobId,
+		"sender", msg.Sender,
 	)
 
 	return &types.MsgCancelJobResponse{}, nil
@@ -351,39 +292,54 @@ func (ms msgServer) CancelJob(goCtx context.Context, msg *types.MsgCancelJob) (*
 func (ms msgServer) ReportJobStatus(goCtx context.Context, msg *types.MsgReportJobStatus) (*types.MsgReportJobStatusResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	// Validate reporter address
+	reporterAddr, err := sdk.AccAddressFromBech32(msg.Reporter)
 	if err != nil {
-		return nil, types.ErrInvalidJob.Wrap("invalid provider address")
+		return nil, types.ErrInvalidJob.Wrap("invalid reporter address")
 	}
 
 	// Get the job to verify ownership
-	job, found := ms.keeper.GetJob(ctx, msg.JobID)
+	job, found := ms.keeper.GetJob(ctx, msg.JobId)
 	if !found {
-		return nil, types.ErrJobNotFound.Wrapf("job %s not found", msg.JobID)
+		return nil, types.ErrJobNotFound.Wrapf("job %s not found", msg.JobId)
 	}
 
-	// Verify provider owns this job
-	if job.ProviderAddress != providerAddr.String() {
+	// Verify reporter owns this job (provider)
+	if job.ProviderAddress != reporterAddr.String() {
 		return nil, types.ErrUnauthorized.Wrap("not the job provider")
 	}
 
+	// Map status string to JobState
+	var jobState types.JobState
+	switch msg.Status {
+	case "running":
+		jobState = types.JobStateRunning
+	case "completed":
+		jobState = types.JobStateCompleted
+	case "failed":
+		jobState = types.JobStateFailed
+	case "cancelled":
+		jobState = types.JobStateCancelled
+	default:
+		jobState = types.JobState(msg.Status)
+	}
+
 	// Update job status
-	if err := ms.keeper.UpdateJobStatus(ctx, msg.JobID, msg.State, msg.StatusMessage, msg.ExitCode, &msg.UsageMetrics); err != nil {
+	if err := ms.keeper.UpdateJobStatus(ctx, msg.JobId, jobState, msg.ErrorMessage, 0, nil); err != nil {
 		return nil, err
 	}
 
 	// If job completed, distribute rewards
-	if msg.State == types.JobStateCompleted || msg.State == types.JobStateFailed {
-		if _, err := ms.keeper.DistributeJobRewards(ctx, msg.JobID); err != nil {
-			ms.keeper.Logger(ctx).Error("failed to distribute job rewards", "job_id", msg.JobID, "error", err)
+	if jobState == types.JobStateCompleted || jobState == types.JobStateFailed {
+		if _, err := ms.keeper.DistributeJobRewards(ctx, msg.JobId); err != nil {
+			ms.keeper.Logger(ctx).Error("failed to distribute job rewards", "job_id", msg.JobId, "error", err)
 		}
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC job status reported",
-		"job_id", msg.JobID,
-		"state", msg.State,
-		"provider", msg.ProviderAddress,
+		"job_id", msg.JobId,
+		"status", msg.Status,
+		"reporter", msg.Reporter,
 	)
 
 	return &types.MsgReportJobStatusResponse{}, nil
@@ -393,36 +349,29 @@ func (ms msgServer) ReportJobStatus(goCtx context.Context, msg *types.MsgReportJ
 func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpdateNodeMetadata) (*types.MsgUpdateNodeMetadataResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	// Validate owner address
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
 	if err != nil {
-		return nil, types.ErrInvalidNodeMetadata.Wrap("invalid provider address")
+		return nil, types.ErrInvalidNodeMetadata.Wrap("invalid owner address")
 	}
 
 	// Verify cluster ownership
-	cluster, found := ms.keeper.GetCluster(ctx, msg.ClusterID)
+	cluster, found := ms.keeper.GetCluster(ctx, msg.ClusterId)
 	if !found {
-		return nil, types.ErrClusterNotFound.Wrapf("cluster %s not found", msg.ClusterID)
+		return nil, types.ErrClusterNotFound.Wrapf("cluster %s not found", msg.ClusterId)
 	}
-	if cluster.ProviderAddress != providerAddr.String() {
+	if cluster.ProviderAddress != ownerAddr.String() {
 		return nil, types.ErrUnauthorized.Wrap("not the cluster owner")
 	}
 
 	// Create/update node metadata
 	node := &types.NodeMetadata{
-		NodeID:               msg.NodeID,
-		ClusterID:            msg.ClusterID,
-		ProviderAddress:      providerAddr.String(),
-		Region:               msg.Region,
-		Datacenter:           msg.Datacenter,
-		LatencyMeasurements:  msg.LatencyMeasurements,
-		NetworkBandwidthMbps: msg.NetworkBandwidthMbps,
-		Resources:            msg.Resources,
-		LastHeartbeat:        ctx.BlockTime(),
-		UpdatedAt:            ctx.BlockTime(),
-	}
-	if msg.Active != nil {
-		node.Active = *msg.Active
+		NodeID:          msg.NodeId,
+		ClusterID:       msg.ClusterId,
+		ProviderAddress: ownerAddr.String(),
+		LastHeartbeat:   ctx.BlockTime(),
+		UpdatedAt:       ctx.BlockTime(),
+		Active:          true,
 	}
 
 	if err := ms.keeper.UpdateNodeMetadata(ctx, node); err != nil {
@@ -430,8 +379,8 @@ func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpda
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC node metadata updated",
-		"node_id", msg.NodeID,
-		"cluster_id", msg.ClusterID,
+		"node_id", msg.NodeId,
+		"cluster_id", msg.ClusterId,
 	)
 
 	return &types.MsgUpdateNodeMetadataResponse{}, nil
@@ -441,21 +390,21 @@ func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpda
 func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute) (*types.MsgFlagDisputeResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate disputer address
-	disputerAddr, err := sdk.AccAddressFromBech32(msg.DisputerAddress)
+	// Validate sender address
+	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
-		return nil, types.ErrInvalidDispute.Wrap("invalid disputer address")
+		return nil, types.ErrInvalidDispute.Wrap("invalid sender address")
 	}
 
 	// Get the job to verify relationship
-	job, found := ms.keeper.GetJob(ctx, msg.JobID)
+	job, found := ms.keeper.GetJob(ctx, msg.JobId)
 	if !found {
-		return nil, types.ErrJobNotFound.Wrapf("job %s not found", msg.JobID)
+		return nil, types.ErrJobNotFound.Wrapf("job %s not found", msg.JobId)
 	}
 
-	// Verify disputer is either customer or provider
-	if job.CustomerAddress != disputerAddr.String() && job.ProviderAddress != disputerAddr.String() {
-		return nil, types.ErrUnauthorized.Wrap("disputer must be customer or provider")
+	// Verify sender is either customer or provider
+	if job.CustomerAddress != senderAddr.String() && job.ProviderAddress != senderAddr.String() {
+		return nil, types.ErrUnauthorized.Wrap("sender must be customer or provider")
 	}
 
 	// Generate dispute ID
@@ -465,10 +414,9 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 	// Create the dispute
 	dispute := &types.HPCDispute{
 		DisputeID:       disputeID,
-		JobID:           msg.JobID,
-		RewardID:        msg.RewardID,
-		DisputerAddress: disputerAddr.String(),
-		DisputeType:     msg.DisputeType,
+		JobID:           msg.JobId,
+		DisputerAddress: senderAddr.String(),
+		DisputeType:     "general",
 		Reason:          msg.Reason,
 		Evidence:        msg.Evidence,
 		Status:          types.DisputeStatusPending,
@@ -481,31 +429,42 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 
 	ms.keeper.Logger(ctx).Info("HPC dispute flagged",
 		"dispute_id", disputeID,
-		"job_id", msg.JobID,
-		"disputer", msg.DisputerAddress,
+		"job_id", msg.JobId,
+		"sender", msg.Sender,
 	)
 
-	return &types.MsgFlagDisputeResponse{DisputeID: disputeID}, nil
+	return &types.MsgFlagDisputeResponse{DisputeId: disputeID}, nil
 }
 
 // ResolveDispute handles resolving a dispute
 func (ms msgServer) ResolveDispute(goCtx context.Context, msg *types.MsgResolveDispute) (*types.MsgResolveDisputeResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate resolver address (must be module authority)
-	if msg.ResolverAddress != ms.keeper.GetAuthority() {
-		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", ms.keeper.GetAuthority(), msg.ResolverAddress)
+	// Validate authority address (must be module authority)
+	if msg.Authority != ms.keeper.GetAuthority() {
+		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
+	}
+
+	// Determine dispute status from resolution
+	var disputeStatus types.DisputeStatus
+	switch msg.Resolution {
+	case "resolved":
+		disputeStatus = types.DisputeStatusResolved
+	case "rejected":
+		disputeStatus = types.DisputeStatusRejected
+	default:
+		disputeStatus = types.DisputeStatusResolved
 	}
 
 	// Resolve the dispute
-	if err := ms.keeper.ResolveDispute(ctx, msg.DisputeID, msg.Status, msg.Resolution, sdk.MustAccAddressFromBech32(msg.ResolverAddress)); err != nil {
+	if err := ms.keeper.ResolveDispute(ctx, msg.DisputeId, disputeStatus, msg.Resolution, sdk.MustAccAddressFromBech32(msg.Authority)); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC dispute resolved",
-		"dispute_id", msg.DisputeID,
-		"status", msg.Status,
-		"resolver", msg.ResolverAddress,
+		"dispute_id", msg.DisputeId,
+		"resolution", msg.Resolution,
+		"authority", msg.Authority,
 	)
 
 	return &types.MsgResolveDisputeResponse{}, nil

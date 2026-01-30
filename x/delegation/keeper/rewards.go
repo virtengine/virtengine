@@ -4,7 +4,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"fmt"
 	"math/big"
 
@@ -14,11 +13,12 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// DefaultRewardDenom is the default denomination for rewards
+const DefaultRewardDenom = "uve"
+
 // DistributeValidatorRewardsToDelegators distributes a validator's rewards to their delegators
 // This should be called after validator rewards are calculated in the staking module
 func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validatorAddr string, epoch uint64, validatorReward string) error {
-	params := k.GetParams(ctx)
-
 	rewardBig, ok := new(big.Int).SetString(validatorReward, 10)
 	if !ok || rewardBig.Sign() <= 0 {
 		return nil // No rewards to distribute
@@ -30,10 +30,10 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 		return nil // No delegations
 	}
 
-	// Calculate commission (goes to validator)
+	// Calculate commission (goes to validator) using default commission rate
 	// commission = validatorReward * commissionRate / BasisPointsMax
-	commission := new(big.Int).Mul(rewardBig, big.NewInt(params.ValidatorCommissionRate))
-	commission.Div(commission, big.NewInt(types.BasisPointsMax))
+	commission := new(big.Int).Mul(rewardBig, big.NewInt(DefaultValidatorCommissionRate))
+	commission.Div(commission, big.NewInt(BasisPointsMax))
 
 	// Distributable = validatorReward - commission
 	distributable := new(big.Int).Sub(rewardBig, commission)
@@ -100,8 +100,6 @@ func (k Keeper) DistributeValidatorRewardsToDelegators(ctx sdk.Context, validato
 
 // ClaimRewards claims rewards for a delegator from a specific validator
 func (k Keeper) ClaimRewards(ctx sdk.Context, delegatorAddr, validatorAddr string) (sdk.Coins, error) {
-	params := k.GetParams(ctx)
-
 	// Get all unclaimed rewards from this validator
 	unclaimedRewards := k.GetDelegatorValidatorUnclaimedRewards(ctx, delegatorAddr, validatorAddr)
 	if len(unclaimedRewards) == 0 {
@@ -134,7 +132,7 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, delegatorAddr, validatorAddr strin
 		return nil, types.ErrInvalidDelegator.Wrapf("invalid delegator address: %v", err)
 	}
 
-	rewardCoins := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, math.NewIntFromBigInt(totalReward)))
+	rewardCoins := sdk.NewCoins(sdk.NewCoin(DefaultRewardDenom, math.NewIntFromBigInt(totalReward)))
 
 	if k.bankKeeper != nil {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, rewardCoins); err != nil {
@@ -164,8 +162,6 @@ func (k Keeper) ClaimRewards(ctx sdk.Context, delegatorAddr, validatorAddr strin
 
 // ClaimAllRewards claims all rewards for a delegator from all validators
 func (k Keeper) ClaimAllRewards(ctx sdk.Context, delegatorAddr string) (sdk.Coins, error) {
-	params := k.GetParams(ctx)
-
 	// Get all unclaimed rewards
 	unclaimedRewards := k.GetDelegatorUnclaimedRewards(ctx, delegatorAddr)
 	if len(unclaimedRewards) == 0 {
@@ -198,7 +194,7 @@ func (k Keeper) ClaimAllRewards(ctx sdk.Context, delegatorAddr string) (sdk.Coin
 		return nil, types.ErrInvalidDelegator.Wrapf("invalid delegator address: %v", err)
 	}
 
-	rewardCoins := sdk.NewCoins(sdk.NewCoin(params.RewardDenom, math.NewIntFromBigInt(totalReward)))
+	rewardCoins := sdk.NewCoins(sdk.NewCoin(DefaultRewardDenom, math.NewIntFromBigInt(totalReward)))
 
 	if k.bankKeeper != nil {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, rewardCoins); err != nil {
@@ -249,3 +245,4 @@ func (k Keeper) GetDelegatorValidatorTotalRewards(ctx sdk.Context, delegatorAddr
 
 	return totalReward.String()
 }
+

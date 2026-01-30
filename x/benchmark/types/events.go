@@ -3,6 +3,24 @@
 // VE-601: Events for the benchmark module
 package types
 
+import (
+	benchmarkv1 "github.com/virtengine/virtengine/sdk/go/node/benchmark/v1"
+)
+
+// Event type aliases to generated protobuf types
+type (
+	AnomalyDetectedEvent         = benchmarkv1.AnomalyDetectedEvent
+	AnomalyResolvedEvent         = benchmarkv1.AnomalyResolvedEvent
+	ProviderFlaggedEvent         = benchmarkv1.ProviderFlaggedEvent
+	ProviderUnflaggedEvent       = benchmarkv1.ProviderUnflaggedEvent
+	ChallengeRequestedEvent      = benchmarkv1.ChallengeRequestedEvent
+	ChallengeCompletedEvent      = benchmarkv1.ChallengeCompletedEvent
+	ChallengeExpiredEvent        = benchmarkv1.ChallengeExpiredEvent
+	BenchmarksSubmittedEvent     = benchmarkv1.BenchmarksSubmittedEvent
+	BenchmarksPrunedEvent        = benchmarkv1.BenchmarksPrunedEvent
+	ReliabilityScoreUpdatedEvent = benchmarkv1.ReliabilityScoreUpdatedEvent
+)
+
 // Event types for the benchmark module
 const (
 	// EventTypeBenchmarksSubmitted is emitted when benchmarks are submitted

@@ -6,16 +6,15 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
-	"github.com/cosmos/gogoproto/grpc"
+
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 )
 
-var (
-	amino     = codec.NewLegacyAmino()
-	ModuleCdc = codec.NewProtoCodec(cdctypes.NewInterfaceRegistry())
-)
+// ModuleCdc is the codec for the module
+var ModuleCdc = codec.NewLegacyAmino()
 
 func init() {
-	RegisterLegacyAminoCodec(amino)
+	RegisterLegacyAminoCodec(ModuleCdc)
 }
 
 // RegisterLegacyAminoCodec registers the necessary interfaces and concrete types
@@ -39,89 +38,21 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// NOTE: These are stub message types without proper protobuf generation.
-	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
-	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
-	//
-	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
-	//
-	// registry.RegisterImplementations((*sdk.Msg)(nil),
-	//     // Escrow messages
-	//     &MsgCreateEscrow{},
-	//     &MsgActivateEscrow{},
-	//     &MsgReleaseEscrow{},
-	//     &MsgRefundEscrow{},
-	//     &MsgDisputeEscrow{},
-	//     // Settlement messages
-	//     &MsgSettleOrder{},
-	//     &MsgRecordUsage{},
-	//     &MsgAcknowledgeUsage{},
-	//     // Reward messages
-	//     &MsgClaimRewards{},
-	// )
-	//
-	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
-	_ = registry // suppress unused variable warning
-	_ = msgservice.RegisterMsgServiceDesc
-}
-
-// _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
-var _Msg_serviceDesc = struct {
-	ServiceName string
-	HandlerType interface{}
-	Methods     []struct {
-		MethodName string
-		Handler    interface{}
-	}
-	Streams  []struct{}
-	Metadata interface{}
-}{
-	ServiceName: "virtengine.settlement.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []struct {
-		MethodName string
-		Handler    interface{}
-	}{
-		{MethodName: "CreateEscrow", Handler: nil},
-		{MethodName: "ActivateEscrow", Handler: nil},
-		{MethodName: "ReleaseEscrow", Handler: nil},
-		{MethodName: "RefundEscrow", Handler: nil},
-		{MethodName: "DisputeEscrow", Handler: nil},
-		{MethodName: "SettleOrder", Handler: nil},
-		{MethodName: "RecordUsage", Handler: nil},
-		{MethodName: "AcknowledgeUsage", Handler: nil},
-		{MethodName: "ClaimRewards", Handler: nil},
-	},
-	Streams:  []struct{}{},
-	Metadata: "virtengine/settlement/v1/tx.proto",
-}
-
-// MsgServer is the server API for Msg service.
-type MsgServer interface {
-	CreateEscrow(ctx sdk.Context, msg *MsgCreateEscrow) (*MsgCreateEscrowResponse, error)
-	ActivateEscrow(ctx sdk.Context, msg *MsgActivateEscrow) (*MsgActivateEscrowResponse, error)
-	ReleaseEscrow(ctx sdk.Context, msg *MsgReleaseEscrow) (*MsgReleaseEscrowResponse, error)
-	RefundEscrow(ctx sdk.Context, msg *MsgRefundEscrow) (*MsgRefundEscrowResponse, error)
-	DisputeEscrow(ctx sdk.Context, msg *MsgDisputeEscrow) (*MsgDisputeEscrowResponse, error)
-	SettleOrder(ctx sdk.Context, msg *MsgSettleOrder) (*MsgSettleOrderResponse, error)
-	RecordUsage(ctx sdk.Context, msg *MsgRecordUsage) (*MsgRecordUsageResponse, error)
-	AcknowledgeUsage(ctx sdk.Context, msg *MsgAcknowledgeUsage) (*MsgAcknowledgeUsageResponse, error)
-	ClaimRewards(ctx sdk.Context, msg *MsgClaimRewards) (*MsgClaimRewardsResponse, error)
-}
-
-// QueryServer is the server API for Query service.
-type QueryServer interface {
-	Escrow(ctx sdk.Context, req *QueryEscrowRequest) (*QueryEscrowResponse, error)
-	EscrowsByOrder(ctx sdk.Context, req *QueryEscrowsByOrderRequest) (*QueryEscrowsByOrderResponse, error)
-	EscrowsByState(ctx sdk.Context, req *QueryEscrowsByStateRequest) (*QueryEscrowsByStateResponse, error)
-	Settlement(ctx sdk.Context, req *QuerySettlementRequest) (*QuerySettlementResponse, error)
-	SettlementsByOrder(ctx sdk.Context, req *QuerySettlementsByOrderRequest) (*QuerySettlementsByOrderResponse, error)
-	UsageRecord(ctx sdk.Context, req *QueryUsageRecordRequest) (*QueryUsageRecordResponse, error)
-	UsageRecordsByOrder(ctx sdk.Context, req *QueryUsageRecordsByOrderRequest) (*QueryUsageRecordsByOrderResponse, error)
-	RewardDistribution(ctx sdk.Context, req *QueryRewardDistributionRequest) (*QueryRewardDistributionResponse, error)
-	RewardsByEpoch(ctx sdk.Context, req *QueryRewardsByEpochRequest) (*QueryRewardsByEpochResponse, error)
-	ClaimableRewards(ctx sdk.Context, req *QueryClaimableRewardsRequest) (*QueryClaimableRewardsResponse, error)
-	Params(ctx sdk.Context, req *QueryParamsRequest) (*QueryParamsResponse, error)
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		// Escrow messages
+		&MsgCreateEscrow{},
+		&MsgActivateEscrow{},
+		&MsgReleaseEscrow{},
+		&MsgRefundEscrow{},
+		&MsgDisputeEscrow{},
+		// Settlement messages
+		&MsgSettleOrder{},
+		&MsgRecordUsage{},
+		&MsgAcknowledgeUsage{},
+		// Reward messages
+		&MsgClaimRewards{},
+	)
+	msgservice.RegisterMsgServiceDesc(registry, &settlementv1.Msg_serviceDesc)
 }
 
 // Query request/response types
@@ -232,20 +163,4 @@ type QueryParamsRequest struct{}
 // QueryParamsResponse is the response for querying module parameters
 type QueryParamsResponse struct {
 	Params Params `json:"params"`
-}
-
-// RegisterMsgServer registers the MsgServer
-// This is a stub implementation until proper protobuf generation is set up.
-func RegisterMsgServer(s grpc.Server, impl MsgServer) {
-	// Registration is a no-op for now since we don't have proper protobuf generated code
-	_ = s
-	_ = impl
-}
-
-// RegisterQueryServer registers the QueryServer
-// This is a stub implementation until proper protobuf generation is set up.
-func RegisterQueryServer(s grpc.Server, impl QueryServer) {
-	// Registration is a no-op for now since we don't have proper protobuf generated code
-	_ = s
-	_ = impl
 }

@@ -134,10 +134,16 @@ message MsgRecordPerformance {
   int64 blocks_signed = 4 [(gogoproto.jsontag) = "blocks_signed"];
 
   // VEIDVerificationsCompleted is VEID verifications completed
-  int64 veid_verifications_completed = 5 [(gogoproto.jsontag) = "veid_verifications_completed"];
+  int64 veid_verifications_completed = 5 [
+    (gogoproto.jsontag) = "veid_verifications_completed",
+    (gogoproto.customname) = "VEIDVerificationsCompleted"
+  ];
 
   // VEIDVerificationScore is the VEID verification quality score
-  int64 veid_verification_score = 6 [(gogoproto.jsontag) = "veid_verification_score"];
+  int64 veid_verification_score = 6 [
+    (gogoproto.jsontag) = "veid_verification_score",
+    (gogoproto.customname) = "VEIDVerificationScore"
+  ];
 }
 
 // MsgRecordPerformanceResponse is the response for MsgRecordPerformance

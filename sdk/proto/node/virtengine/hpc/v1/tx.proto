@@ -1,0 +1,292 @@
+syntax = "proto3";
+package virtengine.hpc.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/hpc/v1";
+
+// Msg defines the hpc Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // RegisterCluster registers a new HPC cluster
+  rpc RegisterCluster(MsgRegisterCluster) returns (MsgRegisterClusterResponse);
+
+  // UpdateCluster updates cluster information
+  rpc UpdateCluster(MsgUpdateCluster) returns (MsgUpdateClusterResponse);
+
+  // DeregisterCluster removes a cluster
+  rpc DeregisterCluster(MsgDeregisterCluster) returns (MsgDeregisterClusterResponse);
+
+  // CreateOffering creates a new HPC offering
+  rpc CreateOffering(MsgCreateOffering) returns (MsgCreateOfferingResponse);
+
+  // UpdateOffering updates an offering
+  rpc UpdateOffering(MsgUpdateOffering) returns (MsgUpdateOfferingResponse);
+
+  // SubmitJob submits a new HPC job
+  rpc SubmitJob(MsgSubmitJob) returns (MsgSubmitJobResponse);
+
+  // CancelJob cancels a job
+  rpc CancelJob(MsgCancelJob) returns (MsgCancelJobResponse);
+
+  // ReportJobStatus reports job status
+  rpc ReportJobStatus(MsgReportJobStatus) returns (MsgReportJobStatusResponse);
+
+  // UpdateNodeMetadata updates node metadata
+  rpc UpdateNodeMetadata(MsgUpdateNodeMetadata) returns (MsgUpdateNodeMetadataResponse);
+
+  // FlagDispute flags a dispute for a job
+  rpc FlagDispute(MsgFlagDispute) returns (MsgFlagDisputeResponse);
+
+  // ResolveDispute resolves a flagged dispute
+  rpc ResolveDispute(MsgResolveDispute) returns (MsgResolveDisputeResponse);
+}
+
+// MsgRegisterCluster registers a new HPC cluster
+message MsgRegisterCluster {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "hpc/MsgRegisterCluster";
+
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string name = 2;
+  string cluster_type = 3;
+  string region = 4;
+  string endpoint = 5;
+  uint64 total_nodes = 6;
+  uint64 total_gpus = 7;
+}
+
+// MsgRegisterClusterResponse is the response for MsgRegisterCluster
+message MsgRegisterClusterResponse {
+  string cluster_id = 1;
+}
+
+// MsgUpdateCluster updates cluster information
+message MsgUpdateCluster {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "hpc/MsgUpdateCluster";
+
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string cluster_id = 2;
+  string endpoint = 3;
+  uint64 total_nodes = 4;
+  uint64 total_gpus = 5;
+  bool active = 6;
+}
+
+// MsgUpdateClusterResponse is the response for MsgUpdateCluster
+message MsgUpdateClusterResponse {}
+
+// MsgDeregisterCluster removes a cluster
+message MsgDeregisterCluster {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "hpc/MsgDeregisterCluster";
+
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string cluster_id = 2;
+}
+
+// MsgDeregisterClusterResponse is the response for MsgDeregisterCluster
+message MsgDeregisterClusterResponse {}
+
+// MsgCreateOffering creates a new HPC offering
+message MsgCreateOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "hpc/MsgCreateOffering";
+
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string cluster_id = 2;
+  string name = 3;
+  string resource_type = 4;
+  string price_per_hour = 5;
+  uint64 min_duration = 6;
+  uint64 max_duration = 7;
+}
+
+// MsgCreateOfferingResponse is the response for MsgCreateOffering
+message MsgCreateOfferingResponse {
+  string offering_id = 1;
+}
+
+// MsgUpdateOffering updates an offering
+message MsgUpdateOffering {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "hpc/MsgUpdateOffering";
+
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string offering_id = 2;
+  string price_per_hour = 3;
+  bool active = 4;
+}
+
+// MsgUpdateOfferingResponse is the response for MsgUpdateOffering
+message MsgUpdateOfferingResponse {}
+
+// MsgSubmitJob submits a new HPC job
+message MsgSubmitJob {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "submitter";
+  option (amino.name) = "hpc/MsgSubmitJob";
+
+  string submitter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string offering_id = 2;
+  string job_script = 3;
+  uint64 requested_nodes = 4;
+  uint64 requested_gpus = 5;
+  uint64 max_duration = 6;
+  string max_budget = 7;
+}
+
+// MsgSubmitJobResponse is the response for MsgSubmitJob
+message MsgSubmitJobResponse {
+  string job_id = 1;
+}
+
+// MsgCancelJob cancels a job
+message MsgCancelJob {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "hpc/MsgCancelJob";
+
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string job_id = 2;
+  string reason = 3;
+}
+
+// MsgCancelJobResponse is the response for MsgCancelJob
+message MsgCancelJobResponse {}
+
+// MsgReportJobStatus reports job status
+message MsgReportJobStatus {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "reporter";
+  option (amino.name) = "hpc/MsgReportJobStatus";
+
+  string reporter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string job_id = 2;
+  string status = 3;
+  uint64 progress_percent = 4;
+  string output_location = 5;
+  string error_message = 6;
+}
+
+// MsgReportJobStatusResponse is the response for MsgReportJobStatus
+message MsgReportJobStatusResponse {}
+
+// MsgUpdateNodeMetadata updates node metadata
+message MsgUpdateNodeMetadata {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "owner";
+  option (amino.name) = "hpc/MsgUpdateNodeMetadata";
+
+  string owner = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string cluster_id = 2;
+  string node_id = 3;
+  string gpu_model = 4;
+  uint64 gpu_memory_gb = 5;
+  string cpu_model = 6;
+  uint64 memory_gb = 7;
+}
+
+// MsgUpdateNodeMetadataResponse is the response for MsgUpdateNodeMetadata
+message MsgUpdateNodeMetadataResponse {}
+
+// MsgFlagDispute flags a dispute for a job
+message MsgFlagDispute {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "sender";
+  option (amino.name) = "hpc/MsgFlagDispute";
+
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string job_id = 2;
+  string reason = 3;
+  string evidence = 4;
+}
+
+// MsgFlagDisputeResponse is the response for MsgFlagDispute
+message MsgFlagDisputeResponse {
+  string dispute_id = 1;
+}
+
+// MsgResolveDispute resolves a flagged dispute
+message MsgResolveDispute {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "hpc/MsgResolveDispute";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string dispute_id = 2;
+  string resolution = 3;
+  string refund_amount = 4;
+}
+
+// MsgResolveDisputeResponse is the response for MsgResolveDispute
+message MsgResolveDisputeResponse {}
+
+// GenesisState is the genesis state for the hpc module
+message GenesisState {
+  option (gogoproto.equal) = true;
+  
+  Params params = 1 [(gogoproto.nullable) = false];
+  repeated Cluster clusters = 2 [(gogoproto.nullable) = false];
+  repeated Offering offerings = 3 [(gogoproto.nullable) = false];
+  repeated Job jobs = 4 [(gogoproto.nullable) = false];
+  uint64 cluster_sequence = 5;
+  uint64 offering_sequence = 6;
+  uint64 job_sequence = 7;
+}
+
+// Params defines the parameters for the hpc module
+message Params {
+  string min_deposit = 1;
+  uint64 max_job_duration = 2;
+  string platform_fee_rate = 3;
+  uint64 dispute_resolution_period = 4;
+}
+
+// Cluster represents an HPC cluster
+message Cluster {
+  string cluster_id = 1;
+  string owner = 2;
+  string name = 3;
+  string cluster_type = 4;
+  string region = 5;
+  string endpoint = 6;
+  uint64 total_nodes = 7;
+  uint64 total_gpus = 8;
+  bool active = 9;
+  int64 registered_at = 10;
+}
+
+// Offering represents an HPC offering
+message Offering {
+  string offering_id = 1;
+  string cluster_id = 2;
+  string provider = 3;
+  string name = 4;
+  string resource_type = 5;
+  string price_per_hour = 6;
+  uint64 min_duration = 7;
+  uint64 max_duration = 8;
+  bool active = 9;
+}
+
+// Job represents an HPC job
+message Job {
+  string job_id = 1;
+  string offering_id = 2;
+  string submitter = 3;
+  string status = 4;
+  int64 submitted_at = 5;
+  int64 started_at = 6;
+  int64 completed_at = 7;
+}

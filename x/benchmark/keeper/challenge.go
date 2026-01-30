@@ -4,7 +4,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"encoding/json"
 	"fmt"
 
@@ -49,11 +48,12 @@ func (k Keeper) CreateChallenge(ctx sdk.Context, challenge *types.BenchmarkChall
 	}
 
 	// Emit event
-	_ = ctx.EventManager().EmitTypedEvent(&ChallengeRequestedEvent{
-		ChallengeID:     challenge.ChallengeID,
-		ProviderAddress: challenge.ProviderAddress,
-		ClusterID:       challenge.ClusterID,
-		Deadline:        challenge.Deadline.Unix(),
+	_ = ctx.EventManager().EmitTypedEvent(&types.ChallengeRequestedEvent{
+		ChallengeId:   challenge.ChallengeID,
+		Requester:     challenge.Requester,
+		Provider:      challenge.ProviderAddress,
+		BenchmarkType: challenge.RequiredSuiteVersion,
+		RequestedAt:   ctx.BlockTime().Unix(),
 	})
 
 	return nil
@@ -136,10 +136,11 @@ func (k Keeper) RespondToChallenge(ctx sdk.Context, challengeID string, report t
 	_ = k.SetChallengeResponse(ctx, response)
 
 	// Emit event
-	_ = ctx.EventManager().EmitTypedEvent(&ChallengeCompletedEvent{
-		ChallengeID:     challengeID,
-		ProviderAddress: report.ProviderAddress,
-		ReportID:        report.ReportID,
+	_ = ctx.EventManager().EmitTypedEvent(&types.ChallengeCompletedEvent{
+		ChallengeId: challengeID,
+		Provider:    report.ProviderAddress,
+		Passed:      true,
+		CompletedAt: ctx.BlockTime().Unix(),
 	})
 
 	return nil
@@ -233,32 +234,14 @@ func (k Keeper) ProcessExpiredChallenges(ctx sdk.Context) error {
 			_ = k.SetChallenge(ctx, challenge)
 
 			// Emit event
-			_ = ctx.EventManager().EmitTypedEvent(&ChallengeExpiredEvent{
-				ChallengeID:     challenge.ChallengeID,
-				ProviderAddress: challenge.ProviderAddress,
+			_ = ctx.EventManager().EmitTypedEvent(&types.ChallengeExpiredEvent{
+				ChallengeId: challenge.ChallengeID,
+				Provider:    challenge.ProviderAddress,
+				ExpiredAt:   ctx.BlockTime().Unix(),
 			})
 		}
 		return false
 	})
 
 	return nil
-}
-
-// Event types for challenges
-type ChallengeRequestedEvent struct {
-	ChallengeID     string `json:"challenge_id"`
-	ProviderAddress string `json:"provider_address"`
-	ClusterID       string `json:"cluster_id"`
-	Deadline        int64  `json:"deadline"`
-}
-
-type ChallengeCompletedEvent struct {
-	ChallengeID     string `json:"challenge_id"`
-	ProviderAddress string `json:"provider_address"`
-	ReportID        string `json:"report_id"`
-}
-
-type ChallengeExpiredEvent struct {
-	ChallengeID     string `json:"challenge_id"`
-	ProviderAddress string `json:"provider_address"`
 }
