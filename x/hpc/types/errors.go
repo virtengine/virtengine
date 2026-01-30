@@ -71,4 +71,34 @@ var (
 
 	// ErrInvalidWorkload is returned when a workload configuration is invalid
 	ErrInvalidWorkload = errors.Register(ModuleName, 2120, "invalid workload configuration")
+
+	// ErrInvalidClusterTemplate is returned when a cluster template is invalid
+	ErrInvalidClusterTemplate = errors.Register(ModuleName, 2121, "invalid cluster template")
+
+	// ErrInvalidPartition is returned when a partition configuration is invalid
+	ErrInvalidPartition = errors.Register(ModuleName, 2122, "invalid partition configuration")
+
+	// ErrInvalidQoSPolicy is returned when a QoS policy is invalid
+	ErrInvalidQoSPolicy = errors.Register(ModuleName, 2123, "invalid QoS policy")
+
+	// ErrInvalidHardwareClass is returned when a hardware class is invalid
+	ErrInvalidHardwareClass = errors.Register(ModuleName, 2124, "invalid hardware class")
+
+	// ErrInvalidSchedulingPolicy is returned when a scheduling policy is invalid
+	ErrInvalidSchedulingPolicy = errors.Register(ModuleName, 2125, "invalid scheduling policy")
+
+	// ErrInvalidHeartbeat is returned when a node heartbeat is invalid
+	ErrInvalidHeartbeat = errors.Register(ModuleName, 2126, "invalid node heartbeat")
+
+	// ErrStaleHeartbeat is returned when a heartbeat has an old sequence number
+	ErrStaleHeartbeat = errors.Register(ModuleName, 2127, "stale heartbeat sequence")
+
+	// ErrNodeDeregistered is returned when trying to update a deregistered node
+	ErrNodeDeregistered = errors.Register(ModuleName, 2128, "node is deregistered")
+
+	// ErrInvalidNodeIdentity is returned when a node identity is invalid
+	ErrInvalidNodeIdentity = errors.Register(ModuleName, 2129, "invalid node identity")
+
+	// ErrHeartbeatAuthFailed is returned when heartbeat authentication fails
+	ErrHeartbeatAuthFailed = errors.Register(ModuleName, 2130, "heartbeat authentication failed")
 )

@@ -49,6 +49,12 @@ var (
 	// ParamsKey is the key for module parameters
 	ParamsKey = []byte{0x10}
 
+	// ClusterTemplatePrefix is the prefix for cluster template storage
+	ClusterTemplatePrefix = []byte{0x11}
+
+	// NodeHeartbeatPrefix is the prefix for node heartbeat storage
+	NodeHeartbeatPrefix = []byte{0x12}
+
 	// SequenceKeyCluster is the sequence key for clusters
 	SequenceKeyCluster = []byte{0x20}
 
@@ -103,4 +109,14 @@ func GetHPCRewardKey(rewardID string) []byte {
 // GetDisputeKey returns the key for a dispute
 func GetDisputeKey(disputeID string) []byte {
 	return append(DisputePrefix, []byte(disputeID)...)
+}
+
+// GetClusterTemplateKey returns the key for a cluster template
+func GetClusterTemplateKey(templateID string) []byte {
+	return append(ClusterTemplatePrefix, []byte(templateID)...)
+}
+
+// GetNodeHeartbeatKey returns the key for a node heartbeat
+func GetNodeHeartbeatKey(nodeID string) []byte {
+	return append(NodeHeartbeatPrefix, []byte(nodeID)...)
 }
