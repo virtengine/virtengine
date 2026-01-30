@@ -9,17 +9,19 @@ defaults:
     shell: bash
 
 on:
-  # Only run on main/tags, not every PR (too heavy)
+  pull_request:
+    paths:
+      - "x/**"
+      - "pkg/**"
+      - "sdk/**"
+      - "app/**"
+      - "**.proto"
   push:
     branches:
       - main
       - mainnet/main
     tags:
       - v*
-  # For PRs, only run if proto files change
-  pull_request:
-    paths:
-      - "**.proto"
 
 jobs:
   # Run proto breaking change detection

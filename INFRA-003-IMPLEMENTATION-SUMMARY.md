@@ -4,8 +4,6 @@
 
 This document summarizes the implementation of CI/CD pipeline hardening for VirtEngine, addressing all acceptance criteria for enhanced security and quality gates.
 
-**Key Achievement**: Consolidated 15 workflows into a streamlined CI that reduces duplicate checks from ~10 per PR to ~6 required gates.
-
 ## Implementation Status
 
 | Requirement | Status | Implementation |
@@ -18,33 +16,6 @@ This document summarizes the implementation of CI/CD pipeline hardening for Virt
 | Integration test gates | ✅ Complete | Required integration tests in CI |
 | Security scanning in PR pipeline | ✅ Complete | Dedicated PR security check workflow |
 | Automated changelog generation | ✅ Complete | git-chglog with automated PR creation |
-
-## CI Pipeline Consolidation
-
-### Problem Solved: 8-10 Failing CI Pipelines
-
-**Root Cause Analysis:**
-1. `ci.yaml` and `tests.yaml` were DUPLICATES - both running lint, test, build on every PR
-2. `tests.yaml` used non-existent runners (`core-e2e`, `upgrade-tester`)
-3. Heavy jobs (sims, network-upgrade) ran on every PR unnecessarily
-4. `infrastructure.yml` used wrong extension (should be `.yaml`)
-5. `compatibility.yaml` ran on every PR touching x/, pkg/, sdk/, app/
-
-**Solution:**
-- **REMOVED** `tests.yaml` (duplicate of ci.yaml)
-- **CONSOLIDATED** all essential jobs into `ci.yaml`
-- **RENAMED** `infrastructure.yml` → `infrastructure.yaml`
-- **Made heavy jobs conditional** (sims, network-upgrade only on main/tags)
-- **Made optional tests non-blocking** (Python, Portal use `continue-on-error`)
-
-### Workflow Reduction
-
-| Before | After | Trigger |
-|--------|-------|---------|
-| ci.yaml + tests.yaml (duplicate) | ci.yaml only | PRs, main |
-| compatibility.yaml (all x/, pkg/) | compatibility.yaml (proto only on PR) | PRs (proto only) |
-| infrastructure.yml | infrastructure.yaml | infra/ changes only |
-| security.yaml (every PR) | security.yaml (main/schedule only) | main, daily |
 
 ## New Workflows Created
 
@@ -61,7 +32,7 @@ Comprehensive security scanning workflow that runs:
 - **gosec**: Go security linting
 - **SBOM generation**: Software Bill of Materials with Syft
 
-**Triggers**: Push to main only, daily schedule (2:00 AM UTC) - NOT on PRs (too heavy)
+**Triggers**: Push to main/develop, PRs, daily schedule (2:00 AM UTC)
 
 ### 2. `.github/workflows/license-compliance.yaml`
 
@@ -186,15 +157,11 @@ Enhanced with:
 | File | Action | Description |
 |------|--------|-------------|
 | `.github/dependabot.yml` | Created | Dependency update automation |
-| `.github/workflows/security.yaml` | Modified | Security scanning (main/schedule only) |
+| `.github/workflows/security.yaml` | Created | Security scanning workflow |
 | `.github/workflows/license-compliance.yaml` | Created | License checking workflow |
 | `.github/workflows/pr-security-check.yaml` | Created | PR security gates |
 | `.github/workflows/changelog.yaml` | Created | Changelog automation |
-| `.github/workflows/ci.yaml` | **Major Rewrite** | Consolidated from ci.yaml + tests.yaml |
-| `.github/workflows/tests.yaml` | **Deleted** | Duplicate of ci.yaml |
-| `.github/workflows/infrastructure.yml` | **Renamed** | → infrastructure.yaml |
-| `.github/workflows/compatibility.yaml` | Modified | Only run on proto changes for PRs |
-| `.github/workflows/standardize-yaml.yaml` | Modified | Only run on .yml file changes |
+| `.github/workflows/ci.yaml` | Modified | Added coverage/integration gates |
 | `codecov.yml` | Modified | Enhanced coverage enforcement |
 
 ## Configuration

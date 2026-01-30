@@ -1,9 +1,6 @@
 # INFRA-003: Comprehensive Security Scanning Workflow
 # Runs security analysis on code, dependencies, and containers
 #
-# NOTE: This runs on schedule and main branch pushes only.
-# For PR security checks, see pr-security-check.yaml (lighter weight)
-#
 # Features:
 #   - CodeQL SAST analysis for Go
 #   - Dependency vulnerability scanning (govulncheck, pip-audit, npm audit)
@@ -18,7 +15,12 @@ on:
   push:
     branches:
       - main
-      - mainnet/main
+      - develop
+      - "release/**"
+  pull_request:
+    branches:
+      - main
+      - develop
   schedule:
     # Run daily at 2:00 AM UTC for continuous security monitoring
     - cron: "0 2 * * *"
