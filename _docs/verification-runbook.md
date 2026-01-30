@@ -362,3 +362,293 @@ curl -s http://prometheus:9090/api/v1/status/runtimeinfo | jq .data.storageReten
 - [Verification Deployment Guide](verification-deployment.md)
 - [VEID Architecture Overview](veid-architecture.md)
 - [Security Incident Response Plan](security-incident-response.md)
+
+---
+
+## SMS Verification Operations
+
+### Overview
+
+The SMS verification service provides phone number verification for VEID identity attestations. It includes:
+
+- Primary/secondary SMS gateway failover (Twilio, AWS SNS)
+- OTP generation with secure hashing (SHA256)
+- VoIP detection and blocking
+- Velocity checks and anti-fraud controls
+- Signed attestations for on-chain storage
+
+### Architecture
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Client    │───▶│ SMS Service │───▶│  Primary    │
+│             │    │             │    │  Provider   │
+└─────────────┘    │             │    │  (Twilio)   │
+                   │             │    └──────┬──────┘
+                   │             │           │ failover
+                   │             │    ┌──────▼──────┐
+                   │             │───▶│  Secondary  │
+                   │             │    │  Provider   │
+                   │             │    │  (SNS)      │
+                   └──────┬──────┘    └─────────────┘
+                          │
+           ┌──────────────┼──────────────┐
+           ▼              ▼              ▼
+    ┌──────────┐   ┌──────────┐   ┌──────────┐
+    │  Redis   │   │  Signer  │   │  Auditor │
+    │  Cache   │   │  Service │   │          │
+    └──────────┘   └──────────┘   └──────────┘
+```
+
+### Configuration Reference
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `OTPLength` | 6 | Number of digits in OTP |
+| `OTPTTLSeconds` | 300 | OTP validity period (5 min) |
+| `MaxAttempts` | 3 | Max verification attempts |
+| `MaxResends` | 3 | Max OTP resends per session |
+| `ResendCooldownSeconds` | 60 | Cooldown between resends |
+| `EnableVoIPBlocking` | true | Block VoIP numbers |
+| `EnableVelocityChecks` | true | Enable rate limiting |
+| `MaxRequestsPerPhonePerHour` | 3 | Phone velocity limit |
+| `MaxRequestsPerIPPerHour` | 10 | IP velocity limit |
+| `MaxRequestsPerAccountPerDay` | 10 | Account daily limit |
+
+### SMS Gateway Health Checks
+
+```bash
+# Check primary provider (Twilio)
+curl -s http://sms-service:8080/api/v1/health | jq .
+
+# Check failover provider status
+curl -s http://sms-service:8080/api/v1/providers/status
+
+# Test SMS delivery (dry run)
+curl -X POST http://sms-service:8080/api/v1/test \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "+14155551234", "dry_run": true}'
+```
+
+### Monitoring Metrics
+
+Key Prometheus metrics for SMS verification:
+
+```promql
+# SMS delivery rate
+sum(rate(veid_sms_sent_total[5m])) by (provider, country_code)
+
+# Verification success rate
+sum(rate(veid_sms_otp_successful_total[5m])) / sum(rate(veid_sms_otp_attempts_total[5m]))
+
+# VoIP detection rate
+sum(rate(veid_sms_voip_detected_total[5m])) by (country_code)
+
+# Rate limit hits
+sum(rate(veid_sms_rate_limit_hit_total[5m])) by (type)
+
+# Provider failover rate
+sum(rate(veid_sms_provider_failover_total[5m]))
+
+# Attestation creation rate
+sum(rate(veid_sms_attestations_created_total[5m])) by (country_code)
+```
+
+### Alert Thresholds
+
+| Alert | Threshold | Severity |
+|-------|-----------|----------|
+| SMS Delivery Failure Rate | > 5% | P2 |
+| VoIP Detection Rate | > 20% | P3 |
+| Rate Limit Hit Rate | > 10% | P3 |
+| Provider Failover | Any | P3 |
+| Primary Provider Down | > 1 min | P2 |
+| Both Providers Down | Any | P1 |
+| Attestation Failure Rate | > 1% | P2 |
+
+### Incident Response: SMS Delivery Issues
+
+**Symptoms:**
+- High SMS delivery failure rate
+- Customer reports of OTPs not received
+- Provider error metrics spiking
+
+**Investigation:**
+```bash
+# Check delivery status by provider
+curl -s http://sms-service:9090/metrics | grep veid_sms_failed_total
+
+# Check provider-specific errors
+curl -s http://sms-service:8080/api/v1/delivery/status?status=failed&limit=100
+
+# Check country-specific issues
+curl -s http://sms-service:9090/metrics | grep veid_sms_sent_total | sort
+```
+
+**Resolution:**
+1. If Twilio errors: Check Twilio console, verify API keys
+2. If SNS errors: Check AWS console, verify IAM permissions
+3. If country-specific: Check carrier blocklists, regional routing
+4. If all providers: Check network connectivity, DNS resolution
+
+### Incident Response: VoIP Abuse Attack
+
+**Symptoms:**
+- Spike in VoIP detection metrics
+- Velocity limit hits increasing
+- Same IP/device requesting multiple verifications
+
+**Investigation:**
+```bash
+# Check VoIP detection breakdown
+curl -s http://sms-service:9090/metrics | grep veid_sms_voip_detected_total
+
+# Check velocity stats for suspicious IPs
+curl -s http://sms-service:8080/api/v1/antifraud/stats?type=ip
+
+# Check blocked phones
+curl -s http://sms-service:8080/api/v1/antifraud/blocked/phones?limit=50
+```
+
+**Mitigation:**
+```bash
+# Block suspicious IP range
+curl -X POST http://sms-service:8080/api/v1/antifraud/block/ip \
+  -H "Content-Type: application/json" \
+  -d '{"ip_range": "192.168.0.0/16", "reason": "abuse", "duration_hours": 24}'
+
+# Block phone number
+curl -X POST http://sms-service:8080/api/v1/antifraud/block/phone \
+  -H "Content-Type: application/json" \
+  -d '{"phone_hash": "<hash>", "reason": "abuse", "duration_hours": 168}'
+
+# Temporarily increase velocity limits (emergency only)
+# Update config and restart service
+```
+
+### Provider Failover Testing
+
+Monthly testing of failover capabilities:
+
+```bash
+# 1. Verify current provider status
+curl -s http://sms-service:8080/api/v1/providers/status
+
+# 2. Simulate primary failure
+kubectl set env deployment/sms-service -n virtengine-veid \
+  SMS_PRIMARY_PROVIDER_DISABLED=true
+
+# 3. Send test SMS
+curl -X POST http://sms-service:8080/api/v1/test \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "+14155551234"}'
+
+# 4. Verify secondary was used
+curl -s http://sms-service:9090/metrics | grep secondary_sent
+
+# 5. Re-enable primary
+kubectl set env deployment/sms-service -n virtengine-veid \
+  SMS_PRIMARY_PROVIDER_DISABLED-
+
+# 6. Verify primary is back
+curl -s http://sms-service:8080/api/v1/providers/status
+```
+
+### Regional Rate Limit Adjustments
+
+Some regions require different rate limits due to fraud patterns:
+
+| Region | Max/Phone/Hour | Max/Account/Day | VoIP Block | Risk Multiplier |
+|--------|----------------|-----------------|------------|-----------------|
+| US/CA | 5 | 15 | Yes | 1.0x |
+| GB | 5 | 15 | Yes | 1.0x |
+| IN | 3 | 8 | Yes | 1.2x |
+| PH | 2 | 5 | Yes | 1.3x |
+| NG | 2 | 5 | Yes | 1.5x |
+
+To update regional limits:
+
+```bash
+# Update config map
+kubectl edit configmap sms-service-config -n virtengine-veid
+
+# Restart to apply
+kubectl rollout restart deployment/sms-service -n virtengine-veid
+```
+
+### Anti-Fraud Manual Actions
+
+#### Block a Phone Number
+
+```bash
+curl -X POST http://sms-service:8080/api/v1/antifraud/block/phone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone_hash": "<sha256-hash>",
+    "reason": "fraud_confirmed",
+    "duration_hours": 8760
+  }'
+```
+
+#### Unblock a Phone Number
+
+```bash
+curl -X DELETE http://sms-service:8080/api/v1/antifraud/block/phone \
+  -H "Content-Type: application/json" \
+  -d '{"phone_hash": "<sha256-hash>"}'
+```
+
+#### Review Velocity Stats
+
+```bash
+# By phone hash
+curl -s http://sms-service:8080/api/v1/antifraud/velocity/phone/<hash>
+
+# By IP hash
+curl -s http://sms-service:8080/api/v1/antifraud/velocity/ip/<hash>
+
+# By account
+curl -s http://sms-service:8080/api/v1/antifraud/velocity/account/<address>
+```
+
+### Cache Maintenance
+
+```bash
+# Check Redis SMS cache stats
+redis-cli -h redis INFO keyspace | grep sms
+
+# Clear expired challenges (automatic, but can force)
+redis-cli -h redis SCAN 0 MATCH "sms:challenge:*" COUNT 1000
+
+# Check anti-fraud cache size
+redis-cli -h redis DBSIZE
+```
+
+### SMS Template Updates
+
+Templates are defined in code but can be overridden via config:
+
+```yaml
+# In ConfigMap
+sms_templates:
+  otp_verification:
+    en: "Your VirtEngine code is: {{otp}}. Valid for {{expires_in}}."
+    es: "Tu código de VirtEngine es: {{otp}}. Válido por {{expires_in}}."
+    # Add more locales...
+```
+
+Apply changes:
+```bash
+kubectl apply -f sms-templates-configmap.yaml
+kubectl rollout restart deployment/sms-service -n virtengine-veid
+```
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| OTP not received | Carrier filtering | Check carrier blocklist, try alternate sender ID |
+| High latency | Provider congestion | Check provider status page, consider failover |
+| VoIP false positives | Carrier lookup error | Review carrier patterns, whitelist valid carriers |
+| Rate limit errors | Velocity misconfiguration | Review and adjust regional limits |
+| Attestation failures | Signer unavailable | Check signer health, verify key rotation |
