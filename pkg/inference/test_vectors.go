@@ -588,3 +588,84 @@ func GetTestVectorByName(name string) (*TestVectorEntry, bool) {
 	}
 	return nil, false
 }
+
+// ============================================================================
+// Sidecar Test Vector Support
+// ============================================================================
+
+// SidecarTestVector represents a test vector for sidecar determinism testing.
+type SidecarTestVector struct {
+	// ID is the unique identifier for this test vector
+	ID string
+
+	// Features is the complete feature vector
+	Features []float32
+
+	// ExpectedOutputHash is the expected hash of the output
+	ExpectedOutputHash string
+}
+
+// GetTestVector returns a sidecar test vector by ID.
+func GetTestVector(id string) *SidecarTestVector {
+	vec, ok := GetTestVectorByName(id)
+	if !ok {
+		return nil
+	}
+
+	// Build full feature vector from test vector input
+	features := buildFullFeatureVector(vec.Input)
+
+	return &SidecarTestVector{
+		ID:                 vec.Name,
+		Features:           features,
+		ExpectedOutputHash: "", // Will be computed at runtime first time
+	}
+}
+
+// GetDefaultTestVector returns the default test vector for determinism checks.
+func GetDefaultTestVector() *SidecarTestVector {
+	return GetTestVector("high_quality_verification")
+}
+
+// buildFullFeatureVector constructs a complete feature vector from test input.
+func buildFullFeatureVector(input TestVectorInput) []float32 {
+	features := make([]float32, TotalFeatureDim)
+
+	// Copy face embedding (pad to FaceEmbeddingDim if needed)
+	faceLen := len(input.FaceEmbedding)
+	if faceLen > FaceEmbeddingDim {
+		faceLen = FaceEmbeddingDim
+	}
+	copy(features[:faceLen], input.FaceEmbedding[:faceLen])
+
+	// Add document quality features
+	offset := FaceEmbeddingDim
+	features[offset] = input.DocQualityFeatures.Sharpness
+	features[offset+1] = input.DocQualityFeatures.Brightness
+	features[offset+2] = input.DocQualityFeatures.Contrast
+	features[offset+3] = input.DocQualityFeatures.NoiseLevel
+	features[offset+4] = input.DocQualityFeatures.BlurScore
+
+	// Add OCR features
+	offset += DocQualityDim
+	for i, field := range OCRFieldNames {
+		if i >= 5 {
+			break
+		}
+		features[offset+i*2] = input.OCRConfidences[field]
+		if input.OCRFieldValidation[field] {
+			features[offset+i*2+1] = 1.0
+		} else {
+			features[offset+i*2+1] = 0.0
+		}
+	}
+
+	// Add metadata features
+	offset += OCRFieldsDim
+	features[offset] = input.FaceConfidence
+	features[offset+1] = input.DocQualityScore
+	features[offset+2] = float32(input.ScopeCount)
+	// Remaining metadata features are zeros (padding)
+
+	return features
+}
