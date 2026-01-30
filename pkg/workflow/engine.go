@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // Engine manages workflow execution with persistence and recovery
@@ -88,7 +90,9 @@ func NewEngine(ctx context.Context, config EngineConfig, logger zerolog.Logger) 
 	}
 
 	if config.RecoveryOnStart {
-		go e.runRecovery(ctx)
+		verrors.SafeGo("workflow:recovery", func() {
+			e.runRecovery(ctx)
+		})
 	} else {
 		close(e.recoveryDone)
 	}
@@ -390,12 +394,12 @@ func (e *Engine) Stop(ctx context.Context) error {
 	}
 	e.mu.Unlock()
 
-	// Wait for all workflows to complete
+	// Wait for all workflows to complete with panic recovery
 	done := make(chan struct{})
-	go func() {
+	verrors.SafeGo("workflow:shutdown-wait", func() {
 		e.wg.Wait()
 		close(done)
-	}()
+	})
 
 	select {
 	case <-done:
@@ -615,14 +619,14 @@ func (e *Engine) executeStepWithRetry(ctx context.Context, step WorkflowStep, da
 		resultCh := make(chan interface{}, 1)
 		errCh := make(chan error, 1)
 
-		go func() {
+		verrors.SafeGoWithError("workflow:step-execute", errCh, func() error {
 			result, err := step.Execute(stepCtx, data)
 			if err != nil {
-				errCh <- err
-			} else {
-				resultCh <- result
+				return err
 			}
-		}()
+			resultCh <- result
+			return nil
+		})
 
 		select {
 		case result := <-resultCh:

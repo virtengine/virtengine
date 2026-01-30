@@ -8,16 +8,20 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
-// ErrMeteringNotStarted is returned when metering is not started
-var ErrMeteringNotStarted = errors.New("metering not started")
+// Sentinel errors for metering
+var (
+	// ErrMeteringNotStarted is returned when metering is not started
+	ErrMeteringNotStarted = verrors.ErrInvalidState
 
-// ErrWorkloadNotMetered is returned when a workload is not being metered
-var ErrWorkloadNotMetered = errors.New("workload not metered")
+	// ErrWorkloadNotMetered is returned when a workload is not being metered
+	ErrWorkloadNotMetered = verrors.ErrNotFound
+)
 
 // MeteringInterval represents the metering interval
 type MeteringInterval time.Duration
@@ -276,7 +280,10 @@ func (um *UsageMeter) Start(ctx context.Context) error {
 	um.mu.Unlock()
 
 	um.wg.Add(1)
-	go um.meteringLoop(ctx)
+	verrors.SafeGo("provider-daemon:usage-meter", func() {
+		defer um.wg.Done()
+		um.meteringLoop(ctx)
+	})
 
 	return nil
 }

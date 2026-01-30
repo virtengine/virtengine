@@ -5,26 +5,30 @@ package provider_daemon
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
-// ErrBidEngineNotRunning is returned when the bid engine is not running
-var ErrBidEngineNotRunning = errors.New("bid engine is not running")
+// Sentinel errors for bid engine
+var (
+	// ErrBidEngineNotRunning is returned when the bid engine is not running
+	ErrBidEngineNotRunning = verrors.ErrInternal
 
-// ErrBidRateLimited is returned when bidding is rate limited
-var ErrBidRateLimited = errors.New("bid rate limited")
+	// ErrBidRateLimited is returned when bidding is rate limited
+	ErrBidRateLimited = verrors.ErrRateLimitExceeded
 
-// ErrOrderNotMatchable is returned when an order doesn't match provider capabilities
-var ErrOrderNotMatchable = errors.New("order does not match provider capabilities")
+	// ErrOrderNotMatchable is returned when an order doesn't match provider capabilities
+	ErrOrderNotMatchable = verrors.ErrInvalidInput
 
-// ErrInvalidPrice is returned when a calculated price is invalid
-var ErrInvalidPrice = errors.New("invalid bid price")
+	// ErrInvalidPrice is returned when a calculated price is invalid
+	ErrInvalidPrice = verrors.ErrInvalidInput
+)
 
 // BidEngineConfig configures the bid engine
 type BidEngineConfig struct {
@@ -378,11 +382,20 @@ func (be *BidEngine) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to load provider config: %w", err)
 	}
 
-	// Start workers
+	// Start workers with panic recovery
 	be.wg.Add(3)
-	go be.configWatcher()
-	go be.orderWatcher()
-	go be.bidWorker()
+	verrors.SafeGo("provider-daemon:config-watcher", func() {
+		defer be.wg.Done()
+		be.configWatcher()
+	})
+	verrors.SafeGo("provider-daemon:order-watcher", func() {
+		defer be.wg.Done()
+		be.orderWatcher()
+	})
+	verrors.SafeGo("provider-daemon:bid-worker", func() {
+		defer be.wg.Done()
+		be.bidWorker()
+	})
 
 	return nil
 }
@@ -440,8 +453,6 @@ func (be *BidEngine) refreshConfig() error {
 
 // configWatcher watches for config updates
 func (be *BidEngine) configWatcher() {
-	defer be.wg.Done()
-
 	ticker := time.NewTicker(be.config.ConfigPollInterval)
 	defer ticker.Stop()
 
@@ -460,8 +471,6 @@ func (be *BidEngine) configWatcher() {
 
 // orderWatcher watches for new orders
 func (be *BidEngine) orderWatcher() {
-	defer be.wg.Done()
-
 	ticker := time.NewTicker(be.config.OrderPollInterval)
 	defer ticker.Stop()
 
@@ -554,8 +563,6 @@ func (be *BidEngine) matchOrder(order Order, config *ProviderConfig) bool {
 
 // bidWorker processes orders and places bids
 func (be *BidEngine) bidWorker() {
-	defer be.wg.Done()
-
 	for {
 		select {
 		case <-be.ctx.Done():
@@ -589,7 +596,7 @@ func (be *BidEngine) processBid(order Order) BidResult {
 	be.configMu.RUnlock()
 
 	if config == nil {
-		result.Error = errors.New("provider config not loaded")
+		result.Error = verrors.NewInternalError("provider_daemon", 160, "bid_engine", "provider config not loaded")
 		return result
 	}
 

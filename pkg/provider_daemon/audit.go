@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,19 +15,24 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
-// ErrAccessDenied is returned when access is denied
-var ErrAccessDenied = errors.New("access denied")
+// Sentinel errors for audit and access control
+var (
+	// ErrAccessDenied is returned when access is denied
+	ErrAccessDenied = verrors.ErrUnauthorized
 
-// ErrInvalidCredentials is returned for invalid credentials
-var ErrInvalidCredentials = errors.New("invalid credentials")
+	// ErrInvalidCredentials is returned for invalid credentials
+	ErrInvalidCredentials = verrors.ErrUnauthorized
 
-// ErrSessionExpired is returned when a session has expired
-var ErrSessionExpired = errors.New("session expired")
+	// ErrSessionExpired is returned when a session has expired
+	ErrSessionExpired = verrors.ErrExpired
 
-// ErrInsufficientPermissions is returned for insufficient permissions
-var ErrInsufficientPermissions = errors.New("insufficient permissions")
+	// ErrInsufficientPermissions is returned for insufficient permissions
+	ErrInsufficientPermissions = verrors.ErrForbidden
+)
 
 // Permission represents a key management permission
 type Permission string
@@ -692,9 +696,11 @@ func (l *AuditLogger) Log(event *AuditEvent) error {
 		}
 	}
 
-	// Send to remote endpoint if configured
+	// Send to remote endpoint if configured with panic recovery
 	if l.config.RemoteEndpoint != "" {
-		go l.sendToRemote(event)
+		verrors.SafeGo("provider-daemon:audit-remote", func() {
+			l.sendToRemote(event)
+		})
 	}
 
 	return nil
