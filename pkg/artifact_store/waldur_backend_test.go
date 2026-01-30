@@ -10,13 +10,19 @@ import (
 func TestWaldurBackend(t *testing.T) {
 	ctx := context.Background()
 
+	// Helper to create a test config with fallback memory enabled
+	testConfig := func() *WaldurConfig {
+		config := DefaultWaldurConfig()
+		config.UseFallbackMemory = true
+		config.Organization = "test-org"
+		config.Project = "test-proj"
+		config.Bucket = "test-bucket"
+		return config
+	}
+
 	t.Run("NewWaldurBackend", func(t *testing.T) {
-		config := &WaldurConfig{
-			Endpoint:     "http://localhost:8080",
-			Organization: "org1",
-			Project:      "proj1",
-			Bucket:       "bucket1",
-		}
+		config := testConfig()
+		config.Endpoint = "http://localhost:8080"
 
 		backend, err := NewWaldurBackend(config)
 		if err != nil {
@@ -29,7 +35,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("Put_Get_Exists", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		data := []byte("encrypted artifact data")
 		req := &PutRequest{
@@ -82,7 +88,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("Get_NotFound", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		hash := sha256.Sum256([]byte("nonexistent"))
 		addr := &ContentAddress{
@@ -100,7 +106,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		data := []byte("to be deleted")
 		req := &PutRequest{
@@ -133,7 +139,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("Delete_Unauthorized", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		data := []byte("protected data")
 		req := &PutRequest{
@@ -160,7 +166,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("ListByOwner", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		owner := "cosmos1listowner"
 
@@ -195,7 +201,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("UpdateRetention", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		data := []byte("data with retention")
 		req := &PutRequest{
@@ -222,7 +228,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("PurgeExpired", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		// Put artifact with past expiration
 		tag := NewRetentionTag("policy-1", "cosmos1purge", true)
@@ -261,7 +267,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("GetMetrics", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		// Put some data
 		for i := 0; i < 5; i++ {
@@ -297,7 +303,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("Health", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		err := backend.Health(ctx)
 		if err != nil {
@@ -306,7 +312,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("GetChunk_NotSupported", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		hash := sha256.Sum256([]byte("test"))
 		addr := &ContentAddress{
@@ -324,7 +330,7 @@ func TestWaldurBackend(t *testing.T) {
 	})
 
 	t.Run("RetentionExpired_GetBlocked", func(t *testing.T) {
-		backend, _ := NewWaldurBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurBackend(testConfig())
 
 		// Put artifact with past expiration
 		tag := NewRetentionTag("policy-1", "cosmos1expired", false) // Not auto-delete
@@ -359,8 +365,18 @@ func TestWaldurBackend(t *testing.T) {
 func TestWaldurStreamingBackend(t *testing.T) {
 	ctx := context.Background()
 
+	// Helper to create a test config with fallback memory enabled
+	testStreamConfig := func() *WaldurConfig {
+		config := DefaultWaldurConfig()
+		config.UseFallbackMemory = true
+		config.Organization = "test-org"
+		config.Project = "test-proj"
+		config.Bucket = "test-bucket"
+		return config
+	}
+
 	t.Run("PutStream_GetStream", func(t *testing.T) {
-		backend, _ := NewWaldurStreamingBackend(DefaultWaldurConfig())
+		backend, _ := NewWaldurStreamingBackend(testStreamConfig())
 
 		data := []byte("streaming test data")
 		reader := &bytesReadCloser{data: data}
