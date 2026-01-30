@@ -1,181 +1,144 @@
-# VirtEngine On-Call Runbooks
+# VirtEngine Operator Runbooks
 
-This directory contains operational runbooks for VirtEngine on-call engineers. Each runbook provides step-by-step procedures for handling common alerts and incidents.
+**Version:** 1.0.0  
+**Last Updated:** 2026-01-30  
+**Owner:** SRE Team
+
+---
+
+## Overview
+
+This directory contains comprehensive operational runbooks for VirtEngine production environments. These runbooks are designed for operators, SREs, and on-call engineers responsible for maintaining VirtEngine infrastructure.
+
+## Runbook Index
+
+### Setup and Maintenance
+
+| Runbook | Description | Audience |
+|---------|-------------|----------|
+| [Validator Setup](VALIDATOR_SETUP.md) | Complete validator node setup and maintenance | Validators |
+| [Provider Operations](PROVIDER_OPERATIONS.md) | Provider daemon setup and daily operations | Providers |
+| [Performance Tuning](PERFORMANCE_TUNING.md) | System optimization and tuning guidelines | SRE/Operators |
+
+### Incident Response
+
+| Runbook | Description | Audience |
+|---------|-------------|----------|
+| [Incident Response](INCIDENT_RESPONSE.md) | Incident classification and response procedures | On-call |
+| [Troubleshooting Guide](TROUBLESHOOTING.md) | Common issues and resolution steps | On-call/SRE |
+| [On-Call Quick Reference](../ON_CALL_RUNBOOK.md) | Quick reference for on-call engineers | On-call |
+| [On-Call Rotation](../../sre/ON_CALL_ROTATION.md) | Full on-call rotation setup and management | SRE/Management |
+
+### Disaster Recovery
+
+| Runbook | Description | Audience |
+|---------|-------------|----------|
+| [Disaster Recovery](DISASTER_RECOVERY.md) | DR procedures for various failure scenarios | SRE/Management |
+| [Backup and Restore](BACKUP_RESTORE.md) | Backup strategies and restoration procedures | SRE/Operators |
+| [Upgrade Procedures](UPGRADE_PROCEDURES.md) | Chain upgrades, hotfixes, and rollbacks | SRE/Validators |
 
 ## Quick Reference
 
-| Alert | Severity | Runbook | Owner |
-|-------|----------|---------|-------|
-| NodeDown | Critical | [node-down.md](node-down.md) | Platform Team |
-| BlockProductionStalled | Critical | [block-stalled.md](block-stalled.md) | Platform Team |
-| LowValidatorCount | Critical | [low-validators.md](low-validators.md) | Platform Team |
-| VEIDInferenceNonDeterministic | Critical | [veid-non-deterministic.md](veid-non-deterministic.md) | ML Team |
-| HighErrorRate | Warning | [high-error-rate.md](high-error-rate.md) | Platform Team |
-| SLOBudgetBurning | Warning | [slo-budget-burning.md](slo-budget-burning.md) | SRE Team |
-| ProviderDeploymentFailures | Warning | [provider-deployment.md](provider-deployment.md) | Provider Team |
+### Severity Levels
 
-## On-Call Responsibilities
+| Level | Definition | Response Time | Escalation |
+|-------|------------|---------------|------------|
+| **SEV-1** | Complete service outage | 5 minutes | Immediate page |
+| **SEV-2** | Major feature unavailable | 15 minutes | Page primary |
+| **SEV-3** | Degraded performance | 1 hour | Slack notification |
+| **SEV-4** | Minor issue | 24 hours | Ticket queue |
 
-### Primary On-Call
-- Respond to pages within 15 minutes
-- Acknowledge all alerts in PagerDuty/Slack
-- Follow runbook procedures
-- Escalate as needed
-- Document incident timeline
+### Emergency Contacts
 
-### Secondary On-Call
-- Backup for primary
-- Available for escalation
-- Shadow for training
+| Role | Contact | Availability |
+|------|---------|--------------|
+| Primary On-Call | PagerDuty | 24/7 |
+| Secondary On-Call | PagerDuty escalation | 24/7 |
+| Security Team | security@virtengine.com | 24/7 |
+| Infrastructure Lead | Slack: #sre-escalation | Business hours |
 
-## Escalation Path
+### Critical Commands
 
-1. **L1 - Primary On-Call**: First responder, follows runbooks
-2. **L2 - Secondary On-Call**: Complex issues requiring additional expertise
-3. **L3 - Team Lead/Manager**: Policy decisions, customer communication
-4. **L4 - Executive**: Major outages, external communication
-
-## Contact Information
-
-| Role | Primary | Secondary |
-|------|---------|-----------|
-| Platform On-Call | @platform-oncall | [PagerDuty Schedule] |
-| ML Team | @ml-team | [Slack: #ml-alerts] |
-| SRE Team | @sre-team | [Slack: #sre-alerts] |
-| Security | @security-team | [security@virtengine.io] |
-
-## Before You Start
-
-1. Ensure you have access to:
-   - Grafana dashboards
-   - Prometheus/Alertmanager
-   - SSH access to nodes
-   - Kubectl/infrastructure access
-   - Log aggregation (Loki)
-   - Tracing (Tempo)
-
-2. Bookmark these dashboards:
-   - [Chain Health](http://grafana:3000/d/chain-health)
-   - [SLO Overview](http://grafana:3000/d/slo-overview)
-   - [VEID Dashboard](http://grafana:3000/d/veid)
-   - [Provider Dashboard](http://grafana:3000/d/provider)
-
-## Incident Response Process
-
-### 1. Acknowledge
-- Acknowledge the alert within 15 minutes
-- Post in #incidents channel with initial assessment
-
-### 2. Assess
-- Determine scope and impact
-- Identify affected services
-- Check for related alerts
-
-### 3. Mitigate
-- Follow runbook procedures
-- Prioritize service restoration
-- Document actions taken
-
-### 4. Communicate
-- Update status page (if customer-facing)
-- Notify stakeholders
-- Regular updates every 30 minutes
-
-### 5. Resolve
-- Verify service restoration
-- Close alert/incident
-- Schedule postmortem if needed
-
-## Common Commands
-
-### Check Node Status
 ```bash
-# SSH to node
-ssh user@virtengine-node
+# Check chain status
+virtengine status
 
-# Check service status
-systemctl status virtengined
+# Check node sync
+curl -s http://localhost:26657/status | jq '.result.sync_info'
 
-# Check recent logs
-journalctl -u virtengined -n 100
+# Check validator status
+virtengine query staking validators --status bonded | head -50
 
-# Check block height
-virtengined status | jq '.SyncInfo.latest_block_height'
+# Check provider daemon health
+curl -s http://localhost:8443/health
+
+# Emergency: Stop validator
+sudo systemctl stop virtengine
+
+# Emergency: Pause provider
+virtengine tx provider set-status --status PAUSED --from provider
 ```
 
-### Check Validator Status
-```bash
-# List validators
-virtengined q staking validators
+### Critical Dashboards
 
-# Check validator signing info
-virtengined q slashing signing-info $(virtengined tendermint show-validator)
-```
+| Dashboard | URL |
+|-----------|-----|
+| Chain Health | https://grafana.virtengine.com/d/chain-health |
+| VEID Scoring | https://grafana.virtengine.com/d/veid-scoring |
+| Marketplace | https://grafana.virtengine.com/d/marketplace |
+| Provider Health | https://grafana.virtengine.com/d/provider-health |
+| Error Budget | https://grafana.virtengine.com/d/error-budget |
 
-### Provider Daemon Commands
-```bash
-# Check provider status
-provider-daemon status
+## Using These Runbooks
 
-# List active deployments
-provider-daemon list deployments
+### During an Incident
 
-# Check bid engine
-provider-daemon bid-engine status
-```
+1. **Identify severity** using the severity matrix
+2. **Find the relevant runbook** in the index above
+3. **Follow the diagnosis and resolution steps** in order
+4. **Escalate** if unable to resolve within expected timeframe
+5. **Document actions** in the incident channel
 
-### Kubernetes Commands
-```bash
-# List pods
-kubectl get pods -n virtengine
+### For Planned Maintenance
 
-# Check pod logs
-kubectl logs -n virtengine <pod-name>
+1. **Review the upgrade or maintenance runbook** at least 24 hours ahead
+2. **Create a change ticket** with planned steps
+3. **Schedule a maintenance window** and notify stakeholders
+4. **Execute the runbook** following each step
+5. **Verify success** using validation commands
+6. **Document any deviations** from the planned procedure
 
-# Describe pod
-kubectl describe pod -n virtengine <pod-name>
+### For Training
 
-# Restart deployment
-kubectl rollout restart deployment -n virtengine <deployment-name>
-```
+1. Use runbooks as training material for new team members
+2. Conduct quarterly incident drills using these runbooks
+3. Review and update runbooks after each incident
 
-## Useful Queries
+## Runbook Maintenance
 
-### Prometheus
+### Update Schedule
 
-```promql
-# Error rate by service
-sum(rate(virtengine_errors_total[5m])) by (service)
+- **Weekly**: Review for accuracy after incidents
+- **Monthly**: Full review of all runbooks
+- **Quarterly**: Major version update and stakeholder review
 
-# P95 latency
-histogram_quantile(0.95, sum(rate(virtengine_api_request_duration_seconds_bucket[5m])) by (le))
+### Contributing
 
-# Error budget consumption
-1 - (sum(rate(virtengine_api_requests_total{status!~"5.."}[28d])) / sum(rate(virtengine_api_requests_total[28d])))
-```
+To update a runbook:
 
-### Loki
+1. Create a branch with your changes
+2. Test procedures in staging environment
+3. Get peer review from another SRE
+4. Update version number and date
+5. Merge and announce changes in #sre channel
 
-```logql
-# Errors in last hour
-{service="virtengine-node"} |= "ERROR" | json | line_format "{{.msg}}"
+### Version History
 
-# Trace correlation
-{service="virtengine-node"} | json | trace_id != ""
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0.0 | 2026-01-30 | SRE Team | Initial release |
 
-# Slow queries
-{service="virtengine-node"} |= "slow_query" | json | duration > 5s
-```
+---
 
-## Index
-
-- [node-down.md](node-down.md) - Node is unresponsive
-- [block-stalled.md](block-stalled.md) - Block production stopped
-- [low-validators.md](low-validators.md) - Insufficient validators
-- [veid-non-deterministic.md](veid-non-deterministic.md) - ML inference mismatch
-- [high-error-rate.md](high-error-rate.md) - Elevated error rates
-- [slo-budget-burning.md](slo-budget-burning.md) - SLO budget depletion
-- [provider-deployment.md](provider-deployment.md) - Deployment failures
-- [consensus-failure.md](consensus-failure.md) - Consensus issues
-- [network-partition.md](network-partition.md) - P2P network issues
-- [database-issues.md](database-issues.md) - State database problems
+**Document Owner:** SRE Team  
+**Next Review:** 2026-04-30
