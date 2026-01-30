@@ -47,6 +47,7 @@ function getOfferingTypeConfig(type: string): { label: string; color: string; bg
 
 /**
  * Offering card component
+ * A11Y: When onSelect is provided, uses button role with proper keyboard support
  */
 export function OfferingCard({
   offering,
@@ -62,63 +63,87 @@ export function OfferingCard({
     }
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (onSelect && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      onSelect(offering);
+    }
+  };
+
+  const cardId = `offering-${offering.name.replace(/\s+/g, '-').toLowerCase()}`;
+  const titleId = `${cardId}-title`;
+  const descId = `${cardId}-desc`;
+  const priceId = `${cardId}-price`;
+
+  // Accessibility status text
+  const availabilityText = 
+    offering.availability === 'available' ? 'Available' :
+    offering.availability === 'limited' ? 'Limited availability' : 'Unavailable';
+
   return (
     <div
       className={`offering-card ${isSelected ? 'offering-card--selected' : ''} ${className}`}
       onClick={handleClick}
-      role={onSelect ? 'button' : undefined}
+      onKeyDown={handleKeyDown}
+      role={onSelect ? 'button' : 'article'}
       tabIndex={onSelect ? 0 : undefined}
+      aria-pressed={onSelect ? isSelected : undefined}
+      aria-labelledby={titleId}
+      aria-describedby={`${descId} ${priceId}`}
     >
       {/* Header */}
       <div className="offering-card__header">
         <span
           className="offering-card__type"
           style={{ color: typeConfig.color, backgroundColor: typeConfig.bg }}
+          aria-label={`Type: ${typeConfig.label}`}
         >
           {typeConfig.label}
         </span>
         {offering.teeEnabled && (
-          <span className="offering-card__tee">🔒 TEE</span>
+          <span className="offering-card__tee" aria-label="Trusted Execution Environment enabled">
+            <span aria-hidden="true">🔒</span> TEE
+          </span>
         )}
       </div>
 
       {/* Title & Provider */}
-      <h3 className="offering-card__title">{offering.name}</h3>
+      <h3 className="offering-card__title" id={titleId}>{offering.name}</h3>
       <p className="offering-card__provider">by {offering.providerName}</p>
 
       {/* Description */}
-      <p className="offering-card__description">{offering.description}</p>
+      <p className="offering-card__description" id={descId}>{offering.description}</p>
 
       {/* Specs */}
-      <div className="offering-card__specs">
+      <dl className="offering-card__specs" aria-label="Specifications">
         {offering.specs.cpu && (
           <div className="offering-card__spec">
-            <span className="offering-card__spec-label">CPU</span>
-            <span className="offering-card__spec-value">{offering.specs.cpu} cores</span>
+            <dt className="offering-card__spec-label">CPU</dt>
+            <dd className="offering-card__spec-value">{offering.specs.cpu} cores</dd>
           </div>
         )}
         {offering.specs.memory && (
           <div className="offering-card__spec">
-            <span className="offering-card__spec-label">Memory</span>
-            <span className="offering-card__spec-value">{offering.specs.memory}</span>
+            <dt className="offering-card__spec-label">Memory</dt>
+            <dd className="offering-card__spec-value">{offering.specs.memory}</dd>
           </div>
         )}
         {offering.specs.storage && (
           <div className="offering-card__spec">
-            <span className="offering-card__spec-label">Storage</span>
-            <span className="offering-card__spec-value">{offering.specs.storage}</span>
+            <dt className="offering-card__spec-label">Storage</dt>
+            <dd className="offering-card__spec-value">{offering.specs.storage}</dd>
           </div>
         )}
         {offering.specs.gpu && (
           <div className="offering-card__spec">
-            <span className="offering-card__spec-label">GPU</span>
-            <span className="offering-card__spec-value">{offering.specs.gpu}</span>
+            <dt className="offering-card__spec-label">GPU</dt>
+            <dd className="offering-card__spec-value">{offering.specs.gpu}</dd>
           </div>
         )}
-      </div>
+      </dl>
 
       {/* Price */}
-      <div className="offering-card__price">
+      <div className="offering-card__price" id={priceId}>
         <span className="offering-card__price-amount">
           {formatTokenAmount(offering.pricePerHour, 6, 'VE')}
         </span>
@@ -129,13 +154,18 @@ export function OfferingCard({
       <div className="offering-card__availability">
         <span
           className={`offering-card__status offering-card__status--${offering.availability}`}
+          role="status"
+          aria-label={availabilityText}
         >
-          {offering.availability === 'available' ? '● Available' :
-           offering.availability === 'limited' ? '◐ Limited' : '○ Unavailable'}
+          <span aria-hidden="true">
+            {offering.availability === 'available' ? '●' :
+             offering.availability === 'limited' ? '◐' : '○'}
+          </span>
+          {' '}{availabilityText}
         </span>
         {offering.regions && (
-          <span className="offering-card__regions">
-            📍 {offering.regions.join(', ')}
+          <span className="offering-card__regions" aria-label={`Regions: ${offering.regions.join(', ')}`}>
+            <span aria-hidden="true">📍</span> {offering.regions.join(', ')}
           </span>
         )}
       </div>
@@ -161,10 +191,26 @@ const cardStyles = `
     transform: translateY(-2px);
   }
 
+  .offering-card:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    border-color: #3b82f6;
+  }
+
   .offering-card--selected {
     border-color: #3b82f6;
     background: #f8fafc;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .offering-card {
+      transition: none;
+    }
+    .offering-card:hover {
+      transform: none;
+    }
   }
 
   .offering-card__header {

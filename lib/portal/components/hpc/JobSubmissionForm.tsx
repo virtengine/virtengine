@@ -336,47 +336,63 @@ function ConfigurationForm({
   error,
 }: ConfigurationFormProps): JSX.Element {
   return (
-    <div className="job-form__config">
-      <h3 className="job-form__title">Configure {template.name}</h3>
+    <div className="job-form__config" role="form" aria-label={`Configure ${template.name} job`}>
+      <h3 className="job-form__title" id="config-title">Configure {template.name}</h3>
 
       <div className="job-form__field">
-        <label className="job-form__label">Job Name</label>
+        <label htmlFor="job-name" className="job-form__label">
+          Job Name <span aria-hidden="true">*</span>
+        </label>
         <input
+          id="job-name"
           type="text"
           className="job-form__input"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="Enter job name"
+          aria-required="true"
+          aria-describedby={error && !name ? 'job-name-error' : undefined}
         />
       </div>
 
       <div className="job-form__field-row">
         <div className="job-form__field">
-          <label className="job-form__label">CPU Cores</label>
+          <label htmlFor="cpu-cores" className="job-form__label">CPU Cores</label>
           <input
+            id="cpu-cores"
             type="number"
             className="job-form__input"
             value={cpu}
             onChange={(e) => onCpuChange(parseInt(e.target.value, 10))}
             min={template.defaultResources.cpu}
+            aria-describedby="cpu-hint"
           />
+          <span id="cpu-hint" className="job-form__hint">
+            Minimum: {template.defaultResources.cpu}
+          </span>
         </div>
         <div className="job-form__field">
-          <label className="job-form__label">Memory (GB)</label>
+          <label htmlFor="memory" className="job-form__label">Memory (GB)</label>
           <input
+            id="memory"
             type="number"
             className="job-form__input"
             value={memory}
             onChange={(e) => onMemoryChange(parseInt(e.target.value, 10))}
             min={template.defaultResources.memory}
+            aria-describedby="memory-hint"
           />
+          <span id="memory-hint" className="job-form__hint">
+            Minimum: {template.defaultResources.memory} GB
+          </span>
         </div>
       </div>
 
       <div className="job-form__field-row">
         <div className="job-form__field">
-          <label className="job-form__label">GPU Count</label>
+          <label htmlFor="gpu-count" className="job-form__label">GPU Count</label>
           <input
+            id="gpu-count"
             type="number"
             className="job-form__input"
             value={gpu}
@@ -385,8 +401,9 @@ function ConfigurationForm({
           />
         </div>
         <div className="job-form__field">
-          <label className="job-form__label">Max Duration</label>
+          <label htmlFor="max-duration" className="job-form__label">Max Duration</label>
           <select
+            id="max-duration"
             className="job-form__select"
             value={duration}
             onChange={(e) => onDurationChange(parseInt(e.target.value, 10))}
@@ -403,34 +420,54 @@ function ConfigurationForm({
 
       {template.supportsTee && (
         <div className="job-form__field">
-          <label className="job-form__checkbox-label">
+          <div className="job-form__checkbox-label">
             <input
+              id="require-tee"
               type="checkbox"
               checked={requiresTee}
               onChange={(e) => onRequiresTeeChange(e.target.checked)}
+              aria-describedby="tee-description"
             />
-            <span>Require TEE (Trusted Execution Environment)</span>
-          </label>
+            <label htmlFor="require-tee">
+              Require TEE (Trusted Execution Environment)
+            </label>
+          </div>
+          <span id="tee-description" className="job-form__hint">
+            Enables confidential computing for sensitive workloads
+          </span>
         </div>
       )}
 
       <div className="job-form__field">
-        <label className="job-form__label">Encrypted Inputs (JSON, optional)</label>
+        <label htmlFor="encrypted-inputs" className="job-form__label">
+          Encrypted Inputs (JSON, optional)
+        </label>
         <textarea
+          id="encrypted-inputs"
           className="job-form__textarea"
           value={encryptedInputs}
           onChange={(e) => onEncryptedInputsChange(e.target.value)}
           placeholder='{"key": "encrypted_value"}'
           rows={4}
+          aria-describedby="inputs-hint"
         />
+        <span id="inputs-hint" className="job-form__hint">
+          Optional JSON object with encrypted input parameters
+        </span>
       </div>
 
-      {error && <p className="job-form__error">{error}</p>}
+      {error && (
+        <p id="job-name-error" className="job-form__error" role="alert" aria-live="assertive">
+          <span aria-hidden="true">⚠ </span>
+          {error}
+        </p>
+      )}
 
       <div className="job-form__buttons">
         <button
           className="job-form__button job-form__button--secondary"
           onClick={onBack}
+          type="button"
         >
           Back
         </button>
@@ -438,8 +475,11 @@ function ConfigurationForm({
           className="job-form__button job-form__button--primary"
           onClick={onContinue}
           disabled={!name || isLoading}
+          aria-busy={isLoading}
+          type="button"
         >
           {isLoading ? 'Getting Quote...' : 'Continue'}
+          {isLoading && <span className="sr-only">Please wait</span>}
         </button>
       </div>
     </div>
@@ -648,14 +688,22 @@ const formStyles = `
     margin-bottom: 4px;
   }
 
+  .job-form__hint {
+    display: block;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 4px;
+  }
+
   .job-form__input,
   .job-form__select,
   .job-form__textarea {
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid #e5e7eb;
+    border: 2px solid #d1d5db;
     border-radius: 6px;
     font-size: 0.875rem;
+    min-height: 44px; /* WCAG 2.5.5 target size */
   }
 
   .job-form__input:focus,
@@ -663,7 +711,7 @@ const formStyles = `
   .job-form__textarea:focus {
     outline: none;
     border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
   }
 
   .job-form__checkbox-label {
@@ -673,6 +721,30 @@ const formStyles = `
     font-size: 0.875rem;
     color: #374151;
     cursor: pointer;
+  }
+
+  .job-form__checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #3b82f6;
+  }
+
+  .job-form__checkbox-label input[type="checkbox"]:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  /* Screen reader only utility */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .job-form__summary {
@@ -738,12 +810,13 @@ const formStyles = `
   }
 
   .job-form__error {
-    color: #dc2626;
+    color: #991b1b;
     font-size: 0.875rem;
     margin: 16px 0;
     padding: 12px;
-    background: #fef2f2;
+    background: #fee2e2;
     border-radius: 6px;
+    border-left: 4px solid #dc2626;
   }
 
   .job-form__buttons {
@@ -761,6 +834,12 @@ const formStyles = `
     cursor: pointer;
     transition: all 0.2s;
     border: none;
+    min-height: 44px; /* WCAG 2.5.5 target size */
+  }
+
+  .job-form__button:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
   }
 
   .job-form__button--primary {
@@ -779,7 +858,7 @@ const formStyles = `
 
   .job-form__button--secondary {
     background: white;
-    border: 1px solid #e5e7eb;
+    border: 2px solid #d1d5db;
     color: #374151;
   }
 
