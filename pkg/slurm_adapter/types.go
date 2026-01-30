@@ -4,7 +4,6 @@
 package slurm_adapter
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"errors"
 	"time"

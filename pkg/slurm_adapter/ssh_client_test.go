@@ -79,7 +79,7 @@ func TestNewSSHSLURMClient_WithPoolSize(t *testing.T) {
 	client, err := NewSSHSLURMClient(config, "cluster1", "default")
 	require.NoError(t, err)
 	require.NotNil(t, client)
-	
+
 	// Pool should be initialized but empty until Connect
 	assert.NotNil(t, client.pool)
 	assert.Len(t, client.pool, 0)
@@ -266,9 +266,9 @@ func TestParseMemory(t *testing.T) {
 
 func TestParseGRES(t *testing.T) {
 	tests := []struct {
-		input      string
-		gpuCount   int32
-		gpuType    string
+		input    string
+		gpuCount int32
+		gpuType  string
 	}{
 		{"gpu:4", 4, ""},
 		{"gpu:a100:8", 8, "a100"},

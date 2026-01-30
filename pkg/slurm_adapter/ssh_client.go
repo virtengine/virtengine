@@ -4,7 +4,6 @@
 package slurm_adapter
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bufio"
 	"bytes"
 	"context"
@@ -22,6 +21,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // ErrSSHConnection is returned when SSH connection fails
