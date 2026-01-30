@@ -3,7 +3,7 @@
 This directory contains fuzz testing infrastructure for VirtEngine, implementing comprehensive
 fuzzing coverage for input validation, parsing, and cryptographic operations.
 
-**Task Reference:** QUALITY-002 - Fuzz Testing Implementation
+**Task Reference:** QUALITY-001 - Fuzz Testing Implementation
 
 ## Overview
 
@@ -68,17 +68,57 @@ VirtEngine implements fuzz testing using:
 | `FuzzOrderCanAcceptBid` | Bid acceptance logic |
 
 ### Provider Daemon (`pkg/provider_daemon/`)
+
+> **Note:** These fuzz targets are currently disabled due to pre-existing compilation issues
+> in the provider_daemon and related packages. They will be enabled once those issues are resolved.
+
+| Fuzz Target | Description | Status |
+|-------------|-------------|--------|
+| `FuzzManifestParse` | Manifest JSON parsing | Disabled |
+| `FuzzManifestValidate` | Manifest validation | Disabled |
+| `FuzzServiceSpecValidation` | Service specification validation | Disabled |
+| `FuzzPortSpecValidation` | Port specification validation | Disabled |
+| `FuzzVolumeSpecValidation` | Volume specification validation | Disabled |
+| `FuzzNetworkSpecValidation` | Network specification validation | Disabled |
+| `FuzzHealthCheckSpecValidation` | Health check validation | Disabled |
+| `FuzzConstraintsValidation` | Deployment constraints validation | Disabled |
+| `FuzzManifestTotalResources` | Resource calculation | Disabled |
+
+### MFA Types (`x/mfa/types/`)
 | Fuzz Target | Description |
 |-------------|-------------|
-| `FuzzManifestParse` | Manifest JSON parsing |
-| `FuzzManifestValidate` | Manifest validation |
-| `FuzzServiceSpecValidation` | Service specification validation |
-| `FuzzPortSpecValidation` | Port specification validation |
-| `FuzzVolumeSpecValidation` | Volume specification validation |
-| `FuzzNetworkSpecValidation` | Network specification validation |
-| `FuzzHealthCheckSpecValidation` | Health check validation |
-| `FuzzConstraintsValidation` | Deployment constraints validation |
-| `FuzzManifestTotalResources` | Resource calculation |
+| `FuzzFactorTypeFromString` | Factor type string parsing |
+| `FuzzFactorTypeProperties` | Factor type properties |
+| `FuzzFactorEnrollmentValidate` | Factor enrollment validation |
+| `FuzzMFAPolicyValidate` | MFA policy validation |
+| `FuzzFactorCombinationIsSatisfiedBy` | Factor combination satisfaction |
+| `FuzzChallengeValidate` | Challenge validation |
+| `FuzzAuthorizationSessionValidate` | Authorization session validation |
+| `FuzzTrustedDeviceValidate` | Trusted device validation |
+| `FuzzComputeFactorFingerprint` | Factor fingerprint computation |
+| `FuzzComputeDeviceFingerprint` | Device fingerprint computation |
+| `FuzzComputeChallengeID` | Challenge ID computation |
+| `FuzzMsgEnrollFactorValidateBasic` | Message validation |
+| `FuzzGenesisStateValidate` | Genesis state validation |
+
+### Enclave Types (`x/enclave/types/`)
+
+> **Note:** These fuzz targets are currently disabled due to pre-existing compilation issues
+> in the enclave package (merge conflicts and duplicate type declarations). They will be 
+> enabled once those issues are resolved.
+
+| Fuzz Target | Description | Status |
+|-------------|-------------|--------|
+| `FuzzParseSGXDCAPQuoteV3` | SGX DCAP quote parsing | Disabled |
+| `FuzzParseSEVSNPReport` | SEV-SNP report parsing | Disabled |
+| `FuzzAddMeasurementProposalValidateBasic` | Add measurement proposal validation | Disabled |
+| `FuzzRevokeMeasurementProposalValidateBasic` | Revoke measurement proposal validation | Disabled |
+| `FuzzTEETypeValidation` | TEE type validation | Disabled |
+| `FuzzEnclaveIdentityValidate` | Enclave identity validation | Disabled |
+| `FuzzAttestationValidate` | Attestation validation | Disabled |
+| `FuzzMeasurementAllowlistEntry` | Measurement allowlist validation | Disabled |
+| `FuzzMsgRegisterEnclaveValidateBasic` | Register enclave message validation | Disabled |
+| `FuzzMsgSubmitAttestationValidateBasic` | Submit attestation message validation | Disabled |
 
 ## Running Fuzz Tests
 
@@ -89,9 +129,11 @@ Run fuzz tests using Go's native fuzzing:
 ```bash
 # Run all fuzz tests for a package (30 seconds each)
 go test -fuzz=. -fuzztime=30s ./x/encryption/types/...
+go test -fuzz=. -fuzztime=30s ./x/encryption/crypto/...
 go test -fuzz=. -fuzztime=30s ./x/veid/types/...
-go test -fuzz=. -fuzztime=30s ./x/market/types/marketplace/...
-go test -fuzz=. -fuzztime=30s ./pkg/provider_daemon/...
+go test -run='^$' -fuzz=. -fuzztime=30s ./x/market/types/marketplace
+go test -fuzz=. -fuzztime=30s ./x/mfa/types/...
+# Note: enclave and provider_daemon packages currently have compilation issues
 
 # Run a specific fuzz test
 go test -fuzz=FuzzEnvelopeValidate -fuzztime=60s ./x/encryption/types/...
