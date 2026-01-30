@@ -96,4 +96,39 @@ var (
 
 	// ErrValidatorOnly is returned when a non-validator attempts a validator-only action
 	ErrValidatorOnly = errorsmod.Register(ModuleName, 1029, "action restricted to validators")
+
+	// ============================================================================
+	// Extended SDK Errors (1300+) - for appeal, compliance, model, wallet, borderline
+	// These use 1300+ range to avoid conflicts with x/veid/types errors (1030-1299)
+	// ============================================================================
+
+	// ErrInvalidAppeal is returned when an appeal is malformed or invalid
+	ErrInvalidAppeal = errorsmod.Register(ModuleName, 1300, "invalid appeal")
+
+	// ErrWalletBindingFailed is returned when wallet binding fails
+	ErrWalletBindingFailed = errorsmod.Register(ModuleName, 1301, "wallet binding failed")
+
+	// ErrInvalidConsent is returned when consent settings are invalid
+	ErrInvalidConsent = errorsmod.Register(ModuleName, 1302, "invalid consent settings")
+
+	// ErrModelNotFound is returned when a model is not found
+	ErrModelNotFound = errorsmod.Register(ModuleName, 1303, "model not found")
+
+	// ErrModelVersionMismatch is returned when model versions don't match
+	ErrModelVersionMismatch = errorsmod.Register(ModuleName, 1304, "model version mismatch")
+
+	// ErrNotComplianceProvider is returned when the sender is not a registered compliance provider
+	ErrNotComplianceProvider = errorsmod.Register(ModuleName, 1305, "not a compliance provider")
+
+	// ErrComplianceCheckFailed is returned when a compliance check fails
+	ErrComplianceCheckFailed = errorsmod.Register(ModuleName, 1306, "compliance check failed")
+
+	// ErrInsufficientAttestations is returned when there are not enough attestations
+	ErrInsufficientAttestations = errorsmod.Register(ModuleName, 1307, "insufficient attestations")
+
+	// ErrInvalidComplianceParams is returned when compliance parameters are invalid
+	ErrInvalidComplianceParams = errorsmod.Register(ModuleName, 1308, "invalid compliance parameters")
+
+	// ErrBorderlineFallbackFailed is returned when borderline fallback fails
+	ErrBorderlineFallbackFailed = errorsmod.Register(ModuleName, 1309, "borderline fallback failed")
 )
