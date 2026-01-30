@@ -2,6 +2,18 @@ package types
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	encryptionv1 "github.com/virtengine/virtengine/sdk/go/node/encryption/v1"
+)
+
+// Type aliases for generated protobuf message types
+type (
+	MsgRegisterRecipientKey         = encryptionv1.MsgRegisterRecipientKey
+	MsgRevokeRecipientKey           = encryptionv1.MsgRevokeRecipientKey
+	MsgUpdateKeyLabel               = encryptionv1.MsgUpdateKeyLabel
+	MsgRegisterRecipientKeyResponse = encryptionv1.MsgRegisterRecipientKeyResponse
+	MsgRevokeRecipientKeyResponse   = encryptionv1.MsgRevokeRecipientKeyResponse
+	MsgUpdateKeyLabelResponse       = encryptionv1.MsgUpdateKeyLabelResponse
 )
 
 // Message type constants
@@ -22,39 +34,18 @@ var (
 	_ sdk.Msg = &MsgUpdateKeyLabel{}
 )
 
-// MsgRegisterRecipientKey is the message for registering a recipient public key
-type MsgRegisterRecipientKey struct {
-	// Sender is the account registering the key (must match the key owner)
-	Sender string `json:"sender"`
-
-	// PublicKey is the X25519 public key bytes (32 bytes)
-	PublicKey []byte `json:"public_key"`
-
-	// AlgorithmID specifies which algorithm this key is for
-	AlgorithmID string `json:"algorithm_id"`
-
-	// Label is an optional human-readable label for the key
-	Label string `json:"label,omitempty"`
-}
-
 // NewMsgRegisterRecipientKey creates a new MsgRegisterRecipientKey
 func NewMsgRegisterRecipientKey(sender string, publicKey []byte, algorithmID, label string) *MsgRegisterRecipientKey {
 	return &MsgRegisterRecipientKey{
 		Sender:      sender,
 		PublicKey:   publicKey,
-		AlgorithmID: algorithmID,
+		AlgorithmId: algorithmID,
 		Label:       label,
 	}
 }
 
-// Route returns the route for the message
-func (msg MsgRegisterRecipientKey) Route() string { return RouterKey }
-
-// Type returns the type for the message
-func (msg MsgRegisterRecipientKey) Type() string { return TypeMsgRegisterRecipientKey }
-
-// ValidateBasic validates the message
-func (msg MsgRegisterRecipientKey) ValidateBasic() error {
+// ValidateMsgRegisterRecipientKey validates the message
+func ValidateMsgRegisterRecipientKey(msg *MsgRegisterRecipientKey) error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
 	}
@@ -63,43 +54,22 @@ func (msg MsgRegisterRecipientKey) ValidateBasic() error {
 		return ErrInvalidPublicKey.Wrap("public key cannot be empty")
 	}
 
-	if !IsAlgorithmSupported(msg.AlgorithmID) {
-		return ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not supported", msg.AlgorithmID)
+	if !IsAlgorithmSupported(msg.AlgorithmId) {
+		return ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not supported", msg.AlgorithmId)
 	}
 
 	// Validate key size for algorithm
-	algInfo, err := GetAlgorithmInfo(msg.AlgorithmID)
+	algInfo, err := GetAlgorithmInfo(msg.AlgorithmId)
 	if err != nil {
 		return err
 	}
 
 	if len(msg.PublicKey) != algInfo.KeySize {
 		return ErrInvalidPublicKey.Wrapf("public key size must be %d bytes for %s",
-			algInfo.KeySize, msg.AlgorithmID)
+			algInfo.KeySize, msg.AlgorithmId)
 	}
 
 	return nil
-}
-
-// GetSigners returns the signers for the message
-func (msg MsgRegisterRecipientKey) GetSigners() []sdk.AccAddress {
-	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
-	return []sdk.AccAddress{signer}
-}
-
-// GetSignBytes returns the sign bytes for the message
-func (msg MsgRegisterRecipientKey) GetSignBytes() []byte {
-	bz := ModuleCdc.MustMarshalJSON(&msg)
-	return sdk.MustSortJSON(bz)
-}
-
-// MsgRevokeRecipientKey is the message for revoking a recipient public key
-type MsgRevokeRecipientKey struct {
-	// Sender is the account revoking the key (must own the key)
-	Sender string `json:"sender"`
-
-	// KeyFingerprint is the fingerprint of the key to revoke
-	KeyFingerprint string `json:"key_fingerprint"`
 }
 
 // NewMsgRevokeRecipientKey creates a new MsgRevokeRecipientKey
@@ -110,14 +80,8 @@ func NewMsgRevokeRecipientKey(sender, keyFingerprint string) *MsgRevokeRecipient
 	}
 }
 
-// Route returns the route for the message
-func (msg MsgRevokeRecipientKey) Route() string { return RouterKey }
-
-// Type returns the type for the message
-func (msg MsgRevokeRecipientKey) Type() string { return TypeMsgRevokeRecipientKey }
-
-// ValidateBasic validates the message
-func (msg MsgRevokeRecipientKey) ValidateBasic() error {
+// ValidateMsgRevokeRecipientKey validates the message
+func ValidateMsgRevokeRecipientKey(msg *MsgRevokeRecipientKey) error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
 	}
@@ -127,30 +91,6 @@ func (msg MsgRevokeRecipientKey) ValidateBasic() error {
 	}
 
 	return nil
-}
-
-// GetSigners returns the signers for the message
-func (msg MsgRevokeRecipientKey) GetSigners() []sdk.AccAddress {
-	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
-	return []sdk.AccAddress{signer}
-}
-
-// GetSignBytes returns the sign bytes for the message
-func (msg MsgRevokeRecipientKey) GetSignBytes() []byte {
-	bz := ModuleCdc.MustMarshalJSON(&msg)
-	return sdk.MustSortJSON(bz)
-}
-
-// MsgUpdateKeyLabel is the message for updating a key's label
-type MsgUpdateKeyLabel struct {
-	// Sender is the account updating the key (must own the key)
-	Sender string `json:"sender"`
-
-	// KeyFingerprint is the fingerprint of the key to update
-	KeyFingerprint string `json:"key_fingerprint"`
-
-	// Label is the new label for the key
-	Label string `json:"label"`
 }
 
 // NewMsgUpdateKeyLabel creates a new MsgUpdateKeyLabel
@@ -162,14 +102,8 @@ func NewMsgUpdateKeyLabel(sender, keyFingerprint, label string) *MsgUpdateKeyLab
 	}
 }
 
-// Route returns the route for the message
-func (msg MsgUpdateKeyLabel) Route() string { return RouterKey }
-
-// Type returns the type for the message
-func (msg MsgUpdateKeyLabel) Type() string { return TypeMsgUpdateKeyLabel }
-
-// ValidateBasic validates the message
-func (msg MsgUpdateKeyLabel) ValidateBasic() error {
+// ValidateMsgUpdateKeyLabel validates the message
+func ValidateMsgUpdateKeyLabel(msg *MsgUpdateKeyLabel) error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return ErrInvalidAddress.Wrap(errMsgInvalidSenderAddress)
 	}
@@ -180,29 +114,3 @@ func (msg MsgUpdateKeyLabel) ValidateBasic() error {
 
 	return nil
 }
-
-// GetSigners returns the signers for the message
-func (msg MsgUpdateKeyLabel) GetSigners() []sdk.AccAddress {
-	signer, _ := sdk.AccAddressFromBech32(msg.Sender)
-	return []sdk.AccAddress{signer}
-}
-
-// GetSignBytes returns the sign bytes for the message
-func (msg MsgUpdateKeyLabel) GetSignBytes() []byte {
-	bz := ModuleCdc.MustMarshalJSON(&msg)
-	return sdk.MustSortJSON(bz)
-}
-
-// Message response types
-
-// MsgRegisterRecipientKeyResponse is the response for MsgRegisterRecipientKey
-type MsgRegisterRecipientKeyResponse struct {
-	// KeyFingerprint is the fingerprint of the registered key
-	KeyFingerprint string `json:"key_fingerprint"`
-}
-
-// MsgRevokeRecipientKeyResponse is the response for MsgRevokeRecipientKey
-type MsgRevokeRecipientKeyResponse struct{}
-
-// MsgUpdateKeyLabelResponse is the response for MsgUpdateKeyLabel
-type MsgUpdateKeyLabelResponse struct{}

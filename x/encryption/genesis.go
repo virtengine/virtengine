@@ -3,6 +3,7 @@ package encryption
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	encryptionv1 "github.com/virtengine/virtengine/sdk/go/node/encryption/v1"
 	"github.com/virtengine/virtengine/x/encryption/keeper"
 	"github.com/virtengine/virtengine/x/encryption/types"
 )
@@ -25,7 +26,7 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, data *types.GenesisState) {
 			ctx,
 			addr,
 			keyRecord.PublicKey,
-			keyRecord.AlgorithmID,
+			keyRecord.AlgorithmId,
 			keyRecord.Label,
 		)
 		if err != nil {
@@ -42,10 +43,18 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 	// Get params
 	params := k.GetParams(ctx)
 
-	// Get all recipient keys
-	var recipientKeys []types.RecipientKeyRecord
+	// Get all recipient keys and convert to proto type
+	var recipientKeys []encryptionv1.RecipientKeyRecord
 	k.WithRecipientKeys(ctx, func(record types.RecipientKeyRecord) bool {
-		recipientKeys = append(recipientKeys, record)
+		recipientKeys = append(recipientKeys, encryptionv1.RecipientKeyRecord{
+			Address:        record.Address,
+			PublicKey:      record.PublicKey,
+			KeyFingerprint: record.KeyFingerprint,
+			AlgorithmId:    record.AlgorithmID,
+			RegisteredAt:   record.RegisteredAt,
+			RevokedAt:      record.RevokedAt,
+			Label:          record.Label,
+		})
 		return false
 	})
 
@@ -57,7 +66,7 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 
 // ValidateGenesis validates the genesis state
 func ValidateGenesis(data *types.GenesisState) error {
-	return data.Validate()
+	return types.ValidateGenesis(data)
 }
 
 // DefaultGenesisState returns the default genesis state

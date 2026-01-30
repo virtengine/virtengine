@@ -77,7 +77,7 @@ type paramsStore struct {
 
 // SetParams sets the module parameters
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
-	if err := params.Validate(); err != nil {
+	if err := types.ValidateParams(&params); err != nil {
 		return err
 	}
 
@@ -131,7 +131,7 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 	params := k.GetParams(ctx)
 
 	// Validate algorithm is allowed
-	if !params.IsAlgorithmAllowed(algorithmID) {
+	if !types.IsAlgorithmAllowed(&params, algorithmID) {
 		return "", types.ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not allowed", algorithmID)
 	}
 
@@ -345,7 +345,7 @@ func (k Keeper) ValidateEnvelope(ctx sdk.Context, envelope *types.EncryptedPaylo
 	params := k.GetParams(ctx)
 
 	// Check algorithm is allowed
-	if !params.IsAlgorithmAllowed(envelope.AlgorithmID) {
+	if !types.IsAlgorithmAllowed(&params, envelope.AlgorithmID) {
 		return types.ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not allowed", envelope.AlgorithmID)
 	}
 

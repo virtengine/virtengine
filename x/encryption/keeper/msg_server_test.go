@@ -15,7 +15,7 @@ func TestNewMsgRegisterRecipientKey(t *testing.T) {
 
 	assert.Equal(t, "cosmos1abc...", msg.Sender)
 	assert.Equal(t, publicKey, msg.PublicKey)
-	assert.Equal(t, types.AlgorithmX25519XSalsa20Poly1305, msg.AlgorithmID)
+	assert.Equal(t, types.AlgorithmX25519XSalsa20Poly1305, msg.AlgorithmId)
 	assert.Equal(t, "my-key", msg.Label)
 }
 
@@ -30,7 +30,7 @@ func TestMsgRegisterRecipientKey_ValidateBasic(t *testing.T) {
 			msg: types.MsgRegisterRecipientKey{
 				Sender:      "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
 				PublicKey:   make([]byte, 32),
-				AlgorithmID: types.AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmId: types.AlgorithmX25519XSalsa20Poly1305,
 				Label:       "test",
 			},
 			expectErr: false,
@@ -40,7 +40,7 @@ func TestMsgRegisterRecipientKey_ValidateBasic(t *testing.T) {
 			msg: types.MsgRegisterRecipientKey{
 				Sender:      "invalid",
 				PublicKey:   make([]byte, 32),
-				AlgorithmID: types.AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmId: types.AlgorithmX25519XSalsa20Poly1305,
 			},
 			expectErr: true,
 		},
@@ -49,7 +49,7 @@ func TestMsgRegisterRecipientKey_ValidateBasic(t *testing.T) {
 			msg: types.MsgRegisterRecipientKey{
 				Sender:      "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
 				PublicKey:   []byte{},
-				AlgorithmID: types.AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmId: types.AlgorithmX25519XSalsa20Poly1305,
 			},
 			expectErr: true,
 		},
@@ -58,7 +58,7 @@ func TestMsgRegisterRecipientKey_ValidateBasic(t *testing.T) {
 			msg: types.MsgRegisterRecipientKey{
 				Sender:      "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
 				PublicKey:   make([]byte, 16),
-				AlgorithmID: types.AlgorithmX25519XSalsa20Poly1305,
+				AlgorithmId: types.AlgorithmX25519XSalsa20Poly1305,
 			},
 			expectErr: true,
 		},
@@ -67,7 +67,7 @@ func TestMsgRegisterRecipientKey_ValidateBasic(t *testing.T) {
 			msg: types.MsgRegisterRecipientKey{
 				Sender:      "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
 				PublicKey:   make([]byte, 32),
-				AlgorithmID: "UNKNOWN",
+				AlgorithmId: "UNKNOWN",
 			},
 			expectErr: true,
 		},
@@ -75,7 +75,7 @@ func TestMsgRegisterRecipientKey_ValidateBasic(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.msg.ValidateBasic()
+			err := types.ValidateMsgRegisterRecipientKey(&tc.msg)
 
 			if tc.expectErr {
 				require.Error(t, err)
@@ -120,7 +120,7 @@ func TestMsgRevokeRecipientKey_ValidateBasic(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.msg.ValidateBasic()
+			err := types.ValidateMsgRevokeRecipientKey(&tc.msg)
 
 			if tc.expectErr {
 				require.Error(t, err)
@@ -177,7 +177,7 @@ func TestMsgUpdateKeyLabel_ValidateBasic(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.msg.ValidateBasic()
+			err := types.ValidateMsgUpdateKeyLabel(&tc.msg)
 
 			if tc.expectErr {
 				require.Error(t, err)

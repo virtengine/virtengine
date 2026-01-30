@@ -6,7 +6,8 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
-	"github.com/cosmos/gogoproto/grpc"
+
+	encryptionv1 "github.com/virtengine/virtengine/sdk/go/node/encryption/v1"
 )
 
 var (
@@ -28,59 +29,16 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	// NOTE: These are stub message types without proper protobuf generation.
-	// They don't have proper typeURLs (XXX_MessageName() methods), so we cannot
-	// register them with RegisterImplementations. This will cause typeURL "/" conflicts.
-	//
-	// Once proper .proto files are generated with protoc-gen-gogo, this should be:
-	//
-	// registry.RegisterImplementations((*sdk.Msg)(nil),
-	//     &MsgRegisterRecipientKey{},
-	//     &MsgRevokeRecipientKey{},
-	//     &MsgUpdateKeyLabel{},
-	// )
-	//
-	// msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
-	_ = registry // suppress unused variable warning
-	_ = msgservice.RegisterMsgServiceDesc
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgRegisterRecipientKey{},
+		&MsgRevokeRecipientKey{},
+		&MsgUpdateKeyLabel{},
+	)
+	msgservice.RegisterMsgServiceDesc(registry, &encryptionv1.Msg_serviceDesc)
 }
 
-// _Msg_serviceDesc is the grpc.ServiceDesc for Msg service.
-var _Msg_serviceDesc = struct {
-	ServiceName string
-	HandlerType interface{}
-	Methods     []struct {
-		MethodName string
-		Handler    interface{}
-	}
-	Streams  []struct{}
-	Metadata interface{}
-}{
-	ServiceName: "virtengine.encryption.v1.Msg",
-	HandlerType: (*MsgServer)(nil),
-	Methods: []struct {
-		MethodName string
-		Handler    interface{}
-	}{
-		{MethodName: "RegisterRecipientKey", Handler: nil},
-		{MethodName: "RevokeRecipientKey", Handler: nil},
-		{MethodName: "UpdateKeyLabel", Handler: nil},
-	},
-	Streams:  []struct{}{},
-	Metadata: "virtengine/encryption/v1/msg.proto",
-}
+// MsgServer is the interface for the message server - alias to generated type
+type MsgServer = encryptionv1.MsgServer
 
-// MsgServer is the interface for the message server
-type MsgServer interface {
-	RegisterRecipientKey(ctx sdk.Context, msg *MsgRegisterRecipientKey) (*MsgRegisterRecipientKeyResponse, error)
-	RevokeRecipientKey(ctx sdk.Context, msg *MsgRevokeRecipientKey) (*MsgRevokeRecipientKeyResponse, error)
-	UpdateKeyLabel(ctx sdk.Context, msg *MsgUpdateKeyLabel) (*MsgUpdateKeyLabelResponse, error)
-}
-
-// RegisterMsgServer registers the MsgServer
-// This is a stub implementation until proper protobuf generation is set up.
-func RegisterMsgServer(s grpc.Server, impl MsgServer) {
-	// Registration is a no-op for now since we don't have proper protobuf generated code
-	_ = s
-	_ = impl
-}
+// RegisterMsgServer registers the MsgServer implementation
+var RegisterMsgServer = encryptionv1.RegisterMsgServer

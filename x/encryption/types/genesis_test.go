@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	encryptionv1 "github.com/virtengine/virtengine/sdk/go/node/encryption/v1"
 )
 
 func TestDefaultGenesisState(t *testing.T) {
@@ -38,12 +40,12 @@ func TestGenesisState_Validate(t *testing.T) {
 		{
 			name: "valid state with keys",
 			state: GenesisState{
-				RecipientKeys: []RecipientKeyRecord{
+				RecipientKeys: []encryptionv1.RecipientKeyRecord{
 					{
 						Address:        "cosmos1xyz...",
 						PublicKey:      make([]byte, 32),
 						KeyFingerprint: "abc123",
-						AlgorithmID:    AlgorithmX25519XSalsa20Poly1305,
+						AlgorithmId:    AlgorithmX25519XSalsa20Poly1305,
 					},
 				},
 				Params: DefaultParams(),
@@ -53,18 +55,18 @@ func TestGenesisState_Validate(t *testing.T) {
 		{
 			name: "duplicate key fingerprints",
 			state: GenesisState{
-				RecipientKeys: []RecipientKeyRecord{
+				RecipientKeys: []encryptionv1.RecipientKeyRecord{
 					{
 						Address:        "cosmos1xyz...",
 						PublicKey:      make([]byte, 32),
 						KeyFingerprint: "abc123",
-						AlgorithmID:    AlgorithmX25519XSalsa20Poly1305,
+						AlgorithmId:    AlgorithmX25519XSalsa20Poly1305,
 					},
 					{
 						Address:        "cosmos1abc...",
 						PublicKey:      make([]byte, 32),
 						KeyFingerprint: "abc123", // Duplicate
-						AlgorithmID:    AlgorithmX25519XSalsa20Poly1305,
+						AlgorithmId:    AlgorithmX25519XSalsa20Poly1305,
 					},
 				},
 				Params: DefaultParams(),
@@ -74,12 +76,12 @@ func TestGenesisState_Validate(t *testing.T) {
 		{
 			name: "invalid key record",
 			state: GenesisState{
-				RecipientKeys: []RecipientKeyRecord{
+				RecipientKeys: []encryptionv1.RecipientKeyRecord{
 					{
 						Address:        "", // Invalid
 						PublicKey:      make([]byte, 32),
 						KeyFingerprint: "abc123",
-						AlgorithmID:    AlgorithmX25519XSalsa20Poly1305,
+						AlgorithmId:    AlgorithmX25519XSalsa20Poly1305,
 					},
 				},
 				Params: DefaultParams(),
@@ -89,7 +91,7 @@ func TestGenesisState_Validate(t *testing.T) {
 		{
 			name: "invalid params",
 			state: GenesisState{
-				RecipientKeys: []RecipientKeyRecord{},
+				RecipientKeys: []encryptionv1.RecipientKeyRecord{},
 				Params: Params{
 					MaxRecipientsPerEnvelope: 0, // Invalid
 					MaxKeysPerAccount:        5,
@@ -101,7 +103,7 @@ func TestGenesisState_Validate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.state.Validate()
+			err := ValidateGenesis(&tc.state)
 
 			if tc.expectErr {
 				require.Error(t, err)
@@ -161,7 +163,7 @@ func TestParams_Validate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.params.Validate()
+			err := ValidateParams(&tc.params)
 
 			if tc.expectErr {
 				require.Error(t, err)
@@ -180,8 +182,8 @@ func TestParams_IsAlgorithmAllowed(t *testing.T) {
 		AllowedAlgorithms:        []string{},
 	}
 
-	assert.True(t, emptyParams.IsAlgorithmAllowed(AlgorithmX25519XSalsa20Poly1305))
-	assert.False(t, emptyParams.IsAlgorithmAllowed("UNKNOWN"))
+	assert.True(t, IsAlgorithmAllowed(&emptyParams, AlgorithmX25519XSalsa20Poly1305))
+	assert.False(t, IsAlgorithmAllowed(&emptyParams, "UNKNOWN"))
 
 	// With specific list, only those are allowed
 	restrictedParams := Params{
@@ -190,6 +192,6 @@ func TestParams_IsAlgorithmAllowed(t *testing.T) {
 		AllowedAlgorithms:        []string{AlgorithmX25519XSalsa20Poly1305},
 	}
 
-	assert.True(t, restrictedParams.IsAlgorithmAllowed(AlgorithmX25519XSalsa20Poly1305))
-	assert.False(t, restrictedParams.IsAlgorithmAllowed(AlgorithmAgeX25519)) // Not in list
+	assert.True(t, IsAlgorithmAllowed(&restrictedParams, AlgorithmX25519XSalsa20Poly1305))
+	assert.False(t, IsAlgorithmAllowed(&restrictedParams, AlgorithmAgeX25519)) // Not in list
 }

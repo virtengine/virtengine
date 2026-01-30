@@ -1,34 +1,19 @@
 package types
 
-// GenesisState is the genesis state for the encryption module
-type GenesisState struct {
-	// RecipientKeys are the initial registered recipient keys
-	RecipientKeys []RecipientKeyRecord `json:"recipient_keys"`
+import (
+	encryptionv1 "github.com/virtengine/virtengine/sdk/go/node/encryption/v1"
+)
 
-	// Params are the module parameters
-	Params Params `json:"params"`
-}
+// GenesisState is an alias to the generated proto type for the encryption module's genesis state.
+type GenesisState = encryptionv1.GenesisState
 
-// Params defines the parameters for the encryption module
-type Params struct {
-	// MaxRecipientsPerEnvelope is the maximum number of recipients per envelope
-	MaxRecipientsPerEnvelope uint32 `json:"max_recipients_per_envelope"`
-
-	// MaxKeysPerAccount is the maximum number of keys an account can register
-	MaxKeysPerAccount uint32 `json:"max_keys_per_account"`
-
-	// AllowedAlgorithms is the list of allowed encryption algorithms
-	// Empty means all supported algorithms are allowed
-	AllowedAlgorithms []string `json:"allowed_algorithms"`
-
-	// RequireSignature determines if envelope signatures are mandatory
-	RequireSignature bool `json:"require_signature"`
-}
+// Params is an alias to the generated proto type for encryption module parameters.
+type Params = encryptionv1.Params
 
 // DefaultGenesisState returns the default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		RecipientKeys: []RecipientKeyRecord{},
+		RecipientKeys: []encryptionv1.RecipientKeyRecord{},
 		Params:        DefaultParams(),
 	}
 }
@@ -43,12 +28,12 @@ func DefaultParams() Params {
 	}
 }
 
-// Validate validates the genesis state
-func (gs GenesisState) Validate() error {
+// ValidateGenesis validates the genesis state
+func ValidateGenesis(gs *GenesisState) error {
 	// Validate recipient keys
 	seen := make(map[string]bool)
 	for _, key := range gs.RecipientKeys {
-		if err := key.Validate(); err != nil {
+		if err := ValidateRecipientKeyRecord(&key); err != nil {
 			return err
 		}
 		if seen[key.KeyFingerprint] {
@@ -58,11 +43,11 @@ func (gs GenesisState) Validate() error {
 	}
 
 	// Validate params
-	return gs.Params.Validate()
+	return ValidateParams(&gs.Params)
 }
 
-// Validate validates the params
-func (p Params) Validate() error {
+// ValidateParams validates the params
+func ValidateParams(p *Params) error {
 	if p.MaxRecipientsPerEnvelope == 0 {
 		return ErrInvalidEnvelope.Wrap("max_recipients_per_envelope must be greater than 0")
 	}
@@ -82,7 +67,7 @@ func (p Params) Validate() error {
 }
 
 // IsAlgorithmAllowed checks if an algorithm is allowed by the params
-func (p Params) IsAlgorithmAllowed(algorithmID string) bool {
+func IsAlgorithmAllowed(p *Params, algorithmID string) bool {
 	// If no specific algorithms are configured, allow all supported
 	if len(p.AllowedAlgorithms) == 0 {
 		return IsAlgorithmSupported(algorithmID)
@@ -94,4 +79,35 @@ func (p Params) IsAlgorithmAllowed(algorithmID string) bool {
 		}
 	}
 	return false
+}
+
+// ValidateRecipientKeyRecord validates the proto RecipientKeyRecord type
+func ValidateRecipientKeyRecord(r *encryptionv1.RecipientKeyRecord) error {
+	if len(r.Address) == 0 {
+		return ErrInvalidAddress.Wrap("address cannot be empty")
+	}
+
+	if len(r.PublicKey) == 0 {
+		return ErrInvalidPublicKey.Wrap("public key cannot be empty")
+	}
+
+	if len(r.KeyFingerprint) == 0 {
+		return ErrInvalidPublicKey.Wrap("key fingerprint cannot be empty")
+	}
+
+	if !IsAlgorithmSupported(r.AlgorithmId) {
+		return ErrUnsupportedAlgorithm.Wrapf("algorithm %s is not supported", r.AlgorithmId)
+	}
+
+	algInfo, err := GetAlgorithmInfo(r.AlgorithmId)
+	if err != nil {
+		return err
+	}
+
+	if len(r.PublicKey) != algInfo.KeySize {
+		return ErrInvalidPublicKey.Wrapf("public key size mismatch: expected %d, got %d",
+			algInfo.KeySize, len(r.PublicKey))
+	}
+
+	return nil
 }

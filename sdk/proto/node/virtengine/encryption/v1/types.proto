@@ -1,0 +1,401 @@
+syntax = "proto3";
+package virtengine.encryption.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/encryption/v1";
+
+// AlgorithmInfo contains metadata about an encryption algorithm
+message AlgorithmInfo {
+  // ID is the algorithm identifier
+  string id = 1 [
+    (gogoproto.jsontag) = "id",
+    (gogoproto.moretags) = "yaml:\"id\""
+  ];
+
+  // Version is the algorithm version
+  uint32 version = 2 [
+    (gogoproto.jsontag) = "version",
+    (gogoproto.moretags) = "yaml:\"version\""
+  ];
+
+  // Description is a human-readable description
+  string description = 3 [
+    (gogoproto.jsontag) = "description",
+    (gogoproto.moretags) = "yaml:\"description\""
+  ];
+
+  // KeySize is the public key size in bytes
+  int32 key_size = 4 [
+    (gogoproto.jsontag) = "key_size",
+    (gogoproto.moretags) = "yaml:\"key_size\""
+  ];
+
+  // NonceSize is the nonce/IV size in bytes
+  int32 nonce_size = 5 [
+    (gogoproto.jsontag) = "nonce_size",
+    (gogoproto.moretags) = "yaml:\"nonce_size\""
+  ];
+
+  // Deprecated indicates if this algorithm should no longer be used for new encryptions
+  bool deprecated = 6 [
+    (gogoproto.jsontag) = "deprecated",
+    (gogoproto.moretags) = "yaml:\"deprecated\""
+  ];
+}
+
+// RecipientKeyRecord represents a registered public key for receiving encrypted data
+message RecipientKeyRecord {
+  // Address is the account address that owns this key
+  string address = 1 [
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  // PublicKey is the X25519 public key bytes
+  bytes public_key = 2 [
+    (gogoproto.jsontag) = "public_key",
+    (gogoproto.moretags) = "yaml:\"public_key\""
+  ];
+
+  // KeyFingerprint is a unique identifier derived from the public key
+  string key_fingerprint = 3 [
+    (gogoproto.jsontag) = "key_fingerprint",
+    (gogoproto.moretags) = "yaml:\"key_fingerprint\""
+  ];
+
+  // AlgorithmID specifies which algorithm this key is for
+  string algorithm_id = 4 [
+    (gogoproto.jsontag) = "algorithm_id",
+    (gogoproto.moretags) = "yaml:\"algorithm_id\""
+  ];
+
+  // RegisteredAt is the block time when the key was registered
+  int64 registered_at = 5 [
+    (gogoproto.jsontag) = "registered_at",
+    (gogoproto.moretags) = "yaml:\"registered_at\""
+  ];
+
+  // RevokedAt is the block time when the key was revoked (0 if active)
+  int64 revoked_at = 6 [
+    (gogoproto.jsontag) = "revoked_at,omitempty",
+    (gogoproto.moretags) = "yaml:\"revoked_at\""
+  ];
+
+  // Label is an optional human-readable label for the key
+  string label = 7 [
+    (gogoproto.jsontag) = "label,omitempty",
+    (gogoproto.moretags) = "yaml:\"label\""
+  ];
+}
+
+// WrappedKeyEntry represents a per-recipient wrapped key
+message WrappedKeyEntry {
+  // RecipientID is the unique identifier for the recipient (key fingerprint or validator address)
+  string recipient_id = 1 [
+    (gogoproto.jsontag) = "recipient_id",
+    (gogoproto.moretags) = "yaml:\"recipient_id\""
+  ];
+
+  // WrappedKey is the data encryption key wrapped for this recipient
+  bytes wrapped_key = 2 [
+    (gogoproto.jsontag) = "wrapped_key",
+    (gogoproto.moretags) = "yaml:\"wrapped_key\""
+  ];
+
+  // Algorithm is the key wrapping algorithm used
+  string algorithm = 3 [
+    (gogoproto.jsontag) = "algorithm,omitempty",
+    (gogoproto.moretags) = "yaml:\"algorithm\""
+  ];
+
+  // EphemeralPubKey is the ephemeral public key used for this recipient (if applicable)
+  bytes ephemeral_pub_key = 4 [
+    (gogoproto.jsontag) = "ephemeral_pub_key,omitempty",
+    (gogoproto.moretags) = "yaml:\"ephemeral_pub_key\""
+  ];
+}
+
+// EncryptedPayloadEnvelope is the canonical encrypted payload structure
+// for all sensitive fields stored on-chain.
+message EncryptedPayloadEnvelope {
+  // Version is the envelope format version for future compatibility
+  uint32 version = 1 [
+    (gogoproto.jsontag) = "version",
+    (gogoproto.moretags) = "yaml:\"version\""
+  ];
+
+  // AlgorithmID identifies the encryption algorithm used
+  string algorithm_id = 2 [
+    (gogoproto.jsontag) = "algorithm_id",
+    (gogoproto.moretags) = "yaml:\"algorithm_id\""
+  ];
+
+  // AlgorithmVersion is the version of the algorithm used
+  uint32 algorithm_version = 3 [
+    (gogoproto.jsontag) = "algorithm_version",
+    (gogoproto.moretags) = "yaml:\"algorithm_version\""
+  ];
+
+  // RecipientKeyIDs are the fingerprints of intended recipients' public keys
+  repeated string recipient_key_ids = 4 [
+    (gogoproto.jsontag) = "recipient_key_ids",
+    (gogoproto.moretags) = "yaml:\"recipient_key_ids\""
+  ];
+
+  // RecipientPublicKeys are the public keys for intended recipients
+  repeated bytes recipient_public_keys = 5 [
+    (gogoproto.jsontag) = "recipient_public_keys,omitempty",
+    (gogoproto.moretags) = "yaml:\"recipient_public_keys\""
+  ];
+
+  // EncryptedKeys contains the data encryption key encrypted for each recipient
+  repeated bytes encrypted_keys = 6 [
+    (gogoproto.jsontag) = "encrypted_keys,omitempty",
+    (gogoproto.moretags) = "yaml:\"encrypted_keys\""
+  ];
+
+  // WrappedKeys contains per-recipient wrapped DEKs keyed by recipient ID
+  repeated WrappedKeyEntry wrapped_keys = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "wrapped_keys,omitempty",
+    (gogoproto.moretags) = "yaml:\"wrapped_keys\""
+  ];
+
+  // Nonce is the initialization vector / nonce for encryption
+  bytes nonce = 8 [
+    (gogoproto.jsontag) = "nonce",
+    (gogoproto.moretags) = "yaml:\"nonce\""
+  ];
+
+  // Ciphertext is the encrypted payload data
+  bytes ciphertext = 9 [
+    (gogoproto.jsontag) = "ciphertext",
+    (gogoproto.moretags) = "yaml:\"ciphertext\""
+  ];
+
+  // SenderSignature is the signature over hash(version || algorithm || ciphertext || nonce || recipients)
+  bytes sender_signature = 10 [
+    (gogoproto.jsontag) = "sender_signature",
+    (gogoproto.moretags) = "yaml:\"sender_signature\""
+  ];
+
+  // SenderPubKey is the sender's public key for signature verification
+  bytes sender_pub_key = 11 [
+    (gogoproto.jsontag) = "sender_pub_key",
+    (gogoproto.moretags) = "yaml:\"sender_pub_key\""
+  ];
+
+  // Metadata contains optional public or encrypted metadata
+  map<string, string> metadata = 12 [
+    (gogoproto.jsontag) = "metadata,omitempty",
+    (gogoproto.moretags) = "yaml:\"metadata\""
+  ];
+}
+
+// RecipientMode defines how recipients are selected for encryption
+enum RecipientMode {
+  // RECIPIENT_MODE_UNSPECIFIED is the unspecified recipient mode
+  RECIPIENT_MODE_UNSPECIFIED = 0;
+
+  // RECIPIENT_MODE_FULL_VALIDATOR_SET encrypts to all active validators
+  RECIPIENT_MODE_FULL_VALIDATOR_SET = 1;
+
+  // RECIPIENT_MODE_COMMITTEE encrypts to a designated identity committee subset
+  RECIPIENT_MODE_COMMITTEE = 2;
+
+  // RECIPIENT_MODE_SPECIFIC encrypts to specific recipients
+  RECIPIENT_MODE_SPECIFIC = 3;
+}
+
+// MultiRecipientEnvelope extends the encrypted envelope to support
+// encrypting to multiple validator enclaves for consensus recomputation.
+message MultiRecipientEnvelope {
+  // Version is the envelope format version
+  uint32 version = 1 [
+    (gogoproto.jsontag) = "version",
+    (gogoproto.moretags) = "yaml:\"version\""
+  ];
+
+  // AlgorithmID identifies the payload encryption algorithm
+  string algorithm_id = 2 [
+    (gogoproto.jsontag) = "algorithm_id",
+    (gogoproto.moretags) = "yaml:\"algorithm_id\""
+  ];
+
+  // AlgorithmVersion is the version of the payload encryption algorithm
+  uint32 algorithm_version = 3 [
+    (gogoproto.jsontag) = "algorithm_version",
+    (gogoproto.moretags) = "yaml:\"algorithm_version\""
+  ];
+
+  // RecipientMode specifies how recipients were selected
+  RecipientMode recipient_mode = 4 [
+    (gogoproto.jsontag) = "recipient_mode",
+    (gogoproto.moretags) = "yaml:\"recipient_mode\""
+  ];
+
+  // PayloadCiphertext is the encrypted payload (symmetric encryption)
+  bytes payload_ciphertext = 5 [
+    (gogoproto.jsontag) = "payload_ciphertext",
+    (gogoproto.moretags) = "yaml:\"payload_ciphertext\""
+  ];
+
+  // PayloadNonce is the nonce used for payload encryption
+  bytes payload_nonce = 6 [
+    (gogoproto.jsontag) = "payload_nonce",
+    (gogoproto.moretags) = "yaml:\"payload_nonce\""
+  ];
+
+  // WrappedKeys contains the data encryption key wrapped for each recipient
+  repeated WrappedKeyEntry wrapped_keys = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "wrapped_keys",
+    (gogoproto.moretags) = "yaml:\"wrapped_keys\""
+  ];
+
+  // ClientSignature is the approved client's signature over the payload
+  bytes client_signature = 8 [
+    (gogoproto.jsontag) = "client_signature",
+    (gogoproto.moretags) = "yaml:\"client_signature\""
+  ];
+
+  // ClientID is the approved client identifier
+  string client_id = 9 [
+    (gogoproto.jsontag) = "client_id",
+    (gogoproto.moretags) = "yaml:\"client_id\""
+  ];
+
+  // UserSignature is the user's signature over the payload
+  bytes user_signature = 10 [
+    (gogoproto.jsontag) = "user_signature",
+    (gogoproto.moretags) = "yaml:\"user_signature\""
+  ];
+
+  // UserPubKey is the user's public key for signature verification
+  bytes user_pub_key = 11 [
+    (gogoproto.jsontag) = "user_pub_key",
+    (gogoproto.moretags) = "yaml:\"user_pub_key\""
+  ];
+
+  // Metadata contains additional public metadata
+  map<string, string> metadata = 12 [
+    (gogoproto.jsontag) = "metadata,omitempty",
+    (gogoproto.moretags) = "yaml:\"metadata\""
+  ];
+
+  // CommitteeEpoch is the committee epoch if RecipientMode is committee
+  uint64 committee_epoch = 13 [
+    (gogoproto.jsontag) = "committee_epoch,omitempty",
+    (gogoproto.moretags) = "yaml:\"committee_epoch\""
+  ];
+}
+
+// Params defines the parameters for the encryption module
+message Params {
+  option (gogoproto.equal) = true;
+
+  // MaxRecipientsPerEnvelope is the maximum number of recipients per envelope
+  uint32 max_recipients_per_envelope = 1 [
+    (gogoproto.jsontag) = "max_recipients_per_envelope",
+    (gogoproto.moretags) = "yaml:\"max_recipients_per_envelope\""
+  ];
+
+  // MaxKeysPerAccount is the maximum number of keys an account can register
+  uint32 max_keys_per_account = 2 [
+    (gogoproto.jsontag) = "max_keys_per_account",
+    (gogoproto.moretags) = "yaml:\"max_keys_per_account\""
+  ];
+
+  // AllowedAlgorithms is the list of allowed encryption algorithms
+  // Empty means all supported algorithms are allowed
+  repeated string allowed_algorithms = 3 [
+    (gogoproto.jsontag) = "allowed_algorithms",
+    (gogoproto.moretags) = "yaml:\"allowed_algorithms\""
+  ];
+
+  // RequireSignature determines if envelope signatures are mandatory
+  bool require_signature = 4 [
+    (gogoproto.jsontag) = "require_signature",
+    (gogoproto.moretags) = "yaml:\"require_signature\""
+  ];
+}
+
+// EventKeyRegistered is emitted when a recipient key is registered
+message EventKeyRegistered {
+  string address = 1 [
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  string fingerprint = 2 [
+    (gogoproto.jsontag) = "fingerprint",
+    (gogoproto.moretags) = "yaml:\"fingerprint\""
+  ];
+
+  string algorithm = 3 [
+    (gogoproto.jsontag) = "algorithm",
+    (gogoproto.moretags) = "yaml:\"algorithm\""
+  ];
+
+  string label = 4 [
+    (gogoproto.jsontag) = "label,omitempty",
+    (gogoproto.moretags) = "yaml:\"label\""
+  ];
+
+  int64 registered_at = 5 [
+    (gogoproto.jsontag) = "registered_at",
+    (gogoproto.moretags) = "yaml:\"registered_at\""
+  ];
+}
+
+// EventKeyRevoked is emitted when a recipient key is revoked
+message EventKeyRevoked {
+  string address = 1 [
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  string fingerprint = 2 [
+    (gogoproto.jsontag) = "fingerprint",
+    (gogoproto.moretags) = "yaml:\"fingerprint\""
+  ];
+
+  string revoked_by = 3 [
+    (gogoproto.jsontag) = "revoked_by",
+    (gogoproto.moretags) = "yaml:\"revoked_by\""
+  ];
+
+  int64 revoked_at = 4 [
+    (gogoproto.jsontag) = "revoked_at",
+    (gogoproto.moretags) = "yaml:\"revoked_at\""
+  ];
+}
+
+// EventKeyUpdated is emitted when a recipient key is updated (e.g., label changed)
+message EventKeyUpdated {
+  string address = 1 [
+    (gogoproto.jsontag) = "address",
+    (gogoproto.moretags) = "yaml:\"address\""
+  ];
+
+  string fingerprint = 2 [
+    (gogoproto.jsontag) = "fingerprint",
+    (gogoproto.moretags) = "yaml:\"fingerprint\""
+  ];
+
+  string field = 3 [
+    (gogoproto.jsontag) = "field",
+    (gogoproto.moretags) = "yaml:\"field\""
+  ];
+
+  string old_value = 4 [
+    (gogoproto.jsontag) = "old_value,omitempty",
+    (gogoproto.moretags) = "yaml:\"old_value\""
+  ];
+
+  string new_value = 5 [
+    (gogoproto.jsontag) = "new_value,omitempty",
+    (gogoproto.moretags) = "yaml:\"new_value\""
+  ];
+}
