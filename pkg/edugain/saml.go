@@ -702,10 +702,13 @@ func verifyXMLSignatureWithCert(xmlData []byte, certBase64 string) (bool, error)
 	return VerifySAMLSignature(xmlData, []string{certBase64})
 }
 
-// decryptXMLEncryption decrypts XML encryption
-func decryptXMLEncryption(encryptedData, key []byte) ([]byte, error) {
-	// Placeholder - production would use proper XML encryption
-	_ = encryptedData
-	_ = key
-	return nil, fmt.Errorf("XML encryption decryption not implemented")
+// decryptXMLEncryption decrypts XML encryption using the SP's private key
+func decryptXMLEncryption(encryptedData, privateKeyPEM []byte) ([]byte, error) {
+	if len(encryptedData) == 0 {
+		return nil, fmt.Errorf("empty encrypted data")
+	}
+	if len(privateKeyPEM) == 0 {
+		return nil, fmt.Errorf("no decryption key configured")
+	}
+	return DecryptXMLEncryptionWithKey(encryptedData, privateKeyPEM)
 }
