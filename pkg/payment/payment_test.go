@@ -5,9 +5,11 @@ package payment
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -322,6 +324,269 @@ func TestConfig_ValidateAmount(t *testing.T) {
 }
 
 // ============================================================================
+// Test Helpers
+// ============================================================================
+
+// newTestService creates a payment service with stub adapters for unit testing.
+// This avoids making real API calls during tests.
+func newTestService(t *testing.T, gateway GatewayType) Service {
+	t.Helper()
+
+	cfg := DefaultConfig()
+	cfg.Gateway = gateway
+
+	var gw Gateway
+	var err error
+
+	switch gateway {
+	case GatewayStripe:
+		cfg.StripeConfig.SecretKey = "sk_test_xxx"
+		gw, err = NewStripeStubAdapter(cfg.StripeConfig)
+	case GatewayAdyen:
+		cfg.AdyenConfig.APIKey = "test_key"
+		cfg.AdyenConfig.MerchantAccount = "TestMerchant"
+		gw, err = NewAdyenStubAdapter(cfg.AdyenConfig)
+	default:
+		t.Fatalf("unsupported gateway: %s", gateway)
+	}
+
+	require.NoError(t, err)
+
+	// Create service with the stub gateway
+	svc := &stubTestService{
+		config:          cfg,
+		gateway:         gw,
+		webhookHandlers: make(map[WebhookEventType][]EventHandler),
+		rateLimiter:     newRateLimiter(cfg.RateLimitConfig),
+		metrics:         &serviceMetrics{},
+	}
+
+	return svc
+}
+
+// stubTestService is a test implementation that wraps stub gateways
+type stubTestService struct {
+	config          Config
+	gateway         Gateway
+	webhookHandlers map[WebhookEventType][]EventHandler
+	handlersMu      sync.RWMutex
+	rateLimiter     *rateLimiter
+	metrics         *serviceMetrics
+}
+
+func (s *stubTestService) Name() string                { return s.gateway.Name() }
+func (s *stubTestService) Type() GatewayType           { return s.gateway.Type() }
+func (s *stubTestService) IsHealthy(ctx context.Context) bool { return s.gateway.IsHealthy(ctx) }
+func (s *stubTestService) Close() error                { return s.gateway.Close() }
+func (s *stubTestService) GetGateway() Gateway         { return s.gateway }
+func (s *stubTestService) GetConfig() Config           { return s.config }
+
+func (s *stubTestService) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
+	return s.gateway.CreateCustomer(ctx, req)
+}
+
+func (s *stubTestService) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
+	return s.gateway.GetCustomer(ctx, customerID)
+}
+
+func (s *stubTestService) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
+	return s.gateway.UpdateCustomer(ctx, customerID, req)
+}
+
+func (s *stubTestService) DeleteCustomer(ctx context.Context, customerID string) error {
+	return s.gateway.DeleteCustomer(ctx, customerID)
+}
+
+func (s *stubTestService) AttachPaymentMethod(ctx context.Context, customerID string, token CardToken) (string, error) {
+	return s.gateway.AttachPaymentMethod(ctx, customerID, token)
+}
+
+func (s *stubTestService) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
+	return s.gateway.DetachPaymentMethod(ctx, paymentMethodID)
+}
+
+func (s *stubTestService) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
+	return s.gateway.ListPaymentMethods(ctx, customerID)
+}
+
+func (s *stubTestService) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
+	// Validate amount
+	if err := s.config.ValidateAmount(req.Amount); err != nil {
+		return PaymentIntent{}, err
+	}
+	return s.gateway.CreatePaymentIntent(ctx, req)
+}
+
+func (s *stubTestService) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
+	return s.gateway.GetPaymentIntent(ctx, paymentIntentID)
+}
+
+func (s *stubTestService) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
+	return s.gateway.ConfirmPaymentIntent(ctx, paymentIntentID, paymentMethodID)
+}
+
+func (s *stubTestService) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
+	return s.gateway.CancelPaymentIntent(ctx, paymentIntentID, reason)
+}
+
+func (s *stubTestService) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
+	return s.gateway.CapturePaymentIntent(ctx, paymentIntentID, amount)
+}
+
+func (s *stubTestService) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
+	return s.gateway.CreateRefund(ctx, req)
+}
+
+func (s *stubTestService) GetRefund(ctx context.Context, refundID string) (Refund, error) {
+	return s.gateway.GetRefund(ctx, refundID)
+}
+
+func (s *stubTestService) ValidateWebhook(payload []byte, signature string) error {
+	return s.gateway.ValidateWebhook(payload, signature)
+}
+
+func (s *stubTestService) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
+	return s.gateway.ParseWebhookEvent(payload)
+}
+
+func (s *stubTestService) ValidateToken(ctx context.Context, token CardToken) error {
+	if token.Gateway != s.config.Gateway {
+		return ErrInvalidCardToken
+	}
+	if token.IsTokenExpired() {
+		return ErrInvalidCardToken
+	}
+	if token.IsExpired() {
+		return ErrCardExpired
+	}
+	if !token.Brand.IsSupported() {
+		return ErrPaymentDeclined
+	}
+	return nil
+}
+
+func (s *stubTestService) GetTokenDetails(ctx context.Context, tokenID string) (CardToken, error) {
+	return CardToken{Token: tokenID, Gateway: s.config.Gateway}, nil
+}
+
+func (s *stubTestService) RefreshToken(ctx context.Context, tokenID string) (CardToken, error) {
+	return CardToken{Token: tokenID, Gateway: s.config.Gateway}, nil
+}
+
+func (s *stubTestService) RevokeToken(ctx context.Context, tokenID string) error {
+	return s.DetachPaymentMethod(ctx, tokenID)
+}
+
+func (s *stubTestService) HandleEvent(ctx context.Context, event WebhookEvent) error {
+	s.handlersMu.RLock()
+	handlers, ok := s.webhookHandlers[event.Type]
+	s.handlersMu.RUnlock()
+	if !ok || len(handlers) == 0 {
+		return nil
+	}
+	var lastErr error
+	for _, handler := range handlers {
+		if err := handler(ctx, event); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+func (s *stubTestService) RegisterHandler(eventType WebhookEventType, handler EventHandler) {
+	s.handlersMu.Lock()
+	defer s.handlersMu.Unlock()
+	s.webhookHandlers[eventType] = append(s.webhookHandlers[eventType], handler)
+}
+
+func (s *stubTestService) UnregisterHandler(eventType WebhookEventType) {
+	s.handlersMu.Lock()
+	defer s.handlersMu.Unlock()
+	delete(s.webhookHandlers, eventType)
+}
+
+func (s *stubTestService) InitiateSCA(ctx context.Context, paymentIntent PaymentIntent) (SCAChallenge, error) {
+	if !paymentIntent.RequiresSCA {
+		return SCAChallenge{}, nil
+	}
+	return SCAChallenge{
+		ID:              "sca_" + paymentIntent.ID,
+		PaymentIntentID: paymentIntent.ID,
+		RedirectURL:     paymentIntent.SCARedirectURL,
+		ThreeDSVersion:  "2.2.0",
+	}, nil
+}
+
+func (s *stubTestService) CompleteSCA(ctx context.Context, challengeID string, result SCAResult) (PaymentIntent, error) {
+	var paymentIntentID string
+	if len(challengeID) > 4 {
+		paymentIntentID = challengeID[4:]
+	}
+	intent, err := s.GetPaymentIntent(ctx, paymentIntentID)
+	if err != nil {
+		return PaymentIntent{}, err
+	}
+	intent.SCAStatus = result.Status
+	if result.Status == SCAStatusFailed {
+		intent.Status = PaymentIntentStatusFailed
+		intent.FailureCode = "sca_failed"
+		intent.FailureMessage = "3D Secure authentication failed"
+		return intent, ErrSCAFailed
+	}
+	return intent, nil
+}
+
+func (s *stubTestService) GetSCAStatus(ctx context.Context, paymentIntentID string) (SCAResult, error) {
+	return SCAResult{Status: SCAStatusSucceeded}, nil
+}
+
+func (s *stubTestService) GetDispute(ctx context.Context, disputeID string) (Dispute, error) {
+	return Dispute{ID: disputeID, Status: DisputeStatusNeedsResponse}, nil
+}
+
+func (s *stubTestService) ListDisputes(ctx context.Context, paymentIntentID string) ([]Dispute, error) {
+	return []Dispute{}, nil
+}
+
+func (s *stubTestService) SubmitEvidence(ctx context.Context, disputeID string, evidence DisputeEvidence) error {
+	return nil
+}
+
+func (s *stubTestService) AcceptDispute(ctx context.Context, disputeID string) error {
+	return nil
+}
+
+func (s *stubTestService) GetConversionRate(ctx context.Context, fromCurrency Currency, toCrypto string) (ConversionRate, error) {
+	return ConversionRate{
+		FromCurrency: fromCurrency,
+		ToCrypto:     toCrypto,
+		Rate:         sdkmath.LegacyNewDecWithPrec(1000000, 6),
+		Timestamp:    time.Now(),
+		Source:       s.config.ConversionConfig.PriceFeedSource,
+	}, nil
+}
+
+func (s *stubTestService) CreateConversionQuote(ctx context.Context, req ConversionQuoteRequest) (ConversionQuote, error) {
+	rate, _ := s.GetConversionRate(ctx, req.FiatAmount.Currency, req.CryptoDenom)
+	return ConversionQuote{
+		ID:                 "quote_test",
+		FiatAmount:         req.FiatAmount,
+		CryptoAmount:       sdkmath.NewInt(req.FiatAmount.Value),
+		CryptoDenom:        req.CryptoDenom,
+		Rate:               rate,
+		ExpiresAt:          time.Now().Add(time.Hour),
+		DestinationAddress: req.DestinationAddress,
+	}, nil
+}
+
+func (s *stubTestService) ExecuteConversion(ctx context.Context, quote ConversionQuote, paymentIntentID string) error {
+	if quote.IsExpired() {
+		return ErrQuoteExpired
+	}
+	return nil
+}
+
+// ============================================================================
 // Service Tests
 // ============================================================================
 
@@ -358,11 +623,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_CustomerOperations(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
-	svc, err := NewService(cfg)
-	require.NoError(t, err)
-
+	svc := newTestService(t, GatewayStripe)
 	ctx := context.Background()
 
 	t.Run("create customer", func(t *testing.T) {
@@ -384,11 +645,7 @@ func TestService_CustomerOperations(t *testing.T) {
 }
 
 func TestService_PaymentIntentOperations(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
-	svc, err := NewService(cfg)
-	require.NoError(t, err)
-
+	svc := newTestService(t, GatewayStripe)
 	ctx := context.Background()
 
 	t.Run("create payment intent", func(t *testing.T) {
@@ -437,11 +694,7 @@ func TestService_PaymentIntentOperations(t *testing.T) {
 }
 
 func TestService_RefundOperations(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
-	svc, err := NewService(cfg)
-	require.NoError(t, err)
-
+	svc := newTestService(t, GatewayStripe)
 	ctx := context.Background()
 
 	t.Run("create refund", func(t *testing.T) {
@@ -467,11 +720,7 @@ func TestService_RefundOperations(t *testing.T) {
 }
 
 func TestService_TokenValidation(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
-	svc, err := NewService(cfg)
-	require.NoError(t, err)
-
+	svc := newTestService(t, GatewayStripe)
 	ctx := context.Background()
 
 	t.Run("valid token", func(t *testing.T) {
@@ -517,10 +766,7 @@ func TestService_TokenValidation(t *testing.T) {
 }
 
 func TestService_WebhookHandler(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
-	svc, err := NewService(cfg)
-	require.NoError(t, err)
+	svc := newTestService(t, GatewayStripe)
 
 	ctx := context.Background()
 	handlerCalled := false
@@ -537,7 +783,7 @@ func TestService_WebhookHandler(t *testing.T) {
 		WithGateway(GatewayStripe).
 		Build()
 
-	err = svc.HandleEvent(ctx, event)
+	err := svc.HandleEvent(ctx, event)
 	require.NoError(t, err)
 	assert.True(t, handlerCalled)
 
@@ -550,11 +796,7 @@ func TestService_WebhookHandler(t *testing.T) {
 }
 
 func TestService_SCAHandler(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
-	svc, err := NewService(cfg)
-	require.NoError(t, err)
-
+	svc := newTestService(t, GatewayStripe)
 	ctx := context.Background()
 
 	t.Run("initiate SCA", func(t *testing.T) {
@@ -583,11 +825,7 @@ func TestService_SCAHandler(t *testing.T) {
 }
 
 func TestService_ConversionService(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
-	svc, err := NewService(cfg)
-	require.NoError(t, err)
-
+	svc := newTestService(t, GatewayStripe)
 	ctx := context.Background()
 
 	t.Run("get conversion rate", func(t *testing.T) {
@@ -633,7 +871,8 @@ func TestStripeAdapter_InvalidConfig(t *testing.T) {
 }
 
 func TestAdyenAdapter(t *testing.T) {
-	adapter, err := NewAdyenAdapter(AdyenConfig{
+	// Use stub adapter for unit tests (no network calls)
+	adapter, err := NewAdyenStubAdapter(AdyenConfig{
 		APIKey:          "test_key",
 		MerchantAccount: "TestMerchant",
 	})
@@ -645,7 +884,7 @@ func TestAdyenAdapter(t *testing.T) {
 }
 
 func TestAdyenAdapter_InvalidConfig(t *testing.T) {
-	_, err := NewAdyenAdapter(AdyenConfig{})
+	_, err := NewAdyenStubAdapter(AdyenConfig{})
 	assert.ErrorIs(t, err, ErrGatewayNotConfigured)
 }
 
