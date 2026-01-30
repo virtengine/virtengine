@@ -54,6 +54,22 @@ const (
 
 	// EventSettlementRequested is emitted when settlement is requested
 	EventSettlementRequested MarketplaceEventType = "settlement_requested"
+
+	// VE-4E: Lifecycle event types
+	// EventLifecycleActionRequested is emitted when a lifecycle action is requested
+	EventLifecycleActionRequested MarketplaceEventType = "lifecycle_action_requested"
+
+	// EventLifecycleActionStarted is emitted when a lifecycle action starts
+	EventLifecycleActionStarted MarketplaceEventType = "lifecycle_action_started"
+
+	// EventLifecycleActionCompleted is emitted when a lifecycle action completes
+	EventLifecycleActionCompleted MarketplaceEventType = "lifecycle_action_completed"
+
+	// EventLifecycleActionFailed is emitted when a lifecycle action fails
+	EventLifecycleActionFailed MarketplaceEventType = "lifecycle_action_failed"
+
+	// EventLifecycleCallbackReceived is emitted when a lifecycle callback is received
+	EventLifecycleCallbackReceived MarketplaceEventType = "lifecycle_callback_received"
 )
 
 // AllMarketplaceEventTypes returns all event types
@@ -73,6 +89,9 @@ func AllMarketplaceEventTypes() []MarketplaceEventType {
 		EventBidAccepted,
 		EventBidRejected,
 		EventSettlementRequested,
+		EventLifecycleActionRequested,
+		EventLifecycleActionCompleted,
+		EventLifecycleActionFailed,
 	}
 }
 
@@ -84,7 +103,8 @@ func (t MarketplaceEventType) IsProviderDaemonEvent() bool {
 		EventAllocationCreated,
 		EventProvisionRequested,
 		EventTerminateRequested,
-		EventUsageUpdateRequested:
+		EventUsageUpdateRequested,
+		EventLifecycleActionRequested:
 		return true
 	default:
 		return false
@@ -577,6 +597,7 @@ func NewProviderDaemonSubscriptionAt(providerAddress string, now time.Time) *Eve
 			EventProvisionRequested,
 			EventTerminateRequested,
 			EventUsageUpdateRequested,
+			EventLifecycleActionRequested,
 		},
 		FilterByProvider: providerAddress,
 		Active:           true,
@@ -623,4 +644,222 @@ func (b *EventBatch) Add(event MarketplaceEvent) {
 // Size returns the number of events in the batch
 func (b *EventBatch) Size() int {
 	return len(b.Events)
+}
+
+// VE-4E: Lifecycle action event types
+
+// LifecycleActionRequestedEvent is emitted when a lifecycle action is requested
+type LifecycleActionRequestedEvent struct {
+	BaseMarketplaceEvent
+
+	// AllocationID is the allocation ID
+	AllocationID string `json:"allocation_id"`
+
+	// OrderID is the order ID
+	OrderID string `json:"order_id"`
+
+	// ProviderAddress is the provider's address
+	ProviderAddress string `json:"provider_address"`
+
+	// Action is the lifecycle action type
+	Action LifecycleActionType `json:"action"`
+
+	// OperationID is the unique operation identifier
+	OperationID string `json:"operation_id"`
+
+	// RequestedBy is who requested the action
+	RequestedBy string `json:"requested_by"`
+
+	// TargetState is the expected state after the action completes
+	TargetState AllocationState `json:"target_state"`
+
+	// Parameters contains action-specific parameters
+	Parameters map[string]interface{} `json:"parameters,omitempty"`
+
+	// RollbackPolicy specifies how to handle failures
+	RollbackPolicy RollbackPolicy `json:"rollback_policy"`
+}
+
+// NewLifecycleActionRequestedEvent creates a new LifecycleActionRequestedEvent
+func NewLifecycleActionRequestedEvent(
+	allocationID, orderID, providerAddress string,
+	action LifecycleActionType,
+	operationID, requestedBy string,
+	targetState AllocationState,
+	parameters map[string]interface{},
+	rollbackPolicy RollbackPolicy,
+	blockHeight int64,
+	sequence uint64,
+) *LifecycleActionRequestedEvent {
+	return NewLifecycleActionRequestedEventAt(
+		allocationID, orderID, providerAddress, action, operationID, requestedBy,
+		targetState, parameters, rollbackPolicy, blockHeight, sequence, time.Now(),
+	)
+}
+
+// NewLifecycleActionRequestedEventAt creates a new LifecycleActionRequestedEvent at a specific time
+func NewLifecycleActionRequestedEventAt(
+	allocationID, orderID, providerAddress string,
+	action LifecycleActionType,
+	operationID, requestedBy string,
+	targetState AllocationState,
+	parameters map[string]interface{},
+	rollbackPolicy RollbackPolicy,
+	blockHeight int64,
+	sequence uint64,
+	now time.Time,
+) *LifecycleActionRequestedEvent {
+	timestamp := now.UTC()
+	return &LifecycleActionRequestedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventLifecycleActionRequested,
+			EventID:     fmt.Sprintf("evt_lifecycle_req_%s_%s_%d", allocationID, action, sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		AllocationID:    allocationID,
+		OrderID:         orderID,
+		ProviderAddress: providerAddress,
+		Action:          action,
+		OperationID:     operationID,
+		RequestedBy:     requestedBy,
+		TargetState:     targetState,
+		Parameters:      parameters,
+		RollbackPolicy:  rollbackPolicy,
+	}
+}
+
+// LifecycleActionCompletedEvent is emitted when a lifecycle action completes
+type LifecycleActionCompletedEvent struct {
+	BaseMarketplaceEvent
+
+	// AllocationID is the allocation ID
+	AllocationID string `json:"allocation_id"`
+
+	// OperationID is the operation that completed
+	OperationID string `json:"operation_id"`
+
+	// Action is the lifecycle action type
+	Action LifecycleActionType `json:"action"`
+
+	// OldState is the previous allocation state
+	OldState AllocationState `json:"old_state"`
+
+	// NewState is the new allocation state
+	NewState AllocationState `json:"new_state"`
+
+	// Duration is how long the action took
+	DurationMs int64 `json:"duration_ms"`
+}
+
+// NewLifecycleActionCompletedEvent creates a new LifecycleActionCompletedEvent
+func NewLifecycleActionCompletedEvent(
+	allocationID, operationID string,
+	action LifecycleActionType,
+	oldState, newState AllocationState,
+	durationMs int64,
+	blockHeight int64,
+	sequence uint64,
+) *LifecycleActionCompletedEvent {
+	return NewLifecycleActionCompletedEventAt(
+		allocationID, operationID, action, oldState, newState, durationMs,
+		blockHeight, sequence, time.Now(),
+	)
+}
+
+// NewLifecycleActionCompletedEventAt creates a new LifecycleActionCompletedEvent at a specific time
+func NewLifecycleActionCompletedEventAt(
+	allocationID, operationID string,
+	action LifecycleActionType,
+	oldState, newState AllocationState,
+	durationMs int64,
+	blockHeight int64,
+	sequence uint64,
+	now time.Time,
+) *LifecycleActionCompletedEvent {
+	timestamp := now.UTC()
+	return &LifecycleActionCompletedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventLifecycleActionCompleted,
+			EventID:     fmt.Sprintf("evt_lifecycle_completed_%s_%s_%d", allocationID, action, sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		AllocationID: allocationID,
+		OperationID:  operationID,
+		Action:       action,
+		OldState:     oldState,
+		NewState:     newState,
+		DurationMs:   durationMs,
+	}
+}
+
+// LifecycleActionFailedEvent is emitted when a lifecycle action fails
+type LifecycleActionFailedEvent struct {
+	BaseMarketplaceEvent
+
+	// AllocationID is the allocation ID
+	AllocationID string `json:"allocation_id"`
+
+	// OperationID is the operation that failed
+	OperationID string `json:"operation_id"`
+
+	// Action is the lifecycle action type
+	Action LifecycleActionType `json:"action"`
+
+	// Error is the error message
+	Error string `json:"error"`
+
+	// RolledBack indicates if the operation was rolled back
+	RolledBack bool `json:"rolled_back"`
+
+	// RetryCount is the number of retries attempted
+	RetryCount int `json:"retry_count"`
+}
+
+// NewLifecycleActionFailedEvent creates a new LifecycleActionFailedEvent
+func NewLifecycleActionFailedEvent(
+	allocationID, operationID string,
+	action LifecycleActionType,
+	errorMsg string,
+	rolledBack bool,
+	retryCount int,
+	blockHeight int64,
+	sequence uint64,
+) *LifecycleActionFailedEvent {
+	return NewLifecycleActionFailedEventAt(
+		allocationID, operationID, action, errorMsg, rolledBack, retryCount,
+		blockHeight, sequence, time.Now(),
+	)
+}
+
+// NewLifecycleActionFailedEventAt creates a new LifecycleActionFailedEvent at a specific time
+func NewLifecycleActionFailedEventAt(
+	allocationID, operationID string,
+	action LifecycleActionType,
+	errorMsg string,
+	rolledBack bool,
+	retryCount int,
+	blockHeight int64,
+	sequence uint64,
+	now time.Time,
+) *LifecycleActionFailedEvent {
+	timestamp := now.UTC()
+	return &LifecycleActionFailedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventLifecycleActionFailed,
+			EventID:     fmt.Sprintf("evt_lifecycle_failed_%s_%s_%d", allocationID, action, sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		AllocationID: allocationID,
+		OperationID:  operationID,
+		Action:       action,
+		Error:        errorMsg,
+		RolledBack:   rolledBack,
+		RetryCount:   retryCount,
+	}
 }
