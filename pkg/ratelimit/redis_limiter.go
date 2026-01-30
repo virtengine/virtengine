@@ -1,7 +1,6 @@
 package ratelimit
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -152,10 +151,10 @@ func (r *RedisRateLimiter) AllowEndpoint(ctx context.Context, endpoint string, i
 	// Apply graceful degradation
 	load, _ := r.GetCurrentLoad(ctx)
 	multiplier := r.getDegradationMultiplier(load, endpoint)
-	endpointRules = r.applyMultiplier(*endpointRules, multiplier)
+	adjustedRules := r.applyMultiplier(*endpointRules, multiplier)
 
 	endpointKey := fmt.Sprintf("%s:endpoint:%s", identifier, endpoint)
-	allowed, endpointResult, err := r.checkLimits(ctx, endpointKey, LimitTypeEndpoint, endpointRules)
+	allowed, endpointResult, err := r.checkLimits(ctx, endpointKey, LimitTypeEndpoint, adjustedRules)
 	if err != nil {
 		return false, nil, err
 	}

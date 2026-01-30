@@ -198,7 +198,7 @@ func TestGracefulDegradation(t *testing.T) {
 
 func TestWhitelisting(t *testing.T) {
 	config := DefaultConfig()
-	config.WhitelistedIPs = []string{"10.0.0.1", "10.0.0.0/24"}
+	config.WhitelistedIPs = []string{"10.0.0.1", "192.168.1.0/24"}
 	config.WhitelistedUsers = []string{"admin", "service-account"}
 
 	limiter := &RedisRateLimiter{
@@ -211,8 +211,8 @@ func TestWhitelisting(t *testing.T) {
 	})
 
 	t.Run("IP whitelist CIDR match", func(t *testing.T) {
-		assert.True(t, limiter.IsWhitelisted("10.0.0.50", LimitTypeIP))
-		assert.False(t, limiter.IsWhitelisted("10.0.1.1", LimitTypeIP))
+		assert.True(t, limiter.IsWhitelisted("192.168.1.50", LimitTypeIP))
+		assert.False(t, limiter.IsWhitelisted("192.168.2.1", LimitTypeIP))
 	})
 
 	t.Run("User whitelist", func(t *testing.T) {
