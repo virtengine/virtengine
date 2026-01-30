@@ -12,6 +12,8 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+
+	"github.com/virtengine/virtengine/pkg/pricefeed"
 )
 
 // ============================================================================
@@ -33,6 +35,9 @@ type paymentService struct {
 
 	// Metrics
 	metrics *serviceMetrics
+
+	// Price feed aggregator for real conversion rates
+	priceFeed pricefeed.Aggregator
 }
 
 // serviceMetrics tracks service-level metrics
@@ -91,6 +96,18 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 		metrics:         &serviceMetrics{},
 	}
 
+	// Initialize price feed aggregator if conversion is enabled
+	if cfg.ConversionConfig.Enabled {
+		priceFeedCfg := buildPriceFeedConfig(cfg.ConversionConfig)
+		agg, err := pricefeed.NewAggregator(priceFeedCfg)
+		if err != nil {
+			// Log warning but don't fail service creation
+			// Conversion will fall back to error when no price feed available
+		} else {
+			svc.priceFeed = agg
+		}
+	}
+
 	// Apply options
 	for _, opt := range opts {
 		opt(svc)
@@ -130,6 +147,44 @@ func (s *paymentService) registerDisputeWebhookHandlers() {
 	})
 }
 
+// buildPriceFeedConfig creates price feed config from conversion config
+func buildPriceFeedConfig(convCfg ConversionConfig) pricefeed.Config {
+	cfg := pricefeed.DefaultConfig()
+
+	// Configure providers based on price feed source
+	switch convCfg.PriceFeedSource {
+	case "coingecko":
+		cfg.Strategy = pricefeed.StrategyPrimary
+		// CoinGecko is already first priority in default config
+	case "chainlink":
+		cfg.Strategy = pricefeed.StrategyPrimary
+		// Move Chainlink to first priority
+		for i := range cfg.Providers {
+			if cfg.Providers[i].Type == pricefeed.SourceTypeChainlink {
+				cfg.Providers[i].Priority = 1
+			} else {
+				cfg.Providers[i].Priority++
+			}
+		}
+	case "pyth":
+		cfg.Strategy = pricefeed.StrategyPrimary
+		// Move Pyth to first priority
+		for i := range cfg.Providers {
+			if cfg.Providers[i].Type == pricefeed.SourceTypePyth {
+				cfg.Providers[i].Priority = 1
+			} else {
+				cfg.Providers[i].Priority++
+			}
+		}
+	case "median":
+		cfg.Strategy = pricefeed.StrategyMedian
+	case "weighted":
+		cfg.Strategy = pricefeed.StrategyWeighted
+	}
+
+	return cfg
+}
+
 // ============================================================================
 // Gateway Interface Implementation (delegated to adapter)
 // ============================================================================
@@ -147,6 +202,10 @@ func (s *paymentService) IsHealthy(ctx context.Context) bool {
 }
 
 func (s *paymentService) Close() error {
+	// Close price feed aggregator if initialized
+	if s.priceFeed != nil {
+		s.priceFeed.Close()
+	}
 	return s.gateway.Close()
 }
 
@@ -829,34 +888,40 @@ func (s *paymentService) GetConversionRate(ctx context.Context, fromCurrency Cur
 		return ConversionRate{}, fmt.Errorf("conversion not enabled")
 	}
 
-	// In production, this would call a real price feed API
-	// Supported sources: coingecko, chainlink, pyth
-	var rate sdkmath.LegacyDec
+	// Use real price feed aggregator
+	if s.priceFeed != nil {
+		// Map currency to asset pair format
+		// For fiat-to-crypto, we get crypto price in fiat then invert
+		baseAsset := strings.ToLower(toCrypto)
+		quoteAsset := strings.ToLower(string(fromCurrency))
 
-	switch s.config.ConversionConfig.PriceFeedSource {
-	case "coingecko":
-		// Would make HTTP request to CoinGecko API
-		// GET /api/v3/simple/price?ids=virtengine&vs_currencies=usd
-		// For now, use a reasonable default rate
-		rate = sdkmath.LegacyNewDecWithPrec(1000000, 6) // 1 USD = 1 UVE
-	case "chainlink":
-		// Would query Chainlink price feed oracle
-		rate = sdkmath.LegacyNewDecWithPrec(1000000, 6)
-	case "pyth":
-		// Would query Pyth price feed
-		rate = sdkmath.LegacyNewDecWithPrec(1000000, 6)
-	default:
-		// Default fallback rate
-		rate = sdkmath.LegacyNewDecWithPrec(1000000, 6)
+		price, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
+		if err == nil && price.PriceData.IsValid() {
+			// Price is in "crypto per fiat unit", so we need to invert
+			// e.g., if 1 UVE = $0.50, then rate is 2 UVE per $1
+			var rate sdkmath.LegacyDec
+			if !price.Price.IsZero() {
+				rate = sdkmath.LegacyOneDec().Quo(price.Price)
+			} else {
+				rate = sdkmath.LegacyZeroDec()
+			}
+
+			return ConversionRate{
+				FromCurrency: fromCurrency,
+				ToCrypto:     toCrypto,
+				Rate:         rate,
+				Timestamp:    price.Timestamp,
+				Source:       price.Source,
+			}, nil
+		}
+
+		// Log the error but try fallback
+		// In production, this would be logged with proper observability
 	}
 
-	return ConversionRate{
-		FromCurrency: fromCurrency,
-		ToCrypto:     toCrypto,
-		Rate:         rate,
-		Timestamp:    time.Now(),
-		Source:       s.config.ConversionConfig.PriceFeedSource,
-	}, nil
+	// Fallback: Return error if no price feed available
+	// This ensures we don't use stale/incorrect rates for financial transactions
+	return ConversionRate{}, fmt.Errorf("price feed unavailable: unable to get real-time rate for %s/%s", toCrypto, fromCurrency)
 }
 
 func (s *paymentService) CreateConversionQuote(ctx context.Context, req ConversionQuoteRequest) (ConversionQuote, error) {
