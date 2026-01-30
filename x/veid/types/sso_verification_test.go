@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until SSOLinkageMetadata API is stabilized.
-
 package types_test
 
 import (
@@ -31,10 +26,11 @@ func TestSSOLinkageMetadata_Validate(t *testing.T) {
 		{
 			name: "valid Google SSO",
 			metadata: types.NewSSOLinkageMetadata(
-				"user@example.com",
+				"linkage-123",
 				types.SSOProviderGoogle,
 				"https://accounts.google.com",
 				"123456789",
+				"random-nonce",
 				now,
 			),
 			wantErr: false,
@@ -42,10 +38,11 @@ func TestSSOLinkageMetadata_Validate(t *testing.T) {
 		{
 			name: "valid Microsoft SSO",
 			metadata: types.NewSSOLinkageMetadata(
-				"user@contoso.com",
+				"linkage-456",
 				types.SSOProviderMicrosoft,
 				"https://login.microsoftonline.com/tenant",
 				"user-oid-12345",
+				"nonce-abc",
 				now,
 			),
 			wantErr: false,
@@ -53,10 +50,11 @@ func TestSSOLinkageMetadata_Validate(t *testing.T) {
 		{
 			name: "valid GitHub SSO",
 			metadata: types.NewSSOLinkageMetadata(
-				"github_user",
+				"linkage-789",
 				types.SSOProviderGitHub,
 				"https://github.com",
 				"12345678",
+				"nonce-def",
 				now,
 			),
 			wantErr: false,
@@ -64,59 +62,68 @@ func TestSSOLinkageMetadata_Validate(t *testing.T) {
 		{
 			name: "valid custom OIDC provider",
 			metadata: types.NewSSOLinkageMetadata(
-				"custom_user",
+				"linkage-custom",
 				types.SSOProviderOIDC,
 				"https://auth.custom.com",
 				"custom-sub-123",
+				"nonce-ghi",
 				now,
 			),
 			wantErr: false,
 		},
 		{
-			name: "invalid - empty subject ID",
+			name: "invalid - empty linkage ID",
 			metadata: &types.SSOLinkageMetadata{
-				Version:    types.SSOLinkageVersion,
-				SubjectID:  "",
-				Provider:   types.SSOProviderGoogle,
-				IssuerURL:  "https://accounts.google.com",
-				ExternalID: "123456789",
-				LinkedAt:   now,
+				Version:     types.SSOVerificationVersion,
+				LinkageID:   "",
+				Provider:    types.SSOProviderGoogle,
+				Issuer:      "https://accounts.google.com",
+				SubjectHash: types.HashSubjectID("123456789"),
+				Nonce:       "nonce",
+				VerifiedAt:  now,
+				Status:      types.SSOStatusVerified,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty issuer URL",
+			name: "invalid - empty issuer",
 			metadata: &types.SSOLinkageMetadata{
-				Version:    types.SSOLinkageVersion,
-				SubjectID:  "user@example.com",
-				Provider:   types.SSOProviderGoogle,
-				IssuerURL:  "",
-				ExternalID: "123456789",
-				LinkedAt:   now,
+				Version:     types.SSOVerificationVersion,
+				LinkageID:   "linkage-123",
+				Provider:    types.SSOProviderGoogle,
+				Issuer:      "",
+				SubjectHash: types.HashSubjectID("123456789"),
+				Nonce:       "nonce",
+				VerifiedAt:  now,
+				Status:      types.SSOStatusVerified,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty external ID",
+			name: "invalid - empty subject hash",
 			metadata: &types.SSOLinkageMetadata{
-				Version:    types.SSOLinkageVersion,
-				SubjectID:  "user@example.com",
-				Provider:   types.SSOProviderGoogle,
-				IssuerURL:  "https://accounts.google.com",
-				ExternalID: "",
-				LinkedAt:   now,
+				Version:     types.SSOVerificationVersion,
+				LinkageID:   "linkage-123",
+				Provider:    types.SSOProviderGoogle,
+				Issuer:      "https://accounts.google.com",
+				SubjectHash: "",
+				Nonce:       "nonce",
+				VerifiedAt:  now,
+				Status:      types.SSOStatusVerified,
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid - invalid provider type",
 			metadata: &types.SSOLinkageMetadata{
-				Version:    types.SSOLinkageVersion,
-				SubjectID:  "user@example.com",
-				Provider:   "invalid_provider",
-				IssuerURL:  "https://example.com",
-				ExternalID: "123",
-				LinkedAt:   now,
+				Version:     types.SSOVerificationVersion,
+				LinkageID:   "linkage-123",
+				Provider:    "invalid_provider",
+				Issuer:      "https://example.com",
+				SubjectHash: types.HashSubjectID("123"),
+				Nonce:       "nonce",
+				VerifiedAt:  now,
+				Status:      types.SSOStatusVerified,
 			},
 			wantErr: true,
 		},
@@ -136,40 +143,36 @@ func TestSSOLinkageMetadata_Validate(t *testing.T) {
 
 func TestHashSubjectID(t *testing.T) {
 	tests := []struct {
-		name       string
-		issuer     string
-		externalID string
+		name      string
+		subjectID string
 	}{
 		{
-			name:       "Google subject",
-			issuer:     "https://accounts.google.com",
-			externalID: "123456789012345678901",
+			name:      "Google subject",
+			subjectID: "123456789012345678901",
 		},
 		{
-			name:       "Microsoft subject",
-			issuer:     "https://login.microsoftonline.com/tenant-id",
-			externalID: "user-object-id-12345",
+			name:      "Microsoft subject",
+			subjectID: "user-object-id-12345",
 		},
 		{
-			name:       "GitHub subject",
-			issuer:     "https://github.com",
-			externalID: "12345678",
+			name:      "GitHub subject",
+			subjectID: "12345678",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hash := types.HashSubjectID(tt.issuer, tt.externalID)
+			hash := types.HashSubjectID(tt.subjectID)
 
 			// Hash should be 64 hex characters (SHA256)
 			assert.Len(t, hash, 64, "HashSubjectID() length should be 64")
 
 			// Hash should be deterministic
-			hash2 := types.HashSubjectID(tt.issuer, tt.externalID)
+			hash2 := types.HashSubjectID(tt.subjectID)
 			assert.Equal(t, hash, hash2, "HashSubjectID() should be deterministic")
 
 			// Different inputs should produce different hashes
-			hash3 := types.HashSubjectID(tt.issuer, tt.externalID+"x")
+			hash3 := types.HashSubjectID(tt.subjectID + "x")
 			assert.NotEqual(t, hash, hash3, "HashSubjectID() should produce different hashes for different inputs")
 		})
 	}
@@ -187,7 +190,6 @@ func TestSSOProviderTypes(t *testing.T) {
 
 func TestSSOVerificationChallenge_Validate(t *testing.T) {
 	now := time.Now()
-	future := now.Add(15 * time.Minute)
 
 	tests := []struct {
 		name      string
@@ -200,68 +202,48 @@ func TestSSOVerificationChallenge_Validate(t *testing.T) {
 				"challenge-123",
 				"cosmos1abc...",
 				types.SSOProviderGoogle,
-				"https://accounts.google.com",
-				"random-state-value",
 				"random-nonce-value",
-				"https://app.example.com/callback",
 				now,
-				future,
+				900, // 15 minutes TTL
 			),
 			wantErr: false,
 		},
 		{
 			name: "invalid - empty challenge ID",
 			challenge: &types.SSOVerificationChallenge{
-				Version:     types.SSOChallengeVersion,
-				ChallengeID: "",
-				VeidOwner:   "cosmos1abc...",
-				Provider:    types.SSOProviderGoogle,
-				State:       "random-state",
-				Nonce:       "random-nonce",
-				CreatedAt:   now,
-				ExpiresAt:   future,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - empty state",
-			challenge: &types.SSOVerificationChallenge{
-				Version:     types.SSOChallengeVersion,
-				ChallengeID: "challenge-123",
-				VeidOwner:   "cosmos1abc...",
-				Provider:    types.SSOProviderGoogle,
-				State:       "",
-				Nonce:       "random-nonce",
-				CreatedAt:   now,
-				ExpiresAt:   future,
+				ChallengeID:    "",
+				AccountAddress: "cosmos1abc...",
+				Provider:       types.SSOProviderGoogle,
+				Nonce:          "random-nonce",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(15 * time.Minute),
+				Status:         types.SSOStatusPending,
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid - empty nonce",
 			challenge: &types.SSOVerificationChallenge{
-				Version:     types.SSOChallengeVersion,
-				ChallengeID: "challenge-123",
-				VeidOwner:   "cosmos1abc...",
-				Provider:    types.SSOProviderGoogle,
-				State:       "random-state",
-				Nonce:       "",
-				CreatedAt:   now,
-				ExpiresAt:   future,
+				ChallengeID:    "challenge-123",
+				AccountAddress: "cosmos1abc...",
+				Provider:       types.SSOProviderGoogle,
+				Nonce:          "",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(15 * time.Minute),
+				Status:         types.SSOStatusPending,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - expired",
+			name: "invalid - empty account address",
 			challenge: &types.SSOVerificationChallenge{
-				Version:     types.SSOChallengeVersion,
-				ChallengeID: "challenge-123",
-				VeidOwner:   "cosmos1abc...",
-				Provider:    types.SSOProviderGoogle,
-				State:       "random-state",
-				Nonce:       "random-nonce",
-				CreatedAt:   now.Add(-1 * time.Hour),
-				ExpiresAt:   now.Add(-30 * time.Minute),
+				ChallengeID:    "challenge-123",
+				AccountAddress: "",
+				Provider:       types.SSOProviderGoogle,
+				Nonce:          "random-nonce",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(15 * time.Minute),
+				Status:         types.SSOStatusPending,
 			},
 			wantErr: true,
 		},
@@ -282,54 +264,95 @@ func TestSSOVerificationChallenge_Validate(t *testing.T) {
 func TestSSOVerificationChallenge_IsExpired(t *testing.T) {
 	now := time.Now()
 
-	notExpired := &types.SSOVerificationChallenge{
-		ExpiresAt: now.Add(15 * time.Minute),
-	}
+	notExpired := types.NewSSOVerificationChallenge(
+		"challenge-123",
+		"cosmos1abc...",
+		types.SSOProviderGoogle,
+		"random-nonce",
+		now,
+		900, // 15 minutes TTL
+	)
 	assert.False(t, notExpired.IsExpired(now), "Challenge should not be expired")
 
-	expired := &types.SSOVerificationChallenge{
-		ExpiresAt: now.Add(-1 * time.Minute),
-	}
+	// Create an expired challenge
+	expired := types.NewSSOVerificationChallenge(
+		"challenge-456",
+		"cosmos1abc...",
+		types.SSOProviderGoogle,
+		"random-nonce",
+		now.Add(-20*time.Minute), // Created 20 minutes ago
+		900,                      // 15 minutes TTL (so expired)
+	)
 	assert.True(t, expired.IsExpired(now), "Challenge should be expired")
 }
 
-func TestSSOLinkageMetadata_IsRevoked(t *testing.T) {
+func TestSSOLinkageMetadata_IsActive(t *testing.T) {
 	now := time.Now()
 
-	active := &types.SSOLinkageMetadata{
-		LinkedAt:  now.Add(-1 * time.Hour),
-		RevokedAt: nil,
-	}
-	assert.False(t, active.IsRevoked(), "Linkage should not be revoked")
+	// Active linkage
+	active := types.NewSSOLinkageMetadata(
+		"linkage-123",
+		types.SSOProviderGoogle,
+		"https://accounts.google.com",
+		"subject-123",
+		"nonce",
+		now.Add(-1*time.Hour),
+	)
+	assert.True(t, active.IsActive(), "Linkage should be active")
 
-	revokedAt := now.Add(-30 * time.Minute)
-	revoked := &types.SSOLinkageMetadata{
-		LinkedAt:  now.Add(-1 * time.Hour),
-		RevokedAt: &revokedAt,
-	}
-	assert.True(t, revoked.IsRevoked(), "Linkage should be revoked")
+	// Revoked linkage
+	revoked := types.NewSSOLinkageMetadata(
+		"linkage-456",
+		types.SSOProviderGoogle,
+		"https://accounts.google.com",
+		"subject-456",
+		"nonce",
+		now.Add(-1*time.Hour),
+	)
+	revoked.Status = types.SSOStatusRevoked
+	assert.False(t, revoked.IsActive(), "Revoked linkage should not be active")
+
+	// Expired linkage
+	expiredTime := now.Add(-30 * time.Minute)
+	expiredLinkage := types.NewSSOLinkageMetadata(
+		"linkage-789",
+		types.SSOProviderGoogle,
+		"https://accounts.google.com",
+		"subject-789",
+		"nonce",
+		now.Add(-1*time.Hour),
+	)
+	expiredLinkage.ExpiresAt = &expiredTime
+	assert.False(t, expiredLinkage.IsActive(), "Expired linkage should not be active")
 }
 
-func TestSSOLinkageMetadata_GetHashedSubjectID(t *testing.T) {
+func TestSSOLinkageMetadata_String(t *testing.T) {
 	now := time.Now()
 
 	metadata := types.NewSSOLinkageMetadata(
-		"user@example.com",
+		"linkage-123",
 		types.SSOProviderGoogle,
 		"https://accounts.google.com",
-		"123456789",
+		"subject-123",
+		"nonce",
 		now,
 	)
 
-	hashed := metadata.GetHashedSubjectID()
+	str := metadata.String()
+	assert.Contains(t, str, "linkage-123", "String should contain linkage ID")
+	assert.Contains(t, str, "google", "String should contain provider")
+	assert.Contains(t, strings.ToLower(str), "verified", "String should contain status")
+}
 
-	// Should be 64 hex characters
-	assert.Len(t, hashed, 64, "GetHashedSubjectID() length should be 64")
+func TestSSOScoringWeights(t *testing.T) {
+	weights := types.DefaultSSOScoringWeights()
+	assert.NotEmpty(t, weights, "Default SSO scoring weights should not be empty")
 
-	// Should be lowercase hex
-	assert.Equal(t, strings.ToLower(hashed), hashed, "GetHashedSubjectID() should return lowercase hex")
+	// Check that Google provider has a weight
+	googleWeight := types.GetSSOScoringWeight(types.SSOProviderGoogle)
+	assert.Greater(t, googleWeight, uint32(0), "Google provider should have positive weight")
 
-	// Should be deterministic
-	hashed2 := metadata.GetHashedSubjectID()
-	assert.Equal(t, hashed, hashed2, "GetHashedSubjectID() should be deterministic")
+	// Check that invalid provider returns 0
+	invalidWeight := types.GetSSOScoringWeight("invalid")
+	assert.Equal(t, uint32(0), invalidWeight, "Invalid provider should return 0 weight")
 }

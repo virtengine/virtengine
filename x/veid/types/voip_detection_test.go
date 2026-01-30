@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until CarrierType API is stabilized.
-
 package types_test
 
 import (
@@ -602,13 +597,13 @@ func TestVoIPRiskLevel_Values(t *testing.T) {
 }
 
 func TestAllCarrierTypes(t *testing.T) {
-	types := types.AllCarrierTypes()
+	carrierTypes := types.AllCarrierTypes()
 
-	assert.Len(t, types, 6)
-	assert.Contains(t, types, types.CarrierTypeMobile)
-	assert.Contains(t, types, types.CarrierTypeLandline)
-	assert.Contains(t, types, types.CarrierTypeVoIP)
-	assert.Contains(t, types, types.CarrierTypeTollFree)
-	assert.Contains(t, types, types.CarrierTypePremium)
-	assert.Contains(t, types, types.CarrierTypeUnknown)
+	assert.Len(t, carrierTypes, 6)
+	assert.Contains(t, carrierTypes, types.CarrierTypeMobile)
+	assert.Contains(t, carrierTypes, types.CarrierTypeLandline)
+	assert.Contains(t, carrierTypes, types.CarrierTypeVoIP)
+	assert.Contains(t, carrierTypes, types.CarrierTypeTollFree)
+	assert.Contains(t, carrierTypes, types.CarrierTypePremium)
+	assert.Contains(t, carrierTypes, types.CarrierTypeUnknown)
 }
