@@ -1,6 +1,8 @@
 # VirtEngine Infrastructure CI/CD
 
 name: Infrastructure
+permissions:
+  contents: read
 
 on:
   push:
