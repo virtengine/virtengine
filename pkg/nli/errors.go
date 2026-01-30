@@ -2,7 +2,6 @@ package nli
 
 import (
 	"errors"
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // Service errors
@@ -63,4 +62,16 @@ var (
 
 	// ErrLowConfidence is returned when classification confidence is too low
 	ErrLowConfidence = errors.New("nli: classification confidence too low")
+)
+
+// Session errors
+var (
+	// ErrSessionNotFound is returned when a session is not found
+	ErrSessionNotFound = errors.New("nli: session not found")
+
+	// ErrSessionExpired is returned when a session has expired
+	ErrSessionExpired = errors.New("nli: session expired")
+
+	// ErrSessionStoreClosed is returned when the session store is closed
+	ErrSessionStoreClosed = errors.New("nli: session store closed")
 )
