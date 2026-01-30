@@ -1,0 +1,78 @@
+# VirtEngine ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: virtengine-config
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine
+    app.kubernetes.io/component: config
+data:
+  # Chain configuration
+  CHAIN_ID: "virtengine-1"
+  MONIKER: "virtengine-node"
+  
+  # Logging
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  
+  # Network
+  P2P_PORT: "26656"
+  RPC_PORT: "26657"
+  REST_PORT: "1317"
+  GRPC_PORT: "9090"
+  GRPC_WEB_PORT: "9091"
+  PROMETHEUS_PORT: "26660"
+  
+  # State sync (disabled by default)
+  STATE_SYNC_ENABLE: "false"
+  
+  # Pruning
+  PRUNING: "default"
+  PRUNING_KEEP_RECENT: "100"
+  PRUNING_INTERVAL: "10"
+  
+  # Indexer
+  INDEXER: "kv"
+  
+  # API settings
+  API_ENABLE: "true"
+  API_SWAGGER: "false"
+  
+  # Telemetry
+  TELEMETRY_ENABLED: "true"
+  TELEMETRY_SERVICE_NAME: "virtengine-node"
+---
+# Provider Daemon ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: provider-daemon-config
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+    app.kubernetes.io/component: config
+data:
+  # Node connection
+  VIRTENGINE_NODE_URL: "http://virtengine-node:26657"
+  VIRTENGINE_GRPC_URL: "virtengine-node:9090"
+  
+  # Provider settings
+  PROVIDER_HOST: "0.0.0.0"
+  PROVIDER_PORT: "8443"
+  PROVIDER_GRPC_PORT: "8444"
+  METRICS_PORT: "9100"
+  
+  # Logging
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  
+  # Bid engine
+  BID_PRICE_CPU_SCALE: "1.0"
+  BID_PRICE_MEMORY_SCALE: "1.0"
+  BID_PRICE_STORAGE_SCALE: "1.0"
+  BID_PRICE_ENDPOINT_SCALE: "1.0"
+  
+  # Kubernetes adapter
+  KUBE_NAMESPACE_PREFIX: "lease-"
+  KUBE_RESOURCE_LIMITS_ENABLED: "true"

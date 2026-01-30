@@ -1,0 +1,27 @@
+# Pod Disruption Budgets
+# Ensures high availability during voluntary disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: virtengine-node-pdb
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: virtengine-node
+spec:
+  minAvailable: 2  # Ensure quorum for consensus
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virtengine-node
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: provider-daemon-pdb
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: provider-daemon
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: provider-daemon

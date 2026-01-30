@@ -1,0 +1,30 @@
+# VirtEngine Kubernetes Base Manifests
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: virtengine
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - virtengine-node-deployment.yaml
+  - virtengine-node-service.yaml
+  - provider-daemon-deployment.yaml
+  - provider-daemon-service.yaml
+  - pdb.yaml
+  - hpa.yaml
+  - networkpolicy.yaml
+
+configMapGenerator:
+  - name: virtengine-config
+    behavior: merge
+    literals:
+      - CHAIN_ID=virtengine-1
+      - LOG_LEVEL=info
+
+images:
+  - name: virtengine/virtengine-node
+    newTag: latest
+  - name: virtengine/provider-daemon
+    newTag: latest
