@@ -1,6 +1,6 @@
 {
   "projectName": "VirtEngine Production Readiness - Military Grade",
-  "description": "Comprehensive task breakdown to achieve 100% production-ready status for VirtEngine blockchain. Updated 2026-01-30 - 93% complete.",
+  "description": "Comprehensive task breakdown to achieve 100% production-ready status for VirtEngine blockchain. Updated 2026-01-30 - 68% complete.",
   "targetDate": "2026-02-28",
   "columns": [
     {
@@ -1508,32 +1508,560 @@
         "moab"
       ],
       "column": "ready"
+    },
+    {
+      "description": "Create production-grade data ingestion and labeling pipeline for VEID identity scoring.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 120,
+      "title": "Build Production VEID Training Dataset + Labeling Pipeline",
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "dataset",
+        "training"
+      ],
+      "acceptanceCriteria": [
+        "Production data ingestion and labeling process implemented",
+        "PII-safe storage and access controls enforced",
+        "Dataset versioning and provenance tracking",
+        "Reproducible train/validation/test splits"
+      ],
+      "id": "VEID-ML-001",
+      "dependencies": []
+    },
+    {
+      "description": "Train the VEID model and export a TensorFlow SavedModel with pinned hash/version.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "title": "Train + Export TensorFlow SavedModel (Trust Score)",
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "model",
+        "tensorflow"
+      ],
+      "acceptanceCriteria": [
+        "Model trained and exported as TensorFlow SavedModel",
+        "Model hash recorded and pinned",
+        "Artifact stored in approved registry/object store",
+        "On-chain model version updated"
+      ],
+      "id": "VEID-ML-002",
+      "dependencies": [
+        "VEID-ML-001"
+      ]
+    },
+    {
+      "description": "Replace simulated sidecar and stubbed scoring with real deterministic inference.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "title": "Implement Real Inference Runtime (Sidecar/Embedded TF)",
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "inference",
+        "sidecar"
+      ],
+      "acceptanceCriteria": [
+        "Real gRPC sidecar or embedded TensorFlow inference implemented",
+        "Deterministic conformance tests across validators",
+        "Health checks and observability wired",
+        "Consensus input/output hashing validated"
+      ],
+      "id": "VEID-ML-003",
+      "dependencies": [
+        "VEID-ML-002"
+      ]
+    },
+    {
+      "description": "Replace hash-based placeholders with real biometric/document feature extraction.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 80,
+      "title": "Implement Real Feature Extraction (Face/OCR/Liveness)",
+      "category": "VEID ML",
+      "labels": [
+        "veid",
+        "ml",
+        "feature-extraction",
+        "ocr"
+      ],
+      "acceptanceCriteria": [
+        "Face embeddings extracted from selfie/video scopes",
+        "OCR + document quality features extracted",
+        "Liveness checks integrated",
+        "Feature pipeline aligned with training inputs"
+      ],
+      "id": "VEID-ML-004",
+      "dependencies": [
+        "VEID-ML-001",
+        "VEID-ML-002"
+      ]
+    },
+    {
+      "description": "Implement SSO/OIDC verification service with signed attestations for on-chain linkage.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "title": "SSO/OIDC Verification Service",
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "sso",
+        "oidc"
+      ],
+      "acceptanceCriteria": [
+        "OIDC/SAML verification service implemented",
+        "Signed attestations submitted on-chain",
+        "Issuer configuration + replay protection",
+        "Revocation flows supported"
+      ],
+      "id": "VEID-VERIF-001",
+      "dependencies": []
+    },
+    {
+      "description": "Implement email verification delivery and on-chain attestation pipeline.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 24,
+      "title": "Email Verification Delivery + Attestation",
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "email",
+        "verification"
+      ],
+      "acceptanceCriteria": [
+        "Email OTP/link delivery service implemented",
+        "Signed verification attestation submitted on-chain",
+        "Rate limiting + audit trail"
+      ],
+      "id": "VEID-VERIF-002",
+      "dependencies": []
+    },
+    {
+      "description": "Integrate SMS gateway and anti-fraud checks for SMS verification.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 32,
+      "title": "SMS Verification Delivery + Anti-Fraud",
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "sms",
+        "verification"
+      ],
+      "acceptanceCriteria": [
+        "SMS OTP delivery implemented",
+        "Signed verification attestation submitted on-chain",
+        "VoIP detection + resend throttling"
+      ],
+      "id": "VEID-VERIF-003",
+      "dependencies": []
+    },
+    {
+      "description": "Integrate mobile capture (document + selfie + liveness) with secure scope packaging.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 60,
+      "title": "Mobile Capture + Biometric Pipeline Integration",
+      "category": "VEID Verification",
+      "labels": [
+        "veid",
+        "mobile",
+        "biometric"
+      ],
+      "acceptanceCriteria": [
+        "Mobile capture pipeline integrated",
+        "Secure upload + encrypted scope packaging",
+        "Device attestation + capture protocol validation"
+      ],
+      "id": "VEID-VERIF-004",
+      "dependencies": []
+    },
+    {
+      "description": "Deploy and manage SLURM controllers/compute nodes across provider K8s clusters.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 120,
+      "title": "Automate SLURM Deployment Across Kubernetes Clusters",
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "slurm",
+        "kubernetes"
+      ],
+      "acceptanceCriteria": [
+        "Automated SLURM controller/compute deployment on K8s",
+        "Cluster bootstrap + join/leave workflows",
+        "Provider-configurable cluster templates"
+      ],
+      "id": "HPC-SLURM-001",
+      "dependencies": []
+    },
+    {
+      "description": "Provision HPC nodes and feed heartbeat/latency metrics into on-chain metadata.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "title": "Node Registration + Heartbeat Pipeline",
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "node",
+        "registration",
+        "latency"
+      ],
+      "acceptanceCriteria": [
+        "Node registration flow implemented",
+        "Heartbeat + capacity reporting",
+        "Latency measurement ingestion",
+        "Auto-deactivation on missed heartbeats"
+      ],
+      "id": "HPC-NODE-001",
+      "dependencies": [
+        "HPC-SLURM-001"
+      ]
+    },
+    {
+      "description": "Wire HPC adapters into provider daemon and post job lifecycle updates on-chain.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "title": "Integrate SLURM/MOAB/OOD Adapters with Provider Daemon",
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "slurm",
+        "moab",
+        "ood",
+        "provider-daemon"
+      ],
+      "acceptanceCriteria": [
+        "Provider daemon submits/monitors jobs via adapters",
+        "Job lifecycle updates posted on-chain",
+        "Secure credential management for HPC backends"
+      ],
+      "id": "HPC-ADAPTER-001",
+      "dependencies": [
+        "HPC-SLURM-001"
+      ]
+    },
+    {
+      "description": "Create a library of validated SLURM workload templates and custom workload packaging.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 60,
+      "title": "Preconfigured Workload Library + Custom Packaging",
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "slurm",
+        "workloads"
+      ],
+      "acceptanceCriteria": [
+        "Validated SLURM job templates (MPI/GPU/batch)",
+        "Custom workload packaging + validation",
+        "Signed workload manifests stored in artifact store"
+      ],
+      "id": "HPC-WORKLOAD-001",
+      "dependencies": []
+    },
+    {
+      "description": "Ingest HPC usage metrics and generate billing + reward distribution.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "title": "Usage Accounting → Billing + Rewards",
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "billing",
+        "rewards"
+      ],
+      "acceptanceCriteria": [
+        "Usage metrics ingested from SLURM/MOAB/OOD",
+        "On-chain billing records generated",
+        "Reward distribution tied to usage metrics"
+      ],
+      "id": "HPC-BILL-001",
+      "dependencies": [
+        "HPC-ADAPTER-001"
+      ]
+    },
+    {
+      "description": "Ensure provider daemon enforces x/hpc scheduling decisions for job placement.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "title": "Enforce On-Chain Scheduling in Job Placement",
+      "category": "HPC",
+      "labels": [
+        "hpc",
+        "routing",
+        "scheduling"
+      ],
+      "acceptanceCriteria": [
+        "Provider daemon consumes scheduling decisions",
+        "Job placement respects proximity/capacity scores",
+        "Fallback routing with audit reasons"
+      ],
+      "id": "HPC-ROUTE-001",
+      "dependencies": [
+        "HPC-NODE-001"
+      ]
+    },
+    {
+      "description": "Sync on-chain offerings to Waldur automatically; remove manual offering map.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "title": "Automated Offering Sync (Chain → Waldur)",
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "waldur",
+        "sync"
+      ],
+      "acceptanceCriteria": [
+        "On-chain offering create/update triggers Waldur sync",
+        "Sync status stored on-chain with retries",
+        "Manual mapping removed"
+      ],
+      "id": "MKP-WALDUR-001",
+      "dependencies": []
+    },
+    {
+      "description": "Import Waldur service/VM listings into on-chain marketplace.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "title": "Listing Ingestion (Waldur → Chain)",
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "waldur",
+        "listing"
+      ],
+      "acceptanceCriteria": [
+        "Waldur offerings imported into on-chain marketplace",
+        "Metadata + pricing normalized",
+        "Provider ownership validated"
+      ],
+      "id": "MKP-WALDUR-002",
+      "dependencies": [
+        "MKP-WALDUR-001"
+      ]
+    },
+    {
+      "description": "Implement start/stop/resize/terminate via Waldur APIs and signed callbacks.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 80,
+      "title": "Resource Lifecycle Control",
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "waldur",
+        "lifecycle"
+      ],
+      "acceptanceCriteria": [
+        "Lifecycle operations supported via Waldur",
+        "Signed callbacks enforce on-chain transitions",
+        "Audit trail for lifecycle events"
+      ],
+      "id": "MKP-WALDUR-003",
+      "dependencies": [
+        "MKP-WALDUR-001"
+      ]
+    },
+    {
+      "description": "Wire usage reporting to on-chain settlement and invoicing.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "title": "Usage Reporting → Settlement",
+      "category": "Marketplace",
+      "labels": [
+        "marketplace",
+        "usage",
+        "settlement"
+      ],
+      "acceptanceCriteria": [
+        "Provider daemon submits usage reports",
+        "Settlement module consumes usage",
+        "Invoice/payout events emitted"
+      ],
+      "id": "MKP-WALDUR-004",
+      "dependencies": [
+        "MKP-WALDUR-003"
+      ]
+    },
+    {
+      "description": "Implement encrypted support request module with access control and lifecycle events.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "title": "On-Chain Support Request Module (Encrypted)",
+      "category": "Support",
+      "labels": [
+        "support",
+        "encryption",
+        "tickets"
+      ],
+      "acceptanceCriteria": [
+        "Support request messages + encrypted payloads",
+        "Access control for support staff/customer",
+        "Lifecycle events for ticket state"
+      ],
+      "id": "SUPPORT-001",
+      "dependencies": []
+    },
+    {
+      "description": "Bridge support request events to Jira/Waldur service desk with bi-directional sync.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 32,
+      "title": "Jira/Waldur Service Desk Integration",
+      "category": "Support",
+      "labels": [
+        "support",
+        "jira",
+        "waldur"
+      ],
+      "acceptanceCriteria": [
+        "Support request events create/update tickets",
+        "Bi-directional status sync",
+        "Audit trail for ticket actions"
+      ],
+      "id": "SUPPORT-002",
+      "dependencies": [
+        "SUPPORT-001"
+      ]
+    },
+    {
+      "description": "Generate usage-based invoices and persist immutable ledger records.",
+      "priority": "P0-Critical",
+      "assignedTo": null,
+      "column": "ready",
+      "estimatedHours": 60,
+      "title": "Invoice Generation + Ledger Persistence",
+      "category": "Billing",
+      "labels": [
+        "billing",
+        "invoices",
+        "ledger"
+      ],
+      "acceptanceCriteria": [
+        "Invoices generated for marketplace + HPC usage",
+        "Immutable invoice ledger records on-chain",
+        "Invoice export format (PDF/JSON)"
+      ],
+      "id": "BILL-001",
+      "dependencies": [
+        "HPC-BILL-001",
+        "MKP-WALDUR-004"
+      ]
+    },
+    {
+      "description": "Wire invoices to escrow settlement and provider payout flows.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "title": "Settlement + Payout Integration",
+      "category": "Billing",
+      "labels": [
+        "billing",
+        "settlement",
+        "payout"
+      ],
+      "acceptanceCriteria": [
+        "Escrow release triggered by invoice settlement",
+        "Provider payouts + treasury accounting",
+        "Dispute holdbacks and resolution paths"
+      ],
+      "id": "BILL-002",
+      "dependencies": [
+        "BILL-001"
+      ]
+    },
+    {
+      "description": "Implement fiat off-ramp integration (PayPal/ACH) for token-to-fiat payouts.",
+      "priority": "P1-High",
+      "assignedTo": null,
+      "column": "backlog",
+      "estimatedHours": 40,
+      "title": "Fiat Off-Ramp (PayPal/ACH) Integration",
+      "category": "Payments",
+      "labels": [
+        "payment",
+        "fiat",
+        "paypal"
+      ],
+      "acceptanceCriteria": [
+        "Off-ramp provider integration implemented",
+        "KYC/AML compliance hooks",
+        "Audit trail + reconciliation reporting"
+      ],
+      "id": "PAY-004",
+      "dependencies": [
+        "PAY-002"
+      ]
     }
   ],
   "metrics": {
-    "totalTasks": 60,
+    "totalTasks": 83,
     "completedTasks": 15,
     "inProgressTasks": 0,
-    "remainingTasks": 45,
-    "totalEstimatedHours": 2584.0,
+    "remainingTasks": 68,
+    "totalEstimatedHours": 3992.0,
     "completedHours": 328.0,
-    "criticalTasks": 20,
-    "highPriorityTasks": 26,
+    "criticalTasks": 31,
+    "highPriorityTasks": 38,
     "mediumPriorityTasks": 14,
-    "productionReadiness": "93%"
+    "productionReadiness": "68%"
   },
   "summary": {
-    "description": "Updated 2026-01-30: Proto stubs resolved and core modules complete. Remaining gaps: TEE hardware deployment, payment conversion/dispute hardening, artifact store backend, distributed NLI sessions, and provider daemon streaming.",
+    "description": "Updated 2026-01-30: Spec-critical gaps identified (VEID ML pipeline, HPC SLURM automation, marketplace/Waldur end-to-end, support desk, billing/invoicing), plus hardening items (TEE hardware, payment conversion, artifact store, NLI sessions, provider streaming).",
     "keyFocusAreas": [
-      "TEE Hardware Deployment (SGX/SEV/Nitro - 2-4 weeks)",
-      "Payment Conversion + Disputes (Price feed + execution - 2-3 weeks)",
-      "Artifact Store Backend (Waldur integration - 2-3 weeks)",
-      "Provider Daemon Streaming (Event subscriptions - 2 weeks)",
-      "Distributed NLI Sessions (Redis - 1-2 weeks)",
-      "Load Testing (1M node simulation - 4 weeks)",
-      "SOC 2 Certification (Compliance - 8-12 weeks)"
+      "VEID ML Pipeline + Deterministic Inference",
+      "HPC SLURM Automation + Node Registration",
+      "Marketplace/Waldur Listing + Lifecycle Control",
+      "Billing/Invoices + Settlement Integration",
+      "Support Requests + Service Desk Bridge",
+      "TEE Hardware Deployment",
+      "Payment Conversion + Disputes",
+      "Provider Daemon Streaming",
+      "Load Testing (1M node simulation)"
     ],
-    "estimatedCompletionTime": "3-6 weeks for hardening + TEE hardware; 2-3 months for compliance",
-    "criticalPath": "TEE Hardware → Payment Conversion → Artifact Store → Provider Streaming → Load Testing → SOC 2 Certification"
+    "estimatedCompletionTime": "2-4 months for spec-critical gaps; 2-3 months for compliance",
+    "criticalPath": "VEID ML → HPC SLURM → Marketplace/Waldur → Billing/Support → TEE Hardware → Payment Conversion → Load Testing → SOC 2"
   }
 }

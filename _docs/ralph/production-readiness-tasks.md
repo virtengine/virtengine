@@ -4,6 +4,7 @@
 
 Based on comprehensive analysis of:
 
+- `_docs/AU2024203136A1-LIVE.pdf` - Original VirtEngine specification baseline
 - `_docs/veid-flow-spec.md` - VEID three-layer model specification
 - `_docs/ralph/prd.json` - User stories VE-200 through VE-804
 - `x/veid/`, `x/mfa/`, `x/roles/`, `x/market/` implementations
@@ -14,24 +15,33 @@ Based on comprehensive analysis of:
 | Blocker ID | Description                                 | Current Status                                                                                |
 | ---------- | ------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | BLOCK-004  | 🟡 TEE hardware deployment                  | SGX/SEV-SNP/Nitro adapters implemented; production hardware rollout pending                   |
+| BLOCK-013  | 🔴 VEID ML production pipeline              | ML training pipeline exists, but no dataset/model artifacts and inference is stubbed         |
+| BLOCK-014  | 🔴 HPC SLURM automation + node registration | No automated SLURM/K8s deployment or node provisioning pipeline                               |
+| BLOCK-015  | 🔴 Marketplace/Waldur end-to-end            | Manual offering map; missing automated listing/purchase/control lifecycle                     |
+| BLOCK-016  | 🔴 Billing & invoicing                      | Usage-driven billing/invoices for HPC/marketplace not implemented                             |
+| BLOCK-017  | 🔴 Support requests + service desk          | No on-chain support request module; Jira/Waldur integration not wired                         |
 | BLOCK-009  | 🟡 Payment conversion & disputes            | Price feed integration, conversion execution, and dispute lifecycle persistence pending      |
 | BLOCK-010  | 🟡 Artifact store backend                   | Waldur artifact backend still stubbed (no real storage API integration)                       |
 | BLOCK-011  | 🟡 NLI session storage                      | In-memory sessions + rate limits; requires Redis/distributed backing                          |
 | BLOCK-012  | 🟡 Provider daemon event streaming          | Order/config polling still used; needs WebSocket/gRPC streaming for scale                     |
+| BLOCK-018  | 🟡 Fiat off-ramp (PayPal/ACH)               | Spec requires fiat exchange; no PayPal/off-ramp integration in repo                            |
 
 ### Module Completion Matrix (Updated 2026-01-30)
 
 | Module              | Completion | Status                                                                |
 | ------------------- | ---------- | --------------------------------------------------------------------- |
-| x/veid              | 90%        | ✅ Tier transitions, scoring, wallet, salt-binding complete           |
-| x/mfa               | 90%        | ✅ Verification flows, session management, ante handler complete      |
-| x/roles             | 75%        | ✅ MsgServer/QueryServer enabled; proto generation complete           |
-| x/market            | 90%        | ✅ VEID gating integration complete                                   |
-| x/escrow            | 85%        | ✅ Settlement automation complete                                     |
+| x/veid              | 75%        | 🟡 Core flows exist; ML scoring stubbed + SSO/email/SMS integrations missing |
+| x/mfa               | 85%        | 🟡 Verification flows complete; off-chain OTP attestation missing     |
+| x/roles             | 70%        | 🟡 Role metadata present; admin/support workflows missing             |
+| x/market            | 70%        | 🟡 Orders/offerings exist; Waldur sync + lifecycle control missing    |
+| x/hpc               | 55%        | 🟡 On-chain scheduling/metadata exist; off-chain SLURM automation missing |
+| x/escrow            | 80%        | 🟡 Settlement core present; usage billing/invoicing not wired         |
 | pkg/enclave_runtime | 85%        | ✅ SGX/SEV-SNP/Nitro adapters + Manager (hardware deployment pending) |
+| pkg/inference       | 50%        | 🔴 TensorFlow pipeline incomplete; sidecar gRPC is stubbed            |
+| pkg/provider_daemon | 70%        | 🟡 Waldur bridge partial; HPC adapters unused; streaming not wired    |
 | pkg/govdata         | 95%        | ✅ AAMVA DLDV + DVS + eIDAS + GOV.UK adapters                         |
 | pkg/edugain         | 90%        | ✅ goxmldsig XML-DSig verification complete                           |
-| pkg/payment         | 90%        | ✅ Stripe/Adyen gateways complete; conversion/dispute flows pending   |
+| pkg/payment         | 80%        | 🟡 Stripe/Adyen gateways complete; conversion/off-ramp pending        |
 
 ---
 
@@ -57,14 +67,13 @@ Based on comprehensive analysis of:
 
 **Priority:** CRITICAL  
 **Spec Reference:** veid-flow-spec.md - ML Score Calculation  
-**Current State:** ✅ **COMPLETED** - x/veid/keeper/scoring.go implemented (765 lines)
+**Current State:** 🟡 **PARTIAL** - scoring scaffold exists, but default scorer is stubbed and no production model artifact is present
 
 **Evidence:**
 
-- `MLScoringConfig` with full TensorFlow integration
-- `ScoringInput/Output` structs with deterministic hash computation
-- Composite scoring with configurable weights
-- Score version tracking
+- `x/veid/keeper/scoring.go` defines TensorFlow integration but uses `StubMLScorer` by default
+- `StubMLScorer` returns deterministic hash-based scores (not ML)
+- No `models/trust_score` SavedModel artifact exists in repo
 
 ---
 
@@ -549,6 +558,346 @@ Test path: Provider register → Order created → Bid placed → Allocation →
 
 ---
 
+### Category 12: VEID ML Productionization (NEW)
+
+#### VEID-ML-001: Build Production Training Dataset + Labeling Pipeline
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - TensorFlow ML identity scoring  
+**Current State:** ML pipeline code exists (`ml/training`), but no production dataset or labeling flow
+
+**Acceptance Criteria:**
+
+- Production data ingestion + labeling process defined and implemented
+- PII-safe storage, redaction, and access controls
+- Dataset versioning and provenance tracking
+- Train/validation/test split reproducibility
+
+---
+
+#### VEID-ML-002: Train + Export TensorFlow SavedModel (Trust Score)
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - VEID scoring 0-100  
+**Current State:** Export scripts exist but no SavedModel artifact in repo
+
+**Acceptance Criteria:**
+
+- Model trained and exported as TensorFlow SavedModel
+- Model hash recorded and pinned for determinism
+- Artifact stored in approved registry/object store
+- On-chain model version updated to match artifact
+
+---
+
+#### VEID-ML-003: Implement Real Inference Runtime (Sidecar or Embedded TF)
+
+**Priority:** CRITICAL  
+**Spec Reference:** VE-205 + deterministic inference requirements  
+**Current State:** `pkg/inference/sidecar.go` simulates responses; `StubMLScorer` used by default
+
+**Acceptance Criteria:**
+
+- Real gRPC sidecar or embedded TensorFlow inference implemented
+- Deterministic conformance tests across validators
+- Fallback and health checks wired to production observability
+- Consensus verification (input/output hashes) validated
+
+---
+
+#### VEID-ML-004: Implement Real Feature Extraction (Face/OCR/Liveness)
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - biometric + document verification  
+**Current State:** Feature extraction uses hash-derived placeholders
+
+**Acceptance Criteria:**
+
+- Face embeddings extracted from selfie/video scopes
+- OCR + document quality features extracted from ID scopes
+- Liveness checks integrated into scoring inputs
+- Feature pipeline aligned with training inputs
+
+---
+
+### Category 13: VEID Verification Integrations (NEW)
+
+#### VEID-VERIF-001: SSO/OIDC Verification Service
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - SSO verification  
+**Current State:** On-chain SSO metadata types exist; no verification service
+
+**Acceptance Criteria:**
+
+- OIDC/SAML verification service with signed attestations
+- On-chain linkage and revocation flows wired
+- Provider-specific issuer configuration + replay protection
+
+---
+
+#### VEID-VERIF-002: Email Verification Delivery + Attestation
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - email verification  
+**Current State:** Types exist; no delivery/attestation pipeline
+
+**Acceptance Criteria:**
+
+- Email OTP/link delivery service implemented
+- Signed verification attestations submitted on-chain
+- Abuse/rate-limit controls + audit trail
+
+---
+
+#### VEID-VERIF-003: SMS Verification Delivery + Anti-Fraud
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - SMS verification  
+**Current State:** Types exist; no gateway integration
+
+**Acceptance Criteria:**
+
+- SMS OTP delivery integrated with gateway
+- Signed verification attestations submitted on-chain
+- VoIP detection + resend throttling enforcement
+
+---
+
+#### VEID-VERIF-004: Mobile Capture + Biometric Pipeline Integration
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - mobile app document/biometric capture  
+**Current State:** Mobile capture pipeline not present in repo
+
+**Acceptance Criteria:**
+
+- Mobile app capture pipeline integrated (document + selfie + liveness)
+- Secure upload + encrypted scope packaging
+- Device attestation + capture protocol validation
+
+---
+
+### Category 14: HPC Supercomputer & SLURM (NEW)
+
+#### HPC-SLURM-001: Automate SLURM Deployment Across Kubernetes Clusters
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - SLURM deployment across K8s  
+**Current State:** No automation for SLURM cluster deployment
+
+**Acceptance Criteria:**
+
+- Automated SLURM controller/compute node deployment on K8s
+- Cluster bootstrap + join/leave workflows
+- Provider-configurable cluster templates
+
+---
+
+#### HPC-NODE-001: Node Registration + Heartbeat Pipeline
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - distributed node network  
+**Current State:** Node metadata exists on-chain; no provisioning pipeline
+
+**Acceptance Criteria:**
+
+- Node registration flow with heartbeat + capacity reporting
+- Latency measurement and proximity data ingestion
+- Automated deactivation on missed heartbeats
+
+---
+
+#### HPC-ADAPTER-001: Integrate SLURM/MOAB/OOD Adapters with Provider Daemon
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - HPC workload manager integration  
+**Current State:** Adapters exist but unused by provider daemon
+
+**Acceptance Criteria:**
+
+- Provider daemon submits/monitors jobs via SLURM/MOAB/OOD adapters
+- Job lifecycle updates posted on-chain
+- Secure credential management for HPC backends
+
+---
+
+#### HPC-WORKLOAD-001: Preconfigured Workload Library + Custom Packaging
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - preconfigured SLURM workloads  
+**Current State:** No workload library exists
+
+**Acceptance Criteria:**
+
+- Library of validated SLURM job templates (MPI, GPU, batch)
+- Custom workload packaging + validation
+- Signed workload manifests stored in artifact store
+
+---
+
+#### HPC-BILL-001: Usage Accounting → Billing + Rewards
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - billing/invoicing + rewards  
+**Current State:** No end-to-end usage accounting or invoicing flow
+
+**Acceptance Criteria:**
+
+- Usage metrics ingested from SLURM/MOAB/OOD
+- On-chain billing records and invoices generated
+- Reward distribution tied to usage metrics
+
+---
+
+#### HPC-ROUTE-001: Enforce On-Chain Scheduling in Job Placement
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - routing + cluster selection  
+**Current State:** Scheduling decisions not enforced by provider daemon
+
+**Acceptance Criteria:**
+
+- Provider daemon consumes scheduling decisions from x/hpc
+- Job placement respects proximity and capacity scoring
+- Fallback routing with auditable reasons
+
+---
+
+### Category 15: Marketplace & Waldur End-to-End (NEW)
+
+#### MKP-WALDUR-001: Automated Offering Sync (Chain → Waldur)
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - marketplace listing  
+**Current State:** Manual `WaldurOfferingMap` required
+
+**Acceptance Criteria:**
+
+- On-chain offering create/update triggers Waldur offering sync
+- Sync status stored on-chain with retries
+- Remove manual mapping dependency
+
+---
+
+#### MKP-WALDUR-002: Listing Ingestion (Waldur → Chain)
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - marketplace listing  
+**Current State:** No ingestion of Waldur service/VM catalogs
+
+**Acceptance Criteria:**
+
+- Import Waldur offerings into on-chain marketplace
+- Normalize service metadata + pricing
+- Provider ownership validation
+
+---
+
+#### MKP-WALDUR-003: Resource Lifecycle Control
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - purchase → provision → control  
+**Current State:** Only basic provisioning callbacks supported
+
+**Acceptance Criteria:**
+
+- Start/stop/resize/terminate actions via Waldur APIs
+- Signed callbacks enforce on-chain state transitions
+- Full audit trail for lifecycle events
+
+---
+
+#### MKP-WALDUR-004: Usage Reporting → Settlement
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - billing/invoicing  
+**Current State:** Usage reporting not wired to settlement
+
+**Acceptance Criteria:**
+
+- Provider daemon submits usage reports on schedule
+- Settlement module consumes usage for billing
+- Invoice + payout events emitted
+
+---
+
+### Category 16: Support Requests & Service Desk (NEW)
+
+#### SUPPORT-001: On-Chain Support Request Module (Encrypted)
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - support requests as encrypted data  
+**Current State:** No support request module in chain
+
+**Acceptance Criteria:**
+
+- Support request types/messages + encrypted payloads
+- Access control for support staff + customer
+- Events for ticket lifecycle (open/assign/close)
+
+---
+
+#### SUPPORT-002: Jira/Waldur Service Desk Integration
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - service desk integration  
+**Current State:** `pkg/jira` exists but not wired to chain events
+
+**Acceptance Criteria:**
+
+- Support request events create/update Jira/Waldur tickets
+- Bi-directional status sync
+- Audit trail for ticket actions
+
+---
+
+### Category 17: Billing & Invoicing (NEW)
+
+#### BILL-001: Invoice Generation + Ledger Persistence
+
+**Priority:** CRITICAL  
+**Spec Reference:** AU2024203136A1-LIVE - billing/invoicing  
+**Current State:** No invoice module or ledger records
+
+**Acceptance Criteria:**
+
+- Usage-based invoices generated for marketplace + HPC
+- Immutable invoice ledger records on-chain
+- Invoice export format (PDF/JSON) for customers/providers
+
+---
+
+#### BILL-002: Settlement + Payout Integration
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - payment settlement  
+**Current State:** Settlement module not wired to usage billing
+
+**Acceptance Criteria:**
+
+- Escrow release triggered by invoice settlement
+- Provider payouts and treasury accounting
+- Dispute holdbacks and resolution paths
+
+---
+
+### Category 18: Fiat Off-Ramp Integration (NEW)
+
+#### PAY-004: Fiat Off-Ramp (PayPal/ACH) Integration
+
+**Priority:** HIGH  
+**Spec Reference:** AU2024203136A1-LIVE - fiat conversion/PayPal  
+**Current State:** No off-ramp integration beyond gateway payments
+
+**Acceptance Criteria:**
+
+- Off-ramp provider integration (PayPal/ACH or equivalent)
+- KYC/AML compliance hooks
+- Audit trail + reconciliation reporting
+
+---
+
 ## TASK IMPORT SUMMARY
 
 Total tasks identified for vibe-kanban import:
@@ -556,10 +905,17 @@ Total tasks identified for vibe-kanban import:
 | Category                             | Count | Priority      |
 | ------------------------------------ | ----- | ------------- |
 | Production Hardening & Integrations  | 8     | CRITICAL/HIGH |
+| VEID ML Productionization            | 4     | CRITICAL/HIGH |
+| VEID Verification Integrations       | 4     | HIGH          |
+| HPC Supercomputer & SLURM            | 6     | CRITICAL/HIGH |
+| Marketplace & Waldur End-to-End      | 4     | CRITICAL/HIGH |
+| Support Requests & Service Desk      | 2     | CRITICAL/HIGH |
+| Billing & Invoicing                  | 2     | CRITICAL/HIGH |
+| Fiat Off-Ramp Integration            | 1     | HIGH          |
 | ML Determinism                       | 2     | CRITICAL/HIGH |
 | Testing (E2E)                        | 3     | HIGH          |
 
-**Total: 13 detailed implementation tasks**
+**Total: 36 detailed implementation tasks**
 
 ---
 
