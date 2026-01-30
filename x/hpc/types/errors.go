@@ -101,4 +101,28 @@ var (
 
 	// ErrHeartbeatAuthFailed is returned when heartbeat authentication fails
 	ErrHeartbeatAuthFailed = errors.Register(ModuleName, 2130, "heartbeat authentication failed")
+
+	// ErrInvalidRoutingAudit is returned when a routing audit record is invalid
+	ErrInvalidRoutingAudit = errors.Register(ModuleName, 2131, "invalid routing audit record")
+
+	// ErrInvalidRoutingViolation is returned when a routing violation is invalid
+	ErrInvalidRoutingViolation = errors.Register(ModuleName, 2132, "invalid routing violation")
+
+	// ErrRoutingDecisionStale is returned when a scheduling decision is too old
+	ErrRoutingDecisionStale = errors.Register(ModuleName, 2133, "scheduling decision is stale")
+
+	// ErrRoutingDecisionNotFound is returned when a scheduling decision is not found
+	ErrRoutingDecisionNotFound = errors.Register(ModuleName, 2134, "scheduling decision not found")
+
+	// ErrRoutingClusterMismatch is returned when job is placed on wrong cluster
+	ErrRoutingClusterMismatch = errors.Register(ModuleName, 2135, "routing cluster mismatch")
+
+	// ErrRoutingEnforcementFailed is returned when routing enforcement fails
+	ErrRoutingEnforcementFailed = errors.Register(ModuleName, 2136, "routing enforcement failed")
+
+	// ErrFallbackNotAuthorized is returned when fallback routing is not authorized
+	ErrFallbackNotAuthorized = errors.Register(ModuleName, 2137, "fallback routing not authorized")
+
+	// ErrMissingSchedulingDecision is returned when job has no scheduling decision
+	ErrMissingSchedulingDecision = errors.Register(ModuleName, 2138, "missing scheduling decision")
 )

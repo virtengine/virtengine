@@ -59,10 +59,11 @@ type HPCAuditEvent struct {
 
 // HPCJobService manages HPC job lifecycle
 type HPCJobService struct {
-	config    HPCConfig
-	scheduler HPCScheduler
-	reporter  HPCOnChainReporter
-	auditor   HPCAuditLogger
+	config          HPCConfig
+	scheduler       HPCScheduler
+	reporter        HPCOnChainReporter
+	auditor         HPCAuditLogger
+	routingEnforcer *RoutingEnforcer
 
 	mu          sync.RWMutex
 	running     bool
@@ -102,6 +103,13 @@ func NewHPCJobService(
 	scheduler.RegisterLifecycleCallback(svc.handleJobLifecycleEvent)
 
 	return svc
+}
+
+// SetRoutingEnforcer sets the routing enforcer for the job service
+func (s *HPCJobService) SetRoutingEnforcer(enforcer *RoutingEnforcer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.routingEnforcer = enforcer
 }
 
 // Start starts the HPC job service
@@ -201,6 +209,42 @@ func (s *HPCJobService) SubmitJob(ctx context.Context, job *hpctypes.HPCJob) (*H
 		return nil, fmt.Errorf("invalid job: %w", err)
 	}
 
+	// VE-5B: Enforce routing before submission
+	s.mu.RLock()
+	enforcer := s.routingEnforcer
+	s.mu.RUnlock()
+
+	if enforcer != nil {
+		result, err := enforcer.EnforceRouting(ctx, job)
+		if err != nil {
+			s.logAuditEvent("routing_enforcement_failed", job.JobID, map[string]interface{}{
+				"error": err.Error(),
+			}, false)
+			return nil, fmt.Errorf("routing enforcement failed: %w", err)
+		}
+
+		if !result.Allowed {
+			s.logAuditEvent("job_routing_rejected", job.JobID, map[string]interface{}{
+				"reason":    result.AuditRecord.Reason,
+				"violation": result.Violation,
+			}, false)
+			return nil, fmt.Errorf("job routing rejected: %s", result.AuditRecord.Reason)
+		}
+
+		// Update job with enforced routing info
+		if result.Decision != nil {
+			job.SchedulingDecisionID = result.Decision.DecisionID
+			job.ClusterID = result.TargetClusterID
+		}
+
+		s.logAuditEvent("routing_enforcement_passed", job.JobID, map[string]interface{}{
+			"decision_id":     job.SchedulingDecisionID,
+			"cluster_id":      result.TargetClusterID,
+			"is_fallback":     result.IsFallback,
+			"was_rescheduled": result.WasRescheduled,
+		}, true)
+	}
+
 	// Check concurrent job limit
 	s.mu.RLock()
 	activeCount := len(s.activeJobs)
@@ -238,12 +282,14 @@ func (s *HPCJobService) SubmitJob(ctx context.Context, job *hpctypes.HPCJob) (*H
 	s.mu.Unlock()
 
 	s.logAuditEvent("job_submitted", job.JobID, map[string]interface{}{
-		"scheduler_job_id": schedulerJob.SchedulerJobID,
-		"scheduler_type":   string(schedulerJob.SchedulerType),
+		"scheduler_job_id":       schedulerJob.SchedulerJobID,
+		"scheduler_type":         string(schedulerJob.SchedulerType),
+		"scheduling_decision_id": job.SchedulingDecisionID,
+		"cluster_id":             job.ClusterID,
 	}, true)
 
-	// Report status on-chain
-	go s.reportJobStatus(context.Background(), schedulerJob)
+	// Report status on-chain with decision linkage
+	go s.reportJobStatusWithDecision(context.Background(), schedulerJob, job.SchedulingDecisionID)
 
 	return schedulerJob, nil
 }
@@ -512,6 +558,37 @@ func (s *HPCJobService) reportJobStatus(ctx context.Context, job *HPCSchedulerJo
 
 	s.logAuditEvent("status_reported", job.VirtEngineJobID, map[string]interface{}{
 		"state": string(job.State),
+	}, true)
+}
+
+// reportJobStatusWithDecision reports job status on-chain with scheduling decision linkage
+func (s *HPCJobService) reportJobStatusWithDecision(ctx context.Context, job *HPCSchedulerJob, decisionID string) {
+	if s.reporter == nil {
+		return
+	}
+
+	report, err := s.scheduler.CreateStatusReport(job)
+	if err != nil {
+		s.logAuditEvent("status_report_creation_failed", job.VirtEngineJobID, map[string]interface{}{
+			"error": err.Error(),
+		}, false)
+		return
+	}
+
+	// VE-5B: Add scheduling decision linkage to report
+	// The report already has fields, but we add decision context in audit
+	err = s.reporter.ReportJobStatus(ctx, report)
+	if err != nil {
+		s.logAuditEvent("status_report_failed", job.VirtEngineJobID, map[string]interface{}{
+			"error":       err.Error(),
+			"decision_id": decisionID,
+		}, false)
+		return
+	}
+
+	s.logAuditEvent("status_reported_with_decision", job.VirtEngineJobID, map[string]interface{}{
+		"state":                  string(job.State),
+		"scheduling_decision_id": decisionID,
 	}, true)
 }
 

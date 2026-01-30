@@ -47,6 +47,9 @@ type HPCConfig struct {
 	// ClusterID is the on-chain cluster ID this provider manages
 	ClusterID string `json:"cluster_id" yaml:"cluster_id"`
 
+	// ProviderAddress is the provider's bech32 address
+	ProviderAddress string `json:"provider_address" yaml:"provider_address"`
+
 	// SLURM configuration (used when SchedulerType is "slurm")
 	SLURM slurm_adapter.SLURMConfig `json:"slurm" yaml:"slurm"`
 
@@ -67,6 +70,12 @@ type HPCConfig struct {
 
 	// Audit configuration
 	Audit HPCAuditConfig `json:"audit" yaml:"audit"`
+
+	// Routing configuration (VE-5B)
+	Routing HPCRoutingConfig `json:"routing" yaml:"routing"`
+
+	// EnforcementMode is the routing enforcement mode (for backward compatibility)
+	EnforcementMode string `json:"enforcement_mode" yaml:"enforcement_mode"`
 }
 
 // HPCJobServiceConfig configures the HPC job service
@@ -138,6 +147,33 @@ type HPCAuditConfig struct {
 	LogUsageReports bool `json:"log_usage_reports" yaml:"log_usage_reports"`
 }
 
+// HPCRoutingConfig configures routing enforcement (VE-5B)
+type HPCRoutingConfig struct {
+	// Enabled enables routing enforcement
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// EnforcementMode is the enforcement mode (strict, permissive, audit_only)
+	EnforcementMode string `json:"enforcement_mode" yaml:"enforcement_mode"`
+
+	// MaxDecisionAgeBlocks is the maximum age of a scheduling decision in blocks
+	MaxDecisionAgeBlocks int64 `json:"max_decision_age_blocks" yaml:"max_decision_age_blocks"`
+
+	// MaxDecisionAgeSeconds is the maximum age in seconds
+	MaxDecisionAgeSeconds int64 `json:"max_decision_age_seconds" yaml:"max_decision_age_seconds"`
+
+	// AllowAutomaticFallback indicates if automatic fallback is permitted
+	AllowAutomaticFallback bool `json:"allow_automatic_fallback" yaml:"allow_automatic_fallback"`
+
+	// RequireDecisionForSubmission requires a scheduling decision for job submission
+	RequireDecisionForSubmission bool `json:"require_decision_for_submission" yaml:"require_decision_for_submission"`
+
+	// AutoRefreshStaleDecisions automatically refreshes stale decisions
+	AutoRefreshStaleDecisions bool `json:"auto_refresh_stale_decisions" yaml:"auto_refresh_stale_decisions"`
+
+	// ViolationAlertThreshold is the number of violations before alerting
+	ViolationAlertThreshold int32 `json:"violation_alert_threshold" yaml:"violation_alert_threshold"`
+}
+
 // DefaultHPCConfig returns the default HPC configuration
 func DefaultHPCConfig() HPCConfig {
 	return HPCConfig{
@@ -176,6 +212,16 @@ func DefaultHPCConfig() HPCConfig {
 			LogJobEvents:      true,
 			LogSecurityEvents: true,
 			LogUsageReports:   true,
+		},
+		Routing: HPCRoutingConfig{
+			Enabled:                      true,
+			EnforcementMode:              "strict",
+			MaxDecisionAgeBlocks:         100,
+			MaxDecisionAgeSeconds:        600,
+			AllowAutomaticFallback:       true,
+			RequireDecisionForSubmission: true,
+			AutoRefreshStaleDecisions:    true,
+			ViolationAlertThreshold:      5,
 		},
 	}
 }

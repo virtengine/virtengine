@@ -73,6 +73,12 @@ var (
 	// AggregationPrefix is the prefix for accounting aggregations (VE-5A)
 	AggregationPrefix = []byte{0x18}
 
+	// RoutingAuditPrefix is the prefix for routing audit records (VE-5B)
+	RoutingAuditPrefix = []byte{0x19}
+
+	// RoutingViolationPrefix is the prefix for routing violation records (VE-5B)
+	RoutingViolationPrefix = []byte{0x1A}
+
 	// SequenceKeyCluster is the sequence key for clusters
 	SequenceKeyCluster = []byte{0x20}
 
@@ -102,6 +108,12 @@ var (
 
 	// SequenceKeyAggregation is the sequence key for aggregations (VE-5A)
 	SequenceKeyAggregation = []byte{0x29}
+
+	// SequenceKeyRoutingAudit is the sequence key for routing audit records (VE-5B)
+	SequenceKeyRoutingAudit = []byte{0x2A}
+
+	// SequenceKeyRoutingViolation is the sequence key for routing violations (VE-5B)
+	SequenceKeyRoutingViolation = []byte{0x2B}
 )
 
 // GetClusterKey returns the key for a cluster
@@ -192,4 +204,14 @@ func GetJobUsageSnapshotsKey(jobID string) []byte {
 // GetJobAccountingRecordsKey returns prefix for all accounting records of a job (VE-5A)
 func GetJobAccountingRecordsKey(jobID string) []byte {
 	return append(AccountingRecordPrefix, append([]byte(jobID), '/')...)
+}
+
+// GetRoutingAuditKey returns the key for a routing audit record (VE-5B)
+func GetRoutingAuditKey(recordID string) []byte {
+	return append(RoutingAuditPrefix, []byte(recordID)...)
+}
+
+// GetRoutingViolationKey returns the key for a routing violation (VE-5B)
+func GetRoutingViolationKey(violationID string) []byte {
+	return append(RoutingViolationPrefix, []byte(violationID)...)
 }

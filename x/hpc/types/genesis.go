@@ -110,6 +110,21 @@ type Params struct {
 
 	// ReconciliationEnabled enables reconciliation checking (VE-5A)
 	ReconciliationEnabled bool `json:"reconciliation_enabled"`
+
+	// RoutingEnforcementEnabled enables routing enforcement (VE-5B)
+	RoutingEnforcementEnabled bool `json:"routing_enforcement_enabled"`
+
+	// RoutingEnforcementMode is the enforcement mode (strict, permissive, audit_only)
+	RoutingEnforcementMode string `json:"routing_enforcement_mode"`
+
+	// MaxSchedulingDecisionAgeBlocks is the maximum age of a scheduling decision in blocks
+	MaxSchedulingDecisionAgeBlocks int64 `json:"max_scheduling_decision_age_blocks"`
+
+	// MaxSchedulingDecisionAgeSeconds is the maximum age in seconds
+	MaxSchedulingDecisionAgeSeconds int64 `json:"max_scheduling_decision_age_seconds"`
+
+	// AllowAutomaticFallback indicates if automatic fallback routing is permitted
+	AllowAutomaticFallback bool `json:"allow_automatic_fallback"`
 }
 
 // DefaultParams returns the default parameters
@@ -131,12 +146,18 @@ func DefaultParams() Params {
 		EnableProximityClustering: true,
 		// VE-5A: Accounting and settlement parameters
 		DefaultDenom:                   "uvirt",
-		AccountingFinalizationDelaySec: 3600,    // 1 hour
-		SettlementDelaySec:             86400,   // 24 hours
-		PlatformFeeRateBps:             250,     // 2.5%
-		UsageSnapshotIntervalSec:       300,     // 5 minutes
+		AccountingFinalizationDelaySec: 3600,  // 1 hour
+		SettlementDelaySec:             86400, // 24 hours
+		PlatformFeeRateBps:             250,   // 2.5%
+		UsageSnapshotIntervalSec:       300,   // 5 minutes
 		EnableAutoSettlement:           true,
 		ReconciliationEnabled:          true,
+		// VE-5B: Routing enforcement defaults
+		RoutingEnforcementEnabled:       true,
+		RoutingEnforcementMode:          "strict",
+		MaxSchedulingDecisionAgeBlocks:  100,
+		MaxSchedulingDecisionAgeSeconds: 600,
+		AllowAutomaticFallback:          true,
 	}
 }
 
