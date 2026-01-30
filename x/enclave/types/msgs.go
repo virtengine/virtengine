@@ -13,6 +13,7 @@ const (
 	TypeMsgProposeMeasurement      = "propose_measurement"
 	TypeMsgRevokeMeasurement       = "revoke_measurement"
 	TypeMsgUpdateParams            = "update_params"
+	TypeMsgEnclaveHeartbeat        = "enclave_heartbeat"
 )
 
 // ValidateBasicMsgRegisterEnclaveIdentity performs basic validation

@@ -199,3 +199,19 @@ func (m msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParam
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }
+
+// EnclaveHeartbeat handles MsgEnclaveHeartbeat
+func (m msgServer) EnclaveHeartbeat(goCtx context.Context, msg *types.MsgEnclaveHeartbeat) (*types.MsgEnclaveHeartbeatResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Process the heartbeat
+	response, err := m.keeper.ProcessHeartbeat(ctx, *msg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Record heartbeat metric
+	m.keeper.RecordHeartbeat()
+
+	return response, nil
+}

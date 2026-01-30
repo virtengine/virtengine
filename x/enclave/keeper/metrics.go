@@ -114,6 +114,71 @@ var (
 		},
 		[]string{"time_range"}, // "1h", "24h", "7d"
 	)
+
+	// EnclaveHealthStatusTotal tracks total number of enclaves by health status
+	EnclaveHealthStatusTotal = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "virtengine",
+			Subsystem: "enclave",
+			Name:      "health_status_total",
+			Help:      "Total number of enclaves by health status",
+		},
+		[]string{"status"}, // "healthy", "degraded", "unhealthy"
+	)
+
+	// EnclaveHeartbeatsTotal tracks total number of heartbeats received
+	EnclaveHeartbeatsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: "virtengine",
+			Subsystem: "enclave",
+			Name:      "heartbeats_total",
+			Help:      "Total number of enclave heartbeats received",
+		},
+	)
+
+	// EnclaveAttestationFailures tracks attestation failures
+	EnclaveAttestationFailures = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "virtengine",
+			Subsystem: "enclave",
+			Name:      "attestation_failures_total",
+			Help:      "Total number of attestation failures by validator",
+		},
+		[]string{"validator"},
+	)
+
+	// EnclaveSignatureFailures tracks signature verification failures
+	EnclaveSignatureFailures = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "virtengine",
+			Subsystem: "enclave",
+			Name:      "signature_failures_total",
+			Help:      "Total number of signature verification failures by validator",
+		},
+		[]string{"validator"},
+	)
+
+	// EnclaveMissedHeartbeats tracks missed heartbeats
+	EnclaveMissedHeartbeats = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "virtengine",
+			Subsystem: "enclave",
+			Name:      "missed_heartbeats",
+			Help:      "Current number of consecutive missed heartbeats by validator",
+		},
+		[]string{"validator"},
+	)
+
+	// EnclaveHealthStatusChanges tracks health status changes
+	EnclaveHealthStatusChanges = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "virtengine",
+			Subsystem: "enclave",
+			Name:      "health_status_changes_total",
+			Help:      "Total number of health status changes",
+		},
+		[]string{"from_status", "to_status"},
+	)
 )
 
 // RecordMetrics updates all enclave module metrics
@@ -145,7 +210,7 @@ func (k Keeper) RecordMetrics(ctx sdk.Context) {
 	measurementCounts := make(map[string]float64)
 	k.WithMeasurements(ctx, func(measurement types.MeasurementRecord) bool {
 		if !measurement.Revoked {
-			measurementCounts[measurement.TeeType.String()]++
+			measurementCounts[measurement.TEEType.String()]++
 		}
 		return false
 	})
@@ -164,6 +229,9 @@ func (k Keeper) RecordMetrics(ctx sdk.Context) {
 
 	// Track upcoming expiries
 	k.recordUpcomingExpiries(ctx)
+
+	// Track health statuses
+	k.recordHealthMetrics(ctx)
 }
 
 // recordUpcomingExpiries tracks identities expiring soon
@@ -231,4 +299,35 @@ func (k Keeper) RecordAttestationVerification(success bool) {
 // RecordAttestationAge records the age of an attestation
 func (k Keeper) RecordAttestationAge(ageInBlocks int64) {
 	EnclaveAttestationAge.Observe(float64(ageInBlocks))
+}
+
+// recordHealthMetrics tracks health status metrics
+func (k Keeper) recordHealthMetrics(ctx sdk.Context) {
+	healthCounts := make(map[string]float64)
+
+	allStatuses := k.GetAllHealthStatuses(ctx)
+	for _, health := range allStatuses {
+		healthCounts[health.Status.String()]++
+
+		// Track missed heartbeats per validator
+		validatorAddr, err := sdk.AccAddressFromBech32(health.ValidatorAddress)
+		if err == nil {
+			EnclaveMissedHeartbeats.WithLabelValues(validatorAddr.String()).Set(float64(health.MissedHeartbeats))
+		}
+	}
+
+	// Update health status count metrics
+	for status, count := range healthCounts {
+		EnclaveHealthStatusTotal.WithLabelValues(status).Set(count)
+	}
+}
+
+// RecordHeartbeat records a heartbeat reception
+func (k Keeper) RecordHeartbeat() {
+	EnclaveHeartbeatsTotal.Inc()
+}
+
+// RecordHealthStatusChange records a health status change
+func (k Keeper) RecordHealthStatusChange(fromStatus, toStatus string) {
+	EnclaveHealthStatusChanges.WithLabelValues(fromStatus, toStatus).Inc()
 }
