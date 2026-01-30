@@ -28,6 +28,18 @@ type IKeeper interface {
 	GetScopesByType(ctx sdk.Context, address sdk.AccAddress, scopeType types.ScopeType) []types.IdentityScope
 	RevokeScope(ctx sdk.Context, address sdk.AccAddress, scopeID string, reason string) error
 
+	// Identity Wallet management (VE-209)
+	CreateIdentityWallet(ctx sdk.Context, accountAddr sdk.AccAddress, bindingSignature, bindingPubKey []byte) (*types.IdentityWallet, error)
+	GetWallet(ctx sdk.Context, address sdk.AccAddress) (*types.IdentityWallet, bool)
+	GetWalletByID(ctx sdk.Context, walletID string) (*types.IdentityWallet, bool)
+	SetWallet(ctx sdk.Context, wallet *types.IdentityWallet) error
+	AddScopeToWallet(ctx sdk.Context, accountAddr sdk.AccAddress, scopeRef types.ScopeReference, userSignature []byte) error
+	RevokeScopeFromWallet(ctx sdk.Context, accountAddr sdk.AccAddress, scopeID string, reason string, userSignature []byte) error
+	UpdateConsent(ctx sdk.Context, accountAddr sdk.AccAddress, update types.ConsentUpdateRequest, userSignature []byte) error
+	UpdateDerivedFeatures(ctx sdk.Context, accountAddr sdk.AccAddress, update *types.DerivedFeaturesUpdate) error
+	UpdateWalletScore(ctx sdk.Context, accountAddr sdk.AccAddress, newScore uint32, newStatus types.AccountStatus, modelVersion string, validatorAddress string, scopesEvaluated []string, reason string) error
+	GetWalletPublicMetadata(ctx sdk.Context, accountAddr sdk.AccAddress) (types.PublicWalletInfo, bool)
+
 	// Verification management
 	UpdateVerificationStatus(ctx sdk.Context, address sdk.AccAddress, scopeID string, status types.VerificationStatus, reason string, validatorAddr string) error
 	UpdateScore(ctx sdk.Context, address sdk.AccAddress, score uint32, scoreVersion string) error
@@ -51,6 +63,7 @@ type IKeeper interface {
 	// Iterators
 	WithIdentityRecords(ctx sdk.Context, fn func(record types.IdentityRecord) bool)
 	WithScopes(ctx sdk.Context, address sdk.AccAddress, fn func(scope types.IdentityScope) bool)
+	WithWallets(ctx sdk.Context, fn func(wallet *types.IdentityWallet) bool)
 
 	// Codec and store
 	Codec() codec.BinaryCodec
