@@ -353,18 +353,43 @@ func (a *stripeStubAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, err
 }
 
 // ============================================================================
-// Adyen Adapter
+// Adyen Adapter Factory
 // ============================================================================
 
-// adyenAdapter implements the Gateway interface for Adyen
-type adyenAdapter struct {
+// NewAdyenGateway creates an Adyen gateway adapter.
+// If useRealAPI is true, it returns the real Adyen API adapter (adyen_adapter.go).
+// If false, it returns the stub adapter for testing without real API calls.
+//
+// For production use, always set useRealAPI to true.
+// The stub adapter is ONLY for unit tests where you don't want network calls.
+func NewAdyenGateway(config AdyenConfig, useRealAPI bool) (Gateway, error) {
+	if useRealAPI {
+		return NewRealAdyenAdapter(config)
+	}
+	return NewAdyenStubAdapter(config)
+}
+
+// ============================================================================
+// Adyen Stub Adapter (DEPRECATED - Use NewRealAdyenAdapter for production)
+// ============================================================================
+
+// adyenStubAdapter is a STUB implementation for testing only.
+// DEPRECATED: Use RealAdyenAdapter (adyen_adapter.go) for production.
+//
+// WARNING: This adapter returns FAKE payment IDs and responses.
+// NO REAL PAYMENTS ARE PROCESSED. Do NOT use in production!
+type adyenStubAdapter struct {
 	config     AdyenConfig
 	httpClient *http.Client
 	baseURL    string
 }
 
-// NewAdyenAdapter creates a new Adyen gateway adapter
-func NewAdyenAdapter(config AdyenConfig) (Gateway, error) {
+// NewAdyenStubAdapter creates a STUB Adyen adapter for testing.
+// DEPRECATED: Use NewRealAdyenAdapter for production.
+//
+// WARNING: This returns fake payment data. For production, use NewAdyenGateway(config, true)
+// or NewRealAdyenAdapter(config).
+func NewAdyenStubAdapter(config AdyenConfig) (Gateway, error) {
 	if config.APIKey == "" || config.MerchantAccount == "" {
 		return nil, ErrGatewayNotConfigured
 	}
@@ -374,32 +399,40 @@ func NewAdyenAdapter(config AdyenConfig) (Gateway, error) {
 		baseURL = fmt.Sprintf("https://%s-checkout-live.adyenpayments.com/checkout/v71", config.LiveEndpointURLPrefix)
 	}
 
-	return &adyenAdapter{
+	return &adyenStubAdapter{
 		config:     config,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    baseURL,
 	}, nil
 }
 
-func (a *adyenAdapter) Name() string {
+// NewAdyenAdapter creates a new Adyen gateway adapter.
+// DEPRECATED: This now returns the REAL Adyen API adapter.
+// For explicit control, use NewAdyenGateway(config, useRealAPI) instead.
+func NewAdyenAdapter(config AdyenConfig) (Gateway, error) {
+	// VE-3059: Now returns the real Adyen API adapter by default
+	return NewRealAdyenAdapter(config)
+}
+
+func (a *adyenStubAdapter) Name() string {
 	return "Adyen"
 }
 
-func (a *adyenAdapter) Type() GatewayType {
+func (a *adyenStubAdapter) Type() GatewayType {
 	return GatewayAdyen
 }
 
-func (a *adyenAdapter) IsHealthy(ctx context.Context) bool {
+func (a *adyenStubAdapter) IsHealthy(ctx context.Context) bool {
 	return a.config.APIKey != ""
 }
 
-func (a *adyenAdapter) Close() error {
+func (a *adyenStubAdapter) Close() error {
 	return nil
 }
 
 // ---- Customer Management (Adyen uses shopperReference) ----
 
-func (a *adyenAdapter) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
+func (a *adyenStubAdapter) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
 	// Adyen doesn't have explicit customer creation
 	// Customers are created implicitly via shopperReference
 	customer := Customer{
@@ -414,12 +447,12 @@ func (a *adyenAdapter) CreateCustomer(ctx context.Context, req CreateCustomerReq
 	return customer, nil
 }
 
-func (a *adyenAdapter) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
+func (a *adyenStubAdapter) GetCustomer(ctx context.Context, customerID string) (Customer, error) {
 	// Adyen doesn't have customer retrieval API
 	return Customer{ID: customerID}, nil
 }
 
-func (a *adyenAdapter) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
+func (a *adyenStubAdapter) UpdateCustomer(ctx context.Context, customerID string, req UpdateCustomerRequest) (Customer, error) {
 	customer := Customer{ID: customerID}
 	if req.Email != nil {
 		customer.Email = *req.Email
@@ -430,14 +463,14 @@ func (a *adyenAdapter) UpdateCustomer(ctx context.Context, customerID string, re
 	return customer, nil
 }
 
-func (a *adyenAdapter) DeleteCustomer(ctx context.Context, customerID string) error {
+func (a *adyenStubAdapter) DeleteCustomer(ctx context.Context, customerID string) error {
 	// Adyen doesn't have customer deletion
 	return nil
 }
 
 // ---- Payment Methods ----
 
-func (a *adyenAdapter) AttachPaymentMethod(ctx context.Context, customerID string, token CardToken) (string, error) {
+func (a *adyenStubAdapter) AttachPaymentMethod(ctx context.Context, customerID string, token CardToken) (string, error) {
 	// POST /paymentMethods/storedPaymentMethods
 	if token.Token == "" {
 		return "", ErrInvalidCardToken
@@ -445,19 +478,19 @@ func (a *adyenAdapter) AttachPaymentMethod(ctx context.Context, customerID strin
 	return token.Token, nil
 }
 
-func (a *adyenAdapter) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
+func (a *adyenStubAdapter) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
 	// DELETE /paymentMethods/{storedPaymentMethodId}
 	return nil
 }
 
-func (a *adyenAdapter) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
+func (a *adyenStubAdapter) ListPaymentMethods(ctx context.Context, customerID string) ([]CardToken, error) {
 	// POST /paymentMethods with shopperReference
 	return nil, nil
 }
 
 // ---- Payment Intents (Adyen uses /payments) ----
 
-func (a *adyenAdapter) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
+func (a *adyenStubAdapter) CreatePaymentIntent(ctx context.Context, req PaymentIntentRequest) (PaymentIntent, error) {
 	// POST /payments
 	intent := PaymentIntent{
 		ID:                  fmt.Sprintf("ADYEN_%d", time.Now().UnixNano()),
@@ -476,7 +509,7 @@ func (a *adyenAdapter) CreatePaymentIntent(ctx context.Context, req PaymentInten
 	return intent, nil
 }
 
-func (a *adyenAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
+func (a *adyenStubAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID string) (PaymentIntent, error) {
 	// GET payment details via webhook or stored state
 	if !strings.HasPrefix(paymentIntentID, "ADYEN_") {
 		return PaymentIntent{}, ErrPaymentIntentNotFound
@@ -488,7 +521,7 @@ func (a *adyenAdapter) GetPaymentIntent(ctx context.Context, paymentIntentID str
 	}, nil
 }
 
-func (a *adyenAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
+func (a *adyenStubAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentID string, paymentMethodID string) (PaymentIntent, error) {
 	// POST /payments/details for 3DS completion
 	intent, err := a.GetPaymentIntent(ctx, paymentIntentID)
 	if err != nil {
@@ -503,7 +536,7 @@ func (a *adyenAdapter) ConfirmPaymentIntent(ctx context.Context, paymentIntentID
 	return intent, nil
 }
 
-func (a *adyenAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
+func (a *adyenStubAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
 	// POST /payments/{paymentPspReference}/cancels
 	intent, err := a.GetPaymentIntent(ctx, paymentIntentID)
 	if err != nil {
@@ -516,7 +549,7 @@ func (a *adyenAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID 
 	return intent, nil
 }
 
-func (a *adyenAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
+func (a *adyenStubAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
 	// POST /payments/{paymentPspReference}/captures
 	intent, err := a.GetPaymentIntent(ctx, paymentIntentID)
 	if err != nil {
@@ -536,7 +569,7 @@ func (a *adyenAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID
 
 // ---- Refunds ----
 
-func (a *adyenAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
+func (a *adyenStubAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
 	// POST /payments/{paymentPspReference}/refunds
 	intent, err := a.GetPaymentIntent(ctx, req.PaymentIntentID)
 	if err != nil {
@@ -561,7 +594,7 @@ func (a *adyenAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Ref
 	return refund, nil
 }
 
-func (a *adyenAdapter) GetRefund(ctx context.Context, refundID string) (Refund, error) {
+func (a *adyenStubAdapter) GetRefund(ctx context.Context, refundID string) (Refund, error) {
 	if !strings.HasPrefix(refundID, "ADYEN_RF_") {
 		return Refund{}, ErrRefundNotAllowed
 	}
@@ -573,7 +606,7 @@ func (a *adyenAdapter) GetRefund(ctx context.Context, refundID string) (Refund, 
 
 // ---- Webhooks ----
 
-func (a *adyenAdapter) ValidateWebhook(payload []byte, signature string) error {
+func (a *adyenStubAdapter) ValidateWebhook(payload []byte, signature string) error {
 	if a.config.HMACKey == "" {
 		return nil // HMAC validation disabled
 	}
@@ -590,7 +623,7 @@ func (a *adyenAdapter) ValidateWebhook(payload []byte, signature string) error {
 	return nil
 }
 
-func (a *adyenAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
+func (a *adyenStubAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, error) {
 	var notification struct {
 		NotificationItems []struct {
 			NotificationRequestItem struct {
