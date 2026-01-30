@@ -611,4 +611,36 @@ var (
 
 	// ErrGeoParamsInvalid is returned when geo restriction parameters are invalid
 	ErrGeoParamsInvalid = errorsmod.Register(ModuleName, 1214, "invalid geo restriction parameters")
+
+	// ============================================================================
+	// SDK Error Aliases (1300+)
+	// These alias errors from sdk/go/node/veid/v1 for consistency
+	// ============================================================================
+
+	// ErrInvalidAppeal is returned when an appeal is malformed or invalid
+	ErrInvalidAppeal = veidv1.ErrInvalidAppeal
+
+	// ErrWalletBindingFailed is returned when wallet binding fails
+	ErrWalletBindingFailed = veidv1.ErrWalletBindingFailed
+
+	// ErrInvalidConsent is returned when consent settings are invalid
+	ErrInvalidConsent = veidv1.ErrInvalidConsent
+
+	// ErrModelNotFound is returned when a model is not found
+	ErrModelNotFound = veidv1.ErrModelNotFound
+
+	// ErrNotComplianceProvider is returned when the sender is not a registered compliance provider
+	ErrNotComplianceProvider = veidv1.ErrNotComplianceProvider
+
+	// ErrComplianceCheckFailed is returned when a compliance check fails
+	ErrComplianceCheckFailed = veidv1.ErrComplianceCheckFailed
+
+	// ErrInsufficientAttestations is returned when there are not enough attestations
+	ErrInsufficientAttestations = veidv1.ErrInsufficientAttestations
+
+	// ErrInvalidComplianceParams is returned when compliance parameters are invalid
+	ErrInvalidComplianceParams = veidv1.ErrInvalidComplianceParams
+
+	// ErrBorderlineFallbackFailed is returned when borderline fallback fails
+	ErrBorderlineFallbackFailed = veidv1.ErrBorderlineFallbackFailed
 )

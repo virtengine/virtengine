@@ -1,8 +1,11 @@
 package keeper
 
 import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
 var (
@@ -119,7 +122,7 @@ func (k Keeper) RecordMetrics(ctx sdk.Context) {
 	// Count identities by status
 	statusCounts := make(map[string]float64)
 	k.WithEnclaveIdentities(ctx, func(identity types.EnclaveIdentity) bool {
-		statusCounts[identity.Status]++
+		statusCounts[string(identity.Status)]++
 		return false
 	})
 
@@ -142,7 +145,7 @@ func (k Keeper) RecordMetrics(ctx sdk.Context) {
 	measurementCounts := make(map[string]float64)
 	k.WithMeasurements(ctx, func(measurement types.MeasurementRecord) bool {
 		if !measurement.Revoked {
-			measurementCounts[measurement.TeeType]++
+			measurementCounts[string(measurement.TEEType)]++
 		}
 		return false
 	})

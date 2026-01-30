@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 
@@ -10,8 +11,16 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/virtengine/virtengine/x/enclave/types"
+)
+
+const (
+	// Secp256k1UncompressedPubKeySize is the size of an uncompressed secp256k1 public key (65 bytes: 0x04 prefix + 32-byte X + 32-byte Y)
+	Secp256k1UncompressedPubKeySize = 65
+	// Secp256k1SignatureSize is the canonical size of a secp256k1 signature without recovery ID (64 bytes: 32-byte R + 32-byte S)
+	Secp256k1SignatureSize = 64
 )
 
 // IKeeper defines the interface for the enclave keeper
@@ -704,8 +713,12 @@ func (k Keeper) ValidateAttestation(ctx sdk.Context, identity *types.EnclaveIden
 		)
 	}
 
-	// In production, this would verify the attestation quote cryptographically
-	// against the platform root of trust
+	if err := k.verifyAttestation(ctx, identity, measurement); err != nil {
+		k.RecordAttestationVerification(false)
+		return err
+	}
+
+	k.RecordAttestationVerification(true)
 	return nil
 }
 
@@ -727,10 +740,64 @@ func (k Keeper) VerifyEnclaveSignature(ctx sdk.Context, result *types.AttestedSc
 		return types.ErrEnclaveSignatureInvalid.Wrap("measurement hash mismatch")
 	}
 
-	// In production, this would verify the signature cryptographically
-	// using the enclave's signing public key
 	if len(result.EnclaveSignature) == 0 {
 		return types.ErrEnclaveSignatureInvalid.Wrap("empty signature")
+	}
+
+	// Verify signature over SHA-256 hash of canonical payload
+	payload := result.SigningPayload()
+	signature := result.EnclaveSignature
+
+	switch len(identity.SigningPubKey) {
+	case ed25519.PublicKeySize:
+		// Ed25519 signature verification
+		if len(signature) != ed25519.SignatureSize {
+			return types.ErrEnclaveSignatureInvalid.Wrapf(
+				"invalid ed25519 signature length: expected %d, got %d",
+				ed25519.SignatureSize, len(signature),
+			)
+		}
+		if !ed25519.Verify(identity.SigningPubKey, payload, signature) {
+			return types.ErrEnclaveSignatureInvalid.Wrap("ed25519 signature verification failed")
+		}
+
+	case Secp256k1UncompressedPubKeySize:
+		// secp256k1 signature verification
+		pubKey, err := crypto.UnmarshalPubkey(identity.SigningPubKey)
+		if err != nil {
+			return types.ErrEnclaveSignatureInvalid.Wrapf("invalid secp256k1 public key: %v", err)
+		}
+
+		// Enforce canonical 64-byte signature format (no recovery ID)
+		// This prevents signature malleability from different signature representations
+		if len(signature) != Secp256k1SignatureSize {
+			return types.ErrEnclaveSignatureInvalid.Wrapf(
+				"invalid secp256k1 signature length: expected %d (canonical R||S format), got %d",
+				Secp256k1SignatureSize, len(signature),
+			)
+		}
+
+		// Enforce low-S normalization to prevent signature malleability
+		// secp256k1 signatures have two valid S values (S and N-S); we require the lower one
+		// The S value is in the second 32 bytes of the signature
+		if signature[32]&0x80 != 0 {
+			return types.ErrEnclaveSignatureInvalid.Wrap(
+				"secp256k1 signature S-value must be in low form (less than curve order / 2) to prevent malleability",
+			)
+		}
+
+		// Verify the signature
+		// crypto.VerifySignature expects the public key without the 0x04 prefix
+		uncompressed := crypto.FromECDSAPub(pubKey)
+		if !crypto.VerifySignature(uncompressed[1:], payload, signature) {
+			return types.ErrEnclaveSignatureInvalid.Wrap("secp256k1 signature verification failed")
+		}
+
+	default:
+		return types.ErrEnclaveSignatureInvalid.Wrapf(
+			"unsupported signing public key length: %d (expected %d for Ed25519 or %d for secp256k1)",
+			len(identity.SigningPubKey), ed25519.PublicKeySize, Secp256k1UncompressedPubKeySize,
+		)
 	}
 
 	return nil

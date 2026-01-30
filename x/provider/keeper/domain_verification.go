@@ -9,7 +9,7 @@ import (
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	
+
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 )
 
@@ -17,17 +17,17 @@ import (
 type DomainVerificationStatus string
 
 const (
-	DomainVerificationPending DomainVerificationStatus = "pending"
+	DomainVerificationPending  DomainVerificationStatus = "pending"
 	DomainVerificationVerified DomainVerificationStatus = "verified"
-	DomainVerificationFailed DomainVerificationStatus = "failed"
-	DomainVerificationExpired DomainVerificationStatus = "expired"
-	
+	DomainVerificationFailed   DomainVerificationStatus = "failed"
+	DomainVerificationExpired  DomainVerificationStatus = "expired"
+
 	// VerificationTokenLength is the length of the verification token in bytes
 	VerificationTokenLength = 32
-	
+
 	// TokenExpirationDays is the number of days before a verification token expires
 	TokenExpirationDays = 7
-	
+
 	// DNSVerificationPrefix is the subdomain prefix for verification TXT records
 	DNSVerificationPrefix = "_virtengine-verification"
 )
@@ -93,7 +93,7 @@ func (k Keeper) VerifyProviderDomain(ctx sdk.Context, providerAddr sdk.AccAddres
 
 	// Perform DNS TXT record lookup
 	expectedRecord := fmt.Sprintf("%s.%s", DNSVerificationPrefix, record.Domain)
-	
+
 	// Query DNS TXT records
 	txtRecords, err := net.LookupTXT(expectedRecord)
 	if err != nil {
@@ -120,7 +120,7 @@ func (k Keeper) VerifyProviderDomain(ctx sdk.Context, providerAddr sdk.AccAddres
 	// Mark as verified
 	record.Status = DomainVerificationVerified
 	record.VerifiedAt = ctx.BlockTime().Unix()
-	
+
 	if err := k.setDomainVerificationRecord(ctx, record); err != nil {
 		return err
 	}
@@ -188,8 +188,8 @@ func (k Keeper) IsDomainVerified(ctx sdk.Context, providerAddr sdk.AccAddress) b
 	}
 
 	// Check if verified and not expired
-	return record.Status == DomainVerificationVerified && 
-		   ctx.BlockTime().Unix() <= record.ExpiresAt
+	return record.Status == DomainVerificationVerified &&
+		ctx.BlockTime().Unix() <= record.ExpiresAt
 }
 
 // validateDomain performs basic domain validation
@@ -213,7 +213,7 @@ func validateDomain(domain string) error {
 		if len(part) == 0 || len(part) > 63 {
 			return fmt.Errorf("invalid domain part length")
 		}
-		
+
 		// Each part must start and end with alphanumeric
 		if !isAlphanumeric(part[0]) || !isAlphanumeric(part[len(part)-1]) {
 			return fmt.Errorf("domain parts must start and end with alphanumeric characters")
