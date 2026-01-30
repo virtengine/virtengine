@@ -12,17 +12,29 @@ import (
 // Type alias for Params from generated proto
 type Params = delegationv1.Params
 
-// DefaultUnbondingPeriod is the default unbonding period in seconds (21 days)
-const DefaultUnbondingPeriod uint64 = 21 * 24 * 60 * 60
+// Default parameter values
+const (
+	// DefaultUnbondingPeriod is the default unbonding period in seconds (21 days)
+	DefaultUnbondingPeriod int64 = 21 * 24 * 60 * 60
 
-// DefaultMaxValidators is the default max validators per delegator
-const DefaultMaxValidators uint64 = 10
+	// DefaultMaxValidatorsPerDelegator is the default max validators per delegator
+	DefaultMaxValidatorsPerDelegator int64 = 10
 
-// DefaultMinDelegation is the default minimum delegation amount (1 token)
-const DefaultMinDelegation = "1000000"
+	// DefaultMinDelegationAmount is the default minimum delegation amount (1 token)
+	DefaultMinDelegationAmount int64 = 1000000
 
-// DefaultRedelegationCooldown is the default redelegation cooldown in seconds (7 days)
-const DefaultRedelegationCooldown uint64 = 7 * 24 * 60 * 60
+	// DefaultMaxRedelegations is the default max simultaneous redelegations
+	DefaultMaxRedelegations int64 = 7
+
+	// DefaultValidatorCommissionRate is the default validator commission rate (10% = 1000 basis points)
+	DefaultValidatorCommissionRate int64 = 1000
+
+	// DefaultRewardDenom is the default reward denomination
+	DefaultRewardDenom = "uve"
+
+	// DefaultStakeDenom is the default stake denomination
+	DefaultStakeDenom = "uve"
+)
 
 // GenesisState is the genesis state for the delegation module
 type GenesisState struct {
@@ -72,10 +84,13 @@ func DefaultGenesisState() *GenesisState {
 // DefaultParams returns the default parameters
 func DefaultParams() Params {
 	return Params{
-		UnbondingPeriod:      DefaultUnbondingPeriod,
-		MaxValidators:        DefaultMaxValidators,
-		MinDelegation:        DefaultMinDelegation,
-		RedelegationCooldown: DefaultRedelegationCooldown,
+		UnbondingPeriod:           DefaultUnbondingPeriod,
+		MaxValidatorsPerDelegator: DefaultMaxValidatorsPerDelegator,
+		MinDelegationAmount:       DefaultMinDelegationAmount,
+		MaxRedelegations:          DefaultMaxRedelegations,
+		ValidatorCommissionRate:   DefaultValidatorCommissionRate,
+		RewardDenom:               DefaultRewardDenom,
+		StakeDenom:                DefaultStakeDenom,
 	}
 }
 
@@ -125,16 +140,32 @@ func (gs *GenesisState) Validate() error {
 
 // ValidateParams validates the parameters
 func ValidateParams(p *Params) error {
-	if p.UnbondingPeriod == 0 {
+	if p.UnbondingPeriod <= 0 {
 		return fmt.Errorf("unbonding_period must be positive")
 	}
 
-	if p.MaxValidators == 0 {
-		return fmt.Errorf("max_validators must be positive")
+	if p.MaxValidatorsPerDelegator <= 0 {
+		return fmt.Errorf("max_validators_per_delegator must be positive")
 	}
 
-	if p.MinDelegation == "" {
-		return fmt.Errorf("min_delegation cannot be empty")
+	if p.MinDelegationAmount <= 0 {
+		return fmt.Errorf("min_delegation_amount must be positive")
+	}
+
+	if p.MaxRedelegations <= 0 {
+		return fmt.Errorf("max_redelegations must be positive")
+	}
+
+	if p.ValidatorCommissionRate < 0 || p.ValidatorCommissionRate > 10000 {
+		return fmt.Errorf("validator_commission_rate must be between 0 and 10000 basis points")
+	}
+
+	if p.RewardDenom == "" {
+		return fmt.Errorf("reward_denom cannot be empty")
+	}
+
+	if p.StakeDenom == "" {
+		return fmt.Errorf("stake_denom cannot be empty")
 	}
 
 	return nil

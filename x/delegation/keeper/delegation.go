@@ -34,14 +34,10 @@ func (k Keeper) Delegate(ctx sdk.Context, delegatorAddr, validatorAddr string, a
 	params := k.GetParams(ctx)
 
 	// Validate minimum delegation amount
-	minDelegation, err := ParseMinDelegation(params.MinDelegation)
-	if err != nil {
-		return types.ErrInvalidParams.Wrapf("invalid min_delegation: %v", err)
-	}
-	if amount.Amount.Int64() < minDelegation {
+	if amount.Amount.Int64() < params.MinDelegationAmount {
 		return types.ErrMinDelegationAmount.Wrapf(
 			"minimum delegation is %d, got %s",
-			minDelegation,
+			params.MinDelegationAmount,
 			amount.String(),
 		)
 	}
@@ -49,10 +45,10 @@ func (k Keeper) Delegate(ctx sdk.Context, delegatorAddr, validatorAddr string, a
 	// Check if delegator has max validators
 	existingDelegations := k.GetDelegatorDelegations(ctx, delegatorAddr)
 	_, existingDelegation := k.GetDelegation(ctx, delegatorAddr, validatorAddr)
-	if !existingDelegation && uint64(len(existingDelegations)) >= params.MaxValidators {
+	if !existingDelegation && int64(len(existingDelegations)) >= params.MaxValidatorsPerDelegator {
 		return types.ErrMaxValidators.Wrapf(
 			"max validators per delegator is %d",
-			params.MaxValidators,
+			params.MaxValidatorsPerDelegator,
 		)
 	}
 
@@ -255,12 +251,12 @@ func (k Keeper) Redelegate(ctx sdk.Context, delegatorAddr, srcValidator, dstVali
 		return time.Time{}, types.ErrTransitiveRedelegation.Wrap("transitive redelegation not allowed")
 	}
 
-	// Check max redelegations (use default since proto doesn't have this param)
+	// Check max redelegations using params
 	redelegationCount := k.CountDelegatorRedelegations(ctx, delegatorAddr)
-	if uint64(redelegationCount) >= DefaultMaxRedelegations {
+	if int64(redelegationCount) >= params.MaxRedelegations {
 		return time.Time{}, types.ErrMaxRedelegations.Wrapf(
 			"max redelegations is %d",
-			DefaultMaxRedelegations,
+			params.MaxRedelegations,
 		)
 	}
 

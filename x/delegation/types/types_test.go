@@ -407,7 +407,7 @@ func TestParamsValidation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.params.Validate()
+			err := ValidateParams(&tc.params)
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
