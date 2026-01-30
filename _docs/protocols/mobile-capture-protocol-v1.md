@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0  
 **Status:** Active  
-**Last Updated:** 2026-01-24  
+**Last Updated:** 2026-01-30  
 **Related Tasks:** VE-207, VE-201, VE-210
 
 ## Overview
@@ -268,6 +268,8 @@ To prevent uploading images from device gallery:
 ### Overview
 
 Client keys can be rotated without disrupting service through a managed deprecation process.
+The approved client allowlist supports overlapping keys to keep capture flows online while old
+keys are phased out.
 
 ### Key States
 

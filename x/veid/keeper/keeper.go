@@ -38,7 +38,7 @@ type IKeeper interface {
 	// Signature validation
 	ValidateClientSignature(ctx sdk.Context, clientID string, signature []byte, payload []byte) error
 	ValidateUserSignature(ctx sdk.Context, address sdk.AccAddress, signature []byte, payload []byte) error
-	ValidateSaltBinding(ctx sdk.Context, salt []byte) error
+	ValidateSaltBinding(ctx sdk.Context, salt []byte, metadata *types.UploadMetadata, payloadHash []byte) error
 
 	// Approved clients
 	GetApprovedClient(ctx sdk.Context, clientID string) (types.ApprovedClient, bool)
@@ -391,8 +391,14 @@ func (k Keeper) UploadScope(ctx sdk.Context, address sdk.AccAddress, scope *type
 
 	params := k.GetParams(ctx)
 
-	// Check if salt has been used
-	if err := k.ValidateSaltBinding(ctx, scope.UploadMetadata.Salt); err != nil {
+	// Validate salt binding, client signature, and user signature
+	if err := k.ValidateSaltBinding(ctx, scope.UploadMetadata.Salt, &scope.UploadMetadata, scope.UploadMetadata.PayloadHash); err != nil {
+		return err
+	}
+	if err := k.ValidateClientSignature(ctx, scope.UploadMetadata.ClientID, scope.UploadMetadata.ClientSignature, scope.UploadMetadata.SigningPayload()); err != nil {
+		return err
+	}
+	if err := k.ValidateUserSignature(ctx, address, scope.UploadMetadata.UserSignature, scope.UploadMetadata.UserSigningPayload()); err != nil {
 		return err
 	}
 
@@ -653,33 +659,6 @@ func (k Keeper) scopeStoreToScope(ss scopeStore) types.IdentityScope {
 // Salt Management
 // ============================================================================
 
-// ValidateSaltBinding validates that a salt hasn't been used before.
-// This performs basic salt validation (length, uniqueness).
-//
-// Task Reference: VE-3022 - Cryptographic Signature Verification
-func (k Keeper) ValidateSaltBinding(ctx sdk.Context, salt []byte) error {
-	if len(salt) == 0 {
-		return types.ErrInvalidSalt.Wrap("salt cannot be empty")
-	}
-
-	params := k.GetParams(ctx)
-	if uint32(len(salt)) < params.SaltMinBytes {
-		return types.ErrInvalidSalt.Wrapf("salt must be at least %d bytes", params.SaltMinBytes)
-	}
-	if uint32(len(salt)) > params.SaltMaxBytes {
-		return types.ErrInvalidSalt.Wrapf("salt cannot exceed %d bytes", params.SaltMaxBytes)
-	}
-
-	// Check if salt has been used
-	saltHash := sha256.Sum256(salt)
-	store := ctx.KVStore(k.skey)
-	if store.Has(types.SaltRegistryKey(saltHash[:])) {
-		return types.ErrSaltAlreadyUsed.Wrap("salt has already been used")
-	}
-
-	return nil
-}
-
 // ValidateSaltBindingWithSignature validates salt binding with cryptographic signature verification.
 // This ensures the salt is cryptographically bound to the user, scope, and timestamp.
 //
@@ -695,7 +674,10 @@ func (k Keeper) ValidateSaltBindingWithSignature(
 	algorithm string,
 ) error {
 	// First, validate basic salt properties
-	if err := k.ValidateSaltBinding(ctx, salt); err != nil {
+	if err := k.validateSaltBasics(ctx, salt); err != nil {
+		return err
+	}
+	if err := k.checkSaltUnused(ctx, types.ComputeSaltHash(salt)); err != nil {
 		return err
 	}
 
