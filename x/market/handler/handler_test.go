@@ -1134,56 +1134,72 @@ func TestCreateBidAlreadyExists(t *testing.T) {
 }
 
 func TestCloseOrderNonExisting(t *testing.T) {
-	t.Skip("TODO CLOSE LEASE")
-	// suite := setupTestSuite(t)
+	suite := setupTestSuite(t)
 
-	// dgroup := testutil.DeploymentGroup(suite.t, testutil.DeploymentID(suite.t), 0)
-	// msg := &types.MsgCloseOrder{
-	// 	OrderID: types.MakeOrderID(dgroup.ID(), 1),
-	// }
+	dgroup := testutil.DeploymentGroup(t, testutil.DeploymentID(t), 0)
+	msg := &types.MsgCloseOrder{
+		OrderID: v1.MakeOrderID(dgroup.ID, 1),
+	}
 
-	// res, err := suite.handler(suite.Context(), msg)
-	// require.Nil(t, res)
-	// require.Error(t, err)
+	res, err := suite.handler(suite.Context(), msg)
+	require.Nil(t, res)
+	require.Error(t, err)
 }
 
 func TestCloseOrderWithoutLease(t *testing.T) {
-	t.Skip("TODO CLOSE LEASE")
-	// suite := setupTestSuite(t)
+	suite := setupTestSuite(t)
 
-	// order, _ := suite.createOrder(testutil.Resources(t))
+	order, _ := suite.createOrder(testutil.Resources(t))
 
-	// msg := &types.MsgCloseOrder{
-	// 	OrderID: order.ID(),
-	// }
+	msg := &types.MsgCloseOrder{
+		OrderID: order.ID,
+	}
 
-	// res, err := suite.handler(suite.Context(), msg)
-	// require.Nil(t, res)
-	// require.Error(t, err)
+	res, err := suite.handler(suite.Context(), msg)
+	require.Nil(t, res)
+	require.Error(t, err)
 }
 
 func TestCloseOrderValid(t *testing.T) {
-	t.Skip("TODO CLOSE LEASE")
-	// suite := setupTestSuite(t)
+	suite := setupTestSuite(t)
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
 
-	// _, _, order := suite.createLease()
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToAccount", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+	})
 
-	// msg := &types.MsgCloseOrder{
-	// 	OrderID: order.ID(),
-	// }
+	lid, _, order := suite.createLease()
 
-	// res, err := suite.handler(suite.Context(), msg)
-	// require.NotNil(t, res)
-	// require.NoError(t, err)
+	msg := &types.MsgCloseOrder{
+		OrderID: order.ID,
+	}
 
-	// t.Run("ensure event created", func(t *testing.T) {
-	// 	iev := testutil.ParseMarketEvent(t, res.Events[3:4])
-	// 	require.IsType(t, types.EventOrderClosed{}, iev)
+	res, err := suite.handler(suite.Context(), msg)
+	require.NotNil(t, res)
+	require.NoError(t, err)
 
-	// 	dev := iev.(types.EventOrderClosed)
+	t.Run("ensure event created", func(t *testing.T) {
+		iev, err := sdk.ParseTypedEvent(res.Events[3])
+		require.NoError(t, err)
+		require.IsType(t, &v1.EventOrderClosed{}, iev)
 
-	// 	require.Equal(t, msg.OrderID, dev.ID)
-	// })
+		dev := iev.(*v1.EventOrderClosed)
+
+		require.Equal(t, msg.OrderID, dev.ID)
+	})
+
+	// Verify lease is closed
+	lease, found := suite.MarketKeeper().GetLease(suite.Context(), lid)
+	require.True(t, found)
+	require.Equal(t, v1.LeaseClosed, lease.State)
 }
 
 func TestCloseBidNonExisting(t *testing.T) {
@@ -1326,21 +1342,36 @@ func TestCloseBidWithStateOpen(t *testing.T) {
 }
 
 func TestCloseBidNotActiveLease(t *testing.T) {
-	t.Skip("TODO CLOSE LEASE")
-	// suite := setupTestSuite(t)
+	suite := setupTestSuite(t)
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
 
-	// lease, bid, _ := suite.createLease()
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToAccount", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+	})
 
-	// suite.MarketKeeper().OnLeaseClosed(suite.Context(), types.Lease{
-	// 	LeaseID: lease,
-	// })
-	// msg := &types.MsgCloseBid{
-	// 	BidID: bid.ID(),
-	// }
+	lid, bid, _ := suite.createLease()
 
-	// res, err := suite.handler(suite.Context(), msg)
-	// require.Nil(t, res)
-	// require.Error(t, err)
+	// Get lease and close it
+	lease, found := suite.MarketKeeper().GetLease(suite.Context(), lid)
+	require.True(t, found)
+
+	_ = suite.MarketKeeper().OnLeaseClosed(suite.Context(), lease, v1.LeaseClosed, v1.LeaseClosedReasonUnspecified)
+
+	msg := &types.MsgCloseBid{
+		ID: bid.ID,
+	}
+
+	res, err := suite.handler(suite.Context(), msg)
+	require.Nil(t, res)
+	require.Error(t, err)
 }
 
 func TestCloseBidUnknownOrder(t *testing.T) {
@@ -1366,6 +1397,249 @@ func TestCloseBidUnknownOrder(t *testing.T) {
 	res, err := suite.handler(suite.Context(), msg)
 	require.Nil(t, res)
 	require.Error(t, err)
+}
+
+func TestCloseLeaseValid(t *testing.T) {
+	suite := setupTestSuite(t)
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
+
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToAccount", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+	})
+
+	lid, bid, _ := suite.createLease()
+
+	msg := &types.MsgCloseLease{
+		ID: lid,
+	}
+
+	res, err := suite.handler(suite.Context(), msg)
+	require.NotNil(t, res)
+	require.NoError(t, err)
+
+	t.Run("ensure lease closed event created", func(t *testing.T) {
+		iev, err := sdk.ParseTypedEvent(res.Events[0])
+		require.NoError(t, err)
+		require.IsType(t, &v1.EventLeaseClosed{}, iev)
+
+		dev := iev.(*v1.EventLeaseClosed)
+		require.Equal(t, lid, dev.ID)
+	})
+
+	// Verify lease is closed
+	lease, found := suite.MarketKeeper().GetLease(suite.Context(), lid)
+	require.True(t, found)
+	require.Equal(t, v1.LeaseClosed, lease.State)
+
+	// Verify bid is closed
+	bidObj, found := suite.MarketKeeper().GetBid(suite.Context(), bid.ID)
+	require.True(t, found)
+	require.Equal(t, types.BidClosed, bidObj.State)
+}
+
+func TestCloseLeaseAfterExpiry(t *testing.T) {
+	suite := setupTestSuite(t)
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
+
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToAccount", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+	})
+
+	lid, bid, _ := suite.createLease()
+
+	// Get lease and manually close it to simulate expiry
+	lease, found := suite.MarketKeeper().GetLease(suite.Context(), lid)
+	require.True(t, found)
+	require.Equal(t, v1.LeaseActive, lease.State)
+
+	_ = suite.MarketKeeper().OnLeaseClosed(suite.Context(), lease, v1.LeaseClosed, v1.LeaseClosedReasonExpired)
+	_ = suite.MarketKeeper().OnBidClosed(suite.Context(), bid)
+
+	msg := &types.MsgCloseLease{
+		ID: lid,
+	}
+
+	// Attempting to close an already-closed lease should fail
+	res, err := suite.handler(suite.Context(), msg)
+	require.Nil(t, res)
+	require.Error(t, err)
+}
+
+func TestCloseLeaseByProvider(t *testing.T) {
+	defaultDeposit, err := dtypes.DefaultParams().MinDepositFor("uve")
+	require.NoError(t, err)
+
+	suite := setupTestSuite(t)
+
+	ctx := suite.Context()
+
+	deployment := testutil.Deployment(t)
+	group := testutil.DeploymentGroup(t, deployment.ID, 0)
+	group.GroupSpec.Resources = testutil.Resources(t)
+
+	owner := sdk.MustAccAddressFromBech32(deployment.ID.Owner)
+
+	dmsg := &dtypes.MsgCreateDeployment{
+		ID:     deployment.ID,
+		Groups: dtypes.GroupSpecs{group.GroupSpec},
+		Deposit: deposit.Deposit{
+			Amount:  defaultDeposit,
+			Sources: deposit.Sources{deposit.SourceBalance},
+		},
+	}
+
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, owner, emodule.ModuleName, sdk.Coins{dmsg.Deposit.Amount}).
+			Return(nil).Once()
+	})
+
+	res, err := suite.dhandler(ctx, dmsg)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	order, found := suite.MarketKeeper().GetOrder(ctx, v1.OrderID{
+		Owner: deployment.ID.Owner,
+		DSeq:  deployment.ID.DSeq,
+		GSeq:  1,
+		OSeq:  1,
+	})
+	require.True(t, found)
+
+	// Create provider and bid
+	provider := suite.createProvider(group.GroupSpec.Requirements.Attributes).Owner
+	providerAddr, err := sdk.AccAddressFromBech32(provider)
+	require.NoError(t, err)
+
+	bmsg := &types.MsgCreateBid{
+		ID:    v1.MakeBidID(order.ID, providerAddr),
+		Price: sdk.NewDecCoin(testutil.CoinDenom, sdkmath.NewInt(1)),
+		Deposit: deposit.Deposit{
+			Amount:  types.DefaultBidMinDeposit,
+			Sources: deposit.Sources{deposit.SourceBalance},
+		},
+	}
+
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, providerAddr, emodule.ModuleName, sdk.Coins{types.DefaultBidMinDeposit}).
+			Return(nil).Once()
+	})
+
+	res, err = suite.handler(ctx, bmsg)
+	require.NotNil(t, res)
+	require.NoError(t, err)
+
+	bid := v1.MakeBidID(order.ID, providerAddr)
+
+	// Create lease
+	lmsg := &types.MsgCreateLease{
+		BidID: bid,
+	}
+
+	lid := v1.MakeLeaseID(bid)
+	res, err = suite.handler(ctx, lmsg)
+	require.NotNil(t, res)
+	require.NoError(t, err)
+
+	// Verify lease is active
+	lease, found := suite.MarketKeeper().GetLease(ctx, lid)
+	require.True(t, found)
+	require.Equal(t, v1.LeaseActive, lease.State)
+
+	// Provider closes the lease via MsgCloseBid
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
+		bkeeper.
+			On("SendCoinsFromModuleToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToAccount", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+	})
+
+	closeBidMsg := &types.MsgCloseBid{
+		ID: bid,
+	}
+
+	res, err = suite.handler(ctx, closeBidMsg)
+	require.NotNil(t, res)
+	require.NoError(t, err)
+
+	// Verify lease is closed
+	lease, found = suite.MarketKeeper().GetLease(ctx, lid)
+	require.True(t, found)
+	require.Equal(t, v1.LeaseClosed, lease.State)
+
+	// Verify bid is closed
+	bidObj, found := suite.MarketKeeper().GetBid(ctx, bid)
+	require.True(t, found)
+	require.Equal(t, types.BidClosed, bidObj.State)
+}
+
+func TestCloseLeaseOnBid(t *testing.T) {
+	suite := setupTestSuite(t)
+	suite.PrepareMocks(func(ts *state.TestSuite) {
+		bkeeper := ts.BankKeeper()
+
+		bkeeper.
+			On("SendCoinsFromAccountToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToAccount", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+		bkeeper.
+			On("SendCoinsFromModuleToModule", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(nil)
+	})
+
+	lid, bid, _ := suite.createLease()
+
+	// Close the lease via bid closure
+	closeBidMsg := &types.MsgCloseBid{
+		ID: bid.ID,
+	}
+
+	res, err := suite.handler(suite.Context(), closeBidMsg)
+	require.NotNil(t, res)
+	require.NoError(t, err)
+
+	t.Run("ensure bid closed event created", func(t *testing.T) {
+		iev, err := sdk.ParseTypedEvent(res.Events[3])
+		require.NoError(t, err)
+		require.IsType(t, &v1.EventBidClosed{}, iev)
+
+		dev := iev.(*v1.EventBidClosed)
+		require.Equal(t, bid.ID, dev.ID)
+	})
+
+	// Verify lease is closed as a result of bid closure
+	lease, found := suite.MarketKeeper().GetLease(suite.Context(), lid)
+	require.True(t, found)
+	require.Equal(t, v1.LeaseClosed, lease.State)
+
+	// Verify bid is closed
+	bidObj, found := suite.MarketKeeper().GetBid(suite.Context(), bid.ID)
+	require.True(t, found)
+	require.Equal(t, types.BidClosed, bidObj.State)
 }
 
 func (st *testSuite) createLease() (v1.LeaseID, types.Bid, types.Order) {
