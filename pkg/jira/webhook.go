@@ -7,7 +7,6 @@
 package jira
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"

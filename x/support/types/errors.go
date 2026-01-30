@@ -27,4 +27,14 @@ var (
 	ErrInvalidCategory      = errors.Register(ModuleName, 19, "invalid ticket category")
 	ErrTicketNotResolved    = errors.Register(ModuleName, 20, "ticket is not resolved")
 	ErrSelfAssignment       = errors.Register(ModuleName, 21, "cannot assign ticket to self")
+
+	// External sync errors
+	ErrExternalSyncFailed   = errors.Register(ModuleName, 30, "external sync failed")
+	ErrExternalRefNotFound  = errors.Register(ModuleName, 31, "external ticket reference not found")
+	ErrSyncConflict         = errors.Register(ModuleName, 32, "sync conflict detected")
+	ErrInvalidSyncConfig    = errors.Register(ModuleName, 33, "invalid sync configuration")
+	ErrInvalidSignature     = errors.Register(ModuleName, 34, "invalid callback signature")
+	ErrDuplicateNonce       = errors.Register(ModuleName, 35, "duplicate callback nonce")
+	ErrAttachmentFailed     = errors.Register(ModuleName, 36, "attachment operation failed")
+	ErrExternalAPIError     = errors.Register(ModuleName, 37, "external API error")
 )
