@@ -1928,6 +1928,7 @@ See `docs/sre/INCIDENT_DRILLS.md` for the full DR drill procedure, integrated wi
 
 ### Related Documentation
 
+- [Horizontal Scaling Guide](_docs/horizontal-scaling-guide.md)
 - [Key Management](_docs/key-management.md)
 - [SLOs and Playbooks](_docs/slos-and-playbooks.md)
 - [Incident Response](docs/sre/INCIDENT_RESPONSE.md)
