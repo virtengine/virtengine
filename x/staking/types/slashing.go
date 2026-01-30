@@ -1,6 +1,7 @@
 // Package types contains types for the staking module.
 //
 // VE-921: Slashing types for validator misbehavior handling
+// This file provides utility methods for slashing types (generated proto types).
 package types
 
 import (
@@ -8,111 +9,36 @@ import (
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	stakingv1 "github.com/virtengine/virtengine/sdk/go/node/staking/v1"
 )
-
-// SlashReason indicates the reason for slashing
-type SlashReason string
-
-const (
-	// SlashReasonDoubleSigning is for double signing infractions
-	SlashReasonDoubleSigning SlashReason = "double_signing"
-
-	// SlashReasonDowntime is for excessive downtime
-	SlashReasonDowntime SlashReason = "downtime"
-
-	// SlashReasonInvalidVEIDAttestation is for invalid VEID attestations
-	SlashReasonInvalidVEIDAttestation SlashReason = "invalid_veid_attestation"
-
-	// SlashReasonMissedRecomputation is for missing VEID recomputation
-	SlashReasonMissedRecomputation SlashReason = "missed_recomputation"
-
-	// SlashReasonInconsistentScore is for scores differing from consensus
-	SlashReasonInconsistentScore SlashReason = "inconsistent_score"
-
-	// SlashReasonExpiredAttestation is for expired attestation
-	SlashReasonExpiredAttestation SlashReason = "expired_attestation"
-
-	// SlashReasonDebugModeEnabled is for enclave debug mode
-	SlashReasonDebugModeEnabled SlashReason = "debug_mode_enabled"
-
-	// SlashReasonNonAllowlistedMeasurement is for non-allowlisted enclave measurement
-	SlashReasonNonAllowlistedMeasurement SlashReason = "non_allowlisted_measurement"
-)
-
-// SlashRecord represents a slashing record
-type SlashRecord struct {
-	// SlashID is the unique identifier for this slashing event
-	SlashID string `json:"slash_id"`
-
-	// ValidatorAddress is the validator being slashed
-	ValidatorAddress string `json:"validator_address"`
-
-	// Reason is the reason for slashing
-	Reason SlashReason `json:"reason"`
-
-	// Amount is the amount slashed
-	Amount sdk.Coins `json:"amount"`
-
-	// SlashPercent is the percentage slashed (fixed-point, 1e6 scale)
-	SlashPercent int64 `json:"slash_percent"`
-
-	// InfractionHeight is the block height of the infraction
-	InfractionHeight int64 `json:"infraction_height"`
-
-	// SlashHeight is the block height when slash was executed
-	SlashHeight int64 `json:"slash_height"`
-
-	// SlashTime is when the slash was executed
-	SlashTime time.Time `json:"slash_time"`
-
-	// Jailed indicates if the validator was jailed
-	Jailed bool `json:"jailed"`
-
-	// JailDuration is how long the validator is jailed
-	JailDuration int64 `json:"jail_duration"` // seconds
-
-	// JailedUntil is when the jail period ends
-	JailedUntil time.Time `json:"jailed_until,omitempty"`
-
-	// Tombstoned indicates if validator is permanently banned
-	Tombstoned bool `json:"tombstoned"`
-
-	// Evidence contains the infraction evidence
-	Evidence string `json:"evidence,omitempty"`
-
-	// EvidenceHash is the hash of the evidence
-	EvidenceHash string `json:"evidence_hash,omitempty"`
-
-	// ReporterAddress is who reported the infraction (if any)
-	ReporterAddress string `json:"reporter_address,omitempty"`
-}
 
 // NewSlashRecord creates a new slash record
 func NewSlashRecord(
 	slashID string,
 	validatorAddr string,
-	reason SlashReason,
+	reason stakingv1.SlashReason,
 	amount sdk.Coins,
 	slashPercent int64,
 	infractionHeight int64,
 	slashHeight int64,
 	slashTime time.Time,
-) *SlashRecord {
-	return &SlashRecord{
-		SlashID:          slashID,
+) *stakingv1.SlashRecord {
+	return &stakingv1.SlashRecord{
+		SlashId:          slashID,
 		ValidatorAddress: validatorAddr,
 		Reason:           reason,
 		Amount:           amount,
 		SlashPercent:     slashPercent,
 		InfractionHeight: infractionHeight,
 		SlashHeight:      slashHeight,
-		SlashTime:        slashTime,
+		SlashTime:        &slashTime,
 	}
 }
 
-// Validate validates the slash record
-func (s *SlashRecord) Validate() error {
-	if s.SlashID == "" {
+// ValidateSlashRecord validates the slash record
+func ValidateSlashRecord(s *stakingv1.SlashRecord) error {
+	if s.SlashId == "" {
 		return fmt.Errorf("slash_id cannot be empty")
 	}
 
@@ -121,7 +47,7 @@ func (s *SlashRecord) Validate() error {
 	}
 
 	if !IsValidSlashReason(s.Reason) {
-		return fmt.Errorf("invalid slash reason: %s", s.Reason)
+		return fmt.Errorf("invalid slash reason: %d", s.Reason)
 	}
 
 	if s.SlashPercent < 0 || s.SlashPercent > FixedPointScale {
@@ -140,7 +66,7 @@ func (s *SlashRecord) Validate() error {
 }
 
 // IsValidSlashReason checks if the reason is valid
-func IsValidSlashReason(reason SlashReason) bool {
+func IsValidSlashReason(reason stakingv1.SlashReason) bool {
 	switch reason {
 	case SlashReasonDoubleSigning,
 		SlashReasonDowntime,

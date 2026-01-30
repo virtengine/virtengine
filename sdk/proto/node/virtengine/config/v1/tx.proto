@@ -1,0 +1,190 @@
+syntax = "proto3";
+package virtengine.config.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/config/v1";
+
+// Msg defines the config Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // RegisterApprovedClient registers a new approved client
+  rpc RegisterApprovedClient(MsgRegisterApprovedClient) returns (MsgRegisterApprovedClientResponse);
+
+  // UpdateApprovedClient updates an approved client
+  rpc UpdateApprovedClient(MsgUpdateApprovedClient) returns (MsgUpdateApprovedClientResponse);
+
+  // SuspendApprovedClient suspends an approved client
+  rpc SuspendApprovedClient(MsgSuspendApprovedClient) returns (MsgSuspendApprovedClientResponse);
+
+  // RevokeApprovedClient revokes an approved client
+  rpc RevokeApprovedClient(MsgRevokeApprovedClient) returns (MsgRevokeApprovedClientResponse);
+
+  // ReactivateApprovedClient reactivates a suspended client
+  rpc ReactivateApprovedClient(MsgReactivateApprovedClient) returns (MsgReactivateApprovedClientResponse);
+
+  // UpdateParams updates module parameters (governance only)
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+}
+
+// MsgRegisterApprovedClient registers a new approved client
+message MsgRegisterApprovedClient {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "config/MsgRegisterApprovedClient";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string client_id = 2;
+  string public_key = 3;
+  string name = 4;
+  string description = 5;
+  string version_constraint = 6;
+  repeated string allowed_scopes = 7;
+}
+
+// MsgRegisterApprovedClientResponse is the response for MsgRegisterApprovedClient
+message MsgRegisterApprovedClientResponse {}
+
+// MsgUpdateApprovedClient updates an approved client
+message MsgUpdateApprovedClient {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "config/MsgUpdateApprovedClient";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string client_id = 2;
+  string public_key = 3;
+  string version_constraint = 4;
+  repeated string allowed_scopes = 5;
+}
+
+// MsgUpdateApprovedClientResponse is the response for MsgUpdateApprovedClient
+message MsgUpdateApprovedClientResponse {}
+
+// MsgSuspendApprovedClient suspends an approved client
+message MsgSuspendApprovedClient {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "config/MsgSuspendApprovedClient";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string client_id = 2;
+  string reason = 3;
+}
+
+// MsgSuspendApprovedClientResponse is the response for MsgSuspendApprovedClient
+message MsgSuspendApprovedClientResponse {}
+
+// MsgRevokeApprovedClient revokes an approved client
+message MsgRevokeApprovedClient {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "config/MsgRevokeApprovedClient";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string client_id = 2;
+  string reason = 3;
+}
+
+// MsgRevokeApprovedClientResponse is the response for MsgRevokeApprovedClient
+message MsgRevokeApprovedClientResponse {}
+
+// MsgReactivateApprovedClient reactivates a suspended client
+message MsgReactivateApprovedClient {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "config/MsgReactivateApprovedClient";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string client_id = 2;
+}
+
+// MsgReactivateApprovedClientResponse is the response for MsgReactivateApprovedClient
+message MsgReactivateApprovedClientResponse {}
+
+// MsgUpdateParams updates module parameters
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "config/MsgUpdateParams";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  Params params = 2 [(gogoproto.nullable) = false];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}
+
+// Event types
+
+// EventClientRegistered is emitted when a client is registered
+message EventClientRegistered {
+  string client_id = 1;
+  string name = 2;
+  int64 registered_at = 3;
+}
+
+// EventClientUpdated is emitted when a client is updated
+message EventClientUpdated {
+  string client_id = 1;
+  int64 updated_at = 2;
+}
+
+// EventClientSuspended is emitted when a client is suspended
+message EventClientSuspended {
+  string client_id = 1;
+  string reason = 2;
+  int64 suspended_at = 3;
+}
+
+// EventClientRevoked is emitted when a client is revoked
+message EventClientRevoked {
+  string client_id = 1;
+  string reason = 2;
+  int64 revoked_at = 3;
+}
+
+// EventClientReactivated is emitted when a client is reactivated
+message EventClientReactivated {
+  string client_id = 1;
+  int64 reactivated_at = 2;
+}
+
+// EventSignatureVerified is emitted when a signature is verified
+message EventSignatureVerified {
+  string client_id = 1;
+  string signer = 2;
+  int64 verified_at = 3;
+}
+
+// Params defines the parameters for the config module
+message Params {
+  uint64 max_clients = 1;
+  uint64 signature_validity_period = 2;
+  bool require_client_signature = 3;
+}
+
+// GenesisState is the genesis state for the config module
+message GenesisState {
+  option (gogoproto.equal) = true;
+  
+  Params params = 1 [(gogoproto.nullable) = false];
+  repeated ApprovedClient approved_clients = 2 [(gogoproto.nullable) = false];
+}
+
+// ApprovedClient represents an approved client
+message ApprovedClient {
+  string client_id = 1;
+  string public_key = 2;
+  string name = 3;
+  string description = 4;
+  string version_constraint = 5;
+  repeated string allowed_scopes = 6;
+  string status = 7;
+  int64 registered_at = 8;
+  int64 updated_at = 9;
+}

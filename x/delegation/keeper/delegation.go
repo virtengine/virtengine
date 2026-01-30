@@ -4,9 +4,9 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"cosmossdk.io/math"
@@ -15,15 +15,33 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// ParseMinDelegation parses the min_delegation string to int64
+func ParseMinDelegation(minDelegation string) (int64, error) {
+	if minDelegation == "" {
+		return 0, fmt.Errorf("min_delegation is empty")
+	}
+	return strconv.ParseInt(minDelegation, 10, 64)
+}
+
+// DefaultMaxRedelegations is the default maximum simultaneous redelegations
+const DefaultMaxRedelegations uint64 = 7
+
+// DefaultStakeDenom is the default stake denomination
+const DefaultStakeDenom = "uve"
+
 // Delegate delegates tokens from a delegator to a validator
 func (k Keeper) Delegate(ctx sdk.Context, delegatorAddr, validatorAddr string, amount sdk.Coin) error {
 	params := k.GetParams(ctx)
 
 	// Validate minimum delegation amount
-	if amount.Amount.Int64() < params.MinDelegationAmount {
+	minDelegation, err := ParseMinDelegation(params.MinDelegation)
+	if err != nil {
+		return types.ErrInvalidParams.Wrapf("invalid min_delegation: %v", err)
+	}
+	if amount.Amount.Int64() < minDelegation {
 		return types.ErrMinDelegationAmount.Wrapf(
 			"minimum delegation is %d, got %s",
-			params.MinDelegationAmount,
+			minDelegation,
 			amount.String(),
 		)
 	}
@@ -31,10 +49,10 @@ func (k Keeper) Delegate(ctx sdk.Context, delegatorAddr, validatorAddr string, a
 	// Check if delegator has max validators
 	existingDelegations := k.GetDelegatorDelegations(ctx, delegatorAddr)
 	_, existingDelegation := k.GetDelegation(ctx, delegatorAddr, validatorAddr)
-	if !existingDelegation && int64(len(existingDelegations)) >= params.MaxValidatorsPerDelegator {
+	if !existingDelegation && uint64(len(existingDelegations)) >= params.MaxValidators {
 		return types.ErrMaxValidators.Wrapf(
 			"max validators per delegator is %d",
-			params.MaxValidatorsPerDelegator,
+			params.MaxValidators,
 		)
 	}
 
@@ -237,12 +255,12 @@ func (k Keeper) Redelegate(ctx sdk.Context, delegatorAddr, srcValidator, dstVali
 		return time.Time{}, types.ErrTransitiveRedelegation.Wrap("transitive redelegation not allowed")
 	}
 
-	// Check max redelegations
+	// Check max redelegations (use default since proto doesn't have this param)
 	redelegationCount := k.CountDelegatorRedelegations(ctx, delegatorAddr)
-	if int64(redelegationCount) >= params.MaxRedelegations {
+	if uint64(redelegationCount) >= DefaultMaxRedelegations {
 		return time.Time{}, types.ErrMaxRedelegations.Wrapf(
 			"max redelegations is %d",
-			params.MaxRedelegations,
+			DefaultMaxRedelegations,
 		)
 	}
 
@@ -425,8 +443,7 @@ func (k Keeper) CompleteUnbonding(ctx sdk.Context, unbondingID string) error {
 		}
 
 		if k.bankKeeper != nil {
-			params := k.GetParams(ctx)
-			coins := sdk.NewCoins(sdk.NewCoin(params.StakeDenom, math.NewIntFromBigInt(completedAmount)))
+			coins := sdk.NewCoins(sdk.NewCoin(DefaultStakeDenom, math.NewIntFromBigInt(completedAmount)))
 			if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, delegatorAccAddr, coins); err != nil {
 				return fmt.Errorf("failed to return tokens: %w", err)
 			}

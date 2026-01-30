@@ -1,11 +1,14 @@
 package keeper
 
 import (
+	"context"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/x/settlement/types"
+
+	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
 )
 
 type msgServer struct {
@@ -13,34 +16,39 @@ type msgServer struct {
 }
 
 // NewMsgServerImpl returns an implementation of the settlement MsgServer interface
-func NewMsgServerImpl(k Keeper) types.MsgServer {
+func NewMsgServerImpl(k Keeper) settlementv1.MsgServer {
 	return &msgServer{keeper: k}
 }
 
-var _ types.MsgServer = msgServer{}
+var _ settlementv1.MsgServer = msgServer{}
 
 // CreateEscrow handles creating a new escrow account
-func (ms msgServer) CreateEscrow(ctx sdk.Context, msg *types.MsgCreateEscrow) (*types.MsgCreateEscrowResponse, error) {
+func (ms msgServer) CreateEscrow(goCtx context.Context, msg *types.MsgCreateEscrow) (*types.MsgCreateEscrowResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
 	expiresIn := time.Duration(msg.ExpiresIn) * time.Second
+	amount := sdk.NewCoins(msg.Amount...)
 
-	escrowID, err := ms.keeper.CreateEscrow(ctx, msg.OrderID, sender, msg.Amount, expiresIn, msg.Conditions)
+	escrowID, err := ms.keeper.CreateEscrow(ctx, msg.OrderId, sender, amount, expiresIn, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	return &types.MsgCreateEscrowResponse{
-		EscrowID:  escrowID,
+		EscrowId:  escrowID,
 		CreatedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
 
 // ActivateEscrow handles activating an escrow
-func (ms msgServer) ActivateEscrow(ctx sdk.Context, msg *types.MsgActivateEscrow) (*types.MsgActivateEscrowResponse, error) {
+func (ms msgServer) ActivateEscrow(goCtx context.Context, msg *types.MsgActivateEscrow) (*types.MsgActivateEscrowResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	// Validate sender has authority (typically the market module or governance)
 	// In production, you would check if sender is authorized to activate escrows
 
@@ -49,7 +57,7 @@ func (ms msgServer) ActivateEscrow(ctx sdk.Context, msg *types.MsgActivateEscrow
 		return nil, types.ErrInvalidAddress.Wrap("invalid recipient address")
 	}
 
-	if err := ms.keeper.ActivateEscrow(ctx, msg.EscrowID, msg.LeaseID, recipient); err != nil {
+	if err := ms.keeper.ActivateEscrow(ctx, msg.EscrowId, msg.LeaseId, recipient); err != nil {
 		return nil, err
 	}
 
@@ -59,16 +67,18 @@ func (ms msgServer) ActivateEscrow(ctx sdk.Context, msg *types.MsgActivateEscrow
 }
 
 // ReleaseEscrow handles releasing an escrow
-func (ms msgServer) ReleaseEscrow(ctx sdk.Context, msg *types.MsgReleaseEscrow) (*types.MsgReleaseEscrowResponse, error) {
+func (ms msgServer) ReleaseEscrow(goCtx context.Context, msg *types.MsgReleaseEscrow) (*types.MsgReleaseEscrowResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
 	// Validate sender is authorized (depositor or governance)
-	escrow, found := ms.keeper.GetEscrow(ctx, msg.EscrowID)
+	escrow, found := ms.keeper.GetEscrow(ctx, msg.EscrowId)
 	if !found {
-		return nil, types.ErrEscrowNotFound.Wrapf("escrow %s not found", msg.EscrowID)
+		return nil, types.ErrEscrowNotFound.Wrapf("escrow %s not found", msg.EscrowId)
 	}
 
 	depositor, _ := sdk.AccAddressFromBech32(escrow.Depositor)
@@ -78,7 +88,7 @@ func (ms msgServer) ReleaseEscrow(ctx sdk.Context, msg *types.MsgReleaseEscrow) 
 
 	balanceBefore := escrow.Balance
 
-	if err := ms.keeper.ReleaseEscrow(ctx, msg.EscrowID, msg.Reason); err != nil {
+	if err := ms.keeper.ReleaseEscrow(ctx, msg.EscrowId, msg.Reason); err != nil {
 		return nil, err
 	}
 
@@ -89,16 +99,18 @@ func (ms msgServer) ReleaseEscrow(ctx sdk.Context, msg *types.MsgReleaseEscrow) 
 }
 
 // RefundEscrow handles refunding an escrow
-func (ms msgServer) RefundEscrow(ctx sdk.Context, msg *types.MsgRefundEscrow) (*types.MsgRefundEscrowResponse, error) {
+func (ms msgServer) RefundEscrow(goCtx context.Context, msg *types.MsgRefundEscrow) (*types.MsgRefundEscrowResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
 	// Validate sender is authorized
-	escrow, found := ms.keeper.GetEscrow(ctx, msg.EscrowID)
+	escrow, found := ms.keeper.GetEscrow(ctx, msg.EscrowId)
 	if !found {
-		return nil, types.ErrEscrowNotFound.Wrapf("escrow %s not found", msg.EscrowID)
+		return nil, types.ErrEscrowNotFound.Wrapf("escrow %s not found", msg.EscrowId)
 	}
 
 	depositor, _ := sdk.AccAddressFromBech32(escrow.Depositor)
@@ -111,7 +123,7 @@ func (ms msgServer) RefundEscrow(ctx sdk.Context, msg *types.MsgRefundEscrow) (*
 
 	balanceBefore := escrow.Balance
 
-	if err := ms.keeper.RefundEscrow(ctx, msg.EscrowID, msg.Reason); err != nil {
+	if err := ms.keeper.RefundEscrow(ctx, msg.EscrowId, msg.Reason); err != nil {
 		return nil, err
 	}
 
@@ -122,16 +134,18 @@ func (ms msgServer) RefundEscrow(ctx sdk.Context, msg *types.MsgRefundEscrow) (*
 }
 
 // DisputeEscrow handles disputing an escrow
-func (ms msgServer) DisputeEscrow(ctx sdk.Context, msg *types.MsgDisputeEscrow) (*types.MsgDisputeEscrowResponse, error) {
+func (ms msgServer) DisputeEscrow(goCtx context.Context, msg *types.MsgDisputeEscrow) (*types.MsgDisputeEscrowResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
 	// Validate sender is party to the escrow
-	escrow, found := ms.keeper.GetEscrow(ctx, msg.EscrowID)
+	escrow, found := ms.keeper.GetEscrow(ctx, msg.EscrowId)
 	if !found {
-		return nil, types.ErrEscrowNotFound.Wrapf("escrow %s not found", msg.EscrowID)
+		return nil, types.ErrEscrowNotFound.Wrapf("escrow %s not found", msg.EscrowId)
 	}
 
 	depositor, _ := sdk.AccAddressFromBech32(escrow.Depositor)
@@ -141,7 +155,7 @@ func (ms msgServer) DisputeEscrow(ctx sdk.Context, msg *types.MsgDisputeEscrow) 
 		return nil, types.ErrUnauthorized.Wrap("only parties to escrow can file dispute")
 	}
 
-	if err := ms.keeper.DisputeEscrow(ctx, msg.EscrowID, msg.Reason); err != nil {
+	if err := ms.keeper.DisputeEscrow(ctx, msg.EscrowId, msg.Reason); err != nil {
 		return nil, err
 	}
 
@@ -151,16 +165,18 @@ func (ms msgServer) DisputeEscrow(ctx sdk.Context, msg *types.MsgDisputeEscrow) 
 }
 
 // SettleOrder handles settling an order
-func (ms msgServer) SettleOrder(ctx sdk.Context, msg *types.MsgSettleOrder) (*types.MsgSettleOrderResponse, error) {
+func (ms msgServer) SettleOrder(goCtx context.Context, msg *types.MsgSettleOrder) (*types.MsgSettleOrderResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
 	// Validate sender is authorized (provider, customer, or governance)
-	escrow, found := ms.keeper.GetEscrowByOrder(ctx, msg.OrderID)
+	escrow, found := ms.keeper.GetEscrowByOrder(ctx, msg.OrderId)
 	if !found {
-		return nil, types.ErrEscrowNotFound.Wrapf("no escrow found for order %s", msg.OrderID)
+		return nil, types.ErrEscrowNotFound.Wrapf("no escrow found for order %s", msg.OrderId)
 	}
 
 	depositor, _ := sdk.AccAddressFromBech32(escrow.Depositor)
@@ -170,13 +186,13 @@ func (ms msgServer) SettleOrder(ctx sdk.Context, msg *types.MsgSettleOrder) (*ty
 		return nil, types.ErrUnauthorized.Wrap("not authorized to settle order")
 	}
 
-	settlement, err := ms.keeper.SettleOrder(ctx, msg.OrderID, msg.UsageRecordIDs, msg.IsFinal)
+	settlement, err := ms.keeper.SettleOrder(ctx, msg.OrderId, msg.UsageRecordIds, msg.IsFinal)
 	if err != nil {
 		return nil, err
 	}
 
 	return &types.MsgSettleOrderResponse{
-		SettlementID:  settlement.SettlementID,
+		SettlementId:  settlement.SettlementID,
 		TotalAmount:   settlement.TotalAmount.String(),
 		ProviderShare: settlement.ProviderShare.String(),
 		PlatformFee:   settlement.PlatformFee.String(),
@@ -185,16 +201,18 @@ func (ms msgServer) SettleOrder(ctx sdk.Context, msg *types.MsgSettleOrder) (*ty
 }
 
 // RecordUsage handles recording usage from a provider
-func (ms msgServer) RecordUsage(ctx sdk.Context, msg *types.MsgRecordUsage) (*types.MsgRecordUsageResponse, error) {
+func (ms msgServer) RecordUsage(goCtx context.Context, msg *types.MsgRecordUsage) (*types.MsgRecordUsageResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
 	// Get escrow to validate provider
-	escrow, found := ms.keeper.GetEscrowByOrder(ctx, msg.OrderID)
+	escrow, found := ms.keeper.GetEscrowByOrder(ctx, msg.OrderId)
 	if !found {
-		return nil, types.ErrEscrowNotFound.Wrapf("no escrow found for order %s", msg.OrderID)
+		return nil, types.ErrEscrowNotFound.Wrapf("no escrow found for order %s", msg.OrderId)
 	}
 
 	recipient, _ := sdk.AccAddressFromBech32(escrow.Recipient)
@@ -205,8 +223,8 @@ func (ms msgServer) RecordUsage(ctx sdk.Context, msg *types.MsgRecordUsage) (*ty
 	// Create usage record
 	record := types.NewUsageRecord(
 		"", // ID will be generated
-		msg.OrderID,
-		msg.LeaseID,
+		msg.OrderId,
+		msg.LeaseId,
 		msg.Sender,
 		escrow.Depositor,
 		msg.UsageUnits,
@@ -219,32 +237,30 @@ func (ms msgServer) RecordUsage(ctx sdk.Context, msg *types.MsgRecordUsage) (*ty
 		ctx.BlockHeight(),
 	)
 
-	if msg.Metadata != nil {
-		record.Metadata = msg.Metadata
-	}
-
 	if err := ms.keeper.RecordUsage(ctx, record); err != nil {
 		return nil, err
 	}
 
 	return &types.MsgRecordUsageResponse{
-		UsageID:    record.UsageID,
+		UsageId:    record.UsageID,
 		TotalCost:  record.TotalCost.String(),
 		RecordedAt: ctx.BlockTime().Unix(),
 	}, nil
 }
 
 // AcknowledgeUsage handles customer acknowledgment of usage
-func (ms msgServer) AcknowledgeUsage(ctx sdk.Context, msg *types.MsgAcknowledgeUsage) (*types.MsgAcknowledgeUsageResponse, error) {
+func (ms msgServer) AcknowledgeUsage(goCtx context.Context, msg *types.MsgAcknowledgeUsage) (*types.MsgAcknowledgeUsageResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
 	// Get usage record to validate customer
-	usage, found := ms.keeper.GetUsageRecord(ctx, msg.UsageID)
+	usage, found := ms.keeper.GetUsageRecord(ctx, msg.UsageId)
 	if !found {
-		return nil, types.ErrUsageRecordNotFound.Wrapf("usage record %s not found", msg.UsageID)
+		return nil, types.ErrUsageRecordNotFound.Wrapf("usage record %s not found", msg.UsageId)
 	}
 
 	customer, _ := sdk.AccAddressFromBech32(usage.Customer)
@@ -252,7 +268,7 @@ func (ms msgServer) AcknowledgeUsage(ctx sdk.Context, msg *types.MsgAcknowledgeU
 		return nil, types.ErrUnauthorized.Wrap("only the customer can acknowledge usage")
 	}
 
-	if err := ms.keeper.AcknowledgeUsage(ctx, msg.UsageID, msg.Signature); err != nil {
+	if err := ms.keeper.AcknowledgeUsage(ctx, msg.UsageId, msg.Signature); err != nil {
 		return nil, err
 	}
 
@@ -262,7 +278,9 @@ func (ms msgServer) AcknowledgeUsage(ctx sdk.Context, msg *types.MsgAcknowledgeU
 }
 
 // ClaimRewards handles claiming accumulated rewards
-func (ms msgServer) ClaimRewards(ctx sdk.Context, msg *types.MsgClaimRewards) (*types.MsgClaimRewardsResponse, error) {
+func (ms msgServer) ClaimRewards(goCtx context.Context, msg *types.MsgClaimRewards) (*types.MsgClaimRewardsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
 	sender, err := sdk.AccAddressFromBech32(msg.Sender)
 	if err != nil {
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")

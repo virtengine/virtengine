@@ -1,0 +1,164 @@
+syntax = "proto3";
+package virtengine.delegation.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+import "cosmos/base/v1beta1/coin.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/delegation/v1";
+
+// Msg defines the delegation Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // UpdateParams updates module parameters (governance only)
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // Delegate delegates tokens to a validator
+  rpc Delegate(MsgDelegate) returns (MsgDelegateResponse);
+
+  // Undelegate undelegates tokens from a validator
+  rpc Undelegate(MsgUndelegate) returns (MsgUndelegateResponse);
+
+  // Redelegate redelegates tokens between validators
+  rpc Redelegate(MsgRedelegate) returns (MsgRedelegateResponse);
+
+  // ClaimRewards claims rewards from a specific validator
+  rpc ClaimRewards(MsgClaimRewards) returns (MsgClaimRewardsResponse);
+
+  // ClaimAllRewards claims rewards from all validators
+  rpc ClaimAllRewards(MsgClaimAllRewards) returns (MsgClaimAllRewardsResponse);
+}
+
+// MsgUpdateParams updates module parameters
+message MsgUpdateParams {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "delegation/MsgUpdateParams";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  Params params = 2 [(gogoproto.nullable) = false];
+}
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+message MsgUpdateParamsResponse {}
+
+// MsgDelegate delegates tokens to a validator
+message MsgDelegate {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "delegator";
+  option (amino.name) = "delegation/MsgDelegate";
+
+  string delegator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string validator = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  cosmos.base.v1beta1.Coin amount = 3 [(gogoproto.nullable) = false];
+}
+
+// MsgDelegateResponse is the response for MsgDelegate
+message MsgDelegateResponse {}
+
+// MsgUndelegate undelegates tokens from a validator
+message MsgUndelegate {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "delegator";
+  option (amino.name) = "delegation/MsgUndelegate";
+
+  string delegator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string validator = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  cosmos.base.v1beta1.Coin amount = 3 [(gogoproto.nullable) = false];
+}
+
+// MsgUndelegateResponse is the response for MsgUndelegate
+message MsgUndelegateResponse {
+  int64 completion_time = 1;
+}
+
+// MsgRedelegate redelegates tokens between validators
+message MsgRedelegate {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "delegator";
+  option (amino.name) = "delegation/MsgRedelegate";
+
+  string delegator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string src_validator = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string dst_validator = 3 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  cosmos.base.v1beta1.Coin amount = 4 [(gogoproto.nullable) = false];
+}
+
+// MsgRedelegateResponse is the response for MsgRedelegate
+message MsgRedelegateResponse {
+  int64 completion_time = 1;
+}
+
+// MsgClaimRewards claims rewards from a specific validator
+message MsgClaimRewards {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "delegator";
+  option (amino.name) = "delegation/MsgClaimRewards";
+
+  string delegator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string validator = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// MsgClaimRewardsResponse is the response for MsgClaimRewards
+message MsgClaimRewardsResponse {
+  string amount = 1;
+}
+
+// MsgClaimAllRewards claims rewards from all validators
+message MsgClaimAllRewards {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "delegator";
+  option (amino.name) = "delegation/MsgClaimAllRewards";
+
+  string delegator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// MsgClaimAllRewardsResponse is the response for MsgClaimAllRewards
+message MsgClaimAllRewardsResponse {
+  string amount = 1;
+}
+
+// Params defines the parameters for the delegation module
+message Params {
+  uint64 unbonding_period = 1;
+  uint64 max_validators = 2;
+  string min_delegation = 3;
+  uint64 redelegation_cooldown = 4;
+}
+
+// GenesisState is the genesis state for the delegation module
+message GenesisState {
+  option (gogoproto.equal) = true;
+  
+  Params params = 1 [(gogoproto.nullable) = false];
+  repeated Delegation delegations = 2 [(gogoproto.nullable) = false];
+  repeated UnbondingDelegation unbonding_delegations = 3 [(gogoproto.nullable) = false];
+  repeated Redelegation redelegations = 4 [(gogoproto.nullable) = false];
+}
+
+// Delegation represents a delegation
+message Delegation {
+  string delegator = 1;
+  string validator = 2;
+  string shares = 3;
+}
+
+// UnbondingDelegation represents an unbonding delegation
+message UnbondingDelegation {
+  string delegator = 1;
+  string validator = 2;
+  string amount = 3;
+  int64 completion_time = 4;
+}
+
+// Redelegation represents a redelegation
+message Redelegation {
+  string delegator = 1;
+  string src_validator = 2;
+  string dst_validator = 3;
+  string amount = 4;
+  int64 completion_time = 5;
+}

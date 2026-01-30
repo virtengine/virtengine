@@ -4,7 +4,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -211,10 +210,10 @@ func (k Keeper) SubmitBenchmarks(ctx sdk.Context, reports []types.BenchmarkRepor
 			k.Logger(ctx).Error("failed to prune old reports", "error", err)
 		}
 		if pruned > 0 {
-			_ = ctx.EventManager().EmitTypedEvent(&BenchmarksPrunedEvent{
-				ProviderAddress: report.ProviderAddress,
-				ClusterID:       report.ClusterID,
-				PrunedCount:     int64(pruned),
+			_ = ctx.EventManager().EmitTypedEvent(&types.BenchmarksPrunedEvent{
+				Provider:    report.ProviderAddress,
+				PrunedCount: uint32(pruned),
+				PrunedAt:    ctx.BlockTime().Unix(),
 			})
 		}
 
@@ -227,9 +226,11 @@ func (k Keeper) SubmitBenchmarks(ctx sdk.Context, reports []types.BenchmarkRepor
 
 	// Emit event
 	if len(reports) > 0 {
-		_ = ctx.EventManager().EmitTypedEvent(&BenchmarksSubmittedEvent{
-			ProviderAddress: reports[0].ProviderAddress,
-			ReportCount:     int64(len(reports)),
+		_ = ctx.EventManager().EmitTypedEvent(&types.BenchmarksSubmittedEvent{
+			Provider:    reports[0].ProviderAddress,
+			ClusterId:   reports[0].ClusterID,
+			ResultCount: uint32(len(reports)),
+			SubmittedAt: ctx.BlockTime().Unix(),
 		})
 	}
 
@@ -446,6 +447,7 @@ func (k Keeper) GetReliabilityScore(ctx sdk.Context, providerAddr string) (types
 
 // UpdateReliabilityScore updates the reliability score for a provider
 func (k Keeper) UpdateReliabilityScore(ctx sdk.Context, providerAddr string, inputs types.ReliabilityScoreInputs) error {
+	oldScore, _ := k.GetReliabilityScore(ctx, providerAddr)
 	score, components := types.ComputeReliabilityScore(inputs)
 
 	reliabilityScore := types.ReliabilityScore{
@@ -463,10 +465,11 @@ func (k Keeper) UpdateReliabilityScore(ctx sdk.Context, providerAddr string, inp
 	}
 
 	// Emit event
-	_ = ctx.EventManager().EmitTypedEvent(&ReliabilityScoreUpdatedEvent{
-		ProviderAddress: providerAddr,
-		Score:           score,
-		ScoreVersion:    types.ScoreVersion,
+	_ = ctx.EventManager().EmitTypedEvent(&types.ReliabilityScoreUpdatedEvent{
+		Provider:  providerAddr,
+		OldScore:  fmt.Sprintf("%d", oldScore.Score),
+		NewScore:  fmt.Sprintf("%d", score),
+		UpdatedAt: ctx.BlockTime().Unix(),
 	})
 
 	return nil
@@ -619,22 +622,4 @@ func (k Keeper) GetNextAnomalySequence(ctx sdk.Context) uint64 {
 func (k Keeper) SetNextAnomalySequence(ctx sdk.Context, seq uint64) {
 	store := ctx.KVStore(k.skey)
 	store.Set(types.SequenceKeyAnomaly, []byte(strconv.FormatUint(seq, 10)))
-}
-
-// Event types for typed events
-type BenchmarksSubmittedEvent struct {
-	ProviderAddress string `json:"provider_address"`
-	ReportCount     int64  `json:"report_count"`
-}
-
-type BenchmarksPrunedEvent struct {
-	ProviderAddress string `json:"provider_address"`
-	ClusterID       string `json:"cluster_id"`
-	PrunedCount     int64  `json:"pruned_count"`
-}
-
-type ReliabilityScoreUpdatedEvent struct {
-	ProviderAddress string `json:"provider_address"`
-	Score           int64  `json:"score"`
-	ScoreVersion    string `json:"score_version"`
 }

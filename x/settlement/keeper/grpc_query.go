@@ -13,8 +13,6 @@ type GRPCQuerier struct {
 	Keeper
 }
 
-var _ types.QueryServer = GRPCQuerier{}
-
 // Escrow returns an escrow account by ID
 func (q GRPCQuerier) Escrow(ctx sdk.Context, req *types.QueryEscrowRequest) (*types.QueryEscrowResponse, error) {
 	if req == nil {

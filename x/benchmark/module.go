@@ -54,7 +54,6 @@ func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) 
 
 // DefaultGenesis returns default genesis state as raw bytes for the Benchmark module.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	// Use standard JSON encoding for stub types until proper protobuf generation
 	defaultGenesis := types.DefaultGenesisState()
 	return cdc.MustMarshalJSON(defaultGenesis)
 }
@@ -64,7 +63,6 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 	if bz == nil {
 		return nil
 	}
-	// Use standard JSON decoding for stub types until proper protobuf generation
 	var data types.GenesisState
 	if err := cdc.UnmarshalJSON(bz, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
@@ -118,7 +116,6 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 
 // InitGenesis performs genesis initialization for the Benchmark module.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
-	// Use standard JSON decoding for stub types until proper protobuf generation
 	var genesisState types.GenesisState
 	if err := cdc.UnmarshalJSON(data, &genesisState); err != nil {
 		panic(fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err))
@@ -129,7 +126,6 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 // ExportGenesis returns the exported genesis state as raw bytes for the Benchmark module.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := ExportGenesis(ctx, am.keeper)
-	// Use standard JSON encoding for stub types until proper protobuf generation
 	return cdc.MustMarshalJSON(gs)
 }
 

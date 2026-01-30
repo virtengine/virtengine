@@ -5,7 +5,12 @@ package types
 
 import (
 	"fmt"
+
+	reviewv1 "github.com/virtengine/virtengine/sdk/go/node/review/v1"
 )
+
+// Type alias for Params from generated proto
+type Params = reviewv1.Params
 
 // Default parameter values
 const (
@@ -22,55 +27,26 @@ const (
 	DefaultMaxReviewsPerProvider = 1000
 )
 
-// Params contains the review module parameters
-type Params struct {
-	// MinReviewTextLength is the minimum review text length
-	MinReviewTextLength int64 `json:"min_review_text_length"`
-
-	// MaxReviewTextLength is the maximum review text length
-	MaxReviewTextLength int64 `json:"max_review_text_length"`
-
-	// ReviewCooldownSeconds is the cooldown between reviews from same reviewer to same provider
-	ReviewCooldownSeconds int64 `json:"review_cooldown_seconds"`
-
-	// MaxReviewsPerProvider is the maximum reviews to retain per provider
-	MaxReviewsPerProvider int64 `json:"max_reviews_per_provider"`
-
-	// RequireCompletedOrder indicates if reviews must be linked to completed orders
-	RequireCompletedOrder bool `json:"require_completed_order"`
-}
-
 // DefaultParams returns default parameters
 func DefaultParams() Params {
 	return Params{
-		MinReviewTextLength:   DefaultMinReviewTextLength,
-		MaxReviewTextLength:   DefaultMaxReviewTextLength,
-		ReviewCooldownSeconds: DefaultReviewCooldownSeconds,
-		MaxReviewsPerProvider: DefaultMaxReviewsPerProvider,
-		RequireCompletedOrder: true, // Reviews must be linked to verified completed orders
+		MinReviewInterval:     uint64(DefaultReviewCooldownSeconds),
+		MaxCommentLength:      uint64(DefaultMaxReviewTextLength),
+		RequireCompletedOrder: true,
+		ReviewWindow:          uint64(DefaultReviewCooldownSeconds * 7), // 7 days
+		MinRating:             MinRating,
+		MaxRating:             MaxRating,
 	}
 }
 
-// Validate validates the parameters
-func (p *Params) Validate() error {
-	if p.MinReviewTextLength <= 0 {
-		return fmt.Errorf("min_review_text_length must be positive")
+// ValidateParams validates the parameters
+func ValidateParams(p *Params) error {
+	if p.MaxCommentLength <= 0 {
+		return fmt.Errorf("max_comment_length must be positive")
 	}
 
-	if p.MaxReviewTextLength <= 0 {
-		return fmt.Errorf("max_review_text_length must be positive")
-	}
-
-	if p.MinReviewTextLength > p.MaxReviewTextLength {
-		return fmt.Errorf("min_review_text_length cannot exceed max_review_text_length")
-	}
-
-	if p.ReviewCooldownSeconds < 0 {
-		return fmt.Errorf("review_cooldown_seconds cannot be negative")
-	}
-
-	if p.MaxReviewsPerProvider <= 0 {
-		return fmt.Errorf("max_reviews_per_provider must be positive")
+	if p.MinRating > p.MaxRating {
+		return fmt.Errorf("min_rating cannot exceed max_rating")
 	}
 
 	return nil
@@ -103,7 +79,7 @@ func DefaultGenesisState() *GenesisState {
 
 // Validate validates the genesis state
 func (gs *GenesisState) Validate() error {
-	if err := gs.Params.Validate(); err != nil {
+	if err := ValidateParams(&gs.Params); err != nil {
 		return fmt.Errorf("invalid params: %w", err)
 	}
 

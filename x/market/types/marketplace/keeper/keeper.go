@@ -6,7 +6,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"encoding/json"
 	"fmt"
 	"time"

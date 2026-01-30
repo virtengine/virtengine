@@ -4,7 +4,6 @@
 package keeper
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -260,12 +259,11 @@ func (k Keeper) CreateAnomalyFlag(ctx sdk.Context, flag *types.AnomalyFlag) erro
 	}
 
 	// Emit event
-	_ = ctx.EventManager().EmitTypedEvent(&AnomalyDetectedEvent{
-		FlagID:          flag.FlagID,
-		ReportID:        flag.ReportID,
-		ProviderAddress: flag.ProviderAddress,
-		AnomalyType:     string(flag.Type),
-		Severity:        string(flag.Severity),
+	_ = ctx.EventManager().EmitTypedEvent(&types.AnomalyDetectedEvent{
+		Provider:    flag.ProviderAddress,
+		AnomalyType: string(flag.Type),
+		Severity:    string(flag.Severity),
+		DetectedAt:  ctx.BlockTime().Unix(),
 	})
 
 	return nil
@@ -295,10 +293,10 @@ func (k Keeper) ResolveAnomalyFlag(ctx sdk.Context, flagID string, resolution st
 	}
 
 	// Emit event
-	_ = ctx.EventManager().EmitTypedEvent(&AnomalyResolvedEvent{
-		FlagID:     flagID,
-		ResolvedBy: resolverAddr.String(),
+	_ = ctx.EventManager().EmitTypedEvent(&types.AnomalyResolvedEvent{
+		Provider:   flag.ProviderAddress,
 		Resolution: resolution,
+		ResolvedAt: ctx.BlockTime().Unix(),
 	})
 
 	return nil
@@ -395,10 +393,11 @@ func (k Keeper) FlagProvider(ctx sdk.Context, flag *types.ProviderFlag) error {
 	}
 
 	// Emit event
-	_ = ctx.EventManager().EmitTypedEvent(&ProviderFlaggedEvent{
-		ProviderAddress: flag.ProviderAddress,
-		FlaggedBy:       flag.FlaggedBy,
-		Reason:          flag.Reason,
+	_ = ctx.EventManager().EmitTypedEvent(&types.ProviderFlaggedEvent{
+		Provider:  flag.ProviderAddress,
+		Reporter:  flag.FlaggedBy,
+		Reason:    flag.Reason,
+		FlaggedAt: ctx.BlockTime().Unix(),
 	})
 
 	return nil
@@ -425,9 +424,9 @@ func (k Keeper) UnflagProvider(ctx sdk.Context, providerAddr string, moderatorAd
 	}
 
 	// Emit event
-	_ = ctx.EventManager().EmitTypedEvent(&ProviderUnflaggedEvent{
-		ProviderAddress: providerAddr,
-		UnflaggedBy:     moderatorAddr.String(),
+	_ = ctx.EventManager().EmitTypedEvent(&types.ProviderUnflaggedEvent{
+		Provider:    providerAddr,
+		UnflaggedAt: ctx.BlockTime().Unix(),
 	})
 
 	return nil
@@ -491,32 +490,6 @@ func (k Keeper) WithProviderFlags(ctx sdk.Context, fn func(types.ProviderFlag) b
 			break
 		}
 	}
-}
-
-// Event types for anomaly detection
-type AnomalyDetectedEvent struct {
-	FlagID          string `json:"flag_id"`
-	ReportID        string `json:"report_id"`
-	ProviderAddress string `json:"provider_address"`
-	AnomalyType     string `json:"anomaly_type"`
-	Severity        string `json:"severity"`
-}
-
-type AnomalyResolvedEvent struct {
-	FlagID     string `json:"flag_id"`
-	ResolvedBy string `json:"resolved_by"`
-	Resolution string `json:"resolution"`
-}
-
-type ProviderFlaggedEvent struct {
-	ProviderAddress string `json:"provider_address"`
-	FlaggedBy       string `json:"flagged_by"`
-	Reason          string `json:"reason"`
-}
-
-type ProviderUnflaggedEvent struct {
-	ProviderAddress string `json:"provider_address"`
-	UnflaggedBy     string `json:"unflagged_by"`
 }
 
 // Unused variable to silence compiler

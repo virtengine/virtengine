@@ -88,13 +88,22 @@ message ValidatorPerformance {
   int64 total_signatures = 5 [(gogoproto.jsontag) = "total_signatures"];
 
   // VEIDVerificationsCompleted is the number of VEID verifications completed
-  int64 veid_verifications_completed = 6 [(gogoproto.jsontag) = "veid_verifications_completed"];
+  int64 veid_verifications_completed = 6 [
+    (gogoproto.jsontag) = "veid_verifications_completed",
+    (gogoproto.customname) = "VEIDVerificationsCompleted"
+  ];
 
   // VEIDVerificationsExpected is the expected VEID verifications based on committee selection
-  int64 veid_verifications_expected = 7 [(gogoproto.jsontag) = "veid_verifications_expected"];
+  int64 veid_verifications_expected = 7 [
+    (gogoproto.jsontag) = "veid_verifications_expected",
+    (gogoproto.customname) = "VEIDVerificationsExpected"
+  ];
 
   // VEIDVerificationScore is the quality score for VEID verifications (0-10000)
-  int64 veid_verification_score = 8 [(gogoproto.jsontag) = "veid_verification_score"];
+  int64 veid_verification_score = 8 [
+    (gogoproto.jsontag) = "veid_verification_score",
+    (gogoproto.customname) = "VEIDVerificationScore"
+  ];
 
   // UptimeSeconds is the total uptime in seconds
   int64 uptime_seconds = 9 [(gogoproto.jsontag) = "uptime_seconds"];
@@ -207,7 +216,8 @@ message RewardEpoch {
     (gogoproto.nullable) = false,
     (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins",
     (gogoproto.jsontag) = "veid_rewards",
-    (gogoproto.moretags) = "yaml:\"veid_rewards\""
+    (gogoproto.moretags) = "yaml:\"veid_rewards\"",
+    (gogoproto.customname) = "VEIDRewards"
   ];
 
   // UptimeRewards is rewards from uptime
@@ -263,7 +273,8 @@ message ValidatorReward {
     (gogoproto.nullable) = false,
     (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins",
     (gogoproto.jsontag) = "veid_reward",
-    (gogoproto.moretags) = "yaml:\"veid_reward\""
+    (gogoproto.moretags) = "yaml:\"veid_reward\"",
+    (gogoproto.customname) = "VEIDReward"
   ];
 
   // UptimeReward is reward from uptime

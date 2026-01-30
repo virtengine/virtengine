@@ -276,7 +276,7 @@ func (k Keeper) GetValidatorPerformance(ctx sdk.Context, validatorAddr string, e
 
 // SetValidatorPerformance sets a validator's performance
 func (k Keeper) SetValidatorPerformance(ctx sdk.Context, perf types.ValidatorPerformance) error {
-	if err := perf.Validate(); err != nil {
+	if err := types.ValidateValidatorPerformance(&perf); err != nil {
 		return err
 	}
 
@@ -339,10 +339,11 @@ func (k Keeper) UpdateValidatorPerformance(ctx sdk.Context, validatorAddr string
 
 	perf.UptimeSeconds += update.UptimeSeconds
 	perf.DowntimeSeconds += update.DowntimeSeconds
-	perf.UpdatedAt = ctx.BlockTime()
+	blockTime := ctx.BlockTime()
+	perf.UpdatedAt = &blockTime
 
 	// Recompute overall score
-	perf.ComputeOverallScore()
+	types.ComputeOverallScore(&perf)
 
 	return k.SetValidatorPerformance(ctx, perf)
 }

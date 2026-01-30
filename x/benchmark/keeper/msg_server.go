@@ -5,6 +5,8 @@ package keeper
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -35,18 +37,37 @@ func (ms msgServer) SubmitBenchmarks(goCtx context.Context, msg *types.MsgSubmit
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	providerAddr, err := sdk.AccAddressFromBech32(msg.Provider)
 	if err != nil {
 		return nil, types.ErrInvalidBenchmark.Wrap(errMsgInvalidProviderAddr)
 	}
 
 	// Check if provider is flagged
-	if ms.keeper.IsProviderFlagged(ctx, msg.ProviderAddress) {
-		return nil, types.ErrProviderFlagged.Wrapf("provider %s is flagged", msg.ProviderAddress)
+	if ms.keeper.IsProviderFlagged(ctx, msg.Provider) {
+		return nil, types.ErrProviderFlagged.Wrapf("provider %s is flagged", msg.Provider)
+	}
+
+	// Convert proto BenchmarkResults to local BenchmarkReports
+	reports := make([]types.BenchmarkReport, len(msg.Results))
+	for i, result := range msg.Results {
+		// Parse score as int64 (proto uses string for flexibility)
+		var summaryScore int64
+		if result.Score != "" {
+			if s, err := strconv.ParseInt(result.Score, 10, 64); err == nil {
+				summaryScore = s
+			}
+		}
+		reports[i] = types.BenchmarkReport{
+			ProviderAddress: msg.Provider,
+			ClusterID:       msg.ClusterId,
+			SuiteVersion:    result.BenchmarkType,
+			SummaryScore:    summaryScore,
+			Timestamp:       time.Unix(result.Timestamp, 0),
+		}
 	}
 
 	// Submit the benchmarks through the keeper
-	if err := ms.keeper.SubmitBenchmarks(ctx, msg.Reports); err != nil {
+	if err := ms.keeper.SubmitBenchmarks(ctx, reports); err != nil {
 		return nil, err
 	}
 
@@ -55,13 +76,13 @@ func (ms msgServer) SubmitBenchmarks(goCtx context.Context, msg *types.MsgSubmit
 		sdk.NewEvent(
 			types.EventTypeBenchmarksSubmitted,
 			sdk.NewAttribute(types.AttributeKeyProviderAddress, providerAddr.String()),
-			sdk.NewAttribute(types.AttributeKeyReportCount, string(rune(len(msg.Reports)))),
+			sdk.NewAttribute(types.AttributeKeyReportCount, fmt.Sprintf("%d", len(msg.Results))),
 		),
 	)
 
 	ms.keeper.Logger(ctx).Info("benchmarks submitted",
-		"provider", msg.ProviderAddress,
-		"report_count", len(msg.Reports),
+		"provider", msg.Provider,
+		"result_count", len(msg.Results),
 	)
 
 	return &types.MsgSubmitBenchmarksResponse{}, nil
@@ -78,22 +99,21 @@ func (ms msgServer) RequestChallenge(goCtx context.Context, msg *types.MsgReques
 	}
 
 	// Validate provider address
-	_, err = sdk.AccAddressFromBech32(msg.ProviderAddress)
+	_, err = sdk.AccAddressFromBech32(msg.Provider)
 	if err != nil {
 		return nil, types.ErrInvalidBenchmark.Wrap(errMsgInvalidProviderAddr)
 	}
 
-	// Calculate deadline
-	deadline := ctx.BlockTime().Add(time.Duration(msg.DeadlineSeconds) * time.Second)
+	// Use default challenge deadline from params
+	params := ms.keeper.GetParams(ctx)
+	deadline := ctx.BlockTime().Add(time.Duration(params.DefaultChallengeDeadlineSeconds) * time.Second)
 
 	// Create the challenge
 	challenge := &types.BenchmarkChallenge{
-		Requester:           requesterAddr.String(),
-		ProviderAddress:     msg.ProviderAddress,
-		ClusterID:           msg.ClusterID,
-		OfferingID:          msg.OfferingID,
-		RequiredSuiteVersion: msg.SuiteVersion,
-		Deadline:            deadline,
+		Requester:            requesterAddr.String(),
+		ProviderAddress:      msg.Provider,
+		RequiredSuiteVersion: msg.BenchmarkType,
+		Deadline:             deadline,
 	}
 
 	if err := ms.keeper.CreateChallenge(ctx, challenge); err != nil {
@@ -105,19 +125,18 @@ func (ms msgServer) RequestChallenge(goCtx context.Context, msg *types.MsgReques
 		sdk.NewEvent(
 			types.EventTypeChallengeRequested,
 			sdk.NewAttribute(types.AttributeKeyChallengeID, challenge.ChallengeID),
-			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.ProviderAddress),
-			sdk.NewAttribute(types.AttributeKeyClusterID, msg.ClusterID),
+			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.Provider),
 		),
 	)
 
 	ms.keeper.Logger(ctx).Info("benchmark challenge created",
 		"challenge_id", challenge.ChallengeID,
-		"provider", msg.ProviderAddress,
+		"provider", msg.Provider,
 		"requester", msg.Requester,
 	)
 
 	return &types.MsgRequestChallengeResponse{
-		ChallengeID: challenge.ChallengeID,
+		ChallengeId: challenge.ChallengeID,
 	}, nil
 }
 
@@ -126,18 +145,33 @@ func (ms msgServer) RespondChallenge(goCtx context.Context, msg *types.MsgRespon
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate provider address
-	_, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
+	_, err := sdk.AccAddressFromBech32(msg.Provider)
 	if err != nil {
 		return nil, types.ErrInvalidBenchmark.Wrap(errMsgInvalidProviderAddr)
 	}
 
 	// Check if provider is flagged
-	if ms.keeper.IsProviderFlagged(ctx, msg.ProviderAddress) {
-		return nil, types.ErrProviderFlagged.Wrapf("provider %s is flagged", msg.ProviderAddress)
+	if ms.keeper.IsProviderFlagged(ctx, msg.Provider) {
+		return nil, types.ErrProviderFlagged.Wrapf("provider %s is flagged", msg.Provider)
+	}
+
+	// Convert proto BenchmarkResult to local BenchmarkReport
+	var summaryScore int64
+	if msg.Result.Score != "" {
+		if s, err := strconv.ParseInt(msg.Result.Score, 10, 64); err == nil {
+			summaryScore = s
+		}
+	}
+	report := types.BenchmarkReport{
+		ProviderAddress: msg.Provider,
+		SuiteVersion:    msg.Result.BenchmarkType,
+		SummaryScore:    summaryScore,
+		Timestamp:       time.Unix(msg.Result.Timestamp, 0),
+		ChallengeID:     msg.ChallengeId,
 	}
 
 	// Respond to the challenge through the keeper
-	if err := ms.keeper.RespondToChallenge(ctx, msg.ChallengeID, msg.Report, msg.ExplanationRef); err != nil {
+	if err := ms.keeper.RespondToChallenge(ctx, msg.ChallengeId, report, ""); err != nil {
 		return nil, err
 	}
 
@@ -145,15 +179,14 @@ func (ms msgServer) RespondChallenge(goCtx context.Context, msg *types.MsgRespon
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			types.EventTypeChallengeCompleted,
-			sdk.NewAttribute(types.AttributeKeyChallengeID, msg.ChallengeID),
-			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.ProviderAddress),
-			sdk.NewAttribute(types.AttributeKeyReportID, msg.Report.ReportID),
+			sdk.NewAttribute(types.AttributeKeyChallengeID, msg.ChallengeId),
+			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.Provider),
 		),
 	)
 
 	ms.keeper.Logger(ctx).Info("challenge responded",
-		"challenge_id", msg.ChallengeID,
-		"provider", msg.ProviderAddress,
+		"challenge_id", msg.ChallengeId,
+		"provider", msg.Provider,
 	)
 
 	return &types.MsgRespondChallengeResponse{}, nil
@@ -163,31 +196,24 @@ func (ms msgServer) RespondChallenge(goCtx context.Context, msg *types.MsgRespon
 func (ms msgServer) FlagProvider(goCtx context.Context, msg *types.MsgFlagProvider) (*types.MsgFlagProviderResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate moderator address
-	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
+	// Validate reporter address
+	reporterAddr, err := sdk.AccAddressFromBech32(msg.Reporter)
 	if err != nil {
 		return nil, types.ErrUnauthorized.Wrap(errMsgInvalidModeratorAddr)
 	}
 
-	// Check if moderator has permission
-	if ms.keeper.rolesKeeper != nil && !ms.keeper.rolesKeeper.IsModerator(ctx, moderatorAddr) {
+	// Check if reporter has permission (moderator role)
+	if ms.keeper.rolesKeeper != nil && !ms.keeper.rolesKeeper.IsModerator(ctx, reporterAddr) {
 		return nil, types.ErrUnauthorized.Wrap("sender is not a moderator")
-	}
-
-	// Calculate expiry time if provided
-	var expiresAt time.Time
-	if msg.ExpiresInSeconds > 0 {
-		expiresAt = ctx.BlockTime().Add(time.Duration(msg.ExpiresInSeconds) * time.Second)
 	}
 
 	// Create the provider flag
 	flag := &types.ProviderFlag{
-		ProviderAddress: msg.ProviderAddress,
+		ProviderAddress: msg.Provider,
 		Active:          true,
-		FlaggedBy:       moderatorAddr.String(),
+		FlaggedBy:       reporterAddr.String(),
 		Reason:          msg.Reason,
 		FlaggedAt:       ctx.BlockTime(),
-		ExpiresAt:       expiresAt,
 		BlockHeight:     ctx.BlockHeight(),
 	}
 
@@ -199,15 +225,15 @@ func (ms msgServer) FlagProvider(goCtx context.Context, msg *types.MsgFlagProvid
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			types.EventTypeProviderFlagged,
-			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.ProviderAddress),
-			sdk.NewAttribute(types.AttributeKeyModerator, msg.Moderator),
+			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.Provider),
+			sdk.NewAttribute(types.AttributeKeyModerator, msg.Reporter),
 			sdk.NewAttribute(types.AttributeKeyReason, msg.Reason),
 		),
 	)
 
 	ms.keeper.Logger(ctx).Info("provider flagged",
-		"provider", msg.ProviderAddress,
-		"moderator", msg.Moderator,
+		"provider", msg.Provider,
+		"reporter", msg.Reporter,
 		"reason", msg.Reason,
 	)
 
@@ -218,19 +244,19 @@ func (ms msgServer) FlagProvider(goCtx context.Context, msg *types.MsgFlagProvid
 func (ms msgServer) UnflagProvider(goCtx context.Context, msg *types.MsgUnflagProvider) (*types.MsgUnflagProviderResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate moderator address
-	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
+	// Validate authority address
+	authorityAddr, err := sdk.AccAddressFromBech32(msg.Authority)
 	if err != nil {
 		return nil, types.ErrUnauthorized.Wrap(errMsgInvalidModeratorAddr)
 	}
 
-	// Check if moderator has permission
-	if ms.keeper.rolesKeeper != nil && !ms.keeper.rolesKeeper.IsModerator(ctx, moderatorAddr) {
+	// Check if authority has permission
+	if ms.keeper.rolesKeeper != nil && !ms.keeper.rolesKeeper.IsModerator(ctx, authorityAddr) {
 		return nil, types.ErrUnauthorized.Wrap("sender is not a moderator")
 	}
 
 	// Remove the flag
-	if err := ms.keeper.UnflagProvider(ctx, msg.ProviderAddress, moderatorAddr); err != nil {
+	if err := ms.keeper.UnflagProvider(ctx, msg.Provider, authorityAddr); err != nil {
 		return nil, err
 	}
 
@@ -238,14 +264,14 @@ func (ms msgServer) UnflagProvider(goCtx context.Context, msg *types.MsgUnflagPr
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			types.EventTypeProviderUnflagged,
-			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.ProviderAddress),
-			sdk.NewAttribute(types.AttributeKeyModerator, msg.Moderator),
+			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.Provider),
+			sdk.NewAttribute(types.AttributeKeyModerator, msg.Authority),
 		),
 	)
 
 	ms.keeper.Logger(ctx).Info("provider unflagged",
-		"provider", msg.ProviderAddress,
-		"moderator", msg.Moderator,
+		"provider", msg.Provider,
+		"authority", msg.Authority,
 	)
 
 	return &types.MsgUnflagProviderResponse{}, nil
@@ -255,19 +281,32 @@ func (ms msgServer) UnflagProvider(goCtx context.Context, msg *types.MsgUnflagPr
 func (ms msgServer) ResolveAnomalyFlag(goCtx context.Context, msg *types.MsgResolveAnomalyFlag) (*types.MsgResolveAnomalyFlagResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate moderator address
-	moderatorAddr, err := sdk.AccAddressFromBech32(msg.Moderator)
+	// Validate authority address
+	authorityAddr, err := sdk.AccAddressFromBech32(msg.Authority)
 	if err != nil {
 		return nil, types.ErrUnauthorized.Wrap(errMsgInvalidModeratorAddr)
 	}
 
-	// Check if moderator has permission
-	if ms.keeper.rolesKeeper != nil && !ms.keeper.rolesKeeper.IsModerator(ctx, moderatorAddr) {
+	// Check if authority has permission
+	if ms.keeper.rolesKeeper != nil && !ms.keeper.rolesKeeper.IsModerator(ctx, authorityAddr) {
 		return nil, types.ErrUnauthorized.Wrap("sender is not a moderator")
 	}
 
+	// Find the active anomaly flag for this provider
+	flags := ms.keeper.GetAnomalyFlagsByProvider(ctx, msg.Provider)
+	var flagID string
+	for _, flag := range flags {
+		if !flag.Resolved {
+			flagID = flag.FlagID
+			break
+		}
+	}
+	if flagID == "" {
+		return nil, types.ErrReportNotFound.Wrap("no active anomaly flag found for provider")
+	}
+
 	// Resolve the anomaly flag
-	if err := ms.keeper.ResolveAnomalyFlag(ctx, msg.FlagID, msg.Resolution, moderatorAddr); err != nil {
+	if err := ms.keeper.ResolveAnomalyFlag(ctx, flagID, msg.Resolution, authorityAddr); err != nil {
 		return nil, err
 	}
 
@@ -275,14 +314,14 @@ func (ms msgServer) ResolveAnomalyFlag(goCtx context.Context, msg *types.MsgReso
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			types.EventTypeAnomalyResolved,
-			sdk.NewAttribute(types.AttributeKeyAnomalyFlagID, msg.FlagID),
-			sdk.NewAttribute(types.AttributeKeyModerator, msg.Moderator),
+			sdk.NewAttribute(types.AttributeKeyProviderAddress, msg.Provider),
+			sdk.NewAttribute(types.AttributeKeyModerator, msg.Authority),
 		),
 	)
 
 	ms.keeper.Logger(ctx).Info("anomaly flag resolved",
-		"flag_id", msg.FlagID,
-		"moderator", msg.Moderator,
+		"provider", msg.Provider,
+		"authority", msg.Authority,
 		"resolution", msg.Resolution,
 	)
 

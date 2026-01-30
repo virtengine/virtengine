@@ -35,7 +35,7 @@ func (k Keeper) GetRewardEpoch(ctx sdk.Context, epochNumber uint64) (types.Rewar
 
 // SetRewardEpoch stores a reward epoch
 func (k Keeper) SetRewardEpoch(ctx sdk.Context, epoch types.RewardEpoch) error {
-	if err := epoch.Validate(); err != nil {
+	if err := types.ValidateRewardEpoch(&epoch); err != nil {
 		return err
 	}
 
@@ -88,7 +88,7 @@ func (k Keeper) GetValidatorReward(ctx sdk.Context, validatorAddr string, epoch 
 
 // SetValidatorReward stores a validator's reward
 func (k Keeper) SetValidatorReward(ctx sdk.Context, reward types.ValidatorReward) error {
-	if err := reward.Validate(); err != nil {
+	if err := types.ValidateValidatorReward(&reward); err != nil {
 		return err
 	}
 
@@ -144,7 +144,7 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 	}
 
 	// Calculate epoch reward pool
-	blocksInEpoch := epochInfo.Duration()
+	blocksInEpoch := types.EpochDuration(&epochInfo)
 	if blocksInEpoch == 0 {
 		blocksInEpoch = int64(params.EpochLength)
 	}
@@ -181,7 +181,8 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 
 		reward := types.CalculateRewards(input, params.RewardDenom)
 		reward.EpochNumber = epoch
-		reward.CalculatedAt = ctx.BlockTime()
+		calculatedAt := ctx.BlockTime()
+		reward.CalculatedAt = &calculatedAt
 		reward.BlockHeight = ctx.BlockHeight()
 
 		rewards = append(rewards, *reward)
@@ -243,9 +244,10 @@ func (k Keeper) CalculateVEIDRewards(ctx sdk.Context, epoch uint64) ([]types.Val
 		reward := types.NewValidatorReward(perf.ValidatorAddress, epoch)
 		reward.VEIDReward = veidReward
 		reward.IdentityNetworkReward = veidReward
-		reward.CalculatedAt = ctx.BlockTime()
+		calculatedAt := ctx.BlockTime()
+		reward.CalculatedAt = &calculatedAt
 		reward.BlockHeight = ctx.BlockHeight()
-		reward.ComputeTotal()
+		reward.TotalReward = types.ComputeTotalReward(reward)
 
 		rewards = append(rewards, *reward)
 	}
@@ -254,7 +256,7 @@ func (k Keeper) CalculateVEIDRewards(ctx sdk.Context, epoch uint64) ([]types.Val
 		"epoch", epoch,
 		"validators", len(rewards),
 		"total_verifications", totalVerifications,
-		"epoch_duration", epochInfo.Duration(),
+		"epoch_duration", types.EpochDuration(&epochInfo),
 	)
 
 	return rewards, nil
@@ -288,7 +290,7 @@ func (k Keeper) DistributeRewards(ctx sdk.Context, epoch uint64) error {
 		if existing, ok := rewardsByValidator[r.ValidatorAddress]; ok {
 			existing.VEIDReward = existing.VEIDReward.Add(r.VEIDReward...)
 			existing.IdentityNetworkReward = existing.IdentityNetworkReward.Add(r.IdentityNetworkReward...)
-			existing.ComputeTotal()
+			existing.TotalReward = types.ComputeTotalReward(existing)
 		} else {
 			reward := r // Create a copy
 			rewardsByValidator[r.ValidatorAddress] = &reward
@@ -360,7 +362,8 @@ func (k Keeper) DistributeRewards(ctx sdk.Context, epoch uint64) error {
 	epochInfo.TotalRewardsDistributed = totalDistributed
 	epochInfo.ValidatorCount = int64(len(rewardsByValidator))
 	epochInfo.EndHeight = ctx.BlockHeight()
-	epochInfo.EndTime = ctx.BlockTime()
+	endTime := ctx.BlockTime()
+	epochInfo.EndTime = &endTime
 	epochInfo.Finalized = true
 
 	if err := k.SetRewardEpoch(ctx, epochInfo); err != nil {

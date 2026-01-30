@@ -1,0 +1,259 @@
+syntax = "proto3";
+package virtengine.benchmark.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "cosmos/msg/v1/msg.proto";
+import "amino/amino.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/benchmark/v1";
+
+// Msg defines the benchmark Msg service
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // SubmitBenchmarks submits benchmark results
+  rpc SubmitBenchmarks(MsgSubmitBenchmarks) returns (MsgSubmitBenchmarksResponse);
+
+  // RequestChallenge requests a benchmark challenge
+  rpc RequestChallenge(MsgRequestChallenge) returns (MsgRequestChallengeResponse);
+
+  // RespondChallenge responds to a benchmark challenge
+  rpc RespondChallenge(MsgRespondChallenge) returns (MsgRespondChallengeResponse);
+
+  // FlagProvider flags a provider for anomaly
+  rpc FlagProvider(MsgFlagProvider) returns (MsgFlagProviderResponse);
+
+  // UnflagProvider removes a provider flag
+  rpc UnflagProvider(MsgUnflagProvider) returns (MsgUnflagProviderResponse);
+
+  // ResolveAnomalyFlag resolves an anomaly flag
+  rpc ResolveAnomalyFlag(MsgResolveAnomalyFlag) returns (MsgResolveAnomalyFlagResponse);
+}
+
+// MsgSubmitBenchmarks submits benchmark results
+message MsgSubmitBenchmarks {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "benchmark/MsgSubmitBenchmarks";
+
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string cluster_id = 2;
+  repeated BenchmarkResult results = 3 [(gogoproto.nullable) = false];
+  bytes signature = 4;
+}
+
+// MsgSubmitBenchmarksResponse is the response for MsgSubmitBenchmarks
+message MsgSubmitBenchmarksResponse {}
+
+// MsgRequestChallenge requests a benchmark challenge
+message MsgRequestChallenge {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "requester";
+  option (amino.name) = "benchmark/MsgRequestChallenge";
+
+  string requester = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string provider = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string benchmark_type = 3;
+}
+
+// MsgRequestChallengeResponse is the response for MsgRequestChallenge
+message MsgRequestChallengeResponse {
+  string challenge_id = 1;
+}
+
+// MsgRespondChallenge responds to a benchmark challenge
+message MsgRespondChallenge {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "provider";
+  option (amino.name) = "benchmark/MsgRespondChallenge";
+
+  string provider = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string challenge_id = 2;
+  BenchmarkResult result = 3 [(gogoproto.nullable) = false];
+  bytes signature = 4;
+}
+
+// MsgRespondChallengeResponse is the response for MsgRespondChallenge
+message MsgRespondChallengeResponse {}
+
+// MsgFlagProvider flags a provider for anomaly
+message MsgFlagProvider {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "reporter";
+  option (amino.name) = "benchmark/MsgFlagProvider";
+
+  string reporter = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string provider = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string reason = 3;
+  string evidence = 4;
+}
+
+// MsgFlagProviderResponse is the response for MsgFlagProvider
+message MsgFlagProviderResponse {}
+
+// MsgUnflagProvider removes a provider flag
+message MsgUnflagProvider {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "benchmark/MsgUnflagProvider";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string provider = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// MsgUnflagProviderResponse is the response for MsgUnflagProvider
+message MsgUnflagProviderResponse {}
+
+// MsgResolveAnomalyFlag resolves an anomaly flag
+message MsgResolveAnomalyFlag {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "benchmark/MsgResolveAnomalyFlag";
+
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string provider = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string resolution = 3;
+  bool is_valid = 4;
+}
+
+// MsgResolveAnomalyFlagResponse is the response for MsgResolveAnomalyFlag
+message MsgResolveAnomalyFlagResponse {}
+
+// BenchmarkResult represents a benchmark result
+message BenchmarkResult {
+  string benchmark_type = 1;
+  string score = 2;
+  int64 timestamp = 3;
+  string hardware_info = 4;
+  bytes raw_data = 5;
+}
+
+// Event types for keeper
+
+// AnomalyDetectedEvent is emitted when an anomaly is detected
+message AnomalyDetectedEvent {
+  string provider = 1;
+  string anomaly_type = 2;
+  string severity = 3;
+  int64 detected_at = 4;
+}
+
+// AnomalyResolvedEvent is emitted when an anomaly is resolved
+message AnomalyResolvedEvent {
+  string provider = 1;
+  string resolution = 2;
+  int64 resolved_at = 3;
+}
+
+// ProviderFlaggedEvent is emitted when a provider is flagged
+message ProviderFlaggedEvent {
+  string provider = 1;
+  string reporter = 2;
+  string reason = 3;
+  int64 flagged_at = 4;
+}
+
+// ProviderUnflaggedEvent is emitted when a provider is unflagged
+message ProviderUnflaggedEvent {
+  string provider = 1;
+  int64 unflagged_at = 2;
+}
+
+// ChallengeRequestedEvent is emitted when a challenge is requested
+message ChallengeRequestedEvent {
+  string challenge_id = 1;
+  string requester = 2;
+  string provider = 3;
+  string benchmark_type = 4;
+  int64 requested_at = 5;
+}
+
+// ChallengeCompletedEvent is emitted when a challenge is completed
+message ChallengeCompletedEvent {
+  string challenge_id = 1;
+  string provider = 2;
+  bool passed = 3;
+  int64 completed_at = 4;
+}
+
+// ChallengeExpiredEvent is emitted when a challenge expires
+message ChallengeExpiredEvent {
+  string challenge_id = 1;
+  string provider = 2;
+  int64 expired_at = 3;
+}
+
+// BenchmarksSubmittedEvent is emitted when benchmarks are submitted
+message BenchmarksSubmittedEvent {
+  string provider = 1;
+  string cluster_id = 2;
+  uint32 result_count = 3;
+  int64 submitted_at = 4;
+}
+
+// BenchmarksPrunedEvent is emitted when benchmarks are pruned
+message BenchmarksPrunedEvent {
+  string provider = 1;
+  uint32 pruned_count = 2;
+  int64 pruned_at = 3;
+}
+
+// ReliabilityScoreUpdatedEvent is emitted when reliability score is updated
+message ReliabilityScoreUpdatedEvent {
+  string provider = 1;
+  string old_score = 2;
+  string new_score = 3;
+  int64 updated_at = 4;
+}
+
+// Params defines the parameters for the benchmark module
+message Params {
+  uint64 challenge_timeout = 1;
+  uint64 benchmark_validity_period = 2;
+  string min_benchmark_score = 3;
+  uint32 max_anomaly_flags = 4;
+}
+
+// GenesisState is the genesis state for the benchmark module
+message GenesisState {
+  option (gogoproto.equal) = true;
+  
+  Params params = 1 [(gogoproto.nullable) = false];
+  repeated ProviderBenchmark provider_benchmarks = 2 [(gogoproto.nullable) = false];
+  repeated Challenge challenges = 3 [(gogoproto.nullable) = false];
+  repeated AnomalyFlag anomaly_flags = 4 [(gogoproto.nullable) = false];
+  uint64 challenge_sequence = 5;
+}
+
+// ProviderBenchmark represents a provider's benchmark data
+message ProviderBenchmark {
+  string provider = 1;
+  repeated BenchmarkResult results = 2 [(gogoproto.nullable) = false];
+  string reliability_score = 3;
+  int64 last_updated = 4;
+}
+
+// Challenge represents a benchmark challenge
+message Challenge {
+  string challenge_id = 1;
+  string requester = 2;
+  string provider = 3;
+  string benchmark_type = 4;
+  string status = 5;
+  int64 requested_at = 6;
+  int64 expires_at = 7;
+  BenchmarkResult response = 8;
+}
+
+// AnomalyFlag represents a provider anomaly flag
+message AnomalyFlag {
+  string provider = 1;
+  string reporter = 2;
+  string reason = 3;
+  string evidence = 4;
+  string status = 5;
+  int64 flagged_at = 6;
+  string resolution = 7;
+  int64 resolved_at = 8;
+}

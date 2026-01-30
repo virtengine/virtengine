@@ -37,12 +37,12 @@ func (k Keeper) GetSlashRecord(ctx sdk.Context, slashID string) (types.SlashReco
 
 // SetSlashRecord stores a slashing record
 func (k Keeper) SetSlashRecord(ctx sdk.Context, record types.SlashRecord) error {
-	if err := record.Validate(); err != nil {
+	if err := types.ValidateSlashRecord(&record); err != nil {
 		return err
 	}
 
 	store := ctx.KVStore(k.skey)
-	key := types.GetSlashingRecordKey(record.SlashID)
+	key := types.GetSlashingRecordKey(record.SlashId)
 	bz, err := json.Marshal(record)
 	if err != nil {
 		return err
@@ -180,7 +180,8 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	} else if escalatedJailDuration > 0 {
 		slashRecord.Jailed = true
 		slashRecord.JailDuration = escalatedJailDuration
-		slashRecord.JailedUntil = ctx.BlockTime().Add(jailDuration)
+		jailedUntil := ctx.BlockTime().Add(jailDuration)
+		slashRecord.JailedUntil = &jailedUntil
 		if err := k.JailValidator(ctx, validatorAddr, jailDuration); err != nil {
 			k.Logger(ctx).Error("failed to jail validator", "error", err)
 		}
@@ -195,7 +196,7 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	if !found {
 		signingInfo = *types.NewValidatorSigningInfo(validatorAddr, ctx.BlockHeight())
 	}
-	signingInfo.IncrementInfractionCount()
+	signingInfo.InfractionCount++
 	if slashRecord.Tombstoned {
 		signingInfo.Tombstoned = true
 	}
@@ -326,7 +327,8 @@ func (k Keeper) JailValidator(ctx sdk.Context, validatorAddr string, duration ti
 		return types.ErrValidatorJailed.Wrap("validator is tombstoned")
 	}
 
-	signingInfo.JailedUntil = ctx.BlockTime().Add(duration)
+	jailedUntil := ctx.BlockTime().Add(duration)
+	signingInfo.JailedUntil = &jailedUntil
 
 	if err := k.SetValidatorSigningInfo(ctx, signingInfo); err != nil {
 		return err
@@ -362,12 +364,12 @@ func (k Keeper) UnjailValidator(ctx sdk.Context, validatorAddr string) error {
 	}
 
 	// Check if jail period has passed
-	if ctx.BlockTime().Before(signingInfo.JailedUntil) {
+	if signingInfo.JailedUntil != nil && ctx.BlockTime().Before(*signingInfo.JailedUntil) {
 		return types.ErrValidatorJailed.Wrapf("validator still jailed until %s", signingInfo.JailedUntil)
 	}
 
 	// Clear jail
-	signingInfo.JailedUntil = time.Time{}
+	signingInfo.JailedUntil = nil
 	signingInfo.MissedBlocksCounter = 0
 
 	if err := k.SetValidatorSigningInfo(ctx, signingInfo); err != nil {
@@ -394,7 +396,7 @@ func (k Keeper) IsValidatorJailed(ctx sdk.Context, validatorAddr string) bool {
 		return false
 	}
 
-	return signingInfo.Tombstoned || signingInfo.IsJailed(ctx.BlockTime())
+	return signingInfo.Tombstoned || (signingInfo.JailedUntil != nil && ctx.BlockTime().Before(*signingInfo.JailedUntil))
 }
 
 // TombstoneValidator permanently bans a validator
