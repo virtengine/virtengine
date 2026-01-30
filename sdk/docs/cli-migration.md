@@ -5,6 +5,7 @@ This guide helps you migrate from VirtEngine v0.38.x to v1.0.0. The main changes
 ## 🚀 Quick Overview
 
 The v1.0.0 release introduces several breaking changes to improve the user experience and security:
+
 - **Deposit**: Replaced `--depositor` flag with `--deposit-sources`
 - **Authorization**: Moved from deployment-specific authz to standard Cosmos authz
 - **Escrow operations**: Consolidated under the `escrow` module
@@ -18,16 +19,19 @@ The v1.0.0 release introduces several breaking changes to improve the user exper
 **What Changed**: The `--depositor` flag has been replaced with `--deposit-sources`
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine tx deployment create --depositor=<granter_address>
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine tx deployment create --deposit-sources=grant
 ```
 
 **Options for `--deposit-sources`**:
+
 - `grant` - Use funds from authorization grants
 - `balance` - Use funds from your account balance
 - `grant,balance` - Try grants first, then take balance (default)
@@ -39,11 +43,13 @@ VirtEngine tx deployment create --deposit-sources=grant
 **What Changed**: Same as deployment creation - `--depositor` replaced with `--deposit-sources`
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine tx market bid create --depositor=<granter_address>
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine tx market bid create --deposit-sources=grant
 ```
@@ -55,11 +61,13 @@ VirtEngine tx market bid create --deposit-sources=grant
 **What Changed**: Deployment-specific authz commands moved to standard Cosmos authz
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine tx deployment authz grant <grantee_address> 50uve
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine tx authz grant <grantee_address> deposit \
   --spend-limit=50uve \
@@ -67,6 +75,7 @@ VirtEngine tx authz grant <grantee_address> deposit \
 ```
 
 **Key Differences**:
+
 - Use `tx authz grant` instead of `tx deployment authz grant`
 - Specify `deposit` as the message type
 - Add `--scope=deployment` to restrict the grant to deployment operations only
@@ -78,11 +87,13 @@ VirtEngine tx authz grant <grantee_address> deposit \
 **What Changed**: Updated to use the new escrow message path
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine tx deployment authz revoke <grantee_address>
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine tx authz revoke <virt1…> /virtengine.escrow.v1.MsgAccountDeposit
 ```
@@ -96,6 +107,7 @@ VirtEngine tx authz revoke <virt1…> /virtengine.escrow.v1.MsgAccountDeposit
 **What Changed**: Moved from `deployment` module to `escrow` module
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine tx deployment deposit 5000000uve \
   --dseq=<deployment_sequence> \
@@ -103,6 +115,7 @@ VirtEngine tx deployment deposit 5000000uve \
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine tx escrow deposit deployment 5000000uve \
   --dseq=<deployment_sequence> \
@@ -118,6 +131,7 @@ VirtEngine tx escrow deposit deployment 5000000uve \
 #### Transaction Commands
 
 **`tx escrow deposit deployment [amount]`**
+
 - **Purpose**: Deposit funds to an escrow account for a deployment
 - **Usage**: `VirtEngine tx escrow deposit deployment 5000000uve --dseq=<dseq> --from=<owner>`
 - **Flags**:
@@ -129,8 +143,10 @@ VirtEngine tx escrow deposit deployment 5000000uve \
 #### Query Commands
 
 **`query escrow accounts [state] [xid]`**
+
 - **Purpose**: Query escrow accounts with optional filtering
 - **Usage Examples**:
+
   ```bash
   # Query all accounts
   VirtEngine query escrow accounts
@@ -144,15 +160,18 @@ VirtEngine tx escrow deposit deployment 5000000uve \
   # Query specific deployment account
   VirtEngine query escrow accounts open deployment/virt1.../123
   ```
+
 - **States**: `open`, `closed`, `overdrawn`
 - **Scopes**: `deployment`, `bid`
 
 **`query escrow payments [state] [xid]`**
+
 - **Purpose**: Query escrow payments with optional filtering
 - **Usage**: Similar to accounts command but for payment records
 - **States**: `open`, `closed`, `overdrawn`
 
 **`query escrow blocks-remaining`**
+
 - **Purpose**: Calculate remaining blocks for an escrow account
 - **Usage**: `VirtEngine query escrow blocks-remaining --owner=<owner> --dseq=<dseq>`
 - **Output**: Shows balance remaining, blocks remaining, and estimated time remaining
@@ -169,6 +188,7 @@ In v1.0.0, all initialization and genesis-related commands have been consolidate
 ### Command Structure Changes
 
 **Before (v0.38.x)**:
+
 ```bash
 # Individual init commands
 VirtEngine init <moniker>
@@ -179,6 +199,7 @@ VirtEngine validate-genesis
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 # All commands now under genesis
 VirtEngine genesis init <moniker>
@@ -193,16 +214,19 @@ VirtEngine genesis validate [file]
 #### 1. Node Initialization
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine init <moniker> --chain-id=<chain_id>
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine genesis init <moniker> --chain-id=<chain_id>
 ```
 
 **New Flags Available**:
+
 - `--init-height` - Specify initial block height (default: 1)
 - `--consensus-key-algo` - Algorithm for consensus key (default: ed25519)
 - `--recover` - Recover existing key using mnemonic
@@ -212,16 +236,19 @@ VirtEngine genesis init <moniker> --chain-id=<chain_id>
 #### 2. Genesis Transaction Generation
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine gentx <key_name> <amount> --chain-id=<chain_id>
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine genesis gentx <key_name> <amount> --chain-id=<chain_id>
 ```
 
 **Key Differences**:
+
 - Command moved under `genesis` subcommand
 - Same functionality and flags maintained
 - Better integration with genesis workflow
@@ -231,16 +258,19 @@ VirtEngine genesis gentx <key_name> <amount> --chain-id=<chain_id>
 #### 3. Genesis Account Addition
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine add-genesis-account <address> <coins>
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine genesis add-account <address> <coins>
 ```
 
 **Enhanced Features**:
+
 - Support for vesting accounts with `--vesting-amt`, `--vesting-start`, `--vesting-end`
 - Module account support with `--module-name`
 - Append mode with `--append` flag
@@ -250,16 +280,19 @@ VirtEngine genesis add-account <address> <coins>
 #### 4. Genesis Transaction Collection
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine collect-gentxs
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine genesis collect
 ```
 
 **Improvements**:
+
 - Better error handling and validation
 - Enhanced output formatting
 - Integration with genesis validation
@@ -269,16 +302,19 @@ VirtEngine genesis collect
 #### 5. Genesis Validation
 
 **Before (v0.38.x)**:
+
 ```bash
 VirtEngine validate-genesis
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 VirtEngine genesis validate [file]
 ```
 
 **Enhanced Validation**:
+
 - Optional file path argument for custom genesis files
 - Better error messages with upgrade guidance
 - CometBFT consensus parameter validation
@@ -295,6 +331,7 @@ VirtEngine genesis validate [file]
 ### Example Migration Workflow
 
 **Before (v0.38.x)**:
+
 ```bash
 # Initialize node
 VirtEngine init mynode --chain-id=testnet-1
@@ -313,6 +350,7 @@ VirtEngine validate-genesis
 ```
 
 **After (v1.0.0)**:
+
 ```bash
 # Initialize node
 VirtEngine genesis init mynode --chain-id=testnet-1
@@ -335,24 +373,31 @@ VirtEngine genesis validate
 ## ❓ Common Issues & Solutions
 
 ### Issue: "Unknown flag --depositor"
+
 **Solution**: Replace with `--deposit-sources=grant` or `--deposit-sources=balance`
 
 ### Issue: "Command not found: tx deployment authz"
+
 **Solution**: Use `tx authz grant` and `tx authz revoke` instead
 
 ### Issue: "Module not found: deployment deposit"
+
 **Solution**: Use `tx escrow deposit deployment` instead
 
 ### Issue: "Invalid account scope" in escrow commands
+
 **Solution**: Use `deployment` as the scope for deployment-related escrow operations
 
 ### Issue: "Command not found: init"
+
 **Solution**: Use `genesis init` instead
 
 ### Issue: "Command not found: gentx"
+
 **Solution**: Use `genesis gentx` instead
 
 ### Issue: "Command not found: add-genesis-account"
+
 **Solution**: Use `genesis add-account` instead
 
 ---
@@ -361,13 +406,14 @@ VirtEngine genesis validate
 
 - [VirtEngine v1.0.0 Release Notes](https://github.com/virtengine/virtengine/releases)
 - [Cosmos SDK Authz Module Documentation](https://docs.cosmos.network/v0.50/modules/authz)
-- [VirtEngine provider Documentation](https://docs.virtengine.io/)
+- [VirtEngine provider Documentation](https://docs.virtengine.com/)
 
 ---
 
 ## 🆘 Need Help?
 
 If you encounter issues during migration:
+
 1. Check the [VirtEngine Discord](https://discord.gg/VirtEngine)
 2. Review [GitHub Issues](https://github.com/virtengine/virtengine/issues)
-3. Consult the [VirtEngine Documentation](https://docs.virtengine.io/)
+3. Consult the [VirtEngine Documentation](https://docs.virtengine.com/)

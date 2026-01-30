@@ -19,7 +19,7 @@
     provider_config: "{{ provider_home }}/config"
     provider_logs: /var/log/virtengine-provider
     provider_version: "{{ provider_version | default('latest') }}"
-    provider_download_url: "https://releases.virtengine.io/provider/{{ provider_version }}/provider-daemon-linux-amd64.tar.gz"
+    provider_download_url: "https://releases.virtengine.com/provider/{{ provider_version }}/provider-daemon-linux-amd64.tar.gz"
 
   handlers:
     - name: restart provider daemon

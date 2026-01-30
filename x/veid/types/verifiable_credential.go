@@ -21,7 +21,7 @@ import (
 const (
 	// W3C standard contexts
 	ContextW3CCredentials = "https://www.w3.org/2018/credentials/v1"
-	ContextVirtEngine     = "https://virtengine.io/credentials/v1"
+	ContextVirtEngine     = "https://virtengine.com/credentials/v1"
 
 	// W3C standard types
 	TypeVerifiableCredential = "VerifiableCredential"

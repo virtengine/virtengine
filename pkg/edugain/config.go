@@ -187,7 +187,7 @@ type LoggingConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		Enabled:                 true,
-		SPEntityID:              "https://virtengine.io/saml/metadata",
+		SPEntityID:              "https://virtengine.com/saml/metadata",
 		SPDisplayName:           "VirtEngine",
 		MetadataURL:             EduGAINProductionMetadataURL,
 		MetadataRefreshInterval: DefaultMetadataRefreshInterval,

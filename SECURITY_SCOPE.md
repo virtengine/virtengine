@@ -37,14 +37,14 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Primary Security Concerns
 
-| Concern | Priority | Relevant Components |
-|---------|----------|---------------------|
+| Concern                       | Priority | Relevant Components                       |
+| ----------------------------- | -------- | ----------------------------------------- |
 | Identity data confidentiality | CRITICAL | x/veid, x/encryption, pkg/enclave_runtime |
-| Cryptographic correctness | CRITICAL | x/encryption/crypto, pkg/capture_protocol |
-| Consensus safety | CRITICAL | All x/ modules, ante handlers |
-| Access control bypass | HIGH | x/roles, x/mfa, ante handlers |
-| Key management security | HIGH | x/encryption, pkg/provider_daemon |
-| Replay attack prevention | HIGH | x/veid, pkg/capture_protocol |
+| Cryptographic correctness     | CRITICAL | x/encryption/crypto, pkg/capture_protocol |
+| Consensus safety              | CRITICAL | All x/ modules, ante handlers             |
+| Access control bypass         | HIGH     | x/roles, x/mfa, ante handlers             |
+| Key management security       | HIGH     | x/encryption, pkg/provider_daemon         |
+| Replay attack prevention      | HIGH     | x/veid, pkg/capture_protocol              |
 
 ---
 
@@ -52,33 +52,33 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Tier 1: Security-Critical (Full Audit Required)
 
-| Module | Path | Description | LOC |
-|--------|------|-------------|-----|
-| **veid** | `x/veid/` | Identity verification with encrypted scopes and ML scoring | ~4,500 |
-| **encryption** | `x/encryption/` | Public-key encryption (X25519-XSalsa20-Poly1305) | ~2,800 |
-| **mfa** | `x/mfa/` | Multi-factor authentication gating | ~1,800 |
-| **roles** | `x/roles/` | Role-based access control | ~1,500 |
-| **enclave_runtime** | `pkg/enclave_runtime/` | TEE runtime for secure processing | ~1,200 |
-| **capture_protocol** | `pkg/capture_protocol/` | Salt-binding and signature verification | ~1,400 |
+| Module               | Path                    | Description                                                | LOC    |
+| -------------------- | ----------------------- | ---------------------------------------------------------- | ------ |
+| **veid**             | `x/veid/`               | Identity verification with encrypted scopes and ML scoring | ~4,500 |
+| **encryption**       | `x/encryption/`         | Public-key encryption (X25519-XSalsa20-Poly1305)           | ~2,800 |
+| **mfa**              | `x/mfa/`                | Multi-factor authentication gating                         | ~1,800 |
+| **roles**            | `x/roles/`              | Role-based access control                                  | ~1,500 |
+| **enclave_runtime**  | `pkg/enclave_runtime/`  | TEE runtime for secure processing                          | ~1,200 |
+| **capture_protocol** | `pkg/capture_protocol/` | Salt-binding and signature verification                    | ~1,400 |
 
 ### Tier 2: Security-Relevant (Review Required)
 
-| Module | Path | Description | LOC |
-|--------|------|-------------|-----|
-| **cert** | `x/cert/` | Certificate management | ~1,200 |
-| **escrow** | `x/escrow/` | Payment escrow with settlement | ~2,000 |
-| **market** | `x/market/` | Marketplace orders and bids | ~3,500 |
+| Module              | Path                   | Description                        | LOC    |
+| ------------------- | ---------------------- | ---------------------------------- | ------ |
+| **cert**            | `x/cert/`              | Certificate management             | ~1,200 |
+| **escrow**          | `x/escrow/`            | Payment escrow with settlement     | ~2,000 |
+| **market**          | `x/market/`            | Marketplace orders and bids        | ~3,500 |
 | **provider_daemon** | `pkg/provider_daemon/` | Off-chain bidding and provisioning | ~5,000 |
-| **ante handlers** | `app/ante*.go` | Transaction preprocessing | ~800 |
+| **ante handlers**   | `app/ante*.go`         | Transaction preprocessing          | ~800   |
 
 ### Tier 3: Supporting (Spot Check)
 
-| Module | Path | Description |
-|--------|------|-------------|
-| **audit** | `x/audit/` | Provider attribute auditing |
-| **config** | `x/config/` | Approved client configuration |
-| **settlement** | `x/settlement/` | Payment settlement processing |
-| **inference** | `pkg/inference/` | Deterministic ML scoring |
+| Module         | Path             | Description                   |
+| -------------- | ---------------- | ----------------------------- |
+| **audit**      | `x/audit/`       | Provider attribute auditing   |
+| **config**     | `x/config/`      | Approved client configuration |
+| **settlement** | `x/settlement/`  | Payment settlement processing |
+| **inference**  | `pkg/inference/` | Deterministic ML scoring      |
 
 ---
 
@@ -86,33 +86,33 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Critical Assets
 
-| Asset | Classification | Storage Location | Protection Mechanism |
-|-------|----------------|------------------|---------------------|
-| Identity document images | PII/CRITICAL | On-chain (encrypted) | X25519-XSalsa20-Poly1305 envelope |
-| Facial embeddings | PII/CRITICAL | On-chain (encrypted) | Validator threshold encryption |
-| Face images for liveness | PII/CRITICAL | On-chain (encrypted) | Per-upload encryption envelope |
-| User private keys | SECRET | Client-side | Never transmitted, wallet-managed |
-| Validator decryption keys | SECRET | Validator nodes | HSM/TEE sealed storage |
-| MFA secrets (TOTP seeds) | SECRET | On-chain (encrypted) | Per-user encryption |
-| Consent records | PII | On-chain | Signed, immutable audit trail |
+| Asset                     | Classification | Storage Location     | Protection Mechanism              |
+| ------------------------- | -------------- | -------------------- | --------------------------------- |
+| Identity document images  | PII/CRITICAL   | On-chain (encrypted) | X25519-XSalsa20-Poly1305 envelope |
+| Facial embeddings         | PII/CRITICAL   | On-chain (encrypted) | Validator threshold encryption    |
+| Face images for liveness  | PII/CRITICAL   | On-chain (encrypted) | Per-upload encryption envelope    |
+| User private keys         | SECRET         | Client-side          | Never transmitted, wallet-managed |
+| Validator decryption keys | SECRET         | Validator nodes      | HSM/TEE sealed storage            |
+| MFA secrets (TOTP seeds)  | SECRET         | On-chain (encrypted) | Per-user encryption               |
+| Consent records           | PII            | On-chain             | Signed, immutable audit trail     |
 
 ### Sensitive Assets
 
-| Asset | Classification | Storage Location | Protection Mechanism |
-|-------|----------------|------------------|---------------------|
-| User wallet addresses | INTERNAL | On-chain | Public but pseudonymous |
-| Verification scores | INTERNAL | On-chain | Public after verification |
-| Provider credentials | SECRET | Provider daemon | Sealed storage, key rotation |
-| Session tokens | SECRET | Memory only | Short TTL, secure deletion |
+| Asset                 | Classification | Storage Location | Protection Mechanism         |
+| --------------------- | -------------- | ---------------- | ---------------------------- |
+| User wallet addresses | INTERNAL       | On-chain         | Public but pseudonymous      |
+| Verification scores   | INTERNAL       | On-chain         | Public after verification    |
+| Provider credentials  | SECRET         | Provider daemon  | Sealed storage, key rotation |
+| Session tokens        | SECRET         | Memory only      | Short TTL, secure deletion   |
 
 ### Integrity-Critical Assets
 
-| Asset | Description | Integrity Control |
-|-------|-------------|-------------------|
-| Genesis state | Initial chain configuration | Multi-sig governance |
-| Module parameters | Runtime configuration | x/gov proposals only |
-| Approved client list | Trusted capture apps | Governance-controlled allowlist |
-| ML model versions | Identity scoring models | Pinned in chain params |
+| Asset                | Description                 | Integrity Control               |
+| -------------------- | --------------------------- | ------------------------------- |
+| Genesis state        | Initial chain configuration | Multi-sig governance            |
+| Module parameters    | Runtime configuration       | x/gov proposals only            |
+| Approved client list | Trusted capture apps        | Governance-controlled allowlist |
+| ML model versions    | Identity scoring models     | Pinned in chain params          |
 
 ---
 
@@ -120,50 +120,50 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### 1. gRPC/REST API Endpoints
 
-| Endpoint Category | Risk Level | Key Controls |
-|-------------------|------------|--------------|
-| `veid.MsgSubmitScope` | CRITICAL | Salt-binding, approved-client signature, rate limiting |
-| `veid.MsgVerifyScope` | HIGH | Validator-only, threshold consensus |
-| `mfa.MsgRegisterDevice` | HIGH | Account ownership, device attestation |
-| `mfa.MsgVerify` | HIGH | Rate limiting, attempt tracking, lockout |
-| `encryption.MsgEncrypt` | MEDIUM | Key validation, envelope format |
-| `market.MsgCreateOrder` | MEDIUM | Authorization, escrow locking |
+| Endpoint Category       | Risk Level | Key Controls                                           |
+| ----------------------- | ---------- | ------------------------------------------------------ |
+| `veid.MsgSubmitScope`   | CRITICAL   | Salt-binding, approved-client signature, rate limiting |
+| `veid.MsgVerifyScope`   | HIGH       | Validator-only, threshold consensus                    |
+| `mfa.MsgRegisterDevice` | HIGH       | Account ownership, device attestation                  |
+| `mfa.MsgVerify`         | HIGH       | Rate limiting, attempt tracking, lockout               |
+| `encryption.MsgEncrypt` | MEDIUM     | Key validation, envelope format                        |
+| `market.MsgCreateOrder` | MEDIUM     | Authorization, escrow locking                          |
 
 ### 2. Ante Handlers (Transaction Preprocessing)
 
-| Handler | File | Security Function |
-|---------|------|-------------------|
-| `MFADecorator` | `app/ante_mfa.go` | Enforces MFA for sensitive transactions |
-| `RateLimitDecorator` | `app/ante_ratelimit.go` | Prevents transaction flooding |
-| `SigVerificationDecorator` | `app/ante.go` (SDK) | Cryptographic signature verification |
-| `DeductFeeDecorator` | `app/ante.go` (SDK) | Gas fee enforcement |
+| Handler                    | File                    | Security Function                       |
+| -------------------------- | ----------------------- | --------------------------------------- |
+| `MFADecorator`             | `app/ante_mfa.go`       | Enforces MFA for sensitive transactions |
+| `RateLimitDecorator`       | `app/ante_ratelimit.go` | Prevents transaction flooding           |
+| `SigVerificationDecorator` | `app/ante.go` (SDK)     | Cryptographic signature verification    |
+| `DeductFeeDecorator`       | `app/ante.go` (SDK)     | Gas fee enforcement                     |
 
 ### 3. Cryptographic Operations
 
-| Operation | Implementation | Risk |
-|-----------|----------------|------|
-| Envelope encryption | `x/encryption/crypto/envelope.go` | Key confusion, nonce reuse |
-| Signature verification | `pkg/capture_protocol/signature.go` | Forgery, replay |
-| Key derivation | `x/encryption/crypto/mnemonic.go` | Weak entropy, predictability |
-| Hash computation | `x/encryption/types/fingerprint.go` | Collision, length extension |
+| Operation              | Implementation                      | Risk                         |
+| ---------------------- | ----------------------------------- | ---------------------------- |
+| Envelope encryption    | `x/encryption/crypto/envelope.go`   | Key confusion, nonce reuse   |
+| Signature verification | `pkg/capture_protocol/signature.go` | Forgery, replay              |
+| Key derivation         | `x/encryption/crypto/mnemonic.go`   | Weak entropy, predictability |
+| Hash computation       | `x/encryption/types/fingerprint.go` | Collision, length extension  |
 
 ### 4. State Machine Transitions
 
-| State Machine | Location | Critical Transitions |
-|---------------|----------|---------------------|
+| State Machine       | Location                       | Critical Transitions                  |
+| ------------------- | ------------------------------ | ------------------------------------- |
 | Verification status | `x/veid/types/verification.go` | pending→verified, expired transitions |
-| MFA challenge | `x/mfa/types/challenge.go` | challenge→verified, lockout |
-| Order lifecycle | `x/market/types/order.go` | open→matched→closed |
-| Escrow settlement | `x/escrow/types/escrow.go` | active→settled, dispute |
+| MFA challenge       | `x/mfa/types/challenge.go`     | challenge→verified, lockout           |
+| Order lifecycle     | `x/market/types/order.go`      | open→matched→closed                   |
+| Escrow settlement   | `x/escrow/types/escrow.go`     | active→settled, dispute               |
 
 ### 5. Inter-Module Calls
 
-| Caller | Callee | Trust Boundary |
-|--------|--------|----------------|
-| x/veid | x/encryption | Decrypt identity data |
-| x/veid | x/mfa | Check MFA requirement |
-| x/market | x/escrow | Lock/release funds |
-| x/mfa | x/roles | Check permission level |
+| Caller   | Callee       | Trust Boundary         |
+| -------- | ------------ | ---------------------- |
+| x/veid   | x/encryption | Decrypt identity data  |
+| x/veid   | x/mfa        | Check MFA requirement  |
+| x/market | x/escrow     | Lock/release funds     |
+| x/mfa    | x/roles      | Check permission level |
 
 ---
 
@@ -171,14 +171,14 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Algorithms Used
 
-| Algorithm | Purpose | Implementation | Standard |
-|-----------|---------|----------------|----------|
-| X25519 | Key exchange | `golang.org/x/crypto/curve25519` | RFC 7748 |
-| XSalsa20-Poly1305 | Authenticated encryption | `golang.org/x/crypto/nacl/box` | NaCl |
-| SHA-256 | Hashing, fingerprints | `crypto/sha256` | FIPS 180-4 |
-| Ed25519 | Signatures (Cosmos) | `crypto/ed25519` | RFC 8032 |
-| secp256k1 | Signatures (optional) | `btcec` | SEC 2 |
-| BIP-39 | Mnemonic generation | `x/encryption/crypto/mnemonic.go` | BIP-39 |
+| Algorithm         | Purpose                  | Implementation                    | Standard   |
+| ----------------- | ------------------------ | --------------------------------- | ---------- |
+| X25519            | Key exchange             | `golang.org/x/crypto/curve25519`  | RFC 7748   |
+| XSalsa20-Poly1305 | Authenticated encryption | `golang.org/x/crypto/nacl/box`    | NaCl       |
+| SHA-256           | Hashing, fingerprints    | `crypto/sha256`                   | FIPS 180-4 |
+| Ed25519           | Signatures (Cosmos)      | `crypto/ed25519`                  | RFC 8032   |
+| secp256k1         | Signatures (optional)    | `btcec`                           | SEC 2      |
+| BIP-39            | Mnemonic generation      | `x/encryption/crypto/mnemonic.go` | BIP-39     |
 
 ### Encryption Envelope Format
 
@@ -202,22 +202,22 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Key Management
 
-| Key Type | Generation | Storage | Rotation |
-|----------|------------|---------|----------|
-| User wallet keys | BIP-39 mnemonic | Client wallet | User-managed |
-| Validator consensus keys | `virtengine init` | Keyring/HSM | Manual rotation |
-| Validator encryption keys | Key ceremony | HSM/TEE sealed | Governance-triggered |
-| Approved client keys | Build pipeline | Secure enclave | Per-release |
-| Provider daemon keys | `provider-daemon init` | Keyring/Ledger | Operator-managed |
+| Key Type                  | Generation             | Storage        | Rotation             |
+| ------------------------- | ---------------------- | -------------- | -------------------- |
+| User wallet keys          | BIP-39 mnemonic        | Client wallet  | User-managed         |
+| Validator consensus keys  | `virtengine init`      | Keyring/HSM    | Manual rotation      |
+| Validator encryption keys | Key ceremony           | HSM/TEE sealed | Governance-triggered |
+| Approved client keys      | Build pipeline         | Secure enclave | Per-release          |
+| Provider daemon keys      | `provider-daemon init` | Keyring/Ledger | Operator-managed     |
 
 ### Nonce Management
 
-| Context | Nonce Source | Size | Uniqueness Guarantee |
-|---------|--------------|------|---------------------|
-| Envelope encryption | `crypto/rand` | 24 bytes | Random per operation |
-| MFA challenges | `crypto/rand` | 32 bytes | Random per challenge |
-| Salt-binding | `crypto/rand` | 32 bytes | Bound to session + wallet |
-| Transaction nonces | Account sequence | uint64 | Cosmos SDK managed |
+| Context             | Nonce Source     | Size     | Uniqueness Guarantee      |
+| ------------------- | ---------------- | -------- | ------------------------- |
+| Envelope encryption | `crypto/rand`    | 24 bytes | Random per operation      |
+| MFA challenges      | `crypto/rand`    | 32 bytes | Random per challenge      |
+| Salt-binding        | `crypto/rand`    | 32 bytes | Bound to session + wallet |
+| Transaction nonces  | Account sequence | uint64   | Cosmos SDK managed        |
 
 ---
 
@@ -304,24 +304,24 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### 3. Role-Based Access Control
 
-| Role | Permissions | Assignment |
-|------|-------------|------------|
-| `admin` | All operations, parameter updates | Genesis or governance |
-| `validator` | Identity verification, vote submission | Staking module |
-| `provider` | Provider registration, bid submission | Self-registration + audit |
-| `user` | Standard transactions, identity upload | Default |
-| `auditor` | Provider audits, attribute signing | Governance approval |
+| Role        | Permissions                            | Assignment                |
+| ----------- | -------------------------------------- | ------------------------- |
+| `admin`     | All operations, parameter updates      | Genesis or governance     |
+| `validator` | Identity verification, vote submission | Staking module            |
+| `provider`  | Provider registration, bid submission  | Self-registration + audit |
+| `user`      | Standard transactions, identity upload | Default                   |
+| `auditor`   | Provider audits, attribute signing     | Governance approval       |
 
 ### 4. Transaction Authorization Matrix
 
-| Transaction Type | Signer Required | MFA Required | Additional Checks |
-|------------------|-----------------|--------------|-------------------|
-| MsgSend | Account owner | If amount > threshold | Rate limiting |
-| MsgSubmitScope | Account owner | No | Approved client signature, salt binding |
-| MsgVerifyScope | Validator | No | Validator set membership |
-| MsgRegisterDevice | Account owner | Yes (if re-register) | Device attestation |
-| MsgUpdateParams | Gov module account | No | Proposal passed |
-| MsgCreateOrder | Account owner | If sensitive | Balance check |
+| Transaction Type  | Signer Required    | MFA Required          | Additional Checks                       |
+| ----------------- | ------------------ | --------------------- | --------------------------------------- |
+| MsgSend           | Account owner      | If amount > threshold | Rate limiting                           |
+| MsgSubmitScope    | Account owner      | No                    | Approved client signature, salt binding |
+| MsgVerifyScope    | Validator          | No                    | Validator set membership                |
+| MsgRegisterDevice | Account owner      | Yes (if re-register)  | Device attestation                      |
+| MsgUpdateParams   | Gov module account | No                    | Proposal passed                         |
+| MsgCreateOrder    | Account owner      | If sensitive          | Balance check                           |
 
 ---
 
@@ -345,6 +345,7 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 ```
 
 **Trust Assumptions:**
+
 - Client app binary has not been tampered with
 - Secure enclave correctly isolates signing key
 - User's device OS is not compromised (best effort)
@@ -365,18 +366,19 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 ```
 
 **Trust Assumptions:**
+
 - TEE hardware (SGX/SEV-SNP) provides memory isolation
 - Validator operator cannot access enclave memory
 - Attestation correctly verifies enclave integrity
 
 ### 3. External Service Boundaries
 
-| Service | Trust Level | Data Exposed | Mitigation |
-|---------|-------------|--------------|------------|
-| Gov data APIs (AAMVA) | MEDIUM | Name, DOB, address (hashed) | Minimal data, hashed queries |
-| EduGAIN SAML IdP | MEDIUM | Email, institution | Signed assertions verified |
-| Payment processors | MEDIUM | User ID, amount | No PII exposed |
-| Cloud providers | LOW | Encrypted blobs only | Client-side encryption |
+| Service               | Trust Level | Data Exposed                | Mitigation                   |
+| --------------------- | ----------- | --------------------------- | ---------------------------- |
+| Gov data APIs (AAMVA) | MEDIUM      | Name, DOB, address (hashed) | Minimal data, hashed queries |
+| EduGAIN SAML IdP      | MEDIUM      | Email, institution          | Signed assertions verified   |
+| Payment processors    | MEDIUM      | User ID, amount             | No PII exposed               |
+| Cloud providers       | LOW         | Encrypted blobs only        | Client-side encryption       |
 
 ---
 
@@ -384,23 +386,23 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Explicitly Excluded
 
-| Component | Reason | Notes |
-|-----------|--------|-------|
-| Web portal UI | Client-side, separate review | Basic XSS/CSRF review elsewhere |
-| Mobile app UI | Client-side, app store review | Security review during app release |
-| Deployment scripts | Infrastructure, not code | Covered by ops security review |
-| CI/CD pipelines | DevSecOps, separate review | Covered by supply chain audit |
-| Third-party dependencies | Separate SBOM review | Go modules, npm packages |
-| Load balancer config | Infrastructure | Covered by network security review |
-| DNS/TLS certificates | Infrastructure | Covered by ops security review |
+| Component                | Reason                        | Notes                              |
+| ------------------------ | ----------------------------- | ---------------------------------- |
+| Web portal UI            | Client-side, separate review  | Basic XSS/CSRF review elsewhere    |
+| Mobile app UI            | Client-side, app store review | Security review during app release |
+| Deployment scripts       | Infrastructure, not code      | Covered by ops security review     |
+| CI/CD pipelines          | DevSecOps, separate review    | Covered by supply chain audit      |
+| Third-party dependencies | Separate SBOM review          | Go modules, npm packages           |
+| Load balancer config     | Infrastructure                | Covered by network security review |
+| DNS/TLS certificates     | Infrastructure                | Covered by ops security review     |
 
 ### Deferred to Phase 2
 
-| Component | Reason | Target Date |
-|-----------|--------|-------------|
-| TEE hardware implementation | Hardware dependency | Q2 2026 |
-| Cross-chain (IBC) security | IBC audit separate | Q2 2026 |
-| Advanced DeFi integrations | Future feature | TBD |
+| Component                   | Reason              | Target Date |
+| --------------------------- | ------------------- | ----------- |
+| TEE hardware implementation | Hardware dependency | Q2 2026     |
+| Cross-chain (IBC) security  | IBC audit separate  | Q2 2026     |
+| Advanced DeFi integrations  | Future feature      | TBD         |
 
 ---
 
@@ -408,24 +410,24 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Critical (Must Fix Before Mainnet)
 
-| ID | Issue | Location | Status |
-|----|-------|----------|--------|
-| K-001 | Proto stubs in VEID may cause serialization mismatch | `x/veid/types/proto_stub.go` | In Progress |
-| K-002 | VEID validator authorization not implemented | `x/veid/keeper/msg_server.go:193` | Acknowledged |
+| ID    | Issue                                                | Location                          | Status       |
+| ----- | ---------------------------------------------------- | --------------------------------- | ------------ |
+| K-001 | Proto stubs in VEID may cause serialization mismatch | `x/veid/types/proto_stub.go`      | In Progress  |
+| K-002 | VEID validator authorization not implemented         | `x/veid/keeper/msg_server.go:193` | Acknowledged |
 
 ### High (Should Fix)
 
-| ID | Issue | Location | Status |
-|----|-------|----------|--------|
-| K-003 | Provider public key stub | `x/provider/keeper/keeper.go:156` | Fixed |
-| K-004 | time.Now() usage in queries (non-consensus) | Various | Acceptable for queries |
+| ID    | Issue                                       | Location                          | Status                 |
+| ----- | ------------------------------------------- | --------------------------------- | ---------------------- |
+| K-003 | Provider public key stub                    | `x/provider/keeper/keeper.go:156` | Fixed                  |
+| K-004 | time.Now() usage in queries (non-consensus) | Various                           | Acceptable for queries |
 
 ### Medium (Track)
 
-| ID | Issue | Location | Status |
-|----|-------|----------|--------|
-| K-005 | Test suites disabled due to API changes | Various `*_test.go` | In Progress |
-| K-006 | Some adapters are stubs | `pkg/ood_adapter/`, `pkg/moab_adapter/` | By Design |
+| ID    | Issue                                   | Location                                | Status      |
+| ----- | --------------------------------------- | --------------------------------------- | ----------- |
+| K-005 | Test suites disabled due to API changes | Various `*_test.go`                     | In Progress |
+| K-006 | Some adapters are stubs                 | `pkg/ood_adapter/`, `pkg/moab_adapter/` | By Design   |
 
 ---
 
@@ -433,13 +435,13 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Q1: What cryptographic libraries are used?
 
-| Library | Version | Purpose |
-|---------|---------|---------|
-| `golang.org/x/crypto` | v0.24.0 | X25519, XSalsa20-Poly1305, curve25519 |
-| `crypto/sha256` | stdlib | Hashing, fingerprints |
-| `crypto/rand` | stdlib | Cryptographic random generation |
-| `crypto/ed25519` | stdlib | Signature verification |
-| `github.com/btcsuite/btcd/btcec` | v2.3.0 | secp256k1 (optional) |
+| Library                          | Version | Purpose                               |
+| -------------------------------- | ------- | ------------------------------------- |
+| `golang.org/x/crypto`            | v0.24.0 | X25519, XSalsa20-Poly1305, curve25519 |
+| `crypto/sha256`                  | stdlib  | Hashing, fingerprints                 |
+| `crypto/rand`                    | stdlib  | Cryptographic random generation       |
+| `crypto/ed25519`                 | stdlib  | Signature verification                |
+| `github.com/btcsuite/btcd/btcec` | v2.3.0  | secp256k1 (optional)                  |
 
 ### Q2: How is random number generation handled?
 
@@ -450,12 +452,12 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 ### Q3: How are keys stored and managed?
 
-| Context | Storage | Protection |
-|---------|---------|------------|
-| User keys | Client wallet (Keplr, etc.) | User-managed, BIP-39 backup |
-| Validator keys | Keyring (`file`, `os`, `ledger`) | HSM recommended for production |
-| Provider keys | Keyring with optional Ledger | Hardware wallet supported |
-| Approved client keys | App binary (obfuscated) | Code signing, rotation per release |
+| Context              | Storage                          | Protection                         |
+| -------------------- | -------------------------------- | ---------------------------------- |
+| User keys            | Client wallet (Keplr, etc.)      | User-managed, BIP-39 backup        |
+| Validator keys       | Keyring (`file`, `os`, `ledger`) | HSM recommended for production     |
+| Provider keys        | Keyring with optional Ledger     | Hardware wallet supported          |
+| Approved client keys | App binary (obfuscated)          | Code signing, rotation per release |
 
 ### Q4: What input validation is performed?
 
@@ -477,21 +479,21 @@ VirtEngine is a Cosmos SDK-based blockchain for decentralized cloud computing wi
 
 See [data-classification.md](_docs/data-classification.md) for full classification policy.
 
-| Classification | Examples | Encryption | Access Control |
-|----------------|----------|------------|----------------|
-| CRITICAL/PII | Identity documents, face images | Envelope encryption | Threshold decryption |
-| SECRET | Private keys, MFA seeds | Sealed storage | Never transmitted |
-| INTERNAL | Wallet addresses, scores | None (public) | Pseudonymous |
-| PUBLIC | Chain parameters, docs | None | Unrestricted |
+| Classification | Examples                        | Encryption          | Access Control       |
+| -------------- | ------------------------------- | ------------------- | -------------------- |
+| CRITICAL/PII   | Identity documents, face images | Envelope encryption | Threshold decryption |
+| SECRET         | Private keys, MFA seeds         | Sealed storage      | Never transmitted    |
+| INTERNAL       | Wallet addresses, scores        | None (public)       | Pseudonymous         |
+| PUBLIC         | Chain parameters, docs          | None                | Unrestricted         |
 
 ### Q7: What are the recovery procedures for key compromise?
 
-| Key Type | Recovery Procedure |
-|----------|-------------------|
-| User wallet | BIP-39 mnemonic recovery, new account if lost |
-| Validator consensus | Key rotation, migration transaction |
-| Validator encryption | Governance proposal for key rotation |
-| Approved client | App update, allowlist update via governance |
+| Key Type             | Recovery Procedure                            |
+| -------------------- | --------------------------------------------- |
+| User wallet          | BIP-39 mnemonic recovery, new account if lost |
+| Validator consensus  | Key rotation, migration transaction           |
+| Validator encryption | Governance proposal for key rotation          |
+| Approved client      | App update, allowlist update via governance   |
 
 ### Q8: How is the audit trail maintained?
 
@@ -589,16 +591,16 @@ x/mfa/
 
 ## Appendix B: Testing Coverage
 
-| Module | Unit Tests | Integration Tests | Fuzz Tests | Property Tests |
-|--------|------------|-------------------|------------|----------------|
-| x/veid/types | ✅ 288 lines | ✅ | ✅ | ✅ |
-| x/encryption/crypto | ✅ 302 lines | ✅ | ✅ | N/A |
-| x/mfa/types | ✅ | ⚠️ Partial | ⚠️ Partial | N/A |
-| x/roles/types | ✅ | ✅ | N/A | N/A |
-| pkg/enclave_runtime | ✅ | ✅ | N/A | N/A |
-| pkg/capture_protocol | ✅ | ✅ | ✅ | N/A |
+| Module               | Unit Tests   | Integration Tests | Fuzz Tests | Property Tests |
+| -------------------- | ------------ | ----------------- | ---------- | -------------- |
+| x/veid/types         | ✅ 288 lines | ✅                | ✅         | ✅             |
+| x/encryption/crypto  | ✅ 302 lines | ✅                | ✅         | N/A            |
+| x/mfa/types          | ✅           | ⚠️ Partial        | ⚠️ Partial | N/A            |
+| x/roles/types        | ✅           | ✅                | N/A        | N/A            |
+| pkg/enclave_runtime  | ✅           | ✅                | N/A        | N/A            |
+| pkg/capture_protocol | ✅           | ✅                | ✅         | N/A            |
 
 ---
 
-*Document prepared for VirtEngine external security audit*  
-*Contact: security@virtengine.io*
+_Document prepared for VirtEngine external security audit_  
+_Contact: security@virtengine.com_

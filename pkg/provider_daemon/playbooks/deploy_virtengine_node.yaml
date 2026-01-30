@@ -21,7 +21,7 @@
     virtengine_config: "{{ virtengine_home }}/config"
     virtengine_logs: /var/log/virtengine
     virtengine_version: "{{ virtengine_version | default('latest') }}"
-    virtengine_download_url: "https://releases.virtengine.io/{{ virtengine_version }}/virtengine-linux-amd64.tar.gz"
+    virtengine_download_url: "https://releases.virtengine.com/{{ virtengine_version }}/virtengine-linux-amd64.tar.gz"
 
   handlers:
     - name: restart virtengine

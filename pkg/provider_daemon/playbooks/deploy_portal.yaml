@@ -15,7 +15,7 @@
     portal_group: www-data
     portal_root: /var/www/virtengine-portal
     portal_version: "{{ portal_version | default('latest') }}"
-    portal_download_url: "https://releases.virtengine.io/portal/{{ portal_version }}/portal-dist.tar.gz"
+    portal_download_url: "https://releases.virtengine.com/portal/{{ portal_version }}/portal-dist.tar.gz"
     nginx_sites_enabled: /etc/nginx/sites-enabled
     nginx_sites_available: /etc/nginx/sites-available
 
@@ -95,8 +95,8 @@
         mode: '0644'
         content: |
           window.VIRTENGINE_CONFIG = {
-            API_ENDPOINT: "{{ api_endpoint | default('https://api.virtengine.io') }}",
-            RPC_ENDPOINT: "{{ rpc_endpoint | default('https://rpc.virtengine.io') }}",
+            API_ENDPOINT: "{{ api_endpoint | default('https://api.virtengine.com') }}",
+            RPC_ENDPOINT: "{{ rpc_endpoint | default('https://rpc.virtengine.com') }}",
             CHAIN_ID: "{{ chain_id | default('virtengine-1') }}",
             WALLET_CONNECT_PROJECT_ID: "{{ wallet_connect_project_id | default('') }}",
             ENABLE_TESTNET: {{ enable_testnet | default(false) | lower }},

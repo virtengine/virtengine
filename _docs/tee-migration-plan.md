@@ -53,15 +53,15 @@ This document outlines the migration plan from VirtEngine's current `SimulatedEn
 
 ### SimulatedEnclaveService Capabilities
 
-| Capability | Simulated | Production TEE |
-|------------|-----------|----------------|
-| Interface Compliance | ✅ | ✅ |
-| Memory Isolation | ❌ | ✅ |
-| Encrypted Memory | ❌ | ✅ |
-| Remote Attestation | ❌ (mock) | ✅ |
-| Sealed Key Storage | ❌ (plaintext) | ✅ |
-| Anti-Rollback | ❌ | ✅ |
-| Production Use | ❌ | ✅ |
+| Capability           | Simulated      | Production TEE |
+| -------------------- | -------------- | -------------- |
+| Interface Compliance | ✅             | ✅             |
+| Memory Isolation     | ❌             | ✅             |
+| Encrypted Memory     | ❌             | ✅             |
+| Remote Attestation   | ❌ (mock)      | ✅             |
+| Sealed Key Storage   | ❌ (plaintext) | ✅             |
+| Anti-Rollback        | ❌             | ✅             |
+| Production Use       | ❌             | ✅             |
 
 ### Files to Migrate
 
@@ -297,22 +297,22 @@ enclave_requirements:
   # Testnet measurements (not production!)
   allowed_measurements:
     sgx:
-      - "abc123..."  # v0.1.0-testnet
-      - "def456..."  # v0.1.1-testnet
+      - "abc123..." # v0.1.0-testnet
+      - "def456..." # v0.1.1-testnet
     sev_snp:
-      - "789abc..."  # v0.1.0-testnet
+      - "789abc..." # v0.1.0-testnet
     nitro:
-      - "xyz789..."  # v0.1.0-testnet
+      - "xyz789..." # v0.1.0-testnet
 
   # Permissive mode for testing
   attestation_mode: "permissive"
-  require_attestation: false  # Set true in phase 3
+  require_attestation: false # Set true in phase 3
 
 governance:
   # Proposal to require TEE
   tee_requirement_proposal:
-    voting_period: "72h"  # 3 days for testnet
-    threshold: "0.5"      # 50% for testnet
+    voting_period: "72h" # 3 days for testnet
+    threshold: "0.5" # 50% for testnet
 ```
 
 #### 2.3 Phase 2 Deliverables
@@ -410,7 +410,7 @@ virtengine tee verify-config
 ```json
 {
   "title": "Enable Mandatory TEE for VEID Scoring",
-  "description": "This proposal enables mandatory Trusted Execution Environment (TEE) for all VEID identity scoring operations. After passage:\n\n1. All validators must run approved TEE enclaves\n2. Scoring without valid attestation will be rejected\n3. Grace period of 200 blocks for migration\n4. Non-compliant validators will be jailed\n\nSee: https://docs.virtengine.io/tee-migration",
+  "description": "This proposal enables mandatory Trusted Execution Environment (TEE) for all VEID identity scoring operations. After passage:\n\n1. All validators must run approved TEE enclaves\n2. Scoring without valid attestation will be rejected\n3. Grace period of 200 blocks for migration\n4. Non-compliant validators will be jailed\n\nSee: https://docs.virtengine.com/tee-migration",
   "type": "SoftwareUpgrade",
   "changes": [
     {
@@ -488,8 +488,8 @@ virtengine tee verify-config
 emergency_proposal:
   title: "Emergency: Disable Mandatory TEE"
   reason: "Critical vulnerability discovered in TEE implementation"
-  voting_period: "24h"  # Emergency shortened period
-  threshold: "0.67"     # 2/3 supermajority required
+  voting_period: "24h" # Emergency shortened period
+  threshold: "0.67" # 2/3 supermajority required
 
   changes:
     - key: "RequireTEE"
@@ -530,7 +530,7 @@ func NewSimulatedEnclaveService() (EnclaveService, error) {
     return nil, errors.New(
         "SimulatedEnclaveService has been deprecated and removed. " +
         "Production TEE (SGX, SEV-SNP, or Nitro) is now required. " +
-        "See https://docs.virtengine.io/tee-migration for migration guide.",
+        "See https://docs.virtengine.com/tee-migration for migration guide.",
     )
 }
 ```
@@ -634,35 +634,35 @@ systemctl restart virtengine
 
 ### Phase Completion Gates
 
-| Phase | Criteria | Threshold |
-|-------|----------|-----------|
-| Phase 1 | Dual mode operational | 100% feature complete |
-| Phase 2 | Testnet stability | >99.9% uptime, 0 critical bugs |
-| Phase 3 | Validator readiness | >80% validators TEE-ready |
-| Phase 4 | Mainnet activation | Governance passes, activation smooth |
-| Phase 5 | Deprecation complete | Zero simulated enclave usage |
+| Phase   | Criteria              | Threshold                            |
+| ------- | --------------------- | ------------------------------------ |
+| Phase 1 | Dual mode operational | 100% feature complete                |
+| Phase 2 | Testnet stability     | >99.9% uptime, 0 critical bugs       |
+| Phase 3 | Validator readiness   | >80% validators TEE-ready            |
+| Phase 4 | Mainnet activation    | Governance passes, activation smooth |
+| Phase 5 | Deprecation complete  | Zero simulated enclave usage         |
 
 ### Key Metrics
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Score Consistency | 100% | Cross-platform score matching |
-| Attestation Success | >99.9% | Valid attestations / total |
-| Latency Impact | <50ms | Additional scoring latency |
-| Availability | >99.9% | Enclave uptime |
-| Migration Time | <4 hours | Per-validator migration |
+| Metric              | Target   | Measurement                   |
+| ------------------- | -------- | ----------------------------- |
+| Score Consistency   | 100%     | Cross-platform score matching |
+| Attestation Success | >99.9%   | Valid attestations / total    |
+| Latency Impact      | <50ms    | Additional scoring latency    |
+| Availability        | >99.9%   | Enclave uptime                |
+| Migration Time      | <4 hours | Per-validator migration       |
 
 ---
 
 ## Timeline
 
-| Week | Phase | Key Activities |
-|------|-------|----------------|
-| 1-2 | Phase 1 | Dual mode infrastructure |
-| 3-5 | Phase 2 | Testnet validation |
-| 6-8 | Phase 3 | Mainnet preparation |
-| 9-10 | Phase 4 | Mainnet activation |
-| 11-12 | Phase 5 | Deprecation |
+| Week  | Phase   | Key Activities           |
+| ----- | ------- | ------------------------ |
+| 1-2   | Phase 1 | Dual mode infrastructure |
+| 3-5   | Phase 2 | Testnet validation       |
+| 6-8   | Phase 3 | Mainnet preparation      |
+| 9-10  | Phase 4 | Mainnet activation       |
+| 11-12 | Phase 5 | Deprecation              |
 
 **Total Duration: 12 weeks**
 

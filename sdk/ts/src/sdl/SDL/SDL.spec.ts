@@ -527,7 +527,7 @@ describe("SDL", () => {
       placement:
         virtengine:
           attributes:
-            organization: virtengine.io
+            organization: virtengine.com
           signedBy:
             anyOf:
               - virt1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63
@@ -607,7 +607,7 @@ describe("SDL", () => {
           attributes: [
             {
               key: "organization",
-              value: "virtengine.io",
+              value: "virtengine.com",
             },
           ],
           signedBy: {
