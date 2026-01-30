@@ -13,6 +13,37 @@ import (
 )
 
 // ============================================================================
+// SECURITY NOTE - CONSENSUS SAFETY
+// ============================================================================
+//
+// Several functions in this file use crypto/rand.Read() for generating random
+// values (nonces, salts) within keeper functions. This pattern is CONSENSUS-UNSAFE
+// because different validators will generate different random values, leading to
+// different state transitions and consensus failure.
+//
+// REMEDIATION REQUIRED (See SECURITY-001-CRYPTOGRAPHIC-AUDIT.md):
+//
+// For functions that STORE state on-chain:
+// - Move random generation to client-side (off-chain)
+// - Accept pre-generated random values as parameters
+// - Only perform verification on-chain
+//
+// For functions that are QUERY-ONLY or create ephemeral requests:
+// - These may be acceptable if the random value is only used locally
+// - However, consider refactoring for consistency
+//
+// TODO: Refactor the following functions to accept pre-generated random values:
+// - CreateSelectiveDisclosureRequest (line 56)
+// - GenerateSelectiveDisclosureProof (lines 144, 158)
+// - CreateAgeProof (line 325)
+// - CreateResidencyProof (line 401)
+// - CreateScoreThresholdProof (lines 479, 489)
+// - evaluateAgeThreshold (line 780)
+// - evaluateResidency (line 820)
+//
+// ============================================================================
+
+// ============================================================================
 // Selective Disclosure Request Management
 // ============================================================================
 
