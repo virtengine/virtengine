@@ -1,12 +1,5 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until MFA keeper and types compilation errors are resolved.
-// Missing types/methods that need implementation:
-// - types.TrustedDeviceInfo (should use types.DeviceInfo)
-// - MFAPolicy fields: AllowTrustedDevices, AllowTrustedDevBypass, EnforceForLowVEID
-// - keeper.GetVEIDThreshold, keeper.ShouldEnforceMFA, keeper.IsFactorActive, keeper.GetActiveFactorCount
-// - CheckMFARequired signature mismatch (expects msgTypeURL string, not SensitiveTransactionType)
+// MFA Gating Tests - Test suite for MFA gating hooks functionality
+// Tests MFA requirement checks, proof validation, and bypass mechanisms.
 
 package keeper_test
 
@@ -29,19 +22,8 @@ import (
 	"github.com/virtengine/virtengine/x/mfa/types"
 )
 
-// mockVEIDKeeper implements keeper.VEIDKeeper for testing
-type mockVEIDKeeper struct{}
-
-func (m *mockVEIDKeeper) GetVEIDScore(ctx sdk.Context, address sdk.AccAddress) (uint32, bool) {
-	return 0, false
-}
-
-// mockRolesKeeper implements keeper.RolesKeeper for testing
-type mockRolesKeeper struct{}
-
-func (m *mockRolesKeeper) IsAccountOperational(ctx sdk.Context, address sdk.AccAddress) bool {
-	return true
-}
+// Note: mockVEIDKeeper and mockRolesKeeper are declared in msg_server_test.go
+// They can be reused here since we're in the same test package.
 
 type GatingTestSuite struct {
 	suite.Suite
@@ -99,12 +81,15 @@ func (s *GatingTestSuite) TestRequiresMFA_PolicyDisabled() {
 func (s *GatingTestSuite) TestRequiresMFA_PolicyEnabled() {
 	address := sdk.AccAddress([]byte("test-mfa-enabled"))
 
-	// Enable MFA policy
+	// Enable MFA policy with required factors (validation requires at least one)
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
-		CreatedAt:      time.Now().Unix(),
-		UpdatedAt:      time.Now().Unix(),
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
 	}
 	err := s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
@@ -129,8 +114,11 @@ func (s *GatingTestSuite) TestRequiresMFA_TxTypeNotConfigured() {
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
-		CreatedAt:      time.Now().Unix(),
-		UpdatedAt:      time.Now().Unix(),
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
 	}
 	err := s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
@@ -157,7 +145,9 @@ func (s *GatingTestSuite) TestValidateMFAProof_Valid() {
 	s.Require().NoError(err)
 
 	proof := &types.MFAProof{
-		SessionID: "valid-session-id",
+		SessionID:       "valid-session-id",
+		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+		Timestamp:       s.ctx.BlockTime().Unix(),
 	}
 
 	err = s.hooks.ValidateMFAProof(s.ctx, address, types.SensitiveTxLargeWithdrawal, proof, "")
@@ -238,12 +228,25 @@ func (s *GatingTestSuite) TestCanBypassMFA_TrustedDevice() {
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 		TrustedDeviceRule: &types.TrustedDevicePolicy{
-			Enabled:       true,
-			TrustDuration: 86400,
+			Enabled:           true,
+			TrustDuration:     86400,
+			MaxTrustedDevices: 5,
 		},
 	}
 	err = s.keeper.SetMFAPolicy(s.ctx, policy)
+	s.Require().NoError(err)
+
+	// Configure sensitive tx config to allow trusted device reduction
+	txConfig := &types.SensitiveTxConfig{
+		TransactionType:             types.SensitiveTxLargeWithdrawal,
+		Enabled:                     true,
+		AllowTrustedDeviceReduction: true,
+	}
+	err = s.keeper.SetSensitiveTxConfig(s.ctx, txConfig)
 	s.Require().NoError(err)
 
 	canBypass, _ := s.hooks.CanBypassMFA(s.ctx, address, types.SensitiveTxLargeWithdrawal, "trusted-device-fp")
@@ -292,6 +295,9 @@ func (s *GatingTestSuite) TestCanBypassMFA_PolicyDisallows() {
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 		// TrustedDeviceRule is nil, so bypass should not be allowed
 	}
 	err = s.keeper.SetMFAPolicy(s.ctx, policy)
@@ -316,9 +322,13 @@ func (s *GatingTestSuite) TestCheckMFARequired_FullFlow() {
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 		TrustedDeviceRule: &types.TrustedDevicePolicy{
-			Enabled:       true,
-			TrustDuration: 86400,
+			Enabled:           true,
+			TrustDuration:     86400,
+			MaxTrustedDevices: 5,
 		},
 	}
 	err := s.keeper.SetMFAPolicy(s.ctx, policy)
@@ -348,9 +358,13 @@ func (s *GatingTestSuite) TestCheckMFARequired_DeviceBypass() {
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
 		TrustedDeviceRule: &types.TrustedDevicePolicy{
 			Enabled:                   true,
 			TrustDuration:             86400,
+			MaxTrustedDevices:         5,
 			RequireReauthForSensitive: false,
 		},
 	}

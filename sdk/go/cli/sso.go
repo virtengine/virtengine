@@ -7,10 +7,10 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
@@ -119,7 +119,7 @@ Example:
 			}
 
 			if policyFile != "" {
-				data, err := os.ReadFile(policyFile)
+				data, err := security.SafeReadFileWithExtension(policyFile, ".json")
 				if err != nil {
 					return fmt.Errorf("failed to read policy file: %w", err)
 				}
@@ -299,7 +299,7 @@ func getSSOConfigValidateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configFile := args[0]
 
-			data, err := os.ReadFile(configFile)
+			data, err := security.SafeReadFileWithExtension(configFile, ".json")
 			if err != nil {
 				return fmt.Errorf("failed to read config file: %w", err)
 			}

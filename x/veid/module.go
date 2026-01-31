@@ -17,6 +17,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/gogoproto/grpc"
 
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	"github.com/virtengine/virtengine/x/veid/keeper"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
@@ -136,13 +137,16 @@ func (am AppModule) QuerierRoute() string {
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
-	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewGRPCQuerier(am.keeper))
+	// Use SDK's RegisterQueryServer with proper proto-generated service descriptor
+	// The SDK descriptor has proper proto registration for gRPC router validation
+	veidv1.RegisterQueryServer(cfg.QueryServer(), keeper.NewSDKQueryServer(am.keeper))
 }
 
 // RegisterQueryService registers a GRPC query service to respond to the
 // module-specific GRPC queries.
 func (am AppModule) RegisterQueryService(server grpc.Server) {
-	types.RegisterQueryServer(server, keeper.NewGRPCQuerier(am.keeper))
+	// Use SDK's RegisterQueryServer with proper proto-generated service descriptor
+	veidv1.RegisterQueryServer(server, keeper.NewSDKQueryServer(am.keeper))
 }
 
 // BeginBlock performs no-op

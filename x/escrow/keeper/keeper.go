@@ -191,7 +191,8 @@ func (k *keeper) AuthorizeDeposits(sctx sdk.Context, msg sdk.Msg) ([]etypes.Depo
 	dep := hasDeposit.GetDeposit()
 	denom := dep.Amount.Denom
 
-	remainder := sdkmath.NewInt(dep.Amount.Amount.Int64())
+	// Use the full sdkmath.Int directly to avoid Int64() overflow
+	remainder := dep.Amount.Amount
 
 	for _, source := range dep.Sources {
 		switch source {

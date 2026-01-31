@@ -139,8 +139,19 @@ func NewWaldurBridge(cfg WaldurBridgeConfig, keyManager *KeyManager, callbackSin
 		callbackSink:    callbackSink,
 		usageReporter:   usageReporter,
 		stateStore:      NewWaldurBridgeStateStore(cfg.StateFile),
-		checkpointStore: NewEventCheckpointStore(cfg.CheckpointFile),
+		checkpointStore: mustNewEventCheckpointStore(cfg.CheckpointFile),
 	}, nil
+}
+
+// mustNewEventCheckpointStore creates a checkpoint store, panicking on validation error.
+// Validation errors indicate misconfiguration and should fail fast.
+func mustNewEventCheckpointStore(path string) *EventCheckpointStore {
+	store, err := NewEventCheckpointStore(path)
+	if err != nil {
+		// Path validation failed - this indicates configuration error
+		panic(fmt.Sprintf("invalid checkpoint file path: %v", err))
+	}
+	return store
 }
 
 // Start starts the bridge event loop.

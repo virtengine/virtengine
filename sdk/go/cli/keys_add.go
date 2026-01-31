@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
@@ -26,6 +25,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 const (
@@ -422,7 +422,7 @@ func printCreate(cmd *cobra.Command, k *keyring.Record, showMnemonic bool, mnemo
 }
 
 func readMnemonicFromFile(filePath string) (string, error) {
-	file, err := os.Open(filePath)
+	file, err := security.SafeOpen(filePath)
 	if err != nil {
 		return "", err
 	}

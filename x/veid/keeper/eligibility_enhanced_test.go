@@ -27,6 +27,7 @@ type EligibilityEnhancedTestSuite struct {
 	suite.Suite
 	ctx               sdk.Context
 	keeper            Keeper
+	stateStore        store.CommitMultiStore
 	premiumAddress    sdk.AccAddress
 	standardAddress   sdk.AccAddress
 	basicAddress      sdk.AccAddress
@@ -53,6 +54,8 @@ func (s *EligibilityEnhancedTestSuite) SetupTest() {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	s.Require().NoError(err)
+
+	s.stateStore = stateStore
 
 	// Create context with store
 	s.ctx = sdk.NewContext(stateStore, cmtproto.Header{
@@ -107,6 +110,11 @@ func (s *EligibilityEnhancedTestSuite) SetupTest() {
 
 	// Set up locked identity
 	s.setupLockedIdentity(s.lockedAddress)
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *EligibilityEnhancedTestSuite) TearDownTest() {
+	closeStoreIfNeeded(s.stateStore)
 }
 
 func (s *EligibilityEnhancedTestSuite) setupVerifiedIdentity(address sdk.AccAddress, score uint32, scopes []types.ScopeType, locked bool) {

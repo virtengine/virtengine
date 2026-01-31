@@ -11,6 +11,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 	enclavetypes "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 )
 
@@ -148,8 +149,8 @@ Example:
 			}
 			var attestationQuote []byte
 			if _, err := os.Stat(attestationQuoteArg); err == nil {
-				// It's a file path
-				attestationQuote, err = os.ReadFile(attestationQuoteArg)
+				// It's a file path - validate before reading
+				attestationQuote, err = security.SafeReadFile(attestationQuoteArg)
 				if err != nil {
 					return fmt.Errorf("failed to read attestation quote file: %w", err)
 				}
@@ -271,7 +272,8 @@ Example:
 			}
 			var newAttestationQuote []byte
 			if _, err := os.Stat(attestationQuoteArg); err == nil {
-				newAttestationQuote, err = os.ReadFile(attestationQuoteArg)
+				// Validate path before reading
+				newAttestationQuote, err = security.SafeReadFile(attestationQuoteArg)
 				if err != nil {
 					return fmt.Errorf("failed to read attestation quote file: %w", err)
 				}
