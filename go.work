@@ -1,0 +1,9 @@
+go 1.25.5
+
+use (
+	.
+	./sdk/go
+)
+
+// Resolve conflicting wasmd versions between root module and SDK
+replace github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.61.7-0.20260126125754-5cc330bcf3d3

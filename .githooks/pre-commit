@@ -39,10 +39,18 @@ if git diff --cached --name-only | grep -qE '^go\.(mod|sum)$'; then
     fi
 
     # Sync vendor directory
-    hook_step "Running 'go mod vendor'..."
-    if ! go mod vendor 2>&1; then
-        hook_fail "go mod vendor failed"
-        exit 1
+    if [ -f "$REPO_ROOT/go.work" ] && [ "${GOWORK:-}" != "off" ]; then
+        hook_step "Running 'go work vendor'..."
+        if ! go work vendor 2>&1; then
+            hook_fail "go work vendor failed"
+            exit 1
+        fi
+    else
+        hook_step "Running 'go mod vendor'..."
+        if ! go mod vendor 2>&1; then
+            hook_fail "go mod vendor failed"
+            exit 1
+        fi
     fi
 
     hook_pass "[pre-commit] Module sync complete"

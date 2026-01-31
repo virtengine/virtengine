@@ -356,7 +356,8 @@ func TestCompromiseDetector_RecordKeyUsage(t *testing.T) {
 	detector := NewCompromiseDetector(config, nil)
 
 	keyID := "test-key"
-	now := time.Now()
+	// Use a fixed timestamp within normal hours (noon) to avoid triggering anomalous time detection
+	now := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
 
 	// First few uses should be fine
 	indicators := detector.RecordKeyUsage(keyID, "192.168.1.1", now)
@@ -755,8 +756,8 @@ func TestKeyManagementIntegration(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sig)
 
-	// Record the key usage for compromise detection
-	indicators := detector.RecordKeyUsage(key.KeyID, "127.0.0.1", time.Now())
+	// Record the key usage for compromise detection (use noon to avoid anomalous time detection)
+	indicators := detector.RecordKeyUsage(key.KeyID, "127.0.0.1", time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC))
 	assert.Empty(t, indicators)
 
 	// Verify the lifecycle state

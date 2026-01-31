@@ -144,6 +144,60 @@ All contributors must follow these security guidelines:
 - **Review updates:** Audit dependency updates for security implications
 - **Monitor advisories:** Stay informed about vulnerabilities in dependencies
 
+## Supply Chain Security
+
+VirtEngine implements comprehensive supply chain security measures. For detailed information, see [SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md).
+
+### Key Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Dependency Pinning** | All dependencies use exact versions | ✅ Active |
+| **SBOM Generation** | CycloneDX and SPDX formats | ✅ Active |
+| **Signed Releases** | Sigstore cosign keyless signing | ✅ Active |
+| **Build Provenance** | SLSA Level 3 attestation | ✅ Active |
+| **Vulnerability Scanning** | Automated via Dependabot, govulncheck, Trivy | ✅ Active |
+| **Attack Detection** | Typosquatting, dependency confusion monitoring | ✅ Active |
+
+### Verifying Releases
+
+All release artifacts are signed with Sigstore. Verify signatures with:
+
+```bash
+# Install cosign
+go install github.com/sigstore/cosign/v2/cmd/cosign@latest
+
+# Verify binary signature
+cosign verify-blob \
+  --signature virtengine_v0.9.0_linux_amd64.zip.sig \
+  --certificate virtengine_v0.9.0_linux_amd64.zip.pem \
+  --certificate-identity-regexp ".*@virtengine.io" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  virtengine_v0.9.0_linux_amd64.zip
+
+# Verify container image
+cosign verify \
+  --certificate-identity-regexp ".*@virtengine.io" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/virtengine/node:v0.9.0
+```
+
+### Supply Chain Tools
+
+```bash
+# Verify dependencies
+./scripts/supply-chain/verify-dependencies.sh
+
+# Detect supply chain attacks
+./scripts/supply-chain/detect-supply-chain-attacks.sh
+
+# Assess dependency risk
+go run ./scripts/supply-chain/assess-dependencies.go
+
+# Generate SBOM
+./scripts/supply-chain/generate-sbom.sh
+```
+
 ## Security Scanning in CI
 
 Our continuous integration pipeline includes comprehensive security scanning:
