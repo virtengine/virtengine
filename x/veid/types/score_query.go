@@ -262,3 +262,80 @@ type QueryScoreStatisticsResponse struct {
 	// Statistics contains the computed statistics
 	Statistics ScoreStatistics `json:"statistics"`
 }
+
+// ============================================================================
+// proto.Message interface implementations for Score Query types
+// Required for Cosmos SDK gRPC router registration
+// ============================================================================
+
+func (m *QueryIdentityScoreRequest) Reset()         { *m = QueryIdentityScoreRequest{} }
+func (m *QueryIdentityScoreRequest) String() string { return "" }
+func (*QueryIdentityScoreRequest) ProtoMessage()    {}
+
+func (m *QueryIdentityScoreResponse) Reset()         { *m = QueryIdentityScoreResponse{} }
+func (m *QueryIdentityScoreResponse) String() string { return "" }
+func (*QueryIdentityScoreResponse) ProtoMessage()    {}
+
+func (m *QueryIdentityStatusRequest) Reset()         { *m = QueryIdentityStatusRequest{} }
+func (m *QueryIdentityStatusRequest) String() string { return "" }
+func (*QueryIdentityStatusRequest) ProtoMessage()    {}
+
+func (m *QueryIdentityStatusResponse) Reset()         { *m = QueryIdentityStatusResponse{} }
+func (m *QueryIdentityStatusResponse) String() string { return "" }
+func (*QueryIdentityStatusResponse) ProtoMessage()    {}
+
+func (m *QueryScoreHistoryRequest) Reset()         { *m = QueryScoreHistoryRequest{} }
+func (m *QueryScoreHistoryRequest) String() string { return "" }
+func (*QueryScoreHistoryRequest) ProtoMessage()    {}
+
+func (m *QueryScoreHistoryResponse) Reset()         { *m = QueryScoreHistoryResponse{} }
+func (m *QueryScoreHistoryResponse) String() string { return "" }
+func (*QueryScoreHistoryResponse) ProtoMessage()    {}
+
+func (m *QueryRequiredScopesRequest) Reset()         { *m = QueryRequiredScopesRequest{} }
+func (m *QueryRequiredScopesRequest) String() string { return "" }
+func (*QueryRequiredScopesRequest) ProtoMessage()    {}
+
+func (m *QueryRequiredScopesResponse) Reset()         { *m = QueryRequiredScopesResponse{} }
+func (m *QueryRequiredScopesResponse) String() string { return "" }
+func (*QueryRequiredScopesResponse) ProtoMessage()    {}
+
+func (m *QueryAllRequiredScopesRequest) Reset()         { *m = QueryAllRequiredScopesRequest{} }
+func (m *QueryAllRequiredScopesRequest) String() string { return "" }
+func (*QueryAllRequiredScopesRequest) ProtoMessage()    {}
+
+func (m *QueryAllRequiredScopesResponse) Reset()         { *m = QueryAllRequiredScopesResponse{} }
+func (m *QueryAllRequiredScopesResponse) String() string { return "" }
+func (*QueryAllRequiredScopesResponse) ProtoMessage()    {}
+
+func (m *QueryAccountsByScoreTierRequest) Reset()         { *m = QueryAccountsByScoreTierRequest{} }
+func (m *QueryAccountsByScoreTierRequest) String() string { return "" }
+func (*QueryAccountsByScoreTierRequest) ProtoMessage()    {}
+
+func (m *QueryAccountsByScoreTierResponse) Reset()         { *m = QueryAccountsByScoreTierResponse{} }
+func (m *QueryAccountsByScoreTierResponse) String() string { return "" }
+func (*QueryAccountsByScoreTierResponse) ProtoMessage()    {}
+
+func (m *QueryScoreThresholdCheckRequest) Reset()         { *m = QueryScoreThresholdCheckRequest{} }
+func (m *QueryScoreThresholdCheckRequest) String() string { return "" }
+func (*QueryScoreThresholdCheckRequest) ProtoMessage()    {}
+
+func (m *QueryScoreThresholdCheckResponse) Reset()         { *m = QueryScoreThresholdCheckResponse{} }
+func (m *QueryScoreThresholdCheckResponse) String() string { return "" }
+func (*QueryScoreThresholdCheckResponse) ProtoMessage()    {}
+
+func (m *QueryEligibilityRequest) Reset()         { *m = QueryEligibilityRequest{} }
+func (m *QueryEligibilityRequest) String() string { return "" }
+func (*QueryEligibilityRequest) ProtoMessage()    {}
+
+func (m *QueryEligibilityResponse) Reset()         { *m = QueryEligibilityResponse{} }
+func (m *QueryEligibilityResponse) String() string { return "" }
+func (*QueryEligibilityResponse) ProtoMessage()    {}
+
+func (m *QueryScoreStatisticsRequest) Reset()         { *m = QueryScoreStatisticsRequest{} }
+func (m *QueryScoreStatisticsRequest) String() string { return "" }
+func (*QueryScoreStatisticsRequest) ProtoMessage()    {}
+
+func (m *QueryScoreStatisticsResponse) Reset()         { *m = QueryScoreStatisticsResponse{} }
+func (m *QueryScoreStatisticsResponse) String() string { return "" }
+func (*QueryScoreStatisticsResponse) ProtoMessage()    {}

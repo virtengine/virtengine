@@ -683,3 +683,80 @@ type QueryAppealParamsRequest struct{}
 type QueryAppealParamsResponse struct {
 	Params AppealParams `json:"params"`
 }
+
+// ============================================================================
+// proto.Message interface implementations for Query types
+// Required for Cosmos SDK gRPC router registration
+// ============================================================================
+
+func (m *QueryIdentityRecordRequest) Reset()         { *m = QueryIdentityRecordRequest{} }
+func (m *QueryIdentityRecordRequest) String() string { return "" }
+func (*QueryIdentityRecordRequest) ProtoMessage()    {}
+
+func (m *QueryIdentityRecordResponse) Reset()         { *m = QueryIdentityRecordResponse{} }
+func (m *QueryIdentityRecordResponse) String() string { return "" }
+func (*QueryIdentityRecordResponse) ProtoMessage()    {}
+
+func (m *QueryScopeRequest) Reset()         { *m = QueryScopeRequest{} }
+func (m *QueryScopeRequest) String() string { return "" }
+func (*QueryScopeRequest) ProtoMessage()    {}
+
+func (m *QueryScopeResponse) Reset()         { *m = QueryScopeResponse{} }
+func (m *QueryScopeResponse) String() string { return "" }
+func (*QueryScopeResponse) ProtoMessage()    {}
+
+func (m *QueryScopesByTypeRequest) Reset()         { *m = QueryScopesByTypeRequest{} }
+func (m *QueryScopesByTypeRequest) String() string { return "" }
+func (*QueryScopesByTypeRequest) ProtoMessage()    {}
+
+func (m *QueryScopesByTypeResponse) Reset()         { *m = QueryScopesByTypeResponse{} }
+func (m *QueryScopesByTypeResponse) String() string { return "" }
+func (*QueryScopesByTypeResponse) ProtoMessage()    {}
+
+func (m *QueryApprovedClientsRequest) Reset()         { *m = QueryApprovedClientsRequest{} }
+func (m *QueryApprovedClientsRequest) String() string { return "" }
+func (*QueryApprovedClientsRequest) ProtoMessage()    {}
+
+func (m *QueryApprovedClientsResponse) Reset()         { *m = QueryApprovedClientsResponse{} }
+func (m *QueryApprovedClientsResponse) String() string { return "" }
+func (*QueryApprovedClientsResponse) ProtoMessage()    {}
+
+func (m *QueryParamsRequest) Reset()         { *m = QueryParamsRequest{} }
+func (m *QueryParamsRequest) String() string { return "" }
+func (*QueryParamsRequest) ProtoMessage()    {}
+
+func (m *QueryParamsResponse) Reset()         { *m = QueryParamsResponse{} }
+func (m *QueryParamsResponse) String() string { return "" }
+func (*QueryParamsResponse) ProtoMessage()    {}
+
+func (m *QueryAppealRequest) Reset()         { *m = QueryAppealRequest{} }
+func (m *QueryAppealRequest) String() string { return "" }
+func (*QueryAppealRequest) ProtoMessage()    {}
+
+func (m *QueryAppealResponse) Reset()         { *m = QueryAppealResponse{} }
+func (m *QueryAppealResponse) String() string { return "" }
+func (*QueryAppealResponse) ProtoMessage()    {}
+
+func (m *QueryAppealsByAccountRequest) Reset()         { *m = QueryAppealsByAccountRequest{} }
+func (m *QueryAppealsByAccountRequest) String() string { return "" }
+func (*QueryAppealsByAccountRequest) ProtoMessage()    {}
+
+func (m *QueryAppealsByAccountResponse) Reset()         { *m = QueryAppealsByAccountResponse{} }
+func (m *QueryAppealsByAccountResponse) String() string { return "" }
+func (*QueryAppealsByAccountResponse) ProtoMessage()    {}
+
+func (m *QueryPendingAppealsRequest) Reset()         { *m = QueryPendingAppealsRequest{} }
+func (m *QueryPendingAppealsRequest) String() string { return "" }
+func (*QueryPendingAppealsRequest) ProtoMessage()    {}
+
+func (m *QueryPendingAppealsResponse) Reset()         { *m = QueryPendingAppealsResponse{} }
+func (m *QueryPendingAppealsResponse) String() string { return "" }
+func (*QueryPendingAppealsResponse) ProtoMessage()    {}
+
+func (m *QueryAppealParamsRequest) Reset()         { *m = QueryAppealParamsRequest{} }
+func (m *QueryAppealParamsRequest) String() string { return "" }
+func (*QueryAppealParamsRequest) ProtoMessage()    {}
+
+func (m *QueryAppealParamsResponse) Reset()         { *m = QueryAppealParamsResponse{} }
+func (m *QueryAppealParamsResponse) String() string { return "" }
+func (*QueryAppealParamsResponse) ProtoMessage()    {}
