@@ -69,4 +69,31 @@ func TestNewClientWithProviderURL(t *testing.T) {
 		require.Empty(t, c.opts.token) // Should be empty when no token provided
 	})
 
+	t.Run("TLS verification enabled by default", func(t *testing.T) {
+		cl, err := NewClient(ctx, addr, WithProviderURL(providerURL))
+		require.NoError(t, err)
+
+		c := cl.(*client)
+		require.False(t, c.tlsCfg.InsecureSkipVerify, "TLS verification should be enabled by default")
+		require.False(t, c.opts.insecureSkipVerify, "insecureSkipVerify option should be false by default")
+	})
+
+	t.Run("TLS verification can be disabled with option", func(t *testing.T) {
+		cl, err := NewClient(ctx, addr, WithProviderURL(providerURL), WithInsecureSkipVerify(true))
+		require.NoError(t, err)
+
+		c := cl.(*client)
+		require.True(t, c.tlsCfg.InsecureSkipVerify, "TLS verification should be disabled when opted in")
+		require.True(t, c.opts.insecureSkipVerify, "insecureSkipVerify option should be true when set")
+	})
+
+	t.Run("TLS verification remains enabled when option is false", func(t *testing.T) {
+		cl, err := NewClient(ctx, addr, WithProviderURL(providerURL), WithInsecureSkipVerify(false))
+		require.NoError(t, err)
+
+		c := cl.(*client)
+		require.False(t, c.tlsCfg.InsecureSkipVerify, "TLS verification should remain enabled")
+		require.False(t, c.opts.insecureSkipVerify, "insecureSkipVerify option should be false")
+	})
+
 }

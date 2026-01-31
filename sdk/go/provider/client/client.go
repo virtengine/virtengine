@@ -159,7 +159,7 @@ func NewClient(ctx context.Context, addr sdk.Address, opts ...ClientOption) (Cli
 		MinVersion:            tls.VersionTLS13,
 		RootCAs:               certPool,
 		VerifyPeerCertificate: cl.verifyPeerCertificate,
-		InsecureSkipVerify:    true, // nolint: gosec
+		InsecureSkipVerify:    cl.opts.insecureSkipVerify, //nolint:gosec // G402: Controlled by explicit opt-in via WithInsecureSkipVerify option
 	}
 
 	// must use Hostname rather than Host field as a certificate is issued for host without port

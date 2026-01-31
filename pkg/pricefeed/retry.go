@@ -2,8 +2,7 @@ package pricefeed
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/binary"
+	"math/rand"
 	"strings"
 	"time"
 )
@@ -137,33 +136,11 @@ func (r *Retryer) calculateDelay(attempt int) time.Duration {
 		delay = float64(r.maxDelay)
 	}
 
-	// Add jitter (±25%) using cryptographically secure randomness
-	jitter := secureJitter(int64(delay * 0.25))
-	return time.Duration(delay) + jitter
-}
+	// Add jitter (±25%)
+	jitter := delay * 0.25 * (rand.Float64()*2 - 1)
+	delay += jitter
 
-// secureJitter returns a cryptographically secure random duration in the range [-maxMs, +maxMs].
-// This prevents predictable retry patterns that could be exploited for timing attacks.
-func secureJitter(maxMs int64) time.Duration {
-	if maxMs <= 0 {
-		return 0
-	}
-
-	var buf [8]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		// Fallback to zero jitter if crypto/rand fails (should never happen)
-		return 0
-	}
-
-	// Convert to uint64, then to a value in range [0, 2*maxMs]
-	randVal := binary.BigEndian.Uint64(buf[:])
-	// #nosec G115 -- maxMs is validated non-negative, so 2*maxMs+1 is safe
-	rangeSize := uint64(2*maxMs + 1)
-	// #nosec G115 -- result of modulo is always < rangeSize which fits in int64
-	offset := int64(randVal % rangeSize)
-
-	// Shift to range [-maxMs, +maxMs]
-	return time.Duration(offset - maxMs)
+	return time.Duration(delay)
 }
 
 // pow calculates x^y for float64
