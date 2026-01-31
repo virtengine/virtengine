@@ -125,7 +125,7 @@ func (s *IdentityIntegrationTestSuite) TestIdentityScopeUploadAndScoreCommit() {
 
 	resp, err := s.msgServer.UploadScope(ctx, msg)
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), scopeID, resp.ScopeID)
+	require.Equal(s.T(), scopeID, resp.ScopeId)
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false)
@@ -133,7 +133,7 @@ func (s *IdentityIntegrationTestSuite) TestIdentityScopeUploadAndScoreCommit() {
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, owner)
 	require.True(s.T(), found)
 	require.Len(s.T(), record.ScopeRefs, 1)
-	require.Equal(s.T(), scopeID, record.ScopeRefs[0].ScopeID)
+	require.Equal(s.T(), scopeID, record.ScopeRefs[0].ScopeId)
 
 	updateScore := veidtypes.NewMsgUpdateScore(
 		s.validator.String(),

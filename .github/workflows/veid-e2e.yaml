@@ -1,0 +1,234 @@
+name: VEID E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+      - mainnet/main
+    paths:
+      - 'x/veid/**'
+      - 'tests/e2e/veid_*.go'
+      - 'pkg/inference/**'
+      - '.github/workflows/veid-e2e.yaml'
+  pull_request:
+    branches:
+      - main
+      - mainnet/main
+    paths:
+      - 'x/veid/**'
+      - 'tests/e2e/veid_*.go'
+      - 'pkg/inference/**'
+      - '.github/workflows/veid-e2e.yaml'
+  workflow_dispatch:
+    inputs:
+      verbose:
+        description: 'Enable verbose logging'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: veid-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.22.x'
+  CACHE_KEY_PREFIX: veid-e2e
+
+jobs:
+  # ============================================================================
+  # VEID E2E Integration Tests
+  # ============================================================================
+  veid-e2e:
+    name: VEID E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            .cache/bin
+          key: ${{ env.CACHE_KEY_PREFIX }}-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ env.CACHE_KEY_PREFIX }}-${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Build VirtEngine
+        run: |
+          make virtengine
+        env:
+          CGO_ENABLED: 1
+
+      - name: Run VEID E2E Tests
+        run: |
+          go test -v -tags="e2e.integration" \
+            -timeout 20m \
+            -count=1 \
+            -run "TestVEIDE2E" \
+            ./tests/e2e/...
+        env:
+          VEID_E2E_VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
+          # Deterministic ML inference settings
+          TF_DETERMINISTIC_OPS: '1'
+          TF_CUDNN_DETERMINISTIC: '1'
+          PYTHONHASHSEED: '42'
+
+      - name: Run VEID Integration Tests
+        run: |
+          go test -v -tags="e2e.integration" \
+            -timeout 15m \
+            -count=1 \
+            -run "TestVEIDOnboarding" \
+            ./tests/integration/...
+        env:
+          VEID_E2E_VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: veid-e2e-logs
+          path: |
+            /tmp/veid-e2e-*.log
+            /tmp/virtengine-test-*.log
+          retention-days: 7
+
+  # ============================================================================
+  # VEID Unit Tests
+  # ============================================================================
+  veid-unit:
+    name: VEID Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run VEID module tests
+        run: |
+          go test -v -timeout 10m \
+            -race \
+            -coverprofile=coverage-veid.txt \
+            -covermode=atomic \
+            ./x/veid/...
+
+      - name: Run inference package tests
+        run: |
+          go test -v -timeout 5m \
+            -race \
+            -coverprofile=coverage-inference.txt \
+            -covermode=atomic \
+            ./pkg/inference/...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage-veid.txt,./coverage-inference.txt
+          flags: veid
+          name: veid-coverage
+
+  # ============================================================================
+  # VEID Determinism Verification
+  # ============================================================================
+  veid-determinism:
+    name: VEID Determinism Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run determinism conformance tests
+        run: |
+          go test -v -timeout 15m \
+            -count=3 \
+            -run "TestDeterminism" \
+            ./pkg/inference/...
+        env:
+          # Force CPU-only inference for determinism
+          CUDA_VISIBLE_DEVICES: ''
+          TF_FORCE_CPU: '1'
+          TF_DETERMINISTIC_OPS: '1'
+          VEID_INFERENCE_SEED: '42'
+
+      - name: Run cross-machine conformance tests
+        run: |
+          go test -v -timeout 10m \
+            -count=1 \
+            -run "TestCrossMachine" \
+            ./pkg/inference/...
+        env:
+          CUDA_VISIBLE_DEVICES: ''
+          TF_FORCE_CPU: '1'
+
+  # ============================================================================
+  # Summary Job
+  # ============================================================================
+  veid-e2e-summary:
+    name: VEID E2E Summary
+    needs: [veid-e2e, veid-unit, veid-determinism]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.veid-e2e.result }}" == "success" ]] && \
+             [[ "${{ needs.veid-unit.result }}" == "success" ]] && \
+             [[ "${{ needs.veid-determinism.result }}" == "success" ]]; then
+            echo "✅ All VEID E2E tests passed!"
+            exit 0
+          else
+            echo "❌ Some VEID E2E tests failed"
+            echo "  - E2E Tests: ${{ needs.veid-e2e.result }}"
+            echo "  - Unit Tests: ${{ needs.veid-unit.result }}"
+            echo "  - Determinism: ${{ needs.veid-determinism.result }}"
+            exit 1
+          fi
+
+      - name: Create summary
+        run: |
+          echo "## VEID E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| E2E Tests | ${{ needs.veid-e2e.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.veid-unit.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Determinism | ${{ needs.veid-determinism.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
