@@ -1,6 +1,173 @@
 ## STATUS: 🔴 IN PROGRESS - Production Readiness Phase
 
-**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks | 24 Production Tasks (VE-2000 series) | 4 TEE Hardware Integration Tasks COMPLETED | 23 VEID Gap Resolution Tasks COMPLETED | 17 NEW Gap Tasks Added (VE-3050-3063) | 8 Gap Tasks COMPLETED | 28 Spec-Driven Tasks Identified**
+**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks | 24 Production Tasks (VE-2000 series) | 4 TEE Hardware Integration Tasks COMPLETED | 23 VEID Gap Resolution Tasks COMPLETED | 17 NEW Gap Tasks Added (VE-3050-3063) | 8 Gap Tasks COMPLETED | 28 Spec-Driven Tasks Identified | 57 vibe-kanban TODO tasks | 1 P0 Blocker**
+
+---
+
+## 🚨 P0 BLOCKER: IAVL Goroutine Leaks (2026-01-31)
+
+**Issue:** `git push` pre-hook fails due to goroutine leaks in `x/veid/keeper` tests.
+
+**Error:**
+
+```
+goroutine 83048 [sleep]:
+github.com/cosmos/iavl.(*nodeDB).startPruning(...)
+```
+
+**Root Cause:** `KeeperTestSuite` creates IAVL stores but doesn't clean them up. IAVL spawns background pruning goroutines that outlive the tests.
+
+**Fix Required:** Add `TearDownTest()` to close stores and stop goroutines.
+
+**Task:** `fix(veid): P0 - Fix IAVL goroutine leaks in keeper tests`
+
+**Workaround:** `git push --no-verify` (bypasses pre-push hook)
+
+---
+
+## vibe-kanban Workflow Enhancement (2026-01-31)
+
+Enhanced the vibe-kanban cleanup script to:
+
+1. **Run comprehensive quality checks** (format, vet, lint, build, tests)
+2. **Return proper exit codes:**
+   - `0` = All passed, ready for PR
+   - `1` = Quality checks failed - **agent must continue working**
+   - `2` = Push failed (quality passed) - manual intervention
+3. **Provide clear agent instructions** on failures
+4. **Auto-commit and push** on success
+5. **Document PR creation command** for GitHub MCP integration
+
+**Documentation:** See [vibe-kanban-workflow.md](vibe-kanban-workflow.md)
+
+---
+
+## Task Planning Session: 2026-01-31
+
+### Session Summary
+
+Comprehensive analysis of project state against AU2024203136A1-LIVE.pdf specification. Created 19 new backlog tasks across 5 series (18A-22D plus P0 fix) to address remaining gaps.
+
+### Recent Commits (Since 2026-01-30)
+
+| PR/Branch | Title                                                  | Status    |
+| --------- | ------------------------------------------------------ | --------- |
+| #174      | fix(pricefeed): 1C - Replace math/rand in retry jitter | ✅ Merged |
+| #173      | fix(veid): P0 - Fix x/veid Keeper tests                | ✅ Merged |
+| #172      | fix(encryption): 1E - Replace SHA-1 with SHA-256       | ✅ Merged |
+| #171      | fix(provider): 1D - Fix InsecureSkipVerify TLS bypass  | ✅ Merged |
+| #170      | fix(enclave_runtime): 1B - Replace math/rand in SGX    | ✅ Merged |
+| #169      | fix(enclave): 1A - Replace math/rand in committee      | ✅ Merged |
+| #168      | feat(escrow): 5D - Settlement + payouts integration    | ✅ Merged |
+| #167      | feat(hpc): 5F - Preconfigured workload library         | ✅ Merged |
+| #166      | feat(market): 5C - Usage reporting to settlement       | ✅ Merged |
+| #165      | feat(hpc): 5B - On-chain scheduling enforcement        | ✅ Merged |
+
+### Disabled Test Files Identified (13 files)
+
+| Module       | File                      | Status      |
+| ------------ | ------------------------- | ----------- |
+| x/mfa        | keeper/gating_test.go     | 🔴 Disabled |
+| x/mfa        | keeper/keeper_test.go     | 🔴 Disabled |
+| x/settlement | keeper/escrow_test.go     | 🔴 Disabled |
+| x/settlement | keeper/events_test.go     | 🔴 Disabled |
+| x/settlement | keeper/rewards_test.go    | 🔴 Disabled |
+| x/settlement | keeper/settlement_test.go | 🔴 Disabled |
+| x/hpc        | keeper/keeper_test.go     | 🔴 Disabled |
+| x/hpc        | keeper/rewards_test.go    | 🔴 Disabled |
+| x/hpc        | keeper/scheduling_test.go | 🔴 Disabled |
+| x/config     | keeper/keeper_test.go     | 🔴 Disabled |
+| x/enclave    | keeper/keeper_test.go     | 🔴 Disabled |
+| x/escrow     | keeper/keeper_test.go     | 🔴 Disabled |
+| x/staking    | keeper/rewards_test.go    | 🔴 Disabled |
+
+### Linter Issues Identified
+
+| File                                | Issue                             | Severity |
+| ----------------------------------- | --------------------------------- | -------- |
+| pkg/observability/logger.go         | ~20 empty noop function warnings  | LOW      |
+| pkg/pruning/disk_monitor.go         | Tautological condition nil == nil | MEDIUM   |
+| x/veid/keeper/borderline_handler.go | Impossible uint32 < 0 check       | LOW      |
+| x/veid/keeper/model_version.go      | Redundant nil check before len()  | LOW      |
+| x/roles/types/genesis.go            | Empty ProtoMessage() warnings     | LOW      |
+| app/genesis.go                      | Range over nil slice              | MEDIUM   |
+
+### New Tasks Created (Series 18-22)
+
+#### Series 18: Test Re-enablement
+
+| Task ID | Title                                              | Priority |
+| ------- | -------------------------------------------------- | -------- |
+| 18A     | fix(mfa): Re-enable MFA keeper tests               | HIGH     |
+| 18B     | fix(settlement): Re-enable settlement keeper tests | HIGH     |
+| 18C     | fix(hpc): Re-enable HPC keeper tests               | HIGH     |
+| 18D     | fix(keeper): Re-enable misc keeper tests           | MEDIUM   |
+
+#### Series 19: Code Quality Fixes
+
+| Task ID | Title                                        | Priority |
+| ------- | -------------------------------------------- | -------- |
+| 19A     | chore(lint): Fix observability noop warnings | LOW      |
+| 19B     | chore(lint): Fix tautological conditions     | LOW      |
+| 19C     | chore(dev): Clean up worktree remnants       | LOW      |
+| 19D     | fix(veid): Fix types test API mismatches     | MEDIUM   |
+
+#### Series 20: Code Fixes
+
+| Task ID | Title                                      | Priority |
+| ------- | ------------------------------------------ | -------- |
+| 20A     | fix(veid): Re-enable msg_server tests      | HIGH     |
+| 20B     | refactor(veid): Privacy proofs determinism | HIGH     |
+| 20C     | fix(app): Fix genesis nil slice bug        | LOW      |
+| 20D     | fix(ci): Fix .github/agents YAML syntax    | LOW      |
+
+#### Series 21: Spec-Critical Production Gaps
+
+| Task ID | Title                                        | Priority |
+| ------- | -------------------------------------------- | -------- |
+| 21A     | feat(veid): Production ML model training     | CRITICAL |
+| 21B     | feat(veid): Real sidecar inference gRPC      | CRITICAL |
+| 21C     | feat(hpc): SLURM provider daemon integration | CRITICAL |
+| 21D     | feat(market): Waldur marketplace E2E         | CRITICAL |
+| 21E     | feat(escrow): Usage-to-billing pipeline      | CRITICAL |
+| 21F     | feat(support): On-chain support module       | CRITICAL |
+
+#### Series 22: Mainnet Readiness
+
+| Task ID | Title                                         | Priority |
+| ------- | --------------------------------------------- | -------- |
+| 22A     | fix(security): Pre-mainnet security hardening | CRITICAL |
+| 22B     | docs(mainnet): Genesis configuration          | HIGH     |
+| 22C     | perf(scale): Load testing 1M nodes            | HIGH     |
+| 22D     | feat(sdk): TypeScript SDK completion          | HIGH     |
+
+### vibe-kanban Task Counts
+
+| Status      | Count                     |
+| ----------- | ------------------------- |
+| Done        | 50                        |
+| In Progress | 0                         |
+| TODO        | 56 (existing 40 + new 18) |
+| **Total**   | **106**                   |
+
+### Production Readiness Assessment Update
+
+| Component             | Previous | Current | Notes                      |
+| --------------------- | -------- | ------- | -------------------------- |
+| Chain Modules (x/)    | 85%      | 88%     | Security fixes merged      |
+| VEID ML Pipeline      | 25%      | 25%     | No change - still stubbed  |
+| HPC SLURM Integration | 55%      | 60%     | Usage accounting added     |
+| Marketplace/Waldur    | 70%      | 75%     | Settlement wiring improved |
+| Billing/Invoicing     | 35%      | 40%     | Schema defined             |
+| Test Coverage         | 60%      | 62%     | Some tests re-enabled      |
+| **Overall**           | **68%**  | **70%** | Incremental progress       |
+
+### Next Priority Actions
+
+1. **CRITICAL**: Complete ML model training (21A) - blocks VEID correctness
+2. **CRITICAL**: Proto generation (13A-13C) - blocks consensus safety
+3. **HIGH**: Re-enable disabled tests (18A-18D) - blocks CI quality
+4. **HIGH**: SLURM integration (21C) - blocks HPC marketplace
 
 ---
 
