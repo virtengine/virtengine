@@ -6,6 +6,31 @@ ALWAYS Take down a task and break it down into parallel chunks, use SUBAGENTS to
 
 ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task is fully completed and ready for merge. This is non negotiable.
 
+When working on a task, do not stop until it is COMPLETELY done. Continue working on this task until it is 100% DONE END-TO-END with no questions asked.
+
+Before finishing a task - ensure that you create a commit based on following convention & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
+
+Commit files:
+
+📝 Conventional Commits Format:
+type(scope): description
+
+✅ Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
+📌 Examples:
+
+feat(veid): add identity verification flow
+
+fix(market): resolve bid race condition
+
+docs: update contributing guidelines
+
+chore(deps): bump cosmos-sdk to v0.53.1
+
+⚠️ Breaking changes: add '!' after type/scope
+
+feat(api)!: change response format
+
 ## Overview
 
 - Primary language: Go (Cosmos SDK-based chain + services).
