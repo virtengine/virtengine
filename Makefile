@@ -78,3 +78,4 @@ include make/test-simulation.mk
 include make/tools.mk
 include make/codegen.mk
 include make/hooks.mk
+include make/supply-chain.mk

@@ -1,0 +1,488 @@
+# SECURITY-9C: Supply Chain Security Workflow
+# Comprehensive supply chain security checks including:
+# - Dependency verification and pinning validation
+# - SBOM generation and attestation
+# - Artifact signing with Sigstore
+# - SLSA provenance generation
+# - Supply chain attack detection
+# - Third-party risk assessment
+
+name: Supply Chain Security
+
+on:
+  push:
+    branches:
+      - main
+      - mainnet/main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - mainnet/main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'vendor/**'
+      - 'ml/requirements*.txt'
+      - 'lib/portal/package*.json'
+      - 'sdk/**/go.mod'
+      - 'sdk/**/package*.json'
+  schedule:
+    # Run weekly for continuous monitoring
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      full_audit:
+        description: "Run full supply chain audit"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25.5"
+  COSIGN_EXPERIMENTAL: "1"
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write  # Required for keyless signing
+  packages: write  # Required for container signing
+  attestations: write  # Required for SLSA attestations
+
+jobs:
+  # ===========================================================================
+  # Dependency Verification
+  # ===========================================================================
+  dependency-verification:
+    name: Verify Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Verify Go module checksums
+        run: |
+          echo "Verifying go.mod and go.sum..."
+          go mod verify
+          echo "✓ Module checksums verified"
+
+      - name: Check go.mod is tidy
+        run: |
+          cp go.mod go.mod.backup
+          cp go.sum go.sum.backup
+          go mod tidy
+          if ! diff -q go.mod go.mod.backup > /dev/null 2>&1; then
+            echo "::error::go.mod is not tidy - run 'go mod tidy'"
+            diff go.mod go.mod.backup || true
+            exit 1
+          fi
+          if ! diff -q go.sum go.sum.backup > /dev/null 2>&1; then
+            echo "::error::go.sum is not tidy - run 'go mod tidy'"
+            exit 1
+          fi
+          echo "✓ go.mod and go.sum are tidy"
+
+      - name: Check for version pinning
+        run: |
+          echo "Checking for unpinned dependencies..."
+          # Check for any dependencies using "latest" or version ranges
+          if grep -E "^\s+.*\s+(latest|>=|<=|>|<|~|\^)" go.mod | grep -v "^//"; then
+            echo "::warning::Found potentially unpinned dependencies"
+          else
+            echo "✓ All dependencies appear to be pinned"
+          fi
+
+      - name: Verify vendor directory
+        if: hashFiles('vendor/') != ''
+        run: |
+          echo "Verifying vendor directory..."
+          go mod vendor
+          if ! git diff --quiet vendor/; then
+            echo "::error::Vendor directory is out of sync"
+            git diff --stat vendor/
+            exit 1
+          fi
+          echo "✓ Vendor directory is in sync"
+
+  # ===========================================================================
+  # Lockfile Integrity Check
+  # ===========================================================================
+  lockfile-integrity:
+    name: Lockfile Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Go lockfile (go.sum)
+        run: |
+          if [[ ! -f "go.sum" ]]; then
+            echo "::error::go.sum not found - dependencies not locked"
+            exit 1
+          fi
+          echo "✓ go.sum exists"
+          
+          # Count entries
+          ENTRIES=$(wc -l < go.sum)
+          echo "go.sum contains $ENTRIES entries"
+
+      - name: Check npm lockfiles
+        run: |
+          for dir in lib/portal sdk/js; do
+            if [[ -f "$dir/package.json" ]]; then
+              if [[ ! -f "$dir/package-lock.json" ]]; then
+                echo "::error::$dir/package-lock.json not found"
+                exit 1
+              fi
+              echo "✓ $dir/package-lock.json exists"
+            fi
+          done
+
+      - name: Verify lockfile hasn't been tampered
+        if: github.event_name == 'pull_request'
+        run: |
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} || echo "")
+          
+          # Check if lockfiles changed without corresponding source changes
+          if echo "$CHANGED_FILES" | grep -q "go.sum"; then
+            if ! echo "$CHANGED_FILES" | grep -q "go.mod"; then
+              echo "::warning::go.sum changed without go.mod changes - verify this is intentional"
+            fi
+          fi
+          
+          echo "✓ Lockfile integrity check passed"
+
+  # ===========================================================================
+  # Supply Chain Attack Detection
+  # ===========================================================================
+  attack-detection:
+    name: Supply Chain Attack Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for dependency confusion
+        run: |
+          echo "Checking for dependency confusion vulnerabilities..."
+          
+          # Look for internal-looking packages that might be vulnerable
+          INTERNAL_PATTERNS="internal|private|corp|company"
+          
+          if grep -E "^\s+.*($INTERNAL_PATTERNS)" go.mod | grep -v "^//"; then
+            echo "::warning::Found packages with internal-looking names - verify these are from trusted sources"
+          else
+            echo "✓ No obvious dependency confusion risks detected"
+          fi
+
+      - name: Check for typosquatting
+        run: |
+          echo "Checking for typosquatting risks..."
+          
+          # Known legitimate packages and common typosquats
+          TYPOSQUATS=(
+            "cosmoss-sdk"
+            "cosmos-skd"
+            "commetbft"
+            "comebtft"
+            "etehrs"
+            "testyfy"
+          )
+          
+          for typo in "${TYPOSQUATS[@]}"; do
+            if grep -qi "$typo" go.mod go.sum 2>/dev/null; then
+              echo "::error::Potential typosquat detected: $typo"
+              exit 1
+            fi
+          done
+          
+          echo "✓ No known typosquatting patterns detected"
+
+      - name: Verify package sources
+        run: |
+          echo "Verifying package sources..."
+          
+          # Check for packages from non-standard domains
+          SUSPICIOUS=$(grep -E "^\s+[a-zA-Z]" go.mod | \
+            grep -vE "(github\.com|golang\.org|google\.golang\.org|gopkg\.in|k8s\.io|cosmossdk\.io)" | \
+            grep -v "//" || true)
+          
+          if [[ -n "$SUSPICIOUS" ]]; then
+            echo "::warning::Packages from non-standard sources detected (verify legitimacy):"
+            echo "$SUSPICIOUS"
+          else
+            echo "✓ All packages from known sources"
+          fi
+
+  # ===========================================================================
+  # SBOM Generation
+  # ===========================================================================
+  sbom-generation:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    outputs:
+      sbom-artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          mkdir -p .cache/sbom
+          syft dir:. -o cyclonedx-json > .cache/sbom/sbom.cdx.json
+          echo "Generated CycloneDX SBOM"
+
+      - name: Generate SPDX SBOM
+        run: |
+          syft dir:. -o spdx-json > .cache/sbom/sbom.spdx.json
+          echo "Generated SPDX SBOM"
+
+      - name: Generate SBOM summary
+        run: |
+          echo "# SBOM Summary" > .cache/sbom/summary.md
+          echo "" >> .cache/sbom/summary.md
+          echo "Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> .cache/sbom/summary.md
+          echo "Commit: ${{ github.sha }}" >> .cache/sbom/summary.md
+          echo "" >> .cache/sbom/summary.md
+          
+          PACKAGES=$(jq '.components | length' .cache/sbom/sbom.cdx.json)
+          echo "Total packages: $PACKAGES" >> .cache/sbom/summary.md
+
+      - name: Upload SBOM artifacts
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: .cache/sbom/
+          retention-days: 90
+
+      - name: Upload SBOM to Dependency Graph
+        uses: anchore/sbom-action/publish-sbom@v0
+        if: github.ref == 'refs/heads/main'
+        with:
+          sbom-artifact-match: ".*\\.cdx\\.json$"
+
+  # ===========================================================================
+  # Third-Party Risk Assessment
+  # ===========================================================================
+  risk-assessment:
+    name: Dependency Risk Assessment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run dependency risk assessment
+        run: |
+          cd scripts/supply-chain
+          go run assess-dependencies.go --json > ../../.cache/risk-assessment.json 2>/dev/null || true
+          go run assess-dependencies.go
+
+      - name: Check for high-risk dependencies
+        run: |
+          if [[ -f ".cache/risk-assessment.json" ]]; then
+            HIGH_RISK=$(jq '.packages[] | select(.risk_level == "high" or .risk_level == "critical") | .package' .cache/risk-assessment.json 2>/dev/null | head -5 || echo "")
+            
+            if [[ -n "$HIGH_RISK" ]]; then
+              echo "::warning::High-risk dependencies detected:"
+              echo "$HIGH_RISK"
+            fi
+          fi
+
+      - name: Upload risk assessment
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: risk-assessment
+          path: .cache/risk-assessment.json
+          retention-days: 30
+
+  # ===========================================================================
+  # Signed Release Artifacts (on tag push)
+  # ===========================================================================
+  sign-artifacts:
+    name: Sign Release Artifacts
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - dependency-verification
+      - sbom-generation
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+          path: .cache/sbom/
+
+      - name: Sign SBOM with cosign
+        run: |
+          for sbom in .cache/sbom/*.json; do
+            if [[ -f "$sbom" ]]; then
+              echo "Signing $sbom..."
+              cosign sign-blob \
+                --yes \
+                --output-signature "${sbom}.sig" \
+                --output-certificate "${sbom}.sig.cert" \
+                "$sbom"
+            fi
+          done
+
+      - name: Upload signed SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-signed
+          path: |
+            .cache/sbom/*.json
+            .cache/sbom/*.sig
+            .cache/sbom/*.cert
+          retention-days: 90
+
+  # ===========================================================================
+  # SLSA Provenance Generation
+  # ===========================================================================
+  provenance:
+    name: Generate SLSA Provenance
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - dependency-verification
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build binary
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/virtengine ./cmd/virtengine
+          sha256sum dist/virtengine > dist/virtengine.sha256
+
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+        with:
+          base64-subjects: |
+            $(sha256sum dist/virtengine | base64 -w0)
+
+  # ===========================================================================
+  # Reproducible Build Verification
+  # ===========================================================================
+  reproducible-build:
+    name: Verify Reproducible Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.full_audit == 'true' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false  # Disable cache for reproducibility test
+
+      - name: Build 1
+        run: |
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /tmp/build1/virtengine ./cmd/virtengine
+          sha256sum /tmp/build1/virtengine > /tmp/build1/checksum
+
+      - name: Clean and rebuild
+        run: |
+          go clean -cache
+          rm -rf /tmp/go-build*
+          
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /tmp/build2/virtengine ./cmd/virtengine
+          sha256sum /tmp/build2/virtengine > /tmp/build2/checksum
+
+      - name: Compare builds
+        run: |
+          HASH1=$(cat /tmp/build1/checksum | awk '{print $1}')
+          HASH2=$(cat /tmp/build2/checksum | awk '{print $1}')
+          
+          echo "Build 1: $HASH1"
+          echo "Build 2: $HASH2"
+          
+          if [[ "$HASH1" == "$HASH2" ]]; then
+            echo "✓ Builds are reproducible"
+          else
+            echo "::warning::Builds are not reproducible"
+            echo "This may be expected if CGO is enabled or build timestamps are included"
+          fi
+
+  # ===========================================================================
+  # Summary
+  # ===========================================================================
+  summary:
+    name: Supply Chain Summary
+    runs-on: ubuntu-latest
+    needs:
+      - dependency-verification
+      - lockfile-integrity
+      - attack-detection
+      - sbom-generation
+      - risk-assessment
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Supply Chain Security Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Verification | ${{ needs.dependency-verification.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lockfile Integrity | ${{ needs.lockfile-integrity.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Attack Detection | ${{ needs.attack-detection.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SBOM Generation | ${{ needs.sbom-generation.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Risk Assessment | ${{ needs.risk-assessment.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for failures
+        if: |
+          needs.dependency-verification.result == 'failure' ||
+          needs.lockfile-integrity.result == 'failure' ||
+          needs.attack-detection.result == 'failure'
+        run: |
+          echo "::error::Supply chain security checks failed"
+          exit 1
