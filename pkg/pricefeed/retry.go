@@ -2,7 +2,8 @@ package pricefeed
 
 import (
 	"context"
-	"math/rand"
+	"crypto/rand"
+	"encoding/binary"
 	"strings"
 	"time"
 )
@@ -136,11 +137,34 @@ func (r *Retryer) calculateDelay(attempt int) time.Duration {
 		delay = float64(r.maxDelay)
 	}
 
-	// Add jitter (±25%)
-	jitter := delay * 0.25 * (rand.Float64()*2 - 1)
-	delay += jitter
+	// Add jitter (±25%) using cryptographically secure random
+	jitter := secureJitter(int64(delay * 0.25))
+	delay += float64(jitter)
 
 	return time.Duration(delay)
+}
+
+// secureJitter generates a cryptographically secure random jitter value
+// in the range [-maxNs, +maxNs] nanoseconds for unpredictable retry patterns.
+func secureJitter(maxNs int64) int64 {
+	if maxNs <= 0 {
+		return 0
+	}
+
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		// Fallback to zero jitter on crypto/rand failure
+		return 0
+	}
+
+	// Read random bytes and mask to ensure positive value
+	// Use only 63 bits to avoid sign issues
+	randVal := int64(binary.LittleEndian.Uint64(buf[:]) >> 1)
+
+	// Scale to range [0, 2*maxNs] then shift to [-maxNs, +maxNs]
+	// Using modulo on positive int64 is safe
+	jitterRange := 2*maxNs + 1
+	return (randVal % jitterRange) - maxNs
 }
 
 // pow calculates x^y for float64
