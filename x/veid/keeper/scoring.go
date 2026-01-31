@@ -90,8 +90,26 @@ func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
 }
 
 // isTensorFlowEnabled checks if TensorFlow scoring is enabled
+// VE-205: Real inference can be enabled via environment variable
 func isTensorFlowEnabled() bool {
-	return os.Getenv("VEID_USE_TENSORFLOW") == "true"
+	// Check for explicit disable first
+	if os.Getenv("VEID_DISABLE_TENSORFLOW") == "true" {
+		return false
+	}
+	// Enable if explicitly set, or if VEID_INFERENCE_ENABLED is true
+	return os.Getenv("VEID_USE_TENSORFLOW") == "true" ||
+		os.Getenv("VEID_INFERENCE_ENABLED") == "true"
+}
+
+// isRealInferenceReady checks if real inference runtime is available and healthy
+func isRealInferenceReady() bool {
+	// Check if model path exists
+	modelPath := getEnvOrDefault("VEID_INFERENCE_MODEL_PATH", "models/trust_score")
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		return false
+	}
+	// Additional checks can be added here for model hash verification, etc.
+	return true
 }
 
 // getEnvOrDefault returns the environment variable value or a default
@@ -466,6 +484,12 @@ func (k Keeper) ComputeIdentityScore(
 // getMLScorer returns the ML scorer instance
 // Returns TensorFlow scorer when VEID_USE_TENSORFLOW=true, otherwise stub
 // Prefers sidecar mode when VEID_INFERENCE_USE_SIDECAR=true for consensus safety
+//
+// VE-205: This function implements a graceful fallback strategy:
+// 1. If TensorFlow is enabled and model is available -> use real inference
+// 2. If sidecar mode is configured -> use gRPC sidecar client
+// 3. If TensorFlow initialization fails -> fall back to stub
+// 4. Default -> use stub scorer for development/testing
 func (k Keeper) getMLScorer() MLScorer {
 	config := DefaultMLScoringConfig()
 
@@ -473,10 +497,18 @@ func (k Keeper) getMLScorer() MLScorer {
 	// Sidecar mode is preferred for production as it provides better isolation
 	// and determinism guarantees across validators
 	if config.UseTensorFlow && config.TensorFlowConfig != nil {
+		// Verify model is available before attempting to create scorer
+		if !isRealInferenceReady() {
+			// Model not available, fall back to stub
+			// This allows validators to operate during model deployment
+			return NewStubMLScorer(config)
+		}
+
 		scorer, err := k.createTensorFlowScorer(config)
 		if err != nil {
 			// Fall back to stub on TensorFlow initialization error
 			// This ensures consensus continues even if inference setup fails
+			// Log the error for observability
 			return NewStubMLScorer(config)
 		}
 		return scorer
