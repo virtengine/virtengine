@@ -1,0 +1,104 @@
+# Time Chaos Experiments for VirtEngine
+# These experiments test clock skew and time-based scenarios
+
+---
+# Clock Skew Forward: Advance system time
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: clock-skew-forward
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: time
+    chaos.virtengine.io/scenario: skew-forward
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  timeOffset: "1h"
+  duration: "120s"
+
+---
+# Clock Skew Backward: Rewind system time
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: clock-skew-backward
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: time
+    chaos.virtengine.io/scenario: skew-backward
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  timeOffset: "-30m"
+  duration: "120s"
+
+---
+# Small Clock Drift: Simulate NTP drift
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: clock-drift
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: time
+    chaos.virtengine.io/scenario: drift
+spec:
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  timeOffset: "5s"
+  duration: "300s"
+
+---
+# Provider Time Skew: Test provider time handling
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: provider-clock-skew
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: time
+    chaos.virtengine.io/scenario: provider
+spec:
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: provider-daemon
+  timeOffset: "15m"
+  duration: "180s"
+
+---
+# Consensus Time Window Test: Test block timestamp validation
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: consensus-time-test
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: time
+    chaos.virtengine.io/scenario: consensus
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  timeOffset: "10s"
+  clockIds:
+    - CLOCK_REALTIME
+  duration: "60s"

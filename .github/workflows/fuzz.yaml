@@ -30,6 +30,9 @@ permissions:
   contents: read
   security-events: write
 
+env:
+  GOWORK: "off"  # Disable workspace mode for vendor operations
+
 jobs:
   fuzz-tests:
     name: Fuzz Tests

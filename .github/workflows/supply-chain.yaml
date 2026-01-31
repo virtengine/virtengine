@@ -46,6 +46,7 @@ concurrency:
 env:
   GO_VERSION: "1.25.5"
   COSIGN_EXPERIMENTAL: "1"
+  GOWORK: "off"  # Disable workspace mode for vendor operations
 
 permissions:
   contents: read

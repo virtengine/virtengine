@@ -1,0 +1,155 @@
+# Network Chaos Experiments for VirtEngine
+# These experiments test network resilience for validators and providers
+
+---
+# Network Partition: Split validators into two groups
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: validator-partition
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: network
+    chaos.virtengine.io/scenario: partition
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  direction: both
+  duration: "300s"
+
+---
+# Network Latency: Inject latency between validators
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: validator-latency
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: network
+    chaos.virtengine.io/scenario: latency
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  delay:
+    latency: "500ms"
+    jitter: "100ms"
+    correlation: "25"
+  direction: both
+  duration: "300s"
+
+---
+# Packet Loss: Simulate unreliable network
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: validator-packet-loss
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: network
+    chaos.virtengine.io/scenario: packet-loss
+spec:
+  action: loss
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  loss:
+    loss: "10"
+    correlation: "25"
+  direction: both
+  duration: "300s"
+
+---
+# Bandwidth Limit: Constrain network throughput
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: validator-bandwidth-limit
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: network
+    chaos.virtengine.io/scenario: bandwidth
+spec:
+  action: bandwidth
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: validator
+  bandwidth:
+    rate: "1mbps"
+    buffer: 1600
+    limit: 10000
+  direction: both
+  duration: "300s"
+
+---
+# Provider Network Isolation: Isolate provider daemon
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: provider-isolation
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: network
+    chaos.virtengine.io/scenario: isolation
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    labelSelectors:
+      app.kubernetes.io/component: provider-daemon
+  direction: both
+  duration: "120s"
+
+---
+# Cross-zone Latency: Simulate multi-region deployment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: cross-zone-latency
+  namespace: chaos-testing
+  labels:
+    chaos.virtengine.io/category: network
+    chaos.virtengine.io/scenario: cross-zone
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - virtengine
+    expressionSelectors:
+      - key: topology.kubernetes.io/zone
+        operator: NotIn
+        values:
+          - zone-a
+  delay:
+    latency: "100ms"
+    jitter: "20ms"
+  direction: to
+  target:
+    selector:
+      namespaces:
+        - virtengine
+      expressionSelectors:
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values:
+            - zone-a
+    mode: all
+  duration: "600s"

@@ -37,6 +37,7 @@ concurrency:
 env:
   GO_VERSION: "1.25.5"
   PYTHON_VERSION: "3.11"
+  GOWORK: "off"  # Disable workspace mode for vendor operations
   NODE_VERSION: "20"
 
 permissions:
