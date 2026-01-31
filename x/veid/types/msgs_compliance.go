@@ -55,6 +55,45 @@ type MsgDeactivateComplianceProvider = veidv1.MsgDeactivateComplianceProvider
 // MsgDeactivateComplianceProviderResponse is the response for MsgDeactivateComplianceProvider
 type MsgDeactivateComplianceProviderResponse = veidv1.MsgDeactivateComplianceProviderResponse
 
+// NewMsgSubmitComplianceCheck creates a new MsgSubmitComplianceCheck message
+func NewMsgSubmitComplianceCheck(
+	providerAddress string,
+	targetAddress string,
+	checkResults []ComplianceCheckResult,
+	providerID string,
+) *MsgSubmitComplianceCheck {
+	pbResults := make([]veidv1.ComplianceCheckResult, len(checkResults))
+	for i, cr := range checkResults {
+		pbResults[i] = veidv1.ComplianceCheckResult{
+			CheckType:  veidv1.ComplianceCheckType(cr.CheckType),
+			Passed:     cr.Passed,
+			Details:    cr.Details,
+			MatchScore: cr.MatchScore,
+			CheckedAt:  cr.CheckedAt,
+			ProviderId: cr.ProviderID,
+		}
+	}
+	return &MsgSubmitComplianceCheck{
+		ProviderAddress: providerAddress,
+		TargetAddress:   targetAddress,
+		CheckResults:    pbResults,
+		ProviderId:      providerID,
+	}
+}
+
+// NewMsgAttestCompliance creates a new MsgAttestCompliance message
+func NewMsgAttestCompliance(
+	validatorAddress string,
+	targetAddress string,
+	attestationType string,
+) *MsgAttestCompliance {
+	return &MsgAttestCompliance{
+		ValidatorAddress: validatorAddress,
+		TargetAddress:    targetAddress,
+		AttestationType:  attestationType,
+	}
+}
+
 // ============================================================================
 // Query Types
 // ============================================================================

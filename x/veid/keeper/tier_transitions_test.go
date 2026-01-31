@@ -132,14 +132,14 @@ func TestUpdateAccountTier_ScoreCappedAt100(t *testing.T) {
 
 	// Add all possible scopes (way more than 100 points)
 	addVerifiedScope(t, ctx, k, addr, "scope1", types.ScopeTypeIDDocument)   // 30
-	addVerifiedScope(t, ctx, k, addr, "scope2", types.ScopeTypeSelfie)        // 20
-	addVerifiedScope(t, ctx, k, addr, "scope3", types.ScopeTypeFaceVideo)     // 25
-	addVerifiedScope(t, ctx, k, addr, "scope4", types.ScopeTypeBiometric)     // 20
-	addVerifiedScope(t, ctx, k, addr, "scope5", types.ScopeTypeDomainVerify)  // 15
-	addVerifiedScope(t, ctx, k, addr, "scope6", types.ScopeTypeEmailProof)    // 10
-	addVerifiedScope(t, ctx, k, addr, "scope7", types.ScopeTypeSMSProof)      // 10
-	addVerifiedScope(t, ctx, k, addr, "scope8", types.ScopeTypeSSOMetadata)   // 5
-	addVerifiedScope(t, ctx, k, addr, "scope9", types.ScopeTypeADSSO)         // 12
+	addVerifiedScope(t, ctx, k, addr, "scope2", types.ScopeTypeSelfie)       // 20
+	addVerifiedScope(t, ctx, k, addr, "scope3", types.ScopeTypeFaceVideo)    // 25
+	addVerifiedScope(t, ctx, k, addr, "scope4", types.ScopeTypeBiometric)    // 20
+	addVerifiedScope(t, ctx, k, addr, "scope5", types.ScopeTypeDomainVerify) // 15
+	addVerifiedScope(t, ctx, k, addr, "scope6", types.ScopeTypeEmailProof)   // 10
+	addVerifiedScope(t, ctx, k, addr, "scope7", types.ScopeTypeSMSProof)     // 10
+	addVerifiedScope(t, ctx, k, addr, "scope8", types.ScopeTypeSSOMetadata)  // 5
+	addVerifiedScope(t, ctx, k, addr, "scope9", types.ScopeTypeADSSO)        // 12
 	// Total: 147 points, but should cap at 100
 
 	result, err := k.UpdateAccountTier(ctx, addr)
@@ -353,7 +353,7 @@ func TestGetAccountTierDetails_AtMaxTier(t *testing.T) {
 	require.NotNil(t, details)
 	require.Equal(t, types.TierPremium, details.Tier)
 	require.Equal(t, "premium", details.TierName)
-	require.Equal(t, uint32(0), details.NextTierThreshold)  // Already at max
+	require.Equal(t, uint32(0), details.NextTierThreshold) // Already at max
 	require.Equal(t, uint32(0), details.PointsToNextTier)
 }
 
@@ -404,9 +404,9 @@ func TestRecalculateAllAccountTiers(t *testing.T) {
 
 func TestTierThresholds_EdgeCases(t *testing.T) {
 	testCases := []struct {
-		name          string
-		score         uint32
-		expectedTier  int
+		name         string
+		score        uint32
+		expectedTier int
 	}{
 		{"Score 0", 0, types.TierUnverified},
 		{"Score 49 (just below Basic)", 49, types.TierUnverified},
@@ -514,8 +514,8 @@ func addVerifiedScope(t *testing.T, ctx sdk.Context, k keeper.Keeper, addr sdk.A
 		ScopeType: scopeType,
 		Version:   types.ScopeSchemaVersion,
 		EncryptedPayload: encryptiontypes.EncryptedPayloadEnvelope{
-			CiphertextB64: "dGVzdGNpcGhlcnRleHQ=",
-			NonceB64:      "dGVzdG5vbmNl",
+			Ciphertext: []byte("testciphertext"),
+			Nonce:      []byte("testnonce"),
 		},
 		UploadMetadata: types.UploadMetadata{
 			Salt:              []byte("testsalt12345678"),
@@ -523,7 +523,7 @@ func addVerifiedScope(t *testing.T, ctx sdk.Context, k keeper.Keeper, addr sdk.A
 			UserSignature:     []byte("usersig"),
 			DeviceFingerprint: "test-device",
 			ClientID:          "test-client",
-			UploadedAt:        now,
+			CaptureTimestamp:  now.Unix(),
 		},
 		Status:     types.VerificationStatusVerified,
 		UploadedAt: now,

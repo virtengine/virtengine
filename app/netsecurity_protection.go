@@ -404,6 +404,11 @@ func (s *SybilProtector) GetDiversityScore() float64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Guard against division by zero
+	if s.config.DiversityRequirement == 0 {
+		return 0
+	}
+
 	uniqueSubnets := len(s.subnetPeers)
 	uniqueASNs := len(s.asnPeers)
 

@@ -22,6 +22,7 @@ func init() {
 // RegisterLegacyAminoCodec registers the necessary interfaces and concrete types
 // on the provided LegacyAmino codec. These types are used for Amino JSON serialization.
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	// Only register messages that are part of the SDK proto Msg service
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgUploadScope{}, "veid/MsgUploadScope")
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgRevokeScope{}, "veid/MsgRevokeScope")
 	legacy.RegisterAminoMsg(cdc, &veidv1.MsgRequestVerification{}, "veid/MsgRequestVerification")
@@ -43,21 +44,29 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
+	// Only register messages that are part of the SDK proto Msg service
+	// Appeal, Compliance, and Model messages are in separate proto files
+	// and have their own service definitions (not part of the main Msg service)
 	registry.RegisterImplementations((*sdk.Msg)(nil),
+		// Core messages (in tx.proto Msg service)
 		&veidv1.MsgUploadScope{},
 		&veidv1.MsgRevokeScope{},
 		&veidv1.MsgRequestVerification{},
 		&veidv1.MsgUpdateVerificationStatus{},
 		&veidv1.MsgUpdateScore{},
+		// Wallet messages (in tx.proto Msg service)
 		&veidv1.MsgCreateIdentityWallet{},
 		&veidv1.MsgAddScopeToWallet{},
 		&veidv1.MsgRevokeScopeFromWallet{},
 		&veidv1.MsgUpdateConsentSettings{},
 		&veidv1.MsgRebindWallet{},
 		&veidv1.MsgUpdateDerivedFeatures{},
+		// Borderline fallback messages (in tx.proto Msg service)
 		&veidv1.MsgCompleteBorderlineFallback{},
 		&veidv1.MsgUpdateBorderlineParams{},
+		// Params message (in tx.proto Msg service)
 		&veidv1.MsgUpdateParams{},
 	)
+	// Use the SDK-generated service descriptor which has proper proto metadata
 	msgservice.RegisterMsgServiceDesc(registry, &veidv1.Msg_serviceDesc)
 }

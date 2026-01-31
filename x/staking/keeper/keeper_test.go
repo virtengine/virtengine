@@ -149,7 +149,7 @@ func (s *StakingKeeperTestSuite) TestComputeOverallScore() {
 	perf.UptimeSeconds = 86400
 	perf.DowntimeSeconds = 0
 
-	score := perf.ComputeOverallScore()
+	score := types.ComputeOverallScore(perf)
 
 	// Perfect performance should yield max score
 	s.Require().Equal(types.MaxPerformanceScore, score)
@@ -167,7 +167,7 @@ func (s *StakingKeeperTestSuite) TestComputeOverallScorePartial() {
 	perf.UptimeSeconds = 86400
 	perf.DowntimeSeconds = 14400 // 83% uptime
 
-	score := perf.ComputeOverallScore()
+	score := types.ComputeOverallScore(perf)
 
 	// Score should be between 0 and max
 	s.Require().Greater(score, int64(0))
@@ -209,7 +209,7 @@ func (s *StakingKeeperTestSuite) TestValidatorReward() {
 	reward.BlockProposalReward = sdk.NewCoins(sdk.NewInt64Coin("uve", 1000))
 	reward.VEIDReward = sdk.NewCoins(sdk.NewInt64Coin("uve", 500))
 	reward.UptimeReward = sdk.NewCoins(sdk.NewInt64Coin("uve", 300))
-	reward.ComputeTotal()
+	reward.TotalReward = types.ComputeTotalReward(reward)
 
 	err := s.keeper.SetValidatorReward(s.ctx, *reward)
 	s.Require().NoError(err)
@@ -352,7 +352,8 @@ func (s *StakingKeeperTestSuite) TestSlashEscalation() {
 
 	// Unjail (simulate time passing)
 	signingInfo, _ := s.keeper.GetValidatorSigningInfo(s.ctx, validatorAddr)
-	signingInfo.JailedUntil = time.Time{}
+	zeroTime := time.Time{}
+	signingInfo.JailedUntil = &zeroTime
 	_ = s.keeper.SetValidatorSigningInfo(s.ctx, signingInfo)
 
 	// Second slash (should be escalated)

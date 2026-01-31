@@ -1059,7 +1059,7 @@ func TestMsgSubmitComplianceCheck_ValidateBasic(t *testing.T) {
 
 	// Empty check results
 	emptyResults := *validMsg
-	emptyResults.CheckResults = []types.ComplianceCheckResult{}
+	emptyResults.CheckResults = nil
 	require.Error(t, emptyResults.ValidateBasic())
 }
 

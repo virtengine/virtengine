@@ -402,7 +402,7 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 		// Convert DelegationPermission slice to string slice
 		permissions := make([]string, len(del.Permissions))
 		for i, p := range del.Permissions {
-			permissions[i] = string(p)
+			permissions[i] = p.String()
 		}
 
 		// Convert ExpiresAt value to pointer
@@ -413,7 +413,7 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 			DelegatorAddress: del.DelegatorAddress,
 			DelegateAddress:  del.DelegateAddress,
 			Permissions:      permissions,
-			Status:           string(del.Status),
+			Status:           del.Status.String(),
 			CreatedAt:        del.CreatedAt,
 			ExpiresAt:        &expiresAt,
 			RevokedAt:        del.RevokedAt,

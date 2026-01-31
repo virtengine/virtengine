@@ -173,16 +173,16 @@ func NewMockVerificationPipeline() *MockVerificationPipeline {
 
 // VerificationResult represents the result of a verification
 type VerificationResult struct {
-	Score         int32
-	ModelVersion  string
-	InputHash     []byte
-	Duration      time.Duration
-	DecryptDur    time.Duration
-	ScoringDur    time.Duration
-	ScopeCount    int
-	ValidCount    int
-	Success       bool
-	Error         error
+	Score        int32
+	ModelVersion string
+	InputHash    []byte
+	Duration     time.Duration
+	DecryptDur   time.Duration
+	ScoringDur   time.Duration
+	ScopeCount   int
+	ValidCount   int
+	Success      bool
+	Error        error
 }
 
 // Verify performs a full verification
@@ -469,7 +469,7 @@ func BenchmarkScoreUpdate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		score := int32(50 + (i % 50))
+		score := uint32(50 + (i % 50))
 		err := k.SetScore(ctx, addr.String(), score, "v1.0.0")
 		if err != nil {
 			b.Fatalf("failed to set score: %v", err)

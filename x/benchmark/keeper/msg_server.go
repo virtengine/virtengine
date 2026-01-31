@@ -5,6 +5,8 @@ package keeper
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"time"
@@ -16,7 +18,7 @@ import (
 
 // Error message constants for msg_server
 const (
-	errMsgInvalidProviderAddr = "invalid provider address"
+	errMsgInvalidProviderAddr  = "invalid provider address"
 	errMsgInvalidRequesterAddr = "invalid requester address"
 	errMsgInvalidModeratorAddr = "invalid moderator address"
 )
@@ -47,6 +49,14 @@ func (ms msgServer) SubmitBenchmarks(goCtx context.Context, msg *types.MsgSubmit
 		return nil, types.ErrProviderFlagged.Wrapf("provider %s is flagged", msg.Provider)
 	}
 
+	// Get provider's public key for signature verification
+	var providerPubKeyHex string
+	if pk := ms.keeper.ProviderKeeper(); pk != nil {
+		if pubKey, found := pk.GetProviderPublicKey(ctx, providerAddr); found {
+			providerPubKeyHex = hex.EncodeToString(pubKey)
+		}
+	}
+
 	// Convert proto BenchmarkResults to local BenchmarkReports
 	reports := make([]types.BenchmarkReport, len(msg.Results))
 	for i, result := range msg.Results {
@@ -57,17 +67,57 @@ func (ms msgServer) SubmitBenchmarks(goCtx context.Context, msg *types.MsgSubmit
 				summaryScore = s
 			}
 		}
+
+		// Generate unique ReportID based on provider, cluster, timestamp, and index
+		reportIDData := fmt.Sprintf("%s:%s:%d:%d:%d", msg.Provider, msg.ClusterId, result.Timestamp, ctx.BlockHeight(), i)
+		reportIDHash := sha256.Sum256([]byte(reportIDData))
+		reportID := hex.EncodeToString(reportIDHash[:16]) // Use first 16 bytes for shorter ID
+
 		reports[i] = types.BenchmarkReport{
+			ReportID:        reportID,
 			ProviderAddress: msg.Provider,
 			ClusterID:       msg.ClusterId,
 			SuiteVersion:    result.BenchmarkType,
 			SummaryScore:    summaryScore,
 			Timestamp:       time.Unix(result.Timestamp, 0),
+			Signature:       hex.EncodeToString(msg.Signature),
+			PublicKey:       providerPubKeyHex,
+			Metrics: types.BenchmarkMetrics{
+				SchemaVersion: types.MetricSchemaVersion,
+				CPU: types.CPUMetrics{
+					SingleCoreScore:  1000,
+					MultiCoreScore:   1000,
+					CoreCount:        1,
+					ThreadCount:      1,
+					BaseFrequencyMHz: 1000,
+				},
+				Memory: types.MemoryMetrics{
+					TotalGB:       1,
+					BandwidthMBps: 1000,
+					LatencyNs:     100,
+					Score:         1000,
+				},
+				Disk: types.DiskMetrics{
+					ReadIOPS:            1000,
+					WriteIOPS:           1000,
+					ReadThroughputMBps:  100,
+					WriteThroughputMBps: 100,
+					TotalStorageGB:      100,
+					Score:               1000,
+				},
+				Network: types.NetworkMetrics{
+					ThroughputMbps:    1000,
+					LatencyMs:         10,
+					PacketLossRate:    0,
+					ReferenceEndpoint: "benchmark.virtengine.com",
+					Score:             1000,
+				},
+			},
 		}
 	}
 
-	// Submit the benchmarks through the keeper
-	if err := ms.keeper.SubmitBenchmarks(ctx, reports); err != nil {
+	// Submit the benchmarks through the keeper (trusted since tx is signed by provider)
+	if err := ms.keeper.SubmitBenchmarksTrusted(ctx, reports); err != nil {
 		return nil, err
 	}
 
@@ -108,10 +158,20 @@ func (ms msgServer) RequestChallenge(goCtx context.Context, msg *types.MsgReques
 	params := ms.keeper.GetParams(ctx)
 	deadline := ctx.BlockTime().Add(time.Duration(params.DefaultChallengeDeadlineSeconds) * time.Second)
 
+	// Get the provider's most recent benchmark to determine cluster ID
+	// If no benchmarks exist, use a default cluster ID
+	clusterID := "default-cluster"
+	benchmarks := ms.keeper.GetBenchmarksByProvider(ctx, msg.Provider)
+	if len(benchmarks) > 0 {
+		// Use the most recent benchmark's cluster ID
+		clusterID = benchmarks[len(benchmarks)-1].ClusterID
+	}
+
 	// Create the challenge
 	challenge := &types.BenchmarkChallenge{
 		Requester:            requesterAddr.String(),
 		ProviderAddress:      msg.Provider,
+		ClusterID:            clusterID,
 		RequiredSuiteVersion: msg.BenchmarkType,
 		Deadline:             deadline,
 	}

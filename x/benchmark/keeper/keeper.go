@@ -134,6 +134,11 @@ func (k Keeper) StoreKey() storetypes.StoreKey {
 	return k.skey
 }
 
+// ProviderKeeper returns the provider keeper
+func (k Keeper) ProviderKeeper() ProviderKeeper {
+	return k.providerKeeper
+}
+
 // GetAuthority returns the module's authority
 func (k Keeper) GetAuthority() string {
 	return k.authority
@@ -142,6 +147,92 @@ func (k Keeper) GetAuthority() string {
 // Logger returns a module-specific logger
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+types.ModuleName)
+}
+
+// SubmitBenchmarksTrusted submits benchmark reports from a trusted source (transaction-signed).
+// This method skips individual report signature verification since the transaction itself
+// is signed by the provider, proving they authorized the submission.
+func (k Keeper) SubmitBenchmarksTrusted(ctx sdk.Context, reports []types.BenchmarkReport) error {
+	// Get params for validation rules
+	_ = k.GetParams(ctx)
+
+	for i := range reports {
+		report := &reports[i]
+
+		// Validate report (skip signature/publickey for trusted submissions)
+		if report.ReportID == "" {
+			return types.ErrInvalidBenchmark.Wrap("report_id cannot be empty")
+		}
+		if report.ProviderAddress == "" {
+			return types.ErrInvalidBenchmark.Wrap("provider_address cannot be empty")
+		}
+		if report.ClusterID == "" {
+			return types.ErrInvalidBenchmark.Wrap("cluster_id cannot be empty")
+		}
+		if report.SuiteVersion == "" {
+			return types.ErrInvalidBenchmark.Wrap("suite_version cannot be empty")
+		}
+
+		// Check for duplicate
+		if _, exists := k.GetBenchmarkReport(ctx, report.ReportID); exists {
+			return types.ErrDuplicateReport.Wrapf("report_id: %s", report.ReportID)
+		}
+
+		// Verify provider exists
+		providerAddr, err := sdk.AccAddressFromBech32(report.ProviderAddress)
+		if err != nil {
+			return types.ErrUnknownProvider.Wrapf("invalid address: %v", err)
+		}
+
+		if k.providerKeeper != nil && !k.providerKeeper.ProviderExists(ctx, providerAddr) {
+			return types.ErrUnknownProvider.Wrapf("provider not found: %s", report.ProviderAddress)
+		}
+
+		// Check if provider is flagged
+		if k.IsProviderFlagged(ctx, report.ProviderAddress) {
+			return types.ErrProviderFlagged.Wrapf("provider is flagged: %s", report.ProviderAddress)
+		}
+
+		// Get previous reports for anomaly detection
+		previousReports := k.GetBenchmarksByCluster(ctx, report.ClusterID)
+
+		// Set block height
+		report.BlockHeight = ctx.BlockHeight()
+
+		// Store the report
+		if err := k.SetBenchmarkReport(ctx, *report); err != nil {
+			return err
+		}
+
+		// Detect anomalies
+		anomalies := k.DetectAnomalies(ctx, *report, previousReports)
+		for _, anomaly := range anomalies {
+			if err := k.CreateAnomalyFlag(ctx, &anomaly); err != nil {
+				k.Logger(ctx).Error("failed to create anomaly flag", "error", err)
+			}
+		}
+
+		// Prune old reports if needed
+		pruned, err := k.PruneOldReports(ctx, report.ProviderAddress, report.ClusterID)
+		if err != nil {
+			k.Logger(ctx).Error("failed to prune old reports", "error", err)
+		}
+		if pruned > 0 {
+			_ = ctx.EventManager().EmitTypedEvent(&types.BenchmarksPrunedEvent{
+				Provider:    report.ProviderAddress,
+				PrunedCount: uint32(pruned),
+				PrunedAt:    ctx.BlockTime().Unix(),
+			})
+		}
+
+		// Update reliability score
+		inputs := k.computeReliabilityInputs(ctx, report.ProviderAddress)
+		if err := k.UpdateReliabilityScore(ctx, report.ProviderAddress, inputs); err != nil {
+			k.Logger(ctx).Error("failed to update reliability score", "error", err)
+		}
+	}
+
+	return nil
 }
 
 // SubmitBenchmarks submits one or more benchmark reports
@@ -260,7 +351,7 @@ func (k Keeper) computeReliabilityInputs(ctx sdk.Context, providerAddr string) t
 	}
 
 	// Default uptime values (would be populated from actual data in production)
-	inputs.TotalUptimeSeconds = 86400 * 30   // 30 days
+	inputs.TotalUptimeSeconds = 86400 * 30 // 30 days
 	inputs.TotalDowntimeSeconds = 0
 	inputs.MeanTimeBetweenFailures = 86400 * 30
 	inputs.ProvisioningAttempts = 100
@@ -312,13 +403,13 @@ func (k Keeper) SetBenchmarkReport(ctx sdk.Context, report types.BenchmarkReport
 func (k Keeper) indexReportByProviderCluster(ctx sdk.Context, report types.BenchmarkReport) {
 	store := ctx.KVStore(k.skey)
 	indexKey := types.GetProviderClusterIndexKey(report.ProviderAddress, report.ClusterID)
-	
+
 	// Append report ID to index
 	var reportIDs []string
 	if bz := store.Get(indexKey); bz != nil {
 		_ = json.Unmarshal(bz, &reportIDs)
 	}
-	
+
 	reportIDs = append(reportIDs, report.ReportID)
 	bz, _ := json.Marshal(reportIDs)
 	store.Set(indexKey, bz)
@@ -333,12 +424,12 @@ func (k Keeper) indexReportByRegion(ctx sdk.Context, report types.BenchmarkRepor
 	}
 
 	indexKey := types.GetRegionIndexKey(region)
-	
+
 	var reportIDs []string
 	if bz := store.Get(indexKey); bz != nil {
 		_ = json.Unmarshal(bz, &reportIDs)
 	}
-	
+
 	reportIDs = append(reportIDs, report.ReportID)
 	bz, _ := json.Marshal(reportIDs)
 	store.Set(indexKey, bz)

@@ -1,12 +1,14 @@
 package keeper_test
 
 import (
+	"crypto/rand"
 	"testing"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 
+	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 	"github.com/virtengine/virtengine/x/veid/keeper"
 	"github.com/virtengine/virtengine/x/veid/types"
 )
@@ -25,6 +27,28 @@ func (s *MsgServerTestSuite) SetupTest() {
 	s.msgServer = keeper.NewMsgServerImpl(s.keeper)
 }
 
+// createTestPayloadPB creates a veidv1.EncryptedPayloadEnvelope for protobuf struct literals
+func (s *MsgServerTestSuite) createTestPayloadPB() veidv1.EncryptedPayloadEnvelope {
+	nonce := make([]byte, 24)
+	_, _ = rand.Read(nonce)
+	ciphertext := make([]byte, 128)
+	_, _ = rand.Read(ciphertext)
+	pubKey := make([]byte, 32)
+	_, _ = rand.Read(pubKey)
+	sig := make([]byte, 64)
+	_, _ = rand.Read(sig)
+	return veidv1.EncryptedPayloadEnvelope{
+		Version:         1,
+		AlgorithmId:     "X25519-XSALSA20-POLY1305",
+		AlgorithmVersion: 1,
+		RecipientKeyIds: []string{"recipient1"},
+		Nonce:           nonce,
+		Ciphertext:      ciphertext,
+		SenderSignature: sig,
+		SenderPubKey:    pubKey,
+	}
+}
+
 // Test: MsgUploadScope - successful upload
 func (s *MsgServerTestSuite) TestMsgUploadScope_Success() {
 	address := sdk.AccAddress([]byte("test-address-upload"))
@@ -40,12 +64,12 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_Success() {
 
 	msg := &types.MsgUploadScope{
 		Sender:            address.String(),
-		ScopeID:           "test-scope-msg-1",
-		ScopeType:         types.ScopeTypeIDDocument,
-		EncryptedPayload:  s.createTestPayload(),
+		ScopeId:           "test-scope-msg-1",
+		ScopeType:         veidv1.ScopeTypeIDDocument,
+		EncryptedPayload:  s.createTestPayloadPB(),
 		Salt:              metadata.Salt,
 		DeviceFingerprint: metadata.DeviceFingerprint,
-		ClientID:          metadata.ClientID,
+		ClientId:          metadata.ClientID,
 		ClientSignature:   metadata.ClientSignature,
 		UserSignature:     metadata.UserSignature,
 		PayloadHash:       metadata.PayloadHash,
@@ -56,7 +80,7 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_Success() {
 	resp, err := s.msgServer.UploadScope(sdk.WrapSDKContext(s.ctx), msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
-	s.Require().Equal("test-scope-msg-1", resp.ScopeID)
+	s.Require().Equal("test-scope-msg-1", resp.ScopeId)
 	s.Require().Equal(types.VerificationStatusPending, resp.Status)
 
 	// Verify scope was created
@@ -69,7 +93,7 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_Success() {
 func (s *MsgServerTestSuite) TestMsgUploadScope_InvalidSender() {
 	msg := &types.MsgUploadScope{
 		Sender:  "invalid-address",
-		ScopeID: "test-scope-invalid",
+		ScopeId: "test-scope-invalid",
 	}
 
 	_, err := s.msgServer.UploadScope(sdk.WrapSDKContext(s.ctx), msg)
@@ -93,12 +117,12 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_UnapprovedClient() {
 
 	msg := &types.MsgUploadScope{
 		Sender:            address.String(),
-		ScopeID:           "test-scope-unapproved",
-		ScopeType:         types.ScopeTypeIDDocument,
-		EncryptedPayload:  s.createTestPayload(),
+		ScopeId:           "test-scope-unapproved",
+		ScopeType:         veidv1.ScopeTypeIDDocument,
+		EncryptedPayload:  s.createTestPayloadPB(),
 		Salt:              metadata.Salt,
 		DeviceFingerprint: metadata.DeviceFingerprint,
-		ClientID:          metadata.ClientID,
+		ClientId:          metadata.ClientID,
 		ClientSignature:   metadata.ClientSignature,
 		UserSignature:     metadata.UserSignature,
 		PayloadHash:       metadata.PayloadHash,
@@ -135,14 +159,14 @@ func (s *MsgServerTestSuite) TestMsgRevokeScope_Success() {
 	// Revoke it via msg server
 	msg := &types.MsgRevokeScope{
 		Sender:  address.String(),
-		ScopeID: "scope-to-revoke-msg",
+		ScopeId: "scope-to-revoke-msg",
 		Reason:  "user requested revocation",
 	}
 
 	resp, err := s.msgServer.RevokeScope(sdk.WrapSDKContext(s.ctx), msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
-	s.Require().Equal("scope-to-revoke-msg", resp.ScopeID)
+	s.Require().Equal("scope-to-revoke-msg", resp.ScopeId)
 
 	// Verify scope is revoked
 	revokedScope, found := s.keeper.GetScope(s.ctx, address, "scope-to-revoke-msg")
@@ -156,7 +180,7 @@ func (s *MsgServerTestSuite) TestMsgRevokeScope_NotFound() {
 
 	msg := &types.MsgRevokeScope{
 		Sender:  address.String(),
-		ScopeID: "nonexistent-scope",
+		ScopeId: "nonexistent-scope",
 		Reason:  "test",
 	}
 
@@ -191,13 +215,13 @@ func (s *MsgServerTestSuite) TestMsgRequestVerification_Success() {
 	// Request verification
 	msg := &types.MsgRequestVerification{
 		Sender:  address.String(),
-		ScopeID: "scope-verify-req",
+		ScopeId: "scope-verify-req",
 	}
 
 	resp, err := s.msgServer.RequestVerification(sdk.WrapSDKContext(s.ctx), msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
-	s.Require().Equal("scope-verify-req", resp.ScopeID)
+	s.Require().Equal("scope-verify-req", resp.ScopeId)
 	s.Require().Equal(types.VerificationStatusInProgress, resp.Status)
 
 	// Verify scope status is updated
@@ -212,7 +236,7 @@ func (s *MsgServerTestSuite) TestMsgRequestVerification_NotFound() {
 
 	msg := &types.MsgRequestVerification{
 		Sender:  address.String(),
-		ScopeID: "nonexistent-scope",
+		ScopeId: "nonexistent-scope",
 	}
 
 	_, err := s.msgServer.RequestVerification(sdk.WrapSDKContext(s.ctx), msg)
@@ -249,7 +273,7 @@ func (s *MsgServerTestSuite) TestMsgRequestVerification_RevokedScope() {
 	// Try to request verification
 	msg := &types.MsgRequestVerification{
 		Sender:  address.String(),
-		ScopeID: "scope-revoked-verify",
+		ScopeId: "scope-revoked-verify",
 	}
 
 	_, err = s.msgServer.RequestVerification(sdk.WrapSDKContext(s.ctx), msg)
@@ -291,12 +315,12 @@ func (s *MsgServerTestSuite) TestMsgCreateIdentityWallet_Success() {
 	resp, err := s.msgServer.CreateIdentityWallet(sdk.WrapSDKContext(s.ctx), msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
-	s.Require().NotEmpty(resp.WalletID)
+	s.Require().NotEmpty(resp.WalletId)
 
 	// Verify wallet was created
 	wallet, found := s.keeper.GetWallet(s.ctx, address)
 	s.Require().True(found)
-	s.Require().Equal(resp.WalletID, wallet.WalletID)
+	s.Require().Equal(resp.WalletId, wallet.WalletID)
 }
 
 // Test: MsgCreateIdentityWallet - invalid sender

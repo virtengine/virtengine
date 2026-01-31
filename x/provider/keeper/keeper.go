@@ -36,6 +36,7 @@ type IKeeper interface {
 	VerifyProviderDomain(ctx sdk.Context, providerAddr sdk.AccAddress) error
 	GetDomainVerificationRecord(ctx sdk.Context, providerAddr sdk.AccAddress) (*DomainVerificationRecord, bool)
 	IsDomainVerified(ctx sdk.Context, providerAddr sdk.AccAddress) bool
+	DeleteDomainVerificationRecord(ctx sdk.Context, providerAddr sdk.AccAddress)
 }
 
 // Keeper of the provider store

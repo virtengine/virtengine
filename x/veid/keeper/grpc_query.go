@@ -24,6 +24,11 @@ type GRPCQuerier struct {
 	Keeper
 }
 
+// NewGRPCQuerier returns a new GRPCQuerier instance
+func NewGRPCQuerier(k Keeper) GRPCQuerier {
+	return GRPCQuerier{Keeper: k}
+}
+
 var _ types.QueryServer = GRPCQuerier{}
 
 // IdentityRecord returns the identity record for an address

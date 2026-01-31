@@ -27,7 +27,7 @@ func TestQualityGates_DefaultConfig(t *testing.T) {
 }
 
 func TestQualityGates_FaceGates(t *testing.T) {
-	gates := NewQualityGates(DefaultQualityGatesConfig())
+	_ = NewQualityGates(DefaultQualityGatesConfig())
 
 	tests := []struct {
 		name           string
@@ -388,9 +388,9 @@ func TestQualityGateResult_ReasonCodeMapping(t *testing.T) {
 	gates := NewQualityGates(DefaultQualityGatesConfig())
 
 	features := &RealExtractedFeatures{
-		FaceEmbedding:  make([]float32, types.FaceEmbeddingDim),
-		FaceConfidence: 0.3, // Low
-		FaceQuality:    FaceQualityMetrics{Sharpness: 0.7, Brightness: 0.5, FaceSize: 0.2},
+		FaceEmbedding:   make([]float32, types.FaceEmbeddingDim),
+		FaceConfidence:  0.3, // Low
+		FaceQuality:     FaceQualityMetrics{Sharpness: 0.7, Brightness: 0.5, FaceSize: 0.2},
 		DocQualityScore: 0.5,
 		DocQualityFeatures: inference.DocQualityFeatures{
 			Sharpness: 0.2, Brightness: 0.6, Contrast: 0.2, NoiseLevel: 0.6, BlurScore: 0.8,
