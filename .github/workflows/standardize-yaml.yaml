@@ -17,7 +17,8 @@ jobs:
         run: |
           # Skip certain legacy yml files that are required by external tools
           # Note: All workflow files should use .yaml extension
-          yml_files=$(git ls-files '*.yml' ':!:codecov.yml' ':!:sdk/codecov.yml' ':!:config/kong/prometheus.yml')
+          # Skip dependabot.yml as GitHub requires this exact filename
+          yml_files=$(git ls-files '*.yml' ':!:codecov.yml' ':!:sdk/codecov.yml' ':!:config/kong/prometheus.yml' ':!:.github/dependabot.yml')
           if [[ -n "$yml_files" ]]; then 
             echo "Found .yml files that should be .yaml:"
             echo "$yml_files"
