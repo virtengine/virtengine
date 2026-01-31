@@ -8,8 +8,12 @@
     "v1.0.0": {
         "modules": {
             "added": [
-                "07-tendermint",
                 "consensus"
+            ],
+            "removed": [
+                "agov",
+                "astaking",
+                "crisis"
             ]
         },
         "migrations": {
