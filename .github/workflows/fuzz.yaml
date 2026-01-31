@@ -45,8 +45,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25.5'
           cache: true
+
+      - name: Sync vendor directory
+        run: |
+          go mod tidy
+          go mod vendor
 
       - name: Determine fuzz time
         id: fuzz-time
@@ -115,13 +120,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25.5'
           cache: true
 
-      - name: Install go-fuzz
+      - name: Sync vendor directory
         run: |
-          go install github.com/dvyukov/go-fuzz/go-fuzz@latest
-          go install github.com/dvyukov/go-fuzz/go-fuzz-build@latest
+          go mod tidy
+          go mod vendor
 
       - name: Verify fuzz targets compile
         run: |
@@ -154,7 +159,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25.5'
           cache: true
 
       - name: Generate fuzz coverage summary

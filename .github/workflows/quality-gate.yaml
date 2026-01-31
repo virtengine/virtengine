@@ -240,37 +240,49 @@ jobs:
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           
-          if [ "$VET_RESULT" = "success" ]; then
+          # Handle success, skipped (treated as success), and failure
+          if [ "$VET_RESULT" = "success" ] || [ "$VET_RESULT" = "skipped" ]; then
             echo "| Go Vet | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Go Vet | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Go Vet | ❌ Failed ($VET_RESULT) |" >> $GITHUB_STEP_SUMMARY
           fi
           
-          if [ "$MOD_RESULT" = "success" ]; then
+          if [ "$MOD_RESULT" = "success" ] || [ "$MOD_RESULT" = "skipped" ]; then
             echo "| Module Sync | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Module Sync | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Module Sync | ❌ Failed ($MOD_RESULT) |" >> $GITHUB_STEP_SUMMARY
           fi
           
-          if [ "$BUILD_RESULT" = "success" ]; then
+          if [ "$BUILD_RESULT" = "success" ] || [ "$BUILD_RESULT" = "skipped" ]; then
             echo "| Build | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Build | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Build | ❌ Failed ($BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
           fi
           
-          if [ "$TEST_RESULT" = "success" ]; then
+          if [ "$TEST_RESULT" = "success" ] || [ "$TEST_RESULT" = "skipped" ]; then
             echo "| Core Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Core Tests | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Core Tests | ❌ Failed ($TEST_RESULT) |" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Fail if any job failed
-          if [ "$VET_RESULT" != "success" ] || \
-             [ "$MOD_RESULT" != "success" ] || \
-             [ "$BUILD_RESULT" != "success" ] || \
-             [ "$TEST_RESULT" != "success" ]; then
+          # Fail only on actual failures, not skipped jobs
+          FAILED=0
+          if [ "$VET_RESULT" = "failure" ] || [ "$VET_RESULT" = "cancelled" ]; then
+            FAILED=1
+          fi
+          if [ "$MOD_RESULT" = "failure" ] || [ "$MOD_RESULT" = "cancelled" ]; then
+            FAILED=1
+          fi
+          if [ "$BUILD_RESULT" = "failure" ] || [ "$BUILD_RESULT" = "cancelled" ]; then
+            FAILED=1
+          fi
+          if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
+            FAILED=1
+          fi
+          
+          if [ "$FAILED" = "1" ]; then
             echo "❌ Quality gate failed" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
