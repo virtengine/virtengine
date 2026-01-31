@@ -89,7 +89,10 @@ check_vet() {
 
     # Check if we're on main or have no diverged commits
     if git rev-parse --verify "$base_branch" &>/dev/null; then
+        # Exclude sdk/ and vendor/ as they are separate Go modules with their own go.mod
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+            grep -v '^sdk/' | \
+            grep -v '^vendor/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
     fi
@@ -174,8 +177,11 @@ check_test() {
     local base_branch="origin/main"
 
     if git rev-parse --verify "$base_branch" &>/dev/null; then
+        # Exclude sdk/ and vendor/ as they are separate Go modules with their own go.mod
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '_test\.go$' | \
+            grep -v '^sdk/' | \
+            grep -v '^vendor/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
     fi
