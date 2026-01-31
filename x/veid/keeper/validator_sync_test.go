@@ -38,9 +38,10 @@ const (
 
 type ValidatorSyncTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	cdc    codec.Codec
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	cdc        codec.Codec
+	stateStore store.CommitMultiStore
 }
 
 func TestValidatorSyncTestSuite(t *testing.T) {
@@ -90,12 +91,17 @@ func (s *ValidatorSyncTestSuite) createContextWithStore(storeKey *storetypes.KVS
 	if err != nil {
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
+	s.stateStore = stateStore
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
 		Height: 100,
 	}, false, log.NewNopLogger())
 	return ctx
+}
+
+func (s *ValidatorSyncTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 func (s *ValidatorSyncTestSuite) registerTestModels() {

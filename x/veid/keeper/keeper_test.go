@@ -33,9 +33,10 @@ const (
 
 type KeeperTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	cdc    codec.Codec
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	cdc        codec.Codec
+	stateStore store.CommitMultiStore
 }
 
 func TestKeeperTestSuite(t *testing.T) {
@@ -71,11 +72,19 @@ func (s *KeeperTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
 
+	// Store reference for cleanup in TearDownTest
+	s.stateStore = stateStore
+
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
 		Height: 100,
 	}, false, log.NewNopLogger())
 	return ctx
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *KeeperTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 func (s *KeeperTestSuite) generateSalt() []byte {

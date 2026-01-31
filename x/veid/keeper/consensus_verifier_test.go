@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"testing"
 	"time"
 
@@ -19,11 +20,22 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// closeStoreIfNeeded closes the CommitMultiStore if it implements io.Closer.
+func closeStoreIfNeeded(stateStore store.CommitMultiStore) {
+	if stateStore == nil {
+		return
+	}
+	if closer, ok := stateStore.(io.Closer); ok {
+		_ = closer.Close()
+	}
+}
+
 // createTestContext creates a minimal SDK context for testing
 func createTestContext(t *testing.T) sdk.Context {
 	t.Helper()
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 	storeKey := storetypes.NewKVStoreKey("test")
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()

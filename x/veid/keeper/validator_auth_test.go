@@ -58,6 +58,7 @@ type ValidatorAuthTestSuite struct {
 	keeper        keeper.Keeper
 	cdc           codec.Codec
 	stakingKeeper *MockStakingKeeper
+	stateStore    store.CommitMultiStore
 }
 
 func TestValidatorAuthTestSuite(t *testing.T) {
@@ -79,6 +80,7 @@ func (s *ValidatorAuthTestSuite) SetupTest() {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	s.Require().NoError(err)
+	s.stateStore = stateStore
 
 	s.ctx = sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
@@ -95,6 +97,10 @@ func (s *ValidatorAuthTestSuite) SetupTest() {
 	// Set default params
 	err = s.keeper.SetParams(s.ctx, types.DefaultParams())
 	s.Require().NoError(err)
+}
+
+func (s *ValidatorAuthTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 // Test: Bonded validator is authorized
@@ -160,6 +166,7 @@ func (s *ValidatorAuthTestSuite) TestIsValidator_NilStakingKeeper() {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	s.Require().NoError(err)
+	s.T().Cleanup(func() { CloseStoreIfNeeded(stateStore) })
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
@@ -195,6 +202,7 @@ func TestUpdateVerificationStatus_ValidatorAuthorization(t *testing.T) {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	require.NoError(t, err)
+	t.Cleanup(func() { CloseStoreIfNeeded(stateStore) })
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
@@ -236,6 +244,7 @@ func TestUpdateScore_ValidatorAuthorization(t *testing.T) {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	require.NoError(t, err)
+	t.Cleanup(func() { CloseStoreIfNeeded(stateStore) })
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),

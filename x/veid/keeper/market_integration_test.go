@@ -25,6 +25,7 @@ type MarketIntegrationTestSuite struct {
 	suite.Suite
 	ctx               sdk.Context
 	keeper            Keeper
+	stateStore        store.CommitMultiStore
 	tenantAddress     sdk.AccAddress
 	providerAddress   sdk.AccAddress
 	unverifiedAddress sdk.AccAddress
@@ -48,6 +49,7 @@ func (s *MarketIntegrationTestSuite) SetupTest() {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	s.Require().NoError(err)
+	s.stateStore = stateStore
 
 	// Create context with store
 	s.ctx = sdk.NewContext(stateStore, cmtproto.Header{
@@ -89,6 +91,11 @@ func (s *MarketIntegrationTestSuite) SetupTest() {
 		RequireUserSignature:   false,
 		VerificationExpiryDays: 365,
 	})
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *MarketIntegrationTestSuite) TearDownTest() {
+	closeStoreIfNeeded(s.stateStore)
 }
 
 func (s *MarketIntegrationTestSuite) setupVerifiedIdentity(address sdk.AccAddress, score uint32, scopes []types.ScopeType) {

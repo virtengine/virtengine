@@ -29,6 +29,7 @@ type PrivacyProofsTestSuite struct {
 	ctx           sdk.Context
 	keeper        keeper.Keeper
 	cdc           codec.Codec
+	stateStore    store.CommitMultiStore
 	subjectAddr   sdk.AccAddress
 	requesterAddr sdk.AccAddress
 	verifierAddr  sdk.AccAddress
@@ -71,12 +72,18 @@ func (s *PrivacyProofsTestSuite) createContextWithStore(storeKey *storetypes.KVS
 	if err != nil {
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
+	s.stateStore = stateStore
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
 		Height: 100,
 	}, false, log.NewNopLogger())
 	return ctx
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *PrivacyProofsTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 func (s *PrivacyProofsTestSuite) setupVerifiedIdentity(level int) {
