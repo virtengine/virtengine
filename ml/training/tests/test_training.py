@@ -5,6 +5,7 @@ Tests for model training, evaluation, and export.
 import pytest
 import numpy as np
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from ml.training.config import TrainingConfig, ModelConfig, ExportConfig
@@ -376,3 +377,217 @@ class TestEndToEnd:
             
             assert export_result.success
             assert Path(export_result.model_path).exists()
+
+
+class TestSyntheticDataset:
+    """Tests for synthetic dataset generation."""
+    
+    def test_generate_synthetic_dataset(self):
+        """Test generating synthetic dataset."""
+        from ml.training.model.train_and_export import generate_synthetic_dataset
+        
+        train_X, train_y, val_X, val_y, test_X, test_y = generate_synthetic_dataset(
+            num_samples=100,
+            feature_dim=128,
+            seed=42,
+        )
+        
+        # Check shapes
+        assert train_X.shape == (80, 128)  # 80% of 100
+        assert len(train_y) == 80
+        assert val_X.shape == (10, 128)    # 10% of 100
+        assert len(val_y) == 10
+        assert test_X.shape == (10, 128)   # 10% of 100
+        assert len(test_y) == 10
+        
+        # Check data types
+        assert train_X.dtype == np.float32
+        assert train_y.dtype == np.float32
+        
+        # Check trust score range
+        assert np.all(train_y >= 0) and np.all(train_y <= 100)
+        assert np.all(val_y >= 0) and np.all(val_y <= 100)
+        assert np.all(test_y >= 0) and np.all(test_y <= 100)
+    
+    def test_synthetic_dataset_reproducibility(self):
+        """Test that synthetic dataset is reproducible with same seed."""
+        from ml.training.model.train_and_export import generate_synthetic_dataset
+        
+        # Generate twice with same seed
+        data1 = generate_synthetic_dataset(num_samples=50, seed=42)
+        data2 = generate_synthetic_dataset(num_samples=50, seed=42)
+        
+        # Should be identical
+        np.testing.assert_array_equal(data1[0], data2[0])  # train_X
+        np.testing.assert_array_equal(data1[1], data2[1])  # train_y
+
+
+class TestModelHash:
+    """Tests for model hash computation."""
+    
+    @pytest.mark.skipif(not TF_AVAILABLE, reason="TensorFlow not available")
+    def test_compute_model_hash(self):
+        """Test computing model hash."""
+        from ml.training.model.train_and_export import compute_model_hash
+        
+        config = ModelConfig(input_dim=64, hidden_layers=[32])
+        model = TrustScoreModel(config)
+        model.compile()
+        
+        exporter = ModelExporter()
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = exporter.export_savedmodel(model, tmpdir, "v_hash_test")
+            
+            hash1 = compute_model_hash(result.model_path)
+            hash2 = compute_model_hash(result.model_path)
+            
+            # Same model should give same hash
+            assert hash1 == hash2
+            
+            # Hash should be 64 hex characters (SHA-256)
+            assert len(hash1) == 64
+            assert all(c in '0123456789abcdef' for c in hash1)
+    
+    @pytest.mark.skipif(not TF_AVAILABLE, reason="TensorFlow not available")
+    def test_save_model_hash(self):
+        """Test saving MODEL_HASH.txt."""
+        from ml.training.model.train_and_export import compute_model_hash, save_model_hash
+        
+        config = ModelConfig(input_dim=64, hidden_layers=[32])
+        model = TrustScoreModel(config)
+        model.compile()
+        
+        exporter = ModelExporter()
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = exporter.export_savedmodel(model, tmpdir, "v_hash_save_test")
+            
+            model_hash = compute_model_hash(result.model_path)
+            hash_path = save_model_hash(result.model_path, model_hash, "v1.0.0")
+            
+            # Check file was created
+            assert Path(hash_path).exists()
+            
+            # Check content
+            content = Path(hash_path).read_text()
+            assert f"SHA256={model_hash}" in content
+            assert "VERSION=v1.0.0" in content
+
+
+class TestGovernanceWorkflow:
+    """Tests for governance workflow generation."""
+    
+    def test_governance_workflow_checklist(self):
+        """Test generating pre-proposal checklist."""
+        from ml.training.model.governance import GovernanceWorkflow
+        from ml.training.model.manifest import ModelManifest
+        
+        # Create mock manifest
+        manifest = ModelManifest(
+            model_version="v1.0.0",
+            model_hash="a" * 64,
+            evaluation_passed=True,
+            tensorflow_version="2.15.0",
+            determinism_settings={
+                "force_cpu": True,
+                "deterministic": True,
+                "tf_deterministic_ops": True,
+                "random_seed": 42,
+            },
+        )
+        
+        metrics = {
+            "r2": 0.90,
+            "mae": 5.0,
+            "num_samples": 500,
+        }
+        
+        workflow = GovernanceWorkflow()
+        checklist = workflow.generate_pre_proposal_checklist(manifest, metrics)
+        
+        assert checklist["model_version"] == "v1.0.0"
+        assert len(checklist["checks"]) >= 4
+        assert checklist["all_passed"] is True
+    
+    def test_governance_proposal_generation(self):
+        """Test generating governance proposal."""
+        from ml.training.model.governance import GovernanceProposalGenerator, GovernanceProposal
+        from ml.training.model.manifest import ModelManifest
+        
+        manifest = ModelManifest(
+            model_version="v1.0.0",
+            model_hash="b" * 64,
+            tensorflow_version="2.15.0",
+            export_timestamp=datetime.utcnow().isoformat(),
+            evaluation_metrics={
+                "mae": 5.0,
+                "rmse": 6.5,
+                "r2": 0.90,
+                "accuracy_5": 0.65,
+                "accuracy_10": 0.85,
+                "accuracy_20": 0.98,
+                "num_samples": 1000,
+            },
+            determinism_settings={
+                "deterministic": True,
+                "random_seed": 42,
+                "force_cpu": True,
+            },
+        )
+        
+        generator = GovernanceProposalGenerator()
+        proposal = generator.generate(
+            manifest=manifest,
+            model_url="ipfs://test-hash",
+        )
+        
+        assert isinstance(proposal, GovernanceProposal)
+        assert proposal.model_version == "v1.0.0"
+        assert proposal.model_hash == "b" * 64
+        assert "Trust Score Model" in proposal.title
+        assert "v1.0.0" in proposal.title
+    
+    def test_validator_notification(self):
+        """Test generating validator notification."""
+        from ml.training.model.governance import GovernanceWorkflow, GovernanceProposal
+        
+        proposal = GovernanceProposal(
+            title="Update Trust Score Model to v1.0.0",
+            model_version="v1.0.0",
+            model_hash="c" * 64,
+            voting_period="604800s",
+            metrics={
+                "mae": 5.0,
+                "rmse": 6.5,
+                "r2": 0.90,
+                "accuracy_10": 0.85,
+            },
+        )
+        
+        workflow = GovernanceWorkflow()
+        notification = workflow.generate_validator_notification(proposal)
+        
+        assert "MODEL UPDATE NOTIFICATION" in notification
+        assert "v1.0.0" in notification
+        assert "VALIDATOR ACTIONS REQUIRED" in notification
+
+
+@pytest.mark.skipif(not TF_AVAILABLE, reason="TensorFlow not available")
+class TestTrainAndExportDryRun:
+    """Tests for train_and_export dry run functionality."""
+    
+    def test_dry_run_mode(self):
+        """Test dry run mode validates without training."""
+        from ml.training.model.train_and_export import train_and_export
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = train_and_export(
+                output_dir=tmpdir,
+                synthetic=True,
+                num_samples=100,
+                dry_run=True,
+            )
+            
+            assert result["success"] is True
+            assert result.get("dry_run") is True
