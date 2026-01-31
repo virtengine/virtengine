@@ -21,6 +21,9 @@ on:
     paths:
       - "**.proto"
 
+env:
+  GOWORK: "off"
+
 jobs:
   # Run proto breaking change detection
   proto-breaking:

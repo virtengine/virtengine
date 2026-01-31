@@ -32,6 +32,7 @@ concurrency:
 
 env:
     GO_VERSION: "1.25.5"
+    GOWORK: "off"
 
 permissions:
     contents: read

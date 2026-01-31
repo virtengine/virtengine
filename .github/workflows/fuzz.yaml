@@ -30,6 +30,9 @@ permissions:
   contents: read
   security-events: write
 
+env:
+  GOWORK: "off"
+
 jobs:
   fuzz-tests:
     name: Fuzz Tests
