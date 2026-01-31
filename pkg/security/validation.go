@@ -31,9 +31,6 @@ var (
 	// ErrInvalidExecutable is returned when an executable path is not in the allowlist
 	ErrInvalidExecutable = errors.New("executable not in trusted allowlist")
 
-	// ErrInvalidPath is returned when a path contains dangerous characters
-	ErrInvalidPath = errors.New("path contains invalid characters")
-
 	// ErrInvalidHostname is returned when a hostname format is invalid
 	ErrInvalidHostname = errors.New("invalid hostname format")
 
@@ -45,12 +42,6 @@ var (
 
 	// ErrShellMetacharacters is returned when input contains shell metacharacters
 	ErrShellMetacharacters = errors.New("input contains shell metacharacters")
-
-	// ErrIntegerOverflow is returned when an integer conversion would overflow
-	ErrIntegerOverflow = errors.New("integer conversion would overflow")
-
-	// ErrPathTraversal is returned when a path contains traversal sequences
-	ErrPathTraversal = errors.New("path contains directory traversal")
 
 	// ErrEmptyInput is returned when required input is empty
 	ErrEmptyInput = errors.New("input cannot be empty")
