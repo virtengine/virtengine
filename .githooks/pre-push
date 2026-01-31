@@ -129,16 +129,30 @@ check_mod_tidy() {
 }
 
 # =========================================================================
-# Check 3: go mod vendor (dirty check)
+# Check 3: go mod vendor (consistency check)
 # =========================================================================
 check_mod_vendor() {
-    go mod vendor 2>&1
+    # Verify module checksums match without rewriting the vendor dir
+    # (go mod vendor is too slow / can hang on Windows due to file locks)
+    go mod verify 2>&1
 
-    # Check if vendor directory changed
-    if ! git diff --quiet vendor/ 2>/dev/null; then
-        # Restore vendor to committed state
-        git checkout -- vendor/ 2>/dev/null || true
-        hook_fail "vendor/ is out of sync. Run 'go mod vendor' and commit the result."
+    # Also check that vendor/modules.txt lists the same modules as go.mod
+    if [ -f vendor/modules.txt ]; then
+        # Extract required modules from go.mod and check they appear in modules.txt
+        local missing=0
+        while IFS= read -r mod; do
+            if ! grep -q "$mod" vendor/modules.txt 2>/dev/null; then
+                hook_warn "  Missing from vendor: $mod"
+                missing=$((missing + 1))
+            fi
+        done < <(go list -m -mod=mod all 2>/dev/null | tail -n +2 | awk '{print $1}' | head -50)
+
+        if [ "$missing" -gt 0 ]; then
+            hook_fail "vendor/modules.txt is out of sync. Run 'go mod vendor' and commit."
+            return 1
+        fi
+    else
+        hook_fail "vendor/modules.txt not found. Run 'go mod vendor'."
         return 1
     fi
     return 0

@@ -10,13 +10,13 @@ import (
 // Use this for returning metrics from GetMetrics() to avoid copying sync.RWMutex.
 type MetricsSnapshot struct {
 	// Pruning metrics
-	TotalPruningOperations  int64         `json:"total_pruning_operations"`
-	TotalHeightsPruned      int64         `json:"total_heights_pruned"`
-	TotalBytesPruned        int64         `json:"total_bytes_pruned"`
-	LastPruningDuration     time.Duration `json:"last_pruning_duration"`
-	LastPruningTime         time.Time     `json:"last_pruning_time"`
-	AveragePruningDuration  time.Duration `json:"average_pruning_duration"`
-	PruningErrorCount       int64         `json:"pruning_error_count"`
+	TotalPruningOperations int64         `json:"total_pruning_operations"`
+	TotalHeightsPruned     int64         `json:"total_heights_pruned"`
+	TotalBytesPruned       int64         `json:"total_bytes_pruned"`
+	LastPruningDuration    time.Duration `json:"last_pruning_duration"`
+	LastPruningTime        time.Time     `json:"last_pruning_time"`
+	AveragePruningDuration time.Duration `json:"average_pruning_duration"`
+	PruningErrorCount      int64         `json:"pruning_error_count"`
 
 	// Snapshot metrics
 	TotalSnapshotsCreated   int64         `json:"total_snapshots_created"`
@@ -45,13 +45,13 @@ type Metrics struct {
 	mu sync.RWMutex
 
 	// Pruning metrics
-	TotalPruningOperations  int64
-	TotalHeightsPruned      int64
-	TotalBytesPruned        int64
-	LastPruningDuration     time.Duration
-	LastPruningTime         time.Time
-	AveragePruningDuration  time.Duration
-	PruningErrorCount       int64
+	TotalPruningOperations int64
+	TotalHeightsPruned     int64
+	TotalBytesPruned       int64
+	LastPruningDuration    time.Duration
+	LastPruningTime        time.Time
+	AveragePruningDuration time.Duration
+	PruningErrorCount      int64
 
 	// Snapshot metrics
 	TotalSnapshotsCreated   int64
@@ -69,10 +69,10 @@ type Metrics struct {
 	DaysUntilFull           int
 
 	// State metrics
-	CurrentHeight           int64
-	OldestRetainedHeight    int64
-	RetainedHeightsCount    int64
-	SnapshotsCount          int
+	CurrentHeight        int64
+	OldestRetainedHeight int64
+	RetainedHeightsCount int64
+	SnapshotsCount       int
 }
 
 // NewMetrics creates a new Metrics instance.
@@ -219,18 +219,18 @@ func (m *Metrics) Reset() {
 
 // BenchmarkResult contains results from a pruning benchmark.
 type BenchmarkResult struct {
-	Strategy          Strategy      `json:"strategy"`
-	TotalBlocks       int64         `json:"total_blocks"`
-	BlocksToProcess   int64         `json:"blocks_to_process"`
-	BlocksProcessed   int64         `json:"blocks_processed"`
-	BlocksPruned      int64         `json:"blocks_pruned"`
-	BlocksRetained    int64         `json:"blocks_retained"`
-	Duration          time.Duration `json:"duration"`
-	BlocksPerSecond   float64       `json:"blocks_per_second"`
-	AvgTimePerBlock   time.Duration `json:"avg_time_per_block"`
-	MemoryUsedMB      float64       `json:"memory_used_mb"`
-	EstimatedSavings  int64         `json:"estimated_savings_bytes"`
-	SavingsPercent    float64       `json:"savings_percent"`
+	Strategy         Strategy      `json:"strategy"`
+	TotalBlocks      int64         `json:"total_blocks"`
+	BlocksToProcess  int64         `json:"blocks_to_process"`
+	BlocksProcessed  int64         `json:"blocks_processed"`
+	BlocksPruned     int64         `json:"blocks_pruned"`
+	BlocksRetained   int64         `json:"blocks_retained"`
+	Duration         time.Duration `json:"duration"`
+	BlocksPerSecond  float64       `json:"blocks_per_second"`
+	AvgTimePerBlock  time.Duration `json:"avg_time_per_block"`
+	MemoryUsedMB     float64       `json:"memory_used_mb"`
+	EstimatedSavings int64         `json:"estimated_savings_bytes"`
+	SavingsPercent   float64       `json:"savings_percent"`
 }
 
 // Benchmark runs a pruning benchmark.
@@ -255,7 +255,7 @@ func (b *Benchmark) RunSimulation(totalBlocks, avgBlockSize int64) BenchmarkResu
 	}
 
 	keepRecent, _ := b.config.PruningOptions()
-	
+
 	// Calculate blocks to prune
 	if b.config.Strategy == StrategyNothing {
 		result.BlocksRetained = totalBlocks
@@ -277,14 +277,14 @@ func (b *Benchmark) RunSimulation(totalBlocks, avgBlockSize int64) BenchmarkResu
 	result.BlocksToProcess = result.BlocksPruned
 	result.BlocksProcessed = result.BlocksPruned
 	result.Duration = time.Since(start)
-	
+
 	if result.Duration.Seconds() > 0 {
 		result.BlocksPerSecond = float64(result.BlocksProcessed) / result.Duration.Seconds()
 	}
 	if result.BlocksProcessed > 0 {
 		result.AvgTimePerBlock = result.Duration / time.Duration(result.BlocksProcessed)
 	}
-	
+
 	result.EstimatedSavings = result.BlocksPruned * avgBlockSize
 	if totalBlocks > 0 {
 		result.SavingsPercent = float64(result.BlocksPruned) / float64(totalBlocks) * 100

@@ -121,16 +121,16 @@ func (m *Manager) GetStatus() (Status, error) {
 	defer m.mu.RUnlock()
 
 	status := Status{
-		Strategy:          m.config.Strategy,
-		KeepRecent:        m.config.KeepRecent,
-		PruningInterval:   m.config.Interval,
-		SnapshotEnabled:   m.config.Snapshot.Enabled,
-		SnapshotInterval:  m.config.Snapshot.Interval,
+		Strategy:           m.config.Strategy,
+		KeepRecent:         m.config.KeepRecent,
+		PruningInterval:    m.config.Interval,
+		SnapshotEnabled:    m.config.Snapshot.Enabled,
+		SnapshotInterval:   m.config.Snapshot.Interval,
 		DiskMonitorEnabled: m.config.DiskMonitor.Enabled,
-		Started:           m.started,
-		RetentionPolicy:   m.stateManager.GetRetentionPolicy(),
-		LastPrunedHeight:  m.stateManager.LastPrunedHeight(),
-		IsPruning:         m.stateManager.IsPruning(),
+		Started:            m.started,
+		RetentionPolicy:    m.stateManager.GetRetentionPolicy(),
+		LastPrunedHeight:   m.stateManager.LastPrunedHeight(),
+		IsPruning:          m.stateManager.IsPruning(),
 		IsCreatingSnapshot: m.snapshotManager.IsCreating(),
 	}
 
