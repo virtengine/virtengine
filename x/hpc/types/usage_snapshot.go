@@ -322,6 +322,16 @@ func (r *HPCReconciliationRecord) GetCriticalDiscrepancies() []ReconciliationDis
 	return critical
 }
 
+// HasCriticalDiscrepancies returns true if there are any critical or high severity discrepancies
+func (r *HPCReconciliationRecord) HasCriticalDiscrepancies() bool {
+	for _, d := range r.Discrepancies {
+		if d.Severity == "critical" || d.Severity == "high" {
+			return true
+		}
+	}
+	return false
+}
+
 // ReconciliationTolerances defines acceptable tolerances for reconciliation
 type ReconciliationTolerances struct {
 	// CPUCoreSecondsPercent is the tolerance for CPU core-seconds
