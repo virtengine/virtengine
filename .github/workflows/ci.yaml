@@ -108,7 +108,7 @@ jobs:
   test-go:
     name: Go Tests
     runs-on: ubuntu-latest
-    needs: lint
+    # Run in parallel with lint for faster feedback
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -253,7 +253,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test-go]
+    # Run in parallel with lint and test-go for faster feedback
     strategy:
       matrix:
         include:
