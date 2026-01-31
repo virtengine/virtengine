@@ -172,10 +172,16 @@ func NewChallenge(
 		return nil, ErrChallengeCreationFailed.Wrapf("failed to generate challenge ID: %v", err)
 	}
 
-	// Generate nonce
+	// Generate nonce for replay protection
 	nonceBytes := make([]byte, 32)
 	if _, err := rand.Read(nonceBytes); err != nil {
 		return nil, ErrChallengeCreationFailed.Wrapf("failed to generate nonce: %v", err)
+	}
+
+	// Generate challenge data (random bytes for the client to sign/verify)
+	challengeData := make([]byte, 32)
+	if _, err := rand.Read(challengeData); err != nil {
+		return nil, ErrChallengeCreationFailed.Wrapf("failed to generate challenge data: %v", err)
 	}
 
 	now := time.Now().Unix()
@@ -187,6 +193,7 @@ func NewChallenge(
 		FactorID:        factorID,
 		TransactionType: txType,
 		Status:          ChallengeStatusPending,
+		ChallengeData:   challengeData,
 		CreatedAt:       now,
 		ExpiresAt:       now + ttlSeconds,
 		AttemptCount:    0,

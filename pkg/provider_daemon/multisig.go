@@ -564,7 +564,7 @@ func generateMultiSigKeyID(signers []AuthorizedSigner, config *MultiSigConfig) s
 	sort.Strings(pubKeys)
 
 	for _, pk := range pubKeys {
-		data += pk[:16] // Use first 16 chars of each public key
+		data += pk[:min(16, len(pk))] // Use first 16 chars of each public key (or full key if shorter)
 	}
 
 	hash := sha256.Sum256([]byte(data))

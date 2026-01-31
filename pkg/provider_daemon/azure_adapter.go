@@ -2305,6 +2305,21 @@ func (aa *AzureAdapter) supportsAcceleratedNetworking(vmSize string) bool {
 
 // waitForVMRunning waits for a VM to reach running state
 func (aa *AzureAdapter) waitForVMRunning(ctx context.Context, resourceGroup, vmName string) error {
+	// Check immediately first before waiting for ticker
+	view, err := aa.compute.GetVMInstanceView(ctx, resourceGroup, vmName)
+	if err != nil {
+		return err
+	}
+	if view.PowerState == AzureVMStateRunning {
+		return nil
+	}
+	// Check for failure states
+	for _, status := range view.Statuses {
+		if strings.HasPrefix(status.Code, "ProvisioningState/failed") {
+			return fmt.Errorf("%w: %s", ErrAzureProvisioningFailed, status.Message)
+		}
+	}
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -2334,6 +2349,19 @@ func (aa *AzureAdapter) waitForVMRunning(ctx context.Context, resourceGroup, vmN
 
 // waitForVMState waits for a VM to reach a specific power state
 func (aa *AzureAdapter) waitForVMState(ctx context.Context, resourceGroup, vmName string, targetState AzureVMPowerState) error {
+	// Check immediately first before waiting for ticker
+	view, err := aa.compute.GetVMInstanceView(ctx, resourceGroup, vmName)
+	if err != nil {
+		if targetState == AzureVMStateDeleted {
+			// VM not found means it's deleted
+			return nil
+		}
+		return err
+	}
+	if view.PowerState == targetState {
+		return nil
+	}
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 

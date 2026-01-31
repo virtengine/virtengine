@@ -187,12 +187,15 @@ func (s *MsgServerTestSuite) TestRevokeFactor_RequiresMFA() {
 	err := s.keeper.EnrollFactor(s.ctx, enrollment)
 	s.Require().NoError(err)
 
-	// Enable MFA policy
+	// Enable MFA policy with required factors
 	policy := &types.MFAPolicy{
 		AccountAddress: address.String(),
 		Enabled:        true,
-		CreatedAt:      time.Now().Unix(),
-		UpdatedAt:      time.Now().Unix(),
+		RequiredFactors: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeTOTP}},
+		},
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
 	}
 	err = s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
@@ -236,7 +239,10 @@ func (s *MsgServerTestSuite) TestSetMFAPolicy_Success() {
 		Policy: types.MFAPolicy{
 			AccountAddress: address.String(),
 			Enabled:        true,
-			VEIDThreshold:  50,
+			RequiredFactors: []types.FactorCombination{
+				{Factors: []types.FactorType{types.FactorTypeTOTP}},
+			},
+			VEIDThreshold: 50,
 		},
 	}
 
@@ -376,7 +382,9 @@ func (s *MsgServerTestSuite) TestAddTrustedDevice_Success() {
 			UserAgent:   "iPhone 15",
 		},
 		MFAProof: &types.MFAProof{
-			SessionID: "session-for-device",
+			SessionID:       "session-for-device",
+			VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
+			Timestamp:       s.ctx.BlockTime().Unix(),
 		},
 	}
 

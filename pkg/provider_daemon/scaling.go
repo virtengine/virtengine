@@ -502,10 +502,14 @@ func (sbe *ScalableBidEngine) Stop() {
 	}
 }
 
+// instanceIDCounter is an atomic counter for generating unique instance IDs
+var instanceIDCounter atomic.Uint64
+
 // GenerateInstanceID generates a unique instance ID based on hostname and timestamp
 func GenerateInstanceID(prefix string) string {
 	timestamp := time.Now().UnixNano()
-	data := fmt.Sprintf("%s-%d", prefix, timestamp)
+	counter := instanceIDCounter.Add(1)
+	data := fmt.Sprintf("%s-%d-%d", prefix, timestamp, counter)
 	hash := sha256.Sum256([]byte(data))
 	return prefix + "-" + hex.EncodeToString(hash[:8])
 }

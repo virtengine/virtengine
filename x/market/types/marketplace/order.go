@@ -313,7 +313,7 @@ func (o *Order) Validate() error {
 
 // CanAcceptBid checks if the order can accept new bids
 func (o *Order) CanAcceptBid() error {
-	return o.CanAcceptBidAt(time.Unix(0, 0))
+	return o.CanAcceptBidAt(time.Now())
 }
 
 // CanAcceptBidAt checks if the order can accept new bids at a specific time

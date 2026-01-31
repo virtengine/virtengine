@@ -6,10 +6,10 @@ import (
 
 // Message type constants for compliance messages
 const (
-	TypeMsgSubmitComplianceCheck       = "submit_compliance_check"
-	TypeMsgAttestCompliance            = "attest_compliance"
-	TypeMsgUpdateComplianceParams      = "update_compliance_params"
-	TypeMsgRegisterComplianceProvider  = "register_compliance_provider"
+	TypeMsgSubmitComplianceCheck        = "submit_compliance_check"
+	TypeMsgAttestCompliance             = "attest_compliance"
+	TypeMsgUpdateComplianceParams       = "update_compliance_params"
+	TypeMsgRegisterComplianceProvider   = "register_compliance_provider"
 	TypeMsgDeactivateComplianceProvider = "deactivate_compliance_provider"
 )
 
@@ -80,6 +80,10 @@ func (msg *MsgAttestCompliance) ValidateBasic() error {
 
 	if msg.AttestationType == "" {
 		return ErrInsufficientAttestations.Wrap("attestation_type cannot be empty")
+	}
+
+	if msg.ExpiryBlocks < 0 {
+		return ErrInvalidComplianceParams.Wrap("expiry_blocks cannot be negative")
 	}
 
 	return nil

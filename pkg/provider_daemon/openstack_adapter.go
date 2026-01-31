@@ -1134,16 +1134,16 @@ type OpenStackAdapter struct {
 // NewOpenStackAdapter creates a new OpenStack adapter
 func NewOpenStackAdapter(cfg OpenStackAdapterConfig) *OpenStackAdapter {
 	return &OpenStackAdapter{
-		nova:    cfg.Nova,
-		neutron: cfg.Neutron,
-		cinder:  cfg.Cinder,
-		parser:  NewManifestParser(),
-		vms:     make(map[string]*DeployedVM),
-		providerID: cfg.ProviderID,
-		resourcePrefix: cfg.ResourcePrefix,
-		externalNetworkID: cfg.ExternalNetworkID,
+		nova:                      cfg.Nova,
+		neutron:                   cfg.Neutron,
+		cinder:                    cfg.Cinder,
+		parser:                    NewManifestParser(),
+		vms:                       make(map[string]*DeployedVM),
+		providerID:                cfg.ProviderID,
+		resourcePrefix:            cfg.ResourcePrefix,
+		externalNetworkID:         cfg.ExternalNetworkID,
 		defaultSecurityGroupRules: cfg.DefaultSecurityGroupRules,
-		statusUpdateChan: cfg.StatusUpdateChan,
+		statusUpdateChan:          cfg.StatusUpdateChan,
 		defaultLabels: map[string]string{
 			"virtengine.managed-by": "provider-daemon",
 			"virtengine.provider":   cfg.ProviderID,
@@ -1170,19 +1170,19 @@ func (oa *OpenStackAdapter) DeployVM(ctx context.Context, manifest *Manifest, de
 
 	// Create VM record
 	vm := &DeployedVM{
-		ID:           vmID,
-		DeploymentID: deploymentID,
-		LeaseID:      leaseID,
-		Name:         vmName,
-		State:        VMStateBuilding,
-		Manifest:     manifest,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-		Networks:     make([]VMNetworkAttachment, 0),
-		Volumes:      make([]VMVolumeAttachment, 0),
-		FloatingIPs:  make([]string, 0),
+		ID:             vmID,
+		DeploymentID:   deploymentID,
+		LeaseID:        leaseID,
+		Name:           vmName,
+		State:          VMStateBuilding,
+		Manifest:       manifest,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		Networks:       make([]VMNetworkAttachment, 0),
+		Volumes:        make([]VMVolumeAttachment, 0),
+		FloatingIPs:    make([]string, 0),
 		SecurityGroups: make([]string, 0),
-		Metadata:     make(map[string]string),
+		Metadata:       make(map[string]string),
 	}
 
 	oa.mu.Lock()
@@ -2109,6 +2109,18 @@ func (oa *OpenStackAdapter) waitForServerActive(ctx context.Context, serverID st
 }
 
 func (oa *OpenStackAdapter) waitForServerState(ctx context.Context, serverID string, targetState VMState) error {
+	// Check immediately first before waiting for ticker
+	server, err := oa.nova.GetServer(ctx, serverID)
+	if err != nil {
+		return err
+	}
+	if server.Status == targetState {
+		return nil
+	}
+	if server.Status == VMStateError {
+		return fmt.Errorf("server entered ERROR state")
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -2134,6 +2146,13 @@ func (oa *OpenStackAdapter) waitForServerState(ctx context.Context, serverID str
 }
 
 func (oa *OpenStackAdapter) waitForServerDeleted(ctx context.Context, serverID string) error {
+	// Check immediately first before waiting for ticker
+	_, err := oa.nova.GetServer(ctx, serverID)
+	if err != nil {
+		// Server not found means it's deleted
+		return nil
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -2152,6 +2171,18 @@ func (oa *OpenStackAdapter) waitForServerDeleted(ctx context.Context, serverID s
 }
 
 func (oa *OpenStackAdapter) waitForVolumeAvailable(ctx context.Context, volumeID string) error {
+	// Check immediately first before waiting for ticker
+	vol, err := oa.cinder.GetVolume(ctx, volumeID)
+	if err != nil {
+		return err
+	}
+	if vol.Status == "available" {
+		return nil
+	}
+	if vol.Status == "error" {
+		return fmt.Errorf("volume entered error state")
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 

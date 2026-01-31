@@ -1890,6 +1890,18 @@ func (aa *AWSAdapter) configureSecurityGroupRules(ctx context.Context, sgID stri
 
 // waitForInstanceRunning waits for an instance to reach the running state
 func (aa *AWSAdapter) waitForInstanceRunning(ctx context.Context, instanceID string) error {
+	// Check immediately first before waiting for ticker
+	info, err := aa.ec2.GetInstance(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	if info.State == EC2StateRunning {
+		return nil
+	}
+	if info.State == EC2StateTerminated || info.State == EC2StateShuttingDown {
+		return fmt.Errorf("%w: instance %s is %s: %s", ErrInvalidEC2InstanceState, instanceID, info.State, info.StateReason)
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -2087,6 +2099,18 @@ func (aa *AWSAdapter) StopInstance(ctx context.Context, instanceID string, force
 
 // waitForInstanceStopped waits for an instance to reach the stopped state
 func (aa *AWSAdapter) waitForInstanceStopped(ctx context.Context, instanceID string) error {
+	// Check immediately first before waiting for ticker
+	info, err := aa.ec2.GetInstance(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	if info.State == EC2StateStopped {
+		return nil
+	}
+	if info.State == EC2StateTerminated {
+		return fmt.Errorf("%w: instance %s is terminated", ErrInvalidEC2InstanceState, instanceID)
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -2176,6 +2200,18 @@ func (aa *AWSAdapter) TerminateInstance(ctx context.Context, instanceID string) 
 	}
 
 	aa.updateInstanceState(instanceID, EC2StateShuttingDown, "Terminating instance")
+
+	// Check immediately first before waiting for ticker
+	info, err := aa.ec2.GetInstance(ctx, instance.InstanceID)
+	if err != nil {
+		// Instance may already be gone
+		aa.updateInstanceState(instanceID, EC2StateTerminated, "Instance terminated")
+		return nil
+	}
+	if info.State == EC2StateTerminated {
+		aa.updateInstanceState(instanceID, EC2StateTerminated, "Instance terminated")
+		return nil
+	}
 
 	// Wait for terminated state
 	ticker := time.NewTicker(5 * time.Second)

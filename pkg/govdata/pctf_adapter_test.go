@@ -654,6 +654,7 @@ func TestPCTFAdapter_WithMockServer(t *testing.T) {
 		Timeout:            5 * time.Second,
 		BaseURL:            server.URL,
 		SupportedProvinces: []string{"ON"},
+		RateLimitPerMinute: 60,
 	}
 
 	adapter, err := NewPCTFAdapter(baseConfig, pctfConfig)

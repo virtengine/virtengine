@@ -506,13 +506,14 @@ func TestEIDASAdapter_WithMockServer(t *testing.T) {
 		Timeout:      5 * time.Second,
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
-		Timeout:               5 * time.Second,
-		BaseURL:               server.URL,
-		SupportedCountries:    []string{"DE"},
+		APIKey:                 "test-key",
+		Timeout:                5 * time.Second,
+		BaseURL:                server.URL,
+		SupportedCountries:     []string{"DE"},
+		RateLimitPerMinute:     30,
 	}
 
 	adapter, err := NewEIDASAdapter(baseConfig, eidasConfig)

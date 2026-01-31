@@ -17,7 +17,7 @@ func TestDefaultSSHConfig(t *testing.T) {
 	assert.Equal(t, 30*time.Second, config.Timeout)
 	assert.Equal(t, 30*time.Second, config.KeepAliveInterval)
 	assert.Equal(t, 3, config.MaxRetries)
-	assert.Equal(t, "ignore", config.HostKeyCallback)
+	assert.Equal(t, "known_hosts", config.HostKeyCallback) // Secure default: verify host keys
 	assert.Equal(t, 5, config.PoolSize)
 	assert.Equal(t, 5*time.Minute, config.PoolIdleTimeout)
 }

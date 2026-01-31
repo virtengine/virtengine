@@ -1613,9 +1613,9 @@ func TestVMwareAdapterGenerateVMName(t *testing.T) {
 		vmID     string
 		expected string
 	}{
-		{"test-vm", "abcd1234efgh5678", "ve-test-test-vm-abcd1234"},
-		{"Test VM", "12345678abcdefgh", "ve-test-test-vm-12345678"},
-		{"test_vm_name", "deadbeef12345678", "ve-test-test-vm-name-deadbeef"},
+		{"test-vm", "abcd1234efgh5678", "virtengine-test-vm-abcd1234"},
+		{"Test VM", "12345678abcdefgh", "virtengine-test-vm-12345678"},
+		{"test_vm_name", "deadbeef12345678", "virtengine-test-vm-name-deadbeef"},
 	}
 
 	for _, tt := range tests {

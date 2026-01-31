@@ -429,13 +429,14 @@ func TestDVSDMVAdapter_WithMockServer(t *testing.T) {
 		Timeout:      5 * time.Second,
 	}
 	dvsConfig := DVSConfig{
-		Environment:     DVSEnvironmentSandbox,
-		OrganisationID:  "test-org",
-		ClientID:        "test-client",
-		ClientSecret:    "test-secret",
-		SupportedStates: []string{"NSW"},
-		Timeout:         5 * time.Second,
-		BaseURL:         server.URL,
+		Environment:        DVSEnvironmentSandbox,
+		OrganisationID:     "test-org",
+		ClientID:           "test-client",
+		ClientSecret:       "test-secret",
+		SupportedStates:    []string{"NSW"},
+		Timeout:            5 * time.Second,
+		BaseURL:            server.URL,
+		RateLimitPerMinute: 60,
 	}
 
 	adapter, err := NewDVSDMVAdapter(baseConfig, dvsConfig)

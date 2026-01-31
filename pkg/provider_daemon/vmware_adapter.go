@@ -108,8 +108,8 @@ const (
 
 // vsphereValidPowerTransitions defines valid VM power state transitions
 var vsphereValidPowerTransitions = map[VSphereVMPowerState][]VSphereVMPowerState{
-	VSphereVMPowerOn:  {VSphereVMPowerOff, VSphereVMSuspended},
-	VSphereVMPowerOff: {VSphereVMPowerOn},
+	VSphereVMPowerOn:   {VSphereVMPowerOff, VSphereVMSuspended},
+	VSphereVMPowerOff:  {VSphereVMPowerOn},
 	VSphereVMSuspended: {VSphereVMPowerOn},
 }
 
@@ -1024,10 +1024,10 @@ type VMwareDeploymentOptions struct {
 
 // VMwareAdapter manages VM deployments to VMware vSphere via Waldur
 type VMwareAdapter struct {
-	mu       sync.RWMutex
-	vsphere  VSphereClient
-	parser   *ManifestParser
-	vms      map[string]*VSphereDeployedVM
+	mu      sync.RWMutex
+	vsphere VSphereClient
+	parser  *ManifestParser
+	vms     map[string]*VSphereDeployedVM
 
 	// providerID is the provider's on-chain ID
 	providerID string
@@ -1841,12 +1841,22 @@ func (va *VMwareAdapter) generateVMName(baseName, vmID string) string {
 	if prefix == "" {
 		prefix = "ve"
 	}
+	// Remove trailing dash from prefix if present (will be added by format string)
+	prefix = strings.TrimSuffix(prefix, "-")
+
 	sanitized := strings.ToLower(baseName)
 	sanitized = strings.ReplaceAll(sanitized, "_", "-")
 	sanitized = strings.ReplaceAll(sanitized, " ", "-")
+
 	// vSphere VM names have length limits and character restrictions
-	if len(sanitized) > 40 {
-		sanitized = sanitized[:40]
+	// Max length = 60 chars; reserve space for: prefix + "-" + "-" + vmID[:8]
+	// That leaves: 60 - len(prefix) - 1 - 1 - 8 = 50 - len(prefix)
+	maxSanitizedLen := 50 - len(prefix)
+	if maxSanitizedLen < 8 {
+		maxSanitizedLen = 8 // Minimum to keep some meaning
+	}
+	if len(sanitized) > maxSanitizedLen {
+		sanitized = sanitized[:maxSanitizedLen]
 	}
 	return fmt.Sprintf("%s-%s-%s", prefix, sanitized, vmID[:8])
 }
@@ -1955,4 +1965,3 @@ func (va *VMwareAdapter) updateVMStatus(vmID string, powerState VSphereVMPowerSt
 		}
 	}
 }
-
