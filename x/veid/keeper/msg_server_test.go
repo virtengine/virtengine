@@ -38,14 +38,14 @@ func (s *MsgServerTestSuite) createTestPayloadPB() veidv1.EncryptedPayloadEnvelo
 	sig := make([]byte, 64)
 	_, _ = rand.Read(sig)
 	return veidv1.EncryptedPayloadEnvelope{
-		Version:         1,
-		AlgorithmId:     "X25519-XSALSA20-POLY1305",
+		Version:          1,
+		AlgorithmId:      "X25519-XSALSA20-POLY1305",
 		AlgorithmVersion: 1,
-		RecipientKeyIds: []string{"recipient1"},
-		Nonce:           nonce,
-		Ciphertext:      ciphertext,
-		SenderSignature: sig,
-		SenderPubKey:    pubKey,
+		RecipientKeyIds:  []string{"recipient1"},
+		Nonce:            nonce,
+		Ciphertext:       ciphertext,
+		SenderSignature:  sig,
+		SenderPubKey:     pubKey,
 	}
 }
 
@@ -81,7 +81,7 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_Success() {
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().Equal("test-scope-msg-1", resp.ScopeId)
-	s.Require().Equal(types.VerificationStatusPending, resp.Status)
+	s.Require().Equal(veidv1.VerificationStatusPending, resp.Status)
 
 	// Verify scope was created
 	scope, found := s.keeper.GetScope(s.ctx, address, "test-scope-msg-1")
@@ -222,7 +222,7 @@ func (s *MsgServerTestSuite) TestMsgRequestVerification_Success() {
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().Equal("scope-verify-req", resp.ScopeId)
-	s.Require().Equal(types.VerificationStatusInProgress, resp.Status)
+	s.Require().Equal(veidv1.VerificationStatusInProgress, resp.Status)
 
 	// Verify scope status is updated
 	updatedScope, found := s.keeper.GetScope(s.ctx, address, "scope-verify-req")

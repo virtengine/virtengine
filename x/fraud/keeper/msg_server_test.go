@@ -108,6 +108,18 @@ func (s *MsgServerTestSuite) createContextWithStore(storeKey *storetypes.KVStore
 	return ctx
 }
 
+// validEvidence returns a valid evidence slice for fraud reports
+func validEvidence() []types.EncryptedEvidencePB {
+	return []types.EncryptedEvidencePB{{
+		AlgorithmId:     "X25519-XSalsa20-Poly1305",
+		RecipientKeyIds: []string{"moderator-key-1"},
+		Nonce:           []byte("123456789012345678901234"), // 24 bytes
+		Ciphertext:      []byte("encrypted evidence data ciphertext"),
+		SenderPubKey:    []byte("sender-public-key-32-bytes-long!"),
+		EvidenceHash:    "sha256:abcdef123456",
+	}}
+}
+
 // Test: SubmitFraudReport - success
 func (s *MsgServerTestSuite) TestSubmitFraudReport_Success() {
 	reporterAddr := sdk.AccAddress([]byte("reporter-address123"))
@@ -121,6 +133,7 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_Success() {
 		Category:        types.FraudCategoryPBFakeIdentity,
 		Description:     "This is a test fraud report",
 		RelatedOrderIds: []string{"order-1", "order-2"},
+		Evidence:        validEvidence(),
 	}
 
 	resp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), msg)
@@ -141,7 +154,8 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_InvalidAddress() {
 		Reporter:      "invalid-address",
 		ReportedParty: "cosmos1reportedparty",
 		Category:      types.FraudCategoryPBFakeIdentity,
-		Description:   "Test description",
+		Description:   "Test description that is valid",
+		Evidence:      validEvidence(),
 	}
 
 	_, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), msg)
@@ -159,7 +173,8 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_UnauthorizedReporter() {
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reportedparty",
 		Category:      types.FraudCategoryPBFakeIdentity,
-		Description:   "Test description",
+		Description:   "Test description that is valid",
+		Evidence:      validEvidence(),
 	}
 
 	_, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), msg)
@@ -186,7 +201,8 @@ func (s *MsgServerTestSuite) TestAssignModerator_Success() {
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
 		Category:      types.FraudCategoryPBPaymentFraud,
-		Description:   "Payment fraud description",
+		Description:   "Payment fraud description that is at least 10 characters long",
+		Evidence:      validEvidence(),
 	}
 
 	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
@@ -254,6 +270,7 @@ func (s *MsgServerTestSuite) TestUpdateReportStatus_Success() {
 		ReportedParty: "cosmos1reported",
 		Category:      types.FraudCategoryPBSybilAttack,
 		Description:   "Sybil attack description",
+		Evidence:      validEvidence(),
 	}
 
 	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
@@ -291,7 +308,8 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_Success() {
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
 		Category:      types.FraudCategoryPBPaymentFraud,
-		Description:   "Payment fraud",
+		Description:   "Payment fraud description",
+		Evidence:      validEvidence(),
 	}
 
 	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
@@ -329,7 +347,8 @@ func (s *MsgServerTestSuite) TestRejectFraudReport_Success() {
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
 		Category:      types.FraudCategoryPBOther,
-		Description:   "False report",
+		Description:   "False report description",
+		Evidence:      validEvidence(),
 	}
 
 	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
@@ -366,10 +385,21 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
 		Category:      types.FraudCategoryPBSybilAttack,
-		Description:   "Complex sybil attack",
+		Description:   "Complex sybil attack description",
+		Evidence:      validEvidence(),
 	}
 
 	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
+	s.Require().NoError(err)
+
+	// First transition to reviewing status (required before escalation)
+	updateMsg := &types.MsgUpdateReportStatus{
+		ReportId:  submitResp.ReportId,
+		Moderator: moderatorAddr.String(),
+		NewStatus: types.FraudReportStatusPBReviewing,
+		Notes:     "Starting review",
+	}
+	_, err = s.msgServer.UpdateReportStatus(sdk.WrapSDKContext(s.ctx), updateMsg)
 	s.Require().NoError(err)
 
 	// Escalate the report

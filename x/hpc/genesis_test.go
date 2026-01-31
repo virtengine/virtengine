@@ -9,8 +9,18 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	_ "github.com/virtengine/virtengine/sdk/go/sdkutil"
+
 	"github.com/virtengine/virtengine/x/hpc"
 	"github.com/virtengine/virtengine/x/hpc/types"
+)
+
+// Valid test addresses (use akash prefix as configured by sdkutil)
+const (
+	testProviderAddr  = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
+	testProviderAddr2 = "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4"
+	testCustomerAddr  = "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4"
+	testDisputerAddr  = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
 )
 
 type GenesisTestSuite struct {
@@ -49,7 +59,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidClusters() {
 		{
 			ClusterID:       "hpc-cluster-1",
 			Name:            "Test Cluster",
-			ProviderAddress: "cosmos1provider",
+			ProviderAddress: testProviderAddr,
 			State:           types.ClusterStateActive,
 			TotalNodes:      10,
 			AvailableNodes:  8,
@@ -73,9 +83,13 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidOfferings() {
 		{
 			OfferingID:      "hpc-offering-1",
 			ClusterID:       "hpc-cluster-1",
-			ProviderAddress: "cosmos1provider",
+			ProviderAddress: testProviderAddr,
 			Name:            "Standard HPC",
 			Active:          true,
+			QueueOptions: []types.QueueOption{
+				{PartitionName: "default", DisplayName: "Default Queue", MaxNodes: 10, MaxRuntime: 3600, PriceMultiplier: "1.0"},
+			},
+			MaxRuntimeSeconds: 3600,
 			Pricing: types.HPCPricing{
 				BaseNodeHourPrice: "100",
 			},
@@ -97,9 +111,14 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidJobs() {
 			JobID:             "hpc-job-1",
 			OfferingID:        "hpc-offering-1",
 			ClusterID:         "hpc-cluster-1",
-			CustomerAddress:   "cosmos1submitter",
+			ProviderAddress:   testProviderAddr,
+			CustomerAddress:   testCustomerAddr,
 			State:             types.JobStateRunning,
+			QueueName:         "default",
 			MaxRuntimeSeconds: 3600,
+			WorkloadSpec: types.JobWorkloadSpec{
+				ContainerImage: "hpc/simulation:latest",
+			},
 			Resources: types.JobResources{
 				Nodes:           1,
 				CPUCoresPerNode: 8,
@@ -122,7 +141,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidCluster_EmptyID() {
 		{
 			ClusterID:       "", // Invalid
 			Name:            "Test Cluster",
-			ProviderAddress: "cosmos1provider",
+			ProviderAddress: testProviderAddr,
 		},
 	}
 
@@ -137,7 +156,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidOffering_EmptyID() {
 		{
 			OfferingID:      "", // Invalid
 			ClusterID:       "hpc-cluster-1",
-			ProviderAddress: "cosmos1provider",
+			ProviderAddress: testProviderAddr,
 		},
 	}
 
@@ -151,7 +170,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidJob_EmptyID() {
 	genesis.Jobs = []types.HPCJob{
 		{
 			JobID:           "", // Invalid
-			CustomerAddress: "cosmos1submitter",
+			CustomerAddress: testCustomerAddr,
 		},
 	}
 
@@ -166,13 +185,13 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateClusters() {
 		{
 			ClusterID:       "hpc-cluster-1",
 			Name:            "Cluster 1",
-			ProviderAddress: "cosmos1provider1",
+			ProviderAddress: testProviderAddr,
 			State:           types.ClusterStateActive,
 		},
 		{
 			ClusterID:       "hpc-cluster-1", // Duplicate
 			Name:            "Cluster 2",
-			ProviderAddress: "cosmos1provider2",
+			ProviderAddress: testProviderAddr2,
 			State:           types.ClusterStateActive,
 		},
 	}
@@ -188,14 +207,14 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateOfferings() {
 		{
 			OfferingID:      "hpc-offering-1",
 			ClusterID:       "hpc-cluster-1",
-			ProviderAddress: "cosmos1provider",
+			ProviderAddress: testProviderAddr,
 			Name:            "Offering 1",
 			Active:          true,
 		},
 		{
 			OfferingID:      "hpc-offering-1", // Duplicate
 			ClusterID:       "hpc-cluster-1",
-			ProviderAddress: "cosmos1provider",
+			ProviderAddress: testProviderAddr,
 			Name:            "Offering 2",
 			Active:          true,
 		},
@@ -278,9 +297,10 @@ func (s *GenesisTestSuite) TestHPCClusterValidate() {
 			cluster: types.HPCCluster{
 				ClusterID:       "hpc-cluster-1",
 				Name:            "Test Cluster",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 				State:           types.ClusterStateActive,
 				TotalNodes:      10,
+				Region:          "us-west-1",
 			},
 			expectError: false,
 		},
@@ -289,7 +309,7 @@ func (s *GenesisTestSuite) TestHPCClusterValidate() {
 			cluster: types.HPCCluster{
 				ClusterID:       "",
 				Name:            "Test Cluster",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 			},
 			expectError: true,
 		},
@@ -307,7 +327,7 @@ func (s *GenesisTestSuite) TestHPCClusterValidate() {
 			cluster: types.HPCCluster{
 				ClusterID:       "hpc-cluster-1",
 				Name:            "",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 			},
 			expectError: true,
 		},
@@ -337,9 +357,13 @@ func (s *GenesisTestSuite) TestHPCOfferingValidate() {
 			offering: types.HPCOffering{
 				OfferingID:      "hpc-offering-1",
 				ClusterID:       "hpc-cluster-1",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 				Name:            "Standard HPC",
 				Active:          true,
+				QueueOptions: []types.QueueOption{
+					{PartitionName: "default", DisplayName: "Default Queue", MaxNodes: 10, MaxRuntime: 3600, PriceMultiplier: "1.0"},
+				},
+				MaxRuntimeSeconds: 3600,
 				Pricing: types.HPCPricing{
 					BaseNodeHourPrice: "100",
 				},
@@ -351,7 +375,7 @@ func (s *GenesisTestSuite) TestHPCOfferingValidate() {
 			offering: types.HPCOffering{
 				OfferingID:      "",
 				ClusterID:       "hpc-cluster-1",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 			},
 			expectError: true,
 		},
@@ -360,7 +384,7 @@ func (s *GenesisTestSuite) TestHPCOfferingValidate() {
 			offering: types.HPCOffering{
 				OfferingID:      "hpc-offering-1",
 				ClusterID:       "",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 				Name:            "Invalid",
 			},
 			expectError: true,
@@ -393,9 +417,14 @@ func (s *GenesisTestSuite) TestHPCJobValidate() {
 				JobID:             "hpc-job-1",
 				OfferingID:        "hpc-offering-1",
 				ClusterID:         "hpc-cluster-1",
-				CustomerAddress:   "cosmos1submitter",
+				ProviderAddress:   testProviderAddr,
+				CustomerAddress:   testCustomerAddr,
 				State:             types.JobStatePending,
+				QueueName:         "default",
 				MaxRuntimeSeconds: 3600,
+				WorkloadSpec: types.JobWorkloadSpec{
+					ContainerImage: "hpc/simulation:latest",
+				},
 				Resources: types.JobResources{
 					Nodes:           1,
 					CPUCoresPerNode: 8,
@@ -409,7 +438,7 @@ func (s *GenesisTestSuite) TestHPCJobValidate() {
 			name: "empty job ID",
 			job: types.HPCJob{
 				JobID:           "",
-				CustomerAddress: "cosmos1submitter",
+				CustomerAddress: testCustomerAddr,
 			},
 			expectError: true,
 		},
@@ -425,7 +454,7 @@ func (s *GenesisTestSuite) TestHPCJobValidate() {
 			name: "zero resources",
 			job: types.HPCJob{
 				JobID:           "hpc-job-1",
-				CustomerAddress: "cosmos1submitter",
+				CustomerAddress: testCustomerAddr,
 				Resources: types.JobResources{
 					Nodes: 0,
 				},
@@ -459,7 +488,8 @@ func (s *GenesisTestSuite) TestHPCDisputeValidate() {
 			dispute: types.HPCDispute{
 				DisputeID:       "hpc-dispute-1",
 				JobID:           "hpc-job-1",
-				DisputerAddress: "cosmos1disputant",
+				DisputerAddress: testDisputerAddr,
+				DisputeType:     "service_quality",
 				Status:          types.DisputeStatusPending,
 				Reason:          "Service quality issue",
 				CreatedAt:       now,
@@ -471,7 +501,7 @@ func (s *GenesisTestSuite) TestHPCDisputeValidate() {
 			dispute: types.HPCDispute{
 				DisputeID:       "",
 				JobID:           "hpc-job-1",
-				DisputerAddress: "cosmos1disputant",
+				DisputerAddress: testDisputerAddr,
 			},
 			expectError: true,
 		},
@@ -480,7 +510,7 @@ func (s *GenesisTestSuite) TestHPCDisputeValidate() {
 			dispute: types.HPCDispute{
 				DisputeID:       "hpc-dispute-1",
 				JobID:           "",
-				DisputerAddress: "cosmos1disputant",
+				DisputerAddress: testDisputerAddr,
 			},
 			expectError: true,
 		},
@@ -489,7 +519,7 @@ func (s *GenesisTestSuite) TestHPCDisputeValidate() {
 			dispute: types.HPCDispute{
 				DisputeID:       "hpc-dispute-1",
 				JobID:           "hpc-job-1",
-				DisputerAddress: "cosmos1disputant",
+				DisputerAddress: testDisputerAddr,
 				Reason:          "",
 			},
 			expectError: true,
@@ -568,18 +598,23 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 			{
 				ClusterID:       "hpc-cluster-1",
 				Name:            "Production Cluster",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 				State:           types.ClusterStateActive,
 				TotalNodes:      100,
+				Region:          "us-west-1",
 			},
 		},
 		Offerings: []types.HPCOffering{
 			{
 				OfferingID:      "hpc-offering-1",
 				ClusterID:       "hpc-cluster-1",
-				ProviderAddress: "cosmos1provider",
+				ProviderAddress: testProviderAddr,
 				Name:            "Standard",
 				Active:          true,
+				QueueOptions: []types.QueueOption{
+					{PartitionName: "default", DisplayName: "Default", MaxNodes: 100, MaxRuntime: 3600, PriceMultiplier: "1.0"},
+				},
+				MaxRuntimeSeconds: 3600,
 				Pricing: types.HPCPricing{
 					BaseNodeHourPrice: "100",
 					CPUCoreHourPrice:  "10",
@@ -592,9 +627,14 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 				JobID:             "hpc-job-1",
 				OfferingID:        "hpc-offering-1",
 				ClusterID:         "hpc-cluster-1",
-				CustomerAddress:   "cosmos1user",
+				ProviderAddress:   testProviderAddr,
+				CustomerAddress:   testCustomerAddr,
 				State:             types.JobStateRunning,
+				QueueName:         "default",
 				MaxRuntimeSeconds: 3600,
+				WorkloadSpec: types.JobWorkloadSpec{
+					ContainerImage: "hpc/simulation:latest",
+				},
 				Resources: types.JobResources{
 					Nodes:           1,
 					CPUCoresPerNode: 8,
@@ -618,15 +658,26 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 				RewardID:    "hpc-reward-1",
 				JobID:       "hpc-job-1",
 				ClusterID:   "hpc-cluster-1",
+				Source:      types.HPCRewardSourceJobCompletion,
 				TotalReward: sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
-				IssuedAt:    now,
+				Recipients: []types.HPCRewardRecipient{
+					{
+						Address:            testProviderAddr,
+						Amount:             sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+						RecipientType:      "provider",
+						ContributionWeight: "1.0",
+						Reason:             "Job completion reward",
+					},
+				},
+				IssuedAt: now,
 			},
 		},
 		Disputes: []types.HPCDispute{
 			{
 				DisputeID:       "hpc-dispute-1",
 				JobID:           "hpc-job-1",
-				DisputerAddress: "cosmos1user",
+				DisputerAddress: testDisputerAddr,
+				DisputeType:     "service_quality",
 				Status:          types.DisputeStatusPending,
 				Reason:          "Quality issue",
 				CreatedAt:       now,
@@ -665,7 +716,7 @@ func TestExtractSequenceFromID(t *testing.T) {
 				{
 					ClusterID:       tc.id,
 					Name:            "Test",
-					ProviderAddress: "cosmos1provider",
+					ProviderAddress: testProviderAddr,
 					State:           types.ClusterStateActive,
 				},
 			}

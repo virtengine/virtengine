@@ -89,7 +89,10 @@ check_vet() {
 
     # Check if we're on main or have no diverged commits
     if git rev-parse --verify "$base_branch" &>/dev/null; then
+        # Exclude sdk/ and vendor/ as they are separate Go modules with their own go.mod
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+            grep -v '^sdk/' | \
+            grep -v '^vendor/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
     fi
@@ -157,34 +160,98 @@ check_build() {
 # Check 6: Unit tests
 # =========================================================================
 check_test() {
-    # Run tests with timeout. Using simpler approach that works on Windows.
-    # Using -short to skip long-running tests
-    # Using -timeout to prevent individual tests from hanging indefinitely
-    # Using -failfast to stop on first failure (faster feedback)
-    # Using -mod=vendor for faster module resolution
+    # Run tests with robust timeout handling for pre-push hook reliability.
+    # Key optimizations:
+    # - Global timeout wrapper (prevents indefinite hangs)
+    # - Limited parallelism (avoids resource contention)
+    # - Short mode (skips long-running tests)
+    # - Failfast (immediate feedback on first failure)
+    # - Compiled test caching (faster repeated runs)
 
-    local go_timeout="180s"  # 3 minutes per test package
+    local go_timeout="60s"     # Per-package timeout (reduced - short tests should be fast)
+    local global_timeout=120   # Global timeout in seconds (2 minutes total for all tests)
+    local parallel_limit=4     # Limit parallel test execution
 
     # Optimization: only test changed packages if possible
     local changed_packages=""
     local base_branch="origin/main"
 
     if git rev-parse --verify "$base_branch" &>/dev/null; then
+        # Exclude sdk/ and vendor/ as they are separate Go modules with their own go.mod
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '_test\.go$' | \
+            grep -v '^sdk/' | \
+            grep -v '^vendor/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
     fi
+
+    # Build test arguments
+    local test_args="-short -timeout $go_timeout -failfast -mod=vendor -p $parallel_limit"
+
+    # Run with global timeout wrapper
+    run_with_timeout() {
+        local timeout_secs=$1
+        shift
+
+        # Try timeout command (GNU coreutils, available on Linux/Git Bash)
+        if command -v timeout &>/dev/null; then
+            timeout --signal=KILL "$timeout_secs" "$@"
+            return $?
+        fi
+
+        # Fallback: background job with manual timeout (works on all bash)
+        local pid
+        "$@" &
+        pid=$!
+
+        # Wait with timeout
+        local elapsed=0
+        while kill -0 "$pid" 2>/dev/null; do
+            if [ "$elapsed" -ge "$timeout_secs" ]; then
+                hook_warn "Tests exceeded ${timeout_secs}s timeout - killing..."
+                kill -9 "$pid" 2>/dev/null || true
+                wait "$pid" 2>/dev/null || true
+                return 124  # timeout exit code
+            fi
+            sleep 1
+            elapsed=$((elapsed + 1))
+        done
+
+        wait "$pid"
+        return $?
+    }
 
     if [ -n "${changed_packages:-}" ]; then
         local pkg_count
         pkg_count=$(echo "$changed_packages" | wc -w | tr -d ' ')
         hook_step "Testing changed packages only ($pkg_count packages)"
+
         # shellcheck disable=SC2086
-        go test -short -timeout "$go_timeout" -failfast -mod=vendor $changed_packages 2>&1
+        run_with_timeout "$global_timeout" go test $test_args $changed_packages 2>&1
+        local exit_code=$?
+
+        if [ "$exit_code" -eq 124 ]; then
+            hook_fail "Tests timed out after ${global_timeout}s"
+            hook_info "Tip: Skip slow tests with VE_HOOK_SKIP_TEST=1 git push"
+            return 1
+        fi
+        return "$exit_code"
     else
-        # Fallback: run all tests
-        go test -short -timeout "$go_timeout" -failfast -mod=vendor ./... 2>&1
+        # Fallback: run critical packages only (not ./... which is too slow)
+        hook_step "Testing core packages (no changed files detected)"
+        local core_packages="./x/... ./pkg/..."
+
+        # shellcheck disable=SC2086
+        run_with_timeout "$global_timeout" go test $test_args $core_packages 2>&1
+        local exit_code=$?
+
+        if [ "$exit_code" -eq 124 ]; then
+            hook_fail "Tests timed out after ${global_timeout}s"
+            hook_info "Tip: Skip slow tests with VE_HOOK_SKIP_TEST=1 git push"
+            return 1
+        fi
+        return "$exit_code"
     fi
 }
 

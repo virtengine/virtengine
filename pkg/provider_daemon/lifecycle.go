@@ -114,19 +114,19 @@ type KeyLifecyclePolicy struct {
 // DefaultKeyLifecyclePolicy returns the default lifecycle policy
 func DefaultKeyLifecyclePolicy() *KeyLifecyclePolicy {
 	return &KeyLifecyclePolicy{
-		Name:                         "default",
-		Description:                  "Default key lifecycle policy",
-		MaxActiveAgeDays:             90,
-		RotationGracePeriodDays:      7,
-		ExpirationDays:               365,
-		ArchiveAfterDeactivationDays: 30,
-		DestroyAfterArchiveDays:      365,
-		RequireApprovalForActivation: false,
+		Name:                          "default",
+		Description:                   "Default key lifecycle policy",
+		MaxActiveAgeDays:              90,
+		RotationGracePeriodDays:       7,
+		ExpirationDays:                365,
+		ArchiveAfterDeactivationDays:  30,
+		DestroyAfterArchiveDays:       365,
+		RequireApprovalForActivation:  false,
 		RequireApprovalForDestruction: true,
-		AutoRotate:                   true,
-		NotifyBeforeExpirationDays:   30,
-		AllowedKeyTypes:              []string{"ed25519", "secp256k1", "p256"},
-		MinimumKeyStrength:           256,
+		AutoRotate:                    true,
+		NotifyBeforeExpirationDays:    30,
+		AllowedKeyTypes:               []string{"ed25519", "secp256k1", "p256"},
+		MinimumKeyStrength:            256,
 	}
 }
 
@@ -491,6 +491,12 @@ func (lm *KeyLifecycleManager) GetKeysNeedingRotation() []*KeyLifecycleRecord {
 			continue
 		}
 
+		// If MaxActiveAgeDays is 0, key needs rotation immediately
+		if policy.MaxActiveAgeDays == 0 {
+			records = append(records, record)
+			continue
+		}
+
 		rotationDue := record.CreatedAt.AddDate(0, 0, policy.MaxActiveAgeDays)
 		if record.LastRotatedAt != nil {
 			rotationDue = record.LastRotatedAt.AddDate(0, 0, policy.MaxActiveAgeDays)
@@ -621,15 +627,15 @@ func (lm *KeyLifecycleManager) GenerateLifecycleReport() *LifecycleReport {
 
 // LifecycleReport contains lifecycle statistics
 type LifecycleReport struct {
-	GeneratedAt     time.Time           `json:"generated_at"`
-	TotalKeys       int                 `json:"total_keys"`
-	ActiveKeys      int                 `json:"active_keys"`
-	ExpiredKeys     int                 `json:"expired_keys"`
-	CompromisedKeys int                 `json:"compromised_keys"`
-	ByState         map[string]int      `json:"by_state"`
-	ByPolicy        map[string]int      `json:"by_policy"`
-	ByType          map[string]int      `json:"by_type"`
-	RecentEvents    []StateTransition   `json:"recent_events"`
+	GeneratedAt     time.Time         `json:"generated_at"`
+	TotalKeys       int               `json:"total_keys"`
+	ActiveKeys      int               `json:"active_keys"`
+	ExpiredKeys     int               `json:"expired_keys"`
+	CompromisedKeys int               `json:"compromised_keys"`
+	ByState         map[string]int    `json:"by_state"`
+	ByPolicy        map[string]int    `json:"by_policy"`
+	ByType          map[string]int    `json:"by_type"`
+	RecentEvents    []StateTransition `json:"recent_events"`
 }
 
 // isValidTransition checks if a state transition is valid

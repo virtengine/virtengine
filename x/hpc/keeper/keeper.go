@@ -86,6 +86,17 @@ type IKeeper interface {
 	WithHPCRewards(ctx sdk.Context, fn func(types.HPCRewardRecord) bool)
 	WithDisputes(ctx sdk.Context, fn func(types.HPCDispute) bool)
 
+	// Routing enforcement (VE-5B)
+	CreateRoutingAuditRecord(ctx sdk.Context, record *types.RoutingAuditRecord) error
+	GetRoutingAuditRecord(ctx sdk.Context, recordID string) (types.RoutingAuditRecord, bool)
+	GetRoutingAuditRecordsByJob(ctx sdk.Context, jobID string) []types.RoutingAuditRecord
+	CreateRoutingViolation(ctx sdk.Context, violation *types.RoutingViolation) error
+	GetRoutingViolation(ctx sdk.Context, violationID string) (types.RoutingViolation, bool)
+	GetViolationsByProvider(ctx sdk.Context, providerAddr string) []types.RoutingViolation
+	ResolveRoutingViolation(ctx sdk.Context, violationID string, resolution string) error
+	ValidateJobRouting(ctx sdk.Context, job *types.HPCJob, targetClusterID string) (*types.RoutingAuditRecord, error)
+	RefreshSchedulingDecision(ctx sdk.Context, job *types.HPCJob) (*types.SchedulingDecision, error)
+
 	// Genesis sequence setters
 	SetNextClusterSequence(ctx sdk.Context, seq uint64)
 	SetNextOfferingSequence(ctx sdk.Context, seq uint64)

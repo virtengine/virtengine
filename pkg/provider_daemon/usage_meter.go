@@ -281,7 +281,7 @@ func (um *UsageMeter) Start(ctx context.Context) error {
 
 	um.wg.Add(1)
 	verrors.SafeGo("provider-daemon:usage-meter", func() {
-		defer um.wg.Done()
+		// Note: wg.Done() is called inside meteringLoop
 		um.meteringLoop(ctx)
 	})
 

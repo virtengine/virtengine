@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	// Initialize SDK config (bech32 prefixes) for tests
+	_ "github.com/virtengine/virtengine/sdk/go/sdkutil"
+
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -34,7 +37,7 @@ func NewMockHPCScheduler() *MockHPCScheduler {
 	return &MockHPCScheduler{
 		jobs:         make(map[string]*HPCSchedulerJob),
 		callbacks:    make([]HPCJobLifecycleCallback, 0),
-		ProviderAddr: "virtengine1testprovider",
+		ProviderAddr: "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
 	}
 }
 
@@ -321,8 +324,8 @@ func createTestJob(jobID string) *hpctypes.HPCJob {
 		JobID:           jobID,
 		OfferingID:      "offering-1",
 		ClusterID:       "cluster-test",
-		ProviderAddress: "virtengine1provider",
-		CustomerAddress: "virtengine1customer",
+		ProviderAddress: "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
+		CustomerAddress: "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4",
 		State:           hpctypes.JobStatePending,
 		QueueName:       "default",
 		WorkloadSpec: hpctypes.JobWorkloadSpec{
@@ -672,7 +675,7 @@ func TestHPCUsageReporter_CreateUsageRecord(t *testing.T) {
 		ReportInterval: time.Minute,
 		BatchSize:      10,
 	}
-	signer := NewMockSigner("virtengine1provider")
+	signer := NewMockSigner("akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63")
 	reporter := NewHPCUsageReporter(config, "test-cluster", signer)
 
 	job := &HPCSchedulerJob{
@@ -688,7 +691,7 @@ func TestHPCUsageReporter_CreateUsageRecord(t *testing.T) {
 
 	record, err := reporter.CreateUsageRecord(
 		job,
-		"virtengine1customer",
+		"akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4",
 		time.Now().Add(-time.Hour),
 		time.Now(),
 		false,

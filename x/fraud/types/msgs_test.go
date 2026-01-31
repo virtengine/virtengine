@@ -98,8 +98,9 @@ func TestMsgSubmitFraudReport_ValidateBasic(t *testing.T) {
 				Reporter:      "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgqjwl8sq",
 				ReportedParty: "cosmos15ky9du8a2wlstz6fpx3p4mqpjyrm5cgp0ctjdj",
 				Category:      FraudCategoryPBFakeIdentity,
-				Description:   strings.Repeat("a", MaxDescriptionLength+1),
-				Evidence:      validEvidence,
+				// ValidateBasic uses SDK's MaxDescriptionLength=10000, not local 5000
+				Description: strings.Repeat("a", 10001),
+				Evidence:    validEvidence,
 			},
 			wantErr: true,
 		},

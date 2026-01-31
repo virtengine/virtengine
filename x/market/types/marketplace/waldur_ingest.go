@@ -193,7 +193,7 @@ func (w *WaldurOfferingImport) ResolveCategory(cfg IngestConfig) OfferingCategor
 	// Try to infer from type string
 	typeLower := strings.ToLower(w.Type)
 	switch {
-	case strings.Contains(typeLower, "compute") || strings.Contains(typeLower, "vm"):
+	case strings.Contains(typeLower, "compute") || strings.Contains(typeLower, "virtualmachine") || strings.Contains(typeLower, "vm"):
 		return OfferingCategoryCompute
 	case strings.Contains(typeLower, "storage") || strings.Contains(typeLower, "volume"):
 		return OfferingCategoryStorage
@@ -203,7 +203,7 @@ func (w *WaldurOfferingImport) ResolveCategory(cfg IngestConfig) OfferingCategor
 		return OfferingCategoryHPC
 	case strings.Contains(typeLower, "gpu"):
 		return OfferingCategoryGPU
-	case strings.Contains(typeLower, "ml") || strings.Contains(typeLower, "machine"):
+	case strings.Contains(typeLower, "ml") || strings.Contains(typeLower, "machinelearning"):
 		return OfferingCategoryML
 	}
 
@@ -664,12 +664,12 @@ func resolvePricingModel(billingType string) PricingModel {
 // isReservedAttribute returns true if the attribute key is reserved.
 func isReservedAttribute(key string) bool {
 	reserved := map[string]bool{
-		"ve_offering_id":          true,
-		"ve_provider":             true,
-		"ve_category":             true,
-		"ve_version":              true,
-		"ve_min_identity_score":   true,
-		"ve_require_mfa":          true,
+		"ve_offering_id":           true,
+		"ve_provider":              true,
+		"ve_category":              true,
+		"ve_version":               true,
+		"ve_min_identity_score":    true,
+		"ve_require_mfa":           true,
 		"ve_max_concurrent_orders": true,
 	}
 	return reserved[key]

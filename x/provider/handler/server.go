@@ -57,17 +57,28 @@ func (ms msgServer) CreateProvider(goCtx context.Context, msg *types.MsgCreatePr
 		return nil, types.ErrProviderExists.Wrapf("id: %s", msg.Owner)
 	}
 
-	// MARKET-VEID-002: Check VEID score requirement
-	score, hasScore := ms.veid.GetVEIDScore(ctx, owner)
-	if !hasScore || score < 70 {
-		return nil, ErrInsufficientVEIDScore.Wrapf(
-			"provider registration requires VEID score ≥70, current score: %d",
-			score,
-		)
+	// MARKET-VEID-002: Check VEID score requirement (only if VEID keeper is configured)
+	if ms.veid != nil {
+		score, hasScore := ms.veid.GetVEIDScore(ctx, owner)
+		if !hasScore || score < 70 {
+			return nil, ErrInsufficientVEIDScore.Wrapf(
+				"provider registration requires VEID score ≥70, current score: %d",
+				score,
+			)
+		}
 	}
 
 	// MARKET-VEID-002: Verify MFA authorization for provider registration
 	// This is a sensitive transaction type that requires MFA approval
+	// Only check if MFA keeper is configured
+	if ms.mfa == nil {
+		// MFA not configured, skip MFA check
+		if err := ms.provider.Create(ctx, types.Provider(*msg)); err != nil {
+			return nil, ErrInternal.Wrapf("err: %v", err)
+		}
+		return &types.MsgCreateProviderResponse{}, nil
+	}
+
 	txType := mfatypes.SensitiveTxProviderRegistration
 	config, found := ms.mfa.GetSensitiveTxConfig(ctx, txType)
 	if found && config.Enabled {

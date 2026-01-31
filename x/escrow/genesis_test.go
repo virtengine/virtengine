@@ -1,6 +1,7 @@
 package escrow_test
 
 import (
+	"fmt"
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
@@ -13,8 +14,28 @@ import (
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/types/v1"
 	types "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 
+	// Initialize SDK config (bech32 prefixes) for tests
+	_ "github.com/virtengine/virtengine/sdk/go/sdkutil"
+
 	"github.com/virtengine/virtengine/x/escrow"
 )
+
+// Test addresses - valid bech32 addresses for akash prefix
+const (
+	testOwnerAddr    = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
+	testProviderAddr = "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4"
+)
+
+// testAccountXID returns a valid XID for ScopeDeployment: "owner/dseq"
+// dseq must be a numeric string
+func testAccountXID(dseq int) string {
+	return fmt.Sprintf("%s/%d", testOwnerAddr, dseq)
+}
+
+// testPaymentXID returns a valid XID for payment: "gseq/oseq/provider"
+func testPaymentXID(gseq, oseq int) string {
+	return fmt.Sprintf("%d/%d/%s", gseq, oseq, testProviderAddr)
+}
 
 type GenesisTestSuite struct {
 	suite.Suite
@@ -44,12 +65,12 @@ func (s *GenesisTestSuite) TestValidateGenesis_Default() {
 func (s *GenesisTestSuite) TestValidateGenesis_Valid() {
 	accountID := eid.Account{
 		Scope: eid.ScopeDeployment,
-		XID:   "test-account-1",
+		XID:   testAccountXID(1),
 	}
 
 	paymentID := eid.Payment{
 		AID: accountID,
-		XID: "payment-1",
+		XID: testPaymentXID(1, 1),
 	}
 
 	genesis := &types.GenesisState{
@@ -57,7 +78,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_Valid() {
 			{
 				ID: accountID,
 				State: etypes.AccountState{
-					Owner: "cosmos1abcdefg",
+					Owner: testOwnerAddr,
 					State: etypes.StateOpen,
 					Funds: []etypes.Balance{
 						{
@@ -72,7 +93,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_Valid() {
 			{
 				ID: paymentID,
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen,
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
@@ -93,7 +114,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidAccount() {
 				// Empty/invalid account ID
 				ID: eid.Account{},
 				State: etypes.AccountState{
-					Owner: "cosmos1abcdefg",
+					Owner: testOwnerAddr,
 					State: etypes.StateOpen,
 				},
 			},
@@ -108,7 +129,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidAccount() {
 func (s *GenesisTestSuite) TestValidateGenesis_DuplicateAccounts() {
 	accountID := eid.Account{
 		Scope: eid.ScopeDeployment,
-		XID:   "duplicate-account",
+		XID:   testAccountXID(2),
 	}
 
 	genesis := &types.GenesisState{
@@ -116,14 +137,14 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateAccounts() {
 			{
 				ID: accountID,
 				State: etypes.AccountState{
-					Owner: "cosmos1abcdefg",
+					Owner: testOwnerAddr,
 					State: etypes.StateOpen,
 				},
 			},
 			{
 				ID: accountID, // Duplicate
 				State: etypes.AccountState{
-					Owner: "cosmos1xyz",
+					Owner: testProviderAddr,
 					State: etypes.StateOpen,
 				},
 			},
@@ -139,12 +160,12 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateAccounts() {
 func (s *GenesisTestSuite) TestValidateGenesis_OrphanPayment() {
 	accountID := eid.Account{
 		Scope: eid.ScopeDeployment,
-		XID:   "non-existent-account",
+		XID:   testAccountXID(3),
 	}
 
 	paymentID := eid.Payment{
 		AID: accountID,
-		XID: "payment-1",
+		XID: testPaymentXID(1, 1),
 	}
 
 	genesis := &types.GenesisState{
@@ -153,7 +174,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_OrphanPayment() {
 			{
 				ID: paymentID,
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen,
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
@@ -171,12 +192,12 @@ func (s *GenesisTestSuite) TestValidateGenesis_OrphanPayment() {
 func (s *GenesisTestSuite) TestValidateGenesis_DuplicatePayments() {
 	accountID := eid.Account{
 		Scope: eid.ScopeDeployment,
-		XID:   "test-account",
+		XID:   testAccountXID(4),
 	}
 
 	paymentID := eid.Payment{
 		AID: accountID,
-		XID: "duplicate-payment",
+		XID: testPaymentXID(1, 1),
 	}
 
 	genesis := &types.GenesisState{
@@ -184,7 +205,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicatePayments() {
 			{
 				ID: accountID,
 				State: etypes.AccountState{
-					Owner: "cosmos1abcdefg",
+					Owner: testOwnerAddr,
 					State: etypes.StateOpen,
 				},
 			},
@@ -193,7 +214,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicatePayments() {
 			{
 				ID: paymentID,
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider1",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen,
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
@@ -202,7 +223,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicatePayments() {
 			{
 				ID: paymentID, // Duplicate
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider2",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen,
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(200)),
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(20)),
@@ -220,12 +241,12 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicatePayments() {
 func (s *GenesisTestSuite) TestValidateGenesis_PaymentStateAccountMismatch() {
 	accountID := eid.Account{
 		Scope: eid.ScopeDeployment,
-		XID:   "closed-account",
+		XID:   testAccountXID(5),
 	}
 
 	paymentID := eid.Payment{
 		AID: accountID,
-		XID: "payment-1",
+		XID: testPaymentXID(1, 1),
 	}
 
 	genesis := &types.GenesisState{
@@ -233,7 +254,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_PaymentStateAccountMismatch() {
 			{
 				ID: accountID,
 				State: etypes.AccountState{
-					Owner: "cosmos1abcdefg",
+					Owner: testOwnerAddr,
 					State: etypes.StateClosed, // Account is closed
 				},
 			},
@@ -242,7 +263,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_PaymentStateAccountMismatch() {
 			{
 				ID: paymentID,
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen, // Payment is still open
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
@@ -264,10 +285,10 @@ func (s *GenesisTestSuite) TestAccountStates() {
 		etypes.StateClosed,
 	}
 
-	for _, state := range states {
+	for i, state := range states {
 		accountID := eid.Account{
 			Scope: eid.ScopeDeployment,
-			XID:   "state-test-" + state.String(),
+			XID:   testAccountXID(100 + i),
 		}
 
 		genesis := &types.GenesisState{
@@ -275,7 +296,7 @@ func (s *GenesisTestSuite) TestAccountStates() {
 				{
 					ID: accountID,
 					State: etypes.AccountState{
-						Owner: "cosmos1abcdefg",
+						Owner: testOwnerAddr,
 						State: state,
 					},
 				},
@@ -327,16 +348,16 @@ func (s *GenesisTestSuite) TestPaymentStatesMatching() {
 		},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		s.Run(tc.name, func() {
 			accountID := eid.Account{
 				Scope: eid.ScopeDeployment,
-				XID:   "match-test-" + tc.name,
+				XID:   testAccountXID(200 + i),
 			}
 
 			paymentID := eid.Payment{
 				AID: accountID,
-				XID: "payment-1",
+				XID: testPaymentXID(1, 1),
 			}
 
 			genesis := &types.GenesisState{
@@ -344,7 +365,7 @@ func (s *GenesisTestSuite) TestPaymentStatesMatching() {
 					{
 						ID: accountID,
 						State: etypes.AccountState{
-							Owner: "cosmos1abcdefg",
+							Owner: testOwnerAddr,
 							State: tc.accountState,
 						},
 					},
@@ -353,7 +374,7 @@ func (s *GenesisTestSuite) TestPaymentStatesMatching() {
 					{
 						ID: paymentID,
 						State: etypes.PaymentState{
-							Owner:   "cosmos1provider",
+							Owner:   testProviderAddr,
 							State:   tc.paymentState,
 							Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
 							Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
@@ -374,15 +395,15 @@ func (s *GenesisTestSuite) TestPaymentStatesMatching() {
 
 // Test: Multiple accounts and payments
 func (s *GenesisTestSuite) TestValidateGenesis_MultipleAccountsAndPayments() {
-	accountID1 := eid.Account{Scope: eid.ScopeDeployment, XID: "account-1"}
-	accountID2 := eid.Account{Scope: eid.ScopeDeployment, XID: "account-2"}
+	accountID1 := eid.Account{Scope: eid.ScopeDeployment, XID: testAccountXID(10)}
+	accountID2 := eid.Account{Scope: eid.ScopeDeployment, XID: testAccountXID(11)}
 
 	genesis := &types.GenesisState{
 		Accounts: []etypes.Account{
 			{
 				ID: accountID1,
 				State: etypes.AccountState{
-					Owner: "cosmos1owner1",
+					Owner: testOwnerAddr,
 					State: etypes.StateOpen,
 					Funds: []etypes.Balance{
 						{Denom: "uve", Amount: sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(1000))},
@@ -392,7 +413,7 @@ func (s *GenesisTestSuite) TestValidateGenesis_MultipleAccountsAndPayments() {
 			{
 				ID: accountID2,
 				State: etypes.AccountState{
-					Owner: "cosmos1owner2",
+					Owner: testProviderAddr,
 					State: etypes.StateOpen,
 					Funds: []etypes.Balance{
 						{Denom: "uve", Amount: sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(2000))},
@@ -402,27 +423,27 @@ func (s *GenesisTestSuite) TestValidateGenesis_MultipleAccountsAndPayments() {
 		},
 		Payments: []etypes.Payment{
 			{
-				ID: eid.Payment{AID: accountID1, XID: "p1"},
+				ID: eid.Payment{AID: accountID1, XID: testPaymentXID(1, 1)},
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider1",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen,
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
 				},
 			},
 			{
-				ID: eid.Payment{AID: accountID1, XID: "p2"},
+				ID: eid.Payment{AID: accountID1, XID: testPaymentXID(1, 2)},
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider2",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen,
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(200)),
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(20)),
 				},
 			},
 			{
-				ID: eid.Payment{AID: accountID2, XID: "p1"},
+				ID: eid.Payment{AID: accountID2, XID: testPaymentXID(1, 1)},
 				State: etypes.PaymentState{
-					Owner:   "cosmos1provider3",
+					Owner:   testProviderAddr,
 					State:   etypes.StateOpen,
 					Balance: sdk.NewDecCoin("uve", sdkmath.NewInt(300)),
 					Rate:    sdk.NewDecCoin("uve", sdkmath.NewInt(30)),
@@ -446,7 +467,7 @@ func TestAccountIDValidation(t *testing.T) {
 		{
 			name:        "valid account ID",
 			scope:       eid.ScopeDeployment,
-			xid:         "abc123",
+			xid:         testOwnerAddr + "/123",
 			expectError: false,
 		},
 		{
@@ -481,7 +502,7 @@ func TestAccountIDValidation(t *testing.T) {
 					{
 						ID: accountID,
 						State: etypes.AccountState{
-							Owner: "cosmos1abcdefg",
+							Owner: testOwnerAddr,
 							State: etypes.StateOpen,
 						},
 					},

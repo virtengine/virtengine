@@ -404,11 +404,12 @@ func TestGovUKAdapter_WithMockServer(t *testing.T) {
 		Timeout:      5 * time.Second,
 	}
 	govUKConfig := GovUKConfig{
-		Environment:     GovUKEnvironmentSandbox,
-		ServiceEntityID: "test-service",
-		APIKey:          "test-key",
-		Timeout:         5 * time.Second,
-		BaseURL:         server.URL,
+		Environment:        GovUKEnvironmentSandbox,
+		ServiceEntityID:    "test-service",
+		APIKey:             "test-key",
+		Timeout:            5 * time.Second,
+		BaseURL:            server.URL,
+		RateLimitPerMinute: 60,
 	}
 
 	adapter, err := NewGovUKAdapter(baseConfig, govUKConfig)
