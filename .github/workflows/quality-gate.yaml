@@ -32,7 +32,7 @@ concurrency:
 
 env:
     GO_VERSION: "1.25.5"
-    GOWORK: "off"  # Disable workspace mode for vendor operations
+    GOWORK: "off" # Disable workspace mode for vendor operations
 
 permissions:
     contents: read

@@ -48,7 +48,7 @@ env:
   GOLANGCI_LINT_VERSION: "v2.4.0"
   NODE_VERSION: "20"
   PYTHON_VERSION: "3.11"
-  GOWORK: "off"  # Disable workspace mode for vendor operations
+  GOWORK: "off" # Disable workspace mode for vendor operations
 
 permissions:
   contents: read
