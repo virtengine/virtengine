@@ -71,6 +71,7 @@ jobs:
         run: |
           pytest ml/training/tests/ -v --tb=short --cov=ml/training --cov-report=term-missing
         env:
+          PYTHONPATH: ${{ github.workspace }}
           PYTHONHASHSEED: 42
           TF_DETERMINISTIC_OPS: 1
 
