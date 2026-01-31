@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -14,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // GetTxVestingCmd returns vesting module's transaction commands.
@@ -185,7 +185,7 @@ func GetTxVestingCreatePeriodicAccountCmd() *cobra.Command {
 				return err
 			}
 
-			contents, err := os.ReadFile(args[1])
+			contents, err := security.SafeReadFileWithExtension(args[1], ".json")
 			if err != nil {
 				return err
 			}

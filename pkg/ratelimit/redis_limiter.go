@@ -261,8 +261,19 @@ func (r *RedisRateLimiter) tokenBucket(ctx context.Context, key string, limit in
 
 	resultSlice := result.([]interface{})
 	allowed := resultSlice[0].(int64) == 1
-	remaining := int(resultSlice[1].(int64))
+	remainingInt64 := resultSlice[1].(int64)
 	resetTimestamp := resultSlice[2].(int64)
+
+	// Safe conversion with bounds checking to prevent integer overflow
+	remaining := int(remainingInt64)
+	if int64(remaining) != remainingInt64 {
+		// Overflow occurred, clamp to max int
+		if remainingInt64 > 0 {
+			remaining = int(^uint(0) >> 1) // max int
+		} else {
+			remaining = 0
+		}
+	}
 
 	return allowed, remaining, time.Unix(resetTimestamp, 0), nil
 }
@@ -284,7 +295,12 @@ func (r *RedisRateLimiter) RecordBypassAttempt(ctx context.Context, identifier s
 		return err
 	}
 
-	attempt.Count = int(count)
+	// Safe conversion with bounds checking
+	attemptCount := int(count)
+	if int64(attemptCount) != count {
+		attemptCount = int(^uint(0) >> 1) // max int on overflow
+	}
+	attempt.Count = attemptCount
 
 	// Set expiry to 1 minute
 	r.client.Expire(ctx, key, time.Minute)

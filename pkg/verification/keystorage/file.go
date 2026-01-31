@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -357,15 +358,45 @@ func (f *FileStorage) Close() error {
 // Helper methods
 
 func (f *FileStorage) keyFilePath(keyID string) string {
-	// Sanitize key ID for filename
+	// Sanitize key ID for filename - prevent path traversal
 	safeKeyID := filepath.Base(keyID)
+	// Double-check for any remaining traversal sequences
+	if strings.Contains(safeKeyID, "..") || safeKeyID == "." || safeKeyID == "" {
+		safeKeyID = "invalid_key"
+	}
 	return filepath.Join(f.config.Directory, safeKeyID+keyFileExtension)
+}
+
+// validateKeyPath ensures a path is within the storage directory
+func (f *FileStorage) validateKeyPath(path string) error {
+	cleanPath := filepath.Clean(path)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("cannot resolve path: %w", err)
+	}
+
+	absDir, err := filepath.Abs(f.config.Directory)
+	if err != nil {
+		return fmt.Errorf("cannot resolve directory: %w", err)
+	}
+
+	// Ensure path is within storage directory
+	if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) && absPath != absDir {
+		return fmt.Errorf("path %s is outside storage directory", path)
+	}
+
+	return nil
 }
 
 func (f *FileStorage) readKeyFile(keyID string) (*encryptedKeyFile, error) {
 	filename := f.keyFilePath(keyID)
 
-	data, err := os.ReadFile(filename)
+	// Validate path before reading
+	if err := f.validateKeyPath(filename); err != nil {
+		return nil, ErrStorageError.Wrapf("invalid key path: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Clean(filename)) // #nosec G304 -- path validated above
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrKeyNotFound.Wrapf("key ID: %s", keyID)

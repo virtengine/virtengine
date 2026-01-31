@@ -5,9 +5,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
+
+// validateStatePath checks for path traversal attacks in state file paths
+func validateStatePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("path is empty")
+	}
+	cleanPath := filepath.Clean(path)
+	// Check for traversal sequences
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("path traversal detected: %s", path)
+	}
+	// Check for null bytes
+	if strings.ContainsRune(path, '\x00') {
+		return fmt.Errorf("null byte in path: %s", path)
+	}
+	return nil
+}
 
 // EventCheckpointState tracks the last processed event sequence.
 type EventCheckpointState struct {
@@ -23,8 +41,11 @@ type EventCheckpointStore struct {
 }
 
 // NewEventCheckpointStore creates a checkpoint store using a file path.
-func NewEventCheckpointStore(path string) *EventCheckpointStore {
-	return &EventCheckpointStore{path: path}
+func NewEventCheckpointStore(path string) (*EventCheckpointStore, error) {
+	if err := validateStatePath(path); err != nil {
+		return nil, fmt.Errorf("invalid checkpoint path: %w", err)
+	}
+	return &EventCheckpointStore{path: filepath.Clean(path)}, nil
 }
 
 // Load reads the checkpoint from disk. If no file exists, returns a zero state.
@@ -32,7 +53,8 @@ func (s *EventCheckpointStore) Load(subscriberID string) (*EventCheckpointState,
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := os.ReadFile(s.path)
+	// Path already validated in constructor, use cleaned path
+	data, err := os.ReadFile(s.path) // #nosec G304 -- path validated in constructor
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &EventCheckpointState{

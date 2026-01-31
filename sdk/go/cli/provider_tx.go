@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -12,6 +11,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	tattr "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 )
@@ -34,7 +34,7 @@ func (c ProviderConfig) GetAttributes() tattr.Attributes {
 
 // ReadProviderConfigPath reads and parses file
 func ReadProviderConfigPath(path string) (ProviderConfig, error) {
-	buf, err := os.ReadFile(path) //nolint: gosec
+	buf, err := security.SafeReadFile(path)
 	if err != nil {
 		return ProviderConfig{}, err
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/distribution/reference"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 func ParseWasmVerificationFlags(gzippedWasm []byte, flags *flag.FlagSet) (string, string, []byte, error) {
@@ -72,7 +72,7 @@ func ParseWasmVerificationFlags(gzippedWasm []byte, flags *flag.FlagSet) (string
 
 // ParseWasmStoreCodeArgs prepares MsgStoreCode object from flags with gzipped wasm byte code field
 func ParseWasmStoreCodeArgs(file, sender string, flags *flag.FlagSet) (types.MsgStoreCode, error) {
-	wasm, err := os.ReadFile(file)
+	wasm, err := security.SafeReadFile(file)
 	if err != nil {
 		return types.MsgStoreCode{}, err
 	}
