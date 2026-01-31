@@ -19,6 +19,7 @@
    - [T4: Replay Attacks](#t4-replay-attacks)
    - [T5: Validator Collusion](#t5-validator-collusion)
    - [T6: Rogue Approved Client](#t6-rogue-approved-client)
+   - [T9: ML Inference and Verification Services](#t9-ml-inference-and-verification-services)
 5. [Additional Threats](#additional-threats)
 6. [Risk Matrix](#risk-matrix)
 7. [Mitigation Summary](#mitigation-summary)
@@ -741,18 +742,198 @@ LIKELIHOOD ├────────────┼─────────
 
 ---
 
+## T9: ML Inference and Verification Services
+
+### T9.1: ML Model Tampering
+
+| Attribute | Value |
+|-----------|-------|
+| **ID** | T9.1 |
+| **Name** | ML Model Tampering |
+| **Description** | Attacker modifies ML model weights or inference code to produce biased or incorrect verification scores |
+| **Threat Actor** | Rogue Validator, Compromised Server |
+| **Impact** | CRITICAL - Identity verification integrity compromised |
+| **Likelihood** | LOW - Model integrity checks in place |
+
+**Attack Scenarios:**
+1. Validator replaces model weights with malicious version
+2. Inference code modified to always approve specific identities
+3. Model poisoning through adversarial updates
+
+**Mitigations:**
+| Control | Type | Effectiveness |
+|---------|------|---------------|
+| Model version pinning in chain config | Preventive | HIGH |
+| Model hash verification before inference | Detective | HIGH |
+| Deterministic inference with hash comparison | Detective | HIGH |
+| Third-party model audits | Detective | MEDIUM |
+
+**Residual Risk:** LOW - Multiple integrity checks prevent tampering.
+
+---
+
+### T9.2: Non-Deterministic Inference
+
+| Attribute | Value |
+|-----------|-------|
+| **ID** | T9.2 |
+| **Name** | Non-Deterministic Inference |
+| **Description** | ML inference produces different results across validators, breaking consensus |
+| **Threat Actor** | Accidental, Environment Variance |
+| **Impact** | HIGH - Consensus failures, chain halts |
+| **Likelihood** | MEDIUM - Requires careful configuration |
+
+**Attack Scenarios:**
+1. GPU floating-point variance causes score differences
+2. Random seed not properly fixed across validators
+3. Library version differences cause numerical variance
+
+**Mitigations:**
+| Control | Type | Effectiveness |
+|---------|------|---------------|
+| CPU-only inference enforcement | Preventive | HIGH |
+| Fixed random seed (42) | Preventive | HIGH |
+| Deterministic TensorFlow ops | Preventive | HIGH |
+| Hash precision normalization (6 decimals) | Preventive | HIGH |
+| Cross-validator conformance tests | Detective | HIGH |
+
+**Residual Risk:** LOW - Comprehensive determinism controls in place.
+
+---
+
+### T9.3: Verification Service Bypass
+
+| Attribute | Value |
+|-----------|-------|
+| **ID** | T9.3 |
+| **Name** | Verification Service Bypass |
+| **Description** | Attacker bypasses email/SMS/OIDC verification to claim identity |
+| **Threat Actor** | External Attacker, Malicious User |
+| **Impact** | HIGH - Fraudulent identity verification |
+| **Likelihood** | LOW - Multiple verification layers |
+
+**Attack Scenarios:**
+1. OTP brute-force attack
+2. SMS interception via SIM swap
+3. OIDC token manipulation
+4. Email verification link guessing
+
+**Mitigations:**
+| Control | Type | Effectiveness |
+|---------|------|---------------|
+| OTP rate limiting (5/minute) | Preventive | HIGH |
+| Cryptographically random OTPs (6+ digits) | Preventive | HIGH |
+| Short OTP expiry (5 minutes) | Preventive | HIGH |
+| SMS anti-fraud (VoIP detection) | Preventive | HIGH |
+| OIDC signature verification | Preventive | HIGH |
+| Multi-factor attestation requirement | Preventive | HIGH |
+
+**Residual Risk:** LOW - Defense-in-depth verification.
+
+---
+
+### T9.4: Attestation Replay Attack
+
+| Attribute | Value |
+|-----------|-------|
+| **ID** | T9.4 |
+| **Name** | Attestation Replay Attack |
+| **Description** | Attacker replays valid attestation to gain unauthorized verification |
+| **Threat Actor** | External Attacker |
+| **Impact** | MEDIUM - Unauthorized verification claims |
+| **Likelihood** | VERY LOW - Nonce binding prevents replay |
+
+**Attack Scenarios:**
+1. Capture and replay signed attestation
+2. Reuse nonce across different subjects
+3. Cross-issuer nonce manipulation
+
+**Mitigations:**
+| Control | Type | Effectiveness |
+|---------|------|---------------|
+| Cryptographic nonce binding | Preventive | HIGH |
+| Issuer fingerprint binding | Preventive | HIGH |
+| Subject address binding | Preventive | HIGH |
+| Configurable expiry window | Preventive | HIGH |
+| Atomic validate-and-use operation | Preventive | HIGH |
+
+**Residual Risk:** VERY LOW - Comprehensive replay protection.
+
+---
+
+### T9.5: Key Rotation Failures
+
+| Attribute | Value |
+|-----------|-------|
+| **ID** | T9.5 |
+| **Name** | Key Rotation Failures |
+| **Description** | Signer key rotation fails, leaving old keys active or new keys unusable |
+| **Threat Actor** | Accidental, Rogue Administrator |
+| **Impact** | MEDIUM - Signing service degradation |
+| **Likelihood** | LOW - Overlapping key rotation |
+
+**Attack Scenarios:**
+1. Old key not revoked after rotation
+2. New key activation fails, leaving no active keys
+3. Key state inconsistency across services
+
+**Mitigations:**
+| Control | Type | Effectiveness |
+|---------|------|---------------|
+| State machine key transitions | Preventive | HIGH |
+| Overlapping key validity period | Preventive | HIGH |
+| Audit logging of key operations | Detective | HIGH |
+| Private key memory clearing | Preventive | HIGH |
+| Key storage encryption (AES-GCM) | Preventive | HIGH |
+
+**Residual Risk:** LOW - Robust key lifecycle management.
+
+---
+
+### T9.6: SMS Fraud Abuse
+
+| Attribute | Value |
+|-----------|-------|
+| **ID** | T9.6 |
+| **Name** | SMS Fraud Abuse |
+| **Description** | Attacker exploits SMS verification for toll fraud or account enumeration |
+| **Threat Actor** | Malicious User, Fraud Ring |
+| **Impact** | MEDIUM - Financial loss, service abuse |
+| **Likelihood** | MEDIUM - SMS is inherently vulnerable |
+
+**Attack Scenarios:**
+1. VoIP number farming for mass verification
+2. Velocity abuse from single IP
+3. Device fingerprint spoofing
+4. Premium rate number exploitation
+
+**Mitigations:**
+| Control | Type | Effectiveness |
+|---------|------|---------------|
+| VoIP carrier detection | Preventive | HIGH |
+| Per-phone velocity limits | Preventive | HIGH |
+| Per-IP velocity limits | Preventive | HIGH |
+| Device fingerprint tracking | Detective | MEDIUM |
+| Risk scoring with thresholds | Preventive | HIGH |
+| Toll-free number blocking | Preventive | HIGH |
+
+**Residual Risk:** MEDIUM - SMS inherently less secure than other methods.
+
+---
+
 ## Appendix: STRIDE Mapping
 
 | Threat Category | STRIDE | Primary Threats |
 |-----------------|--------|-----------------|
-| Spoofing | S | T1.1, T6.2, T3.1, T3.2 |
-| Tampering | T | T2.3, T5.2, T6.1 |
+| Spoofing | S | T1.1, T6.2, T3.1, T3.2, T9.3 |
+| Tampering | T | T2.3, T5.2, T6.1, T9.1 |
 | Repudiation | R | (Mitigated by on-chain audit logs) |
 | Information Disclosure | I | T1.2, T2.2, T5.3 |
-| Denial of Service | D | T7.1, T7.2, T5.1 |
-| Elevation of Privilege | E | T1.1, T1.3, T8.3 |
+| Denial of Service | D | T7.1, T7.2, T5.1, T9.2 |
+| Elevation of Privilege | E | T1.1, T1.3, T8.3, T9.3 |
 
 ---
 
 *Document maintained by VirtEngine Security Team*  
-*Last updated: 2026-01-24*
+*Last updated: 2026-01-25*  
+*Security Review: VE-8D - ML and Verification Services*

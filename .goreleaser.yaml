@@ -196,3 +196,47 @@ release:
   prerelease: auto
   mode: replace
   draft: false
+  extra_files:
+    - glob: .cache/sbom/*.json
+    - glob: .cache/sbom/*.sig
+    - glob: .cache/sbom/*.cert
+
+# SECURITY-9C: Artifact signing with Sigstore cosign
+# Enables keyless signing using GitHub Actions OIDC tokens
+signs:
+  - cmd: cosign
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
+    certificate: "${artifact}.pem"
+
+# Docker image signing with cosign
+docker_signs:
+  - cmd: cosign
+    args:
+      - "sign"
+      - "--yes"
+      - "${artifact}"
+    artifacts: all
+    output: true
+
+# SBOM generation for releases
+sboms:
+  - id: sbom-cyclonedx
+    artifacts: archive
+    documents:
+      - "sbom_{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.cdx.json"
+    cmd: syft
+    args:
+      - "$artifact"
+      - "--output"
+      - "cyclonedx-json=$document"
+
+# Metadata for release artifacts
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
