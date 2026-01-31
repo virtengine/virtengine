@@ -1,10 +1,10 @@
 // Package provider_daemon implements the provider daemon for VirtEngine.
 //
 // VE-920: Ansible automation using Waldur integration
+// VE-7A: Command injection prevention and input sanitization
 package provider_daemon
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -20,6 +20,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // Error format constant
@@ -500,7 +503,17 @@ func (a *AnsibleAdapter) generateExecutionID() string {
 
 // CheckAnsibleInstalled checks if Ansible is installed
 func (a *AnsibleAdapter) CheckAnsibleInstalled(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, a.config.AnsiblePath, "--version")
+	// Validate the ansible path against our trusted executable allowlist
+	ansiblePath, err := security.ResolveAndValidateExecutable("ansible", a.config.AnsiblePath)
+	if err != nil {
+		// Fall back to direct validation if resolution fails
+		if validateErr := security.ValidateExecutable("ansible", a.config.AnsiblePath); validateErr != nil {
+			return fmt.Errorf("%w: %v", ErrAnsibleNotInstalled, validateErr)
+		}
+		ansiblePath = a.config.AnsiblePath
+	}
+
+	cmd := exec.CommandContext(ctx, ansiblePath, "--version")
 	if err := cmd.Run(); err != nil {
 		return ErrAnsibleNotInstalled
 	}
@@ -513,13 +526,30 @@ func (a *AnsibleAdapter) ValidatePlaybook(ctx context.Context, playbook *Playboo
 		return err
 	}
 
+	// Validate playbook path for security (path traversal, shell metacharacters)
+	var allowedDirs []string
+	if a.config.PlaybooksDir != "" {
+		allowedDirs = []string{a.config.PlaybooksDir}
+	}
+	cleanPath, err := security.ValidatePlaybookPath(playbook.Path, allowedDirs)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidPlaybook, err)
+	}
+
 	// Check if playbook file exists
-	if _, err := os.Stat(playbook.Path); os.IsNotExist(err) {
-		return fmt.Errorf(errFmtWrapped, ErrPlaybookNotFound, playbook.Path)
+	if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
+		return fmt.Errorf(errFmtWrapped, ErrPlaybookNotFound, cleanPath)
+	}
+
+	// Validate ansible executable
+	ansiblePath, err := security.ResolveAndValidateExecutable("ansible", a.config.AnsiblePath)
+	if err != nil {
+		// Fall back to configured path if validation fails (e.g., custom install)
+		ansiblePath = a.config.AnsiblePath
 	}
 
 	// Run syntax check
-	cmd := exec.CommandContext(ctx, a.config.AnsiblePath, "--syntax-check", playbook.Path)
+	cmd := exec.CommandContext(ctx, ansiblePath, "--syntax-check", cleanPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: syntax error: %s", ErrInvalidPlaybook, string(output))
 	}
@@ -613,6 +643,20 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 	result.State = ExecutionStateRunning
 	a.sendStatusUpdate(result.ExecutionID, ExecutionStateRunning, "Starting playbook execution", "")
 
+	// Validate playbook path for security
+	var allowedDirs []string
+	if a.config.PlaybooksDir != "" {
+		allowedDirs = []string{a.config.PlaybooksDir}
+	}
+	cleanPlaybookPath, err := security.ValidatePlaybookPath(playbook.Path, allowedDirs)
+	if err != nil {
+		return fmt.Errorf("invalid playbook path: %w", err)
+	}
+
+	// Create a validated playbook copy
+	validatedPlaybook := *playbook
+	validatedPlaybook.Path = cleanPlaybookPath
+
 	// Create temporary inventory file
 	inventoryFile, err := a.writeTemporaryInventory(inventory)
 	if err != nil {
@@ -620,15 +664,27 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 	}
 	defer os.Remove(inventoryFile)
 
-	// Build command arguments
-	args := a.buildCommandArgs(playbook, inventoryFile, options)
+	// Build command arguments with validated playbook
+	args := a.buildCommandArgs(&validatedPlaybook, inventoryFile, options)
+
+	// Validate and resolve ansible executable
+	ansiblePath, err := security.ResolveAndValidateExecutable("ansible", a.config.AnsiblePath)
+	if err != nil {
+		// Fall back to configured path
+		ansiblePath = a.config.AnsiblePath
+	}
 
 	// Create command
-	cmd := exec.CommandContext(ctx, a.config.AnsiblePath, args...)
+	cmd := exec.CommandContext(ctx, ansiblePath, args...)
 	
 	// Set working directory
 	if options.WorkingDir != "" {
-		cmd.Dir = options.WorkingDir
+		// Validate working directory path
+		cleanWorkDir, wdErr := security.SanitizePath(options.WorkingDir)
+		if wdErr != nil {
+			return fmt.Errorf("invalid working directory: %w", wdErr)
+		}
+		cmd.Dir = cleanWorkDir
 	}
 
 	// Set environment
@@ -645,9 +701,14 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 		}
 		defer os.Remove(vaultPwFile)
 		args = append(args, "--vault-password-file", vaultPwFile)
-		cmd = exec.CommandContext(ctx, a.config.AnsiblePath, args...)
+		cmd = exec.CommandContext(ctx, ansiblePath, args...)
 	} else if options.VaultPasswordFile != "" {
-		if _, err := os.Stat(options.VaultPasswordFile); os.IsNotExist(err) {
+		// Validate vault password file path
+		cleanVaultPath, vpErr := security.SanitizePath(options.VaultPasswordFile)
+		if vpErr != nil {
+			return fmt.Errorf("invalid vault password file path: %w", vpErr)
+		}
+		if _, err := os.Stat(cleanVaultPath); os.IsNotExist(err) {
 			return fmt.Errorf("%w: vault password file not found", ErrVaultPasswordRequired)
 		}
 	}

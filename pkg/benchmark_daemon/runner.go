@@ -1,10 +1,10 @@
 // Package benchmark_daemon implements benchmarking for VirtEngine providers.
 //
 // VE-600: Benchmark runner implementation
+// VE-7A: Command injection prevention and input sanitization
 package benchmark_daemon
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"fmt"
 	"os/exec"
@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // DefaultBenchmarkRunner is the default benchmark runner implementation
@@ -257,13 +260,19 @@ func (r *DefaultBenchmarkRunner) runNetworkBenchmarks(ctx context.Context, metri
 
 // runPingTest runs a ping test to measure latency
 func (r *DefaultBenchmarkRunner) runPingTest(ctx context.Context, endpoint string) int64 {
-	// Try to run ping command
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "ping", "-n", "5", endpoint)
-	} else {
-		cmd = exec.CommandContext(ctx, "ping", "-c", "5", endpoint)
+	// Validate endpoint before using in ping command
+	if err := security.ValidatePingTarget(endpoint); err != nil {
+		// Return default latency if validation fails
+		return 10000 // 10ms in fixed-point (*1000)
 	}
+
+	// Build validated ping arguments
+	args, err := security.PingArgs(endpoint, 5)
+	if err != nil {
+		return 10000
+	}
+
+	cmd := exec.CommandContext(ctx, "ping", args...)
 
 	output, err := cmd.Output()
 	if err != nil {
