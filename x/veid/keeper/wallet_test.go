@@ -23,11 +23,12 @@ import (
 
 // testWalletSetup creates a test environment for wallet tests
 type testWalletSetup struct {
-	ctx     sdk.Context
-	keeper  Keeper
-	pubKey  ed25519.PublicKey
-	privKey ed25519.PrivateKey
-	address sdk.AccAddress
+	ctx        sdk.Context
+	keeper     Keeper
+	stateStore store.CommitMultiStore
+	pubKey     ed25519.PublicKey
+	privKey    ed25519.PrivateKey
+	address    sdk.AccAddress
 }
 
 func setupWalletTest(t *testing.T) *testWalletSetup {
@@ -47,6 +48,11 @@ func setupWalletTest(t *testing.T) *testWalletSetup {
 	err := stateStore.LoadLatestVersion()
 	require.NoError(t, err)
 
+	// Register cleanup to close the IAVL store and stop background pruning goroutines
+	t.Cleanup(func() {
+		closeStoreIfNeeded(stateStore)
+	})
+
 	// Create context with store
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
@@ -64,11 +70,12 @@ func setupWalletTest(t *testing.T) *testWalletSetup {
 	address := sdk.AccAddress(pubKey[:20])
 
 	return &testWalletSetup{
-		ctx:     ctx,
-		keeper:  keeper,
-		pubKey:  pubKey,
-		privKey: privKey,
-		address: address,
+		ctx:        ctx,
+		keeper:     keeper,
+		stateStore: stateStore,
+		pubKey:     pubKey,
+		privKey:    privKey,
+		address:    address,
 	}
 }
 

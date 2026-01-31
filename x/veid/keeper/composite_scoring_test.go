@@ -25,9 +25,10 @@ var testCompositeAddress = sdk.AccAddress([]byte("composite_test_addr_")).String
 
 type CompositeScoringTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	cdc    codec.Codec
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	cdc        codec.Codec
+	stateStore store.CommitMultiStore
 }
 
 func TestCompositeScoringTestSuite(t *testing.T) {
@@ -54,6 +55,11 @@ func (s *CompositeScoringTestSuite) SetupTest() {
 	s.Require().NoError(err)
 }
 
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *CompositeScoringTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
+}
+
 func (s *CompositeScoringTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey) sdk.Context {
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
@@ -62,6 +68,7 @@ func (s *CompositeScoringTestSuite) createContextWithStore(storeKey *storetypes.
 	if err != nil {
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
+	s.stateStore = stateStore
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),

@@ -473,6 +473,7 @@ func createTierTestContext(t *testing.T, storeKey *storetypes.KVStoreKey) sdk.Co
 
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	t.Cleanup(func() { CloseStoreIfNeeded(stateStore) })
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	require.NoError(t, err)

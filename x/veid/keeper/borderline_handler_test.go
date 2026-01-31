@@ -30,10 +30,11 @@ var (
 // BorderlineHandlerTestSuite is the test suite for borderline handler functionality
 type BorderlineHandlerTestSuite struct {
 	suite.Suite
-	ctx       sdk.Context
-	keeper    keeper.Keeper
-	mfaKeeper *MockMFAKeeper
-	cdc       codec.Codec
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	mfaKeeper  *MockMFAKeeper
+	cdc        codec.Codec
+	stateStore store.CommitMultiStore
 }
 
 func TestBorderlineHandlerTestSuite(t *testing.T) {
@@ -77,12 +78,18 @@ func (s *BorderlineHandlerTestSuite) createContextWithStore(storeKey *storetypes
 	if err != nil {
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
+	s.stateStore = stateStore
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
 		Height: 100,
 	}, false, log.NewNopLogger())
 	return ctx
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *BorderlineHandlerTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 // ============================================================================
