@@ -171,8 +171,57 @@ check_build() {
 # Check 6: Unit tests
 # =========================================================================
 check_test() {
-    # Run short tests on all packages (same as CI but with -short flag for speed)
-    go test -short -timeout 300s ./... 2>&1
+    # Run all tests with proper timeout and output handling to prevent hanging
+    # Using -short to skip long-running tests
+    # Using -timeout to prevent individual tests from hanging indefinitely
+    # Using -count=1 to disable caching for accurate results
+
+    local output_file
+    output_file=$(mktemp)
+    trap "rm -f '$output_file'" RETURN
+
+    # Run tests in background with process-level timeout
+    # The go test -timeout handles individual test timeouts
+    # The outer timeout handles overall execution time
+    local test_timeout=300  # 5 minutes max for all tests
+    local go_timeout="180s" # 3 minutes per test package
+
+    # Start tests in background, redirect output to temp file
+    go test -short -timeout "$go_timeout" -count=1 ./... > "$output_file" 2>&1 &
+    local test_pid=$!
+
+    # Wait with timeout
+    local elapsed=0
+    while kill -0 "$test_pid" 2>/dev/null; do
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ "$elapsed" -ge "$test_timeout" ]; then
+            hook_warn "Tests exceeded ${test_timeout}s timeout, terminating..."
+            kill -TERM "$test_pid" 2>/dev/null || true
+            sleep 2
+            kill -KILL "$test_pid" 2>/dev/null || true
+            echo ""
+            hook_fail "Test output (last 100 lines):"
+            tail -100 "$output_file"
+            return 1
+        fi
+    done
+
+    # Get exit code
+    wait "$test_pid"
+    local exit_code=$?
+
+    # Show output - limited to prevent overwhelming terminal
+    if [ "$exit_code" -ne 0 ]; then
+        echo ""
+        hook_fail "Test output (last 150 lines):"
+        tail -150 "$output_file"
+    else
+        # On success, just show summary (lines with ok/FAIL/?)
+        grep -E "^(ok|FAIL|\?)" "$output_file" | tail -50 || tail -50 "$output_file"
+    fi
+
+    return $exit_code
 }
 
 # =========================================================================
