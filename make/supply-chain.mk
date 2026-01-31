@@ -51,15 +51,10 @@ deps-verify: ## Verify Go module checksums
 	@go mod verify
 	@echo "✓ All module checksums verified"
 
-.PHONY: deps-tidy
-deps-tidy: ## Ensure go.mod and go.sum are tidy
-	@echo "Tidying dependencies..."
-	@go mod tidy
-	@echo "✓ Dependencies tidied"
-
 .PHONY: deps-vendor
-deps-vendor: deps-tidy ## Vendor all dependencies
+deps-vendor: ## Vendor all dependencies (uses deps-tidy from mod.mk)
 	@echo "Vendoring dependencies..."
+	@$(MAKE) deps-tidy
 	@go mod vendor
 	@echo "✓ Dependencies vendored"
 
@@ -127,7 +122,6 @@ help-supply-chain: ## Show supply chain security targets
 	@echo ""
 	@echo "  Dependencies:"
 	@echo "    deps-verify           - Verify module checksums"
-	@echo "    deps-tidy             - Tidy go.mod/go.sum"
 	@echo "    deps-vendor           - Vendor dependencies"
 	@echo "    deps-update-check     - Check for updates"
 	@echo ""
