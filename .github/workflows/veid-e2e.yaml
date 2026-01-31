@@ -35,7 +35,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: '1.22.x'
+  GO_VERSION: '1.25.5'
   CACHE_KEY_PREFIX: veid-e2e
 
 jobs:
@@ -78,9 +78,13 @@ jobs:
 
       - name: Build VirtEngine
         run: |
-          make virtengine
+          go build -o .cache/bin/virtengine \
+            -ldflags "-s -w \
+              -X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
+              -X github.com/cosmos/cosmos-sdk/version.AppName=virtengine" \
+            ./cmd/virtengine
         env:
-          CGO_ENABLED: 1
+          CGO_ENABLED: 0
 
       - name: Run VEID E2E Tests
         run: |
