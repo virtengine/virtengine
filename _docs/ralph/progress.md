@@ -236,9 +236,7 @@ Deep analysis of `veid-flow-spec.md` and `prd.json` (VE-200 through VE-804) iden
 
 ### Next Steps
 
-1. **vibe-kanban unavailable** - tasks documented in `production-readiness-tasks.md`
-2. **Priority order**: TEE → Proto Generation → VEID Core → MFA Core
-3. **When kanban available**: Import 28 tasks with full implementation paths
+1. **Priority order**: TEE → Proto Generation → VEID Core → MFA Core
 
 ---
 
