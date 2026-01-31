@@ -249,9 +249,9 @@ func TestInputHashDeterminism(t *testing.T) {
 func TestFeatureDimensionConstantsMatch(t *testing.T) {
 	// These must match ml/training/config.py:FeatureConfig
 	tests := []struct {
-		name     string
-		goValue  int
-		pyValue  int // Expected value from Python config
+		name    string
+		goValue int
+		pyValue int // Expected value from Python config
 	}{
 		{"FaceEmbeddingDim", FaceEmbeddingDim, 512},
 		{"DocQualityDim", DocQualityDim, 5},
@@ -358,11 +358,11 @@ func TestConfidenceComputation(t *testing.T) {
 		expectedConfidence float32
 		tolerance          float32
 	}{
-		{rawScore: 0.0, expectedConfidence: 0.9, tolerance: 0.05},    // Near 0
-		{rawScore: 100.0, expectedConfidence: 0.9, tolerance: 0.05},  // Near 100
-		{rawScore: 50.0, expectedConfidence: 0.5, tolerance: 0.05},   // Middle
-		{rawScore: 25.0, expectedConfidence: 0.7, tolerance: 0.05},   // Low
-		{rawScore: 75.0, expectedConfidence: 0.7, tolerance: 0.05},   // High
+		{rawScore: 0.0, expectedConfidence: 0.9, tolerance: 0.05},   // Near 0
+		{rawScore: 100.0, expectedConfidence: 0.9, tolerance: 0.05}, // Near 100
+		{rawScore: 50.0, expectedConfidence: 0.5, tolerance: 0.05},  // Middle
+		{rawScore: 25.0, expectedConfidence: 0.7, tolerance: 0.05},  // Low
+		{rawScore: 75.0, expectedConfidence: 0.7, tolerance: 0.05},  // High
 	}
 
 	for _, tc := range testCases {

@@ -296,13 +296,13 @@ func TestManifestVerification(t *testing.T) {
 	}
 
 	var manifest struct {
-		ModelPath   string            `json:"model_path"`
-		ModelHash   string            `json:"model_hash"`
-		Version     string            `json:"model_version"`
-		InputSig    map[string]any    `json:"input_signature"`
-		OutputSig   map[string]any    `json:"output_signature"`
-		Metrics     map[string]float64 `json:"evaluation_metrics"`
-		EvalPassed  bool              `json:"evaluation_passed"`
+		ModelPath  string             `json:"model_path"`
+		ModelHash  string             `json:"model_hash"`
+		Version    string             `json:"model_version"`
+		InputSig   map[string]any     `json:"input_signature"`
+		OutputSig  map[string]any     `json:"output_signature"`
+		Metrics    map[string]float64 `json:"evaluation_metrics"`
+		EvalPassed bool               `json:"evaluation_passed"`
 	}
 
 	if err := json.Unmarshal(data, &manifest); err != nil {
