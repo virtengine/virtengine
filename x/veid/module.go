@@ -136,17 +136,13 @@ func (am AppModule) QuerierRoute() string {
 // RegisterServices registers the module's services
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
-	// TODO: Query server registration is temporarily disabled due to type incompatibility
-	// with Cosmos SDK's GRPCQueryRouter. The custom query types in grpc_handlers.go
-	// need to be migrated to use SDK-generated protobuf types.
-	// types.RegisterQueryServer(cfg.QueryServer(), keeper.NewGRPCQuerier(am.keeper))
+	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewGRPCQuerier(am.keeper))
 }
 
 // RegisterQueryService registers a GRPC query service to respond to the
 // module-specific GRPC queries.
 func (am AppModule) RegisterQueryService(server grpc.Server) {
-	// TODO: Temporarily disabled - see RegisterServices comment
-	// types.RegisterQueryServer(server, keeper.NewGRPCQuerier(am.keeper))
+	types.RegisterQueryServer(server, keeper.NewGRPCQuerier(am.keeper))
 }
 
 // BeginBlock performs no-op
