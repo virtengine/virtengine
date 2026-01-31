@@ -11,7 +11,11 @@ infra/
 │   │   ├── vpc/             # VPC and networking
 │   │   ├── eks/             # EKS Kubernetes cluster
 │   │   ├── s3/              # S3 storage buckets
-│   │   └── iam/             # IAM roles and policies
+│   │   ├── iam/             # IAM roles and policies
+│   │   ├── monitoring/      # CloudWatch and Prometheus monitoring
+│   │   ├── scaling/         # Multi-region scaling infrastructure
+│   │   ├── cost_optimization/  # Cost optimization automation (PERF-9B)
+│   │   └── autoscaling_optimization/  # Auto-scaling policies (PERF-9B)
 │   ├── environments/         # Environment-specific configurations
 │   │   ├── dev/             # Development environment
 │   │   ├── staging/         # Staging environment
@@ -96,3 +100,38 @@ Secrets are managed via HashiCorp Vault with External Secrets Operator:
 ## Cost Optimization
 
 See [COST_OPTIMIZATION.md](./docs/COST_OPTIMIZATION.md) for detailed analysis.
+
+### Cost Optimization Features (PERF-9B)
+
+The infrastructure includes comprehensive cost optimization automation:
+
+#### Terraform Modules
+
+- **cost_optimization**: AWS Budgets, Cost Anomaly Detection, unused resource cleanup Lambda, cost recommendation Lambda
+- **autoscaling_optimization**: Tuned auto-scaling policies, scheduled scaling for non-prod, Cluster Autoscaler configuration
+
+#### Provider Daemon Integration
+
+The provider daemon includes cost tracking (`pkg/provider_daemon/cost_tracker.go`):
+- Real-time workload cost tracking
+- Resource usage to cost conversion
+- Cost threshold alerts
+- Right-sizing recommendations
+- Cost anomaly detection
+
+#### Documentation
+
+- [Monthly Cost Review Runbook](./docs/MONTHLY_COST_REVIEW_RUNBOOK.md)
+- [Reserved Instances & Savings Plans Guide](./docs/RESERVED_INSTANCES_SAVINGS_PLANS.md)
+- [Cost Optimization Analysis](./docs/COST_OPTIMIZATION.md)
+
+#### Key Features
+
+| Feature | Description | Savings |
+|---------|-------------|---------|
+| Scheduled Scaling | Dev/staging scale-down off-hours | ~$550/month |
+| Spot Instances | Workload nodes use Spot | ~$2,000/month |
+| Resource Cleanup | Weekly cleanup of unused resources | ~$200/month |
+| Cost Anomaly Detection | Alert on unusual spending | Early detection |
+| Budget Alerts | Multi-tier threshold alerts | Budget compliance |
+| Right-sizing | Automated recommendations | ~$1,500/month |
