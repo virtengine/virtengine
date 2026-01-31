@@ -6,6 +6,40 @@ import (
 	"time"
 )
 
+// MetricsSnapshot is a copy-safe snapshot of metrics without the mutex.
+// Use this for returning metrics from GetMetrics() to avoid copying sync.RWMutex.
+type MetricsSnapshot struct {
+	// Pruning metrics
+	TotalPruningOperations  int64         `json:"total_pruning_operations"`
+	TotalHeightsPruned      int64         `json:"total_heights_pruned"`
+	TotalBytesPruned        int64         `json:"total_bytes_pruned"`
+	LastPruningDuration     time.Duration `json:"last_pruning_duration"`
+	LastPruningTime         time.Time     `json:"last_pruning_time"`
+	AveragePruningDuration  time.Duration `json:"average_pruning_duration"`
+	PruningErrorCount       int64         `json:"pruning_error_count"`
+
+	// Snapshot metrics
+	TotalSnapshotsCreated   int64         `json:"total_snapshots_created"`
+	TotalSnapshotsDeleted   int64         `json:"total_snapshots_deleted"`
+	LastSnapshotDuration    time.Duration `json:"last_snapshot_duration"`
+	LastSnapshotTime        time.Time     `json:"last_snapshot_time"`
+	LastSnapshotSize        int64         `json:"last_snapshot_size"`
+	AverageSnapshotDuration time.Duration `json:"average_snapshot_duration"`
+	SnapshotErrorCount      int64         `json:"snapshot_error_count"`
+
+	// Disk metrics
+	CurrentDiskUsage        uint64  `json:"current_disk_usage"`
+	CurrentDiskUsagePercent float64 `json:"current_disk_usage_percent"`
+	DailyGrowthRate         int64   `json:"daily_growth_rate"`
+	DaysUntilFull           int     `json:"days_until_full"`
+
+	// State metrics
+	CurrentHeight        int64 `json:"current_height"`
+	OldestRetainedHeight int64 `json:"oldest_retained_height"`
+	RetainedHeightsCount int64 `json:"retained_heights_count"`
+	SnapshotsCount       int   `json:"snapshots_count"`
+}
+
 // Metrics tracks pruning-related metrics for monitoring and telemetry.
 type Metrics struct {
 	mu sync.RWMutex
@@ -122,12 +156,12 @@ func (m *Metrics) UpdateStateMetrics(currentHeight, oldestHeight, retainedCount 
 	m.SnapshotsCount = snapshotCount
 }
 
-// GetMetrics returns a copy of all metrics.
-func (m *Metrics) GetMetrics() Metrics {
+// GetMetrics returns a copy of all metrics as a snapshot (safe to copy).
+func (m *Metrics) GetMetrics() MetricsSnapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return Metrics{
+	return MetricsSnapshot{
 		TotalPruningOperations:  m.TotalPruningOperations,
 		TotalHeightsPruned:      m.TotalHeightsPruned,
 		TotalBytesPruned:        m.TotalBytesPruned,

@@ -184,7 +184,7 @@ type Status struct {
 	StateSyncInfo  StateSyncInfo `json:"state_sync_info"`
 
 	// Metrics
-	Metrics Metrics `json:"metrics"`
+	Metrics MetricsSnapshot `json:"metrics"`
 }
 
 // ShouldPruneHeight delegates to the state manager.

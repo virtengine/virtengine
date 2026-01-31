@@ -118,18 +118,18 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_Success() {
 	msg := &types.MsgSubmitFraudReport{
 		Reporter:        reporterAddr.String(),
 		ReportedParty:   "cosmos1reportedparty",
-		Category:        types.FraudCategoryFakeIdentity,
+		Category:        types.FraudCategoryPBFakeIdentity,
 		Description:     "This is a test fraud report",
-		RelatedOrderIDs: []string{"order-1", "order-2"},
+		RelatedOrderIds: []string{"order-1", "order-2"},
 	}
 
 	resp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
-	s.Require().NotEmpty(resp.ReportID)
+	s.Require().NotEmpty(resp.ReportId)
 
 	// Verify report was stored
-	report, found := s.keeper.GetFraudReport(s.ctx, resp.ReportID)
+	report, found := s.keeper.GetFraudReport(s.ctx, resp.ReportId)
 	s.Require().True(found)
 	s.Require().Equal(reporterAddr.String(), report.Reporter)
 	s.Require().Equal(types.FraudReportStatusSubmitted, report.Status)
@@ -140,7 +140,7 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_InvalidAddress() {
 	msg := &types.MsgSubmitFraudReport{
 		Reporter:      "invalid-address",
 		ReportedParty: "cosmos1reportedparty",
-		Category:      types.FraudCategoryFakeIdentity,
+		Category:      types.FraudCategoryPBFakeIdentity,
 		Description:   "Test description",
 	}
 
@@ -158,7 +158,7 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_UnauthorizedReporter() {
 	msg := &types.MsgSubmitFraudReport{
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reportedparty",
-		Category:      types.FraudCategoryFakeIdentity,
+		Category:      types.FraudCategoryPBFakeIdentity,
 		Description:   "Test description",
 	}
 
@@ -185,7 +185,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Success() {
 	submitMsg := &types.MsgSubmitFraudReport{
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
-		Category:      types.FraudCategoryPaymentFraud,
+		Category:      types.FraudCategoryPBPaymentFraud,
 		Description:   "Payment fraud description",
 	}
 
@@ -194,7 +194,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Success() {
 
 	// Now assign moderator
 	msg := &types.MsgAssignModerator{
-		ReportID:  submitResp.ReportID,
+		ReportId:  submitResp.ReportId,
 		Moderator: moderatorAddr.String(),
 		AssignTo:  assignToAddr.String(),
 	}
@@ -204,7 +204,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Success() {
 	s.Require().NotNil(resp)
 
 	// Verify report was updated
-	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportID)
+	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
 	s.Require().True(found)
 	s.Require().Equal(assignToAddr.String(), report.AssignedModerator)
 }
@@ -212,7 +212,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Success() {
 // Test: AssignModerator - invalid moderator address
 func (s *MsgServerTestSuite) TestAssignModerator_InvalidModeratorAddress() {
 	msg := &types.MsgAssignModerator{
-		ReportID:  "report-1",
+		ReportId:  "report-1",
 		Moderator: "invalid-address",
 		AssignTo:  "cosmos1assignee",
 	}
@@ -229,7 +229,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Unauthorized() {
 	s.rolesKeeper.On("IsModerator", mock.Anything, moderatorAddr).Return(false)
 
 	msg := &types.MsgAssignModerator{
-		ReportID:  "report-1",
+		ReportId:  "report-1",
 		Moderator: moderatorAddr.String(),
 		AssignTo:  "cosmos1assignee",
 	}
@@ -252,7 +252,7 @@ func (s *MsgServerTestSuite) TestUpdateReportStatus_Success() {
 	submitMsg := &types.MsgSubmitFraudReport{
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
-		Category:      types.FraudCategorySybilAttack,
+		Category:      types.FraudCategoryPBSybilAttack,
 		Description:   "Sybil attack description",
 	}
 
@@ -261,9 +261,9 @@ func (s *MsgServerTestSuite) TestUpdateReportStatus_Success() {
 
 	// Update status
 	msg := &types.MsgUpdateReportStatus{
-		ReportID:  submitResp.ReportID,
+		ReportId:  submitResp.ReportId,
 		Moderator: moderatorAddr.String(),
-		NewStatus: types.FraudReportStatusReviewing,
+		NewStatus: types.FraudReportStatusPBReviewing,
 		Notes:     "Starting review",
 	}
 
@@ -272,7 +272,7 @@ func (s *MsgServerTestSuite) TestUpdateReportStatus_Success() {
 	s.Require().NotNil(resp)
 
 	// Verify status was updated
-	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportID)
+	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
 	s.Require().True(found)
 	s.Require().Equal(types.FraudReportStatusReviewing, report.Status)
 }
@@ -290,7 +290,7 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_Success() {
 	submitMsg := &types.MsgSubmitFraudReport{
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
-		Category:      types.FraudCategoryPaymentFraud,
+		Category:      types.FraudCategoryPBPaymentFraud,
 		Description:   "Payment fraud",
 	}
 
@@ -299,9 +299,9 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_Success() {
 
 	// Resolve the report
 	msg := &types.MsgResolveFraudReport{
-		ReportID:   submitResp.ReportID,
+		ReportId:   submitResp.ReportId,
 		Moderator:  moderatorAddr.String(),
-		Resolution: types.ResolutionTypeWarningIssued,
+		Resolution: types.ResolutionTypePBWarning,
 		Notes:      "Warning issued to the reported party",
 	}
 
@@ -310,7 +310,7 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_Success() {
 	s.Require().NotNil(resp)
 
 	// Verify report was resolved
-	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportID)
+	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
 	s.Require().True(found)
 	s.Require().Equal(types.FraudReportStatusResolved, report.Status)
 }
@@ -328,7 +328,7 @@ func (s *MsgServerTestSuite) TestRejectFraudReport_Success() {
 	submitMsg := &types.MsgSubmitFraudReport{
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
-		Category:      types.FraudCategoryOther,
+		Category:      types.FraudCategoryPBOther,
 		Description:   "False report",
 	}
 
@@ -337,7 +337,7 @@ func (s *MsgServerTestSuite) TestRejectFraudReport_Success() {
 
 	// Reject the report
 	msg := &types.MsgRejectFraudReport{
-		ReportID:  submitResp.ReportID,
+		ReportId:  submitResp.ReportId,
 		Moderator: moderatorAddr.String(),
 		Notes:     "Insufficient evidence",
 	}
@@ -347,7 +347,7 @@ func (s *MsgServerTestSuite) TestRejectFraudReport_Success() {
 	s.Require().NotNil(resp)
 
 	// Verify report was rejected
-	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportID)
+	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
 	s.Require().True(found)
 	s.Require().Equal(types.FraudReportStatusRejected, report.Status)
 }
@@ -365,7 +365,7 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 	submitMsg := &types.MsgSubmitFraudReport{
 		Reporter:      reporterAddr.String(),
 		ReportedParty: "cosmos1reported",
-		Category:      types.FraudCategorySybilAttack,
+		Category:      types.FraudCategoryPBSybilAttack,
 		Description:   "Complex sybil attack",
 	}
 
@@ -374,7 +374,7 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 
 	// Escalate the report
 	msg := &types.MsgEscalateFraudReport{
-		ReportID:  submitResp.ReportID,
+		ReportId:  submitResp.ReportId,
 		Moderator: moderatorAddr.String(),
 		Reason:    "Complex case requiring admin review",
 	}
@@ -384,7 +384,7 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 	s.Require().NotNil(resp)
 
 	// Verify report was escalated
-	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportID)
+	report, found := s.keeper.GetFraudReport(s.ctx, submitResp.ReportId)
 	s.Require().True(found)
 	s.Require().Equal(types.FraudReportStatusEscalated, report.Status)
 }
@@ -392,11 +392,12 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 // Test: UpdateParams - success
 func (s *MsgServerTestSuite) TestUpdateParams_Success() {
 	params := types.DefaultParams()
-	params.AutoAssignReports = true
+	params.AutoAssignEnabled = true
+	paramsPB := types.ParamsToProto(&params)
 
 	msg := &types.MsgUpdateParams{
 		Authority: s.authority,
-		Params:    params,
+		Params:    *paramsPB,
 	}
 
 	resp, err := s.msgServer.UpdateParams(sdk.WrapSDKContext(s.ctx), msg)
@@ -405,16 +406,17 @@ func (s *MsgServerTestSuite) TestUpdateParams_Success() {
 
 	// Verify params were updated
 	storedParams := s.keeper.GetParams(s.ctx)
-	s.Require().Equal(params.AutoAssignReports, storedParams.AutoAssignReports)
+	s.Require().Equal(params.AutoAssignEnabled, storedParams.AutoAssignEnabled)
 }
 
 // Test: UpdateParams - unauthorized
 func (s *MsgServerTestSuite) TestUpdateParams_Unauthorized() {
 	params := types.DefaultParams()
+	paramsPB := types.ParamsToProto(&params)
 
 	msg := &types.MsgUpdateParams{
 		Authority: "cosmos1wrongauthority",
-		Params:    params,
+		Params:    *paramsPB,
 	}
 
 	_, err := s.msgServer.UpdateParams(sdk.WrapSDKContext(s.ctx), msg)
@@ -424,10 +426,11 @@ func (s *MsgServerTestSuite) TestUpdateParams_Unauthorized() {
 // Test: UpdateParams - invalid authority address
 func (s *MsgServerTestSuite) TestUpdateParams_InvalidAuthority() {
 	params := types.DefaultParams()
+	paramsPB := types.ParamsToProto(&params)
 
 	msg := &types.MsgUpdateParams{
 		Authority: "invalid-address",
-		Params:    params,
+		Params:    *paramsPB,
 	}
 
 	_, err := s.msgServer.UpdateParams(sdk.WrapSDKContext(s.ctx), msg)
@@ -441,7 +444,7 @@ func (s *MsgServerTestSuite) TestReportNotFound() {
 
 	// Try to assign moderator to non-existent report
 	msg := &types.MsgAssignModerator{
-		ReportID:  "non-existent-report",
+		ReportId:  "non-existent-report",
 		Moderator: moderatorAddr.String(),
 		AssignTo:  "cosmos1assignee",
 	}

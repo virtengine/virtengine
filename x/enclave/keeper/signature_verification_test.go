@@ -22,7 +22,7 @@ func TestVerifyEnclaveSignature_Ed25519_Valid(t *testing.T) {
 
 	// Create a test result
 	result := &types.AttestedScoringResult{
-		ScopeID:                "test-scope-001",
+		ScopeId:                "test-scope-001",
 		AccountAddress:         "virtengine1test123",
 		Score:                  85,
 		Status:                 "verified",
@@ -43,7 +43,7 @@ func TestVerifyEnclaveSignature_Ed25519_Valid(t *testing.T) {
 	copy(result.AttestationReference, []byte("attestation-ref"))
 
 	// Sign the result
-	payload := result.SigningPayload()
+	payload := types.SigningPayload(result)
 	signature := ed25519.Sign(privKey, payload)
 	result.EnclaveSignature = signature
 
@@ -81,7 +81,7 @@ func TestVerifyEnclaveSignature_Ed25519_InvalidSignature(t *testing.T) {
 	}
 
 	result := createTestResult("virtengine1validator123", 100)
-	payload := result.SigningPayload()
+	payload := types.SigningPayload(result)
 	signature := ed25519.Sign(privKey, payload)
 
 	// Tamper with the signature
@@ -108,7 +108,7 @@ func TestVerifyEnclaveSignature_Ed25519_WrongKey(t *testing.T) {
 	}
 
 	result := createTestResult("virtengine1validator123", 100)
-	payload := result.SigningPayload()
+	payload := types.SigningPayload(result)
 	signature := ed25519.Sign(privKey, payload)
 
 	if ed25519.Verify(wrongPubKey, payload, signature) {
@@ -135,7 +135,7 @@ func TestVerifyEnclaveSignature_Secp256k1_Valid(t *testing.T) {
 
 	// Create a test result
 	result := createTestResult("virtengine1validator123", 100)
-	payload := result.SigningPayload()
+	payload := types.SigningPayload(result)
 
 	// NOTE: In production, the enclave would use ECDSA to sign the payload directly
 	// The go-ethereum crypto.Sign function uses Keccak256 internally (Ethereum-style)
@@ -165,7 +165,7 @@ func TestVerifyEnclaveSignature_Secp256k1_LowS_Enforcement(t *testing.T) {
 	}
 
 	result := createTestResult("virtengine1validator123", 100)
-	payload := result.SigningPayload()
+	payload := types.SigningPayload(result)
 
 	signature, err := crypto.Sign(payload, privKey)
 	if err != nil {
@@ -206,7 +206,7 @@ func TestVerifyEnclaveSignature_Secp256k1_InvalidLength(t *testing.T) {
 	}
 
 	result := createTestResult("virtengine1validator123", 100)
-	payload := result.SigningPayload()
+	payload := types.SigningPayload(result)
 
 	signature, err := crypto.Sign(payload, privKey)
 	if err != nil {
@@ -243,9 +243,9 @@ func TestSigningPayload_Determinism(t *testing.T) {
 	result := createTestResult("virtengine1validator123", 100)
 
 	// Compute payload multiple times
-	payload1 := result.SigningPayload()
-	payload2 := result.SigningPayload()
-	payload3 := result.SigningPayload()
+	payload1 := types.SigningPayload(result)
+	payload2 := types.SigningPayload(result)
+	payload3 := types.SigningPayload(result)
 
 	if !bytesEqual(payload1, payload2) || !bytesEqual(payload2, payload3) {
 		t.Error("SigningPayload() is not deterministic")
@@ -258,12 +258,12 @@ func TestSigningPayload_Determinism(t *testing.T) {
 // TestSigningPayload_Changes tests that payload changes when result changes
 func TestSigningPayload_Changes(t *testing.T) {
 	result1 := createTestResult("virtengine1validator123", 100)
-	payload1 := result1.SigningPayload()
+	payload1 := types.SigningPayload(result1)
 
 	// Change score
 	result2 := createTestResult("virtengine1validator123", 100)
 	result2.Score = 90
-	payload2 := result2.SigningPayload()
+	payload2 := types.SigningPayload(result2)
 
 	if bytesEqual(payload1, payload2) {
 		t.Error("payload should change when score changes")
@@ -272,7 +272,7 @@ func TestSigningPayload_Changes(t *testing.T) {
 	// Change account address (validator address is not part of signing payload)
 	result3 := createTestResult("virtengine1validator123", 100)
 	result3.AccountAddress = "virtengine1different123"
-	payload3 := result3.SigningPayload()
+	payload3 := types.SigningPayload(result3)
 
 	if bytesEqual(payload1, payload3) {
 		t.Error("payload should change when account address changes")
@@ -285,7 +285,7 @@ func TestSigningPayload_Changes(t *testing.T) {
 
 func createTestResult(validatorAddr string, blockHeight int64) *types.AttestedScoringResult {
 	return &types.AttestedScoringResult{
-		ScopeID:                "test-scope-001",
+		ScopeId:                "test-scope-001",
 		AccountAddress:         "virtengine1test123",
 		Score:                  85,
 		Status:                 "verified",

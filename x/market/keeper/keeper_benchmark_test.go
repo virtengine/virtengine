@@ -3,6 +3,7 @@ package keeper_test
 import (
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -122,7 +123,7 @@ func BenchmarkWithBidsForOrder(b *testing.B) {
 			Provider: testutil.AccAddress(b).String(),
 			BSeq:     uint32(i + 1),
 		}
-		price := sdk.NewDecCoin("uakt", sdk.NewInt(1000))
+		price := sdk.NewDecCoin("uakt", sdkmath.NewInt(1000))
 		_, _ = k.CreateBid(ctx, bidID, price, types.ResourcesOffer{})
 	}
 
@@ -160,7 +161,7 @@ func BenchmarkBidCountForOrder(b *testing.B) {
 			Provider: testutil.AccAddress(b).String(),
 			BSeq:     uint32(i + 1),
 		}
-		price := sdk.NewDecCoin("uakt", sdk.NewInt(1000))
+		price := sdk.NewDecCoin("uakt", sdkmath.NewInt(1000))
 		_, _ = k.CreateBid(ctx, bidID, price, types.ResourcesOffer{})
 	}
 

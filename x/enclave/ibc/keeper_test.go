@@ -131,9 +131,9 @@ func TestQueryEnclaveIdentityPacket_Validate(t *testing.T) {
 func TestSyncMeasurementPacket_Validate(t *testing.T) {
 	validMeasurement := types.MeasurementRecord{
 		MeasurementHash: make([]byte, 32),
-		TEEType:         types.TEETypeSGX,
+		TeeType:         types.TEETypeSGX,
 		Description:     "Test measurement",
-		MinISVSVN:       1,
+		MinIsvSvn:       1,
 	}
 
 	tests := []struct {
@@ -251,7 +251,7 @@ func TestEnclaveIdentityResponse(t *testing.T) {
 		Identities: []types.EnclaveIdentity{
 			{
 				ValidatorAddress: "cosmos1abc...",
-				TEEType:          types.TEETypeSGX,
+				TeeType:          types.TEETypeSGX,
 				MeasurementHash:  make([]byte, 32),
 				EncryptionPubKey: []byte("pubkey"),
 				SigningPubKey:    []byte("sigkey"),
@@ -281,9 +281,9 @@ func TestMeasurementAllowlistResponse(t *testing.T) {
 		Measurements: []types.MeasurementRecord{
 			{
 				MeasurementHash: make([]byte, 32),
-				TEEType:         types.TEETypeSGX,
+				TeeType:         types.TEETypeSGX,
 				Description:     "Test measurement",
-				MinISVSVN:       1,
+				MinIsvSvn:       1,
 				AddedAt:         time.Now(),
 			},
 		},
@@ -340,7 +340,7 @@ func TestFederatedIdentity(t *testing.T) {
 	identity := FederatedIdentity{
 		Identity: types.EnclaveIdentity{
 			ValidatorAddress: "cosmos1abc...",
-			TEEType:          types.TEETypeSGX,
+			TeeType:          types.TEETypeSGX,
 			MeasurementHash:  make([]byte, 32),
 			EncryptionPubKey: []byte("pubkey"),
 			SigningPubKey:    []byte("sigkey"),
@@ -369,9 +369,9 @@ func TestFederatedMeasurement(t *testing.T) {
 	measurement := FederatedMeasurement{
 		Measurement: types.MeasurementRecord{
 			MeasurementHash: make([]byte, 32),
-			TEEType:         types.TEETypeSGX,
+			TeeType:         types.TEETypeSGX,
 			Description:     "Test measurement",
-			MinISVSVN:       1,
+			MinIsvSvn:       1,
 		},
 		SourceChainID:   "cosmoshub-4",
 		SourceChannelID: "channel-0",

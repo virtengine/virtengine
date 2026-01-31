@@ -47,7 +47,7 @@ func setupTestSuite(t *testing.T) *testSuite {
 		mkeeper: ssuite.MarketKeeper(),
 	}
 
-	suite.handler = handler.NewHandler(suite.keeper, suite.mkeeper)
+	suite.handler = handler.NewHandler(suite.keeper, suite.mkeeper, ssuite.VEIDKeeper(), ssuite.MFAKeeper())
 
 	return suite
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/virtengine/virtengine/x/review"
 	"github.com/virtengine/virtengine/x/review/types"
 )
 
@@ -44,13 +43,14 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidReviews() {
 		Params: types.DefaultParams(),
 		Reviews: []types.Review{
 			{
-				ReviewID:    "review-1",
-				OrderID:     "order-1",
-				Reviewer:    "cosmos1reviewer",
-				Provider:    "cosmos1provider",
-				Rating:      5,
-				Comment:     "Excellent service!",
-				CreatedAt:   now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-1", CustomerAddress: "cosmos1reviewer", ProviderAddress: "cosmos1provider", CompletedAt: now},
+				Rating:          5,
+				Text:            "Excellent service provided!",
+				State:           types.ReviewStateActive,
+				CreatedAt:       now,
 			},
 		},
 		NextReviewSequence: 2,
@@ -66,15 +66,16 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidAggregations() {
 		Params: types.DefaultParams(),
 		Aggregations: []types.ProviderAggregation{
 			{
-				Provider:       "cosmos1provider",
-				TotalReviews:   100,
-				AverageRating:  4.5,
-				TotalRating:    450,
-				FiveStarCount:  60,
-				FourStarCount:  25,
-				ThreeStarCount: 10,
-				TwoStarCount:   3,
-				OneStarCount:   2,
+				ProviderAddress: "cosmos1provider",
+				TotalReviews:    100,
+				AverageRating:   450, // 4.50 stars (fixed-point: value * 100)
+				Distribution: types.RatingDistribution{
+					OneStar:   2,
+					TwoStar:   3,
+					ThreeStar: 10,
+					FourStar:  25,
+					FiveStar:  60,
+				},
 			},
 		},
 		NextReviewSequence: 1,
@@ -90,11 +91,11 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidReview_EmptyID() {
 		Params: types.DefaultParams(),
 		Reviews: []types.Review{
 			{
-				ReviewID: "", // Invalid
-				OrderID:  "order-1",
-				Reviewer: "cosmos1reviewer",
-				Provider: "cosmos1provider",
-				Rating:   5,
+				ID:              types.ReviewID{ProviderAddress: "", Sequence: 0}, // Invalid - empty provider and zero sequence
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-1", CustomerAddress: "cosmos1reviewer", ProviderAddress: "cosmos1provider", CompletedAt: time.Now()},
+				Rating:          5,
 			},
 		},
 		NextReviewSequence: 1,
@@ -110,11 +111,11 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidReview_EmptyOrderID() {
 		Params: types.DefaultParams(),
 		Reviews: []types.Review{
 			{
-				ReviewID: "review-1",
-				OrderID:  "", // Invalid
-				Reviewer: "cosmos1reviewer",
-				Provider: "cosmos1provider",
-				Rating:   5,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "", CustomerAddress: "cosmos1reviewer", ProviderAddress: "cosmos1provider", CompletedAt: time.Now()}, // Invalid - empty OrderID
+				Rating:          5,
 			},
 		},
 		NextReviewSequence: 1,
@@ -130,11 +131,11 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidReview_RatingOutOfRange() 
 		Params: types.DefaultParams(),
 		Reviews: []types.Review{
 			{
-				ReviewID: "review-1",
-				OrderID:  "order-1",
-				Reviewer: "cosmos1reviewer",
-				Provider: "cosmos1provider",
-				Rating:   6, // Invalid: max is 5
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-1", CustomerAddress: "cosmos1reviewer", ProviderAddress: "cosmos1provider", CompletedAt: time.Now()},
+				Rating:          6, // Invalid: max is 5
 			},
 		},
 		NextReviewSequence: 1,
@@ -150,11 +151,11 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidReview_ZeroRating() {
 		Params: types.DefaultParams(),
 		Reviews: []types.Review{
 			{
-				ReviewID: "review-1",
-				OrderID:  "order-1",
-				Reviewer: "cosmos1reviewer",
-				Provider: "cosmos1provider",
-				Rating:   0, // Invalid: min is 1
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-1", CustomerAddress: "cosmos1reviewer", ProviderAddress: "cosmos1provider", CompletedAt: time.Now()},
+				Rating:          0, // Invalid: min is 1
 			},
 		},
 		NextReviewSequence: 1,
@@ -171,20 +172,20 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateReviews() {
 		Params: types.DefaultParams(),
 		Reviews: []types.Review{
 			{
-				ReviewID:  "review-1",
-				OrderID:   "order-1",
-				Reviewer:  "cosmos1reviewer1",
-				Provider:  "cosmos1provider",
-				Rating:    5,
-				CreatedAt: now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer1",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-1", CustomerAddress: "cosmos1reviewer1", ProviderAddress: "cosmos1provider", CompletedAt: now},
+				Rating:          5,
+				CreatedAt:       now,
 			},
 			{
-				ReviewID:  "review-1", // Duplicate
-				OrderID:   "order-2",
-				Reviewer:  "cosmos1reviewer2",
-				Provider:  "cosmos1provider",
-				Rating:    4,
-				CreatedAt: now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1}, // Duplicate
+				ReviewerAddress: "cosmos1reviewer2",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-2", CustomerAddress: "cosmos1reviewer2", ProviderAddress: "cosmos1provider", CompletedAt: now},
+				Rating:          4,
+				CreatedAt:       now,
 			},
 		},
 		NextReviewSequence: 2,
@@ -200,8 +201,8 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidAggregation_EmptyProvider(
 		Params: types.DefaultParams(),
 		Aggregations: []types.ProviderAggregation{
 			{
-				Provider:     "", // Invalid
-				TotalReviews: 10,
+				ProviderAddress: "", // Invalid
+				TotalReviews:    10,
 			},
 		},
 		NextReviewSequence: 1,
@@ -217,9 +218,9 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidAggregation_AvgRatingOutOf
 		Params: types.DefaultParams(),
 		Aggregations: []types.ProviderAggregation{
 			{
-				Provider:      "cosmos1provider",
-				TotalReviews:  10,
-				AverageRating: 5.5, // Invalid: max is 5.0
+				ProviderAddress: "cosmos1provider",
+				TotalReviews:    10,
+				AverageRating:   550, // Invalid: max is 500 (5.0 * 100)
 			},
 		},
 		NextReviewSequence: 1,
@@ -235,14 +236,14 @@ func (s *GenesisTestSuite) TestDefaultParams() {
 
 	s.Require().NotNil(params)
 	s.Require().Greater(params.MinRating, uint32(0))
-	s.Require().LessOrEqual(params.MinRating, params.MaxRating)
-	s.Require().Greater(params.MaxCommentLength, uint32(0))
+	s.Require().GreaterOrEqual(params.MaxRating, params.MinRating)
+	s.Require().Greater(params.MaxCommentLength, uint64(0))
 }
 
 // Test: Params validation - valid
 func (s *GenesisTestSuite) TestParamsValidation_Valid() {
 	params := types.DefaultParams()
-	err := params.Validate()
+	err := types.ValidateParams(&params)
 	s.Require().NoError(err)
 }
 
@@ -252,7 +253,7 @@ func (s *GenesisTestSuite) TestParamsValidation_MinGreaterThanMax() {
 	params.MinRating = 5
 	params.MaxRating = 1
 
-	err := params.Validate()
+	err := types.ValidateParams(&params)
 	s.Require().Error(err)
 }
 
@@ -261,13 +262,14 @@ func (s *GenesisTestSuite) TestParamsValidation_ZeroMaxCommentLength() {
 	params := types.DefaultParams()
 	params.MaxCommentLength = 0
 
-	err := params.Validate()
+	err := types.ValidateParams(&params)
 	s.Require().Error(err)
 }
 
 // Table-driven tests for review validation
 func TestReviewValidationTable(t *testing.T) {
 	now := time.Now().UTC()
+	orderRef := types.OrderReference{OrderID: "order-1", CustomerAddress: "cosmos1reviewer", ProviderAddress: "cosmos1provider", CompletedAt: now}
 	tests := []struct {
 		name        string
 		review      types.Review
@@ -276,70 +278,81 @@ func TestReviewValidationTable(t *testing.T) {
 		{
 			name: "valid review",
 			review: types.Review{
-				ReviewID:  "review-1",
-				OrderID:   "order-1",
-				Reviewer:  "cosmos1reviewer",
-				Provider:  "cosmos1provider",
-				Rating:    5,
-				Comment:   "Great service!",
-				CreatedAt: now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        orderRef,
+				Rating:          5,
+				Text:            "Great service provided!",
+				State:           types.ReviewStateActive,
+				CreatedAt:       now,
 			},
 			expectError: false,
 		},
 		{
 			name: "empty review ID",
 			review: types.Review{
-				ReviewID: "",
-				OrderID:  "order-1",
-				Reviewer: "cosmos1reviewer",
-				Provider: "cosmos1provider",
-				Rating:   5,
+				ID:              types.ReviewID{ProviderAddress: "", Sequence: 0}, // Invalid
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        orderRef,
+				Rating:          5,
+				Text:            "Great service provided!",
+				State:           types.ReviewStateActive,
 			},
 			expectError: true,
 		},
 		{
 			name: "empty reviewer",
 			review: types.Review{
-				ReviewID: "review-1",
-				OrderID:  "order-1",
-				Reviewer: "",
-				Provider: "cosmos1provider",
-				Rating:   5,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "", // Invalid
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        orderRef,
+				Rating:          5,
+				Text:            "Great service provided!",
+				State:           types.ReviewStateActive,
 			},
 			expectError: true,
 		},
 		{
 			name: "empty provider",
 			review: types.Review{
-				ReviewID: "review-1",
-				OrderID:  "order-1",
-				Reviewer: "cosmos1reviewer",
-				Provider: "",
-				Rating:   5,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "", // Invalid
+				OrderRef:        orderRef,
+				Rating:          5,
+				Text:            "Great service provided!",
+				State:           types.ReviewStateActive,
 			},
 			expectError: true,
 		},
 		{
 			name: "rating 1 (min valid)",
 			review: types.Review{
-				ReviewID:  "review-1",
-				OrderID:   "order-1",
-				Reviewer:  "cosmos1reviewer",
-				Provider:  "cosmos1provider",
-				Rating:    1,
-				CreatedAt: now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        orderRef,
+				Rating:          1,
+				Text:            "Poor service provided!",
+				State:           types.ReviewStateActive,
+				CreatedAt:       now,
 			},
 			expectError: false,
 		},
 		{
 			name: "rating 5 (max valid)",
 			review: types.Review{
-				ReviewID:  "review-1",
-				OrderID:   "order-1",
-				Reviewer:  "cosmos1reviewer",
-				Provider:  "cosmos1provider",
-				Rating:    5,
-				CreatedAt: now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        orderRef,
+				Rating:          5,
+				Text:            "Excellent service!",
+				State:           types.ReviewStateActive,
+				CreatedAt:       now,
 			},
 			expectError: false,
 		},
@@ -367,45 +380,44 @@ func TestAggregationValidationTable(t *testing.T) {
 		{
 			name: "valid aggregation",
 			agg: types.ProviderAggregation{
-				Provider:      "cosmos1provider",
-				TotalReviews:  100,
-				AverageRating: 4.5,
-				TotalRating:   450,
+				ProviderAddress: "cosmos1provider",
+				TotalReviews:    100,
+				AverageRating:   450, // 4.5 stars (fixed-point: value * 100)
+				Distribution: types.RatingDistribution{
+					OneStar:   5,
+					TwoStar:   10,
+					ThreeStar: 15,
+					FourStar:  30,
+					FiveStar:  40,
+				},
 			},
 			expectError: false,
 		},
 		{
 			name: "empty provider",
 			agg: types.ProviderAggregation{
-				Provider:     "",
-				TotalReviews: 10,
-			},
-			expectError: true,
-		},
-		{
-			name: "negative average rating",
-			agg: types.ProviderAggregation{
-				Provider:      "cosmos1provider",
-				TotalReviews:  10,
-				AverageRating: -1.0,
+				ProviderAddress: "",
+				TotalReviews:    10,
 			},
 			expectError: true,
 		},
 		{
 			name: "average rating too high",
 			agg: types.ProviderAggregation{
-				Provider:      "cosmos1provider",
-				TotalReviews:  10,
-				AverageRating: 6.0,
+				ProviderAddress: "cosmos1provider",
+				TotalReviews:    10,
+				AverageRating:   600, // 6.0 stars - too high (max is 500)
 			},
 			expectError: true,
 		},
 		{
-			name: "star counts exceed total",
+			name: "distribution total mismatch",
 			agg: types.ProviderAggregation{
-				Provider:       "cosmos1provider",
-				TotalReviews:   5,
-				FiveStarCount:  10, // More than total
+				ProviderAddress: "cosmos1provider",
+				TotalReviews:    5,
+				Distribution: types.RatingDistribution{
+					FiveStar: 10, // More than total
+				},
 			},
 			expectError: true,
 		},
@@ -430,32 +442,35 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 		Params: types.DefaultParams(),
 		Reviews: []types.Review{
 			{
-				ReviewID:  "review-1",
-				OrderID:   "order-1",
-				Reviewer:  "cosmos1reviewer",
-				Provider:  "cosmos1provider",
-				Rating:    5,
-				Comment:   "Excellent!",
-				CreatedAt: now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 1},
+				ReviewerAddress: "cosmos1reviewer",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-1", CustomerAddress: "cosmos1reviewer", ProviderAddress: "cosmos1provider", CompletedAt: now},
+				Rating:          5,
+				Text:            "Excellent service provided!",
+				State:           types.ReviewStateActive,
+				CreatedAt:       now,
 			},
 			{
-				ReviewID:  "review-2",
-				OrderID:   "order-2",
-				Reviewer:  "cosmos1reviewer2",
-				Provider:  "cosmos1provider",
-				Rating:    4,
-				Comment:   "Good service",
-				CreatedAt: now,
+				ID:              types.ReviewID{ProviderAddress: "cosmos1provider", Sequence: 2},
+				ReviewerAddress: "cosmos1reviewer2",
+				ProviderAddress: "cosmos1provider",
+				OrderRef:        types.OrderReference{OrderID: "order-2", CustomerAddress: "cosmos1reviewer2", ProviderAddress: "cosmos1provider", CompletedAt: now},
+				Rating:          4,
+				Text:            "Good service provided!",
+				State:           types.ReviewStateActive,
+				CreatedAt:       now,
 			},
 		},
 		Aggregations: []types.ProviderAggregation{
 			{
-				Provider:       "cosmos1provider",
-				TotalReviews:   2,
-				AverageRating:  4.5,
-				TotalRating:    9,
-				FiveStarCount:  1,
-				FourStarCount:  1,
+				ProviderAddress: "cosmos1provider",
+				TotalReviews:    2,
+				AverageRating:   450, // 4.5 stars (fixed-point: value * 100)
+				Distribution: types.RatingDistribution{
+					FourStar: 1,
+					FiveStar: 1,
+				},
 			},
 		},
 		NextReviewSequence: 3,
@@ -471,16 +486,17 @@ func (s *GenesisTestSuite) TestValidateGenesis_AggregationConsistency() {
 		Params: types.DefaultParams(),
 		Aggregations: []types.ProviderAggregation{
 			{
-				Provider:       "cosmos1provider",
-				TotalReviews:   10,
-				AverageRating:  4.0,
-				TotalRating:    40,
-				FiveStarCount:  3,
-				FourStarCount:  4,
-				ThreeStarCount: 2,
-				TwoStarCount:   1,
-				OneStarCount:   0,
-				// Sum: 3+4+2+1+0 = 10 = TotalReviews (valid)
+				ProviderAddress: "cosmos1provider",
+				TotalReviews:    10,
+				AverageRating:   400, // 4.0 stars (fixed-point: value * 100)
+				Distribution: types.RatingDistribution{
+					OneStar:   0,
+					TwoStar:   1,
+					ThreeStar: 2,
+					FourStar:  4,
+					FiveStar:  3,
+				},
+				// Sum: 0+1+2+4+3 = 10 = TotalReviews (valid)
 			},
 		},
 		NextReviewSequence: 1,

@@ -6,18 +6,19 @@ UNAME_ARCH            := $(shell uname -m)
 # use virtengine-node-ready target as example
 BASH_PATH := $(shell which bash)
 
-ifeq (, $(shell which direnv))
-$(error "No direnv in $(PATH), consider installing. https://direnv.net")
-endif
-
+# On Windows or when VE_DIRENV_SET is already exported, skip direnv binary check.
+# This allows manual environment setup via git hooks or scripts.
 ifneq (1, $(VE_DIRENV_SET))
-$(error "no envrc detected. might need to run \"direnv allow\"")
+  ifeq (, $(shell which direnv))
+    $(error "No direnv in $(PATH) and VE_DIRENV_SET not set. Install direnv (https://direnv.net) or export VE_DIRENV_SET=1 with required env vars.")
+  endif
+  $(error "no envrc detected. might need to run \"direnv allow\"")
 endif
 
 # VE_ROOT may not be set if environment does not support/use direnv
 # in this case define it manually as well as all required env variables
 ifndef VE_ROOT
-$(error "VE_ROOT is not set. might need to run \"direnv allow\"")
+$(error "VE_ROOT is not set. Export VE_ROOT or run \"direnv allow\"")
 endif
 
 ifeq (, $(GOTOOLCHAIN))

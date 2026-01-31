@@ -71,17 +71,6 @@ func TestIsDomainVerified(t *testing.T) {
 	// Initially should not be verified
 	require.False(t, k.IsDomainVerified(ctx, owner))
 
-	// Create a verified record
-	record := &keeper.DomainVerificationRecord{
-		ProviderAddress: owner.String(),
-		Domain:          "provider.example.com",
-		Token:           "test_token",
-		Status:          keeper.DomainVerificationVerified,
-		GeneratedAt:     ctx.BlockTime().Unix(),
-		VerifiedAt:      ctx.BlockTime().Unix(),
-		ExpiresAt:       ctx.BlockTime().Add(7 * 24 * time.Hour).Unix(),
-	}
-
 	// Store via private method (through public interface)
 	_, err := k.GenerateDomainVerificationToken(ctx, owner, "provider.example.com")
 	require.NoError(t, err)
@@ -106,7 +95,7 @@ func TestTokenExpiration(t *testing.T) {
 	domain := "provider.example.com"
 
 	// Generate token
-	record, err := k.GenerateDomainVerificationToken(ctx, owner, domain)
+	_, err := k.GenerateDomainVerificationToken(ctx, owner, domain)
 	require.NoError(t, err)
 
 	// Fast-forward time past expiration

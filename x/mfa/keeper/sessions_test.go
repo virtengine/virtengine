@@ -47,7 +47,7 @@ func setupTestKeeper(t *testing.T) (sdk.Context, Keeper) {
 	testCtx := sdktestutil.DefaultContextWithDB(t, key, storetypes.NewTransientStoreKey("transient_test"))
 	ctx := testCtx.Ctx.WithBlockTime(time.Now())
 
-	cdc := codec.NewLegacyAmino()
+	cdc := codec.NewProtoCodec(nil)
 	keeper := NewKeeper(cdc, key, "authority", newMockVEIDKeeper(), newMockRolesKeeper())
 
 	return ctx, keeper
@@ -212,53 +212,53 @@ func TestCreateAuthSessionForAction(t *testing.T) {
 	addr := sdk.AccAddress([]byte("test_address_1234567"))
 
 	testCases := []struct {
-		name          string
-		action        types.SensitiveTransactionType
-		expectSingle  bool
-		minDuration   int64
-		maxDuration   int64
+		name         string
+		action       types.SensitiveTransactionType
+		expectSingle bool
+		minDuration  int64
+		maxDuration  int64
 	}{
 		{
-			name:          "Critical - AccountRecovery (single-use)",
-			action:        types.SensitiveTxAccountRecovery,
-			expectSingle:  true,
-			minDuration:   0,
-			maxDuration:   5 * 60, // 5 minute window for single-use
+			name:         "Critical - AccountRecovery (single-use)",
+			action:       types.SensitiveTxAccountRecovery,
+			expectSingle: true,
+			minDuration:  0,
+			maxDuration:  5 * 60, // 5 minute window for single-use
 		},
 		{
-			name:          "Critical - KeyRotation (single-use)",
-			action:        types.SensitiveTxKeyRotation,
-			expectSingle:  true,
-			minDuration:   0,
-			maxDuration:   5 * 60,
+			name:         "Critical - KeyRotation (single-use)",
+			action:       types.SensitiveTxKeyRotation,
+			expectSingle: true,
+			minDuration:  0,
+			maxDuration:  5 * 60,
 		},
 		{
-			name:          "High - ProviderRegistration (15 min)",
-			action:        types.SensitiveTxProviderRegistration,
-			expectSingle:  false,
-			minDuration:   14 * 60,
-			maxDuration:   16 * 60,
+			name:         "High - ProviderRegistration (15 min)",
+			action:       types.SensitiveTxProviderRegistration,
+			expectSingle: false,
+			minDuration:  14 * 60,
+			maxDuration:  16 * 60,
 		},
 		{
-			name:          "High - LargeWithdrawal (15 min)",
-			action:        types.SensitiveTxLargeWithdrawal,
-			expectSingle:  false,
-			minDuration:   14 * 60,
-			maxDuration:   16 * 60,
+			name:         "High - LargeWithdrawal (15 min)",
+			action:       types.SensitiveTxLargeWithdrawal,
+			expectSingle: false,
+			minDuration:  14 * 60,
+			maxDuration:  16 * 60,
 		},
 		{
-			name:          "Medium - HighValueOrder (30 min)",
-			action:        types.SensitiveTxHighValueOrder,
-			expectSingle:  false,
-			minDuration:   29 * 60,
-			maxDuration:   31 * 60,
+			name:         "Medium - HighValueOrder (30 min)",
+			action:       types.SensitiveTxHighValueOrder,
+			expectSingle: false,
+			minDuration:  29 * 60,
+			maxDuration:  31 * 60,
 		},
 		{
-			name:          "Low - MediumWithdrawal (60 min)",
-			action:        types.SensitiveTxMediumWithdrawal,
-			expectSingle:  false,
-			minDuration:   59 * 60,
-			maxDuration:   61 * 60,
+			name:         "Low - MediumWithdrawal (60 min)",
+			action:       types.SensitiveTxMediumWithdrawal,
+			expectSingle: false,
+			minDuration:  59 * 60,
+			maxDuration:  61 * 60,
 		},
 	}
 
@@ -428,12 +428,12 @@ func TestGetSessionDurationForAction(t *testing.T) {
 		action           types.SensitiveTransactionType
 		expectedDuration int64
 	}{
-		{types.SensitiveTxAccountRecovery, 0},             // Critical - single use
-		{types.SensitiveTxKeyRotation, 0},                 // Critical - single use
-		{types.SensitiveTxProviderRegistration, 15 * 60},  // High - 15 min
-		{types.SensitiveTxLargeWithdrawal, 15 * 60},       // High - 15 min
-		{types.SensitiveTxHighValueOrder, 30 * 60},        // Medium - 30 min
-		{types.SensitiveTxMediumWithdrawal, 60 * 60},      // Low - 60 min
+		{types.SensitiveTxAccountRecovery, 0},            // Critical - single use
+		{types.SensitiveTxKeyRotation, 0},                // Critical - single use
+		{types.SensitiveTxProviderRegistration, 15 * 60}, // High - 15 min
+		{types.SensitiveTxLargeWithdrawal, 15 * 60},      // High - 15 min
+		{types.SensitiveTxHighValueOrder, 30 * 60},       // Medium - 30 min
+		{types.SensitiveTxMediumWithdrawal, 60 * 60},     // Low - 60 min
 	}
 
 	for _, tc := range testCases {

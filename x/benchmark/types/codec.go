@@ -28,12 +28,13 @@ func init() {
 
 // RegisterLegacyAminoCodec registers the benchmark types
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	legacy.RegisterAminoMsg(cdc, &MsgSubmitBenchmarks{}, "virtengine/benchmark/MsgSubmitBenchmarks")
-	legacy.RegisterAminoMsg(cdc, &MsgRequestChallenge{}, "virtengine/benchmark/MsgRequestChallenge")
-	legacy.RegisterAminoMsg(cdc, &MsgRespondChallenge{}, "virtengine/benchmark/MsgRespondChallenge")
-	legacy.RegisterAminoMsg(cdc, &MsgFlagProvider{}, "virtengine/benchmark/MsgFlagProvider")
-	legacy.RegisterAminoMsg(cdc, &MsgUnflagProvider{}, "virtengine/benchmark/MsgUnflagProvider")
-	legacy.RegisterAminoMsg(cdc, &MsgResolveAnomalyFlag{}, "virtengine/benchmark/MsgResolveAnomalyFlag")
+	// Note: Amino message names must be <= 39 characters
+	legacy.RegisterAminoMsg(cdc, &MsgSubmitBenchmarks{}, "ve/bench/MsgSubmitBenchmarks")
+	legacy.RegisterAminoMsg(cdc, &MsgRequestChallenge{}, "ve/bench/MsgRequestChallenge")
+	legacy.RegisterAminoMsg(cdc, &MsgRespondChallenge{}, "ve/bench/MsgRespondChallenge")
+	legacy.RegisterAminoMsg(cdc, &MsgFlagProvider{}, "ve/bench/MsgFlagProvider")
+	legacy.RegisterAminoMsg(cdc, &MsgUnflagProvider{}, "ve/bench/MsgUnflagProvider")
+	legacy.RegisterAminoMsg(cdc, &MsgResolveAnomalyFlag{}, "ve/bench/MsgResolveAnomaly")
 }
 
 // RegisterInterfaces registers the x/benchmark interfaces types with the interface registry

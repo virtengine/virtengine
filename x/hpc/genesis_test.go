@@ -49,14 +49,15 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidClusters() {
 		{
 			ClusterID:       "hpc-cluster-1",
 			Name:            "Test Cluster",
-			Provider:        "cosmos1provider",
-			Status:          types.ClusterStatusActive,
+			ProviderAddress: "cosmos1provider",
+			State:           types.ClusterStateActive,
 			TotalNodes:      10,
 			AvailableNodes:  8,
-			TotalCores:      640,
-			AvailableCores:  512,
-			TotalMemoryGB:   5120,
-			AvailableMemoryGB: 4096,
+			Region:          "us-west-1",
+			ClusterMetadata: types.ClusterMetadata{
+				TotalCPUCores: 640,
+				TotalMemoryGB: 5120,
+			},
 		},
 	}
 	genesis.ClusterSequence = 2
@@ -70,17 +71,14 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidOfferings() {
 	genesis := types.DefaultGenesisState()
 	genesis.Offerings = []types.HPCOffering{
 		{
-			OfferingID:    "hpc-offering-1",
-			ClusterID:     "hpc-cluster-1",
-			Provider:      "cosmos1provider",
-			Name:          "Standard HPC",
-			Status:        types.OfferingStatusActive,
-			CoresMin:      1,
-			CoresMax:      64,
-			MemoryGBMin:   1,
-			MemoryGBMax:   256,
-			PricePerCoreHour: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
-			PricePerGBHour:   sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
+			OfferingID:      "hpc-offering-1",
+			ClusterID:       "hpc-cluster-1",
+			ProviderAddress: "cosmos1provider",
+			Name:            "Standard HPC",
+			Active:          true,
+			Pricing: types.HPCPricing{
+				BaseNodeHourPrice: "100",
+			},
 		},
 	}
 	genesis.OfferingSequence = 2
@@ -93,18 +91,22 @@ func (s *GenesisTestSuite) TestValidateGenesis_ValidOfferings() {
 func (s *GenesisTestSuite) TestValidateGenesis_ValidJobs() {
 	genesis := types.DefaultGenesisState()
 	now := time.Now().UTC()
+	startedAt := now
 	genesis.Jobs = []types.HPCJob{
 		{
-			JobID:        "hpc-job-1",
-			OfferingID:   "hpc-offering-1",
-			ClusterID:    "hpc-cluster-1",
-			Submitter:    "cosmos1submitter",
-			Status:       types.JobStatusRunning,
-			RequestedCores: 8,
-			RequestedMemoryGB: 32,
-			SubmittedAt:  now,
-			StartedAt:    now,
-			WallTimeSeconds: 3600,
+			JobID:             "hpc-job-1",
+			OfferingID:        "hpc-offering-1",
+			ClusterID:         "hpc-cluster-1",
+			CustomerAddress:   "cosmos1submitter",
+			State:             types.JobStateRunning,
+			MaxRuntimeSeconds: 3600,
+			Resources: types.JobResources{
+				Nodes:           1,
+				CPUCoresPerNode: 8,
+				MemoryGBPerNode: 32,
+			},
+			CreatedAt: now,
+			StartedAt: &startedAt,
 		},
 	}
 	genesis.JobSequence = 2
@@ -118,9 +120,9 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidCluster_EmptyID() {
 	genesis := types.DefaultGenesisState()
 	genesis.Clusters = []types.HPCCluster{
 		{
-			ClusterID: "", // Invalid
-			Name:      "Test Cluster",
-			Provider:  "cosmos1provider",
+			ClusterID:       "", // Invalid
+			Name:            "Test Cluster",
+			ProviderAddress: "cosmos1provider",
 		},
 	}
 
@@ -133,9 +135,9 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidOffering_EmptyID() {
 	genesis := types.DefaultGenesisState()
 	genesis.Offerings = []types.HPCOffering{
 		{
-			OfferingID: "", // Invalid
-			ClusterID:  "hpc-cluster-1",
-			Provider:   "cosmos1provider",
+			OfferingID:      "", // Invalid
+			ClusterID:       "hpc-cluster-1",
+			ProviderAddress: "cosmos1provider",
 		},
 	}
 
@@ -148,8 +150,8 @@ func (s *GenesisTestSuite) TestValidateGenesis_InvalidJob_EmptyID() {
 	genesis := types.DefaultGenesisState()
 	genesis.Jobs = []types.HPCJob{
 		{
-			JobID:     "", // Invalid
-			Submitter: "cosmos1submitter",
+			JobID:           "", // Invalid
+			CustomerAddress: "cosmos1submitter",
 		},
 	}
 
@@ -162,16 +164,16 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateClusters() {
 	genesis := types.DefaultGenesisState()
 	genesis.Clusters = []types.HPCCluster{
 		{
-			ClusterID: "hpc-cluster-1",
-			Name:      "Cluster 1",
-			Provider:  "cosmos1provider1",
-			Status:    types.ClusterStatusActive,
+			ClusterID:       "hpc-cluster-1",
+			Name:            "Cluster 1",
+			ProviderAddress: "cosmos1provider1",
+			State:           types.ClusterStateActive,
 		},
 		{
-			ClusterID: "hpc-cluster-1", // Duplicate
-			Name:      "Cluster 2",
-			Provider:  "cosmos1provider2",
-			Status:    types.ClusterStatusActive,
+			ClusterID:       "hpc-cluster-1", // Duplicate
+			Name:            "Cluster 2",
+			ProviderAddress: "cosmos1provider2",
+			State:           types.ClusterStateActive,
 		},
 	}
 
@@ -184,18 +186,18 @@ func (s *GenesisTestSuite) TestValidateGenesis_DuplicateOfferings() {
 	genesis := types.DefaultGenesisState()
 	genesis.Offerings = []types.HPCOffering{
 		{
-			OfferingID: "hpc-offering-1",
-			ClusterID:  "hpc-cluster-1",
-			Provider:   "cosmos1provider",
-			Name:       "Offering 1",
-			Status:     types.OfferingStatusActive,
+			OfferingID:      "hpc-offering-1",
+			ClusterID:       "hpc-cluster-1",
+			ProviderAddress: "cosmos1provider",
+			Name:            "Offering 1",
+			Active:          true,
 		},
 		{
-			OfferingID: "hpc-offering-1", // Duplicate
-			ClusterID:  "hpc-cluster-1",
-			Provider:   "cosmos1provider",
-			Name:       "Offering 2",
-			Status:     types.OfferingStatusActive,
+			OfferingID:      "hpc-offering-1", // Duplicate
+			ClusterID:       "hpc-cluster-1",
+			ProviderAddress: "cosmos1provider",
+			Name:            "Offering 2",
+			Active:          true,
 		},
 	}
 
@@ -208,90 +210,58 @@ func (s *GenesisTestSuite) TestDefaultParams() {
 	params := types.DefaultParams()
 
 	s.Require().NotNil(params)
-	s.Require().Greater(params.MaxJobWallTimeSeconds, int64(0))
-	s.Require().Greater(params.MaxCoresPerJob, uint32(0))
-	s.Require().Greater(params.MaxMemoryGBPerJob, uint32(0))
+	s.Require().Greater(params.MaxJobDurationSeconds, int64(0))
+	s.Require().Greater(params.MinJobDurationSeconds, int64(0))
 }
 
-// Test: Params validation - valid
-func (s *GenesisTestSuite) TestParamsValidation_Valid() {
+// Test: Params field validation - valid values
+func (s *GenesisTestSuite) TestParamsFieldValidation_Valid() {
 	params := types.DefaultParams()
-	err := params.Validate()
-	s.Require().NoError(err)
+	// Params doesn't have a Validate method, so we just check the values are sensible
+	s.Require().Greater(params.MaxJobDurationSeconds, int64(0))
+	s.Require().Greater(params.MinJobDurationSeconds, int64(0))
+	s.Require().GreaterOrEqual(params.MaxJobDurationSeconds, params.MinJobDurationSeconds)
 }
 
-// Test: Params validation - zero max wall time
-func (s *GenesisTestSuite) TestParamsValidation_ZeroMaxWallTime() {
+// Test: Params field values - durations are reasonable
+func (s *GenesisTestSuite) TestParamsFieldValidation_DurationValues() {
 	params := types.DefaultParams()
-	params.MaxJobWallTimeSeconds = 0
-
-	err := params.Validate()
-	s.Require().Error(err)
+	// Min should be at least 60 seconds
+	s.Require().GreaterOrEqual(params.MinJobDurationSeconds, int64(60))
 }
 
-// Test: Params validation - zero max cores
-func (s *GenesisTestSuite) TestParamsValidation_ZeroMaxCores() {
+// Test: Params field values - heartbeat timeouts are positive
+func (s *GenesisTestSuite) TestParamsFieldValidation_HeartbeatTimeouts() {
 	params := types.DefaultParams()
-	params.MaxCoresPerJob = 0
-
-	err := params.Validate()
-	s.Require().Error(err)
+	s.Require().Greater(params.ClusterHeartbeatTimeout, int64(0))
+	s.Require().Greater(params.NodeHeartbeatTimeout, int64(0))
 }
 
-// Test: Params validation - zero max memory
-func (s *GenesisTestSuite) TestParamsValidation_ZeroMaxMemory() {
+// Table-driven tests for default params field values
+func TestParamsFieldValuesTable(t *testing.T) {
 	params := types.DefaultParams()
-	params.MaxMemoryGBPerJob = 0
 
-	err := params.Validate()
-	s.Require().Error(err)
-}
-
-// Table-driven tests for various param validations
-func TestParamsValidationTable(t *testing.T) {
 	tests := []struct {
-		name        string
-		modifier    func(*types.Params)
-		expectError bool
+		name      string
+		condition bool
 	}{
 		{
-			name:        "valid default params",
-			modifier:    func(p *types.Params) {},
-			expectError: false,
+			name:      "max job duration positive",
+			condition: params.MaxJobDurationSeconds > 0,
 		},
 		{
-			name: "max wall time too high",
-			modifier: func(p *types.Params) {
-				p.MaxJobWallTimeSeconds = 365 * 24 * 3600 * 10 // 10 years
-			},
-			expectError: true,
+			name:      "min job duration positive",
+			condition: params.MinJobDurationSeconds > 0,
 		},
 		{
-			name: "max cores too high",
-			modifier: func(p *types.Params) {
-				p.MaxCoresPerJob = 1000000
-			},
-			expectError: true,
-		},
-		{
-			name: "max memory too high",
-			modifier: func(p *types.Params) {
-				p.MaxMemoryGBPerJob = 10000000
-			},
-			expectError: true,
+			name:      "max >= min duration",
+			condition: params.MaxJobDurationSeconds >= params.MinJobDurationSeconds,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			params := types.DefaultParams()
-			tc.modifier(&params)
-			err := params.Validate()
-			if tc.expectError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
+			require.True(t, tc.condition)
 		})
 	}
 }
@@ -306,38 +276,38 @@ func (s *GenesisTestSuite) TestHPCClusterValidate() {
 		{
 			name: "valid cluster",
 			cluster: types.HPCCluster{
-				ClusterID:  "hpc-cluster-1",
-				Name:       "Test Cluster",
-				Provider:   "cosmos1provider",
-				Status:     types.ClusterStatusActive,
-				TotalNodes: 10,
+				ClusterID:       "hpc-cluster-1",
+				Name:            "Test Cluster",
+				ProviderAddress: "cosmos1provider",
+				State:           types.ClusterStateActive,
+				TotalNodes:      10,
 			},
 			expectError: false,
 		},
 		{
 			name: "empty cluster ID",
 			cluster: types.HPCCluster{
-				ClusterID: "",
-				Name:      "Test Cluster",
-				Provider:  "cosmos1provider",
+				ClusterID:       "",
+				Name:            "Test Cluster",
+				ProviderAddress: "cosmos1provider",
 			},
 			expectError: true,
 		},
 		{
 			name: "empty provider",
 			cluster: types.HPCCluster{
-				ClusterID: "hpc-cluster-1",
-				Name:      "Test Cluster",
-				Provider:  "",
+				ClusterID:       "hpc-cluster-1",
+				Name:            "Test Cluster",
+				ProviderAddress: "",
 			},
 			expectError: true,
 		},
 		{
 			name: "empty name",
 			cluster: types.HPCCluster{
-				ClusterID: "hpc-cluster-1",
-				Name:      "",
-				Provider:  "cosmos1provider",
+				ClusterID:       "hpc-cluster-1",
+				Name:            "",
+				ProviderAddress: "cosmos1provider",
 			},
 			expectError: true,
 		},
@@ -365,38 +335,33 @@ func (s *GenesisTestSuite) TestHPCOfferingValidate() {
 		{
 			name: "valid offering",
 			offering: types.HPCOffering{
-				OfferingID:       "hpc-offering-1",
-				ClusterID:        "hpc-cluster-1",
-				Provider:         "cosmos1provider",
-				Name:             "Standard HPC",
-				Status:           types.OfferingStatusActive,
-				CoresMin:         1,
-				CoresMax:         64,
-				MemoryGBMin:      1,
-				MemoryGBMax:      256,
-				PricePerCoreHour: sdk.NewDecCoin("uve", sdkmath.NewInt(100)),
-				PricePerGBHour:   sdk.NewDecCoin("uve", sdkmath.NewInt(10)),
+				OfferingID:      "hpc-offering-1",
+				ClusterID:       "hpc-cluster-1",
+				ProviderAddress: "cosmos1provider",
+				Name:            "Standard HPC",
+				Active:          true,
+				Pricing: types.HPCPricing{
+					BaseNodeHourPrice: "100",
+				},
 			},
 			expectError: false,
 		},
 		{
 			name: "empty offering ID",
 			offering: types.HPCOffering{
-				OfferingID: "",
-				ClusterID:  "hpc-cluster-1",
-				Provider:   "cosmos1provider",
+				OfferingID:      "",
+				ClusterID:       "hpc-cluster-1",
+				ProviderAddress: "cosmos1provider",
 			},
 			expectError: true,
 		},
 		{
-			name: "invalid core range",
+			name: "empty cluster ID",
 			offering: types.HPCOffering{
-				OfferingID:  "hpc-offering-1",
-				ClusterID:   "hpc-cluster-1",
-				Provider:    "cosmos1provider",
-				Name:        "Invalid",
-				CoresMin:    64,
-				CoresMax:    1, // Max < Min
+				OfferingID:      "hpc-offering-1",
+				ClusterID:       "",
+				ProviderAddress: "cosmos1provider",
+				Name:            "Invalid",
 			},
 			expectError: true,
 		},
@@ -428,37 +393,42 @@ func (s *GenesisTestSuite) TestHPCJobValidate() {
 				JobID:             "hpc-job-1",
 				OfferingID:        "hpc-offering-1",
 				ClusterID:         "hpc-cluster-1",
-				Submitter:         "cosmos1submitter",
-				Status:            types.JobStatusPending,
-				RequestedCores:    8,
-				RequestedMemoryGB: 32,
-				WallTimeSeconds:   3600,
-				SubmittedAt:       now,
+				CustomerAddress:   "cosmos1submitter",
+				State:             types.JobStatePending,
+				MaxRuntimeSeconds: 3600,
+				Resources: types.JobResources{
+					Nodes:           1,
+					CPUCoresPerNode: 8,
+					MemoryGBPerNode: 32,
+				},
+				CreatedAt: now,
 			},
 			expectError: false,
 		},
 		{
 			name: "empty job ID",
 			job: types.HPCJob{
-				JobID:     "",
-				Submitter: "cosmos1submitter",
+				JobID:           "",
+				CustomerAddress: "cosmos1submitter",
 			},
 			expectError: true,
 		},
 		{
-			name: "empty submitter",
+			name: "empty customer address",
 			job: types.HPCJob{
-				JobID:     "hpc-job-1",
-				Submitter: "",
+				JobID:           "hpc-job-1",
+				CustomerAddress: "",
 			},
 			expectError: true,
 		},
 		{
-			name: "zero requested cores",
+			name: "zero resources",
 			job: types.HPCJob{
-				JobID:          "hpc-job-1",
-				Submitter:      "cosmos1submitter",
-				RequestedCores: 0,
+				JobID:           "hpc-job-1",
+				CustomerAddress: "cosmos1submitter",
+				Resources: types.JobResources{
+					Nodes: 0,
+				},
 			},
 			expectError: true,
 		},
@@ -487,40 +457,40 @@ func (s *GenesisTestSuite) TestHPCDisputeValidate() {
 		{
 			name: "valid dispute",
 			dispute: types.HPCDispute{
-				DisputeID:   "hpc-dispute-1",
-				JobID:       "hpc-job-1",
-				Disputant:   "cosmos1disputant",
-				Status:      types.DisputeStatusOpen,
-				Reason:      "Service quality issue",
-				SubmittedAt: now,
+				DisputeID:       "hpc-dispute-1",
+				JobID:           "hpc-job-1",
+				DisputerAddress: "cosmos1disputant",
+				Status:          types.DisputeStatusPending,
+				Reason:          "Service quality issue",
+				CreatedAt:       now,
 			},
 			expectError: false,
 		},
 		{
 			name: "empty dispute ID",
 			dispute: types.HPCDispute{
-				DisputeID: "",
-				JobID:     "hpc-job-1",
-				Disputant: "cosmos1disputant",
+				DisputeID:       "",
+				JobID:           "hpc-job-1",
+				DisputerAddress: "cosmos1disputant",
 			},
 			expectError: true,
 		},
 		{
 			name: "empty job ID",
 			dispute: types.HPCDispute{
-				DisputeID: "hpc-dispute-1",
-				JobID:     "",
-				Disputant: "cosmos1disputant",
+				DisputeID:       "hpc-dispute-1",
+				JobID:           "",
+				DisputerAddress: "cosmos1disputant",
 			},
 			expectError: true,
 		},
 		{
 			name: "empty reason",
 			dispute: types.HPCDispute{
-				DisputeID: "hpc-dispute-1",
-				JobID:     "hpc-job-1",
-				Disputant: "cosmos1disputant",
-				Reason:    "",
+				DisputeID:       "hpc-dispute-1",
+				JobID:           "hpc-job-1",
+				DisputerAddress: "cosmos1disputant",
+				Reason:          "",
 			},
 			expectError: true,
 		},
@@ -597,20 +567,20 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 		Params: types.DefaultParams(),
 		Clusters: []types.HPCCluster{
 			{
-				ClusterID:  "hpc-cluster-1",
-				Name:       "Production Cluster",
-				Provider:   "cosmos1provider",
-				Status:     types.ClusterStatusActive,
-				TotalNodes: 100,
+				ClusterID:       "hpc-cluster-1",
+				Name:            "Production Cluster",
+				ProviderAddress: "cosmos1provider",
+				State:           types.ClusterStateActive,
+				TotalNodes:      100,
 			},
 		},
 		Offerings: []types.HPCOffering{
 			{
 				OfferingID:       "hpc-offering-1",
 				ClusterID:        "hpc-cluster-1",
-				Provider:         "cosmos1provider",
+				ProviderAddress:  "cosmos1provider",
 				Name:             "Standard",
-				Status:           types.OfferingStatusActive,
+				Active:           true,
 				CoresMin:         1,
 				CoresMax:         64,
 				MemoryGBMin:      1,
@@ -645,11 +615,11 @@ func (s *GenesisTestSuite) TestValidateGenesis_CompleteState() {
 		},
 		HPCRewards: []types.HPCRewardRecord{
 			{
-				RewardID:   "hpc-reward-1",
-				JobID:      "hpc-job-1",
-				Provider:   "cosmos1provider",
-				Amount:     sdk.NewCoin("uve", sdkmath.NewInt(1000)),
-				PaidAt:     now,
+				RewardID:        "hpc-reward-1",
+				JobID:           "hpc-job-1",
+				ProviderAddress: "cosmos1provider",
+				Amount:          sdk.NewCoin("uve", sdkmath.NewInt(1000)),
+				PaidAt:          now,
 			},
 		},
 		Disputes: []types.HPCDispute{
@@ -693,10 +663,10 @@ func TestExtractSequenceFromID(t *testing.T) {
 			genesis := types.DefaultGenesisState()
 			genesis.Clusters = []types.HPCCluster{
 				{
-					ClusterID: tc.id,
-					Name:      "Test",
-					Provider:  "cosmos1provider",
-					Status:    types.ClusterStatusActive,
+					ClusterID:       tc.id,
+					Name:            "Test",
+					ProviderAddress: "cosmos1provider",
+					State:           types.ClusterStateActive,
 				},
 			}
 			// The function is tested implicitly through ExportGenesis behavior

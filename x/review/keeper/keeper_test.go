@@ -808,35 +808,26 @@ func TestParamsValidation(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name: "invalid min text length",
+			name: "invalid max comment length",
 			params: types.Params{
-				MinReviewTextLength:   0,
-				MaxReviewTextLength:   2000,
-				ReviewCooldownSeconds: 86400,
-				MaxReviewsPerProvider: 1000,
+				MinReviewInterval:     86400,
+				MaxCommentLength:      0, // Invalid: must be positive
+				ReviewWindow:          86400 * 7,
 				RequireCompletedOrder: true,
+				MinRating:             1,
+				MaxRating:             5,
 			},
 			expectErr: true,
 		},
 		{
-			name: "min greater than max",
+			name: "min rating greater than max",
 			params: types.Params{
-				MinReviewTextLength:   100,
-				MaxReviewTextLength:   50,
-				ReviewCooldownSeconds: 86400,
-				MaxReviewsPerProvider: 1000,
+				MinReviewInterval:     86400,
+				MaxCommentLength:      2000,
+				ReviewWindow:          86400 * 7,
 				RequireCompletedOrder: true,
-			},
-			expectErr: true,
-		},
-		{
-			name: "negative cooldown",
-			params: types.Params{
-				MinReviewTextLength:   10,
-				MaxReviewTextLength:   2000,
-				ReviewCooldownSeconds: -1,
-				MaxReviewsPerProvider: 1000,
-				RequireCompletedOrder: true,
+				MinRating:             5,
+				MaxRating:             1, // Invalid: max < min
 			},
 			expectErr: true,
 		},
@@ -844,7 +835,7 @@ func TestParamsValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.params.Validate()
+			err := types.ValidateParams(&tc.params)
 			if tc.expectErr && err == nil {
 				t.Error("expected validation error")
 			}
@@ -1031,11 +1022,11 @@ func TestTopProvidersByRating(t *testing.T) {
 		addr    string
 		ratings []uint8
 	}{
-		{"cosmos1provider111111111111111111111111111111", []uint8{5, 5, 5}},      // avg 5.00
-		{"cosmos1provider222222222222222222222222222222", []uint8{4, 4, 4}},      // avg 4.00
-		{"cosmos1provider333333333333333333333333333333", []uint8{3, 3, 3}},      // avg 3.00
-		{"cosmos1provider444444444444444444444444444444", []uint8{5, 4, 5, 4}},   // avg 4.50
-		{"cosmos1provider555555555555555555555555555555", []uint8{2, 2, 3}},      // avg 2.33
+		{"cosmos1provider111111111111111111111111111111", []uint8{5, 5, 5}},    // avg 5.00
+		{"cosmos1provider222222222222222222222222222222", []uint8{4, 4, 4}},    // avg 4.00
+		{"cosmos1provider333333333333333333333333333333", []uint8{3, 3, 3}},    // avg 3.00
+		{"cosmos1provider444444444444444444444444444444", []uint8{5, 4, 5, 4}}, // avg 4.50
+		{"cosmos1provider555555555555555555555555555555", []uint8{2, 2, 3}},    // avg 2.33
 	}
 
 	orderNum := 0
