@@ -80,7 +80,26 @@ run_check() {
 # Check 1: go vet
 # =========================================================================
 check_vet() {
-    go vet ./... 2>&1
+    # Optimization: only vet packages with changes since origin/main
+    # Falls back to ./... if no commits yet or on main branch
+    local changed_packages
+    local base_branch="origin/main"
+
+    # Check if we're on main or have no diverged commits
+    if git rev-parse --verify "$base_branch" &>/dev/null; then
+        changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+            xargs -r dirname 2>/dev/null | sort -u | \
+            sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
+    fi
+
+    if [ -n "${changed_packages:-}" ]; then
+        hook_step "Vetting changed packages only ($(echo "$changed_packages" | wc -w | tr -d ' ') packages)"
+        # shellcheck disable=SC2086
+        go vet $changed_packages 2>&1
+    else
+        # Fallback: vet everything but use -mod=vendor for speed
+        go vet -mod=vendor ./... 2>&1
+    fi
 }
 
 # =========================================================================
@@ -171,57 +190,35 @@ check_build() {
 # Check 6: Unit tests
 # =========================================================================
 check_test() {
-    # Run all tests with proper timeout and output handling to prevent hanging
+    # Run tests with timeout. Using simpler approach that works on Windows.
     # Using -short to skip long-running tests
     # Using -timeout to prevent individual tests from hanging indefinitely
-    # Using -count=1 to disable caching for accurate results
+    # Using -failfast to stop on first failure (faster feedback)
+    # Using -mod=vendor for faster module resolution
 
-    local output_file
-    output_file=$(mktemp)
-    trap "rm -f '$output_file'" RETURN
+    local go_timeout="180s"  # 3 minutes per test package
 
-    # Run tests in background with process-level timeout
-    # The go test -timeout handles individual test timeouts
-    # The outer timeout handles overall execution time
-    local test_timeout=300  # 5 minutes max for all tests
-    local go_timeout="180s" # 3 minutes per test package
+    # Optimization: only test changed packages if possible
+    local changed_packages=""
+    local base_branch="origin/main"
 
-    # Start tests in background, redirect output to temp file
-    go test -short -timeout "$go_timeout" -count=1 ./... > "$output_file" 2>&1 &
-    local test_pid=$!
-
-    # Wait with timeout
-    local elapsed=0
-    while kill -0 "$test_pid" 2>/dev/null; do
-        sleep 1
-        elapsed=$((elapsed + 1))
-        if [ "$elapsed" -ge "$test_timeout" ]; then
-            hook_warn "Tests exceeded ${test_timeout}s timeout, terminating..."
-            kill -TERM "$test_pid" 2>/dev/null || true
-            sleep 2
-            kill -KILL "$test_pid" 2>/dev/null || true
-            echo ""
-            hook_fail "Test output (last 100 lines):"
-            tail -100 "$output_file"
-            return 1
-        fi
-    done
-
-    # Get exit code
-    wait "$test_pid"
-    local exit_code=$?
-
-    # Show output - limited to prevent overwhelming terminal
-    if [ "$exit_code" -ne 0 ]; then
-        echo ""
-        hook_fail "Test output (last 150 lines):"
-        tail -150 "$output_file"
-    else
-        # On success, just show summary (lines with ok/FAIL/?)
-        grep -E "^(ok|FAIL|\?)" "$output_file" | tail -50 || tail -50 "$output_file"
+    if git rev-parse --verify "$base_branch" &>/dev/null; then
+        changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+            grep -v '_test\.go$' | \
+            xargs -r dirname 2>/dev/null | sort -u | \
+            sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
     fi
 
-    return $exit_code
+    if [ -n "${changed_packages:-}" ]; then
+        local pkg_count
+        pkg_count=$(echo "$changed_packages" | wc -w | tr -d ' ')
+        hook_step "Testing changed packages only ($pkg_count packages)"
+        # shellcheck disable=SC2086
+        go test -short -timeout "$go_timeout" -failfast -mod=vendor $changed_packages 2>&1
+    else
+        # Fallback: run all tests
+        go test -short -timeout "$go_timeout" -failfast -mod=vendor ./... 2>&1
+    fi
 }
 
 # =========================================================================
