@@ -53,6 +53,12 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Sync vendor directory
+        run: |
+          # Sync vendor to ensure modules.txt matches go.mod
+          go mod tidy
+          go mod vendor
+
       - name: Run go vet on core packages
         run: |
           # Run vet only on core packages (mirrors pre-push hook)
@@ -133,6 +139,11 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Sync vendor directory
+        run: |
+          go mod tidy
+          go mod vendor
+
       - name: Build binaries
         run: |
           # Build all cmd binaries
@@ -155,6 +166,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Sync vendor directory
+        run: |
+          go mod tidy
+          go mod vendor
 
       - name: Run tests on core packages
         run: |
