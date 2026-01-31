@@ -8,15 +8,14 @@
 # This keeps pre-push fast.
 #
 # Bypass:       git push --no-verify
-# Quick mode:   $env:VE_HOOK_QUICK=1 git push     (vet + build only)
+# Quick mode:   $env:VE_HOOK_QUICK=1; git push     (vet + build only)
 #
 # Skip individual checks:
-#   $env:VE_HOOK_SKIP_VET=1      Skip go vet
-#   $env:VE_HOOK_SKIP_MOD=1      Skip go mod tidy/vendor checks
-#   $env:VE_HOOK_SKIP_LINT=1     Skip golangci-lint
-#   $env:VE_HOOK_SKIP_BUILD=1    Skip build
-#   $env:VE_HOOK_SKIP_TEST=1     Skip unit tests
-
+#   $env:VE_HOOK_SKIP_VET=1;      Skip go vet
+#   $env:VE_HOOK_SKIP_MOD=1;      Skip go mod tidy/vendor checks
+#   $env:VE_HOOK_SKIP_LINT=1;     Skip golangci-lint
+#   $env:VE_HOOK_SKIP_BUILD=1;    Skip build
+#   $env:VE_HOOK_SKIP_TEST=1;     Skip unit tests
 set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
