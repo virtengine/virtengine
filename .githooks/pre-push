@@ -80,6 +80,12 @@ run_check() {
 # Check 1: go vet
 # =========================================================================
 check_vet() {
+    # Ensure vendor exists if gitignored (needed for -mod=vendor)
+    if git check-ignore -q vendor 2>/dev/null && [ ! -d vendor ]; then
+        hook_info "Creating vendor/ for vet check..."
+        go mod vendor 2>&1
+    fi
+
     # Run vet only on core packages (not test files with issues)
     # Skip make test-vet as it runs on all packages
     go vet -mod=vendor \
@@ -122,6 +128,19 @@ check_mod_tidy() {
 # Check 3: go mod vendor (consistency check)
 # =========================================================================
 check_mod_vendor() {
+    # Check if vendor is gitignored - if so, just ensure it exists locally
+    if git check-ignore -q vendor 2>/dev/null; then
+        # Vendor is gitignored, so we just need to ensure it's synced locally for builds
+        if [ ! -d vendor ]; then
+            hook_info "vendor/ not found (gitignored). Running 'go mod vendor'..."
+            go mod vendor 2>&1
+        fi
+        # Verify module checksums match
+        go mod verify 2>&1
+        return 0
+    fi
+
+    # Vendor is tracked in git - verify it's in sync
     # Verify module checksums match without rewriting the vendor dir
     go mod verify 2>&1
 
