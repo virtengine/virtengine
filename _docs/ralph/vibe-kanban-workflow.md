@@ -27,25 +27,29 @@ This document describes the automated workflow for task completion, quality gate
 
 ## Cleanup Script Exit Codes
 
-| Exit Code | Meaning | Agent Action |
-|-----------|---------|--------------|
-| `0` | All checks passed (pre-push hook), pushed successfully | Create PR, mark task done |
-| `1` | Pre-push hook failed (tests, build, lint, vet) | **CONTINUE WORKING** - fix issues and retry |
-| `2` | Git error (non-quality related) | Manual intervention needed |
+| Exit Code | Meaning                                                | Agent Action                                |
+| --------- | ------------------------------------------------------ | ------------------------------------------- |
+| `0`       | All checks passed (pre-push hook), pushed successfully | Create PR, mark task done                   |
+| `1`       | Pre-push hook failed (tests, build, lint, vet)         | **CONTINUE WORKING** - fix issues and retry |
+| `2`       | Git error (non-quality related)                        | Manual intervention needed                  |
 
 **Important:** The cleanup script does NOT bypass the pre-push hook. All quality checks must pass.
 
 ## Workflow Phases
 
 ### Phase 1: Format Code
+
 - `go fmt ./...` - Quick formatting before commit
 
 ### Phase 2: Commit Changes
+
 - Auto-stage uncommitted changes
 - Create commit with task title
 
 ### Phase 3: Push with Pre-Push Hook (QUALITY GATE)
+
 The cleanup script runs `git push` normally, which triggers the comprehensive pre-push hook:
+
 - `go vet ./...` - Static analysis
 - `go mod vendor` - Dependency synchronization
 - `golangci-lint run` - Full linting
@@ -55,6 +59,7 @@ The cleanup script runs `git push` normally, which triggers the comprehensive pr
 **The pre-push hook is the definitive quality gate.** If it fails, the push is rejected and the cleanup script returns exit code 1.
 
 ### Phase 4: PR Creation
+
 - Display instructions for creating PR via GitHub MCP or CLI
 
 ## Agent Instructions
@@ -72,33 +77,42 @@ The agent MUST:
 ### Common Failure Patterns
 
 #### Test Failures
+
 ```
 ERROR: Unit tests failed!
 ```
+
 **Fix**: Review test output, fix failing tests or the code being tested.
 
 #### Build Failures
+
 ```
 ERROR: Build failed!
 ```
+
 **Fix**: Check for compilation errors, missing imports, type mismatches.
 
 #### Goroutine Leaks (IAVL nodeDB)
+
 ```
 goroutine 83048 [sleep]:
 github.com/cosmos/iavl.(*nodeDB).startPruning
 ```
+
 **Fix**: Add `goleak.VerifyNoLeaks(t)` cleanup or use proper test teardown.
 
 #### go vet Failures
+
 ```
 ERROR: go vet found issues
 ```
+
 **Fix**: Address the specific vet warnings shown in output.
 
 ## Environment Variables
 
 Set by vibe-kanban:
+
 - `VE_TASK_TITLE` - Task title for commits/PR
 - `VE_TASK_ID` - Task ID for tracking
 - `VE_BRANCH_NAME` - Current working branch
@@ -124,13 +138,13 @@ mcp_github_github_create_pull_request(
 
 The pre-push hook (`.githooks/pre-push`) is the **definitive quality gate**. It runs:
 
-| Check | Command | Timeout |
-|-------|---------|---------|
-| Static Analysis | `go vet ./...` | - |
-| Dependencies | `go mod vendor` | - |
-| Linting | `golangci-lint run` | - |
-| Build | `go build ./...` | - |
-| Unit Tests | `go test -short ./...` | 120s global |
+| Check           | Command                | Timeout     |
+| --------------- | ---------------------- | ----------- |
+| Static Analysis | `go vet ./...`         | -           |
+| Dependencies    | `go mod vendor`        | -           |
+| Linting         | `golangci-lint run`    | -           |
+| Build           | `go build ./...`       | -           |
+| Unit Tests      | `go test -short ./...` | 120s global |
 
 **The cleanup script does NOT bypass the pre-push hook.** There is no `--no-verify` fallback.
 
@@ -158,13 +172,17 @@ If the pre-push hook fails, the agent MUST fix the issues. Valid reasons include
 ## Troubleshooting
 
 ### Tests Hang Forever
+
 Use timeout flags: `go test -timeout 60s`
 
 ### Goroutine Leaks in Tests
+
 Add cleanup in tests using `defer` or `t.Cleanup()`
 
 ### IAVL nodeDB Goroutines
+
 This is a known issue with Cosmos SDK IAVL. Ensure proper store closing in test teardown.
 
 ### CGO Build Failures
+
 Set `CGO_ENABLED=0` or ensure C compiler is available.
