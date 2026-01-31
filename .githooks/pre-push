@@ -180,8 +180,8 @@ check_test() {
     # - Failfast (immediate feedback on first failure)
     # - Compiled test caching (faster repeated runs)
 
-    local go_timeout="60s"     # Per-package timeout (reduced - short tests should be fast)
-    local global_timeout=120   # Global timeout in seconds (2 minutes total for all tests)
+    local go_timeout="180s"    # Per-package timeout (keeper tests need >60s on some machines)
+    local global_timeout=300   # Global timeout in seconds (5 minutes total for all tests)
     local parallel_limit=4     # Limit parallel test execution
 
     # Optimization: only test changed packages if possible
