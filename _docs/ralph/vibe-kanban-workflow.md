@@ -29,23 +29,33 @@ This document describes the automated workflow for task completion, quality gate
 
 | Exit Code | Meaning | Agent Action |
 |-----------|---------|--------------|
-| `0` | All checks passed, pushed successfully | Create PR, mark task done |
-| `1` | Quality checks failed | **CONTINUE WORKING** - fix issues |
-| `2` | Push failed (quality passed) | Manual intervention needed |
+| `0` | All checks passed (pre-push hook), pushed successfully | Create PR, mark task done |
+| `1` | Pre-push hook failed (tests, build, lint, vet) | **CONTINUE WORKING** - fix issues and retry |
+| `2` | Git error (non-quality related) | Manual intervention needed |
 
-## Quality Checks (Phase 1-3)
+**Important:** The cleanup script does NOT bypass the pre-push hook. All quality checks must pass.
 
-### Phase 1: Code Quality
-- `go fmt ./...` - Format all Go code
+## Workflow Phases
+
+### Phase 1: Format Code
+- `go fmt ./...` - Quick formatting before commit
+
+### Phase 2: Commit Changes
+- Auto-stage uncommitted changes
+- Create commit with task title
+
+### Phase 3: Push with Pre-Push Hook (QUALITY GATE)
+The cleanup script runs `git push` normally, which triggers the comprehensive pre-push hook:
 - `go vet ./...` - Static analysis
-- `golangci-lint run` - Linting (warnings only)
+- `go mod vendor` - Dependency synchronization
+- `golangci-lint run` - Full linting
+- `go build ./...` - Build verification
+- `go test -short ./x/... ./pkg/...` - Unit tests (120s timeout)
 
-### Phase 2: Build Verification
-- `go build ./...` - Ensure code compiles
+**The pre-push hook is the definitive quality gate.** If it fails, the push is rejected and the cleanup script returns exit code 1.
 
-### Phase 3: Unit Tests
-- `go test -short -failfast ./x/... ./pkg/...`
-- Tests MUST pass before proceeding
+### Phase 4: PR Creation
+- Display instructions for creating PR via GitHub MCP or CLI
 
 ## Agent Instructions
 
@@ -110,22 +120,31 @@ mcp_github_github_create_pull_request(
 )
 ```
 
-## Pre-Push Hook vs Cleanup Script
+## Pre-Push Hook Details
 
-| Aspect | Pre-Push Hook | Cleanup Script |
-|--------|---------------|----------------|
-| When | On `git push` | After agent finishes coding |
-| Blocking | Yes (blocks push) | Yes (returns error) |
-| Tests | Full test suite | Short tests only |
-| Timeout | 120s global | 5m per package |
-| Skip Option | `git push --no-verify` | N/A |
+The pre-push hook (`.githooks/pre-push`) is the **definitive quality gate**. It runs:
 
-## Bypassing Pre-Push Hook
+| Check | Command | Timeout |
+|-------|---------|---------|
+| Static Analysis | `go vet ./...` | - |
+| Dependencies | `go mod vendor` | - |
+| Linting | `golangci-lint run` | - |
+| Build | `go build ./...` | - |
+| Unit Tests | `go test -short ./...` | 120s global |
 
-If cleanup passes but pre-push hook fails:
-1. Review the pre-push output
-2. Fix any additional issues found
-3. OR use `git push --no-verify` if the issues are known false positives
+**The cleanup script does NOT bypass the pre-push hook.** There is no `--no-verify` fallback.
+
+## Do NOT Bypass Quality Checks
+
+If the pre-push hook fails, the agent MUST fix the issues. Valid reasons include:
+
+- **Test failures**: Fix the failing tests or the code being tested
+- **Build errors**: Fix compilation issues
+- **go vet warnings**: Address static analysis findings
+- **Goroutine leaks**: Add proper cleanup in test teardown methods
+- **Lint errors**: Fix code quality issues
+
+**Never use `git push --no-verify`** to bypass checks. The issues must be fixed.
 
 ## Task Completion Checklist
 
