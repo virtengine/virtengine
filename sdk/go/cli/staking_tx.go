@@ -24,6 +24,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 	cclient "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
 )
 
@@ -64,7 +65,7 @@ func parseAndValidateValidatorJSON(cdc codec.Codec, path string) (validator, err
 		MinSelfDelegation   string          `json:"min-self-delegation"`
 	}
 
-	contents, err := os.ReadFile(path) //nolint: gosec
+	contents, err := security.SafeReadFile(path)
 	if err != nil {
 		return validator{}, err
 	}

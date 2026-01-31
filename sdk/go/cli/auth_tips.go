@@ -2,12 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/spf13/cobra"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 func GetAuxToFeeCommand() *cobra.Command {
@@ -22,7 +22,7 @@ func GetAuxToFeeCommand() *cobra.Command {
 
 			auxSignerData := tx.AuxSignerData{}
 
-			bytes, err := os.ReadFile(args[0])
+			bytes, err := security.SafeReadFileWithExtension(args[0], ".json")
 			if err != nil {
 				return err
 			}

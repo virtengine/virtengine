@@ -3,7 +3,6 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 
 	"github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ImportKeyCommand imports private keys from a keyfile.
@@ -32,7 +32,7 @@ func ImportKeyCommand() *cobra.Command {
 			}
 			buf := bufio.NewReader(clientCtx.Input)
 
-			armor, err := os.ReadFile(args[1])
+			armor, err := security.SafeReadFile(args[1])
 			if err != nil {
 				return err
 			}

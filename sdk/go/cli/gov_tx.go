@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/errors"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"github.com/virtengine/virtengine/pkg/security"
 
 	wtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 )
@@ -1672,7 +1673,8 @@ func parseSubmitProposal(cdc codec.Codec, path string) (ProposalMsg, []sdk.Msg, 
 	if path == "-" || (path == "" && !term.IsTerminal(0)) {
 		fl = os.Stdin
 	} else {
-		fl, err = os.Open(path)
+		// Validate path before opening
+		fl, err = security.SafeOpen(path)
 		if err != nil {
 			return proposal, nil, nil, err
 		}
@@ -1731,7 +1733,8 @@ func parseSubmitLegacyProposal(fs *pflag.FlagSet) (*legacyProposal, error) {
 		}
 	}
 
-	contents, err := os.ReadFile(proposalFile) //nolint: gosec
+	// Validate path before reading
+	contents, err := security.SafeReadFile(proposalFile)
 	if err != nil {
 		return nil, err
 	}

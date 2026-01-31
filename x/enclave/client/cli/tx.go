@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,6 +16,7 @@ import (
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 
 	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
+	"github.com/virtengine/virtengine/pkg/security"
 	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
@@ -173,7 +173,8 @@ Where proposal.json contains:
 func parseAddMeasurementProposalJSON(path string) (addMeasurementProposalJSON, error) {
 	var proposal addMeasurementProposalJSON
 
-	raw, err := os.ReadFile(path)
+	// Validate path and read with extension check
+	raw, err := security.SafeReadFileWithExtension(path, ".json")
 	if err != nil {
 		return proposal, err
 	}
@@ -201,7 +202,8 @@ func parseAddMeasurementProposalJSON(path string) (addMeasurementProposalJSON, e
 func parseRevokeMeasurementProposalJSON(path string) (revokeMeasurementProposalJSON, error) {
 	var proposal revokeMeasurementProposalJSON
 
-	raw, err := os.ReadFile(path)
+	// Validate path and read with extension check
+	raw, err := security.SafeReadFileWithExtension(path, ".json")
 	if err != nil {
 		return proposal, err
 	}
