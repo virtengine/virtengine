@@ -79,6 +79,24 @@ var (
 	// RoutingViolationPrefix is the prefix for routing violation records (VE-5B)
 	RoutingViolationPrefix = []byte{0x1A}
 
+	// WorkloadTemplatePrefix is the prefix for workload template storage (VE-5F)
+	WorkloadTemplatePrefix = []byte{0x1B}
+
+	// WorkloadTemplateVersionPrefix is the prefix for versioned template storage (VE-5F)
+	WorkloadTemplateVersionPrefix = []byte{0x1C}
+
+	// WorkloadTemplateByTypePrefix is the prefix for templates indexed by type (VE-5F)
+	WorkloadTemplateByTypePrefix = []byte{0x1D}
+
+	// WorkloadProposalPrefix is the prefix for workload governance proposals (VE-5F)
+	WorkloadProposalPrefix = []byte{0x1E}
+
+	// WorkloadVotePrefix is the prefix for workload votes (VE-5F)
+	WorkloadVotePrefix = []byte{0x1F}
+
+	// WorkloadGovernanceParamsKey is the key for governance params (VE-5F)
+	WorkloadGovernanceParamsKey = []byte{0x20}
+
 	// SequenceKeyCluster is the sequence key for clusters
 	SequenceKeyCluster = []byte{0x20}
 
@@ -114,6 +132,12 @@ var (
 
 	// SequenceKeyRoutingViolation is the sequence key for routing violations (VE-5B)
 	SequenceKeyRoutingViolation = []byte{0x2B}
+
+	// SequenceKeyWorkloadTemplate is the sequence key for workload templates (VE-5F)
+	SequenceKeyWorkloadTemplate = []byte{0x2C}
+
+	// SequenceKeyWorkloadProposal is the sequence key for workload proposals (VE-5F)
+	SequenceKeyWorkloadProposal = []byte{0x2D}
 )
 
 // GetClusterKey returns the key for a cluster
@@ -214,4 +238,29 @@ func GetRoutingAuditKey(recordID string) []byte {
 // GetRoutingViolationKey returns the key for a routing violation (VE-5B)
 func GetRoutingViolationKey(violationID string) []byte {
 	return append(RoutingViolationPrefix, []byte(violationID)...)
+}
+
+// GetWorkloadTemplateKey returns the key for a workload template (VE-5F)
+func GetWorkloadTemplateKey(templateID string) []byte {
+	return append(WorkloadTemplatePrefix, []byte(templateID)...)
+}
+
+// GetWorkloadTemplateVersionKey returns the key for a versioned workload template (VE-5F)
+func GetWorkloadTemplateVersionKey(templateID, version string) []byte {
+	return append(WorkloadTemplateVersionPrefix, []byte(templateID+"/"+version)...)
+}
+
+// GetWorkloadTemplateByTypeKey returns the key for templates indexed by type (VE-5F)
+func GetWorkloadTemplateByTypeKey(workloadType WorkloadType, templateID string) []byte {
+	return append(WorkloadTemplateByTypePrefix, []byte(string(workloadType)+"/"+templateID)...)
+}
+
+// GetWorkloadProposalKey returns the key for a governance proposal (VE-5F)
+func GetWorkloadProposalKey(proposalID string) []byte {
+	return append(WorkloadProposalPrefix, []byte(proposalID)...)
+}
+
+// GetWorkloadVoteKey returns the key for a vote (VE-5F)
+func GetWorkloadVoteKey(proposalID, voter string) []byte {
+	return append(WorkloadVotePrefix, []byte(proposalID+"/"+voter)...)
 }

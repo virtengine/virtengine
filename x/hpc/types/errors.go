@@ -125,4 +125,46 @@ var (
 
 	// ErrMissingSchedulingDecision is returned when job has no scheduling decision
 	ErrMissingSchedulingDecision = errors.Register(ModuleName, 2138, "missing scheduling decision")
+
+	// ErrInvalidWorkloadTemplate is returned when a workload template is invalid (VE-5F)
+	ErrInvalidWorkloadTemplate = errors.Register(ModuleName, 2139, "invalid workload template")
+
+	// ErrWorkloadTemplateNotFound is returned when a workload template is not found (VE-5F)
+	ErrWorkloadTemplateNotFound = errors.Register(ModuleName, 2140, "workload template not found")
+
+	// ErrWorkloadTemplateNotApproved is returned when trying to use an unapproved template (VE-5F)
+	ErrWorkloadTemplateNotApproved = errors.Register(ModuleName, 2141, "workload template not approved")
+
+	// ErrInvalidWorkloadRuntime is returned when workload runtime config is invalid (VE-5F)
+	ErrInvalidWorkloadRuntime = errors.Register(ModuleName, 2142, "invalid workload runtime")
+
+	// ErrInvalidWorkloadResources is returned when workload resources are invalid (VE-5F)
+	ErrInvalidWorkloadResources = errors.Register(ModuleName, 2143, "invalid workload resources")
+
+	// ErrInvalidWorkloadSecurity is returned when workload security config is invalid (VE-5F)
+	ErrInvalidWorkloadSecurity = errors.Register(ModuleName, 2144, "invalid workload security")
+
+	// ErrInvalidWorkloadEntrypoint is returned when workload entrypoint is invalid (VE-5F)
+	ErrInvalidWorkloadEntrypoint = errors.Register(ModuleName, 2145, "invalid workload entrypoint")
+
+	// ErrInvalidWorkloadParameter is returned when a workload parameter is invalid (VE-5F)
+	ErrInvalidWorkloadParameter = errors.Register(ModuleName, 2146, "invalid workload parameter")
+
+	// ErrInvalidDataBinding is returned when a data binding is invalid (VE-5F)
+	ErrInvalidDataBinding = errors.Register(ModuleName, 2147, "invalid data binding")
+
+	// ErrInvalidWorkloadSignature is returned when workload signature is invalid (VE-5F)
+	ErrInvalidWorkloadSignature = errors.Register(ModuleName, 2148, "invalid workload signature")
+
+	// ErrWorkloadValidationFailed is returned when workload validation fails (VE-5F)
+	ErrWorkloadValidationFailed = errors.Register(ModuleName, 2149, "workload validation failed")
+
+	// ErrImageNotAllowed is returned when a container image is not allowed (VE-5F)
+	ErrImageNotAllowed = errors.Register(ModuleName, 2150, "container image not allowed")
+
+	// ErrResourceLimitExceeded is returned when resource limits are exceeded (VE-5F)
+	ErrResourceLimitExceeded = errors.Register(ModuleName, 2151, "resource limit exceeded")
+
+	// ErrWorkloadGovernanceFailed is returned when governance action fails (VE-5F)
+	ErrWorkloadGovernanceFailed = errors.Register(ModuleName, 2152, "workload governance action failed")
 )
