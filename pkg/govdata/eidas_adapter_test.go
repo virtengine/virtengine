@@ -39,19 +39,19 @@ func TestEIDASConfigValidation(t *testing.T) {
 		{
 			name: "valid config",
 			config: EIDASConfig{
-				Environment:           EIDASEnvironmentSandbox,
-				ServiceProviderID:     "test-sp",
+				Environment:            EIDASEnvironmentSandbox,
+				ServiceProviderID:      "test-sp",
 				ServiceProviderCountry: "DE",
-				APIKey:                "test-key",
+				APIKey:                 "test-key",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing service_provider_id",
 			config: EIDASConfig{
-				Environment:           EIDASEnvironmentSandbox,
+				Environment:            EIDASEnvironmentSandbox,
 				ServiceProviderCountry: "DE",
-				APIKey:                "test-key",
+				APIKey:                 "test-key",
 			},
 			wantErr: true,
 		},
@@ -67,8 +67,8 @@ func TestEIDASConfigValidation(t *testing.T) {
 		{
 			name: "missing api_key",
 			config: EIDASConfig{
-				Environment:           EIDASEnvironmentSandbox,
-				ServiceProviderID:     "test-sp",
+				Environment:            EIDASEnvironmentSandbox,
+				ServiceProviderID:      "test-sp",
 				ServiceProviderCountry: "DE",
 			},
 			wantErr: true,
@@ -76,20 +76,20 @@ func TestEIDASConfigValidation(t *testing.T) {
 		{
 			name: "invalid environment",
 			config: EIDASConfig{
-				Environment:           "invalid",
-				ServiceProviderID:     "test-sp",
+				Environment:            "invalid",
+				ServiceProviderID:      "test-sp",
 				ServiceProviderCountry: "DE",
-				APIKey:                "test-key",
+				APIKey:                 "test-key",
 			},
 			wantErr: true,
 		},
 		{
 			name: "test environment",
 			config: EIDASConfig{
-				Environment:           EIDASEnvironmentTest,
-				ServiceProviderID:     "test-sp",
+				Environment:            EIDASEnvironmentTest,
+				ServiceProviderID:      "test-sp",
 				ServiceProviderCountry: "DE",
-				APIKey:                "test-key",
+				APIKey:                 "test-key",
 			},
 			wantErr: false,
 		},
@@ -115,10 +115,10 @@ func TestNewEIDASAdapter(t *testing.T) {
 	}
 
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 
 	adapter, err := NewEIDASAdapter(baseConfig, eidasConfig)
@@ -166,10 +166,10 @@ func TestEIDASAdapter_BaseURL(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			eidasConfig := EIDASConfig{
-				Environment:           tc.environment,
-				ServiceProviderID:     "test-sp",
+				Environment:            tc.environment,
+				ServiceProviderID:      "test-sp",
 				ServiceProviderCountry: "DE",
-				APIKey:                "test-key",
+				APIKey:                 "test-key",
 			}
 			adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 			assert.Equal(t, tc.expectedURL, adapter.baseURL())
@@ -183,10 +183,10 @@ func TestEIDASAdapter_ExtractCountry(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -216,11 +216,11 @@ func TestEIDASAdapter_IsCountrySupported(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
-		SupportedCountries:    []string{"DE", "FR", "IT", "ES"},
+		APIKey:                 "test-key",
+		SupportedCountries:     []string{"DE", "FR", "IT", "ES"},
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -239,11 +239,11 @@ func TestEIDASAdapter_RateLimit(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
-		RateLimitPerMinute:    3,
+		APIKey:                 "test-key",
+		RateLimitPerMinute:     3,
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -270,10 +270,10 @@ func TestEIDASAdapter_Verify_UnsupportedDocument(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -293,11 +293,11 @@ func TestEIDASAdapter_Verify_UnsupportedCountry(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
-		SupportedCountries:    []string{"DE", "FR"},
+		APIKey:                 "test-key",
+		SupportedCountries:     []string{"DE", "FR"},
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -320,12 +320,12 @@ func TestEIDASAdapter_BuildRequest(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
-		RequiredLoA:           EIDASLoAHigh,
-		RequestedAttributes:   []string{EIDASAttrPersonIdentifier, EIDASAttrFamilyName},
+		APIKey:                 "test-key",
+		RequiredLoA:            EIDASLoAHigh,
+		RequestedAttributes:    []string{EIDASAttrPersonIdentifier, EIDASAttrFamilyName},
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -351,10 +351,10 @@ func TestEIDASAdapter_LoAToConfidence(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -370,10 +370,10 @@ func TestEIDASAdapter_AttrToFieldName(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -391,10 +391,10 @@ func TestEIDASAdapter_ConvertResponse_Success(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -430,10 +430,10 @@ func TestEIDASAdapter_ConvertResponse_AuthnFailed(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 
@@ -461,10 +461,10 @@ func TestEIDASAdapter_GenerateRequestID(t *testing.T) {
 		Jurisdiction: "EU-DE",
 	}
 	eidasConfig := EIDASConfig{
-		Environment:           EIDASEnvironmentSandbox,
-		ServiceProviderID:     "test-sp",
+		Environment:            EIDASEnvironmentSandbox,
+		ServiceProviderID:      "test-sp",
 		ServiceProviderCountry: "DE",
-		APIKey:                "test-key",
+		APIKey:                 "test-key",
 	}
 	adapter, _ := NewEIDASAdapter(baseConfig, eidasConfig)
 

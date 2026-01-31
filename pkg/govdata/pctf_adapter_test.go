@@ -561,7 +561,7 @@ func TestPCTFAdapter_ConvertFieldResult(t *testing.T) {
 	adapter, _ := NewPCTFAdapter(baseConfig, pctfConfig)
 
 	tests := []struct {
-		pctfMatch    string
+		pctfMatch     string
 		expectedMatch FieldMatchResult
 	}{
 		{PCTFMatchYes, FieldMatchExact},
