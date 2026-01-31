@@ -104,28 +104,18 @@ check_vet() {
 # Check 2: go mod tidy (dirty check)
 # =========================================================================
 check_mod_tidy() {
-    # Save current state of go.mod and go.sum
-    local mod_backup sum_backup
-    mod_backup=$(cat go.mod)
-    sum_backup=$(cat go.sum 2>/dev/null || true)
-
+    # Run go mod tidy and check if files changed using git
     go mod tidy 2>&1
 
-    # Check if files changed
-    local mod_after sum_after
-    mod_after=$(cat go.mod)
-    sum_after=$(cat go.sum 2>/dev/null || true)
-
-    if [ "$mod_backup" != "$mod_after" ] || [ "$sum_backup" != "$sum_after" ]; then
-        # Restore originals so we don't modify the working tree
-        echo "$mod_backup" > go.mod
-        if [ -n "$sum_backup" ]; then
-            echo "$sum_backup" > go.sum
-        fi
+    # Check if go.mod or go.sum have uncommitted changes
+    if git diff --quiet go.mod go.sum 2>/dev/null; then
+        return 0
+    else
+        # Files changed - restore them and fail
+        git checkout -- go.mod go.sum 2>/dev/null || true
         hook_fail "go.mod or go.sum is out of sync. Run 'go mod tidy' and commit the result."
         return 1
     fi
-    return 0
 }
 
 # =========================================================================
