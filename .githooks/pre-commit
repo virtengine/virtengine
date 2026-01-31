@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# VirtEngine Pre-Commit Hook
+#
+# Runs fast checks on staged files before commit.
+# Only runs go mod tidy/vendor when go.mod or go.sum are staged.
+#
+# Bypass: git commit --no-verify
+# Skip mod check: VE_HOOK_SKIP_MOD=1 git commit
+
+set -euo pipefail
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=common.sh
+source "$HOOK_DIR/common.sh"
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Check if go.mod or go.sum are staged
+if git diff --cached --name-only | grep -qE '^go\.(mod|sum)$'; then
+    if [ "${VE_HOOK_SKIP_MOD:-}" = "1" ]; then
+        hook_warn "[pre-commit] Skipping go mod checks (VE_HOOK_SKIP_MOD=1)"
+        exit 0
+    fi
+
+    hook_header "[pre-commit] go.mod/go.sum changed - syncing modules..."
+    
+    # Run go mod tidy
+    hook_step "Running 'go mod tidy'..."
+    if ! go mod tidy 2>&1; then
+        hook_fail "go mod tidy failed"
+        exit 1
+    fi
+
+    # Check if tidy changed anything
+    if ! git diff --quiet go.mod go.sum 2>/dev/null; then
+        hook_warn "go mod tidy made changes. Adding to commit..."
+        git add go.mod go.sum
+    fi
+
+    # Sync vendor directory
+    hook_step "Running 'go mod vendor'..."
+    if ! go mod vendor 2>&1; then
+        hook_fail "go mod vendor failed"
+        exit 1
+    fi
+
+    hook_pass "[pre-commit] Module sync complete"
+fi
+
+exit 0
