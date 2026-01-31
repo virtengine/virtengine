@@ -36,6 +36,7 @@ type GeoRestrictionsTestSuite struct {
 	ctx         sdk.Context
 	keeper      keeper.Keeper
 	cdc         codec.Codec
+	stateStore  store.CommitMultiStore
 	testAddr1   sdk.AccAddress
 	testAddr2   sdk.AccAddress
 	creatorAddr sdk.AccAddress
@@ -65,6 +66,7 @@ func (s *GeoRestrictionsTestSuite) SetupTest() {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	s.Require().NoError(err)
+	s.stateStore = stateStore
 
 	s.ctx = sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
@@ -81,6 +83,11 @@ func (s *GeoRestrictionsTestSuite) SetupTest() {
 	// Set default geo params
 	err = s.keeper.SetGeoRestrictionParams(s.ctx, types.DefaultGeoRestrictionParams())
 	s.Require().NoError(err)
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *GeoRestrictionsTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 // ============================================================================

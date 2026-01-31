@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"cosmossdk.io/store"
-	storemetrics "cosmossdk.io/store/metrics"
-	"cosmossdk.io/log"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	dbm "github.com/cosmos/cosmos-db"
 
 	"github.com/virtengine/virtengine/x/veid/types"
 )
@@ -28,7 +28,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 
 	// Register and activate a pipeline version
 	manifest := createIntegrationTestManifest(t)
-	
+
 	pv, err := keeper.RegisterPipelineVersion(
 		ctx,
 		"1.0.0",
@@ -80,7 +80,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 				ModelManifestHash:   manifest.ManifestHash,
 				InputHash:           "inputhash_abc123",  // Same input
 				OutputHash:          "outputhash_xyz789", // Same output
-				ExecutionDurationMs: 280, // Similar execution time
+				ExecutionDurationMs: 280,                 // Similar execution time
 			},
 		)
 		if err != nil {
@@ -208,8 +208,8 @@ func TestMultiValidatorConsensus(t *testing.T) {
 
 	// Simulate multiple validators
 	validators := []struct {
-		name       string
-		outputHash string
+		name        string
+		outputHash  string
 		shouldMatch bool
 	}{
 		{"validator-1", "outputhash_deterministic_result", true},
@@ -234,7 +234,7 @@ func TestMultiValidatorConsensus(t *testing.T) {
 		validatorRecord.DeterminismVerified = true
 
 		comparison, _ := keeper.ComparePipelineExecutions(ctx, proposerRecord, validatorRecord)
-		
+
 		if comparison.Match != v.shouldMatch {
 			t.Errorf("%s: expected match=%v, got %v", v.name, v.shouldMatch, comparison.Match)
 		}
@@ -369,8 +369,8 @@ func TestConformanceTestIntegration(t *testing.T) {
 
 	// Record multiple conformance test results
 	tests := []struct {
-		testID       string
-		passed       bool
+		testID        string
+		passed        bool
 		validatorAddr string
 	}{
 		{"face_detect_001", true, "validator-1"},
@@ -441,6 +441,7 @@ func setupPipelineIntegrationTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	if err != nil {

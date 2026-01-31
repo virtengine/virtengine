@@ -29,9 +29,10 @@ import (
 
 type BiometricHashTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	cdc    codec.Codec
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	cdc        codec.Codec
+	stateStore store.CommitMultiStore
 }
 
 func TestBiometricHashTestSuite(t *testing.T) {
@@ -67,12 +68,18 @@ func (s *BiometricHashTestSuite) createContextWithStore(storeKey *storetypes.KVS
 	if err != nil {
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
+	s.stateStore = stateStore
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
 		Height: 100,
 	}, false, log.NewNopLogger())
 	return ctx
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *BiometricHashTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 // ============================================================================
@@ -734,6 +741,9 @@ func createTestContext(t *testing.T) sdk.Context {
 	if err := stateStore.LoadLatestVersion(); err != nil {
 		t.Fatalf("failed to load latest version: %v", err)
 	}
+	t.Cleanup(func() {
+		CloseStoreIfNeeded(stateStore)
+	})
 
 	return sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),

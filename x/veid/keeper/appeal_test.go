@@ -37,10 +37,11 @@ const (
 // AppealTestSuite is the test suite for appeal functionality
 type AppealTestSuite struct {
 	suite.Suite
-	ctx       sdk.Context
-	keeper    keeper.Keeper
-	cdc       codec.Codec
-	authority string
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	cdc        codec.Codec
+	authority  string
+	stateStore store.CommitMultiStore
 }
 
 func TestAppealTestSuite(t *testing.T) {
@@ -77,6 +78,7 @@ func (s *AppealTestSuite) SetupTest() {
 func (s *AppealTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey) sdk.Context {
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	s.stateStore = stateStore
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	if err != nil {
@@ -91,6 +93,11 @@ func (s *AppealTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey
 }
 
 // Helper to create a valid test address
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *AppealTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
+}
+
 func (s *AppealTestSuite) testAddress(seed string) sdk.AccAddress {
 	return sdk.AccAddress([]byte(seed))
 }

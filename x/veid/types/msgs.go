@@ -11,6 +11,7 @@ package types
 
 import (
 	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 // Message type constants - kept for backwards compatibility
@@ -66,3 +67,65 @@ type MsgUpdateParams = veidv1.MsgUpdateParams
 
 // MsgUpdateParamsResponse is the response for MsgUpdateParams
 type MsgUpdateParamsResponse = veidv1.MsgUpdateParamsResponse
+
+// ============================================================================
+// Message Constructors
+// ============================================================================
+
+// NewMsgUploadScope creates a new MsgUploadScope.
+// Accepts encryptiontypes.EncryptedPayloadEnvelope and converts to proto type.
+func NewMsgUploadScope(
+	sender string,
+	scopeID string,
+	scopeType ScopeType,
+	encryptedPayload encryptiontypes.EncryptedPayloadEnvelope,
+	salt []byte,
+	deviceFingerprint string,
+	clientID string,
+	clientSignature []byte,
+	userSignature []byte,
+	payloadHash []byte,
+) *MsgUploadScope {
+	// Convert encryptiontypes envelope to proto envelope
+	protoEnvelope := EncryptedPayloadEnvelope{
+		Version:             encryptedPayload.Version,
+		AlgorithmId:         encryptedPayload.AlgorithmID,
+		AlgorithmVersion:    encryptedPayload.AlgorithmVersion,
+		RecipientKeyIds:     encryptedPayload.RecipientKeyIDs,
+		RecipientPublicKeys: encryptedPayload.RecipientPublicKeys,
+		EncryptedKeys:       encryptedPayload.EncryptedKeys,
+		Nonce:               encryptedPayload.Nonce,
+		Ciphertext:          encryptedPayload.Ciphertext,
+		SenderSignature:     encryptedPayload.SenderSignature,
+		SenderPubKey:        encryptedPayload.SenderPubKey,
+		Metadata:            encryptedPayload.Metadata,
+	}
+
+	return &MsgUploadScope{
+		Sender:            sender,
+		ScopeId:           scopeID,
+		ScopeType:         ScopeTypeToProto(scopeType),
+		EncryptedPayload:  protoEnvelope,
+		Salt:              salt,
+		DeviceFingerprint: deviceFingerprint,
+		ClientId:          clientID,
+		ClientSignature:   clientSignature,
+		UserSignature:     userSignature,
+		PayloadHash:       payloadHash,
+	}
+}
+
+// NewMsgUpdateScore creates a new MsgUpdateScore.
+func NewMsgUpdateScore(
+	sender string,
+	accountAddress string,
+	newScore uint32,
+	scoreVersion string,
+) *MsgUpdateScore {
+	return &MsgUpdateScore{
+		Sender:         sender,
+		AccountAddress: accountAddress,
+		NewScore:       newScore,
+		ScoreVersion:   scoreVersion,
+	}
+}

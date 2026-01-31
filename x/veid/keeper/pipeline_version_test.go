@@ -23,6 +23,7 @@ func setupPipelineTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 
 	db := dbm.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	t.Cleanup(func() { closeStoreIfNeeded(stateStore) })
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	if err != nil {
