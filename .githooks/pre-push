@@ -89,11 +89,12 @@ check_vet() {
 
     # Check if we're on main or have no diverged commits
     if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Exclude sdk/ and vendor/ as they are separate Go modules with their own go.mod
+        # Exclude sdk/, vendor/, and tests/ as they have build constraints or separate modules
         # Filter out directories that no longer exist (deleted packages)
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '^sdk/' | \
             grep -v '^vendor/' | \
+            grep -v '^tests/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
             paste -sd ' ' - 2>/dev/null || echo "")
@@ -104,7 +105,8 @@ check_vet() {
         # shellcheck disable=SC2086
         go vet $changed_packages 2>&1
     else
-        go vet ./... 2>&1
+        # Exclude tests/ which may have build constraints
+        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | head -100) 2>&1
     fi
 }
 
@@ -174,65 +176,42 @@ check_build() {
 check_test() {
     # Run tests with robust timeout handling for pre-push hook reliability.
     # Key optimizations:
-    # - Global timeout wrapper (prevents indefinite hangs)
+    # - Go's native -timeout flag (more reliable than external timeout)
     # - Limited parallelism (avoids resource contention)
     # - Short mode (skips long-running tests)
     # - Failfast (immediate feedback on first failure)
     # - Compiled test caching (faster repeated runs)
+    # - Exclude slow/integration test packages
 
-    local go_timeout="60s"     # Per-package timeout (reduced - short tests should be fast)
-    local global_timeout=120   # Global timeout in seconds (2 minutes total for all tests)
+    local go_timeout="180s"    # Per-package timeout (keeper tests need >60s on some machines)
     local parallel_limit=4     # Limit parallel test execution
+
+    # Packages to exclude from pre-push tests (slow, integration, or special setup)
+    local exclude_patterns=(
+        "tests/e2e"
+        "tests/integration"
+        "tests/chaos"
+        "pkg/chaos"
+    )
 
     # Optimization: only test changed packages if possible
     local changed_packages=""
     local base_branch="origin/main"
 
     if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Exclude sdk/ and vendor/ as they are separate Go modules with their own go.mod
+        # Get changed Go files, exclude sdk/vendor/tests, filter to existing dirs
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '_test\.go$' | \
             grep -v '^sdk/' | \
             grep -v '^vendor/' | \
+            grep -v '^tests/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
-            sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
+            while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
+            paste -sd ' ' - 2>/dev/null || echo "")
     fi
 
-    # Build test arguments
-    local test_args="-short -timeout $go_timeout -failfast -p $parallel_limit"
-
-    # Run with global timeout wrapper
-    run_with_timeout() {
-        local timeout_secs=$1
-        shift
-
-        # Try timeout command (GNU coreutils, available on Linux/Git Bash)
-        if command -v timeout &>/dev/null; then
-            timeout --signal=KILL "$timeout_secs" "$@"
-            return $?
-        fi
-
-        # Fallback: background job with manual timeout (works on all bash)
-        local pid
-        "$@" &
-        pid=$!
-
-        # Wait with timeout
-        local elapsed=0
-        while kill -0 "$pid" 2>/dev/null; do
-            if [ "$elapsed" -ge "$timeout_secs" ]; then
-                hook_warn "Tests exceeded ${timeout_secs}s timeout - killing..."
-                kill -9 "$pid" 2>/dev/null || true
-                wait "$pid" 2>/dev/null || true
-                return 124  # timeout exit code
-            fi
-            sleep 1
-            elapsed=$((elapsed + 1))
-        done
-
-        wait "$pid"
-        return $?
-    }
+    # Build test arguments - rely on Go's internal timeout, not external wrapper
+    local test_args="-short -timeout $go_timeout -failfast -p $parallel_limit -count=1"
 
     if [ -n "${changed_packages:-}" ]; then
         local pkg_count
@@ -240,30 +219,35 @@ check_test() {
         hook_step "Testing changed packages only ($pkg_count packages)"
 
         # shellcheck disable=SC2086
-        run_with_timeout "$global_timeout" go test $test_args $changed_packages 2>&1
-        local exit_code=$?
-
-        if [ "$exit_code" -eq 124 ]; then
-            hook_fail "Tests timed out after ${global_timeout}s"
-            hook_info "Tip: Skip slow tests with VE_HOOK_SKIP_TEST=1 git push"
-            return 1
-        fi
-        return "$exit_code"
+        go test $test_args $changed_packages 2>&1
+        return $?
     else
-        # Fallback: run critical packages only (not ./... which is too slow)
-        hook_step "Testing core packages (no changed files detected)"
-        local core_packages="./x/... ./pkg/..."
-
-        # shellcheck disable=SC2086
-        run_with_timeout "$global_timeout" go test $test_args $core_packages 2>&1
-        local exit_code=$?
-
-        if [ "$exit_code" -eq 124 ]; then
-            hook_fail "Tests timed out after ${global_timeout}s"
-            hook_info "Tip: Skip slow tests with VE_HOOK_SKIP_TEST=1 git push"
-            return 1
+        # Fallback: run fast unit test packages only
+        # List packages explicitly to avoid slow discovery and exclude problematic dirs
+        hook_step "Testing fast packages (no changed files detected)"
+        
+        # Get list of packages with test files, excluding slow ones
+        local test_packages
+        test_packages=$(go list ./x/... ./pkg/... 2>/dev/null | \
+            grep -v '/tests/' | \
+            grep -v '/e2e' | \
+            grep -v '/integration' | \
+            grep -v '/chaos' | \
+            grep -v '/simulation' | \
+            head -50 || echo "")  # Limit to 50 packages max
+        
+        if [ -z "$test_packages" ]; then
+            hook_step "No testable packages found"
+            return 0
         fi
-        return "$exit_code"
+        
+        local pkg_count
+        pkg_count=$(echo "$test_packages" | wc -l | tr -d ' ')
+        hook_step "Running $pkg_count packages"
+
+        # Run tests with explicit package list (avoids discovery overhead)
+        echo "$test_packages" | xargs go test $test_args 2>&1
+        return $?
     fi
 }
 

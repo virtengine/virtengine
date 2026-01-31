@@ -15,19 +15,19 @@ on:
       - main
       - mainnet/main
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
     branches:
       - main
       - mainnet/main
     paths:
-      - 'go.mod'
-      - 'go.sum'
-      - 'vendor/**'
-      - 'ml/requirements*.txt'
-      - 'lib/portal/package*.json'
-      - 'sdk/**/go.mod'
-      - 'sdk/**/package*.json'
+      - "go.mod"
+      - "go.sum"
+      - "vendor/**"
+      - "ml/requirements*.txt"
+      - "lib/portal/package*.json"
+      - "sdk/**/go.mod"
+      - "sdk/**/package*.json"
   schedule:
     # Run weekly for continuous monitoring
     - cron: "0 4 * * 1"
@@ -46,14 +46,14 @@ concurrency:
 env:
   GO_VERSION: "1.25.5"
   COSIGN_EXPERIMENTAL: "1"
-  GOWORK: "off"  # Disable workspace mode for vendor operations
+  GOWORK: "off" # Disable workspace mode for vendor operations
 
 permissions:
   contents: read
   security-events: write
-  id-token: write  # Required for keyless signing
-  packages: write  # Required for container signing
-  attestations: write  # Required for SLSA attestations
+  id-token: write # Required for keyless signing
+  packages: write # Required for container signing
+  attestations: write # Required for SLSA attestations
 
 jobs:
   # ===========================================================================
@@ -135,7 +135,7 @@ jobs:
             exit 1
           fi
           echo "✓ go.sum exists"
-          
+
           # Count entries
           ENTRIES=$(wc -l < go.sum)
           echo "go.sum contains $ENTRIES entries"
@@ -157,14 +157,14 @@ jobs:
         run: |
           # Get list of changed files
           CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} || echo "")
-          
+
           # Check if lockfiles changed without corresponding source changes
           if echo "$CHANGED_FILES" | grep -q "go.sum"; then
             if ! echo "$CHANGED_FILES" | grep -q "go.mod"; then
               echo "::warning::go.sum changed without go.mod changes - verify this is intentional"
             fi
           fi
-          
+
           echo "✓ Lockfile integrity check passed"
 
   # ===========================================================================
@@ -180,10 +180,10 @@ jobs:
       - name: Check for dependency confusion
         run: |
           echo "Checking for dependency confusion vulnerabilities..."
-          
+
           # Look for internal-looking packages that might be vulnerable
           INTERNAL_PATTERNS="internal|private|corp|company"
-          
+
           if grep -E "^\s+.*($INTERNAL_PATTERNS)" go.mod | grep -v "^//"; then
             echo "::warning::Found packages with internal-looking names - verify these are from trusted sources"
           else
@@ -193,7 +193,7 @@ jobs:
       - name: Check for typosquatting
         run: |
           echo "Checking for typosquatting risks..."
-          
+
           # Known legitimate packages and common typosquats
           TYPOSQUATS=(
             "cosmoss-sdk"
@@ -203,25 +203,25 @@ jobs:
             "etehrs"
             "testyfy"
           )
-          
+
           for typo in "${TYPOSQUATS[@]}"; do
             if grep -qi "$typo" go.mod go.sum 2>/dev/null; then
               echo "::error::Potential typosquat detected: $typo"
               exit 1
             fi
           done
-          
+
           echo "✓ No known typosquatting patterns detected"
 
       - name: Verify package sources
         run: |
           echo "Verifying package sources..."
-          
+
           # Check for packages from non-standard domains
           SUSPICIOUS=$(grep -E "^\s+[a-zA-Z]" go.mod | \
             grep -vE "(github\.com|golang\.org|google\.golang\.org|gopkg\.in|k8s\.io|cosmossdk\.io)" | \
             grep -v "//" || true)
-          
+
           if [[ -n "$SUSPICIOUS" ]]; then
             echo "::warning::Packages from non-standard sources detected (verify legitimacy):"
             echo "$SUSPICIOUS"
@@ -268,7 +268,7 @@ jobs:
           echo "Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> .cache/sbom/summary.md
           echo "Commit: ${{ github.sha }}" >> .cache/sbom/summary.md
           echo "" >> .cache/sbom/summary.md
-          
+
           PACKAGES=$(jq '.components | length' .cache/sbom/sbom.cdx.json)
           echo "Total packages: $PACKAGES" >> .cache/sbom/summary.md
 
@@ -423,7 +423,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: false  # Disable cache for reproducibility test
+          cache: false # Disable cache for reproducibility test
 
       - name: Build 1
         run: |
@@ -434,7 +434,7 @@ jobs:
         run: |
           go clean -cache
           rm -rf /tmp/go-build*
-          
+
           CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /tmp/build2/virtengine ./cmd/virtengine
           sha256sum /tmp/build2/virtengine > /tmp/build2/checksum
 
@@ -442,10 +442,10 @@ jobs:
         run: |
           HASH1=$(cat /tmp/build1/checksum | awk '{print $1}')
           HASH2=$(cat /tmp/build2/checksum | awk '{print $1}')
-          
+
           echo "Build 1: $HASH1"
           echo "Build 2: $HASH2"
-          
+
           if [[ "$HASH1" == "$HASH2" ]]; then
             echo "✓ Builds are reproducible"
           else
