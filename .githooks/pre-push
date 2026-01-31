@@ -133,29 +133,33 @@ check_mod_tidy() {
 # =========================================================================
 check_mod_vendor() {
     # Verify module checksums match without rewriting the vendor dir
-    # (go mod vendor is too slow / can hang on Windows due to file locks)
     go mod verify 2>&1
 
-    # Also check that vendor/modules.txt lists the same modules as go.mod
-    if [ -f vendor/modules.txt ]; then
-        # Extract required modules from go.mod and check they appear in modules.txt
-        local missing=0
-        while IFS= read -r mod; do
-            if ! grep -q "$mod" vendor/modules.txt 2>/dev/null; then
-                hook_warn "  Missing from vendor: $mod"
-                missing=$((missing + 1))
-            fi
-        done < <(go list -m -mod=mod all 2>/dev/null | tail -n +2 | awk '{print $1}' | head -50)
+    # Check vendor/modules.txt exists
+    if [ ! -f vendor/modules.txt ]; then
+        hook_fail "vendor/modules.txt not found. Run 'go mod vendor'."
+        return 1
+    fi
 
-        if [ "$missing" -gt 0 ]; then
+    # Use go mod vendor -o to a temp dir and compare modules.txt
+    # This is the most reliable way to check vendor consistency
+    local temp_vendor
+    temp_vendor=$(mktemp -d 2>/dev/null || mktemp -d -t 'vendor')
+
+    if go mod vendor -o "$temp_vendor" 2>&1; then
+        if diff -q "$temp_vendor/modules.txt" vendor/modules.txt >/dev/null 2>&1; then
+            rm -rf "$temp_vendor"
+            return 0
+        else
+            rm -rf "$temp_vendor"
             hook_fail "vendor/modules.txt is out of sync. Run 'go mod vendor' and commit."
             return 1
         fi
     else
-        hook_fail "vendor/modules.txt not found. Run 'go mod vendor'."
+        rm -rf "$temp_vendor" 2>/dev/null || true
+        hook_fail "go mod vendor failed."
         return 1
     fi
-    return 0
 }
 
 # =========================================================================
