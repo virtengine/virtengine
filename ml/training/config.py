@@ -11,7 +11,7 @@ This module defines all configuration parameters for:
 import os
 import yaml
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Tuple, Any
 from enum import Enum
 from pathlib import Path
@@ -236,6 +236,10 @@ class ModelConfig:
     # Logging
     tensorboard_log_dir: str = "logs/tensorboard"
     log_every_n_steps: int = 100
+
+    def get_config(self) -> Dict[str, Any]:
+        """Return config dict for TensorFlow serialization."""
+        return asdict(self)
 
 
 @dataclass

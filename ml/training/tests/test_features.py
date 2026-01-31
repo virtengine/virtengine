@@ -84,7 +84,7 @@ class TestDocumentFeatures:
         vector = features.to_vector()
         
         assert len(vector) == 17
-        assert vector[0] == 0.85  # sharpness_score
+        assert vector[0] == pytest.approx(0.85)  # sharpness_score
     
     def test_doc_extractor_creation(self):
         """Test creating document feature extractor."""

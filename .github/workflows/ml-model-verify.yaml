@@ -123,6 +123,8 @@ jobs:
           cache: true
 
       - name: Download dependencies
+        env:
+          GOWORK: off
         run: |
           go mod tidy
           go mod vendor
@@ -346,6 +348,8 @@ jobs:
           cache: true
 
       - name: Download dependencies
+        env:
+          GOWORK: off
         run: |
           go mod tidy
           go mod vendor
