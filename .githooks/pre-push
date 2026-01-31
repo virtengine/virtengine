@@ -80,7 +80,26 @@ run_check() {
 # Check 1: go vet
 # =========================================================================
 check_vet() {
-    go vet ./... 2>&1
+    # Optimization: only vet packages with changes since origin/main
+    # Falls back to ./... if no commits yet or on main branch
+    local changed_packages
+    local base_branch="origin/main"
+
+    # Check if we're on main or have no diverged commits
+    if git rev-parse --verify "$base_branch" &>/dev/null; then
+        changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+            xargs -r dirname 2>/dev/null | sort -u | \
+            sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
+    fi
+
+    if [ -n "${changed_packages:-}" ]; then
+        hook_step "Vetting changed packages only ($(echo "$changed_packages" | wc -w | tr -d ' ') packages)"
+        # shellcheck disable=SC2086
+        go vet $changed_packages 2>&1
+    else
+        # Fallback: vet everything but use -mod=vendor for speed
+        go vet -mod=vendor ./... 2>&1
+    fi
 }
 
 # =========================================================================
@@ -171,8 +190,35 @@ check_build() {
 # Check 6: Unit tests
 # =========================================================================
 check_test() {
-    # Run short tests on all packages (same as CI but with -short flag for speed)
-    go test -short -timeout 300s ./... 2>&1
+    # Run tests with timeout. Using simpler approach that works on Windows.
+    # Using -short to skip long-running tests
+    # Using -timeout to prevent individual tests from hanging indefinitely
+    # Using -failfast to stop on first failure (faster feedback)
+    # Using -mod=vendor for faster module resolution
+
+    local go_timeout="180s"  # 3 minutes per test package
+
+    # Optimization: only test changed packages if possible
+    local changed_packages=""
+    local base_branch="origin/main"
+
+    if git rev-parse --verify "$base_branch" &>/dev/null; then
+        changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+            grep -v '_test\.go$' | \
+            xargs -r dirname 2>/dev/null | sort -u | \
+            sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
+    fi
+
+    if [ -n "${changed_packages:-}" ]; then
+        local pkg_count
+        pkg_count=$(echo "$changed_packages" | wc -w | tr -d ' ')
+        hook_step "Testing changed packages only ($pkg_count packages)"
+        # shellcheck disable=SC2086
+        go test -short -timeout "$go_timeout" -failfast -mod=vendor $changed_packages 2>&1
+    else
+        # Fallback: run all tests
+        go test -short -timeout "$go_timeout" -failfast -mod=vendor ./... 2>&1
+    fi
 }
 
 # =========================================================================

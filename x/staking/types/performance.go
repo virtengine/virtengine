@@ -19,19 +19,19 @@ const MaxPerformanceScore int64 = 10000
 
 // PerformanceWeight constants for reward calculation
 const (
-	WeightBlockProposal    int64 = 3000  // 30%
-	WeightVEIDVerification int64 = 4000  // 40%
-	WeightUptime           int64 = 3000  // 30%
+	WeightBlockProposal    int64 = 3000 // 30%
+	WeightVEIDVerification int64 = 4000 // 40%
+	WeightUptime           int64 = 3000 // 30%
 	TotalWeight            int64 = 10000
 )
 
 // NewValidatorPerformance creates a new validator performance record
 func NewValidatorPerformance(validatorAddr string, epochNumber uint64) *stakingv1.ValidatorPerformance {
 	return &stakingv1.ValidatorPerformance{
-		ValidatorAddress:       validatorAddr,
-		EpochNumber:            epochNumber,
-		VEIDVerificationScore:  MaxPerformanceScore, // Start with full score
-		OverallScore:           0,
+		ValidatorAddress:      validatorAddr,
+		EpochNumber:           epochNumber,
+		VEIDVerificationScore: MaxPerformanceScore, // Start with full score
+		OverallScore:          0,
 	}
 }
 

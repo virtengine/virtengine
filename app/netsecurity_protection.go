@@ -12,19 +12,19 @@ import (
 
 // DDoSProtector implements DDoS mitigation strategies.
 type DDoSProtector struct {
-	config  DDoSProtectionConfig
-	logger  log.Logger
-	
+	config DDoSProtectionConfig
+	logger log.Logger
+
 	// Detection windows (sliding windows for attack detection)
 	connectionWindow *SlidingWindow
 	messageWindow    *SlidingWindow
-	
+
 	// Banned IPs with expiry
 	bannedIPs map[string]time.Time
-	
+
 	// Alert callback
 	alertCallback func(AlertEvent)
-	
+
 	mu sync.RWMutex
 }
 
@@ -34,7 +34,7 @@ type SlidingWindow struct {
 	bucketSize time.Duration
 	buckets    *ring.Ring
 	totalCount int64
-	
+
 	mu sync.Mutex
 }
 
@@ -87,7 +87,7 @@ func (sw *SlidingWindow) Count() int64 {
 // rotate removes old buckets and adds new ones.
 func (sw *SlidingWindow) rotate() {
 	now := time.Now()
-	
+
 	// Rotate through buckets and remove expired ones
 	sw.buckets.Do(func(val interface{}) {
 		bucket := val.(*WindowBucket)
@@ -295,13 +295,13 @@ type SybilProtector struct {
 	config     SybilProtectionConfig
 	peerConfig PeerConfig
 	logger     log.Logger
-	
+
 	// Subnet tracking
 	subnetPeers map[string][]PeerID // subnet -> list of peers
-	
+
 	// ASN tracking
 	asnPeers map[uint32][]PeerID // ASN -> list of peers
-	
+
 	mu sync.RWMutex
 }
 
@@ -428,23 +428,23 @@ func (s *SybilProtector) GetDiversityScore() float64 {
 
 // EclipseProtector implements Eclipse attack prevention.
 type EclipseProtector struct {
-	config      EclipseProtectionConfig
-	logger      log.Logger
-	
+	config EclipseProtectionConfig
+	logger log.Logger
+
 	// Anchor connections (long-lived, trusted connections)
 	anchors map[PeerID]*AnchorConnection
-	
+
 	// Outbound-only slots
 	outboundOnlyPeers map[PeerID]bool
-	
+
 	// Seed node connections
 	seedNodes       []string
 	lastSeedRefresh time.Time
-	
+
 	// Peer rotation tracking
 	peerConnectTimes map[PeerID]time.Time
 	lastRotation     time.Time
-	
+
 	mu sync.RWMutex
 }
 
