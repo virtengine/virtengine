@@ -8,7 +8,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -32,9 +31,9 @@ func generateTestRSAKeyPair() (*rsa.PrivateKey, *rsa.PublicKey, error) {
 	return privateKey, &privateKey.PublicKey, nil
 }
 
-// encryptSessionKeyRSAOAEP encrypts a session key with RSA-OAEP
+// encryptSessionKeyRSAOAEP encrypts a session key with RSA-OAEP using SHA-256
 func encryptSessionKeyRSAOAEP(sessionKey []byte, publicKey *rsa.PublicKey) ([]byte, error) {
-	return rsa.EncryptOAEP(sha1.New(), rand.Reader, publicKey, sessionKey, nil)
+	return rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, sessionKey, nil)
 }
 
 // encryptDataAESCBC encrypts data with AES-CBC
@@ -295,7 +294,7 @@ func TestRSAOAEPDecrypt_Valid(t *testing.T) {
 	sessionKey := make([]byte, 32)
 	rand.Read(sessionKey)
 
-	// Encrypt session key
+	// Encrypt session key with SHA-256
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
 	require.NoError(t, err)
 
@@ -305,8 +304,8 @@ func TestRSAOAEPDecrypt_Valid(t *testing.T) {
 	decryptor, err := NewAssertionDecryptor(keyDER)
 	require.NoError(t, err)
 
-	// Decrypt
-	decrypted, err := decryptor.rsaOAEPDecrypt(encryptedKey, KeyTransportAlgorithmRSAOAEP)
+	// Decrypt using SHA-256 algorithm
+	decrypted, err := decryptor.rsaOAEPDecrypt(encryptedKey, KeyTransportAlgorithmRSAOAEPSHA256)
 	require.NoError(t, err)
 
 	assert.Equal(t, sessionKey, decrypted)
@@ -353,7 +352,7 @@ func TestRSAOAEPDecrypt_WrongKey(t *testing.T) {
 	decryptor, err := NewAssertionDecryptor(keyDER)
 	require.NoError(t, err)
 
-	_, err = decryptor.rsaOAEPDecrypt(encryptedKey, KeyTransportAlgorithmRSAOAEP)
+	_, err = decryptor.rsaOAEPDecrypt(encryptedKey, KeyTransportAlgorithmRSAOAEPSHA256)
 	assert.Error(t, err, "should fail with wrong key")
 }
 
@@ -369,7 +368,7 @@ func TestDecryptAssertion_AES256CBC(t *testing.T) {
 	sessionKey := make([]byte, 32)
 	rand.Read(sessionKey)
 
-	// Encrypt session key
+	// Encrypt session key with SHA-256
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
 	require.NoError(t, err)
 
@@ -382,11 +381,11 @@ func TestDecryptAssertion_AES256CBC(t *testing.T) {
 	encryptedData, err := encryptDataAESCBC(assertion, sessionKey)
 	require.NoError(t, err)
 
-	// Create encrypted XML
+	// Create encrypted XML with SHA-256 algorithm
 	encryptedXML := createEncryptedAssertionXML(
 		encryptedKey,
 		encryptedData,
-		KeyTransportAlgorithmRSAOAEP,
+		KeyTransportAlgorithmRSAOAEPSHA256,
 		EncryptionAlgorithmAES256CBC,
 	)
 
@@ -409,7 +408,7 @@ func TestDecryptAssertion_AES256GCM(t *testing.T) {
 	sessionKey := make([]byte, 32)
 	rand.Read(sessionKey)
 
-	// Encrypt session key
+	// Encrypt session key with SHA-256
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
 	require.NoError(t, err)
 
@@ -422,11 +421,11 @@ func TestDecryptAssertion_AES256GCM(t *testing.T) {
 	encryptedData, err := encryptDataAESGCM(assertion, sessionKey)
 	require.NoError(t, err)
 
-	// Create encrypted XML
+	// Create encrypted XML with SHA-256 algorithm
 	encryptedXML := createEncryptedAssertionXML(
 		encryptedKey,
 		encryptedData,
-		KeyTransportAlgorithmRSAOAEP,
+		KeyTransportAlgorithmRSAOAEPSHA256,
 		EncryptionAlgorithmAES256GCM,
 	)
 
@@ -528,6 +527,38 @@ func TestDecryptAssertion_RejectsRSA15(t *testing.T) {
 	assert.Contains(t, err.Error(), "RSA 1.5")
 }
 
+func TestDecryptAssertion_RejectsSHA1OAEP(t *testing.T) {
+	privateKey, publicKey, err := generateTestRSAKeyPair()
+	require.NoError(t, err)
+
+	sessionKey := make([]byte, 32)
+	rand.Read(sessionKey)
+
+	// Encrypt session key (note: the actual encryption uses SHA-256 now,
+	// but we test that the algorithm URI is rejected)
+	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
+	require.NoError(t, err)
+
+	encryptedData, err := encryptDataAESCBC([]byte("test"), sessionKey)
+	require.NoError(t, err)
+
+	// Create encrypted XML with SHA-1 based OAEP algorithm (should be rejected)
+	encryptedXML := createEncryptedAssertionXML(
+		encryptedKey,
+		encryptedData,
+		KeyTransportAlgorithmRSAOAEP, // SHA-1 based - weak
+		EncryptionAlgorithmAES256CBC,
+	)
+
+	keyDER := x509.MarshalPKCS1PrivateKey(privateKey)
+	decryptor, err := NewAssertionDecryptor(keyDER)
+	require.NoError(t, err)
+
+	_, err = decryptor.DecryptAssertion(encryptedXML)
+	assert.Error(t, err, "SHA-1 based OAEP should be rejected")
+	assert.Contains(t, err.Error(), "SHA-1")
+}
+
 // ============================================================================
 // Edge Cases
 // ============================================================================
@@ -549,7 +580,7 @@ func TestDecryptAssertion_UnsupportedDataAlgorithm(t *testing.T) {
 	encryptedXML := createEncryptedAssertionXML(
 		encryptedKey,
 		encryptedData,
-		KeyTransportAlgorithmRSAOAEP,
+		KeyTransportAlgorithmRSAOAEPSHA256,
 		"http://example.com/unsupported-algorithm",
 	)
 
@@ -582,7 +613,7 @@ func TestDecryptAssertion_TamperedEncryptedKey(t *testing.T) {
 	encryptedXML := createEncryptedAssertionXML(
 		encryptedKey,
 		encryptedData,
-		KeyTransportAlgorithmRSAOAEP,
+		KeyTransportAlgorithmRSAOAEPSHA256,
 		EncryptionAlgorithmAES256CBC,
 	)
 
@@ -615,7 +646,7 @@ func TestDecryptXMLEncryptionWithKey_Valid(t *testing.T) {
 	encryptedXML := createEncryptedAssertionXML(
 		encryptedKey,
 		encryptedData,
-		KeyTransportAlgorithmRSAOAEP,
+		KeyTransportAlgorithmRSAOAEPSHA256,
 		EncryptionAlgorithmAES256CBC,
 	)
 
