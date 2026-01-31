@@ -51,16 +51,16 @@ locals {
 module "vpc" {
   source = "../../modules/vpc"
 
-  name                    = local.name_prefix
-  environment             = local.environment
-  vpc_cidr                = var.vpc_cidr
-  az_count                = 3
-  cluster_name            = local.cluster_name
-  enable_nat_gateway      = true
-  create_database_subnets = true
-  enable_flow_logs        = true
+  name                     = local.name_prefix
+  environment              = local.environment
+  vpc_cidr                 = var.vpc_cidr
+  az_count                 = 3
+  cluster_name             = local.cluster_name
+  enable_nat_gateway       = true
+  create_database_subnets  = true
+  enable_flow_logs         = true
   flow_logs_retention_days = 14
-  enable_vpc_endpoints    = true
+  enable_vpc_endpoints     = true
 
   tags = local.common_tags
 }
