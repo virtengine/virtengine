@@ -5,13 +5,14 @@ package e2e
 import (
 	"testing"
 
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/virtengine/virtengine/testutil"
 )
 
-var DefaultDeposit = sdk.NewCoin("uve", sdk.NewInt(5000000))
+var DefaultDeposit = sdk.NewCoin("uve", math.NewInt(5000000))
 
 func TestIntegrationCLI(t *testing.T) {
 	di := &deploymentIntegrationTestSuite{}

@@ -38,6 +38,7 @@ on:
 env:
   GO_VERSION: "1.25.5"
   PYTHON_VERSION: "3.11"
+  GOWORK: "off"  # Disable workspace mode for vendor operations
   TF_VERSION: "2.15.0"
   GOWORK: "off"
 
@@ -54,6 +55,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr libtesseract-dev
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -72,6 +78,7 @@ jobs:
         run: |
           pytest ml/training/tests/ -v --tb=short --cov=ml/training --cov-report=term-missing
         env:
+          PYTHONPATH: ${{ github.workspace }}
           PYTHONHASHSEED: 42
           TF_DETERMINISTIC_OPS: 1
 
@@ -118,6 +125,8 @@ jobs:
           cache: true
 
       - name: Download dependencies
+        env:
+          GOWORK: off
         run: |
           go mod tidy
           go mod vendor
@@ -341,6 +350,8 @@ jobs:
           cache: true
 
       - name: Download dependencies
+        env:
+          GOWORK: off
         run: |
           go mod tidy
           go mod vendor

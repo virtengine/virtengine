@@ -132,6 +132,11 @@ func (df FlagsSet) WithGasAuto() FlagsSet {
 	return res
 }
 
+// WithGasAutoFlags is an alias for WithGasAuto for backward compatibility.
+func (df FlagsSet) WithGasAutoFlags() FlagsSet {
+	return df.WithGasAuto()
+}
+
 func (df FlagsSet) WithGenerateOnly() FlagsSet {
 	res := make([]string, len(df), len(df)+1)
 

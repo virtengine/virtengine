@@ -1,0 +1,186 @@
+# Validator Chaos Workflow for LitmusChaos
+# Automated chaos testing for VirtEngine validators
+
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: validator-chaos-workflow
+  namespace: litmus
+  labels:
+    app.kubernetes.io/part-of: virtengine
+    chaos.virtengine.io/target: validator
+spec:
+  schedule: "0 2 * * *"  # Run daily at 2 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  suspend: false
+  workflowSpec:
+    entrypoint: validator-chaos-pipeline
+    serviceAccountName: litmus-admin
+    arguments:
+      parameters:
+        - name: chaos-namespace
+          value: virtengine
+        - name: app-label
+          value: app.kubernetes.io/component=validator
+        - name: chaos-duration
+          value: "300"
+    templates:
+      - name: validator-chaos-pipeline
+        steps:
+          # Step 1: Verify steady state before chaos
+          - - name: pre-chaos-check
+              template: steady-state-check
+          
+          # Step 2: Pod failure experiment
+          - - name: pod-delete-experiment
+              template: pod-delete
+          
+          # Step 3: Verify recovery
+          - - name: post-pod-delete-check
+              template: steady-state-check
+          
+          # Step 4: Network partition experiment
+          - - name: network-partition-experiment
+              template: network-partition
+          
+          # Step 5: Verify recovery
+          - - name: post-network-check
+              template: steady-state-check
+          
+          # Step 6: CPU stress experiment
+          - - name: cpu-stress-experiment
+              template: cpu-stress
+          
+          # Step 7: Final verification
+          - - name: final-check
+              template: steady-state-check
+
+      - name: steady-state-check
+        container:
+          image: curlimages/curl:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Checking validator health..."
+              # Check validator status endpoint
+              for i in $(seq 1 3); do
+                response=$(curl -s -o /dev/null -w "%{http_code}" http://virtengine-validator-$i.virtengine:26657/status || echo "000")
+                if [ "$response" != "200" ]; then
+                  echo "Validator $i unhealthy: HTTP $response"
+                  exit 1
+                fi
+              done
+              echo "All validators healthy"
+
+      - name: pod-delete
+        container:
+          image: litmuschaos/litmus-checker:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting pod-delete experiment..."
+              cat <<EOF | kubectl apply -f -
+              apiVersion: litmuschaos.io/v1alpha1
+              kind: ChaosEngine
+              metadata:
+                name: validator-pod-delete-engine
+                namespace: {{workflow.parameters.chaos-namespace}}
+              spec:
+                engineState: active
+                appinfo:
+                  appns: {{workflow.parameters.chaos-namespace}}
+                  applabel: "{{workflow.parameters.app-label}}"
+                  appkind: statefulset
+                chaosServiceAccount: litmus-admin
+                experiments:
+                  - name: pod-delete
+                    spec:
+                      components:
+                        env:
+                          - name: TOTAL_CHAOS_DURATION
+                            value: "60"
+                          - name: CHAOS_INTERVAL
+                            value: "10"
+                          - name: FORCE
+                            value: "false"
+              EOF
+              
+              echo "Waiting for experiment to complete..."
+              sleep 120
+              
+              # Check experiment result
+              kubectl get chaosresult validator-pod-delete-engine-pod-delete \
+                -n {{workflow.parameters.chaos-namespace}} \
+                -o jsonpath='{.status.experimentStatus.verdict}'
+
+      - name: network-partition
+        container:
+          image: litmuschaos/litmus-checker:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting network-partition experiment..."
+              cat <<EOF | kubectl apply -f -
+              apiVersion: litmuschaos.io/v1alpha1
+              kind: ChaosEngine
+              metadata:
+                name: validator-network-engine
+                namespace: {{workflow.parameters.chaos-namespace}}
+              spec:
+                engineState: active
+                appinfo:
+                  appns: {{workflow.parameters.chaos-namespace}}
+                  applabel: "{{workflow.parameters.app-label}}"
+                  appkind: statefulset
+                chaosServiceAccount: litmus-admin
+                experiments:
+                  - name: pod-network-partition
+                    spec:
+                      components:
+                        env:
+                          - name: TOTAL_CHAOS_DURATION
+                            value: "120"
+                          - name: NETWORK_INTERFACE
+                            value: "eth0"
+              EOF
+              
+              echo "Waiting for experiment to complete..."
+              sleep 180
+
+      - name: cpu-stress
+        container:
+          image: litmuschaos/litmus-checker:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting cpu-stress experiment..."
+              cat <<EOF | kubectl apply -f -
+              apiVersion: litmuschaos.io/v1alpha1
+              kind: ChaosEngine
+              metadata:
+                name: validator-cpu-engine
+                namespace: {{workflow.parameters.chaos-namespace}}
+              spec:
+                engineState: active
+                appinfo:
+                  appns: {{workflow.parameters.chaos-namespace}}
+                  applabel: "{{workflow.parameters.app-label}}"
+                  appkind: statefulset
+                chaosServiceAccount: litmus-admin
+                experiments:
+                  - name: pod-cpu-hog
+                    spec:
+                      components:
+                        env:
+                          - name: TOTAL_CHAOS_DURATION
+                            value: "120"
+                          - name: CPU_CORES
+                            value: "2"
+                          - name: CPU_LOAD
+                            value: "80"
+              EOF
+              
+              echo "Waiting for experiment to complete..."
+              sleep 180

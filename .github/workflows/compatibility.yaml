@@ -22,7 +22,7 @@ on:
       - "**.proto"
 
 env:
-  GOWORK: "off"
+  GOWORK: "off" # Disable workspace mode for vendor operations
 
 jobs:
   # Run proto breaking change detection
@@ -47,7 +47,7 @@ jobs:
             BASE_REF="HEAD~1"
           fi
           echo "Checking for breaking changes against $BASE_REF"
-          
+
           # Run buf breaking change detection if available
           if command -v buf &> /dev/null; then
             buf breaking --against ".git#ref=$BASE_REF" || true
@@ -93,10 +93,10 @@ jobs:
         run: |
           # Check for new/changed API versions
           echo "Checking API version declarations..."
-          
+
           # Find all types.go files that might define API versions
           changed_files=$(git diff --name-only ${{ github.event.before || 'HEAD~1' }} HEAD -- '*/types/*.go' '*/keeper/*.go' || true)
-          
+
           if [ -n "$changed_files" ]; then
             echo "Changed API files:"
             echo "$changed_files"
@@ -128,11 +128,11 @@ jobs:
         run: |
           # Check that deprecated code has proper annotations
           echo "Checking for deprecated code with proper annotations..."
-          
+
           # Find deprecated markers and ensure they have successor info
           deprecated_count=$(grep -r "Deprecated:" --include="*.go" . | wc -l || echo "0")
           echo "Found $deprecated_count deprecated items"
-          
+
           # Check for deprecated without version
           missing_version=$(grep -r "Deprecated:" --include="*.go" . | grep -v "v[0-9]" | head -5 || true)
           if [ -n "$missing_version" ]; then
@@ -155,7 +155,7 @@ jobs:
         run: |
           # Run the compatibility matrix validation
           go test -v ./pkg/compatibility/... -run TestCompatibilityMatrix || true
-          
+
           # Check that COMPATIBILITY.md is up to date
           if [ -f "docs/COMPATIBILITY.md" ]; then
             echo "COMPATIBILITY.md found"

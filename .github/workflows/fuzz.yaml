@@ -31,7 +31,7 @@ permissions:
   security-events: write
 
 env:
-  GOWORK: "off"
+  GOWORK: "off" # Disable workspace mode for vendor operations
 
 jobs:
   fuzz-tests:
