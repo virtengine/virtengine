@@ -16,7 +16,10 @@
       "Bash(bash script/mainnet-from-tag.sh:*)",
       "Bash(bash:*)",
       "Bash(git config:*)",
-      "Bash(make check-hooks:*)"
+      "Bash(make check-hooks:*)",
+      "mcp__vibe_kanban__list_projects",
+      "mcp__vibe_kanban__list_repos",
+      "mcp__vibe_kanban__get_repo"
     ]
   }
 }
