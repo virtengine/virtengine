@@ -33,6 +33,7 @@ type CredentialIssuanceTestSuite struct {
 	ctx           sdk.Context
 	keeper        keeper.Keeper
 	cdc           codec.Codec
+	stateStore    store.CommitMultiStore
 	issuerPubKey  ed25519.PublicKey
 	issuerPrivKey ed25519.PrivateKey
 	issuerValAddr sdk.ValAddress
@@ -80,11 +81,18 @@ func (s *CredentialIssuanceTestSuite) createContextWithStore(storeKey *storetype
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
 
+	s.stateStore = stateStore
+
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
 		Height: 100,
 	}, false, log.NewNopLogger())
 	return ctx
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *CredentialIssuanceTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 // ============================================================================

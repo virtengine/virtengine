@@ -38,9 +38,10 @@ const (
 
 type ModelVersionKeeperTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	cdc    codec.Codec
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	cdc        codec.Codec
+	stateStore store.CommitMultiStore
 }
 
 func TestModelVersionKeeperTestSuite(t *testing.T) {
@@ -87,12 +88,18 @@ func (s *ModelVersionKeeperTestSuite) createContextWithStore(storeKey *storetype
 	if err != nil {
 		s.T().Fatalf("failed to load latest version: %v", err)
 	}
+	s.stateStore = stateStore
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
 		Height: 100,
 	}, false, log.NewNopLogger())
 	return ctx
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *ModelVersionKeeperTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 // ============================================================================

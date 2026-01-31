@@ -38,9 +38,10 @@ const (
 
 type ComplianceTestSuite struct {
 	suite.Suite
-	ctx    sdk.Context
-	keeper keeper.Keeper
-	cdc    codec.Codec
+	ctx        sdk.Context
+	keeper     keeper.Keeper
+	cdc        codec.Codec
+	stateStore store.CommitMultiStore
 	// Test addresses
 	complianceAddr1 sdk.AccAddress
 	complianceAddr2 sdk.AccAddress
@@ -75,6 +76,7 @@ func (s *ComplianceTestSuite) SetupTest() {
 	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 	err := stateStore.LoadLatestVersion()
 	s.Require().NoError(err)
+	s.stateStore = stateStore
 
 	s.ctx = sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
@@ -87,6 +89,11 @@ func (s *ComplianceTestSuite) SetupTest() {
 	// Set default params
 	err = s.keeper.SetParams(s.ctx, types.DefaultParams())
 	s.Require().NoError(err)
+}
+
+// TearDownTest closes the IAVL store to stop background pruning goroutines
+func (s *ComplianceTestSuite) TearDownTest() {
+	CloseStoreIfNeeded(s.stateStore)
 }
 
 // ============================================================================

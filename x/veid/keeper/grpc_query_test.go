@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"io"
 	"testing"
 	"time"
 
@@ -25,12 +26,13 @@ import (
 
 // grpcQueryTestSuite provides test setup for gRPC query tests
 type grpcQueryTestSuite struct {
-	ctx     sdk.Context
-	keeper  Keeper
-	querier GRPCQuerier
-	pubKey  ed25519.PublicKey
-	privKey ed25519.PrivateKey
-	address sdk.AccAddress
+	ctx        sdk.Context
+	keeper     Keeper
+	querier    GRPCQuerier
+	pubKey     ed25519.PublicKey
+	privKey    ed25519.PrivateKey
+	address    sdk.AccAddress
+	stateStore store.CommitMultiStore
 }
 
 func setupGRPCQueryTest(t *testing.T) *grpcQueryTestSuite {
@@ -66,14 +68,23 @@ func setupGRPCQueryTest(t *testing.T) *grpcQueryTestSuite {
 	// Generate test address
 	address := sdk.AccAddress(pubKey[:20])
 
-	return &grpcQueryTestSuite{
-		ctx:     ctx,
-		keeper:  keeper,
-		querier: GRPCQuerier{Keeper: keeper},
-		pubKey:  pubKey,
-		privKey: privKey,
-		address: address,
+	ts := &grpcQueryTestSuite{
+		ctx:        ctx,
+		keeper:     keeper,
+		querier:    GRPCQuerier{Keeper: keeper},
+		pubKey:     pubKey,
+		privKey:    privKey,
+		address:    address,
+		stateStore: stateStore,
 	}
+
+	t.Cleanup(func() {
+		if closer, ok := ts.stateStore.(io.Closer); ok {
+			closer.Close()
+		}
+	})
+
+	return ts
 }
 
 // signWalletBinding signs the wallet binding message

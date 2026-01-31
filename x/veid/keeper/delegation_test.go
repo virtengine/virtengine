@@ -22,6 +22,7 @@ import (
 type testDelegationSetup struct {
 	ctx              sdk.Context
 	keeper           Keeper
+	stateStore       store.CommitMultiStore
 	delegatorAddress sdk.AccAddress
 	delegateAddress  sdk.AccAddress
 	delegate2Address sdk.AccAddress
@@ -44,6 +45,11 @@ func setupDelegationTest(t *testing.T) *testDelegationSetup {
 	err := stateStore.LoadLatestVersion()
 	require.NoError(t, err)
 
+	// Register cleanup to close the IAVL store and stop background pruning goroutines
+	t.Cleanup(func() {
+		closeStoreIfNeeded(stateStore)
+	})
+
 	// Create context with store
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now().UTC(),
@@ -61,6 +67,7 @@ func setupDelegationTest(t *testing.T) *testDelegationSetup {
 	return &testDelegationSetup{
 		ctx:              ctx,
 		keeper:           keeper,
+		stateStore:       stateStore,
 		delegatorAddress: delegatorAddress,
 		delegateAddress:  delegateAddress,
 		delegate2Address: delegate2Address,
