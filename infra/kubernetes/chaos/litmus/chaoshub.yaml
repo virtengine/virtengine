@@ -1,0 +1,169 @@
+# LitmusChaos ChaosHub Configuration for VirtEngine
+# Integrates with LitmusChaos ChaosHub for custom experiment discovery
+
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosHub
+metadata:
+  name: virtengine-chaoshub
+  namespace: litmus
+spec:
+  name: virtengine-chaoshub
+  description: "VirtEngine custom chaos experiments for blockchain resilience testing"
+  repoURL: https://github.com/virtengine/chaos-charts
+  repoBranch: main
+  isDefault: false
+  authType: NONE
+  tags:
+    - virtengine
+    - blockchain
+    - consensus
+
+---
+# ServiceAccount for Litmus operations
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: litmus-admin
+  namespace: litmus
+  labels:
+    app.kubernetes.io/component: chaos-controller
+
+---
+# ClusterRole for Litmus
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: litmus-admin
+  labels:
+    app.kubernetes.io/component: chaos-controller
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec", "events", "configmaps", "secrets", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "replicasets", "daemonsets"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["litmuschaos.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "workflows/finalizers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: litmus-admin
+  labels:
+    app.kubernetes.io/component: chaos-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: litmus-admin
+subjects:
+  - kind: ServiceAccount
+    name: litmus-admin
+    namespace: litmus
+
+---
+# ChaosExperiment: Validator Pod Delete
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosExperiment
+metadata:
+  name: validator-pod-delete
+  namespace: litmus
+spec:
+  definition:
+    scope: Namespaced
+    permissions:
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["get", "list", "delete"]
+    image: litmuschaos/go-runner:latest
+    imagePullPolicy: Always
+    args:
+      - -c
+      - ./experiments -name pod-delete
+    command:
+      - /bin/bash
+    env:
+      - name: TOTAL_CHAOS_DURATION
+        value: "60"
+      - name: CHAOS_INTERVAL
+        value: "10"
+      - name: FORCE
+        value: "false"
+    labels:
+      name: validator-pod-delete
+      app.kubernetes.io/part-of: litmus
+
+---
+# ChaosExperiment: Network Partition
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosExperiment
+metadata:
+  name: validator-network-partition
+  namespace: litmus
+spec:
+  definition:
+    scope: Namespaced
+    permissions:
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["get", "list"]
+    image: litmuschaos/go-runner:latest
+    imagePullPolicy: Always
+    args:
+      - -c
+      - ./experiments -name pod-network-partition
+    command:
+      - /bin/bash
+    env:
+      - name: TOTAL_CHAOS_DURATION
+        value: "120"
+      - name: NETWORK_INTERFACE
+        value: "eth0"
+    labels:
+      name: validator-network-partition
+      app.kubernetes.io/part-of: litmus
+
+---
+# ChaosExperiment: CPU Stress
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosExperiment
+metadata:
+  name: validator-cpu-hog
+  namespace: litmus
+spec:
+  definition:
+    scope: Namespaced
+    permissions:
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["get", "list"]
+    image: litmuschaos/go-runner:latest
+    imagePullPolicy: Always
+    args:
+      - -c
+      - ./experiments -name pod-cpu-hog
+    command:
+      - /bin/bash
+    env:
+      - name: TOTAL_CHAOS_DURATION
+        value: "120"
+      - name: CPU_CORES
+        value: "2"
+      - name: CPU_LOAD
+        value: "80"
+    labels:
+      name: validator-cpu-hog
+      app.kubernetes.io/part-of: litmus
