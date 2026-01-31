@@ -1,6 +1,7 @@
 // Package main implements the VirtEngine HPC Node Agent.
 //
 // VE-500: Metrics collection for node agent heartbeats.
+// VE-7A: Command injection prevention and input sanitization
 package main
 
 import (
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // MetricsCollector collects system metrics for heartbeats
@@ -122,8 +125,15 @@ func (m *MetricsCollector) CollectLatency(targets []string) *NodeLatency {
 func (m *MetricsCollector) CollectJobs() *NodeJobs {
 	jobs := &NodeJobs{}
 
-	// Try to get SLURM job counts
-	if output, err := exec.Command("squeue", "-h", "-o", "%T").Output(); err == nil {
+	// Build validated arguments for squeue command
+	args, err := security.SLURMSqueueArgs("%T", "", "")
+	if err != nil {
+		// Log error and return empty jobs
+		return jobs
+	}
+
+	// Try to get SLURM job counts using validated arguments
+	if output, err := exec.Command("squeue", args...).Output(); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 		for _, line := range lines {
 			switch strings.TrimSpace(line) {
@@ -287,7 +297,13 @@ func (m *MetricsCollector) getGPUInfo() (int32, int32, string) {
 
 func (m *MetricsCollector) getStorageInfo(path string) (uint64, uint64) {
 	if runtime.GOOS == "linux" {
-		output, err := exec.Command("df", "-B1", path).Output()
+		// Validate and sanitize the path argument
+		args, err := security.DfArgs(path)
+		if err != nil {
+			return 0, 0
+		}
+
+		output, err := exec.Command("df", args...).Output()
 		if err != nil {
 			return 0, 0
 		}
@@ -316,7 +332,18 @@ func (m *MetricsCollector) getSLURMNodeState() string {
 		return "unknown"
 	}
 
-	output, err := exec.Command("sinfo", "-h", "-N", "-n", hostname, "-o", "%T").Output()
+	// Validate hostname before using in command
+	if err := security.ValidateHostname(hostname); err != nil {
+		return "unknown"
+	}
+
+	// Build validated arguments for sinfo command
+	args, err := security.SLURMSinfoArgs("%T", hostname)
+	if err != nil {
+		return "unknown"
+	}
+
+	output, err := exec.Command("sinfo", args...).Output()
 	if err != nil {
 		return "unknown"
 	}
@@ -327,12 +354,23 @@ func (m *MetricsCollector) getSLURMNodeState() string {
 func (m *MetricsCollector) measureLatency(target string) *LatencyProbe {
 	start := time.Now()
 
+	// Validate target before using in any command
+	if err := security.ValidatePingTarget(target); err != nil {
+		return nil
+	}
+
 	// Try TCP connection as a proxy for latency
 	conn, err := net.DialTimeout("tcp", target+":22", 5*time.Second)
 	if err != nil {
-		// Try ICMP ping if available
-		_, pingErr := exec.Command("ping", "-c", "1", "-W", "1", target).Output()
+		// Build validated ping arguments
+		args, pingErr := security.PingArgs(target, 1)
 		if pingErr != nil {
+			return nil
+		}
+
+		// Try ICMP ping if available
+		_, execErr := exec.Command("ping", args...).Output()
+		if execErr != nil {
 			return nil
 		}
 	} else {

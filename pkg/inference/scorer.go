@@ -7,6 +7,7 @@ import (
 	"time"
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -216,13 +217,9 @@ func (s *TensorFlowScorer) runInference(inputs *ScoreInputs) (*ScoreResult, erro
 	// Compute output hash for determinism verification
 	result.OutputHash = s.determinism.ComputeOutputHash(output)
 
-	// Quantize to 0-100 score
-	score := uint32(rawScore)
-	if rawScore < 0 {
-		score = 0
-	} else if rawScore > 100 {
-		score = 100
-	}
+	// Quantize to 0-100 score using safe conversion
+	// This prevents integer overflow issues on 32-bit systems (CWE-190)
+	score := security.SafeFloat32ToUint32(rawScore, 0, 100)
 	result.Score = score
 
 	// Compute confidence based on raw score distribution

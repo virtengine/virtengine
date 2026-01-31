@@ -11,6 +11,7 @@
 // - Enclave allocator configured in /etc/nitro_enclaves/allocator.yaml
 //
 // Task Reference: VE-2029 - Hardware TEE Integration Layer
+// VE-7A: Command injection prevention and input sanitization
 package enclave_runtime
 
 import (
@@ -29,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/virtengine/virtengine/pkg/security"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -251,14 +253,30 @@ func (r *NitroCLIRunner) RunEnclave(ctx context.Context, eifPath string, cpuCoun
 
 // runHardwareEnclave starts an enclave using nitro-cli
 func (r *NitroCLIRunner) runHardwareEnclave(ctx context.Context, eifPath string, cpuCount int, memoryMB int64) (*NitroRunEnclaveOutput, error) {
+	// Validate the EIF path to prevent command injection
+	cleanPath, err := security.SanitizePath(eifPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid EIF path: %w", err)
+	}
+
+	// Validate nitro-cli executable
+	cliPath := r.detector.GetCLIPath()
+	if err := security.ValidateExecutable("nitro", cliPath); err != nil {
+		// Fall back if validation fails (custom install path)
+		// but at least verify it exists
+		if _, statErr := os.Stat(cliPath); statErr != nil {
+			return nil, fmt.Errorf("nitro-cli not found: %w", statErr)
+		}
+	}
+
 	args := []string{
 		"run-enclave",
-		"--eif-path", eifPath,
+		"--eif-path", cleanPath,
 		"--cpu-count", fmt.Sprintf("%d", cpuCount),
 		"--memory", fmt.Sprintf("%d", memoryMB),
 	}
 
-	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), args...)
+	cmd := exec.CommandContext(ctx, cliPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -310,6 +328,11 @@ func (r *NitroCLIRunner) TerminateEnclave(ctx context.Context, enclaveID string)
 		return nil // Simulated enclave "terminated"
 	}
 
+	// Validate enclave ID to prevent command injection
+	if err := security.SanitizeShellArg(enclaveID); err != nil {
+		return fmt.Errorf("invalid enclave ID: %w", err)
+	}
+
 	args := []string{
 		"terminate-enclave",
 		"--enclave-id", enclaveID,
@@ -359,6 +382,11 @@ func (r *NitroCLIRunner) Console(ctx context.Context, enclaveID string) error {
 
 	if r.simulated {
 		return errors.New("console not available in simulation mode")
+	}
+
+	// Validate enclave ID to prevent command injection
+	if err := security.SanitizeShellArg(enclaveID); err != nil {
+		return fmt.Errorf("invalid enclave ID: %w", err)
 	}
 
 	args := []string{
@@ -772,19 +800,45 @@ func (b *NitroEnclaveImageBuilder) BuildEnclave(ctx context.Context, config Buil
 
 // buildHardware builds using nitro-cli
 func (b *NitroEnclaveImageBuilder) buildHardware(ctx context.Context, config BuildConfig) (*NitroBuildEnclaveOutput, error) {
+	// Validate paths to prevent command injection
+	cleanDockerUri, err := security.SanitizePath(config.DockerUri)
+	if err != nil {
+		// Docker URIs may have special chars, try sanitizing shell arg instead
+		if shellErr := security.SanitizeShellArg(config.DockerUri); shellErr != nil {
+			return nil, fmt.Errorf("invalid docker URI: %w", shellErr)
+		}
+		cleanDockerUri = config.DockerUri
+	}
+
+	cleanOutputPath, err := security.SanitizePath(config.OutputPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid output path: %w", err)
+	}
+
 	args := []string{
 		"build-enclave",
-		"--docker-uri", config.DockerUri,
-		"--output-file", config.OutputPath,
+		"--docker-uri", cleanDockerUri,
+		"--output-file", cleanOutputPath,
 	}
 
 	if config.Name != "" {
+		if err := security.SanitizeShellArg(config.Name); err != nil {
+			return nil, fmt.Errorf("invalid enclave name: %w", err)
+		}
 		args = append(args, "--name", config.Name)
 	}
 
 	if config.SigningKey != "" && config.SigningCert != "" {
-		args = append(args, "--signing-key", config.SigningKey)
-		args = append(args, "--signing-certificate", config.SigningCert)
+		cleanSigningKey, err := security.SanitizePath(config.SigningKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signing key path: %w", err)
+		}
+		cleanSigningCert, err := security.SanitizePath(config.SigningCert)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signing cert path: %w", err)
+		}
+		args = append(args, "--signing-key", cleanSigningKey)
+		args = append(args, "--signing-certificate", cleanSigningCert)
 	}
 
 	cmd := exec.CommandContext(ctx, b.detector.GetCLIPath(), args...)
