@@ -13,10 +13,11 @@ package enclave_runtime
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -374,9 +375,6 @@ type EnclaveManager struct {
 	stopCh   chan struct{}
 	stopOnce sync.Once
 	wg       sync.WaitGroup
-
-	// Random source for weighted selection
-	rng *rand.Rand
 }
 
 // NewEnclaveManager creates a new enclave manager.
@@ -393,7 +391,6 @@ func NewEnclaveManager(config EnclaveManagerConfig) (*EnclaveManager, error) {
 		backends:             make(map[string]*EnclaveBackend),
 		pendingRequests:      make(map[string]struct{}),
 		stopCh:               make(chan struct{}),
-		rng:                  rand.New(rand.NewSource(time.Now().UnixNano())),
 		hardwareCapabilities: &caps,
 	}, nil
 }
@@ -628,7 +625,7 @@ func (m *EnclaveManager) selectLeastLoaded(backends []*EnclaveBackend) *EnclaveB
 	return selected
 }
 
-// selectWeighted performs weighted random selection.
+// selectWeighted performs weighted random selection using crypto/rand.
 func (m *EnclaveManager) selectWeighted(backends []*EnclaveBackend) *EnclaveBackend {
 	totalWeight := 0
 	for _, b := range backends {
@@ -639,7 +636,11 @@ func (m *EnclaveManager) selectWeighted(backends []*EnclaveBackend) *EnclaveBack
 		return backends[0]
 	}
 
-	r := m.rng.Intn(totalWeight)
+	r, err := secureRandomIntn(totalWeight)
+	if err != nil {
+		// Fallback to first backend on crypto/rand failure
+		return backends[0]
+	}
 	cumulative := 0
 
 	for _, b := range backends {
@@ -650,6 +651,19 @@ func (m *EnclaveManager) selectWeighted(backends []*EnclaveBackend) *EnclaveBack
 	}
 
 	return backends[len(backends)-1]
+}
+
+// secureRandomIntn returns a cryptographically secure random number in [0, n).
+func secureRandomIntn(n int) (int, error) {
+	if n <= 0 {
+		return 0, errors.New("n must be positive")
+	}
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return 0, err
+	}
+	r := binary.BigEndian.Uint64(buf[:])
+	return int(r % uint64(n)), nil
 }
 
 // selectByLatency returns the backend with the lowest average latency.
