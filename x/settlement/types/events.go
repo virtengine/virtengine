@@ -210,3 +210,67 @@ func (e *EventRewardsDistributed) String() string { return fmt.Sprintf("%+v", *e
 func (e *EventRewardsClaimed) String() string  { return fmt.Sprintf("%+v", *e) }
 func (e *EventOrderSettled) String() string    { return fmt.Sprintf("%+v", *e) }
 func (e *EventUsageRecorded) String() string   { return fmt.Sprintf("%+v", *e) }
+
+// Payout events
+
+// EventPayoutCompleted is emitted when a payout is completed
+type EventPayoutCompleted struct {
+	PayoutID     string `json:"payout_id"`
+	SettlementID string `json:"settlement_id"`
+	InvoiceID    string `json:"invoice_id,omitempty"`
+	Provider     string `json:"provider"`
+	NetAmount    string `json:"net_amount"`
+	PlatformFee  string `json:"platform_fee"`
+	CompletedAt  int64  `json:"completed_at"`
+}
+
+// EventPayoutHeld is emitted when a payout is held
+type EventPayoutHeld struct {
+	PayoutID  string `json:"payout_id"`
+	DisputeID string `json:"dispute_id"`
+	Reason    string `json:"reason"`
+	HeldAt    int64  `json:"held_at"`
+}
+
+// EventPayoutReleased is emitted when a payout hold is released
+type EventPayoutReleased struct {
+	PayoutID   string `json:"payout_id"`
+	ReleasedAt int64  `json:"released_at"`
+}
+
+// EventPayoutRefunded is emitted when a payout is refunded
+type EventPayoutRefunded struct {
+	PayoutID   string `json:"payout_id"`
+	Customer   string `json:"customer"`
+	Amount     string `json:"amount"`
+	Reason     string `json:"reason"`
+	RefundedAt int64  `json:"refunded_at"`
+}
+
+// EventPayoutFailed is emitted when a payout fails
+type EventPayoutFailed struct {
+	PayoutID string `json:"payout_id"`
+	Error    string `json:"error"`
+	FailedAt int64  `json:"failed_at"`
+}
+
+// ProtoMessage stubs for Payout Event types
+func (*EventPayoutCompleted) ProtoMessage() {}
+func (*EventPayoutHeld) ProtoMessage()      {}
+func (*EventPayoutReleased) ProtoMessage()  {}
+func (*EventPayoutRefunded) ProtoMessage()  {}
+func (*EventPayoutFailed) ProtoMessage()    {}
+
+// Reset stubs for Payout Event types
+func (e *EventPayoutCompleted) Reset() { *e = EventPayoutCompleted{} }
+func (e *EventPayoutHeld) Reset()      { *e = EventPayoutHeld{} }
+func (e *EventPayoutReleased) Reset()  { *e = EventPayoutReleased{} }
+func (e *EventPayoutRefunded) Reset()  { *e = EventPayoutRefunded{} }
+func (e *EventPayoutFailed) Reset()    { *e = EventPayoutFailed{} }
+
+// String stubs for Payout Event types
+func (e *EventPayoutCompleted) String() string { return fmt.Sprintf("%+v", *e) }
+func (e *EventPayoutHeld) String() string      { return fmt.Sprintf("%+v", *e) }
+func (e *EventPayoutReleased) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventPayoutRefunded) String() string  { return fmt.Sprintf("%+v", *e) }
+func (e *EventPayoutFailed) String() string    { return fmt.Sprintf("%+v", *e) }

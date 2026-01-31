@@ -3,7 +3,6 @@ package keeper
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"math/rand"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -19,20 +18,22 @@ func (k Keeper) GetCommitteeEnclaveKeys(ctx sdk.Context, epoch uint64) []types.E
 	}
 
 	allKeys := k.GetActiveValidatorEnclaveKeys(ctx)
+	// #nosec G115 - len() is always non-negative, safe conversion to uint32
 	if uint32(len(allKeys)) <= params.CommitteeSize {
 		return allKeys
 	}
 
-	// Deterministic selection using epoch and block hash as seed
+	// Deterministic selection using cryptographic seed
+	// Use Fisher-Yates shuffle with crypto-derived randomness
 	seed := k.computeCommitteeSeed(ctx, epoch)
 
-	// Fisher-Yates shuffle with deterministic RNG
-	rng := rand.New(rand.NewSource(int64(binary.BigEndian.Uint64(seed[:]))))
 	shuffled := make([]types.EnclaveIdentity, len(allKeys))
 	copy(shuffled, allKeys)
 
+	// Fisher-Yates shuffle using cryptographic hash for index selection
 	for i := len(shuffled) - 1; i > 0; i-- {
-		j := rng.Intn(i + 1)
+		// Derive deterministic random index using HKDF-style expansion
+		j := cryptoRandIndex(seed, uint64(i), i+1)
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	}
 
@@ -65,6 +66,48 @@ func (k Keeper) computeCommitteeSeed(ctx sdk.Context, epoch uint64) []byte {
 	return h.Sum(nil)
 }
 
+// cryptoRandIndex generates a deterministic random index in [0, max) using
+// cryptographic hash expansion. Uses rejection sampling to avoid modulo bias.
+func cryptoRandIndex(seed []byte, counter uint64, max int) int {
+	if max <= 0 {
+		return 0
+	}
+	if max == 1 {
+		return 0
+	}
+
+	// Use rejection sampling to avoid modulo bias
+	// We need enough bits to cover max, then reject values >= max
+	maxUint64 := uint64(max)
+
+	// Compute how many times max fits in 2^64
+	// We reject values >= (2^64 / max) * max to avoid bias
+	limit := (^uint64(0) / maxUint64) * maxUint64
+
+	for attempt := uint64(0); ; attempt++ {
+		// Hash seed || counter || attempt to get random bytes
+		h := sha256.New()
+		h.Write(seed)
+
+		counterBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(counterBytes, counter)
+		h.Write(counterBytes)
+
+		attemptBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(attemptBytes, attempt)
+		h.Write(attemptBytes)
+
+		hash := h.Sum(nil)
+		val := binary.BigEndian.Uint64(hash[:8])
+
+		if val < limit {
+			// #nosec G115 - result is always < max which is an int, safe conversion
+			return int(val % maxUint64)
+		}
+		// Rejection: try again with next attempt value
+	}
+}
+
 // GetCommitteeEpoch returns the current committee epoch based on block height
 func (k Keeper) GetCommitteeEpoch(ctx sdk.Context) uint64 {
 	params := k.GetParams(ctx)
@@ -79,6 +122,7 @@ func (k Keeper) GetCommitteeEpoch(ctx sdk.Context) uint64 {
 		epochBlocks = params.CommitteeEpochBlocks
 	}
 
+	// #nosec G115 - block heights are always non-negative, safe conversion
 	return uint64(ctx.BlockHeight() / epochBlocks)
 }
 

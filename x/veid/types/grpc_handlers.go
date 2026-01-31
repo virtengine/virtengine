@@ -343,6 +343,10 @@ var _Query_serviceDesc = struct {
 		{MethodName: "ConsentSettings", Handler: nil},
 		{MethodName: "DerivedFeatures", Handler: nil},
 		{MethodName: "DerivedFeatureHashes", Handler: nil},
+		{MethodName: "Appeal", Handler: nil},
+		{MethodName: "AppealsByAccount", Handler: nil},
+		{MethodName: "PendingAppeals", Handler: nil},
+		{MethodName: "AppealParams", Handler: nil},
 	},
 	Streams:  []struct{}{},
 	Metadata: "virtengine/veid/v1/query.proto",
@@ -369,6 +373,10 @@ var _Query_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "ConsentSettings", Handler: _Query_ConsentSettings_Handler},
 		{MethodName: "DerivedFeatures", Handler: _Query_DerivedFeatures_Handler},
 		{MethodName: "DerivedFeatureHashes", Handler: _Query_DerivedFeatureHashes_Handler},
+		{MethodName: "Appeal", Handler: _Query_Appeal_Handler},
+		{MethodName: "AppealsByAccount", Handler: _Query_AppealsByAccount_Handler},
+		{MethodName: "PendingAppeals", Handler: _Query_PendingAppeals_Handler},
+		{MethodName: "AppealParams", Handler: _Query_AppealParams_Handler},
 	},
 	Streams:  []ggrpc.StreamDesc{},
 	Metadata: "virtengine/veid/v1/query.proto",
@@ -525,6 +533,62 @@ func _Query_DerivedFeatureHashes_Handler(srv interface{}, ctx context.Context, d
 	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/DerivedFeatureHashes"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(QueryServer).DerivedFeatureHashes(ctx, req.(*QueryDerivedFeatureHashesRequest))
+	})
+}
+
+func _Query_Appeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAppealRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).Appeal(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/Appeal"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).Appeal(ctx, req.(*QueryAppealRequest))
+	})
+}
+
+func _Query_AppealsByAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAppealsByAccountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).AppealsByAccount(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/AppealsByAccount"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).AppealsByAccount(ctx, req.(*QueryAppealsByAccountRequest))
+	})
+}
+
+func _Query_PendingAppeals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryPendingAppealsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).PendingAppeals(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/PendingAppeals"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).PendingAppeals(ctx, req.(*QueryPendingAppealsRequest))
+	})
+}
+
+func _Query_AppealParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAppealParamsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).AppealParams(ctx, in)
+	}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Query/AppealParams"}
+	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).AppealParams(ctx, req.(*QueryAppealParamsRequest))
 	})
 }
 

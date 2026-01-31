@@ -8,7 +8,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -162,6 +161,11 @@ func (d *AssertionDecryptor) decryptSessionKey(encryptedDataEl *etree.Element) (
 		return nil, fmt.Errorf("RSA 1.5 key transport is not allowed (weak algorithm)")
 	}
 
+	// Reject legacy SHA-1 based OAEP (mgf1p uses SHA-1 which is cryptographically weak)
+	if keyAlgorithm == KeyTransportAlgorithmRSAOAEP {
+		return nil, fmt.Errorf("RSA-OAEP with SHA-1 (mgf1p) is not allowed (weak hash algorithm), use SHA-256 variant")
+	}
+
 	// Get encrypted key cipher value
 	keyCipherValue, err := getCipherValue(encryptedKeyEl)
 	if err != nil {
@@ -183,17 +187,14 @@ func (d *AssertionDecryptor) rsaOAEPDecrypt(ciphertext []byte, algorithm string)
 		return nil, fmt.Errorf("no private key available")
 	}
 
-	// Select hash function based on algorithm
+	// Select hash function based on algorithm - only SHA-256 variants are supported
 	var hashFunc hash.Hash
 	switch algorithm {
-	case KeyTransportAlgorithmRSAOAEP:
-		// Default to SHA-1 for mgf1p variant
-		hashFunc = sha1.New()
 	case KeyTransportAlgorithmRSAOAEPSHA256:
 		hashFunc = sha256.New()
 	default:
-		// Default to SHA-1 for backwards compatibility
-		hashFunc = sha1.New()
+		// Reject unknown or weak algorithms - only SHA-256 is supported
+		return nil, fmt.Errorf("unsupported key transport algorithm: %s (only SHA-256 based algorithms are supported)", algorithm)
 	}
 
 	// Decrypt using RSA-OAEP

@@ -22,6 +22,9 @@ type GenesisState struct {
 	// ClaimableRewards are the initial claimable rewards
 	ClaimableRewards []ClaimableRewards `json:"claimable_rewards"`
 
+	// PayoutRecords are the initial payout records
+	PayoutRecords []PayoutRecord `json:"payout_records"`
+
 	// EscrowSequence is the next escrow sequence number
 	EscrowSequence uint64 `json:"escrow_sequence"`
 
@@ -33,6 +36,9 @@ type GenesisState struct {
 
 	// UsageSequence is the next usage sequence number
 	UsageSequence uint64 `json:"usage_sequence"`
+
+	// PayoutSequence is the next payout sequence number
+	PayoutSequence uint64 `json:"payout_sequence"`
 }
 
 // Params defines the parameters for the settlement module
@@ -66,6 +72,15 @@ type Params struct {
 
 	// VerificationRewardAmount is the base reward for identity verifications
 	VerificationRewardAmount string `json:"verification_reward_amount"`
+
+	// PayoutHoldbackRate is the holdback rate for payouts (e.g., 0.0 for no holdback)
+	PayoutHoldbackRate string `json:"payout_holdback_rate"`
+
+	// MaxPayoutRetries is the maximum number of retry attempts for failed payouts
+	MaxPayoutRetries uint32 `json:"max_payout_retries"`
+
+	// DisputeWindowDuration is the dispute window duration in seconds
+	DisputeWindowDuration uint64 `json:"dispute_window_duration"`
 }
 
 // DefaultGenesisState returns the default genesis state
@@ -77,26 +92,31 @@ func DefaultGenesisState() *GenesisState {
 		RewardDistributions:  []RewardDistribution{},
 		UsageRecords:         []UsageRecord{},
 		ClaimableRewards:     []ClaimableRewards{},
+		PayoutRecords:        []PayoutRecord{},
 		EscrowSequence:       1,
 		SettlementSequence:   1,
 		DistributionSequence: 1,
 		UsageSequence:        1,
+		PayoutSequence:       1,
 	}
 }
 
 // DefaultParams returns the default parameters
 func DefaultParams() Params {
 	return Params{
-		PlatformFeeRate:          "0.05",  // 5%
-		ValidatorFeeRate:         "0.01",  // 1%
-		MinEscrowDuration:        3600,    // 1 hour
-		MaxEscrowDuration:        31536000, // 1 year
-		SettlementPeriod:         86400,   // 1 day
-		RewardClaimExpiry:        2592000, // 30 days
-		MinSettlementAmount:      "1000",  // Minimum tokens for settlement
-		UsageGracePeriod:         86400,   // 1 day grace period
-		StakingRewardEpochLength: 100,     // 100 blocks per epoch
-		VerificationRewardAmount: "100",   // Base reward for verification
+		PlatformFeeRate:          "0.05",     // 5%
+		ValidatorFeeRate:         "0.01",     // 1%
+		MinEscrowDuration:        3600,       // 1 hour
+		MaxEscrowDuration:        31536000,   // 1 year
+		SettlementPeriod:         86400,      // 1 day
+		RewardClaimExpiry:        2592000,    // 30 days
+		MinSettlementAmount:      "1000",     // Minimum tokens for settlement
+		UsageGracePeriod:         86400,      // 1 day grace period
+		StakingRewardEpochLength: 100,        // 100 blocks per epoch
+		VerificationRewardAmount: "100",      // Base reward for verification
+		PayoutHoldbackRate:       "0.0",      // No holdback by default
+		MaxPayoutRetries:         3,          // 3 retry attempts
+		DisputeWindowDuration:    604800,     // 7 days
 	}
 }
 
@@ -152,6 +172,18 @@ func (gs GenesisState) Validate() error {
 			return ErrUsageRecordExists.Wrapf("duplicate usage_id: %s", usage.UsageID)
 		}
 		seenUsage[usage.UsageID] = true
+	}
+
+	// Validate payout records
+	seenPayouts := make(map[string]bool)
+	for _, payout := range gs.PayoutRecords {
+		if err := payout.Validate(); err != nil {
+			return err
+		}
+		if seenPayouts[payout.PayoutID] {
+			return ErrPayoutExists.Wrapf("duplicate payout_id: %s", payout.PayoutID)
+		}
+		seenPayouts[payout.PayoutID] = true
 	}
 
 	return nil

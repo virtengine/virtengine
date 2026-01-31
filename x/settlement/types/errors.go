@@ -96,4 +96,28 @@ var (
 
 	// ErrLeaseNotFound is returned when a lease is not found
 	ErrLeaseNotFound = errorsmod.Register(ModuleName, 1529, "lease not found")
+
+	// ErrInvalidPayout is returned when a payout is malformed
+	ErrInvalidPayout = errorsmod.Register(ModuleName, 1530, "invalid payout")
+
+	// ErrPayoutNotFound is returned when a payout is not found
+	ErrPayoutNotFound = errorsmod.Register(ModuleName, 1531, "payout not found")
+
+	// ErrPayoutExists is returned when a payout already exists
+	ErrPayoutExists = errorsmod.Register(ModuleName, 1532, "payout already exists")
+
+	// ErrPayoutIdempotent is returned when a payout has already been processed
+	ErrPayoutIdempotent = errorsmod.Register(ModuleName, 1533, "payout already processed (idempotent)")
+
+	// ErrPayoutHeld is returned when a payout is on hold
+	ErrPayoutHeld = errorsmod.Register(ModuleName, 1534, "payout is on hold")
+
+	// ErrDisputeActive is returned when there's an active dispute
+	ErrDisputeActive = errorsmod.Register(ModuleName, 1535, "active dispute prevents payout")
+
+	// ErrInvoiceNotPaid is returned when invoice is not paid
+	ErrInvoiceNotPaid = errorsmod.Register(ModuleName, 1536, "invoice not paid")
+
+	// ErrPayoutExecutionFailed is returned when payout execution fails
+	ErrPayoutExecutionFailed = errorsmod.Register(ModuleName, 1537, "payout execution failed")
 )
