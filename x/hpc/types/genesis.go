@@ -89,6 +89,27 @@ type Params struct {
 
 	// EnableProximityClustering enables proximity-based clustering
 	EnableProximityClustering bool `json:"enable_proximity_clustering"`
+
+	// DefaultDenom is the default denomination for billing (VE-5A)
+	DefaultDenom string `json:"default_denom"`
+
+	// AccountingFinalizationDelaySec is the delay before accounting records are finalized (VE-5A)
+	AccountingFinalizationDelaySec int64 `json:"accounting_finalization_delay_sec"`
+
+	// SettlementDelaySec is the delay after finalization before settlement (VE-5A)
+	SettlementDelaySec int64 `json:"settlement_delay_sec"`
+
+	// PlatformFeeRateBps is the platform fee in basis points (VE-5A)
+	PlatformFeeRateBps uint32 `json:"platform_fee_rate_bps"`
+
+	// UsageSnapshotIntervalSec is the interval for usage snapshots (VE-5A)
+	UsageSnapshotIntervalSec int64 `json:"usage_snapshot_interval_sec"`
+
+	// EnableAutoSettlement enables automatic settlement processing (VE-5A)
+	EnableAutoSettlement bool `json:"enable_auto_settlement"`
+
+	// ReconciliationEnabled enables reconciliation checking (VE-5A)
+	ReconciliationEnabled bool `json:"reconciliation_enabled"`
 }
 
 // DefaultParams returns the default parameters
@@ -108,6 +129,14 @@ func DefaultParams() Params {
 		DisputeResolutionPeriod:   604800,   // 7 days
 		RewardFormulaVersion:      "v1.0.0",
 		EnableProximityClustering: true,
+		// VE-5A: Accounting and settlement parameters
+		DefaultDenom:                   "uvirt",
+		AccountingFinalizationDelaySec: 3600,    // 1 hour
+		SettlementDelaySec:             86400,   // 24 hours
+		PlatformFeeRateBps:             250,     // 2.5%
+		UsageSnapshotIntervalSec:       300,     // 5 minutes
+		EnableAutoSettlement:           true,
+		ReconciliationEnabled:          true,
 	}
 }
 

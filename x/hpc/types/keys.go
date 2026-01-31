@@ -55,6 +55,24 @@ var (
 	// NodeHeartbeatPrefix is the prefix for node heartbeat storage
 	NodeHeartbeatPrefix = []byte{0x12}
 
+	// AccountingRecordPrefix is the prefix for HPC accounting records (VE-5A)
+	AccountingRecordPrefix = []byte{0x13}
+
+	// UsageSnapshotPrefix is the prefix for usage snapshots (VE-5A)
+	UsageSnapshotPrefix = []byte{0x14}
+
+	// ReconciliationPrefix is the prefix for reconciliation records (VE-5A)
+	ReconciliationPrefix = []byte{0x15}
+
+	// AuditTrailPrefix is the prefix for audit trail entries (VE-5A)
+	AuditTrailPrefix = []byte{0x16}
+
+	// BillingRulesPrefix is the prefix for billing rules (VE-5A)
+	BillingRulesPrefix = []byte{0x17}
+
+	// AggregationPrefix is the prefix for accounting aggregations (VE-5A)
+	AggregationPrefix = []byte{0x18}
+
 	// SequenceKeyCluster is the sequence key for clusters
 	SequenceKeyCluster = []byte{0x20}
 
@@ -69,6 +87,21 @@ var (
 
 	// SequenceKeyDispute is the sequence key for disputes
 	SequenceKeyDispute = []byte{0x24}
+
+	// SequenceKeyAccountingRecord is the sequence key for accounting records (VE-5A)
+	SequenceKeyAccountingRecord = []byte{0x25}
+
+	// SequenceKeySnapshot is the sequence key for usage snapshots (VE-5A)
+	SequenceKeySnapshot = []byte{0x26}
+
+	// SequenceKeyReconciliation is the sequence key for reconciliations (VE-5A)
+	SequenceKeyReconciliation = []byte{0x27}
+
+	// SequenceKeyAuditTrail is the sequence key for audit trail entries (VE-5A)
+	SequenceKeyAuditTrail = []byte{0x28}
+
+	// SequenceKeyAggregation is the sequence key for aggregations (VE-5A)
+	SequenceKeyAggregation = []byte{0x29}
 )
 
 // GetClusterKey returns the key for a cluster
@@ -119,4 +152,44 @@ func GetClusterTemplateKey(templateID string) []byte {
 // GetNodeHeartbeatKey returns the key for a node heartbeat
 func GetNodeHeartbeatKey(nodeID string) []byte {
 	return append(NodeHeartbeatPrefix, []byte(nodeID)...)
+}
+
+// GetAccountingRecordKey returns the key for an accounting record (VE-5A)
+func GetAccountingRecordKey(recordID string) []byte {
+	return append(AccountingRecordPrefix, []byte(recordID)...)
+}
+
+// GetUsageSnapshotKey returns the key for a usage snapshot (VE-5A)
+func GetUsageSnapshotKey(snapshotID string) []byte {
+	return append(UsageSnapshotPrefix, []byte(snapshotID)...)
+}
+
+// GetReconciliationKey returns the key for a reconciliation record (VE-5A)
+func GetReconciliationKey(reconciliationID string) []byte {
+	return append(ReconciliationPrefix, []byte(reconciliationID)...)
+}
+
+// GetAuditTrailKey returns the key for an audit trail entry (VE-5A)
+func GetAuditTrailKey(entryID string) []byte {
+	return append(AuditTrailPrefix, []byte(entryID)...)
+}
+
+// GetBillingRulesKey returns the key for billing rules (VE-5A)
+func GetBillingRulesKey(providerAddr string) []byte {
+	return append(BillingRulesPrefix, []byte(providerAddr)...)
+}
+
+// GetAggregationKey returns the key for an aggregation (VE-5A)
+func GetAggregationKey(aggregationID string) []byte {
+	return append(AggregationPrefix, []byte(aggregationID)...)
+}
+
+// GetJobUsageSnapshotsKey returns prefix for all snapshots of a job (VE-5A)
+func GetJobUsageSnapshotsKey(jobID string) []byte {
+	return append(UsageSnapshotPrefix, append([]byte(jobID), '/')...)
+}
+
+// GetJobAccountingRecordsKey returns prefix for all accounting records of a job (VE-5A)
+func GetJobAccountingRecordsKey(jobID string) []byte {
+	return append(AccountingRecordPrefix, append([]byte(jobID), '/')...)
 }
