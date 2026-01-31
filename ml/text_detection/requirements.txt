@@ -2,7 +2,7 @@
 # Pin exact versions for deterministic builds
 
 # Deep Learning Framework
-torch==2.6.0
+torch==2.7.1+cpu
 torchvision==0.21.0
 
 # CRAFT Text Detector
