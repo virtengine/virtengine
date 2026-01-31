@@ -54,6 +54,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr libtesseract-dev
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -71,6 +76,7 @@ jobs:
         run: |
           pytest ml/training/tests/ -v --tb=short --cov=ml/training --cov-report=term-missing
         env:
+          PYTHONPATH: ${{ github.workspace }}
           PYTHONHASHSEED: 42
           TF_DETERMINISTIC_OPS: 1
 
@@ -117,6 +123,8 @@ jobs:
           cache: true
 
       - name: Download dependencies
+        env:
+          GOWORK: off
         run: |
           go mod tidy
           go mod vendor
@@ -340,6 +348,8 @@ jobs:
           cache: true
 
       - name: Download dependencies
+        env:
+          GOWORK: off
         run: |
           go mod tidy
           go mod vendor

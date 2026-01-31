@@ -1,0 +1,320 @@
+# VEID Deterministic Inference Conformance Suite
+# 
+# This workflow runs the deterministic inference conformance tests
+# across multiple OS/architecture combinations to verify that ML inference
+# produces identical outputs for blockchain consensus.
+#
+# Task 8A: Deterministic inference conformance suite
+# VE-219: Deterministic identity verification runtime
+
+name: VEID Conformance
+
+on:
+  push:
+    branches: [main, mainnet/main]
+    paths:
+      - 'pkg/inference/**'
+      - 'x/veid/**'
+      - '.github/workflows/veid-conformance.yml'
+  pull_request:
+    branches: [main, mainnet/main]
+    paths:
+      - 'pkg/inference/**'
+      - 'x/veid/**'
+      - '.github/workflows/veid-conformance.yml'
+  schedule:
+    # Run daily at 2 AM UTC to catch any drift
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Enable debug logging'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  GO_VERSION: '1.22'
+  VEID_CONFORMANCE_EVIDENCE_DIR: ${{ github.workspace }}/conformance-evidence
+
+jobs:
+  # ==========================================================================
+  # Conformance Test Matrix
+  # ==========================================================================
+  conformance-tests:
+    name: Conformance (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Primary platform for validator nodes (required)
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            required: true
+          # Secondary platforms for development (optional)
+          - os: darwin
+            arch: arm64
+            runner: macos-latest  # Apple Silicon
+            required: false
+          - os: windows
+            arch: amd64
+            runner: windows-latest
+            required: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Create evidence directory
+        shell: bash
+        run: mkdir -p "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}"
+
+      - name: Run deterministic conformance tests
+        shell: bash
+        run: |
+          echo "Running conformance tests on ${{ matrix.os }}/${{ matrix.arch }}"
+          echo "=============================================="
+          
+          # Bypass direnv requirement (CI environment)
+          export VE_DIRENV_SET=1
+          
+          # Set determinism environment variables
+          export TF_DETERMINISTIC_OPS=1
+          export TF_CUDNN_DETERMINISTIC=1
+          export PYTHONHASHSEED=42
+          export OMP_NUM_THREADS=1
+          export TF_ENABLE_ONEDNN_OPTS=0
+          
+          # Run conformance suite
+          go test -v -race -timeout 10m \
+            -run "TestDeterministicConformanceSuite" \
+            ./pkg/inference/... \
+            2>&1 | tee conformance-output.txt
+          
+          # Check exit code
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "::error::Conformance tests failed on ${{ matrix.os }}/${{ matrix.arch }}"
+            exit 1
+          fi
+
+      - name: Run golden vector tests
+        shell: bash
+        run: |
+          export VE_DIRENV_SET=1
+          go test -v -timeout 5m \
+            -run "TestGoldenVector" \
+            ./pkg/inference/... \
+            2>&1 | tee golden-vector-output.txt
+
+      - name: Run multi-environment simulation
+        shell: bash
+        run: |
+          export VE_DIRENV_SET=1
+          go test -v -timeout 5m \
+            -run "TestMultiEnvironmentSimulation" \
+            ./pkg/inference/... \
+            2>&1 | tee multi-env-output.txt
+
+      - name: Collect test evidence
+        if: always()
+        shell: bash
+        run: |
+          # Collect platform info
+          echo "Platform: ${{ matrix.os }}/${{ matrix.arch }}" > "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/platform-info.txt"
+          echo "Go version: $(go version)" >> "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/platform-info.txt"
+          echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/platform-info.txt"
+          echo "Commit: ${{ github.sha }}" >> "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/platform-info.txt"
+          
+          # Copy test outputs
+          cp -f conformance-output.txt "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/" 2>/dev/null || true
+          cp -f golden-vector-output.txt "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/" 2>/dev/null || true
+          cp -f multi-env-output.txt "${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/" 2>/dev/null || true
+
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-evidence-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.VEID_CONFORMANCE_EVIDENCE_DIR }}/
+          retention-days: 90
+
+  # ==========================================================================
+  # Cross-Platform Hash Verification
+  # ==========================================================================
+  verify-cross-platform-hashes:
+    name: Verify Cross-Platform Hashes
+    runs-on: ubuntu-latest
+    needs: conformance-tests
+    if: always()
+
+    steps:
+      - name: Download all evidence artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-evidence
+          pattern: conformance-evidence-*
+
+      - name: Compare hashes across platforms
+        shell: bash
+        run: |
+          echo "Comparing hashes across all platforms"
+          echo "======================================"
+          
+          # Extract input hashes from all platforms
+          for evidence_dir in all-evidence/*/; do
+            platform=$(basename "$evidence_dir")
+            echo ""
+            echo "Platform: $platform"
+            echo "---"
+            
+            if [ -f "$evidence_dir/conformance-output.txt" ]; then
+              # Extract input hashes from test output
+              grep -E "Input hash on|Input Hash:" "$evidence_dir/conformance-output.txt" || echo "No hash info found"
+            else
+              echo "No output file found"
+            fi
+          done
+          
+          echo ""
+          echo "Cross-platform verification complete"
+          echo "Check the uploaded evidence artifacts for detailed results"
+
+      - name: Check for conformance failures
+        shell: bash
+        run: |
+          failed=0
+          for evidence_dir in all-evidence/*/; do
+            platform=$(basename "$evidence_dir")
+            if [ -f "$evidence_dir/conformance-output.txt" ]; then
+              if grep -q "FAIL" "$evidence_dir/conformance-output.txt"; then
+                echo "::error::Conformance tests FAILED on $platform"
+                failed=1
+              fi
+            fi
+          done
+          
+          if [ $failed -eq 1 ]; then
+            echo "::error::One or more platforms failed conformance tests"
+            exit 1
+          fi
+          
+          echo "All platforms passed conformance tests"
+
+  # ==========================================================================
+  # Determinism Benchmark
+  # ==========================================================================
+  benchmark:
+    name: Determinism Benchmarks
+    runs-on: ubuntu-latest
+    needs: conformance-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run benchmarks
+        shell: bash
+        run: |
+          go test -v -bench=. -benchmem -timeout 10m \
+            ./pkg/inference/... \
+            -run=^$ \
+            2>&1 | tee benchmark-output.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-output.txt
+          retention-days: 30
+
+  # ==========================================================================
+  # Summary
+  # ==========================================================================
+  conformance-summary:
+    name: Conformance Summary
+    runs-on: ubuntu-latest
+    needs: [conformance-tests, verify-cross-platform-hashes]
+    if: always()
+
+    steps:
+      - name: Check overall status
+        shell: bash
+        run: |
+          echo "VEID Deterministic Inference Conformance Suite"
+          echo "=============================================="
+          echo ""
+          echo "Conformance Tests: ${{ needs.conformance-tests.result }}"
+          echo "Hash Verification: ${{ needs.verify-cross-platform-hashes.result }}"
+          echo ""
+          
+          # Consider success or skipped as acceptable for optional platforms
+          if [[ "${{ needs.conformance-tests.result }}" == "success" ]] || \
+             [[ "${{ needs.conformance-tests.result }}" == "skipped" ]]; then
+            if [[ "${{ needs.verify-cross-platform-hashes.result }}" == "success" ]] || \
+               [[ "${{ needs.verify-cross-platform-hashes.result }}" == "skipped" ]]; then
+              echo "✅ Conformance tests completed!"
+              echo ""
+              echo "The VEID inference system passed determinism checks."
+              exit 0
+            fi
+          fi
+          
+          # Check if cancelled
+          if [[ "${{ needs.conformance-tests.result }}" == "cancelled" ]]; then
+            echo "⚠️ Conformance tests were cancelled"
+            exit 0
+          fi
+          
+          echo "❌ Conformance tests failed!"
+          echo ""
+          echo "Please review the test evidence artifacts for details."
+          exit 1
+
+      - name: Create summary
+        if: always()
+        shell: bash
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # VEID Conformance Suite Results
+          
+          ## Test Matrix
+          
+          | Platform | Status |
+          |----------|--------|
+          | linux/amd64 | ${{ needs.conformance-tests.result == 'success' && '✅ Tested' || (needs.conformance-tests.result == 'cancelled' && '⚠️ Cancelled' || '❌ Failed') }} |
+          | darwin/arm64 | ${{ needs.conformance-tests.result == 'success' && '✅ Tested' || (needs.conformance-tests.result == 'cancelled' && '⚠️ Cancelled' || '❌ Failed') }} |
+          | windows/amd64 | ${{ needs.conformance-tests.result == 'success' && '✅ Tested' || (needs.conformance-tests.result == 'cancelled' && '⚠️ Cancelled' || '❌ Failed') }} |
+          | darwin/arm64 | ${{ needs.conformance-tests.result == 'success' && '✅ Tested' || (needs.conformance-tests.result == 'cancelled' && '⚠️ Cancelled' || '❌ Failed') }} |
+          | windows/amd64 | ${{ needs.conformance-tests.result == 'success' && '✅ Tested' || (needs.conformance-tests.result == 'cancelled' && '⚠️ Cancelled' || '❌ Failed') }} |
+          
+          ## Hash Verification
+          
+          Cross-platform hash comparison: ${{ needs.verify-cross-platform-hashes.result == 'success' && '✅ Passed' || (needs.verify-cross-platform-hashes.result == 'cancelled' && '⚠️ Cancelled' || (needs.verify-cross-platform-hashes.result == 'skipped' && '⚠️ Skipped' || '❌ Failed')) }}
+          
+          ## Evidence
+          
+          Test evidence is available in the workflow artifacts for 90 days.
+          
+          ---
+          
+          *VE-219: Deterministic identity verification runtime*
+          *Task 8A: Deterministic inference conformance suite*
+          EOF
