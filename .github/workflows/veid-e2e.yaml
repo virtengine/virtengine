@@ -27,6 +27,9 @@ on:
         default: 'false'
         type: boolean
 
+permissions:
+  contents: read
+
 concurrency:
   group: veid-e2e-${{ github.ref }}
   cancel-in-progress: true
