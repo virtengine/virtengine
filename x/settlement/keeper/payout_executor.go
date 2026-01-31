@@ -212,6 +212,30 @@ func (k Keeper) WithPayouts(ctx sdk.Context, fn func(types.PayoutRecord) bool) {
 	}
 }
 
+// WithPayoutsByState iterates over payouts filtered by state
+func (k Keeper) WithPayoutsByState(ctx sdk.Context, state types.PayoutState, fn func(types.PayoutRecord) bool) {
+	store := ctx.KVStore(k.skey)
+	iter := storetypes.KVStorePrefixIterator(store, types.PayoutByStatePrefixKey(state))
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		// The key contains the payout ID after the state prefix
+		key := iter.Key()
+		statePrefix := types.PayoutByStatePrefixKey(state)
+		if len(key) <= len(statePrefix) {
+			continue
+		}
+		payoutID := string(key[len(statePrefix):])
+		payout, found := k.GetPayout(ctx, payoutID)
+		if !found {
+			continue
+		}
+		if fn(payout) {
+			break
+		}
+	}
+}
+
 // updatePayoutState updates the state index for a payout
 func (k Keeper) updatePayoutState(ctx sdk.Context, payout types.PayoutRecord, oldState types.PayoutState) {
 	store := ctx.KVStore(k.skey)
@@ -228,7 +252,7 @@ func (k Keeper) updatePayoutState(ctx sdk.Context, payout types.PayoutRecord, ol
 // ============================================================================
 
 // ExecutePayout executes a payout for a settlement/invoice
-func (k Keeper) ExecutePayout(ctx sdk.Context, settlementID string, invoiceID string) (*types.PayoutRecord, error) {
+func (k Keeper) ExecutePayout(ctx sdk.Context, invoiceID string, settlementID string) (*types.PayoutRecord, error) {
 	// Check idempotency
 	idempotencyKey := fmt.Sprintf("payout-%s-%s", invoiceID, settlementID)
 	if existingPayoutID := k.checkPayoutIdempotency(ctx, idempotencyKey); existingPayoutID != "" {
