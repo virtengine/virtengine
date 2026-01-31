@@ -95,6 +95,9 @@ func ComputeOverallScore(vp *stakingv1.ValidatorPerformance) int64 {
 		veidScore*WeightVEIDVerification +
 		uptimeScore*WeightUptime) / TotalWeight
 
+	// Store the computed score in the struct
+	vp.OverallScore = overallScore
+
 	return overallScore
 }
 

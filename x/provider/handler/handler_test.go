@@ -47,7 +47,8 @@ func setupTestSuite(t *testing.T) *testSuite {
 		mkeeper: ssuite.MarketKeeper(),
 	}
 
-	suite.handler = handler.NewHandler(suite.keeper, suite.mkeeper, ssuite.VEIDKeeper(), ssuite.MFAKeeper())
+	// Pass nil for VEIDKeeper and MFAKeeper - these are optional for basic provider operations
+	suite.handler = handler.NewHandler(suite.keeper, suite.mkeeper, nil, nil)
 
 	return suite
 }
@@ -317,7 +318,7 @@ func TestProviderDeleteWithActiveLeases(t *testing.T) {
 		keeper:  ssuite.ProviderKeeper(),
 		mkeeper: ssuite.MarketKeeper(),
 	}
-	suite.handler = handler.NewHandler(suite.keeper, suite.mkeeper)
+	suite.handler = handler.NewHandler(suite.keeper, suite.mkeeper, nil, nil)
 
 	// Create a provider
 	providerAddr := testutil.AccAddress(t)

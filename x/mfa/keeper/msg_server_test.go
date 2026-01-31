@@ -19,6 +19,20 @@ import (
 	"github.com/virtengine/virtengine/x/mfa/types"
 )
 
+// mockVEIDKeeper implements keeper.VEIDKeeper for testing
+type mockVEIDKeeper struct{}
+
+func (m *mockVEIDKeeper) GetVEIDScore(_ sdk.Context, _ sdk.AccAddress) (uint32, bool) {
+	return 0, false
+}
+
+// mockRolesKeeper implements keeper.RolesKeeper for testing
+type mockRolesKeeper struct{}
+
+func (m *mockRolesKeeper) IsAccountOperational(_ sdk.Context, _ sdk.AccAddress) bool {
+	return true
+}
+
 type MsgServerTestSuite struct {
 	suite.Suite
 	ctx       sdk.Context
@@ -38,7 +52,7 @@ func (s *MsgServerTestSuite) SetupTest() {
 
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 	s.ctx = s.createContextWithStore(storeKey)
-	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority")
+	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority", &mockVEIDKeeper{}, &mockRolesKeeper{})
 	s.msgServer = keeper.NewMsgServerWithContext(s.keeper)
 
 	// Set default params
@@ -72,7 +86,10 @@ func (s *MsgServerTestSuite) TestEnrollFactor_Success() {
 		PublicIdentifier: []byte("totp-secret-key"),
 		Label:            "My Authenticator",
 		Metadata: &types.FactorMetadata{
-			DeviceName: "iPhone 15",
+			DeviceInfo: &types.DeviceInfo{
+				Fingerprint: "iphone15-fp",
+				UserAgent:   "iPhone 15",
+			},
 		},
 	}
 
@@ -295,7 +312,7 @@ func (s *MsgServerTestSuite) TestCreateChallenge_Success() {
 	msg := &types.MsgCreateChallenge{
 		Sender:          address.String(),
 		FactorType:      types.FactorTypeTOTP,
-		TransactionType: types.SensitiveTransactionTypeProviderWithdrawal,
+		TransactionType: types.SensitiveTxLargeWithdrawal,
 		ClientInfo: &types.ClientInfo{
 			DeviceFingerprint: "test-device-fp",
 			UserAgent:         "test-agent",
@@ -317,7 +334,7 @@ func (s *MsgServerTestSuite) TestCreateChallenge_NoActiveFactor() {
 	msg := &types.MsgCreateChallenge{
 		Sender:          address.String(),
 		FactorType:      types.FactorTypeTOTP,
-		TransactionType: types.SensitiveTransactionTypeProviderWithdrawal,
+		TransactionType: types.SensitiveTxLargeWithdrawal,
 	}
 
 	_, err := s.msgServer.CreateChallenge(sdk.WrapSDKContext(s.ctx), msg)
@@ -354,9 +371,9 @@ func (s *MsgServerTestSuite) TestAddTrustedDevice_Success() {
 
 	msg := &types.MsgAddTrustedDevice{
 		Sender: address.String(),
-		DeviceInfo: types.TrustedDeviceInfo{
-			DeviceName:  "My iPhone",
-			DeviceModel: "iPhone 15",
+		DeviceInfo: types.DeviceInfo{
+			Fingerprint: "my-iphone-fp",
+			UserAgent:   "iPhone 15",
 		},
 		MFAProof: &types.MFAProof{
 			SessionID: "session-for-device",
@@ -374,10 +391,9 @@ func (s *MsgServerTestSuite) TestRemoveTrustedDevice_Success() {
 	address := sdk.AccAddress([]byte("test-remove-device"))
 
 	// Add a trusted device first
-	deviceInfo := &types.TrustedDeviceInfo{
-		DeviceFingerprint: "device-to-remove",
-		DeviceName:        "Old Device",
-		TrustExpiresAt:    s.ctx.BlockTime().Unix() + 86400,
+	deviceInfo := &types.DeviceInfo{
+		Fingerprint: "device-to-remove",
+		UserAgent:   "Old Device",
 	}
 	err := s.keeper.AddTrustedDevice(s.ctx, address, deviceInfo)
 	s.Require().NoError(err)
@@ -396,7 +412,7 @@ func (s *MsgServerTestSuite) TestRemoveTrustedDevice_Success() {
 	devices := s.keeper.GetTrustedDevices(s.ctx, address)
 	found := false
 	for _, d := range devices {
-		if d.DeviceInfo.DeviceFingerprint == "device-to-remove" {
+		if d.DeviceInfo.Fingerprint == "device-to-remove" {
 			found = true
 		}
 	}
@@ -408,7 +424,7 @@ func (s *MsgServerTestSuite) TestUpdateSensitiveTxConfig_Success() {
 	msg := &types.MsgUpdateSensitiveTxConfig{
 		Authority: "authority",
 		Config: types.SensitiveTxConfig{
-			TransactionType: types.SensitiveTransactionTypeProviderWithdrawal,
+			TransactionType: types.SensitiveTxLargeWithdrawal,
 			Enabled:         true,
 			Description:     "Provider withdrawals require MFA",
 			RequiredFactorCombinations: []types.FactorCombination{
@@ -428,7 +444,7 @@ func (s *MsgServerTestSuite) TestUpdateSensitiveTxConfig_Unauthorized() {
 	msg := &types.MsgUpdateSensitiveTxConfig{
 		Authority: "wrong-authority",
 		Config: types.SensitiveTxConfig{
-			TransactionType: types.SensitiveTransactionTypeProviderWithdrawal,
+			TransactionType: types.SensitiveTxLargeWithdrawal,
 			Enabled:         true,
 		},
 	}

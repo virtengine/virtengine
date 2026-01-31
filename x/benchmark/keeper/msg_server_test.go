@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
+	benchmarkv1 "github.com/virtengine/virtengine/sdk/go/node/benchmark/v1"
 	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
@@ -142,6 +144,19 @@ func createMsgServerTestReport(t *testing.T, providerAddr string, pub ed25519.Pu
 	return report
 }
 
+// convertReportsToResults converts BenchmarkReport to BenchmarkResult for msg testing
+func convertReportsToResults(reports []types.BenchmarkReport) []benchmarkv1.BenchmarkResult {
+	results := make([]benchmarkv1.BenchmarkResult, len(reports))
+	for i, r := range reports {
+		results[i] = benchmarkv1.BenchmarkResult{
+			BenchmarkType: "compute",
+			Score:         fmt.Sprintf("%d", r.SummaryScore),
+			Timestamp:     r.Timestamp.Unix(),
+		}
+	}
+	return results
+}
+
 func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 	msgServer, k, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
@@ -159,8 +174,10 @@ func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 		report.ReportID = "valid-submission-1"
 		signMsgServerTestReport(t, &report, priv)
 		msg := &types.MsgSubmitBenchmarks{
-			ProviderAddress: providerAddr,
-			Reports:         []types.BenchmarkReport{report},
+			Provider:  providerAddr,
+			ClusterId: "test-cluster-1",
+			Results:   convertReportsToResults([]types.BenchmarkReport{report}),
+			Signature: []byte(report.Signature),
 		}
 		_, err := msgServer.SubmitBenchmarks(ctx, msg)
 		require.NoError(t, err)
@@ -168,8 +185,8 @@ func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 
 	t.Run("invalid provider address", func(t *testing.T) {
 		msg := &types.MsgSubmitBenchmarks{
-			ProviderAddress: "invalid",
-			Reports:         []types.BenchmarkReport{},
+			Provider: "invalid",
+			Results:  []benchmarkv1.BenchmarkResult{},
 		}
 		_, err := msgServer.SubmitBenchmarks(ctx, msg)
 		require.Error(t, err)
@@ -192,8 +209,10 @@ func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 		report.ReportID = "flagged-submission-1"
 		signMsgServerTestReport(t, &report, priv)
 		msg := &types.MsgSubmitBenchmarks{
-			ProviderAddress: providerAddr,
-			Reports:         []types.BenchmarkReport{report},
+			Provider:  providerAddr,
+			ClusterId: "test-cluster-1",
+			Results:   convertReportsToResults([]types.BenchmarkReport{report}),
+			Signature: []byte(report.Signature),
 		}
 		_, err = msgServer.SubmitBenchmarks(ctx, msg)
 		require.Error(t, err)
@@ -224,22 +243,18 @@ func TestMsgServer_RequestChallenge(t *testing.T) {
 		{
 			name: "valid challenge request",
 			msg: &types.MsgRequestChallenge{
-				Requester:       requesterAddr,
-				ProviderAddress: providerAddr,
-				ClusterID:       "cluster-1",
-				SuiteVersion:    "1.0.0",
-				DeadlineSeconds: 3600, // 1 hour
+				Requester:     requesterAddr,
+				Provider:      providerAddr,
+				BenchmarkType: "compute",
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid requester address",
 			msg: &types.MsgRequestChallenge{
-				Requester:       "invalid",
-				ProviderAddress: providerAddr,
-				ClusterID:       "cluster-1",
-				SuiteVersion:    "1.0.0",
-				DeadlineSeconds: 3600,
+				Requester:     "invalid",
+				Provider:      providerAddr,
+				BenchmarkType: "compute",
 			},
 			wantErr: true,
 			errMsg:  "invalid requester address",
@@ -247,11 +262,9 @@ func TestMsgServer_RequestChallenge(t *testing.T) {
 		{
 			name: "invalid provider address",
 			msg: &types.MsgRequestChallenge{
-				Requester:       requesterAddr,
-				ProviderAddress: "invalid",
-				ClusterID:       "cluster-1",
-				SuiteVersion:    "1.0.0",
-				DeadlineSeconds: 3600,
+				Requester:     requesterAddr,
+				Provider:      "invalid",
+				BenchmarkType: "compute",
 			},
 			wantErr: true,
 			errMsg:  "invalid provider address",
@@ -269,7 +282,7 @@ func TestMsgServer_RequestChallenge(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, resp)
-				require.NotEmpty(t, resp.ChallengeID)
+				require.NotEmpty(t, resp.ChallengeId)
 			}
 		})
 	}
@@ -295,18 +308,18 @@ func TestMsgServer_FlagProvider(t *testing.T) {
 		{
 			name: "valid flag",
 			msg: &types.MsgFlagProvider{
-				Moderator:       moderatorAddr,
-				ProviderAddress: providerAddr,
-				Reason:          "Performance issues detected",
+				Reporter: moderatorAddr,
+				Provider: providerAddr,
+				Reason:   "Performance issues detected",
 			},
 			wantErr: false,
 		},
 		{
-			name: "invalid moderator address",
+			name: "invalid reporter address",
 			msg: &types.MsgFlagProvider{
-				Moderator:       "invalid",
-				ProviderAddress: providerAddr,
-				Reason:          "test",
+				Reporter: "invalid",
+				Provider: providerAddr,
+				Reason:   "test",
 			},
 			wantErr: true,
 			errMsg:  "invalid moderator address",
@@ -314,9 +327,9 @@ func TestMsgServer_FlagProvider(t *testing.T) {
 		{
 			name: "non-moderator",
 			msg: &types.MsgFlagProvider{
-				Moderator:       "cosmos1w3jhxap3gempvr46xzaqf7ajj5drrjqcpd8n8g",
-				ProviderAddress: providerAddr,
-				Reason:          "test",
+				Reporter: "cosmos1w3jhxap3gempvr46xzaqf7ajj5drrjqcpd8n8g",
+				Provider: providerAddr,
+				Reason:   "test",
 			},
 			wantErr: true,
 			errMsg:  "unauthorized",
@@ -369,16 +382,16 @@ func TestMsgServer_UnflagProvider(t *testing.T) {
 		{
 			name: "valid unflag",
 			msg: &types.MsgUnflagProvider{
-				Moderator:       moderatorAddr,
-				ProviderAddress: providerAddr,
+				Authority: moderatorAddr,
+				Provider:  providerAddr,
 			},
 			wantErr: false,
 		},
 		{
-			name: "invalid moderator address",
+			name: "invalid authority address",
 			msg: &types.MsgUnflagProvider{
-				Moderator:       "invalid",
-				ProviderAddress: providerAddr,
+				Authority: "invalid",
+				Provider:  providerAddr,
 			},
 			wantErr: true,
 			errMsg:  "invalid moderator address",
@@ -428,27 +441,27 @@ func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 		{
 			name: "valid resolution",
 			msg: &types.MsgResolveAnomalyFlag{
-				Moderator:  moderatorAddr,
-				FlagID:     "anomaly-1",
+				Authority:  moderatorAddr,
+				Provider:   "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
 				Resolution: "Issue investigated and resolved",
 			},
 			wantErr: false,
 		},
 		{
-			name: "invalid moderator address",
+			name: "invalid authority address",
 			msg: &types.MsgResolveAnomalyFlag{
-				Moderator:  "invalid",
-				FlagID:     "anomaly-1",
+				Authority:  "invalid",
+				Provider:   "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
 				Resolution: "test",
 			},
 			wantErr: true,
 			errMsg:  "invalid moderator address",
 		},
 		{
-			name: "non-existent flag",
+			name: "non-existent provider",
 			msg: &types.MsgResolveAnomalyFlag{
-				Moderator:  moderatorAddr,
-				FlagID:     "non-existent",
+				Authority:  moderatorAddr,
+				Provider:   "cosmos1nonexistent",
 				Resolution: "test",
 			},
 			wantErr: true,

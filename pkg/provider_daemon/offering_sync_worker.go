@@ -873,14 +873,27 @@ func (w *OfferingSyncWorker) QueueSync(offeringID string, action SyncAction, off
 	}
 }
 
-// Metrics returns current worker metrics.
+// Metrics returns a snapshot of current worker metrics.
 func (w *OfferingSyncWorker) Metrics() OfferingSyncWorkerMetrics {
 	w.metrics.mu.RLock()
 	defer w.metrics.mu.RUnlock()
 
-	m := *w.metrics
-	m.QueueDepth = len(w.syncQueue)
-	return m
+	return OfferingSyncWorkerMetrics{
+		SyncsTotal:          w.metrics.SyncsTotal,
+		SyncsSuccessful:     w.metrics.SyncsSuccessful,
+		SyncsFailed:         w.metrics.SyncsFailed,
+		SyncsDeadLettered:   w.metrics.SyncsDeadLettered,
+		DriftDetections:     w.metrics.DriftDetections,
+		ReconciliationsRun:  w.metrics.ReconciliationsRun,
+		LastSyncTime:        w.metrics.LastSyncTime,
+		LastSuccessTime:     w.metrics.LastSuccessTime,
+		LastReconcileTime:   w.metrics.LastReconcileTime,
+		WorkerUptime:        w.metrics.WorkerUptime,
+		EventsReceived:      w.metrics.EventsReceived,
+		EventsProcessed:     w.metrics.EventsProcessed,
+		QueueDepth:          len(w.syncQueue),
+		AverageSyncDuration: w.metrics.AverageSyncDuration,
+	}
 }
 
 // State returns the current sync state.

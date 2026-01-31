@@ -60,3 +60,9 @@ type MsgUpdateScoreResponse = veidv1.MsgUpdateScoreResponse
 
 // EncryptedPayloadEnvelope is the encrypted payload type from proto
 type EncryptedPayloadEnvelope = veidv1.EncryptedPayloadEnvelope
+
+// MsgUpdateParams is the message for updating module params
+type MsgUpdateParams = veidv1.MsgUpdateParams
+
+// MsgUpdateParamsResponse is the response for MsgUpdateParams
+type MsgUpdateParamsResponse = veidv1.MsgUpdateParamsResponse

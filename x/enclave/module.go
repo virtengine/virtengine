@@ -55,9 +55,13 @@ func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) 
 
 // DefaultGenesis returns default genesis state as raw bytes for the enclave module.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	// Use standard JSON encoding for stub types until proper protobuf generation
+	// Use standard JSON encoding for stub types since they don't have proper proto marshaling
 	defaultGenesis := types.DefaultGenesisState()
-	return cdc.MustMarshalJSON(defaultGenesis)
+	bz, err := json.Marshal(defaultGenesis)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal default genesis state: %v", err))
+	}
+	return bz
 }
 
 // ValidateGenesis performs genesis state validation for the enclave module.
@@ -65,9 +69,9 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 	if bz == nil {
 		return nil
 	}
-	// Use standard JSON decoding for stub types until proper protobuf generation
+	// Use standard JSON decoding for stub types since they don't have proper proto marshaling
 	var data types.GenesisState
-	if err := cdc.UnmarshalJSON(bz, &data); err != nil {
+	if err := json.Unmarshal(bz, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %v", types.ModuleName, err)
 	}
 
@@ -132,9 +136,9 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 
 // InitGenesis performs genesis initialization for the enclave module.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
-	// Use standard JSON decoding for stub types until proper protobuf generation
+	// Use standard JSON decoding for stub types since they don't have proper proto marshaling
 	var genesisState types.GenesisState
-	if err := cdc.UnmarshalJSON(data, &genesisState); err != nil {
+	if err := json.Unmarshal(data, &genesisState); err != nil {
 		panic(fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err))
 	}
 	InitGenesis(ctx, am.keeper, &genesisState)
@@ -142,9 +146,13 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 
 // ExportGenesis returns the exported genesis state as raw bytes for the enclave module.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
+	// Use standard JSON encoding for stub types since they don't have proper proto marshaling
 	gs := ExportGenesis(ctx, am.keeper)
-	// Use standard JSON encoding for stub types until proper protobuf generation
-	return cdc.MustMarshalJSON(gs)
+	bz, err := json.Marshal(gs)
+	if err != nil {
+		panic(fmt.Errorf("failed to marshal %s genesis state: %w", types.ModuleName, err))
+	}
+	return bz
 }
 
 // BeginBlock performs begin block logic for the enclave module
@@ -185,5 +193,3 @@ func RegisterMsgServer(s grpc.Server, srv types.MsgServer) {
 func RegisterQueryServer(s grpc.Server, srv types.QueryServer) {
 	// This would be implemented with protobuf-generated code in production
 }
-
-

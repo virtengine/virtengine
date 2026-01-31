@@ -5,7 +5,6 @@ import (
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
-	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 
 	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 )
@@ -33,11 +32,12 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&v1.MsgRevokeMeasurement{},
 		&v1.MsgUpdateParams{},
 	)
-	registry.RegisterImplementations(
-		(*govv1beta1.Content)(nil),
-		&AddMeasurementProposal{},
-		&RevokeMeasurementProposal{},
-	)
+
+	// Note: AddMeasurementProposal and RevokeMeasurementProposal are not registered
+	// with RegisterImplementations because they are not proper protobuf types.
+	// They are registered with legacy amino codec which is sufficient for
+	// governance proposal handling. Registering them here would cause a
+	// duplicate typeURL error since they lack proper protobuf message names.
 
 	msgservice.RegisterMsgServiceDesc(registry, &v1.Msg_serviceDesc)
 }

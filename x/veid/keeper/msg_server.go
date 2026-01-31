@@ -609,6 +609,37 @@ func NewMsgServerWithContext(k Keeper) MsgServerWithContext {
 	}
 }
 
+// UpdateParams updates the module parameters.
+// Only the authority (typically governance) can execute this message.
+func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Check authority
+	if msg.Authority != ms.keeper.authority {
+		return nil, types.ErrUnauthorized.Wrapf("invalid authority: expected %s, got %s", ms.keeper.authority, msg.Authority)
+	}
+
+	// Convert proto params to local params
+	localParams := types.Params{
+		MaxScopesPerAccount:    msg.Params.MaxScopesPerAccount,
+		MaxScopesPerType:       msg.Params.MaxScopesPerType,
+		SaltMinBytes:           msg.Params.SaltMinBytes,
+		SaltMaxBytes:           msg.Params.SaltMaxBytes,
+		RequireClientSignature: msg.Params.RequireClientSignature,
+		RequireUserSignature:   msg.Params.RequireUserSignature,
+		VerificationExpiryDays: msg.Params.VerificationExpiryDays,
+		// Keep existing MinScoreForTier from current params
+		MinScoreForTier: ms.keeper.GetParams(ctx).MinScoreForTier,
+	}
+
+	// Set the new params
+	if err := ms.keeper.SetParams(ctx, localParams); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateParamsResponse{}, nil
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================

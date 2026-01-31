@@ -85,6 +85,17 @@ func (p Params) Validate() error {
 	return nil
 }
 
+// ProtoMessage implements proto.Message for Params
+func (*Params) ProtoMessage() {}
+
+// Reset implements proto.Message for Params
+func (p *Params) Reset() { *p = Params{} }
+
+// String implements proto.Message for Params
+func (p *Params) String() string {
+	return fmt.Sprintf("%+v", *p)
+}
+
 // ProtoMessage implements proto.Message
 func (*GenesisState) ProtoMessage() {}
 

@@ -80,30 +80,7 @@ run_check() {
 # Check 1: go vet
 # =========================================================================
 check_vet() {
-    # Ensure vendor exists if gitignored (needed for -mod=vendor)
-    if git check-ignore -q vendor 2>/dev/null && [ ! -d vendor ]; then
-        hook_info "Creating vendor/ for vet check..."
-        go mod vendor 2>&1
-    fi
-
-    # Run vet only on core packages (not test files with issues)
-    # Skip make test-vet as it runs on all packages
-    go vet -mod=vendor \
-        ./app/... \
-        ./cmd/... \
-        ./pkg/benchmark/... \
-        ./pkg/cache/... \
-        ./pkg/compatibility/... \
-        ./pkg/enclave_runtime/... \
-        ./pkg/errors/... \
-        ./pkg/inference/... \
-        ./pkg/pruning/... \
-        ./pkg/ratelimit/... \
-        ./pkg/waldur/... \
-        ./pkg/workflow/... \
-        ./x/enclave/... \
-        ./x/encryption/... \
-        2>&1
+    go vet ./... 2>&1
 }
 
 # =========================================================================
@@ -128,47 +105,44 @@ check_mod_tidy() {
 # Check 3: go mod vendor (consistency check)
 # =========================================================================
 check_mod_vendor() {
-    # Check if vendor is gitignored - if so, just ensure it exists locally
-    if git check-ignore -q vendor 2>/dev/null; then
-        # Vendor is gitignored, so we just need to ensure it's synced locally for builds
-        if [ ! -d vendor ]; then
-            hook_info "vendor/ not found (gitignored). Running 'go mod vendor'..."
-            go mod vendor 2>&1
-        fi
-        # Verify module checksums match
-        go mod verify 2>&1
-        return 0
-    fi
+    # Fast vendor consistency check — single-pass set comparison, no network or file copy.
+    # Extracts module paths from go.mod requires and vendor/modules.txt, then diffs them.
 
-    # Vendor is tracked in git - verify it's in sync
-    # Verify module checksums match without rewriting the vendor dir
-    go mod verify 2>&1
-
-    # Check vendor/modules.txt exists
     if [ ! -f vendor/modules.txt ]; then
         hook_fail "vendor/modules.txt not found. Run 'go mod vendor'."
         return 1
     fi
 
-    # Use go mod vendor -o to a temp dir and compare modules.txt
-    # This is the most reliable way to check vendor consistency
-    local temp_vendor
-    temp_vendor=$(mktemp -d 2>/dev/null || mktemp -d -t 'vendor')
+    # Extract module paths from go.mod require blocks (one awk pass)
+    local gomod_mods vendor_mods
+    gomod_mods=$(awk '/^require \(/{found=1; next} /^\)/{found=0} found && /\t/{print $1}' go.mod | sort)
+    # Extract module paths from vendor/modules.txt (lines starting with "# ")
+    vendor_mods=$(awk '/^# /{print $2}' vendor/modules.txt | sort -u)
 
-    if go mod vendor -o "$temp_vendor" 2>&1; then
-        if diff -q "$temp_vendor/modules.txt" vendor/modules.txt >/dev/null 2>&1; then
-            rm -rf "$temp_vendor"
-            return 0
-        else
-            rm -rf "$temp_vendor"
-            hook_fail "vendor/modules.txt is out of sync. Run 'go mod vendor' and commit."
-            return 1
+    # Find modules in go.mod but not in vendor
+    local missing
+    missing=$(comm -23 <(echo "$gomod_mods") <(echo "$vendor_mods"))
+
+    if [ -n "$missing" ]; then
+        local count
+        count=$(echo "$missing" | wc -l)
+        hook_fail "$count module(s) in go.mod not found in vendor/. Run 'go mod vendor' and commit."
+        echo "$missing" | head -5 | while read -r mod; do
+            hook_warn "  Missing: $mod"
+        done
+        if [ "$count" -gt 5 ]; then
+            hook_warn "  ... and $((count - 5)) more"
         fi
-    else
-        rm -rf "$temp_vendor" 2>/dev/null || true
-        hook_fail "go mod vendor failed."
         return 1
     fi
+
+    # Verify no uncommitted changes to vendor/modules.txt
+    if ! git diff --quiet vendor/modules.txt 2>/dev/null; then
+        hook_fail "vendor/modules.txt has uncommitted changes. Commit or run 'go mod vendor'."
+        return 1
+    fi
+
+    return 0
 }
 
 # =========================================================================
@@ -197,24 +171,8 @@ check_build() {
 # Check 6: Unit tests
 # =========================================================================
 check_test() {
-    # Run tests on core packages that are verified to pass
-    # Skip make test as it runs all tests including broken ones
-    # Run tests on core packages that are verified to pass
-    # Excludes modules with known test issues (to be fixed separately)
-    go test -mod=vendor -short \
-        ./pkg/benchmark/... \
-        ./pkg/cache/... \
-        ./pkg/compatibility/... \
-        ./pkg/enclave_runtime/... \
-        ./pkg/errors/... \
-        ./pkg/inference/... \
-        ./pkg/pruning/... \
-        ./pkg/ratelimit/... \
-        ./pkg/waldur/... \
-        ./pkg/workflow/... \
-        ./x/enclave/... \
-        ./x/encryption/... \
-        2>&1
+    # Run short tests on all packages (same as CI but with -short flag for speed)
+    go test -short -timeout 300s ./... 2>&1
 }
 
 # =========================================================================

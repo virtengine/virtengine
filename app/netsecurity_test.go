@@ -320,8 +320,8 @@ func TestSybilProtector(t *testing.T) {
 
 	t.Run("diversity score calculation", func(t *testing.T) {
 		score := protector.GetDiversityScore()
-		assert.GreaterOrEqual(t, score, float64(0))
-		assert.LessOrEqual(t, score, float64(100))
+		assert.True(t, score >= 0, "score should be >= 0")
+		assert.True(t, score <= 100, "score should be <= 100")
 	})
 }
 

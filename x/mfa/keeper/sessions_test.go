@@ -233,11 +233,11 @@ func TestCreateAuthSessionForAction(t *testing.T) {
 			maxDuration:  5 * 60,
 		},
 		{
-			name:         "High - ProviderRegistration (15 min)",
+			name:         "Medium - ProviderRegistration (30 min)",
 			action:       types.SensitiveTxProviderRegistration,
 			expectSingle: false,
-			minDuration:  14 * 60,
-			maxDuration:  16 * 60,
+			minDuration:  29 * 60,
+			maxDuration:  31 * 60,
 		},
 		{
 			name:         "High - LargeWithdrawal (15 min)",
@@ -430,7 +430,7 @@ func TestGetSessionDurationForAction(t *testing.T) {
 	}{
 		{types.SensitiveTxAccountRecovery, 0},            // Critical - single use
 		{types.SensitiveTxKeyRotation, 0},                // Critical - single use
-		{types.SensitiveTxProviderRegistration, 15 * 60}, // High - 15 min
+		{types.SensitiveTxProviderRegistration, 30 * 60}, // Medium - 30 min
 		{types.SensitiveTxLargeWithdrawal, 15 * 60},      // High - 15 min
 		{types.SensitiveTxHighValueOrder, 30 * 60},       // Medium - 30 min
 		{types.SensitiveTxMediumWithdrawal, 60 * 60},     // Low - 60 min

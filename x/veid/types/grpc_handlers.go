@@ -44,7 +44,8 @@ var _Msg_serviceDesc = struct {
 	Metadata: "virtengine/veid/v1/msg.proto",
 }
 
-// MsgServer is the interface for the message server
+// MsgServer is the interface for the message server.
+// This must match the methods in the SDK proto for proper registration.
 type MsgServer interface {
 	UploadScope(ctx context.Context, msg *MsgUploadScope) (*MsgUploadScopeResponse, error)
 	RevokeScope(ctx context.Context, msg *MsgRevokeScope) (*MsgRevokeScopeResponse, error)
@@ -61,11 +62,8 @@ type MsgServer interface {
 	// Borderline fallback operations
 	CompleteBorderlineFallback(ctx context.Context, msg *MsgCompleteBorderlineFallback) (*MsgCompleteBorderlineFallbackResponse, error)
 	UpdateBorderlineParams(ctx context.Context, msg *MsgUpdateBorderlineParams) (*MsgUpdateBorderlineParamsResponse, error)
-	// Appeal operations (VE-3020)
-	SubmitAppeal(ctx context.Context, msg *MsgSubmitAppeal) (*MsgSubmitAppealResponse, error)
-	ClaimAppeal(ctx context.Context, msg *MsgClaimAppeal) (*MsgClaimAppealResponse, error)
-	ResolveAppeal(ctx context.Context, msg *MsgResolveAppeal) (*MsgResolveAppealResponse, error)
-	WithdrawAppeal(ctx context.Context, msg *MsgWithdrawAppeal) (*MsgWithdrawAppealResponse, error)
+	// Params (from SDK proto)
+	UpdateParams(ctx context.Context, msg *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }
 
 // RegisterMsgServer registers the MsgServer implementation with the grpc.Server.
@@ -74,6 +72,7 @@ func RegisterMsgServer(s grpc.Server, srv MsgServer) {
 }
 
 // _Msg_serviceDesc_grpc is the proper grpc.ServiceDesc for Msg service.
+// This must match the methods in the SDK proto exactly.
 var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 	ServiceName: "virtengine.veid.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
@@ -91,11 +90,7 @@ var _Msg_serviceDesc_grpc = ggrpc.ServiceDesc{
 		{MethodName: "UpdateDerivedFeatures", Handler: _Msg_UpdateDerivedFeatures_Handler},
 		{MethodName: "CompleteBorderlineFallback", Handler: _Msg_CompleteBorderlineFallback_Handler},
 		{MethodName: "UpdateBorderlineParams", Handler: _Msg_UpdateBorderlineParams_Handler},
-		// Appeal operations (VE-3020)
-		{MethodName: "SubmitAppeal", Handler: _Msg_SubmitAppeal_Handler},
-		{MethodName: "ClaimAppeal", Handler: _Msg_ClaimAppeal_Handler},
-		{MethodName: "ResolveAppeal", Handler: _Msg_ResolveAppeal_Handler},
-		{MethodName: "WithdrawAppeal", Handler: _Msg_WithdrawAppeal_Handler},
+		{MethodName: "UpdateParams", Handler: _Msg_UpdateParams_Handler},
 	},
 	Streams:  []ggrpc.StreamDesc{},
 	Metadata: "virtengine/veid/v1/msg.proto",
@@ -283,63 +278,17 @@ func _Msg_UpdateBorderlineParams_Handler(srv interface{}, ctx context.Context, d
 	})
 }
 
-// ============================================================================
-// Appeal Message Handlers (VE-3020)
-// ============================================================================
-
-func _Msg_SubmitAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgSubmitAppeal)
+func _Msg_UpdateParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MsgServer).SubmitAppeal(ctx, in)
+		return srv.(MsgServer).UpdateParams(ctx, in)
 	}
-	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/SubmitAppeal"}
+	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/UpdateParams"}
 	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).SubmitAppeal(ctx, req.(*MsgSubmitAppeal))
-	})
-}
-
-func _Msg_ClaimAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgClaimAppeal)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ClaimAppeal(ctx, in)
-	}
-	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/ClaimAppeal"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ClaimAppeal(ctx, req.(*MsgClaimAppeal))
-	})
-}
-
-func _Msg_ResolveAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgResolveAppeal)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).ResolveAppeal(ctx, in)
-	}
-	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/ResolveAppeal"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).ResolveAppeal(ctx, req.(*MsgResolveAppeal))
-	})
-}
-
-func _Msg_WithdrawAppeal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor ggrpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgWithdrawAppeal)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MsgServer).WithdrawAppeal(ctx, in)
-	}
-	info := &ggrpc.UnaryServerInfo{Server: srv, FullMethod: "/virtengine.veid.v1.Msg/WithdrawAppeal"}
-	return interceptor(ctx, in, info, func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).WithdrawAppeal(ctx, req.(*MsgWithdrawAppeal))
+		return srv.(MsgServer).UpdateParams(ctx, req.(*MsgUpdateParams))
 	})
 }
 
