@@ -21,6 +21,9 @@ on:
     paths:
       - "**.proto"
 
+env:
+  GOWORK: "off"  # Disable workspace mode for vendor operations
+
 jobs:
   # Run proto breaking change detection
   proto-breaking:
