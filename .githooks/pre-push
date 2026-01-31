@@ -90,11 +90,13 @@ check_vet() {
     # Check if we're on main or have no diverged commits
     if git rev-parse --verify "$base_branch" &>/dev/null; then
         # Exclude sdk/ and vendor/ as they are separate Go modules with their own go.mod
+        # Filter out directories that no longer exist (deleted packages)
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '^sdk/' | \
             grep -v '^vendor/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
-            sed 's|^|./|' | paste -sd ' ' - 2>/dev/null || echo "")
+            while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
+            paste -sd ' ' - 2>/dev/null || echo "")
     fi
 
     if [ -n "${changed_packages:-}" ]; then
@@ -102,8 +104,7 @@ check_vet() {
         # shellcheck disable=SC2086
         go vet $changed_packages 2>&1
     else
-        # Fallback: vet everything but use -mod=vendor for speed
-        go vet -mod=vendor ./... 2>&1
+        go vet ./... 2>&1
     fi
 }
 
@@ -111,11 +112,22 @@ check_vet() {
 # Check 2: go mod vendor (fast sync - only if needed)
 # =========================================================================
 check_mod_vendor() {
-    # Quick vendor sync - only runs go mod vendor if vendor is missing or stale.
+    # Quick vendor sync - only runs vendor command if vendor is missing or stale.
     # Full go mod tidy is handled by pre-commit hook when go.mod changes.
+
+    # In workspace mode, use 'go work vendor' instead of 'go mod vendor'
+    local vendor_cmd="go mod vendor"
+    if [ -f "$REPO_ROOT/go.work" ] && [ "${GOWORK:-}" != "off" ]; then
+        vendor_cmd="go work vendor"
+    fi
 
     # Quick check: if vendor exists and is in sync, skip
     if [ -f vendor/modules.txt ]; then
+        # In workspace mode, -mod=vendor is not used so just check vendor exists
+        if [ "$vendor_cmd" = "go work vendor" ]; then
+            hook_step "Workspace mode active - vendor sync skipped (not used at runtime)"
+            return 0
+        fi
         # Use go list to verify vendor consistency (faster than go mod verify)
         if go list -mod=vendor ./... >/dev/null 2>&1; then
             hook_step "Vendor directory already in sync"
@@ -123,10 +135,10 @@ check_mod_vendor() {
         fi
     fi
 
-    # Vendor is missing or out of sync - run go mod vendor
+    # Vendor is missing or out of sync - run vendor command
     hook_step "Syncing vendor directory..."
-    if ! go mod vendor 2>&1; then
-        hook_fail "go mod vendor failed"
+    if ! $vendor_cmd 2>&1; then
+        hook_fail "$vendor_cmd failed"
         return 1
     fi
 
@@ -153,7 +165,7 @@ check_build() {
         return 0
     fi
     hook_warn "make bins failed, trying direct go build..."
-    go build -mod=vendor ./cmd/... 2>&1
+    go build ./cmd/... 2>&1
 }
 
 # =========================================================================
@@ -187,7 +199,7 @@ check_test() {
     fi
 
     # Build test arguments
-    local test_args="-short -timeout $go_timeout -failfast -mod=vendor -p $parallel_limit"
+    local test_args="-short -timeout $go_timeout -failfast -p $parallel_limit"
 
     # Run with global timeout wrapper
     run_with_timeout() {
