@@ -63,26 +63,30 @@ class TrainingResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "best_val_loss": self.best_val_loss,
-            "best_val_mae": self.best_val_mae,
-            "best_epoch": self.best_epoch,
-            "final_train_loss": self.final_train_loss,
-            "final_train_mae": self.final_train_mae,
-            "final_val_loss": self.final_val_loss,
-            "final_val_mae": self.final_val_mae,
-            "total_epochs": self.total_epochs,
-            "early_stopped": self.early_stopped,
-            "training_time_seconds": self.training_time_seconds,
-            "model_hash": self.model_hash,
-            "config_hash": self.config_hash,
+            "best_val_loss": float(self.best_val_loss),
+            "best_val_mae": float(self.best_val_mae),
+            "best_epoch": int(self.best_epoch),
+            "final_train_loss": float(self.final_train_loss),
+            "final_train_mae": float(self.final_train_mae),
+            "final_val_loss": float(self.final_val_loss),
+            "final_val_mae": float(self.final_val_mae),
+            "total_epochs": int(self.total_epochs),
+            "early_stopped": bool(self.early_stopped),
+            "training_time_seconds": float(self.training_time_seconds),
+            "model_hash": str(self.model_hash),
+            "config_hash": str(self.config_hash),
         }
     
     def save_history(self, filepath: str) -> None:
         """Save training history to JSON."""
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        # Convert numpy float32 values to Python floats for JSON serialization
+        serializable_history = {
+            k: [float(v) for v in vals] for k, vals in self.history.items()
+        }
         with open(filepath, 'w') as f:
             json.dump({
-                "history": self.history,
+                "history": serializable_history,
                 "result": self.to_dict(),
             }, f, indent=2)
 
