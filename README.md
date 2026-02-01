@@ -82,9 +82,7 @@ once binary compiled it exempts system-wide installed virtengine within virtengi
 
 ## Running
 
-We use thin integration testing environments to simplify
-the development and testing process. We currently have three environments:
+Deployment, operations, and environment setup have been consolidated into a
+single guide:
 
-- [Single node](_run/lite): simple (no workloads) single node running locally.
-- [Single node with workloads](_run/single): single node and provider running locally, running workloads within a virtual machine.
-- [full k8s](_run/kube): same as above but with node and provider running inside Kubernetes.
+- [Deployment and Operations Guide](docs/operations/DEPLOYMENT_GUIDE.md)
