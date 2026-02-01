@@ -56,13 +56,9 @@ func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) 
 
 // DefaultGenesis returns default genesis state as raw bytes for the Fraud module.
 func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
-	// Use standard JSON encoding for stub types since they don't have proper proto marshaling
-	defaultGenesis := types.DefaultGenesisState()
-	bz, err := json.Marshal(defaultGenesis)
-	if err != nil {
-		panic(fmt.Sprintf("failed to marshal default genesis state: %v", err))
-	}
-	return bz
+	// Use proto-generated types with proper codec marshaling
+	defaultGenesis := types.DefaultGenesisStatePB()
+	return cdc.MustMarshalJSON(defaultGenesis)
 }
 
 // ValidateGenesis performs genesis state validation for the Fraud module.
@@ -70,12 +66,14 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 	if bz == nil {
 		return nil
 	}
-	// Use standard JSON decoding for stub types since they don't have proper proto marshaling
-	var data types.GenesisState
-	if err := json.Unmarshal(bz, &data); err != nil {
+	// Use proto-generated types with proper codec unmarshaling
+	var data types.GenesisStatePB
+	if err := cdc.UnmarshalJSON(bz, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
 	}
-	return data.Validate()
+	// Convert to local type for validation
+	localData := types.GenesisStateFromProto(&data)
+	return localData.Validate()
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the Fraud module.
@@ -128,23 +126,20 @@ func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
 
 // InitGenesis performs genesis initialization
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
-	// Use standard JSON decoding for stub types since they don't have proper proto marshaling
-	var genesisState types.GenesisState
-	if err := json.Unmarshal(data, &genesisState); err != nil {
-		panic(fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err))
-	}
-	InitGenesis(ctx, am.keeper, &genesisState)
+	// Use proto-generated types with proper codec unmarshaling
+	var genesisStatePB types.GenesisStatePB
+	cdc.MustUnmarshalJSON(data, &genesisStatePB)
+	// Convert to local type for initialization
+	genesisState := types.GenesisStateFromProto(&genesisStatePB)
+	InitGenesis(ctx, am.keeper, genesisState)
 }
 
 // ExportGenesis returns the exported genesis state
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
-	// Use standard JSON encoding for stub types since they don't have proper proto marshaling
+	// Export to local type then convert to proto for marshaling
 	gs := ExportGenesis(ctx, am.keeper)
-	bz, err := json.Marshal(gs)
-	if err != nil {
-		panic(fmt.Errorf("failed to marshal %s genesis state: %w", types.ModuleName, err))
-	}
-	return bz
+	gsPB := types.GenesisStateToProto(gs)
+	return cdc.MustMarshalJSON(gsPB)
 }
 
 // ConsensusVersion returns the consensus version
