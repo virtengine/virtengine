@@ -95,6 +95,8 @@ import (
 	marketplacekeeper "github.com/virtengine/virtengine/x/market/types/marketplace/keeper"
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	oraclekeeper "github.com/virtengine/virtengine/x/oracle/keeper"
+	oracletypes "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
 	pkeeper "github.com/virtengine/virtengine/x/provider/keeper"
 	reviewkeeper "github.com/virtengine/virtengine/x/review/keeper"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
@@ -159,6 +161,7 @@ type AppKeepers struct {
 		Delegation  delegationkeeper.Keeper
 		VirtStaking virtstakingkeeper.Keeper
 		BME         bmekeeper.IKeeper
+		Oracle      oraclekeeper.IKeeper
 	}
 
 	Modules struct {
@@ -623,6 +626,12 @@ func (app *App) InitNormalKeepers(
 		app.keys[bmetypes.StoreKey],
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+
+	app.Keepers.VirtEngine.Oracle = oraclekeeper.NewKeeper(
+		cdc,
+		app.keys[oracletypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
 }
 
 func (app *App) SetupHooks() {
@@ -728,6 +737,7 @@ func virtengineKVStoreKeys() []string {
 		delegationtypes.StoreKey,
 		virtstakingtypes.StoreKey,
 		bmetypes.StoreKey,
+		oracletypes.StoreKey,
 	}
 }
 
