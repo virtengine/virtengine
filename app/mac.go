@@ -8,6 +8,7 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	ibctransfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
 	emodule "github.com/virtengine/virtengine/sdk/go/node/escrow/module"
+	virtstaking "github.com/virtengine/virtengine/x/staking/types"
 )
 
 func ModuleAccountPerms() map[string][]string {
@@ -20,6 +21,7 @@ func ModuleAccountPerms() map[string][]string {
 		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
 		govtypes.ModuleName:            {authtypes.Burner},
 		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
+		virtstaking.ModuleName:         {authtypes.Minter}, // virt_staking needs Minter for epoch rewards
 	}
 }
 

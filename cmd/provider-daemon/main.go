@@ -404,8 +404,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 		OrderPollInterval:  time.Second * 5,
 	}
 
-	// Note: chainClient would be initialized with actual RPC connection in production
-	bidEngine := provider_daemon.NewBidEngine(bidEngineConfig, keyManager, nil)
+	// Create chain client for bid engine
+	chainClient, err := provider_daemon.NewRPCChainClient(ctx, provider_daemon.RPCChainClientConfig{
+		NodeURI:        viper.GetString(FlagNode),
+		GRPCEndpoint:   viper.GetString(FlagWaldurChainGRPC),
+		ChainID:        viper.GetString(FlagChainID),
+		RequestTimeout: time.Second * 30,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create chain client: %w", err)
+	}
+
+	bidEngine := provider_daemon.NewBidEngine(bidEngineConfig, keyManager, chainClient)
 
 	if err := bidEngine.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start bid engine: %w", err)
