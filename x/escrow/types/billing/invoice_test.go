@@ -107,6 +107,8 @@ func TestInvoiceLedgerEntry_NewAndValidate(t *testing.T) {
 		"invoice created",
 		"virtengine1abc...",
 		"txhash123",
+		ZeroHash, // Previous entry hash (genesis)
+		1,        // Sequence number
 		blockHeight,
 		now,
 	)
@@ -117,6 +119,22 @@ func TestInvoiceLedgerEntry_NewAndValidate(t *testing.T) {
 
 	if entry.EntryType != LedgerEntryTypeCreated {
 		t.Errorf("expected EntryType %s, got %s", LedgerEntryTypeCreated, entry.EntryType)
+	}
+
+	if entry.SequenceNumber != 1 {
+		t.Errorf("expected SequenceNumber 1, got %d", entry.SequenceNumber)
+	}
+
+	if entry.PreviousEntryHash != ZeroHash {
+		t.Errorf("expected PreviousEntryHash %s, got %s", ZeroHash, entry.PreviousEntryHash)
+	}
+
+	if entry.EntryHash == "" {
+		t.Error("expected EntryHash to be computed, got empty string")
+	}
+
+	if !entry.VerifyHash() {
+		t.Error("hash verification failed")
 	}
 
 	if err := entry.Validate(); err != nil {
