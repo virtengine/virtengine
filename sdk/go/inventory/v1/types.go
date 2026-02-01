@@ -14,3 +14,14 @@ type GPUInfoS []GPUInfo
 
 // MemoryInfoS is a collection of MemoryInfo.
 type MemoryInfoS []MemoryInfo
+
+// InventoryMetrics represents inventory metrics for a provider cluster.
+// It contains the cluster state and aggregated resource information.
+type InventoryMetrics struct {
+	Cluster     *Cluster `json:"cluster,omitempty"`
+	Active      uint64   `json:"active"`
+	Pending     uint64   `json:"pending"`
+	Available   uint64   `json:"available"`
+	Allocatable uint64   `json:"allocatable"`
+}
+
