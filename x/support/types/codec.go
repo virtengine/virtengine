@@ -19,27 +19,18 @@ func init() {
 // RegisterLegacyAminoCodec registers the necessary interfaces and concrete types
 // on the provided LegacyAmino codec. These types are used for Amino JSON serialization.
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	legacy.RegisterAminoMsg(cdc, &MsgCreateTicket{}, "support/MsgCreateTicket")
-	legacy.RegisterAminoMsg(cdc, &MsgAssignTicket{}, "support/MsgAssignTicket")
-	legacy.RegisterAminoMsg(cdc, &MsgRespondToTicket{}, "support/MsgRespondToTicket")
-	legacy.RegisterAminoMsg(cdc, &MsgResolveTicket{}, "support/MsgResolveTicket")
-	legacy.RegisterAminoMsg(cdc, &MsgCloseTicket{}, "support/MsgCloseTicket")
-	legacy.RegisterAminoMsg(cdc, &MsgReopenTicket{}, "support/MsgReopenTicket")
+	legacy.RegisterAminoMsg(cdc, &MsgRegisterExternalTicket{}, "support/MsgRegisterExternalTicket")
+	legacy.RegisterAminoMsg(cdc, &MsgUpdateExternalTicket{}, "support/MsgUpdateExternalTicket")
+	legacy.RegisterAminoMsg(cdc, &MsgRemoveExternalTicket{}, "support/MsgRemoveExternalTicket")
 	legacy.RegisterAminoMsg(cdc, &MsgUpdateParams{}, "support/MsgUpdateParams")
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*sdk.Msg)(nil),
-		&MsgCreateTicket{},
-		&MsgAssignTicket{},
-		&MsgRespondToTicket{},
-		&MsgResolveTicket{},
-		&MsgCloseTicket{},
-		&MsgReopenTicket{},
+		&MsgRegisterExternalTicket{},
+		&MsgUpdateExternalTicket{},
+		&MsgRemoveExternalTicket{},
 		&MsgUpdateParams{},
 	)
-	// Note: In a full implementation, msgservice.RegisterMsgServiceDesc would be called
-	// with the protobuf-generated service descriptor. For now, we register messages
-	// individually above which is sufficient for Cosmos SDK module operation.
 }

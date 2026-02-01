@@ -38,38 +38,23 @@ type (
 	// Params defines the module parameters
 	Params = types.Params
 
-	// SupportTicket represents a support ticket
-	SupportTicket = types.SupportTicket
+	// ExternalTicketRef represents a reference to an external support ticket
+	ExternalTicketRef = types.ExternalTicketRef
 
-	// TicketResponse represents a ticket response
-	TicketResponse = types.TicketResponse
+	// ResourceType represents the type of on-chain resource
+	ResourceType = types.ResourceType
 
-	// TicketStatus represents ticket status
-	TicketStatus = types.TicketStatus
+	// ExternalSystem represents the external service desk system
+	ExternalSystem = types.ExternalSystem
 
-	// TicketPriority represents ticket priority
-	TicketPriority = types.TicketPriority
+	// MsgRegisterExternalTicket registers an external ticket reference
+	MsgRegisterExternalTicket = types.MsgRegisterExternalTicket
 
-	// ResourceReference represents a resource reference
-	ResourceReference = types.ResourceReference
+	// MsgUpdateExternalTicket updates an external ticket reference
+	MsgUpdateExternalTicket = types.MsgUpdateExternalTicket
 
-	// MsgCreateTicket creates a new ticket
-	MsgCreateTicket = types.MsgCreateTicket
-
-	// MsgAssignTicket assigns a ticket
-	MsgAssignTicket = types.MsgAssignTicket
-
-	// MsgRespondToTicket responds to a ticket
-	MsgRespondToTicket = types.MsgRespondToTicket
-
-	// MsgResolveTicket resolves a ticket
-	MsgResolveTicket = types.MsgResolveTicket
-
-	// MsgCloseTicket closes a ticket
-	MsgCloseTicket = types.MsgCloseTicket
-
-	// MsgReopenTicket reopens a ticket
-	MsgReopenTicket = types.MsgReopenTicket
+	// MsgRemoveExternalTicket removes an external ticket reference
+	MsgRemoveExternalTicket = types.MsgRemoveExternalTicket
 
 	// MsgUpdateParams updates params
 	MsgUpdateParams = types.MsgUpdateParams
@@ -78,20 +63,16 @@ type (
 	Keeper = keeper.Keeper
 )
 
-// Ticket status constants
+// Resource type constants
 const (
-	TicketStatusOpen            = types.TicketStatusOpen
-	TicketStatusAssigned        = types.TicketStatusAssigned
-	TicketStatusInProgress      = types.TicketStatusInProgress
-	TicketStatusPendingCustomer = types.TicketStatusPendingCustomer
-	TicketStatusResolved        = types.TicketStatusResolved
-	TicketStatusClosed          = types.TicketStatusClosed
+	ResourceTypeDeployment = types.ResourceTypeDeployment
+	ResourceTypeLease      = types.ResourceTypeLease
+	ResourceTypeOrder      = types.ResourceTypeOrder
+	ResourceTypeProvider   = types.ResourceTypeProvider
 )
 
-// Ticket priority constants
+// External system constants
 const (
-	TicketPriorityLow    = types.TicketPriorityLow
-	TicketPriorityNormal = types.TicketPriorityNormal
-	TicketPriorityHigh   = types.TicketPriorityHigh
-	TicketPriorityUrgent = types.TicketPriorityUrgent
+	ExternalSystemWaldur = types.ExternalSystemWaldur
+	ExternalSystemJira   = types.ExternalSystemJira
 )

@@ -17,7 +17,6 @@ import (
 
 	"github.com/virtengine/virtengine/x/support/keeper"
 	"github.com/virtengine/virtengine/x/support/types"
-	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
 func setupTestKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
@@ -41,48 +40,23 @@ func setupTestKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	return k, ctx
 }
 
-func createTestEnvelope() encryptiontypes.MultiRecipientEnvelope {
-	return encryptiontypes.MultiRecipientEnvelope{
-		Version:          2,
-		AlgorithmID:      "X25519-XSALSA20-POLY1305",
-		AlgorithmVersion: 1,
-		RecipientMode:    "specific",
-		PayloadCiphertext: []byte("encrypted-content"),
-		PayloadNonce:     []byte("123456789012345678901234"),
-		WrappedKeys: []encryptiontypes.WrappedKeyEntry{
-			{
-				RecipientID: "recipient1",
-				WrappedKey:  []byte("wrapped-key-1"),
-			},
-		},
-		ClientSignature: []byte("client-signature"),
-		ClientID:        "test-client",
-		UserSignature:   []byte("user-signature"),
-		UserPubKey:      []byte("12345678901234567890123456789012"),
-	}
-}
-
 func TestInitGenesis(t *testing.T) {
 	k, ctx := setupTestKeeper(t)
 
-	customer := sdk.AccAddress("customer1")
+	owner := sdk.AccAddress("owner1")
 
 	genesisState := &types.GenesisState{
-		Params:         types.DefaultParams(),
-		TicketSequence: 100,
-		Tickets: []types.SupportTicket{
+		Params: types.DefaultParams(),
+		ExternalRefs: []types.ExternalTicketRef{
 			{
-				TicketID:         "TKT-00000001",
-				CustomerAddress:  customer.String(),
-				Status:           types.TicketStatusOpen,
-				Priority:         types.TicketPriorityNormal,
-				Category:         "technical",
-				EncryptedPayload: createTestEnvelope(),
-				CreatedAt:        ctx.BlockTime(),
-				UpdatedAt:        ctx.BlockTime(),
+				ResourceID:       "deployment-123",
+				ResourceType:     types.ResourceTypeDeployment,
+				ExternalSystem:   types.ExternalSystemWaldur,
+				ExternalTicketID: "WALDUR-456",
+				ExternalURL:      "https://waldur.example.com/tickets/456",
+				CreatedBy:        owner.String(),
 			},
 		},
-		Responses: []types.TicketResponse{},
 	}
 
 	// Initialize genesis
@@ -90,16 +64,13 @@ func TestInitGenesis(t *testing.T) {
 
 	// Verify params were set
 	params := k.GetParams(ctx)
-	require.Equal(t, types.DefaultParams().MaxTicketsPerCustomerPerDay, params.MaxTicketsPerCustomerPerDay)
+	require.NotEmpty(t, params.AllowedExternalSystems)
 
-	// Verify sequence was set
-	seq := k.GetTicketSequence(ctx)
-	require.Equal(t, uint64(100), seq)
-
-	// Verify ticket was created
-	ticket, found := k.GetTicket(ctx, "TKT-00000001")
+	// Verify ref was created
+	ref, found := k.GetExternalRef(ctx, types.ResourceTypeDeployment, "deployment-123")
 	require.True(t, found)
-	require.Equal(t, customer.String(), ticket.CustomerAddress)
+	require.Equal(t, owner.String(), ref.CreatedBy)
+	require.Equal(t, "WALDUR-456", ref.ExternalTicketID)
 }
 
 func TestExportGenesis(t *testing.T) {
@@ -107,28 +78,25 @@ func TestExportGenesis(t *testing.T) {
 
 	// Set up initial state
 	require.NoError(t, k.SetParams(ctx, types.DefaultParams()))
-	k.SetTicketSequence(ctx, 50)
 
-	customer := sdk.AccAddress("customer1")
-	ticket := &types.SupportTicket{
-		TicketID:         "TKT-00000001",
-		CustomerAddress:  customer.String(),
-		Status:           types.TicketStatusOpen,
-		Priority:         types.TicketPriorityNormal,
-		Category:         "technical",
-		EncryptedPayload: createTestEnvelope(),
-		CreatedAt:        ctx.BlockTime(),
-		UpdatedAt:        ctx.BlockTime(),
+	owner := sdk.AccAddress("owner1")
+	ref := &types.ExternalTicketRef{
+		ResourceID:       "lease-789",
+		ResourceType:     types.ResourceTypeLease,
+		ExternalSystem:   types.ExternalSystemJira,
+		ExternalTicketID: "JIRA-1234",
+		ExternalURL:      "https://jira.example.com/browse/JIRA-1234",
+		CreatedBy:        owner.String(),
 	}
-	require.NoError(t, k.CreateTicket(ctx, ticket))
+	require.NoError(t, k.RegisterExternalRef(ctx, ref))
 
 	// Export genesis
 	exported := ExportGenesis(ctx, k)
 
 	// Verify export
-	require.Equal(t, uint64(50), exported.TicketSequence)
-	require.Len(t, exported.Tickets, 1)
-	require.Equal(t, "TKT-00000001", exported.Tickets[0].TicketID)
+	require.Len(t, exported.ExternalRefs, 1)
+	require.Equal(t, "lease-789", exported.ExternalRefs[0].ResourceID)
+	require.Equal(t, "JIRA-1234", exported.ExternalRefs[0].ExternalTicketID)
 }
 
 func TestGenesisValidation(t *testing.T) {
@@ -136,13 +104,19 @@ func TestGenesisValidation(t *testing.T) {
 	validGenesis := types.DefaultGenesisState()
 	require.NoError(t, validGenesis.Validate())
 
-	// Invalid genesis - invalid params
+	// Invalid genesis - invalid external system
 	invalidGenesis := &types.GenesisState{
 		Params: types.Params{
-			MaxTicketsPerCustomerPerDay: 0, // Invalid
-			MaxResponsesPerTicket:       100,
-			MaxOpenTicketsPerCustomer:   10,
-			AllowedCategories:           []string{"test"},
+			AllowedExternalSystems: []string{"waldur", "jira"},
+			AllowedExternalDomains: []string{"example.com"},
+		},
+		ExternalRefs: []types.ExternalTicketRef{
+			{
+				ResourceID:       "test-123",
+				ResourceType:     types.ResourceType("invalid"),
+				ExternalSystem:   types.ExternalSystemWaldur,
+				ExternalTicketID: "WALDUR-1",
+			},
 		},
 	}
 	require.Error(t, invalidGenesis.Validate())
@@ -152,24 +126,20 @@ func TestGenesisRoundTrip(t *testing.T) {
 	k, ctx := setupTestKeeper(t)
 
 	// Create initial state
-	customer := sdk.AccAddress("customer1")
+	owner := sdk.AccAddress("owner1")
 
 	initialGenesis := &types.GenesisState{
-		Params:         types.DefaultParams(),
-		TicketSequence: 200,
-		Tickets: []types.SupportTicket{
+		Params: types.DefaultParams(),
+		ExternalRefs: []types.ExternalTicketRef{
 			{
-				TicketID:         "TKT-00000001",
-				CustomerAddress:  customer.String(),
-				Status:           types.TicketStatusOpen,
-				Priority:         types.TicketPriorityHigh,
-				Category:         "billing",
-				EncryptedPayload: createTestEnvelope(),
-				CreatedAt:        ctx.BlockTime(),
-				UpdatedAt:        ctx.BlockTime(),
+				ResourceID:       "order-001",
+				ResourceType:     types.ResourceTypeOrder,
+				ExternalSystem:   types.ExternalSystemWaldur,
+				ExternalTicketID: "WALDUR-999",
+				ExternalURL:      "https://waldur.example.com/tickets/999",
+				CreatedBy:        owner.String(),
 			},
 		},
-		Responses: []types.TicketResponse{},
 	}
 
 	// Initialize
@@ -179,8 +149,7 @@ func TestGenesisRoundTrip(t *testing.T) {
 	exported := ExportGenesis(ctx, k)
 
 	// Verify round-trip
-	require.Equal(t, initialGenesis.TicketSequence, exported.TicketSequence)
-	require.Len(t, exported.Tickets, len(initialGenesis.Tickets))
-	require.Equal(t, initialGenesis.Tickets[0].TicketID, exported.Tickets[0].TicketID)
-	require.Equal(t, initialGenesis.Tickets[0].Priority, exported.Tickets[0].Priority)
+	require.Len(t, exported.ExternalRefs, len(initialGenesis.ExternalRefs))
+	require.Equal(t, initialGenesis.ExternalRefs[0].ResourceID, exported.ExternalRefs[0].ResourceID)
+	require.Equal(t, initialGenesis.ExternalRefs[0].ExternalTicketID, exported.ExternalRefs[0].ExternalTicketID)
 }
