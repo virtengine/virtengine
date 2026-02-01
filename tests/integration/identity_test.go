@@ -36,11 +36,11 @@ import (
 type IdentityIntegrationTestSuite struct {
 	suite.Suite
 
-	app        *app.VirtEngineApp
-	ctx        sdk.Context
-	client     veidTestClient
-	msgServer  veidtypes.MsgServer
-	validator  sdk.AccAddress
+	app       *app.VirtEngineApp
+	ctx       sdk.Context
+	client    veidTestClient
+	msgServer veidtypes.MsgServer
+	validator sdk.AccAddress
 }
 
 // TestIdentityIntegration runs the identity integration test suite.
@@ -133,7 +133,7 @@ func (s *IdentityIntegrationTestSuite) TestIdentityScopeUploadAndScoreCommit() {
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, owner)
 	require.True(s.T(), found)
 	require.Len(s.T(), record.ScopeRefs, 1)
-	require.Equal(s.T(), scopeID, record.ScopeRefs[0].ScopeId)
+	require.Equal(s.T(), scopeID, record.ScopeRefs[0].ScopeID)
 
 	updateScore := veidtypes.NewMsgUpdateScore(
 		s.validator.String(),
@@ -157,4 +157,3 @@ func (s *IdentityIntegrationTestSuite) TestIdentityScopeUploadAndScoreCommit() {
 // =============================================================================
 // Test Data Structures
 // =============================================================================
-

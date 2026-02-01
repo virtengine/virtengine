@@ -12,16 +12,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
 	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
-	"github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 	"github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
-	"github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 	"github.com/virtengine/virtengine/testutil"
 )
@@ -158,13 +155,13 @@ func (s *MarketplaceIntegrationTestSuite) TestOrderBidLeaseFlow() {
 	res, err := clitestutil.ExecDeploymentCreate(
 		ctx,
 		s.cctx,
-		deploymentPath,
-		cli.TestFlags().
-			WithFrom(s.addrDeployer.String()).
-			WithDeposit(sdktestutil.VECoin(s.T(), 5000000)).
-			WithSkipConfirm().
-			WithGasAutoFlags().
-			WithBroadcastModeBlock()...,
+		append([]string{deploymentPath},
+			cli.TestFlags().
+				WithFrom(s.addrDeployer.String()).
+				WithDeposit(sdktestutil.VECoin(s.T(), 5000000)).
+				WithSkipConfirm().
+				WithGasAutoFlags().
+				WithBroadcastModeBlock()...)...,
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
@@ -178,18 +175,18 @@ func (s *MarketplaceIntegrationTestSuite) TestOrderBidLeaseFlow() {
 	err = s.cctx.Codec.UnmarshalJSON(resp.Bytes(), orders)
 	s.Require().NoError(err)
 	s.Require().NotEmpty(orders.Orders)
-	order := orders.Orders[0].Order
+	order := orders.Orders[0]
 
 	// Create provider
 	res, err = clitestutil.ExecTxCreateProvider(
 		ctx,
 		s.cctx,
-		providerPath,
-		cli.TestFlags().
-			WithFrom(s.addrProvider.String()).
-			WithSkipConfirm().
-			WithGasAutoFlags().
-			WithBroadcastModeBlock()...,
+		append([]string{providerPath},
+			cli.TestFlags().
+				WithFrom(s.addrProvider.String()).
+				WithSkipConfirm().
+				WithGasAutoFlags().
+				WithBroadcastModeBlock()...)...,
 	)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
@@ -245,4 +242,3 @@ func (s *MarketplaceIntegrationTestSuite) TestOrderBidLeaseFlow() {
 	s.Require().NotEmpty(leases.Leases)
 	s.Require().Equal(s.addrProvider.String(), leases.Leases[0].Lease.ID.Provider)
 }
-

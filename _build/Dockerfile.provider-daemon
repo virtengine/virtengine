@@ -1,0 +1,37 @@
+FROM golang:1.25.5-alpine AS build
+
+RUN apk add --no-cache ca-certificates git
+
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY sdk/go/go.mod sdk/go/go.sum sdk/go/
+COPY sdk/specs/go.mod sdk/specs/
+RUN go mod download
+
+COPY . .
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ENV CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH}
+
+RUN go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/provider-daemon ./cmd/provider-daemon
+
+FROM alpine:3.20
+
+RUN apk add --no-cache bash ca-certificates curl && \
+    addgroup -S virtengine && \
+    adduser -S -G virtengine -u 10001 virtengine && \
+    mkdir -p /var/lib/provider-daemon && \
+    chown -R virtengine:virtengine /var/lib/provider-daemon
+
+ENV HOME=/var/lib/provider-daemon
+WORKDIR /var/lib/provider-daemon
+VOLUME ["/var/lib/provider-daemon"]
+
+COPY --from=build /out/provider-daemon /usr/local/bin/provider-daemon
+
+USER 10001:10001
+
+EXPOSE 8443 8444
+
+ENTRYPOINT ["provider-daemon"]

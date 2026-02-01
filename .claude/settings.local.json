@@ -19,7 +19,8 @@
       "Bash(make check-hooks:*)",
       "mcp__vibe_kanban__list_projects",
       "mcp__vibe_kanban__list_repos",
-      "mcp__vibe_kanban__get_repo"
+      "mcp__vibe_kanban__get_repo",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

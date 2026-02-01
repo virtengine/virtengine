@@ -117,7 +117,7 @@ func (s *VEIDOnboardingIntegrationTestSuite) TestVEIDOnboardingFlow() {
 
 	resp, err := s.msgServer.UploadScope(ctx, msg)
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), scopeID, resp.ScopeID)
+	require.Equal(s.T(), scopeID, resp.ScopeId)
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false).
