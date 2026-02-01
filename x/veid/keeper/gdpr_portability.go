@@ -114,7 +114,7 @@ func (k Keeper) ProcessExportRequest(ctx sdk.Context, requestID string) (*types.
 	requesterAddr, err := sdk.AccAddressFromBech32(request.RequesterAddress)
 	if err != nil {
 		request.MarkFailed(err.Error())
-		k.SetExportRequest(ctx, request)
+		_ = k.SetExportRequest(ctx, request)
 		return nil, err
 	}
 
@@ -122,7 +122,7 @@ func (k Keeper) ProcessExportRequest(ctx sdk.Context, requestID string) (*types.
 	dataPackage, err := k.generateDataPackage(ctx, requesterAddr, &request)
 	if err != nil {
 		request.MarkFailed(err.Error())
-		k.SetExportRequest(ctx, request)
+		_ = k.SetExportRequest(ctx, request)
 		return nil, err
 	}
 
@@ -130,7 +130,7 @@ func (k Keeper) ProcessExportRequest(ctx sdk.Context, requestID string) (*types.
 	dataBytes, err := json.Marshal(dataPackage)
 	if err != nil {
 		request.MarkFailed(err.Error())
-		k.SetExportRequest(ctx, request)
+		_ = k.SetExportRequest(ctx, request)
 		return nil, err
 	}
 
@@ -203,7 +203,7 @@ func (k Keeper) generateDataPackage(
 	if request.HasCategory(types.ExportCategoryAll) {
 		for _, cat := range types.AllExportCategories() {
 			if cat != types.ExportCategoryAll {
-				k.exportCategory(ctx, address, cat, pkg)
+				_ = k.exportCategory(ctx, address, cat, pkg)
 			}
 		}
 	}

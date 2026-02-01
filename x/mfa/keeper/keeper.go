@@ -351,7 +351,7 @@ func (k Keeper) GetFactorEnrollment(ctx sdk.Context, address sdk.AccAddress, fac
 	}
 
 	var es factorEnrollmentStore
-	json.Unmarshal(bz, &es)
+	_ = json.Unmarshal(bz, &es)
 
 	return &types.FactorEnrollment{
 		AccountAddress:   es.AccountAddress,
@@ -379,7 +379,7 @@ func (k Keeper) GetFactorEnrollments(ctx sdk.Context, address sdk.AccAddress) []
 	var enrollments []types.FactorEnrollment
 	for ; iterator.Valid(); iterator.Next() {
 		var es factorEnrollmentStore
-		json.Unmarshal(iterator.Value(), &es)
+		_ = json.Unmarshal(iterator.Value(), &es)
 		enrollments = append(enrollments, types.FactorEnrollment{
 			AccountAddress:   es.AccountAddress,
 			FactorType:       es.FactorType,
@@ -514,7 +514,7 @@ func (k Keeper) GetMFAPolicy(ctx sdk.Context, address sdk.AccAddress) (*types.MF
 	}
 
 	var ps mfaPolicyStore
-	json.Unmarshal(bz, &ps)
+	_ = json.Unmarshal(bz, &ps)
 
 	return &types.MFAPolicy{
 		AccountAddress:     ps.AccountAddress,
@@ -798,13 +798,13 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 
 	// Mark as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	address, _ := sdk.AccAddressFromBech32(challenge.AccountAddress)
 	if enrollment, found := k.GetFactorEnrollment(ctx, address, challenge.FactorType, challenge.FactorID); found {
 		enrollment.UpdateLastUsed(now.Unix())
-		k.updateFactorEnrollment(ctx, enrollment)
+		_ = k.updateFactorEnrollment(ctx, enrollment)
 	}
 
 	// Emit success event
@@ -1354,31 +1354,41 @@ func (k Keeper) GetAllSensitiveTxConfigs(ctx sdk.Context) []types.SensitiveTxCon
 // InitGenesis initializes the mfa module's state from a genesis state
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 	// Set params
-	k.SetParams(ctx, gs.Params)
+	if err := k.SetParams(ctx, gs.Params); err != nil {
+		panic(err)
+	}
 
 	// Set MFA policies
 	for _, policy := range gs.MFAPolicies {
 		p := policy
-		k.SetMFAPolicy(ctx, &p)
+		if err := k.SetMFAPolicy(ctx, &p); err != nil {
+			panic(err)
+		}
 	}
 
 	// Set factor enrollments
 	for _, enrollment := range gs.FactorEnrollments {
 		e := enrollment
-		k.EnrollFactor(ctx, &e)
+		if err := k.EnrollFactor(ctx, &e); err != nil {
+			panic(err)
+		}
 	}
 
 	// Set sensitive tx configs
 	for _, config := range gs.SensitiveTxConfigs {
 		c := config
-		k.SetSensitiveTxConfig(ctx, &c)
+		if err := k.SetSensitiveTxConfig(ctx, &c); err != nil {
+			panic(err)
+		}
 	}
 
 	// Set trusted devices
 	for _, device := range gs.TrustedDevices {
 		address, _ := sdk.AccAddressFromBech32(device.AccountAddress)
 		info := device.DeviceInfo
-		k.AddTrustedDevice(ctx, address, &info)
+		if err := k.AddTrustedDevice(ctx, address, &info); err != nil {
+			panic(err)
+		}
 	}
 }
 

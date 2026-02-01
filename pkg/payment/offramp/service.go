@@ -395,7 +395,7 @@ func (s *offRampService) CreateAndExecutePayout(ctx context.Context, req CreateP
 			intent.Status = PayoutStatusFailed
 			intent.FailureCode = "PROVIDER_ERROR"
 			intent.FailureMessage = err.Error()
-			s.payoutStore.Save(ctx, intent)
+			_ = s.payoutStore.Save(ctx, intent)
 			return intent, err
 		}
 	}
@@ -412,7 +412,7 @@ func (s *offRampService) CreateAndExecutePayout(ctx context.Context, req CreateP
 	s.metrics.mu.Unlock()
 
 	// Clean up quote
-	s.quoteStore.Delete(ctx, quote.QuoteID)
+	_ = s.quoteStore.Delete(ctx, quote.QuoteID)
 
 	return intent, nil
 }
@@ -438,11 +438,11 @@ func (s *offRampService) submitToProvider(ctx context.Context, intent *PayoutInt
 
 		intent.Status = PayoutStatusProcessing
 		intent.AddAuditEntry("submit_attempt", "service", fmt.Sprintf("attempt=%d", attempt+1))
-		s.payoutStore.Save(ctx, intent)
+		_ = s.payoutStore.Save(ctx, intent)
 
 		err := provider.CreatePayout(ctx, intent)
 		if err == nil {
-			s.payoutStore.Save(ctx, intent)
+			_ = s.payoutStore.Save(ctx, intent)
 			return nil
 		}
 

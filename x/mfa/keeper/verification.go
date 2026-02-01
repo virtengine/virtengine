@@ -979,11 +979,11 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 
 	// Mark challenge as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	enrollment.UpdateLastUsed(now.Unix())
-	k.updateFactorEnrollment(ctx, enrollment)
+	_ = k.updateFactorEnrollment(ctx, enrollment)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -1082,7 +1082,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	address, _ := sdk.AccAddressFromBech32(challenge.AccountAddress)
 	if enrollment, found := k.GetFactorEnrollment(ctx, address, challenge.FactorType, challenge.FactorID); found {
 		enrollment.UpdateLastUsed(now.Unix())
-		k.updateFactorEnrollment(ctx, enrollment)
+		_ = k.updateFactorEnrollment(ctx, enrollment)
 	}
 
 	ctx.EventManager().EmitEvent(

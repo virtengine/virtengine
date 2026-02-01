@@ -285,7 +285,7 @@ func (m *msgServer) VerifyChallenge(goCtx context.Context, msg *types.MsgVerifyC
 
 	// Link session to challenge
 	challenge.SessionID = session.SessionID
-	m.UpdateChallenge(ctx, challenge)
+	_ = m.UpdateChallenge(ctx, challenge)
 
 	// Check if more factors are required
 	var remainingFactors []types.FactorType

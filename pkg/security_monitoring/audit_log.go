@@ -160,8 +160,8 @@ func (a *AuditLog) writeToFile(entry AuditLogEntry) {
 		return
 	}
 
-	a.logFile.Write(data)
-	a.logFile.WriteString("\n")
+	_, _ = a.logFile.Write(data)
+	_, _ = a.logFile.WriteString("\n")
 }
 
 // LogAlert logs a security alert

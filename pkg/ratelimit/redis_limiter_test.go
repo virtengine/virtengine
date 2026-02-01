@@ -55,7 +55,7 @@ func TestRedisRateLimiter(t *testing.T) {
 	t.Run("Whitelist functionality", func(t *testing.T) {
 		key := "whitelisted-ip"
 		config.WhitelistedIPs = []string{key}
-		limiter.UpdateConfig(config)
+		_ = limiter.UpdateConfig(config)
 
 		// Whitelisted IPs should always be allowed
 		for i := 0; i < 100; i++ {
@@ -235,28 +235,27 @@ func BenchmarkRateLimiter(b *testing.B) {
 	}
 	defer limiter.Close()
 
+	const benchIPKey = "bench-ip"
+
 	b.Run("Allow", func(b *testing.B) {
-		key := "bench-ip"
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			limiter.Allow(ctx, key, LimitTypeIP)
+			_, _, _ = limiter.Allow(ctx, benchIPKey, LimitTypeIP)
 		}
 	})
 
 	b.Run("AllowEndpoint", func(b *testing.B) {
-		key := "bench-ip"
 		endpoint := "/market/orders"
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			limiter.AllowEndpoint(ctx, endpoint, key, LimitTypeIP)
+			_, _, _ = limiter.AllowEndpoint(ctx, endpoint, benchIPKey, LimitTypeIP)
 		}
 	})
 
 	b.Run("IsBanned", func(b *testing.B) {
-		key := "bench-ip"
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			limiter.IsBanned(ctx, key)
+			_, _ = limiter.IsBanned(ctx, benchIPKey)
 		}
 	})
 }

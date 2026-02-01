@@ -138,7 +138,7 @@ func (s *ServerIntegration) handleBan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	writeJSON(w, map[string]string{"status": "banned", "identifier": req.Identifier})
+	_ = writeJSON(w, map[string]string{"status": "banned", "identifier": req.Identifier})
 }
 
 // handleUnban handles unbanning an identifier
@@ -160,7 +160,7 @@ func (s *ServerIntegration) handleUnban(w http.ResponseWriter, r *http.Request) 
 	// Unban by setting a past expiry (delete the ban key)
 	// This is a simplified implementation - in production you'd have an explicit Unban method
 	w.WriteHeader(http.StatusOK)
-	writeJSON(w, map[string]string{"status": "unbanned", "identifier": req.Identifier})
+	_ = writeJSON(w, map[string]string{"status": "unbanned", "identifier": req.Identifier})
 }
 
 // handleGetConfig returns the current configuration
@@ -169,7 +169,7 @@ func (s *ServerIntegration) handleGetConfig(w http.ResponseWriter, r *http.Reque
 	// For now, return a placeholder
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	writeJSON(w, map[string]string{"status": "config endpoint - implement retrieval"})
+	_ = writeJSON(w, map[string]string{"status": "config endpoint - implement retrieval"})
 }
 
 // handleUpdateConfig updates the configuration
@@ -186,7 +186,7 @@ func (s *ServerIntegration) handleUpdateConfig(w http.ResponseWriter, r *http.Re
 	}
 
 	w.WriteHeader(http.StatusOK)
-	writeJSON(w, map[string]string{"status": "updated"})
+	_ = writeJSON(w, map[string]string{"status": "updated"})
 }
 
 // Helper functions

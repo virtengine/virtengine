@@ -101,7 +101,7 @@ func (s *service) UnregisterAdapter(name string) error {
 	}
 
 	// Unregister from price feed
-	s.priceFeed.UnregisterSource(name)
+	_ = s.priceFeed.UnregisterSource(name)
 
 	// Close the adapter
 	if err := adapter.Close(); err != nil {

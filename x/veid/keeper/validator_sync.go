@@ -748,7 +748,7 @@ func (k Keeper) updateSyncRequestProgress(ctx sdk.Context, validatorAddr string,
 					request.Status = types.SyncRequestStatusInProgress
 				}
 
-				k.setSyncRequest(ctx, request)
+				_ = k.setSyncRequest(ctx, request)
 				break
 			}
 		}
@@ -984,3 +984,4 @@ const (
 	AttributeKeyValidatorsNotified = "validators_notified"
 	AttributeKeyDeadline          = "deadline"
 )
+

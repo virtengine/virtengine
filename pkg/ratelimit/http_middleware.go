@@ -187,7 +187,7 @@ func (m *HTTPMiddleware) defaultOnRateLimited(w http.ResponseWriter, r *http.Req
 		"reset_at":    result.ResetAt,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // addRateLimitHeaders adds standard rate limit headers to the response

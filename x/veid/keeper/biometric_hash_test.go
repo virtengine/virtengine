@@ -474,7 +474,7 @@ func (s *BiometricHashTestSuite) TestHasBiometricHash() {
 
 	template := generateRandomTemplate(512)
 	hash, _ := keeper.HashBiometricTemplate(template, keeper.TemplateTypeFace, "exists", s.ctx)
-	s.keeper.SetBiometricHash(s.ctx, address, hash)
+	_ = s.keeper.SetBiometricHash(s.ctx, address, hash)
 
 	s.True(s.keeper.HasBiometricHash(s.ctx, address, "exists"))
 	s.False(s.keeper.HasBiometricHash(s.ctx, address, "nonexistent"))
@@ -524,7 +524,7 @@ func (s *BiometricHashTestSuite) TestDeleteTemplateHash() {
 	s.Run("deletes existing hash", func() {
 		template := generateRandomTemplate(512)
 		hash, _ := keeper.HashBiometricTemplate(template, keeper.TemplateTypeFace, "to-delete", s.ctx)
-		s.keeper.SetBiometricHash(s.ctx, address, hash)
+		_ = s.keeper.SetBiometricHash(s.ctx, address, hash)
 
 		// Verify it exists
 		s.True(s.keeper.HasBiometricHash(s.ctx, address, "to-delete"))
@@ -563,7 +563,7 @@ func (s *BiometricHashTestSuite) TestBiometricAuditLog() {
 		template := generateRandomTemplate(512)
 		hashID := "audit-test-" + string(rune('a'+i))
 		hash, _ := keeper.HashBiometricTemplate(template, keeper.TemplateTypeFace, hashID, s.ctx)
-		s.keeper.SetBiometricHash(s.ctx, address, hash)
+		_ = s.keeper.SetBiometricHash(s.ctx, address, hash)
 	}
 
 	// Get audit entries
