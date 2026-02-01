@@ -705,7 +705,9 @@ func (s *paymentService) GetDisputeStore() DisputeStore {
 // ============================================================================
 
 // handleDisputeCreated processes dispute created webhook events
-func (s *paymentService) handleDisputeCreated(ctx context.Context, event WebhookEvent) error {
+//
+//nolint:unparam // ctx kept for future async dispute processing
+func (s *paymentService) handleDisputeCreated(_ context.Context, event WebhookEvent) error {
 	dispute := s.extractDisputeFromEvent(event)
 	if dispute == nil {
 		return nil
@@ -726,7 +728,9 @@ func (s *paymentService) handleDisputeCreated(ctx context.Context, event Webhook
 }
 
 // handleDisputeUpdated processes dispute updated webhook events
-func (s *paymentService) handleDisputeUpdated(ctx context.Context, event WebhookEvent) error {
+//
+//nolint:unparam // ctx kept for future async dispute processing
+func (s *paymentService) handleDisputeUpdated(_ context.Context, event WebhookEvent) error {
 	dispute := s.extractDisputeFromEvent(event)
 	if dispute == nil {
 		return nil
@@ -748,7 +752,9 @@ func (s *paymentService) handleDisputeUpdated(ctx context.Context, event Webhook
 }
 
 // handleDisputeClosed processes dispute closed webhook events
-func (s *paymentService) handleDisputeClosed(ctx context.Context, event WebhookEvent) error {
+//
+//nolint:unparam // ctx kept for future async dispute processing
+func (s *paymentService) handleDisputeClosed(_ context.Context, event WebhookEvent) error {
 	dispute := s.extractDisputeFromEvent(event)
 	if dispute == nil {
 		return nil
@@ -779,7 +785,9 @@ func (s *paymentService) handleDisputeClosed(ctx context.Context, event WebhookE
 }
 
 // handleDisputeFundsWithdrawn processes funds withdrawn webhook events
-func (s *paymentService) handleDisputeFundsWithdrawn(ctx context.Context, event WebhookEvent) error {
+//
+//nolint:unparam // ctx kept for future async funds tracking
+func (s *paymentService) handleDisputeFundsWithdrawn(_ context.Context, event WebhookEvent) error {
 	dispute := s.extractDisputeFromEvent(event)
 	if dispute == nil {
 		return nil
@@ -803,7 +811,9 @@ func (s *paymentService) handleDisputeFundsWithdrawn(ctx context.Context, event 
 }
 
 // handleDisputeFundsReinstated processes funds reinstated webhook events
-func (s *paymentService) handleDisputeFundsReinstated(ctx context.Context, event WebhookEvent) error {
+//
+//nolint:unparam // ctx kept for future async funds tracking
+func (s *paymentService) handleDisputeFundsReinstated(_ context.Context, event WebhookEvent) error {
 	dispute := s.extractDisputeFromEvent(event)
 	if dispute == nil {
 		return nil

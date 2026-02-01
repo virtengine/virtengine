@@ -150,7 +150,10 @@ func (b *BillableLineItem) Hash() []byte {
 		PeriodStart:  b.PeriodStart.Unix(),
 		PeriodEnd:    b.PeriodEnd.Unix(),
 	}
-	bytes, _ := json.Marshal(data)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
 	hash := sha256.Sum256(bytes)
 	return hash[:]
 }

@@ -872,6 +872,7 @@ func TestConcurrentRequests(t *testing.T) {
 
 	wg.Wait()
 
+	//nolint:gosec // G115: numRequests/2 is small positive test value
 	if successCount < int32(numRequests/2) {
 		t.Errorf("too many failures in concurrent test: success=%d, errors=%d",
 			successCount, errCount)

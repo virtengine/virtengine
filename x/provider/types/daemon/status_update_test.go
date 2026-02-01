@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testRecordID = "record-2"
+
 func TestWorkloadStatusString(t *testing.T) {
 	assert.Equal(t, "pending", WorkloadStatusPending.String())
 	assert.Equal(t, "running", WorkloadStatusRunning.String())
@@ -295,7 +297,7 @@ func TestPerformUsageFraudChecks(t *testing.T) {
 		prevRecord.TimeWindow.EndTime = now
 
 		record := baseRecord
-		record.RecordID = "record-2"
+		record.RecordID = testRecordID
 		record.TimeWindow.StartTime = now
 		record.TimeWindow.EndTime = now.Add(1 * time.Hour)
 		record.ResourceUsage.CPUMillicores = 200000 // 200x increase
@@ -309,7 +311,7 @@ func TestPerformUsageFraudChecks(t *testing.T) {
 		prevRecord.TimeWindow.EndTime = now.Add(2 * time.Hour)
 
 		record := baseRecord
-		record.RecordID = "record-2"
+		record.RecordID = testRecordID
 		record.TimeWindow.StartTime = now.Add(1 * time.Hour)
 		record.TimeWindow.EndTime = now.Add(2 * time.Hour)
 

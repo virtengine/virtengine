@@ -261,7 +261,9 @@ func (w *WaldurBackend) Put(ctx context.Context, req *PutRequest) (*PutResponse,
 }
 
 // putFallback stores artifact in memory (for testing/development)
-func (w *WaldurBackend) putFallback(ctx context.Context, req *PutRequest, hashHex string, contentAddr *ContentAddress, artifactRef *ArtifactReference) (*PutResponse, error) {
+//
+//nolint:unparam // ctx is kept for interface consistency and future cancellation support
+func (w *WaldurBackend) putFallback(_ context.Context, req *PutRequest, hashHex string, contentAddr *ContentAddress, artifactRef *ArtifactReference) (*PutResponse, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -329,7 +331,9 @@ func (w *WaldurBackend) Get(ctx context.Context, req *GetRequest) (*GetResponse,
 }
 
 // getFallback retrieves from memory storage (for testing/development)
-func (w *WaldurBackend) getFallback(ctx context.Context, req *GetRequest, hashHex string) (*GetResponse, error) {
+//
+//nolint:unparam // ctx is kept for interface consistency and future cancellation support
+func (w *WaldurBackend) getFallback(_ context.Context, req *GetRequest, hashHex string) (*GetResponse, error) {
 	w.mu.RLock()
 	artifact, exists := w.fallbackStorage[hashHex]
 	w.mu.RUnlock()
@@ -421,7 +425,9 @@ func (w *WaldurBackend) Delete(ctx context.Context, req *DeleteRequest) error {
 }
 
 // deleteFallback removes from memory storage (for testing/development)
-func (w *WaldurBackend) deleteFallback(ctx context.Context, req *DeleteRequest, hashHex string) error {
+//
+//nolint:unparam // ctx is kept for interface consistency and future cancellation support
+func (w *WaldurBackend) deleteFallback(_ context.Context, req *DeleteRequest, hashHex string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 

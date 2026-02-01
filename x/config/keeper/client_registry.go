@@ -162,7 +162,9 @@ func (k Keeper) VerifyUploadSignatures(
 }
 
 // validateUserSignature validates a user's signature
-func (k Keeper) validateUserSignature(ctx sdk.Context, address sdk.AccAddress, signature []byte, payload []byte) error {
+//
+//nolint:unparam // ctx kept for future on-chain signature verification
+func (k Keeper) validateUserSignature(_ sdk.Context, _ sdk.AccAddress, signature []byte, payload []byte) error {
 	// In Cosmos SDK, user signatures are typically validated at the ante handler level
 	// This function does basic validation that the signature is present and non-empty
 	// The actual cryptographic verification happens in the SDK's signature verification

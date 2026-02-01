@@ -236,7 +236,7 @@ func (d DocumentAuthenticityInput) ComputeScore() uint32 {
 		uint64(d.TemplateMatchScore)*25 +
 		uint64(d.SecurityFeaturesScore)*15
 
-	score = score / 100
+	score /= 100
 
 	if score > uint64(MaxBasisPoints) {
 		return uint32(MaxBasisPoints)
@@ -363,7 +363,7 @@ func (d DataConsistencyInput) ComputeScore() uint32 {
 		uint64(d.AddressConsistencyScore)*15 +
 		uint64(d.CrossFieldValidation)*40
 
-	score = score / 100
+	score /= 100
 
 	// Penalties for failed checks
 	if !d.AgeVerificationPassed {
@@ -415,7 +415,7 @@ func (h HistoricalSignalsInput) ComputeScore() uint32 {
 		uint64(h.AccountAgeScore)*20 +
 		uint64(h.SuccessfulVerificationRate)*40
 
-	score = score / 100
+	score /= 100
 
 	if score > uint64(MaxBasisPoints) {
 		return uint32(MaxBasisPoints)

@@ -164,6 +164,8 @@ func (sm *SnapshotManager) RegisterSnapshot(info SnapshotInfo) error {
 }
 
 // cleanupOldSnapshots removes snapshots beyond the retention limit.
+//
+//nolint:unparam // result 0 (error) reserved for future cleanup failures
 func (sm *SnapshotManager) cleanupOldSnapshots() error {
 	keepRecent := int(sm.config.KeepRecent)
 	if keepRecent <= 0 {

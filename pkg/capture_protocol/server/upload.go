@@ -380,7 +380,9 @@ func (d *TamperDetector) checkChunkConsistency(session *UploadSession) TamperChe
 }
 
 // checkNoDuplicates verifies no chunks were submitted multiple times
-func (d *TamperDetector) checkNoDuplicates(session *UploadSession) TamperCheck {
+//
+//nolint:unparam // session kept for future duplicate tracking implementation
+func (d *TamperDetector) checkNoDuplicates(_ *UploadSession) TamperCheck {
 	check := TamperCheck{
 		Name:        "no_duplicates",
 		Description: "Verify no duplicate chunk submissions",
@@ -393,7 +395,9 @@ func (d *TamperDetector) checkNoDuplicates(session *UploadSession) TamperCheck {
 }
 
 // checkReceiptPattern checks for suspicious receipt patterns
-func (d *TamperDetector) checkReceiptPattern(session *UploadSession) TamperCheck {
+//
+//nolint:unparam // session kept for future timing pattern analysis implementation
+func (d *TamperDetector) checkReceiptPattern(_ *UploadSession) TamperCheck {
 	check := TamperCheck{
 		Name:        "receipt_pattern",
 		Description: "Check for suspicious receipt patterns",

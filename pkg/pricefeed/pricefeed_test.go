@@ -8,6 +8,9 @@ import (
 	sdkmath "cosmossdk.io/math"
 )
 
+// pairUVEUSD is the cache key for the UVE/USD price pair
+const pairUVEUSD = "uve/usd"
+
 func TestMockProvider_GetPrice(t *testing.T) {
 	provider := NewMockProvider("test-mock")
 	ctx := context.Background()
@@ -84,7 +87,7 @@ func TestInMemoryCache_Basic(t *testing.T) {
 		Source:     "test",
 	}
 
-	key := "uve/usd"
+	key := pairUVEUSD
 	cache.Set(key, price)
 
 	// Get the price
@@ -123,7 +126,7 @@ func TestInMemoryCache_Expiry(t *testing.T) {
 		Source:     "test",
 	}
 
-	key := "uve/usd"
+	key := pairUVEUSD
 	cache.Set(key, price)
 
 	// Wait for expiry
@@ -155,7 +158,7 @@ func TestInMemoryCache_StaleAllowed(t *testing.T) {
 		Source:     "test",
 	}
 
-	key := "uve/usd"
+	key := pairUVEUSD
 	cache.Set(key, price)
 
 	// Wait for TTL expiry but within stale max age

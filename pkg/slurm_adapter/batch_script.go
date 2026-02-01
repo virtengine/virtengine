@@ -575,7 +575,7 @@ func formatTimeLimit(minutes int64) string {
 
 	if hours >= 24 {
 		days := hours / 24
-		hours = hours % 24
+		hours %= 24
 		return fmt.Sprintf("%d-%02d:%02d:00", days, hours, mins)
 	}
 

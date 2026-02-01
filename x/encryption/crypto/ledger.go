@@ -936,6 +936,8 @@ func (m *MockLedgerDevice) GetAddress(ctx context.Context, hdPath string, displa
 }
 
 // generateMockAddress creates a mock address for testing
+//
+//nolint:unparam // result 1 (error) reserved for future address generation failures
 func (m *MockLedgerDevice) generateMockAddress(hdPath string, display bool) (*LedgerAddress, error) {
 	// Use a deterministic "public key" based on the path
 	// This is for testing only - real keys come from the device
@@ -1005,6 +1007,8 @@ func (m *MockLedgerDevice) SignTransaction(ctx context.Context, req *LedgerSignR
 }
 
 // generateMockSignature creates a mock signature for testing
+//
+//nolint:unparam // result 1 (error) reserved for future signature failures
 func (m *MockLedgerDevice) generateMockSignature(req *LedgerSignRequest) (*LedgerSignature, error) {
 	// Generate deterministic mock signature based on message
 	msgHash := sha256Hash(req.Message)

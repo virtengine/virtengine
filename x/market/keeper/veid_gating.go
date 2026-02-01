@@ -273,7 +273,7 @@ func (k Keeper) CheckVEIDGating(
 
 	// Return appropriate error if failed
 	if !result.Passed {
-		errMsg := "VEID gating failed"
+		var errMsg string
 		if len(result.FailureReasons) == 1 {
 			errMsg = result.FailureReasons[0].Message
 		} else {

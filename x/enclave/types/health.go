@@ -295,7 +295,7 @@ func (msg MsgEnclaveHeartbeat) ValidateBasic() error {
 	if msg.Timestamp.IsZero() {
 		return fmt.Errorf("timestamp cannot be zero")
 	}
-	if msg.Signature == nil || len(msg.Signature) == 0 {
+	if len(msg.Signature) == 0 {
 		return fmt.Errorf("signature cannot be empty")
 	}
 	// Nonce can be any value, including 0

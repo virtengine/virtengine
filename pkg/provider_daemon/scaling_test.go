@@ -66,10 +66,8 @@ func TestOrderPartitioner_ShouldHandle(t *testing.T) {
 					t.Errorf("handled %d orders, expected approximately %d (range %d-%d)",
 						handled, tt.expectHandled, minExpected, maxExpected)
 				}
-			} else {
-				if handled != tt.expectHandled {
-					t.Errorf("handled %d orders, expected %d", handled, tt.expectHandled)
-				}
+			} else if handled != tt.expectHandled {
+				t.Errorf("handled %d orders, expected %d", handled, tt.expectHandled)
 			}
 		})
 	}

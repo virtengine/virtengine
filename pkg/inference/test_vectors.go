@@ -498,6 +498,8 @@ var ConformanceTestVectors = []TestVectorEntry{
 
 // generateDeterministicEmbedding creates a deterministic embedding vector
 // for testing purposes. Uses a simple linear congruential generator.
+//
+//nolint:unparam // dim is configurable for different model architectures
 func generateDeterministicEmbedding(dim int, seed int64, scale float32) []float32 {
 	embedding := make([]float32, dim)
 

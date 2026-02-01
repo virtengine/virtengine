@@ -12,6 +12,11 @@ import (
 	ood "github.com/virtengine/virtengine/pkg/ood_adapter"
 )
 
+const (
+	// pingEndpoint is the OOD dashboard ping endpoint path.
+	pingEndpoint = "/pun/sys/dashboard/ping"
+)
+
 // TestOODProductionClientCreation tests client creation.
 func TestOODProductionClientCreation(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
@@ -41,7 +46,7 @@ func TestOODProductionClientCreation(t *testing.T) {
 func TestOODProductionClientConnect(t *testing.T) {
 	t.Run("successful connection", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -203,7 +208,7 @@ func TestOODProductionClientAuthenticate(t *testing.T) {
 func TestOODProductionClientListApps(t *testing.T) {
 	t.Run("successful list", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -233,7 +238,7 @@ func TestOODProductionClientListApps(t *testing.T) {
 
 	t.Run("fallback to defaults", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -261,7 +266,7 @@ func TestOODProductionClientListApps(t *testing.T) {
 func TestOODProductionClientLaunchApp(t *testing.T) {
 	t.Run("successful launch", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -303,7 +308,7 @@ func TestOODProductionClientLaunchApp(t *testing.T) {
 
 	t.Run("launch failure", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -341,7 +346,7 @@ func TestOODProductionClientLaunchApp(t *testing.T) {
 func TestOODProductionClientGetSession(t *testing.T) {
 	t.Run("session found", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -368,7 +373,7 @@ func TestOODProductionClientGetSession(t *testing.T) {
 
 	t.Run("session not found", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -395,7 +400,7 @@ func TestOODProductionClientGetSession(t *testing.T) {
 func TestOODProductionClientTerminateSession(t *testing.T) {
 	t.Run("successful termination", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -423,7 +428,7 @@ func TestOODProductionClientTerminateSession(t *testing.T) {
 
 	t.Run("session not found", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pun/sys/dashboard/ping" {
+			if r.URL.Path == pingEndpoint {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
@@ -449,7 +454,7 @@ func TestOODProductionClientTerminateSession(t *testing.T) {
 // TestOODProductionClientFiles tests file operations.
 func TestOODProductionClientFiles(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/pun/sys/dashboard/ping" {
+		if r.URL.Path == pingEndpoint {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -507,7 +512,7 @@ func TestOODProductionClientFiles(t *testing.T) {
 // TestOODProductionClientJobs tests job operations.
 func TestOODProductionClientJobs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/pun/sys/dashboard/ping" {
+		if r.URL.Path == pingEndpoint {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -591,7 +596,7 @@ func TestOODProductionClientSessionStateMapping(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.status, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/pun/sys/dashboard/ping" {
+				if r.URL.Path == pingEndpoint {
 					w.WriteHeader(http.StatusOK)
 					return
 				}
@@ -634,7 +639,7 @@ func TestOODProductionClientAppTypeMapping(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.token, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/pun/sys/dashboard/ping" {
+				if r.URL.Path == pingEndpoint {
 					w.WriteHeader(http.StatusOK)
 					return
 				}

@@ -812,9 +812,10 @@ func (dk *disputeKeeper) saveCorrectionLedgerEntry(store storetypes.KVStore, ent
 	store.Set(indexKey, []byte(entry.EntryID))
 }
 
+//nolint:unparam // prefix kept for future index-specific pagination
 func (dk *disputeKeeper) paginateDisputeIndex(
 	store storetypes.KVStore,
-	prefix []byte,
+	_ []byte,
 	pagination *query.PageRequest,
 ) ([]*billing.DisputeWorkflow, *query.PageResponse, error) {
 	var workflows []*billing.DisputeWorkflow
@@ -839,9 +840,10 @@ func (dk *disputeKeeper) paginateDisputeIndex(
 	return workflows, pageRes, err
 }
 
+//nolint:unparam // prefix kept for future index-specific pagination
 func (dk *disputeKeeper) paginateCorrectionIndex(
 	store storetypes.KVStore,
-	prefix []byte,
+	_ []byte,
 	pagination *query.PageRequest,
 ) ([]*billing.Correction, *query.PageResponse, error) {
 	var corrections []*billing.Correction

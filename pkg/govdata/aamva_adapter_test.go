@@ -11,6 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	oauthTokenPath = "/oauth/token"
+)
+
 func TestDefaultAAMVAConfig(t *testing.T) {
 	config := DefaultAAMVAConfig()
 
@@ -509,15 +513,15 @@ func TestAAMVADMVAdapter_Verify_InvalidLicense(t *testing.T) {
 func TestAAMVADMVAdapter_Verify_WithMockServer(t *testing.T) {
 	// Create mock AAMVA server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/oauth/token" {
+		if r.URL.Path == oauthTokenPath {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"access_token": "test-token", "expires_in": 3600, "token_type": "Bearer"}`))
+			_, _ = w.Write([]byte(`{"access_token": "test-token", "expires_in": 3600, "token_type": "Bearer"}`))
 			return
 		}
 
 		if r.URL.Path == "/verify" {
 			w.Header().Set("Content-Type", "application/xml")
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <dldvResponse>
   <messageId>test-message-123</messageId>
   <responseCode>0000</responseCode>

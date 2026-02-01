@@ -148,6 +148,7 @@ func (v *CertificateChainVerifier) Verify(certChain []*x509.Certificate) error {
 
 	// Build intermediate pool from provided chain and configured intermediates
 	intermediates := x509.NewCertPool()
+	//nolint:gosec // G602: loop starts at 1, bounds checked by len(certChain) in condition
 	for i := 1; i < len(certChain); i++ {
 		intermediates.AddCert(certChain[i])
 	}

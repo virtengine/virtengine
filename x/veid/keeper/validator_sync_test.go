@@ -387,9 +387,7 @@ func (s *ValidatorSyncTestSuite) TestGetOutOfSyncValidators_WithOutOfSyncValidat
 	// Validators in "syncing" state are not counted as out_of_sync
 	// outOfSync may be nil if no validators are in out_of_sync or error state
 	// This test verifies the function executes correctly
-	if outOfSync != nil {
-		s.Require().True(len(outOfSync) >= 0)
-	}
+	s.Require().True(len(outOfSync) == 0)
 }
 
 // ============================================================================

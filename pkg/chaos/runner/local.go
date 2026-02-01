@@ -208,16 +208,16 @@ func (r *LocalRunner) ExecuteAction(ctx context.Context, action chaos.Experiment
 
 // ExecuteRollback executes a rollback action.
 func (r *LocalRunner) ExecuteRollback(ctx context.Context, action chaos.RollbackAction) error {
-	// Simulate rollback execution
-	timeout := action.Timeout
-	if timeout == 0 {
-		timeout = r.simulatedDelay
+	// Simulate rollback execution using action timeout if specified
+	delay := action.Timeout
+	if delay == 0 {
+		delay = r.simulatedDelay
 	}
 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(r.simulatedDelay):
+	case <-time.After(delay):
 	}
 
 	if r.logger != nil {

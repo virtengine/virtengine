@@ -125,6 +125,7 @@ func (c *ProductionMOABClient) setupHostKeyCallback() (ssh.HostKeyCallback, erro
 	case SSHHostKeyInsecure:
 		// SECURITY WARNING: This disables host key verification and is vulnerable to MITM attacks.
 		// Only use for testing or when other security measures (e.g., VPN, private network) are in place.
+		//nolint:gosec // G106: InsecureIgnoreHostKey intentional for SSHHostKeyInsecure mode
 		return ssh.InsecureIgnoreHostKey(), nil
 
 	case SSHHostKeyPinned:
@@ -543,7 +544,7 @@ func (c *ProductionMOABClient) execute(ctx context.Context, command string, stdi
 		}
 		go func() {
 			defer stdinPipe.Close()
-			io.WriteString(stdinPipe, stdin)
+			_, _ = io.WriteString(stdinPipe, stdin)
 		}()
 	}
 
@@ -560,7 +561,7 @@ func (c *ProductionMOABClient) execute(ctx context.Context, command string, stdi
 
 	select {
 	case <-ctx.Done():
-		session.Signal(ssh.SIGKILL)
+		_ = session.Signal(ssh.SIGKILL)
 		return "", ctx.Err()
 	case err := <-done:
 		if err != nil {
@@ -675,6 +676,7 @@ func (p *sshConnectionPool) close() {
 func calculateBackoff(attempt int) time.Duration {
 	// Base backoff: 100ms, 200ms, 400ms, 800ms...
 	base := time.Duration(100) * time.Millisecond
+	//nolint:gosec // G115: attempt is small retry counter
 	backoff := base * (1 << uint(attempt))
 
 	// Cap at 30 seconds
@@ -739,7 +741,8 @@ type jobXMLData struct {
 	SysUTime       int64  `xml:"SysUTime,attr"`
 }
 
-func parseCheckjobXML(output string, moabJobID string) (*MOABJob, error) {
+//nolint:unparam // moabJobID kept for parse context and diagnostics
+func parseCheckjobXML(output string, _ string) (*MOABJob, error) {
 	var response checkjobXMLResponse
 	if err := xml.Unmarshal([]byte(output), &response); err != nil {
 		return nil, err
@@ -783,6 +786,7 @@ func parseCheckjobXML(output string, moabJobID string) (*MOABJob, error) {
 	return job, nil
 }
 
+//nolint:unparam // result 1 (error) reserved for future parse failures
 func parseCheckjobText(output string, moabJobID string) (*MOABJob, error) {
 	job := &MOABJob{
 		MOABJobID: moabJobID,
@@ -856,6 +860,7 @@ func parseJobAccountingXML(output string) (*MOABUsageMetrics, error) {
 	}, nil
 }
 
+//nolint:unparam // result 1 (error) reserved for future parse failures
 func parseJobAccountingText(output string) (*MOABUsageMetrics, error) {
 	metrics := &MOABUsageMetrics{}
 

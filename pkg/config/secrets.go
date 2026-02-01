@@ -22,6 +22,8 @@ import (
 	"strings"
 )
 
+const stringTrue = "true"
+
 // SecretConfig holds all secret configuration values for the application.
 // Use struct tags to specify environment variable names and requirements:
 //   - env: the environment variable name
@@ -137,7 +139,7 @@ func (c *SecretConfig) ValidateSecrets() error {
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		requiredTag := field.Tag.Get("required")
-		if requiredTag != "true" {
+		if requiredTag != stringTrue {
 			continue
 		}
 
@@ -178,7 +180,7 @@ func (c *SecretConfig) RedactedString() string {
 		envTag := field.Tag.Get("env")
 		requiredTag := field.Tag.Get("required")
 		reqMarker := ""
-		if requiredTag == "true" {
+		if requiredTag == stringTrue {
 			reqMarker = " (required)"
 		}
 
@@ -214,9 +216,13 @@ func (c *SecretConfig) Clear() {
 // secureBytes is a helper type for secrets that need to be zeroed.
 // Use this for secrets loaded from external sources (files, network)
 // where you control the allocation and can safely zero the memory.
+//
+//nolint:unused // Reserved for future secure memory handling
 type secureBytes []byte
 
 // Clear zeros out the byte slice contents.
+//
+//nolint:unused // Reserved for future secure memory handling
 func (s secureBytes) Clear() {
 	for i := range s {
 		s[i] = 0
@@ -240,7 +246,7 @@ func GetRequiredFields() []string {
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-		if field.Tag.Get("required") == "true" {
+		if field.Tag.Get("required") == stringTrue {
 			required = append(required, field.Name)
 		}
 	}

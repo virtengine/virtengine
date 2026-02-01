@@ -72,7 +72,7 @@ func (c *OODProductionClient) Connect(ctx context.Context) error {
 
 	// OOD returns 200 or 401 (needs auth) - both indicate server is reachable
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusUnauthorized {
-		return fmt.Errorf("Open OnDemand health check failed with status: %d", resp.StatusCode)
+		return fmt.Errorf("open OnDemand health check failed with status: %d", resp.StatusCode)
 	}
 
 	c.connected = true

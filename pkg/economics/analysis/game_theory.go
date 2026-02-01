@@ -6,6 +6,13 @@ import (
 	"github.com/virtengine/virtengine/pkg/economics"
 )
 
+const (
+	alignmentAligned            = "aligned"
+	alignmentMisaligned         = "misaligned"
+	alignmentUnknown            = "unknown"
+	strategyHonestParticipation = "honest_participation"
+)
+
 // GameTheoryAnalyzer analyzes game-theoretic properties of the economic system.
 type GameTheoryAnalyzer struct {
 	params economics.TokenomicsParams
@@ -32,7 +39,7 @@ func (g *GameTheoryAnalyzer) AnalyzeValidatorIncentives(
 ) economics.GameTheoryAnalysis {
 	strategies := map[string][]string{
 		"validator": {
-			"honest_participation",
+			strategyHonestParticipation,
 			"double_signing",
 			"selective_censorship",
 			"collusion",
@@ -125,9 +132,9 @@ func (g *GameTheoryAnalyzer) AnalyzeVEIDVerifierIncentives(
 
 	dominantStrategy := nashEquilibrium
 
-	alignment := "aligned"
+	alignment := alignmentAligned
 	if nashEquilibrium != "thorough_verification" {
-		alignment = "misaligned"
+		alignment = alignmentMisaligned
 	}
 
 	return economics.GameTheoryAnalysis{
@@ -164,7 +171,7 @@ func (g *GameTheoryAnalyzer) AnalyzeProviderIncentives(
 		nashEquilibrium = "quality_degradation"
 	}
 
-	alignment := "aligned"
+	alignment := alignmentAligned
 	if nashEquilibrium != "honest_service" {
 		alignment = "partially_misaligned"
 	}
@@ -257,11 +264,11 @@ func (g *GameTheoryAnalyzer) calculateProviderPayoffs(takeRateBPS, leaseValue, r
 
 func (g *GameTheoryAnalyzer) findNashEquilibrium(payoffs [][]float64) string {
 	if len(payoffs) == 0 {
-		return "unknown"
+		return alignmentUnknown
 	}
 
 	// Find strategy with highest minimum payoff (maximin)
-	strategies := []string{"honest_participation", "double_signing", "selective_censorship", "collusion", "free_riding"}
+	strategies := []string{strategyHonestParticipation, "double_signing", "selective_censorship", "collusion", "free_riding"}
 	
 	bestStrategy := 0
 	bestMinPayoff := float64(-1e18)
@@ -318,7 +325,7 @@ func (g *GameTheoryAnalyzer) findDelegatorNashEquilibrium(payoffs [][]float64) s
 	if bestStrategy < len(strategies) {
 		return strategies[bestStrategy]
 	}
-	return "unknown"
+	return alignmentUnknown
 }
 
 func (g *GameTheoryAnalyzer) findDelegatorDominantStrategy(payoffs [][]float64) string {
@@ -326,29 +333,29 @@ func (g *GameTheoryAnalyzer) findDelegatorDominantStrategy(payoffs [][]float64) 
 }
 
 func (g *GameTheoryAnalyzer) assessIncentiveAlignment(nash, dominant string) string {
-	if nash == "honest_participation" && dominant == "honest_participation" {
+	if nash == strategyHonestParticipation && dominant == strategyHonestParticipation {
 		return "strongly_aligned"
 	}
-	if nash == "honest_participation" || dominant == "honest_participation" {
+	if nash == strategyHonestParticipation || dominant == strategyHonestParticipation {
 		return "partially_aligned"
 	}
-	return "misaligned"
+	return alignmentMisaligned
 }
 
 func (g *GameTheoryAnalyzer) assessDelegatorAlignment(nash string) string {
 	if nash == "split_delegation" || nash == "delegate_to_small_validator" {
-		return "aligned" // Encourages decentralization
+		return alignmentAligned // Encourages decentralization
 	}
 	if nash == "delegate_to_top_validator" {
 		return "partially_aligned" // Not ideal but not harmful
 	}
-	return "misaligned"
+	return alignmentMisaligned
 }
 
 func (g *GameTheoryAnalyzer) generateValidatorRecommendations(nash, alignment string) []string {
 	var recommendations []string
 
-	if alignment == "misaligned" {
+	if alignment == alignmentMisaligned {
 		recommendations = append(recommendations, "Increase slashing penalties for misbehavior")
 		recommendations = append(recommendations, "Implement stronger detection mechanisms for collusion")
 	}
@@ -367,7 +374,7 @@ func (g *GameTheoryAnalyzer) generateValidatorRecommendations(nash, alignment st
 func (g *GameTheoryAnalyzer) generateDelegatorRecommendations(alignment string) []string {
 	var recommendations []string
 
-	if alignment == "misaligned" {
+	if alignment == alignmentMisaligned {
 		recommendations = append(recommendations, "Increase rewards for delegating to smaller validators")
 		recommendations = append(recommendations, "Reduce unbonding period to lower switching costs")
 	}
@@ -380,7 +387,7 @@ func (g *GameTheoryAnalyzer) generateDelegatorRecommendations(alignment string) 
 func (g *GameTheoryAnalyzer) generateVEIDRecommendations(alignment string, reward, cost int64) []string {
 	var recommendations []string
 
-	if alignment == "misaligned" {
+	if alignment == alignmentMisaligned {
 		recommendations = append(recommendations, "Increase verification rewards to at least 2x the estimated cost")
 		recommendations = append(recommendations, "Implement quality scoring for verifications")
 	}
@@ -395,7 +402,7 @@ func (g *GameTheoryAnalyzer) generateVEIDRecommendations(alignment string, rewar
 func (g *GameTheoryAnalyzer) generateProviderRecommendations(alignment string, reputationWeight int64) []string {
 	var recommendations []string
 
-	if alignment != "aligned" {
+	if alignment != alignmentAligned {
 		recommendations = append(recommendations, "Increase reputation weight in provider selection")
 	}
 
@@ -415,7 +422,7 @@ func (g *GameTheoryAnalyzer) analyzeValidatorDelegatorGame() economics.GameTheor
 			"delegator": {"delegate", "withdraw", "redelegate"},
 		},
 		NashEquilibrium:    "competitive_commission + delegate",
-		IncentiveAlignment: "aligned",
+		IncentiveAlignment: alignmentAligned,
 		Recommendations: []string{
 			"Commission market is competitive when there are enough validators",
 			"Delegators benefit from shopping around for best risk-adjusted returns",
@@ -432,7 +439,7 @@ func (g *GameTheoryAnalyzer) analyzeProviderTenantGame() economics.GameTheoryAna
 			"tenant":   {"verify_usage", "trust", "dispute"},
 		},
 		NashEquilibrium:    "honest_fulfillment + trust",
-		IncentiveAlignment: "aligned",
+		IncentiveAlignment: alignmentAligned,
 		Recommendations: []string{
 			"Escrow mechanism ensures providers are incentivized to deliver",
 			"Usage verification and reputation systems reduce information asymmetry",
@@ -449,7 +456,7 @@ func (g *GameTheoryAnalyzer) analyzeVerifierUserGame() economics.GameTheoryAnaly
 			"user":     {"honest_submission", "fraudulent_submission"},
 		},
 		NashEquilibrium:    "thorough + honest_submission",
-		IncentiveAlignment: "aligned",
+		IncentiveAlignment: alignmentAligned,
 		Recommendations: []string{
 			"Multi-verifier consensus reduces bias risk",
 			"Penalty for false submissions deters fraud",

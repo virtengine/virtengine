@@ -221,7 +221,7 @@ func (f *FileStorage) ListKeys(ctx context.Context, signerID string) ([]*veidtyp
 		return nil, ErrStorageError.Wrapf("failed to list key files: %v", err)
 	}
 
-	var result []*veidtypes.SignerKeyInfo
+	result := make([]*veidtypes.SignerKeyInfo, 0, len(files))
 	for _, file := range files {
 		data, err := os.ReadFile(file)
 		if err != nil {

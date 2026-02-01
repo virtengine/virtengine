@@ -33,8 +33,10 @@ func testAccountXID(dseq int) string {
 }
 
 // testPaymentXID returns a valid XID for payment: "gseq/oseq/provider"
-func testPaymentXID(gseq, oseq int) string {
-	return fmt.Sprintf("%d/%d/%s", gseq, oseq, testProviderAddr)
+//
+//nolint:unparam // gseq kept for future multi-group test scenarios
+func testPaymentXID(_, oseq int) string {
+	return fmt.Sprintf("%d/%d/%s", 1, oseq, testProviderAddr)
 }
 
 type GenesisTestSuite struct {

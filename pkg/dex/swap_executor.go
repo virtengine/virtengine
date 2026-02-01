@@ -201,6 +201,8 @@ func (e *swapExecutorImpl) findDirectRoute(ctx context.Context, request SwapRequ
 }
 
 // findAllRoutes finds all possible routes
+//
+//nolint:unparam // result 1 (error) reserved for future multi-hop discovery failures
 func (e *swapExecutorImpl) findAllRoutes(ctx context.Context, request SwapRequest) ([]SwapRoute, error) {
 	adapters := e.service.getHealthyAdapters(ctx)
 
@@ -239,7 +241,9 @@ func (e *swapExecutorImpl) calculateRouteInput(route SwapRoute) sdkmath.Int {
 }
 
 // calculateRouteFee calculates the total fee for a route
-func (e *swapExecutorImpl) calculateRouteFee(route SwapRoute, inputAmount sdkmath.Int) sdkmath.Int {
+//
+//nolint:unparam // inputAmount kept for future slippage-based fee calculation
+func (e *swapExecutorImpl) calculateRouteFee(route SwapRoute, _ sdkmath.Int) sdkmath.Int {
 	totalFee := sdkmath.ZeroInt()
 	for _, hop := range route.Hops {
 		hopFee := hop.Fee.MulInt(hop.AmountIn).TruncateInt()

@@ -34,7 +34,7 @@ func FuzzManifestParse(f *testing.F) {
 			},
 		},
 	}
-	validJSON, _ := json.Marshal(validManifest)
+	validJSON, _ := json.Marshal(validManifest) //nolint:errchkjson // test code
 	f.Add(validJSON)
 
 	// Edge cases

@@ -926,7 +926,7 @@ func (ka *KubernetesAdapter) buildServiceSpec(svc *ServiceSpec, workload *Deploy
 		"virtengine.com/service": svc.Name,
 	}
 
-	var ports []K8sServicePortSpec
+	ports := make([]K8sServicePortSpec, 0, len(svc.Ports))
 	serviceType := "ClusterIP"
 
 	for _, port := range svc.Ports {

@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// statusFailed is the VEID verification status for failed/rejected verifications
+const statusFailed = "failed"
+
 // ============================================================================
 // KYC Gate Implementation
 // ============================================================================
@@ -108,7 +111,7 @@ func (g *VEIDKYCGate) CheckKYCStatus(ctx context.Context, accountAddress string,
 		result.Status = KYCStatusVerified
 	case "pending", "in_progress":
 		result.Status = KYCStatusInProgress
-	case "failed", "rejected":
+	case statusFailed, "rejected":
 		result.Status = KYCStatusFailed
 	case "expired":
 		result.Status = KYCStatusExpired

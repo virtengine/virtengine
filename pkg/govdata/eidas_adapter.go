@@ -267,9 +267,9 @@ const (
 // eidasAdapter implements the eIDAS adapter for EU identity verification
 type eidasAdapter struct {
 	*baseAdapter
-	eidasConfig  EIDASConfig
-	accessToken  string
-	tokenExpiry  time.Time
+	eidasConfig EIDASConfig
+	accessToken string    //nolint:unused // Reserved for OAuth token caching
+	tokenExpiry time.Time //nolint:unused // Reserved for OAuth token caching
 	windowStart  time.Time
 	requestCount int
 	mu           sync.RWMutex
@@ -576,6 +576,8 @@ func (a *eidasAdapter) attrToFieldName(attrURI string) string {
 }
 
 // loadEIDASConfigFromEnv loads eIDAS configuration from environment variables
+//
+//nolint:unparam // result 2 (error) reserved for future validation failures
 func loadEIDASConfigFromEnv(_ AdapterConfig) (EIDASConfig, bool, error) {
 	spID := os.Getenv("EIDAS_SERVICE_PROVIDER_ID")
 	spCountry := os.Getenv("EIDAS_SERVICE_PROVIDER_COUNTRY")

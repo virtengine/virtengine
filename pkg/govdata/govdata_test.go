@@ -459,7 +459,7 @@ func TestService_VerifyDocument(t *testing.T) {
 	if err := svc.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer svc.Stop(ctx)
+	defer func() { _ = svc.Stop(ctx) }()
 
 	req := &VerificationRequest{
 		WalletAddress: "ve1abc123",
@@ -529,7 +529,7 @@ func TestService_VerifyDocument_RateLimited(t *testing.T) {
 	if err := svc.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer svc.Stop(ctx)
+	defer func() { _ = svc.Stop(ctx) }()
 
 	req := &VerificationRequest{
 		WalletAddress: "ve1ratelimit",
@@ -576,7 +576,7 @@ func TestService_ConsentWorkflow(t *testing.T) {
 	if err := svc.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer svc.Stop(ctx)
+	defer func() { _ = svc.Stop(ctx) }()
 
 	// Grant consent
 	consent := &Consent{
@@ -1294,7 +1294,7 @@ func TestRateLimiter_GetRemaining(t *testing.T) {
 	}
 
 	// Use one request
-	limiter.Allow(ctx, wallet)
+	_, _ = limiter.Allow(ctx, wallet)
 
 	info, _ = limiter.GetRemaining(ctx, wallet)
 	if info.RemainingMinute != 9 {
@@ -1315,8 +1315,8 @@ func TestRateLimiter_Reset(t *testing.T) {
 	wallet := "ve1reset"
 
 	// Use all requests
-	limiter.Allow(ctx, wallet)
-	limiter.Allow(ctx, wallet)
+	_, _ = limiter.Allow(ctx, wallet)
+	_, _ = limiter.Allow(ctx, wallet)
 
 	// Should be rate limited
 	allowed, _ := limiter.Allow(ctx, wallet)

@@ -24,6 +24,9 @@ import (
 	"time"
 )
 
+// statusUnknown is the unknown status string value
+const statusUnknown = "UNKNOWN"
+
 // =============================================================================
 // Error Definitions
 // =============================================================================
@@ -79,7 +82,7 @@ func (h HealthStatus) String() string {
 	case HealthUnhealthy:
 		return "UNHEALTHY"
 	default:
-		return "UNKNOWN"
+		return statusUnknown
 	}
 }
 
@@ -113,7 +116,7 @@ func (s SelectionStrategy) String() string {
 	case StrategyLatency:
 		return "LATENCY"
 	default:
-		return "UNKNOWN"
+		return statusUnknown
 	}
 }
 
@@ -161,7 +164,7 @@ func (c CircuitBreakerState) String() string {
 	case CircuitHalfOpen:
 		return "HALF_OPEN"
 	default:
-		return "UNKNOWN"
+		return statusUnknown
 	}
 }
 
@@ -242,6 +245,7 @@ func (b *EnclaveBackend) RecordSuccess(latencyMs int64) {
 
 	b.Metrics.TotalRequests++
 	b.Metrics.SuccessfulRequests++
+	//nolint:gosec // G115: latencyMs is positive duration in milliseconds
 	b.Metrics.TotalLatencyMs += uint64(latencyMs)
 	b.Metrics.LastRequestTime = time.Now()
 
@@ -265,6 +269,7 @@ func (b *EnclaveBackend) RecordFailure(latencyMs int64) {
 
 	b.Metrics.TotalRequests++
 	b.Metrics.FailedRequests++
+	//nolint:gosec // G115: latencyMs is positive duration in milliseconds
 	b.Metrics.TotalLatencyMs += uint64(latencyMs)
 	b.Metrics.LastRequestTime = time.Now()
 
@@ -663,6 +668,7 @@ func secureRandomIntn(n int) (int, error) {
 		return 0, err
 	}
 	r := binary.BigEndian.Uint64(buf[:])
+	//nolint:gosec // G115: n is validated positive, modulo result fits in int
 	return int(r % uint64(n)), nil
 }
 

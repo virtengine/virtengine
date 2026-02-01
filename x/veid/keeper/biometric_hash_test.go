@@ -358,7 +358,7 @@ func TestFuzzyMatching(t *testing.T) {
 		copy(similarTemplate, baseTemplate)
 		// Modify only 10% of bytes
 		for i := 0; i < len(similarTemplate)/10; i++ {
-			similarTemplate[i*10] = similarTemplate[i*10] ^ 0x01
+			similarTemplate[i*10] ^= 0x01
 		}
 
 		// Create a completely different template

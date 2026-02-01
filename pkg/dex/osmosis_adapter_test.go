@@ -534,7 +534,6 @@ func TestTokenParsing(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.denom, func(t *testing.T) {
 			t.Parallel()
 			token := adapter.parseToken(OsmosisCoin{Denom: tc.denom, Amount: "1000000"})

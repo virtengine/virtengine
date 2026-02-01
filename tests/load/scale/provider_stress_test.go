@@ -233,9 +233,12 @@ type ProviderPool struct {
 	mu        sync.RWMutex
 	
 	// Metrics
-	totalEvents    atomic.Int64
-	droppedEvents  atomic.Int64
-	processedBids  atomic.Int64
+	//nolint:unused // Reserved for event tracking metrics
+	totalEvents atomic.Int64
+	//nolint:unused // Reserved for event tracking metrics
+	droppedEvents atomic.Int64
+	//nolint:unused // Reserved for bid tracking metrics
+	processedBids atomic.Int64
 }
 
 // NewProviderPool creates a new provider pool
@@ -363,17 +366,19 @@ func (g *EventGenerator) Generated() int64 {
 // ============================================================================
 
 // ConnectionPool simulates gRPC connection pooling
+//
+//nolint:unused // Reserved for connection pool stress testing
 type ConnectionPool struct {
 	mu          sync.Mutex
 	connections []*MockConnection
 	available   chan *MockConnection
 	maxSize     int
-	
+
 	// Metrics
-	acquireCount   atomic.Int64
-	releaseCount   atomic.Int64
-	waitTime       []time.Duration
-	waitMu         sync.Mutex
+	acquireCount atomic.Int64
+	releaseCount atomic.Int64
+	waitTime     []time.Duration
+	waitMu       sync.Mutex
 }
 
 // MockConnection simulates a gRPC connection

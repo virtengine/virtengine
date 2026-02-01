@@ -486,9 +486,10 @@ func (ik *invoiceKeeper) saveLedgerEntry(store storetypes.KVStore, entry *billin
 	store.Set(indexKey, []byte(entry.EntryID))
 }
 
+//nolint:unparam // prefix kept for future index-specific pagination
 func (ik *invoiceKeeper) paginateInvoiceIndex(
 	store storetypes.KVStore,
-	prefix []byte,
+	_ []byte,
 	pagination *query.PageRequest,
 ) ([]*billing.InvoiceLedgerRecord, *query.PageResponse, error) {
 	var records []*billing.InvoiceLedgerRecord

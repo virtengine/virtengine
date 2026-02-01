@@ -591,7 +591,7 @@ func combineSignatures(signatures []CollectedSignature) []byte {
 	})
 
 	// Concatenate signatures with length prefix
-	var combined []byte
+	combined := make([]byte, 0, 1+len(sorted)*(8+1+64))
 	combined = append(combined, byte(len(sorted))) // Number of signatures
 
 	for _, sig := range sorted {

@@ -378,10 +378,14 @@ func (c *HPCBillingCalculator) CalculateBillableAmount(
 		excessMinutes := (metrics.QueueTimeSeconds - c.Rules.QueueTimePenaltyThresholdSeconds) / 60
 		// Penalty is applied as credit (negative cost) to customer
 		penaltyBps := int64(c.Rules.QueueTimePenaltyRateBps) * excessMinutes
-		if penaltyBps > 5000 { // Cap at 50%
-			penaltyBps = 5000
+		// Cap at 50%
+		const maxPenaltyBps = 5000
+		if penaltyBps > maxPenaltyBps {
+			penaltyBps = maxPenaltyBps
 		}
 		// Queue penalty is a credit, so it's tracked but applied differently
+		// TODO: Apply penaltyBps to breakdown calculation
+		_ = penaltyBps
 		breakdown.QueuePenalty = sdk.NewCoin(denom, sdkmath.NewInt(0))
 	}
 

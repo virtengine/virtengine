@@ -364,7 +364,7 @@ func (s *InMemoryDisputeStore) List(opts DisputeListOptions) []*DisputeRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var results []*DisputeRecord
+	results := make([]*DisputeRecord, 0, len(s.disputes))
 	count := 0
 	skipped := 0
 

@@ -218,7 +218,7 @@ func (s *MemoryWorkflowStore) ListCheckpoints(ctx context.Context, workflowID st
 		return []*Checkpoint{}, nil
 	}
 
-	var results []*Checkpoint
+	results := make([]*Checkpoint, 0, len(steps))
 	for _, cp := range steps {
 		cpCopy := *cp
 		results = append(results, &cpCopy)

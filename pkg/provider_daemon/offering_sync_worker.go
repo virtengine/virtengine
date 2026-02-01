@@ -85,19 +85,31 @@ func NewDefaultAuditLogger(prefix string) *DefaultAuditLogger {
 
 // LogSyncAttempt logs a sync operation to the standard logger as JSON.
 func (l *DefaultAuditLogger) LogSyncAttempt(entry OfferingSyncAuditEntry) {
-	data, _ := json.Marshal(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("%s sync: failed to marshal entry: %v", l.prefix, err)
+		return
+	}
 	log.Printf("%s sync: %s", l.prefix, string(data))
 }
 
 // LogReconciliation logs a reconciliation run to the standard logger as JSON.
 func (l *DefaultAuditLogger) LogReconciliation(entry ReconciliationAuditEntry) {
-	data, _ := json.Marshal(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("%s reconcile: failed to marshal entry: %v", l.prefix, err)
+		return
+	}
 	log.Printf("%s reconcile: %s", l.prefix, string(data))
 }
 
 // LogDeadLetter logs a dead-letter event to the standard logger as JSON.
 func (l *DefaultAuditLogger) LogDeadLetter(entry DeadLetterAuditEntry) {
-	data, _ := json.Marshal(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("%s dead_letter: failed to marshal entry: %v", l.prefix, err)
+		return
+	}
 	log.Printf("%s dead_letter: %s", l.prefix, string(data))
 }
 

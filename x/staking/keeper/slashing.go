@@ -136,11 +136,11 @@ func (k Keeper) SlashValidator(ctx sdk.Context, validatorAddr string, reason typ
 	if found {
 		// Apply escalation for repeat offenders
 		for i := int64(0); i < signingInfo.InfractionCount; i++ {
-			escalatedSlashPercent = (escalatedSlashPercent * slashConfig.EscalationMultiplier)
+			escalatedSlashPercent *= slashConfig.EscalationMultiplier
 			if escalatedSlashPercent > types.FixedPointScale {
 				escalatedSlashPercent = types.FixedPointScale // Cap at 100%
 			}
-			escalatedJailDuration = escalatedJailDuration * slashConfig.EscalationMultiplier
+			escalatedJailDuration *= slashConfig.EscalationMultiplier
 		}
 	}
 

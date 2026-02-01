@@ -469,9 +469,11 @@ func (a *DistributionAnalyzer) applyValidatorCap(
 }
 
 // applyDelegationBonus applies bonus for delegation to smaller validators.
+//
+//nolint:unparam // totalSupply kept for future percentage-based bonus calculation
 func (a *DistributionAnalyzer) applyDelegationBonus(
 	holdings []Holding,
-	totalSupply *big.Int,
+	_ *big.Int,
 	policy RedistributionPolicy,
 ) []Holding {
 	bonusBPS := policy.Parameters["bonus_bps"]

@@ -107,7 +107,9 @@ func (k Keeper) ScheduleJob(ctx sdk.Context, job *types.HPCJob) (*types.Scheduli
 }
 
 // findEligibleClusters finds clusters eligible for the job
-func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, offering *types.HPCOffering) []types.ClusterCandidate {
+//
+//nolint:unparam // offering kept for future offering-based cluster filtering
+func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, _ *types.HPCOffering) []types.ClusterCandidate {
 	var candidates []types.ClusterCandidate
 
 	k.WithClusters(ctx, func(cluster types.HPCCluster) bool {
@@ -154,7 +156,9 @@ func (k Keeper) findEligibleClusters(ctx sdk.Context, job *types.HPCJob, offerin
 }
 
 // scoreClusters calculates scores for cluster candidates
-func (k Keeper) scoreClusters(ctx sdk.Context, candidates []types.ClusterCandidate, job *types.HPCJob, params types.Params) {
+//
+//nolint:unparam // ctx kept for future state-based scoring adjustments
+func (k Keeper) scoreClusters(_ sdk.Context, candidates []types.ClusterCandidate, job *types.HPCJob, params types.Params) {
 	latencyWeight := parseFixedPoint(params.LatencyWeightFactor)
 	capacityWeight := parseFixedPoint(params.CapacityWeightFactor)
 
@@ -296,7 +300,7 @@ func CalculateAverageLatency(measurements []types.LatencyMeasurement) int64 {
 
 // FilterEligibleClusters filters clusters that meet job resource requirements
 func FilterEligibleClusters(clusters []types.HPCCluster, resources types.JobResources) []types.HPCCluster {
-	var eligible []types.HPCCluster
+	eligible := make([]types.HPCCluster, 0, len(clusters))
 
 	for _, cluster := range clusters {
 		// Skip non-active clusters

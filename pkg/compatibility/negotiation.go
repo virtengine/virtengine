@@ -31,7 +31,7 @@ type ProtocolVersionInfo struct {
 	// Current indicates this is the current/recommended version
 	Current bool `json:"current"`
 
-	// Deprecated indicates this version is deprecated
+	// Deprecated: indicates this version is deprecated
 	Deprecated bool `json:"deprecated"`
 
 	// DeprecationMessage contains the deprecation notice

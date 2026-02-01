@@ -114,10 +114,10 @@ func (s *ReliabilityScore) Validate() error {
 func ComputeReliabilityScore(inputs ReliabilityScoreInputs) (int64, ComponentScores) {
 	// Weights for each component (must sum to 1000000)
 	const (
-		performanceWeight  int64 = 300000  // 30%
-		uptimeWeight       int64 = 250000  // 25%
-		provisioningWeight int64 = 250000  // 25%
-		trustWeight        int64 = 200000  // 20%
+		performanceWeight  int64 = 300000 // 30%
+		uptimeWeight       int64 = 250000 // 25%
+		provisioningWeight int64 = 250000 // 25%
+		trustWeight        int64 = 200000 // 20%
 	)
 
 	// Calculate performance score (from benchmark summary)

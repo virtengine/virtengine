@@ -26,6 +26,9 @@ import (
 	"time"
 )
 
+// platformNitro is the nitro platform string used in configuration
+const platformNitro = "nitro"
+
 // =============================================================================
 // Production Mode Constants
 // =============================================================================
@@ -395,7 +398,7 @@ func (c *ProductionConfig) Validate() error {
 	// Validate platform if specified
 	if c.ForcePlatform != "" {
 		switch c.ForcePlatform {
-		case "sgx", "sev-snp", "nitro", "simulated":
+		case "sgx", "sev-snp", platformNitro, "simulated":
 			// Valid
 		default:
 			errs = append(errs, fmt.Sprintf("invalid ForcePlatform: %s", c.ForcePlatform))
@@ -425,7 +428,7 @@ func (c *ProductionConfig) Validate() error {
 	}
 
 	// Validate Nitro config
-	if c.ForcePlatform == "nitro" || c.ForcePlatform == "" {
+	if c.ForcePlatform == platformNitro || c.ForcePlatform == "" {
 		if c.Nitro.EnclaveImagePath == "" {
 			errs = append(errs, "Nitro.EnclaveImagePath is required")
 		}

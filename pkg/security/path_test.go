@@ -103,6 +103,7 @@ func TestPathValidator(t *testing.T) {
 		t.Fatal(err)
 	}
 	testFile := filepath.Join(subDir, "test.json")
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(testFile, []byte("{}"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -138,9 +139,11 @@ func TestPathValidatorWithMultipleDirs(t *testing.T) {
 
 	file1 := filepath.Join(tmpDir1, "file1.txt")
 	file2 := filepath.Join(tmpDir2, "file2.txt")
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(file1, []byte("1"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(file2, []byte("2"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -165,6 +168,7 @@ func TestSafeReadFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := []byte("test content")
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +198,7 @@ func TestSafeReadFile(t *testing.T) {
 func TestSafeOpen(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -218,9 +223,11 @@ func TestSafeReadFileWithExtension(t *testing.T) {
 	tmpDir := t.TempDir()
 	jsonFile := filepath.Join(tmpDir, "test.json")
 	yamlFile := filepath.Join(tmpDir, "test.yaml")
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(jsonFile, []byte("{}"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(yamlFile, []byte("key: value"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -244,6 +251,7 @@ func TestValidateAndClean(t *testing.T) {
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.txt")
+	//nolint:gosec // G306: test file, 0644 permissions acceptable
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}

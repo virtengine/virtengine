@@ -155,8 +155,10 @@ func (s *ReconciliationService) reconcileProvider(
 }
 
 // reconcilePayout reconciles a single payout.
+//
+//nolint:unparam // ctx kept for future async payout verification
 func (s *ReconciliationService) reconcilePayout(
-	ctx context.Context,
+	_ context.Context,
 	payout *PayoutIntent,
 	txByID map[string]SettlementTransaction,
 ) *ReconciliationRecord {

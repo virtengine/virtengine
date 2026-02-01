@@ -83,9 +83,12 @@ type ControllerExperiment struct {
 	Timeline []Event `json:"timeline"`
 
 	// Internal state for controller orchestration
+	//nolint:unused // Reserved for future controller orchestration
 	cancelFunc context.CancelFunc `json:"-"`
-	pauseCh    chan struct{}      `json:"-"`
-	resumeCh   chan struct{}      `json:"-"`
+	//nolint:unused // Reserved for future pause/resume functionality
+	pauseCh chan struct{} `json:"-"`
+	//nolint:unused // Reserved for future pause/resume functionality
+	resumeCh chan struct{} `json:"-"`
 }
 
 // ControllerExperimentResults extends ExperimentResults with controller-specific fields.
@@ -263,7 +266,7 @@ type ScheduledExperiment struct {
 
 // ExperimentScheduler schedules experiments for recurring execution.
 type ExperimentScheduler struct {
-	cronSchedule    string
+	cronSchedule string //nolint:unused // Reserved for cron-based scheduling
 	enabled         bool
 	experimentQueue []*ExperimentSpec
 	scheduled       map[string]*ScheduledExperiment

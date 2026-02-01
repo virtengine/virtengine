@@ -941,6 +941,8 @@ func (s *SGXEnclaveServiceImpl) computeSigningPayloadSecure(requestID string, sc
 // =============================================================================
 
 // simulateEnclaveCreation simulates SGX enclave creation
+//
+//nolint:unparam // result 0 (error) reserved for future enclave creation failures
 func (s *SGXEnclaveServiceImpl) simulateEnclaveCreation() error {
 	// Simulate MRENCLAVE (hash of enclave code)
 	// In real SGX, this is computed during enclave loading
@@ -963,6 +965,8 @@ func (s *SGXEnclaveServiceImpl) simulateEnclaveCreation() error {
 }
 
 // deriveEnclaveKeys derives encryption and signing keys
+//
+//nolint:unparam // result 0 (error) reserved for future key derivation failures
 func (s *SGXEnclaveServiceImpl) deriveEnclaveKeys() error {
 	// Derive keys using HKDF from seal key and epoch
 	salt := append(s.mrEnclave[:], s.mrSigner[:]...)
@@ -991,6 +995,8 @@ func (s *SGXEnclaveServiceImpl) hkdfDerive(secret, salt, info []byte, length int
 }
 
 // simulateEnclaveScoring simulates scoring inside the enclave
+//
+//nolint:unused // Reserved for enclave scoring simulation
 func (s *SGXEnclaveServiceImpl) simulateEnclaveScoring(request *ScoringRequest) *ScoringResult {
 	// Compute input hash
 	inputHash := sha256.Sum256(request.Ciphertext)
@@ -1037,6 +1043,8 @@ func (s *SGXEnclaveServiceImpl) simulateEnclaveScoring(request *ScoringRequest) 
 }
 
 // computeSigningPayload computes the payload to sign
+//
+//nolint:unused // Reserved for enclave signing
 func (s *SGXEnclaveServiceImpl) computeSigningPayload(requestID string, score uint32, status string, inputHash []byte) []byte {
 	h := sha256.New()
 	h.Write([]byte(requestID))
@@ -1057,6 +1065,8 @@ func (s *SGXEnclaveServiceImpl) signInsideEnclave(payload []byte) []byte {
 }
 
 // simulateDCAPQuoteGeneration simulates DCAP quote generation
+//
+//nolint:unparam // result 1 (error) reserved for future quote generation failures
 func (s *SGXEnclaveServiceImpl) simulateDCAPQuoteGeneration(reportData []byte) ([]byte, error) {
 	// Build quote header
 	header := SGXQuoteHeader{
@@ -1104,6 +1114,7 @@ func (s *SGXEnclaveServiceImpl) simulateDCAPQuoteGeneration(reportData []byte) (
 	// Signature (simulated ECDSA)
 	sigPayload := sha256.Sum256(quote)
 	signature := s.signInsideEnclave(sigPayload[:])
+	//nolint:gosec // G115: signature length is bounded by signing algorithm
 	quote = binary.LittleEndian.AppendUint32(quote, uint32(len(signature)))
 	quote = append(quote, signature...)
 
@@ -1167,6 +1178,8 @@ func (s *SGXEnclaveServiceImpl) simulateSealData(plaintext []byte, aad []byte) (
 }
 
 // simulateUnsealData simulates SGX data unsealing
+//
+//nolint:unparam // result 1 ([]byte) reserved for future AAD extraction
 func (s *SGXEnclaveServiceImpl) simulateUnsealData(sealed []byte) ([]byte, []byte, error) {
 	// Verify minimum length
 	if len(sealed) < 64 {

@@ -457,7 +457,7 @@ func NewFailureExplanation(result *EnhancedEligibilityResult) *FailureExplanatio
 	}
 
 	// Build description
-	var descParts []string
+	descParts := make([]string, 0, len(result.FailedChecks))
 	for _, check := range result.FailedChecks {
 		explanation.FailedChecks = append(explanation.FailedChecks, string(check.CheckType))
 		descParts = append(descParts, check.Reason)

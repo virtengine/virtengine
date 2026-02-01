@@ -705,10 +705,6 @@ func (a *SLURMKubernetesAdapter) GetClusterCapacity(ctx context.Context, cluster
 		return nil, err
 	}
 
-	capacity := &ClusterCapacity{
-		LastUpdate: time.Now(),
-	}
-
 	fullname := fmt.Sprintf("slurm-%s", clusterID)
 	if cluster.Config.HelmReleaseName != "" {
 		fullname = cluster.Config.HelmReleaseName
@@ -722,7 +718,7 @@ func (a *SLURMKubernetesAdapter) GetClusterCapacity(ctx context.Context, cluster
 	}
 
 	// Parse sinfo output
-	capacity = a.parseSinfoOutput(output)
+	capacity := a.parseSinfoOutput(output)
 
 	// Update cluster capacity
 	a.mu.Lock()

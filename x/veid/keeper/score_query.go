@@ -145,7 +145,7 @@ func (q GRPCQuerier) QueryAllRequiredScopes(ctx sdk.Context, req *types.QueryAll
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
-	var allRequirements []types.RequiredScopes
+	allRequirements := make([]types.RequiredScopes, 0, len(types.AllOfferingTypes()))
 	for _, offeringType := range types.AllOfferingTypes() {
 		allRequirements = append(allRequirements, types.GetRequiredScopesForOffering(offeringType))
 	}

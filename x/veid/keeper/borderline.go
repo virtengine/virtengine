@@ -511,7 +511,7 @@ func (k Keeper) updateAccountFallbackIndex(ctx sdk.Context, accountAddress strin
 	}
 
 	fallbackIDs = append(fallbackIDs, fallbackID)
-	bz, _ := json.Marshal(fallbackIDs)
+	bz, _ := json.Marshal(fallbackIDs) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, bz)
 }
 

@@ -113,8 +113,10 @@ func (v *LifecycleCallbackValidator) ValidateWaldurCallback(
 }
 
 // validateSigner validates the callback signer is authorized
+//
+//nolint:unparam // ctx kept for future on-chain provider validation
 func (v *LifecycleCallbackValidator) validateSigner(
-	ctx sdk.Context,
+	_ sdk.Context,
 	callback *marketplace.LifecycleCallback,
 ) error {
 	// The signer should be the provider handling the allocation
@@ -138,8 +140,10 @@ func (v *LifecycleCallbackValidator) validateSigner(
 }
 
 // validateStateTransition validates the state transition is allowed
+//
+//nolint:unparam // ctx kept for future state lookup from chain
 func (v *LifecycleCallbackValidator) validateStateTransition(
-	ctx sdk.Context,
+	_ sdk.Context,
 	callback *marketplace.LifecycleCallback,
 ) error {
 	// Get current allocation state from callback context

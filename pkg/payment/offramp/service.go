@@ -428,6 +428,7 @@ func (s *offRampService) submitToProvider(ctx context.Context, intent *PayoutInt
 	for attempt := 0; attempt < s.retryConfig.MaxAttempts; attempt++ {
 		if attempt > 0 {
 			// Calculate backoff delay
+			//nolint:gosec // G115: attempt is small retry counter
 			delay := s.retryConfig.InitialDelay * time.Duration(1<<uint(attempt-1))
 			if delay > s.retryConfig.MaxDelay {
 				delay = s.retryConfig.MaxDelay

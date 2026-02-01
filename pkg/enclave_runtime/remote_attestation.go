@@ -495,7 +495,9 @@ func (p *RemoteAttestationProtocol) computeReportData(challengeID string, nonce 
 }
 
 // verifyNonceInAttestation verifies the nonce is embedded in the attestation
-func (p *RemoteAttestationProtocol) verifyNonceInAttestation(attestation, expectedReportData []byte, platform AttestationType) bool {
+//
+//nolint:unparam // expectedReportData kept for future nonce extraction verification
+func (p *RemoteAttestationProtocol) verifyNonceInAttestation(attestation, _ []byte, platform AttestationType) bool {
 	// Platform-specific nonce extraction and verification
 	// This is a simplified check - real implementation would parse the attestation format
 	switch platform {

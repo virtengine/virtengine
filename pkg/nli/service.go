@@ -524,6 +524,8 @@ func (s *nliService) checkRateLimit(sessionID string) bool {
 }
 
 // checkRateLimitCtx checks rate limit using distributed limiter if available
+//
+//nolint:unparam // result 1 (error) reserved for future rate limit error handling
 func (s *nliService) checkRateLimitCtx(ctx context.Context, sessionID string) (bool, error) {
 	// Use distributed rate limiter if available
 	if s.distributedRateLimiter != nil {

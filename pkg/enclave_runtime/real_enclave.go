@@ -165,7 +165,8 @@ type SGXEnclaveConfig struct {
 
 // SGXEnclaveService connects to an Intel SGX enclave
 type SGXEnclaveService struct {
-	config      SGXEnclaveConfig
+	config SGXEnclaveConfig //nolint:unused // Reserved for SGX configuration
+	//nolint:unused // Reserved for initialization tracking
 	initialized bool
 	// TODO: Add SGX-specific fields
 	// - enclave handle
@@ -263,7 +264,8 @@ type SEVSNPConfig struct {
 
 // SEVSNPEnclaveService connects to an AMD SEV-SNP confidential VM
 type SEVSNPEnclaveService struct {
-	config      SEVSNPConfig
+	config SEVSNPConfig //nolint:unused // Reserved for SEV-SNP configuration
+	//nolint:unused // Reserved for initialization tracking
 	initialized bool
 	// TODO: Add SEV-SNP-specific fields
 	// - gRPC client
@@ -358,7 +360,8 @@ type NitroConfig struct {
 
 // NitroEnclaveService connects to an AWS Nitro Enclave
 type NitroEnclaveService struct {
-	config      NitroConfig
+	config NitroConfig //nolint:unused // Reserved for Nitro configuration
+	//nolint:unused // Reserved for initialization tracking
 	initialized bool
 	// TODO: Add Nitro-specific fields
 	// - vsock connection
