@@ -1,9 +1,7 @@
-//go:build ignore
-// +build ignore
+// MFA Keeper Tests - Test suite for MFA keeper functionality
+// Tests factor enrollment, policies, challenges, sessions, and trusted devices.
 
-// TODO: This test file is excluded until MFA keeper compilation errors are fixed.
-
-package keeper
+package keeper_test
 
 import (
 	"testing"
@@ -13,158 +11,182 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"cosmossdk.io/log"
+	"cosmossdk.io/store"
+	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
-
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
-	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/virtengine/virtengine/x/mfa/keeper"
 	"github.com/virtengine/virtengine/x/mfa/types"
 )
+
+// testVEIDKeeper implements keeper.VEIDKeeper for testing
+type testVEIDKeeper struct{}
+
+func (m *testVEIDKeeper) GetVEIDScore(_ sdk.Context, _ sdk.AccAddress) (uint32, bool) {
+	return 75, true
+}
+
+// testRolesKeeper implements keeper.RolesKeeper for testing
+type testRolesKeeper struct{}
+
+func (m *testRolesKeeper) IsAccountOperational(_ sdk.Context, _ sdk.AccAddress) bool {
+	return true
+}
 
 type KeeperTestSuite struct {
 	suite.Suite
 	ctx    sdk.Context
-	keeper Keeper
-	cdc    codec.BinaryCodec
+	keeper keeper.Keeper
+	cdc    codec.Codec
 }
 
 func TestKeeperTestSuite(t *testing.T) {
 	suite.Run(t, new(KeeperTestSuite))
 }
 
+func (s *KeeperTestSuite) createContextWithStore(storeKey *storetypes.KVStoreKey) sdk.Context {
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	if err != nil {
+		s.T().Fatalf("failed to load latest version: %v", err)
+	}
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
+	return ctx
+}
+
 func (s *KeeperTestSuite) SetupTest() {
-	// Create store key
-	key := storetypes.NewKVStoreKey(types.StoreKey)
-
-	// Create context with store
-	testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
-	s.ctx = testCtx.Ctx.WithBlockTime(time.Now())
-
-	// Create codec
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	types.RegisterInterfaces(interfaceRegistry)
 	s.cdc = codec.NewProtoCodec(interfaceRegistry)
 
-	// Create keeper
-	storeService := runtime.NewKVStoreService(key)
-	s.keeper = NewKeeper(s.cdc, storeService, log.NewNopLogger(), nil)
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	s.ctx = s.createContextWithStore(storeKey)
+	s.keeper = keeper.NewKeeper(s.cdc, storeKey, "authority", &testVEIDKeeper{}, &testRolesKeeper{})
+
+	// Set default params
+	err := s.keeper.SetParams(s.ctx, types.DefaultParams())
+	s.Require().NoError(err)
 }
 
 func (s *KeeperTestSuite) TestFactorEnrollment() {
 	addr := sdk.AccAddress([]byte("test_address_123456"))
-	addrStr := addr.String()
 
 	// Test initial state - no factors enrolled
-	factors, err := s.keeper.GetFactorEnrollments(s.ctx, addrStr)
-	s.Require().NoError(err)
+	factors := s.keeper.GetFactorEnrollments(s.ctx, addr)
 	s.Require().Empty(factors)
 
 	// Enroll a TOTP factor
-	enrollment := types.FactorEnrollment{
-		Address:       addrStr,
-		FactorType:    types.FactorTypeTOTP,
-		FactorID:      "totp-001",
-		Status:        types.EnrollmentStatusActive,
-		CreatedAt:     s.ctx.BlockTime(),
-		LastUsedAt:    time.Time{},
-		FactorInfo:    types.FactorInfo{Label: "My Authenticator"},
-		Fingerprint:   types.ComputeFactorFingerprint(types.FactorTypeTOTP, []byte("totp-001")),
-		SecurityLevel: types.FactorSecurityLevelMedium,
+	enrollment := &types.FactorEnrollment{
+		AccountAddress:   addr.String(),
+		FactorType:       types.FactorTypeTOTP,
+		FactorID:         "totp-001",
+		PublicIdentifier: []byte("totp-key"),
+		Label:            "My Authenticator",
+		Status:           types.EnrollmentStatusActive,
+		EnrolledAt:       s.ctx.BlockTime().Unix(),
 	}
 
-	err = s.keeper.SetFactorEnrollment(s.ctx, enrollment)
+	err := s.keeper.EnrollFactor(s.ctx, enrollment)
 	s.Require().NoError(err)
 
 	// Retrieve and verify
-	factors, err = s.keeper.GetFactorEnrollments(s.ctx, addrStr)
-	s.Require().NoError(err)
+	factors = s.keeper.GetFactorEnrollments(s.ctx, addr)
 	s.Require().Len(factors, 1)
 	s.Require().Equal(types.FactorTypeTOTP, factors[0].FactorType)
 	s.Require().Equal("totp-001", factors[0].FactorID)
 
 	// Get specific factor
-	retrieved, found := s.keeper.GetFactorEnrollment(s.ctx, addrStr, types.FactorTypeTOTP, "totp-001")
+	retrieved, found := s.keeper.GetFactorEnrollment(s.ctx, addr, types.FactorTypeTOTP, "totp-001")
 	s.Require().True(found)
 	s.Require().Equal(enrollment.FactorID, retrieved.FactorID)
 
-	// Delete factor
-	err = s.keeper.DeleteFactorEnrollment(s.ctx, addrStr, types.FactorTypeTOTP, "totp-001")
+	// Revoke factor (replaces delete)
+	err = s.keeper.RevokeFactor(s.ctx, addr, types.FactorTypeTOTP, "totp-001")
 	s.Require().NoError(err)
 
-	// Verify deletion
-	factors, err = s.keeper.GetFactorEnrollments(s.ctx, addrStr)
-	s.Require().NoError(err)
-	s.Require().Empty(factors)
+	// Verify factor is revoked (not deleted, status changed)
+	retrieved, found = s.keeper.GetFactorEnrollment(s.ctx, addr, types.FactorTypeTOTP, "totp-001")
+	s.Require().True(found)
+	s.Require().Equal(types.EnrollmentStatusRevoked, retrieved.Status)
 }
 
 func (s *KeeperTestSuite) TestMFAPolicy() {
 	addr := sdk.AccAddress([]byte("test_address_policy_"))
-	addrStr := addr.String()
 
 	// Test initial state - no policy
-	_, found := s.keeper.GetMFAPolicy(s.ctx, addrStr)
+	_, found := s.keeper.GetMFAPolicy(s.ctx, addr)
 	s.Require().False(found)
 
 	// Set a policy
-	policy := types.MFAPolicy{
-		Address:   addrStr,
-		IsEnabled: true,
+	policy := &types.MFAPolicy{
+		AccountAddress: addr.String(),
+		Enabled:        true,
 		RequiredFactors: []types.FactorCombination{
 			{Factors: []types.FactorType{types.FactorTypeTOTP}},
 		},
-		CreatedAt: s.ctx.BlockTime(),
-		UpdatedAt: s.ctx.BlockTime(),
+		CreatedAt: s.ctx.BlockTime().Unix(),
+		UpdatedAt: s.ctx.BlockTime().Unix(),
 	}
 
 	err := s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
 	// Retrieve and verify
-	retrieved, found := s.keeper.GetMFAPolicy(s.ctx, addrStr)
+	retrieved, found := s.keeper.GetMFAPolicy(s.ctx, addr)
 	s.Require().True(found)
-	s.Require().True(retrieved.IsEnabled)
+	s.Require().True(retrieved.Enabled)
 	s.Require().Len(retrieved.RequiredFactors, 1)
 
 	// Delete policy
-	err = s.keeper.DeleteMFAPolicy(s.ctx, addrStr)
+	err = s.keeper.DeleteMFAPolicy(s.ctx, addr)
 	s.Require().NoError(err)
 
 	// Verify deletion
-	_, found = s.keeper.GetMFAPolicy(s.ctx, addrStr)
+	_, found = s.keeper.GetMFAPolicy(s.ctx, addr)
 	s.Require().False(found)
 }
 
 func (s *KeeperTestSuite) TestChallenge() {
 	addr := sdk.AccAddress([]byte("test_addr_challenge"))
-	addrStr := addr.String()
 	challengeID := "challenge-001"
 
 	// Create challenge
-	challenge := types.Challenge{
-		ChallengeID:   challengeID,
-		Address:       addrStr,
-		FactorType:    types.FactorTypeFIDO2,
-		ChallengeData: []byte("random-challenge-data"),
-		CreatedAt:     s.ctx.BlockTime(),
-		ExpiresAt:     s.ctx.BlockTime().Add(5 * time.Minute),
-		Status:        types.ChallengeStatusPending,
+	challenge := &types.Challenge{
+		ChallengeID:     challengeID,
+		AccountAddress:  addr.String(),
+		FactorType:      types.FactorTypeFIDO2,
+		FactorID:        "fido2-001",
+		TransactionType: types.SensitiveTxKeyRotation,
+		ChallengeData:   []byte("random-challenge-data"),
+		CreatedAt:       s.ctx.BlockTime().Unix(),
+		ExpiresAt:       s.ctx.BlockTime().Unix() + 300, // 5 minutes
+		Status:          types.ChallengeStatusPending,
+		Nonce:           "test-nonce-001",
+		MaxAttempts:     3,
 	}
 
-	err := s.keeper.SetChallenge(s.ctx, challenge)
+	err := s.keeper.CreateChallenge(s.ctx, challenge)
 	s.Require().NoError(err)
 
 	// Retrieve
 	retrieved, found := s.keeper.GetChallenge(s.ctx, challengeID)
 	s.Require().True(found)
-	s.Require().Equal(addrStr, retrieved.Address)
+	s.Require().Equal(addr.String(), retrieved.AccountAddress)
 	s.Require().Equal(types.FactorTypeFIDO2, retrieved.FactorType)
 
 	// Get pending challenges
-	pending, err := s.keeper.GetPendingChallenges(s.ctx, addrStr)
-	s.Require().NoError(err)
+	pending := s.keeper.GetPendingChallenges(s.ctx, addr)
 	s.Require().Len(pending, 1)
 
 	// Delete challenge
@@ -178,29 +200,26 @@ func (s *KeeperTestSuite) TestChallenge() {
 
 func (s *KeeperTestSuite) TestAuthorizationSession() {
 	addr := sdk.AccAddress([]byte("test_addr_session__"))
-	addrStr := addr.String()
 	sessionID := "session-001"
 
 	// Create session
-	session := types.AuthorizationSession{
+	session := &types.AuthorizationSession{
 		SessionID:       sessionID,
-		Address:         addrStr,
-		CreatedAt:       s.ctx.BlockTime(),
-		ExpiresAt:       s.ctx.BlockTime().Add(15 * time.Minute),
+		AccountAddress:  addr.String(),
+		TransactionType: types.SensitiveTxKeyRotation,
+		CreatedAt:       s.ctx.BlockTime().Unix(),
+		ExpiresAt:       s.ctx.BlockTime().Unix() + 900, // 15 minutes
 		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2},
-		SecurityLevel:   types.FactorSecurityLevelHigh,
-		AllowedOperations: []string{
-			types.SensitiveTxKeyRotation.String(),
-		},
+		IsSingleUse:     true,
 	}
 
-	err := s.keeper.SetAuthorizationSession(s.ctx, session)
+	err := s.keeper.CreateAuthorizationSession(s.ctx, session)
 	s.Require().NoError(err)
 
 	// Retrieve
 	retrieved, found := s.keeper.GetAuthorizationSession(s.ctx, sessionID)
 	s.Require().True(found)
-	s.Require().Equal(addrStr, retrieved.Address)
+	s.Require().Equal(addr.String(), retrieved.AccountAddress)
 	s.Require().Len(retrieved.VerifiedFactors, 2)
 
 	// Delete session
@@ -214,72 +233,61 @@ func (s *KeeperTestSuite) TestAuthorizationSession() {
 
 func (s *KeeperTestSuite) TestTrustedDevice() {
 	addr := sdk.AccAddress([]byte("test_addr_device___"))
-	addrStr := addr.String()
-	deviceID := "device-001"
 
 	// Create trusted device
-	device := types.TrustedDevice{
-		DeviceID:               deviceID,
-		Address:                addrStr,
-		DeviceName:             "My Laptop",
-		DeviceType:             "laptop",
-		PublicKey:              []byte("device-public-key"),
-		Fingerprint:            types.ComputeDeviceFingerprint("My Laptop", []byte("device-public-key")),
-		RegisteredAt:           s.ctx.BlockTime(),
-		LastUsedAt:             s.ctx.BlockTime(),
-		IsActive:               true,
-		AllowedFactorReduction: true,
+	device := &types.DeviceInfo{
+		Fingerprint:    "device-001",
+		UserAgent:      "My Laptop",
+		TrustExpiresAt: s.ctx.BlockTime().Unix() + 86400, // 24 hours
 	}
 
-	err := s.keeper.SetTrustedDevice(s.ctx, device)
+	err := s.keeper.AddTrustedDevice(s.ctx, addr, device)
 	s.Require().NoError(err)
 
 	// Retrieve all devices
-	devices, err := s.keeper.GetTrustedDevices(s.ctx, addrStr)
-	s.Require().NoError(err)
+	devices := s.keeper.GetTrustedDevices(s.ctx, addr)
 	s.Require().Len(devices, 1)
 
 	// Get specific device
-	retrieved, found := s.keeper.GetTrustedDevice(s.ctx, addrStr, deviceID)
+	retrieved, found := s.keeper.GetTrustedDevice(s.ctx, addr, "device-001")
 	s.Require().True(found)
-	s.Require().Equal("My Laptop", retrieved.DeviceName)
+	s.Require().Equal("My Laptop", retrieved.DeviceInfo.UserAgent)
+
+	// Check trusted device status
+	isTrusted := s.keeper.IsTrustedDevice(s.ctx, addr, "device-001")
+	s.Require().True(isTrusted)
 
 	// Delete device
-	err = s.keeper.DeleteTrustedDevice(s.ctx, addrStr, deviceID)
+	err = s.keeper.RemoveTrustedDevice(s.ctx, addr, "device-001")
 	s.Require().NoError(err)
 
 	// Verify deletion
-	devices, err = s.keeper.GetTrustedDevices(s.ctx, addrStr)
-	s.Require().NoError(err)
+	devices = s.keeper.GetTrustedDevices(s.ctx, addr)
 	s.Require().Empty(devices)
 }
 
 func (s *KeeperTestSuite) TestSensitiveTxConfig() {
-	// Get default config
-	config := s.keeper.GetSensitiveTxConfig(s.ctx)
-	s.Require().NotNil(config.Configs)
-
 	// Set custom config
-	customConfig := types.SensitiveTxConfig{
-		Configs: map[string]types.SensitiveTxSettings{
-			types.SensitiveTxKeyRotation.String(): {
-				RequiresMFA:      true,
-				MinSecurityLevel: types.FactorSecurityLevelHigh,
-				MinFactorCount:   2,
-				CooldownPeriod:   24 * time.Hour,
-			},
+	customConfig := &types.SensitiveTxConfig{
+		TransactionType: types.SensitiveTxKeyRotation,
+		Enabled:         true,
+		MinVEIDScore:    50,
+		RequiredFactorCombinations: []types.FactorCombination{
+			{Factors: []types.FactorType{types.FactorTypeFIDO2}},
 		},
-		GlobalMinSecurityLevel: types.FactorSecurityLevelMedium,
-		IsEnabled:              true,
+		SessionDuration: 900, // 15 minutes
+		IsSingleUse:     true,
+		Description:     "Key rotation requires FIDO2",
 	}
 
 	err := s.keeper.SetSensitiveTxConfig(s.ctx, customConfig)
 	s.Require().NoError(err)
 
 	// Retrieve
-	retrieved := s.keeper.GetSensitiveTxConfig(s.ctx)
-	s.Require().True(retrieved.IsEnabled)
-	s.Require().Equal(types.FactorSecurityLevelMedium, retrieved.GlobalMinSecurityLevel)
+	retrieved, found := s.keeper.GetSensitiveTxConfig(s.ctx, types.SensitiveTxKeyRotation)
+	s.Require().True(found)
+	s.Require().True(retrieved.Enabled)
+	s.Require().Equal(uint32(50), retrieved.MinVEIDScore)
 }
 
 func (s *KeeperTestSuite) TestParams() {
@@ -289,12 +297,15 @@ func (s *KeeperTestSuite) TestParams() {
 
 	// Set custom params
 	customParams := types.Params{
-		MaxFactorsPerAccount:      10,
-		ChallengeExpiryDuration:   10 * time.Minute,
-		SessionExpiryDuration:     30 * time.Minute,
-		MaxTrustedDevices:         5,
-		RequireFactorVerification: true,
-		MinFactorsForRecovery:     2,
+		DefaultSessionDuration:  1800,  // 30 minutes
+		MaxFactorsPerAccount:    10,
+		MaxChallengeAttempts:    5,
+		ChallengeTTL:            600,   // 10 minutes
+		MaxTrustedDevices:       5,
+		TrustedDeviceTTL:        86400, // 24 hours
+		MinVEIDScoreForMFA:      50,
+		RequireAtLeastOneFactor: true,
+		AllowedFactorTypes:      []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2},
 	}
 
 	err := s.keeper.SetParams(s.ctx, customParams)
@@ -302,135 +313,161 @@ func (s *KeeperTestSuite) TestParams() {
 
 	// Retrieve
 	retrieved := s.keeper.GetParams(s.ctx)
-	s.Require().Equal(10, retrieved.MaxFactorsPerAccount)
-	s.Require().Equal(10*time.Minute, retrieved.ChallengeExpiryDuration)
+	s.Require().Equal(uint32(10), retrieved.MaxFactorsPerAccount)
+	s.Require().Equal(int64(1800), retrieved.DefaultSessionDuration)
 }
 
 func (s *KeeperTestSuite) TestGenesis() {
 	addr := sdk.AccAddress([]byte("genesis_test_addr__"))
-	addrStr := addr.String()
 
 	// Set up some state
-	policy := types.MFAPolicy{
-		Address:   addrStr,
-		IsEnabled: true,
+	policy := &types.MFAPolicy{
+		AccountAddress: addr.String(),
+		Enabled:        true,
 		RequiredFactors: []types.FactorCombination{
 			{Factors: []types.FactorType{types.FactorTypeTOTP}},
 		},
-		CreatedAt: s.ctx.BlockTime(),
-		UpdatedAt: s.ctx.BlockTime(),
+		CreatedAt: s.ctx.BlockTime().Unix(),
+		UpdatedAt: s.ctx.BlockTime().Unix(),
 	}
 	err := s.keeper.SetMFAPolicy(s.ctx, policy)
 	s.Require().NoError(err)
 
-	enrollment := types.FactorEnrollment{
-		Address:    addrStr,
-		FactorType: types.FactorTypeTOTP,
-		FactorID:   "genesis-totp",
-		Status:     types.EnrollmentStatusActive,
-		CreatedAt:  s.ctx.BlockTime(),
+	enrollment := &types.FactorEnrollment{
+		AccountAddress:   addr.String(),
+		FactorType:       types.FactorTypeTOTP,
+		FactorID:         "genesis-totp",
+		PublicIdentifier: []byte("totp-key"),
+		Status:           types.EnrollmentStatusActive,
+		EnrolledAt:       s.ctx.BlockTime().Unix(),
 	}
-	err = s.keeper.SetFactorEnrollment(s.ctx, enrollment)
+	err = s.keeper.EnrollFactor(s.ctx, enrollment)
 	s.Require().NoError(err)
 
 	// Export genesis
 	gs := s.keeper.ExportGenesis(s.ctx)
 	s.Require().NotNil(gs)
-	s.Require().Len(gs.Policies, 1)
-	s.Require().Len(gs.Enrollments, 1)
+	s.Require().Len(gs.MFAPolicies, 1)
+	s.Require().Len(gs.FactorEnrollments, 1)
 
-	// Clear state by creating new keeper
-	key := storetypes.NewKVStoreKey(types.StoreKey + "_new")
-	testCtx := sdktestutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test_new"))
-	newCtx := testCtx.Ctx.WithBlockTime(time.Now())
-	storeService := runtime.NewKVStoreService(key)
-	newKeeper := NewKeeper(s.cdc, storeService, log.NewNopLogger(), nil)
+	// Create new keeper with fresh store
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	types.RegisterInterfaces(interfaceRegistry)
+	cdc := codec.NewProtoCodec(interfaceRegistry)
+
+	newStoreKey := storetypes.NewKVStoreKey(types.StoreKey + "_new")
+	newCtx := s.createContextWithStore(newStoreKey)
+	newKeeper := keeper.NewKeeper(cdc, newStoreKey, "authority", &testVEIDKeeper{}, &testRolesKeeper{})
 
 	// Init genesis
 	newKeeper.InitGenesis(newCtx, gs)
 
 	// Verify state was restored
-	restoredPolicy, found := newKeeper.GetMFAPolicy(newCtx, addrStr)
+	restoredPolicy, found := newKeeper.GetMFAPolicy(newCtx, addr)
 	s.Require().True(found)
-	s.Require().True(restoredPolicy.IsEnabled)
+	s.Require().True(restoredPolicy.Enabled)
 
-	enrollments, err := newKeeper.GetFactorEnrollments(newCtx, addrStr)
-	s.Require().NoError(err)
+	enrollments := newKeeper.GetFactorEnrollments(newCtx, addr)
 	s.Require().Len(enrollments, 1)
 }
 
-// TestIsMFARequired tests the MFA requirement logic
-func TestIsMFARequired(t *testing.T) {
+// TestIsMFAEnabled tests the MFA enabled check logic
+func TestIsMFAEnabled(t *testing.T) {
 	// Setup
-	key := storetypes.NewKVStoreKey(types.StoreKey)
-	testCtx := sdktestutil.DefaultContextWithDB(t, key, storetypes.NewTransientStoreKey("transient_test"))
-	ctx := testCtx.Ctx.WithBlockTime(time.Now())
-
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	types.RegisterInterfaces(interfaceRegistry)
 	cdc := codec.NewProtoCodec(interfaceRegistry)
 
-	storeService := runtime.NewKVStoreService(key)
-	k := NewKeeper(cdc, storeService, log.NewNopLogger(), nil)
-
-	addr := sdk.AccAddress([]byte("test_mfa_required__"))
-	addrStr := addr.String()
-
-	// Without policy, MFA is not required
-	hooks := NewMFAGatingHooks(k)
-	required, err := hooks.RequiresMFA(ctx, addrStr, types.SensitiveTxKeyRotation)
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
 	require.NoError(t, err)
-	require.False(t, required)
 
-	// Set a policy
-	policy := types.MFAPolicy{
-		Address:   addrStr,
-		IsEnabled: true,
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
+
+	k := keeper.NewKeeper(cdc, storeKey, "authority", &testVEIDKeeper{}, &testRolesKeeper{})
+
+	// Set default params
+	err = k.SetParams(ctx, types.DefaultParams())
+	require.NoError(t, err)
+
+	addr := sdk.AccAddress([]byte("test_mfa_enabled___"))
+
+	// Without policy, MFA is not enabled
+	enabled, err := k.IsMFAEnabled(ctx, addr)
+	require.NoError(t, err)
+	require.False(t, enabled)
+
+	// Set a policy that's disabled
+	policy := &types.MFAPolicy{
+		AccountAddress: addr.String(),
+		Enabled:        false,
 		RequiredFactors: []types.FactorCombination{
 			{Factors: []types.FactorType{types.FactorTypeTOTP}},
 		},
-		CreatedAt: ctx.BlockTime(),
-		UpdatedAt: ctx.BlockTime(),
+		CreatedAt: ctx.BlockTime().Unix(),
+		UpdatedAt: ctx.BlockTime().Unix(),
 	}
 	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 
-	// Now MFA should be required for sensitive transactions
-	required, err = hooks.RequiresMFA(ctx, addrStr, types.SensitiveTxKeyRotation)
+	// MFA still not enabled because policy is disabled
+	enabled, err = k.IsMFAEnabled(ctx, addr)
 	require.NoError(t, err)
-	require.True(t, required)
+	require.False(t, enabled)
+
+	// Enable the policy
+	policy.Enabled = true
+	err = k.SetMFAPolicy(ctx, policy)
+	require.NoError(t, err)
+
+	// Still not enabled because no active factors
+	enabled, err = k.IsMFAEnabled(ctx, addr)
+	require.NoError(t, err)
+	require.False(t, enabled)
+
+	// Enroll a factor
+	enrollment := &types.FactorEnrollment{
+		AccountAddress:   addr.String(),
+		FactorType:       types.FactorTypeTOTP,
+		FactorID:         "test-totp",
+		PublicIdentifier: []byte("totp-key"),
+		Status:           types.EnrollmentStatusActive,
+		EnrolledAt:       ctx.BlockTime().Unix(),
+	}
+	err = k.EnrollFactor(ctx, enrollment)
+	require.NoError(t, err)
+
+	// Now MFA should be enabled
+	enabled, err = k.IsMFAEnabled(ctx, addr)
+	require.NoError(t, err)
+	require.True(t, enabled)
 }
 
 // TestSensitiveTransactionDetection tests detecting sensitive transactions
 func TestSensitiveTransactionDetection(t *testing.T) {
-	key := storetypes.NewKVStoreKey(types.StoreKey)
-	testCtx := sdktestutil.DefaultContextWithDB(t, key, storetypes.NewTransientStoreKey("transient_test"))
-	ctx := testCtx.Ctx.WithBlockTime(time.Now())
-
-	interfaceRegistry := codectypes.NewInterfaceRegistry()
-	cdc := codec.NewProtoCodec(interfaceRegistry)
-
-	storeService := runtime.NewKVStoreService(key)
-	k := NewKeeper(cdc, storeService, log.NewNopLogger(), nil)
-
-	hooks := NewMFAGatingHooks(k)
-
-	// Test known sensitive transaction types
+	// Test known sensitive transaction types mapping
 	testCases := []struct {
 		msgTypeURL   string
 		expectedType types.SensitiveTransactionType
 		isSensitive  bool
 	}{
 		{"/cosmos.staking.v1beta1.MsgCreateValidator", types.SensitiveTxValidatorRegistration, true},
-		{"/cosmos.staking.v1beta1.MsgEditValidator", types.SensitiveTxValidatorUpdate, true},
+		{"/cosmos.gov.v1.MsgSubmitProposal", types.SensitiveTxGovernanceProposal, true},
 		{"/cosmos.gov.v1beta1.MsgSubmitProposal", types.SensitiveTxGovernanceProposal, true},
-		{"/virtengine.provider.v1.MsgRegisterProvider", types.SensitiveTxProviderRegistration, true},
-		{"/cosmos.bank.v1beta1.MsgSend", types.SensitiveTxNone, false}, // Regular transfer
+		{"/virtengine.provider.v1.MsgCreateProvider", types.SensitiveTxProviderRegistration, true},
+		{"/cosmos.bank.v1beta1.MsgSend", types.SensitiveTxUnspecified, false}, // Regular transfer
+		{"/virtengine.mfa.v1.MsgDisableMFA", types.SensitiveTxTwoFactorDisable, true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.msgTypeURL, func(t *testing.T) {
-			isSensitive, txType := hooks.IsSensitiveTransaction(ctx, tc.msgTypeURL)
+			txType, isSensitive := types.GetSensitiveTransactionType(tc.msgTypeURL)
 			require.Equal(t, tc.isSensitive, isSensitive)
 			if tc.isSensitive {
 				require.Equal(t, tc.expectedType, txType)
@@ -441,113 +478,129 @@ func TestSensitiveTransactionDetection(t *testing.T) {
 
 // TestFactorCombinationValidation tests OR of ANDs logic
 func TestFactorCombinationValidation(t *testing.T) {
-	key := storetypes.NewKVStoreKey(types.StoreKey)
-	testCtx := sdktestutil.DefaultContextWithDB(t, key, storetypes.NewTransientStoreKey("transient_test"))
-	ctx := testCtx.Ctx.WithBlockTime(time.Now())
-
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	types.RegisterInterfaces(interfaceRegistry)
 	cdc := codec.NewProtoCodec(interfaceRegistry)
 
-	storeService := runtime.NewKVStoreService(key)
-	k := NewKeeper(cdc, storeService, log.NewNopLogger(), nil)
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	require.NoError(t, err)
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
+
+	k := keeper.NewKeeper(cdc, storeKey, "authority", &testVEIDKeeper{}, &testRolesKeeper{})
+
+	// Set default params
+	err = k.SetParams(ctx, types.DefaultParams())
+	require.NoError(t, err)
 
 	addr := sdk.AccAddress([]byte("factor_combo_test__"))
-	addrStr := addr.String()
 
 	// Set policy: (TOTP AND FIDO2) OR (VEID)
-	policy := types.MFAPolicy{
-		Address:   addrStr,
-		IsEnabled: true,
+	policy := &types.MFAPolicy{
+		AccountAddress: addr.String(),
+		Enabled:        true,
 		RequiredFactors: []types.FactorCombination{
 			{Factors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2}},
 			{Factors: []types.FactorType{types.FactorTypeVEID}},
 		},
-		CreatedAt: ctx.BlockTime(),
-		UpdatedAt: ctx.BlockTime(),
+		CreatedAt: ctx.BlockTime().Unix(),
+		UpdatedAt: ctx.BlockTime().Unix(),
 	}
-	err := k.SetMFAPolicy(ctx, policy)
+	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 
-	hooks := NewMFAGatingHooks(k)
+	// Retrieve policy and test CheckFactorsMatch
+	retrieved, found := k.GetMFAPolicy(ctx, addr)
+	require.True(t, found)
 
 	// Test case 1: Only TOTP verified - should fail
-	proof := types.MFAProof{
-		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP},
-		SessionID:       "test-session",
-	}
-	valid := hooks.ValidateMFAProof(ctx, addrStr, proof)
-	require.False(t, valid)
+	match := retrieved.CheckFactorsMatch([]types.FactorType{types.FactorTypeTOTP})
+	require.False(t, match.Matched)
 
 	// Test case 2: TOTP and FIDO2 verified - should pass
-	proof = types.MFAProof{
-		VerifiedFactors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2},
-		SessionID:       "test-session",
-	}
-	valid = hooks.ValidateMFAProof(ctx, addrStr, proof)
-	require.True(t, valid)
+	match = retrieved.CheckFactorsMatch([]types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2})
+	require.True(t, match.Matched)
 
 	// Test case 3: Only VEID verified - should pass (alternative combination)
-	proof = types.MFAProof{
-		VerifiedFactors: []types.FactorType{types.FactorTypeVEID},
-		SessionID:       "test-session",
-	}
-	valid = hooks.ValidateMFAProof(ctx, addrStr, proof)
-	require.True(t, valid)
+	match = retrieved.CheckFactorsMatch([]types.FactorType{types.FactorTypeVEID})
+	require.True(t, match.Matched)
 }
 
 // TestTrustedDeviceReduction tests trusted device factor reduction
 func TestTrustedDeviceReduction(t *testing.T) {
-	key := storetypes.NewKVStoreKey(types.StoreKey)
-	testCtx := sdktestutil.DefaultContextWithDB(t, key, storetypes.NewTransientStoreKey("transient_test"))
-	ctx := testCtx.Ctx.WithBlockTime(time.Now())
-
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	types.RegisterInterfaces(interfaceRegistry)
 	cdc := codec.NewProtoCodec(interfaceRegistry)
 
-	storeService := runtime.NewKVStoreService(key)
-	k := NewKeeper(cdc, storeService, log.NewNopLogger(), nil)
+	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	err := stateStore.LoadLatestVersion()
+	require.NoError(t, err)
+
+	ctx := sdk.NewContext(stateStore, cmtproto.Header{
+		Time:   time.Now().UTC(),
+		Height: 100,
+	}, false, log.NewNopLogger())
+
+	k := keeper.NewKeeper(cdc, storeKey, "authority", &testVEIDKeeper{}, &testRolesKeeper{})
+
+	// Set default params
+	err = k.SetParams(ctx, types.DefaultParams())
+	require.NoError(t, err)
 
 	addr := sdk.AccAddress([]byte("trusted_device_test"))
-	addrStr := addr.String()
 
 	// Set policy with trusted device policy
-	policy := types.MFAPolicy{
-		Address:   addrStr,
-		IsEnabled: true,
+	policy := &types.MFAPolicy{
+		AccountAddress: addr.String(),
+		Enabled:        true,
 		RequiredFactors: []types.FactorCombination{
 			{Factors: []types.FactorType{types.FactorTypeTOTP, types.FactorTypeFIDO2}},
 		},
-		TrustedDevicePolicy: types.TrustedDevicePolicy{
-			AllowFactorReduction: true,
-			ReduceToFactors:      1,
-			TrustDuration:        30 * 24 * time.Hour,
+		TrustedDeviceRule: &types.TrustedDevicePolicy{
+			Enabled:                   true,
+			TrustDuration:             30 * 24 * 60 * 60, // 30 days
+			MaxTrustedDevices:         5,
+			RequireReauthForSensitive: true,
 		},
-		CreatedAt: ctx.BlockTime(),
-		UpdatedAt: ctx.BlockTime(),
+		CreatedAt: ctx.BlockTime().Unix(),
+		UpdatedAt: ctx.BlockTime().Unix(),
 	}
-	err := k.SetMFAPolicy(ctx, policy)
+	err = k.SetMFAPolicy(ctx, policy)
 	require.NoError(t, err)
 
 	// Add a trusted device
-	device := types.TrustedDevice{
-		DeviceID:               "trusted-001",
-		Address:                addrStr,
-		DeviceName:             "My Trusted Laptop",
-		RegisteredAt:           ctx.BlockTime(),
-		LastUsedAt:             ctx.BlockTime(),
-		IsActive:               true,
-		AllowedFactorReduction: true,
+	device := &types.DeviceInfo{
+		Fingerprint:    "trusted-001",
+		UserAgent:      "My Trusted Laptop",
+		TrustExpiresAt: ctx.BlockTime().Unix() + 86400,
 	}
-	err = k.SetTrustedDevice(ctx, device)
+	err = k.AddTrustedDevice(ctx, addr, device)
 	require.NoError(t, err)
 
-	hooks := NewMFAGatingHooks(k)
+	// Check if device is trusted
+	isTrusted := k.IsTrustedDevice(ctx, addr, "trusted-001")
+	require.True(t, isTrusted)
 
-	// With trusted device, can bypass with reduced factors
-	canBypass := hooks.CanBypassMFA(ctx, addrStr, "trusted-001", types.SensitiveTxNone)
-	require.True(t, canBypass)
+	// Retrieve policy and test CanUseTrustedDevice
+	retrieved, found := k.GetMFAPolicy(ctx, addr)
+	require.True(t, found)
 
-	// For high-security operations, trusted device should not allow bypass
-	canBypass = hooks.CanBypassMFA(ctx, addrStr, "trusted-001", types.SensitiveTxKeyRotation)
-	require.False(t, canBypass)
+	// For low-risk operations, trusted device can reduce factors
+	// (when RequireReauthForSensitive is true, critical actions require full MFA)
+	canUse := retrieved.CanUseTrustedDevice(types.SensitiveTxLargeWithdrawal, true)
+	require.True(t, canUse)
+
+	// For critical operations, trusted device should not bypass MFA
+	canUse = retrieved.CanUseTrustedDevice(types.SensitiveTxKeyRotation, true)
+	require.False(t, canUse)
 }
