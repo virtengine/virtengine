@@ -575,3 +575,83 @@ func (a *queryServerAdapter) AuditLog(ctx context.Context, req *fraudv1.QueryAud
 func (a *queryServerAdapter) ModeratorQueue(ctx context.Context, req *fraudv1.QueryModeratorQueueRequest) (*fraudv1.QueryModeratorQueueResponse, error) {
 	return a.impl.ModeratorQueue(ctx, req)
 }
+
+// =============================================================================
+// Type Conversion Functions - GenesisState
+// =============================================================================
+
+// GenesisStateToProto converts local GenesisState to proto GenesisState
+func GenesisStateToProto(gs *GenesisState) *GenesisStatePB {
+	if gs == nil {
+		return nil
+	}
+
+	// Convert fraud reports
+	reports := make([]FraudReportPB, len(gs.FraudReports))
+	for i, r := range gs.FraudReports {
+		reports[i] = *FraudReportToProto(&r)
+	}
+
+	// Convert audit logs
+	auditLogs := make([]FraudAuditLogPB, len(gs.AuditLogs))
+	for i, l := range gs.AuditLogs {
+		auditLogs[i] = *FraudAuditLogToProto(&l)
+	}
+
+	// Convert moderator queue
+	queue := make([]ModeratorQueueEntryPB, len(gs.ModeratorQueue))
+	for i, e := range gs.ModeratorQueue {
+		queue[i] = *ModeratorQueueEntryToProto(&e)
+	}
+
+	return &GenesisStatePB{
+		Params:                  *ParamsToProto(&gs.Params),
+		Reports:                 reports,
+		AuditLogs:               auditLogs,
+		ModeratorQueue:          queue,
+		NextFraudReportSequence: gs.NextFraudReportSequence,
+		NextAuditLogSequence:    gs.NextAuditLogSequence,
+	}
+}
+
+// GenesisStateFromProto converts proto GenesisState to local GenesisState
+func GenesisStateFromProto(pb *GenesisStatePB) *GenesisState {
+	if pb == nil {
+		return nil
+	}
+
+	// Convert fraud reports
+	reports := make([]FraudReport, len(pb.Reports))
+	for i, r := range pb.Reports {
+		rCopy := r
+		reports[i] = *FraudReportFromProto(&rCopy)
+	}
+
+	// Convert audit logs
+	auditLogs := make([]FraudAuditLog, len(pb.AuditLogs))
+	for i, l := range pb.AuditLogs {
+		lCopy := l
+		auditLogs[i] = *FraudAuditLogFromProto(&lCopy)
+	}
+
+	// Convert moderator queue
+	queue := make([]ModeratorQueueEntry, len(pb.ModeratorQueue))
+	for i, e := range pb.ModeratorQueue {
+		eCopy := e
+		queue[i] = *ModeratorQueueEntryFromProto(&eCopy)
+	}
+
+	return &GenesisState{
+		Params:                  *ParamsFromProto(&pb.Params),
+		FraudReports:            reports,
+		AuditLogs:               auditLogs,
+		ModeratorQueue:          queue,
+		NextFraudReportSequence: pb.NextFraudReportSequence,
+		NextAuditLogSequence:    pb.NextAuditLogSequence,
+	}
+}
+
+// DefaultGenesisStatePB returns the default proto genesis state
+func DefaultGenesisStatePB() *GenesisStatePB {
+	return GenesisStateToProto(DefaultGenesisState())
+}
