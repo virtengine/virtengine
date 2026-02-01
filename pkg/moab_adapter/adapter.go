@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+const (
+	jobStatusFailed    = "failed"
+	jobStatusCancelled = "cancelled"
+	jobStatusCompleted = "completed"
+)
+
 // JobSigner signs job status updates
 type JobSigner interface {
 	// Sign signs data and returns the signature
@@ -437,11 +443,11 @@ func (a *MOABAdapter) CreateVERewardsData(job *MOABJob, customerAddress string) 
 	var completionStatus string
 	switch job.State {
 	case MOABJobStateFailed:
-		completionStatus = "failed"
+		completionStatus = jobStatusFailed
 	case MOABJobStateCancelled:
-		completionStatus = "cancelled"
+		completionStatus = jobStatusCancelled
 	default:
-		completionStatus = "completed"
+		completionStatus = jobStatusCompleted
 	}
 
 	a.mu.RLock()

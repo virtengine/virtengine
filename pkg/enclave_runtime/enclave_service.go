@@ -22,6 +22,13 @@ import (
 	"time"
 )
 
+const (
+	// statusNeedsReview is the needs_review verification status
+	statusNeedsReview = "needs_review"
+	// statusRejected is the rejected verification status
+	statusRejected = "rejected"
+)
+
 // ErrEnclaveNotInitialized is returned when enclave operations are attempted before initialization
 var ErrEnclaveNotInitialized = errors.New("enclave not initialized")
 
@@ -390,9 +397,9 @@ func (s *SimulatedEnclaveService) simulateScoring(request *ScoringRequest) *Scor
 	case score >= 80:
 		status = "verified"
 	case score >= 50:
-		status = "needs_review"
+		status = statusNeedsReview
 	default:
-		status = "rejected"
+		status = statusRejected
 	}
 
 	// Generate evidence hashes

@@ -24,6 +24,9 @@ import (
 	"time"
 )
 
+// statusUnknown is the unknown status string value
+const statusUnknown = "UNKNOWN"
+
 // =============================================================================
 // Error Definitions
 // =============================================================================
@@ -79,7 +82,7 @@ func (h HealthStatus) String() string {
 	case HealthUnhealthy:
 		return "UNHEALTHY"
 	default:
-		return "UNKNOWN"
+		return statusUnknown
 	}
 }
 
@@ -113,7 +116,7 @@ func (s SelectionStrategy) String() string {
 	case StrategyLatency:
 		return "LATENCY"
 	default:
-		return "UNKNOWN"
+		return statusUnknown
 	}
 }
 
@@ -161,7 +164,7 @@ func (c CircuitBreakerState) String() string {
 	case CircuitHalfOpen:
 		return "HALF_OPEN"
 	default:
-		return "UNKNOWN"
+		return statusUnknown
 	}
 }
 

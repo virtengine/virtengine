@@ -14,6 +14,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	// metricsNamespace is the default Prometheus namespace for all VirtEngine metrics.
+	metricsNamespace = "virtengine"
+)
+
 var (
 	// Global registry for all VirtEngine metrics
 	globalRegistry     *prometheus.Registry
@@ -89,7 +94,7 @@ type ChainMetrics struct {
 // NewChainMetrics creates and registers chain health metrics
 func NewChainMetrics(namespace string) *ChainMetrics {
 	if namespace == "" {
-		namespace = "virtengine"
+		namespace = metricsNamespace
 	}
 
 	m := &ChainMetrics{
@@ -357,7 +362,7 @@ type VEIDMetrics struct {
 // NewVEIDMetrics creates and registers VEID metrics
 func NewVEIDMetrics(namespace string) *VEIDMetrics {
 	if namespace == "" {
-		namespace = "virtengine"
+		namespace = metricsNamespace
 	}
 
 	m := &VEIDMetrics{
@@ -553,7 +558,7 @@ type MarketplaceMetrics struct {
 // NewMarketplaceMetrics creates and registers marketplace metrics
 func NewMarketplaceMetrics(namespace string) *MarketplaceMetrics {
 	if namespace == "" {
-		namespace = "virtengine"
+		namespace = metricsNamespace
 	}
 
 	m := &MarketplaceMetrics{
@@ -780,7 +785,7 @@ type ProviderDaemonMetrics struct {
 // NewProviderDaemonMetrics creates and registers provider daemon metrics
 func NewProviderDaemonMetrics(namespace string) *ProviderDaemonMetrics {
 	if namespace == "" {
-		namespace = "virtengine"
+		namespace = metricsNamespace
 	}
 
 	m := &ProviderDaemonMetrics{
@@ -948,7 +953,7 @@ type APIMetrics struct {
 // NewAPIMetrics creates and registers API metrics
 func NewAPIMetrics(namespace string) *APIMetrics {
 	if namespace == "" {
-		namespace = "virtengine"
+		namespace = metricsNamespace
 	}
 
 	m := &APIMetrics{
@@ -1053,7 +1058,7 @@ type SLOMetrics struct {
 // NewSLOMetrics creates and registers SLO metrics
 func NewSLOMetrics(namespace string) *SLOMetrics {
 	if namespace == "" {
-		namespace = "virtengine"
+		namespace = metricsNamespace
 	}
 
 	m := &SLOMetrics{

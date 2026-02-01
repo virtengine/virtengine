@@ -29,6 +29,9 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
+// hashAlgorithmSHA384 is the SHA384 hash algorithm string
+const hashAlgorithmSHA384 = "SHA384"
+
 // =============================================================================
 // Nitro Enclave Constants and Types
 // =============================================================================
@@ -184,7 +187,7 @@ func (d *NitroAttestationDocument) Validate() error {
 	if d.Timestamp == 0 {
 		return errors.New("timestamp is required")
 	}
-	if d.Digest != "SHA384" {
+	if d.Digest != hashAlgorithmSHA384 {
 		return errors.New("digest must be SHA384")
 	}
 	if len(d.Certificate) == 0 {
@@ -906,7 +909,7 @@ func (n *NitroEnclaveServiceImpl) deriveEnclaveKeys() error {
 
 // simulateVsockCommunication simulates vsock communication with enclave
 //
-//nolint:unused // Reserved for vsock communication implementation
+//nolint:unused,unparam // Reserved for vsock communication implementation; result 1 (error) for future failures
 func (n *NitroEnclaveServiceImpl) simulateVsockCommunication(request []byte) ([]byte, error) {
 	// TODO: Real implementation would:
 	// 1. Open vsock connection: net.Dial("vsock", fmt.Sprintf("%d:%d", n.config.CID, n.config.VsockPort))
@@ -1008,7 +1011,7 @@ func (n *NitroEnclaveServiceImpl) simulateAttestationDocument(userData []byte) (
 		ModuleID: n.moduleID,
 		//nolint:gosec // G115: UnixMilli timestamp is positive and fits in uint64
 		Timestamp:   uint64(time.Now().UnixMilli()),
-		Digest:      "SHA384",
+		Digest:      hashAlgorithmSHA384,
 		PCRs:        n.pcrSet,
 		Certificate: n.certificate,
 		CABundle:    n.caBundle,

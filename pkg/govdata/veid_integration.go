@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+const (
+	scopeStatusActive  = "active"
+	scopeStatusRevoked = "revoked"
+)
+
 // ============================================================================
 // VEID Integrator Implementation
 // ============================================================================
@@ -86,7 +91,7 @@ func (v *veidIntegrator) CreateScope(ctx context.Context, verification *Verifica
 		ExpiresAt:          expiresAt,
 		CreatedAt:          now,
 		UpdatedAt:          now,
-		Status:             "active",
+		Status:             scopeStatusActive,
 	}
 
 	v.scopes[scopeID] = scope
@@ -149,7 +154,7 @@ func (v *veidIntegrator) RevokeScope(ctx context.Context, scopeID string) error 
 		return fmt.Errorf("scope not found: %s", scopeID)
 	}
 
-	scope.Status = "revoked"
+	scope.Status = scopeStatusRevoked
 	scope.UpdatedAt = time.Now()
 
 	return nil
@@ -232,7 +237,7 @@ func (v *veidIntegrator) GetScopeStats(ctx context.Context, walletAddress string
 
 		stats.TotalScopes++
 
-		if scope.Status == "active" && scope.ExpiresAt.After(now) {
+		if scope.Status == scopeStatusActive && scope.ExpiresAt.After(now) {
 			stats.ActiveScopes++
 			stats.TotalScoreContribution += scope.ScoreContribution
 		} else {
@@ -309,7 +314,7 @@ func (v *veidIntegrator) ComputeMultiSourceScore(ctx context.Context, walletAddr
 
 	for _, scope := range scopes {
 		// Skip expired or revoked scopes
-		if scope.Status != "active" || scope.ExpiresAt.Before(now) {
+		if scope.Status != scopeStatusActive || scope.ExpiresAt.Before(now) {
 			continue
 		}
 

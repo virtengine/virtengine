@@ -18,6 +18,11 @@ import (
 	"github.com/virtengine/virtengine/pkg/security"
 )
 
+const (
+	osLinux   = "linux"
+	osUnknown = "unknown"
+)
+
 // MetricsCollector collects system metrics for heartbeats
 type MetricsCollector struct {
 	startTime time.Time
@@ -31,6 +36,8 @@ func NewMetricsCollector() *MetricsCollector {
 }
 
 // CollectCapacity collects node capacity metrics
+//
+//nolint:unparam // result 1 (error) reserved for hardware query failures
 func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 	capacity := &NodeCapacity{}
 
@@ -60,6 +67,8 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 }
 
 // CollectHealth collects node health metrics
+//
+//nolint:unparam // result 1 (error) reserved for health check failures
 func (m *MetricsCollector) CollectHealth() (*NodeHealth, error) {
 	health := &NodeHealth{
 		Status:        "healthy",
@@ -190,7 +199,7 @@ func (m *MetricsCollector) CollectServices() *NodeServices {
 }
 
 func (m *MetricsCollector) getMemoryInfo() (uint64, uint64) {
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == osLinux {
 		file, err := os.Open("/proc/meminfo")
 		if err != nil {
 			return 0, 0
@@ -226,7 +235,7 @@ func (m *MetricsCollector) getMemoryInfo() (uint64, uint64) {
 }
 
 func (m *MetricsCollector) getLoadAverage() (float64, float64, float64) {
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == osLinux {
 		data, err := os.ReadFile("/proc/loadavg")
 		if err != nil {
 			return 0, 0, 0
@@ -247,7 +256,7 @@ func (m *MetricsCollector) getLoadAverage() (float64, float64, float64) {
 }
 
 func (m *MetricsCollector) getCPUUtilization() int32 {
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == osLinux {
 		// Read CPU stats
 		data, err := os.ReadFile("/proc/stat")
 		if err != nil {
@@ -304,7 +313,7 @@ func (m *MetricsCollector) getGPUInfo() (int32, int32, string) {
 }
 
 func (m *MetricsCollector) getStorageInfo(path string) (uint64, uint64) {
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == osLinux {
 		// Validate and sanitize the path argument
 		args, err := security.DfArgs(path)
 		if err != nil {
@@ -337,23 +346,23 @@ func (m *MetricsCollector) getStorageInfo(path string) (uint64, uint64) {
 func (m *MetricsCollector) getSLURMNodeState() string {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "unknown"
+		return osUnknown
 	}
 
 	// Validate hostname before using in command
 	if err := security.ValidateHostname(hostname); err != nil {
-		return "unknown"
+		return osUnknown
 	}
 
 	// Build validated arguments for sinfo command
 	args, err := security.SLURMSinfoArgs("%T", hostname)
 	if err != nil {
-		return "unknown"
+		return osUnknown
 	}
 
 	output, err := exec.Command("sinfo", args...).Output()
 	if err != nil {
-		return "unknown"
+		return osUnknown
 	}
 
 	return strings.TrimSpace(string(output))

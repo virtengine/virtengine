@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// modeSELinuxPermissive is the permissive attestation mode value
+const modeSELinuxPermissive = "permissive"
+
 // EnclaveRuntimeConfig is the top-level configuration for enclave runtime
 // This can be embedded in app.toml or loaded from a separate config file
 type EnclaveRuntimeConfig struct {
@@ -180,7 +183,7 @@ func (c *EnclaveRuntimeConfig) Validate() error {
 	}
 
 	// Warn about permissive mode
-	if attestationMode == "permissive" {
+	if attestationMode == modeSELinuxPermissive {
 		fmt.Println("WARNING: Enclave attestation mode is 'permissive' - this should only be used for testing")
 	}
 
@@ -403,7 +406,7 @@ func (c *EnclaveRuntimeConfig) IsProductionReady() (bool, []string) {
 	}
 
 	// Check attestation mode
-	if c.AttestationMode == "permissive" {
+	if c.AttestationMode == modeSELinuxPermissive {
 		issues = append(issues, "attestation_mode is 'permissive' - unknown measurements will be accepted")
 	}
 

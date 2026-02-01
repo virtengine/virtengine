@@ -25,6 +25,9 @@ import (
 	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
+// nullString represents the SLURM null value placeholder
+const nullString = "(null)"
+
 // ErrSSHConnection is returned when SSH connection fails
 var ErrSSHConnection = errors.New("SSH connection failed")
 
@@ -1061,7 +1064,7 @@ func (c *SSHSLURMClient) ListNodes(ctx context.Context) ([]NodeInfo, error) {
 		}
 
 		// Parse GPU info (format: gpu:type:count or (null))
-		if fields[4] != "(null)" && fields[4] != "" {
+		if fields[4] != nullString && fields[4] != "" {
 			node.GPUs, node.GPUType = parseGRES(fields[4])
 		}
 
@@ -1071,7 +1074,7 @@ func (c *SSHSLURMClient) ListNodes(ctx context.Context) ([]NodeInfo, error) {
 		}
 
 		// Parse features
-		if len(fields) > 6 && fields[6] != "(null)" {
+		if len(fields) > 6 && fields[6] != nullString {
 			node.Features = strings.Split(fields[6], ",")
 		}
 
@@ -1108,7 +1111,7 @@ func mapSLURMState(state string) SLURMJobState {
 func parseNodeList(nodeSpec string) []string {
 	// Handle compressed node lists like "node[001-004]"
 	nodeSpec = strings.TrimSpace(nodeSpec)
-	if nodeSpec == "" || nodeSpec == "(null)" {
+	if nodeSpec == "" || nodeSpec == nullString {
 		return nil
 	}
 

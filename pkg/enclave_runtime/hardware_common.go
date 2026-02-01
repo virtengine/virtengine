@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// modeAuto is the auto hardware mode string value
+const modeAuto = "auto"
+
 // =============================================================================
 // Hardware Mode Configuration
 // =============================================================================
@@ -38,7 +41,7 @@ const (
 func (m HardwareMode) String() string {
 	switch m {
 	case HardwareModeAuto:
-		return "auto"
+		return modeAuto
 	case HardwareModeSimulate:
 		return "simulate"
 	case HardwareModeRequire:
@@ -273,9 +276,11 @@ type HardwareState struct {
 
 	mode             HardwareMode
 	activeBackend    HardwareBackend
-	initialized      bool
-	initError        error
-	lastHealthCheck  time.Time
+	initialized bool
+	initError   error
+	//nolint:unused // Reserved for health check tracking
+	lastHealthCheck time.Time
+	//nolint:unused // Reserved for health check tracking
 	healthCheckError error
 }
 

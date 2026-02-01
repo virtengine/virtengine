@@ -14,6 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	testStripeSecretKey = "sk_test_xxx"
+	testMerchantName    = "TestMerchant"
+)
+
 // ============================================================================
 // Type Tests
 // ============================================================================
@@ -252,7 +257,7 @@ func TestDefaultConfig(t *testing.T) {
 func TestConfig_Validate(t *testing.T) {
 	t.Run("valid stripe config", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.StripeConfig.SecretKey = "sk_test_xxx"
+		cfg.StripeConfig.SecretKey = testStripeSecretKey
 		assert.NoError(t, cfg.Validate())
 	})
 
@@ -260,7 +265,7 @@ func TestConfig_Validate(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.Gateway = GatewayAdyen
 		cfg.AdyenConfig.APIKey = "test_api_key"
-		cfg.AdyenConfig.MerchantAccount = "TestMerchant"
+		cfg.AdyenConfig.MerchantAccount = testMerchantName
 		assert.NoError(t, cfg.Validate())
 	})
 
@@ -284,7 +289,7 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("no supported currencies", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.StripeConfig.SecretKey = "sk_test_xxx"
+		cfg.StripeConfig.SecretKey = testStripeSecretKey
 		cfg.SupportedCurrencies = nil
 		assert.ErrorIs(t, cfg.Validate(), ErrInvalidCurrency)
 	})
@@ -300,7 +305,7 @@ func TestConfig_IsCurrencySupported(t *testing.T) {
 
 func TestConfig_ValidateAmount(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.StripeConfig.SecretKey = "sk_test_xxx"
+	cfg.StripeConfig.SecretKey = testStripeSecretKey
 
 	t.Run("valid amount", func(t *testing.T) {
 		amount := NewAmount(5000, CurrencyUSD)
@@ -340,11 +345,11 @@ func newTestService(t *testing.T, gateway GatewayType) Service {
 
 	switch gateway {
 	case GatewayStripe:
-		cfg.StripeConfig.SecretKey = "sk_test_xxx"
+		cfg.StripeConfig.SecretKey = testStripeSecretKey
 		gw, err = NewStripeStubAdapter(cfg.StripeConfig)
 	case GatewayAdyen:
 		cfg.AdyenConfig.APIKey = "test_key"
-		cfg.AdyenConfig.MerchantAccount = "TestMerchant"
+		cfg.AdyenConfig.MerchantAccount = testMerchantName
 		gw, err = NewAdyenStubAdapter(cfg.AdyenConfig)
 	default:
 		t.Fatalf("unsupported gateway: %s", gateway)
@@ -593,7 +598,7 @@ func (s *stubTestService) ExecuteConversion(ctx context.Context, quote Conversio
 func TestNewService(t *testing.T) {
 	t.Run("stripe service", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.StripeConfig.SecretKey = "sk_test_xxx"
+		cfg.StripeConfig.SecretKey = testStripeSecretKey
 
 		svc, err := NewService(cfg)
 		require.NoError(t, err)
@@ -606,7 +611,7 @@ func TestNewService(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.Gateway = GatewayAdyen
 		cfg.AdyenConfig.APIKey = "test_key"
-		cfg.AdyenConfig.MerchantAccount = "TestMerchant"
+		cfg.AdyenConfig.MerchantAccount = testMerchantName
 
 		svc, err := NewService(cfg)
 		require.NoError(t, err)
@@ -856,7 +861,7 @@ func TestService_ConversionService(t *testing.T) {
 func TestStripeAdapter(t *testing.T) {
 	// Use stub adapter for unit tests (no network calls)
 	adapter, err := NewStripeStubAdapter(StripeConfig{
-		SecretKey: "sk_test_xxx",
+		SecretKey: testStripeSecretKey,
 	})
 	require.NoError(t, err)
 
@@ -874,7 +879,7 @@ func TestAdyenAdapter(t *testing.T) {
 	// Use stub adapter for unit tests (no network calls)
 	adapter, err := NewAdyenStubAdapter(AdyenConfig{
 		APIKey:          "test_key",
-		MerchantAccount: "TestMerchant",
+		MerchantAccount: testMerchantName,
 	})
 	require.NoError(t, err)
 

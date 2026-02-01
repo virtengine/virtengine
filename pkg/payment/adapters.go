@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// environmentLive is the Adyen live environment identifier
+const environmentLive = "live"
+
 // ============================================================================
 // Stripe Adapter Factory
 // ============================================================================
@@ -38,7 +41,7 @@ func NewStripeGateway(config StripeConfig, useRealSDK bool) (Gateway, error) {
 // ============================================================================
 
 // stripeStubAdapter is a STUB implementation for testing only.
-// DEPRECATED: Use StripeAdapter (stripe_adapter.go) for production.
+// Deprecated: Use StripeAdapter (stripe_adapter.go) for production.
 //
 // WARNING: This adapter returns FAKE customer IDs (cus_xxx) and payment intents.
 // NO REAL PAYMENTS ARE PROCESSED. Do NOT use in production!
@@ -49,7 +52,7 @@ type stripeStubAdapter struct {
 }
 
 // NewStripeStubAdapter creates a STUB Stripe adapter for testing.
-// DEPRECATED: Use NewRealStripeAdapter for production.
+// Deprecated: Use NewRealStripeAdapter for production.
 //
 // WARNING: This returns fake payment data. For production, use NewStripeGateway(config, true)
 // or NewRealStripeAdapter(config).
@@ -68,7 +71,7 @@ func NewStripeStubAdapter(config StripeConfig) (Gateway, error) {
 }
 
 // NewStripeAdapter creates a new Stripe gateway adapter.
-// DEPRECATED: This now returns the REAL Stripe SDK adapter.
+// Deprecated: This now returns the REAL Stripe SDK adapter.
 // For explicit control, use NewStripeGateway(config, useRealSDK) instead.
 func NewStripeAdapter(config StripeConfig) (Gateway, error) {
 	// VE-2003: Now returns the real Stripe SDK adapter by default
@@ -395,7 +398,7 @@ func NewAdyenStubAdapter(config AdyenConfig) (Gateway, error) {
 	}
 
 	baseURL := "https://checkout-test.adyen.com/v71"
-	if config.Environment == "live" {
+	if config.Environment == environmentLive {
 		baseURL = fmt.Sprintf("https://%s-checkout-live.adyenpayments.com/checkout/v71", config.LiveEndpointURLPrefix)
 	}
 

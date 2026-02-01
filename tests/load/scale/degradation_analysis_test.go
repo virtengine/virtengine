@@ -35,6 +35,9 @@ const (
 	AcceptableDegradation   = 2.0  // 2x slower is acceptable
 	WarningDegradation      = 5.0  // 5x slower is warning
 	CriticalDegradation     = 10.0 // 10x slower is critical
+
+	// Severity levels
+	severityLow = "low"
 )
 
 // ============================================================================
@@ -163,11 +166,8 @@ func (a *PerformanceAnalyzer) AnalyzeOperation(operation string) *ScalingAnalysi
 			// log(timeRatio) / log(scaleRatio) gives the exponent
 			// O(n) -> 1, O(n^2) -> 2, O(log n) -> ~0.3
 			analysis.ScalingFactor = timeRatio / scaleRatio
-		} else if first.Duration == 0 && last.Duration > 0 {
-			// First was too fast to measure - estimate as linear
-			analysis.ScalingFactor = 1.0
 		} else {
-			// Default to linear if we can't compute
+			// Default to linear if we can't compute (including when first.Duration == 0)
 			analysis.ScalingFactor = 1.0
 		}
 		
@@ -212,7 +212,7 @@ func (a *PerformanceAnalyzer) GenerateReport() *DegradationReport {
 	
 	// Identify bottlenecks
 	for _, analysis := range a.analyses {
-		severity := "low"
+		severity := severityLow
 		if analysis.ScalingFactor > CriticalDegradation {
 			severity = "critical"
 		} else if analysis.ScalingFactor > WarningDegradation {
@@ -221,7 +221,7 @@ func (a *PerformanceAnalyzer) GenerateReport() *DegradationReport {
 			severity = "medium"
 		}
 		
-		if severity != "low" {
+		if severity != severityLow {
 			report.Bottlenecks = append(report.Bottlenecks, Bottleneck{
 				Component:   analysis.Operation,
 				Severity:    severity,
@@ -434,7 +434,7 @@ func TestMarketplaceScaleDegradation(t *testing.T) {
 			// Measure bid submission
 			start = time.Now()
 			for i := 0; i < 100; i++ {
-				store.SubmitBid(uint64(i%scale+1), generateRandomAddress(), 500)
+				_, _ = store.SubmitBid(uint64(i%scale+1), generateRandomAddress(), 500)
 			}
 			bidTime := time.Since(start)
 			

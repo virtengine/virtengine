@@ -6,6 +6,13 @@ import (
 	"github.com/virtengine/virtengine/pkg/economics"
 )
 
+const (
+	severityLow      = "low"
+	severityMedium   = "medium"
+	severityHigh     = "high"
+	severityCritical = "critical"
+)
+
 // AttackAnalyzer analyzes attack costs and vulnerabilities.
 type AttackAnalyzer struct {
 	params economics.TokenomicsParams
@@ -142,11 +149,11 @@ func (a *AttackAnalyzer) AnalyzeLongRangeAttack(
 	timeToPrepare := formatDays(unbondingPeriodDays) + " (minimum unbonding period)"
 
 	// Risk level
-	riskLevel := "low"
+	riskLevel := severityLow
 	if unbondingPeriodDays < 7 {
-		riskLevel = "high"
+		riskLevel = severityHigh
 	} else if unbondingPeriodDays < 14 {
-		riskLevel = "medium"
+		riskLevel = severityMedium
 	}
 
 	return economics.AttackAnalysis{
@@ -197,13 +204,13 @@ func (a *AttackAnalyzer) AnalyzeCartellization(
 	// Risk assessment
 	var riskLevel string
 	if minFor33 <= 3 {
-		riskLevel = "critical"
+		riskLevel = severityCritical
 	} else if minFor33 <= 5 {
-		riskLevel = "high"
+		riskLevel = severityHigh
 	} else if minFor33 <= 10 {
-		riskLevel = "medium"
+		riskLevel = severityMedium
 	} else {
-		riskLevel = "low"
+		riskLevel = severityLow
 	}
 
 	return economics.AttackAnalysis{
@@ -223,17 +230,17 @@ func (a *AttackAnalyzer) AnalyzeNothingAtStake(
 	slashingEnabled bool,
 	slashingPercentBPS int64,
 ) economics.AttackAnalysis {
-	riskLevel := "low"
+	riskLevel := severityLow
 	mitigation := "Slashing for equivocation is enabled with " + formatBPS(slashingPercentBPS) + " penalty"
 
 	if !slashingEnabled {
-		riskLevel = "critical"
+		riskLevel = severityCritical
 		mitigation = "CRITICAL: Enable slashing for equivocation immediately"
 	} else if slashingPercentBPS < 100 {
-		riskLevel = "high"
+		riskLevel = severityHigh
 		mitigation = "Increase slashing penalty from " + formatBPS(slashingPercentBPS) + " to at least 1%"
 	} else if slashingPercentBPS < 500 {
-		riskLevel = "medium"
+		riskLevel = severityMedium
 		mitigation = "Consider increasing slashing penalty from " + formatBPS(slashingPercentBPS) + " to 5%"
 	}
 
@@ -294,7 +301,7 @@ func (a *AttackAnalyzer) GenerateSecurityRecommendations(
 	var recommendations []economics.Recommendation
 
 	for _, analysis := range analyses {
-		if analysis.RiskLevel == "critical" || analysis.RiskLevel == "high" {
+		if analysis.RiskLevel == severityCritical || analysis.RiskLevel == severityHigh {
 			recommendations = append(recommendations, economics.Recommendation{
 				Category:    "security",
 				Priority:    analysis.RiskLevel,
@@ -346,33 +353,35 @@ func (a *AttackAnalyzer) assessDetectionDifficulty(validators []economics.Valida
 	return "medium"
 }
 
-func (a *AttackAnalyzer) assess51AttackRisk(costUSD, supplyPercentage float64, validatorCount int64) string {
+//nolint:unparam // supplyPercentage kept for future validator concentration analysis
+func (a *AttackAnalyzer) assess51AttackRisk(costUSD, _ float64, _ int64) string {
 	// Very low cost = critical risk
 	if costUSD < 1_000_000 {
-		return "critical"
+		return severityCritical
 	}
 	if costUSD < 10_000_000 {
-		return "high"
+		return severityHigh
 	}
 	if costUSD < 100_000_000 {
-		return "medium"
+		return severityMedium
 	}
-	return "low"
+	return severityLow
 }
 
-func (a *AttackAnalyzer) assessSpamRisk(minGasPrice, targetTPS int64, costUSD float64) string {
+//nolint:unparam // minGasPrice kept for future TPS-based cost scaling
+func (a *AttackAnalyzer) assessSpamRisk(_, _ int64, costUSD float64) string {
 	// If spam is cheap, risk is high
 	costPerDay := costUSD * (86400 / 3600) // Scale to daily cost
 	if costPerDay < 100 {
-		return "critical"
+		return severityCritical
 	}
 	if costPerDay < 1000 {
-		return "high"
+		return severityHigh
 	}
 	if costPerDay < 10000 {
-		return "medium"
+		return severityMedium
 	}
-	return "low"
+	return severityLow
 }
 
 func sortValidatorsByStake(validators []economics.ValidatorState) {
