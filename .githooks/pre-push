@@ -158,7 +158,6 @@ check_lint() {
     local base_ref=""
     local changed_files=""
     local changed_packages=""
-
     # Check if golangci-lint is available
     if ! command -v golangci-lint &>/dev/null; then
         # Try to find it in cache
@@ -169,7 +168,6 @@ check_lint() {
         fi
         alias golangci-lint="$lint_bin"
     fi
-
     if git rev-parse --verify "$base_branch" &>/dev/null; then
         base_ref="$base_branch"
     elif git rev-parse --verify "HEAD~1" &>/dev/null; then
@@ -192,22 +190,18 @@ check_lint() {
         hook_step "No Go files changed, skipping lint"
         return 0
     fi
-
     # Extract unique package directories from changed files
     changed_packages=$(echo "$changed_files" | \
         xargs -r dirname 2>/dev/null | sort -u | \
         while read -r dir; do [ -d "$dir" ] && echo "./$dir/..."; done | \
         paste -sd ' ' - 2>/dev/null || echo "")
-
     if [ -z "${changed_packages:-}" ]; then
         hook_step "No valid packages to lint"
         return 0
     fi
-
     local pkg_count
     pkg_count=$(echo "$changed_packages" | wc -w | tr -d ' ')
     hook_step "Linting packages with changed files ($pkg_count packages)"
-
     # Run golangci-lint with reasonable timeout
     # shellcheck disable=SC2086
     golangci-lint run --timeout=5m $changed_packages 2>&1
