@@ -124,9 +124,12 @@ record, err := billing.NewInvoiceLedgerRecord(invoice, artifactCID, blockHeight,
 
 ### Ledger Entries
 
-Each state change creates an `InvoiceLedgerEntry` for audit trail:
+Each state change creates an `InvoiceLedgerEntry` for audit trail. Entries form an immutable hash chain:
 
 ```go
+// Get previous entry hash and sequence from the chain
+previousHash, seqNum := keeper.GetLastEntryHashAndSeq(invoiceID)
+
 entry := billing.NewInvoiceLedgerEntry(
     entryID,
     invoiceID,
@@ -137,9 +140,22 @@ entry := billing.NewInvoiceLedgerEntry(
     description,
     initiator,
     txHash,
+    previousHash,   // Hash chain link
+    seqNum + 1,     // Next sequence number
     blockHeight,
     timestamp,
 )
+```
+
+### Hash Chain Verification
+
+The ledger chain can be verified for integrity:
+
+```go
+chain, err := keeper.GetInvoiceLedgerChain(ctx, invoiceID)
+if err := chain.Validate(); err != nil {
+    // Chain integrity compromised
+}
 ```
 
 ## Artifact Storage
