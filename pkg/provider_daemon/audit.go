@@ -525,6 +525,47 @@ const (
 
 	// AuditEventMultiSigOperation indicates a multisig operation
 	AuditEventMultiSigOperation AuditEventType = "multisig_operation"
+
+	// VE-14E: Lifecycle control audit event types
+
+	// AuditEventLifecycleActionInitiated indicates a lifecycle action was initiated
+	AuditEventLifecycleActionInitiated AuditEventType = "lifecycle_action_initiated"
+
+	// AuditEventLifecycleActionStarted indicates a lifecycle action started executing
+	AuditEventLifecycleActionStarted AuditEventType = "lifecycle_action_started"
+
+	// AuditEventLifecycleActionCompleted indicates a lifecycle action completed successfully
+	AuditEventLifecycleActionCompleted AuditEventType = "lifecycle_action_completed"
+
+	// AuditEventLifecycleActionFailed indicates a lifecycle action failed
+	AuditEventLifecycleActionFailed AuditEventType = "lifecycle_action_failed"
+
+	// AuditEventLifecycleCallbackReceived indicates a lifecycle callback was received
+	AuditEventLifecycleCallbackReceived AuditEventType = "lifecycle_callback_received"
+
+	// AuditEventLifecycleCallbackFailed indicates a lifecycle callback processing failed
+	AuditEventLifecycleCallbackFailed AuditEventType = "lifecycle_callback_failed"
+
+	// AuditEventLifecycleRollbackInitiated indicates a rollback was initiated
+	AuditEventLifecycleRollbackInitiated AuditEventType = "lifecycle_rollback_initiated"
+
+	// AuditEventLifecycleRollbackCompleted indicates a rollback completed
+	AuditEventLifecycleRollbackCompleted AuditEventType = "lifecycle_rollback_completed"
+
+	// AuditEventLifecycleRollbackFailed indicates a rollback failed
+	AuditEventLifecycleRollbackFailed AuditEventType = "lifecycle_rollback_failed"
+
+	// AuditEventResourceStateChanged indicates a resource state changed
+	AuditEventResourceStateChanged AuditEventType = "resource_state_changed"
+
+	// AuditEventResourceTerminated indicates a resource was terminated
+	AuditEventResourceTerminated AuditEventType = "resource_terminated"
+
+	// AuditEventWaldurCallbackReceived indicates a Waldur callback was received
+	AuditEventWaldurCallbackReceived AuditEventType = "waldur_callback_received"
+
+	// AuditEventWaldurCallbackFailed indicates a Waldur callback failed
+	AuditEventWaldurCallbackFailed AuditEventType = "waldur_callback_failed"
 )
 
 // AuditEvent represents an audit log entry
@@ -973,4 +1014,208 @@ type AuditReport struct {
 	ByType       map[string]int `json:"by_type"`
 	ByPrincipal  map[string]int `json:"by_principal"`
 	ByKey        map[string]int `json:"by_key"`
+}
+
+// VE-14E: Lifecycle audit helper functions
+
+// LogLifecycleAction logs a lifecycle action audit event
+func (l *AuditLogger) LogLifecycleAction(
+	eventType AuditEventType,
+	allocationID string,
+	action string,
+	operationID string,
+	success bool,
+	errorMsg string,
+	details map[string]interface{},
+) error {
+	if details == nil {
+		details = make(map[string]interface{})
+	}
+	details["allocation_id"] = allocationID
+	details["operation_id"] = operationID
+	details["action"] = action
+
+	event := &AuditEvent{
+		Type:         eventType,
+		Operation:    action,
+		Success:      success,
+		ErrorMessage: errorMsg,
+		Details:      details,
+	}
+
+	return l.Log(event)
+}
+
+// LogLifecycleStateChange logs a resource state change
+func (l *AuditLogger) LogLifecycleStateChange(
+	allocationID string,
+	previousState string,
+	newState string,
+	trigger string,
+) error {
+	details := map[string]interface{}{
+		"allocation_id":  allocationID,
+		"previous_state": previousState,
+		"new_state":      newState,
+		"trigger":        trigger,
+	}
+
+	event := &AuditEvent{
+		Type:      AuditEventResourceStateChanged,
+		Operation: "state_change",
+		Success:   true,
+		Details:   details,
+	}
+
+	return l.Log(event)
+}
+
+// LogLifecycleCallback logs a lifecycle callback event
+func (l *AuditLogger) LogLifecycleCallback(
+	callbackID string,
+	operationID string,
+	allocationID string,
+	success bool,
+	errorMsg string,
+) error {
+	eventType := AuditEventLifecycleCallbackReceived
+	if !success {
+		eventType = AuditEventLifecycleCallbackFailed
+	}
+
+	details := map[string]interface{}{
+		"callback_id":   callbackID,
+		"operation_id":  operationID,
+		"allocation_id": allocationID,
+	}
+
+	event := &AuditEvent{
+		Type:         eventType,
+		Operation:    "lifecycle_callback",
+		Success:      success,
+		ErrorMessage: errorMsg,
+		Details:      details,
+	}
+
+	return l.Log(event)
+}
+
+// LogRollback logs a rollback audit event
+func (l *AuditLogger) LogRollback(
+	rollbackID string,
+	originalOperationID string,
+	allocationID string,
+	originalAction string,
+	rollbackAction string,
+	success bool,
+	errorMsg string,
+) error {
+	eventType := AuditEventLifecycleRollbackCompleted
+	if !success {
+		eventType = AuditEventLifecycleRollbackFailed
+	}
+
+	details := map[string]interface{}{
+		"rollback_id":           rollbackID,
+		"original_operation_id": originalOperationID,
+		"allocation_id":         allocationID,
+		"original_action":       originalAction,
+		"rollback_action":       rollbackAction,
+	}
+
+	event := &AuditEvent{
+		Type:         eventType,
+		Operation:    "rollback",
+		Success:      success,
+		ErrorMessage: errorMsg,
+		Details:      details,
+	}
+
+	return l.Log(event)
+}
+
+// LogWaldurCallback logs a Waldur callback event
+func (l *AuditLogger) LogWaldurCallback(
+	callbackID string,
+	waldurEntityID string,
+	chainEntityID string,
+	actionType string,
+	success bool,
+	errorMsg string,
+) error {
+	eventType := AuditEventWaldurCallbackReceived
+	if !success {
+		eventType = AuditEventWaldurCallbackFailed
+	}
+
+	details := map[string]interface{}{
+		"callback_id":     callbackID,
+		"waldur_entity":   waldurEntityID,
+		"chain_entity":    chainEntityID,
+		"action_type":     actionType,
+	}
+
+	event := &AuditEvent{
+		Type:         eventType,
+		Operation:    actionType,
+		Success:      success,
+		ErrorMessage: errorMsg,
+		Details:      details,
+	}
+
+	return l.Log(event)
+}
+
+// GetLifecycleEvents retrieves lifecycle-related audit events
+func (l *AuditLogger) GetLifecycleEvents(since time.Time) []*AuditEvent {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	lifecycleTypes := map[AuditEventType]bool{
+		AuditEventLifecycleActionInitiated:  true,
+		AuditEventLifecycleActionStarted:    true,
+		AuditEventLifecycleActionCompleted:  true,
+		AuditEventLifecycleActionFailed:     true,
+		AuditEventLifecycleCallbackReceived: true,
+		AuditEventLifecycleCallbackFailed:   true,
+		AuditEventLifecycleRollbackInitiated: true,
+		AuditEventLifecycleRollbackCompleted: true,
+		AuditEventLifecycleRollbackFailed:   true,
+		AuditEventResourceStateChanged:      true,
+		AuditEventResourceTerminated:        true,
+		AuditEventWaldurCallbackReceived:    true,
+		AuditEventWaldurCallbackFailed:      true,
+	}
+
+	events := make([]*AuditEvent, 0)
+	for _, event := range l.events {
+		if event.Timestamp.Before(since) {
+			continue
+		}
+		if lifecycleTypes[event.Type] {
+			events = append(events, event)
+		}
+	}
+
+	return events
+}
+
+// GetEventsByAllocation retrieves events for a specific allocation
+func (l *AuditLogger) GetEventsByAllocation(allocationID string, since time.Time) []*AuditEvent {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	events := make([]*AuditEvent, 0)
+	for _, event := range l.events {
+		if event.Timestamp.Before(since) {
+			continue
+		}
+		if event.Details != nil {
+			if id, ok := event.Details["allocation_id"].(string); ok && id == allocationID {
+				events = append(events, event)
+			}
+		}
+	}
+
+	return events
 }
