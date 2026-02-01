@@ -1,11 +1,22 @@
 // Copyright 2024-2026 VirtEngine Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// Package inference provides production determinism configuration for ML inference.
+// Package inference provides production consensus configuration for ML inference.
 // This file implements Task 15A: ML determinism validation + conformance suite.
 //
-// VE-219: Deterministic identity verification runtime
-// Task 15A: ML determinism validation + conformance suite
+// VE-219: Identity verification runtime with tolerance-based consensus
+// Task 15A: ML consensus validation + conformance suite
+//
+// DESIGN DECISION: Tolerance-Based Consensus
+// ==========================================
+// Rather than requiring bit-exact determinism (which forces CPU-only, single-threaded),
+// we use tolerance-based consensus where validators agree if scores are within an
+// acceptable range. This allows:
+// - GPU acceleration (10-100x faster inference)
+// - Multi-threaded execution
+// - Practical deployment without exotic configuration
+//
+// Consensus is achieved when: |score_A - score_B| <= ConsensusTolerance
 
 package inference
 
@@ -14,6 +25,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"sort"
@@ -22,18 +34,33 @@ import (
 )
 
 // ============================================================================
-// Production Determinism Constants
+// Consensus Configuration Constants
 // ============================================================================
 
 const (
-	// ProductionRandomSeed is the fixed random seed for all production validators.
-	// This value MUST NOT change without a coordinated network upgrade.
+	// ProductionRandomSeed is the recommended random seed for reproducibility.
+	// While not strictly required for tolerance-based consensus, using the same
+	// seed helps reduce variance across validators.
 	ProductionRandomSeed int64 = 42
 
-	// ProductionHashPrecision is the decimal precision for float hashing.
-	// 6 decimal places provides sufficient precision while avoiding
-	// floating-point representation differences across platforms.
-	ProductionHashPrecision = 6
+	// ConsensusTolerance is the maximum allowed difference between validator scores.
+	// Scores within this range are considered equivalent for consensus purposes.
+	// Value: 2.0 means scores of 75.0 and 76.5 would both be accepted.
+	ConsensusTolerance float32 = 2.0
+
+	// ConsensusToleranceStrict is a tighter tolerance for high-stakes operations.
+	// Used for scores near critical thresholds (e.g., pass/fail boundaries).
+	ConsensusToleranceStrict float32 = 0.5
+
+	// ScoreThresholdPass is the minimum score for identity verification to pass.
+	ScoreThresholdPass float32 = 60.0
+
+	// ScoreThresholdHighTrust is the threshold for high-trust tier.
+	ScoreThresholdHighTrust float32 = 80.0
+
+	// ThresholdBuffer is the buffer zone around thresholds where stricter
+	// tolerance is applied to prevent gaming.
+	ThresholdBuffer float32 = 5.0
 
 	// ModelVersionV1 is the v1.0.0 model identifier
 	ModelVersionV1 = "v1.0.0"
@@ -46,12 +73,171 @@ const (
 	// TensorFlowVersionRequired is the required TensorFlow version for inference
 	TensorFlowVersionRequired = "2.15.0"
 
-	// DeterminismConfigVersion is the version of this configuration format
-	DeterminismConfigVersion = "1.0.0"
+	// ConsensusConfigVersion is the version of this configuration format
+	ConsensusConfigVersion = "2.0.0"
+
+	// DeterminismConfigVersion kept for backwards compatibility
+	DeterminismConfigVersion = ConsensusConfigVersion
 )
 
 // ============================================================================
-// TensorFlow Deterministic Operations Registry
+// Consensus Score Comparison
+// ============================================================================
+
+// ScoresInConsensus returns true if two scores are within the consensus tolerance.
+// This is the core function for determining if validators agree.
+func ScoresInConsensus(scoreA, scoreB float32) bool {
+	return ScoresInConsensusWithTolerance(scoreA, scoreB, ConsensusTolerance)
+}
+
+// ScoresInConsensusWithTolerance checks if scores are within a custom tolerance.
+func ScoresInConsensusWithTolerance(scoreA, scoreB, tolerance float32) bool {
+	diff := float32(math.Abs(float64(scoreA - scoreB)))
+	return diff <= tolerance
+}
+
+// ScoresInConsensusStrict uses the stricter tolerance for threshold-adjacent scores.
+func ScoresInConsensusStrict(scoreA, scoreB float32) bool {
+	return ScoresInConsensusWithTolerance(scoreA, scoreB, ConsensusToleranceStrict)
+}
+
+// GetEffectiveTolerance returns the appropriate tolerance based on the score.
+// Scores near critical thresholds use stricter tolerance to prevent gaming.
+func GetEffectiveTolerance(score float32) float32 {
+	// Check if score is near the pass threshold
+	if math.Abs(float64(score-ScoreThresholdPass)) < float64(ThresholdBuffer) {
+		return ConsensusToleranceStrict
+	}
+
+	// Check if score is near the high-trust threshold
+	if math.Abs(float64(score-ScoreThresholdHighTrust)) < float64(ThresholdBuffer) {
+		return ConsensusToleranceStrict
+	}
+
+	return ConsensusTolerance
+}
+
+// ValidateConsensus checks if a set of validator scores achieve consensus.
+// Consensus requires that all scores are within tolerance of the median.
+func ValidateConsensus(scores []float32) ConsensusResult {
+	if len(scores) == 0 {
+		return ConsensusResult{
+			Achieved: false,
+			Reason:   "no scores provided",
+		}
+	}
+
+	if len(scores) == 1 {
+		return ConsensusResult{
+			Achieved:    true,
+			MedianScore: scores[0],
+			Reason:      "single validator",
+		}
+	}
+
+	// Calculate median
+	sorted := make([]float32, len(scores))
+	copy(sorted, scores)
+	sortFloat32s(sorted)
+
+	var median float32
+	mid := len(sorted) / 2
+	if len(sorted)%2 == 0 {
+		median = (sorted[mid-1] + sorted[mid]) / 2
+	} else {
+		median = sorted[mid]
+	}
+
+	// Determine effective tolerance based on median score
+	tolerance := GetEffectiveTolerance(median)
+
+	// Check all scores are within tolerance of median
+	var maxDeviation float32
+	allWithinTolerance := true
+	for _, s := range scores {
+		deviation := float32(math.Abs(float64(s - median)))
+		if deviation > maxDeviation {
+			maxDeviation = deviation
+		}
+		if deviation > tolerance {
+			allWithinTolerance = false
+		}
+	}
+
+	return ConsensusResult{
+		Achieved:     allWithinTolerance,
+		MedianScore:  median,
+		MaxDeviation: maxDeviation,
+		Tolerance:    tolerance,
+		Reason:       formatConsensusReason(allWithinTolerance, maxDeviation, tolerance),
+	}
+}
+
+// ConsensusResult contains the result of a consensus validation.
+type ConsensusResult struct {
+	Achieved     bool    `json:"achieved"`
+	MedianScore  float32 `json:"median_score"`
+	MaxDeviation float32 `json:"max_deviation"`
+	Tolerance    float32 `json:"tolerance"`
+	Reason       string  `json:"reason"`
+}
+
+func formatConsensusReason(achieved bool, maxDeviation, tolerance float32) string {
+	if achieved {
+		return fmt.Sprintf("consensus achieved: max deviation %.2f within tolerance %.2f",
+			maxDeviation, tolerance)
+	}
+	return fmt.Sprintf("consensus failed: max deviation %.2f exceeds tolerance %.2f",
+		maxDeviation, tolerance)
+}
+
+func sortFloat32s(s []float32) {
+	for i := 0; i < len(s)-1; i++ {
+		for j := i + 1; j < len(s); j++ {
+			if s[j] < s[i] {
+				s[i], s[j] = s[j], s[i]
+			}
+		}
+	}
+}
+
+// ============================================================================
+// Binned Score for Deterministic Hashing
+// ============================================================================
+
+// BinScore rounds a score to the nearest bin for deterministic consensus.
+// This allows validators to hash the same "effective score" even with small variance.
+func BinScore(score float32) float32 {
+	// Bin to nearest 0.5 (e.g., 75.3 -> 75.5, 75.1 -> 75.0)
+	return float32(math.Round(float64(score)*2) / 2)
+}
+
+// BinScoreInt returns the score as an integer (0-100 scale).
+// This provides the most deterministic representation for hashing.
+func BinScoreInt(score float32) int {
+	return int(math.Round(float64(score)))
+}
+
+// ScoreBand returns the qualitative band for a score.
+func ScoreBand(score float32) string {
+	switch {
+	case score >= 90:
+		return "excellent"
+	case score >= 80:
+		return "high"
+	case score >= 70:
+		return "good"
+	case score >= 60:
+		return "acceptable"
+	case score >= 50:
+		return "marginal"
+	default:
+		return "low"
+	}
+}
+
+// ============================================================================
+// TensorFlow Operations Registry (kept for reference/validation)
 // ============================================================================
 
 // DeterministicOps lists TensorFlow operations verified to be deterministic
@@ -170,38 +356,48 @@ var ConditionallyDeterministicOps = []string{
 }
 
 // ============================================================================
-// Production Determinism Config
+// Production Consensus Config (Tolerance-Based)
 // ============================================================================
 
-// ProductionDeterminismConfig contains the canonical configuration
-// for deterministic ML inference in production validators.
+// ProductionDeterminismConfig contains the configuration for ML inference consensus.
+// Note: Despite the name (kept for backwards compatibility), this now uses
+// tolerance-based consensus rather than strict determinism.
 type ProductionDeterminismConfig struct {
 	// Version is the configuration version
 	Version string `json:"version"`
 
-	// RandomSeed is the fixed random seed (must be 42)
+	// RandomSeed is the recommended random seed for reproducibility
 	RandomSeed int64 `json:"random_seed"`
 
-	// ForceCPU must be true for determinism
+	// AllowGPU enables GPU acceleration (recommended for performance)
+	AllowGPU bool `json:"allow_gpu"`
+
+	// ForceCPU forces CPU-only mode (legacy, not recommended)
 	ForceCPU bool `json:"force_cpu"`
 
-	// DisableGPU hides GPU devices
+	// DisableGPU hides GPU devices (legacy, not recommended)
 	DisableGPU bool `json:"disable_gpu"`
 
-	// InterOpParallelism must be 1 for determinism
+	// AllowParallelism enables multi-threaded execution
+	AllowParallelism bool `json:"allow_parallelism"`
+
+	// InterOpParallelism controls TF inter-op parallelism (0 = auto)
 	InterOpParallelism int `json:"inter_op_parallelism"`
 
-	// IntraOpParallelism must be 1 for determinism
+	// IntraOpParallelism controls TF intra-op parallelism (0 = auto)
 	IntraOpParallelism int `json:"intra_op_parallelism"`
 
-	// EnableDeterministicOps enables TF deterministic operations
+	// ConsensusTolerance is the max allowed score difference for consensus
+	ConsensusTolerance float32 `json:"consensus_tolerance"`
+
+	// StrictTolerance is the tolerance near thresholds
+	StrictTolerance float32 `json:"strict_tolerance"`
+
+	// EnableDeterministicOps enables TF deterministic operations (optional)
 	EnableDeterministicOps bool `json:"enable_deterministic_ops"`
 
-	// DisableAutoTuning disables cuDNN auto-tuning
+	// DisableAutoTuning disables cuDNN auto-tuning (optional)
 	DisableAutoTuning bool `json:"disable_auto_tuning"`
-
-	// HashPrecision is the decimal precision for float hashing
-	HashPrecision int `json:"hash_precision"`
 
 	// ModelVersion is the required model version
 	ModelVersion string `json:"model_version"`
@@ -212,10 +408,10 @@ type ProductionDeterminismConfig struct {
 	// TensorFlowVersion is the required TF version
 	TensorFlowVersion string `json:"tensorflow_version"`
 
-	// StrictMode fails on any potential non-determinism
+	// StrictMode uses strict tolerance for all comparisons
 	StrictMode bool `json:"strict_mode"`
 
-	// RequireHashVerification requires output hash verification
+	// RequireHashVerification requires model hash verification
 	RequireHashVerification bool `json:"require_hash_verification"`
 
 	// ConfigHash is the hash of this configuration for integrity
@@ -225,24 +421,27 @@ type ProductionDeterminismConfig struct {
 	GeneratedAt time.Time `json:"generated_at"`
 }
 
-// NewProductionDeterminismConfig creates the canonical production configuration.
-// This should be used by all validators in the network.
+// NewProductionDeterminismConfig creates the production consensus configuration.
+// This uses tolerance-based consensus, allowing GPU and multi-threading.
 func NewProductionDeterminismConfig() *ProductionDeterminismConfig {
 	config := &ProductionDeterminismConfig{
-		Version:                 DeterminismConfigVersion,
+		Version:                 ConsensusConfigVersion,
 		RandomSeed:              ProductionRandomSeed,
-		ForceCPU:                true,
-		DisableGPU:              true,
-		InterOpParallelism:      1,
-		IntraOpParallelism:      1,
-		EnableDeterministicOps:  true,
-		DisableAutoTuning:       true,
-		HashPrecision:           ProductionHashPrecision,
+		AllowGPU:                true,  // GPU enabled for performance
+		ForceCPU:                false, // Not required with tolerance-based consensus
+		DisableGPU:              false,
+		AllowParallelism:        true,             // Multi-threading enabled
+		InterOpParallelism:      0,                // 0 = auto (let TF decide)
+		IntraOpParallelism:      0,                // 0 = auto
+		ConsensusTolerance:      ConsensusTolerance,
+		StrictTolerance:         ConsensusToleranceStrict,
+		EnableDeterministicOps:  false,            // Not required
+		DisableAutoTuning:       false,
 		ModelVersion:            ModelVersionV1,
 		ExpectedModelHash:       ExpectedModelHashV1Production,
 		TensorFlowVersion:       TensorFlowVersionRequired,
-		StrictMode:              true,
-		RequireHashVerification: true,
+		StrictMode:              false,            // Use dynamic tolerance
+		RequireHashVerification: true,             // Still verify model hash
 		GeneratedAt:             time.Now().UTC(),
 	}
 
@@ -252,37 +451,57 @@ func NewProductionDeterminismConfig() *ProductionDeterminismConfig {
 	return config
 }
 
+// NewStrictDeterminismConfig creates a strict CPU-only config for testing.
+// This is the legacy mode that forces full determinism.
+func NewStrictDeterminismConfig() *ProductionDeterminismConfig {
+	config := &ProductionDeterminismConfig{
+		Version:                 ConsensusConfigVersion,
+		RandomSeed:              ProductionRandomSeed,
+		AllowGPU:                false,
+		ForceCPU:                true,
+		DisableGPU:              true,
+		AllowParallelism:        false,
+		InterOpParallelism:      1,
+		IntraOpParallelism:      1,
+		ConsensusTolerance:      0,     // Zero tolerance = exact match
+		StrictTolerance:         0,
+		EnableDeterministicOps:  true,
+		DisableAutoTuning:       true,
+		ModelVersion:            ModelVersionV1,
+		ExpectedModelHash:       ExpectedModelHashV1Production,
+		TensorFlowVersion:       TensorFlowVersionRequired,
+		StrictMode:              true,
+		RequireHashVerification: true,
+		GeneratedAt:             time.Now().UTC(),
+	}
+
+	config.ConfigHash = config.computeHash()
+	return config
+}
+
 // computeHash computes the SHA256 hash of the configuration.
 func (c *ProductionDeterminismConfig) computeHash() string {
 	// Create a copy without the hash field for computing
 	hashable := struct {
-		Version                 string `json:"version"`
-		RandomSeed              int64  `json:"random_seed"`
-		ForceCPU                bool   `json:"force_cpu"`
-		DisableGPU              bool   `json:"disable_gpu"`
-		InterOpParallelism      int    `json:"inter_op_parallelism"`
-		IntraOpParallelism      int    `json:"intra_op_parallelism"`
-		EnableDeterministicOps  bool   `json:"enable_deterministic_ops"`
-		DisableAutoTuning       bool   `json:"disable_auto_tuning"`
-		HashPrecision           int    `json:"hash_precision"`
-		ModelVersion            string `json:"model_version"`
-		ExpectedModelHash       string `json:"expected_model_hash"`
-		TensorFlowVersion       string `json:"tensorflow_version"`
-		StrictMode              bool   `json:"strict_mode"`
-		RequireHashVerification bool   `json:"require_hash_verification"`
+		Version                 string  `json:"version"`
+		RandomSeed              int64   `json:"random_seed"`
+		AllowGPU                bool    `json:"allow_gpu"`
+		AllowParallelism        bool    `json:"allow_parallelism"`
+		ConsensusTolerance      float32 `json:"consensus_tolerance"`
+		StrictTolerance         float32 `json:"strict_tolerance"`
+		ModelVersion            string  `json:"model_version"`
+		ExpectedModelHash       string  `json:"expected_model_hash"`
+		StrictMode              bool    `json:"strict_mode"`
+		RequireHashVerification bool    `json:"require_hash_verification"`
 	}{
 		Version:                 c.Version,
 		RandomSeed:              c.RandomSeed,
-		ForceCPU:                c.ForceCPU,
-		DisableGPU:              c.DisableGPU,
-		InterOpParallelism:      c.InterOpParallelism,
-		IntraOpParallelism:      c.IntraOpParallelism,
-		EnableDeterministicOps:  c.EnableDeterministicOps,
-		DisableAutoTuning:       c.DisableAutoTuning,
-		HashPrecision:           c.HashPrecision,
+		AllowGPU:                c.AllowGPU,
+		AllowParallelism:        c.AllowParallelism,
+		ConsensusTolerance:      c.ConsensusTolerance,
+		StrictTolerance:         c.StrictTolerance,
 		ModelVersion:            c.ModelVersion,
 		ExpectedModelHash:       c.ExpectedModelHash,
-		TensorFlowVersion:       c.TensorFlowVersion,
 		StrictMode:              c.StrictMode,
 		RequireHashVerification: c.RequireHashVerification,
 	}
@@ -296,42 +515,25 @@ func (c *ProductionDeterminismConfig) computeHash() string {
 	return hex.EncodeToString(hash[:])
 }
 
-// Validate validates the production configuration.
+// Validate validates the consensus configuration.
+// For tolerance-based consensus, requirements are relaxed compared to strict determinism.
 func (c *ProductionDeterminismConfig) Validate() []string {
 	var issues []string
 
-	// Validate random seed
-	if c.RandomSeed != ProductionRandomSeed {
+	// Validate tolerance is reasonable (must be positive, not too large)
+	if c.ConsensusTolerance < 0 {
+		issues = append(issues, "consensus_tolerance cannot be negative")
+	}
+	if c.ConsensusTolerance > 10.0 {
 		issues = append(issues, fmt.Sprintf(
-			"random_seed must be %d for production, got %d",
-			ProductionRandomSeed, c.RandomSeed))
+			"consensus_tolerance of %.2f is too large (max 10.0)", c.ConsensusTolerance))
 	}
 
-	// Validate CPU-only mode
-	if !c.ForceCPU {
-		issues = append(issues, "force_cpu must be true for production determinism")
-	}
-
-	if !c.DisableGPU {
-		issues = append(issues, "disable_gpu must be true for production determinism")
-	}
-
-	// Validate parallelism
-	if c.InterOpParallelism != 1 {
+	// Validate strict tolerance is less than or equal to regular tolerance
+	if c.StrictTolerance > c.ConsensusTolerance && c.ConsensusTolerance > 0 {
 		issues = append(issues, fmt.Sprintf(
-			"inter_op_parallelism must be 1 for determinism, got %d",
-			c.InterOpParallelism))
-	}
-
-	if c.IntraOpParallelism != 1 {
-		issues = append(issues, fmt.Sprintf(
-			"intra_op_parallelism must be 1 for determinism, got %d",
-			c.IntraOpParallelism))
-	}
-
-	// Validate deterministic ops
-	if !c.EnableDeterministicOps {
-		issues = append(issues, "enable_deterministic_ops must be true")
+			"strict_tolerance (%.2f) should not exceed consensus_tolerance (%.2f)",
+			c.StrictTolerance, c.ConsensusTolerance))
 	}
 
 	// Validate model hash
@@ -343,14 +545,14 @@ func (c *ProductionDeterminismConfig) Validate() []string {
 			len(c.ExpectedModelHash)))
 	}
 
-	// Validate strict mode
-	if !c.StrictMode {
-		issues = append(issues, "strict_mode must be true for production")
-	}
-
-	// Validate hash verification
+	// Model hash verification is always required
 	if !c.RequireHashVerification {
 		issues = append(issues, "require_hash_verification must be true for production")
+	}
+
+	// Warn (not error) about legacy strict mode settings
+	if c.ForceCPU && c.AllowGPU {
+		issues = append(issues, "inconsistent: both force_cpu and allow_gpu are set")
 	}
 
 	return issues
@@ -361,7 +563,7 @@ func (c *ProductionDeterminismConfig) ToInferenceConfig() InferenceConfig {
 	return InferenceConfig{
 		ModelVersion:            c.ModelVersion,
 		ExpectedHash:            c.ExpectedModelHash,
-		Deterministic:           true,
+		Deterministic:           c.StrictMode, // Only strict mode requires full determinism
 		ForceCPU:                c.ForceCPU,
 		RandomSeed:              c.RandomSeed,
 		RequireHashVerification: c.RequireHashVerification,
@@ -371,28 +573,46 @@ func (c *ProductionDeterminismConfig) ToInferenceConfig() InferenceConfig {
 }
 
 // GetEnvironmentVariables returns the environment variables for TensorFlow.
+// For tolerance-based consensus, these are optional optimizations.
 func (c *ProductionDeterminismConfig) GetEnvironmentVariables() map[string]string {
-	return map[string]string{
-		// Disable GPU
-		"CUDA_VISIBLE_DEVICES": "-1",
-
-		// TensorFlow determinism settings
-		"TF_DETERMINISTIC_OPS":      "1",
-		"TF_CUDNN_DETERMINISTIC":    "1",
-		"TF_USE_CUDNN_AUTOTUNE":     "0",
-		"TF_ENABLE_ONEDNN_OPTS":     "0",
-		"TF_CPP_MIN_LOG_LEVEL":      "2",
-		"TF_FORCE_GPU_ALLOW_GROWTH": "false",
-		"TF_XLA_FLAGS":              "--tf_xla_auto_jit=-1",
-
-		// Thread settings
-		"OMP_NUM_THREADS":   "1",
-		"MKL_NUM_THREADS":   "1",
-		"OPENBLAS_NUM_THREADS": "1",
-
-		// Python hash seed
-		"PYTHONHASHSEED": fmt.Sprintf("%d", c.RandomSeed),
+	envVars := map[string]string{
+		// Common settings
+		"TF_CPP_MIN_LOG_LEVEL": "2",
+		"PYTHONHASHSEED":       fmt.Sprintf("%d", c.RandomSeed),
 	}
+
+	// Only set strict determinism env vars if in strict mode
+	if c.StrictMode || c.ForceCPU {
+		envVars["CUDA_VISIBLE_DEVICES"] = "-1"
+		envVars["TF_DETERMINISTIC_OPS"] = "1"
+		envVars["TF_CUDNN_DETERMINISTIC"] = "1"
+		envVars["TF_USE_CUDNN_AUTOTUNE"] = "0"
+		envVars["TF_ENABLE_ONEDNN_OPTS"] = "0"
+		envVars["TF_FORCE_GPU_ALLOW_GROWTH"] = "false"
+		envVars["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=-1"
+		envVars["OMP_NUM_THREADS"] = "1"
+		envVars["MKL_NUM_THREADS"] = "1"
+		envVars["OPENBLAS_NUM_THREADS"] = "1"
+	} else if c.AllowGPU {
+		// Allow GPU with memory growth for tolerance-based consensus
+		envVars["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+	}
+
+	return envVars
+}
+
+// CheckScoreConsensus checks if a proposed score is in consensus with a reference score.
+func (c *ProductionDeterminismConfig) CheckScoreConsensus(proposed, reference float32) bool {
+	tolerance := c.ConsensusTolerance
+
+	// Use strict tolerance near thresholds
+	if c.StrictMode ||
+		math.Abs(float64(reference-ScoreThresholdPass)) <= float64(ThresholdBuffer) ||
+		math.Abs(float64(reference-ScoreThresholdHighTrust)) <= float64(ThresholdBuffer) {
+		tolerance = c.StrictTolerance
+	}
+
+	return ScoresInConsensusWithTolerance(proposed, reference, tolerance)
 }
 
 // ============================================================================

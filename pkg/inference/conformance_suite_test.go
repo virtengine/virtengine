@@ -1,17 +1,26 @@
 // Copyright 2024-2026 VirtEngine Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// Package inference provides enhanced conformance tests for ML determinism.
+// Package inference provides conformance tests for ML consensus validation.
 // This implements Task 15A: ML determinism validation + conformance suite.
 //
-// VE-219: Deterministic identity verification runtime
-// Task 15A: ML determinism validation + conformance suite
+// VE-219: Identity verification runtime with tolerance-based consensus
+// Task 15A: ML consensus validation + conformance suite
+//
+// DESIGN: Tolerance-Based Consensus
+// ==================================
+// Rather than requiring bit-exact determinism, we validate that:
+// 1. Scores from different validators are within acceptable tolerance
+// 2. Model hashes match (same model on all validators)
+// 3. Scores near thresholds use stricter tolerance
+// 4. Consensus is achieved when median deviation is within bounds
 
 package inference
 
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,51 +33,48 @@ import (
 // ============================================================================
 
 // TestMultiMachineConformanceSuite runs the complete multi-machine conformance suite.
-// This test generates evidence files that can be compared across different machines.
+// This test validates tolerance-based consensus across different machines.
 func TestMultiMachineConformanceSuite(t *testing.T) {
 	suite := NewMultiMachineConformanceSuite(t)
 
 	// Phase 1: Configuration validation
 	t.Run("Phase1_ConfigurationValidation", func(t *testing.T) {
 		t.Run("ProductionConfig", suite.TestProductionConfigurationValid)
+		t.Run("ConsensusTolerances", suite.TestConsensusTolerancesValid)
 		t.Run("EnvironmentVariables", suite.TestEnvironmentVariablesCorrect)
-		t.Run("DeterminismController", suite.TestDeterminismControllerSettings)
 	})
 
-	// Phase 2: TensorFlow operation validation
-	t.Run("Phase2_OperationValidation", func(t *testing.T) {
+	// Phase 2: Consensus validation
+	t.Run("Phase2_ConsensusValidation", func(t *testing.T) {
+		t.Run("ToleranceBasedConsensus", suite.TestToleranceBasedConsensus)
+		t.Run("ThresholdStrictness", suite.TestThresholdStrictness)
+		t.Run("ScoreBinning", suite.TestScoreBinning)
+	})
+
+	// Phase 3: TensorFlow operation validation
+	t.Run("Phase3_OperationValidation", func(t *testing.T) {
 		t.Run("DeterministicOpsRegistry", suite.TestDeterministicOpsRegistryComplete)
 		t.Run("NonDeterministicOpsBlocked", suite.TestNonDeterministicOpsBlocked)
 		t.Run("ConditionalOpsWarned", suite.TestConditionalOpsWarned)
 	})
 
-	// Phase 3: Hash computation determinism
-	t.Run("Phase3_HashDeterminism", func(t *testing.T) {
-		t.Run("InputHashDeterministic", suite.TestInputHashDeterministic)
-		t.Run("OutputHashDeterministic", suite.TestOutputHashDeterministic)
-		t.Run("ResultHashDeterministic", suite.TestResultHashDeterministic)
-		t.Run("FloatPrecisionConsistent", suite.TestFloatPrecisionConsistent)
-	})
-
-	// Phase 4: Feature extraction determinism
+	// Phase 4: Feature extraction consistency
 	t.Run("Phase4_FeatureExtraction", func(t *testing.T) {
-		t.Run("FeatureVectorDeterministic", suite.TestFeatureVectorDeterministic)
-		t.Run("EmbeddingNormalizationDeterministic", suite.TestEmbeddingNormalizationDeterministic)
-		t.Run("OCRFeaturesDeterministic", suite.TestOCRFeaturesDeterministic)
+		t.Run("FeatureVectorConsistent", suite.TestFeatureVectorDeterministic)
+		t.Run("EmbeddingNormalization", suite.TestEmbeddingNormalizationDeterministic)
+		t.Run("OCRFeatures", suite.TestOCRFeaturesDeterministic)
 	})
 
 	// Phase 5: Golden vector tests
 	t.Run("Phase5_GoldenVectors", func(t *testing.T) {
 		t.Run("GoldenVectorIntegrity", suite.TestGoldenVectorIntegrityValid)
-		t.Run("GoldenVectorHashes", suite.TestGoldenVectorHashesMatch)
 		t.Run("GoldenVectorScores", suite.TestGoldenVectorScoresConsistent)
 	})
 
-	// Phase 6: Cross-run consistency
-	t.Run("Phase6_CrossRunConsistency", func(t *testing.T) {
-		t.Run("MultipleControllers", suite.TestMultipleControllersSameResult)
-		t.Run("SerialExecution", suite.TestSerialExecutionConsistent)
-		t.Run("RepeatedHashing", suite.TestRepeatedHashingIdentical)
+	// Phase 6: Simulated multi-validator consensus
+	t.Run("Phase6_MultiValidatorConsensus", func(t *testing.T) {
+		t.Run("SimulatedValidatorVariance", suite.TestSimulatedValidatorVariance)
+		t.Run("ConsensusWithDrift", suite.TestConsensusWithDrift)
 	})
 
 	// Generate evidence file
@@ -151,85 +157,187 @@ func (s *MultiMachineConformanceSuite) TestProductionConfigurationValid(t *testi
 		return
 	}
 
-	// Verify critical settings
-	if s.config.RandomSeed != ProductionRandomSeed {
-		t.Errorf("Random seed must be %d, got %d", ProductionRandomSeed, s.config.RandomSeed)
+	// Verify consensus tolerance is set
+	if s.config.ConsensusTolerance <= 0 {
+		t.Error("ConsensusTolerance must be positive")
 	}
 
-	if !s.config.ForceCPU {
-		t.Error("ForceCPU must be true for production")
+	// Verify model hash is set
+	if s.config.ExpectedModelHash == "" {
+		t.Error("ExpectedModelHash must be set")
 	}
 
-	if s.config.InterOpParallelism != 1 || s.config.IntraOpParallelism != 1 {
-		t.Error("Parallelism must be 1 for determinism")
-	}
-
-	s.recordResult("ProductionConfig", true, 
-		fmt.Sprintf("seed=%d, cpu=%v, parallel=%d,%d", 
-			s.config.RandomSeed, s.config.ForceCPU, 
-			s.config.InterOpParallelism, s.config.IntraOpParallelism),
+	s.recordResult("ProductionConfig", true,
+		fmt.Sprintf("tolerance=%.2f, strict=%.2f, gpu=%v",
+			s.config.ConsensusTolerance, s.config.StrictTolerance, s.config.AllowGPU),
 		s.config.ConfigHash)
 
-	t.Logf("Production config validated: hash=%s", s.config.ConfigHash[:16])
+	t.Logf("Production config validated: tolerance=%.2f, hash=%s",
+		s.config.ConsensusTolerance, s.config.ConfigHash[:16])
 }
 
-// TestEnvironmentVariablesCorrect tests environment variables are set correctly.
+// TestConsensusTolerancesValid tests the consensus tolerance settings.
+func (s *MultiMachineConformanceSuite) TestConsensusTolerancesValid(t *testing.T) {
+	// Verify global constants
+	if ConsensusTolerance <= 0 {
+		t.Error("ConsensusTolerance constant must be positive")
+	}
+
+	if ConsensusToleranceStrict <= 0 {
+		t.Error("ConsensusToleranceStrict constant must be positive")
+	}
+
+	if ConsensusToleranceStrict > ConsensusTolerance {
+		t.Error("Strict tolerance should be less than or equal to regular tolerance")
+	}
+
+	// Verify thresholds are reasonable
+	if ScoreThresholdPass < 0 || ScoreThresholdPass > 100 {
+		t.Error("ScoreThresholdPass should be between 0 and 100")
+	}
+
+	if ScoreThresholdHighTrust < ScoreThresholdPass {
+		t.Error("ScoreThresholdHighTrust should be greater than ScoreThresholdPass")
+	}
+
+	s.recordResult("ConsensusTolerances", true,
+		fmt.Sprintf("tolerance=%.2f, strict=%.2f, pass=%.0f, high=%.0f",
+			ConsensusTolerance, ConsensusToleranceStrict,
+			ScoreThresholdPass, ScoreThresholdHighTrust), "")
+
+	t.Logf("Consensus tolerances valid: %.2f/%.2f", ConsensusTolerance, ConsensusToleranceStrict)
+}
+
+// TestEnvironmentVariablesCorrect tests environment variables configuration.
 func (s *MultiMachineConformanceSuite) TestEnvironmentVariablesCorrect(t *testing.T) {
 	envVars := s.config.GetEnvironmentVariables()
 
-	// Check critical env vars
-	criticalVars := []string{
-		"TF_DETERMINISTIC_OPS",
-		"TF_CUDNN_DETERMINISTIC",
-		"OMP_NUM_THREADS",
+	// For tolerance-based consensus, we don't require strict env vars
+	// but we should have basic settings
+	if envVars["PYTHONHASHSEED"] == "" {
+		t.Error("PYTHONHASHSEED should be set")
 	}
 
-	allCorrect := true
-	for _, key := range criticalVars {
-		expected := envVars[key]
-		if expected == "" {
-			t.Errorf("Missing env var configuration: %s", key)
-			allCorrect = false
-		}
-	}
-
-	s.recordResult("EnvironmentVariables", allCorrect, 
-		fmt.Sprintf("checked %d critical vars", len(criticalVars)), "")
+	s.recordResult("EnvironmentVariables", true,
+		fmt.Sprintf("configured %d vars", len(envVars)), "")
 
 	t.Logf("Environment configuration verified: %d vars", len(envVars))
 }
 
-// TestDeterminismControllerSettings tests determinism controller settings.
-func (s *MultiMachineConformanceSuite) TestDeterminismControllerSettings(t *testing.T) {
-	tfConfig := s.dc.ConfigureTensorFlow()
+// ============================================================================
+// Phase 2: Consensus Validation
+// ============================================================================
 
-	// Validate settings
-	if tfConfig.RandomSeed != ProductionRandomSeed {
-		t.Errorf("Controller random seed mismatch: expected %d, got %d",
-			ProductionRandomSeed, tfConfig.RandomSeed)
+// TestToleranceBasedConsensus tests the tolerance-based consensus logic.
+func (s *MultiMachineConformanceSuite) TestToleranceBasedConsensus(t *testing.T) {
+	testCases := []struct {
+		name      string
+		scoreA    float32
+		scoreB    float32
+		tolerance float32
+		expectOK  bool
+	}{
+		{"identical", 75.0, 75.0, 2.0, true},
+		{"within_tolerance", 75.0, 76.5, 2.0, true},
+		{"at_boundary", 75.0, 77.0, 2.0, true},
+		{"exceeds_tolerance", 75.0, 78.0, 2.0, false},
+		{"strict_pass", 75.0, 75.4, 0.5, true},
+		{"strict_fail", 75.0, 75.6, 0.5, false},
+		{"near_zero", 0.5, 1.0, 2.0, true},
+		{"near_hundred", 99.0, 100.0, 2.0, true},
 	}
 
-	if !tfConfig.UseCPUOnly {
-		t.Error("Controller must use CPU only")
+	allPassed := true
+	for _, tc := range testCases {
+		result := ScoresInConsensusWithTolerance(tc.scoreA, tc.scoreB, tc.tolerance)
+		if result != tc.expectOK {
+			t.Errorf("%s: expected %v, got %v (%.2f vs %.2f, tol=%.2f)",
+				tc.name, tc.expectOK, result, tc.scoreA, tc.scoreB, tc.tolerance)
+			allPassed = false
+		}
 	}
 
-	if !tfConfig.EnableDeterministicOps {
-		t.Error("Controller must enable deterministic ops")
+	s.recordResult("ToleranceBasedConsensus", allPassed,
+		fmt.Sprintf("tested %d cases", len(testCases)), "")
+
+	t.Logf("Tolerance-based consensus: %d test cases", len(testCases))
+}
+
+// TestThresholdStrictness tests stricter tolerance near thresholds.
+func (s *MultiMachineConformanceSuite) TestThresholdStrictness(t *testing.T) {
+	// Score near pass threshold should use strict tolerance
+	nearPassScore := ScoreThresholdPass + 2.0 // Within buffer
+	tolerance := GetEffectiveTolerance(nearPassScore)
+	if tolerance != ConsensusToleranceStrict {
+		t.Errorf("Score %.2f near pass threshold should use strict tolerance, got %.2f",
+			nearPassScore, tolerance)
 	}
 
-	if tfConfig.InterOpParallelism != 1 || tfConfig.IntraOpParallelism != 1 {
-		t.Error("Controller parallelism must be 1")
+	// Score far from thresholds should use regular tolerance
+	farScore := float32(75.0)
+	tolerance = GetEffectiveTolerance(farScore)
+	if tolerance != ConsensusTolerance {
+		t.Errorf("Score %.2f far from thresholds should use regular tolerance, got %.2f",
+			farScore, tolerance)
 	}
 
-	s.recordResult("DeterminismController", true,
-		fmt.Sprintf("seed=%d, cpu=%v, det_ops=%v",
-			tfConfig.RandomSeed, tfConfig.UseCPUOnly, tfConfig.EnableDeterministicOps), "")
+	// Score near high-trust threshold
+	nearHighTrust := ScoreThresholdHighTrust - 3.0
+	tolerance = GetEffectiveTolerance(nearHighTrust)
+	if tolerance != ConsensusToleranceStrict {
+		t.Errorf("Score %.2f near high-trust threshold should use strict tolerance",
+			nearHighTrust)
+	}
 
-	t.Logf("Determinism controller verified: seed=%d", tfConfig.RandomSeed)
+	s.recordResult("ThresholdStrictness", true,
+		fmt.Sprintf("pass=%.0f, high=%.0f, buffer=%.0f",
+			ScoreThresholdPass, ScoreThresholdHighTrust, ThresholdBuffer), "")
+
+	t.Logf("Threshold strictness verified")
+}
+
+// TestScoreBinning tests score binning for consensus.
+func (s *MultiMachineConformanceSuite) TestScoreBinning(t *testing.T) {
+	testCases := []struct {
+		input    float32
+		expected float32
+	}{
+		{75.1, 75.0},
+		{75.3, 75.5},
+		{75.5, 75.5},
+		{75.7, 75.5},
+		{75.9, 76.0},
+		{0.0, 0.0},
+		{100.0, 100.0},
+	}
+
+	allPassed := true
+	for _, tc := range testCases {
+		binned := BinScore(tc.input)
+		if binned != tc.expected {
+			t.Errorf("BinScore(%.1f) = %.1f, expected %.1f", tc.input, binned, tc.expected)
+			allPassed = false
+		}
+	}
+
+	// Test integer binning
+	if BinScoreInt(75.4) != 75 {
+		t.Error("BinScoreInt(75.4) should be 75")
+		allPassed = false
+	}
+	if BinScoreInt(75.6) != 76 {
+		t.Error("BinScoreInt(75.6) should be 76")
+		allPassed = false
+	}
+
+	s.recordResult("ScoreBinning", allPassed,
+		fmt.Sprintf("tested %d cases", len(testCases)), "")
+
+	t.Logf("Score binning verified")
 }
 
 // ============================================================================
-// Phase 2: Operation Validation
+// Phase 3: Operation Validation
 // ============================================================================
 
 // TestDeterministicOpsRegistryComplete tests the deterministic ops registry.
@@ -541,31 +649,6 @@ func (s *MultiMachineConformanceSuite) TestGoldenVectorIntegrityValid(t *testing
 		fmt.Sprintf("%d vectors validated", len(GoldenVectors)), "")
 }
 
-// TestGoldenVectorHashesMatch tests golden vector hashes are computed correctly.
-func (s *MultiMachineConformanceSuite) TestGoldenVectorHashesMatch(t *testing.T) {
-	for _, vec := range GoldenVectors {
-		t.Run(vec.ID+"_hash", func(t *testing.T) {
-			// Compute input hash
-			inputHash := s.dc.ComputeInputHash(vec.Inputs)
-
-			// Hash should be 64 hex chars
-			if len(inputHash) != 64 {
-				t.Errorf("Hash length incorrect: %d", len(inputHash))
-			}
-
-			// Log hash for cross-machine comparison
-			t.Logf("Vector %s input hash: %s", vec.ID, inputHash)
-		})
-	}
-
-	// Record with hash of first vector
-	if len(GoldenVectors) > 0 {
-		hash := s.dc.ComputeInputHash(GoldenVectors[0].Inputs)
-		s.recordResult("GoldenVectorHashes", true,
-			fmt.Sprintf("computed %d hashes", len(GoldenVectors)), hash)
-	}
-}
-
 // TestGoldenVectorScoresConsistent tests golden vector scores are consistent.
 func (s *MultiMachineConformanceSuite) TestGoldenVectorScoresConsistent(t *testing.T) {
 	for _, vec := range GoldenVectors {
@@ -589,7 +672,81 @@ func (s *MultiMachineConformanceSuite) TestGoldenVectorScoresConsistent(t *testi
 }
 
 // ============================================================================
-// Phase 6: Cross-Run Consistency
+// Phase 6: Multi-Validator Consensus Simulation
+// ============================================================================
+
+// TestSimulatedValidatorVariance tests consensus with simulated validator variance.
+func (s *MultiMachineConformanceSuite) TestSimulatedValidatorVariance(t *testing.T) {
+	// Simulate 5 validators with slight score variance (as would happen with GPU/threading)
+	baseScore := float32(75.0)
+	validatorScores := []float32{
+		baseScore,         // Validator 1
+		baseScore + 0.3,   // Validator 2 (slight positive drift)
+		baseScore - 0.2,   // Validator 3 (slight negative drift)
+		baseScore + 0.5,   // Validator 4
+		baseScore - 0.4,   // Validator 5
+	}
+
+	// Check consensus
+	result := ValidateConsensus(validatorScores)
+
+	if !result.Achieved {
+		t.Errorf("Consensus should be achieved with variance <= %.2f: %s",
+			ConsensusTolerance, result.Reason)
+	}
+
+	// Verify median is close to base score
+	if math.Abs(float64(result.MedianScore-baseScore)) > 1.0 {
+		t.Errorf("Median score %.2f too far from base %.2f", result.MedianScore, baseScore)
+	}
+
+	t.Logf("Validator consensus: median=%.2f, max_deviation=%.2f, tolerance=%.2f",
+		result.MedianScore, result.MaxDeviation, result.Tolerance)
+
+	s.recordResult("SimulatedValidatorVariance", result.Achieved,
+		fmt.Sprintf("5 validators, median=%.2f, max_dev=%.2f",
+			result.MedianScore, result.MaxDeviation), "")
+}
+
+// TestConsensusWithDrift tests consensus fails when drift exceeds tolerance.
+func (s *MultiMachineConformanceSuite) TestConsensusWithDrift(t *testing.T) {
+	// Test case 1: Acceptable drift
+	acceptableScores := []float32{75.0, 75.5, 76.0, 75.3, 75.8}
+	result := ValidateConsensus(acceptableScores)
+	if !result.Achieved {
+		t.Errorf("Acceptable drift should achieve consensus: %s", result.Reason)
+	}
+
+	// Test case 2: Excessive drift
+	excessiveScores := []float32{70.0, 75.0, 80.0, 72.0, 78.0}
+	result = ValidateConsensus(excessiveScores)
+	if result.Achieved {
+		t.Errorf("Excessive drift (10 point spread) should fail consensus")
+	}
+
+	// Test case 3: Near threshold - should use strict tolerance
+	nearThresholdScores := []float32{60.0, 60.3, 60.1, 60.2, 59.9}
+	result = ValidateConsensus(nearThresholdScores)
+	if result.Tolerance != ConsensusToleranceStrict {
+		t.Errorf("Near threshold should use strict tolerance %.2f, got %.2f",
+			ConsensusToleranceStrict, result.Tolerance)
+	}
+
+	// Test case 4: Single validator always achieves consensus
+	singleResult := ValidateConsensus([]float32{75.0})
+	if !singleResult.Achieved {
+		t.Error("Single validator should always achieve consensus")
+	}
+
+	s.recordResult("ConsensusWithDrift", true,
+		"tested acceptable, excessive, threshold, and single validator cases", "")
+
+	t.Logf("Consensus drift tests passed")
+}
+
+// ============================================================================
+// Legacy Phase 6: Hash Consistency (kept for backwards compatibility)
+// ============================================================================
 // ============================================================================
 
 // TestMultipleControllersSameResult tests multiple controllers produce same results.
