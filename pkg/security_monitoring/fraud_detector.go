@@ -441,7 +441,7 @@ func (d *FraudDetector) checkScoreAnomalies(v *VEIDVerificationData) {
 	}
 
 	// Check for significant score difference between proposer and computed
-	if v.Match == false && v.ScoreDifference != 0 {
+	if !v.Match && v.ScoreDifference != 0 {
 		variance := float64(abs32(v.ScoreDifference)) / float64(v.ProposerScore+1)
 		if variance > d.config.ScoreVarianceThreshold {
 			d.metrics.VEIDFraudIndicators.WithLabelValues(string(FraudIndicatorScoreAnomaly), "medium").Inc()

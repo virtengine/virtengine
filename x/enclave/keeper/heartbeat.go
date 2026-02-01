@@ -329,7 +329,7 @@ func (k Keeper) verifyNitroHeartbeatAttestation(ctx sdk.Context, identity types.
 	// Nitro attestation documents are CBOR-encoded COSE Sign1 structures
 	// Minimum size check for a valid CBOR structure
 	if len(attestationProof) < 100 {
-		return fmt.Errorf("Nitro attestation document too small")
+		return fmt.Errorf("nitro attestation document too small")
 	}
 
 	// The attestation document contains PCRs (Platform Configuration Registers)

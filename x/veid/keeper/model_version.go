@@ -856,7 +856,7 @@ func (k Keeper) ReportValidatorModelVersions(ctx sdk.Context, validatorAddr stri
 		return types.ErrInvalidAddress.Wrap("validator address cannot be empty")
 	}
 
-	if versions == nil || len(versions) == 0 {
+	if len(versions) == 0 {
 		return types.ErrInvalidModelInfo.Wrap("model versions cannot be empty")
 	}
 

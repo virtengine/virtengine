@@ -232,7 +232,7 @@ func (v *Verifier) checkPrometheusProbe(ctx context.Context, probe chaos.Probe) 
 
 	resp, err := v.httpClient.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("Prometheus query failed: %w", err)
+		return 0, fmt.Errorf("prometheus query failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -248,7 +248,7 @@ func (v *Verifier) checkPrometheusProbe(ctx context.Context, probe chaos.Probe) 
 	}
 
 	if promResp.Status != "success" {
-		return 0, fmt.Errorf("Prometheus query error: %s", promResp.Status)
+		return 0, fmt.Errorf("prometheus query error: %s", promResp.Status)
 	}
 
 	// Extract value from result

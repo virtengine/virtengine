@@ -507,9 +507,11 @@ func (k Keeper) applyBorderlinePenalty(
 ) error {
 	// Calculate penalty (reduce score by margin to push below threshold)
 	penaltyAmount := borderlineCase.Margin + 1
-	newScore := borderlineCase.Score - penaltyAmount
-	if newScore < 0 {
+	var newScore uint32
+	if borderlineCase.Score < penaltyAmount {
 		newScore = 0
+	} else {
+		newScore = borderlineCase.Score - penaltyAmount
 	}
 
 	borderlineCase.Status = CaseStatusResolved

@@ -130,7 +130,7 @@ func (k Keeper) verifyTOTPCode(
 	}
 
 	// For hash-based verification (commitment scheme)
-	if challenge.ChallengeData != nil && len(challenge.ChallengeData) > 0 {
+	if len(challenge.ChallengeData) > 0 {
 		// Challenge data contains hash(secret || counter) for valid windows
 		// Verify the provided code matches one of the expected hashes
 		verified := k.verifyTOTPWithCommitment(totpResp.Code, challenge.ChallengeData, now, config)
@@ -198,7 +198,7 @@ func generateTOTPCode(secret []byte, counter uint64, digits uint, algorithm stri
 
 	// Format to specified digits
 	mod := uint32(math.Pow10(int(digits)))
-	code = code % mod
+	code %= mod
 
 	return fmt.Sprintf("%0*d", digits, code)
 }

@@ -272,7 +272,7 @@ func (c *MockOODClient) LaunchApp(ctx context.Context, spec *InteractiveAppSpec)
 	go func(sid string, appType InteractiveAppType, counter int) {
 		defer func() {
 			if r := recover(); r != nil {
-				// Recovered from panic
+				_ = r // intentionally ignored: panic recovery is best-effort
 			}
 		}()
 		time.Sleep(100 * time.Millisecond)
