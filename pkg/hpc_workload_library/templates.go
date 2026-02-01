@@ -21,6 +21,8 @@ func GetBuiltinTemplates() []*hpctypes.WorkloadTemplate {
 		GetBatchTemplate(),
 		GetDataProcessingTemplate(),
 		GetInteractiveTemplate(),
+		GetSingularityContainerTemplate(),
+		GetArrayJobTemplate(),
 	}
 }
 
@@ -394,4 +396,156 @@ func GetTemplatesByType(workloadType hpctypes.WorkloadType) []*hpctypes.Workload
 		}
 	}
 	return result
+}
+
+// GetSingularityContainerTemplate returns the Singularity container workload template
+func GetSingularityContainerTemplate() *hpctypes.WorkloadTemplate {
+	return &hpctypes.WorkloadTemplate{
+		TemplateID:  "singularity-container",
+		Name:        "Singularity Container Workload",
+		Version:     "1.0.0",
+		Description: "Run custom Singularity/Apptainer containers on HPC clusters. Supports Docker Hub, Singularity Library, and custom SIF files with configurable bindings and overlay filesystems.",
+		Type:        hpctypes.WorkloadTypeBatch,
+		Runtime: hpctypes.WorkloadRuntime{
+			RuntimeType:     "singularity",
+			ContainerImage:  "library/default:latest",
+			RequiredModules: []string{"singularity/3.11"},
+		},
+		Resources: hpctypes.WorkloadResourceSpec{
+			MinNodes:               1,
+			MaxNodes:               64,
+			DefaultNodes:           1,
+			MinCPUsPerNode:         1,
+			MaxCPUsPerNode:         128,
+			DefaultCPUsPerNode:     8,
+			MinMemoryMBPerNode:     1024,
+			MaxMemoryMBPerNode:     512000,
+			DefaultMemoryMBPerNode: 16000,
+			MinGPUsPerNode:         0,
+			MaxGPUsPerNode:         8,
+			DefaultGPUsPerNode:     0,
+			GPUTypes:               []string{"nvidia-a100", "nvidia-v100", "nvidia-h100", "amd-mi250"},
+			MinRuntimeMinutes:      1,
+			MaxRuntimeMinutes:      4320, // 72 hours
+			DefaultRuntimeMinutes:  60,
+			NetworkRequired:        false,
+			ExclusiveNodes:         false,
+		},
+		Security: hpctypes.WorkloadSecuritySpec{
+			AllowedRegistries:  []string{"library", "docker.io", "ghcr.io", "quay.io", "nvcr.io"},
+			RequireImageDigest: false,
+			AllowNetworkAccess: true,
+			AllowHostMounts:    true,
+			AllowedHostPaths:   []string{"/scratch", "/home", "/work", "/data", "/opt"},
+			SandboxLevel:       "basic",
+			MaxOpenFiles:       65536,
+			MaxProcesses:       16384,
+		},
+		Entrypoint: hpctypes.WorkloadEntrypoint{
+			Command:          "singularity",
+			DefaultArgs:      []string{"exec"},
+			WorkingDirectory: "/work",
+			PreRunScript:     "export SINGULARITY_CACHEDIR=/scratch/$USER/.singularity && mkdir -p $SINGULARITY_CACHEDIR",
+			PostRunScript:    "echo 'Container execution completed at $(date)'",
+		},
+		Environment: []hpctypes.EnvironmentVariable{
+			{Name: "SINGULARITY_BINDPATH", Value: "/scratch,/home,/work", Description: "Paths to bind into container"},
+			{Name: "SINGULARITYENV_OMP_NUM_THREADS", ValueTemplate: "${SLURM_CPUS_PER_TASK}", Description: "OpenMP threads"},
+		},
+		Modules: []string{"singularity/3.11"},
+		DataBindings: []hpctypes.DataBinding{
+			{Name: "input", MountPath: "/input", DataType: "input", Required: false, ReadOnly: true},
+			{Name: "output", MountPath: "/output", DataType: "output", Required: false, ReadOnly: false},
+			{Name: "overlay", MountPath: "/overlay", DataType: "scratch", Required: false, ReadOnly: false},
+		},
+		ParameterSchema: []hpctypes.ParameterDefinition{
+			{Name: "image", Type: "string", Description: "Container image (Docker Hub, library://, or .sif path)", Required: true},
+			{Name: "command", Type: "string", Description: "Command to run inside container", Required: true},
+			{Name: "bind_paths", Type: "string", Description: "Additional bind paths (comma separated)", Default: ""},
+			{Name: "use_gpu", Type: "bool", Description: "Enable GPU passthrough (--nv flag)", Default: "false"},
+			{Name: "writable_tmpfs", Type: "bool", Description: "Use writable tmpfs overlay", Default: "false"},
+			{Name: "fakeroot", Type: "bool", Description: "Run with fakeroot for user namespace", Default: "false"},
+		},
+		ApprovalStatus: hpctypes.WorkloadApprovalApproved,
+		Publisher:      BuiltinTemplatePublisher,
+		Tags:           []string{"singularity", "container", "apptainer", "docker", "portable"},
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+}
+
+// GetArrayJobTemplate returns the array job workload template
+func GetArrayJobTemplate() *hpctypes.WorkloadTemplate {
+	return &hpctypes.WorkloadTemplate{
+		TemplateID:  "batch-array",
+		Name:        "Batch Array Job",
+		Version:     "1.0.0",
+		Description: "Run parameter sweeps, ensemble simulations, or embarrassingly parallel tasks using SLURM array jobs. Each array task runs independently with a unique task ID for input partitioning.",
+		Type:        hpctypes.WorkloadTypeBatch,
+		Runtime: hpctypes.WorkloadRuntime{
+			RuntimeType:     "singularity",
+			ContainerImage:  "library/ubuntu:22.04",
+			RequiredModules: []string{},
+		},
+		Resources: hpctypes.WorkloadResourceSpec{
+			MinNodes:               1,
+			MaxNodes:               1,
+			DefaultNodes:           1,
+			MinCPUsPerNode:         1,
+			MaxCPUsPerNode:         64,
+			DefaultCPUsPerNode:     4,
+			MinMemoryMBPerNode:     512,
+			MaxMemoryMBPerNode:     256000,
+			DefaultMemoryMBPerNode: 8000,
+			MinRuntimeMinutes:      1,
+			MaxRuntimeMinutes:      2880, // 48 hours per task
+			DefaultRuntimeMinutes:  60,
+			ExclusiveNodes:         false,
+		},
+		Security: hpctypes.WorkloadSecuritySpec{
+			AllowedRegistries:  []string{"library", "docker.io", "ghcr.io", "quay.io"},
+			RequireImageDigest: false,
+			AllowNetworkAccess: false,
+			AllowHostMounts:    true,
+			AllowedHostPaths:   []string{"/scratch", "/home", "/work"},
+			SandboxLevel:       "strict",
+			MaxOpenFiles:       16384,
+			MaxProcesses:       4096,
+			MaxFileSize:        10737418240, // 10GB
+		},
+		Entrypoint: hpctypes.WorkloadEntrypoint{
+			Command:          "/bin/bash",
+			DefaultArgs:      []string{"-c"},
+			WorkingDirectory: "/work",
+			PreRunScript:     "echo 'Starting array task $SLURM_ARRAY_TASK_ID of $SLURM_ARRAY_TASK_COUNT'",
+			PostRunScript:    "echo 'Array task $SLURM_ARRAY_TASK_ID completed with exit code $?'",
+		},
+		Environment: []hpctypes.EnvironmentVariable{
+			{Name: "TASK_ID", ValueTemplate: "${SLURM_ARRAY_TASK_ID}", Description: "Current array task ID (0-indexed)"},
+			{Name: "TASK_COUNT", ValueTemplate: "${SLURM_ARRAY_TASK_COUNT}", Description: "Total number of array tasks"},
+			{Name: "TASK_MIN", ValueTemplate: "${SLURM_ARRAY_TASK_MIN}", Description: "Minimum array task ID"},
+			{Name: "TASK_MAX", ValueTemplate: "${SLURM_ARRAY_TASK_MAX}", Description: "Maximum array task ID"},
+			{Name: "INPUT_FILE", ValueTemplate: "/data/input/input_${SLURM_ARRAY_TASK_ID}.dat", Description: "Task-specific input file"},
+			{Name: "OUTPUT_FILE", ValueTemplate: "/data/output/output_${SLURM_ARRAY_TASK_ID}.dat", Description: "Task-specific output file"},
+			{Name: "TMPDIR", Value: "/scratch/$USER/$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID", Description: "Task-specific temp directory"},
+		},
+		DataBindings: []hpctypes.DataBinding{
+			{Name: "input", MountPath: "/data/input", DataType: "input", Required: true, ReadOnly: true},
+			{Name: "output", MountPath: "/data/output", DataType: "output", Required: true, ReadOnly: false},
+			{Name: "scratch", MountPath: "/scratch", DataType: "scratch", Required: true, ReadOnly: false},
+		},
+		ParameterSchema: []hpctypes.ParameterDefinition{
+			{Name: "script", Type: "string", Description: "Script or command to execute for each task", Required: true},
+			{Name: "array_start", Type: "int", Description: "Array start index", Default: "0", MinValue: "0", MaxValue: "100000"},
+			{Name: "array_end", Type: "int", Description: "Array end index", Default: "9", MinValue: "0", MaxValue: "100000"},
+			{Name: "array_step", Type: "int", Description: "Array step size", Default: "1", MinValue: "1", MaxValue: "1000"},
+			{Name: "simultaneous", Type: "int", Description: "Maximum simultaneous tasks (%N syntax)", Default: "0", MinValue: "0", MaxValue: "10000"},
+			{Name: "throttle_rate", Type: "int", Description: "Submit rate limit (tasks per minute)", Default: "0", MinValue: "0", MaxValue: "1000"},
+		},
+		ApprovalStatus: hpctypes.WorkloadApprovalApproved,
+		Publisher:      BuiltinTemplatePublisher,
+		Tags:           []string{"array", "batch", "parameter-sweep", "ensemble", "embarrassingly-parallel"},
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
 }
