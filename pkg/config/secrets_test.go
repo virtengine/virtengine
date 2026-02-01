@@ -335,3 +335,4 @@ func TestLoadSecrets_EmptyEnv(t *testing.T) {
 		t.Errorf("JWTSecret = %q, want empty", cfg.JWTSecret)
 	}
 }
+

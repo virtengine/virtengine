@@ -723,3 +723,4 @@ func (v *DefaultVerifier) logAudit(ctx context.Context, eventType audit.EventTyp
 		Details:   details,
 	})
 }
+

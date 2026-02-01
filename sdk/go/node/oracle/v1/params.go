@@ -94,3 +94,4 @@ func (p *Params) ValidateBasic() error {
 func (p Params) UnpackInterfaces(unpacker cdctypes.AnyUnpacker) error {
 	return sdktx.UnpackInterfaces(unpacker, p.FeedContractsParams)
 }
+

@@ -257,3 +257,4 @@ func TestManagerGetSubManagers(t *testing.T) {
 		t.Error("Metrics() returned nil")
 	}
 }
+

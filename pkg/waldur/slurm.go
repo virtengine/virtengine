@@ -457,3 +457,4 @@ func mapSLURMJob(j *client.FirecrestJob) SLURMJob {
 	}
 	return job
 }
+

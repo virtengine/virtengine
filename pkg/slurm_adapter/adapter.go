@@ -361,3 +361,4 @@ func MapToVirtEngineState(state SLURMJobState) string {
 		return "pending"
 	}
 }
+

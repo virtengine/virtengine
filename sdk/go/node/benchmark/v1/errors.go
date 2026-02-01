@@ -28,3 +28,4 @@ var (
 	ErrReasonTooLong        = sdkerrors.Register(ModuleName, 10, "reason too long")
 	ErrResolutionTooLong    = sdkerrors.Register(ModuleName, 11, "resolution too long")
 )
+

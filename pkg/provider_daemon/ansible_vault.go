@@ -560,3 +560,4 @@ func (vv *VaultVariables) DecryptAll() (map[string]interface{}, error) {
 	}
 	return result, nil
 }
+

@@ -30,3 +30,4 @@ func generateID(prefix string) string {
 	hash := sha256.Sum256([]byte(data))
 	return prefix + "-" + hex.EncodeToString(hash[:8])
 }
+

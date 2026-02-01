@@ -59,3 +59,4 @@ func ExtractMarketplaceEvents(events []abci.Event) ([]MarketplaceEventEnvelope, 
 
 	return envelopes, nil
 }
+

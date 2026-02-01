@@ -264,3 +264,4 @@ func Test_getBechKeyOut(t *testing.T) {
 		})
 	}
 }
+

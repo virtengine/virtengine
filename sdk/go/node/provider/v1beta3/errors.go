@@ -29,3 +29,4 @@ var (
 	// ErrInvalidInfoWebsite register error code for invalid info website
 	ErrInvalidInfoWebsite = errors.New("invalid provider: invalid info website")
 )
+

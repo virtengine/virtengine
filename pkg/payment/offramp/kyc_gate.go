@@ -352,3 +352,4 @@ var (
 	_ VEIDChecker = (*MockVEIDChecker)(nil)
 	_ AMLClient   = (*MockAMLClient)(nil)
 )
+

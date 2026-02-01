@@ -306,3 +306,4 @@ func TestSubscriberStatus(t *testing.T) {
 	assert.Equal(t, "test error", status.LastError)
 	assert.True(t, status.UsingFallback)
 }
+

@@ -795,3 +795,4 @@ func ParseMinTCBVersion(s string) (TCBRequirements, error) {
 
 	return tcb, nil
 }
+

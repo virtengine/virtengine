@@ -52,3 +52,4 @@ func BenchmarkUnsafeStrToBytes(b *testing.B) {
 		UnsafeStrToBytes(strconv.Itoa(i))
 	}
 }
+

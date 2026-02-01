@@ -699,3 +699,4 @@ func (r *TensorFlowRuntime) GetInferenceCount() uint64 {
 func (r *TensorFlowRuntime) GetErrorCount() uint64 {
 	return r.errorCount.Load()
 }
+

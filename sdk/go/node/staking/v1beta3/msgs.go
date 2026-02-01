@@ -64,3 +64,4 @@ func (m *MsgUpdateParams) GetSignBytes() []byte {
 func (m *MsgUpdateParams) Route() string {
 	return RouterKey
 }
+

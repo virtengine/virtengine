@@ -60,3 +60,4 @@ func Test_RunMnemonicCmdUser(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	require.Equal(t, "volcano hungry midnight divorce post ship bicycle fitness hospital critic protect ring trim alien there safe fine subway style impulse identify right improve print\n", mockOut.String())
 }
+

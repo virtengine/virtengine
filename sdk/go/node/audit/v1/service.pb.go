@@ -168,3 +168,4 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "virtengine/audit/v1/service.proto",
 }
+

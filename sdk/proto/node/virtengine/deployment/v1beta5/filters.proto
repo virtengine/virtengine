@@ -14,7 +14,7 @@ message DeploymentFilters {
   // It is a string representing a valid bech32 account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner = 1 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "owner",
@@ -44,7 +44,7 @@ message GroupFilters {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner = 1 [
       (cosmos_proto.scalar) = "cosmos.AddressString",
       (gogoproto.jsontag)   = "owner",

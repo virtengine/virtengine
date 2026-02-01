@@ -269,7 +269,7 @@ pub struct MsgAddPriceEntry {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub signer: ::prost::alloc::string::String,
     /// id uniquely identifies the price data by denomination and base denomination

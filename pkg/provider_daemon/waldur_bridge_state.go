@@ -86,3 +86,4 @@ func (s *WaldurBridgeStateStore) Save(state *WaldurBridgeState) error {
 	}
 	return nil
 }
+

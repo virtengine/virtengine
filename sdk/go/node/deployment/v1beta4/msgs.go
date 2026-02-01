@@ -365,3 +365,4 @@ func (msg *MsgPauseGroup) Route() string { return v1.RouterKey }
 //
 // Deprecated: Route is deprecated
 func (msg *MsgStartGroup) Route() string { return v1.RouterKey }
+

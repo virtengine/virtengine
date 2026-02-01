@@ -952,3 +952,4 @@ func TestRateLimiter_Disabled(t *testing.T) {
 		assert.NoError(t, limiter.checkRefundLimit())
 	}
 }
+

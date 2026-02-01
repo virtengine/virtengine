@@ -20,7 +20,7 @@ message MsgAddPriceEntry {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string signer = 1 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "signer",

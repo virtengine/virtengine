@@ -74,3 +74,4 @@ func GetGenesisCollectCmd(genBalIterator types.GenesisBalancesIterator, defaultN
 
 	return cmd
 }
+

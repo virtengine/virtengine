@@ -806,3 +806,4 @@ func (ct *CostTracker) getMetricsLocked() CostTrackerMetrics {
 		CurrentTotalCost:   ct.getTotalCostLocked(),
 	}
 }
+

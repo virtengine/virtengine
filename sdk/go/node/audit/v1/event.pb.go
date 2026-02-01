@@ -30,13 +30,13 @@ type EventTrustedAuditorCreated struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Auditor is the account address of the auditor.
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Auditor string `protobuf:"bytes,2,opt,name=auditor,proto3" json:"auditor" yaml:"auditor"`
 }
 
@@ -93,13 +93,13 @@ type EventTrustedAuditorDeleted struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Auditor is the account address of the auditor.
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Auditor string `protobuf:"bytes,2,opt,name=auditor,proto3" json:"auditor" yaml:"auditor"`
 }
 
@@ -670,3 +670,4 @@ var (
 	ErrIntOverflowEvent          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupEvent = fmt.Errorf("proto: unexpected end of group")
 )
+

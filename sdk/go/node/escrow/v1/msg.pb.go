@@ -36,7 +36,7 @@ type MsgAccountDeposit struct {
 	// It is a string representing a valid bech32 account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Signer string `protobuf:"bytes,1,opt,name=signer,proto3" json:"signer" yaml:"signer"`
 	// ID is the unique identifier of the account.
 	ID v1.Account `protobuf:"bytes,2,opt,name=id,proto3" json:"id" yaml:"id"`
@@ -570,3 +570,4 @@ var (
 	ErrIntOverflowMsg          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupMsg = fmt.Errorf("proto: unexpected end of group")
 )
+

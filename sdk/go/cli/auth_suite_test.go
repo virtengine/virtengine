@@ -804,7 +804,7 @@ func (s *AuthCLITestSuite) TestSignWithMultisig() {
 	s.Require().NoError(err)
 
 	// Create an address that is not in the keyring, will be used to simulate `--multisig`
-	multisig := "akash1hd6fsrvnz6qkp87s3u86ludegq97agxsqdr9ad"
+	multisig := "ve1hd6fsrvnz6qkp87s3u86ludegq97agxssvg9cx"
 	multisigAddr, err := sdk.AccAddressFromBech32(multisig)
 	s.Require().NoError(err)
 
@@ -1593,3 +1593,4 @@ func (s *AuthCLITestSuite) createBankMsg(cctx client.Context, toAddr sdk.AccAddr
 			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			Append(extraFlags)...)
 }
+

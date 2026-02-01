@@ -353,3 +353,4 @@ func (m *MemoryStore) Close() error {
 
 // Ensure MemoryStore implements NonceStore
 var _ NonceStore = (*MemoryStore)(nil)
+

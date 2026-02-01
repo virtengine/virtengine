@@ -388,3 +388,4 @@ func BootstrapStateCmd(appCreator types.AppCreator) *cobra.Command {
 
 	return cmd
 }
+

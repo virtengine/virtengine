@@ -1219,3 +1219,4 @@ func (l *AuditLogger) GetEventsByAllocation(allocationID string, since time.Time
 
 	return events
 }
+

@@ -91,13 +91,13 @@ type QueryProviderRequest struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Auditor string `protobuf:"bytes,1,opt,name=auditor,proto3" json:"auditor,omitempty"`
 	// Owner is the account bech32 address of the provider.
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
 }
 
@@ -200,7 +200,7 @@ type QueryProviderAttributesRequest struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
 	// Pagination is used to paginate the request.
 	Pagination *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
@@ -260,14 +260,14 @@ type QueryProviderAuditorRequest struct {
 	//
 	// Example:
 	//
-	//	"akash1..."
+	//	"ve1..."
 	Auditor string `protobuf:"bytes,1,opt,name=auditor,proto3" json:"auditor,omitempty"`
 	// Owner is the account bech32 address of the provider.
 	// It is a string representing a valid account address.
 	//
 	// Example:
 	//
-	//	"akash1..."
+	//	"ve1..."
 	Owner string `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
 }
 
@@ -325,7 +325,7 @@ type QueryAuditorAttributesRequest struct {
 	//
 	// Example:
 	//
-	//	"akash1..."
+	//	"ve1..."
 	Auditor string `protobuf:"bytes,1,opt,name=auditor,proto3" json:"auditor,omitempty"`
 	// Pagination is used to paginate the request.
 	Pagination *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
@@ -1755,3 +1755,4 @@ var (
 	ErrIntOverflowQuery          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupQuery = fmt.Errorf("proto: unexpected end of group")
 )
+

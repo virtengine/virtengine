@@ -148,3 +148,4 @@ func mkTxResult(txConfig client.TxConfig, resTx *coretypes.ResultTx, resBlock *c
 type intoAny interface {
 	AsAny() *codectypes.Any
 }
+

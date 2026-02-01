@@ -672,3 +672,4 @@ func crc32Checksum(data []byte) uint32 {
 	}
 	return ^crc
 }
+

@@ -1424,3 +1424,4 @@ func BenchmarkDetectHardware(b *testing.B) {
 		DetectHardware()
 	}
 }
+

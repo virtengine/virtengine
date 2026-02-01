@@ -397,3 +397,4 @@ func TraceIDFromContext(ctx context.Context) string {
 func SpanIDFromContext(ctx context.Context) string {
 	return ""
 }
+

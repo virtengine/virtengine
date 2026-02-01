@@ -16,3 +16,4 @@ func unifyStringAsBool(val string) (string, bool) {
 
 	return "", false
 }
+

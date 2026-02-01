@@ -295,3 +295,4 @@ endpoints:
 	require.Contains(t, err.Error(), "not a valid name")
 
 }
+

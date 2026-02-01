@@ -45,3 +45,4 @@ func TestExtractMarketplaceEvents(t *testing.T) {
 		t.Fatalf("expected payload JSON")
 	}
 }
+

@@ -494,3 +494,4 @@ func matchesStateFilter(state *WorkflowState, filter StateFilter) bool {
 	}
 	return true
 }
+

@@ -658,3 +658,4 @@ func (s *OracleCLITestSuite) TestCLIQueryOracleParamsExec() {
 		})
 	}
 }
+

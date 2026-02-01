@@ -15,7 +15,7 @@ export interface LeaseFilters {
    * It is a string representing a valid bech32 account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /**
@@ -38,7 +38,7 @@ export interface LeaseFilters {
    * It is a string representing a valid account bech32 address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   provider: string;
   /** State represents the state of the lease. */

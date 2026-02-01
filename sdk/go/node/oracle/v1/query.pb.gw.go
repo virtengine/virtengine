@@ -436,3 +436,4 @@ var (
 
 	forward_Query_AggregatedPrice_0 = runtime.ForwardResponseMessage
 )
+

@@ -222,3 +222,4 @@ func (d *discoveryService) GetStats(ctx context.Context) (*DiscoveryStats, error
 
 	return stats, nil
 }
+

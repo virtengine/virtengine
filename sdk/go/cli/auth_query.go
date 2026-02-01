@@ -253,7 +253,7 @@ to each module's documentation for the full set of events to query for. Each mod
 documents its respective events under 'xx_events.md'.
 
 Example:
-$ %s query txs --%s 'message.sender=akash1...&message.action=withdraw_delegator_reward' --page 1 --limit 30
+$ %s query txs --%s 'message.sender=ve1...&message.action=withdraw_delegator_reward' --page 1 --limit 30
 `, eventFormat, version.AppName, cflags.FlagEvents),
 		),
 		PersistentPreRunE: QueryPersistentPreRunE,
@@ -427,3 +427,4 @@ func ParseSigArgs(args []string) ([]string, error) {
 
 	return strings.Split(args[0], ","), nil
 }
+

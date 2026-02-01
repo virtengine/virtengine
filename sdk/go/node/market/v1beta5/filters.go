@@ -69,3 +69,4 @@ func (filters *BidFilters) Accept(obj Bid, stateVal Bid_State) bool {
 
 	return true
 }
+

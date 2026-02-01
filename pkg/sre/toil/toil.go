@@ -457,3 +457,4 @@ func (ao *AutomationOpportunity) GetRecommendation() string {
 		urgency, ao.Task, ao.Category, ao.TotalTime, ao.EstimatedROI,
 	)
 }
+

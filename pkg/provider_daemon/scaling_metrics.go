@@ -328,3 +328,4 @@ func SetActiveLeaseCount(count float64) {
 func ObserveCrossRegionLatency(sourceRegion, targetRegion string, seconds float64) {
 	crossRegionRPCDuration.WithLabelValues(sourceRegion, targetRegion).Observe(seconds)
 }
+

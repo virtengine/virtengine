@@ -266,3 +266,4 @@ func (c *MetricsCollector) collectMetrics(ctx context.Context) {
 
 	c.logger.Debug().Int64("session_count", count).Msg("metrics collected")
 }
+

@@ -540,3 +540,4 @@ func (m *MonitoringService) GetMetrics() *MetricsCollector {
 func (m *MonitoringService) GetAlertManager() *AlertManager {
 	return m.alerts
 }
+

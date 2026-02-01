@@ -35,3 +35,4 @@ func TestCLITestSuite(t *testing.T) {
 	suite.Run(t, new(OracleCLITestSuite))
 	suite.Run(t, new(BMECLITestSuite))
 }
+

@@ -378,3 +378,4 @@ func GetSupportLevel(v, current Version) SupportLevel {
 		return SupportLevelEOL
 	}
 }
+

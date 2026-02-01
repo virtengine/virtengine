@@ -915,3 +915,4 @@ func TestGenerateNonce(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, nonce1, nonce2)
 }
+

@@ -431,3 +431,4 @@ func TestDisputeStatus_IsFinal(t *testing.T) {
 		})
 	}
 }
+

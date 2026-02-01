@@ -868,3 +868,4 @@ func TestWithAuditLogger(t *testing.T) {
 	}
 	assert.True(t, hasInitiated, "should have initiate event")
 }
+

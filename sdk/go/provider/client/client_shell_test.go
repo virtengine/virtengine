@@ -106,3 +106,4 @@ func TestHandleTerminalResizeHalts(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, data, 0)
 }
+

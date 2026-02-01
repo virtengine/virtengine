@@ -247,3 +247,4 @@ func TestSeverityLogLevelMapping(t *testing.T) {
 		}
 	}
 }
+

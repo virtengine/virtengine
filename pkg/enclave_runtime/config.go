@@ -452,3 +452,4 @@ func (c *EnclaveRuntimeConfig) PrintConfigSummary() {
 	}
 	fmt.Println("======================================")
 }
+

@@ -347,3 +347,4 @@ func (b *WebhookEventBuilder) WithRefund(refund Refund) *WebhookEventBuilder {
 func (b *WebhookEventBuilder) Build() WebhookEvent {
 	return b.event
 }
+

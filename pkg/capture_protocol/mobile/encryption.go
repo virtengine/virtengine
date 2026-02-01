@@ -481,3 +481,4 @@ func (e *EncryptedCapturePayload) ToVEIDEnvelope() map[string]interface{} {
 		},
 	}
 }
+

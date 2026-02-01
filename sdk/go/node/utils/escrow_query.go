@@ -21,3 +21,4 @@ func LeaseCalcBalanceRemain(balance sdkmath.LegacyDec, currBlock, settledAt int6
 func LeaseCalcBlocksRemain(balance float64, leasePrice sdkmath.LegacyDec) int64 {
 	return int64(balance / leasePrice.MustFloat64())
 }
+

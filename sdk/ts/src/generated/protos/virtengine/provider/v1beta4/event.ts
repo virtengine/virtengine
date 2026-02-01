@@ -18,7 +18,7 @@ export interface EventProviderCreated {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
 }
@@ -33,7 +33,7 @@ export interface EventProviderUpdated {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
 }
@@ -45,7 +45,7 @@ export interface EventProviderDeleted {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
 }

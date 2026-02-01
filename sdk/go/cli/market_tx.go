@@ -284,3 +284,4 @@ func GetTxMarketLeaseCloseCmd() *cobra.Command {
 
 	return cmd
 }
+

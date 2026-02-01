@@ -63,13 +63,13 @@ message QueryProviderRequest {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string auditor = 1;
   // Owner is the account bech32 address of the provider.
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner   = 2;
 }
 
@@ -85,7 +85,7 @@ message QueryProviderAttributesRequest {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner = 1;
   // Pagination is used to paginate the request.
   cosmos.base.query.v1beta1.PageRequest pagination = 2;
@@ -97,13 +97,13 @@ message QueryProviderAuditorRequest {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string auditor = 1;
   // Owner is the account bech32 address of the provider.
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner   = 2;
 }
 
@@ -113,7 +113,7 @@ message QueryAuditorAttributesRequest {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string auditor = 1;
   // Pagination is used to paginate the request.
   cosmos.base.query.v1beta1.PageRequest pagination = 2;

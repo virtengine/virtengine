@@ -620,3 +620,4 @@ func (d *CompromiseDetector) GenerateReport(since time.Time) *CompromiseReport {
 
 	return report
 }
+

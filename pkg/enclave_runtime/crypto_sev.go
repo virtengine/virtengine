@@ -900,3 +900,4 @@ func ValidateSNPReportNonce(report *CryptoSNPReport, expectedNonce []byte) bool 
 
 	return bytes.HasPrefix(reportData, expectedNonce)
 }
+

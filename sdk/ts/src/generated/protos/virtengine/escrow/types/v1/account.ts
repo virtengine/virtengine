@@ -20,7 +20,7 @@ export interface AccountState {
    * It is a string representing a valid bech32 account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /** State represents the current state of an Account. */

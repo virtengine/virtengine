@@ -543,3 +543,4 @@ func (a *DistributionAnalyzer) CalculateDecentralizationScore(metrics economics.
 
 	return score
 }
+

@@ -69,3 +69,4 @@ private keys stored in a ledger device cannot be deleted with the CLI.
 
 	return cmd
 }
+

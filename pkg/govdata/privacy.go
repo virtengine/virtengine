@@ -601,3 +601,4 @@ func GetRequiredConsentScope(jurisdiction string) []string {
 		"identity_verification",
 	}
 }
+

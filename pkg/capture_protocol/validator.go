@@ -439,3 +439,4 @@ func CreateCapturePayload(
 		Timestamp:       now,
 	}
 }
+

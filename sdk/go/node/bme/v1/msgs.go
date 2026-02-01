@@ -51,3 +51,4 @@ func (msg MsgSeedVault) GetSigners() []sdk.AccAddress {
 	authority, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{authority}
 }
+

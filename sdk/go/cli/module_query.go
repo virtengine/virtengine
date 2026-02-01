@@ -24,3 +24,4 @@ func GetQueryModuleNameToAddressCmd() *cobra.Command {
 
 	return cmd
 }
+

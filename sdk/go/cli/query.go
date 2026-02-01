@@ -80,3 +80,4 @@ func QueryCmd() *cobra.Command {
 
 	return cmd
 }
+

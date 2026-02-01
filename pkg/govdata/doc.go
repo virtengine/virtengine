@@ -162,3 +162,4 @@
 //
 //	result, err := service.VerifyDocumentWithLiveness(ctx, docReq, livenessReq, livenessConfig)
 package govdata
+

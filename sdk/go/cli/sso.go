@@ -449,3 +449,4 @@ var wellKnownIssuers = map[veidtypes.SSOProviderType]string{
 	veidtypes.SSOProviderMicrosoft: "https://login.microsoftonline.com/common/v2.0",
 	veidtypes.SSOProviderGitHub:    "https://token.actions.githubusercontent.com",
 }
+

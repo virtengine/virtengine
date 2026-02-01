@@ -120,3 +120,4 @@ func (m *MsgCreateCertificate) Route() string {
 func (m *MsgRevokeCertificate) Route() string {
 	return RouterKey
 }
+

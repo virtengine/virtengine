@@ -835,3 +835,4 @@ func (h *hashingReader) Hash() string {
 	}
 	return ""
 }
+

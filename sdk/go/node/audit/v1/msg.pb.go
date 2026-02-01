@@ -33,13 +33,13 @@ type MsgSignProviderAttributes struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Auditor is the account address of the auditor.
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Auditor string `protobuf:"bytes,2,opt,name=auditor,proto3" json:"auditor" yaml:"auditor"`
 	// Attributes holds a list of key-value pairs of provider attributes to be audited.
 	// Attributes are arbitrary values that a provider exposes.
@@ -143,13 +143,13 @@ type MsgDeleteProviderAttributes struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Auditor is the account address of the auditor.
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Auditor string `protobuf:"bytes,2,opt,name=auditor,proto3" json:"auditor" yaml:"auditor"`
 	// Keys holds a list of keys of audited provider attributes to delete from the audit.
 	Keys []string `protobuf:"bytes,3,rep,name=keys,proto3" json:"keys" yaml:"keys"`
@@ -990,3 +990,4 @@ var (
 	ErrIntOverflowMsg          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupMsg = fmt.Errorf("proto: unexpected end of group")
 )
+

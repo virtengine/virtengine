@@ -1121,3 +1121,4 @@ type TreasuryTransferResult struct {
 	// Error is any error that occurred
 	Error error `json:"-"`
 }
+

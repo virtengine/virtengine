@@ -3091,3 +3091,4 @@ var (
 	ErrIntOverflowPrices          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupPrices = fmt.Errorf("proto: unexpected end of group")
 )
+

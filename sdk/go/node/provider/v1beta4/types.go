@@ -65,3 +65,4 @@ func (m Info) Validate() error {
 	}
 	return nil
 }
+

@@ -233,3 +233,4 @@ type Vulnerability struct {
 	Mitigation  string `json:"mitigation"`
 	Status      string `json:"status"` // "open", "mitigated", "accepted"
 }
+

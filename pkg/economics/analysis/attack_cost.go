@@ -425,3 +425,4 @@ func formatCartelMitigation(minFor33, minFor67 int64) string {
 		big.NewInt(minFor67).String() + " validators for 67% (safety attack). " +
 		"Encourage stake distribution and implement validator caps."
 }
+

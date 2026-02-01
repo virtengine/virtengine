@@ -31,3 +31,4 @@ func (obj AuditedProviders) String() string {
 
 	return buf.String()
 }
+

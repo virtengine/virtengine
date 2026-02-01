@@ -114,3 +114,4 @@ func AsWithMetrics(err error, target interface{}) bool {
 func formatCode(code uint32) string {
 	return fmt.Sprintf("%d", code)
 }
+

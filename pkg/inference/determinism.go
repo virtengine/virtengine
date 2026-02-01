@@ -334,3 +334,4 @@ func (dc *DeterminismController) CheckModelDeterminism(opNames []string) (bool, 
 
 	return len(nonDetOps) == 0, nonDetOps
 }
+

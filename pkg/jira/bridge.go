@@ -361,3 +361,4 @@ func truncateAddress(address string) string {
 	}
 	return address[:8] + "..." + address[len(address)-8:]
 }
+

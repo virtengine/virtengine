@@ -54,3 +54,4 @@ func Test_splitAndCall_Splitting(t *testing.T) {
 	require.NoError(t, err, "")
 	require.Equal(t, 3, callCount)
 }
+

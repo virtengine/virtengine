@@ -1063,3 +1063,4 @@ func TestNamespaceHandling(t *testing.T) {
 	assert.True(t, strings.Contains(string(assertionXML), "saml:") || 
 		strings.Contains(string(assertionXML), "urn:oasis:names:tc:SAML"))
 }
+

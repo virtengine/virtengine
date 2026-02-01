@@ -663,3 +663,4 @@ func IsAllowedDigestAlgorithm(algorithm string) bool {
 	}
 	return allowedAlgorithms[algorithm]
 }
+

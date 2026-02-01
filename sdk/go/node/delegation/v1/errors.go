@@ -16,3 +16,4 @@ var (
 	ErrInvalidAmount     = sdkerrors.Register(ModuleName, 2, "invalid amount")
 	ErrSelfRedelegation  = sdkerrors.Register(ModuleName, 3, "cannot redelegate to same validator")
 )
+

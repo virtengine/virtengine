@@ -693,3 +693,4 @@ func (c *ValidatorAttestationCache) Size() int {
 	defer c.mu.RUnlock()
 	return len(c.cache)
 }
+

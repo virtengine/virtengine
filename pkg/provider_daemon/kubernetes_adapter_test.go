@@ -751,3 +751,4 @@ func TestBuildServiceSpec(t *testing.T) {
 	assert.Equal(t, int32(8080), spec.Ports[0].Port)
 	assert.Equal(t, int32(80), spec.Ports[0].TargetPort)
 }
+

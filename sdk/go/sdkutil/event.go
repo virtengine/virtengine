@@ -91,3 +91,4 @@ func GetString(attrs []sdk.Attribute, key string) (string, error) {
 	}
 	return "", ErrNotFound
 }
+

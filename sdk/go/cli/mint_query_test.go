@@ -180,3 +180,4 @@ func TestGetCmdQueryAnnualProvisions(t *testing.T) {
 		})
 	}
 }
+

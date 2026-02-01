@@ -31,7 +31,7 @@ type EventProviderCreated struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 }
 
@@ -82,7 +82,7 @@ type EventProviderUpdated struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 }
 
@@ -132,7 +132,7 @@ type EventProviderDeleted struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 }
 
@@ -755,3 +755,4 @@ var (
 	ErrIntOverflowEvent          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupEvent = fmt.Errorf("proto: unexpected end of group")
 )
+

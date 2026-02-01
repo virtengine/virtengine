@@ -949,3 +949,4 @@ func (i *IPFSStreamingBackend) GetStream(ctx context.Context, address *ContentAd
 
 // Ensure IPFSStreamingBackend implements StreamingArtifactStore
 var _ StreamingArtifactStore = (*IPFSStreamingBackend)(nil)
+

@@ -20,3 +20,4 @@ func AuditedProvider(t testing.TB) (atypes.ProviderID, atypes.AuditedProvider) {
 		Attributes: Attributes(t),
 	}
 }
+

@@ -27,3 +27,4 @@ func TestConstructors(t *testing.T) {
 	require.Equal(t, cli.UpdateKeyReq{OldPassword: "old", NewPassword: "new"}, cli.NewUpdateKeyReq("old", "new"))
 	require.Equal(t, cli.DeleteKeyReq{Password: "password"}, cli.NewDeleteKeyReq("password"))
 }
+

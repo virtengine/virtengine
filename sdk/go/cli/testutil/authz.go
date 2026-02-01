@@ -36,3 +36,4 @@ func TxRevokeAuthorizationExec(ctx context.Context, cctx client.Context, grantee
 	allArgs := append([]string{grantee.String(), "deposit"}, args...)
 	return ExecRevokeAuthz(ctx, cctx, allArgs...)
 }
+

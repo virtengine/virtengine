@@ -18,3 +18,4 @@ func AccountKeyPrefix() []byte {
 func PaymentKeyPrefix() []byte {
 	return []byte{0x02}
 }
+

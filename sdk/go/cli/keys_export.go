@@ -105,3 +105,4 @@ func unsafeExportPrivKeyHex(ks unsafeExporter, uid string) (privkey string, err 
 
 	return hex.EncodeToString(priv.Bytes()), nil
 }
+

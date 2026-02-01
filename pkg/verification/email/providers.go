@@ -553,3 +553,4 @@ func NewProvider(config Config, logger zerolog.Logger) (Provider, error) {
 		return nil, errors.Wrapf(ErrInvalidConfig, "unsupported provider: %s", config.Provider)
 	}
 }
+

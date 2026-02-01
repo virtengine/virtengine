@@ -56,3 +56,4 @@ func LoadAndQueryCertificateForAccount(ctx context.Context, cctx client.Context,
 
 	return tlsCert, nil
 }
+

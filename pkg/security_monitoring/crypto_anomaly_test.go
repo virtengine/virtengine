@@ -233,3 +233,4 @@ func TestCryptoAnomalyDetectorCleanup(t *testing.T) {
 	// Cleanup is internal, but detector should handle graceful shutdown
 	// Just verify it doesn't panic when context is cancelled
 }
+

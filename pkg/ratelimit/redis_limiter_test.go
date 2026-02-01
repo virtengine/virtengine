@@ -270,3 +270,4 @@ func applyMultiplier(rules LimitRules, multiplier float64) LimitRules {
 		BurstSize:         int(float64(rules.BurstSize) * multiplier),
 	}
 }
+

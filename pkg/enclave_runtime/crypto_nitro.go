@@ -1225,3 +1225,4 @@ func ExtractNitroPublicKey(doc *CryptoNitroAttestationDocument) (*ecdsa.PublicKe
 		Y:     y,
 	}, nil
 }
+

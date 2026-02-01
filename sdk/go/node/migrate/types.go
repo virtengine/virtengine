@@ -109,3 +109,4 @@ func ResourcesFromV1Beta3(id uint32, from v1beta3.Resources) v1beta4.Resources {
 		Endpoints: EndpointsFromV1Beta3(from.Endpoints),
 	}
 }
+

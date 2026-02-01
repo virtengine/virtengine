@@ -561,3 +561,4 @@ func TestMeteringLoopIntegration(t *testing.T) {
 	records := recorder.GetRecords()
 	assert.GreaterOrEqual(t, len(records), 2)
 }
+

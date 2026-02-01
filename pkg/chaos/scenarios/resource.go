@@ -1038,3 +1038,4 @@ func (r *ScenarioRegistry) RegisterDefaults() {
 		return NewTimeJump([]string{"*"}, 24*time.Hour)
 	})
 }
+

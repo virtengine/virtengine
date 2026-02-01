@@ -17,3 +17,4 @@ func cleanupKeys(t *testing.T, kb keyring.Keyring, keys ...string) func() {
 		}
 	}
 }
+

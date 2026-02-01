@@ -138,3 +138,4 @@ func TestGenerateIDWithPrefix(t *testing.T) {
 		t.Errorf("ID should start with 'test-', got '%s'", id)
 	}
 }
+

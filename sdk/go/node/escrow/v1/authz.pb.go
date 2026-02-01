@@ -485,3 +485,4 @@ var (
 	ErrIntOverflowAuthz          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupAuthz = fmt.Errorf("proto: unexpected end of group")
 )
+

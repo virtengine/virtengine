@@ -968,3 +968,4 @@ func (a *StreamingAssembler) Assemble() (io.Reader, error) {
 
 	return bytes.NewReader(data), nil
 }
+

@@ -306,3 +306,4 @@ func HealthCheckMiddleware(healthCheckPaths ...string) func(http.Handler) http.H
 		})
 	}
 }
+

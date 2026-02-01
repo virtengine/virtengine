@@ -55,3 +55,4 @@ func init() {
 		return SigningMethodES256K
 	})
 }
+

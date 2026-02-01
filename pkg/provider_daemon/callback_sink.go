@@ -69,3 +69,4 @@ func (s *FileCallbackSink) Submit(ctx context.Context, callback *marketplace.Wal
 
 	return nil
 }
+

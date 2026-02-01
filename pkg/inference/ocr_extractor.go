@@ -722,3 +722,4 @@ func (oe *OCRExtractor) Close() error {
 	}
 	return nil
 }
+

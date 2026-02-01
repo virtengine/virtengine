@@ -9,7 +9,7 @@ pub struct BidId {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
@@ -28,7 +28,7 @@ pub struct BidId {
     /// It is a string representing a valid account bech32 address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="5")]
     pub provider: ::prost::alloc::string::String,
     /// BSeq (bid sequence) distinguishes multiple bids associated with a single deployment from same provider.
@@ -43,7 +43,7 @@ pub struct OrderId {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
@@ -119,7 +119,7 @@ pub struct LeaseId {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
@@ -138,7 +138,7 @@ pub struct LeaseId {
     /// It is a string representing a valid account bech32 address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="5")]
     pub provider: ::prost::alloc::string::String,
     /// BSeq (bid sequence) distinguishes multiple bids associated with a single deployment from same provider.
@@ -280,7 +280,7 @@ pub struct LeaseFilters {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
@@ -299,7 +299,7 @@ pub struct LeaseFilters {
     /// It is a string representing a valid account bech32 address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="5")]
     pub provider: ::prost::alloc::string::String,
     /// State represents the state of the lease.

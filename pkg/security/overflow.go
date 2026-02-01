@@ -156,3 +156,4 @@ func ClampToInt(i sdkmath.Int) int {
 
 	return int(i.Int64())
 }
+

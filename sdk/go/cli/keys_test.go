@@ -13,3 +13,4 @@ func TestCommands(t *testing.T) {
 	// Commands are registered
 	assert.Equal(t, 12, len(rootCommands.Commands()))
 }
+

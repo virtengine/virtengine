@@ -547,3 +547,4 @@ func hasError(result ValidationResult, field, code string) bool {
 	}
 	return false
 }
+

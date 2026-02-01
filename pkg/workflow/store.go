@@ -261,3 +261,4 @@ func UnmarshalHistoryEvent(data []byte) (*HistoryEvent, error) {
 	}
 	return &event, nil
 }
+

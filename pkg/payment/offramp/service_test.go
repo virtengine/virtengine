@@ -401,3 +401,4 @@ func BenchmarkAlertCreation(b *testing.B) {
 		alertMgr.CreateAlert(ctx, AlertLevelInfo, "benchmark", "Test", "Test message")
 	}
 }
+

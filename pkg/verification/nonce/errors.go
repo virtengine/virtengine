@@ -37,3 +37,4 @@ var (
 	// ErrConnectionError indicates a connection error
 	ErrConnectionError = errors.Register("verification/nonce", 10, "connection error")
 )
+

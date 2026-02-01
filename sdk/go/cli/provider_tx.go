@@ -153,3 +153,4 @@ func GetTxProviderUpdateCmd() *cobra.Command {
 
 	return cmd
 }
+

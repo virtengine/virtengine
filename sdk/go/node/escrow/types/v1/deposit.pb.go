@@ -32,7 +32,7 @@ type Depositor struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	// If depositor is same as the owner, then any incoming coins are added to the Balance.
 	// If depositor isn't same as the owner, then any incoming coins are added to the Funds.
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
@@ -511,3 +511,4 @@ var (
 	ErrIntOverflowDeposit          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupDeposit = fmt.Errorf("proto: unexpected end of group")
 )
+

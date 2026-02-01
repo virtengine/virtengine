@@ -526,3 +526,4 @@ func ExportToYAML(template *hpctypes.WorkloadTemplate) ([]byte, error) {
 
 	return yaml.Marshal(manifest)
 }
+

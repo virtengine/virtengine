@@ -295,3 +295,4 @@ func (cb *CircuitBreaker) Reset() {
 	cb.failureCount = 0
 	cb.successCount = 0
 }
+

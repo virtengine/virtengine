@@ -44,9 +44,9 @@ func GetTxFeegrantGrantCmd() *cobra.Command {
 				`Grant authorization to pay fees from your address.
 
 Examples:
-%s tx %s grant akash1skjw... --spend-limit 100uve --from <granter> --expiration 2022-01-30T15:04:05Z or
-%s tx %s grant akash1skjw... --spend-limit 100uve --from <granter> --period 3600 --period-limit 10stake --expiration 2022-01-30T15:04:05Z or
-%s tx %s grant akash1skjw... --spend-limit 100uve --from <granter> --expiration 2022-01-30T15:04:05Z
+%s tx %s grant ve1skjw... --spend-limit 100uve --from <granter> --expiration 2022-01-30T15:04:05Z or
+%s tx %s grant ve1skjw... --spend-limit 100uve --from <granter> --period 3600 --period-limit 10stake --expiration 2022-01-30T15:04:05Z or
+%s tx %s grant ve1skjw... --spend-limit 100uve --from <granter> --expiration 2022-01-30T15:04:05Z
 	--allowed-messages "/cosmos.gov.v1beta1.MsgSubmitProposal,/cosmos.gov.v1beta1.MsgVote"
 				`, version.AppName, feegrant.ModuleName, version.AppName, feegrant.ModuleName, version.AppName, feegrant.ModuleName,
 			),
@@ -184,7 +184,7 @@ func GetTxFeegrantRevokeCmd() *cobra.Command {
 			fmt.Sprintf(`revoke fee grant from a granter to a grantee..
 
 Example:
- $ %s tx %s revoke akash1skj.. --from <granter>
+ $ %s tx %s revoke ve1skj.. --from <granter>
 			`, version.AppName, feegrant.ModuleName),
 		),
 		Args:              cobra.ExactArgs(1),
@@ -224,3 +224,4 @@ func getPeriodReset(duration int64) time.Time {
 func getPeriod(duration int64) time.Duration {
 	return time.Duration(duration) * time.Second
 }
+

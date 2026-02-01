@@ -478,3 +478,4 @@ func DecryptXMLEncryptionWithKey(encryptedData []byte, privateKeyPEM []byte) ([]
 	}
 	return decryptor.DecryptAssertion(encryptedData)
 }
+

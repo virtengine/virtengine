@@ -226,8 +226,8 @@ exports[`SDL SDL WordPress Deployment Groups should generate the correct deploym
       "signedBy": {
         "allOf": [],
         "anyOf": [
-          "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
-          "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4",
+          "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
+          "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
         ],
       },
     },
@@ -484,12 +484,12 @@ exports[`SDL SDL v3 Resource Groups should create v3 resource groups: Groups mat
       ],
       "signedBy": {
         "allOf": [
-          "akash1123123",
-          "akash1124123123",
+          "ve1123123",
+          "ve1124123123",
         ],
         "anyOf": [
-          "akash1123123",
-          "akash1124123123",
+          "ve1123123",
+          "ve1124123123",
         ],
       },
     },

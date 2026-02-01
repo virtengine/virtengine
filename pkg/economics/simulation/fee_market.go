@@ -458,3 +458,4 @@ func GenerateSampleTransactions(count int, avgGasPrice int64, spamRatio float64)
 
 	return txs
 }
+

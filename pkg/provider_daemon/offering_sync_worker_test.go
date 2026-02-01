@@ -843,3 +843,4 @@ func TestWorkerMetricsSnapshot(t *testing.T) {
 		t.Errorf("QueueDepth = %d, want 0", snapshot.QueueDepth)
 	}
 }
+

@@ -793,3 +793,4 @@ func DecryptSecureBackup(encrypted []byte, passphrase string) ([]byte, error) {
 
 	return plaintext, nil
 }
+

@@ -722,3 +722,4 @@ func (o *noopObservability) RecordHistogram(ctx context.Context, name string, va
 }
 func (o *noopObservability) RecordCounter(ctx context.Context, name string, value float64, labels map[string]string) {
 }
+

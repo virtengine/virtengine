@@ -937,3 +937,4 @@ func ExtractNonceFromReport(reportData []byte) []byte {
 	}
 	return reportData[32:64]
 }
+

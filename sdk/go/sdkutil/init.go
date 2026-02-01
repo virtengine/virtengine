@@ -23,14 +23,14 @@ const (
 	DenomMExponent = 3
 	DenomUExponent = 6
 
-	Bech32PrefixAccAddr = "akash"
-	Bech32PrefixAccPub  = "akashpub"
+	Bech32PrefixAccAddr = "ve"
+	Bech32PrefixAccPub  = "vepub"
 
-	Bech32PrefixValAddr = "akashvaloper"
-	Bech32PrefixValPub  = "akashvaloperpub"
+	Bech32PrefixValAddr = "vevaloper"
+	Bech32PrefixValPub  = "vevaloperpub"
 
-	Bech32PrefixConsAddr = "akashvalcons"
-	Bech32PrefixConsPub  = "akashvalconspub"
+	Bech32PrefixConsAddr = "vevalcons"
+	Bech32PrefixConsPub  = "vevalconspub"
 )
 
 func init() {
@@ -92,3 +92,4 @@ func init() {
 	}
 
 }
+

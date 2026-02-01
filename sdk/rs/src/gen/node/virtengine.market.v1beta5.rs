@@ -121,7 +121,7 @@ pub struct BidFilters {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
@@ -140,7 +140,7 @@ pub struct BidFilters {
     /// It is a string representing a valid account bech32 address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="5")]
     pub provider: ::prost::alloc::string::String,
     /// State represents the state of the lease.
@@ -158,7 +158,7 @@ pub struct OrderFilters {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.

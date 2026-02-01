@@ -866,3 +866,4 @@ func GenerateNonce(length int) (string, error) {
 
 // Ensure DefaultService implements EmailVerificationService
 var _ EmailVerificationService = (*DefaultService)(nil)
+

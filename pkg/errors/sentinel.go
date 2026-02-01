@@ -152,3 +152,4 @@ var (
 	// ErrScoreToleranceExceeded is returned when score tolerance is exceeded.
 	ErrScoreToleranceExceeded = errors.New("score tolerance exceeded")
 )
+

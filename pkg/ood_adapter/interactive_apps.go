@@ -297,3 +297,4 @@ func (m *InteractiveAppsManager) ValidateAgainstQuota(ctx context.Context, veidA
 
 	return nil
 }
+

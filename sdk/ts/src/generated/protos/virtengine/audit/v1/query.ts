@@ -25,7 +25,7 @@ export interface QueryProviderRequest {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   auditor: string;
   /**
@@ -33,7 +33,7 @@ export interface QueryProviderRequest {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
 }
@@ -51,7 +51,7 @@ export interface QueryProviderAttributesRequest {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /** Pagination is used to paginate the request. */
@@ -65,7 +65,7 @@ export interface QueryProviderAuditorRequest {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   auditor: string;
   /**
@@ -73,7 +73,7 @@ export interface QueryProviderAuditorRequest {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
 }
@@ -85,7 +85,7 @@ export interface QueryAuditorAttributesRequest {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   auditor: string;
   /** Pagination is used to paginate the request. */

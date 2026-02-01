@@ -978,3 +978,4 @@ func BenchmarkMultiMachineFeatureExtract(b *testing.B) {
 		_, _ = extractor.ExtractFeatures(inputs)
 	}
 }
+

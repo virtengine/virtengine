@@ -20,10 +20,10 @@ import (
 	"github.com/virtengine/virtengine/x/escrow"
 )
 
-// Test addresses - valid bech32 addresses for akash prefix
+// Test addresses - valid bech32 addresses for ve prefix
 const (
-	testOwnerAddr    = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
-	testProviderAddr = "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4"
+	testOwnerAddr    = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
+	testProviderAddr = "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8"
 )
 
 // testAccountXID returns a valid XID for ScopeDeployment: "owner/dseq"

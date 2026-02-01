@@ -858,3 +858,4 @@ func (b *Bridge) syncLoop(ctx context.Context) {
 func (b *Bridge) processRetryEvent(ctx context.Context, event *SyncEvent) error {
 	return b.processEvent(ctx, event)
 }
+

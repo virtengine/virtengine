@@ -15,3 +15,4 @@ func (m *Payment) ValidateBasic() error {
 
 	return nil
 }
+

@@ -799,3 +799,4 @@ func BenchmarkFeaturePipeline_Extract(b *testing.B) {
 		_, _ = pipeline.Extract(context.Background(), input)
 	}
 }
+

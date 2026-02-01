@@ -296,3 +296,4 @@ func severityToZerologLevel(severity SecurityEventSeverity) zerolog.Level {
 		return zerolog.InfoLevel
 	}
 }
+

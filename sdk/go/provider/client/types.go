@@ -164,3 +164,4 @@ type ServiceLogs struct {
 	Stream  <-chan ServiceLogMessage
 	OnClose <-chan string
 }
+

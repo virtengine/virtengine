@@ -252,3 +252,4 @@ func BenchmarkGetStats(b *testing.B) {
 		_ = profiler.GetStats()
 	}
 }
+

@@ -505,3 +505,4 @@ func TestComputeSuiteHash(t *testing.T) {
 		t.Error("expected different hashes for different versions")
 	}
 }
+

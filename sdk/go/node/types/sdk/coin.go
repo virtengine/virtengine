@@ -833,3 +833,4 @@ func ParseCoinsNormalized(coinStr string) (Coins, error) {
 	}
 	return NormalizeCoins(coins), nil
 }
+

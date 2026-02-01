@@ -565,3 +565,4 @@ func TestAggregationStrategy_IsValid(t *testing.T) {
 		t.Error("expected invalid strategy to be invalid")
 	}
 }
+

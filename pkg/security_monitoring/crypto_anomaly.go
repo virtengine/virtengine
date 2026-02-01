@@ -525,3 +525,4 @@ func (d *CryptoAnomalyDetector) cleanup(ctx context.Context) {
 		}
 	}
 }
+

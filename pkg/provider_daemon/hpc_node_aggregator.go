@@ -587,3 +587,4 @@ func (a *HPCNodeAggregator) GetNodeStats(nodeID string) (map[string]interface{},
 		"total_heartbeats":  state.TotalHeartbeats,
 	}, true
 }
+

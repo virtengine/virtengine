@@ -1708,3 +1708,4 @@ func BenchmarkVMwareAdapterListVMs(b *testing.B) {
 		_ = adapter.ListVMs()
 	}
 }
+

@@ -533,3 +533,4 @@ func hasCPUIDFLC() bool {
 	result := cpuid(7, 0)
 	return (result.ECX & (1 << 30)) != 0
 }
+

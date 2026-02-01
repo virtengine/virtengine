@@ -360,3 +360,4 @@ func (attr Attributes) AnyIN(group AttributesGroup) bool {
 	}
 	return false
 }
+

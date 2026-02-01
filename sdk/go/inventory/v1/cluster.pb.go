@@ -398,3 +398,4 @@ var (
 	ErrIntOverflowCluster          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupCluster = fmt.Errorf("proto: unexpected end of group")
 )
+

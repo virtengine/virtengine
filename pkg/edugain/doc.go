@@ -77,3 +77,4 @@
 //	// Create VEID scope from verified assertion
 //	scope, err := service.CreateVEIDScope(ctx, assertion, walletAddress)
 package edugain
+

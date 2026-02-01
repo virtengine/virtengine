@@ -394,3 +394,4 @@ func DefaultAlertThresholds() AlertThresholds {
 		MaxActiveChallenges:              10000,
 	}
 }
+

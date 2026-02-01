@@ -19,7 +19,7 @@ message MsgSignProviderAttributes {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner = 1 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "owner",
@@ -30,7 +30,7 @@ message MsgSignProviderAttributes {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string auditor = 2 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "auditor",
@@ -59,7 +59,7 @@ message MsgDeleteProviderAttributes {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner = 1 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "owner",
@@ -70,7 +70,7 @@ message MsgDeleteProviderAttributes {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string auditor = 2 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "auditor",

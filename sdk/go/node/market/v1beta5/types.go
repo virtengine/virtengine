@@ -17,3 +17,4 @@ func (m QueryLeasesResponse) TotalPriceAmount() sdkmath.LegacyDec {
 
 	return total
 }
+

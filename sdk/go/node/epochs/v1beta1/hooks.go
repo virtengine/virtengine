@@ -44,3 +44,4 @@ type EpochHooksWrapper struct{ EpochHooks }
 
 // IsOnePerModuleType implements the depinject.OnePerModuleType interface.
 func (EpochHooksWrapper) IsOnePerModuleType() {}
+

@@ -18,7 +18,7 @@ export interface PaymentState {
    * It is a string representing a valid bech32 account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /** State represents the state of the Payment. */

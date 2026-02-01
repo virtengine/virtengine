@@ -2000,3 +2000,4 @@ func BenchmarkAWSAdapter_ListInstances(b *testing.B) {
 		_ = adapter.ListInstances()
 	}
 }
+

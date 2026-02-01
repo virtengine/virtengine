@@ -321,12 +321,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize key manager (VE-400)
 	keyDir := viper.GetString(FlagProviderKeyDir)
-	keyConfig := provider_daemon.KeyManagerConfig{
-		StorageType: provider_daemon.KeyStorageTypeFile,
-		KeyDir:      keyDir,
-	}
+	keyConfig := provider_daemon.DefaultKeyManagerConfig()
+	keyConfig.KeyDir = keyDir
 	if keyDir == "" {
 		keyConfig.StorageType = provider_daemon.KeyStorageTypeMemory
+	} else {
+		keyConfig.StorageType = provider_daemon.KeyStorageTypeFile
 	}
 	keyManager, err := provider_daemon.NewKeyManager(keyConfig)
 	if err != nil {

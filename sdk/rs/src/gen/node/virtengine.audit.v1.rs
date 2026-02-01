@@ -11,14 +11,14 @@ pub struct AuditedProvider {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Auditor is the account bech32 address of the auditor.
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="2")]
     pub auditor: ::prost::alloc::string::String,
     /// Attributes holds a list of key-value pairs of provider attributes.
@@ -55,14 +55,14 @@ pub struct EventTrustedAuditorCreated {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Auditor is the account address of the auditor.
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="2")]
     pub auditor: ::prost::alloc::string::String,
 }
@@ -74,14 +74,14 @@ pub struct EventTrustedAuditorDeleted {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Auditor is the account address of the auditor.
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="2")]
     pub auditor: ::prost::alloc::string::String,
 }
@@ -101,14 +101,14 @@ pub struct MsgSignProviderAttributes {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Auditor is the account address of the auditor.
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="2")]
     pub auditor: ::prost::alloc::string::String,
     /// Attributes holds a list of key-value pairs of provider attributes to be audited.
@@ -129,14 +129,14 @@ pub struct MsgDeleteProviderAttributes {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Auditor is the account address of the auditor.
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="2")]
     pub auditor: ::prost::alloc::string::String,
     /// Keys holds a list of keys of audited provider attributes to delete from the audit.
@@ -167,14 +167,14 @@ pub struct QueryProviderRequest {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub auditor: ::prost::alloc::string::String,
     /// Owner is the account bech32 address of the provider.
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="2")]
     pub owner: ::prost::alloc::string::String,
 }
@@ -194,7 +194,7 @@ pub struct QueryProviderAttributesRequest {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Pagination is used to paginate the request.
@@ -209,14 +209,14 @@ pub struct QueryProviderAuditorRequest {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub auditor: ::prost::alloc::string::String,
     /// Owner is the account bech32 address of the provider.
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="2")]
     pub owner: ::prost::alloc::string::String,
 }
@@ -228,7 +228,7 @@ pub struct QueryAuditorAttributesRequest {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub auditor: ::prost::alloc::string::String,
     /// Pagination is used to paginate the request.

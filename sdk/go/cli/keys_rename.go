@@ -70,3 +70,4 @@ private keys stored in a ledger device cannot be renamed with the CLI.
 
 	return cmd
 }
+

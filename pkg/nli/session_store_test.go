@@ -367,3 +367,4 @@ func TestDefaultSessionStoreConfig(t *testing.T) {
 		t.Errorf("Expected prefix 'virtengine:nli:session:', got %s", config.RedisPrefix)
 	}
 }
+

@@ -414,3 +414,4 @@ func TestWaldurStreamingBackend(t *testing.T) {
 		}
 	})
 }
+

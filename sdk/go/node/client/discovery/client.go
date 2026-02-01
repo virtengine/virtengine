@@ -88,3 +88,4 @@ func RPCAkash(_ *cmtrpctypes.Context) (*aclient.Akash, error) {
 
 	return result, nil
 }
+

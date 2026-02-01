@@ -356,3 +356,4 @@ func normalizeScore(value, minVal, maxVal, minScore, maxScore int64) int64 {
 
 	return score
 }
+

@@ -106,7 +106,7 @@ Using the '--split' flag, the [amount] is split equally between the addresses.
 Note, the '--from' flag is ignored as it is implied from [from_key_or_address] and
 separate addresses with space.
 When using '--dry-run' a key name cannot be used, only a bech32 address.`,
-		Example: fmt.Sprintf("%s tx bank multi-send akash1... akash1... akash1... akash1... 10stake", version.AppName),
+		Example: fmt.Sprintf("%s tx bank multi-send ve1... ve1... ve1... ve1... 10stake", version.AppName),
 		Args:    cobra.MinimumNArgs(4),
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if err := cmd.Flags().Set(cflags.FlagFrom, args[0]); err != nil {
@@ -179,3 +179,4 @@ When using '--dry-run' a key name cannot be used, only a bech32 address.`,
 
 	return cmd
 }
+

@@ -16,7 +16,7 @@ export interface MsgSignProviderAttributes {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /**
@@ -24,7 +24,7 @@ export interface MsgSignProviderAttributes {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   auditor: string;
   /**
@@ -45,7 +45,7 @@ export interface MsgDeleteProviderAttributes {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /**
@@ -53,7 +53,7 @@ export interface MsgDeleteProviderAttributes {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   auditor: string;
   /** Keys holds a list of keys of audited provider attributes to delete from the audit. */

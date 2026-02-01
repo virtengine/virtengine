@@ -401,3 +401,4 @@ var (
 	ErrIntOverflowBalance          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupBalance = fmt.Errorf("proto: unexpected end of group")
 )
+

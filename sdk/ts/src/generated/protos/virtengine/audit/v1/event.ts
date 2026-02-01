@@ -15,7 +15,7 @@ export interface EventTrustedAuditorCreated {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /**
@@ -23,7 +23,7 @@ export interface EventTrustedAuditorCreated {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   auditor: string;
 }
@@ -35,7 +35,7 @@ export interface EventTrustedAuditorDeleted {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /**
@@ -43,7 +43,7 @@ export interface EventTrustedAuditorDeleted {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   auditor: string;
 }

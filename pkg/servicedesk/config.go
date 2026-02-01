@@ -371,3 +371,4 @@ var (
 	// ErrAuditFailed indicates audit logging failed
 	ErrAuditFailed = errors.Register("servicedesk", 9, "audit logging failed")
 )
+

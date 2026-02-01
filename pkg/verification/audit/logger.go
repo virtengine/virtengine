@@ -377,3 +377,4 @@ func (f *FileLogger) Close() error {
 
 // Ensure FileLogger implements AuditLogger
 var _ AuditLogger = (*FileLogger)(nil)
+

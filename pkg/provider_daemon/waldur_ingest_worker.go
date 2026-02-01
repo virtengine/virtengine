@@ -1015,3 +1015,4 @@ func (w *WaldurIngestWorker) PrometheusMetrics() *WaldurIngestPrometheusMetrics 
 func (w *WaldurIngestWorker) SetAuditLogger(logger WaldurIngestAuditLogger) {
 	w.auditLogger = logger
 }
+

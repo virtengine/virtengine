@@ -341,3 +341,4 @@ func ComputeUserSigningData(salt, payloadHash, clientSignature []byte) []byte {
 	copy(result[len(salt)+len(payloadHash):], clientSignature)
 	return result
 }
+

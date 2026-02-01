@@ -91,3 +91,4 @@ func validateMinDeposits(i interface{}) error {
 
 	return nil
 }
+

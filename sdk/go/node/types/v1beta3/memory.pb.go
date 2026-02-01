@@ -420,3 +420,4 @@ var (
 	ErrIntOverflowMemory          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupMemory = fmt.Errorf("proto: unexpected end of group")
 )
+

@@ -43,3 +43,4 @@ func TestShouldBeIngress(t *testing.T) {
 	// Should not create ingress for something on port 80 that is UDP
 	require.False(t, exp.IsIngress())
 }
+

@@ -37,7 +37,7 @@ func NewMockHPCScheduler() *MockHPCScheduler {
 	return &MockHPCScheduler{
 		jobs:         make(map[string]*HPCSchedulerJob),
 		callbacks:    make([]HPCJobLifecycleCallback, 0),
-		ProviderAddr: "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
+		ProviderAddr: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
 	}
 }
 
@@ -324,8 +324,8 @@ func createTestJob(jobID string) *hpctypes.HPCJob {
 		JobID:           jobID,
 		OfferingID:      "offering-1",
 		ClusterID:       "cluster-test",
-		ProviderAddress: "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
-		CustomerAddress: "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4",
+		ProviderAddress: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
+		CustomerAddress: "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
 		State:           hpctypes.JobStatePending,
 		QueueName:       "default",
 		WorkloadSpec: hpctypes.JobWorkloadSpec{
@@ -675,7 +675,7 @@ func TestHPCUsageReporter_CreateUsageRecord(t *testing.T) {
 		ReportInterval: time.Minute,
 		BatchSize:      10,
 	}
-	signer := NewMockSigner("akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63")
+	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
 	reporter := NewHPCUsageReporter(config, "test-cluster", signer)
 
 	job := &HPCSchedulerJob{
@@ -691,7 +691,7 @@ func TestHPCUsageReporter_CreateUsageRecord(t *testing.T) {
 
 	record, err := reporter.CreateUsageRecord(
 		job,
-		"akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4",
+		"ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
 		time.Now().Add(-time.Hour),
 		time.Now(),
 		false,
@@ -851,3 +851,4 @@ func TestHPCUsageAggregator(t *testing.T) {
 		t.Errorf("MemoryBytesMax = %v, want 2147483648", metrics.MemoryBytesMax)
 	}
 }
+

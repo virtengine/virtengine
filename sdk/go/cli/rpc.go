@@ -55,3 +55,4 @@ func GetValidatorSetCmd() *cobra.Command {
 
 	return cmd
 }
+

@@ -1097,3 +1097,4 @@ func CreateDefaultManager() (*EnclaveManager, error) {
 
 	return manager, nil
 }
+

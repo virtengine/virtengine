@@ -88,3 +88,4 @@ func EnsureEvent(t *testing.T, events []cmbtypes.Event, expEvent proto.Message) 
 
 	t.Errorf("events don't have required event \"%v\"", expEvent)
 }
+

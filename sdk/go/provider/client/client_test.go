@@ -14,7 +14,7 @@ import (
 func TestNewClientWithProviderURL(t *testing.T) {
 	ctx := context.Background()
 	providerURL := "https://example.com:8443"
-	addr, err := sdk.AccAddressFromBech32("akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63")
+	addr, err := sdk.AccAddressFromBech32("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
 	require.NoError(t, err)
 
 	t.Run("basic functionality", func(t *testing.T) {
@@ -97,3 +97,4 @@ func TestNewClientWithProviderURL(t *testing.T) {
 	})
 
 }
+

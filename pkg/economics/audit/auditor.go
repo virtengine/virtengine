@@ -650,3 +650,4 @@ func formatRecommendations(recs []economics.Recommendation) string {
 	}
 	return result
 }
+

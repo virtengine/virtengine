@@ -27,3 +27,4 @@ func (u Endpoints) Swap(i, j int) {
 func (u Endpoints) Less(i, j int) bool {
 	return u[i].SequenceNumber < u[j].SequenceNumber
 }
+

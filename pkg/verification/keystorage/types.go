@@ -228,3 +228,4 @@ func DefaultVaultStorageConfig() VaultStorageConfig {
 		KeyPath:   "veid/signer/keys",
 	}
 }
+

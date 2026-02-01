@@ -561,3 +561,4 @@ func loadGovUKConfigFromEnv(_ AdapterConfig) (GovUKConfig, bool, error) {
 
 	return govUKConfig, true, nil
 }
+

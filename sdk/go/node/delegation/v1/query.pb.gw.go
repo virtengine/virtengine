@@ -1295,3 +1295,4 @@ var (
 
 	forward_Query_ValidatorShares_0 = runtime.ForwardResponseMessage
 )
+

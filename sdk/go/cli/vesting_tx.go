@@ -228,3 +228,4 @@ func GetTxVestingCreatePeriodicAccountCmd() *cobra.Command {
 
 	return cmd
 }
+

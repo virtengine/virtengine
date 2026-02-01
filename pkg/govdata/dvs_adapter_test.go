@@ -462,3 +462,4 @@ func TestDVSDMVAdapter_WithMockServer(t *testing.T) {
 	assert.True(t, resp.DocumentValid)
 	assert.Equal(t, 1.0, resp.Confidence)
 }
+

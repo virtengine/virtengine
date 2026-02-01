@@ -207,3 +207,4 @@ func (m *MemoryStorage) Close() error {
 
 // Ensure MemoryStorage implements KeyStorage
 var _ KeyStorage = (*MemoryStorage)(nil)
+

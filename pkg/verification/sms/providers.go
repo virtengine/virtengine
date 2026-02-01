@@ -808,3 +808,4 @@ func NewProvider(providerType string, config ProviderConfig, logger zerolog.Logg
 		return nil, errors.Wrapf(ErrInvalidConfig, "unsupported SMS provider: %s", providerType)
 	}
 }
+

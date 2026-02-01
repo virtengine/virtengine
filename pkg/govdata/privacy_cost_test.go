@@ -480,3 +480,4 @@ func TestCostManager_GetAlerts(t *testing.T) {
 		t.Error("Expected at least one alert")
 	}
 }
+

@@ -203,3 +203,4 @@ func (c *queryClient) Oracle() otypes.QueryClient {
 func (c *queryClient) BME() btypes.QueryClient {
 	return c.sdk.bme
 }
+

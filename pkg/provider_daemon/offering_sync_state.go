@@ -410,3 +410,4 @@ func (s *OfferingSyncStateStore) Delete() error {
 	}
 	return nil
 }
+

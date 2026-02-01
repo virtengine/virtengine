@@ -62,7 +62,7 @@ type ID struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Serial is a sequence number for the certificate.
 	Serial string `protobuf:"bytes,2,opt,name=serial,proto3" json:"serial" yaml:"serial"`
@@ -689,3 +689,4 @@ var (
 	ErrIntOverflowCert          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupCert = fmt.Errorf("proto: unexpected end of group")
 )
+

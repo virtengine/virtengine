@@ -300,3 +300,4 @@ func TestIntegration_ConversionQuote(t *testing.T) {
 	assert.Equal(t, "uve", quote.CryptoDenom)
 	assert.False(t, quote.IsExpired())
 }
+

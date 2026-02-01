@@ -409,3 +409,4 @@ func (s *service) Stop() error {
 	s.started = false
 	return nil
 }
+

@@ -422,3 +422,4 @@ func GetVerificationTrustLevel(verification *VerificationResponse) int {
 
 	return level
 }
+

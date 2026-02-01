@@ -380,3 +380,4 @@ func (s *Service) PauseTicketSLA(ticketID string) error {
 func (s *Service) ResumeTicketSLA(ticketID string) error {
 	return s.slaTracker.ResumeSLA(ticketID)
 }
+

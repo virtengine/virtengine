@@ -451,3 +451,4 @@ func (s *adapterPriceSource) GetPrice(ctx context.Context, baseSymbol, quoteSymb
 func (s *adapterPriceSource) IsHealthy(ctx context.Context) bool {
 	return s.adapter.IsHealthy(ctx)
 }
+

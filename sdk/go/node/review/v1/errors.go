@@ -28,3 +28,4 @@ var (
 	ErrInvalidReviewID      = sdkerrors.Register(ModuleName, 6, "invalid review ID")
 	ErrInvalidReason        = sdkerrors.Register(ModuleName, 7, "invalid reason")
 )
+

@@ -595,3 +595,4 @@ func TestClient_ContextCancellation(t *testing.T) {
 		t.Error("HealthCheck() with cancelled context should return error")
 	}
 }
+

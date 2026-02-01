@@ -66,3 +66,4 @@ func TestByteQuantity(t *testing.T) {
 		})
 	}
 }
+

@@ -452,3 +452,4 @@ func (g *PDFGenerator) GenerateReceiptPDF(
 
 	return g.renderToPDF(doc)
 }
+

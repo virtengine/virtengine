@@ -498,3 +498,4 @@ func calculateStats(values []float64) (mean, stdDev float64) {
 
 	return mean, stdDev
 }
+

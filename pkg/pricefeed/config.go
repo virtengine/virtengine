@@ -298,3 +298,4 @@ func (c Config) EnabledProviders() []ProviderConfig {
 	}
 	return enabled
 }
+

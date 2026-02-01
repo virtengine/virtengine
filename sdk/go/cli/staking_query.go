@@ -718,3 +718,4 @@ $ %s query staking params
 
 	return cmd
 }
+

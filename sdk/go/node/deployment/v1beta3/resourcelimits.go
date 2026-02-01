@@ -36,3 +36,4 @@ func (u *resourceLimits) mul(count uint32) {
 		u.storage[i] = u.storage[i].MulRaw(int64(count))
 	}
 }
+

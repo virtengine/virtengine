@@ -972,3 +972,4 @@ func (m *MarketplaceClient) GetOfferingByBackendID(ctx context.Context, backendI
 
 	return offering, err
 }
+

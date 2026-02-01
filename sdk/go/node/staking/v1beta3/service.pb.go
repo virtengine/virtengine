@@ -136,3 +136,4 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "akash/staking/v1beta3/service.proto",
 }
+

@@ -439,7 +439,7 @@ func TestExportToYAMLRoundTrip(t *testing.T) {
 }
 
 func TestManifestLoaderCustomPublisher(t *testing.T) {
-	customPublisher := "akash1customaddress123456789"
+	customPublisher := "ve1customaddress123456789"
 	loader := NewManifestLoader(customPublisher)
 
 	yaml := `
@@ -481,3 +481,4 @@ template:
 		t.Errorf("expected publisher %s, got %s", customPublisher, template.Publisher)
 	}
 }
+

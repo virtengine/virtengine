@@ -442,3 +442,4 @@ func IntEq(t *testing.T, exp, got Int) (*testing.T, bool, string, string, string
 func (ip IntProto) String() string {
 	return ip.Int.String()
 }
+

@@ -33,7 +33,7 @@ type AccountState struct {
 	// It is a string representing a valid bech32 account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// State represents the current state of an Account.
 	State State `protobuf:"varint,2,opt,name=state,proto3,enum=virtengine.escrow.types.v1.State" json:"state" yaml:"state"`
@@ -838,3 +838,4 @@ var (
 	ErrIntOverflowAccount          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupAccount = fmt.Errorf("proto: unexpected end of group")
 )
+

@@ -294,3 +294,4 @@ var globalMetricsCollector = NewMetricsCollector()
 func GetGlobalMetricsCollector() *MetricsCollector {
 	return globalMetricsCollector
 }
+

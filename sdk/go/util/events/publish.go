@@ -178,3 +178,4 @@ func processEvent(bev abci.Event) (interface{}, bool) {
 
 	return pev, true
 }
+

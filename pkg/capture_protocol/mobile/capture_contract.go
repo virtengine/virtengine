@@ -693,3 +693,4 @@ func (l *LivenessCaptureSpec) ValidateVideoSpec(
 
 	return nil
 }
+

@@ -262,3 +262,4 @@ func GetEnvVarName(fieldName string) string {
 	}
 	return field.Tag.Get("env")
 }
+

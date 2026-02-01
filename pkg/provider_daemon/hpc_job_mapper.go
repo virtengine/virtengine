@@ -440,3 +440,4 @@ func (m *HPCJobMapper) determineOODAppType(job *hpctypes.HPCJob) ood_adapter.Int
 	// Default to custom app type for batch jobs
 	return ood_adapter.AppTypeCustom
 }
+

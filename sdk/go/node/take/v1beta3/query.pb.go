@@ -80,3 +80,4 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 	Streams:     []grpc.StreamDesc{},
 	Metadata:    "akash/take/v1beta3/query.proto",
 }
+

@@ -441,3 +441,4 @@ func DefaultCompatibilityMatrix() *CompatibilityMatrix {
 
 	return matrix
 }
+

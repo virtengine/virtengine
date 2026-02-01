@@ -665,3 +665,4 @@ func ParseDecCoins(coinsStr string) (DecCoins, error) {
 
 	return newDecCoins, nil
 }
+

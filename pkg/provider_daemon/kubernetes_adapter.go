@@ -1023,3 +1023,4 @@ func (ka *KubernetesAdapter) buildProbeSpec(check *HealthCheckSpec) *K8sProbeSpe
 
 	return probe
 }
+

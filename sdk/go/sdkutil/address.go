@@ -11,3 +11,4 @@ func MustAccAddressFromBech32(address string) sdk.AccAddress {
 	}
 	return addr
 }
+

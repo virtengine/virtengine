@@ -621,3 +621,4 @@ func (s *BMECLITestSuite) TestCLIQueryBMEStatusExec() {
 		})
 	}
 }
+

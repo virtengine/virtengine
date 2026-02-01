@@ -637,3 +637,4 @@ func (c *Collector) ServeHTTP(ctx context.Context) error {
 func (c *Collector) Registry() *prometheus.Registry {
 	return c.registry
 }
+

@@ -53,3 +53,4 @@ $ <appd> tx broadcast ./mytxn.json
 
 	return cmd
 }
+

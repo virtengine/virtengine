@@ -1065,3 +1065,4 @@ func (p *SettlementPipeline) generateID(prefix string, timestamp time.Time) stri
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
 }
+

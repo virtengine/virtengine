@@ -274,3 +274,4 @@ func TestTieredConfigDefaults(t *testing.T) {
 			Tier3SamplingRate, cfg.Tiered.Tier3SamplingRate)
 	}
 }
+

@@ -416,3 +416,4 @@ func extractIssuerEntityID(samlResponseBase64 string) (string, error) {
 
 	return issuer, nil
 }
+

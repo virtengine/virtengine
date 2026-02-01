@@ -30,3 +30,4 @@ func TestParseKey(t *testing.T) {
 		})
 	}
 }
+

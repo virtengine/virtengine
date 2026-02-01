@@ -296,3 +296,4 @@ func TestConvertStripeError(t *testing.T) {
 	err := convertStripeError(assert.AnError)
 	assert.ErrorIs(t, err, ErrGatewayUnavailable)
 }
+

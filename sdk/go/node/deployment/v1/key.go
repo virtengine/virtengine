@@ -22,3 +22,4 @@ func GroupPrefix() []byte {
 func ParamsPrefix() []byte {
 	return []byte{0x03}
 }
+

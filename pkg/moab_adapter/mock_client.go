@@ -567,3 +567,4 @@ func (m *MockRewardsIntegration) SetRecordError(err error) {
 	defer m.mu.Unlock()
 	m.recordError = err
 }
+

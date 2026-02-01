@@ -435,3 +435,4 @@ func NewDefaultCompatibilityChecker(currentVersion Version) *CompatibilityChecke
 	}
 	return checker
 }
+

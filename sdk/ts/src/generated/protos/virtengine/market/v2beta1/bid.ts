@@ -20,7 +20,7 @@ export interface BidID {
    * It is a string representing a valid bech32 account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /**
@@ -43,7 +43,7 @@ export interface BidID {
    * It is a string representing a valid account bech32 address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   provider: string;
   /** BSeq (bid sequence) distinguishes multiple bids associated with a single deployment from same provider. */

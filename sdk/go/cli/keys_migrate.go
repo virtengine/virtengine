@@ -38,3 +38,4 @@ func runMigrateCmd(cmd *cobra.Command, _ []string) error {
 
 	return nil
 }
+

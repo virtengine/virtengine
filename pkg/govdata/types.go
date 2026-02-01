@@ -765,3 +765,4 @@ type BatchVerificationResponse struct {
 	// Duration is the total batch duration
 	Duration time.Duration `json:"duration"`
 }
+

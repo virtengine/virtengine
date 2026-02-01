@@ -30,7 +30,7 @@ type GenesisCertificate struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Certificate holds the certificate.
 	Certificate Certificate `protobuf:"bytes,2,opt,name=certificate,proto3" json:"certificate" yaml:"certificate"`
@@ -569,3 +569,4 @@ var (
 	ErrIntOverflowGenesis          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupGenesis = fmt.Errorf("proto: unexpected end of group")
 )
+

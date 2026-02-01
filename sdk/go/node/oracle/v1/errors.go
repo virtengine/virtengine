@@ -29,3 +29,4 @@ var (
 	ErrInvalidFeedContractConfig = cerrors.Register(ModuleName, errInvalidFeedContractConfig, "invalid feed contract config")
 	ErrTWAPZeroWeight            = cerrors.Register(ModuleName, errTWAPZeroWeight, "invalid TWAP calculation: zero weight")
 )
+

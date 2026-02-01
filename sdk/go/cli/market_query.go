@@ -289,3 +289,4 @@ func GetQueryMarketLeaseCmd() *cobra.Command {
 
 	return cmd
 }
+

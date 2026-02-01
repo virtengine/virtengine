@@ -1124,3 +1124,4 @@ func CreateTestSimulatedAttestation(measurement []byte, nonce []byte) []byte {
 
 	return att
 }
+

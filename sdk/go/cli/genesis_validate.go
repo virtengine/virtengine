@@ -80,3 +80,4 @@ func enrichUnmarshalError(err error) error {
 	}
 	return err
 }
+

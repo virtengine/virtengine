@@ -135,3 +135,4 @@ func MigrateHandler(cmd *cobra.Command, args []string, migrations types.Migratio
 
 	return nil
 }
+

@@ -83,3 +83,4 @@ func (s *FeegrantCLITestSuite) SetupSuite() {
 	}
 	s.accounts[1] = accounts[1].Address
 }
+

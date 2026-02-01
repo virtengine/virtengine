@@ -110,3 +110,4 @@ func Test_runRenameCmd(t *testing.T) {
 	})
 	require.Error(t, cmd.Execute())
 }
+

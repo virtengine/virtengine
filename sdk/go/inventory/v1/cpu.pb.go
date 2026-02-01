@@ -703,3 +703,4 @@ var (
 	ErrIntOverflowCpu          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupCpu = fmt.Errorf("proto: unexpected end of group")
 )
+

@@ -195,3 +195,4 @@ func (g *GroupSpec) validatePricing() error {
 
 	return nil
 }
+

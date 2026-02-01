@@ -11,7 +11,7 @@ import (
 
 // BuiltinTemplatePublisher is the publisher address for builtin templates
 // This is a well-known address for built-in templates
-const BuiltinTemplatePublisher = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
+const BuiltinTemplatePublisher = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
 
 // GetBuiltinTemplates returns all built-in workload templates
 func GetBuiltinTemplates() []*hpctypes.WorkloadTemplate {
@@ -549,3 +549,4 @@ func GetArrayJobTemplate() *hpctypes.WorkloadTemplate {
 		UpdatedAt:      time.Now(),
 	}
 }
+

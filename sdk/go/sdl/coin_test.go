@@ -44,3 +44,4 @@ func TestPricing(t *testing.T) {
 		assert.Equal(t, test.value, obj.Value, "idx:%v text:`%v`", idx, test.text)
 	}
 }
+

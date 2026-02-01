@@ -774,3 +774,4 @@ func (c *UsageMetricsCollector) GetAverages() map[string]float64 {
 		"avg_settlement_time_seconds": c.avgSettlementTime,
 	}
 }
+

@@ -648,3 +648,4 @@ func (m *ResourceLifecycleManager) UpdateResourceState(allocationID string, stat
 	info.LastUpdated = time.Now().UTC()
 	return nil
 }
+

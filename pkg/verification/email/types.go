@@ -910,3 +910,4 @@ func (c *EmailChallenge) String() string {
 	return fmt.Sprintf("EmailChallenge{ID: %s, Status: %s, Method: %s, Attempts: %d/%d}",
 		c.ChallengeID, c.Status, c.Method, c.Attempts, c.MaxAttempts)
 }
+

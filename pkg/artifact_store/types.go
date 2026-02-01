@@ -522,3 +522,4 @@ func (a *ArtifactReference) GetMetadata(key string) (string, bool) {
 func (a *ArtifactReference) IsChunked() bool {
 	return a.ChunkManifest != nil && a.ChunkManifest.ChunkCount > 1
 }
+

@@ -860,3 +860,4 @@ func TestNitroConstants(t *testing.T) {
 	assert.Equal(t, 1024, NitroMaxUserData)
 	assert.Equal(t, 64, NitroModuleIDSize)
 }
+

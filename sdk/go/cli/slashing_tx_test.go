@@ -48,3 +48,4 @@ func (s *SlashingCLITestSuite) TestNewUnjailTxCmd() {
 		})
 	}
 }
+

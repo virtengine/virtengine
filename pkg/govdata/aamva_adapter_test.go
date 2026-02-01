@@ -586,3 +586,4 @@ func TestAAMVADMVAdapter_Verify_WithMockServer(t *testing.T) {
 	assert.NotEmpty(t, msgID)
 	assert.Len(t, msgID, 32)
 }
+

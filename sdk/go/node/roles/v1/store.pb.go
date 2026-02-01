@@ -995,3 +995,4 @@ var (
 	ErrIntOverflowStore          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupStore = fmt.Errorf("proto: unexpected end of group")
 )
+

@@ -38,8 +38,7 @@ DEFAULT_MNEMONICS[validator]="abandon abandon abandon abandon abandon abandon ab
 DEFAULT_MNEMONICS[alice]="legal winner thank year wave sausage worth useful legal winner thank yellow"
 DEFAULT_MNEMONICS[bob]="letter advice cage absurd amount doctor acoustic avoid letter advice cage above"
 DEFAULT_MNEMONICS[charlie]="zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong"
-DEFAULT_MNEMONICS[provider]="gravity machine north sort system female filter attitude volume fold club stay feature office ecology stable narrow fog"
-DEFAULT_MNEMONICS[operator]="hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay"
+# provider and operator use generated keys (no deterministic mnemonic needed for localnet)
 
 log() {
     echo "[init-chain] $1"
@@ -48,6 +47,12 @@ log() {
 error() {
     echo "[init-chain] ERROR: $1" >&2
     exit 1
+}
+
+# Wrapper: always pass --home to virtengine commands
+# The binary defaults to ~/.akash but we use ~/.virtengine
+ve() {
+    virtengine --home "${HOME_DIR}" "$@"
 }
 
 # Check if chain is already initialized
@@ -63,7 +68,7 @@ init_chain() {
     rm -rf "${HOME_DIR}"
 
     # Initialize the chain
-    virtengine genesis init "${MONIKER}" --chain-id "${CHAIN_ID}"
+    ve genesis init "${MONIKER}" --chain-id "${CHAIN_ID}"
 }
 
 # Create validator account
@@ -76,14 +81,15 @@ create_key_with_mnemonic() {
     mnemonic="${!mnemonic_var}"
 
     if [ -z "${mnemonic}" ]; then
-        mnemonic="${DEFAULT_MNEMONICS[$account]}"
+        mnemonic="${DEFAULT_MNEMONICS[$account]:-}"
     fi
 
-    if [ -z "${mnemonic}" ]; then
-        error "No mnemonic found for account '${account}'"
+    if [ -n "${mnemonic}" ]; then
+        printf "%s\n" "${mnemonic}" | ve keys add "${account}" --recover --keyring-backend="${KEYRING_BACKEND}"
+    else
+        log "  No mnemonic for '${account}', generating new key"
+        ve keys add "${account}" --keyring-backend="${KEYRING_BACKEND}"
     fi
-
-    printf "%s\n" "${mnemonic}" | virtengine keys add "${account}" --recover --keyring-backend="${KEYRING_BACKEND}"
 }
 
 create_validator() {
@@ -92,14 +98,14 @@ create_validator() {
     create_key_with_mnemonic validator
 
     local validator_addr
-    validator_addr=$(virtengine keys show validator -a --keyring-backend="${KEYRING_BACKEND}")
+    validator_addr=$(ve keys show validator -a --keyring-backend="${KEYRING_BACKEND}")
     log "Validator address: ${validator_addr}"
 
     # Add validator to genesis
-    virtengine genesis add-account "${validator_addr}" "${VALIDATOR_COINS}"
+    ve genesis add-account "${validator_addr}" "${VALIDATOR_COINS}"
 
     # Create genesis transaction
-    virtengine genesis gentx validator "${VALIDATOR_STAKE}" \
+    ve genesis gentx validator "${VALIDATOR_STAKE}" \
         --keyring-backend="${KEYRING_BACKEND}" \
         --chain-id="${CHAIN_ID}" \
         --min-self-delegation="1"
@@ -114,17 +120,17 @@ create_test_accounts() {
         create_key_with_mnemonic "${account}"
 
         local addr
-        addr=$(virtengine keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
+        addr=$(ve keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
         log "  ${account} address: ${addr}"
 
         # Add to genesis
-        virtengine genesis add-account "${addr}" "${TEST_ACCOUNT_COINS}"
+        ve genesis add-account "${addr}" "${TEST_ACCOUNT_COINS}"
     done
 
     # Add genesis account if provided
     if [ -n "${GENESIS_ACCOUNT}" ]; then
         log "Adding genesis account: ${GENESIS_ACCOUNT}"
-        virtengine genesis add-account "${GENESIS_ACCOUNT}" "${TEST_ACCOUNT_COINS}"
+        ve genesis add-account "${GENESIS_ACCOUNT}" "${TEST_ACCOUNT_COINS}"
     fi
 }
 
@@ -163,10 +169,28 @@ configure_node() {
     rm -f "${config_dir}/"*.bak
 }
 
+# Patch genesis for local development
+# Disables MFA enforcement, identity gating, and other production-only features
+# that would prevent genesis transactions from executing
+patch_genesis_for_localnet() {
+    log "Patching genesis for local development..."
+
+    local genesis="${HOME_DIR}/config/genesis.json"
+
+    # Disable MFA: set require_at_least_one_factor=false and clear sensitive_tx_configs
+    jq '.app_state.mfa.params.require_at_least_one_factor = false |
+        .app_state.mfa.sensitive_tx_configs = [] |
+        .app_state.mktplace.params.enable_mfa_gating = false |
+        .app_state.mktplace.params.enable_identity_gating = false |
+        .app_state.mktplace.params.mfa_configs = [] |
+        .app_state.mktplace.mfa_configs = []' \
+        "${genesis}" > "${genesis}.tmp" && mv "${genesis}.tmp" "${genesis}"
+}
+
 # Collect genesis transactions
 collect_gentxs() {
     log "Collecting genesis transactions..."
-    virtengine genesis collect
+    ve genesis collect
 }
 
 # Export test account info
@@ -182,7 +206,7 @@ export_account_info() {
         local first=true
         local addr
         for account in validator ${TEST_ACCOUNTS}; do
-            addr=$(virtengine keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
+            addr=$(ve keys show "${account}" -a --keyring-backend="${KEYRING_BACKEND}")
 
             if [ "${first}" = "true" ]; then
                 first=false
@@ -212,14 +236,13 @@ start_node() {
     log "gRPC: 0.0.0.0:9090"
     log "REST API: http://0.0.0.0:1317"
 
-    exec virtengine start \
+    exec virtengine --home "${HOME_DIR}" start \
         --pruning=nothing \
         --minimum-gas-prices="0.025${DENOM}" \
         --api.enable=true \
         --api.swagger=true \
         --api.address="tcp://0.0.0.0:1317" \
-        --grpc.address="0.0.0.0:9090" \
-        --grpc-web.address="0.0.0.0:9091"
+        --grpc.address="0.0.0.0:9090"
 }
 
 # Main
@@ -233,6 +256,7 @@ main() {
         init_chain
         create_validator
         create_test_accounts
+        patch_genesis_for_localnet
         collect_gentxs
         configure_node
         export_account_info

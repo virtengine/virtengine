@@ -9,7 +9,7 @@ pub struct EventProviderCreated {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
 }
@@ -22,7 +22,7 @@ pub struct EventProviderUpdated {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
 }
@@ -34,7 +34,7 @@ pub struct EventProviderDeleted {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
 }
@@ -61,7 +61,7 @@ pub struct Provider {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// HostURI is the Uniform Resource Identifier for provider connection.
@@ -91,7 +91,7 @@ pub struct MsgCreateProvider {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// HostURI is the Uniform Resource Identifier for provider connection.
@@ -167,7 +167,7 @@ pub struct QueryProviderRequest {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
 }

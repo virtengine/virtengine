@@ -1446,3 +1446,4 @@ func BenchmarkCertificateCache(b *testing.B) {
 		cache.Get(key)
 	}
 }
+

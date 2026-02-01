@@ -550,3 +550,4 @@ func MustNewHealthChecker(scorer Scorer, config HealthConfig) *HealthChecker {
 	}
 	return NewHealthChecker(scorer, config)
 }
+

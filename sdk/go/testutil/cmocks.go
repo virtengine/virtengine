@@ -54,3 +54,4 @@ func (MockCometRPC) Akash(_ context.Context) (*arpcclient.Akash, error) {
 		},
 	}, nil
 }
+

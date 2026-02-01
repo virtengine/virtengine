@@ -113,3 +113,4 @@ func (filters DeploymentFilters) Accept(obj v1.Deployment, stateVal v1.Deploymen
 
 	return true
 }
+

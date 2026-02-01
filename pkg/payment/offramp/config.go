@@ -505,3 +505,4 @@ func (c Config) ValidatePayoutAmount(amount payment.Amount) error {
 
 	return nil
 }
+

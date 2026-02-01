@@ -521,3 +521,4 @@ func NewSessionStore(ctx context.Context, config SessionStoreConfig, logger zero
 		return nil, fmt.Errorf("nli: unknown session store backend: %s", config.Backend)
 	}
 }
+

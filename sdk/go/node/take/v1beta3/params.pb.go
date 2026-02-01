@@ -579,3 +579,4 @@ var (
 	ErrIntOverflowParams          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupParams = fmt.Errorf("proto: unexpected end of group")
 )
+

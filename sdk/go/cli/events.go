@@ -87,3 +87,4 @@ func getEvents(ctx context.Context, cmd *cobra.Command, _ []string) error {
 
 	return nil
 }
+

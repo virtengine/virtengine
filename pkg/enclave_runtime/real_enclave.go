@@ -546,3 +546,4 @@ func (v *SimpleAttestationVerifier) AddAllowedMeasurement(measurement []byte) {
 	key := string(measurement)
 	v.allowedMeasurements[key] = true
 }
+

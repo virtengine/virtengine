@@ -101,3 +101,4 @@ func (s *Service) checkAgainstGSpec(gspec *groupSpec) error {
 
 	return nil
 }
+

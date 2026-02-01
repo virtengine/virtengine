@@ -382,3 +382,4 @@ func interceptConfigs(rootViper *viper.Viper, customAppTemplate string, customCo
 
 	return conf, nil
 }
+

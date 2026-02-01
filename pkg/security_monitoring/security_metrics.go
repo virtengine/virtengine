@@ -445,3 +445,4 @@ func ThreatLevelValue(severity SecurityEventSeverity) float64 {
 		return 0
 	}
 }
+

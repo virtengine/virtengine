@@ -611,3 +611,4 @@ func loadEIDASConfigFromEnv(_ AdapterConfig) (EIDASConfig, bool, error) {
 
 	return eidasConfig, true, nil
 }
+

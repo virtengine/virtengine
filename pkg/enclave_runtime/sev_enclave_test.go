@@ -545,3 +545,4 @@ func TestSEVSNPEnclaveServiceImpl_ConcurrentScoring(t *testing.T) {
 	// At least max concurrent should succeed
 	assert.GreaterOrEqual(t, successCount, 1)
 }
+

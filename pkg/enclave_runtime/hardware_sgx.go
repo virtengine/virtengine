@@ -935,3 +935,4 @@ func detectSGXCapabilities(caps *HardwareCapabilities) {
 	caps.SGXDriverPath = enclave
 	caps.SGXProvisionPath = provision
 }
+

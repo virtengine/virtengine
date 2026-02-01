@@ -41,3 +41,4 @@ func (nd *node) CurrentBlockHeight(ctx context.Context) (int64, error) {
 
 	return info.LatestBlockHeight, nil
 }
+

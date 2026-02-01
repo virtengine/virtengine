@@ -151,3 +151,4 @@ func displayParseKeyInfo(w io.Writer, stringer fmt.Stringer, output string) {
 
 	_, _ = fmt.Fprintln(w, string(out))
 }
+

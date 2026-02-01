@@ -375,3 +375,4 @@ func (sm *StateManager) notifyHooks(event string, ctx context.Context, fromHeigh
 func (sm *StateManager) Metrics() *Metrics {
 	return sm.metrics
 }
+

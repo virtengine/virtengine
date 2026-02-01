@@ -80,8 +80,8 @@ Arguments are optional. XID cannot be provided without state
         allowed scope values are deployment|bid
         xid examples:
         - deployment
-        - deployment/akash1...
-        - deployment/akash1.../dseq
+        - deployment/ve1...
+        - deployment/ve1.../dseq
 Examples (pagination limits apply to all examples below):
 1. Return all accounts
 $ %[1]s query %[2]s accounts
@@ -90,7 +90,7 @@ $ %[1]s query %[2]s accounts open
 3. Return accounts in open state for deployment scope
 $ %[1]s query %[2]s accounts open deployment
 3. Return accounts in open state for deployment scope
-$ %[1]s query %[2]s accounts open deployment/akash1...
+$ %[1]s query %[2]s accounts open deployment/ve1...
 `,
 				version.AppName, authz.ModuleName)),
 		Args:              cobra.RangeArgs(0, 2),
@@ -154,8 +154,8 @@ Arguments are optional. XID cannot be provided without state
         allowed scope values are deployment|bid
         xid examples:
         - deployment
-        - deployment/akash1...
-        - deployment/akash1.../dseq
+        - deployment/ve1...
+        - deployment/ve1.../dseq
 Examples (pagination limits apply to all examples below):
 1. Return all accounts
 $ %[1]s query %[2]s accounts
@@ -164,7 +164,7 @@ $ %[1]s query %[2]s accounts open
 3. Return accounts in open state for deployment scope
 $ %[1]s query %[2]s accounts open deployment
 3. Return accounts in open state for deployment scope
-$ %[1]s query %[2]s accounts open deployment/akash1...
+$ %[1]s query %[2]s accounts open deployment/ve1...
 `,
 				version.AppName, authz.ModuleName)),
 		Args:              cobra.RangeArgs(0, 2),
@@ -316,3 +316,4 @@ func GetQueryEscrowBlocksRemainingCmd() *cobra.Command {
 
 	return cmd
 }
+

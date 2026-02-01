@@ -72,3 +72,4 @@ func (s *UsageSnapshotStore) trackKey(key string, record *UsageRecord) {
 		s.byKey[key] = record
 	}
 }
+

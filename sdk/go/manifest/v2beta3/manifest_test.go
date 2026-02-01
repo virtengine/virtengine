@@ -467,3 +467,4 @@ func Test_ValidateManifest(t *testing.T) {
 		}
 	}
 }
+

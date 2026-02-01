@@ -296,3 +296,4 @@ func ComputeVEIDScoreContribution(scope *VEIDScope) uint32 {
 
 	return score
 }
+

@@ -538,3 +538,4 @@ func mapOpenStackVolume(v *client.OpenStackVolume) OpenStackVolume {
 	}
 	return volume
 }
+

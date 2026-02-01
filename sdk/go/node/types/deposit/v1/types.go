@@ -7,3 +7,4 @@ type HasDeposit interface {
 type HasDeposits interface {
 	GetDeposits() Deposits
 }
+

@@ -30,7 +30,7 @@ type OrderID struct {
 	// It is a string representing a valid bech32 account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
 	// It is used to differentiate deployments created by the same owner.
@@ -473,3 +473,4 @@ var (
 	ErrIntOverflowOrder          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupOrder = fmt.Errorf("proto: unexpected end of group")
 )
+

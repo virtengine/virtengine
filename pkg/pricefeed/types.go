@@ -263,3 +263,4 @@ func DefaultAssetMappings() []AssetMapping {
 		},
 	}
 }
+

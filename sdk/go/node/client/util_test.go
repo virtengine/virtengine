@@ -33,3 +33,4 @@ func TestPrintJSONStdoutNil(t *testing.T) {
 		t.Errorf("PrintJSON failed:[%T] %v", err, err)
 	}
 }
+

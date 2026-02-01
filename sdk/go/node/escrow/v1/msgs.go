@@ -95,3 +95,4 @@ func (msg *MsgAccountDeposit) ValidateBasic() error {
 
 // Route implements the sdk.Msg interface
 func (msg *MsgAccountDeposit) Route() string { return module.RouterKey }
+

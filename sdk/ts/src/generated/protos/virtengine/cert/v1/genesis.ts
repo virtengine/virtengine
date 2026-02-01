@@ -16,7 +16,7 @@ export interface GenesisCertificate {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /** Certificate holds the certificate. */

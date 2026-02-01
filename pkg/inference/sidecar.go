@@ -576,3 +576,4 @@ type ModelInfoResponse struct {
 	// TensorFlowVersion is the TF version
 	TensorFlowVersion string
 }
+

@@ -55,3 +55,4 @@ func ValidateCmd(cmd *cobra.Command, args []string) error {
 
 	return cmd.Help()
 }
+

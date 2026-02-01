@@ -125,3 +125,4 @@ func (m *MockReporter) ReportNodeLeave(ctx context.Context, clusterID, nodeID st
 	m.NodeLeaves = append(m.NodeLeaves, nodeID)
 	return nil
 }
+

@@ -23,7 +23,7 @@ message MsgAccountDeposit {
   // It is a string representing a valid bech32 account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string signer = 1 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "signer",

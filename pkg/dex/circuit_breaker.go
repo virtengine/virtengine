@@ -141,3 +141,4 @@ func (cb *circuitBreaker) CheckVolumeSpike(currentVolume, averageVolume float64)
 
 	return false
 }
+

@@ -248,3 +248,4 @@ func (ka *KeeperAdapter) RecordSaltUsed(salt []byte) error {
 func (ka *KeeperAdapter) GetProtocolValidator() *ProtocolValidator {
 	return ka.integration.validator
 }
+

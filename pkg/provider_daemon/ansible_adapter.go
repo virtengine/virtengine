@@ -1067,3 +1067,4 @@ func (a *AnsibleAdapter) GetPlaybookPath(name string) string {
 func (a *AnsibleAdapter) RegisterPlaybook(playbook *Playbook) error {
 	return playbook.Validate()
 }
+

@@ -1274,3 +1274,4 @@ var (
 	ErrIntOverflowDeploymentmsg          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupDeploymentmsg = fmt.Errorf("proto: unexpected end of group")
 )
+

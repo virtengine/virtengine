@@ -544,3 +544,4 @@ func TestBidEngineManualBidNotRunning(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, ErrBidEngineNotRunning, err)
 }
+

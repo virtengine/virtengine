@@ -42,3 +42,4 @@ func TestUsageSnapshotStoreTrackAndFind(t *testing.T) {
 		t.Fatalf("expected record to be filtered out by period start")
 	}
 }
+

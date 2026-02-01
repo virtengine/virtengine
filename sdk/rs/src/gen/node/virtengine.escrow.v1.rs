@@ -79,7 +79,7 @@ pub struct MsgAccountDeposit {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub signer: ::prost::alloc::string::String,
     /// ID is the unique identifier of the account.

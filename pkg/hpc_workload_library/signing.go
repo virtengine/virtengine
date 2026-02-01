@@ -318,3 +318,4 @@ func (b *TemplateManifestBuilder) VerifyManifest(manifest *hpctypes.WorkloadMani
 
 	return nil
 }
+

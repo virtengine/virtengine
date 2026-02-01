@@ -830,3 +830,4 @@ type FederationStats struct {
 	// LastRefresh is when stats were last computed
 	LastRefresh time.Time `json:"last_refresh"`
 }
+

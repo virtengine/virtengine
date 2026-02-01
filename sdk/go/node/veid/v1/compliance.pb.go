@@ -5135,3 +5135,4 @@ var (
 	ErrIntOverflowCompliance          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupCompliance = fmt.Errorf("proto: unexpected end of group")
 )
+

@@ -37,3 +37,4 @@ var (
 	// ErrUnsupportedOperation indicates the operation is not supported
 	ErrUnsupportedOperation = errors.Register("verification/keystorage", 10, "unsupported operation")
 )
+

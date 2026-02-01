@@ -337,3 +337,4 @@ func TestGenerateSampleTransactions(t *testing.T) {
 		t.Errorf("Spam ratio %f should be approximately 0.1", spamRatio)
 	}
 }
+

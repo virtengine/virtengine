@@ -31,7 +31,7 @@ type MsgAddPriceEntry struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Signer string `protobuf:"bytes,1,opt,name=signer,proto3" json:"signer" yaml:"signer"`
 	// id uniquely identifies the price data by denomination and base denomination
 	ID DataID `protobuf:"bytes,2,opt,name=id,proto3" json:"id" yaml:"id"`
@@ -921,3 +921,4 @@ var (
 	ErrIntOverflowMsgs          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupMsgs = fmt.Errorf("proto: unexpected end of group")
 )
+

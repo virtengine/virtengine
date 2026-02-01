@@ -29,3 +29,4 @@ func ComputeCommittedResources(factor float64, rv rtypes.ResourceValue) rtypes.R
 
 	return result
 }
+

@@ -372,3 +372,4 @@ func base64URLDecode(s string) ([]byte, error) {
 	}
 	return base64.URLEncoding.DecodeString(s)
 }
+

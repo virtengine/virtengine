@@ -606,3 +606,4 @@ func DefaultBatchScriptOptions() BatchScriptOptions {
 		StrictMode:      true,
 	}
 }
+

@@ -330,3 +330,4 @@ func (a *AuditLogger) EntryCount() int {
 	defer a.mu.RUnlock()
 	return len(a.entries)
 }
+

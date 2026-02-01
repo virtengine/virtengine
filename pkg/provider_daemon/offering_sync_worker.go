@@ -940,3 +940,4 @@ func (w *OfferingSyncWorker) PrometheusMetrics() *OfferingSyncPrometheusMetrics 
 func (w *OfferingSyncWorker) SetAuditLogger(logger OfferingSyncAuditLogger) {
 	w.auditLogger = logger
 }
+

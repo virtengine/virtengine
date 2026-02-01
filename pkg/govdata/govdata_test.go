@@ -1410,3 +1410,4 @@ func TestService_VerifyDocumentBatch(t *testing.T) {
 		t.Errorf("Responses count = %d, want 2", len(resp.Responses))
 	}
 }
+

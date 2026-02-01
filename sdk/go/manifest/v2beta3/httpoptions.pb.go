@@ -534,3 +534,4 @@ var (
 	ErrIntOverflowHttpoptions          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupHttpoptions = fmt.Errorf("proto: unexpected end of group")
 )
+

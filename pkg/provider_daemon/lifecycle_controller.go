@@ -710,3 +710,4 @@ func mapToWaldurAction(action marketplace.LifecycleActionType) waldur.LifecycleA
 		return waldur.LifecycleAction(strings.ToLower(string(action)))
 	}
 }
+

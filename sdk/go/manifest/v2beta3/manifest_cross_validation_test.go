@@ -196,3 +196,4 @@ func TestManifestWithEndpointMismatchB(t *testing.T) {
 	require.Error(t, err)
 	require.Regexp(t, underUtilizedGroupEndpoints, err)
 }
+

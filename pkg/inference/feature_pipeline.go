@@ -787,3 +787,4 @@ func NewProductionFeaturePipeline(
 
 	return NewFeaturePipeline(config)
 }
+

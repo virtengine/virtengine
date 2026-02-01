@@ -136,3 +136,4 @@ $ <appd> query slashing params
 
 	return cmd
 }
+

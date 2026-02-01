@@ -534,3 +534,4 @@ func TestDefaultHPCCredentialManagerConfig(t *testing.T) {
 		t.Error("Default RotationWarningDays should be positive")
 	}
 }
+

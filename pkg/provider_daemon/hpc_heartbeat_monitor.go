@@ -406,3 +406,4 @@ func (m *HPCHeartbeatMonitor) ClusterHealthSummary(clusterID string) map[string]
 		"avg_anomaly_score":   avgAnomalyScore,
 	}
 }
+

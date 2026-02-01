@@ -309,3 +309,4 @@ func (kpm *keyPairManager) readImpl(fin io.Reader) ([]byte, []byte, []byte, erro
 
 	return cert, privKeyPlaintext, pubKey, nil
 }
+

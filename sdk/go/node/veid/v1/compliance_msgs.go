@@ -179,3 +179,4 @@ func (msg *MsgDeactivateComplianceProvider) GetSigners() []sdk.AccAddress {
 	signer, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{signer}
 }
+

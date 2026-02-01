@@ -411,3 +411,4 @@ func GetCode(err error) (string, uint32) {
 	}
 	return "", 0
 }
+

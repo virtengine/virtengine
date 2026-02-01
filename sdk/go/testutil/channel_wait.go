@@ -69,3 +69,4 @@ func ChannelWaitForCloseUpTo(t *testing.T, waitOn interface{}, waitFor time.Dura
 func ChannelWaitForClose(t *testing.T, waitOn interface{}) {
 	ChannelWaitForCloseUpTo(t, waitOn, waitForDefault)
 }
+

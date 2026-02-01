@@ -703,3 +703,4 @@ func (m *Manifest) TotalResources() ResourceSpec {
 func (m *Manifest) ServiceCount() int {
 	return len(m.Services)
 }
+

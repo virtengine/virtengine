@@ -91,7 +91,7 @@ pub struct DeploymentFilters {
     /// It is a string representing a valid bech32 account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
@@ -110,7 +110,7 @@ pub struct GroupFilters {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.

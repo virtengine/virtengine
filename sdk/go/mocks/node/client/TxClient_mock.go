@@ -185,3 +185,4 @@ func NewTxClient(t interface {
 
 	return mock
 }
+

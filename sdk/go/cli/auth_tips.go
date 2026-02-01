@@ -78,3 +78,4 @@ func GetAuxToFeeCommand() *cobra.Command {
 
 	return cmd
 }
+

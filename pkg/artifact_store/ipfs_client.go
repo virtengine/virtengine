@@ -363,3 +363,4 @@ func (c *StubIPFSClient) Delete(cid string) {
 
 // Ensure StubIPFSClient implements IPFSClient
 var _ IPFSClient = (*StubIPFSClient)(nil)
+

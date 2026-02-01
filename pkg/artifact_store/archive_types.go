@@ -474,3 +474,4 @@ type RestoreResponse struct {
 	// RestoreJobID is the backend-specific restore job identifier
 	RestoreJobID string `json:"restore_job_id,omitempty"`
 }
+

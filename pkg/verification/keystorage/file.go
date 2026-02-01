@@ -453,3 +453,4 @@ func (f *FileStorage) decrypt(ciphertext, nonce []byte) ([]byte, error) {
 
 // Ensure FileStorage implements KeyStorage
 var _ KeyStorage = (*FileStorage)(nil)
+

@@ -580,3 +580,4 @@ func v2DeploymentPlacementNames(m v2Deployment) []string {
 
 	return names
 }
+

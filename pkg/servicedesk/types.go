@@ -454,3 +454,4 @@ func (p *CallbackPayload) Validate() error {
 	}
 	return nil
 }
+

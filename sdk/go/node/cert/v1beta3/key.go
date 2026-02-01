@@ -14,3 +14,4 @@ const (
 func PrefixCertificateID() []byte {
 	return []byte{0x01}
 }
+

@@ -391,7 +391,7 @@ func TestTemplateFilterMatches(t *testing.T) {
 		TemplateID:     "test-template",
 		Type:           hpctypes.WorkloadTypeMPI,
 		Tags:           []string{"mpi", "parallel"},
-		Publisher:      "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
+		Publisher:      "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
 		ApprovalStatus: hpctypes.WorkloadApprovalApproved,
 	}
 
@@ -437,12 +437,12 @@ func TestTemplateFilterMatches(t *testing.T) {
 		},
 		{
 			name:    "matching publisher",
-			filter:  &TemplateFilter{Publisher: "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"},
+			filter:  &TemplateFilter{Publisher: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"},
 			matches: true,
 		},
 		{
 			name:    "non-matching publisher",
-			filter:  &TemplateFilter{Publisher: "akash1other"},
+			filter:  &TemplateFilter{Publisher: "ve1other"},
 			matches: false,
 		},
 		{
@@ -538,3 +538,4 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		}
 	}
 }
+

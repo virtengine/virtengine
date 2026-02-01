@@ -372,3 +372,4 @@ func mapAzureVirtualMachine(v *client.AzureVirtualMachine) AzureVirtualMachine {
 	}
 	return vm
 }
+

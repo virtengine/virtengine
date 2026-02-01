@@ -544,3 +544,4 @@ func sha256Bytes(data []byte) []byte {
 	h := sha256.Sum256(data)
 	return h[:]
 }
+

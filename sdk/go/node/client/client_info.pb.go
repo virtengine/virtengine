@@ -321,3 +321,4 @@ var (
 	ErrIntOverflowClientInfo          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupClientInfo = fmt.Errorf("proto: unexpected end of group")
 )
+

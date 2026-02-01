@@ -86,3 +86,4 @@ func validateDenomTakeRates(i interface{}) error {
 
 	return nil
 }
+

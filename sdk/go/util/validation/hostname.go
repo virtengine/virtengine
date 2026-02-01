@@ -86,3 +86,4 @@ func IsDomainName(s string) bool {
 
 	return nonNumeric
 }
+

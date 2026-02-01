@@ -53,3 +53,4 @@ type DeleteKeyReq struct {
 
 // NewDeleteKeyReq constructs a new DeleteKeyReq structure.
 func NewDeleteKeyReq(password string) DeleteKeyReq { return DeleteKeyReq{Password: password} }
+

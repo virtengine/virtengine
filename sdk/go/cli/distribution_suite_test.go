@@ -642,3 +642,4 @@ func (s *DistributionCLITestSuite) TestNewFundCommunityPoolCmd() {
 		})
 	}
 }
+

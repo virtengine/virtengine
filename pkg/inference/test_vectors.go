@@ -671,3 +671,4 @@ func buildFullFeatureVector(input TestVectorInput) []float32 {
 
 	return features
 }
+

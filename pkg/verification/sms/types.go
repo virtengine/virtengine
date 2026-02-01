@@ -1080,3 +1080,4 @@ type SMSVerificationAttestation struct {
 	// IsVoIP indicates if VoIP was detected
 	IsVoIP bool `json:"is_voip"`
 }
+

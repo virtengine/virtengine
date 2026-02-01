@@ -97,3 +97,4 @@ type OwnerResponse struct {
 type ChainResponse struct {
 	Data []byte `json:"data,omitempty"`
 }
+

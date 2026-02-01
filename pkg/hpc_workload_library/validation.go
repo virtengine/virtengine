@@ -644,3 +644,4 @@ func matchGlob(pattern, str string) bool {
 	matched, _ := regexp.MatchString(regexPattern, str)
 	return matched
 }
+

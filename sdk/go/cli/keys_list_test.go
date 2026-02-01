@@ -89,3 +89,4 @@ func Test_runListKeyTypeCmd(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(out.String(), string(hd.Secp256k1Type)))
 }
+

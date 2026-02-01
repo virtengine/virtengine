@@ -777,3 +777,4 @@ func TestNewConversionLedgerEntry(t *testing.T) {
 		t.Error("DestinationAddress not set correctly")
 	}
 }
+

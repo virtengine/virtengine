@@ -308,3 +308,4 @@ type ArchivalStatus struct {
 	// LastRestorationTime is when the last successful restoration was performed
 	LastRestorationTime *time.Time `json:"last_restoration_time,omitempty"`
 }
+

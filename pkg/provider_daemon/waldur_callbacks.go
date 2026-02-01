@@ -796,3 +796,4 @@ func SerializeCallbackForSigning(callback *marketplace.WaldurCallback) []byte {
 	buf.WriteString(fmt.Sprintf("%d", callback.Timestamp.Unix()))
 	return buf.Bytes()
 }
+

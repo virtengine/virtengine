@@ -369,3 +369,4 @@ func TestGetGlobalCertificateCache(t *testing.T) {
 	assert.NotNil(t, cache1)
 	assert.Same(t, cache1, cache2)
 }
+

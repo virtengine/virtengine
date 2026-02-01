@@ -61,7 +61,7 @@ func TestSLURMIntegrationConfig_Validate(t *testing.T) {
 			name: "missing cluster ID when enabled",
 			config: SLURMIntegrationConfig{
 				Enabled:         true,
-				ProviderAddress: "akash1test",
+				ProviderAddress: "ve1test",
 			},
 			wantErr: true,
 		},
@@ -78,7 +78,7 @@ func TestSLURMIntegrationConfig_Validate(t *testing.T) {
 			config: SLURMIntegrationConfig{
 				Enabled:         true,
 				ClusterID:       "cluster-1",
-				ProviderAddress: "akash1test",
+				ProviderAddress: "ve1test",
 			},
 			wantErr: true,
 		},
@@ -88,7 +88,7 @@ func TestSLURMIntegrationConfig_Validate(t *testing.T) {
 				c := DefaultSLURMIntegrationConfig()
 				c.Enabled = true
 				c.ClusterID = "cluster-1"
-				c.ProviderAddress = "akash1test"
+				c.ProviderAddress = "ve1test"
 				c.SSHConfig.Host = "slurm-login.example.com"
 				c.SSHConfig.User = testSSHUser
 				return c
@@ -101,7 +101,7 @@ func TestSLURMIntegrationConfig_Validate(t *testing.T) {
 				c := DefaultSLURMIntegrationConfig()
 				c.Enabled = true
 				c.ClusterID = "cluster-1"
-				c.ProviderAddress = "akash1test"
+				c.ProviderAddress = "ve1test"
 				c.SSHConfig.Host = "slurm-login.example.com"
 				c.SSHConfig.User = testSSHUser
 				c.JobPollInterval = 100 * time.Millisecond // Too short
@@ -157,7 +157,7 @@ func TestSLURMIntegrationService_LeaseHandling(t *testing.T) {
 	config := DefaultSLURMIntegrationConfig()
 	config.Enabled = true
 	config.ClusterID = "test-cluster"
-	config.ProviderAddress = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
+	config.ProviderAddress = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
 	config.SSHConfig.Host = "slurm.example.com"
 	config.SSHConfig.User = "testuser"
 	config.AutoSubmitOnLease = false // Manual submission for testing
@@ -187,7 +187,7 @@ func TestSLURMIntegrationService_LeaseHandling(t *testing.T) {
 			LeaseID:         "lease-123",
 			OrderID:         "order-456",
 			ProviderAddress: config.ProviderAddress,
-			CustomerAddress: "akash1customer",
+			CustomerAddress: "ve1customer",
 			OfferingID:      "offering-789",
 			ClusterID:       config.ClusterID,
 			CreatedAt:       time.Now(),
@@ -266,8 +266,8 @@ func TestLeaseInfo_WithJobSpec(t *testing.T) {
 	lease := &LeaseInfo{
 		LeaseID:         "lease-123",
 		OrderID:         "order-456",
-		ProviderAddress: "akash1provider",
-		CustomerAddress: "akash1customer",
+		ProviderAddress: "ve1provider",
+		CustomerAddress: "ve1customer",
 		OfferingID:      "offering-789",
 		ClusterID:       "test-cluster",
 		JobSpec:         job,
@@ -413,8 +413,8 @@ func TestMockIntegrationService_LeaseLifecycle(t *testing.T) {
 	lease := &LeaseInfo{
 		LeaseID:         "lease-integration-1",
 		OrderID:         "order-1",
-		ProviderAddress: "akash1provider",
-		CustomerAddress: "akash1customer",
+		ProviderAddress: "ve1provider",
+		CustomerAddress: "ve1customer",
 		ClusterID:       config.ClusterID,
 		JobSpec:         job,
 		CreatedAt:       time.Now(),
@@ -502,3 +502,4 @@ func TestMockIntegrationService_MultipleLeases(t *testing.T) {
 		t.Errorf("activeJobs count after termination = %d, want 0", activeCount)
 	}
 }
+

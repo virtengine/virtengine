@@ -409,7 +409,7 @@ func createValidTemplate() *hpctypes.WorkloadTemplate {
 			WorkingDirectory: "/work",
 		},
 		ApprovalStatus: hpctypes.WorkloadApprovalApproved,
-		Publisher:      "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
+		Publisher:      "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -420,8 +420,8 @@ func createValidJob(template *hpctypes.WorkloadTemplate) *hpctypes.HPCJob {
 		JobID:           "test-job-1",
 		OfferingID:      "test-offering",
 		ClusterID:       "test-cluster",
-		ProviderAddress: "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
-		CustomerAddress: "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4",
+		ProviderAddress: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
+		CustomerAddress: "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
 		State:           hpctypes.JobStatePending,
 		QueueName:       "default",
 		WorkloadSpec: hpctypes.JobWorkloadSpec{
@@ -446,8 +446,8 @@ func createCustomJob() *hpctypes.HPCJob {
 		JobID:           "test-job-2",
 		OfferingID:      "test-offering",
 		ClusterID:       "test-cluster",
-		ProviderAddress: "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63",
-		CustomerAddress: "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4",
+		ProviderAddress: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
+		CustomerAddress: "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
 		State:           hpctypes.JobStatePending,
 		QueueName:       "default",
 		WorkloadSpec: hpctypes.JobWorkloadSpec{
@@ -466,3 +466,4 @@ func createCustomJob() *hpctypes.HPCJob {
 		CreatedAt:         time.Now(),
 	}
 }
+

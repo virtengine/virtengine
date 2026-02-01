@@ -792,3 +792,4 @@ func (s *HSMSigner) Public() crypto.PublicKey {
 func (s *HSMSigner) Sign(_ io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
 	return s.provider.Sign(s.keyHandle, digest)
 }
+

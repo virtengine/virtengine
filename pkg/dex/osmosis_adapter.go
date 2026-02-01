@@ -908,3 +908,4 @@ func (a *RealOsmosisAdapter) GetTotalValueLocked(ctx context.Context) (sdkmath.L
 // ============================================================================
 
 var _ Adapter = (*RealOsmosisAdapter)(nil)
+

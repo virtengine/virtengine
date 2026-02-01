@@ -199,3 +199,4 @@ func (m *MockProvider) Reset() {
 	m.getLatency = 0
 	m.onGetPrice = nil
 }
+

@@ -511,3 +511,4 @@ func (b *Budget) IsActionAllowed(action string) bool {
 		return false
 	}
 }
+

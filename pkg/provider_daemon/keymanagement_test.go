@@ -768,3 +768,4 @@ func TestKeyManagementIntegration(t *testing.T) {
 	events := logger.GetEventsByKey(key.KeyID, time.Now().Add(-1*time.Hour))
 	assert.Len(t, events, 1)
 }
+

@@ -1128,3 +1128,4 @@ func GenerateNonce(length int) (string, error) {
 
 // Ensure DefaultService implements SMSVerificationService
 var _ SMSVerificationService = (*DefaultService)(nil)
+

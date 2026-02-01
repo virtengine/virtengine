@@ -326,3 +326,4 @@ func TestIntegration_BatchScriptBuilder(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, job)
 }
+

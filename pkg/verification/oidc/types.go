@@ -509,3 +509,4 @@ type IssuerHealthStatus struct {
 	// LastErrorAt is when the last error occurred
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 }
+

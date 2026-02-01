@@ -152,3 +152,4 @@ func EnsureStack(err error) error {
 	// Future: integrate with pkg/errors or similar for stack traces
 	return err
 }
+

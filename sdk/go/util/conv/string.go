@@ -17,3 +17,4 @@ func UnsafeStrToBytes(s string) []byte {
 func UnsafeBytesToStr(b []byte) string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
+

@@ -91,3 +91,4 @@ func (u parsedURL) GetDialAddress() string {
 func (u parsedURL) GetTrimmedURL() string {
 	return u.Scheme + "://" + u.GetTrimmedHostWithPath()
 }
+

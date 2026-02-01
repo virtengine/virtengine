@@ -78,3 +78,4 @@ func ResourceOfferFromRU(ru dtypes.ResourceUnits) ResourcesOffer {
 
 	return res
 }
+

@@ -1932,3 +1932,4 @@ var (
 	ErrIntOverflowProvider          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupProvider = fmt.Errorf("proto: unexpected end of group")
 )
+

@@ -389,3 +389,4 @@ func TestDefaultSigner_AuditEvents(t *testing.T) {
 	}
 	assert.True(t, foundSignEvent, "should have attestation_signed audit event")
 }
+

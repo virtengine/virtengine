@@ -32,3 +32,4 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 	
 	return nil
 }
+

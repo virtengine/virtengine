@@ -19,7 +19,7 @@ RUN go build -trimpath -buildvcs=false -ldflags "-s -w" -o /out/virtengine ./cmd
 FROM alpine:3.20
 LABEL "org.opencontainers.image.source"="https://github.com/virtengine-network/node"
 
-RUN apk add --no-cache bash ca-certificates && \
+RUN apk add --no-cache bash ca-certificates curl jq && \
     addgroup -S virtengine && \
     adduser -S -G virtengine -u 10001 virtengine && \
     mkdir -p /var/lib/virtengine && \

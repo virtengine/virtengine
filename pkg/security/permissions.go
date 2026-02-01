@@ -230,3 +230,4 @@ func (v *StateFileValidator) SafeReadStateFile(path string) ([]byte, error) {
 	cleanPath := filepath.Clean(path)
 	return os.ReadFile(cleanPath) // #nosec G304 -- path validated above
 }
+

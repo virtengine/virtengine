@@ -552,3 +552,4 @@ func TestCostThreshold(t *testing.T) {
 		t.Error("NotifyEmails not set correctly")
 	}
 }
+

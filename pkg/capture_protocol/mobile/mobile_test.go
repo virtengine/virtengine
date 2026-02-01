@@ -708,3 +708,4 @@ func BenchmarkGalleryPreventionValidation(b *testing.B) {
 		_, _ = validator.ValidateCaptureOrigin(proof, imageData)
 	}
 }
+

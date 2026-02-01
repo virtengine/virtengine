@@ -15,7 +15,7 @@ message AuditedProvider {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner = 1 [
     (gogoproto.jsontag)  = "owner",
     (gogoproto.moretags) = "yaml:\"owner\""
@@ -25,7 +25,7 @@ message AuditedProvider {
   // It is a string representing a valid account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string auditor = 2 [
     (gogoproto.jsontag)  = "auditor",
     (gogoproto.moretags) = "yaml:\"auditor\""

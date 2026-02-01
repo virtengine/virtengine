@@ -95,3 +95,4 @@ func GetQueryCertCertificatesCmd() *cobra.Command {
 
 	return cmd
 }
+

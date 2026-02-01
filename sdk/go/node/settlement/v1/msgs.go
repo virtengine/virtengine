@@ -229,3 +229,4 @@ func (msg *MsgClaimRewards) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return []sdk.AccAddress{addr}
 }
+

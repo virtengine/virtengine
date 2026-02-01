@@ -603,3 +603,4 @@ func generateScopeID() string {
 	counter := atomic.AddInt64(&requestCounter, 1)
 	return fmt.Sprintf("govdata-scope-%d-%d", time.Now().UnixNano(), counter)
 }
+

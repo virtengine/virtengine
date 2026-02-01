@@ -20,3 +20,4 @@ var (
 	ErrInvalidDispute  = sdkerrors.Register(ModuleName, 6, "invalid dispute")
 	ErrInvalidStatus   = sdkerrors.Register(ModuleName, 7, "invalid status")
 )
+

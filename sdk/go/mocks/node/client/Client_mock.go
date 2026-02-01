@@ -313,3 +313,4 @@ func NewClient(t interface {
 
 	return mock
 }
+

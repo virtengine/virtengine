@@ -437,3 +437,4 @@ func readMnemonicFromFile(filePath string) (string, error) {
 
 	return string(bz), nil
 }
+

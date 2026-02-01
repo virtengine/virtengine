@@ -360,3 +360,4 @@ var _ClusterRPC_serviceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "virtengine/inventory/v1/service.proto",
 }
+

@@ -667,3 +667,4 @@ func TestNewAssertionDecryptor_EmptyKey(t *testing.T) {
 	_, err := NewAssertionDecryptor([]byte{})
 	assert.Error(t, err)
 }
+

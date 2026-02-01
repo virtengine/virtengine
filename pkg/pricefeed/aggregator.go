@@ -561,3 +561,4 @@ func (a *PriceFeedAggregator) Close() error {
 
 	return nil
 }
+

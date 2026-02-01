@@ -293,3 +293,4 @@ func (m *Manager) ValidateStateSyncCompatibility() error {
 		m.config.KeepRecent,
 	)
 }
+

@@ -85,3 +85,4 @@ func TestModuleVersionsCLI(t *testing.T) {
 		})
 	}
 }
+

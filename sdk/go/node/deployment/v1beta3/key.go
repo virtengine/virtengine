@@ -18,3 +18,4 @@ func DeploymentPrefix() []byte {
 func GroupPrefix() []byte {
 	return []byte{0x02}
 }
+

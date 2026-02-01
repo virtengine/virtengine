@@ -181,3 +181,4 @@ func (msg *MsgGenerateDomainVerificationToken) Route() string { return RouterKey
 //
 // Deprecated: Route is deprecated
 func (msg *MsgVerifyProviderDomain) Route() string { return RouterKey }
+

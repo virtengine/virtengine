@@ -81,3 +81,4 @@ func DowntimeByDuration(duration time.Duration) (Downtime, error) {
 	downtimeOptions := strings.Join(DowntimeStrings(), ", ")
 	return result, fmt.Errorf("downtime of %s does not exist. Chain-provided downtimes [%s]", duration.String(), downtimeOptions)
 }
+

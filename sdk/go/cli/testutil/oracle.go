@@ -28,3 +28,4 @@ func ExecQueryOracleParams(ctx context.Context, cctx client.Context, args ...str
 func ExecQueryOraclePriceFeedConfig(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetOraclePriceFeedConfigCmd(), args...)
 }
+

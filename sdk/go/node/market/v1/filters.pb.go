@@ -30,7 +30,7 @@ type LeaseFilters struct {
 	// It is a string representing a valid bech32 account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
 	// It is used to differentiate deployments created by the same owner.
@@ -45,7 +45,7 @@ type LeaseFilters struct {
 	// It is a string representing a valid account bech32 address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Provider string `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider" yaml:"provider"`
 	// State represents the state of the lease.
 	State string `protobuf:"bytes,6,opt,name=state,proto3" json:"state" yaml:"state"`
@@ -592,3 +592,4 @@ var (
 	ErrIntOverflowFilters          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupFilters = fmt.Errorf("proto: unexpected end of group")
 )
+

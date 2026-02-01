@@ -98,3 +98,4 @@ func TestByteQuantity(t *testing.T) {
 		assert.Equal(t, byteQuantity(test.value), obj.Val, "idx:%v text:`%v`", idx, test.text)
 	}
 }
+

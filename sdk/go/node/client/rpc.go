@@ -74,3 +74,4 @@ func (cl *rpcClient) Akash(ctx context.Context) (*Akash, error) {
 	}
 	return result, nil
 }
+

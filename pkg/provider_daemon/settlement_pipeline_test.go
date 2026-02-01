@@ -495,3 +495,4 @@ func TestAnomalyThresholds_Defaults(t *testing.T) {
 		t.Errorf("expected 25 hour max duration, got %v", thresholds.MaxRecordDuration)
 	}
 }
+

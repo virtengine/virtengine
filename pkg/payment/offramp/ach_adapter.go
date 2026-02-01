@@ -637,3 +637,4 @@ func (c ACHReturnCode) Description() string {
 // ============================================================================
 
 var _ = bytes.Buffer{} // Keep bytes import for potential use
+

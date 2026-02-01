@@ -1766,3 +1766,4 @@ func (p legacyProposal) validate() error {
 	}
 	return nil
 }
+

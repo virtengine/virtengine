@@ -15,7 +15,7 @@ export interface OrderID {
    * It is a string representing a valid bech32 account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /**

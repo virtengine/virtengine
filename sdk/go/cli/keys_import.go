@@ -80,3 +80,4 @@ func ImportKeyHexCommand() *cobra.Command {
 	cmd.Flags().String(flags.FlagKeyType, string(hd.Secp256k1Type), "private key signing algorithm kind")
 	return cmd
 }
+

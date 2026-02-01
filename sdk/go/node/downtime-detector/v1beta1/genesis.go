@@ -23,3 +23,4 @@ func (g *GenesisState) Validate() error {
 func NewGenesisDowntimeEntry(dur Downtime, time time.Time) GenesisDowntimeEntry {
 	return GenesisDowntimeEntry{Duration: dur, LastDowntime: time}
 }
+

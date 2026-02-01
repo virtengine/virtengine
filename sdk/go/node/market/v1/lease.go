@@ -105,3 +105,4 @@ func (obj Lease) Filters(filters LeaseFilters, stateVal Lease_State) bool {
 
 	return true
 }
+

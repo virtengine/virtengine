@@ -265,3 +265,4 @@ type VerifyDeterminismResponse struct {
 	// TestVectorID is the ID of the test vector used
 	TestVectorID string `json:"test_vector_id,omitempty"`
 }
+

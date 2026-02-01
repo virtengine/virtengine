@@ -278,3 +278,4 @@ func TestFormatFunctions(t *testing.T) {
 		t.Errorf("Expected 'a; b; c', got '%s'", joined)
 	}
 }
+

@@ -78,3 +78,4 @@ func validateOrderMaxBids(i interface{}) error {
 
 	return nil
 }
+

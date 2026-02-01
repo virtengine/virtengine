@@ -16,7 +16,7 @@ export interface MsgCreateCertificate {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   owner: string;
   /** Cert holds the bytes representing the certificate. */

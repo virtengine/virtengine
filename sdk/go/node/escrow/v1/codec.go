@@ -40,3 +40,4 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	cdc.RegisterConcrete(&MsgAccountDeposit{}, "akash-sdk/x/"+module.ModuleName+"/"+(&MsgAccountDeposit{}).Type(), nil)
 }
+

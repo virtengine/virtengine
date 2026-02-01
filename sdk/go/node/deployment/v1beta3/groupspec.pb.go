@@ -424,3 +424,4 @@ var (
 	ErrIntOverflowGroupspec          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupGroupspec = fmt.Errorf("proto: unexpected end of group")
 )
+

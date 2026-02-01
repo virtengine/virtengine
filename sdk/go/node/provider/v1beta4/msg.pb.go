@@ -33,7 +33,7 @@ type MsgCreateProvider struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// HostURI is the Uniform Resource Identifier for provider connection.
 	// This URI is used to directly connect to the provider to perform tasks such as sending the manifest.
@@ -1385,3 +1385,4 @@ var (
 	ErrIntOverflowMsg          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupMsg = fmt.Errorf("proto: unexpected end of group")
 )
+

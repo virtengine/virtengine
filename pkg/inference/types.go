@@ -261,3 +261,4 @@ type ModelMetadata struct {
 	// OpNames lists TensorFlow operation names used by the model (if provided)
 	OpNames []string
 }
+

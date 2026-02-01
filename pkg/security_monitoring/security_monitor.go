@@ -600,3 +600,4 @@ func (sm *SecurityMonitor) ResolveIncident(incidentID string) error {
 	}
 	return nil
 }
+

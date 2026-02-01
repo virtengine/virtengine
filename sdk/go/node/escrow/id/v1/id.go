@@ -117,3 +117,4 @@ func validateBidScope(parts []string) error {
 func (obj *Payment) Account() Account {
 	return obj.AID
 }
+

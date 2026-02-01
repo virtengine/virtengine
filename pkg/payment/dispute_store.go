@@ -503,3 +503,4 @@ func (s *InMemoryDisputeStore) removeFromStatusIndex(disputeID string, status Di
 		}
 	}
 }
+

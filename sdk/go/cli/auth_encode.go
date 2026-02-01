@@ -46,3 +46,4 @@ If you supply a dash (-) argument in place of an input filename, the command rea
 
 	return cmd
 }
+

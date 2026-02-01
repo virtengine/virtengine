@@ -760,3 +760,4 @@ func TestV2_1_ParseServiceMix2(t *testing.T) {
 		},
 	}, mani.GetGroups()[0])
 }
+

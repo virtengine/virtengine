@@ -77,3 +77,4 @@ func (g *Group) checkAgainstGSpec(gspec *groupSpec) error {
 
 	return nil
 }
+

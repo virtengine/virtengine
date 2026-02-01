@@ -21,7 +21,7 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 	prefix := v1beta3.AccountKeyPrefix()
 
 	// Sample data
-	akashAddr := "akash1keydahz9uv8fs8u4lk6q3cluaprjpnm7dd3cf0"
+	akashAddr := "ve1keydahz9uv8fs8u4lk6q3cluaprjpnm7lnsq0u"
 	dseq := "1000"
 
 	// Helper function to create valid account keys
@@ -125,7 +125,7 @@ func TestAccountFromV1beta3(t *testing.T) {
 		account := v1beta3.Account{
 			ID: v1beta3.AccountID{
 				Scope: "deployment",
-				XID:   "akash1test/1000",
+				XID:   "ve1test/1000",
 			},
 			Owner:       owner,
 			Depositor:   depositor,
@@ -155,44 +155,44 @@ func TestAccountFromV1beta3(t *testing.T) {
 	}{
 		{
 			name:             "funds_only_depositor_different_from_owner",
-			owner:            "akash1owner",
-			depositor:        "akash1depositor",
+			owner:            "ve1owner",
+			depositor:        "ve1depositor",
 			balance:          sdk.NewDecCoin("uve", sdkmath.NewInt(0)),
 			funds:            sdk.NewDecCoin("uve", sdkmath.NewInt(1000)),
 			state:            v1beta3.AccountOpen,
 			expectedDeposits: 1,
 			expectedSources:  []deposit.Source{deposit.SourceGrant},
-			expectedOwners:   []string{"akash1depositor"},
+			expectedOwners:   []string{"ve1depositor"},
 			expectedBalances: []sdk.DecCoin{sdk.NewDecCoin("uve", sdkmath.NewInt(1000))},
 		},
 		{
 			name:             "balance_only_depositor_same_as_owner",
-			owner:            "akash1owner",
-			depositor:        "akash1owner",
+			owner:            "ve1owner",
+			depositor:        "ve1owner",
 			balance:          sdk.NewDecCoin("uve", sdkmath.NewInt(2000)),
 			funds:            sdk.NewDecCoin("uve", sdkmath.NewInt(0)),
 			state:            v1beta3.AccountOpen,
 			expectedDeposits: 1,
 			expectedSources:  []deposit.Source{deposit.SourceBalance},
-			expectedOwners:   []string{"akash1owner"},
+			expectedOwners:   []string{"ve1owner"},
 			expectedBalances: []sdk.DecCoin{sdk.NewDecCoin("uve", sdkmath.NewInt(2000))},
 		},
 		{
 			name:             "both_funds_and_balance_present",
-			owner:            "akash1owner",
-			depositor:        "akash1depositor",
+			owner:            "ve1owner",
+			depositor:        "ve1depositor",
 			balance:          sdk.NewDecCoin("uve", sdkmath.NewInt(1500)),
 			funds:            sdk.NewDecCoin("uve", sdkmath.NewInt(500)),
 			state:            v1beta3.AccountOpen,
 			expectedDeposits: 2,
 			expectedSources:  []deposit.Source{deposit.SourceGrant, deposit.SourceBalance},
-			expectedOwners:   []string{"akash1depositor", "akash1owner"},
+			expectedOwners:   []string{"ve1depositor", "ve1owner"},
 			expectedBalances: []sdk.DecCoin{sdk.NewDecCoin("uve", sdkmath.NewInt(500)), sdk.NewDecCoin("uve", sdkmath.NewInt(1500))},
 		},
 		{
 			name:             "zero_balance_zero_funds",
-			owner:            "akash1owner",
-			depositor:        "akash1depositor",
+			owner:            "ve1owner",
+			depositor:        "ve1depositor",
 			balance:          sdk.NewDecCoin("uve", sdkmath.NewInt(0)),
 			funds:            sdk.NewDecCoin("uve", sdkmath.NewInt(0)),
 			state:            v1beta3.AccountOpen,
@@ -203,8 +203,8 @@ func TestAccountFromV1beta3(t *testing.T) {
 		},
 		{
 			name:             "negative_balance_zero_funds",
-			owner:            "akash1owner",
-			depositor:        "akash1owner",
+			owner:            "ve1owner",
+			depositor:        "ve1owner",
 			balance:          sdk.DecCoin{Denom: "uve", Amount: sdkmath.LegacyNewDec(-100)},
 			funds:            sdk.NewDecCoin("uve", sdkmath.NewInt(0)),
 			state:            v1beta3.AccountOpen,
@@ -215,8 +215,8 @@ func TestAccountFromV1beta3(t *testing.T) {
 		},
 		{
 			name:             "zero_balance_negative_funds",
-			owner:            "akash1owner",
-			depositor:        "akash1depositor",
+			owner:            "ve1owner",
+			depositor:        "ve1depositor",
 			balance:          sdk.NewDecCoin("uve", sdkmath.NewInt(0)),
 			funds:            sdk.DecCoin{Denom: "uve", Amount: sdkmath.LegacyNewDec(-50)},
 			state:            v1beta3.AccountOpen,
@@ -227,38 +227,38 @@ func TestAccountFromV1beta3(t *testing.T) {
 		},
 		{
 			name:             "small_positive_amounts",
-			owner:            "akash1owner",
-			depositor:        "akash1depositor",
+			owner:            "ve1owner",
+			depositor:        "ve1depositor",
 			balance:          sdk.NewDecCoinFromDec("uve", sdkmath.LegacyNewDecWithPrec(1, 1)), // 0.1
 			funds:            sdk.NewDecCoinFromDec("uve", sdkmath.LegacyNewDecWithPrec(1, 2)), // 0.01
 			state:            v1beta3.AccountOpen,
 			expectedDeposits: 2,
 			expectedSources:  []deposit.Source{deposit.SourceGrant, deposit.SourceBalance},
-			expectedOwners:   []string{"akash1depositor", "akash1owner"},
+			expectedOwners:   []string{"ve1depositor", "ve1owner"},
 			expectedBalances: []sdk.DecCoin{sdk.NewDecCoinFromDec("uve", sdkmath.LegacyNewDecWithPrec(1, 2)), sdk.NewDecCoinFromDec("uve", sdkmath.LegacyNewDecWithPrec(1, 1))},
 		},
 		{
 			name:             "large_amounts",
-			owner:            "akash1owner",
-			depositor:        "akash1depositor",
+			owner:            "ve1owner",
+			depositor:        "ve1depositor",
 			balance:          sdk.NewDecCoin("uve", sdkmath.NewInt(1000000000)),
 			funds:            sdk.NewDecCoin("uve", sdkmath.NewInt(500000000)),
 			state:            v1beta3.AccountOpen,
 			expectedDeposits: 2,
 			expectedSources:  []deposit.Source{deposit.SourceGrant, deposit.SourceBalance},
-			expectedOwners:   []string{"akash1depositor", "akash1owner"},
+			expectedOwners:   []string{"ve1depositor", "ve1owner"},
 			expectedBalances: []sdk.DecCoin{sdk.NewDecCoin("uve", sdkmath.NewInt(500000000)), sdk.NewDecCoin("uve", sdkmath.NewInt(1000000000))},
 		},
 		{
 			name:             "different_denomination",
-			owner:            "akash1owner",
-			depositor:        "akash1depositor",
+			owner:            "ve1owner",
+			depositor:        "ve1depositor",
 			balance:          sdk.NewDecCoin("ibc/123", sdkmath.NewInt(1000)),
 			funds:            sdk.NewDecCoin("ibc/123", sdkmath.NewInt(500)),
 			state:            v1beta3.AccountOpen,
 			expectedDeposits: 2,
 			expectedSources:  []deposit.Source{deposit.SourceGrant, deposit.SourceBalance},
-			expectedOwners:   []string{"akash1depositor", "akash1owner"},
+			expectedOwners:   []string{"ve1depositor", "ve1owner"},
 			expectedBalances: []sdk.DecCoin{sdk.NewDecCoin("ibc/123", sdkmath.NewInt(500)), sdk.NewDecCoin("ibc/123", sdkmath.NewInt(1000))},
 		},
 	}
@@ -269,7 +269,7 @@ func TestAccountFromV1beta3(t *testing.T) {
 			accountData := createTestAccount(tc.owner, tc.depositor, tc.balance, tc.funds, tc.state)
 
 			// Create account key
-			key := createAccountKey("deployment", "akash1test/1000")
+			key := createAccountKey("deployment", "ve1test/1000")
 
 			// Call the migration function
 			result := AccountFromV1beta3(cdc, key, accountData)
@@ -299,3 +299,4 @@ func TestAccountFromV1beta3(t *testing.T) {
 		})
 	}
 }
+

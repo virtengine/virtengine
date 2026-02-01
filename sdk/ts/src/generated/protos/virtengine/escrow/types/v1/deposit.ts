@@ -17,7 +17,7 @@ export interface Depositor {
    * It is a string representing a valid account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    * If depositor is same as the owner, then any incoming coins are added to the Balance.
    * If depositor isn't same as the owner, then any incoming coins are added to the Funds.
    */

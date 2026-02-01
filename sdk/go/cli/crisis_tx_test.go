@@ -103,3 +103,4 @@ func TestNewMsgVerifyInvariantTxCmd(t *testing.T) {
 		})
 	}
 }
+

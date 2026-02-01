@@ -41,3 +41,4 @@ var (
 //	ErrVaultTransferFailed  = errors.Register(ModuleName, 2632, "failed to transfer to vault")
 //	ErrInvalidParams        = errors.Register(ModuleName, 2633, "invalid parameters")
 //)
+

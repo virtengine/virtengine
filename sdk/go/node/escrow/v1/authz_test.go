@@ -67,3 +67,4 @@ func TestDepositAuthorizationAccept(t *testing.T) {
 	require.True(t, response.Accept)
 	require.True(t, response.Delete)
 }
+

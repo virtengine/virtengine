@@ -309,3 +309,4 @@ func (m *MsgUpdateParams) Route() string { return RouterKey }
 
 // Type implements sdk.Msg
 func (m *MsgUpdateParams) Type() string { return TypeMsgUpdateParams }
+

@@ -251,3 +251,4 @@ func SafeOpenWithExtension(path string, allowedExtensions ...string) (*os.File, 
 	cleanPath := filepath.Clean(path)
 	return os.Open(cleanPath) // #nosec G304 -- path validated above
 }
+

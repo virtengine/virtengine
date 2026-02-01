@@ -179,3 +179,4 @@ $ %s query feegrant grants-by-granter [granter]
 
 	return cmd
 }
+

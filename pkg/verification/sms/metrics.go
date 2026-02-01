@@ -477,3 +477,4 @@ func (m *Metrics) RecordCarrierLookup(provider string, success bool, latency tim
 	m.carrierLookups.WithLabelValues(provider, result).Inc()
 	m.carrierLookupLatency.WithLabelValues(provider).Observe(latency.Seconds())
 }
+

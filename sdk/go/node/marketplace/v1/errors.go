@@ -15,3 +15,4 @@ var (
 	ErrInvalidAddress  = sdkerrors.Register(ModuleName, 1, "invalid address")
 	ErrInvalidCallback = sdkerrors.Register(ModuleName, 2, "invalid callback")
 )
+

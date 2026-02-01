@@ -88,3 +88,4 @@ func ParseGasSetting(gasStr string) (cltypes.GasSetting, error) {
 		return cltypes.GasSetting{Simulate: false, Gas: gas}, nil
 	}
 }
+

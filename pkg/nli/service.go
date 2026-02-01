@@ -709,3 +709,4 @@ func (s *nliService) SetQueryExecutor(executor *DefaultQueryExecutor) {
 func (s *nliService) GetQueryExecutor() *DefaultQueryExecutor {
 	return s.queryExecutor
 }
+

@@ -641,3 +641,4 @@ func verifyXMLSignature(data, cert []byte) (bool, error) {
 	// VE-2005: Real XML-DSig verification using goxmldsig
 	return VerifyXMLSignatureWithCertBytes(data, cert)
 }
+

@@ -104,3 +104,4 @@ func TestAddGenesisAccountCmd(t *testing.T) {
 		})
 	}
 }
+

@@ -13,3 +13,4 @@ var (
 	// ErrInvalidParam indicates an invalid chain parameter
 	ErrInvalidParam = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidParam, codes.InvalidArgument, "parameter invalid")
 )
+

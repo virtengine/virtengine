@@ -1974,3 +1974,4 @@ func TestAzureAdapter_ConcurrentDeployments(t *testing.T) {
 	// Verify adapter state
 	assert.Len(t, adapter.ListInstances(), numDeployments)
 }
+

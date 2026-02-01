@@ -28,3 +28,4 @@ func ExecQueryBMEVaultState(ctx context.Context, cctx client.Context, args ...st
 func ExecQueryBMEStatus(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetBMEStatusCmd(), args...)
 }
+

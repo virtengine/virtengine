@@ -469,3 +469,4 @@ func (c Claims) AuthorizeLeaseIDForPermissionScope(lid mtypes.LeaseID, scope Per
 func (c Claims) IssuerAddress() sdk.Address {
 	return c.iss
 }
+

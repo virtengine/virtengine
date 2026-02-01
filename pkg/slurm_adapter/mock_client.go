@@ -238,3 +238,4 @@ func (c *MockSLURMClient) SimulateJobCompletion(slurmJobID string, success bool,
 
 	return nil
 }
+

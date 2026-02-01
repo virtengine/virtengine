@@ -101,3 +101,4 @@ func GroupFromV1Beta3(cdc codec.BinaryCodec, fromBz []byte) v1beta4.Group {
 		CreatedAt: from.CreatedAt,
 	}
 }
+

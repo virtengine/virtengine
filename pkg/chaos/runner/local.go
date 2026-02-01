@@ -255,3 +255,4 @@ func (r *LocalRunner) Reset() {
 	defer r.mu.Unlock()
 	r.experiments = make(map[string]*chaos.ExperimentSpec)
 }
+

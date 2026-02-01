@@ -475,3 +475,4 @@ var (
 	ErrIntOverflowStorage          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupStorage = fmt.Errorf("proto: unexpected end of group")
 )
+

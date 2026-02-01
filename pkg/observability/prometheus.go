@@ -1165,3 +1165,4 @@ func (t *Timer) ObserveDuration() {
 func (t *Timer) ObserveDurationVec(vec *prometheus.HistogramVec, labels ...string) {
 	vec.WithLabelValues(labels...).Observe(time.Since(t.start).Seconds())
 }
+

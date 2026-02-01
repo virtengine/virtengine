@@ -575,3 +575,4 @@ var (
 	_ ObservableCache[string, any]  = (*RedisCache[string, any])(nil)
 	_ RedisClient                   = (*MockRedisClient)(nil)
 )
+

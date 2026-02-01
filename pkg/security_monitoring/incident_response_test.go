@@ -272,3 +272,4 @@ func TestIncidentResponderRemovePlaybook(t *testing.T) {
 		t.Error("Playbook should not exist after remove")
 	}
 }
+

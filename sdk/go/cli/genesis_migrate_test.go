@@ -71,3 +71,4 @@ func TestMigrateGenesis(t *testing.T) {
 		})
 	}
 }
+

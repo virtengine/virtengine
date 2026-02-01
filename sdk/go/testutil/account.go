@@ -73,3 +73,4 @@ func (kr *testKeyring) CreateAccounts(t *testing.T, num int) []TestAccount {
 
 	return accounts
 }
+

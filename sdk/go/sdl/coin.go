@@ -53,3 +53,4 @@ func (sdl *v2Coin) UnmarshalYAML(node *yaml.Node) error {
 
 	return nil
 }
+

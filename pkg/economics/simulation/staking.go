@@ -519,3 +519,4 @@ func (s *StakingSimulator) calculateEpochInflation(supply, minted *big.Int) int6
 	inflation.Div(inflation, supply)
 	return inflation.Int64()
 }
+

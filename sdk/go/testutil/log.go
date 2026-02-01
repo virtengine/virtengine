@@ -25,3 +25,4 @@ func (tw *testWriter) Write(p []byte) (int, error) {
 	tw.Logf("%s", p)
 	return len(p), nil
 }
+

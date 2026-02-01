@@ -38,3 +38,4 @@ func (e *EventProviderDomainVerificationStarted) Reset() {
 func (e *EventProviderDomainVerificationStarted) String() string {
 	return fmt.Sprintf("EventProviderDomainVerificationStarted{Owner: %s, Domain: %s}", e.Owner, e.Domain)
 }
+

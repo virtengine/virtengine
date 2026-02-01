@@ -365,3 +365,4 @@ type Service interface {
 	// GetConfig returns the service configuration
 	GetConfig() Config
 }
+

@@ -738,3 +738,4 @@ func CreateTestQuote(fiatValue int64, cryptoAmount int64, destAddr string) Conve
 		ExpiresAt: time.Now().Add(15 * time.Minute),
 	}
 }
+

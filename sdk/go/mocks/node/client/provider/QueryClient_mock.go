@@ -186,3 +186,4 @@ func NewQueryClient(t interface {
 
 	return mock
 }
+

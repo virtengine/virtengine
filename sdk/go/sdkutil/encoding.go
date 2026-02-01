@@ -66,3 +66,4 @@ func MakeEncodingConfig(modules ...module.AppModuleBasic) EncodingConfig {
 
 	return encCfg
 }
+

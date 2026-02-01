@@ -362,3 +362,4 @@ func makeCodec() *codec.LegacyAmino {
 	cryptocodec.RegisterCrypto(cdc)
 	return cdc
 }
+

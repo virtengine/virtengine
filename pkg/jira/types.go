@@ -479,3 +479,4 @@ func DefaultTicketBridgeConfig() TicketBridgeConfig {
 		Labels: []string{"virtengine", "waldur"},
 	}
 }
+

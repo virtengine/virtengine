@@ -65,3 +65,4 @@ var (
 	// ErrUnauthorizedRevocation indicates unauthorized revocation attempt.
 	ErrUnauthorizedRevocation = errors.New("unauthorized to revoke SSO linkage")
 )
+

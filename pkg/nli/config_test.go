@@ -186,3 +186,4 @@ func TestLLMBackendType_Values(t *testing.T) {
 		t.Errorf("LLMBackendMock = %v, want mock", LLMBackendMock)
 	}
 }
+

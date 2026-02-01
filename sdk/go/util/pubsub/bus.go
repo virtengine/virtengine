@@ -200,3 +200,4 @@ func newSubscriber(parent *bus) *bus {
 
 	return sub
 }
+

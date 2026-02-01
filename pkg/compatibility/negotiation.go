@@ -330,3 +330,4 @@ func DefaultMultiProtocolNegotiator() *MultiProtocolNegotiator {
 	m.Register(DefaultManifestProtocolNegotiator())
 	return m
 }
+

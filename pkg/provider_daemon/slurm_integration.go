@@ -845,3 +845,4 @@ func (s *adapterJobSigner) Verify(data []byte, signature []byte) bool {
 func (s *adapterJobSigner) GetProviderAddress() string {
 	return s.address
 }
+

@@ -266,3 +266,4 @@ func NewLightClient(t interface {
 
 	return mock
 }
+

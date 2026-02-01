@@ -938,3 +938,4 @@ func BenchmarkCallbackHash(b *testing.B) {
 		ComputeCallbackHash(callback)
 	}
 }
+

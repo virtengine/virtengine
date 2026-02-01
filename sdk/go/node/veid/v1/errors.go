@@ -132,3 +132,4 @@ var (
 	// ErrBorderlineFallbackFailed is returned when borderline fallback fails
 	ErrBorderlineFallbackFailed = errorsmod.Register(ModuleName, 1309, "borderline fallback failed")
 )
+

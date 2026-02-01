@@ -295,3 +295,4 @@ func (c Config) ValidateAmount(amount Amount) error {
 
 	return nil
 }
+

@@ -34,13 +34,13 @@ type AuditedProvider struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Auditor is the account bech32 address of the auditor.
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Auditor string `protobuf:"bytes,2,opt,name=auditor,proto3" json:"auditor" yaml:"auditor"`
 	// Attributes holds a list of key-value pairs of provider attributes.
 	// Attributes are arbitrary values that a provider exposes.
@@ -877,3 +877,4 @@ var (
 	ErrIntOverflowAudit          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupAudit = fmt.Errorf("proto: unexpected end of group")
 )
+

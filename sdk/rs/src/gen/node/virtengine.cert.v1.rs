@@ -8,7 +8,7 @@ pub struct Id {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Serial is a sequence number for the certificate.
@@ -73,7 +73,7 @@ pub struct CertificateFilter {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Serial is a sequence number for the certificate.
@@ -93,7 +93,7 @@ pub struct GenesisCertificate {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Certificate holds the certificate.
@@ -116,7 +116,7 @@ pub struct MsgCreateCertificate {
     /// It is a string representing a valid account address.
     ///
     /// Example:
-    ///    "akash1..."
+    ///    "ve1..."
     #[prost(string, tag="1")]
     pub owner: ::prost::alloc::string::String,
     /// Cert holds the bytes representing the certificate.

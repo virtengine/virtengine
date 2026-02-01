@@ -798,3 +798,4 @@ func (ls *LivenessScorer) Close() error {
 	}
 	return nil
 }
+

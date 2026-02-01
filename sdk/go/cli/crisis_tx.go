@@ -67,3 +67,4 @@ func GetTxCrisisVerifyInvariantTxCmd() *cobra.Command {
 
 	return cmd
 }
+

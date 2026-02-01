@@ -156,3 +156,4 @@ func buildCustomGetSigners(options *signing.Options) []signing.CustomGetSigner {
 
 	return signers
 }
+

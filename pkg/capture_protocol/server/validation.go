@@ -786,3 +786,4 @@ func UnmarshalUploadRequest(data []byte) (*CaptureUploadRequest, error) {
 	}
 	return &request, nil
 }
+

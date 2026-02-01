@@ -272,3 +272,4 @@ type MetricValue struct {
 	Value  float64
 	Labels map[string]string
 }
+

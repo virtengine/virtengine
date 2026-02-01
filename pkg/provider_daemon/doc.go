@@ -28,3 +28,4 @@
 //   - Vault passwords are cleared from memory after use
 //   - Log redaction for sensitive data patterns
 package provider_daemon
+

@@ -427,3 +427,4 @@ func CreateAdapter(cfg AdapterConfig) (Adapter, error) {
 		return nil, fmt.Errorf("unsupported adapter type: %s", cfg.Type)
 	}
 }
+

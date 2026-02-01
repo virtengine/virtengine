@@ -22,7 +22,7 @@ export interface MsgAccountDeposit {
    * It is a string representing a valid bech32 account address.
    *
    * Example:
-   *   "akash1..."
+   *   "ve1..."
    */
   signer: string;
   /** ID is the unique identifier of the account. */

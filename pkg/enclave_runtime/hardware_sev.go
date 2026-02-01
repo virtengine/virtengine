@@ -851,3 +851,4 @@ func VerifyGuestPolicy(policy SNPGuestPolicy) error {
 	}
 	return nil
 }
+

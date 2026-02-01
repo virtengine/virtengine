@@ -137,3 +137,4 @@ func (s *SlashingCLITestSuite) TestGetCmdQueryParams() {
 		})
 	}
 }
+

@@ -277,3 +277,4 @@ endpoints:
 	require.ErrorIs(t, err, errSDLInvalid)
 	require.Contains(t, err.Error(), "not a valid name")
 }
+

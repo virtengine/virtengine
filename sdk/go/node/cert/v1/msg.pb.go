@@ -31,7 +31,7 @@ type MsgCreateCertificate struct {
 	// It is a string representing a valid account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Cert holds the bytes representing the certificate.
 	Cert []byte `protobuf:"bytes,2,opt,name=cert,proto3" json:"cert" yaml:"cert"`
@@ -859,3 +859,4 @@ var (
 	ErrIntOverflowMsg          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupMsg = fmt.Errorf("proto: unexpected end of group")
 )
+

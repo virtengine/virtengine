@@ -21,3 +21,4 @@ var (
 	// ErrAttributeNotFound attribute not found
 	ErrAttributeNotFound = sdkerrors.RegisterWithGRPCCode(ModuleName, errAttributeNotFound, codes.NotFound, "attribute not found")
 )
+

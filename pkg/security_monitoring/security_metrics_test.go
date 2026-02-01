@@ -106,3 +106,4 @@ func TestMetricsGauges(t *testing.T) {
 	metrics.ThreatLevel.Set(0)
 	metrics.SecurityScore.Set(100)
 }
+

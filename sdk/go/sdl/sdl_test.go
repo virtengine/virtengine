@@ -57,3 +57,4 @@ func TestSDLManifestVersionChangesWithVersion(t *testing.T) {
 	// Should be different from the first
 	require.NotEqual(t, secondVersion, version)
 }
+

@@ -207,3 +207,4 @@ func TestRetryQueueClearFailed(t *testing.T) {
 		t.Errorf("expected 0 failed after clear, got %d", queue.FailedCount())
 	}
 }
+

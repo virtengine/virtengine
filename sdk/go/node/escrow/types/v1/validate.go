@@ -25,3 +25,4 @@ func (obj *PaymentState) ValidateBasic() error {
 
 	return nil
 }
+

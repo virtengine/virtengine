@@ -592,3 +592,4 @@ func (v *GalleryPreventionValidator) validateHardwareBinding(
 func (r *GalleryDetectionResult) IsBlocked() bool {
 	return r.Blocked || r.IsGalleryUpload
 }
+

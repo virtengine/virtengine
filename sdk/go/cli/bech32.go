@@ -9,15 +9,15 @@ import (
 
 var flagBech32Prefix = "prefix"
 
-// ConvertBech32Cmd get cmd to convert any bech32 address to an akash prefix.
+// ConvertBech32Cmd get cmd to convert any bech32 address to a ve prefix.
 func ConvertBech32Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bech32-convert [bech32 string]",
-		Short: "Convert any bech32 string to the akash prefix",
-		Long: `Convert any bech32 string to the akash prefix
-Especially useful for converting cosmos addresses to akash addresses
+		Short: "Convert any bech32 string to the ve prefix",
+		Long: `Convert any bech32 string to the ve prefix
+Especially useful for converting cosmos addresses to virtengine addresses
 Example:
-	akash bech32-convert akash1ey69r37gfxvxg62sh4r0ktpuc46pzjrmz29g45
+	virtengine bech32-convert ve1ey69r37gfxvxg62sh4r0ktpuc46pzjrmhykvmf
 	`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -46,3 +46,4 @@ Example:
 
 	return cmd
 }
+

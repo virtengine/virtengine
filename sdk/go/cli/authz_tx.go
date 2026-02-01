@@ -57,8 +57,8 @@ func GetTxAuthzGrantAuthorizationCmd() *cobra.Command {
 			fmt.Sprintf(`create a new grant authorization to an address to execute a transaction on your behalf:
 
 Examples:
- $ %[1]s tx %[2]s grant akash1skjw.. send --spend-limit=1000uve --from=<granter>
- $ %[1]s tx %[2]s grant akash1skjw.. generic --msg-type=/cosmos.gov.v1.MsgVote --from=<granter>
+ $ %[1]s tx %[2]s grant ve1skjw.. send --spend-limit=1000uve --from=<granter>
+ $ %[1]s tx %[2]s grant ve1skjw.. generic --msg-type=/cosmos.gov.v1.MsgVote --from=<granter>
 	`, version.AppName, authz.ModuleName)),
 		Args:              cobra.ExactArgs(2),
 		PersistentPreRunE: TxPersistentPreRunE,
@@ -494,7 +494,7 @@ func GetTxAuthzRevokeAuthorizationCmd() *cobra.Command {
 		Long: strings.TrimSpace(
 			fmt.Sprintf(`revoke authorization from a granter to a grantee:
 Example:
- $ %s tx %s revoke akash1skj.. %s --from=<granter>
+ $ %s tx %s revoke ve1skj.. %s --from=<granter>
 			`, version.AppName, authz.ModuleName, bank.SendAuthorization{}.MsgTypeURL()),
 		),
 		Args:              cobra.ExactArgs(2),
@@ -597,3 +597,4 @@ func bech32toAccAddresses(accAddrs []string, ac address.Codec) ([]sdk.AccAddress
 	}
 	return addrs, nil
 }
+

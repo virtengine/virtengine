@@ -7,3 +7,4 @@ import (
 var (
 	ErrorNodeOffline = errors.New("node is offline")
 )
+

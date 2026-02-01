@@ -47,3 +47,4 @@ func (m Deposits) Validate() error {
 
 	return nil
 }
+

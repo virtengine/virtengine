@@ -145,3 +145,4 @@ func NormalizeCoins(coins []DecCoin) Coins {
 
 	return result
 }
+

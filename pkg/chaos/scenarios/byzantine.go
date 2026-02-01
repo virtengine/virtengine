@@ -611,3 +611,4 @@ func DefaultByzantineScenarios() []ByzantineScenario {
 		NewSelectiveForwardingScenario(defaultValidators, []string{"validator-1"}, 5*time.Minute),
 	}
 }
+

@@ -46,3 +46,4 @@ func ObserveRunner(f func() runner.Result, observer prometheus.Histogram) func()
 		return result
 	}
 }
+

@@ -1203,3 +1203,4 @@ func (b *NitroHardwareBackend) GetEnclaveInfo() (string, uint32) {
 	defer b.mu.RUnlock()
 	return b.enclaveID, b.enclaveCID
 }
+

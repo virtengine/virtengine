@@ -416,3 +416,4 @@ func NewAppConfig(opts ...ModuleOption) depinject.Config {
 
 	return appconfig.Compose(&appv1alpha1.Config{Modules: modules})
 }
+

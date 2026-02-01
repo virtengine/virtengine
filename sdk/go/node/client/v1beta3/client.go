@@ -195,3 +195,4 @@ func (cl *lightClient) PrintJSON(msg interface{}) error {
 
 	return cl.qclient.cctx.PrintString(buf.String())
 }
+

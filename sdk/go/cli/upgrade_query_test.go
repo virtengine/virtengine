@@ -173,3 +173,4 @@ func TestGetModuleVersionsCmd(t *testing.T) {
 		})
 	}
 }
+

@@ -15,12 +15,12 @@ import (
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
-// Valid test addresses (use akash prefix as configured by sdkutil)
+// Valid test addresses (use ve prefix as configured by sdkutil)
 const (
-	testProviderAddr  = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
-	testProviderAddr2 = "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4"
-	testCustomerAddr  = "akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4"
-	testDisputerAddr  = "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
+	testProviderAddr  = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
+	testProviderAddr2 = "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8"
+	testCustomerAddr  = "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8"
+	testDisputerAddr  = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
 )
 
 type GenesisTestSuite struct {

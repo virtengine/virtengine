@@ -224,3 +224,4 @@ Your role is to help users:
 Be helpful, concise, and accurate. When you don't know something, say so.
 If the user asks about their balance or orders, and you have that data, include it in your response.
 Format responses in a friendly but professional manner.`
+

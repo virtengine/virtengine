@@ -234,3 +234,4 @@ func (s *AuthzCLITestSuite) TestQueryGranterGrants() {
 		})
 	}
 }
+

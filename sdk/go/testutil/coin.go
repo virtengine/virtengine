@@ -83,3 +83,4 @@ func MustVEDecCoin(amount string) sdk.DecCoin {
 	}
 	return sdk.NewDecCoinFromDec(VEDenom, dec)
 }
+

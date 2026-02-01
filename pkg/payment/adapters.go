@@ -671,3 +671,4 @@ func (a *adyenStubAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, erro
 		Timestamp: time.Now(),
 	}, nil
 }
+

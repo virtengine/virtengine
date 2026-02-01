@@ -1965,3 +1965,4 @@ func (va *VMwareAdapter) updateVMStatus(vmID string, powerState VSphereVMPowerSt
 		}
 	}
 }
+

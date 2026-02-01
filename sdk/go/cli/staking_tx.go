@@ -784,3 +784,4 @@ func BuildCreateValidatorMsg(clientCtx client.Context, config TxCreateValidatorC
 
 	return txBldr, msg, nil
 }
+

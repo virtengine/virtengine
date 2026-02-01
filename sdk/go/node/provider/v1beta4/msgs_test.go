@@ -252,3 +252,4 @@ func TestMsgStarValidation(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", i), f)
 	}
 }
+

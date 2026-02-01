@@ -568,3 +568,4 @@ func (ir *IncidentResponder) DisablePlaybook(id string) {
 		playbook.Enabled = false
 	}
 }
+

@@ -2463,3 +2463,4 @@ func (aa *AWSAdapter) GenerateS3PresignedURL(ctx context.Context, bucket, key st
 	}
 	return aa.s3.GeneratePresignedURL(ctx, bucket, key, expiration)
 }
+

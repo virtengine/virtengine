@@ -431,3 +431,4 @@ func TestNoopImplementations(t *testing.T) {
 		_ = tracer.Extract(ctx, carrier)
 	})
 }
+

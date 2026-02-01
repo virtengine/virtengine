@@ -27,3 +27,4 @@ func TestComputeCommittedResources(t *testing.T) {
 	// Even for huge overcommit values, zero is not returned
 	require.Equal(t, uint64(1), util.ComputeCommittedResources(10000.0, rv).Val.Uint64())
 }
+

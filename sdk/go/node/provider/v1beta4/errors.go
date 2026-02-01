@@ -91,3 +91,4 @@ var (
 	// ErrDomainVerificationExpired domain verification token expired
 	ErrDomainVerificationExpired = sdkerrors.RegisterWithGRPCCode(ModuleName, errDomainVerificationExpired, codes.DeadlineExceeded, "domain verification token expired")
 )
+

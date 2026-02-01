@@ -899,3 +899,4 @@ func computeExpectedHashes(t *testing.T) {
 		t.Logf("  Platform:    %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 }
+

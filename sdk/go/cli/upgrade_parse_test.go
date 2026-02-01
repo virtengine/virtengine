@@ -31,3 +31,4 @@ func TestParsePlan(t *testing.T) {
 	require.Equal(t, p.Height, proposal.Plan.Height)
 	require.Equal(t, p.Info, proposal.Plan.Info)
 }
+

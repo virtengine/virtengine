@@ -20,7 +20,7 @@ message BidID {
   // It is a string representing a valid bech32 account address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string owner = 1 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "owner",
@@ -54,7 +54,7 @@ message BidID {
   // It is a string representing a valid account bech32 address.
   //
   // Example:
-  //   "akash1..."
+  //   "ve1..."
   string provider = 5 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "provider",

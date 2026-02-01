@@ -725,3 +725,4 @@ func loadPCTFConfigFromEnv(_ AdapterConfig) (PCTFConfig, bool, error) {
 
 	return pctfConfig, true, nil
 }
+

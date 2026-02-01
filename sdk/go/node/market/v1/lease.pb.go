@@ -67,7 +67,7 @@ type LeaseID struct {
 	// It is a string representing a valid bech32 account address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// Dseq (deployment sequence number) is a unique numeric identifier for the deployment.
 	// It is used to differentiate deployments created by the same owner.
@@ -82,7 +82,7 @@ type LeaseID struct {
 	// It is a string representing a valid account bech32 address.
 	//
 	// Example:
-	//   "akash1..."
+	//   "ve1..."
 	Provider string `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider" yaml:"provider"`
 	// BSeq (bid sequence) distinguishes multiple bids associated with a single deployment from same provider.
 	BSeq uint32 `protobuf:"varint,6,opt,name=bseq,proto3" json:"bseq" yaml:"bseq"`
@@ -1008,3 +1008,4 @@ var (
 	ErrIntOverflowLease          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupLease = fmt.Errorf("proto: unexpected end of group")
 )
+

@@ -116,3 +116,4 @@ var validationConfig = ValidationConfig{
 func GetValidationConfig() ValidationConfig {
 	return validationConfig
 }
+

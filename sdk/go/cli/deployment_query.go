@@ -146,3 +146,4 @@ func GetQueryDeploymentGroupCmd() *cobra.Command {
 
 	return cmd
 }
+

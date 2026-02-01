@@ -556,3 +556,4 @@ func TestEIDASMemberStates(t *testing.T) {
 	assert.Contains(t, EIDASMemberStates, "LI") // Liechtenstein
 	assert.Contains(t, EIDASMemberStates, "NO") // Norway
 }
+

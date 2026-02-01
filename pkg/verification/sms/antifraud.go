@@ -918,3 +918,4 @@ func (e *InMemoryAntiFraudEngine) Close() error {
 
 // Ensure InMemoryAntiFraudEngine implements AntiFraudEngine
 var _ AntiFraudEngine = (*InMemoryAntiFraudEngine)(nil)
+

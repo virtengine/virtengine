@@ -108,3 +108,4 @@ func MustValidatorCodecFromContext(ctx context.Context) address.Codec {
 
 	return res
 }
+

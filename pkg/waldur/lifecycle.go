@@ -426,3 +426,4 @@ func ParseLifecycleCallback(data []byte) (*LifecycleCallbackPayload, error) {
 
 	return &payload, nil
 }
+

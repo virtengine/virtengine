@@ -40,3 +40,4 @@ func TestParamsParseProposal(t *testing.T) {
 		},
 	}, proposal.Changes)
 }
+

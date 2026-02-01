@@ -70,3 +70,4 @@ func (j *Job) Equal(other *Job) bool {
 		j.StartedAt == other.StartedAt &&
 		j.CompletedAt == other.CompletedAt
 }
+

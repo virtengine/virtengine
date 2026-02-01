@@ -97,7 +97,7 @@ services:
       - MONIKER=localvalidator
       - KEYRING_BACKEND=test
     entrypoint: ["/scripts/init-chain.sh"]
-    command: ["virtengine-localnet-1", "virtengine1test000000000000000000000000000test"]
+    command: ["virtengine-localnet-1"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
       interval: 10s

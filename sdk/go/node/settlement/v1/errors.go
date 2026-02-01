@@ -20,3 +20,4 @@ var (
 	ErrInvalidSignature   = sdkerrors.Register(ModuleName, 6, "invalid signature")
 	ErrInvalidReward      = sdkerrors.Register(ModuleName, 7, "invalid reward")
 )
+

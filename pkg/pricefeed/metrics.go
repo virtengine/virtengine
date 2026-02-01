@@ -188,3 +188,4 @@ func (m *NoOpMetrics) RecordCacheHit(baseAsset, quoteAsset string)              
 func (m *NoOpMetrics) RecordCacheMiss(baseAsset, quoteAsset string)                                          {}
 func (m *NoOpMetrics) RecordPriceDeviation(baseAsset, quoteAsset string, deviation float64)                  {}
 func (m *NoOpMetrics) RecordSourceHealth(source string, healthy bool, latency float64)                       {}
+

@@ -598,3 +598,4 @@ func UsageReportHashHex(report *ChainUsageReport) string {
 	hash := UsageReportHash(report)
 	return hex.EncodeToString(hash)
 }
+

@@ -424,3 +424,4 @@ func getMultisigRecord(clientCtx client.Context, name string) (*keyring.Record, 
 
 	return multisigRecord, nil
 }
+
