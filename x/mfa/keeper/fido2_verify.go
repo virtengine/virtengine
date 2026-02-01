@@ -669,7 +669,7 @@ func (k Keeper) VerifyFIDO2Registration(
 
 	if ctx.BlockTime().Unix() > challenge.ExpiresAt {
 		challenge.Status = types.ChallengeStatusExpired
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return nil, types.ErrChallengeExpired
 	}
 
@@ -700,14 +700,14 @@ func (k Keeper) VerifyFIDO2Registration(
 		if challenge.AttemptCount >= challenge.MaxAttempts {
 			challenge.Status = types.ChallengeStatusFailed
 		}
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return nil, err
 	}
 
 	// Mark challenge as verified
 	challenge.Status = types.ChallengeStatusVerified
 	challenge.VerifiedAt = ctx.BlockTime().Unix()
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Create enrollment
 	credential := result.Credential

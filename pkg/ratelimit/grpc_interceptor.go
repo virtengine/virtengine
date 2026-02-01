@@ -369,16 +369,16 @@ func RateLimitInfo(ctx context.Context) *RateLimitResult {
 	result := &RateLimitResult{}
 
 	if values := md.Get("x-ratelimit-limit"); len(values) > 0 {
-		fmt.Sscanf(values[0], "%d", &result.Limit)
+		_, _ = fmt.Sscanf(values[0], "%d", &result.Limit)
 	}
 
 	if values := md.Get("x-ratelimit-remaining"); len(values) > 0 {
-		fmt.Sscanf(values[0], "%d", &result.Remaining)
+		_, _ = fmt.Sscanf(values[0], "%d", &result.Remaining)
 	}
 
 	if values := md.Get("x-ratelimit-reset"); len(values) > 0 {
 		var resetUnix int64
-		fmt.Sscanf(values[0], "%d", &resetUnix)
+		_, _ = fmt.Sscanf(values[0], "%d", &resetUnix)
 		result.ResetAt = time.Unix(resetUnix, 0)
 	}
 

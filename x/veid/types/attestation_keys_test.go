@@ -99,7 +99,7 @@ func TestSignerKeyPolicy_IsAlgorithmAllowed(t *testing.T) {
 func TestSignerKeyInfo_Create(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey := make([]byte, 32)
-	rand.Read(publicKey)
+	_, _ = rand.Read(publicKey)
 
 	keyInfo := NewSignerKeyInfo(
 		"validator-001",
@@ -125,7 +125,7 @@ func TestSignerKeyInfo_Create(t *testing.T) {
 func TestSignerKeyInfo_Validate_Valid(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey := make([]byte, 32)
-	rand.Read(publicKey)
+	_, _ = rand.Read(publicKey)
 
 	keyInfo := NewSignerKeyInfo(
 		"validator-001",
@@ -144,7 +144,7 @@ func TestSignerKeyInfo_Validate_Valid(t *testing.T) {
 func TestSignerKeyInfo_Validate_FingerprintMismatch(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey := make([]byte, 32)
-	rand.Read(publicKey)
+	_, _ = rand.Read(publicKey)
 
 	keyInfo := NewSignerKeyInfo(
 		"validator-001",
@@ -260,7 +260,7 @@ func TestSignerKeyInfo_ShouldRotate(t *testing.T) {
 
 	// Activate key
 	expiresAt := now.Add(90 * 24 * time.Hour)
-	keyInfo.Activate(now, expiresAt)
+	_ = keyInfo.Activate(now, expiresAt)
 
 	// Recently activated key should not need rotation
 	if keyInfo.ShouldRotate(now.Add(1*time.Hour), policy) {
@@ -278,7 +278,7 @@ func TestSignerKeyInfo_ShouldRotate(t *testing.T) {
 func TestSignerKeyInfo_IsExpired(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey := make([]byte, 32)
-	rand.Read(publicKey)
+	_, _ = rand.Read(publicKey)
 
 	keyInfo := NewSignerKeyInfo(
 		"validator-001",
@@ -295,7 +295,7 @@ func TestSignerKeyInfo_IsExpired(t *testing.T) {
 
 	// Set expiry
 	expiresAt := now.Add(24 * time.Hour)
-	keyInfo.Activate(now, expiresAt)
+	_ = keyInfo.Activate(now, expiresAt)
 
 	if keyInfo.IsExpired(now) {
 		t.Error("key should not be expired before expiry")

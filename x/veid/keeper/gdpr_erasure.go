@@ -277,7 +277,7 @@ func (k Keeper) eraseCategory(
 		// Erase biometric data (embedding envelopes)
 		envelopes := k.GetEmbeddingEnvelopesByAccount(ctx, address)
 		for _, env := range envelopes {
-			k.DeleteEmbeddingEnvelope(ctx, env.EnvelopeID)
+			_ = k.DeleteEmbeddingEnvelope(ctx, env.EnvelopeID)
 			affected++
 		}
 		report.BiometricDataErased = true
@@ -298,7 +298,7 @@ func (k Keeper) eraseCategory(
 		// Erase derived feature records
 		records := k.GetDerivedFeatureRecordsByAccount(ctx, address)
 		for _, record := range records {
-			k.DeleteDerivedFeatureRecord(ctx, record.RecordID)
+			_ = k.DeleteDerivedFeatureRecord(ctx, record.RecordID)
 			affected++
 		}
 		report.DerivedFeaturesErased = true

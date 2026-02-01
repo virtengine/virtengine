@@ -652,7 +652,7 @@ func TestService_JurisdictionMethods(t *testing.T) {
 	if err := svc.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer svc.Stop(ctx)
+	defer func() { _ = svc.Stop(ctx) }()
 
 	// List jurisdictions
 	jurisdictions, err := svc.ListJurisdictions(ctx)

@@ -459,12 +459,12 @@ func TestComputeNonceHash(t *testing.T) {
 
 func TestNewNonceHistoryEntry(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
-	record.MarkUsed(now.Add(10*time.Minute), "attestation-001", 12345)
+	_ = record.MarkUsed(now.Add(10*time.Minute), "attestation-001", 12345)
 
 	entry := NewNonceHistoryEntry(record)
 

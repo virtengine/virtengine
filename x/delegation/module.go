@@ -165,4 +165,3 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	return am.keeper.EndBlocker(sdkCtx)
 }
-

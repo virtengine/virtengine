@@ -42,6 +42,9 @@ const (
 
 	// OsmosisChainIDTestnet is the testnet chain ID
 	OsmosisChainIDTestnet = "osmo-test-5"
+
+	// networkTestnet is the testnet network identifier
+	networkTestnet = "testnet"
 )
 
 // ============================================================================
@@ -119,7 +122,7 @@ func (c *OsmosisConfig) GetGRPCEndpoint() string {
 	if c.GRPCEndpoint != "" {
 		return c.GRPCEndpoint
 	}
-	if c.Network == "testnet" {
+	if c.Network == networkTestnet {
 		return OsmosisTestnetGRPC
 	}
 	return OsmosisMainnetGRPC
@@ -130,7 +133,7 @@ func (c *OsmosisConfig) GetRESTEndpoint() string {
 	if c.RESTEndpoint != "" {
 		return c.RESTEndpoint
 	}
-	if c.Network == "testnet" {
+	if c.Network == networkTestnet {
 		return OsmosisTestnetREST
 	}
 	return OsmosisMainnetREST
@@ -138,7 +141,7 @@ func (c *OsmosisConfig) GetRESTEndpoint() string {
 
 // GetChainID returns the chain ID based on network
 func (c *OsmosisConfig) GetChainID() string {
-	if c.Network == "testnet" {
+	if c.Network == networkTestnet {
 		return OsmosisChainIDTestnet
 	}
 	return OsmosisChainIDMainnet
