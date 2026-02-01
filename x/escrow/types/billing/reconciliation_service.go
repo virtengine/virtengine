@@ -201,6 +201,9 @@ const (
 
 	// PayoutStatusCancelled is a cancelled payout
 	PayoutStatusCancelled PayoutStatus = 4
+
+	// PayoutStatusRefunded is a refunded payout
+	PayoutStatusRefunded PayoutStatus = 5
 )
 
 // PayoutStatusNames maps status to names
@@ -210,6 +213,7 @@ var PayoutStatusNames = map[PayoutStatus]string{
 	PayoutStatusCompleted:  "completed",
 	PayoutStatusFailed:     "failed",
 	PayoutStatusCancelled:  "cancelled",
+	PayoutStatusRefunded:   "refunded",
 }
 
 // String returns string representation
@@ -258,17 +262,29 @@ type PayoutRecord struct {
 	// PayoutID is the unique identifier for this payout
 	PayoutID string `json:"payout_id"`
 
+	// SettlementID links to the settlement (optional, for settlement-based payouts)
+	SettlementID string `json:"settlement_id,omitempty"`
+
 	// Provider is the provider address receiving the payout
 	Provider string `json:"provider"`
+
+	// GrossAmount is the total amount before fees (same as PayoutAmount for backwards compatibility)
+	GrossAmount sdk.Coins `json:"gross_amount,omitempty"`
 
 	// PayoutAmount is the gross payout amount
 	PayoutAmount sdk.Coins `json:"payout_amount"`
 
-	// FeeAmount is the fee deducted from the payout
+	// FeeAmount is the fee deducted from the payout (alias: TotalFees)
 	FeeAmount sdk.Coins `json:"fee_amount"`
+
+	// TotalFees is the total fees deducted (same as FeeAmount)
+	TotalFees sdk.Coins `json:"total_fees,omitempty"`
 
 	// NetAmount is the net amount after fees
 	NetAmount sdk.Coins `json:"net_amount"`
+
+	// HoldbackAmount is any amount held back for disputes
+	HoldbackAmount sdk.Coins `json:"holdback_amount,omitempty"`
 
 	// InvoiceIDs are the invoices covered by this payout
 	InvoiceIDs []string `json:"invoice_ids"`
@@ -285,6 +301,24 @@ type PayoutRecord struct {
 	// TransactionRef is the external transaction reference
 	TransactionRef string `json:"transaction_ref,omitempty"`
 
+	// TransactionHash is the on-chain transaction hash
+	TransactionHash string `json:"transaction_hash,omitempty"`
+
+	// FailureReason is the reason for failure (if failed)
+	FailureReason string `json:"failure_reason,omitempty"`
+
+	// RefundAmount is the refund amount (if refunded)
+	RefundAmount sdk.Coins `json:"refund_amount,omitempty"`
+
+	// RefundReason is the reason for refund
+	RefundReason string `json:"refund_reason,omitempty"`
+
+	// RefundedAt is when the refund occurred
+	RefundedAt *time.Time `json:"refunded_at,omitempty"`
+
+	// CompletedAt is when the payout was completed
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+
 	// BlockHeight is when this record was created on-chain
 	BlockHeight int64 `json:"block_height"`
 
@@ -293,6 +327,36 @@ type PayoutRecord struct {
 
 	// UpdatedAt is when the record was last updated
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// NewPayoutRecord creates a new payout record for settlement-based payouts
+func NewPayoutRecord(
+	payoutID string,
+	settlementID string,
+	provider string,
+	grossAmount sdk.Coins,
+	totalFees sdk.Coins,
+	netAmount sdk.Coins,
+	payoutAmount sdk.Coins,
+	blockHeight int64,
+	now time.Time,
+) *PayoutRecord {
+	return &PayoutRecord{
+		PayoutID:     payoutID,
+		SettlementID: settlementID,
+		Provider:     provider,
+		GrossAmount:  grossAmount,
+		PayoutAmount: grossAmount, // For compatibility
+		FeeAmount:    totalFees,
+		TotalFees:    totalFees,
+		NetAmount:    netAmount,
+		Status:       PayoutStatusPending,
+		Method:       PayoutMethodCrypto,
+		PayoutDate:   now,
+		BlockHeight:  blockHeight,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
 }
 
 // Validate validates the payout record
@@ -321,8 +385,9 @@ func (r *PayoutRecord) Validate() error {
 		return fmt.Errorf("net_amount must be valid coins")
 	}
 
-	if len(r.InvoiceIDs) == 0 {
-		return fmt.Errorf("at least one invoice_id is required")
+	// Either InvoiceIDs or SettlementID is required
+	if len(r.InvoiceIDs) == 0 && r.SettlementID == "" {
+		return fmt.Errorf("at least one invoice_id or settlement_id is required")
 	}
 
 	if r.PayoutDate.IsZero() {
@@ -330,6 +395,130 @@ func (r *PayoutRecord) Validate() error {
 	}
 
 	return nil
+}
+
+// PayoutCalculation represents the calculation for a payout
+type PayoutCalculation struct {
+	// SettlementID is the settlement being calculated
+	SettlementID string `json:"settlement_id"`
+
+	// Provider is the provider address
+	Provider string `json:"provider"`
+
+	// GrossAmount is the total amount before fees
+	GrossAmount sdk.Coins `json:"gross_amount"`
+
+	// TotalFees is the total fees to deduct
+	TotalFees sdk.Coins `json:"total_fees"`
+
+	// NetAmount is the net amount after fees
+	NetAmount sdk.Coins `json:"net_amount"`
+
+	// HoldbackAmount is any amount to hold back
+	HoldbackAmount sdk.Coins `json:"holdback_amount"`
+
+	// PayableAmount is the amount to pay out
+	PayableAmount sdk.Coins `json:"payable_amount"`
+
+	// CalculatedAt is when the calculation was performed
+	CalculatedAt time.Time `json:"calculated_at"`
+
+	// BlockHeight is when the calculation was performed
+	BlockHeight int64 `json:"block_height"`
+}
+
+// PayoutSummary provides a summary of payouts for a provider
+type PayoutSummary struct {
+	// Provider is the provider address
+	Provider string `json:"provider"`
+
+	// PeriodStart is the start of the summary period
+	PeriodStart time.Time `json:"period_start"`
+
+	// PeriodEnd is the end of the summary period
+	PeriodEnd time.Time `json:"period_end"`
+
+	// TotalPayouts is the number of payouts
+	TotalPayouts uint32 `json:"total_payouts"`
+
+	// TotalGrossAmount is the total gross amount
+	TotalGrossAmount sdk.Coins `json:"total_gross_amount"`
+
+	// TotalFees is the total fees deducted
+	TotalFees sdk.Coins `json:"total_fees"`
+
+	// TotalNetAmount is the total net amount
+	TotalNetAmount sdk.Coins `json:"total_net_amount"`
+
+	// TotalPayoutAmount is the total payout amount
+	TotalPayoutAmount sdk.Coins `json:"total_payout_amount"`
+
+	// PendingPayouts is the number of pending payouts
+	PendingPayouts uint32 `json:"pending_payouts"`
+
+	// PendingAmount is the total pending amount
+	PendingAmount sdk.Coins `json:"pending_amount"`
+
+	// CompletedPayouts is the number of completed payouts
+	CompletedPayouts uint32 `json:"completed_payouts"`
+
+	// CompletedAmount is the total completed amount
+	CompletedAmount sdk.Coins `json:"completed_amount"`
+
+	// FailedPayouts is the number of failed payouts
+	FailedPayouts uint32 `json:"failed_payouts"`
+
+	// FailedAmount is the total failed amount
+	FailedAmount sdk.Coins `json:"failed_amount"`
+
+	// GeneratedAt is when the summary was generated
+	GeneratedAt time.Time `json:"generated_at"`
+
+	// BlockHeight is when the summary was generated
+	BlockHeight int64 `json:"block_height"`
+}
+
+// NewPayoutSummary creates a new payout summary
+func NewPayoutSummary(provider string, periodStart, periodEnd time.Time, blockHeight int64, now time.Time) *PayoutSummary {
+	return &PayoutSummary{
+		Provider:          provider,
+		PeriodStart:       periodStart,
+		PeriodEnd:         periodEnd,
+		TotalPayouts:      0,
+		TotalGrossAmount:  sdk.NewCoins(),
+		TotalFees:         sdk.NewCoins(),
+		TotalNetAmount:    sdk.NewCoins(),
+		TotalPayoutAmount: sdk.NewCoins(),
+		PendingPayouts:    0,
+		PendingAmount:     sdk.NewCoins(),
+		CompletedPayouts:  0,
+		CompletedAmount:   sdk.NewCoins(),
+		FailedPayouts:     0,
+		FailedAmount:      sdk.NewCoins(),
+		GeneratedAt:       now,
+		BlockHeight:       blockHeight,
+	}
+}
+
+// AddPayout adds a payout to the summary
+func (ps *PayoutSummary) AddPayout(payout *PayoutRecord) {
+	ps.TotalPayouts++
+	ps.TotalGrossAmount = ps.TotalGrossAmount.Add(payout.GrossAmount...)
+	ps.TotalFees = ps.TotalFees.Add(payout.FeeAmount...)
+	ps.TotalNetAmount = ps.TotalNetAmount.Add(payout.NetAmount...)
+	ps.TotalPayoutAmount = ps.TotalPayoutAmount.Add(payout.PayoutAmount...)
+
+	switch payout.Status {
+	case PayoutStatusPending, PayoutStatusProcessing:
+		ps.PendingPayouts++
+		ps.PendingAmount = ps.PendingAmount.Add(payout.PayoutAmount...)
+	case PayoutStatusCompleted:
+		ps.CompletedPayouts++
+		ps.CompletedAmount = ps.CompletedAmount.Add(payout.PayoutAmount...)
+	case PayoutStatusFailed:
+		ps.FailedPayouts++
+		ps.FailedAmount = ps.FailedAmount.Add(payout.PayoutAmount...)
+	}
 }
 
 // ReconciliationOption defines options for reconciliation operations
@@ -644,6 +833,15 @@ var (
 
 	// ReconciliationJobPrefix is the prefix for reconciliation jobs
 	ReconciliationJobPrefix = []byte{0x79}
+
+	// PayoutRecordByStatusPrefix indexes payout records by status
+	PayoutRecordByStatusPrefix = []byte{0x7a}
+
+	// PayoutRecordBySettlementPrefix indexes payout records by settlement
+	PayoutRecordBySettlementPrefix = []byte{0x7b}
+
+	// PayoutSequenceKey is the key for payout sequence
+	PayoutSequenceKey = []byte("payout_sequence")
 )
 
 // BuildUsageRecordKey builds the key for a usage record
@@ -720,6 +918,37 @@ func ParseReconciliationJobKey(key []byte) (string, error) {
 		return "", fmt.Errorf("invalid reconciliation job key length")
 	}
 	return string(key[len(ReconciliationJobPrefix):]), nil
+}
+
+// BuildPayoutRecordByStatusKey builds the index key for payout records by status
+func BuildPayoutRecordByStatusKey(status PayoutStatus, payoutID string) []byte {
+	key := append(PayoutRecordByStatusPrefix, byte(status))
+	key = append(key, byte('/'))
+	return append(key, []byte(payoutID)...)
+}
+
+// BuildPayoutRecordByStatusPrefix builds the prefix for payouts by status
+func BuildPayoutRecordByStatusPrefix(status PayoutStatus) []byte {
+	key := append(PayoutRecordByStatusPrefix, byte(status))
+	return append(key, byte('/'))
+}
+
+// BuildPayoutRecordBySettlementKey builds the index key for payout records by settlement
+func BuildPayoutRecordBySettlementKey(settlementID string, payoutID string) []byte {
+	key := append(PayoutRecordBySettlementPrefix, []byte(settlementID)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(payoutID)...)
+}
+
+// BuildPayoutRecordBySettlementPrefix builds the prefix for settlement's payout records
+func BuildPayoutRecordBySettlementPrefix(settlementID string) []byte {
+	key := append(PayoutRecordBySettlementPrefix, []byte(settlementID)...)
+	return append(key, byte('/'))
+}
+
+// NextPayoutID generates the next payout ID
+func NextPayoutID(currentSequence uint64, prefix string) string {
+	return fmt.Sprintf("%s-PAY-%08d", prefix, currentSequence+1)
 }
 
 // IsVarianceWithinThreshold checks if the variance is within the acceptable threshold

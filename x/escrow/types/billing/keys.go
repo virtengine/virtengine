@@ -248,3 +248,134 @@ var InvoiceSequenceKey = []byte("invoice_sequence")
 func NextInvoiceNumber(currentSequence uint64, prefix string) string {
 	return fmt.Sprintf("%s-%08d", prefix, currentSequence+1)
 }
+
+// Settlement and treasury key prefixes
+var (
+	// SettlementRecordPrefix is the prefix for settlement records
+	SettlementRecordPrefix = []byte{0x60}
+
+	// SettlementByInvoicePrefix indexes settlements by invoice
+	SettlementByInvoicePrefix = []byte{0x61}
+
+	// SettlementByProviderPrefix indexes settlements by provider
+	SettlementByProviderPrefix = []byte{0x62}
+
+	// SettlementByStatusPrefix indexes settlements by status
+	SettlementByStatusPrefix = []byte{0x63}
+
+	// SettlementByEscrowPrefix indexes settlements by escrow
+	SettlementByEscrowPrefix = []byte{0x64}
+
+	// TreasuryAllocationPrefix is the prefix for treasury allocations
+	TreasuryAllocationPrefix = []byte{0x70}
+
+	// TreasuryAllocationBySettlementPrefix indexes allocations by settlement
+	TreasuryAllocationBySettlementPrefix = []byte{0x71}
+
+	// TreasuryAllocationByFeeTypePrefix indexes allocations by fee type
+	TreasuryAllocationByFeeTypePrefix = []byte{0x72}
+
+	// FeeConfigKey is the key for fee configuration
+	FeeConfigKey = []byte("fee_config")
+
+	// SettlementSequenceKey is the key for settlement sequence
+	SettlementSequenceKey = []byte("settlement_sequence")
+)
+
+// BuildSettlementRecordKey builds the key for a settlement record
+func BuildSettlementRecordKey(settlementID string) []byte {
+	return append(SettlementRecordPrefix, []byte(settlementID)...)
+}
+
+// BuildSettlementByInvoiceKey builds the index key for settlements by invoice
+func BuildSettlementByInvoiceKey(invoiceID string, settlementID string) []byte {
+	key := append(SettlementByInvoicePrefix, []byte(invoiceID)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(settlementID)...)
+}
+
+// BuildSettlementByInvoicePrefix builds the prefix for invoice's settlements
+func BuildSettlementByInvoicePrefix(invoiceID string) []byte {
+	key := append(SettlementByInvoicePrefix, []byte(invoiceID)...)
+	return append(key, byte('/'))
+}
+
+// BuildSettlementByProviderKey builds the index key for settlements by provider
+func BuildSettlementByProviderKey(provider string, settlementID string) []byte {
+	key := append(SettlementByProviderPrefix, []byte(provider)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(settlementID)...)
+}
+
+// BuildSettlementByProviderPrefix builds the prefix for provider's settlements
+func BuildSettlementByProviderPrefix(provider string) []byte {
+	key := append(SettlementByProviderPrefix, []byte(provider)...)
+	return append(key, byte('/'))
+}
+
+// BuildSettlementByStatusKey builds the index key for settlements by status
+func BuildSettlementByStatusKey(status SettlementStatus, settlementID string) []byte {
+	key := append(SettlementByStatusPrefix, byte(status))
+	key = append(key, byte('/'))
+	return append(key, []byte(settlementID)...)
+}
+
+// BuildSettlementByStatusPrefix builds the prefix for settlements by status
+func BuildSettlementByStatusPrefix(status SettlementStatus) []byte {
+	key := append(SettlementByStatusPrefix, byte(status))
+	return append(key, byte('/'))
+}
+
+// BuildSettlementByEscrowKey builds the index key for settlements by escrow
+func BuildSettlementByEscrowKey(escrowID string, settlementID string) []byte {
+	key := append(SettlementByEscrowPrefix, []byte(escrowID)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(settlementID)...)
+}
+
+// BuildSettlementByEscrowPrefix builds the prefix for escrow's settlements
+func BuildSettlementByEscrowPrefix(escrowID string) []byte {
+	key := append(SettlementByEscrowPrefix, []byte(escrowID)...)
+	return append(key, byte('/'))
+}
+
+// BuildTreasuryAllocationKey builds the key for a treasury allocation
+func BuildTreasuryAllocationKey(allocationID string) []byte {
+	return append(TreasuryAllocationPrefix, []byte(allocationID)...)
+}
+
+// BuildTreasuryAllocationBySettlementKey builds the index key for allocations by settlement
+func BuildTreasuryAllocationBySettlementKey(settlementID string, allocationID string) []byte {
+	key := append(TreasuryAllocationBySettlementPrefix, []byte(settlementID)...)
+	key = append(key, byte('/'))
+	return append(key, []byte(allocationID)...)
+}
+
+// BuildTreasuryAllocationBySettlementPrefix builds the prefix for settlement's allocations
+func BuildTreasuryAllocationBySettlementPrefix(settlementID string) []byte {
+	key := append(TreasuryAllocationBySettlementPrefix, []byte(settlementID)...)
+	return append(key, byte('/'))
+}
+
+// BuildTreasuryAllocationByFeeTypeKey builds the index key for allocations by fee type
+func BuildTreasuryAllocationByFeeTypeKey(feeType FeeType, allocationID string) []byte {
+	key := append(TreasuryAllocationByFeeTypePrefix, byte(feeType))
+	key = append(key, byte('/'))
+	return append(key, []byte(allocationID)...)
+}
+
+// BuildTreasuryAllocationByFeeTypePrefix builds the prefix for allocations by fee type
+func BuildTreasuryAllocationByFeeTypePrefix(feeType FeeType) []byte {
+	key := append(TreasuryAllocationByFeeTypePrefix, byte(feeType))
+	return append(key, byte('/'))
+}
+
+// NextSettlementID generates the next settlement ID
+func NextSettlementID(currentSequence uint64, prefix string) string {
+	return fmt.Sprintf("%s-STL-%08d", prefix, currentSequence+1)
+}
+
+// NextTreasuryAllocationID generates the next treasury allocation ID
+func NextTreasuryAllocationID(settlementID string, feeType FeeType) string {
+	return fmt.Sprintf("%s-%s", settlementID, feeType.String())
+}
