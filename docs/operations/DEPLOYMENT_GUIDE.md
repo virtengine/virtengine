@@ -48,6 +48,8 @@ Useful commands:
 ./scripts/localnet.sh test
 ./scripts/localnet.sh stop
 ./scripts/localnet.sh reset
+#Creates admin in Waldur Portal
+./scripts/localnet.sh create-admin -u myuser -p mypassword -e myuser@example.com
 ```
 
 Notes:

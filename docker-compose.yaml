@@ -69,6 +69,7 @@ volumes:
   caddy-config:
   prometheus-data:
   grafana-data:
+  explorer-data:
 
 services:
   # =============================================================================
@@ -132,7 +133,11 @@ services:
       - VIRTENGINE_WALDUR_ENABLED=true
       - VIRTENGINE_WALDUR_BASE_URL=http://waldur-caddy/api/
       - VIRTENGINE_WALDUR_TOKEN=${WALDUR_API_TOKEN:-}
-    command: ["start", "--node", "http://virtengine-node:26657", "--chain-id", "virtengine-localnet-1"]
+      # Enable offering sync from chain to Waldur by default
+      - VIRTENGINE_WALDUR_OFFERING_SYNC_ENABLED=true
+      - VIRTENGINE_WALDUR_OFFERING_SYNC_INTERVAL=300
+      - VIRTENGINE_WALDUR_CUSTOMER_UUID=${WALDUR_CUSTOMER_UUID:-}
+    command: ["start", "--node", "http://virtengine-node:26657", "--chain-id", "virtengine-localnet-1", "--waldur-offering-sync-enabled=true"]
     depends_on:
       virtengine-node:
         condition: service_healthy
@@ -456,6 +461,34 @@ services:
     environment:
       SWAGGER_JSON: /swagger/swagger.yaml
       BASE_URL: /portal
+    restart: unless-stopped
+
+  # =============================================================================
+  # Blockchain Explorer (Ping.pub / Explorer)
+  # Provides a web UI for browsing blocks, transactions, validators, and
+  # querying on-chain marketplace offerings, orders, and identity data.
+  # =============================================================================
+  explorer:
+    image: ping-pub/explorer:latest
+    container_name: explorer
+    hostname: explorer
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.54
+    ports:
+      - "8088:8080"   # Blockchain Explorer UI
+    volumes:
+      - ./config/explorer/chains.json:/app/chains.json:ro
+      - explorer-data:/app/data
+    environment:
+      # Configure chain endpoints
+      CHAIN_NAME: VirtEngine
+      CHAIN_RPC: http://virtengine-node:26657
+      CHAIN_REST: http://virtengine-node:1317
+      CHAIN_GRPC: virtengine-node:9090
+    depends_on:
+      virtengine-node:
+        condition: service_healthy
     restart: unless-stopped
 
   # =============================================================================

@@ -1,0 +1,29 @@
+{
+  "chains": [
+    {
+      "chain_name": "virtengine-localnet",
+      "coingecko": "",
+      "api": ["http://localhost:1317"],
+      "rpc": ["http://localhost:26657"],
+      "grpc": ["localhost:9090"],
+      "snapshot_provider": "",
+      "sdk_version": "0.53.4",
+      "coin_type": "118",
+      "min_tx_fee": "0",
+      "addr_prefix": "virt",
+      "logo": "/logos/virtengine.svg",
+      "keplr_features": ["cosmwasm"],
+      "assets": [
+        {
+          "base": "uve",
+          "symbol": "VE",
+          "exponent": "6",
+          "coingecko_id": "",
+          "logo": "/logos/virtengine.svg"
+        }
+      ],
+      "registry_name": "virtengine",
+      "features": ["marketplace", "identity", "hpc"]
+    }
+  ]
+}
