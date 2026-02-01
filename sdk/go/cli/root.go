@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	DefaultHome = os.ExpandEnv("$HOME/.akash")
+	DefaultHome = os.ExpandEnv("$HOME/.virtengine")
 )
 
 type PreRunOptions struct {

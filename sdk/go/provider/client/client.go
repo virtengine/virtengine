@@ -102,7 +102,7 @@ func (_ *defaultCertQuerier) GetAccountCertificate(_ context.Context, _ sdk.Addr
 	return nil, nil, atls.CertificateInvalidError{Reason: atls.OnChainCertsNotAvailable}
 }
 
-// NewClient creates and returns a new Client instance for interacting with the Akash provider.
+// NewClient creates and returns a new Client instance for interacting with the VirtEngine provider.
 //
 // It takes a context.Context for managing the lifecycle of operations, a QueryClient for making
 // provider queries, the provider's address, and optional ClientOption functions for customizing

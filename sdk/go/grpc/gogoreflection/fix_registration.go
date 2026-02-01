@@ -9,8 +9,7 @@ import (
 	_ "github.com/cosmos/gogoproto/gogoproto" // required so it does register the gogoproto file descriptor
 	gogoproto "github.com/cosmos/gogoproto/proto"
 	dpb "github.com/cosmos/gogoproto/protoc-gen-gogo/descriptor"
-	"github.com/golang/protobuf/proto"     //nolint:staticcheck
-	"k8s.io/apimachinery/pkg/api/resource" // required so it does register the k8s resource
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 
 	// we need to this transfer protobuf registration to gogoproto above
 	kproto "github.com/gogo/protobuf/proto"
@@ -27,21 +26,7 @@ type registerEntry struct {
 }
 
 var (
-	fixProtos = []registerEntry{
-		{
-			protoFile: "k8s.io/apimachinery/pkg/api/resource/generated.proto",
-			types: []registerEntryType{
-				{
-					msg:       (*resource.Quantity)(nil),
-					protoType: "k8s.io.apimachinery.pkg.api.resource.Quantity",
-				},
-				{
-					msg:       (*resource.QuantityValue)(nil),
-					protoType: "k8s.io.apimachinery.pkg.api.resource.QuantityValue",
-				},
-			},
-		},
-	}
+	fixProtos = []registerEntry{}
 
 	importsToFix = map[string][]string{}
 )

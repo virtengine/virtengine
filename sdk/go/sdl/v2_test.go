@@ -105,7 +105,7 @@ func TestV2ParseSimpleGPU(t *testing.T) {
 				},
 			},
 		},
-		Price: testutil.ACTDecCoin(t, 50),
+		Price: testutil.VEDecCoin(t, 50),
 	}, group.GetResourceUnits()[0])
 
 	mani, err := sdl.Manifest()
@@ -304,7 +304,7 @@ func Test_V2_Parse_simple(t *testing.T) {
 				},
 			},
 		},
-		Price: testutil.ACTDecCoin(t, 50),
+		Price: testutil.VEDecCoin(t, 50),
 	}, group.GetResourceUnits()[0])
 
 	mani, err := sdl.Manifest()
@@ -465,7 +465,7 @@ func TestV2ParseServiceMix(t *testing.T) {
 					},
 				},
 			},
-			Price: testutil.ACTDecCoin(t, 50),
+			Price: testutil.VEDecCoin(t, 50),
 		},
 		{
 			Count: 1,
@@ -495,7 +495,7 @@ func TestV2ParseServiceMix(t *testing.T) {
 					},
 				},
 			},
-			Price: testutil.ACTDecCoin(t, 50),
+			Price: testutil.VEDecCoin(t, 50),
 		},
 	}, group.GetResourceUnits())
 
@@ -651,7 +651,7 @@ func TestV2ParseServiceMix2(t *testing.T) {
 					},
 				},
 			},
-			Price: testutil.ACTDecCoin(t, 50),
+			Price: testutil.VEDecCoin(t, 50),
 		},
 		{
 			Count: 1,
@@ -687,7 +687,7 @@ func TestV2ParseServiceMix2(t *testing.T) {
 					},
 				},
 			},
-			Price: testutil.ACTDecCoin(t, 50),
+			Price: testutil.VEDecCoin(t, 50),
 		},
 	}, group.GetResourceUnits())
 
@@ -857,7 +857,7 @@ func TestV2ParseStorageName(t *testing.T) {
 					},
 				},
 			},
-			Price: testutil.ACTDecCoin(t, 50),
+			Price: testutil.VEDecCoin(t, 50),
 		},
 	}, group.GetResourceUnits())
 

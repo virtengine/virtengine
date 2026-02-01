@@ -88,7 +88,7 @@ func Resources(t testing.TB) dtypes.ResourceUnits {
 
 	vals := make(dtypes.ResourceUnits, 0, count)
 	for i := 0; i < count; i++ {
-		coin := sdk.NewDecCoin(sdkutil.DenomUact, sdkmath.NewInt(rand.Int63n(9999)+1))
+		coin := sdk.NewDecCoin(sdkutil.DenomUve, sdkmath.NewInt(rand.Int63n(9999)+1))
 		res := dtypes.ResourceUnit{
 			Resources: types.Resources{
 				ID: uint32(i) + 1, // nolint: gosec
@@ -124,7 +124,7 @@ func ResourcesList(t testing.TB, startID uint32) dtypes.ResourceUnits {
 
 	vals := make(dtypes.ResourceUnits, 0, count)
 	for i := uint32(0); i < count; i++ {
-		coin := sdk.NewDecCoin(sdkutil.DenomUact, sdkmath.NewInt(rand.Int63n(9999)+1))
+		coin := sdk.NewDecCoin(sdkutil.DenomUve, sdkmath.NewInt(rand.Int63n(9999)+1))
 		res := dtypes.ResourceUnit{
 			Resources: types.Resources{
 				ID: i + startID,

@@ -205,7 +205,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMint() {
 		{
 			"burn AKT to mint ACT successfully",
 			cli.TestFlags().
-				With("1000000uve", "uact").
+				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -216,7 +216,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMint() {
 		{
 			"burn ACT to mint AKT successfully",
 			cli.TestFlags().
-				With("500000uact", "uve").
+				With("500000mve", "uve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -264,7 +264,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintWithToFlag() {
 		{
 			"burn mint with to flag same as sender",
 			cli.TestFlags().
-				With("1000000uve", "uact").
+				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -274,7 +274,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintWithToFlag() {
 		{
 			"burn mint with different to address",
 			cli.TestFlags().
-				With("1000000uve", "uact").
+				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -308,7 +308,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintEdgeCases() {
 		{
 			"burn mint with invalid coin format",
 			cli.TestFlags().
-				With("invalid", "uact").
+				With("invalid", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -326,7 +326,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintEdgeCases() {
 		{
 			"burn mint with zero amount",
 			cli.TestFlags().
-				With("0uve", "uact").
+				With("0uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -336,7 +336,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintEdgeCases() {
 		{
 			"burn mint with very large amount",
 			cli.TestFlags().
-				With("999999999999999999999uve", "uact").
+				With("999999999999999999999uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -369,12 +369,12 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintMultipleDenoms() {
 		{
 			"burn uve to mint uact",
 			"1000000uve",
-			"uact",
+			"mve",
 			false,
 		},
 		{
 			"burn uact to mint uve",
-			"500000uact",
+			"500000mve",
 			"uve",
 			false,
 		},
@@ -412,7 +412,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintWithGasSettings() {
 		{
 			"burn mint with explicit gas",
 			cli.TestFlags().
-				With("1000000uve", "uact").
+				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -423,7 +423,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintWithGasSettings() {
 		{
 			"burn mint with gas adjustment",
 			cli.TestFlags().
-				With("1000000uve", "uact").
+				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -435,7 +435,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintWithGasSettings() {
 		{
 			"burn mint with gas prices",
 			cli.TestFlags().
-				With("1000000uve", "uact").
+				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -470,7 +470,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintTimeouts() {
 		{
 			"burn mint with timeout height",
 			cli.TestFlags().
-				With("1000000uve", "uact").
+				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().

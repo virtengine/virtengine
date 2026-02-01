@@ -33,9 +33,8 @@ func SimulateMsgUpdateParams(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) 
 	// use the default gov module account address as authority
 	var authority sdk.AccAddress = address.Module("gov")
 
-	// Start with the required denominations (uve and uact) that are validated by the params
+	// Start with the required denomination (uve) that is validated by the params
 	coins := sdk.Coins{
-		sdk.NewInt64Coin("uact", int64(simtypes.RandIntBetween(r, 500000, 50000000))),
 		sdk.NewInt64Coin("uve", int64(simtypes.RandIntBetween(r, 500000, 50000000))),
 	}
 

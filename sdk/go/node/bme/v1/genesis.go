@@ -13,16 +13,14 @@ func DefaultGenesisState() *GenesisState {
 		Params: DefaultParams(),
 		State: GenesisVaultState{
 			TotalBurned: sdk.Coins{
-				sdk.NewCoin(sdkutil.DenomUact, sdkmath.ZeroInt()),
-				sdk.NewCoin(sdkutil.Denomuve, sdkmath.ZeroInt()),
+				sdk.NewCoin(sdkutil.DenomUve, sdkmath.ZeroInt()),
 			},
 			TotalMinted: sdk.Coins{
-				sdk.NewCoin(sdkutil.DenomUact, sdkmath.ZeroInt()),
-				sdk.NewCoin(sdkutil.Denomuve, sdkmath.ZeroInt()),
+				sdk.NewCoin(sdkutil.DenomUve, sdkmath.ZeroInt()),
 			},
 			// do not uses sdk.NewCoins as it's sanitize removes zero coins
 			RemintCredits: sdk.Coins{
-				sdk.NewCoin(sdkutil.Denomuve, sdkmath.ZeroInt()),
+				sdk.NewCoin(sdkutil.DenomUve, sdkmath.ZeroInt()),
 			},
 		},
 	}

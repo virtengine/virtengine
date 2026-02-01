@@ -6,19 +6,15 @@ import (
 )
 
 const (
-	DenomAkt  = "akt"  // 1akt
-	DenomMakt = "makt" // 10^-3akt
-	Denomuve  = "uve"  // 10^-6akt
+	DenomVe  = "ve"  // 1ve (base unit)
+	DenomMve = "mve" // 10^-3ve (milli)
+	DenomUve = "uve" // 10^-6ve (micro) - primary transaction denom
 
-	DenomAct  = "act"  // 1act
-	DenomMact = "mact" // 10^-3act
-	DenomUact = "uact" // 10^-6act
+	DenomUSD  = "usd"  // 1usd
+	DenomMusd = "musd" // 10^-3usd
+	DenomUusd = "uusd" // 10^-6usd
 
-	DenomUSD  = "usd"  // 1act
-	DenomMusd = "musd" // 10^-3act
-	DenomUusd = "uusd" // 10^-6act
-
-	BondDenom = Denomuve
+	BondDenom = DenomUve
 
 	DenomMExponent = 3
 	DenomUExponent = 6
@@ -34,44 +30,25 @@ const (
 )
 
 func init() {
-	aktUnit := math.LegacyOneDec()                           // 1 (base denom unit)
-	maktUnit := math.LegacyNewDecWithPrec(1, DenomMExponent) // 10^-6 (micro)
-	uveUnit := math.LegacyNewDecWithPrec(1, DenomUExponent)  // 10^-6 (micro)
-
-	actUnit := math.LegacyOneDec()                           // 1 (base denom unit)
-	mactUnit := math.LegacyNewDecWithPrec(1, DenomMExponent) // 10^-6 (micro)
-	uactUnit := math.LegacyNewDecWithPrec(1, DenomUExponent) // 10^-6 (micro)
+	veUnit := math.LegacyOneDec()                           // 1 (base denom unit)
+	mveUnit := math.LegacyNewDecWithPrec(1, DenomMExponent) // 10^-3 (milli)
+	uveUnit := math.LegacyNewDecWithPrec(1, DenomUExponent) // 10^-6 (micro)
 
 	usdUnit := math.LegacyOneDec()                           // 1 (base denom unit)
-	musdUnit := math.LegacyNewDecWithPrec(1, DenomMExponent) // 10^-6 (micro)
+	musdUnit := math.LegacyNewDecWithPrec(1, DenomMExponent) // 10^-3 (milli)
 	uusdUnit := math.LegacyNewDecWithPrec(1, DenomUExponent) // 10^-6 (micro)
 
-	err := sdktypes.RegisterDenom(DenomAkt, aktUnit)
+	err := sdktypes.RegisterDenom(DenomVe, veUnit)
 	if err != nil {
 		panic(err)
 	}
 
-	err = sdktypes.RegisterDenom(DenomMakt, maktUnit)
+	err = sdktypes.RegisterDenom(DenomMve, mveUnit)
 	if err != nil {
 		panic(err)
 	}
 
-	err = sdktypes.RegisterDenom(Denomuve, uveUnit)
-	if err != nil {
-		panic(err)
-	}
-
-	err = sdktypes.RegisterDenom(DenomAct, actUnit)
-	if err != nil {
-		panic(err)
-	}
-
-	err = sdktypes.RegisterDenom(DenomMact, mactUnit)
-	if err != nil {
-		panic(err)
-	}
-
-	err = sdktypes.RegisterDenom(DenomUact, uactUnit)
+	err = sdktypes.RegisterDenom(DenomUve, uveUnit)
 	if err != nil {
 		panic(err)
 	}
@@ -90,6 +67,5 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-
 }
 

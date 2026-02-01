@@ -255,7 +255,7 @@ func GetTxDeploymentGroupCloseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "close",
 		Short:             "close a Deployment's specific Group",
-		Example:           "akash tx deployment group-close --owner=[Account Address] --dseq=[uint64] --gseq=[uint32]",
+		Example:           "virtengine tx deployment group-close --owner=[Account Address] --dseq=[uint64] --gseq=[uint32]",
 		Args:              cobra.ExactArgs(0),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -295,7 +295,7 @@ func GetDeploymentGroupPauseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "pause",
 		Short:             "pause a Deployment's specific Group",
-		Example:           "akash tx deployment group pause --owner=[Account Address] --dseq=[uint64] --gseq=[uint32]",
+		Example:           "virtengine tx deployment group pause --owner=[Account Address] --dseq=[uint64] --gseq=[uint32]",
 		Args:              cobra.ExactArgs(0),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -335,7 +335,7 @@ func GetDeploymentGroupStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "start",
 		Short:             "start a Deployment's specific Group",
-		Example:           "akash tx deployment group pause --owner=[Account Address] --dseq=[uint64] --gseq=[uint32]",
+		Example:           "virtengine tx deployment group pause --owner=[Account Address] --dseq=[uint64] --gseq=[uint32]",
 		Args:              cobra.ExactArgs(0),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {

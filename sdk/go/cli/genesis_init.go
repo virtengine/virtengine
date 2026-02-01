@@ -126,9 +126,9 @@ func GetGenesisInitCmd(mbm module.BasicManager, defaultNodeHome string) *cobra.C
 			}
 
 			if dlGenesis {
-				// If the chainID is blank or akashnet-2, prep this as a mainnet node
+				// If the chainID is blank or virtengine-2, prep this as a mainnet node
 
-				// Attempt to download the genesis file from the Akash Network GitHub repository
+				// Attempt to download the genesis file from the VirtEngine Network GitHub repository
 				// Generate a new genesis file if failed
 				err = downloadGenesis(config, chainID)
 			}
@@ -211,7 +211,7 @@ func GetGenesisInitCmd(mbm module.BasicManager, defaultNodeHome string) *cobra.C
 // - An error if the download or file writing fails, otherwise nil.
 func downloadGenesis(config *cmtcfg.Config, chainID string) error {
 	// URL of the genesis file to download
-	genesisURL := fmt.Sprintf("https://github.com/akash-network/net/raw/main/%s/genesis.json?download", chainID)
+	genesisURL := fmt.Sprintf("https://github.com/virtengine/net/raw/main/%s/genesis.json?download", chainID)
 
 	// Determine the destination path for the genesis file
 	genFilePath := config.GenesisFile()

@@ -15,7 +15,7 @@ import (
 )
 
 func TestDepositAuthorizationAccept(t *testing.T) {
-	limit := sdk.NewInt64Coin(sdkutil.DenomUact, 333)
+	limit := sdk.NewInt64Coin(sdkutil.DenomUve, 333)
 	dda := v1.NewDepositAuthorization(v1.DepositAuthorizationScopes{v1.DepositScopeDeployment}, limit)
 
 	sctx := sdk.Context{}
@@ -28,7 +28,7 @@ func TestDepositAuthorizationAccept(t *testing.T) {
 	require.Zero(t, response)
 
 	// Try to deposit too much coin, expect an error
-	spendReq := limit.Add(sdk.NewInt64Coin(sdkutil.DenomUact, 1))
+	spendReq := limit.Add(sdk.NewInt64Coin(sdkutil.DenomUve, 1))
 
 	did := testutil.DeploymentID(t)
 
@@ -44,7 +44,7 @@ func TestDepositAuthorizationAccept(t *testing.T) {
 	did = testutil.DeploymentID(t)
 	// Deposit 1 less than the limit, expect an updated deposit
 	msg = v1.NewMsgAccountDeposit(did.Owner, did.ToEscrowAccountID(), deposit.Deposit{
-		Amount:  limit.Sub(sdk.NewInt64Coin(sdkutil.DenomUact, 1)),
+		Amount:  limit.Sub(sdk.NewInt64Coin(sdkutil.DenomUve, 1)),
 		Sources: deposit.Sources{deposit.SourceGrant},
 	})
 	response, err = dda.Accept(sctx, msg)
@@ -59,7 +59,7 @@ func TestDepositAuthorizationAccept(t *testing.T) {
 	did = testutil.DeploymentID(t)
 	// Deposit the limit (now 1), expect that it is not to be deleted
 	msg = v1.NewMsgAccountDeposit(did.Owner, did.ToEscrowAccountID(), deposit.Deposit{
-		Amount:  sdk.NewInt64Coin(sdkutil.DenomUact, 1),
+		Amount:  sdk.NewInt64Coin(sdkutil.DenomUve, 1),
 		Sources: deposit.Sources{deposit.SourceGrant},
 	})
 	response, err = dda.Accept(sctx, msg)

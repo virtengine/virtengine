@@ -207,18 +207,18 @@ func MainnetGenesisParams() GenesisParams {
 			Description: "The native token of virtengine",
 			DenomUnits: []*banktypes.DenomUnit{
 				{
-					Denom:    sdkutil.Denomuve,
+					Denom:    sdkutil.DenomUve,
 					Exponent: 0,
 					Aliases:  nil,
 				},
 				{
-					Denom:    sdkutil.DenomAkt,
+					Denom:    sdkutil.DenomVe,
 					Exponent: sdkutil.DenomUExponent,
 					Aliases:  nil,
 				},
 			},
-			Base:    sdkutil.Denomuve,
-			Display: sdkutil.DenomAkt,
+			Base:    sdkutil.DenomUve,
+			Display: sdkutil.DenomVe,
 		},
 	}
 

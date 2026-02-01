@@ -117,7 +117,7 @@ func (e *DefaultQueryExecutor) executeBalanceQuery(ctx context.Context, address 
 			QueryType: "balance",
 			Data: []BalanceInfo{
 				{Denom: "uve", Amount: "1000000", USD: "100.00"},
-				{Denom: "uact", Amount: "500000", USD: "50.00"},
+				{Denom: "uve", Amount: "500000", USD: "50.00"},
 			},
 		}, nil
 	}
