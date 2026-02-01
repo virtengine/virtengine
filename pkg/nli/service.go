@@ -148,6 +148,9 @@ func NewServiceWithRedis(ctx context.Context, config Config, logger zerolog.Logg
 
 	// Create session store
 	config.SessionStore.MaxHistoryLength = config.MaxHistoryLength
+	if config.SessionStore.Backend == "" {
+		config.SessionStore.Backend = "redis"
+	}
 	sessionStore, err := NewSessionStore(ctx, config.SessionStore, logger)
 	if err != nil {
 		return nil, err
@@ -156,17 +159,7 @@ func NewServiceWithRedis(ctx context.Context, config Config, logger zerolog.Logg
 	// Create rate limiter if enabled
 	var rateLimiter ratelimit.RateLimiter
 	if config.DistributedRateLimiter.Enabled {
-		rateLimitConfig := ratelimit.RateLimitConfig{
-			RedisURL:    config.DistributedRateLimiter.RedisURL,
-			RedisPrefix: config.DistributedRateLimiter.RedisPrefix,
-			Enabled:     true,
-			UserLimits: ratelimit.LimitRules{
-				RequestsPerSecond: config.DistributedRateLimiter.RequestsPerSecond,
-				RequestsPerMinute: config.DistributedRateLimiter.RequestsPerMinute,
-				BurstSize:         config.DistributedRateLimiter.BurstSize,
-			},
-		}
-		rateLimiter, err = ratelimit.NewRedisRateLimiter(ctx, rateLimitConfig, logger)
+		rateLimiter, err = NewDistributedRateLimiter(ctx, config.DistributedRateLimiter, logger)
 		if err != nil {
 			sessionStore.Close()
 			return nil, err
@@ -709,4 +702,3 @@ func (s *nliService) SetQueryExecutor(executor *DefaultQueryExecutor) {
 func (s *nliService) GetQueryExecutor() *DefaultQueryExecutor {
 	return s.queryExecutor
 }
-

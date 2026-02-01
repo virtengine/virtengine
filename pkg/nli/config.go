@@ -73,6 +73,12 @@ type DistributedRateLimiterConfig struct {
 	// RedisPrefix is the key prefix for rate limit keys
 	RedisPrefix string `json:"redis_prefix"`
 
+	// RedisMaxMemoryMB sets Redis maxmemory (MB) when non-zero
+	RedisMaxMemoryMB int `json:"redis_max_memory_mb"`
+
+	// RedisEvictionPolicy sets Redis maxmemory-policy when non-empty
+	RedisEvictionPolicy string `json:"redis_eviction_policy"`
+
 	// RequestsPerMinute is the max requests per minute per session
 	RequestsPerMinute int `json:"requests_per_minute"`
 
@@ -86,12 +92,14 @@ type DistributedRateLimiterConfig struct {
 // DefaultDistributedRateLimiterConfig returns the default distributed rate limiter configuration
 func DefaultDistributedRateLimiterConfig() DistributedRateLimiterConfig {
 	return DistributedRateLimiterConfig{
-		Enabled:           false,
-		RedisURL:          "redis://localhost:6379/0",
-		RedisPrefix:       "virtengine:nli:ratelimit",
-		RequestsPerMinute: 60,
-		RequestsPerSecond: 5,
-		BurstSize:         10,
+		Enabled:             true,
+		RedisURL:            "redis://localhost:6379/0",
+		RedisPrefix:         "virtengine:nli:ratelimit",
+		RedisMaxMemoryMB:    0,
+		RedisEvictionPolicy: "",
+		RequestsPerMinute:   60,
+		RequestsPerSecond:   5,
+		BurstSize:           10,
 	}
 }
 
@@ -224,4 +232,3 @@ Your role is to help users:
 Be helpful, concise, and accurate. When you don't know something, say so.
 If the user asks about their balance or orders, and you have that data, include it in your response.
 Format responses in a friendly but professional manner.`
-

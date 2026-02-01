@@ -8,12 +8,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+	"github.com/virtengine/virtengine/pkg/observability"
 )
 
 var (
-	metricsOnce     sync.Once
-	defaultMetrics  *NLIMetrics
-	metricsRegistry = prometheus.NewRegistry()
+	metricsOnce    sync.Once
+	defaultMetrics *NLIMetrics
 )
 
 // NLIMetrics provides metrics collection for the NLI service
@@ -138,8 +138,9 @@ func createMetrics(namespace string, logger zerolog.Logger) *NLIMetrics {
 		[]string{"type"},
 	)
 
-	// Register with custom registry (won't panic on re-registration)
-	metricsRegistry.MustRegister(
+	// Register with global registry (won't panic on re-registration)
+	registerer := observability.GetRegistry()
+	registerer.MustRegister(
 		activeSessions,
 		sessionOperations,
 		sessionOperationTime,
@@ -266,4 +267,3 @@ func (c *MetricsCollector) collectMetrics(ctx context.Context) {
 
 	c.logger.Debug().Int64("session_count", count).Msg("metrics collected")
 }
-

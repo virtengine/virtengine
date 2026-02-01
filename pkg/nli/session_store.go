@@ -53,6 +53,12 @@ type SessionStoreConfig struct {
 	// RedisPrefix is the key prefix for session keys
 	RedisPrefix string `json:"redis_prefix"`
 
+	// RedisMaxMemoryMB sets Redis maxmemory (MB) when non-zero
+	RedisMaxMemoryMB int `json:"redis_max_memory_mb"`
+
+	// RedisEvictionPolicy sets Redis maxmemory-policy when non-empty
+	RedisEvictionPolicy string `json:"redis_eviction_policy"`
+
 	// SessionTTL is the TTL for session data
 	SessionTTL time.Duration `json:"session_ttl"`
 
@@ -66,12 +72,14 @@ type SessionStoreConfig struct {
 // DefaultSessionStoreConfig returns the default session store configuration
 func DefaultSessionStoreConfig() SessionStoreConfig {
 	return SessionStoreConfig{
-		Backend:          "memory",
-		RedisURL:         "redis://localhost:6379/0",
-		RedisPrefix:      "virtengine:nli:session:",
-		SessionTTL:       30 * time.Minute,
-		MaxSessions:      10000,
-		MaxHistoryLength: 20,
+		Backend:             "memory",
+		RedisURL:            "redis://localhost:6379/0",
+		RedisPrefix:         "virtengine:nli:session:",
+		RedisMaxMemoryMB:    0,
+		RedisEvictionPolicy: "",
+		SessionTTL:          30 * time.Minute,
+		MaxSessions:         10000,
+		MaxHistoryLength:    20,
 	}
 }
 
@@ -112,6 +120,10 @@ func NewRedisSessionStore(ctx context.Context, config SessionStoreConfig, logger
 		return nil, fmt.Errorf("nli: failed to connect to redis: %w", err)
 	}
 
+	if err := applyRedisMemoryPolicy(ctx, client, config.RedisMaxMemoryMB, config.RedisEvictionPolicy); err != nil {
+		return nil, err
+	}
+
 	store := &RedisSessionStore{
 		client:  client,
 		config:  config,
@@ -123,9 +135,31 @@ func NewRedisSessionStore(ctx context.Context, config SessionStoreConfig, logger
 		Str("redis_url", config.RedisURL).
 		Str("prefix", config.RedisPrefix).
 		Dur("ttl", config.SessionTTL).
+		Int("max_memory_mb", config.RedisMaxMemoryMB).
+		Str("eviction_policy", config.RedisEvictionPolicy).
 		Msg("redis session store initialized")
 
 	return store, nil
+}
+
+func applyRedisMemoryPolicy(ctx context.Context, client *redis.Client, maxMemoryMB int, policy string) error {
+	if maxMemoryMB <= 0 && policy == "" {
+		return nil
+	}
+
+	pipe := client.Pipeline()
+	if maxMemoryMB > 0 {
+		bytes := int64(maxMemoryMB) * 1024 * 1024
+		pipe.ConfigSet(ctx, "maxmemory", fmt.Sprintf("%d", bytes))
+	}
+	if policy != "" {
+		pipe.ConfigSet(ctx, "maxmemory-policy", policy)
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("nli: failed to configure redis memory policy: %w", err)
+	}
+	return nil
 }
 
 // Get retrieves a session by ID
@@ -521,4 +555,3 @@ func NewSessionStore(ctx context.Context, config SessionStoreConfig, logger zero
 		return nil, fmt.Errorf("nli: unknown session store backend: %s", config.Backend)
 	}
 }
-

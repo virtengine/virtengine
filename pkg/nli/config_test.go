@@ -169,6 +169,9 @@ func TestDefaultConfig(t *testing.T) {
 	if config.SystemPrompt == "" {
 		t.Error("SystemPrompt should not be empty")
 	}
+	if config.DistributedRateLimiter.RedisPrefix == "" {
+		t.Error("DistributedRateLimiter.RedisPrefix should not be empty")
+	}
 }
 
 func TestLLMBackendType_Values(t *testing.T) {
@@ -186,4 +189,3 @@ func TestLLMBackendType_Values(t *testing.T) {
 		t.Errorf("LLMBackendMock = %v, want mock", LLMBackendMock)
 	}
 }
-
