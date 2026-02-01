@@ -10,7 +10,6 @@ import (
 
 	_ "github.com/pseudomuto/protoc-gen-doc"
 
-	// TODO https://github.com/akash-network/support/issues/77
+	// TODO https://github.com/virtengine/support/issues/77
 	_ "github.com/regen-network/cosmos-proto/protoc-gen-gocosmos"
 )
-

@@ -427,4 +427,3 @@ func ParseSigArgs(args []string) ([]string, error) {
 
 	return strings.Split(args[0], ","), nil
 }
-

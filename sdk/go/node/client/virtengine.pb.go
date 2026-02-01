@@ -69,14 +69,8 @@ func (m *VirtEngine) GetClientInfo() ClientInfo {
 	return ClientInfo{}
 }
 
-// Akash is an alias for VirtEngine for backward compatibility.
-// Deprecated: Use VirtEngine instead.
-type Akash = VirtEngine
-
 func init() {
 	proto.RegisterType((*VirtEngine)(nil), "virtengine.discovery.v1.VirtEngine")
-	// Register alias for backward compatibility
-	proto.RegisterType((*VirtEngine)(nil), "virtengine.discovery.v1.Akash")
 }
 
 func init() {

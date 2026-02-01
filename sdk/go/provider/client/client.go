@@ -222,7 +222,7 @@ func (c *client) verifyPeerCertificate(certificates [][]byte, _ [][]*x509.Certif
 		var owner sdk.Address
 		var err error
 
-		// if the common name is not akash address, do not proceed with mTLS validation and keep the normal handshake flow
+		// if the common name is not virtengine address, do not proceed with mTLS validation and keep the normal handshake flow
 		if owner, err = sdk.AccAddressFromBech32(leaf.Subject.CommonName); err == nil {
 			// 1. CommonName in issuer and Subject must match and be as Bech32 format
 			if leaf.Subject.CommonName != leaf.Issuer.CommonName {

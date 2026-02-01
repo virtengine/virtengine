@@ -17,7 +17,7 @@ import (
 
 type MockRPC interface {
 	client.CometRPC
-	Akash(ctx context.Context)
+	VirtEngine(ctx context.Context)
 }
 
 var _ arpcclient.RPCClient = (*MockCometRPC)(nil)
@@ -47,11 +47,10 @@ func (m MockCometRPC) ABCIQueryWithOptions(
 	return &coretypes.ResultABCIQuery{Response: m.responseQuery}, nil
 }
 
-func (MockCometRPC) Akash(_ context.Context) (*arpcclient.Akash, error) {
-	return &arpcclient.Akash{
+func (MockCometRPC) VirtEngine(_ context.Context) (*arpcclient.VirtEngine, error) {
+	return &arpcclient.VirtEngine{
 		ClientInfo: arpcclient.ClientInfo{
 			ApiVersion: arpcclient.VersionV1beta3,
 		},
 	}, nil
 }
-

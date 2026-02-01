@@ -8,7 +8,7 @@ option go_package = "github.com/virtengine/virtengine/sdk/go/node/wasm/v1";
 
 // GenesisState stores slice of genesis wasm parameters.
 message GenesisState {
-  // Params holds parameters of the genesis of akash wasm.
+  // Params holds parameters of the genesis of virtengine wasm.
   Params params = 1 [
     (gogoproto.nullable) = false,
     (gogoproto.jsontag)  = "params",

@@ -10,7 +10,7 @@ import (
 
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 	attr "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
-	akashtypes "github.com/virtengine/virtengine/sdk/go/node/types/resources/v1beta4"
+	vetypes "github.com/virtengine/virtengine/sdk/go/node/types/resources/v1beta4"
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 	"github.com/virtengine/virtengine/sdk/go/testutil"
 )
@@ -180,7 +180,7 @@ func TestManifestWithEndpointMismatchA(t *testing.T) {
 	deployment := simpleDeployment(t, m[0].Services[0].Expose, 1)
 
 	// Remove an endpoint where the manifest calls for it
-	deployment[0].GroupSpec.Resources[0].Endpoints = akashtypes.Endpoints{}
+	deployment[0].GroupSpec.Resources[0].Endpoints = vetypes.Endpoints{}
 
 	err := m.CheckAgainstDeployment(deployment)
 	require.Error(t, err)
@@ -191,9 +191,8 @@ func TestManifestWithEndpointMismatchB(t *testing.T) {
 	m := simpleManifest(1)
 	deployment := simpleDeployment(t, m[0].Services[0].Expose, 1)
 	// Add an endpoint where the manifest doesn't call for it
-	deployment[0].GroupSpec.Resources[0].Endpoints = append(deployment[0].GroupSpec.Resources[0].Endpoints, akashtypes.Endpoint{})
+	deployment[0].GroupSpec.Resources[0].Endpoints = append(deployment[0].GroupSpec.Resources[0].Endpoints, vetypes.Endpoint{})
 	err := m.CheckAgainstDeployment(deployment)
 	require.Error(t, err)
 	require.Regexp(t, underUtilizedGroupEndpoints, err)
 }
-

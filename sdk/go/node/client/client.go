@@ -26,23 +26,23 @@ const (
 )
 
 func init() {
-	// register akash api routes
-	cmtrpc.Routes["akash"] = cmtrpcsrv.NewRPCFunc(RPCAkash, "")
+	// register virtengine api routes
+	cmtrpc.Routes["virtengine"] = cmtrpcsrv.NewRPCFunc(RPCVirtEngine, "")
 }
 
 // SetupFn defines a function that takes a parameter, ideally a Client or QueryClient.
 // These functions must validate the client and make it accessible.
 type SetupFn func(interface{}) error
 
-func queryClientInfo(ctx context.Context, cctx sdkclient.Context) (*Akash, error) {
-	result := new(Akash)
+func queryClientInfo(ctx context.Context, cctx sdkclient.Context) (*VirtEngine, error) {
+	result := new(VirtEngine)
 	var err error
 
 	if !cctx.Offline {
 		if cctx.Client != nil {
 			switch rpc := cctx.Client.(type) {
 			case RPCClient:
-				if result, err = rpc.Akash(ctx); err != nil {
+				if result, err = rpc.VirtEngine(ctx); err != nil {
 					return nil, err
 				}
 			default:
@@ -55,7 +55,7 @@ func queryClientInfo(ctx context.Context, cctx sdkclient.Context) (*Akash, error
 			}
 
 			params := make(map[string]interface{})
-			if _, err = rpc.Call(ctx, "akash", params, result); err != nil {
+			if _, err = rpc.Call(ctx, "virtengine", params, result); err != nil {
 				return nil, err
 			}
 		}
@@ -155,8 +155,8 @@ func DiscoverQueryClient(ctx context.Context, cctx sdkclient.Context, setup Setu
 	return nil
 }
 
-func RPCAkash(_ *cmtrpctypes.Context) (*Akash, error) {
-	result := &Akash{
+func RPCVirtEngine(_ *cmtrpctypes.Context) (*VirtEngine, error) {
+	result := &VirtEngine{
 		ClientInfo: ClientInfo{
 			ApiVersion: "v1beta3",
 		},
@@ -164,4 +164,3 @@ func RPCAkash(_ *cmtrpctypes.Context) (*Akash, error) {
 
 	return result, nil
 }
-

@@ -6,7 +6,7 @@ import "gogoproto/gogo.proto";
 
 option go_package = "github.com/virtengine/virtengine/sdk/go/node/client";
 
-// ClientInfo is the akash specific client info.
+// ClientInfo is the virtengine specific client info.
 message ClientInfo {
   // ApiVersion is the version of the API running on the client.
   string api_version = 1 [

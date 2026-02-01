@@ -11,7 +11,7 @@ func TestFull(t *testing.T) {
 version: "2.0"
 services:
   web:
-    image: ghcr.io/akash-network/demo-app
+    image: ghcr.io/virtengine/demo-app
     expose:
     - port: 80
       as: 80
@@ -64,4 +64,3 @@ deployment:
 	_, err := Read([]byte(stream))
 	require.NoError(t, err)
 }
-

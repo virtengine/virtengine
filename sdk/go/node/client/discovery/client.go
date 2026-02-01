@@ -79,8 +79,8 @@ func DiscoverClient(ctx context.Context, cctx sdkclient.Context, opts ...cltypes
 	return cl, nil
 }
 
-func RPCAkash(_ *cmtrpctypes.Context) (*aclient.Akash, error) {
-	result := &aclient.Akash{
+func RPCVirtEngine(_ *cmtrpctypes.Context) (*aclient.VirtEngine, error) {
+	result := &aclient.VirtEngine{
 		ClientInfo: aclient.ClientInfo{
 			ApiVersion: "v1beta3",
 		},
@@ -88,4 +88,3 @@ func RPCAkash(_ *cmtrpctypes.Context) (*aclient.Akash, error) {
 
 	return result, nil
 }
-

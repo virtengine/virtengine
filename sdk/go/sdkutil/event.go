@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	akashEventMessageV1 = "akash.v1"
+	virtengineEventMessageV1 = "virtengine.v1"
 
-	// EventTypeMessage defines the Akash message string
-	EventTypeMessage = akashEventMessageV1
+	// EventTypeMessage defines the VirtEngine message string
+	EventTypeMessage = virtengineEventMessageV1
 )
 
 var (
@@ -91,4 +91,3 @@ func GetString(attrs []sdk.Attribute, key string) (string, error) {
 	}
 	return "", ErrNotFound
 }
-

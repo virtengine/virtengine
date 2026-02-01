@@ -36,7 +36,7 @@ func DetectDeploymentDeposit(ctx context.Context, flags *pflag.FlagSet, cl aclie
 			return sdk.Coin{}, err
 		}
 
-		// always default to AKT
+		// always default to VE
 		for _, sCoin := range resp.Params.MinDeposits {
 			if sCoin.Denom == "uve" {
 				depositStr = fmt.Sprintf("%s%s", sCoin.Amount, sCoin.Denom)
@@ -223,4 +223,3 @@ func ReadPageRequest(flagSet *pflag.FlagSet) (*query.PageRequest, error) {
 		Reverse:    reverse,
 	}, nil
 }
-

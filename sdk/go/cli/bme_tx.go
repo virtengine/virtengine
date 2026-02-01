@@ -21,8 +21,8 @@ func GetTxBMECmd() *cobra.Command {
 
 	cmd.AddCommand(
 		GetTxBMEBurnMintCmd(),
-		GetTxBMEMintACTCmd(),
-		GetTxBMEBurnACTCmd(),
+		GetTxBMEMintVACTCmd(),
+		GetTxBMEBurnVACTCmd(),
 	)
 
 	return cmd
@@ -34,11 +34,11 @@ func GetTxBMEBurnMintCmd() *cobra.Command {
 		Use:   "burn-mint [coins-to-burn] [denom-to-mint]",
 		Short: "Burn tokens to mint another denomination",
 		Long: `Burn tokens to mint another denomination.
-This allows burning AKT to mint ACT, or burning unused ACT back to AKT.
+This allows burning VE to mint vACT, or burning unused vACT back to VE.
 
 Example:
-  $ akash tx bme burn-mint 1000000uve uact --from mykey
-  $ akash tx bme burn-mint 500000uact uve --from mykey`,
+  $ virtengine tx bme burn-mint 1000000uve uvact --from mykey
+  $ virtengine tx bme burn-mint 500000uvact uve --from mykey`,
 		Args:              cobra.ExactArgs(2),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -86,14 +86,14 @@ Example:
 	return cmd
 }
 
-// GetTxBMEMintACTCmd returns the command to burn one token and mint another
-func GetTxBMEMintACTCmd() *cobra.Command {
+// GetTxBMEMintVACTCmd returns the command to burn VE tokens to mint vACT
+func GetTxBMEMintVACTCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mint-act [coins-to-burn]",
-		Short: "Mint ACT by burning AKT",
+		Use:   "mint-vact [coins-to-burn]",
+		Short: "Mint vACT by burning VE",
 		Long: `
 Example:
-  $ akash tx bme mint-act 500000uve --from mykey`,
+  $ virtengine tx bme mint-vact 500000uve --from mykey`,
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -134,14 +134,14 @@ Example:
 	return cmd
 }
 
-// GetTxBMEBurnACTCmd returns the command to burn one token and mint another
-func GetTxBMEBurnACTCmd() *cobra.Command {
+// GetTxBMEBurnVACTCmd returns the command to burn vACT tokens to mint/remint VE
+func GetTxBMEBurnVACTCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "burn-act [coins-to-burn]",
-		Short: "Burn ACT tokens to mint/remint AKT",
+		Use:   "burn-vact [coins-to-burn]",
+		Short: "Burn vACT tokens to mint/remint VE",
 		Long: `
 Example:
-  $ akash tx bme burn-act 500000uact --from mykey`,
+  $ virtengine tx bme burn-vact 500000uvact --from mykey`,
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {

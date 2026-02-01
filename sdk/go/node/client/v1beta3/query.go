@@ -119,7 +119,7 @@ func (c *queryClient) Audit() atypes.QueryClient {
 	return c.aclient
 }
 
-// Certs implements QueryClient by returning the certs Akash SDK query client.
+// Certs implements QueryClient by returning the certs VirtEngine SDK query client.
 func (c *queryClient) Certs() ctypes.QueryClient {
 	return c.cclient
 }
@@ -203,4 +203,3 @@ func (c *queryClient) Oracle() otypes.QueryClient {
 func (c *queryClient) BME() btypes.QueryClient {
 	return c.sdk.bme
 }
-

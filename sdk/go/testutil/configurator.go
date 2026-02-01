@@ -172,7 +172,7 @@ func AuthModule() ModuleOption {
 		config.ModuleConfigs["auth"] = &appv1alpha1.ModuleConfig{
 			Name: "auth",
 			Config: appconfig.WrapAny(&authmodulev1.Module{
-				Bech32Prefix: "akash",
+				Bech32Prefix: "ve",
 				ModuleAccountPermissions: []*authmodulev1.ModuleAccountPermission{
 					{Account: "fee_collector"},
 					{Account: "distribution"},

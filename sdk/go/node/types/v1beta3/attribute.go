@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	moduleName                        = "akash"
+	moduleName                        = "virtengine"
 	AttributeNameRegexpStringWildcard = `^([a-zA-Z][\w\/\.\-]{1,126}[\w\*]?)$`
 	AttributeNameRegexpString         = `^([a-zA-Z][\w\/\.\-]{1,126})$`
 )
@@ -32,7 +32,7 @@ var (
 Attributes purpose of using this type in favor of Cosmos's sdk.Attribute is
 ability to later extend it with operators to support querying on things like
 cpu/memory/storage attributes
-At this moment type though is same as sdk.Attributes but all akash libraries were
+At this moment type though is same as sdk.Attributes but all virtengine libraries were
 turned to use a new one
 */
 type Attributes []Attribute

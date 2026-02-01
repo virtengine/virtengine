@@ -21,7 +21,7 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 	prefix := v1beta3.AccountKeyPrefix()
 
 	// Sample data
-	akashAddr := "ve1keydahz9uv8fs8u4lk6q3cluaprjpnm7lnsq0u"
+	veAddr := "ve1keydahz9uv8fs8u4lk6q3cluaprjpnm7lnsq0u"
 	dseq := "1000"
 
 	// Helper function to create valid account keys
@@ -30,10 +30,10 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 	}
 
 	t.Run("valid deployment account", func(t *testing.T) {
-		key := createAccountKey("deployment", akashAddr+"/"+dseq)
+		key := createAccountKey("deployment", veAddr+"/"+dseq)
 		expected := eid.Account{
 			Scope: eid.ScopeDeployment,
-			XID:   akashAddr + "/" + dseq,
+			XID:   veAddr + "/" + dseq,
 		}
 
 		result := AccountIDFromV1beta3(key)
@@ -41,10 +41,10 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 	})
 
 	t.Run("valid bid account", func(t *testing.T) {
-		key := createAccountKey("bid", akashAddr+"/"+dseq)
+		key := createAccountKey("bid", veAddr+"/"+dseq)
 		expected := eid.Account{
 			Scope: eid.ScopeBid,
-			XID:   akashAddr + "/" + dseq,
+			XID:   veAddr + "/" + dseq,
 		}
 
 		result := AccountIDFromV1beta3(key)
@@ -52,7 +52,7 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 	})
 
 	t.Run("prefix check", func(t *testing.T) {
-		invalidPrefix := []byte("/wrong_prefix/deployment/" + akashAddr + "/" + dseq)
+		invalidPrefix := []byte("/wrong_prefix/deployment/" + veAddr + "/" + dseq)
 		require.Panics(t, func() {
 			AccountIDFromV1beta3(invalidPrefix)
 		})
@@ -60,7 +60,7 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 
 	t.Run("separator check", func(t *testing.T) {
 		// Missing separator after prefix
-		invalidKey := append(bytes.Clone(prefix), []byte("deployment/"+akashAddr+"/"+dseq)...)
+		invalidKey := append(bytes.Clone(prefix), []byte("deployment/"+veAddr+"/"+dseq)...)
 		require.Panics(t, func() {
 			AccountIDFromV1beta3(invalidKey)
 		})
@@ -75,7 +75,7 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 
 	t.Run("invalid scope", func(t *testing.T) {
 		// Scope is not "deployment" or "bid"
-		invalidScope := createAccountKey("invalid", akashAddr+"/"+dseq)
+		invalidScope := createAccountKey("invalid", veAddr+"/"+dseq)
 		require.Panics(t, func() {
 			AccountIDFromV1beta3(invalidScope)
 		})
@@ -83,13 +83,13 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 
 	t.Run("invalid parts count", func(t *testing.T) {
 		// Not enough parts
-		tooFewParts := createAccountKey("deployment", akashAddr)
+		tooFewParts := createAccountKey("deployment", veAddr)
 		require.Panics(t, func() {
 			AccountIDFromV1beta3(tooFewParts)
 		})
 
 		// Too many parts that don't match 3 or 6
-		tooManyParts := createAccountKey("deployment", akashAddr+"/"+dseq+"/extra/random")
+		tooManyParts := createAccountKey("deployment", veAddr+"/"+dseq+"/extra/random")
 		require.Panics(t, func() {
 			AccountIDFromV1beta3(tooManyParts)
 		})
@@ -97,7 +97,7 @@ func TestAccountIDFromV1beta3(t *testing.T) {
 
 	t.Run("complex XID with 6 parts", func(t *testing.T) {
 		// Valid XID with 6 parts
-		complexXID := akashAddr + "/1/2/3/4"
+		complexXID := veAddr + "/1/2/3/4"
 		key := createAccountKey("bid", complexXID)
 		expected := eid.Account{
 			Scope: eid.ScopeBid,

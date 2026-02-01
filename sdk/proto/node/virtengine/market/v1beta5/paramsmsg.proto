@@ -12,7 +12,7 @@ option go_package = "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5
 
 // MsgUpdateParams is the Msg/UpdateParams request type.
 //
-// Since: akash v1.0.0
+// Since: virtengine v1.0.0
 message MsgUpdateParams {
     option (cosmos.msg.v1.signer) = "authority";
 
@@ -32,5 +32,5 @@ message MsgUpdateParams {
 // MsgUpdateParamsResponse defines the response structure for executing a
 // MsgUpdateParams message.
 //
-// Since: akash v1.0.0
+// Since: virtengine v1.0.0
 message MsgUpdateParamsResponse {}

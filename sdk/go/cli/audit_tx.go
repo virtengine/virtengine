@@ -154,7 +154,7 @@ func setCmdProviderFlags(cmd *cobra.Command) {
 // readAttributes try read attributes from both cobra arguments or query
 // if no arguments were provided then query provider and sign all found
 // read from stdin uses trick to check if it's file descriptor is a pipe
-// which happens when some data is piped for example cat attr.yaml | akash ...
+// which happens when some data is piped for example cat attr.yaml | virtengine ...
 func readAttributes(cmd *cobra.Command, cctx sdkclient.Context, provider string, args []string) (attrtypes.Attributes, error) {
 	var attr attrtypes.Attributes
 
@@ -222,4 +222,3 @@ func checkKeysDuplicates(k []string) bool {
 	}
 	return false
 }
-

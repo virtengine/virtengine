@@ -357,12 +357,11 @@ check_maintainer_risks() {
             
             # These are the known legitimate forks for VirtEngine
             local known_forks=(
-                "github.com/akash-network/cosmos-sdk"
-                "github.com/akash-network/cometbft"
-                "github.com/akash-network/ledger-go"
-                "github.com/akash-network/gogoproto"
+                "github.com/virtengine/cosmos-sdk"
+                "github.com/virtengine/cometbft"
+                "github.com/virtengine/ledger-go"
+                "github.com/virtengine/gogoproto"
                 "github.com/cosmos/keyring"
-                "github.com/regen-network/protobuf"
             )
             
             while IFS= read -r fork_line; do

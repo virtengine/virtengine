@@ -61,7 +61,7 @@ func DefaultParams() Params {
 }
 
 func (p *Params) ValidateBasic() error {
-	msgs, err := sdktx.GetMsgs(p.FeedContractsParams, "akash.oracle.v1.Params")
+	msgs, err := sdktx.GetMsgs(p.FeedContractsParams, "virtengine.oracle.v1.Params")
 	if err != nil {
 		return err
 	}

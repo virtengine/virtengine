@@ -38,6 +38,5 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 
 // RegisterLegacyAminoCodec register concrete types on codec
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	cdc.RegisterConcrete(&MsgAccountDeposit{}, "akash-sdk/x/"+module.ModuleName+"/"+(&MsgAccountDeposit{}).Type(), nil)
+	cdc.RegisterConcrete(&MsgAccountDeposit{}, "virtengine-sdk/x/"+module.ModuleName+"/"+(&MsgAccountDeposit{}).Type(), nil)
 }
-

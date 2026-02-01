@@ -29,6 +29,6 @@ service Msg {
   // UpdateParams defines a governance operation for updating the x/market module
   // parameters. The authority is hard-coded to the x/gov module account.
   //
-  // Since: akash v1.0.0
+  // Since: virtengine v1.0.0
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }

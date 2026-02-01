@@ -1593,4 +1593,3 @@ func (s *AuthCLITestSuite) createBankMsg(cctx client.Context, toAddr sdk.AccAddr
 			WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10)))).
 			Append(extraFlags)...)
 }
-

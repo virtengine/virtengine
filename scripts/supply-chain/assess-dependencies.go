@@ -85,9 +85,9 @@ type AssessmentReport struct {
 
 // ReportSummary provides high-level metrics
 type ReportSummary struct {
-	AverageScore     float64           `json:"average_score"`
-	LowestScore      float64           `json:"lowest_score"`
-	HighestRiskPkg   string            `json:"highest_risk_package"`
+	AverageScore     float64            `json:"average_score"`
+	LowestScore      float64            `json:"lowest_score"`
+	HighestRiskPkg   string             `json:"highest_risk_package"`
 	CategoryAverages map[string]float64 `json:"category_averages"`
 }
 
@@ -125,7 +125,7 @@ var (
 
 		// Our own packages - Trusted
 		{Pattern: "github.com/virtengine/", TrustLevel: "high", BaseScore: 9.0, Notes: "VirtEngine packages"},
-		{Pattern: "github.com/akash-network/", TrustLevel: "high", BaseScore: 8.5, Notes: "Akash forks"},
+		{Pattern: "github.com/virtengine/", TrustLevel: "high", BaseScore: 8.5, Notes: "VirtEngine forks"},
 
 		// Lower trust - requires review
 		{Pattern: "github.com/", TrustLevel: "medium", BaseScore: 6.0, Notes: "Unknown GitHub package"},

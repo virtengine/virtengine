@@ -21,7 +21,7 @@ import (
 func EventsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "events",
-		Short: "Prints out akash events in real time",
+		Short: "Prints out virtengine events in real time",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return RunForeverWithContext(cmd.Context(), func(ctx context.Context) error {
 				return getEvents(ctx, cmd, args)
@@ -55,7 +55,7 @@ func getEvents(ctx context.Context, cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	evtSvc, err := events.NewEvents(ctx, node, "akash-cli", bus)
+	evtSvc, err := events.NewEvents(ctx, node, "virtengine-cli", bus)
 	if err != nil {
 		return err
 	}
@@ -87,4 +87,3 @@ func getEvents(ctx context.Context, cmd *cobra.Command, _ []string) error {
 
 	return nil
 }
-

@@ -23,8 +23,8 @@ var (
 //
 // Deprecated: RegisterLegacyAminoCodec is deprecated
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	cdc.RegisterConcrete(&MsgSignProviderAttributes{}, "akash-sdk/x/"+ModuleName+"/"+MsgTypeSignProviderAttributes, nil)
-	cdc.RegisterConcrete(&MsgDeleteProviderAttributes{}, "akash-sdk/x/"+ModuleName+"/"+MsgTypeDeleteProviderAttributes, nil)
+	cdc.RegisterConcrete(&MsgSignProviderAttributes{}, "virtengine-sdk/x/"+ModuleName+"/"+MsgTypeSignProviderAttributes, nil)
+	cdc.RegisterConcrete(&MsgDeleteProviderAttributes{}, "virtengine-sdk/x/"+ModuleName+"/"+MsgTypeDeleteProviderAttributes, nil)
 }
 
 // RegisterInterfaces registers the x/provider interfaces types with the interface registry

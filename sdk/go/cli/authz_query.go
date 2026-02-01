@@ -195,4 +195,3 @@ $ %s q %s grants-by-grantee ve1skj..
 
 	return cmd
 }
-

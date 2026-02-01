@@ -12,7 +12,7 @@ import (
 
 type RPCClient interface {
 	client.CometRPC
-	Akash(ctx context.Context) (*Akash, error)
+	VirtEngine(ctx context.Context) (*VirtEngine, error)
 }
 
 type rpcClient struct {
@@ -66,12 +66,11 @@ func NewClient(ctx context.Context, remote string) (RPCClient, error) {
 	return rpc, nil
 }
 
-func (cl *rpcClient) Akash(ctx context.Context) (*Akash, error) {
-	result := &Akash{}
-	_, err := cl.rpc.Call(ctx, "akash", map[string]interface{}{}, result)
+func (cl *rpcClient) VirtEngine(ctx context.Context) (*VirtEngine, error) {
+	result := &VirtEngine{}
+	_, err := cl.rpc.Call(ctx, "virtengine", map[string]interface{}{}, result)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
 }
-

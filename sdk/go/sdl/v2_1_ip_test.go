@@ -198,7 +198,7 @@ version: "2.1"
 
 services:
   web:
-    image: ghcr.io/akash-network/demo-app
+    image: ghcr.io/virtengine/demo-app
     expose:
       - port: 80
         to:
@@ -277,4 +277,3 @@ endpoints:
 	require.ErrorIs(t, err, errSDLInvalid)
 	require.Contains(t, err.Error(), "not a valid name")
 }
-

@@ -597,4 +597,3 @@ func bech32toAccAddresses(accAddrs []string, ac address.Codec) ([]sdk.AccAddress
 	}
 	return addrs, nil
 }
-

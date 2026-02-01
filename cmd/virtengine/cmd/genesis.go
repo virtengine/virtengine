@@ -265,7 +265,7 @@ func TestnetGenesisParams() GenesisParams {
 
 	genParams.GovParams.DepositParams.MinDeposit = sdk.NewCoins(sdk.NewCoin(
 		genParams.NativeCoinMetadatas[0].Base,
-		sdkmath.NewInt(1000000), // 1 AKT
+		sdkmath.NewInt(1000000), // 1 VE
 	))
 	genParams.GovParams.TallyParams.Quorum = sdkmath.LegacyMustNewDecFromStr("0.0000000001") // 0.00000001%
 	genParams.GovParams.VotingParams.VotingPeriod = time.Second * 300                        // 300 seconds

@@ -37,11 +37,11 @@ func init() {
 //
 // Deprecated: RegisterLegacyAminoCodec is deprecated
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	cdc.RegisterConcrete(&MsgCreateBid{}, "akash-sdk/x/"+v1.ModuleName+"/"+(&MsgCreateBid{}).Type(), nil)
-	cdc.RegisterConcrete(&MsgCloseBid{}, "akash-sdk/x/"+v1.ModuleName+"/"+(&MsgCloseBid{}).Type(), nil)
-	cdc.RegisterConcrete(&MsgCreateLease{}, "akash-sdk/x/"+v1.ModuleName+"/"+(&MsgCreateLease{}).Type(), nil)
-	cdc.RegisterConcrete(&MsgCloseLease{}, "akash-sdk/x/"+v1.ModuleName+"/"+(&MsgCloseLease{}).Type(), nil)
-	cdc.RegisterConcrete(&MsgWithdrawLease{}, "akash-sdk/x/"+v1.ModuleName+"/"+(&MsgWithdrawLease{}).Type(), nil)
+	cdc.RegisterConcrete(&MsgCreateBid{}, "virtengine-sdk/x/"+v1.ModuleName+"/"+(&MsgCreateBid{}).Type(), nil)
+	cdc.RegisterConcrete(&MsgCloseBid{}, "virtengine-sdk/x/"+v1.ModuleName+"/"+(&MsgCloseBid{}).Type(), nil)
+	cdc.RegisterConcrete(&MsgCreateLease{}, "virtengine-sdk/x/"+v1.ModuleName+"/"+(&MsgCreateLease{}).Type(), nil)
+	cdc.RegisterConcrete(&MsgCloseLease{}, "virtengine-sdk/x/"+v1.ModuleName+"/"+(&MsgCloseLease{}).Type(), nil)
+	cdc.RegisterConcrete(&MsgWithdrawLease{}, "virtengine-sdk/x/"+v1.ModuleName+"/"+(&MsgWithdrawLease{}).Type(), nil)
 }
 
 // RegisterInterfaces registers the x/market interfaces types with the interface registry
@@ -57,4 +57,3 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 
 	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
 }
-
