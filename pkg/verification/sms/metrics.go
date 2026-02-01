@@ -478,3 +478,13 @@ func (m *Metrics) RecordCarrierLookup(provider string, success bool, latency tim
 	m.carrierLookupLatency.WithLabelValues(provider).Observe(latency.Seconds())
 }
 
+// RecordChainSubmission records an on-chain verification submission
+func (m *Metrics) RecordChainSubmission(countryCode string, success bool) {
+	// Use attestation metrics for chain submissions
+	if success {
+		m.attestationsCreated.WithLabelValues(countryCode).Inc()
+	} else {
+		m.attestationsFailed.WithLabelValues("chain_submission").Inc()
+	}
+}
+

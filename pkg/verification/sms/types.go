@@ -209,6 +209,9 @@ const (
 
 	// StatusBlocked indicates the phone was blocked (VoIP/fraud)
 	StatusBlocked ChallengeStatus = "blocked"
+
+	// StatusRevoked indicates the verification was revoked
+	StatusRevoked ChallengeStatus = "revoked"
 )
 
 // DeliveryStatus represents the SMS delivery status
@@ -933,6 +936,12 @@ type ProviderConfig struct {
 
 	// WebhookURL is the webhook URL for delivery status
 	WebhookURL string `json:"webhook_url,omitempty"`
+
+	// WebhookSecret is the secret for webhook signature validation
+	WebhookSecret string `json:"webhook_secret,omitempty"`
+
+	// Timeout is the HTTP request timeout in seconds
+	Timeout int `json:"timeout,omitempty"`
 
 	// Enabled indicates if this provider is enabled
 	Enabled bool `json:"enabled"`
