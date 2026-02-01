@@ -187,6 +187,125 @@ patch_genesis_for_localnet() {
         "${genesis}" > "${genesis}.tmp" && mv "${genesis}.tmp" "${genesis}"
 }
 
+# Seed test accounts with pre-verified VEID identity records
+# Provider needs score >= 70 for registration, Operator >= 85
+seed_test_identities() {
+    log "Seeding test identities for localnet..."
+
+    local genesis="${HOME_DIR}/config/genesis.json"
+    # RFC3339 formatted timestamp for JSON (Go's time.Time format)
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Get account addresses
+    local provider_addr operator_addr alice_addr bob_addr charlie_addr
+    provider_addr=$(ve keys show provider -a --keyring-backend="${KEYRING_BACKEND}" 2>/dev/null || echo "")
+    operator_addr=$(ve keys show operator -a --keyring-backend="${KEYRING_BACKEND}" 2>/dev/null || echo "")
+    alice_addr=$(ve keys show alice -a --keyring-backend="${KEYRING_BACKEND}" 2>/dev/null || echo "")
+    bob_addr=$(ve keys show bob -a --keyring-backend="${KEYRING_BACKEND}" 2>/dev/null || echo "")
+    charlie_addr=$(ve keys show charlie -a --keyring-backend="${KEYRING_BACKEND}" 2>/dev/null || echo "")
+
+    # Build identity records array
+    local records="[]"
+    
+    # Provider: score 80 (meets >=70 requirement)
+    if [ -n "${provider_addr}" ]; then
+        records=$(echo "${records}" | jq --arg addr "${provider_addr}" --arg ts "${timestamp}" \
+            '. += [{
+                "account_address": $addr,
+                "current_score": 80,
+                "tier": "verified",
+                "score_version": "localnet-seed-v1.0.0",
+                "scope_refs": [],
+                "created_at": $ts,
+                "updated_at": $ts,
+                "flags": [],
+                "locked": false,
+                "locked_reason": ""
+            }]')
+        log "  - Provider (${provider_addr}): score=80"
+    fi
+
+    # Operator: score 85 (meets validator requirements)
+    if [ -n "${operator_addr}" ]; then
+        records=$(echo "${records}" | jq --arg addr "${operator_addr}" --arg ts "${timestamp}" \
+            '. += [{
+                "account_address": $addr,
+                "current_score": 85,
+                "tier": "trusted",
+                "score_version": "localnet-seed-v1.0.0",
+                "scope_refs": [],
+                "created_at": $ts,
+                "updated_at": $ts,
+                "flags": [],
+                "locked": false,
+                "locked_reason": ""
+            }]')
+        log "  - Operator (${operator_addr}): score=85"
+    fi
+
+    # Alice: score 60 (verified tier)
+    if [ -n "${alice_addr}" ]; then
+        records=$(echo "${records}" | jq --arg addr "${alice_addr}" --arg ts "${timestamp}" \
+            '. += [{
+                "account_address": $addr,
+                "current_score": 60,
+                "tier": "verified",
+                "score_version": "localnet-seed-v1.0.0",
+                "scope_refs": [],
+                "created_at": $ts,
+                "updated_at": $ts,
+                "flags": [],
+                "locked": false,
+                "locked_reason": ""
+            }]')
+        log "  - Alice (${alice_addr}): score=60"
+    fi
+
+    # Bob: score 50 (standard tier)
+    if [ -n "${bob_addr}" ]; then
+        records=$(echo "${records}" | jq --arg addr "${bob_addr}" --arg ts "${timestamp}" \
+            '. += [{
+                "account_address": $addr,
+                "current_score": 50,
+                "tier": "standard",
+                "score_version": "localnet-seed-v1.0.0",
+                "scope_refs": [],
+                "created_at": $ts,
+                "updated_at": $ts,
+                "flags": [],
+                "locked": false,
+                "locked_reason": ""
+            }]')
+        log "  - Bob (${bob_addr}): score=50"
+    fi
+
+    # Charlie: score 20 (basic tier, below provider threshold)
+    if [ -n "${charlie_addr}" ]; then
+        records=$(echo "${records}" | jq --arg addr "${charlie_addr}" --arg ts "${timestamp}" \
+            '. += [{
+                "account_address": $addr,
+                "current_score": 20,
+                "tier": "basic",
+                "score_version": "localnet-seed-v1.0.0",
+                "scope_refs": [],
+                "created_at": $ts,
+                "updated_at": $ts,
+                "flags": [],
+                "locked": false,
+                "locked_reason": ""
+            }]')
+        log "  - Charlie (${charlie_addr}): score=20"
+    fi
+
+    # Update genesis with identity records
+    jq --argjson records "${records}" \
+        '.app_state.veid.identity_records = $records' \
+        "${genesis}" > "${genesis}.tmp" && mv "${genesis}.tmp" "${genesis}"
+
+    log "Identity seeding complete!"
+}
+
 # Collect genesis transactions
 collect_gentxs() {
     log "Collecting genesis transactions..."
@@ -257,6 +376,7 @@ main() {
         create_validator
         create_test_accounts
         patch_genesis_for_localnet
+        seed_test_identities
         collect_gentxs
         configure_node
         export_account_info
