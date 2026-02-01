@@ -78,8 +78,9 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 	}
 
 	// Get all role assignments
-	var roleAssignments []types.RoleAssignment
-	for _, role := range types.AllRoles() {
+	allRoles := types.AllRoles()
+	roleAssignments := make([]types.RoleAssignment, 0, len(allRoles))
+	for _, role := range allRoles {
 		members := k.GetRoleMembers(ctx, role)
 		roleAssignments = append(roleAssignments, members...)
 	}

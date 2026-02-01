@@ -75,7 +75,7 @@ func GenesisStateWithValSet(cdc codec.Codec) GenesisState {
 	senderPrivKey.PubKey().Address()
 	acc := authtypes.NewBaseAccountWithAddress(senderPrivKey.PubKey().Address().Bytes())
 
-	var balances []banktypes.Balance
+	balances := make([]banktypes.Balance, 0, 1)
 	initValPowers := make([]abci.ValidatorUpdate, 0, len(valSet.Validators))
 
 	genesisState := NewDefaultGenesisState(cdc)
@@ -119,9 +119,9 @@ func GenesisStateWithValSet(cdc codec.Codec) GenesisState {
 	genesisState[stakingtypes.ModuleName] = cdc.MustMarshalJSON(stakingGenesis)
 
 	totalSupply := sdk.NewCoins()
-	for _, b := range balances {
+	for i := range balances {
 		// add genesis acc tokens to total supply
-		totalSupply = totalSupply.Add(b.Coins...)
+		totalSupply = totalSupply.Add(balances[i].Coins...)
 	}
 
 	for range delegations {

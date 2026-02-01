@@ -464,15 +464,15 @@ func (k Keeper) GrantProvisionalApproval(
 
 	// Create provisional approval record
 	provisionalApproval := &ProvisionalApproval{
-		CaseID:         borderlineCase.CaseID,
-		Address:        borderlineCase.Address,
-		ApprovedAt:     now,
-		ExpiresAt:      expiresAt,
-		Conditions:     []string{"Must complete MFA verification within provisional period"},
+		CaseID:          borderlineCase.CaseID,
+		Address:         borderlineCase.Address,
+		ApprovedAt:      now,
+		ExpiresAt:       expiresAt,
+		Conditions:      []string{"Must complete MFA verification within provisional period"},
 		RequiredActions: []string{"Enroll MFA factor", "Complete identity re-verification"},
-		TemporaryScore: borderlineCase.Score,
-		OriginalScore:  borderlineCase.Score,
-		Status:         ProvisionalStatusActive,
+		TemporaryScore:  borderlineCase.Score,
+		OriginalScore:   borderlineCase.Score,
+		Status:          ProvisionalStatusActive,
 	}
 
 	if err := k.setProvisionalApproval(ctx, provisionalApproval); err != nil {
@@ -754,7 +754,9 @@ func provisionalApprovalKey(caseID string) []byte {
 }
 
 func manualReviewQueueKey(priority int, caseID string) []byte {
-	key := append(PrefixManualReviewQueue, byte(priority))
+	key := make([]byte, 0, len(PrefixManualReviewQueue)+1+len(caseID))
+	key = append(key, PrefixManualReviewQueue...)
+	key = append(key, byte(priority))
 	return append(key, []byte(caseID)...)
 }
 
