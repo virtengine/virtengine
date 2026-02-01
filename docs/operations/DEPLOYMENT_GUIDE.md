@@ -13,13 +13,13 @@ If you only need a local dev environment, start with the localnet section below.
 
 ## Quick Links
 
-- Local dev environment: `_docs/development-environment.md`
-- Validator onboarding: `_docs/validator-onboarding.md`
-- Provider onboarding: `_docs/provider-guide.md`
-- Provider/Waldur integration: `_docs/provider-daemon-waldur-integration.md`
-- Provider ops runbook: `docs/operations/runbooks/PROVIDER_OPERATIONS.md`
-- State sync bootstrap: `scripts/state-sync-bootstrap.sh`
-- Kubernetes manifests: `deploy/kubernetes/`
+- Local dev environment: [Development Environment](_docs/development-environment.md)
+- Validator onboarding: [Validator Onboarding](_docs/validator-onboarding.md)
+- Provider onboarding: [Provider Guide](_docs/provider-guide.md)
+- Provider/Waldur integration: [Provider Daemon Waldur Integration](_docs/provider-daemon-waldur-integration.md)
+- Provider ops runbook: [Provider Operations](runbooks/PROVIDER_OPERATIONS.md)
+- State sync bootstrap: [state-sync-bootstrap.sh](../../scripts/state-sync-bootstrap.sh)
+- Kubernetes manifests: [deploy/kubernetes/](../../deploy/kubernetes/)
 
 ## 1) Deploy the System Locally (Single Node)
 
@@ -45,18 +45,21 @@ Useful commands:
 ./scripts/localnet.sh status
 ./scripts/localnet.sh logs
 ./scripts/localnet.sh logs virtengine-node
+./scripts/localnet.sh update              # Smart rebuild changed services only
 ./scripts/localnet.sh test
 ./scripts/localnet.sh stop
 ./scripts/localnet.sh reset
-#Creates admin in Waldur Portal
+# Creates admin in Waldur Portal
 ./scripts/localnet.sh create-admin -u myuser -p mypassword -e myuser@example.com
 ```
 
 Notes:
 
 - This starts a single validator chain plus supporting services.
+- Use `update` after code changes to rebuild only what changed (preserves chain data).
+- Use `reset` only when you need to wipe all data and start fresh.
 - Windows users should run localnet from WSL2 as documented in
-  [Development Environment](/_docs/development-environment.md).
+  [Development Environment](../../_docs/development-environment.md).
 
 ## 2) Deploy Across Multiple Nodes (VMs or Bare Metal)
 
@@ -135,7 +138,7 @@ Review and customize:
 
 If you plan to validate blocks and run VEID scoring, start here:
 
-- `_docs/validator-onboarding.md` (end-to-end setup and operations)
+- [Validator Onboarding](../../_docs/validator-onboarding.md) (end-to-end setup and operations)
 
 Minimum workflow:
 
@@ -161,9 +164,9 @@ Kubernetes/SLURM adapters) to fulfill on-chain workloads.
 
 Start here:
 
-- `_docs/provider-guide.md`
-- `_docs/provider-daemon-waldur-integration.md`
-- `docs/operations/runbooks/PROVIDER_OPERATIONS.md`
+- [Provider Guide](../../_docs/provider-guide.md)
+- [Provider Daemon Waldur Integration](../../_docs/provider-daemon-waldur-integration.md)
+- [Provider Operations Runbook](runbooks/PROVIDER_OPERATIONS.md)
 
 Minimum workflow:
 
@@ -186,7 +189,7 @@ Waldur note:
 
 - Waldur is provider-operated; validators do not run Waldur.
 - The provider-daemon signs callbacks back to chain.
-- See `_docs/provider-daemon-waldur-integration.md` for the attach guide and
+- See [Provider Daemon Waldur Integration](../../_docs/provider-daemon-waldur-integration.md) for the attach guide and
   offering mapping (Waldur offering UUIDs to on-chain offering IDs).
 
 ## 6) Joining an Existing Cluster (Devnet/Testnet/Mainnet)
@@ -221,11 +224,11 @@ Important:
 
 For day-2 operations and incident handling, use the existing runbooks:
 
-- Provider ops: `docs/operations/runbooks/PROVIDER_OPERATIONS.md`
-- Provider deployment troubleshooting: `docs/operations/runbooks/provider-deployment.md`
-- Disaster recovery: `_docs/disaster-recovery.md`
-- Horizontal scaling: `_docs/horizontal-scaling-guide.md`
+- Provider ops: [Provider Operations](runbooks/PROVIDER_OPERATIONS.md)
+- Provider deployment troubleshooting: [Provider Deployment](runbooks/provider-deployment.md)
+- Disaster recovery: [Disaster Recovery](../../_docs/disaster-recovery.md)
+- Horizontal scaling: [Horizontal Scaling Guide](../../_docs/horizontal-scaling-guide.md)
 
 Keep validators and providers on compatible versions:
 
-- `docs/COMPATIBILITY.md`
+- [Compatibility Guide](../COMPATIBILITY.md)

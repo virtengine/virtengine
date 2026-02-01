@@ -10,6 +10,7 @@
 #   start    - Start the localnet (default)
 #   stop     - Stop all services
 #   restart  - Restart all services
+#   update   - Smart rebuild: only rebuild changed services, preserve data
 #   reset    - Stop, clean data, and restart
 #   status   - Show service status
 #   logs     - Tail logs from all services
@@ -215,6 +216,108 @@ cmd_restart() {
     cmd_start
 }
 
+# Track last update timestamp for smart rebuilds
+LAST_UPDATE_FILE="${PROJECT_ROOT}/.localnet-last-update"
+
+get_service_source_hash() {
+    local service="$1"
+    case "$service" in
+        virtengine-node)
+            # Hash key source files for the chain node
+            find "${PROJECT_ROOT}/cmd/virtengine" "${PROJECT_ROOT}/x" "${PROJECT_ROOT}/app" \
+                "${PROJECT_ROOT}/_build/Dockerfile.virtengine" "${PROJECT_ROOT}/scripts/init-chain.sh" \
+                -type f \( -name "*.go" -o -name "Dockerfile*" -o -name "*.sh" \) 2>/dev/null | \
+                xargs cat 2>/dev/null | md5sum | cut -d' ' -f1
+            ;;
+        provider-daemon)
+            # Hash key source files for provider daemon
+            find "${PROJECT_ROOT}/cmd/provider-daemon" "${PROJECT_ROOT}/pkg/provider_daemon" \
+                "${PROJECT_ROOT}/_build/Dockerfile.provider-daemon" \
+                -type f \( -name "*.go" -o -name "Dockerfile*" \) 2>/dev/null | \
+                xargs cat 2>/dev/null | md5sum | cut -d' ' -f1
+            ;;
+        *)
+            echo "upstream"  # Upstream images don't need rebuilding
+            ;;
+    esac
+}
+
+cmd_update() {
+    log_info "Smart update: checking for changed services..."
+    check_docker
+
+    local services_to_rebuild=()
+    local services_to_restart=()
+
+    # Check if localnet is running
+    if ! docker ps --format '{{.Names}}' | grep -q virtengine-node; then
+        log_warn "Localnet is not running. Starting fresh..."
+        cmd_start
+        return
+    fi
+
+    # Services we build from source
+    local build_services=("virtengine-node" "provider-daemon")
+
+    # Check each build service for changes
+    for service in "${build_services[@]}"; do
+        local current_hash
+        current_hash=$(get_service_source_hash "$service")
+        local stored_hash=""
+        
+        if [ -f "${LAST_UPDATE_FILE}.${service}" ]; then
+            stored_hash=$(cat "${LAST_UPDATE_FILE}.${service}")
+        fi
+
+        if [ "$current_hash" != "$stored_hash" ]; then
+            log_info "Changes detected in ${service}"
+            services_to_rebuild+=("$service")
+        else
+            log_info "No changes in ${service}"
+        fi
+    done
+
+    if [ ${#services_to_rebuild[@]} -eq 0 ]; then
+        log_success "No changes detected. Environment is up to date."
+        return
+    fi
+
+    # Rebuild changed services
+    log_info "Rebuilding ${#services_to_rebuild[@]} service(s): ${services_to_rebuild[*]}"
+    
+    for service in "${services_to_rebuild[@]}"; do
+        log_info "Building ${service}..."
+        if ! compose_cmd build --no-cache "$service"; then
+            log_error "Failed to build ${service}"
+            exit 1
+        fi
+        
+        # Store the new hash
+        get_service_source_hash "$service" > "${LAST_UPDATE_FILE}.${service}"
+    done
+
+    # Restart only the rebuilt services (preserves data volumes)
+    log_info "Restarting rebuilt services..."
+    for service in "${services_to_rebuild[@]}"; do
+        log_info "Restarting ${service}..."
+        compose_cmd up -d --no-deps "$service"
+    done
+
+    # Wait for chain if it was rebuilt
+    if [[ " ${services_to_rebuild[*]} " =~ " virtengine-node " ]]; then
+        wait_for_chain
+    fi
+
+    # Wait for Waldur if provider-daemon was rebuilt (it depends on Waldur)
+    if [[ " ${services_to_rebuild[*]} " =~ " provider-daemon " ]]; then
+        sleep 5  # Give provider-daemon time to connect
+    fi
+
+    log_success "Update complete! Rebuilt: ${services_to_rebuild[*]}"
+    echo ""
+    log_info "Data volumes preserved. Use 'reset' to start fresh."
+}
+
 cmd_reset() {
     log_warn "This will delete all localnet data. Continue? (y/N)"
     read -r response
@@ -399,8 +502,9 @@ cmd_help() {
     echo "Commands:"
     echo "  start         Start the localnet (default)"
     echo "  stop          Stop all services"
-    echo "  restart       Restart all services"
-    echo "  reset         Stop, clean data, and restart"
+    echo "  restart       Restart all services (full restart)"
+    echo "  update        Smart rebuild: only rebuild changed services, preserve data"
+    echo "  reset         Stop, clean data, and restart (destructive)"
     echo "  status        Show service status"
     echo "  logs          Tail logs from all services"
     echo "  test          Run integration tests"
@@ -408,14 +512,20 @@ cmd_help() {
     echo "  create-admin  Create Waldur admin user (interactive or with flags)"
     echo "  help          Show this help message"
     echo ""
+    echo "Workflow:"
+    echo "  First time:   $0 start                # Build and start everything"
+    echo "  After edits:  $0 update               # Smart rebuild changed services only"
+    echo "  Full reset:   $0 reset                # Wipe data and start fresh"
+    echo ""
     echo "create-admin Options:"
     echo "  -u, --username  Admin username (default: admin, or prompted)"
     echo "  -p, --password  Admin password (prompted if not provided)"
     echo "  -e, --email     Admin email (default: <username>@localhost)"
     echo ""
     echo "Examples:"
-    echo "  $0 create-admin                          # Interactive"
-    echo "  $0 create-admin -u myuser -p mypassword  # Non-interactive"
+    echo "  $0 update                              # Rebuild only changed services"
+    echo "  $0 create-admin                        # Interactive admin creation"
+    echo "  $0 create-admin -u myuser -p mypassword # Non-interactive"
     echo ""
     echo "Environment Variables:"
     echo "  CHAIN_ID      Chain ID (default: virtengine-localnet-1)"
@@ -436,6 +546,9 @@ main() {
             ;;
         restart)
             cmd_restart
+            ;;
+        update)
+            cmd_update
             ;;
         reset)
             cmd_reset
