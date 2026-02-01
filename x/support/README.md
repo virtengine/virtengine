@@ -1,343 +1,163 @@
 # Support Module
 
-The `x/support` module provides an on-chain encrypted support request system for VirtEngine. It enables customers to create encrypted support tickets that can only be decrypted by authorized support staff.
+The `x/support` module provides lightweight on-chain references to external support tickets managed by operator software (Waldur/Jira).
+
+## Architecture Decision
+
+**Support tickets are managed by operator software (Waldur with native Jira integration), not on-chain.**
+
+This design decision was made because:
+
+1. **Operator software is purpose-built for ticketing** - Waldur and Jira have mature workflows, SLA tracking, agent assignment, and reporting capabilities
+2. **No consensus overhead** - Ticket updates don't require blockchain transactions, reducing gas costs
+3. **Waldur already supports Jira** - Native integration eliminates duplicate implementations
+4. **Separation of concerns** - Blockchain handles value transfer and state; operators handle support workflows
 
 ## Overview
 
 The support module provides:
 
-- **Encrypted Tickets**: All ticket content is encrypted using multi-recipient envelopes from `x/encryption`
-- **Role-Based Access Control**: Integrates with `x/roles` for SupportAgent and Administrator access
-- **Ticket Lifecycle**: Create, assign, respond, resolve, close, and reopen tickets
-- **Rate Limiting**: Prevents abuse with configurable limits per customer
-- **Indexed Queries**: Efficient lookups by customer, provider, agent, or status
-
-## Security Model
-
-### Encryption
-
-Ticket payloads are **never stored in plaintext** on-chain. The module uses `MultiRecipientEnvelope` from `x/encryption`:
-
-```go
-type MultiRecipientEnvelope struct {
-    Version           uint32
-    AlgorithmID       string           // "X25519-XSALSA20-POLY1305"
-    PayloadCiphertext []byte           // Encrypted content
-    PayloadNonce      []byte           // Unique nonce
-    WrappedKeys       []WrappedKeyEntry // Per-recipient wrapped DEKs
-    ClientSignature   []byte
-    UserSignature     []byte
-}
-```
-
-Recipients typically include:
-- The ticket creator (customer)
-- Assigned support agent(s)
-- Support administrators
-
-### Access Control
-
-| Role | Can Create | Can View Own | Can View All | Can Assign | Can Respond | Can Resolve | Can Close |
-|------|------------|--------------|--------------|------------|-------------|-------------|-----------|
-| Customer | ✓ | ✓ | ✗ | ✗ | Own tickets | ✗ | Own tickets |
-| SupportAgent | ✗ | ✗ | Assigned | ✗ | Assigned | Assigned | ✗ |
-| Administrator | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+- **External Ticket References**: Store mapping from on-chain resources to external ticket IDs
+- **Traceability**: Link deployments, leases, and orders to their support tickets
+- **Event Forwarding**: Emit events that the provider daemon forwards to Waldur
 
 ## Data Models
 
-### SupportTicket
+### ExternalTicketRef
+
+Stores a reference to an external support ticket:
 
 ```go
-type SupportTicket struct {
-    TicketID         string                    // Unique identifier (TKT-00000001)
-    CustomerAddress  string                    // Ticket creator
-    ProviderAddress  string                    // Related provider (optional)
-    ResourceRef      ResourceReference         // Related order/lease (optional)
-    Status           TicketStatus              // Current status
-    Priority         TicketPriority            // Low, Normal, High, Urgent
-    Category         string                    // Issue category
-    EncryptedPayload MultiRecipientEnvelope    // Encrypted content
-    AssignedTo       string                    // Support agent address
-    ResponseCount    uint32                    // Number of responses
-    CreatedAt        time.Time
-    UpdatedAt        time.Time
-    ResolvedAt       *time.Time
-    ClosedAt         *time.Time
-    ResolutionRef    string                    // Resolution reference
+type ExternalTicketRef struct {
+    ResourceID       string    // On-chain resource ID (deployment, lease, order)
+    ResourceType     string    // Type of resource ("deployment", "lease", "order")
+    ExternalSystem   string    // "waldur" or "jira"
+    ExternalTicketID string    // External ticket ID (e.g., "JIRA-123", waldur UUID)
+    ExternalURL      string    // URL to the external ticket
+    CreatedAt        time.Time // When the reference was created
+    CreatedBy        string    // Address that created the reference
 }
 ```
 
-### Ticket Status Flow
+### Supported External Systems
 
-```
-     ┌─────────┐
-     │  Open   │◄────────────────────────────┐
-     └────┬────┘                             │
-          │ Assign                           │ Reopen
-          ▼                                  │
-    ┌──────────┐                             │
-    │ Assigned │──────────────────┐          │
-    └────┬─────┘                  │          │
-         │ Start Work             │          │
-         ▼                        │          │
-   ┌───────────┐                  │          │
-   │In Progress│◄─────────┐       │          │
-   └─────┬─────┘          │       │          │
-         │                │       │ Close    │
-    ┌────┴────┐           │       │          │
-    │         │           │       │          │
-    ▼         ▼           │       │          │
-┌─────────┐ ┌────────────┐│       │          │
-│Pending  │ │  Resolved  │┼───────┼──────────┤
-│Customer │ └─────┬──────┘│       │          │
-└────┬────┘       │       │       ▼          │
-     │            │       │  ┌─────────┐     │
-     └────────────┴───────┴─►│ Closed  │─────┘
-                             └─────────┘
-```
-
-### TicketPriority
-
-| Priority | Description |
-|----------|-------------|
-| Low | Non-urgent issues |
-| Normal | Default priority |
-| High | Urgent issues |
-| Urgent | Critical, immediate attention needed |
+| System | Description |
+|--------|-------------|
+| `waldur` | Waldur service desk (recommended) |
+| `jira` | Jira Service Desk (via Waldur integration) |
 
 ## Messages
 
-### MsgCreateTicket
+### MsgRegisterExternalTicket
 
-Creates a new support ticket.
-
-```json
-{
-    "customer": "virtengine1...",
-    "category": "technical",
-    "priority": "normal",
-    "provider_address": "virtengine1...",  // optional
-    "resource_ref": {                       // optional
-        "type": "lease",
-        "id": "owner/dseq/gseq/oseq"
-    },
-    "encrypted_payload": { ... }
-}
-```
-
-### MsgAssignTicket
-
-Assigns a ticket to a support agent (admin only).
+Registers an external ticket reference for traceability:
 
 ```json
 {
     "sender": "virtengine1...",
-    "ticket_id": "TKT-00000001",
-    "assign_to": "virtengine1..."
+    "resource_id": "owner/dseq/gseq/oseq",
+    "resource_type": "lease",
+    "external_system": "waldur",
+    "external_ticket_id": "abc-123-def",
+    "external_url": "https://waldur.example.com/support/abc-123-def"
 }
 ```
 
-### MsgRespondToTicket
+### MsgUpdateExternalTicket
 
-Adds an encrypted response to a ticket.
-
-```json
-{
-    "responder": "virtengine1...",
-    "ticket_id": "TKT-00000001",
-    "encrypted_payload": { ... }
-}
-```
-
-### MsgResolveTicket
-
-Marks a ticket as resolved (assigned agent or admin).
+Updates an external ticket reference:
 
 ```json
 {
     "sender": "virtengine1...",
-    "ticket_id": "TKT-00000001",
-    "resolution_ref": "Issue fixed by updating configuration"
-}
-```
-
-### MsgCloseTicket
-
-Closes a ticket (customer or admin).
-
-```json
-{
-    "sender": "virtengine1...",
-    "ticket_id": "TKT-00000001",
-    "reason": "No longer needed"
-}
-```
-
-### MsgReopenTicket
-
-Reopens a closed ticket (within reopen window).
-
-```json
-{
-    "sender": "virtengine1...",
-    "ticket_id": "TKT-00000001",
-    "reason": "Issue recurred"
+    "resource_id": "owner/dseq/gseq/oseq",
+    "resource_type": "lease",
+    "external_ticket_id": "abc-123-def",
+    "external_url": "https://waldur.example.com/support/abc-123-def"
 }
 ```
 
 ## Queries
 
-### Query Ticket
+### Query External Ticket by Resource
 
 ```bash
-virtengine query support ticket TKT-00000001
+virtengine query support external-ticket --resource-id="owner/dseq/gseq/oseq" --resource-type="lease"
 ```
 
-### Query Tickets by Customer
+### Query External Tickets by Owner
 
 ```bash
-virtengine query support tickets-by-customer virtengine1...
+virtengine query support external-tickets-by-owner virtengine1...
 ```
-
-### Query Tickets by Agent
-
-```bash
-virtengine query support tickets-by-agent virtengine1...
-```
-
-### Query Open Tickets
-
-```bash
-virtengine query support open-tickets --priority high
-```
-
-### Query Ticket Responses
-
-```bash
-virtengine query support responses TKT-00000001
-```
-
-## Parameters
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `max_tickets_per_customer_per_day` | Daily ticket limit per customer | 5 |
-| `max_responses_per_ticket` | Maximum responses per ticket | 100 |
-| `ticket_cooldown_seconds` | Minimum seconds between tickets | 60 |
-| `auto_close_after_days` | Days after resolution before auto-close | 7 |
-| `max_open_tickets_per_customer` | Maximum open tickets per customer | 10 |
-| `reopen_window_days` | Days after close when reopen is allowed | 30 |
-| `allowed_categories` | Valid ticket categories | billing, technical, account, provider, deployment, security, other |
 
 ## Events
 
-### EventTicketCreated
+### EventExternalTicketRegistered
 
-Emitted when a new ticket is created.
+Emitted when an external ticket reference is registered:
 
 ```json
 {
-    "ticket_id": "TKT-00000001",
-    "customer": "virtengine1...",
-    "provider": "virtengine1...",
-    "category": "technical",
-    "priority": "normal",
+    "resource_id": "owner/dseq/gseq/oseq",
+    "resource_type": "lease",
+    "external_system": "waldur",
+    "external_ticket_id": "abc-123-def",
     "block_height": 12345,
     "timestamp": 1706620800
 }
 ```
 
-### EventTicketAssigned
+## Integration with Waldur
 
-Emitted when a ticket is assigned.
+The provider daemon (`pkg/provider_daemon`) handles the actual support ticket lifecycle:
 
-```json
-{
-    "ticket_id": "TKT-00000001",
-    "assigned_to": "virtengine1...",
-    "assigned_by": "virtengine1...",
-    "block_height": 12346,
-    "timestamp": 1706620860
-}
+1. **Ticket Creation**: Provider daemon creates tickets in Waldur when deployment issues occur
+2. **Status Updates**: Waldur webhooks notify the daemon of ticket status changes
+3. **Reference Storage**: Daemon registers external ticket references on-chain for traceability
+4. **SLA Tracking**: Handled entirely by Waldur/Jira
+
+### Provider Daemon Flow
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
+│  VirtEngine     │     │  Provider Daemon │     │  Waldur        │
+│  On-Chain       │◄────│  (Bridge)        │────►│  (Jira native) │
+│  References     │     │                  │     │                │
+└─────────────────┘     └──────────────────┘     └────────────────┘
+         │                       │                       │
+         │                       │                       │
+         ▼                       ▼                       ▼
+  Store external         Forward events          Manage full
+  ticket refs            to Waldur              ticket lifecycle
 ```
 
-### EventTicketResolved
+### Configuration
 
-Emitted when a ticket is resolved.
+See `pkg/servicedesk` for the bridge configuration:
 
-```json
-{
-    "ticket_id": "TKT-00000001",
-    "resolved_by": "virtengine1...",
-    "resolution": "issue-fixed",
-    "block_height": 12350,
-    "timestamp": 1706621100
-}
+```yaml
+servicedesk:
+  waldur:
+    base_url: "https://waldur.example.com/api"
+    organization_uuid: "org-uuid"
+    # token from secrets manager
 ```
 
-### EventTicketClosed
+## Security Considerations
 
-Emitted when a ticket is closed.
+1. **No sensitive data on-chain** - Only ticket references are stored, not ticket content
+2. **Access control** - Only resource owners can register ticket references
+3. **External URLs validated** - URLs must match configured Waldur/Jira domains
 
-```json
-{
-    "ticket_id": "TKT-00000001",
-    "closed_by": "virtengine1...",
-    "reason": "resolved",
-    "block_height": 12360,
-    "timestamp": 1706621700
-}
-```
+## Migration Notes
 
-## Integration
+This module replaces the previous full on-chain ticketing system. The rationale:
 
-### With x/roles
+- **Previous**: Full ticket lifecycle on-chain (encrypted payloads, responses, SLA tracking)
+- **Current**: Lightweight references only; operator software handles everything else
 
-The support module requires the roles keeper for authorization:
-
-```go
-func (k *Keeper) SetRolesKeeper(rolesKeeper RolesKeeper) {
-    k.rolesKeeper = rolesKeeper
-}
-```
-
-Required roles:
-- `RoleSupportAgent` - Can view/respond to assigned tickets
-- `RoleAdministrator` - Full access to all tickets
-
-### With x/encryption
-
-Ticket payloads must be valid `MultiRecipientEnvelope` structures. The encryption must include appropriate recipients based on who needs access.
-
-## Audit Trail
-
-All ticket lifecycle events are emitted as typed events for audit purposes:
-
-- Ticket creation, assignment, response, resolution, and closure
-- All events include block height and timestamp
-- Events can be indexed for compliance and analysis
-
-## Example Workflow
-
-1. **Customer creates ticket**:
-   - Encrypts ticket content with their key + support admin keys
-   - Submits `MsgCreateTicket`
-   - Event `ticket_created` emitted
-
-2. **Admin assigns to agent**:
-   - Submits `MsgAssignTicket`
-   - Agent added as recipient (re-encryption needed off-chain)
-   - Event `ticket_assigned` emitted
-
-3. **Agent responds**:
-   - Encrypts response with customer + admin keys
-   - Submits `MsgRespondToTicket`
-   - Event `ticket_responded` emitted
-
-4. **Agent resolves**:
-   - Submits `MsgResolveTicket`
-   - Event `ticket_resolved` emitted
-
-5. **Customer closes**:
-   - Submits `MsgCloseTicket`
-   - Event `ticket_closed` emitted
+Benefits:
+- 90%+ reduction in on-chain storage for support
+- No gas costs for ticket updates
+- Leverage mature operator tooling (Waldur/Jira)

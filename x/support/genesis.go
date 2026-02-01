@@ -8,31 +8,21 @@ import (
 )
 
 // InitGenesis initializes the support module's state from a genesis state.
+// This simplified module only manages external ticket references.
 func InitGenesis(ctx sdk.Context, k keeper.Keeper, data *types.GenesisState) {
 	// Set module parameters
 	if err := k.SetParams(ctx, data.Params); err != nil {
 		panic(err)
 	}
 
-	// Set ticket sequence
-	k.SetTicketSequence(ctx, data.TicketSequence)
-
-	// Initialize tickets
-	for _, ticket := range data.Tickets {
-		ticketCopy := ticket // Create copy to avoid pointer issues
-		if err := k.CreateTicket(ctx, &ticketCopy); err != nil {
-			// Skip if ticket already exists (may happen during re-init)
-			if err != types.ErrTicketAlreadyExists {
+	// Initialize external refs
+	for _, ref := range data.ExternalRefs {
+		refCopy := ref // Create copy to avoid pointer issues
+		if err := k.RegisterExternalRef(ctx, &refCopy); err != nil {
+			// Skip if ref already exists (may happen during re-init)
+			if err != types.ErrRefAlreadyExists {
 				panic(err)
 			}
-		}
-	}
-
-	// Initialize responses
-	for _, response := range data.Responses {
-		responseCopy := response // Create copy to avoid pointer issues
-		if err := k.AddResponse(ctx, response.TicketID, &responseCopy); err != nil {
-			panic(err)
 		}
 	}
 }
@@ -42,28 +32,16 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 	// Get params
 	params := k.GetParams(ctx)
 
-	// Get ticket sequence
-	ticketSequence := k.GetTicketSequence(ctx)
-
-	// Get all tickets
-	var tickets []types.SupportTicket
-	k.WithTickets(ctx, func(ticket types.SupportTicket) bool {
-		tickets = append(tickets, ticket)
+	// Get all external refs
+	var refs []types.ExternalTicketRef
+	k.WithExternalRefs(ctx, func(ref types.ExternalTicketRef) bool {
+		refs = append(refs, ref)
 		return false
 	})
 
-	// Get all responses
-	var responses []types.TicketResponse
-	for _, ticket := range tickets {
-		ticketResponses := k.GetResponses(ctx, ticket.TicketID)
-		responses = append(responses, ticketResponses...)
-	}
-
 	return &types.GenesisState{
-		Tickets:        tickets,
-		Responses:      responses,
-		Params:         params,
-		TicketSequence: ticketSequence,
+		ExternalRefs: refs,
+		Params:       params,
 	}
 }
 

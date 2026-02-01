@@ -4,26 +4,28 @@ import (
 	"context"
 )
 
-// MsgServer defines the support module's message service interface
+// MsgServer defines the support module's message service interface.
+// This minimal interface supports external ticket reference management.
+// Full ticket lifecycle is handled by Waldur/Jira.
 type MsgServer interface {
-	CreateTicket(context.Context, *MsgCreateTicket) (*MsgCreateTicketResponse, error)
-	AssignTicket(context.Context, *MsgAssignTicket) (*MsgAssignTicketResponse, error)
-	RespondToTicket(context.Context, *MsgRespondToTicket) (*MsgRespondToTicketResponse, error)
-	ResolveTicket(context.Context, *MsgResolveTicket) (*MsgResolveTicketResponse, error)
-	CloseTicket(context.Context, *MsgCloseTicket) (*MsgCloseTicketResponse, error)
-	ReopenTicket(context.Context, *MsgReopenTicket) (*MsgReopenTicketResponse, error)
+	// RegisterExternalTicket registers an external ticket reference
+	RegisterExternalTicket(context.Context, *MsgRegisterExternalTicket) (*MsgRegisterExternalTicketResponse, error)
+	// UpdateExternalTicket updates an external ticket reference
+	UpdateExternalTicket(context.Context, *MsgUpdateExternalTicket) (*MsgUpdateExternalTicketResponse, error)
+	// RemoveExternalTicket removes an external ticket reference
+	RemoveExternalTicket(context.Context, *MsgRemoveExternalTicket) (*MsgRemoveExternalTicketResponse, error)
+	// UpdateParams updates module parameters (governance)
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }
 
-// QueryServer defines the support module's query service interface
+// QueryServer defines the support module's query service interface.
+// Queries are minimal - just retrieve external refs and params.
 type QueryServer interface {
-	Ticket(context.Context, *QueryTicketRequest) (*QueryTicketResponse, error)
-	TicketsByCustomer(context.Context, *QueryTicketsByCustomerRequest) (*QueryTicketsByCustomerResponse, error)
-	TicketsByProvider(context.Context, *QueryTicketsByProviderRequest) (*QueryTicketsByProviderResponse, error)
-	TicketsByAgent(context.Context, *QueryTicketsByAgentRequest) (*QueryTicketsByAgentResponse, error)
-	TicketsByStatus(context.Context, *QueryTicketsByStatusRequest) (*QueryTicketsByStatusResponse, error)
-	TicketResponses(context.Context, *QueryTicketResponsesRequest) (*QueryTicketResponsesResponse, error)
-	OpenTickets(context.Context, *QueryOpenTicketsRequest) (*QueryOpenTicketsResponse, error)
+	// ExternalRef returns a single external ticket reference
+	ExternalRef(context.Context, *QueryExternalRefRequest) (*QueryExternalRefResponse, error)
+	// ExternalRefsByOwner returns all external refs for a given owner
+	ExternalRefsByOwner(context.Context, *QueryExternalRefsByOwnerRequest) (*QueryExternalRefsByOwnerResponse, error)
+	// Params returns the module parameters
 	Params(context.Context, *QueryParamsRequest) (*QueryParamsResponse, error)
 }
 

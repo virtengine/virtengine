@@ -4,127 +4,65 @@ import "fmt"
 
 // Event types for the support module
 const (
-	EventTypeTicketCreated    = "ticket_created"
-	EventTypeTicketAssigned   = "ticket_assigned"
-	EventTypeTicketResponded  = "ticket_responded"
-	EventTypeTicketResolved   = "ticket_resolved"
-	EventTypeTicketClosed     = "ticket_closed"
-	EventTypeTicketReopened   = "ticket_reopened"
-	EventTypeTicketEscalated  = "ticket_escalated"
-	EventTypePriorityChanged  = "priority_changed"
+	EventTypeExternalTicketRegistered = "external_ticket_registered"
+	EventTypeExternalTicketUpdated    = "external_ticket_updated"
+	EventTypeExternalTicketRemoved    = "external_ticket_removed"
 )
 
 // Event attribute keys
 const (
-	AttributeKeyTicketID       = "ticket_id"
-	AttributeKeyCustomer       = "customer"
-	AttributeKeyProvider       = "provider"
-	AttributeKeyAgent          = "assigned_to"
-	AttributeKeyStatus         = "status"
-	AttributeKeyPreviousStatus = "previous_status"
-	AttributeKeyPriority       = "priority"
-	AttributeKeyCategory       = "category"
-	AttributeKeyResponseIndex  = "response_index"
-	AttributeKeyResolution     = "resolution"
-	AttributeKeyClosedBy       = "closed_by"
-	AttributeKeyAssignedBy     = "assigned_by"
-	AttributeKeyBlockHeight    = "block_height"
-	AttributeKeyTimestamp      = "timestamp"
+	AttributeKeyResourceID       = "resource_id"
+	AttributeKeyResourceType     = "resource_type"
+	AttributeKeyExternalSystem   = "external_system"
+	AttributeKeyExternalTicketID = "external_ticket_id"
+	AttributeKeyExternalURL      = "external_url"
+	AttributeKeyCreatedBy        = "created_by"
+	AttributeKeyBlockHeight      = "block_height"
+	AttributeKeyTimestamp        = "timestamp"
 )
 
-// EventTicketCreated is emitted when a new support ticket is created
-type EventTicketCreated struct {
-	TicketID    string `json:"ticket_id"`
-	Customer    string `json:"customer"`
-	Provider    string `json:"provider,omitempty"`
-	Category    string `json:"category"`
-	Priority    string `json:"priority"`
-	BlockHeight int64  `json:"block_height"`
-	Timestamp   int64  `json:"timestamp"`
-}
-
-// EventTicketAssigned is emitted when a ticket is assigned to an agent
-type EventTicketAssigned struct {
-	TicketID    string `json:"ticket_id"`
-	AssignedTo  string `json:"assigned_to"`
-	AssignedBy  string `json:"assigned_by"`
-	BlockHeight int64  `json:"block_height"`
-	Timestamp   int64  `json:"timestamp"`
-}
-
-// EventTicketResponded is emitted when a response is added to a ticket
-type EventTicketResponded struct {
-	TicketID      string `json:"ticket_id"`
-	Responder     string `json:"responder"`
-	ResponseIndex uint32 `json:"response_index"`
-	BlockHeight   int64  `json:"block_height"`
-	Timestamp     int64  `json:"timestamp"`
-}
-
-// EventTicketResolved is emitted when a ticket is resolved
-type EventTicketResolved struct {
-	TicketID    string `json:"ticket_id"`
-	ResolvedBy  string `json:"resolved_by"`
-	Resolution  string `json:"resolution"`
-	BlockHeight int64  `json:"block_height"`
-	Timestamp   int64  `json:"timestamp"`
-}
-
-// EventTicketClosed is emitted when a ticket is closed
-type EventTicketClosed struct {
-	TicketID    string `json:"ticket_id"`
-	ClosedBy    string `json:"closed_by"`
-	Reason      string `json:"reason,omitempty"`
-	BlockHeight int64  `json:"block_height"`
-	Timestamp   int64  `json:"timestamp"`
-}
-
-// EventTicketReopened is emitted when a ticket is reopened
-type EventTicketReopened struct {
-	TicketID    string `json:"ticket_id"`
-	ReopenedBy  string `json:"reopened_by"`
-	Reason      string `json:"reason,omitempty"`
-	BlockHeight int64  `json:"block_height"`
-	Timestamp   int64  `json:"timestamp"`
-}
-
-// EventTicketEscalated is emitted when a ticket priority is escalated
-type EventTicketEscalated struct {
-	TicketID         string `json:"ticket_id"`
-	PreviousPriority string `json:"previous_priority"`
-	NewPriority      string `json:"new_priority"`
-	EscalatedBy      string `json:"escalated_by"`
-	Reason           string `json:"reason,omitempty"`
+// EventExternalTicketRegistered is emitted when an external ticket reference is registered
+type EventExternalTicketRegistered struct {
+	ResourceID       string `json:"resource_id"`
+	ResourceType     string `json:"resource_type"`
+	ExternalSystem   string `json:"external_system"`
+	ExternalTicketID string `json:"external_ticket_id"`
+	ExternalURL      string `json:"external_url,omitempty"`
+	CreatedBy        string `json:"created_by"`
 	BlockHeight      int64  `json:"block_height"`
 	Timestamp        int64  `json:"timestamp"`
 }
 
+// EventExternalTicketUpdated is emitted when an external ticket reference is updated
+type EventExternalTicketUpdated struct {
+	ResourceID       string `json:"resource_id"`
+	ResourceType     string `json:"resource_type"`
+	ExternalTicketID string `json:"external_ticket_id"`
+	ExternalURL      string `json:"external_url,omitempty"`
+	UpdatedBy        string `json:"updated_by"`
+	BlockHeight      int64  `json:"block_height"`
+	Timestamp        int64  `json:"timestamp"`
+}
+
+// EventExternalTicketRemoved is emitted when an external ticket reference is removed
+type EventExternalTicketRemoved struct {
+	ResourceID   string `json:"resource_id"`
+	ResourceType string `json:"resource_type"`
+	RemovedBy    string `json:"removed_by"`
+	BlockHeight  int64  `json:"block_height"`
+	Timestamp    int64  `json:"timestamp"`
+}
+
 // Proto message interface stubs for Event types
 
-func (*EventTicketCreated) ProtoMessage()    {}
-func (m *EventTicketCreated) Reset()         { *m = EventTicketCreated{} }
-func (m *EventTicketCreated) String() string { return fmt.Sprintf("%+v", *m) }
+func (*EventExternalTicketRegistered) ProtoMessage()    {}
+func (m *EventExternalTicketRegistered) Reset()         { *m = EventExternalTicketRegistered{} }
+func (m *EventExternalTicketRegistered) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventTicketAssigned) ProtoMessage()    {}
-func (m *EventTicketAssigned) Reset()         { *m = EventTicketAssigned{} }
-func (m *EventTicketAssigned) String() string { return fmt.Sprintf("%+v", *m) }
+func (*EventExternalTicketUpdated) ProtoMessage()    {}
+func (m *EventExternalTicketUpdated) Reset()         { *m = EventExternalTicketUpdated{} }
+func (m *EventExternalTicketUpdated) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventTicketResponded) ProtoMessage()    {}
-func (m *EventTicketResponded) Reset()         { *m = EventTicketResponded{} }
-func (m *EventTicketResponded) String() string { return fmt.Sprintf("%+v", *m) }
-
-func (*EventTicketResolved) ProtoMessage()    {}
-func (m *EventTicketResolved) Reset()         { *m = EventTicketResolved{} }
-func (m *EventTicketResolved) String() string { return fmt.Sprintf("%+v", *m) }
-
-func (*EventTicketClosed) ProtoMessage()    {}
-func (m *EventTicketClosed) Reset()         { *m = EventTicketClosed{} }
-func (m *EventTicketClosed) String() string { return fmt.Sprintf("%+v", *m) }
-
-func (*EventTicketReopened) ProtoMessage()    {}
-func (m *EventTicketReopened) Reset()         { *m = EventTicketReopened{} }
-func (m *EventTicketReopened) String() string { return fmt.Sprintf("%+v", *m) }
-
-func (*EventTicketEscalated) ProtoMessage()    {}
-func (m *EventTicketEscalated) Reset()         { *m = EventTicketEscalated{} }
-func (m *EventTicketEscalated) String() string { return fmt.Sprintf("%+v", *m) }
+func (*EventExternalTicketRemoved) ProtoMessage()    {}
+func (m *EventExternalTicketRemoved) Reset()         { *m = EventExternalTicketRemoved{} }
+func (m *EventExternalTicketRemoved) String() string { return fmt.Sprintf("%+v", *m) }
