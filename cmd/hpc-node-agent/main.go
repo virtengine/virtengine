@@ -70,7 +70,7 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagProviderAddress, "", "Provider's blockchain address (bech32)")
 	rootCmd.PersistentFlags().String(FlagProviderDaemonURL, "http://localhost:8080", "Provider daemon API URL")
 	rootCmd.PersistentFlags().Duration(FlagHeartbeatInterval, 30*time.Second, "Heartbeat interval")
-	rootCmd.PersistentFlags().String(FlagKeyFile, "/etc/virtengine/node-agent.key", "Path to Ed25519 key file")
+	rootCmd.PersistentFlags().String(FlagKeyFile, "/etc/virtengine/virtengine-agent.key", "Path to Ed25519 key file")
 	rootCmd.PersistentFlags().String(FlagHostname, "", "Node hostname (auto-detected if empty)")
 	rootCmd.PersistentFlags().String(FlagRegion, "", "Geographic region")
 	rootCmd.PersistentFlags().String(FlagDatacenter, "", "Datacenter identifier")

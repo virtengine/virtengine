@@ -120,7 +120,7 @@ configMapGenerator:
       - log-level=warn
 
 images:
-  - name: virtengine/node
+  - name: virtengine/virtengine
     newTag: v1.0.0
   - name: virtengine/provider-daemon
     newTag: v1.0.0

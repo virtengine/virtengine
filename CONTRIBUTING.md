@@ -8,7 +8,7 @@ Guidelines for contributing.
 
 #### I've found a typo
 
-* A Pull Request is not necessary. Raise an [Issue](https://github.com/virtengine/support/issues) and we'll fix it as soon as we can.
+- A Pull Request is not necessary. Raise an [Issue](https://github.com/virtengine/support/issues) and we'll fix it as soon as we can.
 
 #### I have a (great) idea
 
@@ -20,14 +20,14 @@ Every feature carries a cost - a cost if developed wrong, a cost to carry and ma
 
 What makes a good proposal?
 
-* Brief summary including motivation/context
-* Any design changes
-* Pros + Cons
-* Effort required up front
-* Effort required for CI/CD, release, ongoing maintenance
-* Migration strategy / backwards-compatibility
-* Mock-up screenshots or examples of how the CLI would work
-* Clear examples of how to reproduce any issue the proposal is addressing
+- Brief summary including motivation/context
+- Any design changes
+- Pros + Cons
+- Effort required up front
+- Effort required for CI/CD, release, ongoing maintenance
+- Migration strategy / backwards-compatibility
+- Mock-up screenshots or examples of how the CLI would work
+- Clear examples of how to reproduce any issue the proposal is addressing
 
 Once your proposal receives a `design/approved` label you may go ahead and start work on your Pull Request.
 
@@ -65,51 +65,49 @@ If you feel there is an issue with VirtEngine or were unable to get the help you
 
 #### Setting expectations, support and SLAs
 
-* What kind of support can I expect for free?
+- What kind of support can I expect for free?
 
-    If you are using one of the Open Source projects within the virtengine repository, then help is offered on a good-will basis by volunteers. You can also request help from employees of DET-IO Pty. Ltd. who host the VirtEngine testnet.
+  If you are using one of the Open Source projects within the virtengine repository, then help is offered on a good-will basis by volunteers. You can also request help from employees of DET-IO Pty. Ltd. who host the VirtEngine testnet.
 
-    Please be respectful of volunteer time, it is often limited to evenings and weekends. The person you are requesting help from may not reside in your timezone.
+  Please be respectful of volunteer time, it is often limited to evenings and weekends. The person you are requesting help from may not reside in your timezone.
 
-    The VirtEngine chat is the best place to ask questions, suggest features, and to get help. The GitHub issue tracker can be used for suspected issues with the codebase or deployment artifacts.
+  The VirtEngine chat is the best place to ask questions, suggest features, and to get help. The GitHub issue tracker can be used for suspected issues with the codebase or deployment artifacts.
 
-* What is the SLA for my Issue?
+- What is the SLA for my Issue?
 
-    Issues are examined, triaged and answered on a best effort basis by volunteers and community contributors. This means that you may receive an initial response within any time period such as: 1 minute, 1 hour, 1 day, or 1 week. There is no implicit meaning to the time between you raising an issue and it being answered or resolved.
+  Issues are examined, triaged and answered on a best effort basis by volunteers and community contributors. This means that you may receive an initial response within any time period such as: 1 minute, 1 hour, 1 day, or 1 week. There is no implicit meaning to the time between you raising an issue and it being answered or resolved.
 
-    If you see an issue which does not have a response or does not have a resolution, it does not mean that it is not important, or that it is being ignored. It simply means it has not been worked on by a volunteer yet.
+  If you see an issue which does not have a response or does not have a resolution, it does not mean that it is not important, or that it is being ignored. It simply means it has not been worked on by a volunteer yet.
 
-    Please take responsibility for following up on your Issues if you feel further action is required.
+  Please take responsibility for following up on your Issues if you feel further action is required.
 
-* What is the SLA for my Pull Request?
+- What is the SLA for my Pull Request?
 
-    In a similar way to Issues, Pull Requests are triaged, reviewed, and considered by a team of volunteers - the Core Team,  Members Team and the Project Lead. There are dozens of components that make up the VirtEngine project and a limited amount of people. Sometimes PRs may become blocked or require further action.
+  In a similar way to Issues, Pull Requests are triaged, reviewed, and considered by a team of volunteers - the Core Team, Members Team and the Project Lead. There are dozens of components that make up the VirtEngine project and a limited amount of people. Sometimes PRs may become blocked or require further action.
 
-    Please take responsibility for following up on your Pull Requests if you feel further action is required.
+  Please take responsibility for following up on your Pull Requests if you feel further action is required.
 
-* Why may your PR be delayed?
+- Why may your PR be delayed?
+  - The contributing guide was not followed in some way
 
-    * The contributing guide was not followed in some way
+  - The commits are not signed-off
 
-    * The commits are not signed-off
+  - The commits need to be rebased
 
-    * The commits need to be rebased
+  - Changes have been requested
 
-    * Changes have been requested
+  More information, a use-case, or context may be required for the change to be accepted.
 
-    More information, a use-case, or context may be required for the change to be accepted.
+- What if I need more than that?
 
-* What if I need more than that?
+  If you're a company using any of these projects, you can get the following through a support agreement with DET-IO Pty. Ltd. so that the time can be paid for to help your business.
 
-    If you're a company using any of these projects, you can get the following through a support agreement with DET-IO Pty. Ltd. so that the time can be paid for to help your business.
-
-    A support agreement can be tailored to your needs, you may benefit from support, if you need any of the following:
-
-    * responses within N hours/days on issues/PRs
-    * feature prioritization
-    * urgent help
-    * 1:1 consultations
-    * or any other level of professional services
+  A support agreement can be tailored to your needs, you may benefit from support, if you need any of the following:
+  - responses within N hours/days on issues/PRs
+  - feature prioritization
+  - urgent help
+  - 1:1 consultations
+  - or any other level of professional services
 
 #### I need to add a dependency
 
@@ -136,7 +134,7 @@ For detailed release management procedures, see [RELEASE.md](./RELEASE.md).
 
 3. **Artifacts Published:**
    - GitHub Releases: binaries for Linux (amd64, arm64) and macOS (universal)
-   - Docker images: `ghcr.io/virtengine/node:<version>`
+   - Docker images: `ghcr.io/virtengine/virtengine:<version>`
    - Homebrew: `virtengine/homebrew-tap` (mainnet stable releases only)
 
 4. **Requesting a Release:**
@@ -145,8 +143,9 @@ For detailed release management procedures, see [RELEASE.md](./RELEASE.md).
    - For emergency fixes: contact core team directly
 
 See also:
+
 - [RELEASE.md](./RELEASE.md) - Complete release management process
-- [_docs/version-control.md](./_docs/version-control.md) - Version control practices
+- [\_docs/version-control.md](./_docs/version-control.md) - Version control practices
 - [ADR-001: Network Upgrades](./_docs/adr/adr-001-network-upgrades.md) - Network upgrade implementation
 
 ## Governance
@@ -157,22 +156,22 @@ DET-IO hosts and sponsors the development and maintenance of VirtEngine. DET-IO 
 
 #### Project Lead
 
-Responsibility for the project starts with the *Project Lead*, who delegates specific responsibilities and the corresponding authority to the Core and Members team.
+Responsibility for the project starts with the _Project Lead_, who delegates specific responsibilities and the corresponding authority to the Core and Members team.
 
 Some duties include:
 
-* Setting overall technical & community leadership
-* Engaging end-user community to advocate needs of end-users and to capture case-studies
-* Defining and curating roadmap for VirtEngine
-* Building a community and team of contributors
-* Community & media briefings, out-bound communications, partnerships, relationship management and events
+- Setting overall technical & community leadership
+- Engaging end-user community to advocate needs of end-users and to capture case-studies
+- Defining and curating roadmap for VirtEngine
+- Building a community and team of contributors
+- Community & media briefings, out-bound communications, partnerships, relationship management and events
 
 ### How do I become a maintainer?
 
 In the VirtEngine community there are three levels of structure or maintainership:
 
-* Core Team (GitHub org)
-* The rest of the community.
+- Core Team (GitHub org)
+- The rest of the community.
 
 #### Core Team
 
@@ -184,7 +183,7 @@ This project is written in Golang but many of the community contributions so far
 
 ### Roadmap
 
-* Browse open issues in [support](https://github.com/virtengine/support/issues)
+- Browse open issues in [support](https://github.com/virtengine/support/issues)
 
 ## License
 
@@ -227,7 +226,7 @@ type(scope): description
 #### Types
 
 | Type       | Description                                           |
-|------------|-------------------------------------------------------|
+| ---------- | ----------------------------------------------------- |
 | `feat`     | A new feature                                         |
 | `fix`      | A bug fix                                             |
 | `docs`     | Documentation only changes                            |

@@ -59,7 +59,7 @@ configMapGenerator:
       - log-level=debug
 
 images:
-  - name: virtengine/node
+  - name: virtengine/virtengine
     newTag: dev
   - name: virtengine/provider-daemon
     newTag: dev

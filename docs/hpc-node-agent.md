@@ -45,7 +45,7 @@ cluster-id: "hpc-cluster-1"
 provider-address: "virtengine1provider..."
 provider-daemon-url: "http://provider-daemon:8081"
 heartbeat-interval: 30s
-key-file: "/etc/virtengine/node-agent.key"
+key-file: "/etc/virtengine/virtengine-agent.key"
 region: "us-east-1"
 datacenter: "dc1"
 latency-targets:
@@ -61,7 +61,7 @@ log-level: "info"
 Before running the agent, initialize the Ed25519 key pair:
 
 ```bash
-hpc-node-agent init --key-file /etc/virtengine/node-agent.key
+hpc-node-agent init --key-file /etc/virtengine/virtengine-agent.key
 ```
 
 This generates a key pair and outputs the public key. The public key must be registered with the provider for the node to be allowed.
@@ -96,15 +96,15 @@ hpc-node-agent status
 
 Nodes transition through the following states:
 
-| State | Description |
-|-------|-------------|
-| `pending` | Node registered but not yet active |
-| `active` | Node is healthy and available |
-| `stale` | Node has missed heartbeat timeout (default: 120s) |
-| `draining` | Node is draining jobs before maintenance |
-| `drained` | Node has drained all jobs |
-| `offline` | Node has exceeded offline threshold (default: 300s) |
-| `deregistered` | Node has been deregistered (terminal) |
+| State          | Description                                         |
+| -------------- | --------------------------------------------------- |
+| `pending`      | Node registered but not yet active                  |
+| `active`       | Node is healthy and available                       |
+| `stale`        | Node has missed heartbeat timeout (default: 120s)   |
+| `draining`     | Node is draining jobs before maintenance            |
+| `drained`      | Node has drained all jobs                           |
+| `offline`      | Node has exceeded offline threshold (default: 300s) |
+| `deregistered` | Node has been deregistered (terminal)               |
 
 ### State Transitions
 
@@ -112,7 +112,7 @@ Nodes transition through the following states:
 pending ──▶ active ──▶ stale ──▶ offline ──▶ deregistered
               │          │                         ▲
               │          └───────────────────────────┘
-              ▼                                      
+              ▼
           draining ──▶ drained ──────────────────────┘
 ```
 
@@ -187,12 +187,13 @@ The agent sends heartbeats in the following JSON format:
 
 Each node has an Ed25519 key pair for signing heartbeats:
 
-- **Private Key**: Stored securely on the node at `/etc/virtengine/node-agent.key`
+- **Private Key**: Stored securely on the node at `/etc/virtengine/virtengine-agent.key`
 - **Public Key**: Registered with the provider for allowlist verification
 
 ### Signature Verification
 
 The provider daemon verifies:
+
 1. The heartbeat signature matches the registered public key
 2. The sequence number is greater than the last seen (prevents replay)
 3. The timestamp is within acceptable bounds (±5 minutes)
@@ -207,12 +208,12 @@ For additional security, nodes can include a hardware fingerprint (SHA256 of har
 
 The agent exposes the following metrics:
 
-| Metric | Description |
-|--------|-------------|
-| `total_heartbeats` | Total heartbeats sent |
+| Metric              | Description                  |
+| ------------------- | ---------------------------- |
+| `total_heartbeats`  | Total heartbeats sent        |
 | `failed_heartbeats` | Failed heartbeat submissions |
-| `sequence_number` | Current sequence number |
-| `uptime_seconds` | Agent uptime |
+| `sequence_number`   | Current sequence number      |
+| `uptime_seconds`    | Agent uptime                 |
 
 ### Alerts
 

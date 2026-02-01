@@ -2,12 +2,12 @@
 
 ## Alert Details
 
-| Field | Value |
-|-------|-------|
-| Alert Name | LowValidatorCount |
-| Severity | Critical |
-| Service | virtengine-chain |
-| Tier | Tier 0 |
+| Field      | Value                      |
+| ---------- | -------------------------- |
+| Alert Name | LowValidatorCount          |
+| Severity   | Critical                   |
+| Service    | virtengine-chain           |
+| Tier       | Tier 0                     |
 | SLO Impact | Chain consensus resilience |
 
 ## Summary
@@ -77,7 +77,7 @@ echo "Signature rate: $SIGNED / $TOTAL"
 
 ```bash
 # Check if validators went offline at similar times
-grep -i "validator.*offline\|peer.*disconnected" /var/log/virtengine/node.log | tail -50
+grep -i "validator.*offline\|peer.*disconnected" /var/log/virtengine/virtengine.log | tail -50
 
 # Check for network issues
 virtengined net info | jq '.peers | length'
@@ -218,6 +218,7 @@ curl -s http://localhost:26657/consensus_state | jq '.result.round_state.height_
 ### Validator Monitoring
 
 All validators should have:
+
 - Uptime monitoring
 - Missed block alerts
 - Peer connectivity monitoring
@@ -226,6 +227,7 @@ All validators should have:
 ### Validator Diversity
 
 Ensure validator set diversity:
+
 - Multiple cloud providers
 - Multiple geographic regions
 - Multiple client implementations (if available)
@@ -234,6 +236,7 @@ Ensure validator set diversity:
 ### Communication
 
 Maintain:
+
 - Validator emergency contact list
 - Multiple communication channels
 - Regular validator coordination calls
@@ -242,14 +245,17 @@ Maintain:
 ## Escalation
 
 **Immediate L2 escalation**:
+
 - Always for this alert type
 
 **Immediate L3 escalation if**:
+
 - Active validators < 75% of bonded set
 - Multiple validators unreachable
 - Suspected coordinated attack
 
 **Executive escalation if**:
+
 - Risk of chain halt (approaching 2/3 threshold)
 - Suspected security incident
 - Potential need for emergency governance

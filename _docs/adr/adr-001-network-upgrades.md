@@ -2,7 +2,7 @@
 
 ## Changelog
 
-* 2023/04/28: Initial implementation @troian
+- 2023/04/28: Initial implementation @troian
 
 ## Status
 
@@ -11,8 +11,8 @@ InProgress
 ## Upgrade types
 
 - [Software upgrade](#software-upgrade) - upgrade network state with software upgrade proposal.
-    - [Upgrade handler](#upgrade-handler) **mandatory**
-    - [State migrations](#state-migrations) **optional**
+  - [Upgrade handler](#upgrade-handler) **mandatory**
+  - [State migrations](#state-migrations) **optional**
 - [Height patch](#implementing-height-patch) - Allows urgent patching of the network state at given height
 
 ## Software upgrade
@@ -24,6 +24,7 @@ Each upgrade must be contained within own directory. Name of the directory corre
 
 To keep upgrades consistent, they must implement following file structure.
 Each file has steps in form of comment with `StepX` prefix. Each step must be implemented unless stated in comment
+
 1. have [upgrade.go](#upgradego) file
 2. have [init.go](#initgo) file
 3. have dedicated file for each module that requires [state migration](#state-migrations)
@@ -47,8 +48,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 
-	apptypes "github.com/virtengine/node/app/types"
-	utypes "github.com/virtengine/node/upgrades/types"
+	apptypes "github.com/virtengine/virtengine/app/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
 // Step1 (mandatory): declare upgrade name. Must be Semver compliant with v prefix
@@ -71,11 +72,11 @@ func initUpgrade(log log.Logger, app *apptypes.App) (utypes.IUpgrade, error) {
 		App: app,
 		log: log.With(fmt.Sprintf("upgrade/%s", upgradeName)),
 	}
-	
-	
-	// Step 4.1 (optional): check required modules when necessary 
-	
-	
+
+
+	// Step 4.1 (optional): check required modules when necessary
+
+
 	return up, nil
 }
 
@@ -89,7 +90,7 @@ func (up *upgrade) StoreLoader() *storetypes.StoreUpgrades {
 func (up *upgrade) UpgradeHandler() upgradetypes.UpgradeHandler {
 	return func(ctx sdk.Context, plan upgradetypes.Plan, fromVM module.VersionMap) (module.VersionMap, error) {
 		// Step6.1 (optional): perform validations and state patching if necessary
-		
+
 		// Step6.2 (mandatory): following must always be present as last line
 		return up.MM.RunMigrations(ctx, up.Configurator, fromVM)
 	}
@@ -105,14 +106,14 @@ func (up *upgrade) UpgradeHandler() upgradetypes.UpgradeHandler {
 package v0_24_0
 
 import (
-	utypes "github.com/virtengine/node/upgrades/types"
+	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
 // Step1 (mandatory): create init function
 func init() {
 	// Step1.1 (mandatory): register upgrade
 	utypes.RegisterUpgrade(upgradeName, initUpgrade)
-	
+
 	// Step1.2 (optional) register state migrations for each module
 	// To determine migration version:
 	//    Find module in [changelog](../../upgrades/CHANGELOG.md)
@@ -123,6 +124,7 @@ func init() {
 ```
 
 #### State migrations
+
 ```go
 // Package v0_24_0
 // nolint revive
@@ -176,13 +178,14 @@ func migrateDeploymentGroup(fromBz []byte, cdc codec.BinaryCodec) codec.ProtoMar
    ```go
    import (
    	// nolint: revive
-   	_ "github.com/virtengine/node/upgrades/software/v0.24.0"
+   	_ "github.com/virtengine/virtengine/upgrades/software/v0.24.0"
    )
    ```
 2. Once imported, the upgrade will register itself, and `App` will initialize it during startup
 3. To deregister obsolete upgrade simply remove respective import from [upgrades/upgrades.go](../../upgrades/upgrades.go)
 
 ##### Testing software upgrade
+
 1. cd `tests/upgrade`
 2. Create test config `upgrade-<upgrade name>.json` (use `upgrade-v0.24.0.json` as reference)
 3. Run test

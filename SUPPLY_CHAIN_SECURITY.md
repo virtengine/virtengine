@@ -42,6 +42,7 @@ require github.com/cosmos/cosmos-sdk v0.53.x
 ```
 
 **Requirements:**
+
 - All direct dependencies in `go.mod` must use exact semantic versions
 - `go.sum` must be committed and verified in CI
 - `replace` directives must point to specific commits or tags
@@ -58,6 +59,7 @@ tensorflow>=2.16.0
 ```
 
 **Requirements:**
+
 - Use `requirements.txt` with exact versions
 - Include package hashes where possible
 - Use `pip-compile` from pip-tools for lockfiles
@@ -70,6 +72,7 @@ tensorflow>=2.16.0
 ```
 
 **Requirements:**
+
 - `package-lock.json` must be committed
 - Use `npm ci` instead of `npm install` in CI
 - Audit dependencies before adding new packages
@@ -78,11 +81,11 @@ tensorflow>=2.16.0
 
 All lockfiles are verified in CI to prevent unauthorized modifications:
 
-| Ecosystem | Lockfile | Verification Tool |
-|-----------|----------|-------------------|
-| Go | `go.sum` | `go mod verify` |
-| Python | `requirements.txt` | Hash verification |
-| npm | `package-lock.json` | `npm ci --ignore-scripts` |
+| Ecosystem | Lockfile            | Verification Tool         |
+| --------- | ------------------- | ------------------------- |
+| Go        | `go.sum`            | `go mod verify`           |
+| Python    | `requirements.txt`  | Hash verification         |
+| npm       | `package-lock.json` | `npm ci --ignore-scripts` |
 
 ## SBOM (Software Bill of Materials)
 
@@ -90,10 +93,10 @@ VirtEngine generates SBOMs in multiple formats for each release:
 
 ### Formats
 
-| Format | File | Use Case |
-|--------|------|----------|
-| CycloneDX | `sbom.cdx.json` | Vulnerability scanning, compliance |
-| SPDX | `sbom.spdx.json` | License compliance, auditing |
+| Format    | File             | Use Case                           |
+| --------- | ---------------- | ---------------------------------- |
+| CycloneDX | `sbom.cdx.json`  | Vulnerability scanning, compliance |
+| SPDX      | `sbom.spdx.json` | License compliance, auditing       |
 
 ### Generation
 
@@ -110,6 +113,7 @@ syft . -o spdx-json > sbom.spdx.json
 ### Contents
 
 The SBOM includes:
+
 - All direct and transitive dependencies
 - Version information and checksums
 - License information
@@ -134,12 +138,12 @@ All release artifacts are signed using Sigstore cosign for cryptographic verific
 
 ### What's Signed
 
-| Artifact | Signature File | Certificate |
-|----------|---------------|-------------|
-| Binary archives | `*.sig` | `*.sig.cert` |
-| Container images | In-registry | Rekor transparency log |
-| SBOM files | `*.sbom.sig` | `*.sbom.sig.cert` |
-| Checksums | `checksums.txt.sig` | `checksums.txt.sig.cert` |
+| Artifact         | Signature File      | Certificate              |
+| ---------------- | ------------------- | ------------------------ |
+| Binary archives  | `*.sig`             | `*.sig.cert`             |
+| Container images | In-registry         | Rekor transparency log   |
+| SBOM files       | `*.sbom.sig`        | `*.sbom.sig.cert`        |
+| Checksums        | `checksums.txt.sig` | `checksums.txt.sig.cert` |
 
 ### Signing Process
 
@@ -154,7 +158,7 @@ cosign sign-blob \
   virtengine_v0.9.0_linux_amd64.zip
 
 # Sign container image
-cosign sign --yes ghcr.io/virtengine/node:v0.9.0
+cosign sign --yes ghcr.io/virtengine/virtengine:v0.9.0
 ```
 
 ### Verification
@@ -174,7 +178,7 @@ cosign verify-blob \
 cosign verify \
   --certificate-identity-regexp ".*@virtengine.io" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/virtengine/node:v0.9.0
+  ghcr.io/virtengine/virtengine:v0.9.0
 ```
 
 ## Build Provenance
@@ -192,12 +196,12 @@ Build provenance is cryptographically signed metadata about how an artifact was 
 
 ### SLSA Levels
 
-| Level | Requirement | VirtEngine Status |
-|-------|-------------|-------------------|
-| Level 1 | Documentation of build process | ✅ |
-| Level 2 | Tamper resistance of build service | ✅ |
-| Level 3 | Hardened builds, non-falsifiable provenance | ✅ |
-| Level 4 | Two-person review, hermetic builds | 🔄 In Progress |
+| Level   | Requirement                                 | VirtEngine Status |
+| ------- | ------------------------------------------- | ----------------- |
+| Level 1 | Documentation of build process              | ✅                |
+| Level 2 | Tamper resistance of build service          | ✅                |
+| Level 3 | Hardened builds, non-falsifiable provenance | ✅                |
+| Level 4 | Two-person review, hermetic builds          | 🔄 In Progress    |
 
 ### Provenance Verification
 
@@ -235,12 +239,12 @@ sha256sum .cache/bin/virtengine
 
 ### Reproducibility Guarantees
 
-| Component | Reproducible | Notes |
-|-----------|-------------|-------|
-| Go binaries | ✅ Yes | Using `-trimpath -buildvcs=false` |
-| Container images | ✅ Yes | Using `--reproducible` flag |
-| SBOM | ✅ Yes | Deterministic generation |
-| Documentation | N/A | Not applicable |
+| Component        | Reproducible | Notes                             |
+| ---------------- | ------------ | --------------------------------- |
+| Go binaries      | ✅ Yes       | Using `-trimpath -buildvcs=false` |
+| Container images | ✅ Yes       | Using `--reproducible` flag       |
+| SBOM             | ✅ Yes       | Deterministic generation          |
+| Documentation    | N/A          | Not applicable                    |
 
 ### Known Limitations
 
@@ -254,22 +258,22 @@ sha256sum .cache/bin/virtengine
 
 Dependencies are continuously scanned for vulnerabilities:
 
-| Scanner | Ecosystem | Schedule | Severity Threshold |
-|---------|-----------|----------|-------------------|
-| govulncheck | Go | Every push | All |
-| pip-audit | Python | Every push | High+ |
-| npm audit | npm | Every push | High+ |
-| Trivy | Containers | Every push | Critical/High |
-| Dependabot | All | Daily | All |
+| Scanner     | Ecosystem  | Schedule   | Severity Threshold |
+| ----------- | ---------- | ---------- | ------------------ |
+| govulncheck | Go         | Every push | All                |
+| pip-audit   | Python     | Every push | High+              |
+| npm audit   | npm        | Every push | High+              |
+| Trivy       | Containers | Every push | Critical/High      |
+| Dependabot  | All        | Daily      | All                |
 
 ### Vulnerability Response
 
-| Severity | Response Time | Action |
-|----------|--------------|--------|
-| Critical | 24 hours | Immediate patch, advisory |
-| High | 7 days | Prioritized patch |
-| Medium | 30 days | Scheduled patch |
-| Low | 90 days | Backlog |
+| Severity | Response Time | Action                    |
+| -------- | ------------- | ------------------------- |
+| Critical | 24 hours      | Immediate patch, advisory |
+| High     | 7 days        | Prioritized patch         |
+| Medium   | 30 days       | Scheduled patch           |
+| Low      | 90 days       | Backlog                   |
 
 ### False Positive Management
 
@@ -290,19 +294,20 @@ vulnerabilities:
 
 All third-party dependencies are scored using OpenSSF Scorecard metrics:
 
-| Metric | Weight | Description |
-|--------|--------|-------------|
-| Maintained | 20% | Recent commits, responsive maintainers |
-| Security-Policy | 15% | Has security policy |
-| Code-Review | 15% | Requires code review |
-| Branch-Protection | 10% | Protected branches |
-| Vulnerabilities | 20% | Known vulnerability count |
-| License | 10% | Clear OSS license |
-| CI/CD | 10% | Automated testing |
+| Metric            | Weight | Description                            |
+| ----------------- | ------ | -------------------------------------- |
+| Maintained        | 20%    | Recent commits, responsive maintainers |
+| Security-Policy   | 15%    | Has security policy                    |
+| Code-Review       | 15%    | Requires code review                   |
+| Branch-Protection | 10%    | Protected branches                     |
+| Vulnerabilities   | 20%    | Known vulnerability count              |
+| License           | 10%    | Clear OSS license                      |
+| CI/CD             | 10%    | Automated testing                      |
 
 ### Minimum Requirements
 
 New dependencies must meet:
+
 - Scorecard score ≥ 6.0
 - Active maintenance (commits within 6 months)
 - Clear license (Apache-2.0, MIT, BSD preferred)
@@ -329,13 +334,13 @@ New dependencies must meet:
 
 ### Attack Vectors Monitored
 
-| Attack Type | Detection Method | Response |
-|-------------|------------------|----------|
-| Dependency Confusion | Namespace monitoring | Block + Alert |
-| Typosquatting | Package name analysis | Block + Alert |
-| Compromised Maintainer | Scorecard monitoring | Alert + Review |
-| Malicious Update | Checksum verification | Block + Alert |
-| Build Compromise | Provenance verification | Block + Alert |
+| Attack Type            | Detection Method        | Response       |
+| ---------------------- | ----------------------- | -------------- |
+| Dependency Confusion   | Namespace monitoring    | Block + Alert  |
+| Typosquatting          | Package name analysis   | Block + Alert  |
+| Compromised Maintainer | Scorecard monitoring    | Alert + Review |
+| Malicious Update       | Checksum verification   | Block + Alert  |
+| Build Compromise       | Provenance verification | Block + Alert  |
 
 ### Detection Tools
 
@@ -392,14 +397,14 @@ cosign verify-blob \
 cosign verify \
   --certificate-identity-regexp ".*@virtengine.io" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/virtengine/node:v0.9.0
+  ghcr.io/virtengine/virtengine:v0.9.0
 
 # Verify SBOM attestation
 cosign verify-attestation \
   --type cyclonedx \
   --certificate-identity-regexp ".*@virtengine.io" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/virtengine/node:v0.9.0
+  ghcr.io/virtengine/virtengine:v0.9.0
 ```
 
 #### Verify Build Provenance
@@ -450,14 +455,14 @@ git commit -s -m "chore(deps): add github.com/new/dependency v1.2.3"
 
 ## Tools Reference
 
-| Tool | Purpose | Installation |
-|------|---------|--------------|
-| cosign | Artifact signing | `go install github.com/sigstore/cosign/v2/cmd/cosign@latest` |
-| slsa-verifier | Provenance verification | `go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest` |
-| syft | SBOM generation | `curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \| sh` |
-| grype | Vulnerability scanning | `curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \| sh` |
-| govulncheck | Go vulnerability check | `go install golang.org/x/vuln/cmd/govulncheck@latest` |
-| scorecard | Dependency scoring | `go install github.com/ossf/scorecard/v4/cmd/scorecard@latest` |
+| Tool          | Purpose                 | Installation                                                                       |
+| ------------- | ----------------------- | ---------------------------------------------------------------------------------- |
+| cosign        | Artifact signing        | `go install github.com/sigstore/cosign/v2/cmd/cosign@latest`                       |
+| slsa-verifier | Provenance verification | `go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest`   |
+| syft          | SBOM generation         | `curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \| sh`  |
+| grype         | Vulnerability scanning  | `curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \| sh` |
+| govulncheck   | Go vulnerability check  | `go install golang.org/x/vuln/cmd/govulncheck@latest`                              |
+| scorecard     | Dependency scoring      | `go install github.com/ossf/scorecard/v4/cmd/scorecard@latest`                     |
 
 ## Contact
 
@@ -465,5 +470,5 @@ For supply chain security concerns, contact [security@virtengine.io](mailto:secu
 
 ---
 
-*Last updated: 2024*
-*This document follows NIST SP 800-218 and SLSA guidelines.*
+_Last updated: 2024_
+_This document follows NIST SP 800-218 and SLSA guidelines._

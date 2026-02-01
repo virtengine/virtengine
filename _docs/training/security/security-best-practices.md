@@ -27,6 +27,7 @@
 This comprehensive security training module covers essential security practices for operating VirtEngine infrastructure. Participants will learn defense-in-depth strategies, network hardening techniques, cryptographic key management, and compliance requirements specific to blockchain-based cloud computing environments.
 
 VirtEngine's security model is built on several critical foundations:
+
 - **X25519-XSalsa20-Poly1305** encryption for all sensitive data
 - **Three-signature validation** for VEID scopes (client, user, salt binding)
 - **Hardware/ledger support** for provider keys
@@ -111,13 +112,13 @@ EOF
 
 #### File System Permissions
 
-| Path | Owner | Permissions | Purpose |
-|------|-------|-------------|---------|
-| `/etc/virtengine/` | root:virtengine | 750 | Configuration files |
-| `/var/lib/virtengine/` | virtengine:virtengine | 700 | Chain data |
-| `/var/lib/virtengine/keys/` | virtengine:virtengine | 700 | Key storage |
-| `/var/log/virtengine/` | virtengine:adm | 750 | Log files |
-| `/run/virtengine/` | virtengine:virtengine | 755 | Runtime files |
+| Path                        | Owner                 | Permissions | Purpose             |
+| --------------------------- | --------------------- | ----------- | ------------------- |
+| `/etc/virtengine/`          | root:virtengine       | 750         | Configuration files |
+| `/var/lib/virtengine/`      | virtengine:virtengine | 700         | Chain data          |
+| `/var/lib/virtengine/keys/` | virtengine:virtengine | 700         | Key storage         |
+| `/var/log/virtengine/`      | virtengine:adm        | 750         | Log files           |
+| `/run/virtengine/`          | virtengine:virtengine | 755         | Runtime files       |
 
 #### Process Isolation
 
@@ -579,14 +580,14 @@ VirtEngine uses a layered cryptographic approach:
 
 ### 3.2 Key Types and Protection Requirements
 
-| Key Type | Storage | Protection Level | Rotation Frequency |
-|----------|---------|------------------|-------------------|
-| Validator Private Key | HSM/Ledger | Critical | Never (or with ceremony) |
-| Node Key | Encrypted File | High | Annually |
-| Provider Key | HSM/Ledger | Critical | Never (or with ceremony) |
-| VEID Encryption Key | HSM | Critical | Per-session |
-| TLS Private Key | Encrypted File | Medium | Annually |
-| API Keys | Vault | Medium | Quarterly |
+| Key Type              | Storage        | Protection Level | Rotation Frequency       |
+| --------------------- | -------------- | ---------------- | ------------------------ |
+| Validator Private Key | HSM/Ledger     | Critical         | Never (or with ceremony) |
+| Node Key              | Encrypted File | High             | Annually                 |
+| Provider Key          | HSM/Ledger     | Critical         | Never (or with ceremony) |
+| VEID Encryption Key   | HSM            | Critical         | Per-session              |
+| TLS Private Key       | Encrypted File | Medium           | Annually                 |
+| API Keys              | Vault          | Medium           | Quarterly                |
 
 ### 3.3 Hardware Security Module (HSM) Integration
 
@@ -645,9 +646,9 @@ func initLedgerSigner() error {
         return fmt.Errorf("failed to get public key: %w", err)
     }
 
-    log.Printf("Connected to Ledger. Validator address: %s", 
+    log.Printf("Connected to Ledger. Validator address: %s",
         sdk.AccAddress(pubKey.Address()))
-    
+
     return nil
 }
 ```
@@ -743,7 +744,7 @@ func (s *SecureBytes) Clear() {
         // Use subtle.ConstantTimeCopy to avoid optimization
         zeros := make([]byte, len(s.data))
         subtle.ConstantTimeCopy(1, s.data, zeros)
-        
+
         // Prevent garbage collector from optimizing away
         runtime.KeepAlive(s.data)
         s.data = nil
@@ -766,12 +767,14 @@ func init() {
 ## Validator Key Generation Ceremony
 
 ### Participants Required
+
 - Key Ceremony Lead (1)
 - Key Custodians (3, for split key recovery)
 - Witness (1, independent security officer)
 - Scribe (1, documentation)
 
 ### Pre-Ceremony Checklist
+
 - [ ] Air-gapped computer prepared and verified
 - [ ] Tamper-evident bags for key shards
 - [ ] Video recording equipment ready
@@ -828,7 +831,7 @@ format = "json"
 
 # Output destination
 output = "file"
-output_file = "/var/log/virtengine/node.log"
+output_file = "/var/log/virtengine/virtengine.log"
 
 # Enable module-specific logging
 [log.modules]
@@ -884,14 +887,14 @@ provider = "info"
 
 #### Events Requiring Audit Logging
 
-| Event Category | Events | Retention |
-|---------------|--------|-----------|
-| Authentication | Login success/failure, key usage, session creation | 2 years |
-| Authorization | Permission checks, role changes, access denials | 2 years |
-| VEID Operations | Scope uploads, verifications, encryption | 7 years |
-| Financial | Escrow creation, fund release, market transactions | 7 years |
-| Configuration | Parameter changes, governance proposals | 7 years |
-| Security | Key generation, certificate issuance, security alerts | 7 years |
+| Event Category  | Events                                                | Retention |
+| --------------- | ----------------------------------------------------- | --------- |
+| Authentication  | Login success/failure, key usage, session creation    | 2 years   |
+| Authorization   | Permission checks, role changes, access denials       | 2 years   |
+| VEID Operations | Scope uploads, verifications, encryption              | 7 years   |
+| Financial       | Escrow creation, fund release, market transactions    | 7 years   |
+| Configuration   | Parameter changes, governance proposals               | 7 years   |
+| Security        | Key generation, certificate issuance, security alerts | 7 years   |
 
 #### Audit Log Format
 
@@ -939,15 +942,15 @@ provider = "info"
 
 #### SOC 2 Type II Controls
 
-| Trust Service Criteria | VirtEngine Controls |
-|----------------------|---------------------|
-| CC1.1 - COSO Principle 1 | Security policies documented and communicated |
-| CC2.1 - COSO Principle 13 | Change management process for deployments |
-| CC5.2 - COSO Principle 12 | System monitoring and alerting |
-| CC6.1 - Logical Access | Role-based access with MFA |
-| CC6.7 - Data Transmission | TLS 1.3 for all communications |
-| CC7.1 - System Operations | Automated deployment pipelines |
-| CC7.2 - Change Management | Version control and code review |
+| Trust Service Criteria    | VirtEngine Controls                           |
+| ------------------------- | --------------------------------------------- |
+| CC1.1 - COSO Principle 1  | Security policies documented and communicated |
+| CC2.1 - COSO Principle 13 | Change management process for deployments     |
+| CC5.2 - COSO Principle 12 | System monitoring and alerting                |
+| CC6.1 - Logical Access    | Role-based access with MFA                    |
+| CC6.7 - Data Transmission | TLS 1.3 for all communications                |
+| CC7.1 - System Operations | Automated deployment pipelines                |
+| CC7.2 - Change Management | Version control and code review               |
 
 ### 4.4 Security Monitoring and Alerting
 
@@ -1011,6 +1014,7 @@ groups:
 ## Pre-Production Security Review
 
 ### Infrastructure Security
+
 - [ ] All servers hardened according to CIS benchmarks
 - [ ] Firewalls configured and tested
 - [ ] DDoS protection in place
@@ -1019,6 +1023,7 @@ groups:
 - [ ] TLS/mTLS configured for all services
 
 ### Key Management
+
 - [ ] Validator keys stored in HSM/Ledger
 - [ ] Key ceremony completed and documented
 - [ ] Key backup procedures tested
@@ -1026,6 +1031,7 @@ groups:
 - [ ] No keys stored in plaintext anywhere
 
 ### Access Control
+
 - [ ] All access follows least privilege principle
 - [ ] MFA enabled for all operator accounts
 - [ ] Service accounts use minimal permissions
@@ -1033,6 +1039,7 @@ groups:
 - [ ] Privileged access logging enabled
 
 ### Monitoring and Logging
+
 - [ ] Centralized logging configured
 - [ ] Security alerts configured and tested
 - [ ] Audit logging enabled for all security events
@@ -1040,6 +1047,7 @@ groups:
 - [ ] SIEM integration complete
 
 ### Incident Response
+
 - [ ] Incident response plan documented
 - [ ] Contact lists current and accessible
 - [ ] Runbooks for common scenarios created
@@ -1047,6 +1055,7 @@ groups:
 - [ ] Post-incident review process defined
 
 ### Compliance
+
 - [ ] All required compliance controls implemented
 - [ ] Documentation complete and current
 - [ ] Third-party security audit scheduled
@@ -1060,6 +1069,7 @@ groups:
 ## Daily Security Operations
 
 ### Morning Review (Start of Day)
+
 - [ ] Review overnight security alerts
 - [ ] Check validator uptime and status
 - [ ] Verify backup completion
@@ -1068,12 +1078,14 @@ groups:
 - [ ] Verify all services running normally
 
 ### Continuous Monitoring
+
 - [ ] Monitor Grafana dashboards
 - [ ] Respond to alerts within SLA
 - [ ] Document any security incidents
 - [ ] Track remediation of open issues
 
 ### End of Day
+
 - [ ] Review day's security events
 - [ ] Update incident tracker
 - [ ] Handoff to next shift (if applicable)
@@ -1086,30 +1098,35 @@ groups:
 ## Monthly Security Review
 
 ### Access Review
+
 - [ ] Review all user accounts
 - [ ] Disable/remove inactive accounts
 - [ ] Verify permissions are appropriate
 - [ ] Review API key usage
 
 ### Vulnerability Management
+
 - [ ] Run vulnerability scans
 - [ ] Review and prioritize findings
 - [ ] Patch critical vulnerabilities
 - [ ] Update dependency versions
 
 ### Configuration Review
+
 - [ ] Review firewall rules
 - [ ] Verify logging configuration
 - [ ] Check backup integrity
 - [ ] Review security monitoring rules
 
 ### Documentation
+
 - [ ] Update runbooks as needed
 - [ ] Review and update incident response plan
 - [ ] Update contact lists
 - [ ] Document any security changes
 
 ### Compliance
+
 - [ ] Review compliance status
 - [ ] Address any compliance gaps
 - [ ] Update compliance documentation
@@ -1267,8 +1284,8 @@ kind: PodSecurityPolicy
 metadata:
   name: virtengine-restricted
   annotations:
-    seccomp.security.alpha.kubernetes.io/allowedProfiles: 'runtime/default'
-    seccomp.security.alpha.kubernetes.io/defaultProfileName:  'runtime/default'
+    seccomp.security.alpha.kubernetes.io/allowedProfiles: "runtime/default"
+    seccomp.security.alpha.kubernetes.io/defaultProfileName: "runtime/default"
 spec:
   privileged: false
   allowPrivilegeEscalation: false
@@ -1295,12 +1312,12 @@ spec:
       - min: 1000
         max: 65534
   volumes:
-    - 'configMap'
-    - 'emptyDir'
-    - 'projected'
-    - 'secret'
-    - 'downwardAPI'
-    - 'persistentVolumeClaim'
+    - "configMap"
+    - "emptyDir"
+    - "projected"
+    - "secret"
+    - "downwardAPI"
+    - "persistentVolumeClaim"
   readOnlyRootFilesystem: true
   requiredDropCapabilities:
     - ALL
@@ -1348,8 +1365,9 @@ format = "plain"
 ```
 
 **Expected Security Issues:**
+
 1. RPC bound to all interfaces (0.0.0.0)
-2. CORS allows all origins (*)
+2. CORS allows all origins (\*)
 3. Unsafe RPC mode enabled
 4. No persistent peers configured (vulnerable to eclipse attacks)
 5. Debug logging level (potential information disclosure)
@@ -1363,11 +1381,13 @@ format = "plain"
 **Objective:** Practice responding to a security incident.
 
 **Scenario:** At 14:30 UTC, your monitoring system alerts you to the following:
+
 - 500% increase in failed authentication attempts
 - Unusual outbound network traffic from validator node
 - New process `systemd-networkd-helper` consuming 80% CPU
 
 **Tasks:**
+
 1. Document your initial assessment
 2. List your first 5 response actions
 3. Identify evidence to preserve
@@ -1381,6 +1401,7 @@ format = "plain"
 **Objective:** Walk through a key generation ceremony scenario.
 
 **Scenario:** Your organization is setting up a new validator. Walk through the key ceremony process and identify:
+
 1. Required participants and their roles
 2. Equipment needed
 3. Security controls at each step
@@ -1394,6 +1415,7 @@ format = "plain"
 **Objective:** Prepare for a third-party security assessment.
 
 **Tasks:**
+
 1. List all entry points to your VirtEngine infrastructure
 2. Document expected attack vectors
 3. Identify your most critical assets

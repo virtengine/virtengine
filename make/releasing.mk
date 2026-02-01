@@ -5,11 +5,11 @@ GORELEASER_IMAGE         := ghcr.io/goreleaser/goreleaser-cross:$(GOTOOLCHAIN_SE
 GORELEASER_RELEASE       ?= false
 GORELEASER_MOUNT_CONFIG  ?= false
 GORELEASER_SKIP          := $(subst $(COMMA),$(SPACE),$(GORELEASER_SKIP))
-RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/node
+RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/virtengine
 #GORELEASER_MOD_MOUNT     ?= $(shell git config --get remote.origin.url | sed -r 's/.*(\@|\/\/)(.*)(\:|\/)([^:\/]*)\/([^\/\.]*)\.git/\2\/\4\/\5/' | tr -d '\n')
 GORELEASER_MOD_MOUNT     ?= $(shell cat $(ROOT_DIR)/.github/repo | tr -d '\n')
 
-RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/node
+RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/virtengine
 
 GORELEASER_GOWORK        := $(GOWORK)
 

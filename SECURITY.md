@@ -6,12 +6,12 @@ VirtEngine is committed to ensuring the security of our decentralized cloud comp
 
 We provide security updates for the following versions:
 
-| Version | Supported          | Notes                                      |
-| ------- | ------------------ | ------------------------------------------ |
-| 0.9.x   | :white_check_mark: | Current development (main branch)          |
-| 0.8.x   | :white_check_mark: | Stable release (mainnet/main branch)       |
-| 0.7.x   | :warning:          | Critical fixes only                        |
-| < 0.7   | :x:                | No longer supported                        |
+| Version | Supported          | Notes                                |
+| ------- | ------------------ | ------------------------------------ |
+| 0.9.x   | :white_check_mark: | Current development (main branch)    |
+| 0.8.x   | :white_check_mark: | Stable release (mainnet/main branch) |
+| 0.7.x   | :warning:          | Critical fixes only                  |
+| < 0.7   | :x:                | No longer supported                  |
 
 We strongly recommend running the latest stable release to ensure you have all security patches.
 
@@ -44,11 +44,11 @@ You will receive an acknowledgment within 48 hours of your report.
 
 ## Security Contact Information
 
-| Contact Method | Details                                                                 |
-| -------------- | ----------------------------------------------------------------------- |
-| Email          | [security@virtengine.io](mailto:security@virtengine.io)                 |
-| PGP Key        | Available upon request                                                  |
-| Response Time  | Initial acknowledgment within 48 hours                                  |
+| Contact Method | Details                                                 |
+| -------------- | ------------------------------------------------------- |
+| Email          | [security@virtengine.io](mailto:security@virtengine.io) |
+| PGP Key        | Available upon request                                  |
+| Response Time  | Initial acknowledgment within 48 hours                  |
 
 For urgent matters, please include `[URGENT]` in your email subject line.
 
@@ -57,6 +57,7 @@ For urgent matters, please include `[URGENT]` in your email subject line.
 We classify vulnerabilities according to their potential impact:
 
 ### Critical Severity
+
 **Response Time: 24 hours**
 
 - Remote code execution on validators or provider nodes
@@ -66,6 +67,7 @@ We classify vulnerabilities according to their potential impact:
 - Unauthorized access to encrypted user data
 
 ### High Severity
+
 **Response Time: 7 days**
 
 - Denial of service attacks on core infrastructure
@@ -75,6 +77,7 @@ We classify vulnerabilities according to their potential impact:
 - Cross-module state corruption
 
 ### Medium Severity
+
 **Response Time: 30 days**
 
 - Limited information disclosure
@@ -84,6 +87,7 @@ We classify vulnerabilities according to their potential impact:
 - Partial bypass of security controls
 
 ### Low Severity
+
 **Response Time: 90 days**
 
 - Minor information leaks (non-sensitive)
@@ -108,6 +112,7 @@ We may extend this timeline for complex issues requiring extensive changes. We w
 ### Credit and Recognition
 
 Security researchers who report valid vulnerabilities will be:
+
 - Credited in our security advisories (unless anonymity is requested)
 - Listed in our Security Hall of Fame (coming soon)
 - Eligible for bug bounty rewards (see below)
@@ -150,14 +155,14 @@ VirtEngine implements comprehensive supply chain security measures. For detailed
 
 ### Key Features
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Dependency Pinning** | All dependencies use exact versions | ✅ Active |
-| **SBOM Generation** | CycloneDX and SPDX formats | ✅ Active |
-| **Signed Releases** | Sigstore cosign keyless signing | ✅ Active |
-| **Build Provenance** | SLSA Level 3 attestation | ✅ Active |
-| **Vulnerability Scanning** | Automated via Dependabot, govulncheck, Trivy | ✅ Active |
-| **Attack Detection** | Typosquatting, dependency confusion monitoring | ✅ Active |
+| Feature                    | Description                                    | Status    |
+| -------------------------- | ---------------------------------------------- | --------- |
+| **Dependency Pinning**     | All dependencies use exact versions            | ✅ Active |
+| **SBOM Generation**        | CycloneDX and SPDX formats                     | ✅ Active |
+| **Signed Releases**        | Sigstore cosign keyless signing                | ✅ Active |
+| **Build Provenance**       | SLSA Level 3 attestation                       | ✅ Active |
+| **Vulnerability Scanning** | Automated via Dependabot, govulncheck, Trivy   | ✅ Active |
+| **Attack Detection**       | Typosquatting, dependency confusion monitoring | ✅ Active |
 
 ### Verifying Releases
 
@@ -179,7 +184,7 @@ cosign verify-blob \
 cosign verify \
   --certificate-identity-regexp ".*@virtengine.io" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/virtengine/node:v0.9.0
+  ghcr.io/virtengine/virtengine:v0.9.0
 ```
 
 ### Supply Chain Tools
@@ -204,12 +209,12 @@ Our continuous integration pipeline includes comprehensive security scanning:
 
 ### Static Analysis Tools
 
-| Tool           | Purpose                                      | Runs On        |
-| -------------- | -------------------------------------------- | -------------- |
-| **gosec**      | Go security linter for common vulnerabilities | Every PR       |
-| **gitleaks**   | Secrets and credential detection             | Every PR       |
-| **govulncheck**| Go vulnerability database checking           | Every PR       |
-| **CodeQL**     | Semantic code analysis (GitHub Advanced Security) | Every PR   |
+| Tool            | Purpose                                           | Runs On  |
+| --------------- | ------------------------------------------------- | -------- |
+| **gosec**       | Go security linter for common vulnerabilities     | Every PR |
+| **gitleaks**    | Secrets and credential detection                  | Every PR |
+| **govulncheck** | Go vulnerability database checking                | Every PR |
+| **CodeQL**      | Semantic code analysis (GitHub Advanced Security) | Every PR |
 
 ### Additional Checks
 
@@ -238,14 +243,15 @@ gitleaks detect --source .
 
 ### Rewards (Planned)
 
-| Severity | Reward Range        |
-| -------- | ------------------- |
-| Critical | $5,000 - $50,000    |
-| High     | $2,000 - $10,000    |
-| Medium   | $500 - $2,000       |
-| Low      | $100 - $500         |
+| Severity | Reward Range     |
+| -------- | ---------------- |
+| Critical | $5,000 - $50,000 |
+| High     | $2,000 - $10,000 |
+| Medium   | $500 - $2,000    |
+| Low      | $100 - $500      |
 
 Actual rewards will depend on:
+
 - Impact and exploitability
 - Quality of the report
 - Novelty of the vulnerability
@@ -253,6 +259,7 @@ Actual rewards will depend on:
 ### Program Status
 
 We are actively developing our bug bounty program. In the meantime:
+
 - Report vulnerabilities to [security@virtengine.io](mailto:security@virtengine.io)
 - Good-faith reporters will be recognized and may receive discretionary rewards
 - Sign up for announcements at [virtengine.io](https://virtengine.io) for program launch updates
@@ -329,6 +336,6 @@ For questions about this security policy, contact [security@virtengine.io](mailt
 
 ---
 
-*Last updated: 2024*
+_Last updated: 2024_
 
-*This security policy follows [GitHub's security policy best practices](https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository).*
+_This security policy follows [GitHub's security policy best practices](https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository)._

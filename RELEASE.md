@@ -24,9 +24,9 @@ VirtEngine uses a dual-branch strategy to maintain both active development and s
 
 ### Primary Branches
 
-| Branch | Purpose | Version Pattern |
-|--------|---------|-----------------|
-| `main` | Active development | Odd minor versions (v0.9.x, v0.11.x) |
+| Branch         | Purpose                    | Version Pattern                       |
+| -------------- | -------------------------- | ------------------------------------- |
+| `main`         | Active development         | Odd minor versions (v0.9.x, v0.11.x)  |
 | `mainnet/main` | Stable production releases | Even minor versions (v0.8.x, v0.10.x) |
 
 ### Branch Flow
@@ -40,7 +40,7 @@ main (development)
   ├─── v0.9.0-rc.1 (testnet pre-release)
   ├─── v0.9.0-rc.2
   └─── v0.9.0 (testnet release)
-  
+
 mainnet/main (production)
   │
   ├─── v0.10.0-rc.1 (mainnet pre-release)
@@ -80,13 +80,13 @@ vMAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 
 ### Version Components
 
-| Component | When to Increment |
-|-----------|-------------------|
-| **MAJOR** | State machine breaking changes, consensus breaking changes |
-| **MINOR** | New features, API additions (odd = testnet, even = mainnet) |
-| **PATCH** | Bug fixes, performance improvements |
-| **PRERELEASE** | Release candidates (rc.1, rc.2), alphas, betas |
-| **BUILD** | Build metadata (e.g., +network.mainnet) |
+| Component      | When to Increment                                           |
+| -------------- | ----------------------------------------------------------- |
+| **MAJOR**      | State machine breaking changes, consensus breaking changes  |
+| **MINOR**      | New features, API additions (odd = testnet, even = mainnet) |
+| **PATCH**      | Bug fixes, performance improvements                         |
+| **PRERELEASE** | Release candidates (rc.1, rc.2), alphas, betas              |
+| **BUILD**      | Build metadata (e.g., +network.mainnet)                     |
 
 ### Network Determination
 
@@ -96,6 +96,7 @@ The minor version determines the target network:
 - **Even minor** (0, 2, 4, 6, 8...): Mainnet releases
 
 Examples:
+
 - `v0.9.0` → Testnet
 - `v0.10.0` → Mainnet
 - `v0.9.1-rc.1` → Testnet pre-release
@@ -132,6 +133,7 @@ Use the semver utility to validate versions:
 Full production release for mainnet or testnet.
 
 **Characteristics:**
+
 - No prerelease suffix
 - Fully tested upgrade path
 - Complete documentation
@@ -145,6 +147,7 @@ Full production release for mainnet or testnet.
 Pre-production release for testing.
 
 **Characteristics:**
+
 - `-rc.N` suffix
 - Available for community testing
 - May have known issues
@@ -157,6 +160,7 @@ Pre-production release for testing.
 Bug fixes for an existing release.
 
 **Characteristics:**
+
 - Patch version increment only
 - No new features
 - Backwards compatible
@@ -169,6 +173,7 @@ Bug fixes for an existing release.
 Critical security or consensus fixes.
 
 **Characteristics:**
+
 - Expedited process
 - Minimal scope
 - Immediate deployment needed
@@ -200,6 +205,7 @@ Critical security or consensus fixes.
 ### Phase 2: Release Candidate (1 week before)
 
 1. **Create RC Tag**
+
    ```bash
    git checkout main  # or mainnet/main for mainnet
    git pull origin main
@@ -221,6 +227,7 @@ Critical security or consensus fixes.
 ### Phase 3: Validation (3-5 days)
 
 1. **Integration Testing**
+
    ```bash
    cd tests/upgrade
    UPGRADE_TO=v0.10.0 make test
@@ -244,6 +251,7 @@ Critical security or consensus fixes.
    - Security team clearance (if applicable)
 
 2. **Create Release Tag**
+
    ```bash
    git tag -a v0.10.0 -m "Release v0.10.0"
    git push origin v0.10.0
@@ -297,12 +305,14 @@ test-network-upgrade-on-release:
 ### Manual Testing Checklist
 
 #### Build Verification
+
 - [ ] Binary builds successfully on Linux (amd64, arm64)
 - [ ] Binary builds successfully on macOS (universal)
 - [ ] Docker image builds and runs
 - [ ] Version command shows correct version
 
 #### Functional Testing
+
 - [ ] Node starts from genesis
 - [ ] Node syncs from existing chain
 - [ ] Transactions execute correctly
@@ -310,12 +320,14 @@ test-network-upgrade-on-release:
 - [ ] CLI commands work as expected
 
 #### Upgrade Testing
+
 - [ ] Upgrade handler executes without error
 - [ ] State migrations complete successfully
 - [ ] No consensus failures after upgrade
 - [ ] Rollback tested (if applicable)
 
 #### Network Testing
+
 - [ ] P2P connections establish
 - [ ] Block production continues
 - [ ] Validators sign blocks
@@ -330,13 +342,12 @@ Create test configuration for each upgrade:
 {
   "upgrade_name": "v0.10.0",
   "genesis_version": "v0.9.0",
-  "validators": [
-    {"moniker": "validator0", "voting_power": 1000000}
-  ]
+  "validators": [{ "moniker": "validator0", "voting_power": 1000000 }]
 }
 ```
 
 Run tests:
+
 ```bash
 cd tests/upgrade
 UPGRADE_TO=v0.10.0 CONFIG_FILE=upgrade-v0.10.0.json make test
@@ -355,6 +366,7 @@ make gen-changelog
 ```
 
 This runs `./script/genchangelog.sh` which:
+
 1. Detects network type from tag (mainnet/testnet)
 2. Filters commits by network-specific patterns
 3. Generates markdown changelog
@@ -381,15 +393,15 @@ options:
 
 The root `CHANGELOG.md` uses [Keep a Changelog](https://keepachangelog.com/) format with stanzas:
 
-| Stanza | Description |
-|--------|-------------|
-| Features | New features |
-| Improvements | Changes in existing functionality |
-| Deprecated | Soon-to-be removed features |
-| Bug Fixes | Any bug fixes |
-| Client Breaking | Breaking CLI commands and REST routes |
-| API Breaking | Breaking exported APIs |
-| State Machine Breaking | Changes affecting AppState |
+| Stanza                 | Description                           |
+| ---------------------- | ------------------------------------- |
+| Features               | New features                          |
+| Improvements           | Changes in existing functionality     |
+| Deprecated             | Soon-to-be removed features           |
+| Bug Fixes              | Any bug fixes                         |
+| Client Breaking        | Breaking CLI commands and REST routes |
+| API Breaking           | Breaking exported APIs                |
+| State Machine Breaking | Changes affecting AppState            |
 
 ### Commit Message Format
 
@@ -427,7 +439,7 @@ The `.goreleaser.yaml` defines:
 ```yaml
 # .github/workflows/release.yaml
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   publish:
@@ -444,11 +456,11 @@ jobs:
 Published to GitHub Container Registry:
 
 ```
-ghcr.io/virtengine/node:<version>
-ghcr.io/virtengine/node:<version>-amd64
-ghcr.io/virtengine/node:<version>-arm64
-ghcr.io/virtengine/node:latest  # stable releases only
-ghcr.io/virtengine/node:stable  # mainnet stable only
+ghcr.io/virtengine/virtengine:<version>
+ghcr.io/virtengine/virtengine:<version>-amd64
+ghcr.io/virtengine/virtengine:<version>-arm64
+ghcr.io/virtengine/virtengine:latest  # stable releases only
+ghcr.io/virtengine/virtengine:stable  # mainnet stable only
 ```
 
 ### Homebrew Tap
@@ -566,7 +578,7 @@ systemctl stop virtengined
 
 # Replace binary with previous version
 ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-wget https://github.com/virtengine/node/releases/download/v0.9.0/virtengine_v0.9.0_linux_${ARCH}.zip
+wget https://github.com/virtengine/virtengine/releases/download/v0.9.0/virtengine_v0.9.0_linux_${ARCH}.zip
 unzip -o virtengine_v0.9.0_linux_${ARCH}.zip -d /usr/local/bin/
 
 # Remove upgrade marker (if upgrade occurred)
@@ -581,27 +593,31 @@ systemctl start virtengined
 For consensus-affecting issues requiring chain rollback:
 
 1. **Halt the Network**
+
    ```bash
    # Coordinate with validators
    systemctl stop virtengined
    ```
 
 2. **Identify Rollback Height**
+
    ```bash
    # Find last known good block
    virtengine query block --height <TARGET_HEIGHT>
    ```
 
 3. **Export State (if needed)**
+
    ```bash
    virtengine export --height <TARGET_HEIGHT> > genesis_rollback.json
    ```
 
 4. **Rollback Data**
+
    ```bash
    # Backup current data
    cp -r ~/.virtengine/data ~/.virtengine/data.backup
-   
+
    # Reset to target height
    virtengine rollback --hard
    ```
@@ -657,6 +673,7 @@ retract (
 ```
 
 The upgrade script checks retracted versions:
+
 ```bash
 # script/upgrades.sh automatically handles retracted versions
 retracted_versions=$(go mod edit --json | jq -cr .Retract)
@@ -668,12 +685,12 @@ retracted_versions=$(go mod edit --json | jq -cr .Retract)
 
 ### Release Cadence
 
-| Release Type | Cadence | Notice Period |
-|--------------|---------|---------------|
-| Major (vX.0.0) | As needed | 4 weeks |
-| Minor (vX.Y.0) | Monthly | 2 weeks |
-| Patch (vX.Y.Z) | As needed | 1 week |
-| Emergency | Immediate | None |
+| Release Type   | Cadence   | Notice Period |
+| -------------- | --------- | ------------- |
+| Major (vX.0.0) | As needed | 4 weeks       |
+| Minor (vX.Y.0) | Monthly   | 2 weeks       |
+| Patch (vX.Y.Z) | As needed | 1 week        |
+| Emergency      | Immediate | None          |
 
 ### Quarterly Planning
 
@@ -690,17 +707,20 @@ Each quarter, plan releases:
 ## Q1 2026 Release Calendar
 
 ### January
+
 - Jan 6: Feature freeze for v0.10.0
 - Jan 8: v0.10.0-rc.1 release
 - Jan 13: RC testing complete
 - Jan 15: v0.10.0 production release
 
 ### February
+
 - Feb 3: Feature freeze for v0.10.1
 - Feb 5: v0.10.1-rc.1 release
 - Feb 10: v0.10.1 production release
 
 ### March
+
 - Mar 3: Feature freeze for v0.11.0 (testnet)
 - Mar 5: v0.11.0-rc.1 release
 - Mar 12: v0.11.0 production release
@@ -708,19 +728,20 @@ Each quarter, plan releases:
 
 ### Release Roles
 
-| Role | Responsibilities |
-|------|------------------|
+| Role                | Responsibilities                                             |
+| ------------------- | ------------------------------------------------------------ |
 | **Release Manager** | Coordinates release, owns checklist, makes go/no-go decision |
-| **QA Lead** | Oversees testing, validates acceptance criteria |
-| **Security Lead** | Reviews security implications, clears release |
-| **Communications** | Drafts announcements, updates documentation |
-| **On-Call** | Monitors post-release, handles incidents |
+| **QA Lead**         | Oversees testing, validates acceptance criteria              |
+| **Security Lead**   | Reviews security implications, clears release                |
+| **Communications**  | Drafts announcements, updates documentation                  |
+| **On-Call**         | Monitors post-release, handles incidents                     |
 
 ### Governance Integration
 
 For network upgrades requiring on-chain governance:
 
 1. **Submit Proposal** (T-14 days before target)
+
    ```bash
    virtengine tx gov submit-proposal software-upgrade v0.10.0 \
      --title "Upgrade to v0.10.0" \
@@ -792,7 +813,7 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines and commit format
 - [CHANGELOG.md](./CHANGELOG.md) - Version history
 - [ADR-001: Network Upgrades](./_docs/adr/adr-001-network-upgrades.md) - Upgrade implementation guide
-- [_docs/version-control.md](./_docs/version-control.md) - Branch merge procedures
+- [\_docs/version-control.md](./_docs/version-control.md) - Branch merge procedures
 
 ---
 
@@ -825,11 +846,11 @@ git tag -s -a v0.10.0 -m "Release v0.10.0"
 
 ### Version Examples
 
-| Tag | Network | Type | Stable |
-|-----|---------|------|--------|
-| v0.9.0 | Testnet | Release | Yes |
-| v0.9.1-rc.1 | Testnet | Pre-release | No |
-| v0.10.0 | Mainnet | Release | Yes |
-| v0.10.0-rc.1 | Mainnet | Pre-release | No |
-| v0.10.1 | Mainnet | Patch | Yes |
-| v1.0.0 | Mainnet | Major | Yes |
+| Tag          | Network | Type        | Stable |
+| ------------ | ------- | ----------- | ------ |
+| v0.9.0       | Testnet | Release     | Yes    |
+| v0.9.1-rc.1  | Testnet | Pre-release | No     |
+| v0.10.0      | Mainnet | Release     | Yes    |
+| v0.10.0-rc.1 | Mainnet | Pre-release | No     |
+| v0.10.1      | Mainnet | Patch       | Yes    |
+| v1.0.0       | Mainnet | Major       | Yes    |

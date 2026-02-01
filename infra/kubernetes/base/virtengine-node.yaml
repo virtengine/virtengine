@@ -35,7 +35,7 @@ spec:
       terminationGracePeriodSeconds: 120
       containers:
         - name: virtengine-node
-          image: virtengine/node:latest
+          image: virtengine/virtengine:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: p2p

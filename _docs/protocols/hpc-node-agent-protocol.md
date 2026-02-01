@@ -88,11 +88,11 @@ type HeartbeatAuth struct {
 
 ### Key Storage
 
-| Storage Type | Location | Use Case |
-|-------------|----------|----------|
-| File-based | `/etc/virtengine/node-agent/keys/` | Standard deployment |
-| TPM 2.0 | TPM sealed storage | High-security nodes |
-| HSM | PKCS#11 interface | Enterprise deployment |
+| Storage Type | Location                                 | Use Case              |
+| ------------ | ---------------------------------------- | --------------------- |
+| File-based   | `/etc/virtengine/virtengine-agent/keys/` | Standard deployment   |
+| TPM 2.0      | TPM sealed storage                       | High-security nodes   |
+| HSM          | PKCS#11 interface                        | Enterprise deployment |
 
 ## Heartbeat Protocol
 
@@ -106,7 +106,7 @@ type HeartbeatAuth struct {
     "sequence_number": "uint64 (monotonically increasing)",
     "timestamp": "string (RFC3339 with nanoseconds)",
     "agent_version": "string (semver)",
-    
+
     "capacity": {
       "cpu_cores_total": "int32",
       "cpu_cores_available": "int32",
@@ -122,7 +122,7 @@ type HeartbeatAuth struct {
       "storage_gb_available": "int32",
       "storage_gb_allocated": "int32"
     },
-    
+
     "health": {
       "status": "string (healthy|degraded|unhealthy|draining|offline)",
       "uptime_seconds": "int64",
@@ -142,7 +142,7 @@ type HeartbeatAuth struct {
       "last_error_message": "string (optional, max 256 chars)",
       "slurm_state": "string (idle|allocated|mixed|down|drain|unknown)"
     },
-    
+
     "latency": {
       "measurements": [
         {
@@ -156,7 +156,7 @@ type HeartbeatAuth struct {
       "chain_latency_ms": "int64 (estimated, to chain)",
       "avg_cluster_latency_us": "int64"
     },
-    
+
     "jobs": {
       "running_count": "int32",
       "pending_count": "int32",
@@ -164,7 +164,7 @@ type HeartbeatAuth struct {
       "failed_24h": "int32",
       "active_job_ids": ["string (list of SLURM job IDs)"]
     },
-    
+
     "services": {
       "slurmd_running": "bool",
       "slurmd_version": "string",
@@ -173,7 +173,7 @@ type HeartbeatAuth struct {
       "container_runtime_version": "string"
     }
   },
-  
+
   "auth": {
     "signature": "string (base64)",
     "nonce": "string (base64, 16 bytes)"
@@ -190,7 +190,7 @@ type HeartbeatAuth struct {
     "sequence_ack": "uint64",
     "timestamp": "string (RFC3339)",
     "next_heartbeat_seconds": "int32 (suggested interval)",
-    
+
     "commands": [
       {
         "command_id": "string",
@@ -199,13 +199,13 @@ type HeartbeatAuth struct {
         "deadline": "string (RFC3339)"
       }
     ],
-    
+
     "config_updates": {
       "sampling_interval_seconds": "int32",
       "latency_probe_targets": ["string (node IDs to measure)"],
       "metrics_retention_hours": "int32"
     },
-    
+
     "errors": [
       {
         "code": "string",
@@ -220,12 +220,12 @@ type HeartbeatAuth struct {
 
 ### Heartbeat TTL Configuration
 
-| Parameter | Default | Range | Description |
-|-----------|---------|-------|-------------|
-| `heartbeat_interval` | 30s | 10s-120s | Normal heartbeat interval |
-| `heartbeat_timeout` | 120s | 60s-600s | Time before node marked stale |
-| `offline_threshold` | 300s | 120s-1800s | Time before node marked offline |
-| `deregistration_delay` | 3600s | 600s-86400s | Time before automatic deregistration |
+| Parameter              | Default | Range       | Description                          |
+| ---------------------- | ------- | ----------- | ------------------------------------ |
+| `heartbeat_interval`   | 30s     | 10s-120s    | Normal heartbeat interval            |
+| `heartbeat_timeout`    | 120s    | 60s-600s    | Time before node marked stale        |
+| `offline_threshold`    | 300s    | 120s-1800s  | Time before node marked offline      |
+| `deregistration_delay` | 3600s   | 600s-86400s | Time before automatic deregistration |
 
 ### Node State Transitions
 
@@ -262,10 +262,9 @@ type HeartbeatAuth struct {
 
 ### Deactivation Rules
 
-1. **Stale Detection**: 
+1. **Stale Detection**:
    - No heartbeat for `heartbeat_timeout` → mark `STALE`
    - Node excluded from new job scheduling
-   
 2. **Offline Transition**:
    - No heartbeat for `offline_threshold` → mark `OFFLINE`
    - Running jobs flagged for potential failure
@@ -291,27 +290,27 @@ func (k Keeper) HandleNodeRecovery(ctx sdk.Context, nodeID string, heartbeat *He
     if !exists {
         return ErrNodeNotFound
     }
-    
+
     // Validate recovery is allowed
     if node.State == NodeStateDeregistered {
         return ErrNodeDeregistered
     }
-    
+
     // Check sequence number continuity
     if heartbeat.SequenceNumber <= node.LastSequence {
         return ErrStaleHeartbeat
     }
-    
+
     // Calculate downtime
     downtime := heartbeat.Timestamp.Sub(node.LastHeartbeat)
-    
+
     // Update node state
     node.State = NodeStateActive
     node.LastHeartbeat = heartbeat.Timestamp
     node.LastSequence = heartbeat.SequenceNumber
     node.RecoveryCount++
     node.TotalDowntimeSeconds += int64(downtime.Seconds())
-    
+
     return k.SetNodeMetadata(ctx, node)
 }
 ```
@@ -320,18 +319,18 @@ func (k Keeper) HandleNodeRecovery(ctx sdk.Context, nodeID string, heartbeat *He
 
 ### Heartbeat to NodeMetadata
 
-| Heartbeat Field | NodeMetadata Field | Notes |
-|-----------------|-------------------|-------|
-| `node_id` | `NodeID` | Immutable |
-| `cluster_id` | `ClusterID` | Immutable |
-| `capacity.cpu_cores_available` | `Resources.CPUCores` | Available, not total |
-| `capacity.memory_gb_available` | `Resources.MemoryGB` | Available, not total |
-| `capacity.gpus_available` | `Resources.GPUs` | Available, not total |
-| `capacity.gpu_type` | `Resources.GPUType` | - |
-| `health.status` | `Active` | mapped to bool |
-| `latency.avg_cluster_latency_us` | `AvgLatencyMs` | converted us→ms |
-| `timestamp` | `LastHeartbeat` | - |
-| `latency.measurements` | `LatencyMeasurements` | - |
+| Heartbeat Field                  | NodeMetadata Field    | Notes                |
+| -------------------------------- | --------------------- | -------------------- |
+| `node_id`                        | `NodeID`              | Immutable            |
+| `cluster_id`                     | `ClusterID`           | Immutable            |
+| `capacity.cpu_cores_available`   | `Resources.CPUCores`  | Available, not total |
+| `capacity.memory_gb_available`   | `Resources.MemoryGB`  | Available, not total |
+| `capacity.gpus_available`        | `Resources.GPUs`      | Available, not total |
+| `capacity.gpu_type`              | `Resources.GPUType`   | -                    |
+| `health.status`                  | `Active`              | mapped to bool       |
+| `latency.avg_cluster_latency_us` | `AvgLatencyMs`        | converted us→ms      |
+| `timestamp`                      | `LastHeartbeat`       | -                    |
+| `latency.measurements`           | `LatencyMeasurements` | -                    |
 
 ### Aggregation for Cluster Metadata
 
@@ -363,15 +362,15 @@ func updateClusterFromNodes(cluster *types.HPCCluster, agg *ClusterAggregation) 
 
 ### Minimum Sampling Intervals
 
-| Metric Category | Min Interval | Recommended | Max Staleness |
-|----------------|--------------|-------------|---------------|
-| **Capacity** | 10s | 30s | 60s |
-| **Health Status** | 10s | 30s | 60s |
-| **CPU/Memory Utilization** | 5s | 15s | 30s |
-| **GPU Metrics** | 5s | 15s | 30s |
-| **Latency Measurements** | 60s | 300s | 600s |
-| **Job Counts** | 30s | 60s | 120s |
-| **Temperature** | 30s | 60s | 300s |
+| Metric Category            | Min Interval | Recommended | Max Staleness |
+| -------------------------- | ------------ | ----------- | ------------- |
+| **Capacity**               | 10s          | 30s         | 60s           |
+| **Health Status**          | 10s          | 30s         | 60s           |
+| **CPU/Memory Utilization** | 5s           | 15s         | 30s           |
+| **GPU Metrics**            | 5s           | 15s         | 30s           |
+| **Latency Measurements**   | 60s          | 300s        | 600s          |
+| **Job Counts**             | 30s          | 60s         | 120s          |
+| **Temperature**            | 30s          | 60s         | 300s          |
 
 ### Sampling Configuration
 
@@ -405,12 +404,12 @@ func (a *Agent) calculateSamplingInterval(baseInterval time.Duration) time.Durat
     if a.cpuUtilization > 75 {
         return baseInterval + baseInterval/2
     }
-    
+
     // Decrease interval during state changes
     if a.stateChanged {
         return baseInterval / 2
     }
-    
+
     return baseInterval
 }
 ```
@@ -553,7 +552,12 @@ func (a *Agent) calculateSamplingInterval(baseInterval time.Duration) time.Durat
       "pending_count": 0,
       "completed_24h": 8,
       "failed_24h": 1,
-      "active_job_ids": ["slurm-12350", "slurm-12351", "slurm-12352", "slurm-12353"]
+      "active_job_ids": [
+        "slurm-12350",
+        "slurm-12351",
+        "slurm-12352",
+        "slurm-12353"
+      ]
     },
     "services": {
       "slurmd_running": true,
@@ -586,7 +590,7 @@ func ValidateHeartbeat(hb *Heartbeat) error {
     if hb.SequenceNumber == 0 {
         return errors.New("sequence_number must be > 0")
     }
-    
+
     // Timestamp validation (not too far in past or future)
     now := time.Now()
     if hb.Timestamp.Before(now.Add(-5 * time.Minute)) {
@@ -595,17 +599,17 @@ func ValidateHeartbeat(hb *Heartbeat) error {
     if hb.Timestamp.After(now.Add(1 * time.Minute)) {
         return errors.New("timestamp in future")
     }
-    
+
     // Capacity validation
     if err := validateCapacity(&hb.Capacity); err != nil {
         return fmt.Errorf("capacity: %w", err)
     }
-    
+
     // Health validation
     if err := validateHealth(&hb.Health); err != nil {
         return fmt.Errorf("health: %w", err)
     }
-    
+
     return nil
 }
 
@@ -652,13 +656,13 @@ func ValidateHeartbeatAuth(hb *Heartbeat, auth *HeartbeatAuth, knownPubkeys map[
     if !exists {
         return errors.New("unknown node_id")
     }
-    
+
     // Verify timestamp freshness (prevent replay)
     authTime := time.Unix(auth.Timestamp, 0)
     if time.Since(authTime) > 5*time.Minute {
         return errors.New("auth timestamp expired")
     }
-    
+
     // Construct message to verify
     payloadHash := sha256.Sum256(encodeHeartbeat(hb))
     message := fmt.Sprintf("%s|%d|%s|%x",
@@ -667,17 +671,17 @@ func ValidateHeartbeatAuth(hb *Heartbeat, auth *HeartbeatAuth, knownPubkeys map[
         auth.Nonce,
         payloadHash[:],
     )
-    
+
     // Verify signature
     sig, err := base64.StdEncoding.DecodeString(auth.Signature)
     if err != nil {
         return errors.New("invalid signature encoding")
     }
-    
+
     if !ed25519.Verify(pubkey, []byte(message), sig) {
         return errors.New("signature verification failed")
     }
-    
+
     return nil
 }
 ```
@@ -701,8 +705,8 @@ curl -L https://releases.virtengine.dev/node-agent/v0.9.1/virtengine-node-agent-
 chmod +x /usr/local/bin/virtengine-node-agent
 
 # Create directories
-mkdir -p /etc/virtengine/node-agent/keys
-mkdir -p /var/lib/virtengine/node-agent
+mkdir -p /etc/virtengine/virtengine-agent/keys
+mkdir -p /var/lib/virtengine/virtengine-agent
 mkdir -p /var/log/virtengine
 ```
 
@@ -711,10 +715,10 @@ mkdir -p /var/log/virtengine
 ```bash
 # Generate keypair (creates agent.key and agent.pub)
 virtengine-node-agent keygen \
-  --output-dir /etc/virtengine/node-agent/keys
+  --output-dir /etc/virtengine/virtengine-agent/keys
 
 # Display public key for registration
-cat /etc/virtengine/node-agent/keys/agent.pub
+cat /etc/virtengine/virtengine-agent/keys/agent.pub
 ```
 
 #### Step 3: Request Registration Token
@@ -728,37 +732,37 @@ virtengine-provider node-token create \
   --node-id node-hpc1-compute-042 \
   --pubkey "$(cat agent.pub)" \
   --expires 24h
-  
+
 # Output: registration token (JWT)
 ```
 
 #### Step 4: Configure Node Agent
 
 ```yaml
-# /etc/virtengine/node-agent/config.yaml
+# /etc/virtengine/virtengine-agent/config.yaml
 node:
   id: "node-hpc1-compute-042"
   cluster_id: "hpc-cluster-1"
-  
+
 provider_daemon:
   endpoint: "https://provider.example.com:8443"
   tls:
-    ca_cert: "/etc/virtengine/node-agent/ca.crt"
-    client_cert: "/etc/virtengine/node-agent/client.crt"
-    client_key: "/etc/virtengine/node-agent/client.key"
+    ca_cert: "/etc/virtengine/virtengine-agent/ca.crt"
+    client_cert: "/etc/virtengine/virtengine-agent/client.crt"
+    client_key: "/etc/virtengine/virtengine-agent/client.key"
 
 agent:
-  key_path: "/etc/virtengine/node-agent/keys/agent.key"
+  key_path: "/etc/virtengine/virtengine-agent/keys/agent.key"
   registration_token: "eyJhbGciOiJFZDI1NTE5..."
 
 sampling:
   base_interval: "30s"
   utilization_interval: "15s"
   latency_interval: "5m"
-  
+
 logging:
   level: "info"
-  file: "/var/log/virtengine/node-agent.log"
+  file: "/var/log/virtengine/virtengine-agent.log"
   max_size_mb: 100
   max_backups: 5
 ```
@@ -768,7 +772,7 @@ logging:
 ```bash
 # Register node with provider (one-time)
 virtengine-node-agent register \
-  --config /etc/virtengine/node-agent/config.yaml
+  --config /etc/virtengine/virtengine-agent/config.yaml
 
 # Start agent service
 systemctl enable virtengine-node-agent
@@ -806,7 +810,7 @@ Type=simple
 User=virtengine
 Group=virtengine
 ExecStart=/usr/local/bin/virtengine-node-agent run \
-  --config /etc/virtengine/node-agent/config.yaml
+  --config /etc/virtengine/virtengine-agent/config.yaml
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -826,13 +830,13 @@ WantedBy=multi-user.target
 
 ### Troubleshooting
 
-| Issue | Check | Resolution |
-|-------|-------|------------|
-| Registration fails | Token expired | Generate new token |
-| Heartbeat rejected | Clock skew | Sync NTP |
-| Auth error | Key mismatch | Re-register with correct pubkey |
-| No chain updates | Provider daemon offline | Check provider daemon logs |
-| Node stuck in PENDING | Cluster not active | Activate cluster first |
+| Issue                 | Check                   | Resolution                      |
+| --------------------- | ----------------------- | ------------------------------- |
+| Registration fails    | Token expired           | Generate new token              |
+| Heartbeat rejected    | Clock skew              | Sync NTP                        |
+| Auth error            | Key mismatch            | Re-register with correct pubkey |
+| No chain updates      | Provider daemon offline | Check provider daemon logs      |
+| Node stuck in PENDING | Cluster not active      | Activate cluster first          |
 
 ## Related Documents
 

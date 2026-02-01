@@ -24,7 +24,7 @@ configMapGenerator:
       - cluster-name=virtengine
 
 images:
-  - name: virtengine/node
+  - name: virtengine/virtengine
     newTag: latest
   - name: virtengine/provider-daemon
     newTag: latest

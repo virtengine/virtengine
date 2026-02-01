@@ -16,14 +16,14 @@ are the most critical to review. -->
 
 ### Author Checklist
 
-*All items are required. Please add a note to the item if the item is not applicable and
-please add links to any relevant follow-up issues.*
+_All items are required. Please add a note to the item if the item is not applicable and
+please add links to any relevant follow-up issues._
 
 I have...
 
 - [ ] included the correct [type prefix](https://github.com/commitizen/conventional-commit-types/blob/v3.0.0/index.json) in the PR title
 - [ ] added `!` to the type prefix if API or client breaking change
-- [ ] targeted the correct branch (see [PR Targeting](https://github.com/virtengine/node/blob/main/CONTRIBUTING.md#paperwork-for-pull-requests))
+- [ ] targeted the correct branch (see [PR Targeting](https://github.com/virtengine/virtengine/blob/main/CONTRIBUTING.md#paperwork-for-pull-requests))
 - [ ] provided a link to the relevant issue or specification
 - [ ] included the necessary unit and integration [tests](https://github.com/virtengine/blob/main/CONTRIBUTING.md#testing)
 - [ ] added a changelog entry to `CHANGELOG.md`

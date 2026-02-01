@@ -7,12 +7,12 @@
 
 This repository is a development gateway to the VirtEngine Blockchain.
 It aims following:
+
 - Define data types and API via [protobuf](./proto)
-    - VirtEngine Blockchain and it's stores, aka [node](./proto/node)
-    - VirtEngine provider Interface, aka [provider](./proto/provider)
+  - VirtEngine Blockchain and it's stores, aka [node](./proto/node)
+  - VirtEngine provider Interface, aka [provider](./proto/provider)
 - Define data types and API (both REST and GRPC) of VirtEngine provider Interface
 - Provide official reference clients for supported [programming languages](#supported-languages)
-
 
 ## Supported languages
 
@@ -20,6 +20,7 @@ It aims following:
 
 [This implementation](./go) provider all necessary code-generation as well as client defining VirtEngine Blockchain
 There are a few packages this implementation exports. All packages available via Vanity URLs which are hosted as [Github Pages](https://github.com/virtengine/vanity).
+
 #### Go package
 
 Source code is located within [go](./go) directory
@@ -32,7 +33,8 @@ import "github.com/virtengine/virtengine/sdk/go"
 
 ##### Migrate package
 
-Depending on difference in API and stores between current and previous versions of the blockchain, there may be a **migrate** package. It is intended to be used by [node](https://github.com/virtengine/node) only.
+Depending on difference in API and stores between current and previous versions of the blockchain, there may be a **migrate** package. It is intended to be used by [node](https://github.com/virtengine/virtengine) only.
+
 ```go
 import "github.com/virtengine/virtengine/sdk/go/node/migrate"
 ```
@@ -40,13 +42,15 @@ import "github.com/virtengine/virtengine/sdk/go/node/migrate"
 #### SDL package
 
 Reference implementation of the SDL.
+
 ```go
 import "github.com/virtengine/virtengine/sdk/go/sdl"
 ```
 
 #### CLI package
 
-CLI package which combines improved version of cli clients from node](https://github.com/virtengine/node) and [cosmos-sdk](https://github.com/cosmos/cosmos-sdk)
+CLI package which combines improved version of cli clients from node](https://github.com/virtengine/virtengine) and [cosmos-sdk](https://github.com/cosmos/cosmos-sdk)
+
 ```go
 import "github.com/virtengine/virtengine/sdk/go/cli"
 ```
@@ -55,7 +59,6 @@ import "github.com/virtengine/virtengine/sdk/go/cli"
 
 Source code is located within [ts](./ts) directory
 
-
 ## Protobuf
 
 All protobuf definitions are located within [proto](./proto) directory.
@@ -63,10 +66,12 @@ All protobuf definitions are located within [proto](./proto) directory.
 This repository consolidates gRPC API definitions for the [VirtEngine Node](https://github.com/virtengine/virtengine). It also includes related code generation.
 
 Currently, two `buf` packages are defined, with potential future publication to BSR based on demand:
-- **Node Package**: `buf.build/virtengine/node`
+
+- **Node Package**: `buf.build/virtengine/virtengine`
 - **Provider Package**: `buf.build/virtengine/provider`
 
 Proto documentation is available for:
+
 - [Node](docs/proto/node.md)
 - [Provider](docs/proto/provider.md)
 
@@ -77,32 +82,35 @@ Documentation in swagger format combining both node and provider packages can be
 If there is a need to run regenerate protobuf (in case of API or documentation changes):
 
 1. Install [direnv](https://direnv.net) and hook it to the [shell](https://direnv.net/docs/hook.html)
-    - **MacOS**
-    ```shell
-    brew install make direnv
-    ```
+   - **MacOS**
+   ```shell
+   brew install make direnv
+   ```
 2. Allow direnv within project
-    ```shell
-    direnv allow
-    ```
+
+   ```shell
+   direnv allow
+   ```
 
 3. Run codegen. This will
-    - Install all required tools into local cache
-    - Make sure you setup vendor
+   - Install all required tools into local cache
+   - Make sure you setup vendor
 
-    ```shell
-    make modvendor
-    ```
-    
-    - generate changes to all [supported programming languages](#supported-languages)
+   ```shell
+   make modvendor
+   ```
 
-    ```shell
-    make proto-gen
-    ```
-    - to run codegen for specific language use `make proto-gen-<lang>`. For example
-    ```shell
-    make proto-gen-go
-    ```
+   - generate changes to all [supported programming languages](#supported-languages)
+
+   ```shell
+   make proto-gen
+   ```
+
+   - to run codegen for specific language use `make proto-gen-<lang>`. For example
+
+   ```shell
+   make proto-gen-go
+   ```
 
 ## Releases
 

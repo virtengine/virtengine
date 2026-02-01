@@ -1,5 +1,5 @@
 version: v1
-name: buf.build/virtengine/node
+name: buf.build/virtengine/virtengine
 deps:
   - buf.build/cosmos/gogo-proto
   - buf.build/cosmos/cosmos-sdk

@@ -178,14 +178,14 @@ spec:
           command:
             - /usr/local/bin/virtengine-node-agent
             - run
-            - --config=/etc/virtengine/node-agent/config.yaml
+            - --config=/etc/virtengine/virtengine-agent/config.yaml
           volumeMounts:
             - name: node-agent-config
-              mountPath: /etc/virtengine/node-agent
+              mountPath: /etc/virtengine/virtengine-agent
               readOnly: true
             {{- if .Values.nodeAgent.tls.enabled }}
             - name: node-agent-tls
-              mountPath: /etc/virtengine/node-agent/tls
+              mountPath: /etc/virtengine/virtengine-agent/tls
               readOnly: true
             {{- end }}
           resources:
@@ -315,9 +315,9 @@ data:
       endpoint: "{{ .Values.nodeAgent.config.providerEndpoint }}"
       {{- if .Values.nodeAgent.tls.enabled }}
       tls:
-        ca_cert: "/etc/virtengine/node-agent/tls/ca.crt"
-        client_cert: "/etc/virtengine/node-agent/tls/client.crt"
-        client_key: "/etc/virtengine/node-agent/tls/client.key"
+        ca_cert: "/etc/virtengine/virtengine-agent/tls/ca.crt"
+        client_cert: "/etc/virtengine/virtengine-agent/tls/client.crt"
+        client_key: "/etc/virtengine/virtengine-agent/tls/client.key"
       {{- end }}
       
     sampling:
