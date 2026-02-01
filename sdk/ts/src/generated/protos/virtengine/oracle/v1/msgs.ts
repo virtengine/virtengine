@@ -35,7 +35,7 @@ export interface MsgAddPriceEntryResponse {
 /**
  * MsgUpdateParams is the Msg/UpdateParams request type.
  *
- * Since: akash v2.0.0
+ * Since: virtengine v2.0.0
  */
 export interface MsgUpdateParams {
   /** authority is the address of the governance account. */
@@ -52,7 +52,7 @@ export interface MsgUpdateParams {
  * MsgUpdateParamsResponse defines the response structure for executing a
  * MsgUpdateParams message.
  *
- * Since: akash v2.0.0
+ * Since: virtengine v2.0.0
  */
 export interface MsgUpdateParamsResponse {
 }

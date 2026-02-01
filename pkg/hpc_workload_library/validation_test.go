@@ -466,4 +466,3 @@ func createCustomJob() *hpctypes.HPCJob {
 		CreatedAt:         time.Now(),
 	}
 }
-

@@ -11,7 +11,7 @@ import { Params } from "./params.ts";
 
 /** GenesisState stores slice of genesis wasm parameters. */
 export interface GenesisState {
-  /** Params holds parameters of the genesis of akash wasm. */
+  /** Params holds parameters of the genesis of virtengine wasm. */
   params: Params | undefined;
 }
 

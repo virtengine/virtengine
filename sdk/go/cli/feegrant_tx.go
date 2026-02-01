@@ -224,4 +224,3 @@ func getPeriodReset(duration int64) time.Time {
 func getPeriod(duration int64) time.Duration {
 	return time.Duration(duration) * time.Second
 }
-

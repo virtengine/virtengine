@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package akash.test.functional;
+package virtengine.test.functional;
 
 service Query {
   rpc GetBlock(GetBlockRequest) returns (GetBlockResponse);

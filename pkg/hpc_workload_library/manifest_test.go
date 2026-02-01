@@ -481,4 +481,3 @@ template:
 		t.Errorf("expected publisher %s, got %s", customPublisher, template.Publisher)
 	}
 }
-

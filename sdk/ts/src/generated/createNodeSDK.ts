@@ -285,7 +285,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
            * updateParams defines a governance operation for updating the x/deployment module
            * parameters. The authority is hard-coded to the x/gov module account.
            *
-           * Since: akash v1.0.0
+           * Since: virtengine v1.0.0
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_deployment_v1beta4_paramsmsg.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(7);
@@ -367,7 +367,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
            * updateParams defines a governance operation for updating the x/deployment module
            * parameters. The authority is hard-coded to the x/gov module account.
            *
-           * Since: akash v1.0.0
+           * Since: virtengine v1.0.0
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_deployment_v1beta5_paramsmsg.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(9);
@@ -536,7 +536,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
            * updateParams defines a governance operation for updating the x/market module
            * parameters. The authority is hard-coded to the x/gov module account.
            *
-           * Since: akash v1.0.0
+           * Since: virtengine v1.0.0
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_market_v1beta5_paramsmsg.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(16);
@@ -632,7 +632,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
            * updateParams defines a governance operation for updating the x/market module
            * parameters. The authority is hard-coded to the x/gov module account.
            *
-           * Since: akash v1.0.0
+           * Since: virtengine v1.0.0
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_market_v2beta1_paramsmsg.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(18);
@@ -681,7 +681,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
            * updateParams defines a governance operation for updating the x/wasm module
            * parameters. The authority is hard-coded to the x/gov module account.
            *
-           * Since: akash v2.0.0
+           * Since: virtengine v2.0.0
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_oracle_v1_msgs.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(20);
@@ -741,7 +741,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
            * updateParams defines a governance operation for updating the x/market module
            * parameters. The authority is hard-coded to the x/gov module account.
            *
-           * Since: akash v1.0.0
+           * Since: virtengine v1.0.0
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_take_v1_paramsmsg.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(24);
@@ -762,7 +762,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
            * updateParams defines a governance operation for updating the x/wasm module
            * parameters. The authority is hard-coded to the x/gov module account.
            *
-           * Since: akash v2.0.0
+           * Since: virtengine v2.0.0
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_wasm_v1_paramsmsg.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(27);

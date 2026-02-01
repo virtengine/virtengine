@@ -851,4 +851,3 @@ func TestHPCUsageAggregator(t *testing.T) {
 		t.Errorf("MemoryBytesMax = %v, want 2147483648", metrics.MemoryBytesMax)
 	}
 }
-

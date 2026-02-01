@@ -377,7 +377,7 @@ pub mod msg_client {
         /** UpdateParams defines a governance operation for updating the x/wasm module
  parameters. The authority is hard-coded to the x/gov module account.
 
- Since: akash v2.0.0
+ Since: virtengine v2.0.0
 */
         pub async fn update_params(
             &mut self,
@@ -416,7 +416,7 @@ pub mod msg_server {
         /** UpdateParams defines a governance operation for updating the x/wasm module
  parameters. The authority is hard-coded to the x/gov module account.
 
- Since: akash v2.0.0
+ Since: virtengine v2.0.0
 */
         async fn update_params(
             &self,

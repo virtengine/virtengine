@@ -25,7 +25,7 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 // GenesisState stores slice of genesis wasm parameters.
 type GenesisState struct {
-	// Params holds parameters of the genesis of akash wasm.
+	// Params holds parameters of the genesis of virtengine wasm.
 	Params Params `protobuf:"bytes,1,opt,name=params,proto3" json:"params" yaml:"params"`
 }
 

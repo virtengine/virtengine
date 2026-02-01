@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package akash.test.functional;
+package virtengine.test.functional;
 import "cosmos/msg/v1/msg.proto";
 
 service Msg {

@@ -5,11 +5,12 @@ package client
 
 import (
 	fmt "fmt"
-	_ "github.com/cosmos/gogoproto/gogoproto"
-	proto "github.com/cosmos/gogoproto/proto"
 	io "io"
 	math "math"
 	math_bits "math/bits"
+
+	_ "github.com/cosmos/gogoproto/gogoproto"
+	proto "github.com/cosmos/gogoproto/proto"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -74,7 +75,7 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("virtengine/discovery/v1/virtengine.proto", fileDescriptor_virtengine_discovery)
+	safeRegisterFile("virtengine/discovery/v1/virtengine.proto", fileDescriptor_virtengine_discovery)
 }
 
 var fileDescriptor_virtengine_discovery = []byte{

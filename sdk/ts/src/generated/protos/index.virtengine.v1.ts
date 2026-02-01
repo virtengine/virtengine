@@ -65,7 +65,7 @@ export type AccountState = _AccountState
 export const Types_Account = patched(_Types_Account);
 export type Types_Account = _Types_Account
 export { ClientInfo } from "./virtengine/discovery/v1/client_info.ts";
-export { Akash } from "./virtengine/discovery/v1/akash.ts";
+export { VirtEngine } from "./virtengine/discovery/v1/virtengine.ts";
 
 import { PaymentState as _PaymentState, Payment as _Types_Payment } from "./virtengine/escrow/types/v1/payment.ts";
 export const PaymentState = patched(_PaymentState);

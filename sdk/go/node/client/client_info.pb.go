@@ -23,7 +23,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
-// ClientInfo is the akash specific client info.
+// ClientInfo is the VirtEngine specific client info.
 type ClientInfo struct {
 	// ApiVersion is the version of the API running on the client.
 	ApiVersion string `protobuf:"bytes,1,opt,name=api_version,json=apiVersion,proto3" json:"api_version" yaml:"api_version"`

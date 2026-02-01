@@ -549,4 +549,3 @@ func GetArrayJobTemplate() *hpctypes.WorkloadTemplate {
 		UpdatedAt:      time.Now(),
 	}
 }
-

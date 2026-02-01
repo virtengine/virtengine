@@ -785,7 +785,7 @@ pub mod msg_client {
         /** UpdateParams defines a governance operation for updating the x/deployment module
  parameters. The authority is hard-coded to the x/gov module account.
 
- Since: akash v1.0.0
+ Since: virtengine v1.0.0
 */
         pub async fn update_params(
             &mut self,
@@ -880,7 +880,7 @@ pub mod msg_server {
         /** UpdateParams defines a governance operation for updating the x/deployment module
  parameters. The authority is hard-coded to the x/gov module account.
 
- Since: akash v1.0.0
+ Since: virtengine v1.0.0
 */
         async fn update_params(
             &self,

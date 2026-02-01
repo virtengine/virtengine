@@ -316,4 +316,3 @@ func GetQueryEscrowBlocksRemainingCmd() *cobra.Command {
 
 	return cmd
 }
-

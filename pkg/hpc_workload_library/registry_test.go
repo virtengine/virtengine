@@ -538,4 +538,3 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		}
 	}
 }
-

@@ -8,7 +8,7 @@
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
 
-/** ClientInfo is the akash specific client info. */
+/** ClientInfo is the VirtEngine specific client info. */
 export interface ClientInfo {
   /** ApiVersion is the version of the API running on the client. */
   apiVersion: string;

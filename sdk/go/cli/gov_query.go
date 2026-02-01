@@ -629,4 +629,3 @@ $ %s query gov proposer 1
 
 	return cmd
 }
-

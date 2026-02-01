@@ -32,7 +32,7 @@ pub struct GenesisState {
 }
 /// MsgUpdateParams is the Msg/UpdateParams request type.
 ///
-/// Since: akash v1.0.0
+/// Since: virtengine v1.0.0
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MsgUpdateParams {
@@ -48,7 +48,7 @@ pub struct MsgUpdateParams {
 /// MsgUpdateParamsResponse defines the response structure for executing a
 /// MsgUpdateParams message.
 ///
-/// Since: akash v1.0.0
+/// Since: virtengine v1.0.0
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct MsgUpdateParamsResponse {

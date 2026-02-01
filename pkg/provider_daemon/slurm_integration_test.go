@@ -502,4 +502,3 @@ func TestMockIntegrationService_MultipleLeases(t *testing.T) {
 		t.Errorf("activeJobs count after termination = %d, want 0", activeCount)
 	}
 }
-
