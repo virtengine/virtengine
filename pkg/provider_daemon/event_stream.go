@@ -241,17 +241,7 @@ func (s *CometEventSubscriber) processEvents(ctx context.Context, sub <-chan cty
 			case eventCh <- event:
 				s.mu.Lock()
 				s.lastEventTime = time.Now()
-				if s.checkpoint != nil {
-					s.checkpoint.LastSequence = event.Sequence
-				}
 				s.mu.Unlock()
-
-				// Persist checkpoint
-				if s.checkpointStore != nil && s.checkpoint != nil {
-					if err := s.checkpointStore.Save(s.checkpoint); err != nil {
-						log.Printf("[stream-client] checkpoint save failed: %v", err)
-					}
-				}
 			case <-ctx.Done():
 				return
 			}

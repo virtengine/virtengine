@@ -196,6 +196,9 @@ type Order struct {
 
 	// ExpiresAt is when the order expires
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
+
+	// Sequence is the event sequence number (for streaming)
+	Sequence uint64 `json:"-"`
 }
 
 // ResourceRequirements specifies required resources
@@ -644,6 +647,9 @@ func (be *BidEngine) configStreamWatcher() {
 				}
 				be.configMu.Unlock()
 			}
+			
+			// Acknowledge config event
+			be.eventSubscriber.SetCheckpoint(event.Sequence)
 
 		case <-healthTicker.C:
 			// Check if streaming is healthy
@@ -706,11 +712,18 @@ func (be *BidEngine) orderStreamWatcher() {
 			}
 
 			if be.matchOrder(event.Order, config) {
+				// Attach sequence to order for acknowledgement
+				order := event.Order
+				order.Sequence = event.Sequence
+				
 				select {
-				case be.orderChan <- event.Order:
+				case be.orderChan <- order:
 				default:
 					// Channel full, skip this order
 				}
+			} else {
+				// If we don't process it (no match), we still ack it so we don't get stuck
+				be.eventSubscriber.SetCheckpoint(event.Sequence)
 			}
 
 		case <-healthTicker.C:
@@ -759,6 +772,11 @@ func (be *BidEngine) bidWorker() {
 			case be.bidResults <- result:
 			default:
 				// Results channel full, discard
+			}
+
+			// PROVIDER-STREAM-001: Acknowledge event processing
+			if be.streamingMode && be.eventSubscriber != nil && order.Sequence > 0 {
+				be.eventSubscriber.SetCheckpoint(order.Sequence)
 			}
 		}
 	}
@@ -921,9 +939,9 @@ func parsePriceDecRequired(field, value string, required bool) (sdkmath.LegacyDe
 	return parsePriceDec(field, value)
 }
 
-// generateBidID generates a unique bid ID
+// generateBidID generates a deterministic bid ID based on order and provider
 func generateBidID(orderID, providerAddress string) string {
-	return fmt.Sprintf("bid-%s-%s-%d", orderID, providerAddress[:8], time.Now().UnixNano())
+	return fmt.Sprintf("bid-%s-%s", orderID, providerAddress[:8])
 }
 
 // GetBidResults returns the bid results channel for monitoring

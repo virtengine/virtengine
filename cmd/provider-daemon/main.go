@@ -415,7 +415,37 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create chain client: %w", err)
 	}
 
-	bidEngine := provider_daemon.NewBidEngine(bidEngineConfig, keyManager, chainClient)
+	// Initialize Event Stream (PROVIDER-STREAM-001)
+	var eventSubscriber provider_daemon.EventSubscriber
+	
+	// Create checkpoint store
+	checkpointStore, err := provider_daemon.NewEventCheckpointStore(viper.GetString(FlagWaldurCheckpointFile))
+	if err != nil {
+		fmt.Printf("Warning: Failed to create checkpoint store: %v\n", err)
+	}
+
+	// Configure event stream
+	streamCfg := provider_daemon.DefaultEventSubscriberConfig()
+	streamCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
+	streamCfg.CometWS = viper.GetString(FlagCometWS)
+	streamCfg.CheckpointStore = checkpointStore
+	streamCfg.SubscriberID = fmt.Sprintf("provider-%s", providerID[:8])
+
+	// Create subscriber
+	sub, err := provider_daemon.NewCometEventSubscriber(streamCfg)
+	if err != nil {
+		fmt.Printf("Warning: Failed to create event subscriber: %v. Falling back to polling.\n", err)
+	} else {
+		eventSubscriber = sub
+		fmt.Println("  Event Stream: initialized")
+	}
+
+	var bidEngine *provider_daemon.BidEngine
+	if eventSubscriber != nil {
+		bidEngine = provider_daemon.NewBidEngineWithStreaming(bidEngineConfig, keyManager, chainClient, eventSubscriber)
+	} else {
+		bidEngine = provider_daemon.NewBidEngine(bidEngineConfig, keyManager, chainClient)
+	}
 
 	if err := bidEngine.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start bid engine: %w", err)
