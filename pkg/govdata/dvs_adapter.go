@@ -606,6 +606,8 @@ func (a *dvsDMVAdapter) convertFieldResult(fieldName, result string) FieldVerifi
 }
 
 // loadDVSConfigFromEnv loads DVS configuration from environment variables
+//
+//nolint:unparam // result 2 (error) reserved for future validation failures
 func loadDVSConfigFromEnv(_ AdapterConfig) (DVSConfig, bool, error) {
 	orgID := os.Getenv("DVS_ORGANISATION_ID")
 	clientID := os.Getenv("DVS_CLIENT_ID")

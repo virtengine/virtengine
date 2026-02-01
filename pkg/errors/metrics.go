@@ -84,7 +84,7 @@ func RecordPanic(context string) {
 
 // MetricsCollector is a panic handler that records metrics.
 type MetricsCollector struct {
-	nextHandler PanicHandler
+	nextHandler PanicHandler //nolint:unused // Reserved for handler chaining
 }
 
 // NewMetricsCollector creates a panic handler that records metrics.

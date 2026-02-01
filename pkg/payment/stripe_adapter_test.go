@@ -163,7 +163,7 @@ func TestStripeIntegration_CreatePaymentIntent(t *testing.T) {
 		VEIDAddress: "virtengine1paytest",
 	})
 	require.NoError(t, err)
-	defer adapter.DeleteCustomer(ctx, customer.ID)
+	defer func() { _ = adapter.DeleteCustomer(ctx, customer.ID) }()
 
 	// Create a payment intent
 	intent, err := adapter.CreatePaymentIntent(ctx, PaymentIntentRequest{
@@ -209,7 +209,7 @@ func TestStripeIntegration_GetPaymentIntent(t *testing.T) {
 		Description: "Test retrieval",
 	})
 	require.NoError(t, err)
-	defer adapter.CancelPaymentIntent(ctx, created.ID, "abandoned")
+	defer func() { _, _ = adapter.CancelPaymentIntent(ctx, created.ID, "abandoned") }()
 
 	// Retrieve it
 	retrieved, err := adapter.GetPaymentIntent(ctx, created.ID)

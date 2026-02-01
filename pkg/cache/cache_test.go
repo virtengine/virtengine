@@ -92,12 +92,12 @@ func TestMemoryCache_LRUEviction(t *testing.T) {
 	ctx := context.Background()
 
 	// Fill cache to capacity
-	cache.Set(ctx, "key1", "value1")
-	cache.Set(ctx, "key2", "value2")
-	cache.Set(ctx, "key3", "value3")
+	_ = cache.Set(ctx, "key1", "value1")
+	_ = cache.Set(ctx, "key2", "value2")
+	_ = cache.Set(ctx, "key3", "value3")
 
 	// Access key1 to make it recently used
-	cache.Get(ctx, "key1")
+	_, _ = cache.Get(ctx, "key1")
 
 	// Add new item, should evict key2 (least recently used)
 	cache.Set(ctx, "key4", "value4")
@@ -135,9 +135,9 @@ func TestMemoryCache_Stats(t *testing.T) {
 	}
 
 	// Generate hits and misses
-	cache.Set(ctx, "key1", "value1")
-	cache.Get(ctx, "key1") // hit
-	cache.Get(ctx, "key1") // hit
+	_ = cache.Set(ctx, "key1", "value1")
+	_, _ = cache.Get(ctx, "key1") // hit
+	_, _ = cache.Get(ctx, "key1") // hit
 	cache.Get(ctx, "miss") // miss
 
 	stats = cache.Stats()
@@ -245,10 +245,10 @@ func TestMemoryCache_Concurrent(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
 				key := "key" + string(rune('a'+id%26))
-				cache.Set(ctx, key, id*numOps+j)
-				cache.Get(ctx, key)
+				_ = cache.Set(ctx, key, id*numOps+j)
+				_, _ = cache.Get(ctx, key)
 				if j%10 == 0 {
-					cache.Delete(ctx, key)
+					_ = cache.Delete(ctx, key)
 				}
 			}
 		}(i)
@@ -279,8 +279,8 @@ func TestMemoryCache_InvalidationListener(t *testing.T) {
 	})
 
 	// Add and delete
-	cache.Set(ctx, "key1", "value1")
-	cache.Delete(ctx, "key1")
+	_ = cache.Set(ctx, "key1", "value1")
+	_ = cache.Delete(ctx, "key1")
 
 	// Give async notification time
 	time.Sleep(50 * time.Millisecond)

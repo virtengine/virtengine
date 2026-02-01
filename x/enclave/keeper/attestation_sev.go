@@ -9,6 +9,7 @@ import (
 	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
+//nolint:unparam // ctx and measurement kept for future on-chain measurement allowlist queries
 func (k Keeper) verifySEVSNPAttestation(ctx sdk.Context, identity *types.EnclaveIdentity, measurement *types.MeasurementRecord) error {
 	report, err := types.ParseSEVSNPReport(identity.AttestationQuote)
 	if err != nil {

@@ -11,9 +11,10 @@ import (
 // Test Helpers
 // ============================================================================
 
-func generateTestNonce(t *testing.T, length int) []byte {
+//nolint:unparam // length kept for future variable-length nonce tests
+func generateTestNonce(t *testing.T, _ int) []byte {
 	t.Helper()
-	nonce := make([]byte, length)
+	nonce := make([]byte, 32)
 	_, err := rand.Read(nonce)
 	if err != nil {
 		t.Fatalf("failed to generate nonce: %v", err)

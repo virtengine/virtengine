@@ -235,9 +235,9 @@ const (
 // govUKAdapter implements the GOV.UK Verify adapter
 type govUKAdapter struct {
 	*baseAdapter
-	govUKConfig  GovUKConfig
-	accessToken  string
-	tokenExpiry  time.Time
+	govUKConfig GovUKConfig
+	accessToken string    //nolint:unused // Reserved for OAuth token caching
+	tokenExpiry time.Time //nolint:unused // Reserved for OAuth token caching
 	windowStart  time.Time
 	requestCount int
 	mu           sync.RWMutex
@@ -528,6 +528,8 @@ func (a *govUKAdapter) boolToConfidence(verified bool) float64 {
 }
 
 // loadGovUKConfigFromEnv loads GOV.UK Verify configuration from environment variables
+//
+//nolint:unparam // result 2 (error) reserved for future validation failures
 func loadGovUKConfigFromEnv(_ AdapterConfig) (GovUKConfig, bool, error) {
 	serviceEntityID := os.Getenv("GOVUK_SERVICE_ENTITY_ID")
 	apiKey := os.Getenv("GOVUK_API_KEY")

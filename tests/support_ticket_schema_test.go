@@ -158,6 +158,8 @@ var allowedTransitions = map[string][]string{
 var uuidV7Pattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 var virtengineAddrPattern = regexp.MustCompile(`^virtengine1[a-z0-9]{32,58}$`)
 var keyFingerprintPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
+
+//nolint:unused // Reserved for SHA256 validation in tests
 var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var jurisdictionPattern = regexp.MustCompile(`^[A-Z]{2}(-[A-Z0-9]{1,3})?$`)
 

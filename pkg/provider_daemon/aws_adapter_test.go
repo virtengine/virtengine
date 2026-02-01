@@ -1296,6 +1296,8 @@ func (m *MockS3Client) GeneratePresignedURL(ctx context.Context, bucketName, key
 }
 
 // Helper function to create test adapter
+//
+//nolint:unparam // result 4 (MockS3Client) kept for future S3 test coverage
 func createTestAWSAdapter() (*AWSAdapter, *MockEC2Client, *MockVPCClient, *MockEBSClient, *MockS3Client) {
 	ec2 := NewMockEC2Client()
 	vpc := NewMockVPCClient()

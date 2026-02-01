@@ -637,7 +637,9 @@ func TestXMLEncoding_EntityExpansion(t *testing.T) {
 
 // createWeakSignedAssertion creates an assertion with intentionally weak algorithms
 // This is used to test that weak algorithms are properly rejected
-func createWeakSignedAssertion(cert *x509.Certificate, privateKey *rsa.PrivateKey) ([]byte, error) {
+//
+//nolint:unused,unparam // Test helper for future weak algorithm rejection tests; cert kept for signature generation
+func createWeakSignedAssertion(_ *x509.Certificate, privateKey *rsa.PrivateKey) ([]byte, error) {
 	assertionID := fmt.Sprintf("_assertion_%d", time.Now().UnixNano())
 	now := time.Now().UTC()
 	notOnOrAfter := now.Add(5 * time.Minute)
@@ -839,6 +841,7 @@ func TestRSAKeySize_Minimum(t *testing.T) {
 // Certificate with custom validity for edge case testing
 // ============================================================================
 
+//nolint:unused // Test helper for future certificate validity tests
 func generateCertWithValidity(notBefore, notAfter time.Time, keySize int) (*x509.Certificate, *rsa.PrivateKey, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
 	if err != nil {

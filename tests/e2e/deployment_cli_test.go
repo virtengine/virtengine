@@ -167,7 +167,7 @@ func (s *deploymentIntegrationTestSuite) TestDeployment() {
 		s.cctx,
 		cli.TestFlags().WithOutputJSON().
 			WithOwner(createdDep.Deployment.ID.Owner).
-			WithDseq(createdDep.Deployment.ID.DSeq)...,
+			WithDSeq(createdDep.Deployment.ID.DSeq)...,
 	)
 	s.Require().NoError(err)
 
@@ -183,7 +183,7 @@ func (s *deploymentIntegrationTestSuite) TestDeployment() {
 		cli.TestFlags().
 			WithOutputJSON().
 			WithOwner(s.addrDeployer.String()).
-			WithDseq(createdDep.Deployment.ID.DSeq)...,
+			WithDSeq(createdDep.Deployment.ID.DSeq)...,
 	)
 	s.Require().NoError(err, "Error when fetching deployments with owner filter")
 
@@ -199,7 +199,7 @@ func (s *deploymentIntegrationTestSuite) TestDeployment() {
 		deploymentPath2,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDseq(createdDep.Deployment.ID.DSeq).
+			WithDSeq(createdDep.Deployment.ID.DSeq).
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,
 	)
@@ -212,7 +212,7 @@ func (s *deploymentIntegrationTestSuite) TestDeployment() {
 		s.cctx,
 		cli.TestFlags().WithOutputJSON().
 			WithOwner(createdDep.Deployment.ID.Owner).
-			WithDseq(createdDep.Deployment.ID.DSeq)...,
+			WithDSeq(createdDep.Deployment.ID.DSeq)...,
 	)
 	s.Require().NoError(err)
 
@@ -247,7 +247,7 @@ func (s *deploymentIntegrationTestSuite) TestDeployment() {
 		s.cctx,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDseq(createdDep.Deployment.ID.DSeq).
+			WithDSeq(createdDep.Deployment.ID.DSeq).
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,
 	)
@@ -336,7 +336,7 @@ func (s *deploymentIntegrationTestSuite) TestGroup() {
 		cli.TestFlags().
 			WithOutputJSON().
 			WithOwner(grp.ID.Owner).
-			WithDseq(grp.ID.DSeq).
+			WithDSeq(grp.ID.DSeq).
 			WithGseq(grp.ID.GSeq)...,
 	)
 	s.Require().NoError(err)
@@ -368,7 +368,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
 			WithDepositor(s.addrFunder).
-			WithDseq(deploymentID.DSeq).
+			WithDSeq(deploymentID.DSeq).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,
@@ -403,7 +403,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		deploymentPath,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDseq(deploymentID.DSeq).
+			WithDSeq(deploymentID.DSeq).
 			WithDepositor(s.addrFunder).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
@@ -434,7 +434,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		s.defaultDeposit,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDseq(deploymentID.DSeq).
+			WithDSeq(deploymentID.DSeq).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,
@@ -457,7 +457,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		s.defaultDeposit,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDseq(deploymentID.DSeq).
+			WithDSeq(deploymentID.DSeq).
 			WithDepositor(s.addrFunder).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
@@ -497,7 +497,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		s.defaultDeposit,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDseq(deploymentID.DSeq).
+			WithDSeq(deploymentID.DSeq).
 			WithDepositor(s.addrFunder).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
@@ -516,7 +516,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		s.cctx,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDseq(deploymentID.DSeq).
+			WithDSeq(deploymentID.DSeq).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,

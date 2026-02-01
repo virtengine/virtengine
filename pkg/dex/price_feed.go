@@ -201,6 +201,8 @@ func (p *priceFeedImpl) registerAdapterSource(adapter Adapter) error {
 }
 
 // fetchFromSources fetches prices from all sources
+//
+//nolint:unparam // result 1 (error) reserved for future aggregation failures
 func (p *priceFeedImpl) fetchFromSources(ctx context.Context, baseSymbol, quoteSymbol string) ([]Price, error) {
 	p.sourcesMu.RLock()
 	sources := make([]PriceSource, 0, len(p.sources))
@@ -314,6 +316,8 @@ func (p *priceFeedImpl) calculateVWAP(key string, window time.Duration) sdkmath.
 }
 
 // notifySubscribers notifies price subscribers
+//
+//nolint:unused // Reserved for subscription-based price notifications
 func (p *priceFeedImpl) notifySubscribers(key string, price Price) {
 	p.subsMu.RLock()
 	callbacks := p.subs[key]

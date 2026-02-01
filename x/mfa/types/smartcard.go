@@ -468,6 +468,8 @@ func ExtractPIVData(cardData map[string][]byte) (*PIVData, error) {
 }
 
 // parseCHUID parses a Card Holder Unique Identifier
+//
+//nolint:unparam // result 1 (error) reserved for future parse failures
 func parseCHUID(data []byte) (*CHUID, error) {
 	chuid := &CHUID{}
 

@@ -541,12 +541,14 @@ func (p *FeaturePipeline) extractLivenessFromScopes(
 }
 
 // buildScoreInputs builds ScoreInputs from extraction results
+//
+//nolint:unparam // livenessResult kept for future liveness-based score weighting
 func (p *FeaturePipeline) buildScoreInputs(
 	input *PipelineInput,
 	faceEmbedding []float32,
 	faceConfidence float32,
 	ocrResult *OCRExtractionResult,
-	livenessResult *LivenessResult,
+	_ *LivenessResult,
 ) *ScoreInputs {
 	// Get OCR features
 	var docQualityScore float32

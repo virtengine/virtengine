@@ -375,7 +375,9 @@ func (g *SGXReportGenerator) generateHardwareReport(reportData [64]byte, targetI
 }
 
 // generateSimulatedReport generates a simulated report
-func (g *SGXReportGenerator) generateSimulatedReport(reportData [64]byte, targetInfo []byte) (*SGXReportBody, error) {
+//
+//nolint:unparam // targetInfo kept for future target-specific report generation
+func (g *SGXReportGenerator) generateSimulatedReport(reportData [64]byte, _ []byte) (*SGXReportBody, error) {
 	g.loader.mu.RLock()
 	defer g.loader.mu.RUnlock()
 
@@ -695,7 +697,9 @@ func (e *SGXECallInterface) callHardware(functionID int, input []byte) (*ECallRe
 }
 
 // callSimulated simulates an ECALL
-func (e *SGXECallInterface) callSimulated(functionID int, input []byte) (*ECallResult, error) {
+//
+//nolint:unparam // functionID kept for future function-specific simulation
+func (e *SGXECallInterface) callSimulated(_ int, input []byte) (*ECallResult, error) {
 	// Simple simulation: echo back with a hash prefix
 	hash := sha256.Sum256(input)
 	output := make([]byte, 32+len(input))

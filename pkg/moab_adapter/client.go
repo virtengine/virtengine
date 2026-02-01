@@ -741,7 +741,8 @@ type jobXMLData struct {
 	SysUTime       int64  `xml:"SysUTime,attr"`
 }
 
-func parseCheckjobXML(output string, moabJobID string) (*MOABJob, error) {
+//nolint:unparam // moabJobID kept for parse context and diagnostics
+func parseCheckjobXML(output string, _ string) (*MOABJob, error) {
 	var response checkjobXMLResponse
 	if err := xml.Unmarshal([]byte(output), &response); err != nil {
 		return nil, err
@@ -785,6 +786,7 @@ func parseCheckjobXML(output string, moabJobID string) (*MOABJob, error) {
 	return job, nil
 }
 
+//nolint:unparam // result 1 (error) reserved for future parse failures
 func parseCheckjobText(output string, moabJobID string) (*MOABJob, error) {
 	job := &MOABJob{
 		MOABJobID: moabJobID,
@@ -858,6 +860,7 @@ func parseJobAccountingXML(output string) (*MOABUsageMetrics, error) {
 	}, nil
 }
 
+//nolint:unparam // result 1 (error) reserved for future parse failures
 func parseJobAccountingText(output string) (*MOABUsageMetrics, error) {
 	metrics := &MOABUsageMetrics{}
 

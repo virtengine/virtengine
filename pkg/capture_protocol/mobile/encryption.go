@@ -274,7 +274,7 @@ func (e *CaptureEncryptor) encryptForMultipleRecipients(
 
 	// For simplicity, encrypt with first recipient
 	// In production, would wrap DEK for each recipient
-	var recipientKeyIDs []string
+	recipientKeyIDs := make([]string, 0, len(e.recipientKeys))
 	var ciphertext []byte
 
 	for fingerprint, pubKey := range e.recipientKeys {

@@ -320,7 +320,10 @@ func (r *HPCAccountingRecord) CalculateHash() string {
 		SignedRecords:  r.SignedUsageRecords,
 	}
 
-	data, _ := json.Marshal(hashInput)
+	data, err := json.Marshal(hashInput)
+	if err != nil {
+		return ""
+	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }

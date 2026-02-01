@@ -41,8 +41,8 @@ func DefaultParams() Params {
 		DefaultChallengeDeadlineSeconds: DefaultChallengeDeadlineSeconds,
 		MinBenchmarkInterval:            300, // 5 minutes
 		MaxReportsPerSubmission:         10,
-		AnomalyThresholdJumpPercent:     50,   // 50%
-		AnomalyThresholdRepeatCount:     3,    // 3 identical outputs
+		AnomalyThresholdJumpPercent:     50, // 50%
+		AnomalyThresholdRepeatCount:     3,  // 3 identical outputs
 	}
 }
 

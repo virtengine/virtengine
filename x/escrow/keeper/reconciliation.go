@@ -491,9 +491,10 @@ func (rk *reconciliationKeeper) buildReconciliationReportByProviderPrefix(provid
 	return append(key, byte('/'))
 }
 
+//nolint:unparam // prefix kept for future index-specific pagination
 func (rk *reconciliationKeeper) paginateReconciliationReportIndex(
 	store storetypes.KVStore,
-	prefix []byte,
+	_ []byte,
 	pagination *query.PageRequest,
 ) ([]*billing.ReconciliationReport, *query.PageResponse, error) {
 	var reports []*billing.ReconciliationReport
@@ -522,6 +523,7 @@ func (rk *reconciliationKeeper) periodsOverlap(start1, end1, start2, end2 time.T
 	return !start1.After(end2) && !start2.After(end1)
 }
 
+//nolint:unparam // result 2 (error) reserved for future pagination failures
 func (rk *reconciliationKeeper) applyPagination(
 	reports []*billing.ReconciliationReport,
 	pagination *query.PageRequest,
@@ -635,6 +637,7 @@ func (rk *reconciliationKeeper) getPayoutRecordsForPeriod(
 	return records
 }
 
+//nolint:unparam // ctx kept for future on-chain state queries
 func (rk *reconciliationKeeper) findDiscrepancies(
 	ctx sdk.Context,
 	config billing.ReconciliationConfig,

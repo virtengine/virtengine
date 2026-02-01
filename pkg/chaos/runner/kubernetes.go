@@ -489,6 +489,8 @@ func (r *KubernetesRunner) applyManifest(ctx context.Context, manifest string) e
 }
 
 // deleteResource deletes a chaos resource.
+//
+//nolint:unparam // result 0 (error) reserved for future error aggregation
 func (r *KubernetesRunner) deleteResource(ctx context.Context, name string) error {
 	// Try to delete all chaos types
 	for _, kind := range []string{"podchaos", "networkchaos", "stresschaos", "timechaos", "chaosengine"} {
@@ -505,6 +507,8 @@ func (r *KubernetesRunner) deleteResource(ctx context.Context, name string) erro
 }
 
 // getResourceStatus queries the status of a chaos resource.
+//
+//nolint:unparam // result 1 (error) reserved for future kubectl failures
 func (r *KubernetesRunner) getResourceStatus(ctx context.Context, name string) (string, error) {
 	// Try common chaos resource types
 	for _, kind := range []string{"podchaos", "networkchaos", "stresschaos"} {

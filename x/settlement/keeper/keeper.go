@@ -420,7 +420,7 @@ func (k Keeper) appendSettlementToOrder(ctx sdk.Context, orderID, settlementID s
 	}
 
 	settlementIDs = append(settlementIDs, settlementID)
-	bz, _ = json.Marshal(settlementIDs)
+	bz, _ = json.Marshal(settlementIDs) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, bz)
 }
 
@@ -520,7 +520,7 @@ func (k Keeper) appendUsageToOrder(ctx sdk.Context, orderID, usageID string) {
 	}
 
 	usageIDs = append(usageIDs, usageID)
-	bz, _ = json.Marshal(usageIDs)
+	bz, _ = json.Marshal(usageIDs) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, bz)
 }
 
@@ -654,7 +654,7 @@ func (k Keeper) appendDistributionToEpoch(ctx sdk.Context, epoch uint64, distrib
 	}
 
 	distributionIDs = append(distributionIDs, distributionID)
-	bz, _ = json.Marshal(distributionIDs)
+	bz, _ = json.Marshal(distributionIDs) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, bz)
 }
 

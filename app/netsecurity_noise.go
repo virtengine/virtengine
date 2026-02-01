@@ -302,6 +302,7 @@ func (t *NoiseTransport) SecureInbound(conn net.Conn) (*NoiseSession, error) {
 	return session, nil
 }
 
+//nolint:unparam // result 1 (error) reserved for future validation logic
 func (t *NoiseTransport) newHandshakeState(isInitiator bool, remoteStatic []byte) (*NoiseHandshakeState, error) {
 	// Initialize with protocol name hash
 	protocolHash := sha3.Sum256([]byte(NoiseProtocolName))

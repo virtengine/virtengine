@@ -712,7 +712,10 @@ func (k Keeper) ProcessExpiredProvisionalApprovals(ctx sdk.Context) int {
 		if pa.Status == ProvisionalStatusActive && pa.ExpiresAt <= now {
 			// Mark as expired
 			pa.Status = ProvisionalStatusExpired
-			bz, _ := json.Marshal(pa)
+			bz, err := json.Marshal(pa)
+			if err != nil {
+				continue
+			}
 			store.Set(iterator.Key(), bz)
 
 			// Update the account's status

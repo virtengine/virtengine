@@ -147,7 +147,10 @@ func (ur *UsageRecord) Hash() []byte {
 		EndTime:      ur.EndTime.Unix(),
 		Metrics:      ur.Metrics,
 	}
-	bytes, _ := json.Marshal(data)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
 	hash := sha256.Sum256(bytes)
 	return hash[:]
 }

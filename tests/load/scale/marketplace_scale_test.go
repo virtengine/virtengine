@@ -402,7 +402,7 @@ func populateMarketplace(orderCount, bidsPerOrder, providersCount int) *Marketpl
 	}()
 	
 	// Collect orders and submit bids
-	var orders []*MockOrder
+	orders := make([]*MockOrder, 0, numOrders)
 	for order := range ordersChan {
 		orders = append(orders, order)
 	}
@@ -416,7 +416,7 @@ func populateMarketplace(orderCount, bidsPerOrder, providersCount int) *Marketpl
 			if price < 10 {
 				price = 10
 			}
-			store.SubmitBid(order.ID, provider, price)
+			_, _ = store.SubmitBid(order.ID, provider, price)
 		}
 	}
 	
@@ -463,7 +463,7 @@ func BenchmarkBidSubmission(b *testing.B) {
 		for pb.Next() {
 			idx := counter.Add(1) % numOrders
 			provider := generateRandomAddress()
-			store.SubmitBid(orderIDs[idx], provider, 500+int64(randomInt(500)))
+			_, _ = store.SubmitBid(orderIDs[idx], provider, 500+int64(randomInt(500)))
 		}
 	})
 	
@@ -481,7 +481,7 @@ func BenchmarkOrderMatching(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		orderID := uint64(counter.Add(1)%maxOrderID + 1)
-		store.MatchOrder(orderID)
+		_, _ = store.MatchOrder(orderID)
 	}
 }
 
@@ -531,7 +531,7 @@ func BenchmarkProviderActiveLeaseCheck(b *testing.B) {
 	
 	// Match some orders to create leases
 	for i := uint64(1); i <= 5000; i++ {
-		store.MatchOrder(i)
+		_, _ = store.MatchOrder(i)
 	}
 	
 	providers := make([][20]byte, 100)
@@ -611,7 +611,7 @@ func TestMarketplaceScaleBaseline(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			orderID := uint64(i*100 + 1)
 			start := time.Now()
-			store.MatchOrder(orderID)
+			_, _ = store.MatchOrder(orderID)
 			latencies[i] = time.Since(start)
 		}
 		

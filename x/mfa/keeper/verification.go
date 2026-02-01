@@ -81,9 +81,11 @@ type TOTPResponse struct {
 
 // verifyTOTPCode verifies a TOTP code against the stored secret hash
 // The actual secret is stored off-chain; we verify using a hash-based proof
+//
+//nolint:unparam // enrollment kept for future secret hash verification
 func (k Keeper) verifyTOTPCode(
 	ctx sdk.Context,
-	enrollment *types.FactorEnrollment,
+	_ *types.FactorEnrollment,
 	response *types.ChallengeResponse,
 	challenge *types.Challenge,
 ) (bool, error) {
@@ -141,7 +143,9 @@ func (k Keeper) verifyTOTPCode(
 }
 
 // verifyTOTPWithCommitment verifies TOTP using a hash commitment scheme
-func (k Keeper) verifyTOTPWithCommitment(code string, commitment []byte, now time.Time, config TOTPConfig) bool {
+//
+//nolint:unparam // now kept for future time-window based validation
+func (k Keeper) verifyTOTPWithCommitment(code string, commitment []byte, _ time.Time, _ TOTPConfig) bool {
 	// Parse the commitment which contains expected code hashes
 	// Format: [hash1][hash2][hash3] for current, previous, and next windows
 	if len(commitment) < 32 {

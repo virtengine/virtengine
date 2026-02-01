@@ -121,7 +121,10 @@ func (s *HPCUsageSnapshot) CalculateContentHash() string {
 		SnapshotTime:      s.SnapshotTime.Unix(),
 	}
 
-	data, _ := json.Marshal(hashInput)
+	data, err := json.Marshal(hashInput)
+	if err != nil {
+		return ""
+	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }

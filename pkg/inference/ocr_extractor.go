@@ -548,7 +548,9 @@ func (oe *OCRExtractor) handleError(err error, msg string) (*OCRExtractionResult
 }
 
 // createFailureResult creates a result indicating extraction failure
-func (oe *OCRExtractor) createFailureResult(reasonCode, message string) *OCRExtractionResult {
+//
+//nolint:unparam // message kept for future logging or error details in result
+func (oe *OCRExtractor) createFailureResult(reasonCode, _ string) *OCRExtractionResult {
 	return &OCRExtractionResult{
 		Fields:            make(map[string]*ExtractedField),
 		DocumentQuality:   DocumentQualityResult{},

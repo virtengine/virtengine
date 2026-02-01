@@ -643,6 +643,8 @@ func (s *SEVSNPEnclaveServiceImpl) GenerateExtendedReport(reportData []byte) ([]
 // =============================================================================
 
 // simulateCVMInitialization simulates SEV-SNP CVM initialization
+//
+//nolint:unparam // result 0 (error) reserved for future initialization failures
 func (s *SEVSNPEnclaveServiceImpl) simulateCVMInitialization() error {
 	// Simulate launch measurement (SHA-384 of guest initial state)
 	// In real SEV-SNP, this is computed by the PSP during launch
@@ -683,6 +685,8 @@ func (s *SEVSNPEnclaveServiceImpl) simulateCVMInitialization() error {
 }
 
 // deriveEnclaveKeys derives encryption and signing keys
+//
+//nolint:unparam // result 0 (error) reserved for future key derivation failures
 func (s *SEVSNPEnclaveServiceImpl) deriveEnclaveKeys() error {
 	// Derive keys using HKDF from launch measurement and epoch
 	// In real SEV-SNP, keys would be derived from vTPM or launch secret
@@ -778,6 +782,8 @@ func (s *SEVSNPEnclaveServiceImpl) signInsideCVM(payload []byte) []byte {
 }
 
 // simulateSNPReportGeneration simulates SNP attestation report generation
+//
+//nolint:unparam // result 1 (error) reserved for future report generation failures
 func (s *SEVSNPEnclaveServiceImpl) simulateSNPReportGeneration(reportData []byte) ([]byte, error) {
 	// Build attestation report
 	report := &SNPAttestationReport{

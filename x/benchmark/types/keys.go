@@ -88,9 +88,11 @@ func GetProviderFlagKey(providerAddr string) []byte {
 
 // GetProviderClusterIndexKey returns the index key for provider+cluster
 func GetProviderClusterIndexKey(providerAddr, clusterID string) []byte {
-	key := append(IndexProviderClusterPrefix, []byte(providerAddr)...)
+	key := append([]byte(nil), IndexProviderClusterPrefix...)
+	key = append(key, []byte(providerAddr)...)
 	key = append(key, byte(':'))
-	return append(key, []byte(clusterID)...)
+	key = append(key, []byte(clusterID)...)
+	return key
 }
 
 // GetRegionIndexKey returns the index key for region

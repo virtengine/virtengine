@@ -285,7 +285,7 @@ func (k Keeper) addEnvelopeToAccountIndex(ctx sdk.Context, address []byte, embed
 	}
 	
 	ids = append(ids, envelopeID)
-	bz, _ := json.Marshal(ids)
+	bz, _ := json.Marshal(ids) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, bz)
 }
 
@@ -305,7 +305,7 @@ func (k Keeper) removeEnvelopeFromAccountIndex(ctx sdk.Context, address []byte, 
 	if len(newIDs) == 0 {
 		store.Delete(key)
 	} else {
-		bz, _ := json.Marshal(newIDs)
+		bz, _ := json.Marshal(newIDs) //nolint:errchkjson // string slice cannot fail to marshal
 		store.Set(key, bz)
 	}
 }

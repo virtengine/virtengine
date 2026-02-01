@@ -331,6 +331,8 @@ func (m *metadataService) parseMetadata(data []byte) (*FederationMetadata, error
 }
 
 // parseIdPDescriptor parses a single IdP entity descriptor
+//
+//nolint:unparam // result 1 (error) reserved for future parsing failures
 func (m *metadataService) parseIdPDescriptor(entity EntityDescriptor) (*Institution, error) {
 	idp := entity.IDPSSODescriptor
 
@@ -411,7 +413,7 @@ func (m *metadataService) verifySignature(data []byte) (bool, error) {
 
 // applyFilters applies configuration filters to metadata
 func (m *metadataService) applyFilters(metadata *FederationMetadata) *FederationMetadata {
-	var filtered []Institution
+	filtered := make([]Institution, 0, len(metadata.Institutions))
 
 	for _, inst := range metadata.Institutions {
 		// Check institution allowlist/blocklist

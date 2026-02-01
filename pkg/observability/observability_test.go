@@ -18,6 +18,8 @@ const (
 )
 
 // helper to get map keys for debugging
+//
+//nolint:unused // Test helper for debugging
 func keysOf(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

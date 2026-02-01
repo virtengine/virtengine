@@ -370,7 +370,7 @@ func (k Keeper) appendToIndex(ctx sdk.Context, key []byte, id string) {
 
 	ids = append(ids, id)
 
-	newBz, _ := json.Marshal(ids)
+	newBz, _ := json.Marshal(ids) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, newBz)
 }
 
@@ -398,7 +398,7 @@ func (k Keeper) removeFromIndex(ctx sdk.Context, key []byte, id string) {
 	if len(newIDs) == 0 {
 		store.Delete(key)
 	} else {
-		newBz, _ := json.Marshal(newIDs)
+		newBz, _ := json.Marshal(newIDs) //nolint:errchkjson // string slice cannot fail to marshal
 		store.Set(key, newBz)
 	}
 }

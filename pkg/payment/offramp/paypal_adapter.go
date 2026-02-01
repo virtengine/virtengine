@@ -639,6 +639,8 @@ type paypalTransactionReport struct {
 
 // verifyWebhookSignature verifies a PayPal webhook signature using HMAC-SHA256.
 // In production, you should use PayPal's verify-webhook-signature API instead.
+//
+//nolint:unused // Reserved for webhook signature verification
 func verifyWebhookSignature(webhookID string, transmissionID string, timestamp string, payload []byte, expectedSignature string) bool {
 	// Construct the validation string
 	// PayPal uses: <transmissionId>|<timestamp>|<webhookId>|<CRC32 of payload>
@@ -654,6 +656,8 @@ func verifyWebhookSignature(webhookID string, transmissionID string, timestamp s
 }
 
 // crc32Checksum computes CRC32 checksum of data
+//
+//nolint:unused // Reserved for webhook signature verification
 func crc32Checksum(data []byte) uint32 {
 	var crc uint32 = 0xFFFFFFFF
 	for _, b := range data {

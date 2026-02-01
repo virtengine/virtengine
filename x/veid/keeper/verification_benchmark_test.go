@@ -498,7 +498,7 @@ func BenchmarkIdentityRecordDeserialization(b *testing.B) {
 	now := time.Now().UTC()
 	record := types.NewIdentityRecord("cosmos1testaddr", now)
 	record.CurrentScore = 75
-	data, _ := json.Marshal(record)
+	data, _ := json.Marshal(record) //nolint:errchkjson // test code
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

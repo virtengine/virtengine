@@ -175,7 +175,7 @@ func HashDomain(domain string) string {
 	normalized := []byte(domain)
 	for i := range normalized {
 		if normalized[i] >= 'A' && normalized[i] <= 'Z' {
-			normalized[i] = normalized[i] + 32
+			normalized[i] += 32
 		}
 	}
 	hash := sha256.Sum256(normalized)

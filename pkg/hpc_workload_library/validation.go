@@ -145,7 +145,7 @@ func (r *ValidationResult) Error() error {
 	if r.IsValid() {
 		return nil
 	}
-	var msgs []string
+	msgs := make([]string, 0, len(r.Errors))
 	for _, e := range r.Errors {
 		msgs = append(msgs, fmt.Sprintf("%s: %s", e.Field, e.Message))
 	}

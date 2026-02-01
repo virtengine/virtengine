@@ -29,7 +29,6 @@ func TestGoMatchesPythonOutput(t *testing.T) {
 	t.Logf("Running conformance tests with %d test vectors", len(ConformanceTestVectors))
 
 	for _, vector := range ConformanceTestVectors {
-		vector := vector // Capture range variable
 		t.Run(vector.Name, func(t *testing.T) {
 			t.Parallel()
 

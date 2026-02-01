@@ -268,7 +268,7 @@ func (m *Metrics) Summary() MetricsSummary {
 	}
 
 	// Calculate state sync metrics
-	var syncDurations []time.Duration
+	syncDurations := make([]time.Duration, 0, len(m.stateMetrics))
 	successCount := 0
 	for _, sm := range m.stateMetrics {
 		syncDurations = append(syncDurations, sm.SyncDuration)

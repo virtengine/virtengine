@@ -415,7 +415,9 @@ func getDiskUsageWindows(path string) (DiskUsageInfo, error) {
 }
 
 // getDiskUsageUnix gets disk usage on Unix systems.
-func getDiskUsageUnix(path string) (DiskUsageInfo, error) {
+//
+//nolint:unparam // path kept for future syscall.Statfs implementation
+func getDiskUsageUnix(_ string) (DiskUsageInfo, error) {
 	// On Unix, this would use syscall.Statfs
 	// For portability, return estimated values
 	info := DiskUsageInfo{

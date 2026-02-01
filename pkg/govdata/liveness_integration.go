@@ -328,6 +328,8 @@ type CombinedVerificationResponse struct {
 // ============================================================================
 
 // livenessIntegration provides liveness detection integration
+//
+//nolint:unused // Reserved for liveness detection integration
 type livenessIntegration struct {
 	config   LivenessConfig
 	verifier LivenessVerifier
@@ -335,6 +337,8 @@ type livenessIntegration struct {
 }
 
 // newLivenessIntegration creates a new liveness integration
+//
+//nolint:unused // Reserved for liveness detection integration
 func newLivenessIntegration(config LivenessConfig) *livenessIntegration {
 	return &livenessIntegration{
 		config: config,
@@ -342,6 +346,8 @@ func newLivenessIntegration(config LivenessConfig) *livenessIntegration {
 }
 
 // SetVerifier sets the liveness verifier implementation
+//
+//nolint:unused // Reserved for liveness detection integration
 func (l *livenessIntegration) SetVerifier(v LivenessVerifier) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -349,6 +355,8 @@ func (l *livenessIntegration) SetVerifier(v LivenessVerifier) {
 }
 
 // CheckLiveness performs a liveness check
+//
+//nolint:unused // Reserved for liveness detection integration
 func (l *livenessIntegration) CheckLiveness(ctx context.Context, req *LivenessCheckRequest) (*LivenessCheckResult, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -399,6 +407,8 @@ func (l *livenessIntegration) CheckLiveness(ctx context.Context, req *LivenessCh
 }
 
 // validateResult validates the liveness result against configuration
+//
+//nolint:unused // Reserved for liveness detection integration
 func (l *livenessIntegration) validateResult(result *LivenessCheckResult) error {
 	// Check confidence threshold
 	if result.Confidence < l.config.MinConfidence {
@@ -429,6 +439,8 @@ func (l *livenessIntegration) validateResult(result *LivenessCheckResult) error 
 }
 
 // calculateScoreContribution calculates the VEID score contribution
+//
+//nolint:unused // Reserved for liveness detection integration
 func (l *livenessIntegration) calculateScoreContribution(result *LivenessCheckResult) float64 {
 	base := l.config.ScoreContribution
 

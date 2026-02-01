@@ -850,7 +850,9 @@ func (k Keeper) verifyFIDO2Response(ctx sdk.Context, challenge *types.Challenge,
 }
 
 // verifyTOTPResponse verifies a TOTP code
-func (k Keeper) verifyTOTPResponse(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
+//
+//nolint:unparam // ctx kept for future on-chain TOTP enrollment lookup
+func (k Keeper) verifyTOTPResponse(_ sdk.Context, _ *types.Challenge, response *types.ChallengeResponse) (bool, error) {
 	// TOTP verification happens off-chain as we don't store seeds on-chain
 	// The response should contain proof of verification from an off-chain verifier
 	// For now, assume the response is a signed attestation from a trusted verifier
@@ -864,7 +866,9 @@ func (k Keeper) verifyTOTPResponse(ctx sdk.Context, challenge *types.Challenge, 
 }
 
 // verifyOTPResponse verifies an SMS/Email OTP code
-func (k Keeper) verifyOTPResponse(ctx sdk.Context, challenge *types.Challenge, response *types.ChallengeResponse) (bool, error) {
+//
+//nolint:unparam // ctx kept for future on-chain OTP enrollment lookup
+func (k Keeper) verifyOTPResponse(_ sdk.Context, _ *types.Challenge, response *types.ChallengeResponse) (bool, error) {
 	// Similar to TOTP, OTP verification happens off-chain
 	// The response should contain proof of verification
 

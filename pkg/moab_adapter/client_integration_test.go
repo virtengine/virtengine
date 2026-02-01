@@ -112,7 +112,7 @@ func TestIntegrationListQueues(t *testing.T) {
 
 	err = client.Connect(ctx)
 	require.NoError(t, err)
-	defer client.Disconnect()
+	defer func() { _ = client.Disconnect() }()
 
 	queues, err := client.ListQueues(ctx)
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestIntegrationListNodes(t *testing.T) {
 
 	err = client.Connect(ctx)
 	require.NoError(t, err)
-	defer client.Disconnect()
+	defer func() { _ = client.Disconnect() }()
 
 	nodes, err := client.ListNodes(ctx)
 	require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestIntegrationGetClusterInfo(t *testing.T) {
 
 	err = client.Connect(ctx)
 	require.NoError(t, err)
-	defer client.Disconnect()
+	defer func() { _ = client.Disconnect() }()
 
 	info, err := client.GetClusterInfo(ctx)
 	require.NoError(t, err)
@@ -263,7 +263,7 @@ func TestIntegrationJobLifecycle(t *testing.T) {
 
 	err = adapter.Start(ctx)
 	require.NoError(t, err)
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	// Get test executable
 	executable := os.Getenv("MOAB_TEST_EXECUTABLE")
@@ -296,7 +296,7 @@ func TestIntegrationJobLifecycle(t *testing.T) {
 		select {
 		case <-maxWait:
 			t.Log("Timeout waiting for job completion, cancelling...")
-			adapter.CancelJob(ctx, "ve-test-lifecycle")
+			_ = adapter.CancelJob(ctx, "ve-test-lifecycle")
 			return
 		case <-ticker.C:
 			job, err := adapter.GetJobStatus(ctx, "ve-test-lifecycle")
@@ -363,7 +363,7 @@ func TestIntegrationHoldRelease(t *testing.T) {
 	if err != nil {
 		t.Logf("Hold failed (job may have already started): %v", err)
 		// Cancel and skip rest of test
-		client.CancelJob(ctx, jobID)
+		_ = client.CancelJob(ctx, jobID)
 		return
 	}
 	t.Log("Job held")
@@ -482,7 +482,7 @@ func BenchmarkIntegrationGetJobStatus(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to submit job: %v", err)
 	}
-	defer client.CancelJob(ctx, jobID)
+	defer func() { _ = client.CancelJob(ctx, jobID) }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

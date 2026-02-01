@@ -85,19 +85,31 @@ func NewDefaultIngestAuditLogger(prefix string) *DefaultIngestAuditLogger {
 
 // LogIngestAttempt logs an ingestion operation.
 func (l *DefaultIngestAuditLogger) LogIngestAttempt(entry IngestAuditEntry) {
-	data, _ := json.Marshal(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("%s ingest: failed to marshal entry: %v", l.prefix, err)
+		return
+	}
 	log.Printf("%s ingest: %s", l.prefix, string(data))
 }
 
 // LogReconciliation logs a reconciliation run.
 func (l *DefaultIngestAuditLogger) LogReconciliation(entry IngestReconciliationAuditEntry) {
-	data, _ := json.Marshal(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("%s reconcile: failed to marshal entry: %v", l.prefix, err)
+		return
+	}
 	log.Printf("%s reconcile: %s", l.prefix, string(data))
 }
 
 // LogDeadLetter logs a dead-letter event.
 func (l *DefaultIngestAuditLogger) LogDeadLetter(entry IngestDeadLetterAuditEntry) {
-	data, _ := json.Marshal(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		log.Printf("%s dead_letter: failed to marshal entry: %v", l.prefix, err)
+		return
+	}
 	log.Printf("%s dead_letter: %s", l.prefix, string(data))
 }
 

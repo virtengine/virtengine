@@ -612,6 +612,8 @@ func abs32(n int32) int32 {
 }
 
 // hashData creates a SHA256 hash of data for comparison
+//
+//nolint:unused // Reserved for data comparison
 func hashData(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])

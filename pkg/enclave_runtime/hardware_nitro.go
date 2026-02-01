@@ -295,7 +295,9 @@ func (r *NitroCLIRunner) runHardwareEnclave(ctx context.Context, eifPath string,
 }
 
 // runSimulatedEnclave simulates running an enclave
-func (r *NitroCLIRunner) runSimulatedEnclave(eifPath string, cpuCount int, memoryMB int64) (*NitroRunEnclaveOutput, error) {
+//
+//nolint:unparam // eifPath kept for future simulation that reads enclave image metadata
+func (r *NitroCLIRunner) runSimulatedEnclave(_ string, cpuCount int, memoryMB int64) (*NitroRunEnclaveOutput, error) {
 	// Generate simulated enclave ID
 	idBytes := make([]byte, 16)
 	rand.Read(idBytes)

@@ -620,7 +620,7 @@ func (r *RedisRateLimiter) getTopBlocked(counts map[string]uint64, limit int) []
 		Value uint64
 	}
 
-	var sorted []kv
+	sorted := make([]kv, 0, len(counts))
 	for k, v := range counts {
 		sorted = append(sorted, kv{k, v})
 	}

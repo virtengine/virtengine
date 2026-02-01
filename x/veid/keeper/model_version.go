@@ -742,7 +742,10 @@ func (k Keeper) ProcessPendingActivations(ctx sdk.Context) error {
 			GovernanceID:     activation.proposal.GovernanceID,
 			ActivationHeight: activation.proposal.ActivationHeight,
 		}
-		bz, _ := json.Marshal(&ss)
+		bz, err := json.Marshal(&ss)
+		if err != nil {
+			continue
+		}
 		store.Set(types.ModelUpdateProposalKey(activation.modelType), bz)
 
 		// Remove from pending

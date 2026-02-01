@@ -185,6 +185,8 @@ func (b *ProductionSEVBackend) checkSEVSNPEnvironment() error {
 }
 
 // detectPlatformInfo detects the platform information
+//
+//nolint:unparam // result 0 (error) reserved for future detection failures
 func (b *ProductionSEVBackend) detectPlatformInfo() error {
 	// Try to read platform status
 	statusData, err := os.ReadFile(SEVPlatformStatusPath)

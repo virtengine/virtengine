@@ -104,7 +104,7 @@ type AlgorithmInfo struct {
 	// NonceSize is the nonce/IV size in bytes
 	NonceSize int `json:"nonce_size"`
 
-	// Deprecated indicates if this algorithm should no longer be used for new encryptions
+	// Deprecated: indicates if this algorithm should no longer be used for new encryptions
 	Deprecated bool `json:"deprecated"`
 }
 

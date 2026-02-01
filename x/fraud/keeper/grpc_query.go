@@ -156,7 +156,7 @@ func (q *queryServer) ModeratorQueue(ctx context.Context, req *types.QueryModera
 	localEntries := q.GetModeratorQueue(sdkCtx)
 
 	// Filter by category and assigned_to if specified
-	var filteredEntries []types.ModeratorQueueEntry
+	filteredEntries := make([]types.ModeratorQueueEntry, 0, len(localEntries))
 	for _, entry := range localEntries {
 		if req != nil && req.Category != types.FraudCategoryPBUnspecified {
 			if entry.Category != types.FraudCategoryFromProto(req.Category) {

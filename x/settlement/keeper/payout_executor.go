@@ -691,7 +691,10 @@ func (k Keeper) savePayoutLedgerEntry(
 		ctx.BlockTime(),
 	)
 
-	bz, _ := json.Marshal(entry)
+	bz, err := json.Marshal(entry)
+	if err != nil {
+		return // silently skip if marshal fails
+	}
 	store.Set(types.PayoutLedgerEntryKey(entryID), bz)
 	store.Set(types.PayoutLedgerByPayoutKey(payoutID, entryID), []byte(entryID))
 }
@@ -699,7 +702,8 @@ func (k Keeper) savePayoutLedgerEntry(
 // GetPayoutLedgerEntries retrieves ledger entries for a payout
 func (k Keeper) GetPayoutLedgerEntries(ctx sdk.Context, payoutID string) []types.PayoutLedgerEntry {
 	store := ctx.KVStore(k.skey)
-	prefix := append(types.PrefixPayoutLedgerByPayout, []byte(payoutID)...)
+	prefix := append([]byte(nil), types.PrefixPayoutLedgerByPayout...)
+	prefix = append(prefix, []byte(payoutID)...)
 	prefix = append(prefix, byte('/'))
 	iter := storetypes.KVStorePrefixIterator(store, prefix)
 	defer iter.Close()
@@ -768,7 +772,10 @@ func (k Keeper) recordTreasuryEntry(
 		Timestamp:    ctx.BlockTime(),
 	}
 
-	bz, _ := json.Marshal(&record)
+	bz, err := json.Marshal(&record)
+	if err != nil {
+		return // silently skip if marshal fails
+	}
 	store.Set(types.TreasuryRecordKey(recordID), bz)
 
 	// Update treasury balance
@@ -791,7 +798,10 @@ func (k Keeper) getTreasuryBalance(ctx sdk.Context) sdk.Coins {
 
 func (k Keeper) setTreasuryBalance(ctx sdk.Context, balance sdk.Coins) {
 	store := ctx.KVStore(k.skey)
-	bz, _ := json.Marshal(&balance)
+	bz, err := json.Marshal(&balance)
+	if err != nil {
+		return // silently skip if marshal fails
+	}
 	store.Set(types.PrefixTreasuryBalance, bz)
 }
 

@@ -27,7 +27,8 @@ type service struct {
 	refreshTicker    *time.Ticker
 	stopChan         chan struct{}
 	running          bool
-	mu               sync.RWMutex
+	mu sync.RWMutex
+	//nolint:unused // Reserved for metadata refresh callback functionality
 	metadataCallback MetadataRefreshCallback
 }
 

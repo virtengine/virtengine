@@ -136,7 +136,8 @@ func (k Keeper) RecordNodeStateAudit(ctx sdk.Context, entry types.NodeStateAudit
 
 	// Store audit entry with a composite key: prefix + nodeID + timestamp
 	store := ctx.KVStore(k.skey)
-	key := append(types.NodeHeartbeatPrefix, []byte(fmt.Sprintf("%s:%d", entry.NodeID, ctx.BlockTime().UnixNano()))...)
+	key := append([]byte(nil), types.NodeHeartbeatPrefix...)
+	key = append(key, []byte(fmt.Sprintf("%s:%d", entry.NodeID, ctx.BlockTime().UnixNano()))...)
 	bz, err := json.Marshal(entry)
 	if err != nil {
 		return err

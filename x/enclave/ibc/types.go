@@ -65,7 +65,7 @@ func NewEnclavePacketData(packetType PacketType, data interface{}) (EnclavePacke
 
 // GetBytes returns the JSON marshaled bytes of the packet data
 func (p EnclavePacketData) GetBytes() []byte {
-	bz, _ := json.Marshal(p)
+	bz, _ := json.Marshal(p) //nolint:errchkjson // panics not expected for simple struct
 	return bz
 }
 
@@ -192,7 +192,7 @@ type Acknowledgement struct {
 
 // NewResultAcknowledgement creates a successful acknowledgement
 func NewResultAcknowledgement(result interface{}) Acknowledgement {
-	bz, _ := json.Marshal(result)
+	bz, _ := json.Marshal(result) //nolint:errchkjson // intentional - caller should provide valid result
 	return Acknowledgement{
 		Result: bz,
 	}
@@ -212,7 +212,7 @@ func (a Acknowledgement) Success() bool {
 
 // GetBytes returns the JSON marshaled bytes of the acknowledgement
 func (a Acknowledgement) GetBytes() []byte {
-	bz, _ := json.Marshal(a)
+	bz, _ := json.Marshal(a) //nolint:errchkjson // simple struct cannot fail to marshal
 	return bz
 }
 

@@ -334,6 +334,8 @@ func TestConfig_ValidateAmount(t *testing.T) {
 
 // newTestService creates a payment service with stub adapters for unit testing.
 // This avoids making real API calls during tests.
+//
+//nolint:unparam // gateway kept for future multi-gateway test support
 func newTestService(t *testing.T, gateway GatewayType) Service {
 	t.Helper()
 

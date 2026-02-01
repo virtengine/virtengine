@@ -289,7 +289,7 @@ func (ir *IncidentResponder) executePlaybook(ctx context.Context, playbook *Play
 		Str("execution_id", execution.ID).
 		Msg("starting playbook execution")
 
-	var stepNames []string
+	stepNames := make([]string, 0, len(playbook.Steps))
 	var hasFailure bool
 
 	for _, step := range playbook.Steps {
@@ -375,8 +375,10 @@ func (ir *IncidentResponder) executeStep(ctx context.Context, step PlaybookStep,
 }
 
 // executeAction executes a specific action
+//
+//nolint:unparam // ctx kept for future async action execution
 func (ir *IncidentResponder) executeAction(
-	ctx context.Context,
+	_ context.Context,
 	action PlaybookAction,
 	params map[string]string,
 	incident *SecurityIncident,
@@ -438,7 +440,8 @@ func (ir *IncidentResponder) actionBlockIP(incident *SecurityIncident, params ma
 	return nil
 }
 
-func (ir *IncidentResponder) actionRevokeKey(incident *SecurityIncident, params map[string]string) error {
+//nolint:unparam // params kept for future key ID extraction
+func (ir *IncidentResponder) actionRevokeKey(incident *SecurityIncident, _ map[string]string) error {
 	// In production, this would call key management APIs
 	ir.logger.Warn().
 		Str("incident_id", incident.ID).
@@ -447,7 +450,8 @@ func (ir *IncidentResponder) actionRevokeKey(incident *SecurityIncident, params 
 	return nil
 }
 
-func (ir *IncidentResponder) actionSuspendAccount(incident *SecurityIncident, params map[string]string) error {
+//nolint:unparam // params kept for future account ID extraction
+func (ir *IncidentResponder) actionSuspendAccount(incident *SecurityIncident, _ map[string]string) error {
 	// In production, this would call account management APIs
 	ir.logger.Warn().
 		Str("incident_id", incident.ID).
@@ -456,7 +460,8 @@ func (ir *IncidentResponder) actionSuspendAccount(incident *SecurityIncident, pa
 	return nil
 }
 
-func (ir *IncidentResponder) actionSuspendProvider(incident *SecurityIncident, params map[string]string) error {
+//nolint:unparam // params kept for future provider ID extraction
+func (ir *IncidentResponder) actionSuspendProvider(incident *SecurityIncident, _ map[string]string) error {
 	// In production, this would call provider management APIs
 	ir.logger.Warn().
 		Str("incident_id", incident.ID).
@@ -501,7 +506,8 @@ func (ir *IncidentResponder) actionCollectEvidence(incident *SecurityIncident) e
 	return nil
 }
 
-func (ir *IncidentResponder) actionEscalate(incident *SecurityIncident, params map[string]string) error {
+//nolint:unparam // params kept for future escalation configuration
+func (ir *IncidentResponder) actionEscalate(incident *SecurityIncident, _ map[string]string) error {
 	ir.logger.Warn().
 		Str("incident_id", incident.ID).
 		Str("severity", string(incident.Severity)).

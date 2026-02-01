@@ -253,7 +253,9 @@ func (fh *FailureHandler) getStrategy(failureType FailureType) FailureStrategy {
 }
 
 // recordFailure records a failure for tracking.
-func (fh *FailureHandler) recordFailure(requestID string, failureType FailureType) {
+//
+//nolint:unparam // requestID kept for future per-request failure tracking
+func (fh *FailureHandler) recordFailure(_ string, failureType FailureType) {
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
 

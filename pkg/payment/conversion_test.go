@@ -276,7 +276,7 @@ func TestConversionExecutor_ReconcileConversion(t *testing.T) {
 		3,
 	)
 	entry.MarkReconciling(ConversionErrorInternal, "test reconciliation")
-	store.Save(ctx, entry)
+	_ = store.Save(ctx, entry)
 
 	// Reconcile
 	err := executor.ReconcileConversion(ctx, entry.ID, "0x123abc", 12345)
@@ -359,7 +359,7 @@ func TestConversionExecutor_ListPendingConversions(t *testing.T) {
 			PaymentIntentID: fmt.Sprintf("pi_test%d", i),
 			IdempotencyKey:  fmt.Sprintf("pending-test-%d", i),
 		}
-		executor.ExecuteConversion(ctx, req)
+		_, _ = executor.ExecuteConversion(ctx, req)
 	}
 
 	// List pending - entries should be pending with retry scheduled
@@ -611,9 +611,9 @@ func TestInMemoryLedgerStore_ListByStatus(t *testing.T) {
 	failed := NewConversionLedgerEntry("id3", "key3", CreateTestQuote(10000, 10000000, "virtengine1ghi"), "pi3", 3)
 	failed.Status = ConversionStatusFailed
 
-	store.Save(ctx, pending)
-	store.Save(ctx, completed)
-	store.Save(ctx, failed)
+	_ = store.Save(ctx, pending)
+	_ = store.Save(ctx, completed)
+	_ = store.Save(ctx, failed)
 
 	// List pending
 	pendingList, _ := store.ListByStatus(ctx, ConversionStatusPending)

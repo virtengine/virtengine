@@ -733,12 +733,14 @@ func extractP256PublicKey(privateKey []byte) ([]byte, error) {
 	return publicKey, nil
 }
 
+//nolint:unparam // result 1 (error) reserved for future signing failures
 func signEd25519(privateKey, data []byte) ([]byte, error) {
 	// Simplified signing - would use crypto/ed25519 in production
 	hash := sha256.Sum256(append(privateKey, data...))
 	return hash[:], nil
 }
 
+//nolint:unparam // result 1 (error) reserved for future signing failures
 func signP256(privateKey, data []byte) ([]byte, error) {
 	// Simplified signing - would use crypto/ecdsa in production
 	hash := sha256.Sum256(append(privateKey, data...))

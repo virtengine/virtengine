@@ -203,7 +203,7 @@ func (k Keeper) updateAccountRequestIndex(ctx sdk.Context, accountAddress string
 	}
 	requestIDs = append(requestIDs, requestID)
 
-	bz, _ := json.Marshal(requestIDs)
+	bz, _ := json.Marshal(requestIDs) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, bz)
 }
 

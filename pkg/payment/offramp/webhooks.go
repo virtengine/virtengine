@@ -370,7 +370,7 @@ func MockPayPalWebhookPayload(eventType string, payoutItemID string, senderItemI
 		},
 	}
 
-	data, _ := json.Marshal(payload)
+	data, _ := json.Marshal(payload) //nolint:errchkjson // mock function for testing
 	return data
 }
 
@@ -391,7 +391,7 @@ func MockStripeWebhookPayload(eventType string, outboundPaymentID string, payout
 		},
 	}
 
-	data, _ := json.Marshal(payload)
+	data, _ := json.Marshal(payload) //nolint:errchkjson // mock function for testing
 	return data
 }
 
