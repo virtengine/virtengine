@@ -111,7 +111,7 @@ func TestStateManagerShouldPruneHeight(t *testing.T) {
 
 func TestStateManagerTieredPruning(t *testing.T) {
 	logger := log.NewNopLogger()
-	
+
 	cfg := TieredRetentionConfig()
 	cfg.Tiered.Tier1Blocks = 1000
 	cfg.Tiered.Tier2Blocks = 5000
