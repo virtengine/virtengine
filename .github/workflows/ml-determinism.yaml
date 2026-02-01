@@ -45,6 +45,9 @@ concurrency:
   group: ml-determinism-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   GO_VERSION: '1.22'
   # Production determinism settings - NEVER CHANGE
