@@ -83,18 +83,39 @@ func GetValidNextStates(current InvoiceStatus) []InvoiceStatus {
 
 // InvoiceStatusMachine manages invoice status transitions
 type InvoiceStatusMachine struct {
-	invoice     *Invoice
-	ledgerEntry *InvoiceLedgerEntry
-	now         time.Time
-	blockHeight int64
+	invoice           *Invoice
+	ledgerEntry       *InvoiceLedgerEntry
+	now               time.Time
+	blockHeight       int64
+	previousEntryHash string
+	nextSequenceNum   uint64
 }
 
 // NewInvoiceStatusMachine creates a new status machine for an invoice
 func NewInvoiceStatusMachine(inv *Invoice, blockHeight int64, now time.Time) *InvoiceStatusMachine {
 	return &InvoiceStatusMachine{
-		invoice:     inv,
-		now:         now,
-		blockHeight: blockHeight,
+		invoice:           inv,
+		now:               now,
+		blockHeight:       blockHeight,
+		previousEntryHash: ZeroHash,
+		nextSequenceNum:   1,
+	}
+}
+
+// NewInvoiceStatusMachineWithChain creates a new status machine with chain context
+func NewInvoiceStatusMachineWithChain(
+	inv *Invoice,
+	blockHeight int64,
+	now time.Time,
+	previousEntryHash string,
+	nextSequenceNum uint64,
+) *InvoiceStatusMachine {
+	return &InvoiceStatusMachine{
+		invoice:           inv,
+		now:               now,
+		blockHeight:       blockHeight,
+		previousEntryHash: previousEntryHash,
+		nextSequenceNum:   nextSequenceNum,
 	}
 }
 
@@ -111,7 +132,7 @@ func (sm *InvoiceStatusMachine) Transition(
 		return fmt.Errorf("invalid transition from %s to %s", from, to)
 	}
 
-	// Create ledger entry
+	// Create ledger entry with hash chain
 	entryType := sm.getEntryTypeForTransition(to)
 	sm.ledgerEntry = NewInvoiceLedgerEntry(
 		fmt.Sprintf("%s-%d", sm.invoice.InvoiceID, sm.blockHeight),
@@ -123,9 +144,15 @@ func (sm *InvoiceStatusMachine) Transition(
 		fmt.Sprintf("%s: %s", transition.Description, description),
 		initiator,
 		"",
+		sm.previousEntryHash,
+		sm.nextSequenceNum,
 		sm.blockHeight,
 		sm.now,
 	)
+
+	// Update chain state for next entry
+	sm.previousEntryHash = sm.ledgerEntry.EntryHash
+	sm.nextSequenceNum++
 
 	// Update invoice status
 	sm.invoice.Status = to
@@ -157,7 +184,7 @@ func (sm *InvoiceStatusMachine) TransitionWithPayment(
 		return fmt.Errorf("transition from %s to %s does not require payment", from, to)
 	}
 
-	// Create ledger entry
+	// Create ledger entry with hash chain
 	sm.ledgerEntry = NewInvoiceLedgerEntry(
 		fmt.Sprintf("%s-pay-%d", sm.invoice.InvoiceID, sm.blockHeight),
 		sm.invoice.InvoiceID,
@@ -168,9 +195,15 @@ func (sm *InvoiceStatusMachine) TransitionWithPayment(
 		fmt.Sprintf("payment recorded: %s", amount.String()),
 		initiator,
 		"",
+		sm.previousEntryHash,
+		sm.nextSequenceNum,
 		sm.blockHeight,
 		sm.now,
 	)
+
+	// Update chain state for next entry
+	sm.previousEntryHash = sm.ledgerEntry.EntryHash
+	sm.nextSequenceNum++
 
 	return nil
 }
@@ -195,9 +228,15 @@ func (sm *InvoiceStatusMachine) MarkIssued(initiator string) error {
 		"invoice issued",
 		initiator,
 		"",
+		sm.previousEntryHash,
+		sm.nextSequenceNum,
 		sm.blockHeight,
 		sm.now,
 	)
+
+	// Update chain state for next entry
+	sm.previousEntryHash = sm.ledgerEntry.EntryHash
+	sm.nextSequenceNum++
 
 	return nil
 }
@@ -224,9 +263,15 @@ func (sm *InvoiceStatusMachine) MarkDisputed(
 		fmt.Sprintf("disputed: %s", reason),
 		initiator,
 		"",
+		sm.previousEntryHash,
+		sm.nextSequenceNum,
 		sm.blockHeight,
 		sm.now,
 	)
+
+	// Update chain state for next entry
+	sm.previousEntryHash = sm.ledgerEntry.EntryHash
+	sm.nextSequenceNum++
 
 	return nil
 }
@@ -257,9 +302,15 @@ func (sm *InvoiceStatusMachine) MarkOverdue(initiator string) error {
 		"marked as overdue",
 		initiator,
 		"",
+		sm.previousEntryHash,
+		sm.nextSequenceNum,
 		sm.blockHeight,
 		sm.now,
 	)
+
+	// Update chain state for next entry
+	sm.previousEntryHash = sm.ledgerEntry.EntryHash
+	sm.nextSequenceNum++
 
 	return nil
 }
@@ -282,9 +333,15 @@ func (sm *InvoiceStatusMachine) Cancel(initiator string, reason string) error {
 		fmt.Sprintf("cancelled: %s", reason),
 		initiator,
 		"",
+		sm.previousEntryHash,
+		sm.nextSequenceNum,
 		sm.blockHeight,
 		sm.now,
 	)
+
+	// Update chain state for next entry
+	sm.previousEntryHash = sm.ledgerEntry.EntryHash
+	sm.nextSequenceNum++
 
 	return nil
 }

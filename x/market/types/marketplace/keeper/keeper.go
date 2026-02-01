@@ -572,7 +572,10 @@ func (k Keeper) AcceptBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.A
 	bid.State = marketplace.BidStateAccepted
 	bid.UpdatedAt = ctx.BlockTime().UTC()
 	store := ctx.KVStore(k.skey)
-	bz, _ := json.Marshal(bid)
+	bz, err := json.Marshal(bid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal bid: %w", err)
+	}
 	store.Set(marketplace.BidKey(bid.ID), bz)
 
 	// Update order state
@@ -1132,7 +1135,7 @@ func (k Keeper) IncrementEventSequence(ctx sdk.Context) uint64 {
 	store := ctx.KVStore(k.skey)
 	seq := k.GetEventSequence(ctx) + 1
 
-	bz, _ := json.Marshal(seq)
+	bz, _ := json.Marshal(seq) //nolint:errchkjson // uint64 cannot fail to marshal
 	store.Set(marketplace.EventSequenceKey(), bz)
 	return seq
 }

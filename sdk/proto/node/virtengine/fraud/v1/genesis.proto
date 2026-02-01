@@ -37,9 +37,15 @@ message GenesisState {
     (gogoproto.moretags) = "yaml:\"moderator_queue\""
   ];
 
-  // NextReportID is the next report ID sequence number
-  uint64 next_report_id = 5 [
-    (gogoproto.jsontag) = "next_report_id",
-    (gogoproto.moretags) = "yaml:\"next_report_id\""
+  // NextFraudReportSequence is the next fraud report sequence number
+  uint64 next_fraud_report_sequence = 5 [
+    (gogoproto.jsontag) = "next_fraud_report_sequence",
+    (gogoproto.moretags) = "yaml:\"next_fraud_report_sequence\""
+  ];
+
+  // NextAuditLogSequence is the next audit log sequence number
+  uint64 next_audit_log_sequence = 6 [
+    (gogoproto.jsontag) = "next_audit_log_sequence",
+    (gogoproto.moretags) = "yaml:\"next_audit_log_sequence\""
   ];
 }

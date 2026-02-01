@@ -487,6 +487,8 @@ func TestPayoutParamsDefaults(t *testing.T) {
 }
 
 // createTestKeyPair generates a test key pair for testing
+//
+//nolint:unparam // result 0 (AccAddress) is useful for other test cases
 func createTestKeyPair(t *testing.T, name string) (sdk.AccAddress, *ed25519.PubKey) {
 	t.Helper()
 	// Generate deterministic keys based on name for reproducibility

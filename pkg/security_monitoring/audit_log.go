@@ -189,9 +189,11 @@ func (a *AuditLog) LogAlert(alert *SecurityAlert) {
 		}
 
 		a.mu.Lock()
-		data, _ := json.Marshal(entry)
-		a.logFile.Write(data)
-		a.logFile.WriteString("\n")
+		data, err := json.Marshal(entry)
+		if err == nil {
+			_, _ = a.logFile.Write(data)
+			_, _ = a.logFile.WriteString("\n")
+		}
 		a.mu.Unlock()
 	}
 }
@@ -216,9 +218,11 @@ func (a *AuditLog) LogIncidentAction(incidentID, action, performedBy, result str
 		}
 
 		a.mu.Lock()
-		data, _ := json.Marshal(entry)
-		a.logFile.Write(data)
-		a.logFile.WriteString("\n")
+		data, err := json.Marshal(entry)
+		if err == nil {
+			_, _ = a.logFile.Write(data)
+			_, _ = a.logFile.WriteString("\n")
+		}
 		a.mu.Unlock()
 	}
 }
@@ -245,9 +249,11 @@ func (a *AuditLog) LogPlaybookExecution(playbookID, incidentID, status string, s
 		}
 
 		a.mu.Lock()
-		data, _ := json.Marshal(entry)
-		a.logFile.Write(data)
-		a.logFile.WriteString("\n")
+		data, err := json.Marshal(entry)
+		if err == nil {
+			_, _ = a.logFile.Write(data)
+			_, _ = a.logFile.WriteString("\n")
+		}
 		a.mu.Unlock()
 	}
 }

@@ -431,7 +431,8 @@ func (s *MemoryStressScenario) Build() (*Experiment, error) {
 
 	if s.isLeak {
 		spec.GradualConfig = &GradualConfig{
-			StartValue:    0,
+			StartValue: 0,
+			//nolint:gosec // G115: MemoryBytes/MB is bounded memory size
 			EndValue:      int(s.MemoryBytes / (1024 * 1024)),
 			RampDuration:  s.Duration,
 			RatePerSecond: s.leakRateMBPerSec,
@@ -455,6 +456,7 @@ func (s *MemoryStressScenario) Build() (*Experiment, error) {
 // NewMemoryPressure creates a memory pressure scenario with fixed allocation.
 func NewMemoryPressure(targets []string, memoryMB int, duration time.Duration) *MemoryStressScenario {
 	return &MemoryStressScenario{
+		//nolint:gosec // G115: memoryMB is positive user-provided value
 		MemoryBytes:    uint64(memoryMB) * 1024 * 1024,
 		OOMKillEnabled: false,
 		Duration:       duration,
@@ -476,8 +478,10 @@ func NewOOMKillTest(targets []string) *MemoryStressScenario {
 
 // NewGradualMemoryLeak creates a scenario simulating a gradual memory leak.
 func NewGradualMemoryLeak(targets []string, leakRateMBPerSec int, duration time.Duration) *MemoryStressScenario {
+	//nolint:gosec // G115: duration.Seconds() returns small positive value
 	totalMB := leakRateMBPerSec * int(duration.Seconds())
 	return &MemoryStressScenario{
+		//nolint:gosec // G115: totalMB is positive bounded value
 		MemoryBytes:      uint64(totalMB) * 1024 * 1024,
 		OOMKillEnabled:   false,
 		Duration:         duration,

@@ -86,7 +86,10 @@ func (k IBCKeeper) IsBound(ctx sdk.Context) bool {
 // SetChannelMetadata stores channel metadata
 func (k IBCKeeper) SetChannelMetadata(ctx sdk.Context, channelID string, metadata ChannelMetadata) {
 	store := ctx.KVStore(k.skey)
-	bz, _ := json.Marshal(metadata)
+	bz, err := json.Marshal(metadata)
+	if err != nil {
+		return // silently skip if marshal fails
+	}
 	store.Set(ChannelMetadataKey(channelID), bz)
 }
 
@@ -209,7 +212,10 @@ func (k IBCKeeper) WithFederatedIdentities(ctx sdk.Context, sourceChainID string
 // SetFederatedMeasurement stores a federated measurement
 func (k IBCKeeper) SetFederatedMeasurement(ctx sdk.Context, measurement FederatedMeasurement) {
 	store := ctx.KVStore(k.skey)
-	bz, _ := json.Marshal(measurement)
+	bz, err := json.Marshal(measurement)
+	if err != nil {
+		return // silently skip if marshal fails
+	}
 	store.Set(FederatedMeasurementKey(measurement.SourceChainID, measurement.Measurement.MeasurementHash), bz)
 }
 
@@ -350,7 +356,10 @@ func (k IBCKeeper) sendPacket(
 
 func (k IBCKeeper) setPendingPacket(ctx sdk.Context, channelID string, sequence uint64, data EnclavePacketData) {
 	store := ctx.KVStore(k.skey)
-	bz, _ := json.Marshal(data)
+	bz, err := json.Marshal(data)
+	if err != nil {
+		return // silently skip if marshal fails
+	}
 	store.Set(PendingPacketKey(channelID, sequence), bz)
 }
 

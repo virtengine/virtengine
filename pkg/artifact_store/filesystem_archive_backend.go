@@ -284,6 +284,7 @@ func (b *FilesystemArchiveBackend) GetArchived(ctx context.Context, archiveID st
 	if err := b.writeMetadata(archiveID, metadata); err != nil {
 		// Log error but don't fail the operation
 		// The data was successfully retrieved
+		_ = err // intentionally ignored: metadata update is best-effort
 	}
 
 	return &GetArchivedResponse{

@@ -6,327 +6,211 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
-	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	"github.com/virtengine/virtengine/x/support/types"
 )
 
-func TestMsgServer_CreateTicket(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
+func TestMsgServer_RegisterExternalTicket(t *testing.T) {
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
-	customer := sdk.AccAddress("customer1")
+	owner := sdk.AccAddress("owner1")
 
-	msg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
+	msg := &types.MsgRegisterExternalTicket{
+		Sender:           owner.String(),
+		ResourceID:       "deployment-123",
+		ResourceType:     string(types.ResourceTypeDeployment),
+		ExternalSystem:   string(types.ExternalSystemWaldur),
+		ExternalTicketID: "WALDUR-456",
+		ExternalURL:      "https://waldur.example.com/tickets/456",
 	}
 
-	resp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), msg)
+	resp, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), msg)
 	require.NoError(t, err)
-	require.NotEmpty(t, resp.TicketID)
+	require.NotNil(t, resp)
 
-	// Verify ticket was created
-	ticket, found := keeper.GetTicket(ctx, resp.TicketID)
+	// Verify ref was created
+	ref, found := keeper.GetExternalRef(ctx, types.ResourceTypeDeployment, "deployment-123")
 	require.True(t, found)
-	require.Equal(t, customer.String(), ticket.CustomerAddress)
-	require.Equal(t, "technical", ticket.Category)
-	require.Equal(t, types.TicketStatusOpen, ticket.Status)
+	require.Equal(t, owner.String(), ref.CreatedBy)
+	require.Equal(t, "WALDUR-456", ref.ExternalTicketID)
 }
 
-func TestMsgServer_CreateTicketInvalidCategory(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
+func TestMsgServer_RegisterExternalTicketInvalidAddress(t *testing.T) {
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
-	customer := sdk.AccAddress("customer1")
-
-	msg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "invalid",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
+	msg := &types.MsgRegisterExternalTicket{
+		Sender:           "invalid-address",
+		ResourceID:       "deployment-123",
+		ResourceType:     string(types.ResourceTypeDeployment),
+		ExternalSystem:   string(types.ExternalSystemWaldur),
+		ExternalTicketID: "WALDUR-456",
 	}
 
-	_, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), msg)
+	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), msg)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not allowed")
+	require.Contains(t, err.Error(), "invalid")
 }
 
-func TestMsgServer_AssignTicket(t *testing.T) {
-	keeper, ctx, mockRoles := setupKeeper(t)
+func TestMsgServer_UpdateExternalTicket(t *testing.T) {
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
-	customer := sdk.AccAddress("customer1")
-	agent := sdk.AccAddress("agent1")
-	admin := sdk.AccAddress("admin1")
+	owner := sdk.AccAddress("owner1")
 
-	// Set up roles
-	mockRoles.SetRole(agent, rolestypes.RoleSupportAgent)
-	mockRoles.SetAdmin(admin, true)
-
-	// Create ticket first
-	createMsg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
+	// Register first
+	registerMsg := &types.MsgRegisterExternalTicket{
+		Sender:           owner.String(),
+		ResourceID:       "lease-789",
+		ResourceType:     string(types.ResourceTypeLease),
+		ExternalSystem:   string(types.ExternalSystemJira),
+		ExternalTicketID: "JIRA-100",
+		ExternalURL:      "https://jira.example.com/browse/JIRA-100",
 	}
-	createResp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), createMsg)
+	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
 	require.NoError(t, err)
 
-	// Assign ticket
-	assignMsg := &types.MsgAssignTicket{
-		Sender:   admin.String(),
-		TicketID: createResp.TicketID,
-		AssignTo: agent.String(),
+	// Update
+	updateMsg := &types.MsgUpdateExternalTicket{
+		Sender:           owner.String(),
+		ResourceID:       "lease-789",
+		ResourceType:     string(types.ResourceTypeLease),
+		ExternalTicketID: "JIRA-100-UPDATED",
+		ExternalURL:      "https://jira.example.com/browse/JIRA-100-UPDATED",
 	}
 
-	_, err = msgServer.AssignTicket(sdk.WrapSDKContext(ctx), assignMsg)
+	resp, err := msgServer.UpdateExternalTicket(sdk.WrapSDKContext(ctx), updateMsg)
 	require.NoError(t, err)
+	require.NotNil(t, resp)
 
-	// Verify assignment
-	ticket, found := keeper.GetTicket(ctx, createResp.TicketID)
+	// Verify update
+	ref, found := keeper.GetExternalRef(ctx, types.ResourceTypeLease, "lease-789")
 	require.True(t, found)
-	require.Equal(t, agent.String(), ticket.AssignedTo)
-	require.Equal(t, types.TicketStatusAssigned, ticket.Status)
+	require.Equal(t, "JIRA-100-UPDATED", ref.ExternalTicketID)
 }
 
-func TestMsgServer_AssignTicketUnauthorized(t *testing.T) {
-	keeper, ctx, mockRoles := setupKeeper(t)
+func TestMsgServer_UpdateExternalTicketUnauthorized(t *testing.T) {
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
-	customer := sdk.AccAddress("customer1")
-	agent := sdk.AccAddress("agent1")
-	nonAdmin := sdk.AccAddress("nonadmin1")
-
-	// Only set agent role, not admin for sender
-	mockRoles.SetRole(agent, rolestypes.RoleSupportAgent)
-
-	// Create ticket
-	createMsg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
-	}
-	createResp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), createMsg)
-	require.NoError(t, err)
-
-	// Try to assign without admin role
-	assignMsg := &types.MsgAssignTicket{
-		Sender:   nonAdmin.String(),
-		TicketID: createResp.TicketID,
-		AssignTo: agent.String(),
-	}
-
-	_, err = msgServer.AssignTicket(sdk.WrapSDKContext(ctx), assignMsg)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "unauthorized")
-}
-
-func TestMsgServer_RespondToTicket(t *testing.T) {
-	keeper, ctx, mockRoles := setupKeeper(t)
-	msgServer := NewMsgServerImpl(keeper)
-
-	customer := sdk.AccAddress("customer1")
-	agent := sdk.AccAddress("agent1")
-	admin := sdk.AccAddress("admin1")
-
-	mockRoles.SetRole(agent, rolestypes.RoleSupportAgent)
-	mockRoles.SetAdmin(admin, true)
-
-	// Create and assign ticket
-	createMsg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
-	}
-	createResp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), createMsg)
-	require.NoError(t, err)
-
-	// Customer responds
-	respondMsg := &types.MsgRespondToTicket{
-		Responder:        customer.String(),
-		TicketID:         createResp.TicketID,
-		EncryptedPayload: createTestEnvelope(),
-	}
-
-	resp, err := msgServer.RespondToTicket(sdk.WrapSDKContext(ctx), respondMsg)
-	require.NoError(t, err)
-	require.Equal(t, uint32(0), resp.ResponseIndex)
-
-	// Verify response was added
-	ticket, _ := keeper.GetTicket(ctx, createResp.TicketID)
-	require.Equal(t, uint32(1), ticket.ResponseCount)
-}
-
-func TestMsgServer_RespondToTicketUnauthorized(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
-	msgServer := NewMsgServerImpl(keeper)
-
-	customer := sdk.AccAddress("customer1")
+	owner := sdk.AccAddress("owner1")
 	otherUser := sdk.AccAddress("other1")
 
-	// Create ticket
-	createMsg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
+	// Register
+	registerMsg := &types.MsgRegisterExternalTicket{
+		Sender:           owner.String(),
+		ResourceID:       "order-001",
+		ResourceType:     string(types.ResourceTypeOrder),
+		ExternalSystem:   string(types.ExternalSystemWaldur),
+		ExternalTicketID: "WALDUR-001",
 	}
-	createResp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), createMsg)
+	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
 	require.NoError(t, err)
 
-	// Other user tries to respond
-	respondMsg := &types.MsgRespondToTicket{
-		Responder:        otherUser.String(),
-		TicketID:         createResp.TicketID,
-		EncryptedPayload: createTestEnvelope(),
+	// Try to update with different user
+	updateMsg := &types.MsgUpdateExternalTicket{
+		Sender:           otherUser.String(),
+		ResourceID:       "order-001",
+		ResourceType:     string(types.ResourceTypeOrder),
+		ExternalTicketID: "WALDUR-HACKED",
 	}
 
-	_, err = msgServer.RespondToTicket(sdk.WrapSDKContext(ctx), respondMsg)
+	_, err = msgServer.UpdateExternalTicket(sdk.WrapSDKContext(ctx), updateMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unauthorized")
 }
 
-func TestMsgServer_ResolveTicket(t *testing.T) {
-	keeper, ctx, mockRoles := setupKeeper(t)
+func TestMsgServer_UpdateExternalTicketNotFound(t *testing.T) {
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
-	customer := sdk.AccAddress("customer1")
-	agent := sdk.AccAddress("agent1")
-	admin := sdk.AccAddress("admin1")
+	owner := sdk.AccAddress("owner1")
 
-	mockRoles.SetRole(agent, rolestypes.RoleSupportAgent)
-	mockRoles.SetAdmin(admin, true)
-
-	// Create and assign ticket
-	createMsg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
-	}
-	createResp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), createMsg)
-	require.NoError(t, err)
-
-	assignMsg := &types.MsgAssignTicket{
-		Sender:   admin.String(),
-		TicketID: createResp.TicketID,
-		AssignTo: agent.String(),
-	}
-	_, err = msgServer.AssignTicket(sdk.WrapSDKContext(ctx), assignMsg)
-	require.NoError(t, err)
-
-	// Move to in progress manually (need to update status)
-	ticket, _ := keeper.GetTicket(ctx, createResp.TicketID)
-	ticket.Status = types.TicketStatusInProgress
-	require.NoError(t, keeper.SetTicket(ctx, &ticket))
-
-	// Resolve ticket
-	resolveMsg := &types.MsgResolveTicket{
-		Sender:        agent.String(),
-		TicketID:      createResp.TicketID,
-		ResolutionRef: "fixed-the-issue",
+	updateMsg := &types.MsgUpdateExternalTicket{
+		Sender:           owner.String(),
+		ResourceID:       "nonexistent",
+		ResourceType:     string(types.ResourceTypeDeployment),
+		ExternalTicketID: "WALDUR-999",
 	}
 
-	_, err = msgServer.ResolveTicket(sdk.WrapSDKContext(ctx), resolveMsg)
-	require.NoError(t, err)
-
-	// Verify resolution
-	ticket, _ = keeper.GetTicket(ctx, createResp.TicketID)
-	require.Equal(t, types.TicketStatusResolved, ticket.Status)
-	require.NotNil(t, ticket.ResolvedAt)
+	_, err := msgServer.UpdateExternalTicket(sdk.WrapSDKContext(ctx), updateMsg)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
 }
 
-func TestMsgServer_CloseTicket(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
+func TestMsgServer_RemoveExternalTicket(t *testing.T) {
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
-	customer := sdk.AccAddress("customer1")
+	owner := sdk.AccAddress("owner1")
 
-	// Create ticket
-	createMsg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
+	// Register first
+	registerMsg := &types.MsgRegisterExternalTicket{
+		Sender:           owner.String(),
+		ResourceID:       "provider-001",
+		ResourceType:     string(types.ResourceTypeProvider),
+		ExternalSystem:   string(types.ExternalSystemWaldur),
+		ExternalTicketID: "WALDUR-P001",
 	}
-	createResp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), createMsg)
+	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
 	require.NoError(t, err)
 
-	// Close ticket
-	closeMsg := &types.MsgCloseTicket{
-		Sender:   customer.String(),
-		TicketID: createResp.TicketID,
-		Reason:   "no longer needed",
+	// Remove
+	removeMsg := &types.MsgRemoveExternalTicket{
+		Sender:       owner.String(),
+		ResourceID:   "provider-001",
+		ResourceType: string(types.ResourceTypeProvider),
 	}
 
-	_, err = msgServer.CloseTicket(sdk.WrapSDKContext(ctx), closeMsg)
+	resp, err := msgServer.RemoveExternalTicket(sdk.WrapSDKContext(ctx), removeMsg)
 	require.NoError(t, err)
+	require.NotNil(t, resp)
 
-	// Verify closure
-	ticket, _ := keeper.GetTicket(ctx, createResp.TicketID)
-	require.Equal(t, types.TicketStatusClosed, ticket.Status)
-	require.NotNil(t, ticket.ClosedAt)
+	// Verify removal
+	_, found := keeper.GetExternalRef(ctx, types.ResourceTypeProvider, "provider-001")
+	require.False(t, found)
 }
 
-func TestMsgServer_ReopenTicket(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
+func TestMsgServer_RemoveExternalTicketUnauthorized(t *testing.T) {
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
-	customer := sdk.AccAddress("customer1")
+	owner := sdk.AccAddress("owner1")
+	otherUser := sdk.AccAddress("other1")
 
-	// Create and close ticket
-	createMsg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "technical",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
+	// Register
+	registerMsg := &types.MsgRegisterExternalTicket{
+		Sender:           owner.String(),
+		ResourceID:       "deployment-456",
+		ResourceType:     string(types.ResourceTypeDeployment),
+		ExternalSystem:   string(types.ExternalSystemJira),
+		ExternalTicketID: "JIRA-456",
 	}
-	createResp, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), createMsg)
+	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
 	require.NoError(t, err)
 
-	closeMsg := &types.MsgCloseTicket{
-		Sender:   customer.String(),
-		TicketID: createResp.TicketID,
-	}
-	_, err = msgServer.CloseTicket(sdk.WrapSDKContext(ctx), closeMsg)
-	require.NoError(t, err)
-
-	// Reopen ticket
-	reopenMsg := &types.MsgReopenTicket{
-		Sender:   customer.String(),
-		TicketID: createResp.TicketID,
-		Reason:   "issue recurred",
+	// Try to remove with different user
+	removeMsg := &types.MsgRemoveExternalTicket{
+		Sender:       otherUser.String(),
+		ResourceID:   "deployment-456",
+		ResourceType: string(types.ResourceTypeDeployment),
 	}
 
-	_, err = msgServer.ReopenTicket(sdk.WrapSDKContext(ctx), reopenMsg)
-	require.NoError(t, err)
-
-	// Verify reopening
-	ticket, _ := keeper.GetTicket(ctx, createResp.TicketID)
-	require.Equal(t, types.TicketStatusOpen, ticket.Status)
-	require.Nil(t, ticket.ClosedAt)
+	_, err = msgServer.RemoveExternalTicket(sdk.WrapSDKContext(ctx), removeMsg)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unauthorized")
 }
 
 func TestMsgServer_UpdateParams(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
 	// Update with correct authority
 	updateMsg := &types.MsgUpdateParams{
 		Authority: "authority",
 		Params: types.Params{
-			MaxTicketsPerCustomerPerDay: 10,
-			MaxResponsesPerTicket:       50,
-			TicketCooldownSeconds:       120,
-			AutoCloseAfterDays:          14,
-			MaxOpenTicketsPerCustomer:   20,
-			ReopenWindowDays:            60,
-			AllowedCategories:           []string{"test", "other"},
+			AllowedExternalSystems: []string{"waldur"},
+			AllowedExternalDomains: []string{"custom.example.com"},
 		},
 	}
 
@@ -335,11 +219,11 @@ func TestMsgServer_UpdateParams(t *testing.T) {
 
 	// Verify update
 	params := keeper.GetParams(ctx)
-	require.Equal(t, uint32(10), params.MaxTicketsPerCustomerPerDay)
+	require.Equal(t, []string{"waldur"}, params.AllowedExternalSystems)
 }
 
 func TestMsgServer_UpdateParamsUnauthorized(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
+	keeper, ctx := setupKeeper(t)
 	msgServer := NewMsgServerImpl(keeper)
 
 	// Update with wrong authority
@@ -351,36 +235,4 @@ func TestMsgServer_UpdateParamsUnauthorized(t *testing.T) {
 	_, err := msgServer.UpdateParams(sdk.WrapSDKContext(ctx), updateMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid authority")
-}
-
-func TestMsgServer_RateLimiting(t *testing.T) {
-	keeper, ctx, _ := setupKeeper(t)
-	msgServer := NewMsgServerImpl(keeper)
-
-	customer := sdk.AccAddress("customer1")
-
-	params := keeper.GetParams(ctx)
-
-	// Create max tickets
-	for i := uint32(0); i < params.MaxTicketsPerCustomerPerDay; i++ {
-		msg := &types.MsgCreateTicket{
-			Customer:         customer.String(),
-			Category:         "technical",
-			Priority:         "normal",
-			EncryptedPayload: createTestEnvelope(),
-		}
-		_, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), msg)
-		require.NoError(t, err, "ticket %d should succeed", i)
-	}
-
-	// Next one should fail due to rate limit
-	msg := &types.MsgCreateTicket{
-		Customer:         customer.String(),
-		Category:         "billing",
-		Priority:         "normal",
-		EncryptedPayload: createTestEnvelope(),
-	}
-	_, err := msgServer.CreateTicket(sdk.WrapSDKContext(ctx), msg)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "exceeded")
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/virtengine/virtengine/pkg/economics/analysis"
 )
 
+const severityCritical = "critical"
+
 func TestEconomicAuditor_PerformAudit(t *testing.T) {
 	params := economics.DefaultTokenomicsParams()
 	auditor := NewEconomicAuditor(params)
@@ -156,7 +158,7 @@ func TestEconomicAuditor_IdentifyVulnerabilities(t *testing.T) {
 			GiniCoefficient:     0.85,
 		},
 		AttackAnalyses: []economics.AttackAnalysis{
-			{RiskLevel: "critical", AttackType: "51_attack", CostEstimateUSD: 100000},
+			{RiskLevel: severityCritical, AttackType: "51_attack", CostEstimateUSD: 100000},
 		},
 		GameTheoryAnalyses: []economics.GameTheoryAnalysis{
 			{Scenario: "test", IncentiveAlignment: "misaligned", NashEquilibrium: "bad"},
@@ -173,7 +175,7 @@ func TestEconomicAuditor_IdentifyVulnerabilities(t *testing.T) {
 	// Should have critical vulnerabilities
 	hasCritical := false
 	for _, v := range vulnerabilities {
-		if v.Severity == "critical" {
+		if v.Severity == severityCritical {
 			hasCritical = true
 			break
 		}
@@ -231,7 +233,7 @@ func TestEconomicAuditor_CalculateOverallScore(t *testing.T) {
 					NakamotoCoefficient: 5,
 				},
 				AttackAnalyses: []economics.AttackAnalysis{
-					{RiskLevel: "critical"},
+					{RiskLevel: severityCritical},
 					{RiskLevel: "high"},
 				},
 			},

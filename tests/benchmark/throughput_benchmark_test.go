@@ -67,7 +67,7 @@ func NewMockTransaction(nonce uint64) *MockTransaction {
 		Timestamp: time.Now().UTC(),
 	}
 	tx.Signature = make([]byte, 64)
-	rand.Read(tx.Signature)
+	_, _ = rand.Read(tx.Signature)
 	tx.computeHash()
 	return tx
 }
@@ -84,7 +84,7 @@ func (tx *MockTransaction) computeHash() {
 
 func generateTxID() string {
 	id := make([]byte, 16)
-	rand.Read(id)
+	_, _ = rand.Read(id)
 	return hex.EncodeToString(id)
 }
 
@@ -384,7 +384,7 @@ func (s *MockStateStore) Get(key string) ([]byte, bool) {
 func BenchmarkStateWrite(b *testing.B) {
 	store := NewMockStateStore()
 	value := make([]byte, 256)
-	rand.Read(value)
+	_, _ = rand.Read(value)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

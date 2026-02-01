@@ -235,7 +235,7 @@ func formatFactorCombinations(combinations []mfatypes.FactorCombination) string 
 		return ""
 	}
 
-	var formatted []string
+	formatted := make([]string, 0, len(combinations))
 	for _, combo := range combinations {
 		if len(combo.Factors) == 0 {
 			continue

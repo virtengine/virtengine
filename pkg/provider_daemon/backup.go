@@ -680,7 +680,9 @@ func (m *KeyBackupManager) RecombineShares(shares []*RecoveryShare, passphrases 
 
 // shamirSplit is a simplified Shamir secret sharing split
 // In production, would use a proper Shamir library
-func shamirSplit(secret []byte, threshold, totalShares int) [][]byte {
+//
+//nolint:unparam // threshold kept for future proper Shamir implementation
+func shamirSplit(secret []byte, _, totalShares int) [][]byte {
 	// Simplified implementation - just XOR split for demo
 	// Real implementation would use polynomial interpolation
 	shares := make([][]byte, totalShares)

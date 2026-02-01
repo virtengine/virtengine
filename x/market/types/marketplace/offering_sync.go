@@ -273,7 +273,7 @@ func (o *Offering) ToWaldurCreate(cfg OfferingSyncConfig) WaldurOfferingCreate {
 	}
 
 	// Build pricing components
-	var components []WaldurPricingComponent
+	components := make([]WaldurPricingComponent, 0, 1+len(o.Pricing.UsageRates))
 	components = append(components, WaldurPricingComponent{
 		Type:         "usage",
 		Name:         "base",
@@ -349,7 +349,7 @@ func (o *Offering) ToWaldurUpdate(cfg OfferingSyncConfig) WaldurOfferingUpdate {
 	}
 
 	// Build pricing components
-	var components []WaldurPricingComponent
+	components := make([]WaldurPricingComponent, 0, 1+len(o.Pricing.UsageRates))
 	components = append(components, WaldurPricingComponent{
 		Type:         "usage",
 		Name:         "base",

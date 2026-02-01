@@ -23,6 +23,9 @@ import (
 	"strings"
 )
 
+// osWindows is the GOOS value for Windows operating system
+const osWindows = "windows"
+
 // =============================================================================
 // Error Definitions
 // =============================================================================
@@ -145,9 +148,11 @@ var (
 	nodeIDRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$`)
 
 	// ipv4Regex validates IPv4 addresses
+	//nolint:unused // Reserved for IP validation
 	ipv4Regex = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
 
 	// ipv6Regex validates IPv6 addresses (simplified)
+	//nolint:unused // Reserved for IP validation
 	ipv6Regex = regexp.MustCompile(`^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$`)
 )
 
@@ -191,7 +196,7 @@ func ValidateExecutable(category, path string) error {
 		trustedClean := filepath.Clean(trusted)
 
 		// Case-insensitive comparison on Windows
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == osWindows {
 			if strings.EqualFold(cleanPath, trustedClean) {
 				return nil
 			}
@@ -235,7 +240,7 @@ func ResolveAndValidateExecutable(category, name string) (string, error) {
 		baseName := filepath.Base(trustedClean)
 
 		// Match by base name
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == osWindows {
 			// Windows: case-insensitive, handle .exe extension
 			nameWithExt := name
 			if !strings.HasSuffix(strings.ToLower(name), ".exe") {
@@ -247,12 +252,10 @@ func ResolveAndValidateExecutable(category, name string) (string, error) {
 					return trustedClean, nil
 				}
 			}
-		} else {
-			if baseName == name {
-				// Verify the file exists
-				if _, err := os.Stat(trustedClean); err == nil {
-					return trustedClean, nil
-				}
+		} else if baseName == name {
+			// Verify the file exists
+			if _, err := os.Stat(trustedClean); err == nil {
+				return trustedClean, nil
 			}
 		}
 	}
@@ -625,7 +628,7 @@ func PingArgs(target string, count int) ([]string, error) {
 		count = 1 // Safe default
 	}
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		return []string{"-n", fmt.Sprintf("%d", count), target}, nil
 	}
 	return []string{"-c", fmt.Sprintf("%d", count), "-W", "1", target}, nil

@@ -217,6 +217,7 @@ func (p *CaptureOriginProof) ComputeProofHash() []byte {
 
 	// Session and frame
 	h.Write([]byte(p.CameraSessionID))
+	//nolint:gosec // G115: FrameNumber is positive int
 	binary.BigEndian.PutUint64(tb, uint64(p.FrameNumber))
 	h.Write(tb)
 

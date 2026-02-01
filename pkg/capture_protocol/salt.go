@@ -265,11 +265,7 @@ func isWeakSalt(salt []byte) bool {
 			break
 		}
 	}
-	if allSame {
-		return true
-	}
-
-	return false
+	return allSame
 }
 
 // saltCache is a thread-safe cache for tracking used salts

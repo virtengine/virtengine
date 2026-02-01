@@ -13,6 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	testACSURL        = "https://example.com/acs"
+	testWalletAddress = "ve1wallet123"
+)
+
 // ============================================================================
 // Config Tests
 // ============================================================================
@@ -47,7 +52,7 @@ func TestConfigValidate(t *testing.T) {
 	}{
 		{
 			name:    "valid default config with ACS URL",
-			modify:  func(c *Config) { c.AssertionConsumerServiceURL = "https://example.com/acs" },
+			modify:  func(c *Config) { c.AssertionConsumerServiceURL = testACSURL },
 			wantErr: false,
 		},
 		{
@@ -72,27 +77,27 @@ func TestConfigValidate(t *testing.T) {
 		},
 		{
 			name:    "refresh interval too short",
-			modify:  func(c *Config) { c.MetadataRefreshInterval = 1 * time.Minute; c.AssertionConsumerServiceURL = "https://example.com/acs" },
+			modify:  func(c *Config) { c.MetadataRefreshInterval = 1 * time.Minute; c.AssertionConsumerServiceURL = testACSURL },
 			wantErr: true,
 		},
 		{
 			name:    "session duration too short",
-			modify:  func(c *Config) { c.SessionDuration = 30 * time.Second; c.AssertionConsumerServiceURL = "https://example.com/acs" },
+			modify:  func(c *Config) { c.SessionDuration = 30 * time.Second; c.AssertionConsumerServiceURL = testACSURL },
 			wantErr: true,
 		},
 		{
 			name:    "session duration too long",
-			modify:  func(c *Config) { c.SessionDuration = 48 * time.Hour; c.AssertionConsumerServiceURL = "https://example.com/acs" },
+			modify:  func(c *Config) { c.SessionDuration = 48 * time.Hour; c.AssertionConsumerServiceURL = testACSURL },
 			wantErr: true,
 		},
 		{
 			name:    "invalid preferred binding",
-			modify:  func(c *Config) { c.PreferredBinding = "invalid"; c.AssertionConsumerServiceURL = "https://example.com/acs" },
+			modify:  func(c *Config) { c.PreferredBinding = "invalid"; c.AssertionConsumerServiceURL = testACSURL },
 			wantErr: true,
 		},
 		{
 			name:    "invalid name ID format",
-			modify:  func(c *Config) { c.NameIDFormat = "invalid"; c.AssertionConsumerServiceURL = "https://example.com/acs" },
+			modify:  func(c *Config) { c.NameIDFormat = "invalid"; c.AssertionConsumerServiceURL = testACSURL },
 			wantErr: true,
 		},
 	}
@@ -540,11 +545,11 @@ func TestSessionManagerCreate(t *testing.T) {
 		},
 	}
 
-	session, err := manager.Create(ctx, assertion, "ve1wallet123")
+	session, err := manager.Create(ctx, assertion, testWalletAddress)
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, session.ID)
-	assert.Equal(t, "ve1wallet123", session.WalletAddress)
+	assert.Equal(t, testWalletAddress, session.WalletAddress)
 	assert.Equal(t, "urn:mace:incommon:mit.edu", session.InstitutionID)
 	assert.Equal(t, SessionStatusActive, session.Status)
 }
@@ -560,7 +565,7 @@ func TestSessionManagerGet(t *testing.T) {
 		AuthnInstant:   time.Now(),
 	}
 
-	created, err := manager.Create(ctx, assertion, "ve1wallet123")
+	created, err := manager.Create(ctx, assertion, testWalletAddress)
 	require.NoError(t, err)
 
 	// Get existing session
@@ -585,7 +590,7 @@ func TestSessionManagerRevoke(t *testing.T) {
 		AuthnInstant:   time.Now(),
 	}
 
-	session, err := manager.Create(ctx, assertion, "ve1wallet123")
+	session, err := manager.Create(ctx, assertion, testWalletAddress)
 	require.NoError(t, err)
 
 	// Revoke session
@@ -602,7 +607,7 @@ func TestSessionManagerList(t *testing.T) {
 	manager := newSessionManager(cfg)
 
 	ctx := context.Background()
-	walletAddress := "ve1wallet123"
+	walletAddress := testWalletAddress
 
 	// Create multiple sessions
 	for i := 0; i < 3; i++ {
@@ -626,7 +631,7 @@ func TestSessionManagerMaxSessions(t *testing.T) {
 	manager := newSessionManager(cfg)
 
 	ctx := context.Background()
-	walletAddress := "ve1wallet123"
+	walletAddress := testWalletAddress
 
 	// Create 3 sessions (max is 2)
 	for i := 0; i < 3; i++ {
@@ -656,7 +661,7 @@ func TestSessionManagerTokenValidation(t *testing.T) {
 		AuthnInstant:   time.Now(),
 	}
 
-	session, err := manager.Create(ctx, assertion, "ve1wallet123")
+	session, err := manager.Create(ctx, assertion, testWalletAddress)
 	require.NoError(t, err)
 
 	// Generate token
@@ -709,7 +714,7 @@ func TestSessionManagerCleanup(t *testing.T) {
 		AuthnInstant:   time.Now(),
 	}
 
-	_, err := manager.Create(ctx, assertion, "ve1wallet123")
+	_, err := manager.Create(ctx, assertion, testWalletAddress)
 	require.NoError(t, err)
 
 	// Wait for expiry
@@ -727,7 +732,7 @@ func TestSessionManagerCleanup(t *testing.T) {
 
 func TestSAMLProviderGetEntityID(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.AssertionConsumerServiceURL = "https://example.com/acs"
+	cfg.AssertionConsumerServiceURL = testACSURL
 	provider := newSAMLProvider(cfg)
 
 	assert.Equal(t, cfg.SPEntityID, provider.GetEntityID())
@@ -735,7 +740,7 @@ func TestSAMLProviderGetEntityID(t *testing.T) {
 
 func TestSAMLProviderGetMetadata(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.AssertionConsumerServiceURL = "https://example.com/acs"
+	cfg.AssertionConsumerServiceURL = testACSURL
 	provider := newSAMLProvider(cfg)
 
 	metadata, err := provider.GetMetadata()
@@ -749,7 +754,7 @@ func TestSAMLProviderGetMetadata(t *testing.T) {
 
 func TestSAMLProviderCreateAuthnRequest(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.AssertionConsumerServiceURL = "https://example.com/acs"
+	cfg.AssertionConsumerServiceURL = testACSURL
 	provider := newSAMLProvider(cfg)
 
 	ctx := context.Background()
@@ -788,7 +793,7 @@ func TestSAMLProviderCreateAuthnRequest(t *testing.T) {
 
 func TestSAMLProviderCreateAuthnRequestWithMFA(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.AssertionConsumerServiceURL = "https://example.com/acs"
+	cfg.AssertionConsumerServiceURL = testACSURL
 	cfg.RequireMFA = true
 	provider := newSAMLProvider(cfg)
 
@@ -866,11 +871,11 @@ func TestDiscoveryServiceRecordUsage(t *testing.T) {
 	ctx := context.Background()
 
 	// Record usage
-	err := discovery.RecordUsage(ctx, "urn:mace:incommon:mit.edu", "ve1wallet123")
+	err := discovery.RecordUsage(ctx, "urn:mace:incommon:mit.edu", testWalletAddress)
 	require.NoError(t, err)
 
 	// Check recent
-	recent, err := discovery.GetRecent(ctx, "ve1wallet123", 10)
+	recent, err := discovery.GetRecent(ctx, testWalletAddress, 10)
 	require.NoError(t, err)
 	assert.Len(t, recent, 1)
 	assert.Equal(t, "MIT", recent[0].DisplayName)
@@ -887,7 +892,7 @@ func TestVEIDIntegratorCreateScope(t *testing.T) {
 	ctx := context.Background()
 	session := &Session{
 		ID:              "session123",
-		WalletAddress:   "ve1wallet123",
+		WalletAddress:   testWalletAddress,
 		InstitutionID:   "urn:mace:incommon:mit.edu",
 		InstitutionName: "MIT",
 		Status:          SessionStatusActive,
@@ -910,7 +915,7 @@ func TestVEIDIntegratorCreateScope(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, scope.ID)
-	assert.Equal(t, "ve1wallet123", scope.WalletAddress)
+	assert.Equal(t, testWalletAddress, scope.WalletAddress)
 	assert.Equal(t, "urn:mace:incommon:mit.edu", scope.InstitutionID)
 	assert.True(t, scope.IsMFA)
 	assert.True(t, scope.ScoreContribution > 0)
@@ -924,7 +929,7 @@ func TestVEIDIntegratorRevokeScope(t *testing.T) {
 	ctx := context.Background()
 	session := &Session{
 		ID:            "session123",
-		WalletAddress: "ve1wallet123",
+		WalletAddress: testWalletAddress,
 		InstitutionID: "urn:mace:incommon:mit.edu",
 		Status:        SessionStatusActive,
 		ExpiresAt:     time.Now().Add(8 * time.Hour),
@@ -946,7 +951,7 @@ func TestValidateForVEID(t *testing.T) {
 	// Valid session
 	session := &Session{
 		Status:        SessionStatusActive,
-		WalletAddress: "ve1wallet123",
+		WalletAddress: testWalletAddress,
 		Attributes: UserAttributes{
 			EduPerson: EduPersonAttributes{
 				PrincipalName: "user@example.edu",
@@ -968,7 +973,7 @@ func TestValidateForVEID(t *testing.T) {
 	assert.Error(t, ValidateForVEID(session))
 
 	// Missing principal name
-	session.WalletAddress = "ve1wallet123"
+	session.WalletAddress = testWalletAddress
 	session.Attributes.EduPerson.PrincipalName = ""
 	assert.Error(t, ValidateForVEID(session))
 }
@@ -976,7 +981,7 @@ func TestValidateForVEID(t *testing.T) {
 func TestConvertToScopeData(t *testing.T) {
 	scope := &VEIDScope{
 		ID:                "scope123",
-		WalletAddress:     "ve1wallet123",
+		WalletAddress:     testWalletAddress,
 		InstitutionID:     "urn:mace:incommon:mit.edu",
 		Federation:        "InCommon",
 		PrincipalNameHash: "hash123",

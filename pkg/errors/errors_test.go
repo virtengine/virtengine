@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+const (
+	fieldUsername = "username"
+)
+
 func TestCodedError(t *testing.T) {
 	t.Run("basic error", func(t *testing.T) {
 		err := NewCodedError("test", 100, "test error", CategoryValidation)
@@ -17,10 +21,10 @@ func TestCodedError(t *testing.T) {
 
 	t.Run("with context", func(t *testing.T) {
 		err := NewCodedError("test", 100, "test error", CategoryValidation)
-		err.WithContext("field", "username")
+		err.WithContext("field", fieldUsername)
 		err.WithContext("value", "invalid")
 
-		if err.Context["field"] != "username" {
+		if err.Context["field"] != fieldUsername {
 			t.Error("context not set")
 		}
 	})
@@ -41,13 +45,13 @@ func TestCodedError(t *testing.T) {
 }
 
 func TestValidationError(t *testing.T) {
-	err := NewValidationError("test", 100, "username", "must be alphanumeric")
+	err := NewValidationError("test", 100, fieldUsername, "must be alphanumeric")
 
-	if !strings.Contains(err.Error(), "username") {
+	if !strings.Contains(err.Error(), fieldUsername) {
 		t.Error("error should contain field name")
 	}
 
-	if err.Field != "username" {
+	if err.Field != fieldUsername {
 		t.Error("field not set")
 	}
 
@@ -287,9 +291,9 @@ func TestCause(t *testing.T) {
 
 func TestWithField(t *testing.T) {
 	err := NewCodedError("test", 100, "message", CategoryValidation)
-	err = WithField(err, "username", "testuser").(*CodedError)
+	err = WithField(err, fieldUsername, "testuser").(*CodedError)
 
-	if err.Context["field"] != "username" {
+	if err.Context["field"] != fieldUsername {
 		t.Error("field not added to context")
 	}
 

@@ -112,7 +112,9 @@ func (g *DefaultResponseGenerator) Generate(ctx context.Context, intent Intent, 
 }
 
 // generateBalanceResponse generates a balance query response
-func (g *DefaultResponseGenerator) generateBalanceResponse(result *QueryResult, entities map[string]string) (string, error) {
+//
+//nolint:unparam // entities kept for future address-specific response formatting
+func (g *DefaultResponseGenerator) generateBalanceResponse(result *QueryResult, _ map[string]string) (string, error) {
 	if result == nil || !result.Success {
 		return "I couldn't retrieve your balance at this time. Please try again later or check if your address is connected.", nil
 	}
@@ -196,7 +198,9 @@ Just ask me anything about VirtEngine!`, nil
 }
 
 // generateOrderResponse generates an order status response
-func (g *DefaultResponseGenerator) generateOrderResponse(result *QueryResult, entities map[string]string) (string, error) {
+//
+//nolint:unparam // entities kept for future order ID formatting
+func (g *DefaultResponseGenerator) generateOrderResponse(result *QueryResult, _ map[string]string) (string, error) {
 	if result == nil || !result.Success {
 		return "I couldn't retrieve your order information. Please check if you have the correct order ID.", nil
 	}
@@ -282,7 +286,9 @@ Need help with a specific deployment configuration? Just ask!`, nil
 }
 
 // generateIdentityResponse generates an identity/VEID response
-func (g *DefaultResponseGenerator) generateIdentityResponse(result *QueryResult, entities map[string]string, chatCtx *ChatContext) (string, error) {
+//
+//nolint:unparam // result kept for future identity data extraction
+func (g *DefaultResponseGenerator) generateIdentityResponse(_ *QueryResult, _ map[string]string, chatCtx *ChatContext) (string, error) {
 	if chatCtx != nil && chatCtx.UserProfile != nil {
 		profile := chatCtx.UserProfile
 		if profile.IsVerified {

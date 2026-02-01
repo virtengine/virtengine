@@ -77,7 +77,7 @@ func (k Keeper) SetDecayPolicy(ctx sdk.Context, policy types.DecayPolicy) error 
 	store := ctx.KVStore(k.skey)
 
 	// Convert step thresholds
-	var steps []stepThresholdStore
+	steps := make([]stepThresholdStore, 0, len(policy.StepThresholds))
 	for _, s := range policy.StepThresholds {
 		steps = append(steps, stepThresholdStore{
 			DaysSinceActivity: s.DaysSinceActivity,
@@ -607,7 +607,7 @@ func decayPolicyFromStore(ps decayPolicyStore) (types.DecayPolicy, error) {
 		return types.DecayPolicy{}, fmt.Errorf("invalid last_activity_bonus: %w", err)
 	}
 
-	var steps []types.StepThreshold
+	steps := make([]types.StepThreshold, 0, len(ps.StepThresholds))
 	for _, s := range ps.StepThresholds {
 		multiplier, err := math.LegacyNewDecFromStr(s.ScoreMultiplier)
 		if err != nil {

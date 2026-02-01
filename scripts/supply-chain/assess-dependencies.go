@@ -34,6 +34,11 @@ import (
 	"time"
 )
 
+const (
+	severityHigh     = "high"
+	severityCritical = "critical"
+)
+
 // RiskScore represents the overall risk assessment for a dependency
 type RiskScore struct {
 	Package           string            `json:"package"`
@@ -131,8 +136,10 @@ var (
 	reportFlag    = flag.Bool("report", false, "Generate full assessment report")
 	thresholdFlag = flag.Float64("threshold", 6.0, "Minimum acceptable risk score")
 	jsonFlag      = flag.Bool("json", false, "Output as JSON")
-	newOnlyFlag   = flag.Bool("new-only", false, "Only assess newly added dependencies")
-	verboseFlag   = flag.Bool("verbose", false, "Enable verbose output")
+	//nolint:unused // Reserved for future dependency assessment features
+	newOnlyFlag = flag.Bool("new-only", false, "Only assess newly added dependencies")
+	//nolint:unused // Reserved for future verbose output
+	verboseFlag = flag.Bool("verbose", false, "Enable verbose output")
 )
 
 func main() {
@@ -264,7 +271,9 @@ func assessPackage(pkg, version string) RiskScore {
 }
 
 // calculateScoresFromKnown calculates scores for known packages
-func calculateScoresFromKnown(pkg string, known *KnownPackage) ComponentScores {
+//
+//nolint:unparam // pkg kept for future package-specific scoring adjustments
+func calculateScoresFromKnown(_ string, known *KnownPackage) ComponentScores {
 	scores := ComponentScores{}
 
 	switch known.TrustLevel {
@@ -414,7 +423,7 @@ func generateReport() AssessmentReport {
 			report.FailingPackages++
 		}
 
-		if score.RiskLevel == "high" || score.RiskLevel == "critical" {
+		if score.RiskLevel == severityHigh || score.RiskLevel == severityCritical {
 			report.HighRiskCount++
 		}
 
@@ -453,7 +462,11 @@ func generateReport() AssessmentReport {
 // outputScore prints a single score
 func outputScore(score RiskScore) {
 	if *jsonFlag {
-		data, _ := json.MarshalIndent(score, "", "  ")
+		data, err := json.MarshalIndent(score, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error marshaling score: %v\n", err)
+			return
+		}
 		fmt.Println(string(data))
 		return
 	}
@@ -499,7 +512,11 @@ func outputScore(score RiskScore) {
 // outputReport prints the full report
 func outputReport(report AssessmentReport) {
 	if *jsonFlag {
-		data, _ := json.MarshalIndent(report, "", "  ")
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error marshaling report: %v\n", err)
+			return
+		}
 		fmt.Println(string(data))
 		return
 	}
@@ -536,7 +553,7 @@ func outputReport(report AssessmentReport) {
 	if report.HighRiskCount > 0 {
 		fmt.Println("High Risk Packages (require review):")
 		for _, pkg := range report.Packages {
-			if pkg.RiskLevel == "high" || pkg.RiskLevel == "critical" {
+			if pkg.RiskLevel == severityHigh || pkg.RiskLevel == severityCritical {
 				fmt.Printf("  [%s] %s (score: %.1f)\n", strings.ToUpper(pkg.RiskLevel), pkg.Package, pkg.OverallScore)
 			}
 		}

@@ -19,9 +19,10 @@ type Bridge struct {
 	logger log.Logger
 
 	// Adapters
-	jiraClient   jira.IClient
-	jiraBridge   jira.ITicketBridge
-	waldurClient *waldur.Client
+	jiraClient     jira.IClient
+	jiraBridge     jira.ITicketBridge
+	waldurClient   *waldur.Client
+	waldurSupport  *waldur.SupportClient
 
 	// Internal components
 	syncManager    *SyncManager
@@ -169,6 +170,7 @@ func NewBridge(config *Config, logger log.Logger) (*Bridge, error) {
 			return nil, fmt.Errorf("failed to create waldur client: %w", err)
 		}
 		bridge.waldurClient = waldurClient
+		bridge.waldurSupport = waldur.NewSupportClient(waldurClient)
 	}
 
 	// Initialize internal components
@@ -614,11 +616,62 @@ func (b *Bridge) syncTicketCreated(ctx context.Context, event *SyncEvent) error 
 		})
 	}
 
-	// Create in Waldur (placeholder - would need Waldur support ticket API)
-	if b.waldurClient != nil {
-		// Waldur doesn't have a direct support ticket API in the generated client
-		// This would need custom implementation or use of Waldur's issue tracking
-		b.logger.Debug("waldur ticket creation not yet implemented")
+	// Create in Waldur support system
+	if b.waldurSupport != nil {
+		category := ""
+		priority := ""
+		if c, ok := event.Payload["category"].(string); ok {
+			category = c
+		}
+		if p, ok := event.Payload["priority"].(string); ok {
+			priority = p
+		}
+
+		req := waldur.CreateIssueRequest{
+			Type:        waldur.MapVirtEngineCategoryToWaldurType(category),
+			Priority:    waldur.MapVirtEnginePriorityToWaldur(priority),
+			Summary:     event.Payload["subject"].(string),
+			Description: event.Payload["description"].(string),
+			BackendID:   event.TicketID, // Store VirtEngine ticket ID
+		}
+
+		// Set customer/project if available in config
+		if b.config.WaldurConfig.OrganizationUUID != "" {
+			req.CustomerUUID = b.config.WaldurConfig.OrganizationUUID
+		}
+		if b.config.WaldurConfig.ProjectUUID != "" {
+			req.ProjectUUID = b.config.WaldurConfig.ProjectUUID
+		}
+
+		issue, err := b.waldurSupport.CreateIssue(ctx, req)
+		if err != nil {
+			b.logger.Error("waldur issue creation failed", "error", err, "ticket_id", event.TicketID)
+			// Don't fail the whole sync if Waldur fails - log and continue
+			b.auditLogger.LogEvent(ctx, AuditEventSyncFailed, map[string]interface{}{
+				"ticket_id": event.TicketID,
+				"service":   "waldur",
+				"error":     err.Error(),
+			})
+		} else {
+			// Build external URL for the Waldur issue
+			externalURL := fmt.Sprintf("%s/support/%s/", b.config.WaldurConfig.BaseURL, issue.UUID)
+
+			// Update sync record
+			b.syncManager.UpdateExternalRef(ctx, event.TicketID, ExternalTicketRef{
+				Type:        ServiceDeskWaldur,
+				ExternalID:  issue.UUID,
+				ExternalURL: externalURL,
+				SyncStatus:  SyncStatusSynced,
+				CreatedAt:   time.Now(),
+			})
+
+			b.auditLogger.LogEvent(ctx, AuditEventSyncSuccess, map[string]interface{}{
+				"ticket_id":   event.TicketID,
+				"external_id": issue.UUID,
+				"issue_key":   issue.Key,
+				"service":     "waldur",
+			})
+		}
 	}
 
 	return nil
@@ -648,6 +701,35 @@ func (b *Bridge) syncTicketUpdated(ctx context.Context, event *SyncEvent) error 
 			"ticket_id":   event.TicketID,
 			"external_id": jiraRef.ExternalID,
 			"service":     "jira",
+			"changes":     event.Payload,
+		})
+	}
+
+	// Update in Waldur
+	if waldurRef := record.GetExternalRef(ServiceDeskWaldur); waldurRef != nil && b.waldurSupport != nil {
+		// Sync status changes
+		if status, ok := event.Payload["status"].(string); ok {
+			waldurState := waldur.MapVirtEngineStatusToWaldur(status)
+			if err := b.waldurSupport.SetIssueState(ctx, waldurRef.ExternalID, waldurState, ""); err != nil {
+				b.logger.Error("waldur status sync failed", "error", err, "ticket_id", event.TicketID)
+				// Don't fail the whole sync
+			}
+		}
+
+		// Sync priority changes
+		if priority, ok := event.Payload["priority"].(string); ok {
+			req := waldur.UpdateIssueRequest{
+				Priority: waldur.MapVirtEnginePriorityToWaldur(priority),
+			}
+			if _, err := b.waldurSupport.UpdateIssue(ctx, waldurRef.ExternalID, req); err != nil {
+				b.logger.Error("waldur priority sync failed", "error", err, "ticket_id", event.TicketID)
+			}
+		}
+
+		b.auditLogger.LogEvent(ctx, AuditEventSyncSuccess, map[string]interface{}{
+			"ticket_id":   event.TicketID,
+			"external_id": waldurRef.ExternalID,
+			"service":     "waldur",
 			"changes":     event.Payload,
 		})
 	}
@@ -687,6 +769,31 @@ func (b *Bridge) syncTicketClosed(ctx context.Context, event *SyncEvent) error {
 			"service":     "jira",
 			"action":      "close",
 		})
+	}
+
+	// Close in Waldur
+	if waldurRef := record.GetExternalRef(ServiceDeskWaldur); waldurRef != nil && b.waldurSupport != nil {
+		resolution := ""
+		if r, ok := event.Payload["resolution"].(string); ok {
+			resolution = r
+		}
+		if err := b.waldurSupport.SetIssueState(ctx, waldurRef.ExternalID, waldur.StateClosed, resolution); err != nil {
+			b.logger.Error("waldur close failed", "error", err, "ticket_id", event.TicketID)
+			// Don't fail the whole sync
+		} else {
+			// Update sync record
+			now := time.Now()
+			waldurRef.SyncStatus = SyncStatusSynced
+			waldurRef.LastSyncAt = &now
+			b.syncManager.UpdateExternalRef(ctx, event.TicketID, *waldurRef)
+
+			b.auditLogger.LogEvent(ctx, AuditEventSyncSuccess, map[string]interface{}{
+				"ticket_id":   event.TicketID,
+				"external_id": waldurRef.ExternalID,
+				"service":     "waldur",
+				"action":      "close",
+			})
+		}
 	}
 
 	return nil

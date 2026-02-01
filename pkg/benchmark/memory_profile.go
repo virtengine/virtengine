@@ -279,6 +279,7 @@ func (p *MemoryProfiler) GetStats() *MemoryStats {
 	stats.TotalGCPauses = last.PauseTotalNs - first.PauseTotalNs
 	stats.GCCycles = last.NumGC - first.NumGC
 	if stats.GCCycles > 0 {
+		//nolint:gosec // G115: GCCycles is positive uint32
 		stats.AvgGCPause = time.Duration(stats.TotalGCPauses / uint64(stats.GCCycles))
 	}
 	stats.Duration = last.Timestamp.Sub(first.Timestamp)
@@ -300,6 +301,7 @@ func (p *MemoryProfiler) ExportJSON(filename string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	//nolint:gosec // G306: profile export file, 0644 permissions acceptable
 	if err := os.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -339,6 +341,7 @@ func (p *MemoryProfiler) DetectLeaks(threshold float64) *MemoryLeak {
 		StartHeap:       first.HeapAlloc,
 		EndHeap:         last.HeapAlloc,
 		Duration:        duration,
+		//nolint:gosec // G115: HeapObjects fits in int64
 		ObjectGrowth:    int64(last.HeapObjects) - int64(first.HeapObjects),
 		GoroutineGrowth: last.Goroutines - first.Goroutines,
 	}
@@ -448,8 +451,10 @@ func (p *MemoryProfiler) CheckBudget(budget MemoryBudget) []BudgetViolation {
 	// Check goroutines
 	if latest.Goroutines > budget.MaxGoroutines {
 		violations = append(violations, BudgetViolation{
-			Type:     "goroutines",
-			Current:  uint64(latest.Goroutines),
+			Type: "goroutines",
+			//nolint:gosec // G115: Goroutine count is positive int
+			Current: uint64(latest.Goroutines),
+			//nolint:gosec // G115: MaxGoroutines is positive int
 			Limit:    uint64(budget.MaxGoroutines),
 			Exceeded: true,
 		})

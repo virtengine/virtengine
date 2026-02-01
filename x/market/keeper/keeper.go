@@ -222,7 +222,9 @@ func (k Keeper) CreateOrder(ctx sdk.Context, gid dtypes.GroupID, spec dtypesBeta
 // getVEIDGatingRequirementsForOrder returns the VEID gating requirements for order creation.
 // This reads from market params if available, otherwise returns defaults.
 // VE-301: Marketplace gating
-func (k Keeper) getVEIDGatingRequirementsForOrder(ctx sdk.Context) VEIDGatingRequirements {
+//
+//nolint:unparam // ctx kept for future param-based gating configuration
+func (k Keeper) getVEIDGatingRequirementsForOrder(_ sdk.Context) VEIDGatingRequirements {
 	// For now, return defaults. In a future iteration, this could read from
 	// market params to allow governance to set minimum requirements.
 	// params := k.GetParams(ctx)

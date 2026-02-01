@@ -81,9 +81,11 @@ type TOTPResponse struct {
 
 // verifyTOTPCode verifies a TOTP code against the stored secret hash
 // The actual secret is stored off-chain; we verify using a hash-based proof
+//
+//nolint:unparam // enrollment kept for future secret hash verification
 func (k Keeper) verifyTOTPCode(
 	ctx sdk.Context,
-	enrollment *types.FactorEnrollment,
+	_ *types.FactorEnrollment,
 	response *types.ChallengeResponse,
 	challenge *types.Challenge,
 ) (bool, error) {
@@ -130,7 +132,7 @@ func (k Keeper) verifyTOTPCode(
 	}
 
 	// For hash-based verification (commitment scheme)
-	if challenge.ChallengeData != nil && len(challenge.ChallengeData) > 0 {
+	if len(challenge.ChallengeData) > 0 {
 		// Challenge data contains hash(secret || counter) for valid windows
 		// Verify the provided code matches one of the expected hashes
 		verified := k.verifyTOTPWithCommitment(totpResp.Code, challenge.ChallengeData, now, config)
@@ -141,7 +143,9 @@ func (k Keeper) verifyTOTPCode(
 }
 
 // verifyTOTPWithCommitment verifies TOTP using a hash commitment scheme
-func (k Keeper) verifyTOTPWithCommitment(code string, commitment []byte, now time.Time, config TOTPConfig) bool {
+//
+//nolint:unparam // now kept for future time-window based validation
+func (k Keeper) verifyTOTPWithCommitment(code string, commitment []byte, _ time.Time, _ TOTPConfig) bool {
 	// Parse the commitment which contains expected code hashes
 	// Format: [hash1][hash2][hash3] for current, previous, and next windows
 	if len(commitment) < 32 {
@@ -198,7 +202,7 @@ func generateTOTPCode(secret []byte, counter uint64, digits uint, algorithm stri
 
 	// Format to specified digits
 	mod := uint32(math.Pow10(int(digits)))
-	code = code % mod
+	code %= mod
 
 	return fmt.Sprintf("%0*d", digits, code)
 }

@@ -511,7 +511,7 @@ func (r *jurisdictionRegistry) List(ctx context.Context) ([]Jurisdiction, error)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var results []Jurisdiction
+	results := make([]Jurisdiction, 0, len(r.jurisdictions))
 	for _, j := range r.jurisdictions {
 		results = append(results, *j)
 	}

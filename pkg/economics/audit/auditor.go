@@ -9,6 +9,8 @@ import (
 	"github.com/virtengine/virtengine/pkg/economics/simulation"
 )
 
+const severityHigh = "high"
+
 // EconomicAuditor performs comprehensive economic security audits.
 type EconomicAuditor struct {
 	params             economics.TokenomicsParams
@@ -153,7 +155,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.InflationAnalysis.CurrentRateBPS > 2000 {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "high",
+			Severity:    severityHigh,
 			Category:    "inflation",
 			Title:       "Excessive Inflation Rate",
 			Description: "Current inflation rate exceeds 20%, risking token value dilution.",
@@ -196,7 +198,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.StakingAnalysis.ConcentrationRisk == "high" {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "high",
+			Severity:    severityHigh,
 			Category:    "staking",
 			Title:       "High Stake Concentration",
 			Description: "Stake is highly concentrated among few validators.",
@@ -211,7 +213,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.FeeMarketAnalysis.SpamResistance < 50 {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "high",
+			Severity:    severityHigh,
 			Category:    "fee_market",
 			Title:       "Low Spam Resistance",
 			Description: "Network is vulnerable to spam attacks.",
@@ -240,7 +242,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.DistributionMetrics.GiniCoefficient > 0.8 {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "high",
+			Severity:    severityHigh,
 			Category:    "distribution",
 			Title:       "Extreme Wealth Inequality",
 			Description: "Gini coefficient indicates severe wealth concentration.",
@@ -265,10 +267,10 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 				Status:      "open",
 			})
 			vulnID++
-		} else if attack.RiskLevel == "high" {
+		} else if attack.RiskLevel == severityHigh {
 			vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 				ID:          formatVulnID(vulnID),
-				Severity:    "high",
+				Severity:    severityHigh,
 				Category:    "attack",
 				Title:       attack.AttackType + " Risk",
 				Description: "Attack cost: $" + formatFloat(attack.CostEstimateUSD),
@@ -480,7 +482,7 @@ func (a *EconomicAuditor) generateSummary(audit economics.EconomicSecurityAudit)
 	for _, v := range audit.Vulnerabilities {
 		if v.Severity == "critical" {
 			criticalVulns++
-		} else if v.Severity == "high" {
+		} else if v.Severity == severityHigh {
 			highVulns++
 		}
 	}

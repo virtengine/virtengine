@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+const (
+	resultPass = "pass"
+	resultFail = "fail"
+	resultWarn = "warn"
+)
+
 // BaselineMetrics contains all baseline performance metrics
 type BaselineMetrics struct {
 	Version     string    `json:"version"`
@@ -223,11 +229,11 @@ func (c *BenchmarkComparator) Compare(result BenchmarkResult, baselineNs int64) 
 		diffPercent = float64(diffAbs) / float64(baselineNs) * 100
 	}
 
-	status := "pass"
+	status := resultPass
 	if diffPercent > c.failThreshold {
-		status = "fail"
+		status = resultFail
 	} else if diffPercent > c.warnThreshold {
-		status = "warn"
+		status = resultWarn
 	}
 
 	return &ComparisonResult{
@@ -418,11 +424,11 @@ func (c *BenchmarkComparator) GenerateReport(results []BenchmarkResult) *Benchma
 			report.Comparisons = append(report.Comparisons, *comparison)
 
 			switch comparison.Status {
-			case "pass":
+			case resultPass:
 				summary.Passed++
-			case "warn":
+			case resultWarn:
 				summary.Warnings++
-			case "fail":
+			case resultFail:
 				summary.Failed++
 			}
 		}
@@ -430,11 +436,11 @@ func (c *BenchmarkComparator) GenerateReport(results []BenchmarkResult) *Benchma
 
 	// Determine overall status
 	if summary.Failed > 0 {
-		summary.OverallStatus = "fail"
+		summary.OverallStatus = resultFail
 	} else if summary.Warnings > 0 {
-		summary.OverallStatus = "warn"
+		summary.OverallStatus = resultWarn
 	} else {
-		summary.OverallStatus = "pass"
+		summary.OverallStatus = resultPass
 	}
 
 	report.Summary = summary

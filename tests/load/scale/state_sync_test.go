@@ -161,8 +161,8 @@ func (s *MockStateStore) GetRoot() [32]byte {
 func (s *MockStateStore) updateRoot() {
 	// Simple root computation
 	h := sha256.New()
-	binary.Write(h, binary.BigEndian, s.height)
-	binary.Write(h, binary.BigEndian, int64(len(s.entries)))
+	_ = binary.Write(h, binary.BigEndian, s.height)
+	_ = binary.Write(h, binary.BigEndian, int64(len(s.entries)))
 	copy(s.stateRoot[:], h.Sum(nil))
 }
 
@@ -430,7 +430,7 @@ func BenchmarkSnapshotApply(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		targetStore := NewMockStateStore()
-		manager.ApplySnapshot(snapshot, targetStore)
+		_ = manager.ApplySnapshot(snapshot, targetStore)
 	}
 }
 
@@ -732,7 +732,7 @@ func TestStateRecoveryAfterCrash(t *testing.T) {
 	recoveredStore := NewMockStateStore()
 	
 	start := time.Now()
-	manager.ApplySnapshot(snapshot, recoveredStore)
+	_ = manager.ApplySnapshot(snapshot, recoveredStore)
 	recoveryTime := time.Since(start)
 	
 	t.Logf("Recovery time: %v", recoveryTime)

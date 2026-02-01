@@ -164,6 +164,8 @@ func (sm *SnapshotManager) RegisterSnapshot(info SnapshotInfo) error {
 }
 
 // cleanupOldSnapshots removes snapshots beyond the retention limit.
+//
+//nolint:unparam // result 0 (error) reserved for future cleanup failures
 func (sm *SnapshotManager) cleanupOldSnapshots() error {
 	keepRecent := int(sm.config.KeepRecent)
 	if keepRecent <= 0 {
@@ -274,13 +276,13 @@ func (sm *SnapshotManager) GetTotalSize() int64 {
 
 // StateSyncInfo contains information for state sync.
 type StateSyncInfo struct {
-	Enabled           bool           `json:"enabled"`
-	LatestSnapshot    *SnapshotInfo  `json:"latest_snapshot,omitempty"`
-	AvailableHeights  []uint64       `json:"available_heights"`
-	TrustHeight       int64          `json:"trust_height"`
-	TrustHash         string         `json:"trust_hash"`
-	SnapshotInterval  uint64         `json:"snapshot_interval"`
-	SnapshotKeepCount uint32         `json:"snapshot_keep_count"`
+	Enabled           bool          `json:"enabled"`
+	LatestSnapshot    *SnapshotInfo `json:"latest_snapshot,omitempty"`
+	AvailableHeights  []uint64      `json:"available_heights"`
+	TrustHeight       int64         `json:"trust_height"`
+	TrustHash         string        `json:"trust_hash"`
+	SnapshotInterval  uint64        `json:"snapshot_interval"`
+	SnapshotKeepCount uint32        `json:"snapshot_keep_count"`
 }
 
 // GetStateSyncInfo returns state sync compatibility information.

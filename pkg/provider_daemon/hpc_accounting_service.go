@@ -421,6 +421,8 @@ func (s *HPCAccountingService) createAccountingRecord(
 }
 
 // submitPendingRecords submits pending accounting records
+//
+//nolint:unparam // result 0 (error) reserved for future submission failures
 func (s *HPCAccountingService) submitPendingRecords(ctx context.Context) error {
 	s.mu.Lock()
 	if len(s.pendingRecords) == 0 {
@@ -550,7 +552,10 @@ func (s *HPCAccountingService) hashSnapshot(snapshot *hpctypes.HPCUsageSnapshot)
 		SnapshotTime:   snapshot.SnapshotTime.Unix(),
 	}
 
-	bytes, _ := json.Marshal(data)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
 	hash := sha256.Sum256(bytes)
 	return hash[:]
 }

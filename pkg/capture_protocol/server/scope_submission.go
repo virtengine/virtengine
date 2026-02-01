@@ -325,8 +325,10 @@ func (b *ScopeSubmissionBuilder) buildAuditMetadata(
 }
 
 // extractSignaturePackage extracts signature package for a payload
+//
+//nolint:unparam // flowResult kept for future extraction of client signatures
 func (b *ScopeSubmissionBuilder) extractSignaturePackage(
-	flowResult *mobile.CaptureFlowResult,
+	_ *mobile.CaptureFlowResult,
 	payload *mobile.EncryptedCapturePayload,
 ) mobile.CaptureSignaturePackage {
 	// Build signature package from payload

@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/query"
@@ -42,6 +44,12 @@ type InvoiceKeeper interface {
 	// GetInvoiceLedgerEntries retrieves ledger entries for an invoice
 	GetInvoiceLedgerEntries(ctx sdk.Context, invoiceID string) ([]*billing.InvoiceLedgerEntry, error)
 
+	// GetInvoiceLedgerChain retrieves and validates the complete ledger chain for an invoice
+	GetInvoiceLedgerChain(ctx sdk.Context, invoiceID string) (*billing.InvoiceLedgerChain, error)
+
+	// VerifyLedgerChain verifies the integrity of an invoice's ledger chain
+	VerifyLedgerChain(ctx sdk.Context, invoiceID string) error
+
 	// WithInvoices iterates over all invoices
 	WithInvoices(ctx sdk.Context, fn func(*billing.InvoiceLedgerRecord) bool)
 
@@ -56,6 +64,45 @@ type InvoiceKeeper interface {
 
 	// GetReconciliationReport retrieves a reconciliation report
 	GetReconciliationReport(ctx sdk.Context, reportID string) (*billing.ReconciliationReport, error)
+
+	// CreateInvoiceFromPayment creates an invoice from a payment that is being closed/settled
+	CreateInvoiceFromPayment(ctx sdk.Context, payment PaymentSummary) (*billing.InvoiceLedgerRecord, error)
+}
+
+// PaymentSummary contains summarized payment information for invoice generation
+type PaymentSummary struct {
+	// PaymentID is the payment identifier
+	PaymentID string `json:"payment_id"`
+
+	// EscrowID is the escrow account identifier
+	EscrowID string `json:"escrow_id"`
+
+	// OrderID is the marketplace order ID
+	OrderID string `json:"order_id"`
+
+	// LeaseID is the marketplace lease ID
+	LeaseID string `json:"lease_id"`
+
+	// Provider is the provider address
+	Provider string `json:"provider"`
+
+	// Customer is the customer address
+	Customer string `json:"customer"`
+
+	// Amount is the total payment amount
+	Amount sdk.Coins `json:"amount"`
+
+	// Rate is the payment rate per block
+	Rate sdk.DecCoin `json:"rate"`
+
+	// StartHeight is when the payment started
+	StartHeight int64 `json:"start_height"`
+
+	// EndHeight is when the payment ended
+	EndHeight int64 `json:"end_height"`
+
+	// Currency is the payment currency
+	Currency string `json:"currency"`
 }
 
 // invoiceKeeper implements InvoiceKeeper
@@ -108,14 +155,10 @@ func (ik *invoiceKeeper) CreateInvoice(
 	// Create indexes
 	ik.setInvoiceIndexes(store, record)
 
-	// Create initial ledger entry
-	entry := billing.NewInvoiceLedgerEntry(
+	// Create initial ledger entry (genesis entry with zero hash)
+	entry := billing.NewGenesisLedgerEntry(
 		fmt.Sprintf("%s-created", invoice.InvoiceID),
 		invoice.InvoiceID,
-		billing.LedgerEntryTypeCreated,
-		billing.InvoiceStatusDraft,
-		invoice.Status,
-		sdk.NewCoins(),
 		"invoice created",
 		"system",
 		"",
@@ -245,8 +288,9 @@ func (ik *invoiceKeeper) UpdateInvoiceStatus(
 	newStatusKey := billing.BuildInvoiceByStatusKey(newStatus, invoiceID)
 	store.Set(newStatusKey, []byte(invoiceID))
 
-	// Create ledger entry
+	// Create ledger entry with hash chain
 	transition, _ := billing.GetTransition(oldStatus, newStatus)
+	previousHash, sequenceNum := ik.getLastEntryHashAndSeq(store, invoiceID)
 	entry := billing.NewInvoiceLedgerEntry(
 		fmt.Sprintf("%s-status-%d", invoiceID, ctx.BlockHeight()),
 		invoiceID,
@@ -257,6 +301,8 @@ func (ik *invoiceKeeper) UpdateInvoiceStatus(
 		transition.Description,
 		initiator,
 		"",
+		previousHash,
+		sequenceNum+1,
 		ctx.BlockHeight(),
 		ctx.BlockTime(),
 	)
@@ -322,7 +368,8 @@ func (ik *invoiceKeeper) RecordPayment(
 	}
 	store.Set(key, bz)
 
-	// Create ledger entry
+	// Create ledger entry with hash chain
+	previousHash, sequenceNum := ik.getLastEntryHashAndSeq(store, invoiceID)
 	entry := billing.NewInvoiceLedgerEntry(
 		fmt.Sprintf("%s-payment-%d", invoiceID, ctx.BlockHeight()),
 		invoiceID,
@@ -333,6 +380,8 @@ func (ik *invoiceKeeper) RecordPayment(
 		fmt.Sprintf("payment recorded: %s", amount.String()),
 		initiator,
 		"",
+		previousHash,
+		sequenceNum+1,
 		ctx.BlockHeight(),
 		ctx.BlockTime(),
 	)
@@ -366,6 +415,46 @@ func (ik *invoiceKeeper) GetInvoiceLedgerEntries(ctx sdk.Context, invoiceID stri
 	}
 
 	return entries, nil
+}
+
+// GetInvoiceLedgerChain retrieves and validates the complete ledger chain for an invoice
+func (ik *invoiceKeeper) GetInvoiceLedgerChain(ctx sdk.Context, invoiceID string) (*billing.InvoiceLedgerChain, error) {
+	entries, err := ik.GetInvoiceLedgerEntries(ctx, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+
+	chain := billing.NewInvoiceLedgerChain(invoiceID)
+	
+	// Sort entries by sequence number
+	sortedEntries := make([]*billing.InvoiceLedgerEntry, len(entries))
+	for _, e := range entries {
+		if e.SequenceNumber > 0 && int(e.SequenceNumber) <= len(entries) {
+			sortedEntries[e.SequenceNumber-1] = e
+		}
+	}
+
+	// Add entries to chain in order
+	for _, entry := range sortedEntries {
+		if entry == nil {
+			return nil, fmt.Errorf("missing entry in sequence")
+		}
+		if err := chain.AddEntry(entry); err != nil {
+			return nil, fmt.Errorf("failed to add entry to chain: %w", err)
+		}
+	}
+
+	return chain, nil
+}
+
+// VerifyLedgerChain verifies the integrity of an invoice's ledger chain
+func (ik *invoiceKeeper) VerifyLedgerChain(ctx sdk.Context, invoiceID string) error {
+	chain, err := ik.GetInvoiceLedgerChain(ctx, invoiceID)
+	if err != nil {
+		return fmt.Errorf("failed to get ledger chain: %w", err)
+	}
+
+	return chain.Validate()
 }
 
 // WithInvoices iterates over all invoices
@@ -455,6 +544,79 @@ func (ik *invoiceKeeper) GetReconciliationReport(ctx sdk.Context, reportID strin
 	return &report, nil
 }
 
+// CreateInvoiceFromPayment creates an invoice from a payment that is being closed/settled
+func (ik *invoiceKeeper) CreateInvoiceFromPayment(ctx sdk.Context, payment PaymentSummary) (*billing.InvoiceLedgerRecord, error) {
+	// Get next sequence number for invoice
+	seq := ik.GetInvoiceSequence(ctx)
+	invoiceNumber := fmt.Sprintf("VE-INV-%d", seq+1)
+
+	// Create billing period from payment heights
+	// Use approximate 6-second block times
+	now := ctx.BlockTime()
+	blockDelta := payment.EndHeight - payment.StartHeight
+	periodDuration := time.Duration(blockDelta*6) * time.Second
+	periodStart := now.Add(-periodDuration)
+	periodEnd := now
+
+	// Calculate total from rate * blocks
+	totalAmount := payment.Rate.Amount.Mul(sdkmath.LegacyNewDec(blockDelta)).TruncateInt()
+	total := sdk.NewCoins(sdk.NewCoin(payment.Rate.Denom, totalAmount))
+
+	// Use the configured invoice generator
+	generator := billing.NewInvoiceGenerator(billing.DefaultInvoiceGeneratorConfig())
+
+	// Build usage input for the payment
+	usageInput := billing.UsageInput{
+		UsageRecordID: payment.PaymentID,
+		UsageType:     billing.UsageTypeCPU, // Use CPU as default for compute workloads
+		Quantity:      sdkmath.LegacyNewDec(blockDelta),
+		Unit:          "blocks",
+		UnitPrice:     payment.Rate,
+		Description:   fmt.Sprintf("Lease payment for %d blocks", blockDelta),
+		PeriodStart:   periodStart,
+		PeriodEnd:     periodEnd,
+	}
+
+	// Build generation request
+	req := billing.InvoiceGenerationRequest{
+		EscrowID:    payment.EscrowID,
+		OrderID:     payment.OrderID,
+		LeaseID:     payment.LeaseID,
+		Provider:    payment.Provider,
+		Customer:    payment.Customer,
+		UsageInputs: []billing.UsageInput{usageInput},
+		BillingPeriod: billing.BillingPeriod{
+			StartTime:       periodStart,
+			EndTime:         periodEnd,
+			DurationSeconds: int64(periodDuration.Seconds()),
+			PeriodType:      billing.BillingPeriodTypeFinal, // Settlement = final billing
+		},
+		Currency: payment.Rate.Denom,
+	}
+
+	// Generate invoice
+	invoice, err := generator.GenerateInvoice(req, ctx.BlockHeight(), now)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate invoice: %w", err)
+	}
+
+	// Override invoice number with our sequence-based number
+	invoice.InvoiceNumber = invoiceNumber
+
+	// Mark as paid since this is generated from a settled payment
+	invoice.Status = billing.InvoiceStatusPaid
+	invoice.AmountPaid = total
+	invoice.AmountDue = sdk.NewCoins()
+	paidAt := ctx.BlockTime()
+	invoice.PaidAt = &paidAt
+
+	// Store artifact (simplified - in production would use IPFS/artifact store)
+	artifactCID := fmt.Sprintf("invoice-%s", invoice.InvoiceID)
+
+	// Create the ledger record
+	return ik.CreateInvoice(ctx, invoice, artifactCID)
+}
+
 // Helper methods
 
 func (ik *invoiceKeeper) setInvoiceIndexes(store storetypes.KVStore, record *billing.InvoiceLedgerRecord) {
@@ -484,11 +646,43 @@ func (ik *invoiceKeeper) saveLedgerEntry(store storetypes.KVStore, entry *billin
 	// Create invoice index
 	indexKey := billing.BuildInvoiceLedgerEntryByInvoiceKey(entry.InvoiceID, entry.EntryID)
 	store.Set(indexKey, []byte(entry.EntryID))
+
+	// Store sequence-indexed key for faster last entry lookup
+	seqKey := billing.BuildInvoiceLedgerEntrySeqKey(entry.InvoiceID, entry.SequenceNumber)
+	store.Set(seqKey, []byte(entry.EntryID))
 }
 
+// getLastEntryHashAndSeq gets the hash and sequence number of the last entry for an invoice
+func (ik *invoiceKeeper) getLastEntryHashAndSeq(store storetypes.KVStore, invoiceID string) (string, uint64) {
+	prefix := billing.BuildInvoiceLedgerEntryByInvoicePrefix(invoiceID)
+	iter := storetypes.KVStoreReversePrefixIterator(store, prefix)
+	defer iter.Close()
+
+	if !iter.Valid() {
+		// No entries exist, this will be the genesis entry
+		return billing.ZeroHash, 0
+	}
+
+	// Get the last entry
+	entryID := string(iter.Value())
+	entryKey := billing.BuildInvoiceLedgerEntryKey(entryID)
+	bz := store.Get(entryKey)
+	if bz == nil {
+		return billing.ZeroHash, 0
+	}
+
+	var entry billing.InvoiceLedgerEntry
+	if err := json.Unmarshal(bz, &entry); err != nil {
+		return billing.ZeroHash, 0
+	}
+
+	return entry.EntryHash, entry.SequenceNumber
+}
+
+//nolint:unparam // prefix kept for future index-specific pagination
 func (ik *invoiceKeeper) paginateInvoiceIndex(
 	store storetypes.KVStore,
-	prefix []byte,
+	_ []byte,
 	pagination *query.PageRequest,
 ) ([]*billing.InvoiceLedgerRecord, *query.PageResponse, error) {
 	var records []*billing.InvoiceLedgerRecord

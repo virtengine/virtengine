@@ -219,6 +219,7 @@ func (e *MockBidEngine) matchOrder(order Order) bool {
 	return true
 }
 
+//nolint:unparam // result 1 (error) reserved for future pricing failures
 func (e *MockBidEngine) calculateBidPrice(order Order, config *ProviderConfig) (string, error) {
 	// Simulate price calculation based on order requirements
 	time.Sleep(2 * time.Microsecond) // Minimal delay for calculation
@@ -238,7 +239,8 @@ func (e *MockBidEngine) calculateBidPrice(order Order, config *ProviderConfig) (
 	return fmt.Sprintf("%.6fuvirt", finalPrice), nil
 }
 
-func (e *MockBidEngine) signBid(orderID, price string) (string, error) {
+//nolint:unparam // price kept for future signature verification
+func (e *MockBidEngine) signBid(orderID, _ string) (string, error) {
 	// Simulate cryptographic signing
 	time.Sleep(5 * time.Microsecond) // Minimal delay for signing
 

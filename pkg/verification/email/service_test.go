@@ -454,7 +454,7 @@ func TestService_VerifyChallenge_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get the challenge to find the OTP
-	challenge, err := service.GetChallenge(ctx, initResp.ChallengeID)
+	_, err = service.GetChallenge(ctx, initResp.ChallengeID)
 	require.NoError(t, err)
 
 	// Generate the correct OTP by finding it
@@ -467,13 +467,13 @@ func TestService_VerifyChallenge_Success(t *testing.T) {
 		AccountAddress: "virtengine1testaddr",
 	}
 
-	resp, err := service.VerifyChallenge(ctx, verifyReq)
+	resp, _ := service.VerifyChallenge(ctx, verifyReq)
 	// Should fail with wrong OTP
 	assert.False(t, resp.Success)
 	assert.Greater(t, resp.RemainingAttempts, uint32(0))
 
 	// Verify challenge still exists
-	challenge, err = service.GetChallenge(ctx, initResp.ChallengeID)
+	challenge, err := service.GetChallenge(ctx, initResp.ChallengeID)
 	require.NoError(t, err)
 	assert.Equal(t, uint32(1), challenge.Attempts)
 }

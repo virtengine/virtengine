@@ -1227,7 +1227,7 @@ func TestPayoutRecord_Validate(t *testing.T) {
 			errContains: "invalid provider address",
 		},
 		{
-			name: "no invoice_ids",
+			name: "no invoice_ids or settlement_id",
 			record: PayoutRecord{
 				PayoutID:     "payout-001",
 				Provider:     provider,
@@ -1238,7 +1238,7 @@ func TestPayoutRecord_Validate(t *testing.T) {
 				PayoutDate:   now,
 			},
 			expectError: true,
-			errContains: "at least one invoice_id is required",
+			errContains: "at least one invoice_id or settlement_id is required",
 		},
 		{
 			name: "missing payout_date",

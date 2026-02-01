@@ -458,7 +458,7 @@ func (s *ScoreDecayTestSuite) TestActivityResetsGracePeriod() {
 	s.Require().NoError(err)
 
 	addr := s.testAddr("activity_test1___")
-	snapshot, err := s.keeper.CreateScoreSnapshot(s.ctx, addr, 100, "activity-grace-test")
+	_, err = s.keeper.CreateScoreSnapshot(s.ctx, addr, 100, "activity-grace-test")
 	s.Require().NoError(err)
 
 	// Advance time by 5 days

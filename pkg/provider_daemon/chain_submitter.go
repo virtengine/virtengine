@@ -289,7 +289,9 @@ func (s *ChainUsageSubmitterImpl) submitBatch(ctx context.Context, reports []*Ch
 }
 
 // signAndBroadcast signs and broadcasts a single message.
-func (s *ChainUsageSubmitterImpl) signAndBroadcast(ctx context.Context, msg interface{}) error {
+//
+//nolint:unparam // ctx kept for future context deadline handling
+func (s *ChainUsageSubmitterImpl) signAndBroadcast(_ context.Context, msg interface{}) error {
 	if s.keyManager == nil {
 		return errors.New("key manager not configured")
 	}
@@ -584,7 +586,10 @@ func UsageReportHash(report *ChainUsageReport) []byte {
 		UnitPrice:   report.UnitPrice.String(),
 	}
 
-	bytes, _ := json.Marshal(data)
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
 	return bytes
 }
 

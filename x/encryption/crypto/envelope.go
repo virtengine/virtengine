@@ -377,6 +377,8 @@ func ValidateEnvelopeSignature(envelope *types.EncryptedPayloadEnvelope) (bool, 
 //   - No proof of sender identity (anyone can forge "signatures")
 //   - Suitable only when sender authentication is not required
 //   - Must NOT be used for transaction authorization
+//
+//nolint:unparam // result 1 (error) reserved for future signing failures
 func signEnvelope(envelope *types.EncryptedPayloadEnvelope, _ *[32]byte) ([]byte, error) {
 	payload := envelope.SigningPayload()
 

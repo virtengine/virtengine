@@ -11,6 +11,7 @@ import (
 	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
+//nolint:unparam // ctx and measurement kept for future on-chain measurement allowlist queries
 func (k Keeper) verifySGXAttestation(ctx sdk.Context, identity *types.EnclaveIdentity, measurement *types.MeasurementRecord) error {
 	quote, err := types.ParseSGXDCAPQuoteV3(identity.AttestationQuote)
 	if err != nil {
@@ -92,7 +93,8 @@ func (k Keeper) verifySGXCryptographic(ctx sdk.Context, identity *types.EnclaveI
 	return nil
 }
 
-func verifySGXCollateral(ctx sdk.Context, quote *types.SGXDCAPQuote, chain *attestationChain) error {
+//nolint:unparam // ctx kept for future collateral chain state verification
+func verifySGXCollateral(_ sdk.Context, quote *types.SGXDCAPQuote, chain *attestationChain) error {
 	if chain == nil || len(chain.json) == 0 {
 		return nil
 	}

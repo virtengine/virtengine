@@ -336,7 +336,7 @@ func (k Keeper) addRecordToAccountIndex(ctx sdk.Context, address []byte, blockHe
 	store := ctx.KVStore(k.skey)
 	key := types.DerivedFeatureRecordByAccountKey(address, blockHeight)
 
-	bz, _ := json.Marshal(recordID)
+	bz, _ := json.Marshal(recordID) //nolint:errchkjson // string cannot fail to marshal
 	store.Set(key, bz)
 }
 

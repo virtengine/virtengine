@@ -134,7 +134,7 @@ func (f *FirewallRuleGenerator) GenerateRules() []FirewallRule {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	var rules []FirewallRule
+	rules := make([]FirewallRule, 0, len(f.blockedIPs)+len(f.allowedIPs)*len(f.config.AllowedPorts))
 	priority := 100
 
 	// Add blocked IPs first (highest priority)
@@ -325,7 +325,7 @@ table inet virtengine {
 }
 `
 	
-	var ruleStrings []string
+	ruleStrings := make([]string, 0, len(rules))
 	for _, rule := range rules {
 		ruleStrings = append(ruleStrings, f.ruleToNFTables(rule))
 	}
@@ -381,7 +381,7 @@ func (f *FirewallRuleGenerator) GeneratePF() string {
 	// Macros
 	buf.WriteString("# Macros\n")
 	buf.WriteString(fmt.Sprintf("virtengine_ports = \"{ %s }\"\n\n", 
-		strings.Trim(strings.Replace(fmt.Sprint(f.config.AllowedPorts), " ", ", ", -1), "[]")))
+		strings.Trim(strings.ReplaceAll(fmt.Sprint(f.config.AllowedPorts), " ", ", "), "[]")))
 	
 	// Default policies
 	buf.WriteString("# Default policies\n")

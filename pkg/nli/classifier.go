@@ -191,7 +191,6 @@ func (c *RuleBasedClassifier) Classify(ctx context.Context, message string, chat
 
 	var bestIntent Intent = IntentGeneralChat
 	var bestConfidence float32 = 0.0
-	var entities = make(map[string]string)
 	var alternatives []IntentScore
 
 	// Score each intent
@@ -207,7 +206,7 @@ func (c *RuleBasedClassifier) Classify(ctx context.Context, message string, chat
 	}
 
 	// Extract entities
-	entities = c.extractEntities(message)
+	entities := c.extractEntities(message)
 
 	// If no strong match, default to general chat with base confidence
 	if bestConfidence < 0.3 {

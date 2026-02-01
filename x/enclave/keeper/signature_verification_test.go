@@ -283,7 +283,8 @@ func TestSigningPayload_Changes(t *testing.T) {
 
 // Helper functions
 
-func createTestResult(validatorAddr string, blockHeight int64) *types.AttestedScoringResult {
+//nolint:unparam // validatorAddr kept for future multi-validator test scenarios
+func createTestResult(_ string, blockHeight int64) *types.AttestedScoringResult {
 	return &types.AttestedScoringResult{
 		ScopeId:                "test-scope-001",
 		AccountAddress:         "virtengine1test123",
@@ -294,7 +295,7 @@ func createTestResult(validatorAddr string, blockHeight int64) *types.AttestedSc
 		EvidenceHashes:         [][]byte{[]byte("evidence-hash-32-bytes-padded000")},
 		EnclaveMeasurementHash: []byte("measurement-hash-32-bytes-padded"),
 		AttestationReference:   []byte("attestation-ref-32-bytes-padded00"),
-		ValidatorAddress:       validatorAddr,
+		ValidatorAddress:       "virtengine1validator123",
 		BlockHeight:            blockHeight,
 		Timestamp:              time.Unix(1234567890, 0),
 	}

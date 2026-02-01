@@ -580,19 +580,17 @@ func (v *SEVSNPVerifier) Verify(attestation []byte, nonce []byte, policy Verific
 	snpReport, parseErr := snpParser.Parse(attestation)
 	if parseErr != nil {
 		result.AddWarning("SNP report parsing failed: %v", parseErr)
-	} else {
+	} else if snpReport != nil {
 		// Update TCB version from parsed report
-		if snpReport != nil {
-			result.TCBVersion = fmt.Sprintf("tcb-%d", snpReport.CurrentTCB)
+		result.TCBVersion = fmt.Sprintf("tcb-%d", snpReport.CurrentTCB)
 
-			// Create SNP verifier to check if it's available
-			_, err := NewSNPVerifier()
-			if err != nil {
-				result.AddWarning("SNP verifier initialization: %v", err)
-			} else {
-				// SNP signature verification is available but requires VCEK cert or AMD KDS
-				result.AddWarning("SNP signature verification requires VCEK certificate or AMD KDS access (not performed)")
-			}
+		// Create SNP verifier to check if it's available
+		_, err := NewSNPVerifier()
+		if err != nil {
+			result.AddWarning("SNP verifier initialization: %v", err)
+		} else {
+			// SNP signature verification is available but requires VCEK cert or AMD KDS
+			result.AddWarning("SNP signature verification requires VCEK certificate or AMD KDS access (not performed)")
 		}
 	}
 
@@ -668,6 +666,7 @@ func (v *NitroVerifier) Verify(attestation []byte, nonce []byte, policy Verifica
 	}
 
 	// Extract enclave ID (simulated)
+	//nolint:gosec // G602: bounds checked above with len(attestation) > 96
 	result.NitroEnclaveID = fmt.Sprintf("i-%x", attestation[:8])
 
 	// TCB version for Nitro
@@ -675,6 +674,7 @@ func (v *NitroVerifier) Verify(attestation []byte, nonce []byte, policy Verifica
 
 	// Verify nonce if required
 	if policy.RequireNonce && len(nonce) > 0 {
+		//nolint:gosec // G602: bounds checked by len(result.Nonce) < len(nonce)
 		if len(result.Nonce) < len(nonce) || !bytes.Equal(result.Nonce[:len(nonce)], nonce) {
 			result.AddError("nonce mismatch: document does not contain expected nonce")
 		}

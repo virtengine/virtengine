@@ -9,7 +9,8 @@ import (
 	"github.com/virtengine/virtengine/x/enclave/types"
 )
 
-func (k Keeper) verifyNitroAttestation(ctx sdk.Context, identity *types.EnclaveIdentity, measurement *types.MeasurementRecord) error {
+//nolint:unparam // ctx kept for future on-chain PCR allowlist queries
+func (k Keeper) verifyNitroAttestation(_ sdk.Context, identity *types.EnclaveIdentity, _ *types.MeasurementRecord) error {
 	nitroVerifier, err := enclave.NewNitroCryptoVerifier()
 	if err != nil {
 		return types.ErrAttestationInvalid.Wrapf("Nitro verifier init: %v", err)

@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+const testValidatorAddress = "virtengine1validator123"
+
 // KeyRotationTestSuite tests key rotation procedures.
 type KeyRotationTestSuite struct {
 	suite.Suite
@@ -175,7 +177,7 @@ func (s *KeyRotationTestSuite) TestValidatorKeyRotation() {
 	s.Run("validator_key_update_proposal", func() {
 		registry := NewValidatorKeyRegistry()
 
-		validatorAddr := "virtengine1validator123"
+		validatorAddr := testValidatorAddress
 		oldKey := generateKey(s.T())
 		registry.RegisterValidator(validatorAddr, oldKey)
 
@@ -189,7 +191,7 @@ func (s *KeyRotationTestSuite) TestValidatorKeyRotation() {
 	s.Run("key_update_with_consensus", func() {
 		registry := NewValidatorKeyRegistry()
 
-		validatorAddr := "virtengine1validator123"
+		validatorAddr := testValidatorAddress
 		oldKey := generateKey(s.T())
 		registry.RegisterValidator(validatorAddr, oldKey)
 
@@ -210,7 +212,7 @@ func (s *KeyRotationTestSuite) TestValidatorKeyRotation() {
 		registry := NewValidatorKeyRegistry()
 		registry.SetRotationEpoch(1000) // Rotate every 1000 blocks
 
-		validatorAddr := "virtengine1validator123"
+		validatorAddr := testValidatorAddress
 		key := generateKey(s.T())
 		registry.RegisterValidator(validatorAddr, key)
 

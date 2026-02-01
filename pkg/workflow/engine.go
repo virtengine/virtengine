@@ -639,6 +639,7 @@ func (e *Engine) executeStepWithRetry(ctx context.Context, step WorkflowStep, da
 				return nil, lastErr
 			}
 			// Exponential backoff
+			//nolint:gosec // G115: attempts is small retry counter
 			backoff := time.Duration(1<<uint(attempts-1)) * 100 * time.Millisecond
 			select {
 			case <-ctx.Done():

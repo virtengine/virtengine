@@ -686,6 +686,8 @@ func (a *pctfAdapter) convertFieldResult(pctfResult PCTFFieldResult) FieldVerifi
 }
 
 // loadPCTFConfigFromEnv loads PCTF configuration from environment variables
+//
+//nolint:unparam // result 2 (error) reserved for future validation failures
 func loadPCTFConfigFromEnv(_ AdapterConfig) (PCTFConfig, bool, error) {
 	orgID := os.Getenv("PCTF_ORGANIZATION_ID")
 	clientID := os.Getenv("PCTF_CLIENT_ID")

@@ -464,15 +464,15 @@ func (k Keeper) GrantProvisionalApproval(
 
 	// Create provisional approval record
 	provisionalApproval := &ProvisionalApproval{
-		CaseID:         borderlineCase.CaseID,
-		Address:        borderlineCase.Address,
-		ApprovedAt:     now,
-		ExpiresAt:      expiresAt,
-		Conditions:     []string{"Must complete MFA verification within provisional period"},
+		CaseID:          borderlineCase.CaseID,
+		Address:         borderlineCase.Address,
+		ApprovedAt:      now,
+		ExpiresAt:       expiresAt,
+		Conditions:      []string{"Must complete MFA verification within provisional period"},
 		RequiredActions: []string{"Enroll MFA factor", "Complete identity re-verification"},
-		TemporaryScore: borderlineCase.Score,
-		OriginalScore:  borderlineCase.Score,
-		Status:         ProvisionalStatusActive,
+		TemporaryScore:  borderlineCase.Score,
+		OriginalScore:   borderlineCase.Score,
+		Status:          ProvisionalStatusActive,
 	}
 
 	if err := k.setProvisionalApproval(ctx, provisionalApproval); err != nil {
@@ -507,9 +507,11 @@ func (k Keeper) applyBorderlinePenalty(
 ) error {
 	// Calculate penalty (reduce score by margin to push below threshold)
 	penaltyAmount := borderlineCase.Margin + 1
-	newScore := borderlineCase.Score - penaltyAmount
-	if newScore < 0 {
+	var newScore uint32
+	if borderlineCase.Score < penaltyAmount {
 		newScore = 0
+	} else {
+		newScore = borderlineCase.Score - penaltyAmount
 	}
 
 	borderlineCase.Status = CaseStatusResolved
@@ -710,7 +712,10 @@ func (k Keeper) ProcessExpiredProvisionalApprovals(ctx sdk.Context) int {
 		if pa.Status == ProvisionalStatusActive && pa.ExpiresAt <= now {
 			// Mark as expired
 			pa.Status = ProvisionalStatusExpired
-			bz, _ := json.Marshal(pa)
+			bz, err := json.Marshal(pa)
+			if err != nil {
+				continue
+			}
 			store.Set(iterator.Key(), bz)
 
 			// Update the account's status
@@ -749,7 +754,9 @@ func provisionalApprovalKey(caseID string) []byte {
 }
 
 func manualReviewQueueKey(priority int, caseID string) []byte {
-	key := append(PrefixManualReviewQueue, byte(priority))
+	key := make([]byte, 0, len(PrefixManualReviewQueue)+1+len(caseID))
+	key = append(key, PrefixManualReviewQueue...)
+	key = append(key, byte(priority))
 	return append(key, []byte(caseID)...)
 }
 

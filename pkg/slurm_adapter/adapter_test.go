@@ -23,8 +23,9 @@ type mockJobSigner struct {
 	providerAddress string
 }
 
-func newMockJobSigner(addr string) *mockJobSigner {
-	return &mockJobSigner{providerAddress: addr}
+//nolint:unparam // addr kept for future multi-address test scenarios
+func newMockJobSigner(_ string) *mockJobSigner {
+	return &mockJobSigner{providerAddress: testProviderAddress}
 }
 
 func (m *mockJobSigner) Sign(data []byte) ([]byte, error) {

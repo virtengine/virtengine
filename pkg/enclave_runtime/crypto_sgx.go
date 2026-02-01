@@ -1013,7 +1013,9 @@ OOOOOOOOOO==
 
 	qeAuthOffset := 64 + 64 + 384 + 64
 	binary.LittleEndian.PutUint16(sigData[qeAuthOffset:], 0) // QE auth data size = 0
+	//nolint:gosec // G115: CryptoCertDataTypePCKCertChain is small constant
 	binary.LittleEndian.PutUint16(sigData[qeAuthOffset+2:], uint16(CryptoCertDataTypePCKCertChain))
+	//nolint:gosec // G115: len(fakePEM) is bounded cert chain size
 	binary.LittleEndian.PutUint32(sigData[qeAuthOffset+4:], uint32(len(fakePEM)))
 	copy(sigData[qeAuthOffset+8:], fakePEM)
 
@@ -1021,6 +1023,7 @@ OOOOOOOOOO==
 	quote := make([]byte, dcapQuoteHeaderSize+dcapReportBodySize+4+sigDataLen)
 	copy(quote[0:], header)
 	copy(quote[dcapQuoteHeaderSize:], reportBody)
+	//nolint:gosec // G115: sigDataLen is bounded buffer size
 	binary.LittleEndian.PutUint32(quote[dcapQuoteHeaderSize+dcapReportBodySize:], uint32(sigDataLen))
 	copy(quote[dcapQuoteHeaderSize+dcapReportBodySize+4:], sigData)
 

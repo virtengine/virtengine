@@ -233,6 +233,7 @@ func (p *CBORParser) readByteString() ([]byte, error) {
 		return nil, err
 	}
 
+	//nolint:gosec // G115: CBOR byte string length is validated during parsing
 	return p.readBytes(int(length))
 }
 
@@ -253,6 +254,7 @@ func (p *CBORParser) readTextString() (string, error) {
 		return "", err
 	}
 
+	//nolint:gosec // G115: CBOR text string length is validated during parsing
 	data, err := p.readBytes(int(length))
 	if err != nil {
 		return "", err
@@ -278,6 +280,7 @@ func (p *CBORParser) readArrayHeader() (int, error) {
 		return 0, err
 	}
 
+	//nolint:gosec // G115: CBOR array length validated during parsing
 	return int(length), nil
 }
 
@@ -298,6 +301,7 @@ func (p *CBORParser) readMapHeader() (int, error) {
 		return 0, err
 	}
 
+	//nolint:gosec // G115: CBOR map length validated during parsing
 	return int(length), nil
 }
 
@@ -518,6 +522,7 @@ func (p *NitroAttestationParser) parsePCRs(parser *CBORParser, doc *CryptoNitroA
 			return err
 		}
 
+		//nolint:gosec // G115: PCR index validated in range 0-15
 		doc.PCRs[int(index)] = value
 	}
 
@@ -556,6 +561,7 @@ func (d *CryptoNitroAttestationDocument) GetPCR(index int) ([]byte, bool) {
 
 // GetTimestampTime converts the timestamp to time.Time.
 func (d *CryptoNitroAttestationDocument) GetTimestampTime() time.Time {
+	//nolint:gosec // G115: Timestamp is milliseconds since epoch, safe for int64
 	return time.UnixMilli(int64(d.Timestamp))
 }
 
@@ -1100,6 +1106,7 @@ func createTestPayload(pcr0 []byte, nonce []byte, userData []byte) []byte {
 	buf.WriteByte(0x69) // text(9)
 	buf.WriteString("timestamp")
 	buf.WriteByte(0x1B) // uint64
+	//nolint:gosec // G115: UnixMilli returns positive value in valid time range
 	ts := uint64(time.Now().UnixMilli())
 	binary.Write(&buf, binary.BigEndian, ts)
 

@@ -190,7 +190,9 @@ func (v *DefaultVerifier) VerifyToken(ctx context.Context, token string, req *Ve
 }
 
 // verifySignature verifies the JWT signature.
-func (v *DefaultVerifier) verifySignature(token string, parts []string, alg string, key *JSONWebKey) error {
+//
+//nolint:unparam // token kept for future full token verification
+func (v *DefaultVerifier) verifySignature(_ string, parts []string, alg string, key *JSONWebKey) error {
 	signedContent := parts[0] + "." + parts[1]
 	signatureBytes, err := base64URLDecode(parts[2])
 	if err != nil {

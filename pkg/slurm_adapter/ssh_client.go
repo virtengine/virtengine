@@ -25,6 +25,9 @@ import (
 	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
+// nullString represents the SLURM null value placeholder
+const nullString = "(null)"
+
 // ErrSSHConnection is returned when SSH connection fails
 var ErrSSHConnection = errors.New("SSH connection failed")
 
@@ -156,6 +159,7 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 	// Configure host key callback
 	switch sshConfig.HostKeyCallback {
 	case "ignore":
+		//nolint:gosec // G106: InsecureIgnoreHostKey intentional when HostKeyCallback="ignore"
 		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 	case "known_hosts":
 		knownHostsPath := sshConfig.KnownHostsPath
@@ -202,6 +206,7 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 			clientConfig.HostKeyCallback = hostKeyCallback
 		} else {
 			// Fall back to insecure if no known_hosts file exists
+			//nolint:gosec // G106: InsecureIgnoreHostKey fallback when no known_hosts available
 			clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 		}
 	}
@@ -236,10 +241,8 @@ func (c *SSHSLURMClient) Connect(ctx context.Context) error {
 	}
 
 	// Initialize connection pool
-	poolSize := c.config.PoolSize
-	if poolSize <= 0 {
-		poolSize = 5
-	}
+	// Note: pool size is configured but actual pooling is handled by dialWithRetry
+	_ = c.config.PoolSize // poolSize used in future connection pool expansion
 
 	addr := fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)
 
@@ -486,6 +489,8 @@ func (c *SSHSLURMClient) runCommand(ctx context.Context, cmd string) (string, er
 }
 
 // runCommandWithTimeout executes a command with a specific timeout
+//
+//nolint:unused // Reserved for timeout-based command execution
 func (c *SSHSLURMClient) runCommandWithTimeout(ctx context.Context, cmd string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -1059,7 +1064,7 @@ func (c *SSHSLURMClient) ListNodes(ctx context.Context) ([]NodeInfo, error) {
 		}
 
 		// Parse GPU info (format: gpu:type:count or (null))
-		if fields[4] != "(null)" && fields[4] != "" {
+		if fields[4] != nullString && fields[4] != "" {
 			node.GPUs, node.GPUType = parseGRES(fields[4])
 		}
 
@@ -1069,7 +1074,7 @@ func (c *SSHSLURMClient) ListNodes(ctx context.Context) ([]NodeInfo, error) {
 		}
 
 		// Parse features
-		if len(fields) > 6 && fields[6] != "(null)" {
+		if len(fields) > 6 && fields[6] != nullString {
 			node.Features = strings.Split(fields[6], ",")
 		}
 
@@ -1106,7 +1111,7 @@ func mapSLURMState(state string) SLURMJobState {
 func parseNodeList(nodeSpec string) []string {
 	// Handle compressed node lists like "node[001-004]"
 	nodeSpec = strings.TrimSpace(nodeSpec)
-	if nodeSpec == "" || nodeSpec == "(null)" {
+	if nodeSpec == "" || nodeSpec == nullString {
 		return nil
 	}
 

@@ -175,7 +175,7 @@ func (e *FactorEnrollment) Validate() error {
 	// Factor-specific validation
 	switch e.FactorType {
 	case FactorTypeFIDO2:
-		if e.PublicIdentifier == nil || len(e.PublicIdentifier) == 0 {
+		if len(e.PublicIdentifier) == 0 {
 			return ErrInvalidEnrollment.Wrap("FIDO2 enrollment requires public identifier")
 		}
 		if e.Metadata == nil || e.Metadata.FIDO2Info == nil {
@@ -190,7 +190,7 @@ func (e *FactorEnrollment) Validate() error {
 			return ErrInvalidEnrollment.Wrap("TrustedDevice enrollment requires DeviceInfo metadata")
 		}
 	case FactorTypeHardwareKey:
-		if e.PublicIdentifier == nil || len(e.PublicIdentifier) == 0 {
+		if len(e.PublicIdentifier) == 0 {
 			return ErrInvalidEnrollment.Wrap("HardwareKey enrollment requires public identifier (public key fingerprint)")
 		}
 		if e.Metadata == nil || e.Metadata.HardwareKeyInfo == nil {

@@ -469,12 +469,16 @@ func (r *KubernetesRunner) generateActionManifest(action chaos.ExperimentAction)
 		},
 	}
 
-	data, _ := json.MarshalIndent(manifest, "", "  ")
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Sprintf(`{"error": "failed to marshal manifest: %v"}`, err)
+	}
 	return string(data)
 }
 
 // applyManifest applies a manifest to Kubernetes.
 func (r *KubernetesRunner) applyManifest(ctx context.Context, manifest string) error {
+	//nolint:gosec // G204: kubectlPath is validated during runner initialization
 	cmd := exec.CommandContext(ctx, r.kubectlPath, "apply", "-f", "-")
 	cmd.Stdin = strings.NewReader(manifest)
 	output, err := cmd.CombinedOutput()
@@ -485,9 +489,12 @@ func (r *KubernetesRunner) applyManifest(ctx context.Context, manifest string) e
 }
 
 // deleteResource deletes a chaos resource.
+//
+//nolint:unparam // result 0 (error) reserved for future error aggregation
 func (r *KubernetesRunner) deleteResource(ctx context.Context, name string) error {
 	// Try to delete all chaos types
 	for _, kind := range []string{"podchaos", "networkchaos", "stresschaos", "timechaos", "chaosengine"} {
+		//nolint:gosec // G204: kubectlPath validated, kind from hardcoded list, name is chaos resource name
 		cmd := exec.CommandContext(ctx, r.kubectlPath, "delete", kind, name, "-n", r.namespace, "--ignore-not-found")
 		if _, err := cmd.CombinedOutput(); err != nil {
 			// Log but continue
@@ -500,9 +507,12 @@ func (r *KubernetesRunner) deleteResource(ctx context.Context, name string) erro
 }
 
 // getResourceStatus queries the status of a chaos resource.
+//
+//nolint:unparam // result 1 (error) reserved for future kubectl failures
 func (r *KubernetesRunner) getResourceStatus(ctx context.Context, name string) (string, error) {
 	// Try common chaos resource types
 	for _, kind := range []string{"podchaos", "networkchaos", "stresschaos"} {
+		//nolint:gosec // G204: kubectlPath validated, kind from hardcoded list
 		cmd := exec.CommandContext(ctx, r.kubectlPath, "get", kind, name, "-n", r.namespace,
 			"-o", "jsonpath={.status.experiment.phase}")
 		output, err := cmd.Output()

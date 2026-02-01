@@ -200,7 +200,9 @@ func (m *SyncManager) LastSyncTime() time.Time {
 }
 
 // syncOutbound syncs from on-chain to external
-func (m *SyncManager) syncOutbound(ctx context.Context, ticketID string) error {
+//
+//nolint:unparam // ctx kept for future async external sync operations
+func (m *SyncManager) syncOutbound(_ context.Context, ticketID string) error {
 	// In full implementation:
 	// 1. Fetch on-chain ticket state
 	// 2. Compare with external state

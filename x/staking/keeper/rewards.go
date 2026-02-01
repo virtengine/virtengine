@@ -160,7 +160,7 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 	})
 
 	// Calculate rewards for each validator
-	var rewards []types.ValidatorReward
+	rewards := make([]types.ValidatorReward, 0, len(performances))
 	for _, perf := range performances {
 		// Get validator stake (or use equal distribution if staking keeper not available)
 		var validatorStake int64 = totalStake / int64(len(performances))
@@ -225,7 +225,7 @@ func (k Keeper) CalculateVEIDRewards(ctx sdk.Context, epoch uint64) ([]types.Val
 	}
 
 	// Calculate VEID rewards
-	var rewards []types.ValidatorReward
+	rewards := make([]types.ValidatorReward, 0, len(performances))
 	for _, perf := range performances {
 		if perf.VEIDVerificationsCompleted == 0 {
 			continue

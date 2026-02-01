@@ -579,7 +579,9 @@ func (fe *FaceExtractor) handleError(err error, msg string) (*FaceExtractionResu
 }
 
 // createFailureResult creates a result indicating extraction failure
-func (fe *FaceExtractor) createFailureResult(reasonCode, message string) *FaceExtractionResult {
+//
+//nolint:unparam // message kept for future logging or error details in result
+func (fe *FaceExtractor) createFailureResult(reasonCode, _ string) *FaceExtractionResult {
 	return &FaceExtractionResult{
 		Embedding:     make([]float32, fe.config.EmbeddingDim),
 		Confidence:    0.0,

@@ -177,11 +177,9 @@ func (s *InferenceSidecarServer) ComputeScore(ctx context.Context, req *inferenc
 			inference.TotalFeatureDim, len(req.Features))
 	}
 
-	// Create timeout context
-	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
-	defer cancel()
-
 	// Build ScoreInputs from features
+	// Note: Timeout configured in s.config.Timeout but not applied here as
+	// the underlying scorer doesn't support context-based cancellation yet
 	inputs := s.buildScoreInputs(req)
 
 	// Run inference

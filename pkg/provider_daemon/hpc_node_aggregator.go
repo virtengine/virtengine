@@ -225,7 +225,8 @@ func (a *HPCNodeAggregator) Stop() {
 	a.wg.Wait()
 }
 
-func (a *HPCNodeAggregator) runHTTPServer(ctx context.Context) {
+//nolint:unparam // ctx kept for future graceful shutdown integration
+func (a *HPCNodeAggregator) runHTTPServer(_ context.Context) {
 	defer a.wg.Done()
 
 	go func() {
@@ -309,7 +310,8 @@ func (a *HPCNodeAggregator) handleRegister(w http.ResponseWriter, r *http.Reques
 	fmt.Printf("[HPC-AGGREGATOR] Registered node: %s\n", req.NodeID)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	//nolint:errchkjson // simple response for HTTP handler
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"accepted": true,
 		"node_id":  req.NodeID,
 	})
@@ -336,7 +338,8 @@ func (a *HPCNodeAggregator) handleHeartbeat(w http.ResponseWriter, r *http.Reque
 	response := a.processHeartbeat(req.Heartbeat, req.Auth)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	//nolint:errchkjson // simple response for HTTP handler
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (a *HPCNodeAggregator) processHeartbeat(hb *HPCNodeHeartbeat, auth *HPCHeartbeatAuth) *HPCHeartbeatResponse {
@@ -546,7 +549,8 @@ func (a *HPCNodeAggregator) checkStaleNodes() {
 func (a *HPCNodeAggregator) writeError(w http.ResponseWriter, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(HPCHeartbeatResponse{
+	//nolint:errchkjson // simple error response for HTTP handler
+	_ = json.NewEncoder(w).Encode(HPCHeartbeatResponse{
 		Accepted:             false,
 		Timestamp:            time.Now(),
 		NextHeartbeatSeconds: 30,

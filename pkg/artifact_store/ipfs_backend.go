@@ -85,10 +85,8 @@ func (c *IPFSConfig) Validate() error {
 		return ErrInvalidInput.Wrap("chunk_size cannot be zero")
 	}
 	// Warn if using stub client with CID validation disabled in what looks like production
-	if !c.UseStubClient && !c.ValidateCIDs {
-		// This is a configuration that uses real IPFS but doesn't validate CIDs
-		// It's allowed but unusual - production should validate CIDs
-	}
+	// Note: using real IPFS without CID validation is allowed but unusual
+	// Production should validate CIDs
 	return nil
 }
 

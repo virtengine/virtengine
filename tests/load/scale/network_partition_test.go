@@ -115,7 +115,9 @@ type MockNetwork struct {
 	healTime      time.Time
 	
 	// Metrics
-	totalMessages   atomic.Int64
+	//nolint:unused // Reserved for message tracking metrics
+	totalMessages atomic.Int64
+	//nolint:unused // Reserved for message tracking metrics
 	droppedMessages atomic.Int64
 	recoveryEvents  atomic.Int64
 }
@@ -169,6 +171,7 @@ func (n *MockNode) addPeer(peer *MockNode) {
 	n.peers[peer.ID] = peer
 }
 
+//nolint:unused // Test helper for peer removal
 func (n *MockNode) removePeer(peerID int) {
 	n.peerMu.Lock()
 	defer n.peerMu.Unlock()

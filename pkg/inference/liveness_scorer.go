@@ -582,7 +582,9 @@ func (ls *LivenessScorer) handleError(err error, msg string) (*LivenessResult, e
 }
 
 // createFailureResult creates a result indicating liveness check failure
-func (ls *LivenessScorer) createFailureResult(reasonCode, message string) *LivenessResult {
+//
+//nolint:unparam // message kept for future logging or error details in result
+func (ls *LivenessScorer) createFailureResult(reasonCode, _ string) *LivenessResult {
 	return &LivenessResult{
 		IsLive:           false,
 		Decision:         "uncertain",

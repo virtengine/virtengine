@@ -682,7 +682,8 @@ func TestAnsibleAdapterThreadSafety(t *testing.T) {
 	// Concurrent execution storage
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
-		go func(id int) {
+		//nolint:unparam // id kept for future goroutine-specific logging
+		go func(_ int) {
 			defer wg.Done()
 			execID := adapter.generateExecutionID()
 			adapter.mu.Lock()

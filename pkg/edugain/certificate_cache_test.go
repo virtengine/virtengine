@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testIDPURL = "https://test-idp.example.com"
+
 // ============================================================================
 // CertificateCache Tests
 // ============================================================================
@@ -42,7 +44,7 @@ func TestCertificateCache_Add(t *testing.T) {
 	cert, _, err := generateValidTestCertificate()
 	require.NoError(t, err)
 
-	entityID := "https://test-idp.example.com"
+	entityID := testIDPURL
 	cached, err := cache.Add(cert, entityID, CertificateSourceMetadata)
 
 	assert.NoError(t, err)
@@ -61,7 +63,7 @@ func TestCertificateCache_Add_Duplicate(t *testing.T) {
 	cert, _, err := generateValidTestCertificate()
 	require.NoError(t, err)
 
-	entityID := "https://test-idp.example.com"
+	entityID := testIDPURL
 
 	// Add twice
 	cached1, err := cache.Add(cert, entityID, CertificateSourceMetadata)
@@ -122,7 +124,7 @@ func TestCertificateCache_GetByEntityID(t *testing.T) {
 	cert2, _, err := generateValidTestCertificate()
 	require.NoError(t, err)
 
-	entityID := "https://test-idp.example.com"
+	entityID := testIDPURL
 
 	_, err = cache.Add(cert1, entityID, CertificateSourceMetadata)
 	require.NoError(t, err)
@@ -151,7 +153,7 @@ func TestCertificateCache_GetCertificatesByEntityID(t *testing.T) {
 	cert, _, err := generateValidTestCertificate()
 	require.NoError(t, err)
 
-	entityID := "https://test-idp.example.com"
+	entityID := testIDPURL
 	_, err = cache.Add(cert, entityID, CertificateSourceMetadata)
 	require.NoError(t, err)
 
@@ -189,7 +191,7 @@ func TestCertificateCache_RemoveByEntityID(t *testing.T) {
 	cert2, _, err := generateValidTestCertificate()
 	require.NoError(t, err)
 
-	entityID := "https://test-idp.example.com"
+	entityID := testIDPURL
 
 	_, err = cache.Add(cert1, entityID, CertificateSourceMetadata)
 	require.NoError(t, err)
@@ -228,7 +230,7 @@ func TestCertificateCache_AddFromMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	certBase64 := base64.StdEncoding.EncodeToString(cert.Raw)
-	entityID := "https://test-idp.example.com"
+	entityID := testIDPURL
 
 	cached, err := cache.AddFromMetadata(entityID, []string{certBase64})
 

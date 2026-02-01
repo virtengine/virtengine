@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until settlement events API is stabilized.
-
 package keeper_test
 
 import (
@@ -17,14 +12,16 @@ import (
 )
 
 func TestEventEmission(t *testing.T) {
+	now := time.Now()
+
 	t.Run("escrow created event", func(t *testing.T) {
 		event := types.EventEscrowCreated{
-			EscrowID:   "escrow-1",
-			OrderID:    "order-1",
-			Depositor:  "cosmos1depositor...",
-			Amount:     "1000uve",
-			ExpiresAt:  time.Now().Add(time.Hour * 24).Format(time.RFC3339),
-			Conditions: 2,
+			EscrowID:    "escrow-1",
+			OrderID:     "order-1",
+			Depositor:   "cosmos1depositor...",
+			Amount:      "1000uve",
+			ExpiresAt:   now.Add(time.Hour * 24).Unix(),
+			BlockHeight: 100,
 		}
 
 		require.Equal(t, "escrow-1", event.EscrowID)
@@ -37,7 +34,7 @@ func TestEventEmission(t *testing.T) {
 			OrderID:     "order-1",
 			LeaseID:     "lease-1",
 			Recipient:   "cosmos1recipient...",
-			ActivatedAt: time.Now().Format(time.RFC3339),
+			ActivatedAt: now.Unix(),
 		}
 
 		require.Equal(t, "escrow-1", event.EscrowID)
@@ -51,7 +48,7 @@ func TestEventEmission(t *testing.T) {
 			Recipient:  "cosmos1recipient...",
 			Amount:     "1000uve",
 			Reason:     "service completed",
-			ReleasedAt: time.Now().Format(time.RFC3339),
+			ReleasedAt: now.Unix(),
 		}
 
 		require.Equal(t, "escrow-1", event.EscrowID)
@@ -66,11 +63,11 @@ func TestEventEmission(t *testing.T) {
 			Provider:       "cosmos1provider...",
 			Customer:       "cosmos1customer...",
 			TotalAmount:    "1000uve",
+			ProviderShare:  "940uve",
 			PlatformFee:    "50uve",
-			ValidatorFee:   "10uve",
-			ProviderPayout: "940uve",
-			Type:           string(types.SettlementTypePeriodic),
-			SettledAt:      time.Now().Format(time.RFC3339),
+			SettlementType: string(types.SettlementTypePeriodic),
+			IsFinal:        false,
+			SettledAt:      now.Unix(),
 		}
 
 		require.Equal(t, "settlement-1", event.SettlementID)
@@ -79,19 +76,18 @@ func TestEventEmission(t *testing.T) {
 
 	t.Run("usage recorded event", func(t *testing.T) {
 		event := types.EventUsageRecorded{
-			UsageID:     "usage-1",
-			OrderID:     "order-1",
-			Provider:    "cosmos1provider...",
-			Customer:    "cosmos1customer...",
-			ComputeUsed: "1000",
-			StorageUsed: "500",
-			TotalCost:   "100uve",
-			PeriodStart: time.Now().Add(-time.Hour).Format(time.RFC3339),
-			PeriodEnd:   time.Now().Format(time.RFC3339),
+			UsageID:    "usage-1",
+			OrderID:    "order-1",
+			LeaseID:    "lease-1",
+			Provider:   "cosmos1provider...",
+			UsageUnits: 1000,
+			UsageType:  "compute",
+			TotalCost:  "100uve",
+			RecordedAt: now.Unix(),
 		}
 
 		require.Equal(t, "usage-1", event.UsageID)
-		require.Equal(t, "1000", event.ComputeUsed)
+		require.Equal(t, uint64(1000), event.UsageUnits)
 	})
 
 	t.Run("rewards distributed event", func(t *testing.T) {
@@ -99,9 +95,9 @@ func TestEventEmission(t *testing.T) {
 			DistributionID: "dist-1",
 			Source:         string(types.RewardSourceStaking),
 			EpochNumber:    1,
-			TotalAmount:    "1000uve",
+			TotalRewards:   "1000uve",
 			RecipientCount: 10,
-			DistributedAt:  time.Now().Format(time.RFC3339),
+			DistributedAt:  now.Unix(),
 		}
 
 		require.Equal(t, "dist-1", event.DistributionID)
@@ -110,15 +106,14 @@ func TestEventEmission(t *testing.T) {
 
 	t.Run("rewards claimed event", func(t *testing.T) {
 		event := types.EventRewardsClaimed{
-			Claimer:        "cosmos1claimer...",
-			Source:         string(types.RewardSourceStaking),
-			Amount:         "500uve",
-			EntriesClaimed: 3,
-			ClaimedAt:      time.Now().Format(time.RFC3339),
+			Claimer:       "cosmos1claimer...",
+			Source:        string(types.RewardSourceStaking),
+			ClaimedAmount: "500uve",
+			ClaimedAt:     now.Unix(),
 		}
 
 		require.Equal(t, "cosmos1claimer...", event.Claimer)
-		require.Equal(t, "500uve", event.Amount)
+		require.Equal(t, "500uve", event.ClaimedAmount)
 	})
 }
 
@@ -141,22 +136,21 @@ func TestParamsValidation(t *testing.T) {
 				MinEscrowDuration:        3600,
 				MaxEscrowDuration:        86400 * 365,
 				SettlementPeriod:         86400,
-				DisputeResolutionTimeout: 86400 * 7,
-				StakingRewardPool:        "1000000",
+				RewardClaimExpiry:        86400 * 30,
 				StakingRewardEpochLength: 100,
-				ProviderRewardShare:      "0.85",
+				DisputeWindowDuration:    86400 * 7,
 			},
 			expectError: false,
 		},
 		{
 			name: "invalid platform fee rate",
 			params: types.Params{
-				PlatformFeeRate:          "1.5", // > 100%
-				ValidatorFeeRate:         "0.01",
-				MinEscrowDuration:        3600,
-				MaxEscrowDuration:        86400 * 365,
-				SettlementPeriod:         86400,
-				DisputeResolutionTimeout: 86400 * 7,
+				PlatformFeeRate:       "1.5", // > 100%
+				ValidatorFeeRate:      "0.01",
+				MinEscrowDuration:     3600,
+				MaxEscrowDuration:     86400 * 365,
+				SettlementPeriod:      86400,
+				DisputeWindowDuration: 86400 * 7,
 			},
 			expectError: true,
 		},
@@ -185,6 +179,8 @@ func TestParamsValidation(t *testing.T) {
 }
 
 func TestGenesisStateValidation(t *testing.T) {
+	validAddr := sdk.AccAddress([]byte("test_address________")).String()
+
 	testCases := []struct {
 		name        string
 		genesis     types.GenesisState
@@ -199,12 +195,13 @@ func TestGenesisStateValidation(t *testing.T) {
 			name: "genesis with escrows",
 			genesis: types.GenesisState{
 				Params: types.DefaultParams(),
-				Escrows: []types.EscrowAccount{
+				EscrowAccounts: []types.EscrowAccount{
 					{
 						EscrowID:  "escrow-1",
 						OrderID:   "order-1",
-						Depositor: "cosmos1depositor...",
+						Depositor: validAddr,
 						Amount:    sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+						Balance:   sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
 						State:     types.EscrowStatePending,
 						CreatedAt: time.Now(),
 						ExpiresAt: time.Now().Add(time.Hour * 24),
@@ -237,42 +234,43 @@ func TestGenesisStateValidation(t *testing.T) {
 }
 
 func TestMsgValidation(t *testing.T) {
+	validAddr := sdk.AccAddress([]byte("test_sender_________")).String()
+
 	t.Run("MsgCreateEscrow", func(t *testing.T) {
-		msg := types.MsgCreateEscrow{
-			Depositor:  "cosmos1depositor...",
-			OrderID:    "order-1",
-			Amount:     sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
-			Duration:   86400,
-			Conditions: nil,
-		}
+		msg := types.NewMsgCreateEscrow(
+			validAddr,
+			"order-1",
+			sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+			86400,
+		)
 		err := msg.ValidateBasic()
 		require.NoError(t, err)
 
-		// Empty depositor
-		msg.Depositor = ""
+		// Empty sender
+		msg.Sender = ""
 		err = msg.ValidateBasic()
 		require.Error(t, err)
 	})
 
 	t.Run("MsgReleaseEscrow", func(t *testing.T) {
 		msg := types.MsgReleaseEscrow{
-			Sender:   "cosmos1sender...",
-			EscrowID: "escrow-1",
+			Sender:   validAddr,
+			EscrowId: "escrow-1",
 			Reason:   "service completed",
 		}
 		err := msg.ValidateBasic()
 		require.NoError(t, err)
 
 		// Empty escrow ID
-		msg.EscrowID = ""
+		msg.EscrowId = ""
 		err = msg.ValidateBasic()
 		require.Error(t, err)
 	})
 
 	t.Run("MsgSettleOrder", func(t *testing.T) {
 		msg := types.MsgSettleOrder{
-			Sender:  "cosmos1sender...",
-			OrderID: "order-1",
+			Sender:  validAddr,
+			OrderId: "order-1",
 			IsFinal: true,
 		}
 		err := msg.ValidateBasic()
@@ -286,34 +284,35 @@ func TestMsgValidation(t *testing.T) {
 
 	t.Run("MsgRecordUsage", func(t *testing.T) {
 		msg := types.MsgRecordUsage{
-			Provider:    "cosmos1provider...",
-			OrderID:     "order-1",
-			ComputeUsed: "1000",
-			StorageUsed: "500",
-			TotalCost:   sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(100))),
-			PeriodStart: time.Now().Add(-time.Hour),
-			PeriodEnd:   time.Now(),
+			Sender:      validAddr,
+			OrderId:     "order-1",
+			LeaseId:     "lease-1",
+			UsageUnits:  1000,
+			UsageType:   "compute",
+			PeriodStart: time.Now().Add(-time.Hour).Unix(),
+			PeriodEnd:   time.Now().Unix(),
+			Signature:   []byte("provider-signature"),
 		}
 		err := msg.ValidateBasic()
 		require.NoError(t, err)
 
 		// Invalid period (start after end)
-		msg.PeriodStart = time.Now()
-		msg.PeriodEnd = time.Now().Add(-time.Hour)
+		msg.PeriodStart = time.Now().Unix()
+		msg.PeriodEnd = time.Now().Add(-time.Hour).Unix()
 		err = msg.ValidateBasic()
 		require.Error(t, err)
 	})
 
 	t.Run("MsgClaimRewards", func(t *testing.T) {
 		msg := types.MsgClaimRewards{
-			Claimer: "cosmos1claimer...",
-			Source:  string(types.RewardSourceStaking),
+			Sender: validAddr,
+			Source: string(types.RewardSourceStaking),
 		}
 		err := msg.ValidateBasic()
 		require.NoError(t, err)
 
-		// Empty claimer
-		msg.Claimer = ""
+		// Empty sender
+		msg.Sender = ""
 		err = msg.ValidateBasic()
 		require.Error(t, err)
 	})

@@ -370,7 +370,9 @@ func (r *SNPReportRequester) requestHardwareReport(userData [64]byte, vmpl uint3
 }
 
 // requestSimulatedReport generates a simulated report
-func (r *SNPReportRequester) requestSimulatedReport(userData [64]byte, vmpl uint32) (*SNPAttestationReport, error) {
+//
+//nolint:unparam // vmpl kept for future VMPL-based report differentiation
+func (r *SNPReportRequester) requestSimulatedReport(userData [64]byte, _ uint32) (*SNPAttestationReport, error) {
 	report := &SNPAttestationReport{
 		Version:  SNPReportVersion,
 		GuestSVN: 0,
@@ -447,6 +449,7 @@ func (r *SNPDerivedKeyRequester) RequestKey(rootKey int, guestFieldSelect uint64
 func (r *SNPDerivedKeyRequester) requestHardwareKey(rootKey int, guestFieldSelect uint64, vmpl uint32) ([]byte, error) {
 	// Build request
 	req := SNPKeyRequest{
+		//nolint:gosec // G115: rootKey is 0 or 1 enum value
 		RootKeySelect:    uint32(rootKey),
 		GuestFieldSelect: guestFieldSelect,
 		VMPL:             vmpl,

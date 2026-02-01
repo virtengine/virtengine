@@ -191,11 +191,11 @@ func (a *RealAdyenAdapter) ListPaymentMethods(ctx context.Context, customerID st
 		return nil, err
 	}
 
-	var methods []CardToken
+	methods := make([]CardToken, 0, len(result.StoredPaymentMethods))
 	for _, pm := range result.StoredPaymentMethods {
 		var expiryMonth, expiryYear int
-		fmt.Sscanf(pm.ExpiryMonth, "%d", &expiryMonth)
-		fmt.Sscanf(pm.ExpiryYear, "%d", &expiryYear)
+		_, _ = fmt.Sscanf(pm.ExpiryMonth, "%d", &expiryMonth)
+		_, _ = fmt.Sscanf(pm.ExpiryYear, "%d", &expiryYear)
 
 		methods = append(methods, CardToken{
 			Token:       pm.ID,
