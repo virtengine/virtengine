@@ -17,7 +17,7 @@ require (
 	github.com/99designs/keyring v1.2.2
 	github.com/beevik/etree v1.6.0
 	github.com/boz/go-lifecycle v0.1.1
-	github.com/cometbft/cometbft v0.38.17
+	github.com/cometbft/cometbft v0.38.21
 	github.com/consensys/gnark v0.14.0
 	github.com/consensys/gnark-crypto v0.19.2
 	github.com/cosmos/cosmos-db v1.1.3
@@ -76,23 +76,19 @@ replace (
 
 	github.com/bytedance/sonic => github.com/bytedance/sonic v1.14.1
 
-	// TODO: Migrate app to use VirtEngine forks (requires x/crisis removal and other breaking changes)
-	// VirtEngine forks exist at:
-	//   github.com/virtengine/cometbft v0.4-virtengine
-	//   github.com/virtengine/cosmos-sdk v0.53.5-virtengine
-	//   github.com/virtengine/gogoproto v0.1.7-virtengine
-	// Currently using akash-network forks for compatibility with existing app code
-	github.com/cometbft/cometbft => github.com/akash-network/cometbft v0.38.19-akash.1
+	// VirtEngine forks of Cosmos SDK dependencies
+	// These forks are synced from akash-network forks with virtengine-specific branding
+	// See: https://github.com/virtengine/cosmos-sdk (virtengine/release/v0.53.x branch)
+	github.com/cometbft/cometbft => github.com/virtengine/cometbft v0.38.21-virtengine.1
 
-	github.com/cosmos/cosmos-sdk => github.com/akash-network/cosmos-sdk v0.53.4-akash.b.10
+	github.com/cosmos/cosmos-sdk => github.com/virtengine/cosmos-sdk v0.53.4-virtengine.1
 
-	github.com/cosmos/gogoproto => github.com/akash-network/gogoproto v1.7.0-akash.2
+	github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1
 
-	// akash-network/ledger-go is a mono-repo that provides both:
-	// - zondax/ledger-go (root module, tag v0.16.0)
-	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0)
-	// TODO: Create virtengine fork of ledger-go mono-repo
-	github.com/cosmos/ledger-cosmos-go => github.com/akash-network/ledger-go/cosmos v0.16.0
+	// virtengine/ledger-go is a mono-repo that provides both:
+	// - zondax/ledger-go (root module, tag v0.16.0-virtengine)
+	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0-virtengine)
+	github.com/cosmos/ledger-cosmos-go => github.com/virtengine/ledger-go/cosmos v0.16.0-virtengine
 
 	// Use regen gogoproto fork
 	// To be replaced by cosmos/gogoproto in future versions
@@ -109,8 +105,8 @@ replace (
 
 	github.com/zondax/hid => github.com/troian/hid v0.14.0
 
-	// zondax/ledger-go replacement from akash-network/ledger-go mono-repo
-	github.com/zondax/ledger-go => github.com/akash-network/ledger-go v0.16.0
+	// zondax/ledger-go replacement from virtengine/ledger-go mono-repo
+	github.com/zondax/ledger-go => github.com/virtengine/ledger-go v0.16.0-virtengine
 
 	// stick with compatible version or x/exp in v0.47.x line
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb
@@ -240,7 +236,7 @@ require (
 	github.com/huandu/skiplist v1.2.1 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/iancoleman/strcase v0.3.0 // indirect
-	github.com/imdario/mergo v0.3.12 // indirect
+	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/improbable-eng/grpc-web v0.15.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ingonyama-zk/icicle-gnark/v3 v3.2.2 // indirect
@@ -312,7 +308,7 @@ require (
 	github.com/ulikunitz/xz v0.5.14 // indirect
 	github.com/virtengine/virtengine/sdk/specs v0.0.0-00010101000000-000000000000 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/zondax/golem v0.27.0 // indirect
