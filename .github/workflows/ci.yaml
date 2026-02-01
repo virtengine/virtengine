@@ -179,14 +179,22 @@ jobs:
   test-python:
     name: Python Tests
     runs-on: ubuntu-latest
-    # Only run if Python test files exist
-    if: hashFiles('tests/python/**/*.py') != ''
     continue-on-error: true # Don't fail CI if Python tests fail
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Detect Python tests
+        id: detect
+        run: |
+          if [ -d tests/python ] && find tests/python -name "*.py" -print -quit | grep -q .; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Python
+        if: steps.detect.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -194,6 +202,7 @@ jobs:
           cache-dependency-path: "tests/python/requirements.txt"
 
       - name: Install dependencies
+        if: steps.detect.outputs.run == 'true'
         run: |
           python -m pip install --upgrade pip
           if [ -f tests/python/requirements.txt ]; then
@@ -203,6 +212,7 @@ jobs:
           fi
 
       - name: Run Python tests
+        if: steps.detect.outputs.run == 'true'
         run: |
           if [ -d tests/python ] && [ "$(ls -A tests/python/*.py 2>/dev/null)" ]; then
             pytest tests/python --tb=short || echo "Python tests completed with issues"
@@ -210,20 +220,32 @@ jobs:
             echo "No Python tests found, skipping"
           fi
 
+      - name: Skip notice
+        if: steps.detect.outputs.run != 'true'
+        run: echo "No Python tests found, skipping job steps"
+
   # ===========================================================================
   # Portal Test Job - TypeScript/React Tests (Optional)
   # ===========================================================================
   test-portal:
     name: Portal Tests
     runs-on: ubuntu-latest
-    # Only run if portal package.json exists
-    if: hashFiles('lib/portal/package.json') != ''
     continue-on-error: true # Don't fail CI if Portal tests fail
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Detect portal package
+        id: detect
+        run: |
+          if [ -f lib/portal/package.json ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node.js
+        if: steps.detect.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -231,6 +253,7 @@ jobs:
           cache-dependency-path: "lib/portal/package-lock.json"
 
       - name: Install dependencies
+        if: steps.detect.outputs.run == 'true'
         run: |
           if [ -d lib/portal ] && [ -f lib/portal/package.json ]; then
             cd lib/portal
@@ -240,6 +263,7 @@ jobs:
           fi
 
       - name: Run unit tests
+        if: steps.detect.outputs.run == 'true'
         run: |
           if [ -d lib/portal ] && [ -f lib/portal/package.json ]; then
             cd lib/portal
@@ -247,6 +271,10 @@ jobs:
           else
             echo "Portal package not found, skipping"
           fi
+
+      - name: Skip notice
+        if: steps.detect.outputs.run != 'true'
+        run: echo "Portal package not found, skipping job steps"
 
   # ===========================================================================
   # Build Job - Build Binaries
@@ -866,3 +894,4 @@ jobs:
           fi
 
           echo "✅ All required quality gates passed"
+
