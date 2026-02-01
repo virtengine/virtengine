@@ -89,10 +89,10 @@ check_vet() {
 
     # Check if we're on main or have no diverged commits
     if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Exclude sdk/, vendor/, and tests/ as they have build constraints or separate modules
+        # Exclude vendor/ and tests/ as they have build constraints or separate modules
+        # NOTE: sdk/ is now included to catch SDK build errors early
         # Filter out directories that no longer exist (deleted packages)
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
-            grep -v '^sdk/' | \
             grep -v '^vendor/' | \
             grep -v '^tests/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
@@ -167,7 +167,8 @@ check_build() {
         return 0
     fi
     hook_warn "make bins failed, trying direct go build..."
-    go build ./cmd/... 2>&1
+    # Build cmd/ and sdk/go/ to catch missing types in SDK packages
+    go build ./cmd/... ./sdk/go/... 2>&1
 }
 
 # =========================================================================
@@ -199,10 +200,10 @@ check_test() {
     local base_branch="origin/main"
 
     if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Get changed Go files, exclude sdk/vendor/tests, filter to existing dirs
+        # Get changed Go files, exclude vendor/tests, filter to existing dirs
+        # NOTE: sdk/ is now included to catch SDK test failures early
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '_test\.go$' | \
-            grep -v '^sdk/' | \
             grep -v '^vendor/' | \
             grep -v '^tests/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
