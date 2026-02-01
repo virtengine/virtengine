@@ -13,6 +13,8 @@ This document defines the billing schema, pricing rules, tax handling, and settl
 7. [Settlement and Dispute Windows](#settlement-and-dispute-windows)
 8. [For Providers](#for-providers)
 9. [For Customers](#for-customers)
+10. [Export Formats](#export-formats)
+11. [Immutable Ledger](#immutable-ledger)
 
 ---
 
@@ -484,4 +486,133 @@ Example invoices:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-01-31 | Added PDF export, hash chain ledger |
 | 1.0.0 | 2026-01-30 | Initial billing policy |
+
+---
+
+## Export Formats
+
+### Supported Formats
+
+VirtEngine supports multiple export formats for invoices and billing data:
+
+| Format | Extension | MIME Type | Description |
+|--------|-----------|-----------|-------------|
+| PDF | `.pdf` | `application/pdf` | Print-ready invoice documents |
+| JSON | `.json` | `application/json` | Machine-readable structured data |
+| CSV | `.csv` | `text/csv` | Spreadsheet-compatible format |
+| Excel | `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Microsoft Excel format |
+
+### PDF Export
+
+PDF exports are generated using the `pkg/billing` export service and include:
+
+- **Header**: Company branding, contact information
+- **Invoice Information**: Number, dates, status
+- **Party Details**: Provider and customer addresses
+- **Line Items**: Detailed usage breakdown
+- **Summary**: Subtotal, discounts, tax, total
+- **Payment Instructions**: For pending invoices
+- **Terms and Conditions**: Configurable footer
+
+#### PDF Configuration
+
+```go
+PDFConfig{
+    CompanyName:    "VirtEngine",
+    CompanyAddress: []string{"VirtEngine Inc."},
+    CompanyEmail:   "billing@virtengine.io",
+    PrimaryColor:   "#2563eb",
+    PageSize:       "A4",
+    IncludeTerms:   true,
+    ShowTaxBreakdown: true,
+}
+```
+
+#### Generating PDF Export
+
+```bash
+# Via CLI (planned)
+virtengine query escrow invoice [invoice-id] --output pdf > invoice.pdf
+
+# Via gRPC
+QueryInvoiceExport(invoice_id, format="PDF")
+```
+
+### JSON Export
+
+JSON exports follow the `virtengine/invoice/v1` schema:
+
+```json
+{
+  "version": "1.0",
+  "schema_version": "virtengine/invoice/v1",
+  "exported_at": "2026-01-31T12:00:00Z",
+  "invoice": { ... }
+}
+```
+
+### CSV Export
+
+CSV exports include:
+- **Invoice Summary CSV**: One row per invoice with key fields
+- **Line Items CSV**: Detailed line item breakdown
+
+---
+
+## Immutable Ledger
+
+### Hash Chain Design
+
+Invoice ledger entries form an immutable hash chain for audit integrity:
+
+```
+[Genesis Entry] → [Status Change] → [Payment] → [Resolution]
+     ↓                  ↓               ↓            ↓
+   Hash₀              Hash₁           Hash₂        Hash₃
+   (Zero)            (Hash₀)         (Hash₁)      (Hash₂)
+```
+
+### Ledger Entry Structure
+
+| Field | Description |
+|-------|-------------|
+| `entry_id` | Unique entry identifier |
+| `invoice_id` | Associated invoice |
+| `entry_type` | created, issued, payment, disputed, resolved, etc. |
+| `previous_entry_hash` | SHA-256 hash of previous entry |
+| `entry_hash` | SHA-256 hash of this entry |
+| `sequence_number` | Position in chain (1-indexed) |
+| `block_height` | Blockchain height at creation |
+| `timestamp` | Entry creation time |
+
+### Genesis Entry
+
+The first entry in any invoice's ledger chain uses a zero hash:
+
+```
+PreviousEntryHash: "0000000000000000000000000000000000000000000000000000000000000000"
+SequenceNumber: 1
+```
+
+### Chain Verification
+
+The ledger chain can be verified at any time:
+
+```bash
+virtengine query escrow verify-ledger-chain [invoice-id]
+```
+
+This verifies:
+1. All entries have valid hash computations
+2. Each entry links correctly to its predecessor
+3. Sequence numbers are consecutive
+4. Genesis entry has zero hash
+
+### Audit Properties
+
+- **Immutability**: Once recorded, entries cannot be modified
+- **Ordering**: Cryptographic chain ensures entry ordering
+- **Integrity**: Hash verification detects tampering
+- **Traceability**: Complete audit trail for disputes
