@@ -236,10 +236,8 @@ func (c *SSHSLURMClient) Connect(ctx context.Context) error {
 	}
 
 	// Initialize connection pool
-	poolSize := c.config.PoolSize
-	if poolSize <= 0 {
-		poolSize = 5
-	}
+	// Note: pool size is configured but actual pooling is handled by dialWithRetry
+	_ = c.config.PoolSize // poolSize used in future connection pool expansion
 
 	addr := fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)
 

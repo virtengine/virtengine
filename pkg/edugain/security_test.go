@@ -187,7 +187,7 @@ func TestSignatureForge_SignatureWrapping(t *testing.T) {
 
 	// The verifier should either reject this or only return the legitimately signed content
 	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
-	result, err := verifier.VerifySAMLResponse(wrappedXML, []*x509.Certificate{cert})
+	result, _ := verifier.VerifySAMLResponse(wrappedXML, []*x509.Certificate{cert})
 
 	// If valid, ensure we got the signed assertion not the fake one
 	if result != nil && result.Valid {

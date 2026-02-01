@@ -515,10 +515,9 @@ func TestAnsibleVaultWithPasswordBytes(t *testing.T) {
 	encrypted, err := vault.EncryptWithPassword(plaintext, password, "")
 	require.NoError(t, err)
 
-	decrypted, err := vault.DecryptWithPassword(strings.TrimPrefix(encrypted, "$ANSIBLE_VAULT;1.1;AES256\n"), password)
+	_, _ = vault.DecryptWithPassword(strings.TrimPrefix(encrypted, "$ANSIBLE_VAULT;1.1;AES256\n"), password)
 	// This won't work directly because DecryptWithPassword expects the payload only
 	// Let's use the full decrypt path instead
-	_ = decrypted // suppress unused variable
 
 	// Set the password and use normal decrypt
 	_ = vault.SetDefaultPassword(string(password))
