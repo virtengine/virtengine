@@ -99,8 +99,8 @@ func Test_AccountCreate(t *testing.T) {
 	id := testutil.DeploymentID(t).ToEscrowAccountID()
 
 	owner := testutil.AccAddress(t)
-	amt := testutil.VECoinRandom(t)
-	amt2 := testutil.VECoinRandom(t)
+	amt := testutil.VECoinRandom(t, 1, 1000)
+	amt2 := testutil.VECoinRandom(t, 1, 1000)
 
 	// create account
 	bkeeper.

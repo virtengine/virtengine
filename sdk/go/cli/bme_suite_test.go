@@ -203,7 +203,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMint() {
 		expectedErrMsg string
 	}{
 		{
-			"burn AKT to mint ACT successfully",
+			"burn uve to mint mve successfully",
 			cli.TestFlags().
 				With("1000000uve", "mve").
 				WithFrom(s.addrs[0].String()).
@@ -214,7 +214,7 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMint() {
 			"",
 		},
 		{
-			"burn ACT to mint AKT successfully",
+			"burn mve to mint uve successfully",
 			cli.TestFlags().
 				With("500000mve", "uve").
 				WithFrom(s.addrs[0].String()).
@@ -367,13 +367,13 @@ func (s *BMECLITestSuite) TestCLITxBMEBurnMintMultipleDenoms() {
 		expectErr   bool
 	}{
 		{
-			"burn uve to mint uact",
+			"burn uve to mint mve",
 			"1000000uve",
 			"mve",
 			false,
 		},
 		{
-			"burn uact to mint uve",
+			"burn mve to mint uve",
 			"500000mve",
 			"uve",
 			false,

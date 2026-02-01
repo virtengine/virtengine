@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	DenomVe  = "ve"  // 1ve (base unit)
-	DenomMve = "mve" // 10^-3ve (milli)
-	DenomUve = "uve" // 10^-6ve (micro) - primary transaction denom
+	DenomVe  = "virtengine" // 1ve (base unit for display)
+	DenomMve = "mve"        // 10^-3ve (milli)
+	DenomUve = "uve"        // 10^-6ve (micro) - primary transaction denom
 
 	DenomUSD  = "usd"  // 1usd
 	DenomMusd = "musd" // 10^-3usd
