@@ -5,7 +5,7 @@ tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web', 'com.atlassian/atl
 
 Use MCP vibe-kanban server to manage backlog of tasks, tasks should be detailed and thorough - all tasks should be tasks that involve lots of changes (minimum of 2-10k lines of code changes). Tasks should be prioritized into task execution order & parallel execution where possible. For e.g. 1A-1D would be 4 tasks that are triggered in parallel and before tasks 2A-2X which would be sequential tasks to be triggered after 1A-1D are complete.
 
-naming convention is something like feat(module): 1A xyz
+naming convention is something like feat(module): {name} {taskOrder 1A}
 ✅ Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 
 📌 Examples:
@@ -29,4 +29,3 @@ Tasks added to the backlog should be documented into the progress.md with the st
 Your goal is NOT to implement any code, only create a thorough plan for tasks that need to be completed - and these tasks should be properly added to the backlog of vibe-kanban through MCP Tool calling, you should not duplicate any previously used sequences (for e.g. if currently the latest backlog tasks are 7A-7D then you should add tasks from 8A onwards unless the new task needs to be completed before the other backlog tasks due to priorities or dependancies)
 
 You should always assume progress.md is OUTDATED and a new analysis should be done of the project to determine what progress if any has happened since the last analysis.
-
