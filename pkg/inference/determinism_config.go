@@ -287,7 +287,11 @@ func (c *ProductionDeterminismConfig) computeHash() string {
 		RequireHashVerification: c.RequireHashVerification,
 	}
 
-	data, _ := json.Marshal(hashable)
+	data, err := json.Marshal(hashable)
+	if err != nil {
+		// Fall back to a deterministic default if marshaling fails
+		return "config-hash-error"
+	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }

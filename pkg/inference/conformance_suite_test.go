@@ -260,10 +260,13 @@ func (s *MultiMachineConformanceSuite) TestDeterministicOpsRegistryComplete(t *t
 	t.Logf("Deterministic ops registry: %d operations", len(DeterministicOps))
 }
 
+// testOpCudnnRNN is the CudnnRNN operation name used in tests.
+const testOpCudnnRNN = "CudnnRNN"
+
 // TestNonDeterministicOpsBlocked tests non-deterministic ops are blocked.
 func (s *MultiMachineConformanceSuite) TestNonDeterministicOpsBlocked(t *testing.T) {
 	// Test that model validation blocks non-deterministic ops
-	nonDetOps := []string{"CudnnRNN", "MatMul", "Add"} // CudnnRNN is non-deterministic
+	nonDetOps := []string{testOpCudnnRNN, "MatMul", "Add"} // CudnnRNN is non-deterministic
 
 	result := ValidateModelOperations(nonDetOps, true)
 
@@ -271,7 +274,7 @@ func (s *MultiMachineConformanceSuite) TestNonDeterministicOpsBlocked(t *testing
 		t.Error("Model with CudnnRNN should fail validation")
 	}
 
-	if len(result.NonDeterministicOps) != 1 || result.NonDeterministicOps[0] != "CudnnRNN" {
+	if len(result.NonDeterministicOps) != 1 || result.NonDeterministicOps[0] != testOpCudnnRNN {
 		t.Errorf("Expected CudnnRNN in non-deterministic list, got %v", result.NonDeterministicOps)
 	}
 
@@ -600,7 +603,7 @@ func (s *MultiMachineConformanceSuite) TestMultipleControllersSameResult(t *test
 	inputs := createStandardTestInputs()
 
 	// All controllers should produce same hash
-	var hashes []string
+	hashes := make([]string, 0, len(controllers))
 	for _, dc := range controllers {
 		hash := dc.ComputeInputHash(inputs)
 		hashes = append(hashes, hash)
