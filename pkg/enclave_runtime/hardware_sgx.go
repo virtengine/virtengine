@@ -469,6 +469,7 @@ func (g *SGXQuoteGenerator) generateSimulatedQuote(reportData [64]byte) (*SGXQuo
 	if _, err := rand.Read(quote.Signature); err != nil {
 		return nil, err
 	}
+	//nolint:gosec // G115: signature length is fixed 64 bytes
 	quote.SignatureLength = uint32(len(quote.Signature))
 
 	return quote, nil

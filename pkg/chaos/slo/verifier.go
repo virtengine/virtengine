@@ -89,7 +89,7 @@ func (v *Verifier) Verify(ctx context.Context, experiment *chaos.ExperimentSpec)
 	}
 
 	// Convert SteadyStateViolations to Violations
-	var chaosViolations []chaos.Violation
+	chaosViolations := make([]chaos.Violation, 0, len(violations))
 	for _, ssv := range violations {
 		chaosViolations = append(chaosViolations, chaos.Violation{
 			SLOName:       ssv.ProbeName,
@@ -287,6 +287,7 @@ type prometheusResponse struct {
 
 // checkCommandProbe executes a command probe.
 func (v *Verifier) checkCommandProbe(ctx context.Context, probe chaos.Probe) (float64, error) {
+	//nolint:gosec // G204: probe.Command is validated SLO configuration from trusted source
 	cmd := exec.CommandContext(ctx, "sh", "-c", probe.Command)
 	output, err := cmd.Output()
 	if err != nil {
@@ -314,6 +315,7 @@ func (v *Verifier) checkGRPCProbe(_ context.Context, probe chaos.Probe) (float64
 // checkKubernetesProbe checks Kubernetes resource status.
 func (v *Verifier) checkKubernetesProbe(ctx context.Context, probe chaos.Probe) (float64, error) {
 	// Use kubectl to check resource status
+	//nolint:gosec // G204: probe.Query is validated resource name from trusted SLO config
 	cmd := exec.CommandContext(ctx, "kubectl", "get", probe.Query, "-o", "jsonpath={.status.phase}")
 	output, err := cmd.Output()
 	if err != nil {

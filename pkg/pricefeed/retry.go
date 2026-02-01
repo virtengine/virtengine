@@ -159,6 +159,7 @@ func secureJitter(maxNs int64) int64 {
 
 	// Read random bytes and mask to ensure positive value
 	// Use only 63 bits to avoid sign issues
+	//nolint:gosec // G115: masked to 63 bits, safe for int64
 	randVal := int64(binary.LittleEndian.Uint64(buf[:]) >> 1)
 
 	// Scale to range [0, 2*maxNs] then shift to [-maxNs, +maxNs]

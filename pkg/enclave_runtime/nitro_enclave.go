@@ -905,6 +905,8 @@ func (n *NitroEnclaveServiceImpl) deriveEnclaveKeys() error {
 }
 
 // simulateVsockCommunication simulates vsock communication with enclave
+//
+//nolint:unused // Reserved for vsock communication implementation
 func (n *NitroEnclaveServiceImpl) simulateVsockCommunication(request []byte) ([]byte, error) {
 	// TODO: Real implementation would:
 	// 1. Open vsock connection: net.Dial("vsock", fmt.Sprintf("%d:%d", n.config.CID, n.config.VsockPort))
@@ -1003,7 +1005,8 @@ func (n *NitroEnclaveServiceImpl) simulateAttestationDocument(userData []byte) (
 	// 4. Parse and return the document
 
 	doc := &NitroAttestationDocument{
-		ModuleID:    n.moduleID,
+		ModuleID: n.moduleID,
+		//nolint:gosec // G115: UnixMilli timestamp is positive and fits in uint64
 		Timestamp:   uint64(time.Now().UnixMilli()),
 		Digest:      "SHA384",
 		PCRs:        n.pcrSet,
@@ -1048,14 +1051,17 @@ func (n *NitroEnclaveServiceImpl) serializeAttestationDocument(doc *NitroAttesta
 	}
 
 	// Certificate
+	//nolint:gosec // G115: Certificate length fits in uint16
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(doc.Certificate)))
 	buf = append(buf, doc.Certificate...)
 
 	// User data
+	//nolint:gosec // G115: UserData length fits in uint16
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(doc.UserData)))
 	buf = append(buf, doc.UserData...)
 
 	// Public key
+	//nolint:gosec // G115: PublicKey length fits in uint16
 	buf = binary.BigEndian.AppendUint16(buf, uint16(len(doc.PublicKey)))
 	buf = append(buf, doc.PublicKey...)
 

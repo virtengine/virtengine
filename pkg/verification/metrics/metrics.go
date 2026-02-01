@@ -620,8 +620,9 @@ func (c *Collector) ServeHTTP(ctx context.Context) error {
 	mux.Handle(c.config.HTTPPath, c.Handler())
 
 	server := &http.Server{
-		Addr:    ":" + string(rune(c.config.HTTPPort)),
-		Handler: mux,
+		Addr:              ":" + string(rune(c.config.HTTPPort)),
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {

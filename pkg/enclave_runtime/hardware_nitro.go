@@ -174,6 +174,7 @@ func (d *NitroHardwareDetector) getNitroCLIVersion() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	//nolint:gosec // G204: cliPath is validated during initialization
 	cmd := exec.CommandContext(ctx, d.cliPath, "--version")
 	output, err := cmd.Output()
 	if err != nil {
@@ -338,6 +339,7 @@ func (r *NitroCLIRunner) TerminateEnclave(ctx context.Context, enclaveID string)
 		"--enclave-id", enclaveID,
 	}
 
+	//nolint:gosec // G204: cliPath validated, enclaveID sanitized above
 	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), args...)
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -358,6 +360,7 @@ func (r *NitroCLIRunner) DescribeEnclaves(ctx context.Context) ([]NitroEnclaveIn
 		return []NitroEnclaveInfo{}, nil // No simulated enclaves running
 	}
 
+	//nolint:gosec // G204: cliPath validated during initialization
 	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), "describe-enclaves")
 	output, err := cmd.Output()
 	if err != nil {
@@ -394,6 +397,7 @@ func (r *NitroCLIRunner) Console(ctx context.Context, enclaveID string) error {
 		"--enclave-id", enclaveID,
 	}
 
+	//nolint:gosec // G204: cliPath validated, enclaveID sanitized above
 	cmd := exec.CommandContext(ctx, r.detector.GetCLIPath(), args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -659,7 +663,8 @@ func (c *NitroNSMClient) getHardwareAttestationDocument(userData, nonce, publicK
 // getSimulatedAttestationDocument generates a simulated document
 func (c *NitroNSMClient) getSimulatedAttestationDocument(userData, nonce, publicKey []byte) (*NSMAttestationDocument, error) {
 	doc := &NSMAttestationDocument{
-		ModuleID:  "i-simulated-enclave-module",
+		ModuleID: "i-simulated-enclave-module",
+		//nolint:gosec // G115: Unix timestamp is positive and fits in uint64
 		Timestamp: uint64(time.Now().Unix()),
 		Digest:    "SHA384",
 		PCRs:      make(map[uint8][]byte),

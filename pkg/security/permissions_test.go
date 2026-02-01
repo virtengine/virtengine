@@ -195,6 +195,7 @@ func TestEnsureSecurePermissions(t *testing.T) {
 
 	t.Run("FixInsecurePermissions", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "insecure.key")
+		//nolint:gosec // G306: intentionally insecure for testing permission fix
 		if err := os.WriteFile(path, []byte("key"), 0644); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}

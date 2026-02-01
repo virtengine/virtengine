@@ -47,7 +47,7 @@ type ProductionSEVBackend struct {
 	initialized  bool
 	isHardware   bool
 	platformInfo *SEVPlatformInfo
-	lastError    error
+	lastError    error //nolint:unused // Reserved for error tracking
 
 	// AMD KDS configuration
 	kdsBaseURL string
@@ -315,10 +315,14 @@ func (b *ProductionSEVBackend) parseReportForCertificates(report []byte) (chipID
 	tcbValue := binary.LittleEndian.Uint64(tcbBytes)
 
 	tcbVersion = &SNPTCBVersion{
+		//nolint:gosec // G115: TCB values are 8-bit fields extracted from report
 		BootLoader: uint8(tcbValue & 0xFF),
-		TEE:        uint8((tcbValue >> 8) & 0xFF),
-		SNP:        uint8((tcbValue >> 48) & 0xFF),
-		Microcode:  uint8((tcbValue >> 56) & 0xFF),
+		//nolint:gosec // G115: TCB values are 8-bit fields extracted from report
+		TEE: uint8((tcbValue >> 8) & 0xFF),
+		//nolint:gosec // G115: TCB values are 8-bit fields extracted from report
+		SNP: uint8((tcbValue >> 48) & 0xFF),
+		//nolint:gosec // G115: TCB values are 8-bit fields extracted from report
+		Microcode: uint8((tcbValue >> 56) & 0xFF),
 	}
 
 	return chipID, tcbVersion, nil
@@ -405,6 +409,7 @@ func (b *ProductionSEVBackend) fetchCertificate(url string, certType string) ([]
 	// Cache the certificate
 	if b.config.CertCachePath != "" {
 		cacheFile := fmt.Sprintf("%s/%s_%x.pem", b.config.CertCachePath, certType, sha512.Sum512_256([]byte(url)))
+		//nolint:gosec // G306: certificate cache file, 0644 permissions acceptable
 		_ = os.WriteFile(cacheFile, cert, 0644)
 	}
 

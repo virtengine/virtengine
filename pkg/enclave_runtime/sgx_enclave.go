@@ -991,6 +991,8 @@ func (s *SGXEnclaveServiceImpl) hkdfDerive(secret, salt, info []byte, length int
 }
 
 // simulateEnclaveScoring simulates scoring inside the enclave
+//
+//nolint:unused // Reserved for enclave scoring simulation
 func (s *SGXEnclaveServiceImpl) simulateEnclaveScoring(request *ScoringRequest) *ScoringResult {
 	// Compute input hash
 	inputHash := sha256.Sum256(request.Ciphertext)
@@ -1037,6 +1039,8 @@ func (s *SGXEnclaveServiceImpl) simulateEnclaveScoring(request *ScoringRequest) 
 }
 
 // computeSigningPayload computes the payload to sign
+//
+//nolint:unused // Reserved for enclave signing
 func (s *SGXEnclaveServiceImpl) computeSigningPayload(requestID string, score uint32, status string, inputHash []byte) []byte {
 	h := sha256.New()
 	h.Write([]byte(requestID))
@@ -1104,6 +1108,7 @@ func (s *SGXEnclaveServiceImpl) simulateDCAPQuoteGeneration(reportData []byte) (
 	// Signature (simulated ECDSA)
 	sigPayload := sha256.Sum256(quote)
 	signature := s.signInsideEnclave(sigPayload[:])
+	//nolint:gosec // G115: signature length is bounded by signing algorithm
 	quote = binary.LittleEndian.AppendUint32(quote, uint32(len(signature)))
 	quote = append(quote, signature...)
 

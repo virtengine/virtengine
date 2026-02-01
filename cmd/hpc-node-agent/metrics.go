@@ -35,12 +35,15 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 	capacity := &NodeCapacity{}
 
 	// CPU cores
+	//nolint:gosec // G115: NumCPU returns small positive int, safe for int32
 	capacity.CPUCoresTotal = int32(runtime.NumCPU())
 	capacity.CPUCoresAvailable = capacity.CPUCoresTotal // Simplified; would check SLURM allocation
 
 	// Memory
 	memTotal, memAvailable := m.getMemoryInfo()
+	//nolint:gosec // G115: memory in GB is bounded well under int32 max
 	capacity.MemoryGBTotal = int32(memTotal / (1024 * 1024 * 1024))
+	//nolint:gosec // G115: memory in GB is bounded well under int32 max
 	capacity.MemoryGBAvailable = int32(memAvailable / (1024 * 1024 * 1024))
 
 	// GPU (placeholder - would use nvidia-smi or similar)
@@ -48,7 +51,9 @@ func (m *MetricsCollector) CollectCapacity() (*NodeCapacity, error) {
 
 	// Storage
 	storageTotal, storageAvailable := m.getStorageInfo("/")
+	//nolint:gosec // G115: storage in GB is bounded well under int32 max
 	capacity.StorageGBTotal = int32(storageTotal / (1024 * 1024 * 1024))
+	//nolint:gosec // G115: storage in GB is bounded well under int32 max
 	capacity.StorageGBAvailable = int32(storageAvailable / (1024 * 1024 * 1024))
 
 	return capacity, nil
@@ -73,6 +78,7 @@ func (m *MetricsCollector) CollectHealth() (*NodeHealth, error) {
 	// Memory utilization
 	memTotal, memAvailable := m.getMemoryInfo()
 	if memTotal > 0 {
+		//nolint:gosec // G115: percentage is 0-100, safe for int32
 		health.MemoryUtilizationPercent = int32(100 * (memTotal - memAvailable) / memTotal)
 	}
 
@@ -264,6 +270,7 @@ func (m *MetricsCollector) getCPUUtilization() int32 {
 				total := user + nice + system + idle
 				if total > 0 {
 					used := user + nice + system
+					//nolint:gosec // G115: percentage is 0-100, safe for int32
 					return int32(100 * used / total)
 				}
 				break
@@ -286,6 +293,7 @@ func (m *MetricsCollector) getGPUInfo() (int32, int32, string) {
 		return 0, 0, ""
 	}
 
+	//nolint:gosec // G115: GPU count is bounded (realistically < 100)
 	count := int32(len(lines))
 	gpuType := ""
 	if parts := strings.SplitN(lines[0], ",", 2); len(parts) == 2 {

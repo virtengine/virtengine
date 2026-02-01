@@ -53,6 +53,10 @@ var (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	flag.Parse()
 
 	// Setup logging
@@ -83,7 +87,7 @@ func main() {
 	server, err := NewInferenceSidecarServer(config, log)
 	if err != nil {
 		log.Error("Failed to create inference server", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer server.Close()
 
@@ -114,7 +118,7 @@ func main() {
 	lis, err := net.Listen("tcp", *grpcAddr)
 	if err != nil {
 		log.Error("Failed to listen", "error", err, "addr", *grpcAddr)
-		os.Exit(1)
+		return 1
 	}
 
 	log.Info("gRPC server listening", "addr", *grpcAddr)
@@ -138,21 +142,29 @@ func main() {
 		grpcServer.GracefulStop()
 	case err := <-errChan:
 		log.Error("Server error", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	log.Info("Server stopped gracefully")
+	return 0
 }
 
 func startMetricsServer(addr string, log Logger) {
-	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
 
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
 	log.Info("Metrics server listening", "addr", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Error("Metrics server error", "error", err)
 	}
 }

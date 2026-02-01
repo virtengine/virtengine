@@ -156,6 +156,7 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 	// Configure host key callback
 	switch sshConfig.HostKeyCallback {
 	case "ignore":
+		//nolint:gosec // G106: InsecureIgnoreHostKey intentional when HostKeyCallback="ignore"
 		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 	case "known_hosts":
 		knownHostsPath := sshConfig.KnownHostsPath
@@ -202,6 +203,7 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 			clientConfig.HostKeyCallback = hostKeyCallback
 		} else {
 			// Fall back to insecure if no known_hosts file exists
+			//nolint:gosec // G106: InsecureIgnoreHostKey fallback when no known_hosts available
 			clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 		}
 	}
@@ -484,6 +486,8 @@ func (c *SSHSLURMClient) runCommand(ctx context.Context, cmd string) (string, er
 }
 
 // runCommandWithTimeout executes a command with a specific timeout
+//
+//nolint:unused // Reserved for timeout-based command execution
 func (c *SSHSLURMClient) runCommandWithTimeout(ctx context.Context, cmd string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

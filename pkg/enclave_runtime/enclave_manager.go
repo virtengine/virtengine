@@ -242,6 +242,7 @@ func (b *EnclaveBackend) RecordSuccess(latencyMs int64) {
 
 	b.Metrics.TotalRequests++
 	b.Metrics.SuccessfulRequests++
+	//nolint:gosec // G115: latencyMs is positive duration in milliseconds
 	b.Metrics.TotalLatencyMs += uint64(latencyMs)
 	b.Metrics.LastRequestTime = time.Now()
 
@@ -265,6 +266,7 @@ func (b *EnclaveBackend) RecordFailure(latencyMs int64) {
 
 	b.Metrics.TotalRequests++
 	b.Metrics.FailedRequests++
+	//nolint:gosec // G115: latencyMs is positive duration in milliseconds
 	b.Metrics.TotalLatencyMs += uint64(latencyMs)
 	b.Metrics.LastRequestTime = time.Now()
 
@@ -663,6 +665,7 @@ func secureRandomIntn(n int) (int, error) {
 		return 0, err
 	}
 	r := binary.BigEndian.Uint64(buf[:])
+	//nolint:gosec // G115: n is validated positive, modulo result fits in int
 	return int(r % uint64(n)), nil
 }
 

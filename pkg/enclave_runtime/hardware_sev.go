@@ -447,6 +447,7 @@ func (r *SNPDerivedKeyRequester) RequestKey(rootKey int, guestFieldSelect uint64
 func (r *SNPDerivedKeyRequester) requestHardwareKey(rootKey int, guestFieldSelect uint64, vmpl uint32) ([]byte, error) {
 	// Build request
 	req := SNPKeyRequest{
+		//nolint:gosec // G115: rootKey is 0 or 1 enum value
 		RootKeySelect:    uint32(rootKey),
 		GuestFieldSelect: guestFieldSelect,
 		VMPL:             vmpl,

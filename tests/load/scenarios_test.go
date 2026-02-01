@@ -463,7 +463,7 @@ func (r *LoadTestResults) calculatePercentiles() {
 
 // MockChainClient simulates chain interactions for load testing
 type MockChainClient struct {
-	mu              sync.Mutex
+	mu sync.Mutex //nolint:unused // Reserved for thread-safe counter access
 	identityCounter int64
 	orderCounter    int64
 	jobCounter      int64
@@ -475,34 +475,40 @@ func NewMockChainClient() *MockChainClient {
 
 func (c *MockChainClient) SubmitIdentityUpload(payload *IdentityPayload) (string, error) {
 	// Simulate processing delay
+	//nolint:gosec // G404: weak random acceptable for test timing jitter
 	time.Sleep(time.Duration(50+mathrand.IntN(100)) * time.Millisecond)
 	id := atomic.AddInt64(&c.identityCounter, 1)
 	return fmt.Sprintf("identity_%d", id), nil
 }
 
 func (c *MockChainClient) SubmitOrder(order *MarketplaceOrder) (string, error) {
+	//nolint:gosec // G404: weak random acceptable for test timing jitter
 	time.Sleep(time.Duration(100+mathrand.IntN(200)) * time.Millisecond)
 	id := atomic.AddInt64(&c.orderCounter, 1)
 	return fmt.Sprintf("order_%d", id), nil
 }
 
 func (c *MockChainClient) SubmitBid(orderID string, bid *ProviderBid) (string, error) {
+	//nolint:gosec // G404: weak random acceptable for test timing jitter
 	time.Sleep(time.Duration(50+mathrand.IntN(100)) * time.Millisecond)
 	return "bid_" + orderID, nil
 }
 
 func (c *MockChainClient) AllocateOrder(orderID string) (string, error) {
+	//nolint:gosec // G404: weak random acceptable for test timing jitter
 	time.Sleep(time.Duration(100+mathrand.IntN(200)) * time.Millisecond)
 	return "alloc_" + orderID, nil
 }
 
 func (c *MockChainClient) SubmitHPCJob(job *HPCJob) (string, error) {
+	//nolint:gosec // G404: weak random acceptable for test timing jitter
 	time.Sleep(time.Duration(50+mathrand.IntN(100)) * time.Millisecond)
 	id := atomic.AddInt64(&c.jobCounter, 1)
 	return fmt.Sprintf("job_%d", id), nil
 }
 
 func (c *MockChainClient) WaitForJobScheduled(jobID string, timeout time.Duration) (string, error) {
+	//nolint:gosec // G404: weak random acceptable for test timing jitter
 	time.Sleep(time.Duration(100+mathrand.IntN(200)) * time.Millisecond)
 	return "scheduled", nil
 }
@@ -615,9 +621,9 @@ func generateIdentityPayload() *IdentityPayload {
 	scopes := make([]byte, 1024)
 	salt := make([]byte, 32)
 	sig := make([]byte, 64)
-	io.ReadFull(rand.Reader, scopes)
-	io.ReadFull(rand.Reader, salt)
-	io.ReadFull(rand.Reader, sig)
+	_, _ = io.ReadFull(rand.Reader, scopes)
+	_, _ = io.ReadFull(rand.Reader, salt)
+	_, _ = io.ReadFull(rand.Reader, sig)
 	return &IdentityPayload{Scopes: scopes, Salt: salt, Signature: sig}
 }
 

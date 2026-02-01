@@ -141,6 +141,7 @@ func TestOAuth2TokenManagerExchangeCode(t *testing.T) {
 
 		if r.URL.Path == "/token" && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:gosec // G101: test JWT token, not a real credential
 			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIiLCJpZGVudGl0eV9zY29yZSI6MC45NX0.sig"
 			_, _ = w.Write([]byte(`{
 				"access_token":"access-token-123",
@@ -193,6 +194,7 @@ func TestOAuth2TokenManagerRefreshToken(t *testing.T) {
 
 		if r.URL.Path == "/token" {
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:gosec // G101: test JWT token, not a real credential
 			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIiLCJpZGVudGl0eV9zY29yZSI6MC45NX0.sig"
 			_, _ = w.Write([]byte(`{
 				"access_token":"new-access-token",
@@ -249,6 +251,7 @@ func TestOAuth2TokenManagerGetValidToken(t *testing.T) {
 
 		if r.URL.Path == "/token" {
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:gosec // G101: test JWT token, not a real credential
 			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIifQ.sig"
 			_, _ = w.Write([]byte(`{
 				"access_token":"token",
@@ -343,6 +346,7 @@ func TestOAuth2TokenManagerRevokeToken(t *testing.T) {
 
 		if r.URL.Path == "/token" {
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:gosec // G101: test JWT token, not a real credential
 			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIifQ.sig"
 			_, _ = w.Write([]byte(`{
 				"access_token":"token-to-revoke",
@@ -469,6 +473,7 @@ func TestOAuth2ProviderAdapter(t *testing.T) {
 
 		if r.URL.Path == "/token" {
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:gosec // G101: test JWT token, not a real credential
 			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIiLCJpZGVudGl0eV9zY29yZSI6MC45NX0.sig"
 			_, _ = w.Write([]byte(`{
 				"access_token":"access-token",
@@ -562,6 +567,7 @@ func TestManagedTokenOnRefreshCallback(t *testing.T) {
 
 		if r.URL.Path == "/token" {
 			w.Header().Set("Content-Type", "application/json")
+			//nolint:gosec // G101: test JWT token, not a real credential
 			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJ2ZWlkX2FkZHJlc3MiOiJ2ZWlkMXVzZXIifQ.sig"
 			_, _ = w.Write([]byte(`{
 				"access_token":"token",
@@ -620,6 +626,7 @@ func TestIDTokenParsing(t *testing.T) {
 		if r.URL.Path == "/token" {
 			w.Header().Set("Content-Type", "application/json")
 			// Valid ID token with claims
+			//nolint:gosec // G101: test JWT token, not a real credential
 			idToken := "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIiwidmVpZF9hZGRyZXNzIjoidmVpZDFjdXN0b211c2VyIiwiaWRlbnRpdHlfc2NvcmUiOjAuOTksImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsIm5hbWUiOiJUZXN0IFVzZXIifQ.signature"
 			_, _ = w.Write([]byte(`{
 				"access_token":"access",
