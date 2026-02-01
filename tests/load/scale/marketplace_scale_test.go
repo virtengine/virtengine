@@ -402,7 +402,7 @@ func populateMarketplace(orderCount, bidsPerOrder, providersCount int) *Marketpl
 	}()
 	
 	// Collect orders and submit bids
-	orders := make([]*MockOrder, 0, numOrders)
+	orders := make([]*MockOrder, 0, orderCount)
 	for order := range ordersChan {
 		orders = append(orders, order)
 	}
