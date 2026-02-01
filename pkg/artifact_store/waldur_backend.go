@@ -43,6 +43,9 @@ type WaldurConfig struct {
 	// QuotaBytes is the storage quota in bytes (0 = unlimited)
 	QuotaBytes int64 `json:"quota_bytes"`
 
+	// PerOwnerQuotaBytes is the per-owner storage quota in bytes (0 = unlimited)
+	PerOwnerQuotaBytes int64 `json:"per_owner_quota_bytes"`
+
 	// StreamingChunkSize is the chunk size for streaming uploads (default: 8MB)
 	StreamingChunkSize int64 `json:"streaming_chunk_size"`
 
@@ -51,17 +54,37 @@ type WaldurConfig struct {
 
 	// UseFallbackMemory enables in-memory fallback when Waldur is unavailable (testing only)
 	UseFallbackMemory bool `json:"use_fallback_memory"`
+
+	// EnablePinning enables artifact pinning for protected storage
+	EnablePinning bool `json:"enable_pinning"`
+
+	// RetentionCheckInterval is how often to check for expired artifacts
+	RetentionCheckInterval time.Duration `json:"retention_check_interval"`
+
+	// DefaultRetentionDays is the default retention period in days (0 = indefinite)
+	DefaultRetentionDays int `json:"default_retention_days"`
+
+	// VerifyOnUpload enables hash verification immediately after upload
+	VerifyOnUpload bool `json:"verify_on_upload"`
+
+	// VerifyOnDownload enables hash verification on every download
+	VerifyOnDownload bool `json:"verify_on_download"`
 }
 
 // DefaultWaldurConfig returns a default configuration
 func DefaultWaldurConfig() *WaldurConfig {
 	return &WaldurConfig{
-		MaxRetries:         3,
-		Timeout:            30 * time.Second,
-		EncryptAtRest:      true,
-		StreamingChunkSize: 8 * 1024 * 1024, // 8MB
-		HealthCheckTimeout: 10 * time.Second,
-		UseFallbackMemory:  false,
+		MaxRetries:             3,
+		Timeout:                30 * time.Second,
+		EncryptAtRest:          true,
+		StreamingChunkSize:     8 * 1024 * 1024, // 8MB
+		HealthCheckTimeout:     10 * time.Second,
+		UseFallbackMemory:      false,
+		EnablePinning:          true,
+		RetentionCheckInterval: 1 * time.Hour,
+		DefaultRetentionDays:   365,
+		VerifyOnUpload:         true,
+		VerifyOnDownload:       true,
 	}
 }
 
@@ -106,6 +129,12 @@ type WaldurBackend struct {
 	// ownerIndex maps owner -> list of content hashes (for fallback and caching)
 	ownerIndex map[string][]string
 
+	// pinnedArtifacts tracks pinned artifact hashes that should not be deleted
+	pinnedArtifacts map[string]bool
+
+	// ownerUsage tracks per-owner storage usage in bytes
+	ownerUsage map[string]int64
+
 	// metrics tracks storage metrics
 	metrics *StorageMetrics
 
@@ -131,6 +160,8 @@ func NewWaldurBackend(config *WaldurConfig) (*WaldurBackend, error) {
 		config:          config,
 		fallbackStorage: make(map[string]*storedArtifact),
 		ownerIndex:      make(map[string][]string),
+		pinnedArtifacts: make(map[string]bool),
+		ownerUsage:      make(map[string]int64),
 		metrics: &StorageMetrics{
 			BackendType:   BackendWaldur,
 			BackendStatus: make(map[string]string),
@@ -1048,4 +1079,553 @@ func boolToString(b bool) string {
 	}
 	return "false"
 }
+
+// PinnableStore extends ArtifactStore with pinning support
+type PinnableStore interface {
+	ArtifactStore
+	Pin(ctx context.Context, address *ContentAddress) error
+	Unpin(ctx context.Context, address *ContentAddress) error
+	IsPinned(ctx context.Context, address *ContentAddress) (bool, error)
+}
+
+// Pin marks an artifact as pinned, preventing automatic deletion
+func (w *WaldurBackend) Pin(ctx context.Context, address *ContentAddress) error {
+	if address == nil {
+		return ErrInvalidInput.Wrap("address cannot be nil")
+	}
+
+	if !w.config.EnablePinning {
+		return ErrBackendNotSupported.Wrap("pinning is not enabled")
+	}
+
+	hashHex := hex.EncodeToString(address.Hash)
+
+	// In production mode, update object metadata
+	if !w.useFallback && w.objectStorage != nil {
+		// Store pin state in object metadata
+		meta, err := w.objectStorage.Head(ctx, w.config.Bucket, address.BackendRef)
+		if err != nil {
+			if errors.Is(err, waldur.ErrObjectNotFound) {
+				return ErrArtifactNotFound.Wrapf("artifact not found: %s", hashHex)
+			}
+			return ErrBackendUnavailable.Wrapf("failed to get metadata: %v", err)
+		}
+
+		// Update metadata with pin status
+		if meta.Metadata == nil {
+			meta.Metadata = make(map[string]string)
+		}
+		meta.Metadata["pinned"] = "true"
+		meta.Metadata["pinned_at"] = time.Now().UTC().Format(time.RFC3339)
+
+		// Note: Waldur object storage may not support in-place metadata updates
+		// In that case, we track locally
+	}
+
+	// Track in local cache
+	w.mu.Lock()
+	w.pinnedArtifacts[hashHex] = true
+	w.mu.Unlock()
+
+	return nil
+}
+
+// Unpin removes the pin from an artifact, allowing automatic deletion
+func (w *WaldurBackend) Unpin(ctx context.Context, address *ContentAddress) error {
+	if address == nil {
+		return ErrInvalidInput.Wrap("address cannot be nil")
+	}
+
+	if !w.config.EnablePinning {
+		return ErrBackendNotSupported.Wrap("pinning is not enabled")
+	}
+
+	hashHex := hex.EncodeToString(address.Hash)
+
+	// Verify artifact exists
+	exists, err := w.Exists(ctx, address)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrArtifactNotFound.Wrapf("artifact not found: %s", hashHex)
+	}
+
+	// Remove from local cache
+	w.mu.Lock()
+	delete(w.pinnedArtifacts, hashHex)
+	w.mu.Unlock()
+
+	return nil
+}
+
+// IsPinned checks if an artifact is pinned
+func (w *WaldurBackend) IsPinned(ctx context.Context, address *ContentAddress) (bool, error) {
+	if address == nil {
+		return false, ErrInvalidInput.Wrap("address cannot be nil")
+	}
+
+	if !w.config.EnablePinning {
+		return false, nil
+	}
+
+	hashHex := hex.EncodeToString(address.Hash)
+
+	w.mu.RLock()
+	pinned := w.pinnedArtifacts[hashHex]
+	w.mu.RUnlock()
+
+	return pinned, nil
+}
+
+// GetOwnerUsage returns the storage usage for an owner in bytes
+func (w *WaldurBackend) GetOwnerUsage(ctx context.Context, owner string) (int64, error) {
+	if owner == "" {
+		return 0, ErrInvalidInput.Wrap("owner cannot be empty")
+	}
+
+	// If we have production storage, get from backend
+	if !w.useFallback && w.objectStorage != nil {
+		prefix := w.generateOwnerPrefix(owner)
+		listReq := &waldur.ListRequest{
+			Bucket:  w.config.Bucket,
+			Prefix:  prefix,
+			MaxKeys: 10000,
+		}
+
+		var totalBytes int64
+		for {
+			listResp, err := w.objectStorage.List(ctx, listReq)
+			if err != nil {
+				// Fall through to local cache if list fails
+				break
+			}
+
+			for _, obj := range listResp.Objects {
+				totalBytes += obj.Size
+			}
+
+			if !listResp.IsTruncated {
+				return totalBytes, nil
+			}
+			listReq.ContinuationToken = listResp.NextContinuationToken
+		}
+	}
+
+	// Use local cache
+	w.mu.RLock()
+	usage := w.ownerUsage[owner]
+	w.mu.RUnlock()
+
+	return usage, nil
+}
+
+// CheckOwnerQuota checks if an owner has quota available for the given size
+func (w *WaldurBackend) CheckOwnerQuota(ctx context.Context, owner string, size int64) error {
+	if w.config.PerOwnerQuotaBytes <= 0 {
+		return nil // No per-owner quota
+	}
+
+	currentUsage, err := w.GetOwnerUsage(ctx, owner)
+	if err != nil {
+		return err
+	}
+
+	if currentUsage+size > w.config.PerOwnerQuotaBytes {
+		return ErrStorageLimitExceeded.Wrapf(
+			"owner quota exceeded: current=%d, requested=%d, limit=%d",
+			currentUsage, size, w.config.PerOwnerQuotaBytes)
+	}
+
+	return nil
+}
+
+// VerifyArtifact verifies an artifact's integrity by downloading and checking hash
+func (w *WaldurBackend) VerifyArtifact(ctx context.Context, address *ContentAddress) error {
+	if address == nil {
+		return ErrInvalidInput.Wrap("address cannot be nil")
+	}
+
+	hashHex := hex.EncodeToString(address.Hash)
+
+	// Get the artifact
+	resp, err := w.Get(ctx, &GetRequest{ContentAddress: address})
+	if err != nil {
+		return err
+	}
+
+	// Compute hash and verify
+	computedHash := sha256.Sum256(resp.Data)
+	if !bytesEqual(computedHash[:], address.Hash) {
+		return ErrHashMismatch.Wrapf(
+			"artifact %s failed verification: expected %s, got %s",
+			hashHex, hashHex, hex.EncodeToString(computedHash[:]))
+	}
+
+	return nil
+}
+
+// BatchVerify verifies multiple artifacts and returns results
+func (w *WaldurBackend) BatchVerify(ctx context.Context, addresses []*ContentAddress) (map[string]error, error) {
+	results := make(map[string]error)
+
+	for _, addr := range addresses {
+		hashHex := hex.EncodeToString(addr.Hash)
+		err := w.VerifyArtifact(ctx, addr)
+		results[hashHex] = err
+	}
+
+	return results, nil
+}
+
+// GetRetentionPolicy returns the retention policy for an artifact
+func (w *WaldurBackend) GetRetentionPolicy(ctx context.Context, address *ContentAddress) (*RetentionTag, error) {
+	if address == nil {
+		return nil, ErrInvalidInput.Wrap("address cannot be nil")
+	}
+
+	hashHex := hex.EncodeToString(address.Hash)
+
+	// Check fallback storage
+	if w.useFallback {
+		w.mu.RLock()
+		artifact, exists := w.fallbackStorage[hashHex]
+		w.mu.RUnlock()
+
+		if !exists {
+			return nil, ErrArtifactNotFound.Wrapf("artifact not found: %s", hashHex)
+		}
+
+		if artifact.reference.RetentionTag != nil {
+			return artifact.reference.RetentionTag, nil
+		}
+
+		return nil, nil
+	}
+
+	// For production, get from object metadata
+	meta, err := w.objectStorage.Head(ctx, w.config.Bucket, address.BackendRef)
+	if err != nil {
+		if errors.Is(err, waldur.ErrObjectNotFound) {
+			return nil, ErrArtifactNotFound.Wrapf("artifact not found: %s", hashHex)
+		}
+		return nil, ErrBackendUnavailable.Wrapf("failed to get metadata: %v", err)
+	}
+
+	// Parse retention from metadata
+	if meta.Metadata == nil {
+		return nil, nil
+	}
+
+	tag := &RetentionTag{}
+	if policyID, ok := meta.Metadata["retention_policy_id"]; ok {
+		tag.PolicyID = policyID
+	}
+	if expiresAt, ok := meta.Metadata["retention_expires_at"]; ok {
+		if t, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+			tag.ExpiresAt = &t
+		}
+	}
+	if deleteOnExpiry, ok := meta.Metadata["delete_on_expiry"]; ok {
+		tag.DeleteOnExpiry = deleteOnExpiry == "true"
+	}
+
+	return tag, nil
+}
+
+// SetRetentionPolicy sets the retention policy for an artifact
+func (w *WaldurBackend) SetRetentionPolicy(ctx context.Context, address *ContentAddress, policy *RetentionTag) error {
+	return w.UpdateRetention(ctx, address, policy)
+}
+
+// PurgeByOwner removes all artifacts owned by a specific account
+func (w *WaldurBackend) PurgeByOwner(ctx context.Context, owner string) (int, error) {
+	if owner == "" {
+		return 0, ErrInvalidInput.Wrap("owner cannot be empty")
+	}
+
+	if w.useFallback {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+
+		hashes, exists := w.ownerIndex[owner]
+		if !exists {
+			return 0, nil
+		}
+
+		count := 0
+		for _, hashHex := range hashes {
+			// Skip pinned artifacts
+			if w.pinnedArtifacts[hashHex] {
+				continue
+			}
+
+			artifact, exists := w.fallbackStorage[hashHex]
+			if !exists {
+				continue
+			}
+
+			// Update metrics
+			w.metrics.TotalBytes -= uint64(len(artifact.data))
+			w.metrics.TotalArtifacts--
+
+			delete(w.fallbackStorage, hashHex)
+			count++
+		}
+
+		// Clear owner index
+		delete(w.ownerIndex, owner)
+		delete(w.ownerUsage, owner)
+
+		return count, nil
+	}
+
+	// For production, list and delete
+	prefix := w.generateOwnerPrefix(owner)
+	listReq := &waldur.ListRequest{
+		Bucket:  w.config.Bucket,
+		Prefix:  prefix,
+		MaxKeys: 1000,
+	}
+
+	count := 0
+	for {
+		listResp, err := w.objectStorage.List(ctx, listReq)
+		if err != nil {
+			return count, ErrBackendUnavailable.Wrapf("list failed: %v", err)
+		}
+
+		for _, obj := range listResp.Objects {
+			// Skip pinned artifacts
+			hashFromKey := extractHashFromKey(obj.Key)
+			w.mu.RLock()
+			pinned := w.pinnedArtifacts[hashFromKey]
+			w.mu.RUnlock()
+			if pinned {
+				continue
+			}
+
+			if err := w.objectStorage.Delete(ctx, w.config.Bucket, obj.Key); err == nil {
+				count++
+			}
+		}
+
+		if !listResp.IsTruncated {
+			break
+		}
+		listReq.ContinuationToken = listResp.NextContinuationToken
+	}
+
+	return count, nil
+}
+
+// extractHashFromKey extracts the hash from an object key
+func extractHashFromKey(key string) string {
+	// Keys are in format: org/project/bucket/owner_prefix/hash
+	parts := splitKeyPath(key)
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return key
+}
+
+// splitKeyPath splits a key path into parts
+func splitKeyPath(key string) []string {
+	var parts []string
+	var current string
+	for _, c := range key {
+		if c == '/' {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		} else {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+	return parts
+}
+
+// WaldurPinnableBackend wraps WaldurBackend with pinning interface
+type WaldurPinnableBackend struct {
+	*WaldurBackend
+}
+
+// NewWaldurPinnableBackend creates a new pinnable Waldur backend
+func NewWaldurPinnableBackend(config *WaldurConfig) (*WaldurPinnableBackend, error) {
+	if config == nil {
+		config = DefaultWaldurConfig()
+	}
+	config.EnablePinning = true
+
+	base, err := NewWaldurBackend(config)
+	if err != nil {
+		return nil, err
+	}
+	return &WaldurPinnableBackend{WaldurBackend: base}, nil
+}
+
+// Ensure WaldurBackend implements PinnableStore
+var _ PinnableStore = (*WaldurBackend)(nil)
+
+// RetentionCleanupStats contains statistics from retention cleanup
+type RetentionCleanupStats struct {
+	// CheckedCount is the number of artifacts checked
+	CheckedCount int64
+
+	// DeletedCount is the number of artifacts deleted
+	DeletedCount int64
+
+	// SkippedPinned is the number of pinned artifacts skipped
+	SkippedPinned int64
+
+	// SkippedNotExpired is the number of non-expired artifacts skipped
+	SkippedNotExpired int64
+
+	// Errors is the number of errors encountered
+	Errors int64
+
+	// BytesReclaimed is the total bytes reclaimed
+	BytesReclaimed int64
+
+	// Duration is how long the cleanup took
+	Duration time.Duration
+}
+
+// RunRetentionCleanup performs a full retention cleanup and returns stats
+func (w *WaldurBackend) RunRetentionCleanup(ctx context.Context, currentBlock int64) (*RetentionCleanupStats, error) {
+	startTime := time.Now()
+	stats := &RetentionCleanupStats{}
+	now := time.Now().UTC()
+
+	if w.useFallback {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+
+		toDelete := make([]string, 0)
+
+		for hashHex, artifact := range w.fallbackStorage {
+			stats.CheckedCount++
+
+			// Skip pinned
+			if w.pinnedArtifacts[hashHex] {
+				stats.SkippedPinned++
+				continue
+			}
+
+			// Check retention
+			if artifact.reference.RetentionTag == nil {
+				stats.SkippedNotExpired++
+				continue
+			}
+
+			if !artifact.reference.RetentionTag.DeleteOnExpiry {
+				stats.SkippedNotExpired++
+				continue
+			}
+
+			expired := artifact.reference.RetentionTag.IsExpired(now) ||
+				artifact.reference.RetentionTag.IsExpiredAtBlock(currentBlock)
+
+			if !expired {
+				stats.SkippedNotExpired++
+				continue
+			}
+
+			toDelete = append(toDelete, hashHex)
+		}
+
+		for _, hashHex := range toDelete {
+			artifact := w.fallbackStorage[hashHex]
+
+			// Remove from owner index
+			if hashes, ok := w.ownerIndex[artifact.reference.AccountAddress]; ok {
+				newHashes := make([]string, 0, len(hashes)-1)
+				for _, h := range hashes {
+					if h != hashHex {
+						newHashes = append(newHashes, h)
+					}
+				}
+				w.ownerIndex[artifact.reference.AccountAddress] = newHashes
+			}
+
+			// Update metrics and stats
+			size := uint64(len(artifact.data))
+			stats.BytesReclaimed += int64(size)
+			w.metrics.TotalBytes -= size
+			w.metrics.TotalArtifacts--
+
+			delete(w.fallbackStorage, hashHex)
+			stats.DeletedCount++
+		}
+
+		stats.Duration = time.Since(startTime)
+		return stats, nil
+	}
+
+	// Production mode - list and check each object
+	listReq := &waldur.ListRequest{
+		Bucket:  w.config.Bucket,
+		MaxKeys: 1000,
+	}
+
+	for {
+		listResp, err := w.objectStorage.List(ctx, listReq)
+		if err != nil {
+			stats.Errors++
+			stats.Duration = time.Since(startTime)
+			return stats, ErrBackendUnavailable.Wrapf("list failed: %v", err)
+		}
+
+		for _, obj := range listResp.Objects {
+			stats.CheckedCount++
+
+			// Check if pinned
+			hashHex := extractHashFromKey(obj.Key)
+			w.mu.RLock()
+			pinned := w.pinnedArtifacts[hashHex]
+			w.mu.RUnlock()
+			if pinned {
+				stats.SkippedPinned++
+				continue
+			}
+
+			// Check retention from metadata
+			expiryStr, hasExpiry := obj.Metadata["retention_expires_at"]
+			deleteOnExpiryStr, hasDelete := obj.Metadata["delete_on_expiry"]
+
+			if !hasExpiry || !hasDelete || deleteOnExpiryStr != "true" {
+				stats.SkippedNotExpired++
+				continue
+			}
+
+			expiryTime, err := time.Parse(time.RFC3339, expiryStr)
+			if err != nil || !now.After(expiryTime) {
+				stats.SkippedNotExpired++
+				continue
+			}
+
+			// Delete expired artifact
+			if err := w.objectStorage.Delete(ctx, w.config.Bucket, obj.Key); err != nil {
+				stats.Errors++
+				continue
+			}
+
+			stats.DeletedCount++
+			stats.BytesReclaimed += obj.Size
+		}
+
+		if !listResp.IsTruncated {
+			break
+		}
+		listReq.ContinuationToken = listResp.NextContinuationToken
+	}
+
+	stats.Duration = time.Since(startTime)
+	return stats, nil
+}
+
 
