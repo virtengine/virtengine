@@ -16,10 +16,8 @@ import (
 // schemaVersion10 is the schema version for GDPR export data
 const schemaVersion10 = "1.0"
 
-// ============================================================================
-// GDPR Data Portability Keeper Methods
-// ============================================================================
-// Implements GDPR Article 20 - Right to Data Portability
+// =====================================================================// GDPR Data Portability Keeper Methods
+// =====================================================================// Implements GDPR Article 20 - Right to Data Portability
 // Reference: https://gdpr-info.eu/art-20-gdpr/
 
 // exportRequestStore is the storage format for export requests
@@ -122,7 +120,12 @@ func (k Keeper) ProcessExportRequest(ctx sdk.Context, requestID string) (*types.
 	}
 
 	// Generate the export package
-	dataPackage := k.generateDataPackage(ctx, requesterAddr, &request)
+	dataPackage, err := k.generateDataPackage(ctx, requesterAddr, &request)
+	if err != nil {
+		request.MarkFailed(err.Error())
+		_ = k.SetExportRequest(ctx, request)
+		return nil, err
+	}
 
 	// Calculate checksum
 	dataBytes, err := json.Marshal(dataPackage)
@@ -164,7 +167,7 @@ func (k Keeper) generateDataPackage(
 	ctx sdk.Context,
 	address sdk.AccAddress,
 	request *types.PortabilityExportRequest,
-) *types.PortableDataPackage {
+) (*types.PortableDataPackage, error) {
 	now := ctx.BlockTime()
 	blockHeight := ctx.BlockHeight()
 
@@ -206,7 +209,7 @@ func (k Keeper) generateDataPackage(
 		}
 	}
 
-	return pkg
+	return pkg, nil
 }
 
 // exportCategory exports a specific data category
@@ -414,10 +417,8 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 	return nil
 }
 
-// ============================================================================
-// Storage Methods
-// ============================================================================
-
+// =====================================================================// Storage Methods
+// =====================================================================
 // SetExportRequest stores an export request
 func (k Keeper) SetExportRequest(ctx sdk.Context, request types.PortabilityExportRequest) error {
 	if err := request.Validate(); err != nil {
@@ -475,10 +476,8 @@ func (k Keeper) GetExportRequestsByAddress(ctx sdk.Context, address sdk.AccAddre
 	return requests
 }
 
-// ============================================================================
-// Key Generation Functions
-// ============================================================================
-
+// =====================================================================// Key Generation Functions
+// =====================================================================
 var (
 	prefixExportRequest          = []byte{0x60}
 	prefixExportRequestByAddress = []byte{0x61}
@@ -518,10 +517,8 @@ func generateExportRequestID(address string, timestamp time.Time, blockHeight in
 	return "export_" + hex.EncodeToString(hash[:8])
 }
 
-// ============================================================================
-// Storage Conversion Functions
-// ============================================================================
-
+// =====================================================================// Storage Conversion Functions
+// =====================================================================
 func exportRequestToStore(r *types.PortabilityExportRequest) *exportRequestStore {
 	categories := make([]string, len(r.Categories))
 	for i, c := range r.Categories {

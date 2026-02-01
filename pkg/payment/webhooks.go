@@ -13,10 +13,8 @@ import (
 	"time"
 )
 
-// ============================================================================
-// Webhook Handler Implementation
-// ============================================================================
-
+// =====================================================================// Webhook Handler Implementation
+// =====================================================================
 // WebhookServer handles incoming webhook requests from payment gateways
 type WebhookServer struct {
 	service Service
@@ -193,10 +191,8 @@ func (ws *WebhookServer) markProcessed(eventID string) {
 	}
 }
 
-// ============================================================================
-// Default Event Handlers
-// ============================================================================
-
+// =====================================================================// Default Event Handlers
+// =====================================================================
 // PaymentSucceededHandler is a default handler for payment success events
 type PaymentSucceededHandler struct {
 	OnSuccess func(ctx context.Context, paymentIntent PaymentIntent) error
@@ -291,10 +287,8 @@ func (h *DisputeEventHandler) Handle(ctx context.Context, event WebhookEvent) er
 	return nil
 }
 
-// ============================================================================
-// Webhook Event Builder (for testing)
-// ============================================================================
-
+// =====================================================================// Webhook Event Builder (for testing)
+// =====================================================================
 // WebhookEventBuilder helps build webhook events for testing
 type WebhookEventBuilder struct {
 	event WebhookEvent
