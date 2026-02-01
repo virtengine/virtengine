@@ -1,0 +1,118 @@
+# Interactive Session Template
+# VE-5F: Pre-configured workload templates
+#
+# This template configures interactive computing sessions
+# with JupyterLab or terminal access.
+
+schema_version: "1.0.0"
+
+template:
+  template_id: interactive-session
+  name: Interactive Session
+  version: 1.0.0
+  description: >
+    Interactive computing session with JupyterLab or terminal access.
+    Suitable for development, debugging, and exploratory analysis.
+  type: interactive
+
+  runtime:
+    runtime_type: singularity
+    container_image: jupyter/scipy-notebook:latest
+    python_version: "3.11"
+    required_modules:
+      - python/3.11
+
+  resources:
+    min_nodes: 1
+    max_nodes: 1
+    default_nodes: 1
+    min_cpus_per_node: 2
+    max_cpus_per_node: 32
+    default_cpus_per_node: 8
+    min_memory_mb_per_node: 4096
+    max_memory_mb_per_node: 128000
+    default_memory_mb_per_node: 16000
+    min_gpus_per_node: 0
+    max_gpus_per_node: 2
+    default_gpus_per_node: 0
+    gpu_types:
+      - nvidia-a100
+      - nvidia-v100
+    min_runtime_minutes: 15
+    max_runtime_minutes: 480  # 8 hours
+    default_runtime_minutes: 120
+    exclusive_nodes: false
+
+  security:
+    allowed_registries:
+      - jupyter
+      - docker.io
+      - ghcr.io
+    require_image_digest: false
+    allow_network_access: true
+    allow_host_mounts: true
+    allowed_host_paths:
+      - /home
+      - /work
+      - /scratch
+    sandbox_level: basic
+    max_open_files: 32768
+    max_processes: 8192
+
+  entrypoint:
+    command: jupyter
+    default_args:
+      - lab
+      - "--no-browser"
+      - "--ip=0.0.0.0"
+    working_directory: /home/jovyan/work
+    pre_run_script: "echo 'Starting JupyterLab session'"
+
+  environment:
+    - name: JUPYTER_ENABLE_LAB
+      value: "yes"
+      description: Enable JupyterLab interface
+    - name: JUPYTER_TOKEN
+      value_template: "${SLURM_JOB_ID}"
+      description: Jupyter authentication token
+      secret: true
+
+  data_bindings:
+    - name: work
+      mount_path: /home/jovyan/work
+      host_path: /work/$USER
+      data_type: output
+      required: true
+      read_only: false
+    - name: data
+      mount_path: /home/jovyan/data
+      data_type: input
+      required: false
+      read_only: true
+
+  parameter_schema:
+    - name: port
+      type: int
+      description: JupyterLab port
+      default: "8888"
+      min_value: "8000"
+      max_value: "9999"
+    - name: gpu_enabled
+      type: bool
+      description: Enable GPU support
+      default: "false"
+    - name: interface
+      type: enum
+      description: Interface type
+      enum_values:
+        - jupyterlab
+        - notebook
+        - terminal
+      default: jupyterlab
+
+  approval_status: approved
+  tags:
+    - interactive
+    - jupyter
+    - development
+    - notebook

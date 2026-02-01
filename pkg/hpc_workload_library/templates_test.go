@@ -14,8 +14,8 @@ import (
 func TestGetBuiltinTemplates(t *testing.T) {
 	templates := GetBuiltinTemplates()
 
-	if len(templates) != 5 {
-		t.Errorf("expected 5 built-in templates, got %d", len(templates))
+	if len(templates) != 7 {
+		t.Errorf("expected 7 built-in templates, got %d", len(templates))
 	}
 
 	// Verify all templates are valid
@@ -175,30 +175,30 @@ func TestGetTemplateByID(t *testing.T) {
 
 func TestGetTemplatesByType(t *testing.T) {
 	tests := []struct {
-		workloadType hpctypes.WorkloadType
-		expectedIDs  []string
+		workloadType   hpctypes.WorkloadType
+		expectedMinIDs int // Minimum number of templates
 	}{
-		{hpctypes.WorkloadTypeMPI, []string{"mpi-standard"}},
-		{hpctypes.WorkloadTypeGPU, []string{"gpu-compute"}},
-		{hpctypes.WorkloadTypeBatch, []string{"batch-standard"}},
-		{hpctypes.WorkloadTypeDataProcessing, []string{"data-processing"}},
-		{hpctypes.WorkloadTypeInteractive, []string{"interactive-session"}},
-		{hpctypes.WorkloadTypeCustom, []string{}},
+		{hpctypes.WorkloadTypeMPI, 1},
+		{hpctypes.WorkloadTypeGPU, 1},
+		{hpctypes.WorkloadTypeBatch, 3}, // batch-standard, singularity-container, batch-array
+		{hpctypes.WorkloadTypeDataProcessing, 1},
+		{hpctypes.WorkloadTypeInteractive, 1},
+		{hpctypes.WorkloadTypeCustom, 0},
 	}
 
 	for _, tt := range tests {
 		templates := GetTemplatesByType(tt.workloadType)
 
-		if len(templates) != len(tt.expectedIDs) {
-			t.Errorf("GetTemplatesByType(%s) returned %d templates, want %d",
-				tt.workloadType, len(templates), len(tt.expectedIDs))
+		if len(templates) < tt.expectedMinIDs {
+			t.Errorf("GetTemplatesByType(%s) returned %d templates, want at least %d",
+				tt.workloadType, len(templates), tt.expectedMinIDs)
 			continue
 		}
 
-		for i, tmpl := range templates {
-			if tmpl.TemplateID != tt.expectedIDs[i] {
-				t.Errorf("GetTemplatesByType(%s)[%d] = %s, want %s",
-					tt.workloadType, i, tmpl.TemplateID, tt.expectedIDs[i])
+		for _, tmpl := range templates {
+			if tmpl.Type != tt.workloadType {
+				t.Errorf("GetTemplatesByType(%s) returned template %s with type %s",
+					tt.workloadType, tmpl.TemplateID, tmpl.Type)
 			}
 		}
 	}

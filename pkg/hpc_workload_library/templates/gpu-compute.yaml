@@ -1,0 +1,131 @@
+# GPU Compute Workload Template
+# VE-5F: Pre-configured workload templates
+#
+# This template configures GPU-accelerated compute workloads
+# using CUDA with NVIDIA containers on SLURM clusters.
+
+schema_version: "1.0.0"
+
+template:
+  template_id: gpu-compute
+  name: GPU Compute Workload
+  version: 1.0.0
+  description: >
+    GPU-accelerated compute workload using CUDA. Suitable for
+    deep learning training, scientific simulations, and
+    GPU-accelerated applications.
+  type: gpu
+
+  runtime:
+    runtime_type: singularity
+    container_image: nvcr.io/nvidia/cuda:12.2-runtime-ubuntu22.04
+    cuda_version: "12.2"
+    required_modules:
+      - cuda/12.2
+      - cudnn/8.9
+
+  resources:
+    min_nodes: 1
+    max_nodes: 32
+    default_nodes: 1
+    min_cpus_per_node: 4
+    max_cpus_per_node: 128
+    default_cpus_per_node: 16
+    min_memory_mb_per_node: 8192
+    max_memory_mb_per_node: 512000
+    default_memory_mb_per_node: 64000
+    min_gpus_per_node: 1
+    max_gpus_per_node: 8
+    default_gpus_per_node: 1
+    gpu_types:
+      - nvidia-a100
+      - nvidia-v100
+      - nvidia-h100
+    min_runtime_minutes: 1
+    max_runtime_minutes: 4320  # 72 hours
+    default_runtime_minutes: 120
+    network_required: true
+    exclusive_nodes: true
+
+  security:
+    allowed_registries:
+      - nvcr.io
+      - docker.io
+      - ghcr.io
+    require_image_digest: true
+    allow_network_access: true
+    allow_host_mounts: true
+    allowed_host_paths:
+      - /scratch
+      - /home
+      - /work
+      - /datasets
+    sandbox_level: basic
+    max_open_files: 262144
+    max_processes: 65536
+
+  entrypoint:
+    command: /bin/bash
+    default_args:
+      - "-c"
+    working_directory: /workspace
+    pre_run_script: "nvidia-smi && echo 'CUDA devices: '$CUDA_VISIBLE_DEVICES"
+    post_run_script: "nvidia-smi --query-gpu=utilization.gpu --format=csv"
+
+  environment:
+    - name: CUDA_VISIBLE_DEVICES
+      value_template: "${SLURM_GPUS_ON_NODE}"
+      description: GPU devices visible to CUDA
+    - name: NCCL_DEBUG
+      value: INFO
+      description: NCCL debug level
+    - name: CUDA_CACHE_PATH
+      value: /tmp/cuda_cache
+      description: CUDA compilation cache
+
+  modules:
+    - cuda/12.2
+    - cudnn/8.9
+
+  data_bindings:
+    - name: datasets
+      mount_path: /datasets
+      data_type: input
+      required: false
+      read_only: true
+    - name: models
+      mount_path: /models
+      data_type: output
+      required: false
+      read_only: false
+    - name: checkpoints
+      mount_path: /checkpoints
+      data_type: output
+      required: false
+      read_only: false
+
+  parameter_schema:
+    - name: script
+      type: string
+      description: Python script to run
+      required: true
+    - name: gpu_type
+      type: enum
+      description: GPU type to use
+      enum_values:
+        - nvidia-a100
+        - nvidia-v100
+        - nvidia-h100
+      default: nvidia-a100
+    - name: mixed_precision
+      type: bool
+      description: Enable mixed precision training
+      default: "true"
+
+  approval_status: approved
+  tags:
+    - gpu
+    - cuda
+    - deep-learning
+    - ai
+    - ml
