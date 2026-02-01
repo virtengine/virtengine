@@ -34,6 +34,7 @@ import (
 
 	"github.com/virtengine/virtengine/x/audit"
 	"github.com/virtengine/virtengine/x/benchmark"
+	"github.com/virtengine/virtengine/x/bme"
 	"github.com/virtengine/virtengine/x/cert"
 	"github.com/virtengine/virtengine/x/config"
 	"github.com/virtengine/virtengine/x/delegation"
@@ -262,6 +263,10 @@ func appModules(
 		virtstaking.NewAppModule(
 			app.cdc,
 			app.Keepers.VirtEngine.VirtStaking,
+		),
+		bme.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.BME,
 		),
 	}
 }

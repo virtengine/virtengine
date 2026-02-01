@@ -72,6 +72,8 @@ import (
 	akeeper "github.com/virtengine/virtengine/x/audit/keeper"
 	benchkeeper "github.com/virtengine/virtengine/x/benchmark/keeper"
 	benchtypes "github.com/virtengine/virtengine/x/benchmark/types"
+	bmekeeper "github.com/virtengine/virtengine/x/bme/keeper"
+	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
 	ckeeper "github.com/virtengine/virtengine/x/cert/keeper"
 	configkeeper "github.com/virtengine/virtengine/x/config/keeper"
 	configtypes "github.com/virtengine/virtengine/x/config/types"
@@ -156,6 +158,7 @@ type AppKeepers struct {
 		Review      reviewkeeper.Keeper
 		Delegation  delegationkeeper.Keeper
 		VirtStaking virtstakingkeeper.Keeper
+		BME         bmekeeper.IKeeper
 	}
 
 	Modules struct {
@@ -614,6 +617,12 @@ func (app *App) InitNormalKeepers(
 		nil, // CosmosStakingKeeper - uses cosmos staking via interface
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+
+	app.Keepers.VirtEngine.BME = bmekeeper.NewKeeper(
+		cdc,
+		app.keys[bmetypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
 }
 
 func (app *App) SetupHooks() {
@@ -718,6 +727,7 @@ func virtengineKVStoreKeys() []string {
 		reviewtypes.StoreKey,
 		delegationtypes.StoreKey,
 		virtstakingtypes.StoreKey,
+		bmetypes.StoreKey,
 	}
 }
 

@@ -27,6 +27,8 @@ import (
 	"github.com/virtengine/virtengine/x/audit"
 	"github.com/virtengine/virtengine/x/benchmark"
 	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
+	"github.com/virtengine/virtengine/x/bme"
+	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
 	"github.com/virtengine/virtengine/x/cert"
 	"github.com/virtengine/virtengine/x/config"
 	configtypes "github.com/virtengine/virtengine/x/config/types"
@@ -85,6 +87,7 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		review.AppModuleBasic{},
 		delegation.AppModuleBasic{},
 		virtstaking.AppModuleBasic{},
+		bme.AppModuleBasic{},
 	}
 }
 
@@ -135,6 +138,7 @@ func OrderInitGenesis(_ []string) []string {
 		reviewtypes.ModuleName,
 		delegationtypes.ModuleName,
 		virtstakingtypes.ModuleName,
+		bmetypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 }
