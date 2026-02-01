@@ -78,6 +78,7 @@ import (
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
@@ -325,6 +326,7 @@ func orderBeginBlockers(_ []string) []string {
 		delegationtypes.ModuleName,
 		virtstakingtypes.ModuleName,
 		bmetypes.ModuleName,
+		oracletypes.ModuleName,
 	}
 }
 
@@ -372,6 +374,7 @@ func OrderEndBlockers(_ []string) []string {
 		delegationtypes.ModuleName,
 		virtstakingtypes.ModuleName,
 		bmetypes.ModuleName,
+		oracletypes.ModuleName,
 	}
 }
 

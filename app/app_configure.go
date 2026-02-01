@@ -49,6 +49,8 @@ import (
 	"github.com/virtengine/virtengine/x/marketplace"
 	"github.com/virtengine/virtengine/x/mfa"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	"github.com/virtengine/virtengine/x/oracle"
+	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
 	"github.com/virtengine/virtengine/x/provider"
 	"github.com/virtengine/virtengine/x/review"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
@@ -88,6 +90,7 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		delegation.AppModuleBasic{},
 		virtstaking.AppModuleBasic{},
 		bme.AppModuleBasic{},
+		oracle.AppModuleBasic{},
 	}
 }
 
@@ -139,6 +142,7 @@ func OrderInitGenesis(_ []string) []string {
 		delegationtypes.ModuleName,
 		virtstakingtypes.ModuleName,
 		bmetypes.ModuleName,
+		oracletypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 }
