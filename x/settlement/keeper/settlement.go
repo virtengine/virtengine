@@ -246,6 +246,14 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 
 // RecordUsage records a usage record from a provider
 func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
+	// Generate usage ID if not already set
+	if record.UsageID == "" {
+		seq := k.incrementUsageSequence(ctx)
+		record.UsageID = generateIDWithTimestamp("usage", seq, ctx.BlockTime().Unix())
+	}
+	record.SubmittedAt = ctx.BlockTime()
+	record.BlockHeight = ctx.BlockHeight()
+
 	// Validate the record
 	if err := record.Validate(); err != nil {
 		return err
@@ -265,12 +273,6 @@ func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 	if record.Provider != escrow.Recipient {
 		return types.ErrUnauthorized.Wrap("provider does not match escrow recipient")
 	}
-
-	// Generate usage ID
-	seq := k.incrementUsageSequence(ctx)
-	record.UsageID = generateIDWithTimestamp("usage", seq, ctx.BlockTime().Unix())
-	record.SubmittedAt = ctx.BlockTime()
-	record.BlockHeight = ctx.BlockHeight()
 
 	// Save usage record
 	if err := k.SetUsageRecord(ctx, *record); err != nil {

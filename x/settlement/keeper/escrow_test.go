@@ -1,20 +1,19 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until settlement escrow API is stabilized.
-
 package keeper_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
+	"cosmossdk.io/store"
+	"cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -22,6 +21,11 @@ import (
 	"github.com/virtengine/virtengine/x/settlement/keeper"
 	"github.com/virtengine/virtengine/x/settlement/types"
 )
+
+// ptrTime returns a pointer to a time.Time value
+func ptrTime(t time.Time) *time.Time {
+	return &t
+}
 
 // MockBankKeeper is a mock implementation of the bank keeper
 type MockBankKeeper struct {
@@ -34,7 +38,7 @@ func NewMockBankKeeper() *MockBankKeeper {
 	}
 }
 
-func (m *MockBankKeeper) SendCoins(ctx sdk.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error {
+func (m *MockBankKeeper) SendCoins(_ context.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) error {
 	from := fromAddr.String()
 	to := toAddr.String()
 
@@ -48,12 +52,12 @@ func (m *MockBankKeeper) SendCoins(ctx sdk.Context, fromAddr sdk.AccAddress, toA
 	return nil
 }
 
-func (m *MockBankKeeper) SendCoinsFromModuleToAccount(ctx sdk.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error {
+func (m *MockBankKeeper) SendCoinsFromModuleToAccount(_ context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error {
 	m.balances[recipientAddr.String()] = m.balances[recipientAddr.String()].Add(amt...)
 	return nil
 }
 
-func (m *MockBankKeeper) SendCoinsFromAccountToModule(ctx sdk.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error {
+func (m *MockBankKeeper) SendCoinsFromAccountToModule(_ context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error {
 	sender := senderAddr.String()
 	senderBalance := m.balances[sender]
 	if !senderBalance.IsAllGTE(amt) {
@@ -63,11 +67,11 @@ func (m *MockBankKeeper) SendCoinsFromAccountToModule(ctx sdk.Context, senderAdd
 	return nil
 }
 
-func (m *MockBankKeeper) SpendableCoins(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins {
+func (m *MockBankKeeper) SpendableCoins(_ context.Context, addr sdk.AccAddress) sdk.Coins {
 	return m.balances[addr.String()]
 }
 
-func (m *MockBankKeeper) GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) sdk.Coin {
+func (m *MockBankKeeper) GetBalance(_ context.Context, addr sdk.AccAddress, denom string) sdk.Coin {
 	balance := m.balances[addr.String()]
 	return sdk.NewCoin(denom, balance.AmountOf(denom))
 }
@@ -103,13 +107,17 @@ func (s *KeeperTestSuite) SetupTest() {
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	s.cdc = codec.NewProtoCodec(interfaceRegistry)
 
-	// Create test context
-	storeService := runtime.NewKVStoreService(storeKey)
-	testCtx := sdk.Context{}.WithLogger(log.NewNopLogger()).WithBlockTime(time.Now()).WithBlockHeight(1)
+	// Create proper multi-store with backing database
+	db := dbm.NewMemDB()
+	stateStore := store.NewCommitMultiStore(db, log.NewNopLogger(), metrics.NewNoOpMetrics())
+	stateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	require.NoError(s.T(), stateStore.LoadLatestVersion())
 
-	// Note: In real tests, you would use a proper test context with a store
-	// This is a simplified version for demonstration
-	s.ctx = testCtx
+	// Create proper context with multi-store
+	s.ctx = sdk.NewContext(stateStore, cmtproto.Header{
+		Height: 1,
+		Time:   time.Now().UTC(),
+	}, false, log.NewNopLogger())
 
 	// Create mock bank keeper
 	s.bankKeeper = NewMockBankKeeper()
@@ -144,8 +152,9 @@ func (s *KeeperTestSuite) TestCreateEscrow() {
 			duration:  time.Hour * 24,
 			conditions: []types.ReleaseCondition{
 				{
-					Type:        types.ReleaseConditionTimelock,
-					IsSatisfied: false,
+					Type:        types.ConditionTypeTimelock,
+					Satisfied:   false,
+					UnlockAfter: ptrTime(time.Now().Add(time.Hour)),
 				},
 			},
 			expectError: false,
@@ -248,6 +257,8 @@ func (s *KeeperTestSuite) TestDispute() {
 }
 
 func TestEscrowValidation(t *testing.T) {
+	validAddr := sdk.AccAddress([]byte("test_address________")).String()
+
 	testCases := []struct {
 		name        string
 		escrow      types.EscrowAccount
@@ -258,8 +269,9 @@ func TestEscrowValidation(t *testing.T) {
 			escrow: types.EscrowAccount{
 				EscrowID:  "escrow-1",
 				OrderID:   "order-1",
-				Depositor: "cosmos1xyz...",
+				Depositor: validAddr,
 				Amount:    sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
+				Balance:   sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
 				State:     types.EscrowStatePending,
 				CreatedAt: time.Now(),
 				ExpiresAt: time.Now().Add(time.Hour * 24),
@@ -271,7 +283,7 @@ func TestEscrowValidation(t *testing.T) {
 			escrow: types.EscrowAccount{
 				EscrowID:  "",
 				OrderID:   "order-1",
-				Depositor: "cosmos1xyz...",
+				Depositor: validAddr,
 				Amount:    sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
 				State:     types.EscrowStatePending,
 			},
@@ -282,7 +294,7 @@ func TestEscrowValidation(t *testing.T) {
 			escrow: types.EscrowAccount{
 				EscrowID:  "escrow-1",
 				OrderID:   "",
-				Depositor: "cosmos1xyz...",
+				Depositor: validAddr,
 				Amount:    sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
 				State:     types.EscrowStatePending,
 			},
@@ -293,7 +305,7 @@ func TestEscrowValidation(t *testing.T) {
 			escrow: types.EscrowAccount{
 				EscrowID:  "escrow-1",
 				OrderID:   "order-1",
-				Depositor: "cosmos1xyz...",
+				Depositor: validAddr,
 				Amount:    sdk.NewCoins(),
 				State:     types.EscrowStatePending,
 			},
@@ -304,7 +316,7 @@ func TestEscrowValidation(t *testing.T) {
 			escrow: types.EscrowAccount{
 				EscrowID:  "escrow-1",
 				OrderID:   "order-1",
-				Depositor: "cosmos1xyz...",
+				Depositor: validAddr,
 				Amount:    sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(1000))),
 				State:     types.EscrowState("invalid"),
 			},
