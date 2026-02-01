@@ -155,3 +155,9 @@ kubectl rollout restart deployment/tee-enclave -n virtengine
 - **Status updates:** Every 30–60 minutes for P1/P2; include current platform, attestation status, and failover state.
 - **Resolution message:** Summarize impact, root cause, mitigation, and recovery steps.
 - **Post-incident:** File a follow-up ticket with logs, timeline, and any measurement or TCB changes.
+
+## Related References
+
+- `_docs/tee-deployment-guide.md`
+- `_docs/tee-failover-strategy.md`
+- `deploy/monitoring/alerts/enclave-health.yaml`
