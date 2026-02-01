@@ -322,3 +322,340 @@ def generate_governance_proposal(
         f.write(generator.generate_cli_commands(proposal))
     
     return proposal
+
+
+# ============================================================================
+# Governance Workflow Templates (VE-11B)
+# ============================================================================
+
+class GovernanceWorkflow:
+    """
+    Complete governance workflow for model updates.
+    
+    Provides templates and utilities for:
+    - Pre-proposal checklist validation
+    - Proposal submission automation
+    - Validator notification generation
+    - Post-approval activation workflow
+    """
+    
+    def __init__(self):
+        """Initialize the workflow manager."""
+        self.generator = GovernanceProposalGenerator()
+    
+    def generate_pre_proposal_checklist(
+        self,
+        manifest,
+        metrics,
+    ) -> Dict[str, Any]:
+        """
+        Generate pre-proposal checklist for governance submission.
+        
+        Returns checklist with pass/fail status for each requirement.
+        """
+        checklist = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "model_version": manifest.model_version,
+            "model_hash": manifest.model_hash,
+            "checks": [],
+            "all_passed": True,
+        }
+        
+        # Check 1: Evaluation passed
+        check1 = {
+            "name": "Evaluation Thresholds",
+            "description": "Model meets all evaluation thresholds",
+            "passed": manifest.evaluation_passed,
+            "details": f"R²: {metrics.get('r2', 0):.4f}, MAE: {metrics.get('mae', 0):.4f}",
+        }
+        checklist["checks"].append(check1)
+        checklist["all_passed"] &= check1["passed"]
+        
+        # Check 2: Model hash computed
+        check2 = {
+            "name": "Model Hash",
+            "description": "SHA-256 hash computed for model files",
+            "passed": len(manifest.model_hash) == 64,
+            "details": f"Hash: {manifest.model_hash[:16]}...",
+        }
+        checklist["checks"].append(check2)
+        checklist["all_passed"] &= check2["passed"]
+        
+        # Check 3: Determinism settings
+        det_settings = manifest.determinism_settings
+        check3 = {
+            "name": "Determinism Configuration",
+            "description": "CPU-only, fixed seed, deterministic ops enabled",
+            "passed": (
+                det_settings.get('force_cpu', False) and
+                det_settings.get('deterministic', False) and
+                det_settings.get('tf_deterministic_ops', False)
+            ),
+            "details": f"CPU: {det_settings.get('force_cpu')}, Seed: {det_settings.get('random_seed')}",
+        }
+        checklist["checks"].append(check3)
+        checklist["all_passed"] &= check3["passed"]
+        
+        # Check 4: TensorFlow version
+        check4 = {
+            "name": "TensorFlow Version",
+            "description": "TensorFlow version matches requirements",
+            "passed": manifest.tensorflow_version.startswith("2.15"),
+            "details": f"Version: {manifest.tensorflow_version}",
+        }
+        checklist["checks"].append(check4)
+        checklist["all_passed"] &= check4["passed"]
+        
+        # Check 5: Minimum test samples
+        min_samples = 100  # Default threshold
+        num_samples = metrics.get('num_samples', 0)
+        check5 = {
+            "name": "Test Sample Count",
+            "description": f"At least {min_samples} test samples evaluated",
+            "passed": num_samples >= min_samples,
+            "details": f"Samples: {num_samples}",
+        }
+        checklist["checks"].append(check5)
+        checklist["all_passed"] &= check5["passed"]
+        
+        return checklist
+    
+    def generate_validator_notification(
+        self,
+        proposal: GovernanceProposal,
+    ) -> str:
+        """
+        Generate notification message for validators about model update.
+        """
+        notification = f"""
+================================================================================
+VIRTENGINE MODEL UPDATE NOTIFICATION
+================================================================================
+
+A new trust score model update proposal has been submitted for governance voting.
+
+PROPOSAL DETAILS
+----------------
+Title: {proposal.title}
+Model Version: {proposal.model_version}
+Model Hash: {proposal.model_hash}
+Voting Period: {proposal.voting_period}
+
+KEY METRICS
+-----------
+- MAE: {proposal.metrics.get('mae', 'N/A'):.4f}
+- RMSE: {proposal.metrics.get('rmse', 'N/A'):.4f}
+- R²: {proposal.metrics.get('r2', 'N/A'):.4f}
+- Accuracy@10: {proposal.metrics.get('accuracy_10', 0) * 100:.1f}%
+
+VALIDATOR ACTIONS REQUIRED
+--------------------------
+1. Review the proposal on-chain
+2. Download and verify the model hash
+3. Test model inference on your node (optional)
+4. Cast your vote before voting period ends
+
+VERIFICATION COMMANDS
+---------------------
+# Query the proposal
+virtengine query gov proposal <PROPOSAL_ID>
+
+# Download and verify model hash
+curl -O <MODEL_URL>
+sha256sum saved_model/* | sha256sum
+
+# Vote on the proposal
+virtengine tx gov vote <PROPOSAL_ID> yes --from <VALIDATOR_KEY>
+
+================================================================================
+"""
+        return notification
+    
+    def generate_activation_workflow(
+        self,
+        proposal: GovernanceProposal,
+    ) -> str:
+        """
+        Generate post-approval activation workflow instructions.
+        """
+        workflow = f"""
+# Trust Score Model Activation Workflow
+# Model Version: {proposal.model_version}
+# Model Hash: {proposal.model_hash}
+
+## Prerequisites
+- Proposal has been approved via governance
+- Activation delay blocks have passed
+- Node is synced to latest block height
+
+## Activation Steps
+
+### 1. Download the model artifact
+```bash
+# From approved storage location
+wget -O trust_score_model.tar.gz <APPROVED_MODEL_URL>
+
+# Extract
+tar -xzf trust_score_model.tar.gz -C ~/.virtengine/models/
+```
+
+### 2. Verify the model hash
+```bash
+# Compute hash of downloaded model
+cd ~/.virtengine/models/trust_score/{proposal.model_version}/model
+find . -type f | sort | xargs sha256sum | sha256sum
+
+# Compare with approved hash
+# Expected: {proposal.model_hash}
+```
+
+### 3. Update node configuration
+```bash
+# Update models.toml
+cat >> ~/.virtengine/config/models.toml << EOF
+[trust_score]
+version = "{proposal.model_version}"
+hash = "{proposal.model_hash}"
+path = "models/trust_score/{proposal.model_version}/model"
+EOF
+```
+
+### 4. Restart the node
+```bash
+systemctl restart virtengined
+```
+
+### 5. Verify model is loaded
+```bash
+virtengine query veid model-version trust_score
+
+# Should show:
+# model_id: <computed_model_id>
+# version: {proposal.model_version}
+# sha256_hash: {proposal.model_hash}
+# status: active
+```
+
+### 6. Report model sync status
+```bash
+virtengine tx veid report-model-versions --from <VALIDATOR_KEY>
+```
+
+## Rollback Procedure
+
+If issues are discovered after activation:
+
+```bash
+# 1. Stop the node
+systemctl stop virtengined
+
+# 2. Restore previous model
+mv ~/.virtengine/models/trust_score/{proposal.model_version} ~/.virtengine/models/trust_score/{proposal.model_version}.failed
+cp -r ~/.virtengine/models/trust_score/{proposal.previous_version or 'previous'} ~/.virtengine/models/trust_score/current
+
+# 3. Update configuration to previous version
+# 4. Restart node
+# 5. Submit rollback governance proposal
+```
+
+## Support
+
+For issues during activation:
+- GitHub Issues: https://github.com/virtengine/virtengine/issues
+- Discord: #validator-support
+"""
+        return workflow
+    
+    def save_workflow_artifacts(
+        self,
+        proposal: GovernanceProposal,
+        manifest,
+        metrics: Dict[str, float],
+        output_dir: str,
+    ) -> Dict[str, str]:
+        """
+        Save all governance workflow artifacts to output directory.
+        
+        Returns dict of artifact paths.
+        """
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        artifacts = {}
+        
+        # Save proposal JSON
+        proposal_path = output_path / "proposal.json"
+        self.generator.save_proposal(proposal, str(proposal_path))
+        artifacts["proposal"] = str(proposal_path)
+        
+        # Save CLI commands
+        cli_path = output_path / "submit_proposal.sh"
+        with open(cli_path, 'w') as f:
+            f.write(self.generator.generate_cli_commands(proposal))
+        artifacts["cli_commands"] = str(cli_path)
+        
+        # Save pre-proposal checklist
+        checklist = self.generate_pre_proposal_checklist(manifest, metrics)
+        checklist_path = output_path / "pre_proposal_checklist.json"
+        with open(checklist_path, 'w') as f:
+            json.dump(checklist, f, indent=2)
+        artifacts["checklist"] = str(checklist_path)
+        
+        # Save validator notification
+        notification = self.generate_validator_notification(proposal)
+        notification_path = output_path / "validator_notification.txt"
+        with open(notification_path, 'w') as f:
+            f.write(notification)
+        artifacts["notification"] = str(notification_path)
+        
+        # Save activation workflow
+        activation = self.generate_activation_workflow(proposal)
+        activation_path = output_path / "activation_workflow.md"
+        with open(activation_path, 'w') as f:
+            f.write(activation)
+        artifacts["activation_workflow"] = str(activation_path)
+        
+        logger.info(f"Governance workflow artifacts saved to: {output_dir}")
+        
+        return artifacts
+
+
+def generate_complete_governance_package(
+    manifest,
+    model_url: str,
+    output_dir: str,
+    previous_manifest: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Generate complete governance package with all artifacts.
+    
+    Args:
+        manifest: Model manifest
+        model_url: URL where model is published
+        output_dir: Directory to save artifacts
+        previous_manifest: Previous model manifest (optional)
+        
+    Returns:
+        Dictionary with paths to all generated artifacts
+    """
+    workflow = GovernanceWorkflow()
+    
+    # Generate proposal
+    proposal = workflow.generator.generate(manifest, model_url, previous_manifest)
+    
+    # Get metrics from manifest
+    metrics = manifest.evaluation_metrics if hasattr(manifest, 'evaluation_metrics') else {}
+    
+    # Save all artifacts
+    artifacts = workflow.save_workflow_artifacts(
+        proposal=proposal,
+        manifest=manifest,
+        metrics=metrics,
+        output_dir=output_dir,
+    )
+    
+    return {
+        "proposal": proposal,
+        "artifacts": artifacts,
+        "checklist_passed": workflow.generate_pre_proposal_checklist(manifest, metrics)["all_passed"],
+    }
