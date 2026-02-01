@@ -76,13 +76,24 @@ replace (
 
 	github.com/bytedance/sonic => github.com/bytedance/sonic v1.14.1
 
+	// TODO: Migrate app to use VirtEngine forks (requires x/crisis removal and other breaking changes)
+	// VirtEngine forks exist at:
+	//   github.com/virtengine/cometbft v0.4-virtengine
+	//   github.com/virtengine/cosmos-sdk v0.53.5-virtengine
+	//   github.com/virtengine/gogoproto v0.1.7-virtengine
+	// Currently using akash-network forks for compatibility with existing app code
 	github.com/cometbft/cometbft => github.com/akash-network/cometbft v0.38.19-akash.1
 
 	github.com/cosmos/cosmos-sdk => github.com/akash-network/cosmos-sdk v0.53.4-akash.b.10
 
 	github.com/cosmos/gogoproto => github.com/akash-network/gogoproto v1.7.0-akash.2
 
+	// akash-network/ledger-go is a mono-repo that provides both:
+	// - zondax/ledger-go (root module, tag v0.16.0)
+	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0)
+	// TODO: Create virtengine fork of ledger-go mono-repo
 	github.com/cosmos/ledger-cosmos-go => github.com/akash-network/ledger-go/cosmos v0.16.0
+
 	// Use regen gogoproto fork
 	// To be replaced by cosmos/gogoproto in future versions
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
@@ -98,7 +109,7 @@ replace (
 
 	github.com/zondax/hid => github.com/troian/hid v0.14.0
 
-	// TODO: Create virtengine fork of ledger-go
+	// zondax/ledger-go replacement from akash-network/ledger-go mono-repo
 	github.com/zondax/ledger-go => github.com/akash-network/ledger-go v0.16.0
 
 	// stick with compatible version or x/exp in v0.47.x line
@@ -306,7 +317,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/zondax/golem v0.27.0 // indirect
 	github.com/zondax/hid v0.9.2 // indirect
-	github.com/zondax/ledger-go v0.15.0 // indirect
+	github.com/zondax/ledger-go v1.0.1 // indirect
 	go.etcd.io/bbolt v1.4.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.38.0 // indirect
