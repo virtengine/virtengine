@@ -272,7 +272,61 @@ cmd_status() {
 }
 
 cmd_create_admin() {
-    log_info "Creating Waldur admin user..."
+    local username=""
+    local password=""
+    local email=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -u|--username)
+                username="$2"
+                shift 2
+                ;;
+            -p|--password)
+                password="$2"
+                shift 2
+                ;;
+            -e|--email)
+                email="$2"
+                shift 2
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    # Interactive prompts if not provided
+    if [ -z "$username" ]; then
+        read -rp "Enter admin username [admin]: " username
+        username="${username:-admin}"
+    fi
+
+    if [ -z "$email" ]; then
+        read -rp "Enter admin email [${username}@localhost]: " email
+        email="${email:-${username}@localhost}"
+    fi
+
+    if [ -z "$password" ]; then
+        while true; do
+            read -rsp "Enter admin password: " password
+            echo ""
+            if [ -z "$password" ]; then
+                log_warn "Password cannot be empty. Please try again."
+                continue
+            fi
+            read -rsp "Confirm password: " password_confirm
+            echo ""
+            if [ "$password" != "$password_confirm" ]; then
+                log_warn "Passwords do not match. Please try again."
+                continue
+            fi
+            break
+        done
+    fi
+
+    log_info "Creating Waldur admin user '${username}'..."
     check_docker
 
     if ! docker ps --format '{{.Names}}' | grep -q waldur-mastermind-api; then
@@ -280,15 +334,29 @@ cmd_create_admin() {
         exit 1
     fi
 
-    docker exec -it waldur-mastermind-api waldur createsuperuser --username admin --email admin@localhost --noinput 2>/dev/null || true
-    docker exec -it waldur-mastermind-api waldur changepassword admin <<< $'admin\nadmin' 2>/dev/null || true
+    # Create superuser (--noinput skips interactive prompts)
+    if ! docker exec waldur-mastermind-api waldur createsuperuser \
+        --username "${username}" \
+        --email "${email}" \
+        --noinput 2>/dev/null; then
+        log_warn "User '${username}' may already exist, attempting password update..."
+    fi
 
-    log_success "Waldur admin user created (admin / admin)"
+    # Set password using Django shell (more reliable than changepassword)
+    local python_cmd="from django.contrib.auth import get_user_model; User = get_user_model(); u = User.objects.get(username='${username}'); u.set_password('${password}'); u.save(); print('Password set successfully')"
+    
+    if docker exec waldur-mastermind-api waldur shell -c "${python_cmd}" 2>/dev/null; then
+        log_success "Waldur admin user '${username}' created/updated successfully!"
+    else
+        log_error "Failed to set password for '${username}'"
+        exit 1
+    fi
+
     log_info "Access Waldur UI at: https://localhost"
     log_info "Access Waldur API at: https://localhost/api/"
     echo ""
     log_info "To get an API token, run:"
-    echo "  curl -k -X POST https://localhost/api-auth/password/ -d 'username=admin&password=admin'"
+    echo "  curl -k -X POST https://localhost/api-auth/password/ -d 'username=${username}&password=<your-password>'"
 }
 
 cmd_logs() {
@@ -336,8 +404,17 @@ cmd_help() {
     echo "  logs          Tail logs from all services"
     echo "  test          Run integration tests"
     echo "  shell         Open shell in test-runner container"
-    echo "  create-admin  Create Waldur admin user (admin/admin)"
+    echo "  create-admin  Create Waldur admin user (interactive or with flags)"
     echo "  help          Show this help message"
+    echo ""
+    echo "create-admin Options:"
+    echo "  -u, --username  Admin username (default: admin, or prompted)"
+    echo "  -p, --password  Admin password (prompted if not provided)"
+    echo "  -e, --email     Admin email (default: <username>@localhost)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 create-admin                          # Interactive"
+    echo "  $0 create-admin -u myuser -p mypassword  # Non-interactive"
     echo ""
     echo "Environment Variables:"
     echo "  CHAIN_ID      Chain ID (default: virtengine-localnet-1)"
@@ -376,7 +453,8 @@ main() {
             cmd_shell
             ;;
         create-admin)
-            cmd_create_admin
+            shift
+            cmd_create_admin "$@"
             ;;
         help|--help|-h)
             cmd_help
