@@ -24,6 +24,8 @@ import (
 	"github.com/spf13/viper"
 
 	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
+	"github.com/virtengine/virtengine/pkg/waldur"
+	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
 const (
@@ -144,6 +146,40 @@ const (
 
 	// FlagWaldurOfferingSyncMaxRetries is max retries before dead-letter
 	FlagWaldurOfferingSyncMaxRetries = "waldur-offering-sync-max-retries"
+
+	// VE-3D: Waldur-to-chain offering ingest flags
+	// FlagWaldurIngestEnabled enables Waldur offering ingestion to chain.
+	FlagWaldurIngestEnabled = "waldur-ingest-enabled"
+	// FlagWaldurIngestConfig is path to ingestion config JSON.
+	FlagWaldurIngestConfig = "waldur-ingest-config"
+	// FlagWaldurIngestStateFile is the path for ingest state persistence.
+	FlagWaldurIngestStateFile = "waldur-ingest-state-file"
+	// FlagWaldurIngestInterval is the ingestion interval in seconds.
+	FlagWaldurIngestInterval = "waldur-ingest-interval"
+	// FlagWaldurIngestReconcileInterval is the reconciliation interval in seconds.
+	FlagWaldurIngestReconcileInterval = "waldur-ingest-reconcile-interval"
+	// FlagWaldurIngestReconcileOnStartup triggers reconcile on start.
+	FlagWaldurIngestReconcileOnStartup = "waldur-ingest-reconcile-on-startup"
+	// FlagWaldurIngestMaxRetries is max ingest retries before dead-letter.
+	FlagWaldurIngestMaxRetries = "waldur-ingest-max-retries"
+	// FlagWaldurIngestRateLimitPerSecond limits Waldur API requests.
+	FlagWaldurIngestRateLimitPerSecond = "waldur-ingest-rate-limit-per-second"
+	// FlagWaldurIngestRateLimitBurst is the rate limit burst size.
+	FlagWaldurIngestRateLimitBurst = "waldur-ingest-rate-limit-burst"
+	// FlagWaldurIngestPageSize is the page size for listing offerings.
+	FlagWaldurIngestPageSize = "waldur-ingest-page-size"
+	// FlagWaldurIngestTimeout is per-operation timeout.
+	FlagWaldurIngestTimeout = "waldur-ingest-timeout"
+	// FlagWaldurIngestSkipShared skips non-shared offerings.
+	FlagWaldurIngestSkipShared = "waldur-ingest-skip-shared"
+	// FlagWaldurIngestSkipNonBillable skips non-billable offerings.
+	FlagWaldurIngestSkipNonBillable = "waldur-ingest-skip-non-billable"
+	// FlagWaldurIngestOnlyActive ingests only Active offerings.
+	FlagWaldurIngestOnlyActive = "waldur-ingest-only-active"
+	// FlagWaldurIngestCategoryUUIDs filters by category UUID list (comma-separated).
+	FlagWaldurIngestCategoryUUIDs = "waldur-ingest-category-uuids"
+	// FlagWaldurIngestOfferingTypes filters by offering types list (comma-separated).
+	FlagWaldurIngestOfferingTypes = "waldur-ingest-offering-types"
 )
 
 var (
@@ -212,6 +248,24 @@ func init() {
 	rootCmd.PersistentFlags().Int64(FlagWaldurOfferingSyncInterval, 300, "Offering sync reconciliation interval in seconds")
 	rootCmd.PersistentFlags().Int(FlagWaldurOfferingSyncMaxRetries, 5, "Max sync retries before dead-lettering")
 
+	// VE-3D: Waldur-to-chain offering ingest flags
+	rootCmd.PersistentFlags().Bool(FlagWaldurIngestEnabled, false, "Enable Waldur offering ingestion to chain")
+	rootCmd.PersistentFlags().String(FlagWaldurIngestConfig, "", "Path to JSON file for Waldur ingestion config")
+	rootCmd.PersistentFlags().String(FlagWaldurIngestStateFile, "data/waldur_ingest_state.json", "Path for Waldur ingest state file")
+	rootCmd.PersistentFlags().Int64(FlagWaldurIngestInterval, 3600, "Waldur ingest interval in seconds")
+	rootCmd.PersistentFlags().Int64(FlagWaldurIngestReconcileInterval, 300, "Waldur ingest reconciliation interval in seconds")
+	rootCmd.PersistentFlags().Bool(FlagWaldurIngestReconcileOnStartup, true, "Run Waldur ingest reconciliation on startup")
+	rootCmd.PersistentFlags().Int(FlagWaldurIngestMaxRetries, 5, "Max Waldur ingest retries before dead-lettering")
+	rootCmd.PersistentFlags().Float64(FlagWaldurIngestRateLimitPerSecond, 2.0, "Waldur ingest rate limit per second")
+	rootCmd.PersistentFlags().Int(FlagWaldurIngestRateLimitBurst, 5, "Waldur ingest rate limit burst")
+	rootCmd.PersistentFlags().Int(FlagWaldurIngestPageSize, 50, "Waldur ingest page size")
+	rootCmd.PersistentFlags().Duration(FlagWaldurIngestTimeout, 60*time.Second, "Waldur ingest operation timeout")
+	rootCmd.PersistentFlags().Bool(FlagWaldurIngestSkipShared, false, "Skip non-shared offerings during ingest")
+	rootCmd.PersistentFlags().Bool(FlagWaldurIngestSkipNonBillable, false, "Skip non-billable offerings during ingest")
+	rootCmd.PersistentFlags().Bool(FlagWaldurIngestOnlyActive, true, "Only ingest Active offerings")
+	rootCmd.PersistentFlags().String(FlagWaldurIngestCategoryUUIDs, "", "Comma-separated Waldur category UUID filter")
+	rootCmd.PersistentFlags().String(FlagWaldurIngestOfferingTypes, "", "Comma-separated Waldur offering type filter")
+
 	// Bind to viper
 	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
 	_ = viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
@@ -249,6 +303,24 @@ func init() {
 	_ = viper.BindPFlag(FlagWaldurCategoryMap, rootCmd.PersistentFlags().Lookup(FlagWaldurCategoryMap))
 	_ = viper.BindPFlag(FlagWaldurOfferingSyncInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncInterval))
 	_ = viper.BindPFlag(FlagWaldurOfferingSyncMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncMaxRetries))
+
+	// VE-3D: Bind ingest flags
+	_ = viper.BindPFlag(FlagWaldurIngestEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestEnabled))
+	_ = viper.BindPFlag(FlagWaldurIngestConfig, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestConfig))
+	_ = viper.BindPFlag(FlagWaldurIngestStateFile, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestStateFile))
+	_ = viper.BindPFlag(FlagWaldurIngestInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestInterval))
+	_ = viper.BindPFlag(FlagWaldurIngestReconcileInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestReconcileInterval))
+	_ = viper.BindPFlag(FlagWaldurIngestReconcileOnStartup, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestReconcileOnStartup))
+	_ = viper.BindPFlag(FlagWaldurIngestMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestMaxRetries))
+	_ = viper.BindPFlag(FlagWaldurIngestRateLimitPerSecond, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestRateLimitPerSecond))
+	_ = viper.BindPFlag(FlagWaldurIngestRateLimitBurst, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestRateLimitBurst))
+	_ = viper.BindPFlag(FlagWaldurIngestPageSize, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestPageSize))
+	_ = viper.BindPFlag(FlagWaldurIngestTimeout, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestTimeout))
+	_ = viper.BindPFlag(FlagWaldurIngestSkipShared, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestSkipShared))
+	_ = viper.BindPFlag(FlagWaldurIngestSkipNonBillable, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestSkipNonBillable))
+	_ = viper.BindPFlag(FlagWaldurIngestOnlyActive, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestOnlyActive))
+	_ = viper.BindPFlag(FlagWaldurIngestCategoryUUIDs, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestCategoryUUIDs))
+	_ = viper.BindPFlag(FlagWaldurIngestOfferingTypes, rootCmd.PersistentFlags().Lookup(FlagWaldurIngestOfferingTypes))
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())
@@ -483,6 +555,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to load waldur offering map: %w", err)
 		}
 
+		categoryMap, err := loadCategoryMap(viper.GetString(FlagWaldurCategoryMap))
+		if err != nil {
+			return fmt.Errorf("failed to load waldur category map: %w", err)
+		}
+
 		bridgeCfg := provider_daemon.DefaultWaldurBridgeConfig()
 		bridgeCfg.Enabled = true
 		bridgeCfg.ProviderAddress = providerAddress
@@ -497,7 +574,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 		bridgeCfg.WaldurToken = viper.GetString(FlagWaldurToken)
 		bridgeCfg.WaldurProjectUUID = viper.GetString(FlagWaldurProjectUUID)
 		bridgeCfg.WaldurOfferingMap = offeringMap
+		bridgeCfg.WaldurCategoryMap = categoryMap
 		bridgeCfg.OrderCallbackURL = viper.GetString(FlagWaldurOrderCallbackURL)
+		bridgeCfg.OfferingSyncEnabled = viper.GetBool(FlagWaldurOfferingSyncEnabled)
+		bridgeCfg.OfferingSyncStateFile = viper.GetString(FlagWaldurOfferingSyncStateFile)
+		bridgeCfg.WaldurCustomerUUID = viper.GetString(FlagWaldurCustomerUUID)
+		bridgeCfg.OfferingSyncInterval = viper.GetInt64(FlagWaldurOfferingSyncInterval)
+		bridgeCfg.OfferingSyncMaxRetries = viper.GetInt(FlagWaldurOfferingSyncMaxRetries)
 
 		waldurBridge, err := provider_daemon.NewWaldurBridge(bridgeCfg, keyManager, callbackSink, usageReporter)
 		if err != nil {
@@ -510,6 +593,84 @@ func runStart(cmd *cobra.Command, args []string) error {
 			}
 		}()
 		fmt.Println("  Waldur Bridge: started")
+
+		if viper.GetBool(FlagWaldurIngestEnabled) {
+			ingestCfg, err := loadIngestConfig(viper.GetString(FlagWaldurIngestConfig))
+			if err != nil {
+				return fmt.Errorf("failed to load waldur ingest config: %w", err)
+			}
+
+			submitterCfg := provider_daemon.ChainOfferingSubmitterConfig{
+				ChainID:           viper.GetString(FlagChainID),
+				NodeURI:           viper.GetString(FlagNode),
+				GRPCEndpoint:      viper.GetString(FlagWaldurChainGRPC),
+				KeyName:           viper.GetString(FlagWaldurChainKey),
+				KeyringBackend:    viper.GetString(FlagWaldurChainKeyringBackend),
+				KeyringDir:        viper.GetString(FlagWaldurChainKeyringDir),
+				KeyringPassphrase: viper.GetString(FlagWaldurChainKeyringPassphrase),
+				GasSetting:        provider_daemon.GasSetting{Simulate: true},
+				GasPrices:         viper.GetString(FlagWaldurChainGasPrices),
+				Fees:              viper.GetString(FlagWaldurChainFees),
+				GasAdjustment:     viper.GetFloat64(FlagWaldurChainGasAdjustment),
+				BroadcastTimeout:  viper.GetDuration(FlagWaldurChainBroadcastTimeout),
+				IngestStateFile:   viper.GetString(FlagWaldurIngestStateFile),
+			}
+			if submitterCfg.KeyName == "" {
+				submitterCfg.KeyName = providerKeyName
+			}
+
+			gasSetting, err := parseGasSetting(viper.GetString(FlagWaldurChainGas))
+			if err != nil {
+				return fmt.Errorf("invalid waldur chain gas: %w", err)
+			}
+			submitterCfg.GasSetting = gasSetting
+
+			submitter, err := provider_daemon.NewChainOfferingSubmitter(ctx, submitterCfg)
+			if err != nil {
+				return fmt.Errorf("failed to create waldur offering submitter: %w", err)
+			}
+
+			ingestWorkerCfg := provider_daemon.DefaultWaldurIngestWorkerConfig()
+			ingestWorkerCfg.Enabled = true
+			ingestWorkerCfg.ProviderAddress = providerAddress
+			ingestWorkerCfg.WaldurCustomerUUID = viper.GetString(FlagWaldurCustomerUUID)
+			ingestWorkerCfg.WaldurCategoryUUIDs = parseCSVList(viper.GetString(FlagWaldurIngestCategoryUUIDs))
+			ingestWorkerCfg.WaldurOfferingTypes = parseCSVList(viper.GetString(FlagWaldurIngestOfferingTypes))
+			ingestWorkerCfg.IngestIntervalSeconds = viper.GetInt64(FlagWaldurIngestInterval)
+			ingestWorkerCfg.ReconcileIntervalSeconds = viper.GetInt64(FlagWaldurIngestReconcileInterval)
+			ingestWorkerCfg.ReconcileOnStartup = viper.GetBool(FlagWaldurIngestReconcileOnStartup)
+			ingestWorkerCfg.PageSize = viper.GetInt(FlagWaldurIngestPageSize)
+			ingestWorkerCfg.MaxRetries = viper.GetInt(FlagWaldurIngestMaxRetries)
+			ingestWorkerCfg.RateLimitPerSecond = viper.GetFloat64(FlagWaldurIngestRateLimitPerSecond)
+			ingestWorkerCfg.RateLimitBurst = viper.GetInt(FlagWaldurIngestRateLimitBurst)
+			ingestWorkerCfg.OperationTimeout = viper.GetDuration(FlagWaldurIngestTimeout)
+			ingestWorkerCfg.StateFilePath = viper.GetString(FlagWaldurIngestStateFile)
+			ingestWorkerCfg.IngestConfig = ingestCfg
+			ingestWorkerCfg.SkipSharedOfferings = viper.GetBool(FlagWaldurIngestSkipShared)
+			ingestWorkerCfg.SkipNonBillableOfferings = viper.GetBool(FlagWaldurIngestSkipNonBillable)
+			ingestWorkerCfg.OnlyActiveOfferings = viper.GetBool(FlagWaldurIngestOnlyActive)
+
+			waldurCfg := waldur.DefaultConfig()
+			waldurCfg.BaseURL = viper.GetString(FlagWaldurBaseURL)
+			waldurCfg.Token = viper.GetString(FlagWaldurToken)
+			waldurClient, err := waldur.NewClient(waldurCfg)
+			if err != nil {
+				return fmt.Errorf("failed to create waldur client for ingest: %w", err)
+			}
+
+			ingestMarketplace := waldur.NewMarketplaceClient(waldurClient)
+			ingestWorker, err := provider_daemon.NewWaldurIngestWorker(ingestWorkerCfg, ingestMarketplace, submitter)
+			if err != nil {
+				return fmt.Errorf("failed to create waldur ingest worker: %w", err)
+			}
+
+			go func() {
+				if err := ingestWorker.Start(ctx); err != nil {
+					fmt.Printf("[WALDUR] ingest worker stopped: %v\n", err)
+				}
+			}()
+			fmt.Println("  Waldur Ingest: started")
+		}
 	}
 
 	// Start background workers
@@ -754,6 +915,52 @@ func loadOfferingMap(path string) (map[string]string, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func loadCategoryMap(path string) (map[string]string, error) {
+	if path == "" {
+		return map[string]string{}, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func loadIngestConfig(path string) (marketplace.IngestConfig, error) {
+	cfg := marketplace.DefaultIngestConfig()
+	if path == "" {
+		return cfg, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cfg, err
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+func parseCSVList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 func parseGasSetting(value string) (provider_daemon.GasSetting, error) {
