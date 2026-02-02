@@ -74,7 +74,7 @@ func (s *OracleCLITestSuite) SetupSuite() {
 		s.cctx,
 		cmd,
 		cli.TestFlags().
-			With("ve", "usd", "5.47", time.Now().Format(time.RFC3339Nano)).
+			With("uve", "usd", "5.47", time.Now().Format(time.RFC3339Nano)).
 			WithFrom(s.addrs[0].String()).
 			WithBroadcastModeSync().
 			WithSkipConfirm().
@@ -136,7 +136,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPrice() {
 		{
 			"feed price successfully",
 			cli.TestFlags().
-				With("ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -147,7 +147,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPrice() {
 		{
 			"feed price with missing args",
 			cli.TestFlags().
-				With("ve").
+				With("uve").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -157,7 +157,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPrice() {
 		{
 			"feed price without from address",
 			cli.TestFlags().
-				With("ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
 			true,
@@ -290,7 +290,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceWithGasSettings() {
 		{
 			"feed price with auto gas",
 			cli.TestFlags().
-				With("ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -301,7 +301,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceWithGasSettings() {
 		{
 			"feed price with gas adjustment",
 			cli.TestFlags().
-				With("ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -313,7 +313,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceWithGasSettings() {
 		{
 			"feed price with gas prices",
 			cli.TestFlags().
-				With("ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -399,7 +399,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceTimeouts() {
 		{
 			"feed price with timeout height",
 			cli.TestFlags().
-				With("ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -410,7 +410,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceTimeouts() {
 		{
 			"feed price with timeout duration and unordered",
 			cli.TestFlags().
-				With("ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -498,7 +498,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceEdgeCases() {
 		{
 			"feed price with empty base denom",
 			cli.TestFlags().
-				With("ve", "").
+				With("uve", "").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -593,7 +593,7 @@ func (s *OracleCLITestSuite) TestCLIQueryOraclePriceFeedConfigValidation() {
 		{
 			"valid denom",
 			cli.TestFlags().
-				With("ve").
+				With("uve").
 				WithOutputJSON(),
 			false,
 		},
