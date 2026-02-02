@@ -101,4 +101,3 @@ func TxCmd() *cobra.Command {
 
 	return cmd
 }
-
