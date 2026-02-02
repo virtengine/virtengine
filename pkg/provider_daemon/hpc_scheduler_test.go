@@ -15,6 +15,8 @@ import (
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
+const testClusterID = "cluster-test"
+
 // =============================================================================
 // Mock Implementations
 // =============================================================================
