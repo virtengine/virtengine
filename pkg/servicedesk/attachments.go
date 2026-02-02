@@ -437,4 +437,3 @@ type ExternalAttachmentRef struct {
 	// SyncedAt is when the attachment was synced
 	SyncedAt time.Time `json:"synced_at"`
 }
-

@@ -2976,4 +2976,3 @@ func (aa *AzureAdapter) DeleteResourceGroup(ctx context.Context, name string) er
 
 // Port is an alias for the Port field in PortSpec for NSG rule creation
 type Port = int32
-

@@ -441,4 +441,3 @@ func (c *HPCBillingCalculator) CalculateCostBreakdown(metrics *HPCSchedulerMetri
 
 	return breakdown
 }
-

@@ -165,12 +165,12 @@ func DefaultMappingSchema() *MappingSchema {
 			{OnChainCategory: "security", JiraComponent: "Security", WaldurType: "security"},
 		},
 		CustomFieldMappings: map[string]string{
-			"ticket_id":         "customfield_10100",
-			"ticket_number":     "customfield_10101",
-			"customer_address":  "customfield_10102",
-			"related_entity":    "customfield_10103",
-			"provider_address":  "customfield_10104",
-			"blockchain_tx":     "customfield_10105",
+			"ticket_id":        "customfield_10100",
+			"ticket_number":    "customfield_10101",
+			"customer_address": "customfield_10102",
+			"related_entity":   "customfield_10103",
+			"provider_address": "customfield_10104",
+			"blockchain_tx":    "customfield_10105",
 		},
 	}
 }
@@ -454,4 +454,3 @@ func (p *CallbackPayload) Validate() error {
 	}
 	return nil
 }
-

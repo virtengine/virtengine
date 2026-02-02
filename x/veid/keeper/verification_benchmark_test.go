@@ -131,7 +131,7 @@ func (d *MockDecryptor) Decrypt(scopeIDs []string) ([]MockDecryptedScope, error)
 
 		// Generate mock decrypted data
 		contentHash := make([]byte, 32)
-		rand.Read(contentHash)
+		_, _ = rand.Read(contentHash)
 
 		features := make([]float64, 128) // 128-dim feature vector
 		for i := range features {
@@ -139,7 +139,7 @@ func (d *MockDecryptor) Decrypt(scopeIDs []string) ([]MockDecryptedScope, error)
 		}
 
 		biometricRef := make([]byte, 64)
-		rand.Read(biometricRef)
+		_, _ = rand.Read(biometricRef)
 
 		scopes = append(scopes, MockDecryptedScope{
 			ScopeID:      id,
@@ -517,7 +517,7 @@ func BenchmarkIdentityRecordDeserialization(b *testing.B) {
 // BenchmarkInputHashComputation benchmarks input hash computation
 func BenchmarkInputHashComputation(b *testing.B) {
 	data := make([]byte, 4096)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

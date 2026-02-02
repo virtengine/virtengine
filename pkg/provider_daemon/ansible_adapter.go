@@ -463,11 +463,11 @@ func DefaultAnsibleAdapterConfig() AnsibleAdapterConfig {
 
 // AnsibleAdapter provides Ansible playbook execution capabilities
 type AnsibleAdapter struct {
-	config          AnsibleAdapterConfig
-	executions      map[string]*ExecutionResult
+	config           AnsibleAdapterConfig
+	executions       map[string]*ExecutionResult
 	activeExecutions map[string]context.CancelFunc
-	mu              sync.RWMutex
-	semaphore       chan struct{}
+	mu               sync.RWMutex
+	semaphore        chan struct{}
 }
 
 // NewAnsibleAdapter creates a new Ansible adapter
@@ -483,10 +483,10 @@ func NewAnsibleAdapter(config AnsibleAdapterConfig) *AnsibleAdapter {
 	}
 
 	return &AnsibleAdapter{
-		config:          config,
-		executions:      make(map[string]*ExecutionResult),
+		config:           config,
+		executions:       make(map[string]*ExecutionResult),
 		activeExecutions: make(map[string]context.CancelFunc),
-		semaphore:       make(chan struct{}, config.MaxConcurrentExecutions),
+		semaphore:        make(chan struct{}, config.MaxConcurrentExecutions),
 	}
 }
 
@@ -611,7 +611,7 @@ func (a *AnsibleAdapter) ExecutePlaybook(ctx context.Context, playbook *Playbook
 
 	// Execute the playbook
 	err := a.runPlaybook(execCtx, playbook, inventory, options, result)
-	
+
 	result.CompletedAt = time.Now()
 	result.Duration = result.CompletedAt.Sub(result.StartedAt)
 
@@ -676,7 +676,7 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 
 	// Create command
 	cmd := exec.CommandContext(ctx, ansiblePath, args...)
-	
+
 	// Set working directory
 	if options.WorkingDir != "" {
 		// Validate working directory path
@@ -849,7 +849,7 @@ func (a *AnsibleAdapter) writeTemporaryVaultPassword(password string) (string, e
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Set restrictive permissions
 	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
 		os.Remove(tmpFile.Name())
@@ -1067,4 +1067,3 @@ func (a *AnsibleAdapter) GetPlaybookPath(name string) string {
 func (a *AnsibleAdapter) RegisterPlaybook(playbook *Playbook) error {
 	return playbook.Validate()
 }
-

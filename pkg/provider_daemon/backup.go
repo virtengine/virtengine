@@ -328,11 +328,11 @@ func (m *KeyBackupManager) CreateBackup(passphrase string) (*KeyBackup, error) {
 
 	if m.config.IncludeMetadata {
 		backup.Metadata = &BackupMetadata{
-			BackupID:   generateBackupID(),
-			KeyCount:   len(backupData.Keys),
-			KeyTypes:   extractKeyTypes(backupData.Keys),
-			KeyLabels:  extractKeyLabels(backupData.Keys),
-			CreatedBy:  "key_backup_manager",
+			BackupID:    generateBackupID(),
+			KeyCount:    len(backupData.Keys),
+			KeyTypes:    extractKeyTypes(backupData.Keys),
+			KeyLabels:   extractKeyLabels(backupData.Keys),
+			CreatedBy:   "key_backup_manager",
 			Environment: "production",
 		}
 	}
@@ -793,4 +793,3 @@ func DecryptSecureBackup(encrypted []byte, passphrase string) ([]byte, error) {
 
 	return plaintext, nil
 }
-

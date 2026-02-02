@@ -281,13 +281,13 @@ type PrivacyManager interface {
 
 // privacyManager implements PrivacyManager
 type privacyManager struct {
-	config           PrivacyConfig
+	config            PrivacyConfig
 	retentionPolicies map[string]*RetentionPolicy
-	erasureRequests  map[string]*ErasureRequest
-	sarRequests      map[string]*SubjectAccessRequest
-	purgeTasks       map[string]time.Time
-	legalHolds       map[string]time.Time
-	mu               sync.RWMutex
+	erasureRequests   map[string]*ErasureRequest
+	sarRequests       map[string]*SubjectAccessRequest
+	purgeTasks        map[string]time.Time
+	legalHolds        map[string]time.Time
+	mu                sync.RWMutex
 }
 
 // newPrivacyManager creates a new privacy manager
@@ -601,4 +601,3 @@ func GetRequiredConsentScope(jurisdiction string) []string {
 		"identity_verification",
 	}
 }
-

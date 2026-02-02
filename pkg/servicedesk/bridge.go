@@ -19,10 +19,10 @@ type Bridge struct {
 	logger log.Logger
 
 	// Adapters
-	jiraClient     jira.IClient
-	jiraBridge     jira.ITicketBridge
-	waldurClient   *waldur.Client
-	waldurSupport  *waldur.SupportClient
+	jiraClient    jira.IClient
+	jiraBridge    jira.ITicketBridge
+	waldurClient  *waldur.Client
+	waldurSupport *waldur.SupportClient
 
 	// Internal components
 	syncManager    *SyncManager
@@ -75,17 +75,17 @@ var _ IBridge = (*Bridge)(nil)
 
 // TicketCreatedEvent represents an on-chain ticket creation event
 type TicketCreatedEvent struct {
-	TicketID        string            `json:"ticket_id"`
-	CustomerAddress string            `json:"customer_address"`
-	ProviderAddress string            `json:"provider_address,omitempty"`
-	Category        string            `json:"category"`
-	Priority        string            `json:"priority"`
-	Subject         string            `json:"subject"`
-	Description     string            `json:"description"`
-	RelatedEntity   *RelatedEntity    `json:"related_entity,omitempty"`
-	BlockHeight     int64             `json:"block_height"`
-	Timestamp       time.Time         `json:"timestamp"`
-	TxHash          string            `json:"tx_hash"`
+	TicketID        string         `json:"ticket_id"`
+	CustomerAddress string         `json:"customer_address"`
+	ProviderAddress string         `json:"provider_address,omitempty"`
+	Category        string         `json:"category"`
+	Priority        string         `json:"priority"`
+	Subject         string         `json:"subject"`
+	Description     string         `json:"description"`
+	RelatedEntity   *RelatedEntity `json:"related_entity,omitempty"`
+	BlockHeight     int64          `json:"block_height"`
+	Timestamp       time.Time      `json:"timestamp"`
+	TxHash          string         `json:"tx_hash"`
 }
 
 // RelatedEntity represents a related on-chain entity
@@ -116,12 +116,12 @@ type TicketClosedEvent struct {
 
 // HealthStatus represents the bridge health status
 type HealthStatus struct {
-	Healthy     bool      `json:"healthy"`
-	JiraStatus  string    `json:"jira_status,omitempty"`
-	WaldurStatus string   `json:"waldur_status,omitempty"`
-	LastSync    time.Time `json:"last_sync"`
-	PendingEvents int     `json:"pending_events"`
-	FailedEvents  int     `json:"failed_events"`
+	Healthy       bool      `json:"healthy"`
+	JiraStatus    string    `json:"jira_status,omitempty"`
+	WaldurStatus  string    `json:"waldur_status,omitempty"`
+	LastSync      time.Time `json:"last_sync"`
+	PendingEvents int       `json:"pending_events"`
+	FailedEvents  int       `json:"failed_events"`
 }
 
 // NewBridge creates a new bridge service
@@ -282,19 +282,19 @@ func (b *Bridge) HandleTicketCreated(ctx context.Context, event *TicketCreatedEv
 
 	// Create sync event
 	syncEvent := &SyncEvent{
-		ID:          fmt.Sprintf("create-%s-%d", event.TicketID, event.BlockHeight),
-		Type:        "ticket_created",
-		TicketID:    event.TicketID,
-		Direction:   SyncDirectionOutbound,
+		ID:        fmt.Sprintf("create-%s-%d", event.TicketID, event.BlockHeight),
+		Type:      "ticket_created",
+		TicketID:  event.TicketID,
+		Direction: SyncDirectionOutbound,
 		Payload: map[string]interface{}{
-			"customer_address":  event.CustomerAddress,
-			"provider_address":  event.ProviderAddress,
-			"category":          event.Category,
-			"priority":          event.Priority,
-			"subject":           event.Subject,
-			"description":       event.Description,
-			"related_entity":    event.RelatedEntity,
-			"tx_hash":           event.TxHash,
+			"customer_address": event.CustomerAddress,
+			"provider_address": event.ProviderAddress,
+			"category":         event.Category,
+			"priority":         event.Priority,
+			"subject":          event.Subject,
+			"description":      event.Description,
+			"related_entity":   event.RelatedEntity,
+			"tx_hash":          event.TxHash,
 		},
 		Timestamp:   event.Timestamp,
 		BlockHeight: event.BlockHeight,
@@ -366,10 +366,10 @@ func (b *Bridge) HandleTicketClosed(ctx context.Context, event *TicketClosedEven
 
 	// Create sync event
 	syncEvent := &SyncEvent{
-		ID:          fmt.Sprintf("close-%s-%d", event.TicketID, event.BlockHeight),
-		Type:        "ticket_closed",
-		TicketID:    event.TicketID,
-		Direction:   SyncDirectionOutbound,
+		ID:        fmt.Sprintf("close-%s-%d", event.TicketID, event.BlockHeight),
+		Type:      "ticket_closed",
+		TicketID:  event.TicketID,
+		Direction: SyncDirectionOutbound,
 		Payload: map[string]interface{}{
 			"closed_by":  event.ClosedBy,
 			"resolution": event.Resolution,
@@ -416,14 +416,14 @@ func (b *Bridge) HandleExternalCallback(ctx context.Context, payload *CallbackPa
 
 	// Create sync event for inbound sync
 	syncEvent := &SyncEvent{
-		ID:        fmt.Sprintf("callback-%s-%s", payload.ExternalID, payload.Nonce),
-		Type:      payload.EventType,
-		TicketID:  payload.OnChainTicketID,
-		Direction: SyncDirectionInbound,
-		Payload:   payload.Changes,
-		Timestamp: payload.Timestamp,
+		ID:         fmt.Sprintf("callback-%s-%s", payload.ExternalID, payload.Nonce),
+		Type:       payload.EventType,
+		TicketID:   payload.OnChainTicketID,
+		Direction:  SyncDirectionInbound,
+		Payload:    payload.Changes,
+		Timestamp:  payload.Timestamp,
 		MaxRetries: b.config.RetryConfig.MaxRetries,
-		Status:    SyncStatusPending,
+		Status:     SyncStatusPending,
 	}
 
 	// Queue for processing
@@ -802,10 +802,10 @@ func (b *Bridge) syncTicketClosed(ctx context.Context, event *SyncEvent) error {
 // handleConflict handles a sync conflict
 func (b *Bridge) handleConflict(ctx context.Context, event *SyncEvent, conflict *Conflict) error {
 	b.auditLogger.LogEvent(ctx, AuditEventConflictDetected, map[string]interface{}{
-		"ticket_id":   event.TicketID,
-		"event_id":    event.ID,
-		"conflict":    conflict,
-		"resolution":  b.config.SyncConfig.ConflictResolution,
+		"ticket_id":  event.TicketID,
+		"event_id":   event.ID,
+		"conflict":   conflict,
+		"resolution": b.config.SyncConfig.ConflictResolution,
 	})
 
 	switch b.config.SyncConfig.ConflictResolution {
@@ -858,4 +858,3 @@ func (b *Bridge) syncLoop(ctx context.Context) {
 func (b *Bridge) processRetryEvent(ctx context.Context, event *SyncEvent) error {
 	return b.processEvent(ctx, event)
 }
-

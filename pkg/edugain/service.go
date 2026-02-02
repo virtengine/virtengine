@@ -16,18 +16,18 @@ import (
 
 // service implements the Service interface
 type service struct {
-	config           Config
-	metadata         MetadataService
-	saml             SAMLProvider
-	sessions         SessionManager
-	discovery        DiscoveryService
-	veid             VEIDIntegrator
-	attributeMapper  AttributeMapper
-	status           ServiceStatus
-	refreshTicker    *time.Ticker
-	stopChan         chan struct{}
-	running          bool
-	mu sync.RWMutex
+	config          Config
+	metadata        MetadataService
+	saml            SAMLProvider
+	sessions        SessionManager
+	discovery       DiscoveryService
+	veid            VEIDIntegrator
+	attributeMapper AttributeMapper
+	status          ServiceStatus
+	refreshTicker   *time.Ticker
+	stopChan        chan struct{}
+	running         bool
+	mu              sync.RWMutex
 	//nolint:unused // Reserved for metadata refresh callback functionality
 	metadataCallback MetadataRefreshCallback
 }
@@ -416,4 +416,3 @@ func extractIssuerEntityID(samlResponseBase64 string) (string, error) {
 
 	return issuer, nil
 }
-

@@ -425,7 +425,7 @@ func (ik *invoiceKeeper) GetInvoiceLedgerChain(ctx sdk.Context, invoiceID string
 	}
 
 	chain := billing.NewInvoiceLedgerChain(invoiceID)
-	
+
 	// Sort entries by sequence number
 	sortedEntries := make([]*billing.InvoiceLedgerEntry, len(entries))
 	for _, e := range entries {
@@ -640,6 +640,7 @@ func (ik *invoiceKeeper) setInvoiceIndexes(store storetypes.KVStore, record *bil
 func (ik *invoiceKeeper) saveLedgerEntry(store storetypes.KVStore, entry *billing.InvoiceLedgerEntry) {
 	// Save entry
 	entryKey := billing.BuildInvoiceLedgerEntryKey(entry.EntryID)
+	//nolint:errchkjson // entry contains sdk.Coins which is safe for Marshal
 	bz, _ := json.Marshal(entry)
 	store.Set(entryKey, bz)
 
@@ -755,8 +756,8 @@ type QueryInvoiceResponse struct {
 
 // QueryInvoicesByProviderRequest is the request for InvoicesByProvider query
 type QueryInvoicesByProviderRequest struct {
-	Provider   string              `json:"provider"`
-	Pagination *query.PageRequest  `json:"pagination,omitempty"`
+	Provider   string             `json:"provider"`
+	Pagination *query.PageRequest `json:"pagination,omitempty"`
 }
 
 // QueryInvoicesByProviderResponse is the response for InvoicesByProvider query
@@ -767,8 +768,8 @@ type QueryInvoicesByProviderResponse struct {
 
 // QueryInvoicesByCustomerRequest is the request for InvoicesByCustomer query
 type QueryInvoicesByCustomerRequest struct {
-	Customer   string              `json:"customer"`
-	Pagination *query.PageRequest  `json:"pagination,omitempty"`
+	Customer   string             `json:"customer"`
+	Pagination *query.PageRequest `json:"pagination,omitempty"`
 }
 
 // QueryInvoicesByCustomerResponse is the response for InvoicesByCustomer query

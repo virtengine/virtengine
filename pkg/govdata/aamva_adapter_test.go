@@ -242,11 +242,11 @@ func TestAAMVADMVAdapter_IsStateSupported(t *testing.T) {
 		Jurisdiction: "US-CA",
 	}
 	aamvaConfig := AAMVAConfig{
-		Environment:    AAMVAEnvironmentSandbox,
-		OrgID:          "test-org",
-		PermissionCode: "test-permission",
-		ClientID:       "test-client",
-		ClientSecret:   "test-secret",
+		Environment:     AAMVAEnvironmentSandbox,
+		OrgID:           "test-org",
+		PermissionCode:  "test-permission",
+		ClientID:        "test-client",
+		ClientSecret:    "test-secret",
 		SupportedStates: []string{"CA", "TX", "NY"},
 	}
 	adapter, _ := NewAAMVADMVAdapter(baseConfig, aamvaConfig)
@@ -306,9 +306,9 @@ func TestAAMVADMVAdapter_ConvertFieldMatch(t *testing.T) {
 	adapter, _ := NewAAMVADMVAdapter(baseConfig, aamvaConfig)
 
 	tests := []struct {
-		input      string
-		wantMatch  FieldMatchResult
-		wantConf   float64
+		input     string
+		wantMatch FieldMatchResult
+		wantConf  float64
 	}{
 		{string(AAMVAMatchYes), FieldMatchExact, 1.0},
 		{string(AAMVAMatchPartial), FieldMatchFuzzy, 0.7},
@@ -347,13 +347,13 @@ func TestAAMVADMVAdapter_ConvertResponse_Verified(t *testing.T) {
 	}
 
 	dldvResp := &AAMVADLDVResponse{
-		OverallMatch:    string(AAMVAMatchYes),
-		LicenseMatch:    string(AAMVAMatchYes),
-		FirstNameMatch:  string(AAMVAMatchYes),
-		LastNameMatch:   string(AAMVAMatchYes),
-		DOBMatch:        string(AAMVAMatchYes),
-		LicenseStatus:   string(AAMVALicenseValid),
-		ExpirationDate:  "2030-12-31",
+		OverallMatch:   string(AAMVAMatchYes),
+		LicenseMatch:   string(AAMVAMatchYes),
+		FirstNameMatch: string(AAMVAMatchYes),
+		LastNameMatch:  string(AAMVAMatchYes),
+		DOBMatch:       string(AAMVAMatchYes),
+		LicenseStatus:  string(AAMVALicenseValid),
+		ExpirationDate: "2030-12-31",
 	}
 
 	resp := adapter.convertResponse(req, dldvResp)
@@ -434,11 +434,11 @@ func TestAAMVADMVAdapter_Verify_UnsupportedDocument(t *testing.T) {
 		Jurisdiction: "US-CA",
 	}
 	aamvaConfig := AAMVAConfig{
-		Environment:    AAMVAEnvironmentSandbox,
-		OrgID:          "test-org",
-		PermissionCode: "test-permission",
-		ClientID:       "test-client",
-		ClientSecret:   "test-secret",
+		Environment:     AAMVAEnvironmentSandbox,
+		OrgID:           "test-org",
+		PermissionCode:  "test-permission",
+		ClientID:        "test-client",
+		ClientSecret:    "test-secret",
 		SupportedStates: []string{"CA"},
 	}
 	adapter, _ := NewAAMVADMVAdapter(baseConfig, aamvaConfig)
@@ -459,11 +459,11 @@ func TestAAMVADMVAdapter_Verify_UnsupportedState(t *testing.T) {
 		Jurisdiction: "US-CA",
 	}
 	aamvaConfig := AAMVAConfig{
-		Environment:    AAMVAEnvironmentSandbox,
-		OrgID:          "test-org",
-		PermissionCode: "test-permission",
-		ClientID:       "test-client",
-		ClientSecret:   "test-secret",
+		Environment:     AAMVAEnvironmentSandbox,
+		OrgID:           "test-org",
+		PermissionCode:  "test-permission",
+		ClientID:        "test-client",
+		ClientSecret:    "test-secret",
 		SupportedStates: []string{"CA", "TX"},
 	}
 	adapter, _ := NewAAMVADMVAdapter(baseConfig, aamvaConfig)
@@ -487,11 +487,11 @@ func TestAAMVADMVAdapter_Verify_InvalidLicense(t *testing.T) {
 		Jurisdiction: "US-CA",
 	}
 	aamvaConfig := AAMVAConfig{
-		Environment:    AAMVAEnvironmentSandbox,
-		OrgID:          "test-org",
-		PermissionCode: "test-permission",
-		ClientID:       "test-client",
-		ClientSecret:   "test-secret",
+		Environment:     AAMVAEnvironmentSandbox,
+		OrgID:           "test-org",
+		PermissionCode:  "test-permission",
+		ClientID:        "test-client",
+		ClientSecret:    "test-secret",
 		SupportedStates: []string{"CA"},
 	}
 	adapter, _ := NewAAMVADMVAdapter(baseConfig, aamvaConfig)
@@ -586,4 +586,3 @@ func TestAAMVADMVAdapter_Verify_WithMockServer(t *testing.T) {
 	assert.NotEmpty(t, msgID)
 	assert.Len(t, msgID, 32)
 }
-

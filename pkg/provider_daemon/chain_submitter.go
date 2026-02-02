@@ -518,8 +518,8 @@ func (b *TransactionBuilder) BuildSettlementTx(orderID string, usageRecordIDs []
 
 // Placeholder interfaces for Cosmos SDK integration
 var (
-	_ signing.SignMode     = signing.SignMode(0)
-	_ authsigning.Tx       = (authsigning.Tx)(nil)
+	_ signing.SignMode = signing.SignMode(0)
+	_ authsigning.Tx   = (authsigning.Tx)(nil)
 )
 
 // SignatureVerifier verifies usage report signatures.
@@ -598,4 +598,3 @@ func UsageReportHashHex(report *ChainUsageReport) string {
 	hash := UsageReportHash(report)
 	return hex.EncodeToString(hash)
 }
-

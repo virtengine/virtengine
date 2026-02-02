@@ -21,11 +21,11 @@ type RedisWorkflowStore struct {
 
 // Redis key patterns
 const (
-	stateKeyPattern      = "%s:state:%s"              // prefix:state:workflowID
-	stateIndexKey        = "%s:states"                // prefix:states (ZSET for listing)
-	checkpointKeyPattern = "%s:checkpoint:%s:%s"      // prefix:checkpoint:workflowID:step
-	checkpointIndexKey   = "%s:checkpoints:%s"        // prefix:checkpoints:workflowID (SET)
-	historyKeyPattern    = "%s:history:%s"            // prefix:history:workflowID (LIST)
+	stateKeyPattern      = "%s:state:%s"         // prefix:state:workflowID
+	stateIndexKey        = "%s:states"           // prefix:states (ZSET for listing)
+	checkpointKeyPattern = "%s:checkpoint:%s:%s" // prefix:checkpoint:workflowID:step
+	checkpointIndexKey   = "%s:checkpoints:%s"   // prefix:checkpoints:workflowID (SET)
+	historyKeyPattern    = "%s:history:%s"       // prefix:history:workflowID (LIST)
 )
 
 // NewRedisWorkflowStore creates a new Redis-backed workflow store
@@ -494,4 +494,3 @@ func matchesStateFilter(state *WorkflowState, filter StateFilter) bool {
 	}
 	return true
 }
-

@@ -562,4 +562,3 @@ func (m *TFModel) Close() error {
 
 	return nil
 }
-

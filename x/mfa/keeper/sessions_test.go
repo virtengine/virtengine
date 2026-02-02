@@ -281,7 +281,7 @@ func TestCreateAuthSessionForAction(t *testing.T) {
 			require.LessOrEqual(t, duration, tc.maxDuration, "duration too long")
 
 			// Cleanup
-			keeper.DeleteAuthorizationSession(ctx, session.SessionID)
+			_ = keeper.DeleteAuthorizationSession(ctx, session.SessionID)
 		})
 	}
 }
@@ -302,7 +302,7 @@ func TestGetValidSessionsForAccount(t *testing.T) {
 		ExpiresAt:       now + 15*60,
 		IsSingleUse:     false,
 	}
-	keeper.CreateAuthorizationSession(ctx, validSession)
+	_ = keeper.CreateAuthorizationSession(ctx, validSession)
 
 	expiredSession := &types.AuthorizationSession{
 		SessionID:       "expired-session",
@@ -313,7 +313,7 @@ func TestGetValidSessionsForAccount(t *testing.T) {
 		ExpiresAt:       now - 30*60, // Expired 30 min ago
 		IsSingleUse:     false,
 	}
-	keeper.CreateAuthorizationSession(ctx, expiredSession)
+	_ = keeper.CreateAuthorizationSession(ctx, expiredSession)
 
 	usedSingleUseSession := &types.AuthorizationSession{
 		SessionID:       "used-single-use",
@@ -325,7 +325,7 @@ func TestGetValidSessionsForAccount(t *testing.T) {
 		IsSingleUse:     true,
 		UsedAt:          now - 60, // Used 1 minute ago
 	}
-	keeper.CreateAuthorizationSession(ctx, usedSingleUseSession)
+	_ = keeper.CreateAuthorizationSession(ctx, usedSingleUseSession)
 
 	// Get valid sessions
 	validSessions := keeper.GetValidSessionsForAccount(ctx, addr)
@@ -340,7 +340,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	now := ctx.BlockTime().Unix()
 
 	// Create sessions
-	keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
+	_ = keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
 		SessionID:       "valid-session",
 		AccountAddress:  addr.String(),
 		TransactionType: types.SensitiveTxProviderRegistration,
@@ -348,7 +348,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 		ExpiresAt:       now + 15*60,
 	})
 
-	keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
+	_ = keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
 		SessionID:       "expired-session-1",
 		AccountAddress:  addr.String(),
 		TransactionType: types.SensitiveTxHighValueOrder,
@@ -356,7 +356,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 		ExpiresAt:       now - 30*60,
 	})
 
-	keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
+	_ = keeper.CreateAuthorizationSession(ctx, &types.AuthorizationSession{
 		SessionID:       "expired-session-2",
 		AccountAddress:  addr.String(),
 		TransactionType: types.SensitiveTxMediumWithdrawal,
@@ -394,7 +394,7 @@ func TestValidateSessionForTransaction(t *testing.T) {
 		IsSingleUse:       false,
 		DeviceFingerprint: "bound-device",
 	}
-	keeper.CreateAuthorizationSession(ctx, session)
+	_ = keeper.CreateAuthorizationSession(ctx, session)
 
 	// Test: Valid session
 	err := keeper.ValidateSessionForTransaction(ctx, "validate-test-session", addr, types.SensitiveTxProviderRegistration, "bound-device")

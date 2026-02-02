@@ -109,4 +109,3 @@ func (s *EventCheckpointStore) Save(state *EventCheckpointState) error {
 
 	return nil
 }
-

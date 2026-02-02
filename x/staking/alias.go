@@ -22,27 +22,27 @@ const (
 // Type aliases for types
 type (
 	// Keeper aliases
-	Keeper           = keeper.Keeper
-	IKeeper          = keeper.IKeeper
+	Keeper            = keeper.Keeper
+	IKeeper           = keeper.IKeeper
 	PerformanceUpdate = keeper.PerformanceUpdate
-	BankKeeper       = keeper.BankKeeper
-	VEIDKeeper       = keeper.VEIDKeeper
-	StakingKeeper    = keeper.StakingKeeper
+	BankKeeper        = keeper.BankKeeper
+	VEIDKeeper        = keeper.VEIDKeeper
+	StakingKeeper     = keeper.StakingKeeper
 
 	// Types aliases
-	GenesisState          = types.GenesisState
-	Params                = types.Params
-	ValidatorPerformance  = types.ValidatorPerformance
-	ValidatorSigningInfo  = types.ValidatorSigningInfo
-	SlashRecord           = types.SlashRecord
-	SlashReason           = types.SlashReason
-	SlashConfig           = types.SlashConfig
-	DoubleSignEvidence    = types.DoubleSignEvidence
-	InvalidVEIDAttestation = types.InvalidVEIDAttestation
-	RewardEpoch           = types.RewardEpoch
-	ValidatorReward       = types.ValidatorReward
-	RewardType            = types.RewardType
-	RewardCalculationInput = types.RewardCalculationInput
+	GenesisState               = types.GenesisState
+	Params                     = types.Params
+	ValidatorPerformance       = types.ValidatorPerformance
+	ValidatorSigningInfo       = types.ValidatorSigningInfo
+	SlashRecord                = types.SlashRecord
+	SlashReason                = types.SlashReason
+	SlashConfig                = types.SlashConfig
+	DoubleSignEvidence         = types.DoubleSignEvidence
+	InvalidVEIDAttestation     = types.InvalidVEIDAttestation
+	RewardEpoch                = types.RewardEpoch
+	ValidatorReward            = types.ValidatorReward
+	RewardType                 = types.RewardType
+	RewardCalculationInput     = types.RewardCalculationInput
 	IdentityNetworkRewardInput = types.IdentityNetworkRewardInput
 
 	// Message types
@@ -55,21 +55,21 @@ type (
 // Constants aliases
 const (
 	// Slash reasons
-	SlashReasonDoubleSigning           = types.SlashReasonDoubleSigning
-	SlashReasonDowntime                = types.SlashReasonDowntime
-	SlashReasonInvalidVEIDAttestation  = types.SlashReasonInvalidVEIDAttestation
-	SlashReasonMissedRecomputation     = types.SlashReasonMissedRecomputation
-	SlashReasonInconsistentScore       = types.SlashReasonInconsistentScore
-	SlashReasonExpiredAttestation      = types.SlashReasonExpiredAttestation
-	SlashReasonDebugModeEnabled        = types.SlashReasonDebugModeEnabled
+	SlashReasonDoubleSigning             = types.SlashReasonDoubleSigning
+	SlashReasonDowntime                  = types.SlashReasonDowntime
+	SlashReasonInvalidVEIDAttestation    = types.SlashReasonInvalidVEIDAttestation
+	SlashReasonMissedRecomputation       = types.SlashReasonMissedRecomputation
+	SlashReasonInconsistentScore         = types.SlashReasonInconsistentScore
+	SlashReasonExpiredAttestation        = types.SlashReasonExpiredAttestation
+	SlashReasonDebugModeEnabled          = types.SlashReasonDebugModeEnabled
 	SlashReasonNonAllowlistedMeasurement = types.SlashReasonNonAllowlistedMeasurement
 
 	// Reward types
-	RewardTypeBlockProposal     = types.RewardTypeBlockProposal
-	RewardTypeVEIDVerification  = types.RewardTypeVEIDVerification
-	RewardTypeUptime            = types.RewardTypeUptime
-	RewardTypeIdentityNetwork   = types.RewardTypeIdentityNetwork
-	RewardTypeStaking           = types.RewardTypeStaking
+	RewardTypeBlockProposal    = types.RewardTypeBlockProposal
+	RewardTypeVEIDVerification = types.RewardTypeVEIDVerification
+	RewardTypeUptime           = types.RewardTypeUptime
+	RewardTypeIdentityNetwork  = types.RewardTypeIdentityNetwork
+	RewardTypeStaking          = types.RewardTypeStaking
 
 	// Performance constants
 	MaxPerformanceScore    = types.MaxPerformanceScore
@@ -86,15 +86,15 @@ var (
 	DefaultParams       = types.DefaultParams
 
 	// Types
-	NewValidatorPerformance   = types.NewValidatorPerformance
-	NewValidatorSigningInfo   = types.NewValidatorSigningInfo
-	NewSlashRecord            = types.NewSlashRecord
-	NewRewardEpoch            = types.NewRewardEpoch
-	NewValidatorReward        = types.NewValidatorReward
-	IsValidSlashReason        = types.IsValidSlashReason
-	GetSlashConfig            = types.GetSlashConfig
-	DefaultSlashConfigs       = types.DefaultSlashConfigs
-	CalculateRewards          = types.CalculateRewards
+	NewValidatorPerformance        = types.NewValidatorPerformance
+	NewValidatorSigningInfo        = types.NewValidatorSigningInfo
+	NewSlashRecord                 = types.NewSlashRecord
+	NewRewardEpoch                 = types.NewRewardEpoch
+	NewValidatorReward             = types.NewValidatorReward
+	IsValidSlashReason             = types.IsValidSlashReason
+	GetSlashConfig                 = types.GetSlashConfig
+	DefaultSlashConfigs            = types.DefaultSlashConfigs
+	CalculateRewards               = types.CalculateRewards
 	CalculateIdentityNetworkReward = types.CalculateIdentityNetworkReward
 
 	// Messages
@@ -109,17 +109,17 @@ var (
 
 // Error aliases
 var (
-	ErrValidatorNotFound       = types.ErrValidatorNotFound
-	ErrInvalidValidator        = types.ErrInvalidValidator
-	ErrSlashingAlreadyRecorded = types.ErrSlashingAlreadyRecorded
-	ErrInvalidSlashReason      = types.ErrInvalidSlashReason
-	ErrInvalidEpoch            = types.ErrInvalidEpoch
+	ErrValidatorNotFound         = types.ErrValidatorNotFound
+	ErrInvalidValidator          = types.ErrInvalidValidator
+	ErrSlashingAlreadyRecorded   = types.ErrSlashingAlreadyRecorded
+	ErrInvalidSlashReason        = types.ErrInvalidSlashReason
+	ErrInvalidEpoch              = types.ErrInvalidEpoch
 	ErrRewardsAlreadyDistributed = types.ErrRewardsAlreadyDistributed
-	ErrInvalidParams           = types.ErrInvalidParams
-	ErrValidatorJailed         = types.ErrValidatorJailed
-	ErrInvalidPerformanceMetric = types.ErrInvalidPerformanceMetric
-	ErrInsufficientStake       = types.ErrInsufficientStake
-	ErrDoubleSign              = types.ErrDoubleSign
-	ErrInvalidAttestation      = types.ErrInvalidAttestation
-	ErrDowntime                = types.ErrDowntime
+	ErrInvalidParams             = types.ErrInvalidParams
+	ErrValidatorJailed           = types.ErrValidatorJailed
+	ErrInvalidPerformanceMetric  = types.ErrInvalidPerformanceMetric
+	ErrInsufficientStake         = types.ErrInsufficientStake
+	ErrDoubleSign                = types.ErrDoubleSign
+	ErrInvalidAttestation        = types.ErrInvalidAttestation
+	ErrDowntime                  = types.ErrDowntime
 )

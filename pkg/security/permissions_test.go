@@ -218,4 +218,3 @@ func TestEnsureSecurePermissions(t *testing.T) {
 		}
 	})
 }
-

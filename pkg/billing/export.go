@@ -299,4 +299,3 @@ const PDFContentType = "application/pdf"
 
 // PDFFileExtension is the file extension for PDF
 const PDFFileExtension = ".pdf"
-

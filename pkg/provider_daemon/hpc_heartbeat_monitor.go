@@ -37,48 +37,48 @@ func DefaultHPCHeartbeatMonitorConfig() HPCHeartbeatMonitorConfig {
 
 // HeartbeatAlert represents an alert for heartbeat issues
 type HeartbeatAlert struct {
-	NodeID      string    `json:"node_id"`
-	ClusterID   string    `json:"cluster_id"`
-	AlertType   string    `json:"alert_type"` // stale, offline, recovered, anomaly
-	Severity    string    `json:"severity"`   // info, warning, critical
-	Message     string    `json:"message"`
-	Timestamp   time.Time `json:"timestamp"`
-	LastSeen    time.Time `json:"last_seen,omitempty"`
-	MissedCount int       `json:"missed_count,omitempty"`
+	NodeID      string                 `json:"node_id"`
+	ClusterID   string                 `json:"cluster_id"`
+	AlertType   string                 `json:"alert_type"` // stale, offline, recovered, anomaly
+	Severity    string                 `json:"severity"`   // info, warning, critical
+	Message     string                 `json:"message"`
+	Timestamp   time.Time              `json:"timestamp"`
+	LastSeen    time.Time              `json:"last_seen,omitempty"`
+	MissedCount int                    `json:"missed_count,omitempty"`
 	Details     map[string]interface{} `json:"details,omitempty"`
 }
 
 // NodeHeartbeatState tracks heartbeat state for a node
 type NodeHeartbeatState struct {
-	NodeID            string
-	ClusterID         string
-	LastHeartbeat     time.Time
-	LastSequence      uint64
-	ExpectedInterval  time.Duration
-	Status            string // healthy, stale, offline
-	MissedCount       int
-	RecoveryCount     int
-	AnomalyScore      float64
-	HeartbeatHistory  []time.Time
-	IntervalHistory   []time.Duration
-	AlertSent         map[string]time.Time
+	NodeID           string
+	ClusterID        string
+	LastHeartbeat    time.Time
+	LastSequence     uint64
+	ExpectedInterval time.Duration
+	Status           string // healthy, stale, offline
+	MissedCount      int
+	RecoveryCount    int
+	AnomalyScore     float64
+	HeartbeatHistory []time.Time
+	IntervalHistory  []time.Duration
+	AlertSent        map[string]time.Time
 }
 
 // HPCHeartbeatMonitor monitors node heartbeats for gaps and anomalies
 type HPCHeartbeatMonitor struct {
-	config   HPCHeartbeatMonitorConfig
-	nodes    map[string]*NodeHeartbeatState
-	nodesMu  sync.RWMutex
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
+	config  HPCHeartbeatMonitorConfig
+	nodes   map[string]*NodeHeartbeatState
+	nodesMu sync.RWMutex
+	stopCh  chan struct{}
+	wg      sync.WaitGroup
 
 	// Metrics
-	totalNodes    int
-	healthyNodes  int
-	staleNodes    int
-	offlineNodes  int
-	alertsRaised  int
-	metricsMu     sync.RWMutex
+	totalNodes   int
+	healthyNodes int
+	staleNodes   int
+	offlineNodes int
+	alertsRaised int
+	metricsMu    sync.RWMutex
 }
 
 // NewHPCHeartbeatMonitor creates a new heartbeat monitor
@@ -397,13 +397,12 @@ func (m *HPCHeartbeatMonitor) ClusterHealthSummary(clusterID string) map[string]
 	}
 
 	return map[string]interface{}{
-		"cluster_id":          clusterID,
-		"total_nodes":         total,
-		"healthy_nodes":       healthy,
-		"stale_nodes":         stale,
-		"offline_nodes":       offline,
-		"health_percent":      healthPercent,
-		"avg_anomaly_score":   avgAnomalyScore,
+		"cluster_id":        clusterID,
+		"total_nodes":       total,
+		"healthy_nodes":     healthy,
+		"stale_nodes":       stale,
+		"offline_nodes":     offline,
+		"health_percent":    healthPercent,
+		"avg_anomaly_score": avgAnomalyScore,
 	}
 }
-

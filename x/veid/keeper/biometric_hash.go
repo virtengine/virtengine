@@ -43,9 +43,9 @@ const (
 	SaltSize = 32
 
 	// Error message constants to avoid duplication
-	errMsgTemplateEmpty    = "template cannot be empty"
-	errMsgStoredHashNil    = "stored hash cannot be nil"
-	errMsgHashIDEmpty      = "hash ID cannot be empty"
+	errMsgTemplateEmpty = "template cannot be empty"
+	errMsgStoredHashNil = "stored hash cannot be nil"
+	errMsgHashIDEmpty   = "hash ID cannot be empty"
 
 	// HashSize is the size of the final biometric hash in bytes
 	HashSize = 64

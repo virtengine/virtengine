@@ -51,10 +51,10 @@ const (
 
 // XML Encryption namespace constants
 const (
-	xmlEncNS     = "http://www.w3.org/2001/04/xmlenc#"
-	xmlEncNS11   = "http://www.w3.org/2009/xmlenc11#"
-	xmlDSigNS    = "http://www.w3.org/2000/09/xmldsig#"
-	samlNS       = "urn:oasis:names:tc:SAML:2.0:assertion"
+	xmlEncNS   = "http://www.w3.org/2001/04/xmlenc#"
+	xmlEncNS11 = "http://www.w3.org/2009/xmlenc11#"
+	xmlDSigNS  = "http://www.w3.org/2000/09/xmldsig#"
+	samlNS     = "urn:oasis:names:tc:SAML:2.0:assertion"
 )
 
 // ============================================================================
@@ -478,4 +478,3 @@ func DecryptXMLEncryptionWithKey(encryptedData []byte, privateKeyPEM []byte) ([]
 	}
 	return decryptor.DecryptAssertion(encryptedData)
 }
-

@@ -514,15 +514,15 @@ func IsOrganizationalDomain(email string) bool {
 
 	// Check against common personal email domains
 	personalDomains := map[string]bool{
-		"gmail.com":   true,
-		"yahoo.com":   true,
-		"hotmail.com": true,
-		"outlook.com": true,
-		"aol.com":     true,
-		"icloud.com":  true,
-		"me.com":      true,
-		"mail.com":    true,
-		"proton.me":   true,
+		"gmail.com":      true,
+		"yahoo.com":      true,
+		"hotmail.com":    true,
+		"outlook.com":    true,
+		"aol.com":        true,
+		"icloud.com":     true,
+		"me.com":         true,
+		"mail.com":       true,
+		"proton.me":      true,
 		"protonmail.com": true,
 	}
 
@@ -910,4 +910,3 @@ func (c *EmailChallenge) String() string {
 	return fmt.Sprintf("EmailChallenge{ID: %s, Status: %s, Method: %s, Attempts: %d/%d}",
 		c.ChallengeID, c.Status, c.Method, c.Attempts, c.MaxAttempts)
 }
-

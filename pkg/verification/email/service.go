@@ -467,9 +467,9 @@ func (s *DefaultService) ResendVerification(ctx context.Context, req *ResendRequ
 			Resource:  req.ChallengeID,
 			Action:    "resend_verification",
 			Details: map[string]interface{}{
-				"method":        challenge.Method,
-				"resend_count":  challenge.ResendCount,
-				"max_resends":   challenge.MaxResends,
+				"method":       challenge.Method,
+				"resend_count": challenge.ResendCount,
+				"max_resends":  challenge.MaxResends,
 			},
 		})
 	}
@@ -847,8 +847,8 @@ func (s *DefaultService) processWebhookEvent(ctx context.Context, event WebhookE
 			Resource:  event.MessageID,
 			Action:    "webhook_" + string(event.EventType),
 			Details: map[string]interface{}{
-				"event_type":   event.EventType,
-				"bounce_type":  event.BounceType,
+				"event_type":     event.EventType,
+				"bounce_type":    event.BounceType,
 				"bounce_subtype": event.BounceSubtype,
 			},
 		})
@@ -866,4 +866,3 @@ func GenerateNonce(length int) (string, error) {
 
 // Ensure DefaultService implements EmailVerificationService
 var _ EmailVerificationService = (*DefaultService)(nil)
-

@@ -684,4 +684,3 @@ func (l *PayoutLimits) CanPayout(amount int64) (bool, error) {
 	}
 	return true, nil
 }
-

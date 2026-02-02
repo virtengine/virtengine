@@ -662,17 +662,17 @@ func (p *ProductionEnclaveService) Shutdown() error {
 
 // ProductionStatus represents the status of the production TEE service
 type ProductionStatus struct {
-	Mode                 string    `json:"mode"`
-	Platform             string    `json:"platform"`
-	HardwareEnabled      bool      `json:"hardware_enabled"`
-	Initialized          bool      `json:"initialized"`
-	DebugMode            bool      `json:"debug_mode"`
-	ProductionReady      bool      `json:"production_ready"`
-	ProductionIssues     []string  `json:"production_issues,omitempty"`
-	MeasurementsLoaded   int       `json:"measurements_loaded"`
-	AttestationEndpoint  string    `json:"attestation_endpoint,omitempty"`
-	LastHealthCheck      time.Time `json:"last_health_check"`
-	HealthCheckStatus    string    `json:"health_check_status"`
+	Mode                string    `json:"mode"`
+	Platform            string    `json:"platform"`
+	HardwareEnabled     bool      `json:"hardware_enabled"`
+	Initialized         bool      `json:"initialized"`
+	DebugMode           bool      `json:"debug_mode"`
+	ProductionReady     bool      `json:"production_ready"`
+	ProductionIssues    []string  `json:"production_issues,omitempty"`
+	MeasurementsLoaded  int       `json:"measurements_loaded"`
+	AttestationEndpoint string    `json:"attestation_endpoint,omitempty"`
+	LastHealthCheck     time.Time `json:"last_health_check"`
+	HealthCheckStatus   string    `json:"health_check_status"`
 }
 
 // GetStatus returns the current production status
@@ -795,4 +795,3 @@ func ParseMinTCBVersion(s string) (TCBRequirements, error) {
 
 	return tcb, nil
 }
-

@@ -264,11 +264,11 @@ func (t *Tracker) GetAutomationOpportunities(period time.Duration) []AutomationO
 				opp.Occurrences++
 			} else {
 				taskMap[entry.Task] = &AutomationOpportunity{
-					Task:        entry.Task,
-					Category:    entry.Category,
-					TotalTime:   entry.TimeSpent,
-					Occurrences: 1,
-					Priority:    entry.Priority,
+					Task:         entry.Task,
+					Category:     entry.Category,
+					TotalTime:    entry.TimeSpent,
+					Occurrences:  1,
+					Priority:     entry.Priority,
 					EstimatedROI: calculateROI(entry.TimeSpent, entry.Frequency),
 				}
 			}
@@ -457,4 +457,3 @@ func (ao *AutomationOpportunity) GetRecommendation() string {
 		urgency, ao.Task, ao.Category, ao.TotalTime, ao.EstimatedROI,
 	)
 }
-

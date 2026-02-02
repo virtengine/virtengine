@@ -19,9 +19,9 @@ func TestDefaultResponseGenerator_Generate(t *testing.T) {
 		wantEmpty   bool
 	}{
 		{
-			name:      "balance response with data",
-			intent:    IntentQueryBalance,
-			entities:  map[string]string{},
+			name:     "balance response with data",
+			intent:   IntentQueryBalance,
+			entities: map[string]string{},
 			queryResult: &QueryResult{
 				Success:   true,
 				QueryType: "balance",
@@ -32,16 +32,16 @@ func TestDefaultResponseGenerator_Generate(t *testing.T) {
 			wantEmpty: false,
 		},
 		{
-			name:      "balance response without data",
-			intent:    IntentQueryBalance,
-			entities:  map[string]string{},
+			name:        "balance response without data",
+			intent:      IntentQueryBalance,
+			entities:    map[string]string{},
 			queryResult: nil,
-			wantEmpty: false,
+			wantEmpty:   false,
 		},
 		{
-			name:      "offerings response with data",
-			intent:    IntentFindOfferings,
-			entities:  map[string]string{"resource_type": "gpu"},
+			name:     "offerings response with data",
+			intent:   IntentFindOfferings,
+			entities: map[string]string{"resource_type": "gpu"},
 			queryResult: &QueryResult{
 				Success:   true,
 				QueryType: "offerings",
@@ -52,9 +52,9 @@ func TestDefaultResponseGenerator_Generate(t *testing.T) {
 			wantEmpty: false,
 		},
 		{
-			name:      "offerings response empty",
-			intent:    IntentFindOfferings,
-			entities:  map[string]string{},
+			name:     "offerings response empty",
+			intent:   IntentFindOfferings,
+			entities: map[string]string{},
 			queryResult: &QueryResult{
 				Success:   true,
 				QueryType: "offerings",
@@ -69,9 +69,9 @@ func TestDefaultResponseGenerator_Generate(t *testing.T) {
 			wantEmpty: false,
 		},
 		{
-			name:      "order response with data",
-			intent:    IntentCheckOrder,
-			entities:  map[string]string{},
+			name:     "order response with data",
+			intent:   IntentCheckOrder,
+			entities: map[string]string{},
 			queryResult: &QueryResult{
 				Success:   true,
 				QueryType: "order",
@@ -127,9 +127,9 @@ func TestDefaultResponseGenerator_Generate(t *testing.T) {
 			wantEmpty: false,
 		},
 		{
-			name:      "provider info response",
-			intent:    IntentGetProviderInfo,
-			entities:  map[string]string{"address": "ve1provider"},
+			name:     "provider info response",
+			intent:   IntentGetProviderInfo,
+			entities: map[string]string{"address": "ve1provider"},
 			queryResult: &QueryResult{
 				Success: true,
 				Data:    map[string]interface{}{"name": "Test Provider"},
@@ -155,7 +155,7 @@ func TestDefaultResponseGenerator_Generate(t *testing.T) {
 func TestDefaultResponseGenerator_ContextCancellation(t *testing.T) {
 	config := DefaultConfig()
 	generator := NewDefaultResponseGenerator(config)
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -314,7 +314,7 @@ func TestDefaultQueryExecutor_Execute(t *testing.T) {
 
 func TestDefaultQueryExecutor_ContextCancellation(t *testing.T) {
 	executor := NewDefaultQueryExecutor()
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -380,7 +380,7 @@ func TestMockLLMBackend_ClassifyIntent(t *testing.T) {
 
 func TestMockLLMBackend_ContextCancellation(t *testing.T) {
 	backend := NewMockLLMBackend()
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -447,4 +447,3 @@ func TestCreateLLMBackend(t *testing.T) {
 		})
 	}
 }
-

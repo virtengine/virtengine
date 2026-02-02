@@ -130,8 +130,8 @@ func (s LifecycleOperationState) IsTerminal() bool {
 // AllocationLifecycleTransitions defines valid state transitions for allocations based on lifecycle actions
 var AllocationLifecycleTransitions = map[AllocationState]map[LifecycleActionType]AllocationState{
 	AllocationStatePending: {
-		LifecycleActionProvision:  AllocationStateProvisioning,
-		LifecycleActionTerminate:  AllocationStateTerminated,
+		LifecycleActionProvision: AllocationStateProvisioning,
+		LifecycleActionTerminate: AllocationStateTerminated,
 	},
 	AllocationStateAccepted: {
 		LifecycleActionProvision: AllocationStateProvisioning,
@@ -576,7 +576,7 @@ type LifecycleOperationStore interface {
 	GetOperationsByState(state LifecycleOperationState) ([]*LifecycleOperation, error)
 }
 
-// Note: Lifecycle event types (EventLifecycleActionRequested, EventLifecycleActionStarted, 
+// Note: Lifecycle event types (EventLifecycleActionRequested, EventLifecycleActionStarted,
 // EventLifecycleActionCompleted, EventLifecycleActionFailed, EventLifecycleCallbackReceived)
 // are defined in events.go along with the event structs.
 

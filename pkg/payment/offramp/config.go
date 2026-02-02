@@ -359,9 +359,9 @@ func DefaultConfig() Config {
 			DefaultMonthlyLimit:        500000000, // $5,000,000.00
 			DefaultPerTransactionLimit: 10000000,  // $100,000.00
 			MinPayoutAmount: map[payment.Currency]int64{
-				payment.CurrencyUSD: 100,   // $1.00
-				payment.CurrencyEUR: 100,   // €1.00
-				payment.CurrencyGBP: 100,   // £1.00
+				payment.CurrencyUSD: 100, // $1.00
+				payment.CurrencyEUR: 100, // €1.00
+				payment.CurrencyGBP: 100, // £1.00
 			},
 			MaxPayoutAmount: map[payment.Currency]int64{
 				payment.CurrencyUSD: 10000000, // $100,000.00
@@ -370,19 +370,19 @@ func DefaultConfig() Config {
 			},
 			TierLimits: map[KYCVerificationLevel]TierLimit{
 				KYCLevelBasic: {
-					DailyLimit:          100000,   // $1,000.00
-					MonthlyLimit:        500000,   // $5,000.00
-					PerTransactionLimit: 50000,    // $500.00
+					DailyLimit:          100000, // $1,000.00
+					MonthlyLimit:        500000, // $5,000.00
+					PerTransactionLimit: 50000,  // $500.00
 				},
 				KYCLevelEnhanced: {
-					DailyLimit:          1000000,  // $10,000.00
-					MonthlyLimit:        5000000,  // $50,000.00
-					PerTransactionLimit: 500000,   // $5,000.00
+					DailyLimit:          1000000, // $10,000.00
+					MonthlyLimit:        5000000, // $50,000.00
+					PerTransactionLimit: 500000,  // $5,000.00
 				},
 				KYCLevelFull: {
-					DailyLimit:          10000000,  // $100,000.00
-					MonthlyLimit:        50000000,  // $500,000.00
-					PerTransactionLimit: 5000000,   // $50,000.00
+					DailyLimit:          10000000, // $100,000.00
+					MonthlyLimit:        50000000, // $500,000.00
+					PerTransactionLimit: 5000000,  // $50,000.00
 				},
 			},
 		},
@@ -413,9 +413,9 @@ func DefaultConfig() Config {
 			},
 		},
 		ConversionConfig: ConversionConfig{
-			FeePercent:      1.5,
+			FeePercent: 1.5,
 			FeeMinimum: map[payment.Currency]int64{
-				payment.CurrencyUSD: 25,  // $0.25
+				payment.CurrencyUSD: 25, // $0.25
 				payment.CurrencyEUR: 25,
 				payment.CurrencyGBP: 25,
 			},
@@ -505,4 +505,3 @@ func (c Config) ValidatePayoutAmount(amount payment.Amount) error {
 
 	return nil
 }
-

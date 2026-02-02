@@ -21,41 +21,41 @@ import (
 
 // BiddingLatencyBaseline defines baseline metrics for bidding latency
 type BiddingLatencyBaseline struct {
-	TargetLatency             time.Duration `json:"target_latency"`
-	MaxLatencyP95             time.Duration `json:"max_latency_p95"`
-	MaxLatencyP99             time.Duration `json:"max_latency_p99"`
-	MinBidsPerSecond          float64       `json:"min_bids_per_second"`
-	MaxOrderMatchingLatency   time.Duration `json:"max_order_matching_latency"`
+	TargetLatency              time.Duration `json:"target_latency"`
+	MaxLatencyP95              time.Duration `json:"max_latency_p95"`
+	MaxLatencyP99              time.Duration `json:"max_latency_p99"`
+	MinBidsPerSecond           float64       `json:"min_bids_per_second"`
+	MaxOrderMatchingLatency    time.Duration `json:"max_order_matching_latency"`
 	MaxPriceCalculationLatency time.Duration `json:"max_price_calculation_latency"`
-	MaxSigningLatency         time.Duration `json:"max_signing_latency"`
+	MaxSigningLatency          time.Duration `json:"max_signing_latency"`
 }
 
 // DefaultBiddingBaseline returns baseline metrics for bidding
 func DefaultBiddingBaseline() BiddingLatencyBaseline {
 	return BiddingLatencyBaseline{
-		TargetLatency:             50 * time.Millisecond,
-		MaxLatencyP95:             100 * time.Millisecond,
-		MaxLatencyP99:             200 * time.Millisecond,
-		MinBidsPerSecond:          20.0,
-		MaxOrderMatchingLatency:   10 * time.Millisecond,
+		TargetLatency:              50 * time.Millisecond,
+		MaxLatencyP95:              100 * time.Millisecond,
+		MaxLatencyP99:              200 * time.Millisecond,
+		MinBidsPerSecond:           20.0,
+		MaxOrderMatchingLatency:    10 * time.Millisecond,
 		MaxPriceCalculationLatency: 5 * time.Millisecond,
-		MaxSigningLatency:         20 * time.Millisecond,
+		MaxSigningLatency:          20 * time.Millisecond,
 	}
 }
 
 // MockBidEngine provides a benchmarking version of the bid engine
 type MockBidEngine struct {
-	config        BidEngineConfig
-	provConfig    *ProviderConfig
-	rateLimiter   *RateLimiter
-	
-	mu            sync.Mutex
-	latencies     []time.Duration
+	config      BidEngineConfig
+	provConfig  *ProviderConfig
+	rateLimiter *RateLimiter
+
+	mu             sync.Mutex
+	latencies      []time.Duration
 	matchLatencies []time.Duration
 	priceLatencies []time.Duration
 	signLatencies  []time.Duration
-	bidsPlaced    int64
-	bidsFailed    int64
+	bidsPlaced     int64
+	bidsFailed     int64
 }
 
 // NewMockBidEngine creates a new mock bid engine for benchmarking
@@ -82,13 +82,13 @@ func createBenchmarkProviderConfig() *ProviderConfig {
 		Regions:            []string{"us-east", "us-west", "eu-west"},
 		Active:             true,
 		Pricing: PricingConfig{
-			CPUPricePerCore:    "0.1",
-			MemoryPricePerGB:   "0.05",
-			StoragePricePerGB:  "0.01",
-			GPUPricePerHour:    "1.0",
-			MinBidPrice:        "0.001",
-			BidMarkupPercent:   10.0,
-			Currency:           "uvirt",
+			CPUPricePerCore:   "0.1",
+			MemoryPricePerGB:  "0.05",
+			StoragePricePerGB: "0.01",
+			GPUPricePerHour:   "1.0",
+			MinBidPrice:       "0.001",
+			BidMarkupPercent:  10.0,
+			Currency:          "uvirt",
 		},
 		Capacity: CapacityConfig{
 			TotalCPUCores:    128,
@@ -103,14 +103,14 @@ func createBenchmarkProviderConfig() *ProviderConfig {
 
 // BidResult tracks individual bid result
 type BidResultBenchmark struct {
-	OrderID       string
-	BidID         string
-	Success       bool
-	Error         error
-	TotalLatency  time.Duration
-	MatchLatency  time.Duration
-	PriceLatency  time.Duration
-	SignLatency   time.Duration
+	OrderID      string
+	BidID        string
+	Success      bool
+	Error        error
+	TotalLatency time.Duration
+	MatchLatency time.Duration
+	PriceLatency time.Duration
+	SignLatency  time.Duration
 }
 
 // ProcessBid processes a bid for benchmarking
@@ -226,10 +226,10 @@ func (e *MockBidEngine) calculateBidPrice(order Order, config *ProviderConfig) (
 
 	// Calculate base price from requirements
 	req := order.Requirements
-	cpuPrice := float64(req.CPUCores) * 0.1        // per core
-	memPrice := float64(req.MemoryGB) * 0.05       // per GB
-	storagePrice := float64(req.StorageGB) * 0.01  // per GB
-	gpuPrice := float64(req.GPUs) * 1.0            // per GPU
+	cpuPrice := float64(req.CPUCores) * 0.1       // per core
+	memPrice := float64(req.MemoryGB) * 0.05      // per GB
+	storagePrice := float64(req.StorageGB) * 0.01 // per GB
+	gpuPrice := float64(req.GPUs) * 1.0           // per GPU
 
 	basePrice := cpuPrice + memPrice + storagePrice + gpuPrice
 
@@ -247,7 +247,7 @@ func (e *MockBidEngine) signBid(orderID, _ string) (string, error) {
 	// Generate bid ID
 	idBytes := make([]byte, 8)
 	rand.Read(idBytes)
-	
+
 	providerPrefix := "provider"
 	if len(e.config.ProviderAddress) >= 8 {
 		providerPrefix = e.config.ProviderAddress[:8]
@@ -350,11 +350,11 @@ func BenchmarkBidProcessingParallel(b *testing.B) {
 // BenchmarkBidProcessingWithVaryingResources benchmarks bids with different resource requirements
 func BenchmarkBidProcessingWithVaryingResources(b *testing.B) {
 	resourceProfiles := []struct {
-		name   string
-		cpu    int64
-		memory int64
+		name    string
+		cpu     int64
+		memory  int64
 		storage int64
-		gpus   int64
+		gpus    int64
 	}{
 		{"small", 1, 2, 10, 0},
 		{"medium", 4, 8, 100, 0},
@@ -593,4 +593,3 @@ type mockEvent struct {
 	Type    string
 	OrderID string
 }
-

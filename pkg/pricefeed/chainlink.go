@@ -267,4 +267,3 @@ var ChainlinkSepoliaFeeds = map[string]string{
 	"BTC/USD":  "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43",
 	"LINK/USD": "0xc59E3633BAAC79493d908e63626716e204A45EdF",
 }
-

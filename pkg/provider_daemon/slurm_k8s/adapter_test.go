@@ -328,4 +328,3 @@ func TestClusterStateTransitions(t *testing.T) {
 		t.Errorf("expected state running, got %s", cluster.State)
 	}
 }
-

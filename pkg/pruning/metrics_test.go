@@ -304,4 +304,3 @@ func TestCompareBenchmarks(t *testing.T) {
 		t.Error("Everything strategy should have > 99% savings")
 	}
 }
-

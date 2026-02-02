@@ -1397,7 +1397,7 @@ func BenchmarkECDSAVerifyP256(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		v.VerifyP256(&privateKey.PublicKey, hash[:], sig)
+		_ = v.VerifyP256(&privateKey.PublicKey, hash[:], sig)
 	}
 }
 
@@ -1407,7 +1407,7 @@ func BenchmarkDCAPQuoteParsing(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser.Parse(quoteBytes)
+		_, _ = parser.Parse(quoteBytes)
 	}
 }
 
@@ -1417,7 +1417,7 @@ func BenchmarkSNPReportParsing(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser.Parse(reportBytes)
+		_, _ = parser.Parse(reportBytes)
 	}
 }
 
@@ -1427,7 +1427,7 @@ func BenchmarkNitroAttestationParsing(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parser.Parse(docBytes)
+		_, _ = parser.Parse(docBytes)
 	}
 }
 
@@ -1443,7 +1443,6 @@ func BenchmarkCertificateCache(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		key := hex.EncodeToString([]byte{byte(i % 100)})
-		cache.Get(key)
+		_, _ = cache.Get(key)
 	}
 }
-

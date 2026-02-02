@@ -35,7 +35,7 @@ func (q GRPCQuerier) RecipientKey(c context.Context, req *types.QueryRecipientKe
 	}
 
 	localKeys := q.Keeper.GetRecipientKeys(ctx, addr)
-	
+
 	// Convert local keys to proto type
 	keys := make([]encryptionv1.RecipientKeyRecord, len(localKeys))
 	for i, k := range localKeys {
@@ -143,7 +143,7 @@ func (q GRPCQuerier) ValidateEnvelope(c context.Context, req *types.QueryValidat
 
 	// Convert proto envelope to local type for validation
 	localEnvelope := convertProtoEnvelopeToLocal(envelope)
-	
+
 	// Validate envelope structure
 	if err := q.Keeper.ValidateEnvelope(ctx, localEnvelope); err != nil {
 		response.Valid = false
@@ -179,7 +179,7 @@ func convertProtoEnvelopeToLocal(pb *encryptionv1.EncryptedPayloadEnvelope) *typ
 			EphemeralPubKey: wk.EphemeralPubKey,
 		}
 	}
-	
+
 	return &types.EncryptedPayloadEnvelope{
 		Version:             pb.Version,
 		AlgorithmID:         pb.AlgorithmId,

@@ -497,4 +497,3 @@ func TestSnapshotManagerValidateStateSyncCompatibility(t *testing.T) {
 		})
 	}
 }
-

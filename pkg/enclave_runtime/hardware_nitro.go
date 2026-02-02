@@ -300,12 +300,12 @@ func (r *NitroCLIRunner) runHardwareEnclave(ctx context.Context, eifPath string,
 func (r *NitroCLIRunner) runSimulatedEnclave(_ string, cpuCount int, memoryMB int64) (*NitroRunEnclaveOutput, error) {
 	// Generate simulated enclave ID
 	idBytes := make([]byte, 16)
-	rand.Read(idBytes)
+	_, _ = rand.Read(idBytes)
 	enclaveID := fmt.Sprintf("i-simulated-%x", idBytes[:8])
 
 	// Generate simulated CID
 	var cid uint32
-	binary.Read(rand.Reader, binary.LittleEndian, &cid)
+	_ = binary.Read(rand.Reader, binary.LittleEndian, &cid)
 	cid = (cid % 65000) + 100 // Keep in reasonable range
 
 	cpuIDs := make([]int, cpuCount)
@@ -1013,7 +1013,7 @@ func (b *NitroHardwareBackend) GetAttestation(nonce []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString(doc.ModuleID)
 	buf.WriteByte(0)
-	binary.Write(&buf, binary.LittleEndian, doc.Timestamp)
+	_ = binary.Write(&buf, binary.LittleEndian, doc.Timestamp)
 	buf.Write(doc.Nonce)
 	for i := uint8(0); i < 16; i++ {
 		if pcr, ok := doc.PCRs[i]; ok {
@@ -1190,7 +1190,7 @@ func (b *NitroHardwareBackend) RunAndConnect(ctx context.Context, config NitroHW
 	client := NewNitroVsockClient(result.EnclaveCID, vsockPort)
 	if err := client.Connect(ctx); err != nil {
 		// Try to terminate enclave on connection failure
-		b.cliRunner.TerminateEnclave(ctx, b.enclaveID)
+		_ = b.cliRunner.TerminateEnclave(ctx, b.enclaveID)
 		return nil, fmt.Errorf("failed to connect via vsock: %w", err)
 	}
 
@@ -1203,4 +1203,3 @@ func (b *NitroHardwareBackend) GetEnclaveInfo() (string, uint32) {
 	defer b.mu.RUnlock()
 	return b.enclaveID, b.enclaveCID
 }
-

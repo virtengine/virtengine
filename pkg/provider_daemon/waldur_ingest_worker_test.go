@@ -147,11 +147,11 @@ var sampleWaldurStorage = &marketplace.WaldurOfferingImport{
 	Shared:       true,
 	Billable:     true,
 	Attributes: map[string]interface{}{
-		"tags":             []interface{}{"storage", "ssd"},
-		"regions":          []interface{}{"us-east-1"},
-		"spec_type":        "ssd",
-		"spec_iops":        "3000",
-		"spec_throughput":  "250",
+		"tags":            []interface{}{"storage", "ssd"},
+		"regions":         []interface{}{"us-east-1"},
+		"spec_type":       "ssd",
+		"spec_iops":       "3000",
+		"spec_throughput": "250",
 	},
 	Components: []marketplace.WaldurPricingComponent{
 		{
@@ -173,27 +173,27 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		offering *marketplace.WaldurOfferingImport
-		wantValid bool
+		name       string
+		offering   *marketplace.WaldurOfferingImport
+		wantValid  bool
 		wantErrors int
 	}{
 		{
-			name:     "valid compute offering",
-			offering: sampleWaldurCompute,
-			wantValid: true,
+			name:       "valid compute offering",
+			offering:   sampleWaldurCompute,
+			wantValid:  true,
 			wantErrors: 0,
 		},
 		{
-			name:     "valid hpc offering",
-			offering: sampleWaldurHPC,
-			wantValid: true,
+			name:       "valid hpc offering",
+			offering:   sampleWaldurHPC,
+			wantValid:  true,
 			wantErrors: 0,
 		},
 		{
-			name:     "valid storage offering",
-			offering: sampleWaldurStorage,
-			wantValid: true,
+			name:       "valid storage offering",
+			offering:   sampleWaldurStorage,
+			wantValid:  true,
 			wantErrors: 0,
 		},
 		{
@@ -202,7 +202,7 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 				Name:         "Test",
 				CustomerUUID: "cust-provider-001",
 			},
-			wantValid: false,
+			wantValid:  false,
 			wantErrors: 1,
 		},
 		{
@@ -211,7 +211,7 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 				UUID:         "test-uuid",
 				CustomerUUID: "cust-provider-001",
 			},
-			wantValid: false,
+			wantValid:  false,
 			wantErrors: 1,
 		},
 		{
@@ -221,7 +221,7 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 				Name:         "Test",
 				CustomerUUID: "unknown-customer",
 			},
-			wantValid: false,
+			wantValid:  false,
 			wantErrors: 1,
 		},
 	}
@@ -296,9 +296,9 @@ func TestWaldurOfferingImport_ResolveCategory(t *testing.T) {
 
 func TestWaldurOfferingImport_ResolveState(t *testing.T) {
 	tests := []struct {
-		name     string
-		state    string
-		want     marketplace.OfferingState
+		name  string
+		state string
+		want  marketplace.OfferingState
 	}{
 		{"active", "Active", marketplace.OfferingStateActive},
 		{"paused", "Paused", marketplace.OfferingStatePaused},
@@ -594,4 +594,3 @@ func TestMockAuditLogger(t *testing.T) {
 		Action:     "dead_lettered",
 	})
 }
-

@@ -20,27 +20,27 @@ func NewFeeMarketSimulator(params economics.TokenomicsParams) *FeeMarketSimulato
 
 // Transaction represents a simulated transaction for fee analysis.
 type Transaction struct {
-	Hash        string   `json:"hash"`
-	GasUsed     int64    `json:"gas_used"`
-	GasPrice    int64    `json:"gas_price"`
-	FeePaid     *big.Int `json:"fee_paid"`
-	TxType      string   `json:"tx_type"`
-	IsSpam      bool     `json:"is_spam"`
-	Timestamp   time.Time `json:"timestamp"`
+	Hash      string    `json:"hash"`
+	GasUsed   int64     `json:"gas_used"`
+	GasPrice  int64     `json:"gas_price"`
+	FeePaid   *big.Int  `json:"fee_paid"`
+	TxType    string    `json:"tx_type"`
+	IsSpam    bool      `json:"is_spam"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // FeeMarketSnapshot is a point-in-time snapshot of fee market state.
 type FeeMarketSnapshot struct {
-	BlockHeight     int64    `json:"block_height"`
-	TotalTxs        int64    `json:"total_txs"`
-	TotalGasUsed    int64    `json:"total_gas_used"`
-	TotalFees       *big.Int `json:"total_fees"`
-	AvgGasPrice     int64    `json:"avg_gas_price"`
-	MedianGasPrice  int64    `json:"median_gas_price"`
-	MaxGasPrice     int64    `json:"max_gas_price"`
-	MinGasPrice     int64    `json:"min_gas_price"`
-	BlockUtilization int64   `json:"block_utilization_bps"` // basis points
-	SpamTxCount     int64    `json:"spam_tx_count"`
+	BlockHeight      int64    `json:"block_height"`
+	TotalTxs         int64    `json:"total_txs"`
+	TotalGasUsed     int64    `json:"total_gas_used"`
+	TotalFees        *big.Int `json:"total_fees"`
+	AvgGasPrice      int64    `json:"avg_gas_price"`
+	MedianGasPrice   int64    `json:"median_gas_price"`
+	MaxGasPrice      int64    `json:"max_gas_price"`
+	MinGasPrice      int64    `json:"min_gas_price"`
+	BlockUtilization int64    `json:"block_utilization_bps"` // basis points
+	SpamTxCount      int64    `json:"spam_tx_count"`
 }
 
 // SimulateFeeMarket simulates fee market dynamics over a period.
@@ -132,29 +132,29 @@ func (s *FeeMarketSimulator) SimulateFeeMarket(
 
 // FeeMarketSimulationResult contains fee market simulation results.
 type FeeMarketSimulationResult struct {
-	InitialState         economics.NetworkState     `json:"initial_state"`
-	TakeRateBPS          int64                      `json:"take_rate_bps"`
-	Snapshots            []FeeMarketSnapshot        `json:"snapshots"`
-	TotalFeesCollected   *big.Int                   `json:"total_fees_collected"`
-	ProtocolRevenue      *big.Int                   `json:"protocol_revenue"`
-	ValidatorRevenue     *big.Int                   `json:"validator_revenue"`
-	TotalTxCount         int64                      `json:"total_tx_count"`
-	TotalGasUsed         int64                      `json:"total_gas_used"`
-	AvgGasPrice          int64                      `json:"avg_gas_price"`
-	MedianGasPrice       int64                      `json:"median_gas_price"`
-	FeeVolatility        float64                    `json:"fee_volatility"`
-	SpamTxCount          int64                      `json:"spam_tx_count"`
-	SpamResistanceScore  int64                      `json:"spam_resistance_score"`
-	Recommendations      []economics.Recommendation `json:"recommendations"`
+	InitialState        economics.NetworkState     `json:"initial_state"`
+	TakeRateBPS         int64                      `json:"take_rate_bps"`
+	Snapshots           []FeeMarketSnapshot        `json:"snapshots"`
+	TotalFeesCollected  *big.Int                   `json:"total_fees_collected"`
+	ProtocolRevenue     *big.Int                   `json:"protocol_revenue"`
+	ValidatorRevenue    *big.Int                   `json:"validator_revenue"`
+	TotalTxCount        int64                      `json:"total_tx_count"`
+	TotalGasUsed        int64                      `json:"total_gas_used"`
+	AvgGasPrice         int64                      `json:"avg_gas_price"`
+	MedianGasPrice      int64                      `json:"median_gas_price"`
+	FeeVolatility       float64                    `json:"fee_volatility"`
+	SpamTxCount         int64                      `json:"spam_tx_count"`
+	SpamResistanceScore int64                      `json:"spam_resistance_score"`
+	Recommendations     []economics.Recommendation `json:"recommendations"`
 }
 
 // processBlock processes transactions in a block.
 func (s *FeeMarketSimulator) processBlock(blockHeight int64, txs []Transaction) FeeMarketSnapshot {
 	snapshot := FeeMarketSnapshot{
-		BlockHeight:  blockHeight,
-		TotalTxs:     int64(len(txs)),
-		TotalFees:    big.NewInt(0),
-		MinGasPrice:  int64(^uint64(0) >> 1), // Max int64
+		BlockHeight: blockHeight,
+		TotalTxs:    int64(len(txs)),
+		TotalFees:   big.NewInt(0),
+		MinGasPrice: int64(^uint64(0) >> 1), // Max int64
 	}
 
 	if len(txs) == 0 {
@@ -437,7 +437,7 @@ func GenerateSampleTransactions(count int, avgGasPrice int64, spamRatio float64)
 	for i := 0; i < count; i++ {
 		// Simulate varying gas prices (simple model: +/- 50%)
 		priceVariation := int64(float64(avgGasPrice) * (0.5 + float64(i%100)/100.0))
-		
+
 		isSpam := float64(i%100) < spamRatio*100
 
 		gasUsed := int64(21000) // Base transaction
@@ -458,4 +458,3 @@ func GenerateSampleTransactions(count int, avgGasPrice int64, spamRatio float64)
 
 	return txs
 }
-

@@ -10,9 +10,9 @@ import (
 
 // Module name and store key constants
 const (
-	ModuleName  = types.ModuleName
-	StoreKey    = types.StoreKey
-	RouterKey   = types.RouterKey
+	ModuleName   = types.ModuleName
+	StoreKey     = types.StoreKey
+	RouterKey    = types.RouterKey
 	QuerierRoute = types.QuerierRoute
 )
 
@@ -77,19 +77,19 @@ var (
 
 // Error aliases
 var (
-	ErrInvalidRating       = types.ErrInvalidRating
-	ErrInvalidReviewText   = types.ErrInvalidReviewText
-	ErrOrderNotFound       = types.ErrOrderNotFound
-	ErrOrderNotCompleted   = types.ErrOrderNotCompleted
+	ErrInvalidRating        = types.ErrInvalidRating
+	ErrInvalidReviewText    = types.ErrInvalidReviewText
+	ErrOrderNotFound        = types.ErrOrderNotFound
+	ErrOrderNotCompleted    = types.ErrOrderNotCompleted
 	ErrUnauthorizedReviewer = types.ErrUnauthorizedReviewer
-	ErrDuplicateReview     = types.ErrDuplicateReview
-	ErrReviewNotFound      = types.ErrReviewNotFound
-	ErrProviderNotFound    = types.ErrProviderNotFound
-	ErrInvalidReviewID     = types.ErrInvalidReviewID
-	ErrInvalidAddress      = types.ErrInvalidAddress
-	ErrContentHashMismatch = types.ErrContentHashMismatch
-	ErrReviewTextTooLong   = types.ErrReviewTextTooLong
-	ErrReviewTextTooShort  = types.ErrReviewTextTooShort
+	ErrDuplicateReview      = types.ErrDuplicateReview
+	ErrReviewNotFound       = types.ErrReviewNotFound
+	ErrProviderNotFound     = types.ErrProviderNotFound
+	ErrInvalidReviewID      = types.ErrInvalidReviewID
+	ErrInvalidAddress       = types.ErrInvalidAddress
+	ErrContentHashMismatch  = types.ErrContentHashMismatch
+	ErrReviewTextTooLong    = types.ErrReviewTextTooLong
+	ErrReviewTextTooShort   = types.ErrReviewTextTooShort
 )
 
 // Event type aliases

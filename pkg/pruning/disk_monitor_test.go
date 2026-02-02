@@ -109,4 +109,3 @@ func TestAlertLevel(t *testing.T) {
 		}
 	}
 }
-

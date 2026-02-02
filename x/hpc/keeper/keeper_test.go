@@ -359,8 +359,8 @@ func TestJobValidation(t *testing.T) {
 				State:           types.JobStatePending,
 				QueueName:       "default",
 				WorkloadSpec: types.JobWorkloadSpec{
-					ContainerImage: "ubuntu:latest",
-					Command:        "echo hello",
+					ContainerImage:  "ubuntu:latest",
+					Command:         "echo hello",
 					IsPreconfigured: false,
 				},
 				Resources: types.JobResources{

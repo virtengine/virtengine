@@ -19,8 +19,8 @@ import (
 type InMemoryPayoutStore struct {
 	mu               sync.RWMutex
 	payouts          map[string]*PayoutIntent
-	byIdempotencyKey map[string]string // idempotency_key -> payout_id
-	byProviderID     map[string]string // provider_payout_id -> payout_id
+	byIdempotencyKey map[string]string   // idempotency_key -> payout_id
+	byProviderID     map[string]string   // provider_payout_id -> payout_id
 	byAccount        map[string][]string // account_address -> []payout_id
 }
 
@@ -290,9 +290,9 @@ func (s *InMemoryReconciliationStore) ListMismatches(ctx context.Context) ([]*Re
 
 // InMemoryLimitsStore implements LimitsStore with in-memory storage.
 type InMemoryLimitsStore struct {
-	mu       sync.RWMutex
-	limits   map[string]*PayoutLimits
-	config   LimitsConfig
+	mu     sync.RWMutex
+	limits map[string]*PayoutLimits
+	config LimitsConfig
 }
 
 // NewInMemoryLimitsStore creates a new in-memory limits store.
@@ -476,4 +476,3 @@ var (
 	_ ReconciliationStore = (*InMemoryReconciliationStore)(nil)
 	_ LimitsStore         = (*InMemoryLimitsStore)(nil)
 )
-

@@ -19,9 +19,9 @@ import (
 
 func TestGenerateOTP(t *testing.T) {
 	tests := []struct {
-		name      string
-		length    int
-		wantLen   int
+		name    string
+		length  int
+		wantLen int
 	}{
 		{"default length 6", 6, 6},
 		{"length 4", 4, 4},
@@ -915,4 +915,3 @@ func TestGenerateNonce(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, nonce1, nonce2)
 }
-

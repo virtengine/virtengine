@@ -272,4 +272,3 @@ type VerifyResponse struct {
 	// Error contains an error message if verification failed
 	Error string `json:"error,omitempty"`
 }
-

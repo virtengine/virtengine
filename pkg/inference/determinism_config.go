@@ -430,18 +430,18 @@ func NewProductionDeterminismConfig() *ProductionDeterminismConfig {
 		AllowGPU:                true,  // GPU enabled for performance
 		ForceCPU:                false, // Not required with tolerance-based consensus
 		DisableGPU:              false,
-		AllowParallelism:        true,             // Multi-threading enabled
-		InterOpParallelism:      0,                // 0 = auto (let TF decide)
-		IntraOpParallelism:      0,                // 0 = auto
+		AllowParallelism:        true, // Multi-threading enabled
+		InterOpParallelism:      0,    // 0 = auto (let TF decide)
+		IntraOpParallelism:      0,    // 0 = auto
 		ConsensusTolerance:      ConsensusTolerance,
 		StrictTolerance:         ConsensusToleranceStrict,
-		EnableDeterministicOps:  false,            // Not required
+		EnableDeterministicOps:  false, // Not required
 		DisableAutoTuning:       false,
 		ModelVersion:            ModelVersionV1,
 		ExpectedModelHash:       ExpectedModelHashV1Production,
 		TensorFlowVersion:       TensorFlowVersionRequired,
-		StrictMode:              false,            // Use dynamic tolerance
-		RequireHashVerification: true,             // Still verify model hash
+		StrictMode:              false, // Use dynamic tolerance
+		RequireHashVerification: true,  // Still verify model hash
 		GeneratedAt:             time.Now().UTC(),
 	}
 
@@ -463,7 +463,7 @@ func NewStrictDeterminismConfig() *ProductionDeterminismConfig {
 		AllowParallelism:        false,
 		InterOpParallelism:      1,
 		IntraOpParallelism:      1,
-		ConsensusTolerance:      0,     // Zero tolerance = exact match
+		ConsensusTolerance:      0, // Zero tolerance = exact match
 		StrictTolerance:         0,
 		EnableDeterministicOps:  true,
 		DisableAutoTuning:       true,
@@ -645,10 +645,10 @@ type ModelOpValidationResult struct {
 
 // PlatformValidationInfo contains platform information for validation.
 type PlatformValidationInfo struct {
-	OS        string `json:"os"`
-	Arch      string `json:"arch"`
-	GoVersion string `json:"go_version"`
-	NumCPU    int    `json:"num_cpu"`
+	OS        string    `json:"os"`
+	Arch      string    `json:"arch"`
+	GoVersion string    `json:"go_version"`
+	NumCPU    int       `json:"num_cpu"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
@@ -901,7 +901,7 @@ func GenerateConformanceReport(config *ProductionDeterminismConfig, modelOps []s
 			NumCPU:    runtime.NumCPU(),
 			Timestamp: time.Now().UTC(),
 		},
-		Configuration:  config,
+		Configuration: config,
 		OverallPassed: true,
 	}
 
@@ -951,4 +951,3 @@ func GenerateConformanceReport(config *ProductionDeterminismConfig, modelOps []s
 func (r *ConformanceReport) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(r, "", "  ")
 }
-

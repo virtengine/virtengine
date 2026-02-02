@@ -805,7 +805,6 @@ func convertAuthorizationSessionToProto(s *AuthorizationSession) *mfav1.Authoriz
 
 // Remove unused function
 
-
 func convertTrustedDeviceToProto(d *TrustedDevice) *mfav1.TrustedDevice {
 	return &mfav1.TrustedDevice{
 		AccountAddress: d.AccountAddress,

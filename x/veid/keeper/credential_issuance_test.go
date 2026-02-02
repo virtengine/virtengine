@@ -916,8 +916,8 @@ func TestCredentialSubject_Validate(t *testing.T) {
 
 func TestCredentialTypeFromScopeType(t *testing.T) {
 	tests := []struct {
-		scopeType      types.ScopeType
-		expectedType   string
+		scopeType    types.ScopeType
+		expectedType string
 	}{
 		{types.ScopeTypeIDDocument, types.TypeDocumentVerification},
 		{types.ScopeTypeSelfie, types.TypeFacialVerification},

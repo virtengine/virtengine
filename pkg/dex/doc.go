@@ -49,4 +49,3 @@
 //	// Off-ramp to fiat
 //	settlement, err := service.InitiateOffRamp(ctx, dex.OffRampRequest{...})
 package dex
-

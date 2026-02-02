@@ -19,11 +19,11 @@ const SMSVerificationVersion uint32 = 1
 
 // Error message constants for SMS verification
 const (
-	errMsgCreatedAtZero     = "created_at cannot be zero"
-	errMsgExpiresAtZero     = "expires_at cannot be zero"
-	errMsgMaxAttemptsZero   = "max_attempts must be positive"
-	errMsgOTPHashEmpty      = "otp_hash cannot be empty"
-	errMsgChallengeIDEmpty  = "challenge_id cannot be empty"
+	errMsgCreatedAtZero       = "created_at cannot be zero"
+	errMsgExpiresAtZero       = "expires_at cannot be zero"
+	errMsgMaxAttemptsZero     = "max_attempts must be positive"
+	errMsgOTPHashEmpty        = "otp_hash cannot be empty"
+	errMsgChallengeIDEmpty    = "challenge_id cannot be empty"
 	errMsgVerificationIDEmpty = "verification_id cannot be empty"
 )
 

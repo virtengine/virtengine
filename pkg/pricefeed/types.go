@@ -245,9 +245,9 @@ type AssetMapping struct {
 func DefaultAssetMappings() []AssetMapping {
 	return []AssetMapping{
 		{
-			InternalID:   "uve",
-			CoinGeckoID:  "virtengine",
-			Decimals:     6,
+			InternalID:  "uve",
+			CoinGeckoID: "virtengine",
+			Decimals:    6,
 			// Chainlink/Pyth IDs would be added when feeds are available
 		},
 		{
@@ -263,4 +263,3 @@ func DefaultAssetMappings() []AssetMapping {
 		},
 	}
 }
-

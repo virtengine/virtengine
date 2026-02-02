@@ -1191,4 +1191,3 @@ func BindNitroResultToReport(result *ScoringResult, nonce []byte) []byte {
 
 	return userData
 }
-

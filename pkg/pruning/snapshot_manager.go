@@ -362,4 +362,3 @@ func (ss *SnapshotScheduler) Stop() {
 	}
 	ss.wg.Wait()
 }
-

@@ -853,4 +853,3 @@ func TestOperationsWhenNotRunning(t *testing.T) {
 	_, err = adapter.ListJobTemplates(ctx)
 	require.ErrorIs(t, err, ood.ErrOODNotConnected)
 }
-

@@ -270,7 +270,7 @@ func (l *SGXEnclaveLoader) loadSimulated(enclavePath string, debug bool) error {
 	}
 
 	// Generate simulated enclave ID
-	binary.Read(rand.Reader, binary.LittleEndian, &l.enclaveID)
+	_ = binary.Read(rand.Reader, binary.LittleEndian, &l.enclaveID)
 
 	// Generate simulated key material
 	l.simulatedKey = make([]byte, 32)
@@ -935,4 +935,3 @@ func detectSGXCapabilities(caps *HardwareCapabilities) {
 	caps.SGXDriverPath = enclave
 	caps.SGXProvisionPath = provision
 }
-

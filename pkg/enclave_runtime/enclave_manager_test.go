@@ -584,7 +584,7 @@ func TestHealthMonitoring(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Manual health check instead of waiting
 	manager.performHealthChecks()
@@ -664,7 +664,7 @@ func TestFailover(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Request should fail on primary, then succeed on secondary
 	request := createTestRequest("failover-test-1")
@@ -710,7 +710,7 @@ func TestFailoverDisabled(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	request := createTestRequest("no-failover-test")
 	_, err = manager.Score(context.Background(), request)
@@ -1243,4 +1243,3 @@ func TestBackendMetricsClone(t *testing.T) {
 		t.Error("clone AverageLatencyMs mismatch")
 	}
 }
-

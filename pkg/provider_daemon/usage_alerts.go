@@ -139,9 +139,9 @@ type UsageAlertManager struct {
 	recentAlertKeys map[string]time.Time
 
 	// counters for metrics.
-	totalCreated     int64
+	totalCreated      int64
 	totalAcknowledged int64
-	totalExpired     int64
+	totalExpired      int64
 
 	// running indicates if cleanup is running.
 	running  bool
@@ -623,15 +623,15 @@ type UsageMetricsCollector struct {
 	correctionsApplied int64
 
 	// Gauges
-	pendingRecords    int64
-	activeDisputes    int64
-	activeAnomalies   int64
+	pendingRecords      int64
+	activeDisputes      int64
+	activeAnomalies     int64
 	reconciliationScore int64
 
 	// Histograms (simplified as averages)
-	avgCollectionTime   float64
-	avgSubmissionTime   float64
-	avgSettlementTime   float64
+	avgCollectionTime float64
+	avgSubmissionTime float64
+	avgSettlementTime float64
 
 	// Timestamps
 	lastCollection time.Time
@@ -724,16 +724,16 @@ func (c *UsageMetricsCollector) GetMetrics() UsageReportingMetrics {
 	defer c.mu.RUnlock()
 
 	return UsageReportingMetrics{
-		TotalRecordsCollected:     atomic.LoadInt64(&c.recordsCollected),
-		TotalRecordsSubmitted:     atomic.LoadInt64(&c.recordsSubmitted),
-		TotalSettlementsProcessed: atomic.LoadInt64(&c.settlementsSuccess),
-		TotalDisputesCreated:      atomic.LoadInt64(&c.disputesCreated),
-		TotalDisputesResolved:     atomic.LoadInt64(&c.disputesResolved),
-		TotalAnomaliesDetected:    atomic.LoadInt64(&c.anomaliesDetected),
-		TotalCorrectionsApplied:   atomic.LoadInt64(&c.correctionsApplied),
-		LastCollectionTime:        c.lastCollection,
-		LastSubmissionTime:        c.lastSubmission,
-		LastSettlementTime:        c.lastSettlement,
+		TotalRecordsCollected:      atomic.LoadInt64(&c.recordsCollected),
+		TotalRecordsSubmitted:      atomic.LoadInt64(&c.recordsSubmitted),
+		TotalSettlementsProcessed:  atomic.LoadInt64(&c.settlementsSuccess),
+		TotalDisputesCreated:       atomic.LoadInt64(&c.disputesCreated),
+		TotalDisputesResolved:      atomic.LoadInt64(&c.disputesResolved),
+		TotalAnomaliesDetected:     atomic.LoadInt64(&c.anomaliesDetected),
+		TotalCorrectionsApplied:    atomic.LoadInt64(&c.correctionsApplied),
+		LastCollectionTime:         c.lastCollection,
+		LastSubmissionTime:         c.lastSubmission,
+		LastSettlementTime:         c.lastSettlement,
 		AverageReconciliationScore: int(atomic.LoadInt64(&c.reconciliationScore)),
 	}
 }
@@ -774,4 +774,3 @@ func (c *UsageMetricsCollector) GetAverages() map[string]float64 {
 		"avg_settlement_time_seconds": c.avgSettlementTime,
 	}
 }
-

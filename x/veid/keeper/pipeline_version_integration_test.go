@@ -193,7 +193,7 @@ func TestMultiValidatorConsensus(t *testing.T) {
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
 	)
-	keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	_ = keeper.ActivatePipelineVersion(ctx, "1.0.0")
 
 	// Proposer's execution record
 	proposerRecord := types.NewPipelineExecutionRecord(

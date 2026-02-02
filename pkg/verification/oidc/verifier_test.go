@@ -58,13 +58,13 @@ func newTestOIDCServer(t *testing.T) *testOIDCServer {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"issuer":                 ts.issuer,
-			"authorization_endpoint": ts.issuer + "/authorize",
-			"token_endpoint":         ts.issuer + "/token",
-			"userinfo_endpoint":      ts.issuer + "/userinfo",
-			"jwks_uri":               ts.issuer + "/.well-known/jwks.json",
-			"response_types_supported": []string{"code", "token", "id_token"},
-			"subject_types_supported":  []string{"public"},
+			"issuer":                                ts.issuer,
+			"authorization_endpoint":                ts.issuer + "/authorize",
+			"token_endpoint":                        ts.issuer + "/token",
+			"userinfo_endpoint":                     ts.issuer + "/userinfo",
+			"jwks_uri":                              ts.issuer + "/.well-known/jwks.json",
+			"response_types_supported":              []string{"code", "token", "id_token"},
+			"subject_types_supported":               []string{"public"},
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 		})
 	})
@@ -89,7 +89,7 @@ func newTestOIDCServer(t *testing.T) *testOIDCServer {
 			"access_token": "test-access-token",
 			"token_type":   "Bearer",
 			"expires_in":   3600,
-			"id_token":     ts.generateIDToken(t, map[string]interface{}{
+			"id_token": ts.generateIDToken(t, map[string]interface{}{
 				"sub":            "user-123",
 				"email":          "test@example.com",
 				"email_verified": true,
@@ -146,10 +146,12 @@ func (ts *testOIDCServer) generateIDToken(t *testing.T, claims map[string]interf
 		"typ": "JWT",
 		"kid": ts.keyID,
 	}
+	//nolint:errchkjson // Test code with known-good data
 	headerBytes, _ := json.Marshal(header)
 	headerB64 := base64.RawURLEncoding.EncodeToString(headerBytes)
 
 	// Encode payload
+	//nolint:errchkjson // Test code with known-good data
 	payloadBytes, _ := json.Marshal(claims)
 	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadBytes)
 
@@ -454,4 +456,3 @@ func TestWellKnownIssuers(t *testing.T) {
 	assert.True(t, ok)
 	assert.Contains(t, microsoftIssuer, "login.microsoftonline.com")
 }
-

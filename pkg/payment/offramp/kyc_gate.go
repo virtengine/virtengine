@@ -125,7 +125,7 @@ func (g *VEIDKYCGate) CheckKYCStatus(ctx context.Context, accountAddress string,
 
 	if status.ExpiresAt != nil {
 		result.ExpiresAt = status.ExpiresAt.Format(time.RFC3339)
-		
+
 		// Check if revalidation is needed
 		if g.config.RevalidationDays > 0 && status.VerifiedAt != nil {
 			revalidationDate := status.VerifiedAt.AddDate(0, 0, g.config.RevalidationDays)
@@ -352,4 +352,3 @@ var (
 	_ VEIDChecker = (*MockVEIDChecker)(nil)
 	_ AMLClient   = (*MockAMLClient)(nil)
 )
-

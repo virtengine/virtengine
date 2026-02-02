@@ -10,8 +10,8 @@ import (
 
 // Error message constants
 const (
-	errMsgInvalidSenderAddr    = "invalid sender address"
-	errMsgInvalidTargetAddr    = "invalid target address"
+	errMsgInvalidSenderAddr     = "invalid sender address"
+	errMsgInvalidTargetAddr     = "invalid target address"
 	errMsgAccountNotOperational = "sender account is not operational"
 )
 

@@ -496,4 +496,3 @@ type SEVPlatformInfo struct {
 	FirmwareVer   string
 	APIVersion    int
 }
-

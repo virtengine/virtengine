@@ -679,4 +679,3 @@ func (c *costManager) GetDailyTotal() int64 {
 	}
 	return total
 }
-

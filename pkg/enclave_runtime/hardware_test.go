@@ -127,13 +127,13 @@ func TestSGXEnclaveLoader(t *testing.T) {
 			t.Error("second Load should fail")
 		}
 
-		loader.Unload()
+		_ = loader.Unload()
 	})
 
 	t.Run("measurement is non-zero after load", func(t *testing.T) {
 		loader := NewSGXEnclaveLoader(detector)
 		_ = loader.Load("/fake/enclave.so", false)
-		defer loader.Unload()
+		defer func() { _ = loader.Unload() }()
 
 		measurement := loader.GetMeasurement()
 		if measurement == (SGXMeasurement{}) {
@@ -161,7 +161,7 @@ func TestSGXReportGenerator(t *testing.T) {
 
 	t.Run("generate report with loaded enclave", func(t *testing.T) {
 		_ = loader.Load("/fake/enclave.so", false)
-		defer loader.Unload()
+		defer func() { _ = loader.Unload() }()
 
 		gen := NewSGXReportGenerator(loader)
 
@@ -322,7 +322,7 @@ func TestSGXECallInterface(t *testing.T) {
 		initial := ecaller.GetCallCount()
 
 		for i := 0; i < 5; i++ {
-			ecaller.Call(i, []byte("test"))
+			_, _ = ecaller.Call(i, []byte("test"))
 		}
 
 		final := ecaller.GetCallCount()
@@ -355,7 +355,7 @@ func TestSGXHardwareBackend(t *testing.T) {
 
 	t.Run("get attestation", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		nonce := []byte("test-attestation-nonce")
 		attestation, err := backend.GetAttestation(nonce)
@@ -370,7 +370,7 @@ func TestSGXHardwareBackend(t *testing.T) {
 
 	t.Run("derive key", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		key1, err := backend.DeriveKey([]byte("context1"), 32)
 		if err != nil {
@@ -394,7 +394,7 @@ func TestSGXHardwareBackend(t *testing.T) {
 
 	t.Run("seal and unseal", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		plaintext := []byte("backend seal test")
 
@@ -1424,4 +1424,3 @@ func BenchmarkDetectHardware(b *testing.B) {
 		DetectHardware()
 	}
 }
-

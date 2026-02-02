@@ -21,15 +21,15 @@ import (
 
 // offRampService is the main implementation of the Service interface.
 type offRampService struct {
-	config        Config
-	providers     map[ProviderType]Provider
+	config          Config
+	providers       map[ProviderType]Provider
 	defaultProvider Provider
 
 	// Stores
-	payoutStore       PayoutStore
-	quoteStore        *QuoteStore
-	reconcileStore    ReconciliationStore
-	limitsStore       LimitsStore
+	payoutStore    PayoutStore
+	quoteStore     *QuoteStore
+	reconcileStore ReconciliationStore
+	limitsStore    LimitsStore
 
 	// KYC/AML
 	kycGate     KYCGate
@@ -49,21 +49,21 @@ type offRampService struct {
 	metrics *serviceMetrics
 
 	// Close handling
-	closeMu  sync.Mutex
-	closed   bool
+	closeMu sync.Mutex
+	closed  bool
 }
 
 // serviceMetrics tracks service-level metrics.
 type serviceMetrics struct {
-	mu                  sync.RWMutex
-	totalPayouts        int64
-	successfulPayouts   int64
-	failedPayouts       int64
-	totalAmount         int64
-	kycRejections       int64
-	amlRejections       int64
-	webhooksProcessed   int64
-	reconciliationsRun  int64
+	mu                 sync.RWMutex
+	totalPayouts       int64
+	successfulPayouts  int64
+	failedPayouts      int64
+	totalAmount        int64
+	kycRejections      int64
+	amlRejections      int64
+	webhooksProcessed  int64
+	reconciliationsRun int64
 }
 
 // ServiceOption is a functional option for configuring the service.
@@ -121,11 +121,11 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 	}
 
 	svc := &offRampService{
-		config:     cfg,
-		providers:  make(map[ProviderType]Provider),
-		quoteStore: NewQuoteStore(),
+		config:      cfg,
+		providers:   make(map[ProviderType]Provider),
+		quoteStore:  NewQuoteStore(),
 		retryConfig: cfg.RetryConfig,
-		metrics:    &serviceMetrics{},
+		metrics:     &serviceMetrics{},
 	}
 
 	// Initialize providers
@@ -708,4 +708,3 @@ func (s *offRampService) Close() error {
 
 // Ensure implementation satisfies interface
 var _ Service = (*offRampService)(nil)
-

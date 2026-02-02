@@ -1002,4 +1002,3 @@ func (be *BidEngine) ManualBid(ctx context.Context, order Order) (*Bid, error) {
 
 	return bid, nil
 }
-

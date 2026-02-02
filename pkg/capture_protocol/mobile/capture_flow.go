@@ -36,8 +36,8 @@ type CaptureFlowConfig struct {
 	CompressionConfig CompressionConfig `json:"compression_config"`
 
 	// Timeouts
-	StepTimeoutSeconds   int `json:"step_timeout_seconds"`
-	TotalTimeoutSeconds  int `json:"total_timeout_seconds"`
+	StepTimeoutSeconds  int `json:"step_timeout_seconds"`
+	TotalTimeoutSeconds int `json:"total_timeout_seconds"`
 
 	// Retry settings
 	MaxRetries       int `json:"max_retries"`
@@ -116,10 +116,10 @@ type SelfieStepConfig struct {
 
 // LivenessStepConfig configures a liveness capture step
 type LivenessStepConfig struct {
-	Mode            LivenessMode            `json:"mode"`
-	ChallengeTypes  []LivenessChallengeType `json:"challenge_types,omitempty"`
-	MinChallenges   int                     `json:"min_challenges"`
-	RequirePassive  bool                    `json:"require_passive"`
+	Mode           LivenessMode            `json:"mode"`
+	ChallengeTypes []LivenessChallengeType `json:"challenge_types,omitempty"`
+	MinChallenges  int                     `json:"min_challenges"`
+	RequirePassive bool                    `json:"require_passive"`
 }
 
 // DefaultCaptureFlowConfig returns default capture flow configuration
@@ -261,11 +261,11 @@ func DefaultCaptureFlowConfig(flowType CaptureFlowType) CaptureFlowConfig {
 // CompressionConfig configures image/video compression
 type CompressionConfig struct {
 	// Image compression
-	EnableImageCompression bool    `json:"enable_image_compression"`
-	TargetImageSizeBytes   int64   `json:"target_image_size_bytes"`
-	MinJPEGQuality         int     `json:"min_jpeg_quality"`
-	MaxJPEGQuality         int     `json:"max_jpeg_quality"`
-	MaxCompressionPasses   int     `json:"max_compression_passes"`
+	EnableImageCompression bool  `json:"enable_image_compression"`
+	TargetImageSizeBytes   int64 `json:"target_image_size_bytes"`
+	MinJPEGQuality         int   `json:"min_jpeg_quality"`
+	MaxJPEGQuality         int   `json:"max_jpeg_quality"`
+	MaxCompressionPasses   int   `json:"max_compression_passes"`
 
 	// Video compression
 	EnableVideoCompression bool  `json:"enable_video_compression"`
@@ -273,8 +273,8 @@ type CompressionConfig struct {
 	MaxVideoSizeBytes      int64 `json:"max_video_size_bytes"`
 
 	// Metadata handling
-	StripAllMetadata       bool `json:"strip_all_metadata"`
-	PreserveOrientation    bool `json:"preserve_orientation"`
+	StripAllMetadata    bool `json:"strip_all_metadata"`
+	PreserveOrientation bool `json:"preserve_orientation"`
 }
 
 // DefaultCompressionConfig returns default compression settings
@@ -287,7 +287,7 @@ func DefaultCompressionConfig() CompressionConfig {
 		MaxCompressionPasses:   5,
 
 		EnableVideoCompression: true,
-		TargetVideoBitrate:     2000, // 2 Mbps
+		TargetVideoBitrate:     2000,             // 2 Mbps
 		MaxVideoSizeBytes:      20 * 1024 * 1024, // 20MB
 
 		StripAllMetadata:    true,
@@ -638,11 +638,11 @@ func (e *CaptureFlowExecutor) Execute(ctx context.Context) (*CaptureFlowResult, 
 	}
 
 	result := &CaptureFlowResult{
-		FlowID:            flowID,
-		FlowType:          e.config.FlowType,
-		StartedAt:         startTime,
-		DeviceFingerprint: *fingerprint,
-		StepResults:       make([]StepResult, 0, len(e.config.Steps)),
+		FlowID:             flowID,
+		FlowType:           e.config.FlowType,
+		StartedAt:          startTime,
+		DeviceFingerprint:  *fingerprint,
+		StepResults:        make([]StepResult, 0, len(e.config.Steps)),
 		CompressedPayloads: make([]CompressedPayload, 0),
 		Metadata: CaptureFlowMetadata{
 			ClientID:      e.clientKeyProvider.GetClientID(),
@@ -901,4 +901,3 @@ func GenerateSalt() ([]byte, error) {
 	}
 	return salt, nil
 }
-

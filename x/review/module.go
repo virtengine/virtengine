@@ -167,5 +167,3 @@ func (am AppModule) IsOnePerModuleType() {
 func (am AppModule) IsAppModule() {
 	// Required by the appmodule.AppModule interface
 }
-
-

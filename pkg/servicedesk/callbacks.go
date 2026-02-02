@@ -528,4 +528,3 @@ func (s *CallbackServer) isAllowedIP(r *http.Request) bool {
 
 	return false
 }
-

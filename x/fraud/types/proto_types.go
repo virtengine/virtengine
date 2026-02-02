@@ -127,15 +127,15 @@ const (
 
 // Proto enum value constants - FraudCategory
 const (
-	FraudCategoryPBUnspecified             = fraudv1.FraudCategoryUnspecified
-	FraudCategoryPBFakeIdentity            = fraudv1.FraudCategoryFakeIdentity
-	FraudCategoryPBPaymentFraud            = fraudv1.FraudCategoryPaymentFraud
+	FraudCategoryPBUnspecified              = fraudv1.FraudCategoryUnspecified
+	FraudCategoryPBFakeIdentity             = fraudv1.FraudCategoryFakeIdentity
+	FraudCategoryPBPaymentFraud             = fraudv1.FraudCategoryPaymentFraud
 	FraudCategoryPBServiceMisrepresentation = fraudv1.FraudCategoryServiceMisrepresentation
-	FraudCategoryPBResourceAbuse           = fraudv1.FraudCategoryResourceAbuse
-	FraudCategoryPBSybilAttack             = fraudv1.FraudCategorySybilAttack
-	FraudCategoryPBMaliciousContent        = fraudv1.FraudCategoryMaliciousContent
-	FraudCategoryPBTermsViolation          = fraudv1.FraudCategoryTermsViolation
-	FraudCategoryPBOther                   = fraudv1.FraudCategoryOther
+	FraudCategoryPBResourceAbuse            = fraudv1.FraudCategoryResourceAbuse
+	FraudCategoryPBSybilAttack              = fraudv1.FraudCategorySybilAttack
+	FraudCategoryPBMaliciousContent         = fraudv1.FraudCategoryMaliciousContent
+	FraudCategoryPBTermsViolation           = fraudv1.FraudCategoryTermsViolation
+	FraudCategoryPBOther                    = fraudv1.FraudCategoryOther
 )
 
 // Proto enum value constants - ResolutionType

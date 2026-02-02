@@ -829,9 +829,9 @@ func TestAuditLogger_WaldurCallback(t *testing.T) {
 // MockWaldurServer creates a mock Waldur server for testing
 type MockWaldurServer struct {
 	*httptest.Server
-	Responses   map[string]MockResponse
+	Responses        map[string]MockResponse
 	ReceivedRequests []MockRequest
-	mu          sync.Mutex
+	mu               sync.Mutex
 }
 
 // MockResponse represents a mock response
@@ -850,7 +850,7 @@ type MockRequest struct {
 // NewMockWaldurServer creates a new mock Waldur server
 func NewMockWaldurServer() *MockWaldurServer {
 	mock := &MockWaldurServer{
-		Responses: make(map[string]MockResponse),
+		Responses:        make(map[string]MockResponse),
 		ReceivedRequests: make([]MockRequest, 0),
 	}
 
@@ -938,4 +938,3 @@ func BenchmarkCallbackHash(b *testing.B) {
 		ComputeCallbackHash(callback)
 	}
 }
-

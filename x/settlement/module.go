@@ -191,5 +191,3 @@ func EndBlocker(ctx sdk.Context, k keeper.IKeeper) error {
 
 	return nil
 }
-
-

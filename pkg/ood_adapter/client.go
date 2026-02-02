@@ -1196,4 +1196,3 @@ func (c *OODProductionClient) convertActiveJobs(jobs []oodActiveJob) []ActiveJob
 
 // Ensure OODProductionClient implements OODClient interface.
 var _ OODClient = (*OODProductionClient)(nil)
-

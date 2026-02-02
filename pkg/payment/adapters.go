@@ -41,6 +41,7 @@ func NewStripeGateway(config StripeConfig, useRealSDK bool) (Gateway, error) {
 // ============================================================================
 
 // stripeStubAdapter is a STUB implementation for testing only.
+//
 // Deprecated: Use StripeAdapter (stripe_adapter.go) for production.
 //
 // WARNING: This adapter returns FAKE customer IDs (cus_xxx) and payment intents.
@@ -52,6 +53,7 @@ type stripeStubAdapter struct {
 }
 
 // NewStripeStubAdapter creates a STUB Stripe adapter for testing.
+//
 // Deprecated: Use NewRealStripeAdapter for production.
 //
 // WARNING: This returns fake payment data. For production, use NewStripeGateway(config, true)
@@ -71,6 +73,7 @@ func NewStripeStubAdapter(config StripeConfig) (Gateway, error) {
 }
 
 // NewStripeAdapter creates a new Stripe gateway adapter.
+//
 // Deprecated: This now returns the REAL Stripe SDK adapter.
 // For explicit control, use NewStripeGateway(config, useRealSDK) instead.
 func NewStripeAdapter(config StripeConfig) (Gateway, error) {
@@ -377,7 +380,8 @@ func NewAdyenGateway(config AdyenConfig, useRealAPI bool) (Gateway, error) {
 // ============================================================================
 
 // adyenStubAdapter is a STUB implementation for testing only.
-// DEPRECATED: Use RealAdyenAdapter (adyen_adapter.go) for production.
+//
+// Deprecated: Use RealAdyenAdapter (adyen_adapter.go) for production.
 //
 // WARNING: This adapter returns FAKE payment IDs and responses.
 // NO REAL PAYMENTS ARE PROCESSED. Do NOT use in production!
@@ -388,7 +392,8 @@ type adyenStubAdapter struct {
 }
 
 // NewAdyenStubAdapter creates a STUB Adyen adapter for testing.
-// DEPRECATED: Use NewRealAdyenAdapter for production.
+//
+// Deprecated: Use NewRealAdyenAdapter for production.
 //
 // WARNING: This returns fake payment data. For production, use NewAdyenGateway(config, true)
 // or NewRealAdyenAdapter(config).
@@ -410,7 +415,8 @@ func NewAdyenStubAdapter(config AdyenConfig) (Gateway, error) {
 }
 
 // NewAdyenAdapter creates a new Adyen gateway adapter.
-// DEPRECATED: This now returns the REAL Adyen API adapter.
+//
+// Deprecated: This now returns the REAL Adyen API adapter.
 // For explicit control, use NewAdyenGateway(config, useRealAPI) instead.
 func NewAdyenAdapter(config AdyenConfig) (Gateway, error) {
 	// VE-3059: Now returns the real Adyen API adapter by default
@@ -630,9 +636,9 @@ func (a *adyenStubAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, erro
 	var notification struct {
 		NotificationItems []struct {
 			NotificationRequestItem struct {
-				EventCode   string          `json:"eventCode"`
-				EventDate   string          `json:"eventDate"`
-				PspReference string         `json:"pspReference"`
+				EventCode      string          `json:"eventCode"`
+				EventDate      string          `json:"eventDate"`
+				PspReference   string          `json:"pspReference"`
 				AdditionalData json.RawMessage `json:"additionalData"`
 			} `json:"NotificationRequestItem"`
 		} `json:"notificationItems"`
@@ -671,4 +677,3 @@ func (a *adyenStubAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, erro
 		Timestamp: time.Now(),
 	}, nil
 }
-

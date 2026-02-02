@@ -166,4 +166,3 @@ func (q *RetryQueue) PendingCount() int {
 	defer q.mu.Unlock()
 	return len(q.queue)
 }
-

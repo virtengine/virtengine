@@ -271,4 +271,3 @@ func TestValidateAndClean(t *testing.T) {
 		t.Error("ValidateAndClean should reject traversal")
 	}
 }
-

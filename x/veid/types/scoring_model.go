@@ -561,7 +561,7 @@ func (c CaptureQualityInput) ComputeCaptureScore() uint32 {
 		uint64(c.FocusScore)*25 +
 		uint64(c.AngleScore)*15
 
-	score = score / 100
+	score /= 100
 
 	// Penalty for inadequate resolution
 	if !c.ResolutionAdequate {

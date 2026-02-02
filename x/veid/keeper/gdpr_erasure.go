@@ -21,22 +21,22 @@ import (
 
 // erasureRequestStore is the storage format for erasure requests
 type erasureRequestStore struct {
-	Version           uint32                    `json:"version"`
-	RequestID         string                    `json:"request_id"`
-	RequesterAddress  string                    `json:"requester_address"`
-	Categories        []string                  `json:"categories"`
-	Status            string                    `json:"status"`
-	RequestedAt       int64                     `json:"requested_at"`
-	RequestedAtBlock  int64                     `json:"requested_at_block"`
-	ProcessedAt       *int64                    `json:"processed_at,omitempty"`
-	ProcessedAtBlock  *int64                    `json:"processed_at_block,omitempty"`
-	CompletedAt       *int64                    `json:"completed_at,omitempty"`
-	CompletedAtBlock  *int64                    `json:"completed_at_block,omitempty"`
-	DeadlineAt        int64                     `json:"deadline_at"`
-	RejectionReason   *string                   `json:"rejection_reason,omitempty"`
-	RejectionDetails  string                    `json:"rejection_details,omitempty"`
-	ErasureReport     *erasureReportStore       `json:"erasure_report,omitempty"`
-	VerificationHash  []byte                    `json:"verification_hash,omitempty"`
+	Version          uint32              `json:"version"`
+	RequestID        string              `json:"request_id"`
+	RequesterAddress string              `json:"requester_address"`
+	Categories       []string            `json:"categories"`
+	Status           string              `json:"status"`
+	RequestedAt      int64               `json:"requested_at"`
+	RequestedAtBlock int64               `json:"requested_at_block"`
+	ProcessedAt      *int64              `json:"processed_at,omitempty"`
+	ProcessedAtBlock *int64              `json:"processed_at_block,omitempty"`
+	CompletedAt      *int64              `json:"completed_at,omitempty"`
+	CompletedAtBlock *int64              `json:"completed_at_block,omitempty"`
+	DeadlineAt       int64               `json:"deadline_at"`
+	RejectionReason  *string             `json:"rejection_reason,omitempty"`
+	RejectionDetails string              `json:"rejection_details,omitempty"`
+	ErasureReport    *erasureReportStore `json:"erasure_report,omitempty"`
+	VerificationHash []byte              `json:"verification_hash,omitempty"`
 }
 
 type erasureReportStore struct {
@@ -211,8 +211,8 @@ func (k Keeper) executeErasure(ctx sdk.Context, request *types.ErasureRequest) (
 
 	now := ctx.BlockTime()
 	report := &types.ErasureReport{
-		ReportGeneratedAt:  now,
-		RetentionReasons:   make(map[string]string),
+		ReportGeneratedAt: now,
+		RetentionReasons:  make(map[string]string),
 	}
 
 	var totalAffected uint64
@@ -647,12 +647,12 @@ func (k Keeper) markEnvelopeKeysDestroyed(ctx sdk.Context, address sdk.AccAddres
 // ============================================================================
 
 var (
-	prefixErasureRequest             = []byte{0x50}
-	prefixErasureRequestByAddress    = []byte{0x51}
-	prefixPendingErasure             = []byte{0x52}
-	prefixKeyDestructionRecord       = []byte{0x53}
-	prefixKeyDestructionByAccount    = []byte{0x54}
-	prefixLegalHold                  = []byte{0x55}
+	prefixErasureRequest          = []byte{0x50}
+	prefixErasureRequestByAddress = []byte{0x51}
+	prefixPendingErasure          = []byte{0x52}
+	prefixKeyDestructionRecord    = []byte{0x53}
+	prefixKeyDestructionByAccount = []byte{0x54}
+	prefixLegalHold               = []byte{0x55}
 )
 
 func erasureRequestKey(requestID string) []byte {
@@ -660,14 +660,18 @@ func erasureRequestKey(requestID string) []byte {
 }
 
 func erasureRequestByAddressKey(address string, requestID string) []byte {
-	key := append(prefixErasureRequestByAddress, []byte(address)...)
+	key := make([]byte, 0, len(prefixErasureRequestByAddress)+len(address)+1+len(requestID))
+	key = append(key, prefixErasureRequestByAddress...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte(0x00))
 	key = append(key, []byte(requestID)...)
 	return key
 }
 
 func erasureRequestByAddressPrefixKey(address string) []byte {
-	key := append(prefixErasureRequestByAddress, []byte(address)...)
+	key := make([]byte, 0, len(prefixErasureRequestByAddress)+len(address)+1)
+	key = append(key, prefixErasureRequestByAddress...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte(0x00))
 	return key
 }
@@ -692,7 +696,9 @@ func keyDestructionRecordKey(recordID string) []byte {
 }
 
 func keyDestructionByAccountKey(address string, recordID string) []byte {
-	key := append(prefixKeyDestructionByAccount, []byte(address)...)
+	key := make([]byte, 0, len(prefixKeyDestructionByAccount)+len(address)+1+len(recordID))
+	key = append(key, prefixKeyDestructionByAccount...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte(0x00))
 	key = append(key, []byte(recordID)...)
 	return key

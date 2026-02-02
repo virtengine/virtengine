@@ -15,12 +15,12 @@ import (
 // MemoryLogger implements AuditLogger using in-memory storage.
 // Primarily for testing; not suitable for production.
 type MemoryLogger struct {
-	mu       sync.RWMutex
-	events   []Event
-	maxSize  int
-	config   Config
-	logger   zerolog.Logger
-	closed   bool
+	mu      sync.RWMutex
+	events  []Event
+	maxSize int
+	config  Config
+	logger  zerolog.Logger
+	closed  bool
 }
 
 // NewMemoryLogger creates a new in-memory audit logger.
@@ -269,12 +269,12 @@ var _ AuditLogger = (*MemoryLogger)(nil)
 
 // FileLogger implements AuditLogger using append-only files.
 type FileLogger struct {
-	mu       sync.Mutex
-	config   Config
-	file     *os.File
-	encoder  *json.Encoder
-	logger   zerolog.Logger
-	closed   bool
+	mu      sync.Mutex
+	config  Config
+	file    *os.File
+	encoder *json.Encoder
+	logger  zerolog.Logger
+	closed  bool
 }
 
 // NewFileLogger creates a new file-based audit logger.
@@ -377,4 +377,3 @@ func (f *FileLogger) Close() error {
 
 // Ensure FileLogger implements AuditLogger
 var _ AuditLogger = (*FileLogger)(nil)
-

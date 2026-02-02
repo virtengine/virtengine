@@ -818,7 +818,7 @@ func (k Keeper) EscalateFraudReport(ctx sdk.Context, reportID, reason, moderator
 
 	// Update queue priority
 	if entry, found := k.GetModeratorQueueEntry(ctx, reportID); found {
-		entry.Priority = 15 // Escalated = highest priority
+		entry.Priority = 15   // Escalated = highest priority
 		entry.AssignedTo = "" // Unassign for admin to pick up
 		if err := k.AddToModeratorQueue(ctx, entry); err != nil {
 			return err

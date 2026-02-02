@@ -17,7 +17,7 @@ import (
 
 func TestDerivedFeatureVerificationRecord_New(t *testing.T) {
 	now := time.Now()
-	
+
 	record := types.NewDerivedFeatureVerificationRecord(
 		"record-001",
 		"ve1test1234567890",
@@ -41,7 +41,7 @@ func TestDerivedFeatureVerificationRecord_New(t *testing.T) {
 
 func TestDerivedFeatureVerificationRecord_Validate(t *testing.T) {
 	now := time.Now()
-	
+
 	record := types.NewDerivedFeatureVerificationRecord(
 		"record-001",
 		"ve1test1234567890",
@@ -72,7 +72,7 @@ func TestDerivedFeatureVerificationRecord_Validate(t *testing.T) {
 
 func TestDerivedFeatureVerificationRecord_Validate_Errors(t *testing.T) {
 	now := time.Now()
-	
+
 	tests := []struct {
 		name   string
 		modify func(*types.DerivedFeatureVerificationRecord)
@@ -148,7 +148,7 @@ func TestDerivedFeatureVerificationRecord_Validate_Errors(t *testing.T) {
 				100,
 				"ve1validator123",
 			)
-			
+
 			tc.modify(record)
 			err := record.Validate()
 			require.Error(t, err)
@@ -159,7 +159,7 @@ func TestDerivedFeatureVerificationRecord_Validate_Errors(t *testing.T) {
 
 func TestDerivedFeatureVerificationRecord_FeatureReferences(t *testing.T) {
 	now := time.Now()
-	
+
 	record := types.NewDerivedFeatureVerificationRecord(
 		"record-001",
 		"ve1test1234567890",
@@ -201,7 +201,7 @@ func TestDerivedFeatureVerificationRecord_FeatureReferences(t *testing.T) {
 
 func TestDerivedFeatureVerificationRecord_ComputeCompositeHash(t *testing.T) {
 	now := time.Now()
-	
+
 	record := types.NewDerivedFeatureVerificationRecord(
 		"record-001",
 		"ve1test1234567890",
@@ -231,7 +231,7 @@ func TestDerivedFeatureVerificationRecord_ComputeCompositeHash(t *testing.T) {
 
 func TestDerivedFeatureVerificationRecord_WeightedScore(t *testing.T) {
 	now := time.Now()
-	
+
 	record := types.NewDerivedFeatureVerificationRecord(
 		"record-001",
 		"ve1test1234567890",
@@ -261,7 +261,7 @@ func TestDerivedFeatureVerificationRecord_WeightedScore(t *testing.T) {
 
 func TestDerivedFeatureVerificationRecord_Consensus(t *testing.T) {
 	now := time.Now()
-	
+
 	record := types.NewDerivedFeatureVerificationRecord(
 		"record-001",
 		"ve1test1234567890",
@@ -323,7 +323,7 @@ func TestDerivedFeatureVerificationRecord_Consensus(t *testing.T) {
 
 func TestDerivedFeatureVerificationRecord_Finalize(t *testing.T) {
 	now := time.Now()
-	
+
 	record := types.NewDerivedFeatureVerificationRecord(
 		"record-001",
 		"ve1test1234567890",
@@ -378,11 +378,11 @@ func TestDerivedFeatureReference_SetResults(t *testing.T) {
 
 func TestFeatureMatchResult_Validation(t *testing.T) {
 	validResults := types.AllFeatureMatchResults()
-	
+
 	for _, r := range validResults {
 		assert.True(t, types.IsValidFeatureMatchResult(r))
 	}
-	
+
 	assert.False(t, types.IsValidFeatureMatchResult("invalid"))
 	assert.False(t, types.IsValidFeatureMatchResult(""))
 }

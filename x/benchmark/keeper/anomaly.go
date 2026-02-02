@@ -111,9 +111,9 @@ func (k Keeper) detectInconsistentRatio(ctx sdk.Context, report types.BenchmarkR
 		maxExpectedBandwidth := mem.TotalGB * 100 * 1024 // Convert to MB/s
 		if mem.BandwidthMBps > maxExpectedBandwidth {
 			evidence, _ := json.Marshal(map[string]interface{}{
-				"total_memory_gb":     mem.TotalGB,
-				"bandwidth_mbps":      mem.BandwidthMBps,
-				"max_expected_mbps":   maxExpectedBandwidth,
+				"total_memory_gb":   mem.TotalGB,
+				"bandwidth_mbps":    mem.BandwidthMBps,
+				"max_expected_mbps": maxExpectedBandwidth,
 			})
 
 			return &types.AnomalyFlag{

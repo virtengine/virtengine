@@ -15,8 +15,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 
-	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 	"github.com/virtengine/virtengine/pkg/security"
+	v1 "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 	"github.com/virtengine/virtengine/x/enclave/types"
 )
 

@@ -34,6 +34,7 @@ func FuzzOrderValidate(f *testing.F) {
 		CreatedAt:         time.Now().UTC(),
 		UpdatedAt:         time.Now().UTC(),
 	}
+	//nolint:errchkjson // Fuzz test seed data with time.Time is safe
 	validJSON, _ := json.Marshal(validOrder)
 	f.Add(validJSON)
 
@@ -74,7 +75,7 @@ func FuzzOrderIDValidate(f *testing.F) {
 	f.Add("/123")
 	f.Add("address/notanumber")
 	f.Add("address/1/extra")
-	f.Add("a/0")                      // Zero sequence
+	f.Add("a/0")                       // Zero sequence
 	f.Add("addr/18446744073709551615") // Max uint64
 
 	f.Fuzz(func(t *testing.T, input string) {
@@ -110,14 +111,14 @@ func FuzzOrderIDValidate(f *testing.F) {
 // FuzzOrderStateTransitions tests order state machine.
 func FuzzOrderStateTransitions(f *testing.F) {
 	// Valid transitions
-	f.Add(uint8(1), uint8(2))  // pending_payment -> open
-	f.Add(uint8(2), uint8(3))  // open -> matched
-	f.Add(uint8(3), uint8(4))  // matched -> provisioning
-	f.Add(uint8(4), uint8(5))  // provisioning -> active
-	f.Add(uint8(5), uint8(7))  // active -> pending_termination
+	f.Add(uint8(1), uint8(2)) // pending_payment -> open
+	f.Add(uint8(2), uint8(3)) // open -> matched
+	f.Add(uint8(3), uint8(4)) // matched -> provisioning
+	f.Add(uint8(4), uint8(5)) // provisioning -> active
+	f.Add(uint8(5), uint8(7)) // active -> pending_termination
 	// Invalid transitions
-	f.Add(uint8(5), uint8(1))  // active -> pending_payment
-	f.Add(uint8(8), uint8(1))  // terminated -> pending_payment
+	f.Add(uint8(5), uint8(1)) // active -> pending_payment
+	f.Add(uint8(8), uint8(1)) // terminated -> pending_payment
 	f.Add(uint8(255), uint8(1))
 
 	f.Fuzz(func(t *testing.T, from, to uint8) {
@@ -171,6 +172,7 @@ func FuzzOfferingValidate(f *testing.F) {
 		CreatedAt:           time.Now().UTC(),
 		UpdatedAt:           time.Now().UTC(),
 	}
+	//nolint:errchkjson // Fuzz test seed data with time.Time is safe
 	validJSON, _ := json.Marshal(validOffering)
 	f.Add(validJSON)
 
@@ -415,10 +417,10 @@ func FuzzOrderSetState(f *testing.F) {
 
 // FuzzOrderCanAcceptBid tests bid acceptance logic.
 func FuzzOrderCanAcceptBid(f *testing.F) {
-	f.Add(uint8(2), int64(0), int64(0))         // Open, no expiry
+	f.Add(uint8(2), int64(0), int64(0))                   // Open, no expiry
 	f.Add(uint8(2), int64(1234567890), int64(1234567890)) // Open, expired
-	f.Add(uint8(3), int64(0), int64(0))         // Matched, no expiry
-	f.Add(uint8(1), int64(0), int64(0))         // Pending payment
+	f.Add(uint8(3), int64(0), int64(0))                   // Matched, no expiry
+	f.Add(uint8(1), int64(0), int64(0))                   // Pending payment
 
 	f.Fuzz(func(t *testing.T, state uint8, expiresAt, checkTime int64) {
 		var expires *time.Time
@@ -508,12 +510,12 @@ func FuzzOrdersFiltering(f *testing.F) {
 
 // FuzzOfferingCanAcceptOrder tests offering order acceptance logic.
 func FuzzOfferingCanAcceptOrder(f *testing.F) {
-	f.Add(uint8(1), uint32(0), uint64(0))  // Active, no limit
-	f.Add(uint8(1), uint32(10), uint64(5)) // Active, under limit
+	f.Add(uint8(1), uint32(0), uint64(0))   // Active, no limit
+	f.Add(uint8(1), uint32(10), uint64(5))  // Active, under limit
 	f.Add(uint8(1), uint32(10), uint64(10)) // Active, at limit
 	f.Add(uint8(1), uint32(10), uint64(15)) // Active, over limit
-	f.Add(uint8(2), uint32(0), uint64(0))  // Paused
-	f.Add(uint8(5), uint32(0), uint64(0))  // Terminated
+	f.Add(uint8(2), uint32(0), uint64(0))   // Paused
+	f.Add(uint8(5), uint32(0), uint64(0))   // Terminated
 
 	f.Fuzz(func(t *testing.T, state uint8, maxConcurrent uint32, activeCount uint64) {
 		offering := &Offering{

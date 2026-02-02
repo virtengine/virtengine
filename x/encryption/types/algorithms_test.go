@@ -42,11 +42,11 @@ func TestDefaultAlgorithm(t *testing.T) {
 
 func TestGetAlgorithmInfo(t *testing.T) {
 	tests := []struct {
-		algorithm   string
-		expectErr   bool
-		keySize     int
-		nonceSize   int
-		deprecated  bool
+		algorithm  string
+		expectErr  bool
+		keySize    int
+		nonceSize  int
+		deprecated bool
 	}{
 		{
 			algorithm:  AlgorithmX25519XSalsa20Poly1305,

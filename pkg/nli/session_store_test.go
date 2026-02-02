@@ -291,10 +291,10 @@ func TestInMemorySessionStore_Metrics(t *testing.T) {
 
 	// Perform operations
 	session := &Session{ID: "metrics-test", CreatedAt: time.Now()}
-	store.Set(ctx, session)
-	store.Get(ctx, "metrics-test")
-	store.Get(ctx, "nonexistent") // Miss
-	store.Delete(ctx, "metrics-test")
+	_ = store.Set(ctx, session)
+	_, _ = store.Get(ctx, "metrics-test")
+	_, _ = store.Get(ctx, "nonexistent") // Miss
+	_ = store.Delete(ctx, "metrics-test")
 
 	metrics := store.GetMetrics()
 
@@ -367,4 +367,3 @@ func TestDefaultSessionStoreConfig(t *testing.T) {
 		t.Errorf("Expected prefix 'virtengine:nli:session:', got %s", config.RedisPrefix)
 	}
 }
-

@@ -573,4 +573,3 @@ func (s *HPCAccountingService) GetActiveJobCount() int {
 	defer s.mu.RUnlock()
 	return len(s.jobAggregators)
 }
-

@@ -209,7 +209,7 @@ func TestStripeIntegration_3DSecureFlow(t *testing.T) {
 		Description: "3DS Test Payment",
 		ReturnURL:   "https://virtengine.io/payment/return",
 		Metadata: map[string]string{
-			"test":        "true",
+			"test":         "true",
 			"requires_3ds": "true",
 		},
 	})
@@ -300,4 +300,3 @@ func TestIntegration_ConversionQuote(t *testing.T) {
 	assert.Equal(t, "uve", quote.CryptoDenom)
 	assert.False(t, quote.IsExpired())
 }
-

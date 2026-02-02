@@ -54,32 +54,32 @@ const (
 
 // FeeTierNames maps fee tiers to human-readable names
 var FeeTierNames = map[FeeTier]string{
-	FeeTierStandard:  "standard",
-	FeeTierBronze:    "bronze",
-	FeeTierSilver:    "silver",
-	FeeTierGold:      "gold",
-	FeeTierPlatinum:  "platinum",
-	FeeTierDiamond:   "diamond",
+	FeeTierStandard: "standard",
+	FeeTierBronze:   "bronze",
+	FeeTierSilver:   "silver",
+	FeeTierGold:     "gold",
+	FeeTierPlatinum: "platinum",
+	FeeTierDiamond:  "diamond",
 }
 
 // FeeTierDiscounts maps fee tiers to discount percentages (in basis points, 10000 = 100%)
 var FeeTierDiscounts = map[FeeTier]uint32{
-	FeeTierStandard:  0,    // 0%
-	FeeTierBronze:    1000, // 10%
-	FeeTierSilver:    2000, // 20%
-	FeeTierGold:      3000, // 30%
-	FeeTierPlatinum:  4000, // 40%
-	FeeTierDiamond:   5000, // 50%
+	FeeTierStandard: 0,    // 0%
+	FeeTierBronze:   1000, // 10%
+	FeeTierSilver:   2000, // 20%
+	FeeTierGold:     3000, // 30%
+	FeeTierPlatinum: 4000, // 40%
+	FeeTierDiamond:  5000, // 50%
 }
 
 // FeeTierVolumeThresholds maps fee tiers to minimum 30-day volume thresholds (in smallest token unit)
 var FeeTierVolumeThresholds = map[FeeTier]uint64{
-	FeeTierStandard:  0,
-	FeeTierBronze:    100000000,   // 100 tokens
-	FeeTierSilver:    500000000,   // 500 tokens
-	FeeTierGold:      2000000000,  // 2000 tokens
-	FeeTierPlatinum:  10000000000, // 10000 tokens
-	FeeTierDiamond:   50000000000, // 50000 tokens
+	FeeTierStandard: 0,
+	FeeTierBronze:   100000000,   // 100 tokens
+	FeeTierSilver:   500000000,   // 500 tokens
+	FeeTierGold:     2000000000,  // 2000 tokens
+	FeeTierPlatinum: 10000000000, // 10000 tokens
+	FeeTierDiamond:  50000000000, // 50000 tokens
 }
 
 // String returns the string representation of a FeeTier
@@ -142,12 +142,12 @@ type FeeSchedule struct {
 // DefaultFeeSchedule returns the default fee schedule
 func DefaultFeeSchedule() FeeSchedule {
 	return FeeSchedule{
-		BaseTakeRateBps:          200,  // 2%
-		MinTakeRateBps:           50,   // 0.5%
-		MaxTakeRateBps:           500,  // 5%
-		MakerRebateBps:           25,   // 0.25%
-		UtilizationMultiplierBps: 10,   // 0.1% per 10% utilization
-		UtilizationThresholdPct:  70,   // Start increasing fees at 70% utilization
+		BaseTakeRateBps:          200, // 2%
+		MinTakeRateBps:           50,  // 0.5%
+		MaxTakeRateBps:           500, // 5%
+		MakerRebateBps:           25,  // 0.25%
+		UtilizationMultiplierBps: 10,  // 0.1% per 10% utilization
+		UtilizationThresholdPct:  70,  // Start increasing fees at 70% utilization
 		VolumeDiscountEnabled:    true,
 		TierDiscountEnabled:      true,
 		EarlyAdopterBonusBps:     50, // 0.5% extra discount

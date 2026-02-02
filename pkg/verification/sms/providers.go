@@ -177,24 +177,24 @@ type DeliveryStatusResult struct {
 
 // FailoverProvider wraps multiple providers with automatic failover
 type FailoverProvider struct {
-	primary      Provider
-	secondary    Provider
-	logger       zerolog.Logger
-	metrics      *ProviderMetrics
-	mu           sync.RWMutex
-	primaryFails int64
+	primary         Provider
+	secondary       Provider
+	logger          zerolog.Logger
+	metrics         *ProviderMetrics
+	mu              sync.RWMutex
+	primaryFails    int64
 	lastPrimaryFail time.Time
 }
 
 // ProviderMetrics tracks provider metrics
 type ProviderMetrics struct {
-	mu               sync.RWMutex
-	totalSent        int64
-	primarySent      int64
-	secondarySent    int64
-	primaryFailures  int64
+	mu                sync.RWMutex
+	totalSent         int64
+	primarySent       int64
+	secondarySent     int64
+	primaryFailures   int64
 	secondaryFailures int64
-	totalFailures    int64
+	totalFailures     int64
 }
 
 // NewFailoverProvider creates a new failover provider
@@ -808,4 +808,3 @@ func NewProvider(providerType string, config ProviderConfig, logger zerolog.Logg
 		return nil, errors.Wrapf(ErrInvalidConfig, "unsupported SMS provider: %s", providerType)
 	}
 }
-

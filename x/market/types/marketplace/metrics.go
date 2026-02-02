@@ -601,10 +601,10 @@ func DefaultMetricsConfig() MetricsConfig {
 		HourlyMetricsEnabled:     true,
 		DailyMetricsEnabled:      true,
 		WeeklyMetricsEnabled:     true,
-		RetentionBlockMetrics:    1000,  // ~1.6 hours
-		RetentionHourlyMetrics:   168,   // 1 week
-		RetentionDailyMetrics:    90,    // 3 months
-		TightSpreadThresholdBps:  100,   // 1%
+		RetentionBlockMetrics:    1000,       // ~1.6 hours
+		RetentionHourlyMetrics:   168,        // 1 week
+		RetentionDailyMetrics:    90,         // 3 months
+		TightSpreadThresholdBps:  100,        // 1%
 		HighVolumeThreshold:      1000000000, // 1000 tokens
 		LowLiquidityThreshold:    100000000,  // 100 tokens
 		EfficiencyAlertThreshold: 50,
@@ -650,9 +650,9 @@ type MarketMetricsParams struct {
 func DefaultMarketMetricsParams() MarketMetricsParams {
 	return MarketMetricsParams{
 		Config:                    DefaultMetricsConfig(),
-		GlobalMetricsEnabled:     true,
+		GlobalMetricsEnabled:      true,
 		PerOfferingMetricsEnabled: true,
-		AlertsEnabled:            true,
+		AlertsEnabled:             true,
 	}
 }
 

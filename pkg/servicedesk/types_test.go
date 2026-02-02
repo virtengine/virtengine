@@ -298,4 +298,3 @@ func TestServiceDeskTypeIsValid(t *testing.T) {
 		}
 	}
 }
-

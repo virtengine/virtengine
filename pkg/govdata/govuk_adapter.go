@@ -164,31 +164,31 @@ func (c *GovUKConfig) Validate() error {
 
 // GovUKVerifyRequest represents a GOV.UK Verify request
 type GovUKVerifyRequest struct {
-	RequestID        string `json:"requestId"`
-	LevelOfAssurance string `json:"levelOfAssurance"`
+	RequestID        string                `json:"requestId"`
+	LevelOfAssurance string                `json:"levelOfAssurance"`
 	Attributes       GovUKAttributeRequest `json:"attributes"`
 }
 
 // GovUKAttributeRequest specifies which attributes to verify
 type GovUKAttributeRequest struct {
-	FirstName        bool `json:"firstName"`
-	MiddleNames      bool `json:"middleNames,omitempty"`
-	Surname          bool `json:"surname"`
-	DateOfBirth      bool `json:"dateOfBirth"`
-	Address          bool `json:"address,omitempty"`
-	Gender           bool `json:"gender,omitempty"`
-	PlaceOfBirth     bool `json:"placeOfBirth,omitempty"`
+	FirstName    bool `json:"firstName"`
+	MiddleNames  bool `json:"middleNames,omitempty"`
+	Surname      bool `json:"surname"`
+	DateOfBirth  bool `json:"dateOfBirth"`
+	Address      bool `json:"address,omitempty"`
+	Gender       bool `json:"gender,omitempty"`
+	PlaceOfBirth bool `json:"placeOfBirth,omitempty"`
 }
 
 // GovUKVerifyResponse represents a GOV.UK Verify response
 type GovUKVerifyResponse struct {
-	RequestID     string               `json:"requestId"`
-	Scenario      string               `json:"scenario"`
-	PID           string               `json:"pid,omitempty"`
-	Attributes    *GovUKAttributes     `json:"attributes,omitempty"`
-	LevelOfAssurance string            `json:"levelOfAssurance,omitempty"`
-	ErrorCode     string               `json:"errorCode,omitempty"`
-	ErrorMessage  string               `json:"errorMessage,omitempty"`
+	RequestID        string           `json:"requestId"`
+	Scenario         string           `json:"scenario"`
+	PID              string           `json:"pid,omitempty"`
+	Attributes       *GovUKAttributes `json:"attributes,omitempty"`
+	LevelOfAssurance string           `json:"levelOfAssurance,omitempty"`
+	ErrorCode        string           `json:"errorCode,omitempty"`
+	ErrorMessage     string           `json:"errorMessage,omitempty"`
 }
 
 // GovUKAttributes contains verified identity attributes
@@ -211,11 +211,11 @@ type GovUKVerifiedValue struct {
 
 // GovUKAddress represents a verified address
 type GovUKAddress struct {
-	Lines       []string `json:"lines"`
-	PostCode    string   `json:"postCode"`
-	InternationalPostCode string `json:"internationalPostCode,omitempty"`
-	UPRN        string   `json:"uprn,omitempty"`
-	Verified    bool     `json:"verified"`
+	Lines                 []string `json:"lines"`
+	PostCode              string   `json:"postCode"`
+	InternationalPostCode string   `json:"internationalPostCode,omitempty"`
+	UPRN                  string   `json:"uprn,omitempty"`
+	Verified              bool     `json:"verified"`
 }
 
 // GOV.UK Verify Scenarios
@@ -235,9 +235,9 @@ const (
 // govUKAdapter implements the GOV.UK Verify adapter
 type govUKAdapter struct {
 	*baseAdapter
-	govUKConfig GovUKConfig
-	accessToken string    //nolint:unused // Reserved for OAuth token caching
-	tokenExpiry time.Time //nolint:unused // Reserved for OAuth token caching
+	govUKConfig  GovUKConfig
+	accessToken  string    //nolint:unused // Reserved for OAuth token caching
+	tokenExpiry  time.Time //nolint:unused // Reserved for OAuth token caching
 	windowStart  time.Time
 	requestCount int
 	mu           sync.RWMutex
@@ -561,4 +561,3 @@ func loadGovUKConfigFromEnv(_ AdapterConfig) (GovUKConfig, bool, error) {
 
 	return govUKConfig, true, nil
 }
-

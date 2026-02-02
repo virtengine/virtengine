@@ -93,4 +93,3 @@ func WrapInvalidEmail(msg string) error {
 func WrapChallengeNotFound(challengeID string) error {
 	return errors.Wrapf(ErrChallengeNotFound, "challenge ID: %s", challengeID)
 }
-

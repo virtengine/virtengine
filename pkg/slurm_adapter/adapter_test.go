@@ -342,4 +342,3 @@ func TestCancelJobNotFound(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, slurm.ErrJobNotFound)
 }
-

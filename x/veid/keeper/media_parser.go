@@ -130,9 +130,9 @@ type MediaParser struct {
 // NewMediaParser creates a new media parser with default settings
 func NewMediaParser() *MediaParser {
 	return &MediaParser{
-		MaxImageSize: 10 * 1024 * 1024,  // 10MB
-		MaxVideoSize: 50 * 1024 * 1024,  // 50MB
-		MaxJSONSize:  1 * 1024 * 1024,   // 1MB
+		MaxImageSize: 10 * 1024 * 1024, // 10MB
+		MaxVideoSize: 50 * 1024 * 1024, // 50MB
+		MaxJSONSize:  1 * 1024 * 1024,  // 1MB
 	}
 }
 
@@ -340,8 +340,8 @@ func (mp *MediaParser) detectVideoFormat(data []byte) VideoFormat {
 // ValidateImageDimensions checks if image dimensions are within acceptable range
 func ValidateImageDimensions(width, height int) error {
 	const (
-		minDim = 64    // Minimum 64x64
-		maxDim = 8192  // Maximum 8192x8192
+		minDim = 64   // Minimum 64x64
+		maxDim = 8192 // Maximum 8192x8192
 	)
 
 	if width < minDim || height < minDim {

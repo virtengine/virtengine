@@ -464,4 +464,3 @@ const (
 	// CaptureSourceUnknown indicates unknown source (rejected)
 	CaptureSourceUnknown CaptureSourceType = "unknown"
 )
-

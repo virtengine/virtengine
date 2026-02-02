@@ -376,8 +376,8 @@ func TestCompromiseDetector_RecordKeyUsage(t *testing.T) {
 
 func TestCompromiseDetector_AnomalousTime(t *testing.T) {
 	config := DefaultCompromiseDetectorConfig()
-	config.AnomalousTimeWindowStart = 9  // 9 AM
-	config.AnomalousTimeWindowEnd = 17   // 5 PM
+	config.AnomalousTimeWindowStart = 9 // 9 AM
+	config.AnomalousTimeWindowEnd = 17  // 5 PM
 	detector := NewCompromiseDetector(config, nil)
 
 	keyID := "test-key"
@@ -768,4 +768,3 @@ func TestKeyManagementIntegration(t *testing.T) {
 	events := logger.GetEventsByKey(key.KeyID, time.Now().Add(-1*time.Hour))
 	assert.Len(t, events, 1)
 }
-

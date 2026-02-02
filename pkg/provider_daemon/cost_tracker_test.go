@@ -98,12 +98,12 @@ func TestCostTrackerUpdateWorkloadCost(t *testing.T) {
 	tracker.StartWorkloadTracking(workloadID, "deployment-456", "lease-789")
 
 	usage := ResourceMetrics{
-		CPUMilliSeconds:    3600000, // 1 CPU-hour
-		MemoryByteSeconds:  3600 * 1024 * 1024 * 1024, // 1 GB-hour
+		CPUMilliSeconds:    3600000,                        // 1 CPU-hour
+		MemoryByteSeconds:  3600 * 1024 * 1024 * 1024,      // 1 GB-hour
 		StorageByteSeconds: 3600 * 10 * 1024 * 1024 * 1024, // 10 GB-hour
-		GPUSeconds:         3600, // 1 GPU-hour
-		NetworkBytesIn:     1024 * 1024 * 1024, // 1 GB
-		NetworkBytesOut:    1024 * 1024 * 1024, // 1 GB
+		GPUSeconds:         3600,                           // 1 GPU-hour
+		NetworkBytesIn:     1024 * 1024 * 1024,             // 1 GB
+		NetworkBytesOut:    1024 * 1024 * 1024,             // 1 GB
 	}
 
 	err := tracker.UpdateWorkloadCost(workloadID, usage, time.Hour)
@@ -424,8 +424,8 @@ func TestCostTrackerRightsizingRecommendations(t *testing.T) {
 	// Simulate usage that results in low utilization but high cost
 	// Use actual UpdateWorkloadCost to set up state properly
 	usage := ResourceMetrics{
-		CPUMilliSeconds: 360000,  // 0.1 CPU-hour worth
-		GPUSeconds:      360,     // 0.1 GPU-hour worth
+		CPUMilliSeconds: 360000, // 0.1 CPU-hour worth
+		GPUSeconds:      360,    // 0.1 GPU-hour worth
 	}
 	_ = tracker.UpdateWorkloadCost("workload-1", usage, time.Hour)
 
@@ -552,4 +552,3 @@ func TestCostThreshold(t *testing.T) {
 		t.Error("NotifyEmails not set correctly")
 	}
 }
-

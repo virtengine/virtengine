@@ -102,7 +102,7 @@ func TestClient_HealthCheck(t *testing.T) {
 		username := "testuser"
 		email := "test@example.com"
 		uuid := "550e8400-e29b-41d4-a716-446655440000"
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":       &uuid,
 			"username":   &username,
 			"email":      &email,
@@ -157,7 +157,7 @@ func TestClient_GetCurrentUser(t *testing.T) {
 		username := "johndoe"
 		email := "john@example.com"
 		uuid := "550e8400-e29b-41d4-a716-446655440001"
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":       &uuid,
 			"username":   &username,
 			"email":      &email,
@@ -256,7 +256,7 @@ func TestRateLimiter_ContextCancellation(t *testing.T) {
 func TestClient_Metrics(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{})
+		_ = json.NewEncoder(w).Encode(map[string]any{})
 	}))
 	defer server.Close()
 
@@ -276,7 +276,7 @@ func TestClient_Metrics(t *testing.T) {
 
 	// Make a request
 	ctx := context.Background()
-	client.HealthCheck(ctx)
+	_ = client.HealthCheck(ctx)
 
 	// Check metrics updated
 	metrics = client.Metrics()
@@ -353,7 +353,7 @@ func TestMarketplaceClient_ListOfferings(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(offerings)
+		_ = json.NewEncoder(w).Encode(offerings)
 	}))
 	defer server.Close()
 
@@ -386,7 +386,7 @@ func TestOpenStackClient_ListInstances(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(instances)
+		_ = json.NewEncoder(w).Encode(instances)
 	}))
 	defer server.Close()
 
@@ -421,7 +421,7 @@ func TestAWSClient_ListInstances(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(instances)
+		_ = json.NewEncoder(w).Encode(instances)
 	}))
 	defer server.Close()
 
@@ -595,4 +595,3 @@ func TestClient_ContextCancellation(t *testing.T) {
 		t.Error("HealthCheck() with cancelled context should return error")
 	}
 }
-

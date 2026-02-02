@@ -45,7 +45,7 @@ func FuzzManifestParse(f *testing.F) {
 	f.Add([]byte(`{"version": "v1", "name": ""}`))
 	f.Add([]byte(`{"version": "v1", "name": "test", "services": []}`))
 	f.Add([]byte(`{"version": "invalid", "name": "test"}`))
-	f.Add([]byte{0xFF, 0xFE})           // Invalid UTF-8
+	f.Add([]byte{0xFF, 0xFE}) // Invalid UTF-8
 	f.Add([]byte(`{"services": null}`))
 	f.Add([]byte(`{"name": "a-valid-name"}`))
 	f.Add([]byte(`{"name": "Invalid Name With Spaces"}`))
@@ -666,4 +666,3 @@ func FuzzVolumeMountValidation(f *testing.F) {
 		}
 	})
 }
-

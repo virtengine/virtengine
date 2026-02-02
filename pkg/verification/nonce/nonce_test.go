@@ -277,4 +277,3 @@ func TestMemoryStore_StoreFull(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
-

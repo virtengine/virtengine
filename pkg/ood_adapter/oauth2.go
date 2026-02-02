@@ -657,4 +657,3 @@ func (a *OAuth2ProviderAdapter) RevokeToken(ctx context.Context, token string) e
 
 // Ensure OAuth2ProviderAdapter implements VEIDAuthProvider.
 var _ VEIDAuthProvider = (*OAuth2ProviderAdapter)(nil)
-

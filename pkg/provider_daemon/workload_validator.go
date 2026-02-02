@@ -283,4 +283,3 @@ func ApplyResourceDefaults(job *hpctypes.HPCJob, template *hpctypes.WorkloadTemp
 		job.MaxRuntimeSeconds = r.DefaultRuntimeMinutes * 60
 	}
 }
-

@@ -424,7 +424,7 @@ func TestSNPTCBVersion_ToUint64(t *testing.T) {
 
 	// Verify individual byte positions
 	//nolint:gosec // G115: extracting 8-bit values from uint64, safe for uint8
-	assert.Equal(t, uint8(2), uint8(uint64Val&0xFF))      // BootLoader at byte 0
+	assert.Equal(t, uint8(2), uint8(uint64Val&0xFF)) // BootLoader at byte 0
 	//nolint:gosec // G115: extracting 8-bit values from uint64, safe for uint8
 	assert.Equal(t, uint8(0), uint8((uint64Val>>8)&0xFF)) // TEE at byte 1
 }
@@ -545,4 +545,3 @@ func TestSEVSNPEnclaveServiceImpl_ConcurrentScoring(t *testing.T) {
 	// At least max concurrent should succeed
 	assert.GreaterOrEqual(t, successCount, 1)
 }
-

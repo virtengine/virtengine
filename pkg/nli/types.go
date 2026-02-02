@@ -354,4 +354,3 @@ type CompletionResult struct {
 	// FinishReason indicates why generation stopped
 	FinishReason string `json:"finish_reason"`
 }
-

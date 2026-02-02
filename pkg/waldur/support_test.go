@@ -184,4 +184,3 @@ func TestSupportIssue_Fields(t *testing.T) {
 		t.Error("BackendID field not set correctly")
 	}
 }
-

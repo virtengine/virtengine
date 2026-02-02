@@ -786,14 +786,14 @@ func (a *SLURMKubernetesAdapter) buildHelmValues(config DeploymentConfig) map[st
 		if config.Template.SchedulingPolicy.SchedulerType != "" {
 			values["controller"] = map[string]interface{}{
 				"config": map[string]interface{}{
-					"schedulerType":            config.Template.SchedulingPolicy.SchedulerType,
-					"backfillEnabled":          config.Template.SchedulingPolicy.BackfillEnabled,
-					"preemptionEnabled":        config.Template.SchedulingPolicy.PreemptionEnabled,
-					"priorityWeightAge":        config.Template.SchedulingPolicy.PriorityWeightAge,
-					"priorityWeightFairshare":  config.Template.SchedulingPolicy.PriorityWeightFairShare,
-					"priorityWeightJobSize":    config.Template.SchedulingPolicy.PriorityWeightJobSize,
-					"priorityWeightPartition":  config.Template.SchedulingPolicy.PriorityWeightPartition,
-					"priorityWeightQOS":        config.Template.SchedulingPolicy.PriorityWeightQoS,
+					"schedulerType":           config.Template.SchedulingPolicy.SchedulerType,
+					"backfillEnabled":         config.Template.SchedulingPolicy.BackfillEnabled,
+					"preemptionEnabled":       config.Template.SchedulingPolicy.PreemptionEnabled,
+					"priorityWeightAge":       config.Template.SchedulingPolicy.PriorityWeightAge,
+					"priorityWeightFairshare": config.Template.SchedulingPolicy.PriorityWeightFairShare,
+					"priorityWeightJobSize":   config.Template.SchedulingPolicy.PriorityWeightJobSize,
+					"priorityWeightPartition": config.Template.SchedulingPolicy.PriorityWeightPartition,
+					"priorityWeightQOS":       config.Template.SchedulingPolicy.PriorityWeightQoS,
 				},
 			}
 		}
@@ -1150,4 +1150,3 @@ func splitByColon(s string) []string {
 	}
 	return parts
 }
-

@@ -339,13 +339,13 @@ func TestCalculateBidPriceAppliesMarkupAndMin(t *testing.T) {
 
 	config := &ProviderConfig{
 		Pricing: PricingConfig{
-			CPUPricePerCore:    "2.5",
-			MemoryPricePerGB:   "1.25",
-			StoragePricePerGB:  "0.5",
-			GPUPricePerHour:    "10",
-			MinBidPrice:        "100",
-			BidMarkupPercent:   10,
-			Currency:           "uve",
+			CPUPricePerCore:   "2.5",
+			MemoryPricePerGB:  "1.25",
+			StoragePricePerGB: "0.5",
+			GPUPricePerHour:   "10",
+			MinBidPrice:       "100",
+			BidMarkupPercent:  10,
+			Currency:          "uve",
 		},
 	}
 
@@ -372,13 +372,13 @@ func TestCalculateBidPriceUsesCalculatedWhenAboveMin(t *testing.T) {
 
 	config := &ProviderConfig{
 		Pricing: PricingConfig{
-			CPUPricePerCore:    "2.5",
-			MemoryPricePerGB:   "1.25",
-			StoragePricePerGB:  "0.5",
-			GPUPricePerHour:    "10",
-			MinBidPrice:        "50",
-			BidMarkupPercent:   10,
-			Currency:           "uve",
+			CPUPricePerCore:   "2.5",
+			MemoryPricePerGB:  "1.25",
+			StoragePricePerGB: "0.5",
+			GPUPricePerHour:   "10",
+			MinBidPrice:       "50",
+			BidMarkupPercent:  10,
+			Currency:          "uve",
 		},
 	}
 
@@ -544,4 +544,3 @@ func TestBidEngineManualBidNotRunning(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, ErrBidEngineNotRunning, err)
 }
-

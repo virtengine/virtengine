@@ -166,7 +166,7 @@ func TestReplayPrevention(t *testing.T) {
 		// Use a pointer to time so that both validator and cache see updates
 		currentTime := time.Now()
 		timeSource := func() time.Time { return currentTime }
-		
+
 		sv := NewSaltValidator(
 			WithReplayWindow(1*time.Second),
 			WithTimeSource(timeSource),
@@ -558,4 +558,3 @@ func createValidPayload(
 		Timestamp:       now,
 	}
 }
-

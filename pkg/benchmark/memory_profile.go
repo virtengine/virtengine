@@ -16,27 +16,27 @@ import (
 
 // MemorySnapshot represents a point-in-time memory snapshot
 type MemorySnapshot struct {
-	Timestamp      time.Time `json:"timestamp"`
-	HeapAlloc      uint64    `json:"heap_alloc"`       // bytes allocated and still in use
-	HeapSys        uint64    `json:"heap_sys"`         // bytes obtained from system
-	HeapInuse      uint64    `json:"heap_inuse"`       // bytes in in-use spans
-	HeapIdle       uint64    `json:"heap_idle"`        // bytes in idle spans
-	HeapReleased   uint64    `json:"heap_released"`    // bytes released to OS
-	HeapObjects    uint64    `json:"heap_objects"`     // number of allocated objects
-	StackInuse     uint64    `json:"stack_inuse"`      // bytes in stack spans
-	StackSys       uint64    `json:"stack_sys"`        // bytes obtained from system for stacks
-	MSpanInuse     uint64    `json:"mspan_inuse"`      // bytes in mspan structures
-	MCacheInuse    uint64    `json:"mcache_inuse"`     // bytes in mcache structures
-	BuckHashSys    uint64    `json:"buckhash_sys"`     // bytes in profiling bucket hash table
-	GCSys          uint64    `json:"gc_sys"`           // bytes in GC metadata
-	OtherSys       uint64    `json:"other_sys"`        // other system allocations
-	NextGC         uint64    `json:"next_gc"`          // target heap size for next GC
-	LastGC         uint64    `json:"last_gc"`          // time of last GC (nanoseconds since epoch)
-	PauseTotalNs   uint64    `json:"pause_total_ns"`   // total GC pause time
-	NumGC          uint32    `json:"num_gc"`           // number of completed GC cycles
-	NumForcedGC    uint32    `json:"num_forced_gc"`    // number of forced GC cycles
-	GCCPUFraction  float64   `json:"gc_cpu_fraction"`  // fraction of CPU time used by GC
-	Goroutines     int       `json:"goroutines"`       // number of goroutines
+	Timestamp     time.Time `json:"timestamp"`
+	HeapAlloc     uint64    `json:"heap_alloc"`      // bytes allocated and still in use
+	HeapSys       uint64    `json:"heap_sys"`        // bytes obtained from system
+	HeapInuse     uint64    `json:"heap_inuse"`      // bytes in in-use spans
+	HeapIdle      uint64    `json:"heap_idle"`       // bytes in idle spans
+	HeapReleased  uint64    `json:"heap_released"`   // bytes released to OS
+	HeapObjects   uint64    `json:"heap_objects"`    // number of allocated objects
+	StackInuse    uint64    `json:"stack_inuse"`     // bytes in stack spans
+	StackSys      uint64    `json:"stack_sys"`       // bytes obtained from system for stacks
+	MSpanInuse    uint64    `json:"mspan_inuse"`     // bytes in mspan structures
+	MCacheInuse   uint64    `json:"mcache_inuse"`    // bytes in mcache structures
+	BuckHashSys   uint64    `json:"buckhash_sys"`    // bytes in profiling bucket hash table
+	GCSys         uint64    `json:"gc_sys"`          // bytes in GC metadata
+	OtherSys      uint64    `json:"other_sys"`       // other system allocations
+	NextGC        uint64    `json:"next_gc"`         // target heap size for next GC
+	LastGC        uint64    `json:"last_gc"`         // time of last GC (nanoseconds since epoch)
+	PauseTotalNs  uint64    `json:"pause_total_ns"`  // total GC pause time
+	NumGC         uint32    `json:"num_gc"`          // number of completed GC cycles
+	NumForcedGC   uint32    `json:"num_forced_gc"`   // number of forced GC cycles
+	GCCPUFraction float64   `json:"gc_cpu_fraction"` // fraction of CPU time used by GC
+	Goroutines    int       `json:"goroutines"`      // number of goroutines
 }
 
 // MemoryProfiler tracks memory usage over time
@@ -210,20 +210,20 @@ func (p *MemoryProfiler) Clear() {
 
 // MemoryStats provides analysis of memory snapshots
 type MemoryStats struct {
-	MinHeapAlloc    uint64        `json:"min_heap_alloc"`
-	MaxHeapAlloc    uint64        `json:"max_heap_alloc"`
-	AvgHeapAlloc    uint64        `json:"avg_heap_alloc"`
-	MinHeapObjects  uint64        `json:"min_heap_objects"`
-	MaxHeapObjects  uint64        `json:"max_heap_objects"`
-	AvgHeapObjects  uint64        `json:"avg_heap_objects"`
-	MinGoroutines   int           `json:"min_goroutines"`
-	MaxGoroutines   int           `json:"max_goroutines"`
-	AvgGoroutines   int           `json:"avg_goroutines"`
-	TotalGCPauses   uint64        `json:"total_gc_pauses_ns"`
-	AvgGCPause      time.Duration `json:"avg_gc_pause"`
-	GCCycles        uint32        `json:"gc_cycles"`
-	SampleCount     int           `json:"sample_count"`
-	Duration        time.Duration `json:"duration"`
+	MinHeapAlloc   uint64        `json:"min_heap_alloc"`
+	MaxHeapAlloc   uint64        `json:"max_heap_alloc"`
+	AvgHeapAlloc   uint64        `json:"avg_heap_alloc"`
+	MinHeapObjects uint64        `json:"min_heap_objects"`
+	MaxHeapObjects uint64        `json:"max_heap_objects"`
+	AvgHeapObjects uint64        `json:"avg_heap_objects"`
+	MinGoroutines  int           `json:"min_goroutines"`
+	MaxGoroutines  int           `json:"max_goroutines"`
+	AvgGoroutines  int           `json:"avg_goroutines"`
+	TotalGCPauses  uint64        `json:"total_gc_pauses_ns"`
+	AvgGCPause     time.Duration `json:"avg_gc_pause"`
+	GCCycles       uint32        `json:"gc_cycles"`
+	SampleCount    int           `json:"sample_count"`
+	Duration       time.Duration `json:"duration"`
 }
 
 // GetStats returns statistics for collected snapshots
@@ -338,9 +338,9 @@ func (p *MemoryProfiler) DetectLeaks(threshold float64) *MemoryLeak {
 	}
 
 	leak := &MemoryLeak{
-		StartHeap:       first.HeapAlloc,
-		EndHeap:         last.HeapAlloc,
-		Duration:        duration,
+		StartHeap: first.HeapAlloc,
+		EndHeap:   last.HeapAlloc,
+		Duration:  duration,
 		//nolint:gosec // G115: HeapObjects fits in int64
 		ObjectGrowth:    int64(last.HeapObjects) - int64(first.HeapObjects),
 		GoroutineGrowth: last.Goroutines - first.Goroutines,
@@ -365,13 +365,13 @@ func ForceGC() (before, after MemorySnapshot) {
 	// Before
 	runtime.ReadMemStats(&m)
 	before = MemorySnapshot{
-		Timestamp:    time.Now().UTC(),
-		HeapAlloc:    m.HeapAlloc,
-		HeapSys:      m.HeapSys,
-		HeapInuse:    m.HeapInuse,
-		HeapObjects:  m.HeapObjects,
-		NumGC:        m.NumGC,
-		Goroutines:   runtime.NumGoroutine(),
+		Timestamp:   time.Now().UTC(),
+		HeapAlloc:   m.HeapAlloc,
+		HeapSys:     m.HeapSys,
+		HeapInuse:   m.HeapInuse,
+		HeapObjects: m.HeapObjects,
+		NumGC:       m.NumGC,
+		Goroutines:  runtime.NumGoroutine(),
 	}
 
 	// Force GC
@@ -381,13 +381,13 @@ func ForceGC() (before, after MemorySnapshot) {
 	// After
 	runtime.ReadMemStats(&m)
 	after = MemorySnapshot{
-		Timestamp:    time.Now().UTC(),
-		HeapAlloc:    m.HeapAlloc,
-		HeapSys:      m.HeapSys,
-		HeapInuse:    m.HeapInuse,
-		HeapObjects:  m.HeapObjects,
-		NumGC:        m.NumGC,
-		Goroutines:   runtime.NumGoroutine(),
+		Timestamp:   time.Now().UTC(),
+		HeapAlloc:   m.HeapAlloc,
+		HeapSys:     m.HeapSys,
+		HeapInuse:   m.HeapInuse,
+		HeapObjects: m.HeapObjects,
+		NumGC:       m.NumGC,
+		Goroutines:  runtime.NumGoroutine(),
 	}
 
 	return
@@ -405,18 +405,18 @@ type MemoryBudget struct {
 func DefaultMemoryBudget() MemoryBudget {
 	return MemoryBudget{
 		MaxHeapAlloc:   4 * 1024 * 1024 * 1024, // 4GB
-		MaxHeapObjects: 10_000_000,              // 10M objects
-		MaxGoroutines:  100_000,                 // 100K goroutines
-		MaxGCPauseNs:   100_000_000,             // 100ms
+		MaxHeapObjects: 10_000_000,             // 10M objects
+		MaxGoroutines:  100_000,                // 100K goroutines
+		MaxGCPauseNs:   100_000_000,            // 100ms
 	}
 }
 
 // BudgetViolation represents a memory budget violation
 type BudgetViolation struct {
-	Type      string `json:"type"`
-	Current   uint64 `json:"current"`
-	Limit     uint64 `json:"limit"`
-	Exceeded  bool   `json:"exceeded"`
+	Type     string `json:"type"`
+	Current  uint64 `json:"current"`
+	Limit    uint64 `json:"limit"`
+	Exceeded bool   `json:"exceeded"`
 }
 
 // CheckBudget checks memory against budget constraints
@@ -482,4 +482,3 @@ func FormatBytes(bytes uint64) string {
 		return fmt.Sprintf("%d B", bytes)
 	}
 }
-

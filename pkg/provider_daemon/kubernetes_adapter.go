@@ -346,11 +346,11 @@ type K8sPVCSpec struct {
 
 // K8sNetworkPolicySpec represents a network policy
 type K8sNetworkPolicySpec struct {
-	Name          string
-	PodSelector   map[string]string
-	IngressRules  []K8sNetworkPolicyRule
-	EgressRules   []K8sNetworkPolicyRule
-	PolicyTypes   []string
+	Name         string
+	PodSelector  map[string]string
+	IngressRules []K8sNetworkPolicyRule
+	EgressRules  []K8sNetworkPolicyRule
+	PolicyTypes  []string
 }
 
 // K8sNetworkPolicyRule represents a network policy rule
@@ -408,12 +408,12 @@ type KubernetesAdapter struct {
 
 // WorkloadStatusUpdate is sent when workload status changes
 type WorkloadStatusUpdate struct {
-	WorkloadID    string
-	DeploymentID  string
-	LeaseID       string
-	State         WorkloadState
-	Message       string
-	Timestamp     time.Time
+	WorkloadID   string
+	DeploymentID string
+	LeaseID      string
+	State        WorkloadState
+	Message      string
+	Timestamp    time.Time
 }
 
 // KubernetesAdapterConfig configures the adapter
@@ -1023,4 +1023,3 @@ func (ka *KubernetesAdapter) buildProbeSpec(check *HealthCheckSpec) *K8sProbeSpe
 
 	return probe
 }
-

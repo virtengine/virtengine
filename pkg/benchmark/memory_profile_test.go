@@ -123,10 +123,10 @@ func TestMemoryBudget(t *testing.T) {
 
 	// Check with very restrictive budget
 	strictBudget := MemoryBudget{
-		MaxHeapAlloc:   1,        // 1 byte
-		MaxHeapObjects: 1,        // 1 object
-		MaxGoroutines:  1,        // 1 goroutine
-		MaxGCPauseNs:   1,        // 1 nanosecond
+		MaxHeapAlloc:   1, // 1 byte
+		MaxHeapObjects: 1, // 1 object
+		MaxGoroutines:  1, // 1 goroutine
+		MaxGCPauseNs:   1, // 1 nanosecond
 	}
 
 	violations = profiler.CheckBudget(strictBudget)
@@ -252,4 +252,3 @@ func BenchmarkGetStats(b *testing.B) {
 		_ = profiler.GetStats()
 	}
 }
-

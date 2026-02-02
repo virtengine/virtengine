@@ -12,13 +12,13 @@ import (
 
 // MemoryStore implements NonceStore using in-memory storage.
 type MemoryStore struct {
-	mu               sync.RWMutex
-	nonces           map[string]*veidtypes.NonceRecord
-	noncesByIssuer   map[string][]string
-	config           StoreConfig
-	lastCleanup      time.Time
-	cleanedUpCount   int64
-	closed           bool
+	mu             sync.RWMutex
+	nonces         map[string]*veidtypes.NonceRecord
+	noncesByIssuer map[string][]string
+	config         StoreConfig
+	lastCleanup    time.Time
+	cleanedUpCount int64
+	closed         bool
 }
 
 // NewMemoryStore creates a new in-memory nonce store.
@@ -353,4 +353,3 @@ func (m *MemoryStore) Close() error {
 
 // Ensure MemoryStore implements NonceStore
 var _ NonceStore = (*MemoryStore)(nil)
-

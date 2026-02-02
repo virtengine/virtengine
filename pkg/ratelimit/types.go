@@ -316,4 +316,3 @@ func DefaultConfig() RateLimitConfig {
 		},
 	}
 }
-

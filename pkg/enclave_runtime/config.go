@@ -51,9 +51,9 @@ type EnclaveRuntimeConfig struct {
 	RequestTimeoutMs int64 `mapstructure:"request_timeout_ms" json:"request_timeout_ms"`
 
 	// Platform-specific configurations
-	SGX   SGXConfig       `mapstructure:"sgx" json:"sgx"`
-	SEV   SEVConfig       `mapstructure:"sev" json:"sev"`
-	Nitro NitroConfigApp  `mapstructure:"nitro" json:"nitro"`
+	SGX   SGXConfig      `mapstructure:"sgx" json:"sgx"`
+	SEV   SEVConfig      `mapstructure:"sev" json:"sev"`
+	Nitro NitroConfigApp `mapstructure:"nitro" json:"nitro"`
 }
 
 // SGXConfig contains Intel SGX-specific configuration
@@ -452,4 +452,3 @@ func (c *EnclaveRuntimeConfig) PrintConfigSummary() {
 	}
 	fmt.Println("======================================")
 }
-

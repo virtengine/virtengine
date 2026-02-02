@@ -1040,4 +1040,3 @@ func loadAAMVAConfigFromEnv(baseConfig AdapterConfig) (AAMVAConfig, bool, error)
 // ============================================================================
 
 var _ DataSourceAdapter = (*AAMVADMVAdapter)(nil)
-

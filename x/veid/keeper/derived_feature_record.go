@@ -16,25 +16,25 @@ import (
 
 // derivedFeatureRecordStore is the storage format for verification records
 type derivedFeatureRecordStore struct {
-	RecordID          string                        `json:"record_id"`
-	AccountAddress    string                        `json:"account_address"`
-	Version           uint32                        `json:"version"`
-	RequestID         string                        `json:"request_id"`
-	FeatureReferences []featureReferenceStore       `json:"feature_references"`
-	CompositeHash     []byte                        `json:"composite_hash"`
-	ModelVersion      string                        `json:"model_version"`
-	ModelHash         string                        `json:"model_hash"`
-	Score             uint32                        `json:"score"`
-	Confidence        uint32                        `json:"confidence"`
+	RecordID          string                         `json:"record_id"`
+	AccountAddress    string                         `json:"account_address"`
+	Version           uint32                         `json:"version"`
+	RequestID         string                         `json:"request_id"`
+	FeatureReferences []featureReferenceStore        `json:"feature_references"`
+	CompositeHash     []byte                         `json:"composite_hash"`
+	ModelVersion      string                         `json:"model_version"`
+	ModelHash         string                         `json:"model_hash"`
+	Score             uint32                         `json:"score"`
+	Confidence        uint32                         `json:"confidence"`
 	Status            types.VerificationResultStatus `json:"status"`
-	ReasonCodes       []types.ReasonCode            `json:"reason_codes,omitempty"`
-	ComputedAt        int64                         `json:"computed_at"`
-	BlockHeight       int64                         `json:"block_height"`
-	ComputedBy        string                        `json:"computed_by"`
-	ConsensusVotes    []consensusVoteStore          `json:"consensus_votes,omitempty"`
-	Finalized         bool                          `json:"finalized"`
-	FinalizedAt       *int64                        `json:"finalized_at,omitempty"`
-	FinalizedAtBlock  *int64                        `json:"finalized_at_block,omitempty"`
+	ReasonCodes       []types.ReasonCode             `json:"reason_codes,omitempty"`
+	ComputedAt        int64                          `json:"computed_at"`
+	BlockHeight       int64                          `json:"block_height"`
+	ComputedBy        string                         `json:"computed_by"`
+	ConsensusVotes    []consensusVoteStore           `json:"consensus_votes,omitempty"`
+	Finalized         bool                           `json:"finalized"`
+	FinalizedAt       *int64                         `json:"finalized_at,omitempty"`
+	FinalizedAtBlock  *int64                         `json:"finalized_at_block,omitempty"`
 }
 
 // featureReferenceStore is the storage format for feature references

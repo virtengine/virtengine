@@ -356,11 +356,11 @@ func TestIsRetryable(t *testing.T) {
 		{401, false},
 		{403, false},
 		{404, false},
-		{429, true},  // Rate limited
-		{500, true},  // Server error
-		{502, true},  // Bad gateway
-		{503, true},  // Service unavailable
-		{504, true},  // Gateway timeout
+		{429, true}, // Rate limited
+		{500, true}, // Server error
+		{502, true}, // Bad gateway
+		{503, true}, // Service unavailable
+		{504, true}, // Gateway timeout
 	}
 
 	for _, tt := range tests {
@@ -369,4 +369,3 @@ func TestIsRetryable(t *testing.T) {
 		}
 	}
 }
-

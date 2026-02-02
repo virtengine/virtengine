@@ -233,23 +233,23 @@ type SingleFrameLivenessResult struct {
 // ============================================================================
 
 const (
-	LivenessReasonCodeSuccess           = "LIVENESS_CONFIRMED"
-	LivenessReasonCodeHighConfidence    = "HIGH_CONFIDENCE_LIVE"
-	LivenessReasonCodeSpoof             = "SPOOF_DETECTED"
-	LivenessReasonCodeSpoofHighConf     = "SPOOF_HIGH_CONFIDENCE"
-	LivenessReasonCodeUncertain         = "LIVENESS_UNCERTAIN"
-	LivenessReasonCodeInsufficientFrames = "INSUFFICIENT_FRAMES"
-	LivenessReasonCodeChallengeFailed   = "CHALLENGE_FAILED"
+	LivenessReasonCodeSuccess             = "LIVENESS_CONFIRMED"
+	LivenessReasonCodeHighConfidence      = "HIGH_CONFIDENCE_LIVE"
+	LivenessReasonCodeSpoof               = "SPOOF_DETECTED"
+	LivenessReasonCodeSpoofHighConf       = "SPOOF_HIGH_CONFIDENCE"
+	LivenessReasonCodeUncertain           = "LIVENESS_UNCERTAIN"
+	LivenessReasonCodeInsufficientFrames  = "INSUFFICIENT_FRAMES"
+	LivenessReasonCodeChallengeFailed     = "CHALLENGE_FAILED"
 	LivenessReasonCodeAllChallengesPassed = "ALL_CHALLENGES_PASSED"
-	LivenessReasonCodePhotoSpoof        = "PHOTO_SPOOF_DETECTED"
-	LivenessReasonCodeScreenSpoof       = "SCREEN_SPOOF_DETECTED"
-	LivenessReasonCodeDeepfakeSpoof     = "DEEPFAKE_DETECTED"
-	LivenessReasonCodeMaskSpoof         = "MASK_SPOOF_DETECTED"
-	LivenessReasonCodeLowTextureVar     = "LOW_TEXTURE_VARIANCE"
-	LivenessReasonCodeMoirePattern      = "MOIRE_PATTERN_DETECTED"
-	LivenessReasonCodeExtractionError   = "LIVENESS_EXTRACTION_ERROR"
-	LivenessReasonCodeSidecarUnavail    = "LIVENESS_SIDECAR_UNAVAILABLE"
-	LivenessReasonCodeTimeout           = "LIVENESS_TIMEOUT"
+	LivenessReasonCodePhotoSpoof          = "PHOTO_SPOOF_DETECTED"
+	LivenessReasonCodeScreenSpoof         = "SCREEN_SPOOF_DETECTED"
+	LivenessReasonCodeDeepfakeSpoof       = "DEEPFAKE_DETECTED"
+	LivenessReasonCodeMaskSpoof           = "MASK_SPOOF_DETECTED"
+	LivenessReasonCodeLowTextureVar       = "LOW_TEXTURE_VARIANCE"
+	LivenessReasonCodeMoirePattern        = "MOIRE_PATTERN_DETECTED"
+	LivenessReasonCodeExtractionError     = "LIVENESS_EXTRACTION_ERROR"
+	LivenessReasonCodeSidecarUnavail      = "LIVENESS_SIDECAR_UNAVAILABLE"
+	LivenessReasonCodeTimeout             = "LIVENESS_TIMEOUT"
 )
 
 // ============================================================================
@@ -798,4 +798,3 @@ func (ls *LivenessScorer) Close() error {
 	}
 	return nil
 }
-

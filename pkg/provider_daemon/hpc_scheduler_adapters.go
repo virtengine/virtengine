@@ -742,4 +742,3 @@ func hashStatusReport(report *HPCStatusReport) []byte {
 	hash := sha256.Sum256(bytes)
 	return hash[:]
 }
-

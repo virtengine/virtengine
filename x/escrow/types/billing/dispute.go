@@ -459,10 +459,10 @@ type SettlementConfig struct {
 // DefaultSettlementConfig returns default settlement configuration
 func DefaultSettlementConfig() SettlementConfig {
 	return SettlementConfig{
-		DefaultDisputeWindowSeconds:   604800, // 7 days
-		MinDisputeWindowSeconds:       86400,  // 1 day
+		DefaultDisputeWindowSeconds:   604800,  // 7 days
+		MinDisputeWindowSeconds:       86400,   // 1 day
 		MaxDisputeWindowSeconds:       2592000, // 30 days
-		EscalationTimeoutSeconds:      172800, // 2 days
+		EscalationTimeoutSeconds:      172800,  // 2 days
 		MaxEscalationSteps:            3,
 		AutoSettleAfterDisputeWindow:  true,
 		RequireCustomerAcknowledgment: false,

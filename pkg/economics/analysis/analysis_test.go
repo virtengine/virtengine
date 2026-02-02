@@ -71,9 +71,9 @@ func TestDistributionAnalyzer_CalculateNakamoto(t *testing.T) {
 	analyzer := NewDistributionAnalyzer()
 
 	testCases := []struct {
-		name            string
-		holdings        []Holding
-		totalSupply     *big.Int
+		name             string
+		holdings         []Holding
+		totalSupply      *big.Int
 		expectedNakamoto int64
 	}{
 		{
@@ -83,7 +83,7 @@ func TestDistributionAnalyzer_CalculateNakamoto(t *testing.T) {
 				{Address: "addr2", Balance: big.NewInt(2000)},
 				{Address: "addr3", Balance: big.NewInt(2000)},
 			},
-			totalSupply:     big.NewInt(10000),
+			totalSupply:      big.NewInt(10000),
 			expectedNakamoto: 1, // One holder controls 60%
 		},
 		{
@@ -95,7 +95,7 @@ func TestDistributionAnalyzer_CalculateNakamoto(t *testing.T) {
 				{Address: "addr4", Balance: big.NewInt(2000)},
 				{Address: "addr5", Balance: big.NewInt(2000)},
 			},
-			totalSupply:     big.NewInt(10000),
+			totalSupply:      big.NewInt(10000),
 			expectedNakamoto: 3, // Need 3 to reach 51%
 		},
 	}
@@ -217,10 +217,10 @@ func TestAttackAnalyzer_AnalyzeNothingAtStake(t *testing.T) {
 	analyzer := NewAttackAnalyzer(params)
 
 	testCases := []struct {
-		name             string
-		slashingEnabled  bool
-		slashingBPS      int64
-		expectedRisk     string
+		name            string
+		slashingEnabled bool
+		slashingBPS     int64
+		expectedRisk    string
 	}{
 		{
 			name:            "no slashing",
@@ -276,10 +276,10 @@ func TestGameTheoryAnalyzer_AnalyzeValidatorIncentives(t *testing.T) {
 	}
 
 	validAlignments := map[string]bool{
-		"strongly_aligned":   true,
-		"partially_aligned":  true,
-		"misaligned":         true,
-		"aligned":            true,
+		"strongly_aligned":     true,
+		"partially_aligned":    true,
+		"misaligned":           true,
+		"aligned":              true,
 		"partially_misaligned": true,
 	}
 	if !validAlignments[analysis.IncentiveAlignment] {
@@ -292,14 +292,14 @@ func TestGameTheoryAnalyzer_ComprehensiveAnalysis(t *testing.T) {
 	analyzer := NewGameTheoryAnalyzer(params)
 
 	analyses := analyzer.ComprehensiveGameTheoryAnalysis(
-		100,   // validator count
+		100,           // validator count
 		1_000_000_000, // avg stake
-		1000,  // avg commission
-		500,   // slashing penalty
-		1000,  // delegator count
-		100_000_000, // avg delegation
-		1000,  // avg APR
-		21,    // unbonding days
+		1000,          // avg commission
+		500,           // slashing penalty
+		1000,          // delegator count
+		100_000_000,   // avg delegation
+		1000,          // avg APR
+		21,            // unbonding days
 	)
 
 	// Should have multiple analyses
@@ -317,4 +317,3 @@ func TestGameTheoryAnalyzer_ComprehensiveAnalysis(t *testing.T) {
 		}
 	}
 }
-

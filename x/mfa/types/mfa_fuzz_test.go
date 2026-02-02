@@ -30,9 +30,9 @@ func FuzzFactorTypeFromString(f *testing.F) {
 	// Invalid types
 	f.Add("")
 	f.Add("invalid")
-	f.Add("TOTP")        // Case sensitivity
-	f.Add("totp ")       // Trailing space
-	f.Add(" fido2")      // Leading space
+	f.Add("TOTP")   // Case sensitivity
+	f.Add("totp ")  // Trailing space
+	f.Add(" fido2") // Leading space
 	f.Add("unknown_type")
 	f.Add("123")
 	f.Add("\x00\x01\x02") // Binary data
@@ -124,7 +124,7 @@ func FuzzMFAPolicyValidate(f *testing.F) {
 			{Factors: []FactorType{FactorTypeTOTP}},
 		},
 	}
-	validJSON, _ := json.Marshal(validPolicy)
+	validJSON, _ := json.Marshal(validPolicy) //nolint:errchkjson // Best-effort marshal for fuzz seeding
 	f.Add(validJSON)
 
 	f.Add([]byte("{}"))
@@ -358,7 +358,7 @@ func FuzzComputeChallengeID(f *testing.F) {
 // FuzzGenesisStateValidate tests genesis state validation.
 func FuzzGenesisStateValidate(f *testing.F) {
 	defaultGenesis := DefaultGenesisState()
-	genesisJSON, _ := json.Marshal(defaultGenesis)
+	genesisJSON, _ := json.Marshal(defaultGenesis) //nolint:errchkjson // Best-effort marshal for fuzz seeding
 	f.Add(genesisJSON)
 
 	f.Add([]byte("{}"))

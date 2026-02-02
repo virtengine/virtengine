@@ -113,8 +113,8 @@ func TestEconomicAuditor_GenerateAuditReport(t *testing.T) {
 		AttackAnalyses: []economics.AttackAnalysis{
 			{AttackType: "51_percent_attack", RiskLevel: "low", CostEstimateUSD: 100000000},
 		},
-		Vulnerabilities:  []economics.Vulnerability{},
-		Recommendations:  []economics.Recommendation{},
+		Vulnerabilities: []economics.Vulnerability{},
+		Recommendations: []economics.Recommendation{},
 	}
 
 	report := auditor.GenerateAuditReport(mockAudit)
@@ -278,4 +278,3 @@ func TestFormatFunctions(t *testing.T) {
 		t.Errorf("Expected 'a; b; c', got '%s'", joined)
 	}
 }
-

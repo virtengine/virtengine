@@ -25,8 +25,8 @@ import (
 
 // Test address constants - valid bech32 addresses for delegation_test
 var (
-	delTestDelegatorAddr = sdk.AccAddress([]byte("deltest_delegator_01")).String()
-	delTestValidatorAddr = sdk.AccAddress([]byte("deltest_validator_01")).String()
+	delTestDelegatorAddr  = sdk.AccAddress([]byte("deltest_delegator_01")).String()
+	delTestValidatorAddr  = sdk.AccAddress([]byte("deltest_validator_01")).String()
 	delTestValidator2Addr = sdk.AccAddress([]byte("deltest_validator_02")).String()
 	delTestValidator3Addr = sdk.AccAddress([]byte("deltest_validator_03")).String()
 )

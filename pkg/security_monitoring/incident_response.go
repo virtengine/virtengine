@@ -20,69 +20,69 @@ type IncidentResponder struct {
 
 // Playbook defines an automated incident response playbook
 type Playbook struct {
-	ID              string          `json:"id"`
-	Name            string          `json:"name"`
-	Description     string          `json:"description"`
-	TriggerTypes    []string        `json:"trigger_types"`
+	ID              string                `json:"id"`
+	Name            string                `json:"name"`
+	Description     string                `json:"description"`
+	TriggerTypes    []string              `json:"trigger_types"`
 	MinSeverity     SecurityEventSeverity `json:"min_severity"`
-	Steps           []PlaybookStep  `json:"steps"`
-	Enabled         bool            `json:"enabled"`
-	CooldownMinutes int             `json:"cooldown_minutes"`
-	MaxExecutions   int             `json:"max_executions_per_hour"`
-	NotifyOnSuccess bool            `json:"notify_on_success"`
-	NotifyOnFailure bool            `json:"notify_on_failure"`
+	Steps           []PlaybookStep        `json:"steps"`
+	Enabled         bool                  `json:"enabled"`
+	CooldownMinutes int                   `json:"cooldown_minutes"`
+	MaxExecutions   int                   `json:"max_executions_per_hour"`
+	NotifyOnSuccess bool                  `json:"notify_on_success"`
+	NotifyOnFailure bool                  `json:"notify_on_failure"`
 }
 
 // PlaybookStep defines a single step in a playbook
 type PlaybookStep struct {
-	Name        string            `json:"name"`
-	Action      string            `json:"action"`
-	Parameters  map[string]string `json:"parameters,omitempty"`
-	Timeout     int               `json:"timeout_seconds"`
-	ContinueOnFailure bool        `json:"continue_on_failure"`
-	Condition   string            `json:"condition,omitempty"`
+	Name              string            `json:"name"`
+	Action            string            `json:"action"`
+	Parameters        map[string]string `json:"parameters,omitempty"`
+	Timeout           int               `json:"timeout_seconds"`
+	ContinueOnFailure bool              `json:"continue_on_failure"`
+	Condition         string            `json:"condition,omitempty"`
 }
 
 // PlaybookAction represents types of playbook actions
 type PlaybookAction string
 
 const (
-	ActionLogEvent            PlaybookAction = "log_event"
-	ActionSendAlert           PlaybookAction = "send_alert"
-	ActionBlockIP             PlaybookAction = "block_ip"
-	ActionRevokeKey           PlaybookAction = "revoke_key"
-	ActionSuspendAccount      PlaybookAction = "suspend_account"
-	ActionSuspendProvider     PlaybookAction = "suspend_provider"
-	ActionIncreaseSeverity    PlaybookAction = "increase_severity"
-	ActionTriggerBackup       PlaybookAction = "trigger_backup"
-	ActionNotifyTeam          PlaybookAction = "notify_team"
-	ActionRunScript           PlaybookAction = "run_script"
-	ActionUpdateFirewall      PlaybookAction = "update_firewall"
-	ActionCollectEvidence     PlaybookAction = "collect_evidence"
-	ActionEscalate            PlaybookAction = "escalate"
+	ActionLogEvent         PlaybookAction = "log_event"
+	ActionSendAlert        PlaybookAction = "send_alert"
+	ActionBlockIP          PlaybookAction = "block_ip"
+	ActionRevokeKey        PlaybookAction = "revoke_key"
+	ActionSuspendAccount   PlaybookAction = "suspend_account"
+	ActionSuspendProvider  PlaybookAction = "suspend_provider"
+	ActionIncreaseSeverity PlaybookAction = "increase_severity"
+	ActionTriggerBackup    PlaybookAction = "trigger_backup"
+	ActionNotifyTeam       PlaybookAction = "notify_team"
+	ActionRunScript        PlaybookAction = "run_script"
+	ActionUpdateFirewall   PlaybookAction = "update_firewall"
+	ActionCollectEvidence  PlaybookAction = "collect_evidence"
+	ActionEscalate         PlaybookAction = "escalate"
 )
 
 // PlaybookExecution tracks playbook execution
 type PlaybookExecution struct {
-	ID            string                `json:"id"`
-	PlaybookID    string                `json:"playbook_id"`
-	IncidentID    string                `json:"incident_id"`
-	StartedAt     time.Time             `json:"started_at"`
-	CompletedAt   *time.Time            `json:"completed_at,omitempty"`
-	Status        string                `json:"status"` // running, completed, failed
-	StepsExecuted []StepExecution       `json:"steps_executed"`
-	Error         string                `json:"error,omitempty"`
+	ID            string          `json:"id"`
+	PlaybookID    string          `json:"playbook_id"`
+	IncidentID    string          `json:"incident_id"`
+	StartedAt     time.Time       `json:"started_at"`
+	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
+	Status        string          `json:"status"` // running, completed, failed
+	StepsExecuted []StepExecution `json:"steps_executed"`
+	Error         string          `json:"error,omitempty"`
 }
 
 // StepExecution tracks individual step execution
 type StepExecution struct {
-	StepName    string                 `json:"step_name"`
-	Action      string                 `json:"action"`
-	StartedAt   time.Time              `json:"started_at"`
-	CompletedAt *time.Time             `json:"completed_at,omitempty"`
-	Success     bool                   `json:"success"`
-	Output      string                 `json:"output,omitempty"`
-	Error       string                 `json:"error,omitempty"`
+	StepName    string     `json:"step_name"`
+	Action      string     `json:"action"`
+	StartedAt   time.Time  `json:"started_at"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Success     bool       `json:"success"`
+	Output      string     `json:"output,omitempty"`
+	Error       string     `json:"error,omitempty"`
 }
 
 // NewIncidentResponder creates a new incident responder
@@ -568,4 +568,3 @@ func (ir *IncidentResponder) DisablePlaybook(id string) {
 		playbook.Enabled = false
 	}
 }
-
