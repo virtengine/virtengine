@@ -196,7 +196,7 @@ func (s *OracleCLITestSuite) TestCLIQueryOraclePricesWithFilter() {
 			"query prices with asset filter",
 			cli.TestFlags().
 				WithOutput("json").
-				WithFlag(cflags.FlagAssetDenom, "ve"),
+				WithFlag(cflags.FlagAssetDenom, "uve"),
 			false,
 			false,
 			0,
@@ -214,7 +214,7 @@ func (s *OracleCLITestSuite) TestCLIQueryOraclePricesWithFilter() {
 			"query prices with both filters",
 			cli.TestFlags().
 				WithOutput("json").
-				WithFlag(cflags.FlagAssetDenom, "ve").
+				WithFlag(cflags.FlagAssetDenom, "uve").
 				WithFlag(cflags.FlagBaseDenom, "usd"),
 			false,
 			false,

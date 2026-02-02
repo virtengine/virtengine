@@ -4,51 +4,52 @@ import (
 	"github.com/spf13/cobra"
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	types "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 )
 
-// GetQueryVEIDCmd returns the query commands for the VEID module
+// GetQueryVEIDCmd returns the query commands for the veid module
 func GetQueryVEIDCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                        types.ModuleName,
-		Short:                      "VEID identity verification query commands",
+		Short:                      "VEID query commands",
 		SuggestionsMinimumDistance: 2,
 		RunE:                       sdkclient.ValidateCmd,
 	}
 
 	cmd.AddCommand(
-		GetVEIDIdentityCmd(),
-		GetVEIDIdentityRecordCmd(),
-		GetVEIDScopeCmd(),
-		GetVEIDScopesCmd(),
-		GetVEIDIdentityScoreCmd(),
-		GetVEIDIdentityStatusCmd(),
-		GetVEIDIdentityWalletCmd(),
-		GetVEIDWalletScopesCmd(),
-		GetVEIDConsentSettingsCmd(),
-		GetVEIDParamsCmd(),
+		GetQueryVEIDIdentityCmd(),
+		GetQueryVEIDScoreCmd(),
+		GetQueryVEIDScopesCmd(),
+		GetQueryVEIDScopeCmd(),
+		GetQueryVEIDWalletCmd(),
+		GetQueryVEIDApprovedClientsCmd(),
+		GetQueryVEIDParamsCmd(),
 	)
 
 	return cmd
 }
 
-func GetVEIDIdentityCmd() *cobra.Command {
+func GetQueryVEIDIdentityCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "identity [address]",
-		Short:             "Query identity for an address",
+		Short:             "Query identity record",
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cl := MustLightClientFromContext(ctx)
 
-			req := &types.QueryIdentityRequest{
-				AccountAddress: args[0],
+			addr, err := sdk.AccAddressFromBech32(args[0])
+			if err != nil {
+				return err
 			}
 
-			res, err := cl.Query().VEID().Identity(ctx, req)
+			res, err := cl.Query().VEID().IdentityRecord(ctx, &types.QueryIdentityRecordRequest{
+				AccountAddress: addr.String(),
+			})
 			if err != nil {
 				return err
 			}
@@ -58,24 +59,28 @@ func GetVEIDIdentityCmd() *cobra.Command {
 	}
 
 	cflags.AddQueryFlagsToCmd(cmd)
+
 	return cmd
 }
 
-func GetVEIDIdentityRecordCmd() *cobra.Command {
+func GetQueryVEIDScoreCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "identity-record [address]",
-		Short:             "Query identity record for an address",
+		Use:               "score [address]",
+		Short:             "Query VEID score",
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cl := MustLightClientFromContext(ctx)
 
-			req := &types.QueryIdentityRecordRequest{
-				AccountAddress: args[0],
+			addr, err := sdk.AccAddressFromBech32(args[0])
+			if err != nil {
+				return err
 			}
 
-			res, err := cl.Query().VEID().IdentityRecord(ctx, req)
+			res, err := cl.Query().VEID().IdentityScore(ctx, &types.QueryIdentityScoreRequest{
+				AccountAddress: addr.String(),
+			})
 			if err != nil {
 				return err
 			}
@@ -85,58 +90,34 @@ func GetVEIDIdentityRecordCmd() *cobra.Command {
 	}
 
 	cflags.AddQueryFlagsToCmd(cmd)
+
 	return cmd
 }
 
-func GetVEIDScopeCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:               "scope [address] [scope-id]",
-		Short:             "Query a specific scope for an address",
-		Args:              cobra.ExactArgs(2),
-		PersistentPreRunE: QueryPersistentPreRunE,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cl := MustLightClientFromContext(ctx)
-
-			req := &types.QueryScopeRequest{
-				AccountAddress: args[0],
-				ScopeId:        args[1],
-			}
-
-			res, err := cl.Query().VEID().Scope(ctx, req)
-			if err != nil {
-				return err
-			}
-
-			return cl.ClientContext().PrintProto(res)
-		},
-	}
-
-	cflags.AddQueryFlagsToCmd(cmd)
-	return cmd
-}
-
-func GetVEIDScopesCmd() *cobra.Command {
+func GetQueryVEIDScopesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "scopes [address]",
-		Short:             "Query all scopes for an address",
+		Short:             "List all scopes for an address",
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cl := MustLightClientFromContext(ctx)
+
+			addr, err := sdk.AccAddressFromBech32(args[0])
+			if err != nil {
+				return err
+			}
 
 			pageReq, err := ReadPageRequest(cmd.Flags())
 			if err != nil {
 				return err
 			}
 
-			req := &types.QueryScopesRequest{
-				AccountAddress: args[0],
+			res, err := cl.Query().VEID().Scopes(ctx, &types.QueryScopesRequest{
+				AccountAddress: addr.String(),
 				Pagination:     pageReq,
-			}
-
-			res, err := cl.Query().VEID().Scopes(ctx, req)
+			})
 			if err != nil {
 				return err
 			}
@@ -147,24 +128,29 @@ func GetVEIDScopesCmd() *cobra.Command {
 
 	cflags.AddQueryFlagsToCmd(cmd)
 	cflags.AddPaginationFlagsToCmd(cmd, "scopes")
+
 	return cmd
 }
 
-func GetVEIDIdentityScoreCmd() *cobra.Command {
+func GetQueryVEIDScopeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "score [address]",
-		Short:             "Query identity score for an address",
-		Args:              cobra.ExactArgs(1),
+		Use:               "scope [address] [scope-id]",
+		Short:             "Get specific scope",
+		Args:              cobra.ExactArgs(2),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cl := MustLightClientFromContext(ctx)
 
-			req := &types.QueryIdentityScoreRequest{
-				AccountAddress: args[0],
+			addr, err := sdk.AccAddressFromBech32(args[0])
+			if err != nil {
+				return err
 			}
 
-			res, err := cl.Query().VEID().IdentityScore(ctx, req)
+			res, err := cl.Query().VEID().Scope(ctx, &types.QueryScopeRequest{
+				AccountAddress: addr.String(),
+				ScopeId:        args[1],
+			})
 			if err != nil {
 				return err
 			}
@@ -174,24 +160,28 @@ func GetVEIDIdentityScoreCmd() *cobra.Command {
 	}
 
 	cflags.AddQueryFlagsToCmd(cmd)
+
 	return cmd
 }
 
-func GetVEIDIdentityStatusCmd() *cobra.Command {
+func GetQueryVEIDWalletCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "status [address]",
-		Short:             "Query identity verification status for an address",
+		Use:               "wallet [address]",
+		Short:             "Get identity wallet",
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cl := MustLightClientFromContext(ctx)
 
-			req := &types.QueryIdentityStatusRequest{
-				AccountAddress: args[0],
+			addr, err := sdk.AccAddressFromBech32(args[0])
+			if err != nil {
+				return err
 			}
 
-			res, err := cl.Query().VEID().IdentityStatus(ctx, req)
+			res, err := cl.Query().VEID().IdentityWallet(ctx, &types.QueryIdentityWalletRequest{
+				AccountAddress: addr.String(),
+			})
 			if err != nil {
 				return err
 			}
@@ -201,24 +191,28 @@ func GetVEIDIdentityStatusCmd() *cobra.Command {
 	}
 
 	cflags.AddQueryFlagsToCmd(cmd)
+
 	return cmd
 }
 
-func GetVEIDIdentityWalletCmd() *cobra.Command {
+func GetQueryVEIDApprovedClientsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "wallet [wallet-address]",
-		Short:             "Query identity wallet by wallet address",
-		Args:              cobra.ExactArgs(1),
+		Use:               "approved-clients",
+		Short:             "List approved capture clients",
+		Args:              cobra.ExactArgs(0),
 		PersistentPreRunE: QueryPersistentPreRunE,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			cl := MustLightClientFromContext(ctx)
 
-			req := &types.QueryIdentityWalletRequest{
-				AccountAddress: args[0],
+			pageReq, err := ReadPageRequest(cmd.Flags())
+			if err != nil {
+				return err
 			}
 
-			res, err := cl.Query().VEID().IdentityWallet(ctx, req)
+			res, err := cl.Query().VEID().ApprovedClients(ctx, &types.QueryApprovedClientsRequest{
+				Pagination: pageReq,
+			})
 			if err != nil {
 				return err
 			}
@@ -228,68 +222,16 @@ func GetVEIDIdentityWalletCmd() *cobra.Command {
 	}
 
 	cflags.AddQueryFlagsToCmd(cmd)
+	cflags.AddPaginationFlagsToCmd(cmd, "approved-clients")
+
 	return cmd
 }
 
-func GetVEIDWalletScopesCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:               "wallet-scopes [wallet-address]",
-		Short:             "Query scopes linked to a wallet",
-		Args:              cobra.ExactArgs(1),
-		PersistentPreRunE: QueryPersistentPreRunE,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cl := MustLightClientFromContext(ctx)
-
-			req := &types.QueryWalletScopesRequest{
-				AccountAddress: args[0],
-			}
-
-			res, err := cl.Query().VEID().WalletScopes(ctx, req)
-			if err != nil {
-				return err
-			}
-
-			return cl.ClientContext().PrintProto(res)
-		},
-	}
-
-	cflags.AddQueryFlagsToCmd(cmd)
-	return cmd
-}
-
-func GetVEIDConsentSettingsCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:               "consent [address]",
-		Short:             "Query consent settings for an address",
-		Args:              cobra.ExactArgs(1),
-		PersistentPreRunE: QueryPersistentPreRunE,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cl := MustLightClientFromContext(ctx)
-
-			req := &types.QueryConsentSettingsRequest{
-				AccountAddress: args[0],
-			}
-
-			res, err := cl.Query().VEID().ConsentSettings(ctx, req)
-			if err != nil {
-				return err
-			}
-
-			return cl.ClientContext().PrintProto(res)
-		},
-	}
-
-	cflags.AddQueryFlagsToCmd(cmd)
-	return cmd
-}
-
-func GetVEIDParamsCmd() *cobra.Command {
+func GetQueryVEIDParamsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "params",
-		Short:             "Query VEID module parameters",
-		Args:              cobra.NoArgs,
+		Short:             "Get module parameters",
+		Args:              cobra.ExactArgs(0),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
@@ -305,5 +247,6 @@ func GetVEIDParamsCmd() *cobra.Command {
 	}
 
 	cflags.AddQueryFlagsToCmd(cmd)
+
 	return cmd
 }
