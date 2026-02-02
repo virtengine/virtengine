@@ -258,7 +258,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceMultipleDenoms() {
 		price     string
 		timestamp string
 	}{
-		{"ve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)},
+		{"uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)},
 		{"usdc", "usd", "1.00", time.Now().Format(time.RFC3339Nano)},
 	}
 

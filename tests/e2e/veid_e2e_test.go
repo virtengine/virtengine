@@ -858,7 +858,7 @@ func (s *VEIDE2ETestSuite) TestScopeRevocation() {
 func genesisWithVEIDApprovedClientE2E(t *testing.T, cdc codec.Codec, client VEIDTestClient) app.GenesisState {
 	t.Helper()
 
-	genesis := app.NewDefaultGenesisState(cdc)
+	genesis := app.GenesisStateWithValSet(cdc)
 
 	// Parse existing VEID genesis
 	var veidGenesis veidtypes.GenesisState

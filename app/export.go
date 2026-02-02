@@ -320,7 +320,9 @@ func Setup(opts ...SetupAppOption) *VirtEngineApp {
 		var state GenesisState
 		if cfg.genesisFn == nil {
 			// init chain must be called to stop deliverState from being nil
-			state = NewDefaultGenesisState(app.AppCodec())
+			// Use GenesisStateWithValSet to include a default validator,
+			// required by the staking module's InitGenesis.
+			state = GenesisStateWithValSet(app.AppCodec())
 		} else {
 			state = cfg.genesisFn(app.cdc)
 		}
