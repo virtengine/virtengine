@@ -12,6 +12,9 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// decisionLive is the liveness decision for a live subject
+const decisionLive = "live"
+
 // ============================================================================
 // Feature Extraction Pipeline
 // ============================================================================
@@ -291,7 +294,7 @@ func (p *FeatureExtractionPipeline) extractLivenessFeatures(
 
 	// Determine liveness decision
 	if features.LivenessScore >= 0.7 {
-		features.LivenessDecision = "live"
+		features.LivenessDecision = decisionLive
 	} else if features.LivenessScore >= 0.4 {
 		features.LivenessDecision = "uncertain"
 	} else {

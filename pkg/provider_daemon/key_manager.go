@@ -211,7 +211,7 @@ func (km *KeyManager) GenerateKey(providerAddress string) (*ManagedKey, error) {
 	}
 
 	switch km.config.DefaultAlgorithm {
-	case "ed25519":
+	case string(HSMKeyTypeEd25519):
 		return km.generateEd25519Key(providerAddress)
 	default:
 		return nil, fmt.Errorf("unsupported algorithm: %s", km.config.DefaultAlgorithm)

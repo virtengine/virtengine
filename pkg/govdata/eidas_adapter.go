@@ -257,7 +257,8 @@ const (
 	EIDASStatusResponder       = "urn:oasis:names:tc:SAML:2.0:status:Responder"
 	EIDASStatusVersionMismatch = "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch"
 	EIDASStatusAuthnFailed     = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed"
-	EIDASStatusNoPassive       = "urn:oasis:names:tc:SAML:2.0:status:NoPassive"
+	//nolint:gosec // G101: This is a SAML URN constant, not a credential
+	EIDASStatusNoPassive = "urn:oasis:names:tc:SAML:2.0:status:NoPassive"
 )
 
 // ============================================================================

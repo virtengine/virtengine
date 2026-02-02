@@ -109,21 +109,22 @@ func NewInvoiceLedgerRecord(inv *Invoice, artifactCID string, blockHeight int64,
 	contentHash := hex.EncodeToString(hash[:])
 
 	return &InvoiceLedgerRecord{
-		InvoiceID:          inv.InvoiceID,
-		InvoiceNumber:      inv.InvoiceNumber,
-		EscrowID:           inv.EscrowID,
-		OrderID:            inv.OrderID,
-		LeaseID:            inv.LeaseID,
-		Provider:           inv.Provider,
-		Customer:           inv.Customer,
-		Status:             inv.Status,
-		Currency:           inv.Currency,
-		Subtotal:           inv.Subtotal,
-		DiscountTotal:      inv.DiscountTotal,
-		TaxTotal:           inv.TaxTotal,
-		Total:              inv.Total,
-		AmountPaid:         inv.AmountPaid,
-		AmountDue:          inv.AmountDue,
+		InvoiceID:     inv.InvoiceID,
+		InvoiceNumber: inv.InvoiceNumber,
+		EscrowID:      inv.EscrowID,
+		OrderID:       inv.OrderID,
+		LeaseID:       inv.LeaseID,
+		Provider:      inv.Provider,
+		Customer:      inv.Customer,
+		Status:        inv.Status,
+		Currency:      inv.Currency,
+		Subtotal:      inv.Subtotal,
+		DiscountTotal: inv.DiscountTotal,
+		TaxTotal:      inv.TaxTotal,
+		Total:         inv.Total,
+		AmountPaid:    inv.AmountPaid,
+		AmountDue:     inv.AmountDue,
+		//nolint:gosec // G115: line items count is bounded by practical invoice limits
 		LineItemCount:      uint32(len(inv.LineItems)),
 		BillingPeriodStart: inv.BillingPeriod.StartTime,
 		BillingPeriodEnd:   inv.BillingPeriod.EndTime,
@@ -500,6 +501,7 @@ func (c *InvoiceLedgerChain) AddEntry(entry *InvoiceLedgerEntry) error {
 			entry.InvoiceID, c.InvoiceID)
 	}
 
+	//nolint:gosec // G115: entries count is bounded by practical ledger chain limits
 	expectedSeq := uint64(len(c.Entries) + 1)
 	if entry.SequenceNumber != expectedSeq {
 		return fmt.Errorf("entry sequence_number %d does not match expected %d",
@@ -563,6 +565,7 @@ func (c *InvoiceLedgerChain) GetPreviousHash() string {
 
 // NextSequenceNumber returns the next sequence number
 func (c *InvoiceLedgerChain) NextSequenceNumber() uint64 {
+	//nolint:gosec // G115: entries count is bounded by practical ledger chain limits
 	return uint64(len(c.Entries) + 1)
 }
 

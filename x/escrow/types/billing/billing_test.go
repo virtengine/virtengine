@@ -9,6 +9,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+// Test constants for repeated string literals
+const testDenom = "uvirt"
+
 // testAddr generates a valid test bech32 address from a seed number
 func testAddr(seed int) string {
 	var buffer bytes.Buffer
@@ -42,7 +45,7 @@ func TestInvoiceValidation(t *testing.T) {
 				Provider:      providerAddr,
 				Customer:      customerAddr,
 				Status:        InvoiceStatusDraft,
-				Currency:      "uvirt",
+				Currency:      testDenom,
 				BillingPeriod: BillingPeriod{
 					StartTime: now.Add(-24 * time.Hour),
 					EndTime:   now,
@@ -54,16 +57,16 @@ func TestInvoiceValidation(t *testing.T) {
 						UsageType:   UsageTypeCPU,
 						Quantity:    sdkmath.LegacyNewDec(10),
 						Unit:        "core-hour",
-						UnitPrice:   sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyNewDec(100)),
-						Amount:      sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+						UnitPrice:   sdk.NewDecCoinFromDec(testDenom, sdkmath.LegacyNewDec(100)),
+						Amount:      sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 					},
 				},
-				Subtotal:      sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+				Subtotal:      sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 				DiscountTotal: sdk.NewCoins(),
 				TaxTotal:      sdk.NewCoins(),
-				Total:         sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+				Total:         sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 				AmountPaid:    sdk.NewCoins(),
-				AmountDue:     sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+				AmountDue:     sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 				DueDate:       now.Add(7 * 24 * time.Hour),
 				IssuedAt:      now,
 				BlockHeight:   100,
@@ -78,8 +81,8 @@ func TestInvoiceValidation(t *testing.T) {
 				EscrowID: "escrow-001",
 				Provider: providerAddr,
 				Customer: customerAddr,
-				Currency: "uvirt",
-				Total:    sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+				Currency: testDenom,
+				Total:    sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 			},
 			wantErr: true,
 			errMsg:  "invoice_id is required",
@@ -91,8 +94,8 @@ func TestInvoiceValidation(t *testing.T) {
 				EscrowID:  "escrow-001",
 				Provider:  "invalid",
 				Customer:  customerAddr,
-				Currency:  "uvirt",
-				Total:     sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+				Currency:  testDenom,
+				Total:     sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 			},
 			wantErr: true,
 			errMsg:  "invalid provider address",
@@ -104,12 +107,12 @@ func TestInvoiceValidation(t *testing.T) {
 				EscrowID:  "escrow-001",
 				Provider:  providerAddr,
 				Customer:  customerAddr,
-				Currency:  "uvirt",
+				Currency:  testDenom,
 				BillingPeriod: BillingPeriod{
 					StartTime: now,
 					EndTime:   now.Add(-24 * time.Hour), // End before start
 				},
-				Total: sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+				Total: sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 			},
 			wantErr: true,
 			errMsg:  "billing period end_time must be after start_time",
@@ -125,7 +128,7 @@ func TestInvoiceValidation(t *testing.T) {
 					StartTime: now.Add(-24 * time.Hour),
 					EndTime:   now,
 				},
-				Total: sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+				Total: sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 			},
 			wantErr: true,
 			errMsg:  "currency is required",
@@ -155,13 +158,13 @@ func TestInvoiceRecordPayment(t *testing.T) {
 
 	inv := &Invoice{
 		Status:     InvoiceStatusPending,
-		Total:      sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+		Total:      sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 		AmountPaid: sdk.NewCoins(),
-		AmountDue:  sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
+		AmountDue:  sdk.NewCoins(sdk.NewInt64Coin(testDenom, 1000)),
 	}
 
 	// Partial payment
-	err := inv.RecordPayment(sdk.NewCoins(sdk.NewInt64Coin("uvirt", 500)), now)
+	err := inv.RecordPayment(sdk.NewCoins(sdk.NewInt64Coin(testDenom, 500)), now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,12 +173,12 @@ func TestInvoiceRecordPayment(t *testing.T) {
 		t.Errorf("expected status %v, got %v", InvoiceStatusPartiallyPaid, inv.Status)
 	}
 
-	if !inv.AmountPaid.Equal(sdk.NewCoins(sdk.NewInt64Coin("uvirt", 500))) {
+	if !inv.AmountPaid.Equal(sdk.NewCoins(sdk.NewInt64Coin(testDenom, 500))) {
 		t.Errorf("expected amount_paid 500, got %v", inv.AmountPaid)
 	}
 
 	// Full payment
-	err = inv.RecordPayment(sdk.NewCoins(sdk.NewInt64Coin("uvirt", 500)), now)
+	err = inv.RecordPayment(sdk.NewCoins(sdk.NewInt64Coin(testDenom, 500)), now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -219,7 +222,7 @@ func TestRoundHalfEven(t *testing.T) {
 func TestPricingTierEffectiveRate(t *testing.T) {
 	tier := PricingTier{
 		TierID:      "tier-1",
-		Rate:        sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyNewDec(100)),
+		Rate:        sdk.NewDecCoinFromDec(testDenom, sdkmath.LegacyNewDec(100)),
 		DiscountBps: 1000, // 10% discount
 	}
 
@@ -234,7 +237,7 @@ func TestPricingTierEffectiveRate(t *testing.T) {
 func TestResourcePricingCalculate(t *testing.T) {
 	rp := ResourcePricing{
 		ResourceType:       UsageTypeCPU,
-		BaseRate:           sdk.NewDecCoinFromDec("uvirt", sdkmath.LegacyNewDec(100)),
+		BaseRate:           sdk.NewDecCoinFromDec(testDenom, sdkmath.LegacyNewDec(100)),
 		Unit:               "core-hour",
 		MinQuantity:        sdkmath.LegacyOneDec(),
 		GranularitySeconds: 3600,

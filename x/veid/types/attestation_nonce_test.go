@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// testFingerprint is a test fingerprint for attestation nonce tests
+const testFingerprint = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+
 // ============================================================================
 // NonceRecord Tests
 // ============================================================================
@@ -15,7 +18,7 @@ func TestNonceRecord_Create(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(
 		nonce,
@@ -43,7 +46,7 @@ func TestNonceRecord_Validate_Valid(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 
@@ -97,7 +100,7 @@ func TestNonceRecord_Validate_Invalid(t *testing.T) {
 			nonce := make([]byte, 32)
 			_, _ = rand.Read(nonce)
 			now := time.Now().UTC()
-			fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+			fingerprint := testFingerprint
 
 			record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 			tc.modify(record)
@@ -114,7 +117,7 @@ func TestNonceRecord_MarkUsed(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 
@@ -157,7 +160,7 @@ func TestNonceRecord_MarkUsed_Expired(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 
@@ -172,7 +175,7 @@ func TestNonceRecord_MarkUsed_AlreadyExpired(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 	record.MarkExpired()
@@ -187,7 +190,7 @@ func TestNonceRecord_IsExpired(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 
@@ -206,7 +209,7 @@ func TestNonceRecord_CanBeUsed(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 
@@ -461,7 +464,7 @@ func TestNewNonceHistoryEntry(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 	_ = record.MarkUsed(now.Add(10*time.Minute), "attestation-001", 12345)
@@ -494,7 +497,7 @@ func TestNewNonceHistoryEntry_UnusedNonce(t *testing.T) {
 	nonce := make([]byte, 32)
 	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
-	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	fingerprint := testFingerprint
 
 	record := NewNonceRecord(nonce, fingerprint, AttestationTypeFacialVerification, now, 3600)
 

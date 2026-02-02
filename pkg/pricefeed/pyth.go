@@ -181,7 +181,7 @@ func (p *PythProvider) fetchPrice(ctx context.Context, baseAsset, quoteAsset str
 	confInt, _ := sdkmath.NewIntFromString(priceResp.Price.Conf)
 
 	// Calculate confidence as percentage (lower conf = higher reliability)
-	var confidence float64 = 0.95
+	confidence := 0.95
 	if !confInt.IsZero() && !priceInt.IsZero() {
 		confPct := float64(confInt.Int64()) / float64(priceInt.Int64())
 		confidence = 1 - confPct // Lower conf% = higher confidence

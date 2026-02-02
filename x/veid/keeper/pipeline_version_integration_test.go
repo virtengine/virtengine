@@ -17,6 +17,9 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// versionOne is the test version constant for pipeline version integration tests
+const versionOne = "1.0.0"
+
 // TestPipelineVersionConsensusIntegration tests the full consensus verification flow
 // This simulates:
 // 1. Proposer computes verification with a specific pipeline version
@@ -31,7 +34,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 
 	pv, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -40,7 +43,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 		t.Fatalf("failed to register pipeline: %v", err)
 	}
 
-	err = keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	err = keeper.ActivatePipelineVersion(ctx, versionOne)
 	if err != nil {
 		t.Fatalf("failed to activate pipeline: %v", err)
 	}
@@ -54,7 +57,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 		PipelineExecutionParams{
 			RequestID:           requestID,
 			ValidatorAddress:    proposerAddr,
-			PipelineVersion:     "1.0.0",
+			PipelineVersion:     versionOne,
 			ImageHash:           pv.ImageHash,
 			ModelManifestHash:   manifest.ManifestHash,
 			InputHash:           "inputhash_abc123",
@@ -75,7 +78,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 			PipelineExecutionParams{
 				RequestID:           requestID + "-validator",
 				ValidatorAddress:    validatorAddr,
-				PipelineVersion:     "1.0.0",
+				PipelineVersion:     versionOne,
 				ImageHash:           pv.ImageHash,
 				ModelManifestHash:   manifest.ManifestHash,
 				InputHash:           "inputhash_abc123",  // Same input
@@ -107,7 +110,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 			PipelineExecutionParams{
 				RequestID:           requestID + "-validator2",
 				ValidatorAddress:    validatorAddr,
-				PipelineVersion:     "1.0.0",
+				PipelineVersion:     versionOne,
 				ImageHash:           pv.ImageHash,
 				ModelManifestHash:   manifest.ManifestHash,
 				InputHash:           "inputhash_abc123",
@@ -166,7 +169,7 @@ func TestPipelineVersionConsensusIntegration(t *testing.T) {
 			PipelineExecutionParams{
 				RequestID:           requestID + "-validator4",
 				ValidatorAddress:    validatorAddr,
-				PipelineVersion:     "1.0.0",
+				PipelineVersion:     versionOne,
 				ImageHash:           "sha256:wrong00000000000000000000000000000000000000000000000000000000000", // Wrong hash!
 				ModelManifestHash:   manifest.ManifestHash,
 				InputHash:           "inputhash_abc123",
@@ -188,16 +191,16 @@ func TestMultiValidatorConsensus(t *testing.T) {
 	manifest := createIntegrationTestManifest(t)
 	pv, _ := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
 	)
-	_ = keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	_ = keeper.ActivatePipelineVersion(ctx, versionOne)
 
 	// Proposer's execution record
 	proposerRecord := types.NewPipelineExecutionRecord(
-		"1.0.0",
+		versionOne,
 		pv.ImageHash,
 		manifest.ManifestHash,
 		ctx.BlockTime(),
@@ -224,7 +227,7 @@ func TestMultiValidatorConsensus(t *testing.T) {
 
 	for _, v := range validators {
 		validatorRecord := types.NewPipelineExecutionRecord(
-			"1.0.0",
+			versionOne,
 			pv.ImageHash,
 			manifest.ManifestHash,
 			ctx.BlockTime(),
@@ -272,7 +275,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	// Register and activate v1.0.0
 	_, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -281,7 +284,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 		t.Fatalf("failed to register v1.0.0: %v", err)
 	}
 
-	err = keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	err = keeper.ActivatePipelineVersion(ctx, versionOne)
 	if err != nil {
 		t.Fatalf("failed to activate v1.0.0: %v", err)
 	}
@@ -291,7 +294,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get active version: %v", err)
 	}
-	if active.Version != "1.0.0" {
+	if active.Version != versionOne {
 		t.Errorf("expected active version 1.0.0, got %s", active.Version)
 	}
 
@@ -332,7 +335,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	}
 
 	// Verify v1.0.0 is deprecated
-	v1, found := keeper.GetPipelineVersion(ctx, "1.0.0")
+	v1, found := keeper.GetPipelineVersion(ctx, versionOne)
 	if !found {
 		t.Fatal("v1.0.0 should still exist")
 	}
@@ -343,7 +346,7 @@ func TestPipelineVersionUpgrade(t *testing.T) {
 	// Validators using old version should fail verification
 	err = keeper.VerifyPipelineVersion(
 		ctx,
-		"1.0.0", // Old version
+		versionOne, // Old version
 		"sha256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
 		manifest.ManifestHash,
 	)
@@ -382,7 +385,7 @@ func TestConformanceTestIntegration(t *testing.T) {
 	for _, tc := range tests {
 		result := &ConformanceTestResult{
 			TestID:             tc.testID,
-			PipelineVersion:    "1.0.0",
+			PipelineVersion:    versionOne,
 			TestInputHash:      "inputhash_" + tc.testID,
 			ExpectedOutputHash: "expectedhash_" + tc.testID,
 			ActualOutputHash:   "expectedhash_" + tc.testID,
@@ -466,19 +469,19 @@ func createIntegrationTestManifest(t *testing.T) types.ModelManifest {
 	models := []types.ModelInfo{
 		{
 			Name:        "deepface_facenet512",
-			Version:     "1.0.0",
+			Version:     versionOne,
 			WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			Framework:   "tensorflow",
 			Purpose:     string(types.ModelPurposeFaceRecognition),
 		},
 		{
 			Name:        "craft_text_detection",
-			Version:     "1.0.0",
+			Version:     versionOne,
 			WeightsHash: "sha256:b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
 			Framework:   "pytorch",
 			Purpose:     string(types.ModelPurposeTextDetection),
 		},
 	}
 
-	return *types.NewModelManifest("1.0.0", models, time.Now().UTC())
+	return *types.NewModelManifest(versionOne, models, time.Now().UTC())
 }

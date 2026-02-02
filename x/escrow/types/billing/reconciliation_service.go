@@ -529,7 +529,7 @@ type reconciliationOptions struct {
 	provider        string
 	customer        string
 	includeVoided   bool
-	skipValidation  bool
+	skipValidation  bool //nolint:unused // Reserved for optional validation bypass
 	maxRecords      uint32
 	notifyOnSuccess bool
 }

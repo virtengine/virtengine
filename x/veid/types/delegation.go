@@ -76,7 +76,7 @@ func (s DelegationStatus) String() string {
 	case DelegationActive:
 		return "active"
 	case DelegationExpired:
-		return "expired"
+		return string(DomainStatusExpired)
 	case DelegationRevoked:
 		return "revoked"
 	case DelegationExhausted:

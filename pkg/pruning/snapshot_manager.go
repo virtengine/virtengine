@@ -102,7 +102,7 @@ func (sm *SnapshotManager) saveSnapshotsLocked() error {
 	}
 
 	metadataFile := filepath.Join(sm.baseDir, "metadata.json")
-	return os.WriteFile(metadataFile, data, 0644)
+	return os.WriteFile(metadataFile, data, 0600)
 }
 
 // ShouldCreateSnapshot determines if a snapshot should be created at this height.

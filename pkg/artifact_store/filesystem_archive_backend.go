@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// extJSON is the file extension for JSON metadata files
+const extJSON = ".json"
+
 // FilesystemArchiveBackend implements ArchiveBackend using local filesystem
 // This is primarily for development, testing, and small deployments
 // Production deployments should use cloud archive storage (S3 Glacier, etc.)
@@ -371,7 +374,7 @@ func (b *FilesystemArchiveBackend) ListArchives(ctx context.Context, owner strin
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != ".json" {
+		if filepath.Ext(path) != extJSON {
 			return nil
 		}
 
@@ -441,7 +444,7 @@ func (b *FilesystemArchiveBackend) PurgeExpiredArchives(ctx context.Context, cur
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != ".json" {
+		if filepath.Ext(path) != extJSON {
 			return nil
 		}
 
@@ -527,7 +530,7 @@ func (b *FilesystemArchiveBackend) GetArchiveMetrics(ctx context.Context) (*Arch
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) != ".json" {
+		if filepath.Ext(path) != extJSON {
 			return nil
 		}
 

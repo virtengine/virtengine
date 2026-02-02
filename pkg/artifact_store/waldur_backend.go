@@ -14,6 +14,9 @@ import (
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
 
+// boolStrTrue is the string representation of true for metadata
+const boolStrTrue = "true"
+
 // WaldurConfig contains configuration for the Waldur backend
 type WaldurConfig struct {
 	// Endpoint is the Waldur API endpoint URL
@@ -680,7 +683,7 @@ func (w *WaldurBackend) PurgeExpired(ctx context.Context, currentBlock int64) (i
 			if expiry, ok := obj.Metadata["retention_expires_at"]; ok {
 				expiryTime, err := time.Parse(time.RFC3339, expiry)
 				if err == nil && now.After(expiryTime) {
-					if deleteOnExpiry, ok := obj.Metadata["delete_on_expiry"]; ok && deleteOnExpiry == "true" {
+					if deleteOnExpiry, ok := obj.Metadata["delete_on_expiry"]; ok && deleteOnExpiry == boolStrTrue {
 						if err := w.objectStorage.Delete(ctx, w.config.Bucket, obj.Key); err == nil {
 							deleted++
 						}
@@ -1075,7 +1078,7 @@ func bytesEqual(a, b []byte) bool {
 // boolToString converts a bool to string
 func boolToString(b bool) string {
 	if b {
-		return "true"
+		return boolStrTrue
 	}
 	return "false"
 }
@@ -1115,7 +1118,7 @@ func (w *WaldurBackend) Pin(ctx context.Context, address *ContentAddress) error 
 		if meta.Metadata == nil {
 			meta.Metadata = make(map[string]string)
 		}
-		meta.Metadata["pinned"] = "true"
+		meta.Metadata["pinned"] = boolStrTrue
 		meta.Metadata["pinned_at"] = time.Now().UTC().Format(time.RFC3339)
 
 		// Note: Waldur object storage may not support in-place metadata updates
@@ -1327,7 +1330,7 @@ func (w *WaldurBackend) GetRetentionPolicy(ctx context.Context, address *Content
 		}
 	}
 	if deleteOnExpiry, ok := meta.Metadata["delete_on_expiry"]; ok {
-		tag.DeleteOnExpiry = deleteOnExpiry == "true"
+		tag.DeleteOnExpiry = deleteOnExpiry == boolStrTrue
 	}
 
 	return tag, nil
@@ -1597,7 +1600,7 @@ func (w *WaldurBackend) RunRetentionCleanup(ctx context.Context, currentBlock in
 			expiryStr, hasExpiry := obj.Metadata["retention_expires_at"]
 			deleteOnExpiryStr, hasDelete := obj.Metadata["delete_on_expiry"]
 
-			if !hasExpiry || !hasDelete || deleteOnExpiryStr != "true" {
+			if !hasExpiry || !hasDelete || deleteOnExpiryStr != boolStrTrue {
 				stats.SkippedNotExpired++
 				continue
 			}

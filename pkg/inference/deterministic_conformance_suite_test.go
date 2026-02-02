@@ -314,7 +314,7 @@ func (s *ConformanceSuite) TestCrossRunConsistency(t *testing.T) {
 
 	for _, vec := range GoldenVectors[:2] { // Test with first 2 vectors for speed
 		t.Run(vec.ID, func(t *testing.T) {
-			var hashes []string
+			hashes := make([]string, 0, len(controllers))
 			for _, dc := range controllers {
 				hash := dc.ComputeInputHash(vec.Inputs)
 				hashes = append(hashes, hash)
@@ -884,6 +884,8 @@ func TestRuntimeConfigHash(t *testing.T) {
 // ============================================================================
 
 // computeExpectedHashes computes and logs expected hashes for documentation
+//
+//nolint:unused // Reserved for documentation and debugging
 func computeExpectedHashes(t *testing.T) {
 	t.Helper()
 

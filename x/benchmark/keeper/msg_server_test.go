@@ -26,6 +26,12 @@ import (
 	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
+// Test address constants for benchmark MsgServer tests
+const (
+	testMsgServerProviderAddr  = "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	testMsgServerModeratorAddr = "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+)
+
 // setupMsgServerTest creates a test MsgServer with mocked dependencies
 func setupMsgServerTest(t *testing.T) (types.MsgServer, Keeper, sdk.Context, *mockProviderKeeper, *mockRolesKeeper) {
 	t.Helper()
@@ -160,8 +166,8 @@ func convertReportsToResults(reports []types.BenchmarkReport) []benchmarkv1.Benc
 func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 	msgServer, k, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
-	moderatorAddr := "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+	providerAddr := testMsgServerProviderAddr
+	moderatorAddr := testMsgServerModeratorAddr
 	pub, priv := generateMsgServerTestKeyPair(t)
 
 	// Add provider to mock

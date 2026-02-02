@@ -380,7 +380,7 @@ func TestHPCConfig_Validate(t *testing.T) {
 			config: func() HPCConfig {
 				c := DefaultHPCConfig()
 				c.Enabled = true
-				c.ClusterID = "test-cluster"
+				c.ClusterID = testClusterID
 				return c
 			}(),
 			wantErr: false,

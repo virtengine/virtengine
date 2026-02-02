@@ -400,7 +400,7 @@ func SummarizeBatch(results []*IntegrityCheckResult) *BatchVerificationSummary {
 // VerifyingReader wraps a reader and verifies data as it's read.
 type VerifyingReader struct {
 	reader       io.Reader
-	hasher       io.Writer
+	hasher       io.Writer //nolint:unused // Reserved for future streaming hash verification
 	expectedHash []byte
 	bytesRead    int64
 	verified     bool

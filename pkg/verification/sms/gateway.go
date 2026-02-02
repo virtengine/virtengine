@@ -71,6 +71,16 @@ const (
 	twilioLookupBaseURL = "https://lookups.twilio.com/v2"
 )
 
+// String constants for carrier and delivery status matching
+const (
+	carrierMobile   = "mobile"
+	carrierLandline = "landline"
+	carrierVoIP     = "voip"
+	statusDelivered = "delivered"
+	statusFailed    = "failed"
+	providerVonage  = "vonage"
+)
+
 // TwilioGateway implements SMSGateway using Twilio API
 type TwilioGateway struct {
 	config            ProviderConfig
@@ -384,12 +394,12 @@ func (g *TwilioGateway) LookupCarrier(ctx context.Context, phoneNumber string) (
 		result.NetworkCode = lookupResp.LineTypeIntel.MobileNetworkCode
 
 		switch strings.ToLower(lookupResp.LineTypeIntel.Type) {
-		case "mobile":
+		case carrierMobile:
 			result.CarrierType = CarrierTypeMobile
 			result.IsMobile = true
-		case "landline":
+		case carrierLandline:
 			result.CarrierType = CarrierTypeLandline
-		case "voip":
+		case carrierVoIP:
 			result.CarrierType = CarrierTypeVoIP
 			result.IsVoIP = true
 		case "toll_free", "toll-free":
@@ -452,11 +462,11 @@ func (g *TwilioGateway) GetDeliveryStatus(ctx context.Context, messageID string)
 	}
 
 	switch strings.ToLower(msgResp.Status) {
-	case "delivered":
+	case statusDelivered:
 		result.Status = DeliveryDelivered
 	case "sent", "queued", "accepted":
 		result.Status = DeliverySent
-	case "failed":
+	case statusFailed:
 		result.Status = DeliveryFailed
 	case "undelivered":
 		result.Status = DeliveryUndelivered
@@ -625,12 +635,12 @@ func validateVonageConfig(config ProviderConfig) error {
 
 // Name returns the provider name
 func (g *VonageGateway) Name() string {
-	return "vonage"
+	return providerVonage
 }
 
 // GetProviderType returns the provider type
 func (g *VonageGateway) GetProviderType() string {
-	return "vonage"
+	return providerVonage
 }
 
 // IsConfigured returns true if properly configured

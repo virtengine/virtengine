@@ -9,7 +9,7 @@ func TestCIDValidator(t *testing.T) {
 		validator := NewCIDValidator()
 
 		// Stub CID format: Qm + 32 hex chars
-		stubCID := "Qm0123456789abcdef0123456789abcdef"
+		stubCID := testStubCID
 
 		err := validator.ValidateCID(stubCID)
 		if err == nil {
@@ -21,7 +21,7 @@ func TestCIDValidator(t *testing.T) {
 		validator := NewTestCIDValidator()
 
 		// Stub CID format: Qm + 32 hex chars
-		stubCID := "Qm0123456789abcdef0123456789abcdef"
+		stubCID := testStubCID
 
 		err := validator.ValidateCID(stubCID)
 		if err != nil {

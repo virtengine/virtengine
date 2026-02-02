@@ -23,6 +23,12 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// Test address constants for msg_server tests
+const (
+	testMsgDelegatorAddr = "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	testMsgValidatorAddr = "cosmos1sn6yerd80wqhwlm8ykw337vj6hurs688ucg9tn"
+)
+
 // MsgServerTestSuite is the test suite for the delegation MsgServer
 type MsgServerTestSuite struct {
 	suite.Suite
@@ -79,8 +85,8 @@ func (s *MsgServerTestSuite) TestNewMsgServerImpl() {
 
 // TestDelegate tests the Delegate message handler
 func (s *MsgServerTestSuite) TestDelegate() {
-	delegatorAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
-	validatorAddr := "cosmos1sn6yerd80wqhwlm8ykw337vj6hurs688ucg9tn"
+	delegatorAddr := testMsgDelegatorAddr
+	validatorAddr := testMsgValidatorAddr
 
 	// Create validator shares first
 	valShares := types.NewValidatorShares(validatorAddr, s.ctx.BlockTime())

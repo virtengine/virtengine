@@ -864,11 +864,11 @@ func (s *SGXEnclaveServiceImpl) scoreWithPlaintextGuard(request *ScoringRequest,
 	var status string
 	switch {
 	case score >= 80:
-		status = "verified"
+		status = statusVerified
 	case score >= 50:
-		status = "needs_review"
+		status = statusNeedsReview
 	default:
-		status = "rejected"
+		status = statusRejected
 	}
 
 	// Generate evidence hashes (safe to export - just hashes)
@@ -1014,11 +1014,11 @@ func (s *SGXEnclaveServiceImpl) simulateEnclaveScoring(request *ScoringRequest) 
 	var status string
 	switch {
 	case score >= 80:
-		status = "verified"
+		status = statusVerified
 	case score >= 50:
-		status = "needs_review"
+		status = statusNeedsReview
 	default:
-		status = "rejected"
+		status = statusRejected
 	}
 
 	// Generate evidence hashes

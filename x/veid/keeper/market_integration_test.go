@@ -20,6 +20,9 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// testAuthority is the test authority constant for market integration tests
+const testAuthority = "authority"
+
 // MarketIntegrationTestSuite is the test suite for market integration
 type MarketIntegrationTestSuite struct {
 	suite.Suite
@@ -58,7 +61,7 @@ func (s *MarketIntegrationTestSuite) SetupTest() {
 	}, false, log.NewNopLogger())
 
 	// Create keeper
-	s.keeper = NewKeeper(cdc, storeKey, "authority")
+	s.keeper = NewKeeper(cdc, storeKey, testAuthority)
 
 	// Generate test addresses
 	s.tenantAddress = sdk.AccAddress([]byte("tenant_address______"))
@@ -139,7 +142,7 @@ func (s *MarketIntegrationTestSuite) TestSetMarketRequirements() {
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeCompute, s.ctx.BlockTime())
 	requirements.MinTrustScore = sdkmath.LegacyNewDec(60)
 	requirements.RequiredScopes = []types.ScopeType{types.ScopeTypeEmailProof}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -162,7 +165,7 @@ func (s *MarketIntegrationTestSuite) TestSetMarketRequirements_WithProviderRequi
 		RequireDomainVerification: true,
 		RequireActiveStake:        true,
 	}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -176,7 +179,7 @@ func (s *MarketIntegrationTestSuite) TestSetMarketRequirements_WithProviderRequi
 
 func (s *MarketIntegrationTestSuite) TestSetMarketRequirements_InvalidMarketType() {
 	requirements := types.NewMarketVEIDRequirements("invalid_type", s.ctx.BlockTime())
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().Error(err)
@@ -186,7 +189,7 @@ func (s *MarketIntegrationTestSuite) TestSetMarketRequirements_InvalidMarketType
 func (s *MarketIntegrationTestSuite) TestSetMarketRequirements_InvalidScore() {
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeCompute, s.ctx.BlockTime())
 	requirements.MinTrustScore = sdkmath.LegacyNewDec(150) // > 100
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().Error(err)
@@ -195,7 +198,7 @@ func (s *MarketIntegrationTestSuite) TestSetMarketRequirements_InvalidScore() {
 
 func (s *MarketIntegrationTestSuite) TestDeleteMarketRequirements() {
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeStorage, s.ctx.BlockTime())
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -210,7 +213,7 @@ func (s *MarketIntegrationTestSuite) TestWithMarketRequirements() {
 	// Set up multiple requirements
 	for _, mt := range []types.MarketType{types.MarketTypeCompute, types.MarketTypeStorage, types.MarketTypeGPU} {
 		req := types.NewMarketVEIDRequirements(mt, s.ctx.BlockTime())
-		req.Authority = "authority"
+		req.Authority = testAuthority
 		err := s.keeper.SetMarketRequirements(s.ctx, req)
 		s.Require().NoError(err)
 	}
@@ -245,7 +248,7 @@ func (s *MarketIntegrationTestSuite) TestValidateParticipant_InsufficientScore()
 	// Set requirements with high score threshold
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeTEE, s.ctx.BlockTime())
 	requirements.MinTrustScore = sdkmath.LegacyNewDec(95) // Higher than tenant's 75
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -260,7 +263,7 @@ func (s *MarketIntegrationTestSuite) TestValidateParticipant_MissingScopes() {
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeCompute, s.ctx.BlockTime())
 	requirements.MinTrustScore = sdkmath.LegacyNewDec(50)
 	requirements.RequiredScopes = []types.ScopeType{types.ScopeTypeFaceVideo} // Tenant doesn't have this
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -283,7 +286,7 @@ func (s *MarketIntegrationTestSuite) TestValidateProvider_RequiresDomainVerifica
 		MinTrustScore:             sdkmath.LegacyNewDec(85),
 		RequireDomainVerification: true,
 	}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -328,7 +331,7 @@ func (s *MarketIntegrationTestSuite) TestGetParticipantStatus_WithRequirements()
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeCompute, s.ctx.BlockTime())
 	requirements.MinTrustScore = sdkmath.LegacyNewDec(60)
 	requirements.RequiredScopes = []types.ScopeType{types.ScopeTypeEmailProof}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -343,7 +346,7 @@ func (s *MarketIntegrationTestSuite) TestGetParticipantStatus_MissingScopes() {
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeCompute, s.ctx.BlockTime())
 	requirements.MinTrustScore = sdkmath.LegacyNewDec(50)
 	requirements.RequiredScopes = []types.ScopeType{types.ScopeTypeFaceVideo, types.ScopeTypeBiometric}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -396,7 +399,7 @@ func (s *MarketIntegrationTestSuite) TestCheckBidEligibility_ProviderRequirement
 		MinTrustScore:             sdkmath.LegacyNewDec(88),
 		RequireDomainVerification: true,
 	}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -413,7 +416,7 @@ func (s *MarketIntegrationTestSuite) TestCheckBidEligibility_InsufficientProvide
 	requirements.ProviderRequirements = &types.ProviderVEIDRequirements{
 		MinTrustScore: sdkmath.LegacyNewDec(95), // Higher than provider's 90
 	}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -448,7 +451,7 @@ func (s *MarketIntegrationTestSuite) TestCheckLeaseEligibility_ProviderIneligibl
 	requirements.ProviderRequirements = &types.ProviderVEIDRequirements{
 		MinTrustScore: sdkmath.LegacyNewDec(99), // Provider has 90
 	}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -485,7 +488,7 @@ func (s *MarketIntegrationTestSuite) TestBeforeBidCreate_Failure() {
 	requirements.ProviderRequirements = &types.ProviderVEIDRequirements{
 		MinTrustScore: sdkmath.LegacyNewDec(99),
 	}
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -519,7 +522,7 @@ func (s *MarketIntegrationTestSuite) TestGetRequiredVEIDLevel_Default() {
 func (s *MarketIntegrationTestSuite) TestGetRequiredVEIDLevel_Configured() {
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeCompute, s.ctx.BlockTime())
 	requirements.MinTrustScore = sdkmath.LegacyNewDec(85) // Premium level
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err := s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -557,7 +560,7 @@ func (s *MarketIntegrationTestSuite) TestCheckDelegationForMarket_DelegationNotA
 	// Set requirements that don't allow delegation
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeTEE, s.ctx.BlockTime())
 	requirements.AllowDelegation = false
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err = s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)
@@ -585,7 +588,7 @@ func (s *MarketIntegrationTestSuite) TestCheckDelegationForMarket_DelegationTooO
 	// Set requirements with short max delegation age
 	requirements := types.NewMarketVEIDRequirements(types.MarketTypeCompute, s.ctx.BlockTime())
 	requirements.MaxDelegationAge = 1 * time.Second // Very short
-	requirements.Authority = "authority"
+	requirements.Authority = testAuthority
 
 	err = s.keeper.SetMarketRequirements(s.ctx, requirements)
 	s.Require().NoError(err)

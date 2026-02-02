@@ -17,12 +17,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 const (
+	// statusVerified is the verified status
+	statusVerified = "verified"
 	// statusNeedsReview is the needs_review verification status
 	statusNeedsReview = "needs_review"
 	// statusRejected is the rejected verification status

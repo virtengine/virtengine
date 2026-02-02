@@ -145,7 +145,7 @@ func TestDetectLeaks(t *testing.T) {
 	profiler.TakeSnapshot()
 
 	// Allocate some memory
-	var leaky [][]byte
+	leaky := make([][]byte, 0, 100)
 	for i := 0; i < 100; i++ {
 		leaky = append(leaky, make([]byte, 100*1024)) // 100KB each
 		time.Sleep(10 * time.Millisecond)
@@ -158,7 +158,6 @@ func TestDetectLeaks(t *testing.T) {
 	require.Greater(t, leak.Growth, uint64(0))
 
 	// Clear reference
-	leaky = nil
 	_ = leaky
 	runtime.GC()
 }

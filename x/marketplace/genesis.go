@@ -62,7 +62,10 @@ func InitGenesis(ctx sdk.Context, k marketplacekeeper.IKeeper, gs *marketplacety
 	}
 
 	store := ctx.KVStore(k.StoreKey())
-	bz, _ := json.Marshal(gs.EventSequence)
+	bz, err := json.Marshal(gs.EventSequence)
+	if err != nil {
+		panic(err)
+	}
 	store.Set(marketplacetypes.EventSequenceKey(), bz)
 }
 

@@ -10,6 +10,7 @@ import (
 )
 
 const severityHigh = "high"
+const severityCritical = "critical"
 
 // EconomicAuditor performs comprehensive economic security audits.
 type EconomicAuditor struct {
@@ -184,7 +185,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.StakingAnalysis.CurrentRatioBPS < 5000 {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "critical",
+			Severity:    severityCritical,
 			Category:    "staking",
 			Title:       "Low Staking Ratio",
 			Description: "Staking ratio below 50% significantly increases attack vulnerability.",
@@ -195,7 +196,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 		vulnID++
 	}
 
-	if audit.StakingAnalysis.ConcentrationRisk == "high" {
+	if audit.StakingAnalysis.ConcentrationRisk == severityHigh {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
 			Severity:    severityHigh,
@@ -228,7 +229,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.DistributionMetrics.NakamotoCoefficient < 10 {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "critical",
+			Severity:    severityCritical,
 			Category:    "distribution",
 			Title:       "Low Nakamoto Coefficient",
 			Description: "Fewer than 10 entities could control the network.",
@@ -255,10 +256,10 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 
 	// Attack vulnerabilities
 	for _, attack := range audit.AttackAnalyses {
-		if attack.RiskLevel == "critical" {
+		if attack.RiskLevel == severityCritical {
 			vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 				ID:          formatVulnID(vulnID),
-				Severity:    "critical",
+				Severity:    severityCritical,
 				Category:    "attack",
 				Title:       attack.AttackType + " Vulnerability",
 				Description: "Attack cost: $" + formatFloat(attack.CostEstimateUSD),
@@ -370,9 +371,9 @@ func (a *EconomicAuditor) calculateOverallScore(audit economics.EconomicSecurity
 	// Attack vulnerability score (max -20)
 	for _, attack := range audit.AttackAnalyses {
 		switch attack.RiskLevel {
-		case "critical":
+		case severityCritical:
 			score -= 10
-		case "high":
+		case severityHigh:
 			score -= 5
 		case "medium":
 			score -= 2
@@ -480,9 +481,10 @@ func (a *EconomicAuditor) generateSummary(audit economics.EconomicSecurityAudit)
 	criticalVulns := 0
 	highVulns := 0
 	for _, v := range audit.Vulnerabilities {
-		if v.Severity == "critical" {
+		switch v.Severity {
+		case "critical":
 			criticalVulns++
-		} else if v.Severity == severityHigh {
+		case severityHigh:
 			highVulns++
 		}
 	}

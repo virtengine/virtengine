@@ -22,9 +22,16 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// Test address constants for rewards tests
+const (
+	testRewardValidatorAddr = "cosmos1validator123456789abcdef"
+	testRewardDelegator1    = "cosmos1delegator1111111111111111"
+	testRewardDelegator2    = "cosmos1delegator2222222222222222"
+	testRewardDelegatorAddr = "cosmos1delegator123456789abcdef"
+)
+
 // Valid bech32 test addresses (must be 20 bytes for proper encoding)
 var (
-	testValidatorAddr  = sdk.AccAddress([]byte("validator_address___")).String()
 	testDelegator1Addr = sdk.AccAddress([]byte("delegator1_address__")).String()
 	testValidator1Addr = sdk.AccAddress([]byte("validator1_address__")).String()
 	testValidator2Addr = sdk.AccAddress([]byte("validator2_address__")).String()
@@ -76,9 +83,9 @@ func TestRewardsTestSuite(t *testing.T) {
 
 // TestDistributeValidatorRewardsToDelegators tests reward distribution
 func (s *RewardsTestSuite) TestDistributeValidatorRewardsToDelegators() {
-	validatorAddr := "cosmos1validator123456789abcdef"
-	delegator1 := "cosmos1delegator1111111111111111"
-	delegator2 := "cosmos1delegator2222222222222222"
+	validatorAddr := testRewardValidatorAddr
+	delegator1 := testRewardDelegator1
+	delegator2 := testRewardDelegator2
 	epoch := uint64(10)
 	validatorReward := "10000000" // 10 tokens in reward
 

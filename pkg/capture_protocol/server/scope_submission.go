@@ -244,7 +244,7 @@ func (b *ScopeSubmissionBuilder) BuildFromCaptureFlow(
 	deviceAttestation *mobile.DeviceAttestationResult,
 	recipientValidatorKeys []string,
 ) ([]*ScopeSubmissionRequest, error) {
-	requests := make([]*ScopeSubmissionRequest, 0)
+	requests := make([]*ScopeSubmissionRequest, 0, len(encryptedPayloads))
 
 	for i, payload := range encryptedPayloads {
 		// Determine scope type from capture type

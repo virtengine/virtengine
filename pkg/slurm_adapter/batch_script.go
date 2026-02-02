@@ -457,44 +457,44 @@ func (b *BatchScriptBuilder) writeSBATCHDirectives(sb *strings.Builder) {
 
 	// Job identification
 	if b.jobName != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --job-name=%s\n", b.jobName))
+		fmt.Fprintf(sb, "#SBATCH --job-name=%s\n", b.jobName)
 	}
 
 	// Resource allocation
 	if b.partition != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --partition=%s\n", b.partition))
+		fmt.Fprintf(sb, "#SBATCH --partition=%s\n", b.partition)
 	}
 
 	if b.account != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --account=%s\n", b.account))
+		fmt.Fprintf(sb, "#SBATCH --account=%s\n", b.account)
 	}
 
 	if b.qos != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --qos=%s\n", b.qos))
+		fmt.Fprintf(sb, "#SBATCH --qos=%s\n", b.qos)
 	}
 
 	if b.reservation != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --reservation=%s\n", b.reservation))
+		fmt.Fprintf(sb, "#SBATCH --reservation=%s\n", b.reservation)
 	}
 
 	// Node/CPU allocation
 	if b.nodes > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --nodes=%d\n", b.nodes))
+		fmt.Fprintf(sb, "#SBATCH --nodes=%d\n", b.nodes)
 	}
 
 	if b.ntasks > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --ntasks=%d\n", b.ntasks))
+		fmt.Fprintf(sb, "#SBATCH --ntasks=%d\n", b.ntasks)
 	}
 
 	if b.cpusPerTask > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --cpus-per-task=%d\n", b.cpusPerTask))
+		fmt.Fprintf(sb, "#SBATCH --cpus-per-task=%d\n", b.cpusPerTask)
 	}
 
 	// Memory allocation
 	if b.memoryMB > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --mem=%dM\n", b.memoryMB))
+		fmt.Fprintf(sb, "#SBATCH --mem=%dM\n", b.memoryMB)
 	} else if b.memoryPerCPU > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --mem-per-cpu=%dM\n", b.memoryPerCPU))
+		fmt.Fprintf(sb, "#SBATCH --mem-per-cpu=%dM\n", b.memoryPerCPU)
 	}
 
 	// Time limit

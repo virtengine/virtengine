@@ -327,7 +327,7 @@ func (a *AzureClient) WaitForAzureVMState(ctx context.Context, vmUUID string, de
 			}
 
 			// Check for error states
-			if vm.State == "Erred" {
+			if vm.State == string(ResourceStateErred) {
 				return vm, fmt.Errorf("VM entered error state: %s", vm.ErrorMessage)
 			}
 		}

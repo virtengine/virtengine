@@ -236,7 +236,7 @@ type BenchmarkResult struct {
 // Benchmark runs a pruning benchmark.
 type Benchmark struct {
 	config Config
-	logger interface{ Info(string, ...interface{}) }
+	logger interface{ Info(string, ...interface{}) } //nolint:unused // Reserved for future benchmark logging
 }
 
 // NewBenchmark creates a new benchmark runner.
@@ -266,6 +266,7 @@ func (b *Benchmark) RunSimulation(totalBlocks, avgBlockSize int64) BenchmarkResu
 	} else if b.config.Strategy == StrategyTiered && b.config.Tiered.Enabled {
 		result = b.simulateTieredPruning(totalBlocks, avgBlockSize)
 	} else {
+		//nolint:gosec // G115: keepRecent is a configuration value bounded by practical limits
 		retained := int64(keepRecent)
 		if retained > totalBlocks {
 			retained = totalBlocks
@@ -301,6 +302,7 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 	}
 
 	// Tier 1: Full retention
+	//nolint:gosec // G115: Tier1Blocks is a configuration value bounded by practical limits
 	tier1 := int64(b.config.Tiered.Tier1Blocks)
 	if tier1 > totalBlocks {
 		tier1 = totalBlocks
@@ -313,6 +315,7 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 	}
 
 	// Tier 2: Sample every N blocks
+	//nolint:gosec // G115: Tier2Blocks is a configuration value bounded by practical limits
 	tier2 := int64(b.config.Tiered.Tier2Blocks) - tier1
 	if tier2 > remaining {
 		tier2 = remaining

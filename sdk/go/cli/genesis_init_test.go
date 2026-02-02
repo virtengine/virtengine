@@ -37,6 +37,9 @@ import (
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
 
+// osWindows is the GOOS value for Windows
+const osWindows = "windows"
+
 var testMbm = module.NewBasicManager(
 	staking.AppModuleBasic{},
 	genutil.AppModuleBasic{},
@@ -159,10 +162,10 @@ func TestEmptyState(t *testing.T) {
 	// TempDir cleanup. This is a known issue with LevelDB on Windows
 	// where background goroutines hold file handles longer than expected.
 	// See: https://github.com/syndtr/goleveldb/issues/109
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
 	}
-	
+
 	home := t.TempDir()
 	logger := log.NewNopLogger()
 	cfg, err := genutiltest.CreateDefaultCometConfig(home)
@@ -204,7 +207,7 @@ func TestEmptyState(t *testing.T) {
 	require.NoError(t, w.Close())
 	os.Stdout = old
 	out := <-outC
-	
+
 	// Give time for database to close completely on Windows
 	// to avoid file locking issues in TempDir cleanup
 	time.Sleep(100 * time.Millisecond)
@@ -218,10 +221,10 @@ func TestEmptyState(t *testing.T) {
 
 func TestStartStandAlone(t *testing.T) {
 	// Skip on Windows due to LevelDB file locking issues in TempDir cleanup
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
 	}
-	
+
 	home := t.TempDir()
 	logger := log.NewNopLogger()
 	interfaceRegistry := types.NewInterfaceRegistry()
@@ -269,10 +272,10 @@ func TestInitNodeValidatorFiles(t *testing.T) {
 
 func TestInitConfig(t *testing.T) {
 	// Skip on Windows due to LevelDB file locking issues in TempDir cleanup
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
 	}
-	
+
 	home := t.TempDir()
 	logger := log.NewNopLogger()
 	cfg, err := genutiltest.CreateDefaultCometConfig(home)

@@ -29,6 +29,12 @@ import (
 // platformNitro is the nitro platform string used in configuration
 const platformNitro = "nitro"
 
+// platformSEVSNP is the sev-snp platform string used in configuration
+const platformSEVSNP = "sev-snp"
+
+// platformUnknown is the unknown platform string
+const platformUnknown = "unknown"
+
 // =============================================================================
 // Production Mode Constants
 // =============================================================================
@@ -55,7 +61,7 @@ func (m TEEMode) String() string {
 	case TEEModeTesting:
 		return "testing"
 	default:
-		return "unknown"
+		return platformUnknown
 	}
 }
 
@@ -398,27 +404,27 @@ func (c *ProductionConfig) Validate() error {
 	// Validate platform if specified
 	if c.ForcePlatform != "" {
 		switch c.ForcePlatform {
-		case "sgx", "sev-snp", platformNitro, "simulated":
+		case string(PlatformSGX), platformSEVSNP, platformNitro, string(PlatformSimulated):
 			// Valid
 		default:
 			errs = append(errs, fmt.Sprintf("invalid ForcePlatform: %s", c.ForcePlatform))
 		}
 
 		// Can't force simulated in production
-		if c.Mode == TEEModeProduction && c.ForcePlatform == "simulated" {
+		if c.Mode == TEEModeProduction && c.ForcePlatform == string(PlatformSimulated) {
 			errs = append(errs, "cannot force simulated platform in production mode")
 		}
 	}
 
 	// Validate SGX config
-	if c.ForcePlatform == "sgx" || c.ForcePlatform == "" {
+	if c.ForcePlatform == string(PlatformSGX) || c.ForcePlatform == "" {
 		if c.SGX.EnclavePath == "" {
 			errs = append(errs, "SGX.EnclavePath is required")
 		}
 	}
 
 	// Validate SEV-SNP config
-	if c.ForcePlatform == "sev-snp" || c.ForcePlatform == "" {
+	if c.ForcePlatform == platformSEVSNP || c.ForcePlatform == "" {
 		if c.SEVSNP.KDSBaseURL == "" {
 			errs = append(errs, "SEVSNP.KDSBaseURL is required")
 		}
@@ -698,7 +704,7 @@ func (p *ProductionEnclaveService) GetStatus() ProductionStatus {
 		if pa, ok := p.service.(platformAware); ok {
 			status.Platform = string(pa.GetPlatformType())
 		} else {
-			status.Platform = "unknown"
+			status.Platform = platformUnknown
 		}
 
 		// Check if hardware is enabled

@@ -14,9 +14,9 @@ func TestIntegrityChecker(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 

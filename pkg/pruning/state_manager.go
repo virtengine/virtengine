@@ -354,6 +354,8 @@ type StorageSavingsEstimate struct {
 }
 
 // notifyHooks notifies all registered hooks of a pruning event.
+//
+//nolint:unused // Reserved for hook-based extensibility
 func (sm *StateManager) notifyHooks(event string, ctx context.Context, fromHeight, toHeight int64, prunedCount int64, duration time.Duration, err error) {
 	sm.mu.RLock()
 	hooks := sm.hooks

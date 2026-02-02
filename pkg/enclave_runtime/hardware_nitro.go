@@ -848,6 +848,7 @@ func (b *NitroEnclaveImageBuilder) buildHardware(ctx context.Context, config Bui
 		args = append(args, "--signing-certificate", cleanSigningCert)
 	}
 
+	//nolint:gosec // G204: All arguments are validated via filepath.Clean and path validation above
 	cmd := exec.CommandContext(ctx, b.detector.GetCLIPath(), args...)
 	output, err := cmd.Output()
 	if err != nil {

@@ -245,9 +245,8 @@ func (a *RealOsmosisAdapter) Connect(ctx context.Context) error {
 
 	// Create gRPC connection
 	// Note: In production, use proper TLS credentials
-	conn, err := grpc.DialContext(ctx, endpoint,
+	conn, err := grpc.NewClient(endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Osmosis gRPC: %w", err)
@@ -479,9 +478,10 @@ func (a *RealOsmosisAdapter) GetPrice(ctx context.Context, baseSymbol, quoteSymb
 func (a *RealOsmosisAdapter) getPoolTokenPair(pool LiquidityPool, baseSymbol, quoteSymbol string) (Token, Token) {
 	var baseToken, quoteToken Token
 	for _, token := range pool.Tokens {
-		if token.Symbol == baseSymbol {
+		switch token.Symbol {
+		case baseSymbol:
 			baseToken = token
-		} else if token.Symbol == quoteSymbol {
+		case quoteSymbol:
 			quoteToken = token
 		}
 	}

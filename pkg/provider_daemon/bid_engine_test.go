@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testProvider1 = "provider1"
+
 // MockChainClient is a mock implementation of ChainClient for testing
 type MockChainClient struct {
 	config      *ProviderConfig
@@ -130,10 +132,10 @@ func TestCapacityConfigAvailable(t *testing.T) {
 
 func TestBidEngineNewBidEngine(t *testing.T) {
 	config := DefaultBidEngineConfig()
-	config.ProviderAddress = "provider1"
+	config.ProviderAddress = testProvider1
 
 	km := createUnlockedKeyManager(t)
-	_, err := km.GenerateKey("provider1")
+	_, err := km.GenerateKey(testProvider1)
 	require.NoError(t, err)
 
 	mockClient := NewMockChainClient()
@@ -145,17 +147,17 @@ func TestBidEngineNewBidEngine(t *testing.T) {
 
 func TestBidEngineStartStop(t *testing.T) {
 	config := DefaultBidEngineConfig()
-	config.ProviderAddress = "provider1"
+	config.ProviderAddress = testProvider1
 	config.ConfigPollInterval = time.Millisecond * 100
 	config.OrderPollInterval = time.Millisecond * 100
 
 	km := createUnlockedKeyManager(t)
-	_, err := km.GenerateKey("provider1")
+	_, err := km.GenerateKey(testProvider1)
 	require.NoError(t, err)
 
 	mockClient := NewMockChainClient()
 	mockClient.SetConfig(&ProviderConfig{
-		ProviderAddress:    "provider1",
+		ProviderAddress:    testProvider1,
 		SupportedOfferings: []string{"compute"},
 		Regions:            []string{"us-east"},
 		Active:             true,
@@ -285,15 +287,15 @@ func TestBidEngineMatchOrder(t *testing.T) {
 
 func TestBidEngineProcessBid(t *testing.T) {
 	config := DefaultBidEngineConfig()
-	config.ProviderAddress = "provider1"
+	config.ProviderAddress = testProvider1
 
 	km := createUnlockedKeyManager(t)
-	_, err := km.GenerateKey("provider1")
+	_, err := km.GenerateKey(testProvider1)
 	require.NoError(t, err)
 
 	mockClient := NewMockChainClient()
 	mockClient.SetConfig(&ProviderConfig{
-		ProviderAddress:    "provider1",
+		ProviderAddress:    testProvider1,
 		SupportedOfferings: []string{"compute"},
 		Active:             true,
 		Pricing: PricingConfig{
@@ -452,16 +454,16 @@ func TestCalculateBidPriceMissingGPUPrice(t *testing.T) {
 
 func TestBidEngineProcessBidRateLimited(t *testing.T) {
 	config := DefaultBidEngineConfig()
-	config.ProviderAddress = "provider1"
+	config.ProviderAddress = testProvider1
 	config.MaxBidsPerMinute = 2
 
 	km := createUnlockedKeyManager(t)
-	_, err := km.GenerateKey("provider1")
+	_, err := km.GenerateKey(testProvider1)
 	require.NoError(t, err)
 
 	mockClient := NewMockChainClient()
 	mockClient.SetConfig(&ProviderConfig{
-		ProviderAddress:    "provider1",
+		ProviderAddress:    testProvider1,
 		SupportedOfferings: []string{"compute"},
 		Active:             true,
 		Pricing: PricingConfig{
@@ -513,7 +515,7 @@ func TestBidEngineGetConfig(t *testing.T) {
 
 	// Set config
 	provConfig := &ProviderConfig{
-		ProviderAddress: "provider1",
+		ProviderAddress: testProvider1,
 		Version:         1,
 	}
 	be.provConfig = provConfig

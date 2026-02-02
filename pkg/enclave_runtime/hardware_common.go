@@ -19,6 +19,12 @@ import (
 // modeAuto is the auto hardware mode string value
 const modeAuto = "auto"
 
+// modeSimulate is the simulate hardware mode string value
+const modeSimulate = "simulate"
+
+// modeRequire is the require hardware mode string value
+const modeRequire = "require"
+
 // =============================================================================
 // Hardware Mode Configuration
 // =============================================================================
@@ -43,9 +49,9 @@ func (m HardwareMode) String() string {
 	case HardwareModeAuto:
 		return modeAuto
 	case HardwareModeSimulate:
-		return "simulate"
+		return modeSimulate
 	case HardwareModeRequire:
-		return "require"
+		return modeRequire
 	default:
 		return fmt.Sprintf("unknown(%d)", m)
 	}
@@ -322,7 +328,7 @@ func (s *HardwareState) Initialize() error {
 	if caps.SGXAvailable {
 		backend := NewSGXHardwareBackend()
 		if err := backend.Initialize(); err != nil {
-			initErrors = append(initErrors, fmt.Errorf("SGX init: %w", err))
+			initErrors = append(initErrors, fmt.Errorf("sgx init: %w", err))
 		} else {
 			s.sgxBackend = backend
 		}
@@ -331,7 +337,7 @@ func (s *HardwareState) Initialize() error {
 	if caps.SEVSNPAvailable {
 		backend := NewSEVHardwareBackend()
 		if err := backend.Initialize(); err != nil {
-			initErrors = append(initErrors, fmt.Errorf("SEV init: %w", err))
+			initErrors = append(initErrors, fmt.Errorf("sev init: %w", err))
 		} else {
 			s.sevBackend = backend
 		}
@@ -340,7 +346,7 @@ func (s *HardwareState) Initialize() error {
 	if caps.NitroAvailable {
 		backend := NewNitroHardwareBackend()
 		if err := backend.Initialize(); err != nil {
-			initErrors = append(initErrors, fmt.Errorf("Nitro init: %w", err))
+			initErrors = append(initErrors, fmt.Errorf("nitro init: %w", err))
 		} else {
 			s.nitroBackend = backend
 		}
@@ -412,19 +418,19 @@ func (s *HardwareState) Shutdown() error {
 
 	if s.sgxBackend != nil {
 		if err := s.sgxBackend.Shutdown(); err != nil {
-			errs = append(errs, fmt.Errorf("SGX shutdown: %w", err))
+			errs = append(errs, fmt.Errorf("sgx shutdown: %w", err))
 		}
 	}
 
 	if s.sevBackend != nil {
 		if err := s.sevBackend.Shutdown(); err != nil {
-			errs = append(errs, fmt.Errorf("SEV shutdown: %w", err))
+			errs = append(errs, fmt.Errorf("sev shutdown: %w", err))
 		}
 	}
 
 	if s.nitroBackend != nil {
 		if err := s.nitroBackend.Shutdown(); err != nil {
-			errs = append(errs, fmt.Errorf("Nitro shutdown: %w", err))
+			errs = append(errs, fmt.Errorf("nitro shutdown: %w", err))
 		}
 	}
 

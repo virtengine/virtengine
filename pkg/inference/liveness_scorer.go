@@ -72,6 +72,13 @@ const (
 	ChallengeRaiseEyebrows ChallengeType = "raise_eyebrows"
 )
 
+// Liveness decision constants
+const (
+	DecisionLive      = "live"
+	DecisionSpoof     = "spoof"
+	DecisionUncertain = "uncertain"
+)
+
 // DefaultLivenessScorerConfig returns sensible defaults
 func DefaultLivenessScorerConfig() LivenessScorerConfig {
 	return LivenessScorerConfig{
@@ -403,12 +410,12 @@ func (ls *LivenessScorer) checkLivenessFallback(videoData []byte, challenges []C
 
 	// Determine decision
 	isLive := livenessScore >= ls.config.MinLivenessScore && allChallengesPassed
-	decision := "live"
+	decision := DecisionLive
 	if !isLive {
 		if livenessScore < 0.5 {
-			decision = "spoof"
+			decision = DecisionSpoof
 		} else {
-			decision = "uncertain"
+			decision = DecisionUncertain
 		}
 	}
 
@@ -542,7 +549,7 @@ func (ls *LivenessScorer) postProcessResult(result *LivenessResult) {
 			if cr, exists := result.ChallengeResults[reqChallenge]; exists && !cr.Passed {
 				result.ReasonCodes = appendIfNotExists(result.ReasonCodes, LivenessReasonCodeChallengeFailed)
 				result.IsLive = false
-				result.Decision = "uncertain"
+				result.Decision = DecisionUncertain
 			}
 		}
 	}
@@ -683,7 +690,7 @@ func (ls *LivenessScorer) ValidateResult(result *LivenessResult) []string {
 	}
 
 	// Check decision validity
-	validDecisions := map[string]bool{"live": true, "spoof": true, "uncertain": true}
+	validDecisions := map[string]bool{DecisionLive: true, DecisionSpoof: true, DecisionUncertain: true}
 	if !validDecisions[result.Decision] {
 		issues = append(issues, fmt.Sprintf(
 			"invalid decision: %s",
@@ -730,9 +737,9 @@ func (ls *LivenessScorer) SanitizeResult(result *LivenessResult) {
 	}
 
 	// Ensure valid decision
-	validDecisions := map[string]bool{"live": true, "spoof": true, "uncertain": true}
+	validDecisions := map[string]bool{DecisionLive: true, DecisionSpoof: true, DecisionUncertain: true}
 	if !validDecisions[result.Decision] {
-		result.Decision = "uncertain"
+		result.Decision = DecisionUncertain
 	}
 }
 

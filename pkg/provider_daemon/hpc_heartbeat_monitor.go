@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// Node status constants
+const (
+	statusHealthy = "healthy"
+	statusStale   = "stale"
+	statusOffline = "offline"
+)
+
 // HPCHeartbeatMonitorConfig contains configuration for the heartbeat monitor
 type HPCHeartbeatMonitorConfig struct {
 	// CheckInterval is how often to check for heartbeat gaps
@@ -168,7 +175,7 @@ func (m *HPCHeartbeatMonitor) RecordHeartbeat(nodeID, clusterID string, sequence
 	}
 
 	// Check if recovering from stale/offline
-	if state.Status != "healthy" {
+	if state.Status != statusHealthy {
 		state.RecoveryCount++
 		m.raiseAlert(HeartbeatAlert{
 			NodeID:    nodeID,
@@ -182,7 +189,7 @@ func (m *HPCHeartbeatMonitor) RecordHeartbeat(nodeID, clusterID string, sequence
 
 	state.LastHeartbeat = now
 	state.LastSequence = sequence
-	state.Status = "healthy"
+	state.Status = statusHealthy
 	state.MissedCount = 0
 
 	// Update history
@@ -255,12 +262,12 @@ func (m *HPCHeartbeatMonitor) checkAllNodes() {
 
 		switch {
 		case timeSinceHB > m.config.OfflineThreshold:
-			if state.Status != "offline" {
-				state.Status = "offline"
+			if state.Status != statusOffline {
+				state.Status = statusOffline
 				m.raiseAlertLocked(HeartbeatAlert{
 					NodeID:      nodeID,
 					ClusterID:   state.ClusterID,
-					AlertType:   "offline",
+					AlertType:   statusOffline,
 					Severity:    "critical",
 					Message:     "Node is offline - no heartbeat received",
 					Timestamp:   now,
@@ -272,8 +279,8 @@ func (m *HPCHeartbeatMonitor) checkAllNodes() {
 			state.MissedCount++
 
 		case timeSinceHB > m.config.StaleThreshold:
-			if state.Status == "healthy" {
-				state.Status = "stale"
+			if state.Status == statusHealthy {
+				state.Status = statusStale
 				m.raiseAlertLocked(HeartbeatAlert{
 					NodeID:      nodeID,
 					ClusterID:   state.ClusterID,
@@ -376,11 +383,11 @@ func (m *HPCHeartbeatMonitor) ClusterHealthSummary(clusterID string) map[string]
 		}
 
 		switch state.Status {
-		case "healthy":
+		case statusHealthy:
 			healthy++
-		case "stale":
+		case statusStale:
 			stale++
-		case "offline":
+		case statusOffline:
 			offline++
 		}
 		avgAnomalyScore += state.AnomalyScore

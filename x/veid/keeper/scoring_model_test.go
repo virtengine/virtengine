@@ -25,6 +25,12 @@ var (
 	testScoringModelAddress2 = sdk.AccAddress([]byte("scoring_addr2_______")).String()
 )
 
+// Test version constants for scoring model tests
+const (
+	version100 = "1.0.0"
+	version200 = "2.0.0"
+)
+
 // ============================================================================
 // Scoring Model Keeper Test Suite
 // ============================================================================
@@ -89,7 +95,7 @@ func (s *ScoringModelKeeperTestSuite) TearDownTest() {
 
 func (s *ScoringModelKeeperTestSuite) TestSetAndGetScoringModelVersion() {
 	model := types.DefaultScoringModel()
-	model.Version = "1.0.0"
+	model.Version = version100
 	model.Description = "Test model"
 
 	// Set
@@ -97,9 +103,9 @@ func (s *ScoringModelKeeperTestSuite) TestSetAndGetScoringModelVersion() {
 	s.Require().NoError(err)
 
 	// Get
-	retrieved, found := s.keeper.GetScoringModelVersion(s.ctx, "1.0.0")
+	retrieved, found := s.keeper.GetScoringModelVersion(s.ctx, version100)
 	s.Require().True(found)
-	s.Require().Equal("1.0.0", retrieved.Version)
+	s.Require().Equal(version100, retrieved.Version)
 	s.Require().Equal("Test model", retrieved.Description)
 	s.Require().Equal(model.Weights.FaceSimilarityWeight, retrieved.Weights.FaceSimilarityWeight)
 	s.Require().Equal(model.Thresholds.MinFaceSimilarity, retrieved.Thresholds.MinFaceSimilarity)
@@ -112,7 +118,7 @@ func (s *ScoringModelKeeperTestSuite) TestGetScoringModelVersion_NotFound() {
 
 func (s *ScoringModelKeeperTestSuite) TestSetScoringModelVersion_InvalidWeights() {
 	model := types.ScoringModelVersion{
-		Version: "1.0.0",
+		Version: version100,
 		Weights: types.ScoringWeights{
 			FaceSimilarityWeight: 5000, // Doesn't sum to 10000
 		},
@@ -126,7 +132,7 @@ func (s *ScoringModelKeeperTestSuite) TestSetScoringModelVersion_InvalidWeights(
 
 func (s *ScoringModelKeeperTestSuite) TestListScoringModelVersions() {
 	// Store multiple versions
-	for _, version := range []string{"1.0.0", "1.1.0", "2.0.0"} {
+	for _, version := range []string{version100, "1.1.0", version200} {
 		model := types.DefaultScoringModel()
 		model.Version = version
 		err := s.keeper.SetScoringModelVersion(s.ctx, model)
@@ -142,9 +148,9 @@ func (s *ScoringModelKeeperTestSuite) TestListScoringModelVersions() {
 	for _, v := range versions {
 		versionMap[v.Version] = true
 	}
-	s.Require().True(versionMap["1.0.0"])
+	s.Require().True(versionMap[version100])
 	s.Require().True(versionMap["1.1.0"])
-	s.Require().True(versionMap["2.0.0"])
+	s.Require().True(versionMap[version200])
 }
 
 // ============================================================================
@@ -154,18 +160,18 @@ func (s *ScoringModelKeeperTestSuite) TestListScoringModelVersions() {
 func (s *ScoringModelKeeperTestSuite) TestSetAndGetActiveScoringModel() {
 	// Store a model first
 	model := types.DefaultScoringModel()
-	model.Version = "1.0.0"
+	model.Version = version100
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
 
 	// Set as active
-	err = s.keeper.SetActiveScoringModel(s.ctx, "1.0.0")
+	err = s.keeper.SetActiveScoringModel(s.ctx, version100)
 	s.Require().NoError(err)
 
 	// Get active
 	active, err := s.keeper.GetActiveScoringModel(s.ctx)
 	s.Require().NoError(err)
-	s.Require().Equal("1.0.0", active.Version)
+	s.Require().Equal(version100, active.Version)
 }
 
 func (s *ScoringModelKeeperTestSuite) TestSetActiveScoringModel_NotFound() {
@@ -183,14 +189,14 @@ func (s *ScoringModelKeeperTestSuite) TestGetActiveScoringModel_Default() {
 func (s *ScoringModelKeeperTestSuite) TestGetActiveScoringModelVersion() {
 	// Store and activate a model
 	model := types.DefaultScoringModel()
-	model.Version = "2.0.0"
+	model.Version = version200
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
-	err = s.keeper.SetActiveScoringModel(s.ctx, "2.0.0")
+	err = s.keeper.SetActiveScoringModel(s.ctx, version200)
 	s.Require().NoError(err)
 
 	version := s.keeper.GetActiveScoringModelVersion(s.ctx)
-	s.Require().Equal("2.0.0", version)
+	s.Require().Equal(version200, version)
 }
 
 // ============================================================================
@@ -201,7 +207,7 @@ func (s *ScoringModelKeeperTestSuite) TestRecordAndGetScoringResult() {
 	summary := &types.EvidenceSummary{
 		FinalScore:   75,
 		Passed:       true,
-		ModelVersion: "1.0.0",
+		ModelVersion: version100,
 		Contributions: []types.FeatureContribution{
 			{FeatureName: types.FeatureNameFaceSimilarity, RawScore: 8500, Weight: 3000, WeightedScore: 2550},
 		},
@@ -220,7 +226,7 @@ func (s *ScoringModelKeeperTestSuite) TestRecordAndGetScoringResult() {
 	history := s.keeper.GetScoringHistory(s.ctx, testScoringModelAddress1)
 	s.Require().Len(history, 1)
 	s.Require().Equal(uint32(75), history[0].Score)
-	s.Require().Equal("1.0.0", history[0].ModelVersion)
+	s.Require().Equal(version100, history[0].ModelVersion)
 	s.Require().Contains(history[0].ReasonCodes, types.ScoringReasonSuccess)
 }
 
@@ -232,7 +238,7 @@ func (s *ScoringModelKeeperTestSuite) TestScoringHistory_MultipleEntries() {
 		summary := &types.EvidenceSummary{
 			FinalScore:   uint32(50 + i*10),
 			Passed:       true,
-			ModelVersion: "1.0.0",
+			ModelVersion: version100,
 			ReasonCodes:  []types.ScoringReasonCode{types.ScoringReasonSuccess},
 			ComputedAt:   s.ctx.BlockTime(),
 			BlockHeight:  s.ctx.BlockHeight(),
@@ -259,7 +265,7 @@ func (s *ScoringModelKeeperTestSuite) TestScoringHistory_Paginated() {
 		summary := &types.EvidenceSummary{
 			FinalScore:   uint32(50 + i*5),
 			Passed:       true,
-			ModelVersion: "1.0.0",
+			ModelVersion: version100,
 			ComputedAt:   time.Now(),
 			BlockHeight:  s.ctx.BlockHeight(),
 		}
@@ -289,8 +295,8 @@ func (s *ScoringModelKeeperTestSuite) TestRecordAndGetVersionTransition() {
 	err := s.keeper.RecordVersionTransition(
 		s.ctx,
 		testScoringModelAddress1,
-		"1.0.0",
-		"2.0.0",
+		version100,
+		version200,
 		75,
 		80,
 		"model upgrade",
@@ -299,8 +305,8 @@ func (s *ScoringModelKeeperTestSuite) TestRecordAndGetVersionTransition() {
 
 	transitions := s.keeper.GetVersionTransitions(s.ctx, testScoringModelAddress1)
 	s.Require().Len(transitions, 1)
-	s.Require().Equal("1.0.0", transitions[0].FromVersion)
-	s.Require().Equal("2.0.0", transitions[0].ToVersion)
+	s.Require().Equal(version100, transitions[0].FromVersion)
+	s.Require().Equal(version200, transitions[0].ToVersion)
 	s.Require().Equal(uint32(75), transitions[0].PreviousScore)
 	s.Require().Equal(uint32(80), transitions[0].NewScore)
 	s.Require().Equal("model upgrade", transitions[0].TransitionReason)
@@ -338,7 +344,7 @@ func (s *ScoringModelKeeperTestSuite) TestStoreAndGetEvidenceSummary() {
 	summary := &types.EvidenceSummary{
 		FinalScore:   82,
 		Passed:       true,
-		ModelVersion: "1.0.0",
+		ModelVersion: version100,
 		Contributions: []types.FeatureContribution{
 			{
 				FeatureName:     types.FeatureNameFaceSimilarity,
@@ -378,7 +384,7 @@ func (s *ScoringModelKeeperTestSuite) TestStoreAndGetEvidenceSummary() {
 	s.Require().True(found)
 	s.Require().Equal(uint32(82), retrieved.FinalScore)
 	s.Require().True(retrieved.Passed)
-	s.Require().Equal("1.0.0", retrieved.ModelVersion)
+	s.Require().Equal(version100, retrieved.ModelVersion)
 	s.Require().Len(retrieved.Contributions, 2)
 	s.Require().Equal(types.FeatureNameFaceSimilarity, retrieved.Contributions[0].FeatureName)
 }
@@ -395,10 +401,10 @@ func (s *ScoringModelKeeperTestSuite) TestGetEvidenceSummary_NotFound() {
 func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel() {
 	// Store a model
 	model := types.DefaultScoringModel()
-	model.Version = "1.0.0"
+	model.Version = version100
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
-	err = s.keeper.SetActiveScoringModel(s.ctx, "1.0.0")
+	err = s.keeper.SetActiveScoringModel(s.ctx, version100)
 	s.Require().NoError(err)
 
 	// Create inputs
@@ -429,20 +435,20 @@ func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel() {
 		AccountAddress: testScoringModelAddress1,
 	}
 
-	summary, err := s.keeper.ComputeScoreWithModel(s.ctx, inputs, "1.0.0")
+	summary, err := s.keeper.ComputeScoreWithModel(s.ctx, inputs, version100)
 	s.Require().NoError(err)
 	s.Require().NotNil(summary)
-	s.Require().Equal("1.0.0", summary.ModelVersion)
+	s.Require().Equal(version100, summary.ModelVersion)
 	s.Require().Greater(summary.FinalScore, uint32(0))
 }
 
 func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel_UseActive() {
 	// Store and activate a model
 	model := types.DefaultScoringModel()
-	model.Version = "2.0.0"
+	model.Version = version200
 	err := s.keeper.SetScoringModelVersion(s.ctx, model)
 	s.Require().NoError(err)
-	err = s.keeper.SetActiveScoringModel(s.ctx, "2.0.0")
+	err = s.keeper.SetActiveScoringModel(s.ctx, version200)
 	s.Require().NoError(err)
 
 	inputs := types.ScoringInputs{
@@ -453,7 +459,7 @@ func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel_UseActive() {
 	// Empty version string should use active model
 	summary, err := s.keeper.ComputeScoreWithModel(s.ctx, inputs, "")
 	s.Require().NoError(err)
-	s.Require().Equal("2.0.0", summary.ModelVersion)
+	s.Require().Equal(version200, summary.ModelVersion)
 }
 
 func (s *ScoringModelKeeperTestSuite) TestComputeScoreWithModel_NotFound() {
@@ -592,7 +598,7 @@ func (s *ScoringModelKeeperTestSuite) TestFullScoringFlow_VersionTransition() {
 
 	// Upgrade to v2
 	modelV2 := types.DefaultScoringModel()
-	modelV2.Version = "2.0.0"
+	modelV2.Version = version200
 	modelV2.Weights.FaceSimilarityWeight = 4000 // Increase face weight
 	modelV2.Weights.CaptureQualityWeight = 0    // Remove capture quality weight
 	// Rebalance weights to sum to 10000
@@ -602,7 +608,7 @@ func (s *ScoringModelKeeperTestSuite) TestFullScoringFlow_VersionTransition() {
 	modelV2.Weights.LivenessCheckWeight = 1000
 	err = s.keeper.SetScoringModelVersion(s.ctx, modelV2)
 	s.Require().NoError(err)
-	err = s.keeper.SetActiveScoringModel(s.ctx, "2.0.0")
+	err = s.keeper.SetActiveScoringModel(s.ctx, version200)
 	s.Require().NoError(err)
 
 	// Advance block
@@ -611,13 +617,13 @@ func (s *ScoringModelKeeperTestSuite) TestFullScoringFlow_VersionTransition() {
 	// Compute second score with new model
 	summary2, err := s.keeper.ComputeAndRecordScore(s.ctx, testScoringModelAddress1, inputs)
 	s.Require().NoError(err)
-	s.Require().Equal("2.0.0", summary2.ModelVersion)
+	s.Require().Equal(version200, summary2.ModelVersion)
 
 	// Check version transition was recorded
 	transitions := s.keeper.GetVersionTransitions(s.ctx, testScoringModelAddress1)
 	s.Require().Len(transitions, 1)
 	s.Require().Equal(types.DefaultScoringModelVersion, transitions[0].FromVersion)
-	s.Require().Equal("2.0.0", transitions[0].ToVersion)
+	s.Require().Equal(version200, transitions[0].ToVersion)
 	s.Require().Equal(firstScore, transitions[0].PreviousScore)
 	s.Require().Equal(summary2.FinalScore, transitions[0].NewScore)
 }

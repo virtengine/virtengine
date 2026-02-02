@@ -79,7 +79,7 @@ func NewDisputeRecord(dispute Dispute, gateway GatewayType, actor string) *Dispu
 		UpdatedAt:        now,
 		AuditLog:         make([]DisputeAuditEntry, 0, 10),
 	}
-	record.Dispute.Gateway = gateway
+	record.Gateway = gateway
 
 	record.AddAuditEntry(DisputeAuditEntry{
 		Timestamp: now,

@@ -638,11 +638,11 @@ func (m *MarketplaceClient) WaitForOrderCompletion(ctx context.Context, orderUUI
 			}
 
 			switch order.State {
-			case "done":
+			case opStateDone:
 				return order, nil
 			case "erred":
 				return order, fmt.Errorf("order failed: %s", order.ErrorMessage)
-			case "canceled", "rejected":
+			case opStateCanceled, "rejected":
 				return order, fmt.Errorf("order %s", order.State)
 			}
 		}

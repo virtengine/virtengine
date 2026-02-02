@@ -355,7 +355,7 @@ func TestLivenessScorer_CheckLiveness_StubMode(t *testing.T) {
 		t.Errorf("liveness score out of range: %f", result.LivenessScore)
 	}
 
-	if result.Decision != "live" && result.Decision != "spoof" && result.Decision != "uncertain" {
+	if result.Decision != DecisionLive && result.Decision != DecisionSpoof && result.Decision != DecisionUncertain {
 		t.Errorf("invalid decision: %s", result.Decision)
 	}
 
@@ -452,8 +452,8 @@ func TestLivenessScorer_SanitizeResult(t *testing.T) {
 	if result.Confidence > 1.0 || result.Confidence < 0.0 {
 		t.Errorf("expected clamped confidence, got: %f", result.Confidence)
 	}
-	if result.Decision != "uncertain" {
-		t.Errorf("expected sanitized decision 'uncertain', got: %s", result.Decision)
+	if result.Decision != DecisionUncertain {
+		t.Errorf("expected sanitized decision '%s', got: %s", DecisionUncertain, result.Decision)
 	}
 }
 

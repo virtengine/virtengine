@@ -253,7 +253,6 @@ func (t *Tracker) GetAutomationOpportunities(period time.Duration) []AutomationO
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	opportunities := make([]AutomationOpportunity, 0)
 	taskMap := make(map[string]*AutomationOpportunity)
 	cutoff := time.Now().Add(-period)
 
@@ -276,6 +275,7 @@ func (t *Tracker) GetAutomationOpportunities(period time.Duration) []AutomationO
 	}
 
 	// Convert to slice
+	opportunities := make([]AutomationOpportunity, 0, len(taskMap))
 	for _, opp := range taskMap {
 		opportunities = append(opportunities, *opp)
 	}

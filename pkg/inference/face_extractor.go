@@ -561,7 +561,7 @@ func (fe *FaceExtractor) computeEmbeddingHash(embedding []float32) string {
 	for _, v := range embedding {
 		// Round to 6 decimal places for determinism
 		rounded := math.Round(float64(v)*1e6) / 1e6
-		h.Write([]byte(fmt.Sprintf("%.6f", rounded)))
+		fmt.Fprintf(h, "%.6f", rounded)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

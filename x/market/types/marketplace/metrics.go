@@ -41,6 +41,9 @@ const (
 	MetricTypeEfficiency MetricType = 8
 )
 
+// trendStable is the constant for a stable trend indicator
+const trendStable = "stable"
+
 // MetricTypeNames maps metric types to human-readable names
 var MetricTypeNames = map[MetricType]string{
 	MetricTypeNone:       "none",
@@ -765,7 +768,7 @@ func (d *MarketHealthDashboard) UpdateFromMetrics(metrics MarketMetrics, now tim
 	d.LastUpdated = now
 
 	// Calculate trends (simplified)
-	d.Trends["volume"] = "stable"
-	d.Trends["spread"] = "stable"
-	d.Trends["liquidity"] = "stable"
+	d.Trends["volume"] = trendStable
+	d.Trends["spread"] = trendStable
+	d.Trends["liquidity"] = trendStable
 }

@@ -7,12 +7,13 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // ============================================================================
@@ -575,7 +576,7 @@ type EntityExtensions struct {
 	PrivacyStatementURL   string   `xml:"PrivacyStatementURL"`
 	EntityCategory        []string `xml:"EntityCategory"`
 	EntityAttributes      []string `xml:"EntityAttributes>Attribute>AttributeValue"`
-	RegistrationAuthority string   `xml:"RegistrationInfo>registrationAuthority,attr"`
+	RegistrationAuthority string   `xml:"-"` // Parsed separately from RegistrationInfo
 }
 
 // ============================================================================

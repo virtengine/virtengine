@@ -15,9 +15,9 @@ func TestStreamingUploader(t *testing.T) {
 	testStreamConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -115,9 +115,9 @@ func TestStreamingDownloader(t *testing.T) {
 	testStreamConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -238,7 +238,7 @@ func TestResumableUploader(t *testing.T) {
 	t.Run("StartUpload", func(t *testing.T) {
 		backend, _ := NewWaldurStreamingBackend(&WaldurConfig{
 			UseFallbackMemory: true,
-			Organization:      "test-org",
+			Organization:      testOrg,
 		})
 
 		uploader := NewResumableUploader(backend, nil)
@@ -261,7 +261,7 @@ func TestResumableUploader(t *testing.T) {
 	t.Run("MarkChunkComplete", func(t *testing.T) {
 		backend, _ := NewWaldurStreamingBackend(&WaldurConfig{
 			UseFallbackMemory: true,
-			Organization:      "test-org",
+			Organization:      testOrg,
 		})
 
 		uploader := NewResumableUploader(backend, nil)

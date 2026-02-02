@@ -444,15 +444,15 @@ func TestDCAPSignatureVerification(t *testing.T) {
 		}
 
 		sigData := &CryptoDCAPQuoteSignatureData{}
-		privateKey.PublicKey.X.FillBytes(sigData.ECDSAAttestationKey[:32])
-		privateKey.PublicKey.Y.FillBytes(sigData.ECDSAAttestationKey[32:])
+		privateKey.X.FillBytes(sigData.ECDSAAttestationKey[:32])
+		privateKey.Y.FillBytes(sigData.ECDSAAttestationKey[32:])
 
 		pubKey, err := verifier.extractAttestationKey(sigData)
 		if err != nil {
 			t.Errorf("failed to extract key: %v", err)
 		}
 
-		if pubKey.X.Cmp(privateKey.PublicKey.X) != 0 || pubKey.Y.Cmp(privateKey.PublicKey.Y) != 0 {
+		if pubKey.X.Cmp(privateKey.X) != 0 || pubKey.Y.Cmp(privateKey.Y) != 0 {
 			t.Error("extracted key doesn't match")
 		}
 	})
@@ -821,7 +821,7 @@ func TestNitroAttestationParsing(t *testing.T) {
 			t.Errorf("module ID: got %s, want test-enclave-001", doc.ModuleID)
 		}
 
-		if doc.Digest != "SHA384" {
+		if doc.Digest != hashAlgorithmSHA384 {
 			t.Errorf("digest: got %s, want SHA384", doc.Digest)
 		}
 
