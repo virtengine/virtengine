@@ -645,7 +645,7 @@ func (s *VEIDOnboardingTestSuite) TestOnboardingFlowCICompatible() {
 func genesisWithVEIDApprovedClientOnboarding(t *testing.T, cdc codec.Codec, client VEIDTestClient) app.GenesisState {
 	t.Helper()
 
-	genesis := app.NewDefaultGenesisState(cdc)
+	genesis := app.GenesisStateWithValSet(cdc)
 
 	var veidGenesis veidtypes.GenesisState
 	require.NoError(t, cdc.UnmarshalJSON(genesis[veidtypes.ModuleName], &veidGenesis))

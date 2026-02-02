@@ -37,6 +37,7 @@ func ExportCmd(appExporter types.AppExporter, defaultNodeHome string) *cobra.Com
 			if err != nil {
 				return err
 			}
+			defer db.Close()
 
 			if appExporter == nil {
 				if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "WARNING: App exporter not defined. Returning genesis file."); err != nil {

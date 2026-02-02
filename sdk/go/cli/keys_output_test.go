@@ -41,7 +41,7 @@ func TestBech32KeysOutput(t *testing.T) {
 	out, err := MkAccKeyOutput(k)
 	require.NoError(t, err)
 	require.Equal(t, expectedOutput, out)
-	require.Equal(t, "{Name:multisig Type:multi Address:ve1nf8lf6n4wa43rzmdzwe6hkrnw5guekhqde3c44 PubKey:{\"@type\":\"/cosmos.crypto.multisig.LegacyAminoPubKey\",\"threshold\":1,\"public_keys\":[{\"@type\":\"/cosmos.crypto.secp256k1.PubKey\",\"key\":\"AurroA7jvfPd1AadmmOvWM2rJSwipXfRf8yD6pLbA2DJ\"}]} Mnemonic:}", fmt.Sprintf("%+v", out))
+	require.Equal(t, "{Name:multisig Type:multi Address:ve1nf8lf6n4wa43rzmdzwe6hkrnw5guekhqhf7qhx PubKey:{\"@type\":\"/cosmos.crypto.multisig.LegacyAminoPubKey\",\"threshold\":1,\"public_keys\":[{\"@type\":\"/cosmos.crypto.secp256k1.PubKey\",\"key\":\"AurroA7jvfPd1AadmmOvWM2rJSwipXfRf8yD6pLbA2DJ\"}]} Mnemonic:}", fmt.Sprintf("%+v", out))
 }
 
 // TestBech32KeysOutputNestedMsig tests that the output of a nested multisig key is correct
@@ -65,7 +65,7 @@ func TestBech32KeysOutputNestedMsig(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, expectedOutput, out)
-	require.Equal(t, "{Name:multisig Type:multi Address:ve1nffp6v2j7wva4y4975exlrv8x5vh39axtqwenq PubKey:{\"@type\":\"/cosmos.crypto.multisig.LegacyAminoPubKey\",\"threshold\":2,\"public_keys\":[{\"@type\":\"/cosmos.crypto.secp256k1.PubKey\",\"key\":\"AurroA7jvfPd1AadmmOvWM2rJSwipXfRf8yD6pLbA2DJ\"},{\"@type\":\"/cosmos.crypto.multisig.LegacyAminoPubKey\",\"threshold\":1,\"public_keys\":[{\"@type\":\"/cosmos.crypto.secp256k1.PubKey\",\"key\":\"AurroA7jvfPd1AadmmOvWM2rJSwipXfRf8yD6pLbA2DJ\"}]}]} Mnemonic:}", fmt.Sprintf("%+v", out))
+	require.Equal(t, "{Name:multisig Type:multi Address:ve1nffp6v2j7wva4y4975exlrv8x5vh39ax6k2yp2 PubKey:{\"@type\":\"/cosmos.crypto.multisig.LegacyAminoPubKey\",\"threshold\":2,\"public_keys\":[{\"@type\":\"/cosmos.crypto.secp256k1.PubKey\",\"key\":\"AurroA7jvfPd1AadmmOvWM2rJSwipXfRf8yD6pLbA2DJ\"},{\"@type\":\"/cosmos.crypto.multisig.LegacyAminoPubKey\",\"threshold\":1,\"public_keys\":[{\"@type\":\"/cosmos.crypto.secp256k1.PubKey\",\"key\":\"AurroA7jvfPd1AadmmOvWM2rJSwipXfRf8yD6pLbA2DJ\"}]}]} Mnemonic:}", fmt.Sprintf("%+v", out))
 }
 
 func TestProtoMarshalJSON(t *testing.T) {

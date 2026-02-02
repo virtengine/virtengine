@@ -51,6 +51,19 @@ func (s *NodeStartupTestSuite) SetupSuite() {
 	projectRoot := findProjectRoot(s.T())
 	s.binaryPath = filepath.Join(projectRoot, ".cache", "bin", binaryName)
 
+	// Build the binary if it doesn't exist
+	if _, err := os.Stat(s.binaryPath); os.IsNotExist(err) {
+		s.T().Logf("Binary not found at %s, building...", s.binaryPath)
+
+		binDir := filepath.Dir(s.binaryPath)
+		require.NoError(s.T(), os.MkdirAll(binDir, 0o755), "Failed to create bin directory")
+
+		cmd := exec.Command("go", "build", "-o", s.binaryPath, "./cmd/virtengine")
+		cmd.Dir = projectRoot
+		out, buildErr := cmd.CombinedOutput()
+		require.NoError(s.T(), buildErr, "Failed to build binary: %s", string(out))
+	}
+
 	s.T().Logf("Using binary: %s", s.binaryPath)
 }
 

@@ -101,7 +101,7 @@ func newVEIDTestClient() veidTestClient {
 func genesisWithVEIDApprovedClient(t testing.TB, cdc codec.Codec, client veidTestClient) app.GenesisState {
 	t.Helper()
 
-	genesis := app.NewDefaultGenesisState(cdc)
+	genesis := app.GenesisStateWithValSet(cdc)
 
 	var veidGenesis veidtypes.GenesisState
 	require.NoError(t, json.Unmarshal(genesis[veidtypes.ModuleName], &veidGenesis))

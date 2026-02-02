@@ -1,6 +1,154 @@
 ## STATUS: 🔴 IN PROGRESS - Production Readiness Phase
 
-**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks | 24 Production Tasks (VE-2000 series) | 4 TEE Hardware Integration Tasks COMPLETED | 23 VEID Gap Resolution Tasks COMPLETED | 17 NEW Gap Tasks Added (VE-3050-3063) | 8 Gap Tasks COMPLETED | 28 Spec-Driven Tasks Identified | 57 vibe-kanban TODO tasks | 1 P0 Blocker**
+**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks | 24 Production Tasks (VE-2000 series) | 4 TEE Hardware Integration Tasks COMPLETED | 23 VEID Gap Resolution Tasks COMPLETED | 17 NEW Gap Tasks Added (VE-3050-3063) | 8 Gap Tasks COMPLETED | 28 Spec-Driven Tasks Identified | 70+ vibe-kanban TODO tasks | 1 P0 Blocker | 14 NEW Waldur Integration Tasks (25A-25N)**
+
+---
+
+## 🚀 NEW: Waldur ↔ Decentralized System Integration (2026-02-01)
+
+### Strategic Vision
+
+Comprehensive integration between VirtEngine blockchain and provider Waldur instances. This creates a decentralized compute marketplace where:
+
+- **Customers** use VE Portal to browse, order, and manage compute resources
+- **Providers** use their local Waldur to manage infrastructure and fulfill orders
+- **Blockchain** serves as source of truth for marketplace state, escrow, and settlement
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          VE Portal (React)                                   │
+│   ┌─────────────┐ ┌──────────────┐ ┌─────────────┐ ┌──────────────────────┐ │
+│   │  Customer   │ │   Provider   │ │  Validator  │ │        Admin         │ │
+│   │  Dashboard  │ │  Dashboard   │ │  Dashboard  │ │     Dashboard        │ │
+│   └──────┬──────┘ └──────┬───────┘ └──────┬──────┘ └──────────┬───────────┘ │
+└──────────┼───────────────┼────────────────┼───────────────────┼─────────────┘
+           │               │                │                   │
+           ▼               ▼                ▼                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        VirtEngine Blockchain                                  │
+│  ┌──────────┐ ┌──────────┐ ┌────────┐ ┌────────┐ ┌──────────┐ ┌───────────┐ │
+│  │ x/market │ │ x/escrow │ │ x/veid │ │ x/mfa  │ │ x/hpc    │ │ x/support │ │
+│  └────┬─────┘ └────┬─────┘ └────────┘ └────────┘ └────┬─────┘ └─────┬─────┘ │
+└───────┼────────────┼────────────────────────────────────┼───────────┼───────┘
+        │            │                                    │           │
+        ▼            ▼                                    ▼           ▼
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                        Provider Daemon (per provider)                          │
+│  ┌─────────────────┐ ┌────────────────┐ ┌───────────────┐ ┌─────────────────┐ │
+│  │ Offering Sync   │ │ Order Router   │ │ Usage Meter   │ │ Callback Bridge │ │
+│  │ Chain→Waldur    │ │ Chain→Waldur   │ │ Waldur→Chain  │ │ Waldur→Chain    │ │
+│  └────────┬────────┘ └───────┬────────┘ └───────┬───────┘ └────────┬────────┘ │
+└───────────┼──────────────────┼──────────────────┼──────────────────┼──────────┘
+            │                  │                  │                  │
+            ▼                  ▼                  ▼                  ▼
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                        Provider's Waldur Instance                              │
+│  ┌─────────────────┐ ┌────────────────┐ ┌───────────────┐ ┌─────────────────┐ │
+│  │   Offerings     │ │    Orders      │ │ Resources/VMs │ │ Service Desk    │ │
+│  │   Categories    │ │    Tickets     │ │ SLURM/K8s     │ │ Support         │ │
+│  └─────────────────┘ └────────────────┘ └───────────────┘ └─────────────────┘ │
+│                                                                                │
+│  ◄── Provider Admin Access (Waldur UI) ──►                                    │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Customer Journey Flow
+
+```
+Customer → VE Portal → Browse Marketplace → Select Offering → Configure Order
+    → Sign with Wallet → Order on Chain → Escrow Locked
+    → Provider Daemon receives event → Creates Waldur Order
+    → Waldur provisions resource → Callback: status=active
+    → Customer accesses resource → Usage metered → Escrow settled
+```
+
+### Provider Admin Separation
+
+| Control                | Waldur (Provider Side) | VE Portal (Decentralized) |
+| ---------------------- | ---------------------- | ------------------------- |
+| Resource Management    | ✅ Full control        | ❌ View only              |
+| Offering Configuration | ✅ Define specs        | ✅ Publish to chain       |
+| Support Tickets        | ✅ Respond & resolve   | ✅ Create & view          |
+| Order Approval         | ✅ Manual approval     | ✅ View status            |
+| Pricing                | ✅ Cost structure      | ✅ Chain pricing (VE)     |
+| User Management        | ✅ Staff accounts      | ❌ N/A                    |
+
+### New Tasks Created (Series 25: Waldur Integration)
+
+| Task ID | Title                                                                      | Priority | Est. Lines |
+| ------- | -------------------------------------------------------------------------- | -------- | ---------- |
+| 25A     | feat(waldur): auto-create marketplace categories on localnet startup       | P0       | 500-1000   |
+| 25B     | feat(waldur): customer order routing - chain to provider Waldur            | P0       | 2000-4000  |
+| 25C     | feat(waldur): support ticket routing - chain to provider service desk      | P1       | 1500-3000  |
+| 25D     | feat(portal): provider admin separation - Waldur vs decentralized controls | P1       | 2000-4000  |
+| 25E     | feat(portal): customer marketplace - browse offerings from chain           | P0       | 3000-5000  |
+| 25F     | feat(portal): customer order flow - configure and submit on-chain orders   | P0       | 2500-4000  |
+| 25G     | feat(portal): customer order tracking - real-time status and access        | P0       | 3000-5000  |
+| 25H     | feat(waldur): offering publication - Waldur to chain sync and portal UI    | P1       | 3000-5000  |
+| 25I     | feat(portal): provider order dashboard - view and approve chain orders     | P1       | 2500-4000  |
+| 25J     | feat(portal): wallet authentication - connect Keplr, Leap, Cosmostation    | P0       | 2000-3500  |
+| 25K     | feat(sdk): TypeScript SDK - query and transaction clients for all modules  | P0       | 5000-8000  |
+| 25L     | feat(portal): landing page - hero, stats, featured offerings               | P1       | 2000-3500  |
+| 25M     | test(e2e): Waldur integration tests - customer and provider flows          | P1       | 3000-5000  |
+| 25N     | docs(waldur): comprehensive integration documentation and ADRs             | P2       | 2000-3000  |
+
+**Total Estimated Lines: 34,000 - 57,000**
+
+### Execution Order & Dependencies
+
+**Phase 1 - Foundation (Parallel: 25A, 25J, 25K)**
+
+- 25A: Categories (blocker for offerings)
+- 25J: Wallet auth (blocker for portal)
+- 25K: TypeScript SDK (blocker for portal queries)
+
+**Phase 2 - Core Flows (Sequential: 25E → 25F → 25G)**
+
+- 25E: Marketplace browsing
+- 25F: Order creation
+- 25G: Order tracking
+
+**Phase 3 - Provider Integration (Parallel: 25B, 25H, 25I)**
+
+- 25B: Order routing
+- 25H: Offering publication
+- 25I: Provider dashboard
+
+**Phase 4 - Extended Features (Parallel: 25C, 25D, 25L)**
+
+- 25C: Support tickets
+- 25D: Admin separation
+- 25L: Landing page
+
+**Phase 5 - Quality & Documentation (Sequential: 25M → 25N)**
+
+- 25M: E2E tests
+- 25N: Documentation
+
+### Key Gap: Waldur Categories
+
+**Problem:** Waldur requires marketplace categories before offerings can be created. Currently `localnet.sh` starts Waldur but doesn't create categories.
+
+**Solution (25A):**
+
+1. Add `waldur load_categories` to localnet startup
+2. Create VirtEngine-specific categories fixture
+3. Provider daemon auto-discovers categories on startup
+4. CLI command for manual category setup
+
+### vibe-kanban Task Summary
+
+| Series      | Focus                        | Count  | Status   |
+| ----------- | ---------------------------- | ------ | -------- |
+| 18A-18D     | Test Re-enablement           | 4      | TODO     |
+| 19A-19D     | Code Quality                 | 4      | TODO     |
+| 20A-20D     | Code Fixes                   | 4      | TODO     |
+| 21A-21F     | Spec-Critical Production     | 6      | TODO     |
+| 22A-22D     | Mainnet Readiness            | 4      | TODO     |
+| 23A-24K     | Portal (existing)            | ~20    | TODO     |
+| **25A-25N** | **Waldur Integration (NEW)** | **14** | **TODO** |
 
 ---
 

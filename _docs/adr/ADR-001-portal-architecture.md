@@ -47,6 +47,7 @@ lib/capture/
 ```
 
 **This is a component library, not a full app.** The portal tasks should focus on:
+
 1. **Creating the app shell** (Vite/Next.js project, routing, layout)
 2. **Wiring up existing components** to the app
 3. **Adding missing components** (wallet connect, order flow, dashboards)

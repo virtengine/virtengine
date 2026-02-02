@@ -32,6 +32,7 @@ import (
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 
+	vecli "github.com/virtengine/virtengine/sdk/go/cli"
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
 
@@ -179,7 +180,7 @@ func TestEmptyState(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	cmd = server.ExportCmd(nil, home)
+	cmd = vecli.ExportCmd(nil, home)
 	cmd.SetArgs([]string{fmt.Sprintf("--%s=%s", cflags.FlagHome, home)})
 	require.NoError(t, cmd.ExecuteContext(ctx))
 
@@ -212,6 +213,9 @@ func TestStartStandAlone(t *testing.T) {
 
 	app, err := mock.NewApp(home, logger)
 	require.NoError(t, err)
+	if closer, ok := app.(io.Closer); ok {
+		t.Cleanup(func() { _ = closer.Close() })
+	}
 
 	svrAddr, _, closeFn, err := network.FreeTCPAddr()
 	require.NoError(t, err)
@@ -273,7 +277,7 @@ func TestInitConfig(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	cmd = server.ExportCmd(nil, home)
+	cmd = vecli.ExportCmd(nil, home)
 	require.NoError(t, cmd.ExecuteContext(ctx))
 
 	outC := make(chan string)
