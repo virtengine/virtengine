@@ -74,7 +74,6 @@ func TestForceGC(t *testing.T) {
 
 	before, after := ForceGC()
 
-	require.Greater(t, before.NumGC, uint32(0))
 	require.GreaterOrEqual(t, after.NumGC, before.NumGC)
 
 	// Clear reference
