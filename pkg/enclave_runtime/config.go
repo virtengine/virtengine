@@ -158,7 +158,7 @@ func (c *EnclaveRuntimeConfig) Validate() error {
 	// Validate platform
 	platform := strings.ToLower(c.Platform)
 	switch platform {
-	case "auto", string(PlatformSGX), platformSEVSNP, platformNitro, string(PlatformSimulated):
+	case "auto", string(PlatformSGX), platformSEVSNP, platformNitro, "simulated":
 		// Valid platforms
 	default:
 		return fmt.Errorf("invalid platform: %s (must be auto, sgx, sev-snp, nitro, or simulated)", c.Platform)
@@ -252,7 +252,7 @@ func (c *EnclaveRuntimeConfig) GetPlatformType() AttestationType {
 		return AttestationTypeSEVSNP
 	case platformNitro:
 		return AttestationTypeNitro
-	case string(PlatformSimulated):
+	case "simulated":
 		return AttestationTypeSimulated
 	default:
 		return AttestationTypeUnknown
@@ -351,7 +351,7 @@ func (c *EnclaveRuntimeConfig) ParseMeasurements() ([]Measurement, error) {
 			platformType = AttestationTypeSEVSNP
 		case platformNitro:
 			platformType = AttestationTypeNitro
-		case string(PlatformSimulated), "sim":
+		case "simulated", "sim":
 			platformType = AttestationTypeSimulated
 		default:
 			return nil, fmt.Errorf("unknown platform: %s", platform)

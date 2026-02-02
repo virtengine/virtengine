@@ -16,8 +16,10 @@ import (
 // schemaVersion10 is the schema version for GDPR export data
 const schemaVersion10 = "1.0"
 
-// =====================================================================// GDPR Data Portability Keeper Methods
-// =====================================================================// Implements GDPR Article 20 - Right to Data Portability
+// ============================================================================
+// GDPR Data Portability Keeper Methods
+// ============================================================================
+// Implements GDPR Article 20 - Right to Data Portability
 // Reference: https://gdpr-info.eu/art-20-gdpr/
 
 // exportRequestStore is the storage format for export requests
@@ -299,7 +301,16 @@ func (k Keeper) exportConsentData(ctx sdk.Context, address sdk.AccAddress, pkg *
 
 	// Export scope consents
 	for _, sc := range wallet.ConsentSettings.ScopeConsents {
-		portableConsent := types.PortableScopeConsent(sc)
+		portableConsent := types.PortableScopeConsent{
+			ScopeID:            sc.ScopeID,
+			Granted:            sc.Granted,
+			GrantedAt:          sc.GrantedAt,
+			RevokedAt:          sc.RevokedAt,
+			ExpiresAt:          sc.ExpiresAt,
+			Purpose:            sc.Purpose,
+			GrantedToProviders: sc.GrantedToProviders,
+			Restrictions:       sc.Restrictions,
+		}
 		pkg.Consent.ScopeConsents = append(pkg.Consent.ScopeConsents, portableConsent)
 	}
 
@@ -349,7 +360,7 @@ func (k Keeper) exportVerificationHistory(ctx sdk.Context, address sdk.AccAddres
 
 // exportTransactionData exports transaction history
 // Note: This requires access to the bank/auth modules which may not be available here
-func (k Keeper) exportTransactionData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
+func (k Keeper) exportTransactionData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
 	// Transaction data would be exported from chain history
 	// This is a placeholder - actual implementation would query the chain
 	pkg.Transactions = &types.PortableTransactionData{
@@ -363,7 +374,7 @@ func (k Keeper) exportTransactionData(_ sdk.Context, _ sdk.AccAddress, pkg *type
 
 // exportMarketplaceData exports marketplace activity
 // Note: This requires access to the market module
-func (k Keeper) exportMarketplaceData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
+func (k Keeper) exportMarketplaceData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
 	// Marketplace data would be exported from the market module
 	// This is a placeholder - actual implementation would query the market keeper
 	pkg.Marketplace = &types.PortableMarketplaceData{
@@ -417,8 +428,10 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 	return nil
 }
 
-// =====================================================================// Storage Methods
-// =====================================================================
+// ============================================================================
+// Storage Methods
+// ============================================================================
+
 // SetExportRequest stores an export request
 func (k Keeper) SetExportRequest(ctx sdk.Context, request types.PortabilityExportRequest) error {
 	if err := request.Validate(); err != nil {
@@ -476,8 +489,10 @@ func (k Keeper) GetExportRequestsByAddress(ctx sdk.Context, address sdk.AccAddre
 	return requests
 }
 
-// =====================================================================// Key Generation Functions
-// =====================================================================
+// ============================================================================
+// Key Generation Functions
+// ============================================================================
+
 var (
 	prefixExportRequest          = []byte{0x60}
 	prefixExportRequestByAddress = []byte{0x61}
@@ -517,8 +532,10 @@ func generateExportRequestID(address string, timestamp time.Time, blockHeight in
 	return "export_" + hex.EncodeToString(hash[:8])
 }
 
-// =====================================================================// Storage Conversion Functions
-// =====================================================================
+// ============================================================================
+// Storage Conversion Functions
+// ============================================================================
+
 func exportRequestToStore(r *types.PortabilityExportRequest) *exportRequestStore {
 	categories := make([]string, len(r.Categories))
 	for i, c := range r.Categories {

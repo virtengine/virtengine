@@ -30,6 +30,12 @@ const (
 	version200 = "2.0.0"
 )
 
+// Test version constants for scoring model tests
+const (
+	version100 = "1.0.0"
+	version200 = "2.0.0"
+)
+
 // ============================================================================
 // Scoring Model Keeper Test Suite
 // ============================================================================
