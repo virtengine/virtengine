@@ -13,7 +13,7 @@ import (
 
 func TestNonceRecord_Create(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -41,7 +41,7 @@ func TestNonceRecord_Create(t *testing.T) {
 
 func TestNonceRecord_Validate_Valid(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -95,7 +95,7 @@ func TestNonceRecord_Validate_Invalid(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			nonce := make([]byte, 32)
-			rand.Read(nonce)
+			_, _ = rand.Read(nonce)
 			now := time.Now().UTC()
 			fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -112,7 +112,7 @@ func TestNonceRecord_Validate_Invalid(t *testing.T) {
 
 func TestNonceRecord_MarkUsed(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -155,7 +155,7 @@ func TestNonceRecord_MarkUsed(t *testing.T) {
 
 func TestNonceRecord_MarkUsed_Expired(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -170,7 +170,7 @@ func TestNonceRecord_MarkUsed_Expired(t *testing.T) {
 
 func TestNonceRecord_MarkUsed_AlreadyExpired(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -185,7 +185,7 @@ func TestNonceRecord_MarkUsed_AlreadyExpired(t *testing.T) {
 
 func TestNonceRecord_IsExpired(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -204,7 +204,7 @@ func TestNonceRecord_IsExpired(t *testing.T) {
 
 func TestNonceRecord_CanBeUsed(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 
@@ -292,7 +292,7 @@ func TestReplayProtectionPolicy_Validate_Invalid(t *testing.T) {
 
 func TestValidateNonce_Valid(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 
 	err := ValidateNonce(nonce)
 	if err != nil {
@@ -302,7 +302,7 @@ func TestValidateNonce_Valid(t *testing.T) {
 
 func TestValidateNonce_TooShort(t *testing.T) {
 	nonce := make([]byte, 8)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 
 	err := ValidateNonce(nonce)
 	if err == nil {
@@ -312,7 +312,7 @@ func TestValidateNonce_TooShort(t *testing.T) {
 
 func TestValidateNonce_TooLong(t *testing.T) {
 	nonce := make([]byte, 128)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 
 	err := ValidateNonce(nonce)
 	if err == nil {
@@ -343,7 +343,7 @@ func TestValidateNonce_AllOnes(t *testing.T) {
 
 func TestValidateNonceHex_Valid(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	nonceHex := hex.EncodeToString(nonce)
 
 	err := ValidateNonceHex(nonceHex)
@@ -424,7 +424,7 @@ func TestValidateTimestamp_BindingDisabled(t *testing.T) {
 
 func TestComputeNonceHash(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 
 	hash := ComputeNonceHash(nonce)
 
@@ -446,7 +446,7 @@ func TestComputeNonceHash(t *testing.T) {
 
 	// Different input produces different output
 	nonce2 := make([]byte, 32)
-	rand.Read(nonce2)
+	_, _ = rand.Read(nonce2)
 	hash3 := ComputeNonceHash(nonce2)
 	if hash == hash3 {
 		t.Error("different nonces should have different hashes")
@@ -492,7 +492,7 @@ func TestNewNonceHistoryEntry(t *testing.T) {
 
 func TestNewNonceHistoryEntry_UnusedNonce(t *testing.T) {
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	now := time.Now().UTC()
 	fingerprint := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 

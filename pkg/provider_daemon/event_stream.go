@@ -597,4 +597,3 @@ func parseConfigFromEvent(event MarketplaceEvent) (*ProviderConfig, error) {
 
 	return config, nil
 }
-

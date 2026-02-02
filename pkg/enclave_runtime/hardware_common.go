@@ -58,23 +58,23 @@ func (m HardwareMode) String() string {
 // HardwareCapabilities represents detected TEE hardware on the system
 type HardwareCapabilities struct {
 	// SGX capabilities
-	SGXAvailable    bool   // SGX hardware detected
-	SGXVersion      int    // 1 or 2 (SGX2 supports dynamic memory)
-	SGXFLCSupported bool   // Flexible Launch Control support
-	SGXDriverPath   string // Path to SGX device (/dev/sgx_enclave)
+	SGXAvailable     bool   // SGX hardware detected
+	SGXVersion       int    // 1 or 2 (SGX2 supports dynamic memory)
+	SGXFLCSupported  bool   // Flexible Launch Control support
+	SGXDriverPath    string // Path to SGX device (/dev/sgx_enclave)
 	SGXProvisionPath string // Path to provision device (/dev/sgx_provision)
 
 	// SEV-SNP capabilities
-	SEVSNPAvailable  bool   // SEV-SNP hardware detected
-	SEVSNPVersion    string // SEV-SNP version string (e.g., "1.51")
-	SEVGuestDevice   string // Path to guest device (/dev/sev-guest)
-	SEVAPIVersion    int    // SEV API version
+	SEVSNPAvailable bool   // SEV-SNP hardware detected
+	SEVSNPVersion   string // SEV-SNP version string (e.g., "1.51")
+	SEVGuestDevice  string // Path to guest device (/dev/sev-guest)
+	SEVAPIVersion   int    // SEV API version
 
 	// Nitro capabilities
-	NitroAvailable   bool   // Nitro hardware detected
-	NitroVersion     string // Nitro CLI version
-	NitroDevice      string // Path to Nitro device (/dev/nitro_enclaves)
-	NitroCLIPath     string // Path to nitro-cli binary
+	NitroAvailable bool   // Nitro hardware detected
+	NitroVersion   string // Nitro CLI version
+	NitroDevice    string // Path to Nitro device (/dev/nitro_enclaves)
+	NitroCLIPath   string // Path to nitro-cli binary
 
 	// Preferred backend based on detection priority
 	PreferredBackend AttestationType
@@ -274,10 +274,10 @@ type HardwareState struct {
 	sevBackend   HardwareBackend
 	nitroBackend HardwareBackend
 
-	mode             HardwareMode
-	activeBackend    HardwareBackend
-	initialized bool
-	initError   error
+	mode          HardwareMode
+	activeBackend HardwareBackend
+	initialized   bool
+	initError     error
 	//nolint:unused // Reserved for health check tracking
 	lastHealthCheck time.Time
 	//nolint:unused // Reserved for health check tracking
@@ -533,4 +533,3 @@ func hasCPUIDFLC() bool {
 	result := cpuid(7, 0)
 	return (result.ECX & (1 << 30)) != 0
 }
-

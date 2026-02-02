@@ -387,4 +387,3 @@ func CreateSaltBinding(salt []byte, deviceID, sessionID string, timestamp int64)
 		BindingHash: ComputeBindingHash(salt, deviceID, sessionID, timestamp),
 	}
 }
-

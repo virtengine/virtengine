@@ -542,10 +542,10 @@ func DefaultTaxJurisdictions() map[string]TaxJurisdiction {
 			DigitalServicesApplicable: true,
 			TaxRates: []TaxRate{
 				{
-					RateID:   "GB-VAT-20",
-					TaxType:  TaxTypeVAT,
-					Name:     "VAT Standard Rate",
-					RateBps:  2000, // 20%
+					RateID:  "GB-VAT-20",
+					TaxType: TaxTypeVAT,
+					Name:    "VAT Standard Rate",
+					RateBps: 2000, // 20%
 					ExemptCategories: []TaxExemptionCategory{
 						TaxExemptionB2B,
 						TaxExemptionExport,
@@ -562,10 +562,10 @@ func DefaultTaxJurisdictions() map[string]TaxJurisdiction {
 			DigitalServicesApplicable: true,
 			TaxRates: []TaxRate{
 				{
-					RateID:   "DE-VAT-19",
-					TaxType:  TaxTypeVAT,
-					Name:     "Mehrwertsteuer",
-					RateBps:  1900, // 19%
+					RateID:  "DE-VAT-19",
+					TaxType: TaxTypeVAT,
+					Name:    "Mehrwertsteuer",
+					RateBps: 1900, // 19%
 					ExemptCategories: []TaxExemptionCategory{
 						TaxExemptionB2B,
 						TaxExemptionExport,
@@ -582,10 +582,10 @@ func DefaultTaxJurisdictions() map[string]TaxJurisdiction {
 			DigitalServicesApplicable: true,
 			TaxRates: []TaxRate{
 				{
-					RateID:   "SG-GST-9",
-					TaxType:  TaxTypeGST,
-					Name:     "Goods and Services Tax",
-					RateBps:  900, // 9%
+					RateID:  "SG-GST-9",
+					TaxType: TaxTypeGST,
+					Name:    "Goods and Services Tax",
+					RateBps: 900, // 9%
 					ExemptCategories: []TaxExemptionCategory{
 						TaxExemptionExport,
 					},
@@ -601,10 +601,10 @@ func DefaultTaxJurisdictions() map[string]TaxJurisdiction {
 			DigitalServicesApplicable: true,
 			TaxRates: []TaxRate{
 				{
-					RateID:   "AU-GST-10",
-					TaxType:  TaxTypeGST,
-					Name:     "Goods and Services Tax",
-					RateBps:  1000, // 10%
+					RateID:  "AU-GST-10",
+					TaxType: TaxTypeGST,
+					Name:    "Goods and Services Tax",
+					RateBps: 1000, // 10%
 					ExemptCategories: []TaxExemptionCategory{
 						TaxExemptionExport,
 					},

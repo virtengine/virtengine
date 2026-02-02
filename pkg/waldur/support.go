@@ -715,4 +715,3 @@ func MapVirtEngineCategoryToWaldurType(category string) IssueType {
 		return IssueTypeServiceRequest
 	}
 }
-

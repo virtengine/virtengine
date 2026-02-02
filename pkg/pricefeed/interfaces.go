@@ -130,4 +130,3 @@ type Metrics interface {
 	// RecordSourceHealth records source health status
 	RecordSourceHealth(source string, healthy bool, latency float64)
 }
-

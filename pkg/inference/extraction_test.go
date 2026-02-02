@@ -143,9 +143,9 @@ func TestFaceExtractor_SanitizeEmbedding(t *testing.T) {
 	extractor := NewFaceExtractor(config)
 
 	embedding := make([]float32, config.EmbeddingDim)
-	embedding[0] = 100.0   // Out of range
-	embedding[1] = -100.0  // Out of range
-	embedding[2] = 0.5     // Valid
+	embedding[0] = 100.0  // Out of range
+	embedding[1] = -100.0 // Out of range
+	embedding[2] = 0.5    // Valid
 
 	sanitized := extractor.SanitizeEmbedding(embedding)
 
@@ -439,7 +439,7 @@ func TestLivenessScorer_SanitizeResult(t *testing.T) {
 	scorer := NewLivenessScorer(config)
 
 	result := &LivenessResult{
-		LivenessScore: 1.5, // Out of range
+		LivenessScore: 1.5,  // Out of range
 		Confidence:    -0.5, // Out of range
 		Decision:      "invalid_decision",
 	}
@@ -799,4 +799,3 @@ func BenchmarkFeaturePipeline_Extract(b *testing.B) {
 		_, _ = pipeline.Extract(context.Background(), input)
 	}
 }
-

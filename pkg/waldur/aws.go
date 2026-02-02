@@ -402,4 +402,3 @@ func mapAWSVolume(v *client.AwsVolume) AWSVolume {
 	}
 	return volume
 }
-

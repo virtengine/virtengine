@@ -23,10 +23,10 @@ type service struct {
 	adapters   map[string]Adapter
 	adaptersMu sync.RWMutex
 
-	priceFeed  *priceFeedImpl
-	swapExec   *swapExecutorImpl
-	offRamp    *offRampBridgeImpl
-	breaker    *circuitBreaker
+	priceFeed *priceFeedImpl
+	swapExec  *swapExecutorImpl
+	offRamp   *offRampBridgeImpl
+	breaker   *circuitBreaker
 
 	started bool
 	stopCh  chan struct{}
@@ -409,4 +409,3 @@ func (s *service) Stop() error {
 	s.started = false
 	return nil
 }
-

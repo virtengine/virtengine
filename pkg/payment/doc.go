@@ -35,12 +35,12 @@
 //   - All connections use TLS 1.2+ minimum
 //
 // 3D Secure / SCA Flow:
-//   1. Create PaymentIntent with customer data
-//   2. Gateway determines if 3DS is required
-//   3. If required, return redirect URL for customer authentication
-//   4. Customer completes 3DS challenge on issuer's page
-//   5. Gateway webhook notifies of authentication result
-//   6. Payment completes or fails based on 3DS result
+//  1. Create PaymentIntent with customer data
+//  2. Gateway determines if 3DS is required
+//  3. If required, return redirect URL for customer authentication
+//  4. Customer completes 3DS challenge on issuer's page
+//  5. Gateway webhook notifies of authentication result
+//  6. Payment completes or fails based on 3DS result
 //
 // Security Considerations:
 //   - All webhook payloads are cryptographically verified
@@ -80,4 +80,3 @@
 //	    Reason:          payment.RefundReasonRequestedByCustomer,
 //	})
 package payment
-

@@ -770,13 +770,13 @@ func TestWorkflowDataPersistence(t *testing.T) {
 			Name:   "test",
 			Status: WorkflowStatusRunning,
 			Data: map[string]interface{}{
-				"string":  "value",
-				"number":  float64(42),
-				"float":   3.14,
-				"bool":    true,
-				"array":   []interface{}{"a", "b", "c"},
-				"nested":  map[string]interface{}{"inner": "value"},
-				"null":    nil,
+				"string": "value",
+				"number": float64(42),
+				"float":  3.14,
+				"bool":   true,
+				"array":  []interface{}{"a", "b", "c"},
+				"nested": map[string]interface{}{"inner": "value"},
+				"null":   nil,
 			},
 			StartedAt: time.Now(),
 			UpdatedAt: time.Now(),
@@ -807,4 +807,3 @@ func TestWorkflowDataPersistence(t *testing.T) {
 		}
 	})
 }
-

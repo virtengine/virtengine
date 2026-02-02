@@ -436,7 +436,7 @@ func CreateOCSPRequest(cert, issuer *x509.Certificate, nonce []byte) ([]byte, er
 
 // OCSPRequestWithNonce represents an OCSP request with a nonce extension
 type OCSPRequestWithNonce struct {
-	TBSRequest       TBSRequest
+	TBSRequest        TBSRequest
 	OptionalSignature asn1.RawValue `asn1:"explicit,optional,tag:0"`
 }
 
@@ -450,7 +450,7 @@ type TBSRequest struct {
 
 // Request represents a single request in an OCSP request
 type Request struct {
-	CertID          CertID
+	CertID           CertID
 	SingleExtensions []Extension `asn1:"explicit,optional,tag:0"`
 }
 

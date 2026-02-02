@@ -67,7 +67,7 @@ func (s *EligibilityEnhancedTestSuite) SetupTest() {
 	s.keeper = NewKeeper(cdc, storeKey, "authority")
 
 	// Set default params
-	s.keeper.SetParams(s.ctx, types.Params{
+	_ = s.keeper.SetParams(s.ctx, types.Params{
 		MaxScopesPerAccount:    10,
 		MaxScopesPerType:       3,
 		SaltMinBytes:           32,

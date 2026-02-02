@@ -753,6 +753,6 @@ func createTestContext(t *testing.T) sdk.Context {
 
 func generateRandomTemplate(size int) []byte {
 	template := make([]byte, size)
-	rand.Read(template)
+	_, _ = rand.Read(template)
 	return template
 }

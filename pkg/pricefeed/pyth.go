@@ -379,4 +379,3 @@ var PythMainnetPriceIDs = map[string]string{
 	"DOGE/USD":  "0xdcef50dd0a4cd2dcc17e45df1676dcb336a11a61c69df7a0299b0150c672d25c",
 	"MATIC/USD": "0x5de33440f6c50b5d2b4e8f65c4d2e03d7f2a8dd8d3b9d0e2d7a8b7c8d9e0f1a2",
 }
-

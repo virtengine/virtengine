@@ -21,8 +21,8 @@ func TestCodedError(t *testing.T) {
 
 	t.Run("with context", func(t *testing.T) {
 		err := NewCodedError("test", 100, "test error", CategoryValidation)
-		err.WithContext("field", fieldUsername)
-		err.WithContext("value", "invalid")
+		_ = err.WithContext("field", fieldUsername)
+		_ = err.WithContext("value", "invalid")
 
 		if err.Context["field"] != fieldUsername {
 			t.Error("context not set")
@@ -405,4 +405,3 @@ func TestValidateCode(t *testing.T) {
 		})
 	}
 }
-

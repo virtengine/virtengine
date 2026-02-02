@@ -17,7 +17,7 @@ import (
 
 func TestEmbeddingEnvelope_NewAndValidate(t *testing.T) {
 	hash := sha256.Sum256([]byte("test-embedding-data"))
-	
+
 	envelope := types.NewEmbeddingEnvelope(
 		"envelope-001",
 		"ve1test1234567890",
@@ -46,9 +46,9 @@ func TestEmbeddingEnvelope_NewAndValidate(t *testing.T) {
 
 func TestEmbeddingEnvelope_Validate_Errors(t *testing.T) {
 	tests := []struct {
-		name     string
-		modify   func(*types.EmbeddingEnvelope)
-		errMsg   string
+		name   string
+		modify func(*types.EmbeddingEnvelope)
+		errMsg string
 	}{
 		{
 			name: "empty envelope ID",
@@ -117,7 +117,7 @@ func TestEmbeddingEnvelope_Validate_Errors(t *testing.T) {
 				100,
 				"ve1validator123",
 			)
-			
+
 			tc.modify(envelope)
 			err := envelope.Validate()
 			require.Error(t, err)
@@ -155,7 +155,7 @@ func TestEmbeddingEnvelope_Revoke(t *testing.T) {
 func TestEmbeddingEnvelope_MatchesEmbedding(t *testing.T) {
 	embeddingData := []byte("test-embedding-data-12345")
 	hash := sha256.Sum256(embeddingData)
-	
+
 	envelope := types.NewEmbeddingEnvelope(
 		"envelope-001",
 		"ve1test1234567890",
@@ -184,7 +184,7 @@ func TestEmbeddingEnvelope_MatchesEmbedding(t *testing.T) {
 func TestEmbeddingEnvelope_IsActive(t *testing.T) {
 	hash := sha256.Sum256([]byte("test-data"))
 	now := time.Now()
-	
+
 	envelope := types.NewEmbeddingEnvelope(
 		"envelope-001",
 		"ve1test1234567890",
@@ -219,7 +219,7 @@ func TestEmbeddingEnvelope_IsActive(t *testing.T) {
 func TestEmbeddingEnvelope_ToOnChainReference(t *testing.T) {
 	hash := sha256.Sum256([]byte("test-data"))
 	now := time.Now()
-	
+
 	envelope := types.NewEmbeddingEnvelope(
 		"envelope-001",
 		"ve1test1234567890",
@@ -241,7 +241,7 @@ func TestEmbeddingEnvelope_ToOnChainReference(t *testing.T) {
 	assert.Equal(t, envelope.EmbeddingType, ref.EmbeddingType)
 	assert.Equal(t, envelope.EmbeddingHash, ref.EmbeddingHash)
 	assert.Equal(t, envelope.ModelVersion, ref.ModelVersion)
-	
+
 	// Validate reference
 	err := ref.Validate()
 	require.NoError(t, err)
@@ -249,15 +249,15 @@ func TestEmbeddingEnvelope_ToOnChainReference(t *testing.T) {
 
 func TestComputeEmbeddingHash(t *testing.T) {
 	data := []byte("test-embedding-vector-data")
-	
+
 	hash := types.ComputeEmbeddingHash(data)
-	
+
 	require.Len(t, hash, 32)
-	
+
 	// Same input should produce same hash
 	hash2 := types.ComputeEmbeddingHash(data)
 	assert.Equal(t, hash, hash2)
-	
+
 	// Different input should produce different hash
 	hash3 := types.ComputeEmbeddingHash([]byte("different-data"))
 	assert.NotEqual(t, hash, hash3)
@@ -265,11 +265,11 @@ func TestComputeEmbeddingHash(t *testing.T) {
 
 func TestEmbeddingType_Validation(t *testing.T) {
 	validTypes := types.AllEmbeddingTypes()
-	
+
 	for _, et := range validTypes {
 		assert.True(t, types.IsValidEmbeddingType(et))
 	}
-	
+
 	assert.False(t, types.IsValidEmbeddingType("invalid_type"))
 	assert.False(t, types.IsValidEmbeddingType(""))
 }

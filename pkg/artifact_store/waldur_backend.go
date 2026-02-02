@@ -1627,5 +1627,3 @@ func (w *WaldurBackend) RunRetentionCleanup(ctx context.Context, currentBlock in
 	stats.Duration = time.Since(startTime)
 	return stats, nil
 }
-
-

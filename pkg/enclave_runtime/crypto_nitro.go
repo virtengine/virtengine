@@ -1108,7 +1108,7 @@ func createTestPayload(pcr0 []byte, nonce []byte, userData []byte) []byte {
 	buf.WriteByte(0x1B) // uint64
 	//nolint:gosec // G115: UnixMilli returns positive value in valid time range
 	ts := uint64(time.Now().UnixMilli())
-	binary.Write(&buf, binary.BigEndian, ts)
+	_ = binary.Write(&buf, binary.BigEndian, ts)
 
 	// digest
 	buf.WriteByte(0x66) // text(6)
@@ -1225,4 +1225,3 @@ func ExtractNitroPublicKey(doc *CryptoNitroAttestationDocument) (*ecdsa.PublicKe
 		Y:     y,
 	}, nil
 }
-

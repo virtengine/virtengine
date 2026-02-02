@@ -33,46 +33,46 @@ type (
 	Params       = types.Params
 
 	// Message types
-	MsgCreateEscrow      = types.MsgCreateEscrow
-	MsgActivateEscrow    = types.MsgActivateEscrow
-	MsgReleaseEscrow     = types.MsgReleaseEscrow
-	MsgRefundEscrow      = types.MsgRefundEscrow
-	MsgDisputeEscrow     = types.MsgDisputeEscrow
-	MsgSettleOrder       = types.MsgSettleOrder
-	MsgRecordUsage       = types.MsgRecordUsage
-	MsgAcknowledgeUsage  = types.MsgAcknowledgeUsage
-	MsgClaimRewards      = types.MsgClaimRewards
+	MsgCreateEscrow     = types.MsgCreateEscrow
+	MsgActivateEscrow   = types.MsgActivateEscrow
+	MsgReleaseEscrow    = types.MsgReleaseEscrow
+	MsgRefundEscrow     = types.MsgRefundEscrow
+	MsgDisputeEscrow    = types.MsgDisputeEscrow
+	MsgSettleOrder      = types.MsgSettleOrder
+	MsgRecordUsage      = types.MsgRecordUsage
+	MsgAcknowledgeUsage = types.MsgAcknowledgeUsage
+	MsgClaimRewards     = types.MsgClaimRewards
 
 	// Query types
-	QueryEscrowRequest            = types.QueryEscrowRequest
-	QueryEscrowResponse           = types.QueryEscrowResponse
-	QueryEscrowsByOrderRequest    = types.QueryEscrowsByOrderRequest
-	QueryEscrowsByOrderResponse   = types.QueryEscrowsByOrderResponse
-	QueryEscrowsByStateRequest    = types.QueryEscrowsByStateRequest
-	QueryEscrowsByStateResponse   = types.QueryEscrowsByStateResponse
-	QuerySettlementRequest        = types.QuerySettlementRequest
-	QuerySettlementResponse       = types.QuerySettlementResponse
-	QuerySettlementsByOrderRequest  = types.QuerySettlementsByOrderRequest
-	QuerySettlementsByOrderResponse = types.QuerySettlementsByOrderResponse
-	QueryUsageRecordRequest       = types.QueryUsageRecordRequest
-	QueryUsageRecordResponse      = types.QueryUsageRecordResponse
+	QueryEscrowRequest               = types.QueryEscrowRequest
+	QueryEscrowResponse              = types.QueryEscrowResponse
+	QueryEscrowsByOrderRequest       = types.QueryEscrowsByOrderRequest
+	QueryEscrowsByOrderResponse      = types.QueryEscrowsByOrderResponse
+	QueryEscrowsByStateRequest       = types.QueryEscrowsByStateRequest
+	QueryEscrowsByStateResponse      = types.QueryEscrowsByStateResponse
+	QuerySettlementRequest           = types.QuerySettlementRequest
+	QuerySettlementResponse          = types.QuerySettlementResponse
+	QuerySettlementsByOrderRequest   = types.QuerySettlementsByOrderRequest
+	QuerySettlementsByOrderResponse  = types.QuerySettlementsByOrderResponse
+	QueryUsageRecordRequest          = types.QueryUsageRecordRequest
+	QueryUsageRecordResponse         = types.QueryUsageRecordResponse
 	QueryUsageRecordsByOrderRequest  = types.QueryUsageRecordsByOrderRequest
 	QueryUsageRecordsByOrderResponse = types.QueryUsageRecordsByOrderResponse
-	QueryRewardDistributionRequest  = types.QueryRewardDistributionRequest
-	QueryRewardDistributionResponse = types.QueryRewardDistributionResponse
-	QueryRewardsByEpochRequest    = types.QueryRewardsByEpochRequest
-	QueryRewardsByEpochResponse   = types.QueryRewardsByEpochResponse
-	QueryClaimableRewardsRequest  = types.QueryClaimableRewardsRequest
-	QueryClaimableRewardsResponse = types.QueryClaimableRewardsResponse
-	QueryParamsRequest            = types.QueryParamsRequest
-	QueryParamsResponse           = types.QueryParamsResponse
+	QueryRewardDistributionRequest   = types.QueryRewardDistributionRequest
+	QueryRewardDistributionResponse  = types.QueryRewardDistributionResponse
+	QueryRewardsByEpochRequest       = types.QueryRewardsByEpochRequest
+	QueryRewardsByEpochResponse      = types.QueryRewardsByEpochResponse
+	QueryClaimableRewardsRequest     = types.QueryClaimableRewardsRequest
+	QueryClaimableRewardsResponse    = types.QueryClaimableRewardsResponse
+	QueryParamsRequest               = types.QueryParamsRequest
+	QueryParamsResponse              = types.QueryParamsResponse
 )
 
 // Constants aliases
 const (
 	// Module constants
-	RouterKey  = types.RouterKey
-	StoreKey   = types.StoreKey
+	RouterKey = types.RouterKey
+	StoreKey  = types.StoreKey
 
 	// Escrow states
 	EscrowStatePending  = types.EscrowStatePending

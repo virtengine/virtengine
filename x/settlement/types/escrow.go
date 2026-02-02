@@ -59,11 +59,11 @@ func (s EscrowState) CanTransitionTo(newState EscrowState) bool {
 type ReleaseConditionType string
 
 const (
-	ConditionTypeTimelock        ReleaseConditionType = "timelock"
-	ConditionTypeSignature       ReleaseConditionType = "signature"
-	ConditionTypeUsageThreshold  ReleaseConditionType = "usage_threshold"
-	ConditionTypeVerification    ReleaseConditionType = "verification"
-	ConditionTypeMultisig        ReleaseConditionType = "multisig"
+	ConditionTypeTimelock       ReleaseConditionType = "timelock"
+	ConditionTypeSignature      ReleaseConditionType = "signature"
+	ConditionTypeUsageThreshold ReleaseConditionType = "usage_threshold"
+	ConditionTypeVerification   ReleaseConditionType = "verification"
+	ConditionTypeMultisig       ReleaseConditionType = "multisig"
 )
 
 // ReleaseCondition defines a condition that must be met for escrow release
@@ -75,7 +75,7 @@ type ReleaseCondition struct {
 	UnlockAfter *time.Time `json:"unlock_after,omitempty"`
 
 	// Signature conditions
-	RequiredSigners   []string `json:"required_signers,omitempty"`
+	RequiredSigners    []string `json:"required_signers,omitempty"`
 	SignatureThreshold uint32   `json:"signature_threshold,omitempty"`
 
 	// Usage threshold conditions

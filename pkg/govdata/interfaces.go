@@ -379,4 +379,3 @@ type AdapterFactory interface {
 	// CreateForJurisdiction creates adapters for a jurisdiction
 	CreateForJurisdiction(jurisdiction string, configs []AdapterConfig) ([]DataSourceAdapter, error)
 }
-

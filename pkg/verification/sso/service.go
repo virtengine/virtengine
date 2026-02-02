@@ -25,17 +25,17 @@ import (
 
 // DefaultService implements VerificationService.
 type DefaultService struct {
-	config      Config
+	config       Config
 	oidcVerifier oidc.OIDCVerifier
-	signer      signer.SignerService
-	rateLimiter ratelimit.VerificationLimiter
-	auditor     audit.AuditLogger
-	logger      zerolog.Logger
+	signer       signer.SignerService
+	rateLimiter  ratelimit.VerificationLimiter
+	auditor      audit.AuditLogger
+	logger       zerolog.Logger
 
 	// Challenge storage (in-memory for now, should use Redis in production)
-	mu          sync.RWMutex
-	challenges  map[string]*Challenge
-	byAccount   map[string][]string // accountAddress -> challengeIDs
+	mu         sync.RWMutex
+	challenges map[string]*Challenge
+	byAccount  map[string][]string // accountAddress -> challengeIDs
 }
 
 // NewDefaultService creates a new DefaultService.
@@ -49,14 +49,14 @@ func NewDefaultService(
 	logger zerolog.Logger,
 ) (*DefaultService, error) {
 	s := &DefaultService{
-		config:      config,
+		config:       config,
 		oidcVerifier: oidcVerifier,
-		signer:      signerSvc,
-		rateLimiter: rateLimiter,
-		auditor:     auditor,
-		logger:      logger.With().Str("component", "sso_service").Logger(),
-		challenges:  make(map[string]*Challenge),
-		byAccount:   make(map[string][]string),
+		signer:       signerSvc,
+		rateLimiter:  rateLimiter,
+		auditor:      auditor,
+		logger:       logger.With().Str("component", "sso_service").Logger(),
+		challenges:   make(map[string]*Challenge),
+		byAccount:    make(map[string][]string),
 	}
 
 	// Start background cleanup
@@ -79,7 +79,7 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 			s.logger.Warn().Err(err).Msg("rate limit check failed")
 		} else if !allowed {
 			s.logAudit(ctx, audit.EventTypeRateLimitExceeded, req.AccountAddress, "initiate_verification", map[string]interface{}{
-				"reason":   result.Reason,
+				"reason":      result.Reason,
 				"retry_after": result.RetryAfter,
 			})
 			return nil, fmt.Errorf("%w: retry after %d seconds", ErrRateLimitExceeded, result.RetryAfter)
@@ -259,11 +259,11 @@ func (s *DefaultService) CompleteVerification(ctx context.Context, req *Complete
 	s.updateChallengeStatus(req.ChallengeID, ChallengeStatusCompleted)
 
 	s.logAudit(ctx, audit.EventTypeVerificationCompleted, challenge.AccountAddress, "complete_verification", map[string]interface{}{
-		"challenge_id":  req.ChallengeID,
-		"linkage_id":    linkageID,
-		"provider":      challenge.ProviderType,
-		"subject_hash":  attestation.SubjectHash,
-		"email_domain":  claims.GetEmailDomain(),
+		"challenge_id": req.ChallengeID,
+		"linkage_id":   linkageID,
+		"provider":     challenge.ProviderType,
+		"subject_hash": attestation.SubjectHash,
+		"email_domain": claims.GetEmailDomain(),
 	})
 
 	return NewCompleteSuccess(attestation, linkageID), nil
@@ -626,4 +626,3 @@ func generateSecureToken(length int) string {
 	}
 	return hex.EncodeToString(bytes)
 }
-

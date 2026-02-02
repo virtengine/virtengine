@@ -359,4 +359,3 @@ func (c *Config) IsAffiliationAllowed(affiliation AffiliationType) bool {
 	}
 	return false
 }
-

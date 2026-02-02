@@ -510,6 +510,6 @@ func (k Keeper) ListConformanceTestResults(ctx sdk.Context) []*ConformanceTestRe
 // ============================================================================
 
 // ConformanceTestResult proto stubs
-func (*ConformanceTestResult) ProtoMessage()            {}
-func (m *ConformanceTestResult) Reset()                 { *m = ConformanceTestResult{} }
-func (m *ConformanceTestResult) String() string         { return fmt.Sprintf("%+v", *m) }
+func (*ConformanceTestResult) ProtoMessage()    {}
+func (m *ConformanceTestResult) Reset()         { *m = ConformanceTestResult{} }
+func (m *ConformanceTestResult) String() string { return fmt.Sprintf("%+v", *m) }

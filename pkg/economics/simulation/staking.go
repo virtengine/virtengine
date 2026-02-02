@@ -144,8 +144,8 @@ func (s *StakingSimulator) OptimizeRewardParameters(
 	validators []economics.ValidatorState,
 ) RewardOptimizationResult {
 	result := RewardOptimizationResult{
-		CurrentParams:    s.params,
-		Recommendations:  make([]economics.Recommendation, 0),
+		CurrentParams:   s.params,
+		Recommendations: make([]economics.Recommendation, 0),
 	}
 
 	// Analyze current state
@@ -428,9 +428,9 @@ func (s *StakingSimulator) SimulateUnbonding(
 	durationDays int64,
 ) UnbondingSimulationResult {
 	result := UnbondingSimulationResult{
-		UnbondingAmount:    unbondingAmount,
-		UnbondingDays:      durationDays,
-		DailySnapshots:     make([]UnbondingSnapshot, durationDays),
+		UnbondingAmount: unbondingAmount,
+		UnbondingDays:   durationDays,
+		DailySnapshots:  make([]UnbondingSnapshot, durationDays),
 	}
 
 	currentStaked := new(big.Int).Set(state.TotalStaked)
@@ -519,4 +519,3 @@ func (s *StakingSimulator) calculateEpochInflation(supply, minted *big.Int) int6
 	inflation.Div(inflation, supply)
 	return inflation.Int64()
 }
-

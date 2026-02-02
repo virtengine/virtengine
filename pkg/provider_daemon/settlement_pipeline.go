@@ -353,11 +353,11 @@ type ChainUsageReport struct {
 type SettlementPipeline struct {
 	mu sync.RWMutex
 
-	cfg           SettlementConfig
-	keyManager    *KeyManager
-	usageMeter    *UsageMeter
-	usageStore    *UsageSnapshotStore
-	chainSubmit   ChainUsageSubmitter
+	cfg         SettlementConfig
+	keyManager  *KeyManager
+	usageMeter  *UsageMeter
+	usageStore  *UsageSnapshotStore
+	chainSubmit ChainUsageSubmitter
 
 	// pending contains usage records pending settlement.
 	pending map[string]*UsageRecord
@@ -1006,7 +1006,7 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 		hasDispute := false
 		for _, record := range records {
 			for _, dispute := range p.disputes {
-				if dispute.UsageRecordID == record.ID && 
+				if dispute.UsageRecordID == record.ID &&
 					(dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing) {
 					hasDispute = true
 					break
@@ -1065,4 +1065,3 @@ func (p *SettlementPipeline) generateID(prefix string, timestamp time.Time) stri
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
 }
-

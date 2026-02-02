@@ -376,4 +376,3 @@ func (c *HybridClassifier) Classify(ctx context.Context, message string, chatCtx
 
 	return result, nil
 }
-

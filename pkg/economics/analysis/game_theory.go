@@ -25,9 +25,9 @@ func NewGameTheoryAnalyzer(params economics.TokenomicsParams) *GameTheoryAnalyze
 
 // Player represents an economic actor in the game.
 type Player struct {
-	Type     string   // "validator", "delegator", "user", "attacker"
-	Strategy string   // Current strategy
-	Payoff   float64  // Expected payoff
+	Type     string  // "validator", "delegator", "user", "attacker"
+	Strategy string  // Current strategy
+	Payoff   float64 // Expected payoff
 }
 
 // AnalyzeValidatorIncentives analyzes validator incentive alignment.
@@ -216,11 +216,11 @@ func (g *GameTheoryAnalyzer) calculateValidatorPayoffs(avgStake, avgCommission, 
 	commissionGain := baseReward * float64(avgCommission) / 10000
 
 	return [][]float64{
-		{baseReward + commissionGain, baseReward + commissionGain},                      // honest
-		{-slashCost, -slashCost},                                                         // double_signing (always detected)
-		{baseReward*0.9 + commissionGain*1.1, -slashCost*0.5},                           // censorship (sometimes detected)
-		{baseReward*1.2 + commissionGain*1.5, -slashCost*0.3},                           // collusion (hard to detect)
-		{baseReward*0.7, baseReward*0.5},                                                 // free_riding
+		{baseReward + commissionGain, baseReward + commissionGain}, // honest
+		{-slashCost, -slashCost},                                   // double_signing (always detected)
+		{baseReward*0.9 + commissionGain*1.1, -slashCost * 0.5},    // censorship (sometimes detected)
+		{baseReward*1.2 + commissionGain*1.5, -slashCost * 0.3},    // collusion (hard to detect)
+		{baseReward * 0.7, baseReward * 0.5},                       // free_riding
 	}
 }
 
@@ -229,9 +229,9 @@ func (g *GameTheoryAnalyzer) calculateDelegatorPayoffs(avgDelegation, avgAPR, un
 	opportunityCost := baseReward * float64(unbondingDays) / 365 * 0.1 // 10% annual opportunity cost
 
 	return [][]float64{
-		{baseReward * 1.0, baseReward * 0.9},           // top_validator (stable, slightly less reward)
-		{baseReward * 1.1, baseReward * 0.8},           // small_validator (higher reward, more risk)
-		{baseReward * 1.0, baseReward * 0.95},          // split_delegation (diversified)
+		{baseReward * 1.0, baseReward * 0.9},                                  // top_validator (stable, slightly less reward)
+		{baseReward * 1.1, baseReward * 0.8},                                  // small_validator (higher reward, more risk)
+		{baseReward * 1.0, baseReward * 0.95},                                 // split_delegation (diversified)
 		{baseReward*1.05 - opportunityCost, baseReward*0.9 - opportunityCost}, // redelegation_chasing
 		{0, 0}, // hold_liquid
 	}
@@ -243,10 +243,10 @@ func (g *GameTheoryAnalyzer) calculateVEIDPayoffs(reward, cost, penalty int64) [
 	p := float64(penalty)
 
 	return [][]float64{
-		{r - c, r - c},           // thorough (always correct)
-		{r - c*0.3, r*0.5 - p},   // quick_approval (sometimes wrong)
-		{-p, -p},                 // random_rejection (penalized)
-		{r*2 - c*0.1, -p*5},      // collusive (high penalty if caught)
+		{r - c, r - c},         // thorough (always correct)
+		{r - c*0.3, r*0.5 - p}, // quick_approval (sometimes wrong)
+		{-p, -p},               // random_rejection (penalized)
+		{r*2 - c*0.1, -p * 5},  // collusive (high penalty if caught)
 	}
 }
 
@@ -255,10 +255,10 @@ func (g *GameTheoryAnalyzer) calculateProviderPayoffs(takeRateBPS, leaseValue, r
 	reputationBonus := revenue * float64(reputationWeight) / 10000
 
 	return [][]float64{
-		{revenue + reputationBonus, revenue + reputationBonus},              // honest
-		{revenue*1.5, -reputationBonus*2},                                   // overselling
-		{revenue*0.5, -reputationBonus*3},                                   // underbidding
-		{revenue*0.9 + reputationBonus*0.3, revenue*0.7 - reputationBonus},  // degradation
+		{revenue + reputationBonus, revenue + reputationBonus},             // honest
+		{revenue * 1.5, -reputationBonus * 2},                              // overselling
+		{revenue * 0.5, -reputationBonus * 3},                              // underbidding
+		{revenue*0.9 + reputationBonus*0.3, revenue*0.7 - reputationBonus}, // degradation
 	}
 }
 
@@ -269,7 +269,7 @@ func (g *GameTheoryAnalyzer) findNashEquilibrium(payoffs [][]float64) string {
 
 	// Find strategy with highest minimum payoff (maximin)
 	strategies := []string{strategyHonestParticipation, "double_signing", "selective_censorship", "collusion", "free_riding"}
-	
+
 	bestStrategy := 0
 	bestMinPayoff := float64(-1e18)
 
@@ -302,7 +302,7 @@ func (g *GameTheoryAnalyzer) findDominantStrategy(payoffs [][]float64) string {
 
 func (g *GameTheoryAnalyzer) findDelegatorNashEquilibrium(payoffs [][]float64) string {
 	strategies := []string{"delegate_to_top_validator", "delegate_to_small_validator", "split_delegation", "redelegation_chasing", "hold_liquid"}
-	
+
 	bestStrategy := 0
 	bestMinPayoff := float64(-1e18)
 
@@ -393,7 +393,7 @@ func (g *GameTheoryAnalyzer) generateVEIDRecommendations(alignment string, rewar
 	}
 
 	if reward < cost*2 {
-		recommendations = append(recommendations, "Current reward (" + formatInt(reward) + ") should be increased relative to cost (" + formatInt(cost) + ")")
+		recommendations = append(recommendations, "Current reward ("+formatInt(reward)+") should be increased relative to cost ("+formatInt(cost)+")")
 	}
 
 	return recommendations
@@ -407,7 +407,7 @@ func (g *GameTheoryAnalyzer) generateProviderRecommendations(alignment string, r
 	}
 
 	if reputationWeight < 2000 {
-		recommendations = append(recommendations, "Reputation weight (" + formatInt(reputationWeight) + " BPS) should be at least 2000 BPS (20%)")
+		recommendations = append(recommendations, "Reputation weight ("+formatInt(reputationWeight)+" BPS) should be at least 2000 BPS (20%)")
 	}
 
 	return recommendations
@@ -491,4 +491,3 @@ func (g *GameTheoryAnalyzer) ComprehensiveGameTheoryAnalysis(
 
 	return analyses
 }
-

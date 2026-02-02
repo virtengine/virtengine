@@ -83,24 +83,24 @@ func TestMultiMachineConformanceSuite(t *testing.T) {
 
 // MultiMachineConformanceSuite implements the conformance test suite.
 type MultiMachineConformanceSuite struct {
-	t                 *testing.T
-	config            *ProductionDeterminismConfig
-	dc                *DeterminismController
-	extractor         *FeatureExtractor
-	startTime         time.Time
-	results           []ConformanceTestResult
-	evidenceDir       string
-	platformInfo      PlatformValidationInfo
+	t            *testing.T
+	config       *ProductionDeterminismConfig
+	dc           *DeterminismController
+	extractor    *FeatureExtractor
+	startTime    time.Time
+	results      []ConformanceTestResult
+	evidenceDir  string
+	platformInfo PlatformValidationInfo
 }
 
 // ConformanceTestResult represents a single test result.
 type ConformanceTestResult struct {
-	TestName      string    `json:"test_name"`
-	Passed        bool      `json:"passed"`
-	Duration      int64     `json:"duration_ms"`
-	Details       string    `json:"details,omitempty"`
-	Hash          string    `json:"hash,omitempty"`
-	Timestamp     time.Time `json:"timestamp"`
+	TestName  string    `json:"test_name"`
+	Passed    bool      `json:"passed"`
+	Duration  int64     `json:"duration_ms"`
+	Details   string    `json:"details,omitempty"`
+	Hash      string    `json:"hash,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // NewMultiMachineConformanceSuite creates a new conformance suite.
@@ -680,11 +680,11 @@ func (s *MultiMachineConformanceSuite) TestSimulatedValidatorVariance(t *testing
 	// Simulate 5 validators with slight score variance (as would happen with GPU/threading)
 	baseScore := float32(75.0)
 	validatorScores := []float32{
-		baseScore,         // Validator 1
-		baseScore + 0.3,   // Validator 2 (slight positive drift)
-		baseScore - 0.2,   // Validator 3 (slight negative drift)
-		baseScore + 0.5,   // Validator 4
-		baseScore - 0.4,   // Validator 5
+		baseScore,       // Validator 1
+		baseScore + 0.3, // Validator 2 (slight positive drift)
+		baseScore - 0.2, // Validator 3 (slight negative drift)
+		baseScore + 0.5, // Validator 4
+		baseScore - 0.4, // Validator 5
 	}
 
 	// Check consensus
@@ -846,18 +846,18 @@ func (s *MultiMachineConformanceSuite) GenerateEvidence(t *testing.T) {
 	}
 
 	evidence := struct {
-		ReportID      string                      `json:"report_id"`
-		Version       string                      `json:"version"`
-		Platform      PlatformValidationInfo      `json:"platform"`
+		ReportID      string                       `json:"report_id"`
+		Version       string                       `json:"version"`
+		Platform      PlatformValidationInfo       `json:"platform"`
 		Config        *ProductionDeterminismConfig `json:"config"`
-		StartTime     time.Time                   `json:"start_time"`
-		EndTime       time.Time                   `json:"end_time"`
-		DurationMs    int64                       `json:"duration_ms"`
-		TestsPassed   int                         `json:"tests_passed"`
-		TestsFailed   int                         `json:"tests_failed"`
-		TotalTests    int                         `json:"total_tests"`
-		OverallPassed bool                        `json:"overall_passed"`
-		Results       []ConformanceTestResult     `json:"results"`
+		StartTime     time.Time                    `json:"start_time"`
+		EndTime       time.Time                    `json:"end_time"`
+		DurationMs    int64                        `json:"duration_ms"`
+		TestsPassed   int                          `json:"tests_passed"`
+		TestsFailed   int                          `json:"tests_failed"`
+		TotalTests    int                          `json:"total_tests"`
+		OverallPassed bool                         `json:"overall_passed"`
+		Results       []ConformanceTestResult      `json:"results"`
 	}{
 		ReportID:      fmt.Sprintf("conf-%s-%s-%d", runtime.GOOS, runtime.GOARCH, time.Now().Unix()),
 		Version:       DeterminismConfigVersion,
@@ -978,4 +978,3 @@ func BenchmarkMultiMachineFeatureExtract(b *testing.B) {
 		_, _ = extractor.ExtractFeatures(inputs)
 	}
 }
-

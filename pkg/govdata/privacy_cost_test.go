@@ -215,7 +215,7 @@ func TestRedactDocumentNumber(t *testing.T) {
 		expected string
 	}{
 		{"AB123456", "****3456"},
-		{"1234", "****"},       // 4 chars or less = all masked
+		{"1234", "****"}, // 4 chars or less = all masked
 		{"12345678901234", "**********1234"},
 	}
 
@@ -480,4 +480,3 @@ func TestCostManager_GetAlerts(t *testing.T) {
 		t.Error("Expected at least one alert")
 	}
 }
-

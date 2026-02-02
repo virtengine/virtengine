@@ -578,4 +578,3 @@ func InitializeProductionTEE() (*ProductionEnclaveService, error) {
 	// Create production service
 	return NewProductionEnclaveService(config)
 }
-

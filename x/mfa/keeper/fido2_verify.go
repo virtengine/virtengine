@@ -765,7 +765,7 @@ func (k Keeper) VerifyFIDO2Assertion(
 
 	if ctx.BlockTime().Unix() > challenge.ExpiresAt {
 		challenge.Status = types.ChallengeStatusExpired
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return types.ErrChallengeExpired
 	}
 
@@ -834,7 +834,7 @@ func (k Keeper) VerifyFIDO2Assertion(
 		if challenge.AttemptCount >= challenge.MaxAttempts {
 			challenge.Status = types.ChallengeStatusFailed
 		}
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return err
 	}
 
@@ -851,7 +851,7 @@ func (k Keeper) VerifyFIDO2Assertion(
 	challenge.Status = types.ChallengeStatusVerified
 	challenge.VerifiedAt = ctx.BlockTime().Unix()
 	challenge.FactorID = credIDBase64
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	return nil
 }

@@ -19,10 +19,10 @@ import (
 
 // WebhookServer handles incoming webhook requests from payment gateways
 type WebhookServer struct {
-	service    Service
-	config     WebhookConfig
-	mux        *http.ServeMux
-	
+	service Service
+	config  WebhookConfig
+	mux     *http.ServeMux
+
 	// Idempotency tracking
 	processedEvents map[string]time.Time
 	processedMu     sync.RWMutex
@@ -160,7 +160,10 @@ func (ws *WebhookServer) processWebhook(w http.ResponseWriter, r *http.Request, 
 	if gateway == GatewayAdyen {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{"response": "[accepted]"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"response": "[accepted]"}); err != nil {
+			// Best-effort response encoding - error already logged by caller
+			return
+		}
 		return
 	}
 
@@ -347,4 +350,3 @@ func (b *WebhookEventBuilder) WithRefund(refund Refund) *WebhookEventBuilder {
 func (b *WebhookEventBuilder) Build() WebhookEvent {
 	return b.event
 }
-

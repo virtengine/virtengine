@@ -249,11 +249,11 @@ func (h MFAGatingHooks) CheckMFARequired(
 // GetAccountMFAStatus returns a summary of MFA status for an account
 func (h MFAGatingHooks) GetAccountMFAStatus(ctx sdk.Context, account sdk.AccAddress) AccountMFAStatus {
 	status := AccountMFAStatus{
-		Address:         account.String(),
-		MFAEnabled:      false,
-		FactorCount:     0,
-		ActiveFactors:   []types.FactorType{},
-		TrustedDevices:  0,
+		Address:           account.String(),
+		MFAEnabled:        false,
+		FactorCount:       0,
+		ActiveFactors:     []types.FactorType{},
+		TrustedDevices:    0,
 		PendingChallenges: 0,
 	}
 
@@ -268,7 +268,7 @@ func (h MFAGatingHooks) GetAccountMFAStatus(ctx sdk.Context, account sdk.AccAddr
 	enrollments := h.keeper.GetFactorEnrollments(ctx, account)
 	now := ctx.BlockTime()
 	seenTypes := make(map[types.FactorType]bool)
-	
+
 	for _, e := range enrollments {
 		if e.CanVerify(now) {
 			status.FactorCount++

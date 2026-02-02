@@ -453,7 +453,7 @@ func (k Keeper) TallyWorkloadProposal(ctx sdk.Context, proposalID string) error 
 	if proposal.Status == types.WorkloadProposalStatusPassed {
 		if err := k.ExecuteWorkloadProposal(ctx, &proposal); err != nil {
 			proposal.Status = types.WorkloadProposalStatusFailed
-			k.SetWorkloadProposal(ctx, proposal)
+			_ = k.SetWorkloadProposal(ctx, proposal)
 			return err
 		}
 	}

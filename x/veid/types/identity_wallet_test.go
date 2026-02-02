@@ -425,45 +425,45 @@ func TestIdentityWallet_GetEligibility(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name             string
-		score            uint32
-		status           AccountStatus
-		scopes           []ScopeReference
-		canAccessBasic   bool
+		name              string
+		score             uint32
+		status            AccountStatus
+		scopes            []ScopeReference
+		canAccessBasic    bool
 		canAccessStandard bool
-		canAccessPremium bool
+		canAccessPremium  bool
 	}{
 		{
-			name:             "unverified - no access",
-			score:            0,
-			status:           AccountStatusUnknown,
-			canAccessBasic:   false,
+			name:              "unverified - no access",
+			score:             0,
+			status:            AccountStatusUnknown,
+			canAccessBasic:    false,
 			canAccessStandard: false,
-			canAccessPremium: false,
+			canAccessPremium:  false,
 		},
 		{
-			name:             "basic tier - basic access",
-			score:            50,
-			status:           AccountStatusVerified,
-			canAccessBasic:   true,
+			name:              "basic tier - basic access",
+			score:             50,
+			status:            AccountStatusVerified,
+			canAccessBasic:    true,
 			canAccessStandard: false,
-			canAccessPremium: false,
+			canAccessPremium:  false,
 		},
 		{
-			name:             "standard tier - basic and standard access",
-			score:            70,
-			status:           AccountStatusVerified,
-			canAccessBasic:   true,
+			name:              "standard tier - basic and standard access",
+			score:             70,
+			status:            AccountStatusVerified,
+			canAccessBasic:    true,
 			canAccessStandard: true,
-			canAccessPremium: false,
+			canAccessPremium:  false,
 		},
 		{
-			name:             "premium tier - all access",
-			score:            85,
-			status:           AccountStatusVerified,
-			canAccessBasic:   true,
+			name:              "premium tier - all access",
+			score:             85,
+			status:            AccountStatusVerified,
+			canAccessBasic:    true,
 			canAccessStandard: true,
-			canAccessPremium: true,
+			canAccessPremium:  true,
 		},
 	}
 

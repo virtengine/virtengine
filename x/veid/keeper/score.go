@@ -372,7 +372,7 @@ func (k Keeper) GetVerificationStatus(ctx sdk.Context, addr string) types.Accoun
 func (k Keeper) CheckEligibility(ctx sdk.Context, addr string, offeringType types.OfferingType) types.EligibilityResult {
 	requirements := types.GetRequiredScopesForOffering(offeringType)
 	result := types.EligibilityResult{
-		Eligible:      false,
+		Eligible:       false,
 		AccountAddress: addr,
 		OfferingType:   offeringType,
 		RequiredScore:  requirements.MinimumScore,

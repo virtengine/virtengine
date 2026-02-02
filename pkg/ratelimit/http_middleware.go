@@ -187,6 +187,7 @@ func (m *HTTPMiddleware) defaultOnRateLimited(w http.ResponseWriter, r *http.Req
 		"reset_at":    result.ResetAt,
 	}
 
+	//nolint:errchkjson // HTTP response encoding
 	_ = json.NewEncoder(w).Encode(response)
 }
 
@@ -306,4 +307,3 @@ func HealthCheckMiddleware(healthCheckPaths ...string) func(http.Handler) http.H
 		})
 	}
 }
-

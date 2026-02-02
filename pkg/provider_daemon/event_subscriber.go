@@ -124,4 +124,3 @@ func DefaultEventSubscriberConfig() EventSubscriberConfig {
 		HealthCheckInterval:    time.Second * 30,
 	}
 }
-

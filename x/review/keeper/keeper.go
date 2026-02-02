@@ -190,8 +190,8 @@ func (k Keeper) VerifyOrderCompleted(ctx sdk.Context, orderID, customerAddr, pro
 			CustomerAddress: customerAddr,
 			ProviderAddress: providerAddr,
 			// BUGFIX-001: Use ctx.BlockTime() for consensus safety, even in test mock
-			CompletedAt:     ctx.BlockTime().UTC().Add(-24 * time.Hour),
-			OrderHash:       fmt.Sprintf("mock-hash-%s", orderID),
+			CompletedAt: ctx.BlockTime().UTC().Add(-24 * time.Hour),
+			OrderHash:   fmt.Sprintf("mock-hash-%s", orderID),
 		}, nil
 	}
 
@@ -551,6 +551,7 @@ func (k Keeper) addToIndex(store storetypes.KVStore, key []byte, reviewID string
 	}
 
 	ids = append(ids, reviewID)
+	//nolint:errchkjson // ids is a simple string slice, Marshal cannot fail
 	newBz, _ := json.Marshal(ids)
 	store.Set(key, newBz)
 }
@@ -589,6 +590,7 @@ func (k Keeper) removeFromIndex(store storetypes.KVStore, key []byte, reviewID s
 	if len(newIds) == 0 {
 		store.Delete(key)
 	} else {
+		//nolint:errchkjson // newIds is a simple string slice, Marshal cannot fail
 		newBz, _ := json.Marshal(newIds)
 		store.Set(key, newBz)
 	}

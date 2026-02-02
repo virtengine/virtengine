@@ -57,4 +57,3 @@ var (
 	// ErrInvalidState is returned when an operation is invalid for the current state
 	ErrInvalidState = errors.Register("artifact_store", 2516, "invalid state")
 )
-

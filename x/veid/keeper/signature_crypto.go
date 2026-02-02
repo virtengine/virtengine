@@ -255,6 +255,7 @@ func VerifySaltBindingWithParams(params *SaltBindingVerifyParams) error {
 
 // VerifySaltBinding verifies the cryptographic salt binding.
 // This ensures the salt was properly bound to the user, scope, and timestamp.
+//
 // Deprecated: Use VerifySaltBindingWithParams for new code.
 //
 //nolint:revive // Keeping for backward compatibility
@@ -381,6 +382,7 @@ func VerifyCompositeSignatures(params *CompositeSignatureParams) (*ClientSignatu
 }
 
 // VerifyClientAndUserSignatures verifies both client and user signatures.
+//
 // Deprecated: Use VerifyCompositeSignatures for new code.
 //
 //nolint:revive // Keeping for backward compatibility

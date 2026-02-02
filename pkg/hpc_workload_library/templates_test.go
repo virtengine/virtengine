@@ -351,4 +351,3 @@ func TestTemplateVersionedID(t *testing.T) {
 		t.Errorf("GetVersionedID() = %s, want %s", template.GetVersionedID(), expected)
 	}
 }
-

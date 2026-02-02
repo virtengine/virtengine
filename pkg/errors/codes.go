@@ -88,50 +88,49 @@ func ValidateCode(module string, code uint32) bool {
 // Modules should follow this pattern for consistency:
 const (
 	// 00-09: Invalid input/validation errors
-	CodeInvalidInput = 0
+	CodeInvalidInput   = 0
 	CodeInvalidAddress = 1
-	CodeInvalidParams = 2
+	CodeInvalidParams  = 2
 
 	// 10-19: Not found errors
-	CodeNotFound = 10
+	CodeNotFound         = 10
 	CodeResourceNotFound = 11
 
 	// 20-29: Already exists/conflict errors
 	CodeAlreadyExists = 20
-	CodeConflict = 21
+	CodeConflict      = 21
 
 	// 30-39: Unauthorized/permission errors
-	CodeUnauthorized = 30
-	CodeForbidden = 31
+	CodeUnauthorized            = 30
+	CodeForbidden               = 31
 	CodeInsufficientPermissions = 32
 
 	// 40-49: State/lifecycle errors
 	CodeInvalidState = 40
-	CodeExpired = 41
-	CodeRevoked = 42
-	CodeLocked = 43
+	CodeExpired      = 41
+	CodeRevoked      = 42
+	CodeLocked       = 43
 
 	// 50-59: External service errors
 	CodeExternalServiceError = 50
-	CodeTimeout = 51
-	CodeUnavailable = 52
+	CodeTimeout              = 51
+	CodeUnavailable          = 52
 
 	// 60-69: Internal errors
-	CodeInternal = 60
-	CodeInferenceFailed = 61
+	CodeInternal         = 60
+	CodeInferenceFailed  = 61
 	CodeEncryptionFailed = 62
 	CodeDecryptionFailed = 63
 
 	// 70-79: Verification/validation errors
 	CodeVerificationFailed = 70
-	CodeSignatureInvalid = 71
-	CodeChallengeInvalid = 72
+	CodeSignatureInvalid   = 71
+	CodeChallengeInvalid   = 72
 
 	// 80-89: Rate limiting/quota errors
-	CodeRateLimitExceeded = 80
-	CodeQuotaExceeded = 81
+	CodeRateLimitExceeded  = 80
+	CodeQuotaExceeded      = 81
 	CodeMaxRetriesExceeded = 82
 
 	// 90-99: Reserved for future use
 )
-

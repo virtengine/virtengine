@@ -23,10 +23,10 @@ import (
 func TestLoadSecrets(t *testing.T) {
 	// Save original env and restore after test
 	origEnv := map[string]string{
-		"DATABASE_URL":    os.Getenv("DATABASE_URL"),
-		"JWT_SECRET":      os.Getenv("JWT_SECRET"),
-		"ENCRYPTION_KEY":  os.Getenv("ENCRYPTION_KEY"),
-		"OPENAI_API_KEY":  os.Getenv("OPENAI_API_KEY"),
+		"DATABASE_URL":      os.Getenv("DATABASE_URL"),
+		"JWT_SECRET":        os.Getenv("JWT_SECRET"),
+		"ENCRYPTION_KEY":    os.Getenv("ENCRYPTION_KEY"),
+		"OPENAI_API_KEY":    os.Getenv("OPENAI_API_KEY"),
 		"STRIPE_SECRET_KEY": os.Getenv("STRIPE_SECRET_KEY"),
 	}
 	defer func() {
@@ -335,4 +335,3 @@ func TestLoadSecrets_EmptyEnv(t *testing.T) {
 		t.Errorf("JWTSecret = %q, want empty", cfg.JWTSecret)
 	}
 }
-

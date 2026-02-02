@@ -149,10 +149,10 @@ func DefaultMarketMakerConfig() MarketMakerConfig {
 		MaxSpreadBps:       500,     // 5% max spread
 		BaseRewardPerBlock: 1000,
 		SpreadTiers: []SpreadTierConfig{
-			{MaxSpreadBps: 50, RewardBonusBps: 5000},   // <0.5% spread: 50% bonus
-			{MaxSpreadBps: 100, RewardBonusBps: 2500},  // <1% spread: 25% bonus
-			{MaxSpreadBps: 200, RewardBonusBps: 1000},  // <2% spread: 10% bonus
-			{MaxSpreadBps: 500, RewardBonusBps: 0},     // <5% spread: no bonus
+			{MaxSpreadBps: 50, RewardBonusBps: 5000},  // <0.5% spread: 50% bonus
+			{MaxSpreadBps: 100, RewardBonusBps: 2500}, // <1% spread: 25% bonus
+			{MaxSpreadBps: 200, RewardBonusBps: 1000}, // <2% spread: 10% bonus
+			{MaxSpreadBps: 500, RewardBonusBps: 0},    // <5% spread: no bonus
 		},
 		UptimeMinimumPct:        80,
 		MaxRewardPerEpoch:       100000000, // 100 tokens per epoch
@@ -212,13 +212,13 @@ func DefaultLiquidityMiningConfig() LiquidityMiningConfig {
 	return LiquidityMiningConfig{
 		Enabled:                   true,
 		RewardTokenDenom:          "uakt",
-		RewardPerBlock:            10000,      // 10000 tokens per block
-		MinLiquidityAmount:        10000000,   // 10 tokens minimum
-		LockupPeriodBlocks:        604800,     // ~42 days at 6s blocks
-		LockupBonusBps:            2000,       // 20% bonus for lockup
-		EarlyUnlockPenaltyBps:     5000,       // 50% penalty for early unlock
+		RewardPerBlock:            10000,       // 10000 tokens per block
+		MinLiquidityAmount:        10000000,    // 10 tokens minimum
+		LockupPeriodBlocks:        604800,      // ~42 days at 6s blocks
+		LockupBonusBps:            2000,        // 20% bonus for lockup
+		EarlyUnlockPenaltyBps:     5000,        // 50% penalty for early unlock
 		MaxTotalRewardsPerEpoch:   10000000000, // 10000 tokens per epoch
-		BoostMultiplierForStakers: 150,        // 1.5x for stakers
+		BoostMultiplierForStakers: 150,         // 1.5x for stakers
 	}
 }
 

@@ -601,20 +601,20 @@ type RefundRequest struct {
 type WebhookEventType string
 
 const (
-	WebhookEventPaymentIntentSucceeded    WebhookEventType = "payment_intent.succeeded"
-	WebhookEventPaymentIntentFailed       WebhookEventType = "payment_intent.payment_failed"
-	WebhookEventPaymentIntentCanceled     WebhookEventType = "payment_intent.canceled"
-	WebhookEventPaymentIntentProcessing   WebhookEventType = "payment_intent.processing"
-	WebhookEventChargeRefunded            WebhookEventType = "charge.refunded"
-	WebhookEventChargeDisputeCreated      WebhookEventType = "charge.dispute.created"
-	WebhookEventChargeDisputeUpdated      WebhookEventType = "charge.dispute.updated"
-	WebhookEventChargeDisputeClosed       WebhookEventType = "charge.dispute.closed"
+	WebhookEventPaymentIntentSucceeded       WebhookEventType = "payment_intent.succeeded"
+	WebhookEventPaymentIntentFailed          WebhookEventType = "payment_intent.payment_failed"
+	WebhookEventPaymentIntentCanceled        WebhookEventType = "payment_intent.canceled"
+	WebhookEventPaymentIntentProcessing      WebhookEventType = "payment_intent.processing"
+	WebhookEventChargeRefunded               WebhookEventType = "charge.refunded"
+	WebhookEventChargeDisputeCreated         WebhookEventType = "charge.dispute.created"
+	WebhookEventChargeDisputeUpdated         WebhookEventType = "charge.dispute.updated"
+	WebhookEventChargeDisputeClosed          WebhookEventType = "charge.dispute.closed"
 	WebhookEventChargeDisputeFundsWithdrawn  WebhookEventType = "charge.dispute.funds_withdrawn"
 	WebhookEventChargeDisputeFundsReinstated WebhookEventType = "charge.dispute.funds_reinstated"
-	WebhookEventPaymentMethodAttached     WebhookEventType = "payment_method.attached"
-	WebhookEventPaymentMethodDetached     WebhookEventType = "payment_method.detached"
-	WebhookEventCustomerCreated           WebhookEventType = "customer.created"
-	WebhookEventCustomerDeleted           WebhookEventType = "customer.deleted"
+	WebhookEventPaymentMethodAttached        WebhookEventType = "payment_method.attached"
+	WebhookEventPaymentMethodDetached        WebhookEventType = "payment_method.detached"
+	WebhookEventCustomerCreated              WebhookEventType = "customer.created"
+	WebhookEventCustomerDeleted              WebhookEventType = "customer.deleted"
 )
 
 // WebhookEvent represents a webhook event from the payment gateway
@@ -652,13 +652,13 @@ type WebhookEvent struct {
 type DisputeStatus string
 
 const (
-	DisputeStatusOpen             DisputeStatus = "open"
-	DisputeStatusNeedsResponse    DisputeStatus = "needs_response"
-	DisputeStatusUnderReview      DisputeStatus = "under_review"
-	DisputeStatusWon              DisputeStatus = "won"
-	DisputeStatusLost             DisputeStatus = "lost"
-	DisputeStatusAccepted         DisputeStatus = "accepted"
-	DisputeStatusExpired          DisputeStatus = "expired"
+	DisputeStatusOpen          DisputeStatus = "open"
+	DisputeStatusNeedsResponse DisputeStatus = "needs_response"
+	DisputeStatusUnderReview   DisputeStatus = "under_review"
+	DisputeStatusWon           DisputeStatus = "won"
+	DisputeStatusLost          DisputeStatus = "lost"
+	DisputeStatusAccepted      DisputeStatus = "accepted"
+	DisputeStatusExpired       DisputeStatus = "expired"
 )
 
 // IsFinal returns true if the dispute is in a terminal state
@@ -675,11 +675,11 @@ func (s DisputeStatus) IsFinal() bool {
 type DisputeReason string
 
 const (
-	DisputeReasonFraudulent        DisputeReason = "fraudulent"
-	DisputeReasonDuplicate         DisputeReason = "duplicate"
+	DisputeReasonFraudulent         DisputeReason = "fraudulent"
+	DisputeReasonDuplicate          DisputeReason = "duplicate"
 	DisputeReasonProductNotReceived DisputeReason = "product_not_received"
-	DisputeReasonUnrecognized      DisputeReason = "unrecognized"
-	DisputeReasonGeneral           DisputeReason = "general"
+	DisputeReasonUnrecognized       DisputeReason = "unrecognized"
+	DisputeReasonGeneral            DisputeReason = "general"
 )
 
 // Dispute represents a payment dispute/chargeback
@@ -1121,4 +1121,3 @@ type TreasuryTransferResult struct {
 	// Error is any error that occurred
 	Error error `json:"-"`
 }
-

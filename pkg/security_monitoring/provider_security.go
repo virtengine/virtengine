@@ -11,19 +11,19 @@ import (
 // ProviderSecurityConfig configures provider security monitoring
 type ProviderSecurityConfig struct {
 	// Key compromise detection
-	MaxKeyUsagePerMinute        int `json:"max_key_usage_per_minute"`
-	MaxFailedSignaturesPerHour  int `json:"max_failed_signatures_per_hour"`
-	AnomalousTimeWindowStart    int `json:"anomalous_time_window_start"` // hour
-	AnomalousTimeWindowEnd      int `json:"anomalous_time_window_end"`   // hour
+	MaxKeyUsagePerMinute       int `json:"max_key_usage_per_minute"`
+	MaxFailedSignaturesPerHour int `json:"max_failed_signatures_per_hour"`
+	AnomalousTimeWindowStart   int `json:"anomalous_time_window_start"` // hour
+	AnomalousTimeWindowEnd     int `json:"anomalous_time_window_end"`   // hour
 
 	// Activity thresholds
-	MaxBidsPerMinute           int `json:"max_bids_per_minute"`
-	MaxLeasesPerHour           int `json:"max_leases_per_hour"`
-	MaxDeploymentsPerHour      int `json:"max_deployments_per_hour"`
+	MaxBidsPerMinute      int `json:"max_bids_per_minute"`
+	MaxLeasesPerHour      int `json:"max_leases_per_hour"`
+	MaxDeploymentsPerHour int `json:"max_deployments_per_hour"`
 
 	// Location tracking
-	EnableLocationTracking     bool     `json:"enable_location_tracking"`
-	AllowedIPRanges            []string `json:"allowed_ip_ranges,omitempty"`
+	EnableLocationTracking bool     `json:"enable_location_tracking"`
+	AllowedIPRanges        []string `json:"allowed_ip_ranges,omitempty"`
 
 	// Resource anomaly detection
 	EnableResourceAnomalyDetection bool    `json:"enable_resource_anomaly_detection"`
@@ -51,28 +51,28 @@ func DefaultProviderSecurityConfig() *ProviderSecurityConfig {
 
 // ProviderActivityData represents provider daemon activity
 type ProviderActivityData struct {
-	ProviderID      string                 `json:"provider_id"`
-	ActivityType    string                 `json:"activity_type"` // bid, lease, deploy, key_usage, etc.
-	Timestamp       time.Time              `json:"timestamp"`
-	SourceIP        string                 `json:"source_ip,omitempty"`
-	KeyID           string                 `json:"key_id,omitempty"`
-	KeyFingerprint  string                 `json:"key_fingerprint,omitempty"`
-	Success         bool                   `json:"success"`
-	FailureReason   string                 `json:"failure_reason,omitempty"`
+	ProviderID     string    `json:"provider_id"`
+	ActivityType   string    `json:"activity_type"` // bid, lease, deploy, key_usage, etc.
+	Timestamp      time.Time `json:"timestamp"`
+	SourceIP       string    `json:"source_ip,omitempty"`
+	KeyID          string    `json:"key_id,omitempty"`
+	KeyFingerprint string    `json:"key_fingerprint,omitempty"`
+	Success        bool      `json:"success"`
+	FailureReason  string    `json:"failure_reason,omitempty"`
 
 	// Activity-specific data
-	LeaseID         string                 `json:"lease_id,omitempty"`
-	OrderID         string                 `json:"order_id,omitempty"`
-	DeploymentID    string                 `json:"deployment_id,omitempty"`
-	BidAmount       float64                `json:"bid_amount,omitempty"`
+	LeaseID      string  `json:"lease_id,omitempty"`
+	OrderID      string  `json:"order_id,omitempty"`
+	DeploymentID string  `json:"deployment_id,omitempty"`
+	BidAmount    float64 `json:"bid_amount,omitempty"`
 
 	// Resource metrics
-	CPUUsage        float64                `json:"cpu_usage,omitempty"`
-	MemoryUsage     float64                `json:"memory_usage,omitempty"`
-	StorageUsage    float64                `json:"storage_usage,omitempty"`
-	NetworkUsage    float64                `json:"network_usage,omitempty"`
+	CPUUsage     float64 `json:"cpu_usage,omitempty"`
+	MemoryUsage  float64 `json:"memory_usage,omitempty"`
+	StorageUsage float64 `json:"storage_usage,omitempty"`
+	NetworkUsage float64 `json:"network_usage,omitempty"`
 
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ProviderSecurityIndicator represents types of provider security indicators
@@ -96,11 +96,11 @@ type ProviderSecurityMonitor struct {
 	metrics *SecurityMetrics
 
 	// State tracking
-	providerActivity   map[string][]providerActivityRecord
-	providerKeyUsage   map[string][]keyUsageRecord
-	providerLocations  map[string][]locationRecord
-	resourceBaselines  map[string]resourceBaseline
-	mu                 sync.RWMutex
+	providerActivity  map[string][]providerActivityRecord
+	providerKeyUsage  map[string][]keyUsageRecord
+	providerLocations map[string][]locationRecord
+	resourceBaselines map[string]resourceBaseline
+	mu                sync.RWMutex
 
 	// Event channel
 	eventChan chan<- *SecurityEvent
@@ -229,11 +229,11 @@ func (m *ProviderSecurityMonitor) checkKeyUsageVelocity(activity *ProviderActivi
 			Source:      activity.ProviderID,
 			Description: "Rapid key usage detected - potential key compromise",
 			Metadata: map[string]interface{}{
-				"provider_id":  activity.ProviderID,
-				"key_id":       activity.KeyID,
-				"usage_count":  recentUsage,
-				"threshold":    m.config.MaxKeyUsagePerMinute,
-				"window":       "1m",
+				"provider_id": activity.ProviderID,
+				"key_id":      activity.KeyID,
+				"usage_count": recentUsage,
+				"threshold":   m.config.MaxKeyUsagePerMinute,
+				"window":      "1m",
 			},
 		})
 	}
@@ -265,11 +265,11 @@ func (m *ProviderSecurityMonitor) checkKeyFailures(activity *ProviderActivityDat
 			Source:      activity.ProviderID,
 			Description: "Multiple key operation failures - potential compromise",
 			Metadata: map[string]interface{}{
-				"provider_id":    activity.ProviderID,
-				"failure_count":  failureCount,
-				"threshold":      m.config.MaxFailedSignaturesPerHour,
-				"window":         "1h",
-				"last_reason":    activity.FailureReason,
+				"provider_id":   activity.ProviderID,
+				"failure_count": failureCount,
+				"threshold":     m.config.MaxFailedSignaturesPerHour,
+				"window":        "1h",
+				"last_reason":   activity.FailureReason,
 			},
 		})
 	}
@@ -498,11 +498,11 @@ func (m *ProviderSecurityMonitor) checkResourceAnomaly(activity *ProviderActivit
 				Source:      activity.ProviderID,
 				Description: "Anomalous CPU usage detected",
 				Metadata: map[string]interface{}{
-					"provider_id":    activity.ProviderID,
-					"current_cpu":    activity.CPUUsage,
-					"baseline_cpu":   baseline.avgCPU,
-					"variance":       cpuVariance,
-					"threshold":      m.config.ResourceUsageVarianceThreshold,
+					"provider_id":  activity.ProviderID,
+					"current_cpu":  activity.CPUUsage,
+					"baseline_cpu": baseline.avgCPU,
+					"variance":     cpuVariance,
+					"threshold":    m.config.ResourceUsageVarianceThreshold,
 				},
 			})
 		}
@@ -521,11 +521,11 @@ func (m *ProviderSecurityMonitor) checkResourceAnomaly(activity *ProviderActivit
 				Source:      activity.ProviderID,
 				Description: "Anomalous memory usage detected",
 				Metadata: map[string]interface{}{
-					"provider_id":      activity.ProviderID,
-					"current_memory":   activity.MemoryUsage,
-					"baseline_memory":  baseline.avgMemory,
-					"variance":         memVariance,
-					"threshold":        m.config.ResourceUsageVarianceThreshold,
+					"provider_id":     activity.ProviderID,
+					"current_memory":  activity.MemoryUsage,
+					"baseline_memory": baseline.avgMemory,
+					"variance":        memVariance,
+					"threshold":       m.config.ResourceUsageVarianceThreshold,
 				},
 			})
 		}
@@ -646,4 +646,3 @@ func (m *ProviderSecurityMonitor) cleanup(ctx context.Context) {
 		}
 	}
 }
-

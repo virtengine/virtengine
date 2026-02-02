@@ -217,4 +217,3 @@ func QuickSetup(ctx context.Context, redisURL string, logger zerolog.Logger) (*S
 func QuickSetupWithConfig(ctx context.Context, config RateLimitConfig, logger zerolog.Logger) (*ServerIntegration, error) {
 	return NewServerIntegration(ctx, config, logger)
 }
-

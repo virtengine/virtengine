@@ -174,7 +174,7 @@ func BenchmarkProofVerification(b *testing.B) {
 // BenchmarkCommitmentGeneration benchmarks commitment hash generation
 func BenchmarkCommitmentGeneration(b *testing.B) {
 	salt := make([]byte, 32)
-	rand.Read(salt)
+	_, _ = rand.Read(salt)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -202,7 +202,7 @@ func BenchmarkProofIDGeneration(b *testing.B) {
 	subjectAddr := "cosmos1test"
 	claimTypes := []types.ClaimType{types.ClaimTypeAgeOver18, types.ClaimTypeEmailVerified}
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

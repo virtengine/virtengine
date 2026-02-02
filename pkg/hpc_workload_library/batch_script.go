@@ -459,7 +459,7 @@ func formatTime(minutes int64) string {
 	mins := minutes % 60
 	if hours > 24 {
 		days := hours / 24
-		hours = hours % 24
+		hours %= 24
 		return fmt.Sprintf("%d-%02d:%02d:00", days, hours, mins)
 	}
 	return fmt.Sprintf("%02d:%02d:00", hours, mins)
@@ -523,4 +523,3 @@ EXIT_CODE=$?
 
 exit $EXIT_CODE
 `))
-

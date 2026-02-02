@@ -34,16 +34,16 @@ func FuzzEnvelopeValidate(f *testing.F) {
 	f.Add(validJSON)
 
 	// Edge cases
-	f.Add([]byte("{}"))                                    // Empty object
-	f.Add([]byte("null"))                                  // Null
-	f.Add([]byte("[]"))                                    // Array instead of object
-	f.Add([]byte(`{"version": 0}`))                        // Zero version
-	f.Add([]byte(`{"version": 999999}`))                   // Future version
-	f.Add([]byte(`{"algorithm_id": "UNKNOWN-ALGO"}`))      // Unknown algorithm
-	f.Add([]byte(`{"recipient_key_ids": []}`))             // Empty recipients
-	f.Add([]byte(`{"nonce": ""}`))                         // Empty nonce
-	f.Add([]byte(`{"ciphertext": ""}`))                    // Empty ciphertext
-	f.Add(bytes.Repeat([]byte{0xFF}, 1000))                // Random bytes
+	f.Add([]byte("{}"))                               // Empty object
+	f.Add([]byte("null"))                             // Null
+	f.Add([]byte("[]"))                               // Array instead of object
+	f.Add([]byte(`{"version": 0}`))                   // Zero version
+	f.Add([]byte(`{"version": 999999}`))              // Future version
+	f.Add([]byte(`{"algorithm_id": "UNKNOWN-ALGO"}`)) // Unknown algorithm
+	f.Add([]byte(`{"recipient_key_ids": []}`))        // Empty recipients
+	f.Add([]byte(`{"nonce": ""}`))                    // Empty nonce
+	f.Add([]byte(`{"ciphertext": ""}`))               // Empty ciphertext
+	f.Add(bytes.Repeat([]byte{0xFF}, 1000))           // Random bytes
 	f.Add([]byte(`{"version": 1, "algorithm_id": "X25519-XSALSA20-POLY1305", "algorithm_version": 1}`))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -345,11 +345,9 @@ func FuzzAlgorithmValidation(f *testing.F) {
 					t.Errorf("unexpected error for valid params: %v", err)
 				}
 			}
-		} else {
+		} else if err == nil {
 			// Unsupported algorithm should fail
-			if err == nil {
-				t.Errorf("expected error for unsupported algorithm %q", algorithmID)
-			}
+			t.Errorf("expected error for unsupported algorithm %q", algorithmID)
 		}
 	})
 }

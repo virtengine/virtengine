@@ -411,6 +411,7 @@ func (k Keeper) indexReportByProviderCluster(ctx sdk.Context, report types.Bench
 	}
 
 	reportIDs = append(reportIDs, report.ReportID)
+	//nolint:errchkjson // reportIDs is a simple string slice, Marshal cannot fail
 	bz, _ := json.Marshal(reportIDs)
 	store.Set(indexKey, bz)
 }
@@ -431,6 +432,7 @@ func (k Keeper) indexReportByRegion(ctx sdk.Context, report types.BenchmarkRepor
 	}
 
 	reportIDs = append(reportIDs, report.ReportID)
+	//nolint:errchkjson // reportIDs is a simple string slice, Marshal cannot fail
 	bz, _ := json.Marshal(reportIDs)
 	store.Set(indexKey, bz)
 }

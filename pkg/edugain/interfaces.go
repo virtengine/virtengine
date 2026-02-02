@@ -465,4 +465,3 @@ type ServiceStatus struct {
 	// LastError is the last error (if any)
 	LastError string `json:"last_error,omitempty"`
 }
-

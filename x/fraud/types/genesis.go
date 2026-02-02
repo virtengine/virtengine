@@ -10,14 +10,14 @@ import (
 // DefaultParams returns default module parameters
 func DefaultParams() Params {
 	return Params{
-		MinDescriptionLength:       MinDescriptionLength,
-		MaxDescriptionLength:       MaxDescriptionLength,
-		MaxEvidenceCount:           10,
-		MaxEvidenceSizeBytes:       10 * 1024 * 1024, // 10MB
-		AutoAssignEnabled:          true,
-		EscalationThresholdDays:    7,
-		ReportRetentionDays:        365,
-		AuditLogRetentionDays:      730, // 2 years
+		MinDescriptionLength:    MinDescriptionLength,
+		MaxDescriptionLength:    MaxDescriptionLength,
+		MaxEvidenceCount:        10,
+		MaxEvidenceSizeBytes:    10 * 1024 * 1024, // 10MB
+		AutoAssignEnabled:       true,
+		EscalationThresholdDays: 7,
+		ReportRetentionDays:     365,
+		AuditLogRetentionDays:   730, // 2 years
 	}
 }
 
@@ -77,12 +77,12 @@ func (p Params) Validate() error {
 // DefaultGenesisState returns default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Params:                   DefaultParams(),
-		FraudReports:             []FraudReport{},
-		AuditLogs:                []FraudAuditLog{},
-		ModeratorQueue:           []ModeratorQueueEntry{},
-		NextFraudReportSequence:  1,
-		NextAuditLogSequence:     1,
+		Params:                  DefaultParams(),
+		FraudReports:            []FraudReport{},
+		AuditLogs:               []FraudAuditLog{},
+		ModeratorQueue:          []ModeratorQueueEntry{},
+		NextFraudReportSequence: 1,
+		NextAuditLogSequence:    1,
 	}
 }
 

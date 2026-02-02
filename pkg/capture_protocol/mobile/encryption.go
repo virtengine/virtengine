@@ -460,25 +460,24 @@ func ComputeKeyFingerprint(publicKey []byte) string {
 // This method would be used when submitting to the chain
 func (e *EncryptedCapturePayload) ToVEIDEnvelope() map[string]interface{} {
 	return map[string]interface{}{
-		"version":             e.Version,
-		"algorithm_id":        e.AlgorithmID,
-		"algorithm_version":   e.AlgorithmVersion,
-		"recipient_key_ids":   e.RecipientKeyIDs,
-		"nonce":               e.Nonce,
-		"ciphertext":          e.Ciphertext,
-		"sender_pub_key":      e.EphemeralPublicKey,
+		"version":           e.Version,
+		"algorithm_id":      e.AlgorithmID,
+		"algorithm_version": e.AlgorithmVersion,
+		"recipient_key_ids": e.RecipientKeyIDs,
+		"nonce":             e.Nonce,
+		"ciphertext":        e.Ciphertext,
+		"sender_pub_key":    e.EphemeralPublicKey,
 		"metadata": map[string]string{
-			"capture_type":        e.Metadata.CaptureType,
-			"original_size":       fmt.Sprintf("%d", e.Metadata.OriginalSize),
-			"compressed_size":     fmt.Sprintf("%d", e.Metadata.CompressedSize),
-			"mime_type":           e.Metadata.MimeType,
-			"client_id":           e.Metadata.ClientID,
-			"sdk_version":         e.Metadata.SDKVersion,
-			"salt_hash":           fmt.Sprintf("%x", e.SaltBinding.SaltHash),
-			"device_fingerprint":  e.SaltBinding.DeviceFingerprint,
-			"session_id":          e.SaltBinding.SessionID,
-			"timestamp":           fmt.Sprintf("%d", e.SaltBinding.Timestamp),
+			"capture_type":       e.Metadata.CaptureType,
+			"original_size":      fmt.Sprintf("%d", e.Metadata.OriginalSize),
+			"compressed_size":    fmt.Sprintf("%d", e.Metadata.CompressedSize),
+			"mime_type":          e.Metadata.MimeType,
+			"client_id":          e.Metadata.ClientID,
+			"sdk_version":        e.Metadata.SDKVersion,
+			"salt_hash":          fmt.Sprintf("%x", e.SaltBinding.SaltHash),
+			"device_fingerprint": e.SaltBinding.DeviceFingerprint,
+			"session_id":         e.SaltBinding.SessionID,
+			"timestamp":          fmt.Sprintf("%d", e.SaltBinding.Timestamp),
 		},
 	}
 }
-

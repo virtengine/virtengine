@@ -16,10 +16,10 @@ type MemoryCache[K comparable, V any] struct {
 	defaultTTL time.Duration
 
 	// Internal storage
-	mu       sync.RWMutex
-	items    map[K]*list.Element
-	lruList  *list.List
-	closed   atomic.Bool
+	mu      sync.RWMutex
+	items   map[K]*list.Element
+	lruList *list.List
+	closed  atomic.Bool
 
 	// Metrics
 	hits        atomic.Uint64
@@ -424,4 +424,3 @@ var (
 	_ LoadingCache[string, any]     = (*MemoryCache[string, any])(nil)
 	_ ObservableCache[string, any]  = (*MemoryCache[string, any])(nil)
 )
-

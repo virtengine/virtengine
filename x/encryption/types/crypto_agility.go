@@ -494,8 +494,8 @@ type PQMilestone struct {
 // DefaultPostQuantumRoadmap returns the default post-quantum roadmap
 func DefaultPostQuantumRoadmap(now time.Time) *PostQuantumRoadmap {
 	// Set target dates based on current date
-	hybridDate := now.AddDate(1, 0, 0)  // 1 year from now
-	fullDate := now.AddDate(3, 0, 0)    // 3 years from now
+	hybridDate := now.AddDate(1, 0, 0) // 1 year from now
+	fullDate := now.AddDate(3, 0, 0)   // 3 years from now
 
 	return &PostQuantumRoadmap{
 		Version:      CryptoAgilityVersion,
@@ -534,9 +534,9 @@ func DefaultPostQuantumRoadmap(now time.Time) *PostQuantumRoadmap {
 			},
 		},
 		RecommendedAlgorithms: []string{
-			"ML-KEM-768",          // NIST ML-KEM (formerly CRYSTALS-Kyber)
-			"ML-DSA-65",           // NIST ML-DSA (formerly CRYSTALS-Dilithium)
-			"SLH-DSA-SHAKE-128f",  // NIST SLH-DSA (formerly SPHINCS+)
+			"ML-KEM-768",         // NIST ML-KEM (formerly CRYSTALS-Kyber)
+			"ML-DSA-65",          // NIST ML-DSA (formerly CRYSTALS-Dilithium)
+			"SLH-DSA-SHAKE-128f", // NIST SLH-DSA (formerly SPHINCS+)
 		},
 		HybridTransitionDate: &hybridDate,
 		FullTransitionDate:   &fullDate,

@@ -169,14 +169,14 @@ type LifecycleActionResult struct {
 
 // ResourceLifecycleManager manages resource lifecycle operations
 type ResourceLifecycleManager struct {
-	cfg           ResourceLifecycleConfig
-	controller    *LifecycleController
-	lifecycle     *waldur.LifecycleClient
-	auditLogger   *AuditLogger
-	resources     map[string]*ResourceInfo
-	activeOps     map[string]string // allocationID -> operationID
-	rollbackMgr   *RollbackManager
-	mu            sync.RWMutex
+	cfg         ResourceLifecycleConfig
+	controller  *LifecycleController
+	lifecycle   *waldur.LifecycleClient
+	auditLogger *AuditLogger
+	resources   map[string]*ResourceInfo
+	activeOps   map[string]string // allocationID -> operationID
+	rollbackMgr *RollbackManager
+	mu          sync.RWMutex
 }
 
 // NewResourceLifecycleManager creates a new lifecycle manager
@@ -648,4 +648,3 @@ func (m *ResourceLifecycleManager) UpdateResourceState(allocationID string, stat
 	info.LastUpdated = time.Now().UTC()
 	return nil
 }
-

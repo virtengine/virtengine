@@ -86,7 +86,8 @@ func GetDelegatorValidatorsKey(delegatorAddr string) []byte {
 
 // GetDelegatorRewardsKey returns the key for delegator rewards
 func GetDelegatorRewardsKey(delegatorAddr, validatorAddr string, epoch uint64) []byte {
-	key := append(DelegatorRewardsPrefix, []byte(delegatorAddr+":"+validatorAddr+":")...)
+	prefix := DelegatorRewardsPrefix
+	key := append(prefix, []byte(delegatorAddr+":"+validatorAddr+":")...)
 	return append(key, uint64ToBytes(epoch)...)
 }
 

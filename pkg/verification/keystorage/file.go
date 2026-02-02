@@ -33,9 +33,9 @@ type encryptedKeyFile struct {
 	KeyID      string            `json:"key_id"`
 	SignerID   string            `json:"signer_id"`
 	Metadata   StoredKeyMetadata `json:"metadata"`
-	PublicKey  string            `json:"public_key"`  // base64
-	Ciphertext string            `json:"ciphertext"`  // base64 encrypted private key
-	Nonce      string            `json:"nonce"`       // base64 AES-GCM nonce
+	PublicKey  string            `json:"public_key"` // base64
+	Ciphertext string            `json:"ciphertext"` // base64 encrypted private key
+	Nonce      string            `json:"nonce"`      // base64 AES-GCM nonce
 	CreatedAt  time.Time         `json:"created_at"`
 }
 
@@ -161,14 +161,14 @@ func (f *FileStorage) GetKeyInfo(ctx context.Context, keyID string) (*veidtypes.
 	}
 
 	keyInfo := &veidtypes.SignerKeyInfo{
-		KeyID:          keyFile.KeyID,
-		Fingerprint:    keyFile.Metadata.Fingerprint,
-		PublicKey:      publicKey,
-		Algorithm:      keyFile.Metadata.Algorithm,
-		State:          keyFile.Metadata.State,
-		SignerID:       keyFile.SignerID,
-		CreatedAt:      keyFile.Metadata.CreatedAt,
-		ExpiresAt:      keyFile.Metadata.ExpiresAt,
+		KeyID:       keyFile.KeyID,
+		Fingerprint: keyFile.Metadata.Fingerprint,
+		PublicKey:   publicKey,
+		Algorithm:   keyFile.Metadata.Algorithm,
+		State:       keyFile.Metadata.State,
+		SignerID:    keyFile.SignerID,
+		CreatedAt:   keyFile.Metadata.CreatedAt,
+		ExpiresAt:   keyFile.Metadata.ExpiresAt,
 	}
 
 	return keyInfo, nil
@@ -453,4 +453,3 @@ func (f *FileStorage) decrypt(ciphertext, nonce []byte) ([]byte, error) {
 
 // Ensure FileStorage implements KeyStorage
 var _ KeyStorage = (*FileStorage)(nil)
-

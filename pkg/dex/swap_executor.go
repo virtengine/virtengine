@@ -260,4 +260,3 @@ func generateQuoteID() (string, error) {
 	}
 	return "quote_" + hex.EncodeToString(bytes), nil
 }
-

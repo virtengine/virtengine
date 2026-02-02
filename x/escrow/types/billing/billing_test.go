@@ -24,7 +24,7 @@ func TestInvoiceValidation(t *testing.T) {
 	now := time.Now()
 	providerAddr := testAddr(100)
 	customerAddr := testAddr(101)
-	
+
 	tests := []struct {
 		name    string
 		invoice Invoice
@@ -152,7 +152,7 @@ func TestInvoiceValidation(t *testing.T) {
 
 func TestInvoiceRecordPayment(t *testing.T) {
 	now := time.Now()
-	
+
 	inv := &Invoice{
 		Status:     InvoiceStatusPending,
 		Total:      sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000)),
@@ -194,15 +194,15 @@ func TestRoundHalfEven(t *testing.T) {
 		input    string
 		expected int64
 	}{
-		{"1.5", 2},   // Round to even
-		{"2.5", 2},   // Round to even
-		{"3.5", 4},   // Round to even
-		{"4.5", 4},   // Round to even
-		{"1.4", 1},   // Round down
-		{"1.6", 2},   // Round up
-		{"0.5", 0},   // Round to even
-		{"1.0", 1},   // Exact
-		{"2.0", 2},   // Exact
+		{"1.5", 2}, // Round to even
+		{"2.5", 2}, // Round to even
+		{"3.5", 4}, // Round to even
+		{"4.5", 4}, // Round to even
+		{"1.4", 1}, // Round down
+		{"1.6", 2}, // Round up
+		{"0.5", 0}, // Round to even
+		{"1.0", 1}, // Exact
+		{"2.0", 2}, // Exact
 	}
 
 	for _, tt := range tests {
@@ -424,7 +424,7 @@ func TestTaxJurisdictionValidation(t *testing.T) {
 
 func TestTaxCalculator(t *testing.T) {
 	tc := NewTaxCalculator("US")
-	
+
 	// Add UK jurisdiction
 	err := tc.AddJurisdiction(TaxJurisdiction{
 		JurisdictionID: "GB",

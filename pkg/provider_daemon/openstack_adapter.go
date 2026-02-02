@@ -2235,4 +2235,3 @@ func (oa *OpenStackAdapter) updateVMState(vmID string, state VMState, message st
 		}
 	}
 }
-

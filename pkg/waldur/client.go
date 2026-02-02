@@ -477,4 +477,3 @@ func safeInt(i *int) int {
 func ptr[T any](v T) *T {
 	return &v
 }
-

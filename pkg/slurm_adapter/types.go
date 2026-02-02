@@ -274,4 +274,3 @@ type NodeInfo struct {
 	Partitions []string `json:"partitions"`
 	Features   []string `json:"features,omitempty"`
 }
-

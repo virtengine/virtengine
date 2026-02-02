@@ -10,26 +10,36 @@ import (
 // InitGenesis initializes the settlement module's state from a provided genesis state.
 func InitGenesis(ctx sdk.Context, k keeper.IKeeper, data *types.GenesisState) {
 	// Set module parameters
-	k.SetParams(ctx, data.Params)
+	if err := k.SetParams(ctx, data.Params); err != nil {
+		panic(err)
+	}
 
 	// Import escrow accounts
 	for _, escrow := range data.EscrowAccounts {
-		k.SetEscrow(ctx, escrow)
+		if err := k.SetEscrow(ctx, escrow); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import settlement records
 	for _, settlement := range data.SettlementRecords {
-		k.SetSettlement(ctx, settlement)
+		if err := k.SetSettlement(ctx, settlement); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import usage records
 	for _, usage := range data.UsageRecords {
-		k.SetUsageRecord(ctx, usage)
+		if err := k.SetUsageRecord(ctx, usage); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import reward distributions
 	for _, distribution := range data.RewardDistributions {
-		k.SetRewardDistribution(ctx, distribution)
+		if err := k.SetRewardDistribution(ctx, distribution); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import claimable rewards

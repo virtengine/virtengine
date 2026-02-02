@@ -167,20 +167,20 @@ type OsmosisPoolsResponse struct {
 
 // OsmosisPoolData represents pool data from Osmosis
 type OsmosisPoolData struct {
-	Type         string             `json:"@type"`
-	ID           string             `json:"id"`
-	Address      string             `json:"address"`
-	PoolParams   OsmosisPoolParams  `json:"pool_params"`
-	TotalShares  OsmosisCoin        `json:"total_shares"`
-	PoolAssets   []OsmosisPoolAsset `json:"pool_assets"`
-	TotalWeight  string             `json:"total_weight"`
-	FuturePoolGovernor string       `json:"future_pool_governor"`
+	Type               string             `json:"@type"`
+	ID                 string             `json:"id"`
+	Address            string             `json:"address"`
+	PoolParams         OsmosisPoolParams  `json:"pool_params"`
+	TotalShares        OsmosisCoin        `json:"total_shares"`
+	PoolAssets         []OsmosisPoolAsset `json:"pool_assets"`
+	TotalWeight        string             `json:"total_weight"`
+	FuturePoolGovernor string             `json:"future_pool_governor"`
 }
 
 // OsmosisPoolParams represents pool parameters
 type OsmosisPoolParams struct {
-	SwapFee   string `json:"swap_fee"`
-	ExitFee   string `json:"exit_fee"`
+	SwapFee                  string      `json:"swap_fee"`
+	ExitFee                  string      `json:"exit_fee"`
 	SmoothWeightChangeParams interface{} `json:"smooth_weight_change_params"`
 }
 
@@ -213,12 +213,12 @@ type OsmosisEstimateSwapResponse struct {
 // RealOsmosisAdapter implements real Osmosis DEX integration using gRPC/REST
 type RealOsmosisAdapter struct {
 	*BaseAdapter
-	config     OsmosisConfig
-	grpcConn   *grpc.ClientConn
-	httpClient *http.Client
-	pools      map[string]LiquidityPool
-	poolsMu    sync.RWMutex
-	connected  bool
+	config      OsmosisConfig
+	grpcConn    *grpc.ClientConn
+	httpClient  *http.Client
+	pools       map[string]LiquidityPool
+	poolsMu     sync.RWMutex
+	connected   bool
 	lastRefresh time.Time
 }
 
@@ -242,7 +242,7 @@ func NewRealOsmosisAdapter(cfg AdapterConfig, osmosisConfig OsmosisConfig) (*Rea
 // Connect establishes connection to Osmosis
 func (a *RealOsmosisAdapter) Connect(ctx context.Context) error {
 	endpoint := a.config.GetGRPCEndpoint()
-	
+
 	// Create gRPC connection
 	// Note: In production, use proper TLS credentials
 	conn, err := grpc.DialContext(ctx, endpoint,
@@ -794,7 +794,7 @@ func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, s
 	}
 
 	if broadcastResp.TxResponse.Code != 0 {
-		return SwapResult{}, fmt.Errorf("%w: code %d: %s", 
+		return SwapResult{}, fmt.Errorf("%w: code %d: %s",
 			ErrOsmosisSwapFailed, broadcastResp.TxResponse.Code, broadcastResp.TxResponse.Log)
 	}
 
@@ -814,7 +814,7 @@ func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, s
 func (a *RealOsmosisAdapter) EstimateGas(ctx context.Context, request SwapRequest) (uint64, error) {
 	// Osmosis swaps typically use 250k-400k gas depending on route complexity
 	// Multi-hop swaps use more gas
-	
+
 	pool, err := a.findPoolForPair(ctx, request.FromToken.Symbol, request.ToToken.Symbol)
 	if err != nil {
 		// If no direct pool, estimate higher for multi-hop
@@ -911,4 +911,3 @@ func (a *RealOsmosisAdapter) GetTotalValueLocked(ctx context.Context) (sdkmath.L
 // ============================================================================
 
 var _ Adapter = (*RealOsmosisAdapter)(nil)
-

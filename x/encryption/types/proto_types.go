@@ -91,10 +91,10 @@ type (
 
 // Proto enum value constants
 const (
-	RecipientModePBUnspecified       = encryptionv1.RecipientMode_RECIPIENT_MODE_UNSPECIFIED
-	RecipientModePBFullValidatorSet  = encryptionv1.RecipientMode_RECIPIENT_MODE_FULL_VALIDATOR_SET
-	RecipientModePBCommittee         = encryptionv1.RecipientMode_RECIPIENT_MODE_COMMITTEE
-	RecipientModePBSpecific          = encryptionv1.RecipientMode_RECIPIENT_MODE_SPECIFIC
+	RecipientModePBUnspecified      = encryptionv1.RecipientMode_RECIPIENT_MODE_UNSPECIFIED
+	RecipientModePBFullValidatorSet = encryptionv1.RecipientMode_RECIPIENT_MODE_FULL_VALIDATOR_SET
+	RecipientModePBCommittee        = encryptionv1.RecipientMode_RECIPIENT_MODE_COMMITTEE
+	RecipientModePBSpecific         = encryptionv1.RecipientMode_RECIPIENT_MODE_SPECIFIC
 )
 
 // =============================================================================

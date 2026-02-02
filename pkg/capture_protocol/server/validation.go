@@ -27,19 +27,19 @@ type ServerValidationConfig struct {
 	MaxProtocolVersion uint32 `json:"max_protocol_version"`
 
 	// Salt validation
-	MinSaltLength    int           `json:"min_salt_length"`
-	MaxSaltLength    int           `json:"max_salt_length"`
-	MaxSaltAge       time.Duration `json:"max_salt_age"`
-	ReplayWindow     time.Duration `json:"replay_window"`
-	MaxClockSkew     time.Duration `json:"max_clock_skew"`
+	MinSaltLength int           `json:"min_salt_length"`
+	MaxSaltLength int           `json:"max_salt_length"`
+	MaxSaltAge    time.Duration `json:"max_salt_age"`
+	ReplayWindow  time.Duration `json:"replay_window"`
+	MaxClockSkew  time.Duration `json:"max_clock_skew"`
 
 	// Signature validation
 	RequireClientSignature bool `json:"require_client_signature"`
 	RequireUserSignature   bool `json:"require_user_signature"`
 
 	// Encryption validation
-	RequiredAlgorithm    string `json:"required_algorithm"`
-	RequiredNonceLength  int    `json:"required_nonce_length"`
+	RequiredAlgorithm   string `json:"required_algorithm"`
+	RequiredNonceLength int    `json:"required_nonce_length"`
 
 	// Device attestation
 	RequireDeviceAttestation bool          `json:"require_device_attestation"`
@@ -216,10 +216,10 @@ type ValidationWarning struct {
 
 // ServerValidator validates capture upload requests
 type ServerValidator struct {
-	config            ServerValidationConfig
-	clientRegistry    capture_protocol.ApprovedClientRegistry
-	saltValidator     *capture_protocol.SaltValidator
-	replayProtector   *capture_protocol.ReplayProtector
+	config          ServerValidationConfig
+	clientRegistry  capture_protocol.ApprovedClientRegistry
+	saltValidator   *capture_protocol.SaltValidator
+	replayProtector *capture_protocol.ReplayProtector
 }
 
 // NewServerValidator creates a new server validator
@@ -786,4 +786,3 @@ func UnmarshalUploadRequest(data []byte) (*CaptureUploadRequest, error) {
 	}
 	return &request, nil
 }
-

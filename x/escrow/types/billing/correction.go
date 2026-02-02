@@ -125,9 +125,9 @@ type CorrectionLimit struct {
 // DefaultCorrectionLimit returns a default correction limit configuration
 func DefaultCorrectionLimit() CorrectionLimit {
 	return CorrectionLimit{
-		MaxCorrectionAmount:     sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000000000)), // 1000 VIRT
-		MaxCorrectionsPerPeriod: 10,
-		CorrectionWindowSeconds: 604800, // 7 days
+		MaxCorrectionAmount:      sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000000000)), // 1000 VIRT
+		MaxCorrectionsPerPeriod:  10,
+		CorrectionWindowSeconds:  604800,                                             // 7 days
 		RequireApprovalThreshold: sdk.NewCoins(sdk.NewInt64Coin("uvirt", 100000000)), // 100 VIRT
 		AllowedCorrectionTypes: []CorrectionType{
 			CorrectionTypeInvoiceAdjustment,

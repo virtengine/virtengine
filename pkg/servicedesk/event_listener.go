@@ -323,4 +323,3 @@ type IChainEventListener interface {
 
 // Ensure ChainEventListener implements IChainEventListener
 var _ IChainEventListener = (*ChainEventListener)(nil)
-

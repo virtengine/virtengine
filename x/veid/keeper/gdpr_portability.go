@@ -21,21 +21,21 @@ import (
 
 // exportRequestStore is the storage format for export requests
 type exportRequestStore struct {
-	Version          uint32  `json:"version"`
-	RequestID        string  `json:"request_id"`
-	RequesterAddress string  `json:"requester_address"`
+	Version          uint32   `json:"version"`
+	RequestID        string   `json:"request_id"`
+	RequesterAddress string   `json:"requester_address"`
 	Categories       []string `json:"categories"`
-	Format           string  `json:"format"`
-	Status           string  `json:"status"`
-	RequestedAt      int64   `json:"requested_at"`
-	RequestedAtBlock int64   `json:"requested_at_block"`
-	CompletedAt      *int64  `json:"completed_at,omitempty"`
-	CompletedAtBlock *int64  `json:"completed_at_block,omitempty"`
-	DeadlineAt       int64   `json:"deadline_at"`
-	ExpiresAt        *int64  `json:"expires_at,omitempty"`
-	ExportDataHash   []byte  `json:"export_data_hash,omitempty"`
-	ExportSize       uint64  `json:"export_size,omitempty"`
-	ErrorDetails     string  `json:"error_details,omitempty"`
+	Format           string   `json:"format"`
+	Status           string   `json:"status"`
+	RequestedAt      int64    `json:"requested_at"`
+	RequestedAtBlock int64    `json:"requested_at_block"`
+	CompletedAt      *int64   `json:"completed_at,omitempty"`
+	CompletedAtBlock *int64   `json:"completed_at_block,omitempty"`
+	DeadlineAt       int64    `json:"deadline_at"`
+	ExpiresAt        *int64   `json:"expires_at,omitempty"`
+	ExportDataHash   []byte   `json:"export_data_hash,omitempty"`
+	ExportSize       uint64   `json:"export_size,omitempty"`
+	ErrorDetails     string   `json:"error_details,omitempty"`
 }
 
 // SubmitExportRequest submits a new GDPR data portability export request

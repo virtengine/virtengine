@@ -13,11 +13,11 @@
 package enclave_runtime
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"sync"
 	"time"
 )
@@ -544,4 +544,3 @@ func sha256Bytes(data []byte) []byte {
 	h := sha256.Sum256(data)
 	return h[:]
 }
-

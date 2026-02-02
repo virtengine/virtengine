@@ -23,8 +23,8 @@ type CryptoAnomalyConfig struct {
 	MinEntropyThreshold   float64 `json:"min_entropy_threshold"`
 
 	// Algorithm restrictions
-	AllowedAlgorithms     []string `json:"allowed_algorithms"`
-	DeprecatedAlgorithms  []string `json:"deprecated_algorithms"`
+	AllowedAlgorithms    []string `json:"allowed_algorithms"`
+	DeprecatedAlgorithms []string `json:"deprecated_algorithms"`
 
 	// Key reuse detection
 	EnableKeyReuseDetection bool `json:"enable_key_reuse_detection"`
@@ -101,10 +101,10 @@ type CryptoAnomalyDetector struct {
 	metrics *SecurityMetrics
 
 	// State tracking
-	accountOperations    map[string][]cryptoOpRecord
+	accountOperations       map[string][]cryptoOpRecord
 	globalSignatureFailures []signatureFailureRecord
-	seenKeyHashes        map[string]keyHashRecord
-	mu                   sync.RWMutex
+	seenKeyHashes           map[string]keyHashRecord
+	mu                      sync.RWMutex
 
 	// Event channel
 	eventChan chan<- *SecurityEvent
@@ -306,8 +306,8 @@ func (d *CryptoAnomalyDetector) checkAlgorithm(op *CryptoOperationData) {
 				Source:      op.AccountAddress,
 				Description: "Unauthorized cryptographic algorithm used",
 				Metadata: map[string]interface{}{
-					"account":           op.AccountAddress,
-					"algorithm":         op.Algorithm,
+					"account":            op.AccountAddress,
+					"algorithm":          op.Algorithm,
 					"allowed_algorithms": d.config.AllowedAlgorithms,
 				},
 			})
@@ -369,10 +369,10 @@ func (d *CryptoAnomalyDetector) checkOperationVelocity(op *CryptoOperationData) 
 			Source:      op.AccountAddress,
 			Description: "Rapid cryptographic operations detected",
 			Metadata: map[string]interface{}{
-				"account":        op.AccountAddress,
+				"account":         op.AccountAddress,
 				"operation_count": recentOps,
-				"threshold":      d.config.MaxKeyOperationsPerMinute,
-				"window":         "1m",
+				"threshold":       d.config.MaxKeyOperationsPerMinute,
+				"window":          "1m",
 			},
 		})
 	}
@@ -525,4 +525,3 @@ func (d *CryptoAnomalyDetector) cleanup(ctx context.Context) {
 		}
 	}
 }
-

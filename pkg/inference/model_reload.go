@@ -444,4 +444,3 @@ func (m *ModelReloadManager) SetLogger(logger *log.Logger) {
 func (m *ModelReloadManager) GetConfig() InferenceConfig {
 	return m.config
 }
-

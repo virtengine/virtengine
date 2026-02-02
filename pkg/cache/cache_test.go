@@ -556,4 +556,3 @@ func BenchmarkMemoryCache_ConcurrentAccess(b *testing.B) {
 		}
 	})
 }
-

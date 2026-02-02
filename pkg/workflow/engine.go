@@ -743,4 +743,3 @@ func (e *Engine) appendHistory(ctx context.Context, workflowID string, event *Hi
 		e.logger.Warn().Err(err).Str("workflow_id", workflowID).Msg("failed to append history event")
 	}
 }
-

@@ -475,9 +475,9 @@ func (r *SNPDerivedKeyRequester) requestSimulatedKey(rootKey int, guestFieldSele
 	// Generate a deterministic simulated key
 	h := sha256.New()
 	h.Write([]byte("virtengine-sev-snp-derived-key"))
-	binary.Write(h, binary.LittleEndian, uint32(rootKey))
-	binary.Write(h, binary.LittleEndian, guestFieldSelect)
-	binary.Write(h, binary.LittleEndian, vmpl)
+	_ = binary.Write(h, binary.LittleEndian, uint32(rootKey))
+	_ = binary.Write(h, binary.LittleEndian, guestFieldSelect)
+	_ = binary.Write(h, binary.LittleEndian, vmpl)
 
 	key := h.Sum(nil)
 	return key, nil
@@ -851,4 +851,3 @@ func VerifyGuestPolicy(policy SNPGuestPolicy) error {
 	}
 	return nil
 }
-

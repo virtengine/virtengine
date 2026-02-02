@@ -303,13 +303,13 @@ type AppliedCap struct {
 // CalculateHash computes a deterministic hash of the accounting inputs
 func (r *HPCAccountingRecord) CalculateHash() string {
 	hashInput := struct {
-		JobID           string             `json:"job_id"`
-		ClusterID       string             `json:"cluster_id"`
-		UsageMetrics    HPCDetailedMetrics `json:"usage_metrics"`
-		PeriodStart     int64              `json:"period_start"`
-		PeriodEnd       int64              `json:"period_end"`
-		FormulaVersion  string             `json:"formula_version"`
-		SignedRecords   []string           `json:"signed_records"`
+		JobID          string             `json:"job_id"`
+		ClusterID      string             `json:"cluster_id"`
+		UsageMetrics   HPCDetailedMetrics `json:"usage_metrics"`
+		PeriodStart    int64              `json:"period_start"`
+		PeriodEnd      int64              `json:"period_end"`
+		FormulaVersion string             `json:"formula_version"`
+		SignedRecords  []string           `json:"signed_records"`
 	}{
 		JobID:          r.JobID,
 		ClusterID:      r.ClusterID,

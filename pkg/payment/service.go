@@ -1081,7 +1081,7 @@ func (r *rateLimiter) checkRefundLimit() error {
 		return ErrRateLimitExceeded
 	}
 
-	r.refundCount = append(recent, now)
+	recent = append(recent, now)
+	r.refundCount = recent
 	return nil
 }
-

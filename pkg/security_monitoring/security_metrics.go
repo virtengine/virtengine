@@ -15,20 +15,20 @@ const (
 // SecurityMetrics contains all Prometheus metrics for security monitoring
 type SecurityMetrics struct {
 	// Transaction security metrics
-	TxAnomaliesDetected    *prometheus.CounterVec
-	TxVelocityRate         *prometheus.GaugeVec
-	TxSuspiciousPatterns   *prometheus.CounterVec
-	TxValueAnomalies       prometheus.Counter
-	TxReplayAttempts       prometheus.Counter
+	TxAnomaliesDetected  *prometheus.CounterVec
+	TxVelocityRate       *prometheus.GaugeVec
+	TxSuspiciousPatterns *prometheus.CounterVec
+	TxValueAnomalies     prometheus.Counter
+	TxReplayAttempts     prometheus.Counter
 
 	// Identity verification fraud metrics
-	VEIDFraudIndicators     *prometheus.CounterVec
+	VEIDFraudIndicators      *prometheus.CounterVec
 	VEIDVerificationFailures *prometheus.CounterVec
-	VEIDTamperingAttempts   prometheus.Counter
-	VEIDReplayAttempts      prometheus.Counter
-	VEIDScoreAnomalies      prometheus.Counter
-	VEIDBiometricMismatches prometheus.Counter
-	VEIDDocumentForgery     prometheus.Counter
+	VEIDTamperingAttempts    prometheus.Counter
+	VEIDReplayAttempts       prometheus.Counter
+	VEIDScoreAnomalies       prometheus.Counter
+	VEIDBiometricMismatches  prometheus.Counter
+	VEIDDocumentForgery      prometheus.Counter
 
 	// Rate limiting security metrics
 	RateLimitBreaches       *prometheus.CounterVec
@@ -51,15 +51,15 @@ type SecurityMetrics struct {
 	ProviderAnomalousActivity    *prometheus.CounterVec
 
 	// Authentication & authorization metrics
-	AuthFailures           *prometheus.CounterVec
-	AuthzViolations        *prometheus.CounterVec
-	SessionAnomalies       prometheus.Counter
-	PrivilegeEscalation    prometheus.Counter
+	AuthFailures        *prometheus.CounterVec
+	AuthzViolations     *prometheus.CounterVec
+	SessionAnomalies    prometheus.Counter
+	PrivilegeEscalation prometheus.Counter
 
 	// Audit metrics
-	AuditEventsTotal       *prometheus.CounterVec
-	AuditEventsBySeverity  *prometheus.CounterVec
-	AlertsTriggered        *prometheus.CounterVec
+	AuditEventsTotal        *prometheus.CounterVec
+	AuditEventsBySeverity   *prometheus.CounterVec
+	AlertsTriggered         *prometheus.CounterVec
 	IncidentResponseActions *prometheus.CounterVec
 
 	// Overall security health
@@ -445,4 +445,3 @@ func ThreatLevelValue(severity SecurityEventSeverity) float64 {
 		return 0
 	}
 }
-

@@ -22,15 +22,15 @@ import (
 
 // scoringModelStore is the stored format of a scoring model version
 type scoringModelStore struct {
-	Version       string `json:"version"`
-	CreatedAt     int64  `json:"created_at"`
-	ActivatedAt   *int64 `json:"activated_at,omitempty"`
-	DeprecatedAt  *int64 `json:"deprecated_at,omitempty"`
-	Weights       string `json:"weights"`       // JSON-encoded weights
-	Thresholds    string `json:"thresholds"`    // JSON-encoded thresholds
-	Config        string `json:"config"`        // JSON-encoded config
-	Description   string `json:"description,omitempty"`
-	ModelHash     []byte `json:"model_hash"`
+	Version      string `json:"version"`
+	CreatedAt    int64  `json:"created_at"`
+	ActivatedAt  *int64 `json:"activated_at,omitempty"`
+	DeprecatedAt *int64 `json:"deprecated_at,omitempty"`
+	Weights      string `json:"weights"`    // JSON-encoded weights
+	Thresholds   string `json:"thresholds"` // JSON-encoded thresholds
+	Config       string `json:"config"`     // JSON-encoded config
+	Description  string `json:"description,omitempty"`
+	ModelHash    []byte `json:"model_hash"`
 }
 
 // scoringHistoryStore is the stored format of a scoring history entry
@@ -651,7 +651,7 @@ func (k Keeper) ComputeAndRecordScore(
 
 	// Get previous score and model version for transition tracking
 	prevScore, _, _ := k.GetScore(ctx, accountAddr)
-	
+
 	// Get the previous model version from score history (not from active model)
 	var prevModelVersion string
 	history := k.GetScoreHistory(ctx, accountAddr)

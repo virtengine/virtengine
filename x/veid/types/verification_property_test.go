@@ -288,8 +288,8 @@ func TestPropertyResultScoreBounds(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		score    uint32
-		valid    bool
+		score uint32
+		valid bool
 	}{
 		{0, true},
 		{50, true},

@@ -815,7 +815,7 @@ func (k Keeper) VerifyFIDO2ChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -855,7 +855,7 @@ func (k Keeper) VerifyFIDO2ChallengeResponse(
 		authenticatorData,
 		signature,
 	); err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -904,7 +904,7 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired
 	}
 
@@ -946,7 +946,7 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 	// Verify the TOTP code
 	verified, err := k.verifyTOTPCode(ctx, enrollment, response, challenge)
 	if err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -962,7 +962,7 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -1017,7 +1017,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired
 	}
 
@@ -1043,7 +1043,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	// Verify the OTP code
 	verified, err := k.verifyDeliveredOTP(ctx, challenge, response)
 	if err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -1059,7 +1059,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -1076,7 +1076,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 
 	// Mark challenge as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	address, _ := sdk.AccAddressFromBech32(challenge.AccountAddress)
@@ -1119,7 +1119,7 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired
 	}
 
@@ -1156,7 +1156,7 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 		Algorithm: algorithm,
 		KeyID:     keyID,
 	}
-	responseData, _ := json.Marshal(hkResp)
+	responseData, _ := json.Marshal(hkResp) //nolint:errchkjson // Best-effort marshal for response data
 
 	response := &types.ChallengeResponse{
 		ChallengeID:  challengeID,
@@ -1168,7 +1168,7 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 	// Verify the hardware key response
 	verified, err := k.verifyHardwareKeyResponse(ctx, challenge, response, enrollment)
 	if err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -1184,17 +1184,17 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrInvalidSignature
 	}
 
 	// Mark challenge as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	enrollment.UpdateLastUsed(now.Unix())
-	k.updateFactorEnrollment(ctx, enrollment)
+	_ = k.updateFactorEnrollment(ctx, enrollment)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

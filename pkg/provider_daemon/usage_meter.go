@@ -664,4 +664,3 @@ func (fc *FraudChecker) CheckRecordSignature(record *UsageRecord, publicKey []by
 	// For now, we just check that the signature exists and is valid hex
 	return len(signature) > 0 && len(hash) > 0
 }
-

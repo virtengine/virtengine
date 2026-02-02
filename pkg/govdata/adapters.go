@@ -702,4 +702,3 @@ func (a *immigrationAdapter) Verify(ctx context.Context, req *VerificationReques
 
 	return response, nil
 }
-

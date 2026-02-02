@@ -1007,4 +1007,3 @@ func TestSplitKeyPath(t *testing.T) {
 		t.Error("unexpected parts")
 	}
 }
-

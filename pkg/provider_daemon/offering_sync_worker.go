@@ -51,13 +51,13 @@ type OfferingSyncAuditEntry struct {
 
 // ReconciliationAuditEntry represents an audit log entry for reconciliation.
 type ReconciliationAuditEntry struct {
-	Timestamp        time.Time `json:"timestamp"`
-	ProviderAddress  string    `json:"provider_address"`
-	OfferingsChecked int       `json:"offerings_checked"`
-	DriftDetected    int       `json:"drift_detected"`
-	OfferingsQueued  int       `json:"offerings_queued"`
+	Timestamp        time.Time     `json:"timestamp"`
+	ProviderAddress  string        `json:"provider_address"`
+	OfferingsChecked int           `json:"offerings_checked"`
+	DriftDetected    int           `json:"drift_detected"`
+	OfferingsQueued  int           `json:"offerings_queued"`
 	Duration         time.Duration `json:"duration_ns"`
-	Error            string    `json:"error,omitempty"`
+	Error            string        `json:"error,omitempty"`
 }
 
 // DeadLetterAuditEntry represents an audit log entry for dead-letter events.
@@ -217,14 +217,14 @@ type OfferingSyncWorker struct {
 	state       *OfferingSyncState
 	rpcClient   *rpchttp.HTTP
 
-	mu            sync.RWMutex
-	running       bool
-	stopCh        chan struct{}
-	doneCh        chan struct{}
-	syncQueue     chan *OfferingSyncTask
-	metrics       *OfferingSyncWorkerMetrics
-	auditLogger   OfferingSyncAuditLogger
-	promMetrics   *OfferingSyncPrometheusMetrics
+	mu          sync.RWMutex
+	running     bool
+	stopCh      chan struct{}
+	doneCh      chan struct{}
+	syncQueue   chan *OfferingSyncTask
+	metrics     *OfferingSyncWorkerMetrics
+	auditLogger OfferingSyncAuditLogger
+	promMetrics *OfferingSyncPrometheusMetrics
 }
 
 // OfferingSyncTask represents a sync task to execute.
@@ -940,4 +940,3 @@ func (w *OfferingSyncWorker) PrometheusMetrics() *OfferingSyncPrometheusMetrics 
 func (w *OfferingSyncWorker) SetAuditLogger(logger OfferingSyncAuditLogger) {
 	w.auditLogger = logger
 }
-

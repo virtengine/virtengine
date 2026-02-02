@@ -75,4 +75,3 @@ var (
 	// ErrSessionStoreClosed is returned when the session store is closed
 	ErrSessionStoreClosed = errors.New("nli: session store closed")
 )
-

@@ -166,7 +166,7 @@ func TestSignerKeyInfo_Validate_FingerprintMismatch(t *testing.T) {
 func TestSignerKeyInfo_Lifecycle(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey := make([]byte, 32)
-	rand.Read(publicKey)
+	_, _ = rand.Read(publicKey)
 
 	keyInfo := NewSignerKeyInfo(
 		"validator-001",
@@ -241,7 +241,7 @@ func TestSignerKeyInfo_Lifecycle(t *testing.T) {
 func TestSignerKeyInfo_ShouldRotate(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey := make([]byte, 32)
-	rand.Read(publicKey)
+	_, _ = rand.Read(publicKey)
 
 	keyInfo := NewSignerKeyInfo(
 		"validator-001",
@@ -360,8 +360,8 @@ func TestKeyRotationRecord_Create(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey1 := make([]byte, 32)
 	publicKey2 := make([]byte, 32)
-	rand.Read(publicKey1)
-	rand.Read(publicKey2)
+	_, _ = rand.Read(publicKey1)
+	_, _ = rand.Read(publicKey2)
 
 	oldKey := NewSignerKeyInfo("validator-001", publicKey1, ProofTypeEd25519, 1, now.Add(-90*24*time.Hour))
 	newKey := NewSignerKeyInfo("validator-001", publicKey2, ProofTypeEd25519, 2, now)
@@ -392,8 +392,8 @@ func TestKeyRotationRecord_IsOverlapPeriodActive(t *testing.T) {
 	now := time.Now().UTC()
 	publicKey1 := make([]byte, 32)
 	publicKey2 := make([]byte, 32)
-	rand.Read(publicKey1)
-	rand.Read(publicKey2)
+	_, _ = rand.Read(publicKey1)
+	_, _ = rand.Read(publicKey2)
 
 	oldKey := NewSignerKeyInfo("validator-001", publicKey1, ProofTypeEd25519, 1, now)
 	newKey := NewSignerKeyInfo("validator-001", publicKey2, ProofTypeEd25519, 2, now)
@@ -528,7 +528,7 @@ func TestIsValidRevocationReason(t *testing.T) {
 
 func TestComputeKeyFingerprint(t *testing.T) {
 	publicKey := make([]byte, 32)
-	rand.Read(publicKey)
+	_, _ = rand.Read(publicKey)
 
 	fp := ComputeKeyFingerprint(publicKey)
 
@@ -550,7 +550,7 @@ func TestComputeKeyFingerprint(t *testing.T) {
 
 	// Different input should produce different output
 	publicKey2 := make([]byte, 32)
-	rand.Read(publicKey2)
+	_, _ = rand.Read(publicKey2)
 	fp3 := ComputeKeyFingerprint(publicKey2)
 	if fp == fp3 {
 		t.Error("different keys should have different fingerprints")

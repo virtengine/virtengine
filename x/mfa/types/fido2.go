@@ -442,9 +442,9 @@ func ParseAuthenticatorData(data []byte) (*AuthenticatorData, error) {
 	}
 
 	authData := &AuthenticatorData{
-		Raw:      data,
-		RPIDHash: data[0:32],
-		Flags:    AuthenticatorDataFlags(data[32]),
+		Raw:       data,
+		RPIDHash:  data[0:32],
+		Flags:     AuthenticatorDataFlags(data[32]),
 		SignCount: binary.BigEndian.Uint32(data[33:37]),
 	}
 

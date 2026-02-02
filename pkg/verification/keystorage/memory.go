@@ -12,10 +12,10 @@ import (
 // MemoryStorage implements KeyStorage using in-memory storage.
 // This is primarily for testing and development; not suitable for production.
 type MemoryStorage struct {
-	mu         sync.RWMutex
-	keys       map[string]*storedKey
-	maxKeys    int
-	closed     bool
+	mu      sync.RWMutex
+	keys    map[string]*storedKey
+	maxKeys int
+	closed  bool
 }
 
 // storedKey holds both key info and private key in memory.
@@ -207,4 +207,3 @@ func (m *MemoryStorage) Close() error {
 
 // Ensure MemoryStorage implements KeyStorage
 var _ KeyStorage = (*MemoryStorage)(nil)
-

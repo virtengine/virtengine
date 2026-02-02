@@ -9,43 +9,43 @@ import (
 
 // Type aliases to generated protobuf types
 type (
-	MsgRegisterCluster           = hpcv1.MsgRegisterCluster
-	MsgRegisterClusterResponse   = hpcv1.MsgRegisterClusterResponse
-	MsgUpdateCluster             = hpcv1.MsgUpdateCluster
-	MsgUpdateClusterResponse     = hpcv1.MsgUpdateClusterResponse
-	MsgDeregisterCluster         = hpcv1.MsgDeregisterCluster
-	MsgDeregisterClusterResponse = hpcv1.MsgDeregisterClusterResponse
-	MsgCreateOffering            = hpcv1.MsgCreateOffering
-	MsgCreateOfferingResponse    = hpcv1.MsgCreateOfferingResponse
-	MsgUpdateOffering            = hpcv1.MsgUpdateOffering
-	MsgUpdateOfferingResponse    = hpcv1.MsgUpdateOfferingResponse
-	MsgSubmitJob                 = hpcv1.MsgSubmitJob
-	MsgSubmitJobResponse         = hpcv1.MsgSubmitJobResponse
-	MsgCancelJob                 = hpcv1.MsgCancelJob
-	MsgCancelJobResponse         = hpcv1.MsgCancelJobResponse
-	MsgReportJobStatus           = hpcv1.MsgReportJobStatus
-	MsgReportJobStatusResponse   = hpcv1.MsgReportJobStatusResponse
-	MsgUpdateNodeMetadata        = hpcv1.MsgUpdateNodeMetadata
+	MsgRegisterCluster            = hpcv1.MsgRegisterCluster
+	MsgRegisterClusterResponse    = hpcv1.MsgRegisterClusterResponse
+	MsgUpdateCluster              = hpcv1.MsgUpdateCluster
+	MsgUpdateClusterResponse      = hpcv1.MsgUpdateClusterResponse
+	MsgDeregisterCluster          = hpcv1.MsgDeregisterCluster
+	MsgDeregisterClusterResponse  = hpcv1.MsgDeregisterClusterResponse
+	MsgCreateOffering             = hpcv1.MsgCreateOffering
+	MsgCreateOfferingResponse     = hpcv1.MsgCreateOfferingResponse
+	MsgUpdateOffering             = hpcv1.MsgUpdateOffering
+	MsgUpdateOfferingResponse     = hpcv1.MsgUpdateOfferingResponse
+	MsgSubmitJob                  = hpcv1.MsgSubmitJob
+	MsgSubmitJobResponse          = hpcv1.MsgSubmitJobResponse
+	MsgCancelJob                  = hpcv1.MsgCancelJob
+	MsgCancelJobResponse          = hpcv1.MsgCancelJobResponse
+	MsgReportJobStatus            = hpcv1.MsgReportJobStatus
+	MsgReportJobStatusResponse    = hpcv1.MsgReportJobStatusResponse
+	MsgUpdateNodeMetadata         = hpcv1.MsgUpdateNodeMetadata
 	MsgUpdateNodeMetadataResponse = hpcv1.MsgUpdateNodeMetadataResponse
-	MsgFlagDispute               = hpcv1.MsgFlagDispute
-	MsgFlagDisputeResponse       = hpcv1.MsgFlagDisputeResponse
-	MsgResolveDispute            = hpcv1.MsgResolveDispute
-	MsgResolveDisputeResponse    = hpcv1.MsgResolveDisputeResponse
+	MsgFlagDispute                = hpcv1.MsgFlagDispute
+	MsgFlagDisputeResponse        = hpcv1.MsgFlagDisputeResponse
+	MsgResolveDispute             = hpcv1.MsgResolveDispute
+	MsgResolveDisputeResponse     = hpcv1.MsgResolveDisputeResponse
 )
 
 // Message type constants
 const (
-	TypeMsgRegisterCluster   = "register_cluster"
-	TypeMsgUpdateCluster     = "update_cluster"
-	TypeMsgDeregisterCluster = "deregister_cluster"
-	TypeMsgCreateOffering    = "create_offering"
-	TypeMsgUpdateOffering    = "update_offering"
-	TypeMsgSubmitJob         = "submit_job"
-	TypeMsgCancelJob         = "cancel_job"
-	TypeMsgReportJobStatus   = "report_job_status"
+	TypeMsgRegisterCluster    = "register_cluster"
+	TypeMsgUpdateCluster      = "update_cluster"
+	TypeMsgDeregisterCluster  = "deregister_cluster"
+	TypeMsgCreateOffering     = "create_offering"
+	TypeMsgUpdateOffering     = "update_offering"
+	TypeMsgSubmitJob          = "submit_job"
+	TypeMsgCancelJob          = "cancel_job"
+	TypeMsgReportJobStatus    = "report_job_status"
 	TypeMsgUpdateNodeMetadata = "update_node_metadata"
-	TypeMsgFlagDispute       = "flag_dispute"
-	TypeMsgResolveDispute    = "resolve_dispute"
+	TypeMsgFlagDispute        = "flag_dispute"
+	TypeMsgResolveDispute     = "resolve_dispute"
 )
 
 var (

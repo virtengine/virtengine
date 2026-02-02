@@ -647,11 +647,11 @@ func TestOfferingSyncWorkerWithLogger(t *testing.T) {
 // TestSyncMetrics tests the sync metrics structure.
 func TestSyncMetrics(t *testing.T) {
 	metrics := &SyncMetrics{
-		TotalSyncs:       100,
-		SuccessfulSyncs:  95,
-		FailedSyncs:      5,
-		DeadLettered:     2,
-		DriftDetections:  10,
+		TotalSyncs:         100,
+		SuccessfulSyncs:    95,
+		FailedSyncs:        5,
+		DeadLettered:       2,
+		DriftDetections:    10,
 		ReconciliationsRun: 20,
 	}
 
@@ -696,14 +696,14 @@ func TestDeadLetterItem(t *testing.T) {
 func TestOfferingSyncRecord(t *testing.T) {
 	now := time.Now().UTC()
 	record := &OfferingSyncRecord{
-		OfferingID:   "offering/1",
-		WaldurUUID:   "waldur-uuid-1",
-		State:        SyncStateSynced,
-		ChainVersion: 1,
+		OfferingID:    "offering/1",
+		WaldurUUID:    "waldur-uuid-1",
+		State:         SyncStateSynced,
+		ChainVersion:  1,
 		SyncedVersion: 1,
-		Checksum:     "checksum123",
-		LastSyncedAt: &now,
-		CreatedAt:    now,
+		Checksum:      "checksum123",
+		LastSyncedAt:  &now,
+		CreatedAt:     now,
 	}
 
 	if record.OfferingID != "offering/1" {
@@ -788,10 +788,10 @@ func TestReconcile(t *testing.T) {
 	state.MarkOutOfSync("offering/1", 2, "new-checksum")
 
 	worker := &OfferingSyncWorker{
-		cfg:       cfg,
-		state:     state,
-		syncQueue: make(chan *OfferingSyncTask, cfg.EventBuffer),
-		metrics:   &OfferingSyncWorkerMetrics{},
+		cfg:         cfg,
+		state:       state,
+		syncQueue:   make(chan *OfferingSyncTask, cfg.EventBuffer),
+		metrics:     &OfferingSyncWorkerMetrics{},
 		promMetrics: &OfferingSyncPrometheusMetrics{},
 		auditLogger: NewDefaultAuditLogger("[test]"),
 	}
@@ -843,4 +843,3 @@ func TestWorkerMetricsSnapshot(t *testing.T) {
 		t.Errorf("QueueDepth = %d, want 0", snapshot.QueueDepth)
 	}
 }
-

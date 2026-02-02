@@ -567,9 +567,9 @@ func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error)
 
 // TensorFlowScorerAdapter adapts the inference.Scorer to MLScorer interface
 type TensorFlowScorerAdapter struct {
-	scorer             inference.Scorer
-	config             MLScoringConfig
-	featurePipeline    *FeatureExtractionPipeline
+	scorer          inference.Scorer
+	config          MLScoringConfig
+	featurePipeline *FeatureExtractionPipeline
 }
 
 // Score implements MLScorer.Score using TensorFlow inference
@@ -620,7 +620,7 @@ func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, er
 	// Add quality gate failure reason codes
 	if len(failedGates) > 0 {
 		output.ReasonCodes = append(output.ReasonCodes, qualityReasonCodes...)
-		
+
 		// Apply score penalty for quality gate failures
 		penaltyRatio := float32(len(failedGates)) / float32(len(features.QualityGateResults))
 		penalizedScore := float32(output.Score) * (1.0 - penaltyRatio*0.3)

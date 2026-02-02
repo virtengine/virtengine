@@ -617,4 +617,3 @@ func (t *SLATracker) calculateBusinessMinutes(start, end time.Time, pausedMinute
 
 	return businessMinutes - pausedMinutes
 }
-

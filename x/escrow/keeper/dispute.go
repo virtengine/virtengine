@@ -804,6 +804,7 @@ func (dk *disputeKeeper) setCorrectionIndexes(store storetypes.KVStore, correcti
 
 func (dk *disputeKeeper) saveCorrectionLedgerEntry(store storetypes.KVStore, entry *billing.CorrectionLedgerEntry) {
 	entryKey := billing.BuildCorrectionLedgerEntryKey(entry.EntryID)
+	//nolint:errchkjson // entry contains sdk.Coins which is safe for Marshal
 	bz, _ := json.Marshal(entry)
 	store.Set(entryKey, bz)
 

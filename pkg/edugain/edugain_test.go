@@ -76,8 +76,11 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "refresh interval too short",
-			modify:  func(c *Config) { c.MetadataRefreshInterval = 1 * time.Minute; c.AssertionConsumerServiceURL = testACSURL },
+			name: "refresh interval too short",
+			modify: func(c *Config) {
+				c.MetadataRefreshInterval = 1 * time.Minute
+				c.AssertionConsumerServiceURL = testACSURL
+			},
 			wantErr: true,
 		},
 		{
@@ -1050,8 +1053,8 @@ func TestHashString(t *testing.T) {
 	hash2 := hashString("test")
 	hash3 := hashString("different")
 
-	assert.Len(t, hash1, 64) // SHA-256 hex is 64 chars
-	assert.Equal(t, hash1, hash2) // Same input = same output
+	assert.Len(t, hash1, 64)         // SHA-256 hex is 64 chars
+	assert.Equal(t, hash1, hash2)    // Same input = same output
 	assert.NotEqual(t, hash1, hash3) // Different input = different output
 }
 
@@ -1107,4 +1110,3 @@ func TestContainsString(t *testing.T) {
 	assert.False(t, containsString(nil, "a"))
 	assert.False(t, containsString([]string{}, "a"))
 }
-

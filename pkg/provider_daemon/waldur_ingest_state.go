@@ -595,4 +595,3 @@ func (s *WaldurIngestStateStore) Delete() error {
 	}
 	return nil
 }
-

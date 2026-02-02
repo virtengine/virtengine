@@ -68,10 +68,10 @@ type SettlementRecord struct {
 type SettlementType string
 
 const (
-	SettlementTypePeriodic    SettlementType = "periodic"
-	SettlementTypeUsageBased  SettlementType = "usage_based"
-	SettlementTypeFinal       SettlementType = "final"
-	SettlementTypeRefund      SettlementType = "refund"
+	SettlementTypePeriodic   SettlementType = "periodic"
+	SettlementTypeUsageBased SettlementType = "usage_based"
+	SettlementTypeFinal      SettlementType = "final"
+	SettlementTypeRefund     SettlementType = "refund"
 )
 
 // IsValidSettlementType checks if the type is valid

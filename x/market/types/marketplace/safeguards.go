@@ -210,11 +210,11 @@ type SpoofingConfig struct {
 func DefaultSpoofingConfig() SpoofingConfig {
 	return SpoofingConfig{
 		Enabled:                     true,
-		MinOrderLifetimeBlocks:      5,    // ~30 seconds
-		MaxCancellationRatePct:      80,   // 80% max cancellation
-		CancellationWindowBlocks:    100,  // ~10 minutes
+		MinOrderLifetimeBlocks:      5,   // ~30 seconds
+		MaxCancellationRatePct:      80,  // 80% max cancellation
+		CancellationWindowBlocks:    100, // ~10 minutes
 		MinOrdersForEvaluation:      5,
-		PenaltyPerCancelledOrderBps: 100,  // 1% per cancelled order
+		PenaltyPerCancelledOrderBps: 100, // 1% per cancelled order
 	}
 }
 
@@ -341,10 +341,10 @@ func DefaultPenaltyConfig() PenaltyConfig {
 		CooldownThreshold:        5,
 		SuspensionThreshold:      10,
 		BanThreshold:             20,
-		BasePenaltyBps:           100,   // 1%
-		EscalationMultiplier:     150,   // 1.5x per violation
-		CooldownDurationBlocks:   100,   // ~10 minutes
-		SuspensionDurationBlocks: 14400, // ~1 day
+		BasePenaltyBps:           100,    // 1%
+		EscalationMultiplier:     150,    // 1.5x per violation
+		CooldownDurationBlocks:   100,    // ~10 minutes
+		SuspensionDurationBlocks: 14400,  // ~1 day
 		ViolationDecayBlocks:     100800, // ~1 week
 	}
 }
@@ -834,8 +834,8 @@ func (d *ManipulationDetector) DetectSpoofing(check SpoofingCheck) *ViolationRec
 			Severity:    ManipulationTypeSpoofing.Severity(),
 			Description: fmt.Sprintf("excessive cancellation rate: %d%%", cancellationRate),
 			Evidence: map[string]string{
-				"total_orders":     fmt.Sprintf("%d", check.TotalOrders),
-				"cancelled_orders": fmt.Sprintf("%d", check.CancelledOrders),
+				"total_orders":      fmt.Sprintf("%d", check.TotalOrders),
+				"cancelled_orders":  fmt.Sprintf("%d", check.CancelledOrders),
 				"cancellation_rate": fmt.Sprintf("%d%%", cancellationRate),
 			},
 			DetectedAt:  check.WindowEnd,

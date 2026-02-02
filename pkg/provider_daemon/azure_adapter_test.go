@@ -14,34 +14,34 @@ import (
 
 // Test constants for Azure adapter
 const (
-	testAzureProviderID     = "azure-provider-123"
-	testAzureDeploymentID   = "azure-deployment-1"
-	testAzureLeaseID        = "azure-lease-1"
-	testAzureInstanceName   = "test-azure-instance"
-	testAzureVMSize         = "Standard_D2s_v3"
-	testAzureResourceGroup  = "test-rg"
-	testAzureVNetID         = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/virtualNetworks/test-vnet"
-	testAzureSubnetID       = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/virtualNetworks/test-vnet/subnets/test-subnet"
-	testAzureNSGID          = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/networkSecurityGroups/test-nsg"
-	testAzureNICID          = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/networkInterfaces/test-nic"
-	testAzurePublicIPID     = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/publicIPAddresses/test-pip"
-	testAzureDiskID         = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/disks/test-disk"
-	testAzureVMID           = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/virtualMachines/test-vm"
-	testAzureSnapshotID     = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/snapshots/test-snapshot"
+	testAzureProviderID    = "azure-provider-123"
+	testAzureDeploymentID  = "azure-deployment-1"
+	testAzureLeaseID       = "azure-lease-1"
+	testAzureInstanceName  = "test-azure-instance"
+	testAzureVMSize        = "Standard_D2s_v3"
+	testAzureResourceGroup = "test-rg"
+	testAzureVNetID        = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/virtualNetworks/test-vnet"
+	testAzureSubnetID      = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/virtualNetworks/test-vnet/subnets/test-subnet"
+	testAzureNSGID         = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/networkSecurityGroups/test-nsg"
+	testAzureNICID         = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/networkInterfaces/test-nic"
+	testAzurePublicIPID    = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Network/publicIPAddresses/test-pip"
+	testAzureDiskID        = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/disks/test-disk"
+	testAzureVMID          = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/virtualMachines/test-vm"
+	testAzureSnapshotID    = "/subscriptions/test-sub/resourceGroups/test-rg/providers/Microsoft.Compute/snapshots/test-snapshot"
 )
 
 // MockAzureComputeClient is a mock implementation of AzureComputeClient
 type MockAzureComputeClient struct {
-	mu               sync.Mutex
-	vms              map[string]*AzureVMInfo
-	vmInstanceViews  map[string]*AzureVMInstanceView
-	vmSizes          []AzureVMSizeInfo
-	vmImages         []AzureVMImageInfo
-	availSets        map[string]*AzureAvailabilitySetInfo
-	extensions       map[string][]AzureVMExtensionInfo
-	failOnCreate     bool
-	failOnAction     bool
-	vmCounter        int
+	mu              sync.Mutex
+	vms             map[string]*AzureVMInfo
+	vmInstanceViews map[string]*AzureVMInstanceView
+	vmSizes         []AzureVMSizeInfo
+	vmImages        []AzureVMImageInfo
+	availSets       map[string]*AzureAvailabilitySetInfo
+	extensions      map[string][]AzureVMExtensionInfo
+	failOnCreate    bool
+	failOnAction    bool
+	vmCounter       int
 }
 
 func NewMockAzureComputeClient() *MockAzureComputeClient {
@@ -362,17 +362,17 @@ func (m *MockAzureComputeClient) ListVMExtensions(ctx context.Context, resourceG
 
 // MockAzureNetworkClient is a mock implementation of AzureNetworkClient
 type MockAzureNetworkClient struct {
-	mu            sync.Mutex
-	vnets         map[string]*AzureVNetInfo
-	subnets       map[string]*AzureSubnetInfo
-	nsgs          map[string]*AzureNSGInfo
-	nics          map[string]*AzureNICInfo
-	publicIPs     map[string]*AzurePublicIPInfo
-	failOnCreate  bool
-	failOnAction  bool
-	nicCounter    int
-	pipCounter    int
-	nsgCounter    int
+	mu           sync.Mutex
+	vnets        map[string]*AzureVNetInfo
+	subnets      map[string]*AzureSubnetInfo
+	nsgs         map[string]*AzureNSGInfo
+	nics         map[string]*AzureNICInfo
+	publicIPs    map[string]*AzurePublicIPInfo
+	failOnCreate bool
+	failOnAction bool
+	nicCounter   int
+	pipCounter   int
+	nsgCounter   int
 }
 
 func NewMockAzureNetworkClient() *MockAzureNetworkClient {
@@ -1523,9 +1523,9 @@ func TestAzureAdapter_ParseImageReference(t *testing.T) {
 	adapter, _, _, _ := newTestAzureAdapter()
 
 	testCases := []struct {
-		name      string
-		image     string
-		expected  AzureImageReference
+		name     string
+		image    string
+		expected AzureImageReference
 	}{
 		{
 			"marketplace-format",
@@ -1974,4 +1974,3 @@ func TestAzureAdapter_ConcurrentDeployments(t *testing.T) {
 	// Verify adapter state
 	assert.Len(t, adapter.ListInstances(), numDeployments)
 }
-

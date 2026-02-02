@@ -82,7 +82,7 @@ func (s *MarketIntegrationTestSuite) SetupTest() {
 	})
 
 	// Set up default params
-	s.keeper.SetParams(s.ctx, types.Params{
+	_ = s.keeper.SetParams(s.ctx, types.Params{
 		MaxScopesPerAccount:    10,
 		MaxScopesPerType:       3,
 		SaltMinBytes:           32,

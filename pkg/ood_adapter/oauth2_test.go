@@ -670,4 +670,3 @@ func TestIDTokenParsing(t *testing.T) {
 	require.Equal(t, "veid1customuser", token.VEIDAddress)
 	require.Equal(t, 0.99, token.IdentityScore)
 }
-

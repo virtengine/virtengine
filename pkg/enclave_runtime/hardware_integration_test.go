@@ -28,7 +28,7 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SGX service in auto mode: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		// Initialize the service
 		err = svc.Initialize(DefaultRuntimeConfig())
@@ -57,7 +57,7 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SGX service in simulate mode: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -84,7 +84,7 @@ func TestSGXHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SGX service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -409,14 +409,14 @@ func TestEnclaveManagerHardwareDetection(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create manager: %v", err)
 		}
-		defer manager.Stop()
+		defer func() { _ = manager.Stop() }()
 
 		// Create a simulated backend
 		simBackend, err := CreateSimulatedBackend("sim-1")
 		if err != nil {
 			t.Fatalf("Failed to create simulated backend: %v", err)
 		}
-		manager.RegisterBackend(simBackend)
+		_ = manager.RegisterBackend(simBackend)
 
 		// Create an SGX backend (will use simulation if no hardware)
 		sgxConfig := SGXEnclaveConfig{
@@ -427,14 +427,14 @@ func TestEnclaveManagerHardwareDetection(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SGX service: %v", err)
 		}
-		sgxSvc.Initialize(DefaultRuntimeConfig())
+		_ = sgxSvc.Initialize(DefaultRuntimeConfig())
 
 		sgxBackend := NewEnclaveBackend("sgx-1", AttestationTypeSGX, sgxSvc)
 		sgxBackend.Priority = 1 // Higher priority (lower number)
 		sgxBackend.Health = HealthHealthy
-		manager.RegisterBackend(sgxBackend)
+		_ = manager.RegisterBackend(sgxBackend)
 
-		manager.Start()
+		_ = manager.Start()
 
 		// Select backend
 		selected, err := manager.SelectBackend()
@@ -466,7 +466,7 @@ func TestEnclaveManagerHardwareDetection(t *testing.T) {
 		}
 
 		simBackend, _ := CreateSimulatedBackend("test-sim")
-		manager.RegisterBackend(simBackend)
+		_ = manager.RegisterBackend(simBackend)
 
 		// This should log hardware status without errors
 		manager.LogHardwareStatus()
@@ -697,9 +697,9 @@ func BenchmarkSGXAttestationSimulated(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create SGX service: %v", err)
 	}
-	defer svc.Shutdown()
+	defer func() { _ = svc.Shutdown() }()
 
-	svc.Initialize(DefaultRuntimeConfig())
+	_ = svc.Initialize(DefaultRuntimeConfig())
 
 	reportData := []byte("benchmark-report-data")
 
@@ -722,9 +722,9 @@ func BenchmarkSEVAttestationSimulated(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create SEV-SNP service: %v", err)
 	}
-	defer svc.Shutdown()
+	defer func() { _ = svc.Shutdown() }()
 
-	svc.Initialize(DefaultRuntimeConfig())
+	_ = svc.Initialize(DefaultRuntimeConfig())
 
 	reportData := []byte("benchmark-report-data")
 
@@ -749,9 +749,9 @@ func BenchmarkNitroAttestationSimulated(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create Nitro service: %v", err)
 	}
-	defer svc.Shutdown()
+	defer func() { _ = svc.Shutdown() }()
 
-	svc.Initialize(DefaultRuntimeConfig())
+	_ = svc.Initialize(DefaultRuntimeConfig())
 
 	reportData := []byte("benchmark-report-data")
 
@@ -763,4 +763,3 @@ func BenchmarkNitroAttestationSimulated(b *testing.B) {
 		}
 	}
 }
-

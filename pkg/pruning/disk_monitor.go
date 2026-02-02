@@ -476,4 +476,3 @@ func FormatBytes(bytes uint64) string {
 		return fmt.Sprintf("%d B", bytes)
 	}
 }
-

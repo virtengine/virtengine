@@ -1038,4 +1038,3 @@ func GetIntelSGXRootCA() (*x509.Certificate, error) {
 	}
 	return x509.ParseCertificate(block.Bytes)
 }
-

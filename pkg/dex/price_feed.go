@@ -4,8 +4,8 @@
 package dex
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"sort"
 	"sync"
 	"time"
@@ -15,13 +15,13 @@ import (
 
 // priceFeedImpl implements the PriceFeed interface
 type priceFeedImpl struct {
-	cfg        PriceFeedConfig
-	sources    map[string]PriceSource
-	sourcesMu  sync.RWMutex
-	cache      *priceCache
-	history    *priceHistory
-	subs       map[string][]PriceCallback
-	subsMu     sync.RWMutex
+	cfg       PriceFeedConfig
+	sources   map[string]PriceSource
+	sourcesMu sync.RWMutex
+	cache     *priceCache
+	history   *priceHistory
+	subs      map[string][]PriceCallback
+	subsMu    sync.RWMutex
 }
 
 // priceCache provides thread-safe price caching
@@ -451,4 +451,3 @@ func (s *adapterPriceSource) GetPrice(ctx context.Context, baseSymbol, quoteSymb
 func (s *adapterPriceSource) IsHealthy(ctx context.Context) bool {
 	return s.adapter.IsHealthy(ctx)
 }
-

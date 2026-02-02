@@ -502,4 +502,3 @@ type ProviderRegistry interface {
 	// Close closes all providers.
 	Close() error
 }
-

@@ -257,7 +257,7 @@ func TestProviderIncentiveCalculator(t *testing.T) {
 		}
 
 		rewards := calc.CalculateAllRewards(metrics, blockHeight, now)
-		
+
 		earlyAdopterFound := false
 		for _, r := range rewards {
 			if r != nil && r.Reason != "" && len(r.Reason) > 0 {
@@ -575,7 +575,7 @@ func TestMarketMetrics(t *testing.T) {
 
 	t.Run("efficiency score calculation", func(t *testing.T) {
 		// Set up some metrics
-		metrics.Spread.AverageSpreadBps = 100  // 1% spread
+		metrics.Spread.AverageSpreadBps = 100 // 1% spread
 		metrics.FillRate.TotalOrders = 100
 		metrics.FillRate.FilledOrders = 80
 		metrics.FillRate.FillRatePercentage = 80

@@ -266,4 +266,3 @@ func (m *SyncManager) GetPendingCount() int {
 	}
 	return count
 }
-

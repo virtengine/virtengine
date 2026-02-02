@@ -789,4 +789,3 @@ func gbFromBytes(bytes int64) float64 {
 func formatFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', 6, 64)
 }
-

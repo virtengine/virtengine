@@ -206,4 +206,3 @@ func (s *ChainCallbackSink) Submit(ctx context.Context, callback *marketplacetyp
 
 	return nil
 }
-

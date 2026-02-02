@@ -411,8 +411,8 @@ func DefaultDataLifecycleRules() *DataLifecycleRules {
 				ArtifactType:            ArtifactTypeRawImage,
 				AllowOnChain:            false, // NEVER on-chain
 				RequireEncryption:       true,
-				MaxRetentionDays:        30,  // Max 30 days off-chain
-				DefaultRetentionDays:    7,   // Default 7 days
+				MaxRetentionDays:        30,   // Max 30 days off-chain
+				DefaultRetentionDays:    7,    // Default 7 days
 				DeleteAfterVerification: true, // Delete after processing
 				AllowOffChainStorage:    true,
 				RequireUserConsent:      true,

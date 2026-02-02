@@ -244,4 +244,3 @@ func (pg *PanicGroup) Wait() error {
 	close(pg.errCh)
 	return pg.err
 }
-

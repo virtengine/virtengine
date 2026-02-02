@@ -583,4 +583,3 @@ func CreateLLMBackend(config *Config) (LLMBackend, error) {
 		return nil, fmt.Errorf("unknown LLM backend: %s", config.LLMBackend)
 	}
 }
-

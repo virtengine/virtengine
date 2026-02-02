@@ -113,14 +113,14 @@ func (s *KeeperTestSuite) createTestPayload() encryptiontypes.EncryptedPayloadEn
 	_, _ = rand.Read(senderSignature)
 
 	return encryptiontypes.EncryptedPayloadEnvelope{
-		Version:         1,
-		AlgorithmID:     "X25519-XSALSA20-POLY1305",
+		Version:          1,
+		AlgorithmID:      "X25519-XSALSA20-POLY1305",
 		AlgorithmVersion: encryptiontypes.AlgorithmVersionV1,
-		RecipientKeyIDs: []string{"recipient1"},
-		Nonce:           nonce,
-		Ciphertext:      ciphertext,
-		SenderSignature: senderSignature,
-		SenderPubKey:    pubKey,
+		RecipientKeyIDs:  []string{"recipient1"},
+		Nonce:            nonce,
+		Ciphertext:       ciphertext,
+		SenderSignature:  senderSignature,
+		SenderPubKey:     pubKey,
 	}
 }
 

@@ -59,7 +59,7 @@ func (q GRPCQuerier) QueryIdentityStatus(ctx sdk.Context, req *types.QueryIdenti
 	}
 
 	tier := types.ComputeTierFromScoreValue(score, accountStatus)
-	
+
 	// Get last updated time from identity score if available
 	var lastUpdatedAt *types.IdentityScore
 	identityScore, scoreFound := q.Keeper.GetIdentityScore(ctx, req.AccountAddress)

@@ -16,7 +16,7 @@ import (
 // discoveryService implements the DiscoveryService interface
 type discoveryService struct {
 	metadata   MetadataService
-	usageCache map[string]int64 // entityID -> usage count
+	usageCache map[string]int64    // entityID -> usage count
 	recentUse  map[string][]string // walletAddress -> entityIDs
 	mu         sync.RWMutex
 }
@@ -222,4 +222,3 @@ func (d *discoveryService) GetStats(ctx context.Context) (*DiscoveryStats, error
 
 	return stats, nil
 }
-

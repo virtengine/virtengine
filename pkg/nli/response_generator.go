@@ -365,4 +365,3 @@ func formatStatus(status string) string {
 		return status
 	}
 }
-

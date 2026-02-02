@@ -471,4 +471,3 @@ func DefaultConfig() Config {
 		RateLimitEnabled:        true,
 	}
 }
-

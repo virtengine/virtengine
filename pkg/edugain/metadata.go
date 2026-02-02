@@ -4,10 +4,10 @@
 package edugain
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/xml"
 	"fmt"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"io"
 	"net/http"
 	"strings"
@@ -518,14 +518,14 @@ type EntityDescriptor struct {
 
 // IDPSSODescriptor represents an IdP descriptor
 type IDPSSODescriptor struct {
-	XMLName              xml.Name             `xml:"IDPSSODescriptor"`
-	WantAuthnRequestsSigned bool             `xml:"WantAuthnRequestsSigned,attr"`
-	ProtocolSupportEnumeration string        `xml:"protocolSupportEnumeration,attr"`
-	SingleSignOnServices []SingleSignOnService `xml:"SingleSignOnService"`
-	SingleLogoutServices []SingleLogoutService `xml:"SingleLogoutService"`
-	KeyDescriptors       []KeyDescriptor       `xml:"KeyDescriptor"`
-	NameIDFormats        []string              `xml:"NameIDFormat"`
-	Attributes           []Attribute           `xml:"Attribute"`
+	XMLName                    xml.Name              `xml:"IDPSSODescriptor"`
+	WantAuthnRequestsSigned    bool                  `xml:"WantAuthnRequestsSigned,attr"`
+	ProtocolSupportEnumeration string                `xml:"protocolSupportEnumeration,attr"`
+	SingleSignOnServices       []SingleSignOnService `xml:"SingleSignOnService"`
+	SingleLogoutServices       []SingleLogoutService `xml:"SingleLogoutService"`
+	KeyDescriptors             []KeyDescriptor       `xml:"KeyDescriptor"`
+	NameIDFormats              []string              `xml:"NameIDFormat"`
+	Attributes                 []Attribute           `xml:"Attribute"`
 }
 
 // SingleSignOnService represents an SSO endpoint
@@ -641,4 +641,3 @@ func verifyXMLSignature(data, cert []byte) (bool, error) {
 	// VE-2005: Real XML-DSig verification using goxmldsig
 	return VerifyXMLSignatureWithCertBytes(data, cert)
 }
-

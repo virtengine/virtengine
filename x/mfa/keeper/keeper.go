@@ -628,7 +628,7 @@ func (k Keeper) GetChallenge(ctx sdk.Context, challengeID string) (*types.Challe
 	}
 
 	var cs challengeStore
-	json.Unmarshal(bz, &cs)
+	_ = json.Unmarshal(bz, &cs)
 
 	return &types.Challenge{
 		ChallengeID:     cs.ChallengeID,
@@ -738,7 +738,7 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	// Check if challenge is expired
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired.Wrap("challenge has expired")
 	}
 
@@ -750,7 +750,7 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	// Check attempt count
 	if challenge.AttemptCount >= challenge.MaxAttempts {
 		challenge.MarkFailed()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrMaxAttemptsExceeded.Wrap("maximum verification attempts exceeded")
 	}
 
@@ -778,12 +778,12 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 
 	if verifyErr != nil {
 		challenge.MarkFailed()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, verifyErr
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -972,7 +972,7 @@ func (k Keeper) CreateAuthorizationSession(ctx sdk.Context, session *types.Autho
 	// Generate session ID if not provided
 	if session.SessionID == "" {
 		idBytes := make([]byte, 16)
-		rand.Read(idBytes)
+		_, _ = rand.Read(idBytes)
 		session.SessionID = hex.EncodeToString(idBytes)
 	}
 
@@ -1023,7 +1023,7 @@ func (k Keeper) GetAuthorizationSession(ctx sdk.Context, sessionID string) (*typ
 	}
 
 	var ss sessionStore
-	json.Unmarshal(bz, &ss)
+	_ = json.Unmarshal(bz, &ss)
 
 	return &types.AuthorizationSession{
 		SessionID:         ss.SessionID,
@@ -1217,7 +1217,7 @@ func (k Keeper) GetTrustedDevice(ctx sdk.Context, address sdk.AccAddress, finger
 	}
 
 	var ds trustedDeviceStore
-	json.Unmarshal(bz, &ds)
+	_ = json.Unmarshal(bz, &ds)
 
 	return &types.TrustedDevice{
 		AccountAddress: ds.AccountAddress,
@@ -1237,7 +1237,7 @@ func (k Keeper) GetTrustedDevices(ctx sdk.Context, address sdk.AccAddress) []typ
 	var devices []types.TrustedDevice
 	for ; iterator.Valid(); iterator.Next() {
 		var ds trustedDeviceStore
-		json.Unmarshal(iterator.Value(), &ds)
+		_ = json.Unmarshal(iterator.Value(), &ds)
 		devices = append(devices, types.TrustedDevice{
 			AccountAddress: ds.AccountAddress,
 			DeviceInfo:     ds.DeviceInfo,
@@ -1317,7 +1317,7 @@ func (k Keeper) GetSensitiveTxConfig(ctx sdk.Context, txType types.SensitiveTran
 	}
 
 	var cs sensitiveTxConfigStore
-	json.Unmarshal(bz, &cs)
+	_ = json.Unmarshal(bz, &cs)
 
 	return &types.SensitiveTxConfig{
 		TransactionType:             cs.TransactionType,
@@ -1402,7 +1402,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; iterator.Valid(); iterator.Next() {
 		var ps mfaPolicyStore
-		json.Unmarshal(iterator.Value(), &ps)
+		_ = json.Unmarshal(iterator.Value(), &ps)
 		policies = append(policies, types.MFAPolicy{
 			AccountAddress:     ps.AccountAddress,
 			RequiredFactors:    ps.RequiredFactors,
@@ -1424,7 +1424,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; enrollmentIterator.Valid(); enrollmentIterator.Next() {
 		var es factorEnrollmentStore
-		json.Unmarshal(enrollmentIterator.Value(), &es)
+		_ = json.Unmarshal(enrollmentIterator.Value(), &es)
 		enrollments = append(enrollments, types.FactorEnrollment{
 			AccountAddress:   es.AccountAddress,
 			FactorType:       es.FactorType,
@@ -1448,7 +1448,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; deviceIterator.Valid(); deviceIterator.Next() {
 		var ds trustedDeviceStore
-		json.Unmarshal(deviceIterator.Value(), &ds)
+		_ = json.Unmarshal(deviceIterator.Value(), &ds)
 		devices = append(devices, types.TrustedDevice{
 			AccountAddress: ds.AccountAddress,
 			DeviceInfo:     ds.DeviceInfo,

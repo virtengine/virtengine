@@ -18,17 +18,17 @@ import (
 
 // decayPolicyStore is the storage format for decay policies
 type decayPolicyStore struct {
-	PolicyID          string             `json:"policy_id"`
-	DecayType         int                `json:"decay_type"`
-	DecayRate         string             `json:"decay_rate"`
-	DecayPeriodNanos  int64              `json:"decay_period_nanos"`
-	MinScore          string             `json:"min_score"`
-	GracePeriodNanos  int64              `json:"grace_period_nanos"`
-	LastActivityBonus string             `json:"last_activity_bonus"`
+	PolicyID          string               `json:"policy_id"`
+	DecayType         int                  `json:"decay_type"`
+	DecayRate         string               `json:"decay_rate"`
+	DecayPeriodNanos  int64                `json:"decay_period_nanos"`
+	MinScore          string               `json:"min_score"`
+	GracePeriodNanos  int64                `json:"grace_period_nanos"`
+	LastActivityBonus string               `json:"last_activity_bonus"`
 	StepThresholds    []stepThresholdStore `json:"step_thresholds,omitempty"`
-	Enabled           bool               `json:"enabled"`
-	CreatedAt         int64              `json:"created_at"`
-	UpdatedAt         int64              `json:"updated_at"`
+	Enabled           bool                 `json:"enabled"`
+	CreatedAt         int64                `json:"created_at"`
+	UpdatedAt         int64                `json:"updated_at"`
 }
 
 type stepThresholdStore struct {

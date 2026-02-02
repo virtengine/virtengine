@@ -79,12 +79,12 @@ func TestParseAuthenticatorData(t *testing.T) {
 // TestAuthenticatorDataFlags tests flag checking
 func TestAuthenticatorDataFlags(t *testing.T) {
 	tests := []struct {
-		name     string
-		flags    types.AuthenticatorDataFlags
-		checkUP  bool
-		checkUV  bool
-		checkAT  bool
-		checkED  bool
+		name    string
+		flags   types.AuthenticatorDataFlags
+		checkUP bool
+		checkUV bool
+		checkAT bool
+		checkED bool
 	}{
 		{
 			name:    "no_flags",
@@ -209,28 +209,28 @@ func TestClientDataChallengeVerification(t *testing.T) {
 	encodedChallenge := base64.RawURLEncoding.EncodeToString(challenge)
 
 	tests := []struct {
-		name             string
-		clientChallenge  string
+		name              string
+		clientChallenge   string
 		expectedChallenge []byte
-		wantErr          bool
+		wantErr           bool
 	}{
 		{
-			name:             "matching_challenge",
-			clientChallenge:  encodedChallenge,
+			name:              "matching_challenge",
+			clientChallenge:   encodedChallenge,
 			expectedChallenge: challenge,
-			wantErr:          false,
+			wantErr:           false,
 		},
 		{
-			name:             "mismatched_challenge",
-			clientChallenge:  base64.RawURLEncoding.EncodeToString([]byte("different")),
+			name:              "mismatched_challenge",
+			clientChallenge:   base64.RawURLEncoding.EncodeToString([]byte("different")),
 			expectedChallenge: challenge,
-			wantErr:          true,
+			wantErr:           true,
 		},
 		{
-			name:             "invalid_base64",
-			clientChallenge:  "not-valid-base64!@#",
+			name:              "invalid_base64",
+			clientChallenge:   "not-valid-base64!@#",
 			expectedChallenge: challenge,
-			wantErr:          true,
+			wantErr:           true,
 		},
 	}
 
@@ -313,10 +313,10 @@ func TestClientDataOriginVerification(t *testing.T) {
 // TestRPIDVerification tests relying party ID verification
 func TestRPIDVerification(t *testing.T) {
 	tests := []struct {
-		name       string
-		rpID       string
-		checkRPID  string
-		wantErr    bool
+		name      string
+		rpID      string
+		checkRPID string
+		wantErr   bool
 	}{
 		{
 			name:      "matching_rpid",
@@ -555,7 +555,7 @@ func TestCOSEAlgorithmSupport(t *testing.T) {
 		{types.COSEAlgorithmES384, true},
 		{types.COSEAlgorithmES512, true},
 		{types.COSEAlgorithmEdDSA, true},
-		{types.COSEAlgorithmRS256, false}, // RSA not yet implemented
+		{types.COSEAlgorithmRS256, false},  // RSA not yet implemented
 		{types.COSEAlgorithm(9999), false}, // Unknown
 	}
 

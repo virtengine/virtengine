@@ -10,20 +10,20 @@ import (
 // DefaultParams returns the default enclave parameters
 func DefaultParams() v1.Params {
 	return v1.Params{
-		MaxEnclaveKeysPerValidator: 2,                                                                  // Allow current + rotating key
-		DefaultExpiryBlocks:        1000,                                                               // ~1.5 hours at 5s blocks
-		KeyRotationOverlapBlocks:   100,                                                                // ~8 minutes overlap
-		MinQuoteVersion:            3,                                                                  // DCAP v3 minimum
+		MaxEnclaveKeysPerValidator: 2,    // Allow current + rotating key
+		DefaultExpiryBlocks:        1000, // ~1.5 hours at 5s blocks
+		KeyRotationOverlapBlocks:   100,  // ~8 minutes overlap
+		MinQuoteVersion:            3,    // DCAP v3 minimum
 		AllowedTeeTypes:            []v1.TEEType{v1.TEETypeSGX, v1.TEETypeSEVSNP, v1.TEETypeNitro},
-		ScoreTolerance:             0,                                                                  // Exact match by default
+		ScoreTolerance:             0, // Exact match by default
 		RequireAttestationChain:    true,
-		MaxAttestationAge:          10000,                                                              // ~14 hours
+		MaxAttestationAge:          10000, // ~14 hours
 		EnableCommitteeMode:        false,
 		CommitteeSize:              0,
-		CommitteeEpochBlocks:       10000,                                                              // ~14 hours per epoch
-		EnableMeasurementCleanup:   false,                                                              // Disabled by default
-		MaxRegistrationsPerBlock:   0,                                                                  // Unlimited by default
-		RegistrationCooldownBlocks: 0,                                                                  // No cooldown by default
+		CommitteeEpochBlocks:       10000, // ~14 hours per epoch
+		EnableMeasurementCleanup:   false, // Disabled by default
+		MaxRegistrationsPerBlock:   0,     // Unlimited by default
+		RegistrationCooldownBlocks: 0,     // No cooldown by default
 	}
 }
 

@@ -704,4 +704,3 @@ func (s *service) VerifyDocumentWithFraudCheck(ctx context.Context, req *Verific
 
 	return verifyResult, fraudResult, nil
 }
-

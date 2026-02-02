@@ -127,7 +127,7 @@ func createEncryptedAssertionXML(
 
 func TestDecryptAESCBC_Valid(t *testing.T) {
 	key := make([]byte, 32) // 256-bit key
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	plaintext := []byte("Test SAML assertion content that needs to be encrypted")
 
@@ -144,7 +144,7 @@ func TestDecryptAESCBC_Valid(t *testing.T) {
 
 func TestDecryptAESCBC_TooShort(t *testing.T) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	// Ciphertext shorter than block size
 	_, err := decryptAESCBC(make([]byte, 10), key)
@@ -153,11 +153,11 @@ func TestDecryptAESCBC_TooShort(t *testing.T) {
 
 func TestDecryptAESCBC_NotBlockAligned(t *testing.T) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	// Ciphertext not aligned to block size (after removing IV)
 	ciphertext := make([]byte, aes.BlockSize+10) // IV + non-aligned data
-	rand.Read(ciphertext)
+	_, _ = rand.Read(ciphertext)
 
 	_, err := decryptAESCBC(ciphertext, key)
 	assert.Error(t, err)
@@ -667,4 +667,3 @@ func TestNewAssertionDecryptor_EmptyKey(t *testing.T) {
 	_, err := NewAssertionDecryptor([]byte{})
 	assert.Error(t, err)
 }
-

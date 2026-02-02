@@ -241,6 +241,7 @@ func (k Keeper) SlashForDoubleSigning(ctx sdk.Context, validatorAddr string, hei
 	// Store evidence
 	store := ctx.KVStore(k.skey)
 	evidenceKey := types.GetDoubleSignEvidenceKey(evidence.EvidenceID)
+	//nolint:errchkjson // evidence contains time.Time which is safe for Marshal
 	evidenceBz, _ := json.Marshal(evidence)
 	store.Set(evidenceKey, evidenceBz)
 

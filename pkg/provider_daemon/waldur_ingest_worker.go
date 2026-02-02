@@ -48,15 +48,15 @@ type IngestAuditEntry struct {
 
 // IngestReconciliationAuditEntry represents an audit log entry for reconciliation.
 type IngestReconciliationAuditEntry struct {
-	Timestamp         time.Time `json:"timestamp"`
-	WaldurCustomer    string    `json:"waldur_customer"`
-	ProviderAddress   string    `json:"provider_address"`
-	OfferingsChecked  int       `json:"offerings_checked"`
-	DriftDetected     int       `json:"drift_detected"`
-	OfferingsQueued   int       `json:"offerings_queued"`
-	NewOfferingsFound int       `json:"new_offerings_found"`
+	Timestamp         time.Time     `json:"timestamp"`
+	WaldurCustomer    string        `json:"waldur_customer"`
+	ProviderAddress   string        `json:"provider_address"`
+	OfferingsChecked  int           `json:"offerings_checked"`
+	DriftDetected     int           `json:"drift_detected"`
+	OfferingsQueued   int           `json:"offerings_queued"`
+	NewOfferingsFound int           `json:"new_offerings_found"`
 	Duration          time.Duration `json:"duration_ns"`
-	Error             string    `json:"error,omitempty"`
+	Error             string        `json:"error,omitempty"`
 }
 
 // IngestDeadLetterAuditEntry represents an audit log entry for dead-letter events.
@@ -128,9 +128,9 @@ type WaldurIngestPrometheusMetrics struct {
 	OfferingsDeprecated atomic.Int64
 
 	// Fetch counters
-	FetchesTotal    atomic.Int64
+	FetchesTotal      atomic.Int64
 	FetchesSuccessful atomic.Int64
-	FetchesFailed   atomic.Int64
+	FetchesFailed     atomic.Int64
 
 	// Reconciliation counters
 	ReconciliationsRun atomic.Int64
@@ -215,8 +215,8 @@ type WaldurIngestWorkerConfig struct {
 // DefaultWaldurIngestWorkerConfig returns sensible defaults.
 func DefaultWaldurIngestWorkerConfig() WaldurIngestWorkerConfig {
 	return WaldurIngestWorkerConfig{
-		IngestIntervalSeconds:    3600,  // 1 hour
-		ReconcileIntervalSeconds: 300,   // 5 minutes
+		IngestIntervalSeconds:    3600, // 1 hour
+		ReconcileIntervalSeconds: 300,  // 5 minutes
 		ReconcileOnStartup:       true,
 		PageSize:                 50,
 		MaxRetries:               5,
@@ -277,22 +277,22 @@ type WaldurIngestTask struct {
 
 // WaldurIngestWorkerMetrics tracks worker metrics.
 type WaldurIngestWorkerMetrics struct {
-	mu                   sync.RWMutex
-	IngestsTotal         int64
-	IngestsSuccessful    int64
-	IngestsFailed        int64
-	IngestsDeadLettered  int64
-	IngestsSkipped       int64
-	DriftDetections      int64
-	ReconciliationsRun   int64
-	LastIngestTime       time.Time
-	LastSuccessTime      time.Time
-	LastReconcileTime    time.Time
-	WorkerUptime         time.Time
-	OfferingsCreated     int64
-	OfferingsUpdated     int64
-	OfferingsDeprecated  int64
-	QueueDepth           int
+	mu                    sync.RWMutex
+	IngestsTotal          int64
+	IngestsSuccessful     int64
+	IngestsFailed         int64
+	IngestsDeadLettered   int64
+	IngestsSkipped        int64
+	DriftDetections       int64
+	ReconciliationsRun    int64
+	LastIngestTime        time.Time
+	LastSuccessTime       time.Time
+	LastReconcileTime     time.Time
+	WorkerUptime          time.Time
+	OfferingsCreated      int64
+	OfferingsUpdated      int64
+	OfferingsDeprecated   int64
+	QueueDepth            int
 	AverageIngestDuration time.Duration
 }
 
@@ -510,10 +510,10 @@ func (w *WaldurIngestWorker) FetchAndQueueOfferings(ctx context.Context) error {
 
 		// Update cursor
 		w.state.UpdateCursor(&IngestCursor{
-			Page:          page,
-			PageSize:      w.cfg.PageSize,
+			Page:           page,
+			PageSize:       w.cfg.PageSize,
 			ProcessedCount: totalQueued,
-			StartedAt:     startTime,
+			StartedAt:      startTime,
 		})
 
 		if len(offerings) < w.cfg.PageSize {
@@ -960,21 +960,21 @@ func (w *WaldurIngestWorker) Metrics() WaldurIngestWorkerMetrics {
 
 	// Copy all fields except the mutex
 	return WaldurIngestWorkerMetrics{
-		IngestsTotal:         w.metrics.IngestsTotal,
-		IngestsSuccessful:    w.metrics.IngestsSuccessful,
-		IngestsFailed:        w.metrics.IngestsFailed,
-		IngestsDeadLettered:  w.metrics.IngestsDeadLettered,
-		IngestsSkipped:       w.metrics.IngestsSkipped,
-		DriftDetections:      w.metrics.DriftDetections,
-		ReconciliationsRun:   w.metrics.ReconciliationsRun,
-		LastIngestTime:       w.metrics.LastIngestTime,
-		LastSuccessTime:      w.metrics.LastSuccessTime,
-		LastReconcileTime:    w.metrics.LastReconcileTime,
-		WorkerUptime:         w.metrics.WorkerUptime,
-		OfferingsCreated:     w.metrics.OfferingsCreated,
-		OfferingsUpdated:     w.metrics.OfferingsUpdated,
-		OfferingsDeprecated:  w.metrics.OfferingsDeprecated,
-		QueueDepth:           len(w.ingestQueue),
+		IngestsTotal:        w.metrics.IngestsTotal,
+		IngestsSuccessful:   w.metrics.IngestsSuccessful,
+		IngestsFailed:       w.metrics.IngestsFailed,
+		IngestsDeadLettered: w.metrics.IngestsDeadLettered,
+		IngestsSkipped:      w.metrics.IngestsSkipped,
+		DriftDetections:     w.metrics.DriftDetections,
+		ReconciliationsRun:  w.metrics.ReconciliationsRun,
+		LastIngestTime:      w.metrics.LastIngestTime,
+		LastSuccessTime:     w.metrics.LastSuccessTime,
+		LastReconcileTime:   w.metrics.LastReconcileTime,
+		WorkerUptime:        w.metrics.WorkerUptime,
+		OfferingsCreated:    w.metrics.OfferingsCreated,
+		OfferingsUpdated:    w.metrics.OfferingsUpdated,
+		OfferingsDeprecated: w.metrics.OfferingsDeprecated,
+		QueueDepth:          len(w.ingestQueue),
 	}
 }
 
@@ -1015,4 +1015,3 @@ func (w *WaldurIngestWorker) PrometheusMetrics() *WaldurIngestPrometheusMetrics 
 func (w *WaldurIngestWorker) SetAuditLogger(logger WaldurIngestAuditLogger) {
 	w.auditLogger = logger
 }
-

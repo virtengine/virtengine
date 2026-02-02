@@ -7,15 +7,15 @@ import (
 
 // Alias types for external access
 type (
-	Keeper                     = keeper.Keeper
-	EncryptedPayloadEnvelope   = types.EncryptedPayloadEnvelope
-	RecipientKeyRecord         = types.RecipientKeyRecord
-	GenesisState               = types.GenesisState
-	Params                     = types.Params
-	AlgorithmInfo              = types.AlgorithmInfo
-	MsgRegisterRecipientKey    = types.MsgRegisterRecipientKey
-	MsgRevokeRecipientKey      = types.MsgRevokeRecipientKey
-	MsgUpdateKeyLabel          = types.MsgUpdateKeyLabel
+	Keeper                   = keeper.Keeper
+	EncryptedPayloadEnvelope = types.EncryptedPayloadEnvelope
+	RecipientKeyRecord       = types.RecipientKeyRecord
+	GenesisState             = types.GenesisState
+	Params                   = types.Params
+	AlgorithmInfo            = types.AlgorithmInfo
+	MsgRegisterRecipientKey  = types.MsgRegisterRecipientKey
+	MsgRevokeRecipientKey    = types.MsgRevokeRecipientKey
+	MsgUpdateKeyLabel        = types.MsgUpdateKeyLabel
 )
 
 // Alias constants
@@ -31,17 +31,17 @@ const (
 
 // Alias functions
 var (
-	NewKeeper                    = keeper.NewKeeper
-	NewMsgServerImpl             = keeper.NewMsgServerImpl
-	NewEncryptedPayloadEnvelope  = types.NewEncryptedPayloadEnvelope
-	DefaultParams                = types.DefaultParams
-	ComputeKeyFingerprint        = types.ComputeKeyFingerprint
-	SupportedAlgorithms          = types.SupportedAlgorithms
-	IsAlgorithmSupported         = types.IsAlgorithmSupported
-	DefaultAlgorithm             = types.DefaultAlgorithm
-	GetAlgorithmInfo             = types.GetAlgorithmInfo
-	RegisterInterfaces           = types.RegisterInterfaces
-	RegisterLegacyAminoCodec     = types.RegisterLegacyAminoCodec
+	NewKeeper                   = keeper.NewKeeper
+	NewMsgServerImpl            = keeper.NewMsgServerImpl
+	NewEncryptedPayloadEnvelope = types.NewEncryptedPayloadEnvelope
+	DefaultParams               = types.DefaultParams
+	ComputeKeyFingerprint       = types.ComputeKeyFingerprint
+	SupportedAlgorithms         = types.SupportedAlgorithms
+	IsAlgorithmSupported        = types.IsAlgorithmSupported
+	DefaultAlgorithm            = types.DefaultAlgorithm
+	GetAlgorithmInfo            = types.GetAlgorithmInfo
+	RegisterInterfaces          = types.RegisterInterfaces
+	RegisterLegacyAminoCodec    = types.RegisterLegacyAminoCodec
 )
 
 // Alias error variables

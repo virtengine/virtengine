@@ -307,4 +307,3 @@ func (m *SessionTokenManager) CleanupExpiredTokens() {
 		}
 	}
 }
-

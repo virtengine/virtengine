@@ -427,7 +427,7 @@ func (hc *HealthChecker) GetLastStatus() *HealthStatus {
 
 	if hc.lastStatus == nil {
 		return &HealthStatus{
-			Healthy:     false,
+			Healthy:      false,
 			ErrorMessage: "no health check performed yet",
 		}
 	}
@@ -525,8 +525,8 @@ func (hc *HealthChecker) CheckWithContext(ctx context.Context) (*HealthStatus, e
 	select {
 	case <-ctx.Done():
 		return &HealthStatus{
-			Healthy:      false,
-			ErrorMessage: "health check cancelled",
+			Healthy:       false,
+			ErrorMessage:  "health check cancelled",
 			LastCheckTime: time.Now(),
 		}, ctx.Err()
 	case r := <-resultChan:
@@ -550,4 +550,3 @@ func MustNewHealthChecker(scorer Scorer, config HealthConfig) *HealthChecker {
 	}
 	return NewHealthChecker(scorer, config)
 }
-

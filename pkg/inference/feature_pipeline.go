@@ -25,9 +25,9 @@ import (
 type FeaturePipeline struct {
 	config PipelineConfig
 
-	faceExtractor   *FaceExtractor
-	ocrExtractor    *OCRExtractor
-	livenessScorer  *LivenessScorer
+	faceExtractor    *FaceExtractor
+	ocrExtractor     *OCRExtractor
+	livenessScorer   *LivenessScorer
 	featureExtractor *FeatureExtractor
 
 	mu               sync.RWMutex
@@ -213,12 +213,12 @@ func (p *FeaturePipeline) Extract(ctx context.Context, input *PipelineInput) (*P
 
 	// Initialize output
 	output := &PipelineOutput{
-		Features:     make([]float32, TotalFeatureDim),
-		FaceResults:  make(map[string]*FaceExtractionResult),
-		OCRResults:   make(map[string]*OCRExtractionResult),
-		ReasonCodes:  []string{},
-		Warnings:     []string{},
-		Success:      true,
+		Features:    make([]float32, TotalFeatureDim),
+		FaceResults: make(map[string]*FaceExtractionResult),
+		OCRResults:  make(map[string]*OCRExtractionResult),
+		ReasonCodes: []string{},
+		Warnings:    []string{},
+		Success:     true,
 	}
 
 	// Apply timeout
@@ -787,4 +787,3 @@ func NewProductionFeaturePipeline(
 
 	return NewFeaturePipeline(config)
 }
-

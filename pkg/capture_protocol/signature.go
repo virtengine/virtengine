@@ -308,4 +308,3 @@ func (r *mockApprovedClientRegistry) VerifyClientKey(clientID string, publicKey 
 	}
 	return nil
 }
-

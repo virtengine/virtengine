@@ -459,7 +459,7 @@ func (r RiskIndicatorsInput) ComputeScore() uint32 {
 		uint64(r.IPReputationScore)*20 +
 		uint64(r.GeoConsistencyScore)*25
 
-	score = score / 100
+	score /= 100
 
 	// Penalty if velocity check failed
 	if !r.VelocityCheckPassed {

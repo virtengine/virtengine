@@ -255,9 +255,9 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 		JobCompletionStatus:    job.State,
 		FormulaVersion:         record.FormulaVersion,
 		CalculationDetails: types.RewardCalculationDetails{
-			TotalUsageValue:        record.BillableAmount.String(),
-			RewardPoolContribution: record.ProviderReward.String(),
-			PlatformFeeRate:        fmt.Sprintf("%d", k.GetParams(ctx).PlatformFeeRateBps),
+			TotalUsageValue:         record.BillableAmount.String(),
+			RewardPoolContribution:  record.ProviderReward.String(),
+			PlatformFeeRate:         fmt.Sprintf("%d", k.GetParams(ctx).PlatformFeeRateBps),
 			NodeContributionFormula: "proportional_time_weighted",
 			InputMetrics: map[string]string{
 				"wall_clock_seconds": fmt.Sprintf("%d", record.UsageMetrics.WallClockSeconds),

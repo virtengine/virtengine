@@ -1818,4 +1818,3 @@ func TestOpenStackAdapterMetadata(t *testing.T) {
 	assert.Equal(t, "lease-789", metadata["virtengine.lease"])
 	assert.Equal(t, "vm-123", metadata["virtengine.vm-id"])
 }
-

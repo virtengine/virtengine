@@ -486,4 +486,3 @@ func GetGlobalCertificateCache() *CertificateCache {
 	})
 	return globalCertCache
 }
-

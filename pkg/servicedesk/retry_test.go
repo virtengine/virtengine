@@ -59,7 +59,7 @@ func TestRetryQueueProcessing(t *testing.T) {
 	}
 	now := time.Now().Add(-1 * time.Second) // Already due
 	event.NextRetryAt = &now
-	
+
 	queue.mu.Lock()
 	queue.queue = append(queue.queue, event)
 	queue.mu.Unlock()
@@ -207,4 +207,3 @@ func TestRetryQueueClearFailed(t *testing.T) {
 		t.Errorf("expected 0 failed after clear, got %d", queue.FailedCount())
 	}
 }
-

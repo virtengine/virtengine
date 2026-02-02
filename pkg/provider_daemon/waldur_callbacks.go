@@ -102,7 +102,7 @@ func DefaultWaldurCallbackConfig() WaldurCallbackConfig {
 		ListenAddr:         ":8443",
 		CallbackPath:       "/v1/callbacks/waldur",
 		SignatureRequired:  true,
-		NonceWindowSeconds: 3600, // 1 hour
+		NonceWindowSeconds: 3600,    // 1 hour
 		MaxPayloadBytes:    1 << 20, // 1MB
 		EnableAuditLogging: true,
 	}
@@ -110,33 +110,33 @@ func DefaultWaldurCallbackConfig() WaldurCallbackConfig {
 
 // WaldurCallbackHandler handles incoming Waldur callbacks
 type WaldurCallbackHandler struct {
-	cfg             WaldurCallbackConfig
-	controller      *LifecycleController
-	lifecycleMgr    *ResourceLifecycleManager
-	callbackSink    CallbackSink
-	auditLogger     *AuditLogger
-	keyManager      *KeyManager
-	nonceTracker    *NonceTracker
-	allowedSigners  map[string]bool
+	cfg              WaldurCallbackConfig
+	controller       *LifecycleController
+	lifecycleMgr     *ResourceLifecycleManager
+	callbackSink     CallbackSink
+	auditLogger      *AuditLogger
+	keyManager       *KeyManager
+	nonceTracker     *NonceTracker
+	allowedSigners   map[string]bool
 	pendingCallbacks map[string]*PendingCallback
-	server          *http.Server
-	mu              sync.RWMutex
-	stopCh          chan struct{}
+	server           *http.Server
+	mu               sync.RWMutex
+	stopCh           chan struct{}
 }
 
 // PendingCallback represents a pending callback with retry info
 type PendingCallback struct {
-	Callback    *marketplace.WaldurCallback
-	ReceivedAt  time.Time
-	RetryCount  int
-	LastError   string
+	Callback   *marketplace.WaldurCallback
+	ReceivedAt time.Time
+	RetryCount int
+	LastError  string
 }
 
 // NonceTracker tracks processed nonces for replay protection
 type NonceTracker struct {
-	nonces   map[string]time.Time
-	maxAge   time.Duration
-	mu       sync.RWMutex
+	nonces map[string]time.Time
+	maxAge time.Duration
+	mu     sync.RWMutex
 }
 
 // NewNonceTracker creates a new nonce tracker
@@ -195,15 +195,15 @@ func NewWaldurCallbackHandler(
 	keyManager *KeyManager,
 ) *WaldurCallbackHandler {
 	h := &WaldurCallbackHandler{
-		cfg:             cfg,
-		controller:      controller,
-		callbackSink:    callbackSink,
-		auditLogger:     auditLogger,
-		keyManager:      keyManager,
-		nonceTracker:    NewNonceTracker(time.Duration(cfg.NonceWindowSeconds) * time.Second),
-		allowedSigners:  make(map[string]bool),
+		cfg:              cfg,
+		controller:       controller,
+		callbackSink:     callbackSink,
+		auditLogger:      auditLogger,
+		keyManager:       keyManager,
+		nonceTracker:     NewNonceTracker(time.Duration(cfg.NonceWindowSeconds) * time.Second),
+		allowedSigners:   make(map[string]bool),
 		pendingCallbacks: make(map[string]*PendingCallback),
-		stopCh:          make(chan struct{}),
+		stopCh:           make(chan struct{}),
 	}
 
 	// Build allowed signers map
@@ -399,21 +399,21 @@ func (h *WaldurCallbackHandler) processLifecyclePayload(ctx context.Context, pay
 
 	// Create lifecycle callback
 	lcCallback := &marketplace.LifecycleCallback{
-		ID:              fmt.Sprintf("lcb_waldur_%s", payload.OperationID),
-		OperationID:     payload.OperationID,
-		AllocationID:    allocationID,
-		Action:          marketplace.LifecycleActionType(payload.Action),
-		Success:         payload.Success,
-		ResultState:     mapWaldurStateToAllocationState(payload.State),
+		ID:               fmt.Sprintf("lcb_waldur_%s", payload.OperationID),
+		OperationID:      payload.OperationID,
+		AllocationID:     allocationID,
+		Action:           marketplace.LifecycleActionType(payload.Action),
+		Success:          payload.Success,
+		ResultState:      mapWaldurStateToAllocationState(payload.State),
 		WaldurResourceID: payload.ResourceUUID,
-		ProviderAddress: h.controller.cfg.ProviderAddress,
-		Payload:         payload.Metadata,
-		Error:           payload.Error,
-		ErrorCode:       payload.ErrorCode,
-		SignerID:        h.controller.cfg.ProviderAddress,
-		Nonce:           payload.IdempotencyKey,
-		Timestamp:       payload.Timestamp,
-		ExpiresAt:       payload.Timestamp.Add(time.Hour),
+		ProviderAddress:  h.controller.cfg.ProviderAddress,
+		Payload:          payload.Metadata,
+		Error:            payload.Error,
+		ErrorCode:        payload.ErrorCode,
+		SignerID:         h.controller.cfg.ProviderAddress,
+		Nonce:            payload.IdempotencyKey,
+		Timestamp:        payload.Timestamp,
+		ExpiresAt:        payload.Timestamp.Add(time.Hour),
 	}
 
 	// Process via controller
@@ -796,4 +796,3 @@ func SerializeCallbackForSigning(callback *marketplace.WaldurCallback) []byte {
 	buf.WriteString(fmt.Sprintf("%d", callback.Timestamp.Unix()))
 	return buf.Bytes()
 }
-

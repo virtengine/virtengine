@@ -15,16 +15,16 @@ import (
 
 // MockProvider is a mock implementation of Provider for testing
 type MockProvider struct {
-	name           string
-	prices         map[string]PriceData
-	pricesMu       sync.RWMutex
-	healthy        bool
-	healthyMu      sync.RWMutex
-	errorOnGet     error
-	requestCount   atomic.Int64
-	closed         atomic.Bool
-	getLatency     time.Duration
-	onGetPrice     func(ctx context.Context, baseAsset, quoteAsset string) (PriceData, error)
+	name         string
+	prices       map[string]PriceData
+	pricesMu     sync.RWMutex
+	healthy      bool
+	healthyMu    sync.RWMutex
+	errorOnGet   error
+	requestCount atomic.Int64
+	closed       atomic.Bool
+	getLatency   time.Duration
+	onGetPrice   func(ctx context.Context, baseAsset, quoteAsset string) (PriceData, error)
 }
 
 // NewMockProvider creates a new mock provider
@@ -199,4 +199,3 @@ func (m *MockProvider) Reset() {
 	m.getLatency = 0
 	m.onGetPrice = nil
 }
-

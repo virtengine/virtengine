@@ -650,9 +650,9 @@ type DisputeRules struct {
 // DefaultDisputeRules returns default dispute rules
 func DefaultDisputeRules() DisputeRules {
 	return DisputeRules{
-		MinDisputeAmount:     sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000000)), // 1 VIRT
-		MaxEvidenceCount:     10,
-		MaxEvidenceSize:      10485760, // 10 MB
+		MinDisputeAmount: sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000000)), // 1 VIRT
+		MaxEvidenceCount: 10,
+		MaxEvidenceSize:  10485760, // 10 MB
 		AllowedEvidenceTypes: []EvidenceType{
 			DocumentEvidence,
 			UsageLogEvidence,

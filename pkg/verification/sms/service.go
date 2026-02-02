@@ -273,15 +273,15 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 			} else {
 				afReq.CarrierInfo = carrierResult
 				phoneInfo = &PhoneInfo{
-					E164:               phoneNumber,
-					CountryCode:        countryCode,
-					CarrierType:        carrierResult.CarrierType,
-					CarrierName:        carrierResult.CarrierName,
-					IsVoIP:             carrierResult.IsVoIP,
-					IsMobile:           carrierResult.IsMobile,
-					IsValid:            carrierResult.IsValid,
-					RiskScore:          carrierResult.RiskScore,
-					RiskFactors:        carrierResult.RiskFactors,
+					E164:        phoneNumber,
+					CountryCode: countryCode,
+					CarrierType: carrierResult.CarrierType,
+					CarrierName: carrierResult.CarrierName,
+					IsVoIP:      carrierResult.IsVoIP,
+					IsMobile:    carrierResult.IsMobile,
+					IsValid:     carrierResult.IsValid,
+					RiskScore:   carrierResult.RiskScore,
+					RiskFactors: carrierResult.RiskFactors,
 				}
 
 				if s.metrics != nil {
@@ -383,12 +383,12 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 			Resource:  challengeID,
 			Action:    "initiate_sms_verification",
 			Details: map[string]interface{}{
-				"country_code":  countryCode,
-				"phone_hash":    phoneHash[:16] + "...",
-				"masked_phone":  challenge.MaskedPhone,
-				"ip_address":    req.IPAddress,
-				"is_voip":       challenge.IsVoIP,
-				"carrier_type":  challenge.CarrierType,
+				"country_code": countryCode,
+				"phone_hash":   phoneHash[:16] + "...",
+				"masked_phone": challenge.MaskedPhone,
+				"ip_address":   req.IPAddress,
+				"is_voip":      challenge.IsVoIP,
+				"carrier_type": challenge.CarrierType,
 			},
 		})
 	}
@@ -810,15 +810,15 @@ func (s *DefaultService) LookupPhoneInfo(ctx context.Context, phoneNumber string
 	}
 
 	return &PhoneInfo{
-		E164:               result.PhoneNumber,
-		CountryCode:        result.CountryCode,
-		CarrierType:        result.CarrierType,
-		CarrierName:        result.CarrierName,
-		IsVoIP:             result.IsVoIP,
-		IsMobile:           result.IsMobile,
-		IsValid:            result.IsValid,
-		RiskScore:          result.RiskScore,
-		RiskFactors:        result.RiskFactors,
+		E164:        result.PhoneNumber,
+		CountryCode: result.CountryCode,
+		CarrierType: result.CarrierType,
+		CarrierName: result.CarrierName,
+		IsVoIP:      result.IsVoIP,
+		IsMobile:    result.IsMobile,
+		IsValid:     result.IsValid,
+		RiskScore:   result.RiskScore,
+		RiskFactors: result.RiskFactors,
 	}, nil
 }
 
@@ -1128,4 +1128,3 @@ func GenerateNonce(length int) (string, error) {
 
 // Ensure DefaultService implements SMSVerificationService
 var _ SMSVerificationService = (*DefaultService)(nil)
-

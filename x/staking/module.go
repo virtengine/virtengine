@@ -253,5 +253,3 @@ func (am AppModule) IsOnePerModuleType() {
 func (am AppModule) IsAppModule() {
 	// Marker interface method - no implementation needed
 }
-
-

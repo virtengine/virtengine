@@ -15,21 +15,21 @@ import (
 // Metrics contains Prometheus metrics for the email verification service
 type Metrics struct {
 	// Counters
-	ChallengesCreated   *prometheus.CounterVec
-	ChallengesVerified  *prometheus.CounterVec
-	ChallengesFailed    *prometheus.CounterVec
-	ChallengesExpired   *prometheus.CounterVec
-	EmailsSent          *prometheus.CounterVec
-	EmailsDelivered     *prometheus.CounterVec
-	EmailsBounced       *prometheus.CounterVec
+	ChallengesCreated    *prometheus.CounterVec
+	ChallengesVerified   *prometheus.CounterVec
+	ChallengesFailed     *prometheus.CounterVec
+	ChallengesExpired    *prometheus.CounterVec
+	EmailsSent           *prometheus.CounterVec
+	EmailsDelivered      *prometheus.CounterVec
+	EmailsBounced        *prometheus.CounterVec
 	VerificationAttempts *prometheus.CounterVec
-	ResendsTotal        *prometheus.CounterVec
-	RateLimitHits       prometheus.Counter
-	AttestationsCreated prometheus.Counter
+	ResendsTotal         *prometheus.CounterVec
+	RateLimitHits        prometheus.Counter
+	AttestationsCreated  prometheus.Counter
 
 	// Gauges
-	ActiveChallenges    prometheus.Gauge
-	PendingDeliveries   prometheus.Gauge
+	ActiveChallenges  prometheus.Gauge
+	PendingDeliveries prometheus.Gauge
 
 	// Histograms
 	VerificationLatency *prometheus.HistogramVec
@@ -343,27 +343,27 @@ func (m *Metrics) SetPendingDeliveries(count float64) {
 // MetricsSummary contains a summary of key metrics for dashboards
 type MetricsSummary struct {
 	// Challenge metrics
-	TotalChallengesCreated    int64   `json:"total_challenges_created"`
-	TotalChallengesVerified   int64   `json:"total_challenges_verified"`
-	TotalChallengesFailed     int64   `json:"total_challenges_failed"`
-	VerificationSuccessRate   float64 `json:"verification_success_rate"`
-	ActiveChallenges          int64   `json:"active_challenges"`
+	TotalChallengesCreated  int64   `json:"total_challenges_created"`
+	TotalChallengesVerified int64   `json:"total_challenges_verified"`
+	TotalChallengesFailed   int64   `json:"total_challenges_failed"`
+	VerificationSuccessRate float64 `json:"verification_success_rate"`
+	ActiveChallenges        int64   `json:"active_challenges"`
 
 	// Email metrics
-	TotalEmailsSent           int64   `json:"total_emails_sent"`
-	TotalEmailsDelivered      int64   `json:"total_emails_delivered"`
-	TotalEmailsBounced        int64   `json:"total_emails_bounced"`
-	DeliverySuccessRate       float64 `json:"delivery_success_rate"`
-	AverageDeliveryLatencyMs  float64 `json:"average_delivery_latency_ms"`
+	TotalEmailsSent          int64   `json:"total_emails_sent"`
+	TotalEmailsDelivered     int64   `json:"total_emails_delivered"`
+	TotalEmailsBounced       int64   `json:"total_emails_bounced"`
+	DeliverySuccessRate      float64 `json:"delivery_success_rate"`
+	AverageDeliveryLatencyMs float64 `json:"average_delivery_latency_ms"`
 
 	// Attestation metrics
-	TotalAttestationsCreated  int64   `json:"total_attestations_created"`
+	TotalAttestationsCreated int64 `json:"total_attestations_created"`
 
 	// Rate limiting
-	TotalRateLimitHits        int64   `json:"total_rate_limit_hits"`
+	TotalRateLimitHits int64 `json:"total_rate_limit_hits"`
 
 	// Timestamp
-	Timestamp                 time.Time `json:"timestamp"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // ============================================================================
@@ -394,4 +394,3 @@ func DefaultAlertThresholds() AlertThresholds {
 		MaxActiveChallenges:              10000,
 	}
 }
-
