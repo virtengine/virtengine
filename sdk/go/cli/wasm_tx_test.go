@@ -81,6 +81,10 @@ func TestParseVerificationFlags(t *testing.T) {
 }
 
 func TestParseAccessConfigFlags(t *testing.T) {
+	// Generate valid test addresses
+	addr1 := sdk.AccAddress([]byte("wasm_access_addr1_test"))
+	addr2 := sdk.AccAddress([]byte("wasm_access_addr2_test_long"))
+	
 	specs := map[string]struct {
 		args   []string
 		expCfg *types.AccessConfig
@@ -95,7 +99,7 @@ func TestParseAccessConfigFlags(t *testing.T) {
 			expCfg: &types.AccessConfig{Permission: types.AccessTypeEverybody},
 		},
 		"only address": {
-			args:   []string{"--instantiate-only-address=ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm"},
+			args:   []string{"--instantiate-only-address=" + addr1.String()},
 			expErr: true,
 		},
 		"only address - invalid": {
@@ -103,11 +107,11 @@ func TestParseAccessConfigFlags(t *testing.T) {
 			expErr: true,
 		},
 		"any of address": {
-			args:   []string{"--instantiate-anyof-addresses=ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm,ve14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sxfxq5x"},
-			expCfg: &types.AccessConfig{Permission: types.AccessTypeAnyOfAddresses, Addresses: []string{"ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm", "ve14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sxfxq5x"}},
+			args:   []string{"--instantiate-anyof-addresses=" + addr1.String() + "," + addr2.String()},
+			expCfg: &types.AccessConfig{Permission: types.AccessTypeAnyOfAddresses, Addresses: []string{addr1.String(), addr2.String()}},
 		},
 		"any of address - invalid": {
-			args:   []string{"--instantiate-anyof-addresses=ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm,foo"},
+			args:   []string{"--instantiate-anyof-addresses=" + addr1.String() + ",foo"},
 			expErr: true,
 		},
 		"not set": {
