@@ -66,7 +66,7 @@ GORELEASER_BUILD_VARS := \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
 ifeq ($(OS),Windows_NT)
-GIT_VERSION := $(shell powershell -NoProfile -Command "try { $$version = (git describe --tags) -replace '^v','' } catch { $$version = '0.0.0' }; $$version")
+GIT_VERSION := $(shell powershell -NoProfile -Command "try { (git describe --tags) -replace '^v','' } catch { '0.0.0' }")
 else
 GIT_VERSION := $(shell git describe --tags 2>/dev/null | sed 's/^v//' || echo "0.0.0")
 endif

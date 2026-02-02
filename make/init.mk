@@ -119,7 +119,7 @@ COSMOVISOR_DEBUG                 := $(VE_RUN_BIN)/cosmovisor
 
 
 ifeq ($(OS),Windows_NT)
-RELEASE_TAG           ?= $(shell powershell -NoProfile -Command "try { $$tag = git describe --tags --abbrev=0 } catch { $$tag = 'v0.0.0' }; $$tag")
+RELEASE_TAG           ?= $(shell powershell -NoProfile -Command "try { git describe --tags --abbrev=0 } catch { 'v0.0.0' }")
 else
 RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 endif
