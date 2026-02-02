@@ -24,11 +24,11 @@ import (
 	audittypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
+	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
 	"github.com/virtengine/virtengine/x/audit"
 	"github.com/virtengine/virtengine/x/benchmark"
 	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
 	"github.com/virtengine/virtengine/x/bme"
-	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
 	"github.com/virtengine/virtengine/x/cert"
 	"github.com/virtengine/virtengine/x/config"
 	configtypes "github.com/virtengine/virtengine/x/config/types"

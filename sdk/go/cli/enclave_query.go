@@ -2,10 +2,8 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/spf13/cobra"
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
@@ -65,7 +63,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			var validatorAddr string
 			if len(args) > 0 {
@@ -91,7 +89,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -117,7 +115,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			req := &enclavetypes.QueryActiveValidatorEnclaveKeysRequest{}
 
@@ -126,7 +124,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -154,7 +152,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			teeType, _ := cmd.Flags().GetString(FlagTEEType)
 			includeRevoked, _ := cmd.Flags().GetBool(FlagIncludeRevoked)
@@ -169,7 +167,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -197,7 +195,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			var measurementHashHex string
 			if len(args) > 0 {
@@ -223,7 +221,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -250,7 +248,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			var validatorAddr string
 			if len(args) > 0 {
@@ -276,7 +274,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -302,7 +300,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			req := &enclavetypes.QueryParamsRequest{}
 
@@ -311,7 +309,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -337,7 +335,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			forHeight, _ := cmd.Flags().GetInt64(FlagForBlockHeight)
 
@@ -350,7 +348,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -376,7 +374,7 @@ Example:
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
-			cl := MustQueryClientFromContext(ctx)
+			cl := MustLightClientFromContext(ctx)
 
 			blockHeight, err := cmd.Flags().GetInt64(FlagBlockHeight)
 			if err != nil {
@@ -404,7 +402,7 @@ Example:
 				return err
 			}
 
-			return printJSON(cmd, res)
+			return cl.ClientContext().PrintProto(res)
 		},
 	}
 
@@ -418,213 +416,44 @@ Example:
 	return cmd
 }
 
-// Query helper functions - these make gRPC calls to the enclave module
-// In production, these would use the actual gRPC client
-
-// MustQueryClientFromContext is an alias for MustLightClientFromContext
-// that provides enclave query functionality
-func MustQueryClientFromContext(ctx context.Context) aclient.LightClient {
-	return MustLightClientFromContext(ctx)
-}
+// Query helper functions - these use the gRPC client to call the enclave module
 
 // queryEnclaveIdentity queries an enclave identity
 func queryEnclaveIdentity(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryEnclaveIdentityRequest) (*enclavetypes.QueryEnclaveIdentityResponse, error) {
-	// This uses the standard REST/gRPC query path
-	// The actual implementation would use cl.Query().Enclave().EnclaveIdentity(ctx, req)
-	// For now, we simulate via the ABCIQuery interface
-
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/EnclaveIdentity")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryEnclaveIdentityResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().EnclaveIdentity(ctx, req)
 }
 
 // queryActiveValidatorEnclaveKeys queries all active validator enclave keys
 func queryActiveValidatorEnclaveKeys(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryActiveValidatorEnclaveKeysRequest) (*enclavetypes.QueryActiveValidatorEnclaveKeysResponse, error) {
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/ActiveValidatorEnclaveKeys")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryActiveValidatorEnclaveKeysResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().ActiveValidatorEnclaveKeys(ctx, req)
 }
 
 // queryMeasurementAllowlist queries the measurement allowlist
 func queryMeasurementAllowlist(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryMeasurementAllowlistRequest) (*enclavetypes.QueryMeasurementAllowlistResponse, error) {
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/MeasurementAllowlist")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryMeasurementAllowlistResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().MeasurementAllowlist(ctx, req)
 }
 
 // queryMeasurement queries a specific measurement
 func queryMeasurement(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryMeasurementRequest) (*enclavetypes.QueryMeasurementResponse, error) {
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/Measurement")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryMeasurementResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().Measurement(ctx, req)
 }
 
 // queryKeyRotation queries key rotation status
 func queryKeyRotation(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryKeyRotationRequest) (*enclavetypes.QueryKeyRotationResponse, error) {
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/KeyRotation")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryKeyRotationResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().KeyRotation(ctx, req)
 }
 
 // queryEnclaveParams queries module parameters
 func queryEnclaveParams(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryParamsRequest) (*enclavetypes.QueryParamsResponse, error) {
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/Params")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryParamsResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().Params(ctx, req)
 }
 
 // queryValidKeySet queries the valid key set
 func queryValidKeySet(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryValidKeySetRequest) (*enclavetypes.QueryValidKeySetResponse, error) {
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/ValidKeySet")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryValidKeySetResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().ValidKeySet(ctx, req)
 }
 
 // queryAttestedResult queries an attested result
 func queryAttestedResult(ctx context.Context, cl aclient.LightClient, req *enclavetypes.QueryAttestedResultRequest) (*enclavetypes.QueryAttestedResultResponse, error) {
-	queryPath := fmt.Sprintf("/virtengine.enclave.v1.Query/AttestedResult")
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resBytes, err := abciQuery(ctx, cl, queryPath, reqBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var res enclavetypes.QueryAttestedResultResponse
-	if err := json.Unmarshal(resBytes, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
+	return cl.Query().Enclave().AttestedResult(ctx, req)
 }
-
-// abciQuery performs an ABCI query using the client context
-func abciQuery(_ context.Context, cl aclient.LightClient, path string, data []byte) ([]byte, error) {
-	cctx := cl.ClientContext()
-	resp, err := cctx.QueryABCI(abci.RequestQuery{
-		Path: path,
-		Data: data,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.Code != 0 {
-		return nil, fmt.Errorf("query failed with code %d: %s", resp.Code, resp.Log)
-	}
-
-	return resp.Value, nil
-}
-
-// printJSON prints a response as JSON
-func printJSON(cmd *cobra.Command, v interface{}) error {
-	out, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-	cmd.Println(string(out))
-	return nil
-}
-
-

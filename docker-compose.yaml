@@ -85,11 +85,11 @@ services:
       virtengine-net:
         ipv4_address: 172.28.0.10
     ports:
-      - "26656:26656"   # P2P
-      - "26657:26657"   # RPC
-      - "1317:1317"     # REST API
-      - "9090:9090"     # gRPC
-      - "9091:9091"     # gRPC-Web
+      - "26656:26656" # P2P
+      - "26657:26657" # RPC
+      - "1317:1317" # REST API
+      - "9090:9090" # gRPC
+      - "9091:9091" # gRPC-Web
     volumes:
       - chain-data:/var/lib/virtengine
       - ./scripts:/scripts:ro
@@ -120,8 +120,8 @@ services:
       virtengine-net:
         ipv4_address: 172.28.0.40
     ports:
-      - "8443:8443"   # Provider API
-      - "8444:8444"   # Provider gRPC
+      - "8443:8443" # Provider API
+      - "8444:8444" # Provider gRPC
     volumes:
       - provider-data:/var/lib/provider-daemon
     environment:
@@ -137,7 +137,15 @@ services:
       - VIRTENGINE_WALDUR_OFFERING_SYNC_ENABLED=true
       - VIRTENGINE_WALDUR_OFFERING_SYNC_INTERVAL=300
       - VIRTENGINE_WALDUR_CUSTOMER_UUID=${WALDUR_CUSTOMER_UUID:-}
-    command: ["start", "--node", "http://virtengine-node:26657", "--chain-id", "virtengine-localnet-1", "--waldur-offering-sync-enabled=true"]
+    command:
+      [
+        "start",
+        "--node",
+        "http://virtengine-node:26657",
+        "--chain-id",
+        "virtengine-localnet-1",
+        "--waldur-offering-sync-enabled=true",
+      ]
     depends_on:
       virtengine-node:
         condition: service_healthy
@@ -321,7 +329,11 @@ services:
       waldur-mastermind-api:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "curl --silent --fail http://waldur-homeport:8080/ || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl --silent --fail http://waldur-homeport:8080/ || exit 1",
+        ]
       interval: 30s
       timeout: 30s
       retries: 3
@@ -338,8 +350,8 @@ services:
       virtengine-net:
         ipv4_address: 172.28.0.24
     ports:
-      - "80:80"        # Waldur HTTP
-      - "443:443"      # Waldur HTTPS (self-signed for local dev)
+      - "80:80" # Waldur HTTP
+      - "443:443" # Waldur HTTPS (self-signed for local dev)
     environment:
       VIRTUAL_HOST: localhost
       TLS: internal
@@ -420,9 +432,9 @@ services:
       virtengine-net:
         ipv4_address: 172.28.0.50
     ports:
-      - "8000:8000"   # API Gateway proxy
-      - "8001:8001"   # Admin API
-      - "8100:8100"   # Metrics (Prometheus)
+      - "8000:8000" # API Gateway proxy
+      - "8001:8001" # Admin API
+      - "8100:8100" # Metrics (Prometheus)
     volumes:
       - ./config/kong/kong.yaml:/kong/declarative/kong.yaml:ro
     environment:
@@ -455,7 +467,7 @@ services:
       virtengine-net:
         ipv4_address: 172.28.0.51
     ports:
-      - "3001:8080"   # Developer portal (Swagger UI)
+      - "3001:8080" # Developer portal (Swagger UI)
     volumes:
       - ./sdk/docs/swagger-ui/swagger.yaml:/swagger/swagger.yaml:ro
     environment:
@@ -468,28 +480,32 @@ services:
   # Provides a web UI for browsing blocks, transactions, validators, and
   # querying on-chain marketplace offerings, orders, and identity data.
   # =============================================================================
-  explorer:
-    image: ping-pub/explorer:latest
-    container_name: explorer
-    hostname: explorer
-    networks:
-      virtengine-net:
-        ipv4_address: 172.28.0.54
-    ports:
-      - "8088:8080"   # Blockchain Explorer UI
-    volumes:
-      - ./config/explorer/chains.json:/app/chains.json:ro
-      - explorer-data:/app/data
-    environment:
-      # Configure chain endpoints
-      CHAIN_NAME: VirtEngine
-      CHAIN_RPC: http://virtengine-node:26657
-      CHAIN_REST: http://virtengine-node:1317
-      CHAIN_GRPC: virtengine-node:9090
-    depends_on:
-      virtengine-node:
-        condition: service_healthy
-    restart: unless-stopped
+  # NOTE: Commented out - ping-pub/explorer doesn't publish Docker images.
+  # To use, either:
+  # 1. Build from source: https://github.com/ping-pub/explorer
+  # 2. Use an alternative like Big Dipper or Mintscan
+  # explorer:
+  #   image: ping-pub/explorer:latest
+  #   container_name: explorer
+  #   hostname: explorer
+  #   networks:
+  #     virtengine-net:
+  #       ipv4_address: 172.28.0.54
+  #   ports:
+  #     - "8088:8080" # Blockchain Explorer UI
+  #   volumes:
+  #     - ./config/explorer/chains.json:/app/chains.json:ro
+  #     - explorer-data:/app/data
+  #   environment:
+  #     # Configure chain endpoints
+  #     CHAIN_NAME: VirtEngine
+  #     CHAIN_RPC: http://virtengine-node:26657
+  #     CHAIN_REST: http://virtengine-node:1317
+  #     CHAIN_GRPC: virtengine-node:9090
+  #   depends_on:
+  #     virtengine-node:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
   # =============================================================================
   # Prometheus
@@ -502,7 +518,7 @@ services:
       virtengine-net:
         ipv4_address: 172.28.0.52
     ports:
-      - "9095:9090"   # Prometheus UI
+      - "9095:9090" # Prometheus UI
     volumes:
       - ./config/kong/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -524,7 +540,7 @@ services:
       virtengine-net:
         ipv4_address: 172.28.0.53
     ports:
-      - "3002:3000"   # Grafana UI
+      - "3002:3000" # Grafana UI
     volumes:
       - ./config/kong/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
       - grafana-data:/var/lib/grafana
@@ -556,7 +572,11 @@ services:
       PROVIDER_API_URL: http://provider-daemon:8443
       API_GATEWAY_URL: http://kong:8000
     working_dir: /workspace
-    command: ["echo", "Test runner ready. Use: docker compose run test-runner go test ./tests/integration/..."]
+    command:
+      [
+        "echo",
+        "Test runner ready. Use: docker compose run test-runner go test ./tests/integration/...",
+      ]
     depends_on:
       - virtengine-node
       - waldur-mastermind-api

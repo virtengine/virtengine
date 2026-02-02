@@ -30,4 +30,3 @@ func LedgerRecordPrefix() []byte {
 func LedgerPendingRecordPrefix() []byte {
 	return []byte{0x03, 0x01}
 }
-

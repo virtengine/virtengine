@@ -80,4 +80,3 @@ func (p Params) UnpackInterfaces(unpacker cdctypes.AnyUnpacker) error {
 	// No-op for now as FeedContractsParams is simplified
 	return nil
 }
-

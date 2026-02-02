@@ -32,8 +32,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 
 	wtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 )
@@ -1767,4 +1767,3 @@ func (p legacyProposal) validate() error {
 	}
 	return nil
 }
-

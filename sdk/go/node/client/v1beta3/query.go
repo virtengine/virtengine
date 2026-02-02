@@ -21,6 +21,7 @@ import (
 	btypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
 	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	enclavetypes "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	otypes "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
@@ -46,6 +47,7 @@ type sdkQueryClient struct {
 	wasm      wasmtypes.QueryClient
 	oracle    otypes.QueryClient
 	bme       btypes.QueryClient
+	enclave   enclavetypes.QueryClient
 }
 
 type queryClient struct {
@@ -89,6 +91,7 @@ func newQueryClient(cctx sdkclient.Context) *queryClient {
 			wasm:      wasmtypes.NewQueryClient(cctx),
 			oracle:    otypes.NewQueryClient(cctx),
 			bme:       btypes.NewQueryClient(cctx),
+			enclave:   enclavetypes.NewQueryClient(cctx),
 		},
 		cctx: cctx,
 	}
@@ -202,4 +205,9 @@ func (c *queryClient) Oracle() otypes.QueryClient {
 // BME implements QueryClient by returning the bme query client.
 func (c *queryClient) BME() btypes.QueryClient {
 	return c.sdk.bme
+}
+
+// Enclave implements QueryClient by returning the enclave query client.
+func (c *queryClient) Enclave() enclavetypes.QueryClient {
+	return c.sdk.enclave
 }

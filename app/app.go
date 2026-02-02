@@ -68,8 +68,8 @@ import (
 	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
-	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
 	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
+	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
 	configtypes "github.com/virtengine/virtengine/x/config/types"
 	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
 	enclavetypes "github.com/virtengine/virtengine/x/enclave/types"

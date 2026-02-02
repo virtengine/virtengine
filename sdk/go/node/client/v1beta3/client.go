@@ -32,6 +32,7 @@ import (
 	ctypes "github.com/virtengine/virtengine/sdk/go/node/cert/v1"
 	cltypes "github.com/virtengine/virtengine/sdk/go/node/client/types"
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
+	enclavetypes "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	otypes "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
@@ -62,6 +63,7 @@ type QueryClient interface {
 	Wasm() wasmtypes.QueryClient
 	Oracle() otypes.QueryClient
 	BME() btypes.QueryClient
+	Enclave() enclavetypes.QueryClient
 
 	ClientContext() sdkclient.Context
 }
@@ -195,4 +197,3 @@ func (cl *lightClient) PrintJSON(msg interface{}) error {
 
 	return cl.qclient.cctx.PrintString(buf.String())
 }
-
