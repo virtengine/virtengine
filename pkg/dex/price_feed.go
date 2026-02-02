@@ -5,7 +5,6 @@ package dex
 
 import (
 	"context"
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"sort"
 	"sync"
 	"time"
