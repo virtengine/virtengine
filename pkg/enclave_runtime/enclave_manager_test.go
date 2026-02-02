@@ -751,7 +751,7 @@ func TestCircuitBreaker(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Cause failures to trip the circuit breaker
 	for i := 0; i < 3; i++ {
@@ -842,7 +842,7 @@ func TestConcurrentRequests(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Run concurrent requests
 	var wg sync.WaitGroup
@@ -906,7 +906,7 @@ func TestMetricsCollection(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Run some successful requests
 	for i := 0; i < 5; i++ {
