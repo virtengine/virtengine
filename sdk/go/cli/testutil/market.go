@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	sdktest "github.com/cosmos/cosmos-sdk/testutil"
@@ -16,22 +15,13 @@ func ExecCreateBid(ctx context.Context, cctx client.Context, extraArgs ...string
 }
 
 // TxCreateBidExec is an alias for ExecCreateBid
-func TxCreateBidExec(ctx context.Context, cctx client.Context, extraArgs ...any) (sdktest.BufferWriter, error) {
-	args := make([]string, 0, len(extraArgs))
-	for _, arg := range extraArgs {
-		switch val := arg.(type) {
-		case string:
-			args = append(args, val)
-		case []string:
-			args = append(args, val...)
-		case cli.FlagsSet:
-			args = append(args, val...)
-		default:
-			return nil, fmt.Errorf("unexpected argument type %T", arg)
-		}
-	}
+func TxCreateBidExec(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
+	return ExecCreateBid(ctx, cctx, extraArgs...)
+}
 
-	return ExecCreateBid(ctx, cctx, args...)
+// TxCreateBidExecWithFlags builds args from a FlagsSet
+func TxCreateBidExecWithFlags(ctx context.Context, cctx client.Context, flags cli.FlagsSet) (sdktest.BufferWriter, error) {
+	return ExecCreateBid(ctx, cctx, flags...)
 }
 
 // ExecCloseBid is used for testing close bid tx

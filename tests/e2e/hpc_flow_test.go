@@ -20,7 +20,6 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 
 	pd "github.com/virtengine/virtengine/pkg/provider_daemon"
