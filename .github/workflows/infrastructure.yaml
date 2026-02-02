@@ -87,7 +87,8 @@ jobs:
         uses: azure/k8s-lint@v1
         with:
           manifests: |
-            deploy/kubernetes/**/*.yaml
+            deploy/kubernetes/base/*.yaml
+            deploy/kubernetes/overlays/**/*.yaml
             deploy/argocd/**/*.yaml
 
   # ============================================================================
