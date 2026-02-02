@@ -34,9 +34,12 @@ import (
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 	enclavetypes "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
+	hpctypes "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	mfatypes "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
 	otypes "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
 	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	veidtypes "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 )
 
 // QueryClient is the interface that exposes query modules.
@@ -64,6 +67,9 @@ type QueryClient interface {
 	Oracle() otypes.QueryClient
 	BME() btypes.QueryClient
 	Enclave() enclavetypes.QueryClient
+	VEID() veidtypes.QueryClient
+	MFA() mfatypes.QueryClient
+	HPC() hpctypes.QueryClient
 
 	ClientContext() sdkclient.Context
 }

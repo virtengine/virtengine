@@ -23,9 +23,12 @@ import (
 	dtypes "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta4"
 	enclavetypes "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
+	hpctypes "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	mtypes "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	mfatypes "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
 	otypes "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
 	ptypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
+	veidtypes "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
 )
 
 var _ QueryClient = (*queryClient)(nil)
@@ -48,6 +51,9 @@ type sdkQueryClient struct {
 	oracle    otypes.QueryClient
 	bme       btypes.QueryClient
 	enclave   enclavetypes.QueryClient
+	veid      veidtypes.QueryClient
+	mfa       mfatypes.QueryClient
+	hpc       hpctypes.QueryClient
 }
 
 type queryClient struct {
@@ -92,6 +98,9 @@ func newQueryClient(cctx sdkclient.Context) *queryClient {
 			oracle:    otypes.NewQueryClient(cctx),
 			bme:       btypes.NewQueryClient(cctx),
 			enclave:   enclavetypes.NewQueryClient(cctx),
+			veid:      veidtypes.NewQueryClient(cctx),
+			mfa:       mfatypes.NewQueryClient(cctx),
+			hpc:       hpctypes.NewQueryClient(cctx),
 		},
 		cctx: cctx,
 	}
@@ -210,4 +219,19 @@ func (c *queryClient) BME() btypes.QueryClient {
 // Enclave implements QueryClient by returning the enclave query client.
 func (c *queryClient) Enclave() enclavetypes.QueryClient {
 	return c.sdk.enclave
+}
+
+// VEID implements QueryClient by returning the veid query client.
+func (c *queryClient) VEID() veidtypes.QueryClient {
+	return c.sdk.veid
+}
+
+// MFA implements QueryClient by returning the mfa query client.
+func (c *queryClient) MFA() mfatypes.QueryClient {
+	return c.sdk.mfa
+}
+
+// HPC implements QueryClient by returning the hpc query client.
+func (c *queryClient) HPC() hpctypes.QueryClient {
+	return c.sdk.hpc
 }
