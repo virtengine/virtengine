@@ -11,3 +11,22 @@ const (
 	RouterKey = ModuleName
 )
 
+// ParamsPrefix returns the prefix for storing module params
+func ParamsPrefix() []byte {
+	return []byte{0x01, 0x00}
+}
+
+// StatePrefix returns the prefix for storing vault state
+func StatePrefix() []byte {
+	return []byte{0x02, 0x00}
+}
+
+// LedgerRecordPrefix returns the prefix for storing ledger records
+func LedgerRecordPrefix() []byte {
+	return []byte{0x03, 0x00}
+}
+
+// LedgerPendingRecordPrefix returns the prefix for storing pending ledger records
+func LedgerPendingRecordPrefix() []byte {
+	return []byte{0x03, 0x01}
+}

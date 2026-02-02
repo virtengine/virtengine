@@ -24,9 +24,11 @@ import (
 	audittypes "github.com/virtengine/virtengine/sdk/go/node/audit/v1"
 	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
+	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
 	"github.com/virtengine/virtengine/x/audit"
 	"github.com/virtengine/virtengine/x/benchmark"
 	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
+	"github.com/virtengine/virtengine/x/bme"
 	"github.com/virtengine/virtengine/x/cert"
 	"github.com/virtengine/virtengine/x/config"
 	configtypes "github.com/virtengine/virtengine/x/config/types"
@@ -47,6 +49,8 @@ import (
 	"github.com/virtengine/virtengine/x/marketplace"
 	"github.com/virtengine/virtengine/x/mfa"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	"github.com/virtengine/virtengine/x/oracle"
+	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
 	"github.com/virtengine/virtengine/x/provider"
 	"github.com/virtengine/virtengine/x/review"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
@@ -85,6 +89,8 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		review.AppModuleBasic{},
 		delegation.AppModuleBasic{},
 		virtstaking.AppModuleBasic{},
+		bme.AppModuleBasic{},
+		oracle.AppModuleBasic{},
 	}
 }
 
@@ -135,6 +141,8 @@ func OrderInitGenesis(_ []string) []string {
 		reviewtypes.ModuleName,
 		delegationtypes.ModuleName,
 		virtstakingtypes.ModuleName,
+		bmetypes.ModuleName,
+		oracletypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 }

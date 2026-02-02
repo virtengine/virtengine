@@ -34,6 +34,7 @@ import (
 
 	"github.com/virtengine/virtengine/x/audit"
 	"github.com/virtengine/virtengine/x/benchmark"
+	"github.com/virtengine/virtengine/x/bme"
 	"github.com/virtengine/virtengine/x/cert"
 	"github.com/virtengine/virtengine/x/config"
 	"github.com/virtengine/virtengine/x/delegation"
@@ -46,6 +47,7 @@ import (
 	"github.com/virtengine/virtengine/x/market"
 	"github.com/virtengine/virtengine/x/marketplace"
 	"github.com/virtengine/virtengine/x/mfa"
+	"github.com/virtengine/virtengine/x/oracle"
 	"github.com/virtengine/virtengine/x/provider"
 	"github.com/virtengine/virtengine/x/review"
 	"github.com/virtengine/virtengine/x/roles"
@@ -262,6 +264,14 @@ func appModules(
 		virtstaking.NewAppModule(
 			app.cdc,
 			app.Keepers.VirtEngine.VirtStaking,
+		),
+		bme.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.BME,
+		),
+		oracle.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.Oracle,
 		),
 	}
 }

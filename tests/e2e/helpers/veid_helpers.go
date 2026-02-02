@@ -122,7 +122,7 @@ func SetupOnboardingTestApp(t *testing.T, client OnboardingTestClient) *app.Virt
 func genesisWithApprovedClient(t *testing.T, cdc codec.Codec, client OnboardingTestClient) app.GenesisState {
 	t.Helper()
 
-	genesis := app.NewDefaultGenesisState(cdc)
+	genesis := app.GenesisStateWithValSet(cdc)
 
 	var veidGenesis veidtypes.GenesisState
 	require.NoError(t, json.Unmarshal(genesis[veidtypes.ModuleName], &veidGenesis))

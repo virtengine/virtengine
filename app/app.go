@@ -68,6 +68,7 @@ import (
 	providertypes "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	taketypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 
+	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
 	benchmarktypes "github.com/virtengine/virtengine/x/benchmark/types"
 	configtypes "github.com/virtengine/virtengine/x/config/types"
 	delegationtypes "github.com/virtengine/virtengine/x/delegation/types"
@@ -77,6 +78,7 @@ import (
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	oracletypes "github.com/virtengine/virtengine/x/oracle/types"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
@@ -323,6 +325,8 @@ func orderBeginBlockers(_ []string) []string {
 		reviewtypes.ModuleName,
 		delegationtypes.ModuleName,
 		virtstakingtypes.ModuleName,
+		bmetypes.ModuleName,
+		oracletypes.ModuleName,
 	}
 }
 
@@ -369,6 +373,8 @@ func OrderEndBlockers(_ []string) []string {
 		reviewtypes.ModuleName,
 		delegationtypes.ModuleName,
 		virtstakingtypes.ModuleName,
+		bmetypes.ModuleName,
+		oracletypes.ModuleName,
 	}
 }
 

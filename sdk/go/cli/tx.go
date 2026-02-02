@@ -91,10 +91,13 @@ func TxCmd() *cobra.Command {
 		GetTxOracleCmd(),
 		GetTxBMECmd(),
 		GetTxEnclaveCmd(),
+		cflags.LineBreak,
+		GetTxVEIDCmd(),
+		GetTxMFACmd(),
+		GetTxHPCCmd(),
 	)
 
 	cmd.PersistentFlags().String(cflags.FlagChainID, "", "The network chain ID")
 
 	return cmd
 }
-

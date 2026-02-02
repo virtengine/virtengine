@@ -69,9 +69,12 @@ import (
 	ttypes "github.com/virtengine/virtengine/sdk/go/node/take/v1"
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
+	bmetypes "github.com/virtengine/virtengine/sdk/go/node/bme/v1"
+	oracletypes "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
 	akeeper "github.com/virtengine/virtengine/x/audit/keeper"
 	benchkeeper "github.com/virtengine/virtengine/x/benchmark/keeper"
 	benchtypes "github.com/virtengine/virtengine/x/benchmark/types"
+	bmekeeper "github.com/virtengine/virtengine/x/bme/keeper"
 	ckeeper "github.com/virtengine/virtengine/x/cert/keeper"
 	configkeeper "github.com/virtengine/virtengine/x/config/keeper"
 	configtypes "github.com/virtengine/virtengine/x/config/types"
@@ -93,6 +96,7 @@ import (
 	marketplacekeeper "github.com/virtengine/virtengine/x/market/types/marketplace/keeper"
 	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
+	oraclekeeper "github.com/virtengine/virtengine/x/oracle/keeper"
 	pkeeper "github.com/virtengine/virtengine/x/provider/keeper"
 	reviewkeeper "github.com/virtengine/virtengine/x/review/keeper"
 	reviewtypes "github.com/virtengine/virtengine/x/review/types"
@@ -156,6 +160,8 @@ type AppKeepers struct {
 		Review      reviewkeeper.Keeper
 		Delegation  delegationkeeper.Keeper
 		VirtStaking virtstakingkeeper.Keeper
+		BME         bmekeeper.IKeeper
+		Oracle      oraclekeeper.IKeeper
 	}
 
 	Modules struct {
@@ -614,6 +620,18 @@ func (app *App) InitNormalKeepers(
 		nil, // CosmosStakingKeeper - uses cosmos staking via interface
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+
+	app.Keepers.VirtEngine.BME = bmekeeper.NewKeeper(
+		cdc,
+		app.keys[bmetypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
+
+	app.Keepers.VirtEngine.Oracle = oraclekeeper.NewKeeper(
+		cdc,
+		app.keys[oracletypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+	)
 }
 
 func (app *App) SetupHooks() {
@@ -718,6 +736,8 @@ func virtengineKVStoreKeys() []string {
 		reviewtypes.StoreKey,
 		delegationtypes.StoreKey,
 		virtstakingtypes.StoreKey,
+		bmetypes.StoreKey,
+		oracletypes.StoreKey,
 	}
 }
 
