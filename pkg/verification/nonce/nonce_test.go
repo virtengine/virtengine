@@ -102,7 +102,7 @@ func TestMemoryStore_ExpiredNonce(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	issuerFP := "abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+	issuerFP := testIssuerFP
 
 	testNonce := make([]byte, 32)
 	for i := range testNonce {

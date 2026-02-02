@@ -106,16 +106,31 @@ func (q GRPCQuerier) Algorithms(c context.Context, req *types.QueryAlgorithmsReq
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
+	maxInt32 := int(^uint32(0) >> 1)
 	var algorithms []encryptionv1.AlgorithmInfo
 	for _, algID := range types.SupportedAlgorithms() {
 		info, err := types.GetAlgorithmInfo(algID)
 		if err == nil {
+			keySize := info.KeySize
+			if keySize < 0 {
+				keySize = 0
+			}
+			if keySize > maxInt32 {
+				keySize = maxInt32
+			}
+			nonceSize := info.NonceSize
+			if nonceSize < 0 {
+				nonceSize = 0
+			}
+			if nonceSize > maxInt32 {
+				nonceSize = maxInt32
+			}
 			algorithms = append(algorithms, encryptionv1.AlgorithmInfo{
 				Id:          info.ID,
 				Version:     info.Version,
 				Description: info.Description,
-				KeySize:     int32(info.KeySize),
-				NonceSize:   int32(info.NonceSize),
+				KeySize:     int32(keySize),
+				NonceSize:   int32(nonceSize),
 				Deprecated:  info.Deprecated,
 			})
 		}
@@ -135,6 +150,10 @@ func (q GRPCQuerier) ValidateEnvelope(c context.Context, req *types.QueryValidat
 	ctx := sdk.UnwrapSDKContext(c)
 
 	envelope := &req.Envelope
+	maxInt32 := int(^uint32(0) >> 1)
+	if len(envelope.RecipientKeyIds) > maxInt32 {
+		return nil, status.Error(codes.InvalidArgument, "recipient count exceeds int32")
+	}
 	response := &types.QueryValidateEnvelopeResponse{
 		Valid:          true,
 		RecipientCount: int32(len(envelope.RecipientKeyIds)),

@@ -149,12 +149,12 @@ func validateTwilioConfig(config ProviderConfig) error {
 
 // Name returns the provider name
 func (g *TwilioGateway) Name() string {
-	return "twilio"
+	return providerTwilio
 }
 
 // GetProviderType returns the provider type
 func (g *TwilioGateway) GetProviderType() string {
-	return "twilio"
+	return providerTwilio
 }
 
 // IsConfigured returns true if properly configured

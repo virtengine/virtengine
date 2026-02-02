@@ -86,7 +86,7 @@ func (l VEIDLevel) String() string {
 	case VEIDLevelEnterprise:
 		return "enterprise"
 	default:
-		return "unknown"
+		return string(AccountStatusUnknown)
 	}
 }
 

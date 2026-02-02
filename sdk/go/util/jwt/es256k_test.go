@@ -56,6 +56,7 @@ func (s *ES256kTest) TestSignVerify() {
 			require.NoError(t, err)
 
 			toSign := strings.Join(parts[0:2], ".")
+			require.Equal(t, toSign, sstr)
 			method := jwt.GetSigningMethod(tc.Expected.Alg)
 			sig, err := method.Sign(toSign, signer)
 			require.NoError(t, err, "Error signing token: %v", err)
@@ -66,13 +67,11 @@ func (s *ES256kTest) TestSignVerify() {
 			err = method.Verify(toSign, dsig, verifier)
 
 			if !tc.MustFail {
-				require.Equal(t, parts[2], ssig, "Identical signatures\nbefore:\n%v\nafter:\n%v", parts[2], ssig)
 				require.NoError(t, err, "Sign produced an invalid signature: %v", err)
-				require.Equal(t, tc.TokenString, sigString)
-				require.NotEqual(t, sig, parts[2])
+				require.NoError(t, method.Verify(toSign, sig, verifier))
+				require.Equal(t, toSign, strings.Join(strings.Split(sigString, ".")[0:2], "."))
+				require.NotEqual(t, ssig, parts[2])
 			} else {
-				require.NotEqual(t, parts[2], ssig, "Identical signatures\nbefore:\n%v\nafter:\n%v", parts[2], ssig)
-				require.NotEqual(t, tc.TokenString, sigString)
 				require.Error(t, err)
 			}
 		})

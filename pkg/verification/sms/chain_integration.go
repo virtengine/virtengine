@@ -469,7 +469,7 @@ func generateScopeID(accountAddress, verificationID string) string {
 }
 
 // submitToChain submits a verification record to the blockchain
-func (c *DefaultChainIntegrator) submitToChain(ctx context.Context, record *OnChainVerificationRecord, attestation *SMSAttestation) (string, uint64, error) {
+func (c *DefaultChainIntegrator) submitToChain(ctx context.Context, record *OnChainVerificationRecord, _ *SMSAttestation) (string, uint64, error) {
 	// In production, this would:
 	// 1. Build a MsgRecordSMSVerification transaction
 	// 2. Sign with validator key from keyring
@@ -494,7 +494,11 @@ func (c *DefaultChainIntegrator) submitToChain(ctx context.Context, record *OnCh
 	txData := fmt.Sprintf("%s:%s:%d", record.VerificationID, record.AccountAddress, time.Now().UnixNano())
 	txHash := sha256.Sum256([]byte(txData))
 
-	return hex.EncodeToString(txHash[:]), uint64(time.Now().Unix()), nil
+	now := time.Now().Unix()
+	if now < 0 {
+		return "", 0, fmt.Errorf("negative unix time: %d", now)
+	}
+	return hex.EncodeToString(txHash[:]), uint64(now), nil
 }
 
 // retrySubmission retries a failed chain submission

@@ -429,8 +429,14 @@ func (ik *invoiceKeeper) GetInvoiceLedgerChain(ctx sdk.Context, invoiceID string
 	// Sort entries by sequence number
 	sortedEntries := make([]*billing.InvoiceLedgerEntry, len(entries))
 	for _, e := range entries {
-		if e.SequenceNumber > 0 && int(e.SequenceNumber) <= len(entries) {
-			sortedEntries[e.SequenceNumber-1] = e
+		if e.SequenceNumber == 0 {
+			continue
+		}
+		if e.SequenceNumber > uint64(len(entries)) {
+			continue
+		}
+		idx := int(e.SequenceNumber - 1)
+		sortedEntries[idx] = e
 		}
 	}
 

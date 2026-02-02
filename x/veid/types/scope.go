@@ -44,7 +44,10 @@ const (
 const ScopeSchemaVersion uint32 = 1
 
 // Error message constants
-const errMsgScopeIDEmpty = "scope_id cannot be empty"
+const (
+	errMsgScopeIDEmpty    = "scope_id cannot be empty"
+	errMsgUnknownScopeType = "Unknown scope type"
+)
 
 // AllScopeTypes returns all valid scope types
 func AllScopeTypes() []ScopeType {
@@ -125,7 +128,7 @@ func ScopeTypeDescription(scopeType ScopeType) string {
 	case ScopeTypeADSSO:
 		return "Active Directory SSO verification (Azure AD, SAML, LDAP)"
 	default:
-		return "Unknown scope type"
+		return errMsgUnknownScopeType
 	}
 }
 

@@ -531,7 +531,7 @@ func (o *PriceOracle) ValidatePrice(price uint64, history *PriceHistory, now tim
 	result.Status = PriceValidationStatusOutOfBand
 
 	// Check for suspicious movement
-	if uint32(abs(int64(result.DeviationBps))) > o.Config.SuspiciousMovementThresholdBps {
+	if abs(int64(result.DeviationBps)) > int64(o.Config.SuspiciousMovementThresholdBps) {
 		result.Status = PriceValidationStatusSuspicious
 		result.Reason = fmt.Sprintf("suspicious_movement_%dbps", result.DeviationBps)
 	} else {

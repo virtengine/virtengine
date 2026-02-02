@@ -202,6 +202,11 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 		return nil, types.ErrUnauthorized.Wrapf("invalid authority; expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
 	}
 
+	maxUint32 := uint64(^uint32(0))
+	if msg.Params.MaxClients > maxUint32 {
+		return nil, types.ErrInvalidProposal.Wrap("max_clients exceeds uint32")
+	}
+
 	// Convert proto Params to local Params type for storage
 	localParams := types.Params{
 		RequireClientSignature:  msg.Params.RequireClientSignature,

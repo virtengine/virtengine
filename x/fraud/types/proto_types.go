@@ -194,6 +194,9 @@ func FraudReportStatusToProto(s FraudReportStatus) FraudReportStatusPB {
 
 // FraudReportStatusFromProto converts proto enum to local FraudReportStatus
 func FraudReportStatusFromProto(s FraudReportStatusPB) FraudReportStatus {
+	if s < FraudReportStatusPBUnspecified || s > FraudReportStatusPBEscalated {
+		return FraudReportStatusUnspecified
+	}
 	return FraudReportStatus(s)
 }
 
@@ -208,6 +211,9 @@ func FraudCategoryToProto(c FraudCategory) FraudCategoryPB {
 
 // FraudCategoryFromProto converts proto enum to local FraudCategory
 func FraudCategoryFromProto(c FraudCategoryPB) FraudCategory {
+	if c < FraudCategoryPBUnspecified || c > FraudCategoryPBOther {
+		return FraudCategoryUnspecified
+	}
 	return FraudCategory(c)
 }
 
@@ -222,6 +228,9 @@ func ResolutionTypeToProto(r ResolutionType) ResolutionTypePB {
 
 // ResolutionTypeFromProto converts proto enum to local ResolutionType
 func ResolutionTypeFromProto(r ResolutionTypePB) ResolutionType {
+	if r < ResolutionTypePBUnspecified || r > ResolutionTypePBNoAction {
+		return ResolutionTypeUnspecified
+	}
 	return ResolutionType(r)
 }
 
@@ -420,9 +429,15 @@ func ModeratorQueueEntryFromProto(pb *ModeratorQueueEntryPB) *ModeratorQueueEntr
 	if pb == nil {
 		return nil
 	}
+	priority := uint8(0)
+	if pb.Priority > uint32(^uint8(0)) {
+		priority = ^uint8(0)
+	} else {
+		priority = uint8(pb.Priority)
+	}
 	return &ModeratorQueueEntry{
 		ReportID:   pb.ReportId,
-		Priority:   uint8(pb.Priority),
+		Priority:   priority,
 		QueuedAt:   pb.QueuedAt,
 		Category:   FraudCategoryFromProto(pb.Category),
 		AssignedTo: pb.AssignedTo,
@@ -438,15 +453,59 @@ func ParamsToProto(p *Params) *ParamsPB {
 	if p == nil {
 		return nil
 	}
+	maxInt32 := int(^uint32(0) >> 1)
+	minInt32 := -maxInt32 - 1
+	minDesc := p.MinDescriptionLength
+	if minDesc > maxInt32 {
+		minDesc = maxInt32
+	}
+	if minDesc < minInt32 {
+		minDesc = minInt32
+	}
+	maxDesc := p.MaxDescriptionLength
+	if maxDesc > maxInt32 {
+		maxDesc = maxInt32
+	}
+	if maxDesc < minInt32 {
+		maxDesc = minInt32
+	}
+	maxEvidenceCount := p.MaxEvidenceCount
+	if maxEvidenceCount > maxInt32 {
+		maxEvidenceCount = maxInt32
+	}
+	if maxEvidenceCount < minInt32 {
+		maxEvidenceCount = minInt32
+	}
+	escalation := p.EscalationThresholdDays
+	if escalation > maxInt32 {
+		escalation = maxInt32
+	}
+	if escalation < minInt32 {
+		escalation = minInt32
+	}
+	reportRetention := p.ReportRetentionDays
+	if reportRetention > maxInt32 {
+		reportRetention = maxInt32
+	}
+	if reportRetention < minInt32 {
+		reportRetention = minInt32
+	}
+	auditRetention := p.AuditLogRetentionDays
+	if auditRetention > maxInt32 {
+		auditRetention = maxInt32
+	}
+	if auditRetention < minInt32 {
+		auditRetention = minInt32
+	}
 	return &ParamsPB{
-		MinDescriptionLength:    int32(p.MinDescriptionLength),
-		MaxDescriptionLength:    int32(p.MaxDescriptionLength),
-		MaxEvidenceCount:        int32(p.MaxEvidenceCount),
+		MinDescriptionLength:    int32(minDesc),
+		MaxDescriptionLength:    int32(maxDesc),
+		MaxEvidenceCount:        int32(maxEvidenceCount),
 		MaxEvidenceSizeBytes:    p.MaxEvidenceSizeBytes,
 		AutoAssignEnabled:       p.AutoAssignEnabled,
-		EscalationThresholdDays: int32(p.EscalationThresholdDays),
-		ReportRetentionDays:     int32(p.ReportRetentionDays),
-		AuditLogRetentionDays:   int32(p.AuditLogRetentionDays),
+		EscalationThresholdDays: int32(escalation),
+		ReportRetentionDays:     int32(reportRetention),
+		AuditLogRetentionDays:   int32(auditRetention),
 	}
 }
 
