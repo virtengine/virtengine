@@ -118,7 +118,6 @@ func (s *ES256kTest) TestSignVerify() {
 		})
 	}
 }
-
 // TestInvalidSignature tests that verification fails with tampered signatures
 func (s *ES256kTest) TestInvalidSignature() {
 	now := time.Now()
