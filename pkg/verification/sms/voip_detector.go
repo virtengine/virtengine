@@ -620,6 +620,7 @@ type NumVerifyDetector struct {
 	httpClient *http.Client
 	logger     zerolog.Logger
 	cache      *voipCache
+	mu         sync.RWMutex
 }
 
 // NewNumVerifyDetector creates a new NumVerify detector
