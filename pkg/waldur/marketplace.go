@@ -973,3 +973,148 @@ func (m *MarketplaceClient) GetOfferingByBackendID(ctx context.Context, backendI
 	return offering, err
 }
 
+// ===============================================================================
+// VE-25A: Category CRUD Operations for Automatic Sync
+// ===============================================================================
+
+// Category represents a marketplace category in Waldur.
+type Category struct {
+	UUID        string `json:"uuid"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Icon        string `json:"icon,omitempty"`
+}
+
+// ListCategoriesParams contains parameters for listing categories.
+type ListCategoriesParams struct {
+	Title    string
+	Page     int
+	PageSize int
+}
+
+// ListCategories retrieves all marketplace categories from Waldur.
+func (m *MarketplaceClient) ListCategories(ctx context.Context, params ListCategoriesParams) ([]Category, error) {
+	var categories []Category
+
+	err := m.client.doWithRetry(ctx, func() error {
+		// Build query string
+		path := "/marketplace-categories/"
+		queryParams := []string{}
+
+		if params.Title != "" {
+			queryParams = append(queryParams, fmt.Sprintf("title=%s", params.Title))
+		}
+		if params.Page > 0 {
+			queryParams = append(queryParams, fmt.Sprintf("page=%d", params.Page))
+		}
+		if params.PageSize > 0 {
+			queryParams = append(queryParams, fmt.Sprintf("page_size=%d", params.PageSize))
+		}
+
+		if len(queryParams) > 0 {
+			path += "?" + joinQueryParams(queryParams)
+		}
+
+		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodGet, path, nil)
+		if err != nil {
+			return err
+		}
+
+		if statusCode != http.StatusOK {
+			return mapHTTPError(statusCode, respBody)
+		}
+
+		if err := json.Unmarshal(respBody, &categories); err != nil {
+			return fmt.Errorf("unmarshal categories: %w", err)
+		}
+
+		return nil
+	})
+
+	return categories, err
+}
+
+// GetCategoryByTitle finds a category by its title.
+func (m *MarketplaceClient) GetCategoryByTitle(ctx context.Context, title string) (*Category, error) {
+	categories, err := m.ListCategories(ctx, ListCategoriesParams{Title: title})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, cat := range categories {
+		if cat.Title == title {
+			return &cat, nil
+		}
+	}
+
+	return nil, ErrNotFound
+}
+
+// CreateCategoryRequest contains parameters for creating a category.
+type CreateCategoryRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+}
+
+// CreateCategory creates a new marketplace category in Waldur.
+func (m *MarketplaceClient) CreateCategory(ctx context.Context, req CreateCategoryRequest) (*Category, error) {
+	if req.Title == "" {
+		return nil, fmt.Errorf("title is required")
+	}
+
+	var category *Category
+
+	err := m.client.doWithRetry(ctx, func() error {
+		bodyBytes, err := json.Marshal(req)
+		if err != nil {
+			return fmt.Errorf("marshal request: %w", err)
+		}
+
+		respBody, statusCode, err := m.client.doRequest(ctx, http.MethodPost, "/marketplace-categories/", bodyBytes)
+		if err != nil {
+			return err
+		}
+
+		if statusCode != http.StatusCreated && statusCode != http.StatusOK {
+			return mapHTTPError(statusCode, respBody)
+		}
+
+		var respData Category
+		if err := json.Unmarshal(respBody, &respData); err != nil {
+			return fmt.Errorf("unmarshal response: %w", err)
+		}
+
+		category = &respData
+		return nil
+	})
+
+	return category, err
+}
+
+// EnsureCategory creates a category if it doesn't exist, or returns the existing one.
+func (m *MarketplaceClient) EnsureCategory(ctx context.Context, req CreateCategoryRequest) (*Category, error) {
+	// First check if category exists
+	existing, err := m.GetCategoryByTitle(ctx, req.Title)
+	if err == nil && existing != nil {
+		return existing, nil
+	}
+	if err != nil && err != ErrNotFound {
+		return nil, fmt.Errorf("check existing category: %w", err)
+	}
+
+	// Create new category
+	return m.CreateCategory(ctx, req)
+}
+
+func joinQueryParams(params []string) string {
+	result := ""
+	for i, p := range params {
+		if i > 0 {
+			result += "&"
+		}
+		result += p
+	}
+	return result
+}
+
