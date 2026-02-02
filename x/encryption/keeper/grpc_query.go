@@ -102,16 +102,31 @@ func (q GRPCQuerier) Algorithms(c context.Context, req *types.QueryAlgorithmsReq
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
+	maxInt32 := int(^uint32(0) >> 1)
 	var algorithms []encryptionv1.AlgorithmInfo
 	for _, algID := range types.SupportedAlgorithms() {
 		info, err := types.GetAlgorithmInfo(algID)
 		if err == nil {
+			keySize := info.KeySize
+			if keySize < 0 {
+				keySize = 0
+			}
+			if keySize > maxInt32 {
+				keySize = maxInt32
+			}
+			nonceSize := info.NonceSize
+			if nonceSize < 0 {
+				nonceSize = 0
+			}
+			if nonceSize > maxInt32 {
+				nonceSize = maxInt32
+			}
 			algorithms = append(algorithms, encryptionv1.AlgorithmInfo{
 				Id:          info.ID,
 				Version:     info.Version,
 				Description: info.Description,
-				KeySize:     safeInt32FromInt(info.KeySize),
-				NonceSize:   safeInt32FromInt(info.NonceSize),
+				KeySize:   int32(keySize),
+				NonceSize: int32(nonceSize),
 				//nolint:staticcheck // Deprecated field is required for compatibility with existing clients.
 				Deprecated: info.Deprecated,
 			})
