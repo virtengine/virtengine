@@ -20,6 +20,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func skipIfNoAwsCredentials(t *testing.T) {
+	if _, err := aws.GetAccountIdE(t); err != nil {
+		t.Skipf("Skipping infra tests without AWS credentials: %v", err)
+	}
+}
+
 // Test configuration
 const (
 	testRegion     = "us-east-1"
@@ -30,16 +36,18 @@ const (
 // TestNetworkingModule tests the networking Terraform module
 func TestNetworkingModule(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	// Unique ID for test resources
 	uniqueID := random.UniqueId()
 	projectName := fmt.Sprintf("ve-test-%s", strings.ToLower(uniqueID))
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../terraform/modules/networking",
+		TerraformDir:    "../terraform/modules/networking",
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":            projectName,
-			"environment":        "test",
+			"environment":        "staging",
 			"cluster_name":       fmt.Sprintf("%s-cluster", projectName),
 			"vpc_cidr":           "10.99.0.0/16",
 			"availability_zones": []string{"us-east-1a", "us-east-1b"},
@@ -54,6 +62,7 @@ func TestNetworkingModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -122,6 +131,7 @@ func TestNetworkingModule(t *testing.T) {
 // TestEKSModule tests the EKS Terraform module
 func TestEKSModule(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	// Use test-structure to skip long-running tests
 	workingDir := "../terraform/modules/eks"
@@ -137,10 +147,11 @@ func TestEKSModule(t *testing.T) {
 	// First, deploy networking (dependency)
 	networkingDir := "../terraform/modules/networking"
 	networkingOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: networkingDir,
+		TerraformDir:    networkingDir,
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":            projectName,
-			"environment":        "test",
+			"environment":        "staging",
 			"cluster_name":       fmt.Sprintf("%s-cluster", projectName),
 			"vpc_cidr":           "10.98.0.0/16",
 			"availability_zones": []string{"us-east-1a", "us-east-1b"},
@@ -150,6 +161,7 @@ func TestEKSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -163,7 +175,8 @@ func TestEKSModule(t *testing.T) {
 
 	// Now deploy EKS
 	eksOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: workingDir,
+		TerraformDir:    workingDir,
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"cluster_name":              fmt.Sprintf("%s-cluster", projectName),
 			"kubernetes_version":        "1.29",
@@ -188,6 +201,7 @@ func TestEKSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -236,6 +250,7 @@ func TestEKSModule(t *testing.T) {
 // TestRDSModule tests the RDS Terraform module
 func TestRDSModule(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	if testing.Short() {
 		t.Skip("Skipping RDS test in short mode")
@@ -247,10 +262,11 @@ func TestRDSModule(t *testing.T) {
 	// First, deploy networking
 	networkingDir := "../terraform/modules/networking"
 	networkingOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: networkingDir,
+		TerraformDir:    networkingDir,
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":            projectName,
-			"environment":        "test",
+			"environment":        "staging",
 			"cluster_name":       fmt.Sprintf("%s-cluster", projectName),
 			"vpc_cidr":           "10.97.0.0/16",
 			"availability_zones": []string{"us-east-1a", "us-east-1b"},
@@ -259,6 +275,7 @@ func TestRDSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -270,10 +287,11 @@ func TestRDSModule(t *testing.T) {
 
 	// Deploy RDS
 	rdsOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../terraform/modules/rds",
+		TerraformDir:    "../terraform/modules/rds",
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":                      projectName,
-			"environment":                  "test",
+			"environment":                  "staging",
 			"db_subnet_group_name":         dbSubnetGroup,
 			"security_group_id":            dbSGID,
 			"engine_version":               "15.5",
@@ -290,6 +308,7 @@ func TestRDSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -337,6 +356,7 @@ func TestRDSModule(t *testing.T) {
 // TestFullStackIntegration tests the complete infrastructure stack
 func TestFullStackIntegration(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	if testing.Short() {
 		t.Skip("Skipping full stack test in short mode")
@@ -350,9 +370,11 @@ func TestFullStackIntegration(t *testing.T) {
 	// Stage 1: Setup
 	test_structure.RunTestStage(t, "setup", func() {
 		terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-			TerraformDir: workingDir,
+			TerraformDir:    workingDir,
+			TerraformBinary: "terraform",
 			EnvVars: map[string]string{
 				"AWS_DEFAULT_REGION": testRegion,
+				"AWS_REGION":         testRegion,
 			},
 		})
 		test_structure.SaveTerraformOptions(t, workingDir, terraformOptions)

@@ -36,10 +36,10 @@ locals {
   env_scaling_configs = {
     dev = {
       enable_scheduled_scaling = true
-      scale_down_time          = "0 20 * * MON-FRI"  # 8 PM weekdays
-      scale_up_time            = "0 8 * * MON-FRI"   # 8 AM weekdays
-      weekend_scale_down       = "0 20 * * FRI"      # Friday 8 PM
-      weekend_scale_up         = "0 8 * * MON"       # Monday 8 AM
+      scale_down_time          = "0 20 * * MON-FRI" # 8 PM weekdays
+      scale_up_time            = "0 8 * * MON-FRI"  # 8 AM weekdays
+      weekend_scale_down       = "0 20 * * FRI"     # Friday 8 PM
+      weekend_scale_up         = "0 8 * * MON"      # Monday 8 AM
       min_capacity_off_hours   = 0
       target_cpu_utilization   = 70
       scale_in_cooldown        = 300
@@ -47,8 +47,8 @@ locals {
     }
     staging = {
       enable_scheduled_scaling = true
-      scale_down_time          = "0 22 * * *"        # 10 PM daily
-      scale_up_time            = "0 6 * * *"         # 6 AM daily
+      scale_down_time          = "0 22 * * *" # 10 PM daily
+      scale_up_time            = "0 6 * * *"  # 6 AM daily
       weekend_scale_down       = "0 22 * * FRI"
       weekend_scale_up         = "0 6 * * MON"
       min_capacity_off_hours   = 1
@@ -315,30 +315,30 @@ resource "kubernetes_config_map" "cluster_autoscaler_config" {
 
   data = {
     # Scale-down configurations for cost optimization
-    "scale-down-enabled"              = "true"
-    "scale-down-delay-after-add"      = var.environment == "prod" ? "10m" : "5m"
-    "scale-down-delay-after-delete"   = "0s"
-    "scale-down-delay-after-failure"  = "3m"
-    "scale-down-unneeded-time"        = var.environment == "prod" ? "10m" : "5m"
-    "scale-down-unready-time"         = "20m"
+    "scale-down-enabled"               = "true"
+    "scale-down-delay-after-add"       = var.environment == "prod" ? "10m" : "5m"
+    "scale-down-delay-after-delete"    = "0s"
+    "scale-down-delay-after-failure"   = "3m"
+    "scale-down-unneeded-time"         = var.environment == "prod" ? "10m" : "5m"
+    "scale-down-unready-time"          = "20m"
     "scale-down-utilization-threshold" = var.environment == "prod" ? "0.5" : "0.6"
-    
+
     # Balance similar node groups for even distribution
-    "balance-similar-node-groups"     = "true"
-    
+    "balance-similar-node-groups" = "true"
+
     # Skip nodes with local storage for safer scaling
-    "skip-nodes-with-local-storage"   = "false"
-    "skip-nodes-with-system-pods"     = "true"
-    
+    "skip-nodes-with-local-storage" = "false"
+    "skip-nodes-with-system-pods"   = "true"
+
     # Expander strategy
-    "expander"                        = "priority"
-    
+    "expander" = "priority"
+
     # Node readiness and resource estimation
-    "max-node-provision-time"         = "15m"
-    "max-graceful-termination-sec"    = "600"
-    
+    "max-node-provision-time"      = "15m"
+    "max-graceful-termination-sec" = "600"
+
     # New pod handling
-    "new-pod-scale-up-delay"          = "0s"
+    "new-pod-scale-up-delay" = "0s"
   }
 }
 
@@ -441,7 +441,7 @@ resource "aws_cloudwatch_metric_alarm" "scale_out_events" {
   statistic           = "Average"
   threshold           = var.app_node_max_size * 0.8
   alarm_description   = "Alert when ASG reaches 80% of max capacity"
-  
+
   dimensions = {
     AutoScalingGroupName = var.app_node_asg_name
   }

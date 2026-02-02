@@ -73,12 +73,12 @@ module "vpc" {
   name                     = local.name_prefix
   environment              = local.environment
   vpc_cidr                 = var.vpc_cidr
-  az_count                 = 3  # Multi-AZ for HA
+  az_count                 = 3 # Multi-AZ for HA
   cluster_name             = local.cluster_name
   enable_nat_gateway       = true
   create_database_subnets  = true
   enable_flow_logs         = true
-  flow_logs_retention_days = 90  # Extended retention for compliance
+  flow_logs_retention_days = 90 # Extended retention for compliance
   enable_vpc_endpoints     = true
 
   tags = local.common_tags
@@ -95,9 +95,9 @@ module "eks" {
   kubernetes_version     = var.kubernetes_version
   vpc_id                 = module.vpc.vpc_id
   subnet_ids             = module.vpc.private_subnet_ids
-  enable_public_endpoint = false  # Private-only for production
+  enable_public_endpoint = false # Private-only for production
   log_retention_days     = 90
-  enable_ssm_access      = false  # Disabled for security
+  enable_ssm_access      = false # Disabled for security
 
   enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
@@ -116,7 +116,7 @@ module "eks" {
     }
     workload = {
       instance_types = ["m5.2xlarge", "m5a.2xlarge"]
-      capacity_type  = "ON_DEMAND"  # On-demand for production stability
+      capacity_type  = "ON_DEMAND" # On-demand for production stability
       disk_size      = 200
       desired_size   = 4
       max_size       = 12
@@ -129,7 +129,7 @@ module "eks" {
     validators = {
       instance_types = ["m5.2xlarge"]
       capacity_type  = "ON_DEMAND"
-      disk_size      = 500  # Large disk for chain data
+      disk_size      = 500 # Large disk for chain data
       desired_size   = 4
       max_size       = 7
       min_size       = 4
@@ -144,7 +144,7 @@ module "eks" {
       }]
     }
     inference = {
-      instance_types = ["g4dn.xlarge"]  # GPU for ML inference
+      instance_types = ["g4dn.xlarge"] # GPU for ML inference
       capacity_type  = "ON_DEMAND"
       disk_size      = 200
       desired_size   = 2
@@ -174,7 +174,7 @@ module "s3" {
   name_prefix         = local.name_prefix
   environment         = local.environment
   create_ml_bucket    = true
-  create_state_bucket = false  # Managed separately
+  create_state_bucket = false # Managed separately
 
   tags = local.common_tags
 }
@@ -338,13 +338,13 @@ resource "aws_cloudwatch_metric_alarm" "cluster_memory" {
 module "tee_hardware" {
   source = "../../modules/tee-hardware"
 
-  cluster_name    = local.cluster_name
-  aws_region      = var.aws_region
-  vpc_id          = module.vpc.vpc_id
-  subnet_ids      = module.vpc.private_subnet_ids
-  node_role_arn   = module.eks.node_role_arn
-  node_role_name  = module.eks.node_role_name
-  kms_key_arn     = module.eks.kms_key_arn
+  cluster_name   = local.cluster_name
+  aws_region     = var.aws_region
+  vpc_id         = module.vpc.vpc_id
+  subnet_ids     = module.vpc.private_subnet_ids
+  node_role_arn  = module.eks.node_role_arn
+  node_role_name = module.eks.node_role_name
+  kms_key_arn    = module.eks.kms_key_arn
 
   # Platform enablement
   enable_nitro   = var.enable_tee_nitro

@@ -302,9 +302,9 @@ resource "helm_release" "prometheus_stack" {
     yamlencode({
       prometheus = {
         prometheusSpec = {
-          retention              = var.prometheus_retention
-          retentionSize          = var.prometheus_retention_size
-          
+          retention     = var.prometheus_retention
+          retentionSize = var.prometheus_retention_size
+
           storageSpec = {
             volumeClaimTemplate = {
               spec = {
@@ -391,9 +391,9 @@ resource "helm_release" "prometheus_stack" {
 
       grafana = {
         enabled = true
-        
+
         adminPassword = var.grafana_admin_password
-        
+
         persistence = {
           enabled          = true
           storageClassName = var.storage_class

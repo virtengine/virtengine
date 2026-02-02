@@ -58,11 +58,11 @@ module "eks" {
   private_subnet_ids        = module.networking.private_subnet_ids
   public_subnet_ids         = module.networking.public_subnet_ids
   cluster_security_group_id = module.networking.eks_cluster_security_group_id
-  
+
   endpoint_private_access = var.endpoint_private_access
   endpoint_public_access  = var.endpoint_public_access
   public_access_cidrs     = var.public_access_cidrs
-  
+
   enabled_cluster_log_types  = var.enabled_cluster_log_types
   cluster_log_retention_days = var.cluster_log_retention_days
 
@@ -123,7 +123,7 @@ module "rds" {
 
   create_read_replica    = var.create_read_replica
   replica_instance_class = var.replica_instance_class
-  
+
   alarm_actions = var.enable_monitoring ? [module.monitoring[0].sns_topic_arn] : []
 
   tags = var.tags

@@ -21,5 +21,5 @@ variable "kubernetes_version" {
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to access the EKS public endpoint"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Open for dev; restrict in prod
+  default     = ["0.0.0.0/0"] # Open for dev; restrict in prod
 }

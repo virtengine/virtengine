@@ -24,22 +24,22 @@ locals {
 
   # Instance types by TEE platform
   nitro_instance_types = [
-    "c5.xlarge",      # Nitro-based
+    "c5.xlarge", # Nitro-based
     "c5.2xlarge",
-    "c5a.xlarge",     # AMD Nitro
-    "c6i.xlarge",     # Intel Ice Lake Nitro
+    "c5a.xlarge", # AMD Nitro
+    "c6i.xlarge", # Intel Ice Lake Nitro
     "c6i.2xlarge",
   ]
 
   sev_snp_instance_types = [
-    "c6a.xlarge",     # AMD EPYC Milan (SEV-SNP capable)
+    "c6a.xlarge", # AMD EPYC Milan (SEV-SNP capable)
     "c6a.2xlarge",
     "c6a.4xlarge",
   ]
 
   sgx_instance_types = [
-    "c5.xlarge",      # SGX capable (limited EPC)
-    "c6i.xlarge",     # Intel Ice Lake with SGX
+    "c5.xlarge",  # SGX capable (limited EPC)
+    "c6i.xlarge", # Intel Ice Lake with SGX
     "c6i.2xlarge",
   ]
 }
@@ -57,7 +57,7 @@ resource "aws_eks_node_group" "nitro_enclave" {
   subnet_ids      = var.subnet_ids
 
   instance_types = var.nitro_instance_types != null ? var.nitro_instance_types : local.nitro_instance_types
-  capacity_type  = "ON_DEMAND"  # Production requires on-demand
+  capacity_type  = "ON_DEMAND" # Production requires on-demand
 
   scaling_config {
     desired_size = var.nitro_desired_size
@@ -70,8 +70,8 @@ resource "aws_eks_node_group" "nitro_enclave" {
   }
 
   labels = {
-    "virtengine.io/tee-platform"   = "nitro"
-    "virtengine.io/enclave-ready"  = "true"
+    "virtengine.io/tee-platform"       = "nitro"
+    "virtengine.io/enclave-ready"      = "true"
     "node.kubernetes.io/instance-type" = "enclave"
   }
 
@@ -100,8 +100,8 @@ resource "aws_eks_node_group" "nitro_enclave" {
 resource "aws_launch_template" "nitro_enclave" {
   count = var.enable_nitro ? 1 : 0
 
-  name_prefix   = "${local.name_prefix}-nitro-"
-  description   = "Launch template for Nitro Enclave nodes"
+  name_prefix = "${local.name_prefix}-nitro-"
+  description = "Launch template for Nitro Enclave nodes"
 
   # Enable Nitro Enclaves
   enclave_options {
@@ -122,7 +122,7 @@ resource "aws_launch_template" "nitro_enclave" {
 
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"  # IMDSv2 required
+    http_tokens                 = "required" # IMDSv2 required
     http_put_response_hop_limit = 1
     instance_metadata_tags      = "enabled"
   }
@@ -433,7 +433,7 @@ resource "aws_security_group" "tee_attestation" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Intel PCCS endpoints
+    cidr_blocks = ["0.0.0.0/0"] # Intel PCCS endpoints
   }
 
   # Allow KDS access (AMD SEV)
@@ -442,7 +442,7 @@ resource "aws_security_group" "tee_attestation" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # AMD KDS endpoints
+    cidr_blocks = ["0.0.0.0/0"] # AMD KDS endpoints
   }
 
   # Allow NSM access (Nitro)
@@ -451,7 +451,7 @@ resource "aws_security_group" "tee_attestation" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # AWS KMS endpoints
+    cidr_blocks = ["0.0.0.0/0"] # AWS KMS endpoints
   }
 
   tags = merge(local.common_tags, {
@@ -515,14 +515,14 @@ resource "aws_secretsmanager_secret_version" "tee_config" {
   secret_id = aws_secretsmanager_secret.tee_config.id
 
   secret_string = jsonencode({
-    sgx_pccs_endpoint        = var.sgx_pccs_endpoint
-    amd_kds_base_url         = "https://kdsintf.amd.com/vcek/v1"
-    measurement_allowlist    = var.measurement_allowlist
-    attestation_cache_ttl    = "5m"
-    min_tcb_version          = var.min_tcb_version
-    require_hardware         = true
-    allow_debug              = false
-    production_mode          = true
+    sgx_pccs_endpoint     = var.sgx_pccs_endpoint
+    amd_kds_base_url      = "https://kdsintf.amd.com/vcek/v1"
+    measurement_allowlist = var.measurement_allowlist
+    attestation_cache_ttl = "5m"
+    min_tcb_version       = var.min_tcb_version
+    require_hardware      = true
+    allow_debug           = false
+    production_mode       = true
   })
 }
 

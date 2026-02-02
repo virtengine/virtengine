@@ -35,42 +35,42 @@ variable "environment" {
 variable "regions" {
   description = "Map of regions to deploy with their configurations"
   type = map(object({
-    role               = string       # primary, secondary, tertiary
-    priority           = number       # 1 = highest priority
-    full_nodes         = number       # Number of full nodes
-    provider_daemons   = number       # Number of provider daemons
-    validators         = number       # Number of validators
-    enable_state_sync  = bool         # Enable state sync provider
-    vpc_cidr           = string       # VPC CIDR block
+    role              = string # primary, secondary, tertiary
+    priority          = number # 1 = highest priority
+    full_nodes        = number # Number of full nodes
+    provider_daemons  = number # Number of provider daemons
+    validators        = number # Number of validators
+    enable_state_sync = bool   # Enable state sync provider
+    vpc_cidr          = string # VPC CIDR block
   }))
 
   default = {
     "us-east-1" = {
-      role               = "primary"
-      priority           = 1
-      full_nodes         = 4
-      provider_daemons   = 4
-      validators         = 2
-      enable_state_sync  = true
-      vpc_cidr           = "10.0.0.0/16"
+      role              = "primary"
+      priority          = 1
+      full_nodes        = 4
+      provider_daemons  = 4
+      validators        = 2
+      enable_state_sync = true
+      vpc_cidr          = "10.0.0.0/16"
     }
     "eu-west-1" = {
-      role               = "secondary"
-      priority           = 2
-      full_nodes         = 3
-      provider_daemons   = 2
-      validators         = 2
-      enable_state_sync  = true
-      vpc_cidr           = "10.1.0.0/16"
+      role              = "secondary"
+      priority          = 2
+      full_nodes        = 3
+      provider_daemons  = 2
+      validators        = 2
+      enable_state_sync = true
+      vpc_cidr          = "10.1.0.0/16"
     }
     "ap-south-1" = {
-      role               = "tertiary"
-      priority           = 3
-      full_nodes         = 2
-      provider_daemons   = 1
-      validators         = 1
-      enable_state_sync  = true
-      vpc_cidr           = "10.2.0.0/16"
+      role              = "tertiary"
+      priority          = 3
+      full_nodes        = 2
+      provider_daemons  = 1
+      validators        = 1
+      enable_state_sync = true
+      vpc_cidr          = "10.2.0.0/16"
     }
   }
 }
@@ -107,12 +107,12 @@ variable "waf_rate_limit" {
 variable "scaling_config" {
   description = "Auto scaling configuration"
   type = object({
-    provider_daemon_min     = number
-    provider_daemon_max     = number
+    provider_daemon_min        = number
+    provider_daemon_max        = number
     provider_daemon_cpu_target = number
-    full_node_min          = number
-    full_node_max          = number
-    full_node_cpu_target   = number
+    full_node_min              = number
+    full_node_max              = number
+    full_node_cpu_target       = number
   })
   default = {
     provider_daemon_min        = 2
@@ -272,8 +272,8 @@ resource "aws_route53_record" "rpc_regional" {
   }
 
   alias {
-    name                   = "placeholder.elb.${each.key}.amazonaws.com"  # Replace with actual ALB
-    zone_id                = "Z35SXDOTRQ7X7K"  # Placeholder - use actual zone ID
+    name                   = "placeholder.elb.${each.key}.amazonaws.com" # Replace with actual ALB
+    zone_id                = "Z35SXDOTRQ7X7K"                            # Placeholder - use actual zone ID
     evaluate_target_health = true
   }
 
@@ -291,7 +291,7 @@ resource "aws_route53_record" "rpc_geo" {
   set_identifier = each.key
 
   geolocation_routing_policy {
-    country = "*"  # Default
+    country = "*" # Default
   }
 
   alias {
