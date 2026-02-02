@@ -625,7 +625,7 @@ func TestSimulateWashTradingAttack(t *testing.T) {
 		check := WashTradingCheck{
 			BuyerAddress:  "attacker",
 			SellerAddress: "attacker", // Self-dealing
-			Amount:        1000000 + uint64(i),
+			Amount:        1000000 + safeUint64FromInt(t, i),
 			Timestamp:     now,
 			BlockHeight:   int64(1000 + i),
 		}
@@ -880,7 +880,7 @@ func BenchmarkTWAPCalculation(b *testing.B) {
 	// Populate history
 	for i := int64(0); i < 100; i++ {
 		history.AddPoint(PricePoint{
-			Price:       1000 + uint64(i),
+			Price:       1000 + safeUint64FromInt64(b, i),
 			Volume:      100,
 			BlockHeight: i,
 			Timestamp:   now.Add(time.Duration(i) * time.Minute),
@@ -912,4 +912,20 @@ func BenchmarkWashTradingDetection(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = detector.DetectWashTrading(check, state)
 	}
+}
+
+func safeUint64FromInt(t *testing.T, value int) uint64 {
+	t.Helper()
+	if value < 0 {
+		t.Fatalf("invalid negative value: %d", value)
+	}
+	return uint64(value)
+}
+
+func safeUint64FromInt64(tb testing.TB, value int64) uint64 {
+	tb.Helper()
+	if value < 0 {
+		tb.Fatalf("invalid negative value: %d", value)
+	}
+	return uint64(value)
 }

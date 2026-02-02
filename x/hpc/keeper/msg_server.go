@@ -36,6 +36,10 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 	// Generate cluster ID
 	seq := ms.keeper.GetNextClusterSequence(ctx)
 	clusterID := fmt.Sprintf("HPC-%d", seq)
+	maxInt32 := int64(^uint32(0) >> 1)
+	if msg.TotalNodes > uint64(maxInt32) {
+		return nil, types.ErrInvalidCluster.Wrap("total_nodes exceeds int32")
+	}
 
 	// Create the cluster
 	cluster := &types.HPCCluster{
@@ -85,6 +89,10 @@ func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateClu
 
 	// Apply updates
 	if msg.TotalNodes > 0 {
+		maxInt32 := int64(^uint32(0) >> 1)
+		if msg.TotalNodes > uint64(maxInt32) {
+			return nil, types.ErrInvalidCluster.Wrap("total_nodes exceeds int32")
+		}
 		cluster.TotalNodes = int32(msg.TotalNodes)
 	}
 
@@ -231,6 +239,14 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 	// Generate job ID
 	seq := ms.keeper.GetNextJobSequence(ctx)
 	jobID := fmt.Sprintf("JOB-%d", seq)
+	maxInt32 := int64(^uint32(0) >> 1)
+	if msg.RequestedNodes > uint64(maxInt32) {
+		return nil, types.ErrInvalidJob.Wrap("requested_nodes exceeds int32")
+	}
+	maxInt64 := int64(^uint64(0) >> 1)
+	if msg.MaxDuration > uint64(maxInt64) {
+		return nil, types.ErrInvalidJob.Wrap("max_duration exceeds int64")
+	}
 
 	// Create the job
 	job := &types.HPCJob{

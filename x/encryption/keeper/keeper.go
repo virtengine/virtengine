@@ -154,6 +154,9 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 
 	// Check max keys per account
 	existingKeys := k.GetRecipientKeys(ctx, address)
+	if len(existingKeys) > int(^uint32(0)) {
+		return "", types.ErrInvalidPublicKey.Wrap("existing keys overflow")
+	}
 	if uint32(len(existingKeys)) >= params.MaxKeysPerAccount {
 		return "", types.ErrInvalidPublicKey.Wrapf("account has reached max keys limit: %d", params.MaxKeysPerAccount)
 	}
@@ -350,6 +353,9 @@ func (k Keeper) ValidateEnvelope(ctx sdk.Context, envelope *types.EncryptedPaylo
 	}
 
 	// Check max recipients
+	if len(envelope.RecipientKeyIDs) > int(^uint32(0)) {
+		return types.ErrInvalidEnvelope.Wrap("recipient count overflow")
+	}
 	if uint32(len(envelope.RecipientKeyIDs)) > params.MaxRecipientsPerEnvelope {
 		return types.ErrMaxRecipientsExceeded.Wrapf("envelope has %d recipients, max is %d",
 			len(envelope.RecipientKeyIDs), params.MaxRecipientsPerEnvelope)
