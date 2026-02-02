@@ -6,7 +6,6 @@ package keeper
 import (
 	"context"
 	"fmt"
-	"math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -37,9 +36,9 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 	// Generate cluster ID
 	seq := ms.keeper.GetNextClusterSequence(ctx)
 	clusterID := fmt.Sprintf("HPC-%d", seq)
-	totalNodes, err := safeInt32FromUint64(msg.TotalNodes)
-	if err != nil {
-		return nil, types.ErrInvalidCluster.Wrap(err.Error())
+	maxInt32 := int64(^uint32(0) >> 1)
+	if msg.TotalNodes > uint64(maxInt32) {
+		return nil, types.ErrInvalidCluster.Wrap("total_nodes exceeds int32")
 	}
 
 	// Create the cluster
@@ -48,8 +47,8 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 		ProviderAddress: ownerAddr.String(),
 		Name:            msg.Name,
 		Region:          msg.Region,
-		TotalNodes:      totalNodes,
-		AvailableNodes:  totalNodes,
+		TotalNodes:      int32(msg.TotalNodes),
+		AvailableNodes:  int32(msg.TotalNodes),
 		State:           types.ClusterStateActive,
 	}
 
@@ -90,11 +89,11 @@ func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateClu
 
 	// Apply updates
 	if msg.TotalNodes > 0 {
-		totalNodes, err := safeInt32FromUint64(msg.TotalNodes)
-		if err != nil {
-			return nil, types.ErrInvalidCluster.Wrap(err.Error())
+		maxInt32 := int64(^uint32(0) >> 1)
+		if msg.TotalNodes > uint64(maxInt32) {
+			return nil, types.ErrInvalidCluster.Wrap("total_nodes exceeds int32")
 		}
-		cluster.TotalNodes = totalNodes
+		cluster.TotalNodes = int32(msg.TotalNodes)
 	}
 
 	// Update the cluster
@@ -180,14 +179,6 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *types.MsgCreateOf
 	return &types.MsgCreateOfferingResponse{OfferingId: offeringID}, nil
 }
 
-func safeInt32FromUint64(value uint64) (int32, error) {
-	maxInt32 := uint64(^uint32(0) >> 1)
-	if value > maxInt32 {
-		return 0, fmt.Errorf("value exceeds int32: %d", value)
-	}
-	return int32(value), nil
-}
-
 // UpdateOffering handles updating an HPC offering
 func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOffering) (*types.MsgUpdateOfferingResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
@@ -248,12 +239,12 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 	// Generate job ID
 	seq := ms.keeper.GetNextJobSequence(ctx)
 	jobID := fmt.Sprintf("JOB-%d", seq)
-	maxInt32 := uint64(math.MaxInt32)
-	if msg.RequestedNodes > maxInt32 {
+	maxInt32 := int64(^uint32(0) >> 1)
+	if msg.RequestedNodes > uint64(maxInt32) {
 		return nil, types.ErrInvalidJob.Wrap("requested_nodes exceeds int32")
 	}
-	maxInt64 := uint64(math.MaxInt64)
-	if msg.MaxDuration > maxInt64 {
+	maxInt64 := int64(^uint64(0) >> 1)
+	if msg.MaxDuration > uint64(maxInt64) {
 		return nil, types.ErrInvalidJob.Wrap("max_duration exceeds int64")
 	}
 
@@ -265,10 +256,9 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 		ClusterID:       offering.ClusterID,
 		ProviderAddress: offering.ProviderAddress,
 		Resources: types.JobResources{
-			//nolint:gosec // bounds checked above
 			Nodes: int32(msg.RequestedNodes),
 		},
-		MaxRuntimeSeconds: safeInt64FromUint64(msg.MaxDuration),
+		MaxRuntimeSeconds: int64(msg.MaxDuration),
 		State:             types.JobStatePending,
 	}
 
@@ -312,13 +302,6 @@ func (ms msgServer) CancelJob(goCtx context.Context, msg *types.MsgCancelJob) (*
 	)
 
 	return &types.MsgCancelJobResponse{}, nil
-}
-
-func safeInt64FromUint64(value uint64) int64 {
-	if value > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(value)
 }
 
 // ReportJobStatus handles provider reporting job status

@@ -435,8 +435,9 @@ func (ik *invoiceKeeper) GetInvoiceLedgerChain(ctx sdk.Context, invoiceID string
 		if e.SequenceNumber > uint64(len(entries)) {
 			continue
 		}
-		idx := safeIntFromUint64(e.SequenceNumber - 1)
+		idx := int(e.SequenceNumber - 1)
 		sortedEntries[idx] = e
+		}
 	}
 
 	// Add entries to chain in order
@@ -791,12 +792,4 @@ type QueryInvoiceLedgerRequest struct {
 // QueryInvoiceLedgerResponse is the response for InvoiceLedger query
 type QueryInvoiceLedgerResponse struct {
 	Entries []*billing.InvoiceLedgerEntry `json:"entries"`
-}
-
-func safeIntFromUint64(value uint64) int {
-	if value > uint64(^uint(0)>>1) {
-		return int(^uint(0) >> 1)
-	}
-	//nolint:gosec // range checked above
-	return int(value)
 }
