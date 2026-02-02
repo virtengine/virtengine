@@ -512,6 +512,8 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "suspend", event)
 	case marketplace.LifecycleActionResume:
 		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resume", event)
+	case marketplace.LifecycleActionResize:
+		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resize", event)
 	case marketplace.LifecycleActionTerminate:
 		attrs := map[string]interface{}{
 			"operation_id": event.OperationID,
@@ -559,24 +561,130 @@ func (b *WaldurBridge) executeLifecycleAction(
 	action string,
 	event marketplace.LifecycleActionRequestedEvent,
 ) (string, error) {
-	// Build request body with idempotency key
-	body := map[string]interface{}{
-		"idempotency_key": marketplace.GenerateIdempotencyKey(
-			event.AllocationID, event.Action, event.Timestamp,
-		),
+	idempotencyKey := marketplace.GenerateIdempotencyKey(
+		event.AllocationID, event.Action, event.Timestamp,
+	)
+
+	req := waldur.LifecycleRequest{
+		ResourceUUID:  resourceUUID,
+		IdempotencyKey: idempotencyKey,
+		Parameters:    map[string]interface{}{},
 	}
 
-	// Add any action-specific parameters
+	if b.cfg.OperationTimeout > 0 {
+		req.Timeout = int(b.cfg.OperationTimeout.Seconds())
+	}
+
 	for k, v := range event.Parameters {
-		body[k] = v
+		req.Parameters[k] = v
 	}
 
-	// Execute via marketplace client
-	// Note: The actual execution is done through the lifecycle client in a real implementation
-	// This is a simplified version that calls the resource action endpoint directly
+	lifecycle := waldur.NewLifecycleClient(b.marketplace)
 	log.Printf("[waldur-bridge] executing %s on resource %s", action, resourceUUID)
 
-	return event.OperationID, nil
+	switch action {
+	case "start":
+		resp, err := lifecycle.Start(ctx, req)
+		if err != nil {
+			return event.OperationID, err
+		}
+		return pickOperationID(resp, event.OperationID), nil
+	case "stop":
+		resp, err := lifecycle.Stop(ctx, req)
+		if err != nil {
+			return event.OperationID, err
+		}
+		return pickOperationID(resp, event.OperationID), nil
+	case "restart":
+		resp, err := lifecycle.Restart(ctx, req)
+		if err != nil {
+			return event.OperationID, err
+		}
+		return pickOperationID(resp, event.OperationID), nil
+	case "suspend":
+		resp, err := lifecycle.Suspend(ctx, req)
+		if err != nil {
+			return event.OperationID, err
+		}
+		return pickOperationID(resp, event.OperationID), nil
+	case "resume":
+		resp, err := lifecycle.Resume(ctx, req)
+		if err != nil {
+			return event.OperationID, err
+		}
+		return pickOperationID(resp, event.OperationID), nil
+	case "resize":
+		resizeReq := waldur.ResizeRequest{LifecycleRequest: req}
+		if v, ok := parseIntParam(event.Parameters, "cpu_cores"); ok {
+			resizeReq.CPUCores = &v
+		}
+		if v, ok := parseIntParam(event.Parameters, "memory_mb"); ok {
+			resizeReq.MemoryMB = &v
+		}
+		if v, ok := parseIntParam(event.Parameters, "disk_gb"); ok {
+			resizeReq.DiskGB = &v
+		}
+		if v, ok := event.Parameters["flavor"]; ok {
+			if s, ok := v.(string); ok {
+				resizeReq.Flavor = s
+			}
+		}
+		if v, ok := event.Parameters["instance_type"]; ok {
+			if s, ok := v.(string); ok {
+				resizeReq.InstanceType = s
+			}
+		}
+		resp, err := lifecycle.Resize(ctx, resizeReq)
+		if err != nil {
+			return event.OperationID, err
+		}
+		return pickOperationID(resp, event.OperationID), nil
+	default:
+		return event.OperationID, fmt.Errorf("unsupported lifecycle action: %s", action)
+	}
+}
+
+func pickOperationID(resp *waldur.LifecycleResponse, fallback string) string {
+	if resp == nil {
+		return fallback
+	}
+	if resp.OperationID != "" {
+		return resp.OperationID
+	}
+	if resp.UUID != "" {
+		return resp.UUID
+	}
+	return fallback
+}
+
+func parseIntParam(params map[string]interface{}, key string) (int, bool) {
+	if params == nil {
+		return 0, false
+	}
+	val, ok := params[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case float32:
+		return int(v), true
+	case string:
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
 }
 
 // mapLifecycleActionToWaldur maps a marketplace lifecycle action to Waldur action type
@@ -627,6 +735,7 @@ func defaultMarketplaceEventQuery() string {
 		string(marketplace.EventAllocationCreated),
 		string(marketplace.EventTerminateRequested),
 		string(marketplace.EventUsageUpdateRequested),
+		string(marketplace.EventLifecycleActionRequested),
 	}
 
 	parts := make([]string, 0, len(eventTypes))
@@ -789,4 +898,3 @@ func gbFromBytes(bytes int64) float64 {
 func formatFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', 6, 64)
 }
-

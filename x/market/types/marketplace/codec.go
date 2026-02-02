@@ -22,10 +22,18 @@ func init() {
 // RegisterLegacyAminoCodec registers amino types.
 func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &MsgWaldurCallback{}, "marketplace/MsgWaldurCallback")
+	legacy.RegisterAminoMsg(cdc, &MsgCreateOffering{}, "marketplace/MsgCreateOffering")
+	legacy.RegisterAminoMsg(cdc, &MsgUpdateOffering{}, "marketplace/MsgUpdateOffering")
+	legacy.RegisterAminoMsg(cdc, &MsgDeprecateOffering{}, "marketplace/MsgDeprecateOffering")
 }
 
 // RegisterInterfaces registers module interfaces.
 func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
-	registry.RegisterImplementations((*sdk.Msg)(nil), &MsgWaldurCallback{})
+	registry.RegisterImplementations((*sdk.Msg)(nil),
+		&MsgWaldurCallback{},
+		&MsgCreateOffering{},
+		&MsgUpdateOffering{},
+		&MsgDeprecateOffering{},
+	)
 	msgservice.RegisterMsgServiceDesc(registry, &marketplacev1.Msg_serviceDesc)
 }

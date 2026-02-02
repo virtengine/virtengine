@@ -269,7 +269,16 @@ func (k Keeper) UpdateOffering(ctx sdk.Context, offering *marketplace.Offering) 
 		return err
 	}
 	store.Set(key, bz)
-	return nil
+
+	seq := k.IncrementEventSequence(ctx)
+	event := &marketplace.BaseMarketplaceEvent{
+		EventType:   marketplace.EventOfferingUpdated,
+		EventID:     fmt.Sprintf("evt_offering_updated_%s_%d", offering.ID.String(), seq),
+		BlockHeight: ctx.BlockHeight(),
+		Timestamp:   ctx.BlockTime().UTC(),
+		Sequence:    seq,
+	}
+	return k.EmitMarketplaceEvent(ctx, event)
 }
 
 // TerminateOffering terminates an offering
@@ -284,7 +293,19 @@ func (k Keeper) TerminateOffering(ctx sdk.Context, id marketplace.OfferingID, re
 	offering.TerminatedAt = &now
 	offering.UpdatedAt = now
 
-	return k.UpdateOffering(ctx, offering)
+	if err := k.UpdateOffering(ctx, offering); err != nil {
+		return err
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	event := &marketplace.BaseMarketplaceEvent{
+		EventType:   marketplace.EventOfferingTerminated,
+		EventID:     fmt.Sprintf("evt_offering_terminated_%s_%d", offering.ID.String(), seq),
+		BlockHeight: ctx.BlockHeight(),
+		Timestamp:   ctx.BlockTime().UTC(),
+		Sequence:    seq,
+	}
+	return k.EmitMarketplaceEvent(ctx, event)
 }
 
 // WithOfferings iterates over all offerings
