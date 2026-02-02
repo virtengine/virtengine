@@ -167,9 +167,11 @@ func TestEmptyState(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	logger := log.NewNopLogger()
+	// Prevent Windows file lock cleanup issues with embedded DB handles.
 	cfg, err := genutiltest.CreateDefaultCometConfig(home)
 	require.NoError(t, err)
+	cfg.DBBackend = "memdb"
+	logger := log.NewNopLogger()
 
 	serverCtx := server.NewContext(viper.New(), cfg, logger)
 	interfaceRegistry := types.NewInterfaceRegistry()
