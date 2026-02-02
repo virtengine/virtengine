@@ -465,3 +465,62 @@ func formatTime(minutes int64) string {
 	}
 	return fmt.Sprintf("%02d:%02d:00", hours, mins)
 }
+
+// BatchScriptTemplateData contains data for script templating
+type BatchScriptTemplateData struct {
+	Template   *hpctypes.WorkloadTemplate
+	Parameters *JobParameters
+	Config     *BatchScriptConfig
+}
+
+// templateFuncs contains functions for template rendering
+var templateFuncs = template.FuncMap{
+	"formatTime": formatTime,
+}
+
+// scriptTemplate is the Go template for batch scripts (alternative approach)
+var scriptTemplate = template.Must(template.New("batchscript").Funcs(templateFuncs).Parse(`#!/bin/bash
+#
+# SLURM batch script generated from template: {{.Template.TemplateID}} v{{.Template.Version}}
+# Template: {{.Template.Name}}
+#
+
+# SLURM directives
+#SBATCH --job-name={{.Config.JobName}}
+#SBATCH --nodes={{.Parameters.Nodes}}
+#SBATCH --cpus-per-task={{.Parameters.CPUsPerNode}}
+#SBATCH --mem={{.Parameters.MemoryMB}}M
+#SBATCH --time={{.Parameters.RuntimeMinutes | formatTime}}
+{{if .Config.Partition}}#SBATCH --partition={{.Config.Partition}}{{end}}
+{{if .Config.Account}}#SBATCH --account={{.Config.Account}}{{end}}
+#SBATCH --output=%x-%j.out
+#SBATCH --error=%x-%j.err
+
+{{if .Template.Modules}}
+# Load modules
+module purge
+{{range .Template.Modules}}module load {{.}}
+{{end}}{{end}}
+
+# Environment
+{{range .Template.Environment}}export {{.Name}}="{{if .Value}}{{.Value}}{{else}}{{.ValueTemplate}}{{end}}"
+{{end}}
+
+{{if .Template.Entrypoint.PreRunScript}}
+# Pre-run
+{{.Template.Entrypoint.PreRunScript}}
+{{end}}
+
+# Main execution
+{{if .Template.Entrypoint.WorkingDirectory}}cd {{.Template.Entrypoint.WorkingDirectory}} || exit 1{{end}}
+{{.Template.Entrypoint.Command}} {{range .Template.Entrypoint.DefaultArgs}}{{.}} {{end}}{{.Parameters.Script}}
+
+EXIT_CODE=$?
+
+{{if .Template.Entrypoint.PostRunScript}}
+# Post-run
+{{.Template.Entrypoint.PostRunScript}}
+{{end}}
+
+exit $EXIT_CODE
+`))
