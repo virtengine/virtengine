@@ -38,17 +38,17 @@ const (
 
 // Error codes for validation
 var (
-	ErrInvalidReporter       = errors.Register("fraud", 2000, "invalid reporter address")
-	ErrInvalidReportedParty  = errors.Register("fraud", 2001, "invalid reported party address")
-	ErrSelfReport            = errors.Register("fraud", 2008, "invalid report: cannot report yourself")
-	ErrInvalidCategory       = errors.Register("fraud", 2013, "invalid fraud category")
-	ErrDescriptionTooShort   = errors.Register("fraud", 2016, "description too short")
-	ErrDescriptionTooLong    = errors.Register("fraud", 2015, "description too long")
-	ErrMissingEvidence       = errors.Register("fraud", 2017, "evidence is required for fraud reports")
-	ErrUnauthorizedModerator = errors.Register("fraud", 2006, "unauthorized: moderator role required")
-	ErrInvalidReportID       = errors.Register("fraud", 2009, "invalid report ID")
-	ErrInvalidStatus         = errors.Register("fraud", 2010, "invalid status transition")
-	ErrInvalidResolution     = errors.Register("fraud", 2014, "invalid resolution")
+	ErrInvalidReporter        = errors.Register("fraud", 2000, "invalid reporter address")
+	ErrInvalidReportedParty   = errors.Register("fraud", 2001, "invalid reported party address")
+	ErrSelfReport             = errors.Register("fraud", 2008, "invalid report: cannot report yourself")
+	ErrInvalidCategory        = errors.Register("fraud", 2013, "invalid fraud category")
+	ErrDescriptionTooShort    = errors.Register("fraud", 2016, "description too short")
+	ErrDescriptionTooLong     = errors.Register("fraud", 2015, "description too long")
+	ErrMissingEvidence        = errors.Register("fraud", 2017, "evidence is required for fraud reports")
+	ErrUnauthorizedModerator  = errors.Register("fraud", 2006, "unauthorized: moderator role required")
+	ErrInvalidReportID        = errors.Register("fraud", 2009, "invalid report ID")
+	ErrInvalidStatus          = errors.Register("fraud", 2010, "invalid status transition")
+	ErrInvalidResolution      = errors.Register("fraud", 2014, "invalid resolution")
 	ErrInvalidResolutionNotes = errors.Register("fraud", 2018, "invalid resolution notes")
 )
 
@@ -309,4 +309,3 @@ func (m *MsgUpdateParams) Route() string { return RouterKey }
 
 // Type implements sdk.Msg
 func (m *MsgUpdateParams) Type() string { return TypeMsgUpdateParams }
-

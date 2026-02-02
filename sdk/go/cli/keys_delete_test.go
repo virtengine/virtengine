@@ -100,4 +100,3 @@ func Test_runDeleteCmd(t *testing.T) {
 	_, err = kb.Key(fakeKeyName2)
 	require.Error(t, err) // Key2 is gone
 }
-

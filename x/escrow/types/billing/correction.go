@@ -616,64 +616,84 @@ func ParseCorrectionKey(key []byte) (string, error) {
 
 // BuildCorrectionByInvoiceKey builds the index key for corrections by invoice
 func BuildCorrectionByInvoiceKey(invoiceID string, correctionID string) []byte {
-	key := append(CorrectionByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(CorrectionByInvoicePrefix)+len(invoiceID)+len(correctionID)+1)
+	key = append(key, CorrectionByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(correctionID)...)
 }
 
 // BuildCorrectionByInvoicePrefix builds the prefix for invoice's corrections
 func BuildCorrectionByInvoicePrefix(invoiceID string) []byte {
-	key := append(CorrectionByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(CorrectionByInvoicePrefix)+len(invoiceID)+1)
+	key = append(key, CorrectionByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	return append(key, byte('/'))
 }
 
 // BuildCorrectionByStatusKey builds the index key for corrections by status
 func BuildCorrectionByStatusKey(status CorrectionStatus, correctionID string) []byte {
-	key := append(CorrectionByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(CorrectionByStatusPrefix)+len(correctionID)+2)
+	key = append(key, CorrectionByStatusPrefix...)
+	key = append(key, byte(status))
 	key = append(key, byte('/'))
 	return append(key, []byte(correctionID)...)
 }
 
 // BuildCorrectionByStatusPrefix builds the prefix for corrections by status
 func BuildCorrectionByStatusPrefix(status CorrectionStatus) []byte {
-	key := append(CorrectionByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(CorrectionByStatusPrefix)+2)
+	key = append(key, CorrectionByStatusPrefix...)
+	key = append(key, byte(status))
 	return append(key, byte('/'))
 }
 
 // BuildCorrectionBySettlementKey builds the index key for corrections by settlement
 func BuildCorrectionBySettlementKey(settlementID string, correctionID string) []byte {
-	key := append(CorrectionBySettlementPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(CorrectionBySettlementPrefix)+len(settlementID)+len(correctionID)+1)
+	key = append(key, CorrectionBySettlementPrefix...)
+	key = append(key, []byte(settlementID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(correctionID)...)
 }
 
 // BuildCorrectionBySettlementPrefix builds the prefix for settlement's corrections
 func BuildCorrectionBySettlementPrefix(settlementID string) []byte {
-	key := append(CorrectionBySettlementPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(CorrectionBySettlementPrefix)+len(settlementID)+1)
+	key = append(key, CorrectionBySettlementPrefix...)
+	key = append(key, []byte(settlementID)...)
 	return append(key, byte('/'))
 }
 
 // BuildCorrectionByRequesterKey builds the index key for corrections by requester
 func BuildCorrectionByRequesterKey(requester string, correctionID string) []byte {
-	key := append(CorrectionByRequesterPrefix, []byte(requester)...)
+	key := make([]byte, 0, len(CorrectionByRequesterPrefix)+len(requester)+len(correctionID)+1)
+	key = append(key, CorrectionByRequesterPrefix...)
+	key = append(key, []byte(requester)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(correctionID)...)
 }
 
 // BuildCorrectionByRequesterPrefix builds the prefix for requester's corrections
 func BuildCorrectionByRequesterPrefix(requester string) []byte {
-	key := append(CorrectionByRequesterPrefix, []byte(requester)...)
+	key := make([]byte, 0, len(CorrectionByRequesterPrefix)+len(requester)+1)
+	key = append(key, CorrectionByRequesterPrefix...)
+	key = append(key, []byte(requester)...)
 	return append(key, byte('/'))
 }
 
 // BuildCorrectionLedgerEntryKey builds the key for a correction ledger entry
 func BuildCorrectionLedgerEntryKey(entryID string) []byte {
-	return append(CorrectionLedgerEntryPrefix, []byte(entryID)...)
+	key := make([]byte, 0, len(CorrectionLedgerEntryPrefix)+len(entryID))
+	key = append(key, CorrectionLedgerEntryPrefix...)
+	return append(key, []byte(entryID)...)
 }
 
 // BuildCorrectionLedgerEntryByCorrectionKey builds the index key for entries by correction
 func BuildCorrectionLedgerEntryByCorrectionKey(correctionID string, timestamp int64) []byte {
-	key := append(CorrectionLedgerEntryByCorrectionPrefix, []byte(correctionID)...)
+	key := make([]byte, 0, len(CorrectionLedgerEntryByCorrectionPrefix)+len(correctionID)+1+8)
+	key = append(key, CorrectionLedgerEntryByCorrectionPrefix...)
+	key = append(key, []byte(correctionID)...)
 	key = append(key, byte('/'))
 
 	// Append timestamp as big-endian uint64 for deterministic ordering
@@ -684,13 +704,17 @@ func BuildCorrectionLedgerEntryByCorrectionKey(correctionID string, timestamp in
 
 // BuildCorrectionLedgerEntryByCorrectionPrefix builds the prefix for correction's entries
 func BuildCorrectionLedgerEntryByCorrectionPrefix(correctionID string) []byte {
-	key := append(CorrectionLedgerEntryByCorrectionPrefix, []byte(correctionID)...)
+	key := make([]byte, 0, len(CorrectionLedgerEntryByCorrectionPrefix)+len(correctionID)+1)
+	key = append(key, CorrectionLedgerEntryByCorrectionPrefix...)
+	key = append(key, []byte(correctionID)...)
 	return append(key, byte('/'))
 }
 
 // BuildCorrectionLimitKey builds the key for correction limits
 func BuildCorrectionLimitKey(provider string) []byte {
-	return append(CorrectionLimitPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(CorrectionLimitPrefix)+len(provider))
+	key = append(key, CorrectionLimitPrefix...)
+	return append(key, []byte(provider)...)
 }
 
 // CorrectionSequenceKey is the key for correction ID sequence

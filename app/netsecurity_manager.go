@@ -17,20 +17,20 @@ type NetworkSecurityManager struct {
 	logger log.Logger
 
 	// Security components
-	noiseTransport      *NoiseTransport
-	peerAuthenticator   *PeerAuthenticator
-	peerAuthorizer      *PeerAuthorizer
-	peerScoreManager    *PeerScoreManager
-	networkRateLimiter  *NetworkRateLimiter
-	ddosProtector       *DDoSProtector
-	sybilProtector      *SybilProtector
-	eclipseProtector    *EclipseProtector
-	firewallGenerator   *FirewallRuleGenerator
-	idsIntegration      *IDSIntegration
+	noiseTransport     *NoiseTransport
+	peerAuthenticator  *PeerAuthenticator
+	peerAuthorizer     *PeerAuthorizer
+	peerScoreManager   *PeerScoreManager
+	networkRateLimiter *NetworkRateLimiter
+	ddosProtector      *DDoSProtector
+	sybilProtector     *SybilProtector
+	eclipseProtector   *EclipseProtector
+	firewallGenerator  *FirewallRuleGenerator
+	idsIntegration     *IDSIntegration
 
 	// State
 	started bool
-	
+
 	// Background workers
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -509,19 +509,19 @@ func (nsm *NetworkSecurityManager) GetStats() NetworkSecurityStats {
 // NetworkSecurityStats contains comprehensive security statistics.
 type NetworkSecurityStats struct {
 	// Peer statistics
-	TotalPeers     int
-	InboundPeers   int
-	OutboundPeers  int
-	
+	TotalPeers    int
+	InboundPeers  int
+	OutboundPeers int
+
 	// Rate limiting
-	RateLimitActiveIPs  int
-	RateLimitBlocked    int
-	AdaptiveMultiplier  float64
-	
+	RateLimitActiveIPs int
+	RateLimitBlocked   int
+	AdaptiveMultiplier float64
+
 	// Attack prevention
 	DiversityScore    float64
 	AnchorConnections int
-	
+
 	// IDS
 	IDSAlertsSent    int64
 	IDSAlertsDropped int64

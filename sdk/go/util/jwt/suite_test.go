@@ -86,4 +86,3 @@ func decodeSegment(t interface{ Fatalf(string, ...any) }, seg string) (sig []byt
 func encodeSegment(sig []byte) string {
 	return (&jwt.Token{}).EncodeSegment(sig)
 }
-

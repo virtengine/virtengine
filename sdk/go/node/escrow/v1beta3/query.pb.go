@@ -305,7 +305,9 @@ func init() {
 	proto.RegisterType((*QueryPaymentsResponse)(nil), "virtengine.escrow.v1beta3.QueryPaymentsResponse")
 }
 
-func init() { proto.RegisterFile("virtengine/escrow/v1beta3/query.proto", fileDescriptor_84bc7a3aed491eed) }
+func init() {
+	proto.RegisterFile("virtengine/escrow/v1beta3/query.proto", fileDescriptor_84bc7a3aed491eed)
+}
 
 var fileDescriptor_84bc7a3aed491eed = []byte{
 	// 499 bytes of a gzipped FileDescriptorProto
@@ -1604,4 +1606,3 @@ var (
 	ErrIntOverflowQuery          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupQuery = fmt.Errorf("proto: unexpected end of group")
 )
-

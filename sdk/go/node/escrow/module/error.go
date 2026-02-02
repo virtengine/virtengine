@@ -44,4 +44,3 @@ var (
 	ErrInvalidDeposit           = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidDeposit, codes.InvalidArgument, "invalid deposit")
 	ErrInvalidAuthzScope        = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidAuthzScope, codes.InvalidArgument, "invalid authz scope")
 )
-

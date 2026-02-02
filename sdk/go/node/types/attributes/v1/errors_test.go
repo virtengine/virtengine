@@ -36,4 +36,3 @@ func TestErrorGRPCStatusCodes(t *testing.T) {
 		})
 	}
 }
-

@@ -115,4 +115,3 @@ func applyOptions(opts ...LogOption) (options, error) {
 
 	return *obj, nil
 }
-

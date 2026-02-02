@@ -18,4 +18,3 @@ var (
 	// ErrInvalidDepositSource indicates invalid deposit source for the deployment
 	ErrInvalidDepositSource = sdkerrors.RegisterWithGRPCCode(attr.ModuleName, errInvalidDepositSource, codes.InvalidArgument, "invalid deposit source")
 )
-

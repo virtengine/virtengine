@@ -83,4 +83,3 @@ func validateMinCommissionRate(i interface{}) error {
 
 	return nil
 }
-

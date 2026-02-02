@@ -167,4 +167,3 @@ func DepositAuthorizationFromV1beta3(from dv1beta3.DepositDeploymentAuthorizatio
 		SpendLimit: from.SpendLimit,
 	}
 }
-

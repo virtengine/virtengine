@@ -822,7 +822,9 @@ func (s *SGXEnclaveServiceImpl) VerifyMeasurement(mrEnclave []byte) bool {
 // This is the production-ready key generation that ensures private keys never leave
 func (s *SGXEnclaveServiceImpl) generateEnclaveKeysInternal() error {
 	// Derive seal key from enclave measurement (simulated)
-	sealKeyMaterial := append(s.mrEnclave[:], s.mrSigner[:]...)
+	sealKeyMaterial := make([]byte, 0, len(s.mrEnclave)+len(s.mrSigner)+len([]byte("production_seal_key")))
+	sealKeyMaterial = append(sealKeyMaterial, s.mrEnclave[:]...)
+	sealKeyMaterial = append(sealKeyMaterial, s.mrSigner[:]...)
 	sealKeyMaterial = append(sealKeyMaterial, []byte("production_seal_key")...)
 	fullSealKey := sha256Bytes(sealKeyMaterial)
 
@@ -958,7 +960,9 @@ func (s *SGXEnclaveServiceImpl) simulateEnclaveCreation() error {
 
 	// Derive seal key (in real SGX, this uses EGETKEY with key_policy)
 	// Key is bound to MRENCLAVE and platform
-	sealKeyMaterial := append(s.mrEnclave[:], []byte("seal_key_derive")...)
+	sealKeyMaterial := make([]byte, 0, len(s.mrEnclave)+len([]byte("seal_key_derive")))
+	sealKeyMaterial = append(sealKeyMaterial, s.mrEnclave[:]...)
+	sealKeyMaterial = append(sealKeyMaterial, []byte("seal_key_derive")...)
 	s.sealKey = sha256Bytes(sealKeyMaterial)[:SGXSealKeySize]
 
 	return nil
@@ -969,7 +973,9 @@ func (s *SGXEnclaveServiceImpl) simulateEnclaveCreation() error {
 //nolint:unparam // result 0 (error) reserved for future key derivation failures
 func (s *SGXEnclaveServiceImpl) deriveEnclaveKeys() error {
 	// Derive keys using HKDF from seal key and epoch
-	salt := append(s.mrEnclave[:], s.mrSigner[:]...)
+	salt := make([]byte, 0, len(s.mrEnclave)+len(s.mrSigner))
+	salt = append(salt, s.mrEnclave[:]...)
+	salt = append(salt, s.mrSigner[:]...)
 
 	// Encryption key (X25519 seed)
 	encInfo := fmt.Sprintf("encryption_key_epoch_%d", s.currentEpoch)

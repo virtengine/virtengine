@@ -162,12 +162,12 @@ func DefaultVoIPDetectorConfig() VoIPDetectorConfig {
 
 // DefaultVoIPDetector implements VoIPDetector with carrier lookup and pattern matching
 type DefaultVoIPDetector struct {
-	config      VoIPDetectorConfig
-	gateway     SMSGateway
-	logger      zerolog.Logger
-	cache       *voipCache
-	patterns    *voipPatterns
-	mu          sync.RWMutex
+	config   VoIPDetectorConfig
+	gateway  SMSGateway
+	logger   zerolog.Logger
+	cache    *voipCache
+	patterns *voipPatterns
+	mu       sync.RWMutex
 }
 
 // voipCache is a simple in-memory cache for VoIP detection results
@@ -239,8 +239,8 @@ func (c *voipCache) cleanup() {
 
 // voipPatterns contains compiled regex patterns for VoIP detection
 type voipPatterns struct {
-	knownVoIPCarriers    []string
-	disposablePatterns   []*regexp.Regexp
+	knownVoIPCarriers     []string
+	disposablePatterns    []*regexp.Regexp
 	virtualNumberPrefixes map[string][]string // Country code -> prefixes
 }
 
@@ -616,11 +616,11 @@ const numVerifyBaseURL = "http://apilayer.net/api/validate"
 
 // NumVerifyDetector implements VoIP detection using NumVerify API
 type NumVerifyDetector struct {
-	apiKey      string
-	httpClient  *http.Client
-	logger      zerolog.Logger
-	cache       *voipCache
-	mu          sync.RWMutex
+	apiKey     string
+	httpClient *http.Client
+	logger     zerolog.Logger
+	cache      *voipCache
+	mu         sync.RWMutex
 }
 
 // NewNumVerifyDetector creates a new NumVerify detector

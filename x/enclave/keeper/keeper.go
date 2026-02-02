@@ -351,7 +351,7 @@ func (k Keeper) InitiateKeyRotation(ctx sdk.Context, rotation *types.KeyRotation
 	identity, exists := k.GetEnclaveIdentity(ctx, validatorAddr)
 	if exists {
 		identity.Status = types.EnclaveIdentityStatusRotating
-		k.UpdateEnclaveIdentity(ctx, identity)
+		_ = k.UpdateEnclaveIdentity(ctx, identity)
 	}
 
 	// Emit event
@@ -391,7 +391,7 @@ func (k Keeper) CompleteKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddres
 	identity, exists := k.GetEnclaveIdentity(ctx, validatorAddr)
 	if exists {
 		identity.Status = types.EnclaveIdentityStatusActive
-		k.UpdateEnclaveIdentity(ctx, identity)
+		_ = k.UpdateEnclaveIdentity(ctx, identity)
 	}
 
 	// Emit event
@@ -412,7 +412,9 @@ func (k Keeper) CompleteKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddres
 // GetActiveKeyRotation retrieves the active key rotation for a validator
 func (k Keeper) GetActiveKeyRotation(ctx sdk.Context, validatorAddr sdk.AccAddress) (*types.KeyRotationRecord, bool) {
 	store := ctx.KVStore(k.skey)
-	prefix := append(types.PrefixKeyRotation, validatorAddr...)
+	prefix := make([]byte, 0, len(types.PrefixKeyRotation)+len(validatorAddr))
+	prefix = append(prefix, types.PrefixKeyRotation...)
+	prefix = append(prefix, validatorAddr...)
 	iterator := store.ReverseIterator(prefix, storetypes.PrefixEndBytes(prefix))
 	defer iterator.Close()
 

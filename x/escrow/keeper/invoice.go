@@ -493,7 +493,7 @@ func (ik *invoiceKeeper) GetInvoiceSequence(ctx sdk.Context) uint64 {
 // SetInvoiceSequence sets the invoice sequence number
 func (ik *invoiceKeeper) SetInvoiceSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(ik.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.InvoiceSequenceKey, bz)
 }
 

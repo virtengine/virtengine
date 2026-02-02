@@ -71,7 +71,9 @@ var (
 
 // BuildInvoiceKey builds the key for an invoice
 func BuildInvoiceKey(invoiceID string) []byte {
-	return append(InvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(InvoicePrefix)+len(invoiceID))
+	key = append(key, InvoicePrefix...)
+	return append(key, []byte(invoiceID)...)
 }
 
 // ParseInvoiceKey parses an invoice key
@@ -84,153 +86,203 @@ func ParseInvoiceKey(key []byte) (string, error) {
 
 // BuildInvoiceByProviderKey builds the index key for invoices by provider
 func BuildInvoiceByProviderKey(provider string, invoiceID string) []byte {
-	key := append(InvoiceByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(InvoiceByProviderPrefix)+len(provider)+1+len(invoiceID))
+	key = append(key, InvoiceByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(invoiceID)...)
 }
 
 // BuildInvoiceByProviderPrefix builds the prefix for provider's invoices
 func BuildInvoiceByProviderPrefix(provider string) []byte {
-	key := append(InvoiceByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(InvoiceByProviderPrefix)+len(provider)+1)
+	key = append(key, InvoiceByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	return append(key, byte('/'))
 }
 
 // BuildInvoiceByCustomerKey builds the index key for invoices by customer
 func BuildInvoiceByCustomerKey(customer string, invoiceID string) []byte {
-	key := append(InvoiceByCustomerPrefix, []byte(customer)...)
+	key := make([]byte, 0, len(InvoiceByCustomerPrefix)+len(customer)+1+len(invoiceID))
+	key = append(key, InvoiceByCustomerPrefix...)
+	key = append(key, []byte(customer)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(invoiceID)...)
 }
 
 // BuildInvoiceByCustomerPrefix builds the prefix for customer's invoices
 func BuildInvoiceByCustomerPrefix(customer string) []byte {
-	key := append(InvoiceByCustomerPrefix, []byte(customer)...)
+	key := make([]byte, 0, len(InvoiceByCustomerPrefix)+len(customer)+1)
+	key = append(key, InvoiceByCustomerPrefix...)
+	key = append(key, []byte(customer)...)
 	return append(key, byte('/'))
 }
 
 // BuildInvoiceByStatusKey builds the index key for invoices by status
 func BuildInvoiceByStatusKey(status InvoiceStatus, invoiceID string) []byte {
-	key := append(InvoiceByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(InvoiceByStatusPrefix)+1+1+len(invoiceID))
+	key = append(key, InvoiceByStatusPrefix...)
+	key = append(key, byte(status))
 	key = append(key, byte('/'))
 	return append(key, []byte(invoiceID)...)
 }
 
 // BuildInvoiceByStatusPrefix builds the prefix for invoices by status
 func BuildInvoiceByStatusPrefix(status InvoiceStatus) []byte {
-	key := append(InvoiceByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(InvoiceByStatusPrefix)+1+1)
+	key = append(key, InvoiceByStatusPrefix...)
+	key = append(key, byte(status))
 	return append(key, byte('/'))
 }
 
 // BuildInvoiceByEscrowKey builds the index key for invoices by escrow
 func BuildInvoiceByEscrowKey(escrowID string, invoiceID string) []byte {
-	key := append(InvoiceByEscrowPrefix, []byte(escrowID)...)
+	key := make([]byte, 0, len(InvoiceByEscrowPrefix)+len(escrowID)+1+len(invoiceID))
+	key = append(key, InvoiceByEscrowPrefix...)
+	key = append(key, []byte(escrowID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(invoiceID)...)
 }
 
 // BuildInvoiceByEscrowPrefix builds the prefix for escrow's invoices
 func BuildInvoiceByEscrowPrefix(escrowID string) []byte {
-	key := append(InvoiceByEscrowPrefix, []byte(escrowID)...)
+	key := make([]byte, 0, len(InvoiceByEscrowPrefix)+len(escrowID)+1)
+	key = append(key, InvoiceByEscrowPrefix...)
+	key = append(key, []byte(escrowID)...)
 	return append(key, byte('/'))
 }
 
 // BuildDiscountPolicyKey builds the key for a discount policy
 func BuildDiscountPolicyKey(policyID string) []byte {
-	return append(DiscountPolicyPrefix, []byte(policyID)...)
+	key := make([]byte, 0, len(DiscountPolicyPrefix)+len(policyID))
+	key = append(key, DiscountPolicyPrefix...)
+	return append(key, []byte(policyID)...)
 }
 
 // BuildCouponCodeKey builds the key for a coupon code
 func BuildCouponCodeKey(code string) []byte {
-	return append(CouponCodePrefix, []byte(code)...)
+	key := make([]byte, 0, len(CouponCodePrefix)+len(code))
+	key = append(key, CouponCodePrefix...)
+	return append(key, []byte(code)...)
 }
 
 // BuildCouponByPolicyKey builds the index key for coupons by policy
 func BuildCouponByPolicyKey(policyID string, code string) []byte {
-	key := append(CouponByPolicyPrefix, []byte(policyID)...)
+	key := make([]byte, 0, len(CouponByPolicyPrefix)+len(policyID)+1+len(code))
+	key = append(key, CouponByPolicyPrefix...)
+	key = append(key, []byte(policyID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(code)...)
 }
 
 // BuildLoyaltyProgramKey builds the key for a loyalty program
 func BuildLoyaltyProgramKey(programID string) []byte {
-	return append(LoyaltyProgramPrefix, []byte(programID)...)
+	key := make([]byte, 0, len(LoyaltyProgramPrefix)+len(programID))
+	key = append(key, LoyaltyProgramPrefix...)
+	return append(key, []byte(programID)...)
 }
 
 // BuildCustomerLoyaltyKey builds the key for customer loyalty
 func BuildCustomerLoyaltyKey(customer string, programID string) []byte {
-	key := append(CustomerLoyaltyPrefix, []byte(customer)...)
+	key := make([]byte, 0, len(CustomerLoyaltyPrefix)+len(customer)+1+len(programID))
+	key = append(key, CustomerLoyaltyPrefix...)
+	key = append(key, []byte(customer)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(programID)...)
 }
 
 // BuildTaxJurisdictionKey builds the key for a tax jurisdiction
 func BuildTaxJurisdictionKey(countryCode string) []byte {
-	return append(TaxJurisdictionPrefix, []byte(countryCode)...)
+	key := make([]byte, 0, len(TaxJurisdictionPrefix)+len(countryCode))
+	key = append(key, TaxJurisdictionPrefix...)
+	return append(key, []byte(countryCode)...)
 }
 
 // BuildTaxJurisdictionRegionKey builds the key for a regional tax jurisdiction
 func BuildTaxJurisdictionRegionKey(countryCode string, regionCode string) []byte {
-	key := append(TaxJurisdictionPrefix, []byte(countryCode)...)
+	key := make([]byte, 0, len(TaxJurisdictionPrefix)+len(countryCode)+1+len(regionCode))
+	key = append(key, TaxJurisdictionPrefix...)
+	key = append(key, []byte(countryCode)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(regionCode)...)
 }
 
 // BuildCustomerTaxProfileKey builds the key for a customer tax profile
 func BuildCustomerTaxProfileKey(customer string) []byte {
-	return append(CustomerTaxProfilePrefix, []byte(customer)...)
+	key := make([]byte, 0, len(CustomerTaxProfilePrefix)+len(customer))
+	key = append(key, CustomerTaxProfilePrefix...)
+	return append(key, []byte(customer)...)
 }
 
 // BuildProviderTaxProfileKey builds the key for a provider tax profile
 func BuildProviderTaxProfileKey(provider string) []byte {
-	return append(ProviderTaxProfilePrefix, []byte(provider)...)
+	key := make([]byte, 0, len(ProviderTaxProfilePrefix)+len(provider))
+	key = append(key, ProviderTaxProfilePrefix...)
+	return append(key, []byte(provider)...)
 }
 
 // BuildPricingPolicyKey builds the key for a pricing policy
 func BuildPricingPolicyKey(policyID string) []byte {
-	return append(PricingPolicyPrefix, []byte(policyID)...)
+	key := make([]byte, 0, len(PricingPolicyPrefix)+len(policyID))
+	key = append(key, PricingPolicyPrefix...)
+	return append(key, []byte(policyID)...)
 }
 
 // BuildPricingPolicyByProviderKey builds the index key for policies by provider
 func BuildPricingPolicyByProviderKey(provider string, policyID string) []byte {
-	key := append(PricingPolicyByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(PricingPolicyByProviderPrefix)+len(provider)+1+len(policyID))
+	key = append(key, PricingPolicyByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(policyID)...)
 }
 
 // BuildPricingPolicyByProviderPrefix builds the prefix for provider's policies
 func BuildPricingPolicyByProviderPrefix(provider string) []byte {
-	key := append(PricingPolicyByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(PricingPolicyByProviderPrefix)+len(provider)+1)
+	key = append(key, PricingPolicyByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	return append(key, byte('/'))
 }
 
 // BuildDisputeWindowKey builds the key for a dispute window
 func BuildDisputeWindowKey(windowID string) []byte {
-	return append(DisputeWindowPrefix, []byte(windowID)...)
+	key := make([]byte, 0, len(DisputeWindowPrefix)+len(windowID))
+	key = append(key, DisputeWindowPrefix...)
+	return append(key, []byte(windowID)...)
 }
 
 // BuildDisputeByInvoiceKey builds the index key for disputes by invoice
 func BuildDisputeByInvoiceKey(invoiceID string, windowID string) []byte {
-	key := append(DisputeByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(DisputeByInvoicePrefix)+len(invoiceID)+1+len(windowID))
+	key = append(key, DisputeByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(windowID)...)
 }
 
 // BuildDisputeByStatusKey builds the index key for disputes by status
 func BuildDisputeByStatusKey(status DisputeStatus, windowID string) []byte {
-	key := append(DisputeByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(DisputeByStatusPrefix)+1+1+len(windowID))
+	key = append(key, DisputeByStatusPrefix...)
+	key = append(key, byte(status))
 	key = append(key, byte('/'))
 	return append(key, []byte(windowID)...)
 }
 
 // BuildDisputeByStatusPrefix builds the prefix for disputes by status
 func BuildDisputeByStatusPrefix(status DisputeStatus) []byte {
-	key := append(DisputeByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(DisputeByStatusPrefix)+1+1)
+	key = append(key, DisputeByStatusPrefix...)
+	key = append(key, byte(status))
 	return append(key, byte('/'))
 }
 
 // BuildSettlementHookResultKey builds the key for a hook result
 func BuildSettlementHookResultKey(settlementID string, hookID string, timestamp int64) []byte {
-	key := append(SettlementHookResultPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(SettlementHookResultPrefix)+len(settlementID)+1+len(hookID)+1+8)
+	key = append(key, SettlementHookResultPrefix...)
+	key = append(key, []byte(settlementID)...)
 	key = append(key, byte('/'))
 	key = append(key, []byte(hookID)...)
 	key = append(key, byte('/'))
@@ -284,89 +336,117 @@ var (
 
 // BuildSettlementRecordKey builds the key for a settlement record
 func BuildSettlementRecordKey(settlementID string) []byte {
-	return append(SettlementRecordPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(SettlementRecordPrefix)+len(settlementID))
+	key = append(key, SettlementRecordPrefix...)
+	return append(key, []byte(settlementID)...)
 }
 
 // BuildSettlementByInvoiceKey builds the index key for settlements by invoice
 func BuildSettlementByInvoiceKey(invoiceID string, settlementID string) []byte {
-	key := append(SettlementByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(SettlementByInvoicePrefix)+len(invoiceID)+1+len(settlementID))
+	key = append(key, SettlementByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(settlementID)...)
 }
 
 // BuildSettlementByInvoicePrefix builds the prefix for invoice's settlements
 func BuildSettlementByInvoicePrefix(invoiceID string) []byte {
-	key := append(SettlementByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(SettlementByInvoicePrefix)+len(invoiceID)+1)
+	key = append(key, SettlementByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	return append(key, byte('/'))
 }
 
 // BuildSettlementByProviderKey builds the index key for settlements by provider
 func BuildSettlementByProviderKey(provider string, settlementID string) []byte {
-	key := append(SettlementByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(SettlementByProviderPrefix)+len(provider)+1+len(settlementID))
+	key = append(key, SettlementByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(settlementID)...)
 }
 
 // BuildSettlementByProviderPrefix builds the prefix for provider's settlements
 func BuildSettlementByProviderPrefix(provider string) []byte {
-	key := append(SettlementByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(SettlementByProviderPrefix)+len(provider)+1)
+	key = append(key, SettlementByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	return append(key, byte('/'))
 }
 
 // BuildSettlementByStatusKey builds the index key for settlements by status
 func BuildSettlementByStatusKey(status SettlementStatus, settlementID string) []byte {
-	key := append(SettlementByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(SettlementByStatusPrefix)+1+1+len(settlementID))
+	key = append(key, SettlementByStatusPrefix...)
+	key = append(key, byte(status))
 	key = append(key, byte('/'))
 	return append(key, []byte(settlementID)...)
 }
 
 // BuildSettlementByStatusPrefix builds the prefix for settlements by status
 func BuildSettlementByStatusPrefix(status SettlementStatus) []byte {
-	key := append(SettlementByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(SettlementByStatusPrefix)+1+1)
+	key = append(key, SettlementByStatusPrefix...)
+	key = append(key, byte(status))
 	return append(key, byte('/'))
 }
 
 // BuildSettlementByEscrowKey builds the index key for settlements by escrow
 func BuildSettlementByEscrowKey(escrowID string, settlementID string) []byte {
-	key := append(SettlementByEscrowPrefix, []byte(escrowID)...)
+	key := make([]byte, 0, len(SettlementByEscrowPrefix)+len(escrowID)+1+len(settlementID))
+	key = append(key, SettlementByEscrowPrefix...)
+	key = append(key, []byte(escrowID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(settlementID)...)
 }
 
 // BuildSettlementByEscrowPrefix builds the prefix for escrow's settlements
 func BuildSettlementByEscrowPrefix(escrowID string) []byte {
-	key := append(SettlementByEscrowPrefix, []byte(escrowID)...)
+	key := make([]byte, 0, len(SettlementByEscrowPrefix)+len(escrowID)+1)
+	key = append(key, SettlementByEscrowPrefix...)
+	key = append(key, []byte(escrowID)...)
 	return append(key, byte('/'))
 }
 
 // BuildTreasuryAllocationKey builds the key for a treasury allocation
 func BuildTreasuryAllocationKey(allocationID string) []byte {
-	return append(TreasuryAllocationPrefix, []byte(allocationID)...)
+	key := make([]byte, 0, len(TreasuryAllocationPrefix)+len(allocationID))
+	key = append(key, TreasuryAllocationPrefix...)
+	return append(key, []byte(allocationID)...)
 }
 
 // BuildTreasuryAllocationBySettlementKey builds the index key for allocations by settlement
 func BuildTreasuryAllocationBySettlementKey(settlementID string, allocationID string) []byte {
-	key := append(TreasuryAllocationBySettlementPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(TreasuryAllocationBySettlementPrefix)+len(settlementID)+1+len(allocationID))
+	key = append(key, TreasuryAllocationBySettlementPrefix...)
+	key = append(key, []byte(settlementID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(allocationID)...)
 }
 
 // BuildTreasuryAllocationBySettlementPrefix builds the prefix for settlement's allocations
 func BuildTreasuryAllocationBySettlementPrefix(settlementID string) []byte {
-	key := append(TreasuryAllocationBySettlementPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(TreasuryAllocationBySettlementPrefix)+len(settlementID)+1)
+	key = append(key, TreasuryAllocationBySettlementPrefix...)
+	key = append(key, []byte(settlementID)...)
 	return append(key, byte('/'))
 }
 
 // BuildTreasuryAllocationByFeeTypeKey builds the index key for allocations by fee type
 func BuildTreasuryAllocationByFeeTypeKey(feeType FeeType, allocationID string) []byte {
-	key := append(TreasuryAllocationByFeeTypePrefix, byte(feeType))
+	key := make([]byte, 0, len(TreasuryAllocationByFeeTypePrefix)+1+1+len(allocationID))
+	key = append(key, TreasuryAllocationByFeeTypePrefix...)
+	key = append(key, byte(feeType))
 	key = append(key, byte('/'))
 	return append(key, []byte(allocationID)...)
 }
 
 // BuildTreasuryAllocationByFeeTypePrefix builds the prefix for allocations by fee type
 func BuildTreasuryAllocationByFeeTypePrefix(feeType FeeType) []byte {
-	key := append(TreasuryAllocationByFeeTypePrefix, byte(feeType))
+	key := make([]byte, 0, len(TreasuryAllocationByFeeTypePrefix)+1+1)
+	key = append(key, TreasuryAllocationByFeeTypePrefix...)
+	key = append(key, byte(feeType))
 	return append(key, byte('/'))
 }
 

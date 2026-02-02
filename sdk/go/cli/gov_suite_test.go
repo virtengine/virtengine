@@ -138,4 +138,3 @@ func (s *GovCLITestSuite) SetupSuite() {
 			WithSkipConfirm()...)
 	s.Require().NoError(err)
 }
-

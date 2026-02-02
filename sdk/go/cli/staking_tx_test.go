@@ -632,4 +632,3 @@ func (s *StakingCLITestSuite) TestNewCancelUnbondingDelegationCmd() {
 		})
 	}
 }
-

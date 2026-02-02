@@ -90,4 +90,3 @@ func (inv *ResourcesMetric) AddResourceUnits(res dtypes.ResourceUnits) {
 		inv.AddResourceUnit(unit)
 	}
 }
-

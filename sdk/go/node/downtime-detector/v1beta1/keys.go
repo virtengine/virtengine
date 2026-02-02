@@ -15,4 +15,3 @@ func GetLastBlockTimestampKey() []byte { return lastBlockTimestampKey }
 func GetLastDowntimeOfLengthKey(downtimeDur Downtime) []byte {
 	return []byte(fmt.Sprintf(lastDowntimeOfLengthPrefix, downtimeDur.String()))
 }
-

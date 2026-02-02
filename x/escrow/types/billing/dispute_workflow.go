@@ -796,27 +796,35 @@ func ParseDisputeWorkflowKey(key []byte) (string, error) {
 
 // BuildDisputeWorkflowByInvoiceKey builds the index key for disputes by invoice
 func BuildDisputeWorkflowByInvoiceKey(invoiceID string, disputeID string) []byte {
-	key := append(DisputeWorkflowByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(DisputeWorkflowByInvoicePrefix)+len(invoiceID)+len(disputeID)+1)
+	key = append(key, DisputeWorkflowByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(disputeID)...)
 }
 
 // BuildDisputeWorkflowByInvoicePrefix builds the prefix for invoice's disputes
 func BuildDisputeWorkflowByInvoicePrefix(invoiceID string) []byte {
-	key := append(DisputeWorkflowByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(DisputeWorkflowByInvoicePrefix)+len(invoiceID)+1)
+	key = append(key, DisputeWorkflowByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	return append(key, byte('/'))
 }
 
 // BuildDisputeWorkflowByStatusKey builds the index key for disputes by status
 func BuildDisputeWorkflowByStatusKey(status DisputeStatus, disputeID string) []byte {
-	key := append(DisputeByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(DisputeByStatusPrefix)+len(disputeID)+2)
+	key = append(key, DisputeByStatusPrefix...)
+	key = append(key, byte(status))
 	key = append(key, byte('/'))
 	return append(key, []byte(disputeID)...)
 }
 
 // BuildDisputeWorkflowByStatusPrefix builds the prefix for disputes by status
 func BuildDisputeWorkflowByStatusPrefix(status DisputeStatus) []byte {
-	key := append(DisputeByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(DisputeByStatusPrefix)+2)
+	key = append(key, DisputeByStatusPrefix...)
+	key = append(key, byte(status))
 	return append(key, byte('/'))
 }
 
@@ -835,25 +843,33 @@ func ParseDisputeEvidenceKey(key []byte) (string, error) {
 
 // BuildDisputeEvidenceByDisputeKey builds the index key for evidence by dispute
 func BuildDisputeEvidenceByDisputeKey(disputeID string, evidenceID string) []byte {
-	key := append(DisputeEvidencePrefix, []byte(disputeID)...)
+	key := make([]byte, 0, len(DisputeEvidencePrefix)+len(disputeID)+len(evidenceID)+1)
+	key = append(key, DisputeEvidencePrefix...)
+	key = append(key, []byte(disputeID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(evidenceID)...)
 }
 
 // BuildDisputeEvidenceByDisputePrefix builds the prefix for dispute's evidence
 func BuildDisputeEvidenceByDisputePrefix(disputeID string) []byte {
-	key := append(DisputeEvidencePrefix, []byte(disputeID)...)
+	key := make([]byte, 0, len(DisputeEvidencePrefix)+len(disputeID)+1)
+	key = append(key, DisputeEvidencePrefix...)
+	key = append(key, []byte(disputeID)...)
 	return append(key, byte('/'))
 }
 
 // BuildDisputeRulesKey builds the key for dispute rules
 func BuildDisputeRulesKey(provider string) []byte {
-	return append(DisputeRulesPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(DisputeRulesPrefix)+len(provider))
+	key = append(key, DisputeRulesPrefix...)
+	return append(key, []byte(provider)...)
 }
 
 // BuildDisputeEvidenceByTimestampKey builds the key for evidence sorted by timestamp
 func BuildDisputeEvidenceByTimestampKey(disputeID string, timestamp int64, evidenceID string) []byte {
-	key := append(DisputeEvidencePrefix, []byte(disputeID)...)
+	key := make([]byte, 0, len(DisputeEvidencePrefix)+len(disputeID)+8+len(evidenceID)+2)
+	key = append(key, DisputeEvidencePrefix...)
+	key = append(key, []byte(disputeID)...)
 	key = append(key, byte('/'))
 
 	// Append timestamp as big-endian uint64 for deterministic ordering

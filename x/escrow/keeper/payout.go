@@ -405,7 +405,7 @@ func (pk *payoutKeeper) GetPayoutSequence(ctx sdk.Context) uint64 {
 // SetPayoutSequence sets the payout sequence number
 func (pk *payoutKeeper) SetPayoutSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(pk.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.PayoutSequenceKey, bz)
 }
 

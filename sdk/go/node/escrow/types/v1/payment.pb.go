@@ -825,4 +825,3 @@ var (
 	ErrIntOverflowPayment          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupPayment = fmt.Errorf("proto: unexpected end of group")
 )
-

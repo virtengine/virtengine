@@ -147,4 +147,3 @@ func ParseWithSuffix(sval string) (uint64, error) { // strings.SplitAfter()
 
 	return res, nil
 }
-

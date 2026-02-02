@@ -30,7 +30,7 @@ func FuzzEnvelopeValidate(f *testing.F) {
 		SenderPubKey:     bytes.Repeat([]byte{0x02}, X25519PublicKeySize),
 		SenderSignature:  bytes.Repeat([]byte{0x03}, 64),
 	}
-	validJSON, _ := json.Marshal(validEnvelope)
+	validJSON, _ := json.Marshal(validEnvelope) //nolint:errchkjson // fuzz test seed data
 	f.Add(validJSON)
 
 	// Edge cases

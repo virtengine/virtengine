@@ -413,7 +413,7 @@ func TestCompromiseDetector_IsKeyCompromised(t *testing.T) {
 	assert.False(t, detector.IsKeyCompromised("test-key"))
 
 	// Report a high severity compromise
-	detector.ReportCompromise("test-key", IndicatorKeyLeakage, SeverityHigh, "Leaked", "admin")
+	_ = detector.ReportCompromise("test-key", IndicatorKeyLeakage, SeverityHigh, "Leaked", "admin")
 	assert.True(t, detector.IsKeyCompromised("test-key"))
 
 	// Acknowledge the event
@@ -454,7 +454,7 @@ func TestKeyLifecycleManager_InvalidTransition(t *testing.T) {
 	km, _ := NewKeyManager(DefaultKeyManagerConfig())
 	lm := NewKeyLifecycleManager(km)
 
-	lm.RegisterKey("key-1", "ed25519", "fp-1", "default")
+	_, _ = lm.RegisterKey("key-1", "ed25519", "fp-1", "default")
 
 	// Cannot go directly from Created to Expired
 	err := lm.TransitionState("key-1", KeyStateExpired, "admin", "test")
@@ -467,12 +467,12 @@ func TestKeyLifecycleManager_RotateKey(t *testing.T) {
 	lm := NewKeyLifecycleManager(km)
 
 	// Create and activate first key
-	lm.RegisterKey("key-1", "ed25519", "fp-1", "default")
-	lm.ActivateKey("key-1", "admin")
+	_, _ = lm.RegisterKey("key-1", "ed25519", "fp-1", "default")
+	_ = lm.ActivateKey("key-1", "admin")
 
 	// Create second key
-	lm.RegisterKey("key-2", "ed25519", "fp-2", "default")
-	lm.ActivateKey("key-2", "admin")
+	_, _ = lm.RegisterKey("key-2", "ed25519", "fp-2", "default")
+	_ = lm.ActivateKey("key-2", "admin")
 
 	// Rotate first key to second
 	err := lm.RotateKey("key-1", "key-2", "admin")
@@ -500,11 +500,11 @@ func TestKeyLifecycleManager_GetKeysNeedingRotation(t *testing.T) {
 		MaxActiveAgeDays: 0, // Immediate rotation needed
 		ExpirationDays:   365,
 	}
-	lm.RegisterPolicy(policy)
+	_ = lm.RegisterPolicy(policy)
 
 	// Create and activate a key with this policy
-	lm.RegisterKey("old-key", "ed25519", "fp-1", "short-rotation")
-	lm.ActivateKey("old-key", "admin")
+	_, _ = lm.RegisterKey("old-key", "ed25519", "fp-1", "short-rotation")
+	_ = lm.ActivateKey("old-key", "admin")
 
 	// Should need rotation immediately
 	keys := lm.GetKeysNeedingRotation()
@@ -517,12 +517,12 @@ func TestKeyLifecycleManager_GenerateReport(t *testing.T) {
 	lm := NewKeyLifecycleManager(km)
 
 	// Create various keys in different states
-	lm.RegisterKey("key-1", "ed25519", "fp-1", "default")
-	lm.ActivateKey("key-1", "admin")
+	_, _ = lm.RegisterKey("key-1", "ed25519", "fp-1", "default")
+	_ = lm.ActivateKey("key-1", "admin")
 
-	lm.RegisterKey("key-2", "p256", "fp-2", "default")
-	lm.ActivateKey("key-2", "admin")
-	lm.SuspendKey("key-2", "admin", "maintenance")
+	_, _ = lm.RegisterKey("key-2", "p256", "fp-2", "default")
+	_ = lm.ActivateKey("key-2", "admin")
+	_ = lm.SuspendKey("key-2", "admin", "maintenance")
 
 	report := lm.GenerateLifecycleReport()
 	require.NotNil(t, report)
@@ -596,7 +596,7 @@ func TestAccessController_SessionExpiration(t *testing.T) {
 		Name:  "Test User",
 		Roles: []string{"operator"},
 	}
-	ac.CreatePrincipal(principal)
+	_ = ac.CreatePrincipal(principal)
 
 	session, _ := ac.CreateSession("user-1", "", "")
 
@@ -661,7 +661,7 @@ func TestAuditLogger_HashChaining(t *testing.T) {
 
 	// Log multiple events
 	for i := 0; i < 5; i++ {
-		logger.Log(&AuditEvent{
+		_ = logger.Log(&AuditEvent{
 			Type:      AuditEventKeyRead,
 			KeyID:     "key-1",
 			Operation: "read",
@@ -682,9 +682,9 @@ func TestAuditLogger_GenerateReport(t *testing.T) {
 	defer logger.Close()
 
 	// Log various events
-	logger.LogKeyOperation(AuditEventKeyCreated, "s1", "u1", "User 1", "k1", "create", true, "", nil)
-	logger.LogKeyOperation(AuditEventKeySigned, "s1", "u1", "User 1", "k1", "sign", true, "", nil)
-	logger.LogKeyOperation(AuditEventKeySigned, "s2", "u2", "User 2", "k2", "sign", false, "key locked", nil)
+	_ = logger.LogKeyOperation(AuditEventKeyCreated, "s1", "u1", "User 1", "k1", "create", true, "", nil)
+	_ = logger.LogKeyOperation(AuditEventKeySigned, "s1", "u1", "User 1", "k1", "sign", true, "", nil)
+	_ = logger.LogKeyOperation(AuditEventKeySigned, "s2", "u2", "User 2", "k2", "sign", false, "key locked", nil)
 
 	since := time.Now().Add(-1 * time.Hour)
 	report := logger.GenerateAuditReport(since)
@@ -704,7 +704,7 @@ func TestKeyManagementIntegration(t *testing.T) {
 	config := DefaultKeyManagerConfig()
 	config.StorageType = KeyStorageTypeMemory
 	km, _ := NewKeyManager(config)
-	km.Unlock("")
+	_ = km.Unlock("")
 
 	lm := NewKeyLifecycleManager(km)
 	detector := NewCompromiseDetector(nil, km)
@@ -715,7 +715,7 @@ func TestKeyManagementIntegration(t *testing.T) {
 	defer logger.Close()
 
 	// Create admin user
-	ac.CreatePrincipal(&Principal{
+	_ = ac.CreatePrincipal(&Principal{
 		ID:    "admin",
 		Type:  "user",
 		Name:  "Admin",

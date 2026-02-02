@@ -23,7 +23,9 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
-func init() { proto.RegisterFile("virtengine/take/v1beta3/query.proto", fileDescriptor_d53d30cc323d5fb3) }
+func init() {
+	proto.RegisterFile("virtengine/take/v1beta3/query.proto", fileDescriptor_d53d30cc323d5fb3)
+}
 
 var fileDescriptor_d53d30cc323d5fb3 = []byte{
 	// 129 bytes of a gzipped FileDescriptorProto
@@ -80,4 +82,3 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 	Streams:     []grpc.StreamDesc{},
 	Metadata:    "virtengine/take/v1beta3/query.proto",
 }
-

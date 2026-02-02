@@ -75,4 +75,3 @@ func validateMinInitialDepositRate(i interface{}) error {
 
 	return nil
 }
-

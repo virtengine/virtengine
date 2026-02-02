@@ -297,7 +297,7 @@ func (k Keeper) SlashForInvalidAttestation(ctx sdk.Context, validatorAddr string
 	// Store invalid attestation record
 	store := ctx.KVStore(k.skey)
 	attestationKey := types.GetInvalidAttestationKey(attestation.RecordID)
-	attestationBz, _ := json.Marshal(attestation)
+	attestationBz, _ := json.Marshal(attestation) //nolint:errchkjson // time.Time is safe
 	store.Set(attestationKey, attestationBz)
 
 	// Emit event

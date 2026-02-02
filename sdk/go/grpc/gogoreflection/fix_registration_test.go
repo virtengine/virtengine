@@ -20,4 +20,3 @@ func TestRegistrationFix(t *testing.T) {
 		t.Fatal("unexpected parsing")
 	}
 }
-

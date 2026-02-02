@@ -617,4 +617,3 @@ var (
 	ErrIntOverflowBid          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupBid = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -25,4 +25,3 @@ func MsgVote(clientCtx client.Context, args ...string) (testutil.BufferWriter, e
 func MsgDeposit(clientCtx client.Context, args ...string) (testutil.BufferWriter, error) {
 	return clitestutil.ExecTestCLICmd(clientCtx, govcli.NewCmdDeposit(), args)
 }
-

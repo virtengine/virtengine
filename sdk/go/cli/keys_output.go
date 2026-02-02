@@ -87,4 +87,3 @@ func MkAccKeysOutput(records []*keyring.Record) ([]KeyOutput, error) {
 
 	return kos, nil
 }
-

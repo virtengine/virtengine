@@ -134,4 +134,3 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "virtengine/take/v1/service.proto",
 }
-

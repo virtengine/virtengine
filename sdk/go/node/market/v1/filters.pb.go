@@ -592,4 +592,3 @@ var (
 	ErrIntOverflowFilters          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupFilters = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -119,4 +119,3 @@ func (m *MsgSignProviderAttributes) Route() string {
 func (m *MsgDeleteProviderAttributes) Route() string {
 	return RouterKey
 }
-

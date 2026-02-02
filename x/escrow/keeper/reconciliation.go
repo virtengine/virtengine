@@ -487,7 +487,9 @@ func (rk *reconciliationKeeper) setReconciliationReportIndexes(store storetypes.
 }
 
 func (rk *reconciliationKeeper) buildReconciliationReportByProviderPrefix(provider string) []byte {
-	key := append(billing.ReconciliationReportByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(billing.ReconciliationReportByProviderPrefix)+len(provider)+1)
+	key = append(key, billing.ReconciliationReportByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	return append(key, byte('/'))
 }
 

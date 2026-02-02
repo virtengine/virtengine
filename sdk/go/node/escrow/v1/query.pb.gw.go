@@ -252,4 +252,3 @@ var (
 
 	forward_Query_Payments_0 = runtime.ForwardResponseMessage
 )
-

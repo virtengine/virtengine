@@ -807,7 +807,9 @@ func (k Keeper) setTreasuryBalance(ctx sdk.Context, balance sdk.Coins) {
 
 func (k Keeper) incrementTreasurySequence(ctx sdk.Context) uint64 {
 	store := ctx.KVStore(k.skey)
-	key := append(types.PrefixTreasuryRecord, []byte("_seq")...)
+	key := make([]byte, 0, len(types.PrefixTreasuryRecord)+5)
+	key = append(key, types.PrefixTreasuryRecord...)
+	key = append(key, []byte("_seq")...)
 	bz := store.Get(key)
 	var seq uint64
 	if bz != nil {

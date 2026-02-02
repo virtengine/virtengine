@@ -111,4 +111,3 @@ var (
 	ErrInvalidLeaseClosedReason = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidLeaseClosedReason, codes.InvalidArgument, "invalid lease closed reason")
 	ErrInvalidEscrowID          = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidEscrowID, codes.InvalidArgument, "invalid escrow id")
 )
-

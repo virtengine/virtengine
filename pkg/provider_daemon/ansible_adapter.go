@@ -929,7 +929,7 @@ func (a *AnsibleAdapter) parseRecapLine(line string) *PlaySummary {
 			continue
 		}
 		var val int
-		fmt.Sscanf(kv[1], "%d", &val)
+		_, _ = fmt.Sscanf(kv[1], "%d", &val)
 		switch kv[0] {
 		case "ok":
 			summary.OK = val

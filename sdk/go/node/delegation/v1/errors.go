@@ -12,8 +12,7 @@ const (
 
 // Module error codes
 var (
-	ErrInvalidAddress    = sdkerrors.Register(ModuleName, 1, "invalid address")
-	ErrInvalidAmount     = sdkerrors.Register(ModuleName, 2, "invalid amount")
-	ErrSelfRedelegation  = sdkerrors.Register(ModuleName, 3, "cannot redelegate to same validator")
+	ErrInvalidAddress   = sdkerrors.Register(ModuleName, 1, "invalid address")
+	ErrInvalidAmount    = sdkerrors.Register(ModuleName, 2, "invalid amount")
+	ErrSelfRedelegation = sdkerrors.Register(ModuleName, 3, "cannot redelegate to same validator")
 )
-

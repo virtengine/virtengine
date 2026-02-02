@@ -811,4 +811,3 @@ func MaxDec(d1, d2 Dec) Dec {
 func DecEq(t *testing.T, exp, got Dec) (*testing.T, bool, string, string, string) {
 	return t, exp.Equal(got), "expected:\t%v\ngot:\t\t%v", exp.String(), got.String()
 }
-

@@ -74,4 +74,3 @@ func StdSignBytes(cdc *codec.LegacyAmino, chainID string, accnum, sequence, time
 
 	return mustSortJSON(bz)
 }
-

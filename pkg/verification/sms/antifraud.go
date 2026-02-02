@@ -446,7 +446,7 @@ func (e *RedisAntiFraudEngine) BlockPhone(ctx context.Context, phoneHash string,
 		"blocked_at": time.Now().Unix(),
 		"expires_at": time.Now().Add(duration).Unix(),
 	}
-	jsonData, _ := json.Marshal(data)
+	jsonData, _ := json.Marshal(data) //nolint:errchkjson // interface{} map for simple JSON
 	return e.client.Set(ctx, key, jsonData, duration).Err()
 }
 
@@ -478,7 +478,7 @@ func (e *RedisAntiFraudEngine) BlockIP(ctx context.Context, ipHash string, reaso
 		"blocked_at": time.Now().Unix(),
 		"expires_at": time.Now().Add(duration).Unix(),
 	}
-	jsonData, _ := json.Marshal(data)
+	jsonData, _ := json.Marshal(data) //nolint:errchkjson // interface{} map for simple JSON
 	return e.client.Set(ctx, key, jsonData, duration).Err()
 }
 

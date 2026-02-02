@@ -151,4 +151,3 @@ func (s *MigrateTestSuite) Test_runMigrateCmdLegacyMultiInfo() {
 func TestMigrateTestSuite(t *testing.T) {
 	suite.Run(t, new(MigrateTestSuite))
 }
-

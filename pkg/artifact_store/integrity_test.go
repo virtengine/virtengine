@@ -324,7 +324,9 @@ func TestStreamingHasher(t *testing.T) {
 		_, _ = hasher.Write(data1)
 		_, _ = hasher.Write(data2)
 
-		fullData := append(data1, data2...)
+		fullData := make([]byte, 0, len(data1)+len(data2))
+		fullData = append(fullData, data1...)
+		fullData = append(fullData, data2...)
 		expectedHash := sha256.Sum256(fullData)
 
 		result := hasher.Sum()
@@ -368,10 +370,10 @@ func TestStreamingHasher(t *testing.T) {
 
 func TestIntegrityCheckResult(t *testing.T) {
 	result := &IntegrityCheckResult{
-		Valid:          true,
-		ExpectedHash:   "abc123",
-		ComputedHash:   "abc123",
-		BytesVerified:  1024,
+		Valid:         true,
+		ExpectedHash:  "abc123",
+		ComputedHash:  "abc123",
+		BytesVerified: 1024,
 	}
 
 	if !result.Valid {

@@ -118,7 +118,9 @@ func init() {
 	proto.RegisterType((*QueryParamsResponse)(nil), "virtengine.staking.v1beta3.QueryParamsResponse")
 }
 
-func init() { proto.RegisterFile("virtengine/staking/v1beta3/query.proto", fileDescriptor_b58ba6fa3ac0c571) }
+func init() {
+	proto.RegisterFile("virtengine/staking/v1beta3/query.proto", fileDescriptor_b58ba6fa3ac0c571)
+}
 
 var fileDescriptor_b58ba6fa3ac0c571 = []byte{
 	// 291 bytes of a gzipped FileDescriptorProto
@@ -536,4 +538,3 @@ var (
 	ErrIntOverflowQuery          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupQuery = fmt.Errorf("proto: unexpected end of group")
 )
-

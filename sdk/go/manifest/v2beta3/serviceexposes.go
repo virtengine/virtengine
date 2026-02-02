@@ -49,4 +49,3 @@ func (s ServiceExposes) GetEndpoints() resources.Endpoints {
 
 	return endpoints
 }
-

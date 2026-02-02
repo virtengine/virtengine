@@ -27,4 +27,3 @@ func PrintJSON(ctx client.Context, v interface{}) error {
 
 	return ctx.PrintString(buf.String())
 }
-

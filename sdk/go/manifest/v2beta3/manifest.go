@@ -65,4 +65,3 @@ func (m Manifest) Version() ([]byte, error) {
 
 	return sum[:], nil
 }
-

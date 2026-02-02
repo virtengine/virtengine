@@ -25,4 +25,3 @@ func ProviderFromV1beta3(cdc codec.BinaryCodec, fromBz []byte) v1beta4.Provider 
 		Info:       ProviderInfoFromV1beta3(from.Info),
 	}
 }
-

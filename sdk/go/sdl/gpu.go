@@ -129,4 +129,3 @@ func (sdl *gpuInterface) UnmarshalYAML(node *yaml.Node) error {
 
 	return nil
 }
-

@@ -307,7 +307,7 @@ func GetQueryEscrowBlocksRemainingCmd() *cobra.Command {
 		//	}
 		//
 		//	return cl.ClientContext().PrintBytes(data)
-		//},
+		// },
 	}
 
 	cflags.AddQueryFlagsToCmd(cmd)

@@ -909,4 +909,3 @@ var (
 
 	forward_Query_AttestedResult_0 = runtime.ForwardResponseMessage
 )
-

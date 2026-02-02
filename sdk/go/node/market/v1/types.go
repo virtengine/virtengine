@@ -20,4 +20,3 @@ func (m LeaseClosedReason) IsRange(r LeaseClosedReasonRange) bool {
 
 	return false
 }
-

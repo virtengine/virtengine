@@ -226,7 +226,9 @@ func (g *BatchScriptGenerator) writeSBATCHDirectives(buf *bytes.Buffer, tmpl *hp
 
 // writeModuleLoads writes module load commands
 func (g *BatchScriptGenerator) writeModuleLoads(buf *bytes.Buffer, tmpl *hpctypes.WorkloadTemplate) {
-	modules := append(tmpl.Runtime.RequiredModules, tmpl.Modules...)
+	modules := make([]string, 0, len(tmpl.Runtime.RequiredModules)+len(tmpl.Modules))
+	modules = append(modules, tmpl.Runtime.RequiredModules...)
+	modules = append(modules, tmpl.Modules...)
 	if len(modules) == 0 {
 		return
 	}

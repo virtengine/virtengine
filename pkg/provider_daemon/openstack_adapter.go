@@ -2003,7 +2003,7 @@ func (oa *OpenStackAdapter) createPrivateNetwork(ctx context.Context, vmID strin
 	})
 	if err != nil {
 		// Cleanup network
-		oa.neutron.DeleteNetwork(ctx, network.ID)
+		_ = oa.neutron.DeleteNetwork(ctx, network.ID)
 		return nil, nil, fmt.Errorf("failed to create subnet: %w", err)
 	}
 
@@ -2046,7 +2046,7 @@ func (oa *OpenStackAdapter) assignFloatingIP(ctx context.Context, serverID strin
 	// Get server's first port
 	server, err := oa.nova.GetServer(ctx, serverID)
 	if err != nil {
-		oa.neutron.DeleteFloatingIP(ctx, fip.ID)
+		_ = oa.neutron.DeleteFloatingIP(ctx, fip.ID)
 		return "", fmt.Errorf("failed to get server: %w", err)
 	}
 
@@ -2067,7 +2067,7 @@ func (oa *OpenStackAdapter) assignFloatingIP(ctx context.Context, serverID strin
 	// Associate with first available port (simplified - in production would need proper port lookup)
 	if portID != "" {
 		if err := oa.neutron.AssociateFloatingIP(ctx, fip.ID, portID); err != nil {
-			oa.neutron.DeleteFloatingIP(ctx, fip.ID)
+			_ = oa.neutron.DeleteFloatingIP(ctx, fip.ID)
 			return "", fmt.Errorf("failed to associate floating IP: %w", err)
 		}
 	}

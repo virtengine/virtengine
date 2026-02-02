@@ -207,4 +207,3 @@ func (msg *MsgUpdateProvider) Route() string { return RouterKey }
 //
 // Deprecated: Route is deprecated
 func (msg *MsgDeleteProvider) Route() string { return RouterKey }
-

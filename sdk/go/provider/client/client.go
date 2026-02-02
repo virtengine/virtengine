@@ -890,4 +890,3 @@ func parseCloseMessage(msg string) string {
 
 	return ""
 }
-

@@ -40,8 +40,8 @@ type StreamingConfig struct {
 // DefaultStreamingConfig returns default streaming configuration.
 func DefaultStreamingConfig() *StreamingConfig {
 	return &StreamingConfig{
-		ChunkSize:           8 * 1024 * 1024,  // 8MB
-		BufferSize:          64 * 1024,        // 64KB
+		ChunkSize:           8 * 1024 * 1024, // 8MB
+		BufferSize:          64 * 1024,       // 64KB
 		MaxConcurrentChunks: 4,
 		ProgressInterval:    time.Second,
 		VerifyOnStream:      true,

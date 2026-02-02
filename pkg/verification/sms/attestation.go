@@ -135,10 +135,10 @@ func DefaultSMSAttestationConfig() SMSAttestationConfig {
 
 // DefaultSMSAttestationService implements SMSAttestationService
 type DefaultSMSAttestationService struct {
-	config       SMSAttestationConfig
-	signer       signer.SignerService
-	logger       zerolog.Logger
-	metrics      *Metrics
+	config  SMSAttestationConfig
+	signer  signer.SignerService
+	logger  zerolog.Logger
+	metrics *Metrics
 
 	// State
 	mu           sync.RWMutex

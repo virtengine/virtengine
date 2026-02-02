@@ -877,4 +877,3 @@ var (
 	ErrIntOverflowAudit          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupAudit = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -89,4 +89,3 @@ Where proposal.json contains:
 		},
 	}
 }
-

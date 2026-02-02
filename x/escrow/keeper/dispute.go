@@ -889,7 +889,7 @@ func (dk *disputeKeeper) GetDisputeSequence(ctx sdk.Context) uint64 {
 // SetDisputeSequence sets the dispute sequence number
 func (dk *disputeKeeper) SetDisputeSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(dk.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 always serializes
 	store.Set(billing.DisputeWorkflowSequenceKey, bz)
 }
 
@@ -911,7 +911,7 @@ func (dk *disputeKeeper) GetCorrectionSequence(ctx sdk.Context) uint64 {
 // SetCorrectionSequence sets the correction sequence number
 func (dk *disputeKeeper) SetCorrectionSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(dk.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.CorrectionSequenceKey, bz)
 }
 
@@ -933,6 +933,6 @@ func (dk *disputeKeeper) GetEvidenceSequence(ctx sdk.Context) uint64 {
 // SetEvidenceSequence sets the evidence sequence number
 func (dk *disputeKeeper) SetEvidenceSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(dk.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.DisputeEvidenceSequenceKey, bz)
 }

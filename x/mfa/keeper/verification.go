@@ -729,7 +729,9 @@ func (k Keeper) VerifyChallengeWithPolicy(
 	}
 
 	// Add to verified factors list
-	allVerified := append(alreadyVerifiedFactors, challenge.FactorType)
+	allVerified := make([]types.FactorType, 0, len(alreadyVerifiedFactors)+1)
+	allVerified = append(allVerified, alreadyVerifiedFactors...)
+	allVerified = append(allVerified, challenge.FactorType)
 
 	// Get policy for this transaction type
 	policy := GetCombinationPolicy(txType)

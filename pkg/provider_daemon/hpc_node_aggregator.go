@@ -220,7 +220,7 @@ func (a *HPCNodeAggregator) Stop() {
 	if a.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		a.server.Shutdown(ctx)
+		_ = a.server.Shutdown(ctx)
 	}
 	a.wg.Wait()
 }
@@ -259,7 +259,7 @@ func (a *HPCNodeAggregator) runBatchSubmitter(ctx context.Context) {
 
 func (a *HPCNodeAggregator) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (a *HPCNodeAggregator) handleRegister(w http.ResponseWriter, r *http.Request) {
