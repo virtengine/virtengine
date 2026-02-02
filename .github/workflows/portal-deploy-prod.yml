@@ -18,6 +18,9 @@ on:
           - staging
           - production
 
+permissions:
+  contents: read
+
 concurrency:
   group: production-deploy
   cancel-in-progress: false
@@ -123,6 +126,9 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
     needs: [smoke-test]
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
     environment:
