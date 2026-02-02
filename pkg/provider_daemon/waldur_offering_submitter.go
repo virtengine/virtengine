@@ -29,7 +29,6 @@ import (
 )
 
 const defaultKeyringBackend = "test"
-
 // ChainOfferingSubmitterConfig configures on-chain offering submission.
 type ChainOfferingSubmitterConfig struct {
 	ChainID           string
@@ -107,7 +106,10 @@ func NewChainOfferingSubmitter(ctx context.Context, cfg ChainOfferingSubmitterCo
 		return nil, fmt.Errorf("connect comet rpc: %w", err)
 	}
 
-	grpcConn, err := grpc.NewClient(cfg.GRPCEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	grpcConn, err := grpc.DialContext(dialCtx, cfg.GRPCEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("dial grpc: %w", err)
 	}
