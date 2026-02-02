@@ -325,7 +325,7 @@ func (k Keeper) getEnvelopeIDsForKey(ctx sdk.Context, key []byte) []string {
 }
 
 func (k Keeper) getEnvelopeIDsForAccount(ctx sdk.Context, address []byte) []string {
-	allIDs := make([]string, 0, len(types.AllEmbeddingTypes()))
+	var allIDs []string
 
 	// Get IDs for all embedding types
 	for _, embType := range types.AllEmbeddingTypes() {

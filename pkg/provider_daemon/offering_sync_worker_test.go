@@ -14,17 +14,12 @@ import (
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
-const (
-	testProviderAddress = "virtengine1provider123"
-	testOfferingID      = "offering/1"
-)
-
 // sampleCompute returns a sample compute offering for testing.
 func sampleCompute() *marketplace.Offering {
 	now := time.Now().UTC()
 	return &marketplace.Offering{
 		ID: marketplace.OfferingID{
-			ProviderAddress: testProviderAddress,
+			ProviderAddress: "virtengine1provider123",
 			Sequence:        1,
 		},
 		Name:        "Basic Compute Instance",
@@ -56,7 +51,7 @@ func sampleHPC() *marketplace.Offering {
 	now := time.Now().UTC()
 	return &marketplace.Offering{
 		ID: marketplace.OfferingID{
-			ProviderAddress: testProviderAddress,
+			ProviderAddress: "virtengine1provider123",
 			Sequence:        2,
 		},
 		Name:        "HPC Cluster Access",
@@ -191,18 +186,18 @@ func TestOffering_SyncChecksum(t *testing.T) {
 }
 
 func TestOfferingSyncState(t *testing.T) {
-	state := NewOfferingSyncState(testProviderAddress)
+	state := NewOfferingSyncState("virtengine1provider123")
 
-	if state.ProviderAddress != testProviderAddress {
-		t.Errorf("ProviderAddress = %s, want %s", state.ProviderAddress, testProviderAddress)
+	if state.ProviderAddress != "virtengine1provider123" {
+		t.Errorf("ProviderAddress = %s, want virtengine1provider123", state.ProviderAddress)
 	}
 	if len(state.Records) != 0 {
 		t.Errorf("Records should be empty, got %d", len(state.Records))
 	}
 
 	t.Run("mark synced", func(t *testing.T) {
-		state.MarkSynced(testOfferingID, "waldur-uuid-1", "checksum123", 1)
-		record := state.GetRecord(testOfferingID)
+		state.MarkSynced("offering/1", "waldur-uuid-1", "checksum123", 1)
+		record := state.GetRecord("offering/1")
 		if record == nil {
 			t.Fatal("record should exist")
 		}
@@ -306,16 +301,16 @@ func TestOfferingSyncStateStore(t *testing.T) {
 	store := NewOfferingSyncStateStore(statePath)
 
 	// Load non-existent creates new
-	state, err := store.Load(testProviderAddress)
+	state, err := store.Load("virtengine1provider123")
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if state.ProviderAddress != testProviderAddress {
-		t.Errorf("ProviderAddress = %s, want %s", state.ProviderAddress, testProviderAddress)
+	if state.ProviderAddress != "virtengine1provider123" {
+		t.Errorf("ProviderAddress = %s, want virtengine1provider123", state.ProviderAddress)
 	}
 
 	// Add data and save
-	state.MarkSynced(testOfferingID, "waldur-uuid-1", "checksum", 1)
+	state.MarkSynced("offering/1", "waldur-uuid-1", "checksum", 1)
 	if err := store.Save(state); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
@@ -326,12 +321,12 @@ func TestOfferingSyncStateStore(t *testing.T) {
 	}
 
 	// Load and verify
-	loaded, err := store.Load(testProviderAddress)
+	loaded, err := store.Load("virtengine1provider123")
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if loaded.GetRecord(testOfferingID) == nil {
-		t.Errorf("loaded state should contain %s", testOfferingID)
+	if loaded.GetRecord("offering/1") == nil {
+		t.Error("loaded state should contain offering/1")
 	}
 
 	// Delete
@@ -427,18 +422,18 @@ func TestSyncStates(t *testing.T) {
 func TestOfferingSyncAuditEntry(t *testing.T) {
 	entry := OfferingSyncAuditEntry{
 		Timestamp:       time.Now().UTC(),
-		OfferingID:      testOfferingID,
+		OfferingID:      "offering/1",
 		WaldurUUID:      "waldur-uuid-1",
 		Action:          SyncActionCreate,
 		Success:         true,
 		Duration:        time.Millisecond * 100,
 		RetryCount:      0,
-		ProviderAddress: testProviderAddress,
+		ProviderAddress: "virtengine1provider123",
 		Checksum:        "checksum123",
 	}
 
-	if entry.OfferingID != testOfferingID {
-		t.Errorf("OfferingID = %s, want %s", entry.OfferingID, testOfferingID)
+	if entry.OfferingID != "offering/1" {
+		t.Errorf("OfferingID = %s, want offering/1", entry.OfferingID)
 	}
 	if !entry.Success {
 		t.Error("Success should be true")
@@ -448,7 +443,7 @@ func TestOfferingSyncAuditEntry(t *testing.T) {
 func TestReconciliationAuditEntry(t *testing.T) {
 	entry := ReconciliationAuditEntry{
 		Timestamp:        time.Now().UTC(),
-		ProviderAddress:  testProviderAddress,
+		ProviderAddress:  "virtengine1provider123",
 		OfferingsChecked: 100,
 		DriftDetected:    5,
 		OfferingsQueued:  5,
@@ -466,8 +461,8 @@ func TestReconciliationAuditEntry(t *testing.T) {
 func TestDeadLetterAuditEntry(t *testing.T) {
 	entry := DeadLetterAuditEntry{
 		Timestamp:       time.Now().UTC(),
-		OfferingID:      testOfferingID,
-		ProviderAddress: testProviderAddress,
+		OfferingID:      "offering/1",
+		ProviderAddress: "virtengine1provider123",
 		TotalAttempts:   5,
 		LastError:       "connection timeout",
 		Action:          "dead_lettered",
@@ -627,7 +622,7 @@ func TestWaldurOfferingStateMapping(t *testing.T) {
 // TestOfferingSyncWorkerCreation tests worker creation with nil marketplace client.
 func TestOfferingSyncWorkerCreation(t *testing.T) {
 	cfg := DefaultOfferingSyncWorkerConfig()
-	cfg.ProviderAddress = testProviderAddress
+	cfg.ProviderAddress = "virtengine1provider123"
 
 	// Should fail with nil marketplace client
 	_, err := NewOfferingSyncWorker(cfg, nil)
@@ -639,7 +634,7 @@ func TestOfferingSyncWorkerCreation(t *testing.T) {
 // TestOfferingSyncWorkerWithLogger tests worker creation with custom logger.
 func TestOfferingSyncWorkerWithLogger(t *testing.T) {
 	cfg := DefaultOfferingSyncWorkerConfig()
-	cfg.ProviderAddress = testProviderAddress
+	cfg.ProviderAddress = "virtengine1provider123"
 
 	// Should fail with nil marketplace client
 	customLogger := NewDefaultAuditLogger("[custom]")
@@ -676,7 +671,7 @@ func TestSyncMetrics(t *testing.T) {
 func TestDeadLetterItem(t *testing.T) {
 	now := time.Now().UTC()
 	item := &DeadLetterItem{
-		OfferingID:     testOfferingID,
+		OfferingID:     "offering/1",
 		Action:         "update",
 		LastError:      "connection timeout",
 		RetryCount:     5,
@@ -686,8 +681,8 @@ func TestDeadLetterItem(t *testing.T) {
 		ChainVersion:   3,
 	}
 
-	if item.OfferingID != testOfferingID {
-		t.Errorf("OfferingID = %s, want %s", item.OfferingID, testOfferingID)
+	if item.OfferingID != "offering/1" {
+		t.Errorf("OfferingID = %s, want offering/1", item.OfferingID)
 	}
 	if item.RetryCount != 5 {
 		t.Errorf("RetryCount = %d, want 5", item.RetryCount)
@@ -701,7 +696,7 @@ func TestDeadLetterItem(t *testing.T) {
 func TestOfferingSyncRecord(t *testing.T) {
 	now := time.Now().UTC()
 	record := &OfferingSyncRecord{
-		OfferingID:    testOfferingID,
+		OfferingID:    "offering/1",
 		WaldurUUID:    "waldur-uuid-1",
 		State:         SyncStateSynced,
 		ChainVersion:  1,
@@ -711,8 +706,8 @@ func TestOfferingSyncRecord(t *testing.T) {
 		CreatedAt:     now,
 	}
 
-	if record.OfferingID != testOfferingID {
-		t.Errorf("OfferingID = %s, want %s", record.OfferingID, testOfferingID)
+	if record.OfferingID != "offering/1" {
+		t.Errorf("OfferingID = %s, want offering/1", record.OfferingID)
 	}
 	if record.State != SyncStateSynced {
 		t.Errorf("State = %s, want synced", record.State)
@@ -768,7 +763,7 @@ func TestQueueSyncFull(t *testing.T) {
 	offering := sampleCompute()
 
 	// Fill the queue
-	_ = worker.QueueSync(testOfferingID, SyncActionCreate, offering)
+	_ = worker.QueueSync("offering/1", SyncActionCreate, offering)
 
 	// Next queue should fail
 	err := worker.QueueSync("offering/2", SyncActionCreate, offering)
@@ -787,10 +782,10 @@ func TestReconcile(t *testing.T) {
 	cfg := DefaultOfferingSyncWorkerConfig()
 	cfg.EventBuffer = 100
 
-	state := NewOfferingSyncState(testProviderAddress)
+	state := NewOfferingSyncState("virtengine1provider123")
 	// Add some offerings that need sync
-	state.GetOrCreateRecord(testOfferingID)
-	state.MarkOutOfSync(testOfferingID, 2, "new-checksum")
+	state.GetOrCreateRecord("offering/1")
+	state.MarkOutOfSync("offering/1", 2, "new-checksum")
 
 	worker := &OfferingSyncWorker{
 		cfg:         cfg,
@@ -809,8 +804,8 @@ func TestReconcile(t *testing.T) {
 	// Verify task was queued
 	select {
 	case task := <-worker.syncQueue:
-		if task.OfferingID != testOfferingID {
-			t.Errorf("queued task OfferingID = %s, want %s", task.OfferingID, testOfferingID)
+		if task.OfferingID != "offering/1" {
+			t.Errorf("queued task OfferingID = %s, want offering/1", task.OfferingID)
 		}
 	default:
 		t.Error("reconcile should have queued a task")

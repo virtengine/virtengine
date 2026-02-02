@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-// Test constants for repeated string literals
-const testDataValue = "value"
-
 func TestMemoryWorkflowStore(t *testing.T) {
 	ctx := context.Background()
 
@@ -24,7 +21,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 			Name:           "test-workflow",
 			Status:         WorkflowStatusRunning,
 			CurrentStep:    "step1",
-			Data:           map[string]interface{}{"key": testDataValue},
+			Data:           map[string]interface{}{"key": "value"},
 			StartedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 			CompletedSteps: []string{"step0"},
@@ -50,7 +47,7 @@ func TestMemoryWorkflowStore(t *testing.T) {
 		if loaded.Status != state.Status {
 			t.Errorf("expected status %s, got %s", state.Status, loaded.Status)
 		}
-		if loaded.Data["key"] != testDataValue {
+		if loaded.Data["key"] != "value" {
 			t.Errorf("expected data key=value, got %v", loaded.Data)
 		}
 		if len(loaded.CompletedSteps) != 1 || loaded.CompletedSteps[0] != "step0" {
@@ -384,7 +381,7 @@ func TestWorkflowStateMarshaling(t *testing.T) {
 			Name:           "test-workflow",
 			Status:         WorkflowStatusCompleted,
 			CurrentStep:    "step3",
-			Data:           map[string]interface{}{"key": testDataValue, "count": float64(42)},
+			Data:           map[string]interface{}{"key": "value", "count": float64(42)},
 			Error:          "",
 			RetryCount:     2,
 			MaxRetries:     5,
@@ -773,12 +770,12 @@ func TestWorkflowDataPersistence(t *testing.T) {
 			Name:   "test",
 			Status: WorkflowStatusRunning,
 			Data: map[string]interface{}{
-				"string": testDataValue,
+				"string": "value",
 				"number": float64(42),
 				"float":  3.14,
 				"bool":   true,
 				"array":  []interface{}{"a", "b", "c"},
-				"nested": map[string]interface{}{"inner": testDataValue},
+				"nested": map[string]interface{}{"inner": "value"},
 				"null":   nil,
 			},
 			StartedAt: time.Now(),
@@ -789,7 +786,7 @@ func TestWorkflowDataPersistence(t *testing.T) {
 		loaded, _ := store.LoadState(ctx, state.ID)
 
 		// Verify complex types
-		if loaded.Data["string"] != testDataValue {
+		if loaded.Data["string"] != "value" {
 			t.Error("string not preserved")
 		}
 		if loaded.Data["number"] != float64(42) {
@@ -805,7 +802,7 @@ func TestWorkflowDataPersistence(t *testing.T) {
 		}
 
 		nested, ok := loaded.Data["nested"].(map[string]interface{})
-		if !ok || nested["inner"] != testDataValue {
+		if !ok || nested["inner"] != "value" {
 			t.Error("nested object not preserved")
 		}
 	})

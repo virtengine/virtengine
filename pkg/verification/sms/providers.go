@@ -13,11 +13,6 @@ import (
 	"github.com/virtengine/virtengine/pkg/errors"
 )
 
-// Provider name constants
-const (
-	providerTwilio = "twilio"
-)
-
 // ============================================================================
 // SMS Provider Interface
 // ============================================================================
@@ -193,6 +188,7 @@ type FailoverProvider struct {
 
 // ProviderMetrics tracks provider metrics
 type ProviderMetrics struct {
+	mu                sync.RWMutex
 	totalSent         int64
 	primarySent       int64
 	secondarySent     int64
@@ -623,13 +619,13 @@ func NewTwilioProvider(config ProviderConfig, logger zerolog.Logger) (*TwilioPro
 
 	return &TwilioProvider{
 		config: config,
-		logger: logger.With().Str("provider", providerTwilio).Logger(),
+		logger: logger.With().Str("provider", "twilio").Logger(),
 	}, nil
 }
 
 // Name returns the provider name
 func (p *TwilioProvider) Name() string {
-	return providerTwilio
+	return "twilio"
 }
 
 // Send sends an SMS using Twilio
@@ -645,7 +641,7 @@ func (p *TwilioProvider) Send(ctx context.Context, msg *SMSMessage) (*SendResult
 		Success:      true,
 		MessageID:    messageID,
 		Timestamp:    time.Now(),
-		Provider:     providerTwilio,
+		Provider:     "twilio",
 		SegmentCount: (len(msg.Body) / 160) + 1,
 	}, nil
 }
@@ -802,7 +798,7 @@ var _ Provider = (*SNSProvider)(nil)
 // NewProvider creates a new SMS provider based on configuration
 func NewProvider(providerType string, config ProviderConfig, logger zerolog.Logger) (Provider, error) {
 	switch providerType {
-	case providerTwilio:
+	case "twilio":
 		return NewTwilioProvider(config, logger)
 	case "sns", "aws_sns":
 		return NewSNSProvider(config, logger)

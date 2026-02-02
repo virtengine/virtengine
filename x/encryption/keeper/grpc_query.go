@@ -2,7 +2,6 @@ package keeper
 
 import (
 	"context"
-	"math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/grpc/codes"
@@ -35,7 +34,7 @@ func (q GRPCQuerier) RecipientKey(c context.Context, req *types.QueryRecipientKe
 		return nil, types.ErrInvalidAddress.Wrap(err.Error())
 	}
 
-	localKeys := q.GetRecipientKeys(ctx, addr)
+	localKeys := q.Keeper.GetRecipientKeys(ctx, addr)
 
 	// Convert local keys to proto type
 	keys := make([]encryptionv1.RecipientKeyRecord, len(localKeys))
@@ -64,7 +63,7 @@ func (q GRPCQuerier) KeyByFingerprint(c context.Context, req *types.QueryKeyByFi
 
 	ctx := sdk.UnwrapSDKContext(c)
 
-	key, found := q.GetRecipientKeyByFingerprint(ctx, req.Fingerprint)
+	key, found := q.Keeper.GetRecipientKeyByFingerprint(ctx, req.Fingerprint)
 	if !found {
 		return nil, types.ErrKeyNotFound.Wrapf("key with fingerprint %s not found", req.Fingerprint)
 	}
@@ -89,10 +88,15 @@ func (q GRPCQuerier) Params(c context.Context, req *types.QueryParamsRequest) (*
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	params := q.GetParams(ctx)
+	params := q.Keeper.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
-		Params: params,
+		Params: encryptionv1.Params{
+			MaxRecipientsPerEnvelope: params.MaxRecipientsPerEnvelope,
+			MaxKeysPerAccount:        params.MaxKeysPerAccount,
+			AllowedAlgorithms:        params.AllowedAlgorithms,
+			RequireSignature:         params.RequireSignature,
+		},
 	}, nil
 }
 
@@ -110,10 +114,9 @@ func (q GRPCQuerier) Algorithms(c context.Context, req *types.QueryAlgorithmsReq
 				Id:          info.ID,
 				Version:     info.Version,
 				Description: info.Description,
-				KeySize:     safeInt32FromInt(info.KeySize),
-				NonceSize:   safeInt32FromInt(info.NonceSize),
-				//nolint:staticcheck // Deprecated field is required for compatibility with existing clients.
-				Deprecated: info.Deprecated,
+				KeySize:     int32(info.KeySize),
+				NonceSize:   int32(info.NonceSize),
+				Deprecated:  info.Deprecated,
 			})
 		}
 	}
@@ -132,12 +135,9 @@ func (q GRPCQuerier) ValidateEnvelope(c context.Context, req *types.QueryValidat
 	ctx := sdk.UnwrapSDKContext(c)
 
 	envelope := &req.Envelope
-	if len(envelope.RecipientKeyIds) > math.MaxInt32 {
-		return nil, status.Error(codes.InvalidArgument, "recipient count exceeds int32")
-	}
 	response := &types.QueryValidateEnvelopeResponse{
 		Valid:          true,
-		RecipientCount: safeInt32FromInt(len(envelope.RecipientKeyIds)),
+		RecipientCount: int32(len(envelope.RecipientKeyIds)),
 		Algorithm:      envelope.AlgorithmId,
 	}
 
@@ -152,7 +152,7 @@ func (q GRPCQuerier) ValidateEnvelope(c context.Context, req *types.QueryValidat
 	}
 
 	// Validate recipients
-	missingKeys, err := q.ValidateEnvelopeRecipients(ctx, localEnvelope)
+	missingKeys, err := q.Keeper.ValidateEnvelopeRecipients(ctx, localEnvelope)
 	if err != nil {
 		response.Valid = false
 		response.Error = err.Error()
@@ -166,16 +166,6 @@ func (q GRPCQuerier) ValidateEnvelope(c context.Context, req *types.QueryValidat
 	response.SignatureValid = len(envelope.SenderSignature) > 0
 
 	return response, nil
-}
-
-func safeInt32FromInt(value int) int32 {
-	if value < math.MinInt32 {
-		return math.MinInt32
-	}
-	if value > math.MaxInt32 {
-		return math.MaxInt32
-	}
-	return int32(value)
 }
 
 // convertProtoEnvelopeToLocal converts a proto envelope to the local type

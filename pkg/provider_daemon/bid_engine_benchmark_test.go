@@ -246,7 +246,7 @@ func (e *MockBidEngine) signBid(orderID, _ string) (string, error) {
 
 	// Generate bid ID
 	idBytes := make([]byte, 8)
-	_, _ = rand.Read(idBytes)
+	rand.Read(idBytes)
 
 	providerPrefix := "provider"
 	if len(e.config.ProviderAddress) >= 8 {
