@@ -349,7 +349,9 @@ func ParseAuditEntryKey(key []byte) (string, error) {
 
 // BuildAuditByEntityKey builds the index key for audit entries by entity
 func BuildAuditByEntityKey(entityType AuditEntityType, entityID string, entryID string) []byte {
-	key := append(AuditByEntityPrefix, []byte(entityType)...)
+	key := make([]byte, 0, len(AuditByEntityPrefix)+len(entityType)+len(entityID)+len(entryID)+2)
+	key = append(key, AuditByEntityPrefix...)
+	key = append(key, []byte(entityType)...)
 	key = append(key, byte('/'))
 	key = append(key, []byte(entityID)...)
 	key = append(key, byte('/'))
@@ -358,7 +360,9 @@ func BuildAuditByEntityKey(entityType AuditEntityType, entityID string, entryID 
 
 // BuildAuditByEntityPrefix builds the prefix for an entity's audit entries
 func BuildAuditByEntityPrefix(entityType AuditEntityType, entityID string) []byte {
-	key := append(AuditByEntityPrefix, []byte(entityType)...)
+	key := make([]byte, 0, len(AuditByEntityPrefix)+len(entityType)+len(entityID)+2)
+	key = append(key, AuditByEntityPrefix...)
+	key = append(key, []byte(entityType)...)
 	key = append(key, byte('/'))
 	key = append(key, []byte(entityID)...)
 	return append(key, byte('/'))
@@ -366,11 +370,14 @@ func BuildAuditByEntityPrefix(entityType AuditEntityType, entityID string) []byt
 
 // BuildAuditByActorKey builds the index key for audit entries by actor
 func BuildAuditByActorKey(actor string, timestamp int64, entryID string) []byte {
-	key := append(AuditByActorPrefix, []byte(actor)...)
-	key = append(key, byte('/'))
-	// Append timestamp as big-endian uint64 for proper ordering
 	tsBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
+
+	key := make([]byte, 0, len(AuditByActorPrefix)+len(actor)+1+8+1+len(entryID))
+	key = append(key, AuditByActorPrefix...)
+	key = append(key, []byte(actor)...)
+	key = append(key, byte('/'))
+	// Append timestamp as big-endian uint64 for proper ordering
 	key = append(key, tsBytes...)
 	key = append(key, byte('/'))
 	return append(key, []byte(entryID)...)
@@ -378,17 +385,22 @@ func BuildAuditByActorKey(actor string, timestamp int64, entryID string) []byte 
 
 // BuildAuditByActorPrefix builds the prefix for an actor's audit entries
 func BuildAuditByActorPrefix(actor string) []byte {
-	key := append(AuditByActorPrefix, []byte(actor)...)
+	key := make([]byte, 0, len(AuditByActorPrefix)+len(actor)+1)
+	key = append(key, AuditByActorPrefix...)
+	key = append(key, []byte(actor)...)
 	return append(key, byte('/'))
 }
 
 // BuildAuditByActionKey builds the index key for audit entries by action type
 func BuildAuditByActionKey(action AuditActionType, timestamp int64, entryID string) []byte {
-	key := append(AuditByActionPrefix, byte(action))
-	key = append(key, byte('/'))
-	// Append timestamp as big-endian uint64 for proper ordering
 	tsBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
+
+	key := make([]byte, 0, len(AuditByActionPrefix)+1+1+8+1+len(entryID))
+	key = append(key, AuditByActionPrefix...)
+	key = append(key, byte(action))
+	key = append(key, byte('/'))
+	// Append timestamp as big-endian uint64 for proper ordering
 	key = append(key, tsBytes...)
 	key = append(key, byte('/'))
 	return append(key, []byte(entryID)...)
@@ -396,7 +408,9 @@ func BuildAuditByActionKey(action AuditActionType, timestamp int64, entryID stri
 
 // BuildAuditByActionPrefix builds the prefix for action type's audit entries
 func BuildAuditByActionPrefix(action AuditActionType) []byte {
-	key := append(AuditByActionPrefix, byte(action))
+	key := make([]byte, 0, len(AuditByActionPrefix)+2)
+	key = append(key, AuditByActionPrefix...)
+	key = append(key, byte(action))
 	return append(key, byte('/'))
 }
 

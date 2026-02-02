@@ -1051,7 +1051,7 @@ func TestNitroHardwareBackend(t *testing.T) {
 
 	t.Run("get attestation", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		nonce := []byte("nitro-attestation-nonce")
 		attestation, err := backend.GetAttestation(nonce)
@@ -1066,7 +1066,7 @@ func TestNitroHardwareBackend(t *testing.T) {
 
 	t.Run("seal and unseal", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		plaintext := []byte("nitro backend seal test")
 
@@ -1152,7 +1152,7 @@ func TestSimulationFallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
-		defer loader.Unload()
+		defer func() { _ = loader.Unload() }()
 
 		// Should be in simulation mode
 		if !loader.IsSimulated() {
@@ -1374,7 +1374,7 @@ func BenchmarkSGXSeal(b *testing.B) {
 	_ = detector.Detect()
 	loader := NewSGXEnclaveLoader(detector)
 	_ = loader.Load("/fake/enclave.so", false)
-	defer loader.Unload()
+	defer func() { _ = loader.Unload() }()
 
 	sealer := NewSGXSealingService(loader)
 	plaintext := make([]byte, 1024)

@@ -37,4 +37,3 @@ func GetGenesisCmd(
 
 	return cmd
 }
-

@@ -362,7 +362,9 @@ func init() {
 	proto.RegisterType((*FractionalPayment)(nil), "virtengine.escrow.v1beta3.FractionalPayment")
 }
 
-func init() { proto.RegisterFile("virtengine/escrow/v1beta3/types.proto", fileDescriptor_c4875611bf6739ee) }
+func init() {
+	proto.RegisterFile("virtengine/escrow/v1beta3/types.proto", fileDescriptor_c4875611bf6739ee)
+}
 
 var fileDescriptor_c4875611bf6739ee = []byte{
 	// 798 bytes of a gzipped FileDescriptorProto
@@ -1464,4 +1466,3 @@ var (
 	ErrIntOverflowTypes          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupTypes = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -110,4 +110,3 @@ func (s *KeeperTestSuite) TestHooksPanicRecovery() {
 		}
 	}
 }
-

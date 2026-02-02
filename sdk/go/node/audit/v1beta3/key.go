@@ -14,4 +14,3 @@ const (
 func PrefixProviderID() []byte {
 	return []byte{0x01}
 }
-

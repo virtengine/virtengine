@@ -500,14 +500,18 @@ func exportRequestKey(requestID string) []byte {
 }
 
 func exportRequestByAddressKey(address string, requestID string) []byte {
-	key := append(prefixExportRequestByAddress, []byte(address)...)
+	key := make([]byte, 0, len(prefixExportRequestByAddress)+len(address)+len(requestID)+1)
+	key = append(key, prefixExportRequestByAddress...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte(0x00))
 	key = append(key, []byte(requestID)...)
 	return key
 }
 
 func exportRequestByAddressPrefixKey(address string) []byte {
-	key := append(prefixExportRequestByAddress, []byte(address)...)
+	key := make([]byte, 0, len(prefixExportRequestByAddress)+len(address)+1)
+	key = append(key, prefixExportRequestByAddress...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte(0x00))
 	return key
 }

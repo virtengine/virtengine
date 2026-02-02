@@ -596,25 +596,33 @@ func BuildInvoiceLedgerEntryKey(entryID string) []byte {
 
 // BuildInvoiceLedgerEntryByInvoiceKey builds the index key for entries by invoice
 func BuildInvoiceLedgerEntryByInvoiceKey(invoiceID string, entryID string) []byte {
-	key := append(InvoiceLedgerEntryByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(InvoiceLedgerEntryByInvoicePrefix)+len(invoiceID)+len(entryID)+1)
+	key = append(key, InvoiceLedgerEntryByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(entryID)...)
 }
 
 // BuildInvoiceLedgerEntryByInvoicePrefix builds the prefix for invoice's entries
 func BuildInvoiceLedgerEntryByInvoicePrefix(invoiceID string) []byte {
-	key := append(InvoiceLedgerEntryByInvoicePrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(InvoiceLedgerEntryByInvoicePrefix)+len(invoiceID)+1)
+	key = append(key, InvoiceLedgerEntryByInvoicePrefix...)
+	key = append(key, []byte(invoiceID)...)
 	return append(key, byte('/'))
 }
 
 // BuildInvoiceArtifactKey builds the key for an artifact reference
 func BuildInvoiceArtifactKey(cid string) []byte {
-	return append(InvoiceArtifactPrefix, []byte(cid)...)
+	key := make([]byte, 0, len(InvoiceArtifactPrefix)+len(cid))
+	key = append(key, InvoiceArtifactPrefix...)
+	return append(key, []byte(cid)...)
 }
 
 // BuildInvoiceLedgerEntrySeqKey builds the key for entries indexed by sequence
 func BuildInvoiceLedgerEntrySeqKey(invoiceID string, seqNum uint64) []byte {
-	key := append(InvoiceLedgerEntrySeqPrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(InvoiceLedgerEntrySeqPrefix)+len(invoiceID)+9)
+	key = append(key, InvoiceLedgerEntrySeqPrefix...)
+	key = append(key, []byte(invoiceID)...)
 	key = append(key, byte('/'))
 	// Use fixed-width 8-byte encoding for proper ordering
 	seqBytes := make([]byte, 8)
@@ -631,6 +639,8 @@ func BuildInvoiceLedgerEntrySeqKey(invoiceID string, seqNum uint64) []byte {
 
 // BuildInvoiceLedgerEntrySeqPrefix builds the prefix for sequence-indexed entries
 func BuildInvoiceLedgerEntrySeqPrefix(invoiceID string) []byte {
-	key := append(InvoiceLedgerEntrySeqPrefix, []byte(invoiceID)...)
+	key := make([]byte, 0, len(InvoiceLedgerEntrySeqPrefix)+len(invoiceID)+1)
+	key = append(key, InvoiceLedgerEntrySeqPrefix...)
+	key = append(key, []byte(invoiceID)...)
 	return append(key, byte('/'))
 }

@@ -226,4 +226,3 @@ func TestGetSupportedScopes(t *testing.T) {
 		scopeMap[scope] = true
 	}
 }
-

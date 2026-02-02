@@ -58,4 +58,3 @@ func ParseGroupPath(parts []string) (types.GroupID, error) {
 func deploymentParts(id types.DeploymentID) string {
 	return fmt.Sprintf("%s/%v", id.Owner, id.DSeq)
 }
-

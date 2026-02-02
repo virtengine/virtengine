@@ -9,4 +9,3 @@ func (s State) IsValid() bool {
 
 	return false
 }
-

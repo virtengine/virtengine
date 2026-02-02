@@ -4,8 +4,8 @@
 package v1beta3
 
 import (
-	fmt "fmt"
 	github_com_cosmos_cosmos_sdk_types "cosmossdk.io/math"
+	fmt "fmt"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
 	io "io"
@@ -68,7 +68,9 @@ func init() {
 	proto.RegisterType((*DepositParams)(nil), "virtengine.gov.v1beta3.DepositParams")
 }
 
-func init() { proto.RegisterFile("virtengine/gov/v1beta3/params.proto", fileDescriptor_ff7c87bcce7fe71f) }
+func init() {
+	proto.RegisterFile("virtengine/gov/v1beta3/params.proto", fileDescriptor_ff7c87bcce7fe71f)
+}
 
 var fileDescriptor_ff7c87bcce7fe71f = []byte{
 	// 267 bytes of a gzipped FileDescriptorProto
@@ -319,4 +321,3 @@ var (
 	ErrIntOverflowParams          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupParams = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -86,4 +86,3 @@ func GetTxEscrowDeposit() *cobra.Command {
 
 	return cmd
 }
-

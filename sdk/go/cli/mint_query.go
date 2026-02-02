@@ -112,4 +112,3 @@ func GetQueryMintAnnualProvisionsCmd() *cobra.Command {
 
 	return cmd
 }
-

@@ -40,4 +40,3 @@ func (sdl *v2MemoryAttributes) UnmarshalYAML(node *yaml.Node) error {
 
 	return nil
 }
-

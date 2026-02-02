@@ -373,4 +373,3 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "virtengine/deployment/v1beta4/service.proto",
 }
-

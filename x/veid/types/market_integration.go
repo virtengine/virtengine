@@ -400,7 +400,9 @@ func MarketRequirementsKey(marketType MarketType) []byte {
 
 // MarketParticipantStatusKey returns the store key for participant status
 func MarketParticipantStatusKey(address string, marketType MarketType) []byte {
-	key := append(PrefixMarketParticipantStatus, []byte(address)...)
+	key := make([]byte, 0, len(PrefixMarketParticipantStatus)+len(address)+1+len(marketType))
+	key = append(key, PrefixMarketParticipantStatus...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(marketType)...)
 }

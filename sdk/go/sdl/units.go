@@ -152,4 +152,3 @@ func parseWithSuffix(sval string, units map[string]uint64) (uint64, error) {
 
 	return uint64(val), nil
 }
-

@@ -579,7 +579,7 @@ func (sik *settlementIntegrationKeeper) GetSettlementSequence(ctx sdk.Context) u
 // SetSettlementSequence sets the settlement sequence number
 func (sik *settlementIntegrationKeeper) SetSettlementSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(sik.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.SettlementSequenceKey, bz)
 }
 

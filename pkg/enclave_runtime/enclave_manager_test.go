@@ -996,7 +996,7 @@ func TestDuplicateRequest(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Start first request
 	var wg sync.WaitGroup
@@ -1046,7 +1046,7 @@ func TestGenerateAttestation(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	reportData := []byte("test-report-data")
 	attestation, err := manager.GenerateAttestation(reportData)

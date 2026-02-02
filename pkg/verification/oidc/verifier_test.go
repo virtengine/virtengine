@@ -57,7 +57,7 @@ func newTestOIDCServer(t *testing.T) *testOIDCServer {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"issuer":                                ts.issuer,
 			"authorization_endpoint":                ts.issuer + "/authorize",
 			"token_endpoint":                        ts.issuer + "/token",
@@ -75,7 +75,7 @@ func newTestOIDCServer(t *testing.T) *testOIDCServer {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ts.getJWKS())
+		_ = json.NewEncoder(w).Encode(ts.getJWKS())
 	})
 
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func newTestOIDCServer(t *testing.T) *testOIDCServer {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"access_token": "test-access-token",
 			"token_type":   "Bearer",
 			"expires_in":   3600,

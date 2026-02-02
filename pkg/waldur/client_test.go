@@ -453,7 +453,7 @@ func TestAzureClient_ListVMs(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(vms)
+		_ = json.NewEncoder(w).Encode(vms)
 	}))
 	defer server.Close()
 
@@ -485,7 +485,7 @@ func TestSLURMClient_ListAllocations(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(allocations)
+		_ = json.NewEncoder(w).Encode(allocations)
 	}))
 	defer server.Close()
 
@@ -513,7 +513,7 @@ func TestClient_RetryLogic(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":     ptr("550e8400-e29b-41d4-a716-446655440070"),
 			"username": ptr("testuser"),
 		})
@@ -550,7 +550,7 @@ func TestMarketplaceClient_WaitForOrderCompletion(t *testing.T) {
 		if attempts >= 3 {
 			state = "done"
 		}
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":  ptr("550e8400-e29b-41d4-a716-446655440080"),
 			"state": ptr(state),
 		})

@@ -346,4 +346,3 @@ func GetTxDistributionDepositValidatorRewardsPoolCmd() *cobra.Command {
 
 	return cmd
 }
-

@@ -882,4 +882,3 @@ var (
 	ErrIntOverflowAttribute          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupAttribute = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -198,4 +198,3 @@ func Test_runAddCmdLedgerDryRun(t *testing.T) {
 		})
 	}
 }
-

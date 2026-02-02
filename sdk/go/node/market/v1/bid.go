@@ -77,4 +77,3 @@ func (id BidID) Validate() error {
 
 	return nil
 }
-

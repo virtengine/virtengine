@@ -37,7 +37,9 @@ func ParamsPrefix() []byte {
 
 // LatestPriceDataKey returns the key for latest price data ID
 func LatestPriceDataKey(source uint32, denom, baseDenom string) []byte {
-	key := append(LatestPriceDataPrefix, byte(source>>24), byte(source>>16), byte(source>>8), byte(source))
+	key := make([]byte, 0, len(LatestPriceDataPrefix)+4+len(denom)+1+len(baseDenom))
+	key = append(key, LatestPriceDataPrefix...)
+	key = append(key, byte(source>>24), byte(source>>16), byte(source>>8), byte(source))
 	key = append(key, []byte(denom)...)
 	key = append(key, 0x00) // separator
 	key = append(key, []byte(baseDenom)...)
@@ -46,7 +48,9 @@ func LatestPriceDataKey(source uint32, denom, baseDenom string) []byte {
 
 // PriceDataKey returns the key for a price data record
 func PriceDataKey(source uint32, denom, baseDenom string, height int64) []byte {
-	key := append(PriceDataPrefix, byte(source>>24), byte(source>>16), byte(source>>8), byte(source))
+	key := make([]byte, 0, len(PriceDataPrefix)+4+len(denom)+1+len(baseDenom)+1+8)
+	key = append(key, PriceDataPrefix...)
+	key = append(key, byte(source>>24), byte(source>>16), byte(source>>8), byte(source))
 	key = append(key, []byte(denom)...)
 	key = append(key, 0x00) // separator
 	key = append(key, []byte(baseDenom)...)
@@ -61,7 +65,9 @@ func PriceDataKey(source uint32, denom, baseDenom string, height int64) []byte {
 
 // PriceDataPrefixByPair returns prefix for all price data for a source/pair
 func PriceDataPrefixByPair(source uint32, denom, baseDenom string) []byte {
-	key := append(PriceDataPrefix, byte(source>>24), byte(source>>16), byte(source>>8), byte(source))
+	key := make([]byte, 0, len(PriceDataPrefix)+4+len(denom)+1+len(baseDenom)+1)
+	key = append(key, PriceDataPrefix...)
+	key = append(key, byte(source>>24), byte(source>>16), byte(source>>8), byte(source))
 	key = append(key, []byte(denom)...)
 	key = append(key, 0x00) // separator
 	key = append(key, []byte(baseDenom)...)

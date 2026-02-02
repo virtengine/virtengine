@@ -80,4 +80,3 @@ func (s ResourceUnits) Validate() error {
 
 	return nil
 }
-

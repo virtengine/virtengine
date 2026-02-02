@@ -111,4 +111,3 @@ func TestGetQueryCmd(t *testing.T) {
 		})
 	}
 }
-

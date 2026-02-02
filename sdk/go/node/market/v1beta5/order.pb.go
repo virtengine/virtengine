@@ -500,4 +500,3 @@ var (
 	ErrIntOverflowOrder          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupOrder = fmt.Errorf("proto: unexpected end of group")
 )
-

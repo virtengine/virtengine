@@ -280,7 +280,7 @@ type DefaultChainIntegrator struct {
 	mu           sync.RWMutex
 	records      map[string]*OnChainVerificationRecord // In-memory cache
 	accountIndex map[string][]string                   // account -> verification IDs
-	pendingBatch []*RecordVerificationRequest         // Pending batch submissions
+	pendingBatch []*RecordVerificationRequest          // Pending batch submissions
 	closed       bool
 }
 
@@ -633,11 +633,11 @@ func (c *DefaultChainIntegrator) UpdateVerificationStatus(ctx context.Context, r
 // canTransitionStatus checks if a status transition is valid
 func canTransitionStatus(from, to ChallengeStatus) bool {
 	validTransitions := map[ChallengeStatus][]ChallengeStatus{
-		StatusPending: {StatusVerified, StatusFailed, StatusExpired},
+		StatusPending:  {StatusVerified, StatusFailed, StatusExpired},
 		StatusVerified: {StatusRevoked, StatusExpired},
-		StatusFailed: {StatusPending}, // Allow retry
-		StatusExpired: {StatusPending}, // Allow re-verification
-		StatusRevoked: {}, // Terminal state
+		StatusFailed:   {StatusPending}, // Allow retry
+		StatusExpired:  {StatusPending}, // Allow re-verification
+		StatusRevoked:  {},              // Terminal state
 	}
 
 	allowed, ok := validTransitions[from]
@@ -834,20 +834,20 @@ func (c *DefaultChainIntegrator) QuerySMSVerifications(ctx context.Context, quer
 
 // CreateSMSScope creates an SMS verification scope for the identity wallet
 type SMSScope struct {
-	ScopeID          string          `json:"scope_id"`
-	ScopeType        string          `json:"scope_type"`
-	VerificationID   string          `json:"verification_id"`
-	AccountAddress   string          `json:"account_address"`
-	PhoneHash        string          `json:"phone_hash"`
-	CountryCodeHash  string          `json:"country_code_hash"`
-	CarrierType      CarrierType     `json:"carrier_type"`
-	IsVoIP           bool            `json:"is_voip"`
-	RiskScore        uint32          `json:"risk_score"`
-	VerifiedAt       time.Time       `json:"verified_at"`
-	ExpiresAt        time.Time       `json:"expires_at"`
-	Status           ChallengeStatus `json:"status"`
-	AttestationID    string          `json:"attestation_id,omitempty"`
-	Signature        []byte          `json:"signature"`
+	ScopeID         string          `json:"scope_id"`
+	ScopeType       string          `json:"scope_type"`
+	VerificationID  string          `json:"verification_id"`
+	AccountAddress  string          `json:"account_address"`
+	PhoneHash       string          `json:"phone_hash"`
+	CountryCodeHash string          `json:"country_code_hash"`
+	CarrierType     CarrierType     `json:"carrier_type"`
+	IsVoIP          bool            `json:"is_voip"`
+	RiskScore       uint32          `json:"risk_score"`
+	VerifiedAt      time.Time       `json:"verified_at"`
+	ExpiresAt       time.Time       `json:"expires_at"`
+	Status          ChallengeStatus `json:"status"`
+	AttestationID   string          `json:"attestation_id,omitempty"`
+	Signature       []byte          `json:"signature"`
 }
 
 // NewSMSScope creates a new SMS scope from a verification record

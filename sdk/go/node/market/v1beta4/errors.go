@@ -70,4 +70,3 @@ var (
 	// ErrInvalidBid indicates an invalid chain parameter
 	ErrInvalidBid = errors.New("unknown provider")
 )
-

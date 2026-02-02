@@ -373,4 +373,3 @@ func (s *BankCLITestSuite) TestGetCmdQuerySendEnabled() {
 		})
 	}
 }
-

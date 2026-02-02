@@ -356,4 +356,3 @@ $ %s query distribution community-pool
 	cflags.AddQueryFlagsToCmd(cmd)
 	return cmd
 }
-

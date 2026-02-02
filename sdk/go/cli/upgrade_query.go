@@ -146,4 +146,3 @@ func GetQueryUpgradeModuleVersionsCmd() *cobra.Command {
 
 	return cmd
 }
-

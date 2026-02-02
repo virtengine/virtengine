@@ -192,8 +192,8 @@ func (c *IntegrityChecker) VerifyChunked(ctx context.Context, manifest *ChunkMan
 
 	startTime := time.Now()
 	result := &ChunkedVerificationResult{
-		Manifest:   manifest,
-		CheckedAt:  startTime,
+		Manifest:     manifest,
+		CheckedAt:    startTime,
 		ChunkResults: make([]ChunkVerificationResult, len(manifest.Chunks)),
 	}
 

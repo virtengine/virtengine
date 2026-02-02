@@ -10,8 +10,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/version"
 
-	"github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	"github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
 
 // ImportKeyCommand imports private keys from a keyfile.
@@ -80,4 +80,3 @@ func ImportKeyHexCommand() *cobra.Command {
 	cmd.Flags().String(flags.FlagKeyType, string(hd.Secp256k1Type), "private key signing algorithm kind")
 	return cmd
 }
-

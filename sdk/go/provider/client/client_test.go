@@ -97,4 +97,3 @@ func TestNewClientWithProviderURL(t *testing.T) {
 	})
 
 }
-

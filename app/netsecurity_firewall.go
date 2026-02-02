@@ -15,14 +15,14 @@ import (
 
 // FirewallRuleGenerator generates firewall rules for various firewall types.
 type FirewallRuleGenerator struct {
-	config     FirewallConfig
-	logger     log.Logger
-	
+	config FirewallConfig
+	logger log.Logger
+
 	// Dynamic rules
 	allowedIPs  map[string]time.Time // IP -> expiry (zero time means permanent)
 	blockedIPs  map[string]time.Time // IP -> expiry
 	allowedNets []*net.IPNet
-	
+
 	mu sync.RWMutex
 }
 
@@ -115,13 +115,13 @@ func (f *FirewallRuleGenerator) CleanupExpired() {
 	defer f.mu.Unlock()
 
 	now := time.Now()
-	
+
 	for ip, expiry := range f.allowedIPs {
 		if !expiry.IsZero() && now.After(expiry) {
 			delete(f.allowedIPs, ip)
 		}
 	}
-	
+
 	for ip, expiry := range f.blockedIPs {
 		if !expiry.IsZero() && now.After(expiry) {
 			delete(f.blockedIPs, ip)
@@ -222,7 +222,7 @@ func (f *FirewallRuleGenerator) GenerateRules() []FirewallRule {
 // GenerateIPTables generates iptables rules.
 func (f *FirewallRuleGenerator) GenerateIPTables() string {
 	rules := f.GenerateRules()
-	
+
 	var buf bytes.Buffer
 	buf.WriteString("# VirtEngine Firewall Rules - Generated\n")
 	buf.WriteString("# Apply with: iptables-restore < this_file\n\n")
@@ -231,49 +231,49 @@ func (f *FirewallRuleGenerator) GenerateIPTables() string {
 	buf.WriteString(":FORWARD ACCEPT [0:0]\n")
 	buf.WriteString(":OUTPUT ACCEPT [0:0]\n")
 	buf.WriteString(":VIRTENGINE - [0:0]\n\n")
-	
+
 	// Jump to VIRTENGINE chain
 	buf.WriteString("-A INPUT -j VIRTENGINE\n\n")
-	
+
 	// Flush existing rules
 	buf.WriteString("-F VIRTENGINE\n")
-	
+
 	// Allow established connections
 	buf.WriteString("-A VIRTENGINE -m state --state ESTABLISHED,RELATED -j ACCEPT\n")
 	buf.WriteString("-A VIRTENGINE -i lo -j ACCEPT\n\n")
-	
+
 	for _, rule := range rules {
 		buf.WriteString(f.ruleToIPTables(rule))
 		buf.WriteString("\n")
 	}
-	
+
 	buf.WriteString("\nCOMMIT\n")
-	
+
 	return buf.String()
 }
 
 func (f *FirewallRuleGenerator) ruleToIPTables(rule FirewallRule) string {
 	var parts []string
 	parts = append(parts, "-A VIRTENGINE")
-	
+
 	if rule.Protocol != "all" && rule.Protocol != "" {
 		parts = append(parts, "-p", rule.Protocol)
 	}
-	
+
 	if rule.SourceIP != "" {
 		parts = append(parts, "-s", rule.SourceIP)
 	}
-	
+
 	if rule.DestIP != "" {
 		parts = append(parts, "-d", rule.DestIP)
 	}
-	
+
 	if rule.Port > 0 {
 		parts = append(parts, "--dport", fmt.Sprintf("%d", rule.Port))
 	} else if rule.PortRange != "" {
 		parts = append(parts, "--dport", rule.PortRange)
 	}
-	
+
 	switch rule.Action {
 	case "allow":
 		parts = append(parts, "-j ACCEPT")
@@ -282,18 +282,18 @@ func (f *FirewallRuleGenerator) ruleToIPTables(rule FirewallRule) string {
 	case "drop":
 		parts = append(parts, "-j DROP")
 	}
-	
+
 	if rule.Comment != "" {
 		parts = append(parts, "-m comment --comment", fmt.Sprintf("%q", rule.Comment))
 	}
-	
+
 	return strings.Join(parts, " ")
 }
 
 // GenerateNFTables generates nftables rules.
 func (f *FirewallRuleGenerator) GenerateNFTables() string {
 	rules := f.GenerateRules()
-	
+
 	tmpl := `#!/usr/sbin/nft -f
 # VirtEngine Firewall Rules - Generated
 # Apply with: nft -f this_file
@@ -324,36 +324,36 @@ table inet virtengine {
     }
 }
 `
-	
+
 	ruleStrings := make([]string, 0, len(rules))
 	for _, rule := range rules {
 		ruleStrings = append(ruleStrings, f.ruleToNFTables(rule))
 	}
-	
+
 	t := template.Must(template.New("nftables").Parse(tmpl))
 	var buf bytes.Buffer
-	t.Execute(&buf, ruleStrings)
-	
+	_ = t.Execute(&buf, ruleStrings)
+
 	return buf.String()
 }
 
 func (f *FirewallRuleGenerator) ruleToNFTables(rule FirewallRule) string {
 	var parts []string
-	
+
 	if rule.SourceIP != "" {
 		parts = append(parts, fmt.Sprintf("ip saddr %s", rule.SourceIP))
 	}
-	
+
 	if rule.Protocol != "all" && rule.Protocol != "" {
 		parts = append(parts, rule.Protocol)
 	}
-	
+
 	if rule.Port > 0 {
 		parts = append(parts, fmt.Sprintf("dport %d", rule.Port))
 	} else if rule.PortRange != "" {
 		parts = append(parts, fmt.Sprintf("dport %s", rule.PortRange))
 	}
-	
+
 	switch rule.Action {
 	case "allow":
 		parts = append(parts, "accept")
@@ -362,40 +362,40 @@ func (f *FirewallRuleGenerator) ruleToNFTables(rule FirewallRule) string {
 	case "drop":
 		parts = append(parts, "drop")
 	}
-	
+
 	if rule.Comment != "" {
 		parts = append(parts, fmt.Sprintf("comment %q", rule.Comment))
 	}
-	
+
 	return strings.Join(parts, " ")
 }
 
 // GeneratePF generates OpenBSD PF rules.
 func (f *FirewallRuleGenerator) GeneratePF() string {
 	rules := f.GenerateRules()
-	
+
 	var buf bytes.Buffer
 	buf.WriteString("# VirtEngine Firewall Rules - Generated\n")
 	buf.WriteString("# Apply with: pfctl -f this_file\n\n")
-	
+
 	// Macros
 	buf.WriteString("# Macros\n")
-	buf.WriteString(fmt.Sprintf("virtengine_ports = \"{ %s }\"\n\n", 
+	buf.WriteString(fmt.Sprintf("virtengine_ports = \"{ %s }\"\n\n",
 		strings.Trim(strings.ReplaceAll(fmt.Sprint(f.config.AllowedPorts), " ", ", "), "[]")))
-	
+
 	// Default policies
 	buf.WriteString("# Default policies\n")
 	buf.WriteString("set skip on lo0\n")
 	buf.WriteString("block in all\n")
 	buf.WriteString("pass out all keep state\n\n")
-	
+
 	// Rules
 	buf.WriteString("# VirtEngine rules\n")
 	for _, rule := range rules {
 		buf.WriteString(f.ruleToPF(rule))
 		buf.WriteString("\n")
 	}
-	
+
 	return buf.String()
 }
 
@@ -407,45 +407,45 @@ func (f *FirewallRuleGenerator) ruleToPF(rule FirewallRule) string {
 	case "deny", "drop":
 		action = "block"
 	}
-	
+
 	var parts []string
 	parts = append(parts, action, "in")
-	
+
 	if rule.Protocol != "all" && rule.Protocol != "" {
 		parts = append(parts, "proto", rule.Protocol)
 	}
-	
+
 	if rule.SourceIP != "" {
 		parts = append(parts, "from", rule.SourceIP)
 	} else {
 		parts = append(parts, "from any")
 	}
-	
+
 	if rule.Port > 0 {
 		parts = append(parts, fmt.Sprintf("to any port %d", rule.Port))
 	} else if rule.PortRange != "" {
 		parts = append(parts, fmt.Sprintf("to any port %s", strings.Replace(rule.PortRange, "-", ":", 1)))
 	}
-	
+
 	if rule.Action == "allow" {
 		parts = append(parts, "keep state")
 	}
-	
+
 	return strings.Join(parts, " ")
 }
 
 // GenerateWindowsFirewall generates Windows Firewall PowerShell commands.
 func (f *FirewallRuleGenerator) GenerateWindowsFirewall() string {
 	rules := f.GenerateRules()
-	
+
 	var buf bytes.Buffer
 	buf.WriteString("# VirtEngine Firewall Rules - Generated\n")
 	buf.WriteString("# Run as Administrator\n\n")
-	
+
 	// Remove existing VirtEngine rules
 	buf.WriteString("# Remove existing VirtEngine rules\n")
 	buf.WriteString("Get-NetFirewallRule -DisplayName \"VirtEngine*\" -ErrorAction SilentlyContinue | Remove-NetFirewallRule\n\n")
-	
+
 	ruleNum := 1
 	for _, rule := range rules {
 		if rule.Action == "allow" && rule.Port > 0 {
@@ -455,7 +455,7 @@ func (f *FirewallRuleGenerator) GenerateWindowsFirewall() string {
 			ruleNum++
 		}
 	}
-	
+
 	// Block rules
 	for _, rule := range rules {
 		if rule.Action != "allow" && rule.SourceIP != "" {
@@ -465,7 +465,7 @@ func (f *FirewallRuleGenerator) GenerateWindowsFirewall() string {
 			ruleNum++
 		}
 	}
-	
+
 	return buf.String()
 }
 

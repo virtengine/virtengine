@@ -593,7 +593,7 @@ func (c *NitroNSMClient) initSimulatedState() {
 
 	// Generate simulated key
 	c.simulatedKey = make([]byte, 32)
-	rand.Read(c.simulatedKey)
+	_, _ = rand.Read(c.simulatedKey)
 }
 
 // Close closes the NSM device

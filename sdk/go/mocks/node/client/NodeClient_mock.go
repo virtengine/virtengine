@@ -149,4 +149,3 @@ func NewNodeClient(t interface {
 
 	return mock
 }
-

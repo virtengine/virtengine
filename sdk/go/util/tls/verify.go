@@ -128,4 +128,3 @@ func ValidatePeerCertificates(
 
 	return owner, cert, nil
 }
-

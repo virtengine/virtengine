@@ -24,4 +24,3 @@ func init() {
 		panic(err)
 	}
 }
-

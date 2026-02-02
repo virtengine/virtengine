@@ -343,7 +343,7 @@ func FuzzEncryptedOrderConfigValidate(f *testing.F) {
 		Envelope:      validEnvelope,
 		CustomerKeyID: "customer-key-id",
 	}
-	validJSON, _ := json.Marshal(validConfig)
+	validJSON, _ := json.Marshal(validConfig) //nolint:errchkjson // fuzz test seed data
 	f.Add(validJSON)
 
 	f.Add([]byte("{}"))

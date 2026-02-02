@@ -969,20 +969,26 @@ func BuildAlertByTypePrefix(alertType AlertType) []byte {
 
 // BuildAlertBySeverityKey builds the index key for alerts by severity
 func BuildAlertBySeverityKey(severity AlertSeverity, alertID string) []byte {
-	key := append(AlertBySeverityPrefix, byte(severity))
+	key := make([]byte, 0, len(AlertBySeverityPrefix)+2+len(alertID))
+	key = append(key, AlertBySeverityPrefix...)
+	key = append(key, byte(severity))
 	key = append(key, byte('/'))
 	return append(key, []byte(alertID)...)
 }
 
 // BuildAlertBySeverityPrefix builds the prefix for alerts by severity
 func BuildAlertBySeverityPrefix(severity AlertSeverity) []byte {
-	key := append(AlertBySeverityPrefix, byte(severity))
+	key := make([]byte, 0, len(AlertBySeverityPrefix)+2)
+	key = append(key, AlertBySeverityPrefix...)
+	key = append(key, byte(severity))
 	return append(key, byte('/'))
 }
 
 // BuildAlertByEntityKey builds the index key for alerts by entity
 func BuildAlertByEntityKey(entityType string, entityID string, alertID string) []byte {
-	key := append(AlertByEntityPrefix, []byte(entityType)...)
+	key := make([]byte, 0, len(AlertByEntityPrefix)+len(entityType)+1+len(entityID)+1+len(alertID))
+	key = append(key, AlertByEntityPrefix...)
+	key = append(key, []byte(entityType)...)
 	key = append(key, byte('/'))
 	key = append(key, []byte(entityID)...)
 	key = append(key, byte('/'))
@@ -991,7 +997,9 @@ func BuildAlertByEntityKey(entityType string, entityID string, alertID string) [
 
 // BuildAlertByEntityPrefix builds the prefix for alerts by entity
 func BuildAlertByEntityPrefix(entityType string, entityID string) []byte {
-	key := append(AlertByEntityPrefix, []byte(entityType)...)
+	key := make([]byte, 0, len(AlertByEntityPrefix)+len(entityType)+1+len(entityID)+1)
+	key = append(key, AlertByEntityPrefix...)
+	key = append(key, []byte(entityType)...)
 	key = append(key, byte('/'))
 	key = append(key, []byte(entityID)...)
 	return append(key, byte('/'))

@@ -53,4 +53,3 @@ func GetQueryParamsSubspaceCmd() *cobra.Command {
 
 	return cmd
 }
-

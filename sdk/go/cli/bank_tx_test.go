@@ -182,4 +182,3 @@ func (s *BankCLITestSuite) TestMultiSendTxCmd() {
 		})
 	}
 }
-

@@ -478,4 +478,3 @@ func AddGovPropFlagsToCmd(cmd *cobra.Command) {
 	cmd.Flags().String(FlagSummary, "", "The summary to include with the governance proposal")
 	cmd.Flags().Bool(FlagExpedited, false, "Whether to expedite the governance proposal") // cannot be enabled because of IBC redefining this flag in `upgrade-channels` command.
 }
-

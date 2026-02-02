@@ -362,4 +362,3 @@ func (sdl *v2_1) computeEndpointSequenceNumbers() map[string]uint32 {
 
 	return res
 }
-

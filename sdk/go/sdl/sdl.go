@@ -157,4 +157,3 @@ func (s *sdl) validate() error {
 
 	return s.data.validate()
 }
-

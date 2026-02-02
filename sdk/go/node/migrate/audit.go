@@ -23,4 +23,3 @@ func AuditedProviderFromV1beta3(cdc codec.BinaryCodec, fromBz []byte) v1.Audited
 
 	return to
 }
-

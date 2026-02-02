@@ -277,4 +277,3 @@ func writeSignedGenTx(clientCtx client.Context, outputDocument string, tx sdk.Tx
 
 	return err
 }
-

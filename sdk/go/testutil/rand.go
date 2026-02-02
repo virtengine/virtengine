@@ -10,4 +10,3 @@ import (
 func init() {
 	rand.Seed(time.Now().Unix()) // nolint: staticcheck
 }
-

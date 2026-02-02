@@ -78,4 +78,3 @@ func (s *ES256kTest) TestSignVerify() {
 		})
 	}
 }
-

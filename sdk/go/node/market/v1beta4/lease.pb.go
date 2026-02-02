@@ -556,7 +556,9 @@ func init() {
 	proto.RegisterType((*MsgCloseLeaseResponse)(nil), "virtengine.market.v1beta4.MsgCloseLeaseResponse")
 }
 
-func init() { proto.RegisterFile("virtengine/market/v1beta4/lease.proto", fileDescriptor_4ab6faa2f1861aa1) }
+func init() {
+	proto.RegisterFile("virtengine/market/v1beta4/lease.proto", fileDescriptor_4ab6faa2f1861aa1)
+}
 
 var fileDescriptor_4ab6faa2f1861aa1 = []byte{
 	// 742 bytes of a gzipped FileDescriptorProto
@@ -2131,4 +2133,3 @@ var (
 	ErrIntOverflowLease          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupLease = fmt.Errorf("proto: unexpected end of group")
 )
-

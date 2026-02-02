@@ -6,4 +6,3 @@ const (
 	DefaultGasPrices       = "0.025uve"
 	DefaultGasAdjustment   = 1.5
 )
-

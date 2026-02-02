@@ -38,7 +38,7 @@ type NoiseHandshakeState struct {
 	remoteEphemeral []byte
 
 	// Symmetric state
-	chainingKey []byte
+	chainingKey   []byte
 	handshakeHash []byte
 
 	// Direction
@@ -59,11 +59,11 @@ type NoiseKeyPair struct {
 // NoiseSession represents an established encrypted session.
 type NoiseSession struct {
 	// Cipher states for sending and receiving
-	sendCipher   cipher.AEAD
-	recvCipher   cipher.AEAD
-	sendNonce    uint64
-	recvNonce    uint64
-	
+	sendCipher cipher.AEAD
+	recvCipher cipher.AEAD
+	sendNonce  uint64
+	recvNonce  uint64
+
 	// Session identification
 	remotePublicKey []byte
 	handshakeHash   []byte
@@ -80,10 +80,10 @@ type NoiseSession struct {
 
 // NoiseTransport wraps a connection with Noise Protocol encryption.
 type NoiseTransport struct {
-	config        NoiseConfig
-	localKeyPair  *NoiseKeyPair
-	trustedKeys   map[string]bool // Map of trusted remote public keys (hex encoded)
-	
+	config       NoiseConfig
+	localKeyPair *NoiseKeyPair
+	trustedKeys  map[string]bool // Map of trusted remote public keys (hex encoded)
+
 	mu sync.RWMutex
 }
 
@@ -176,7 +176,7 @@ func (t *NoiseTransport) SecureOutbound(conn net.Conn, remoteStaticKey []byte) (
 	// -> e, es
 	// Mix ephemeral public key
 	state.mixHash(state.localEphemeral.PublicKey)
-	
+
 	// Perform DH: es
 	sharedSecret, err := curve25519DH(state.localEphemeral.PrivateKey, remoteStaticKey)
 	if err != nil {
@@ -374,7 +374,7 @@ func (s *NoiseHandshakeState) split(conn net.Conn) (*NoiseSession, error) {
 
 	// Derive transport keys using HKDF
 	r := hkdf.New(sha3.New256, nil, s.chainingKey, []byte("noise-transport"))
-	
+
 	sendKey := make([]byte, 32)
 	recvKey := make([]byte, 32)
 

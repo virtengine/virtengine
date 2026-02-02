@@ -10,8 +10,8 @@ import (
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	tattr "github.com/virtengine/virtengine/sdk/go/node/types/attributes/v1"
 )
@@ -153,4 +153,3 @@ func GetTxProviderUpdateCmd() *cobra.Command {
 
 	return cmd
 }
-

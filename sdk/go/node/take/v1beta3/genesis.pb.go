@@ -72,7 +72,9 @@ func init() {
 	proto.RegisterType((*GenesisState)(nil), "virtengine.take.v1beta3.GenesisState")
 }
 
-func init() { proto.RegisterFile("virtengine/take/v1beta3/genesis.proto", fileDescriptor_58ffc0750201d0e9) }
+func init() {
+	proto.RegisterFile("virtengine/take/v1beta3/genesis.proto", fileDescriptor_58ffc0750201d0e9)
+}
 
 var fileDescriptor_58ffc0750201d0e9 = []byte{
 	// 209 bytes of a gzipped FileDescriptorProto
@@ -320,4 +322,3 @@ var (
 	ErrIntOverflowGenesis          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupGenesis = fmt.Errorf("proto: unexpected end of group")
 )
-

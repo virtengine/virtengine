@@ -249,4 +249,3 @@ func (sdl v2ResourceStorageArray) sort() {
 		return sdl[i].Name < sdl[j].Name
 	})
 }
-

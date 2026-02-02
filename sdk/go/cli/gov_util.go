@@ -60,4 +60,3 @@ func ReadGovPropFlags(clientCtx client.Context, flagSet *pflag.FlagSet) (*govv1.
 
 	return rv, nil
 }
-

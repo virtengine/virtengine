@@ -30,4 +30,3 @@ func SecondaryLeasePrefix() []byte {
 func ParamsPrefix() []byte {
 	return []byte{0x04, 0x00}
 }
-

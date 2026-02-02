@@ -208,7 +208,7 @@ func TestSEVHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SEV-SNP service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -237,7 +237,7 @@ func TestSEVHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SEV-SNP service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -282,7 +282,7 @@ func TestNitroHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create Nitro service in auto mode: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -310,7 +310,7 @@ func TestNitroHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create Nitro service in simulate mode: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -334,7 +334,7 @@ func TestNitroHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create Nitro service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -365,7 +365,7 @@ func TestNitroHardwareIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create Nitro service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -489,7 +489,7 @@ func TestAutomaticFallbackToSimulation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SGX service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -517,7 +517,7 @@ func TestAutomaticFallbackToSimulation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SEV-SNP service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -546,7 +546,7 @@ func TestAutomaticFallbackToSimulation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create Nitro service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {
@@ -592,7 +592,7 @@ func TestAutomaticFallbackToSimulation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create SGX service: %v", err)
 		}
-		defer svc.Shutdown()
+		defer func() { _ = svc.Shutdown() }()
 
 		err = svc.Initialize(DefaultRuntimeConfig())
 		if err != nil {

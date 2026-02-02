@@ -78,4 +78,3 @@ func MnemonicKeyCommand() *cobra.Command {
 
 	return cmd
 }
-

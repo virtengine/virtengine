@@ -576,13 +576,17 @@ func ParseExportRequestKey(key []byte) (string, error) {
 
 // BuildExportRequestByRequesterKey builds the index key for exports by requester
 func BuildExportRequestByRequesterKey(requester string, requestID string) []byte {
-	key := append(ExportRequestByRequesterPrefix, []byte(requester)...)
+	key := make([]byte, 0, len(ExportRequestByRequesterPrefix)+len(requester)+len(requestID)+1)
+	key = append(key, ExportRequestByRequesterPrefix...)
+	key = append(key, []byte(requester)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(requestID)...)
 }
 
 // BuildExportRequestByRequesterPrefix builds the prefix for requester's exports
 func BuildExportRequestByRequesterPrefix(requester string) []byte {
-	key := append(ExportRequestByRequesterPrefix, []byte(requester)...)
+	key := make([]byte, 0, len(ExportRequestByRequesterPrefix)+len(requester)+1)
+	key = append(key, ExportRequestByRequesterPrefix...)
+	key = append(key, []byte(requester)...)
 	return append(key, byte('/'))
 }
