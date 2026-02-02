@@ -4,12 +4,12 @@ package test
 import (
 	"fmt"
 	"testing"
-	"time"
 
+	sdkaws "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
-	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,12 +65,22 @@ func TestVPCModule(t *testing.T) {
 
 	// Verify VPC exists in AWS
 	vpc := aws.GetVpcById(t, vpcID, testRegion)
-	assert.Equal(t, "10.99.0.0/16", *vpc.CidrBlock)
+	ec2Client := aws.NewEc2Client(t, testRegion)
+	vpcOutput, err := ec2Client.DescribeVpcs(&ec2.DescribeVpcsInput{
+		VpcIds: []*string{sdkaws.String(vpc.Id)},
+	})
+	require.NoError(t, err)
+	require.Len(t, vpcOutput.Vpcs, 1)
+	assert.Equal(t, "10.99.0.0/16", sdkaws.StringValue(vpcOutput.Vpcs[0].CidrBlock))
 
 	// Verify subnets have correct CIDR blocks
 	for _, subnetID := range publicSubnetIDs {
-		subnet := aws.GetSubnetById(t, subnetID, testRegion)
-		assert.True(t, *subnet.MapPublicIpOnLaunch, "Public subnets should auto-assign public IPs")
+		subnetOutput, err := ec2Client.DescribeSubnets(&ec2.DescribeSubnetsInput{
+			SubnetIds: []*string{sdkaws.String(subnetID)},
+		})
+		require.NoError(t, err)
+		require.Len(t, subnetOutput.Subnets, 1)
+		assert.True(t, sdkaws.BoolValue(subnetOutput.Subnets[0].MapPublicIpOnLaunch), "Public subnets should auto-assign public IPs")
 	}
 
 	// Verify NAT gateways exist
@@ -145,6 +155,20 @@ func TestVPCNetworkACLs(t *testing.T) {
 	vpcID := terraform.Output(t, terraformOptions, "vpc_id")
 
 	// Verify default NACL allows all traffic (we rely on security groups)
-	defaultNacl := aws.GetDefaultNetworkAcl(t, vpcID, testRegion)
-	require.NotNil(t, defaultNacl)
+	ec2Client := aws.NewEc2Client(t, testRegion)
+	defaultFilterName := "default"
+	networkAcls, err := ec2Client.DescribeNetworkAcls(&ec2.DescribeNetworkAclsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   sdkaws.String("vpc-id"),
+				Values: []*string{sdkaws.String(vpcID)},
+			},
+			{
+				Name:   sdkaws.String(defaultFilterName),
+				Values: []*string{sdkaws.String("true")},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, networkAcls.NetworkAcls)
 }

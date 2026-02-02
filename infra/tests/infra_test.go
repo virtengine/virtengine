@@ -9,13 +9,15 @@ import (
 	"testing"
 	"time"
 
+	sdkaws "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // Test configuration
@@ -70,7 +72,14 @@ func TestNetworkingModule(t *testing.T) {
 	// Validate VPC
 	t.Run("VPC exists and has correct CIDR", func(t *testing.T) {
 		vpc := aws.GetVpcById(t, vpcID, testRegion)
-		assert.Equal(t, "10.99.0.0/16", *vpc.CidrBlock)
+		ec2Client := aws.NewEc2Client(t, testRegion)
+		vpcOutput, err := ec2Client.DescribeVpcs(&ec2.DescribeVpcsInput{
+			VpcIds: []*string{sdkaws.String(vpc.Id)},
+		})
+		assert.NoError(t, err)
+		if assert.Len(t, vpcOutput.Vpcs, 1) {
+			assert.Equal(t, "10.99.0.0/16", sdkaws.StringValue(vpcOutput.Vpcs[0].CidrBlock))
+		}
 	})
 
 	// Validate subnets
@@ -190,8 +199,16 @@ func TestEKSModule(t *testing.T) {
 	clusterEndpoint := terraform.Output(t, eksOptions, "cluster_endpoint")
 
 	t.Run("EKS cluster is active", func(t *testing.T) {
-		cluster := aws.GetEksCluster(t, testRegion, clusterName)
-		assert.Equal(t, "ACTIVE", *cluster.Status)
+		session, err := aws.NewAuthenticatedSession(testRegion)
+		assert.NoError(t, err)
+		eksClient := eks.New(session, sdkaws.NewConfig().WithRegion(testRegion))
+		clusterOutput, err := eksClient.DescribeCluster(&eks.DescribeClusterInput{
+			Name: sdkaws.String(clusterName),
+		})
+		assert.NoError(t, err)
+		if assert.NotNil(t, clusterOutput.Cluster) {
+			assert.Equal(t, "ACTIVE", sdkaws.StringValue(clusterOutput.Cluster.Status))
+		}
 	})
 
 	t.Run("Cluster endpoint is accessible", func(t *testing.T) {
@@ -285,7 +302,10 @@ func TestRDSModule(t *testing.T) {
 
 		// Wait for RDS to be available
 		retry.DoWithRetry(t, "Wait for RDS", retryMaxTries, retrySleepTime, func() (string, error) {
-			instance := aws.GetRdsInstanceDetailsE(t, instanceID, testRegion)
+			instance, err := aws.GetRdsInstanceDetailsE(t, instanceID, testRegion)
+			if err != nil {
+				return "", err
+			}
 			if instance == nil {
 				return "", fmt.Errorf("RDS instance not found")
 			}
