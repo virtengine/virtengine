@@ -16,7 +16,7 @@ import (
 )
 
 func TestParseVerificationFlags(t *testing.T) {
-	mySender := sdk.AccAddress([]byte("wasm_test_sender_1234567890"))
+	mySender := sdk.MustAccAddressFromBech32("ve1wyqh3n50ecatjg4vww5crmtd0nmyzusnwckw4at4gluc0m5m477qrm2lg4")
 
 	specs := map[string]struct {
 		srcPath     string
@@ -239,4 +239,3 @@ func TestParseStoreCodeGrants(t *testing.T) {
 		})
 	}
 }
-
