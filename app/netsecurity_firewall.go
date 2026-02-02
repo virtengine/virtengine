@@ -13,13 +13,6 @@ import (
 	"cosmossdk.io/log"
 )
 
-const (
-	firewallActionAllow = "allow"
-	firewallActionDeny  = "deny"
-	firewallActionDrop  = "drop"
-	firewallProtocolAll = "all"
-)
-
 // FirewallRuleGenerator generates firewall rules for various firewall types.
 type FirewallRuleGenerator struct {
 	config FirewallConfig
@@ -149,9 +142,9 @@ func (f *FirewallRuleGenerator) GenerateRules() []FirewallRule {
 	for ip, expiry := range f.blockedIPs {
 		if expiry.IsZero() || now.Before(expiry) {
 			rules = append(rules, FirewallRule{
-				Action:    firewallActionDrop,
+				Action:    "drop",
 				Direction: "inbound",
-				Protocol:  firewallProtocolAll,
+				Protocol:  "all",
 				SourceIP:  ip,
 				Comment:   "Blocked IP",
 				Priority:  priority,
@@ -165,7 +158,7 @@ func (f *FirewallRuleGenerator) GenerateRules() []FirewallRule {
 		if expiry.IsZero() || now.Before(expiry) {
 			for _, port := range f.config.AllowedPorts {
 				rules = append(rules, FirewallRule{
-					Action:    firewallActionAllow,
+					Action:    "allow",
 					Direction: "inbound",
 					Protocol:  "tcp",
 					Port:      port,
@@ -182,7 +175,7 @@ func (f *FirewallRuleGenerator) GenerateRules() []FirewallRule {
 	for _, ipNet := range f.allowedNets {
 		for _, port := range f.config.AllowedPorts {
 			rules = append(rules, FirewallRule{
-				Action:    firewallActionAllow,
+				Action:    "allow",
 				Direction: "inbound",
 				Protocol:  "tcp",
 				Port:      port,
@@ -197,7 +190,7 @@ func (f *FirewallRuleGenerator) GenerateRules() []FirewallRule {
 	// Add port-based allow rules for everyone
 	for _, port := range f.config.AllowedPorts {
 		rules = append(rules, FirewallRule{
-			Action:    firewallActionAllow,
+			Action:    "allow",
 			Direction: "inbound",
 			Protocol:  "tcp",
 			Port:      port,
@@ -210,9 +203,9 @@ func (f *FirewallRuleGenerator) GenerateRules() []FirewallRule {
 	// Add default deny if enabled
 	if f.config.DefaultDeny {
 		rules = append(rules, FirewallRule{
-			Action:    firewallActionDrop,
+			Action:    "drop",
 			Direction: "inbound",
-			Protocol:  firewallProtocolAll,
+			Protocol:  "all",
 			Comment:   "Default deny",
 			Priority:  9999,
 		})
@@ -263,7 +256,7 @@ func (f *FirewallRuleGenerator) ruleToIPTables(rule FirewallRule) string {
 	var parts []string
 	parts = append(parts, "-A VIRTENGINE")
 
-	if rule.Protocol != firewallProtocolAll && rule.Protocol != "" {
+	if rule.Protocol != "all" && rule.Protocol != "" {
 		parts = append(parts, "-p", rule.Protocol)
 	}
 
@@ -282,11 +275,11 @@ func (f *FirewallRuleGenerator) ruleToIPTables(rule FirewallRule) string {
 	}
 
 	switch rule.Action {
-	case firewallActionAllow:
+	case "allow":
 		parts = append(parts, "-j ACCEPT")
-	case firewallActionDeny:
+	case "deny":
 		parts = append(parts, "-j REJECT")
-	case firewallActionDrop:
+	case "drop":
 		parts = append(parts, "-j DROP")
 	}
 
@@ -351,7 +344,7 @@ func (f *FirewallRuleGenerator) ruleToNFTables(rule FirewallRule) string {
 		parts = append(parts, fmt.Sprintf("ip saddr %s", rule.SourceIP))
 	}
 
-	if rule.Protocol != firewallProtocolAll && rule.Protocol != "" {
+	if rule.Protocol != "all" && rule.Protocol != "" {
 		parts = append(parts, rule.Protocol)
 	}
 
@@ -362,11 +355,11 @@ func (f *FirewallRuleGenerator) ruleToNFTables(rule FirewallRule) string {
 	}
 
 	switch rule.Action {
-	case firewallActionAllow:
+	case "allow":
 		parts = append(parts, "accept")
-	case firewallActionDeny:
+	case "deny":
 		parts = append(parts, "reject")
-	case firewallActionDrop:
+	case "drop":
 		parts = append(parts, "drop")
 	}
 
@@ -409,16 +402,16 @@ func (f *FirewallRuleGenerator) GeneratePF() string {
 func (f *FirewallRuleGenerator) ruleToPF(rule FirewallRule) string {
 	var action string
 	switch rule.Action {
-	case firewallActionAllow:
+	case "allow":
 		action = "pass"
-	case firewallActionDeny, firewallActionDrop:
+	case "deny", "drop":
 		action = "block"
 	}
 
 	var parts []string
 	parts = append(parts, action, "in")
 
-	if rule.Protocol != firewallProtocolAll && rule.Protocol != "" {
+	if rule.Protocol != "all" && rule.Protocol != "" {
 		parts = append(parts, "proto", rule.Protocol)
 	}
 
@@ -434,7 +427,7 @@ func (f *FirewallRuleGenerator) ruleToPF(rule FirewallRule) string {
 		parts = append(parts, fmt.Sprintf("to any port %s", strings.Replace(rule.PortRange, "-", ":", 1)))
 	}
 
-	if rule.Action == firewallActionAllow {
+	if rule.Action == "allow" {
 		parts = append(parts, "keep state")
 	}
 
@@ -455,7 +448,7 @@ func (f *FirewallRuleGenerator) GenerateWindowsFirewall() string {
 
 	ruleNum := 1
 	for _, rule := range rules {
-		if rule.Action == firewallActionAllow && rule.Port > 0 {
+		if rule.Action == "allow" && rule.Port > 0 {
 			buf.WriteString(fmt.Sprintf(
 				"New-NetFirewallRule -DisplayName \"VirtEngine Port %d\" -Direction Inbound -Protocol TCP -LocalPort %d -Action Allow\n",
 				rule.Port, rule.Port))
@@ -465,7 +458,7 @@ func (f *FirewallRuleGenerator) GenerateWindowsFirewall() string {
 
 	// Block rules
 	for _, rule := range rules {
-		if rule.Action != firewallActionAllow && rule.SourceIP != "" {
+		if rule.Action != "allow" && rule.SourceIP != "" {
 			buf.WriteString(fmt.Sprintf(
 				"New-NetFirewallRule -DisplayName \"VirtEngine Block %s\" -Direction Inbound -RemoteAddress %s -Action Block\n",
 				rule.SourceIP, rule.SourceIP))

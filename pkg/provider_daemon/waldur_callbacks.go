@@ -629,6 +629,7 @@ func (h *WaldurCallbackHandler) writeError(w http.ResponseWriter, msg string, st
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	response := map[string]string{"error": msg}
+	//nolint:errchkjson // map[string]string is always safe to encode
 	_ = json.NewEncoder(w).Encode(response)
 }
 
