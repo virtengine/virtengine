@@ -677,8 +677,8 @@ func (b *SEVHardwareBackend) GetAttestation(nonce []byte) ([]byte, error) {
 
 	// Serialize report
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, report.Version)
-	binary.Write(&buf, binary.LittleEndian, report.GuestSVN)
+	_ = binary.Write(&buf, binary.LittleEndian, report.Version)
+	_ = binary.Write(&buf, binary.LittleEndian, report.GuestSVN)
 	buf.Write(report.LaunchDigest[:])
 	buf.Write(report.ReportData[:])
 	buf.Write(report.Signature[:])

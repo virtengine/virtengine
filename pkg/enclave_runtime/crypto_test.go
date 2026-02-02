@@ -130,7 +130,7 @@ func TestECDSAVerifier(t *testing.T) {
 
 		hash := sha256.Sum256([]byte("test message"))
 		invalidSig := make([]byte, 64)
-		rand.Read(invalidSig)
+		_, _ = rand.Read(invalidSig)
 
 		if err := v.VerifyP256(&privateKey.PublicKey, hash[:], invalidSig); err == nil {
 			t.Error("expected verification to fail")
@@ -1367,7 +1367,7 @@ func TestCBORParser(t *testing.T) {
 func BenchmarkSHA256(b *testing.B) {
 	h := NewHashComputer()
 	data := make([]byte, 1024)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1378,7 +1378,7 @@ func BenchmarkSHA256(b *testing.B) {
 func BenchmarkSHA384(b *testing.B) {
 	h := NewHashComputer()
 	data := make([]byte, 1024)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
