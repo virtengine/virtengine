@@ -217,6 +217,8 @@ func TestEmptyState(t *testing.T) {
 	require.Contains(t, out, "genesis_time")
 	require.Contains(t, out, "chain_id")
 	require.Contains(t, out, "consensus")
+
+	require.NoError(t, serverCtx.Config.DB.Close())
 	require.Contains(t, out, "app_hash")
 	require.Contains(t, out, "app_state")
 }
