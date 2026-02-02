@@ -60,5 +60,9 @@ dist/
 venv/
 .venv/
 .localnet-last-update.virtengine-node
-.gitignore
 .localnet-last-update.provider-daemon
+
+# Node.js / Frontend
+node_modules/
+.next/
+*.tsbuildinfo

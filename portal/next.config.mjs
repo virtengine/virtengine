@@ -1,0 +1,64 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  
+  transpilePackages: [
+    'virtengine-portal-lib',
+    'virtengine-capture-lib',
+  ],
+
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'rpc.virtengine.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.virtengine.io',
+      },
+    ],
+  },
+
+  experimental: {
+    // typedRoutes: true, // Re-enable when all routes are complete
+  },
+
+  webpack: (config, { isServer }) => {
+    // Handle SVG imports
+    config.module.rules.push({
+      test: /\.svg$/,
+      use: ['@svgr/webpack'],
+    });
+
+    return config;
+  },
+
+  headers: async () => {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(self), microphone=(), geolocation=()',
+          },
+        ],
+      },
+    ];
+  },
+};
+
+export default nextConfig;
