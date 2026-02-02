@@ -236,8 +236,9 @@ func TestStartStandAlone(t *testing.T) {
 
 	app, err := mock.NewApp(home, logger)
 	require.NoError(t, err)
-	if closer, ok := app.(io.Closer); ok {
-		t.Cleanup(func() { _ = closer.Close() })
+	var appCloser interface{ Close() error }
+	if closer, ok := app.(interface{ Close() error }); ok {
+		appCloser = closer
 	}
 
 	svrAddr, _, closeFn, err := network.FreeTCPAddr()
@@ -252,11 +253,11 @@ func TestStartStandAlone(t *testing.T) {
 	err = svr.Start()
 	require.NoError(t, err)
 
-	timer := time.NewTimer(time.Duration(2) * time.Second)
-	for range timer.C {
-		err = svr.Stop()
-		require.NoError(t, err)
-		break
+	time.Sleep(2 * time.Second)
+	err = svr.Stop()
+	require.NoError(t, err)
+	if appCloser != nil {
+		require.NoError(t, appCloser.Close())
 	}
 }
 
