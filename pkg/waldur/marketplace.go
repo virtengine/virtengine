@@ -1024,9 +1024,13 @@ func (m *MarketplaceClient) ListCategories(ctx context.Context, params ListCateg
 			return mapHTTPError(statusCode, respBody)
 		}
 
-		if err := json.Unmarshal(respBody, &categories); err != nil {
+		var resp struct {
+			Results []Category `json:"results"`
+		}
+		if err := json.Unmarshal(respBody, &resp); err != nil {
 			return fmt.Errorf("unmarshal categories: %w", err)
 		}
+		categories = resp.Results
 
 		return nil
 	})
@@ -1117,4 +1121,3 @@ func joinQueryParams(params []string) string {
 	}
 	return result
 }
-
