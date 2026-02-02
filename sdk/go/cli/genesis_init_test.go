@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -217,6 +218,9 @@ func TestEmptyState(t *testing.T) {
 	require.Contains(t, out, "chain_id")
 	require.Contains(t, out, "consensus")
 
+	t.Cleanup(func() {
+		_ = os.RemoveAll(filepath.Join(home, "data", "application.db"))
+	})
 	require.Contains(t, out, "app_hash")
 	require.Contains(t, out, "app_state")
 }
