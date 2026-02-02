@@ -134,6 +134,10 @@ func TestParseAccessConfigFlags(t *testing.T) {
 }
 
 func TestParseStoreCodeGrants(t *testing.T) {
+	// Generate valid test addresses  
+	addr1 := sdk.AccAddress([]byte("wasm_grant_addr1_test"))
+	addr2 := sdk.AccAddress([]byte("wasm_grant_addr2_test_long"))
+	
 	specs := map[string]struct {
 		src    []string
 		exp    []types.CodeGrant
@@ -160,37 +164,37 @@ func TestParseStoreCodeGrants(t *testing.T) {
 			}},
 		},
 		"wildcard : any of addresses - single": {
-			src: []string{"*:ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm"},
+			src: []string{"*:" + addr1.String()},
 			exp: []types.CodeGrant{
 				{
 					CodeHash: []byte("*"),
 					InstantiatePermission: &types.AccessConfig{
 						Permission: types.AccessTypeAnyOfAddresses,
-						Addresses:  []string{"ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm"},
+						Addresses:  []string{addr1.String()},
 					},
 				},
 			},
 		},
 		"wildcard : any of addresses - multiple": {
-			src: []string{"*:ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm,ve14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sxfxq5x"},
+			src: []string{"*:" + addr1.String() + "," + addr2.String()},
 			exp: []types.CodeGrant{
 				{
 					CodeHash: []byte("*"),
 					InstantiatePermission: &types.AccessConfig{
 						Permission: types.AccessTypeAnyOfAddresses,
-						Addresses:  []string{"ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm", "ve14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sxfxq5x"},
+						Addresses:  []string{addr1.String(), addr2.String()},
 					},
 				},
 			},
 		},
 		"multiple code hashes with different permissions": {
-			src: []string{"any_checksum_1:ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm,ve14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sxfxq5x", "any_checksum_2:nobody"},
+			src: []string{"any_checksum_1:" + addr1.String() + "," + addr2.String(), "any_checksum_2:nobody"},
 			exp: []types.CodeGrant{
 				{
 					CodeHash: []byte("any_checksum_1"),
 					InstantiatePermission: &types.AccessConfig{
 						Permission: types.AccessTypeAnyOfAddresses,
-						Addresses:  []string{"ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm", "ve14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sxfxq5x"},
+						Addresses:  []string{addr1.String(), addr2.String()},
 					},
 				}, {
 					CodeHash: []byte("any_checksum_2"),
@@ -215,7 +219,7 @@ func TestParseStoreCodeGrants(t *testing.T) {
 			expErr: true,
 		},
 		"code hash : any of addresses - duplicate address": {
-			src:    []string{"any_checksum_1:ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm,ve1vx8knpllrj7n963p9ttd80w47kpacrhuxlvmwm"},
+			src:    []string{"any_checksum_1:" + addr1.String() + "," + addr1.String()},
 			expErr: true,
 		},
 		"empty code hash": {
