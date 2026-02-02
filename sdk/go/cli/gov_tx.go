@@ -592,10 +592,11 @@ func GetTxGovDraftProposalCmd() *cobra.Command {
 // GetTxGovCancelProposalCmd implements submitting a cancel proposal transaction command.
 func GetTxGovCancelProposalCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "cancel-proposal [proposal-id]",
-		Short:   "Cancel governance proposal before the voting period ends. Must be signed by the proposal creator.",
-		Args:    cobra.ExactArgs(1),
-		Example: fmt.Sprintf(`$ %s tx gov cancel-proposal 1 --from mykey`, version.AppName),
+		Use:               "cancel-proposal [proposal-id]",
+		Short:             "Cancel governance proposal before the voting period ends. Must be signed by the proposal creator.",
+		Args:              cobra.ExactArgs(1),
+		Example:           fmt.Sprintf(`$ %s tx gov cancel-proposal 1 --from mykey`, version.AppName),
+		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cl := MustClientFromContext(ctx)
