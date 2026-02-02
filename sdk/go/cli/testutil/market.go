@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	sdktest "github.com/cosmos/cosmos-sdk/testutil"
@@ -14,9 +15,33 @@ func ExecCreateBid(ctx context.Context, cctx client.Context, extraArgs ...string
 	return ExecTestCLICmd(ctx, cctx, cli.GetTxMarketBidCreateCmd(), extraArgs...)
 }
 
+// TxCreateBidExec is an alias for ExecCreateBid
+func TxCreateBidExec(ctx context.Context, cctx client.Context, extraArgs ...any) (sdktest.BufferWriter, error) {
+	args := make([]string, 0, len(extraArgs))
+	for _, arg := range extraArgs {
+		switch val := arg.(type) {
+		case string:
+			args = append(args, val)
+		case []string:
+			args = append(args, val...)
+		case cli.FlagsSet:
+			args = append(args, val...)
+		default:
+			return nil, fmt.Errorf("unexpected argument type %T", arg)
+		}
+	}
+
+	return ExecCreateBid(ctx, cctx, args...)
+}
+
 // ExecCloseBid is used for testing close bid tx
 func ExecCloseBid(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetTxMarketBidCloseCmd(), extraArgs...)
+}
+
+// TxCloseBidExec is an alias for ExecCloseBid
+func TxCloseBidExec(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
+	return ExecCloseBid(ctx, cctx, extraArgs...)
 }
 
 // ExecCreateLease is used for creating a lease
@@ -24,9 +49,19 @@ func ExecCreateLease(ctx context.Context, cctx client.Context, extraArgs ...stri
 	return ExecTestCLICmd(ctx, cctx, cli.GetTxMarketLeaseCreateCmd(), extraArgs...)
 }
 
+// TxCreateLeaseExec is an alias for ExecCreateLease
+func TxCreateLeaseExec(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
+	return ExecCreateLease(ctx, cctx, extraArgs...)
+}
+
 // ExecCloseLease is used for testing close order tx
 func ExecCloseLease(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetTxMarketLeaseCloseCmd(), extraArgs...)
+}
+
+// TxCloseLeaseExec is an alias for ExecCloseLease
+func TxCloseLeaseExec(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
+	return ExecCloseLease(ctx, cctx, extraArgs...)
 }
 
 // ExecQueryOrders is used for testing orders query
@@ -59,6 +94,16 @@ func ExecQueryBid(ctx context.Context, cctx client.Context, extraArgs ...string)
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryMarketBidCmd(), extraArgs...)
 }
 
+// QueryBidsExec is an alias for ExecQueryBids
+func QueryBidsExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryBids(ctx, cctx, args...)
+}
+
+// QueryBidExec is an alias for ExecQueryBid
+func QueryBidExec(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryBid(ctx, cctx, extraArgs...)
+}
+
 // ExecQueryLeases is used for testing leases query
 func ExecQueryLeases(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryMarketLeasesCmd(), args...)
@@ -67,4 +112,14 @@ func ExecQueryLeases(ctx context.Context, cctx client.Context, args ...string) (
 // ExecQueryLease is used for testing lease query
 func ExecQueryLease(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryMarketLeaseCmd(), extraArgs...)
+}
+
+// QueryLeasesExec is an alias for ExecQueryLeases
+func QueryLeasesExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryLeases(ctx, cctx, args...)
+}
+
+// QueryLeaseExec is an alias for ExecQueryLease
+func QueryLeaseExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryLease(ctx, cctx, args...)
 }
