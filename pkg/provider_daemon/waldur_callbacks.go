@@ -121,8 +121,8 @@ type WaldurCallbackHandler struct {
 	pendingCallbacks map[string]*PendingCallback
 	server           *http.Server
 	//nolint:unused // reserved for concurrent access control
-	mu     sync.RWMutex
-	stopCh chan struct{}
+	mu               sync.RWMutex
+	stopCh           chan struct{}
 }
 
 // PendingCallback represents a pending callback with retry info
@@ -279,14 +279,14 @@ func (h *WaldurCallbackHandler) handleCallback(w http.ResponseWriter, r *http.Re
 	// Read and parse payload
 	body, err := io.ReadAll(io.LimitReader(r.Body, h.cfg.MaxPayloadBytes))
 	if err != nil {
-		h.writeError(w, "failed to read body")
+		h.writeError(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
 
 	var callback marketplace.WaldurCallback
 	if err := json.Unmarshal(body, &callback); err != nil {
-		h.writeError(w, "invalid JSON payload")
+		h.writeError(w, "invalid JSON payload", http.StatusBadRequest)
 		return
 	}
 
@@ -294,7 +294,7 @@ func (h *WaldurCallbackHandler) handleCallback(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	if err := h.ProcessWaldurCallback(ctx, &callback); err != nil {
 		log.Printf("[waldur-callbacks] callback processing failed: %v", err)
-		h.writeError(w, err.Error())
+		h.writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -311,7 +311,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, h.cfg.MaxPayloadBytes))
 	if err != nil {
-		h.writeError(w, "failed to read body")
+		h.writeError(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
@@ -319,7 +319,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 	// Parse Waldur lifecycle callback
 	payload, err := waldur.ParseLifecycleCallback(body)
 	if err != nil {
-		h.writeError(w, "invalid lifecycle callback")
+		h.writeError(w, "invalid lifecycle callback", http.StatusBadRequest)
 		return
 	}
 
@@ -327,7 +327,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 	ctx := r.Context()
 	if err := h.processLifecyclePayload(ctx, payload); err != nil {
 		log.Printf("[waldur-callbacks] lifecycle callback failed: %v", err)
-		h.writeError(w, err.Error())
+		h.writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -626,9 +626,9 @@ func mapWaldurStateToAllocationState(state string) marketplace.AllocationState {
 }
 
 // writeError writes an error response
-func (h *WaldurCallbackHandler) writeError(w http.ResponseWriter, msg string) {
+func (h *WaldurCallbackHandler) writeError(w http.ResponseWriter, msg string, status int) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
+	w.WriteHeader(status)
 	response := map[string]string{"error": msg}
 	//nolint:errchkjson // map[string]string is always safe to encode
 	_ = json.NewEncoder(w).Encode(response)
