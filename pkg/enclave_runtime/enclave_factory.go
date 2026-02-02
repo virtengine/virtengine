@@ -114,7 +114,7 @@ func (f *EnclaveFactory) CreateService() (EnclaveService, error) {
 			return svc, nil
 		}
 		if mode == HardwareModeRequire {
-			return nil, fmt.Errorf("Nitro hardware required but failed to initialize: %w", err)
+			return nil, fmt.Errorf("nitro hardware required but failed to initialize: %w", err)
 		}
 		// Fall through to simulation
 	}

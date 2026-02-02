@@ -33,6 +33,11 @@ const (
 	AuditEventConfigChange AuditEventType = "config_change"
 )
 
+// Audit entry status constants
+const (
+	auditStatusFailed = "failed"
+)
+
 // AuditEntry represents an audit log entry
 type AuditEntry struct {
 	// ID is the unique entry ID
@@ -133,7 +138,7 @@ func (a *AuditLogger) LogEvent(ctx context.Context, eventType AuditEventType, de
 	}
 	if errStr, ok := details["error"].(string); ok {
 		entry.Error = errStr
-		entry.Status = "failed"
+		entry.Status = auditStatusFailed
 	}
 
 	a.store(entry)
@@ -230,11 +235,11 @@ func (a *AuditLogger) logEntry(entry AuditEntry) {
 	case "debug":
 		logFn = a.logger.Debug
 	case "warn":
-		if entry.Status == "failed" {
+		if entry.Status == auditStatusFailed {
 			logFn = a.logger.Warn
 		}
 	case "error":
-		if entry.Status == "failed" {
+		if entry.Status == auditStatusFailed {
 			logFn = a.logger.Error
 		} else {
 			return // Don't log non-errors at error level

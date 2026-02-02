@@ -9,8 +9,6 @@ import (
 	"github.com/virtengine/virtengine/pkg/economics/analysis"
 )
 
-const severityCritical = "critical"
-
 func TestEconomicAuditor_PerformAudit(t *testing.T) {
 	params := economics.DefaultTokenomicsParams()
 	auditor := NewEconomicAuditor(params)

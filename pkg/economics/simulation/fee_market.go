@@ -59,7 +59,13 @@ func (s *FeeMarketSimulator) SimulateFeeMarket(
 	totalGasUsed := int64(0)
 	totalTxs := int64(0)
 	totalSpamTxs := int64(0)
-	allGasPrices := make([]int64, 0)
+
+	// Calculate total transactions for preallocation
+	totalTxCount := 0
+	for _, txs := range txsPerBlock {
+		totalTxCount += len(txs)
+	}
+	allGasPrices := make([]int64, 0, totalTxCount)
 
 	for blockIdx, txs := range txsPerBlock {
 		snapshot := s.processBlock(int64(blockIdx)+initialState.BlockHeight, txs)

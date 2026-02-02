@@ -78,11 +78,11 @@ func (l VEIDLevel) String() string {
 	case VEIDLevelNone:
 		return "none"
 	case VEIDLevelBasic:
-		return "basic"
+		return string(IdentityTierBasic)
 	case VEIDLevelStandard:
-		return "standard"
+		return string(IdentityTierStandard)
 	case VEIDLevelPremium:
-		return "premium"
+		return string(IdentityTierPremium)
 	case VEIDLevelEnterprise:
 		return "enterprise"
 	default:
@@ -118,11 +118,11 @@ func ParseVEIDLevel(s string) (VEIDLevel, error) {
 	switch s {
 	case "none":
 		return VEIDLevelNone, nil
-	case "basic":
+	case string(IdentityTierBasic):
 		return VEIDLevelBasic, nil
-	case "standard":
+	case string(IdentityTierStandard):
 		return VEIDLevelStandard, nil
-	case "premium":
+	case string(IdentityTierPremium):
 		return VEIDLevelPremium, nil
 	case "enterprise":
 		return VEIDLevelEnterprise, nil

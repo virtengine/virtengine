@@ -437,7 +437,7 @@ func TestSEVHardwareDetection(t *testing.T) {
 		version := detector.Version()
 		// Version should be "unknown" or a valid version string
 		if version == "" {
-			version = "unknown"
+			version = platformUnknown
 		}
 		t.Logf("SEV-SNP version: %s", version)
 	})

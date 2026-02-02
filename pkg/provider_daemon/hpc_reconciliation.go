@@ -13,6 +13,9 @@ import (
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
+// Reconciliation resolution action constants
+const resolutionNone = "none"
+
 // HPCReconciliationConfig configures the reconciliation service
 type HPCReconciliationConfig struct {
 	// ReconciliationInterval is how often to run reconciliation
@@ -290,7 +293,7 @@ func (s *HPCReconciliationService) reconcileJob(ctx context.Context, jobID strin
 		if s.config.AutoResolveMinorDiscrepancies && !record.HasDiscrepancies() {
 			record.Status = hpctypes.ReconciliationStatusResolved
 			record.Resolution = "Auto-resolved: all discrepancies within tolerance"
-			record.ResolutionAction = "none"
+			record.ResolutionAction = resolutionNone
 		} else if record.HasDiscrepancies() {
 			// Check for critical discrepancies
 			criticalDiscrepancies := record.GetCriticalDiscrepancies()
@@ -370,7 +373,7 @@ func (s *HPCReconciliationService) compareMetrics(
 			SchedulerValue:    fmt.Sprintf("%d", scheduler.NodesUsed),
 			OnChainValue:      fmt.Sprintf("%d", onChain.UsageMetrics.NodesUsed),
 			DifferencePercent: "N/A",
-			Severity:          "high",
+			Severity:          string(SeverityHigh),
 			ToleranceExceeded: true,
 		})
 	}
@@ -401,15 +404,15 @@ func (s *HPCReconciliationService) checkDiscrepancy(
 	}
 
 	// Determine severity
-	severity := "low"
+	severity := string(SeverityLow)
 	if diffPercent > tolerancePercent*2 {
-		severity = "medium"
+		severity = string(SeverityMedium)
 	}
 	if diffPercent > tolerancePercent*5 {
-		severity = "high"
+		severity = string(SeverityHigh)
 	}
 	if diffPercent > tolerancePercent*10 {
-		severity = "critical"
+		severity = string(SeverityCritical)
 	}
 
 	return &hpctypes.ReconciliationDiscrepancy{

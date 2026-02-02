@@ -906,7 +906,7 @@ func (s *paymentService) GetConversionRate(ctx context.Context, fromCurrency Cur
 		quoteAsset := strings.ToLower(string(fromCurrency))
 
 		price, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
-		if err == nil && price.PriceData.IsValid() {
+		if err == nil && price.IsValid() {
 			// Price is in "crypto per fiat unit", so we need to invert
 			// e.g., if 1 UVE = $0.50, then rate is 2 UVE per $1
 			var rate sdkmath.LegacyDec

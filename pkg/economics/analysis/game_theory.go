@@ -190,7 +190,7 @@ func (g *GameTheoryAnalyzer) AnalyzeProviderIncentives(
 
 // AnalyzeMultiPlayerGame analyzes a multi-player game scenario.
 func (g *GameTheoryAnalyzer) AnalyzeMultiPlayerGame() []economics.GameTheoryAnalysis {
-	analyses := make([]economics.GameTheoryAnalysis, 0)
+	analyses := make([]economics.GameTheoryAnalysis, 0, 3)
 
 	// Validator vs Delegator game
 	analyses = append(analyses, g.analyzeValidatorDelegatorGame())
@@ -479,7 +479,7 @@ func (g *GameTheoryAnalyzer) ComprehensiveGameTheoryAnalysis(
 	avgAPR int64,
 	unbondingDays int64,
 ) []economics.GameTheoryAnalysis {
-	analyses := make([]economics.GameTheoryAnalysis, 0)
+	analyses := make([]economics.GameTheoryAnalysis, 0, 7)
 
 	analyses = append(analyses, g.AnalyzeValidatorIncentives(validatorCount, avgStake, avgCommission, slashingPenaltyBPS))
 	analyses = append(analyses, g.AnalyzeDelegatorIncentives(delegatorCount, avgDelegation, avgAPR, unbondingDays))

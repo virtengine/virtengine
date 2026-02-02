@@ -8,9 +8,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// backendMemory is the memory backend type for testing
+const backendMemory = "memory"
+
 func TestInMemorySessionStore_BasicOperations(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 	config.MaxSessions = 100
 	config.SessionTTL = time.Minute
 
@@ -54,7 +57,7 @@ func TestInMemorySessionStore_BasicOperations(t *testing.T) {
 
 func TestInMemorySessionStore_SessionNotFound(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
 	defer store.Close()
@@ -69,7 +72,7 @@ func TestInMemorySessionStore_SessionNotFound(t *testing.T) {
 
 func TestInMemorySessionStore_Count(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
 	defer store.Close()
@@ -107,7 +110,7 @@ func TestInMemorySessionStore_Count(t *testing.T) {
 
 func TestInMemorySessionStore_Delete(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
 	defer store.Close()
@@ -137,7 +140,7 @@ func TestInMemorySessionStore_Delete(t *testing.T) {
 
 func TestInMemorySessionStore_Touch(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 	config.SessionTTL = time.Hour
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
@@ -173,7 +176,7 @@ func TestInMemorySessionStore_Touch(t *testing.T) {
 
 func TestInMemorySessionStore_MaxSessions(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 	config.MaxSessions = 10
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
@@ -206,7 +209,7 @@ func TestInMemorySessionStore_MaxSessions(t *testing.T) {
 
 func TestInMemorySessionStore_TTLExpiry(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 	config.SessionTTL = 50 * time.Millisecond
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
@@ -241,7 +244,7 @@ func TestInMemorySessionStore_TTLExpiry(t *testing.T) {
 
 func TestInMemorySessionStore_HistoryTrimming(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 	config.MaxHistoryLength = 5
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
@@ -282,7 +285,7 @@ func TestInMemorySessionStore_HistoryTrimming(t *testing.T) {
 
 func TestInMemorySessionStore_Metrics(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 
 	store := NewInMemorySessionStore(config, zerolog.Nop())
 	defer store.Close()
@@ -317,7 +320,7 @@ func TestInMemorySessionStore_Metrics(t *testing.T) {
 
 func TestNewSessionStore_Memory(t *testing.T) {
 	config := DefaultSessionStoreConfig()
-	config.Backend = "memory"
+	config.Backend = backendMemory
 
 	store, err := NewSessionStore(context.Background(), config, zerolog.Nop())
 	if err != nil {

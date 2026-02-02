@@ -17,6 +17,9 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// boolTrue is the string representation of boolean true for event attributes
+const boolTrue = "true"
+
 // ============================================================================
 // Geographic Restriction Parameters
 // ============================================================================
@@ -647,7 +650,7 @@ func (k Keeper) InvalidateGeoCheckCache(ctx sdk.Context, address string) {
 // boolToString converts bool to string for event attributes
 func boolToString(b bool) string {
 	if b {
-		return "true"
+		return boolTrue
 	}
 	return "false"
 }

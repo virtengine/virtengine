@@ -189,8 +189,8 @@ func (c *RuleBasedClassifier) Classify(ctx context.Context, message string, chat
 	message = strings.TrimSpace(message)
 	lowerMessage := strings.ToLower(message)
 
-	var bestIntent Intent = IntentGeneralChat
-	var bestConfidence float32 = 0.0
+	bestIntent := IntentGeneralChat
+	var bestConfidence float32
 	var alternatives []IntentScore
 
 	// Score each intent

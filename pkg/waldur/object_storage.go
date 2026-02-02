@@ -814,7 +814,7 @@ func (o *ObjectStorageClient) Ping(ctx context.Context) error {
 type hashingReader struct {
 	reader io.Reader
 	hasher io.Writer
-	hash   []byte
+	hash   []byte //nolint:unused // Reserved for caching computed hash
 }
 
 func newHashingReader(r io.Reader) *hashingReader {

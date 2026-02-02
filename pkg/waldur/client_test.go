@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// testValue is a common test string value
+const testValue = "test"
+
 func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -296,8 +299,8 @@ func TestSafeString(t *testing.T) {
 	}
 
 	// Test valid pointer
-	s := "test"
-	if got := safeString(&s); got != "test" {
+	s := testValue
+	if got := safeString(&s); got != testValue {
 		t.Errorf("safeString(&%q) = %q, want %q", s, got, s)
 	}
 }

@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	//nolint:gosec // G101: This is a URL path constant, not a credential
 	oauthTokenPath = "/oauth/token"
 )
 

@@ -24,6 +24,11 @@ import (
 	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
+// Test address constants for benchmark keeper tests
+const (
+	testBenchProviderAddr = "cosmos1test123456789"
+)
+
 // mockProviderKeeper is a mock implementation of ProviderKeeper
 type mockProviderKeeper struct {
 	providers map[string]bool
@@ -239,7 +244,7 @@ func TestSubmitBenchmarks_InvalidSignature(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1test123456789"
+	providerAddr := testBenchProviderAddr
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -269,7 +274,7 @@ func TestSubmitBenchmarks_UnknownProvider(t *testing.T) {
 func TestReliabilityScore(t *testing.T) {
 	keeper, ctx, _, _ := setupKeeper(t)
 
-	providerAddr := "cosmos1test123456789"
+	providerAddr := testBenchProviderAddr
 
 	inputs := types.ReliabilityScoreInputs{
 		BenchmarkSummary:        7000,

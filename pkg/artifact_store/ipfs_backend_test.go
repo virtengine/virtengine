@@ -37,7 +37,7 @@ func TestIPFSBackend(t *testing.T) {
 
 		// Create a validator with production settings
 		prodValidator := NewCIDValidator()
-		stubCID := "Qm0123456789abcdef0123456789abcdef"
+		stubCID := testStubCID
 
 		// Stub CID should be rejected
 		err := prodValidator.ValidateCID(stubCID)
@@ -46,7 +46,7 @@ func TestIPFSBackend(t *testing.T) {
 		}
 
 		// Real CID should be accepted
-		realCID := "QmRf22bZar3WKmojipms22PkXH1MZGmvsqzQtuSvQE3uhm"
+		realCID := testRealCID
 		err = prodValidator.ValidateCID(realCID)
 		if err != nil {
 			t.Errorf("expected production validator to accept real CID: %v", err)

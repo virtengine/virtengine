@@ -51,7 +51,7 @@ func TestSecureKeyStorage(t *testing.T) {
 		}
 
 		// Verify permissions on non-Windows systems
-		if runtime.GOOS != "windows" {
+		if runtime.GOOS != osWindows {
 			info, err := os.Stat(path)
 			if err != nil {
 				t.Fatalf("Failed to stat file: %v", err)
@@ -183,7 +183,7 @@ func TestStateFileValidator(t *testing.T) {
 
 func TestEnsureSecurePermissions(t *testing.T) {
 	// Skip permission tests on Windows
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		t.Skip("Permission tests not applicable on Windows")
 	}
 

@@ -22,6 +22,13 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// Test address constants
+const (
+	testDelegatorAddr = "cosmos1delegator123"
+	testValidatorAddr = "cosmos1validator456"
+	testValidator123  = "cosmos1validator123"
+)
+
 // DelegationKeeperTestSuite is the test suite for the delegation keeper
 type DelegationKeeperTestSuite struct {
 	suite.Suite
@@ -89,8 +96,8 @@ func (s *DelegationKeeperTestSuite) TestParams() {
 
 // TestDelegationStorage tests delegation storage
 func (s *DelegationKeeperTestSuite) TestDelegationStorage() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 
 	// Initially no delegation
 	_, found := s.keeper.GetDelegation(s.ctx, delegatorAddr, validatorAddr)
@@ -120,7 +127,7 @@ func (s *DelegationKeeperTestSuite) TestDelegationStorage() {
 
 // TestValidatorShares tests validator shares management
 func (s *DelegationKeeperTestSuite) TestValidatorShares() {
-	validatorAddr := "cosmos1validator123"
+	validatorAddr := testValidator123
 
 	// Initially no shares
 	_, found := s.keeper.GetValidatorShares(s.ctx, validatorAddr)

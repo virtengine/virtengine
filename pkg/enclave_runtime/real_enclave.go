@@ -537,8 +537,7 @@ func (v *SimpleAttestationVerifier) VerifyReport(ctx context.Context, report *At
 
 // IsMeasurementAllowed checks if a measurement is in the allowlist
 func (v *SimpleAttestationVerifier) IsMeasurementAllowed(measurement []byte) bool {
-	key := string(measurement)
-	return v.allowedMeasurements[key]
+	return v.allowedMeasurements[string(measurement)]
 }
 
 // AddAllowedMeasurement adds a measurement to the allowlist

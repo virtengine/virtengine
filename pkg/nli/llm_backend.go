@@ -473,6 +473,8 @@ func (o *OpenAIBackend) SetHTTPClient(client *http.Client) {
 }
 
 // extractConfidenceFromText attempts to extract confidence score from text
+//
+//nolint:unused // Reserved for future LLM response parsing
 func extractConfidenceFromText(text string) float32 {
 	// Try to find patterns like "0.9", "0.85", "confidence: 0.7"
 	text = strings.ToLower(text)

@@ -47,7 +47,7 @@ type RealIPFSClient struct {
 	endpoint   string
 	timeout    time.Duration
 	maxRetries int
-	mu         sync.RWMutex
+	mu         sync.RWMutex //nolint:unused // Reserved for future concurrent access protection
 }
 
 // RealIPFSClientConfig contains configuration for the real IPFS client

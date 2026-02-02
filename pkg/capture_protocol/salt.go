@@ -361,6 +361,8 @@ func (c *saltCache) evictOldest() {
 }
 
 // size returns the current cache size
+//
+//nolint:unused // Reserved for diagnostics and testing
 func (c *saltCache) size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

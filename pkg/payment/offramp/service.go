@@ -402,7 +402,7 @@ func (s *offRampService) CreateAndExecutePayout(ctx context.Context, req CreateP
 
 	// Update limits
 	if err := s.limitsStore.UpdateUsage(ctx, req.AccountAddress, intent.FiatAmount.Value); err != nil {
-		// Log but don't fail
+		_ = err // Log but don't fail
 	}
 
 	// Update metrics
@@ -494,7 +494,7 @@ func (s *offRampService) CancelPayout(ctx context.Context, payoutID string, reas
 		provider, ok := s.providers[payout.Provider]
 		if ok {
 			if err := provider.CancelPayout(ctx, payout.ProviderPayoutID); err != nil {
-				// Log but continue - we'll mark as canceled locally
+				_ = err // Log but continue - we'll mark as canceled locally
 			}
 		}
 	}
@@ -600,9 +600,10 @@ func (s *offRampService) HandleWebhook(ctx context.Context, providerType Provide
 	// Update metrics
 	s.metrics.mu.Lock()
 	s.metrics.webhooksProcessed++
-	if event.Status == PayoutStatusSucceeded {
+	switch event.Status {
+	case PayoutStatusSucceeded:
 		s.metrics.successfulPayouts++
-	} else if event.Status == PayoutStatusFailed {
+	case PayoutStatusFailed:
 		s.metrics.failedPayouts++
 	}
 	s.metrics.mu.Unlock()

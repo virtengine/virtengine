@@ -243,6 +243,7 @@ func (w *DisputeWindow) Escalate(
 		return fmt.Errorf("cannot escalate resolved dispute")
 	}
 
+	//nolint:gosec // G115: escalation path length is bounded by practical dispute workflow limits
 	stepNumber := uint32(len(w.EscalationPath) + 1)
 	w.EscalationPath = append(w.EscalationPath, EscalationStep{
 		StepNumber:       stepNumber,

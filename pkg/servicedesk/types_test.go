@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+// Test constants for repeated string literals
+const (
+	testStatusOpen = "open"
+)
+
 func TestDefaultMappingSchema(t *testing.T) {
 	schema := DefaultMappingSchema()
 
@@ -18,7 +23,7 @@ func TestDefaultMappingSchema(t *testing.T) {
 		jira    string
 		waldur  string
 	}{
-		{"open", "Open", "new"},
+		{testStatusOpen, "Open", "new"},
 		{"assigned", "In Progress", "in_progress"},
 		{"in_progress", "In Progress", "in_progress"},
 		{"pending_customer", "Waiting for Customer", "waiting"},
@@ -43,9 +48,9 @@ func TestMapStatusRoundTrip(t *testing.T) {
 	schema := DefaultMappingSchema()
 
 	// Test Jira round trip
-	jiraStatus := schema.MapOnChainStatusToJira("open")
+	jiraStatus := schema.MapOnChainStatusToJira(testStatusOpen)
 	onChain := schema.MapJiraStatusToOnChain(jiraStatus)
-	if onChain != "open" {
+	if onChain != testStatusOpen {
 		t.Errorf("Jira round trip failed: open -> %s -> %s", jiraStatus, onChain)
 	}
 

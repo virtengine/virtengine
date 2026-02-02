@@ -235,9 +235,10 @@ func (v APIVersion) String() string {
 		return v.RawVersion
 	}
 	s := fmt.Sprintf("v%d", v.Version)
-	if v.Stability == StabilityBeta {
+	switch v.Stability {
+	case StabilityBeta:
 		s += fmt.Sprintf("beta%d", v.Revision)
-	} else if v.Stability == StabilityAlpha {
+	case StabilityAlpha:
 		s += fmt.Sprintf("alpha%d", v.Revision)
 	}
 	return s

@@ -147,7 +147,7 @@ func (s *ReconciliationService) reconcileProvider(
 
 		// Save record
 		if err := s.reconcile.Save(ctx, record); err != nil {
-			// Log but continue
+			_ = err // Log but continue
 		}
 	}
 

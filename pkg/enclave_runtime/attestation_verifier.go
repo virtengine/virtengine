@@ -1032,7 +1032,7 @@ func CreateTestSGXQuote(mrenclave, mrsigner []byte, debugMode bool, nonce []byte
 	reportBody := quote[sgxQuoteReportBodyOffset:]
 
 	// Attributes
-	var attrs uint64 = sgxAttrMode64Bit
+	attrs := uint64(sgxAttrMode64Bit)
 	if debugMode {
 		attrs |= sgxAttrDebug
 	}

@@ -569,10 +569,11 @@ func (a *dvsDMVAdapter) convertResponse(req *VerificationRequest, dvsResp *DVSVe
 	// Check document status
 	if !dvsResp.VerifyResult.DocumentValid {
 		response.DocumentValid = false
-		if dvsResp.VerifyResult.DocumentStatus == "EXPIRED" {
+		switch dvsResp.VerifyResult.DocumentStatus {
+		case "EXPIRED":
 			response.Status = VerificationStatusExpired
 			response.Warnings = append(response.Warnings, "Document has expired")
-		} else if dvsResp.VerifyResult.DocumentStatus == "CANCELLED" {
+		case "CANCELLED":
 			response.Status = VerificationStatusRevoked
 			response.Warnings = append(response.Warnings, "Document has been cancelled")
 		}

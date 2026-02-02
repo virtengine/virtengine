@@ -937,7 +937,7 @@ func (a *AnsibleAdapter) parseRecapLine(line string) *PlaySummary {
 			summary.Changed = val
 		case "unreachable":
 			summary.Unreachable = val
-		case "failed":
+		case string(WorkloadStateFailed):
 			summary.Failed = val
 		case "skipped":
 			summary.Skipped = val

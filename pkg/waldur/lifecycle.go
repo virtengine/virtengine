@@ -37,6 +37,12 @@ const (
 	LifecycleActionTerminate LifecycleAction = "terminate"
 )
 
+// Operation state constants for polling
+const (
+	opStateDone     = "done"
+	opStateCanceled = "canceled"
+)
+
 // LifecycleRequest contains parameters for lifecycle operations
 type LifecycleRequest struct {
 	// ResourceUUID is the Waldur resource UUID
@@ -260,11 +266,11 @@ func (l *LifecycleClient) WaitForOperation(ctx context.Context, resourceUUID, op
 			}
 
 			switch status.State {
-			case "done", "completed", "OK":
+			case opStateDone, "completed", "OK":
 				return status, nil
 			case "erred", "failed", "error":
 				return status, fmt.Errorf("operation failed: %s", status.Error)
-			case "canceled", "cancelled":
+			case opStateCanceled, "cancelled":
 				return status, fmt.Errorf("operation was cancelled")
 			}
 		}

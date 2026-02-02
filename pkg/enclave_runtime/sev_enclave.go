@@ -731,11 +731,11 @@ func (s *SEVSNPEnclaveServiceImpl) simulateCVMScoring(request *ScoringRequest) *
 	var status string
 	switch {
 	case score >= 80:
-		status = "verified"
+		status = statusVerified
 	case score >= 50:
-		status = "needs_review"
+		status = statusNeedsReview
 	default:
-		status = "rejected"
+		status = statusRejected
 	}
 
 	// Generate evidence hashes

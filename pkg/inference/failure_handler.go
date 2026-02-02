@@ -167,7 +167,7 @@ func (fh *FailureHandler) handleRetry(
 	inputs *ScoreInputs,
 	scorer Scorer,
 ) (*ScoreResult, error) {
-	var lastErr error = originalErr
+	lastErr := originalErr
 
 	for attempt := 1; attempt <= fh.config.MaxRetries; attempt++ {
 		// Wait before retry

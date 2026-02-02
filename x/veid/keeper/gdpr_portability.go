@@ -13,6 +13,9 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// schemaVersion10 is the schema version for GDPR export data
+const schemaVersion10 = "1.0"
+
 // ============================================================================
 // GDPR Data Portability Keeper Methods
 // ============================================================================
@@ -271,7 +274,7 @@ func (k Keeper) exportIdentityData(ctx sdk.Context, address sdk.AccAddress, pkg 
 		return false // continue iteration
 	})
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryIdentity] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryIdentity] = schemaVersion10
 	return nil
 }
 
@@ -311,7 +314,7 @@ func (k Keeper) exportConsentData(ctx sdk.Context, address sdk.AccAddress, pkg *
 		pkg.Consent.ScopeConsents = append(pkg.Consent.ScopeConsents, portableConsent)
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryConsent] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryConsent] = schemaVersion10
 	return nil
 }
 
@@ -351,7 +354,7 @@ func (k Keeper) exportVerificationHistory(ctx sdk.Context, address sdk.AccAddres
 		pkg.VerificationHistory.Verifications = append(pkg.VerificationHistory.Verifications, portableRecord)
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryVerificationHistory] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryVerificationHistory] = schemaVersion10
 	return nil
 }
 
@@ -365,7 +368,7 @@ func (k Keeper) exportTransactionData(ctx sdk.Context, address sdk.AccAddress, p
 		Transactions:      make([]types.PortableTransaction, 0),
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryTransactions] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryTransactions] = schemaVersion10
 	return nil
 }
 
@@ -381,7 +384,7 @@ func (k Keeper) exportMarketplaceData(ctx sdk.Context, address sdk.AccAddress, p
 		Leases:      make([]types.PortableLease, 0),
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryMarketplace] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryMarketplace] = schemaVersion10
 	return nil
 }
 
@@ -421,7 +424,7 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 		pkg.Delegations.Delegations = append(pkg.Delegations.Delegations, portableDel)
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryDelegations] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryDelegations] = schemaVersion10
 	return nil
 }
 

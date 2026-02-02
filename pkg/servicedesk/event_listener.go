@@ -192,6 +192,8 @@ func (l *ChainEventListener) connectAndListen(ctx context.Context) error {
 }
 
 // processEvent processes a single chain event
+//
+//nolint:unused // Reserved for chain event processing integration
 func (l *ChainEventListener) processEvent(ctx context.Context, event abci.Event, blockHeight int64, txHash string) error {
 	eventType := event.Type
 
@@ -227,6 +229,8 @@ func (l *ChainEventListener) processEvent(ctx context.Context, event abci.Event,
 }
 
 // isSupportEvent checks if an event type is a support module event
+//
+//nolint:unused // Used by processEvent for event filtering
 func (l *ChainEventListener) isSupportEvent(eventType string) bool {
 	for _, et := range l.config.EventTypes {
 		if et == eventType {
@@ -237,6 +241,8 @@ func (l *ChainEventListener) isSupportEvent(eventType string) bool {
 }
 
 // handleTicketCreated handles a ticket created event
+//
+//nolint:unused // Used by processEvent for ticket creation handling
 func (l *ChainEventListener) handleTicketCreated(ctx context.Context, attrs map[string]string, blockHeight int64, txHash string) error {
 	event := &TicketCreatedEvent{
 		TicketID:        attrs["ticket_id"],
@@ -263,6 +269,8 @@ func (l *ChainEventListener) handleTicketCreated(ctx context.Context, attrs map[
 }
 
 // handleTicketUpdated handles a ticket updated event
+//
+//nolint:unused // Used by processEvent for ticket update handling
 func (l *ChainEventListener) handleTicketUpdated(ctx context.Context, attrs map[string]string, blockHeight int64, txHash string) error {
 	event := &TicketUpdatedEvent{
 		TicketID:    attrs["ticket_id"],
@@ -295,6 +303,8 @@ func (l *ChainEventListener) handleTicketUpdated(ctx context.Context, attrs map[
 }
 
 // handleTicketClosed handles a ticket closed event
+//
+//nolint:unused // Used by processEvent for ticket closure handling
 func (l *ChainEventListener) handleTicketClosed(ctx context.Context, attrs map[string]string, blockHeight int64, txHash string) error {
 	event := &TicketClosedEvent{
 		TicketID:    attrs["ticket_id"],
