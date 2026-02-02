@@ -17,6 +17,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"sync"
 	"time"
 

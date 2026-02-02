@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"io"
 	"net/http"
 	"strings"
