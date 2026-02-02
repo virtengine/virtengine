@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 
+	"github.com/virtengine/virtengine/x/hpc/client/cli"
 	"github.com/virtengine/virtengine/x/hpc/keeper"
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
@@ -80,7 +81,7 @@ func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *r
 
 // GetTxCmd returns the root tx command for the HPC module.
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetTxCmd()
 }
 
 // GetQueryCmd returns the root query command for the HPC module.
@@ -167,5 +168,4 @@ func (am AppModule) IsOnePerModuleType() {}
 
 // IsAppModule implements the appmodule.AppModule interface.
 func (am AppModule) IsAppModule() {}
-
 
