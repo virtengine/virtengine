@@ -39,6 +39,16 @@ func ExecQueryOrder(ctx context.Context, cctx client.Context, extraArgs ...strin
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryMarketOrderCmd(), extraArgs...)
 }
 
+// QueryOrdersExec is an alias for ExecQueryOrders
+func QueryOrdersExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryOrders(ctx, cctx, args...)
+}
+
+// QueryOrderExec is an alias for ExecQueryOrder
+func QueryOrderExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryOrder(ctx, cctx, args...)
+}
+
 // ExecQueryBids is used for testing bids query
 func ExecQueryBids(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryMarketBidsCmd(), args...)
