@@ -9,14 +9,22 @@ import (
 	"testing"
 	"time"
 
+	sdkaws "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
+
+func skipIfNoAwsCredentials(t *testing.T) {
+	if _, err := aws.GetAccountIdE(t); err != nil {
+		t.Skipf("Skipping infra tests without AWS credentials: %v", err)
+	}
+}
 
 // Test configuration
 const (
@@ -28,16 +36,18 @@ const (
 // TestNetworkingModule tests the networking Terraform module
 func TestNetworkingModule(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	// Unique ID for test resources
 	uniqueID := random.UniqueId()
 	projectName := fmt.Sprintf("ve-test-%s", strings.ToLower(uniqueID))
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../terraform/modules/networking",
+		TerraformDir:    "../terraform/modules/networking",
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":            projectName,
-			"environment":        "test",
+			"environment":        "staging",
 			"cluster_name":       fmt.Sprintf("%s-cluster", projectName),
 			"vpc_cidr":           "10.99.0.0/16",
 			"availability_zones": []string{"us-east-1a", "us-east-1b"},
@@ -52,6 +62,7 @@ func TestNetworkingModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -70,7 +81,14 @@ func TestNetworkingModule(t *testing.T) {
 	// Validate VPC
 	t.Run("VPC exists and has correct CIDR", func(t *testing.T) {
 		vpc := aws.GetVpcById(t, vpcID, testRegion)
-		assert.Equal(t, "10.99.0.0/16", *vpc.CidrBlock)
+		ec2Client := aws.NewEc2Client(t, testRegion)
+		vpcOutput, err := ec2Client.DescribeVpcs(&ec2.DescribeVpcsInput{
+			VpcIds: []*string{sdkaws.String(vpc.Id)},
+		})
+		assert.NoError(t, err)
+		if assert.Len(t, vpcOutput.Vpcs, 1) {
+			assert.Equal(t, "10.99.0.0/16", sdkaws.StringValue(vpcOutput.Vpcs[0].CidrBlock))
+		}
 	})
 
 	// Validate subnets
@@ -113,6 +131,7 @@ func TestNetworkingModule(t *testing.T) {
 // TestEKSModule tests the EKS Terraform module
 func TestEKSModule(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	// Use test-structure to skip long-running tests
 	workingDir := "../terraform/modules/eks"
@@ -128,10 +147,11 @@ func TestEKSModule(t *testing.T) {
 	// First, deploy networking (dependency)
 	networkingDir := "../terraform/modules/networking"
 	networkingOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: networkingDir,
+		TerraformDir:    networkingDir,
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":            projectName,
-			"environment":        "test",
+			"environment":        "staging",
 			"cluster_name":       fmt.Sprintf("%s-cluster", projectName),
 			"vpc_cidr":           "10.98.0.0/16",
 			"availability_zones": []string{"us-east-1a", "us-east-1b"},
@@ -141,6 +161,7 @@ func TestEKSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -154,7 +175,8 @@ func TestEKSModule(t *testing.T) {
 
 	// Now deploy EKS
 	eksOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: workingDir,
+		TerraformDir:    workingDir,
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"cluster_name":              fmt.Sprintf("%s-cluster", projectName),
 			"kubernetes_version":        "1.29",
@@ -179,6 +201,7 @@ func TestEKSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -190,8 +213,16 @@ func TestEKSModule(t *testing.T) {
 	clusterEndpoint := terraform.Output(t, eksOptions, "cluster_endpoint")
 
 	t.Run("EKS cluster is active", func(t *testing.T) {
-		cluster := aws.GetEksCluster(t, testRegion, clusterName)
-		assert.Equal(t, "ACTIVE", *cluster.Status)
+		session, err := aws.NewAuthenticatedSession(testRegion)
+		assert.NoError(t, err)
+		eksClient := eks.New(session, sdkaws.NewConfig().WithRegion(testRegion))
+		clusterOutput, err := eksClient.DescribeCluster(&eks.DescribeClusterInput{
+			Name: sdkaws.String(clusterName),
+		})
+		assert.NoError(t, err)
+		if assert.NotNil(t, clusterOutput.Cluster) {
+			assert.Equal(t, "ACTIVE", sdkaws.StringValue(clusterOutput.Cluster.Status))
+		}
 	})
 
 	t.Run("Cluster endpoint is accessible", func(t *testing.T) {
@@ -219,6 +250,7 @@ func TestEKSModule(t *testing.T) {
 // TestRDSModule tests the RDS Terraform module
 func TestRDSModule(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	if testing.Short() {
 		t.Skip("Skipping RDS test in short mode")
@@ -230,10 +262,11 @@ func TestRDSModule(t *testing.T) {
 	// First, deploy networking
 	networkingDir := "../terraform/modules/networking"
 	networkingOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: networkingDir,
+		TerraformDir:    networkingDir,
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":            projectName,
-			"environment":        "test",
+			"environment":        "staging",
 			"cluster_name":       fmt.Sprintf("%s-cluster", projectName),
 			"vpc_cidr":           "10.97.0.0/16",
 			"availability_zones": []string{"us-east-1a", "us-east-1b"},
@@ -242,6 +275,7 @@ func TestRDSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -253,10 +287,11 @@ func TestRDSModule(t *testing.T) {
 
 	// Deploy RDS
 	rdsOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../terraform/modules/rds",
+		TerraformDir:    "../terraform/modules/rds",
+		TerraformBinary: "terraform",
 		Vars: map[string]interface{}{
 			"project":                      projectName,
-			"environment":                  "test",
+			"environment":                  "staging",
 			"db_subnet_group_name":         dbSubnetGroup,
 			"security_group_id":            dbSGID,
 			"engine_version":               "15.5",
@@ -273,6 +308,7 @@ func TestRDSModule(t *testing.T) {
 		},
 		EnvVars: map[string]string{
 			"AWS_DEFAULT_REGION": testRegion,
+			"AWS_REGION":         testRegion,
 		},
 	})
 
@@ -285,7 +321,10 @@ func TestRDSModule(t *testing.T) {
 
 		// Wait for RDS to be available
 		retry.DoWithRetry(t, "Wait for RDS", retryMaxTries, retrySleepTime, func() (string, error) {
-			instance := aws.GetRdsInstanceDetailsE(t, instanceID, testRegion)
+			instance, err := aws.GetRdsInstanceDetailsE(t, instanceID, testRegion)
+			if err != nil {
+				return "", err
+			}
 			if instance == nil {
 				return "", fmt.Errorf("RDS instance not found")
 			}
@@ -317,6 +356,7 @@ func TestRDSModule(t *testing.T) {
 // TestFullStackIntegration tests the complete infrastructure stack
 func TestFullStackIntegration(t *testing.T) {
 	t.Parallel()
+	skipIfNoAwsCredentials(t)
 
 	if testing.Short() {
 		t.Skip("Skipping full stack test in short mode")
@@ -330,9 +370,11 @@ func TestFullStackIntegration(t *testing.T) {
 	// Stage 1: Setup
 	test_structure.RunTestStage(t, "setup", func() {
 		terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-			TerraformDir: workingDir,
+			TerraformDir:    workingDir,
+			TerraformBinary: "terraform",
 			EnvVars: map[string]string{
 				"AWS_DEFAULT_REGION": testRegion,
+				"AWS_REGION":         testRegion,
 			},
 		})
 		test_structure.SaveTerraformOptions(t, workingDir, terraformOptions)

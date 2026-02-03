@@ -83,12 +83,41 @@ jobs:
             cd -
           done
 
+      - name: Collect Kubernetes manifests
+        id: k8s-manifests
+        run: |
+          {
+            echo "files<<EOF"
+            if [ -d deploy/kubernetes/base ]; then
+              find deploy/kubernetes/base -maxdepth 1 -name '*.yaml' -print
+            fi
+            if [ -d deploy/kubernetes/overlays ]; then
+              find deploy/kubernetes/overlays -name '*.yaml' -print
+            fi
+            if [ -d deploy/argocd ]; then
+              find deploy/argocd -name '*.yaml' -print
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install kubeval
+        run: |
+          KUBEVAL_VERSION=0.16.1
+          curl -sSL -o kubeval.tar.gz https://github.com/instrumenta/kubeval/releases/download/v${KUBEVAL_VERSION}/kubeval-linux-amd64.tar.gz
+          tar -xzf kubeval.tar.gz
+          sudo mv kubeval /usr/local/bin/kubeval
+
       - name: Lint Kubernetes Manifests
-        uses: azure/k8s-lint@v1
-        with:
-          manifests: |
-            deploy/kubernetes/**/*.yaml
-            deploy/argocd/**/*.yaml
+        run: |
+          files="${{ steps.k8s-manifests.outputs.files }}"
+          if [ -z "$files" ]; then
+            echo "No Kubernetes manifests found to lint."
+            exit 0
+          fi
+          echo "$files" | xargs -r kubeval \
+            --kubernetes-version 1.29.0 \
+            --schema-location https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master \
+            --ignore-missing-schemas
 
   # ============================================================================
   # Security Scanning
@@ -158,13 +187,6 @@ jobs:
           chmod +x terragrunt
           sudo mv terragrunt /usr/local/bin/
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Terragrunt Plan
         run: |
           cd infra/terraform/environments/${{ matrix.environment }}
@@ -218,13 +240,6 @@ jobs:
           chmod +x terragrunt
           sudo mv terragrunt /usr/local/bin/
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Terragrunt Apply
         run: |
           cd infra/terraform/environments/dev
@@ -256,13 +271,6 @@ jobs:
           chmod +x terragrunt
           sudo mv terragrunt /usr/local/bin/
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Terragrunt Apply
         run: |
           cd infra/terraform/environments/staging
@@ -292,13 +300,6 @@ jobs:
           curl -Lo terragrunt https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
           chmod +x terragrunt
           sudo mv terragrunt /usr/local/bin/
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Terragrunt Plan
         run: |

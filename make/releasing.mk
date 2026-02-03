@@ -7,7 +7,11 @@ GORELEASER_MOUNT_CONFIG  ?= false
 GORELEASER_SKIP          := $(subst $(COMMA),$(SPACE),$(GORELEASER_SKIP))
 RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/virtengine
 #GORELEASER_MOD_MOUNT     ?= $(shell git config --get remote.origin.url | sed -r 's/.*(\@|\/\/)(.*)(\:|\/)([^:\/]*)\/([^\/\.]*)\.git/\2\/\4\/\5/' | tr -d '\n')
+ifeq ($(OS),Windows_NT)
+GORELEASER_MOD_MOUNT     ?= $(shell powershell -NoProfile -Command "(Get-Content -Path '$(ROOT_DIR)/.github/repo' -Raw).Trim()")
+else
 GORELEASER_MOD_MOUNT     ?= $(shell cat $(ROOT_DIR)/.github/repo | tr -d '\n')
+endif
 
 RELEASE_DOCKER_IMAGE     ?= ghcr.io/virtengine/virtengine
 

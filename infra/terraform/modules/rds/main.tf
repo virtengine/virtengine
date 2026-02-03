@@ -110,9 +110,9 @@ resource "aws_db_parameter_group" "main" {
 # DB Option Group (for enhanced monitoring, etc.)
 # -----------------------------------------------------------------------------
 resource "aws_db_option_group" "main" {
-  name                     = "${var.project}-${var.environment}-og"
-  engine_name              = "postgres"
-  major_engine_version     = split(".", var.engine_version)[0]
+  name                 = "${var.project}-${var.environment}-og"
+  engine_name          = "postgres"
+  major_engine_version = split(".", var.engine_version)[0]
 
   tags = var.tags
 
@@ -213,15 +213,15 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot       = var.skip_final_snapshot
 
   # Maintenance
-  maintenance_window         = var.maintenance_window
-  auto_minor_version_upgrade = var.auto_minor_version_upgrade
+  maintenance_window          = var.maintenance_window
+  auto_minor_version_upgrade  = var.auto_minor_version_upgrade
   allow_major_version_upgrade = false
 
   # Monitoring
-  monitoring_interval             = var.monitoring_interval
-  monitoring_role_arn             = var.monitoring_interval > 0 ? aws_iam_role.rds_monitoring[0].arn : null
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  performance_insights_enabled    = var.performance_insights_enabled
+  monitoring_interval                   = var.monitoring_interval
+  monitoring_role_arn                   = var.monitoring_interval > 0 ? aws_iam_role.rds_monitoring[0].arn : null
+  enabled_cloudwatch_logs_exports       = ["postgresql", "upgrade"]
+  performance_insights_enabled          = var.performance_insights_enabled
   performance_insights_retention_period = var.performance_insights_enabled ? var.performance_insights_retention_period : null
 
   # Timeouts
@@ -274,7 +274,7 @@ resource "aws_cloudwatch_metric_alarm" "storage" {
   namespace           = "AWS/RDS"
   period              = 300
   statistic           = "Average"
-  threshold           = var.allocated_storage * 1024 * 1024 * 1024 * 0.2  # 20% free
+  threshold           = var.allocated_storage * 1024 * 1024 * 1024 * 0.2 # 20% free
   alarm_description   = "RDS storage space below 20%"
   alarm_actions       = var.alarm_actions
   ok_actions          = var.alarm_actions
@@ -325,9 +325,9 @@ resource "aws_db_instance" "replica" {
   kms_key_id        = var.kms_key_arn != "" ? var.kms_key_arn : aws_kms_key.rds[0].arn
 
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
-  
-  monitoring_interval  = var.monitoring_interval
-  monitoring_role_arn  = var.monitoring_interval > 0 ? aws_iam_role.rds_monitoring[0].arn : null
+
+  monitoring_interval = var.monitoring_interval
+  monitoring_role_arn = var.monitoring_interval > 0 ? aws_iam_role.rds_monitoring[0].arn : null
 
   performance_insights_enabled          = var.performance_insights_enabled
   performance_insights_retention_period = var.performance_insights_enabled ? var.performance_insights_retention_period : null

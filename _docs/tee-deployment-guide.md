@@ -723,6 +723,28 @@ virtengine tx veid register-enclave \
 
 The Enclave Manager provides a unified interface across TEE platforms with automatic failover.
 
+### Kubernetes Production Deployments
+
+Use the platform-specific manifests for production clusters. These target hardware-labeled nodes and mount the required device files for attestation.
+
+```bash
+# Intel SGX deployment
+kubectl apply -f deploy/tee/sgx-deployment.yaml
+
+# AMD SEV-SNP deployment
+kubectl apply -f deploy/tee/sev-deployment.yaml
+```
+
+**Required node labels:**
+
+- `virtengine.io/enclave-ready=true`
+- `virtengine.io/tee-platform=sgx` or `virtengine.io/tee-platform=sev-snp`
+
+**Required node devices:**
+
+- SGX: `/dev/sgx`, `/dev/sgx_enclave`, `/dev/sgx_provision`
+- SEV-SNP: `/dev/sev-guest`
+
 ### Configuration File
 
 **`/etc/virtengine/enclave-manager.yaml`:**
@@ -957,6 +979,23 @@ virtengine tx veid submit-attestation \
   -y
 ```
 
+### Production Attestation Verification Infrastructure
+
+Run a highly available verification service that validates quotes/reports, caches collateral, and enforces policy (debug disabled, minimum TCB, allowlist enforced).
+
+**Required components:**
+
+- **Intel SGX collateral cache (PCCS):** accessible over HTTPS for DCAP verification.
+- **AMD KDS access:** outbound HTTPS to `https://kdsintf.amd.com` with cached VCEK/ASK/ARK chain.
+- **Verifier service:** validates SGX/SEV/Nitro attestations, backed by the measurement allowlist.
+- **Network policy:** allow outbound access to PCCS/KDS and block untrusted destinations.
+
+**Configuration:**
+
+- Set `VIRTENGINE_TEE_ATTESTATION_ENDPOINT` in `tee-enclave-config` to the verifier service URL.
+- Keep verifier instances in separate failure domains and enable health checks behind a load balancer.
+- Rotate verifier TLS credentials and enforce mTLS for validator-to-verifier traffic.
+
 ---
 
 ## Monitoring and Operations
@@ -993,7 +1032,7 @@ enclave_attestation_age_seconds{backend="sgx-primary"} 1800
 
 ### Grafana Dashboard
 
-Import the VirtEngine TEE dashboard from `/opt/virtengine/monitoring/dashboards/tee-monitoring.json`:
+Import the VirtEngine TEE dashboard (store as `tee-monitoring.json` in your Grafana provisioning path):
 
 ```json
 {
@@ -1047,7 +1086,7 @@ Import the VirtEngine TEE dashboard from `/opt/virtengine/monitoring/dashboards/
 
 ### Alert Rules
 
-**`/etc/prometheus/rules/tee-alerts.yml`:**
+Use the alert rule set in `deploy/monitoring/alerts/enclave-health.yaml` (or vendor into your Prometheus rules path):
 
 ```yaml
 groups:
@@ -1496,6 +1535,7 @@ sudo iptables -A OUTPUT -m owner --uid-owner virtengine -d 127.0.0.1 -j ACCEPT
 - [ ] **Documentation updated** - Runbooks reflect current setup
 - [ ] **Team trained** - Operations team familiar with TEE
 - [ ] **Incident response** - Compromise response plan documented
+- [ ] **TEE validator quorum** - At least 3 validators running hardware-backed TEE
 
 ### Final Verification
 

@@ -23,6 +23,13 @@ hook_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 hook_step()  { echo -e "${BLUE}  ->  ${NC} $*"; }
 hook_header() { echo -e "${BOLD}$*${NC}"; }
 
+is_windows() {
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # --- Timing ---
 hook_time_start() { date +%s; }
 hook_time_elapsed() {
@@ -53,7 +60,11 @@ ensure_direnv_env() {
     fi
 
     # Fallback: manually set the critical variables from .env
-    hook_warn "direnv not active. Loading environment manually..."
+    if is_windows; then
+        hook_info "direnv not active. Loading environment manually..."
+    else
+        hook_warn "direnv not active. Loading environment manually..."
+    fi
 
     export VIRTENGINE_ROOT="$repo_root"
 

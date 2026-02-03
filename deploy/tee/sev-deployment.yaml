@@ -1,0 +1,182 @@
+# VirtEngine TEE SEV-SNP Deployment
+# TEE-HW-001: Deploy AMD SEV-SNP hardware-backed enclave pods
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tee-enclave-sev-snp
+  namespace: virtengine
+  labels:
+    app.kubernetes.io/name: tee-enclave
+    app.kubernetes.io/component: enclave
+    app.kubernetes.io/part-of: virtengine
+    virtengine.io/tee-platform: sev-snp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tee-enclave
+      app.kubernetes.io/component: enclave
+      virtengine.io/tee-platform: sev-snp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tee-enclave
+        app.kubernetes.io/component: enclave
+        app.kubernetes.io/part-of: virtengine
+        virtengine.io/tee-platform: sev-snp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: tee-enclave
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      nodeSelector:
+        virtengine.io/tee-platform: sev-snp
+        virtengine.io/enclave-ready: "true"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: tee-enclave
+                topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: virtengine.io/tee
+          operator: Exists
+          effect: NoSchedule
+        - key: dedicated
+          operator: Equal
+          value: enclave
+          effect: NoSchedule
+      containers:
+        - name: enclave
+          image: virtengine/tee-enclave:0.1.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - serve
+            - --config=/config/enclave.yaml
+          ports:
+            - name: grpc
+              containerPort: 8443
+              protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            - name: attestation
+              containerPort: 8444
+              protocol: TCP
+          env:
+            - name: VIRTENGINE_TEE_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_MODE
+            - name: VIRTENGINE_TEE_REQUIRE_HARDWARE
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_REQUIRE_HARDWARE
+            - name: VIRTENGINE_TEE_ALLOW_DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_ALLOW_DEBUG
+            - name: VIRTENGINE_TEE_ATTESTATION_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_ATTESTATION_ENDPOINT
+            - name: VIRTENGINE_TEE_CERT_CACHE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: tee-enclave-config
+                  key: VIRTENGINE_TEE_CERT_CACHE_PATH
+            - name: VIRTENGINE_TEE_MEASUREMENT_ALLOWLIST
+              value: /config/measurements.json
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: measurements
+              mountPath: /config/measurements.json
+              subPath: measurements.json
+              readOnly: true
+            - name: cert-cache
+              mountPath: /var/cache/virtengine/tee-certs
+            - name: tmp
+              mountPath: /tmp
+            - name: dev-sev
+              mountPath: /dev/sev-guest
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: tee-enclave-config
+        - name: measurements
+          configMap:
+            name: tee-measurement-allowlist
+        - name: cert-cache
+          emptyDir:
+            sizeLimit: 100Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 100Mi
+        - name: dev-sev
+          hostPath:
+            path: /dev/sev-guest
+            type: CharDevice

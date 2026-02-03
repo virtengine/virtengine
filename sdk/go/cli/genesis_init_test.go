@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -154,10 +156,19 @@ func TestInitDefaultBondDenom(t *testing.T) {
 }
 
 func TestEmptyState(t *testing.T) {
+	// Skip on Windows due to LevelDB file locking issues that prevent
+	// TempDir cleanup. This is a known issue with LevelDB on Windows
+	// where background goroutines hold file handles longer than expected.
+	// See: https://github.com/syndtr/goleveldb/issues/109
+	if runtime.GOOS == osWindows {
+		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
+	}
 	home := t.TempDir()
-	logger := log.NewNopLogger()
+	// Prevent Windows file lock cleanup issues with embedded DB handles.
 	cfg, err := genutiltest.CreateDefaultCometConfig(home)
 	require.NoError(t, err)
+	cfg.DBBackend = "memdb"
+	logger := log.NewNopLogger()
 
 	serverCtx := server.NewContext(viper.New(), cfg, logger)
 	interfaceRegistry := types.NewInterfaceRegistry()
@@ -199,6 +210,11 @@ func TestEmptyState(t *testing.T) {
 	require.Contains(t, out, "genesis_time")
 	require.Contains(t, out, "chain_id")
 	require.Contains(t, out, "consensus")
+
+	t.Cleanup(func() {
+		_ = os.RemoveAll(filepath.Join(home, "data", "application.db"))
+	})
+
 	require.Contains(t, out, "app_hash")
 	require.Contains(t, out, "app_state")
 }
@@ -231,11 +247,11 @@ func TestStartStandAlone(t *testing.T) {
 	err = svr.Start()
 	require.NoError(t, err)
 
-	timer := time.NewTimer(time.Duration(2) * time.Second)
-	for range timer.C {
-		err = svr.Stop()
-		require.NoError(t, err)
-		break
+	time.Sleep(2 * time.Second)
+	err = svr.Stop()
+	require.NoError(t, err)
+	if appCloser != nil {
+		require.NoError(t, appCloser.Close())
 	}
 }
 
