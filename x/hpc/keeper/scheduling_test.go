@@ -1,13 +1,9 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until HPC scheduling API is stabilized.
-
 package keeper_test
 
 import (
 	"testing"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/x/hpc/keeper"
@@ -109,6 +105,8 @@ func TestSchedulingDecisionScoring(t *testing.T) {
 }
 
 // calculateClusterScore mirrors the keeper's scoring logic for testing
+//
+//nolint:gosec // G115: integer overflow conversion is acceptable in test code with controlled inputs
 func calculateClusterScore(
 	latencyMs, maxLatencyMs uint64,
 	availableNodes, totalNodes uint64,
@@ -120,14 +118,14 @@ func calculateClusterScore(
 	// latencyScore = (maxLatency - actualLatency) / maxLatency
 	var latencyScore int64
 	if maxLatencyMs > 0 && latencyMs <= maxLatencyMs {
-		latencyScore = (int64(maxLatencyMs) - int64(latencyMs)) * scale / int64(maxLatencyMs)
+		latencyScore = (int64(maxLatencyMs) - int64(latencyMs)) * scale / int64(maxLatencyMs) //nolint:gosec // test code
 	}
 
 	// Capacity score: higher availability is better
 	// capacityScore = availableNodes / totalNodes
 	var capacityScore int64
 	if totalNodes > 0 {
-		capacityScore = int64(availableNodes) * scale / int64(totalNodes)
+		capacityScore = int64(availableNodes) * scale / int64(totalNodes) //nolint:gosec // test code
 	}
 
 	// Combined score with weights (fixed-point multiplication)
@@ -136,8 +134,10 @@ func calculateClusterScore(
 	return totalScore
 }
 
-// TestNodeMetadataValidation tests node metadata validation
-func TestNodeMetadataValidation(t *testing.T) {
+// TestSchedulingNodeMetadataValidation tests node metadata validation for scheduling
+func TestSchedulingNodeMetadataValidation(t *testing.T) {
+	validAddr := sdk.AccAddress(make([]byte, 20)).String()
+
 	testCases := []struct {
 		name        string
 		metadata    types.NodeMetadata
@@ -147,58 +147,52 @@ func TestNodeMetadataValidation(t *testing.T) {
 		{
 			name: "valid metadata",
 			metadata: types.NodeMetadata{
-				NodeAddress: "node1",
-				ClusterID:   1,
-				Region:      "us-east-1",
-				Datacenter:  "dc1",
+				NodeID:          "node-001",
+				ClusterID:       "cluster-001",
+				ProviderAddress: validAddr,
+				Region:          "us-east-1",
+				Datacenter:      "dc1",
 				Resources: types.NodeResources{
-					CPUCores:          32,
-					MemoryMB:          65536,
-					GPUs:              2,
-					AvailableCPU:      16,
-					AvailableMemoryMB: 32768,
-					AvailableGPUs:     1,
-				},
-				LatencyMeasurements: []types.LatencyMeasurement{
-					{
-						TargetRegion: "us-west-1",
-						LatencyMs:    50,
-						MeasuredAt:   1000000,
-					},
+					CPUCores:  32,
+					MemoryGB:  64,
+					GPUs:      2,
+					StorageGB: 1000,
 				},
 			},
 			expectError: false,
 		},
 		{
-			name: "missing node address",
+			name: "missing node ID",
 			metadata: types.NodeMetadata{
-				NodeAddress: "",
-				ClusterID:   1,
+				NodeID:          "",
+				ClusterID:       "cluster-001",
+				ProviderAddress: validAddr,
+				Region:          "us-east-1",
 			},
 			expectError: true,
-			errorMsg:    "node address is required",
+			errorMsg:    "node_id",
 		},
 		{
-			name: "zero cluster ID",
+			name: "missing cluster ID",
 			metadata: types.NodeMetadata{
-				NodeAddress: "node1",
-				ClusterID:   0,
+				NodeID:          "node-001",
+				ClusterID:       "",
+				ProviderAddress: validAddr,
+				Region:          "us-east-1",
 			},
 			expectError: true,
-			errorMsg:    "cluster ID is required",
+			errorMsg:    "cluster_id",
 		},
 		{
-			name: "available exceeds total CPU",
+			name: "missing region",
 			metadata: types.NodeMetadata{
-				NodeAddress: "node1",
-				ClusterID:   1,
-				Resources: types.NodeResources{
-					CPUCores:     32,
-					AvailableCPU: 64,
-				},
+				NodeID:          "node-001",
+				ClusterID:       "cluster-001",
+				ProviderAddress: validAddr,
+				Region:          "",
 			},
 			expectError: true,
-			errorMsg:    "available CPU cannot exceed total",
+			errorMsg:    "region",
 		},
 	}
 
@@ -215,8 +209,8 @@ func TestNodeMetadataValidation(t *testing.T) {
 	}
 }
 
-// TestSchedulingDecisionValidation tests scheduling decision validation
-func TestSchedulingDecisionValidation(t *testing.T) {
+// TestSchedulingDecisionValidationFields tests scheduling decision validation
+func TestSchedulingDecisionValidationFields(t *testing.T) {
 	testCases := []struct {
 		name        string
 		decision    types.SchedulingDecision
@@ -226,35 +220,38 @@ func TestSchedulingDecisionValidation(t *testing.T) {
 		{
 			name: "valid decision",
 			decision: types.SchedulingDecision{
-				JobID:           1,
-				SelectedCluster: 1,
-				Score:           850000,
-				Candidates: []types.ClusterCandidate{
-					{ClusterID: 1, Score: 850000, LatencyScore: 900000, CapacityScore: 800000},
-					{ClusterID: 2, Score: 750000, LatencyScore: 700000, CapacityScore: 800000},
+				DecisionID:        "decision-001",
+				JobID:             "job-001",
+				SelectedClusterID: "cluster-001",
+				CandidateClusters: []types.ClusterCandidate{
+					{ClusterID: "cluster-001", CombinedScore: "850000", LatencyScore: "900000", CapacityScore: "800000"},
+					{ClusterID: "cluster-002", CombinedScore: "750000", LatencyScore: "700000", CapacityScore: "800000"},
 				},
-				DecisionTime: 1000000,
-				Reason:       "highest score",
+				DecisionReason: "highest score",
 			},
 			expectError: false,
 		},
 		{
-			name: "zero job ID",
+			name: "missing job ID",
 			decision: types.SchedulingDecision{
-				JobID:           0,
-				SelectedCluster: 1,
+				DecisionID:        "decision-001",
+				JobID:             "",
+				SelectedClusterID: "cluster-001",
+				DecisionReason:    "test",
 			},
 			expectError: true,
-			errorMsg:    "job ID is required",
+			errorMsg:    "job_id",
 		},
 		{
 			name: "no selected cluster",
 			decision: types.SchedulingDecision{
-				JobID:           1,
-				SelectedCluster: 0,
+				DecisionID:        "decision-001",
+				JobID:             "job-001",
+				SelectedClusterID: "",
+				DecisionReason:    "test",
 			},
 			expectError: true,
-			errorMsg:    "selected cluster is required",
+			errorMsg:    "selected_cluster_id",
 		},
 	}
 
@@ -274,61 +271,58 @@ func TestSchedulingDecisionValidation(t *testing.T) {
 // TestClusterCandidateSorting tests that clusters are sorted by score correctly
 func TestClusterCandidateSorting(t *testing.T) {
 	candidates := []types.ClusterCandidate{
-		{ClusterID: 1, Score: 500000},
-		{ClusterID: 2, Score: 900000},
-		{ClusterID: 3, Score: 750000},
-		{ClusterID: 4, Score: 600000},
+		{ClusterID: "cluster-001", CombinedScore: "500000"},
+		{ClusterID: "cluster-002", CombinedScore: "900000"},
+		{ClusterID: "cluster-003", CombinedScore: "750000"},
+		{ClusterID: "cluster-004", CombinedScore: "600000"},
 	}
 
 	// Sort candidates by score descending
 	sorted := keeper.SortCandidatesByScore(candidates)
 
-	require.Equal(t, uint64(2), sorted[0].ClusterID, "highest score should be first")
-	require.Equal(t, uint64(3), sorted[1].ClusterID)
-	require.Equal(t, uint64(4), sorted[2].ClusterID)
-	require.Equal(t, uint64(1), sorted[3].ClusterID, "lowest score should be last")
+	require.Equal(t, "cluster-002", sorted[0].ClusterID, "highest score should be first")
+	require.Equal(t, "cluster-003", sorted[1].ClusterID)
+	require.Equal(t, "cluster-004", sorted[2].ClusterID)
+	require.Equal(t, "cluster-001", sorted[3].ClusterID, "lowest score should be last")
 }
 
 // TestLatencyMeasurementAggregation tests aggregating latency measurements
 func TestLatencyMeasurementAggregation(t *testing.T) {
 	measurements := []types.LatencyMeasurement{
-		{TargetRegion: "us-east-1", LatencyMs: 10, MeasuredAt: 100},
-		{TargetRegion: "us-east-1", LatencyMs: 20, MeasuredAt: 200},
-		{TargetRegion: "us-east-1", LatencyMs: 15, MeasuredAt: 300},
+		{TargetNodeID: "node-001", LatencyMs: 10},
+		{TargetNodeID: "node-002", LatencyMs: 20},
+		{TargetNodeID: "node-003", LatencyMs: 15},
 	}
 
 	// Average latency should be 15ms
-	avgLatency := keeper.CalculateAverageLatency(measurements, "us-east-1")
-	require.Equal(t, uint64(15), avgLatency)
+	avgLatency := keeper.CalculateAverageLatency(measurements)
+	require.Equal(t, int64(15), avgLatency)
 
-	// Non-existent region should return max latency
-	unknownLatency := keeper.CalculateAverageLatency(measurements, "unknown-region")
-	require.Equal(t, uint64(0xFFFFFFFFFFFFFFFF), unknownLatency)
+	// Empty measurements should return 0
+	emptyAvg := keeper.CalculateAverageLatency([]types.LatencyMeasurement{})
+	require.Equal(t, int64(0), emptyAvg)
 }
 
 // TestEligibleClusterFiltering tests filtering clusters by job requirements
 func TestEligibleClusterFiltering(t *testing.T) {
 	clusters := []types.HPCCluster{
 		{
-			ID:            1,
-			Status:        types.ClusterStatusActive,
-			TotalCPUCores: 100,
-			TotalMemoryMB: 512000,
-			TotalGPUs:     4,
+			ClusterID:      "cluster-001",
+			State:          types.ClusterStateActive,
+			TotalNodes:     10,
+			AvailableNodes: 8,
 		},
 		{
-			ID:            2,
-			Status:        types.ClusterStatusMaintenance,
-			TotalCPUCores: 200,
-			TotalMemoryMB: 1024000,
-			TotalGPUs:     8,
+			ClusterID:      "cluster-002",
+			State:          types.ClusterStateDraining, // Not active
+			TotalNodes:     20,
+			AvailableNodes: 15,
 		},
 		{
-			ID:            3,
-			Status:        types.ClusterStatusActive,
-			TotalCPUCores: 50,
-			TotalMemoryMB: 256000,
-			TotalGPUs:     0,
+			ClusterID:      "cluster-003",
+			State:          types.ClusterStateActive,
+			TotalNodes:     5,
+			AvailableNodes: 5,
 		},
 	}
 
@@ -336,37 +330,31 @@ func TestEligibleClusterFiltering(t *testing.T) {
 		name          string
 		resources     types.JobResources
 		expectedCount int
-		expectedIDs   []uint64
+		expectedIDs   []string
 	}{
 		{
-			name: "basic CPU/memory requirements",
+			name: "basic node requirements",
 			resources: types.JobResources{
-				CPUCores: 32,
-				MemoryMB: 128000,
-				GPUs:     0,
+				Nodes: 4,
 			},
-			expectedCount: 2, // Clusters 1 and 3 (cluster 2 is in maintenance)
-			expectedIDs:   []uint64{1, 3},
+			expectedCount: 2, // Clusters 1 and 3 (cluster 2 is draining)
+			expectedIDs:   []string{"cluster-001", "cluster-003"},
 		},
 		{
-			name: "GPU requirements",
+			name: "high node requirements",
 			resources: types.JobResources{
-				CPUCores: 16,
-				MemoryMB: 64000,
-				GPUs:     2,
+				Nodes: 6,
 			},
-			expectedCount: 1, // Only cluster 1 (active with GPUs)
-			expectedIDs:   []uint64{1},
+			expectedCount: 1, // Only cluster 1 has enough nodes
+			expectedIDs:   []string{"cluster-001"},
 		},
 		{
 			name: "exceeds all clusters",
 			resources: types.JobResources{
-				CPUCores: 500,
-				MemoryMB: 2048000,
-				GPUs:     16,
+				Nodes: 50,
 			},
 			expectedCount: 0,
-			expectedIDs:   []uint64{},
+			expectedIDs:   []string{},
 		},
 	}
 
@@ -376,7 +364,7 @@ func TestEligibleClusterFiltering(t *testing.T) {
 			require.Equal(t, tc.expectedCount, len(eligible))
 
 			for i, id := range tc.expectedIDs {
-				require.Equal(t, id, eligible[i].ID)
+				require.Equal(t, id, eligible[i].ClusterID)
 			}
 		})
 	}
