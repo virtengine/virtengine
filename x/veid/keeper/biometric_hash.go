@@ -898,6 +898,7 @@ func clearBytes(b []byte) {
 	}
 }
 
+//nolint:unused // reserved for future biometric similarity scoring
 // computeCosineSimilarity computes the cosine similarity between two vectors.
 // This is used for embedding comparison when LSH indicates a potential match.
 // Returns a value between -1.0 and 1.0.
