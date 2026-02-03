@@ -16,8 +16,8 @@
     "properties": {
         "iss": {
             "type": "string",
-            "pattern": "^virt1[a-z0-9]{38}$",
-            "description": "virtengine address of the lease(s) owner, e.g., virt1abcd... (44 characters)"
+            "pattern": "^ve1[a-z0-9]{38}$",
+            "description": "virtengine address of the lease(s) owner, e.g., ve1abcd... (41 characters)"
         },
         "iat": {
             "type": "integer",
@@ -96,8 +96,8 @@
                         "properties": {
                             "provider": {
                                 "type": "string",
-                                "pattern": "^virt1[a-z0-9]{38}$",
-                                "description": "Provider address, e.g., virt1xyz... (44 characters)."
+                                "pattern": "^ve1[a-z0-9]{38}$",
+                                "description": "Provider address, e.g., ve1xyz... (41 characters)."
                             },
                             "access": {
                                 "type": "string",
