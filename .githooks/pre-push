@@ -105,8 +105,8 @@ check_vet() {
         # shellcheck disable=SC2086
         go vet $changed_packages 2>&1
     else
-        # Exclude tests/ which may have build constraints
-        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | head -100) 2>&1
+        # Exclude tests/ and local temp/ scratch dirs which may have build constraints
+        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | grep -Ev '/temp($|/)' | head -100) 2>&1
     fi
 }
 
