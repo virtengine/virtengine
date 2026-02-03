@@ -280,7 +280,7 @@ func (s *ChainOfferingSubmitter) ValidateProviderVEID(ctx context.Context, provi
 		return fmt.Errorf("veid query client unavailable")
 	}
 
-	resp, err := s.veidQuery.QueryIdentity(ctx, &veidv1.QueryIdentityRequest{AccountAddress: providerAddress})
+	resp, err := s.veidQuery.Identity(ctx, &veidv1.QueryIdentityRequest{AccountAddress: providerAddress})
 	if err != nil {
 		return fmt.Errorf("query identity: %w", err)
 	}
