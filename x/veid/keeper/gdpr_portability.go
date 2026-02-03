@@ -122,12 +122,7 @@ func (k Keeper) ProcessExportRequest(ctx sdk.Context, requestID string) (*types.
 	}
 
 	// Generate the export package
-	dataPackage, err := k.generateDataPackage(ctx, requesterAddr, &request)
-	if err != nil {
-		request.MarkFailed(err.Error())
-		_ = k.SetExportRequest(ctx, request)
-		return nil, err
-	}
+	dataPackage := k.generateDataPackage(ctx, requesterAddr, &request)
 
 	// Calculate checksum
 	dataBytes, err := json.Marshal(dataPackage)
