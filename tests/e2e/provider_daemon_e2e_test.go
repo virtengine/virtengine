@@ -26,9 +26,9 @@ import (
 type providerDaemonE2ETestSuite struct {
 	*testutil.NetworkTestSuite
 
-	providerAddr  string
-	deployerAddr  string
-	providerPath  string
+	providerAddr   string
+	deployerAddr   string
+	providerPath   string
 	deploymentPath string
 }
 

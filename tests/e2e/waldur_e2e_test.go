@@ -22,9 +22,9 @@ import (
 	sdkmath "cosmossdk.io/math"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/virtengine/virtengine/testutil"
 	"github.com/virtengine/virtengine/tests/e2e/fixtures"
 	"github.com/virtengine/virtengine/tests/e2e/mocks"
+	"github.com/virtengine/virtengine/testutil"
 )
 
 // =============================================================================
@@ -43,9 +43,9 @@ type WaldurE2ETestSuite struct {
 	waldurMock *mocks.WaldurMock
 
 	// Test state
-	offerings  []fixtures.TestOffering
-	orders     map[string]*mocks.MockWaldurOrder
-	resources  map[string]*mocks.MockWaldurResource
+	offerings []fixtures.TestOffering
+	orders    map[string]*mocks.MockWaldurOrder
+	resources map[string]*mocks.MockWaldurResource
 }
 
 // TestWaldurE2E runs the Waldur E2E test suite.

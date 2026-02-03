@@ -223,18 +223,18 @@ func HighCapacityProvider(addr string) TestProvider {
 
 // TestOrder represents a marketplace order for E2E tests.
 type TestOrder struct {
-	OrderID        string
-	CustomerAddr   string
-	OfferingID     string
-	MaxPrice       sdkmath.LegacyDec
-	Deposit        sdk.Coin
-	Duration       time.Duration
-	Status         string
-	CreatedAt      time.Time
-	ClosedAt       *time.Time
-	AllocationID   string
-	LeaseID        string
-	ResourceSpecs  ResourceSpecs
+	OrderID       string
+	CustomerAddr  string
+	OfferingID    string
+	MaxPrice      sdkmath.LegacyDec
+	Deposit       sdk.Coin
+	Duration      time.Duration
+	Status        string
+	CreatedAt     time.Time
+	ClosedAt      *time.Time
+	AllocationID  string
+	LeaseID       string
+	ResourceSpecs ResourceSpecs
 }
 
 // ResourceSpecs defines requested resource specifications.
@@ -390,11 +390,11 @@ func DefaultTestUsageRecord(allocationID, providerAddr, customerAddr string) Tes
 		PeriodEnd:    periodEnd,
 		IsFinal:      false,
 		Metrics: UsageMetrics{
-			CPUMilliSeconds:    4 * 3600 * 1000,     // 4 cores for 1 hour
+			CPUMilliSeconds:    4 * 3600 * 1000,                // 4 cores for 1 hour
 			MemoryByteSeconds:  16 * 1024 * 1024 * 1024 * 3600, // 16 GB for 1 hour
 			StorageByteSeconds: 50 * 1024 * 1024 * 1024 * 3600, // 50 GB for 1 hour
-			NetworkBytesIn:     100 * 1024 * 1024,   // 100 MB in
-			NetworkBytesOut:    50 * 1024 * 1024,    // 50 MB out
+			NetworkBytesIn:     100 * 1024 * 1024,              // 100 MB in
+			NetworkBytesOut:    50 * 1024 * 1024,               // 50 MB out
 			GPUSeconds:         0,
 		},
 		BilledAmount: sdkmath.LegacyNewDec(12),
@@ -429,19 +429,19 @@ func FinalTestUsageRecord(allocationID, providerAddr, customerAddr string, durat
 
 // TestSettlement represents a settlement for E2E tests.
 type TestSettlement struct {
-	SettlementID     string
-	AllocationID     string
-	ProviderAddr     string
-	CustomerAddr     string
-	UsageRecordIDs   []string
-	TotalAmount      sdk.Coin
-	ProviderPayout   sdk.Coin
-	PlatformFee      sdk.Coin
-	Status           string
-	CreatedAt        time.Time
-	SettledAt        *time.Time
-	DisputedAt       *time.Time
-	DisputeReason    string
+	SettlementID      string
+	AllocationID      string
+	ProviderAddr      string
+	CustomerAddr      string
+	UsageRecordIDs    []string
+	TotalAmount       sdk.Coin
+	ProviderPayout    sdk.Coin
+	PlatformFee       sdk.Coin
+	Status            string
+	CreatedAt         time.Time
+	SettledAt         *time.Time
+	DisputedAt        *time.Time
+	DisputeReason     string
 	DisputeResolution string
 }
 

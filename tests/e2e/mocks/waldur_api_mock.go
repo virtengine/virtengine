@@ -118,17 +118,17 @@ type MockUsageAggregate struct {
 
 // WaldurCallback represents a callback from Waldur to the chain
 type WaldurCallback struct {
-	ID            string                 `json:"id"`
-	Type          string                 `json:"type"`
-	ResourceUUID  string                 `json:"resource_uuid"`
-	OrderUUID     string                 `json:"order_uuid"`
-	Action        string                 `json:"action"`
-	State         string                 `json:"state"`
-	Success       bool                   `json:"success"`
-	Payload       map[string]interface{} `json:"payload"`
-	Timestamp     time.Time              `json:"timestamp"`
-	Signature     string                 `json:"signature"`
-	IdempotencyKey string                `json:"idempotency_key"`
+	ID             string                 `json:"id"`
+	Type           string                 `json:"type"`
+	ResourceUUID   string                 `json:"resource_uuid"`
+	OrderUUID      string                 `json:"order_uuid"`
+	Action         string                 `json:"action"`
+	State          string                 `json:"state"`
+	Success        bool                   `json:"success"`
+	Payload        map[string]interface{} `json:"payload"`
+	Timestamp      time.Time              `json:"timestamp"`
+	Signature      string                 `json:"signature"`
+	IdempotencyKey string                 `json:"idempotency_key"`
 }
 
 // NewWaldurProviderMock creates an enhanced mock for provider testing
@@ -493,17 +493,17 @@ func (m *WaldurProviderMock) SimulateUsageCallback(resourceUUID string, periodSt
 
 // MockStats contains mock statistics
 type MockStats struct {
-	TotalOrders          int
-	CompletedOrders      int
-	FailedOrders         int
-	ActiveResources      int
-	TerminatedResources  int
-	TotalUsageRecords    int
-	TotalInvoices        int
-	PaidInvoices         int
-	TotalCallbacks       int
-	SyncedOfferings      int
-	PendingSyncRecords   int
+	TotalOrders         int
+	CompletedOrders     int
+	FailedOrders        int
+	ActiveResources     int
+	TerminatedResources int
+	TotalUsageRecords   int
+	TotalInvoices       int
+	PaidInvoices        int
+	TotalCallbacks      int
+	SyncedOfferings     int
+	PendingSyncRecords  int
 }
 
 // GetStats returns mock statistics
@@ -512,10 +512,10 @@ func (m *WaldurProviderMock) GetStats() MockStats {
 	defer m.mu.RUnlock()
 
 	stats := MockStats{
-		TotalOrders:      len(m.Orders),
-		TotalInvoices:    len(m.Invoices),
-		TotalCallbacks:   len(m.CallbackHistory),
-		SyncedOfferings:  0,
+		TotalOrders:        len(m.Orders),
+		TotalInvoices:      len(m.Invoices),
+		TotalCallbacks:     len(m.CallbackHistory),
+		SyncedOfferings:    0,
 		PendingSyncRecords: 0,
 	}
 
