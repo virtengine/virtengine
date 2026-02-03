@@ -291,14 +291,14 @@ resource "helm_release" "vault" {
         }
 
         livenessProbe = {
-          enabled     = true
-          path        = "/v1/sys/health?standbyok=true"
+          enabled             = true
+          path                = "/v1/sys/health?standbyok=true"
           initialDelaySeconds = 60
         }
 
         extraEnvironmentVars = {
-          AWS_REGION         = data.aws_region.current.name
-          VAULT_SEAL_TYPE    = "awskms"
+          AWS_REGION               = data.aws_region.current.name
+          VAULT_SEAL_TYPE          = "awskms"
           VAULT_AWSKMS_SEAL_KEY_ID = aws_kms_key.vault.key_id
         }
 
@@ -311,7 +311,7 @@ resource "helm_release" "vault" {
         }
 
         dataStorage = {
-          enabled      = false  # Using DynamoDB
+          enabled = false # Using DynamoDB
         }
 
         auditStorage = {
@@ -328,7 +328,7 @@ resource "helm_release" "vault" {
           enabled  = true
           replicas = var.vault_replicas
           raft = {
-            enabled = false  # Using DynamoDB for HA
+            enabled = false # Using DynamoDB for HA
           }
           config = <<-EOF
             ui = true
@@ -399,7 +399,7 @@ resource "helm_release" "external_secrets" {
   values = [
     yamlencode({
       installCRDs = true
-      
+
       serviceAccount = {
         create = true
         name   = "external-secrets"

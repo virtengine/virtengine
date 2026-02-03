@@ -139,6 +139,9 @@ func (id BidID) Validate() error {
 	if id.ProviderAddress == "" {
 		return fmt.Errorf("provider address is required")
 	}
+	if id.Sequence == 0 {
+		return fmt.Errorf("sequence must be positive")
+	}
 	return nil
 }
 

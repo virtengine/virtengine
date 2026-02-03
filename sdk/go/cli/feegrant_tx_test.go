@@ -58,6 +58,19 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 		WithBroadcastModeSync().
 		WithSkipConfirm().
 		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10))))
+	validGrantee := testAccAddressString(2)
+	validGranteeAlt := testAccAddressString(3)
+	validGranteeAmino := testAccAddressString(4)
+	validGranteeNoSpend := testAccAddressString(5)
+	validGranteeNoExpiry := testAccAddressString(6)
+	validGranteeNoSpendNoExpiry := testAccAddressString(7)
+	periodicGrantee := testAccAddressString(8)
+	periodicGranteeAlt := testAccAddressString(9)
+	periodicGranteeNoSpend := testAccAddressString(10)
+	periodicGranteeNoExpiry := testAccAddressString(11)
+	periodicGranteeNoSpendNoExpiry := testAccAddressString(12)
+	invalidExpiryGrantee := testAccAddressString(13)
+	invalidFromAddr := testAccAddressString(14)
 
 	testCases := []struct {
 		name         string
@@ -82,7 +95,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"wrong granter key name",
 			cli.TestFlags().
 				With(
-					"ve16dun6ehcc86e03wreqqww89ey569wuj49x029x",
+					invalidFromAddr,
 				).
 				WithFrom("invalid_granter").
 				WithSpendLimit("100uve").
@@ -93,7 +106,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid basic fee grant",
 			cli.TestFlags().
 				With(
-					"ve1nph3cfzk6trsmfxkeu943nvach5qw4vwvkgceh",
+					validGrantee,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -104,7 +117,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid basic fee grant with granter key name",
 			cli.TestFlags().
 				With(
-					"ve16dun6ehcc86e03wreqqww89ey569wuj49x029x",
+					validGranteeAlt,
 				).
 				WithFrom(fromName).
 				WithSpendLimit("100uve").
@@ -115,7 +128,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid basic fee grant with amino",
 			cli.TestFlags().
 				With(
-					"ve1v57fx2l2rt6ehujuu99u2fw05779m5e2qmwk9l",
+					validGranteeAmino,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -127,7 +140,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid basic fee grant without spend limit",
 			cli.TestFlags().
 				With(
-					"ve17h5lzptx3ghvsuhk7wx4c4hnl7rsswxj9772kn",
+					validGranteeNoSpend,
 				).
 				WithFrom(granter.String()).
 				Append(commonArgs),
@@ -137,7 +150,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid basic fee grant without expiration",
 			cli.TestFlags().
 				With(
-					"ve16dlc38dcqt0uralyd8hksxyrny6kaeqfw3f6wu",
+					validGranteeNoExpiry,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -148,7 +161,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid basic fee grant without spend-limit and expiration",
 			cli.TestFlags().
 				With(
-					"ve1ku40qup9vwag4wtf8cls9mkszxfthakl6t69h0",
+					validGranteeNoSpendNoExpiry,
 				).
 				WithFrom(granter.String()).
 				Append(commonArgs),
@@ -169,7 +182,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"invalid number of args(periodic fee grant)",
 			cli.TestFlags().
 				With(
-					"ve1nph3cfzk6trsmfxkeu943nvach5qw4vwvkgceh",
+					periodicGrantee,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -182,7 +195,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"period mentioned and period limit omitted, invalid periodic grant",
 			cli.TestFlags().
 				With(
-					"ve1nph3cfzk6trsmfxkeu943nvach5qw4vwvkgceh",
+					periodicGrantee,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -195,7 +208,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"period cannot be greater than the actual expiration(periodic fee grant)",
 			cli.TestFlags().
 				With(
-					"ve1nph3cfzk6trsmfxkeu943nvach5qw4vwvkgceh",
+					periodicGrantee,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -209,7 +222,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid periodic fee grant",
 			cli.TestFlags().
 				With(
-					"ve1nph3cfzk6trsmfxkeu943nvach5qw4vwvkgceh",
+					periodicGranteeAlt,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -223,7 +236,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid periodic fee grant without spend-limit",
 			cli.TestFlags().
 				With(
-					"ve1vevyks8pthkscvgazc97qyfjt40m6g9x960ht0",
+					periodicGranteeNoSpend,
 				).
 				WithFrom(granter.String()).
 				WithPeriodLimit("10uve").
@@ -236,7 +249,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid periodic fee grant without expiration",
 			cli.TestFlags().
 				With(
-					"ve1vevyks8pthkscvgazc97qyfjt40m6g9x960ht0",
+					periodicGranteeNoExpiry,
 				).
 				WithFrom(granter.String()).
 				WithSpendLimit("100uve").
@@ -249,7 +262,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"valid periodic fee grant without spend-limit and expiration",
 			cli.TestFlags().
 				With(
-					"ve12jfxk5q7273sv9v7cz8f4jl477q83jl6h98sqw",
+					periodicGranteeNoSpendNoExpiry,
 				).
 				WithFrom(granter.String()).
 				WithPeriodLimit("10uve").
@@ -261,7 +274,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdFeeGrant() {
 			"invalid expiration",
 			cli.TestFlags().
 				With(
-					"ve1vevyks8pthkscvgazc97qyfjt40m6g9x960ht0",
+					invalidExpiryGrantee,
 				).
 				WithFrom(granter.String()).
 				WithPeriodLimit("10uve").
@@ -296,8 +309,7 @@ func (s *FeegrantCLITestSuite) TestNewCmdRevokeFeegrant() {
 		WithFees(sdk.NewCoins(sdk.NewCoin("uve", sdkmath.NewInt(10))))
 
 	// Create new fee grant specifically to test amino.
-	aminoGrantee, err := sdk.AccAddressFromBech32("ve16ydaqh0fcnh4qt7a3jme4mmztm2qel5a6966q8")
-	s.Require().NoError(err)
+	aminoGrantee := testAccAddress(15)
 	s.createGrant(granter, aminoGrantee)
 
 	testCases := []struct {
@@ -468,7 +480,7 @@ func (s *FeegrantCLITestSuite) TestFilteredFeeAllowance() {
 		{
 			"invalid granter address",
 			cli.TestFlags().
-				With("ve1nph3cfzk6trsmfxkeu943nvach5qw4vwvkgceh").
+				With(testAccAddressString(16)).
 				WithFrom("not an address").
 				WithAllowedMsgs(allowMsgs).
 				WithSpendLimit(spendLimit.String()).
@@ -562,7 +574,7 @@ func (s *FeegrantCLITestSuite) TestFilteredFeeAllowance() {
 			"should fail with unauthorized msgs",
 			func() error {
 				sArgs := cli.TestFlags().
-					With("ve14cm33pvnrv2497tyt8sp9yavhmw83nwewvqmk0").
+					With(testAccAddressString(17)).
 					WithFrom(grantee.String()).
 					WithSpendLimit("100uve").
 					WithFeeGranter(granter).

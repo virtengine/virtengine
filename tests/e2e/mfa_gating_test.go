@@ -4,9 +4,12 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
@@ -16,11 +19,13 @@ import (
 	cltypes "github.com/virtengine/virtengine/sdk/go/node/client/types"
 	cclient "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
 	mfaquery "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
+	mfatx "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
+	rolespb "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
 	rolesquery "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
 
 	"github.com/virtengine/virtengine/testutil"
+	"github.com/virtengine/virtengine/testutil/network"
 	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
-	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 )
 
 type mfaGatingE2ETestSuite struct {
@@ -28,8 +33,60 @@ type mfaGatingE2ETestSuite struct {
 }
 
 func TestIntegrationMFA(t *testing.T) {
+	cfg := network.DefaultConfig(testutil.NewTestNetworkFixture, network.WithInterceptState(func(cdc codec.Codec, key string, raw json.RawMessage) json.RawMessage {
+		if key != mfatypes.ModuleName {
+			return raw
+		}
+
+		_ = cdc
+
+		var state map[string]any
+		if err := json.Unmarshal(raw, &state); err != nil {
+			return raw
+		}
+
+		configs, ok := state["sensitive_tx_configs"].([]any)
+		if !ok {
+			configs, ok = state["sensitiveTxConfigs"].([]any)
+		}
+		if !ok {
+			return raw
+		}
+
+		for _, cfgEntry := range configs {
+			cfgMap, ok := cfgEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			txType := cfgMap["transaction_type"]
+			if txType == nil {
+				txType = cfgMap["transactionType"]
+			}
+
+			switch val := txType.(type) {
+			case string:
+				normalized := strings.ToLower(val)
+				if strings.Contains(normalized, "validator") {
+					cfgMap["enabled"] = false
+				}
+			case float64:
+				if int(val) == int(mfaquery.SensitiveTxValidatorRegistration) {
+					cfgMap["enabled"] = false
+				}
+			}
+		}
+
+		updated, err := json.Marshal(state)
+		if err != nil {
+			return raw
+		}
+		return updated
+	}))
+	cfg.NumValidators = 1
+
 	mg := &mfaGatingE2ETestSuite{}
-	mg.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, mg)
+	mg.NetworkTestSuite = testutil.NewNetworkTestSuite(&cfg, mg)
 	suite.Run(t, mg)
 }
 
@@ -66,9 +123,9 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	_, err = cl.Tx().BroadcastMsgs(
 		ctx,
 		[]sdk.Msg{
-			&mfatypes.MsgEnrollFactor{
+			&mfatx.MsgEnrollFactor{
 				Sender:     sender,
-				FactorType: mfatypes.FactorTypeTOTP,
+				FactorType: mfaquery.FactorTypeTOTP,
 				Label:      "e2e-totp",
 			},
 		},
@@ -78,10 +135,10 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
 	// Enable MFA policy with a single required factor to keep the flow deterministic.
-	policy := mfatypes.MFAPolicy{
+	policy := mfaquery.MFAPolicy{
 		AccountAddress: sender,
-		RequiredFactors: []mfatypes.FactorCombination{
-			{Factors: []mfatypes.FactorType{mfatypes.FactorTypeTOTP}},
+		RequiredFactors: []mfaquery.FactorCombination{
+			{Factors: []mfaquery.FactorType{mfaquery.FactorTypeTOTP}},
 		},
 		SessionDuration: 15 * 60,
 		Enabled:         true,
@@ -90,7 +147,7 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	_, err = cl.Tx().BroadcastMsgs(
 		ctx,
 		[]sdk.Msg{
-			&mfatypes.MsgSetMFAPolicy{
+			&mfatx.MsgSetMFAPolicy{
 				Sender: sender,
 				Policy: policy,
 			},
@@ -104,7 +161,7 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	_, err = cl.Tx().BroadcastMsgs(
 		ctx,
 		[]sdk.Msg{
-			&rolestypes.MsgSetAccountState{
+			&rolespb.MsgSetAccountState{
 				Sender:  sender,
 				Address: target,
 				State:   "suspended",
@@ -119,10 +176,10 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	_, err = cl.Tx().BroadcastMsgs(
 		ctx,
 		[]sdk.Msg{
-			&mfatypes.MsgCreateChallenge{
+			&mfatx.MsgCreateChallenge{
 				Sender:          sender,
-				FactorType:      mfatypes.FactorTypeTOTP,
-				TransactionType: mfatypes.SensitiveTxAccountRecovery,
+				FactorType:      mfaquery.FactorTypeTOTP,
+				TransactionType: mfaquery.SensitiveTxAccountRecovery,
 			},
 		},
 		cclient.WithBroadcastMode("block"),
@@ -151,14 +208,14 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	_, err = cl.Tx().BroadcastMsgs(
 		ctx,
 		[]sdk.Msg{
-			&mfatypes.MsgVerifyChallenge{
+			&mfatx.MsgVerifyChallenge{
 				Sender:      sender,
-				ChallengeID: challenge.ChallengeId,
-				Response: &mfatypes.ChallengeResponse{
-					ChallengeID:  challenge.ChallengeId,
-					FactorType:   mfatypes.FactorTypeTOTP,
+				ChallengeId: challenge.ChallengeId,
+				Response: mfatx.ChallengeResponse{
+					ChallengeId:  challenge.ChallengeId,
+					FactorType:   mfaquery.FactorTypeTOTP,
 					ResponseData: []byte("e2e-ok"),
-					ClientInfo: &mfatypes.ClientInfo{
+					ClientInfo: &mfatx.ClientInfo{
 						DeviceFingerprint: deviceFingerprint,
 						RequestedAt:       time.Now().Unix(),
 					},
@@ -188,14 +245,14 @@ func (s *mfaGatingE2ETestSuite) TestMFAGatingFlow() {
 	_, err = cl.Tx().BroadcastMsgs(
 		ctx,
 		[]sdk.Msg{
-			&rolestypes.MsgSetAccountState{
+			&rolespb.MsgSetAccountState{
 				Sender:  sender,
 				Address: target,
 				State:   "suspended",
 				Reason:  "mfa gating test with proof",
-				MFAProof: &mfatypes.MFAProof{
-					SessionID:       verified.Challenge.SessionId,
-					VerifiedFactors: []mfatypes.FactorType{mfatypes.FactorTypeTOTP},
+				MfaProof: &mfatx.MFAProof{
+					SessionId:       verified.Challenge.SessionId,
+					VerifiedFactors: []mfaquery.FactorType{mfaquery.FactorTypeTOTP},
 					Timestamp:       time.Now().Unix(),
 				},
 				DeviceFingerprint: deviceFingerprint,

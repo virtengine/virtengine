@@ -1,13 +1,26 @@
+ifeq ($(OS),Windows_NT)
+UNAME_OS              := Windows
+UNAME_ARCH            := $(PROCESSOR_ARCHITECTURE)
+else
 UNAME_OS              := $(shell uname -s)
 UNAME_ARCH            := $(shell uname -m)
+endif
 
 # certain targets need to use bash
 # detect where bash is installed
 # use virtengine-node-ready target as example
+ifeq ($(OS),Windows_NT)
+BASH_PATH := $(shell where bash 2>nul)
+else
 BASH_PATH := $(shell which bash)
+endif
 
-# On Windows or when VE_DIRENV_SET is already exported, skip direnv binary check.
-# This allows manual environment setup via git hooks or scripts.
+# On Windows, skip direnv validation and fall back to local defaults.
+ifeq ($(OS),Windows_NT)
+VE_DIRENV_SET := 1
+endif
+
+# On non-Windows or when VE_DIRENV_SET is already exported, require direnv.
 ifneq (1, $(VE_DIRENV_SET))
   ifeq (, $(shell which direnv))
     $(error "No direnv in $(PATH) and VE_DIRENV_SET not set. Install direnv (https://direnv.net) or export VE_DIRENV_SET=1 with required env vars.")
@@ -15,14 +28,25 @@ ifneq (1, $(VE_DIRENV_SET))
   $(error "no envrc detected. might need to run \"direnv allow\"")
 endif
 
-# VE_ROOT may not be set if environment does not support/use direnv
-# in this case define it manually as well as all required env variables
+# VE_ROOT may not be set if environment does not support/use direnv.
 ifndef VE_ROOT
+ifeq ($(OS),Windows_NT)
+VE_ROOT := $(CURDIR)
+else
 $(error "VE_ROOT is not set. Export VE_ROOT or run \"direnv allow\"")
+endif
+endif
+
+ifndef ROOT_DIR
+ROOT_DIR := $(VE_ROOT)
 endif
 
 ifeq (, $(GOTOOLCHAIN))
+ifeq ($(OS),Windows_NT)
+GOTOOLCHAIN := auto
+else
 $(error "GOTOOLCHAIN is not set")
+endif
 endif
 
 NULL  :=
@@ -94,6 +118,10 @@ COSMOVISOR                       := $(VE_DEVCACHE_BIN)/cosmovisor
 COSMOVISOR_DEBUG                 := $(VE_RUN_BIN)/cosmovisor
 
 
+ifeq ($(OS),Windows_NT)
+RELEASE_TAG           ?= $(shell powershell -NoProfile -Command "try { git describe --tags --abbrev=0 } catch { 'v0.0.0' }")
+else
 RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+endif
 
 include $(VE_ROOT)/make/setup-cache.mk

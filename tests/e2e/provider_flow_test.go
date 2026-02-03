@@ -167,16 +167,12 @@ func (s *ProviderFlowE2ETestSuite) TestFullProviderFlow() {
 		s.T().Log("Step 1: Registering provider with VEID score ≥70")
 
 		// Create provider on-chain
-		_, err := clitestutil.TxCreateProviderExec(
-			ctx,
-			cctx,
-			s.providerPath,
-			cli.TestFlags().
-				WithFrom(s.providerAddr).
-				WithGasAutoFlags().
-				WithSkipConfirm().
-				WithBroadcastModeBlock()...,
-		)
+		providerFlags := cli.TestFlags().
+			WithFrom(s.providerAddr).
+			WithGasAutoFlags().
+			WithSkipConfirm().
+			WithBroadcastModeBlock()
+		_, err := clitestutil.TxCreateProviderExec(ctx, cctx, s.providerPath, providerFlags...)
 		s.Require().NoError(err)
 		s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -243,7 +239,7 @@ func (s *ProviderFlowE2ETestSuite) TestFullProviderFlow() {
 	// =========================================================================
 	// Step 4: Order Created by Customer
 	// =========================================================================
-	var orderID v1beta5.OrderID
+	var orderID v1.OrderID
 	s.Run("Step4_OrderCreation", func() {
 		s.T().Log("Step 4: Creating deployment/order")
 
@@ -295,7 +291,7 @@ func (s *ProviderFlowE2ETestSuite) TestFullProviderFlow() {
 			cli.TestFlags().
 				WithFrom(s.providerAddr).
 				WithOrderID(orderID).
-				WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
+				WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
 				WithDeposit(DefaultDeposit).
 				WithGasAutoFlags().
 				WithSkipConfirm().

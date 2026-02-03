@@ -83,6 +83,7 @@ func NewSidecarClient(config InferenceConfig) (*SidecarClient, error) {
 		extractor:   NewFeatureExtractor(DefaultFeatureExtractorConfig()),
 		determinism: NewDeterminismController(config.RandomSeed, config.ForceCPU),
 		isConnected: false,
+		useTLS:      config.SidecarTLS,
 	}
 
 	// Connect to sidecar
@@ -259,6 +260,9 @@ func (sc *SidecarClient) ComputeScoreWithContext(ctx context.Context, inputs *Sc
 	result.ReasonCodes = sidecarResult.ReasonCodes
 	result.FeatureContributions = sidecarResult.FeatureContributions
 	result.ComputeTimeMs = time.Since(startTime).Milliseconds()
+	if result.InputHash == "" {
+		result.InputHash = sidecarResult.InputHash
+	}
 
 	return result, nil
 }

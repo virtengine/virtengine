@@ -24,7 +24,29 @@ func ExecQueryProviders(ctx context.Context, cctx client.Context, args ...string
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryProvidersCmd(), args...)
 }
 
+// QueryProvidersExec is an alias for ExecQueryProviders.
+func QueryProvidersExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryProviders(ctx, cctx, args...)
+}
+
 // ExecQueryProvider is used for testing provider query
 func ExecQueryProvider(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryProviderCmd(), extraArgs...)
+}
+
+// TxCreateProviderExec is an alias for ExecTxCreateProvider with config path
+func TxCreateProviderExec(ctx context.Context, cctx client.Context, configPath string, flags ...string) (sdktest.BufferWriter, error) {
+	allArgs := append([]string{configPath}, flags...)
+	return ExecTxCreateProvider(ctx, cctx, allArgs...)
+}
+
+// TxUpdateProviderExec is an alias for ExecTxUpdateProvider with config path
+func TxUpdateProviderExec(ctx context.Context, cctx client.Context, configPath string, flags ...string) (sdktest.BufferWriter, error) {
+	allArgs := append([]string{configPath}, flags...)
+	return ExecTxUpdateProvider(ctx, cctx, allArgs...)
+}
+
+// QueryProviderExec is an alias for ExecQueryProvider
+func QueryProviderExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryProvider(ctx, cctx, args...)
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 
@@ -61,16 +62,12 @@ func (s *providerDaemonE2ETestSuite) TestProviderDaemonFullFlow() {
 
 	// Step 1: Register provider on-chain
 	s.Run("RegisterProvider", func() {
-		_, err := clitestutil.TxCreateProviderExec(
-			ctx,
-			cctx,
-			s.providerPath,
-			cli.TestFlags().
-				WithFrom(s.providerAddr).
-				WithGasAutoFlags().
-				WithSkipConfirm().
-				WithBroadcastModeBlock()...,
-		)
+		providerFlags := cli.TestFlags().
+			WithFrom(s.providerAddr).
+			WithGasAutoFlags().
+			WithSkipConfirm().
+			WithBroadcastModeBlock()
+		_, err := clitestutil.TxCreateProviderExec(ctx, cctx, s.providerPath, providerFlags...)
 		s.Require().NoError(err)
 		s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -108,7 +105,7 @@ func (s *providerDaemonE2ETestSuite) TestProviderDaemonFullFlow() {
 	})
 
 	// Step 3: Create deployment (generates order)
-	var orderID v1beta5.OrderID
+	var orderID v1.OrderID
 	s.Run("CreateDeployment", func() {
 		_, err := clitestutil.TxCreateDeploymentExec(
 			ctx, cctx,
@@ -145,7 +142,7 @@ func (s *providerDaemonE2ETestSuite) TestProviderDaemonFullFlow() {
 			cli.TestFlags().
 				WithFrom(s.providerAddr).
 				WithOrderID(orderID).
-				WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdk.MustNewDecFromStr("1.5"))).
+				WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
 				WithDeposit(DefaultDeposit).
 				WithGasAutoFlags().
 				WithSkipConfirm().

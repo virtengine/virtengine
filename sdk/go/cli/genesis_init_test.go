@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -36,9 +37,6 @@ import (
 	vecli "github.com/virtengine/virtengine/sdk/go/cli"
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
-
-// osWindows is the GOOS value for Windows
-const osWindows = "windows"
 
 var testMbm = module.NewBasicManager(
 	staking.AppModuleBasic{},
@@ -165,11 +163,12 @@ func TestEmptyState(t *testing.T) {
 	if runtime.GOOS == osWindows {
 		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
 	}
-
 	home := t.TempDir()
-	logger := log.NewNopLogger()
+	// Prevent Windows file lock cleanup issues with embedded DB handles.
 	cfg, err := genutiltest.CreateDefaultCometConfig(home)
 	require.NoError(t, err)
+	cfg.DBBackend = "memdb"
+	logger := log.NewNopLogger()
 
 	serverCtx := server.NewContext(viper.New(), cfg, logger)
 	interfaceRegistry := types.NewInterfaceRegistry()
@@ -208,23 +207,19 @@ func TestEmptyState(t *testing.T) {
 	os.Stdout = old
 	out := <-outC
 
-	// Give time for database to close completely on Windows
-	// to avoid file locking issues in TempDir cleanup
-	time.Sleep(100 * time.Millisecond)
-
 	require.Contains(t, out, "genesis_time")
 	require.Contains(t, out, "chain_id")
 	require.Contains(t, out, "consensus")
+
+	t.Cleanup(func() {
+		_ = os.RemoveAll(filepath.Join(home, "data", "application.db"))
+	})
+
 	require.Contains(t, out, "app_hash")
 	require.Contains(t, out, "app_state")
 }
 
 func TestStartStandAlone(t *testing.T) {
-	// Skip on Windows due to LevelDB file locking issues in TempDir cleanup
-	if runtime.GOOS == osWindows {
-		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
-	}
-
 	home := t.TempDir()
 	logger := log.NewNopLogger()
 	interfaceRegistry := types.NewInterfaceRegistry()
@@ -234,8 +229,10 @@ func TestStartStandAlone(t *testing.T) {
 
 	app, err := mock.NewApp(home, logger)
 	require.NoError(t, err)
-	if closer, ok := app.(io.Closer); ok {
-		t.Cleanup(func() { _ = closer.Close() })
+	if closer, ok := app.(interface{ Close() error }); ok {
+		t.Cleanup(func() {
+			_ = closer.Close()
+		})
 	}
 
 	svrAddr, _, closeFn, err := network.FreeTCPAddr()
@@ -250,11 +247,11 @@ func TestStartStandAlone(t *testing.T) {
 	err = svr.Start()
 	require.NoError(t, err)
 
-	timer := time.NewTimer(time.Duration(2) * time.Second)
-	for range timer.C {
-		err = svr.Stop()
-		require.NoError(t, err)
-		break
+	time.Sleep(2 * time.Second)
+	err = svr.Stop()
+	require.NoError(t, err)
+	if appCloser != nil {
+		require.NoError(t, appCloser.Close())
 	}
 }
 
@@ -271,11 +268,6 @@ func TestInitNodeValidatorFiles(t *testing.T) {
 }
 
 func TestInitConfig(t *testing.T) {
-	// Skip on Windows due to LevelDB file locking issues in TempDir cleanup
-	if runtime.GOOS == osWindows {
-		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
-	}
-
 	home := t.TempDir()
 	logger := log.NewNopLogger()
 	cfg, err := genutiltest.CreateDefaultCometConfig(home)

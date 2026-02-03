@@ -34,16 +34,13 @@ func (s *providerGRPCRestTestSuite) SetupSuite() {
 	cctx := val.ClientCtx
 
 	// create deployment
-	_, err = clitestutil.TxCreateProviderExec(
-		ctx,
-		cctx,
-		providerPath,
-		cli.TestFlags().
-			WithFrom(val.Address.String()).
-			WithGasAutoFlags().
-			WithSkipConfirm().
-			WithBroadcastModeBlock()...,
-	)
+	providerFlags := cli.TestFlags().
+		WithFrom(val.Address.String()).
+		WithGasAutoFlags().
+		WithSkipConfirm().
+		WithBroadcastModeBlock()
+	providerArgs := append([]string{providerPath}, []string(providerFlags)...)
+	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerArgs...)
 	s.Require().NoError(err)
 
 	s.Require().NoError(s.Network().WaitForNextBlock())

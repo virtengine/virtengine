@@ -64,6 +64,7 @@ type IKeeper interface {
 	TerminateOffering(ctx sdk.Context, id marketplace.OfferingID, reason string) error
 	WithOfferings(ctx sdk.Context, fn func(marketplace.Offering) bool)
 	GetOfferingsByProvider(ctx sdk.Context, providerAddress string) []marketplace.Offering
+	IsProvider(ctx sdk.Context, address sdk.AccAddress) bool
 
 	// Orders
 	CreateOrder(ctx sdk.Context, order *marketplace.Order) error
@@ -167,6 +168,14 @@ func (k Keeper) GetAuthority() string {
 	return k.authority
 }
 
+// IsProvider returns whether the account is a registered provider
+func (k Keeper) IsProvider(ctx sdk.Context, address sdk.AccAddress) bool {
+	if k.providerKeeper == nil {
+		return false
+	}
+	return k.providerKeeper.IsProvider(ctx, address)
+}
+
 // ============================================================================
 // Parameters
 // ============================================================================
@@ -223,13 +232,8 @@ func (k Keeper) CreateOffering(ctx sdk.Context, offering *marketplace.Offering) 
 	store.Set(key, bz)
 
 	// Emit event
-	event := &marketplace.BaseMarketplaceEvent{
-		EventType:   marketplace.EventOfferingCreated,
-		EventID:     fmt.Sprintf("evt_offering_created_%s_%d", offering.ID.String(), k.IncrementEventSequence(ctx)),
-		BlockHeight: ctx.BlockHeight(),
-		Timestamp:   ctx.BlockTime().UTC(),
-		Sequence:    k.GetEventSequence(ctx),
-	}
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewOfferingCreatedEventAt(offering, ctx.BlockHeight(), seq, ctx.BlockTime())
 	return k.EmitMarketplaceEvent(ctx, event)
 }
 
@@ -269,7 +273,10 @@ func (k Keeper) UpdateOffering(ctx sdk.Context, offering *marketplace.Offering) 
 		return err
 	}
 	store.Set(key, bz)
-	return nil
+
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewOfferingUpdatedEventAt(offering, ctx.BlockHeight(), seq, ctx.BlockTime())
+	return k.EmitMarketplaceEvent(ctx, event)
 }
 
 // TerminateOffering terminates an offering
@@ -284,7 +291,13 @@ func (k Keeper) TerminateOffering(ctx sdk.Context, id marketplace.OfferingID, re
 	offering.TerminatedAt = &now
 	offering.UpdatedAt = now
 
-	return k.UpdateOffering(ctx, offering)
+	if err := k.UpdateOffering(ctx, offering); err != nil {
+		return err
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewOfferingTerminatedEventAt(offering, reason, ctx.BlockHeight(), seq, ctx.BlockTime())
+	return k.EmitMarketplaceEvent(ctx, event)
 }
 
 // WithOfferings iterates over all offerings
@@ -588,9 +601,16 @@ func (k Keeper) AcceptBid(ctx sdk.Context, id marketplace.BidID) (*marketplace.A
 		return nil, err
 	}
 
-	// Emit allocation created event
+	// Emit bid accepted event
 	seq := k.IncrementEventSequence(ctx)
-	event := marketplace.NewAllocationCreatedEvent(allocation, order.ID.CustomerAddress, ctx.BlockHeight(), seq)
+	bidAcceptedEvent := marketplace.NewBidAcceptedEventAt(bid, order, allocation, ctx.BlockHeight(), seq, ctx.BlockTime())
+	if err := k.EmitMarketplaceEvent(ctx, bidAcceptedEvent); err != nil {
+		return nil, err
+	}
+
+	// Emit allocation created event
+	seq = k.IncrementEventSequence(ctx)
+	event := marketplace.NewAllocationCreatedEventAt(allocation, order.ID.CustomerAddress, ctx.BlockHeight(), seq, ctx.BlockTime())
 	if err := k.EmitMarketplaceEvent(ctx, event); err != nil {
 		return nil, err
 	}
