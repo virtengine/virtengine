@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until testutil.VECoinRandom API is updated.
-
 package keeper_test
 
 import (

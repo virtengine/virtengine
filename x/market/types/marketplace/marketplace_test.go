@@ -934,6 +934,105 @@ func TestNewOrderCreatedEvent(t *testing.T) {
 	}
 }
 
+func TestNewOfferingCreatedEvent(t *testing.T) {
+	offering := &Offering{
+		ID:       OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		State:    OfferingStateActive,
+		Category: OfferingCategoryCompute,
+		Name:     "Test Offering",
+	}
+
+	event := NewOfferingCreatedEvent(offering, 100, 2)
+
+	if event.EventType != EventOfferingCreated {
+		t.Errorf("OfferingCreatedEvent.EventType = %s, want %s", event.EventType, EventOfferingCreated)
+	}
+	if event.OfferingID != offering.ID.String() {
+		t.Errorf("OfferingCreatedEvent.OfferingID = %s, want %s", event.OfferingID, offering.ID.String())
+	}
+	if event.ProviderAddress != offering.ID.ProviderAddress {
+		t.Errorf("OfferingCreatedEvent.ProviderAddress = %s, want %s", event.ProviderAddress, offering.ID.ProviderAddress)
+	}
+	if event.State != offering.State.String() {
+		t.Errorf("OfferingCreatedEvent.State = %s, want %s", event.State, offering.State.String())
+	}
+}
+
+func TestNewOfferingUpdatedEvent(t *testing.T) {
+	offering := &Offering{
+		ID:    OfferingID{ProviderAddress: "cosmos1provider", Sequence: 2},
+		State: OfferingStatePaused,
+	}
+
+	event := NewOfferingUpdatedEvent(offering, 200, 3)
+
+	if event.EventType != EventOfferingUpdated {
+		t.Errorf("OfferingUpdatedEvent.EventType = %s, want %s", event.EventType, EventOfferingUpdated)
+	}
+	if event.OfferingID != offering.ID.String() {
+		t.Errorf("OfferingUpdatedEvent.OfferingID = %s, want %s", event.OfferingID, offering.ID.String())
+	}
+	if event.State != offering.State.String() {
+		t.Errorf("OfferingUpdatedEvent.State = %s, want %s", event.State, offering.State.String())
+	}
+}
+
+func TestNewOfferingTerminatedEvent(t *testing.T) {
+	offering := &Offering{
+		ID:    OfferingID{ProviderAddress: "cosmos1provider", Sequence: 3},
+		State: OfferingStateTerminated,
+	}
+
+	event := NewOfferingTerminatedEvent(offering, "requested", 300, 4)
+
+	if event.EventType != EventOfferingTerminated {
+		t.Errorf("OfferingTerminatedEvent.EventType = %s, want %s", event.EventType, EventOfferingTerminated)
+	}
+	if event.Reason != "requested" {
+		t.Errorf("OfferingTerminatedEvent.Reason = %s, want requested", event.Reason)
+	}
+}
+
+func TestNewBidAcceptedEvent(t *testing.T) {
+	order := NewOrder(
+		OrderID{CustomerAddress: "cosmos1customer", Sequence: 1},
+		OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		1000,
+		1,
+	)
+	order.State = OrderStateMatched
+
+	bid := &MarketplaceBid{
+		ID: BidID{
+			OrderID:         OrderID{CustomerAddress: "cosmos1customer", Sequence: 1},
+			ProviderAddress: "cosmos1provider",
+			Sequence:        1,
+		},
+		OfferingID: OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		Price:      900,
+	}
+
+	allocation := NewAllocation(
+		AllocationID{OrderID: order.ID, Sequence: 1},
+		OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		"cosmos1provider",
+		bid.ID,
+		900,
+	)
+
+	event := NewBidAcceptedEvent(bid, order, allocation, 400, 5)
+
+	if event.EventType != EventBidAccepted {
+		t.Errorf("BidAcceptedEvent.EventType = %s, want %s", event.EventType, EventBidAccepted)
+	}
+	if event.AllocationID != allocation.ID.String() {
+		t.Errorf("BidAcceptedEvent.AllocationID = %s, want %s", event.AllocationID, allocation.ID.String())
+	}
+	if event.CustomerAddress != order.ID.CustomerAddress {
+		t.Errorf("BidAcceptedEvent.CustomerAddress = %s, want %s", event.CustomerAddress, order.ID.CustomerAddress)
+	}
+}
+
 func TestEventCheckpoint(t *testing.T) {
 	checkpoint := NewEventCheckpoint("subscriber1")
 

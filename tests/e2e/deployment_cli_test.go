@@ -532,7 +532,8 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 
 func (s *deploymentIntegrationTestSuite) getAccountBalance(address sdk.AccAddress) sdkmath.Int {
 	cctxJSON := s.Network().Validators[0].ClientCtx.WithOutputFormat("json")
-	res, err := clitestutil.QueryBalancesExec(context.Background(), cctxJSON, address.String())
+	ctx := context.Background()
+	res, err := clitestutil.QueryBalancesExec(ctx, cctxJSON, address.String())
 	s.Require().NoError(err)
 	var balRes banktypes.QueryAllBalancesResponse
 	err = cctxJSON.Codec.UnmarshalJSON(res.Bytes(), &balRes)

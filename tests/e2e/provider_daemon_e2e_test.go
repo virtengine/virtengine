@@ -16,7 +16,6 @@ import (
 	pd "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/sdk/go/cli"
 	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
-	sdkgoTestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	v1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	provider "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
@@ -63,16 +62,12 @@ func (s *providerDaemonE2ETestSuite) TestProviderDaemonFullFlow() {
 
 	// Step 1: Register provider on-chain
 	s.Run("RegisterProvider", func() {
-		_, err := clitestutil.TxCreateProviderExec(
-			ctx,
-			cctx,
-			s.providerPath,
-			cli.TestFlags().
-				WithFrom(s.providerAddr).
-				WithGasAutoFlags().
-				WithSkipConfirm().
-				WithBroadcastModeBlock()...,
-		)
+		providerFlags := cli.TestFlags().
+			WithFrom(s.providerAddr).
+			WithGasAutoFlags().
+			WithSkipConfirm().
+			WithBroadcastModeBlock()
+		_, err := clitestutil.TxCreateProviderExec(ctx, cctx, s.providerPath, providerFlags...)
 		s.Require().NoError(err)
 		s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -147,7 +142,7 @@ func (s *providerDaemonE2ETestSuite) TestProviderDaemonFullFlow() {
 			cli.TestFlags().
 				WithFrom(s.providerAddr).
 				WithOrderID(orderID).
-				WithPrice(sdk.NewDecCoinFromDec(sdkgoTestutil.VEDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
+				WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
 				WithDeposit(DefaultDeposit).
 				WithGasAutoFlags().
 				WithSkipConfirm().

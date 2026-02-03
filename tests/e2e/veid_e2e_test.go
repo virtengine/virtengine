@@ -462,9 +462,9 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 	customer := sdktestutil.AccAddress(s.T())
 
 	// Create identity record
-	recordPtr, err := s.app.Keepers.VirtEngine.VEID.CreateIdentityRecord(ctx, customer)
+	createdRecord, err := s.app.Keepers.VirtEngine.VEID.CreateIdentityRecord(ctx, customer)
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), veidtypes.IdentityTierUnverified, recordPtr.Tier)
+	require.Equal(s.T(), veidtypes.IdentityTierUnverified, createdRecord.Tier)
 
 	// Test transition: Unverified -> Basic
 	transition1 := UnverifiedToBasic()
@@ -728,15 +728,6 @@ func (s *VEIDE2ETestSuite) TestInvalidClientSignatureRejection() {
 	scopeFixture := SelfieScope()
 	envelope := EncryptedEnvelopeFixture(scopeFixture.ScopeID)
 	payloadHash := PayloadHash(envelope)
-
-	_ = veidtypes.NewUploadMetadata(
-		scopeFixture.Salt,
-		scopeFixture.DeviceFingerprint,
-		s.testClient.ClientID,
-		nil,
-		nil,
-		payloadHash,
-	)
 
 	// Use invalid signature (wrong data signed)
 	invalidClientSig := s.testClient.Sign([]byte("wrong-data"))
