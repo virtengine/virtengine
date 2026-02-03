@@ -707,6 +707,7 @@ func (w *OfferingSyncWorker) syncCreate(ctx context.Context, task *OfferingSyncT
 		Billable:     createReq.Billable,
 		BackendID:    createReq.BackendID,
 		Attributes:   createReq.Attributes,
+		Components:   toWaldurPricingComponents(createReq.Components),
 	})
 	if err != nil {
 		return "", fmt.Errorf("create offering: %w", err)
@@ -747,6 +748,7 @@ func (w *OfferingSyncWorker) syncUpdateExisting(ctx context.Context, task *Offer
 		Name:        updateReq.Name,
 		Description: updateReq.Description,
 		Attributes:  updateReq.Attributes,
+		Components:  toWaldurPricingComponents(updateReq.Components),
 	})
 	if err != nil {
 		return fmt.Errorf("update offering: %w", err)
@@ -779,6 +781,26 @@ func (w *OfferingSyncWorker) stateToAction(state string) string {
 	default:
 		return ""
 	}
+}
+
+func toWaldurPricingComponents(components []marketplace.WaldurPricingComponent) []waldur.PricingComponent {
+	if len(components) == 0 {
+		return nil
+	}
+
+	out := make([]waldur.PricingComponent, 0, len(components))
+	for _, component := range components {
+		out = append(out, waldur.PricingComponent{
+			Type:         component.Type,
+			Name:         component.Name,
+			MeasuredUnit: component.MeasuredUnit,
+			BillingType:  component.BillingType,
+			Price:        component.Price,
+			MinValue:     component.MinValue,
+			MaxValue:     component.MaxValue,
+		})
+	}
+	return out
 }
 
 // syncDisable disables an offering in Waldur.

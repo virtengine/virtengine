@@ -450,17 +450,22 @@ export interface PricingConfig {
   /**
    * Base price per unit
    */
-  basePrice: string;
+  basePrice?: string;
 
   /**
    * Price unit
    */
-  unit: string;
+  unit?: string;
 
   /**
    * Currency denom
    */
   denom: string;
+
+  /**
+   * Component-based pricing configuration
+   */
+  components?: PriceComponent[];
 
   /**
    * Deposit multiplier (e.g., 1.0 = 100% of order value)
@@ -496,6 +501,31 @@ export interface DiscountTier {
    * Discount percentage (0-100)
    */
   discountPercent: number;
+}
+
+/**
+ * Component-based price entry
+ */
+export interface PriceComponent {
+  /**
+   * Resource type (cpu, ram, storage, gpu, network)
+   */
+  resourceType: string;
+
+  /**
+   * Unit (vcpu, gb, hour, month)
+   */
+  unit: string;
+
+  /**
+   * Price per unit in token amount
+   */
+  price: string;
+
+  /**
+   * USD reference price at creation
+   */
+  usdReference?: string;
 }
 
 /**

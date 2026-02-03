@@ -214,17 +214,22 @@ export interface OfferingPricing {
   /**
    * Base price per unit
    */
-  basePrice: string; // Token amount as string
+  basePrice?: string; // Token amount as string
 
   /**
    * Price unit
    */
-  unit: PriceUnit;
+  unit?: PriceUnit;
 
   /**
    * Currency/token denom
    */
   denom: string;
+
+  /**
+   * Component-based pricing
+   */
+  components?: PriceComponent[];
 
   /**
    * Deposit required
@@ -252,6 +257,31 @@ export type PriceUnit =
   | 'per_cpu_hour'
   | 'per_gpu_hour'
   | 'per_gb_hour';
+
+/**
+ * Component-based price entry
+ */
+export interface PriceComponent {
+  /**
+   * Resource type (cpu, ram, storage, gpu, network)
+   */
+  resourceType: string;
+
+  /**
+   * Unit (vcpu, gb, hour, month)
+   */
+  unit: string;
+
+  /**
+   * Price per unit in token amount
+   */
+  price: string;
+
+  /**
+   * USD reference price at creation
+   */
+  usdReference?: string;
+}
 
 /**
  * Identity requirements for ordering

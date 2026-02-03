@@ -1,0 +1,34 @@
+syntax = "proto3";
+package virtengine.marketplace.v1;
+
+import "cosmos/base/v1beta1/coin.proto";
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1";
+
+// Query defines the gRPC querier service for the marketplace module.
+service Query {
+  // OfferingPrice calculates pricing for a specific offering.
+  rpc OfferingPrice(QueryOfferingPriceRequest) returns (QueryOfferingPriceResponse) {
+    option (google.api.http).get = "/virtengine/marketplace/v1/offerings/{offering_id}/price";
+  }
+}
+
+// QueryOfferingPriceRequest is request type for the Query/OfferingPrice RPC method.
+message QueryOfferingPriceRequest {
+  // On-chain offering ID string (provider/sequence).
+  string offering_id = 1;
+
+  // Resource units keyed by resource type (cpu, ram, storage, gpu, network).
+  map<string, uint64> resource_units = 2;
+
+  // Requested quantity (defaults to 1 if omitted).
+  uint32 quantity = 3;
+}
+
+// QueryOfferingPriceResponse is response type for the Query/OfferingPrice RPC method.
+message QueryOfferingPriceResponse {
+  // Total calculated price.
+  cosmos.base.v1beta1.Coin total = 1 [(gogoproto.nullable) = false];
+}
