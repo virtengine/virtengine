@@ -19,6 +19,17 @@ import (
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
+const (
+	waldurActionStart     = "start"
+	waldurActionStop      = "stop"
+	waldurActionRestart   = "restart"
+	waldurActionSuspend   = "suspend"
+	waldurActionResume    = "resume"
+	waldurActionResize    = "resize"
+	waldurActionTerminate = "terminate"
+	waldurActionProvision = "provision"
+)
+
 // WaldurBridgeConfig configures the provider-daemon Waldur bridge.
 type WaldurBridgeConfig struct {
 	Enabled            bool
@@ -501,19 +512,20 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 	defer cancel()
 
 	var err error
+	var waldurOpID string
 	switch event.Action {
 	case marketplace.LifecycleActionStart:
-		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "start", event)
+		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionStart, event)
 	case marketplace.LifecycleActionStop:
-		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "stop", event)
+		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionStop, event)
 	case marketplace.LifecycleActionRestart:
-		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "restart", event)
+		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionRestart, event)
 	case marketplace.LifecycleActionSuspend:
-		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "suspend", event)
+		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionSuspend, event)
 	case marketplace.LifecycleActionResume:
-		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resume", event)
+		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionResume, event)
 	case marketplace.LifecycleActionResize:
-		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resize", event)
+		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionResize, event)
 	case marketplace.LifecycleActionTerminate:
 		attrs := map[string]interface{}{
 			"operation_id": event.OperationID,
@@ -534,6 +546,9 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 	callback.SignerID = b.cfg.ProviderAddress
 	callback.ExpiresAt = callback.Timestamp.Add(b.cfg.CallbackTTL)
 	callback.Payload["operation_id"] = event.OperationID
+	if waldurOpID != "" && waldurOpID != event.OperationID {
+		callback.Payload["waldur_operation_id"] = waldurOpID
+	}
 	callback.Payload["action"] = string(event.Action)
 	callback.Payload["idempotency_key"] = marketplace.GenerateIdempotencyKey(
 		event.AllocationID, event.Action, event.Timestamp,
@@ -556,7 +571,7 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 
 // executeLifecycleAction executes a lifecycle action on a Waldur resource
 func (b *WaldurBridge) executeLifecycleAction(
-	_ context.Context,
+	ctx context.Context,
 	resourceUUID string,
 	action string,
 	event marketplace.LifecycleActionRequestedEvent,
