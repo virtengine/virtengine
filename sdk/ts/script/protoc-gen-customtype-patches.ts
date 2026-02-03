@@ -8,7 +8,7 @@ import {
   runNodeJs,
   type Schema,
 } from "@bufbuild/protoplugin";
-import { basename, normalize as normalizePath } from "path";
+import { basename, posix } from "path";
 
 import { findPathsToCustomField, getCustomType } from "../src/encoding/customTypes/utils.ts";
 
@@ -21,6 +21,7 @@ runNodeJs(
 );
 
 const PROTO_PATH = "../protos";
+const normalizeProtoPath = (value: string) => posix.normalize(value.replace(/\\/g, "/"));
 function generateTs(schema: Schema): void {
   const allPaths: DescField[][] = [];
 
@@ -79,7 +80,7 @@ function generateTs(schema: Schema): void {
     });
 
     const parent = fields.values().next().value!.parent;
-    const path = normalizePath(`${PROTO_PATH}/${parent.file.name}`);
+    const path = normalizeProtoPath(`${PROTO_PATH}/${parent.file.name}`);
     imports[path] ??= new Set(["type *"]);
 
     patches.push([
@@ -190,7 +191,7 @@ function generateTests(fileName: string, testsFile: GeneratedFile, messageToCust
   testsFile.print(`const messageTypes: Record<string, MessageSchema> = {`);
   for (const [message, fields] of messageToCustomFields.entries()) {
     testsFile.print(`  "${message.typeName}": {`);
-    testsFile.print(`    type: `, testsFile.import(message.name, `${PROTO_PATH}/${message.file.name}.ts`), `,`);
+    testsFile.print(`    type: `, testsFile.import(message.name, `${normalizeProtoPath(`${PROTO_PATH}/${message.file.name}`)}.ts`), `,`);
     testsFile.print(`    fields: [`, ...Array.from(fields, f => serializeField(f, testsFile)), `],`);
     testsFile.print(`  },`);
   }
@@ -248,7 +249,7 @@ function serializeField(f: DescField, file: GeneratedFile): Printable {
     field.push(`message: {fields: [`,
       ...f.message.fields.map(nf => serializeField(nf, file)),
       `],`,
-      `type: `, file.import(f.message.name, `${PROTO_PATH}/${f.message.file.name}.ts`),
+      `type: `, file.import(f.message.name, `${normalizeProtoPath(`${PROTO_PATH}/${f.message.file.name}`)}.ts`),
       `},`
     );
   }

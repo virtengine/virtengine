@@ -8,7 +8,7 @@ import {
   runNodeJs,
   type Schema,
 } from "@bufbuild/protoplugin";
-import { normalize as normalizePath } from "path";
+import { posix } from "path";
 
 runNodeJs(
   createEcmaScriptPlugin({
@@ -19,6 +19,7 @@ runNodeJs(
 );
 
 const PROTO_PATH = "protos";
+const normalizeImportPath = (value: string) => posix.normalize(value.replace(/\\/g, "/"));
 function generateTs(schema: Schema): void {
   const servicesLoaderDefs: string[] = [];
   const sdkDefs: Record<string, string> = {};
@@ -36,7 +37,7 @@ function generateTs(schema: Schema): void {
     const isMsgService = !!msgServiceExtension && hasOption(service, msgServiceExtension);
 
     const serviceImport = generateServiceDefs(service, schema);
-    const serviceImportPath = normalizePath(serviceImport.from.replace(/\.js$/, importExtension));
+    const serviceImportPath = normalizeImportPath(serviceImport.from.replace(/\.js$/, importExtension));
     servicesLoaderDefs.push(`() => import("./${PROTO_PATH}/${serviceImportPath}").then(m => m.${serviceImport.name})`);
     const serviceIndex = servicesLoaderDefs.length - 1;
     const serviceMethods = service.methods.map((method, methodIndex) => {
@@ -78,7 +79,7 @@ function generateTs(schema: Schema): void {
   });
 
   imports.forEach((importPath) => {
-    f.print(`import type * as ${fileNameToScope(importPath)} from "${importPath.startsWith("./") ? "./" + normalizePath(`${PROTO_PATH}/${importPath}${importExtension}`) : importPath}";`);
+    f.print(`import type * as ${fileNameToScope(importPath)} from "${importPath.startsWith("./") ? "./" + normalizeImportPath(`${PROTO_PATH}/${importPath}${importExtension}`) : importPath}";`);
   });
   f.print(`import { createClientFactory } from "../sdk/client/createClientFactory${importExtension}";`);
 
@@ -189,7 +190,7 @@ function stringifyObject(obj: Record<string, any>, tabSize = 0, wrap = (value: s
 }
 
 function fileNameToScope(fileName: string) {
-  return normalizePath(fileName).replace(/\W+/g, "_")
+  return normalizeImportPath(fileName).replace(/\W+/g, "_")
     .replace(/^_+/, "")
     .replace(/^protos_/, "")
     .replace(/_pb$/, "");

@@ -15,7 +15,23 @@ Afterwards use any preferred ts compilation command:
 ```sh
 node --experimental-strip-types examples/create-deployment.ts # nodejs >=22
 # or
-deno run --allow-net --allow-env examples/create-deployment.ts
-# or
 bun run examples/create-deployment.ts
+# or
+deno run --allow-net --allow-env examples/create-deployment.ts
+```
+
+## React example
+
+```sh
+cd examples/react
+npm install
+npm run dev
+```
+
+## Vue example
+
+```sh
+cd examples/vue
+npm install
+npm run dev
 ```
