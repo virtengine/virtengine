@@ -78,3 +78,31 @@ func TestParseOfferingID(t *testing.T) {
 		})
 	}
 }
+
+func TestParseBidID(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{name: "valid", value: "cosmos1abc/1/cosmos1prov/2", wantErr: false},
+		{name: "missing_parts", value: "cosmos1abc/1/cosmos1prov", wantErr: true},
+		{name: "bad_order_sequence", value: "cosmos1abc/notanum/cosmos1prov/2", wantErr: true},
+		{name: "bad_bid_sequence", value: "cosmos1abc/1/cosmos1prov/notanum", wantErr: true},
+		{name: "zero_order_sequence", value: "cosmos1abc/0/cosmos1prov/2", wantErr: true},
+		{name: "zero_bid_sequence", value: "cosmos1abc/1/cosmos1prov/0", wantErr: true},
+		{name: "missing_provider", value: "cosmos1abc/1//2", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseBidID(tt.value)
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error for %s", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error for %s: %v", tt.value, err)
+			}
+		})
+	}
+}

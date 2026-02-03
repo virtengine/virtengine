@@ -80,3 +80,34 @@ func ParseOfferingID(value string) (OfferingID, error) {
 	}
 	return id, nil
 }
+
+// ParseBidID parses a BidID from its string form ("customer/orderSeq/provider/bidSeq").
+func ParseBidID(value string) (BidID, error) {
+	parts := strings.Split(value, "/")
+	if len(parts) != 4 {
+		return BidID{}, fmt.Errorf("invalid bid id format: %s", value)
+	}
+
+	orderSeq, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return BidID{}, fmt.Errorf("invalid order sequence: %w", err)
+	}
+
+	bidSeq, err := strconv.ParseUint(parts[3], 10, 64)
+	if err != nil {
+		return BidID{}, fmt.Errorf("invalid bid sequence: %w", err)
+	}
+
+	id := BidID{
+		OrderID: OrderID{
+			CustomerAddress: parts[0],
+			Sequence:        orderSeq,
+		},
+		ProviderAddress: parts[2],
+		Sequence:        bidSeq,
+	}
+	if err := id.Validate(); err != nil {
+		return BidID{}, err
+	}
+	return id, nil
+}
