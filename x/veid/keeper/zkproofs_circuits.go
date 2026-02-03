@@ -395,6 +395,7 @@ func (k Keeper) GenerateScoreRangeProofGroth16(
 // Deterministic Hash-Based Fallback for Consensus
 // ============================================================================
 
+//nolint:unused // reserved for deterministic proof hashing in future circuits
 // generateDeterministicProofHash generates a deterministic hash for consensus
 // when full ZK proof generation would introduce non-determinism.
 // This is used as a commitment scheme that can be verified deterministically.
