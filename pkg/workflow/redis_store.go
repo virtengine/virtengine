@@ -366,7 +366,7 @@ func (s *RedisWorkflowStore) GetHistory(ctx context.Context, workflowID string) 
 		return nil, fmt.Errorf("failed to get history: %w", err)
 	}
 
-	var results []*HistoryEvent
+	results := make([]*HistoryEvent, 0, len(data))
 	for _, item := range data {
 		var event HistoryEvent
 		if err := json.Unmarshal([]byte(item), &event); err != nil {
