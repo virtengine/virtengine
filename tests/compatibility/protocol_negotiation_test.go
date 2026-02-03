@@ -186,7 +186,7 @@ func TestNegotiationPrecedence(t *testing.T) {
 		"test",
 		"2",
 		[]compatibility.ProtocolVersionInfo{
-			{Version: "2", Current: true},  // First = highest preference
+			{Version: "2", Current: true}, // First = highest preference
 			{Version: "1", Deprecated: true},
 		},
 	)

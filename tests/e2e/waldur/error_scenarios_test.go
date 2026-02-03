@@ -265,9 +265,9 @@ func (s *ErrorScenariosTestSuite) TestUsageSubmissionFailures() {
 		defer s.waldurMock.ClearErrorState()
 
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    time.Now().Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   time.Now().Format(time.RFC3339),
 			"usages":       map[string]interface{}{"cpu_hours": 1.0},
 		}
 
@@ -543,4 +543,3 @@ func (s *ErrorScenariosTestSuite) TestHealthCheckDuringErrors() {
 		s.Equal("ok", health["status"])
 	})
 }
-

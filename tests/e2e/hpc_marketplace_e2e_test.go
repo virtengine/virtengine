@@ -40,11 +40,11 @@ type HPCMarketplaceE2ETestSuite struct {
 	deploymentPath string
 
 	// Mock components for unit-level E2E testing
-	mockScheduler   *MockHPCScheduler
-	mockReporter    *MockHPCOnChainReporter
-	mockAuditor     *MockHPCAuditLogger
-	mockWaldur      *MockWaldurClient
-	mockSettlement  *MockSettlementClient
+	mockScheduler  *MockHPCScheduler
+	mockReporter   *MockHPCOnChainReporter
+	mockAuditor    *MockHPCAuditLogger
+	mockWaldur     *MockWaldurClient
+	mockSettlement *MockSettlementClient
 }
 
 func TestHPCMarketplaceE2E(t *testing.T) {
@@ -82,19 +82,19 @@ func (s *HPCMarketplaceE2ETestSuite) SetupSuite() {
 func (s *HPCMarketplaceE2ETestSuite) TestA_StagingEnvironmentSetup() {
 	s.Run("ValidateSchedulerBackend", func() {
 		ctx := context.Background()
-		
+
 		// Verify scheduler is functional
 		err := s.mockScheduler.Start(ctx)
 		s.Require().NoError(err)
 		s.True(s.mockScheduler.IsRunning())
-		
+
 		// Configure HPC settings
 		config := pd.DefaultHPCConfig()
 		config.ClusterID = "e2e-test-cluster"
 		config.SchedulerType = pd.HPCSchedulerTypeSLURM
 		config.UsageReporting.Enabled = true
 		config.UsageReporting.ReportInterval = time.Second * 5
-		
+
 		s.Equal("e2e-test-cluster", config.ClusterID)
 	})
 
@@ -103,7 +103,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestA_StagingEnvironmentSetup() {
 		config.ProviderAddress = s.providerAddr
 		config.OrderPollInterval = time.Millisecond * 100
 		config.ConfigPollInterval = time.Millisecond * 100
-		
+
 		s.NotEmpty(config.ProviderAddress)
 	})
 
@@ -112,7 +112,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestA_StagingEnvironmentSetup() {
 		config.ProviderAddress = s.providerAddr
 		config.OfferingSyncEnabled = true
 		config.OfferingSyncInterval = 60
-		
+
 		s.True(config.OfferingSyncEnabled)
 	})
 }
@@ -127,7 +127,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestB_ProviderRegistrationAndOfferings() {
 	s.Run("RegisterProvider", func() {
 		// Simulate provider registration
 		s.mockWaldur.SetProviderRegistered(s.providerAddr, true)
-		
+
 		registered := s.mockWaldur.IsProviderRegistered(s.providerAddr)
 		s.True(registered)
 	})
@@ -343,8 +343,8 @@ func (s *HPCMarketplaceE2ETestSuite) TestE_UsageMetricsAndReporting() {
 			GPUSeconds:       3600,
 			NodesUsed:        1,
 			NodeHours:        1.0,
-			NetworkBytesIn:   1073741824,  // 1 GB
-			NetworkBytesOut:  536870912,   // 0.5 GB
+			NetworkBytesIn:   1073741824, // 1 GB
+			NetworkBytesOut:  536870912,  // 0.5 GB
 		}
 
 		s.mockReporter.SetJobMetrics("hpc-job-e2e-1", metrics)
@@ -441,10 +441,10 @@ func (s *HPCMarketplaceE2ETestSuite) TestF_InvoiceAndSettlement() {
 					TotalCost:    "3.60",
 				},
 			},
-			TotalAmount:  "5.328",
-			PeriodStart:  time.Now().Add(-time.Hour),
-			PeriodEnd:    time.Now(),
-			Status:       "pending",
+			TotalAmount: "5.328",
+			PeriodStart: time.Now().Add(-time.Hour),
+			PeriodEnd:   time.Now(),
+			Status:      "pending",
 		}
 
 		err := s.mockSettlement.CreateInvoice(ctx, invoice)
@@ -456,7 +456,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestF_InvoiceAndSettlement() {
 		invoice := s.mockSettlement.GetInvoice(invoiceID)
 		s.NotNil(invoice)
 		s.Len(invoice.LineItems, 3)
-		
+
 		// Verify each line item
 		for _, item := range invoice.LineItems {
 			s.NotEmpty(item.ResourceType)
@@ -477,7 +477,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestF_InvoiceAndSettlement() {
 		payout := s.mockSettlement.GetProviderPayout(s.providerAddr, invoiceID)
 		s.NotNil(payout)
 		s.Equal("completed", payout.Status)
-		
+
 		// Provider should receive ~97.5% (platform fee is 2.5%)
 		s.NotEmpty(payout.Amount)
 	})
@@ -514,7 +514,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestG_StateTransitionsAndEvents() {
 
 	s.Run("VerifyEventEmissions", func() {
 		events := s.mockAuditor.GetEvents()
-		
+
 		// Should have job lifecycle events
 		jobEvents := filterEventsByType(events, "job")
 		s.GreaterOrEqual(len(jobEvents), 0)
@@ -754,12 +754,12 @@ func (s *HPCMarketplaceE2ETestSuite) TestH_NegativeScenarios() {
 
 // MockHPCScheduler is a mock HPC scheduler for testing
 type MockHPCScheduler struct {
-	running      bool
-	jobs         map[string]*pd.HPCSchedulerJob
-	metrics      map[string]*pd.HPCSchedulerMetrics
-	maxCPU       int32
-	maxMemoryMB  int64
-	maxGPUs      int32
+	running     bool
+	jobs        map[string]*pd.HPCSchedulerJob
+	metrics     map[string]*pd.HPCSchedulerMetrics
+	maxCPU      int32
+	maxMemoryMB int64
+	maxGPUs     int32
 }
 
 func NewMockHPCScheduler() *MockHPCScheduler {
@@ -1038,7 +1038,7 @@ func (m *MockWaldurClient) IsProviderRegistered(addr string) bool {
 
 func (m *MockWaldurClient) PublishOffering(ctx context.Context, offering MockOffering) error {
 	offering.WaldurUUID = fmt.Sprintf("waldur-%s", offering.OfferingID)
-	
+
 	// Use first provider address as key (simplified)
 	for addr := range m.providers {
 		m.offerings[addr] = append(m.offerings[addr], offering)

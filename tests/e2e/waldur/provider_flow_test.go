@@ -37,10 +37,10 @@ type ProviderFlowTestSuite struct {
 	waldurMock *mocks.WaldurMock
 
 	// Test data
-	testProjectUUID   string
-	testCustomerUUID  string
-	testOfferingUUID  string
-	testProviderAddr  string
+	testProjectUUID  string
+	testCustomerUUID string
+	testOfferingUUID string
+	testProviderAddr string
 }
 
 func TestProviderFlow(t *testing.T) {
@@ -118,13 +118,13 @@ func (s *ProviderFlowTestSuite) httpPost(path string, payload interface{}) ([]by
 func (s *ProviderFlowTestSuite) TestOfferingPublication() {
 	s.Run("CreateNewOffering", func() {
 		offeringReq := map[string]interface{}{
-			"name":         "New Provider Offering",
-			"description":  "A new offering from provider",
-			"customer":     s.testCustomerUUID,
-			"category":     "compute",
-			"backend_id":   s.testProviderAddr + "/new-offering",
-			"shared":       true,
-			"billable":     true,
+			"name":        "New Provider Offering",
+			"description": "A new offering from provider",
+			"customer":    s.testCustomerUUID,
+			"category":    "compute",
+			"backend_id":  s.testProviderAddr + "/new-offering",
+			"shared":      true,
+			"billable":    true,
 		}
 
 		_, status, err := s.httpPost("/api/marketplace-offerings/", offeringReq)
@@ -154,10 +154,10 @@ func (s *ProviderFlowTestSuite) TestOrderFulfillment() {
 	s.Run("ReceiveOrderFromChain", func() {
 		// Simulate order from chain
 		orderReq := map[string]interface{}{
-			"offering_uuid":    s.testOfferingUUID,
-			"project_uuid":     s.testProjectUUID,
-			"name":             "chain-submitted-order",
-			"backend_id":       s.testProviderAddr + "/order-001",
+			"offering_uuid":     s.testOfferingUUID,
+			"project_uuid":      s.testProjectUUID,
+			"name":              "chain-submitted-order",
+			"backend_id":        s.testProviderAddr + "/order-001",
 			"requestor_address": "ve1customer123",
 		}
 
@@ -356,9 +356,9 @@ func (s *ProviderFlowTestSuite) TestUsageReporting() {
 
 		// Submit usage
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    time.Now().Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   time.Now().Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours":       1.5,
 				"memory_gb_hours": 4.0,
@@ -386,9 +386,9 @@ func (s *ProviderFlowTestSuite) TestUsageReporting() {
 		})
 
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    time.Now().Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   time.Now().Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours": 2.0,
 			},
@@ -510,4 +510,3 @@ func (s *ProviderFlowTestSuite) TestStateTransitions() {
 		s.Error(err)
 	})
 }
-

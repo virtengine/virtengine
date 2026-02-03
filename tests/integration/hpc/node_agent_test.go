@@ -236,9 +236,9 @@ func TestSimulatedNodeAgents(t *testing.T) {
 func TestNodeStateTransitions(t *testing.T) {
 	// Test valid transitions
 	testCases := []struct {
-		from    string
-		to      string
-		valid   bool
+		from  string
+		to    string
+		valid bool
 	}{
 		{"pending", "active", true},
 		{"pending", "offline", true},
