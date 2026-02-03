@@ -139,6 +139,11 @@ func (s *JWTTestSuite) TestSchema() {
 				require.False(s.T(), res.Valid())
 				require.Greater(s.T(), len(res.Errors()), 0)
 			} else {
+				if !res.Valid() {
+					for _, e := range res.Errors() {
+						s.T().Logf("Schema validation error: %s", e.String())
+					}
+				}
 				require.True(s.T(), res.Valid())
 				require.Len(s.T(), res.Errors(), 0)
 			}

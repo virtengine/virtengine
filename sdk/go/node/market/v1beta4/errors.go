@@ -62,7 +62,7 @@ var (
 	// ErrOrderDurationExceeded order should be closed
 	ErrOrderDurationExceeded = errors.New("order duration has exceeded the bidding duration")
 	// ErrInvalidDeposit indicates an invalid deposit
-	ErrInvalidDeposit = errors.New("Deposit invalid")
+	ErrInvalidDeposit = errors.New("deposit invalid")
 	// ErrInvalidParam indicates an invalid chain parameter
 	ErrInvalidParam = errors.New("parameter invalid")
 	// ErrUnknownProvider indicates an invalid chain parameter

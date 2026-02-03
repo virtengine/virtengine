@@ -627,15 +627,16 @@ func (k Keeper) getMinScoreForTier(tier types.IdentityTier) uint32 {
 }
 
 // tierToLevel converts tier to numeric level for comparison
+// Includes deprecated tier constants for backward compatibility with existing records
 func (k Keeper) tierToLevel(tier types.IdentityTier) int {
 	switch tier {
 	case types.IdentityTierUnverified:
 		return 0
 	case types.IdentityTierBasic:
 		return 1
-	case types.IdentityTierStandard:
+	case types.IdentityTierStandard, types.IdentityTierVerified: //nolint:staticcheck // SA1019: IdentityTierVerified is deprecated but kept for backward compatibility
 		return 2
-	case types.IdentityTierPremium:
+	case types.IdentityTierPremium, types.IdentityTierTrusted: //nolint:staticcheck // SA1019: IdentityTierTrusted is deprecated but kept for backward compatibility
 		return 3
 	default:
 		return 0
