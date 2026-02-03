@@ -27,7 +27,7 @@ type FraudDetectorConfig struct {
 	FaceSimilarityMinimum      float64 `json:"face_similarity_minimum"`
 
 	// Document validation
-	EnableDocumentForensics bool `json:"enable_document_forensics"`
+	EnableDocumentForensics bool    `json:"enable_document_forensics"`
 	OCRConfidenceMinimum    float64 `json:"ocr_confidence_minimum"`
 
 	// Replay detection
@@ -62,58 +62,58 @@ func DefaultFraudDetectorConfig() *FraudDetectorConfig {
 
 // VEIDVerificationData represents VEID verification data for analysis
 type VEIDVerificationData struct {
-	RequestID         string                 `json:"request_id"`
-	AccountAddress    string                 `json:"account_address"`
-	Timestamp         time.Time              `json:"timestamp"`
-	BlockHeight       int64                  `json:"block_height"`
+	RequestID      string    `json:"request_id"`
+	AccountAddress string    `json:"account_address"`
+	Timestamp      time.Time `json:"timestamp"`
+	BlockHeight    int64     `json:"block_height"`
 
 	// Scores
-	ProposerScore     uint32                 `json:"proposer_score"`
-	ComputedScore     uint32                 `json:"computed_score"`
-	ScoreDifference   int32                  `json:"score_difference"`
-	Match             bool                   `json:"match"`
+	ProposerScore   uint32 `json:"proposer_score"`
+	ComputedScore   uint32 `json:"computed_score"`
+	ScoreDifference int32  `json:"score_difference"`
+	Match           bool   `json:"match"`
 
 	// Biometric data (metadata only, never actual biometrics)
-	FaceSimilarityScore float64              `json:"face_similarity_score,omitempty"`
-	LivenessScore       float64              `json:"liveness_score,omitempty"`
-	BiometricHash       string               `json:"biometric_hash,omitempty"`
+	FaceSimilarityScore float64 `json:"face_similarity_score,omitempty"`
+	LivenessScore       float64 `json:"liveness_score,omitempty"`
+	BiometricHash       string  `json:"biometric_hash,omitempty"`
 
 	// Document data
-	DocumentType      string                 `json:"document_type,omitempty"`
-	OCRConfidence     float64                `json:"ocr_confidence,omitempty"`
-	DocumentHash      string                 `json:"document_hash,omitempty"`
-	DocumentCountry   string                 `json:"document_country,omitempty"`
+	DocumentType    string  `json:"document_type,omitempty"`
+	OCRConfidence   float64 `json:"ocr_confidence,omitempty"`
+	DocumentHash    string  `json:"document_hash,omitempty"`
+	DocumentCountry string  `json:"document_country,omitempty"`
 
 	// Scope data
-	ScopeHashes       []string               `json:"scope_hashes,omitempty"`
-	ScopeCount        int                    `json:"scope_count,omitempty"`
+	ScopeHashes []string `json:"scope_hashes,omitempty"`
+	ScopeCount  int      `json:"scope_count,omitempty"`
 
 	// Result
-	Success           bool                   `json:"success"`
-	FailureReason     string                 `json:"failure_reason,omitempty"`
-	ReasonCodes       []string               `json:"reason_codes,omitempty"`
+	Success       bool     `json:"success"`
+	FailureReason string   `json:"failure_reason,omitempty"`
+	ReasonCodes   []string `json:"reason_codes,omitempty"`
 
 	// Source information
-	ClientAppID       string                 `json:"client_app_id,omitempty"`
-	SourceIP          string                 `json:"source_ip,omitempty"`
+	ClientAppID string `json:"client_app_id,omitempty"`
+	SourceIP    string `json:"source_ip,omitempty"`
 
-	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // FraudIndicatorType represents types of fraud indicators
 type FraudIndicatorType string
 
 const (
-	FraudIndicatorDocumentTampering    FraudIndicatorType = "document_tampering"
-	FraudIndicatorBiometricMismatch    FraudIndicatorType = "biometric_mismatch"
-	FraudIndicatorReplayAttack         FraudIndicatorType = "replay_attack"
-	FraudIndicatorScoreAnomaly         FraudIndicatorType = "score_anomaly"
-	FraudIndicatorVelocityAbuse        FraudIndicatorType = "velocity_abuse"
-	FraudIndicatorSyntheticIdentity    FraudIndicatorType = "synthetic_identity"
-	FraudIndicatorDocumentForgery      FraudIndicatorType = "document_forgery"
-	FraudIndicatorLivenessFailure      FraudIndicatorType = "liveness_failure"
-	FraudIndicatorMultipleIdentities   FraudIndicatorType = "multiple_identities"
-	FraudIndicatorSuspiciousBehavior   FraudIndicatorType = "suspicious_behavior"
+	FraudIndicatorDocumentTampering  FraudIndicatorType = "document_tampering"
+	FraudIndicatorBiometricMismatch  FraudIndicatorType = "biometric_mismatch"
+	FraudIndicatorReplayAttack       FraudIndicatorType = "replay_attack"
+	FraudIndicatorScoreAnomaly       FraudIndicatorType = "score_anomaly"
+	FraudIndicatorVelocityAbuse      FraudIndicatorType = "velocity_abuse"
+	FraudIndicatorSyntheticIdentity  FraudIndicatorType = "synthetic_identity"
+	FraudIndicatorDocumentForgery    FraudIndicatorType = "document_forgery"
+	FraudIndicatorLivenessFailure    FraudIndicatorType = "liveness_failure"
+	FraudIndicatorMultipleIdentities FraudIndicatorType = "multiple_identities"
+	FraudIndicatorSuspiciousBehavior FraudIndicatorType = "suspicious_behavior"
 )
 
 // FraudDetector detects VEID fraud indicators
@@ -134,20 +134,20 @@ type FraudDetector struct {
 }
 
 type verificationRecord struct {
-	requestID    string
-	timestamp    time.Time
-	score        uint32
-	success      bool
+	requestID     string
+	timestamp     time.Time
+	score         uint32
+	success       bool
 	biometricHash string
-	documentHash string
+	documentHash  string
 }
 
 type scopeHashRecord struct {
-	hash          string
+	hash           string
 	accountAddress string
-	firstSeenAt   time.Time
-	lastSeenAt    time.Time
-	seenCount     int
+	firstSeenAt    time.Time
+	lastSeenAt     time.Time
+	seenCount      int
 }
 
 // NewFraudDetector creates a new fraud detector
@@ -235,11 +235,11 @@ func (d *FraudDetector) checkVerificationVelocity(v *VEIDVerificationData) {
 			Source:      v.AccountAddress,
 			Description: "Excessive verification attempts detected",
 			Metadata: map[string]interface{}{
-				"account":         v.AccountAddress,
-				"attempt_count":   recentCount,
-				"threshold":       d.config.MaxVerificationAttemptsPerAccount,
-				"window_mins":     d.config.VerificationCooldownMins,
-				"request_id":      v.RequestID,
+				"account":       v.AccountAddress,
+				"attempt_count": recentCount,
+				"threshold":     d.config.MaxVerificationAttemptsPerAccount,
+				"window_mins":   d.config.VerificationCooldownMins,
+				"request_id":    v.RequestID,
 			},
 		})
 	}
@@ -279,9 +279,9 @@ func (d *FraudDetector) checkReplayAttack(v *VEIDVerificationData) {
 					Source:      v.AccountAddress,
 					Description: "Repeated scope submission detected",
 					Metadata: map[string]interface{}{
-						"account":     v.AccountAddress,
-						"seen_count":  existing.seenCount,
-						"request_id":  v.RequestID,
+						"account":    v.AccountAddress,
+						"seen_count": existing.seenCount,
+						"request_id": v.RequestID,
 					},
 				})
 			}
@@ -430,11 +430,11 @@ func (d *FraudDetector) checkScoreAnomalies(v *VEIDVerificationData) {
 				Source:      v.AccountAddress,
 				Description: "Consecutive low verification scores detected",
 				Metadata: map[string]interface{}{
-					"account":            v.AccountAddress,
-					"current_score":      v.ComputedScore,
-					"consecutive_count":  consecutiveLow,
-					"threshold":          d.config.MinExpectedScore,
-					"request_id":         v.RequestID,
+					"account":           v.AccountAddress,
+					"current_score":     v.ComputedScore,
+					"consecutive_count": consecutiveLow,
+					"threshold":         d.config.MinExpectedScore,
+					"request_id":        v.RequestID,
 				},
 			})
 		}
@@ -618,4 +618,3 @@ func hashData(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
 }
-

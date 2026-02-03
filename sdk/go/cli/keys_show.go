@@ -225,4 +225,3 @@ func getBechKeyOut(bechPrefix string) (bechKeyOutFn, error) {
 
 	return nil, fmt.Errorf("invalid Bech32 prefix encoding provided: %s", bechPrefix)
 }
-

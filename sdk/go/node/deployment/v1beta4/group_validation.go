@@ -35,4 +35,3 @@ func ValidateDeploymentGroups(gspecs []GroupSpec) error {
 
 	return nil
 }
-

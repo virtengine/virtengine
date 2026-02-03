@@ -88,4 +88,3 @@ func GetQueryProviderCmd() *cobra.Command {
 
 	return cmd
 }
-

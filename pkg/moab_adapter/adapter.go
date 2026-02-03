@@ -632,4 +632,3 @@ func CalculateJobCost(metrics *MOABUsageMetrics, cpuRatePerHour, gpuRatePerHour,
 
 	return cost
 }
-

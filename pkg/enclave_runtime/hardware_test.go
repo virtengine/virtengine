@@ -127,13 +127,13 @@ func TestSGXEnclaveLoader(t *testing.T) {
 			t.Error("second Load should fail")
 		}
 
-		loader.Unload()
+		_ = loader.Unload()
 	})
 
 	t.Run("measurement is non-zero after load", func(t *testing.T) {
 		loader := NewSGXEnclaveLoader(detector)
 		_ = loader.Load("/fake/enclave.so", false)
-		defer loader.Unload()
+		defer func() { _ = loader.Unload() }()
 
 		measurement := loader.GetMeasurement()
 		if measurement == (SGXMeasurement{}) {
@@ -161,7 +161,7 @@ func TestSGXReportGenerator(t *testing.T) {
 
 	t.Run("generate report with loaded enclave", func(t *testing.T) {
 		_ = loader.Load("/fake/enclave.so", false)
-		defer loader.Unload()
+		defer func() { _ = loader.Unload() }()
 
 		gen := NewSGXReportGenerator(loader)
 
@@ -196,7 +196,7 @@ func TestSGXQuoteGenerator(t *testing.T) {
 
 	t.Run("generate quote with loaded enclave", func(t *testing.T) {
 		_ = loader.Load("/fake/enclave.so", false)
-		defer loader.Unload()
+		defer func() { _ = loader.Unload() }()
 
 		quoter := NewSGXQuoteGenerator(detector, loader)
 
@@ -229,7 +229,7 @@ func TestSGXSealingService(t *testing.T) {
 	_ = detector.Detect()
 	loader := NewSGXEnclaveLoader(detector)
 	_ = loader.Load("/fake/enclave.so", false)
-	defer loader.Unload()
+	defer func() { _ = loader.Unload() }()
 
 	sealer := NewSGXSealingService(loader)
 
@@ -293,7 +293,7 @@ func TestSGXECallInterface(t *testing.T) {
 	_ = detector.Detect()
 	loader := NewSGXEnclaveLoader(detector)
 	_ = loader.Load("/fake/enclave.so", false)
-	defer loader.Unload()
+	defer func() { _ = loader.Unload() }()
 
 	ecaller := NewSGXECallInterface(loader)
 
@@ -322,7 +322,7 @@ func TestSGXECallInterface(t *testing.T) {
 		initial := ecaller.GetCallCount()
 
 		for i := 0; i < 5; i++ {
-			ecaller.Call(i, []byte("test"))
+			_, _ = ecaller.Call(i, []byte("test"))
 		}
 
 		final := ecaller.GetCallCount()
@@ -355,7 +355,7 @@ func TestSGXHardwareBackend(t *testing.T) {
 
 	t.Run("get attestation", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		nonce := []byte("test-attestation-nonce")
 		attestation, err := backend.GetAttestation(nonce)
@@ -370,7 +370,7 @@ func TestSGXHardwareBackend(t *testing.T) {
 
 	t.Run("derive key", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		key1, err := backend.DeriveKey([]byte("context1"), 32)
 		if err != nil {
@@ -394,7 +394,7 @@ func TestSGXHardwareBackend(t *testing.T) {
 
 	t.Run("seal and unseal", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		plaintext := []byte("backend seal test")
 
@@ -437,7 +437,7 @@ func TestSEVHardwareDetection(t *testing.T) {
 		version := detector.Version()
 		// Version should be "unknown" or a valid version string
 		if version == "" {
-			version = "unknown"
+			version = platformUnknown
 		}
 		t.Logf("SEV-SNP version: %s", version)
 	})
@@ -629,7 +629,7 @@ func TestSEVHardwareBackend(t *testing.T) {
 
 	t.Run("get attestation", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		nonce := []byte("sev-snp-attestation-nonce")
 		attestation, err := backend.GetAttestation(nonce)
@@ -644,7 +644,7 @@ func TestSEVHardwareBackend(t *testing.T) {
 
 	t.Run("seal and unseal", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		plaintext := []byte("sev-snp backend seal test")
 
@@ -665,7 +665,7 @@ func TestSEVHardwareBackend(t *testing.T) {
 
 	t.Run("get platform info", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		info, err := backend.GetPlatformInfo()
 		if err != nil {
@@ -1051,7 +1051,7 @@ func TestNitroHardwareBackend(t *testing.T) {
 
 	t.Run("get attestation", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		nonce := []byte("nitro-attestation-nonce")
 		attestation, err := backend.GetAttestation(nonce)
@@ -1066,7 +1066,7 @@ func TestNitroHardwareBackend(t *testing.T) {
 
 	t.Run("seal and unseal", func(t *testing.T) {
 		_ = backend.Initialize()
-		defer backend.Shutdown()
+		defer func() { _ = backend.Shutdown() }()
 
 		plaintext := []byte("nitro backend seal test")
 
@@ -1152,7 +1152,7 @@ func TestSimulationFallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
-		defer loader.Unload()
+		defer func() { _ = loader.Unload() }()
 
 		// Should be in simulation mode
 		if !loader.IsSimulated() {
@@ -1266,7 +1266,7 @@ func TestHardwareState(t *testing.T) {
 		err := state.Initialize()
 		if err == nil {
 			t.Error("require mode should fail without hardware")
-			state.Shutdown()
+			_ = state.Shutdown()
 		}
 	})
 
@@ -1286,7 +1286,7 @@ func TestHardwareState(t *testing.T) {
 	t.Run("get active backend", func(t *testing.T) {
 		state := NewHardwareState(HardwareModeAuto)
 		_ = state.Initialize()
-		defer state.Shutdown()
+		defer func() { _ = state.Shutdown() }()
 
 		backend := state.GetActiveBackend()
 		if backend != nil {
@@ -1374,14 +1374,14 @@ func BenchmarkSGXSeal(b *testing.B) {
 	_ = detector.Detect()
 	loader := NewSGXEnclaveLoader(detector)
 	_ = loader.Load("/fake/enclave.so", false)
-	defer loader.Unload()
+	defer func() { _ = loader.Unload() }()
 
 	sealer := NewSGXSealingService(loader)
 	plaintext := make([]byte, 1024)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sealer.Seal(plaintext)
+		_, _ = sealer.Seal(plaintext)
 	}
 }
 
@@ -1397,7 +1397,7 @@ func BenchmarkSEVRequestReport(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		requester.RequestReport(userData, 0)
+		_, _ = requester.RequestReport(userData, 0)
 	}
 }
 
@@ -1411,7 +1411,7 @@ func BenchmarkNitroAttestation(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		client.GetAttestationDocument(userData, nonce, nil)
+		_, _ = client.GetAttestationDocument(userData, nonce, nil)
 	}
 }
 
@@ -1424,4 +1424,3 @@ func BenchmarkDetectHardware(b *testing.B) {
 		DetectHardware()
 	}
 }
-

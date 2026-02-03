@@ -68,4 +68,3 @@ func ListKeyTypesCmd() *cobra.Command {
 		},
 	}
 }
-

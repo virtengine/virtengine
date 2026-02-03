@@ -41,10 +41,10 @@ const (
 
 // PCTF Assurance Levels (based on PCTF Verified Person component)
 const (
-	PCTFAssuranceLevelBasic     = "BASIC"
-	PCTFAssuranceLevelStandard  = "STANDARD"
-	PCTFAssuranceLevelEnhanced  = "ENHANCED"
-	PCTFAssuranceLevelHigh      = "HIGH"
+	PCTFAssuranceLevelBasic    = "BASIC"
+	PCTFAssuranceLevelStandard = "STANDARD"
+	PCTFAssuranceLevelEnhanced = "ENHANCED"
+	PCTFAssuranceLevelHigh     = "HIGH"
 )
 
 // PCTF Document Types
@@ -199,63 +199,63 @@ func (c *PCTFConfig) Validate() error {
 
 // PCTFVerifyRequest represents a PCTF verification request
 type PCTFVerifyRequest struct {
-	RequestID          string            `json:"requestId"`
-	AssuranceLevel     string            `json:"assuranceLevel"`
-	DocumentType       string            `json:"documentType"`
-	Province           string            `json:"province,omitempty"`
-	PersonData         PCTFPersonData    `json:"personData"`
-	DocumentData       PCTFDocumentData  `json:"documentData"`
-	ConsentReference   string            `json:"consentReference"`
-	PreferredLanguage  string            `json:"preferredLanguage,omitempty"`
+	RequestID         string           `json:"requestId"`
+	AssuranceLevel    string           `json:"assuranceLevel"`
+	DocumentType      string           `json:"documentType"`
+	Province          string           `json:"province,omitempty"`
+	PersonData        PCTFPersonData   `json:"personData"`
+	DocumentData      PCTFDocumentData `json:"documentData"`
+	ConsentReference  string           `json:"consentReference"`
+	PreferredLanguage string           `json:"preferredLanguage,omitempty"`
 }
 
 // PCTFPersonData contains person identity data
 type PCTFPersonData struct {
-	GivenName       string `json:"givenName,omitempty"`
-	MiddleNames     string `json:"middleNames,omitempty"`
-	Surname         string `json:"surname,omitempty"`
-	DateOfBirth     string `json:"dateOfBirth,omitempty"` // Format: YYYY-MM-DD
-	Gender          string `json:"gender,omitempty"`
-	PlaceOfBirth    string `json:"placeOfBirth,omitempty"`
+	GivenName    string `json:"givenName,omitempty"`
+	MiddleNames  string `json:"middleNames,omitempty"`
+	Surname      string `json:"surname,omitempty"`
+	DateOfBirth  string `json:"dateOfBirth,omitempty"` // Format: YYYY-MM-DD
+	Gender       string `json:"gender,omitempty"`
+	PlaceOfBirth string `json:"placeOfBirth,omitempty"`
 }
 
 // PCTFDocumentData contains document-specific data
 type PCTFDocumentData struct {
-	DocumentNumber  string `json:"documentNumber,omitempty"`
-	ExpiryDate      string `json:"expiryDate,omitempty"`
-	IssueDate       string `json:"issueDate,omitempty"`
+	DocumentNumber   string `json:"documentNumber,omitempty"`
+	ExpiryDate       string `json:"expiryDate,omitempty"`
+	IssueDate        string `json:"issueDate,omitempty"`
 	IssuingAuthority string `json:"issuingAuthority,omitempty"`
-	DocumentClass   string `json:"documentClass,omitempty"`
+	DocumentClass    string `json:"documentClass,omitempty"`
 }
 
 // PCTFVerifyResponse represents a PCTF verification response
 type PCTFVerifyResponse struct {
-	RequestID         string              `json:"requestId"`
-	TransactionID     string              `json:"transactionId"`
-	Status            string              `json:"status"`
-	AssuranceLevel    string              `json:"assuranceLevel,omitempty"`
+	RequestID          string                 `json:"requestId"`
+	TransactionID      string                 `json:"transactionId"`
+	Status             string                 `json:"status"`
+	AssuranceLevel     string                 `json:"assuranceLevel,omitempty"`
 	VerificationResult PCTFVerificationResult `json:"verificationResult"`
-	Timestamp         string              `json:"timestamp"`
-	ErrorCode         string              `json:"errorCode,omitempty"`
-	ErrorMessage      string              `json:"errorMessage,omitempty"`
+	Timestamp          string                 `json:"timestamp"`
+	ErrorCode          string                 `json:"errorCode,omitempty"`
+	ErrorMessage       string                 `json:"errorMessage,omitempty"`
 }
 
 // PCTFVerificationResult contains the verification result
 type PCTFVerificationResult struct {
-	OverallMatch      string                   `json:"overallMatch"`
-	IdentityVerified  bool                     `json:"identityVerified"`
-	DocumentVerified  bool                     `json:"documentVerified"`
+	OverallMatch      string                     `json:"overallMatch"`
+	IdentityVerified  bool                       `json:"identityVerified"`
+	DocumentVerified  bool                       `json:"documentVerified"`
 	FieldResults      map[string]PCTFFieldResult `json:"fieldResults,omitempty"`
-	Confidence        float64                  `json:"confidence"`
-	AssuranceLevelMet bool                     `json:"assuranceLevelMet"`
+	Confidence        float64                    `json:"confidence"`
+	AssuranceLevelMet bool                       `json:"assuranceLevelMet"`
 }
 
 // PCTFFieldResult contains a field-level verification result
 type PCTFFieldResult struct {
-	FieldName   string  `json:"fieldName"`
-	Match       string  `json:"match"`
-	Confidence  float64 `json:"confidence"`
-	Note        string  `json:"note,omitempty"`
+	FieldName  string  `json:"fieldName"`
+	Match      string  `json:"match"`
+	Confidence float64 `json:"confidence"`
+	Note       string  `json:"note,omitempty"`
 }
 
 // PCTF Status codes
@@ -393,11 +393,11 @@ func (a *pctfAdapter) Verify(ctx context.Context, req *VerificationRequest) (*Ve
 func (a *pctfAdapter) extractProvince(jurisdiction string) string {
 	// Handle formats: "CA-ON", "ON", "CA/ON"
 	jurisdiction = strings.ToUpper(jurisdiction)
-	
+
 	// Remove CA prefix
 	jurisdiction = strings.TrimPrefix(jurisdiction, "CA-")
 	jurisdiction = strings.TrimPrefix(jurisdiction, "CA/")
-	
+
 	// Take first 2 characters as province code
 	if len(jurisdiction) >= 2 {
 		return jurisdiction[:2]
@@ -725,4 +725,3 @@ func loadPCTFConfigFromEnv(_ AdapterConfig) (PCTFConfig, bool, error) {
 
 	return pctfConfig, true, nil
 }
-

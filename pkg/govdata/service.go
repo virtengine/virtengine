@@ -230,16 +230,16 @@ func (s *service) VerifyDocument(ctx context.Context, req *VerificationRequest) 
 
 	// Create audit log entry
 	auditEntry := &AuditLogEntry{
-		ID:            generateAuditID(),
-		RequestID:     req.RequestID,
-		Action:        AuditActionVerify,
-		WalletAddress: req.WalletAddress,
-		Jurisdiction:  req.Jurisdiction,
-		DocumentType:  req.DocumentType,
-		DataSource:    adapter.Type(),
-		ConsentID:     req.ConsentID,
-		Timestamp:     time.Now(),
-		Duration:      duration,
+		ID:                 generateAuditID(),
+		RequestID:          req.RequestID,
+		Action:             AuditActionVerify,
+		WalletAddress:      req.WalletAddress,
+		Jurisdiction:       req.Jurisdiction,
+		DocumentType:       req.DocumentType,
+		DataSource:         adapter.Type(),
+		ConsentID:          req.ConsentID,
+		Timestamp:          time.Now(),
+		Duration:           duration,
 		RetentionExpiresAt: time.Now().AddDate(0, 0, s.config.DefaultRetention.AuditLogRetentionDays),
 	}
 
@@ -337,13 +337,13 @@ func (s *service) GrantConsent(ctx context.Context, consent *Consent) (*Consent,
 
 	// Log consent grant
 	auditEntry := &AuditLogEntry{
-		ID:            generateAuditID(),
-		RequestID:     consent.ID,
-		Action:        AuditActionConsentGrant,
-		WalletAddress: consent.WalletAddress,
-		ConsentID:     consent.ID,
-		Timestamp:     time.Now(),
-		Status:        VerificationStatusVerified,
+		ID:                 generateAuditID(),
+		RequestID:          consent.ID,
+		Action:             AuditActionConsentGrant,
+		WalletAddress:      consent.WalletAddress,
+		ConsentID:          consent.ID,
+		Timestamp:          time.Now(),
+		Status:             VerificationStatusVerified,
 		RetentionExpiresAt: time.Now().AddDate(0, 0, s.config.DefaultRetention.AuditLogRetentionDays),
 	}
 	if err := s.auditLogger.Log(ctx, auditEntry); err != nil {
@@ -366,13 +366,13 @@ func (s *service) RevokeConsent(ctx context.Context, consentID string) error {
 
 	// Log consent revocation
 	auditEntry := &AuditLogEntry{
-		ID:            generateAuditID(),
-		RequestID:     consentID,
-		Action:        AuditActionConsentRevoke,
-		WalletAddress: consent.WalletAddress,
-		ConsentID:     consentID,
-		Timestamp:     time.Now(),
-		Status:        VerificationStatusVerified,
+		ID:                 generateAuditID(),
+		RequestID:          consentID,
+		Action:             AuditActionConsentRevoke,
+		WalletAddress:      consent.WalletAddress,
+		ConsentID:          consentID,
+		Timestamp:          time.Now(),
+		Status:             VerificationStatusVerified,
 		RetentionExpiresAt: time.Now().AddDate(0, 0, s.config.DefaultRetention.AuditLogRetentionDays),
 	}
 	if err := s.auditLogger.Log(ctx, auditEntry); err != nil {
@@ -603,4 +603,3 @@ func generateScopeID() string {
 	counter := atomic.AddInt64(&requestCounter, 1)
 	return fmt.Sprintf("govdata-scope-%d-%d", time.Now().UnixNano(), counter)
 }
-

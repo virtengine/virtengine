@@ -216,4 +216,3 @@ type ObservableCache[K comparable, V any] interface {
 	// OnInvalidate registers a listener for invalidation events.
 	OnInvalidate(listener InvalidationListener)
 }
-

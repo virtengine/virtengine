@@ -94,21 +94,21 @@ func TestVerificationMetricsAggregated_Empty(t *testing.T) {
 
 func TestVerificationMetricsAggregated_WithData(t *testing.T) {
 	agg := &VerificationMetricsAggregated{
-		BlockHeightStart:      1000,
-		BlockHeightEnd:        2000,
-		TotalVerifications:    100,
-		MatchCount:            95,
-		MismatchCount:         5,
-		MatchRate:             95.0,
-		AvgComputeTimeMs:      50.5,
-		MaxComputeTimeMs:      200,
-		MinComputeTimeMs:      10,
-		AvgScoreDifference:    0.5,
-		MaxScoreDifference:    3,
-		PeriodStart:           time.Now().Add(-1 * time.Hour),
-		PeriodEnd:             time.Now(),
-		ByModelVersion:        make(map[string]ModelVersionMetrics),
-		ByStatus:              make(map[types.VerificationResultStatus]int64),
+		BlockHeightStart:   1000,
+		BlockHeightEnd:     2000,
+		TotalVerifications: 100,
+		MatchCount:         95,
+		MismatchCount:      5,
+		MatchRate:          95.0,
+		AvgComputeTimeMs:   50.5,
+		MaxComputeTimeMs:   200,
+		MinComputeTimeMs:   10,
+		AvgScoreDifference: 0.5,
+		MaxScoreDifference: 3,
+		PeriodStart:        time.Now().Add(-1 * time.Hour),
+		PeriodEnd:          time.Now(),
+		ByModelVersion:     make(map[string]ModelVersionMetrics),
+		ByStatus:           make(map[types.VerificationResultStatus]int64),
 	}
 
 	agg.ByModelVersion["v1.0.0"] = ModelVersionMetrics{

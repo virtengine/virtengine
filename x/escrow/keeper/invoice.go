@@ -425,13 +425,18 @@ func (ik *invoiceKeeper) GetInvoiceLedgerChain(ctx sdk.Context, invoiceID string
 	}
 
 	chain := billing.NewInvoiceLedgerChain(invoiceID)
-	
+
 	// Sort entries by sequence number
 	sortedEntries := make([]*billing.InvoiceLedgerEntry, len(entries))
 	for _, e := range entries {
-		if e.SequenceNumber > 0 && int(e.SequenceNumber) <= len(entries) {
-			sortedEntries[e.SequenceNumber-1] = e
+		if e.SequenceNumber == 0 {
+			continue
 		}
+		if e.SequenceNumber > uint64(len(entries)) {
+			continue
+		}
+		idx := safeIntFromUint64(e.SequenceNumber - 1)
+		sortedEntries[idx] = e
 	}
 
 	// Add entries to chain in order
@@ -493,7 +498,7 @@ func (ik *invoiceKeeper) GetInvoiceSequence(ctx sdk.Context) uint64 {
 // SetInvoiceSequence sets the invoice sequence number
 func (ik *invoiceKeeper) SetInvoiceSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(ik.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.InvoiceSequenceKey, bz)
 }
 
@@ -640,6 +645,7 @@ func (ik *invoiceKeeper) setInvoiceIndexes(store storetypes.KVStore, record *bil
 func (ik *invoiceKeeper) saveLedgerEntry(store storetypes.KVStore, entry *billing.InvoiceLedgerEntry) {
 	// Save entry
 	entryKey := billing.BuildInvoiceLedgerEntryKey(entry.EntryID)
+	//nolint:errchkjson // entry contains sdk.Coins which is safe for Marshal
 	bz, _ := json.Marshal(entry)
 	store.Set(entryKey, bz)
 
@@ -755,8 +761,8 @@ type QueryInvoiceResponse struct {
 
 // QueryInvoicesByProviderRequest is the request for InvoicesByProvider query
 type QueryInvoicesByProviderRequest struct {
-	Provider   string              `json:"provider"`
-	Pagination *query.PageRequest  `json:"pagination,omitempty"`
+	Provider   string             `json:"provider"`
+	Pagination *query.PageRequest `json:"pagination,omitempty"`
 }
 
 // QueryInvoicesByProviderResponse is the response for InvoicesByProvider query
@@ -767,8 +773,8 @@ type QueryInvoicesByProviderResponse struct {
 
 // QueryInvoicesByCustomerRequest is the request for InvoicesByCustomer query
 type QueryInvoicesByCustomerRequest struct {
-	Customer   string              `json:"customer"`
-	Pagination *query.PageRequest  `json:"pagination,omitempty"`
+	Customer   string             `json:"customer"`
+	Pagination *query.PageRequest `json:"pagination,omitempty"`
 }
 
 // QueryInvoicesByCustomerResponse is the response for InvoicesByCustomer query
@@ -785,4 +791,12 @@ type QueryInvoiceLedgerRequest struct {
 // QueryInvoiceLedgerResponse is the response for InvoiceLedger query
 type QueryInvoiceLedgerResponse struct {
 	Entries []*billing.InvoiceLedgerEntry `json:"entries"`
+}
+
+func safeIntFromUint64(value uint64) int {
+	if value > uint64(^uint(0)>>1) {
+		return int(^uint(0) >> 1)
+	}
+	//nolint:gosec // range checked above
+	return int(value)
 }

@@ -158,9 +158,9 @@ type SignerKeyPolicy struct {
 // DefaultSignerKeyPolicy returns the default key rotation policy
 func DefaultSignerKeyPolicy() SignerKeyPolicy {
 	return SignerKeyPolicy{
-		MaxKeyAgeSeconds:         7776000,  // 90 days
-		RotationOverlapSeconds:   604800,   // 7 days
-		MinRotationNoticeSeconds: 259200,   // 3 days
+		MaxKeyAgeSeconds:         7776000, // 90 days
+		RotationOverlapSeconds:   604800,  // 7 days
+		MinRotationNoticeSeconds: 259200,  // 3 days
 		MaxPendingKeys:           2,
 		RequireSuccessorKey:      true,
 		AllowEmergencyRevocation: true,

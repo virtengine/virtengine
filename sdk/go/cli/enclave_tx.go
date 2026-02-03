@@ -10,8 +10,8 @@ import (
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	enclavetypes "github.com/virtengine/virtengine/sdk/go/node/enclave/v1"
 )
 
@@ -521,4 +521,3 @@ Example:
 
 	return cmd
 }
-

@@ -406,10 +406,10 @@ func DefaultConfig() Config {
 		Enabled:                    true,
 		IssuerPolicies:             make(map[string]*IssuerPolicy),
 		DefaultScopes:              []string{"openid", "email", "profile"},
-		JWKSCacheTTLSeconds:        3600,  // 1 hour
-		JWKSRefreshIntervalSeconds: 1800,  // 30 minutes
-		MaxClockSkewSeconds:        300,   // 5 minutes
-		TokenValidityWindowSeconds: 3600,  // 1 hour
+		JWKSCacheTTLSeconds:        3600, // 1 hour
+		JWKSRefreshIntervalSeconds: 1800, // 30 minutes
+		MaxClockSkewSeconds:        300,  // 5 minutes
+		TokenValidityWindowSeconds: 3600, // 1 hour
 		HTTPClientTimeoutSeconds:   30,
 		AllowInsecureHTTP:          false,
 		MetricsEnabled:             true,
@@ -449,7 +449,7 @@ func DefaultIssuerPolicy(providerType veidtypes.SSOProviderType) *IssuerPolicy {
 		RequiredScopes:       []string{"openid", "email"},
 		RequiredClaims:       []string{"sub", "email"},
 		RequireEmailVerified: true,
-		MaxAuthAgeSeconds:    86400,  // 24 hours
+		MaxAuthAgeSeconds:    86400, // 24 hours
 		ScoreWeight:          veidtypes.GetSSOScoringWeight(providerType),
 		RateLimitPerHour:     100,
 		JWKSCacheTTLSeconds:  3600,
@@ -509,4 +509,3 @@ type IssuerHealthStatus struct {
 	// LastErrorAt is when the last error occurred
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 }
-

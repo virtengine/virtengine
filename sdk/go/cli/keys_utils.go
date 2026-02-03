@@ -78,4 +78,3 @@ func printTextRecords(w io.Writer, kos []KeyOutput) error {
 
 	return nil
 }
-

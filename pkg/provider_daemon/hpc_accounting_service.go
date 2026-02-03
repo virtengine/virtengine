@@ -345,7 +345,7 @@ func (s *HPCAccountingService) finalizeJobAccounting(ctx context.Context, job *H
 		snapshot.ContentHash = hex.EncodeToString(hash)
 
 		// Submit final snapshot
-		s.submitter.SubmitUsageSnapshot(ctx, snapshot)
+		_ = s.submitter.SubmitUsageSnapshot(ctx, snapshot)
 
 		// Create accounting record
 		record, err := s.createAccountingRecord(ctx, job, aggregator, periodStart, periodEnd, detailedMetrics)
@@ -573,4 +573,3 @@ func (s *HPCAccountingService) GetActiveJobCount() int {
 	defer s.mu.RUnlock()
 	return len(s.jobAggregators)
 }
-

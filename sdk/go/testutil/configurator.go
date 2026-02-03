@@ -405,10 +405,11 @@ func NewAppConfig(opts ...ModuleOption) depinject.Config {
 		runtimeConfig.InitGenesis = initGenesis
 	}
 
-	modules := []*appv1alpha1.ModuleConfig{{
+	modules := make([]*appv1alpha1.ModuleConfig, 0, 1+len(cfg.ModuleConfigs))
+	modules = append(modules, &appv1alpha1.ModuleConfig{
 		Name:   "runtime",
 		Config: appconfig.WrapAny(runtimeConfig),
-	}}
+	})
 
 	for _, m := range cfg.ModuleConfigs {
 		modules = append(modules, m)
@@ -416,4 +417,3 @@ func NewAppConfig(opts ...ModuleOption) depinject.Config {
 
 	return appconfig.Compose(&appv1alpha1.Config{Modules: modules})
 }
-

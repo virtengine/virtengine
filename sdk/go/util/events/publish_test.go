@@ -48,4 +48,3 @@ package events
 // 		assert.Equal(t, test, ev, test)
 // 	}
 // }
-

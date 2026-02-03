@@ -16,28 +16,28 @@ import (
 // Attribute OID constants (eduPerson schema)
 const (
 	// eduPerson attributes
-	OIDEduPersonPrincipalName      = "urn:oid:1.3.6.1.4.1.5923.1.1.1.6"
-	OIDEduPersonAffiliation        = "urn:oid:1.3.6.1.4.1.5923.1.1.1.1"
-	OIDEduPersonScopedAffiliation  = "urn:oid:1.3.6.1.4.1.5923.1.1.1.9"
-	OIDEduPersonEntitlement        = "urn:oid:1.3.6.1.4.1.5923.1.1.1.7"
-	OIDEduPersonAssurance          = "urn:oid:1.3.6.1.4.1.5923.1.1.1.11"
-	OIDEduPersonTargetedID         = "urn:oid:1.3.6.1.4.1.5923.1.1.1.10"
-	OIDEduPersonUniqueID           = "urn:oid:1.3.6.1.4.1.5923.1.1.1.13"
-	OIDEduPersonOrcid              = "urn:oid:1.3.6.1.4.1.5923.1.1.1.16"
+	OIDEduPersonPrincipalName     = "urn:oid:1.3.6.1.4.1.5923.1.1.1.6"
+	OIDEduPersonAffiliation       = "urn:oid:1.3.6.1.4.1.5923.1.1.1.1"
+	OIDEduPersonScopedAffiliation = "urn:oid:1.3.6.1.4.1.5923.1.1.1.9"
+	OIDEduPersonEntitlement       = "urn:oid:1.3.6.1.4.1.5923.1.1.1.7"
+	OIDEduPersonAssurance         = "urn:oid:1.3.6.1.4.1.5923.1.1.1.11"
+	OIDEduPersonTargetedID        = "urn:oid:1.3.6.1.4.1.5923.1.1.1.10"
+	OIDEduPersonUniqueID          = "urn:oid:1.3.6.1.4.1.5923.1.1.1.13"
+	OIDEduPersonOrcid             = "urn:oid:1.3.6.1.4.1.5923.1.1.1.16"
 
 	// SCHAC attributes
-	OIDSchacHomeOrganization       = "urn:oid:1.3.6.1.4.1.25178.1.2.9"
-	OIDSchacHomeOrganizationType   = "urn:oid:1.3.6.1.4.1.25178.1.2.10"
-	OIDSchacPersonalUniqueCode     = "urn:oid:1.3.6.1.4.1.25178.1.2.14"
-	OIDSchacUserStatus             = "urn:oid:1.3.6.1.4.1.25178.1.2.19"
-	OIDSchacCountryOfCitizenship   = "urn:oid:1.3.6.1.4.1.25178.1.2.5"
+	OIDSchacHomeOrganization     = "urn:oid:1.3.6.1.4.1.25178.1.2.9"
+	OIDSchacHomeOrganizationType = "urn:oid:1.3.6.1.4.1.25178.1.2.10"
+	OIDSchacPersonalUniqueCode   = "urn:oid:1.3.6.1.4.1.25178.1.2.14"
+	OIDSchacUserStatus           = "urn:oid:1.3.6.1.4.1.25178.1.2.19"
+	OIDSchacCountryOfCitizenship = "urn:oid:1.3.6.1.4.1.25178.1.2.5"
 
 	// Standard attributes
-	OIDDisplayName  = "urn:oid:2.16.840.1.113730.3.1.241"
-	OIDGivenName    = "urn:oid:2.5.4.42"
-	OIDSurname      = "urn:oid:2.5.4.4"
-	OIDEmail        = "urn:oid:0.9.2342.19200300.100.1.3"
-	OIDCommonName   = "urn:oid:2.5.4.3"
+	OIDDisplayName = "urn:oid:2.16.840.1.113730.3.1.241"
+	OIDGivenName   = "urn:oid:2.5.4.42"
+	OIDSurname     = "urn:oid:2.5.4.4"
+	OIDEmail       = "urn:oid:0.9.2342.19200300.100.1.3"
+	OIDCommonName  = "urn:oid:2.5.4.3"
 )
 
 // Attribute friendly names
@@ -422,4 +422,3 @@ func hashString(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
 }
-

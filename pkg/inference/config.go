@@ -302,4 +302,3 @@ var sha256HexRegex = regexp.MustCompile(`^[a-f0-9]{64}$`)
 func isValidSHA256Hex(hash string) bool {
 	return sha256HexRegex.MatchString(hash)
 }
-

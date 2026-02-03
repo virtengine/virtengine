@@ -12,6 +12,9 @@ import (
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
+// Test constant for issuer fingerprint
+const testIssuerFP = "abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+
 func TestMemoryStore_CreateNonce(t *testing.T) {
 	store, err := NewMemoryStore(DefaultStoreConfig())
 	require.NoError(t, err)
@@ -20,7 +23,7 @@ func TestMemoryStore_CreateNonce(t *testing.T) {
 	ctx := context.Background()
 
 	record, err := store.CreateNonce(ctx, CreateNonceRequest{
-		IssuerFingerprint: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+		IssuerFingerprint: testIssuerFP,
 		AttestationType:   veidtypes.AttestationTypeFacialVerification,
 	})
 	require.NoError(t, err)
@@ -34,7 +37,7 @@ func TestMemoryStore_ValidateAndUse(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	issuerFP := "abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+	issuerFP := testIssuerFP
 
 	// Create a nonce
 	record, err := store.CreateNonce(ctx, CreateNonceRequest{
@@ -99,7 +102,7 @@ func TestMemoryStore_ExpiredNonce(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	issuerFP := "abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+	issuerFP := testIssuerFP
 
 	testNonce := make([]byte, 32)
 	for i := range testNonce {
@@ -277,4 +280,3 @@ func TestMemoryStore_StoreFull(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
-

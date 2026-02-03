@@ -257,4 +257,3 @@ func (s *SLODefinition) BuildSteadyStateHypothesis() *chaos.SteadyStateHypothesi
 		Tolerance: 0.05, // 5% default tolerance
 	}
 }
-

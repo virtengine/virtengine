@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -24,21 +25,21 @@ import (
 
 // TransactionThroughputBaseline defines the baseline metrics for throughput tests
 type TransactionThroughputBaseline struct {
-	TargetTPS         int64         `json:"target_tps"`
-	MinAcceptableTPS  int64         `json:"min_acceptable_tps"`
-	MaxLatencyP95     time.Duration `json:"max_latency_p95"`
-	MaxLatencyP99     time.Duration `json:"max_latency_p99"`
-	MaxErrorRate      float64       `json:"max_error_rate"`
+	TargetTPS        int64         `json:"target_tps"`
+	MinAcceptableTPS int64         `json:"min_acceptable_tps"`
+	MaxLatencyP95    time.Duration `json:"max_latency_p95"`
+	MaxLatencyP99    time.Duration `json:"max_latency_p99"`
+	MaxErrorRate     float64       `json:"max_error_rate"`
 }
 
 // DefaultTransactionBaseline returns baseline metrics for transaction throughput
 func DefaultTransactionBaseline() TransactionThroughputBaseline {
 	return TransactionThroughputBaseline{
-		TargetTPS:         10000,
-		MinAcceptableTPS:  5000,
-		MaxLatencyP95:     100 * time.Millisecond,
-		MaxLatencyP99:     250 * time.Millisecond,
-		MaxErrorRate:      0.001, // 0.1%
+		TargetTPS:        10000,
+		MinAcceptableTPS: 5000,
+		MaxLatencyP95:    100 * time.Millisecond,
+		MaxLatencyP99:    250 * time.Millisecond,
+		MaxErrorRate:     0.001, // 0.1%
 	}
 }
 
@@ -61,7 +62,7 @@ func NewMockTransaction(nonce uint64) *MockTransaction {
 		ID:        generateTxID(),
 		Sender:    "cosmos1sender" + fmt.Sprintf("%d", nonce%1000),
 		Receiver:  "cosmos1receiver" + fmt.Sprintf("%d", nonce%1000),
-		Amount:    int64(1000 + nonce%10000),
+		Amount:    safeInt64FromUint64(1000 + nonce%10000),
 		Nonce:     nonce,
 		GasLimit:  200000,
 		Timestamp: time.Now().UTC(),
@@ -77,8 +78,8 @@ func (tx *MockTransaction) computeHash() {
 	h.Write([]byte(tx.ID))
 	h.Write([]byte(tx.Sender))
 	h.Write([]byte(tx.Receiver))
-	h.Write([]byte(fmt.Sprintf("%d", tx.Amount)))
-	h.Write([]byte(fmt.Sprintf("%d", tx.Nonce)))
+	fmt.Fprintf(h, "%d", tx.Amount)
+	fmt.Fprintf(h, "%d", tx.Nonce)
 	tx.Hash = h.Sum(nil)
 }
 
@@ -199,7 +200,7 @@ func BenchmarkTransactionProcessing(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tx := NewMockTransaction(uint64(i))
+		tx := NewMockTransaction(safeUint64FromInt(b, i))
 		_ = processor.ProcessTransaction(tx)
 	}
 }
@@ -241,7 +242,7 @@ func BenchmarkBlockProcessing(b *testing.B) {
 	// Pre-generate transactions
 	txs := make([]*MockTransaction, txPerBlock)
 	for i := range txs {
-		txs[i] = NewMockTransaction(uint64(i))
+		txs[i] = NewMockTransaction(safeUint64FromInt(b, i))
 	}
 
 	b.ResetTimer()
@@ -316,6 +317,28 @@ func TestTransactionThroughputBaseline(t *testing.T) {
 		"Error rate should be within acceptable limit")
 }
 
+func safeInt64FromUint64(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
+}
+
+func safeUint64FromInt(tb testing.TB, value int) uint64 {
+	tb.Helper()
+	if value < 0 {
+		tb.Fatalf("invalid negative value: %d", value)
+	}
+	return uint64(value)
+}
+
+func mustRandRead(tb testing.TB, b []byte) {
+	tb.Helper()
+	if _, err := rand.Read(b); err != nil {
+		tb.Fatalf("failed to read random bytes: %v", err)
+	}
+}
+
 // calculateLatencyPercentiles calculates P95 and P99 latencies
 func calculateLatencyPercentiles(latencies []time.Duration) (p95, p99 time.Duration) {
 	if len(latencies) == 0 {
@@ -384,7 +407,7 @@ func (s *MockStateStore) Get(key string) ([]byte, bool) {
 func BenchmarkStateWrite(b *testing.B) {
 	store := NewMockStateStore()
 	value := make([]byte, 256)
-	_, _ = rand.Read(value)
+	mustRandRead(b, value)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -398,7 +421,7 @@ func BenchmarkStateRead(b *testing.B) {
 	store := NewMockStateStore()
 	const numKeys = 10000
 	value := make([]byte, 256)
-	rand.Read(value)
+	mustRandRead(b, value)
 
 	// Pre-populate store
 	for i := 0; i < numKeys; i++ {
@@ -417,7 +440,7 @@ func BenchmarkStateRead(b *testing.B) {
 func BenchmarkStateWriteParallel(b *testing.B) {
 	store := NewMockStateStore()
 	value := make([]byte, 256)
-	rand.Read(value)
+	mustRandRead(b, value)
 
 	var counter atomic.Int64
 

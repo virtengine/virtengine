@@ -17,49 +17,49 @@ import (
 // Azure-specific errors
 var (
 	// ErrAzureVMNotFound is returned when a VM is not found
-	ErrAzureVMNotFound = errors.New("Azure VM not found")
+	ErrAzureVMNotFound = errors.New("azure VM not found")
 
 	// ErrAzureImageNotFound is returned when an image is not found
-	ErrAzureImageNotFound = errors.New("Azure image not found")
+	ErrAzureImageNotFound = errors.New("azure image not found")
 
 	// ErrAzureVMSizeNotFound is returned when a VM size is not found
-	ErrAzureVMSizeNotFound = errors.New("Azure VM size not found")
+	ErrAzureVMSizeNotFound = errors.New("azure VM size not found")
 
 	// ErrAzureVNetNotFound is returned when a VNet is not found
-	ErrAzureVNetNotFound = errors.New("Azure VNet not found")
+	ErrAzureVNetNotFound = errors.New("azure VNet not found")
 
 	// ErrAzureSubnetNotFound is returned when a subnet is not found
-	ErrAzureSubnetNotFound = errors.New("Azure subnet not found")
+	ErrAzureSubnetNotFound = errors.New("azure subnet not found")
 
 	// ErrAzureNSGNotFound is returned when a Network Security Group is not found
-	ErrAzureNSGNotFound = errors.New("Azure NSG not found")
+	ErrAzureNSGNotFound = errors.New("azure NSG not found")
 
 	// ErrAzureDiskNotFound is returned when a managed disk is not found
-	ErrAzureDiskNotFound = errors.New("Azure managed disk not found")
+	ErrAzureDiskNotFound = errors.New("azure managed disk not found")
 
 	// ErrAzureNICNotFound is returned when a network interface is not found
-	ErrAzureNICNotFound = errors.New("Azure NIC not found")
+	ErrAzureNICNotFound = errors.New("azure NIC not found")
 
 	// ErrAzurePublicIPNotFound is returned when a public IP is not found
-	ErrAzurePublicIPNotFound = errors.New("Azure public IP not found")
+	ErrAzurePublicIPNotFound = errors.New("azure public IP not found")
 
 	// ErrAzureResourceGroupNotFound is returned when a resource group is not found
-	ErrAzureResourceGroupNotFound = errors.New("Azure resource group not found")
+	ErrAzureResourceGroupNotFound = errors.New("azure resource group not found")
 
 	// ErrInvalidAzureVMState is returned when VM is in an invalid state for the operation
-	ErrInvalidAzureVMState = errors.New("invalid Azure VM state for operation")
+	ErrInvalidAzureVMState = errors.New("invalid azure VM state for operation")
 
 	// ErrAzureAPIError is returned for general Azure API errors
-	ErrAzureAPIError = errors.New("Azure API error")
+	ErrAzureAPIError = errors.New("azure API error")
 
 	// ErrAzureQuotaExceeded is returned when Azure quota is exceeded
-	ErrAzureQuotaExceeded = errors.New("Azure quota exceeded")
+	ErrAzureQuotaExceeded = errors.New("azure quota exceeded")
 
 	// ErrInvalidAzureRegion is returned when an invalid region is specified
-	ErrInvalidAzureRegion = errors.New("invalid Azure region")
+	ErrInvalidAzureRegion = errors.New("invalid azure region")
 
 	// ErrAzureProvisioningFailed is returned when ARM provisioning fails
-	ErrAzureProvisioningFailed = errors.New("Azure provisioning failed")
+	ErrAzureProvisioningFailed = errors.New("azure provisioning failed")
 )
 
 // AzureVMPowerState represents the power state of an Azure VM
@@ -209,9 +209,9 @@ const (
 	errMsgAzureVMStateExpectedRunning     = "%w: VM is %s, expected running"
 	errMsgAzureVMStateExpectedStopped     = "%w: VM is %s, expected stopped"
 	errMsgAzureVMStateExpectedDeallocated = "%w: VM is %s, expected deallocated"
-	errMsgNoAzureVMID                     = "%w: no Azure VM ID"
-	errMsgNetworkClientNotConfigured      = "Azure network client not configured"
-	errMsgStorageClientNotConfigured      = "Azure storage client not configured"
+	errMsgNoAzureVMID                     = "%w: no azure VM ID"
+	errMsgNetworkClientNotConfigured      = "azure network client not configured"
+	errMsgStorageClientNotConfigured      = "azure storage client not configured"
 )
 
 // azureValidPowerTransitions defines valid Azure VM power state transitions
@@ -2149,9 +2149,7 @@ func (aa *AzureAdapter) performInstanceDeployment(ctx context.Context, instance 
 	}
 
 	// Refresh instance info
-	if err := aa.refreshInstanceInfo(ctx, instance); err != nil {
-		// Non-fatal, continue
-	}
+	_ = aa.refreshInstanceInfo(ctx, instance)
 
 	return nil
 }
@@ -2753,7 +2751,7 @@ func (aa *AzureAdapter) SetDefaultRegion(region AzureRegion) error {
 // CreateDisk creates a managed disk
 func (aa *AzureAdapter) CreateDisk(ctx context.Context, resourceGroup string, spec *AzureDiskCreateSpec) (*AzureDiskInfo, error) {
 	if aa.storage == nil {
-		return nil, fmt.Errorf(errMsgStorageClientNotConfigured)
+		return nil, errors.New(errMsgStorageClientNotConfigured)
 	}
 
 	// Add default tags
@@ -2772,7 +2770,7 @@ func (aa *AzureAdapter) CreateDisk(ctx context.Context, resourceGroup string, sp
 // DeleteDisk deletes a managed disk
 func (aa *AzureAdapter) DeleteDisk(ctx context.Context, resourceGroup, diskName string) error {
 	if aa.storage == nil {
-		return fmt.Errorf(errMsgStorageClientNotConfigured)
+		return errors.New(errMsgStorageClientNotConfigured)
 	}
 	return aa.storage.DeleteDisk(ctx, resourceGroup, diskName)
 }
@@ -2780,7 +2778,7 @@ func (aa *AzureAdapter) DeleteDisk(ctx context.Context, resourceGroup, diskName 
 // AttachDisk attaches a disk to a VM
 func (aa *AzureAdapter) AttachDisk(ctx context.Context, instanceID, diskID string, lun int) error {
 	if aa.storage == nil {
-		return fmt.Errorf(errMsgStorageClientNotConfigured)
+		return errors.New(errMsgStorageClientNotConfigured)
 	}
 
 	aa.mu.RLock()
@@ -2809,7 +2807,7 @@ func (aa *AzureAdapter) AttachDisk(ctx context.Context, instanceID, diskID strin
 // DetachDisk detaches a disk from a VM
 func (aa *AzureAdapter) DetachDisk(ctx context.Context, instanceID, diskName string) error {
 	if aa.storage == nil {
-		return fmt.Errorf(errMsgStorageClientNotConfigured)
+		return errors.New(errMsgStorageClientNotConfigured)
 	}
 
 	aa.mu.RLock()
@@ -2826,7 +2824,7 @@ func (aa *AzureAdapter) DetachDisk(ctx context.Context, instanceID, diskName str
 // CreateSnapshot creates a disk snapshot
 func (aa *AzureAdapter) CreateSnapshot(ctx context.Context, resourceGroup string, spec *AzureSnapshotCreateSpec) (*AzureSnapshotInfo, error) {
 	if aa.storage == nil {
-		return nil, fmt.Errorf(errMsgStorageClientNotConfigured)
+		return nil, errors.New(errMsgStorageClientNotConfigured)
 	}
 
 	// Add default tags
@@ -2845,7 +2843,7 @@ func (aa *AzureAdapter) CreateSnapshot(ctx context.Context, resourceGroup string
 // DeleteSnapshot deletes a snapshot
 func (aa *AzureAdapter) DeleteSnapshot(ctx context.Context, resourceGroup, snapshotName string) error {
 	if aa.storage == nil {
-		return fmt.Errorf(errMsgStorageClientNotConfigured)
+		return errors.New(errMsgStorageClientNotConfigured)
 	}
 	return aa.storage.DeleteSnapshot(ctx, resourceGroup, snapshotName)
 }
@@ -2853,7 +2851,7 @@ func (aa *AzureAdapter) DeleteSnapshot(ctx context.Context, resourceGroup, snaps
 // CreateVNet creates a virtual network
 func (aa *AzureAdapter) CreateVNet(ctx context.Context, resourceGroup string, spec *AzureVNetCreateSpec) (*AzureVNetInfo, error) {
 	if aa.network == nil {
-		return nil, fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return nil, errors.New(errMsgNetworkClientNotConfigured)
 	}
 
 	// Add default tags
@@ -2872,7 +2870,7 @@ func (aa *AzureAdapter) CreateVNet(ctx context.Context, resourceGroup string, sp
 // DeleteVNet deletes a virtual network
 func (aa *AzureAdapter) DeleteVNet(ctx context.Context, resourceGroup, vnetName string) error {
 	if aa.network == nil {
-		return fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return errors.New(errMsgNetworkClientNotConfigured)
 	}
 	return aa.network.DeleteVNet(ctx, resourceGroup, vnetName)
 }
@@ -2880,7 +2878,7 @@ func (aa *AzureAdapter) DeleteVNet(ctx context.Context, resourceGroup, vnetName 
 // CreateSubnet creates a subnet in a VNet
 func (aa *AzureAdapter) CreateSubnet(ctx context.Context, resourceGroup, vnetName string, spec *AzureSubnetCreateSpec) (*AzureSubnetInfo, error) {
 	if aa.network == nil {
-		return nil, fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return nil, errors.New(errMsgNetworkClientNotConfigured)
 	}
 	return aa.network.CreateSubnet(ctx, resourceGroup, vnetName, spec)
 }
@@ -2888,7 +2886,7 @@ func (aa *AzureAdapter) CreateSubnet(ctx context.Context, resourceGroup, vnetNam
 // DeleteSubnet deletes a subnet
 func (aa *AzureAdapter) DeleteSubnet(ctx context.Context, resourceGroup, vnetName, subnetName string) error {
 	if aa.network == nil {
-		return fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return errors.New(errMsgNetworkClientNotConfigured)
 	}
 	return aa.network.DeleteSubnet(ctx, resourceGroup, vnetName, subnetName)
 }
@@ -2896,7 +2894,7 @@ func (aa *AzureAdapter) DeleteSubnet(ctx context.Context, resourceGroup, vnetNam
 // CreateNSG creates a network security group
 func (aa *AzureAdapter) CreateNSG(ctx context.Context, resourceGroup string, spec *AzureNSGCreateSpec) (*AzureNSGInfo, error) {
 	if aa.network == nil {
-		return nil, fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return nil, errors.New(errMsgNetworkClientNotConfigured)
 	}
 
 	// Add default tags
@@ -2915,7 +2913,7 @@ func (aa *AzureAdapter) CreateNSG(ctx context.Context, resourceGroup string, spe
 // DeleteNSG deletes a network security group
 func (aa *AzureAdapter) DeleteNSG(ctx context.Context, resourceGroup, nsgName string) error {
 	if aa.network == nil {
-		return fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return errors.New(errMsgNetworkClientNotConfigured)
 	}
 	return aa.network.DeleteNSG(ctx, resourceGroup, nsgName)
 }
@@ -2923,7 +2921,7 @@ func (aa *AzureAdapter) DeleteNSG(ctx context.Context, resourceGroup, nsgName st
 // AddNSGRule adds a security rule to an NSG
 func (aa *AzureAdapter) AddNSGRule(ctx context.Context, resourceGroup, nsgName string, rule *AzureNSGRuleSpec) error {
 	if aa.network == nil {
-		return fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return errors.New(errMsgNetworkClientNotConfigured)
 	}
 	return aa.network.AddNSGRule(ctx, resourceGroup, nsgName, rule)
 }
@@ -2931,7 +2929,7 @@ func (aa *AzureAdapter) AddNSGRule(ctx context.Context, resourceGroup, nsgName s
 // RemoveNSGRule removes a security rule from an NSG
 func (aa *AzureAdapter) RemoveNSGRule(ctx context.Context, resourceGroup, nsgName, ruleName string) error {
 	if aa.network == nil {
-		return fmt.Errorf(errMsgNetworkClientNotConfigured)
+		return errors.New(errMsgNetworkClientNotConfigured)
 	}
 	return aa.network.RemoveNSGRule(ctx, resourceGroup, nsgName, ruleName)
 }
@@ -2976,4 +2974,3 @@ func (aa *AzureAdapter) DeleteResourceGroup(ctx context.Context, name string) er
 
 // Port is an alias for the Port field in PortSpec for NSG rule creation
 type Port = int32
-

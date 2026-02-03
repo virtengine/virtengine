@@ -583,4 +583,3 @@ func (s *InMemoryCheckpointStore) Delete(ctx context.Context, workflowID string)
 	}
 	return nil
 }
-

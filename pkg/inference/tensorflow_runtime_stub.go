@@ -415,6 +415,10 @@ func (r *TensorFlowRuntime) getAverageLatency() int64 {
 	if count == 0 {
 		return 0
 	}
+	const maxInt64 = int64(^uint64(0) >> 1)
+	if count > uint64(maxInt64) {
+		return 0
+	}
 	return r.totalLatencyNs.Load() / int64(count)
 }
 
@@ -517,4 +521,3 @@ func (r *TensorFlowRuntime) GetInferenceCount() uint64 {
 func (r *TensorFlowRuntime) GetErrorCount() uint64 {
 	return r.errorCount.Load()
 }
-

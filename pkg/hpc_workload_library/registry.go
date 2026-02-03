@@ -184,8 +184,6 @@ func (r *WorkloadRegistry) List(ctx context.Context, filter *TemplateFilter) ([]
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var results []*hpctypes.WorkloadTemplate
-
 	// Get candidate IDs based on filter
 	var candidateIDs []string
 	if filter != nil && filter.Type != "" {
@@ -202,6 +200,8 @@ func (r *WorkloadRegistry) List(ctx context.Context, filter *TemplateFilter) ([]
 			}
 		}
 	}
+
+	results := make([]*hpctypes.WorkloadTemplate, 0, len(candidateIDs))
 
 	// Filter and collect results
 	for _, id := range candidateIDs {
@@ -356,8 +356,12 @@ func (r *WorkloadRegistry) Refresh(ctx context.Context) error {
 	}
 
 	// List all workload templates from store
+	limit := r.config.MaxTemplates
+	if limit < 0 {
+		return fmt.Errorf("invalid max templates limit: %d", limit)
+	}
 	resp, err := r.store.ListByOwner(ctx, "", &artifact_store.Pagination{
-		Limit: uint64(r.config.MaxTemplates),
+		Limit: uint64(limit),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list templates: %w", err)
@@ -579,4 +583,3 @@ func removeString(slice []string, s string) []string {
 	}
 	return result
 }
-

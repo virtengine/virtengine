@@ -58,4 +58,3 @@ func ExecQueryLeases(ctx context.Context, cctx client.Context, args ...string) (
 func ExecQueryLease(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryMarketLeaseCmd(), extraArgs...)
 }
-

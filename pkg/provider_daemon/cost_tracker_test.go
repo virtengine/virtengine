@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	testProviderID = "test-provider"
+	testWorkloadID = "workload-123"
+)
+
 func TestDefaultResourceCostConfig(t *testing.T) {
 	cfg := DefaultResourceCostConfig()
 
@@ -47,24 +52,24 @@ func TestDefaultCostTrackerConfig(t *testing.T) {
 
 func TestNewCostTracker(t *testing.T) {
 	cfg := DefaultCostTrackerConfig()
-	cfg.ProviderID = "test-provider"
+	cfg.ProviderID = testProviderID
 
 	tracker := NewCostTracker(cfg)
 
 	if tracker == nil {
 		t.Fatal("NewCostTracker should not return nil")
 	}
-	if tracker.cfg.ProviderID != "test-provider" {
+	if tracker.cfg.ProviderID != testProviderID {
 		t.Error("Provider ID not set correctly")
 	}
 }
 
 func TestCostTrackerStartWorkloadTracking(t *testing.T) {
 	cfg := DefaultCostTrackerConfig()
-	cfg.ProviderID = "test-provider"
+	cfg.ProviderID = testProviderID
 	tracker := NewCostTracker(cfg)
 
-	workloadID := "workload-123"
+	workloadID := testWorkloadID
 	deploymentID := "deployment-456"
 	leaseID := "lease-789"
 
@@ -91,19 +96,19 @@ func TestCostTrackerStartWorkloadTracking(t *testing.T) {
 
 func TestCostTrackerUpdateWorkloadCost(t *testing.T) {
 	cfg := DefaultCostTrackerConfig()
-	cfg.ProviderID = "test-provider"
+	cfg.ProviderID = testProviderID
 	tracker := NewCostTracker(cfg)
 
-	workloadID := "workload-123"
+	workloadID := testWorkloadID
 	tracker.StartWorkloadTracking(workloadID, "deployment-456", "lease-789")
 
 	usage := ResourceMetrics{
-		CPUMilliSeconds:    3600000, // 1 CPU-hour
-		MemoryByteSeconds:  3600 * 1024 * 1024 * 1024, // 1 GB-hour
+		CPUMilliSeconds:    3600000,                        // 1 CPU-hour
+		MemoryByteSeconds:  3600 * 1024 * 1024 * 1024,      // 1 GB-hour
 		StorageByteSeconds: 3600 * 10 * 1024 * 1024 * 1024, // 10 GB-hour
-		GPUSeconds:         3600, // 1 GPU-hour
-		NetworkBytesIn:     1024 * 1024 * 1024, // 1 GB
-		NetworkBytesOut:    1024 * 1024 * 1024, // 1 GB
+		GPUSeconds:         3600,                           // 1 GPU-hour
+		NetworkBytesIn:     1024 * 1024 * 1024,             // 1 GB
+		NetworkBytesOut:    1024 * 1024 * 1024,             // 1 GB
 	}
 
 	err := tracker.UpdateWorkloadCost(workloadID, usage, time.Hour)
@@ -146,7 +151,7 @@ func TestCostTrackerStopWorkloadTracking(t *testing.T) {
 	cfg := DefaultCostTrackerConfig()
 	tracker := NewCostTracker(cfg)
 
-	workloadID := "workload-123"
+	workloadID := testWorkloadID
 	tracker.StartWorkloadTracking(workloadID, "deployment-456", "lease-789")
 
 	cost := tracker.StopWorkloadTracking(workloadID)
@@ -215,7 +220,7 @@ func TestCostTrackerGetTotalCost(t *testing.T) {
 
 func TestCostTrackerGetCostSummary(t *testing.T) {
 	cfg := DefaultCostTrackerConfig()
-	cfg.ProviderID = "test-provider"
+	cfg.ProviderID = testProviderID
 	tracker := NewCostTracker(cfg)
 
 	tracker.StartWorkloadTracking("workload-1", "deployment-1", "lease-1")
@@ -295,7 +300,7 @@ func TestCostTrackerGetMetrics(t *testing.T) {
 
 func TestCostTrackerExportCostReport(t *testing.T) {
 	cfg := DefaultCostTrackerConfig()
-	cfg.ProviderID = "test-provider"
+	cfg.ProviderID = testProviderID
 	tracker := NewCostTracker(cfg)
 
 	tracker.StartWorkloadTracking("workload-1", "deployment-1", "lease-1")
@@ -320,7 +325,7 @@ func TestCostTrackerExportCostReport(t *testing.T) {
 		t.Errorf("Report should be valid JSON: %v", err)
 	}
 
-	if parsed["provider_id"] != "test-provider" {
+	if parsed["provider_id"] != testProviderID {
 		t.Error("Report should contain provider ID")
 	}
 }
@@ -424,8 +429,8 @@ func TestCostTrackerRightsizingRecommendations(t *testing.T) {
 	// Simulate usage that results in low utilization but high cost
 	// Use actual UpdateWorkloadCost to set up state properly
 	usage := ResourceMetrics{
-		CPUMilliSeconds: 360000,  // 0.1 CPU-hour worth
-		GPUSeconds:      360,     // 0.1 GPU-hour worth
+		CPUMilliSeconds: 360000, // 0.1 CPU-hour worth
+		GPUSeconds:      360,    // 0.1 GPU-hour worth
 	}
 	_ = tracker.UpdateWorkloadCost("workload-1", usage, time.Hour)
 
@@ -552,4 +557,3 @@ func TestCostThreshold(t *testing.T) {
 		t.Error("NotifyEmails not set correctly")
 	}
 }
-

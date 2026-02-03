@@ -29,4 +29,3 @@ var (
 	// ErrUnauthorized indicates an unauthorized action
 	ErrUnauthorized = errors.Register(ModuleName, 8, "unauthorized")
 )
-

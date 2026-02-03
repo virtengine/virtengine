@@ -64,4 +64,3 @@ func NewGenesisEpochInfo(identifier string, duration time.Duration) EpochInfo {
 		EpochCountingStarted:    false,
 	}
 }
-

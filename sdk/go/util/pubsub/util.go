@@ -32,4 +32,3 @@ func delayThreadStart(t *testing.T) time.Duration {
 
 	return defaultDelayThreadStart
 }
-

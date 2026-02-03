@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/virtengine/virtengine/x/support/keeper"
-	"github.com/virtengine/virtengine/x/support/types"
+	types "github.com/virtengine/virtengine/x/support/types" //nolint:staticcheck // deprecated types retained for compatibility
 )
 
 func setupTestKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {

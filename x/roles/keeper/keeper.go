@@ -128,7 +128,7 @@ func (k Keeper) AssignRole(ctx sdk.Context, address sdk.AccAddress, role types.R
 	// Check max roles per account
 	params := k.GetParams(ctx)
 	currentRoles := k.GetAccountRoles(ctx, address)
-	if uint32(len(currentRoles)) >= params.MaxRolesPerAccount {
+	if safeUint32FromInt(len(currentRoles)) >= params.MaxRolesPerAccount {
 		return types.ErrInvalidRole.Wrapf("account has reached max roles limit: %d", params.MaxRolesPerAccount)
 	}
 
@@ -294,7 +294,7 @@ func (k Keeper) SetAccountState(ctx sdk.Context, address sdk.AccAddress, state t
 	if existingBz != nil {
 		var existing rolesv1.AccountStateStore
 		k.cdc.MustUnmarshal(existingBz, &existing)
-		previousState = types.AccountState(existing.State)
+		previousState = safeAccountStateFromUint32(existing.State)
 
 		// Check if transition is allowed
 		if !previousState.CanTransitionTo(state) {
@@ -352,11 +352,11 @@ func (k Keeper) GetAccountState(ctx sdk.Context, address sdk.AccAddress) (types.
 
 	return types.AccountStateRecord{
 		Address:       address.String(),
-		State:         types.AccountState(record.State),
+		State:         safeAccountStateFromUint32(record.State),
 		Reason:        record.Reason,
 		ModifiedBy:    record.ModifiedBy,
 		ModifiedAt:    record.ModifiedAt,
-		PreviousState: types.AccountState(record.PreviousState),
+		PreviousState: safeAccountStateFromUint32(record.PreviousState),
 	}, true
 }
 
@@ -375,6 +375,13 @@ func (k Keeper) IsGenesisAccount(ctx sdk.Context, address sdk.AccAddress) bool {
 	store := ctx.KVStore(k.skey)
 	key := types.GenesisAccountKey(address.Bytes())
 	return store.Has(key)
+}
+
+func safeAccountStateFromUint32(value uint32) types.AccountState {
+	if value > uint32(^uint8(0)) {
+		return types.AccountStateUnspecified
+	}
+	return types.AccountState(value)
 }
 
 // AddGenesisAccount adds an account as a genesis account
@@ -464,4 +471,15 @@ func (k Keeper) IsModerator(ctx sdk.Context, addr sdk.AccAddress) bool {
 // NewGRPCQuerier returns a new GRPCQuerier
 func (k Keeper) NewGRPCQuerier() GRPCQuerier {
 	return GRPCQuerier{Keeper: k}
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }

@@ -340,4 +340,3 @@ func (r *WebhookRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (r *WebhookRouter) Mount(mux *http.ServeMux) {
 	mux.Handle(r.path, r)
 }
-

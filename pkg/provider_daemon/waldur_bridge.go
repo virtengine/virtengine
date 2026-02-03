@@ -503,15 +503,15 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 	var err error
 	switch event.Action {
 	case marketplace.LifecycleActionStart:
-		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "start", event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "start", event)
 	case marketplace.LifecycleActionStop:
-		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "stop", event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "stop", event)
 	case marketplace.LifecycleActionRestart:
-		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "restart", event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "restart", event)
 	case marketplace.LifecycleActionSuspend:
-		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "suspend", event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "suspend", event)
 	case marketplace.LifecycleActionResume:
-		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resume", event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resume", event)
 	case marketplace.LifecycleActionTerminate:
 		attrs := map[string]interface{}{
 			"operation_id": event.OperationID,
@@ -543,7 +543,7 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 		log.Printf("[waldur-bridge] lifecycle action %s failed for allocation %s: %v",
 			event.Action, event.AllocationID, err)
 	} else {
-		callback.Payload["state"] = "completed"
+		callback.Payload["state"] = string(HPCJobStateCompleted)
 		callback.Payload["target_state"] = event.TargetState.String()
 		log.Printf("[waldur-bridge] lifecycle action %s completed for allocation %s",
 			event.Action, event.AllocationID)
@@ -554,11 +554,18 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 
 // executeLifecycleAction executes a lifecycle action on a Waldur resource
 func (b *WaldurBridge) executeLifecycleAction(
-	ctx context.Context,
+	_ context.Context,
 	resourceUUID string,
 	action string,
 	event marketplace.LifecycleActionRequestedEvent,
-) (string, error) {
+) error {
+	if resourceUUID == "" {
+		return errors.New("resource UUID is empty")
+	}
+	if action == "" {
+		return errors.New("lifecycle action is empty")
+	}
+
 	// Build request body with idempotency key
 	body := map[string]interface{}{
 		"idempotency_key": marketplace.GenerateIdempotencyKey(
@@ -576,7 +583,7 @@ func (b *WaldurBridge) executeLifecycleAction(
 	// This is a simplified version that calls the resource action endpoint directly
 	log.Printf("[waldur-bridge] executing %s on resource %s", action, resourceUUID)
 
-	return event.OperationID, nil
+	return nil
 }
 
 // mapLifecycleActionToWaldur maps a marketplace lifecycle action to Waldur action type
@@ -789,4 +796,3 @@ func gbFromBytes(bytes int64) float64 {
 func formatFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', 6, 64)
 }
-

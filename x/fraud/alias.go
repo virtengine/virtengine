@@ -61,15 +61,15 @@ const (
 
 // Category constants (local)
 const (
-	FraudCategoryUnspecified             = types.FraudCategoryUnspecified
-	FraudCategoryFakeIdentity            = types.FraudCategoryFakeIdentity
-	FraudCategoryPaymentFraud            = types.FraudCategoryPaymentFraud
+	FraudCategoryUnspecified              = types.FraudCategoryUnspecified
+	FraudCategoryFakeIdentity             = types.FraudCategoryFakeIdentity
+	FraudCategoryPaymentFraud             = types.FraudCategoryPaymentFraud
 	FraudCategoryServiceMisrepresentation = types.FraudCategoryServiceMisrepresentation
-	FraudCategoryResourceAbuse           = types.FraudCategoryResourceAbuse
-	FraudCategorySybilAttack             = types.FraudCategorySybilAttack
-	FraudCategoryMaliciousContent        = types.FraudCategoryMaliciousContent
-	FraudCategoryTermsViolation          = types.FraudCategoryTermsViolation
-	FraudCategoryOther                   = types.FraudCategoryOther
+	FraudCategoryResourceAbuse            = types.FraudCategoryResourceAbuse
+	FraudCategorySybilAttack              = types.FraudCategorySybilAttack
+	FraudCategoryMaliciousContent         = types.FraudCategoryMaliciousContent
+	FraudCategoryTermsViolation           = types.FraudCategoryTermsViolation
+	FraudCategoryOther                    = types.FraudCategoryOther
 )
 
 // Resolution constants (local)

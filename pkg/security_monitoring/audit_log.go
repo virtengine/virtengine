@@ -11,10 +11,10 @@ import (
 
 // AuditLog provides structured security event audit logging
 type AuditLog struct {
-	logger    zerolog.Logger
-	logFile   *os.File
-	logPath   string
-	mu        sync.Mutex
+	logger  zerolog.Logger
+	logFile *os.File
+	logPath string
+	mu      sync.Mutex
 }
 
 // SecurityEvent represents a security event for logging and processing
@@ -28,39 +28,39 @@ type SecurityEvent struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 
 	// Classification
-	Category    string                 `json:"category,omitempty"`
-	Subcategory string                 `json:"subcategory,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Subcategory string `json:"subcategory,omitempty"`
 
 	// Attribution
-	AccountAddress  string             `json:"account_address,omitempty"`
-	ProviderID      string             `json:"provider_id,omitempty"`
-	ValidatorID     string             `json:"validator_id,omitempty"`
-	SourceIP        string             `json:"source_ip,omitempty"`
+	AccountAddress string `json:"account_address,omitempty"`
+	ProviderID     string `json:"provider_id,omitempty"`
+	ValidatorID    string `json:"validator_id,omitempty"`
+	SourceIP       string `json:"source_ip,omitempty"`
 
 	// Context
-	BlockHeight     int64              `json:"block_height,omitempty"`
-	TransactionHash string             `json:"transaction_hash,omitempty"`
-	RequestID       string             `json:"request_id,omitempty"`
+	BlockHeight     int64  `json:"block_height,omitempty"`
+	TransactionHash string `json:"transaction_hash,omitempty"`
+	RequestID       string `json:"request_id,omitempty"`
 
 	// Response tracking
-	ActionsTaken    []string           `json:"actions_taken,omitempty"`
-	PlaybookID      string             `json:"playbook_id,omitempty"`
+	ActionsTaken []string `json:"actions_taken,omitempty"`
+	PlaybookID   string   `json:"playbook_id,omitempty"`
 }
 
 // SecurityAlert represents a security alert sent to operators
 type SecurityAlert struct {
-	ID          string                 `json:"id"`
-	EventID     string                 `json:"event_id"`
-	Type        string                 `json:"type"`
-	Severity    SecurityEventSeverity  `json:"severity"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Source      string                 `json:"source"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Acknowledged bool                  `json:"acknowledged"`
-	AcknowledgedAt *time.Time          `json:"acknowledged_at,omitempty"`
-	AcknowledgedBy string              `json:"acknowledged_by,omitempty"`
+	ID             string                 `json:"id"`
+	EventID        string                 `json:"event_id"`
+	Type           string                 `json:"type"`
+	Severity       SecurityEventSeverity  `json:"severity"`
+	Title          string                 `json:"title"`
+	Description    string                 `json:"description"`
+	Source         string                 `json:"source"`
+	Timestamp      time.Time              `json:"timestamp"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Acknowledged   bool                   `json:"acknowledged"`
+	AcknowledgedAt *time.Time             `json:"acknowledged_at,omitempty"`
+	AcknowledgedBy string                 `json:"acknowledged_by,omitempty"`
 }
 
 // RateLimitBreachData represents rate limit breach data
@@ -76,22 +76,22 @@ type RateLimitBreachData struct {
 
 // AuditLogEntry represents a structured audit log entry
 type AuditLogEntry struct {
-	Timestamp     string                 `json:"@timestamp"`
-	Level         string                 `json:"level"`
-	LogType       string                 `json:"log_type"`
-	EventID       string                 `json:"event_id"`
-	EventType     string                 `json:"event_type"`
-	Severity      string                 `json:"severity"`
-	Source        string                 `json:"source"`
-	Description   string                 `json:"description"`
-	Account       string                 `json:"account,omitempty"`
-	Provider      string                 `json:"provider,omitempty"`
-	SourceIP      string                 `json:"source_ip,omitempty"`
-	BlockHeight   int64                  `json:"block_height,omitempty"`
-	TxHash        string                 `json:"tx_hash,omitempty"`
-	RequestID     string                 `json:"request_id,omitempty"`
-	Actions       []string               `json:"actions,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp   string                 `json:"@timestamp"`
+	Level       string                 `json:"level"`
+	LogType     string                 `json:"log_type"`
+	EventID     string                 `json:"event_id"`
+	EventType   string                 `json:"event_type"`
+	Severity    string                 `json:"severity"`
+	Source      string                 `json:"source"`
+	Description string                 `json:"description"`
+	Account     string                 `json:"account,omitempty"`
+	Provider    string                 `json:"provider,omitempty"`
+	SourceIP    string                 `json:"source_ip,omitempty"`
+	BlockHeight int64                  `json:"block_height,omitempty"`
+	TxHash      string                 `json:"tx_hash,omitempty"`
+	RequestID   string                 `json:"request_id,omitempty"`
+	Actions     []string               `json:"actions,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // NewAuditLog creates a new audit log
@@ -160,8 +160,8 @@ func (a *AuditLog) writeToFile(entry AuditLogEntry) {
 		return
 	}
 
-	a.logFile.Write(data)
-	a.logFile.WriteString("\n")
+	_, _ = a.logFile.Write(data)
+	_, _ = a.logFile.WriteString("\n")
 }
 
 // LogAlert logs a security alert
@@ -239,13 +239,13 @@ func (a *AuditLog) LogPlaybookExecution(playbookID, incidentID, status string, s
 
 	if a.logFile != nil {
 		entry := map[string]interface{}{
-			"@timestamp":   time.Now().Format(time.RFC3339Nano),
-			"log_type":     "playbook_execution",
-			"playbook_id":  playbookID,
-			"incident_id":  incidentID,
-			"status":       status,
-			"steps":        steps,
-			"duration_ms":  duration.Milliseconds(),
+			"@timestamp":  time.Now().Format(time.RFC3339Nano),
+			"log_type":    "playbook_execution",
+			"playbook_id": playbookID,
+			"incident_id": incidentID,
+			"status":      status,
+			"steps":       steps,
+			"duration_ms": duration.Milliseconds(),
 		}
 
 		a.mu.Lock()
@@ -296,4 +296,3 @@ func severityToZerologLevel(severity SecurityEventSeverity) zerolog.Level {
 		return zerolog.InfoLevel
 	}
 }
-

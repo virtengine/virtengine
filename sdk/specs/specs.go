@@ -27,4 +27,3 @@ func GetSpecFile(name string) ([]byte, error) {
 
 	return nil, os.ErrNotExist
 }
-

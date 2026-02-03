@@ -29,4 +29,3 @@ func NewSigner(kr keyring.Keyring, addr sdk.Address) SignerI {
 		addr:   addr,
 	}
 }
-

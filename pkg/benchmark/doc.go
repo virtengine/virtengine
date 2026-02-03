@@ -62,4 +62,3 @@
 //	    os.Exit(1)
 //	}
 package benchmark
-

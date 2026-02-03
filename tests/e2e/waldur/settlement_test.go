@@ -150,9 +150,9 @@ func (s *SettlementTestSuite) TestUsageRecording() {
 			periodEnd := now.Add(time.Duration(-4+i) * time.Hour)
 
 			usageReq := map[string]interface{}{
-				"resource": resourceUUID,
-				"period_start":  periodStart.Format(time.RFC3339),
-				"period_end":    periodEnd.Format(time.RFC3339),
+				"resource":     resourceUUID,
+				"period_start": periodStart.Format(time.RFC3339),
+				"period_end":   periodEnd.Format(time.RFC3339),
 				"usages": map[string]interface{}{
 					"cpu_hours":       1.0 + float64(i)*0.1,
 					"memory_gb_hours": 4.0 + float64(i)*0.5,
@@ -181,9 +181,9 @@ func (s *SettlementTestSuite) TestUsageRecording() {
 
 		now := time.Now()
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    now.Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   now.Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours": 2.5,
 			},
@@ -218,9 +218,9 @@ func (s *SettlementTestSuite) TestInvoiceGeneration() {
 		// Submit usage first
 		now := time.Now()
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-24 * time.Hour).Format(time.RFC3339),
-			"period_end":    now.Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-24 * time.Hour).Format(time.RFC3339),
+			"period_end":   now.Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours":       24.0,
 				"memory_gb_hours": 96.0,
@@ -287,9 +287,9 @@ func (s *SettlementTestSuite) TestSettlementWorkflow() {
 		// Submit usage
 		now := time.Now()
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    now.Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   now.Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours": 1.0,
 			},
@@ -364,9 +364,9 @@ func (s *SettlementTestSuite) TestMetricsAndBilling() {
 		// Submit usage with exact values
 		now := time.Now()
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    now.Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   now.Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours":       10.0, // 10 * 0.10 = 1.00
 				"memory_gb_hours": 50.0, // 50 * 0.02 = 1.00
@@ -399,9 +399,9 @@ func (s *SettlementTestSuite) TestMetricsAndBilling() {
 
 		now := time.Now()
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    now.Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   now.Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours":       0.0,
 				"memory_gb_hours": 0.0,
@@ -422,9 +422,9 @@ func (s *SettlementTestSuite) TestMetricsAndBilling() {
 func (s *SettlementTestSuite) TestSettlementEdgeCases() {
 	s.Run("UsageForNonExistentResource", func() {
 		usageReq := map[string]interface{}{
-			"resource": "00000000-0000-0000-0000-000000000001",
-			"period_start":  time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    time.Now().Format(time.RFC3339),
+			"resource":     "00000000-0000-0000-0000-000000000001",
+			"period_start": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   time.Now().Format(time.RFC3339),
 			"usages":       map[string]interface{}{"cpu_hours": 1.0},
 		}
 
@@ -446,18 +446,18 @@ func (s *SettlementTestSuite) TestSettlementEdgeCases() {
 		now := time.Now()
 		// First period: -2h to -1h
 		usageReq1 := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-2 * time.Hour).Format(time.RFC3339),
-			"period_end":    now.Add(-1 * time.Hour).Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-2 * time.Hour).Format(time.RFC3339),
+			"period_end":   now.Add(-1 * time.Hour).Format(time.RFC3339),
 			"usages":       map[string]interface{}{"cpu_hours": 1.0},
 		}
 		_, _, _ = s.httpPost("/api/marketplace-component-usages/", usageReq1)
 
 		// Overlapping period: -1.5h to -0.5h
 		usageReq2 := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-90 * time.Minute).Format(time.RFC3339),
-			"period_end":    now.Add(-30 * time.Minute).Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-90 * time.Minute).Format(time.RFC3339),
+			"period_end":   now.Add(-30 * time.Minute).Format(time.RFC3339),
 			"usages":       map[string]interface{}{"cpu_hours": 1.0},
 		}
 		_, status, _ := s.httpPost("/api/marketplace-component-usages/", usageReq2)
@@ -477,9 +477,9 @@ func (s *SettlementTestSuite) TestSettlementEdgeCases() {
 
 		now := time.Now()
 		usageReq := map[string]interface{}{
-			"resource": resourceUUID,
-			"period_start":  now.Add(-1 * time.Hour).Format(time.RFC3339),
-			"period_end":    now.Format(time.RFC3339),
+			"resource":     resourceUUID,
+			"period_start": now.Add(-1 * time.Hour).Format(time.RFC3339),
+			"period_end":   now.Format(time.RFC3339),
 			"usages": map[string]interface{}{
 				"cpu_hours":       999999.999,
 				"memory_gb_hours": 999999.999,
@@ -491,4 +491,3 @@ func (s *SettlementTestSuite) TestSettlementEdgeCases() {
 		s.Equal(http.StatusCreated, status)
 	})
 }
-

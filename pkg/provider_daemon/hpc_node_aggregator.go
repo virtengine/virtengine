@@ -58,10 +58,10 @@ type HPCNodeAggregator struct {
 	config     HPCNodeAggregatorConfig
 	keyManager *KeyManager
 
-	nodes       map[string]*aggregatedNodeState
-	nodesMu     sync.RWMutex
-	pendingMu   sync.Mutex
-	pending     []*HPCNodeHeartbeat
+	nodes     map[string]*aggregatedNodeState
+	nodesMu   sync.RWMutex
+	pendingMu sync.Mutex
+	pending   []*HPCNodeHeartbeat
 
 	server *http.Server
 	stopCh chan struct{}
@@ -220,7 +220,7 @@ func (a *HPCNodeAggregator) Stop() {
 	if a.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		a.server.Shutdown(ctx)
+		_ = a.server.Shutdown(ctx)
 	}
 	a.wg.Wait()
 }
@@ -259,7 +259,7 @@ func (a *HPCNodeAggregator) runBatchSubmitter(ctx context.Context) {
 
 func (a *HPCNodeAggregator) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (a *HPCNodeAggregator) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -476,10 +476,10 @@ func (a *HPCNodeAggregator) buildNodeMetadataUpdate(hb *HPCNodeHeartbeat) map[st
 	}
 
 	return map[string]interface{}{
-		"@type":            "/virtengine.hpc.v1.MsgUpdateNodeMetadata",
-		"provider_address": a.config.ProviderAddress,
-		"node_id":          hb.NodeID,
-		"cluster_id":       hb.ClusterID,
+		"@type":                "/virtengine.hpc.v1.MsgUpdateNodeMetadata",
+		"provider_address":     a.config.ProviderAddress,
+		"node_id":              hb.NodeID,
+		"cluster_id":           hb.ClusterID,
 		"latency_measurements": latencyMeasurements,
 		"resources": map[string]interface{}{
 			"cpu_cores":  hb.Capacity.CPUCoresTotal,
@@ -579,12 +579,11 @@ func (a *HPCNodeAggregator) GetNodeStats(nodeID string) (map[string]interface{},
 	}
 
 	return map[string]interface{}{
-		"node_id":           state.NodeID,
-		"cluster_id":        state.ClusterID,
-		"last_heartbeat":    state.LastHeartbeat,
-		"last_sequence":     state.LastSequence,
+		"node_id":            state.NodeID,
+		"cluster_id":         state.ClusterID,
+		"last_heartbeat":     state.LastHeartbeat,
+		"last_sequence":      state.LastSequence,
 		"consecutive_misses": state.ConsecutiveMisses,
-		"total_heartbeats":  state.TotalHeartbeats,
+		"total_heartbeats":   state.TotalHeartbeats,
 	}, true
 }
-

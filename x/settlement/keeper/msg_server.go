@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -31,7 +32,10 @@ func (ms msgServer) CreateEscrow(goCtx context.Context, msg *types.MsgCreateEscr
 		return nil, types.ErrInvalidAddress.Wrap("invalid sender address")
 	}
 
-	expiresIn := time.Duration(msg.ExpiresIn) * time.Second
+	expiresIn, err := durationFromSeconds(msg.ExpiresIn)
+	if err != nil {
+		return nil, types.ErrInvalidParams.Wrap(err.Error())
+	}
 	amount := sdk.NewCoins(msg.Amount...)
 
 	escrowID, err := ms.keeper.CreateEscrow(ctx, msg.OrderId, sender, amount, expiresIn, nil)
@@ -43,6 +47,14 @@ func (ms msgServer) CreateEscrow(goCtx context.Context, msg *types.MsgCreateEscr
 		EscrowId:  escrowID,
 		CreatedAt: ctx.BlockTime().Unix(),
 	}, nil
+}
+
+func durationFromSeconds(seconds uint64) (time.Duration, error) {
+	maxSeconds := uint64(^uint64(0)>>1) / uint64(time.Second)
+	if seconds > maxSeconds {
+		return 0, fmt.Errorf("duration out of range: %d seconds", seconds)
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 // ActivateEscrow handles activating an escrow

@@ -27,11 +27,11 @@ type (
 
 // Message type constants
 const (
-	TypeMsgUpdateParams   = "update_params"
-	TypeMsgDelegate       = "delegate"
-	TypeMsgUndelegate     = "undelegate"
-	TypeMsgRedelegate     = "redelegate"
-	TypeMsgClaimRewards   = "claim_rewards"
+	TypeMsgUpdateParams    = "update_params"
+	TypeMsgDelegate        = "delegate"
+	TypeMsgUndelegate      = "undelegate"
+	TypeMsgRedelegate      = "redelegate"
+	TypeMsgClaimRewards    = "claim_rewards"
 	TypeMsgClaimAllRewards = "claim_all_rewards"
 )
 

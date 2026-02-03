@@ -420,7 +420,9 @@ func init() {
 	proto.RegisterType((*MsgRevokeCertificateResponse)(nil), "virtengine.cert.v1beta3.MsgRevokeCertificateResponse")
 }
 
-func init() { proto.RegisterFile("virtengine/cert/v1beta3/cert.proto", fileDescriptor_a906cf3717502e3d) }
+func init() {
+	proto.RegisterFile("virtengine/cert/v1beta3/cert.proto", fileDescriptor_a906cf3717502e3d)
+}
 
 var fileDescriptor_a906cf3717502e3d = []byte{
 	// 526 bytes of a gzipped FileDescriptorProto
@@ -1644,4 +1646,3 @@ var (
 	ErrIntOverflowCert          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupCert = fmt.Errorf("proto: unexpected end of group")
 )
-

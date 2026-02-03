@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -910,6 +911,9 @@ func (i *IPFSStreamingBackend) PutStream(ctx context.Context, req *PutStreamRequ
 	// Note: For very large files, consider implementing true streaming to IPFS
 	data, err := io.ReadAll(req.Reader)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		return nil, ErrInvalidInput.Wrapf("failed to read stream: %v", err)
 	}
 
@@ -949,4 +953,3 @@ func (i *IPFSStreamingBackend) GetStream(ctx context.Context, address *ContentAd
 
 // Ensure IPFSStreamingBackend implements StreamingArtifactStore
 var _ StreamingArtifactStore = (*IPFSStreamingBackend)(nil)
-

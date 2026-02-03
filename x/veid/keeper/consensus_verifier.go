@@ -206,14 +206,16 @@ func (cv *ConsensusVerifier) CompareResults(
 	}
 
 	// Calculate score difference
+	var scoreDiff uint32
 	if proposed.Score > computed.Score {
-		result.ScoreDifference = int32(proposed.Score - computed.Score)
+		scoreDiff = proposed.Score - computed.Score
 	} else {
-		result.ScoreDifference = int32(computed.Score - proposed.Score)
+		scoreDiff = computed.Score - proposed.Score
 	}
+	result.ScoreDifference = safeInt32FromUint32(scoreDiff)
 
 	// Check 1: Score within tolerance
-	if uint32(result.ScoreDifference) > cv.params.ScoreTolerance {
+	if scoreDiff > cv.params.ScoreTolerance {
 		result.Match = false
 		result.Differences = append(result.Differences, fmt.Sprintf(
 			"score difference %d exceeds tolerance %d (proposed=%d, computed=%d)",
@@ -253,6 +255,13 @@ func (cv *ConsensusVerifier) CompareResults(
 	}
 
 	return result
+}
+
+func safeInt32FromUint32(value uint32) int32 {
+	if value > uint32(^uint32(0)>>1) {
+		return int32(^uint32(0) >> 1)
+	}
+	return int32(value)
 }
 
 // ValidateModelVersion validates that this node can run the required model version

@@ -253,7 +253,6 @@ func (t *Tracker) GetAutomationOpportunities(period time.Duration) []AutomationO
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	opportunities := make([]AutomationOpportunity, 0)
 	taskMap := make(map[string]*AutomationOpportunity)
 	cutoff := time.Now().Add(-period)
 
@@ -264,11 +263,11 @@ func (t *Tracker) GetAutomationOpportunities(period time.Duration) []AutomationO
 				opp.Occurrences++
 			} else {
 				taskMap[entry.Task] = &AutomationOpportunity{
-					Task:        entry.Task,
-					Category:    entry.Category,
-					TotalTime:   entry.TimeSpent,
-					Occurrences: 1,
-					Priority:    entry.Priority,
+					Task:         entry.Task,
+					Category:     entry.Category,
+					TotalTime:    entry.TimeSpent,
+					Occurrences:  1,
+					Priority:     entry.Priority,
 					EstimatedROI: calculateROI(entry.TimeSpent, entry.Frequency),
 				}
 			}
@@ -276,6 +275,7 @@ func (t *Tracker) GetAutomationOpportunities(period time.Duration) []AutomationO
 	}
 
 	// Convert to slice
+	opportunities := make([]AutomationOpportunity, 0, len(taskMap))
 	for _, opp := range taskMap {
 		opportunities = append(opportunities, *opp)
 	}
@@ -457,4 +457,3 @@ func (ao *AutomationOpportunity) GetRecommendation() string {
 		urgency, ao.Task, ao.Category, ao.TotalTime, ao.EstimatedROI,
 	)
 }
-

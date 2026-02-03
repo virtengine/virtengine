@@ -774,9 +774,9 @@ type ADSSOScoringWeight struct {
 // DefaultADSSOScoringWeights returns default scoring weights for AD SSO methods
 func DefaultADSSOScoringWeights() []ADSSOScoringWeight {
 	return []ADSSOScoringWeight{
-		{AuthMethod: ADAuthMethodOIDC, Weight: 400},  // 4.0% weight (Azure AD cloud)
-		{AuthMethod: ADAuthMethodSAML, Weight: 350},  // 3.5% weight (SAML federation)
-		{AuthMethod: ADAuthMethodLDAP, Weight: 300},  // 3.0% weight (on-premises)
+		{AuthMethod: ADAuthMethodOIDC, Weight: 400}, // 4.0% weight (Azure AD cloud)
+		{AuthMethod: ADAuthMethodSAML, Weight: 350}, // 3.5% weight (SAML federation)
+		{AuthMethod: ADAuthMethodLDAP, Weight: 300}, // 3.0% weight (on-premises)
 	}
 }
 

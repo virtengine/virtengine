@@ -138,4 +138,3 @@ func WrapVoIPDetected(reason string) error {
 func WrapProviderError(provider string, err error) error {
 	return errors.Wrapf(ErrProviderError, "provider %s: %v", provider, err)
 }
-

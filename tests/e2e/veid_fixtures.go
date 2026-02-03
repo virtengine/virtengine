@@ -427,13 +427,13 @@ func PayloadHash(envelope encryptiontypes.EncryptedPayloadEnvelope) []byte {
 
 // ScoreTransitionFixture represents expected score and tier transitions
 type ScoreTransitionFixture struct {
-	InitialScore    uint32
-	InitialTier     veidtypes.IdentityTier
-	ActionType      string
-	ExpectedScore   uint32
-	ExpectedTier    veidtypes.IdentityTier
-	ExpectedStatus  veidtypes.VerificationStatus
-	ScoringModel    string
+	InitialScore   uint32
+	InitialTier    veidtypes.IdentityTier
+	ActionType     string
+	ExpectedScore  uint32
+	ExpectedTier   veidtypes.IdentityTier
+	ExpectedStatus veidtypes.VerificationStatus
+	ScoringModel   string
 }
 
 // UnverifiedToBasic returns a transition from unverified to basic tier

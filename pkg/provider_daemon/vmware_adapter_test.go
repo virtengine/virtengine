@@ -1127,9 +1127,9 @@ func TestVMwareAdapterListVMs(t *testing.T) {
 	manifest := createTestVMwareManifest()
 	ctx := context.Background()
 
-	adapter.DeployVM(ctx, manifest, "deployment-1", "lease-1", VMwareDeploymentOptions{})
-	adapter.DeployVM(ctx, manifest, "deployment-2", "lease-2", VMwareDeploymentOptions{})
-	adapter.DeployVM(ctx, manifest, "deployment-3", "lease-3", VMwareDeploymentOptions{})
+	_, _ = adapter.DeployVM(ctx, manifest, "deployment-1", "lease-1", VMwareDeploymentOptions{})
+	_, _ = adapter.DeployVM(ctx, manifest, "deployment-2", "lease-2", VMwareDeploymentOptions{})
+	_, _ = adapter.DeployVM(ctx, manifest, "deployment-3", "lease-3", VMwareDeploymentOptions{})
 
 	vms := adapter.ListVMs()
 
@@ -1325,7 +1325,7 @@ func TestVMwareAdapterResumeVM(t *testing.T) {
 	})
 
 	// Suspend first
-	adapter.SuspendVM(ctx, deployed.ID)
+	_ = adapter.SuspendVM(ctx, deployed.ID)
 
 	// Then resume
 	err := adapter.ResumeVM(ctx, deployed.ID)
@@ -1700,7 +1700,7 @@ func BenchmarkVMwareAdapterListVMs(b *testing.B) {
 
 	// Create some VMs first
 	for i := 0; i < 100; i++ {
-		adapter.DeployVM(ctx, manifest, fmt.Sprintf("d-%d", i), fmt.Sprintf("l-%d", i), VMwareDeploymentOptions{DryRun: true})
+		_, _ = adapter.DeployVM(ctx, manifest, fmt.Sprintf("d-%d", i), fmt.Sprintf("l-%d", i), VMwareDeploymentOptions{DryRun: true})
 	}
 
 	b.ResetTimer()
@@ -1708,4 +1708,3 @@ func BenchmarkVMwareAdapterListVMs(b *testing.B) {
 		_ = adapter.ListVMs()
 	}
 }
-

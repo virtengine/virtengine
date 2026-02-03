@@ -19,4 +19,3 @@ func (s Services) Swap(i, j int) {
 func (s Services) Less(i, j int) bool {
 	return s[i].Name < s[j].Name
 }
-

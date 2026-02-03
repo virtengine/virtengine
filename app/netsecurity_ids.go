@@ -17,24 +17,24 @@ import (
 
 // IDSIntegration provides integration with Intrusion Detection Systems.
 type IDSIntegration struct {
-	config   IDSConfig
-	logger   log.Logger
-	
+	config IDSConfig
+	logger log.Logger
+
 	// Alert channels
-	alertChan   chan IDSAlert
-	httpClient  *http.Client
-	
+	alertChan  chan IDSAlert
+	httpClient *http.Client
+
 	// Metrics
 	alertsSent    int64
 	alertsDropped int64
-	
+
 	// Log file
 	logFile *os.File
-	
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
-	
+
 	mu sync.RWMutex
 }
 
@@ -50,11 +50,11 @@ type IDSAlert struct {
 	Details     map[string]interface{} `json:"details,omitempty"`
 	Protocol    string                 `json:"protocol,omitempty"`
 	Action      string                 `json:"action"` // "allowed", "blocked", "alerted"
-	
+
 	// Signature-based detection
 	SignatureID   int    `json:"signature_id,omitempty"`
 	SignatureName string `json:"signature_name,omitempty"`
-	
+
 	// Classification
 	Classification string `json:"classification,omitempty"`
 	Priority       int    `json:"priority,omitempty"`
@@ -153,7 +153,7 @@ func (ids *IDSIntegration) Start() {
 func (ids *IDSIntegration) Stop() {
 	ids.cancel()
 	ids.wg.Wait()
-	
+
 	if ids.logFile != nil {
 		ids.logFile.Close()
 	}
@@ -223,16 +223,16 @@ func (ids *IDSIntegration) meetsThreshold(severity IDSSeverity) bool {
 func (ids *IDSIntegration) writeLogEntry(alert IDSAlert) {
 	// EVE JSON format compatible with Suricata/ELK
 	entry := map[string]interface{}{
-		"timestamp": alert.Timestamp.Format(time.RFC3339Nano),
+		"timestamp":  alert.Timestamp.Format(time.RFC3339Nano),
 		"event_type": "alert",
 		"src_ip":     alert.Source.IP,
 		"src_port":   alert.Source.Port,
 		"alert": map[string]interface{}{
-			"action":      alert.Action,
-			"severity":    severityToInt(alert.Severity),
-			"signature":   alert.SignatureName,
+			"action":       alert.Action,
+			"severity":     severityToInt(alert.Severity),
+			"signature":    alert.SignatureName,
 			"signature_id": alert.SignatureID,
-			"category":    alert.Classification,
+			"category":     alert.Classification,
 			"metadata": map[string]interface{}{
 				"type":    alert.Type,
 				"message": alert.Message,
@@ -262,8 +262,8 @@ func (ids *IDSIntegration) writeLogEntry(alert IDSAlert) {
 		return
 	}
 
-	ids.logFile.Write(data)
-	ids.logFile.WriteString("\n")
+	_, _ = ids.logFile.Write(data)
+	_, _ = ids.logFile.WriteString("\n")
 }
 
 // sendAlertHTTP sends an alert to the configured HTTP endpoint.
@@ -326,15 +326,15 @@ func (ids *IDSIntegration) SendAlert(alert IDSAlert) {
 // AlertDDoS sends a DDoS attack alert.
 func (ids *IDSIntegration) AlertDDoS(attackType string, sourceIP string, count int64, threshold int) {
 	ids.SendAlert(IDSAlert{
-		Type:          AlertTypeDDoS,
-		Severity:      IDSSeverityHigh,
-		Source:        IDSAlertSource{IP: sourceIP},
-		Message:       fmt.Sprintf("%s detected: %d events (threshold: %d)", attackType, count, threshold),
-		Action:        "blocked",
-		SignatureID:   getSignatureID(attackType),
-		SignatureName: fmt.Sprintf("VirtEngine %s Detection", attackType),
+		Type:           AlertTypeDDoS,
+		Severity:       IDSSeverityHigh,
+		Source:         IDSAlertSource{IP: sourceIP},
+		Message:        fmt.Sprintf("%s detected: %d events (threshold: %d)", attackType, count, threshold),
+		Action:         "blocked",
+		SignatureID:    getSignatureID(attackType),
+		SignatureName:  fmt.Sprintf("VirtEngine %s Detection", attackType),
 		Classification: "Network Attack",
-		Priority:      1,
+		Priority:       1,
 		Details: map[string]interface{}{
 			"attack_type": attackType,
 			"count":       count,
@@ -346,18 +346,18 @@ func (ids *IDSIntegration) AlertDDoS(attackType string, sourceIP string, count i
 // AlertSybil sends a Sybil attack alert.
 func (ids *IDSIntegration) AlertSybil(reason string, sourceIP string, subnet string, count int) {
 	ids.SendAlert(IDSAlert{
-		Type:          AlertTypeSybil,
-		Severity:      IDSSeverityMedium,
-		Source:        IDSAlertSource{IP: sourceIP},
-		Message:       fmt.Sprintf("Sybil attack indicator: %s (%d peers from %s)", reason, count, subnet),
-		Action:        "blocked",
-		SignatureID:   SigSybilSubnetAbuse,
-		SignatureName: "VirtEngine Sybil Attack Detection",
+		Type:           AlertTypeSybil,
+		Severity:       IDSSeverityMedium,
+		Source:         IDSAlertSource{IP: sourceIP},
+		Message:        fmt.Sprintf("Sybil attack indicator: %s (%d peers from %s)", reason, count, subnet),
+		Action:         "blocked",
+		SignatureID:    SigSybilSubnetAbuse,
+		SignatureName:  "VirtEngine Sybil Attack Detection",
 		Classification: "Attempted Network Manipulation",
-		Priority:      2,
+		Priority:       2,
 		Details: map[string]interface{}{
-			"reason":    reason,
-			"subnet":    subnet,
+			"reason":     reason,
+			"subnet":     subnet,
 			"peer_count": count,
 		},
 	})
@@ -366,15 +366,15 @@ func (ids *IDSIntegration) AlertSybil(reason string, sourceIP string, subnet str
 // AlertRateLimit sends a rate limit alert.
 func (ids *IDSIntegration) AlertRateLimit(limitType string, sourceIP string, current, limit int64) {
 	ids.SendAlert(IDSAlert{
-		Type:          AlertTypeRateLimit,
-		Severity:      IDSSeverityLow,
-		Source:        IDSAlertSource{IP: sourceIP},
-		Message:       fmt.Sprintf("Rate limit exceeded: %s (%d > %d)", limitType, current, limit),
-		Action:        "blocked",
-		SignatureID:   SigRateLimitConnection,
-		SignatureName: "VirtEngine Rate Limit Violation",
+		Type:           AlertTypeRateLimit,
+		Severity:       IDSSeverityLow,
+		Source:         IDSAlertSource{IP: sourceIP},
+		Message:        fmt.Sprintf("Rate limit exceeded: %s (%d > %d)", limitType, current, limit),
+		Action:         "blocked",
+		SignatureID:    SigRateLimitConnection,
+		SignatureName:  "VirtEngine Rate Limit Violation",
 		Classification: "Potential DoS",
-		Priority:      3,
+		Priority:       3,
 		Details: map[string]interface{}{
 			"limit_type": limitType,
 			"current":    current,
@@ -386,15 +386,15 @@ func (ids *IDSIntegration) AlertRateLimit(limitType string, sourceIP string, cur
 // AlertAuthFailure sends an authentication failure alert.
 func (ids *IDSIntegration) AlertAuthFailure(reason string, sourceIP string, peerID string) {
 	ids.SendAlert(IDSAlert{
-		Type:          AlertTypeAuthFailure,
-		Severity:      IDSSeverityMedium,
-		Source:        IDSAlertSource{IP: sourceIP, ID: peerID},
-		Message:       fmt.Sprintf("Authentication failed: %s", reason),
-		Action:        "blocked",
-		SignatureID:   SigAuthFailure,
-		SignatureName: "VirtEngine Auth Failure",
+		Type:           AlertTypeAuthFailure,
+		Severity:       IDSSeverityMedium,
+		Source:         IDSAlertSource{IP: sourceIP, ID: peerID},
+		Message:        fmt.Sprintf("Authentication failed: %s", reason),
+		Action:         "blocked",
+		SignatureID:    SigAuthFailure,
+		SignatureName:  "VirtEngine Auth Failure",
 		Classification: "Attempted Access",
-		Priority:      2,
+		Priority:       2,
 		Details: map[string]interface{}{
 			"reason":  reason,
 			"peer_id": peerID,
@@ -405,15 +405,15 @@ func (ids *IDSIntegration) AlertAuthFailure(reason string, sourceIP string, peer
 // AlertMalformedMessage sends a malformed message alert.
 func (ids *IDSIntegration) AlertMalformedMessage(messageType string, sourceIP string, details string) {
 	ids.SendAlert(IDSAlert{
-		Type:          AlertTypeMalformedMessage,
-		Severity:      IDSSeverityLow,
-		Source:        IDSAlertSource{IP: sourceIP},
-		Message:       fmt.Sprintf("Malformed %s message: %s", messageType, details),
-		Action:        "blocked",
-		SignatureID:   SigMalformedMessage,
-		SignatureName: "VirtEngine Malformed Message",
+		Type:           AlertTypeMalformedMessage,
+		Severity:       IDSSeverityLow,
+		Source:         IDSAlertSource{IP: sourceIP},
+		Message:        fmt.Sprintf("Malformed %s message: %s", messageType, details),
+		Action:         "blocked",
+		SignatureID:    SigMalformedMessage,
+		SignatureName:  "VirtEngine Malformed Message",
 		Classification: "Protocol Anomaly",
-		Priority:      3,
+		Priority:       3,
 		Details: map[string]interface{}{
 			"message_type": messageType,
 			"details":      details,
@@ -436,15 +436,15 @@ func (ids *IDSIntegration) AlertFromEvent(event AlertEvent) {
 	}
 
 	ids.SendAlert(IDSAlert{
-		Type:       event.Type,
-		Severity:   severity,
-		Source:     IDSAlertSource{IP: event.Source},
-		Message:    event.Message,
-		Timestamp:  event.Timestamp,
-		Details:    event.Details,
-		Action:     "alerted",
+		Type:           event.Type,
+		Severity:       severity,
+		Source:         IDSAlertSource{IP: event.Source},
+		Message:        event.Message,
+		Timestamp:      event.Timestamp,
+		Details:        event.Details,
+		Action:         "alerted",
 		Classification: "Security Event",
-		Priority:   severityToPriority(severity),
+		Priority:       severityToPriority(severity),
 	})
 }
 

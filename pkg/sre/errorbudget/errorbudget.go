@@ -1,10 +1,12 @@
 // Package errorbudget provides error budget tracking and management for SLO compliance.
 //
 // Error budgets are calculated as:
-//   ErrorBudget = (1 - SLO_Target) × Total_Time_Period
+//
+//	ErrorBudget = (1 - SLO_Target) × Total_Time_Period
 //
 // For example, 99.90% SLO over 28 days:
-//   ErrorBudget = (1 - 0.9990) × 28 days = 40.32 minutes
+//
+//	ErrorBudget = (1 - 0.9990) × 28 days = 40.32 minutes
 package errorbudget
 
 import (
@@ -511,4 +513,3 @@ func (b *Budget) IsActionAllowed(action string) bool {
 		return false
 	}
 }
-

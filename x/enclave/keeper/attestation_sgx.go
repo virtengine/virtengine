@@ -34,12 +34,22 @@ func (k Keeper) verifySGXAttestation(ctx sdk.Context, identity *types.EnclaveIde
 		return types.ErrAttestationInvalid.Wrap("MRSIGNER does not match signer hash")
 	}
 
-	if identity.IsvProdId != 0 && uint16(identity.IsvProdId) != quote.Report.ISVProdID {
-		return types.ErrAttestationInvalid.Wrapf("ISVProdID mismatch: got %d expected %d", quote.Report.ISVProdID, identity.IsvProdId)
+	if identity.IsvProdId != 0 {
+		if identity.IsvProdId > uint32(^uint16(0)) {
+			return types.ErrAttestationInvalid.Wrapf("ISVProdID out of range: %d", identity.IsvProdId)
+		}
+		if uint16(identity.IsvProdId) != quote.Report.ISVProdID {
+			return types.ErrAttestationInvalid.Wrapf("ISVProdID mismatch: got %d expected %d", quote.Report.ISVProdID, identity.IsvProdId)
+		}
 	}
 
-	if identity.IsvSvn != 0 && uint16(identity.IsvSvn) != quote.Report.ISVSVN {
-		return types.ErrAttestationInvalid.Wrapf("ISVSVN mismatch: got %d expected %d", quote.Report.ISVSVN, identity.IsvSvn)
+	if identity.IsvSvn != 0 {
+		if identity.IsvSvn > uint32(^uint16(0)) {
+			return types.ErrAttestationInvalid.Wrapf("ISVSVN out of range: %d", identity.IsvSvn)
+		}
+		if uint16(identity.IsvSvn) != quote.Report.ISVSVN {
+			return types.ErrAttestationInvalid.Wrapf("ISVSVN mismatch: got %d expected %d", quote.Report.ISVSVN, identity.IsvSvn)
+		}
 	}
 
 	if err := k.verifySGXCryptographic(ctx, identity, quote); err != nil {

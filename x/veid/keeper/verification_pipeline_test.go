@@ -17,7 +17,6 @@ import (
 
 type VerificationPipelineTestSuite struct {
 	suite.Suite
-	keyPair *encryptioncrypto.KeyPair
 }
 
 func TestVerificationPipelineTestSuite(t *testing.T) {
@@ -689,9 +688,9 @@ func TestScoringInput_ComputeInputHash(t *testing.T) {
 
 func TestScopeVerificationResult_WeightedScore(t *testing.T) {
 	tests := []struct {
-		name    string
-		result  *types.ScopeVerificationResult
-		want    uint32
+		name   string
+		result *types.ScopeVerificationResult
+		want   uint32
 	}{
 		{
 			name: "successful with score",

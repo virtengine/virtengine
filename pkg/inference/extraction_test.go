@@ -143,9 +143,9 @@ func TestFaceExtractor_SanitizeEmbedding(t *testing.T) {
 	extractor := NewFaceExtractor(config)
 
 	embedding := make([]float32, config.EmbeddingDim)
-	embedding[0] = 100.0   // Out of range
-	embedding[1] = -100.0  // Out of range
-	embedding[2] = 0.5     // Valid
+	embedding[0] = 100.0  // Out of range
+	embedding[1] = -100.0 // Out of range
+	embedding[2] = 0.5    // Valid
 
 	sanitized := extractor.SanitizeEmbedding(embedding)
 
@@ -355,7 +355,7 @@ func TestLivenessScorer_CheckLiveness_StubMode(t *testing.T) {
 		t.Errorf("liveness score out of range: %f", result.LivenessScore)
 	}
 
-	if result.Decision != "live" && result.Decision != "spoof" && result.Decision != "uncertain" {
+	if result.Decision != DecisionLive && result.Decision != DecisionSpoof && result.Decision != DecisionUncertain {
 		t.Errorf("invalid decision: %s", result.Decision)
 	}
 
@@ -439,7 +439,7 @@ func TestLivenessScorer_SanitizeResult(t *testing.T) {
 	scorer := NewLivenessScorer(config)
 
 	result := &LivenessResult{
-		LivenessScore: 1.5, // Out of range
+		LivenessScore: 1.5,  // Out of range
 		Confidence:    -0.5, // Out of range
 		Decision:      "invalid_decision",
 	}
@@ -452,8 +452,8 @@ func TestLivenessScorer_SanitizeResult(t *testing.T) {
 	if result.Confidence > 1.0 || result.Confidence < 0.0 {
 		t.Errorf("expected clamped confidence, got: %f", result.Confidence)
 	}
-	if result.Decision != "uncertain" {
-		t.Errorf("expected sanitized decision 'uncertain', got: %s", result.Decision)
+	if result.Decision != DecisionUncertain {
+		t.Errorf("expected sanitized decision '%s', got: %s", DecisionUncertain, result.Decision)
 	}
 }
 
@@ -799,4 +799,3 @@ func BenchmarkFeaturePipeline_Extract(b *testing.B) {
 		_, _ = pipeline.Extract(context.Background(), input)
 	}
 }
-

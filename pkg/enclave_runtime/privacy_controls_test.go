@@ -287,4 +287,3 @@ func TestNewLogRedactorWithRules(t *testing.T) {
 		t.Error("should contain custom replacement")
 	}
 }
-

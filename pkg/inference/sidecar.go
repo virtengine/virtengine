@@ -102,12 +102,8 @@ func (sc *SidecarClient) connect() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), sc.config.SidecarTimeout)
-	defer cancel()
-
 	// Build gRPC dial options
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithBlock())
 
 	if sc.useTLS {
 		// Use TLS with system root CAs
@@ -120,7 +116,7 @@ func (sc *SidecarClient) connect() error {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.DialContext(ctx, sc.config.SidecarAddress, opts...)
+	conn, err := grpc.NewClient(sc.config.SidecarAddress, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to dial sidecar at %s: %w", sc.config.SidecarAddress, err)
 	}
@@ -576,4 +572,3 @@ type ModelInfoResponse struct {
 	// TensorFlowVersion is the TF version
 	TensorFlowVersion string
 }
-

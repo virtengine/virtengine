@@ -153,15 +153,15 @@ func (s RollbackState) IsTerminal() bool {
 
 // RollbackManager manages rollback operations
 type RollbackManager struct {
-	cfg         RollbackConfig
-	controller  *LifecycleController
-	lifecycle   *waldur.LifecycleClient
-	auditLogger *AuditLogger
-	records     map[string]*RollbackRecord
+	cfg             RollbackConfig
+	controller      *LifecycleController
+	lifecycle       *waldur.LifecycleClient
+	auditLogger     *AuditLogger
+	records         map[string]*RollbackRecord
 	activeRollbacks map[string]string // allocationID -> rollbackID
-	mu          sync.RWMutex
-	stopCh      chan struct{}
-	wg          sync.WaitGroup
+	mu              sync.RWMutex
+	stopCh          chan struct{}
+	wg              sync.WaitGroup
 }
 
 // NewRollbackManager creates a new rollback manager
@@ -352,7 +352,7 @@ func (m *RollbackManager) waitForRollbackCompletion(ctx context.Context, record 
 }
 
 // handleRollbackFailure handles a failed rollback attempt
-func (m *RollbackManager) handleRollbackFailure(ctx context.Context, record *RollbackRecord, err error) {
+func (m *RollbackManager) handleRollbackFailure(_ context.Context, record *RollbackRecord, err error) {
 	record.AttemptCount++
 	errMsg := err.Error()
 
@@ -512,9 +512,10 @@ func (m *RollbackManager) GetRollbackMetrics() *RollbackMetrics {
 		metrics.ByState[record.State]++
 		metrics.ByAction[record.OriginalAction]++
 
-		if record.State == RollbackStateCompleted {
+		switch record.State {
+		case RollbackStateCompleted:
 			metrics.SuccessfulRollbacks++
-		} else if record.State == RollbackStateFailed {
+		case RollbackStateFailed:
 			metrics.FailedRollbacks++
 		}
 	}
@@ -561,13 +562,13 @@ func (m *RollbackManager) logRollbackEvent(record *RollbackRecord, success bool)
 	}
 
 	details := map[string]interface{}{
-		"rollback_id":          record.ID,
+		"rollback_id":           record.ID,
 		"original_operation_id": record.OriginalOperationID,
-		"allocation_id":        record.AllocationID,
-		"original_action":      record.OriginalAction,
-		"rollback_action":      record.RollbackAction,
-		"attempt_count":        record.AttemptCount,
-		"original_state":       record.OriginalState,
+		"allocation_id":         record.AllocationID,
+		"original_action":       record.OriginalAction,
+		"rollback_action":       record.RollbackAction,
+		"attempt_count":         record.AttemptCount,
+		"original_state":        record.OriginalState,
 	}
 
 	if success {
@@ -705,4 +706,3 @@ type RollbackStep struct {
 	// Handler is an optional custom handler
 	Handler RollbackHandler
 }
-

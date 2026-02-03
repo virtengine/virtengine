@@ -67,7 +67,7 @@ const (
 	FlagWaldurBaseURL = "waldur-base-url"
 
 	// FlagWaldurToken is Waldur API token
-	FlagWaldurToken = "waldur-token"
+	FlagWaldurToken = "waldur-token" //nolint:gosec
 
 	// FlagWaldurProjectUUID is Waldur project UUID
 	FlagWaldurProjectUUID = "waldur-project-uuid"
@@ -100,7 +100,7 @@ const (
 	FlagWaldurChainKeyringDir = "waldur-chain-keyring-dir"
 
 	// FlagWaldurChainKeyringPassphrase is the keyring passphrase for on-chain callbacks
-	FlagWaldurChainKeyringPassphrase = "waldur-chain-keyring-passphrase"
+	FlagWaldurChainKeyringPassphrase = "waldur-chain-keyring-passphrase" //nolint:gosec
 
 	// FlagWaldurChainGRPC is the gRPC endpoint for on-chain callbacks
 	FlagWaldurChainGRPC = "waldur-chain-grpc"
@@ -417,7 +417,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize Event Stream (PROVIDER-STREAM-001)
 	var eventSubscriber provider_daemon.EventSubscriber
-	
+
 	// Create checkpoint store
 	checkpointStore, err := provider_daemon.NewEventCheckpointStore(viper.GetString(FlagWaldurCheckpointFile))
 	if err != nil {

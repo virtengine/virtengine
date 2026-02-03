@@ -44,12 +44,12 @@ profiles:
     global:
       pricing:
         web:
-          denom: uact
+          denom: uve
           amount: 10
     bob:
       pricing:
         bob:
-          denom: uact
+          denom: uve
           amount: 99
 
 deployment:

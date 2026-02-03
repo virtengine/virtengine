@@ -526,7 +526,7 @@ func (lc *LifecycleController) createFailureCallback(op *marketplace.LifecycleOp
 	callback.ExpiresAt = callback.Timestamp.Add(lc.cfg.CallbackTTL)
 	callback.Payload["operation_id"] = op.ID
 	callback.Payload["action"] = string(op.Action)
-	callback.Payload["state"] = "failed"
+	callback.Payload["state"] = string(HPCJobStateFailed)
 	callback.Payload["error"] = op.Error
 	return callback
 }
@@ -571,7 +571,7 @@ func (lc *LifecycleController) retryWorker(ctx context.Context) {
 }
 
 // processRetries processes operations needing retry
-func (lc *LifecycleController) processRetries(ctx context.Context) {
+func (lc *LifecycleController) processRetries(_ context.Context) {
 	lc.mu.RLock()
 	var toRetry []*marketplace.LifecycleOperation
 	for _, op := range lc.state.Operations {
@@ -710,4 +710,3 @@ func mapToWaldurAction(action marketplace.LifecycleActionType) waldur.LifecycleA
 		return waldur.LifecycleAction(strings.ToLower(string(action)))
 	}
 }
-

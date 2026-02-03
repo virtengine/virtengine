@@ -44,7 +44,10 @@ const (
 const ScopeSchemaVersion uint32 = 1
 
 // Error message constants
-const errMsgScopeIDEmpty = "scope_id cannot be empty"
+const (
+	errMsgScopeIDEmpty     = "scope_id cannot be empty"
+	errMsgUnknownScopeType = "Unknown scope type"
+)
 
 // AllScopeTypes returns all valid scope types
 func AllScopeTypes() []ScopeType {
@@ -125,7 +128,7 @@ func ScopeTypeDescription(scopeType ScopeType) string {
 	case ScopeTypeADSSO:
 		return "Active Directory SSO verification (Azure AD, SAML, LDAP)"
 	default:
-		return "Unknown scope type"
+		return errMsgUnknownScopeType
 	}
 }
 
@@ -262,10 +265,10 @@ func (s *IdentityScope) String() string {
 
 // ScopeRef is a lightweight reference to a scope (used in IdentityRecord)
 type ScopeRef struct {
-	ScopeID   string             `json:"scope_id"`
-	ScopeType ScopeType          `json:"scope_type"`
-	Status    VerificationStatus `json:"status"`
-	UploadedAt int64             `json:"uploaded_at"` // Unix timestamp
+	ScopeID    string             `json:"scope_id"`
+	ScopeType  ScopeType          `json:"scope_type"`
+	Status     VerificationStatus `json:"status"`
+	UploadedAt int64              `json:"uploaded_at"` // Unix timestamp
 }
 
 // NewScopeRef creates a scope reference from a full scope

@@ -153,4 +153,3 @@ func (msg *MsgWithdrawAppeal) GetSigners() []sdk.AccAddress {
 	signer, _ := sdk.AccAddressFromBech32(msg.Submitter)
 	return []sdk.AccAddress{signer}
 }
-

@@ -186,19 +186,19 @@ func TestGetHealthyEnclaves(t *testing.T) {
 	validator3 := sdk.AccAddress([]byte("validator3"))
 
 	// Initialize all
-	keeper.InitializeHealthStatus(ctx, validator1)
-	keeper.InitializeHealthStatus(ctx, validator2)
-	keeper.InitializeHealthStatus(ctx, validator3)
+	_ = keeper.InitializeHealthStatus(ctx, validator1)
+	_ = keeper.InitializeHealthStatus(ctx, validator2)
+	_ = keeper.InitializeHealthStatus(ctx, validator3)
 
 	// Make validator2 degraded
 	health2, _ := keeper.GetEnclaveHealthStatus(ctx, validator2)
 	health2.UpdateStatus(types.HealthStatusDegraded)
-	keeper.SetEnclaveHealthStatus(ctx, health2)
+	_ = keeper.SetEnclaveHealthStatus(ctx, health2)
 
 	// Make validator3 unhealthy
 	health3, _ := keeper.GetEnclaveHealthStatus(ctx, validator3)
 	health3.UpdateStatus(types.HealthStatusUnhealthy)
-	keeper.SetEnclaveHealthStatus(ctx, health3)
+	_ = keeper.SetEnclaveHealthStatus(ctx, health3)
 
 	// Get healthy enclaves
 	healthyValidators := keeper.GetHealthyEnclaves(ctx)
@@ -216,19 +216,19 @@ func TestGetUnhealthyEnclaves(t *testing.T) {
 	validator3 := sdk.AccAddress([]byte("validator3"))
 
 	// Initialize all
-	keeper.InitializeHealthStatus(ctx, validator1)
-	keeper.InitializeHealthStatus(ctx, validator2)
-	keeper.InitializeHealthStatus(ctx, validator3)
+	_ = keeper.InitializeHealthStatus(ctx, validator1)
+	_ = keeper.InitializeHealthStatus(ctx, validator2)
+	_ = keeper.InitializeHealthStatus(ctx, validator3)
 
 	// Make validator2 unhealthy
 	health2, _ := keeper.GetEnclaveHealthStatus(ctx, validator2)
 	health2.UpdateStatus(types.HealthStatusUnhealthy)
-	keeper.SetEnclaveHealthStatus(ctx, health2)
+	_ = keeper.SetEnclaveHealthStatus(ctx, health2)
 
 	// Make validator3 unhealthy
 	health3, _ := keeper.GetEnclaveHealthStatus(ctx, validator3)
 	health3.UpdateStatus(types.HealthStatusUnhealthy)
-	keeper.SetEnclaveHealthStatus(ctx, health3)
+	_ = keeper.SetEnclaveHealthStatus(ctx, health3)
 
 	// Get unhealthy enclaves
 	unhealthyValidators := keeper.GetUnhealthyEnclaves(ctx)
@@ -244,13 +244,13 @@ func TestIsEnclaveHealthy(t *testing.T) {
 	require.False(t, keeper.IsEnclaveHealthy(ctx, validatorAddr))
 
 	// Initialize as healthy
-	keeper.InitializeHealthStatus(ctx, validatorAddr)
+	_ = keeper.InitializeHealthStatus(ctx, validatorAddr)
 	require.True(t, keeper.IsEnclaveHealthy(ctx, validatorAddr))
 
 	// Make unhealthy
 	health, _ := keeper.GetEnclaveHealthStatus(ctx, validatorAddr)
 	health.UpdateStatus(types.HealthStatusUnhealthy)
-	keeper.SetEnclaveHealthStatus(ctx, health)
+	_ = keeper.SetEnclaveHealthStatus(ctx, health)
 
 	require.False(t, keeper.IsEnclaveHealthy(ctx, validatorAddr))
 }
@@ -376,7 +376,7 @@ func TestGetAllHealthStatuses(t *testing.T) {
 
 	// Initialize all
 	for _, validator := range validators {
-		keeper.InitializeHealthStatus(ctx, validator)
+		_ = keeper.InitializeHealthStatus(ctx, validator)
 	}
 
 	// Get all health statuses
@@ -394,6 +394,8 @@ func TestGetAllHealthStatuses(t *testing.T) {
 }
 
 // setupTestEnvironment creates a test context and keeper for testing
+//
+//nolint:unparam // placeholder test helper until keeper test utilities are wired
 func setupTestEnvironment(t *testing.T) (sdk.Context, Keeper) {
 	// This is a placeholder - in a real test environment, you would:
 	// 1. Create a test store

@@ -269,4 +269,3 @@ func handleTerminalResize(ctx context.Context, wg *sync.WaitGroup, input <-chan 
 		}
 	}
 }
-

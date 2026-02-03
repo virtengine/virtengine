@@ -306,4 +306,3 @@ func TestNitroEnclaveService_GetPlatformType(t *testing.T) {
 	assert.Equal(t, PlatformNitro, svc.GetPlatformType())
 	assert.True(t, svc.IsPlatformSecure())
 }
-

@@ -41,7 +41,7 @@ func (s ServiceExposes) Less(i, j int) bool {
 }
 
 func (s ServiceExposes) GetEndpoints() resources.Endpoints {
-	endpoints := make(resources.Endpoints, 0)
+	endpoints := make(resources.Endpoints, 0, len(s))
 
 	for _, expose := range s {
 		endpoints = append(endpoints, expose.GetEndpoints()...)
@@ -49,4 +49,3 @@ func (s ServiceExposes) GetEndpoints() resources.Endpoints {
 
 	return endpoints
 }
-

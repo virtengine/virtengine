@@ -56,13 +56,13 @@ func TestCompareTransaction(t *testing.T) {
 		nsPerOp  int64
 		expected string
 	}{
-		{"hash_compute", 500, "pass"},   // 50% faster
-		{"hash_compute", 1000, "pass"},  // exactly at baseline
-		{"hash_compute", 1150, "warn"},  // 15% slower (exceeds 10% warn)
-		{"hash_compute", 1250, "fail"},  // 25% slower (exceeds 20% fail)
-		{"validation", 5000, "pass"},    // 50% faster
-		{"execution", 50000, "pass"},    // at baseline
-		{"state_write", 5000, "pass"},   // at baseline
+		{"hash_compute", 500, "pass"},  // 50% faster
+		{"hash_compute", 1000, "pass"}, // exactly at baseline
+		{"hash_compute", 1150, "warn"}, // 15% slower (exceeds 10% warn)
+		{"hash_compute", 1250, "fail"}, // 25% slower (exceeds 20% fail)
+		{"validation", 5000, "pass"},   // 50% faster
+		{"execution", 50000, "pass"},   // at baseline
+		{"state_write", 5000, "pass"},  // at baseline
 	}
 
 	for _, tt := range tests {
@@ -81,11 +81,11 @@ func TestCompareVerification(t *testing.T) {
 		nsPerOp  int64
 		expected string
 	}{
-		{"identity_record_create", 50000, "pass"},   // 50% faster
-		{"identity_record_get", 5000, "pass"},       // 50% faster
-		{"score_update", 50000, "pass"},             // at baseline
-		{"decryption", 20_000_000, "pass"},          // 33% faster than 30ms
-		{"scoring", 40_000_000, "pass"},             // 20% faster than 50ms
+		{"identity_record_create", 50000, "pass"}, // 50% faster
+		{"identity_record_get", 5000, "pass"},     // 50% faster
+		{"score_update", 50000, "pass"},           // at baseline
+		{"decryption", 20_000_000, "pass"},        // 33% faster than 30ms
+		{"scoring", 40_000_000, "pass"},           // 20% faster than 50ms
 	}
 
 	for _, tt := range tests {
@@ -104,10 +104,10 @@ func TestCompareBidding(t *testing.T) {
 		nsPerOp  int64
 		expected string
 	}{
-		{"order_matching", 5_000_000, "pass"},   // 50% faster than 10ms
-		{"price_calc", 2_500_000, "pass"},       // 50% faster than 5ms
-		{"signing", 10_000_000, "pass"},         // 50% faster than 20ms
-		{"rate_limiter", 500, "pass"},           // 50% faster than 1µs
+		{"order_matching", 5_000_000, "pass"}, // 50% faster than 10ms
+		{"price_calc", 2_500_000, "pass"},     // 50% faster than 5ms
+		{"signing", 10_000_000, "pass"},       // 50% faster than 20ms
+		{"rate_limiter", 500, "pass"},         // 50% faster than 1µs
 	}
 
 	for _, tt := range tests {
@@ -126,11 +126,11 @@ func TestCompareZKProof(t *testing.T) {
 		nsPerOp  int64
 		expected string
 	}{
-		{"age_proof", 250_000_000, "pass"},           // 50% faster than 500ms
-		{"residency_proof", 300_000_000, "pass"},     // 40% faster than 500ms
-		{"proof_verification", 50_000_000, "pass"},   // 50% faster than 100ms
-		{"commitment", 2500, "pass"},                 // 50% faster than 5µs
-		{"nonce", 500, "pass"},                       // 50% faster than 1µs
+		{"age_proof", 250_000_000, "pass"},         // 50% faster than 500ms
+		{"residency_proof", 300_000_000, "pass"},   // 40% faster than 500ms
+		{"proof_verification", 50_000_000, "pass"}, // 50% faster than 100ms
+		{"commitment", 2500, "pass"},               // 50% faster than 5µs
+		{"nonce", 500, "pass"},                     // 50% faster than 1µs
 	}
 
 	for _, tt := range tests {

@@ -260,15 +260,15 @@ func (pc *ProviderCache) Close() error {
 
 // ProviderCacheStats contains provider cache statistics.
 type ProviderCacheStats struct {
-	Enabled        bool    `json:"enabled"`
-	ProviderHits   uint64  `json:"provider_hits"`
-	ProviderMisses uint64  `json:"provider_misses"`
-	ProviderSize   int     `json:"provider_size"`
+	Enabled         bool    `json:"enabled"`
+	ProviderHits    uint64  `json:"provider_hits"`
+	ProviderMisses  uint64  `json:"provider_misses"`
+	ProviderSize    int     `json:"provider_size"`
 	ProviderHitRate float64 `json:"provider_hit_rate"`
-	PubKeyHits     uint64  `json:"pubkey_hits"`
-	PubKeyMisses   uint64  `json:"pubkey_misses"`
-	PubKeySize     int     `json:"pubkey_size"`
-	PubKeyHitRate  float64 `json:"pubkey_hit_rate"`
+	PubKeyHits      uint64  `json:"pubkey_hits"`
+	PubKeyMisses    uint64  `json:"pubkey_misses"`
+	PubKeySize      int     `json:"pubkey_size"`
+	PubKeyHitRate   float64 `json:"pubkey_hit_rate"`
 }
 
 // ============================================================================

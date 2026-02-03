@@ -42,12 +42,12 @@ type ConsAddress struct {
 }
 
 type TestnetValidator struct {
-	Moniker           string                    `json:"moniker"`
-	Operator          AccAddress                `json:"operator"`
-	Status            stakingtypes.BondStatus   `json:"status"`
-	Commission        stakingtypes.Commission   `json:"commission"`
-	MinSelfDelegation sdkmath.Int               `json:"min_self_delegation"`
-	Home              string                    `json:"home"`
+	Moniker           string                         `json:"moniker"`
+	Operator          AccAddress                     `json:"operator"`
+	Status            stakingtypes.BondStatus        `json:"status"`
+	Commission        stakingtypes.Commission        `json:"commission"`
+	MinSelfDelegation sdkmath.Int                    `json:"min_self_delegation"`
+	Home              string                         `json:"home"`
 	Delegations       []virtengine.TestnetDelegation `json:"delegations"`
 
 	privValidator    *pvm.FilePV
@@ -59,8 +59,8 @@ type TestnetValidator struct {
 type TestnetValidators []TestnetValidator
 
 type TestnetConfig struct {
-	ChainID    string                 `json:"chain_id"`
-	Validators TestnetValidators      `json:"validators"`
+	ChainID    string                      `json:"chain_id"`
+	Validators TestnetValidators           `json:"validators"`
 	Accounts   []virtengine.TestnetAccount `json:"accounts"`
 	Gov        virtengine.TestnetGovConfig `json:"gov"`
 	upgrade    virtengine.TestnetUpgrade

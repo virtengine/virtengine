@@ -402,7 +402,7 @@ func TestDVSDMVAdapter_WithMockServer(t *testing.T) {
 
 		if r.URL.Path == "/verify" {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"requestId": "test-123",
 				"verificationId": "ver-456",
 				"status": "SUCCESS",
@@ -462,4 +462,3 @@ func TestDVSDMVAdapter_WithMockServer(t *testing.T) {
 	assert.True(t, resp.DocumentValid)
 	assert.Equal(t, 1.0, resp.Confidence)
 }
-

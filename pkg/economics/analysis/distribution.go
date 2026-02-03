@@ -18,9 +18,9 @@ func NewDistributionAnalyzer() *DistributionAnalyzer {
 
 // Holding represents a token holder's balance.
 type Holding struct {
-	Address string   `json:"address"`
-	Balance *big.Int `json:"balance"`
-	IsStaked bool    `json:"is_staked"`
+	Address  string   `json:"address"`
+	Balance  *big.Int `json:"balance"`
+	IsStaked bool     `json:"is_staked"`
 }
 
 // AnalyzeDistribution performs comprehensive distribution analysis.
@@ -96,7 +96,7 @@ func (a *DistributionAnalyzer) calculateGini(sortedHoldings []Holding) float64 {
 	}
 
 	gini := (2*sumIndexedWealth)/(float64(n)*totalWealth) - float64(n+1)/float64(n)
-	
+
 	// Ensure Gini is in valid range [0, 1]
 	if gini < 0 {
 		gini = -gini
@@ -138,7 +138,7 @@ func (a *DistributionAnalyzer) calculateLorenzCurve(sortedHoldings []Holding, to
 
 	for i, h := range ascending {
 		cumulativeWealth += float64(h.Balance.Int64())
-		
+
 		decile := i / decileSize
 		if decile >= 10 {
 			decile = 9
@@ -391,17 +391,17 @@ func (a *DistributionAnalyzer) SimulateRedistribution(
 	afterMetrics := a.AnalyzeDistribution(newHoldings, totalSupply)
 
 	return RedistributionResult{
-		Policy:        policy,
-		BeforeMetrics: beforeMetrics,
-		AfterMetrics:  afterMetrics,
-		GiniChange:    afterMetrics.GiniCoefficient - beforeMetrics.GiniCoefficient,
+		Policy:         policy,
+		BeforeMetrics:  beforeMetrics,
+		AfterMetrics:   afterMetrics,
+		GiniChange:     afterMetrics.GiniCoefficient - beforeMetrics.GiniCoefficient,
 		NakamotoChange: afterMetrics.NakamotoCoefficient - beforeMetrics.NakamotoCoefficient,
 	}
 }
 
 // RedistributionPolicy defines a redistribution policy.
 type RedistributionPolicy struct {
-	Type       string  `json:"type"`
+	Type       string           `json:"type"`
 	Parameters map[string]int64 `json:"parameters"`
 }
 
@@ -543,4 +543,3 @@ func (a *DistributionAnalyzer) CalculateDecentralizationScore(metrics economics.
 
 	return score
 }
-

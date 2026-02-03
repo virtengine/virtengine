@@ -4,7 +4,6 @@
 package edugain
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 // ============================================================================
@@ -518,14 +519,14 @@ type EntityDescriptor struct {
 
 // IDPSSODescriptor represents an IdP descriptor
 type IDPSSODescriptor struct {
-	XMLName              xml.Name             `xml:"IDPSSODescriptor"`
-	WantAuthnRequestsSigned bool             `xml:"WantAuthnRequestsSigned,attr"`
-	ProtocolSupportEnumeration string        `xml:"protocolSupportEnumeration,attr"`
-	SingleSignOnServices []SingleSignOnService `xml:"SingleSignOnService"`
-	SingleLogoutServices []SingleLogoutService `xml:"SingleLogoutService"`
-	KeyDescriptors       []KeyDescriptor       `xml:"KeyDescriptor"`
-	NameIDFormats        []string              `xml:"NameIDFormat"`
-	Attributes           []Attribute           `xml:"Attribute"`
+	XMLName                    xml.Name              `xml:"IDPSSODescriptor"`
+	WantAuthnRequestsSigned    bool                  `xml:"WantAuthnRequestsSigned,attr"`
+	ProtocolSupportEnumeration string                `xml:"protocolSupportEnumeration,attr"`
+	SingleSignOnServices       []SingleSignOnService `xml:"SingleSignOnService"`
+	SingleLogoutServices       []SingleLogoutService `xml:"SingleLogoutService"`
+	KeyDescriptors             []KeyDescriptor       `xml:"KeyDescriptor"`
+	NameIDFormats              []string              `xml:"NameIDFormat"`
+	Attributes                 []Attribute           `xml:"Attribute"`
 }
 
 // SingleSignOnService represents an SSO endpoint
@@ -575,7 +576,7 @@ type EntityExtensions struct {
 	PrivacyStatementURL   string   `xml:"PrivacyStatementURL"`
 	EntityCategory        []string `xml:"EntityCategory"`
 	EntityAttributes      []string `xml:"EntityAttributes>Attribute>AttributeValue"`
-	RegistrationAuthority string   `xml:"RegistrationInfo>registrationAuthority,attr"`
+	RegistrationAuthority string   `xml:"-"` // Parsed separately from RegistrationInfo
 }
 
 // ============================================================================
@@ -641,4 +642,3 @@ func verifyXMLSignature(data, cert []byte) (bool, error) {
 	// VE-2005: Real XML-DSig verification using goxmldsig
 	return VerifyXMLSignatureWithCertBytes(data, cert)
 }
-

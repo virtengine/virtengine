@@ -219,6 +219,8 @@ func (k Keeper) addToExpiredArtifactsIndex(ctx sdk.Context, expiresAt int64, art
 }
 
 // removeFromExpiredArtifactsIndex removes an artifact from the expiry index
+//
+//nolint:unused // reserved for future artifact expiry cleanup
 func (k Keeper) removeFromExpiredArtifactsIndex(ctx sdk.Context, expiresAt int64, artifactType string, artifactID string) {
 	store := ctx.KVStore(k.skey)
 	key := types.ExpiredArtifactKey(expiresAt, artifactType, artifactID)
@@ -262,7 +264,7 @@ func (k Keeper) ValidateNoRawBiometricsOnChain(ctx sdk.Context, payload []byte) 
 	// This is a placeholder for additional security checks
 	// In production, this would use heuristics or ML to detect biometric data
 	// For now, we rely on the type system and lifecycle rules
-	
+
 	// Check payload size - raw images would be much larger than hashes
 	maxHashedPayloadSize := 1024 // 1KB is plenty for hashes and metadata
 	if len(payload) > maxHashedPayloadSize {
@@ -317,10 +319,10 @@ func (k Keeper) AuditDataLifecycleCompliance(ctx sdk.Context, address sdk.AccAdd
 	}
 
 	report["embedding_envelopes"] = map[string]interface{}{
-		"total":    len(envelopes),
-		"by_type":  envelopeStats,
-		"revoked":  revokedCount,
-		"expired":  expiredCount,
+		"total":   len(envelopes),
+		"by_type": envelopeStats,
+		"revoked": revokedCount,
+		"expired": expiredCount,
 	}
 
 	// Check verification records

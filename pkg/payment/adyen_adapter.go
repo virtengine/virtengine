@@ -318,7 +318,7 @@ func (a *RealAdyenAdapter) ConfirmPaymentIntent(ctx context.Context, paymentInte
 
 func (a *RealAdyenAdapter) CancelPaymentIntent(ctx context.Context, paymentIntentID string, reason string) (PaymentIntent, error) {
 	reqBody := map[string]interface{}{
-		"merchantAccount":  a.config.MerchantAccount,
+		"merchantAccount":   a.config.MerchantAccount,
 		"originalReference": paymentIntentID,
 	}
 
@@ -341,7 +341,7 @@ func (a *RealAdyenAdapter) CancelPaymentIntent(ctx context.Context, paymentInten
 
 func (a *RealAdyenAdapter) CapturePaymentIntent(ctx context.Context, paymentIntentID string, amount *Amount) (PaymentIntent, error) {
 	reqBody := map[string]interface{}{
-		"merchantAccount":  a.config.MerchantAccount,
+		"merchantAccount":   a.config.MerchantAccount,
 		"originalReference": paymentIntentID,
 	}
 
@@ -377,7 +377,7 @@ func (a *RealAdyenAdapter) CapturePaymentIntent(ctx context.Context, paymentInte
 
 func (a *RealAdyenAdapter) CreateRefund(ctx context.Context, req RefundRequest) (Refund, error) {
 	reqBody := map[string]interface{}{
-		"merchantAccount":  a.config.MerchantAccount,
+		"merchantAccount":   a.config.MerchantAccount,
 		"originalReference": req.PaymentIntentID,
 	}
 
@@ -471,12 +471,12 @@ func (a *RealAdyenAdapter) ParseWebhookEvent(payload []byte) (WebhookEvent, erro
 		Live              string `json:"live"`
 		NotificationItems []struct {
 			NotificationRequestItem struct {
-				EventCode      string          `json:"eventCode"`
-				EventDate      string          `json:"eventDate"`
-				PSPReference   string          `json:"pspReference"`
-				Success        string          `json:"success"`
-				MerchantAccount string         `json:"merchantAccount"`
-				Amount         struct {
+				EventCode       string `json:"eventCode"`
+				EventDate       string `json:"eventDate"`
+				PSPReference    string `json:"pspReference"`
+				Success         string `json:"success"`
+				MerchantAccount string `json:"merchantAccount"`
+				Amount          struct {
 					Value    int64  `json:"value"`
 					Currency string `json:"currency"`
 				} `json:"amount"`
@@ -554,7 +554,7 @@ func (a *RealAdyenAdapter) GetDispute(ctx context.Context, disputeID string) (Di
 	// Adyen Disputes API: GET /disputes/{disputeId}
 	// Note: Adyen's Disputes API requires separate enablement and may have different
 	// base URL. This is a simplified implementation using the Checkout API path structure.
-	
+
 	resp, err := a.doRequest(ctx, "GET", fmt.Sprintf("/disputes/%s", disputeID), nil)
 	if err != nil {
 		// If API call fails, return minimal dispute info
@@ -578,7 +578,7 @@ func (a *RealAdyenAdapter) GetDispute(ctx context.Context, disputeID string) (Di
 func (a *RealAdyenAdapter) ListDisputes(ctx context.Context, paymentIntentID string) ([]Dispute, error) {
 	// Adyen's dispute listing requires querying by payment reference
 	reqBody := map[string]interface{}{
-		"merchantAccount":   a.config.MerchantAccount,
+		"merchantAccount":     a.config.MerchantAccount,
 		"paymentPspReference": paymentIntentID,
 	}
 
@@ -782,14 +782,14 @@ func (a *RealAdyenAdapter) doRequest(ctx context.Context, method, path string, b
 
 // adyenPaymentResponse represents the response from Adyen /payments endpoint
 type adyenPaymentResponse struct {
-	PSPReference   string `json:"pspReference"`
-	ResultCode     string `json:"resultCode"`
-	RefusalReason  string `json:"refusalReason"`
+	PSPReference      string `json:"pspReference"`
+	ResultCode        string `json:"resultCode"`
+	RefusalReason     string `json:"refusalReason"`
 	RefusalReasonCode string `json:"refusalReasonCode"`
-	Action         *struct {
-		Type            string `json:"type"`
-		URL             string `json:"url"`
-		PaymentData     string `json:"paymentData"`
+	Action            *struct {
+		Type              string `json:"type"`
+		URL               string `json:"url"`
+		PaymentData       string `json:"paymentData"`
 		PaymentMethodType string `json:"paymentMethodType"`
 	} `json:"action"`
 	AdditionalData map[string]string `json:"additionalData"`
@@ -851,10 +851,10 @@ func mapAdyenCardBrand(brand string) CardBrand {
 // convertAdyenError converts Adyen API errors to our domain errors
 func convertAdyenError(statusCode int, body []byte) error {
 	var errResp struct {
-		Status        int    `json:"status"`
-		ErrorCode     string `json:"errorCode"`
-		Message       string `json:"message"`
-		ErrorType     string `json:"errorType"`
+		Status    int    `json:"status"`
+		ErrorCode string `json:"errorCode"`
+		Message   string `json:"message"`
+		ErrorType string `json:"errorType"`
 	}
 
 	if err := json.Unmarshal(body, &errResp); err == nil {
@@ -894,14 +894,13 @@ func (a *RealAdyenAdapter) IsTestMode() bool {
 // GetTestCardNumbers returns a map of test card scenarios for Adyen integration testing
 func GetAdyenTestCardNumbers() map[string]string {
 	return map[string]string{
-		"visa_success":            "4111111111111111",
-		"mastercard_success":      "5500000000000004",
-		"amex_success":            "370000000000002",
-		"visa_declined":           "4000000000000002",
-		"insufficient_funds":      "4000000000000010",
-		"expired_card":            "4000000000000069",
-		"3ds_required":            "4212345678901237",
-		"3ds2_challenge":          "5201281111111113",
+		"visa_success":       "4111111111111111",
+		"mastercard_success": "5500000000000004",
+		"amex_success":       "370000000000002",
+		"visa_declined":      "4000000000000002",
+		"insufficient_funds": "4000000000000010",
+		"expired_card":       "4000000000000069",
+		"3ds_required":       "4212345678901237",
+		"3ds2_challenge":     "5201281111111113",
 	}
 }
-

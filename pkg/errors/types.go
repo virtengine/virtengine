@@ -266,42 +266,42 @@ func GetCategory(err error) ErrorCategory {
 	if errors.As(err, &valErr) {
 		return valErr.Category
 	}
-	
+
 	var nfErr *NotFoundError
 	if errors.As(err, &nfErr) {
 		return nfErr.Category
 	}
-	
+
 	var conflictErr *ConflictError
 	if errors.As(err, &conflictErr) {
 		return conflictErr.Category
 	}
-	
+
 	var unauthErr *UnauthorizedError
 	if errors.As(err, &unauthErr) {
 		return unauthErr.Category
 	}
-	
+
 	var timeoutErr *TimeoutError
 	if errors.As(err, &timeoutErr) {
 		return timeoutErr.Category
 	}
-	
+
 	var intErr *InternalError
 	if errors.As(err, &intErr) {
 		return intErr.Category
 	}
-	
+
 	var extErr *ExternalError
 	if errors.As(err, &extErr) {
 		return extErr.Category
 	}
-	
+
 	var rlErr *RateLimitError
 	if errors.As(err, &rlErr) {
 		return rlErr.Category
 	}
-	
+
 	// Check base CodedError
 	var codedErr *CodedError
 	if errors.As(err, &codedErr) {
@@ -317,42 +317,42 @@ func IsRetryable(err error) bool {
 	if errors.As(err, &valErr) {
 		return valErr.Retryable
 	}
-	
+
 	var nfErr *NotFoundError
 	if errors.As(err, &nfErr) {
 		return nfErr.Retryable
 	}
-	
+
 	var conflictErr *ConflictError
 	if errors.As(err, &conflictErr) {
 		return conflictErr.Retryable
 	}
-	
+
 	var unauthErr *UnauthorizedError
 	if errors.As(err, &unauthErr) {
 		return unauthErr.Retryable
 	}
-	
+
 	var timeoutErr *TimeoutError
 	if errors.As(err, &timeoutErr) {
 		return timeoutErr.Retryable
 	}
-	
+
 	var intErr *InternalError
 	if errors.As(err, &intErr) {
 		return intErr.Retryable
 	}
-	
+
 	var extErr *ExternalError
 	if errors.As(err, &extErr) {
 		return extErr.Retryable
 	}
-	
+
 	var rlErr *RateLimitError
 	if errors.As(err, &rlErr) {
 		return rlErr.Retryable
 	}
-	
+
 	// Check base CodedError
 	var codedErr *CodedError
 	if errors.As(err, &codedErr) {
@@ -368,42 +368,42 @@ func GetCode(err error) (string, uint32) {
 	if errors.As(err, &valErr) {
 		return valErr.Module, valErr.Code
 	}
-	
+
 	var nfErr *NotFoundError
 	if errors.As(err, &nfErr) {
 		return nfErr.Module, nfErr.Code
 	}
-	
+
 	var conflictErr *ConflictError
 	if errors.As(err, &conflictErr) {
 		return conflictErr.Module, conflictErr.Code
 	}
-	
+
 	var unauthErr *UnauthorizedError
 	if errors.As(err, &unauthErr) {
 		return unauthErr.Module, unauthErr.Code
 	}
-	
+
 	var timeoutErr *TimeoutError
 	if errors.As(err, &timeoutErr) {
 		return timeoutErr.Module, timeoutErr.Code
 	}
-	
+
 	var intErr *InternalError
 	if errors.As(err, &intErr) {
 		return intErr.Module, intErr.Code
 	}
-	
+
 	var extErr *ExternalError
 	if errors.As(err, &extErr) {
 		return extErr.Module, extErr.Code
 	}
-	
+
 	var rlErr *RateLimitError
 	if errors.As(err, &rlErr) {
 		return rlErr.Module, rlErr.Code
 	}
-	
+
 	// Check base CodedError
 	var codedErr *CodedError
 	if errors.As(err, &codedErr) {
@@ -411,4 +411,3 @@ func GetCode(err error) (string, uint32) {
 	}
 	return "", 0
 }
-

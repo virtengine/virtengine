@@ -26,4 +26,3 @@ func CertFromV1beta3(cdc codec.BinaryCodec, fromBz []byte) v1.Certificate {
 
 	return to
 }
-

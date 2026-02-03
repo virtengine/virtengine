@@ -120,6 +120,8 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 }
 
 // RegisterInvariants registers module invariants
+//
+//nolint:staticcheck // sdk.InvariantRegistry is deprecated in upstream SDK
 func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
 	// Invariants to be implemented
 }

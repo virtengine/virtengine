@@ -244,7 +244,7 @@ func (k Keeper) EnrollFactor(ctx sdk.Context, enrollment *types.FactorEnrollment
 			activeCount++
 		}
 	}
-	if uint32(activeCount) >= params.MaxFactorsPerAccount {
+	if safeUint32FromInt(activeCount) >= params.MaxFactorsPerAccount {
 		return types.ErrInvalidEnrollment.Wrapf("maximum factors per account (%d) reached", params.MaxFactorsPerAccount)
 	}
 
@@ -351,7 +351,7 @@ func (k Keeper) GetFactorEnrollment(ctx sdk.Context, address sdk.AccAddress, fac
 	}
 
 	var es factorEnrollmentStore
-	json.Unmarshal(bz, &es)
+	_ = json.Unmarshal(bz, &es)
 
 	return &types.FactorEnrollment{
 		AccountAddress:   es.AccountAddress,
@@ -379,7 +379,7 @@ func (k Keeper) GetFactorEnrollments(ctx sdk.Context, address sdk.AccAddress) []
 	var enrollments []types.FactorEnrollment
 	for ; iterator.Valid(); iterator.Next() {
 		var es factorEnrollmentStore
-		json.Unmarshal(iterator.Value(), &es)
+		_ = json.Unmarshal(iterator.Value(), &es)
 		enrollments = append(enrollments, types.FactorEnrollment{
 			AccountAddress:   es.AccountAddress,
 			FactorType:       es.FactorType,
@@ -514,7 +514,7 @@ func (k Keeper) GetMFAPolicy(ctx sdk.Context, address sdk.AccAddress) (*types.MF
 	}
 
 	var ps mfaPolicyStore
-	json.Unmarshal(bz, &ps)
+	_ = json.Unmarshal(bz, &ps)
 
 	return &types.MFAPolicy{
 		AccountAddress:     ps.AccountAddress,
@@ -628,7 +628,7 @@ func (k Keeper) GetChallenge(ctx sdk.Context, challengeID string) (*types.Challe
 	}
 
 	var cs challengeStore
-	json.Unmarshal(bz, &cs)
+	_ = json.Unmarshal(bz, &cs)
 
 	return &types.Challenge{
 		ChallengeID:     cs.ChallengeID,
@@ -738,7 +738,7 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	// Check if challenge is expired
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired.Wrap("challenge has expired")
 	}
 
@@ -750,7 +750,7 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 	// Check attempt count
 	if challenge.AttemptCount >= challenge.MaxAttempts {
 		challenge.MarkFailed()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrMaxAttemptsExceeded.Wrap("maximum verification attempts exceeded")
 	}
 
@@ -778,12 +778,12 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 
 	if verifyErr != nil {
 		challenge.MarkFailed()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, verifyErr
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -798,13 +798,13 @@ func (k Keeper) VerifyMFAChallenge(ctx sdk.Context, challengeID string, response
 
 	// Mark as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	address, _ := sdk.AccAddressFromBech32(challenge.AccountAddress)
 	if enrollment, found := k.GetFactorEnrollment(ctx, address, challenge.FactorType, challenge.FactorID); found {
 		enrollment.UpdateLastUsed(now.Unix())
-		k.updateFactorEnrollment(ctx, enrollment)
+		_ = k.updateFactorEnrollment(ctx, enrollment)
 	}
 
 	// Emit success event
@@ -972,7 +972,7 @@ func (k Keeper) CreateAuthorizationSession(ctx sdk.Context, session *types.Autho
 	// Generate session ID if not provided
 	if session.SessionID == "" {
 		idBytes := make([]byte, 16)
-		rand.Read(idBytes)
+		_, _ = rand.Read(idBytes)
 		session.SessionID = hex.EncodeToString(idBytes)
 	}
 
@@ -1023,7 +1023,7 @@ func (k Keeper) GetAuthorizationSession(ctx sdk.Context, sessionID string) (*typ
 	}
 
 	var ss sessionStore
-	json.Unmarshal(bz, &ss)
+	_ = json.Unmarshal(bz, &ss)
 
 	return &types.AuthorizationSession{
 		SessionID:         ss.SessionID,
@@ -1141,7 +1141,7 @@ func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device
 
 	// Check max trusted devices
 	existing := k.GetTrustedDevices(ctx, address)
-	if uint32(len(existing)) >= params.MaxTrustedDevices {
+	if safeUint32FromInt(len(existing)) >= params.MaxTrustedDevices {
 		return types.ErrMaxTrustedDevicesReached.Wrapf("maximum %d trusted devices allowed", params.MaxTrustedDevices)
 	}
 
@@ -1217,7 +1217,7 @@ func (k Keeper) GetTrustedDevice(ctx sdk.Context, address sdk.AccAddress, finger
 	}
 
 	var ds trustedDeviceStore
-	json.Unmarshal(bz, &ds)
+	_ = json.Unmarshal(bz, &ds)
 
 	return &types.TrustedDevice{
 		AccountAddress: ds.AccountAddress,
@@ -1237,7 +1237,7 @@ func (k Keeper) GetTrustedDevices(ctx sdk.Context, address sdk.AccAddress) []typ
 	var devices []types.TrustedDevice
 	for ; iterator.Valid(); iterator.Next() {
 		var ds trustedDeviceStore
-		json.Unmarshal(iterator.Value(), &ds)
+		_ = json.Unmarshal(iterator.Value(), &ds)
 		devices = append(devices, types.TrustedDevice{
 			AccountAddress: ds.AccountAddress,
 			DeviceInfo:     ds.DeviceInfo,
@@ -1317,7 +1317,7 @@ func (k Keeper) GetSensitiveTxConfig(ctx sdk.Context, txType types.SensitiveTran
 	}
 
 	var cs sensitiveTxConfigStore
-	json.Unmarshal(bz, &cs)
+	_ = json.Unmarshal(bz, &cs)
 
 	return &types.SensitiveTxConfig{
 		TransactionType:             cs.TransactionType,
@@ -1354,31 +1354,41 @@ func (k Keeper) GetAllSensitiveTxConfigs(ctx sdk.Context) []types.SensitiveTxCon
 // InitGenesis initializes the mfa module's state from a genesis state
 func (k Keeper) InitGenesis(ctx sdk.Context, gs *types.GenesisState) {
 	// Set params
-	k.SetParams(ctx, gs.Params)
+	if err := k.SetParams(ctx, gs.Params); err != nil {
+		panic(err)
+	}
 
 	// Set MFA policies
 	for _, policy := range gs.MFAPolicies {
 		p := policy
-		k.SetMFAPolicy(ctx, &p)
+		if err := k.SetMFAPolicy(ctx, &p); err != nil {
+			panic(err)
+		}
 	}
 
 	// Set factor enrollments
 	for _, enrollment := range gs.FactorEnrollments {
 		e := enrollment
-		k.EnrollFactor(ctx, &e)
+		if err := k.EnrollFactor(ctx, &e); err != nil {
+			panic(err)
+		}
 	}
 
 	// Set sensitive tx configs
 	for _, config := range gs.SensitiveTxConfigs {
 		c := config
-		k.SetSensitiveTxConfig(ctx, &c)
+		if err := k.SetSensitiveTxConfig(ctx, &c); err != nil {
+			panic(err)
+		}
 	}
 
 	// Set trusted devices
 	for _, device := range gs.TrustedDevices {
 		address, _ := sdk.AccAddressFromBech32(device.AccountAddress)
 		info := device.DeviceInfo
-		k.AddTrustedDevice(ctx, address, &info)
+		if err := k.AddTrustedDevice(ctx, address, &info); err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -1392,7 +1402,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; iterator.Valid(); iterator.Next() {
 		var ps mfaPolicyStore
-		json.Unmarshal(iterator.Value(), &ps)
+		_ = json.Unmarshal(iterator.Value(), &ps)
 		policies = append(policies, types.MFAPolicy{
 			AccountAddress:     ps.AccountAddress,
 			RequiredFactors:    ps.RequiredFactors,
@@ -1414,7 +1424,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; enrollmentIterator.Valid(); enrollmentIterator.Next() {
 		var es factorEnrollmentStore
-		json.Unmarshal(enrollmentIterator.Value(), &es)
+		_ = json.Unmarshal(enrollmentIterator.Value(), &es)
 		enrollments = append(enrollments, types.FactorEnrollment{
 			AccountAddress:   es.AccountAddress,
 			FactorType:       es.FactorType,
@@ -1438,7 +1448,7 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 
 	for ; deviceIterator.Valid(); deviceIterator.Next() {
 		var ds trustedDeviceStore
-		json.Unmarshal(deviceIterator.Value(), &ds)
+		_ = json.Unmarshal(deviceIterator.Value(), &ds)
 		devices = append(devices, types.TrustedDevice{
 			AccountAddress: ds.AccountAddress,
 			DeviceInfo:     ds.DeviceInfo,
@@ -1454,4 +1464,16 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		SensitiveTxConfigs: k.GetAllSensitiveTxConfigs(ctx),
 		TrustedDevices:     devices,
 	}
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	max := int(^uint32(0))
+	if value > max {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }

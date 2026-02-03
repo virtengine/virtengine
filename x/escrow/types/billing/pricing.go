@@ -80,12 +80,12 @@ type PricingConfig struct {
 // DefaultPricingConfig returns default pricing configuration
 func DefaultPricingConfig() PricingConfig {
 	return PricingConfig{
-		RoundingMode:         RoundingModeHalfEven,
-		MinimumCharge:        sdk.NewCoin(DefaultCurrency, sdkmath.NewInt(1000)), // 0.001 virt
-		GracePeriodSeconds:   86400,                                               // 1 day
+		RoundingMode:           RoundingModeHalfEven,
+		MinimumCharge:          sdk.NewCoin(DefaultCurrency, sdkmath.NewInt(1000)), // 0.001 virt
+		GracePeriodSeconds:     86400,                                              // 1 day
 		DefaultPaymentTermDays: 7,
-		LateFeePercentBps:    100, // 1%
-		MaxLateFeePercentBps: 500, // 5%
+		LateFeePercentBps:      100, // 1%
+		MaxLateFeePercentBps:   500, // 5%
 	}
 }
 

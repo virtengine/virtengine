@@ -79,7 +79,7 @@ func NewDisputeRecord(dispute Dispute, gateway GatewayType, actor string) *Dispu
 		UpdatedAt:        now,
 		AuditLog:         make([]DisputeAuditEntry, 0, 10),
 	}
-	record.Dispute.Gateway = gateway
+	record.Gateway = gateway
 
 	record.AddAuditEntry(DisputeAuditEntry{
 		Timestamp: now,
@@ -87,11 +87,11 @@ func NewDisputeRecord(dispute Dispute, gateway GatewayType, actor string) *Dispu
 		Actor:     actor,
 		NewStatus: dispute.Status,
 		Details: map[string]string{
-			"reason":        string(dispute.Reason),
-			"payment_id":    dispute.PaymentIntentID,
-			"amount":        fmt.Sprintf("%d", dispute.Amount.Value),
-			"currency":      string(dispute.Amount.Currency),
-			"gateway":       string(gateway),
+			"reason":     string(dispute.Reason),
+			"payment_id": dispute.PaymentIntentID,
+			"amount":     fmt.Sprintf("%d", dispute.Amount.Value),
+			"currency":   string(dispute.Amount.Currency),
+			"gateway":    string(gateway),
 		},
 	})
 
@@ -503,4 +503,3 @@ func (s *InMemoryDisputeStore) removeFromStatusIndex(disputeID string, status Di
 		}
 	}
 }
-

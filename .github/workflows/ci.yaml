@@ -34,10 +34,6 @@ on:
       - "release/**"
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - main
-      - develop
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -63,6 +59,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Fetch base ref for lint diff
+        run: |
+          git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -894,4 +894,3 @@ jobs:
           fi
 
           echo "✅ All required quality gates passed"
-

@@ -132,12 +132,12 @@ func TestSettlementPipeline_ProcessUsageToLineItems(t *testing.T) {
 		StartTime:    now.Add(-time.Hour),
 		EndTime:      now,
 		Metrics: ResourceMetrics{
-			CPUMilliSeconds:    3600000,  // 1 CPU-hour
-			MemoryByteSeconds:  1073741824 * 3600, // 1 GB-hour
+			CPUMilliSeconds:    3600000,            // 1 CPU-hour
+			MemoryByteSeconds:  1073741824 * 3600,  // 1 GB-hour
 			StorageByteSeconds: 10737418240 * 3600, // 10 GB-hours
-			GPUSeconds:         3600, // 1 GPU-hour
-			NetworkBytesIn:     1073741824, // 1 GB in
-			NetworkBytesOut:    1073741824, // 1 GB out
+			GPUSeconds:         3600,               // 1 GPU-hour
+			NetworkBytesIn:     1073741824,         // 1 GB in
+			NetworkBytesOut:    1073741824,         // 1 GB out
 		},
 		PricingInputs: PricingInputs{
 			AgreedCPURate:     "0.01",
@@ -363,7 +363,7 @@ func TestUsageCorrection_AppliesCorrectMetrics(t *testing.T) {
 
 	// Create dispute with expected metrics
 	expectedMetrics := &ResourceMetrics{
-		CPUMilliSeconds:   1800000, // Half of original
+		CPUMilliSeconds:   1800000,           // Half of original
 		MemoryByteSeconds: 1073741824 * 1800, // Half
 	}
 
@@ -427,7 +427,7 @@ func (m *mockChainSubmitter) SubmitSettlementRequest(ctx context.Context, orderI
 func TestSettlementPipeline_SubmitUsageToChain(t *testing.T) {
 	cfg := DefaultSettlementConfig()
 	cfg.ProviderAddress = "provider123"
-	
+
 	mockSubmitter := &mockChainSubmitter{}
 	pipeline := NewSettlementPipeline(cfg, nil, nil, NewUsageSnapshotStore(), mockSubmitter)
 
@@ -495,4 +495,3 @@ func TestAnomalyThresholds_Defaults(t *testing.T) {
 		t.Errorf("expected 25 hour max duration, got %v", thresholds.MaxRecordDuration)
 	}
 }
-

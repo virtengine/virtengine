@@ -19,9 +19,9 @@ import (
 
 // WebhookServer handles incoming webhook requests from off-ramp providers.
 type WebhookServer struct {
-	service  Service
-	config   WebhookConfig
-	mux      *http.ServeMux
+	service   Service
+	config    WebhookConfig
+	mux       *http.ServeMux
 	providers map[ProviderType]Provider
 
 	// Idempotency tracking
@@ -399,4 +399,3 @@ func MockStripeWebhookPayload(eventType string, outboundPaymentID string, payout
 var (
 	_ WebhookHandler = (*DefaultWebhookHandler)(nil)
 )
-

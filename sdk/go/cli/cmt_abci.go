@@ -71,4 +71,3 @@ func (w cometABCIWrapper) LoadSnapshotChunk(_ context.Context, req *abci.Request
 func (w cometABCIWrapper) ApplySnapshotChunk(_ context.Context, req *abci.RequestApplySnapshotChunk) (*abci.ResponseApplySnapshotChunk, error) {
 	return w.app.ApplySnapshotChunk(req)
 }
-

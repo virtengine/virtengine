@@ -17,8 +17,8 @@ import (
 	wasmvm "github.com/CosmWasm/wasmvm/v3"
 	"github.com/distribution/reference"
 
-	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
 
 func ParseWasmVerificationFlags(gzippedWasm []byte, flags *flag.FlagSet) (string, string, []byte, error) {
@@ -323,4 +323,3 @@ func ParseStoreCodeGrants(args []string) ([]types.CodeGrant, error) {
 	}
 	return grants, nil
 }
-

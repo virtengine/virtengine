@@ -154,7 +154,7 @@ func (p *PythProvider) fetchPrice(ctx context.Context, baseAsset, quoteAsset str
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return PriceData{}, fmt.Errorf("Pyth API error %d: %s", resp.StatusCode, string(body))
+		return PriceData{}, fmt.Errorf("pyth API error %d: %s", resp.StatusCode, string(body))
 	}
 
 	var responses []pythPriceResponse
@@ -181,7 +181,7 @@ func (p *PythProvider) fetchPrice(ctx context.Context, baseAsset, quoteAsset str
 	confInt, _ := sdkmath.NewIntFromString(priceResp.Price.Conf)
 
 	// Calculate confidence as percentage (lower conf = higher reliability)
-	var confidence float64 = 0.95
+	confidence := 0.95
 	if !confInt.IsZero() && !priceInt.IsZero() {
 		confPct := float64(confInt.Int64()) / float64(priceInt.Int64())
 		confidence = 1 - confPct // Lower conf% = higher confidence
@@ -281,7 +281,7 @@ func (p *PythProvider) GetPrices(ctx context.Context, pairs []AssetPair) (map[st
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Pyth API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("pyth API error %d: %s", resp.StatusCode, string(body))
 	}
 
 	var responses []pythPriceResponse
@@ -379,4 +379,3 @@ var PythMainnetPriceIDs = map[string]string{
 	"DOGE/USD":  "0xdcef50dd0a4cd2dcc17e45df1676dcb336a11a61c69df7a0299b0150c672d25c",
 	"MATIC/USD": "0x5de33440f6c50b5d2b4e8f65c4d2e03d7f2a8dd8d3b9d0e2d7a8b7c8d9e0f1a2",
 }
-

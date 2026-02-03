@@ -136,6 +136,13 @@ type WaldurReconciler struct {
 	wg sync.WaitGroup
 }
 
+const (
+	reconcileSeverityCritical = "critical"
+	reconcileSeverityHigh     = "high"
+	reconcileSeverityMedium   = "medium"
+	reconcileSeverityLow      = "low"
+)
+
 // NewWaldurReconciler creates a new Waldur reconciler.
 func NewWaldurReconciler(
 	cfg WaldurReconcilerConfig,
@@ -367,13 +374,13 @@ func (r *WaldurReconciler) calculateDiscrepancy(metricName string, provider, wal
 func (r *WaldurReconciler) severityFromDifference(diff float64) string {
 	switch {
 	case diff >= 50:
-		return "critical"
+		return reconcileSeverityCritical
 	case diff >= 25:
-		return "high"
+		return reconcileSeverityHigh
 	case diff >= 15:
-		return "medium"
+		return reconcileSeverityMedium
 	default:
-		return "low"
+		return reconcileSeverityLow
 	}
 }
 
@@ -386,13 +393,13 @@ func (r *WaldurReconciler) calculateScore(discrepancies []MetricDiscrepancy) int
 	score := 100
 	for _, d := range discrepancies {
 		switch d.Severity {
-		case "critical":
+		case reconcileSeverityCritical:
 			score -= 30
-		case "high":
+		case reconcileSeverityHigh:
 			score -= 20
-		case "medium":
+		case reconcileSeverityMedium:
 			score -= 10
-		case "low":
+		case reconcileSeverityLow:
 			score -= 5
 		}
 	}
@@ -529,7 +536,7 @@ func (r *WaldurReconciler) runLoop(ctx context.Context) {
 }
 
 // runReconciliation runs a reconciliation cycle.
-func (r *WaldurReconciler) runReconciliation(ctx context.Context) {
+func (r *WaldurReconciler) runReconciliation(_ context.Context) {
 	log.Printf("[waldur-reconciler] starting reconciliation cycle")
 
 	// In a real implementation, this would iterate over all active allocations
@@ -744,6 +751,8 @@ type UsageReportingMetrics struct {
 }
 
 // generateReconciliationID generates a unique reconciliation ID.
+//
+//nolint:unused // reserved for future reconciliation tracking
 func generateReconciliationID(allocationID string, timestamp time.Time) string {
 	data := allocationID + ":" + timestamp.Format(time.RFC3339Nano)
 	hash := sha256.Sum256([]byte(data))
@@ -761,4 +770,3 @@ func (r *ReconciliationResult) MarshalJSON() ([]byte, error) {
 		ReconciliationTime: r.ReconciliationTime.Format(time.RFC3339),
 	})
 }
-

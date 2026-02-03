@@ -804,8 +804,9 @@ func (s *AuthCLITestSuite) TestSignWithMultisig() {
 	s.Require().NoError(err)
 
 	// Create an address that is not in the keyring, will be used to simulate `--multisig`
-	// Generate a valid address dynamically instead of hardcoding
-	multisigAddr := sdk.AccAddress([]byte("multisig_addr_test_123456"))
+	multisig := "ve1hd6fsrvnz6qkp87s3u86ludegq97agxs3t4ktl"
+	multisigAddr, err := sdk.AccAddressFromBech32(multisig)
+	s.Require().NoError(err)
 
 	// Generate a transaction for testing --multisig with an address not in the keyring.
 	multisigTx, err := clitestutil.ExecSend(

@@ -31,22 +31,22 @@ type YAMLManifest struct {
 
 // YAMLTemplate represents a template in YAML format
 type YAMLTemplate struct {
-	TemplateID     string                `yaml:"template_id"`
-	Name           string                `yaml:"name"`
-	Version        string                `yaml:"version"`
-	Description    string                `yaml:"description"`
-	Type           string                `yaml:"type"`
-	Runtime        YAMLRuntime           `yaml:"runtime"`
-	Resources      YAMLResources         `yaml:"resources"`
-	Security       YAMLSecurity          `yaml:"security"`
-	Entrypoint     YAMLEntrypoint        `yaml:"entrypoint"`
-	Environment    []YAMLEnvironment     `yaml:"environment,omitempty"`
-	Modules        []string              `yaml:"modules,omitempty"`
-	DataBindings   []YAMLDataBinding     `yaml:"data_bindings,omitempty"`
-	ParameterSchema []YAMLParameter      `yaml:"parameter_schema,omitempty"`
-	ApprovalStatus string                `yaml:"approval_status"`
-	Publisher      string                `yaml:"publisher,omitempty"`
-	Tags           []string              `yaml:"tags,omitempty"`
+	TemplateID      string            `yaml:"template_id"`
+	Name            string            `yaml:"name"`
+	Version         string            `yaml:"version"`
+	Description     string            `yaml:"description"`
+	Type            string            `yaml:"type"`
+	Runtime         YAMLRuntime       `yaml:"runtime"`
+	Resources       YAMLResources     `yaml:"resources"`
+	Security        YAMLSecurity      `yaml:"security"`
+	Entrypoint      YAMLEntrypoint    `yaml:"entrypoint"`
+	Environment     []YAMLEnvironment `yaml:"environment,omitempty"`
+	Modules         []string          `yaml:"modules,omitempty"`
+	DataBindings    []YAMLDataBinding `yaml:"data_bindings,omitempty"`
+	ParameterSchema []YAMLParameter   `yaml:"parameter_schema,omitempty"`
+	ApprovalStatus  string            `yaml:"approval_status"`
+	Publisher       string            `yaml:"publisher,omitempty"`
+	Tags            []string          `yaml:"tags,omitempty"`
 }
 
 // YAMLRuntime represents runtime configuration
@@ -526,4 +526,3 @@ func ExportToYAML(template *hpctypes.WorkloadTemplate) ([]byte, error) {
 
 	return yaml.Marshal(manifest)
 }
-

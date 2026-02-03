@@ -147,7 +147,7 @@ func (s *ReconciliationService) reconcileProvider(
 
 		// Save record
 		if err := s.reconcile.Save(ctx, record); err != nil {
-			// Log but continue
+			_ = err // Log but continue
 		}
 	}
 
@@ -430,4 +430,3 @@ func (g *ReconciliationReportGenerator) Generate(ctx context.Context, startDate,
 
 	return report, nil
 }
-

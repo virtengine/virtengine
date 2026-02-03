@@ -48,15 +48,15 @@ const (
 
 // eIDAS Attribute URIs
 const (
-	EIDASAttrPersonIdentifier    = "http://eidas.europa.eu/attributes/naturalperson/PersonIdentifier"
-	EIDASAttrFamilyName          = "http://eidas.europa.eu/attributes/naturalperson/CurrentFamilyName"
-	EIDASAttrFirstName           = "http://eidas.europa.eu/attributes/naturalperson/CurrentGivenName"
-	EIDASAttrDateOfBirth         = "http://eidas.europa.eu/attributes/naturalperson/DateOfBirth"
-	EIDASAttrPlaceOfBirth        = "http://eidas.europa.eu/attributes/naturalperson/PlaceOfBirth"
-	EIDASAttrCurrentAddress      = "http://eidas.europa.eu/attributes/naturalperson/CurrentAddress"
-	EIDASAttrGender              = "http://eidas.europa.eu/attributes/naturalperson/Gender"
-	EIDASAttrBirthName           = "http://eidas.europa.eu/attributes/naturalperson/BirthName"
-	EIDASAttrNationality         = "http://eidas.europa.eu/attributes/naturalperson/Nationality"
+	EIDASAttrPersonIdentifier = "http://eidas.europa.eu/attributes/naturalperson/PersonIdentifier"
+	EIDASAttrFamilyName       = "http://eidas.europa.eu/attributes/naturalperson/CurrentFamilyName"
+	EIDASAttrFirstName        = "http://eidas.europa.eu/attributes/naturalperson/CurrentGivenName"
+	EIDASAttrDateOfBirth      = "http://eidas.europa.eu/attributes/naturalperson/DateOfBirth"
+	EIDASAttrPlaceOfBirth     = "http://eidas.europa.eu/attributes/naturalperson/PlaceOfBirth"
+	EIDASAttrCurrentAddress   = "http://eidas.europa.eu/attributes/naturalperson/CurrentAddress"
+	EIDASAttrGender           = "http://eidas.europa.eu/attributes/naturalperson/Gender"
+	EIDASAttrBirthName        = "http://eidas.europa.eu/attributes/naturalperson/BirthName"
+	EIDASAttrNationality      = "http://eidas.europa.eu/attributes/naturalperson/Nationality"
 )
 
 // EU Member States with eIDAS nodes
@@ -211,36 +211,36 @@ func (c *EIDASConfig) Validate() error {
 
 // EIDASAuthRequest represents an eIDAS authentication request
 type EIDASAuthRequest struct {
-	RequestID            string   `json:"requestId"`
-	DestinationCountry   string   `json:"destinationCountry"`
-	LevelOfAssurance     string   `json:"levelOfAssurance"`
-	RequestedAttributes  []string `json:"requestedAttributes"`
-	SPCountry            string   `json:"spCountry"`
-	CitizenCountry       string   `json:"citizenCountry,omitempty"`
-	NameIDFormat         string   `json:"nameIdFormat,omitempty"`
-	ForceAuth            bool     `json:"forceAuth,omitempty"`
+	RequestID           string   `json:"requestId"`
+	DestinationCountry  string   `json:"destinationCountry"`
+	LevelOfAssurance    string   `json:"levelOfAssurance"`
+	RequestedAttributes []string `json:"requestedAttributes"`
+	SPCountry           string   `json:"spCountry"`
+	CitizenCountry      string   `json:"citizenCountry,omitempty"`
+	NameIDFormat        string   `json:"nameIdFormat,omitempty"`
+	ForceAuth           bool     `json:"forceAuth,omitempty"`
 }
 
 // EIDASAuthResponse represents an eIDAS authentication response
 type EIDASAuthResponse struct {
-	RequestID         string               `json:"requestId"`
-	Status            string               `json:"status"`
-	StatusCode        string               `json:"statusCode"`
-	SubStatusCode     string               `json:"subStatusCode,omitempty"`
-	StatusMessage     string               `json:"statusMessage,omitempty"`
-	LevelOfAssurance  string               `json:"levelOfAssurance,omitempty"`
-	Attributes        []EIDASAttribute     `json:"attributes,omitempty"`
-	Issuer            string               `json:"issuer,omitempty"`
-	IssueInstant      string               `json:"issueInstant,omitempty"`
+	RequestID           string                    `json:"requestId"`
+	Status              string                    `json:"status"`
+	StatusCode          string                    `json:"statusCode"`
+	SubStatusCode       string                    `json:"subStatusCode,omitempty"`
+	StatusMessage       string                    `json:"statusMessage,omitempty"`
+	LevelOfAssurance    string                    `json:"levelOfAssurance,omitempty"`
+	Attributes          []EIDASAttribute          `json:"attributes,omitempty"`
+	Issuer              string                    `json:"issuer,omitempty"`
+	IssueInstant        string                    `json:"issueInstant,omitempty"`
 	SubjectConfirmation *EIDASSubjectConfirmation `json:"subjectConfirmation,omitempty"`
 }
 
 // EIDASAttribute represents a verified eIDAS attribute
 type EIDASAttribute struct {
-	Name       string   `json:"name"`
-	FriendlyName string `json:"friendlyName,omitempty"`
-	Values     []string `json:"values"`
-	Status     string   `json:"status,omitempty"`
+	Name         string   `json:"name"`
+	FriendlyName string   `json:"friendlyName,omitempty"`
+	Values       []string `json:"values"`
+	Status       string   `json:"status,omitempty"`
 }
 
 // EIDASSubjectConfirmation contains subject confirmation data
@@ -252,12 +252,13 @@ type EIDASSubjectConfirmation struct {
 
 // eIDAS Status codes
 const (
-	EIDASStatusSuccess        = "urn:oasis:names:tc:SAML:2.0:status:Success"
-	EIDASStatusRequester      = "urn:oasis:names:tc:SAML:2.0:status:Requester"
-	EIDASStatusResponder      = "urn:oasis:names:tc:SAML:2.0:status:Responder"
+	EIDASStatusSuccess         = "urn:oasis:names:tc:SAML:2.0:status:Success"
+	EIDASStatusRequester       = "urn:oasis:names:tc:SAML:2.0:status:Requester"
+	EIDASStatusResponder       = "urn:oasis:names:tc:SAML:2.0:status:Responder"
 	EIDASStatusVersionMismatch = "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch"
-	EIDASStatusAuthnFailed    = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed"
-	EIDASStatusNoPassive      = "urn:oasis:names:tc:SAML:2.0:status:NoPassive"
+	EIDASStatusAuthnFailed     = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed"
+	//nolint:gosec // G101: This is a SAML URN constant, not a credential
+	EIDASStatusNoPassive = "urn:oasis:names:tc:SAML:2.0:status:NoPassive"
 )
 
 // ============================================================================
@@ -267,9 +268,9 @@ const (
 // eidasAdapter implements the eIDAS adapter for EU identity verification
 type eidasAdapter struct {
 	*baseAdapter
-	eidasConfig EIDASConfig
-	accessToken string    //nolint:unused // Reserved for OAuth token caching
-	tokenExpiry time.Time //nolint:unused // Reserved for OAuth token caching
+	eidasConfig  EIDASConfig
+	accessToken  string    //nolint:unused // Reserved for OAuth token caching
+	tokenExpiry  time.Time //nolint:unused // Reserved for OAuth token caching
 	windowStart  time.Time
 	requestCount int
 	mu           sync.RWMutex
@@ -366,11 +367,11 @@ func (a *eidasAdapter) Verify(ctx context.Context, req *VerificationRequest) (*V
 func (a *eidasAdapter) extractCountry(jurisdiction string) string {
 	// Handle formats: "EU-DE", "DE", "EU/DE"
 	jurisdiction = strings.ToUpper(jurisdiction)
-	
+
 	// Remove EU prefix
 	jurisdiction = strings.TrimPrefix(jurisdiction, "EU-")
 	jurisdiction = strings.TrimPrefix(jurisdiction, "EU/")
-	
+
 	// Take first 2 characters as country code
 	if len(jurisdiction) >= 2 {
 		return jurisdiction[:2]
@@ -611,4 +612,3 @@ func loadEIDASConfigFromEnv(_ AdapterConfig) (EIDASConfig, bool, error) {
 
 	return eidasConfig, true, nil
 }
-

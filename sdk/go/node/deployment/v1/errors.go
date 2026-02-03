@@ -79,4 +79,3 @@ var (
 	// ErrInvalidEscrowID indicates an invalid escrow ID
 	ErrInvalidEscrowID = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidEscrowID, codes.InvalidArgument, "invalid escrow id")
 )
-

@@ -614,10 +614,6 @@ func TestVERewardsIntegration(t *testing.T) {
 	err = mockClient.SimulateJobCompletion(job.MOABJobID, 0)
 	require.NoError(t, err)
 
-	// Get updated status with accounting
-	job, err = adapter.GetJobStatus(ctx, testRewardsJobID)
-	require.NoError(t, err)
-
 	// Wait for state to update
 	time.Sleep(100 * time.Millisecond)
 
@@ -1025,4 +1021,3 @@ func TestInsecureModeWarning(t *testing.T) {
 }
 
 type MOABJobState = moab.MOABJobState
-

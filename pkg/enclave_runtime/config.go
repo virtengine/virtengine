@@ -51,9 +51,9 @@ type EnclaveRuntimeConfig struct {
 	RequestTimeoutMs int64 `mapstructure:"request_timeout_ms" json:"request_timeout_ms"`
 
 	// Platform-specific configurations
-	SGX   SGXConfig       `mapstructure:"sgx" json:"sgx"`
-	SEV   SEVConfig       `mapstructure:"sev" json:"sev"`
-	Nitro NitroConfigApp  `mapstructure:"nitro" json:"nitro"`
+	SGX   SGXConfig      `mapstructure:"sgx" json:"sgx"`
+	SEV   SEVConfig      `mapstructure:"sev" json:"sev"`
+	Nitro NitroConfigApp `mapstructure:"nitro" json:"nitro"`
 }
 
 // SGXConfig contains Intel SGX-specific configuration
@@ -158,7 +158,7 @@ func (c *EnclaveRuntimeConfig) Validate() error {
 	// Validate platform
 	platform := strings.ToLower(c.Platform)
 	switch platform {
-	case "auto", "sgx", "sev-snp", "nitro", "simulated":
+	case "auto", string(PlatformSGX), platformSEVSNP, platformNitro, string(PlatformSimulated):
 		// Valid platforms
 	default:
 		return fmt.Errorf("invalid platform: %s (must be auto, sgx, sev-snp, nitro, or simulated)", c.Platform)
@@ -167,7 +167,7 @@ func (c *EnclaveRuntimeConfig) Validate() error {
 	// Validate mode
 	mode := strings.ToLower(c.Mode)
 	switch mode {
-	case "auto", "require", "simulate":
+	case "auto", "require", modeSimulate:
 		// Valid modes
 	default:
 		return fmt.Errorf("invalid mode: %s (must be auto, require, or simulate)", c.Mode)
@@ -205,23 +205,23 @@ func (c *EnclaveRuntimeConfig) Validate() error {
 
 	// Platform-specific validation
 	switch platform {
-	case "sgx":
+	case string(PlatformSGX):
 		if c.SGX.EnclavePath == "" {
 			return errors.New("sgx.enclave_path is required when platform is 'sgx'")
 		}
 		if c.SGX.Debug {
 			fmt.Println("WARNING: SGX debug mode enabled - NOT SECURE FOR PRODUCTION")
 		}
-	case "sev-snp":
+	case platformSEVSNP:
 		if c.SEV.Endpoint == "" {
 			return errors.New("sev.endpoint is required when platform is 'sev-snp'")
 		}
 		if c.SEV.AllowDebugPolicy {
 			fmt.Println("WARNING: SEV-SNP debug policy allowed - NOT SECURE FOR PRODUCTION")
 		}
-	case "nitro":
+	case platformNitro:
 		if c.Nitro.EnclaveImagePath == "" {
-			return errors.New("nitro.enclave_image_path is required when platform is 'nitro'")
+			return errors.New("nitro.enclave_image_path is required when platform is 'nitro')")
 		}
 		if c.Nitro.DebugMode {
 			fmt.Println("WARNING: Nitro debug mode enabled - NOT SECURE FOR PRODUCTION")
@@ -246,13 +246,13 @@ func (c *EnclaveRuntimeConfig) GetHardwareMode() HardwareMode {
 // GetPlatformType converts the platform string to AttestationType enum
 func (c *EnclaveRuntimeConfig) GetPlatformType() AttestationType {
 	switch strings.ToLower(c.Platform) {
-	case "sgx":
+	case string(PlatformSGX):
 		return AttestationTypeSGX
 	case "sev-snp":
 		return AttestationTypeSEVSNP
-	case "nitro":
+	case platformNitro:
 		return AttestationTypeNitro
-	case "simulated":
+	case string(PlatformSimulated):
 		return AttestationTypeSimulated
 	default:
 		return AttestationTypeUnknown
@@ -345,13 +345,13 @@ func (c *EnclaveRuntimeConfig) ParseMeasurements() ([]Measurement, error) {
 
 		var platformType AttestationType
 		switch platform {
-		case "sgx":
+		case string(PlatformSGX):
 			platformType = AttestationTypeSGX
 		case "sev-snp", "sev":
 			platformType = AttestationTypeSEVSNP
-		case "nitro":
+		case platformNitro:
 			platformType = AttestationTypeNitro
-		case "simulated", "sim":
+		case string(PlatformSimulated), "sim":
 			platformType = AttestationTypeSimulated
 		default:
 			return nil, fmt.Errorf("unknown platform: %s", platform)
@@ -452,4 +452,3 @@ func (c *EnclaveRuntimeConfig) PrintConfigSummary() {
 	}
 	fmt.Println("======================================")
 }
-

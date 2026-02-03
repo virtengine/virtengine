@@ -24,6 +24,12 @@ const (
 	ArtifactTypeReceipt ArtifactType = 2
 )
 
+// Content type constants for MIME types
+const (
+	contentTypeJSON        = "application/json"
+	contentTypeOctetStream = "application/octet-stream"
+)
+
 // ArtifactTypeNames maps types to names
 var ArtifactTypeNames = map[ArtifactType]string{
 	ArtifactTypeJSON:    "json",
@@ -43,13 +49,13 @@ func (t ArtifactType) String() string {
 func (t ArtifactType) ContentType() string {
 	switch t {
 	case ArtifactTypeJSON:
-		return "application/json"
+		return contentTypeJSON
 	case ArtifactTypePDF:
 		return "application/pdf"
 	case ArtifactTypeReceipt:
-		return "application/json"
+		return contentTypeJSON
 	default:
-		return "application/octet-stream"
+		return contentTypeOctetStream
 	}
 }
 

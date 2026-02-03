@@ -109,6 +109,8 @@ func (am AppModule) Name() string {
 
 // RegisterInvariants registers module invariants.
 // Currently no invariants are registered for delegation module.
+//
+//nolint:staticcheck // InvariantRegistry is required by the module interface.
 func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 	// No invariants to register
 }
@@ -165,4 +167,3 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	return am.keeper.EndBlocker(sdkCtx)
 }
-

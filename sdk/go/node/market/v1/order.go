@@ -48,4 +48,3 @@ func (id OrderID) Validate() error {
 func (id OrderID) String() string {
 	return fmt.Sprintf("%s/%v", id.GroupID(), id.OSeq)
 }
-

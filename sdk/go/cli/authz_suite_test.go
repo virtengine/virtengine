@@ -1092,4 +1092,3 @@ func (s *AuthzCLITestSuite) TestExecSendAuthzWithAllowList() {
 	s.Require().NoError(err)
 	s.Require().NoError(s.cctx.Codec.UnmarshalJSON(out.Bytes(), &response), out.String())
 }
-

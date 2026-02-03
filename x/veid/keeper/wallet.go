@@ -19,22 +19,22 @@ import (
 
 // walletStore is the stored format of an identity wallet
 type walletStore struct {
-	WalletID            string                           `json:"wallet_id"`
-	AccountAddress      string                           `json:"account_address"`
-	CreatedAt           int64                            `json:"created_at"`
-	UpdatedAt           int64                            `json:"updated_at"`
-	Status              types.WalletStatus               `json:"status"`
-	ScopeRefs           []types.ScopeReference           `json:"scope_refs"`
-	DerivedFeatures     derivedFeaturesStore             `json:"derived_features"`
-	CurrentScore        uint32                           `json:"current_score"`
-	ScoreStatus         types.AccountStatus              `json:"score_status"`
-	VerificationHistory []verificationHistoryEntryStore  `json:"verification_history"`
-	ConsentSettings     consentSettingsStore             `json:"consent_settings"`
-	BindingSignature    []byte                           `json:"binding_signature"`
-	BindingPubKey       []byte                           `json:"binding_pub_key"`
-	LastBindingAt       int64                            `json:"last_binding_at"`
-	Tier                types.IdentityTier               `json:"tier"`
-	Metadata            map[string]string                `json:"metadata,omitempty"`
+	WalletID            string                          `json:"wallet_id"`
+	AccountAddress      string                          `json:"account_address"`
+	CreatedAt           int64                           `json:"created_at"`
+	UpdatedAt           int64                           `json:"updated_at"`
+	Status              types.WalletStatus              `json:"status"`
+	ScopeRefs           []types.ScopeReference          `json:"scope_refs"`
+	DerivedFeatures     derivedFeaturesStore            `json:"derived_features"`
+	CurrentScore        uint32                          `json:"current_score"`
+	ScoreStatus         types.AccountStatus             `json:"score_status"`
+	VerificationHistory []verificationHistoryEntryStore `json:"verification_history"`
+	ConsentSettings     consentSettingsStore            `json:"consent_settings"`
+	BindingSignature    []byte                          `json:"binding_signature"`
+	BindingPubKey       []byte                          `json:"binding_pub_key"`
+	LastBindingAt       int64                           `json:"last_binding_at"`
+	Tier                types.IdentityTier              `json:"tier"`
+	Metadata            map[string]string               `json:"metadata,omitempty"`
 }
 
 // derivedFeaturesStore is the stored format of derived features
@@ -283,6 +283,7 @@ func (k Keeper) CreateIdentityWallet(ctx sdk.Context, accountAddr sdk.AccAddress
 }
 
 // CreateWallet creates a new identity wallet for an account.
+//
 // Deprecated: Use CreateIdentityWallet instead.
 func (k Keeper) CreateWallet(ctx sdk.Context, accountAddr sdk.AccAddress, bindingSignature, bindingPubKey []byte) (*types.IdentityWallet, error) {
 	return k.createWalletInternal(ctx, accountAddr, bindingSignature, bindingPubKey)

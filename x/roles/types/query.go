@@ -19,7 +19,7 @@ type QueryAccountRolesResponse struct {
 
 // QueryRoleMembersRequest is the request for QueryRoleMembers
 type QueryRoleMembersRequest struct {
-	Role       string `json:"role"`
+	Role       string       `json:"role"`
 	Pagination *PageRequest `json:"pagination,omitempty"`
 }
 
@@ -27,7 +27,7 @@ type QueryRoleMembersRequest struct {
 type QueryRoleMembersResponse struct {
 	Role       string           `json:"role"`
 	Members    []RoleAssignment `json:"members"`
-	Pagination *PageResponse `json:"pagination,omitempty"`
+	Pagination *PageResponse    `json:"pagination,omitempty"`
 }
 
 // QueryAccountStateRequest is the request for QueryAccountState
@@ -47,7 +47,7 @@ type QueryGenesisAccountsRequest struct {
 
 // QueryGenesisAccountsResponse is the response for QueryGenesisAccounts
 type QueryGenesisAccountsResponse struct {
-	Addresses  []string `json:"addresses"`
+	Addresses  []string      `json:"addresses"`
 	Pagination *PageResponse `json:"pagination,omitempty"`
 }
 

@@ -26,6 +26,12 @@ import (
 	"github.com/virtengine/virtengine/x/benchmark/types"
 )
 
+// Test address constants for benchmark MsgServer tests
+const (
+	testMsgServerProviderAddr  = "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	testMsgServerModeratorAddr = "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+)
+
 // setupMsgServerTest creates a test MsgServer with mocked dependencies
 func setupMsgServerTest(t *testing.T) (types.MsgServer, Keeper, sdk.Context, *mockProviderKeeper, *mockRolesKeeper) {
 	t.Helper()
@@ -160,8 +166,8 @@ func convertReportsToResults(reports []types.BenchmarkReport) []benchmarkv1.Benc
 func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 	msgServer, k, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
-	moderatorAddr := "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+	providerAddr := testMsgServerProviderAddr
+	moderatorAddr := testMsgServerModeratorAddr
 	pub, priv := generateMsgServerTestKeyPair(t)
 
 	// Add provider to mock
@@ -227,8 +233,8 @@ func TestMsgServer_SubmitBenchmarks(t *testing.T) {
 func TestMsgServer_RequestChallenge(t *testing.T) {
 	msgServer, _, ctx, mockProvider, _ := setupMsgServerTest(t)
 
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
-	requesterAddr := "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+	providerAddr := testMsgServerProviderAddr
+	requesterAddr := testMsgServerModeratorAddr
 	pub, _ := generateMsgServerTestKeyPair(t)
 
 	// Add provider to mock
@@ -291,8 +297,8 @@ func TestMsgServer_RequestChallenge(t *testing.T) {
 func TestMsgServer_FlagProvider(t *testing.T) {
 	msgServer, _, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
-	moderatorAddr := "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
+	providerAddr := testMsgServerProviderAddr
+	moderatorAddr := testMsgServerModeratorAddr
 	pub, _ := generateMsgServerTestKeyPair(t)
 
 	// Add provider and moderator to mocks
@@ -354,7 +360,7 @@ func TestMsgServer_FlagProvider(t *testing.T) {
 func TestMsgServer_UnflagProvider(t *testing.T) {
 	msgServer, k, ctx, mockProvider, mockRoles := setupMsgServerTest(t)
 
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	providerAddr := testMsgServerProviderAddr
 	moderatorAddr := "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh"
 	pub, _ := generateMsgServerTestKeyPair(t)
 
@@ -423,7 +429,7 @@ func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 	anomalyFlag := &types.AnomalyFlag{
 		FlagID:          "anomaly-1",
 		ReportID:        "report-1",
-		ProviderAddress: "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+		ProviderAddress: testMsgServerProviderAddr,
 		Type:            types.AnomalyTypeSuddenJump,
 		Severity:        types.AnomalySeverityMedium,
 		Description:     "Test anomaly",
@@ -442,7 +448,7 @@ func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 			name: "valid resolution",
 			msg: &types.MsgResolveAnomalyFlag{
 				Authority:  moderatorAddr,
-				Provider:   "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+				Provider:   testMsgServerProviderAddr,
 				Resolution: "Issue investigated and resolved",
 			},
 			wantErr: false,
@@ -451,7 +457,7 @@ func TestMsgServer_ResolveAnomalyFlag(t *testing.T) {
 			name: "invalid authority address",
 			msg: &types.MsgResolveAnomalyFlag{
 				Authority:  "invalid",
-				Provider:   "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+				Provider:   testMsgServerProviderAddr,
 				Resolution: "test",
 			},
 			wantErr: true,

@@ -247,4 +247,3 @@ func (k Keeper) GetDelegatorValidatorTotalRewards(ctx sdk.Context, delegatorAddr
 
 	return totalReward.String()
 }
-

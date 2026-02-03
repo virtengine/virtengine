@@ -13,4 +13,3 @@ func (m *PlacementRequirements) String() string {
 	res, _ := yaml.Marshal(m)
 	return string(res)
 }
-

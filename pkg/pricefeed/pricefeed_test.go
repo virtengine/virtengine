@@ -203,9 +203,9 @@ func TestRetryer_Success(t *testing.T) {
 func TestRetryer_RetryOnError(t *testing.T) {
 	cfg := RetryConfig{
 		MaxRetries:      2,
-		InitialDelay:   10 * time.Millisecond,
-		MaxDelay:       100 * time.Millisecond,
-		BackoffFactor:  2.0,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		BackoffFactor:   2.0,
 		RetryableErrors: []string{"timeout"},
 	}
 
@@ -565,4 +565,3 @@ func TestAggregationStrategy_IsValid(t *testing.T) {
 		t.Error("expected invalid strategy to be invalid")
 	}
 }
-

@@ -127,15 +127,15 @@ const (
 
 // Proto enum value constants - FraudCategory
 const (
-	FraudCategoryPBUnspecified             = fraudv1.FraudCategoryUnspecified
-	FraudCategoryPBFakeIdentity            = fraudv1.FraudCategoryFakeIdentity
-	FraudCategoryPBPaymentFraud            = fraudv1.FraudCategoryPaymentFraud
+	FraudCategoryPBUnspecified              = fraudv1.FraudCategoryUnspecified
+	FraudCategoryPBFakeIdentity             = fraudv1.FraudCategoryFakeIdentity
+	FraudCategoryPBPaymentFraud             = fraudv1.FraudCategoryPaymentFraud
 	FraudCategoryPBServiceMisrepresentation = fraudv1.FraudCategoryServiceMisrepresentation
-	FraudCategoryPBResourceAbuse           = fraudv1.FraudCategoryResourceAbuse
-	FraudCategoryPBSybilAttack             = fraudv1.FraudCategorySybilAttack
-	FraudCategoryPBMaliciousContent        = fraudv1.FraudCategoryMaliciousContent
-	FraudCategoryPBTermsViolation          = fraudv1.FraudCategoryTermsViolation
-	FraudCategoryPBOther                   = fraudv1.FraudCategoryOther
+	FraudCategoryPBResourceAbuse            = fraudv1.FraudCategoryResourceAbuse
+	FraudCategoryPBSybilAttack              = fraudv1.FraudCategorySybilAttack
+	FraudCategoryPBMaliciousContent         = fraudv1.FraudCategoryMaliciousContent
+	FraudCategoryPBTermsViolation           = fraudv1.FraudCategoryTermsViolation
+	FraudCategoryPBOther                    = fraudv1.FraudCategoryOther
 )
 
 // Proto enum value constants - ResolutionType
@@ -194,7 +194,14 @@ func FraudReportStatusToProto(s FraudReportStatus) FraudReportStatusPB {
 
 // FraudReportStatusFromProto converts proto enum to local FraudReportStatus
 func FraudReportStatusFromProto(s FraudReportStatusPB) FraudReportStatus {
-	return FraudReportStatus(s)
+	if s < FraudReportStatusPBUnspecified || s > FraudReportStatusPBEscalated {
+		return FraudReportStatusUnspecified
+	}
+	if s > FraudReportStatusPB(^uint8(0)) {
+		return FraudReportStatusUnspecified
+	}
+	//nolint:gosec // range checked above
+	return FraudReportStatus(uint8(s))
 }
 
 // =============================================================================
@@ -208,7 +215,14 @@ func FraudCategoryToProto(c FraudCategory) FraudCategoryPB {
 
 // FraudCategoryFromProto converts proto enum to local FraudCategory
 func FraudCategoryFromProto(c FraudCategoryPB) FraudCategory {
-	return FraudCategory(c)
+	if c < FraudCategoryPBUnspecified || c > FraudCategoryPBOther {
+		return FraudCategoryUnspecified
+	}
+	if c > FraudCategoryPB(^uint8(0)) {
+		return FraudCategoryUnspecified
+	}
+	//nolint:gosec // range checked above
+	return FraudCategory(uint8(c))
 }
 
 // =============================================================================
@@ -222,7 +236,14 @@ func ResolutionTypeToProto(r ResolutionType) ResolutionTypePB {
 
 // ResolutionTypeFromProto converts proto enum to local ResolutionType
 func ResolutionTypeFromProto(r ResolutionTypePB) ResolutionType {
-	return ResolutionType(r)
+	if r < ResolutionTypePBUnspecified || r > ResolutionTypePBNoAction {
+		return ResolutionTypeUnspecified
+	}
+	if r > ResolutionTypePB(^uint8(0)) {
+		return ResolutionTypeUnspecified
+	}
+	//nolint:gosec // range checked above
+	return ResolutionType(uint8(r))
 }
 
 // =============================================================================
@@ -236,7 +257,14 @@ func AuditActionToProto(a AuditAction) AuditActionPB {
 
 // AuditActionFromProto converts proto enum to local AuditAction
 func AuditActionFromProto(a AuditActionPB) AuditAction {
-	return AuditAction(a)
+	if a < AuditActionPBUnspecified || a > AuditActionPBCommentAdded {
+		return AuditActionUnspecified
+	}
+	if a > AuditActionPB(^uint8(0)) {
+		return AuditActionUnspecified
+	}
+	//nolint:gosec // range checked above
+	return AuditAction(uint8(a))
 }
 
 // =============================================================================
@@ -420,9 +448,15 @@ func ModeratorQueueEntryFromProto(pb *ModeratorQueueEntryPB) *ModeratorQueueEntr
 	if pb == nil {
 		return nil
 	}
+	priority := uint8(0)
+	if pb.Priority > uint32(^uint8(0)) {
+		priority = ^uint8(0)
+	} else {
+		priority = uint8(pb.Priority)
+	}
 	return &ModeratorQueueEntry{
 		ReportID:   pb.ReportId,
-		Priority:   uint8(pb.Priority),
+		Priority:   priority,
 		QueuedAt:   pb.QueuedAt,
 		Category:   FraudCategoryFromProto(pb.Category),
 		AssignedTo: pb.AssignedTo,
@@ -438,15 +472,59 @@ func ParamsToProto(p *Params) *ParamsPB {
 	if p == nil {
 		return nil
 	}
+	maxInt32 := int(^uint32(0) >> 1)
+	minInt32 := -maxInt32 - 1
+	minDesc := p.MinDescriptionLength
+	if minDesc > maxInt32 {
+		minDesc = maxInt32
+	}
+	if minDesc < minInt32 {
+		minDesc = minInt32
+	}
+	maxDesc := p.MaxDescriptionLength
+	if maxDesc > maxInt32 {
+		maxDesc = maxInt32
+	}
+	if maxDesc < minInt32 {
+		maxDesc = minInt32
+	}
+	maxEvidenceCount := p.MaxEvidenceCount
+	if maxEvidenceCount > maxInt32 {
+		maxEvidenceCount = maxInt32
+	}
+	if maxEvidenceCount < minInt32 {
+		maxEvidenceCount = minInt32
+	}
+	escalation := p.EscalationThresholdDays
+	if escalation > maxInt32 {
+		escalation = maxInt32
+	}
+	if escalation < minInt32 {
+		escalation = minInt32
+	}
+	reportRetention := p.ReportRetentionDays
+	if reportRetention > maxInt32 {
+		reportRetention = maxInt32
+	}
+	if reportRetention < minInt32 {
+		reportRetention = minInt32
+	}
+	auditRetention := p.AuditLogRetentionDays
+	if auditRetention > maxInt32 {
+		auditRetention = maxInt32
+	}
+	if auditRetention < minInt32 {
+		auditRetention = minInt32
+	}
 	return &ParamsPB{
-		MinDescriptionLength:    int32(p.MinDescriptionLength),
-		MaxDescriptionLength:    int32(p.MaxDescriptionLength),
-		MaxEvidenceCount:        int32(p.MaxEvidenceCount),
+		MinDescriptionLength:    safeInt32FromInt(minDesc),
+		MaxDescriptionLength:    safeInt32FromInt(maxDesc),
+		MaxEvidenceCount:        safeInt32FromInt(maxEvidenceCount),
 		MaxEvidenceSizeBytes:    p.MaxEvidenceSizeBytes,
 		AutoAssignEnabled:       p.AutoAssignEnabled,
-		EscalationThresholdDays: int32(p.EscalationThresholdDays),
-		ReportRetentionDays:     int32(p.ReportRetentionDays),
-		AuditLogRetentionDays:   int32(p.AuditLogRetentionDays),
+		EscalationThresholdDays: safeInt32FromInt(escalation),
+		ReportRetentionDays:     safeInt32FromInt(reportRetention),
+		AuditLogRetentionDays:   safeInt32FromInt(auditRetention),
 	}
 }
 
@@ -465,6 +543,21 @@ func ParamsFromProto(pb *ParamsPB) *Params {
 		ReportRetentionDays:     int(pb.ReportRetentionDays),
 		AuditLogRetentionDays:   int(pb.AuditLogRetentionDays),
 	}
+}
+
+func safeInt32FromInt(value int) int32 {
+	maxInt32 := int(^uint32(0) >> 1)
+	minInt32 := -maxInt32 - 1
+	if value > maxInt32 {
+		//nolint:gosec // range checked above
+		return int32(maxInt32)
+	}
+	if value < minInt32 {
+		//nolint:gosec // range checked above
+		return int32(minInt32)
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
 }
 
 // =============================================================================

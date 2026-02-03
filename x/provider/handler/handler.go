@@ -7,8 +7,8 @@ import (
 
 	types "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 
-	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	mkeeper "github.com/virtengine/virtengine/x/market/keeper"
+	mfakeeper "github.com/virtengine/virtengine/x/mfa/keeper"
 	"github.com/virtengine/virtengine/x/provider/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 )

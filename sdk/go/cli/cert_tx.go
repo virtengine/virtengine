@@ -484,4 +484,3 @@ func addRevokeCmdFlags(cmd *cobra.Command) error {
 	cflags.AddTxFlagsToCmd(cmd)
 	return nil
 }
-

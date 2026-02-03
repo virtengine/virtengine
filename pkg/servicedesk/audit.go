@@ -19,18 +19,23 @@ const (
 	AuditEventTicketClose  AuditEventType = "ticket_close"
 
 	// Sync events
-	AuditEventSyncSuccess       AuditEventType = "sync_success"
-	AuditEventSyncFailed        AuditEventType = "sync_failed"
-	AuditEventConflictDetected  AuditEventType = "conflict_detected"
-	AuditEventConflictResolved  AuditEventType = "conflict_resolved"
+	AuditEventSyncSuccess      AuditEventType = "sync_success"
+	AuditEventSyncFailed       AuditEventType = "sync_failed"
+	AuditEventConflictDetected AuditEventType = "conflict_detected"
+	AuditEventConflictResolved AuditEventType = "conflict_resolved"
 
 	// External events
-	AuditEventExternalCallback  AuditEventType = "external_callback"
-	AuditEventAttachmentSync    AuditEventType = "attachment_sync"
+	AuditEventExternalCallback AuditEventType = "external_callback"
+	AuditEventAttachmentSync   AuditEventType = "attachment_sync"
 
 	// Admin events
-	AuditEventManualSync        AuditEventType = "manual_sync"
-	AuditEventConfigChange      AuditEventType = "config_change"
+	AuditEventManualSync   AuditEventType = "manual_sync"
+	AuditEventConfigChange AuditEventType = "config_change"
+)
+
+// Audit entry status constants
+const (
+	auditStatusFailed = "failed"
 )
 
 // AuditEntry represents an audit log entry
@@ -133,7 +138,7 @@ func (a *AuditLogger) LogEvent(ctx context.Context, eventType AuditEventType, de
 	}
 	if errStr, ok := details["error"].(string); ok {
 		entry.Error = errStr
-		entry.Status = "failed"
+		entry.Status = auditStatusFailed
 	}
 
 	a.store(entry)
@@ -230,11 +235,11 @@ func (a *AuditLogger) logEntry(entry AuditEntry) {
 	case "debug":
 		logFn = a.logger.Debug
 	case "warn":
-		if entry.Status == "failed" {
+		if entry.Status == auditStatusFailed {
 			logFn = a.logger.Warn
 		}
 	case "error":
-		if entry.Status == "failed" {
+		if entry.Status == auditStatusFailed {
 			logFn = a.logger.Error
 		} else {
 			return // Don't log non-errors at error level
@@ -261,6 +266,7 @@ func (a *AuditLogger) logEntry(entry AuditEntry) {
 
 	// Add details if sensitive logging is enabled
 	if a.config.LogSensitive && entry.Details != nil {
+		//nolint:errchkjson // Details is intentionally interface{} for flexible audit logging
 		detailsJSON, _ := json.Marshal(entry.Details)
 		args = append(args, "details", string(detailsJSON))
 	}
@@ -330,4 +336,3 @@ func (a *AuditLogger) EntryCount() int {
 	defer a.mu.RUnlock()
 	return len(a.entries)
 }
-

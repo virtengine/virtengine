@@ -52,15 +52,15 @@ func TestDefaultFraudDetectorConfig(t *testing.T) {
 
 func TestVEIDVerificationDataStructure(t *testing.T) {
 	data := &VEIDVerificationData{
-		RequestID:        "req_123",
-		AccountAddress:   "virtengine1test",
-		Timestamp:        time.Now(),
-		BlockHeight:      12345,
-		ProposerScore:    85,
-		ComputedScore:    84,
-		ScoreDifference:  1,
-		Match:            true,
-		Success:          true,
+		RequestID:       "req_123",
+		AccountAddress:  "virtengine1test",
+		Timestamp:       time.Now(),
+		BlockHeight:     12345,
+		ProposerScore:   85,
+		ComputedScore:   84,
+		ScoreDifference: 1,
+		Match:           true,
+		Success:         true,
 	}
 
 	if data.RequestID == "" {
@@ -88,14 +88,14 @@ func TestFraudDetectorAnalyze(t *testing.T) {
 	detector.Start(ctx, eventChan)
 
 	data := &VEIDVerificationData{
-		RequestID:        "req_test",
-		AccountAddress:   "virtengine1test",
-		Timestamp:        time.Now(),
-		BlockHeight:      100,
-		ProposerScore:    85,
-		ComputedScore:    85,
-		Match:            true,
-		Success:          true,
+		RequestID:      "req_test",
+		AccountAddress: "virtengine1test",
+		Timestamp:      time.Now(),
+		BlockHeight:    100,
+		ProposerScore:  85,
+		ComputedScore:  85,
+		Match:          true,
+		Success:        true,
 	}
 
 	// Analyze should not panic
@@ -116,15 +116,15 @@ func TestFraudDetectorLowScoreDetection(t *testing.T) {
 
 	// Submit low score verification
 	data := &VEIDVerificationData{
-		RequestID:        "req_low",
-		AccountAddress:   "virtengine1low",
-		Timestamp:        time.Now(),
-		BlockHeight:      100,
-		ProposerScore:    30, // Very low
-		ComputedScore:    30,
-		Match:            true,
-		Success:          false,
-		FailureReason:    "score_below_threshold",
+		RequestID:      "req_low",
+		AccountAddress: "virtengine1low",
+		Timestamp:      time.Now(),
+		BlockHeight:    100,
+		ProposerScore:  30, // Very low
+		ComputedScore:  30,
+		Match:          true,
+		Success:        false,
+		FailureReason:  "score_below_threshold",
 	}
 
 	detector.Analyze(data)
@@ -227,4 +227,3 @@ func TestFraudDetectorCleanup(t *testing.T) {
 	// Cleanup is internal, but detector should handle graceful shutdown
 	// Just verify it doesn't panic when context is cancelled
 }
-

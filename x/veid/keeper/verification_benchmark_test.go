@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -88,7 +89,7 @@ func (s *MockMLScorer) Score(scopes []MockDecryptedScope) (int32, string, []byte
 	for _, scope := range scopes {
 		h.Write(scope.ContentHash)
 		for _, f := range scope.Features {
-			h.Write([]byte(fmt.Sprintf("%f", f)))
+			fmt.Fprintf(h, "%f", f)
 		}
 	}
 	inputHash := h.Sum(nil)
@@ -102,7 +103,7 @@ func (s *MockMLScorer) Score(scopes []MockDecryptedScope) (int32, string, []byte
 	}
 
 	// Score calculation (50-100 based on valid scopes)
-	score := int32(50 + (validCount * 10))
+	score := safeInt32FromInt(50 + (validCount * 10))
 	if score > 100 {
 		score = 100
 	}
@@ -131,7 +132,7 @@ func (d *MockDecryptor) Decrypt(scopeIDs []string) ([]MockDecryptedScope, error)
 
 		// Generate mock decrypted data
 		contentHash := make([]byte, 32)
-		rand.Read(contentHash)
+		_, _ = rand.Read(contentHash)
 
 		features := make([]float64, 128) // 128-dim feature vector
 		for i := range features {
@@ -139,7 +140,7 @@ func (d *MockDecryptor) Decrypt(scopeIDs []string) ([]MockDecryptedScope, error)
 		}
 
 		biometricRef := make([]byte, 64)
-		rand.Read(biometricRef)
+		_, _ = rand.Read(biometricRef)
 
 		scopes = append(scopes, MockDecryptedScope{
 			ScopeID:      id,
@@ -469,7 +470,7 @@ func BenchmarkScoreUpdate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		score := uint32(50 + (i % 50))
+		score := uint32(50 + (i % 50)) //nolint:gosec // G115: benchmark, i%50 is bounded 0-49
 		err := k.SetScore(ctx, addr.String(), score, "v1.0.0")
 		if err != nil {
 			b.Fatalf("failed to set score: %v", err)
@@ -517,7 +518,7 @@ func BenchmarkIdentityRecordDeserialization(b *testing.B) {
 // BenchmarkInputHashComputation benchmarks input hash computation
 func BenchmarkInputHashComputation(b *testing.B) {
 	data := make([]byte, 4096)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -537,7 +538,7 @@ func BenchmarkFeatureVectorHash(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		h := sha256.New()
 		for _, f := range features {
-			h.Write([]byte(fmt.Sprintf("%.6f", f)))
+			fmt.Fprintf(h, "%.6f", f)
 		}
 		_ = h.Sum(nil)
 	}
@@ -583,4 +584,15 @@ func setupVEIDKeeperForBenchmark(b *testing.B) (keeper.Keeper, sdk.Context) {
 	}
 
 	return k, ctx
+}
+
+func safeInt32FromInt(value int) int32 {
+	if value > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if value < math.MinInt32 {
+		return math.MinInt32
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
 }

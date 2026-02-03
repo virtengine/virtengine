@@ -240,10 +240,10 @@ func DefaultConfig() Config {
 		},
 		Jurisdictions: []string{},
 		DefaultRetention: RetentionPolicy{
-			ResultRetentionDays:  90,
+			ResultRetentionDays:   90,
 			AuditLogRetentionDays: 365,
-			ConsentRetentionDays: 365 * 7, // 7 years
-			AutoPurge:            true,
+			ConsentRetentionDays:  365 * 7, // 7 years
+			AutoPurge:             true,
 		},
 		RequireConsent:  true,
 		ConsentDuration: 365 * 24 * time.Hour, // 1 year
@@ -388,10 +388,10 @@ func DefaultJurisdictions() JurisdictionConfig {
 					DataSourceTaxAuthority,
 				},
 				RetentionPolicy: RetentionPolicy{
-					ResultRetentionDays:  90,
+					ResultRetentionDays:   90,
 					AuditLogRetentionDays: 365 * 7,
-					ConsentRetentionDays: 365 * 7,
-					AutoPurge:            true,
+					ConsentRetentionDays:  365 * 7,
+					AutoPurge:             true,
 				},
 				GDPRApplicable:  false,
 				CCPAApplicable:  true,
@@ -411,10 +411,10 @@ func DefaultJurisdictions() JurisdictionConfig {
 					DataSourceDMV,
 				},
 				RetentionPolicy: RetentionPolicy{
-					ResultRetentionDays:  90,
+					ResultRetentionDays:   90,
 					AuditLogRetentionDays: 365 * 7,
-					ConsentRetentionDays: 365 * 7,
-					AutoPurge:            true,
+					ConsentRetentionDays:  365 * 7,
+					AutoPurge:             true,
 				},
 				GDPRApplicable:  false,
 				CCPAApplicable:  true,
@@ -436,10 +436,10 @@ func DefaultJurisdictions() JurisdictionConfig {
 					DataSourceImmigration,
 				},
 				RetentionPolicy: RetentionPolicy{
-					ResultRetentionDays:  30, // GDPR minimum
+					ResultRetentionDays:   30, // GDPR minimum
 					AuditLogRetentionDays: 365,
-					ConsentRetentionDays: 365,
-					AutoPurge:            true,
+					ConsentRetentionDays:  365,
+					AutoPurge:             true,
 				},
 				GDPRApplicable:  true,
 				CCPAApplicable:  false,
@@ -461,10 +461,10 @@ func DefaultJurisdictions() JurisdictionConfig {
 					DataSourceNationalRegistry,
 				},
 				RetentionPolicy: RetentionPolicy{
-					ResultRetentionDays:  30,
+					ResultRetentionDays:   30,
 					AuditLogRetentionDays: 365,
-					ConsentRetentionDays: 365,
-					AutoPurge:            true,
+					ConsentRetentionDays:  365,
+					AutoPurge:             true,
 				},
 				GDPRApplicable:  true, // UK GDPR
 				CCPAApplicable:  false,
@@ -486,10 +486,10 @@ func DefaultJurisdictions() JurisdictionConfig {
 					DataSourceVitalRecords,
 				},
 				RetentionPolicy: RetentionPolicy{
-					ResultRetentionDays:  90,
+					ResultRetentionDays:   90,
 					AuditLogRetentionDays: 365 * 7,
-					ConsentRetentionDays: 365 * 7,
-					AutoPurge:            true,
+					ConsentRetentionDays:  365 * 7,
+					AutoPurge:             true,
 				},
 				GDPRApplicable:  false,
 				CCPAApplicable:  false,
@@ -499,4 +499,3 @@ func DefaultJurisdictions() JurisdictionConfig {
 		},
 	}
 }
-

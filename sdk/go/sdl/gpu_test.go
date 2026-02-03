@@ -188,4 +188,3 @@ attributes:
 	require.Equal(t, "vendor/nvidia/model/a6000", p.Attributes[1].Key)
 	require.Equal(t, "true", p.Attributes[1].Value)
 }
-

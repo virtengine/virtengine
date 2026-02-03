@@ -41,4 +41,3 @@
 // All metrics are exported via Prometheus with the "virtengine_security_" prefix.
 // See security_metrics.go for the full list of available metrics.
 package security_monitoring
-

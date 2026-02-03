@@ -215,7 +215,7 @@ func (v *veidIntegrator) GetScopeStats(ctx context.Context, walletAddress string
 	defer v.mu.RUnlock()
 
 	stats := &VEIDScopeStats{
-		DocumentTypesVerified:  []DocumentType{},
+		DocumentTypesVerified: []DocumentType{},
 		JurisdictionsVerified: []string{},
 	}
 
@@ -422,4 +422,3 @@ func GetVerificationTrustLevel(verification *VerificationResponse) int {
 
 	return level
 }
-

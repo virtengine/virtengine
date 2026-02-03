@@ -574,4 +574,3 @@ func MapToVirtEngineState(state SessionState) string {
 		return "unknown"
 	}
 }
-

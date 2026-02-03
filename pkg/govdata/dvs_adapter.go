@@ -39,13 +39,13 @@ const (
 
 // DVS Document Types
 const (
-	DVSDocTypeDriverLicence     = "DRIVER_LICENCE"
-	DVSDocTypePassport          = "PASSPORT"
-	DVSDocTypeBirthCertificate  = "BIRTH_CERTIFICATE"
-	DVSDocTypeCitizenshipCert   = "CITIZENSHIP_CERTIFICATE"
-	DVSDocTypeImmiCard          = "IMMI_CARD"
-	DVSDocTypeMedicareCard      = "MEDICARE_CARD"
-	DVSDocTypeVisaDocument      = "VISA"
+	DVSDocTypeDriverLicence    = "DRIVER_LICENCE"
+	DVSDocTypePassport         = "PASSPORT"
+	DVSDocTypeBirthCertificate = "BIRTH_CERTIFICATE"
+	DVSDocTypeCitizenshipCert  = "CITIZENSHIP_CERTIFICATE"
+	DVSDocTypeImmiCard         = "IMMI_CARD"
+	DVSDocTypeMedicareCard     = "MEDICARE_CARD"
+	DVSDocTypeVisaDocument     = "VISA"
 )
 
 // ============================================================================
@@ -157,10 +157,10 @@ func (c *DVSConfig) Validate() error {
 
 // DVSVerifyRequest represents a DVS verification request
 type DVSVerifyRequest struct {
-	DocumentType   string         `json:"documentType"`
-	DocumentFields DVSDocFields   `json:"documentFields"`
-	ConsentGiven   bool           `json:"consentGiven"`
-	RequestID      string         `json:"requestId"`
+	DocumentType   string       `json:"documentType"`
+	DocumentFields DVSDocFields `json:"documentFields"`
+	ConsentGiven   bool         `json:"consentGiven"`
+	RequestID      string       `json:"requestId"`
 }
 
 // DVSDocFields contains document-specific fields for verification
@@ -181,34 +181,34 @@ type DVSDocFields struct {
 	Gender         string `json:"gender,omitempty"`
 
 	// Birth certificate fields
-	RegistrationNumber  string `json:"registrationNumber,omitempty"`
-	RegistrationYear    string `json:"registrationYear,omitempty"`
-	RegistrationState   string `json:"registrationState,omitempty"`
-	CertificateNumber   string `json:"certificateNumber,omitempty"`
+	RegistrationNumber string `json:"registrationNumber,omitempty"`
+	RegistrationYear   string `json:"registrationYear,omitempty"`
+	RegistrationState  string `json:"registrationState,omitempty"`
+	CertificateNumber  string `json:"certificateNumber,omitempty"`
 
 	// Medicare fields
-	MedicareNumber     string `json:"medicareNumber,omitempty"`
-	MedicareReference  string `json:"medicareReference,omitempty"`
-	MedicareExpiry     string `json:"medicareExpiry,omitempty"`
+	MedicareNumber    string `json:"medicareNumber,omitempty"`
+	MedicareReference string `json:"medicareReference,omitempty"`
+	MedicareExpiry    string `json:"medicareExpiry,omitempty"`
 }
 
 // DVSVerifyResponse represents a DVS verification response
 type DVSVerifyResponse struct {
-	RequestID       string            `json:"requestId"`
-	VerificationID  string            `json:"verificationId"`
-	Status          string            `json:"status"`
-	VerifyResult    DVSVerifyResult   `json:"verifyResult"`
-	Timestamp       string            `json:"timestamp"`
-	ErrorCode       string            `json:"errorCode,omitempty"`
-	ErrorMessage    string            `json:"errorMessage,omitempty"`
+	RequestID      string          `json:"requestId"`
+	VerificationID string          `json:"verificationId"`
+	Status         string          `json:"status"`
+	VerifyResult   DVSVerifyResult `json:"verifyResult"`
+	Timestamp      string          `json:"timestamp"`
+	ErrorCode      string          `json:"errorCode,omitempty"`
+	ErrorMessage   string          `json:"errorMessage,omitempty"`
 }
 
 // DVSVerifyResult contains the verification result
 type DVSVerifyResult struct {
-	OverallResult    string              `json:"overallResult"`
-	FieldResults     map[string]string   `json:"fieldResults"`
-	DocumentValid    bool                `json:"documentValid"`
-	DocumentStatus   string              `json:"documentStatus,omitempty"`
+	OverallResult  string            `json:"overallResult"`
+	FieldResults   map[string]string `json:"fieldResults"`
+	DocumentValid  bool              `json:"documentValid"`
+	DocumentStatus string            `json:"documentStatus,omitempty"`
 }
 
 // DVS Result codes
@@ -315,7 +315,7 @@ func (a *dvsDMVAdapter) Verify(ctx context.Context, req *VerificationRequest) (*
 
 	// Convert response
 	response := a.convertResponse(req, dvsResp)
-	
+
 	latency := time.Since(startTime)
 	a.recordSuccess(latency)
 
@@ -569,10 +569,11 @@ func (a *dvsDMVAdapter) convertResponse(req *VerificationRequest, dvsResp *DVSVe
 	// Check document status
 	if !dvsResp.VerifyResult.DocumentValid {
 		response.DocumentValid = false
-		if dvsResp.VerifyResult.DocumentStatus == "EXPIRED" {
+		switch dvsResp.VerifyResult.DocumentStatus {
+		case "EXPIRED":
 			response.Status = VerificationStatusExpired
 			response.Warnings = append(response.Warnings, "Document has expired")
-		} else if dvsResp.VerifyResult.DocumentStatus == "CANCELLED" {
+		case "CANCELLED":
 			response.Status = VerificationStatusRevoked
 			response.Warnings = append(response.Warnings, "Document has been cancelled")
 		}
@@ -637,4 +638,3 @@ func loadDVSConfigFromEnv(_ AdapterConfig) (DVSConfig, bool, error) {
 
 	return dvsConfig, true, nil
 }
-

@@ -433,7 +433,7 @@ func TierToString(tier int) string {
 	case TierPremium:
 		return "premium"
 	default:
-		return "unknown"
+		return string(AccountStatusUnknown)
 	}
 }
 

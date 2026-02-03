@@ -212,15 +212,15 @@ func DefaultHPCBillingRules(denom string) HPCBillingRules {
 	return HPCBillingRules{
 		FormulaVersion: CurrentBillingFormulaVersion,
 		ResourceRates: HPCResourceRates{
-			CPUCoreHourRate:   sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(50, 3)),    // 0.05
-			GPUHourRate:       sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDec(1)),                // 1.00
-			MemoryGBHourRate:  sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(10, 3)),    // 0.01
-			NodeHourRate:      sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(500, 3)),   // 0.50
-			StorageGBHourRate: sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(1, 3)),     // 0.001
-			NetworkGBRate:     sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(100, 3)),   // 0.10
+			CPUCoreHourRate:   sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(50, 3)),  // 0.05
+			GPUHourRate:       sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDec(1)),              // 1.00
+			MemoryGBHourRate:  sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(10, 3)),  // 0.01
+			NodeHourRate:      sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(500, 3)), // 0.50
+			StorageGBHourRate: sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(1, 3)),   // 0.001
+			NetworkGBRate:     sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(100, 3)), // 0.10
 			GPUTypeRates: map[string]sdk.DecCoin{
-				"nvidia-a100": sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDec(3)),       // 3.00
-				"nvidia-v100": sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDec(2)),       // 2.00
+				"nvidia-a100": sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDec(3)),            // 3.00
+				"nvidia-v100": sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDec(2)),            // 2.00
 				"nvidia-t4":   sdk.NewDecCoinFromDec(denom, sdkmath.LegacyNewDecWithPrec(5, 1)), // 0.50
 			},
 		},
@@ -246,17 +246,17 @@ func DefaultHPCBillingRules(denom string) HPCBillingRules {
 		},
 		BillingCaps: []HPCBillingCap{
 			{
-				CapID:    "monthly-cap",
-				CapName:  "Monthly Spending Cap",
-				CapType:  HPCBillingCapTypeMonthly,
+				CapID:     "monthly-cap",
+				CapName:   "Monthly Spending Cap",
+				CapType:   HPCBillingCapTypeMonthly,
 				CapAmount: sdk.NewCoin(denom, sdkmath.NewInt(10000000000)), // 10000 virt
-				Active:   true,
+				Active:    true,
 			},
 		},
-		PlatformFeeRateBps:               250, // 2.5%
-		ProviderRewardRateBps:           9750, // 97.5% (100% - platform fee)
+		PlatformFeeRateBps:               250,                                      // 2.5%
+		ProviderRewardRateBps:            9750,                                     // 97.5% (100% - platform fee)
 		MinimumCharge:                    sdk.NewCoin(denom, sdkmath.NewInt(1000)), // 0.001 virt
-		BillingGranularitySeconds:        60, // 1 minute
+		BillingGranularitySeconds:        60,                                       // 1 minute
 		QueueTimePenaltyEnabled:          true,
 		QueueTimePenaltyThresholdSeconds: 3600, // 1 hour
 		QueueTimePenaltyRateBps:          10,   // 0.1% per minute

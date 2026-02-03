@@ -3,6 +3,7 @@ go 1.25.5
 use (
 	.
 	./sdk/go
+	./sdk/specs
 )
 
 // Resolve conflicting wasmd versions between root module and SDK

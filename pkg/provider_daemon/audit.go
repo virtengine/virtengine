@@ -662,11 +662,11 @@ func DefaultAuditLogConfig() *AuditLogConfig {
 
 // AuditLogger logs audit events
 type AuditLogger struct {
-	config       *AuditLogConfig
-	events       []*AuditEvent
-	lastHash     string
-	file         *os.File
-	mu           sync.RWMutex
+	config   *AuditLogConfig
+	events   []*AuditEvent
+	lastHash string
+	file     *os.File
+	mu       sync.RWMutex
 }
 
 // NewAuditLogger creates a new audit logger
@@ -1149,10 +1149,10 @@ func (l *AuditLogger) LogWaldurCallback(
 	}
 
 	details := map[string]interface{}{
-		"callback_id":     callbackID,
-		"waldur_entity":   waldurEntityID,
-		"chain_entity":    chainEntityID,
-		"action_type":     actionType,
+		"callback_id":   callbackID,
+		"waldur_entity": waldurEntityID,
+		"chain_entity":  chainEntityID,
+		"action_type":   actionType,
 	}
 
 	event := &AuditEvent{
@@ -1172,19 +1172,19 @@ func (l *AuditLogger) GetLifecycleEvents(since time.Time) []*AuditEvent {
 	defer l.mu.RUnlock()
 
 	lifecycleTypes := map[AuditEventType]bool{
-		AuditEventLifecycleActionInitiated:  true,
-		AuditEventLifecycleActionStarted:    true,
-		AuditEventLifecycleActionCompleted:  true,
-		AuditEventLifecycleActionFailed:     true,
-		AuditEventLifecycleCallbackReceived: true,
-		AuditEventLifecycleCallbackFailed:   true,
+		AuditEventLifecycleActionInitiated:   true,
+		AuditEventLifecycleActionStarted:     true,
+		AuditEventLifecycleActionCompleted:   true,
+		AuditEventLifecycleActionFailed:      true,
+		AuditEventLifecycleCallbackReceived:  true,
+		AuditEventLifecycleCallbackFailed:    true,
 		AuditEventLifecycleRollbackInitiated: true,
 		AuditEventLifecycleRollbackCompleted: true,
-		AuditEventLifecycleRollbackFailed:   true,
-		AuditEventResourceStateChanged:      true,
-		AuditEventResourceTerminated:        true,
-		AuditEventWaldurCallbackReceived:    true,
-		AuditEventWaldurCallbackFailed:      true,
+		AuditEventLifecycleRollbackFailed:    true,
+		AuditEventResourceStateChanged:       true,
+		AuditEventResourceTerminated:         true,
+		AuditEventWaldurCallbackReceived:     true,
+		AuditEventWaldurCallbackFailed:       true,
 	}
 
 	events := make([]*AuditEvent, 0)
@@ -1219,4 +1219,3 @@ func (l *AuditLogger) GetEventsByAllocation(allocationID string, since time.Time
 
 	return events
 }
-

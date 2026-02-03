@@ -688,8 +688,8 @@ func TestTruncateAddress(t *testing.T) {
 		// Note: Strings slightly over 16 chars may become longer when truncated
 		// due to the 8+...+8 format. This is acceptable as the goal is to identify
 		// long blockchain addresses while maintaining readability.
-		{"12345678901234567890123456789012", "12345678...89012"},  // 32 chars -> truncated
-		{"123456789012345678901234", "12345678...45678901234"}, // 24 chars
+		{"12345678901234567890123456789012", "12345678...89012"}, // 32 chars -> truncated
+		{"123456789012345678901234", "12345678...45678901234"},   // 24 chars
 	}
 
 	for _, tt := range tests {
@@ -885,4 +885,3 @@ func (m *MockClient) GetServiceDeskInfo(ctx context.Context) (map[string]interfa
 		"version": "5.0.0",
 	}, nil
 }
-

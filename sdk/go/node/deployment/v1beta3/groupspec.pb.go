@@ -7,10 +7,10 @@ import (
 	fmt "fmt"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
+	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -424,4 +424,3 @@ var (
 	ErrIntOverflowGroupspec          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupGroupspec = fmt.Errorf("proto: unexpected end of group")
 )
-

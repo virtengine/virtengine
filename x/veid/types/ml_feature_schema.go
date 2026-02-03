@@ -49,8 +49,8 @@ const (
 )
 
 // Validate dimension constants at compile time
-var _ = [1]struct{}{}[TotalFeatureDim-768]               // TotalFeatureDim must be 768
-var _ = [1]struct{}{}[PaddingDim-225]                    // PaddingDim must be 225
+var _ = [1]struct{}{}[TotalFeatureDim-768]                                                              // TotalFeatureDim must be 768
+var _ = [1]struct{}{}[PaddingDim-225]                                                                   // PaddingDim must be 225
 var _ = [1]struct{}{}[FaceEmbeddingDim+DocQualityDim+OCRFeaturesDim+MetadataFeaturesDim+PaddingDim-768] // Sum must be 768
 
 // ============================================================================
@@ -407,17 +407,17 @@ func IsSchemaCompatible(version1, version2 string) bool {
 // GetSchemaInfo returns information about the current schema
 func GetSchemaInfo() map[string]interface{} {
 	return map[string]interface{}{
-		"version":             MLFeatureSchemaVersion,
-		"major":               MLFeatureSchemaVersionMajor,
-		"minor":               MLFeatureSchemaVersionMinor,
-		"patch":               MLFeatureSchemaVersionPatch,
-		"total_dimension":     TotalFeatureDim,
-		"face_embedding_dim":  FaceEmbeddingDim,
-		"doc_quality_dim":     DocQualityDim,
-		"ocr_features_dim":    OCRFeaturesDim,
-		"metadata_dim":        MetadataFeaturesDim,
-		"padding_dim":         PaddingDim,
-		"ocr_field_count":     OCRFieldCount,
+		"version":              MLFeatureSchemaVersion,
+		"major":                MLFeatureSchemaVersionMajor,
+		"minor":                MLFeatureSchemaVersionMinor,
+		"patch":                MLFeatureSchemaVersionPatch,
+		"total_dimension":      TotalFeatureDim,
+		"face_embedding_dim":   FaceEmbeddingDim,
+		"doc_quality_dim":      DocQualityDim,
+		"ocr_features_dim":     OCRFeaturesDim,
+		"metadata_dim":         MetadataFeaturesDim,
+		"padding_dim":          PaddingDim,
+		"ocr_field_count":      OCRFieldCount,
 		"scope_schema_version": ScopeSchemaVersion,
 	}
 }

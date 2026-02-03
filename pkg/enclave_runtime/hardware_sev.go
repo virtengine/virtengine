@@ -475,9 +475,10 @@ func (r *SNPDerivedKeyRequester) requestSimulatedKey(rootKey int, guestFieldSele
 	// Generate a deterministic simulated key
 	h := sha256.New()
 	h.Write([]byte("virtengine-sev-snp-derived-key"))
-	binary.Write(h, binary.LittleEndian, uint32(rootKey))
-	binary.Write(h, binary.LittleEndian, guestFieldSelect)
-	binary.Write(h, binary.LittleEndian, vmpl)
+	//nolint:gosec // rootKey is 0 or 1 enum value
+	_ = binary.Write(h, binary.LittleEndian, uint32(rootKey))
+	_ = binary.Write(h, binary.LittleEndian, guestFieldSelect)
+	_ = binary.Write(h, binary.LittleEndian, vmpl)
 
 	key := h.Sum(nil)
 	return key, nil
@@ -610,9 +611,7 @@ func (b *SEVHardwareBackend) Initialize() error {
 	}
 
 	// Detect hardware
-	if err := b.detector.Detect(); err != nil {
-		// Continue anyway for simulation mode
-	}
+	_ = b.detector.Detect()
 
 	// Create device wrapper
 	b.device = NewSEVGuestDevice(b.detector)
@@ -677,8 +676,8 @@ func (b *SEVHardwareBackend) GetAttestation(nonce []byte) ([]byte, error) {
 
 	// Serialize report
 	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, report.Version)
-	binary.Write(&buf, binary.LittleEndian, report.GuestSVN)
+	_ = binary.Write(&buf, binary.LittleEndian, report.Version)
+	_ = binary.Write(&buf, binary.LittleEndian, report.GuestSVN)
 	buf.Write(report.LaunchDigest[:])
 	buf.Write(report.ReportData[:])
 	buf.Write(report.Signature[:])
@@ -851,4 +850,3 @@ func VerifyGuestPolicy(policy SNPGuestPolicy) error {
 	}
 	return nil
 }
-

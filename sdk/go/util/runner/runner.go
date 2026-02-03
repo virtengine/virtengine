@@ -38,4 +38,3 @@ func (r result) Value() interface{} {
 func (r result) Error() error {
 	return r.err
 }
-

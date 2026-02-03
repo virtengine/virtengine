@@ -189,15 +189,12 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 	if _, err := rand.Read(commitmentSalt); err != nil {
 		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate commitment salt")
 	}
-	commitmentHash, err := k.generateCommitmentHash(disclosedClaims, commitmentSalt)
-	if err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap(err.Error())
-	}
+	commitmentHash := k.generateCommitmentHash(disclosedClaims, commitmentSalt)
 
 	// Generate the ZK proof bytes
 	// NOTE: For MVP, this is a placeholder that generates a simulated proof
 	// In production, this would call actual ZK circuit implementation
-	proofValue, err := k.generateZKProof(
+	proofValue := k.generateZKProof(
 		ctx,
 		subjectAddress,
 		request.RequestedClaims,
@@ -206,9 +203,6 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 		scheme,
 		proofNonce,
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// Create the proof
 	proof := types.NewSelectiveDisclosureProof(
@@ -371,16 +365,13 @@ func (k Keeper) CreateAgeProof(
 	proof.Nonce = nonce
 
 	// Generate ZK proof for age range
-	proofValue, err := k.generateAgeRangeProof(
+	proofValue := k.generateAgeRangeProof(
 		ctx,
 		subjectAddress,
 		ageThreshold,
 		satisfiesThreshold,
 		nonce,
 	)
-	if err != nil {
-		return nil, err
-	}
 	proof.ProofValue = proofValue
 
 	// Validate the proof
@@ -577,7 +568,7 @@ func (k Keeper) validateClaimAvailability(
 	subjectAddress sdk.AccAddress,
 	record types.IdentityRecord,
 	claimType types.ClaimType,
-	parameters map[string]interface{},
+	_ map[string]interface{},
 ) error {
 	switch claimType {
 	case types.ClaimTypeAgeOver18, types.ClaimTypeAgeOver21, types.ClaimTypeAgeOver25:
@@ -630,7 +621,7 @@ func hasVerificationLevel(record types.IdentityRecord, level int) bool {
 		return record.Tier != types.IdentityTierUnverified
 	case 2:
 		switch record.Tier {
-		case types.IdentityTierStandard, types.IdentityTierVerified, types.IdentityTierTrusted, types.IdentityTierPremium:
+		case types.IdentityTierStandard, types.IdentityTierPremium:
 			return true
 		default:
 			return false
@@ -641,17 +632,17 @@ func hasVerificationLevel(record types.IdentityRecord, level int) bool {
 }
 
 // generateCommitmentHash generates a commitment hash for disclosed claims
-func (k Keeper) generateCommitmentHash(claims map[string]interface{}, salt []byte) ([]byte, error) {
+func (k Keeper) generateCommitmentHash(claims map[string]interface{}, salt []byte) []byte {
 	h := sha256.New()
 	h.Write(salt)
 
 	// Sort claims by key for deterministic hashing
 	for key, value := range claims {
 		h.Write([]byte(key))
-		h.Write([]byte(fmt.Sprintf("%v", value)))
+		fmt.Fprintf(h, "%v", value)
 	}
 
-	return h.Sum(nil), nil
+	return h.Sum(nil)
 }
 
 // generateZKProof generates a zero-knowledge proof for the given claims
@@ -661,10 +652,10 @@ func (k Keeper) generateZKProof(
 	subjectAddress sdk.AccAddress,
 	claimTypes []types.ClaimType,
 	disclosedClaims map[string]interface{},
-	parameters map[string]interface{},
+	_ map[string]interface{},
 	scheme types.ProofScheme,
 	nonce []byte,
-) ([]byte, error) {
+) []byte {
 	// For SNARK scheme, use real Groth16 if available
 	if scheme == types.ProofSchemeSNARK && k.zkSystem != nil {
 		// Circuit-specific proof generation is handled by specialized functions
@@ -677,13 +668,13 @@ func (k Keeper) generateZKProof(
 		}
 		for key, value := range disclosedClaims {
 			h.Write([]byte(key))
-			h.Write([]byte(fmt.Sprintf("%v", value)))
+			fmt.Fprintf(h, "%v", value)
 		}
 		h.Write([]byte(scheme.String()))
 		h.Write(nonce)
 		// Use block height for determinism, not block time
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
-		return h.Sum(nil), nil
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
+		return h.Sum(nil)
 	}
 
 	// For other schemes, use deterministic hash-based construction
@@ -695,13 +686,13 @@ func (k Keeper) generateZKProof(
 	}
 	for key, value := range disclosedClaims {
 		h.Write([]byte(key))
-		h.Write([]byte(fmt.Sprintf("%v", value)))
+		fmt.Fprintf(h, "%v", value)
 	}
 	h.Write([]byte(scheme.String()))
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 
-	return h.Sum(nil), nil
+	return h.Sum(nil)
 }
 
 // verifyZKProof verifies a zero-knowledge proof
@@ -748,11 +739,11 @@ func (k Keeper) verifyZKProof(
 		}
 		for key, value := range disclosedClaims {
 			h.Write([]byte(key))
-			h.Write([]byte(fmt.Sprintf("%v", value)))
+			fmt.Fprintf(h, "%v", value)
 		}
 		h.Write([]byte(scheme.String()))
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
 		expected := h.Sum(nil)
 
 		// Verify proof matches expected hash for determinism
@@ -775,11 +766,11 @@ func (k Keeper) verifyZKProof(
 	}
 	for key, value := range disclosedClaims {
 		h.Write([]byte(key))
-		h.Write([]byte(fmt.Sprintf("%v", value)))
+		fmt.Fprintf(h, "%v", value)
 	}
 	h.Write([]byte(scheme.String()))
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	expected := h.Sum(nil)
 
 	// Deterministic verification
@@ -797,7 +788,7 @@ func (k Keeper) verifyZKProof(
 // evaluateAgeThreshold evaluates if the subject meets an age threshold
 // Generates real cryptographic commitment to DOB for privacy-preserving proofs
 func (k Keeper) evaluateAgeThreshold(
-	ctx sdk.Context,
+	_ sdk.Context,
 	record types.IdentityRecord,
 	ageThreshold uint32,
 ) (bool, []byte, error) {
@@ -824,10 +815,10 @@ func (k Keeper) evaluateAgeThreshold(
 	// Evaluate age based on verification tier and current score
 	// Higher tiers and scores indicate more thorough age verification
 	satisfies := hasVerificationLevel(record, 2)
-	if ageThreshold > 21 && record.Tier < types.IdentityTierVerified {
+	if ageThreshold > 21 && record.Tier < types.IdentityTierStandard {
 		satisfies = false
 	}
-	if ageThreshold > 25 && record.Tier < types.IdentityTierTrusted {
+	if ageThreshold > 25 && record.Tier < types.IdentityTierPremium {
 		satisfies = false
 	}
 
@@ -837,7 +828,7 @@ func (k Keeper) evaluateAgeThreshold(
 // evaluateResidency evaluates if the subject is a resident of a country
 // Generates real cryptographic commitment to address for privacy-preserving proofs
 func (k Keeper) evaluateResidency(
-	ctx sdk.Context,
+	_ sdk.Context,
 	record types.IdentityRecord,
 	countryCode string,
 ) (bool, []byte, error) {
@@ -877,7 +868,7 @@ func (k Keeper) generateAgeRangeProof(
 	ageThreshold uint32,
 	satisfies bool,
 	nonce []byte,
-) ([]byte, error) {
+) []byte {
 	// If ZK system is available and satisfies is true, generate real proof
 	if k.zkSystem != nil && satisfies {
 		// In production, this would use actual DOB from decrypted scopes
@@ -889,25 +880,27 @@ func (k Keeper) generateAgeRangeProof(
 		h := sha256.New()
 		h.Write([]byte("age_proof_v1"))
 		h.Write([]byte(subjectAddress.String()))
-		h.Write([]byte(fmt.Sprintf("threshold_%d", ageThreshold)))
-		h.Write([]byte(fmt.Sprintf("satisfies_%t", satisfies)))
+		fmt.Fprintf(h, "threshold_%d", ageThreshold)
+		fmt.Fprintf(h, "satisfies_%t", satisfies)
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
-		return h.Sum(nil), nil
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
+		return h.Sum(nil)
 	}
 
 	// Fallback to deterministic hash for consensus
 	h := sha256.New()
 	h.Write([]byte(subjectAddress.String()))
-	h.Write([]byte(fmt.Sprintf("age_threshold_%d", ageThreshold)))
-	h.Write([]byte(fmt.Sprintf("satisfies_%t", satisfies)))
+	fmt.Fprintf(h, "age_threshold_%d", ageThreshold)
+	fmt.Fprintf(h, "satisfies_%t", satisfies)
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
-	return h.Sum(nil), nil
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
+	return h.Sum(nil)
 }
 
 // generateResidencyProof generates a proof for residency
 // Uses Groth16 ZK-SNARK for privacy-preserving residency verification
+//
+//nolint:unparam // signature matches other proof generators
 func (k Keeper) generateResidencyProof(
 	ctx sdk.Context,
 	subjectAddress sdk.AccAddress,
@@ -926,20 +919,20 @@ func (k Keeper) generateResidencyProof(
 		h := sha256.New()
 		h.Write([]byte("residency_proof_v1"))
 		h.Write([]byte(subjectAddress.String()))
-		h.Write([]byte(fmt.Sprintf("country_%s", countryCode)))
-		h.Write([]byte(fmt.Sprintf("resident_%t", isResident)))
+		fmt.Fprintf(h, "country_%s", countryCode)
+		fmt.Fprintf(h, "resident_%t", isResident)
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
 		return h.Sum(nil), nil
 	}
 
 	// Fallback to deterministic hash for consensus
 	h := sha256.New()
 	h.Write([]byte(subjectAddress.String()))
-	h.Write([]byte(fmt.Sprintf("country_%s", countryCode)))
-	h.Write([]byte(fmt.Sprintf("resident_%t", isResident)))
+	fmt.Fprintf(h, "country_%s", countryCode)
+	fmt.Fprintf(h, "resident_%t", isResident)
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	return h.Sum(nil), nil
 }
 
@@ -965,20 +958,20 @@ func (k Keeper) generateScoreRangeProof(
 		h := sha256.New()
 		h.Write([]byte("score_proof_v1"))
 		h.Write([]byte(subjectAddress.String()))
-		h.Write([]byte(fmt.Sprintf("threshold_%d", scoreThreshold)))
-		h.Write([]byte(fmt.Sprintf("actual_%d", score.Score)))
-		h.Write([]byte(fmt.Sprintf("exceeds_%t", exceeds)))
+		fmt.Fprintf(h, "threshold_%d", scoreThreshold)
+		fmt.Fprintf(h, "actual_%d", score.Score)
+		fmt.Fprintf(h, "exceeds_%t", exceeds)
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
 		return h.Sum(nil), nil
 	}
 
 	// Fallback to deterministic hash for consensus
 	h := sha256.New()
 	h.Write([]byte(subjectAddress.String()))
-	h.Write([]byte(fmt.Sprintf("score_threshold_%d", scoreThreshold)))
-	h.Write([]byte(fmt.Sprintf("exceeds_%t", exceeds)))
+	fmt.Fprintf(h, "score_threshold_%d", scoreThreshold)
+	fmt.Fprintf(h, "exceeds_%t", exceeds)
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	return h.Sum(nil), nil
 }

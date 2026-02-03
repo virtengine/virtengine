@@ -279,7 +279,7 @@ func TestPKCS7UnpadInvalid(t *testing.T) {
 	}{
 		{"empty", []byte{}},
 		{"invalid padding byte", []byte{0x01, 0x02, 0x03, 0x00}}, // padding byte is 0
-		{"padding larger than length", []byte{0x10}},              // padding is 16 but only 1 byte
+		{"padding larger than length", []byte{0x10}},             // padding is 16 but only 1 byte
 	}
 
 	for _, tc := range testCases {
@@ -480,13 +480,13 @@ func TestAnsibleVaultRoundTrip(t *testing.T) {
 
 	// Test with realistic secrets
 	secrets := map[string]string{
-		"db_password":       "postgres_super_secret_123!",
-		"api_key":           "sk_live_abcdef1234567890",
-		"ssh_private_key":   "-----BEGIN RSA PRIVATE KEY-----\nMIIEpA...",
-		"aws_access_key":    "AKIAIOSFODNN7EXAMPLE",
-		"aws_secret_key":    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-		"certificate":       "-----BEGIN CERTIFICATE-----\nMIIC+z...",
-		"service_account":   `{"type":"service_account","project_id":"my-project"}`,
+		"db_password":     "postgres_super_secret_123!",
+		"api_key":         "sk_live_abcdef1234567890",
+		"ssh_private_key": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpA...",
+		"aws_access_key":  "AKIAIOSFODNN7EXAMPLE",
+		"aws_secret_key":  "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		"certificate":     "-----BEGIN CERTIFICATE-----\nMIIC+z...",
+		"service_account": `{"type":"service_account","project_id":"my-project"}`,
 	}
 
 	for name, secret := range secrets {
@@ -525,4 +525,3 @@ func TestAnsibleVaultWithPasswordBytes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, plaintext, decrypted2)
 }
-

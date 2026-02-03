@@ -20,6 +20,12 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+const (
+	testChainID        = "test-chain"
+	testModelVersion   = "v1.0.0"
+	testKeyFingerprint = "validator1"
+)
+
 // closeStoreIfNeeded closes the CommitMultiStore if it implements io.Closer.
 func closeStoreIfNeeded(stateStore store.CommitMultiStore) {
 	if stateStore == nil {
@@ -58,9 +64,9 @@ type mockMLScorer struct {
 	scoreOverride map[string]uint32 // Allow per-input score overrides
 }
 
-func newMockMLScorer(version string, healthy bool, fixedScore uint32) *mockMLScorer {
+func newMockMLScorer(healthy bool, fixedScore uint32) *mockMLScorer {
 	return &mockMLScorer{
-		version:       version,
+		version:       testModelVersion,
 		healthy:       healthy,
 		fixedScore:    fixedScore,
 		scoreOverride: make(map[string]uint32),
@@ -110,11 +116,11 @@ type mockKeyProvider struct {
 	fingerprint string
 }
 
-func newMockKeyProvider(fingerprint string) *mockKeyProvider {
-	key := sha256.Sum256([]byte(fingerprint))
+func newMockKeyProvider() *mockKeyProvider {
+	key := sha256.Sum256([]byte(testKeyFingerprint))
 	return &mockKeyProvider{
 		privateKey:  key[:],
-		fingerprint: fingerprint,
+		fingerprint: testKeyFingerprint,
 	}
 }
 
@@ -150,8 +156,8 @@ func TestDefaultConsensusParams(t *testing.T) {
 
 func TestCompareResults_ExactMatch(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -186,8 +192,8 @@ func TestCompareResults_ExactMatch(t *testing.T) {
 
 func TestCompareResults_ScoreMismatch(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams() // tolerance = 0
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -221,8 +227,8 @@ func TestCompareResults_ScoreMismatch(t *testing.T) {
 
 func TestCompareResults_ScoreWithinTolerance(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := ConsensusParams{
 		ScoreTolerance:        2, // Allow up to 2 points difference
 		RequireModelMatch:     true,
@@ -257,8 +263,8 @@ func TestCompareResults_ScoreWithinTolerance(t *testing.T) {
 
 func TestCompareResults_ScoreExceedsTolerance(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := ConsensusParams{
 		ScoreTolerance:        2, // Allow up to 2 points difference
 		RequireModelMatch:     true,
@@ -293,8 +299,8 @@ func TestCompareResults_ScoreExceedsTolerance(t *testing.T) {
 
 func TestCompareResults_StatusMismatch(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -326,8 +332,8 @@ func TestCompareResults_StatusMismatch(t *testing.T) {
 
 func TestCompareResults_ModelVersionMismatch(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -358,8 +364,8 @@ func TestCompareResults_ModelVersionMismatch(t *testing.T) {
 
 func TestCompareResults_InputHashMismatch(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -391,8 +397,8 @@ func TestCompareResults_InputHashMismatch(t *testing.T) {
 
 func TestCompareResults_ModelMatchNotRequired(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := ConsensusParams{
 		ScoreTolerance:        0,
 		RequireModelMatch:     false, // Don't require model match
@@ -430,8 +436,8 @@ func TestCompareResults_ModelMatchNotRequired(t *testing.T) {
 
 func TestValidateModelVersion_Match(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -443,8 +449,8 @@ func TestValidateModelVersion_Match(t *testing.T) {
 
 func TestValidateModelVersion_Mismatch(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -457,8 +463,8 @@ func TestValidateModelVersion_Mismatch(t *testing.T) {
 
 func TestValidateModelVersion_UnhealthyScorer(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", false, 85) // Not healthy
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(false, 85) // Not healthy
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -702,8 +708,8 @@ func TestComparisonResult_MultipleDifferences(t *testing.T) {
 
 func TestCompareResults_ZeroScores(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 0)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 0)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -734,8 +740,8 @@ func TestCompareResults_ZeroScores(t *testing.T) {
 
 func TestCompareResults_MaxScores(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 100)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 100)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)
@@ -766,8 +772,8 @@ func TestCompareResults_MaxScores(t *testing.T) {
 
 func TestCompareResults_EmptyInputHash(t *testing.T) {
 	logger := log.NewNopLogger()
-	scorer := newMockMLScorer("v1.0.0", true, 85)
-	keyProvider := newMockKeyProvider("validator1")
+	scorer := newMockMLScorer(true, 85)
+	keyProvider := newMockKeyProvider()
 	params := DefaultConsensusParams()
 
 	cv := NewConsensusVerifier(nil, scorer, keyProvider, params, logger)

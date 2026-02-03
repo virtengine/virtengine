@@ -200,9 +200,9 @@ func TestUsageMeterListMeteredWorkloads(t *testing.T) {
 		MetricsCollector: collector,
 	})
 
-	meter.StartMetering("workload-1", "deployment-1", "lease-1", PricingInputs{})
-	meter.StartMetering("workload-2", "deployment-2", "lease-2", PricingInputs{})
-	meter.StartMetering("workload-3", "deployment-3", "lease-3", PricingInputs{})
+	_ = meter.StartMetering("workload-1", "deployment-1", "lease-1", PricingInputs{})
+	_ = meter.StartMetering("workload-2", "deployment-2", "lease-2", PricingInputs{})
+	_ = meter.StartMetering("workload-3", "deployment-3", "lease-3", PricingInputs{})
 
 	workloads := meter.ListMeteredWorkloads()
 	assert.Len(t, workloads, 3)
@@ -545,12 +545,12 @@ func TestMeteringLoopIntegration(t *testing.T) {
 	}
 
 	// Start metering for a workload
-	meter.StartMetering("workload-1", "deployment-1", "lease-1", PricingInputs{})
+	_ = meter.StartMetering("workload-1", "deployment-1", "lease-1", PricingInputs{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	meter.Start(ctx)
+	_ = meter.Start(ctx)
 
 	// Wait for a few collection cycles
 	time.Sleep(350 * time.Millisecond)
@@ -561,4 +561,3 @@ func TestMeteringLoopIntegration(t *testing.T) {
 	records := recorder.GetRecords()
 	assert.GreaterOrEqual(t, len(records), 2)
 }
-

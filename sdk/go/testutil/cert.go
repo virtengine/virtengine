@@ -233,4 +233,3 @@ func CertificateRequireEqualResponse(t *testing.T, cert TestCertificate, resp ty
 	require.Equal(t, cert.PEM.Cert, resp.Certificate.Cert)
 	require.Equal(t, cert.PEM.Pub, resp.Certificate.Pubkey)
 }
-

@@ -23,7 +23,7 @@ import (
 
 // Error message constants
 const (
-	errMsgHashCredentialFailed = "failed to hash credential: %v"
+	errMsgHashCredentialFailed = "failed to hash credential: %v" //nolint:gosec // non-secret error text
 )
 
 // ============================================================================
@@ -143,9 +143,7 @@ func (k Keeper) IssueCredential(
 	}
 
 	// Create indexes
-	if err := k.indexCredential(ctx, record, subjectAddr, issuerAddress); err != nil {
-		return nil, err
-	}
+	k.indexCredential(ctx, record, subjectAddr, issuerAddress)
 
 	// Emit event
 	ctx.EventManager().EmitEvent(
@@ -376,7 +374,7 @@ func (k Keeper) RevokeCredential(
 	store := ctx.KVStore(k.skey)
 	revokedKey := types.RevokedCredentialKey(credentialID)
 	revokedValue := make([]byte, 8)
-	binary.BigEndian.PutUint64(revokedValue, uint64(ctx.BlockTime().Unix()))
+	binary.BigEndian.PutUint64(revokedValue, safeUint64FromInt64Credential(ctx.BlockTime().Unix()))
 	store.Set(revokedKey, revokedValue)
 
 	// Emit event
@@ -592,12 +590,12 @@ func (k Keeper) generateCredentialID(ctx sdk.Context, subjectAddress string, iss
 
 	// Add block height
 	heightBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(heightBytes, uint64(ctx.BlockHeight()))
+	binary.BigEndian.PutUint64(heightBytes, safeUint64FromInt64Credential(ctx.BlockHeight()))
 	h.Write(heightBytes)
 
 	// Add timestamp
 	timeBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(timeBytes, uint64(ctx.BlockTime().UnixNano()))
+	binary.BigEndian.PutUint64(timeBytes, safeUint64FromInt64Credential(ctx.BlockTime().UnixNano()))
 	h.Write(timeBytes)
 
 	hash := h.Sum(nil)
@@ -631,7 +629,7 @@ func (k Keeper) indexCredential(
 	record *types.CredentialRecord,
 	subjectAddress sdk.AccAddress,
 	issuerAddress sdk.ValAddress,
-) error {
+) {
 	store := ctx.KVStore(k.skey)
 
 	// Index by subject
@@ -654,7 +652,6 @@ func (k Keeper) indexCredential(
 		store.Set(expiryKey, []byte{1})
 	}
 
-	return nil
 }
 
 // bytesEqual compares two byte slices for equality.
@@ -705,4 +702,12 @@ func (k Keeper) CleanupExpiredCredentials(ctx sdk.Context) int {
 	}
 
 	return cleaned
+}
+
+func safeUint64FromInt64Credential(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }

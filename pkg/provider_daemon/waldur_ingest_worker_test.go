@@ -13,6 +13,8 @@ import (
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
+const testComputeTag = "compute"
+
 // MockOfferingSubmitter implements OfferingSubmitter for testing.
 type MockOfferingSubmitter struct {
 	CreateOfferingFn          func(ctx context.Context, offering *marketplace.Offering) (string, error)
@@ -78,7 +80,7 @@ var sampleWaldurCompute = &marketplace.WaldurOfferingImport{
 	Shared:       true,
 	Billable:     true,
 	Attributes: map[string]interface{}{
-		"tags":                  []interface{}{"compute", "basic"},
+		"tags":                  []interface{}{testComputeTag, "basic"},
 		"regions":               []interface{}{"us-east-1", "eu-west-1"},
 		"spec_vcpu":             "2",
 		"spec_memory_gb":        "4",
@@ -147,11 +149,11 @@ var sampleWaldurStorage = &marketplace.WaldurOfferingImport{
 	Shared:       true,
 	Billable:     true,
 	Attributes: map[string]interface{}{
-		"tags":             []interface{}{"storage", "ssd"},
-		"regions":          []interface{}{"us-east-1"},
-		"spec_type":        "ssd",
-		"spec_iops":        "3000",
-		"spec_throughput":  "250",
+		"tags":            []interface{}{"storage", "ssd"},
+		"regions":         []interface{}{"us-east-1"},
+		"spec_type":       "ssd",
+		"spec_iops":       "3000",
+		"spec_throughput": "250",
 	},
 	Components: []marketplace.WaldurPricingComponent{
 		{
@@ -173,27 +175,27 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		offering *marketplace.WaldurOfferingImport
-		wantValid bool
+		name       string
+		offering   *marketplace.WaldurOfferingImport
+		wantValid  bool
 		wantErrors int
 	}{
 		{
-			name:     "valid compute offering",
-			offering: sampleWaldurCompute,
-			wantValid: true,
+			name:       "valid compute offering",
+			offering:   sampleWaldurCompute,
+			wantValid:  true,
 			wantErrors: 0,
 		},
 		{
-			name:     "valid hpc offering",
-			offering: sampleWaldurHPC,
-			wantValid: true,
+			name:       "valid hpc offering",
+			offering:   sampleWaldurHPC,
+			wantValid:  true,
 			wantErrors: 0,
 		},
 		{
-			name:     "valid storage offering",
-			offering: sampleWaldurStorage,
-			wantValid: true,
+			name:       "valid storage offering",
+			offering:   sampleWaldurStorage,
+			wantValid:  true,
 			wantErrors: 0,
 		},
 		{
@@ -202,7 +204,7 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 				Name:         "Test",
 				CustomerUUID: "cust-provider-001",
 			},
-			wantValid: false,
+			wantValid:  false,
 			wantErrors: 1,
 		},
 		{
@@ -211,7 +213,7 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 				UUID:         "test-uuid",
 				CustomerUUID: "cust-provider-001",
 			},
-			wantValid: false,
+			wantValid:  false,
 			wantErrors: 1,
 		},
 		{
@@ -221,7 +223,7 @@ func TestWaldurOfferingImport_Validate(t *testing.T) {
 				Name:         "Test",
 				CustomerUUID: "unknown-customer",
 			},
-			wantValid: false,
+			wantValid:  false,
 			wantErrors: 1,
 		},
 	}
@@ -296,9 +298,9 @@ func TestWaldurOfferingImport_ResolveCategory(t *testing.T) {
 
 func TestWaldurOfferingImport_ResolveState(t *testing.T) {
 	tests := []struct {
-		name     string
-		state    string
-		want     marketplace.OfferingState
+		name  string
+		state string
+		want  marketplace.OfferingState
 	}{
 		{"active", "Active", marketplace.OfferingStateActive},
 		{"paused", "Paused", marketplace.OfferingStatePaused},
@@ -363,8 +365,8 @@ func TestWaldurOfferingImport_ExtractTags(t *testing.T) {
 	if len(tags) != 2 {
 		t.Errorf("tags count = %d, want 2", len(tags))
 	}
-	if tags[0] != "compute" {
-		t.Errorf("first tag = %s, want 'compute'", tags[0])
+	if tags[0] != testComputeTag {
+		t.Errorf("first tag = %s, want '%s'", tags[0], testComputeTag)
 	}
 }
 
@@ -594,4 +596,3 @@ func TestMockAuditLogger(t *testing.T) {
 		Action:     "dead_lettered",
 	})
 }
-

@@ -2,7 +2,7 @@ package support
 
 import (
 	"github.com/virtengine/virtengine/x/support/keeper"
-	"github.com/virtengine/virtengine/x/support/types"
+	types "github.com/virtengine/virtengine/x/support/types" //nolint:staticcheck // deprecated types retained for compatibility
 )
 
 const (

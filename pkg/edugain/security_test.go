@@ -596,9 +596,9 @@ func TestXMLEncoding_CommentInjection(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to inject XML comment
-	injected := bytes.Replace(assertionXML, 
-		[]byte("testuser@example.com"), 
-		[]byte("testuser@example.com<!-- -->attacker@evil.com"), 
+	injected := bytes.Replace(assertionXML,
+		[]byte("testuser@example.com"),
+		[]byte("testuser@example.com<!-- -->attacker@evil.com"),
 		1)
 
 	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
@@ -623,7 +623,7 @@ func TestXMLEncoding_EntityExpansion(t *testing.T) {
 	require.NoError(t, err)
 
 	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
-	
+
 	// This should not cause resource exhaustion
 	// etree library should handle this safely
 	_, err = verifier.VerifyAssertion(maliciousXML, []*x509.Certificate{cert})
@@ -1002,9 +1002,9 @@ func TestVerification_MultipleCertsOnlyOneValid(t *testing.T) {
 	// Verify with mix of valid/invalid certs
 	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
 	result, err := verifier.VerifyAssertion(assertionXML, []*x509.Certificate{
-		expiredCert1,  // expired
-		futureCert,    // not yet valid
-		signingCert,   // valid - the one that signed
+		expiredCert1, // expired
+		futureCert,   // not yet valid
+		signingCert,  // valid - the one that signed
 	})
 
 	assert.NoError(t, err)
@@ -1060,7 +1060,6 @@ func TestNamespaceHandling(t *testing.T) {
 	require.NoError(t, err)
 
 	// The signed assertion should handle namespaces correctly
-	assert.True(t, strings.Contains(string(assertionXML), "saml:") || 
+	assert.True(t, strings.Contains(string(assertionXML), "saml:") ||
 		strings.Contains(string(assertionXML), "urn:oasis:names:tc:SAML"))
 }
-

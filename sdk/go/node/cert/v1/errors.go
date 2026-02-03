@@ -51,4 +51,3 @@ var (
 	// ErrInvalidKeySize invalid key size
 	ErrInvalidKeySize = sdkerrors.RegisterWithGRPCCode(ModuleName, errInvalidKeySize, codes.InvalidArgument, "invalid key size")
 )
-

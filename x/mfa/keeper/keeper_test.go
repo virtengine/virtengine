@@ -297,10 +297,10 @@ func (s *KeeperTestSuite) TestParams() {
 
 	// Set custom params
 	customParams := types.Params{
-		DefaultSessionDuration:  1800,  // 30 minutes
+		DefaultSessionDuration:  1800, // 30 minutes
 		MaxFactorsPerAccount:    10,
 		MaxChallengeAttempts:    5,
-		ChallengeTTL:            600,   // 10 minutes
+		ChallengeTTL:            600, // 10 minutes
 		MaxTrustedDevices:       5,
 		TrustedDeviceTTL:        86400, // 24 hours
 		MinVEIDScoreForMFA:      50,

@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// algorithmSHA256 is the SHA256 hash algorithm identifier
+const algorithmSHA256 = "sha256"
+
 func TestContentAddress(t *testing.T) {
 	t.Run("NewContentAddress", func(t *testing.T) {
 		content := []byte("test content for hashing")
@@ -21,7 +24,7 @@ func TestContentAddress(t *testing.T) {
 			t.Error("hash mismatch")
 		}
 
-		if addr.Algorithm != "sha256" {
+		if addr.Algorithm != algorithmSHA256 {
 			t.Errorf("expected algorithm sha256, got %s", addr.Algorithm)
 		}
 
@@ -49,7 +52,7 @@ func TestContentAddress(t *testing.T) {
 		addr := &ContentAddress{
 			Version:    1,
 			Hash:       []byte("short"),
-			Algorithm:  "sha256",
+			Algorithm:  algorithmSHA256,
 			Backend:    BackendWaldur,
 			BackendRef: "ref",
 		}
@@ -64,7 +67,7 @@ func TestContentAddress(t *testing.T) {
 		addr := &ContentAddress{
 			Version:    1,
 			Hash:       hash[:],
-			Algorithm:  "sha256",
+			Algorithm:  algorithmSHA256,
 			Backend:    BackendWaldur,
 			BackendRef: "",
 		}
@@ -572,4 +575,3 @@ func TestDeleteRequest(t *testing.T) {
 		}
 	})
 }
-

@@ -8,7 +8,9 @@ import (
 	"sort"
 	"time"
 
-	"cosmossdk.io/math"
+	stdmath "math"
+
+	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -163,15 +165,14 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 	maxStaleness := params.MaxPriceStalenessBlocks
 
 	// Collect prices from all sources
-	var prices []math.LegacyDec
-	var validPrices []types.PriceData
+	prices := make([]sdkmath.LegacyDec, 0, len(params.Sources))
 	var totalSources uint32
 	var healthySources uint32
 	var failureReasons []string
 
 	// Iterate through sources (0 to len(params.Sources))
 	for sourceIdx := range params.Sources {
-		source := uint32(sourceIdx)
+		source := safeUint32FromInt(sourceIdx)
 		totalSources++
 
 		priceData, found := k.GetLatestPrice(ctx, source, denom, baseDenom)
@@ -188,7 +189,6 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 
 		healthySources++
 		prices = append(prices, priceData.State.Price)
-		validPrices = append(validPrices, *priceData)
 	}
 
 	// Check minimum sources requirement
@@ -211,10 +211,10 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 		// Return empty aggregated price with unhealthy status
 		return &types.AggregatedPrice{
 			Denom:       denom,
-			TWAP:        math.LegacyZeroDec(),
-			MedianPrice: math.LegacyZeroDec(),
-			MinPrice:    math.LegacyZeroDec(),
-			MaxPrice:    math.LegacyZeroDec(),
+			TWAP:        sdkmath.LegacyZeroDec(),
+			MedianPrice: sdkmath.LegacyZeroDec(),
+			MinPrice:    sdkmath.LegacyZeroDec(),
+			MaxPrice:    sdkmath.LegacyZeroDec(),
 			Timestamp:   ctx.BlockTime(),
 			NumSources:  0,
 		}, health, nil
@@ -226,10 +226,10 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 	})
 
 	// Calculate median
-	var median math.LegacyDec
+	var median sdkmath.LegacyDec
 	n := len(prices)
 	if n%2 == 0 {
-		median = prices[n/2-1].Add(prices[n/2]).Quo(math.LegacyNewDec(2))
+		median = prices[n/2-1].Add(prices[n/2]).Quo(sdkmath.LegacyNewDec(2))
 	} else {
 		median = prices[n/2]
 	}
@@ -241,7 +241,7 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 	// Calculate deviation in basis points
 	var deviationBps uint64
 	if !minPrice.IsZero() {
-		deviation := maxPrice.Sub(minPrice).Quo(minPrice).Mul(math.LegacyNewDec(10000))
+		deviation := maxPrice.Sub(minPrice).Quo(minPrice).Mul(sdkmath.LegacyNewDec(10000))
 		deviationBps = deviation.TruncateInt().Uint64()
 	}
 
@@ -273,7 +273,7 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 }
 
 // calculateTWAP calculates the time-weighted average price over a window.
-func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowBlocks int64) math.LegacyDec {
+func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowBlocks int64) sdkmath.LegacyDec {
 	store := ctx.KVStore(k.storeKey)
 	currentHeight := ctx.BlockHeight()
 	startHeight := currentHeight - windowBlocks
@@ -282,17 +282,17 @@ func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowB
 	}
 
 	params := k.GetParams(ctx)
-	var totalWeightedPrice math.LegacyDec = math.LegacyZeroDec()
+	totalWeightedPrice := sdkmath.LegacyZeroDec()
 	var totalWeight int64
 
 	// Collect prices from all sources within the window
 	for sourceIdx := range params.Sources {
-		source := uint32(sourceIdx)
+		source := safeUint32FromInt(sourceIdx)
 		prefix := otypes.PriceDataPrefixByPair(source, denom, baseDenom)
 		iter := storetypes.KVStoreReversePrefixIterator(store, prefix)
 		defer iter.Close()
 
-		var prevHeight int64 = currentHeight
+		prevHeight := currentHeight
 		for ; iter.Valid(); iter.Next() {
 			var priceData types.PriceData
 			if err := k.cdc.Unmarshal(iter.Value(), &priceData); err != nil {
@@ -314,7 +314,7 @@ func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowB
 	}
 
 	if totalWeight == 0 {
-		return math.LegacyZeroDec()
+		return sdkmath.LegacyZeroDec()
 	}
 
 	return totalWeightedPrice.QuoInt64(totalWeight)
@@ -336,10 +336,10 @@ func (k *Keeper) GetPrices(ctx sdk.Context, filters types.PricesFilter) ([]types
 
 // getPricesByPair retrieves prices for a specific asset/base denomination pair.
 func (k *Keeper) getPricesByPair(store storetypes.KVStore, params types.Params, filters types.PricesFilter) ([]types.PriceData, error) {
-	var results []types.PriceData
+	results := make([]types.PriceData, 0, len(params.Sources))
 
 	for sourceIdx := range params.Sources {
-		source := uint32(sourceIdx)
+		source := safeUint32FromInt(sourceIdx)
 		prices := k.getPricesForSource(store, source, filters)
 		results = append(results, prices...)
 	}
@@ -363,6 +363,17 @@ func (k *Keeper) getPricesForSource(store storetypes.KVStore, source uint32, fil
 	}
 
 	return results
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > stdmath.MaxInt32 {
+		return stdmath.MaxUint32
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }
 
 // getPriceAtHeight retrieves a specific price at a given block height.
@@ -505,11 +516,13 @@ func (q Querier) Prices(ctx context.Context, req *types.QueryPricesRequest) (*ty
 var _ types.QueryServer = Querier{}
 
 // getDefaultPriceData returns default price data when not found
+//
+//nolint:unused // reserved for default price fallback during maintenance
 func getDefaultPriceData() types.PriceData {
 	return types.PriceData{
 		ID: types.PriceDataRecordID{},
 		State: types.PriceDataState{
-			Price:     math.LegacyZeroDec(),
+			Price:     sdkmath.LegacyZeroDec(),
 			Timestamp: time.Time{},
 		},
 	}

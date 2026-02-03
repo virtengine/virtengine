@@ -863,4 +863,3 @@ func DefaultNetworkScenarios() []NetworkScenario {
 		NewBandwidthLimit(defaultNodes, "100kbps", 2*time.Minute),
 	}
 }
-

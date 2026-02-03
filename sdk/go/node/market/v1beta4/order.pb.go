@@ -7,10 +7,10 @@ import (
 	fmt "fmt"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
+	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta3"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/deployment/v1beta3"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -280,7 +280,9 @@ func init() {
 	proto.RegisterType((*OrderFilters)(nil), "virtengine.market.v1beta4.OrderFilters")
 }
 
-func init() { proto.RegisterFile("virtengine/market/v1beta4/order.proto", fileDescriptor_f7500a2881510f8f) }
+func init() {
+	proto.RegisterFile("virtengine/market/v1beta4/order.proto", fileDescriptor_f7500a2881510f8f)
+}
 
 var fileDescriptor_f7500a2881510f8f = []byte{
 	// 574 bytes of a gzipped FileDescriptorProto
@@ -1104,4 +1106,3 @@ var (
 	ErrIntOverflowOrder          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupOrder = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -48,7 +48,6 @@ type XMLDSigVerifier struct {
 	certCache  *CertificateCache
 	clockSkew  time.Duration
 	requireSig bool
-	mu         sync.RWMutex
 }
 
 // XMLDSigVerifierConfig configures the verifier
@@ -663,4 +662,3 @@ func IsAllowedDigestAlgorithm(algorithm string) bool {
 	}
 	return allowedAlgorithms[algorithm]
 }
-

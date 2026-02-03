@@ -49,7 +49,7 @@ func newDefaultEthClient(rpcURL string) *defaultEthClient {
 func (c *defaultEthClient) CallContract(ctx context.Context, address string, data []byte) ([]byte, error) {
 	// In production, this would use go-ethereum's ethclient to make RPC calls
 	// For now, return an error indicating the client needs to be configured
-	return nil, fmt.Errorf("Chainlink ETH client not configured - set RPCURL in ChainlinkConfig")
+	return nil, fmt.Errorf("chainlink ETH client not configured - set RPCURL in ChainlinkConfig")
 }
 
 func (c *defaultEthClient) Close() error {
@@ -59,7 +59,7 @@ func (c *defaultEthClient) Close() error {
 // NewChainlinkProvider creates a new Chainlink provider
 func NewChainlinkProvider(name string, cfg ChainlinkConfig, retryCfg RetryConfig) (*ChainlinkProvider, error) {
 	if cfg.RPCURL == "" {
-		return nil, fmt.Errorf("Chainlink provider requires RPC URL")
+		return nil, fmt.Errorf("chainlink provider requires RPC URL")
 	}
 
 	provider := &ChainlinkProvider{
@@ -267,4 +267,3 @@ var ChainlinkSepoliaFeeds = map[string]string{
 	"BTC/USD":  "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43",
 	"LINK/USD": "0xc59E3633BAAC79493d908e63626716e204A45EdF",
 }
-

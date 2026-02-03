@@ -29,7 +29,6 @@ func (e *EncryptedPayloadEnvelope) Validate() error {
 	if len(e.SenderSignature) == 0 {
 		return fmt.Errorf("sender signature required")
 	}
-	
+
 	return nil
 }
-

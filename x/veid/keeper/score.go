@@ -281,11 +281,13 @@ func (k Keeper) GetScoreHistoryPaginated(ctx sdk.Context, accountAddr string, li
 	entries := k.getScoreHistoryForAddress(ctx, address, 0)
 
 	// Apply pagination
+	//nolint:gosec // G115: len(entries) is bounded by storage limits, safe uint32 conversion
 	if offset >= uint32(len(entries)) {
 		return []types.ScoreHistoryEntry{}
 	}
 
 	end := offset + limit
+	//nolint:gosec // G115: len(entries) is bounded by storage limits, safe uint32 conversion
 	if end > uint32(len(entries)) || limit == 0 {
 		end = uint32(len(entries))
 	}
@@ -372,7 +374,7 @@ func (k Keeper) GetVerificationStatus(ctx sdk.Context, addr string) types.Accoun
 func (k Keeper) CheckEligibility(ctx sdk.Context, addr string, offeringType types.OfferingType) types.EligibilityResult {
 	requirements := types.GetRequiredScopesForOffering(offeringType)
 	result := types.EligibilityResult{
-		Eligible:      false,
+		Eligible:       false,
 		AccountAddress: addr,
 		OfferingType:   offeringType,
 		RequiredScore:  requirements.MinimumScore,

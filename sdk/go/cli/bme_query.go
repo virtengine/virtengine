@@ -103,4 +103,3 @@ func GetBMEStatusCmd() *cobra.Command {
 
 	return cmd
 }
-

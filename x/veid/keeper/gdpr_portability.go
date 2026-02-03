@@ -13,6 +13,9 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// schemaVersion10 is the schema version for GDPR export data
+const schemaVersion10 = "1.0"
+
 // ============================================================================
 // GDPR Data Portability Keeper Methods
 // ============================================================================
@@ -21,21 +24,21 @@ import (
 
 // exportRequestStore is the storage format for export requests
 type exportRequestStore struct {
-	Version          uint32  `json:"version"`
-	RequestID        string  `json:"request_id"`
-	RequesterAddress string  `json:"requester_address"`
+	Version          uint32   `json:"version"`
+	RequestID        string   `json:"request_id"`
+	RequesterAddress string   `json:"requester_address"`
 	Categories       []string `json:"categories"`
-	Format           string  `json:"format"`
-	Status           string  `json:"status"`
-	RequestedAt      int64   `json:"requested_at"`
-	RequestedAtBlock int64   `json:"requested_at_block"`
-	CompletedAt      *int64  `json:"completed_at,omitempty"`
-	CompletedAtBlock *int64  `json:"completed_at_block,omitempty"`
-	DeadlineAt       int64   `json:"deadline_at"`
-	ExpiresAt        *int64  `json:"expires_at,omitempty"`
-	ExportDataHash   []byte  `json:"export_data_hash,omitempty"`
-	ExportSize       uint64  `json:"export_size,omitempty"`
-	ErrorDetails     string  `json:"error_details,omitempty"`
+	Format           string   `json:"format"`
+	Status           string   `json:"status"`
+	RequestedAt      int64    `json:"requested_at"`
+	RequestedAtBlock int64    `json:"requested_at_block"`
+	CompletedAt      *int64   `json:"completed_at,omitempty"`
+	CompletedAtBlock *int64   `json:"completed_at_block,omitempty"`
+	DeadlineAt       int64    `json:"deadline_at"`
+	ExpiresAt        *int64   `json:"expires_at,omitempty"`
+	ExportDataHash   []byte   `json:"export_data_hash,omitempty"`
+	ExportSize       uint64   `json:"export_size,omitempty"`
+	ErrorDetails     string   `json:"error_details,omitempty"`
 }
 
 // SubmitExportRequest submits a new GDPR data portability export request
@@ -114,23 +117,18 @@ func (k Keeper) ProcessExportRequest(ctx sdk.Context, requestID string) (*types.
 	requesterAddr, err := sdk.AccAddressFromBech32(request.RequesterAddress)
 	if err != nil {
 		request.MarkFailed(err.Error())
-		k.SetExportRequest(ctx, request)
+		_ = k.SetExportRequest(ctx, request)
 		return nil, err
 	}
 
 	// Generate the export package
-	dataPackage, err := k.generateDataPackage(ctx, requesterAddr, &request)
-	if err != nil {
-		request.MarkFailed(err.Error())
-		k.SetExportRequest(ctx, request)
-		return nil, err
-	}
+	dataPackage := k.generateDataPackage(ctx, requesterAddr, &request)
 
 	// Calculate checksum
 	dataBytes, err := json.Marshal(dataPackage)
 	if err != nil {
 		request.MarkFailed(err.Error())
-		k.SetExportRequest(ctx, request)
+		_ = k.SetExportRequest(ctx, request)
 		return nil, err
 	}
 
@@ -166,7 +164,7 @@ func (k Keeper) generateDataPackage(
 	ctx sdk.Context,
 	address sdk.AccAddress,
 	request *types.PortabilityExportRequest,
-) (*types.PortableDataPackage, error) {
+) *types.PortableDataPackage {
 	now := ctx.BlockTime()
 	blockHeight := ctx.BlockHeight()
 
@@ -203,12 +201,12 @@ func (k Keeper) generateDataPackage(
 	if request.HasCategory(types.ExportCategoryAll) {
 		for _, cat := range types.AllExportCategories() {
 			if cat != types.ExportCategoryAll {
-				k.exportCategory(ctx, address, cat, pkg)
+				_ = k.exportCategory(ctx, address, cat, pkg)
 			}
 		}
 	}
 
-	return pkg, nil
+	return pkg
 }
 
 // exportCategory exports a specific data category
@@ -271,7 +269,7 @@ func (k Keeper) exportIdentityData(ctx sdk.Context, address sdk.AccAddress, pkg 
 		return false // continue iteration
 	})
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryIdentity] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryIdentity] = schemaVersion10
 	return nil
 }
 
@@ -298,20 +296,11 @@ func (k Keeper) exportConsentData(ctx sdk.Context, address sdk.AccAddress, pkg *
 
 	// Export scope consents
 	for _, sc := range wallet.ConsentSettings.ScopeConsents {
-		portableConsent := types.PortableScopeConsent{
-			ScopeID:            sc.ScopeID,
-			Granted:            sc.Granted,
-			GrantedAt:          sc.GrantedAt,
-			RevokedAt:          sc.RevokedAt,
-			ExpiresAt:          sc.ExpiresAt,
-			Purpose:            sc.Purpose,
-			GrantedToProviders: sc.GrantedToProviders,
-			Restrictions:       sc.Restrictions,
-		}
+		portableConsent := types.PortableScopeConsent(sc)
 		pkg.Consent.ScopeConsents = append(pkg.Consent.ScopeConsents, portableConsent)
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryConsent] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryConsent] = schemaVersion10
 	return nil
 }
 
@@ -351,13 +340,13 @@ func (k Keeper) exportVerificationHistory(ctx sdk.Context, address sdk.AccAddres
 		pkg.VerificationHistory.Verifications = append(pkg.VerificationHistory.Verifications, portableRecord)
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryVerificationHistory] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryVerificationHistory] = schemaVersion10
 	return nil
 }
 
 // exportTransactionData exports transaction history
 // Note: This requires access to the bank/auth modules which may not be available here
-func (k Keeper) exportTransactionData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
+func (k Keeper) exportTransactionData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
 	// Transaction data would be exported from chain history
 	// This is a placeholder - actual implementation would query the chain
 	pkg.Transactions = &types.PortableTransactionData{
@@ -365,13 +354,13 @@ func (k Keeper) exportTransactionData(ctx sdk.Context, address sdk.AccAddress, p
 		Transactions:      make([]types.PortableTransaction, 0),
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryTransactions] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryTransactions] = schemaVersion10
 	return nil
 }
 
 // exportMarketplaceData exports marketplace activity
 // Note: This requires access to the market module
-func (k Keeper) exportMarketplaceData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
+func (k Keeper) exportMarketplaceData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
 	// Marketplace data would be exported from the market module
 	// This is a placeholder - actual implementation would query the market keeper
 	pkg.Marketplace = &types.PortableMarketplaceData{
@@ -381,7 +370,7 @@ func (k Keeper) exportMarketplaceData(ctx sdk.Context, address sdk.AccAddress, p
 		Leases:      make([]types.PortableLease, 0),
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryMarketplace] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryMarketplace] = schemaVersion10
 	return nil
 }
 
@@ -421,7 +410,7 @@ func (k Keeper) exportDelegationData(ctx sdk.Context, address sdk.AccAddress, pk
 		pkg.Delegations.Delegations = append(pkg.Delegations.Delegations, portableDel)
 	}
 
-	pkg.Metadata.SchemaVersions[types.ExportCategoryDelegations] = "1.0"
+	pkg.Metadata.SchemaVersions[types.ExportCategoryDelegations] = schemaVersion10
 	return nil
 }
 
@@ -500,14 +489,18 @@ func exportRequestKey(requestID string) []byte {
 }
 
 func exportRequestByAddressKey(address string, requestID string) []byte {
-	key := append(prefixExportRequestByAddress, []byte(address)...)
+	key := make([]byte, 0, len(prefixExportRequestByAddress)+len(address)+len(requestID)+1)
+	key = append(key, prefixExportRequestByAddress...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte(0x00))
 	key = append(key, []byte(requestID)...)
 	return key
 }
 
 func exportRequestByAddressPrefixKey(address string) []byte {
-	key := append(prefixExportRequestByAddress, []byte(address)...)
+	key := make([]byte, 0, len(prefixExportRequestByAddress)+len(address)+1)
+	key = append(key, prefixExportRequestByAddress...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte(0x00))
 	return key
 }

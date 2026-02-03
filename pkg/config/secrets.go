@@ -49,8 +49,8 @@ type SecretConfig struct {
 	EncryptionKey string `env:"ENCRYPTION_KEY" required:"true" desc:"Master encryption key (32 bytes hex)"`
 
 	// Identity Verification API Keys
-	GovUKAPIKey      string `env:"GOVUK_API_KEY" required:"false" desc:"GOV.UK Verify API key"`
-	EIDASAPIKey      string `env:"EIDAS_API_KEY" required:"false" desc:"eIDAS API key for EU identity"`
+	GovUKAPIKey       string `env:"GOVUK_API_KEY" required:"false" desc:"GOV.UK Verify API key"`
+	EIDASAPIKey       string `env:"EIDAS_API_KEY" required:"false" desc:"eIDAS API key for EU identity"`
 	AAMVAClientSecret string `env:"AAMVA_CLIENT_SECRET" required:"false" desc:"AAMVA client secret for US license verification"`
 
 	// Provider Keys
@@ -262,4 +262,3 @@ func GetEnvVarName(fieldName string) string {
 	}
 	return field.Tag.Get("env")
 }
-

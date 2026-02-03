@@ -51,6 +51,7 @@ func mustSortJSON(bz []byte) []byte {
 }
 
 // StdSignBytes returns the bytes to sign for a transaction.
+//
 // Deprecated: Please use x/tx/signing/aminojson instead.
 func StdSignBytes(cdc *codec.LegacyAmino, chainID string, accnum, sequence, timeout uint64, fee legacytx.StdFee, msgs []sdk.Msg, memo string) []byte {
 	msgsBytes := make([]json.RawMessage, 0, len(msgs))
@@ -74,4 +75,3 @@ func StdSignBytes(cdc *codec.LegacyAmino, chainID string, accnum, sequence, time
 
 	return mustSortJSON(bz)
 }
-

@@ -676,4 +676,3 @@ type MultiSigVerificationResult struct {
 	// VerifiedAt is when verification was performed
 	VerifiedAt time.Time `json:"verified_at"`
 }
-

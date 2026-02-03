@@ -362,13 +362,13 @@ type ReconciliationTolerances struct {
 // DefaultReconciliationTolerances returns default tolerances
 func DefaultReconciliationTolerances() ReconciliationTolerances {
 	return ReconciliationTolerances{
-		CPUCoreSecondsPercent:   1.0,  // 1% tolerance
+		CPUCoreSecondsPercent:   1.0, // 1% tolerance
 		MemoryGBSecondsPercent:  1.0,
-		GPUSecondsPercent:       0.5,  // Tighter for expensive GPUs
-		WallClockSecondsPercent: 0.1,  // Very tight for wall clock
-		NetworkBytesPercent:     5.0,  // More tolerance for network
+		GPUSecondsPercent:       0.5, // Tighter for expensive GPUs
+		WallClockSecondsPercent: 0.1, // Very tight for wall clock
+		NetworkBytesPercent:     5.0, // More tolerance for network
 		StorageGBHoursPercent:   2.0,
-		TimeDriftSeconds:        60,   // 1 minute drift allowed
+		TimeDriftSeconds:        60, // 1 minute drift allowed
 	}
 }
 

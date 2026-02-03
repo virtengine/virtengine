@@ -140,4 +140,3 @@ func (s DepositAuthorizationScopes) Has(val DepositAuthorization_Scope) bool {
 
 	return false
 }
-

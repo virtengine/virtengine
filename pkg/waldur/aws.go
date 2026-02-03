@@ -327,7 +327,7 @@ func (a *AWSClient) WaitForAWSInstanceState(ctx context.Context, instanceUUID st
 			}
 
 			// Check for error states
-			if instance.State == "Erred" {
+			if instance.State == string(ResourceStateErred) {
 				return instance, fmt.Errorf("instance entered error state: %s", instance.ErrorMessage)
 			}
 		}
@@ -402,4 +402,3 @@ func mapAWSVolume(v *client.AwsVolume) AWSVolume {
 	}
 	return volume
 }
-

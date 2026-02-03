@@ -113,4 +113,3 @@ func (sdl v2Expose) toManifestExposes(endpointNames map[string]uint32) (manifest
 
 	return res, nil
 }
-

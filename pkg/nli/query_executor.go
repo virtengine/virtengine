@@ -308,11 +308,11 @@ func (e *DefaultQueryExecutor) executeIdentityQuery(ctx context.Context, address
 			Success:   true,
 			QueryType: "identity",
 			Data: map[string]interface{}{
-				"address":   address,
-				"verified":  true,
-				"score":     0.85,
-				"level":     "full",
-				"scopes":    []string{"document", "selfie", "liveness"},
+				"address":    address,
+				"verified":   true,
+				"score":      0.85,
+				"level":      "full",
+				"scopes":     []string{"document", "selfie", "liveness"},
 				"verifiedAt": "2026-01-15T10:00:00Z",
 			},
 		}, nil
@@ -339,4 +339,3 @@ func (e *DefaultQueryExecutor) executeIdentityQuery(ctx context.Context, address
 		},
 	}, nil
 }
-

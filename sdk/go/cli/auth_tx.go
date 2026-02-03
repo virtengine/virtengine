@@ -637,4 +637,3 @@ func readTxAndInitContexts(clientCtx client.Context, cmd *cobra.Command, filenam
 
 	return clientCtx, txFactory, stdTx, nil
 }
-

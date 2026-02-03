@@ -489,7 +489,7 @@ func (s *AttestationService) calculateVerificationScore(challenge *EmailChalleng
 
 	// Penalty for multiple attempts
 	if challenge.Attempts > 1 {
-		penalty := uint32(challenge.Attempts - 1) * 5
+		penalty := uint32(challenge.Attempts-1) * 5
 		if penalty > 20 {
 			penalty = 20
 		}

@@ -38,6 +38,8 @@ var (
 	ErrResourceBusy = errors.New("resource is busy with another operation")
 )
 
+const paramValueTrue = "true"
+
 // ResourceLifecycleConfig configures resource lifecycle operations
 type ResourceLifecycleConfig struct {
 	// StartTimeout is the timeout for start operations
@@ -169,14 +171,14 @@ type LifecycleActionResult struct {
 
 // ResourceLifecycleManager manages resource lifecycle operations
 type ResourceLifecycleManager struct {
-	cfg           ResourceLifecycleConfig
-	controller    *LifecycleController
-	lifecycle     *waldur.LifecycleClient
-	auditLogger   *AuditLogger
-	resources     map[string]*ResourceInfo
-	activeOps     map[string]string // allocationID -> operationID
-	rollbackMgr   *RollbackManager
-	mu            sync.RWMutex
+	cfg         ResourceLifecycleConfig
+	controller  *LifecycleController
+	lifecycle   *waldur.LifecycleClient
+	auditLogger *AuditLogger
+	resources   map[string]*ResourceInfo
+	activeOps   map[string]string // allocationID -> operationID
+	rollbackMgr *RollbackManager
+	mu          sync.RWMutex
 }
 
 // NewResourceLifecycleManager creates a new lifecycle manager
@@ -210,7 +212,7 @@ func (m *ResourceLifecycleManager) RegisterResource(info *ResourceInfo) error {
 		return errors.New("allocation ID is required")
 	}
 	if info.WaldurResourceUUID == "" {
-		return errors.New("Waldur resource UUID is required")
+		return errors.New("waldur resource UUID is required")
 	}
 
 	m.mu.Lock()
@@ -335,7 +337,7 @@ func (m *ResourceLifecycleManager) executeAction(ctx context.Context, req *Lifec
 
 	// Add immediate flag
 	if req.Immediate {
-		params["immediate"] = "true"
+		params["immediate"] = paramValueTrue
 	}
 
 	// Execute via lifecycle controller
@@ -550,7 +552,7 @@ func (m *ResourceLifecycleManager) performCleanup(ctx context.Context, allocatio
 }
 
 // executeCleanupTasks executes cleanup tasks after termination
-func (m *ResourceLifecycleManager) executeCleanupTasks(ctx context.Context, allocationID string, terminated bool) {
+func (m *ResourceLifecycleManager) executeCleanupTasks(_ context.Context, allocationID string, terminated bool) {
 	if !terminated {
 		log.Printf("[lifecycle-manager] skipping cleanup for %s (termination failed)", allocationID)
 		return
@@ -648,4 +650,3 @@ func (m *ResourceLifecycleManager) UpdateResourceState(allocationID string, stat
 	info.LastUpdated = time.Now().UTC()
 	return nil
 }
-

@@ -289,4 +289,3 @@ func (msg *MsgResolveDispute) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
 	return []sdk.AccAddress{addr}
 }
-

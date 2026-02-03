@@ -102,7 +102,7 @@ func DefaultWaldurCallbackConfig() WaldurCallbackConfig {
 		ListenAddr:         ":8443",
 		CallbackPath:       "/v1/callbacks/waldur",
 		SignatureRequired:  true,
-		NonceWindowSeconds: 3600, // 1 hour
+		NonceWindowSeconds: 3600,    // 1 hour
 		MaxPayloadBytes:    1 << 20, // 1MB
 		EnableAuditLogging: true,
 	}
@@ -110,33 +110,34 @@ func DefaultWaldurCallbackConfig() WaldurCallbackConfig {
 
 // WaldurCallbackHandler handles incoming Waldur callbacks
 type WaldurCallbackHandler struct {
-	cfg             WaldurCallbackConfig
-	controller      *LifecycleController
-	lifecycleMgr    *ResourceLifecycleManager
-	callbackSink    CallbackSink
-	auditLogger     *AuditLogger
-	keyManager      *KeyManager
-	nonceTracker    *NonceTracker
-	allowedSigners  map[string]bool
+	cfg              WaldurCallbackConfig
+	controller       *LifecycleController
+	lifecycleMgr     *ResourceLifecycleManager
+	callbackSink     CallbackSink
+	auditLogger      *AuditLogger
+	keyManager       *KeyManager
+	nonceTracker     *NonceTracker
+	allowedSigners   map[string]bool
 	pendingCallbacks map[string]*PendingCallback
-	server          *http.Server
-	mu              sync.RWMutex
-	stopCh          chan struct{}
+	server           *http.Server
+	//nolint:unused // reserved for concurrent access control
+	mu     sync.RWMutex
+	stopCh chan struct{}
 }
 
 // PendingCallback represents a pending callback with retry info
 type PendingCallback struct {
-	Callback    *marketplace.WaldurCallback
-	ReceivedAt  time.Time
-	RetryCount  int
-	LastError   string
+	Callback   *marketplace.WaldurCallback
+	ReceivedAt time.Time
+	RetryCount int
+	LastError  string
 }
 
 // NonceTracker tracks processed nonces for replay protection
 type NonceTracker struct {
-	nonces   map[string]time.Time
-	maxAge   time.Duration
-	mu       sync.RWMutex
+	nonces map[string]time.Time
+	maxAge time.Duration
+	mu     sync.RWMutex
 }
 
 // NewNonceTracker creates a new nonce tracker
@@ -195,15 +196,15 @@ func NewWaldurCallbackHandler(
 	keyManager *KeyManager,
 ) *WaldurCallbackHandler {
 	h := &WaldurCallbackHandler{
-		cfg:             cfg,
-		controller:      controller,
-		callbackSink:    callbackSink,
-		auditLogger:     auditLogger,
-		keyManager:      keyManager,
-		nonceTracker:    NewNonceTracker(time.Duration(cfg.NonceWindowSeconds) * time.Second),
-		allowedSigners:  make(map[string]bool),
+		cfg:              cfg,
+		controller:       controller,
+		callbackSink:     callbackSink,
+		auditLogger:      auditLogger,
+		keyManager:       keyManager,
+		nonceTracker:     NewNonceTracker(time.Duration(cfg.NonceWindowSeconds) * time.Second),
+		allowedSigners:   make(map[string]bool),
 		pendingCallbacks: make(map[string]*PendingCallback),
-		stopCh:          make(chan struct{}),
+		stopCh:           make(chan struct{}),
 	}
 
 	// Build allowed signers map
@@ -278,14 +279,14 @@ func (h *WaldurCallbackHandler) handleCallback(w http.ResponseWriter, r *http.Re
 	// Read and parse payload
 	body, err := io.ReadAll(io.LimitReader(r.Body, h.cfg.MaxPayloadBytes))
 	if err != nil {
-		h.writeError(w, "failed to read body", http.StatusBadRequest)
+		h.writeError(w, "failed to read body")
 		return
 	}
 	defer r.Body.Close()
 
 	var callback marketplace.WaldurCallback
 	if err := json.Unmarshal(body, &callback); err != nil {
-		h.writeError(w, "invalid JSON payload", http.StatusBadRequest)
+		h.writeError(w, "invalid JSON payload")
 		return
 	}
 
@@ -293,7 +294,7 @@ func (h *WaldurCallbackHandler) handleCallback(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	if err := h.ProcessWaldurCallback(ctx, &callback); err != nil {
 		log.Printf("[waldur-callbacks] callback processing failed: %v", err)
-		h.writeError(w, err.Error(), http.StatusBadRequest)
+		h.writeError(w, err.Error())
 		return
 	}
 
@@ -310,7 +311,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, h.cfg.MaxPayloadBytes))
 	if err != nil {
-		h.writeError(w, "failed to read body", http.StatusBadRequest)
+		h.writeError(w, "failed to read body")
 		return
 	}
 	defer r.Body.Close()
@@ -318,7 +319,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 	// Parse Waldur lifecycle callback
 	payload, err := waldur.ParseLifecycleCallback(body)
 	if err != nil {
-		h.writeError(w, "invalid lifecycle callback", http.StatusBadRequest)
+		h.writeError(w, "invalid lifecycle callback")
 		return
 	}
 
@@ -326,7 +327,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 	ctx := r.Context()
 	if err := h.processLifecyclePayload(ctx, payload); err != nil {
 		log.Printf("[waldur-callbacks] lifecycle callback failed: %v", err)
-		h.writeError(w, err.Error(), http.StatusBadRequest)
+		h.writeError(w, err.Error())
 		return
 	}
 
@@ -399,21 +400,21 @@ func (h *WaldurCallbackHandler) processLifecyclePayload(ctx context.Context, pay
 
 	// Create lifecycle callback
 	lcCallback := &marketplace.LifecycleCallback{
-		ID:              fmt.Sprintf("lcb_waldur_%s", payload.OperationID),
-		OperationID:     payload.OperationID,
-		AllocationID:    allocationID,
-		Action:          marketplace.LifecycleActionType(payload.Action),
-		Success:         payload.Success,
-		ResultState:     mapWaldurStateToAllocationState(payload.State),
+		ID:               fmt.Sprintf("lcb_waldur_%s", payload.OperationID),
+		OperationID:      payload.OperationID,
+		AllocationID:     allocationID,
+		Action:           marketplace.LifecycleActionType(payload.Action),
+		Success:          payload.Success,
+		ResultState:      mapWaldurStateToAllocationState(payload.State),
 		WaldurResourceID: payload.ResourceUUID,
-		ProviderAddress: h.controller.cfg.ProviderAddress,
-		Payload:         payload.Metadata,
-		Error:           payload.Error,
-		ErrorCode:       payload.ErrorCode,
-		SignerID:        h.controller.cfg.ProviderAddress,
-		Nonce:           payload.IdempotencyKey,
-		Timestamp:       payload.Timestamp,
-		ExpiresAt:       payload.Timestamp.Add(time.Hour),
+		ProviderAddress:  h.controller.cfg.ProviderAddress,
+		Payload:          payload.Metadata,
+		Error:            payload.Error,
+		ErrorCode:        payload.ErrorCode,
+		SignerID:         h.controller.cfg.ProviderAddress,
+		Nonce:            payload.IdempotencyKey,
+		Timestamp:        payload.Timestamp,
+		ExpiresAt:        payload.Timestamp.Add(time.Hour),
 	}
 
 	// Process via controller
@@ -490,7 +491,7 @@ func (h *WaldurCallbackHandler) processStatusUpdate(ctx context.Context, callbac
 }
 
 // processResourceChange processes a resource change callback
-func (h *WaldurCallbackHandler) processResourceChange(ctx context.Context, callback *marketplace.WaldurCallback) error {
+func (h *WaldurCallbackHandler) processResourceChange(_ context.Context, callback *marketplace.WaldurCallback) error {
 	allocationID := callback.ChainEntityID
 
 	switch callback.ActionType {
@@ -625,10 +626,11 @@ func mapWaldurStateToAllocationState(state string) marketplace.AllocationState {
 }
 
 // writeError writes an error response
-func (h *WaldurCallbackHandler) writeError(w http.ResponseWriter, msg string, status int) {
+func (h *WaldurCallbackHandler) writeError(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusBadRequest)
 	response := map[string]string{"error": msg}
+	//nolint:errchkjson // map[string]string is always safe to encode
 	_ = json.NewEncoder(w).Encode(response)
 }
 
@@ -796,4 +798,3 @@ func SerializeCallbackForSigning(callback *marketplace.WaldurCallback) []byte {
 	buf.WriteString(fmt.Sprintf("%d", callback.Timestamp.Unix()))
 	return buf.Bytes()
 }
-

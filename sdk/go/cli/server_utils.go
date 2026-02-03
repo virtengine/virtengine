@@ -136,4 +136,3 @@ func GetPruningOptionsFromFlags(appOpts types.AppOptions) (pruningtypes.PruningO
 		return pruningtypes.PruningOptions{}, fmt.Errorf("unknown pruning strategy %s", strategy)
 	}
 }
-

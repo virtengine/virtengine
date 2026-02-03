@@ -89,12 +89,12 @@ func NewMultiRecipientEnvelope() *MultiRecipientEnvelope {
 		algInfo = AlgorithmInfo{Version: AlgorithmVersionV1}
 	}
 	return &MultiRecipientEnvelope{
-		Version:       MultiRecipientEnvelopeVersion,
-		AlgorithmID:   DefaultAlgorithm(),
+		Version:          MultiRecipientEnvelopeVersion,
+		AlgorithmID:      DefaultAlgorithm(),
 		AlgorithmVersion: algInfo.Version,
-		RecipientMode: RecipientModeFullValidatorSet,
-		WrappedKeys:   make([]WrappedKeyEntry, 0),
-		Metadata:      make(map[string]string),
+		RecipientMode:    RecipientModeFullValidatorSet,
+		WrappedKeys:      make([]WrappedKeyEntry, 0),
+		Metadata:         make(map[string]string),
 	}
 }
 

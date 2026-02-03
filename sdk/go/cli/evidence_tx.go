@@ -43,4 +43,3 @@ func SubmitEvidenceCmd() *cobra.Command {
 
 	return cmd
 }
-

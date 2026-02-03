@@ -12,13 +12,13 @@ import (
 type PayoutState string
 
 const (
-	PayoutStatePending   PayoutState = "pending"
+	PayoutStatePending    PayoutState = "pending"
 	PayoutStateProcessing PayoutState = "processing"
-	PayoutStateCompleted PayoutState = "completed"
-	PayoutStateFailed    PayoutState = "failed"
-	PayoutStateHeld      PayoutState = "held"       // Held due to dispute
-	PayoutStateRefunded  PayoutState = "refunded"   // Refunded to customer
-	PayoutStateCancelled PayoutState = "cancelled"
+	PayoutStateCompleted  PayoutState = "completed"
+	PayoutStateFailed     PayoutState = "failed"
+	PayoutStateHeld       PayoutState = "held"     // Held due to dispute
+	PayoutStateRefunded   PayoutState = "refunded" // Refunded to customer
+	PayoutStateCancelled  PayoutState = "cancelled"
 )
 
 // IsValidPayoutState checks if the state is valid

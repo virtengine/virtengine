@@ -197,7 +197,7 @@ type ChunkManifestReference struct {
 
 // NewChunkManifestReference creates a new chunk manifest reference
 func NewChunkManifestReference(totalSize, chunkSize uint64) *ChunkManifestReference {
-	chunkCount := uint32((totalSize + chunkSize - 1) / chunkSize)
+	chunkCount := safeUint32FromUint64((totalSize + chunkSize - 1) / chunkSize)
 	return &ChunkManifestReference{
 		Version:    ChunkManifestVersion,
 		TotalSize:  totalSize,
@@ -210,14 +210,34 @@ func NewChunkManifestReference(totalSize, chunkSize uint64) *ChunkManifestRefere
 
 // AddChunk adds a chunk to the manifest
 func (m *ChunkManifestReference) AddChunk(chunk ChunkReference) error {
-	if uint32(len(m.Chunks)) >= m.ChunkCount {
+	chunkLen := safeUint32FromInt(len(m.Chunks))
+	if chunkLen >= m.ChunkCount {
 		return ErrInvalidPayload.Wrap("cannot add more chunks than declared count")
 	}
-	if chunk.Index != uint32(len(m.Chunks)) {
+	if chunk.Index != chunkLen {
 		return ErrInvalidPayload.Wrapf("expected chunk index %d, got %d", len(m.Chunks), chunk.Index)
 	}
 	m.Chunks = append(m.Chunks, chunk)
 	return nil
+}
+
+func safeUint32FromUint64(value uint64) uint32 {
+	if value > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }
 
 // ComputeRootHash computes the Merkle root hash of all chunks
@@ -258,7 +278,7 @@ func (m *ChunkManifestReference) Validate() error {
 	if m.ChunkCount == 0 {
 		return ErrInvalidPayload.Wrap("chunk_count cannot be zero")
 	}
-	if uint32(len(m.Chunks)) != m.ChunkCount {
+	if safeUint32FromInt(len(m.Chunks)) != m.ChunkCount {
 		return ErrInvalidPayload.Wrapf("chunk count mismatch: got %d, want %d", len(m.Chunks), m.ChunkCount)
 	}
 	if len(m.RootHash) != 32 {
@@ -268,7 +288,7 @@ func (m *ChunkManifestReference) Validate() error {
 	// Validate individual chunks
 	var totalChunkSize uint64
 	for i, chunk := range m.Chunks {
-		if chunk.Index != uint32(i) {
+		if chunk.Index != safeUint32FromInt(i) {
 			return ErrInvalidPayload.Wrapf("chunk %d has wrong index %d", i, chunk.Index)
 		}
 		if len(chunk.Hash) != 32 {

@@ -54,4 +54,3 @@ application.
 	cmd.Flags().BoolVar(&removeBlock, "hard", false, "remove last block as well as state")
 	return cmd
 }
-

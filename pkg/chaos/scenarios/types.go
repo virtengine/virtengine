@@ -38,6 +38,7 @@ type Experiment struct {
 	Targets []string `json:"targets"`
 
 	// Spec contains the experiment-specific configuration.
+	//
 	// Deprecated: Use Parameters for new scenarios.
 	Spec interface{} `json:"spec,omitempty"`
 
@@ -50,4 +51,3 @@ type Experiment struct {
 	// Annotations for additional metadata.
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
-

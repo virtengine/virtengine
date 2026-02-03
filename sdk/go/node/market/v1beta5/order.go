@@ -106,4 +106,3 @@ func (o *Order) Filters(filters OrderFilters, stateVal Order_State) bool {
 
 	return true
 }
-

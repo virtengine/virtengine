@@ -346,4 +346,3 @@ func (c *Config) PruningOptions() (keepRecent uint64, interval uint64) {
 		return DefaultKeepRecent, DefaultInterval
 	}
 }
-

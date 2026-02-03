@@ -654,10 +654,10 @@ func (s *MLVerificationSecurityTestSuite) TestOIDCVerificationSecurity() {
 		validator := NewTestOIDCValidator()
 
 		tamperedToken := &TestOIDCToken{
-			Subject:          "user-123",
-			Issuer:           "https://trusted.example.com",
-			Audience:         "virtengine",
-			ExpiresAt:        time.Now().Add(time.Hour),
+			Subject:           "user-123",
+			Issuer:            "https://trusted.example.com",
+			Audience:          "virtengine",
+			ExpiresAt:         time.Now().Add(time.Hour),
 			SignatureTampered: true,
 		}
 
@@ -1161,9 +1161,9 @@ type MultiTierConfig struct {
 
 // MultiTierLimiter for multi-tier rate limiting.
 type MultiTierLimiter struct {
-	config    MultiTierConfig
-	counts    map[string]int
-	mu        sync.Mutex
+	config MultiTierConfig
+	counts map[string]int
+	mu     sync.Mutex
 }
 
 func NewMultiTierLimiter(config MultiTierConfig) *MultiTierLimiter {
@@ -1211,14 +1211,14 @@ func (d *CarrierDetector) Check(phone string) CarrierCheckResult {
 
 // VelocityChecker for SMS velocity checks.
 type VelocityChecker struct {
-	phoneCounts map[string]int
+	phoneCounts   map[string]int
 	ipPhoneCounts map[string]int
-	mu          sync.Mutex
+	mu            sync.Mutex
 }
 
 func NewVelocityChecker() *VelocityChecker {
 	return &VelocityChecker{
-		phoneCounts: make(map[string]int),
+		phoneCounts:   make(map[string]int),
 		ipPhoneCounts: make(map[string]int),
 	}
 }
@@ -1331,8 +1331,8 @@ const (
 
 // TestKeyManager for key management testing.
 type TestKeyManager struct {
-	keys map[string]KeyState
-	mu   sync.Mutex
+	keys   map[string]KeyState
+	mu     sync.Mutex
 	nextID int
 }
 
@@ -1408,10 +1408,10 @@ type TestOIDCValidator struct {
 }
 
 type TestOIDCToken struct {
-	Subject          string
-	Issuer           string
-	Audience         string
-	ExpiresAt        time.Time
+	Subject           string
+	Issuer            string
+	Audience          string
+	ExpiresAt         time.Time
 	SignatureTampered bool
 }
 
@@ -1421,7 +1421,7 @@ type OIDCConfig struct {
 
 func NewTestOIDCValidator() *TestOIDCValidator {
 	return &TestOIDCValidator{
-		trustedIssuers: []string{"https://trusted.example.com"},
+		trustedIssuers:   []string{"https://trusted.example.com"},
 		expectedAudience: "virtengine",
 	}
 }

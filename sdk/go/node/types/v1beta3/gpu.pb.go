@@ -418,4 +418,3 @@ var (
 	ErrIntOverflowGpu          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupGpu = fmt.Errorf("proto: unexpected end of group")
 )
-

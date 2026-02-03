@@ -18,6 +18,7 @@ var (
 )
 
 // ParamKeyTable for agov module
+//
 // Deprecated: now params can be accessed via cosmos-sdk gov store
 func ParamKeyTable() paramtypes.KeyTable {
 	return paramtypes.NewKeyTable(
@@ -75,4 +76,3 @@ func validateMinInitialDepositRate(i interface{}) error {
 
 	return nil
 }
-

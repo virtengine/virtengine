@@ -89,4 +89,3 @@ func pinnedDeterminismInputs() *ScoreInputs {
 		ScopeCount: 2,
 	}
 }
-

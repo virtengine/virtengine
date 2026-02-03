@@ -227,7 +227,7 @@ func DefaultMFAPolicy(accountAddress string) *MFAPolicy {
 	return &MFAPolicy{
 		AccountAddress: accountAddress,
 		RequiredFactors: []FactorCombination{
-			{Factors: []FactorType{FactorTypeFIDO2}}, // FIDO2 alone is sufficient
+			{Factors: []FactorType{FactorTypeFIDO2}},                // FIDO2 alone is sufficient
 			{Factors: []FactorType{FactorTypeTOTP, FactorTypeVEID}}, // Or TOTP + VEID
 		},
 		RecoveryFactors: []FactorCombination{

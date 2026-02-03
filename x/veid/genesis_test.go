@@ -248,7 +248,8 @@ func (s *GenesisTestSuite) TestGenesisRoundTrip() {
 		ScoreVersion:   "v2.0",
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
-		Tier:           types.IdentityTierVerified,
+		//nolint:staticcheck // SA1019: testing deprecated tier for backwards compatibility
+		Tier: types.IdentityTierVerified,
 	}
 	genState.IdentityRecords = []types.IdentityRecord{record}
 
@@ -402,7 +403,9 @@ func TestGetMinScoreForTier(t *testing.T) {
 	require.Equal(t, uint32(0), params.GetMinScoreForTier(types.IdentityTierUnverified))
 	require.Equal(t, uint32(1), params.GetMinScoreForTier(types.IdentityTierBasic))
 	require.Equal(t, uint32(30), params.GetMinScoreForTier(types.IdentityTierStandard))
+	//nolint:staticcheck // SA1019: testing deprecated tier for backwards compatibility
 	require.Equal(t, uint32(60), params.GetMinScoreForTier(types.IdentityTierVerified))
+	//nolint:staticcheck // SA1019: testing deprecated tier for backwards compatibility
 	require.Equal(t, uint32(85), params.GetMinScoreForTier(types.IdentityTierTrusted))
 
 	// Test fallback for unknown tier

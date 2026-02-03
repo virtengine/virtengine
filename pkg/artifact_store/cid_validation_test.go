@@ -9,7 +9,7 @@ func TestCIDValidator(t *testing.T) {
 		validator := NewCIDValidator()
 
 		// Stub CID format: Qm + 32 hex chars
-		stubCID := "Qm0123456789abcdef0123456789abcdef"
+		stubCID := testStubCID
 
 		err := validator.ValidateCID(stubCID)
 		if err == nil {
@@ -21,7 +21,7 @@ func TestCIDValidator(t *testing.T) {
 		validator := NewTestCIDValidator()
 
 		// Stub CID format: Qm + 32 hex chars
-		stubCID := "Qm0123456789abcdef0123456789abcdef"
+		stubCID := testStubCID
 
 		err := validator.ValidateCID(stubCID)
 		if err != nil {
@@ -224,8 +224,8 @@ func TestValidateCIDForBackend(t *testing.T) {
 
 	t.Run("AllowStub variant allows stub CIDs", func(t *testing.T) {
 		err := ValidateCIDForBackendAllowStub("Qm0123456789abcdef0123456789abcdef", BackendIPFS)
-		if err == nil || err.Error() != "" {
-			// Should allow stub CIDs
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
@@ -236,4 +236,3 @@ func TestValidateCIDForBackend(t *testing.T) {
 		}
 	})
 }
-

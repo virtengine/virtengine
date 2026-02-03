@@ -581,4 +581,3 @@ type VERewardsData struct {
 	// CompletionStatus is the completion status
 	CompletionStatus string `json:"completion_status"`
 }
-

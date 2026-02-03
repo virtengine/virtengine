@@ -56,7 +56,7 @@ var (
 	ErrEC2KeyPairNotFound = errors.New("key pair not found")
 
 	// ErrElasticIPNotFound is returned when an Elastic IP is not found
-	ErrElasticIPNotFound = errors.New("Elastic IP not found")
+	ErrElasticIPNotFound = errors.New("elastic IP not found")
 )
 
 // EC2InstanceState represents the state of an EC2 instance
@@ -1764,9 +1764,7 @@ func (aa *AWSAdapter) performInstanceDeployment(ctx context.Context, instance *A
 	}
 
 	// Refresh instance info
-	if err := aa.refreshInstanceInfo(ctx, instance); err != nil {
-		// Non-fatal, continue
-	}
+	_ = aa.refreshInstanceInfo(ctx, instance)
 
 	// Assign Elastic IP if requested
 	if opts.AssignElasticIP && aa.vpc != nil {
@@ -1786,9 +1784,7 @@ func (aa *AWSAdapter) performInstanceDeployment(ctx context.Context, instance *A
 	}
 
 	// Update volume attachment info
-	if err := aa.updateVolumeInfo(ctx, instance); err != nil {
-		// Non-fatal
-	}
+	_ = aa.updateVolumeInfo(ctx, instance)
 
 	return nil
 }
@@ -1866,17 +1862,6 @@ func (aa *AWSAdapter) configureSecurityGroupRules(ctx context.Context, sgID stri
 	})
 
 	// Convert to AWS format and authorize
-	awsRules := make([]AWSSecurityGroupRule, 0, len(rules))
-	for _, r := range rules {
-		awsRules = append(awsRules, AWSSecurityGroupRule{
-			Protocol:    r.Protocol,
-			FromPort:    r.PortRangeMin,
-			ToPort:      r.PortRangeMax,
-			CIDRBlocks:  []string{r.RemoteIPPrefix},
-			Description: r.Description,
-		})
-	}
-
 	// Use the raw ingress authorization through the interface pattern
 	// Note: We pass the rules through the existing SecurityGroupRuleSpec interface
 	for _, rule := range rules {
@@ -2301,7 +2286,7 @@ func (aa *AWSAdapter) SetDefaultRegion(region AWSRegion) error {
 // CreateVolume creates an EBS volume
 func (aa *AWSAdapter) CreateVolume(ctx context.Context, spec *EBSVolumeCreateSpec) (*EBSVolumeInfo, error) {
 	if aa.ebs == nil {
-		return nil, fmt.Errorf(errMsgEBSClientNotConfigured)
+		return nil, errors.New(errMsgEBSClientNotConfigured)
 	}
 
 	// Add default tags
@@ -2320,7 +2305,7 @@ func (aa *AWSAdapter) CreateVolume(ctx context.Context, spec *EBSVolumeCreateSpe
 // DeleteVolume deletes an EBS volume
 func (aa *AWSAdapter) DeleteVolume(ctx context.Context, volumeID string) error {
 	if aa.ebs == nil {
-		return fmt.Errorf(errMsgEBSClientNotConfigured)
+		return errors.New(errMsgEBSClientNotConfigured)
 	}
 	return aa.ebs.DeleteVolume(ctx, volumeID)
 }
@@ -2328,7 +2313,7 @@ func (aa *AWSAdapter) DeleteVolume(ctx context.Context, volumeID string) error {
 // AttachVolume attaches an EBS volume to an instance
 func (aa *AWSAdapter) AttachVolume(ctx context.Context, volumeID, instanceID, device string) (*EBSVolumeAttachmentInfo, error) {
 	if aa.ebs == nil {
-		return nil, fmt.Errorf(errMsgEBSClientNotConfigured)
+		return nil, errors.New(errMsgEBSClientNotConfigured)
 	}
 
 	aa.mu.RLock()
@@ -2358,7 +2343,7 @@ func (aa *AWSAdapter) AttachVolume(ctx context.Context, volumeID, instanceID, de
 // DetachVolume detaches an EBS volume from an instance
 func (aa *AWSAdapter) DetachVolume(ctx context.Context, volumeID string, force bool) error {
 	if aa.ebs == nil {
-		return fmt.Errorf(errMsgEBSClientNotConfigured)
+		return errors.New(errMsgEBSClientNotConfigured)
 	}
 
 	return aa.ebs.DetachVolume(ctx, volumeID, force)
@@ -2367,7 +2352,7 @@ func (aa *AWSAdapter) DetachVolume(ctx context.Context, volumeID string, force b
 // CreateSnapshot creates a snapshot of an EBS volume
 func (aa *AWSAdapter) CreateSnapshot(ctx context.Context, volumeID, description string) (*EBSSnapshotInfo, error) {
 	if aa.ebs == nil {
-		return nil, fmt.Errorf(errMsgEBSClientNotConfigured)
+		return nil, errors.New(errMsgEBSClientNotConfigured)
 	}
 
 	tags := make(map[string]string)
@@ -2381,7 +2366,7 @@ func (aa *AWSAdapter) CreateSnapshot(ctx context.Context, volumeID, description 
 // DeleteSnapshot deletes an EBS snapshot
 func (aa *AWSAdapter) DeleteSnapshot(ctx context.Context, snapshotID string) error {
 	if aa.ebs == nil {
-		return fmt.Errorf(errMsgEBSClientNotConfigured)
+		return errors.New(errMsgEBSClientNotConfigured)
 	}
 	return aa.ebs.DeleteSnapshot(ctx, snapshotID)
 }
@@ -2389,7 +2374,7 @@ func (aa *AWSAdapter) DeleteSnapshot(ctx context.Context, snapshotID string) err
 // CreateVPC creates a new VPC
 func (aa *AWSAdapter) CreateVPC(ctx context.Context, cidrBlock string, enableDNS bool) (*VPCInfo, error) {
 	if aa.vpc == nil {
-		return nil, fmt.Errorf(errMsgVPCClientNotConfigured)
+		return nil, errors.New(errMsgVPCClientNotConfigured)
 	}
 
 	tags := make(map[string]string)
@@ -2408,7 +2393,7 @@ func (aa *AWSAdapter) CreateVPC(ctx context.Context, cidrBlock string, enableDNS
 // DeleteVPC deletes a VPC
 func (aa *AWSAdapter) DeleteVPC(ctx context.Context, vpcID string) error {
 	if aa.vpc == nil {
-		return fmt.Errorf(errMsgVPCClientNotConfigured)
+		return errors.New(errMsgVPCClientNotConfigured)
 	}
 	return aa.vpc.DeleteVPC(ctx, vpcID)
 }
@@ -2416,7 +2401,7 @@ func (aa *AWSAdapter) DeleteVPC(ctx context.Context, vpcID string) error {
 // CreateSubnet creates a subnet in a VPC
 func (aa *AWSAdapter) CreateSubnet(ctx context.Context, vpcID, cidrBlock, availabilityZone string) (*AWSSubnetInfo, error) {
 	if aa.vpc == nil {
-		return nil, fmt.Errorf(errMsgVPCClientNotConfigured)
+		return nil, errors.New(errMsgVPCClientNotConfigured)
 	}
 
 	tags := make(map[string]string)
@@ -2435,7 +2420,7 @@ func (aa *AWSAdapter) CreateSubnet(ctx context.Context, vpcID, cidrBlock, availa
 // DeleteSubnet deletes a subnet
 func (aa *AWSAdapter) DeleteSubnet(ctx context.Context, subnetID string) error {
 	if aa.vpc == nil {
-		return fmt.Errorf(errMsgVPCClientNotConfigured)
+		return errors.New(errMsgVPCClientNotConfigured)
 	}
 	return aa.vpc.DeleteSubnet(ctx, subnetID)
 }
@@ -2443,7 +2428,7 @@ func (aa *AWSAdapter) DeleteSubnet(ctx context.Context, subnetID string) error {
 // UploadToS3 uploads data to an S3 bucket
 func (aa *AWSAdapter) UploadToS3(ctx context.Context, bucket, key string, data []byte, contentType string) error {
 	if aa.s3 == nil {
-		return fmt.Errorf(errMsgS3ClientNotConfigured)
+		return errors.New(errMsgS3ClientNotConfigured)
 	}
 	return aa.s3.PutObject(ctx, bucket, key, data, contentType)
 }
@@ -2451,7 +2436,7 @@ func (aa *AWSAdapter) UploadToS3(ctx context.Context, bucket, key string, data [
 // DownloadFromS3 downloads data from an S3 bucket
 func (aa *AWSAdapter) DownloadFromS3(ctx context.Context, bucket, key string) ([]byte, error) {
 	if aa.s3 == nil {
-		return nil, fmt.Errorf(errMsgS3ClientNotConfigured)
+		return nil, errors.New(errMsgS3ClientNotConfigured)
 	}
 	return aa.s3.GetObject(ctx, bucket, key)
 }
@@ -2459,8 +2444,7 @@ func (aa *AWSAdapter) DownloadFromS3(ctx context.Context, bucket, key string) ([
 // GenerateS3PresignedURL generates a presigned URL for S3 object access
 func (aa *AWSAdapter) GenerateS3PresignedURL(ctx context.Context, bucket, key string, expiration time.Duration) (string, error) {
 	if aa.s3 == nil {
-		return "", fmt.Errorf(errMsgS3ClientNotConfigured)
+		return "", errors.New(errMsgS3ClientNotConfigured)
 	}
 	return aa.s3.GeneratePresignedURL(ctx, bucket, key, expiration)
 }
-

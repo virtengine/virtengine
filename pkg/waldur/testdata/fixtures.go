@@ -673,11 +673,11 @@ const IngestAuditLogEntriesJSON = `[
 
 // IngestReconciliationTestCases provides test scenarios for reconciliation.
 var IngestReconciliationTestCases = []struct {
-	Name             string
-	WaldurChecksum   string
-	ChainChecksum    string
-	ExpectDrift      bool
-	ExpectAction     string
+	Name           string
+	WaldurChecksum string
+	ChainChecksum  string
+	ExpectDrift    bool
+	ExpectAction   string
 }{
 	{"no drift", "abc123", "abc123", false, "skip"},
 	{"checksum mismatch", "abc123", "def456", true, "update"},
@@ -687,12 +687,12 @@ var IngestReconciliationTestCases = []struct {
 
 // IngestValidationTestCases provides test scenarios for offering validation.
 var IngestValidationTestCases = []struct {
-	Name           string
-	WaldurUUID     string
-	CustomerUUID   string
-	OfferingType   string
-	ExpectValid    bool
-	ExpectErrors   []string
+	Name         string
+	WaldurUUID   string
+	CustomerUUID string
+	OfferingType string
+	ExpectValid  bool
+	ExpectErrors []string
 }{
 	{
 		"valid offering",
@@ -719,4 +719,3 @@ var IngestValidationTestCases = []struct {
 		[]string{"customer UUID unknown-customer-uuid not mapped"},
 	},
 }
-

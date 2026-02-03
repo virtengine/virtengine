@@ -66,29 +66,29 @@ type (
 
 // Function aliases
 var (
-	NewKeeper           = keeper.NewKeeper
-	NewMsgServerImpl    = keeper.NewMsgServerImpl
-	RoleFromString      = types.RoleFromString
+	NewKeeper              = keeper.NewKeeper
+	NewMsgServerImpl       = keeper.NewMsgServerImpl
+	RoleFromString         = types.RoleFromString
 	AccountStateFromString = types.AccountStateFromString
-	AllRoles            = types.AllRoles
-	AllAccountStates    = types.AllAccountStates
-	DefaultParams       = types.DefaultParams
+	AllRoles               = types.AllRoles
+	AllAccountStates       = types.AllAccountStates
+	DefaultParams          = types.DefaultParams
 )
 
 // Error aliases
 var (
-	ErrInvalidAddress           = types.ErrInvalidAddress
-	ErrInvalidRole              = types.ErrInvalidRole
-	ErrInvalidAccountState      = types.ErrInvalidAccountState
-	ErrUnauthorized             = types.ErrUnauthorized
-	ErrRoleNotFound             = types.ErrRoleNotFound
-	ErrRoleAlreadyAssigned      = types.ErrRoleAlreadyAssigned
-	ErrAccountStateNotFound     = types.ErrAccountStateNotFound
-	ErrInvalidStateTransition   = types.ErrInvalidStateTransition
+	ErrInvalidAddress             = types.ErrInvalidAddress
+	ErrInvalidRole                = types.ErrInvalidRole
+	ErrInvalidAccountState        = types.ErrInvalidAccountState
+	ErrUnauthorized               = types.ErrUnauthorized
+	ErrRoleNotFound               = types.ErrRoleNotFound
+	ErrRoleAlreadyAssigned        = types.ErrRoleAlreadyAssigned
+	ErrAccountStateNotFound       = types.ErrAccountStateNotFound
+	ErrInvalidStateTransition     = types.ErrInvalidStateTransition
 	ErrCannotModifyGenesisAccount = types.ErrCannotModifyGenesisAccount
-	ErrAccountTerminated        = types.ErrAccountTerminated
-	ErrAccountSuspended         = types.ErrAccountSuspended
-	ErrNotGenesisAccount        = types.ErrNotGenesisAccount
-	ErrCannotRevokeOwnRole      = types.ErrCannotRevokeOwnRole
-	ErrCannotSuspendSelf        = types.ErrCannotSuspendSelf
+	ErrAccountTerminated          = types.ErrAccountTerminated
+	ErrAccountSuspended           = types.ErrAccountSuspended
+	ErrNotGenesisAccount          = types.ErrNotGenesisAccount
+	ErrCannotRevokeOwnRole        = types.ErrCannotRevokeOwnRole
+	ErrCannotSuspendSelf          = types.ErrCannotSuspendSelf
 )

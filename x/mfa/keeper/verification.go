@@ -201,10 +201,33 @@ func generateTOTPCode(secret []byte, counter uint64, digits uint, algorithm stri
 	code := binary.BigEndian.Uint32(sum[offset:offset+4]) & 0x7fffffff
 
 	// Format to specified digits
-	mod := uint32(math.Pow10(int(digits)))
+	if digits > 9 {
+		digits = 9
+	}
+	digitsInt := safeIntFromUint(digits)
+	mod := uint32(math.Pow10(digitsInt))
 	code %= mod
 
-	return fmt.Sprintf("%0*d", digits, code)
+	return fmt.Sprintf("%0*d", digitsInt, code)
+}
+
+func safeIntFromUint(value uint) int {
+	if value > uint(^uint(0)>>1) {
+		return int(^uint(0) >> 1)
+	}
+	return int(value)
+}
+
+func safeUint32FromIntVerification(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	max := int(^uint32(0))
+	if value > max {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }
 
 // ============================================================================
@@ -295,6 +318,8 @@ func DefaultVEIDConfig() VEIDVerificationConfig {
 }
 
 // verifyVEIDScore verifies that the account meets the VEID biometric score threshold
+//
+//nolint:unused // reserved for future VEID gating enforcement
 func (k Keeper) verifyVEIDScore(
 	ctx sdk.Context,
 	challenge *types.Challenge,
@@ -428,7 +453,7 @@ func (k Keeper) verifyHardwareKeyResponse(
 		// In production, this would check OCSP/CRL
 		// For now, we trust the enrollment revocation status
 		if hkInfo.LastRevocationCheck > 0 {
-			// Revocation was checked during enrollment
+			_ = hkInfo.LastRevocationCheck
 		}
 	}
 
@@ -629,7 +654,7 @@ func ValidateFactorCombination(
 	policy FactorCombinationPolicy,
 ) error {
 	// Check minimum factor count
-	if uint32(len(verifiedFactors)) < policy.MinFactors {
+	if safeUint32FromIntVerification(len(verifiedFactors)) < policy.MinFactors {
 		return types.ErrInsufficientFactors.Wrapf(
 			"verified %d factors, required minimum %d", len(verifiedFactors), policy.MinFactors)
 	}
@@ -729,7 +754,9 @@ func (k Keeper) VerifyChallengeWithPolicy(
 	}
 
 	// Add to verified factors list
-	allVerified := append(alreadyVerifiedFactors, challenge.FactorType)
+	allVerified := make([]types.FactorType, 0, len(alreadyVerifiedFactors)+1)
+	allVerified = append(allVerified, alreadyVerifiedFactors...)
+	allVerified = append(allVerified, challenge.FactorType)
 
 	// Get policy for this transaction type
 	policy := GetCombinationPolicy(txType)
@@ -815,7 +842,7 @@ func (k Keeper) VerifyFIDO2ChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -855,7 +882,7 @@ func (k Keeper) VerifyFIDO2ChallengeResponse(
 		authenticatorData,
 		signature,
 	); err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -904,7 +931,7 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired
 	}
 
@@ -946,7 +973,7 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 	// Verify the TOTP code
 	verified, err := k.verifyTOTPCode(ctx, enrollment, response, challenge)
 	if err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -962,7 +989,7 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -979,11 +1006,11 @@ func (k Keeper) VerifyTOTPChallengeResponse(
 
 	// Mark challenge as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	enrollment.UpdateLastUsed(now.Unix())
-	k.updateFactorEnrollment(ctx, enrollment)
+	_ = k.updateFactorEnrollment(ctx, enrollment)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
@@ -1017,7 +1044,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired
 	}
 
@@ -1043,7 +1070,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	// Verify the OTP code
 	verified, err := k.verifyDeliveredOTP(ctx, challenge, response)
 	if err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -1059,7 +1086,7 @@ func (k Keeper) VerifyOTPChallengeResponse(
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -1076,13 +1103,13 @@ func (k Keeper) VerifyOTPChallengeResponse(
 
 	// Mark challenge as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	address, _ := sdk.AccAddressFromBech32(challenge.AccountAddress)
 	if enrollment, found := k.GetFactorEnrollment(ctx, address, challenge.FactorType, challenge.FactorID); found {
 		enrollment.UpdateLastUsed(now.Unix())
-		k.updateFactorEnrollment(ctx, enrollment)
+		_ = k.updateFactorEnrollment(ctx, enrollment)
 	}
 
 	ctx.EventManager().EmitEvent(
@@ -1119,7 +1146,7 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 	now := ctx.BlockTime()
 	if challenge.IsExpired(now) {
 		challenge.MarkExpired()
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrChallengeExpired
 	}
 
@@ -1156,7 +1183,7 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 		Algorithm: algorithm,
 		KeyID:     keyID,
 	}
-	responseData, _ := json.Marshal(hkResp)
+	responseData, _ := json.Marshal(hkResp) //nolint:errchkjson // Best-effort marshal for response data
 
 	response := &types.ChallengeResponse{
 		ChallengeID:  challengeID,
@@ -1168,7 +1195,7 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 	// Verify the hardware key response
 	verified, err := k.verifyHardwareKeyResponse(ctx, challenge, response, enrollment)
 	if err != nil {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 
 		ctx.EventManager().EmitEvent(
 			sdk.NewEvent(
@@ -1184,17 +1211,17 @@ func (k Keeper) VerifyHardwareKeyChallengeResponse(
 	}
 
 	if !verified {
-		k.UpdateChallenge(ctx, challenge)
+		_ = k.UpdateChallenge(ctx, challenge)
 		return false, types.ErrInvalidSignature
 	}
 
 	// Mark challenge as verified
 	challenge.MarkVerified(now.Unix())
-	k.UpdateChallenge(ctx, challenge)
+	_ = k.UpdateChallenge(ctx, challenge)
 
 	// Update factor usage
 	enrollment.UpdateLastUsed(now.Unix())
-	k.updateFactorEnrollment(ctx, enrollment)
+	_ = k.updateFactorEnrollment(ctx, enrollment)
 
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(

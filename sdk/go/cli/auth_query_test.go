@@ -32,4 +32,3 @@ func TestParseSigs(t *testing.T) {
 		}
 	}
 }
-

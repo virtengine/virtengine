@@ -56,4 +56,3 @@ func (m ResourceValue) Dup() ResourceValue {
 
 	return res
 }
-
