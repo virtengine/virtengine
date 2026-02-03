@@ -101,8 +101,6 @@ func getShowTemplateCmd() *cobra.Command {
 		Aliases: []string{"get"},
 		Short:   "Show details of a workload template",
 		Long:    `Display detailed information about a specific workload template.`,
-		Short: "Show details of a workload template",
-		Long:  `Display detailed information about a specific workload template.`,
 		Example: `  # Show template details
   virtengine hpc-templates show mpi-standard
 
@@ -136,7 +134,6 @@ func getVerifyTemplateCmd() *cobra.Command {
 		Use:     "verify <template-id>",
 		Aliases: []string{"validate"},
 		Short:   "Verify a workload template signature",
-		Short: "Verify a workload template signature",
 		Long: `Verify the cryptographic signature of a workload template to ensure
 it has not been tampered with.`,
 		Example: `  # Verify a template
