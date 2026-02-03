@@ -257,7 +257,6 @@ func (k Keeper) getAvailableFactorsForFallbackCount(
 	return available
 }
 
-//nolint:unused // reserved for configurable factor selection
 // getAvailableFactorsForFallback returns the factor types that are both required
 // by borderline params and enrolled by the account
 //
