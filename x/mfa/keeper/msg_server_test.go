@@ -93,7 +93,7 @@ func (s *MsgServerTestSuite) TestEnrollFactor_Success() {
 		},
 	}
 
-	resp, err := s.msgServer.EnrollFactor(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.EnrollFactor(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().NotEmpty(resp.FactorID)
@@ -112,7 +112,7 @@ func (s *MsgServerTestSuite) TestEnrollFactor_InvalidAddress() {
 		FactorType: types.FactorTypeTOTP,
 	}
 
-	_, err := s.msgServer.EnrollFactor(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.EnrollFactor(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "invalid")
 }
@@ -132,7 +132,7 @@ func (s *MsgServerTestSuite) TestEnrollFactor_InvalidFactorType() {
 		FactorType: types.FactorTypeSMS, // Not in allowed list
 	}
 
-	_, err = s.msgServer.EnrollFactor(sdk.WrapSDKContext(s.ctx), msg)
+	_, err = s.msgServer.EnrollFactor(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "not allowed")
 }
@@ -160,7 +160,7 @@ func (s *MsgServerTestSuite) TestRevokeFactor_Success() {
 		FactorID:   "factor-to-revoke",
 	}
 
-	resp, err := s.msgServer.RevokeFactor(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.RevokeFactor(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().True(resp.Success)
@@ -208,7 +208,7 @@ func (s *MsgServerTestSuite) TestRevokeFactor_RequiresMFA() {
 		MFAProof:   nil,
 	}
 
-	_, err = s.msgServer.RevokeFactor(sdk.WrapSDKContext(s.ctx), msg)
+	_, err = s.msgServer.RevokeFactor(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "MFA proof required")
 }
@@ -246,7 +246,7 @@ func (s *MsgServerTestSuite) TestSetMFAPolicy_Success() {
 		},
 	}
 
-	resp, err := s.msgServer.SetMFAPolicy(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.SetMFAPolicy(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().True(resp.Success)
@@ -271,7 +271,7 @@ func (s *MsgServerTestSuite) TestSetMFAPolicy_WrongAccount() {
 		},
 	}
 
-	_, err := s.msgServer.SetMFAPolicy(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.SetMFAPolicy(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "only set policy for own account")
 }
@@ -294,7 +294,7 @@ func (s *MsgServerTestSuite) TestSetMFAPolicy_NoFactors() {
 		},
 	}
 
-	_, err = s.msgServer.SetMFAPolicy(sdk.WrapSDKContext(s.ctx), msg)
+	_, err = s.msgServer.SetMFAPolicy(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "must enroll at least one factor")
 }
@@ -325,7 +325,7 @@ func (s *MsgServerTestSuite) TestCreateChallenge_Success() {
 		},
 	}
 
-	resp, err := s.msgServer.CreateChallenge(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.CreateChallenge(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().NotEmpty(resp.ChallengeID)
@@ -343,7 +343,7 @@ func (s *MsgServerTestSuite) TestCreateChallenge_NoActiveFactor() {
 		TransactionType: types.SensitiveTxLargeWithdrawal,
 	}
 
-	_, err := s.msgServer.CreateChallenge(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.CreateChallenge(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "no active")
 }
@@ -356,7 +356,7 @@ func (s *MsgServerTestSuite) TestVerifyChallenge_InvalidAddress() {
 		Response:    &types.ChallengeResponse{},
 	}
 
-	_, err := s.msgServer.VerifyChallenge(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.VerifyChallenge(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "invalid")
 }
@@ -388,7 +388,7 @@ func (s *MsgServerTestSuite) TestAddTrustedDevice_Success() {
 		},
 	}
 
-	resp, err := s.msgServer.AddTrustedDevice(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.AddTrustedDevice(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().True(resp.Success)
@@ -411,7 +411,7 @@ func (s *MsgServerTestSuite) TestRemoveTrustedDevice_Success() {
 		DeviceFingerprint: "device-to-remove",
 	}
 
-	resp, err := s.msgServer.RemoveTrustedDevice(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.RemoveTrustedDevice(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().True(resp.Success)
@@ -441,7 +441,7 @@ func (s *MsgServerTestSuite) TestUpdateSensitiveTxConfig_Success() {
 		},
 	}
 
-	resp, err := s.msgServer.UpdateSensitiveTxConfig(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.UpdateSensitiveTxConfig(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().True(resp.Success)
@@ -457,7 +457,7 @@ func (s *MsgServerTestSuite) TestUpdateSensitiveTxConfig_Unauthorized() {
 		},
 	}
 
-	_, err := s.msgServer.UpdateSensitiveTxConfig(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.UpdateSensitiveTxConfig(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "expected")
 }

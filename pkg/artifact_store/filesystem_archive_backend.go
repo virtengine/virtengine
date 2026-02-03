@@ -559,7 +559,11 @@ func (b *FilesystemArchiveBackend) GetArchiveMetrics(ctx context.Context) (*Arch
 		// Get file size
 		archivePath := b.getArchivePath(metadata.ArchiveID)
 		if stat, err := os.Stat(archivePath); err == nil {
-			metrics.TotalBytes += uint64(stat.Size())
+			size := stat.Size()
+			if size >= 0 {
+				//nolint:gosec // size checked for negativity
+				metrics.TotalBytes += uint64(size)
+			}
 		}
 
 		return nil

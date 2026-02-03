@@ -164,14 +164,13 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 
 	// Collect prices from all sources
 	var prices []math.LegacyDec
-	var validPrices []types.PriceData
 	var totalSources uint32
 	var healthySources uint32
 	var failureReasons []string
 
 	// Iterate through sources (0 to len(params.Sources))
 	for sourceIdx := range params.Sources {
-		source := uint32(sourceIdx)
+		source := safeUint32FromInt(sourceIdx)
 		totalSources++
 
 		priceData, found := k.GetLatestPrice(ctx, source, denom, baseDenom)
@@ -188,7 +187,6 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 
 		healthySources++
 		prices = append(prices, priceData.State.Price)
-		validPrices = append(validPrices, *priceData)
 	}
 
 	// Check minimum sources requirement
@@ -282,17 +280,17 @@ func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowB
 	}
 
 	params := k.GetParams(ctx)
-	var totalWeightedPrice math.LegacyDec = math.LegacyZeroDec()
+	totalWeightedPrice := math.LegacyZeroDec()
 	var totalWeight int64
 
 	// Collect prices from all sources within the window
 	for sourceIdx := range params.Sources {
-		source := uint32(sourceIdx)
+		source := safeUint32FromInt(sourceIdx)
 		prefix := otypes.PriceDataPrefixByPair(source, denom, baseDenom)
 		iter := storetypes.KVStoreReversePrefixIterator(store, prefix)
 		defer iter.Close()
 
-		var prevHeight int64 = currentHeight
+		prevHeight := currentHeight
 		for ; iter.Valid(); iter.Next() {
 			var priceData types.PriceData
 			if err := k.cdc.Unmarshal(iter.Value(), &priceData); err != nil {
@@ -336,10 +334,10 @@ func (k *Keeper) GetPrices(ctx sdk.Context, filters types.PricesFilter) ([]types
 
 // getPricesByPair retrieves prices for a specific asset/base denomination pair.
 func (k *Keeper) getPricesByPair(store storetypes.KVStore, params types.Params, filters types.PricesFilter) ([]types.PriceData, error) {
-	var results []types.PriceData
+	results := make([]types.PriceData, 0, len(params.Sources))
 
 	for sourceIdx := range params.Sources {
-		source := uint32(sourceIdx)
+		source := safeUint32FromInt(sourceIdx)
 		prices := k.getPricesForSource(store, source, filters)
 		results = append(results, prices...)
 	}
@@ -363,6 +361,17 @@ func (k *Keeper) getPricesForSource(store storetypes.KVStore, source uint32, fil
 	}
 
 	return results
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxInt32 {
+		return math.MaxUint32
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }
 
 // getPriceAtHeight retrieves a specific price at a given block height.
@@ -505,6 +514,7 @@ func (q Querier) Prices(ctx context.Context, req *types.QueryPricesRequest) (*ty
 var _ types.QueryServer = Querier{}
 
 // getDefaultPriceData returns default price data when not found
+//nolint:unused // reserved for default price fallback during maintenance
 func getDefaultPriceData() types.PriceData {
 	return types.PriceData{
 		ID: types.PriceDataRecordID{},

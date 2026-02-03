@@ -13,6 +13,8 @@ import (
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
+const testComputeTag = "compute"
+
 // MockOfferingSubmitter implements OfferingSubmitter for testing.
 type MockOfferingSubmitter struct {
 	CreateOfferingFn          func(ctx context.Context, offering *marketplace.Offering) (string, error)
@@ -78,7 +80,7 @@ var sampleWaldurCompute = &marketplace.WaldurOfferingImport{
 	Shared:       true,
 	Billable:     true,
 	Attributes: map[string]interface{}{
-		"tags":                  []interface{}{"compute", "basic"},
+		"tags":                  []interface{}{testComputeTag, "basic"},
 		"regions":               []interface{}{"us-east-1", "eu-west-1"},
 		"spec_vcpu":             "2",
 		"spec_memory_gb":        "4",
@@ -363,8 +365,8 @@ func TestWaldurOfferingImport_ExtractTags(t *testing.T) {
 	if len(tags) != 2 {
 		t.Errorf("tags count = %d, want 2", len(tags))
 	}
-	if tags[0] != "compute" {
-		t.Errorf("first tag = %s, want 'compute'", tags[0])
+	if tags[0] != testComputeTag {
+		t.Errorf("first tag = %s, want '%s'", tags[0], testComputeTag)
 	}
 }
 

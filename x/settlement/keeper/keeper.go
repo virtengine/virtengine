@@ -413,7 +413,7 @@ func (k Keeper) appendSettlementToOrder(ctx sdk.Context, orderID, settlementID s
 	store := ctx.KVStore(k.skey)
 	key := types.SettlementByOrderKey(orderID)
 
-	var settlementIDs []string
+	settlementIDs := make([]string, 0, 1)
 	bz := store.Get(key)
 	if bz != nil {
 		_ = json.Unmarshal(bz, &settlementIDs)
@@ -513,7 +513,7 @@ func (k Keeper) appendUsageToOrder(ctx sdk.Context, orderID, usageID string) {
 	store := ctx.KVStore(k.skey)
 	key := types.UsageByOrderKey(orderID)
 
-	var usageIDs []string
+	usageIDs := make([]string, 0, 1)
 	bz := store.Get(key)
 	if bz != nil {
 		_ = json.Unmarshal(bz, &usageIDs)
@@ -647,7 +647,7 @@ func (k Keeper) appendDistributionToEpoch(ctx sdk.Context, epoch uint64, distrib
 	store := ctx.KVStore(k.skey)
 	key := types.RewardByEpochKey(epoch)
 
-	var distributionIDs []string
+	distributionIDs := make([]string, 0, 1)
 	bz := store.Get(key)
 	if bz != nil {
 		_ = json.Unmarshal(bz, &distributionIDs)
@@ -761,7 +761,11 @@ func (k Keeper) calculateCurrentEpoch(ctx sdk.Context) uint64 {
 	if params.StakingRewardEpochLength == 0 {
 		return 1
 	}
-	return uint64(ctx.BlockHeight()) / params.StakingRewardEpochLength
+	height := ctx.BlockHeight()
+	if height < 0 {
+		return 1
+	}
+	return uint64(height) / params.StakingRewardEpochLength
 }
 
 // ============================================================================

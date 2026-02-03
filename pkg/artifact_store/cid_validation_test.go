@@ -224,8 +224,8 @@ func TestValidateCIDForBackend(t *testing.T) {
 
 	t.Run("AllowStub variant allows stub CIDs", func(t *testing.T) {
 		err := ValidateCIDForBackendAllowStub("Qm0123456789abcdef0123456789abcdef", BackendIPFS)
-		if err == nil || err.Error() != "" {
-			// Should allow stub CIDs
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
 	})
 

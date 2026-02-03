@@ -24,6 +24,12 @@ const (
 	AlertSeverityCritical AlertSeverity = "critical"
 )
 
+const (
+	anomalySeverityCritical = "critical"
+	anomalySeverityHigh     = "high"
+	anomalySeverityMedium   = "medium"
+)
+
 // AlertType represents the type of alert.
 type AlertType string
 
@@ -511,11 +517,11 @@ func (m *UsageAlertManager) isDuplicate(key string) bool {
 // mapAnomalySeverity maps anomaly severity to alert severity.
 func (m *UsageAlertManager) mapAnomalySeverity(severity string) AlertSeverity {
 	switch severity {
-	case "critical":
+	case anomalySeverityCritical:
 		return AlertSeverityCritical
-	case "high":
+	case anomalySeverityHigh:
 		return AlertSeverityError
-	case "medium":
+	case anomalySeverityMedium:
 		return AlertSeverityWarning
 	default:
 		return AlertSeverityInfo

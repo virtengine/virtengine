@@ -289,14 +289,11 @@ func (ir *IncidentResponder) executePlaybook(ctx context.Context, playbook *Play
 		Str("execution_id", execution.ID).
 		Msg("starting playbook execution")
 
-	stepNames := make([]string, 0, len(playbook.Steps))
 	var hasFailure bool
 
 	for _, step := range playbook.Steps {
 		stepExec := ir.executeStep(ctx, step, incident)
 		execution.StepsExecuted = append(execution.StepsExecuted, stepExec)
-		stepNames = append(stepNames, step.Name)
-
 		if !stepExec.Success {
 			hasFailure = true
 			if !step.ContinueOnFailure {

@@ -45,7 +45,7 @@ const ScopeSchemaVersion uint32 = 1
 
 // Error message constants
 const (
-	errMsgScopeIDEmpty    = "scope_id cannot be empty"
+	errMsgScopeIDEmpty     = "scope_id cannot be empty"
 	errMsgUnknownScopeType = "Unknown scope type"
 )
 

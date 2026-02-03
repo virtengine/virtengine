@@ -502,7 +502,7 @@ func (d *DefaultVoIPDetector) calculateRiskScore(result *VoIPDetectionResult) {
 	}
 
 	// Risk factor accumulation
-	score += uint32(len(result.RiskFactors) * 5)
+	score += safeUint32FromInt(len(result.RiskFactors) * 5)
 
 	// Cap at 100
 	if score > 100 {
@@ -620,7 +620,6 @@ type NumVerifyDetector struct {
 	httpClient *http.Client
 	logger     zerolog.Logger
 	cache      *voipCache
-	mu         sync.RWMutex
 }
 
 // NewNumVerifyDetector creates a new NumVerify detector
@@ -924,11 +923,22 @@ func calculateRiskFromResult(result *VoIPDetectionResult) uint32 {
 		score += 5
 	}
 
-	score += uint32(len(result.RiskFactors) * 5)
+	score += safeUint32FromInt(len(result.RiskFactors) * 5)
 
 	if score > 100 {
 		score = 100
 	}
 
 	return score
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }

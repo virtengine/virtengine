@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -312,7 +313,15 @@ func (v *FIDOVerifier) verifyPackedAttestation(
 	if !ok {
 		return false, types.ErrFIDO2InvalidAttestation.Wrap("missing alg in packed attestation")
 	}
-	alg := types.COSEAlgorithm(algVal.(int64))
+	algInt64, ok := algVal.(int64)
+	if !ok {
+		return false, types.ErrFIDO2InvalidAttestation.Wrap("invalid alg type in packed attestation")
+	}
+	algInt32, err := safeInt32FromInt64(algInt64)
+	if err != nil {
+		return false, types.ErrFIDO2InvalidAttestation.Wrap(err.Error())
+	}
+	alg := types.COSEAlgorithm(algInt32)
 
 	// Build verification data
 	verificationData := make([]byte, len(attestation.AuthData)+len(clientDataHash))
@@ -349,6 +358,16 @@ func (v *FIDOVerifier) verifyPackedAttestation(
 
 	// Self attestation is valid but not trusted
 	return false, nil
+}
+
+func safeInt32FromInt64(value int64) (int32, error) {
+	maxInt32 := int64(^uint32(0) >> 1)
+	minInt32 := -maxInt32 - 1
+	if value > maxInt32 || value < minInt32 {
+		return 0, fmt.Errorf("value out of int32 range: %d", value)
+	}
+	//nolint:gosec // range checked above
+	return int32(value), nil
 }
 
 // verifyFIDOU2FAttestation verifies FIDO U2F attestation format

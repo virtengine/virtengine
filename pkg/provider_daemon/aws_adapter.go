@@ -56,7 +56,7 @@ var (
 	ErrEC2KeyPairNotFound = errors.New("key pair not found")
 
 	// ErrElasticIPNotFound is returned when an Elastic IP is not found
-	ErrElasticIPNotFound = errors.New("Elastic IP not found")
+	ErrElasticIPNotFound = errors.New("elastic IP not found")
 )
 
 // EC2InstanceState represents the state of an EC2 instance
@@ -1764,9 +1764,7 @@ func (aa *AWSAdapter) performInstanceDeployment(ctx context.Context, instance *A
 	}
 
 	// Refresh instance info
-	if err := aa.refreshInstanceInfo(ctx, instance); err != nil {
-		// Non-fatal, continue
-	}
+	_ = aa.refreshInstanceInfo(ctx, instance)
 
 	// Assign Elastic IP if requested
 	if opts.AssignElasticIP && aa.vpc != nil {
@@ -1786,9 +1784,7 @@ func (aa *AWSAdapter) performInstanceDeployment(ctx context.Context, instance *A
 	}
 
 	// Update volume attachment info
-	if err := aa.updateVolumeInfo(ctx, instance); err != nil {
-		// Non-fatal
-	}
+	_ = aa.updateVolumeInfo(ctx, instance)
 
 	return nil
 }
@@ -1866,17 +1862,6 @@ func (aa *AWSAdapter) configureSecurityGroupRules(ctx context.Context, sgID stri
 	})
 
 	// Convert to AWS format and authorize
-	awsRules := make([]AWSSecurityGroupRule, 0, len(rules))
-	for _, r := range rules {
-		awsRules = append(awsRules, AWSSecurityGroupRule{
-			Protocol:    r.Protocol,
-			FromPort:    r.PortRangeMin,
-			ToPort:      r.PortRangeMax,
-			CIDRBlocks:  []string{r.RemoteIPPrefix},
-			Description: r.Description,
-		})
-	}
-
 	// Use the raw ingress authorization through the interface pattern
 	// Note: We pass the rules through the existing SecurityGroupRuleSpec interface
 	for _, rule := range rules {
@@ -2301,7 +2286,7 @@ func (aa *AWSAdapter) SetDefaultRegion(region AWSRegion) error {
 // CreateVolume creates an EBS volume
 func (aa *AWSAdapter) CreateVolume(ctx context.Context, spec *EBSVolumeCreateSpec) (*EBSVolumeInfo, error) {
 	if aa.ebs == nil {
-		return nil, fmt.Errorf(errMsgEBSClientNotConfigured)
+		return nil, errors.New(errMsgEBSClientNotConfigured)
 	}
 
 	// Add default tags
@@ -2320,7 +2305,7 @@ func (aa *AWSAdapter) CreateVolume(ctx context.Context, spec *EBSVolumeCreateSpe
 // DeleteVolume deletes an EBS volume
 func (aa *AWSAdapter) DeleteVolume(ctx context.Context, volumeID string) error {
 	if aa.ebs == nil {
-		return fmt.Errorf(errMsgEBSClientNotConfigured)
+		return errors.New(errMsgEBSClientNotConfigured)
 	}
 	return aa.ebs.DeleteVolume(ctx, volumeID)
 }
@@ -2328,7 +2313,7 @@ func (aa *AWSAdapter) DeleteVolume(ctx context.Context, volumeID string) error {
 // AttachVolume attaches an EBS volume to an instance
 func (aa *AWSAdapter) AttachVolume(ctx context.Context, volumeID, instanceID, device string) (*EBSVolumeAttachmentInfo, error) {
 	if aa.ebs == nil {
-		return nil, fmt.Errorf(errMsgEBSClientNotConfigured)
+		return nil, errors.New(errMsgEBSClientNotConfigured)
 	}
 
 	aa.mu.RLock()

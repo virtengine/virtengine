@@ -110,11 +110,15 @@ func (am AppModule) Name() string {
 }
 
 // RegisterInvariants registers the staking module invariants.
+//
+//nolint:staticcheck // InvariantRegistry is required by the module interface.
 func (am AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {
 	RegisterInvariants(ir, am.keeper)
 }
 
 // RegisterInvariants registers all staking module invariants
+//
+//nolint:staticcheck // InvariantRegistry is required by the module interface.
 func RegisterInvariants(ir sdk.InvariantRegistry, k keeper.Keeper) {
 	ir.RegisterRoute(types.ModuleName, "validator-performance-consistency",
 		ValidatorPerformanceConsistencyInvariant(k))
@@ -124,6 +128,8 @@ func RegisterInvariants(ir sdk.InvariantRegistry, k keeper.Keeper) {
 
 // ValidatorPerformanceConsistencyInvariant checks that validator performance records
 // have consistent data (uptime percentage between 0 and FixedPointScale, valid epoch numbers)
+//
+//nolint:staticcheck // Invariant types are required for legacy invariants.
 func ValidatorPerformanceConsistencyInvariant(k keeper.Keeper) sdk.Invariant {
 	return func(ctx sdk.Context) (string, bool) {
 		var invalidRecords []string
@@ -163,6 +169,8 @@ func ValidatorPerformanceConsistencyInvariant(k keeper.Keeper) sdk.Invariant {
 }
 
 // RewardNonNegativeInvariant checks that all validator rewards are non-negative
+//
+//nolint:staticcheck // Invariant types are required for legacy invariants.
 func RewardNonNegativeInvariant(k keeper.Keeper) sdk.Invariant {
 	return func(ctx sdk.Context) (string, bool) {
 		var invalidRewards []string

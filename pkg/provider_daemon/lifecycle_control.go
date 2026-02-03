@@ -38,6 +38,8 @@ var (
 	ErrResourceBusy = errors.New("resource is busy with another operation")
 )
 
+const paramValueTrue = "true"
+
 // ResourceLifecycleConfig configures resource lifecycle operations
 type ResourceLifecycleConfig struct {
 	// StartTimeout is the timeout for start operations
@@ -335,7 +337,7 @@ func (m *ResourceLifecycleManager) executeAction(ctx context.Context, req *Lifec
 
 	// Add immediate flag
 	if req.Immediate {
-		params["immediate"] = "true"
+		params["immediate"] = paramValueTrue
 	}
 
 	// Execute via lifecycle controller
@@ -550,7 +552,7 @@ func (m *ResourceLifecycleManager) performCleanup(ctx context.Context, allocatio
 }
 
 // executeCleanupTasks executes cleanup tasks after termination
-func (m *ResourceLifecycleManager) executeCleanupTasks(ctx context.Context, allocationID string, terminated bool) {
+func (m *ResourceLifecycleManager) executeCleanupTasks(_ context.Context, allocationID string, terminated bool) {
 	if !terminated {
 		log.Printf("[lifecycle-manager] skipping cleanup for %s (termination failed)", allocationID)
 		return

@@ -214,8 +214,7 @@ func TestParseOrderFromEvent(t *testing.T) {
 		},
 	}
 
-	order, err := parseOrderFromEvent(event)
-	require.NoError(t, err)
+	order := parseOrderFromEvent(event)
 	assert.Equal(t, "order-123", order.OrderID)
 	assert.Equal(t, "customer1", order.CustomerAddress)
 	assert.Equal(t, "compute", order.OfferingType)
@@ -255,8 +254,7 @@ func TestParseConfigFromEvent(t *testing.T) {
 		},
 	}
 
-	config, err := parseConfigFromEvent(event)
-	require.NoError(t, err)
+	config := parseConfigFromEvent(event)
 	assert.Equal(t, "provider1", config.ProviderAddress)
 	assert.True(t, config.Active)
 	assert.Equal(t, uint64(5), config.Version)
@@ -277,7 +275,7 @@ func TestParseConfigFromEvent(t *testing.T) {
 }
 
 func TestBuildOrderQuery(t *testing.T) {
-	query := buildOrderQuery("provider1")
+	query := buildOrderQuery()
 	assert.Contains(t, query, "tm.event='Tx'")
 	assert.Contains(t, query, "order_created")
 	assert.Contains(t, query, "order_closed")

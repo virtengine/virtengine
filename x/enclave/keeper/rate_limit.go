@@ -20,7 +20,7 @@ var (
 // registrationCountKey creates store key for block registration count
 func registrationCountKey(height int64) []byte {
 	bz := make([]byte, 8)
-	binary.BigEndian.PutUint64(bz, uint64(height))
+	binary.BigEndian.PutUint64(bz, safeUint64FromInt64(height))
 	return append(PrefixRegistrationCount, bz...)
 }
 
@@ -82,7 +82,7 @@ func (k Keeper) checkValidatorCooldown(ctx sdk.Context, validatorAddr sdk.AccAdd
 	bz := store.Get(key)
 
 	if bz != nil {
-		lastHeight := int64(binary.BigEndian.Uint64(bz))
+		lastHeight := safeInt64FromUint64(binary.BigEndian.Uint64(bz))
 		currentHeight := ctx.BlockHeight()
 		blocksSinceLastReg := currentHeight - lastHeight
 
@@ -137,7 +137,7 @@ func (k Keeper) RecordValidatorRegistration(ctx sdk.Context, validatorAddr sdk.A
 
 	key := lastRegistrationKey(validatorAddr)
 	bz := make([]byte, 8)
-	binary.BigEndian.PutUint64(bz, uint64(currentHeight))
+	binary.BigEndian.PutUint64(bz, safeUint64FromInt64(currentHeight))
 	store.Set(key, bz)
 }
 
@@ -198,5 +198,21 @@ func (k Keeper) GetValidatorLastRegistrationHeight(ctx sdk.Context, validatorAdd
 		return 0, false
 	}
 
-	return int64(binary.BigEndian.Uint64(bz)), true
+	return safeInt64FromUint64(binary.BigEndian.Uint64(bz)), true
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	//nolint:gosec // range checked above
+	return int64(value)
 }

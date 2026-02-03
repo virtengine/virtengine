@@ -244,7 +244,7 @@ func (k Keeper) EnrollFactor(ctx sdk.Context, enrollment *types.FactorEnrollment
 			activeCount++
 		}
 	}
-	if uint32(activeCount) >= params.MaxFactorsPerAccount {
+	if safeUint32FromInt(activeCount) >= params.MaxFactorsPerAccount {
 		return types.ErrInvalidEnrollment.Wrapf("maximum factors per account (%d) reached", params.MaxFactorsPerAccount)
 	}
 
@@ -1141,7 +1141,7 @@ func (k Keeper) AddTrustedDevice(ctx sdk.Context, address sdk.AccAddress, device
 
 	// Check max trusted devices
 	existing := k.GetTrustedDevices(ctx, address)
-	if uint32(len(existing)) >= params.MaxTrustedDevices {
+	if safeUint32FromInt(len(existing)) >= params.MaxTrustedDevices {
 		return types.ErrMaxTrustedDevicesReached.Wrapf("maximum %d trusted devices allowed", params.MaxTrustedDevices)
 	}
 
@@ -1464,4 +1464,16 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		SensitiveTxConfigs: k.GetAllSensitiveTxConfigs(ctx),
 		TrustedDevices:     devices,
 	}
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	max := int(^uint32(0))
+	if value > max {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }

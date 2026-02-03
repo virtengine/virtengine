@@ -520,7 +520,7 @@ func (c *LifecycleCallback) SigningPayload() []byte {
 	h.Write([]byte(c.ResultState.String()))
 	h.Write([]byte(c.ProviderAddress))
 	h.Write([]byte(c.Nonce))
-	h.Write([]byte(fmt.Sprintf("%d", c.Timestamp.Unix())))
+	fmt.Fprintf(h, "%d", c.Timestamp.Unix())
 	return h.Sum(nil)
 }
 

@@ -677,7 +677,7 @@ func erasureRequestByAddressPrefixKey(address string) []byte {
 }
 
 func pendingErasureKey(deadlineUnix int64, requestID string) []byte {
-	key := append(prefixPendingErasure, sdk.Uint64ToBigEndian(uint64(deadlineUnix))...)
+	key := append(prefixPendingErasure, sdk.Uint64ToBigEndian(safeUint64FromInt64(deadlineUnix))...)
 	key = append(key, byte(0x00))
 	key = append(key, []byte(requestID)...)
 	return key
@@ -688,7 +688,7 @@ func pendingErasurePrefixKey() []byte {
 }
 
 func pendingErasureBeforeKey(beforeUnix int64) []byte {
-	return append(prefixPendingErasure, sdk.Uint64ToBigEndian(uint64(beforeUnix))...)
+	return append(prefixPendingErasure, sdk.Uint64ToBigEndian(safeUint64FromInt64(beforeUnix))...)
 }
 
 func keyDestructionRecordKey(recordID string) []byte {
@@ -926,4 +926,12 @@ func erasureReportFromStore(rs *erasureReportStore) *types.ErasureReport {
 	}
 
 	return r
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }

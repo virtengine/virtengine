@@ -6,7 +6,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/virtengine/virtengine/x/support/types"
+	types "github.com/virtengine/virtengine/x/support/types" //nolint:staticcheck // Deprecated types retained for compatibility.
 )
 
 func TestMsgServer_RegisterExternalTicket(t *testing.T) {
@@ -24,7 +24,7 @@ func TestMsgServer_RegisterExternalTicket(t *testing.T) {
 		ExternalURL:      "https://waldur.example.com/tickets/456",
 	}
 
-	resp, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), msg)
+	resp, err := msgServer.RegisterExternalTicket(ctx, msg)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
@@ -47,7 +47,7 @@ func TestMsgServer_RegisterExternalTicketInvalidAddress(t *testing.T) {
 		ExternalTicketID: "WALDUR-456",
 	}
 
-	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), msg)
+	_, err := msgServer.RegisterExternalTicket(ctx, msg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid")
 }
@@ -67,7 +67,7 @@ func TestMsgServer_UpdateExternalTicket(t *testing.T) {
 		ExternalTicketID: "JIRA-100",
 		ExternalURL:      "https://jira.example.com/browse/JIRA-100",
 	}
-	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
+	_, err := msgServer.RegisterExternalTicket(ctx, registerMsg)
 	require.NoError(t, err)
 
 	// Update
@@ -79,7 +79,7 @@ func TestMsgServer_UpdateExternalTicket(t *testing.T) {
 		ExternalURL:      "https://jira.example.com/browse/JIRA-100-UPDATED",
 	}
 
-	resp, err := msgServer.UpdateExternalTicket(sdk.WrapSDKContext(ctx), updateMsg)
+	resp, err := msgServer.UpdateExternalTicket(ctx, updateMsg)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
@@ -104,7 +104,7 @@ func TestMsgServer_UpdateExternalTicketUnauthorized(t *testing.T) {
 		ExternalSystem:   string(types.ExternalSystemWaldur),
 		ExternalTicketID: "WALDUR-001",
 	}
-	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
+	_, err := msgServer.RegisterExternalTicket(ctx, registerMsg)
 	require.NoError(t, err)
 
 	// Try to update with different user
@@ -115,7 +115,7 @@ func TestMsgServer_UpdateExternalTicketUnauthorized(t *testing.T) {
 		ExternalTicketID: "WALDUR-HACKED",
 	}
 
-	_, err = msgServer.UpdateExternalTicket(sdk.WrapSDKContext(ctx), updateMsg)
+	_, err = msgServer.UpdateExternalTicket(ctx, updateMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unauthorized")
 }
@@ -133,7 +133,7 @@ func TestMsgServer_UpdateExternalTicketNotFound(t *testing.T) {
 		ExternalTicketID: "WALDUR-999",
 	}
 
-	_, err := msgServer.UpdateExternalTicket(sdk.WrapSDKContext(ctx), updateMsg)
+	_, err := msgServer.UpdateExternalTicket(ctx, updateMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not found")
 }
@@ -152,7 +152,7 @@ func TestMsgServer_RemoveExternalTicket(t *testing.T) {
 		ExternalSystem:   string(types.ExternalSystemWaldur),
 		ExternalTicketID: "WALDUR-P001",
 	}
-	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
+	_, err := msgServer.RegisterExternalTicket(ctx, registerMsg)
 	require.NoError(t, err)
 
 	// Remove
@@ -162,7 +162,7 @@ func TestMsgServer_RemoveExternalTicket(t *testing.T) {
 		ResourceType: string(types.ResourceTypeProvider),
 	}
 
-	resp, err := msgServer.RemoveExternalTicket(sdk.WrapSDKContext(ctx), removeMsg)
+	resp, err := msgServer.RemoveExternalTicket(ctx, removeMsg)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
@@ -186,7 +186,7 @@ func TestMsgServer_RemoveExternalTicketUnauthorized(t *testing.T) {
 		ExternalSystem:   string(types.ExternalSystemJira),
 		ExternalTicketID: "JIRA-456",
 	}
-	_, err := msgServer.RegisterExternalTicket(sdk.WrapSDKContext(ctx), registerMsg)
+	_, err := msgServer.RegisterExternalTicket(ctx, registerMsg)
 	require.NoError(t, err)
 
 	// Try to remove with different user
@@ -196,7 +196,7 @@ func TestMsgServer_RemoveExternalTicketUnauthorized(t *testing.T) {
 		ResourceType: string(types.ResourceTypeDeployment),
 	}
 
-	_, err = msgServer.RemoveExternalTicket(sdk.WrapSDKContext(ctx), removeMsg)
+	_, err = msgServer.RemoveExternalTicket(ctx, removeMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unauthorized")
 }
@@ -232,7 +232,7 @@ func TestMsgServer_UpdateParamsUnauthorized(t *testing.T) {
 		Params:    types.DefaultParams(),
 	}
 
-	_, err := msgServer.UpdateParams(sdk.WrapSDKContext(ctx), updateMsg)
+	_, err := msgServer.UpdateParams(ctx, updateMsg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid authority")
 }

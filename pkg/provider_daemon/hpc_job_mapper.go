@@ -151,7 +151,7 @@ func (m *HPCJobMapper) MapToOOD(job *hpctypes.HPCJob) (*ood_adapter.InteractiveA
 	}
 
 	// Calculate hours from seconds
-	hours := int32(job.MaxRuntimeSeconds / 3600)
+	hours := safeInt32FromInt64(job.MaxRuntimeSeconds / 3600)
 	if hours < 1 {
 		hours = 1
 	}

@@ -29,6 +29,12 @@ var ErrKeyStorageLocked = errors.New("key storage is locked")
 // ErrInvalidPassphrase is returned when the passphrase is invalid
 var ErrInvalidPassphrase = errors.New("invalid passphrase")
 
+const (
+	keyStatusActive  = "active"
+	keyStatusRotated = "rotated"
+	keyStatusRevoked = "revoked"
+)
+
 // KeyStorageType represents the type of key storage
 type KeyStorageType string
 
@@ -98,7 +104,7 @@ type LedgerConfig struct {
 func DefaultKeyManagerConfig() KeyManagerConfig {
 	return KeyManagerConfig{
 		StorageType:      KeyStorageTypeFile,
-		DefaultAlgorithm: "ed25519",
+		DefaultAlgorithm: string(HSMKeyTypeEd25519),
 		KeyRotationDays:  90,
 		GracePeriodHours: 24,
 	}
@@ -230,9 +236,9 @@ func (km *KeyManager) generateEd25519Key(providerAddress string) (*ManagedKey, e
 	key := &ManagedKey{
 		KeyID:           keyID,
 		PublicKey:       hex.EncodeToString(pubKey),
-		Algorithm:       "ed25519",
+		Algorithm:       string(HSMKeyTypeEd25519),
 		CreatedAt:       now,
-		Status:          "active",
+		Status:          keyStatusActive,
 		ProviderAddress: providerAddress,
 		privateKey:      privKey,
 	}
@@ -271,7 +277,7 @@ func (km *KeyManager) GetActiveKey() (*ManagedKey, error) {
 		return nil, ErrKeyNotFound
 	}
 
-	if key.Status == "revoked" {
+	if key.Status == keyStatusRevoked {
 		return nil, ErrKeyRevoked
 	}
 
@@ -370,7 +376,7 @@ func (km *KeyManager) getActiveKeyInternal() (*ManagedKey, error) {
 		return nil, ErrKeyNotFound
 	}
 
-	if key.Status == "revoked" {
+	if key.Status == keyStatusRevoked {
 		return nil, ErrKeyRevoked
 	}
 
@@ -389,7 +395,7 @@ func (km *KeyManager) signWithKey(key *ManagedKey, message []byte) (*Signature, 
 	var sigBytes []byte
 
 	switch key.Algorithm {
-	case "ed25519":
+	case string(HSMKeyTypeEd25519):
 		sigBytes = ed25519.Sign(key.privateKey, message)
 	default:
 		return nil, fmt.Errorf("unsupported algorithm: %s", key.Algorithm)
@@ -435,7 +441,7 @@ func (s *Signature) Verify(message []byte) error {
 	}
 
 	switch s.Algorithm {
-	case "ed25519":
+	case string(HSMKeyTypeEd25519):
 		if len(pubKeyBytes) != ed25519.PublicKeySize {
 			return fmt.Errorf("invalid ed25519 public key size: %d", len(pubKeyBytes))
 		}
@@ -481,7 +487,7 @@ func (km *KeyManager) RotateKey(providerAddress string) (*ManagedKey, *KeyRotati
 
 	if oldKey != nil {
 		rotation.OldKeyID = oldKey.KeyID
-		oldKey.Status = "rotated"
+		oldKey.Status = keyStatusRotated
 	}
 
 	return newKey, rotation, nil
@@ -516,7 +522,7 @@ func (km *KeyManager) RevokeKey(keyID string) error {
 		return ErrKeyNotFound
 	}
 
-	key.Status = "revoked"
+	key.Status = keyStatusRevoked
 
 	// Scrub private key from memory
 	if key.privateKey != nil {
@@ -575,7 +581,7 @@ func (km *KeyManager) ImportKey(providerAddress string, privateKey []byte, algor
 	var pubKey []byte
 
 	switch algorithm {
-	case "ed25519":
+	case string(HSMKeyTypeEd25519):
 		if len(privateKey) != ed25519.PrivateKeySize {
 			return nil, fmt.Errorf("invalid ed25519 private key size: %d", len(privateKey))
 		}
@@ -593,7 +599,7 @@ func (km *KeyManager) ImportKey(providerAddress string, privateKey []byte, algor
 		PublicKey:       hex.EncodeToString(pubKey),
 		Algorithm:       algorithm,
 		CreatedAt:       now,
-		Status:          "active",
+		Status:          keyStatusActive,
 		ProviderAddress: providerAddress,
 		privateKey:      privateKey,
 	}

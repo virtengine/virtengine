@@ -116,9 +116,7 @@ func FuzzScopeTypeValidation(f *testing.F) {
 		// Consistency checks
 		if isValid {
 			// Valid types should have non-zero weight (except unknown)
-			if weight == 0 && st != ScopeType("unknown") {
-				// Some valid types might have zero weight
-			}
+			// Some valid types might have zero weight.
 			// Description should not be "Unknown scope type"
 			if desc == "Unknown scope type" {
 				t.Errorf("valid scope type %q has unknown description", scopeType)
@@ -192,11 +190,8 @@ func FuzzVerificationStatusTransitions(f *testing.F) {
 		// If both are valid, check consistency
 		if IsValidVerificationStatus(fromStatus) && IsValidVerificationStatus(toStatus) {
 			// Final statuses can only transition to specific states
-			if IsFinalStatus(fromStatus) {
-				// Final statuses have limited transitions
-				if canTransition && toStatus != VerificationStatusPending && toStatus != VerificationStatusExpired {
-					// Only specific transitions allowed from final states
-				}
+			if IsFinalStatus(fromStatus) && canTransition && toStatus != VerificationStatusPending && toStatus != VerificationStatusExpired {
+				t.Errorf("final status %q should not transition to %q", from, to)
 			}
 		}
 	})

@@ -499,37 +499,37 @@ func (b *BatchScriptBuilder) writeSBATCHDirectives(sb *strings.Builder) {
 
 	// Time limit
 	if b.timeLimitMinutes > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --time=%s\n", formatTimeLimit(b.timeLimitMinutes)))
+		fmt.Fprintf(sb, "#SBATCH --time=%s\n", formatTimeLimit(b.timeLimitMinutes))
 	}
 
 	// GPU allocation
 	if b.gpus > 0 {
 		if b.gpuType != "" {
-			sb.WriteString(fmt.Sprintf("#SBATCH --gres=gpu:%s:%d\n", b.gpuType, b.gpus))
+			fmt.Fprintf(sb, "#SBATCH --gres=gpu:%s:%d\n", b.gpuType, b.gpus)
 		} else {
-			sb.WriteString(fmt.Sprintf("#SBATCH --gres=gpu:%d\n", b.gpus))
+			fmt.Fprintf(sb, "#SBATCH --gres=gpu:%d\n", b.gpus)
 		}
 	}
 
 	if b.gpusPerNode > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --gpus-per-node=%d\n", b.gpusPerNode))
+		fmt.Fprintf(sb, "#SBATCH --gpus-per-node=%d\n", b.gpusPerNode)
 	}
 
 	if b.gpusPerTask > 0 {
-		sb.WriteString(fmt.Sprintf("#SBATCH --gpus-per-task=%d\n", b.gpusPerTask))
+		fmt.Fprintf(sb, "#SBATCH --gpus-per-task=%d\n", b.gpusPerTask)
 	}
 
 	// Working directory and output
 	if b.workingDir != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --chdir=%s\n", b.workingDir))
+		fmt.Fprintf(sb, "#SBATCH --chdir=%s\n", b.workingDir)
 	}
 
 	if b.outputFile != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --output=%s\n", b.outputFile))
+		fmt.Fprintf(sb, "#SBATCH --output=%s\n", b.outputFile)
 	}
 
 	if b.errorFile != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --error=%s\n", b.errorFile))
+		fmt.Fprintf(sb, "#SBATCH --error=%s\n", b.errorFile)
 	}
 
 	// Node constraints and selection
@@ -538,33 +538,33 @@ func (b *BatchScriptBuilder) writeSBATCHDirectives(sb *strings.Builder) {
 	}
 
 	for _, constraint := range b.constraints {
-		sb.WriteString(fmt.Sprintf("#SBATCH --constraint=%s\n", constraint))
+		fmt.Fprintf(sb, "#SBATCH --constraint=%s\n", constraint)
 	}
 
 	if b.nodelist != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --nodelist=%s\n", b.nodelist))
+		fmt.Fprintf(sb, "#SBATCH --nodelist=%s\n", b.nodelist)
 	}
 
 	if b.excludeNodes != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --exclude=%s\n", b.excludeNodes))
+		fmt.Fprintf(sb, "#SBATCH --exclude=%s\n", b.excludeNodes)
 	}
 
 	// Job dependencies and arrays
 	if b.dependency != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --dependency=%s\n", b.dependency))
+		fmt.Fprintf(sb, "#SBATCH --dependency=%s\n", b.dependency)
 	}
 
 	if b.arraySpec != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --array=%s\n", b.arraySpec))
+		fmt.Fprintf(sb, "#SBATCH --array=%s\n", b.arraySpec)
 	}
 
 	// Email notifications
 	if b.mailType != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --mail-type=%s\n", b.mailType))
+		fmt.Fprintf(sb, "#SBATCH --mail-type=%s\n", b.mailType)
 	}
 
 	if b.mailUser != "" {
-		sb.WriteString(fmt.Sprintf("#SBATCH --mail-user=%s\n", b.mailUser))
+		fmt.Fprintf(sb, "#SBATCH --mail-user=%s\n", b.mailUser)
 	}
 }
 

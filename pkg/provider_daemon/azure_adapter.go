@@ -2149,9 +2149,7 @@ func (aa *AzureAdapter) performInstanceDeployment(ctx context.Context, instance 
 	}
 
 	// Refresh instance info
-	if err := aa.refreshInstanceInfo(ctx, instance); err != nil {
-		// Non-fatal, continue
-	}
+	_ = aa.refreshInstanceInfo(ctx, instance)
 
 	return nil
 }

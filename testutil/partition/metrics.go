@@ -92,11 +92,11 @@ type BlockMetric struct {
 
 // StateMetric captures state synchronization metrics.
 type StateMetric struct {
-	NodeID        NodeID
-	Timestamp     time.Time
-	HeightBefore  int64
-	HeightAfter   int64
-	SyncDuration  time.Duration
+	NodeID         NodeID
+	Timestamp      time.Time
+	HeightBefore   int64
+	HeightAfter    int64
+	SyncDuration   time.Duration
 	StateHashMatch bool
 }
 
@@ -189,12 +189,12 @@ type MetricsSummary struct {
 	MaxTimeToFirstBlock     time.Duration
 	MaxTimeToConsensus      time.Duration
 
-	TotalBlocksProduced     int
-	BlocksDuringPartition   int
-	BlocksAfterHeal         int
-	AverageStateSyncTime    time.Duration
-	StateSyncSuccessRate    float64
-	TotalMessagesReplayed   int
+	TotalBlocksProduced   int
+	BlocksDuringPartition int
+	BlocksAfterHeal       int
+	AverageStateSyncTime  time.Duration
+	StateSyncSuccessRate  float64
+	TotalMessagesReplayed int
 }
 
 // Summary computes and returns a summary of the metrics.

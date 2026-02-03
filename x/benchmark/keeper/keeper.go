@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 
 	"cosmossdk.io/log"
@@ -220,7 +221,7 @@ func (k Keeper) SubmitBenchmarksTrusted(ctx sdk.Context, reports []types.Benchma
 		if pruned > 0 {
 			_ = ctx.EventManager().EmitTypedEvent(&types.BenchmarksPrunedEvent{
 				Provider:    report.ProviderAddress,
-				PrunedCount: uint32(pruned),
+				PrunedCount: safeUint32FromInt(pruned),
 				PrunedAt:    ctx.BlockTime().Unix(),
 			})
 		}
@@ -303,7 +304,7 @@ func (k Keeper) SubmitBenchmarks(ctx sdk.Context, reports []types.BenchmarkRepor
 		if pruned > 0 {
 			_ = ctx.EventManager().EmitTypedEvent(&types.BenchmarksPrunedEvent{
 				Provider:    report.ProviderAddress,
-				PrunedCount: uint32(pruned),
+				PrunedCount: safeUint32FromInt(pruned),
 				PrunedAt:    ctx.BlockTime().Unix(),
 			})
 		}
@@ -320,7 +321,7 @@ func (k Keeper) SubmitBenchmarks(ctx sdk.Context, reports []types.BenchmarkRepor
 		_ = ctx.EventManager().EmitTypedEvent(&types.BenchmarksSubmittedEvent{
 			Provider:    reports[0].ProviderAddress,
 			ClusterId:   reports[0].ClusterID,
-			ResultCount: uint32(len(reports)),
+			ResultCount: safeUint32FromInt(len(reports)),
 			SubmittedAt: ctx.BlockTime().Unix(),
 		})
 	}
@@ -360,6 +361,16 @@ func (k Keeper) computeReliabilityInputs(ctx sdk.Context, providerAddr string) t
 	inputs.MeanTimeToProvision = 120        // 2 minutes
 
 	return inputs
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
 // GetBenchmarkReport returns a benchmark report by ID
@@ -405,7 +416,7 @@ func (k Keeper) indexReportByProviderCluster(ctx sdk.Context, report types.Bench
 	indexKey := types.GetProviderClusterIndexKey(report.ProviderAddress, report.ClusterID)
 
 	// Append report ID to index
-	var reportIDs []string
+	reportIDs := make([]string, 0, 1)
 	if bz := store.Get(indexKey); bz != nil {
 		_ = json.Unmarshal(bz, &reportIDs)
 	}
@@ -426,7 +437,7 @@ func (k Keeper) indexReportByRegion(ctx sdk.Context, report types.BenchmarkRepor
 
 	indexKey := types.GetRegionIndexKey(region)
 
-	var reportIDs []string
+	reportIDs := make([]string, 0, 1)
 	if bz := store.Get(indexKey); bz != nil {
 		_ = json.Unmarshal(bz, &reportIDs)
 	}

@@ -21,6 +21,8 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+const testScopeID = "scope_123"
+
 // testWalletSetup creates a test environment for wallet tests
 type testWalletSetup struct {
 	ctx        sdk.Context
@@ -171,7 +173,7 @@ func TestAddScopeToWallet(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create scope reference
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:        scopeID,
@@ -201,7 +203,7 @@ func TestAddScopeToWallet_WalletNotFound(t *testing.T) {
 	ts := setupWalletTest(t)
 
 	scopeRef := types.ScopeReference{
-		ScopeID:      "scope_123",
+		ScopeID:      testScopeID,
 		ScopeType:    types.ScopeTypeIDDocument,
 		EnvelopeHash: make([]byte, 32),
 		AddedAt:      time.Now(),
@@ -223,7 +225,7 @@ func TestAddScopeToWallet_InvalidSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	scopeRef := types.ScopeReference{
-		ScopeID:      "scope_123",
+		ScopeID:      testScopeID,
 		ScopeType:    types.ScopeTypeIDDocument,
 		EnvelopeHash: make([]byte, 32),
 		AddedAt:      time.Now(),
@@ -248,7 +250,7 @@ func TestAddScopeToWallet_DuplicateScope(t *testing.T) {
 	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, bindingSignature, ts.pubKey)
 	require.NoError(t, err)
 
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:      scopeID,
@@ -280,7 +282,7 @@ func TestRevokeScopeFromWallet(t *testing.T) {
 	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, bindingSignature, ts.pubKey)
 	require.NoError(t, err)
 
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:      scopeID,
@@ -336,7 +338,7 @@ func TestRevokeScopeFromWallet_InvalidSignature(t *testing.T) {
 	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, bindingSignature, ts.pubKey)
 	require.NoError(t, err)
 
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:      scopeID,
@@ -369,7 +371,7 @@ func TestUpdateConsent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update consent for a scope
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	update := types.ConsentUpdateRequest{
 		ScopeID:      scopeID,
 		GrantConsent: true,

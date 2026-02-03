@@ -355,7 +355,7 @@ func (k Keeper) IteratePendingArtifactRetrievals(ctx sdk.Context, fn func(retrie
 func (k Keeper) appendToIndex(ctx sdk.Context, key []byte, id string) {
 	store := ctx.KVStore(k.skey)
 
-	var ids []string
+	ids := make([]string, 0, 1)
 	bz := store.Get(key)
 	if bz != nil {
 		_ = json.Unmarshal(bz, &ids)
@@ -378,7 +378,7 @@ func (k Keeper) appendToIndex(ctx sdk.Context, key []byte, id string) {
 func (k Keeper) removeFromIndex(ctx sdk.Context, key []byte, id string) {
 	store := ctx.KVStore(k.skey)
 
-	var ids []string
+	ids := make([]string, 0, 1)
 	bz := store.Get(key)
 	if bz == nil {
 		return

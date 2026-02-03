@@ -139,7 +139,7 @@ func (s *MsgServerTestSuite) TestDelegate() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.msgServer.Delegate(sdk.WrapSDKContext(s.ctx), tc.msg)
+			resp, err := s.msgServer.Delegate(s.ctx, tc.msg)
 			if tc.expectErr {
 				s.Require().Error(err)
 			} else {
@@ -152,8 +152,8 @@ func (s *MsgServerTestSuite) TestDelegate() {
 
 // TestUndelegate tests the Undelegate message handler
 func (s *MsgServerTestSuite) TestUndelegate() {
-	delegatorAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
-	validatorAddr := "cosmos1sn6yerd80wqhwlm8ykw337vj6hurs688ucg9tn"
+	delegatorAddr := testMsgDelegatorAddr
+	validatorAddr := testMsgValidatorAddr
 
 	// Create validator shares and delegation first
 	valShares := types.NewValidatorShares(validatorAddr, s.ctx.BlockTime())
@@ -222,7 +222,7 @@ func (s *MsgServerTestSuite) TestUndelegate() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.msgServer.Undelegate(sdk.WrapSDKContext(s.ctx), tc.msg)
+			resp, err := s.msgServer.Undelegate(s.ctx, tc.msg)
 			if tc.expectErr {
 				s.Require().Error(err)
 			} else {
@@ -236,7 +236,7 @@ func (s *MsgServerTestSuite) TestUndelegate() {
 
 // TestRedelegate tests the Redelegate message handler
 func (s *MsgServerTestSuite) TestRedelegate() {
-	delegatorAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	delegatorAddr := testMsgDelegatorAddr
 	srcValidatorAddr := "cosmos1sn6yerd80wqhwlm8ykw337vj6hurs688ucg9tn"
 	dstValidatorAddr := "cosmos1wn2fmyewy43qj3d2tpa82wq8ndehqvzzxhcm0d"
 
@@ -315,7 +315,7 @@ func (s *MsgServerTestSuite) TestRedelegate() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.msgServer.Redelegate(sdk.WrapSDKContext(s.ctx), tc.msg)
+			resp, err := s.msgServer.Redelegate(s.ctx, tc.msg)
 			if tc.expectErr {
 				s.Require().Error(err)
 			} else {
@@ -329,7 +329,7 @@ func (s *MsgServerTestSuite) TestRedelegate() {
 
 // TestClaimRewards tests the ClaimRewards message handler
 func (s *MsgServerTestSuite) TestClaimRewards() {
-	delegatorAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	delegatorAddr := testMsgDelegatorAddr
 	validatorAddr := "cosmos1sn6yerd80wqhwlm8ykw337vj6hurs688ucg9tn"
 
 	testCases := []struct {
@@ -365,7 +365,7 @@ func (s *MsgServerTestSuite) TestClaimRewards() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.msgServer.ClaimRewards(sdk.WrapSDKContext(s.ctx), tc.msg)
+			resp, err := s.msgServer.ClaimRewards(s.ctx, tc.msg)
 			if tc.expectErr {
 				s.Require().Error(err)
 			} else {
@@ -378,7 +378,7 @@ func (s *MsgServerTestSuite) TestClaimRewards() {
 
 // TestClaimAllRewards tests the ClaimAllRewards message handler
 func (s *MsgServerTestSuite) TestClaimAllRewards() {
-	delegatorAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	delegatorAddr := testMsgDelegatorAddr
 
 	testCases := []struct {
 		name      string
@@ -403,7 +403,7 @@ func (s *MsgServerTestSuite) TestClaimAllRewards() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.msgServer.ClaimAllRewards(sdk.WrapSDKContext(s.ctx), tc.msg)
+			resp, err := s.msgServer.ClaimAllRewards(s.ctx, tc.msg)
 			if tc.expectErr {
 				s.Require().Error(err)
 			} else {
@@ -460,7 +460,7 @@ func (s *MsgServerTestSuite) TestUpdateParams() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			resp, err := s.msgServer.UpdateParams(sdk.WrapSDKContext(s.ctx), tc.msg)
+			resp, err := s.msgServer.UpdateParams(s.ctx, tc.msg)
 			if tc.expectErr {
 				s.Require().Error(err)
 			} else {
@@ -479,7 +479,7 @@ func (s *MsgServerTestSuite) TestUpdateParams() {
 func (s *MsgServerTestSuite) TestMsgServerDelegateValidation() {
 	// Test that msg.ValidateBasic is properly called by the message with valid inputs
 	msg := types.NewMsgDelegate(
-		"cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+		testMsgDelegatorAddr,
 		"cosmos1sn6yerd80wqhwlm8ykw337vj6hurs688ucg9tn",
 		sdk.NewCoin("uve", sdkmath.NewInt(1000000)),
 	)
@@ -487,7 +487,7 @@ func (s *MsgServerTestSuite) TestMsgServerDelegateValidation() {
 
 	// Test with zero amount (should fail validation)
 	msgZero := types.NewMsgDelegate(
-		"cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu",
+		testMsgDelegatorAddr,
 		"cosmos1sn6yerd80wqhwlm8ykw337vj6hurs688ucg9tn",
 		sdk.NewCoin("uve", sdkmath.ZeroInt()),
 	)

@@ -56,7 +56,7 @@ func (m *mockSchedulingQuerier) RequestNewSchedulingDecision(ctx context.Context
 	decision := &hpctypes.SchedulingDecision{
 		DecisionID:        fmt.Sprintf("new-decision-%s", job.JobID),
 		JobID:             job.JobID,
-		SelectedClusterID: "cluster-1",
+		SelectedClusterID: testClusterID,
 		DecisionReason:    "Test decision",
 		CreatedAt:         time.Now(),
 		BlockHeight:       m.currentBlock,
@@ -122,7 +122,7 @@ func TestRoutingEnforcer_EnforceRouting_Success(t *testing.T) {
 	decision := &hpctypes.SchedulingDecision{
 		DecisionID:        "decision-1",
 		JobID:             "job-1",
-		SelectedClusterID: "cluster-1",
+		SelectedClusterID: testClusterID,
 		DecisionReason:    "Best capacity match",
 		CreatedAt:         time.Now(),
 		BlockHeight:       95, // 5 blocks old
@@ -130,7 +130,7 @@ func TestRoutingEnforcer_EnforceRouting_Success(t *testing.T) {
 	querier.addDecision(decision)
 
 	clusterStatus := &HPCClusterStatus{
-		ClusterID:      "cluster-1",
+		ClusterID:      testClusterID,
 		State:          hpctypes.ClusterStateActive,
 		TotalNodes:     10,
 		AvailableNodes: 5,
@@ -139,13 +139,13 @@ func TestRoutingEnforcer_EnforceRouting_Success(t *testing.T) {
 	querier.addCluster(clusterStatus)
 
 	config := DefaultRoutingEnforcerConfig()
-	config.ClusterID = "cluster-1"
+	config.ClusterID = testClusterID
 
 	enforcer := NewRoutingEnforcer(config, querier, nil, auditor)
 
 	job := &hpctypes.HPCJob{
 		JobID:                "job-1",
-		ClusterID:            "cluster-1",
+		ClusterID:            testClusterID,
 		SchedulingDecisionID: "decision-1",
 		ProviderAddress:      "virtengine1provider",
 		Resources: hpctypes.JobResources{
@@ -164,8 +164,8 @@ func TestRoutingEnforcer_EnforceRouting_Success(t *testing.T) {
 		t.Error("Expected routing to be allowed")
 	}
 
-	if result.TargetClusterID != "cluster-1" {
-		t.Errorf("Expected target cluster 'cluster-1', got '%s'", result.TargetClusterID)
+	if result.TargetClusterID != testClusterID {
+		t.Errorf("Expected target cluster '%s', got '%s'", testClusterID, result.TargetClusterID)
 	}
 
 	if result.IsFallback {
@@ -223,7 +223,7 @@ func TestRoutingEnforcer_EnforceRouting_StaleDecision_AutoRefresh(t *testing.T) 
 	staleDecision := &hpctypes.SchedulingDecision{
 		DecisionID:        "stale-decision",
 		JobID:             "job-3",
-		SelectedClusterID: "cluster-1",
+		SelectedClusterID: testClusterID,
 		DecisionReason:    "Old decision",
 		CreatedAt:         time.Now().Add(-20 * time.Minute),
 		BlockHeight:       1, // Very old
@@ -233,7 +233,7 @@ func TestRoutingEnforcer_EnforceRouting_StaleDecision_AutoRefresh(t *testing.T) 
 
 	// Add available cluster
 	clusterStatus := &HPCClusterStatus{
-		ClusterID:      "cluster-1",
+		ClusterID:      testClusterID,
 		State:          hpctypes.ClusterStateActive,
 		TotalNodes:     10,
 		AvailableNodes: 5,
@@ -303,7 +303,7 @@ func TestRoutingEnforcer_EnforceRouting_ClusterUnavailable_Fallback(t *testing.T
 
 	// Add a fallback cluster
 	fallbackCluster := &HPCClusterStatus{
-		ClusterID:      "cluster-1",
+		ClusterID:      testClusterID,
 		State:          hpctypes.ClusterStateActive,
 		TotalNodes:     10,
 		AvailableNodes: 5,
@@ -354,7 +354,7 @@ func TestRoutingEnforcer_ValidateJobPlacement_ClusterMismatch_Strict(t *testing.
 	decision := &hpctypes.SchedulingDecision{
 		DecisionID:        "decision-5",
 		JobID:             "job-5",
-		SelectedClusterID: "cluster-1",
+		SelectedClusterID: testClusterID,
 		CreatedAt:         time.Now(),
 		BlockHeight:       95,
 	}
@@ -443,7 +443,7 @@ func TestRoutingEnforcer_AuditRecordCreation(t *testing.T) {
 	decision := &hpctypes.SchedulingDecision{
 		DecisionID:        "decision-audit",
 		JobID:             "job-audit",
-		SelectedClusterID: "cluster-1",
+		SelectedClusterID: testClusterID,
 		DecisionReason:    "Test decision",
 		CreatedAt:         time.Now(),
 		BlockHeight:       95,
@@ -451,7 +451,7 @@ func TestRoutingEnforcer_AuditRecordCreation(t *testing.T) {
 	querier.addDecision(decision)
 
 	clusterStatus := &HPCClusterStatus{
-		ClusterID:      "cluster-1",
+		ClusterID:      testClusterID,
 		State:          hpctypes.ClusterStateActive,
 		TotalNodes:     10,
 		AvailableNodes: 5,
@@ -503,7 +503,7 @@ func TestRoutingEnforcer_InsufficientCapacity(t *testing.T) {
 	decision := &hpctypes.SchedulingDecision{
 		DecisionID:        "decision-capacity",
 		JobID:             "job-capacity",
-		SelectedClusterID: "cluster-1",
+		SelectedClusterID: testClusterID,
 		CreatedAt:         time.Now(),
 		BlockHeight:       95,
 	}
@@ -511,7 +511,7 @@ func TestRoutingEnforcer_InsufficientCapacity(t *testing.T) {
 
 	// Cluster has insufficient nodes
 	clusterStatus := &HPCClusterStatus{
-		ClusterID:      "cluster-1",
+		ClusterID:      testClusterID,
 		State:          hpctypes.ClusterStateActive,
 		TotalNodes:     10,
 		AvailableNodes: 2, // Only 2 available
@@ -591,7 +591,7 @@ func TestRoutingEnforcer_ClearDecisionCache(t *testing.T) {
 	// Add a decision to cache manually
 	decision := &hpctypes.SchedulingDecision{
 		DecisionID:        "cached-decision",
-		SelectedClusterID: "cluster-1",
+		SelectedClusterID: testClusterID,
 		CreatedAt:         time.Now(),
 		BlockHeight:       100,
 	}

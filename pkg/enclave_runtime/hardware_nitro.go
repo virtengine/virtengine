@@ -142,13 +142,13 @@ func (d *NitroHardwareDetector) Detect() error {
 			d.detectionError = err
 			return err
 		}
-		d.detectionError = fmt.Errorf("error checking Nitro device: %w", err)
+		d.detectionError = fmt.Errorf("error checking nitro device: %w", err)
 		return d.detectionError
 	}
 
 	if !exists {
 		d.available = false
-		d.detectionError = fmt.Errorf("Nitro device not found at %s", NitroDevicePath)
+		d.detectionError = fmt.Errorf("nitro device not found at %s", NitroDevicePath)
 		return d.detectionError
 	}
 
@@ -585,7 +585,7 @@ func (c *NitroNSMClient) initSimulatedState() {
 	// Generate simulated PCRs
 	for i := uint8(0); i < 16; i++ {
 		h := sha512.New384()
-		h.Write([]byte(fmt.Sprintf("simulated-pcr-%d", i)))
+		fmt.Fprintf(h, "simulated-pcr-%d", i)
 		var pcr [48]byte
 		copy(pcr[:], h.Sum(nil))
 		c.simulatedPCRs[i] = pcr
@@ -941,9 +941,7 @@ func (b *NitroHardwareBackend) Initialize() error {
 	}
 
 	// Detect hardware
-	if err := b.detector.Detect(); err != nil {
-		// Continue anyway for simulation mode
-	}
+	_ = b.detector.Detect()
 
 	// Create components
 	b.cliRunner = NewNitroCLIRunner(b.detector)

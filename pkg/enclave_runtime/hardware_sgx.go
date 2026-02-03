@@ -294,6 +294,7 @@ func (l *SGXEnclaveLoader) Unload() error {
 	if !l.simulated {
 		// TODO: Real SGX implementation:
 		// Call sgx_destroy_enclave()
+		_ = l.enclaveID
 	}
 
 	l.loaded = false

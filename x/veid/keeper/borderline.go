@@ -238,7 +238,7 @@ func (k Keeper) getDefaultRequiredFactorsList() []string {
 func (k Keeper) getAvailableFactorsForFallbackCount(
 	ctx sdk.Context,
 	address sdk.AccAddress,
-	requiredCount uint32,
+	_ uint32,
 ) []mfatypes.FactorType {
 	var available []mfatypes.FactorType
 
@@ -257,6 +257,7 @@ func (k Keeper) getAvailableFactorsForFallbackCount(
 	return available
 }
 
+//nolint:unused // reserved for configurable factor selection
 // getAvailableFactorsForFallback returns the factor types that are both required
 // by borderline params and enrolled by the account
 func (k Keeper) getAvailableFactorsForFallback(
@@ -472,7 +473,7 @@ func (k Keeper) GetPendingFallbacksForAccount(ctx sdk.Context, accountAddress st
 		return nil
 	}
 
-	var fallbackIDs []string
+	fallbackIDs := make([]string, 0, 1)
 	if err := json.Unmarshal(bz, &fallbackIDs); err != nil {
 		return nil
 	}
@@ -498,7 +499,7 @@ func (k Keeper) updateAccountFallbackIndex(ctx sdk.Context, accountAddress strin
 	store := ctx.KVStore(k.skey)
 	key := types.BorderlineFallbackByAccountKey(address.Bytes())
 
-	var fallbackIDs []string
+	fallbackIDs := make([]string, 0, 1)
 	if bz := store.Get(key); bz != nil {
 		_ = json.Unmarshal(bz, &fallbackIDs)
 	}

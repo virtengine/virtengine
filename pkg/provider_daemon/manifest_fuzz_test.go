@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+const errCodeInvalidValue = "INVALID_VALUE"
+
 // FuzzManifestParse tests manifest JSON parsing with arbitrary input.
 // This fuzz test verifies that:
 // 1. Parsing never panics regardless of input
@@ -162,7 +164,7 @@ func FuzzServiceSpecValidation(f *testing.F) {
 		if cpu <= 0 {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "services[0].resources.cpu" {
+				if err.Code == errCodeInvalidValue && err.Field == "services[0].resources.cpu" {
 					hasError = true
 					break
 				}
@@ -175,7 +177,7 @@ func FuzzServiceSpecValidation(f *testing.F) {
 		if memory <= 0 {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "services[0].resources.memory" {
+				if err.Code == errCodeInvalidValue && err.Field == "services[0].resources.memory" {
 					hasError = true
 					break
 				}
@@ -230,7 +232,7 @@ func FuzzPortSpecValidation(f *testing.F) {
 		if containerPort <= 0 || containerPort > 65535 {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "services[0].ports[0].container_port" {
+				if err.Code == errCodeInvalidValue && err.Field == "services[0].ports[0].container_port" {
 					hasError = true
 					break
 				}
@@ -243,7 +245,7 @@ func FuzzPortSpecValidation(f *testing.F) {
 		if protocol != "" && protocol != "tcp" && protocol != "udp" {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "services[0].ports[0].protocol" {
+				if err.Code == errCodeInvalidValue && err.Field == "services[0].ports[0].protocol" {
 					hasError = true
 					break
 				}
@@ -307,7 +309,7 @@ func FuzzVolumeSpecValidation(f *testing.F) {
 		if size <= 0 {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "volumes[0].size" {
+				if err.Code == errCodeInvalidValue && err.Field == "volumes[0].size" {
 					hasError = true
 					break
 				}
@@ -370,7 +372,7 @@ func FuzzNetworkSpecValidation(f *testing.F) {
 		if netType != "private" && netType != "public" {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "networks[0].type" {
+				if err.Code == errCodeInvalidValue && err.Field == "networks[0].type" {
 					hasError = true
 					break
 				}
@@ -454,7 +456,7 @@ func FuzzHealthCheckSpecValidation(f *testing.F) {
 		if initialDelay < 0 || period < 0 || timeout < 0 {
 			hasNegativeError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" {
+				if err.Code == errCodeInvalidValue {
 					hasNegativeError = true
 					break
 				}
@@ -506,7 +508,7 @@ func FuzzConstraintsValidation(f *testing.F) {
 		if maxLatency < 0 {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "constraints.max_latency_ms" {
+				if err.Code == errCodeInvalidValue && err.Field == "constraints.max_latency_ms" {
 					hasError = true
 					break
 				}
@@ -521,7 +523,7 @@ func FuzzConstraintsValidation(f *testing.F) {
 		if !validTypes[affinityType] {
 			hasError := false
 			for _, err := range result.Errors {
-				if err.Code == "INVALID_VALUE" && err.Field == "constraints.affinity[0].type" {
+				if err.Code == errCodeInvalidValue && err.Field == "constraints.affinity[0].type" {
 					hasError = true
 					break
 				}

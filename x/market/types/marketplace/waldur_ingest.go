@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -339,9 +340,9 @@ func (w *WaldurOfferingImport) ExtractIdentityRequirements() IdentityRequirement
 	if minScore, ok := w.Attributes["ve_min_identity_score"]; ok {
 		switch v := minScore.(type) {
 		case float64:
-			req.MinScore = uint32(v)
+			req.MinScore = safeUint32FromFloat64(v)
 		case int:
-			req.MinScore = uint32(v)
+			req.MinScore = safeUint32FromInt(v)
 		}
 	}
 
@@ -352,6 +353,26 @@ func (w *WaldurOfferingImport) ExtractIdentityRequirements() IdentityRequirement
 	}
 
 	return req
+}
+
+func safeUint32FromFloat64(value float64) uint32 {
+	if value <= 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
 // ToOffering converts a Waldur offering import to an on-chain Offering.
@@ -391,9 +412,9 @@ func (w *WaldurOfferingImport) ToOfferingAt(providerAddr string, sequence uint64
 	if maxOrders, ok := w.Attributes["ve_max_concurrent_orders"]; ok {
 		switch v := maxOrders.(type) {
 		case float64:
-			offering.MaxConcurrentOrders = uint32(v)
+			offering.MaxConcurrentOrders = safeUint32FromFloat64(v)
 		case int:
-			offering.MaxConcurrentOrders = uint32(v)
+			offering.MaxConcurrentOrders = safeUint32FromInt(v)
 		}
 	}
 
@@ -423,9 +444,9 @@ func (w *WaldurOfferingImport) IngestChecksum() string {
 	h.Write([]byte(w.State))
 	h.Write([]byte(w.CategoryUUID))
 	h.Write([]byte(w.CustomerUUID))
-	h.Write([]byte(fmt.Sprintf("%t", w.Shared)))
-	h.Write([]byte(fmt.Sprintf("%t", w.Billable)))
-	h.Write([]byte(fmt.Sprintf("%d", w.Modified.Unix())))
+	fmt.Fprintf(h, "%t", w.Shared)
+	fmt.Fprintf(h, "%t", w.Billable)
+	fmt.Fprintf(h, "%d", w.Modified.Unix())
 
 	for _, comp := range w.Components {
 		h.Write([]byte(comp.Name))

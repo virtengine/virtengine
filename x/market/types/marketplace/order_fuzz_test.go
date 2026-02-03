@@ -128,14 +128,9 @@ func FuzzOrderStateTransitions(f *testing.F) {
 		// Should never panic
 		canTransition := fromState.CanTransitionTo(toState)
 		isValid := fromState.IsValid()
-		isTerminal := fromState.IsTerminal()
 		isActive := fromState.IsActive()
 
 		// Consistency checks
-		if isTerminal && canTransition {
-			// Terminal states should not be able to transition (except in rare cases)
-			// This is more of a warning than an error
-		}
 
 		// Invalid states should not have valid transitions
 		if !isValid && canTransition {

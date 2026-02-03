@@ -89,7 +89,7 @@ func TestStreamingUploader(t *testing.T) {
 		_, err := uploader.Upload(ctx, req)
 		// Either success or context canceled is acceptable
 		if err != nil && err != context.Canceled {
-			// OK - upload may have completed before cancel
+			t.Fatalf("unexpected upload error: %v", err)
 		}
 	})
 }

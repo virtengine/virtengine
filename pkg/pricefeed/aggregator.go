@@ -72,19 +72,19 @@ func createProvider(cfg ProviderConfig, retryCfg RetryConfig) (Provider, error) 
 	switch cfg.Type {
 	case SourceTypeCoinGecko:
 		if cfg.CoinGeckoConfig == nil {
-			return nil, fmt.Errorf("CoinGecko config required")
+			return nil, fmt.Errorf("coingecko config required")
 		}
 		return NewCoinGeckoProvider(cfg.Name, *cfg.CoinGeckoConfig, retryCfg)
 
 	case SourceTypeChainlink:
 		if cfg.ChainlinkConfig == nil {
-			return nil, fmt.Errorf("Chainlink config required")
+			return nil, fmt.Errorf("chainlink config required")
 		}
 		return NewChainlinkProvider(cfg.Name, *cfg.ChainlinkConfig, retryCfg)
 
 	case SourceTypePyth:
 		if cfg.PythConfig == nil {
-			return nil, fmt.Errorf("Pyth config required")
+			return nil, fmt.Errorf("pyth config required")
 		}
 		return NewPythProvider(cfg.Name, *cfg.PythConfig, retryCfg)
 

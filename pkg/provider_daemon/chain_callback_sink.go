@@ -105,6 +105,7 @@ func NewChainCallbackSink(ctx context.Context, cfg ChainCallbackSinkConfig) (*Ch
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
+	//nolint:staticcheck // grpc.DialContext kept for compatibility with existing connection flow.
 	grpcConn, err := grpc.DialContext(dialCtx, cfg.GRPCEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("dial grpc: %w", err)

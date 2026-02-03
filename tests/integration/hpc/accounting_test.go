@@ -74,7 +74,7 @@ func TestBillingCalculator(t *testing.T) {
 	calculator := types.NewHPCBillingCalculator(rules)
 
 	metrics := &types.HPCDetailedMetrics{
-		WallClockSeconds: 3600, // 1 hour
+		WallClockSeconds: 3600,  // 1 hour
 		CPUCoreSeconds:   14400, // 4 cores * 1 hour
 		MemoryGBSeconds:  28800, // 8 GB * 1 hour
 		GPUSeconds:       3600,  // 1 GPU * 1 hour
@@ -82,8 +82,8 @@ func TestBillingCalculator(t *testing.T) {
 		NodeHours:        sdkmath.LegacyNewDec(1),
 		NodesUsed:        1,
 		StorageGBHours:   10,
-		NetworkBytesIn:   1073741824,  // 1 GB
-		NetworkBytesOut:  1073741824,  // 1 GB
+		NetworkBytesIn:   1073741824, // 1 GB
+		NetworkBytesOut:  1073741824, // 1 GB
 	}
 
 	breakdown, billable, err := calculator.CalculateBillableAmount(metrics, nil, nil)
@@ -150,7 +150,7 @@ func TestBillingCaps(t *testing.T) {
 	}
 	calculator.Rules = rules
 
-	billable := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(500000))) // 0.5 virt
+	billable := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(500000)))       // 0.5 virt
 	periodSpending := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(800000))) // 0.8 virt already spent
 
 	caps := calculator.EvaluateCaps(billable, "customer1", periodSpending)
@@ -249,9 +249,9 @@ func TestDisputeWorkflow(t *testing.T) {
 // TestAccountingStatusTransitions tests valid status transitions
 func TestAccountingStatusTransitions(t *testing.T) {
 	testCases := []struct {
-		name        string
-		initial     types.AccountingRecordStatus
-		checkValid  func(*types.HPCAccountingRecord) error
+		name       string
+		initial    types.AccountingRecordStatus
+		checkValid func(*types.HPCAccountingRecord) error
 	}{
 		{
 			name:    "pending to finalized",
@@ -288,8 +288,8 @@ func TestAccountingStatusTransitions(t *testing.T) {
 // TestDeterministicHash tests that accounting hash is deterministic
 func TestDeterministicHash(t *testing.T) {
 	record := &types.HPCAccountingRecord{
-		JobID:      "job-123",
-		ClusterID:  "cluster-456",
+		JobID:     "job-123",
+		ClusterID: "cluster-456",
 		UsageMetrics: types.HPCDetailedMetrics{
 			WallClockSeconds: 3600,
 			CPUCoreSeconds:   14400,

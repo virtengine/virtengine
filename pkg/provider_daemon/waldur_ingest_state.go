@@ -298,7 +298,7 @@ func (s *WaldurIngestState) MarkFailed(waldurUUID, errorMsg string, maxRetries i
 	// Calculate next retry with exponential backoff
 	if record.RetryCount <= maxRetries {
 		record.State = IngestRecordStateRetrying
-		backoff := baseBackoff * time.Duration(1<<uint(record.RetryCount-1))
+		backoff := baseBackoff * time.Duration(1<<safeUintFromInt(record.RetryCount-1))
 		if backoff > maxBackoff {
 			backoff = maxBackoff
 		}

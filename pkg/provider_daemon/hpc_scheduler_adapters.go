@@ -158,7 +158,7 @@ func (w *SLURMSchedulerWrapper) GetJobStatus(ctx context.Context, virtEngineJobI
 	hpcJob.EndTime = slurmJob.EndTime
 
 	if slurmJob.UsageMetrics != nil {
-		hpcJob.Metrics = MapSLURMMetrics(slurmJob.UsageMetrics, int32(len(slurmJob.NodeList)))
+		hpcJob.Metrics = MapSLURMMetrics(slurmJob.UsageMetrics, safeInt32FromInt(len(slurmJob.NodeList)))
 	}
 
 	w.mu.Unlock()

@@ -6,6 +6,7 @@ package marketplace
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -435,7 +436,7 @@ type Quote struct {
 func NewQuote(id, makerAddr string, offeringID OfferingID, bidPrice, askPrice, size uint64, duration time.Duration, now time.Time) *Quote {
 	var spreadBps uint32
 	if askPrice > 0 && bidPrice > 0 {
-		spreadBps = uint32(((askPrice - bidPrice) * 10000) / askPrice)
+		spreadBps = safeUint32FromUint64Liquidity(((askPrice - bidPrice) * 10000) / askPrice)
 	}
 
 	return &Quote{
@@ -450,6 +451,13 @@ func NewQuote(id, makerAddr string, offeringID OfferingID, bidPrice, askPrice, s
 		ExpiresAt:          now.Add(duration),
 		IsActive:           true,
 	}
+}
+
+func safeUint32FromUint64Liquidity(value uint64) uint32 {
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
 // IsValid checks if the quote is still valid

@@ -152,9 +152,9 @@ func (k Keeper) determineTier(score uint32, record types.IdentityRecord) int {
 // computeTierInt converts an IdentityTier string to its numeric tier value
 func (k Keeper) computeTierInt(tier types.IdentityTier) int {
 	switch tier {
-	case types.IdentityTierPremium, types.IdentityTierTrusted:
+	case types.IdentityTierPremium:
 		return types.TierPremium
-	case types.IdentityTierStandard, types.IdentityTierVerified:
+	case types.IdentityTierStandard:
 		return types.TierStandard
 	case types.IdentityTierBasic:
 		return types.TierBasic

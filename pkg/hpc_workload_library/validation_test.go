@@ -5,6 +5,7 @@ package hpc_workload_library
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -433,7 +434,7 @@ func createValidJob(template *hpctypes.WorkloadTemplate) *hpctypes.HPCJob {
 		Resources: hpctypes.JobResources{
 			Nodes:           template.Resources.DefaultNodes,
 			CPUCoresPerNode: template.Resources.DefaultCPUsPerNode,
-			MemoryGBPerNode: int32(template.Resources.DefaultMemoryMBPerNode / 1024),
+			MemoryGBPerNode: safeInt32FromInt64(template.Resources.DefaultMemoryMBPerNode / 1024),
 			StorageGB:       10,
 		},
 		MaxRuntimeSeconds: template.Resources.DefaultRuntimeMinutes * 60,
@@ -465,4 +466,14 @@ func createCustomJob() *hpctypes.HPCJob {
 		MaxRuntimeSeconds: 3600,
 		CreatedAt:         time.Now(),
 	}
+}
+
+func safeInt32FromInt64(value int64) int32 {
+	if value < math.MinInt32 {
+		return math.MinInt32
+	}
+	if value > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(value)
 }

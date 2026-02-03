@@ -10,13 +10,15 @@ import (
 	"github.com/virtengine/virtengine/x/provider/keeper"
 )
 
+const testDomain = "provider.example.com"
+
 func TestGenerateDomainVerificationToken(t *testing.T) {
 	suite := setupTestSuite(t)
 	ctx := suite.ctx
 	k := suite.keeper
 
 	owner := sdk.AccAddress("owner_address______")
-	domain := "provider.example.com"
+	domain := testDomain
 
 	// Generate token
 	record, err := k.GenerateDomainVerificationToken(ctx, owner, domain)
@@ -72,7 +74,7 @@ func TestIsDomainVerified(t *testing.T) {
 	require.False(t, k.IsDomainVerified(ctx, owner))
 
 	// Store via private method (through public interface)
-	_, err := k.GenerateDomainVerificationToken(ctx, owner, "provider.example.com")
+	_, err := k.GenerateDomainVerificationToken(ctx, owner, testDomain)
 	require.NoError(t, err)
 
 	// Manually set as verified for testing
@@ -92,7 +94,7 @@ func TestTokenExpiration(t *testing.T) {
 	k := suite.keeper
 
 	owner := sdk.AccAddress("owner_address______")
-	domain := "provider.example.com"
+	domain := testDomain
 
 	// Generate token
 	_, err := k.GenerateDomainVerificationToken(ctx, owner, domain)

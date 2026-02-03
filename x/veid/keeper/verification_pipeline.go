@@ -153,7 +153,7 @@ func (k Keeper) GetVerificationRequestsByAccount(ctx sdk.Context, accountAddress
 		return nil
 	}
 
-	var requestIDs []string
+	requestIDs := make([]string, 0, 1)
 	if err := json.Unmarshal(bz, &requestIDs); err != nil {
 		return nil
 	}
@@ -190,7 +190,7 @@ func (k Keeper) updateAccountRequestIndex(ctx sdk.Context, accountAddress string
 	store := ctx.KVStore(k.skey)
 	key := types.VerificationRequestByAccountKey(accountAddress)
 
-	var requestIDs []string
+	requestIDs := make([]string, 0, 1)
 	if bz := store.Get(key); bz != nil {
 		_ = json.Unmarshal(bz, &requestIDs)
 	}

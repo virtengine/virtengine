@@ -33,7 +33,7 @@ func (q GRPCQuerier) AccountRoles(c context.Context, req *types.QueryAccountRole
 		return nil, types.ErrInvalidAddress.Wrap(err.Error())
 	}
 
-	roles := q.Keeper.GetAccountRoles(ctx, addr)
+	roles := q.GetAccountRoles(ctx, addr)
 
 	return &types.QueryAccountRolesResponse{
 		Address: req.Address,
@@ -54,7 +54,7 @@ func (q GRPCQuerier) RoleMembers(c context.Context, req *types.QueryRoleMembersR
 		return nil, types.ErrInvalidRole.Wrap(err.Error())
 	}
 
-	members := q.Keeper.GetRoleMembers(ctx, role)
+	members := q.GetRoleMembers(ctx, role)
 
 	return &types.QueryRoleMembersResponse{
 		Role:    role.String(),
@@ -75,7 +75,7 @@ func (q GRPCQuerier) AccountState(c context.Context, req *types.QueryAccountStat
 		return nil, types.ErrInvalidAddress.Wrap(err.Error())
 	}
 
-	state, found := q.Keeper.GetAccountState(ctx, addr)
+	state, found := q.GetAccountState(ctx, addr)
 	if !found {
 		// Return default active state for accounts without explicit state
 		state = types.DefaultAccountStateRecord(req.Address)
@@ -94,7 +94,7 @@ func (q GRPCQuerier) GenesisAccounts(c context.Context, req *types.QueryGenesisA
 
 	ctx := sdk.UnwrapSDKContext(c)
 
-	accounts := q.Keeper.GetGenesisAccounts(ctx)
+	accounts := q.GetGenesisAccounts(ctx)
 	addresses := make([]string, len(accounts))
 	for i, acc := range accounts {
 		addresses[i] = acc.String()
@@ -112,7 +112,7 @@ func (q GRPCQuerier) Params(c context.Context, req *types.QueryParamsRequest) (*
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	params := q.Keeper.GetParams(ctx)
+	params := q.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
 		Params: params,

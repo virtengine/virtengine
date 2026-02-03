@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+	"math"
 
 	ggrpc "google.golang.org/grpc"
 
@@ -222,7 +223,7 @@ func convertMFAProofFromProto(p *mfav1.MFAProof) *mfatypes.MFAProof {
 	}
 	factors := make([]mfatypes.FactorType, len(p.VerifiedFactors))
 	for i, f := range p.VerifiedFactors {
-		factors[i] = mfatypes.FactorType(f)
+		factors[i] = safeFactorTypeFromProto(f)
 	}
 	return &mfatypes.MFAProof{
 		SessionID:       p.SessionId,
@@ -241,4 +242,15 @@ func convertParamsFromProto(p *rolesv1.Params) Params {
 		MaxRolesPerAccount: p.MaxRolesPerAccount,
 		AllowSelfRevoke:    p.AllowSelfRevoke,
 	}
+}
+
+func safeFactorTypeFromProto(value mfav1.FactorType) mfatypes.FactorType {
+	intValue := int32(value)
+	if intValue < 0 {
+		return 0
+	}
+	if intValue > math.MaxUint8 {
+		return mfatypes.FactorType(math.MaxUint8)
+	}
+	return mfatypes.FactorType(intValue)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -299,7 +300,7 @@ func (sm *SnapshotManager) GetStateSyncInfo() StateSyncInfo {
 	if len(sm.snapshots) > 0 {
 		latest := sm.snapshots[0]
 		info.LatestSnapshot = &latest
-		info.TrustHeight = int64(latest.Height)
+		info.TrustHeight = safeInt64FromUint64Snapshot(latest.Height)
 	}
 
 	for _, s := range sm.snapshots {
@@ -307,6 +308,13 @@ func (sm *SnapshotManager) GetStateSyncInfo() StateSyncInfo {
 	}
 
 	return info
+}
+
+func safeInt64FromUint64Snapshot(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 // ValidateStateSyncCompatibility validates if the current configuration

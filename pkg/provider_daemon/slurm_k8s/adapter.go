@@ -543,8 +543,7 @@ func (a *SLURMKubernetesAdapter) Scale(ctx context.Context, clusterID string, re
 			"replicas": req.TargetNodes,
 		}
 	} else {
-		// Scale specific node pool
-		// This would need to modify the nodePools section
+		return fmt.Errorf("node pool scaling not implemented")
 	}
 
 	// Get release name

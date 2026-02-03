@@ -52,6 +52,11 @@ const (
 	WorkloadStateTerminated WorkloadState = "terminated"
 )
 
+const (
+	volumeTypePersistent = "persistent"
+	protocolTCP          = "tcp"
+)
+
 // validTransitions defines valid state transitions
 var validTransitions = map[WorkloadState][]WorkloadState{
 	WorkloadStatePending:    {WorkloadStateDeploying, WorkloadStateFailed},
@@ -532,7 +537,7 @@ func (ka *KubernetesAdapter) performDeployment(ctx context.Context, workload *De
 
 	// Create PVCs for volumes
 	for _, vol := range workload.Manifest.Volumes {
-		if vol.Type == "persistent" {
+		if vol.Type == volumeTypePersistent {
 			pvcSpec := ka.buildPVCSpec(vol, opts)
 			if err := ka.client.CreatePVC(ctx, workload.Namespace, pvcSpec); err != nil {
 				return fmt.Errorf("failed to create PVC %s: %w", vol.Name, err)
@@ -860,7 +865,7 @@ func (ka *KubernetesAdapter) buildDeploymentSpec(svc *ServiceSpec, workload *Dep
 	for _, port := range svc.Ports {
 		protocol := port.Protocol
 		if protocol == "" {
-			protocol = "tcp"
+			protocol = protocolTCP
 		}
 		container.Ports = append(container.Ports, K8sPortSpec{
 			Name:          port.Name,
@@ -871,12 +876,7 @@ func (ka *KubernetesAdapter) buildDeploymentSpec(svc *ServiceSpec, workload *Dep
 
 	// Add volume mounts
 	for _, mount := range svc.Volumes {
-		container.VolumeMounts = append(container.VolumeMounts, K8sVolumeMountSpec{
-			Name:      mount.Name,
-			MountPath: mount.MountPath,
-			ReadOnly:  mount.ReadOnly,
-			SubPath:   mount.SubPath,
-		})
+		container.VolumeMounts = append(container.VolumeMounts, K8sVolumeMountSpec(mount))
 	}
 
 	// Add health check
@@ -891,7 +891,7 @@ func (ka *KubernetesAdapter) buildDeploymentSpec(svc *ServiceSpec, workload *Dep
 		// Find volume spec
 		for _, vol := range workload.Manifest.Volumes {
 			if vol.Name == mount.Name {
-				if vol.Type == "persistent" {
+				if vol.Type == volumeTypePersistent {
 					volumes = append(volumes, K8sVolumeSpec{
 						Name:    mount.Name,
 						PVCName: mount.Name,
@@ -917,7 +917,7 @@ func (ka *KubernetesAdapter) buildDeploymentSpec(svc *ServiceSpec, workload *Dep
 	}
 }
 
-func (ka *KubernetesAdapter) buildServiceSpec(svc *ServiceSpec, workload *DeployedWorkload, opts DeploymentOptions) *K8sServiceSpec {
+func (ka *KubernetesAdapter) buildServiceSpec(svc *ServiceSpec, _ *DeployedWorkload, opts DeploymentOptions) *K8sServiceSpec {
 	labels := ka.mergeLabels(opts.Labels, map[string]string{
 		"virtengine.com/service": svc.Name,
 	})
@@ -932,7 +932,7 @@ func (ka *KubernetesAdapter) buildServiceSpec(svc *ServiceSpec, workload *Deploy
 	for _, port := range svc.Ports {
 		protocol := port.Protocol
 		if protocol == "" {
-			protocol = "tcp"
+			protocol = protocolTCP
 		}
 
 		sp := K8sServicePortSpec{
@@ -962,7 +962,7 @@ func (ka *KubernetesAdapter) buildServiceSpec(svc *ServiceSpec, workload *Deploy
 	}
 }
 
-func (ka *KubernetesAdapter) buildPVCSpec(vol VolumeSpec, opts DeploymentOptions) *K8sPVCSpec {
+func (ka *KubernetesAdapter) buildPVCSpec(vol VolumeSpec, _ DeploymentOptions) *K8sPVCSpec {
 	storageClass := vol.StorageClass
 	if storageClass == "" {
 		storageClass = "standard"
@@ -976,7 +976,7 @@ func (ka *KubernetesAdapter) buildPVCSpec(vol VolumeSpec, opts DeploymentOptions
 	}
 }
 
-func (ka *KubernetesAdapter) buildNetworkPolicy(workload *DeployedWorkload, opts DeploymentOptions) *K8sNetworkPolicySpec {
+func (ka *KubernetesAdapter) buildNetworkPolicy(workload *DeployedWorkload, _ DeploymentOptions) *K8sNetworkPolicySpec {
 	// Default deny all ingress except from within namespace
 	return &K8sNetworkPolicySpec{
 		Name:        "default-network-policy",

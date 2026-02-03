@@ -151,7 +151,7 @@ func (m *HPCHeartbeatMonitor) RecordHeartbeat(nodeID, clusterID string, sequence
 				Severity:    "warning",
 				Message:     fmt.Sprintf("Detected sequence gap of %d heartbeats", gap),
 				Timestamp:   now,
-				MissedCount: int(gap),
+				MissedCount: safeIntFromUint64(gap),
 			})
 		}
 

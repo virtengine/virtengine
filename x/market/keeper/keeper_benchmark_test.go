@@ -82,7 +82,7 @@ func BenchmarkWithOrders(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		gid := dtypes.GroupID{
 			Owner: testutil.AccAddress(b).String(),
-			DSeq:  uint64(i + 1),
+			DSeq:  safeUint64FromInt(i + 1),
 			GSeq:  1,
 		}
 		spec := testutil.GroupSpec(b)
@@ -169,4 +169,12 @@ func BenchmarkBidCountForOrder(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = k.BidCountForOrder(ctx, order.ID)
 	}
+}
+
+func safeUint64FromInt(value int) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }

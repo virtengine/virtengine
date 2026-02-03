@@ -304,9 +304,7 @@ func (e *conversionExecutor) handleExecutionError(
 	if errCode.IsRetryable() {
 		retried := entry.MarkForRetry(errCode, errMsg, e.config.BaseRetryDelay)
 		if retried {
-			if err := e.store.Save(ctx, entry); err != nil {
-				// Log but don't fail - entry state is still valid
-			}
+			_ = e.store.Save(ctx, entry)
 			return &ConversionExecutionResult{
 				LedgerEntry: entry,
 				Success:     false,
@@ -320,9 +318,7 @@ func (e *conversionExecutor) handleExecutionError(
 		entry.MarkFailed(errCode, errMsg)
 	}
 
-	if err := e.store.Save(ctx, entry); err != nil {
-		// Log but continue - the error state is what matters
-	}
+	_ = e.store.Save(ctx, entry)
 
 	return &ConversionExecutionResult{
 		LedgerEntry: entry,

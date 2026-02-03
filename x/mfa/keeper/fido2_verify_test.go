@@ -373,8 +373,8 @@ func TestECDSASignatureVerification(t *testing.T) {
 		KeyType:   types.COSEKeyTypeEC2,
 		Algorithm: types.COSEAlgorithmES256,
 		Curve:     types.COSECurveP256,
-		XCoord:    privateKey.PublicKey.X.Bytes(),
-		YCoord:    privateKey.PublicKey.Y.Bytes(),
+		XCoord:    privateKey.X.Bytes(),
+		YCoord:    privateKey.Y.Bytes(),
 	}
 
 	verifier := NewFIDOVerifier(FIDOVerifierConfig{

@@ -154,7 +154,7 @@ func (p *PythProvider) fetchPrice(ctx context.Context, baseAsset, quoteAsset str
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return PriceData{}, fmt.Errorf("Pyth API error %d: %s", resp.StatusCode, string(body))
+		return PriceData{}, fmt.Errorf("pyth API error %d: %s", resp.StatusCode, string(body))
 	}
 
 	var responses []pythPriceResponse
@@ -281,7 +281,7 @@ func (p *PythProvider) GetPrices(ctx context.Context, pairs []AssetPair) (map[st
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Pyth API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("pyth API error %d: %s", resp.StatusCode, string(body))
 	}
 
 	var responses []pythPriceResponse

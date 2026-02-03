@@ -124,5 +124,8 @@ func uint64ToBytes(n uint64) []byte {
 
 // int64ToBytes converts int64 to big-endian bytes
 func int64ToBytes(n int64) []byte {
+	if n < 0 {
+		return uint64ToBytes(0)
+	}
 	return uint64ToBytes(uint64(n))
 }

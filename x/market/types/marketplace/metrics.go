@@ -6,6 +6,7 @@ package marketplace
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -185,7 +186,7 @@ func (m *FillRateMetrics) CalculateFillRate() uint32 {
 	if m.TotalOrders == 0 {
 		return 0
 	}
-	return uint32((m.FilledOrders * 100) / m.TotalOrders)
+	return safeUint32FromUint64((m.FilledOrders * 100) / m.TotalOrders)
 }
 
 // MarketDepthMetrics tracks market depth metrics
@@ -229,7 +230,14 @@ func (m *MarketDepthMetrics) CalculateDepthRatio() uint32 {
 		}
 		return 20000 // All bids, no asks
 	}
-	return uint32((m.TotalBidVolume * 10000) / m.TotalAskVolume)
+	return safeUint32FromUint64((m.TotalBidVolume * 10000) / m.TotalAskVolume)
+}
+
+func safeUint32FromUint64(value uint64) uint32 {
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
 // LiquidityMetrics tracks liquidity metrics
