@@ -87,10 +87,10 @@ func (k Keeper) ValidateSSOAttestationSubmission(
 
 	// 5. Write audit log (pattern: SetAuditEntry)
 	details := map[string]interface{}{
-		"oidc_issuer": att.OIDCIssuer,
-		"subject_hash": att.SubjectHash,
+		"oidc_issuer":   att.OIDCIssuer,
+		"subject_hash":  att.SubjectHash,
 		"provider_type": string(att.ProviderType),
-		"nonce_hash": nonceHash,
+		"nonce_hash":    nonceHash,
 	}
 	audit := types.NewAuditEntry(
 		fmt.Sprintf("sso_attestation:%s:%s", att.OIDCIssuer, att.SubjectHash),
