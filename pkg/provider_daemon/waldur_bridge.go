@@ -575,8 +575,12 @@ func (b *WaldurBridge) executeLifecycleAction(
 		req.Timeout = int(b.cfg.OperationTimeout.Seconds())
 	}
 
-	for k, v := range event.Parameters {
-		req.Parameters[k] = v
+	if action == "resize" {
+		req.Parameters = filterResizeParameters(event.Parameters)
+	} else {
+		for k, v := range event.Parameters {
+			req.Parameters[k] = v
+		}
 	}
 
 	lifecycle := waldur.NewLifecycleClient(b.marketplace)
@@ -685,6 +689,22 @@ func parseIntParam(params map[string]interface{}, key string) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func filterResizeParameters(params map[string]interface{}) map[string]interface{} {
+	if params == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(params))
+	for k, v := range params {
+		switch k {
+		case "cpu_cores", "memory_mb", "disk_gb", "flavor", "instance_type":
+			continue
+		default:
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // mapLifecycleActionToWaldur maps a marketplace lifecycle action to Waldur action type
