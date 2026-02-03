@@ -441,6 +441,7 @@ func (s *BorderlineFallbackTestSuite) addFIDO2Enrollment(address string) {
 	s.mfaKeeper.AddEnrollment(address, enrollment)
 }
 
+//nolint:unused // helper reserved for future fallback scenarios
 func (s *BorderlineFallbackTestSuite) addEmailEnrollment(address string) {
 	enrollment := mfatypes.FactorEnrollment{
 		AccountAddress: address,

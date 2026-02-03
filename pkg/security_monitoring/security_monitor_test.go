@@ -125,4 +125,3 @@ func TestSecurityMonitorConfigValidation(t *testing.T) {
 		t.Errorf("Expected AlertCooldownSecs 30, got %d", cfg.AlertCooldownSecs)
 	}
 }
-

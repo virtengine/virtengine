@@ -34,9 +34,9 @@ const (
 	EventTypeAttestationRejected EventType = "attestation_rejected"
 
 	// Nonce Events
-	EventTypeNonceCreated EventType = "nonce_created"
-	EventTypeNonceUsed    EventType = "nonce_used"
-	EventTypeNonceExpired EventType = "nonce_expired"
+	EventTypeNonceCreated  EventType = "nonce_created"
+	EventTypeNonceUsed     EventType = "nonce_used"
+	EventTypeNonceExpired  EventType = "nonce_expired"
 	EventTypeNonceRejected EventType = "nonce_rejected"
 
 	// Verification Events
@@ -68,8 +68,8 @@ const (
 	EventTypeHealthCheck    EventType = "health_check"
 
 	// Error Events
-	EventTypeError          EventType = "error"
-	EventTypeSecurityAlert  EventType = "security_alert"
+	EventTypeError         EventType = "error"
+	EventTypeSecurityAlert EventType = "security_alert"
 )
 
 // ============================================================================
@@ -370,4 +370,3 @@ func DefaultConfig() Config {
 		},
 	}
 }
-

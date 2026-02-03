@@ -57,7 +57,7 @@ func (s *KeyRotationTestSuite) TestProviderDaemonKeyRotation() {
 		keyManager.SetActiveKey(oldKey, "v1")
 
 		newKey := generateKey(s.T())
-		keyManager.RegisterNewKey(newKey, "v2")
+		require.NoError(s.T(), keyManager.RegisterNewKey(newKey, "v2"), "new key registration should succeed")
 
 		// Activate new key
 		err := keyManager.ActivateKey("v2")
@@ -76,8 +76,8 @@ func (s *KeyRotationTestSuite) TestProviderDaemonKeyRotation() {
 		keyManager.SetActiveKey(oldKey, "v1")
 
 		newKey := generateKey(s.T())
-		keyManager.RegisterNewKey(newKey, "v2")
-		keyManager.ActivateKey("v2")
+		require.NoError(s.T(), keyManager.RegisterNewKey(newKey, "v2"), "new key registration should succeed")
+		require.NoError(s.T(), keyManager.ActivateKey("v2"), "key activation should succeed")
 
 		// Old key should still be valid during grace period
 		isValid := keyManager.IsKeyValid("v1", gracePeriod)
@@ -92,8 +92,8 @@ func (s *KeyRotationTestSuite) TestProviderDaemonKeyRotation() {
 		keyManager.SetActiveKey(key, "v1")
 
 		newKey := generateKey(s.T())
-		keyManager.RegisterNewKey(newKey, "v2")
-		keyManager.ActivateKey("v2")
+		require.NoError(s.T(), keyManager.RegisterNewKey(newKey, "v2"), "new key registration should succeed")
+		require.NoError(s.T(), keyManager.ActivateKey("v2"), "key activation should succeed")
 
 		err := keyManager.RevokeKey("v1")
 		require.NoError(s.T(), err, "key revocation should succeed")
@@ -128,10 +128,10 @@ func (s *KeyRotationTestSuite) TestApprovedClientKeyRotation() {
 		allowlist := NewApprovedClientAllowlist()
 
 		oldKey := generateKey(s.T())
-		allowlist.AddKey(oldKey, "MobileApp-v1.0")
+		require.NoError(s.T(), allowlist.AddKey(oldKey, "MobileApp-v1.0"), "adding client key should succeed")
 
 		newKey := generateKey(s.T())
-		allowlist.AddKey(newKey, "MobileApp-v2.0")
+		require.NoError(s.T(), allowlist.AddKey(newKey, "MobileApp-v2.0"), "adding client key should succeed")
 
 		// Both should be valid during transition
 		require.True(s.T(), allowlist.IsApproved(oldKey), "old key should still be approved")
@@ -150,7 +150,7 @@ func (s *KeyRotationTestSuite) TestApprovedClientKeyRotation() {
 		allowlist := NewApprovedClientAllowlist()
 
 		compromisedKey := generateKey(s.T())
-		allowlist.AddKey(compromisedKey, "CompromisedApp")
+		require.NoError(s.T(), allowlist.AddKey(compromisedKey, "CompromisedApp"), "adding client key should succeed")
 
 		// Emergency revoke
 		err := allowlist.RevokeWithReason(compromisedKey, "key_compromised")

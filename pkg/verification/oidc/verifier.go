@@ -25,11 +25,11 @@ import (
 
 // DefaultVerifier implements OIDCVerifier with JWKS rotation support.
 type DefaultVerifier struct {
-	config     Config
+	config      Config
 	jwksManager *JWKSManager
-	httpClient *http.Client
-	auditor    audit.AuditLogger
-	logger     zerolog.Logger
+	httpClient  *http.Client
+	auditor     audit.AuditLogger
+	logger      zerolog.Logger
 
 	mu             sync.RWMutex
 	discoveryCache map[string]*OIDCDiscoveryDocument // issuer -> discovery doc
@@ -723,4 +723,3 @@ func (v *DefaultVerifier) logAudit(ctx context.Context, eventType audit.EventTyp
 		Details:   details,
 	})
 }
-

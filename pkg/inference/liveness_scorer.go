@@ -72,6 +72,13 @@ const (
 	ChallengeRaiseEyebrows ChallengeType = "raise_eyebrows"
 )
 
+// Liveness decision constants
+const (
+	DecisionLive      = "live"
+	DecisionSpoof     = "spoof"
+	DecisionUncertain = "uncertain"
+)
+
 // DefaultLivenessScorerConfig returns sensible defaults
 func DefaultLivenessScorerConfig() LivenessScorerConfig {
 	return LivenessScorerConfig{
@@ -233,23 +240,23 @@ type SingleFrameLivenessResult struct {
 // ============================================================================
 
 const (
-	LivenessReasonCodeSuccess           = "LIVENESS_CONFIRMED"
-	LivenessReasonCodeHighConfidence    = "HIGH_CONFIDENCE_LIVE"
-	LivenessReasonCodeSpoof             = "SPOOF_DETECTED"
-	LivenessReasonCodeSpoofHighConf     = "SPOOF_HIGH_CONFIDENCE"
-	LivenessReasonCodeUncertain         = "LIVENESS_UNCERTAIN"
-	LivenessReasonCodeInsufficientFrames = "INSUFFICIENT_FRAMES"
-	LivenessReasonCodeChallengeFailed   = "CHALLENGE_FAILED"
+	LivenessReasonCodeSuccess             = "LIVENESS_CONFIRMED"
+	LivenessReasonCodeHighConfidence      = "HIGH_CONFIDENCE_LIVE"
+	LivenessReasonCodeSpoof               = "SPOOF_DETECTED"
+	LivenessReasonCodeSpoofHighConf       = "SPOOF_HIGH_CONFIDENCE"
+	LivenessReasonCodeUncertain           = "LIVENESS_UNCERTAIN"
+	LivenessReasonCodeInsufficientFrames  = "INSUFFICIENT_FRAMES"
+	LivenessReasonCodeChallengeFailed     = "CHALLENGE_FAILED"
 	LivenessReasonCodeAllChallengesPassed = "ALL_CHALLENGES_PASSED"
-	LivenessReasonCodePhotoSpoof        = "PHOTO_SPOOF_DETECTED"
-	LivenessReasonCodeScreenSpoof       = "SCREEN_SPOOF_DETECTED"
-	LivenessReasonCodeDeepfakeSpoof     = "DEEPFAKE_DETECTED"
-	LivenessReasonCodeMaskSpoof         = "MASK_SPOOF_DETECTED"
-	LivenessReasonCodeLowTextureVar     = "LOW_TEXTURE_VARIANCE"
-	LivenessReasonCodeMoirePattern      = "MOIRE_PATTERN_DETECTED"
-	LivenessReasonCodeExtractionError   = "LIVENESS_EXTRACTION_ERROR"
-	LivenessReasonCodeSidecarUnavail    = "LIVENESS_SIDECAR_UNAVAILABLE"
-	LivenessReasonCodeTimeout           = "LIVENESS_TIMEOUT"
+	LivenessReasonCodePhotoSpoof          = "PHOTO_SPOOF_DETECTED"
+	LivenessReasonCodeScreenSpoof         = "SCREEN_SPOOF_DETECTED"
+	LivenessReasonCodeDeepfakeSpoof       = "DEEPFAKE_DETECTED"
+	LivenessReasonCodeMaskSpoof           = "MASK_SPOOF_DETECTED"
+	LivenessReasonCodeLowTextureVar       = "LOW_TEXTURE_VARIANCE"
+	LivenessReasonCodeMoirePattern        = "MOIRE_PATTERN_DETECTED"
+	LivenessReasonCodeExtractionError     = "LIVENESS_EXTRACTION_ERROR"
+	LivenessReasonCodeSidecarUnavail      = "LIVENESS_SIDECAR_UNAVAILABLE"
+	LivenessReasonCodeTimeout             = "LIVENESS_TIMEOUT"
 )
 
 // ============================================================================
@@ -403,12 +410,12 @@ func (ls *LivenessScorer) checkLivenessFallback(videoData []byte, challenges []C
 
 	// Determine decision
 	isLive := livenessScore >= ls.config.MinLivenessScore && allChallengesPassed
-	decision := "live"
+	decision := DecisionLive
 	if !isLive {
 		if livenessScore < 0.5 {
-			decision = "spoof"
+			decision = DecisionSpoof
 		} else {
-			decision = "uncertain"
+			decision = DecisionUncertain
 		}
 	}
 
@@ -542,7 +549,7 @@ func (ls *LivenessScorer) postProcessResult(result *LivenessResult) {
 			if cr, exists := result.ChallengeResults[reqChallenge]; exists && !cr.Passed {
 				result.ReasonCodes = appendIfNotExists(result.ReasonCodes, LivenessReasonCodeChallengeFailed)
 				result.IsLive = false
-				result.Decision = "uncertain"
+				result.Decision = DecisionUncertain
 			}
 		}
 	}
@@ -561,7 +568,7 @@ func (ls *LivenessScorer) postProcessResult(result *LivenessResult) {
 // computeResultHash computes a deterministic hash of the result
 func (ls *LivenessScorer) computeResultHash(score float32, isLive bool, decision string, reasonCodes []string) string {
 	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%.4f|%v|%s|", score, isLive, decision)))
+	fmt.Fprintf(h, "%.4f|%v|%s|", score, isLive, decision)
 	for _, code := range reasonCodes {
 		h.Write([]byte(code))
 		h.Write([]byte(","))
@@ -683,7 +690,7 @@ func (ls *LivenessScorer) ValidateResult(result *LivenessResult) []string {
 	}
 
 	// Check decision validity
-	validDecisions := map[string]bool{"live": true, "spoof": true, "uncertain": true}
+	validDecisions := map[string]bool{DecisionLive: true, DecisionSpoof: true, DecisionUncertain: true}
 	if !validDecisions[result.Decision] {
 		issues = append(issues, fmt.Sprintf(
 			"invalid decision: %s",
@@ -730,9 +737,9 @@ func (ls *LivenessScorer) SanitizeResult(result *LivenessResult) {
 	}
 
 	// Ensure valid decision
-	validDecisions := map[string]bool{"live": true, "spoof": true, "uncertain": true}
+	validDecisions := map[string]bool{DecisionLive: true, DecisionSpoof: true, DecisionUncertain: true}
 	if !validDecisions[result.Decision] {
-		result.Decision = "uncertain"
+		result.Decision = DecisionUncertain
 	}
 }
 
@@ -798,4 +805,3 @@ func (ls *LivenessScorer) Close() error {
 	}
 	return nil
 }
-

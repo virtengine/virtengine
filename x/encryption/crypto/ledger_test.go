@@ -3,6 +3,7 @@ package crypto
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -784,7 +785,12 @@ func TestLedgerWallet_ConcurrentAccess(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 
-			path := BuildHDPath(118, 0, uint32(idx))
+			uIdx, ok := safeUint32FromInt(idx)
+			if !ok {
+				errChan <- fmt.Errorf("invalid index: %d", idx)
+				return
+			}
+			path := BuildHDPath(118, 0, uIdx)
 			_, err := wallet.GetAddress(ctx, path, false)
 			if err != nil {
 				errChan <- err
@@ -819,7 +825,12 @@ func TestLedgerWallet_ConcurrentSignAndGetAddress(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			path := BuildHDPath(118, 0, uint32(idx))
+			uIdx, ok := safeUint32FromInt(idx)
+			if !ok {
+				errChan <- fmt.Errorf("invalid index: %d", idx)
+				return
+			}
+			path := BuildHDPath(118, 0, uIdx)
 			_, err := wallet.GetAddress(ctx, path, false)
 			if err != nil {
 				errChan <- err
@@ -832,7 +843,12 @@ func TestLedgerWallet_ConcurrentSignAndGetAddress(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			path := BuildHDPath(118, 0, uint32(idx))
+			uIdx, ok := safeUint32FromInt(idx)
+			if !ok {
+				errChan <- fmt.Errorf("invalid index: %d", idx)
+				return
+			}
+			path := BuildHDPath(118, 0, uIdx)
 			msg := []byte("test message " + string(rune(idx)))
 			_, err := wallet.SignTransaction(ctx, path, msg)
 			if err != nil {
@@ -858,6 +874,13 @@ func TestDiscoverLedgerDevices(t *testing.T) {
 	require.NoError(t, err)
 	// In test environment, no real devices are expected
 	assert.NotNil(t, devices)
+}
+
+func safeUint32FromInt(value int) (uint32, bool) {
+	if value < 0 || value > int(^uint32(0)) {
+		return 0, false
+	}
+	return uint32(value), true
 }
 
 // ============================================================================

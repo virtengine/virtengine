@@ -244,12 +244,12 @@ func (r *Review) Validate() error {
 func (r *Review) ComputeContentHash() string {
 	h := sha256.New()
 	// Include rating, text, order ID, and provider for integrity
-	h.Write([]byte(fmt.Sprintf("%d:%s:%s:%s",
+	fmt.Fprintf(h, "%d:%s:%s:%s",
 		r.Rating,
 		r.Text,
 		r.OrderRef.OrderID,
 		r.ProviderAddress,
-	)))
+	)
 	return hex.EncodeToString(h.Sum(nil))
 }
 

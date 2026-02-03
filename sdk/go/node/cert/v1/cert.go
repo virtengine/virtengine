@@ -88,4 +88,3 @@ func (m Certificate) Validate(owner sdk.Address) error {
 func (m Certificate) IsState(state State) bool {
 	return m.State == state
 }
-

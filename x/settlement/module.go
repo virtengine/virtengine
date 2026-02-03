@@ -108,6 +108,8 @@ func (am AppModule) Name() string {
 }
 
 // RegisterInvariants registers the settlement module invariants.
+//
+//nolint:staticcheck // sdk.InvariantRegistry is deprecated in upstream SDK
 func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 	// Settlement module does not register invariants as state consistency
 	// is enforced through escrow lifecycle validations
@@ -191,5 +193,3 @@ func EndBlocker(ctx sdk.Context, k keeper.IKeeper) error {
 
 	return nil
 }
-
-

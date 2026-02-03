@@ -17,7 +17,6 @@ import (
 // SettlementIntegrationTestSuite tests the settlement integration keeper
 type SettlementIntegrationTestSuite struct {
 	suite.Suite
-	ctx sdk.Context
 }
 
 func TestSettlementIntegrationTestSuite(t *testing.T) {

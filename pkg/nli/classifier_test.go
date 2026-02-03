@@ -10,11 +10,11 @@ func TestRuleBasedClassifier_Classify(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name           string
-		message        string
-		wantIntent     Intent
-		minConfidence  float32
-		wantEntities   map[string]string
+		name          string
+		message       string
+		wantIntent    Intent
+		minConfidence float32
+		wantEntities  map[string]string
 	}{
 		// Balance queries
 		{
@@ -231,7 +231,7 @@ func TestRuleBasedClassifier_ExtractEntities(t *testing.T) {
 
 func TestRuleBasedClassifier_ContextCancellation(t *testing.T) {
 	classifier := NewRuleBasedClassifier()
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -314,4 +314,3 @@ func TestIntent_String(t *testing.T) {
 		})
 	}
 }
-

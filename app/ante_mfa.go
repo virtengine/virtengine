@@ -88,7 +88,7 @@ func isMFAEnforcedTx(transactionType mfatypes.SensitiveTransactionType) bool {
 		mfatypes.SensitiveTxKeyRotation,
 		mfatypes.SensitiveTxProviderRegistration,
 		mfatypes.SensitiveTxLargeWithdrawal,
-    mfatypes.SensitiveTxValidatorRegistration,
+		mfatypes.SensitiveTxValidatorRegistration,
 		mfatypes.SensitiveTxHighValueOrder:
 		return true
 	default:

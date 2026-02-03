@@ -83,4 +83,3 @@ func (r ProviderPublicKeyRecord) String() string {
 func (r ProviderPublicKeyRecord) IsEmpty() bool {
 	return len(r.PublicKey) == 0
 }
-

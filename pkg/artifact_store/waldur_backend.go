@@ -8,11 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
+
+// boolStrTrue is the string representation of true for metadata
+const boolStrTrue = "true"
 
 // WaldurConfig contains configuration for the Waldur backend
 type WaldurConfig struct {
@@ -550,7 +554,7 @@ func (w *WaldurBackend) ListByOwner(ctx context.Context, owner string, paginatio
 					Version:    ContentAddressVersion,
 					Backend:    BackendWaldur,
 					BackendRef: obj.Key,
-					Size:       uint64(obj.Size),
+					Size:       safeUint64FromInt64(obj.Size),
 				},
 			}
 			refs = append(refs, ref)
@@ -680,7 +684,7 @@ func (w *WaldurBackend) PurgeExpired(ctx context.Context, currentBlock int64) (i
 			if expiry, ok := obj.Metadata["retention_expires_at"]; ok {
 				expiryTime, err := time.Parse(time.RFC3339, expiry)
 				if err == nil && now.After(expiryTime) {
-					if deleteOnExpiry, ok := obj.Metadata["delete_on_expiry"]; ok && deleteOnExpiry == "true" {
+					if deleteOnExpiry, ok := obj.Metadata["delete_on_expiry"]; ok && deleteOnExpiry == boolStrTrue {
 						if err := w.objectStorage.Delete(ctx, w.config.Bucket, obj.Key); err == nil {
 							deleted++
 						}
@@ -748,8 +752,8 @@ func (w *WaldurBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error)
 		quota, err := w.objectStorage.GetQuota(ctx, w.config.Bucket)
 		if err == nil {
 			return &StorageMetrics{
-				TotalArtifacts:   uint64(quota.ObjectCount),
-				TotalBytes:       uint64(quota.UsedBytes),
+				TotalArtifacts:   safeUint64FromInt64(quota.ObjectCount),
+				TotalBytes:       safeUint64FromInt64(quota.UsedBytes),
 				TotalChunks:      0, // Waldur doesn't use chunks
 				ExpiredArtifacts: expired,
 				BackendType:      BackendWaldur,
@@ -789,6 +793,20 @@ func (w *WaldurBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error)
 			"encrypt_at_rest": boolToString(w.config.EncryptAtRest),
 		},
 	}, nil
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	return uint64(value)
+}
+
+func safeInt64FromUint64Waldur(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 // Health checks if the backend is healthy
@@ -872,6 +890,9 @@ func (w *WaldurStreamingBackend) PutStream(ctx context.Context, req *PutStreamRe
 	if w.useFallback {
 		data, err := io.ReadAll(req.Reader)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
 			return nil, ErrInvalidInput.Wrapf("failed to read stream: %v", err)
 		}
 
@@ -930,7 +951,7 @@ func (w *WaldurStreamingBackend) PutStream(ctx context.Context, req *PutStreamRe
 		Version:    ContentAddressVersion,
 		Hash:       hashBytes,
 		Algorithm:  "sha256",
-		Size:       uint64(uploadResp.Size),
+		Size:       safeUint64FromInt64(uploadResp.Size),
 		Backend:    BackendWaldur,
 		BackendRef: uploadResp.Key,
 	}
@@ -955,7 +976,7 @@ func (w *WaldurStreamingBackend) PutStream(ctx context.Context, req *PutStreamRe
 	// Update metrics
 	w.mu.Lock()
 	w.metrics.TotalArtifacts++
-	w.metrics.TotalBytes += uint64(uploadResp.Size)
+	w.metrics.TotalBytes += safeUint64FromInt64(uploadResp.Size)
 	w.ownerIndex[req.Owner] = append(w.ownerIndex[req.Owner], uploadResp.ContentHash)
 	w.mu.Unlock()
 
@@ -1075,7 +1096,7 @@ func bytesEqual(a, b []byte) bool {
 // boolToString converts a bool to string
 func boolToString(b bool) string {
 	if b {
-		return "true"
+		return boolStrTrue
 	}
 	return "false"
 }
@@ -1115,7 +1136,7 @@ func (w *WaldurBackend) Pin(ctx context.Context, address *ContentAddress) error 
 		if meta.Metadata == nil {
 			meta.Metadata = make(map[string]string)
 		}
-		meta.Metadata["pinned"] = "true"
+		meta.Metadata["pinned"] = boolStrTrue
 		meta.Metadata["pinned_at"] = time.Now().UTC().Format(time.RFC3339)
 
 		// Note: Waldur object storage may not support in-place metadata updates
@@ -1327,7 +1348,7 @@ func (w *WaldurBackend) GetRetentionPolicy(ctx context.Context, address *Content
 		}
 	}
 	if deleteOnExpiry, ok := meta.Metadata["delete_on_expiry"]; ok {
-		tag.DeleteOnExpiry = deleteOnExpiry == "true"
+		tag.DeleteOnExpiry = deleteOnExpiry == boolStrTrue
 	}
 
 	return tag, nil
@@ -1554,7 +1575,7 @@ func (w *WaldurBackend) RunRetentionCleanup(ctx context.Context, currentBlock in
 
 			// Update metrics and stats
 			size := uint64(len(artifact.data))
-			stats.BytesReclaimed += int64(size)
+			stats.BytesReclaimed += safeInt64FromUint64Waldur(size)
 			w.metrics.TotalBytes -= size
 			w.metrics.TotalArtifacts--
 
@@ -1597,7 +1618,7 @@ func (w *WaldurBackend) RunRetentionCleanup(ctx context.Context, currentBlock in
 			expiryStr, hasExpiry := obj.Metadata["retention_expires_at"]
 			deleteOnExpiryStr, hasDelete := obj.Metadata["delete_on_expiry"]
 
-			if !hasExpiry || !hasDelete || deleteOnExpiryStr != "true" {
+			if !hasExpiry || !hasDelete || deleteOnExpiryStr != boolStrTrue {
 				stats.SkippedNotExpired++
 				continue
 			}
@@ -1627,5 +1648,3 @@ func (w *WaldurBackend) RunRetentionCleanup(ctx context.Context, currentBlock in
 	stats.Duration = time.Since(startTime)
 	return stats, nil
 }
-
-

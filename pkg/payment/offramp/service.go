@@ -21,15 +21,15 @@ import (
 
 // offRampService is the main implementation of the Service interface.
 type offRampService struct {
-	config        Config
-	providers     map[ProviderType]Provider
+	config          Config
+	providers       map[ProviderType]Provider
 	defaultProvider Provider
 
 	// Stores
-	payoutStore       PayoutStore
-	quoteStore        *QuoteStore
-	reconcileStore    ReconciliationStore
-	limitsStore       LimitsStore
+	payoutStore    PayoutStore
+	quoteStore     *QuoteStore
+	reconcileStore ReconciliationStore
+	limitsStore    LimitsStore
 
 	// KYC/AML
 	kycGate     KYCGate
@@ -49,21 +49,21 @@ type offRampService struct {
 	metrics *serviceMetrics
 
 	// Close handling
-	closeMu  sync.Mutex
-	closed   bool
+	closeMu sync.Mutex
+	closed  bool
 }
 
 // serviceMetrics tracks service-level metrics.
 type serviceMetrics struct {
-	mu                  sync.RWMutex
-	totalPayouts        int64
-	successfulPayouts   int64
-	failedPayouts       int64
-	totalAmount         int64
-	kycRejections       int64
-	amlRejections       int64
-	webhooksProcessed   int64
-	reconciliationsRun  int64
+	mu                 sync.RWMutex
+	totalPayouts       int64
+	successfulPayouts  int64
+	failedPayouts      int64
+	totalAmount        int64
+	kycRejections      int64
+	amlRejections      int64
+	webhooksProcessed  int64
+	reconciliationsRun int64
 }
 
 // ServiceOption is a functional option for configuring the service.
@@ -121,11 +121,11 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 	}
 
 	svc := &offRampService{
-		config:     cfg,
-		providers:  make(map[ProviderType]Provider),
-		quoteStore: NewQuoteStore(),
+		config:      cfg,
+		providers:   make(map[ProviderType]Provider),
+		quoteStore:  NewQuoteStore(),
 		retryConfig: cfg.RetryConfig,
-		metrics:    &serviceMetrics{},
+		metrics:     &serviceMetrics{},
 	}
 
 	// Initialize providers
@@ -395,14 +395,14 @@ func (s *offRampService) CreateAndExecutePayout(ctx context.Context, req CreateP
 			intent.Status = PayoutStatusFailed
 			intent.FailureCode = "PROVIDER_ERROR"
 			intent.FailureMessage = err.Error()
-			s.payoutStore.Save(ctx, intent)
+			_ = s.payoutStore.Save(ctx, intent)
 			return intent, err
 		}
 	}
 
 	// Update limits
 	if err := s.limitsStore.UpdateUsage(ctx, req.AccountAddress, intent.FiatAmount.Value); err != nil {
-		// Log but don't fail
+		_ = err // Log but don't fail
 	}
 
 	// Update metrics
@@ -412,7 +412,7 @@ func (s *offRampService) CreateAndExecutePayout(ctx context.Context, req CreateP
 	s.metrics.mu.Unlock()
 
 	// Clean up quote
-	s.quoteStore.Delete(ctx, quote.QuoteID)
+	_ = s.quoteStore.Delete(ctx, quote.QuoteID)
 
 	return intent, nil
 }
@@ -438,11 +438,11 @@ func (s *offRampService) submitToProvider(ctx context.Context, intent *PayoutInt
 
 		intent.Status = PayoutStatusProcessing
 		intent.AddAuditEntry("submit_attempt", "service", fmt.Sprintf("attempt=%d", attempt+1))
-		s.payoutStore.Save(ctx, intent)
+		_ = s.payoutStore.Save(ctx, intent)
 
 		err := provider.CreatePayout(ctx, intent)
 		if err == nil {
-			s.payoutStore.Save(ctx, intent)
+			_ = s.payoutStore.Save(ctx, intent)
 			return nil
 		}
 
@@ -494,7 +494,7 @@ func (s *offRampService) CancelPayout(ctx context.Context, payoutID string, reas
 		provider, ok := s.providers[payout.Provider]
 		if ok {
 			if err := provider.CancelPayout(ctx, payout.ProviderPayoutID); err != nil {
-				// Log but continue - we'll mark as canceled locally
+				_ = err // Log but continue - we'll mark as canceled locally
 			}
 		}
 	}
@@ -600,9 +600,10 @@ func (s *offRampService) HandleWebhook(ctx context.Context, providerType Provide
 	// Update metrics
 	s.metrics.mu.Lock()
 	s.metrics.webhooksProcessed++
-	if event.Status == PayoutStatusSucceeded {
+	switch event.Status {
+	case PayoutStatusSucceeded:
 		s.metrics.successfulPayouts++
-	} else if event.Status == PayoutStatusFailed {
+	case PayoutStatusFailed:
 		s.metrics.failedPayouts++
 	}
 	s.metrics.mu.Unlock()
@@ -708,4 +709,3 @@ func (s *offRampService) Close() error {
 
 // Ensure implementation satisfies interface
 var _ Service = (*offRampService)(nil)
-

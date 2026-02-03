@@ -5,13 +5,13 @@ package v1beta3
 
 import (
 	fmt "fmt"
-	types "github.com/virtengine/virtengine/sdk/go/node/types/sdk"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
+	types "github.com/virtengine/virtengine/sdk/go/node/types/sdk"
+	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -442,4 +442,3 @@ var (
 	ErrIntOverflowResourceunit          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupResourceunit = fmt.Errorf("proto: unexpected end of group")
 )
-

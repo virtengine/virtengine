@@ -22,6 +22,13 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// Test address constants
+const (
+	testDelegatorAddr = "cosmos1delegator123"
+	testValidatorAddr = "cosmos1validator456"
+	testValidator123  = "cosmos1validator123"
+)
+
 // DelegationKeeperTestSuite is the test suite for the delegation keeper
 type DelegationKeeperTestSuite struct {
 	suite.Suite
@@ -89,8 +96,8 @@ func (s *DelegationKeeperTestSuite) TestParams() {
 
 // TestDelegationStorage tests delegation storage
 func (s *DelegationKeeperTestSuite) TestDelegationStorage() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 
 	// Initially no delegation
 	_, found := s.keeper.GetDelegation(s.ctx, delegatorAddr, validatorAddr)
@@ -120,7 +127,7 @@ func (s *DelegationKeeperTestSuite) TestDelegationStorage() {
 
 // TestValidatorShares tests validator shares management
 func (s *DelegationKeeperTestSuite) TestValidatorShares() {
-	validatorAddr := "cosmos1validator123"
+	validatorAddr := testValidator123
 
 	// Initially no shares
 	_, found := s.keeper.GetValidatorShares(s.ctx, validatorAddr)
@@ -143,7 +150,7 @@ func (s *DelegationKeeperTestSuite) TestValidatorShares() {
 
 // TestCalculateSharesForAmount tests share calculation
 func (s *DelegationKeeperTestSuite) TestCalculateSharesForAmount() {
-	validatorAddr := "cosmos1validator123"
+	validatorAddr := testValidator123
 
 	// Test with no existing shares (first delegation)
 	shares := types.NewValidatorShares(validatorAddr, s.ctx.BlockTime())
@@ -185,8 +192,8 @@ func (s *DelegationKeeperTestSuite) TestCalculateAmountForShares() {
 
 // TestUnbondingDelegation tests unbonding delegation storage
 func (s *DelegationKeeperTestSuite) TestUnbondingDelegation() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 	completionTime := s.ctx.BlockTime().Add(21 * 24 * time.Hour)
 
 	// Create unbonding delegation
@@ -215,7 +222,7 @@ func (s *DelegationKeeperTestSuite) TestUnbondingDelegation() {
 
 // TestRedelegation tests redelegation storage
 func (s *DelegationKeeperTestSuite) TestRedelegation() {
-	delegatorAddr := "cosmos1delegator123"
+	delegatorAddr := testDelegatorAddr
 	srcValidator := "cosmos1validator1"
 	dstValidator := "cosmos1validator2"
 	completionTime := s.ctx.BlockTime().Add(21 * 24 * time.Hour)
@@ -253,8 +260,8 @@ func (s *DelegationKeeperTestSuite) TestRedelegation() {
 
 // TestDelegatorReward tests delegator reward storage
 func (s *DelegationKeeperTestSuite) TestDelegatorReward() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 	epoch := uint64(10)
 
 	// Create delegator reward
@@ -282,7 +289,7 @@ func (s *DelegationKeeperTestSuite) TestDelegatorReward() {
 
 // TestGetDelegatorDelegations tests getting all delegations for a delegator
 func (s *DelegationKeeperTestSuite) TestGetDelegatorDelegations() {
-	delegatorAddr := "cosmos1delegator123"
+	delegatorAddr := testDelegatorAddr
 	validator1 := "cosmos1validator1"
 	validator2 := "cosmos1validator2"
 
@@ -322,8 +329,8 @@ func (s *DelegationKeeperTestSuite) TestGetValidatorDelegations() {
 
 // TestMatureUnbondings tests getting mature unbonding delegations
 func (s *DelegationKeeperTestSuite) TestMatureUnbondings() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 
 	// Create unbonding that's already mature
 	pastTime := s.ctx.BlockTime().Add(-1 * time.Hour)
@@ -364,8 +371,8 @@ func (s *DelegationKeeperTestSuite) TestMatureUnbondings() {
 
 // TestCalculateDelegatorProportion tests delegator proportion calculation
 func (s *DelegationKeeperTestSuite) TestCalculateDelegatorProportion() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 
 	// Set up validator shares (total 10 tokens)
 	shares := types.NewValidatorShares(validatorAddr, s.ctx.BlockTime())
@@ -387,7 +394,7 @@ func (s *DelegationKeeperTestSuite) TestCalculateDelegatorProportion() {
 
 // TestCountDelegatorRedelegations tests counting redelegations
 func (s *DelegationKeeperTestSuite) TestCountDelegatorRedelegations() {
-	delegatorAddr := "cosmos1delegator123"
+	delegatorAddr := testDelegatorAddr
 	completionTime := s.ctx.BlockTime().Add(21 * 24 * time.Hour)
 
 	// Create redelegations
@@ -406,8 +413,8 @@ func (s *DelegationKeeperTestSuite) TestCountDelegatorRedelegations() {
 
 // TestDeleteDelegation tests delegation deletion
 func (s *DelegationKeeperTestSuite) TestDeleteDelegation() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 
 	// Create delegation
 	del := types.NewDelegation(delegatorAddr, validatorAddr, "1000000000000000000", "1000000", s.ctx.BlockTime(), s.ctx.BlockHeight())
@@ -428,8 +435,8 @@ func (s *DelegationKeeperTestSuite) TestDeleteDelegation() {
 
 // TestGetDelegatorUnclaimedRewards tests getting unclaimed rewards
 func (s *DelegationKeeperTestSuite) TestGetDelegatorUnclaimedRewards() {
-	delegatorAddr := "cosmos1delegator123"
-	validatorAddr := "cosmos1validator456"
+	delegatorAddr := testDelegatorAddr
+	validatorAddr := testValidatorAddr
 
 	// Create unclaimed reward
 	reward1 := types.NewDelegatorReward(delegatorAddr, validatorAddr, 1, "100000", "1000000000000000000", "10000000000000000000", s.ctx.BlockTime())

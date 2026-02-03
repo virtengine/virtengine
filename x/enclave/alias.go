@@ -37,13 +37,13 @@ type (
 	MsgRevokeMeasurement       = types.MsgRevokeMeasurement
 
 	// Queries
-	QueryEnclaveIdentityRequest              = types.QueryEnclaveIdentityRequest
-	QueryEnclaveIdentityResponse             = types.QueryEnclaveIdentityResponse
-	QueryActiveValidatorEnclaveKeysRequest   = types.QueryActiveValidatorEnclaveKeysRequest
-	QueryActiveValidatorEnclaveKeysResponse  = types.QueryActiveValidatorEnclaveKeysResponse
-	QueryMeasurementAllowlistRequest         = types.QueryMeasurementAllowlistRequest
-	QueryMeasurementAllowlistResponse        = types.QueryMeasurementAllowlistResponse
-	ValidatorKeyInfo                         = types.ValidatorKeyInfo
+	QueryEnclaveIdentityRequest             = types.QueryEnclaveIdentityRequest
+	QueryEnclaveIdentityResponse            = types.QueryEnclaveIdentityResponse
+	QueryActiveValidatorEnclaveKeysRequest  = types.QueryActiveValidatorEnclaveKeysRequest
+	QueryActiveValidatorEnclaveKeysResponse = types.QueryActiveValidatorEnclaveKeysResponse
+	QueryMeasurementAllowlistRequest        = types.QueryMeasurementAllowlistRequest
+	QueryMeasurementAllowlistResponse       = types.QueryMeasurementAllowlistResponse
+	ValidatorKeyInfo                        = types.ValidatorKeyInfo
 )
 
 // Status constants

@@ -114,7 +114,7 @@ func (q queryServer) ValidKeySet(goCtx context.Context, req *types.QueryValidKey
 
 	return &types.QueryValidKeySetResponse{
 		ValidatorKeys: keys,
-		TotalCount:    int32(len(keys)),
+		TotalCount:    safeInt32FromInt(len(keys)),
 	}, nil
 }
 
@@ -134,4 +134,17 @@ func (q queryServer) AttestedResult(goCtx context.Context, req *types.QueryAttes
 	result, _ := q.keeper.GetAttestedResult(ctx, req.BlockHeight, req.ScopeId)
 
 	return &types.QueryAttestedResultResponse{Result: result}, nil
+}
+
+func safeInt32FromInt(value int) int32 {
+	const maxInt32 = int32(^uint32(0) >> 1)
+	const minInt32 = -maxInt32 - 1
+	if value > int(maxInt32) {
+		return maxInt32
+	}
+	if value < int(minInt32) {
+		return minInt32
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
 }

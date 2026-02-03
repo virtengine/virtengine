@@ -19,4 +19,3 @@ func Provider(t testing.TB) ptypes.Provider {
 		},
 	}
 }
-

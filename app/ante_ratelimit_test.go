@@ -36,8 +36,8 @@ type MockSigVerifiableTx struct {
 }
 
 func (m MockSigVerifiableTx) GetSigners() ([][]byte, error) {
-	signers := make([][]byte, len(m.MockTx.signers))
-	for i, addr := range m.MockTx.signers {
+	signers := make([][]byte, len(m.signers))
+	for i, addr := range m.signers {
 		signers[i] = addr.Bytes()
 	}
 	return signers, nil

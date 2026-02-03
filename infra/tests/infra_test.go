@@ -116,7 +116,7 @@ func TestEKSModule(t *testing.T) {
 
 	// Use test-structure to skip long-running tests
 	workingDir := "../terraform/modules/eks"
-	
+
 	// Skip if running in short mode
 	if testing.Short() {
 		t.Skip("Skipping EKS test in short mode")
@@ -255,20 +255,20 @@ func TestRDSModule(t *testing.T) {
 	rdsOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../terraform/modules/rds",
 		Vars: map[string]interface{}{
-			"project":               projectName,
-			"environment":           "test",
-			"db_subnet_group_name":  dbSubnetGroup,
-			"security_group_id":     dbSGID,
-			"engine_version":        "15.5",
-			"instance_class":        "db.t3.micro",
-			"database_name":         "testdb",
-			"allocated_storage":     20,
-			"max_allocated_storage": 50,
-			"multi_az":              false,
-			"deletion_protection":   false,
-			"skip_final_snapshot":   true,
-			"backup_retention_period": 1,
-			"monitoring_interval":   0,
+			"project":                      projectName,
+			"environment":                  "test",
+			"db_subnet_group_name":         dbSubnetGroup,
+			"security_group_id":            dbSGID,
+			"engine_version":               "15.5",
+			"instance_class":               "db.t3.micro",
+			"database_name":                "testdb",
+			"allocated_storage":            20,
+			"max_allocated_storage":        50,
+			"multi_az":                     false,
+			"deletion_protection":          false,
+			"skip_final_snapshot":          true,
+			"backup_retention_period":      1,
+			"monitoring_interval":          0,
 			"performance_insights_enabled": false,
 		},
 		EnvVars: map[string]string{
@@ -282,7 +282,7 @@ func TestRDSModule(t *testing.T) {
 	// Validate RDS
 	t.Run("RDS instance is available", func(t *testing.T) {
 		instanceID := terraform.Output(t, rdsOptions, "db_instance_id")
-		
+
 		// Wait for RDS to be available
 		retry.DoWithRetry(t, "Wait for RDS", retryMaxTries, retrySleepTime, func() (string, error) {
 			instance := aws.GetRdsInstanceDetailsE(t, instanceID, testRegion)

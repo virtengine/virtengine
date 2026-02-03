@@ -21,6 +21,8 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+const testScopeID = "scope_123"
+
 // testWalletSetup creates a test environment for wallet tests
 type testWalletSetup struct {
 	ctx        sdk.Context
@@ -153,7 +155,7 @@ func TestCreateWallet_InvalidSignature(t *testing.T) {
 
 	// Create invalid signature
 	invalidSignature := make([]byte, 64)
-	rand.Read(invalidSignature)
+	_, _ = rand.Read(invalidSignature)
 
 	// Try to create wallet with invalid signature
 	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, invalidSignature, ts.pubKey)
@@ -171,7 +173,7 @@ func TestAddScopeToWallet(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create scope reference
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:        scopeID,
@@ -201,7 +203,7 @@ func TestAddScopeToWallet_WalletNotFound(t *testing.T) {
 	ts := setupWalletTest(t)
 
 	scopeRef := types.ScopeReference{
-		ScopeID:      "scope_123",
+		ScopeID:      testScopeID,
 		ScopeType:    types.ScopeTypeIDDocument,
 		EnvelopeHash: make([]byte, 32),
 		AddedAt:      time.Now(),
@@ -223,7 +225,7 @@ func TestAddScopeToWallet_InvalidSignature(t *testing.T) {
 	require.NoError(t, err)
 
 	scopeRef := types.ScopeReference{
-		ScopeID:      "scope_123",
+		ScopeID:      testScopeID,
 		ScopeType:    types.ScopeTypeIDDocument,
 		EnvelopeHash: make([]byte, 32),
 		AddedAt:      time.Now(),
@@ -232,7 +234,7 @@ func TestAddScopeToWallet_InvalidSignature(t *testing.T) {
 
 	// Invalid signature
 	invalidSig := make([]byte, 64)
-	rand.Read(invalidSig)
+	_, _ = rand.Read(invalidSig)
 
 	err = ts.keeper.AddScopeToWallet(ts.ctx, ts.address, scopeRef, invalidSig)
 	require.Error(t, err)
@@ -248,7 +250,7 @@ func TestAddScopeToWallet_DuplicateScope(t *testing.T) {
 	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, bindingSignature, ts.pubKey)
 	require.NoError(t, err)
 
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:      scopeID,
@@ -280,7 +282,7 @@ func TestRevokeScopeFromWallet(t *testing.T) {
 	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, bindingSignature, ts.pubKey)
 	require.NoError(t, err)
 
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:      scopeID,
@@ -336,7 +338,7 @@ func TestRevokeScopeFromWallet_InvalidSignature(t *testing.T) {
 	_, err := ts.keeper.CreateWallet(ts.ctx, ts.address, bindingSignature, ts.pubKey)
 	require.NoError(t, err)
 
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	envelopeHash := sha256.Sum256([]byte("test envelope"))
 	scopeRef := types.ScopeReference{
 		ScopeID:      scopeID,
@@ -353,7 +355,7 @@ func TestRevokeScopeFromWallet_InvalidSignature(t *testing.T) {
 
 	// Try to revoke with invalid signature
 	invalidSig := make([]byte, 64)
-	rand.Read(invalidSig)
+	_, _ = rand.Read(invalidSig)
 	err = ts.keeper.RevokeScopeFromWallet(ts.ctx, ts.address, scopeID, "reason", invalidSig)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "signature")
@@ -369,7 +371,7 @@ func TestUpdateConsent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update consent for a scope
-	scopeID := "scope_123"
+	scopeID := testScopeID
 	update := types.ConsentUpdateRequest{
 		ScopeID:      scopeID,
 		GrantConsent: true,
@@ -528,7 +530,7 @@ func TestRebindWallet_InvalidOldSignature(t *testing.T) {
 
 	// Invalid old signature
 	invalidOldSig := make([]byte, 64)
-	rand.Read(invalidOldSig)
+	_, _ = rand.Read(invalidOldSig)
 
 	newBindingMsg := types.GetWalletBindingMessage(walletID, ts.address.String())
 	newBindingSignature := ed25519.Sign(newPrivKey, newBindingMsg)

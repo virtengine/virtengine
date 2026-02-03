@@ -116,12 +116,15 @@ func (c *IntegrityChecker) Verify(ctx context.Context, address *ContentAddress) 
 			result.ExpectedHash, result.ComputedHash)
 
 		if c.options.ReportCorruption {
-			// Log corruption - in production this would report to monitoring
-			// Note: actual reporting implementation depends on backend
+			c.reportCorruption(address, result)
 		}
 	}
 
 	return result, nil
+}
+
+func (c *IntegrityChecker) reportCorruption(_ *ContentAddress, _ *IntegrityCheckResult) {
+	// Placeholder for monitoring integration.
 }
 
 // VerifyStream checks integrity while streaming data.
@@ -192,8 +195,8 @@ func (c *IntegrityChecker) VerifyChunked(ctx context.Context, manifest *ChunkMan
 
 	startTime := time.Now()
 	result := &ChunkedVerificationResult{
-		Manifest:   manifest,
-		CheckedAt:  startTime,
+		Manifest:     manifest,
+		CheckedAt:    startTime,
 		ChunkResults: make([]ChunkVerificationResult, len(manifest.Chunks)),
 	}
 
@@ -400,7 +403,7 @@ func SummarizeBatch(results []*IntegrityCheckResult) *BatchVerificationSummary {
 // VerifyingReader wraps a reader and verifies data as it's read.
 type VerifyingReader struct {
 	reader       io.Reader
-	hasher       io.Writer
+	hasher       io.Writer //nolint:unused // Reserved for future streaming hash verification
 	expectedHash []byte
 	bytesRead    int64
 	verified     bool

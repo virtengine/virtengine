@@ -396,4 +396,3 @@ func TestScoringRequest_Validate(t *testing.T) {
 		})
 	}
 }
-

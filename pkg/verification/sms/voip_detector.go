@@ -162,12 +162,12 @@ func DefaultVoIPDetectorConfig() VoIPDetectorConfig {
 
 // DefaultVoIPDetector implements VoIPDetector with carrier lookup and pattern matching
 type DefaultVoIPDetector struct {
-	config      VoIPDetectorConfig
-	gateway     SMSGateway
-	logger      zerolog.Logger
-	cache       *voipCache
-	patterns    *voipPatterns
-	mu          sync.RWMutex
+	config   VoIPDetectorConfig
+	gateway  SMSGateway
+	logger   zerolog.Logger
+	cache    *voipCache
+	patterns *voipPatterns
+	mu       sync.RWMutex
 }
 
 // voipCache is a simple in-memory cache for VoIP detection results
@@ -239,8 +239,8 @@ func (c *voipCache) cleanup() {
 
 // voipPatterns contains compiled regex patterns for VoIP detection
 type voipPatterns struct {
-	knownVoIPCarriers    []string
-	disposablePatterns   []*regexp.Regexp
+	knownVoIPCarriers     []string
+	disposablePatterns    []*regexp.Regexp
 	virtualNumberPrefixes map[string][]string // Country code -> prefixes
 }
 
@@ -502,7 +502,7 @@ func (d *DefaultVoIPDetector) calculateRiskScore(result *VoIPDetectionResult) {
 	}
 
 	// Risk factor accumulation
-	score += uint32(len(result.RiskFactors) * 5)
+	score += safeUint32FromInt(len(result.RiskFactors) * 5)
 
 	// Cap at 100
 	if score > 100 {
@@ -616,11 +616,10 @@ const numVerifyBaseURL = "http://apilayer.net/api/validate"
 
 // NumVerifyDetector implements VoIP detection using NumVerify API
 type NumVerifyDetector struct {
-	apiKey      string
-	httpClient  *http.Client
-	logger      zerolog.Logger
-	cache       *voipCache
-	mu          sync.RWMutex
+	apiKey     string
+	httpClient *http.Client
+	logger     zerolog.Logger
+	cache      *voipCache
 }
 
 // NewNumVerifyDetector creates a new NumVerify detector
@@ -924,11 +923,22 @@ func calculateRiskFromResult(result *VoIPDetectionResult) uint32 {
 		score += 5
 	}
 
-	score += uint32(len(result.RiskFactors) * 5)
+	score += safeUint32FromInt(len(result.RiskFactors) * 5)
 
 	if score > 100 {
 		score = 100
 	}
 
 	return score
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }

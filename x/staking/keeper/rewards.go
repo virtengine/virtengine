@@ -146,7 +146,7 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 	// Calculate epoch reward pool
 	blocksInEpoch := types.EpochDuration(&epochInfo)
 	if blocksInEpoch == 0 {
-		blocksInEpoch = int64(params.EpochLength)
+		blocksInEpoch = safeInt64FromUint64Rewards(params.EpochLength)
 	}
 	epochRewardPool := params.BaseRewardPerBlock * blocksInEpoch
 
@@ -163,7 +163,7 @@ func (k Keeper) CalculateEpochRewards(ctx sdk.Context, epoch uint64) ([]types.Va
 	rewards := make([]types.ValidatorReward, 0, len(performances))
 	for _, perf := range performances {
 		// Get validator stake (or use equal distribution if staking keeper not available)
-		var validatorStake int64 = totalStake / int64(len(performances))
+		validatorStake := totalStake / int64(len(performances))
 		if k.stakingKeeper != nil {
 			validatorAddr, _ := sdk.AccAddressFromBech32(perf.ValidatorAddress)
 			validatorStake = k.stakingKeeper.GetValidatorStake(ctx, validatorAddr)
@@ -378,6 +378,14 @@ func (k Keeper) DistributeRewards(ctx sdk.Context, epoch uint64) error {
 	)
 
 	return nil
+}
+
+func safeInt64FromUint64Rewards(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	//nolint:gosec // range checked above
+	return int64(value)
 }
 
 // DistributeIdentityNetworkRewards distributes identity network rewards for an epoch

@@ -8,10 +8,10 @@ import (
 	types "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
+	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -565,7 +565,9 @@ func init() {
 	proto.RegisterType((*BidFilters)(nil), "virtengine.market.v1beta4.BidFilters")
 }
 
-func init() { proto.RegisterFile("virtengine/market/v1beta4/bid.proto", fileDescriptor_c19fff42684bf143) }
+func init() {
+	proto.RegisterFile("virtengine/market/v1beta4/bid.proto", fileDescriptor_c19fff42684bf143)
+}
 
 var fileDescriptor_c19fff42684bf143 = []byte{
 	// 876 bytes of a gzipped FileDescriptorProto
@@ -2334,4 +2336,3 @@ var (
 	ErrIntOverflowBid          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupBid = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -171,10 +171,12 @@ const (
 	IdentityTierStandard IdentityTier = "standard"
 
 	// IdentityTierVerified is for fully verified identities (score 60-84)
+	//
 	// Deprecated: Use IdentityTierStandard for score 70-84
 	IdentityTierVerified IdentityTier = "verified"
 
 	// IdentityTierTrusted is for highly trusted identities (score 85-100)
+	//
 	// Deprecated: Use IdentityTierPremium instead
 	IdentityTierTrusted IdentityTier = "trusted"
 

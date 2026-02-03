@@ -760,5 +760,3 @@ func TestLifecycleController_Integration(t *testing.T) {
 
 	_ = ctx // Used to ensure context is available for future async tests
 }
-
-

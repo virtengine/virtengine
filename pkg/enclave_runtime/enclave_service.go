@@ -13,16 +13,19 @@
 package enclave_runtime
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 )
 
 const (
+	// statusVerified is the verified status
+	statusVerified = "verified"
 	// statusNeedsReview is the needs_review verification status
 	statusNeedsReview = "needs_review"
 	// statusRejected is the rejected verification status
@@ -544,4 +547,3 @@ func sha256Bytes(data []byte) []byte {
 	h := sha256.Sum256(data)
 	return h[:]
 }
-

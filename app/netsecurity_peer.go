@@ -14,35 +14,35 @@ type PeerID string
 
 // PeerInfo contains information about a connected peer.
 type PeerInfo struct {
-	ID           PeerID
-	Address      net.Addr
-	PublicKey    []byte
-	IsInbound    bool
-	ConnectedAt  time.Time
-	LastSeen     time.Time
-	Stake        int64
-	IsValidator  bool
-	ASN          uint32
-	Subnet       string // /24 subnet
+	ID          PeerID
+	Address     net.Addr
+	PublicKey   []byte
+	IsInbound   bool
+	ConnectedAt time.Time
+	LastSeen    time.Time
+	Stake       int64
+	IsValidator bool
+	ASN         uint32
+	Subnet      string // /24 subnet
 }
 
 // PeerScore represents the reputation score for a peer.
 type PeerScore struct {
 	// Base score components
-	UptimeScore       float64 // Score based on connection uptime
-	ResponseScore     float64 // Score based on message response times
-	BehaviorScore     float64 // Score based on protocol compliance
-	StakeScore        float64 // Score based on staked amount
-	ValidatorBonus    float64 // Bonus for being a validator
-	
+	UptimeScore    float64 // Score based on connection uptime
+	ResponseScore  float64 // Score based on message response times
+	BehaviorScore  float64 // Score based on protocol compliance
+	StakeScore     float64 // Score based on staked amount
+	ValidatorBonus float64 // Bonus for being a validator
+
 	// Penalty components
 	DisconnectionPenalty float64 // Penalty for frequent disconnections
 	MisbehaviorPenalty   float64 // Penalty for protocol violations
 	RateLimitPenalty     float64 // Penalty for hitting rate limits
-	
+
 	// Computed total
-	Total         float64
-	LastUpdated   time.Time
+	Total       float64
+	LastUpdated time.Time
 }
 
 // PeerScoreParams defines the parameters for peer scoring.
@@ -55,9 +55,9 @@ type PeerScoreParams struct {
 	ValidatorBonusMax float64
 
 	// Thresholds
-	MinScore         float64 // Minimum score before disconnection
-	WarningScore     float64 // Score threshold for warnings
-	
+	MinScore     float64 // Minimum score before disconnection
+	WarningScore float64 // Score threshold for warnings
+
 	// Decay rates
 	ScoreDecayRate   float64 // How fast scores decay over time
 	PenaltyDecayRate float64 // How fast penalties decay
@@ -84,7 +84,7 @@ type PeerAuthenticator struct {
 	logger     log.Logger
 	trustedSet map[PeerID]bool
 	bannedSet  map[PeerID]time.Time // PeerID -> ban expiry time
-	
+
 	mu sync.RWMutex
 }
 
@@ -191,13 +191,13 @@ type PeerAuthorizer struct {
 	config       PeerConfig
 	logger       log.Logger
 	scoreManager *PeerScoreManager
-	
+
 	// Connection tracking
 	inboundCount  int
 	outboundCount int
 	subnetCounts  map[string]int // /24 subnet -> peer count
 	asnCounts     map[uint32]int // ASN -> peer count
-	
+
 	mu sync.RWMutex
 }
 
@@ -318,10 +318,10 @@ func (a *PeerAuthorizer) GetPeerCounts() (inbound, outbound, total int) {
 
 // PeerScoreManager manages peer reputation scores.
 type PeerScoreManager struct {
-	params    PeerScoreParams
-	scores    map[PeerID]*PeerScore
-	logger    log.Logger
-	
+	params PeerScoreParams
+	scores map[PeerID]*PeerScore
+	logger log.Logger
+
 	mu sync.RWMutex
 }
 
@@ -404,7 +404,7 @@ func (m *PeerScoreManager) ApplyDecay(elapsed time.Duration) {
 		score.UptimeScore *= (1 - m.params.ScoreDecayRate*hours)
 		score.ResponseScore *= (1 - m.params.ScoreDecayRate*hours)
 		score.BehaviorScore *= (1 - m.params.ScoreDecayRate*hours)
-		
+
 		// Decay penalties toward zero
 		score.DisconnectionPenalty *= (1 - m.params.PenaltyDecayRate*hours)
 		score.MisbehaviorPenalty *= (1 - m.params.PenaltyDecayRate*hours)
@@ -442,7 +442,7 @@ func (m *PeerScoreManager) RecordDisconnection(id PeerID, wasClean bool) {
 	if !wasClean {
 		penalty = 5.0 // Higher penalty for unclean disconnections
 	}
-	
+
 	m.UpdateScore(id, func(s *PeerScore) {
 		s.DisconnectionPenalty += penalty
 	})

@@ -58,7 +58,7 @@ func TestVoteExtension_AddMultipleResults(t *testing.T) {
 		inputHash := sha256.Sum256([]byte("test-input-" + string(rune('a'+i))))
 		result := types.VerificationResult{
 			RequestID:    "req-" + string(rune('a'+i)),
-			Score:        uint32(80 + i),
+			Score:        uint32(80 + i), //nolint:gosec // G115: test code, i is bounded 0-4
 			Status:       types.VerificationResultStatusSuccess,
 			ModelVersion: "v1.0.0",
 			InputHash:    inputHash[:],
@@ -71,7 +71,7 @@ func TestVoteExtension_AddMultipleResults(t *testing.T) {
 	// Verify each result
 	for i := 0; i < 5; i++ {
 		require.Equal(t, "req-"+string(rune('a'+i)), extension.VerificationResults[i].RequestID)
-		require.Equal(t, uint32(80+i), extension.VerificationResults[i].Score)
+		require.Equal(t, uint32(80+i), extension.VerificationResults[i].Score) //nolint:gosec // G115: test code, i is bounded 0-4
 	}
 }
 
@@ -289,7 +289,7 @@ func TestVoteExtension_Size(t *testing.T) {
 		result := types.VerificationResult{
 			RequestID:      "req-" + string(rune('a'+i)),
 			AccountAddress: "virt1abc123",
-			Score:          uint32(80 + i),
+			Score:          uint32(80 + i), //nolint:gosec // G115: test code, i is bounded 0-9
 			Status:         types.VerificationResultStatusSuccess,
 			ModelVersion:   "v1.0.0",
 			InputHash:      inputHash[:],
@@ -356,7 +356,7 @@ func TestVoteExtensionVersion(t *testing.T) {
 // ============================================================================
 
 func TestNewVoteExtensionHandler(t *testing.T) {
-	keyProvider := newMockKeyProvider("validator1")
+	keyProvider := newMockKeyProvider()
 	handler := NewVoteExtensionHandler(nil, keyProvider)
 
 	require.NotNil(t, handler)

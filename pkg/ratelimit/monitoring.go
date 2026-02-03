@@ -59,10 +59,10 @@ type AlertThresholds struct {
 
 // Alert represents a monitoring alert
 type Alert struct {
-	Severity  string    `json:"severity"`
-	Title     string    `json:"title"`
-	Message   string    `json:"message"`
-	Timestamp time.Time `json:"timestamp"`
+	Severity  string                 `json:"severity"`
+	Title     string                 `json:"title"`
+	Message   string                 `json:"message"`
+	Timestamp time.Time              `json:"timestamp"`
 	Metadata  map[string]interface{} `json:"metadata"`
 }
 
@@ -361,4 +361,3 @@ func min(a, b int) int {
 	}
 	return b
 }
-

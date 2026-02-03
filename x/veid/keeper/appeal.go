@@ -572,9 +572,10 @@ func (k Keeper) ApplyAppealScoreAdjustment(ctx sdk.Context, appeal *types.Appeal
 	if newScore > int64(types.MaxScore) {
 		newScore = int64(types.MaxScore)
 	}
+	newScoreUint32 := safeUint32FromInt64(newScore)
 
 	// Update the score in the score store (use SetScore, not UpdateScore)
-	if err := k.SetScore(ctx, address.String(), uint32(newScore), "appeal_adjustment"); err != nil {
+	if err := k.SetScore(ctx, address.String(), newScoreUint32, "appeal_adjustment"); err != nil {
 		return err
 	}
 
@@ -583,7 +584,7 @@ func (k Keeper) ApplyAppealScoreAdjustment(ctx sdk.Context, appeal *types.Appeal
 		AppealID:        appeal.AppealID,
 		AccountAddress:  appeal.AccountAddress,
 		OriginalScore:   originalScore,
-		NewScore:        uint32(newScore),
+		NewScore:        newScoreUint32,
 		ScoreAdjustment: appeal.ScoreAdjustment,
 		AdjustedAt:      ctx.BlockHeight(),
 	}); err != nil {
@@ -591,6 +592,16 @@ func (k Keeper) ApplyAppealScoreAdjustment(ctx sdk.Context, appeal *types.Appeal
 	}
 
 	return nil
+}
+
+func safeUint32FromInt64(value int64) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(value)
 }
 
 // ExpireStaleAppeals expires appeals that have been in reviewing status too long

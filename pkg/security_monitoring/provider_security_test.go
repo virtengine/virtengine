@@ -230,4 +230,3 @@ func TestProviderSecurityMonitorCleanup(t *testing.T) {
 	// Cleanup is internal, but monitor should handle graceful shutdown
 	// Just verify it doesn't panic when context is cancelled
 }
-

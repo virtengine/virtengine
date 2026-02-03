@@ -33,11 +33,11 @@ func TestGenerateScript_MPI(t *testing.T) {
 
 	template := GetMPITemplate()
 	params := &JobParameters{
-		Nodes:        4,
-		TasksPerNode: 16,
-		MemoryMB:     32000,
+		Nodes:          4,
+		TasksPerNode:   16,
+		MemoryMB:       32000,
 		RuntimeMinutes: 120,
-		Script:       "./my_mpi_app",
+		Script:         "./my_mpi_app",
 	}
 
 	script, err := gen.GenerateScript(template, params)
@@ -441,4 +441,3 @@ func TestGenerateScript_Reservation(t *testing.T) {
 		t.Error("script should have reservation directive")
 	}
 }
-

@@ -27,13 +27,6 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
-// Test address constants
-const (
-	testAppealAddress    = "cosmos1appeal_test_address___"
-	testResolverAddress  = "cosmos1resolver_test_addr____"
-	testUnauthorizedAddr = "cosmos1unauthorized_addr______"
-)
-
 // AppealTestSuite is the test suite for appeal functionality
 type AppealTestSuite struct {
 	suite.Suite

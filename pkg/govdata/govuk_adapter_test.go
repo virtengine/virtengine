@@ -380,7 +380,7 @@ func TestGovUKAdapter_WithMockServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/verify/match" {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"requestId": "test-123",
 				"scenario": "SUCCESS_MATCH",
 				"pid": "pid-12345",
@@ -434,4 +434,3 @@ func TestGovUKAdapter_WithMockServer(t *testing.T) {
 	assert.True(t, resp.DocumentValid)
 	assert.Equal(t, 1.0, resp.Confidence)
 }
-

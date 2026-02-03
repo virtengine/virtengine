@@ -976,4 +976,3 @@ var (
 	ErrIntOverflowCoin          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupCoin = fmt.Errorf("proto: unexpected end of group")
 )
-

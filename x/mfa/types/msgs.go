@@ -242,13 +242,13 @@ func (p *MFAProof) Validate() error {
 
 // Message type URLs
 const (
-	TypeMsgEnrollFactor           = "mfa/MsgEnrollFactor"
-	TypeMsgRevokeFactor           = "mfa/MsgRevokeFactor"
-	TypeMsgSetMFAPolicy           = "mfa/MsgSetMFAPolicy"
-	TypeMsgCreateChallenge        = "mfa/MsgCreateChallenge"
-	TypeMsgVerifyChallenge        = "mfa/MsgVerifyChallenge"
-	TypeMsgAddTrustedDevice       = "mfa/MsgAddTrustedDevice"
-	TypeMsgRemoveTrustedDevice    = "mfa/MsgRemoveTrustedDevice"
+	TypeMsgEnrollFactor            = "mfa/MsgEnrollFactor"
+	TypeMsgRevokeFactor            = "mfa/MsgRevokeFactor"
+	TypeMsgSetMFAPolicy            = "mfa/MsgSetMFAPolicy"
+	TypeMsgCreateChallenge         = "mfa/MsgCreateChallenge"
+	TypeMsgVerifyChallenge         = "mfa/MsgVerifyChallenge"
+	TypeMsgAddTrustedDevice        = "mfa/MsgAddTrustedDevice"
+	TypeMsgRemoveTrustedDevice     = "mfa/MsgRemoveTrustedDevice"
 	TypeMsgUpdateSensitiveTxConfig = "mfa/MsgUpdateSensitiveTxConfig"
 )
 

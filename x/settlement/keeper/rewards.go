@@ -70,7 +70,7 @@ func (k Keeper) DistributeStakingRewards(ctx sdk.Context, epoch uint64) (*types.
 		EpochNumber:    epoch,
 		Source:         string(types.RewardSourceStaking),
 		TotalRewards:   dist.TotalRewards.String(),
-		RecipientCount: uint32(len(dist.Recipients)),
+		RecipientCount: safeUint32FromInt(len(dist.Recipients)),
 		DistributedAt:  ctx.BlockTime().Unix(),
 	})
 	if err != nil {
@@ -112,7 +112,7 @@ func (k Keeper) DistributeProviderRewards(ctx sdk.Context, usageRecords []types.
 
 	for provider, units := range providerUsage {
 		// Calculate reward (placeholder: 1 token per 100 usage units)
-		rewardAmount := sdkmath.NewInt(int64(units / 100))
+		rewardAmount := sdkmath.NewInt(safeInt64FromUint64(units / 100))
 		if rewardAmount.IsZero() {
 			continue
 		}
@@ -160,7 +160,7 @@ func (k Keeper) DistributeProviderRewards(ctx sdk.Context, usageRecords []types.
 		EpochNumber:    epoch,
 		Source:         string(types.RewardSourceProvider),
 		TotalRewards:   dist.TotalRewards.String(),
-		RecipientCount: uint32(len(recipients)),
+		RecipientCount: safeUint32FromInt(len(recipients)),
 		DistributedAt:  ctx.BlockTime().Unix(),
 	})
 	if err != nil {
@@ -241,7 +241,7 @@ func (k Keeper) DistributeVerificationRewards(ctx sdk.Context, verificationResul
 		EpochNumber:    epoch,
 		Source:         string(types.RewardSourceVerification),
 		TotalRewards:   dist.TotalRewards.String(),
-		RecipientCount: uint32(len(recipients)),
+		RecipientCount: safeUint32FromInt(len(recipients)),
 		DistributedAt:  ctx.BlockTime().Unix(),
 	})
 	if err != nil {
@@ -325,7 +325,11 @@ func (k Keeper) EndBlockerRewards(ctx sdk.Context) error {
 
 	// Check if we should distribute staking rewards (new epoch)
 	currentEpoch := k.calculateCurrentEpoch(ctx)
-	blockInEpoch := uint64(ctx.BlockHeight()) % params.StakingRewardEpochLength
+	blockHeight := ctx.BlockHeight()
+	if blockHeight < 0 {
+		blockHeight = 0
+	}
+	blockInEpoch := safeUint64FromInt64(blockHeight) % params.StakingRewardEpochLength
 
 	if blockInEpoch == 0 && currentEpoch > 0 {
 		// New epoch started, distribute rewards for previous epoch
@@ -339,4 +343,32 @@ func (k Keeper) EndBlockerRewards(ctx sdk.Context) error {
 	k.ProcessRewardExpiry(ctx)
 
 	return nil
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	return int64(value)
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(value)
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	if value > int64(^uint64(0)>>1) {
+		return ^uint64(0)
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }

@@ -35,7 +35,7 @@ func (d DecayType) String() string {
 	case DecayTypeStepFunction:
 		return "step_function"
 	default:
-		return "unknown"
+		return string(AccountStatusUnknown)
 	}
 }
 
@@ -122,11 +122,11 @@ func DefaultDecayPolicy() DecayPolicy {
 	return DecayPolicy{
 		PolicyID:          "default",
 		DecayType:         DecayTypeExponential,
-		DecayRate:         math.LegacyNewDecWithPrec(2, 2), // 2% per period
-		DecayPeriod:       24 * time.Hour * 30,             // Monthly decay
+		DecayRate:         math.LegacyNewDecWithPrec(2, 2),  // 2% per period
+		DecayPeriod:       24 * time.Hour * 30,              // Monthly decay
 		MinScore:          math.LegacyNewDecWithPrec(20, 0), // Floor at 20
-		GracePeriod:       24 * time.Hour * 90,             // 90 day grace period
-		LastActivityBonus: math.LegacyOneDec(),             // No bonus by default
+		GracePeriod:       24 * time.Hour * 90,              // 90 day grace period
+		LastActivityBonus: math.LegacyOneDec(),              // No bonus by default
 		Enabled:           true,
 		StepThresholds:    nil,
 	}
@@ -137,11 +137,11 @@ func DefaultStepFunctionPolicy() DecayPolicy {
 	return DecayPolicy{
 		PolicyID:          "step_default",
 		DecayType:         DecayTypeStepFunction,
-		DecayRate:         math.LegacyZeroDec(), // Not used for step function
-		DecayPeriod:       24 * time.Hour,       // Check daily
+		DecayRate:         math.LegacyZeroDec(),             // Not used for step function
+		DecayPeriod:       24 * time.Hour,                   // Check daily
 		MinScore:          math.LegacyNewDecWithPrec(10, 0), // Floor at 10
-		GracePeriod:       24 * time.Hour * 30,  // 30 day grace period
-		LastActivityBonus: math.LegacyOneDec(), // No bonus by default
+		GracePeriod:       24 * time.Hour * 30,              // 30 day grace period
+		LastActivityBonus: math.LegacyOneDec(),              // No bonus by default
 		Enabled:           true,
 		StepThresholds: []StepThreshold{
 			{DaysSinceActivity: 30, ScoreMultiplier: math.LegacyNewDecWithPrec(95, 2)},  // 95% at 30 days

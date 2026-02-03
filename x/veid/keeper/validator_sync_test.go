@@ -666,7 +666,7 @@ func TestSyncRequestStatus_IsTerminal(t *testing.T) {
 }
 
 func TestModelVersionInfo_Validate(t *testing.T) {
-	validHash := "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+	validHash := testModelHash1
 
 	testCases := []struct {
 		name      string
@@ -742,7 +742,7 @@ func TestModelVersionInfo_Validate(t *testing.T) {
 }
 
 func TestValidatorModelSync_Validate(t *testing.T) {
-	validHash := "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+	validHash := testModelHash1
 
 	testCases := []struct {
 		name      string
@@ -954,7 +954,7 @@ func TestGenerateSyncRequestID(t *testing.T) {
 }
 
 func TestModelUpdateBroadcast_Validate(t *testing.T) {
-	validHash := "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+	validHash := testModelHash1
 
 	testCases := []struct {
 		name      string
@@ -1063,7 +1063,7 @@ func TestNetworkSyncProgress_CalculateSyncPercentage(t *testing.T) {
 }
 
 func TestSyncConfirmation_Validate(t *testing.T) {
-	validHash := "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+	validHash := testModelHash1
 
 	testCases := []struct {
 		name         string

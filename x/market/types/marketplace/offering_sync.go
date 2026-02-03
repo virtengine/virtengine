@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// statePaused is the Waldur state for paused offerings
+const statePaused = "Paused"
+
 // WaldurOfferingType maps VirtEngine offering categories to Waldur offering types.
 var WaldurOfferingType = map[OfferingCategory]string{
 	OfferingCategoryCompute: "VirtEngine.Compute",
@@ -25,9 +28,9 @@ var WaldurOfferingType = map[OfferingCategory]string{
 // WaldurOfferingState maps VirtEngine offering states to Waldur states.
 var WaldurOfferingState = map[OfferingState]string{
 	OfferingStateActive:     "Active",
-	OfferingStatePaused:     "Paused",
+	OfferingStatePaused:     statePaused,
 	OfferingStateSuspended:  "Archived",
-	OfferingStateDeprecated: "Paused",
+	OfferingStateDeprecated: statePaused,
 	OfferingStateTerminated: "Archived",
 }
 
@@ -237,7 +240,7 @@ func (o *Offering) ToWaldurCreate(cfg OfferingSyncConfig) WaldurOfferingCreate {
 	// Map state
 	state := WaldurOfferingState[o.State]
 	if state == "" {
-		state = "Paused"
+		state = statePaused
 	}
 
 	// Build attributes
@@ -322,7 +325,7 @@ func (o *Offering) ToWaldurUpdate(cfg OfferingSyncConfig) WaldurOfferingUpdate {
 	// Map state
 	state := WaldurOfferingState[o.State]
 	if state == "" {
-		state = "Paused"
+		state = statePaused
 	}
 
 	// Build attributes (same as create)
@@ -386,14 +389,14 @@ func (o *Offering) SyncChecksum() string {
 	h.Write([]byte(o.Description))
 	h.Write([]byte(o.Category))
 	h.Write([]byte(o.Version))
-	h.Write([]byte(fmt.Sprintf("%d", o.State)))
+	fmt.Fprintf(h, "%d", o.State)
 	h.Write([]byte(o.Pricing.Model))
-	h.Write([]byte(fmt.Sprintf("%d", o.Pricing.BasePrice)))
+	fmt.Fprintf(h, "%d", o.Pricing.BasePrice)
 	h.Write([]byte(o.Pricing.Currency))
-	h.Write([]byte(fmt.Sprintf("%d", o.IdentityRequirement.MinScore)))
-	h.Write([]byte(fmt.Sprintf("%t", o.RequireMFAForOrders)))
-	h.Write([]byte(fmt.Sprintf("%d", o.MaxConcurrentOrders)))
-	h.Write([]byte(fmt.Sprintf("%d", o.UpdatedAt.Unix())))
+	fmt.Fprintf(h, "%d", o.IdentityRequirement.MinScore)
+	fmt.Fprintf(h, "%t", o.RequireMFAForOrders)
+	fmt.Fprintf(h, "%d", o.MaxConcurrentOrders)
+	fmt.Fprintf(h, "%d", o.UpdatedAt.Unix())
 
 	// Include tags in sorted order
 	for _, tag := range o.Tags {
@@ -412,17 +415,17 @@ func (o *Offering) SyncChecksum() string {
 func mapPricingModel(model PricingModel) string {
 	switch model {
 	case PricingModelHourly:
-		return "usage"
+		return string(SyncTypeUsage)
 	case PricingModelDaily:
-		return "usage"
+		return string(SyncTypeUsage)
 	case PricingModelMonthly:
 		return "monthly"
 	case PricingModelUsageBased:
-		return "usage"
+		return string(SyncTypeUsage)
 	case PricingModelFixed:
-		return "fixed"
+		return string(PricingModelFixed)
 	default:
-		return "usage"
+		return string(SyncTypeUsage)
 	}
 }
 

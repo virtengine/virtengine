@@ -42,6 +42,9 @@ const (
 
 	// OsmosisChainIDTestnet is the testnet chain ID
 	OsmosisChainIDTestnet = "osmo-test-5"
+
+	// networkTestnet is the testnet network identifier
+	networkTestnet = "testnet"
 )
 
 // ============================================================================
@@ -53,16 +56,16 @@ var (
 	ErrOsmosisNotConnected = errors.New("not connected to Osmosis")
 
 	// ErrOsmosisPoolNotFound is returned when pool is not found
-	ErrOsmosisPoolNotFound = errors.New("Osmosis pool not found")
+	ErrOsmosisPoolNotFound = errors.New("osmosis pool not found")
 
 	// ErrOsmosisInvalidPool is returned for invalid pool data
 	ErrOsmosisInvalidPool = errors.New("invalid Osmosis pool data")
 
 	// ErrOsmosisQueryFailed is returned when query fails
-	ErrOsmosisQueryFailed = errors.New("Osmosis query failed")
+	ErrOsmosisQueryFailed = errors.New("osmosis query failed")
 
 	// ErrOsmosisSwapFailed is returned when swap fails
-	ErrOsmosisSwapFailed = errors.New("Osmosis swap failed")
+	ErrOsmosisSwapFailed = errors.New("osmosis swap failed")
 
 	// ErrOsmosisInsufficientLiquidity is returned for low liquidity
 	ErrOsmosisInsufficientLiquidity = errors.New("insufficient liquidity in Osmosis pool")
@@ -119,7 +122,7 @@ func (c *OsmosisConfig) GetGRPCEndpoint() string {
 	if c.GRPCEndpoint != "" {
 		return c.GRPCEndpoint
 	}
-	if c.Network == "testnet" {
+	if c.Network == networkTestnet {
 		return OsmosisTestnetGRPC
 	}
 	return OsmosisMainnetGRPC
@@ -130,7 +133,7 @@ func (c *OsmosisConfig) GetRESTEndpoint() string {
 	if c.RESTEndpoint != "" {
 		return c.RESTEndpoint
 	}
-	if c.Network == "testnet" {
+	if c.Network == networkTestnet {
 		return OsmosisTestnetREST
 	}
 	return OsmosisMainnetREST
@@ -138,7 +141,7 @@ func (c *OsmosisConfig) GetRESTEndpoint() string {
 
 // GetChainID returns the chain ID based on network
 func (c *OsmosisConfig) GetChainID() string {
-	if c.Network == "testnet" {
+	if c.Network == networkTestnet {
 		return OsmosisChainIDTestnet
 	}
 	return OsmosisChainIDMainnet
@@ -164,20 +167,20 @@ type OsmosisPoolsResponse struct {
 
 // OsmosisPoolData represents pool data from Osmosis
 type OsmosisPoolData struct {
-	Type         string             `json:"@type"`
-	ID           string             `json:"id"`
-	Address      string             `json:"address"`
-	PoolParams   OsmosisPoolParams  `json:"pool_params"`
-	TotalShares  OsmosisCoin        `json:"total_shares"`
-	PoolAssets   []OsmosisPoolAsset `json:"pool_assets"`
-	TotalWeight  string             `json:"total_weight"`
-	FuturePoolGovernor string       `json:"future_pool_governor"`
+	Type               string             `json:"@type"`
+	ID                 string             `json:"id"`
+	Address            string             `json:"address"`
+	PoolParams         OsmosisPoolParams  `json:"pool_params"`
+	TotalShares        OsmosisCoin        `json:"total_shares"`
+	PoolAssets         []OsmosisPoolAsset `json:"pool_assets"`
+	TotalWeight        string             `json:"total_weight"`
+	FuturePoolGovernor string             `json:"future_pool_governor"`
 }
 
 // OsmosisPoolParams represents pool parameters
 type OsmosisPoolParams struct {
-	SwapFee   string `json:"swap_fee"`
-	ExitFee   string `json:"exit_fee"`
+	SwapFee                  string      `json:"swap_fee"`
+	ExitFee                  string      `json:"exit_fee"`
 	SmoothWeightChangeParams interface{} `json:"smooth_weight_change_params"`
 }
 
@@ -210,12 +213,12 @@ type OsmosisEstimateSwapResponse struct {
 // RealOsmosisAdapter implements real Osmosis DEX integration using gRPC/REST
 type RealOsmosisAdapter struct {
 	*BaseAdapter
-	config     OsmosisConfig
-	grpcConn   *grpc.ClientConn
-	httpClient *http.Client
-	pools      map[string]LiquidityPool
-	poolsMu    sync.RWMutex
-	connected  bool
+	config      OsmosisConfig
+	grpcConn    *grpc.ClientConn
+	httpClient  *http.Client
+	pools       map[string]LiquidityPool
+	poolsMu     sync.RWMutex
+	connected   bool
 	lastRefresh time.Time
 }
 
@@ -239,12 +242,11 @@ func NewRealOsmosisAdapter(cfg AdapterConfig, osmosisConfig OsmosisConfig) (*Rea
 // Connect establishes connection to Osmosis
 func (a *RealOsmosisAdapter) Connect(ctx context.Context) error {
 	endpoint := a.config.GetGRPCEndpoint()
-	
+
 	// Create gRPC connection
 	// Note: In production, use proper TLS credentials
-	conn, err := grpc.DialContext(ctx, endpoint,
+	conn, err := grpc.NewClient(endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Osmosis gRPC: %w", err)
@@ -476,9 +478,10 @@ func (a *RealOsmosisAdapter) GetPrice(ctx context.Context, baseSymbol, quoteSymb
 func (a *RealOsmosisAdapter) getPoolTokenPair(pool LiquidityPool, baseSymbol, quoteSymbol string) (Token, Token) {
 	var baseToken, quoteToken Token
 	for _, token := range pool.Tokens {
-		if token.Symbol == baseSymbol {
+		switch token.Symbol {
+		case baseSymbol:
 			baseToken = token
-		} else if token.Symbol == quoteSymbol {
+		case quoteSymbol:
 			quoteToken = token
 		}
 	}
@@ -791,7 +794,7 @@ func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, s
 	}
 
 	if broadcastResp.TxResponse.Code != 0 {
-		return SwapResult{}, fmt.Errorf("%w: code %d: %s", 
+		return SwapResult{}, fmt.Errorf("%w: code %d: %s",
 			ErrOsmosisSwapFailed, broadcastResp.TxResponse.Code, broadcastResp.TxResponse.Log)
 	}
 
@@ -811,7 +814,7 @@ func (a *RealOsmosisAdapter) ExecuteSwap(ctx context.Context, quote SwapQuote, s
 func (a *RealOsmosisAdapter) EstimateGas(ctx context.Context, request SwapRequest) (uint64, error) {
 	// Osmosis swaps typically use 250k-400k gas depending on route complexity
 	// Multi-hop swaps use more gas
-	
+
 	pool, err := a.findPoolForPair(ctx, request.FromToken.Symbol, request.ToToken.Symbol)
 	if err != nil {
 		// If no direct pool, estimate higher for multi-hop
@@ -908,4 +911,3 @@ func (a *RealOsmosisAdapter) GetTotalValueLocked(ctx context.Context) (sdkmath.L
 // ============================================================================
 
 var _ Adapter = (*RealOsmosisAdapter)(nil)
-

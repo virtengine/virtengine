@@ -60,4 +60,3 @@ $ <appd> tx slashing unjail --from mykey
 
 	return cmd
 }
-

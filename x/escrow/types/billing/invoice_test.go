@@ -50,6 +50,7 @@ func TestInvoiceLedgerRecord_NewAndValidate(t *testing.T) {
 		t.Errorf("expected ArtifactCID %s, got %s", artifactCID, record.ArtifactCID)
 	}
 
+	//nolint:gosec // G115: line items count is bounded by practical invoice limits
 	if record.LineItemCount != uint32(len(invoice.LineItems)) {
 		t.Errorf("expected LineItemCount %d, got %d", len(invoice.LineItems), record.LineItemCount)
 	}

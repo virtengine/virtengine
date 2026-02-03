@@ -677,7 +677,9 @@ func (s *SEVSNPEnclaveServiceImpl) simulateCVMInitialization() error {
 
 	// Simulate VCEK derivation
 	// In real SEV-SNP, VCEK is a per-chip key used to sign attestation reports
-	vcekSeed := append(s.chipID[:], []byte("vcek_derive")...)
+	vcekSeed := make([]byte, 0, len(s.chipID)+11)
+	vcekSeed = append(vcekSeed, s.chipID[:]...)
+	vcekSeed = append(vcekSeed, []byte("vcek_derive")...)
 	vcekHash := sha512.Sum512(vcekSeed)
 	s.vcekPrivateKey = vcekHash[:32]
 
@@ -690,7 +692,9 @@ func (s *SEVSNPEnclaveServiceImpl) simulateCVMInitialization() error {
 func (s *SEVSNPEnclaveServiceImpl) deriveEnclaveKeys() error {
 	// Derive keys using HKDF from launch measurement and epoch
 	// In real SEV-SNP, keys would be derived from vTPM or launch secret
-	salt := append(s.launchDigest[:], s.chipID[:32]...)
+	salt := make([]byte, 0, len(s.launchDigest)+32)
+	salt = append(salt, s.launchDigest[:]...)
+	salt = append(salt, s.chipID[:32]...)
 
 	// Encryption key (X25519 seed)
 	encInfo := fmt.Sprintf("encryption_key_epoch_%d", s.currentEpoch)
@@ -727,11 +731,11 @@ func (s *SEVSNPEnclaveServiceImpl) simulateCVMScoring(request *ScoringRequest) *
 	var status string
 	switch {
 	case score >= 80:
-		status = "verified"
+		status = statusVerified
 	case score >= 50:
-		status = "needs_review"
+		status = statusNeedsReview
 	default:
-		status = "rejected"
+		status = statusRejected
 	}
 
 	// Generate evidence hashes
@@ -807,7 +811,9 @@ func (s *SEVSNPEnclaveServiceImpl) simulateSNPReportGeneration(reportData []byte
 	copy(report.ImageID[:], imageID[:16])
 
 	// Generate report ID
-	reportIDSeed := append(reportData, []byte(fmt.Sprintf("report_%d", time.Now().UnixNano()))...)
+	reportIDSeed := make([]byte, 0, len(reportData)+40)
+	reportIDSeed = append(reportIDSeed, reportData...)
+	reportIDSeed = append(reportIDSeed, []byte(fmt.Sprintf("report_%d", time.Now().UnixNano()))...)
 	reportID := sha256.Sum256(reportIDSeed)
 	copy(report.ReportID[:], reportID[:])
 
@@ -937,4 +943,3 @@ func ExtractNonceFromReport(reportData []byte) []byte {
 	}
 	return reportData[32:64]
 }
-

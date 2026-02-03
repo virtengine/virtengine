@@ -269,6 +269,7 @@ func (c *Client) doWithRetry(ctx context.Context, fn func() error) error {
 	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
 		if attempt > 0 {
 			// Calculate backoff with exponential increase
+			//nolint:gosec // G115: attempt is bounded by MaxRetries configuration (typically < 10)
 			waitTime := c.config.RetryWaitMin * time.Duration(1<<uint(attempt-1))
 			if waitTime > c.config.RetryWaitMax {
 				waitTime = c.config.RetryWaitMax
@@ -477,4 +478,3 @@ func safeInt(i *int) int {
 func ptr[T any](v T) *T {
 	return &v
 }
-

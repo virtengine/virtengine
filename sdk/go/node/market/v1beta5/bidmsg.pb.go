@@ -964,4 +964,3 @@ var (
 	ErrIntOverflowBidmsg          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupBidmsg = fmt.Errorf("proto: unexpected end of group")
 )
-

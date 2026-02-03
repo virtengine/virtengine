@@ -20,6 +20,9 @@ import (
 // Certificate Revocation Checking (VE-925)
 // ============================================================================
 
+// statusUnspecified is the revocation reason for unspecified
+const statusUnspecified = "unspecified"
+
 // RevocationStatus represents the revocation status of a certificate
 type RevocationStatus uint8
 
@@ -276,7 +279,7 @@ func ocspResponseToResult(resp *ocsp.Response, result *RevocationCheckResult) *R
 func ocspRevocationReasonToString(reason int) string {
 	switch reason {
 	case ocsp.Unspecified:
-		return "unspecified"
+		return statusUnspecified
 	case ocsp.KeyCompromise:
 		return "key_compromise"
 	case ocsp.CACompromise:
@@ -396,7 +399,7 @@ func checkCRLForCert(crl *x509.RevocationList, cert *x509.Certificate, result *R
 func crlRevocationReasonToString(reason int) string {
 	switch reason {
 	case 0:
-		return "unspecified"
+		return statusUnspecified
 	case 1:
 		return "key_compromise"
 	case 2:
@@ -436,7 +439,7 @@ func CreateOCSPRequest(cert, issuer *x509.Certificate, nonce []byte) ([]byte, er
 
 // OCSPRequestWithNonce represents an OCSP request with a nonce extension
 type OCSPRequestWithNonce struct {
-	TBSRequest       TBSRequest
+	TBSRequest        TBSRequest
 	OptionalSignature asn1.RawValue `asn1:"explicit,optional,tag:0"`
 }
 
@@ -450,7 +453,7 @@ type TBSRequest struct {
 
 // Request represents a single request in an OCSP request
 type Request struct {
-	CertID          CertID
+	CertID           CertID
 	SingleExtensions []Extension `asn1:"explicit,optional,tag:0"`
 }
 

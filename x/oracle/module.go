@@ -51,7 +51,7 @@ func (AppModuleBasic) Name() string {
 
 // RegisterLegacyAminoCodec registers the oracle module's types for the given codec.
 func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
-	types.RegisterLegacyAminoCodec(cdc)
+	types.RegisterLegacyAminoCodec(cdc) //nolint:staticcheck // legacy amino registration required by interface
 }
 
 // RegisterInterfaces registers the module's interface types

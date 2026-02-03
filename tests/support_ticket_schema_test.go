@@ -11,30 +11,30 @@ import (
 
 // SupportTicket represents a customer support ticket
 type SupportTicket struct {
-	TicketID           string                    `json:"ticket_id"`
-	Version            uint32                    `json:"version"`
-	Category           string                    `json:"category"`
-	Priority           string                    `json:"priority"`
-	Tags               []string                  `json:"tags,omitempty"`
-	Status             string                    `json:"status"`
-	CreatedAt          int64                     `json:"created_at"`
-	UpdatedAt          int64                     `json:"updated_at"`
-	ClosedAt           int64                     `json:"closed_at,omitempty"`
-	CustomerAddress    string                    `json:"customer_address"`
-	AssignedAgentAddr  string                    `json:"assigned_agent_addr,omitempty"`
-	OrderRef           *OrderReference           `json:"order_ref,omitempty"`
-	ProviderRef        *ProviderReference        `json:"provider_ref,omitempty"`
-	DeploymentRef      *DeploymentReference      `json:"deployment_ref,omitempty"`
-	RelatedTickets     []string                  `json:"related_tickets,omitempty"`
-	Subject            string                    `json:"subject"`
+	TicketID            string                    `json:"ticket_id"`
+	Version             uint32                    `json:"version"`
+	Category            string                    `json:"category"`
+	Priority            string                    `json:"priority"`
+	Tags                []string                  `json:"tags,omitempty"`
+	Status              string                    `json:"status"`
+	CreatedAt           int64                     `json:"created_at"`
+	UpdatedAt           int64                     `json:"updated_at"`
+	ClosedAt            int64                     `json:"closed_at,omitempty"`
+	CustomerAddress     string                    `json:"customer_address"`
+	AssignedAgentAddr   string                    `json:"assigned_agent_addr,omitempty"`
+	OrderRef            *OrderReference           `json:"order_ref,omitempty"`
+	ProviderRef         *ProviderReference        `json:"provider_ref,omitempty"`
+	DeploymentRef       *DeploymentReference      `json:"deployment_ref,omitempty"`
+	RelatedTickets      []string                  `json:"related_tickets,omitempty"`
+	Subject             string                    `json:"subject"`
 	DescriptionEnvelope *EncryptedPayloadEnvelope `json:"description_envelope"`
-	Messages           []TicketMessage           `json:"messages,omitempty"`
-	Attachments        []AttachmentRef           `json:"attachments,omitempty"`
-	ContactEnvelope    *EncryptedPayloadEnvelope `json:"contact_envelope,omitempty"`
-	RetentionPolicy    RetentionPolicyRef        `json:"retention_policy"`
-	JurisdictionCode   string                    `json:"jurisdiction_code"`
-	ConsentRecordID    string                    `json:"consent_record_id,omitempty"`
-	Metadata           map[string]string         `json:"metadata,omitempty"`
+	Messages            []TicketMessage           `json:"messages,omitempty"`
+	Attachments         []AttachmentRef           `json:"attachments,omitempty"`
+	ContactEnvelope     *EncryptedPayloadEnvelope `json:"contact_envelope,omitempty"`
+	RetentionPolicy     RetentionPolicyRef        `json:"retention_policy"`
+	JurisdictionCode    string                    `json:"jurisdiction_code"`
+	ConsentRecordID     string                    `json:"consent_record_id,omitempty"`
+	Metadata            map[string]string         `json:"metadata,omitempty"`
 }
 
 type OrderReference struct {
@@ -101,10 +101,10 @@ type AttachmentRef struct {
 }
 
 type RetentionPolicyRef struct {
-	PolicyID         string `json:"policy_id"`
-	RetentionDays    int    `json:"retention_days"`
+	PolicyID          string `json:"policy_id"`
+	RetentionDays     int    `json:"retention_days"`
 	DeleteAfterClosed bool   `json:"delete_after_closed"`
-	ArchiveAfterDays int    `json:"archive_after_days,omitempty"`
+	ArchiveAfterDays  int    `json:"archive_after_days,omitempty"`
 }
 
 // Valid values
@@ -157,7 +157,6 @@ var allowedTransitions = map[string][]string{
 // Regex patterns
 var uuidV7Pattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 var virtengineAddrPattern = regexp.MustCompile(`^virtengine1[a-z0-9]{32,58}$`)
-var keyFingerprintPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
 
 //nolint:unused // Reserved for SHA256 validation in tests
 var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -545,11 +544,11 @@ func TestVirtEngineAddressFormat(t *testing.T) {
 		addr    string
 		isValid bool
 	}{
-		{"virtengine1abc123def456ghi789jkl012mno345pq", true},  // 32 chars after prefix
-		{"virtengine1abcdefghijklmnopqrstuvwxyz012345", true},    // 32 chars after prefix
+		{"virtengine1abc123def456ghi789jkl012mno345pq", true},                  // 32 chars after prefix
+		{"virtengine1abcdefghijklmnopqrstuvwxyz012345", true},                  // 32 chars after prefix
 		{"virtengine1abc123def456ghi789jkl012mno345pqrstuvwxyz01234567", true}, // 50 chars
-		{"cosmos1abc123def456ghi789jkl012mno345pqr678st", false}, // Wrong prefix
-		{"virtengine1ABC", false}, // Uppercase not allowed
+		{"cosmos1abc123def456ghi789jkl012mno345pqr678st", false},               // Wrong prefix
+		{"virtengine1ABC", false},                                              // Uppercase not allowed
 		{"", false},
 	}
 
@@ -593,9 +592,9 @@ func TestRetentionPolicyByJurisdiction(t *testing.T) {
 		code     string
 		expected int
 	}{
-		{"DE", 730},    // Germany - GDPR
-		{"FR", 730},    // France - GDPR
-		{"GB", 730},    // UK - UK GDPR
+		{"DE", 730},     // Germany - GDPR
+		{"FR", 730},     // France - GDPR
+		{"GB", 730},     // UK - UK GDPR
 		{"US-CA", 1095}, // California - CCPA
 		{"US-NY", 1825}, // New York - US General
 		{"US", 1825},    // US General
@@ -633,8 +632,8 @@ func TestTerminalStatesRequireClosedAt(t *testing.T) {
 			SenderPubKey:     "dGVzdFB1YktleQ==",
 		},
 		RetentionPolicy: RetentionPolicyRef{
-			PolicyID:         "global",
-			RetentionDays:    1095,
+			PolicyID:          "global",
+			RetentionDays:     1095,
 			DeleteAfterClosed: true,
 		},
 		JurisdictionCode: "US",

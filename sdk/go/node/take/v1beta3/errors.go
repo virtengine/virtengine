@@ -8,4 +8,3 @@ var (
 	// ErrInvalidParam indicates an invalid chain parameter
 	ErrInvalidParam = errors.New("parameter invalid")
 )
-

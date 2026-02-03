@@ -96,8 +96,8 @@ func run() int {
 
 	// Start gRPC server
 	grpcServer := grpc.NewServer(
-		grpc.MaxRecvMsgSize(16 * 1024 * 1024), // 16MB max message size
-		grpc.MaxSendMsgSize(16 * 1024 * 1024),
+		grpc.MaxRecvMsgSize(16*1024*1024), // 16MB max message size
+		grpc.MaxSendMsgSize(16*1024*1024),
 	)
 
 	// Register services

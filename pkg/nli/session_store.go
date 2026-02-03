@@ -310,7 +310,7 @@ type InMemorySessionStore struct {
 	config     SessionStoreConfig
 	logger     zerolog.Logger
 	metrics    *sessionMetrics
-	cleanupTTL time.Duration
+	cleanupTTL time.Duration //nolint:unused // Reserved for configurable cleanup intervals
 	stopCh     chan struct{}
 }
 

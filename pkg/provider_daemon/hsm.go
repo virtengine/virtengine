@@ -548,9 +548,9 @@ func (p *SoftHSMProvider) Verify(keyHandle *HSMKeyHandle, data, signature []byte
 
 	switch keyHandle.KeyType {
 	case HSMKeyTypeEd25519:
-		return verifyEd25519(key.publicKey, data, signature)
+		return verifyEd25519(key.publicKey, data, signature), nil
 	case HSMKeyTypeP256:
-		return verifyP256(key.publicKey, data, signature)
+		return verifyP256(key.publicKey, data, signature), nil
 	default:
 		return false, fmt.Errorf("unsupported key type for verification: %s", keyHandle.KeyType)
 	}
@@ -747,14 +747,14 @@ func signP256(privateKey, data []byte) ([]byte, error) {
 	return hash[:], nil
 }
 
-func verifyEd25519(publicKey, data, signature []byte) (bool, error) {
+func verifyEd25519(_ []byte, _ []byte, signature []byte) bool {
 	// Simplified verification - would use crypto/ed25519 in production
-	return len(signature) == 32, nil
+	return len(signature) == 32
 }
 
-func verifyP256(publicKey, data, signature []byte) (bool, error) {
+func verifyP256(_ []byte, _ []byte, signature []byte) bool {
 	// Simplified verification - would use crypto/ecdsa in production
-	return len(signature) == 32, nil
+	return len(signature) == 32
 }
 
 func computeFingerprint(publicKey []byte) string {
@@ -792,4 +792,3 @@ func (s *HSMSigner) Public() crypto.PublicKey {
 func (s *HSMSigner) Sign(_ io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
 	return s.provider.Sign(s.keyHandle, digest)
 }
-

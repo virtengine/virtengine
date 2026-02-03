@@ -316,4 +316,3 @@ func ReadTxCommandFlags(cctx sdkclient.Context, flagSet *pflag.FlagSet) (sdkclie
 
 	return cctx, nil
 }
-

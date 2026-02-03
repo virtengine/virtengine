@@ -12,17 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test constants to reduce duplication
-const (
-	testProviderID   = "provider-123"
-	testDeploymentID = "deployment-1"
-	testLeaseID      = "lease-1"
-	testVMName       = "test-vm"
-	testServiceName  = "web-server"
-	testImageUbuntu  = "image-ubuntu"
-	testErrInvalidVM = "invalid VM state"
-)
-
 // MockNovaClient is a mock implementation of NovaClient
 type MockNovaClient struct {
 	mu            sync.Mutex
@@ -1818,4 +1807,3 @@ func TestOpenStackAdapterMetadata(t *testing.T) {
 	assert.Equal(t, "lease-789", metadata["virtengine.lease"])
 	assert.Equal(t, "vm-123", metadata["virtengine.vm-id"])
 }
-

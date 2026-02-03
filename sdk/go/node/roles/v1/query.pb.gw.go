@@ -678,4 +678,3 @@ var (
 
 	forward_Query_HasRole_0 = runtime.ForwardResponseMessage
 )
-

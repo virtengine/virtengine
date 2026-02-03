@@ -36,21 +36,21 @@ const (
 
 // Event attribute keys
 const (
-	AttributeKeyAccountAddress   = "account_address"
-	AttributeKeyFactorType       = "factor_type"
-	AttributeKeyFactorID         = "factor_id"
-	AttributeKeyChallengeID      = "challenge_id"
-	AttributeKeySessionID        = "session_id"
-	AttributeKeyTransactionType  = "transaction_type"
-	AttributeKeyStatus           = "status"
+	AttributeKeyAccountAddress    = "account_address"
+	AttributeKeyFactorType        = "factor_type"
+	AttributeKeyFactorID          = "factor_id"
+	AttributeKeyChallengeID       = "challenge_id"
+	AttributeKeySessionID         = "session_id"
+	AttributeKeyTransactionType   = "transaction_type"
+	AttributeKeyStatus            = "status"
 	AttributeKeyDeviceFingerprint = "device_fingerprint"
-	AttributeKeyTimestamp        = "timestamp"
-	AttributeKeyExpiresAt        = "expires_at"
-	AttributeKeyReason           = "reason"
-	AttributeKeyAttemptCount     = "attempt_count"
-	AttributeKeyVerifiedFactors  = "verified_factors"
-	AttributeKeyVEIDScore        = "veid_score"
-	AttributeKeyThreshold        = "threshold"
+	AttributeKeyTimestamp         = "timestamp"
+	AttributeKeyExpiresAt         = "expires_at"
+	AttributeKeyReason            = "reason"
+	AttributeKeyAttemptCount      = "attempt_count"
+	AttributeKeyVerifiedFactors   = "verified_factors"
+	AttributeKeyVEIDScore         = "veid_score"
+	AttributeKeyThreshold         = "threshold"
 )
 
 // Event attribute values

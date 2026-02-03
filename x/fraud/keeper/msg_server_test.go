@@ -136,7 +136,7 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_Success() {
 		Evidence:        validEvidence(),
 	}
 
-	resp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.SubmitFraudReport(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().NotEmpty(resp.ReportId)
@@ -158,7 +158,7 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_InvalidAddress() {
 		Evidence:      validEvidence(),
 	}
 
-	_, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.SubmitFraudReport(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, types.ErrInvalidReporter)
 }
@@ -177,7 +177,7 @@ func (s *MsgServerTestSuite) TestSubmitFraudReport_UnauthorizedReporter() {
 		Evidence:      validEvidence(),
 	}
 
-	_, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.SubmitFraudReport(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, types.ErrUnauthorizedReporter)
 }
@@ -205,7 +205,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Success() {
 		Evidence:      validEvidence(),
 	}
 
-	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
+	submitResp, err := s.msgServer.SubmitFraudReport(s.ctx, submitMsg)
 	s.Require().NoError(err)
 
 	// Now assign moderator
@@ -215,7 +215,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Success() {
 		AssignTo:  assignToAddr.String(),
 	}
 
-	resp, err := s.msgServer.AssignModerator(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.AssignModerator(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 
@@ -233,7 +233,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_InvalidModeratorAddress() {
 		AssignTo:  "cosmos1assignee",
 	}
 
-	_, err := s.msgServer.AssignModerator(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.AssignModerator(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, types.ErrUnauthorizedModerator)
 }
@@ -250,7 +250,7 @@ func (s *MsgServerTestSuite) TestAssignModerator_Unauthorized() {
 		AssignTo:  "cosmos1assignee",
 	}
 
-	_, err := s.msgServer.AssignModerator(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.AssignModerator(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, types.ErrUnauthorizedModerator)
 }
@@ -273,7 +273,7 @@ func (s *MsgServerTestSuite) TestUpdateReportStatus_Success() {
 		Evidence:      validEvidence(),
 	}
 
-	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
+	submitResp, err := s.msgServer.SubmitFraudReport(s.ctx, submitMsg)
 	s.Require().NoError(err)
 
 	// Update status
@@ -284,7 +284,7 @@ func (s *MsgServerTestSuite) TestUpdateReportStatus_Success() {
 		Notes:     "Starting review",
 	}
 
-	resp, err := s.msgServer.UpdateReportStatus(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.UpdateReportStatus(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 
@@ -312,7 +312,7 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_Success() {
 		Evidence:      validEvidence(),
 	}
 
-	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
+	submitResp, err := s.msgServer.SubmitFraudReport(s.ctx, submitMsg)
 	s.Require().NoError(err)
 
 	// Resolve the report
@@ -323,7 +323,7 @@ func (s *MsgServerTestSuite) TestResolveFraudReport_Success() {
 		Notes:      "Warning issued to the reported party",
 	}
 
-	resp, err := s.msgServer.ResolveFraudReport(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.ResolveFraudReport(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 
@@ -351,7 +351,7 @@ func (s *MsgServerTestSuite) TestRejectFraudReport_Success() {
 		Evidence:      validEvidence(),
 	}
 
-	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
+	submitResp, err := s.msgServer.SubmitFraudReport(s.ctx, submitMsg)
 	s.Require().NoError(err)
 
 	// Reject the report
@@ -361,7 +361,7 @@ func (s *MsgServerTestSuite) TestRejectFraudReport_Success() {
 		Notes:     "Insufficient evidence",
 	}
 
-	resp, err := s.msgServer.RejectFraudReport(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.RejectFraudReport(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 
@@ -389,7 +389,7 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 		Evidence:      validEvidence(),
 	}
 
-	submitResp, err := s.msgServer.SubmitFraudReport(sdk.WrapSDKContext(s.ctx), submitMsg)
+	submitResp, err := s.msgServer.SubmitFraudReport(s.ctx, submitMsg)
 	s.Require().NoError(err)
 
 	// First transition to reviewing status (required before escalation)
@@ -399,7 +399,7 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 		NewStatus: types.FraudReportStatusPBReviewing,
 		Notes:     "Starting review",
 	}
-	_, err = s.msgServer.UpdateReportStatus(sdk.WrapSDKContext(s.ctx), updateMsg)
+	_, err = s.msgServer.UpdateReportStatus(s.ctx, updateMsg)
 	s.Require().NoError(err)
 
 	// Escalate the report
@@ -409,7 +409,7 @@ func (s *MsgServerTestSuite) TestEscalateFraudReport_Success() {
 		Reason:    "Complex case requiring admin review",
 	}
 
-	resp, err := s.msgServer.EscalateFraudReport(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.EscalateFraudReport(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 
@@ -430,7 +430,7 @@ func (s *MsgServerTestSuite) TestUpdateParams_Success() {
 		Params:    *paramsPB,
 	}
 
-	resp, err := s.msgServer.UpdateParams(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.UpdateParams(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 
@@ -449,7 +449,7 @@ func (s *MsgServerTestSuite) TestUpdateParams_Unauthorized() {
 		Params:    *paramsPB,
 	}
 
-	_, err := s.msgServer.UpdateParams(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.UpdateParams(s.ctx, msg)
 	s.Require().Error(err)
 }
 
@@ -463,7 +463,7 @@ func (s *MsgServerTestSuite) TestUpdateParams_InvalidAuthority() {
 		Params:    *paramsPB,
 	}
 
-	_, err := s.msgServer.UpdateParams(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.UpdateParams(s.ctx, msg)
 	s.Require().Error(err)
 }
 
@@ -483,7 +483,7 @@ func (s *MsgServerTestSuite) TestReportNotFound() {
 	assigneeAddr, _ := sdk.AccAddressFromBech32("cosmos1assignee")
 	s.rolesKeeper.On("IsModerator", mock.Anything, assigneeAddr).Return(true)
 
-	_, err := s.msgServer.AssignModerator(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.AssignModerator(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, types.ErrReportNotFound)
 }

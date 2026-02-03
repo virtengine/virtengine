@@ -130,15 +130,15 @@ const (
 
 // FraudCategoryNames maps fraud categories to human-readable names
 var FraudCategoryNames = map[FraudCategory]string{
-	FraudCategoryUnspecified:             "unspecified",
-	FraudCategoryFakeIdentity:            "fake_identity",
-	FraudCategoryPaymentFraud:            "payment_fraud",
+	FraudCategoryUnspecified:              "unspecified",
+	FraudCategoryFakeIdentity:             "fake_identity",
+	FraudCategoryPaymentFraud:             "payment_fraud",
 	FraudCategoryServiceMisrepresentation: "service_misrepresentation",
-	FraudCategoryResourceAbuse:           "resource_abuse",
-	FraudCategorySybilAttack:             "sybil_attack",
-	FraudCategoryMaliciousContent:        "malicious_content",
-	FraudCategoryTermsViolation:          "terms_violation",
-	FraudCategoryOther:                   "other",
+	FraudCategoryResourceAbuse:            "resource_abuse",
+	FraudCategorySybilAttack:              "sybil_attack",
+	FraudCategoryMaliciousContent:         "malicious_content",
+	FraudCategoryTermsViolation:           "terms_violation",
+	FraudCategoryOther:                    "other",
 }
 
 // String returns the string representation of a FraudCategory

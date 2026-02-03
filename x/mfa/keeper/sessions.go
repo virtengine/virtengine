@@ -202,7 +202,7 @@ func (k Keeper) CleanupExpiredSessions(ctx sdk.Context, address sdk.AccAddress) 
 				)
 			}
 
-			k.DeleteAuthorizationSession(ctx, session.SessionID)
+			_ = k.DeleteAuthorizationSession(ctx, session.SessionID)
 			deleted++
 		}
 	}

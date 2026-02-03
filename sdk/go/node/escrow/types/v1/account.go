@@ -37,4 +37,3 @@ func (m *Account) ValidateBasic() error {
 
 	return nil
 }
-

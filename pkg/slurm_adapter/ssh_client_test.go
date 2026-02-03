@@ -329,4 +329,3 @@ func TestSSHSLURMClient_IsConnected_NotConnected(t *testing.T) {
 
 	assert.False(t, client.IsConnected())
 }
-

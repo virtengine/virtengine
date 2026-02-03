@@ -49,4 +49,3 @@ func TestWebsocketWriterWrapperReturnsError(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, io.EOF, err)
 }
-

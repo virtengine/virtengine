@@ -444,4 +444,3 @@ type HealthStatus struct {
 	// Warnings contains any warnings
 	Warnings []string `json:"warnings,omitempty"`
 }
-

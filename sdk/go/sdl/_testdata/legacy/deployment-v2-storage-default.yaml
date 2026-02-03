@@ -31,7 +31,7 @@ profiles:
     global:
       pricing:
         web:
-          denom: uact
+          denom: uve
           amount: 10
 deployment:
   web:

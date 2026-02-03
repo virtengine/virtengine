@@ -341,4 +341,3 @@ func (s *GovCLITestSuite) TestCmdQueryVote() {
 		})
 	}
 }
-

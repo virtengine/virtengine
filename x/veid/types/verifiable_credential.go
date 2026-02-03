@@ -20,14 +20,14 @@ import (
 
 const (
 	// W3C standard contexts
-	ContextW3CCredentials = "https://www.w3.org/2018/credentials/v1"
+	ContextW3CCredentials = "https://www.w3.org/2018/credentials/v1" //nolint:gosec // non-secret identifier
 	ContextVirtEngine     = "https://virtengine.com/credentials/v1"
 
 	// W3C standard types
-	TypeVerifiableCredential = "VerifiableCredential"
+	TypeVerifiableCredential = "VerifiableCredential" //nolint:gosec // non-secret identifier
 
 	// VirtEngine credential types
-	TypeVEIDCredential        = "VEIDCredential"
+	TypeVEIDCredential        = "VEIDCredential" //nolint:gosec // non-secret identifier
 	TypeIdentityVerification  = "IdentityVerificationCredential"
 	TypeFacialVerification    = "FacialVerificationCredential"
 	TypeDocumentVerification  = "DocumentVerificationCredential"
@@ -245,7 +245,8 @@ func NewVerifiableCredential(
 	context := []string{ContextW3CCredentials, ContextVirtEngine}
 
 	// Build types - always include base type
-	types := []string{TypeVerifiableCredential}
+	types := make([]string, 0, 1+len(credentialTypes))
+	types = append(types, TypeVerifiableCredential)
 	types = append(types, credentialTypes...)
 
 	return &VerifiableCredential{

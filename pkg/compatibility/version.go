@@ -27,10 +27,10 @@ type Version struct {
 
 // APIVersion represents a versioned API identifier (e.g., "v1", "v1beta2").
 type APIVersion struct {
-	Version     int
-	Stability   Stability
-	Revision    int // For beta/alpha versions (e.g., beta2 has Revision=2)
-	RawVersion  string
+	Version    int
+	Stability  Stability
+	Revision   int // For beta/alpha versions (e.g., beta2 has Revision=2)
+	RawVersion string
 }
 
 // Stability represents the stability level of an API version.
@@ -49,10 +49,10 @@ const (
 
 // VersionRange represents a range of supported versions.
 type VersionRange struct {
-	Min     Version
-	Max     Version
-	MinStr  string
-	MaxStr  string
+	Min    Version
+	Max    Version
+	MinStr string
+	MaxStr string
 }
 
 // SupportLevel indicates the support status of a version.
@@ -235,9 +235,10 @@ func (v APIVersion) String() string {
 		return v.RawVersion
 	}
 	s := fmt.Sprintf("v%d", v.Version)
-	if v.Stability == StabilityBeta {
+	switch v.Stability {
+	case StabilityBeta:
 		s += fmt.Sprintf("beta%d", v.Revision)
-	} else if v.Stability == StabilityAlpha {
+	case StabilityAlpha:
 		s += fmt.Sprintf("alpha%d", v.Revision)
 	}
 	return s
@@ -378,4 +379,3 @@ func GetSupportLevel(v, current Version) SupportLevel {
 		return SupportLevelEOL
 	}
 }
-

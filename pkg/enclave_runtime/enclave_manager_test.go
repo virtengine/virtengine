@@ -584,7 +584,7 @@ func TestHealthMonitoring(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Manual health check instead of waiting
 	manager.performHealthChecks()
@@ -664,7 +664,7 @@ func TestFailover(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Request should fail on primary, then succeed on secondary
 	request := createTestRequest("failover-test-1")
@@ -710,7 +710,7 @@ func TestFailoverDisabled(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	request := createTestRequest("no-failover-test")
 	_, err = manager.Score(context.Background(), request)
@@ -751,7 +751,7 @@ func TestCircuitBreaker(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Cause failures to trip the circuit breaker
 	for i := 0; i < 3; i++ {
@@ -842,7 +842,7 @@ func TestConcurrentRequests(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Run concurrent requests
 	var wg sync.WaitGroup
@@ -906,7 +906,7 @@ func TestMetricsCollection(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Run some successful requests
 	for i := 0; i < 5; i++ {
@@ -996,7 +996,7 @@ func TestDuplicateRequest(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	// Start first request
 	var wg sync.WaitGroup
@@ -1046,7 +1046,7 @@ func TestGenerateAttestation(t *testing.T) {
 	if err := manager.Start(); err != nil {
 		t.Fatalf("failed to start manager: %v", err)
 	}
-	defer manager.Stop()
+	defer func() { _ = manager.Stop() }()
 
 	reportData := []byte("test-report-data")
 	attestation, err := manager.GenerateAttestation(reportData)
@@ -1243,4 +1243,3 @@ func TestBackendMetricsClone(t *testing.T) {
 		t.Error("clone AverageLatencyMs mismatch")
 	}
 }
-

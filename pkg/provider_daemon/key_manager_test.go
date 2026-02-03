@@ -376,4 +376,3 @@ func encodeHex(data []byte) string {
 	}
 	return string(dst)
 }
-

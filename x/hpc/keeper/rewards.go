@@ -330,7 +330,7 @@ func (k Keeper) FlagDispute(ctx sdk.Context, dispute *types.HPCDispute) error {
 		if exists {
 			reward.Disputed = true
 			reward.DisputeID = dispute.DisputeID
-			k.SetHPCReward(ctx, reward)
+			_ = k.SetHPCReward(ctx, reward)
 		}
 	}
 

@@ -104,19 +104,19 @@ func DefaultGenesisState() *GenesisState {
 // DefaultParams returns the default parameters
 func DefaultParams() Params {
 	return Params{
-		PlatformFeeRate:          "0.05",     // 5%
-		ValidatorFeeRate:         "0.01",     // 1%
-		MinEscrowDuration:        3600,       // 1 hour
-		MaxEscrowDuration:        31536000,   // 1 year
-		SettlementPeriod:         86400,      // 1 day
-		RewardClaimExpiry:        2592000,    // 30 days
-		MinSettlementAmount:      "1000",     // Minimum tokens for settlement
-		UsageGracePeriod:         86400,      // 1 day grace period
-		StakingRewardEpochLength: 100,        // 100 blocks per epoch
-		VerificationRewardAmount: "100",      // Base reward for verification
-		PayoutHoldbackRate:       "0.0",      // No holdback by default
-		MaxPayoutRetries:         3,          // 3 retry attempts
-		DisputeWindowDuration:    604800,     // 7 days
+		PlatformFeeRate:          "0.05",   // 5%
+		ValidatorFeeRate:         "0.01",   // 1%
+		MinEscrowDuration:        3600,     // 1 hour
+		MaxEscrowDuration:        31536000, // 1 year
+		SettlementPeriod:         86400,    // 1 day
+		RewardClaimExpiry:        2592000,  // 30 days
+		MinSettlementAmount:      "1000",   // Minimum tokens for settlement
+		UsageGracePeriod:         86400,    // 1 day grace period
+		StakingRewardEpochLength: 100,      // 100 blocks per epoch
+		VerificationRewardAmount: "100",    // Base reward for verification
+		PayoutHoldbackRate:       "0.0",    // No holdback by default
+		MaxPayoutRetries:         3,        // 3 retry attempts
+		DisputeWindowDuration:    604800,   // 7 days
 	}
 }
 

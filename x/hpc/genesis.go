@@ -14,46 +14,64 @@ import (
 // InitGenesis initializes the HPC module's state from a provided genesis state.
 func InitGenesis(ctx sdk.Context, k keeper.Keeper, data *types.GenesisState) {
 	// Set module parameters
-	k.SetParams(ctx, data.Params)
+	if err := k.SetParams(ctx, data.Params); err != nil {
+		panic(err)
+	}
 
 	// Import clusters
 	for _, cluster := range data.Clusters {
-		k.SetCluster(ctx, cluster)
+		if err := k.SetCluster(ctx, cluster); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import offerings
 	for _, offering := range data.Offerings {
-		k.SetOffering(ctx, offering)
+		if err := k.SetOffering(ctx, offering); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import jobs
 	for _, job := range data.Jobs {
-		k.SetJob(ctx, job)
+		if err := k.SetJob(ctx, job); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import job accountings
 	for _, accounting := range data.JobAccountings {
-		k.SetJobAccounting(ctx, accounting)
+		if err := k.SetJobAccounting(ctx, accounting); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import node metadatas
 	for _, node := range data.NodeMetadatas {
-		k.SetNodeMetadata(ctx, node)
+		if err := k.SetNodeMetadata(ctx, node); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import scheduling decisions
 	for _, decision := range data.SchedulingDecisions {
-		k.SetSchedulingDecision(ctx, decision)
+		if err := k.SetSchedulingDecision(ctx, decision); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import HPC rewards
 	for _, reward := range data.HPCRewards {
-		k.SetHPCReward(ctx, reward)
+		if err := k.SetHPCReward(ctx, reward); err != nil {
+			panic(err)
+		}
 	}
 
 	// Import disputes
 	for _, dispute := range data.Disputes {
-		k.SetDispute(ctx, dispute)
+		if err := k.SetDispute(ctx, dispute); err != nil {
+			panic(err)
+		}
 	}
 
 	// Set sequences

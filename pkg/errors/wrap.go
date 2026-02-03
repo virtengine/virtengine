@@ -80,7 +80,7 @@ func AddContext(err error, module string, code uint32, key string, value interfa
 
 	var codedErr *CodedError
 	if errors.As(err, &codedErr) {
-		codedErr.WithContext(key, value)
+		_ = codedErr.WithContext(key, value)
 		return err
 	}
 
@@ -105,9 +105,9 @@ func WithField(err error, field string, value interface{}) error {
 
 	var codedErr *CodedError
 	if errors.As(err, &codedErr) {
-		codedErr.WithContext("field", field)
+		_ = codedErr.WithContext("field", field)
 		if value != nil {
-			codedErr.WithContext("value", value)
+			_ = codedErr.WithContext("value", value)
 		}
 		return err
 	}
@@ -123,7 +123,7 @@ func WithOperation(err error, operation string) error {
 
 	var codedErr *CodedError
 	if errors.As(err, &codedErr) {
-		codedErr.WithContext("operation", operation)
+		_ = codedErr.WithContext("operation", operation)
 		return err
 	}
 
@@ -138,8 +138,8 @@ func WithResource(err error, resourceType string, resourceID string) error {
 
 	var codedErr *CodedError
 	if errors.As(err, &codedErr) {
-		codedErr.WithContext("resource_type", resourceType)
-		codedErr.WithContext("resource_id", resourceID)
+		_ = codedErr.WithContext("resource_type", resourceType)
+		_ = codedErr.WithContext("resource_id", resourceID)
 		return err
 	}
 
@@ -152,4 +152,3 @@ func EnsureStack(err error) error {
 	// Future: integrate with pkg/errors or similar for stack traces
 	return err
 }
-

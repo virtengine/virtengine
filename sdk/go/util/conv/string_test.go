@@ -26,9 +26,9 @@ func (s *StringSuite) TestUnsafeStrToBytes() {
 		b := unsafeConvertStr()
 		runtime.GC()
 		<-time.NewTimer(2 * time.Millisecond).C
-		b2 := append(b, 'd')
-		s.Equal("abc", string(b))
-		s.Equal("abcd", string(b2))
+		b = append(b, 'd') //nolint:gocritic // appendAssign: intentionally reassigning to same slice for test
+		s.Equal("abc", string(b[:3]))
+		s.Equal("abcd", string(b))
 	}
 }
 
@@ -52,4 +52,3 @@ func BenchmarkUnsafeStrToBytes(b *testing.B) {
 		UnsafeStrToBytes(strconv.Itoa(i))
 	}
 }
-

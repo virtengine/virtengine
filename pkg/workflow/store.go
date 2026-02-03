@@ -177,7 +177,7 @@ func DefaultWorkflowStoreConfig() WorkflowStoreConfig {
 	return WorkflowStoreConfig{
 		Type:                  "memory",
 		RedisPrefix:           "workflow",
-		StateTTL:              24 * time.Hour * 7, // 7 days
+		StateTTL:              24 * time.Hour * 7,  // 7 days
 		HistoryTTL:            24 * time.Hour * 30, // 30 days
 		MaxHistoryPerWorkflow: 10000,
 	}
@@ -261,4 +261,3 @@ func UnmarshalHistoryEvent(data []byte) (*HistoryEvent, error) {
 	}
 	return &event, nil
 }
-

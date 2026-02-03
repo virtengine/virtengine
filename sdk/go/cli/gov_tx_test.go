@@ -408,4 +408,3 @@ func (s *GovCLITestSuite) TestNewCmdWeightedVote() {
 		})
 	}
 }
-

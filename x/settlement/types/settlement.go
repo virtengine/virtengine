@@ -68,10 +68,10 @@ type SettlementRecord struct {
 type SettlementType string
 
 const (
-	SettlementTypePeriodic    SettlementType = "periodic"
-	SettlementTypeUsageBased  SettlementType = "usage_based"
-	SettlementTypeFinal       SettlementType = "final"
-	SettlementTypeRefund      SettlementType = "refund"
+	SettlementTypePeriodic   SettlementType = "periodic"
+	SettlementTypeUsageBased SettlementType = "usage_based"
+	SettlementTypeFinal      SettlementType = "final"
+	SettlementTypeRefund     SettlementType = "refund"
 )
 
 // IsValidSettlementType checks if the type is valid
@@ -260,7 +260,7 @@ func NewUsageRecord(
 	// Calculate total cost
 	totalCost := sdk.NewCoin(
 		unitPrice.Denom,
-		unitPrice.Amount.MulInt64(int64(usageUnits)).TruncateInt(),
+		unitPrice.Amount.MulInt64(safeInt64FromUint64(usageUnits)).TruncateInt(),
 	)
 
 	return &UsageRecord{
@@ -280,6 +280,13 @@ func NewUsageRecord(
 		BlockHeight:       blockHeight,
 		Metadata:          make(map[string]string),
 	}
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	return int64(value)
 }
 
 // Validate validates a usage record

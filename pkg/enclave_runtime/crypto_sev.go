@@ -431,7 +431,7 @@ const (
 type VCEKCertificateFetcher struct {
 	httpClient *http.Client
 	cache      *CertificateCache
-	mu         sync.RWMutex
+	mu         sync.RWMutex //nolint:unused // Reserved for future concurrent access protection
 }
 
 // NewVCEKCertificateFetcher creates a new VCEK certificate fetcher.
@@ -900,4 +900,3 @@ func ValidateSNPReportNonce(report *CryptoSNPReport, expectedNonce []byte) bool 
 
 	return bytes.HasPrefix(reportData, expectedNonce)
 }
-

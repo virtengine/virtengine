@@ -198,4 +198,3 @@ func convertVote(v *v1beta1.MsgVoteWeighted) *v1.Vote {
 		Options:    opts,
 	}
 }
-

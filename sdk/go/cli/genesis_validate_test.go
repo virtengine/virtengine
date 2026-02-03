@@ -108,4 +108,3 @@ func (m mockModule) DefaultGenesis(codec.JSONCodec) json.RawMessage {
 func (m mockModule) ValidateGenesis(codec.JSONCodec, client.TxEncodingConfig, json.RawMessage) error {
 	return fmt.Errorf("mock section is missing: %w", io.EOF)
 }
-

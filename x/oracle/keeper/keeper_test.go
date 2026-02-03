@@ -19,7 +19,9 @@ import (
 	otypes "github.com/virtengine/virtengine/x/oracle/types"
 )
 
+//nolint:unused // helper reserved for future keeper tests
 func setupTestKeeper(t *testing.T) (IKeeper, sdk.Context) {
+	t.Helper()
 	storeKey := storetypes.NewKVStoreKey(otypes.StoreKey)
 
 	interfaceRegistry := codectypes.NewInterfaceRegistry()

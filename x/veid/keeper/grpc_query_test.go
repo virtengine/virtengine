@@ -108,7 +108,7 @@ func (ts *grpcQueryTestSuite) createTestWallet(t *testing.T) *types.IdentityWall
 }
 
 // createTestWalletWithScopes creates a wallet with scope references
-func (ts *grpcQueryTestSuite) createTestWalletWithScopes(t *testing.T) *types.IdentityWallet {
+func (ts *grpcQueryTestSuite) createTestWalletWithScopes(t *testing.T) {
 	t.Helper()
 
 	wallet := ts.createTestWallet(t)
@@ -143,11 +143,10 @@ func (ts *grpcQueryTestSuite) createTestWalletWithScopes(t *testing.T) *types.Id
 	err := ts.keeper.SetWallet(ts.ctx, wallet)
 	require.NoError(t, err)
 
-	return wallet
 }
 
 // createTestWalletWithConsent creates a wallet with consent settings
-func (ts *grpcQueryTestSuite) createTestWalletWithConsent(t *testing.T) *types.IdentityWallet {
+func (ts *grpcQueryTestSuite) createTestWalletWithConsent(t *testing.T) {
 	t.Helper()
 
 	wallet := ts.createTestWallet(t)
@@ -161,7 +160,6 @@ func (ts *grpcQueryTestSuite) createTestWalletWithConsent(t *testing.T) *types.I
 	err := ts.keeper.SetWallet(ts.ctx, wallet)
 	require.NoError(t, err)
 
-	return wallet
 }
 
 // createTestWalletWithDerivedFeatures creates a wallet with derived features
@@ -192,7 +190,7 @@ func (ts *grpcQueryTestSuite) createTestWalletWithDerivedFeatures(t *testing.T) 
 }
 
 // createTestWalletWithHistory creates a wallet with verification history
-func (ts *grpcQueryTestSuite) createTestWalletWithHistory(t *testing.T) *types.IdentityWallet {
+func (ts *grpcQueryTestSuite) createTestWalletWithHistory(t *testing.T) {
 	t.Helper()
 
 	wallet := ts.createTestWallet(t)
@@ -240,7 +238,6 @@ func (ts *grpcQueryTestSuite) createTestWalletWithHistory(t *testing.T) *types.I
 	err := ts.keeper.SetWallet(ts.ctx, wallet)
 	require.NoError(t, err)
 
-	return wallet
 }
 
 // ============================================================================

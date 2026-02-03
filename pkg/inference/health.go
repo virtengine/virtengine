@@ -363,9 +363,9 @@ func (hc *HealthChecker) computeOutputHash(result *ScoreResult) string {
 	h := sha256.New()
 
 	// Include key fields that should be deterministic
-	h.Write([]byte(fmt.Sprintf("%d", result.Score)))
-	h.Write([]byte(fmt.Sprintf("%.6f", result.Confidence)))
-	h.Write([]byte(fmt.Sprintf("%.6f", result.RawScore)))
+	fmt.Fprintf(h, "%d", result.Score)
+	fmt.Fprintf(h, "%.6f", result.Confidence)
+	fmt.Fprintf(h, "%.6f", result.RawScore)
 	h.Write([]byte(result.OutputHash))
 
 	return hex.EncodeToString(h.Sum(nil))
@@ -427,7 +427,7 @@ func (hc *HealthChecker) GetLastStatus() *HealthStatus {
 
 	if hc.lastStatus == nil {
 		return &HealthStatus{
-			Healthy:     false,
+			Healthy:      false,
 			ErrorMessage: "no health check performed yet",
 		}
 	}
@@ -525,8 +525,8 @@ func (hc *HealthChecker) CheckWithContext(ctx context.Context) (*HealthStatus, e
 	select {
 	case <-ctx.Done():
 		return &HealthStatus{
-			Healthy:      false,
-			ErrorMessage: "health check cancelled",
+			Healthy:       false,
+			ErrorMessage:  "health check cancelled",
 			LastCheckTime: time.Now(),
 		}, ctx.Err()
 	case r := <-resultChan:
@@ -550,4 +550,3 @@ func MustNewHealthChecker(scorer Scorer, config HealthConfig) *HealthChecker {
 	}
 	return NewHealthChecker(scorer, config)
 }
-

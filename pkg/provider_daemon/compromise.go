@@ -555,26 +555,26 @@ func matchesLocation(sourceIP, allowedLocation string) bool {
 
 // CompromiseAlert represents an alert sent for a compromise
 type CompromiseAlert struct {
-	EventID     string             `json:"event_id"`
-	KeyID       string             `json:"key_id"`
+	EventID     string              `json:"event_id"`
+	KeyID       string              `json:"key_id"`
 	Indicator   CompromiseIndicator `json:"indicator"`
 	Severity    CompromiseSeverity  `json:"severity"`
-	Description string             `json:"description"`
-	DetectedAt  time.Time          `json:"detected_at"`
-	AlertSentAt time.Time          `json:"alert_sent_at"`
+	Description string              `json:"description"`
+	DetectedAt  time.Time           `json:"detected_at"`
+	AlertSentAt time.Time           `json:"alert_sent_at"`
 }
 
 // CompromiseReport generates a report of compromise events
 type CompromiseReport struct {
-	GeneratedAt   time.Time          `json:"generated_at"`
-	ReportPeriod  string             `json:"report_period"`
-	TotalEvents   int                `json:"total_events"`
-	BySeverity    map[string]int     `json:"by_severity"`
-	ByIndicator   map[string]int     `json:"by_indicator"`
-	AffectedKeys  []string           `json:"affected_keys"`
-	CriticalCount int                `json:"critical_count"`
-	Acknowledged  int                `json:"acknowledged"`
-	Unacknowledged int               `json:"unacknowledged"`
+	GeneratedAt    time.Time      `json:"generated_at"`
+	ReportPeriod   string         `json:"report_period"`
+	TotalEvents    int            `json:"total_events"`
+	BySeverity     map[string]int `json:"by_severity"`
+	ByIndicator    map[string]int `json:"by_indicator"`
+	AffectedKeys   []string       `json:"affected_keys"`
+	CriticalCount  int            `json:"critical_count"`
+	Acknowledged   int            `json:"acknowledged"`
+	Unacknowledged int            `json:"unacknowledged"`
 }
 
 // GenerateReport generates a compromise report
@@ -620,4 +620,3 @@ func (d *CompromiseDetector) GenerateReport(since time.Time) *CompromiseReport {
 
 	return report
 }
-

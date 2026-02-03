@@ -65,4 +65,3 @@ func (m ProviderInfo) Validate() error {
 	}
 	return nil
 }
-

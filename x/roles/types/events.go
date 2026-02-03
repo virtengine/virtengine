@@ -2,10 +2,10 @@ package types
 
 // Event types for the roles module
 const (
-	EventTypeRoleAssigned         = "role_assigned"
-	EventTypeRoleRevoked          = "role_revoked"
-	EventTypeAccountStateChanged  = "account_state_changed"
-	EventTypeAdminNominated       = "admin_nominated"
+	EventTypeRoleAssigned        = "role_assigned"
+	EventTypeRoleRevoked         = "role_revoked"
+	EventTypeAccountStateChanged = "account_state_changed"
+	EventTypeAdminNominated      = "admin_nominated"
 )
 
 // Event attribute keys

@@ -345,7 +345,7 @@ type TierProgress struct {
 // ============================================================================
 
 // checkAccountStatus verifies the account status
-func (k Keeper) checkAccountStatus(ctx sdk.Context, record *types.IdentityRecord, result *types.EnhancedEligibilityResult) {
+func (k Keeper) checkAccountStatus(_ sdk.Context, record *types.IdentityRecord, result *types.EnhancedEligibilityResult) {
 	if record.Locked {
 		result.AddCheck(types.NewEligibilityCheck(
 			types.EligibilityCheckTypeAccountStatus,
@@ -363,7 +363,7 @@ func (k Keeper) checkAccountStatus(ctx sdk.Context, record *types.IdentityRecord
 }
 
 // checkTierRequirement verifies the tier requirement
-func (k Keeper) checkTierRequirement(ctx sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
+func (k Keeper) checkTierRequirement(_ sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
 	currentTierLevel := k.tierToLevel(record.Tier)
 	requiredTierLevel := k.tierToLevel(requiredTier)
 
@@ -384,7 +384,7 @@ func (k Keeper) checkTierRequirement(ctx sdk.Context, record *types.IdentityReco
 }
 
 // checkScoreThreshold verifies the score threshold
-func (k Keeper) checkScoreThreshold(ctx sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
+func (k Keeper) checkScoreThreshold(_ sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
 	minScore := k.getMinScoreForTier(requiredTier)
 
 	if record.CurrentScore >= minScore {
@@ -627,15 +627,16 @@ func (k Keeper) getMinScoreForTier(tier types.IdentityTier) uint32 {
 }
 
 // tierToLevel converts tier to numeric level for comparison
+// Includes deprecated tier constants for backward compatibility with existing records
 func (k Keeper) tierToLevel(tier types.IdentityTier) int {
 	switch tier {
 	case types.IdentityTierUnverified:
 		return 0
 	case types.IdentityTierBasic:
 		return 1
-	case types.IdentityTierStandard, types.IdentityTierVerified:
+	case types.IdentityTierStandard, types.IdentityTierVerified: //nolint:staticcheck // SA1019: IdentityTierVerified is deprecated but kept for backward compatibility
 		return 2
-	case types.IdentityTierPremium, types.IdentityTierTrusted:
+	case types.IdentityTierPremium, types.IdentityTierTrusted: //nolint:staticcheck // SA1019: IdentityTierTrusted is deprecated but kept for backward compatibility
 		return 3
 	default:
 		return 0

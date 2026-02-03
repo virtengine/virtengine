@@ -1205,7 +1205,7 @@ func (va *VMwareAdapter) performVMDeployment(ctx context.Context, vm *VSphereDep
 
 	// Get VM info
 	if err := va.refreshVMInfo(ctx, vm); err != nil {
-		// Non-fatal, continue
+		_ = err // Non-fatal, continue
 	}
 
 	return nil
@@ -1243,7 +1243,7 @@ func (va *VMwareAdapter) buildCloneSpec(vm *VSphereDeployedVM, opts VMwareDeploy
 func (va *VMwareAdapter) computeResources(resources ResourceSpec, opts VMwareDeploymentOptions) (int32, int64) {
 	numCPUs := opts.NumCPUs
 	if numCPUs == 0 {
-		numCPUs = int32(resources.CPU / 1000)
+		numCPUs = safeInt32FromInt64(resources.CPU / 1000)
 		if numCPUs == 0 {
 			numCPUs = 1
 		}
@@ -1315,7 +1315,7 @@ func (va *VMwareAdapter) applyDisks(spec *VSphereCloneSpec, volumes []VolumeSpec
 	}
 
 	for _, volSpec := range volumes {
-		if volSpec.Type == "persistent" {
+		if volSpec.Type == volumeTypePersistent {
 			sizeGB := volSpec.Size / (1024 * 1024 * 1024)
 			if sizeGB == 0 {
 				sizeGB = 10
@@ -1590,7 +1590,7 @@ func (va *VMwareAdapter) DeleteVM(ctx context.Context, vmID string) error {
 	if vm.PowerState == VSphereVMPowerOn {
 		task, err := va.vsphere.PowerOffVM(ctx, vm.VMID)
 		if err == nil {
-			va.vsphere.WaitForTask(ctx, task.ID)
+			_, _ = va.vsphere.WaitForTask(ctx, task.ID)
 		}
 	}
 
@@ -1727,7 +1727,7 @@ func (va *VMwareAdapter) RevertToSnapshot(ctx context.Context, vmID, snapshotID 
 	}
 
 	// Refresh VM state
-	va.refreshVMInfo(ctx, vm)
+	_ = va.refreshVMInfo(ctx, vm)
 
 	return nil
 }
@@ -1824,7 +1824,7 @@ func (va *VMwareAdapter) ReconfigureVM(ctx context.Context, vmID string, numCPUs
 	}
 
 	// Refresh VM info
-	va.refreshVMInfo(ctx, vm)
+	_ = va.refreshVMInfo(ctx, vm)
 
 	return nil
 }
@@ -1965,4 +1965,3 @@ func (va *VMwareAdapter) updateVMStatus(vmID string, powerState VSphereVMPowerSt
 		}
 	}
 }
-

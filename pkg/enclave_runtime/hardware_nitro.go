@@ -142,13 +142,13 @@ func (d *NitroHardwareDetector) Detect() error {
 			d.detectionError = err
 			return err
 		}
-		d.detectionError = fmt.Errorf("error checking Nitro device: %w", err)
+		d.detectionError = fmt.Errorf("error checking nitro device: %w", err)
 		return d.detectionError
 	}
 
 	if !exists {
 		d.available = false
-		d.detectionError = fmt.Errorf("Nitro device not found at %s", NitroDevicePath)
+		d.detectionError = fmt.Errorf("nitro device not found at %s", NitroDevicePath)
 		return d.detectionError
 	}
 
@@ -300,12 +300,12 @@ func (r *NitroCLIRunner) runHardwareEnclave(ctx context.Context, eifPath string,
 func (r *NitroCLIRunner) runSimulatedEnclave(_ string, cpuCount int, memoryMB int64) (*NitroRunEnclaveOutput, error) {
 	// Generate simulated enclave ID
 	idBytes := make([]byte, 16)
-	rand.Read(idBytes)
+	_, _ = rand.Read(idBytes)
 	enclaveID := fmt.Sprintf("i-simulated-%x", idBytes[:8])
 
 	// Generate simulated CID
 	var cid uint32
-	binary.Read(rand.Reader, binary.LittleEndian, &cid)
+	_ = binary.Read(rand.Reader, binary.LittleEndian, &cid)
 	cid = (cid % 65000) + 100 // Keep in reasonable range
 
 	cpuIDs := make([]int, cpuCount)
@@ -585,7 +585,7 @@ func (c *NitroNSMClient) initSimulatedState() {
 	// Generate simulated PCRs
 	for i := uint8(0); i < 16; i++ {
 		h := sha512.New384()
-		h.Write([]byte(fmt.Sprintf("simulated-pcr-%d", i)))
+		fmt.Fprintf(h, "simulated-pcr-%d", i)
 		var pcr [48]byte
 		copy(pcr[:], h.Sum(nil))
 		c.simulatedPCRs[i] = pcr
@@ -593,7 +593,7 @@ func (c *NitroNSMClient) initSimulatedState() {
 
 	// Generate simulated key
 	c.simulatedKey = make([]byte, 32)
-	rand.Read(c.simulatedKey)
+	_, _ = rand.Read(c.simulatedKey)
 }
 
 // Close closes the NSM device
@@ -848,6 +848,7 @@ func (b *NitroEnclaveImageBuilder) buildHardware(ctx context.Context, config Bui
 		args = append(args, "--signing-certificate", cleanSigningCert)
 	}
 
+	//nolint:gosec // G204: All arguments are validated via filepath.Clean and path validation above
 	cmd := exec.CommandContext(ctx, b.detector.GetCLIPath(), args...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -940,9 +941,7 @@ func (b *NitroHardwareBackend) Initialize() error {
 	}
 
 	// Detect hardware
-	if err := b.detector.Detect(); err != nil {
-		// Continue anyway for simulation mode
-	}
+	_ = b.detector.Detect()
 
 	// Create components
 	b.cliRunner = NewNitroCLIRunner(b.detector)
@@ -1013,7 +1012,7 @@ func (b *NitroHardwareBackend) GetAttestation(nonce []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString(doc.ModuleID)
 	buf.WriteByte(0)
-	binary.Write(&buf, binary.LittleEndian, doc.Timestamp)
+	_ = binary.Write(&buf, binary.LittleEndian, doc.Timestamp)
 	buf.Write(doc.Nonce)
 	for i := uint8(0); i < 16; i++ {
 		if pcr, ok := doc.PCRs[i]; ok {
@@ -1190,7 +1189,7 @@ func (b *NitroHardwareBackend) RunAndConnect(ctx context.Context, config NitroHW
 	client := NewNitroVsockClient(result.EnclaveCID, vsockPort)
 	if err := client.Connect(ctx); err != nil {
 		// Try to terminate enclave on connection failure
-		b.cliRunner.TerminateEnclave(ctx, b.enclaveID)
+		_ = b.cliRunner.TerminateEnclave(ctx, b.enclaveID)
 		return nil, fmt.Errorf("failed to connect via vsock: %w", err)
 	}
 
@@ -1203,4 +1202,3 @@ func (b *NitroHardwareBackend) GetEnclaveInfo() (string, uint32) {
 	defer b.mu.RUnlock()
 	return b.enclaveID, b.enclaveCID
 }
-

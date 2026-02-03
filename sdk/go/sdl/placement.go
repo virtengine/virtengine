@@ -35,4 +35,3 @@ func (sdl *v2PlacementAttributes) UnmarshalYAML(node *yaml.Node) error {
 
 	return nil
 }
-

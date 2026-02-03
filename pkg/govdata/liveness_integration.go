@@ -549,4 +549,3 @@ func (s *service) VerifyDocumentWithLiveness(ctx context.Context, req *CombinedV
 
 	return response, nil
 }
-

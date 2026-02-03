@@ -93,7 +93,7 @@ func TestDeploy(t *testing.T) {
 	if err := adapter.Start(ctx); err != nil {
 		t.Fatalf("failed to start adapter: %v", err)
 	}
-	defer adapter.Stop()
+	defer func() { _ = adapter.Stop() }()
 
 	config := DeploymentConfig{
 		ClusterID:   "test-cluster",
@@ -170,6 +170,8 @@ func TestBuildHelmValues(t *testing.T) {
 		K8s:  &MockK8sChecker{},
 	})
 
+	const testPartitionNameGPU = "gpu"
+
 	config := DeploymentConfig{
 		ClusterID:        "test-cluster",
 		ClusterName:      "Test Cluster",
@@ -179,7 +181,7 @@ func TestBuildHelmValues(t *testing.T) {
 		ProviderEndpoint: "https://provider.example.com:8443",
 		Template: &hpctypes.ClusterTemplate{
 			Partitions: []hpctypes.PartitionConfig{
-				{Name: "gpu", Nodes: 4, MaxRuntimeSeconds: 86400, Priority: 100, State: "up"},
+				{Name: testPartitionNameGPU, Nodes: 4, MaxRuntimeSeconds: 86400, Priority: 100, State: "up"},
 			},
 			QoSPolicies: []hpctypes.QoSPolicy{
 				{Name: "premium", Priority: 100, MaxJobsPerUser: 50},
@@ -218,7 +220,7 @@ func TestBuildHelmValues(t *testing.T) {
 	if len(partitions) != 1 {
 		t.Errorf("expected 1 partition, got %d", len(partitions))
 	}
-	if partitions[0]["name"] != "gpu" {
+	if partitions[0]["name"] != testPartitionNameGPU {
 		t.Errorf("expected partition name gpu, got %v", partitions[0]["name"])
 	}
 
@@ -326,4 +328,3 @@ func TestClusterStateTransitions(t *testing.T) {
 		t.Errorf("expected state running, got %s", cluster.State)
 	}
 }
-

@@ -545,23 +545,23 @@ type PipelineComparisonResult struct {
 // ============================================================================
 
 // PipelineVersion proto stubs
-func (*PipelineVersion) ProtoMessage()            {}
-func (m *PipelineVersion) Reset()                 { *m = PipelineVersion{} }
-func (m *PipelineVersion) String() string         { return fmt.Sprintf("%+v", *m) }
+func (*PipelineVersion) ProtoMessage()    {}
+func (m *PipelineVersion) Reset()         { *m = PipelineVersion{} }
+func (m *PipelineVersion) String() string { return fmt.Sprintf("%+v", *m) }
 
 // ModelManifest proto stubs
-func (*ModelManifest) ProtoMessage()              {}
-func (m *ModelManifest) Reset()                   { *m = ModelManifest{} }
-func (m *ModelManifest) String() string           { return fmt.Sprintf("%+v", *m) }
+func (*ModelManifest) ProtoMessage()    {}
+func (m *ModelManifest) Reset()         { *m = ModelManifest{} }
+func (m *ModelManifest) String() string { return fmt.Sprintf("%+v", *m) }
 
 // ModelInfo proto stubs
-func (*ModelInfo) ProtoMessage()                  {}
-func (m *ModelInfo) Reset()                       { *m = ModelInfo{} }
-func (m *ModelInfo) String() string               { return fmt.Sprintf("%+v", *m) }
+func (*ModelInfo) ProtoMessage()    {}
+func (m *ModelInfo) Reset()         { *m = ModelInfo{} }
+func (m *ModelInfo) String() string { return fmt.Sprintf("%+v", *m) }
 
 // PipelineDeterminismConfig proto stubs
-func (*PipelineDeterminismConfig) ProtoMessage()  {}
-func (m *PipelineDeterminismConfig) Reset()       { *m = PipelineDeterminismConfig{} }
+func (*PipelineDeterminismConfig) ProtoMessage()    {}
+func (m *PipelineDeterminismConfig) Reset()         { *m = PipelineDeterminismConfig{} }
 func (m *PipelineDeterminismConfig) String() string { return fmt.Sprintf("%+v", *m) }
 
 // PipelineExecutionRecord proto stubs
@@ -570,6 +570,6 @@ func (m *PipelineExecutionRecord) Reset()         { *m = PipelineExecutionRecord
 func (m *PipelineExecutionRecord) String() string { return fmt.Sprintf("%+v", *m) }
 
 // PipelineComparisonResult proto stubs
-func (*PipelineComparisonResult) ProtoMessage()   {}
-func (m *PipelineComparisonResult) Reset()        { *m = PipelineComparisonResult{} }
+func (*PipelineComparisonResult) ProtoMessage()    {}
+func (m *PipelineComparisonResult) Reset()         { *m = PipelineComparisonResult{} }
 func (m *PipelineComparisonResult) String() string { return fmt.Sprintf("%+v", *m) }

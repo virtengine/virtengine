@@ -8,8 +8,8 @@ import (
 
 	dbm "github.com/cosmos/cosmos-db"
 	sdksrv "github.com/cosmos/cosmos-sdk/server"
-	"golang.org/x/sync/errgroup"
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/virtengine/virtengine/util/server"
 )

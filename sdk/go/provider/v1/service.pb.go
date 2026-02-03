@@ -207,4 +207,3 @@ var _ProviderRPC_serviceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "virtengine/provider/v1/service.proto",
 }
-

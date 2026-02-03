@@ -223,4 +223,3 @@ func BidClosedReasonFromFlags(flags *pflag.FlagSet) (mv1.LeaseClosedReason, erro
 
 	return reason, nil
 }
-

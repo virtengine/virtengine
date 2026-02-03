@@ -2,6 +2,7 @@
 package pruning
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -236,7 +237,7 @@ type BenchmarkResult struct {
 // Benchmark runs a pruning benchmark.
 type Benchmark struct {
 	config Config
-	logger interface{ Info(string, ...interface{}) }
+	logger interface{ Info(string, ...interface{}) } //nolint:unused // Reserved for future benchmark logging
 }
 
 // NewBenchmark creates a new benchmark runner.
@@ -266,6 +267,7 @@ func (b *Benchmark) RunSimulation(totalBlocks, avgBlockSize int64) BenchmarkResu
 	} else if b.config.Strategy == StrategyTiered && b.config.Tiered.Enabled {
 		result = b.simulateTieredPruning(totalBlocks, avgBlockSize)
 	} else {
+		//nolint:gosec // G115: keepRecent is a configuration value bounded by practical limits
 		retained := int64(keepRecent)
 		if retained > totalBlocks {
 			retained = totalBlocks
@@ -301,6 +303,7 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 	}
 
 	// Tier 1: Full retention
+	//nolint:gosec // G115: Tier1Blocks is a configuration value bounded by practical limits
 	tier1 := int64(b.config.Tiered.Tier1Blocks)
 	if tier1 > totalBlocks {
 		tier1 = totalBlocks
@@ -313,11 +316,16 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 	}
 
 	// Tier 2: Sample every N blocks
+	//nolint:gosec // G115: Tier2Blocks is a configuration value bounded by practical limits
 	tier2 := int64(b.config.Tiered.Tier2Blocks) - tier1
 	if tier2 > remaining {
 		tier2 = remaining
 	}
-	tier2Retained := tier2 / int64(b.config.Tiered.Tier2SamplingRate)
+	tier2SampleRate := safeInt64FromUint64(b.config.Tiered.Tier2SamplingRate)
+	if tier2SampleRate == 0 {
+		tier2SampleRate = 1
+	}
+	tier2Retained := tier2 / tier2SampleRate
 	result.BlocksRetained += tier2Retained
 
 	remaining -= tier2
@@ -327,7 +335,11 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 	}
 
 	// Tier 3: Lower sample rate
-	tier3Retained := remaining / int64(b.config.Tiered.Tier3SamplingRate)
+	tier3SampleRate := safeInt64FromUint64(b.config.Tiered.Tier3SamplingRate)
+	if tier3SampleRate == 0 {
+		tier3SampleRate = 1
+	}
+	tier3Retained := remaining / tier3SampleRate
 	result.BlocksRetained += tier3Retained
 
 	result.BlocksPruned = totalBlocks - result.BlocksRetained
@@ -377,6 +389,13 @@ func (m *Metrics) TelemetryLabels() map[string]string {
 	}
 }
 
+func safeInt64FromUint64(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
+}
+
 func formatInt64(v int64) string {
 	return string(rune(v))
 }
@@ -388,4 +407,3 @@ func formatInt(v int) string {
 func formatFloat64(v float64) string {
 	return string(rune(int(v)))
 }
-

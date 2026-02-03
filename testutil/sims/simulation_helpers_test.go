@@ -87,7 +87,7 @@ func TestDiffKVStores(t *testing.T) {
 	store2.Delete(k2)
 
 	// Same keys, different value. Comparisons will be nil as prefixes are skipped.
-	var prefix []byte
+	prefix := make([]byte, 0, len("prefix:")+len(k1))
 	prefix = append(prefix, []byte("prefix:")...)
 	prefix = append(prefix, k1...)
 	store1.Set(prefix, v1)

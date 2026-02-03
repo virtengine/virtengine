@@ -415,7 +415,7 @@ func (k Keeper) CompleteUnbonding(ctx sdk.Context, unbondingID string) error {
 	}
 
 	now := ctx.BlockTime()
-	var completedAmount *big.Int = big.NewInt(0)
+	completedAmount := big.NewInt(0)
 	var remainingEntries []types.UnbondingDelegationEntry
 
 	for _, entry := range ubd.Entries {

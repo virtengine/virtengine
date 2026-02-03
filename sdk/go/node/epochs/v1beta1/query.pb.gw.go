@@ -234,4 +234,3 @@ var (
 
 	forward_Query_CurrentEpoch_0 = runtime.ForwardResponseMessage
 )
-

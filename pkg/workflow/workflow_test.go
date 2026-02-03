@@ -8,27 +8,48 @@ import (
 	"time"
 )
 
+// Test constants for repeated state machine string literals
+const (
+	testStatePending    = "pending"
+	testStateProcessing = "processing"
+	testStateCompleted  = "completed"
+)
+
+// Test constants for workflow step results
+const (
+	testStep1Result = "step1-result"
+	testStep2Result = "step2-result"
+	testStep3Result = "step3-result"
+)
+
+// Test constants for workflow step names
+const (
+	testStepName1 = "step1"
+	testStepName2 = "step2"
+	testStepName3 = "step3"
+)
+
 func TestStateMachine(t *testing.T) {
 	t.Run("basic transitions", func(t *testing.T) {
-		sm := NewStateMachine("test", "pending")
-		sm.AddStates("pending", "processing", "completed", "failed")
+		sm := NewStateMachine("test", testStatePending)
+		sm.AddStates(testStatePending, testStateProcessing, testStateCompleted, "failed")
 		sm.AddTransition(Transition{
-			From:  "pending",
-			To:    "processing",
+			From:  testStatePending,
+			To:    testStateProcessing,
 			Event: "start",
 		})
 		sm.AddTransition(Transition{
-			From:  "processing",
-			To:    "completed",
+			From:  testStateProcessing,
+			To:    testStateCompleted,
 			Event: "complete",
 		})
 		sm.AddTransition(Transition{
-			From:  "processing",
+			From:  testStateProcessing,
 			To:    "failed",
 			Event: "fail",
 		})
 
-		if sm.Current() != "pending" {
+		if sm.Current() != testStatePending {
 			t.Errorf("expected pending, got %s", sm.Current())
 		}
 
@@ -45,7 +66,7 @@ func TestStateMachine(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 
-		if sm.Current() != "processing" {
+		if sm.Current() != testStateProcessing {
 			t.Errorf("expected processing, got %s", sm.Current())
 		}
 
@@ -54,14 +75,14 @@ func TestStateMachine(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 
-		if sm.Current() != "completed" {
+		if sm.Current() != testStateCompleted {
 			t.Errorf("expected completed, got %s", sm.Current())
 		}
 	})
 
 	t.Run("transition with guard", func(t *testing.T) {
-		sm := NewStateMachine("test", "pending")
-		sm.AddStates("pending", "approved", "rejected")
+		sm := NewStateMachine("test", testStatePending)
+		sm.AddStates(testStatePending, "approved", "rejected")
 
 		type request struct {
 			Amount int
@@ -69,7 +90,7 @@ func TestStateMachine(t *testing.T) {
 		sm.SetData(&request{Amount: 100})
 
 		sm.AddTransition(Transition{
-			From:  "pending",
+			From:  testStatePending,
 			To:    "approved",
 			Event: "approve",
 			Guard: func(ctx context.Context, data interface{}) bool {
@@ -90,10 +111,10 @@ func TestStateMachine(t *testing.T) {
 
 	t.Run("transition with action", func(t *testing.T) {
 		executed := false
-		sm := NewStateMachine("test", "pending")
-		sm.AddStates("pending", "done")
+		sm := NewStateMachine("test", testStatePending)
+		sm.AddStates(testStatePending, "done")
 		sm.AddTransition(Transition{
-			From:  "pending",
+			From:  testStatePending,
 			To:    "done",
 			Event: "do",
 			Action: func(ctx context.Context, data interface{}) error {
@@ -113,10 +134,10 @@ func TestStateMachine(t *testing.T) {
 	})
 
 	t.Run("action error prevents transition", func(t *testing.T) {
-		sm := NewStateMachine("test", "pending")
-		sm.AddStates("pending", "done")
+		sm := NewStateMachine("test", testStatePending)
+		sm.AddStates(testStatePending, "done")
 		sm.AddTransition(Transition{
-			From:  "pending",
+			From:  testStatePending,
 			To:    "done",
 			Event: "do",
 			Action: func(ctx context.Context, data interface{}) error {
@@ -129,7 +150,7 @@ func TestStateMachine(t *testing.T) {
 			t.Error("expected error")
 		}
 
-		if sm.Current() != "pending" {
+		if sm.Current() != testStatePending {
 			t.Error("state should not have changed")
 		}
 	})
@@ -281,24 +302,24 @@ func TestWorkflowRunner(t *testing.T) {
 
 		steps := []string{}
 		runner.AddStep(WorkflowStep{
-			Name: "step1",
+			Name: testStepName1,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
-				steps = append(steps, "step1")
-				return "step1-result", nil
+				steps = append(steps, testStepName1)
+				return testStep1Result, nil
 			},
 		})
 		runner.AddStep(WorkflowStep{
-			Name: "step2",
+			Name: testStepName2,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
-				steps = append(steps, "step2")
-				return "step2-result", nil
+				steps = append(steps, testStepName2)
+				return testStep2Result, nil
 			},
 		})
 		runner.AddStep(WorkflowStep{
-			Name: "step3",
+			Name: testStepName3,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
-				steps = append(steps, "step3")
-				return "step3-result", nil
+				steps = append(steps, testStepName3)
+				return testStep3Result, nil
 			},
 		})
 
@@ -320,14 +341,14 @@ func TestWorkflowRunner(t *testing.T) {
 		_ = store.Save(context.Background(), &Checkpoint{
 			ID:         "workflow-2-step1",
 			WorkflowID: "workflow-2",
-			Step:       "step1",
+			Step:       testStepName1,
 			Status:     CheckpointCompleted,
 			Data:       "step1-data",
 		})
 		_ = store.Save(context.Background(), &Checkpoint{
 			ID:         "workflow-2-step2",
 			WorkflowID: "workflow-2",
-			Step:       "step2",
+			Step:       testStepName2,
 			Status:     CheckpointCompleted,
 			Data:       "step2-data",
 		})
@@ -337,24 +358,24 @@ func TestWorkflowRunner(t *testing.T) {
 		step3Executed := false
 
 		runner.AddStep(WorkflowStep{
-			Name: "step1",
+			Name: testStepName1,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
 				step1Executed = true
-				return "step1-result", nil
+				return testStep1Result, nil
 			},
 		})
 		runner.AddStep(WorkflowStep{
-			Name: "step2",
+			Name: testStepName2,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
 				step2Executed = true
-				return "step2-result", nil
+				return testStep2Result, nil
 			},
 		})
 		runner.AddStep(WorkflowStep{
-			Name: "step3",
+			Name: testStepName3,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
 				step3Executed = true
-				return "step3-result", nil
+				return testStep3Result, nil
 			},
 		})
 
@@ -407,27 +428,27 @@ func TestWorkflowRunner(t *testing.T) {
 		compensated := []string{}
 
 		runner.AddStep(WorkflowStep{
-			Name: "step1",
+			Name: testStepName1,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
-				return "step1", nil
+				return testStepName1, nil
 			},
 			Compensate: func(ctx context.Context, data interface{}) error {
-				compensated = append(compensated, "step1")
+				compensated = append(compensated, testStepName1)
 				return nil
 			},
 		})
 		runner.AddStep(WorkflowStep{
-			Name: "step2",
+			Name: testStepName2,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
-				return "step2", nil
+				return testStepName2, nil
 			},
 			Compensate: func(ctx context.Context, data interface{}) error {
-				compensated = append(compensated, "step2")
+				compensated = append(compensated, testStepName2)
 				return nil
 			},
 		})
 		runner.AddStep(WorkflowStep{
-			Name: "step3",
+			Name: testStepName3,
 			Execute: func(ctx context.Context, data interface{}) (interface{}, error) {
 				return nil, errors.New("step3 failed")
 			},
@@ -447,9 +468,8 @@ func TestWorkflowRunner(t *testing.T) {
 			t.Errorf("expected 2 compensations, got %d", len(compensated))
 		}
 
-		if compensated[0] != "step2" || compensated[1] != "step1" {
+		if compensated[0] != testStepName2 || compensated[1] != testStepName1 {
 			t.Error("compensations should happen in reverse order")
 		}
 	})
 }
-

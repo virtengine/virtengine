@@ -88,4 +88,3 @@ func GetTxOracleFeedPriceCmd() *cobra.Command {
 
 	return cmd
 }
-

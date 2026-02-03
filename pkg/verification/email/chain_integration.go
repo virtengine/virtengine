@@ -181,11 +181,11 @@ type ChainIntegrationService struct {
 	logger  zerolog.Logger
 
 	// State
-	mu                  sync.RWMutex
-	pendingSubmissions  map[string]*PendingSubmission
-	submissionQueue     chan *SubmissionRequest
-	stopChan            chan struct{}
-	closed              bool
+	mu                 sync.RWMutex
+	pendingSubmissions map[string]*PendingSubmission
+	submissionQueue    chan *SubmissionRequest
+	stopChan           chan struct{}
+	closed             bool
 }
 
 // PendingSubmission tracks a pending on-chain submission.
@@ -412,18 +412,18 @@ func (s *ChainIntegrationService) createVerificationRecord(
 	expiresAt := attestation.ExpiresAt
 
 	record := &veidtypes.EmailVerificationRecord{
-		Version:        veidtypes.EmailVerificationVersion,
-		VerificationID: attestation.ID,
-		AccountAddress: challenge.AccountAddress,
-		EmailHash:      challenge.EmailHash,
-		DomainHash:     challenge.DomainHash,
-		Nonce:          attestation.Nonce,
-		NonceUsedAt:    &now,
-		Status:         veidtypes.EmailStatusVerified,
-		VerifiedAt:     &now,
-		ExpiresAt:      &expiresAt,
-		CreatedAt:      challenge.CreatedAt,
-		UpdatedAt:      now,
+		Version:          veidtypes.EmailVerificationVersion,
+		VerificationID:   attestation.ID,
+		AccountAddress:   challenge.AccountAddress,
+		EmailHash:        challenge.EmailHash,
+		DomainHash:       challenge.DomainHash,
+		Nonce:            attestation.Nonce,
+		NonceUsedAt:      &now,
+		Status:           veidtypes.EmailStatusVerified,
+		VerifiedAt:       &now,
+		ExpiresAt:        &expiresAt,
+		CreatedAt:        challenge.CreatedAt,
+		UpdatedAt:        now,
 		IsOrganizational: challenge.IsOrganizational,
 	}
 
@@ -649,9 +649,10 @@ func (s *ChainIntegrationService) HealthCheck(ctx context.Context) (*HealthStatu
 	pendingCount := 0
 	failedCount := 0
 	for _, sub := range s.pendingSubmissions {
-		if sub.Status == SubmissionStatusPending {
+		switch sub.Status {
+		case SubmissionStatusPending:
 			pendingCount++
-		} else if sub.Status == SubmissionStatusFailed {
+		case SubmissionStatusFailed:
 			failedCount++
 		}
 	}
@@ -693,11 +694,11 @@ func (s *ChainIntegrationService) Close() error {
 
 // MockChainClient implements ChainClient for testing.
 type MockChainClient struct {
-	mu            sync.RWMutex
-	records       map[string]*veidtypes.EmailVerificationRecord
-	attestations  map[string]*veidtypes.VerificationAttestation
-	submitFunc    func(ctx context.Context, record *veidtypes.EmailVerificationRecord) (*ChainSubmissionResult, error)
-	logger        zerolog.Logger
+	mu           sync.RWMutex
+	records      map[string]*veidtypes.EmailVerificationRecord
+	attestations map[string]*veidtypes.VerificationAttestation
+	submitFunc   func(ctx context.Context, record *veidtypes.EmailVerificationRecord) (*ChainSubmissionResult, error)
+	logger       zerolog.Logger
 }
 
 // NewMockChainClient creates a new mock chain client.

@@ -138,7 +138,7 @@ func NewPriceBand(refPrice uint64, upperBps, lowerBps uint32, validity time.Dura
 
 // UpperBound returns the upper price bound
 func (b *PriceBand) UpperBound() uint64 {
-	return b.ReferencePrice + (b.ReferencePrice * uint64(b.UpperBoundBps)) / 10000
+	return b.ReferencePrice + (b.ReferencePrice*uint64(b.UpperBoundBps))/10000
 }
 
 // LowerBound returns the lower price bound
@@ -204,11 +204,11 @@ func DefaultPriceOracleConfig() PriceOracleConfig {
 	return PriceOracleConfig{
 		Enabled:                        true,
 		AggregationType:                PriceAggregationTypeTWAP,
-		TWAPWindowBlocks:               100,   // ~10 minutes at 6s blocks
+		TWAPWindowBlocks:               100, // ~10 minutes at 6s blocks
 		VWAPWindowBlocks:               100,
-		EMAAlpha:                       20,    // 20% weight to most recent
-		PriceBandUpperBps:              1000,  // 10% upper band
-		PriceBandLowerBps:              1000,  // 10% lower band
+		EMAAlpha:                       20,   // 20% weight to most recent
+		PriceBandUpperBps:              1000, // 10% upper band
+		PriceBandLowerBps:              1000, // 10% lower band
 		MaxPriceAgeDuration:            time.Hour,
 		MinObservationsForTWAP:         3,
 		MinVolumeForVWAP:               1000000, // 1 token
@@ -294,7 +294,7 @@ func NewPriceHistory(offeringID OfferingID, maxPoints int) *PriceHistory {
 // AddPoint adds a new price point
 func (h *PriceHistory) AddPoint(point PricePoint) {
 	h.Points = append(h.Points, point)
-	
+
 	// Trim to max points
 	if len(h.Points) > h.MaxPoints {
 		h.Points = h.Points[len(h.Points)-h.MaxPoints:]
@@ -339,7 +339,7 @@ func NewPriceOracle(config PriceOracleConfig) *PriceOracle {
 // CalculateTWAP calculates Time-Weighted Average Price
 func (o *PriceOracle) CalculateTWAP(history *PriceHistory, currentBlock int64) (uint64, error) {
 	points := history.GetPointsInWindow(currentBlock, o.Config.TWAPWindowBlocks)
-	
+
 	if len(points) < int(o.Config.MinObservationsForTWAP) {
 		return 0, fmt.Errorf("insufficient observations for TWAP: %d < %d", len(points), o.Config.MinObservationsForTWAP)
 	}
@@ -352,7 +352,7 @@ func (o *PriceOracle) CalculateTWAP(history *PriceHistory, currentBlock int64) (
 	var weightedSum, totalWeight uint64
 
 	for i := 0; i < len(points)-1; i++ {
-		timeDelta := uint64(points[i+1].BlockHeight - points[i].BlockHeight)
+		timeDelta := safeUint64FromInt64Delta(points[i+1].BlockHeight - points[i].BlockHeight)
 		weightedSum += points[i].Price * timeDelta
 		totalWeight += timeDelta
 	}
@@ -373,7 +373,7 @@ func (o *PriceOracle) CalculateTWAP(history *PriceHistory, currentBlock int64) (
 // CalculateVWAP calculates Volume-Weighted Average Price
 func (o *PriceOracle) CalculateVWAP(history *PriceHistory, currentBlock int64) (uint64, error) {
 	points := history.GetPointsInWindow(currentBlock, o.Config.VWAPWindowBlocks)
-	
+
 	var totalVolumeWeightedPrice, totalVolume uint64
 	for _, p := range points {
 		totalVolumeWeightedPrice += p.Price * p.Volume
@@ -404,7 +404,7 @@ func (o *PriceOracle) CalculateEMA(currentEMA, newPrice uint64) uint64 {
 // CalculateMedian calculates the median price
 func (o *PriceOracle) CalculateMedian(history *PriceHistory, currentBlock int64) (uint64, error) {
 	points := history.GetPointsInWindow(currentBlock, o.Config.TWAPWindowBlocks)
-	
+
 	if len(points) == 0 {
 		return 0, fmt.Errorf("no price points for median calculation")
 	}
@@ -423,6 +423,32 @@ func (o *PriceOracle) CalculateMedian(history *PriceHistory, currentBlock int64)
 		return (prices[mid-1] + prices[mid]) / 2, nil
 	}
 	return prices[mid], nil
+}
+
+func safeUint64FromInt64Delta(value int64) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	return uint64(value)
+}
+
+func safeInt64FromUint64Price(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	//nolint:gosec // range checked above
+	return int64(value)
+}
+
+func safeInt32FromInt64(value int64) int32 {
+	if value > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if value < math.MinInt32 {
+		return math.MinInt32
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
 }
 
 // GetAggregatedPrice returns the aggregated price using the configured method
@@ -513,11 +539,16 @@ func (o *PriceOracle) ValidatePrice(price uint64, history *PriceHistory, now tim
 	// Calculate deviation
 	var deviation int64
 	if price > band.ReferencePrice {
-		deviation = int64(price - band.ReferencePrice)
+		deviation = safeInt64FromUint64Price(price - band.ReferencePrice)
 	} else {
-		deviation = -int64(band.ReferencePrice - price)
+		deviation = -safeInt64FromUint64Price(band.ReferencePrice - price)
 	}
-	result.DeviationBps = int32((deviation * 10000) / int64(band.ReferencePrice))
+	denominator := safeInt64FromUint64Price(band.ReferencePrice)
+	if denominator == 0 {
+		result.DeviationBps = 0
+	} else {
+		result.DeviationBps = safeInt32FromInt64((deviation * 10000) / denominator)
+	}
 
 	// Check if within band
 	if band.IsWithinBand(price) {
@@ -531,7 +562,7 @@ func (o *PriceOracle) ValidatePrice(price uint64, history *PriceHistory, now tim
 	result.Status = PriceValidationStatusOutOfBand
 
 	// Check for suspicious movement
-	if uint32(abs(int64(result.DeviationBps))) > o.Config.SuspiciousMovementThresholdBps {
+	if abs(int64(result.DeviationBps)) > int64(o.Config.SuspiciousMovementThresholdBps) {
 		result.Status = PriceValidationStatusSuspicious
 		result.Reason = fmt.Sprintf("suspicious_movement_%dbps", result.DeviationBps)
 	} else {
@@ -599,8 +630,8 @@ func DefaultPriceDiscoveryParams() PriceDiscoveryParams {
 		MaxHistoryPointsPerOffering:   1000,
 		PriceBandUpdateIntervalBlocks: 10,
 		EnableCircuitBreaker:          true,
-		CircuitBreakerThresholdBps:    2000,  // 20% move
-		CircuitBreakerCooldownBlocks:  100,   // ~10 minutes
+		CircuitBreakerThresholdBps:    2000, // 20% move
+		CircuitBreakerCooldownBlocks:  100,  // ~10 minutes
 	}
 }
 
@@ -686,7 +717,7 @@ func CalculateVolatility(prices []uint64) uint32 {
 	if mean == 0 {
 		return 0
 	}
-	
+
 	return uint32((stdDev / mean) * 10000)
 }
 

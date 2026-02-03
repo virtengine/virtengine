@@ -710,7 +710,7 @@ func (a *AAMVADMVAdapter) shouldRetry(ctx context.Context, err error, statusCode
 	}
 	var netErr net.Error
 	if errors.As(err, &netErr) {
-		return netErr.Temporary() || netErr.Timeout()
+		return netErr.Timeout()
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return true
@@ -1040,4 +1040,3 @@ func loadAAMVAConfigFromEnv(baseConfig AdapterConfig) (AAMVAConfig, bool, error)
 // ============================================================================
 
 var _ DataSourceAdapter = (*AAMVADMVAdapter)(nil)
-

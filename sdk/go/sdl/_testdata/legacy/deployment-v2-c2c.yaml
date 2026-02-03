@@ -41,10 +41,10 @@ profiles:
     global:
       pricing:
         web: 
-          denom: uact
+          denom: uve
           amount: 9000
         redis-server:
-          denom: uact
+          denom: uve
           amount: 9000
 
 deployment:

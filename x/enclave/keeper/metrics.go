@@ -240,8 +240,8 @@ func (k Keeper) recordUpcomingExpiries(ctx sdk.Context) {
 
 	// Define time ranges (assuming ~5s block time)
 	timeRanges := map[string]int64{
-		"1h":  720,   // 1 hour = 720 blocks
-		"24h": 17280, // 24 hours = 17,280 blocks
+		"1h":  720,    // 1 hour = 720 blocks
+		"24h": 17280,  // 24 hours = 17,280 blocks
 		"7d":  120960, // 7 days = 120,960 blocks
 	}
 

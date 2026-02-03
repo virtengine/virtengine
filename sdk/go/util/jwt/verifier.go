@@ -32,4 +32,3 @@ func (v Verify) Pubkey() cryptotypes.PubKey {
 func (v Verify) GetAddress() sdk.Address {
 	return v.addr
 }
-

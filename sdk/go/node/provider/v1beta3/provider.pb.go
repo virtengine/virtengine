@@ -7,11 +7,11 @@ import (
 	fmt "fmt"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
+	pkg_akt_dev_go_node_types_v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
+	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-	pkg_akt_dev_go_node_types_v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
-	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1932,4 +1932,3 @@ var (
 	ErrIntOverflowProvider          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupProvider = fmt.Errorf("proto: unexpected end of group")
 )
-

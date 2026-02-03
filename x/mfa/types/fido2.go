@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 
 	errorsmod "cosmossdk.io/errors"
@@ -232,7 +233,11 @@ func ParseCredentialPublicKey(cborData []byte) (*CredentialPublicKey, error) {
 	// Extract key type
 	if ktyVal, ok := params[1]; ok {
 		if kty, ok := ktyVal.(int64); ok {
-			key.KeyType = COSEKeyType(kty)
+			kty32, ok := int64ToInt32(kty)
+			if !ok {
+				return nil, ErrFIDO2InvalidPublicKey.Wrap("key type out of int32 range")
+			}
+			key.KeyType = COSEKeyType(kty32)
 		}
 	} else {
 		return nil, ErrFIDO2InvalidPublicKey.Wrap("missing key type (kty)")
@@ -241,7 +246,11 @@ func ParseCredentialPublicKey(cborData []byte) (*CredentialPublicKey, error) {
 	// Extract algorithm
 	if algVal, ok := params[3]; ok {
 		if alg, ok := algVal.(int64); ok {
-			key.Algorithm = COSEAlgorithm(alg)
+			alg32, ok := int64ToInt32(alg)
+			if !ok {
+				return nil, ErrFIDO2InvalidPublicKey.Wrap("algorithm out of int32 range")
+			}
+			key.Algorithm = COSEAlgorithm(alg32)
 		}
 	} else {
 		return nil, ErrFIDO2InvalidPublicKey.Wrap("missing algorithm (alg)")
@@ -253,7 +262,11 @@ func ParseCredentialPublicKey(cborData []byte) (*CredentialPublicKey, error) {
 		// EC2 key
 		if crvVal, ok := params[-1]; ok {
 			if crv, ok := crvVal.(int64); ok {
-				key.Curve = COSECurve(crv)
+				crv32, ok := int64ToInt32(crv)
+				if !ok {
+					return nil, ErrFIDO2InvalidPublicKey.Wrap("curve out of int32 range")
+				}
+				key.Curve = COSECurve(crv32)
 			}
 		}
 		if xVal, ok := params[-2]; ok {
@@ -274,7 +287,11 @@ func ParseCredentialPublicKey(cborData []byte) (*CredentialPublicKey, error) {
 		// OKP key (EdDSA)
 		if crvVal, ok := params[-1]; ok {
 			if crv, ok := crvVal.(int64); ok {
-				key.Curve = COSECurve(crv)
+				crv32, ok := int64ToInt32(crv)
+				if !ok {
+					return nil, ErrFIDO2InvalidPublicKey.Wrap("curve out of int32 range")
+				}
+				key.Curve = COSECurve(crv32)
 			}
 		}
 		if xVal, ok := params[-2]; ok {
@@ -328,6 +345,16 @@ func (k *CredentialPublicKey) ToECDSAPublicKey() (*ecdsa.PublicKey, error) {
 		X:     x,
 		Y:     y,
 	}, nil
+}
+
+func int64ToInt32(value int64) (int32, bool) {
+	maxInt32 := int64(^uint32(0) >> 1)
+	minInt32 := -maxInt32 - 1
+	if value > maxInt32 || value < minInt32 {
+		return 0, false
+	}
+	//nolint:gosec // range checked above
+	return int32(value), true
 }
 
 // ToEd25519PublicKey converts to Go's ed25519.PublicKey
@@ -442,9 +469,9 @@ func ParseAuthenticatorData(data []byte) (*AuthenticatorData, error) {
 	}
 
 	authData := &AuthenticatorData{
-		Raw:      data,
-		RPIDHash: data[0:32],
-		Flags:    AuthenticatorDataFlags(data[32]),
+		Raw:       data,
+		RPIDHash:  data[0:32],
+		Flags:     AuthenticatorDataFlags(data[32]),
 		SignCount: binary.BigEndian.Uint32(data[33:37]),
 	}
 
@@ -995,11 +1022,11 @@ func parseCBORValue(data []byte, offset int) (interface{}, int, error) {
 	switch majorType {
 	case 0: // Unsigned integer
 		val, newOffset, err := parseCBORUint(data, offset-1)
-		return int64(val), newOffset, err
+		return safeInt64FromUint64(val), newOffset, err
 
 	case 1: // Negative integer
 		val, newOffset, err := parseCBORUint(data, offset-1)
-		return -1 - int64(val), newOffset, err
+		return -1 - safeInt64FromUint64(val), newOffset, err
 
 	case 2: // Byte string
 		length, newOffset, err := parseCBORLength(additionalInfo, data, offset)
@@ -1060,6 +1087,13 @@ func parseCBORValue(data []byte, offset int) (interface{}, int, error) {
 	default:
 		return nil, offset, fmt.Errorf("unsupported CBOR major type: %d", majorType)
 	}
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 // parseCBORUint parses a CBOR unsigned integer

@@ -9,13 +9,13 @@ const (
 
 // Event attribute keys
 const (
-	AttributeKeyAddress        = "address"
-	AttributeKeyFingerprint    = "fingerprint"
-	AttributeKeyAlgorithm      = "algorithm"
-	AttributeKeyLabel          = "label"
-	AttributeKeyRegisteredAt   = "registered_at"
-	AttributeKeyRevokedAt      = "revoked_at"
-	AttributeKeyRevokedBy      = "revoked_by"
+	AttributeKeyAddress      = "address"
+	AttributeKeyFingerprint  = "fingerprint"
+	AttributeKeyAlgorithm    = "algorithm"
+	AttributeKeyLabel        = "label"
+	AttributeKeyRegisteredAt = "registered_at"
+	AttributeKeyRevokedAt    = "revoked_at"
+	AttributeKeyRevokedBy    = "revoked_by"
 )
 
 // EventKeyRegistered is emitted when a recipient key is registered

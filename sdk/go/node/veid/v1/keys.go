@@ -7,4 +7,3 @@ const (
 	// RouterKey is the message route for veid module
 	RouterKey = ModuleName
 )
-

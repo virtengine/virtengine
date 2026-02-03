@@ -21,11 +21,11 @@ type RedisWorkflowStore struct {
 
 // Redis key patterns
 const (
-	stateKeyPattern      = "%s:state:%s"              // prefix:state:workflowID
-	stateIndexKey        = "%s:states"                // prefix:states (ZSET for listing)
-	checkpointKeyPattern = "%s:checkpoint:%s:%s"      // prefix:checkpoint:workflowID:step
-	checkpointIndexKey   = "%s:checkpoints:%s"        // prefix:checkpoints:workflowID (SET)
-	historyKeyPattern    = "%s:history:%s"            // prefix:history:workflowID (LIST)
+	stateKeyPattern      = "%s:state:%s"         // prefix:state:workflowID
+	stateIndexKey        = "%s:states"           // prefix:states (ZSET for listing)
+	checkpointKeyPattern = "%s:checkpoint:%s:%s" // prefix:checkpoint:workflowID:step
+	checkpointIndexKey   = "%s:checkpoints:%s"   // prefix:checkpoints:workflowID (SET)
+	historyKeyPattern    = "%s:history:%s"       // prefix:history:workflowID (LIST)
 )
 
 // NewRedisWorkflowStore creates a new Redis-backed workflow store
@@ -160,7 +160,7 @@ func (s *RedisWorkflowStore) ListStates(ctx context.Context, filter StateFilter)
 	}
 
 	// Parse results and apply filters
-	var results []*WorkflowState
+	results := make([]*WorkflowState, 0, len(cmds))
 	for _, cmd := range cmds {
 		data, err := cmd.Bytes()
 		if err == redis.Nil {
@@ -272,7 +272,7 @@ func (s *RedisWorkflowStore) ListCheckpoints(ctx context.Context, workflowID str
 		return nil, fmt.Errorf("failed to fetch checkpoints: %w", err)
 	}
 
-	var results []*Checkpoint
+	results := make([]*Checkpoint, 0, len(cmds))
 	for _, cmd := range cmds {
 		data, err := cmd.Bytes()
 		if err == redis.Nil {
@@ -366,7 +366,7 @@ func (s *RedisWorkflowStore) GetHistory(ctx context.Context, workflowID string) 
 		return nil, fmt.Errorf("failed to get history: %w", err)
 	}
 
-	var results []*HistoryEvent
+	results := make([]*HistoryEvent, 0, len(data))
 	for _, item := range data {
 		var event HistoryEvent
 		if err := json.Unmarshal([]byte(item), &event); err != nil {
@@ -494,4 +494,3 @@ func matchesStateFilter(state *WorkflowState, filter StateFilter) bool {
 	}
 	return true
 }
-

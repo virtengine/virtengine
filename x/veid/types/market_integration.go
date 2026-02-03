@@ -78,15 +78,15 @@ func (l VEIDLevel) String() string {
 	case VEIDLevelNone:
 		return "none"
 	case VEIDLevelBasic:
-		return "basic"
+		return string(IdentityTierBasic)
 	case VEIDLevelStandard:
-		return "standard"
+		return string(IdentityTierStandard)
 	case VEIDLevelPremium:
-		return "premium"
+		return string(IdentityTierPremium)
 	case VEIDLevelEnterprise:
 		return "enterprise"
 	default:
-		return "unknown"
+		return string(AccountStatusUnknown)
 	}
 }
 
@@ -118,11 +118,11 @@ func ParseVEIDLevel(s string) (VEIDLevel, error) {
 	switch s {
 	case "none":
 		return VEIDLevelNone, nil
-	case "basic":
+	case string(IdentityTierBasic):
 		return VEIDLevelBasic, nil
-	case "standard":
+	case string(IdentityTierStandard):
 		return VEIDLevelStandard, nil
-	case "premium":
+	case string(IdentityTierPremium):
 		return VEIDLevelPremium, nil
 	case "enterprise":
 		return VEIDLevelEnterprise, nil
@@ -400,7 +400,9 @@ func MarketRequirementsKey(marketType MarketType) []byte {
 
 // MarketParticipantStatusKey returns the store key for participant status
 func MarketParticipantStatusKey(address string, marketType MarketType) []byte {
-	key := append(PrefixMarketParticipantStatus, []byte(address)...)
+	key := make([]byte, 0, len(PrefixMarketParticipantStatus)+len(address)+1+len(marketType))
+	key = append(key, PrefixMarketParticipantStatus...)
+	key = append(key, []byte(address)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(marketType)...)
 }

@@ -381,12 +381,12 @@ type stubTestService struct {
 	metrics         *serviceMetrics
 }
 
-func (s *stubTestService) Name() string                { return s.gateway.Name() }
-func (s *stubTestService) Type() GatewayType           { return s.gateway.Type() }
+func (s *stubTestService) Name() string                       { return s.gateway.Name() }
+func (s *stubTestService) Type() GatewayType                  { return s.gateway.Type() }
 func (s *stubTestService) IsHealthy(ctx context.Context) bool { return s.gateway.IsHealthy(ctx) }
-func (s *stubTestService) Close() error                { return s.gateway.Close() }
-func (s *stubTestService) GetGateway() Gateway         { return s.gateway }
-func (s *stubTestService) GetConfig() Config           { return s.config }
+func (s *stubTestService) Close() error                       { return s.gateway.Close() }
+func (s *stubTestService) GetGateway() Gateway                { return s.gateway }
+func (s *stubTestService) GetConfig() Config                  { return s.config }
 
 func (s *stubTestService) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (Customer, error) {
 	return s.gateway.CreateCustomer(ctx, req)
@@ -920,9 +920,9 @@ func TestWebhookEventBuilder(t *testing.T) {
 
 func TestRateLimiter(t *testing.T) {
 	cfg := RateLimitConfig{
-		Enabled:              true,
-		MaxPaymentsPerHour:   2,
-		MaxRefundsPerDay:     2,
+		Enabled:            true,
+		MaxPaymentsPerHour: 2,
+		MaxRefundsPerDay:   2,
 	}
 	limiter := newRateLimiter(cfg)
 
@@ -952,4 +952,3 @@ func TestRateLimiter_Disabled(t *testing.T) {
 		assert.NoError(t, limiter.checkRefundLimit())
 	}
 }
-

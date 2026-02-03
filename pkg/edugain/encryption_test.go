@@ -127,7 +127,7 @@ func createEncryptedAssertionXML(
 
 func TestDecryptAESCBC_Valid(t *testing.T) {
 	key := make([]byte, 32) // 256-bit key
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	plaintext := []byte("Test SAML assertion content that needs to be encrypted")
 
@@ -144,7 +144,7 @@ func TestDecryptAESCBC_Valid(t *testing.T) {
 
 func TestDecryptAESCBC_TooShort(t *testing.T) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	// Ciphertext shorter than block size
 	_, err := decryptAESCBC(make([]byte, 10), key)
@@ -153,11 +153,11 @@ func TestDecryptAESCBC_TooShort(t *testing.T) {
 
 func TestDecryptAESCBC_NotBlockAligned(t *testing.T) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	// Ciphertext not aligned to block size (after removing IV)
 	ciphertext := make([]byte, aes.BlockSize+10) // IV + non-aligned data
-	rand.Read(ciphertext)
+	_, _ = rand.Read(ciphertext)
 
 	_, err := decryptAESCBC(ciphertext, key)
 	assert.Error(t, err)
@@ -165,12 +165,12 @@ func TestDecryptAESCBC_NotBlockAligned(t *testing.T) {
 
 func TestDecryptAESCBC_InvalidPadding(t *testing.T) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	// Create ciphertext with invalid padding
 	block, _ := aes.NewCipher(key)
 	iv := make([]byte, aes.BlockSize)
-	rand.Read(iv)
+	_, _ = rand.Read(iv)
 
 	// Create block with invalid padding (padding byte > block size)
 	plainWithBadPadding := make([]byte, aes.BlockSize)
@@ -180,7 +180,9 @@ func TestDecryptAESCBC_InvalidPadding(t *testing.T) {
 	encrypted := make([]byte, aes.BlockSize)
 	mode.CryptBlocks(encrypted, plainWithBadPadding)
 
-	ciphertext := append(iv, encrypted...)
+	ciphertext := make([]byte, 0, len(iv)+len(encrypted))
+	ciphertext = append(ciphertext, iv...)
+	ciphertext = append(ciphertext, encrypted...)
 
 	_, err := decryptAESCBC(ciphertext, key)
 	assert.Error(t, err)
@@ -192,7 +194,7 @@ func TestDecryptAESCBC_InvalidPadding(t *testing.T) {
 
 func TestDecryptAESGCM_Valid(t *testing.T) {
 	key := make([]byte, 32) // 256-bit key
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	plaintext := []byte("Test SAML assertion content for GCM encryption")
 
@@ -209,7 +211,7 @@ func TestDecryptAESGCM_Valid(t *testing.T) {
 
 func TestDecryptAESGCM_TooShort(t *testing.T) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	// Ciphertext shorter than nonce size
 	_, err := decryptAESGCM(make([]byte, 5), key)
@@ -218,7 +220,7 @@ func TestDecryptAESGCM_TooShort(t *testing.T) {
 
 func TestDecryptAESGCM_TamperedData(t *testing.T) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 
 	plaintext := []byte("Original message")
 
@@ -292,7 +294,7 @@ func TestRSAOAEPDecrypt_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	// Encrypt session key with SHA-256
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
@@ -316,7 +318,7 @@ func TestRSAOAEPDecrypt_SHA256(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	// Encrypt with SHA-256
 	encryptedKey, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, sessionKey, nil)
@@ -341,7 +343,7 @@ func TestRSAOAEPDecrypt_WrongKey(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	// Encrypt with key 2
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey2)
@@ -366,7 +368,7 @@ func TestDecryptAssertion_AES256CBC(t *testing.T) {
 
 	// Session key for AES-256
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	// Encrypt session key with SHA-256
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
@@ -406,7 +408,7 @@ func TestDecryptAssertion_AES256GCM(t *testing.T) {
 
 	// Session key for AES-256
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	// Encrypt session key with SHA-256
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
@@ -500,7 +502,7 @@ func TestDecryptAssertion_RejectsRSA15(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	// Note: We can't actually encrypt with RSA 1.5 safely, but we test that
 	// the algorithm is rejected by creating XML with that algorithm URI
@@ -532,7 +534,7 @@ func TestDecryptAssertion_RejectsSHA1OAEP(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	// Encrypt session key (note: the actual encryption uses SHA-256 now,
 	// but we test that the algorithm URI is rejected)
@@ -568,13 +570,13 @@ func TestDecryptAssertion_UnsupportedDataAlgorithm(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
 	require.NoError(t, err)
 
 	encryptedData := make([]byte, 100)
-	rand.Read(encryptedData)
+	_, _ = rand.Read(encryptedData)
 
 	// Create encrypted XML with unsupported algorithm
 	encryptedXML := createEncryptedAssertionXML(
@@ -597,7 +599,7 @@ func TestDecryptAssertion_TamperedEncryptedKey(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
 	require.NoError(t, err)
@@ -634,7 +636,7 @@ func TestDecryptXMLEncryptionWithKey_Valid(t *testing.T) {
 	require.NoError(t, err)
 
 	sessionKey := make([]byte, 32)
-	rand.Read(sessionKey)
+	_, _ = rand.Read(sessionKey)
 
 	encryptedKey, err := encryptSessionKeyRSAOAEP(sessionKey, publicKey)
 	require.NoError(t, err)
@@ -667,4 +669,3 @@ func TestNewAssertionDecryptor_EmptyKey(t *testing.T) {
 	_, err := NewAssertionDecryptor([]byte{})
 	assert.Error(t, err)
 }
-

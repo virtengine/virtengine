@@ -298,6 +298,9 @@ func (t UsageType) String() string {
 	return fmt.Sprintf("unknown(%d)", t)
 }
 
+// billingTypeUnit is the default billing unit type
+const billingTypeUnit = "unit"
+
 // UnitForUsageType returns the default unit for a usage type
 func UnitForUsageType(t UsageType) string {
 	switch t {
@@ -312,11 +315,11 @@ func UnitForUsageType(t UsageType) string {
 	case UsageTypeGPU:
 		return "gpu-hour"
 	case UsageTypeFixed:
-		return "unit"
+		return billingTypeUnit
 	case UsageTypeSetup:
-		return "unit"
+		return billingTypeUnit
 	default:
-		return "unit"
+		return billingTypeUnit
 	}
 }
 

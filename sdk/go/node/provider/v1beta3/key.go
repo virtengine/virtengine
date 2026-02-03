@@ -10,4 +10,3 @@ const (
 	// RouterKey is the message route for provider
 	RouterKey = ModuleName
 )
-

@@ -707,4 +707,3 @@ func TestOODProductionClientNotConnected(t *testing.T) {
 		require.ErrorIs(t, err, ood.ErrOODNotConnected)
 	})
 }
-

@@ -248,7 +248,8 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 	}
 
 	// Emit appropriate event
-	if msg.NewStatus == types.VerificationStatusPBVerified {
+	switch msg.NewStatus {
+	case types.VerificationStatusPBVerified:
 		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeVerified{
 			AccountAddress:   msg.AccountAddress,
 			ScopeID:          msg.ScopeId,
@@ -256,7 +257,7 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 			ValidatorAddress: sender.String(),
 			VerifiedAt:       ctx.BlockTime().Unix(),
 		})
-	} else if msg.NewStatus == types.VerificationStatusPBRejected {
+	case types.VerificationStatusPBRejected:
 		err = ctx.EventManager().EmitTypedEvent(&types.EventScopeRejected{
 			AccountAddress:   msg.AccountAddress,
 			ScopeID:          msg.ScopeId,

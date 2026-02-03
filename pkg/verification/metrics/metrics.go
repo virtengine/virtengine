@@ -9,10 +9,10 @@ package metrics
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -22,19 +22,18 @@ import (
 
 // Collector collects and exposes metrics for verification services.
 type Collector struct {
-	mu       sync.RWMutex
 	registry *prometheus.Registry
 	config   Config
 
 	// Signer metrics
-	signerSignRequests       *prometheus.CounterVec
-	signerVerifyRequests     *prometheus.CounterVec
-	signerSignLatency        *prometheus.HistogramVec
-	signerVerifyLatency      *prometheus.HistogramVec
-	signerActiveKeys         prometheus.Gauge
-	signerKeyRotations       prometheus.Counter
-	signerKeyAge             prometheus.Gauge
-	signerErrors             *prometheus.CounterVec
+	signerSignRequests   *prometheus.CounterVec
+	signerVerifyRequests *prometheus.CounterVec
+	signerSignLatency    *prometheus.HistogramVec
+	signerVerifyLatency  *prometheus.HistogramVec
+	signerActiveKeys     prometheus.Gauge
+	signerKeyRotations   prometheus.Counter
+	signerKeyAge         prometheus.Gauge
+	signerErrors         *prometheus.CounterVec
 
 	// Nonce metrics
 	nonceCreated      prometheus.Counter
@@ -45,26 +44,26 @@ type Collector struct {
 	nonceValidateTime prometheus.Histogram
 
 	// Rate limiting metrics
-	rateLimitChecks    *prometheus.CounterVec
-	rateLimitBlocked   *prometheus.CounterVec
-	rateLimitBans      *prometheus.CounterVec
-	abuseScoreGauge    *prometheus.GaugeVec
+	rateLimitChecks  *prometheus.CounterVec
+	rateLimitBlocked *prometheus.CounterVec
+	rateLimitBans    *prometheus.CounterVec
+	abuseScoreGauge  *prometheus.GaugeVec
 
 	// Verification metrics
-	verificationRequests  *prometheus.CounterVec
-	verificationSuccess   *prometheus.CounterVec
-	verificationFailures  *prometheus.CounterVec
-	verificationLatency   *prometheus.HistogramVec
-	verificationScores    *prometheus.HistogramVec
+	verificationRequests *prometheus.CounterVec
+	verificationSuccess  *prometheus.CounterVec
+	verificationFailures *prometheus.CounterVec
+	verificationLatency  *prometheus.HistogramVec
+	verificationScores   *prometheus.HistogramVec
 
 	// Audit metrics
-	auditEventsLogged   *prometheus.CounterVec
-	auditBufferSize     prometheus.Gauge
-	auditFlushLatency   prometheus.Histogram
+	auditEventsLogged *prometheus.CounterVec
+	auditBufferSize   prometheus.Gauge
+	auditFlushLatency prometheus.Histogram
 
 	// Health metrics
-	serviceHealth       *prometheus.GaugeVec
-	lastHealthCheck     prometheus.Gauge
+	serviceHealth   *prometheus.GaugeVec
+	lastHealthCheck prometheus.Gauge
 }
 
 // Config contains metrics configuration.
@@ -113,10 +112,10 @@ func NewCollector(config Config) (*Collector, error) {
 	registry := prometheus.NewRegistry()
 
 	if config.EnableGoMetrics {
-		registry.MustRegister(prometheus.NewGoCollector())
+		registry.MustRegister(collectors.NewGoCollector())
 	}
 	if config.EnableProcessMetrics {
-		registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+		registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	}
 
 	if config.LatencyBuckets == nil {
@@ -627,7 +626,7 @@ func (c *Collector) ServeHTTP(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		server.Shutdown(context.Background())
+		_ = server.Shutdown(context.Background())
 	}()
 
 	return server.ListenAndServe()
@@ -637,4 +636,3 @@ func (c *Collector) ServeHTTP(ctx context.Context) error {
 func (c *Collector) Registry() *prometheus.Registry {
 	return c.registry
 }
-

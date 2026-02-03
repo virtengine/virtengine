@@ -392,4 +392,3 @@ var (
 	ErrIntOverflowResourcesoffer          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupResourcesoffer = fmt.Errorf("proto: unexpected end of group")
 )
-

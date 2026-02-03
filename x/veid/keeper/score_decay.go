@@ -18,17 +18,17 @@ import (
 
 // decayPolicyStore is the storage format for decay policies
 type decayPolicyStore struct {
-	PolicyID          string             `json:"policy_id"`
-	DecayType         int                `json:"decay_type"`
-	DecayRate         string             `json:"decay_rate"`
-	DecayPeriodNanos  int64              `json:"decay_period_nanos"`
-	MinScore          string             `json:"min_score"`
-	GracePeriodNanos  int64              `json:"grace_period_nanos"`
-	LastActivityBonus string             `json:"last_activity_bonus"`
+	PolicyID          string               `json:"policy_id"`
+	DecayType         int                  `json:"decay_type"`
+	DecayRate         string               `json:"decay_rate"`
+	DecayPeriodNanos  int64                `json:"decay_period_nanos"`
+	MinScore          string               `json:"min_score"`
+	GracePeriodNanos  int64                `json:"grace_period_nanos"`
+	LastActivityBonus string               `json:"last_activity_bonus"`
 	StepThresholds    []stepThresholdStore `json:"step_thresholds,omitempty"`
-	Enabled           bool               `json:"enabled"`
-	CreatedAt         int64              `json:"created_at"`
-	UpdatedAt         int64              `json:"updated_at"`
+	Enabled           bool                 `json:"enabled"`
+	CreatedAt         int64                `json:"created_at"`
+	UpdatedAt         int64                `json:"updated_at"`
 }
 
 type stepThresholdStore struct {
@@ -344,7 +344,7 @@ func (k Keeper) CalculateDecayedScore(
 	case types.DecayTypeStepFunction:
 		// Step function: find the applicable threshold based on days since activity
 		daysSinceActivity := int64(now.Sub(snapshot.LastActivityAt).Hours() / 24)
-		var applicableMultiplier math.LegacyDec = math.LegacyOneDec()
+		applicableMultiplier := math.LegacyOneDec()
 
 		for _, step := range policy.StepThresholds {
 			if daysSinceActivity >= step.DaysSinceActivity {
@@ -405,7 +405,7 @@ func (k Keeper) ApplyDecay(ctx sdk.Context, addr string) (*types.DecayResult, er
 		}
 
 		// Also update the main score store
-		newScoreUint := uint32(result.NewScore.TruncateInt64())
+		newScoreUint := safeUint32FromInt64ScoreDecay(result.NewScore.TruncateInt64())
 		if err := k.SetScore(ctx, addr, newScoreUint, "decay"); err != nil {
 			return nil, fmt.Errorf("failed to update main score: %w", err)
 		}
@@ -461,6 +461,16 @@ func (k Keeper) ApplyDecayToAll(ctx sdk.Context) (int, error) {
 	}
 
 	return decayedCount, nil
+}
+
+func safeUint32FromInt64ScoreDecay(value int64) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(value)
 }
 
 // ============================================================================
@@ -577,14 +587,14 @@ func (k Keeper) GetEffectiveScore(ctx sdk.Context, addr string) (uint32, bool) {
 
 	policy, found := k.GetDecayPolicy(ctx, snapshot.PolicyID)
 	if !found {
-		return uint32(snapshot.CurrentScore.TruncateInt64()), true
+		return safeUint32FromInt64ScoreDecay(snapshot.CurrentScore.TruncateInt64()), true
 	}
 
 	// Calculate current effective score
 	now := ctx.BlockTime()
 	result := k.CalculateDecayedScore(policy, snapshot, now)
 
-	return uint32(result.NewScore.TruncateInt64()), true
+	return safeUint32FromInt64ScoreDecay(result.NewScore.TruncateInt64()), true
 }
 
 // ============================================================================

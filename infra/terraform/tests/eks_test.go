@@ -202,7 +202,7 @@ func TestEKSNodeGroupScaling(t *testing.T) {
 	// Only validate the plan, don't apply
 	terraform.Init(t, eksOptions)
 	_, err := terraform.PlanE(t, eksOptions)
-	
+
 	// Plan should succeed (actual deployment would fail due to fake VPC/subnets)
 	// This validates the Terraform configuration is syntactically correct
 	if err != nil {

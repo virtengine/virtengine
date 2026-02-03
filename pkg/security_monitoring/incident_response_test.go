@@ -156,17 +156,17 @@ func TestIncidentResponderAddPlaybook(t *testing.T) {
 func TestPlaybookExecutionStructure(t *testing.T) {
 	now := time.Now()
 	execution := &PlaybookExecution{
-		ID:          "exec_123",
-		PlaybookID:  "pb_test",
-		IncidentID:  "inc_456",
-		StartedAt:   now,
-		Status:      "running",
+		ID:         "exec_123",
+		PlaybookID: "pb_test",
+		IncidentID: "inc_456",
+		StartedAt:  now,
+		Status:     "running",
 		StepsExecuted: []StepExecution{
 			{
-				StepName:    "step1",
-				Action:      string(ActionLogEvent),
-				StartedAt:   now,
-				Success:     true,
+				StepName:  "step1",
+				Action:    string(ActionLogEvent),
+				StartedAt: now,
+				Success:   true,
 			},
 		},
 	}
@@ -272,4 +272,3 @@ func TestIncidentResponderRemovePlaybook(t *testing.T) {
 		t.Error("Playbook should not exist after remove")
 	}
 }
-

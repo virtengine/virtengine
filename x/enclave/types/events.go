@@ -2,22 +2,22 @@ package types
 
 // Event types for enclave module
 const (
-	EventTypeEnclaveIdentityRegistered = "enclave_identity_registered"
-	EventTypeEnclaveIdentityUpdated    = "enclave_identity_updated"
-	EventTypeEnclaveIdentityRevoked    = "enclave_identity_revoked"
-	EventTypeEnclaveIdentityExpired    = "enclave_identity_expired"
-	EventTypeEnclaveKeyRotated         = "enclave_key_rotated"
-	EventTypeKeyRotationCompleted      = "key_rotation_completed"
-	EventTypeMeasurementAdded          = "measurement_added"
-	EventTypeMeasurementRevoked        = "measurement_revoked"
-	EventTypeVEIDScoreComputedAttested = "veid_score_computed_attested"
+	EventTypeEnclaveIdentityRegistered    = "enclave_identity_registered"
+	EventTypeEnclaveIdentityUpdated       = "enclave_identity_updated"
+	EventTypeEnclaveIdentityRevoked       = "enclave_identity_revoked"
+	EventTypeEnclaveIdentityExpired       = "enclave_identity_expired"
+	EventTypeEnclaveKeyRotated            = "enclave_key_rotated"
+	EventTypeKeyRotationCompleted         = "key_rotation_completed"
+	EventTypeMeasurementAdded             = "measurement_added"
+	EventTypeMeasurementRevoked           = "measurement_revoked"
+	EventTypeVEIDScoreComputedAttested    = "veid_score_computed_attested"
 	EventTypeVEIDScoreRejectedAttestation = "veid_score_rejected_attestation"
 	EventTypeConsensusVerificationFailed  = "consensus_verification_failed"
-	EventTypeEnclaveHeartbeatReceived    = "enclave_heartbeat_received"
-	EventTypeEnclaveHealthStatusChanged  = "enclave_health_status_changed"
-	EventTypeEnclaveHealthDegraded       = "enclave_health_degraded"
-	EventTypeEnclaveHealthUnhealthy      = "enclave_health_unhealthy"
-	EventTypeEnclaveHealthRecovered      = "enclave_health_recovered"
+	EventTypeEnclaveHeartbeatReceived     = "enclave_heartbeat_received"
+	EventTypeEnclaveHealthStatusChanged   = "enclave_health_status_changed"
+	EventTypeEnclaveHealthDegraded        = "enclave_health_degraded"
+	EventTypeEnclaveHealthUnhealthy       = "enclave_health_unhealthy"
+	EventTypeEnclaveHealthRecovered       = "enclave_health_recovered"
 )
 
 // Event attribute keys

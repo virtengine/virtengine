@@ -72,7 +72,7 @@ func (k Keeper) detectSuddenJump(ctx sdk.Context, current, previous types.Benchm
 
 	// Check if change exceeds threshold
 	if change > params.AnomalyThresholdJumpPercent || change < -params.AnomalyThresholdJumpPercent {
-		evidence, _ := json.Marshal(map[string]interface{}{
+		evidence, _ := json.Marshal(map[string]interface{}{ //nolint:errchkjson // interface{} map for evidence
 			"previous_score": previous.SummaryScore,
 			"current_score":  current.SummaryScore,
 			"change_percent": change,
@@ -110,10 +110,10 @@ func (k Keeper) detectInconsistentRatio(ctx sdk.Context, report types.BenchmarkR
 		// Rough check: bandwidth shouldn't exceed 100GB/s per 1GB of memory
 		maxExpectedBandwidth := mem.TotalGB * 100 * 1024 // Convert to MB/s
 		if mem.BandwidthMBps > maxExpectedBandwidth {
-			evidence, _ := json.Marshal(map[string]interface{}{
-				"total_memory_gb":     mem.TotalGB,
-				"bandwidth_mbps":      mem.BandwidthMBps,
-				"max_expected_mbps":   maxExpectedBandwidth,
+			evidence, _ := json.Marshal(map[string]interface{}{ //nolint:errchkjson // interface{} map for evidence
+				"total_memory_gb":   mem.TotalGB,
+				"bandwidth_mbps":    mem.BandwidthMBps,
+				"max_expected_mbps": maxExpectedBandwidth,
 			})
 
 			return &types.AnomalyFlag{
@@ -134,7 +134,7 @@ func (k Keeper) detectInconsistentRatio(ctx sdk.Context, report types.BenchmarkR
 		// Threads per core should be 1-4 typically (hyperthreading)
 		threadsPerCore := cpu.ThreadCount / cpu.CoreCount
 		if threadsPerCore > 4 || threadsPerCore < 1 {
-			evidence, _ := json.Marshal(map[string]interface{}{
+			evidence, _ := json.Marshal(map[string]interface{}{ //nolint:errchkjson // interface{} map for evidence
 				"core_count":       cpu.CoreCount,
 				"thread_count":     cpu.ThreadCount,
 				"threads_per_core": threadsPerCore,
@@ -175,7 +175,7 @@ func (k Keeper) detectRepeatedOutput(ctx sdk.Context, current types.BenchmarkRep
 	}
 
 	if identicalCount >= params.AnomalyThresholdRepeatCount {
-		evidence, _ := json.Marshal(map[string]interface{}{
+		evidence, _ := json.Marshal(map[string]interface{}{ //nolint:errchkjson // interface{} map for evidence
 			"identical_count": identicalCount,
 			"matching_ids":    matchingIDs,
 			"threshold":       params.AnomalyThresholdRepeatCount,
@@ -216,7 +216,7 @@ func (k Keeper) detectTimestampAnomaly(ctx sdk.Context, current, previous types.
 	// Check if benchmarks are submitted too quickly
 	timeDiff := current.Timestamp.Sub(previous.Timestamp).Seconds()
 	if timeDiff > 0 && timeDiff < float64(params.MinBenchmarkInterval) {
-		evidence, _ := json.Marshal(map[string]interface{}{
+		evidence, _ := json.Marshal(map[string]interface{}{ //nolint:errchkjson // interface{} map for evidence
 			"time_diff_seconds": timeDiff,
 			"min_interval":      params.MinBenchmarkInterval,
 			"previous_time":     previous.Timestamp,

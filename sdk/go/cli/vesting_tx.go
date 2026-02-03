@@ -12,8 +12,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
 
-	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
 
 // GetTxVestingCmd returns vesting module's transaction commands.
@@ -228,4 +228,3 @@ func GetTxVestingCreatePeriodicAccountCmd() *cobra.Command {
 
 	return cmd
 }
-

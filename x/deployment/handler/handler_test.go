@@ -261,7 +261,7 @@ func TestUpdateDeploymentExisting(t *testing.T) {
 
 	deployment, groups := suite.createDeployment()
 
-	msgGroupSpecs := make(v1beta4.GroupSpecs, 0)
+	msgGroupSpecs := make(v1beta4.GroupSpecs, 0, len(groups))
 	for _, g := range groups {
 		msgGroupSpecs = append(msgGroupSpecs, g.GroupSpec)
 	}

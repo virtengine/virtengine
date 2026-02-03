@@ -567,6 +567,7 @@ func CanonicalRuntimeConfig() RuntimeConfig {
 	}
 
 	// Compute config hash
+	//nolint:errchkjson // This struct is fully typed and Marshal cannot fail
 	data, _ := json.Marshal(struct {
 		TensorFlowVersion  string `json:"tensorflow_version"`
 		RandomSeed         int64  `json:"random_seed"`
@@ -622,4 +623,3 @@ func ValidateRuntimeConfig(config *RuntimeConfig) []string {
 
 	return issues
 }
-

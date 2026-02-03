@@ -934,4 +934,3 @@ func GetTestCardNumbers() map[string]string {
 		"3ds_required_challenge": "4000002760003184",
 	}
 }
-

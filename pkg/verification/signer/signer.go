@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"sync"
 	"time"
@@ -27,12 +26,12 @@ type DefaultSigner struct {
 	registry *veidtypes.SignerRegistryEntry
 
 	// State
-	mu               sync.RWMutex
-	activeKey        *veidtypes.SignerKeyInfo
-	keys             map[string]*veidtypes.SignerKeyInfo
-	rotations        map[string]*veidtypes.KeyRotationRecord
-	currentRotation  *veidtypes.KeyRotationRecord
-	sequenceCounter  uint64
+	mu              sync.RWMutex
+	activeKey       *veidtypes.SignerKeyInfo
+	keys            map[string]*veidtypes.SignerKeyInfo
+	rotations       map[string]*veidtypes.KeyRotationRecord
+	currentRotation *veidtypes.KeyRotationRecord
+	sequenceCounter uint64
 }
 
 // NewDefaultSigner creates a new DefaultSigner instance.
@@ -157,10 +156,10 @@ func (s *DefaultSigner) generateInitialKey(ctx context.Context) error {
 			Resource:  keyInfo.KeyID,
 			Action:    "generate_initial_key",
 			Details: map[string]interface{}{
-				"algorithm":        keyInfo.Algorithm,
-				"fingerprint":      keyInfo.Fingerprint,
-				"sequence_number":  keyInfo.SequenceNumber,
-				"expires_at":       expiresAt,
+				"algorithm":       keyInfo.Algorithm,
+				"fingerprint":     keyInfo.Fingerprint,
+				"sequence_number": keyInfo.SequenceNumber,
+				"expires_at":      expiresAt,
 			},
 		})
 	}
@@ -699,13 +698,3 @@ func clearBytes(b []byte) {
 		b[i] = 0
 	}
 }
-
-// Helper for base64 encoding (not used but available for external callers)
-func encodeBase64(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-func decodeBase64(s string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(s)
-}
-

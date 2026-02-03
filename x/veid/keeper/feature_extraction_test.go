@@ -535,7 +535,7 @@ func makeJPEGPayload() []byte {
 	// Fill with some color to make it non-trivial
 	for y := 0; y < 100; y++ {
 		for x := 0; x < 100; x++ {
-			img.Set(x, y, color.RGBA{R: uint8(x * 2), G: uint8(y * 2), B: 128, A: 255})
+			img.Set(x, y, color.RGBA{R: safeUint8FromInt(x * 2), G: safeUint8FromInt(y * 2), B: 128, A: 255})
 		}
 	}
 	buf := &bytes.Buffer{}
@@ -549,7 +549,7 @@ func makePNGPayload() []byte {
 	// Fill with some color to make it non-trivial
 	for y := 0; y < 100; y++ {
 		for x := 0; x < 100; x++ {
-			img.Set(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: 200, A: 255})
+			img.Set(x, y, color.RGBA{R: safeUint8FromInt(x), G: safeUint8FromInt(y), B: 200, A: 255})
 		}
 	}
 	buf := &bytes.Buffer{}
@@ -577,4 +577,14 @@ func makeWebMPayload() []byte {
 func sha256Sum(data []byte) []byte {
 	h := sha256.Sum256(data)
 	return h[:]
+}
+
+func safeUint8FromInt(value int) uint8 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint8(0)) {
+		return ^uint8(0)
+	}
+	return uint8(value)
 }

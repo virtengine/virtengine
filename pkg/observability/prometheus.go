@@ -50,45 +50,45 @@ func MetricsHandler() http.Handler {
 // ChainMetrics contains metrics for blockchain health monitoring
 type ChainMetrics struct {
 	// Block metrics
-	BlockHeight     prometheus.Gauge
-	BlockTime       prometheus.Gauge
-	BlockTxCount    prometheus.Histogram
-	BlockSize       prometheus.Histogram
-	BlockLatency    prometheus.Histogram
-	MissedBlocks    prometheus.Counter
-	BlocksProduced  prometheus.Counter
+	BlockHeight    prometheus.Gauge
+	BlockTime      prometheus.Gauge
+	BlockTxCount   prometheus.Histogram
+	BlockSize      prometheus.Histogram
+	BlockLatency   prometheus.Histogram
+	MissedBlocks   prometheus.Counter
+	BlocksProduced prometheus.Counter
 
 	// Consensus metrics
-	ConsensusRounds         prometheus.Histogram
-	ConsensusLatency        prometheus.Histogram
-	ValidatorVotingPower    *prometheus.GaugeVec
-	ValidatorMissedBlocks   *prometheus.CounterVec
-	ValidatorUptime         *prometheus.GaugeVec
-	ActiveValidators        prometheus.Gauge
-	TotalValidators         prometheus.Gauge
+	ConsensusRounds       prometheus.Histogram
+	ConsensusLatency      prometheus.Histogram
+	ValidatorVotingPower  *prometheus.GaugeVec
+	ValidatorMissedBlocks *prometheus.CounterVec
+	ValidatorUptime       *prometheus.GaugeVec
+	ActiveValidators      prometheus.Gauge
+	TotalValidators       prometheus.Gauge
 
 	// Transaction metrics
-	TxPoolSize              prometheus.Gauge
-	TxProcessed             *prometheus.CounterVec
-	TxLatency               *prometheus.HistogramVec
-	TxGasUsed               prometheus.Histogram
-	TxFees                  prometheus.Histogram
-	TxPerSecond             prometheus.Gauge
+	TxPoolSize  prometheus.Gauge
+	TxProcessed *prometheus.CounterVec
+	TxLatency   *prometheus.HistogramVec
+	TxGasUsed   prometheus.Histogram
+	TxFees      prometheus.Histogram
+	TxPerSecond prometheus.Gauge
 
 	// State metrics
-	StateSize               prometheus.Gauge
-	StateSyncHeight         prometheus.Gauge
-	StateSyncPeers          prometheus.Gauge
+	StateSize       prometheus.Gauge
+	StateSyncHeight prometheus.Gauge
+	StateSyncPeers  prometheus.Gauge
 
 	// P2P metrics
-	PeerCount               prometheus.Gauge
-	InboundPeers            prometheus.Gauge
-	OutboundPeers           prometheus.Gauge
-	PeerLatency             *prometheus.HistogramVec
-	MessagesReceived        *prometheus.CounterVec
-	MessagesSent            *prometheus.CounterVec
-	BytesReceived           prometheus.Counter
-	BytesSent               prometheus.Counter
+	PeerCount        prometheus.Gauge
+	InboundPeers     prometheus.Gauge
+	OutboundPeers    prometheus.Gauge
+	PeerLatency      *prometheus.HistogramVec
+	MessagesReceived *prometheus.CounterVec
+	MessagesSent     *prometheus.CounterVec
+	BytesReceived    prometheus.Counter
+	BytesSent        prometheus.Counter
 }
 
 // NewChainMetrics creates and registers chain health metrics
@@ -329,34 +329,34 @@ func NewChainMetrics(namespace string) *ChainMetrics {
 // VEIDMetrics contains metrics for VEID identity verification
 type VEIDMetrics struct {
 	// Verification metrics
-	VerificationsTotal      *prometheus.CounterVec
-	VerificationLatency     *prometheus.HistogramVec
-	VerificationScores      prometheus.Histogram
-	VerificationMismatches  prometheus.Counter
-	VerificationTimeouts    prometheus.Counter
+	VerificationsTotal     *prometheus.CounterVec
+	VerificationLatency    *prometheus.HistogramVec
+	VerificationScores     prometheus.Histogram
+	VerificationMismatches prometheus.Counter
+	VerificationTimeouts   prometheus.Counter
 
 	// Scope metrics
-	ScopesUploaded          *prometheus.CounterVec
-	ScopeValidationErrors   *prometheus.CounterVec
-	ScopeSize               prometheus.Histogram
-	ActiveScopes            prometheus.Gauge
+	ScopesUploaded        *prometheus.CounterVec
+	ScopeValidationErrors *prometheus.CounterVec
+	ScopeSize             prometheus.Histogram
+	ActiveScopes          prometheus.Gauge
 
 	// ML inference metrics
-	InferenceLatency        *prometheus.HistogramVec
-	InferenceErrors         *prometheus.CounterVec
-	InferenceDeterminism    prometheus.Counter
-	ModelVersion            *prometheus.GaugeVec
+	InferenceLatency     *prometheus.HistogramVec
+	InferenceErrors      *prometheus.CounterVec
+	InferenceDeterminism prometheus.Counter
+	ModelVersion         *prometheus.GaugeVec
 
 	// Identity metrics
-	IdentitiesVerified      prometheus.Counter
-	IdentitiesActive        prometheus.Gauge
-	IdentityScoreDecay      prometheus.Histogram
-	BorderlineCases         prometheus.Counter
+	IdentitiesVerified prometheus.Counter
+	IdentitiesActive   prometheus.Gauge
+	IdentityScoreDecay prometheus.Histogram
+	BorderlineCases    prometheus.Counter
 
 	// Rate limiting metrics
-	RateLimitHits           *prometheus.CounterVec
-	SMSVerifications        *prometheus.CounterVec
-	EmailVerifications      *prometheus.CounterVec
+	RateLimitHits      *prometheus.CounterVec
+	SMSVerifications   *prometheus.CounterVec
+	EmailVerifications *prometheus.CounterVec
 }
 
 // NewVEIDMetrics creates and registers VEID metrics
@@ -517,42 +517,42 @@ func NewVEIDMetrics(namespace string) *VEIDMetrics {
 // MarketplaceMetrics contains metrics for marketplace operations
 type MarketplaceMetrics struct {
 	// Order metrics
-	OrdersTotal           *prometheus.CounterVec
-	OrdersActive          prometheus.Gauge
-	OrderLatency          *prometheus.HistogramVec
-	OrderValue            prometheus.Histogram
+	OrdersTotal  *prometheus.CounterVec
+	OrdersActive prometheus.Gauge
+	OrderLatency *prometheus.HistogramVec
+	OrderValue   prometheus.Histogram
 
 	// Bid metrics
-	BidsTotal             *prometheus.CounterVec
-	BidsActive            prometheus.Gauge
-	BidLatency            prometheus.Histogram
-	BidValue              prometheus.Histogram
-	BidSpread             prometheus.Histogram
+	BidsTotal  *prometheus.CounterVec
+	BidsActive prometheus.Gauge
+	BidLatency prometheus.Histogram
+	BidValue   prometheus.Histogram
+	BidSpread  prometheus.Histogram
 
 	// Lease metrics
-	LeasesTotal           *prometheus.CounterVec
-	LeasesActive          prometheus.Gauge
-	LeaseValue            prometheus.Histogram
-	LeaseDuration         prometheus.Histogram
+	LeasesTotal   *prometheus.CounterVec
+	LeasesActive  prometheus.Gauge
+	LeaseValue    prometheus.Histogram
+	LeaseDuration prometheus.Histogram
 
 	// Provider metrics
-	ProvidersActive       prometheus.Gauge
-	ProvidersTotal        prometheus.Gauge
-	ProviderCapacity      *prometheus.GaugeVec
-	ProviderUtilization   *prometheus.GaugeVec
-	ProviderReliability   *prometheus.GaugeVec
+	ProvidersActive     prometheus.Gauge
+	ProvidersTotal      prometheus.Gauge
+	ProviderCapacity    *prometheus.GaugeVec
+	ProviderUtilization *prometheus.GaugeVec
+	ProviderReliability *prometheus.GaugeVec
 
 	// Market health metrics
-	MarketEfficiency      prometheus.Gauge
-	MarketVolume24h       prometheus.Gauge
-	MarketFillRate        prometheus.Gauge
-	MarketSpreadAvg       prometheus.Gauge
+	MarketEfficiency prometheus.Gauge
+	MarketVolume24h  prometheus.Gauge
+	MarketFillRate   prometheus.Gauge
+	MarketSpreadAvg  prometheus.Gauge
 
 	// Escrow metrics
-	EscrowTotal           prometheus.Gauge
-	EscrowLocked          prometheus.Gauge
-	EscrowReleased        prometheus.Counter
-	EscrowDisputed        prometheus.Counter
+	EscrowTotal    prometheus.Gauge
+	EscrowLocked   prometheus.Gauge
+	EscrowReleased prometheus.Counter
+	EscrowDisputed prometheus.Counter
 }
 
 // NewMarketplaceMetrics creates and registers marketplace metrics
@@ -753,33 +753,33 @@ func NewMarketplaceMetrics(namespace string) *MarketplaceMetrics {
 // ProviderDaemonMetrics contains metrics for provider daemon operations
 type ProviderDaemonMetrics struct {
 	// Bid engine metrics
-	BidEngineOrders         prometheus.Gauge
-	BidEngineDecisions      *prometheus.CounterVec
-	BidEngineLatency        prometheus.Histogram
+	BidEngineOrders    prometheus.Gauge
+	BidEngineDecisions *prometheus.CounterVec
+	BidEngineLatency   prometheus.Histogram
 
 	// Deployment metrics
-	DeploymentsTotal        *prometheus.CounterVec
-	DeploymentsActive       prometheus.Gauge
-	DeploymentLatency       *prometheus.HistogramVec
-	DeploymentState         *prometheus.GaugeVec
+	DeploymentsTotal  *prometheus.CounterVec
+	DeploymentsActive prometheus.Gauge
+	DeploymentLatency *prometheus.HistogramVec
+	DeploymentState   *prometheus.GaugeVec
 
 	// Usage metering metrics
-	UsageSubmissions        *prometheus.CounterVec
-	UsageLatency            prometheus.Histogram
-	UsageCPU                *prometheus.GaugeVec
-	UsageMemory             *prometheus.GaugeVec
-	UsageStorage            *prometheus.GaugeVec
-	UsageGPU                *prometheus.GaugeVec
-	UsageNetwork            *prometheus.GaugeVec
+	UsageSubmissions *prometheus.CounterVec
+	UsageLatency     prometheus.Histogram
+	UsageCPU         *prometheus.GaugeVec
+	UsageMemory      *prometheus.GaugeVec
+	UsageStorage     *prometheus.GaugeVec
+	UsageGPU         *prometheus.GaugeVec
+	UsageNetwork     *prometheus.GaugeVec
 
 	// Infrastructure adapter metrics
-	AdapterOperations       *prometheus.CounterVec
-	AdapterLatency          *prometheus.HistogramVec
-	AdapterErrors           *prometheus.CounterVec
+	AdapterOperations *prometheus.CounterVec
+	AdapterLatency    *prometheus.HistogramVec
+	AdapterErrors     *prometheus.CounterVec
 
 	// Key management metrics
-	KeyOperations           *prometheus.CounterVec
-	KeyRotations            prometheus.Counter
+	KeyOperations *prometheus.CounterVec
+	KeyRotations  prometheus.Counter
 }
 
 // NewProviderDaemonMetrics creates and registers provider daemon metrics
@@ -933,21 +933,21 @@ func NewProviderDaemonMetrics(namespace string) *ProviderDaemonMetrics {
 // APIMetrics contains metrics for gRPC and HTTP API endpoints
 type APIMetrics struct {
 	// Request metrics
-	RequestsTotal         *prometheus.CounterVec
-	RequestDuration       *prometheus.HistogramVec
-	RequestSize           *prometheus.HistogramVec
-	ResponseSize          *prometheus.HistogramVec
+	RequestsTotal   *prometheus.CounterVec
+	RequestDuration *prometheus.HistogramVec
+	RequestSize     *prometheus.HistogramVec
+	ResponseSize    *prometheus.HistogramVec
 
 	// Error metrics
-	ErrorsTotal           *prometheus.CounterVec
+	ErrorsTotal *prometheus.CounterVec
 
 	// Connection metrics
-	ConnectionsTotal      *prometheus.CounterVec
-	ConnectionsActive     *prometheus.GaugeVec
+	ConnectionsTotal  *prometheus.CounterVec
+	ConnectionsActive *prometheus.GaugeVec
 
 	// Rate limiting metrics
-	RateLimitHits         *prometheus.CounterVec
-	RateLimitRemaining    *prometheus.GaugeVec
+	RateLimitHits      *prometheus.CounterVec
+	RateLimitRemaining *prometheus.GaugeVec
 }
 
 // NewAPIMetrics creates and registers API metrics
@@ -1037,22 +1037,22 @@ func NewAPIMetrics(namespace string) *APIMetrics {
 // SLOMetrics contains metrics for SLO tracking
 type SLOMetrics struct {
 	// Availability SLOs
-	AvailabilitySLO       *prometheus.GaugeVec
-	AvailabilityBudget    *prometheus.GaugeVec
-	AvailabilityBurnRate  *prometheus.GaugeVec
+	AvailabilitySLO      *prometheus.GaugeVec
+	AvailabilityBudget   *prometheus.GaugeVec
+	AvailabilityBurnRate *prometheus.GaugeVec
 
 	// Latency SLOs
-	LatencySLO            *prometheus.GaugeVec
-	LatencyBudget         *prometheus.GaugeVec
-	LatencyBurnRate       *prometheus.GaugeVec
+	LatencySLO      *prometheus.GaugeVec
+	LatencyBudget   *prometheus.GaugeVec
+	LatencyBurnRate *prometheus.GaugeVec
 
 	// Error rate SLOs
-	ErrorRateSLO          *prometheus.GaugeVec
-	ErrorRateBudget       *prometheus.GaugeVec
-	ErrorRateBurnRate     *prometheus.GaugeVec
+	ErrorRateSLO      *prometheus.GaugeVec
+	ErrorRateBudget   *prometheus.GaugeVec
+	ErrorRateBurnRate *prometheus.GaugeVec
 
 	// SLO violations
-	SLOViolations         *prometheus.CounterVec
+	SLOViolations *prometheus.CounterVec
 }
 
 // NewSLOMetrics creates and registers SLO metrics
@@ -1165,4 +1165,3 @@ func (t *Timer) ObserveDuration() {
 func (t *Timer) ObserveDurationVec(vec *prometheus.HistogramVec, labels ...string) {
 	vec.WithLabelValues(labels...).Observe(time.Since(t.start).Seconds())
 }
-

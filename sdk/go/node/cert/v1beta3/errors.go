@@ -36,4 +36,3 @@ var (
 	// ErrInvalidKeySize invalid certificate state
 	ErrInvalidKeySize = errors.New("invalid key size")
 )
-

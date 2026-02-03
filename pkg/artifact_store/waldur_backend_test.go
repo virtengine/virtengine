@@ -14,9 +14,9 @@ func TestWaldurBackend(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -369,9 +369,9 @@ func TestWaldurStreamingBackend(t *testing.T) {
 	testStreamConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -421,9 +421,9 @@ func TestWaldurBackendPinning(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		config.EnablePinning = true
 		return config
 	}
@@ -533,7 +533,7 @@ func TestWaldurBackendQuota(t *testing.T) {
 	t.Run("GetOwnerUsage", func(t *testing.T) {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
+		config.Organization = testOrg
 
 		backend, _ := NewWaldurBackend(config)
 
@@ -568,7 +568,7 @@ func TestWaldurBackendQuota(t *testing.T) {
 	t.Run("CheckOwnerQuota_Unlimited", func(t *testing.T) {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
+		config.Organization = testOrg
 		config.PerOwnerQuotaBytes = 0 // Unlimited
 
 		backend, _ := NewWaldurBackend(config)
@@ -582,7 +582,7 @@ func TestWaldurBackendQuota(t *testing.T) {
 	t.Run("CheckOwnerQuota_Exceeded", func(t *testing.T) {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
+		config.Organization = testOrg
 		config.PerOwnerQuotaBytes = 100 // 100 bytes limit
 
 		backend, _ := NewWaldurBackend(config)
@@ -601,9 +601,9 @@ func TestWaldurBackendRetentionCleanup(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		config.EnablePinning = true
 		return config
 	}
@@ -724,9 +724,9 @@ func TestWaldurBackendPurgeByOwner(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		config.EnablePinning = true
 		return config
 	}
@@ -822,9 +822,9 @@ func TestWaldurBackendVerify(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -888,9 +888,9 @@ func TestWaldurBackendRetentionPolicy(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -966,7 +966,7 @@ func TestWaldurPinnableBackend(t *testing.T) {
 	t.Run("NewWaldurPinnableBackend", func(t *testing.T) {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
+		config.Organization = testOrg
 
 		backend, err := NewWaldurPinnableBackend(config)
 		if err != nil {
@@ -1007,4 +1007,3 @@ func TestSplitKeyPath(t *testing.T) {
 		t.Error("unexpected parts")
 	}
 }
-

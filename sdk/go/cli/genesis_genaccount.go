@@ -84,4 +84,3 @@ contain valid denominations. Accounts may optionally be supplied with vesting pa
 
 	return cmd
 }
-

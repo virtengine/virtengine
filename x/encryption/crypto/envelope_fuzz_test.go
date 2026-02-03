@@ -22,15 +22,15 @@ import (
 // 4. No panics occur with arbitrary input
 func FuzzCreateEnvelope(f *testing.F) {
 	// Seed corpus with various plaintext sizes and patterns
-	f.Add([]byte(""))                                  // Empty
-	f.Add([]byte("a"))                                 // Single byte
-	f.Add([]byte("Hello, World!"))                     // Simple ASCII
-	f.Add([]byte("🔐 Unicode encryption test 密码"))    // Unicode
-	f.Add(bytes.Repeat([]byte{0x00}, 100))             // Null bytes
-	f.Add(bytes.Repeat([]byte{0xFF}, 100))             // High bytes
-	f.Add(bytes.Repeat([]byte("x"), 10000))            // Large payload
-	f.Add([]byte{0x00, 0x01, 0x02, 0x03, 0x04})        // Binary sequence
-	f.Add([]byte("\x00\x00\x00\x00\x00\x00\x00\x00"))  // All zeros
+	f.Add([]byte(""))                                 // Empty
+	f.Add([]byte("a"))                                // Single byte
+	f.Add([]byte("Hello, World!"))                    // Simple ASCII
+	f.Add([]byte("🔐 Unicode encryption test 密码"))     // Unicode
+	f.Add(bytes.Repeat([]byte{0x00}, 100))            // Null bytes
+	f.Add(bytes.Repeat([]byte{0xFF}, 100))            // High bytes
+	f.Add(bytes.Repeat([]byte("x"), 10000))           // Large payload
+	f.Add([]byte{0x00, 0x01, 0x02, 0x03, 0x04})       // Binary sequence
+	f.Add([]byte("\x00\x00\x00\x00\x00\x00\x00\x00")) // All zeros
 
 	f.Fuzz(func(t *testing.T, plaintext []byte) {
 		// Generate fresh key pairs for each iteration
@@ -96,9 +96,9 @@ func FuzzCreateEnvelope(f *testing.F) {
 // 3. Error handling is robust
 func FuzzOpenEnvelope(f *testing.F) {
 	// Seed corpus with various corruption patterns
-	f.Add([]byte{0x00})        // Single null byte
-	f.Add([]byte{0xFF})        // Single high byte
-	f.Add([]byte("corrupted")) // ASCII corruption
+	f.Add([]byte{0x00})                   // Single null byte
+	f.Add([]byte{0xFF})                   // Single high byte
+	f.Add([]byte("corrupted"))            // ASCII corruption
 	f.Add(bytes.Repeat([]byte{0x41}, 50)) // Repeated bytes
 
 	f.Fuzz(func(t *testing.T, corruption []byte) {

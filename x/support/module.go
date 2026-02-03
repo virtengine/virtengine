@@ -18,7 +18,7 @@ import (
 	"github.com/cosmos/gogoproto/grpc"
 
 	"github.com/virtengine/virtengine/x/support/keeper"
-	"github.com/virtengine/virtengine/x/support/types"
+	types "github.com/virtengine/virtengine/x/support/types" //nolint:staticcheck // deprecated types retained for compatibility
 )
 
 var (

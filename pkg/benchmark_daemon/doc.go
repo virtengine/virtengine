@@ -77,4 +77,3 @@ package benchmark_daemon
 //
 //	// Stop the daemon
 //	daemon.Stop()
-

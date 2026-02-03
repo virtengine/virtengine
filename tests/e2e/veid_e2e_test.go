@@ -474,7 +474,7 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false).
-		WithBlockHeight(ctx.BlockHeight()+1).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(1))
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -489,7 +489,7 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false).
-		WithBlockHeight(ctx.BlockHeight()+1).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(2))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -504,7 +504,7 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false).
-		WithBlockHeight(ctx.BlockHeight()+1).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(3))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)

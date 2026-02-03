@@ -4,24 +4,25 @@
 package dex
 
 import (
-	verrors "github.com/virtengine/virtengine/pkg/errors"
 	"context"
 	"sort"
 	"sync"
 	"time"
+
+	verrors "github.com/virtengine/virtengine/pkg/errors"
 
 	sdkmath "cosmossdk.io/math"
 )
 
 // priceFeedImpl implements the PriceFeed interface
 type priceFeedImpl struct {
-	cfg        PriceFeedConfig
-	sources    map[string]PriceSource
-	sourcesMu  sync.RWMutex
-	cache      *priceCache
-	history    *priceHistory
-	subs       map[string][]PriceCallback
-	subsMu     sync.RWMutex
+	cfg       PriceFeedConfig
+	sources   map[string]PriceSource
+	sourcesMu sync.RWMutex
+	cache     *priceCache
+	history   *priceHistory
+	subs      map[string][]PriceCallback
+	subsMu    sync.RWMutex
 }
 
 // priceCache provides thread-safe price caching
@@ -269,7 +270,7 @@ func (p *priceFeedImpl) calculateTWAP(key string, window time.Duration) sdkmath.
 	}
 
 	cutoff := time.Now().Add(-window)
-	var sum sdkmath.LegacyDec = sdkmath.LegacyZeroDec()
+	sum := sdkmath.LegacyZeroDec()
 	var count int
 
 	for _, e := range entries {
@@ -297,8 +298,8 @@ func (p *priceFeedImpl) calculateVWAP(key string, window time.Duration) sdkmath.
 	}
 
 	cutoff := time.Now().Add(-window)
-	var sumPV sdkmath.LegacyDec = sdkmath.LegacyZeroDec()
-	var sumV sdkmath.Int = sdkmath.ZeroInt()
+	sumPV := sdkmath.LegacyZeroDec()
+	sumV := sdkmath.ZeroInt()
 
 	for _, e := range entries {
 		if e.timestamp.After(cutoff) && e.volume.IsPositive() {
@@ -451,4 +452,3 @@ func (s *adapterPriceSource) GetPrice(ctx context.Context, baseSymbol, quoteSymb
 func (s *adapterPriceSource) IsHealthy(ctx context.Context) bool {
 	return s.adapter.IsHealthy(ctx)
 }
-

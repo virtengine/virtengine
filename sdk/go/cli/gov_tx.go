@@ -252,6 +252,7 @@ metadata example:
 }
 
 // GetTxGovSubmitLegacyProposalCmd implements submitting a proposal transaction command.
+//
 // Deprecated: please use GetTxGovSubmitProposalCmd instead.
 func GetTxGovSubmitLegacyProposalCmd() *cobra.Command {
 	cmd := &cobra.Command{

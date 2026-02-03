@@ -110,13 +110,14 @@ func ParseCID(cidStr string) (*ParsedCID, error) {
 	}
 
 	return &ParsedCID{
-		Raw:       cidStr,
-		Version:   int(c.Version()),
-		Codec:     c.Type(),
-		Hash:      c.Hash(),
-		IsStub:    false,
-		StringV1:  c.String(),
-		BytesCID:  c.Bytes(),
+		Raw: cidStr,
+		//nolint:gosec // G115: CID version is a small bounded value (0 or 1)
+		Version:  int(c.Version()),
+		Codec:    c.Type(),
+		Hash:     c.Hash(),
+		IsStub:   false,
+		StringV1: c.String(),
+		BytesCID: c.Bytes(),
 	}, nil
 }
 
@@ -187,4 +188,3 @@ func ValidateCIDForBackendAllowStub(backendRef string, backend BackendType) erro
 		return ErrBackendNotSupported.Wrapf("unknown backend: %s", backend)
 	}
 }
-

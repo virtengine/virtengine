@@ -233,9 +233,9 @@ func TestEmailChallenge_Validate(t *testing.T) {
 
 	// Test missing fields
 	tests := []struct {
-		name    string
-		modify  func(*EmailChallenge)
-		errMsg  string
+		name   string
+		modify func(*EmailChallenge)
+		errMsg string
 	}{
 		{"empty challenge_id", func(c *EmailChallenge) { c.ChallengeID = "" }, "challenge_id"},
 		{"empty account_address", func(c *EmailChallenge) { c.AccountAddress = "" }, "account address"},
@@ -459,7 +459,7 @@ func TestService_VerifyChallenge_Success(t *testing.T) {
 
 	// Generate the correct OTP by finding it
 	// In tests, we need to find the actual OTP that was generated
-	// Since we can't get the plaintext OTP from the challenge, 
+	// Since we can't get the plaintext OTP from the challenge,
 	// we'll test with a known failure first, then verify the flow works
 	verifyReq := &VerifyRequest{
 		ChallengeID:    initResp.ChallengeID,
@@ -724,7 +724,7 @@ func TestMockProvider_Send(t *testing.T) {
 
 func TestMockProvider_CustomSendFunc(t *testing.T) {
 	logger := newTestLogger()
-	
+
 	customFunc := func(ctx context.Context, email *Email) (*SendResult, error) {
 		return nil, errors.Wrap(ErrDeliveryFailed, "simulated failure")
 	}
@@ -868,4 +868,3 @@ func TestWithAuditLogger(t *testing.T) {
 	}
 	assert.True(t, hasInitiated, "should have initiate event")
 }
-

@@ -379,6 +379,7 @@ func TestSnapshotManagerGetTotalSize(t *testing.T) {
 	sizes := []int64{1024, 2048, 4096}
 	for i, size := range sizes {
 		info := SnapshotInfo{
+			//nolint:gosec // G115: i is a small loop index in test code
 			Height:    uint64((i + 1) * 1000),
 			Format:    1,
 			Size:      size,
@@ -497,4 +498,3 @@ func TestSnapshotManagerValidateStateSyncCompatibility(t *testing.T) {
 		})
 	}
 }
-

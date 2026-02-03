@@ -353,11 +353,11 @@ type ChainUsageReport struct {
 type SettlementPipeline struct {
 	mu sync.RWMutex
 
-	cfg           SettlementConfig
-	keyManager    *KeyManager
-	usageMeter    *UsageMeter
-	usageStore    *UsageSnapshotStore
-	chainSubmit   ChainUsageSubmitter
+	cfg         SettlementConfig
+	keyManager  *KeyManager
+	usageMeter  *UsageMeter
+	usageStore  *UsageSnapshotStore
+	chainSubmit ChainUsageSubmitter
 
 	// pending contains usage records pending settlement.
 	pending map[string]*UsageRecord
@@ -889,19 +889,24 @@ func (p *SettlementPipeline) calculateUsageUnits(record *UsageRecord) uint64 {
 
 	// Convert each resource type to normalized units
 	// CPU: 1 unit = 1 CPU-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.CPUMilliSeconds / (1000 * 3600))
 
 	// Memory: 1 unit = 1 GB-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.MemoryByteSeconds / (1024 * 1024 * 1024 * 3600))
 
 	// Storage: 1 unit = 1 GB-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.StorageByteSeconds / (1024 * 1024 * 1024 * 3600))
 
 	// GPU: 1 unit = 1 GPU-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.GPUSeconds / 3600)
 
 	// Network: 1 unit = 1 GB
 	networkBytes := record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(networkBytes / (1024 * 1024 * 1024))
 
 	if units == 0 {
@@ -1006,7 +1011,7 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 		hasDispute := false
 		for _, record := range records {
 			for _, dispute := range p.disputes {
-				if dispute.UsageRecordID == record.ID && 
+				if dispute.UsageRecordID == record.ID &&
 					(dispute.Status == DisputeStatusPending || dispute.Status == DisputeStatusReviewing) {
 					hasDispute = true
 					break
@@ -1065,4 +1070,3 @@ func (p *SettlementPipeline) generateID(prefix string, timestamp time.Time) stri
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
 }
-

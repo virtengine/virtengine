@@ -5,4 +5,3 @@ type ClientOptions struct {
 }
 
 type ClientOption func(*ClientOptions) *ClientOptions
-

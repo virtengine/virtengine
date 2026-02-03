@@ -17,14 +17,14 @@ const (
 
 // Borderline fallback event attribute keys
 const (
-	AttributeKeyFallbackID        = "fallback_id"
-	AttributeKeyBorderlineScore   = "borderline_score"
-	AttributeKeyChallengeID       = "challenge_id"
-	AttributeKeyRequiredFactors   = "required_factors"
-	AttributeKeySatisfiedFactors  = "satisfied_factors"
-	AttributeKeyFinalStatus       = "final_status"
-	AttributeKeyExpiresAt         = "expires_at"
-	AttributeKeyFactorClass       = "factor_class"
+	AttributeKeyFallbackID       = "fallback_id"
+	AttributeKeyBorderlineScore  = "borderline_score"
+	AttributeKeyChallengeID      = "challenge_id"
+	AttributeKeyRequiredFactors  = "required_factors"
+	AttributeKeySatisfiedFactors = "satisfied_factors"
+	AttributeKeyFinalStatus      = "final_status"
+	AttributeKeyExpiresAt        = "expires_at"
+	AttributeKeyFactorClass      = "factor_class"
 )
 
 // EventBorderlineFallbackTriggered represents the event emitted when borderline fallback is triggered

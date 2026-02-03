@@ -314,7 +314,9 @@ func (e *Engine) RecoverWorkflows(ctx context.Context) error {
 	}
 
 	// Combine running and pending - these need immediate recovery
-	toRecover := append(runningStates, pendingStates...)
+	toRecover := make([]*WorkflowState, 0, len(runningStates)+len(pendingStates))
+	toRecover = append(toRecover, runningStates...)
+	toRecover = append(toRecover, pendingStates...)
 
 	recovered := 0
 	failed := 0
@@ -743,4 +745,3 @@ func (e *Engine) appendHistory(ctx context.Context, workflowID string, event *Hi
 		e.logger.Warn().Err(err).Str("workflow_id", workflowID).Msg("failed to append history event")
 	}
 }
-

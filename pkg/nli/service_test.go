@@ -444,4 +444,3 @@ func TestChatRequest_Validate(t *testing.T) {
 		})
 	}
 }
-

@@ -22,4 +22,3 @@ attributes:
 	require.Equal(t, "arch", p.Attributes[0].Key)
 	require.Equal(t, "amd64", p.Attributes[0].Value)
 }
-

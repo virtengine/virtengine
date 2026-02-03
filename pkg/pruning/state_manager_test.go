@@ -397,4 +397,3 @@ func TestStateManagerGetHeightStatus(t *testing.T) {
 		t.Error("Height 800 should be pruned")
 	}
 }
-

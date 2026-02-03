@@ -111,6 +111,8 @@ func (am AppModule) Name() string {
 }
 
 // RegisterInvariants registers the Benchmark module invariants.
+//
+//nolint:staticcheck // InvariantRegistry is required by the module interface.
 func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // RegisterServices registers module services.

@@ -170,10 +170,10 @@ type FeeConfig struct {
 // DefaultFeeConfig returns the default fee configuration
 func DefaultFeeConfig() FeeConfig {
 	return FeeConfig{
-		PlatformFeeRate:    sdkmath.LegacyNewDecWithPrec(250, 4),  // 2.5%
-		NetworkFeeRate:     sdkmath.LegacyNewDecWithPrec(50, 4),   // 0.5%
-		CommunityPoolRate:  sdkmath.LegacyNewDecWithPrec(100, 4),  // 1.0%
-		TakeRate:           sdkmath.LegacyNewDecWithPrec(400, 4),  // 4.0% (from take module)
+		PlatformFeeRate:    sdkmath.LegacyNewDecWithPrec(250, 4), // 2.5%
+		NetworkFeeRate:     sdkmath.LegacyNewDecWithPrec(50, 4),  // 0.5%
+		CommunityPoolRate:  sdkmath.LegacyNewDecWithPrec(100, 4), // 1.0%
+		TakeRate:           sdkmath.LegacyNewDecWithPrec(400, 4), // 4.0% (from take module)
 		MinFeeAmount:       sdk.NewCoins(),
 		MaxFeeAmount:       sdk.NewCoins(),
 		FeeExemptAddresses: make([]string, 0),
@@ -210,13 +210,13 @@ func (fc *FeeConfig) Validate() error {
 // CalculateFees calculates all fees for a given amount
 func (fc *FeeConfig) CalculateFees(amount sdk.Coins) FeeBreakdown {
 	breakdown := FeeBreakdown{
-		GrossAmount:   amount,
-		PlatformFee:   sdk.NewCoins(),
-		NetworkFee:    sdk.NewCoins(),
-		CommunityFee:  sdk.NewCoins(),
-		TakeFee:       sdk.NewCoins(),
-		TotalFees:     sdk.NewCoins(),
-		NetAmount:     sdk.NewCoins(),
+		GrossAmount:  amount,
+		PlatformFee:  sdk.NewCoins(),
+		NetworkFee:   sdk.NewCoins(),
+		CommunityFee: sdk.NewCoins(),
+		TakeFee:      sdk.NewCoins(),
+		TotalFees:    sdk.NewCoins(),
+		NetAmount:    sdk.NewCoins(),
 	}
 
 	for _, coin := range amount {

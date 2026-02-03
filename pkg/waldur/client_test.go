@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// testValue is a common test string value
+const testValue = "test"
+
 func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -102,7 +105,7 @@ func TestClient_HealthCheck(t *testing.T) {
 		username := "testuser"
 		email := "test@example.com"
 		uuid := "550e8400-e29b-41d4-a716-446655440000"
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":       &uuid,
 			"username":   &username,
 			"email":      &email,
@@ -157,7 +160,7 @@ func TestClient_GetCurrentUser(t *testing.T) {
 		username := "johndoe"
 		email := "john@example.com"
 		uuid := "550e8400-e29b-41d4-a716-446655440001"
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":       &uuid,
 			"username":   &username,
 			"email":      &email,
@@ -256,7 +259,7 @@ func TestRateLimiter_ContextCancellation(t *testing.T) {
 func TestClient_Metrics(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{})
+		_ = json.NewEncoder(w).Encode(map[string]any{})
 	}))
 	defer server.Close()
 
@@ -276,7 +279,7 @@ func TestClient_Metrics(t *testing.T) {
 
 	// Make a request
 	ctx := context.Background()
-	client.HealthCheck(ctx)
+	_ = client.HealthCheck(ctx)
 
 	// Check metrics updated
 	metrics = client.Metrics()
@@ -296,8 +299,8 @@ func TestSafeString(t *testing.T) {
 	}
 
 	// Test valid pointer
-	s := "test"
-	if got := safeString(&s); got != "test" {
+	s := testValue
+	if got := safeString(&s); got != testValue {
 		t.Errorf("safeString(&%q) = %q, want %q", s, got, s)
 	}
 }
@@ -353,7 +356,7 @@ func TestMarketplaceClient_ListOfferings(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(offerings)
+		_ = json.NewEncoder(w).Encode(offerings)
 	}))
 	defer server.Close()
 
@@ -386,7 +389,7 @@ func TestOpenStackClient_ListInstances(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(instances)
+		_ = json.NewEncoder(w).Encode(instances)
 	}))
 	defer server.Close()
 
@@ -421,7 +424,7 @@ func TestAWSClient_ListInstances(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(instances)
+		_ = json.NewEncoder(w).Encode(instances)
 	}))
 	defer server.Close()
 
@@ -453,7 +456,7 @@ func TestAzureClient_ListVMs(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(vms)
+		_ = json.NewEncoder(w).Encode(vms)
 	}))
 	defer server.Close()
 
@@ -485,7 +488,7 @@ func TestSLURMClient_ListAllocations(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(allocations)
+		_ = json.NewEncoder(w).Encode(allocations)
 	}))
 	defer server.Close()
 
@@ -513,7 +516,7 @@ func TestClient_RetryLogic(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":     ptr("550e8400-e29b-41d4-a716-446655440070"),
 			"username": ptr("testuser"),
 		})
@@ -550,7 +553,7 @@ func TestMarketplaceClient_WaitForOrderCompletion(t *testing.T) {
 		if attempts >= 3 {
 			state = "done"
 		}
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"uuid":  ptr("550e8400-e29b-41d4-a716-446655440080"),
 			"state": ptr(state),
 		})
@@ -595,4 +598,3 @@ func TestClient_ContextCancellation(t *testing.T) {
 		t.Error("HealthCheck() with cancelled context should return error")
 	}
 }
-

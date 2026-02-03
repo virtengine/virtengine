@@ -456,4 +456,3 @@ func (c *Client) FindIssuesBySubmitterAddress(ctx context.Context, address, cust
 	jql := fmt.Sprintf(`"%s" ~ "%s"`, customFieldID, address)
 	return c.SearchIssues(ctx, jql, startAt, maxResults)
 }
-

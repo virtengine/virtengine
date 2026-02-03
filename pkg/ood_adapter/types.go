@@ -538,4 +538,3 @@ type VEIDAuthProvider interface {
 	// RevokeToken revokes a token
 	RevokeToken(ctx context.Context, token string) error
 }
-

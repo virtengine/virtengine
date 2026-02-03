@@ -75,14 +75,14 @@ func getSSOIssuerListCmd() *cobra.Command {
 
 func getSSOIssuerAddCmd() *cobra.Command {
 	var (
-		clientID            string
-		providerType        string
-		scoreWeight         uint32
-		enabled             bool
+		clientID             string
+		providerType         string
+		scoreWeight          uint32
+		enabled              bool
 		requireEmailVerified bool
-		allowedEmailDomains []string
-		allowedTenants      []string
-		policyFile          string
+		allowedEmailDomains  []string
+		allowedTenants       []string
+		policyFile           string
 	)
 
 	cmd := &cobra.Command{
@@ -412,12 +412,12 @@ type IssuerPolicyConfig struct {
 
 // SSOServiceConfig is the CLI representation of SSO service config.
 type SSOServiceConfig struct {
-	Enabled                bool                          `json:"enabled"`
-	ChallengeTTLSeconds    int64                         `json:"challenge_ttl_seconds"`
-	AttestationValidityDays int                          `json:"attestation_validity_days"`
-	MaxChallengesPerAccount int                          `json:"max_challenges_per_account"`
-	EnableRateLimiting     bool                          `json:"enable_rate_limiting"`
-	IssuerPolicies         map[string]IssuerPolicyConfig `json:"issuer_policies"`
+	Enabled                 bool                          `json:"enabled"`
+	ChallengeTTLSeconds     int64                         `json:"challenge_ttl_seconds"`
+	AttestationValidityDays int                           `json:"attestation_validity_days"`
+	MaxChallengesPerAccount int                           `json:"max_challenges_per_account"`
+	EnableRateLimiting      bool                          `json:"enable_rate_limiting"`
+	IssuerPolicies          map[string]IssuerPolicyConfig `json:"issuer_policies"`
 }
 
 // Validate validates the SSO service config.
@@ -434,12 +434,12 @@ func (c *SSOServiceConfig) Validate() error {
 // DefaultSSOConfig returns default SSO configuration.
 func DefaultSSOConfig() *SSOServiceConfig {
 	return &SSOServiceConfig{
-		Enabled:                true,
-		ChallengeTTLSeconds:    600, // 10 minutes
+		Enabled:                 true,
+		ChallengeTTLSeconds:     600, // 10 minutes
 		AttestationValidityDays: 365,
 		MaxChallengesPerAccount: 3,
-		EnableRateLimiting:     true,
-		IssuerPolicies:         make(map[string]IssuerPolicyConfig),
+		EnableRateLimiting:      true,
+		IssuerPolicies:          make(map[string]IssuerPolicyConfig),
 	}
 }
 
@@ -449,4 +449,3 @@ var wellKnownIssuers = map[veidtypes.SSOProviderType]string{
 	veidtypes.SSOProviderMicrosoft: "https://login.microsoftonline.com/common/v2.0",
 	veidtypes.SSOProviderGitHub:    "https://token.actions.githubusercontent.com",
 }
-

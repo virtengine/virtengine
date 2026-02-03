@@ -3,6 +3,7 @@ package artifact_store
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -15,9 +16,9 @@ func TestStreamingUploader(t *testing.T) {
 	testStreamConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -87,9 +88,15 @@ func TestStreamingUploader(t *testing.T) {
 		}()
 
 		_, err := uploader.Upload(ctx, req)
-		// Either success or context canceled is acceptable
-		if err != nil && err != context.Canceled {
-			// OK - upload may have completed before cancel
+		// Either success or cancellation (possibly wrapped) is acceptable
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			if errors.Is(err, ErrInvalidInput) && strings.Contains(err.Error(), "context canceled") {
+				return
+			}
+			t.Fatalf("unexpected upload error: %v", err)
 		}
 	})
 }
@@ -115,9 +122,9 @@ func TestStreamingDownloader(t *testing.T) {
 	testStreamConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
-		config.Project = "test-proj"
-		config.Bucket = "test-bucket"
+		config.Organization = testOrg
+		config.Project = testProj
+		config.Bucket = testBucket
 		return config
 	}
 
@@ -238,7 +245,7 @@ func TestResumableUploader(t *testing.T) {
 	t.Run("StartUpload", func(t *testing.T) {
 		backend, _ := NewWaldurStreamingBackend(&WaldurConfig{
 			UseFallbackMemory: true,
-			Organization:      "test-org",
+			Organization:      testOrg,
 		})
 
 		uploader := NewResumableUploader(backend, nil)
@@ -261,7 +268,7 @@ func TestResumableUploader(t *testing.T) {
 	t.Run("MarkChunkComplete", func(t *testing.T) {
 		backend, _ := NewWaldurStreamingBackend(&WaldurConfig{
 			UseFallbackMemory: true,
-			Organization:      "test-org",
+			Organization:      testOrg,
 		})
 
 		uploader := NewResumableUploader(backend, nil)

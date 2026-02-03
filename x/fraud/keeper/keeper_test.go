@@ -21,6 +21,9 @@ import (
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 )
 
+// testFraudDescription is a test fraud report description that exceeds the minimum length
+const testFraudDescription = "This is a detailed fraud report description that exceeds the minimum length."
+
 // MockRolesKeeper implements a mock roles keeper for testing
 type MockRolesKeeper struct {
 	moderators map[string]bool
@@ -143,7 +146,7 @@ func TestKeeper_SubmitFraudReport(t *testing.T) {
 	mockProvider.SetProvider(reporter.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	report := types.NewFraudReport(
 		"", // Will be auto-generated
@@ -201,7 +204,7 @@ func TestKeeper_SubmitFraudReport_UnauthorizedReporter(t *testing.T) {
 	// Not setting reporter as provider
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	report := types.NewFraudReport(
 		"",
@@ -228,7 +231,7 @@ func TestKeeper_GetFraudReportsByReporter(t *testing.T) {
 	mockProvider.SetProvider(reporter.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	// Submit two reports from the same reporter
 	for i := 0; i < 2; i++ {
@@ -261,7 +264,7 @@ func TestKeeper_GetFraudReportsByStatus(t *testing.T) {
 	mockProvider.SetProvider(reporter.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	// Submit a report
 	report := types.NewFraudReport(
@@ -357,7 +360,7 @@ func TestKeeper_AssignModerator_Unauthorized(t *testing.T) {
 	mockProvider.SetProvider(reporter.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	report := types.NewFraudReport(
 		"",
@@ -391,7 +394,7 @@ func TestKeeper_ResolveFraudReport(t *testing.T) {
 	mockRoles.SetModerator(moderator.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	report := types.NewFraudReport(
 		"",
@@ -461,7 +464,7 @@ func TestKeeper_RejectFraudReport(t *testing.T) {
 	mockRoles.SetModerator(moderator.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	report := types.NewFraudReport(
 		"",
@@ -509,7 +512,7 @@ func TestKeeper_EscalateFraudReport(t *testing.T) {
 	mockRoles.SetModerator(moderator.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	report := types.NewFraudReport(
 		"",
@@ -563,7 +566,7 @@ func TestKeeper_ModeratorQueue(t *testing.T) {
 	mockProvider.SetProvider(reporter.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	// Submit multiple reports with different categories
 	categories := []types.FraudCategory{
@@ -606,7 +609,7 @@ func TestKeeper_AuditLogs(t *testing.T) {
 	mockRoles.SetModerator(moderator.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	report := types.NewFraudReport(
 		"",
@@ -740,7 +743,7 @@ func TestKeeper_WithFraudReports(t *testing.T) {
 	mockProvider.SetProvider(reporter.String())
 
 	evidence := createValidEvidence()
-	description := "This is a detailed fraud report description that exceeds the minimum length."
+	description := testFraudDescription
 
 	// Submit 3 reports
 	for i := 0; i < 3; i++ {

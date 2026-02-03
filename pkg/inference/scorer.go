@@ -397,4 +397,3 @@ func MustNewScorer(config InferenceConfig) Scorer {
 	}
 	return scorer
 }
-

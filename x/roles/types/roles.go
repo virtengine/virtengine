@@ -151,8 +151,8 @@ func AllRoles() []Role {
 
 // RoleAssignment represents a role assigned to an account
 type RoleAssignment struct {
-	Address   string `json:"address"`
-	Role      Role   `json:"role"`
+	Address    string `json:"address"`
+	Role       Role   `json:"role"`
 	AssignedBy string `json:"assigned_by"`
 	AssignedAt int64  `json:"assigned_at"`
 }

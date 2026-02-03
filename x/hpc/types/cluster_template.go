@@ -328,14 +328,14 @@ type MaintenanceWindow struct {
 
 // Validation regex patterns
 var (
-	partitionNameRegex     = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,62}$`)
-	templateNameRegex      = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{2,63}$`)
-	semverRegex            = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
-	validPartitionStates   = map[string]bool{"up": true, "down": true, "drain": true, "inactive": true}
-	validPreemptModes      = map[string]bool{"off": true, "suspend": true, "requeue": true, "cancel": true}
-	validStorageTypes      = map[string]bool{"nvme": true, "ssd": true, "hdd": true, "lustre": true, "gpfs": true, "cephfs": true}
-	validNetworkTypes      = map[string]bool{"infiniband": true, "ethernet": true, "roce": true}
-	validSchedulerTypes    = map[string]bool{"slurm": true, "pbs": true, "custom": true}
+	partitionNameRegex   = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{0,62}$`)
+	templateNameRegex    = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{2,63}$`)
+	semverRegex          = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
+	validPartitionStates = map[string]bool{"up": true, "down": true, "drain": true, "inactive": true}
+	validPreemptModes    = map[string]bool{"off": true, "suspend": true, "requeue": true, "cancel": true}
+	validStorageTypes    = map[string]bool{"nvme": true, "ssd": true, "hdd": true, "lustre": true, "gpfs": true, "cephfs": true}
+	validNetworkTypes    = map[string]bool{"infiniband": true, "ethernet": true, "roce": true}
+	validSchedulerTypes  = map[string]bool{"slurm": true, "pbs": true, "custom": true}
 )
 
 // Validate validates a cluster template

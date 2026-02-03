@@ -831,15 +831,7 @@ func (c *OODProductionClient) convertTemplates(templates []oodTemplateResponse) 
 	for _, t := range templates {
 		params := make([]TemplateParameter, 0, len(t.Parameters))
 		for _, p := range t.Parameters {
-			params = append(params, TemplateParameter{
-				Name:        p.Name,
-				Label:       p.Label,
-				Type:        p.Type,
-				Required:    p.Required,
-				Default:     p.Default,
-				Options:     p.Options,
-				Description: p.Description,
-			})
+			params = append(params, TemplateParameter(p))
 		}
 
 		result = append(result, JobTemplate{
@@ -1196,4 +1188,3 @@ func (c *OODProductionClient) convertActiveJobs(jobs []oodActiveJob) []ActiveJob
 
 // Ensure OODProductionClient implements OODClient interface.
 var _ OODClient = (*OODProductionClient)(nil)
-

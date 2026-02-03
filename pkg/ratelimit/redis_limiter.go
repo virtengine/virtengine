@@ -594,9 +594,10 @@ func (r *RedisRateLimiter) recordMetric(allowed bool, limitType LimitType, key s
 		r.metrics.blockedRequests++
 
 		// Track by type
-		if limitType == LimitTypeIP {
+		switch limitType {
+		case LimitTypeIP:
 			r.metrics.blockedIPCounts[key]++
-		} else if limitType == LimitTypeUser {
+		case LimitTypeUser:
 			r.metrics.blockedUserCounts[key]++
 		}
 	}
@@ -636,4 +637,3 @@ func (r *RedisRateLimiter) getTopBlocked(counts map[string]uint64, limit int) []
 
 	return result
 }
-

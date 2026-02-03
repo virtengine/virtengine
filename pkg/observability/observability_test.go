@@ -13,8 +13,8 @@ import (
 const (
 	testLogFormatJSON = "json"
 	// Use field names that are NOT in the default sensitive fields list
-	testFieldKey      = "request_id"
-	testFieldValue    = "abc123"
+	testFieldKey   = "request_id"
+	testFieldValue = "abc123"
 )
 
 // helper to get map keys for debugging
@@ -431,4 +431,3 @@ func TestNoopImplementations(t *testing.T) {
 		_ = tracer.Extract(ctx, carrier)
 	})
 }
-

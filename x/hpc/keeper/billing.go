@@ -76,23 +76,23 @@ func (k Keeper) CalculateJobBilling(ctx sdk.Context, jobID string) (*types.HPCAc
 
 	// Create accounting record
 	record := &types.HPCAccountingRecord{
-		JobID:             jobID,
-		ClusterID:         job.ClusterID,
-		ProviderAddress:   job.ProviderAddress,
-		CustomerAddress:   job.CustomerAddress,
-		OfferingID:        job.OfferingID,
-		SchedulerType:     "", // Will be set by provider daemon
-		UsageMetrics:      finalSnapshot.CumulativeMetrics,
-		BillableAmount:    billable,
-		BillableBreakdown: *breakdown,
-		AppliedDiscounts:  appliedDiscounts,
-		ProviderReward:    providerReward,
-		PlatformFee:       platformFee,
+		JobID:              jobID,
+		ClusterID:          job.ClusterID,
+		ProviderAddress:    job.ProviderAddress,
+		CustomerAddress:    job.CustomerAddress,
+		OfferingID:         job.OfferingID,
+		SchedulerType:      "", // Will be set by provider daemon
+		UsageMetrics:       finalSnapshot.CumulativeMetrics,
+		BillableAmount:     billable,
+		BillableBreakdown:  *breakdown,
+		AppliedDiscounts:   appliedDiscounts,
+		ProviderReward:     providerReward,
+		PlatformFee:        platformFee,
 		SignedUsageRecords: signedRecordIDs,
-		Status:            types.AccountingStatusPending,
-		PeriodStart:       finalSnapshot.Metrics.SubmitTime,
-		PeriodEnd:         ctx.BlockTime(),
-		FormulaVersion:    rules.FormulaVersion,
+		Status:             types.AccountingStatusPending,
+		PeriodStart:        finalSnapshot.Metrics.SubmitTime,
+		PeriodEnd:          ctx.BlockTime(),
+		FormulaVersion:     rules.FormulaVersion,
 	}
 
 	if finalSnapshot.Metrics.EndTime != nil {

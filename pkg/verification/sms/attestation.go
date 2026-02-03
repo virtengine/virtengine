@@ -135,10 +135,10 @@ func DefaultSMSAttestationConfig() SMSAttestationConfig {
 
 // DefaultSMSAttestationService implements SMSAttestationService
 type DefaultSMSAttestationService struct {
-	config       SMSAttestationConfig
-	signer       signer.SignerService
-	logger       zerolog.Logger
-	metrics      *Metrics
+	config  SMSAttestationConfig
+	signer  signer.SignerService
+	logger  zerolog.Logger
+	metrics *Metrics
 
 	// State
 	mu           sync.RWMutex
@@ -448,7 +448,7 @@ func (s *DefaultSMSAttestationService) VerifyAttestation(ctx context.Context, at
 	}
 
 	// No signer available - validate structure only
-	if err := attestation.VerificationAttestation.Validate(); err != nil {
+	if err := attestation.Validate(); err != nil {
 		return false, err
 	}
 

@@ -26,7 +26,7 @@ import (
 // BenchmarkIdentityUploadBurst benchmarks burst identity scope uploads.
 func BenchmarkIdentityUploadBurst(b *testing.B) {
 	client := NewMockChainClient()
-	
+
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -48,10 +48,10 @@ func TestIdentityBurstLoad(t *testing.T) {
 	t.Log("=== Load Test: Identity Scope Upload Burst ===")
 
 	config := LoadTestConfig{
-		Concurrency:     50,
-		Duration:        30 * time.Second,
-		RampUpDuration:  5 * time.Second,
-		TargetTPS:       100,
+		Concurrency:    50,
+		Duration:       30 * time.Second,
+		RampUpDuration: 5 * time.Second,
+		TargetTPS:      100,
 	}
 
 	client := NewMockChainClient()
@@ -152,7 +152,7 @@ func runIdentityBurstTest(t *testing.T, client *MockChainClient, config LoadTest
 // BenchmarkMarketplaceOrderBurst benchmarks burst order submissions.
 func BenchmarkMarketplaceOrderBurst(b *testing.B) {
 	client := NewMockChainClient()
-	
+
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -174,10 +174,10 @@ func TestMarketplaceBurstLoad(t *testing.T) {
 	t.Log("=== Load Test: Marketplace Order Burst ===")
 
 	config := LoadTestConfig{
-		Concurrency:     30,
-		Duration:        30 * time.Second,
-		RampUpDuration:  5 * time.Second,
-		TargetTPS:       50,
+		Concurrency:    30,
+		Duration:       30 * time.Second,
+		RampUpDuration: 5 * time.Second,
+		TargetTPS:      50,
 	}
 
 	client := NewMockChainClient()
@@ -263,7 +263,7 @@ func runMarketplaceBurstTest(t *testing.T, client *MockChainClient, config LoadT
 // BenchmarkHPCJobSubmission benchmarks HPC job submissions.
 func BenchmarkHPCJobSubmission(b *testing.B) {
 	client := NewMockChainClient()
-	
+
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -285,10 +285,10 @@ func TestHPCBurstLoad(t *testing.T) {
 	t.Log("=== Load Test: HPC Job Submission Burst ===")
 
 	config := LoadTestConfig{
-		Concurrency:     20,
-		Duration:        30 * time.Second,
-		RampUpDuration:  5 * time.Second,
-		TargetTPS:       30,
+		Concurrency:    20,
+		Duration:       30 * time.Second,
+		RampUpDuration: 5 * time.Second,
+		TargetTPS:      30,
 	}
 
 	client := NewMockChainClient()
@@ -374,9 +374,9 @@ func TestDaemonBackpressure(t *testing.T) {
 	t.Log("=== Load Test: Daemon Backpressure ===")
 
 	daemon := NewMockProviderDaemon(DaemonConfig{
-		MaxConcurrentJobs:    10,
-		EventBufferSize:      100,
-		ProcessingTimeout:    5 * time.Second,
+		MaxConcurrentJobs: 10,
+		EventBufferSize:   100,
+		ProcessingTimeout: 5 * time.Second,
 	})
 
 	// Generate events faster than daemon can process
@@ -421,10 +421,10 @@ func TestDaemonBackpressure(t *testing.T) {
 // =============================================================================
 
 type LoadTestConfig struct {
-	Concurrency     int
-	Duration        time.Duration
-	RampUpDuration  time.Duration
-	TargetTPS       int
+	Concurrency    int
+	Duration       time.Duration
+	RampUpDuration time.Duration
+	TargetTPS      int
 }
 
 type LoadTestResults struct {
@@ -463,7 +463,7 @@ func (r *LoadTestResults) calculatePercentiles() {
 
 // MockChainClient simulates chain interactions for load testing
 type MockChainClient struct {
-	mu sync.Mutex //nolint:unused // Reserved for thread-safe counter access
+	mu              sync.Mutex //nolint:unused // Reserved for thread-safe counter access
 	identityCounter int64
 	orderCounter    int64
 	jobCounter      int64
@@ -532,9 +532,9 @@ type ProviderBid struct {
 }
 
 type HPCJob struct {
-	UserID     string
-	Manifest   []byte
-	Resources  HPCResources
+	UserID    string
+	Manifest  []byte
+	Resources HPCResources
 }
 
 type HPCResources struct {
@@ -550,10 +550,10 @@ type DaemonConfig struct {
 }
 
 type MockProviderDaemon struct {
-	config          DaemonConfig
-	eventQueue      chan *ChainEvent
-	stats           DaemonStats
-	mu              sync.Mutex
+	config     DaemonConfig
+	eventQueue chan *ChainEvent
+	stats      DaemonStats
+	mu         sync.Mutex
 }
 
 type ChainEvent struct {
@@ -621,15 +621,15 @@ func generateIdentityPayload() *IdentityPayload {
 	scopes := make([]byte, 1024)
 	salt := make([]byte, 32)
 	sig := make([]byte, 64)
-	_, _ = io.ReadFull(rand.Reader, scopes)
-	_, _ = io.ReadFull(rand.Reader, salt)
-	_, _ = io.ReadFull(rand.Reader, sig)
+	mustReadFull(rand.Reader, scopes)
+	mustReadFull(rand.Reader, salt)
+	mustReadFull(rand.Reader, sig)
 	return &IdentityPayload{Scopes: scopes, Salt: salt, Signature: sig}
 }
 
 func generateMarketplaceOrder() *MarketplaceOrder {
 	id := make([]byte, 8)
-	io.ReadFull(rand.Reader, id)
+	mustReadFull(rand.Reader, id)
 	return &MarketplaceOrder{
 		CustomerID: "customer_" + hex.EncodeToString(id),
 		OfferingID: "offering_001",
@@ -647,7 +647,7 @@ func generateBid() *ProviderBid {
 
 func generateHPCJob() *HPCJob {
 	id := make([]byte, 8)
-	io.ReadFull(rand.Reader, id)
+	mustReadFull(rand.Reader, id)
 	return &HPCJob{
 		UserID:   "user_" + hex.EncodeToString(id),
 		Manifest: []byte(`#!/bin/bash\necho "Hello HPC"`),
@@ -656,6 +656,12 @@ func generateHPCJob() *HPCJob {
 			Memory: 8 * 1024 * 1024 * 1024,
 			GPUs:   0,
 		},
+	}
+}
+
+func mustReadFull(r io.Reader, b []byte) {
+	if _, err := io.ReadFull(r, b); err != nil {
+		panic(err)
 	}
 }
 

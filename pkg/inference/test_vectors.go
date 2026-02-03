@@ -511,6 +511,7 @@ func generateDeterministicEmbedding(dim int, seed int64, scale float32) []float3
 		m = 4294967296 // 2^32
 	)
 
+	//nolint:gosec // G115: seed is a positive test value used for deterministic embedding generation
 	state := uint64(seed)
 	for i := 0; i < dim; i++ {
 		state = (a*state + c) % m
@@ -550,7 +551,7 @@ func SaveTestVectorsToFile(vectors []TestVectorEntry, path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // ConvertToScoreInputs converts a TestVectorInput to ScoreInputs for inference
@@ -671,4 +672,3 @@ func buildFullFeatureVector(input TestVectorInput) []float32 {
 
 	return features
 }
-

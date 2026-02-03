@@ -27,6 +27,7 @@ func GetTxVEIDCmd() *cobra.Command {
 		RunE:                       sdkclient.ValidateCmd,
 	}
 	cmd.AddCommand(
+		GetTxVEIDRequestVerificationCmd(),
 		GetTxVEIDUploadScopeCmd(),
 		GetTxVEIDRevokeScopeCmd(),
 		GetTxVEIDCreateWalletCmd(),
@@ -34,6 +35,40 @@ func GetTxVEIDCmd() *cobra.Command {
 		GetTxVEIDUpdateVerificationCmd(),
 		GetTxVEIDUpdateScoreCmd(),
 	)
+	return cmd
+}
+
+// GetTxVEIDRequestVerificationCmd returns the command to request identity verification
+func GetTxVEIDRequestVerificationCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:               "request-verification [scope-id]",
+		Short:             "Request identity verification for a scope",
+		Args:              cobra.ExactArgs(1),
+		PersistentPreRunE: TxPersistentPreRunE,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cl := MustClientFromContext(ctx)
+			cctx := cl.ClientContext()
+
+			msg := &veidv1.MsgRequestVerification{
+				Sender:  cctx.FromAddress.String(),
+				ScopeId: args[0],
+			}
+
+			if err := msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
+			if err != nil {
+				return err
+			}
+
+			return cl.PrintMessage(resp)
+		},
+	}
+
+	cflags.AddTxFlagsToCmd(cmd)
 	return cmd
 }
 
@@ -220,7 +255,7 @@ Example:
 	// Encryption envelope flags
 	cmd.Flags().String("encrypted-payload-file", "", "Path to encrypted payload file (required)")
 	cmd.Flags().String("algorithm-id", "X25519-XSalsa20-Poly1305", "Encryption algorithm ID")
-	cmd.Flags().String("algorithm-version", "1.0", "Algorithm version")
+	cmd.Flags().String("algorithm-version", "1", "Algorithm version")
 	cmd.Flags().String("recipient-key-id", "", "Recipient validator key ID (required)")
 	cmd.Flags().String("recipient-pubkey", "", "Recipient public key (hex) (required)")
 	cmd.Flags().String("encrypted-key", "", "Encrypted symmetric key (hex) (required)")
@@ -298,7 +333,6 @@ Example:
 
 	cflags.AddTxFlagsToCmd(cmd)
 	cmd.Flags().String("reason", "", "Reason for revocation")
-	_ = cmd.MarkFlagRequired("reason")
 
 	return cmd
 }
@@ -372,11 +406,13 @@ func GetTxVEIDUpdateConsentCmd() *cobra.Command {
 
 Example:
   virtengine tx veid update-consent \
-    --data-processing=true \
-    --marketing=false \
-    --third-party-sharing=false
+    --scope-id my-scope \
+    --grant-consent=true \
+    --purpose "identity verification" \
+    --expires-at 1234567890 \
+    --user-signature <hex>
 `,
-		Args:              cobra.ExactArgs(0),
+		Args:              cobra.NoArgs,
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

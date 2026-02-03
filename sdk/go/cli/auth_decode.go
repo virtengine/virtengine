@@ -53,4 +53,3 @@ func GetDecodeCommand() *cobra.Command {
 
 	return cmd
 }
-

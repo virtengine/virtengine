@@ -49,4 +49,3 @@ var (
 	// ErrServiceUnavailable indicates the service is unavailable
 	ErrServiceUnavailable = errors.Register("verification/signer", 14, "service unavailable")
 )
-

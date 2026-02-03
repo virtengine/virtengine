@@ -664,4 +664,3 @@ var (
 	ErrIntOverflowServiceexpose          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupServiceexpose = fmt.Errorf("proto: unexpected end of group")
 )
-

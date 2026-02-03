@@ -17,9 +17,9 @@ type TransactionDetectorConfig struct {
 	MaxTxValueThreshold      float64 `json:"max_tx_value_threshold"`
 
 	// Pattern detection
-	RapidFireWindowSecs      int `json:"rapid_fire_window_secs"`
-	RapidFireThreshold       int `json:"rapid_fire_threshold"`
-	SplitTransactionWindow   int `json:"split_transaction_window_secs"`
+	RapidFireWindowSecs       int `json:"rapid_fire_window_secs"`
+	RapidFireThreshold        int `json:"rapid_fire_threshold"`
+	SplitTransactionWindow    int `json:"split_transaction_window_secs"`
 	SplitTransactionThreshold int `json:"split_transaction_threshold"`
 
 	// Anomaly detection
@@ -34,9 +34,9 @@ type TransactionDetectorConfig struct {
 // DefaultTransactionDetectorConfig returns default configuration
 func DefaultTransactionDetectorConfig() *TransactionDetectorConfig {
 	return &TransactionDetectorConfig{
-		MaxTxPerMinutePerAccount:  20,
-		MaxTxPerHourPerAccount:    200,
-		MaxTxValueThreshold:       1000000, // In smallest denomination
+		MaxTxPerMinutePerAccount: 20,
+		MaxTxPerHourPerAccount:   200,
+		MaxTxValueThreshold:      1000000, // In smallest denomination
 
 		RapidFireWindowSecs:       10,
 		RapidFireThreshold:        5,
@@ -53,20 +53,20 @@ func DefaultTransactionDetectorConfig() *TransactionDetectorConfig {
 
 // TransactionData represents a transaction for analysis
 type TransactionData struct {
-	TxHash          string                 `json:"tx_hash"`
-	Sender          string                 `json:"sender"`
-	Recipient       string                 `json:"recipient"`
-	Amount          float64                `json:"amount"`
-	Denom           string                 `json:"denom"`
-	MsgType         string                 `json:"msg_type"`
-	Timestamp       time.Time              `json:"timestamp"`
-	BlockHeight     int64                  `json:"block_height"`
-	GasUsed         int64                  `json:"gas_used"`
-	Success         bool                   `json:"success"`
-	Memo            string                 `json:"memo,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	AccountAge      time.Duration          `json:"account_age"`
-	IsHighRiskAccount bool                 `json:"is_high_risk_account"`
+	TxHash            string                 `json:"tx_hash"`
+	Sender            string                 `json:"sender"`
+	Recipient         string                 `json:"recipient"`
+	Amount            float64                `json:"amount"`
+	Denom             string                 `json:"denom"`
+	MsgType           string                 `json:"msg_type"`
+	Timestamp         time.Time              `json:"timestamp"`
+	BlockHeight       int64                  `json:"block_height"`
+	GasUsed           int64                  `json:"gas_used"`
+	Success           bool                   `json:"success"`
+	Memo              string                 `json:"memo,omitempty"`
+	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	AccountAge        time.Duration          `json:"account_age"`
+	IsHighRiskAccount bool                   `json:"is_high_risk_account"`
 }
 
 // TransactionDetector detects suspicious transaction patterns
@@ -158,10 +158,10 @@ func (d *TransactionDetector) checkReplayAttack(tx *TransactionData) {
 			Source:      tx.Sender,
 			Description: "Transaction replay attempt detected",
 			Metadata: map[string]interface{}{
-				"tx_hash":        tx.TxHash,
-				"original_time":  prevTime,
-				"replay_time":    tx.Timestamp,
-				"sender":         tx.Sender,
+				"tx_hash":       tx.TxHash,
+				"original_time": prevTime,
+				"replay_time":   tx.Timestamp,
+				"sender":        tx.Sender,
 			},
 		})
 	}
@@ -198,10 +198,10 @@ func (d *TransactionDetector) checkVelocityViolation(tx *TransactionData) {
 			Source:      tx.Sender,
 			Description: "Transaction velocity exceeded per-minute threshold",
 			Metadata: map[string]interface{}{
-				"sender":      tx.Sender,
-				"tx_count":    txInMinute,
-				"threshold":   d.config.MaxTxPerMinutePerAccount,
-				"window":      "1m",
+				"sender":    tx.Sender,
+				"tx_count":  txInMinute,
+				"threshold": d.config.MaxTxPerMinutePerAccount,
+				"window":    "1m",
 			},
 		})
 	}
@@ -380,11 +380,11 @@ func (d *TransactionDetector) checkNewAccountAbuse(tx *TransactionData) {
 				Source:      tx.Sender,
 				Description: "Suspicious activity from new account",
 				Metadata: map[string]interface{}{
-					"sender":       tx.Sender,
-					"account_age":  tx.AccountAge.String(),
-					"tx_count":     txInHour,
-					"threshold":    newAccountThreshold,
-					"cooldown":     cooldownDuration.String(),
+					"sender":      tx.Sender,
+					"account_age": tx.AccountAge.String(),
+					"tx_count":    txInHour,
+					"threshold":   newAccountThreshold,
+					"cooldown":    cooldownDuration.String(),
 				},
 			})
 		}
@@ -416,9 +416,9 @@ func (d *TransactionDetector) checkHighRiskAccount(tx *TransactionData) {
 			Source:      tx.Sender,
 			Description: "High-risk account exceeded transaction limit",
 			Metadata: map[string]interface{}{
-				"sender":    tx.Sender,
-				"tx_count":  txInHour,
-				"limit":     d.config.HighRiskAccountTxLimit,
+				"sender":   tx.Sender,
+				"tx_count": txInHour,
+				"limit":    d.config.HighRiskAccountTxLimit,
 			},
 		})
 	}
@@ -498,4 +498,3 @@ func calculateStats(values []float64) (mean, stdDev float64) {
 
 	return mean, stdDev
 }
-

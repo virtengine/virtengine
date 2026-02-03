@@ -328,11 +328,11 @@ func (m *KeyBackupManager) CreateBackup(passphrase string) (*KeyBackup, error) {
 
 	if m.config.IncludeMetadata {
 		backup.Metadata = &BackupMetadata{
-			BackupID:   generateBackupID(),
-			KeyCount:   len(backupData.Keys),
-			KeyTypes:   extractKeyTypes(backupData.Keys),
-			KeyLabels:  extractKeyLabels(backupData.Keys),
-			CreatedBy:  "key_backup_manager",
+			BackupID:    generateBackupID(),
+			KeyCount:    len(backupData.Keys),
+			KeyTypes:    extractKeyTypes(backupData.Keys),
+			KeyLabels:   extractKeyLabels(backupData.Keys),
+			CreatedBy:   "key_backup_manager",
 			Environment: "production",
 		}
 	}
@@ -521,7 +521,7 @@ func decryptBackup(ciphertext, nonce, key []byte) ([]byte, error) {
 // generateBackupID generates a unique backup ID
 func generateBackupID() string {
 	id := make([]byte, 16)
-	rand.Read(id)
+	_, _ = rand.Read(id)
 	return hex.EncodeToString(id)
 }
 
@@ -599,7 +599,7 @@ func (m *KeyBackupManager) SplitBackupIntoShares(backup *KeyBackup, threshold, t
 	for i, shareData := range shares {
 		// Encrypt each share with its passphrase
 		salt := make([]byte, 32)
-		rand.Read(salt)
+		_, _ = rand.Read(salt)
 
 		key := deriveKey(passphrases[i], salt, DefaultKeyDerivationParams())
 		encryptedShare, nonce, err := encryptBackup(shareData, key)
@@ -608,7 +608,10 @@ func (m *KeyBackupManager) SplitBackupIntoShares(backup *KeyBackup, threshold, t
 		}
 
 		// Combine salt, nonce, and encrypted data
-		combinedShare := append(salt, append(nonce, encryptedShare...)...)
+		combinedShare := make([]byte, 0, len(salt)+len(nonce)+len(encryptedShare))
+		combinedShare = append(combinedShare, salt...)
+		combinedShare = append(combinedShare, nonce...)
+		combinedShare = append(combinedShare, encryptedShare...)
 
 		checksum := sha256.Sum256(shareData)
 
@@ -743,7 +746,9 @@ func SecureBackupWithSecretBox(data []byte, passphrase string) ([]byte, error) {
 	encrypted := secretbox.Seal(nonce[:], data, &nonce, &keyArray)
 
 	// Prepend salt
-	result := append(salt, encrypted...)
+	result := make([]byte, 0, len(salt)+len(encrypted))
+	result = append(result, salt...)
+	result = append(result, encrypted...)
 
 	// Scrub key from memory
 	for i := range key {
@@ -793,4 +798,3 @@ func DecryptSecureBackup(encrypted []byte, passphrase string) ([]byte, error) {
 
 	return plaintext, nil
 }
-

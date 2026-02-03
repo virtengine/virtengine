@@ -93,17 +93,17 @@ type ControllerExperiment struct {
 
 // ControllerExperimentResults extends ExperimentResults with controller-specific fields.
 type ControllerExperimentResults struct {
-	ExperimentID          string         `json:"experiment_id"`
-	Success               bool           `json:"success"`
-	Error                 string         `json:"error,omitempty"`
-	StartTime             time.Time      `json:"start_time"`
-	EndTime               time.Time      `json:"end_time"`
-	Duration              time.Duration  `json:"duration"`
-	Timeline              []Event        `json:"timeline"`
-	SteadyStateVerified   bool           `json:"steady_state_verified"`
-	SteadyStateViolations []Violation    `json:"steady_state_violations,omitempty"`
-	ActionsExecuted       int            `json:"actions_executed"`
-	RollbackExecuted      bool           `json:"rollback_executed"`
+	ExperimentID          string             `json:"experiment_id"`
+	Success               bool               `json:"success"`
+	Error                 string             `json:"error,omitempty"`
+	StartTime             time.Time          `json:"start_time"`
+	EndTime               time.Time          `json:"end_time"`
+	Duration              time.Duration      `json:"duration"`
+	Timeline              []Event            `json:"timeline"`
+	SteadyStateVerified   bool               `json:"steady_state_verified"`
+	SteadyStateViolations []Violation        `json:"steady_state_violations,omitempty"`
+	ActionsExecuted       int                `json:"actions_executed"`
+	RollbackExecuted      bool               `json:"rollback_executed"`
 	MetricsData           map[string]float64 `json:"metrics,omitempty"`
 }
 
@@ -256,17 +256,17 @@ func (m *ControllerMetrics) Snapshot() ControllerMetrics {
 
 // ScheduledExperiment represents a scheduled experiment.
 type ScheduledExperiment struct {
-	Experiment   *ExperimentSpec `json:"experiment"`
-	Schedule     string          `json:"schedule"`
-	NextRun      time.Time       `json:"next_run"`
-	LastRun      *time.Time      `json:"last_run,omitempty"`
-	RunCount     int             `json:"run_count"`
-	Enabled      bool            `json:"enabled"`
+	Experiment *ExperimentSpec `json:"experiment"`
+	Schedule   string          `json:"schedule"`
+	NextRun    time.Time       `json:"next_run"`
+	LastRun    *time.Time      `json:"last_run,omitempty"`
+	RunCount   int             `json:"run_count"`
+	Enabled    bool            `json:"enabled"`
 }
 
 // ExperimentScheduler schedules experiments for recurring execution.
 type ExperimentScheduler struct {
-	cronSchedule string //nolint:unused // Reserved for cron-based scheduling
+	cronSchedule    string //nolint:unused // Reserved for cron-based scheduling
 	enabled         bool
 	experimentQueue []*ExperimentSpec
 	scheduled       map[string]*ScheduledExperiment
@@ -1073,4 +1073,3 @@ func (c *Controller) finalizeResults(exp *ExperimentSpec, results *ExperimentRes
 
 	return results
 }
-

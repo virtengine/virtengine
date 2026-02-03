@@ -334,10 +334,10 @@ func TestAutoReset(t *testing.T) {
 func TestCalculateBurnRate(t *testing.T) {
 	// Create a budget that has been running for 10 hours
 	budget := &Budget{
-		BudgetMinutes: 40.32,  // 28-day period at 99.90%
-		BudgetPeriod:  28 * 24 * time.Hour,
-		LastReset:     time.Now().Add(-10 * time.Hour),
-		ConsumedMinutes: 2.0,  // Consumed 2 minutes in 10 hours
+		BudgetMinutes:   40.32, // 28-day period at 99.90%
+		BudgetPeriod:    28 * 24 * time.Hour,
+		LastReset:       time.Now().Add(-10 * time.Hour),
+		ConsumedMinutes: 2.0, // Consumed 2 minutes in 10 hours
 	}
 
 	burnRate := calculateBurnRate(budget)
@@ -367,5 +367,3 @@ func BenchmarkRecordDowntime(b *testing.B) {
 		_ = manager.RecordDowntime("bench-service", "SLO-BENCH-001", 1*time.Second)
 	}
 }
-
-

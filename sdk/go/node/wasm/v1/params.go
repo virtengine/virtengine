@@ -9,6 +9,7 @@ import (
 var _ paramtypes.ParamSet = (*Params)(nil)
 
 // ParamKeyTable for wasm module
+//
 // Deprecated: now params can be accessed on key `0x01` on the wasm store.
 func ParamKeyTable() paramtypes.KeyTable {
 	return paramtypes.NewKeyTable().RegisterParamSet(&Params{})
@@ -31,4 +32,3 @@ func (p Params) Validate() error {
 
 	return nil
 }
-

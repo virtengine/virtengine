@@ -162,4 +162,3 @@ func getExtensionsNumbers(m proto.Message) []int32 {
 	}
 	return out
 }
-

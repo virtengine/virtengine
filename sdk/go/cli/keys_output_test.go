@@ -40,7 +40,7 @@ func TestBech32KeysOutput(t *testing.T) {
 	out, err := MkAccKeyOutput(k)
 	require.NoError(t, err)
 	require.Equal(t, expectedOutput, out)
-	
+
 	// Verify the output structure instead of hardcoding the address
 	// which can be non-deterministic due to multisig encoding changes
 	require.Equal(t, "multisig", out.Name)
@@ -73,7 +73,7 @@ func TestBech32KeysOutputNestedMsig(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, expectedOutput, out)
-	
+
 	// Verify the output structure instead of hardcoding the address
 	// which can be non-deterministic due to multisig encoding changes
 	require.Equal(t, "multisig", out.Name)
@@ -110,4 +110,3 @@ func TestProtoMarshalJSON(t *testing.T) {
 	require.Equal(ko.Address, sdk.AccAddress(pk2.Address()).String())
 	require.Equal(ko.PubKey, string(bz))
 }
-

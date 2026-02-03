@@ -77,7 +77,7 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_Success() {
 		GeoHint:           "US",
 	}
 
-	resp, err := s.msgServer.UploadScope(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.UploadScope(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().Equal("test-scope-msg-1", resp.ScopeId)
@@ -96,7 +96,7 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_InvalidSender() {
 		ScopeId: "test-scope-invalid",
 	}
 
-	_, err := s.msgServer.UploadScope(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.UploadScope(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "invalid")
 }
@@ -128,7 +128,7 @@ func (s *MsgServerTestSuite) TestMsgUploadScope_UnapprovedClient() {
 		PayloadHash:       metadata.PayloadHash,
 	}
 
-	_, err = s.msgServer.UploadScope(sdk.WrapSDKContext(s.ctx), msg)
+	_, err = s.msgServer.UploadScope(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "not approved")
 }
@@ -163,7 +163,7 @@ func (s *MsgServerTestSuite) TestMsgRevokeScope_Success() {
 		Reason:  "user requested revocation",
 	}
 
-	resp, err := s.msgServer.RevokeScope(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.RevokeScope(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().Equal("scope-to-revoke-msg", resp.ScopeId)
@@ -184,7 +184,7 @@ func (s *MsgServerTestSuite) TestMsgRevokeScope_NotFound() {
 		Reason:  "test",
 	}
 
-	_, err := s.msgServer.RevokeScope(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.RevokeScope(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "not found")
 }
@@ -218,7 +218,7 @@ func (s *MsgServerTestSuite) TestMsgRequestVerification_Success() {
 		ScopeId: "scope-verify-req",
 	}
 
-	resp, err := s.msgServer.RequestVerification(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.RequestVerification(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().Equal("scope-verify-req", resp.ScopeId)
@@ -239,7 +239,7 @@ func (s *MsgServerTestSuite) TestMsgRequestVerification_NotFound() {
 		ScopeId: "nonexistent-scope",
 	}
 
-	_, err := s.msgServer.RequestVerification(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.RequestVerification(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "not found")
 }
@@ -276,7 +276,7 @@ func (s *MsgServerTestSuite) TestMsgRequestVerification_RevokedScope() {
 		ScopeId: "scope-revoked-verify",
 	}
 
-	_, err = s.msgServer.RequestVerification(sdk.WrapSDKContext(s.ctx), msg)
+	_, err = s.msgServer.RequestVerification(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "revoked")
 }
@@ -293,7 +293,7 @@ func (s *MsgServerTestSuite) TestMsgUpdateScore_RecordNotFound() {
 		ScoreVersion:   "v1.0",
 	}
 
-	_, err := s.msgServer.UpdateScore(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.UpdateScore(s.ctx, msg)
 	s.Require().Error(err)
 	// Should fail due to not being a validator
 	s.Require().Contains(err.Error(), "validator")
@@ -312,7 +312,7 @@ func (s *MsgServerTestSuite) TestMsgCreateIdentityWallet_Success() {
 		BindingSignature: bindingSignature,
 	}
 
-	resp, err := s.msgServer.CreateIdentityWallet(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.CreateIdentityWallet(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().NotEmpty(resp.WalletId)
@@ -329,7 +329,7 @@ func (s *MsgServerTestSuite) TestMsgCreateIdentityWallet_InvalidSender() {
 		Sender: "invalid-address",
 	}
 
-	_, err := s.msgServer.CreateIdentityWallet(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.CreateIdentityWallet(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "invalid")
 }
@@ -365,7 +365,7 @@ func (s *MsgServerTestSuite) TestMsgUpdateBorderlineParams_Unauthorized() {
 		Params:    types.DefaultBorderlineParams(),
 	}
 
-	_, err := s.msgServer.UpdateBorderlineParams(sdk.WrapSDKContext(s.ctx), msg)
+	_, err := s.msgServer.UpdateBorderlineParams(s.ctx, msg)
 	s.Require().Error(err)
 	s.Require().Contains(err.Error(), "invalid authority")
 }
@@ -377,7 +377,7 @@ func (s *MsgServerTestSuite) TestMsgUpdateBorderlineParams_Success() {
 		Params:    types.DefaultBorderlineParams(),
 	}
 
-	resp, err := s.msgServer.UpdateBorderlineParams(sdk.WrapSDKContext(s.ctx), msg)
+	resp, err := s.msgServer.UpdateBorderlineParams(s.ctx, msg)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 }

@@ -242,7 +242,7 @@ func (m *msgServer) VerifyChallenge(goCtx context.Context, msg *types.MsgVerifyC
 	}
 
 	// Verify the challenge
-	verified, err := m.Keeper.VerifyMFAChallenge(ctx, msg.ChallengeID, msg.Response)
+	verified, err := m.VerifyMFAChallenge(ctx, msg.ChallengeID, msg.Response)
 	if err != nil {
 		return &types.MsgVerifyChallengeResponse{
 			Verified: false,
@@ -279,13 +279,13 @@ func (m *msgServer) VerifyChallenge(goCtx context.Context, msg *types.MsgVerifyC
 		session.DeviceFingerprint = msg.Response.ClientInfo.DeviceFingerprint
 	}
 
-	if err := m.Keeper.CreateAuthorizationSession(ctx, session); err != nil {
+	if err := m.CreateAuthorizationSession(ctx, session); err != nil {
 		return nil, err
 	}
 
 	// Link session to challenge
 	challenge.SessionID = session.SessionID
-	m.UpdateChallenge(ctx, challenge)
+	_ = m.UpdateChallenge(ctx, challenge)
 
 	// Check if more factors are required
 	var remainingFactors []types.FactorType
@@ -369,7 +369,7 @@ func (m *msgServer) UpdateSensitiveTxConfig(goCtx context.Context, msg *types.Ms
 		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", m.GetAuthority(), msg.Authority)
 	}
 
-	if err := m.Keeper.SetSensitiveTxConfig(ctx, &msg.Config); err != nil {
+	if err := m.SetSensitiveTxConfig(ctx, &msg.Config); err != nil {
 		return nil, err
 	}
 
