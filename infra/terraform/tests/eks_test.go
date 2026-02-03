@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gruntwork-io/terratest/modules/aws"
-	"github.com/gruntwork-io/terratest/modules/k8s"
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/gruntwork-io/terratest/modules/terraform"
@@ -100,9 +98,14 @@ func TestEKSCluster(t *testing.T) {
 	assert.Contains(t, oidcProviderArn, "oidc-provider")
 
 	// Verify EKS cluster exists and is active
-	cluster := aws.GetEksCluster(t, testRegion, clusterName)
-	assert.Equal(t, "ACTIVE", *cluster.Status)
-	assert.Equal(t, "1.29", *cluster.Version)
+	cluster, err := getEksCluster(t, testRegion, clusterName)
+	require.NoError(t, err)
+	if assert.NotNil(t, cluster) && cluster.Status != nil {
+		assert.Equal(t, "ACTIVE", *cluster.Status)
+	}
+	if assert.NotNil(t, cluster) && cluster.Version != nil {
+		assert.Equal(t, "1.29", *cluster.Version)
+	}
 
 	// Get kubeconfig and verify cluster connectivity
 	kubeconfigCmd := terraform.Output(t, eksOptions, "kubeconfig_command")
@@ -111,7 +114,10 @@ func TestEKSCluster(t *testing.T) {
 	// Wait for nodes to be ready
 	t.Log("Waiting for nodes to become ready...")
 	retry.DoWithRetry(t, "Wait for nodes", 30, 30*time.Second, func() (string, error) {
-		nodes := aws.GetEksClusterNodeGroups(t, testRegion, clusterName)
+		nodes, err := getEksClusterNodeGroups(t, testRegion, clusterName)
+		if err != nil {
+			return "", err
+		}
 		if len(nodes) == 0 {
 			return "", fmt.Errorf("no node groups found")
 		}

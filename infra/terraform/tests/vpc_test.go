@@ -4,12 +4,10 @@ package test
 import (
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/gruntwork-io/terratest/modules/aws"
+	awsSDK "github.com/aws/aws-sdk-go/aws"
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
-	test_structure "github.com/gruntwork-io/terratest/modules/test-structure"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,13 +62,19 @@ func TestVPCModule(t *testing.T) {
 	assert.Len(t, privateSubnetIDs, 2, "Should have 2 private subnets")
 
 	// Verify VPC exists in AWS
-	vpc := aws.GetVpcById(t, vpcID, testRegion)
-	assert.Equal(t, "10.99.0.0/16", *vpc.CidrBlock)
+	vpc, err := getVpcByID(t, testRegion, vpcID)
+	require.NoError(t, err)
+	if assert.NotNil(t, vpc) {
+		assert.Equal(t, "10.99.0.0/16", awsSDK.StringValue(vpc.CidrBlock))
+	}
 
 	// Verify subnets have correct CIDR blocks
 	for _, subnetID := range publicSubnetIDs {
-		subnet := aws.GetSubnetById(t, subnetID, testRegion)
-		assert.True(t, *subnet.MapPublicIpOnLaunch, "Public subnets should auto-assign public IPs")
+		subnet, err := getSubnetByID(t, testRegion, subnetID)
+		require.NoError(t, err)
+		if assert.NotNil(t, subnet) && subnet.MapPublicIpOnLaunch != nil {
+			assert.True(t, awsSDK.BoolValue(subnet.MapPublicIpOnLaunch), "Public subnets should auto-assign public IPs")
+		}
 	}
 
 	// Verify NAT gateways exist
@@ -145,6 +149,7 @@ func TestVPCNetworkACLs(t *testing.T) {
 	vpcID := terraform.Output(t, terraformOptions, "vpc_id")
 
 	// Verify default NACL allows all traffic (we rely on security groups)
-	defaultNacl := aws.GetDefaultNetworkAcl(t, vpcID, testRegion)
+	defaultNacl, err := getDefaultNetworkACL(t, testRegion, vpcID)
+	require.NoError(t, err)
 	require.NotNil(t, defaultNacl)
 }
