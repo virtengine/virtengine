@@ -6,6 +6,7 @@ import (
 	"context"
 	"path/filepath"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
 	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
+	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 
 	"github.com/virtengine/virtengine/testutil"
 )
@@ -283,8 +285,8 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 		cli.TestFlags().
 			WithFrom(addr.String()).
 			WithOrderID(createdOrder.ID).
-			WithDeposit(sdk.NewCoin("uve", sdk.NewInt(5000000))).
-			WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdk.MustNewDecFromStr("1.1"))).
+			WithDeposit(sdk.NewCoin("uve", sdkmath.NewInt(5000000))).
+			WithPrice(sdk.NewDecCoinFromDec(sdktestutil.VEDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
 			WithSkipConfirm().
 			WithGasAutoFlags().
 			WithBroadcastModeBlock()...,

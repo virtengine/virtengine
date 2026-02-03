@@ -11,7 +11,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
-	sdktestutil "github.com/cosmos/cosmos-sdk/testutil/cli"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
@@ -337,7 +336,7 @@ func (s *deploymentIntegrationTestSuite) TestGroup() {
 			WithOutputJSON().
 			WithOwner(grp.ID.Owner).
 			WithDSeq(grp.ID.DSeq).
-			WithGseq(grp.ID.GSeq)...,
+			WithGSeq(grp.ID.GSeq)...,
 	)
 	s.Require().NoError(err)
 
@@ -367,7 +366,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		deploymentPath,
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
-			WithDepositor(s.addrFunder).
+			WithDepositSources([]string{"grant"}).
 			WithDSeq(deploymentID.DSeq).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
@@ -404,7 +403,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
 			WithDSeq(deploymentID.DSeq).
-			WithDepositor(s.addrFunder).
+			WithDepositSources([]string{"grant"}).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,
@@ -458,7 +457,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
 			WithDSeq(deploymentID.DSeq).
-			WithDepositor(s.addrFunder).
+			WithDepositSources([]string{"grant"}).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,
@@ -498,7 +497,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 		cli.TestFlags().
 			WithFrom(s.addrDeployer.String()).
 			WithDSeq(deploymentID.DSeq).
-			WithDepositor(s.addrFunder).
+			WithDepositSources([]string{"grant"}).
 			WithSkipConfirm().
 			WithBroadcastModeBlock().
 			WithGasAutoFlags()...,
@@ -533,7 +532,7 @@ func (s *deploymentIntegrationTestSuite) TestFundedDeployment() {
 
 func (s *deploymentIntegrationTestSuite) getAccountBalance(address sdk.AccAddress) sdkmath.Int {
 	cctxJSON := s.Network().Validators[0].ClientCtx.WithOutputFormat("json")
-	res, err := sdktestutil.QueryBalancesExec(cctxJSON, address)
+	res, err := clitestutil.QueryBalancesExec(context.Background(), cctxJSON, address.String())
 	s.Require().NoError(err)
 	var balRes banktypes.QueryAllBalancesResponse
 	err = cctxJSON.Codec.UnmarshalJSON(res.Bytes(), &balRes)

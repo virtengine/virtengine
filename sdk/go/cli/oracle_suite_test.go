@@ -26,6 +26,11 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/testutil"
 )
 
+const (
+	oracleAssetDenom = sdkutil.DenomVe
+	oracleBaseDenom  = sdkutil.DenomUSD
+)
+
 type OracleCLITestSuite struct {
 	CLITestSuite
 
@@ -74,7 +79,7 @@ func (s *OracleCLITestSuite) SetupSuite() {
 		s.cctx,
 		cmd,
 		cli.TestFlags().
-			With("uve", "usd", "5.47", time.Now().Format(time.RFC3339Nano)).
+			With(oracleAssetDenom, oracleBaseDenom, "5.47", time.Now().Format(time.RFC3339Nano)).
 			WithFrom(s.addrs[0].String()).
 			WithBroadcastModeSync().
 			WithSkipConfirm().
@@ -136,7 +141,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPrice() {
 		{
 			"feed price successfully",
 			cli.TestFlags().
-				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With(oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -147,7 +152,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPrice() {
 		{
 			"feed price with missing args",
 			cli.TestFlags().
-				With("uve").
+				With(oracleAssetDenom).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -157,7 +162,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPrice() {
 		{
 			"feed price without from address",
 			cli.TestFlags().
-				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With(oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
 			true,
@@ -196,7 +201,7 @@ func (s *OracleCLITestSuite) TestCLIQueryOraclePricesWithFilter() {
 			"query prices with asset filter",
 			cli.TestFlags().
 				WithOutput("json").
-				WithFlag(cflags.FlagAssetDenom, "uve"),
+				WithFlag(cflags.FlagAssetDenom, oracleAssetDenom),
 			false,
 			false,
 			0,
@@ -205,7 +210,7 @@ func (s *OracleCLITestSuite) TestCLIQueryOraclePricesWithFilter() {
 			"query prices with base denom filter",
 			cli.TestFlags().
 				WithOutput("json").
-				WithFlag(cflags.FlagBaseDenom, "usd"),
+				WithFlag(cflags.FlagBaseDenom, oracleBaseDenom),
 			false,
 			false,
 			0,
@@ -214,8 +219,8 @@ func (s *OracleCLITestSuite) TestCLIQueryOraclePricesWithFilter() {
 			"query prices with both filters",
 			cli.TestFlags().
 				WithOutput("json").
-				WithFlag(cflags.FlagAssetDenom, "uve").
-				WithFlag(cflags.FlagBaseDenom, "usd"),
+				WithFlag(cflags.FlagAssetDenom, oracleAssetDenom).
+				WithFlag(cflags.FlagBaseDenom, oracleBaseDenom),
 			false,
 			false,
 			0,
@@ -258,8 +263,8 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceMultipleDenoms() {
 		price     string
 		timestamp string
 	}{
-		{"uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)},
-		{"usdc", "usd", "1.00", time.Now().Format(time.RFC3339Nano)},
+		{oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)},
+		{"usdc", oracleBaseDenom, "1.00", time.Now().Format(time.RFC3339Nano)},
 	}
 
 	for _, denom := range denoms {
@@ -290,7 +295,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceWithGasSettings() {
 		{
 			"feed price with auto gas",
 			cli.TestFlags().
-				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With(oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -301,7 +306,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceWithGasSettings() {
 		{
 			"feed price with gas adjustment",
 			cli.TestFlags().
-				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With(oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -313,7 +318,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceWithGasSettings() {
 		{
 			"feed price with gas prices",
 			cli.TestFlags().
-				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With(oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -399,7 +404,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceTimeouts() {
 		{
 			"feed price with timeout height",
 			cli.TestFlags().
-				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With(oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -410,7 +415,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceTimeouts() {
 		{
 			"feed price with timeout duration and unordered",
 			cli.TestFlags().
-				With("uve", "usd", "5.48", time.Now().Format(time.RFC3339Nano)).
+				With(oracleAssetDenom, oracleBaseDenom, "5.48", time.Now().Format(time.RFC3339Nano)).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync().
@@ -488,7 +493,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceEdgeCases() {
 		{
 			"feed price with empty denom",
 			cli.TestFlags().
-				With("", "usd").
+				With("", oracleBaseDenom).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -498,7 +503,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceEdgeCases() {
 		{
 			"feed price with empty base denom",
 			cli.TestFlags().
-				With("uve", "").
+				With(oracleAssetDenom, "").
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -508,7 +513,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceEdgeCases() {
 		{
 			"feed price with special characters in denom",
 			cli.TestFlags().
-				With("u@kt", "usd").
+				With("u@kt", oracleBaseDenom).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -518,7 +523,7 @@ func (s *OracleCLITestSuite) TestCLITxOracleFeedPriceEdgeCases() {
 		{
 			"feed price with very long denom",
 			cli.TestFlags().
-				With("thisisaverylongdenomthatexceedsthemaximumallowedsizeofonetwentyeightcharactersthisisaverylongdenomthatexceedsthemaximumallowedsizeofonetwentyeightcharacters", "usd").
+				With("thisisaverylongdenomthatexceedsthemaximumallowedsizeofonetwentyeightcharactersthisisaverylongdenomthatexceedsthemaximumallowedsizeofonetwentyeightcharacters", oracleBaseDenom).
 				WithFrom(s.addrs[0].String()).
 				WithSkipConfirm().
 				WithBroadcastModeSync(),
@@ -593,7 +598,7 @@ func (s *OracleCLITestSuite) TestCLIQueryOraclePriceFeedConfigValidation() {
 		{
 			"valid denom",
 			cli.TestFlags().
-				With("uve").
+				With(oracleAssetDenom).
 				WithOutputJSON(),
 			false,
 		},

@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -16,6 +17,7 @@ import (
 
 	"github.com/virtengine/virtengine/app"
 	"github.com/virtengine/virtengine/testutil/network"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 )
 
 // NewTestNetworkFixture returns a new simapp AppConstructor for network simulation tests
@@ -66,9 +68,28 @@ func NewTestNetworkFixture(opts ...network.TestnetFixtureOption) network.TestFix
 		)
 	}
 
+	genesisState := app.NewDefaultGenesisState(tapp.AppCodec())
+	if mfaGenesisBz, ok := genesisState[mfatypes.ModuleName]; ok {
+		var mfaGenesis mfatypes.GenesisState
+		if err := json.Unmarshal(mfaGenesisBz, &mfaGenesis); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal mfa genesis: %v", err))
+		}
+		for i, config := range mfaGenesis.SensitiveTxConfigs {
+			if config.TransactionType == mfatypes.SensitiveTxValidatorRegistration {
+				config.Enabled = false
+				mfaGenesis.SensitiveTxConfigs[i] = config
+			}
+		}
+		mfaGenesisBz, err := json.Marshal(&mfaGenesis)
+		if err != nil {
+			panic(fmt.Sprintf("failed to marshal mfa genesis: %v", err))
+		}
+		genesisState[mfatypes.ModuleName] = mfaGenesisBz
+	}
+
 	return network.TestFixture{
 		AppConstructor: appCtr,
-		GenesisState:   app.NewDefaultGenesisState(tapp.AppCodec()),
+		GenesisState:   genesisState,
 		EncodingConfig: cfgOpts.EncCfg,
 	}
 }
