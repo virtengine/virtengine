@@ -92,7 +92,7 @@ func (c *TFServingClient) Predict(ctx context.Context, features []float32) ([]fl
 // CheckHealth checks the model status via TensorFlow Serving REST API.
 func (c *TFServingClient) CheckHealth(ctx context.Context) (string, error) {
 	endpoint := c.baseURL
-	if _, err := c.checkHealthOnce(ctx, c.baseURL); err == nil {
+	if err := c.checkHealthOnce(ctx, c.baseURL); err == nil {
 		return endpoint, nil
 	}
 
@@ -101,14 +101,14 @@ func (c *TFServingClient) CheckHealth(ctx context.Context) (string, error) {
 	}
 
 	endpoint = c.fallbackURL
-	if _, err := c.checkHealthOnce(ctx, c.fallbackURL); err == nil {
+	if err := c.checkHealthOnce(ctx, c.fallbackURL); err == nil {
 		return endpoint, nil
 	}
 
 	return endpoint, fmt.Errorf("tf serving health check failed at %s and fallback %s", c.baseURL, c.fallbackURL)
 }
 
-func (c *TFServingClient) checkHealthOnce(ctx context.Context, baseURL string) (string, error) {
+func (c *TFServingClient) checkHealthOnce(ctx context.Context, baseURL string) error {
 	path := c.healthPath
 	if path == "" {
 		path = fmt.Sprintf("/v1/models/%s", c.modelName)
@@ -116,33 +116,33 @@ func (c *TFServingClient) checkHealthOnce(ctx context.Context, baseURL string) (
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
 	if err != nil {
-		return baseURL, err
+		return err
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return baseURL, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return baseURL, fmt.Errorf("tf serving health status %d", resp.StatusCode)
+		return fmt.Errorf("tf serving health status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return baseURL, err
+		return err
 	}
 
 	if len(body) == 0 {
-		return baseURL, nil
+		return nil
 	}
 
 	if healthy, ok := parseTFServingHealth(body); ok && !healthy {
-		return baseURL, fmt.Errorf("tf serving model not available")
+		return fmt.Errorf("tf serving model not available")
 	}
 
-	return baseURL, nil
+	return nil
 }
 
 func (c *TFServingClient) predictOnce(ctx context.Context, baseURL string, features []float32) ([]float32, error) {

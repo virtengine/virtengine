@@ -286,7 +286,7 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 			WithFrom(addr.String()).
 			WithOrderID(createdOrder.ID).
 			WithDeposit(sdk.NewCoin("uve", sdkmath.NewInt(5000000))).
-			WithPrice(sdk.NewDecCoinFromDec(sdktestutil.VEDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
+			WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
 			WithSkipConfirm().
 			WithGasAutoFlags().
 			WithBroadcastModeBlock()...,

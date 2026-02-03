@@ -33,6 +33,8 @@ type ModelLoader struct {
 	loadedModel *TFModel
 }
 
+const defaultInputName = "features"
+
 // NewModelLoader creates a new model loader
 func NewModelLoader(config InferenceConfig) *ModelLoader {
 	return &ModelLoader{
@@ -176,7 +178,7 @@ func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
 		return &ModelMetadata{
 			Version:     ml.config.ModelVersion,
-			InputName:   "features",
+			InputName:   defaultInputName,
 			OutputName:  "trust_score",
 			InputShape:  []int64{-1, TotalFeatureDim},
 			OutputShape: []int64{-1, 1},
@@ -208,7 +210,7 @@ func (ml *ModelLoader) loadMetadata(modelPath string) (*ModelMetadata, error) {
 	}
 
 	// Extract input/output names from signatures
-	inputName := "features"
+	inputName := defaultInputName
 	outputName := "trust_score"
 	var inputShape, outputShape []int64
 
@@ -293,7 +295,7 @@ func (ml *ModelLoader) getInputName(metadata *ModelMetadata) string {
 	if metadata != nil && metadata.InputName != "" {
 		return metadata.InputName
 	}
-	return "features"
+	return defaultInputName
 }
 
 // getOutputName returns the output tensor name
