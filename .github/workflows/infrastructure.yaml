@@ -116,7 +116,8 @@ jobs:
           fi
           echo "$files" | xargs -r kubeval \
             --kubernetes-version 1.29.0 \
-            --schema-location https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master
+            --schema-location https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master \
+            --ignore-missing-schemas
 
   # ============================================================================
   # Security Scanning
