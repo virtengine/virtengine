@@ -133,7 +133,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestB_ProviderRegistrationAndOfferings() {
 	})
 
 	s.Run("PublishOfferings", func() {
-		offerings := []MockOffering{
+		offerings := []MktE2EMockOffering{
 			{
 				OfferingID:   "hpc-compute-standard",
 				Name:         "HPC Compute Standard",
@@ -184,7 +184,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestC_OrderCreationAndAllocation() {
 	var allocationID string
 
 	s.Run("CreateTestOrder", func() {
-		order := MockOrder{
+		order := MktE2EMockOrder{
 			OrderID:      "order-e2e-test-1",
 			CustomerAddr: s.customerAddr,
 			OfferingID:   "hpc-compute-standard",
@@ -204,7 +204,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestC_OrderCreationAndAllocation() {
 	})
 
 	s.Run("ProviderPlacesBid", func() {
-		bid := MockBid{
+		bid := MktE2EMockBid{
 			BidID:        "bid-e2e-test-1",
 			OrderID:      orderID,
 			ProviderAddr: s.providerAddr,
@@ -416,12 +416,12 @@ func (s *HPCMarketplaceE2ETestSuite) TestF_InvoiceAndSettlement() {
 	var invoiceID string
 
 	s.Run("GenerateInvoice", func() {
-		invoice := MockInvoice{
+		invoice := MktE2EMockInvoice{
 			InvoiceID:    "invoice-e2e-1",
 			ProviderAddr: s.providerAddr,
 			CustomerAddr: s.customerAddr,
 			OrderID:      "order-e2e-test-1",
-			LineItems: []MockLineItem{
+			LineItems: []MktE2EMockLineItem{
 				{
 					ResourceType: "cpu",
 					Quantity:     14400, // core-seconds
@@ -723,7 +723,7 @@ func (s *HPCMarketplaceE2ETestSuite) TestH_NegativeScenarios() {
 	})
 
 	s.Run("DisputedSettlement", func() {
-		invoice := MockInvoice{
+		invoice := MktE2EMockInvoice{
 			InvoiceID:    "invoice-dispute-1",
 			ProviderAddr: s.providerAddr,
 			CustomerAddr: s.customerAddr,
@@ -975,13 +975,13 @@ func (m *MockHPCAuditLogger) GetEvents() []pd.HPCAuditEvent {
 // MockWaldurClient is a mock Waldur client for testing
 type MockWaldurClient struct {
 	providers   map[string]bool
-	offerings   map[string][]MockOffering
-	orders      map[string]MockOrder
-	bids        map[string][]MockBid
-	allocations map[string]MockAllocation
+	offerings   map[string][]MktE2EMockOffering
+	orders      map[string]MktE2EMockOrder
+	bids        map[string][]MktE2EMockBid
+	allocations map[string]MktE2EMockAllocation
 }
 
-type MockOffering struct {
+type MktE2EMockOffering struct {
 	OfferingID   string
 	Name         string
 	Category     string
@@ -993,7 +993,7 @@ type MockOffering struct {
 	WaldurUUID   string
 }
 
-type MockOrder struct {
+type MktE2EMockOrder struct {
 	OrderID      string
 	CustomerAddr string
 	OfferingID   string
@@ -1003,7 +1003,7 @@ type MockOrder struct {
 	Status       string
 }
 
-type MockBid struct {
+type MktE2EMockBid struct {
 	BidID        string
 	OrderID      string
 	ProviderAddr string
@@ -1011,7 +1011,7 @@ type MockBid struct {
 	TTL          time.Duration
 }
 
-type MockAllocation struct {
+type MktE2EMockAllocation struct {
 	AllocationID string
 	OrderID      string
 	ProviderAddr string
@@ -1021,10 +1021,10 @@ type MockAllocation struct {
 func NewMockWaldurClient() *MockWaldurClient {
 	return &MockWaldurClient{
 		providers:   make(map[string]bool),
-		offerings:   make(map[string][]MockOffering),
-		orders:      make(map[string]MockOrder),
-		bids:        make(map[string][]MockBid),
-		allocations: make(map[string]MockAllocation),
+		offerings:   make(map[string][]MktE2EMockOffering),
+		orders:      make(map[string]MktE2EMockOrder),
+		bids:        make(map[string][]MktE2EMockBid),
+		allocations: make(map[string]MktE2EMockAllocation),
 	}
 }
 
@@ -1036,7 +1036,7 @@ func (m *MockWaldurClient) IsProviderRegistered(addr string) bool {
 	return m.providers[addr]
 }
 
-func (m *MockWaldurClient) PublishOffering(ctx context.Context, offering MockOffering) error {
+func (m *MockWaldurClient) PublishOffering(ctx context.Context, offering MktE2EMockOffering) error {
 	offering.WaldurUUID = fmt.Sprintf("waldur-%s", offering.OfferingID)
 
 	// Use first provider address as key (simplified)
@@ -1047,7 +1047,7 @@ func (m *MockWaldurClient) PublishOffering(ctx context.Context, offering MockOff
 	return nil
 }
 
-func (m *MockWaldurClient) GetPublishedOfferings(providerAddr string) []MockOffering {
+func (m *MockWaldurClient) GetPublishedOfferings(providerAddr string) []MktE2EMockOffering {
 	return m.offerings[providerAddr]
 }
 
@@ -1063,18 +1063,18 @@ func (m *MockWaldurClient) GetSyncedOfferingIDs() []string {
 	return ids
 }
 
-func (m *MockWaldurClient) CreateOrder(ctx context.Context, order MockOrder) error {
+func (m *MockWaldurClient) CreateOrder(ctx context.Context, order MktE2EMockOrder) error {
 	order.Status = "open"
 	m.orders[order.OrderID] = order
 	return nil
 }
 
-func (m *MockWaldurClient) PlaceBid(ctx context.Context, bid MockBid) error {
+func (m *MockWaldurClient) PlaceBid(ctx context.Context, bid MktE2EMockBid) error {
 	m.bids[bid.OrderID] = append(m.bids[bid.OrderID], bid)
 	return nil
 }
 
-func (m *MockWaldurClient) GetBidsForOrder(orderID string) []MockBid {
+func (m *MockWaldurClient) GetBidsForOrder(orderID string) []MktE2EMockBid {
 	return m.bids[orderID]
 }
 
@@ -1092,7 +1092,7 @@ func (m *MockWaldurClient) AcceptBid(ctx context.Context, orderID, bidID string)
 		}
 	}
 
-	allocation := MockAllocation{
+	allocation := MktE2EMockAllocation{
 		AllocationID: fmt.Sprintf("alloc-%s", orderID),
 		OrderID:      orderID,
 		ProviderAddr: providerAddr,
@@ -1102,8 +1102,8 @@ func (m *MockWaldurClient) AcceptBid(ctx context.Context, orderID, bidID string)
 	return nil
 }
 
-func (m *MockWaldurClient) GetAllocationsForOrder(orderID string) []MockAllocation {
-	var result []MockAllocation
+func (m *MockWaldurClient) GetAllocationsForOrder(orderID string) []MktE2EMockAllocation {
+	var result []MktE2EMockAllocation
 	for _, alloc := range m.allocations {
 		if alloc.OrderID == orderID {
 			result = append(result, alloc)
@@ -1121,31 +1121,31 @@ func (m *MockWaldurClient) GetAllocationStatus(allocationID string) string {
 
 // MockSettlementClient is a mock settlement client for testing
 type MockSettlementClient struct {
-	invoices map[string]*MockInvoice
-	payouts  map[string]*MockPayout
-	fees     map[string]*MockFee
+	invoices map[string]*MktE2EMockInvoice
+	payouts  map[string]*MktE2EMockPayout
+	fees     map[string]*MktE2EMockFee
 }
 
-type MockInvoice struct {
+type MktE2EMockInvoice struct {
 	InvoiceID    string
 	ProviderAddr string
 	CustomerAddr string
 	OrderID      string
-	LineItems    []MockLineItem
+	LineItems    []MktE2EMockLineItem
 	TotalAmount  string
 	PeriodStart  time.Time
 	PeriodEnd    time.Time
 	Status       string
 }
 
-type MockLineItem struct {
+type MktE2EMockLineItem struct {
 	ResourceType string
 	Quantity     int64
 	UnitPrice    string
 	TotalCost    string
 }
 
-type MockPayout struct {
+type MktE2EMockPayout struct {
 	PayoutID  string
 	InvoiceID string
 	Provider  string
@@ -1153,7 +1153,7 @@ type MockPayout struct {
 	Status    string
 }
 
-type MockFee struct {
+type MktE2EMockFee struct {
 	FeeID     string
 	InvoiceID string
 	Amount    string
@@ -1161,18 +1161,18 @@ type MockFee struct {
 
 func NewMockSettlementClient() *MockSettlementClient {
 	return &MockSettlementClient{
-		invoices: make(map[string]*MockInvoice),
-		payouts:  make(map[string]*MockPayout),
-		fees:     make(map[string]*MockFee),
+		invoices: make(map[string]*MktE2EMockInvoice),
+		payouts:  make(map[string]*MktE2EMockPayout),
+		fees:     make(map[string]*MktE2EMockFee),
 	}
 }
 
-func (m *MockSettlementClient) CreateInvoice(ctx context.Context, invoice MockInvoice) error {
+func (m *MockSettlementClient) CreateInvoice(ctx context.Context, invoice MktE2EMockInvoice) error {
 	m.invoices[invoice.InvoiceID] = &invoice
 	return nil
 }
 
-func (m *MockSettlementClient) GetInvoice(invoiceID string) *MockInvoice {
+func (m *MockSettlementClient) GetInvoice(invoiceID string) *MktE2EMockInvoice {
 	return m.invoices[invoiceID]
 }
 
@@ -1188,7 +1188,7 @@ func (m *MockSettlementClient) TriggerSettlement(ctx context.Context, invoiceID 
 	invoice.Status = "settled"
 
 	// Create payout (97.5% to provider)
-	m.payouts[invoiceID] = &MockPayout{
+	m.payouts[invoiceID] = &MktE2EMockPayout{
 		PayoutID:  fmt.Sprintf("payout-%s", invoiceID),
 		InvoiceID: invoiceID,
 		Provider:  invoice.ProviderAddr,
@@ -1197,7 +1197,7 @@ func (m *MockSettlementClient) TriggerSettlement(ctx context.Context, invoiceID 
 	}
 
 	// Create platform fee (2.5%)
-	m.fees[invoiceID] = &MockFee{
+	m.fees[invoiceID] = &MktE2EMockFee{
 		FeeID:     fmt.Sprintf("fee-%s", invoiceID),
 		InvoiceID: invoiceID,
 		Amount:    "0.133", // 2.5% of 5.328
@@ -1206,11 +1206,11 @@ func (m *MockSettlementClient) TriggerSettlement(ctx context.Context, invoiceID 
 	return nil
 }
 
-func (m *MockSettlementClient) GetProviderPayout(providerAddr, invoiceID string) *MockPayout {
+func (m *MockSettlementClient) GetProviderPayout(providerAddr, invoiceID string) *MktE2EMockPayout {
 	return m.payouts[invoiceID]
 }
 
-func (m *MockSettlementClient) GetPlatformFee(invoiceID string) *MockFee {
+func (m *MockSettlementClient) GetPlatformFee(invoiceID string) *MktE2EMockFee {
 	return m.fees[invoiceID]
 }
 
