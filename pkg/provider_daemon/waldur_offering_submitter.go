@@ -28,6 +28,8 @@ import (
 	"github.com/virtengine/virtengine/x/marketplace"
 )
 
+const defaultKeyringBackend = "test"
+
 // ChainOfferingSubmitterConfig configures on-chain offering submission.
 type ChainOfferingSubmitterConfig struct {
 	ChainID           string
@@ -81,7 +83,7 @@ func NewChainOfferingSubmitter(ctx context.Context, cfg ChainOfferingSubmitterCo
 
 	backend := cfg.KeyringBackend
 	if backend == "" {
-		backend = "test"
+		backend = defaultKeyringBackend
 	}
 
 	in := strings.NewReader(cfg.KeyringPassphrase + "\n" + cfg.KeyringPassphrase + "\n")
@@ -105,10 +107,7 @@ func NewChainOfferingSubmitter(ctx context.Context, cfg ChainOfferingSubmitterCo
 		return nil, fmt.Errorf("connect comet rpc: %w", err)
 	}
 
-	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	grpcConn, err := grpc.DialContext(dialCtx, cfg.GRPCEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	grpcConn, err := grpc.NewClient(cfg.GRPCEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("dial grpc: %w", err)
 	}
