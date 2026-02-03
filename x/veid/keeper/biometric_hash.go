@@ -745,7 +745,7 @@ func BiometricHashByTypeKey(address sdk.AccAddress, templateType TemplateType, h
 	key = append(key, address...)
 	key = append(key, byte('/'))
 	typeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(typeBytes, uint32(templateType))
+	binary.BigEndian.PutUint32(typeBytes, safeUint32FromIntBiometric(int(templateType)))
 	key = append(key, typeBytes...)
 	key = append(key, []byte(hashID)...)
 	return key
@@ -758,7 +758,7 @@ func BiometricHashByTypePrefixKey(address sdk.AccAddress, templateType TemplateT
 	key = append(key, address...)
 	key = append(key, byte('/'))
 	typeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(typeBytes, uint32(templateType))
+	binary.BigEndian.PutUint32(typeBytes, safeUint32FromIntBiometric(int(templateType)))
 	key = append(key, typeBytes...)
 	return key
 }
@@ -898,10 +898,11 @@ func clearBytes(b []byte) {
 	}
 }
 
-//nolint:unused // reserved for future biometric similarity scoring
 // computeCosineSimilarity computes the cosine similarity between two vectors.
 // This is used for embedding comparison when LSH indicates a potential match.
 // Returns a value between -1.0 and 1.0.
+//
+//nolint:unused // reserved for future biometric similarity scoring
 func computeCosineSimilarity(a, b []float64) float64 {
 	if len(a) != len(b) || len(a) == 0 {
 		return 0.0

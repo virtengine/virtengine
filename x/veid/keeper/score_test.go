@@ -183,7 +183,8 @@ func (s *ScoreKeeperTestSuite) TestScoreHistoryPaginated() {
 	// Set multiple scores
 	for i := 0; i < 10; i++ {
 		s.ctx = s.ctx.WithBlockTime(s.ctx.BlockTime().Add(time.Minute)).WithBlockHeight(int64(100 + i))
-		err := s.keeper.SetScoreWithDetails(s.ctx, testScoreAddress1, uint32(50+i*5), keeper.ScoreDetails{
+		score := uint32(50 + i*5) //nolint:gosec // bounded test data
+		err := s.keeper.SetScoreWithDetails(s.ctx, testScoreAddress1, score, keeper.ScoreDetails{
 			Status: types.AccountStatusVerified, ModelVersion: "v1.0.0",
 		})
 		s.Require().NoError(err)

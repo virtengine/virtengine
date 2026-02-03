@@ -751,6 +751,8 @@ type UsageReportingMetrics struct {
 }
 
 // generateReconciliationID generates a unique reconciliation ID.
+//
+//nolint:unused // reserved for future reconciliation tracking
 func generateReconciliationID(allocationID string, timestamp time.Time) string {
 	data := allocationID + ":" + timestamp.Format(time.RFC3339Nano)
 	hash := sha256.Sum256([]byte(data))

@@ -369,6 +369,7 @@ type MockAzureNetworkClient struct {
 	nics         map[string]*AzureNICInfo
 	publicIPs    map[string]*AzurePublicIPInfo
 	failOnCreate bool
+	//nolint:unused // reserved for testing action failures
 	failOnAction bool
 	nicCounter   int
 	pipCounter   int
@@ -522,7 +523,7 @@ func (m *MockAzureNetworkClient) ListSubnets(ctx context.Context, resourceGroup,
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	result := make([]AzureSubnetInfo, 0)
+	result := make([]AzureSubnetInfo, 0, len(m.subnets))
 	for _, subnet := range m.subnets {
 		result = append(result, *subnet)
 	}

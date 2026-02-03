@@ -349,7 +349,8 @@ func (k Keeper) buildHistoricalInput(ctx sdk.Context, accountAddr string) types.
 
 	// Get prior verification history
 	history := k.GetScoreHistory(ctx, accountAddr)
-	input.VerificationHistoryCount = uint32(len(history))
+	historyCount := safeUint32FromIntBiometric(len(history))
+	input.VerificationHistoryCount = historyCount
 
 	if len(history) > 0 {
 		// Calculate average prior score
@@ -363,11 +364,11 @@ func (k Keeper) buildHistoricalInput(ctx sdk.Context, accountAddr string) types.
 		}
 
 		// Prior verification score is the average (in basis points)
-		avgScore := totalScore / uint32(len(history))
+		avgScore := totalScore / historyCount
 		input.PriorVerificationScore = avgScore * 100 // Convert 0-100 to basis points
 
 		// Success rate in basis points
-		input.SuccessfulVerificationRate = (successCount * uint32(types.MaxBasisPoints)) / uint32(len(history))
+		input.SuccessfulVerificationRate = (successCount * uint32(types.MaxBasisPoints)) / historyCount
 	}
 
 	return input

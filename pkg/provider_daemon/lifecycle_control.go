@@ -212,7 +212,7 @@ func (m *ResourceLifecycleManager) RegisterResource(info *ResourceInfo) error {
 		return errors.New("allocation ID is required")
 	}
 	if info.WaldurResourceUUID == "" {
-		return errors.New("Waldur resource UUID is required")
+		return errors.New("waldur resource UUID is required")
 	}
 
 	m.mu.Lock()

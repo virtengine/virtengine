@@ -19,7 +19,7 @@ var (
 	ErrBurnFailed             = errors.Register(ModuleName, 2613, "failed to burn tokens")
 )
 
-//var (
+// var (
 //	ErrInvalidPayer         = errors.Register(ModuleName, 2614, "invalid payer address")
 //	ErrInvalidOwner         = errors.Register(ModuleName, 2615, "invalid owner address")
 //	ErrInvalidRecipient     = errors.Register(ModuleName, 2616, "invalid recipient address")

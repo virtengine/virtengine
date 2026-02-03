@@ -353,6 +353,8 @@ func (s *KeeperTestSuite) TestInvalidStatusTransition() {
 // Test: Score update and tier calculation
 func (s *KeeperTestSuite) TestScoreUpdateAndTier() {
 	address := sdk.AccAddress([]byte(testAddress1))
+	verifiedTier := types.IdentityTierVerified //nolint:staticcheck // deprecated tiers kept for compatibility checks
+	trustedTier := types.IdentityTierTrusted   //nolint:staticcheck // deprecated tiers kept for compatibility checks
 
 	// Create identity record
 	_, err := s.keeper.CreateIdentityRecord(s.ctx, address)
@@ -383,14 +385,15 @@ func (s *KeeperTestSuite) TestScoreUpdateAndTier() {
 	s.Require().NoError(err)
 
 	record, _ = s.keeper.GetIdentityRecord(s.ctx, address)
-	s.Require().Equal(types.IdentityTierVerified, record.Tier)
+	s.Require().Equal(verifiedTier, record.Tier)
 
 	// Update score to 90 (Trusted tier)
 	err = s.keeper.UpdateScore(s.ctx, address, 90, "v1.0")
 	s.Require().NoError(err)
 
 	record, _ = s.keeper.GetIdentityRecord(s.ctx, address)
-	s.Require().Equal(types.IdentityTierTrusted, record.Tier)
+	//nolint:staticcheck // SA1019: testing deprecated tier for backwards compatibility
+	s.Require().Equal(trustedTier, record.Tier)
 }
 
 // Test: Salt binding - prevent salt reuse
@@ -534,15 +537,17 @@ func TestVerificationStatusTransitions(t *testing.T) {
 }
 
 func TestIdentityTierCalculation(t *testing.T) {
+	verifiedTier := types.IdentityTierVerified //nolint:staticcheck // deprecated tiers kept for compatibility checks
+	trustedTier := types.IdentityTierTrusted   //nolint:staticcheck // deprecated tiers kept for compatibility checks
 	require.Equal(t, types.IdentityTierUnverified, types.ComputeTierFromScore(0))
 	require.Equal(t, types.IdentityTierBasic, types.ComputeTierFromScore(1))
 	require.Equal(t, types.IdentityTierBasic, types.ComputeTierFromScore(29))
 	require.Equal(t, types.IdentityTierStandard, types.ComputeTierFromScore(30))
 	require.Equal(t, types.IdentityTierStandard, types.ComputeTierFromScore(59))
-	require.Equal(t, types.IdentityTierVerified, types.ComputeTierFromScore(60))
-	require.Equal(t, types.IdentityTierVerified, types.ComputeTierFromScore(84))
-	require.Equal(t, types.IdentityTierTrusted, types.ComputeTierFromScore(85))
-	require.Equal(t, types.IdentityTierTrusted, types.ComputeTierFromScore(100))
+	require.Equal(t, verifiedTier, types.ComputeTierFromScore(60))
+	require.Equal(t, verifiedTier, types.ComputeTierFromScore(84))
+	require.Equal(t, trustedTier, types.ComputeTierFromScore(85))
+	require.Equal(t, trustedTier, types.ComputeTierFromScore(100))
 }
 
 func TestScopeTypeWeights(t *testing.T) {

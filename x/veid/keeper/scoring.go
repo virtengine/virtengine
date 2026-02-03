@@ -175,7 +175,7 @@ func (si *ScoringInput) ComputeInputHash() []byte {
 
 	// Include block height for determinism
 	heightBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(heightBytes, uint64(si.BlockHeight))
+	binary.BigEndian.PutUint64(heightBytes, safeUint64FromInt64(si.BlockHeight))
 	h.Write(heightBytes)
 
 	// Include content hashes of all decrypted scopes (in order)

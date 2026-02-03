@@ -489,7 +489,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize Event Stream (PROVIDER-STREAM-001)
 	var eventSubscriber provider_daemon.EventSubscriber
-	
+
 	// Create checkpoint store
 	checkpointStore, err := provider_daemon.NewEventCheckpointStore(viper.GetString(FlagWaldurCheckpointFile))
 	if err != nil {

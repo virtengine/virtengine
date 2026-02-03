@@ -228,7 +228,7 @@ func (k Keeper) generateRequestID(ctx sdk.Context, accountAddress string, scopeI
 	for _, id := range scopeIDs {
 		h.Write([]byte(id))
 	}
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	h.Write([]byte(ctx.BlockTime().String()))
 	return hex.EncodeToString(h.Sum(nil)[:16]) // 32 char hex string
 }

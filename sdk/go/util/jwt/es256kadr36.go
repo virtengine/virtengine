@@ -32,6 +32,7 @@ var (
 func (s *signerADR36) Sign(signingString string, key interface{}) ([]byte, error) {
 	switch key := key.(type) {
 	case SignerI:
+		//nolint:staticcheck // SA1019: using deprecated StdSignBytes for ADR-36 compatibility
 		signBytes := offchain.StdSignBytes(s.cdc, "", 0, 0, 0, legacytx.StdFee{}, []sdk.Msg{
 			&offchain.MsgSignData{
 				Signer: key.GetAddress().String(),
@@ -52,6 +53,7 @@ func (s *signerADR36) Sign(signingString string, key interface{}) ([]byte, error
 func (s *signerADR36) Verify(signingString string, sig []byte, key interface{}) error {
 	switch key := key.(type) {
 	case VerifyI:
+		//nolint:staticcheck // SA1019: using deprecated StdSignBytes for ADR-36 compatibility
 		signBytes := offchain.StdSignBytes(s.cdc, "", 0, 0, 0, legacytx.StdFee{}, []sdk.Msg{
 			&offchain.MsgSignData{
 				Signer: key.GetAddress().String(),

@@ -15,7 +15,7 @@ import (
 	etypes "github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 )
 
-var errNoLeaseMatches = errors.New("leases for deployment do not exist")
+var errNoLeaseMatches = errors.New("leases for deployment do not exist") //nolint:unused // TODO: use in query implementation
 
 const (
 	authzDepositScopeDeployment = "deployment"

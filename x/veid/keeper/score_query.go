@@ -24,7 +24,7 @@ func (q GRPCQuerier) QueryIdentityScore(ctx sdk.Context, req *types.QueryIdentit
 		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
 	}
 
-	identityScore, found := q.Keeper.GetIdentityScore(ctx, req.AccountAddress)
+	identityScore, found := q.GetIdentityScore(ctx, req.AccountAddress)
 	if !found {
 		return &types.QueryIdentityScoreResponse{
 			Score: nil,
@@ -48,7 +48,7 @@ func (q GRPCQuerier) QueryIdentityStatus(ctx sdk.Context, req *types.QueryIdenti
 		return nil, status.Error(codes.InvalidArgument, errMsgAccountAddressEmpty)
 	}
 
-	score, accountStatus, found := q.Keeper.GetScore(ctx, req.AccountAddress)
+	score, accountStatus, found := q.GetScore(ctx, req.AccountAddress)
 	if !found {
 		return &types.QueryIdentityStatusResponse{
 			AccountAddress: req.AccountAddress,
@@ -64,7 +64,7 @@ func (q GRPCQuerier) QueryIdentityStatus(ctx sdk.Context, req *types.QueryIdenti
 
 	// Get last updated time from identity score if available
 	var lastUpdatedAt *types.IdentityScore
-	identityScore, scoreFound := q.Keeper.GetIdentityScore(ctx, req.AccountAddress)
+	identityScore, scoreFound := q.GetIdentityScore(ctx, req.AccountAddress)
 	if scoreFound {
 		lastUpdatedAt = identityScore
 	}
@@ -116,7 +116,7 @@ func (q GRPCQuerier) QueryScoreHistory(ctx sdk.Context, req *types.QueryScoreHis
 		}
 	}
 
-	entries := q.Keeper.GetScoreHistoryPaginated(ctx, req.AccountAddress, limit, offset)
+	entries := q.GetScoreHistoryPaginated(ctx, req.AccountAddress, limit, offset)
 
 	return &types.QueryScoreHistoryResponse{
 		AccountAddress: req.AccountAddress,
@@ -181,10 +181,10 @@ func (q GRPCQuerier) QueryAccountsByScoreTier(ctx sdk.Context, req *types.QueryA
 		if req.MaxScore != nil {
 			maxScore = *req.MaxScore
 		}
-		accounts = q.Keeper.GetAccountsByScoreRange(ctx, minScore, maxScore)
+		accounts = q.GetAccountsByScoreRange(ctx, minScore, maxScore)
 	} else {
 		// Use tier filtering
-		accounts = q.Keeper.GetAccountsByTier(ctx, req.Tier)
+		accounts = q.GetAccountsByTier(ctx, req.Tier)
 	}
 
 	// Apply status filter if provided
@@ -253,7 +253,7 @@ func (q GRPCQuerier) QueryScoreThresholdCheck(ctx sdk.Context, req *types.QueryS
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	score, accountStatus, found := q.Keeper.GetScore(ctx, req.AccountAddress)
+	score, accountStatus, found := q.GetScore(ctx, req.AccountAddress)
 	if !found {
 		return &types.QueryScoreThresholdCheckResponse{
 			AccountAddress: req.AccountAddress,
@@ -300,7 +300,7 @@ func (q GRPCQuerier) QueryEligibility(ctx sdk.Context, req *types.QueryEligibili
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	result := q.Keeper.CheckEligibility(ctx, req.AccountAddress, req.OfferingType)
+	result := q.CheckEligibility(ctx, req.AccountAddress, req.OfferingType)
 
 	return &types.QueryEligibilityResponse{
 		Result: result,
@@ -313,7 +313,7 @@ func (q GRPCQuerier) QueryScoreStatistics(ctx sdk.Context, req *types.QueryScore
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
-	stats := q.Keeper.GetScoreStatistics(ctx)
+	stats := q.GetScoreStatistics(ctx)
 
 	return &types.QueryScoreStatisticsResponse{
 		Statistics: stats,

@@ -77,8 +77,8 @@ func (g *BatchScriptGenerator) GenerateScript(tmpl *hpctypes.WorkloadTemplate, p
 	// Write shebang
 	buf.WriteString("#!/bin/bash\n")
 	buf.WriteString("#\n")
-	buf.WriteString(fmt.Sprintf("# SLURM batch script generated from template: %s v%s\n", tmpl.TemplateID, tmpl.Version))
-	buf.WriteString(fmt.Sprintf("# Template: %s\n", tmpl.Name))
+	fmt.Fprintf(&buf, "# SLURM batch script generated from template: %s v%s\n", tmpl.TemplateID, tmpl.Version)
+	fmt.Fprintf(&buf, "# Template: %s\n", tmpl.Name)
 	buf.WriteString("#\n\n")
 
 	// Write SBATCH directives
@@ -111,53 +111,53 @@ func (g *BatchScriptGenerator) writeSBATCHDirectives(buf *bytes.Buffer, tmpl *hp
 	if jobName == "" {
 		jobName = tmpl.TemplateID
 	}
-	fmt.Fprintf(&buf, "#SBATCH --job-name=%s\n", jobName)
+	fmt.Fprintf(buf, "#SBATCH --job-name=%s\n", jobName)
 
 	// Nodes
-	fmt.Fprintf(&buf, "#SBATCH --nodes=%d\n", params.Nodes)
+	fmt.Fprintf(buf, "#SBATCH --nodes=%d\n", params.Nodes)
 
 	// CPUs per node or ntasks
 	if tmpl.Type == hpctypes.WorkloadTypeMPI {
 		totalTasks := params.Nodes * params.TasksPerNode
-		fmt.Fprintf(&buf, "#SBATCH --ntasks=%d\n", totalTasks)
-		buf.WriteString(fmt.Sprintf("#SBATCH --ntasks-per-node=%d\n", params.TasksPerNode))
+		fmt.Fprintf(buf, "#SBATCH --ntasks=%d\n", totalTasks)
+		fmt.Fprintf(buf, "#SBATCH --ntasks-per-node=%d\n", params.TasksPerNode)
 	} else {
-		buf.WriteString(fmt.Sprintf("#SBATCH --cpus-per-task=%d\n", params.CPUsPerNode))
+		fmt.Fprintf(buf, "#SBATCH --cpus-per-task=%d\n", params.CPUsPerNode)
 	}
 
 	// Memory
-	buf.WriteString(fmt.Sprintf("#SBATCH --mem=%dM\n", params.MemoryMB))
+	fmt.Fprintf(buf, "#SBATCH --mem=%dM\n", params.MemoryMB)
 
 	// Time limit
-	buf.WriteString(fmt.Sprintf("#SBATCH --time=%s\n", formatTime(params.RuntimeMinutes)))
+	fmt.Fprintf(buf, "#SBATCH --time=%s\n", formatTime(params.RuntimeMinutes))
 
 	// GPUs
 	if params.GPUs > 0 {
 		if params.GPUType != "" {
-			buf.WriteString(fmt.Sprintf("#SBATCH --gres=gpu:%s:%d\n", params.GPUType, params.GPUs))
+			fmt.Fprintf(buf, "#SBATCH --gres=gpu:%s:%d\n", params.GPUType, params.GPUs)
 		} else {
-			buf.WriteString(fmt.Sprintf("#SBATCH --gres=gpu:%d\n", params.GPUs))
+			fmt.Fprintf(buf, "#SBATCH --gres=gpu:%d\n", params.GPUs)
 		}
 	}
 
 	// Partition
 	if g.config.Partition != "" {
-		buf.WriteString(fmt.Sprintf("#SBATCH --partition=%s\n", g.config.Partition))
+		fmt.Fprintf(buf, "#SBATCH --partition=%s\n", g.config.Partition)
 	}
 
 	// Account
 	if g.config.Account != "" {
-		buf.WriteString(fmt.Sprintf("#SBATCH --account=%s\n", g.config.Account))
+		fmt.Fprintf(buf, "#SBATCH --account=%s\n", g.config.Account)
 	}
 
 	// QOS
 	if g.config.QOS != "" {
-		buf.WriteString(fmt.Sprintf("#SBATCH --qos=%s\n", g.config.QOS))
+		fmt.Fprintf(buf, "#SBATCH --qos=%s\n", g.config.QOS)
 	}
 
 	// Cluster
 	if g.config.Cluster != "" {
-		buf.WriteString(fmt.Sprintf("#SBATCH --cluster=%s\n", g.config.Cluster))
+		fmt.Fprintf(buf, "#SBATCH --cluster=%s\n", g.config.Cluster)
 	}
 
 	// Output/error paths
@@ -165,13 +165,13 @@ func (g *BatchScriptGenerator) writeSBATCHDirectives(buf *bytes.Buffer, tmpl *hp
 	if outputPath == "" {
 		outputPath = "%x-%j.out"
 	}
-	buf.WriteString(fmt.Sprintf("#SBATCH --output=%s\n", outputPath))
+	fmt.Fprintf(buf, "#SBATCH --output=%s\n", outputPath)
 
 	errorPath := g.config.ErrorPath
 	if errorPath == "" {
 		errorPath = "%x-%j.err"
 	}
-	buf.WriteString(fmt.Sprintf("#SBATCH --error=%s\n", errorPath))
+	fmt.Fprintf(buf, "#SBATCH --error=%s\n", errorPath)
 
 	// Exclusive nodes
 	if tmpl.Resources.ExclusiveNodes || params.Exclusive {
@@ -187,37 +187,37 @@ func (g *BatchScriptGenerator) writeSBATCHDirectives(buf *bytes.Buffer, tmpl *hp
 		if params.ArraySimultaneous > 0 {
 			arraySpec += fmt.Sprintf("%%%d", params.ArraySimultaneous)
 		}
-		buf.WriteString(fmt.Sprintf("#SBATCH --array=%s\n", arraySpec))
+		fmt.Fprintf(buf, "#SBATCH --array=%s\n", arraySpec)
 	}
 
 	// Mail notifications
 	if g.config.MailUser != "" {
-		buf.WriteString(fmt.Sprintf("#SBATCH --mail-user=%s\n", g.config.MailUser))
+		fmt.Fprintf(buf, "#SBATCH --mail-user=%s\n", g.config.MailUser)
 		mailType := g.config.MailType
 		if mailType == "" {
 			mailType = "END,FAIL"
 		}
-		buf.WriteString(fmt.Sprintf("#SBATCH --mail-type=%s\n", mailType))
+		fmt.Fprintf(buf, "#SBATCH --mail-type=%s\n", mailType)
 	}
 
 	// Reservation
 	if g.config.Reservation != "" {
-		buf.WriteString(fmt.Sprintf("#SBATCH --reservation=%s\n", g.config.Reservation))
+		fmt.Fprintf(buf, "#SBATCH --reservation=%s\n", g.config.Reservation)
 	}
 
 	// Dependency
 	if g.config.Dependency != "" {
-		buf.WriteString(fmt.Sprintf("#SBATCH --dependency=%s\n", g.config.Dependency))
+		fmt.Fprintf(buf, "#SBATCH --dependency=%s\n", g.config.Dependency)
 	}
 
 	// Constraints
 	if len(params.Constraints) > 0 {
-		buf.WriteString(fmt.Sprintf("#SBATCH --constraint=%s\n", strings.Join(params.Constraints, "&")))
+		fmt.Fprintf(buf, "#SBATCH --constraint=%s\n", strings.Join(params.Constraints, "&"))
 	}
 
 	// Custom directives
 	for key, value := range g.config.CustomDirectives {
-		buf.WriteString(fmt.Sprintf("#SBATCH --%s=%s\n", key, value))
+		fmt.Fprintf(buf, "#SBATCH --%s=%s\n", key, value)
 	}
 
 	buf.WriteString("\n")
@@ -235,7 +235,7 @@ func (g *BatchScriptGenerator) writeModuleLoads(buf *bytes.Buffer, tmpl *hpctype
 	buf.WriteString("# Load required modules\n")
 	buf.WriteString("module purge\n")
 	for _, mod := range modules {
-		buf.WriteString(fmt.Sprintf("module load %s\n", mod))
+		fmt.Fprintf(buf, "module load %s\n", mod)
 	}
 	buf.WriteString("\n")
 }
@@ -255,13 +255,13 @@ func (g *BatchScriptGenerator) writeEnvironment(buf *bytes.Buffer, tmpl *hpctype
 			value = env.ValueTemplate
 		}
 		if value != "" {
-			buf.WriteString(fmt.Sprintf("export %s=\"%s\"\n", env.Name, value))
+			fmt.Fprintf(buf, "export %s=\"%s\"\n", env.Name, value)
 		}
 	}
 
 	// User-provided environment variables
 	for key, value := range params.Environment {
-		buf.WriteString(fmt.Sprintf("export %s=\"%s\"\n", key, value))
+		fmt.Fprintf(buf, "export %s=\"%s\"\n", key, value)
 	}
 
 	buf.WriteString("\n")
@@ -288,7 +288,7 @@ func (g *BatchScriptGenerator) writeMainCommand(buf *bytes.Buffer, tmpl *hpctype
 		workDir = params.WorkingDirectory
 	}
 	if workDir != "" {
-		buf.WriteString(fmt.Sprintf("cd %s || exit 1\n", workDir))
+		fmt.Fprintf(buf, "cd %s || exit 1\n", workDir)
 	}
 
 	// Build command

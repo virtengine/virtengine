@@ -207,9 +207,9 @@ func (h *InventoryHost) toINILine() string {
 // writeGroupVars writes group variables to the buffer
 func (i *Inventory) writeGroupVars(buf *bytes.Buffer, group InventoryGroup) {
 	if len(group.Variables) > 0 {
-		buf.WriteString(fmt.Sprintf("[%s:vars]\n", group.Name))
+		fmt.Fprintf(buf, "[%s:vars]\n", group.Name)
 		for k, v := range group.Variables {
-			buf.WriteString(fmt.Sprintf("%s=%v\n", k, v))
+			fmt.Fprintf(buf, "%s=%v\n", k, v)
 		}
 		buf.WriteString("\n")
 	}
@@ -218,7 +218,7 @@ func (i *Inventory) writeGroupVars(buf *bytes.Buffer, group InventoryGroup) {
 // writeGroupChildren writes group children to the buffer
 func (i *Inventory) writeGroupChildren(buf *bytes.Buffer, group InventoryGroup) {
 	if len(group.Children) > 0 {
-		buf.WriteString(fmt.Sprintf("[%s:children]\n", group.Name))
+		fmt.Fprintf(buf, "[%s:children]\n", group.Name)
 		for _, child := range group.Children {
 			buf.WriteString(child + "\n")
 		}

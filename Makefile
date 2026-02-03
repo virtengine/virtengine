@@ -25,6 +25,12 @@ IS_MAINNET            := $(shell $(ROOT_DIR)/script/mainnet-from-tag.sh "$(RELEA
 IS_STABLE             ?= false
 
 GO_LINKMODE            ?= external
+CGO_ENABLED            ?= $(shell go env CGO_ENABLED)
+ifeq ($(CGO_ENABLED),0)
+	ifeq ($(GO_LINKMODE),external)
+		GO_LINKMODE := internal
+	endif
+endif
 GOMOD                  ?= readonly
 BUILD_TAGS             ?= osusergo,netgo,hidraw,ledger
 GORELEASER_STRIP_FLAGS ?=

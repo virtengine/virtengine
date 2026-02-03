@@ -233,9 +233,11 @@ func (s *ScoringModelKeeperTestSuite) TestScoringHistory_MultipleEntries() {
 	// Record multiple scores at different blocks
 	for i := 0; i < 5; i++ {
 		s.ctx = s.ctx.WithBlockHeight(int64(100 + i)).WithBlockTime(time.Now().Add(time.Duration(i) * time.Hour))
+		//nolint:gosec // bounded test data
+		score := uint32(50 + i*10)
 
 		summary := &types.EvidenceSummary{
-			FinalScore:   uint32(50 + i*10),
+			FinalScore:   score,
 			Passed:       true,
 			ModelVersion: version100,
 			ReasonCodes:  []types.ScoringReasonCode{types.ScoringReasonSuccess},
@@ -260,9 +262,11 @@ func (s *ScoringModelKeeperTestSuite) TestScoringHistory_Paginated() {
 	// Record 10 entries
 	for i := 0; i < 10; i++ {
 		s.ctx = s.ctx.WithBlockHeight(int64(100 + i))
+		//nolint:gosec // bounded test data
+		score := uint32(50 + i*5)
 
 		summary := &types.EvidenceSummary{
-			FinalScore:   uint32(50 + i*5),
+			FinalScore:   score,
 			Passed:       true,
 			ModelVersion: version100,
 			ComputedAt:   time.Now(),
@@ -321,8 +325,8 @@ func (s *ScoringModelKeeperTestSuite) TestVersionTransition_MultipleTransitions(
 			testScoringModelAddress1,
 			"1."+string(rune('0'+i))+".0",
 			"1."+string(rune('0'+i+1))+".0",
-			uint32(70+i*5),
-			uint32(75+i*5),
+			uint32(70+i*5), //nolint:gosec // G115: test code, i is bounded 0-2
+			uint32(75+i*5), //nolint:gosec // G115: test code, i is bounded 0-2
 			"upgrade",
 		)
 		s.Require().NoError(err)

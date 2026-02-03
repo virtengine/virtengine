@@ -889,19 +889,24 @@ func (p *SettlementPipeline) calculateUsageUnits(record *UsageRecord) uint64 {
 
 	// Convert each resource type to normalized units
 	// CPU: 1 unit = 1 CPU-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.CPUMilliSeconds / (1000 * 3600))
 
 	// Memory: 1 unit = 1 GB-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.MemoryByteSeconds / (1024 * 1024 * 1024 * 3600))
 
 	// Storage: 1 unit = 1 GB-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.StorageByteSeconds / (1024 * 1024 * 1024 * 3600))
 
 	// GPU: 1 unit = 1 GPU-hour
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(record.Metrics.GPUSeconds / 3600)
 
 	// Network: 1 unit = 1 GB
 	networkBytes := record.Metrics.NetworkBytesIn + record.Metrics.NetworkBytesOut
+	//nolint:gosec // usage metrics should be non-negative
 	units += uint64(networkBytes / (1024 * 1024 * 1024))
 
 	if units == 0 {

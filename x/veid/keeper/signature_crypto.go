@@ -185,7 +185,7 @@ func (s *SaltBindingData) Payload() []byte {
 
 	// Write timestamp as 8-byte big-endian
 	ts := make([]byte, 8)
-	binary.BigEndian.PutUint64(ts, uint64(s.Timestamp.Unix()))
+	binary.BigEndian.PutUint64(ts, safeUint64FromInt64(s.Timestamp.Unix()))
 	h.Write(ts)
 
 	return h.Sum(nil)

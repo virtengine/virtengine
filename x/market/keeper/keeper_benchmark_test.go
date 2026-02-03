@@ -121,7 +121,7 @@ func BenchmarkWithBidsForOrder(b *testing.B) {
 			GSeq:     order.ID.GSeq,
 			OSeq:     order.ID.OSeq,
 			Provider: testutil.AccAddress(b).String(),
-			BSeq:     uint32(i + 1),
+			BSeq:     uint32(i + 1), //nolint:gosec // G115: test code, i is bounded 0-49
 		}
 		price := sdk.NewDecCoin("uakt", sdkmath.NewInt(1000))
 		_, _ = k.CreateBid(ctx, bidID, price, types.ResourcesOffer{})
@@ -159,7 +159,7 @@ func BenchmarkBidCountForOrder(b *testing.B) {
 			GSeq:     order.ID.GSeq,
 			OSeq:     order.ID.OSeq,
 			Provider: testutil.AccAddress(b).String(),
-			BSeq:     uint32(i + 1),
+			BSeq:     uint32(i + 1), //nolint:gosec // G115: test code, i is bounded 0-19
 		}
 		price := sdk.NewDecCoin("uakt", sdkmath.NewInt(1000))
 		_, _ = k.CreateBid(ctx, bidID, price, types.ResourcesOffer{})

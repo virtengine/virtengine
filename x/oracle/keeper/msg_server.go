@@ -45,7 +45,7 @@ func (m *MsgServer) AddPriceEntry(ctx context.Context, msg *types.MsgAddPriceEnt
 	// Add the price entry
 	if err := m.keeper.AddPriceEntry(
 		sdkCtx,
-		uint32(sourceIdx),
+		safeUint32FromInt(sourceIdx),
 		msg.ID.Denom,
 		msg.ID.BaseDenom,
 		msg.Price,
