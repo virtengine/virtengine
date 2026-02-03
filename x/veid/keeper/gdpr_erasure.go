@@ -930,3 +930,11 @@ func erasureReportFromStore(rs *erasureReportStore) *types.ErasureReport {
 
 	return r
 }
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
+}
