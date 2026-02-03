@@ -21,7 +21,8 @@ func GetTemplatesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hpc-templates",
 		Short: "Manage HPC workload templates",
-		Long:  `Commands for listing, viewing, and verifying HPC workload templates.`,
+		Long: `Commands for listing, viewing, and verifying HPC workload templates.
+Preferred usage: "virtengine hpc-templates". Legacy usage: "virtengine hpc templates".`,
 	}
 
 	cmd.AddCommand(

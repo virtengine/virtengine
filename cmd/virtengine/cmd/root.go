@@ -106,6 +106,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig sdkutil.EncodingConfig) 
 		PrepareGenesisCmd(app.DefaultHome, app.ModuleBasics()),
 		testnetify.GetCmd(ac.newTestnetApp),
 		waldur.GetCmd(),
+		hpc.GetCmd(),
 		hpc.GetTemplatesCmd(),
 	)
 
