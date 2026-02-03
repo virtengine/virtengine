@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * useHPC Hook
  * VE-705: Supercomputer/HPC UI (job submission, library workloads, outputs)

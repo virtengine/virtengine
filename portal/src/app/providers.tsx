@@ -2,7 +2,16 @@
 
 import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
+import { PortalProvider } from '@/lib/portal-adapter';
+import { portalConfig, chainConfig } from '@/config';
 
+/**
+ * Root Providers
+ *
+ * Wraps the application with necessary providers:
+ * - ThemeProvider: next-themes for dark/light mode
+ * - PortalProvider: VirtEngine portal lib for auth, identity, marketplace, etc.
+ */
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider
@@ -11,7 +20,9 @@ export function Providers({ children }: { children: ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      {children}
+      <PortalProvider config={portalConfig} chainConfig={chainConfig}>
+        {children}
+      </PortalProvider>
     </ThemeProvider>
   );
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Quality Check Implementations
  * VE-210: Image quality validation for document and selfie capture

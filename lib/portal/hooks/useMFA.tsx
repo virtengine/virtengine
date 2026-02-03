@@ -135,7 +135,7 @@ export function MFAProvider({
   /**
    * Make authenticated API request
    */
-  const apiRequest = useCallback(async <T>(
+  const apiRequest = useCallback(async <T,>(
     path: string,
     options: RequestInit = {}
   ): Promise<T> => {

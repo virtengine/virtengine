@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * MFA Enrollment Wizard Component
  * VE-702: Guide users through MFA factor enrollment

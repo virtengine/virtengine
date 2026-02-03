@@ -323,7 +323,7 @@ export function ChainProvider({ children, config: userConfig }: ChainProviderPro
       };
     },
 
-    query: async <T>(path: string, params?: Record<string, string>): Promise<T> => {
+    query: async <T,>(path: string, params?: Record<string, string>): Promise<T> => {
       const url = new URL(`${config.restEndpoint}${path}`);
       if (params) {
         for (const [key, value] of Object.entries(params)) {
