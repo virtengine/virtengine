@@ -121,8 +121,8 @@ type WaldurCallbackHandler struct {
 	pendingCallbacks map[string]*PendingCallback
 	server           *http.Server
 	//nolint:unused // reserved for concurrent access control
-	mu               sync.RWMutex
-	stopCh           chan struct{}
+	mu     sync.RWMutex
+	stopCh chan struct{}
 }
 
 // PendingCallback represents a pending callback with retry info
