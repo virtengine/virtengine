@@ -510,12 +510,12 @@ func paginateSlice[T any](items []T, pageReq *query.PageRequest) ([]T, *query.Pa
 		return items, nil
 	}
 
-	offset := int(pageReq.Offset)
+	offset := int(clampUint64ToInt(pageReq.Offset))
 	if offset < 0 {
 		offset = 0
 	}
 
-	limit := int(pageReq.Limit)
+	limit := int(clampUint64ToInt(pageReq.Limit))
 	if limit <= 0 {
 		limit = len(items)
 	}
@@ -534,6 +534,13 @@ func paginateSlice[T any](items []T, pageReq *query.PageRequest) ([]T, *query.Pa
 		pageResp.Total = uint64(len(items))
 	}
 	return pageItems, pageResp
+}
+
+func clampUint64ToInt(value uint64) int {
+	if value > uint64(int(^uint(0)>>1)) {
+		return int(^uint(0) >> 1)
+	}
+	return int(value)
 }
 
 func readActiveFilter(cmd *cobra.Command) (*bool, error) {
