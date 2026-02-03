@@ -100,10 +100,23 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Install kubeval
+        run: |
+          KUBEVAL_VERSION=0.16.1
+          curl -sSL -o kubeval.tar.gz https://github.com/instrumenta/kubeval/releases/download/v${KUBEVAL_VERSION}/kubeval-linux-amd64.tar.gz
+          tar -xzf kubeval.tar.gz
+          sudo mv kubeval /usr/local/bin/kubeval
+
       - name: Lint Kubernetes Manifests
-        uses: azure/k8s-lint@v1
-        with:
-          manifests: ${{ steps.k8s-manifests.outputs.files }}
+        run: |
+          files="${{ steps.k8s-manifests.outputs.files }}"
+          if [ -z "$files" ]; then
+            echo "No Kubernetes manifests found to lint."
+            exit 0
+          fi
+          echo "$files" | xargs -r kubeval \
+            --kubernetes-version 1.29.0 \
+            --schema-location https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master
 
   # ============================================================================
   # Security Scanning
