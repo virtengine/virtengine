@@ -1,38 +1,30 @@
 import { BaseClient, type ClientOptions } from "./BaseClient.ts";
-import type { ClientTxResult, ListOptions } from "./types.ts";
-
-export type EscrowState =
-  | "ESCROW_STATE_OPEN"
-  | "ESCROW_STATE_ACTIVE"
-  | "ESCROW_STATE_CLOSED";
-
-export interface EscrowAccount {
-  id: string;
-  owner: string;
-  state: EscrowState;
-  balance: { denom: string; amount: string };
-  deposited: { denom: string; amount: string };
-  transferred: { denom: string; amount: string };
-}
-
-export interface Payment {
-  escrowId: string;
-  paymentId: string;
-  owner: string;
-  state: string;
-  rate: { denom: string; amount: string };
-  balance: { denom: string; amount: string };
-}
+import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
+import { toPageRequest, withTxResult } from "./types.ts";
+import type { Account } from "../generated/protos/virtengine/escrow/types/v1/account.ts";
+import type { Payment } from "../generated/protos/virtengine/escrow/types/v1/payment.ts";
+import type { MsgAccountDeposit } from "../generated/protos/virtengine/escrow/v1/msg.ts";
+import type { TxCallOptions } from "../sdk/transport/types.ts";
 
 export interface EscrowClientDeps {
-  sdk: unknown;
+  sdk: ChainNodeSDK;
+}
+
+export interface EscrowAccountFilters {
+  state?: string;
+  xid?: string;
+}
+
+export interface EscrowPaymentFilters {
+  state?: string;
+  xid?: string;
 }
 
 /**
  * Client for Escrow module (payment escrow management)
  */
 export class EscrowClient extends BaseClient {
-  private sdk: unknown;
+  private sdk: ChainNodeSDK;
 
   constructor(deps: EscrowClientDeps, options?: ClientOptions) {
     super(options);
@@ -40,12 +32,16 @@ export class EscrowClient extends BaseClient {
   }
 
   /**
-   * Get escrow account by ID
+   * Get escrow account by ID (xid)
    */
-  async getAccount(_escrowId: string): Promise<EscrowAccount | null> {
+  async getAccount(xid: string): Promise<Account | null> {
     try {
-      // Escrow already exists in generated SDK
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.escrow.v1.getAccounts({
+        xid,
+        state: "",
+        pagination: toPageRequest({ limit: 1 }),
+      });
+      return result.accounts[0] ?? null;
     } catch (error) {
       this.handleQueryError(error, "getAccount");
     }
@@ -54,9 +50,14 @@ export class EscrowClient extends BaseClient {
   /**
    * List escrow accounts
    */
-  async listAccounts(_options?: ListOptions & { owner?: string; state?: EscrowState }): Promise<EscrowAccount[]> {
+  async listAccounts(options?: ListOptions & EscrowAccountFilters): Promise<Account[]> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.escrow.v1.getAccounts({
+        state: options?.state ?? "",
+        xid: options?.xid ?? "",
+        pagination: toPageRequest(options),
+      });
+      return result.accounts;
     } catch (error) {
       this.handleQueryError(error, "listAccounts");
     }
@@ -65,9 +66,14 @@ export class EscrowClient extends BaseClient {
   /**
    * Get payments for an escrow account
    */
-  async getPayments(_escrowId: string): Promise<Payment[]> {
+  async getPayments(xid: string, options?: ListOptions): Promise<Payment[]> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.escrow.v1.getPayments({
+        xid,
+        state: "",
+        pagination: toPageRequest(options),
+      });
+      return result.payments;
     } catch (error) {
       this.handleQueryError(error, "getPayments");
     }
@@ -76,22 +82,13 @@ export class EscrowClient extends BaseClient {
   /**
    * Deposit funds into an escrow account
    */
-  async deposit(_escrowId: string, _amount: { denom: string; amount: string }): Promise<ClientTxResult> {
+  async deposit(params: MsgAccountDeposit, options?: TxCallOptions): Promise<ClientTxResult> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const { txResult } = await withTxResult((txOptions) =>
+        this.sdk.virtengine.escrow.v1.accountDeposit(params, txOptions), options);
+      return txResult;
     } catch (error) {
       this.handleQueryError(error, "deposit");
-    }
-  }
-
-  /**
-   * Withdraw funds from an escrow account
-   */
-  async withdraw(_escrowId: string, _amount: { denom: string; amount: string }): Promise<ClientTxResult> {
-    try {
-      throw new Error("Implementation pending - SDK integration needed");
-    } catch (error) {
-      this.handleQueryError(error, "withdraw");
     }
   }
 }

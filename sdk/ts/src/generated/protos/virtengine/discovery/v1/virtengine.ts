@@ -11,7 +11,7 @@ import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
 import { ClientInfo } from "./client_info.ts";
 
-/** VirtEngine specific RPC parameters. */
+/** VirtEngine virtengine specific RPC parameters. */
 export interface VirtEngine {
   /** ClientInfo holds information about the client. */
   clientInfo: ClientInfo | undefined;

@@ -1,4 +1,4 @@
-import { MsgCreateProvider, MsgCreateProviderResponse, MsgDeleteProvider, MsgDeleteProviderResponse, MsgUpdateProvider, MsgUpdateProviderResponse } from "./msg.ts";
+import { MsgCreateProvider, MsgCreateProviderResponse, MsgDeleteProvider, MsgDeleteProviderResponse, MsgGenerateDomainVerificationToken, MsgGenerateDomainVerificationTokenResponse, MsgUpdateProvider, MsgUpdateProviderResponse, MsgVerifyProviderDomain, MsgVerifyProviderDomainResponse } from "./msg.ts";
 
 export const Msg = {
   typeName: "virtengine.provider.v1beta4.Msg",
@@ -19,6 +19,18 @@ export const Msg = {
       name: "DeleteProvider",
       input: MsgDeleteProvider,
       output: MsgDeleteProviderResponse,
+      get parent() { return Msg; },
+    },
+    generateDomainVerificationToken: {
+      name: "GenerateDomainVerificationToken",
+      input: MsgGenerateDomainVerificationToken,
+      output: MsgGenerateDomainVerificationTokenResponse,
+      get parent() { return Msg; },
+    },
+    verifyProviderDomain: {
+      name: "VerifyProviderDomain",
+      input: MsgVerifyProviderDomain,
+      output: MsgVerifyProviderDomainResponse,
       get parent() { return Msg; },
     },
   },

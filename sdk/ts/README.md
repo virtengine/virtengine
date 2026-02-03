@@ -91,6 +91,22 @@ const signer = createStargateClient({
 });
 ```
 
+#### Transaction signing helpers
+
+The SDK ships with convenient signing helpers:
+
+- `createStargateClient` - simple signer from mnemonic or `OfflineSigner`
+- `createGenericStargateClient` - advanced signer with custom registry/client
+- `TxClient` - interface for custom sign-and-broadcast implementations
+
+```ts
+import {
+  createStargateClient,
+  createGenericStargateClient,
+  type TxClient,
+} from "@virtengine/chain-sdk";
+```
+
 #### Web Environment
 
 This implementation can be used in both browser and nodejs, since it uses gRPC Gateway transport to fetch data from blockchain
@@ -121,6 +137,23 @@ const deployments = await sdk.virtengine.deployment.v1beta4.getDeployments({
     limit: 1,
   },
 });
+```
+
+### Module clients (high-level API)
+
+The `VirtEngineClient` wraps the generated SDK and exposes higher-level module clients:
+
+```ts
+import { createVirtEngineClient } from "@virtengine/chain-sdk";
+
+const client = await createVirtEngineClient({
+  rpcEndpoint: "https://grpc.sandbox-2.aksh.pw:9090",
+  restEndpoint: "https://api.sandbox-2.aksh.pw:443",
+  // txSigner: createStargateClient({ baseUrl: "...", signerMnemonic: "..." }),
+});
+
+const identity = await client.veid.getIdentity("virt1...");
+const clusters = await client.hpc.listClusters();
 ```
 
 ### Provider SDK
@@ -293,6 +326,26 @@ services:
 const sdl = SDL.fromString(yaml);
 const manifest = sdl.manifest();
 ```
+
+### Examples
+
+Additional examples are available under `examples/`:
+
+- `examples/react` - React + Vite integration
+- `examples/vue` - Vue 3 + Vite integration
+- `examples/create-deployment.ts` - deployment creation
+
+See each example README for instructions.
+
+### Publishing
+
+Publishing is handled via the `release` script and GitHub workflow:
+
+```bash
+npm run release
+```
+
+This runs `build`, `test`, and publishes with the `alpha` tag.
 
 ### Contributing
 
