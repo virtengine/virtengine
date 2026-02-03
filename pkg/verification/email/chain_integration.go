@@ -649,9 +649,10 @@ func (s *ChainIntegrationService) HealthCheck(ctx context.Context) (*HealthStatu
 	pendingCount := 0
 	failedCount := 0
 	for _, sub := range s.pendingSubmissions {
-		if sub.Status == SubmissionStatusPending {
+		switch sub.Status {
+		case SubmissionStatusPending:
 			pendingCount++
-		} else if sub.Status == SubmissionStatusFailed {
+		case SubmissionStatusFailed:
 			failedCount++
 		}
 	}

@@ -8,7 +8,8 @@
 package types_test
 
 import (
-	"math/rand"
+	crand "crypto/rand"
+	"math/big"
 	"testing"
 	"time"
 
@@ -384,8 +385,6 @@ func TestPropertyRandomWalkEventuallyTerminates(t *testing.T) {
 	const maxSteps = 100
 	const numWalks = 50
 
-	rng := rand.New(rand.NewSource(42)) // Deterministic for reproducibility
-
 	for i := 0; i < numWalks; i++ {
 		t.Run("walk_"+string(rune(i)), func(t *testing.T) {
 			current := types.VerificationStatusUnknown
@@ -401,7 +400,7 @@ func TestPropertyRandomWalkEventuallyTerminates(t *testing.T) {
 				}
 
 				// Pick a random transition
-				current = validTargets[rng.Intn(len(validTargets))]
+				current = validTargets[randIntnCrypto(t, len(validTargets))]
 				steps++
 			}
 
@@ -418,6 +417,16 @@ func TestPropertyRandomWalkEventuallyTerminates(t *testing.T) {
 			}
 		})
 	}
+}
+
+func randIntnCrypto(t *testing.T, n int) int {
+	t.Helper()
+	if n <= 0 {
+		t.Fatalf("invalid max value: %d", n)
+	}
+	value, err := crand.Int(crand.Reader, big.NewInt(int64(n)))
+	require.NoError(t, err)
+	return int(value.Int64())
 }
 
 // TestPropertyTransitionDeterminism verifies that CanTransitionTo is deterministic.

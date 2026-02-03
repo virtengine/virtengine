@@ -108,6 +108,8 @@ func (am AppModule) Name() string {
 }
 
 // RegisterInvariants registers module invariants.
+//
+//nolint:staticcheck // sdk.InvariantRegistry is deprecated in upstream SDK
 func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // RegisterServices registers module services.

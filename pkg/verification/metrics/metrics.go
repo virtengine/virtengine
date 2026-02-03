@@ -9,7 +9,6 @@ package metrics
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,7 +22,6 @@ import (
 
 // Collector collects and exposes metrics for verification services.
 type Collector struct {
-	mu       sync.RWMutex
 	registry *prometheus.Registry
 	config   Config
 

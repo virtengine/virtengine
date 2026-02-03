@@ -405,9 +405,10 @@ func (c *EmailChallenge) UpdateDeliveryStatus(status DeliveryStatus, messageID s
 	if messageID != "" {
 		c.ProviderMessageID = messageID
 	}
-	if status == DeliveryDelivered {
+	switch status {
+	case DeliveryDelivered:
 		c.Status = StatusDelivered
-	} else if status == DeliveryBounced || status == DeliveryFailed {
+	case DeliveryBounced, DeliveryFailed:
 		c.Status = StatusBounced
 	}
 }

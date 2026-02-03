@@ -218,6 +218,7 @@ func (k Keeper) addToExpiredArtifactsIndex(ctx sdk.Context, expiresAt int64, art
 	store.Set(key, []byte{1})
 }
 
+//nolint:unused // reserved for future artifact expiry cleanup
 // removeFromExpiredArtifactsIndex removes an artifact from the expiry index
 func (k Keeper) removeFromExpiredArtifactsIndex(ctx sdk.Context, expiresAt int64, artifactType string, artifactID string) {
 	store := ctx.KVStore(k.skey)

@@ -332,7 +332,7 @@ func TestPriceOracle(t *testing.T) {
 		// Add price points
 		for i := int64(0); i < 10; i++ {
 			history.AddPoint(PricePoint{
-				Price:       1000 + uint64(i*10),
+				Price:       1000 + safeUint64FromInt64(t, i*10),
 				Volume:      100,
 				BlockHeight: i,
 				Timestamp:   now.Add(time.Duration(i*6) * time.Second),
@@ -718,7 +718,7 @@ func TestSimulatePriceManipulationAttack(t *testing.T) {
 	// Establish normal price range
 	for i := int64(0); i < 20; i++ {
 		history.AddPoint(PricePoint{
-			Price:       1000 + uint64(i%10), // 1000-1009 range
+			Price:       1000 + safeUint64FromInt64(t, i%10), // 1000-1009 range
 			Volume:      100,
 			BlockHeight: i,
 			Timestamp:   now.Add(time.Duration(i) * time.Minute),

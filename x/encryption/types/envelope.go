@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -294,7 +295,7 @@ func (e *EncryptedPayloadEnvelope) DeterministicBytes() ([]byte, error) {
 		_ = binary.Write(&buf, binary.BigEndian, v)
 	}
 	writeBytes := func(b []byte) {
-		writeUint32(uint32(len(b)))
+		writeUint32(safeUint32FromInt(len(b)))
 		buf.Write(b)
 	}
 	writeString := func(s string) {
@@ -309,7 +310,7 @@ func (e *EncryptedPayloadEnvelope) DeterministicBytes() ([]byte, error) {
 	writeBytes(e.SenderPubKey)
 	writeBytes(e.SenderSignature)
 
-	writeUint32(uint32(len(recipientIDs)))
+	writeUint32(safeUint32FromInt(len(recipientIDs)))
 	for _, id := range recipientIDs {
 		writeString(id)
 		writeBytes(recipientPubKeys[id])
@@ -337,13 +338,23 @@ func (e *EncryptedPayloadEnvelope) DeterministicBytes() ([]byte, error) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	writeUint32(uint32(len(keys)))
+	writeUint32(safeUint32FromInt(len(keys)))
 	for _, k := range keys {
 		writeString(k)
 		writeString(e.Metadata[k])
 	}
 
 	return buf.Bytes(), nil
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
 // RecipientKeyRecord represents a registered public key for receiving encrypted data

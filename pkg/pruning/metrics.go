@@ -2,6 +2,7 @@
 package pruning
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -320,7 +321,11 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 	if tier2 > remaining {
 		tier2 = remaining
 	}
-	tier2Retained := tier2 / int64(b.config.Tiered.Tier2SamplingRate)
+	tier2SampleRate := safeInt64FromUint64(b.config.Tiered.Tier2SamplingRate)
+	if tier2SampleRate == 0 {
+		tier2SampleRate = 1
+	}
+	tier2Retained := tier2 / tier2SampleRate
 	result.BlocksRetained += tier2Retained
 
 	remaining -= tier2
@@ -330,7 +335,11 @@ func (b *Benchmark) simulateTieredPruning(totalBlocks, avgBlockSize int64) Bench
 	}
 
 	// Tier 3: Lower sample rate
-	tier3Retained := remaining / int64(b.config.Tiered.Tier3SamplingRate)
+	tier3SampleRate := safeInt64FromUint64(b.config.Tiered.Tier3SamplingRate)
+	if tier3SampleRate == 0 {
+		tier3SampleRate = 1
+	}
+	tier3Retained := remaining / tier3SampleRate
 	result.BlocksRetained += tier3Retained
 
 	result.BlocksPruned = totalBlocks - result.BlocksRetained
@@ -378,6 +387,13 @@ func (m *Metrics) TelemetryLabels() map[string]string {
 		"pruning_errors":       formatInt64(m.PruningErrorCount),
 		"snapshot_errors":      formatInt64(m.SnapshotErrorCount),
 	}
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 func formatInt64(v int64) string {

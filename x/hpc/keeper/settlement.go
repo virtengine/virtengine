@@ -277,6 +277,8 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 }
 
 // calculateNodeRewards calculates rewards for each node based on contribution
+//
+//nolint:unused // reserved for future per-node reward distribution
 func (k Keeper) calculateNodeRewards(ctx sdk.Context, totalReward sdk.Coins, nodeIDs []string) []types.HPCRewardRecipient {
 	if len(nodeIDs) == 0 {
 		return nil

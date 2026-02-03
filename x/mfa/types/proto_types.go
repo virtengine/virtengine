@@ -7,6 +7,7 @@ package types
 
 import (
 	"context"
+	"math"
 
 	mfav1 "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
 )
@@ -310,7 +311,7 @@ func (a *queryServerAdapter) TrustedDevices(ctx context.Context, req *mfav1.Quer
 }
 
 func (a *queryServerAdapter) SensitiveTxConfig(ctx context.Context, req *mfav1.QuerySensitiveTxConfigRequest) (*mfav1.QuerySensitiveTxConfigResponse, error) {
-	localReq := &QuerySensitiveTxConfigRequest{TransactionType: SensitiveTransactionType(req.TransactionType)}
+	localReq := &QuerySensitiveTxConfigRequest{TransactionType: safeSensitiveTransactionType(req.TransactionType)}
 	resp, err := a.local.GetSensitiveTxConfig(ctx, localReq)
 	if err != nil {
 		return nil, err
@@ -330,7 +331,7 @@ func (a *queryServerAdapter) AllSensitiveTxConfigs(ctx context.Context, req *mfa
 func (a *queryServerAdapter) MFARequired(ctx context.Context, req *mfav1.QueryMFARequiredRequest) (*mfav1.QueryMFARequiredResponse, error) {
 	localReq := &QueryMFARequiredRequest{
 		Address:         req.Address,
-		TransactionType: SensitiveTransactionType(req.TransactionType),
+		TransactionType: safeSensitiveTransactionType(req.TransactionType),
 	}
 	resp, err := a.local.IsMFARequired(ctx, localReq)
 	if err != nil {
@@ -346,4 +347,16 @@ func (a *queryServerAdapter) Params(ctx context.Context, req *mfav1.QueryParamsR
 		return nil, err
 	}
 	return convertQueryParamsResponseToProto(resp), nil
+}
+
+func safeSensitiveTransactionType(value mfav1.SensitiveTransactionType) SensitiveTransactionType {
+	intValue := int32(value)
+	if intValue < 0 {
+		return 0
+	}
+	if intValue > math.MaxUint8 {
+		return SensitiveTransactionType(math.MaxUint8)
+	}
+	//nolint:gosec // range checked above
+	return SensitiveTransactionType(intValue)
 }

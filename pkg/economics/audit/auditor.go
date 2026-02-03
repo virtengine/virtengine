@@ -256,7 +256,8 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 
 	// Attack vulnerabilities
 	for _, attack := range audit.AttackAnalyses {
-		if attack.RiskLevel == severityCritical {
+		switch attack.RiskLevel {
+		case severityCritical:
 			vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 				ID:          formatVulnID(vulnID),
 				Severity:    severityCritical,
@@ -268,7 +269,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 				Status:      "open",
 			})
 			vulnID++
-		} else if attack.RiskLevel == severityHigh {
+		case severityHigh:
 			vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 				ID:          formatVulnID(vulnID),
 				Severity:    severityHigh,

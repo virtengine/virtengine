@@ -635,7 +635,7 @@ func (s ScoringInputs) ComputeInputHash() []byte {
 	// Account and block context
 	h.Write([]byte(s.AccountAddress))
 	blockBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(blockBytes, uint64(s.BlockHeight))
+	binary.BigEndian.PutUint64(blockBytes, safeUint64FromInt64Scoring(s.BlockHeight))
 	h.Write(blockBytes)
 
 	// Face similarity inputs
@@ -742,7 +742,7 @@ const (
 	ScoringReasonLowCaptureQuality ScoringReasonCode = "LOW_CAPTURE_QUALITY"
 
 	// ScoringReasonBelowPassThreshold indicates final score below pass threshold
-	ScoringReasonBelowPassThreshold ScoringReasonCode = "BELOW_PASS_THRESHOLD"
+	ScoringReasonBelowPassThreshold ScoringReasonCode = "BELOW_PASS_THRESHOLD" //nolint:gosec // non-secret reason code
 
 	// ScoringReasonFallbackApplied indicates fallback scoring was applied
 	ScoringReasonFallbackApplied ScoringReasonCode = "FALLBACK_APPLIED"
@@ -1019,7 +1019,7 @@ func ComputeDeterministicScore(
 	}
 
 	// Compute individual feature scores (all in basis points)
-	var contributions []FeatureContribution
+	contributions := make([]FeatureContribution, 0, 6)
 
 	// 1. Face Similarity
 	faceContrib := computeFaceContribution(inputs.FaceSimilarity, model.Weights, model.Thresholds)
@@ -1084,7 +1084,7 @@ func ComputeDeterministicScore(
 	var finalScore uint32
 	if activeWeight > 0 {
 		// Proportional scoring based on active features
-		finalScore = uint32((totalWeightedScore * 100) / uint64(MaxBasisPoints))
+		finalScore = safeUint32FromUint64Scoring((totalWeightedScore * 100) / uint64(MaxBasisPoints))
 	}
 
 	// Apply caps for missing components
@@ -1168,10 +1168,10 @@ func computeFaceContribution(input FaceSimilarityInput, weights ScoringWeights, 
 	// Use similarity score weighted by confidence
 	// Effective score = (similarity * confidence) / 10000
 	effectiveScore := (uint64(input.SimilarityScore) * uint64(input.Confidence)) / uint64(MaxBasisPoints)
-	contrib.RawScore = uint32(effectiveScore)
+	contrib.RawScore = safeUint32FromUint64Scoring(effectiveScore)
 
 	// Compute weighted contribution
-	contrib.WeightedScore = uint32((effectiveScore * uint64(weights.FaceSimilarityWeight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Scoring((effectiveScore * uint64(weights.FaceSimilarityWeight)) / uint64(MaxBasisPoints))
 
 	// Check threshold
 	contrib.PassedThreshold = contrib.RawScore >= thresholds.MinFaceSimilarity
@@ -1200,10 +1200,10 @@ func computeOCRContribution(input OCRConfidenceInput, weights ScoringWeights, th
 	// Combine overall confidence with field extraction success
 	fieldScore := input.ComputeFieldScore()
 	combinedScore := (uint64(input.OverallConfidence)*70 + uint64(fieldScore)*30) / 100
-	contrib.RawScore = uint32(combinedScore)
+	contrib.RawScore = safeUint32FromUint64Scoring(combinedScore)
 
 	// Compute weighted contribution
-	contrib.WeightedScore = uint32((combinedScore * uint64(weights.OCRConfidenceWeight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Scoring((combinedScore * uint64(weights.OCRConfidenceWeight)) / uint64(MaxBasisPoints))
 
 	// Check threshold
 	contrib.PassedThreshold = contrib.RawScore >= thresholds.MinOCRConfidence
@@ -1233,7 +1233,7 @@ func computeDocContribution(input DocIntegrityInput, weights ScoringWeights, thr
 	contrib.RawScore = input.ComputeIntegrityScore()
 
 	// Compute weighted contribution
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weights.DocIntegrityWeight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Scoring((uint64(contrib.RawScore) * uint64(weights.DocIntegrityWeight)) / uint64(MaxBasisPoints))
 
 	// Check threshold
 	contrib.PassedThreshold = contrib.RawScore >= thresholds.MinDocIntegrity
@@ -1255,7 +1255,7 @@ func computeSaltContribution(input SaltBindingInput, weights ScoringWeights) Fea
 	contrib.RawScore = input.ComputeBindingScore()
 
 	// Compute weighted contribution
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weights.SaltBindingWeight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Scoring((uint64(contrib.RawScore) * uint64(weights.SaltBindingWeight)) / uint64(MaxBasisPoints))
 
 	// Salt binding passes if all components are valid
 	contrib.PassedThreshold = input.SaltPresent && input.SaltValid &&
@@ -1277,7 +1277,7 @@ func computeLivenessContribution(input LivenessCheckInput, weights ScoringWeight
 	if !input.Present {
 		// Liveness not present - may be optional
 		contrib.RawScore = uint32(MaxBasisPoints) / 2 // Default 50% when not present
-		contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weights.LivenessCheckWeight)) / uint64(MaxBasisPoints))
+		contrib.WeightedScore = safeUint32FromUint64Scoring((uint64(contrib.RawScore) * uint64(weights.LivenessCheckWeight)) / uint64(MaxBasisPoints))
 		contrib.PassedThreshold = true // Not required to pass
 		return contrib
 	}
@@ -1286,7 +1286,7 @@ func computeLivenessContribution(input LivenessCheckInput, weights ScoringWeight
 	contrib.RawScore = input.ComputeLivenessScore()
 
 	// Compute weighted contribution
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weights.LivenessCheckWeight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Scoring((uint64(contrib.RawScore) * uint64(weights.LivenessCheckWeight)) / uint64(MaxBasisPoints))
 
 	// Check threshold
 	contrib.PassedThreshold = contrib.RawScore >= thresholds.MinLivenessScore
@@ -1308,7 +1308,7 @@ func computeCaptureContribution(input CaptureQualityInput, weights ScoringWeight
 	contrib.RawScore = input.ComputeCaptureScore()
 
 	// Compute weighted contribution
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weights.CaptureQualityWeight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Scoring((uint64(contrib.RawScore) * uint64(weights.CaptureQualityWeight)) / uint64(MaxBasisPoints))
 
 	// Check threshold
 	contrib.PassedThreshold = contrib.RawScore >= thresholds.MinCaptureQuality
@@ -1330,4 +1330,20 @@ func deduplicateReasonCodes(codes []ScoringReasonCode) []ScoringReasonCode {
 		}
 	}
 	return result
+}
+
+func safeUint64FromInt64Scoring(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
+}
+
+func safeUint32FromUint64Scoring(value uint64) uint32 {
+	if value > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"math"
 	"time"
 
 	"cosmossdk.io/log"
@@ -246,7 +247,7 @@ func (h *AttachmentHandler) ListAttachments(ctx context.Context, ticketID string
 				ArtifactAddress: ref.ContentAddress.HashHex(),
 				FileName:        ref.Metadata["file_name"],
 				ContentType:     ref.Metadata["content_type"],
-				Size:            int64(ref.ContentAddress.Size),
+				Size:            safeInt64FromUint64(ref.ContentAddress.Size),
 				CreatedAt:       ref.CreatedAt,
 			})
 		}
@@ -298,6 +299,13 @@ func (h *AttachmentHandler) generateAccessToken() (string, time.Time) {
 	_, _ = rand.Read(token)
 	expiresAt := time.Now().Add(h.config.AccessTokenTTL)
 	return hex.EncodeToString(token), expiresAt
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 // UploadAttachmentRequest contains parameters for uploading an attachment

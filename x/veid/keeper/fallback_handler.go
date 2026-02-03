@@ -147,7 +147,7 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 
 	// Update identity record tier if it exists (after successful MFA fallback)
 	if record, found := k.GetIdentityRecord(ctx, address); found {
-		record.Tier = types.IdentityTierVerified
+		record.Tier = types.IdentityTierStandard
 		if err := k.SetIdentityRecord(ctx, record); err != nil {
 			k.Logger(ctx).Error("failed to update identity record tier", "error", err)
 		}

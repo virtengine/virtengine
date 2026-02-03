@@ -575,7 +575,7 @@ func validateUTF8(s string) error {
 func validateBase64(s string) error {
 	// Check for valid base64 characters
 	for _, c := range s {
-		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=') {
+		if (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '+' && c != '/' && c != '=' {
 			return &ValidationError{Field: "base64", Message: "invalid character"}
 		}
 	}
@@ -584,7 +584,7 @@ func validateBase64(s string) error {
 
 func validateHex(s string) error {
 	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return &ValidationError{Field: "hex", Message: "invalid hex character"}
 		}
 	}

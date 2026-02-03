@@ -389,14 +389,14 @@ func (o *Offering) SyncChecksum() string {
 	h.Write([]byte(o.Description))
 	h.Write([]byte(o.Category))
 	h.Write([]byte(o.Version))
-	h.Write([]byte(fmt.Sprintf("%d", o.State)))
+	fmt.Fprintf(h, "%d", o.State)
 	h.Write([]byte(o.Pricing.Model))
-	h.Write([]byte(fmt.Sprintf("%d", o.Pricing.BasePrice)))
+	fmt.Fprintf(h, "%d", o.Pricing.BasePrice)
 	h.Write([]byte(o.Pricing.Currency))
-	h.Write([]byte(fmt.Sprintf("%d", o.IdentityRequirement.MinScore)))
-	h.Write([]byte(fmt.Sprintf("%t", o.RequireMFAForOrders)))
-	h.Write([]byte(fmt.Sprintf("%d", o.MaxConcurrentOrders)))
-	h.Write([]byte(fmt.Sprintf("%d", o.UpdatedAt.Unix())))
+	fmt.Fprintf(h, "%d", o.IdentityRequirement.MinScore)
+	fmt.Fprintf(h, "%t", o.RequireMFAForOrders)
+	fmt.Fprintf(h, "%d", o.MaxConcurrentOrders)
+	fmt.Fprintf(h, "%d", o.UpdatedAt.Unix())
 
 	// Include tags in sorted order
 	for _, tag := range o.Tags {

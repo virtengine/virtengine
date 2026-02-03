@@ -289,6 +289,10 @@ func BuildSettlementHookResultKey(settlementID string, hookID string, timestamp 
 
 	// Append timestamp as big-endian uint64
 	tsBytes := make([]byte, 8)
+	if timestamp < 0 {
+		timestamp = 0
+	}
+	//nolint:gosec // timestamp checked for negativity
 	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
 	return append(key, tsBytes...)
 }

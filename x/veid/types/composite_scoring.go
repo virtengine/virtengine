@@ -23,6 +23,8 @@ import (
 
 // Composite scoring weight constants in basis points (10000 = 100%)
 // Per veid-flow-spec.md ML Score Calculation section
+//
+//nolint:gosec // composite reason labels are not credentials
 const (
 	// WeightDocumentAuthenticity is the weight for document authenticity (25%)
 	WeightDocumentAuthenticity uint32 = 2500
@@ -607,7 +609,7 @@ const (
 	CompositeReasonHighRisk CompositeReasonCode = "HIGH_RISK"
 
 	// CompositeReasonBelowPassThreshold indicates final score below pass threshold
-	CompositeReasonBelowPassThreshold CompositeReasonCode = "BELOW_PASS_THRESHOLD"
+	CompositeReasonBelowPassThreshold CompositeReasonCode = "BELOW_PASS_THRESHOLD" //nolint:gosec // non-secret reason code
 )
 
 // ============================================================================
@@ -825,7 +827,7 @@ func ComputeCompositeScore(
 	// Convert from basis points to 0-100 scale
 	// totalWeightedScore is the sum of (component_score * weight / 10000)
 	// We need to divide by total possible weight contribution to normalize
-	finalScore := uint32((totalWeightedScore * 100) / uint64(MaxBasisPoints))
+	finalScore := safeUint32FromUint64Composite((totalWeightedScore * 100) / uint64(MaxBasisPoints))
 
 	// Ensure score doesn't exceed maximum
 	if finalScore > MaxScore {
@@ -862,6 +864,14 @@ func ComputeCompositeScore(
 	return result, nil
 }
 
+func safeUint32FromUint64Composite(value uint64) uint32 {
+	if value > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
+}
+
 // ============================================================================
 // Helper Functions for Component Contributions
 // ============================================================================
@@ -885,7 +895,7 @@ func computeDocAuthenticityContribution(
 	}
 
 	contrib.RawScore = input.ComputeScore()
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Composite((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
 	contrib.PassedThreshold = contrib.RawScore >= threshold
 
 	if !contrib.PassedThreshold {
@@ -914,7 +924,7 @@ func computeFaceMatchContribution(
 	}
 
 	contrib.RawScore = input.ComputeScore()
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Composite((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
 	contrib.PassedThreshold = contrib.RawScore >= threshold
 
 	if !contrib.PassedThreshold {
@@ -936,7 +946,7 @@ func computeLivenessContribution2(
 
 	// Liveness is optional - get default score if not present
 	contrib.RawScore = input.ComputeScore()
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Composite((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
 
 	// If present, check threshold; if not present, automatically pass
 	if input.Present {
@@ -970,7 +980,7 @@ func computeDataConsistencyContribution(
 	}
 
 	contrib.RawScore = input.ComputeScore()
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Composite((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
 	contrib.PassedThreshold = contrib.RawScore >= threshold
 
 	if !contrib.PassedThreshold {
@@ -992,7 +1002,7 @@ func computeHistoricalContribution(
 
 	// Historical signals are optional - get default score
 	contrib.RawScore = input.ComputeScore()
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Composite((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
 
 	// Historical threshold is typically 0 for new accounts
 	contrib.PassedThreshold = contrib.RawScore >= threshold
@@ -1016,7 +1026,7 @@ func computeRiskContribution(
 
 	// Risk indicators are optional - get default score
 	contrib.RawScore = input.ComputeScore()
-	contrib.WeightedScore = uint32((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
+	contrib.WeightedScore = safeUint32FromUint64Composite((uint64(contrib.RawScore) * uint64(weight)) / uint64(MaxBasisPoints))
 
 	// For risk, higher score = lower risk, so check if above threshold
 	contrib.PassedThreshold = contrib.RawScore >= threshold

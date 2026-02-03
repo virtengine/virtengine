@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -102,7 +103,7 @@ func (s *MockMLScorer) Score(scopes []MockDecryptedScope) (int32, string, []byte
 	}
 
 	// Score calculation (50-100 based on valid scopes)
-	score := int32(50 + (validCount * 10))
+	score := safeInt32FromInt(50 + (validCount * 10))
 	if score > 100 {
 		score = 100
 	}
@@ -583,4 +584,15 @@ func setupVEIDKeeperForBenchmark(b *testing.B) (keeper.Keeper, sdk.Context) {
 	}
 
 	return k, ctx
+}
+
+func safeInt32FromInt(value int) int32 {
+	if value > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if value < math.MinInt32 {
+		return math.MinInt32
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
 }

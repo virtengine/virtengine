@@ -363,9 +363,9 @@ func (hc *HealthChecker) computeOutputHash(result *ScoreResult) string {
 	h := sha256.New()
 
 	// Include key fields that should be deterministic
-	h.Write([]byte(fmt.Sprintf("%d", result.Score)))
-	h.Write([]byte(fmt.Sprintf("%.6f", result.Confidence)))
-	h.Write([]byte(fmt.Sprintf("%.6f", result.RawScore)))
+	fmt.Fprintf(h, "%d", result.Score)
+	fmt.Fprintf(h, "%.6f", result.Confidence)
+	fmt.Fprintf(h, "%.6f", result.RawScore)
 	h.Write([]byte(result.OutputHash))
 
 	return hex.EncodeToString(h.Sum(nil))

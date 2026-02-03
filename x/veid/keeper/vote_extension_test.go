@@ -356,7 +356,7 @@ func TestVoteExtensionVersion(t *testing.T) {
 // ============================================================================
 
 func TestNewVoteExtensionHandler(t *testing.T) {
-	keyProvider := newMockKeyProvider("validator1")
+	keyProvider := newMockKeyProvider()
 	handler := NewVoteExtensionHandler(nil, keyProvider)
 
 	require.NotNil(t, handler)

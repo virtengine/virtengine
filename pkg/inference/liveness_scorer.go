@@ -568,7 +568,7 @@ func (ls *LivenessScorer) postProcessResult(result *LivenessResult) {
 // computeResultHash computes a deterministic hash of the result
 func (ls *LivenessScorer) computeResultHash(score float32, isLive bool, decision string, reasonCodes []string) string {
 	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%.4f|%v|%s|", score, isLive, decision)))
+	fmt.Fprintf(h, "%.4f|%v|%s|", score, isLive, decision)
 	for _, code := range reasonCodes {
 		h.Write([]byte(code))
 		h.Write([]byte(","))

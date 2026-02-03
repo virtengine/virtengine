@@ -352,7 +352,7 @@ func (o *PriceOracle) CalculateTWAP(history *PriceHistory, currentBlock int64) (
 	var weightedSum, totalWeight uint64
 
 	for i := 0; i < len(points)-1; i++ {
-		timeDelta := uint64(points[i+1].BlockHeight - points[i].BlockHeight)
+		timeDelta := safeUint64FromInt64Delta(points[i+1].BlockHeight - points[i].BlockHeight)
 		weightedSum += points[i].Price * timeDelta
 		totalWeight += timeDelta
 	}
@@ -423,6 +423,32 @@ func (o *PriceOracle) CalculateMedian(history *PriceHistory, currentBlock int64)
 		return (prices[mid-1] + prices[mid]) / 2, nil
 	}
 	return prices[mid], nil
+}
+
+func safeUint64FromInt64Delta(value int64) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	return uint64(value)
+}
+
+func safeInt64FromUint64Price(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	//nolint:gosec // range checked above
+	return int64(value)
+}
+
+func safeInt32FromInt64(value int64) int32 {
+	if value > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if value < math.MinInt32 {
+		return math.MinInt32
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
 }
 
 // GetAggregatedPrice returns the aggregated price using the configured method
@@ -513,11 +539,16 @@ func (o *PriceOracle) ValidatePrice(price uint64, history *PriceHistory, now tim
 	// Calculate deviation
 	var deviation int64
 	if price > band.ReferencePrice {
-		deviation = int64(price - band.ReferencePrice)
+		deviation = safeInt64FromUint64Price(price - band.ReferencePrice)
 	} else {
-		deviation = -int64(band.ReferencePrice - price)
+		deviation = -safeInt64FromUint64Price(band.ReferencePrice - price)
 	}
-	result.DeviationBps = int32((deviation * 10000) / int64(band.ReferencePrice))
+	denominator := safeInt64FromUint64Price(band.ReferencePrice)
+	if denominator == 0 {
+		result.DeviationBps = 0
+	} else {
+		result.DeviationBps = safeInt32FromInt64((deviation * 10000) / denominator)
+	}
 
 	// Check if within band
 	if band.IsWithinBand(price) {

@@ -167,7 +167,7 @@ func splitMnemonicWords(mnemonic string) []string {
 // SECURITY: The caller must call Zero() on the returned DerivedKey when done
 func DeriveKeyFromMnemonic(mnemonic string, hdPath string) (*DerivedKey, error) {
 	if !ValidateMnemonic(mnemonic) {
-		return nil, fmt.Errorf(errMsgInvalidMnemonic)
+		return nil, fmt.Errorf("%s", errMsgInvalidMnemonic)
 	}
 
 	if hdPath == "" {
@@ -307,7 +307,7 @@ func DeriveKeyWithOpts(mnemonic string, opts *DeriveOptions) (*DerivedKey, error
 	}
 
 	if !ValidateMnemonic(mnemonic) {
-		return nil, fmt.Errorf(errMsgInvalidMnemonic)
+		return nil, fmt.Errorf("%s", errMsgInvalidMnemonic)
 	}
 
 	hdPath := opts.BuildHDPath()
@@ -358,7 +358,7 @@ func RecoverKeyFromMnemonic(mnemonic string, hdPath string) (*DerivedKey, error)
 // SECURITY: The returned seed must be zeroed after use
 func MnemonicToSeed(mnemonic string, passphrase string) ([]byte, error) {
 	if !ValidateMnemonic(mnemonic) {
-		return nil, fmt.Errorf(errMsgInvalidMnemonic)
+		return nil, fmt.Errorf("%s", errMsgInvalidMnemonic)
 	}
 
 	seed, err := bip39.NewSeedWithErrorChecking(mnemonic, passphrase)
@@ -389,7 +389,7 @@ func EntropyToMnemonic(entropy []byte) (string, error) {
 // SECURITY: The returned entropy is sensitive material
 func MnemonicToEntropy(mnemonic string) ([]byte, error) {
 	if !ValidateMnemonic(mnemonic) {
-		return nil, fmt.Errorf(errMsgInvalidMnemonic)
+		return nil, fmt.Errorf("%s", errMsgInvalidMnemonic)
 	}
 
 	// Get full byte array including checksum
@@ -440,7 +440,7 @@ func PrivateKeyToAddress(privateKey []byte) (string, error) {
 // SECURITY: All returned DerivedKeys must be zeroed after use
 func DeriveMultipleAccounts(mnemonic string, startIndex, count uint32) ([]*DerivedKey, error) {
 	if !ValidateMnemonic(mnemonic) {
-		return nil, fmt.Errorf(errMsgInvalidMnemonic)
+		return nil, fmt.Errorf("%s", errMsgInvalidMnemonic)
 	}
 
 	if count == 0 {

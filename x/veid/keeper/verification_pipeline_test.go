@@ -17,7 +17,6 @@ import (
 
 type VerificationPipelineTestSuite struct {
 	suite.Suite
-	keyPair *encryptioncrypto.KeyPair
 }
 
 func TestVerificationPipelineTestSuite(t *testing.T) {

@@ -496,7 +496,9 @@ func simulateEncryption(plaintext, recipientPubKey, senderPrivKey, nonce []byte)
 		result[i] = b ^ key[i%len(key)] ^ nonce[i%len(nonce)]
 	}
 	// Compute auth tag using key (simulates Poly1305)
-	tagData := append(result[:len(plaintext)], key...)
+	tagData := make([]byte, 0, len(plaintext)+len(key)+len(nonce))
+	tagData = append(tagData, result[:len(plaintext)]...)
+	tagData = append(tagData, key...)
 	tagData = append(tagData, nonce...)
 	copy(result[len(plaintext):], sha256Hash(tagData)[:16])
 	return result
@@ -511,7 +513,9 @@ func simulateDecryption(ciphertext, senderPubKey, recipientPrivKey, nonce []byte
 	dataLen := len(ciphertext) - 16
 
 	// Verify auth tag using key (simulates Poly1305 verification)
-	tagData := append(ciphertext[:dataLen], key...)
+	tagData := make([]byte, 0, dataLen+len(key)+len(nonce))
+	tagData = append(tagData, ciphertext[:dataLen]...)
+	tagData = append(tagData, key...)
 	tagData = append(tagData, nonce...)
 	expectedTag := sha256Hash(tagData)[:16]
 	if !bytes.Equal(expectedTag, ciphertext[dataLen:]) {
@@ -532,7 +536,9 @@ func simulateSymmetricEncryption(plaintext, key, nonce []byte) []byte {
 		result[i] = b ^ key[i%len(key)] ^ nonce[i%len(nonce)]
 	}
 	// Compute auth tag using key (simulates Poly1305)
-	tagData := append(result[:len(plaintext)], key...)
+	tagData := make([]byte, 0, len(plaintext)+len(key)+len(nonce))
+	tagData = append(tagData, result[:len(plaintext)]...)
+	tagData = append(tagData, key...)
 	tagData = append(tagData, nonce...)
 	copy(result[len(plaintext):], sha256Hash(tagData)[:16])
 	return result
@@ -546,7 +552,9 @@ func simulateSymmetricDecryption(ciphertext, key, nonce []byte) ([]byte, error) 
 	dataLen := len(ciphertext) - 16
 
 	// Verify auth tag using key (simulates Poly1305 verification)
-	tagData := append(ciphertext[:dataLen], key...)
+	tagData := make([]byte, 0, dataLen+len(key)+len(nonce))
+	tagData = append(tagData, ciphertext[:dataLen]...)
+	tagData = append(tagData, key...)
 	tagData = append(tagData, nonce...)
 	expectedTag := sha256Hash(tagData)[:16]
 	if !bytes.Equal(expectedTag, ciphertext[dataLen:]) {
@@ -562,7 +570,7 @@ func simulateSymmetricDecryption(ciphertext, key, nonce []byte) ([]byte, error) 
 }
 
 func deriveKey(pubKey, privKey []byte) []byte {
-	combined := append(pubKey, privKey...)
+	combined := append(append([]byte{}, pubKey...), privKey...)
 	return sha256Hash(combined)
 }
 

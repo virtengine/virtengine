@@ -345,7 +345,7 @@ type TierProgress struct {
 // ============================================================================
 
 // checkAccountStatus verifies the account status
-func (k Keeper) checkAccountStatus(ctx sdk.Context, record *types.IdentityRecord, result *types.EnhancedEligibilityResult) {
+func (k Keeper) checkAccountStatus(_ sdk.Context, record *types.IdentityRecord, result *types.EnhancedEligibilityResult) {
 	if record.Locked {
 		result.AddCheck(types.NewEligibilityCheck(
 			types.EligibilityCheckTypeAccountStatus,
@@ -363,7 +363,7 @@ func (k Keeper) checkAccountStatus(ctx sdk.Context, record *types.IdentityRecord
 }
 
 // checkTierRequirement verifies the tier requirement
-func (k Keeper) checkTierRequirement(ctx sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
+func (k Keeper) checkTierRequirement(_ sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
 	currentTierLevel := k.tierToLevel(record.Tier)
 	requiredTierLevel := k.tierToLevel(requiredTier)
 
@@ -384,7 +384,7 @@ func (k Keeper) checkTierRequirement(ctx sdk.Context, record *types.IdentityReco
 }
 
 // checkScoreThreshold verifies the score threshold
-func (k Keeper) checkScoreThreshold(ctx sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
+func (k Keeper) checkScoreThreshold(_ sdk.Context, record *types.IdentityRecord, requiredTier types.IdentityTier, result *types.EnhancedEligibilityResult) {
 	minScore := k.getMinScoreForTier(requiredTier)
 
 	if record.CurrentScore >= minScore {
@@ -633,9 +633,9 @@ func (k Keeper) tierToLevel(tier types.IdentityTier) int {
 		return 0
 	case types.IdentityTierBasic:
 		return 1
-	case types.IdentityTierStandard, types.IdentityTierVerified:
+	case types.IdentityTierStandard:
 		return 2
-	case types.IdentityTierPremium, types.IdentityTierTrusted:
+	case types.IdentityTierPremium:
 		return 3
 	default:
 		return 0

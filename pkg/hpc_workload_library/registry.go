@@ -356,8 +356,12 @@ func (r *WorkloadRegistry) Refresh(ctx context.Context) error {
 	}
 
 	// List all workload templates from store
+	limit := r.config.MaxTemplates
+	if limit < 0 {
+		return fmt.Errorf("invalid max templates limit: %d", limit)
+	}
 	resp, err := r.store.ListByOwner(ctx, "", &artifact_store.Pagination{
-		Limit: uint64(r.config.MaxTemplates),
+		Limit: uint64(limit),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list templates: %w", err)

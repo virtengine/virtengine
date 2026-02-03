@@ -534,9 +534,10 @@ func (c *SMSChallenge) UpdateDeliveryStatus(status DeliveryStatus, messageID str
 	if provider != "" {
 		c.Provider = provider
 	}
-	if status == DeliveryDelivered {
+	switch status {
+	case DeliveryDelivered:
 		c.Status = StatusDelivered
-	} else if status == DeliverySent {
+	case DeliverySent:
 		c.Status = StatusSent
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -478,6 +479,9 @@ func (s *NoiseSession) Write(b []byte) (int, error) {
 	ciphertext := s.sendCipher.Seal(nil, nonce, b, nil)
 
 	// Write length prefix
+	if len(ciphertext) > math.MaxUint16 {
+		return 0, errors.New("ciphertext too large")
+	}
 	var lengthBuf [2]byte
 	binary.BigEndian.PutUint16(lengthBuf[:], uint16(len(ciphertext)))
 	if _, err := s.conn.Write(lengthBuf[:]); err != nil {
@@ -542,15 +546,17 @@ func curve25519DH(privateKey, publicKey []byte) ([]byte, error) {
 	copy(priv[:], privateKey)
 	copy(pub[:], publicKey)
 
-	var shared [32]byte
-	curve25519.ScalarMult(&shared, &priv, &pub)
+	shared, err := curve25519.X25519(priv[:], pub[:])
+	if err != nil {
+		return nil, fmt.Errorf("x25519 exchange failed: %w", err)
+	}
 
 	// Clear private key from memory
 	for i := range priv {
 		priv[i] = 0
 	}
 
-	return shared[:], nil
+	return shared, nil
 }
 
 // constantTimeCompare performs constant-time comparison of two byte slices.

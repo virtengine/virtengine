@@ -211,7 +211,7 @@ func (s *EligibilityEnhancedTestSuite) TestEnhancedCheckEligibility_BasicForPrem
 	s.Assert().NotEmpty(result.NextSteps)
 
 	// Should have tier and score failures
-	failedTypes := make([]types.EligibilityCheckType, 0)
+	failedTypes := make([]types.EligibilityCheckType, 0, len(result.FailedChecks))
 	for _, check := range result.FailedChecks {
 		failedTypes = append(failedTypes, check.CheckType)
 	}
@@ -324,7 +324,7 @@ func (s *EligibilityEnhancedTestSuite) TestGetRemediationHints_BasicForPremium()
 	s.Assert().NotEmpty(hints)
 
 	// Should include hints for missing scopes
-	categories := make([]string, 0)
+	categories := make([]string, 0, len(hints))
 	for _, hint := range hints {
 		categories = append(categories, hint.Category)
 		s.Assert().NotEmpty(hint.Issue)

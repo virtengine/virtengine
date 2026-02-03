@@ -475,6 +475,7 @@ func (r *SNPDerivedKeyRequester) requestSimulatedKey(rootKey int, guestFieldSele
 	// Generate a deterministic simulated key
 	h := sha256.New()
 	h.Write([]byte("virtengine-sev-snp-derived-key"))
+	//nolint:gosec // rootKey is 0 or 1 enum value
 	_ = binary.Write(h, binary.LittleEndian, uint32(rootKey))
 	_ = binary.Write(h, binary.LittleEndian, guestFieldSelect)
 	_ = binary.Write(h, binary.LittleEndian, vmpl)
@@ -610,9 +611,7 @@ func (b *SEVHardwareBackend) Initialize() error {
 	}
 
 	// Detect hardware
-	if err := b.detector.Detect(); err != nil {
-		// Continue anyway for simulation mode
-	}
+	_ = b.detector.Detect()
 
 	// Create device wrapper
 	b.device = NewSEVGuestDevice(b.detector)

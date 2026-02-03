@@ -56,16 +56,16 @@ var (
 	ErrOsmosisNotConnected = errors.New("not connected to Osmosis")
 
 	// ErrOsmosisPoolNotFound is returned when pool is not found
-	ErrOsmosisPoolNotFound = errors.New("Osmosis pool not found")
+	ErrOsmosisPoolNotFound = errors.New("osmosis pool not found")
 
 	// ErrOsmosisInvalidPool is returned for invalid pool data
 	ErrOsmosisInvalidPool = errors.New("invalid Osmosis pool data")
 
 	// ErrOsmosisQueryFailed is returned when query fails
-	ErrOsmosisQueryFailed = errors.New("Osmosis query failed")
+	ErrOsmosisQueryFailed = errors.New("osmosis query failed")
 
 	// ErrOsmosisSwapFailed is returned when swap fails
-	ErrOsmosisSwapFailed = errors.New("Osmosis swap failed")
+	ErrOsmosisSwapFailed = errors.New("osmosis swap failed")
 
 	// ErrOsmosisInsufficientLiquidity is returned for low liquidity
 	ErrOsmosisInsufficientLiquidity = errors.New("insufficient liquidity in Osmosis pool")

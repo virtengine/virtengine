@@ -7,6 +7,7 @@ package keeper
 
 import (
 	"encoding/json"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -321,7 +322,7 @@ func (k Keeper) CheckGeoCompliance(ctx sdk.Context, address string, location *ty
 
 	// Get applicable policies ordered by priority
 	policies := k.GetPoliciesByPriority(ctx)
-	result.EvaluatedPolicies = int32(len(policies))
+	result.EvaluatedPolicies = safeInt32FromIntGeo(len(policies))
 
 	for _, policy := range policies {
 		matched, allowed, reason := k.evaluatePolicy(ctx, &policy, location)
@@ -360,7 +361,7 @@ func (k Keeper) CheckGeoCompliance(ctx sdk.Context, address string, location *ty
 
 // evaluatePolicy evaluates a single policy against a location
 // Returns: matched (bool), allowed (bool), reason (string)
-func (k Keeper) evaluatePolicy(ctx sdk.Context, policy *types.GeoRestrictionPolicy, location *types.GeoLocation) (bool, bool, string) {
+func (k Keeper) evaluatePolicy(_ sdk.Context, policy *types.GeoRestrictionPolicy, location *types.GeoLocation) (bool, bool, string) {
 	country := types.NormalizeCountryCode(location.Country)
 	region := types.NormalizeRegionCode(location.Region)
 
@@ -674,7 +675,7 @@ func (k Keeper) CheckGeoComplianceForScope(ctx sdk.Context, address string, loca
 
 	// Get policies applicable to this scope
 	policies := k.GetApplicablePolicies(ctx, scopeType, "")
-	result.EvaluatedPolicies = int32(len(policies))
+	result.EvaluatedPolicies = safeInt32FromIntGeo(len(policies))
 
 	// Check global blocklist
 	country := types.NormalizeCountryCode(location.Country)
@@ -779,6 +780,17 @@ func (k Keeper) SetGeoPolicyStatus(ctx sdk.Context, policyID string, status type
 	}
 
 	return nil
+}
+
+func safeInt32FromIntGeo(value int) int32 {
+	if value > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if value < math.MinInt32 {
+		return math.MinInt32
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
 }
 
 // Ensure unused import doesn't cause errors

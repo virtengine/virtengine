@@ -48,6 +48,7 @@ func (AppModuleBasic) Name() string {
 
 // RegisterLegacyAminoCodec registers the bme module's types for the given codec.
 func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	//nolint:staticcheck // Legacy amino registration is required for compatibility.
 	types.RegisterLegacyAminoCodec(cdc)
 }
 

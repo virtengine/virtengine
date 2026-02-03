@@ -227,6 +227,15 @@ type OfferingSyncWorker struct {
 	promMetrics *OfferingSyncPrometheusMetrics
 }
 
+const (
+	waldurStateActive   = "Active"
+	waldurStatePaused   = "Paused"
+	waldurStateArchived = "Archived"
+	waldurActionArchive = "archive"
+	waldurActionPause   = "pause"
+	waldurActionActivate = "activate"
+)
+
 // OfferingSyncTask represents a sync task to execute.
 type OfferingSyncTask struct {
 	OfferingID string
@@ -470,7 +479,7 @@ func (w *OfferingSyncWorker) buildOfferingEventQuery() string {
 }
 
 // processChainEvents extracts and queues offering events from a transaction.
-func (w *OfferingSyncWorker) processChainEvents(ctx context.Context, data tmtypes.EventDataTx) {
+func (w *OfferingSyncWorker) processChainEvents(_ context.Context, data tmtypes.EventDataTx) {
 	envelopes, err := ExtractMarketplaceEvents(data.Result.Events)
 	if err != nil {
 		log.Printf("[offering-sync] extract events error: %v", err)
@@ -761,12 +770,12 @@ func (w *OfferingSyncWorker) syncUpdateExisting(ctx context.Context, task *Offer
 // stateToAction converts a Waldur state to an action.
 func (w *OfferingSyncWorker) stateToAction(state string) string {
 	switch state {
-	case "Active":
-		return "activate"
-	case "Paused":
-		return "pause"
-	case "Archived":
-		return "archive"
+	case waldurStateActive:
+		return waldurActionActivate
+	case waldurStatePaused:
+		return waldurActionPause
+	case waldurStateArchived:
+		return waldurActionArchive
 	default:
 		return ""
 	}
@@ -784,10 +793,10 @@ func (w *OfferingSyncWorker) syncDisable(ctx context.Context, task *OfferingSync
 			}
 			return fmt.Errorf("lookup offering: %w", err)
 		}
-		return w.marketplace.SetOfferingState(ctx, existing.UUID, "archive")
+		return w.marketplace.SetOfferingState(ctx, existing.UUID, waldurActionArchive)
 	}
 
-	return w.marketplace.SetOfferingState(ctx, record.WaldurUUID, "archive")
+	return w.marketplace.SetOfferingState(ctx, record.WaldurUUID, waldurActionArchive)
 }
 
 // reconcileLoop runs periodic reconciliation.

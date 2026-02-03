@@ -257,7 +257,7 @@ func (c *WaldurCallback) SigningPayload() []byte {
 	h.Write([]byte(c.ChainEntityType))
 	h.Write([]byte(c.ChainEntityID))
 	h.Write([]byte(c.Nonce))
-	h.Write([]byte(fmt.Sprintf("%d", c.Timestamp.Unix())))
+	fmt.Fprintf(h, "%d", c.Timestamp.Unix())
 	return h.Sum(nil)
 }
 

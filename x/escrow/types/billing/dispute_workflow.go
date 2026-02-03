@@ -874,6 +874,10 @@ func BuildDisputeEvidenceByTimestampKey(disputeID string, timestamp int64, evide
 
 	// Append timestamp as big-endian uint64 for deterministic ordering
 	tsBytes := make([]byte, 8)
+	if timestamp < 0 {
+		timestamp = 0
+	}
+	//nolint:gosec // timestamp checked for negativity
 	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
 	key = append(key, tsBytes...)
 	key = append(key, byte('/'))

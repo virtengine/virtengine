@@ -242,7 +242,7 @@ func (m *msgServer) VerifyChallenge(goCtx context.Context, msg *types.MsgVerifyC
 	}
 
 	// Verify the challenge
-	verified, err := m.Keeper.VerifyMFAChallenge(ctx, msg.ChallengeID, msg.Response)
+	verified, err := m.VerifyMFAChallenge(ctx, msg.ChallengeID, msg.Response)
 	if err != nil {
 		return &types.MsgVerifyChallengeResponse{
 			Verified: false,

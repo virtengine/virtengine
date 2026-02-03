@@ -35,7 +35,7 @@ func (d DecayType) String() string {
 	case DecayTypeStepFunction:
 		return "step_function"
 	default:
-		return "unknown"
+		return string(AccountStatusUnknown)
 	}
 }
 

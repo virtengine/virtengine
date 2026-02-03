@@ -116,12 +116,15 @@ func (c *IntegrityChecker) Verify(ctx context.Context, address *ContentAddress) 
 			result.ExpectedHash, result.ComputedHash)
 
 		if c.options.ReportCorruption {
-			// Log corruption - in production this would report to monitoring
-			// Note: actual reporting implementation depends on backend
+			c.reportCorruption(address, result)
 		}
 	}
 
 	return result, nil
+}
+
+func (c *IntegrityChecker) reportCorruption(_ *ContentAddress, _ *IntegrityCheckResult) {
+	// Placeholder for monitoring integration.
 }
 
 // VerifyStream checks integrity while streaming data.

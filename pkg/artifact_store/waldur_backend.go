@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"time"
 
@@ -553,7 +554,7 @@ func (w *WaldurBackend) ListByOwner(ctx context.Context, owner string, paginatio
 					Version:    ContentAddressVersion,
 					Backend:    BackendWaldur,
 					BackendRef: obj.Key,
-					Size:       uint64(obj.Size),
+					Size:       safeUint64FromInt64(obj.Size),
 				},
 			}
 			refs = append(refs, ref)
@@ -751,8 +752,8 @@ func (w *WaldurBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error)
 		quota, err := w.objectStorage.GetQuota(ctx, w.config.Bucket)
 		if err == nil {
 			return &StorageMetrics{
-				TotalArtifacts:   uint64(quota.ObjectCount),
-				TotalBytes:       uint64(quota.UsedBytes),
+				TotalArtifacts:   safeUint64FromInt64(quota.ObjectCount),
+				TotalBytes:       safeUint64FromInt64(quota.UsedBytes),
 				TotalChunks:      0, // Waldur doesn't use chunks
 				ExpiredArtifacts: expired,
 				BackendType:      BackendWaldur,
@@ -792,6 +793,20 @@ func (w *WaldurBackend) GetMetrics(ctx context.Context) (*StorageMetrics, error)
 			"encrypt_at_rest": boolToString(w.config.EncryptAtRest),
 		},
 	}, nil
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	return uint64(value)
+}
+
+func safeInt64FromUint64Waldur(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 // Health checks if the backend is healthy
@@ -933,7 +948,7 @@ func (w *WaldurStreamingBackend) PutStream(ctx context.Context, req *PutStreamRe
 		Version:    ContentAddressVersion,
 		Hash:       hashBytes,
 		Algorithm:  "sha256",
-		Size:       uint64(uploadResp.Size),
+		Size:       safeUint64FromInt64(uploadResp.Size),
 		Backend:    BackendWaldur,
 		BackendRef: uploadResp.Key,
 	}
@@ -958,7 +973,7 @@ func (w *WaldurStreamingBackend) PutStream(ctx context.Context, req *PutStreamRe
 	// Update metrics
 	w.mu.Lock()
 	w.metrics.TotalArtifacts++
-	w.metrics.TotalBytes += uint64(uploadResp.Size)
+	w.metrics.TotalBytes += safeUint64FromInt64(uploadResp.Size)
 	w.ownerIndex[req.Owner] = append(w.ownerIndex[req.Owner], uploadResp.ContentHash)
 	w.mu.Unlock()
 
@@ -1557,7 +1572,7 @@ func (w *WaldurBackend) RunRetentionCleanup(ctx context.Context, currentBlock in
 
 			// Update metrics and stats
 			size := uint64(len(artifact.data))
-			stats.BytesReclaimed += int64(size)
+			stats.BytesReclaimed += safeInt64FromUint64Waldur(size)
 			w.metrics.TotalBytes -= size
 			w.metrics.TotalArtifacts--
 

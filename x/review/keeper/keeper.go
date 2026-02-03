@@ -538,7 +538,7 @@ func (k Keeper) WithProviderAggregations(ctx sdk.Context, fn func(types.Provider
 // Index helper functions
 func (k Keeper) addToIndex(store storetypes.KVStore, key []byte, reviewID string) {
 	bz := store.Get(key)
-	var ids []string
+	ids := make([]string, 0, 1)
 	if bz != nil {
 		_ = json.Unmarshal(bz, &ids)
 	}
@@ -569,6 +569,7 @@ func (k Keeper) getFromIndex(store storetypes.KVStore, key []byte) []string {
 	return ids
 }
 
+//nolint:unused // retained for future index cleanup
 func (k Keeper) removeFromIndex(store storetypes.KVStore, key []byte, reviewID string) {
 	bz := store.Get(key)
 	if bz == nil {

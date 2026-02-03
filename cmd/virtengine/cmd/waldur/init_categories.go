@@ -19,7 +19,7 @@ import (
 
 const (
 	flagWaldurURL   = "waldur-url"
-	flagWaldurToken = "waldur-token"
+	flagWaldurToken = "waldur-token" //nolint:gosec
 	flagOutput      = "output"
 	flagTimeout     = "timeout"
 )

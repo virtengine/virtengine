@@ -360,7 +360,8 @@ func (r *VerificationResult) DetermineStatus() {
 
 	successful := r.CountSuccessfulScopes()
 
-	if successful == 0 {
+	switch successful {
+	case 0:
 		r.Status = VerificationResultStatusFailed
 		// Collect reason codes from failed scopes
 		var codes []ReasonCode
@@ -368,10 +369,10 @@ func (r *VerificationResult) DetermineStatus() {
 			codes = append(codes, sr.ReasonCodes...)
 		}
 		r.ReasonCodes = codes
-	} else if successful == total {
+	case total:
 		r.Status = VerificationResultStatusSuccess
 		r.ReasonCodes = []ReasonCode{ReasonCodeSuccess}
-	} else {
+	default:
 		r.Status = VerificationResultStatusPartial
 		// Include failure reason codes
 		var codes []ReasonCode

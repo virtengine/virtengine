@@ -626,7 +626,7 @@ func (k Keeper) addToUnbondingQueue(ctx sdk.Context, completionTime time.Time, u
 	key := types.GetUnbondingQueueKey(completionTime.Unix())
 
 	// Get existing entries at this time
-	var entries []string
+	entries := make([]string, 0, 1)
 	if bz := store.Get(key); bz != nil {
 		_ = json.Unmarshal(bz, &entries)
 	}
@@ -666,7 +666,7 @@ func (k Keeper) addToRedelegationQueue(ctx sdk.Context, completionTime time.Time
 	key := types.GetRedelegationQueueKey(completionTime.Unix())
 
 	// Get existing entries at this time
-	var entries []string
+	entries := make([]string, 0, 1)
 	if bz := store.Get(key); bz != nil {
 		_ = json.Unmarshal(bz, &entries)
 	}

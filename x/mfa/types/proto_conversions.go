@@ -2,6 +2,8 @@
 package types
 
 import (
+	"math"
+
 	mfav1 "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
 )
 
@@ -12,7 +14,7 @@ import (
 func convertMsgEnrollFactorFromProto(req *mfav1.MsgEnrollFactor) *MsgEnrollFactor {
 	return &MsgEnrollFactor{
 		Sender:                   req.Sender,
-		FactorType:               FactorType(req.FactorType),
+		FactorType:               factorTypeFromProto(req.FactorType),
 		Label:                    req.Label,
 		PublicIdentifier:         req.PublicIdentifier,
 		Metadata:                 convertFactorMetadataFromProto(req.Metadata),
@@ -23,7 +25,7 @@ func convertMsgEnrollFactorFromProto(req *mfav1.MsgEnrollFactor) *MsgEnrollFacto
 func convertMsgRevokeFactorFromProto(req *mfav1.MsgRevokeFactor) *MsgRevokeFactor {
 	return &MsgRevokeFactor{
 		Sender:     req.Sender,
-		FactorType: FactorType(req.FactorType),
+		FactorType: factorTypeFromProto(req.FactorType),
 		FactorID:   req.FactorId,
 		MFAProof:   convertMFAProofFromProto(req.MfaProof),
 	}
@@ -40,9 +42,9 @@ func convertMsgSetMFAPolicyFromProto(req *mfav1.MsgSetMFAPolicy) *MsgSetMFAPolic
 func convertMsgCreateChallengeFromProto(req *mfav1.MsgCreateChallenge) *MsgCreateChallenge {
 	return &MsgCreateChallenge{
 		Sender:          req.Sender,
-		FactorType:      FactorType(req.FactorType),
+		FactorType:      factorTypeFromProto(req.FactorType),
 		FactorID:        req.FactorId,
-		TransactionType: SensitiveTransactionType(req.TransactionType),
+		TransactionType: transactionTypeFromProto(req.TransactionType),
 		ClientInfo:      convertClientInfoFromProto(req.ClientInfo),
 	}
 }
@@ -76,6 +78,28 @@ func convertMsgUpdateSensitiveTxConfigFromProto(req *mfav1.MsgUpdateSensitiveTxC
 		Authority: req.Authority,
 		Config:    convertSensitiveTxConfigFromProto(&req.Config),
 	}
+}
+
+func factorTypeFromProto(value mfav1.FactorType) FactorType {
+	intValue := int32(value)
+	if intValue < 0 {
+		return 0
+	}
+	if intValue > math.MaxUint8 {
+		return FactorType(math.MaxUint8)
+	}
+	return FactorType(intValue)
+}
+
+func transactionTypeFromProto(value mfav1.SensitiveTransactionType) SensitiveTransactionType {
+	intValue := int32(value)
+	if intValue < 0 {
+		return 0
+	}
+	if intValue > math.MaxUint8 {
+		return SensitiveTransactionType(math.MaxUint8)
+	}
+	return SensitiveTransactionType(intValue)
 }
 
 // =============================================================================
@@ -357,7 +381,7 @@ func convertMFAProofFromProto(proof *mfav1.MFAProof) *MFAProof {
 	}
 	factors := make([]FactorType, len(proof.VerifiedFactors))
 	for i, f := range proof.VerifiedFactors {
-		factors[i] = FactorType(f)
+		factors[i] = factorTypeFromProto(f)
 	}
 	return &MFAProof{
 		SessionID:       proof.SessionId,
@@ -373,7 +397,7 @@ func convertMFAProofFromProtoDirect(proof *mfav1.MFAProof) *MFAProof {
 	}
 	factors := make([]FactorType, len(proof.VerifiedFactors))
 	for i, f := range proof.VerifiedFactors {
-		factors[i] = FactorType(f)
+		factors[i] = factorTypeFromProto(f)
 	}
 	return &MFAProof{
 		SessionID:       proof.SessionId,
@@ -435,11 +459,11 @@ func convertMFAPolicyFromProto(policy *mfav1.MFAPolicy) MFAPolicy {
 func convertFactorCombinationFromProto(c *mfav1.FactorCombination) FactorCombination {
 	factors := make([]FactorType, len(c.Factors))
 	for i, f := range c.Factors {
-		factors[i] = FactorType(f)
+		factors[i] = factorTypeFromProto(f)
 	}
 	return FactorCombination{
 		Factors:          factors,
-		MinSecurityLevel: FactorSecurityLevel(c.MinSecurityLevel),
+		MinSecurityLevel: factorSecurityLevelFromProto(c.MinSecurityLevel),
 	}
 }
 
@@ -513,7 +537,7 @@ func convertHardwareKeyInfoFromProto(h *mfav1.HardwareKeyEnrollment) *HardwareKe
 		return nil
 	}
 	return &HardwareKeyEnrollment{
-		KeyType:                HardwareKeyType(h.KeyType),
+		KeyType:                hardwareKeyTypeFromProto(h.KeyType),
 		KeyID:                  h.KeyId,
 		SubjectDN:              h.SubjectDn,
 		IssuerDN:               h.IssuerDn,
@@ -525,7 +549,7 @@ func convertHardwareKeyInfoFromProto(h *mfav1.HardwareKeyEnrollment) *HardwareKe
 		ExtendedKeyUsage:       h.ExtendedKeyUsage,
 		RevocationCheckEnabled: h.RevocationCheckEnabled,
 		LastRevocationCheck:    h.LastRevocationCheck,
-		RevocationStatus:       RevocationStatus(h.RevocationStatus),
+		RevocationStatus:       RevocationStatus(safeUint8FromInt32(int32(h.RevocationStatus))),
 	}
 }
 
@@ -547,11 +571,33 @@ func convertChallengeResponseFromProto(r *mfav1.ChallengeResponse) *ChallengeRes
 	}
 	return &ChallengeResponse{
 		ChallengeID:  r.ChallengeId,
-		FactorType:   FactorType(r.FactorType),
+		FactorType:   factorTypeFromProto(r.FactorType),
 		ResponseData: r.ResponseData,
 		ClientInfo:   convertClientInfoFromProto(r.ClientInfo),
 		Timestamp:    r.Timestamp,
 	}
+}
+
+func factorSecurityLevelFromProto(value mfav1.FactorSecurityLevel) FactorSecurityLevel {
+	intValue := int32(value)
+	if intValue < 0 {
+		return 0
+	}
+	if intValue > math.MaxUint8 {
+		return FactorSecurityLevel(math.MaxUint8)
+	}
+	return FactorSecurityLevel(intValue)
+}
+
+func hardwareKeyTypeFromProto(value mfav1.HardwareKeyType) HardwareKeyType {
+	intValue := int32(value)
+	if intValue < 0 {
+		return 0
+	}
+	if intValue > math.MaxUint8 {
+		return HardwareKeyType(math.MaxUint8)
+	}
+	return HardwareKeyType(intValue)
 }
 
 func convertChallengeResponseToProto(r *ChallengeResponse) *mfav1.ChallengeResponse {
@@ -584,7 +630,7 @@ func convertSensitiveTxConfigFromProto(c *mfav1.SensitiveTxConfig) SensitiveTxCo
 		combinations[i] = convertFactorCombinationFromProto(&fc)
 	}
 	return SensitiveTxConfig{
-		TransactionType:             SensitiveTransactionType(c.TransactionType),
+		TransactionType:             SensitiveTransactionType(safeUint8FromInt32(int32(c.TransactionType))),
 		Enabled:                     c.Enabled,
 		MinVEIDScore:                c.MinVeidScore,
 		RequiredFactorCombinations:  combinations,
@@ -595,6 +641,17 @@ func convertSensitiveTxConfigFromProto(c *mfav1.SensitiveTxConfig) SensitiveTxCo
 		CooldownPeriod:              c.CooldownPeriod,
 		Description:                 c.Description,
 	}
+}
+
+func safeUint8FromInt32(value int32) uint8 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint8 {
+		return math.MaxUint8
+	}
+	//nolint:gosec // range checked above
+	return uint8(value)
 }
 
 // =============================================================================

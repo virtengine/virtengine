@@ -197,7 +197,7 @@ func TestSubmitBenchmarks(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	providerAddr := testMsgServerProviderAddr
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -222,7 +222,7 @@ func TestSubmitBenchmarks_DuplicateRejection(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	providerAddr := testMsgServerProviderAddr
 	mockProvider.AddProvider(providerAddr, pub)
 
 	report := createTestReport(t, providerAddr, pub, priv)
@@ -350,7 +350,7 @@ func TestChallenge(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	providerAddr := testMsgServerProviderAddr
 	mockProvider.AddProvider(providerAddr, pub)
 
 	challenge := &types.BenchmarkChallenge{
@@ -398,7 +398,7 @@ func TestChallenge_Expired(t *testing.T) {
 	keeper, ctx, mockProvider, _ := setupKeeper(t)
 
 	pub, priv := generateTestKeyPair(t)
-	providerAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	providerAddr := testMsgServerProviderAddr
 	mockProvider.AddProvider(providerAddr, pub)
 
 	challenge := &types.BenchmarkChallenge{
@@ -427,7 +427,7 @@ func TestChallenge_Expired(t *testing.T) {
 func TestAnomalyDetection_SuddenJump(t *testing.T) {
 	keeper, ctx, _, _ := setupKeeper(t)
 
-	providerAddr := "cosmos1test123456789"
+	providerAddr := testBenchProviderAddr
 
 	previousReport := types.BenchmarkReport{
 		ReportID:        "prev-1",
@@ -481,7 +481,7 @@ func TestAnomalyDetection_SuddenJump(t *testing.T) {
 func TestAnomalyDetection_RepeatedOutput(t *testing.T) {
 	keeper, ctx, _, _ := setupKeeper(t)
 
-	providerAddr := "cosmos1test123456789"
+	providerAddr := testBenchProviderAddr
 
 	metrics := types.BenchmarkMetrics{
 		SchemaVersion: types.MetricSchemaVersion,
@@ -531,7 +531,7 @@ func TestAnomalyDetection_RepeatedOutput(t *testing.T) {
 func TestProviderFlag(t *testing.T) {
 	keeper, ctx, _, mockRoles := setupKeeper(t)
 
-	moderatorAddr := "cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu"
+	moderatorAddr := testMsgServerProviderAddr
 	mockRoles.AddModerator(moderatorAddr)
 
 	providerAddr := "cosmos1w3jhxapddamtrt6saykt3pqad4gg3p2c72a4ld"

@@ -351,7 +351,7 @@ func (p *FeatureExtractionPipeline) generateDeterministicEmbedding(hash []byte) 
 		// Linear congruential generator for determinism
 		seed = seed*6364136223846793005 + 1442695040888963407
 		// Map to [-1, 1] range
-		val := float32(int64(seed>>33)-int64(1<<30)) / float32(1<<30)
+		val := float32(safeInt64FromUint64Feature(seed>>33)-int64(1<<30)) / float32(1<<30)
 		embedding[i] = val
 		sumSquares += float64(val) * float64(val)
 	}
@@ -415,6 +415,14 @@ func (p *FeatureExtractionPipeline) computeDocQuality(img *ParsedImageData) infe
 		NoiseLevel: float32(hash[3]%20) / 100.0,
 		BlurScore:  float32(hash[4]%25) / 100.0,
 	}
+}
+
+func safeInt64FromUint64Feature(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	//nolint:gosec // range checked above
+	return int64(value)
 }
 
 // extractOCRFeatures extracts OCR confidence and validation features

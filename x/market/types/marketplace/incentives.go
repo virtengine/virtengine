@@ -381,7 +381,11 @@ func (m *ProviderMetrics) CalculateSuccessRate() uint32 {
 	if m.TotalOrders == 0 {
 		return 0
 	}
-	return uint32((m.SuccessfulOrders * 100) / m.TotalOrders)
+	rate := (m.SuccessfulOrders * 100) / m.TotalOrders
+	if rate > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(rate)
 }
 
 // CalculateDisputeRate returns the dispute rate as a percentage
@@ -389,7 +393,11 @@ func (m *ProviderMetrics) CalculateDisputeRate() uint32 {
 	if m.TotalOrders == 0 {
 		return 0
 	}
-	return uint32((m.DisputedOrders * 100) / m.TotalOrders)
+	rate := (m.DisputedOrders * 100) / m.TotalOrders
+	if rate > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(rate)
 }
 
 // TenureDays returns the provider's tenure in days

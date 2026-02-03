@@ -374,7 +374,7 @@ func (k Keeper) buildHistoricalInput(ctx sdk.Context, accountAddr string) types.
 }
 
 // buildRiskInput builds risk indicators input from security signals
-func (k Keeper) buildRiskInput(scopes []DecryptedScope, features ExtractedFeatures) types.RiskIndicatorsInput {
+func (k Keeper) buildRiskInput(_ []DecryptedScope, features ExtractedFeatures) types.RiskIndicatorsInput {
 	input := types.RiskIndicatorsInput{
 		Present: true, // Risk indicators are always evaluated
 	}

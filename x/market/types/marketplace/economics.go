@@ -6,6 +6,7 @@ package marketplace
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -203,7 +204,11 @@ func (um *UtilizationMetrics) UtilizationPercent() uint32 {
 	if um.TotalCapacity == 0 {
 		return 0
 	}
-	return uint32((um.UsedCapacity * 100) / um.TotalCapacity)
+	percent := (um.UsedCapacity * 100) / um.TotalCapacity
+	if percent > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(percent)
 }
 
 // FeeCalculationInput contains all inputs needed to calculate fees
@@ -288,7 +293,7 @@ func (c *DynamicFeeCalculator) CalculateFee(input FeeCalculationInput) (*FeeCalc
 	// Calculate base fee
 	baseFee := (input.OrderValue * uint64(c.Schedule.BaseTakeRateBps)) / 10000
 	result.GrossFee = baseFee
-	result.Breakdown["base_fee"] = int64(baseFee)
+	result.Breakdown["base_fee"] = safeInt64FromUint64Value(baseFee)
 
 	// Apply utilization adjustment
 	utilizationPct := input.Utilization.UtilizationPercent()
@@ -296,48 +301,48 @@ func (c *DynamicFeeCalculator) CalculateFee(input FeeCalculationInput) (*FeeCalc
 		excessUtilization := utilizationPct - c.Schedule.UtilizationThresholdPct
 		multiplierSteps := excessUtilization / 10
 		adjustment := (baseFee * uint64(multiplierSteps) * uint64(c.Schedule.UtilizationMultiplierBps)) / 10000
-		result.UtilizationAdjustment = int64(adjustment)
-		result.Breakdown["utilization_adjustment"] = int64(adjustment)
+		result.UtilizationAdjustment = safeInt64FromUint64Value(adjustment)
+		result.Breakdown["utilization_adjustment"] = safeInt64FromUint64Value(adjustment)
 	}
 
 	// Apply tier discount
 	if c.Schedule.TierDiscountEnabled && input.UserTier > FeeTierStandard {
 		tierDiscount := (baseFee * uint64(input.UserTier.Discount())) / 10000
 		result.TierDiscount = tierDiscount
-		result.Breakdown["tier_discount"] = -int64(tierDiscount)
+		result.Breakdown["tier_discount"] = -safeInt64FromUint64Value(tierDiscount)
 	}
 
 	// Apply volume discount (additional to tier)
 	if c.Schedule.VolumeDiscountEnabled {
 		volumeDiscount := c.calculateVolumeDiscount(baseFee, input.User30DayVolume)
 		result.VolumeDiscount = volumeDiscount
-		result.Breakdown["volume_discount"] = -int64(volumeDiscount)
+		result.Breakdown["volume_discount"] = -safeInt64FromUint64Value(volumeDiscount)
 	}
 
 	// Apply early adopter bonus
 	if input.IsEarlyAdopter && c.Schedule.EarlyAdopterBonusBps > 0 {
 		earlyAdopterDiscount := (baseFee * uint64(c.Schedule.EarlyAdopterBonusBps)) / 10000
 		result.EarlyAdopterDiscount = earlyAdopterDiscount
-		result.Breakdown["early_adopter_discount"] = -int64(earlyAdopterDiscount)
+		result.Breakdown["early_adopter_discount"] = -safeInt64FromUint64Value(earlyAdopterDiscount)
 	}
 
 	// Apply maker rebate
 	if input.IsMaker && c.Schedule.MakerRebateBps > 0 {
 		makerRebate := (input.OrderValue * uint64(c.Schedule.MakerRebateBps)) / 10000
 		result.MakerRebate = makerRebate
-		result.Breakdown["maker_rebate"] = -int64(makerRebate)
+		result.Breakdown["maker_rebate"] = -safeInt64FromUint64Value(makerRebate)
 	}
 
 	// Calculate net fee
-	netFee := int64(baseFee) + result.UtilizationAdjustment -
-		int64(result.TierDiscount) -
-		int64(result.VolumeDiscount) -
-		int64(result.EarlyAdopterDiscount) -
-		int64(result.MakerRebate)
+	netFee := safeInt64FromUint64Value(baseFee) + result.UtilizationAdjustment -
+		safeInt64FromUint64Value(result.TierDiscount) -
+		safeInt64FromUint64Value(result.VolumeDiscount) -
+		safeInt64FromUint64Value(result.EarlyAdopterDiscount) -
+		safeInt64FromUint64Value(result.MakerRebate)
 
 	// Apply min/max bounds
-	minFee := int64((input.OrderValue * uint64(c.Schedule.MinTakeRateBps)) / 10000)
-	maxFee := int64((input.OrderValue * uint64(c.Schedule.MaxTakeRateBps)) / 10000)
+	minFee := safeInt64FromUint64Value((input.OrderValue * uint64(c.Schedule.MinTakeRateBps)) / 10000)
+	maxFee := safeInt64FromUint64Value((input.OrderValue * uint64(c.Schedule.MaxTakeRateBps)) / 10000)
 
 	if netFee < minFee {
 		netFee = minFee
@@ -353,14 +358,37 @@ func (c *DynamicFeeCalculator) CalculateFee(input FeeCalculationInput) (*FeeCalc
 		netFee = 0
 	}
 
-	result.NetFee = uint64(netFee)
+	result.NetFee = safeUint64FromInt64Value(netFee)
 
 	// Calculate effective rate
 	if input.OrderValue > 0 {
-		result.EffectiveRateBps = uint32((uint64(netFee) * 10000) / input.OrderValue)
+		netFeeValue := safeUint64FromInt64Value(netFee)
+		result.EffectiveRateBps = safeUint32FromUint64Value((netFeeValue * 10000) / input.OrderValue)
 	}
 
 	return result, nil
+}
+
+func safeUint64FromInt64Value(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	return uint64(value)
+}
+
+func safeInt64FromUint64Value(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
+}
+
+func safeUint32FromUint64Value(value uint64) uint32 {
+	if value > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }
 
 // calculateVolumeDiscount computes additional volume-based discount

@@ -12,46 +12,6 @@ import (
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 )
 
-// mockVEIDKeeper is a mock implementation of VEIDKeeper for testing
-type mockVEIDKeeper struct {
-	records    map[string]veidtypes.IdentityRecord
-	scopes     map[string][]veidtypes.IdentityScope
-	veidScores map[string]uint32
-}
-
-func newMockVEIDKeeper() *mockVEIDKeeper {
-	return &mockVEIDKeeper{
-		records:    make(map[string]veidtypes.IdentityRecord),
-		scopes:     make(map[string][]veidtypes.IdentityScope),
-		veidScores: make(map[string]uint32),
-	}
-}
-
-func (m *mockVEIDKeeper) GetVEIDScore(ctx sdk.Context, address sdk.AccAddress) (uint32, bool) {
-	score, ok := m.veidScores[address.String()]
-	return score, ok
-}
-
-func (m *mockVEIDKeeper) GetIdentityRecord(ctx sdk.Context, address sdk.AccAddress) (veidtypes.IdentityRecord, bool) {
-	record, ok := m.records[address.String()]
-	return record, ok
-}
-
-func (m *mockVEIDKeeper) GetScopesByType(ctx sdk.Context, address sdk.AccAddress, scopeType veidtypes.ScopeType) []veidtypes.IdentityScope {
-	key := address.String() + ":" + string(scopeType)
-	return m.scopes[key]
-}
-
-func (m *mockVEIDKeeper) SetIdentityRecord(address sdk.AccAddress, record veidtypes.IdentityRecord) {
-	m.records[address.String()] = record
-	m.veidScores[address.String()] = record.CurrentScore
-}
-
-func (m *mockVEIDKeeper) AddScope(address sdk.AccAddress, scope veidtypes.IdentityScope) {
-	key := address.String() + ":" + string(scope.ScopeType)
-	m.scopes[key] = append(m.scopes[key], scope)
-}
-
 func TestCheckVEIDGating_NoKeeperConfigured(t *testing.T) {
 	ctx, k, _ := setupKeeper(t)
 

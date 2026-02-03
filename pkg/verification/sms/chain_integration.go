@@ -555,20 +555,17 @@ func (c *DefaultChainIntegrator) batchProcessor() {
 	ticker := time.NewTicker(c.config.BatchInterval)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			c.mu.RLock()
-			closed := c.closed
-			batchLen := len(c.pendingBatch)
-			c.mu.RUnlock()
+	for range ticker.C {
+		c.mu.RLock()
+		closed := c.closed
+		batchLen := len(c.pendingBatch)
+		c.mu.RUnlock()
 
-			if closed {
-				return
-			}
-			if batchLen > 0 {
-				c.flushBatch()
-			}
+		if closed {
+			return
+		}
+		if batchLen > 0 {
+			c.flushBatch()
 		}
 	}
 }

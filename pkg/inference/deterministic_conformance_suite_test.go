@@ -447,7 +447,7 @@ func (s *ConformanceSuite) TestPlatformIndependence(t *testing.T) {
 
 			// Verify hash contains only hex characters
 			for _, c := range inputHash {
-				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 					t.Errorf("invalid character in hash: %c", c)
 				}
 			}

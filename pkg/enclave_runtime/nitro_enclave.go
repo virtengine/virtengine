@@ -372,12 +372,12 @@ func NewNitroEnclaveServiceImplWithMode(config NitroEnclaveConfig, mode Hardware
 				svc.hardwareBackend = backend
 				fmt.Println("INFO: Nitro hardware backend initialized successfully")
 			} else if mode == HardwareModeRequire {
-				return nil, fmt.Errorf("Nitro hardware required but initialization failed: %w", err)
+				return nil, fmt.Errorf("nitro hardware required but initialization failed: %w", err)
 			} else {
 				fmt.Printf("INFO: Nitro hardware initialization failed, using simulation: %v\n", err)
 			}
 		} else if mode == HardwareModeRequire {
-			return nil, fmt.Errorf("%w: Nitro hardware required but not available", ErrHardwareNotAvailable)
+			return nil, fmt.Errorf("%w: nitro hardware required but not available", ErrHardwareNotAvailable)
 		} else {
 			fmt.Println("INFO: Nitro hardware not available, using simulation mode")
 		}

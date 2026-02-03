@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -102,15 +104,15 @@ func (q GRPCQuerier) QueryScoreHistory(ctx sdk.Context, req *types.QueryScoreHis
 	}
 
 	// Apply pagination
-	var limit uint32 = 100
-	var offset uint32 = 0
+	limit := uint32(100)
+	offset := uint32(0)
 
 	if req.Pagination != nil {
 		if req.Pagination.Limit > 0 && req.Pagination.Limit <= 1000 {
-			limit = uint32(req.Pagination.Limit)
+			limit = safeUint32FromUint64(req.Pagination.Limit)
 		}
 		if req.Pagination.Offset > 0 {
-			offset = uint32(req.Pagination.Offset)
+			offset = safeUint32FromUint64(req.Pagination.Offset)
 		}
 	}
 
@@ -225,6 +227,14 @@ func (q GRPCQuerier) QueryAccountsByScoreTier(ctx sdk.Context, req *types.QueryA
 		Accounts: accounts,
 		Total:    total,
 	}, nil
+}
+
+func safeUint32FromUint64(value uint64) uint32 {
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
 }
 
 // QueryScoreThresholdCheck checks if an account meets a score threshold

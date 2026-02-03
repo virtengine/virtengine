@@ -1149,7 +1149,8 @@ func TestIterators(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		orderID := "order-iter-" + string(rune('a'+i))
 		mockMarket.AddCompletedOrder(orderID, reviewerAddr, providerAddr)
-		review := createTestReview(t, reviewerAddr, providerAddr, orderID, uint8(i%5+1))
+		rating := safeUint8FromInt(i%5 + 1)
+		review := createTestReview(t, reviewerAddr, providerAddr, orderID, rating)
 		if err := k.SubmitReview(ctx, review); err != nil {
 			t.Fatalf("failed to submit review: %v", err)
 		}
@@ -1176,4 +1177,14 @@ func TestIterators(t *testing.T) {
 	if aggCount != 1 {
 		t.Errorf("expected 1 aggregation, got %d", aggCount)
 	}
+}
+
+func safeUint8FromInt(value int) uint8 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint8(0)) {
+		return ^uint8(0)
+	}
+	return uint8(value)
 }

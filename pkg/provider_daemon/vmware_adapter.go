@@ -1243,7 +1243,7 @@ func (va *VMwareAdapter) buildCloneSpec(vm *VSphereDeployedVM, opts VMwareDeploy
 func (va *VMwareAdapter) computeResources(resources ResourceSpec, opts VMwareDeploymentOptions) (int32, int64) {
 	numCPUs := opts.NumCPUs
 	if numCPUs == 0 {
-		numCPUs = int32(resources.CPU / 1000)
+		numCPUs = safeInt32FromInt64(resources.CPU / 1000)
 		if numCPUs == 0 {
 			numCPUs = 1
 		}

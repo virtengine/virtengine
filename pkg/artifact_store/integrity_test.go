@@ -118,7 +118,7 @@ func TestVerifyStream(t *testing.T) {
 		config := func() *WaldurConfig {
 			c := DefaultWaldurConfig()
 			c.UseFallbackMemory = true
-			c.Organization = "test-org"
+			c.Organization = testOrg
 			return c
 		}
 
@@ -149,7 +149,7 @@ func TestVerifyStream(t *testing.T) {
 		config := func() *WaldurConfig {
 			c := DefaultWaldurConfig()
 			c.UseFallbackMemory = true
-			c.Organization = "test-org"
+			c.Organization = testOrg
 			return c
 		}
 
@@ -191,7 +191,7 @@ func TestBatchIntegrityChecker(t *testing.T) {
 	testConfig := func() *WaldurConfig {
 		config := DefaultWaldurConfig()
 		config.UseFallbackMemory = true
-		config.Organization = "test-org"
+		config.Organization = testOrg
 		config.Project = "test-proj"
 		config.Bucket = "test-bucket"
 		return config

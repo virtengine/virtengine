@@ -1131,6 +1131,11 @@ type OpenStackAdapter struct {
 	statusUpdateChan chan<- VMStatusUpdate
 }
 
+const (
+	volumeStatusAvailable = "available"
+	volumeStatusError     = "error"
+)
+
 // NewOpenStackAdapter creates a new OpenStack adapter
 func NewOpenStackAdapter(cfg OpenStackAdapterConfig) *OpenStackAdapter {
 	return &OpenStackAdapter{
@@ -1290,7 +1295,7 @@ func (oa *OpenStackAdapter) performVMDeployment(ctx context.Context, vm *Deploye
 
 	// Create volumes for persistent storage
 	for _, volSpec := range vm.Manifest.Volumes {
-		if volSpec.Type == "persistent" {
+		if volSpec.Type == volumeTypePersistent {
 			vol, err := oa.cinder.CreateVolume(ctx, &VolumeCreateSpec{
 				Name:        oa.generateResourceName(volSpec.Name),
 				Size:        int(volSpec.Size / (1024 * 1024 * 1024)), // Convert bytes to GB
@@ -2090,10 +2095,11 @@ func (oa *OpenStackAdapter) updateNetworkInfo(ctx context.Context, vm *DeployedV
 		for i, net := range vm.Networks {
 			if net.NetworkName == netName || net.NetworkID == netName {
 				for _, addr := range addrs {
-					if addr.Type == "fixed" {
+					switch addr.Type {
+					case "fixed":
 						vm.Networks[i].FixedIP = addr.Address
 						vm.Networks[i].MACAddress = addr.MACAddress
-					} else if addr.Type == "floating" {
+					case "floating":
 						vm.Networks[i].FloatingIP = addr.Address
 					}
 				}
@@ -2176,10 +2182,10 @@ func (oa *OpenStackAdapter) waitForVolumeAvailable(ctx context.Context, volumeID
 	if err != nil {
 		return err
 	}
-	if vol.Status == "available" {
+	if vol.Status == volumeStatusAvailable {
 		return nil
 	}
-	if vol.Status == "error" {
+	if vol.Status == volumeStatusError {
 		return fmt.Errorf("volume entered error state")
 	}
 
@@ -2196,11 +2202,11 @@ func (oa *OpenStackAdapter) waitForVolumeAvailable(ctx context.Context, volumeID
 				return err
 			}
 
-			if vol.Status == "available" {
+			if vol.Status == volumeStatusAvailable {
 				return nil
 			}
 
-			if vol.Status == "error" {
+			if vol.Status == volumeStatusError {
 				return fmt.Errorf("volume entered error state")
 			}
 		}

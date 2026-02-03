@@ -340,7 +340,7 @@ func (k Keeper) addRecordToAccountIndex(ctx sdk.Context, address []byte, blockHe
 	store.Set(key, bz)
 }
 
-func (k Keeper) removeRecordFromAccountIndex(ctx sdk.Context, address []byte, blockHeight int64, recordID string) {
+func (k Keeper) removeRecordFromAccountIndex(ctx sdk.Context, address []byte, blockHeight int64, _ string) {
 	store := ctx.KVStore(k.skey)
 	key := types.DerivedFeatureRecordByAccountKey(address, blockHeight)
 	store.Delete(key)
@@ -392,7 +392,7 @@ func (k Keeper) AddFeatureReferenceToRecord(
 }
 
 // Helper function to generate record IDs
-func generateRecordID(address string, blockHeight int64, requestID string) string {
+func generateRecordID(address string, _ int64, requestID string) string {
 	// Use a deterministic ID based on input parameters
 	// In production, this could use a hash of the inputs
 	return address[:8] + "-" + requestID

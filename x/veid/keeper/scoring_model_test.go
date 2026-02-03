@@ -22,7 +22,6 @@ import (
 // Test address constants for scoring model tests - valid bech32 addresses
 var (
 	testScoringModelAddress1 = sdk.AccAddress([]byte("scoring_addr1_______")).String()
-	testScoringModelAddress2 = sdk.AccAddress([]byte("scoring_addr2_______")).String()
 )
 
 // Test version constants for scoring model tests

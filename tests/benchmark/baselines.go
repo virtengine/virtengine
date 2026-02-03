@@ -41,15 +41,15 @@ type BaselineMetrics struct {
 
 // TransactionBaselines defines transaction throughput baselines
 type TransactionBaselines struct {
-	TargetTPS         int64   `json:"target_tps"`
-	MinAcceptableTPS  int64   `json:"min_acceptable_tps"`
-	MaxP95LatencyMs   int64   `json:"max_p95_latency_ms"`
-	MaxP99LatencyMs   int64   `json:"max_p99_latency_ms"`
-	MaxErrorRatePct   float64 `json:"max_error_rate_pct"`
-	HashComputeNs     int64   `json:"hash_compute_ns"`
-	ValidationNs      int64   `json:"validation_ns"`
-	ExecutionNs       int64   `json:"execution_ns"`
-	StateWriteNs      int64   `json:"state_write_ns"`
+	TargetTPS        int64   `json:"target_tps"`
+	MinAcceptableTPS int64   `json:"min_acceptable_tps"`
+	MaxP95LatencyMs  int64   `json:"max_p95_latency_ms"`
+	MaxP99LatencyMs  int64   `json:"max_p99_latency_ms"`
+	MaxErrorRatePct  float64 `json:"max_error_rate_pct"`
+	HashComputeNs    int64   `json:"hash_compute_ns"`
+	ValidationNs     int64   `json:"validation_ns"`
+	ExecutionNs      int64   `json:"execution_ns"`
+	StateWriteNs     int64   `json:"state_write_ns"`
 }
 
 // VerificationBaselines defines VEID verification baselines
@@ -68,14 +68,14 @@ type VerificationBaselines struct {
 
 // BiddingBaselines defines provider daemon bidding baselines
 type BiddingBaselines struct {
-	TargetLatencyMs     int64   `json:"target_latency_ms"`
-	MaxP95LatencyMs     int64   `json:"max_p95_latency_ms"`
-	MaxP99LatencyMs     int64   `json:"max_p99_latency_ms"`
-	MinBidsPerSecond    float64 `json:"min_bids_per_sec"`
-	MaxOrderMatchingMs  int64   `json:"max_order_matching_ms"`
-	MaxPriceCalcMs      int64   `json:"max_price_calc_ms"`
-	MaxSigningMs        int64   `json:"max_signing_ms"`
-	RateLimiterCheckNs  int64   `json:"rate_limiter_check_ns"`
+	TargetLatencyMs    int64   `json:"target_latency_ms"`
+	MaxP95LatencyMs    int64   `json:"max_p95_latency_ms"`
+	MaxP99LatencyMs    int64   `json:"max_p99_latency_ms"`
+	MinBidsPerSecond   float64 `json:"min_bids_per_sec"`
+	MaxOrderMatchingMs int64   `json:"max_order_matching_ms"`
+	MaxPriceCalcMs     int64   `json:"max_price_calc_ms"`
+	MaxSigningMs       int64   `json:"max_signing_ms"`
+	RateLimiterCheckNs int64   `json:"rate_limiter_check_ns"`
 }
 
 // ZKProofBaselines defines ZK proof generation baselines
@@ -93,14 +93,14 @@ type ZKProofBaselines struct {
 
 // MemoryBaselines defines memory usage baselines
 type MemoryBaselines struct {
-	MaxHeapAllocMB       int64 `json:"max_heap_alloc_mb"`
-	MaxHeapObjectsM      int64 `json:"max_heap_objects_millions"`
-	MaxGoroutines        int64 `json:"max_goroutines"`
-	MaxGCPauseMs         int64 `json:"max_gc_pause_ms"`
-	MaxLeakGrowthPct     int64 `json:"max_leak_growth_pct"`
-	IdleHeapMB           int64 `json:"idle_heap_mb"`
-	PerVerificationKB    int64 `json:"per_verification_kb"`
-	PerTransactionKB     int64 `json:"per_transaction_kb"`
+	MaxHeapAllocMB    int64 `json:"max_heap_alloc_mb"`
+	MaxHeapObjectsM   int64 `json:"max_heap_objects_millions"`
+	MaxGoroutines     int64 `json:"max_goroutines"`
+	MaxGCPauseMs      int64 `json:"max_gc_pause_ms"`
+	MaxLeakGrowthPct  int64 `json:"max_leak_growth_pct"`
+	IdleHeapMB        int64 `json:"idle_heap_mb"`
+	PerVerificationKB int64 `json:"per_verification_kb"`
+	PerTransactionKB  int64 `json:"per_transaction_kb"`
 }
 
 // DefaultBaselineMetrics returns the default baseline metrics
@@ -112,15 +112,15 @@ func DefaultBaselineMetrics() BaselineMetrics {
 		GoVersion:   "1.21+",
 
 		Transaction: TransactionBaselines{
-			TargetTPS:         10000,
-			MinAcceptableTPS:  5000,
-			MaxP95LatencyMs:   100,
-			MaxP99LatencyMs:   250,
-			MaxErrorRatePct:   0.1,
-			HashComputeNs:     1000,     // 1µs
-			ValidationNs:      10000,    // 10µs
-			ExecutionNs:       50000,    // 50µs
-			StateWriteNs:      5000,     // 5µs
+			TargetTPS:        10000,
+			MinAcceptableTPS: 5000,
+			MaxP95LatencyMs:  100,
+			MaxP99LatencyMs:  250,
+			MaxErrorRatePct:  0.1,
+			HashComputeNs:    1000,  // 1µs
+			ValidationNs:     10000, // 10µs
+			ExecutionNs:      50000, // 50µs
+			StateWriteNs:     5000,  // 5µs
 		},
 
 		Verification: VerificationBaselines{
@@ -131,9 +131,9 @@ func DefaultBaselineMetrics() BaselineMetrics {
 			MaxDecryptionMs:        30,
 			MaxScoringMs:           50,
 			MaxStateUpdateMs:       10,
-			IdentityRecordCreateNs: 100000,  // 100µs
-			IdentityRecordGetNs:    10000,   // 10µs
-			ScoreUpdateNs:          50000,   // 50µs
+			IdentityRecordCreateNs: 100000, // 100µs
+			IdentityRecordGetNs:    10000,  // 10µs
+			ScoreUpdateNs:          50000,  // 50µs
 		},
 
 		Bidding: BiddingBaselines{
@@ -153,58 +153,58 @@ func DefaultBaselineMetrics() BaselineMetrics {
 			ScoreThresholdProofMs:      500,
 			SelectiveDisclosureProofMs: 1000,
 			ProofVerificationMs:        100,
-			CommitmentGenerationNs:     5000,   // 5µs
-			NonceGenerationNs:          1000,   // 1µs
-			ProofIDGenerationNs:        2000,   // 2µs
-			CircuitCompilationMs:       5000,   // 5s (one-time)
+			CommitmentGenerationNs:     5000, // 5µs
+			NonceGenerationNs:          1000, // 1µs
+			ProofIDGenerationNs:        2000, // 2µs
+			CircuitCompilationMs:       5000, // 5s (one-time)
 		},
 
 		Memory: MemoryBaselines{
-			MaxHeapAllocMB:       4096,   // 4GB
-			MaxHeapObjectsM:      10,     // 10M
-			MaxGoroutines:        100000, // 100K
-			MaxGCPauseMs:         100,
-			MaxLeakGrowthPct:     10,
-			IdleHeapMB:           256,
-			PerVerificationKB:    64,
-			PerTransactionKB:     8,
+			MaxHeapAllocMB:    4096,   // 4GB
+			MaxHeapObjectsM:   10,     // 10M
+			MaxGoroutines:     100000, // 100K
+			MaxGCPauseMs:      100,
+			MaxLeakGrowthPct:  10,
+			IdleHeapMB:        256,
+			PerVerificationKB: 64,
+			PerTransactionKB:  8,
 		},
 	}
 }
 
 // BenchmarkResult represents a single benchmark result
 type BenchmarkResult struct {
-	Name           string        `json:"name"`
-	Category       string        `json:"category"`
-	Iterations     int64         `json:"iterations"`
-	NsPerOp        int64         `json:"ns_per_op"`
-	BytesPerOp     int64         `json:"bytes_per_op"`
-	AllocsPerOp    int64         `json:"allocs_per_op"`
-	Throughput     float64       `json:"throughput,omitempty"`
-	P50LatencyNs   int64         `json:"p50_latency_ns,omitempty"`
-	P95LatencyNs   int64         `json:"p95_latency_ns,omitempty"`
-	P99LatencyNs   int64         `json:"p99_latency_ns,omitempty"`
-	ErrorRate      float64       `json:"error_rate,omitempty"`
-	Timestamp      time.Time     `json:"timestamp"`
+	Name         string    `json:"name"`
+	Category     string    `json:"category"`
+	Iterations   int64     `json:"iterations"`
+	NsPerOp      int64     `json:"ns_per_op"`
+	BytesPerOp   int64     `json:"bytes_per_op"`
+	AllocsPerOp  int64     `json:"allocs_per_op"`
+	Throughput   float64   `json:"throughput,omitempty"`
+	P50LatencyNs int64     `json:"p50_latency_ns,omitempty"`
+	P95LatencyNs int64     `json:"p95_latency_ns,omitempty"`
+	P99LatencyNs int64     `json:"p99_latency_ns,omitempty"`
+	ErrorRate    float64   `json:"error_rate,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // ComparisonResult represents the result of comparing against baseline
 type ComparisonResult struct {
-	Name           string  `json:"name"`
-	Category       string  `json:"category"`
-	Current        int64   `json:"current"`
-	Baseline       int64   `json:"baseline"`
-	DiffPercent    float64 `json:"diff_percent"`
-	DiffAbs        int64   `json:"diff_abs"`
-	Status         string  `json:"status"` // "pass", "warn", "fail"
-	Threshold      float64 `json:"threshold"`
+	Name        string  `json:"name"`
+	Category    string  `json:"category"`
+	Current     int64   `json:"current"`
+	Baseline    int64   `json:"baseline"`
+	DiffPercent float64 `json:"diff_percent"`
+	DiffAbs     int64   `json:"diff_abs"`
+	Status      string  `json:"status"` // "pass", "warn", "fail"
+	Threshold   float64 `json:"threshold"`
 }
 
 // BenchmarkComparator compares benchmark results against baselines
 type BenchmarkComparator struct {
-	baselines       BaselineMetrics
-	warnThreshold   float64 // percentage above baseline to warn (e.g., 10.0 = 10%)
-	failThreshold   float64 // percentage above baseline to fail (e.g., 20.0 = 20%)
+	baselines     BaselineMetrics
+	warnThreshold float64 // percentage above baseline to warn (e.g., 10.0 = 10%)
+	failThreshold float64 // percentage above baseline to fail (e.g., 20.0 = 20%)
 }
 
 // NewBenchmarkComparator creates a new comparator with given thresholds
@@ -350,7 +350,7 @@ func SaveBaselines(baselines BaselineMetrics, filename string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := os.WriteFile(filename, data, 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -374,21 +374,21 @@ func LoadBaselines(filename string) (*BaselineMetrics, error) {
 
 // BenchmarkReport represents a full benchmark report
 type BenchmarkReport struct {
-	GeneratedAt    time.Time          `json:"generated_at"`
-	Platform       string             `json:"platform"`
-	GoVersion      string             `json:"go_version"`
-	BaselineVersion string            `json:"baseline_version"`
-	Results        []BenchmarkResult  `json:"results"`
-	Comparisons    []ComparisonResult `json:"comparisons"`
-	Summary        ReportSummary      `json:"summary"`
+	GeneratedAt     time.Time          `json:"generated_at"`
+	Platform        string             `json:"platform"`
+	GoVersion       string             `json:"go_version"`
+	BaselineVersion string             `json:"baseline_version"`
+	Results         []BenchmarkResult  `json:"results"`
+	Comparisons     []ComparisonResult `json:"comparisons"`
+	Summary         ReportSummary      `json:"summary"`
 }
 
 // ReportSummary summarizes benchmark comparison results
 type ReportSummary struct {
-	TotalBenchmarks int `json:"total_benchmarks"`
-	Passed          int `json:"passed"`
-	Warnings        int `json:"warnings"`
-	Failed          int `json:"failed"`
+	TotalBenchmarks int    `json:"total_benchmarks"`
+	Passed          int    `json:"passed"`
+	Warnings        int    `json:"warnings"`
+	Failed          int    `json:"failed"`
 	OverallStatus   string `json:"overall_status"`
 }
 
@@ -459,7 +459,7 @@ func SaveReport(report *BenchmarkReport, filename string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := os.WriteFile(filename, data, 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

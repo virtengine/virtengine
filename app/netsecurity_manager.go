@@ -236,7 +236,7 @@ func (nsm *NetworkSecurityManager) SecureOutbound(conn net.Conn, remotePublicKey
 	session, err := nsm.noiseTransport.SecureOutbound(conn, remotePublicKey)
 	if err != nil {
 		telemetry.IncrCounter(1, "network", "noise", "handshake_failed", "outbound")
-		return nil, fmt.Errorf("Noise handshake failed: %w", err)
+		return nil, fmt.Errorf("noise handshake failed: %w", err)
 	}
 
 	telemetry.IncrCounter(1, "network", "noise", "handshake_success", "outbound")
@@ -252,7 +252,7 @@ func (nsm *NetworkSecurityManager) SecureInbound(conn net.Conn) (net.Conn, error
 	session, err := nsm.noiseTransport.SecureInbound(conn)
 	if err != nil {
 		telemetry.IncrCounter(1, "network", "noise", "handshake_failed", "inbound")
-		return nil, fmt.Errorf("Noise handshake failed: %w", err)
+		return nil, fmt.Errorf("noise handshake failed: %w", err)
 	}
 
 	telemetry.IncrCounter(1, "network", "noise", "handshake_success", "inbound")
