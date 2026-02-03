@@ -10,24 +10,63 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    
+    /* VirtEngine Brand Primary - Deep Blue */
+    --primary: 217 89% 51%;
     --primary-foreground: 210 40% 98%;
+    --primary-50: 217 100% 97%;
+    --primary-100: 217 100% 94%;
+    --primary-200: 217 96% 86%;
+    --primary-300: 217 94% 74%;
+    --primary-400: 217 91% 60%;
+    --primary-500: 217 89% 51%;
+    --primary-600: 217 91% 41%;
+    --primary-700: 217 93% 33%;
+    --primary-800: 217 91% 28%;
+    --primary-900: 217 89% 23%;
+    
+    /* Brand alias */
+    --brand: 217 89% 51%;
+    --brand-foreground: 210 40% 98%;
+    
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
+    
+    /* Status colors */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --success: 142.1 76.2% 36.3%;
     --success-foreground: 210 40% 98%;
     --warning: 45.4 93.4% 47.5%;
     --warning-foreground: 222.2 47.4% 11.2%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+    
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 217 89% 51%;
     --radius: 0.5rem;
+    
+    /* Sidebar */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 217 89% 51%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 89% 51%;
+    
+    /* Chart colors */
+    --chart-1: 217 89% 51%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
   }
 
   .dark {
@@ -37,23 +76,62 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
+    
+    /* VirtEngine Brand Primary - Lighter Blue for dark mode */
+    --primary: 217 91% 60%;
     --primary-foreground: 222.2 47.4% 11.2%;
+    --primary-50: 217 93% 15%;
+    --primary-100: 217 89% 23%;
+    --primary-200: 217 91% 28%;
+    --primary-300: 217 93% 33%;
+    --primary-400: 217 91% 41%;
+    --primary-500: 217 89% 51%;
+    --primary-600: 217 91% 60%;
+    --primary-700: 217 94% 74%;
+    --primary-800: 217 96% 86%;
+    --primary-900: 217 100% 94%;
+    
+    /* Brand alias */
+    --brand: 217 91% 60%;
+    --brand-foreground: 222.2 47.4% 11.2%;
+    
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
+    
+    /* Status colors - adjusted for dark mode */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     --success: 142.1 70.6% 45.3%;
     --success-foreground: 210 40% 98%;
     --warning: 45.4 93.4% 47.5%;
     --warning-foreground: 222.2 47.4% 11.2%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+    
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --ring: 217 91% 60%;
+    
+    /* Sidebar - dark mode */
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 217 91% 60%;
+    
+    /* Chart colors - adjusted for dark mode */
+    --chart-1: 217 91% 60%;
+    --chart-2: 160 70% 50%;
+    --chart-3: 30 90% 60%;
+    --chart-4: 280 75% 65%;
+    --chart-5: 340 85% 60%;
   }
 }
 
