@@ -45,6 +45,8 @@ func queryClientInfo(ctx context.Context, cctx sdkclient.Context) (*VirtEngine, 
 				if result, err = rpc.VirtEngine(ctx); err != nil {
 					return nil, err
 				}
+			case sdkclient.CometRPC:
+				result.ClientInfo = ClientInfo{ApiVersion: VersionV1beta3}
 			default:
 				return nil, fmt.Errorf("unsupported RPC client [%T]", rpc)
 			}

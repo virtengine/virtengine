@@ -9,12 +9,14 @@ import (
 	"testing"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 
 	pd "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/sdk/go/cli"
 	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
+	sdkgoTestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	v1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	provider "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
@@ -108,7 +110,7 @@ func (s *providerDaemonE2ETestSuite) TestProviderDaemonFullFlow() {
 	})
 
 	// Step 3: Create deployment (generates order)
-	var orderID v1beta5.OrderID
+	var orderID v1.OrderID
 	s.Run("CreateDeployment", func() {
 		_, err := clitestutil.TxCreateDeploymentExec(
 			ctx, cctx,
@@ -145,7 +147,7 @@ func (s *providerDaemonE2ETestSuite) TestProviderDaemonFullFlow() {
 			cli.TestFlags().
 				WithFrom(s.providerAddr).
 				WithOrderID(orderID).
-				WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdk.MustNewDecFromStr("1.5"))).
+				WithPrice(sdk.NewDecCoinFromDec(sdkgoTestutil.VEDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
 				WithDeposit(DefaultDeposit).
 				WithGasAutoFlags().
 				WithSkipConfirm().

@@ -38,9 +38,6 @@ import (
 	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
 
-// osWindows is the GOOS value for Windows
-const osWindows = "windows"
-
 var testMbm = module.NewBasicManager(
 	staking.AppModuleBasic{},
 	genutil.AppModuleBasic{},
@@ -210,10 +207,6 @@ func TestEmptyState(t *testing.T) {
 	os.Stdout = old
 	out := <-outC
 
-	// Give time for database to close completely on Windows
-	// to avoid file locking issues in TempDir cleanup
-	time.Sleep(100 * time.Millisecond)
-
 	require.Contains(t, out, "genesis_time")
 	require.Contains(t, out, "chain_id")
 	require.Contains(t, out, "consensus")
@@ -227,11 +220,6 @@ func TestEmptyState(t *testing.T) {
 }
 
 func TestStartStandAlone(t *testing.T) {
-	// Skip on Windows due to LevelDB file locking issues in TempDir cleanup
-	if runtime.GOOS == osWindows {
-		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
-	}
-
 	home := t.TempDir()
 	logger := log.NewNopLogger()
 	interfaceRegistry := types.NewInterfaceRegistry()
@@ -241,9 +229,10 @@ func TestStartStandAlone(t *testing.T) {
 
 	app, err := mock.NewApp(home, logger)
 	require.NoError(t, err)
-	var appCloser interface{ Close() error }
 	if closer, ok := app.(interface{ Close() error }); ok {
-		appCloser = closer
+		t.Cleanup(func() {
+			_ = closer.Close()
+		})
 	}
 
 	svrAddr, _, closeFn, err := network.FreeTCPAddr()
@@ -279,11 +268,6 @@ func TestInitNodeValidatorFiles(t *testing.T) {
 }
 
 func TestInitConfig(t *testing.T) {
-	// Skip on Windows due to LevelDB file locking issues in TempDir cleanup
-	if runtime.GOOS == osWindows {
-		t.Skip("Skipping on Windows due to LevelDB file locking in cleanup")
-	}
-
 	home := t.TempDir()
 	logger := log.NewNopLogger()
 	cfg, err := genutiltest.CreateDefaultCometConfig(home)
