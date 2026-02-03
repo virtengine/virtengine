@@ -19,9 +19,10 @@ import (
 // GetTemplatesCmd returns the templates command group
 func GetTemplatesCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "templates",
+		Use:   "hpc-templates",
 		Short: "Manage HPC workload templates",
-		Long:  `Commands for listing, viewing, and verifying HPC workload templates.`,
+		Long: `Commands for listing, viewing, and verifying HPC workload templates.
+Preferred usage: "virtengine hpc-templates". Legacy usage: "virtengine hpc templates".`,
 	}
 
 	cmd.AddCommand(
@@ -47,13 +48,13 @@ func getListTemplatesCmd() *cobra.Command {
 		Long: `List all available HPC workload templates. By default, only built-in 
 templates are shown. Use --all to include on-chain templates.`,
 		Example: `  # List all built-in templates
-  virtengine hpc templates list
+  virtengine hpc-templates list
 
   # List templates of a specific type
-  virtengine hpc templates list --type gpu
+  virtengine hpc-templates list --type gpu
 
   # Output as JSON
-  virtengine hpc templates list --output json`,
+  virtengine hpc-templates list --output json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			templates := hpc_workload_library.GetBuiltinTemplates()
 
@@ -96,14 +97,15 @@ func getShowTemplateCmd() *cobra.Command {
 	var outputFormat string
 
 	cmd := &cobra.Command{
-		Use:   "show <template-id>",
+		Use:     "show <template-id>",
+		Aliases: []string{"get"},
 		Short: "Show details of a workload template",
 		Long:  `Display detailed information about a specific workload template.`,
 		Example: `  # Show template details
-  virtengine hpc templates show mpi-standard
+  virtengine hpc-templates show mpi-standard
 
   # Output as JSON
-  virtengine hpc templates show gpu-compute --output json`,
+  virtengine hpc-templates show gpu-compute --output json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			templateID := args[0]
@@ -129,12 +131,13 @@ func getShowTemplateCmd() *cobra.Command {
 
 func getVerifyTemplateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "verify <template-id>",
+		Use:     "verify <template-id>",
+		Aliases: []string{"validate"},
 		Short: "Verify a workload template signature",
 		Long: `Verify the cryptographic signature of a workload template to ensure
 it has not been tampered with.`,
 		Example: `  # Verify a template
-  virtengine hpc templates verify mpi-standard`,
+  virtengine hpc-templates verify mpi-standard`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			templateID := args[0]
