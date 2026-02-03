@@ -19,7 +19,6 @@ import (
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
 	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
-	sdkgoTestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 
 	"github.com/virtengine/virtengine/testutil"
 )
@@ -127,16 +126,12 @@ func (s *marketGRPCRestTestSuite) SetupSuite() {
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
 	// create provider
-	_, err = clitestutil.TxCreateProviderExec(
-		ctx,
-		s.cctx,
-		providerPath,
-		cli.TestFlags().
-			WithFrom(keyAddr.String()).
-			WithGasAutoFlags().
-			WithSkipConfirm().
-			WithBroadcastModeBlock()...,
-	)
+	providerFlags := cli.TestFlags().
+		WithFrom(keyAddr.String()).
+		WithGasAutoFlags().
+		WithSkipConfirm().
+		WithBroadcastModeBlock()
+	_, err = clitestutil.TxCreateProviderExec(ctx, s.cctx, providerPath, providerFlags...)
 	s.Require().NoError(err)
 
 	s.Require().NoError(s.Network().WaitForNextBlock())
@@ -147,7 +142,7 @@ func (s *marketGRPCRestTestSuite) SetupSuite() {
 		cli.TestFlags().
 			WithFrom(keyAddr.String()).
 			WithOrderID(s.order.ID).
-			WithPrice(sdk.NewDecCoinFromDec(sdkgoTestutil.VEDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
+			WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
 			WithDeposit(DefaultDeposit).
 			WithGasAutoFlags().
 			WithSkipConfirm().

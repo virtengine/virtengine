@@ -19,6 +19,11 @@ func ExecTxUpdateProvider(ctx context.Context, cctx client.Context, args ...stri
 	return ExecTestCLICmd(ctx, cctx, cli.GetTxProviderUpdateCmd(), args...)
 }
 
+// TxUpdateProviderExec is an alias for ExecTxUpdateProvider.
+func TxUpdateProviderExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecTxUpdateProvider(ctx, cctx, args...)
+}
+
 // ExecQueryProviders is used for testing providers query
 func ExecQueryProviders(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryProvidersCmd(), args...)

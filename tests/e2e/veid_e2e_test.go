@@ -462,9 +462,9 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 	customer := sdktestutil.AccAddress(s.T())
 
 	// Create identity record
-	recordPtr, err := s.app.Keepers.VirtEngine.VEID.CreateIdentityRecord(ctx, customer)
+	createdRecord, err := s.app.Keepers.VirtEngine.VEID.CreateIdentityRecord(ctx, customer)
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), veidtypes.IdentityTierUnverified, recordPtr.Tier)
+	require.Equal(s.T(), veidtypes.IdentityTierUnverified, createdRecord.Tier)
 
 	// Test transition: Unverified -> Basic
 	transition1 := UnverifiedToBasic()
