@@ -83,13 +83,27 @@ jobs:
             cd -
           done
 
+      - name: Collect Kubernetes manifests
+        id: k8s-manifests
+        run: |
+          {
+            echo "files<<EOF"
+            if [ -d deploy/kubernetes/base ]; then
+              find deploy/kubernetes/base -maxdepth 1 -name '*.yaml' -print
+            fi
+            if [ -d deploy/kubernetes/overlays ]; then
+              find deploy/kubernetes/overlays -name '*.yaml' -print
+            fi
+            if [ -d deploy/argocd ]; then
+              find deploy/argocd -name '*.yaml' -print
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Lint Kubernetes Manifests
         uses: azure/k8s-lint@v1
         with:
-          manifests: |
-            deploy/kubernetes/base/*.yaml
-            deploy/kubernetes/overlays/**/*.yaml
-            deploy/argocd/**/*.yaml
+          manifests: ${{ steps.k8s-manifests.outputs.files }}
 
   # ============================================================================
   # Security Scanning
