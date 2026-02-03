@@ -122,12 +122,7 @@ func (k Keeper) ProcessExportRequest(ctx sdk.Context, requestID string) (*types.
 	}
 
 	// Generate the export package
-	dataPackage, err := k.generateDataPackage(ctx, requesterAddr, &request)
-	if err != nil {
-		request.MarkFailed(err.Error())
-		_ = k.SetExportRequest(ctx, request)
-		return nil, err
-	}
+	dataPackage := k.generateDataPackage(ctx, requesterAddr, &request)
 
 	// Calculate checksum
 	dataBytes, err := json.Marshal(dataPackage)
@@ -169,7 +164,7 @@ func (k Keeper) generateDataPackage(
 	ctx sdk.Context,
 	address sdk.AccAddress,
 	request *types.PortabilityExportRequest,
-) (*types.PortableDataPackage, error) {
+) *types.PortableDataPackage {
 	now := ctx.BlockTime()
 	blockHeight := ctx.BlockHeight()
 
@@ -211,7 +206,7 @@ func (k Keeper) generateDataPackage(
 		}
 	}
 
-	return pkg, nil
+	return pkg
 }
 
 // exportCategory exports a specific data category
@@ -301,16 +296,7 @@ func (k Keeper) exportConsentData(ctx sdk.Context, address sdk.AccAddress, pkg *
 
 	// Export scope consents
 	for _, sc := range wallet.ConsentSettings.ScopeConsents {
-		portableConsent := types.PortableScopeConsent{
-			ScopeID:            sc.ScopeID,
-			Granted:            sc.Granted,
-			GrantedAt:          sc.GrantedAt,
-			RevokedAt:          sc.RevokedAt,
-			ExpiresAt:          sc.ExpiresAt,
-			Purpose:            sc.Purpose,
-			GrantedToProviders: sc.GrantedToProviders,
-			Restrictions:       sc.Restrictions,
-		}
+		portableConsent := types.PortableScopeConsent(sc)
 		pkg.Consent.ScopeConsents = append(pkg.Consent.ScopeConsents, portableConsent)
 	}
 
@@ -360,7 +346,7 @@ func (k Keeper) exportVerificationHistory(ctx sdk.Context, address sdk.AccAddres
 
 // exportTransactionData exports transaction history
 // Note: This requires access to the bank/auth modules which may not be available here
-func (k Keeper) exportTransactionData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
+func (k Keeper) exportTransactionData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
 	// Transaction data would be exported from chain history
 	// This is a placeholder - actual implementation would query the chain
 	pkg.Transactions = &types.PortableTransactionData{
@@ -374,7 +360,7 @@ func (k Keeper) exportTransactionData(ctx sdk.Context, address sdk.AccAddress, p
 
 // exportMarketplaceData exports marketplace activity
 // Note: This requires access to the market module
-func (k Keeper) exportMarketplaceData(ctx sdk.Context, address sdk.AccAddress, pkg *types.PortableDataPackage) error {
+func (k Keeper) exportMarketplaceData(_ sdk.Context, _ sdk.AccAddress, pkg *types.PortableDataPackage) error {
 	// Marketplace data would be exported from the market module
 	// This is a placeholder - actual implementation would query the market keeper
 	pkg.Marketplace = &types.PortableMarketplaceData{

@@ -193,7 +193,6 @@ type FailoverProvider struct {
 
 // ProviderMetrics tracks provider metrics
 type ProviderMetrics struct {
-	mu                sync.RWMutex
 	totalSent         int64
 	primarySent       int64
 	secondarySent     int64

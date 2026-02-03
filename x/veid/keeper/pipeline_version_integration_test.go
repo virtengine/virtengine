@@ -465,7 +465,7 @@ func setupPipelineIntegrationTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 	return keeper, ctx
 }
 
-func createIntegrationTestManifest(t *testing.T) types.ModelManifest {
+func createIntegrationTestManifest(_ *testing.T) types.ModelManifest {
 	models := []types.ModelInfo{
 		{
 			Name:        "deepface_facenet512",

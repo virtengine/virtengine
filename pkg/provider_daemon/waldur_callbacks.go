@@ -278,14 +278,14 @@ func (h *WaldurCallbackHandler) handleCallback(w http.ResponseWriter, r *http.Re
 	// Read and parse payload
 	body, err := io.ReadAll(io.LimitReader(r.Body, h.cfg.MaxPayloadBytes))
 	if err != nil {
-		h.writeError(w, "failed to read body", http.StatusBadRequest)
+		h.writeError(w, "failed to read body")
 		return
 	}
 	defer r.Body.Close()
 
 	var callback marketplace.WaldurCallback
 	if err := json.Unmarshal(body, &callback); err != nil {
-		h.writeError(w, "invalid JSON payload", http.StatusBadRequest)
+		h.writeError(w, "invalid JSON payload")
 		return
 	}
 
@@ -293,7 +293,7 @@ func (h *WaldurCallbackHandler) handleCallback(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	if err := h.ProcessWaldurCallback(ctx, &callback); err != nil {
 		log.Printf("[waldur-callbacks] callback processing failed: %v", err)
-		h.writeError(w, err.Error(), http.StatusBadRequest)
+		h.writeError(w, err.Error())
 		return
 	}
 
@@ -310,7 +310,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, h.cfg.MaxPayloadBytes))
 	if err != nil {
-		h.writeError(w, "failed to read body", http.StatusBadRequest)
+		h.writeError(w, "failed to read body")
 		return
 	}
 	defer r.Body.Close()
@@ -318,7 +318,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 	// Parse Waldur lifecycle callback
 	payload, err := waldur.ParseLifecycleCallback(body)
 	if err != nil {
-		h.writeError(w, "invalid lifecycle callback", http.StatusBadRequest)
+		h.writeError(w, "invalid lifecycle callback")
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *WaldurCallbackHandler) handleLifecycleCallback(w http.ResponseWriter, r
 	ctx := r.Context()
 	if err := h.processLifecyclePayload(ctx, payload); err != nil {
 		log.Printf("[waldur-callbacks] lifecycle callback failed: %v", err)
-		h.writeError(w, err.Error(), http.StatusBadRequest)
+		h.writeError(w, err.Error())
 		return
 	}
 
@@ -490,7 +490,7 @@ func (h *WaldurCallbackHandler) processStatusUpdate(ctx context.Context, callbac
 }
 
 // processResourceChange processes a resource change callback
-func (h *WaldurCallbackHandler) processResourceChange(ctx context.Context, callback *marketplace.WaldurCallback) error {
+func (h *WaldurCallbackHandler) processResourceChange(_ context.Context, callback *marketplace.WaldurCallback) error {
 	allocationID := callback.ChainEntityID
 
 	switch callback.ActionType {
@@ -625,9 +625,9 @@ func mapWaldurStateToAllocationState(state string) marketplace.AllocationState {
 }
 
 // writeError writes an error response
-func (h *WaldurCallbackHandler) writeError(w http.ResponseWriter, msg string, status int) {
+func (h *WaldurCallbackHandler) writeError(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusBadRequest)
 	response := map[string]string{"error": msg}
 	//nolint:errchkjson // map[string]string is always safe to encode
 	_ = json.NewEncoder(w).Encode(response)

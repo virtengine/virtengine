@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"errors"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -202,9 +203,9 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 		return nil, types.ErrUnauthorized.Wrapf("invalid authority; expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
 	}
 
-	maxUint32 := uint64(^uint32(0))
-	if msg.Params.MaxClients > maxUint32 {
-		return nil, types.ErrInvalidProposal.Wrap("max_clients exceeds uint32")
+	maxClients, err := safeUint32FromUint64(msg.Params.MaxClients)
+	if err != nil {
+		return nil, types.ErrInvalidProposal.Wrap(err.Error())
 	}
 
 	// Convert proto Params to local Params type for storage
@@ -212,7 +213,7 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 		RequireClientSignature:  msg.Params.RequireClientSignature,
 		RequireUserSignature:    true, // default
 		RequireSaltBinding:      true, // default
-		MaxClientsPerRegistrar:  uint32(msg.Params.MaxClients),
+		MaxClientsPerRegistrar:  maxClients,
 		AllowGovernanceOverride: true, // default
 		DefaultMinVersion:       "1.0.0",
 		AdminAddresses:          []string{},
@@ -223,4 +224,11 @@ func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdatePara
 	}
 
 	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+func safeUint32FromUint64(value uint64) (uint32, error) {
+	if value > uint64(^uint32(0)) {
+		return 0, errors.New("max_clients exceeds uint32")
+	}
+	return uint32(value), nil
 }

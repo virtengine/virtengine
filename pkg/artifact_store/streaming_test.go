@@ -3,7 +3,6 @@ package artifact_store
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -88,14 +87,8 @@ func TestStreamingUploader(t *testing.T) {
 		}()
 
 		_, err := uploader.Upload(ctx, req)
-		// Either success or cancellation (possibly wrapped) is acceptable
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				return
-			}
-			if errors.Is(err, ErrInvalidInput) && strings.Contains(err.Error(), "context canceled") {
-				return
-			}
+		// Either success or context canceled is acceptable
+		if err != nil && err != context.Canceled {
 			t.Fatalf("unexpected upload error: %v", err)
 		}
 	})

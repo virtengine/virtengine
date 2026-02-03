@@ -19,17 +19,6 @@ import (
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
-const (
-	waldurActionStart     = "start"
-	waldurActionStop      = "stop"
-	waldurActionRestart   = "restart"
-	waldurActionSuspend   = "suspend"
-	waldurActionResume    = "resume"
-	waldurActionResize    = "resize"
-	waldurActionTerminate = "terminate"
-	waldurActionProvision = "provision"
-)
-
 // WaldurBridgeConfig configures the provider-daemon Waldur bridge.
 type WaldurBridgeConfig struct {
 	Enabled            bool
@@ -512,20 +501,19 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 	defer cancel()
 
 	var err error
-	var waldurOpID string
 	switch event.Action {
 	case marketplace.LifecycleActionStart:
-		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionStart, event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "start", event)
 	case marketplace.LifecycleActionStop:
-		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionStop, event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "stop", event)
 	case marketplace.LifecycleActionRestart:
-		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionRestart, event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "restart", event)
 	case marketplace.LifecycleActionSuspend:
-		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionSuspend, event)
+		err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "suspend", event)
 	case marketplace.LifecycleActionResume:
-		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionResume, event)
+		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resume", event)
 	case marketplace.LifecycleActionResize:
-		waldurOpID, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, waldurActionResize, event)
+		_, err = b.executeLifecycleAction(opCtx, mapping.ResourceUUID, "resize", event)
 	case marketplace.LifecycleActionTerminate:
 		attrs := map[string]interface{}{
 			"operation_id": event.OperationID,
@@ -546,9 +534,6 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 	callback.SignerID = b.cfg.ProviderAddress
 	callback.ExpiresAt = callback.Timestamp.Add(b.cfg.CallbackTTL)
 	callback.Payload["operation_id"] = event.OperationID
-	if waldurOpID != "" && waldurOpID != event.OperationID {
-		callback.Payload["waldur_operation_id"] = waldurOpID
-	}
 	callback.Payload["action"] = string(event.Action)
 	callback.Payload["idempotency_key"] = marketplace.GenerateIdempotencyKey(
 		event.AllocationID, event.Action, event.Timestamp,
@@ -571,33 +556,26 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 
 // executeLifecycleAction executes a lifecycle action on a Waldur resource
 func (b *WaldurBridge) executeLifecycleAction(
-	ctx context.Context,
+	_ context.Context,
 	resourceUUID string,
 	action string,
 	event marketplace.LifecycleActionRequestedEvent,
 ) (string, error) {
-	if resourceUUID == "" {
-		return "", errors.New("resource UUID is empty")
-	}
-	if action == "" {
-		return "", errors.New("lifecycle action is empty")
-	}
-
 	idempotencyKey := marketplace.GenerateIdempotencyKey(
 		event.AllocationID, event.Action, event.Timestamp,
 	)
 
 	req := waldur.LifecycleRequest{
-		ResourceUUID:   resourceUUID,
+		ResourceUUID:  resourceUUID,
 		IdempotencyKey: idempotencyKey,
-		Parameters:     map[string]interface{}{},
+		Parameters:    map[string]interface{}{},
 	}
 
 	if b.cfg.OperationTimeout > 0 {
 		req.Timeout = int(b.cfg.OperationTimeout.Seconds())
 	}
 
-	if action == waldurActionResize {
+	if action == "resize" {
 		req.Parameters = filterResizeParameters(event.Parameters)
 	} else {
 		for k, v := range event.Parameters {
@@ -609,37 +587,37 @@ func (b *WaldurBridge) executeLifecycleAction(
 	log.Printf("[waldur-bridge] executing %s on resource %s", action, resourceUUID)
 
 	switch action {
-	case waldurActionStart:
+	case "start":
 		resp, err := lifecycle.Start(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case waldurActionStop:
+	case "stop":
 		resp, err := lifecycle.Stop(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case waldurActionRestart:
+	case "restart":
 		resp, err := lifecycle.Restart(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case waldurActionSuspend:
+	case "suspend":
 		resp, err := lifecycle.Suspend(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case waldurActionResume:
+	case "resume":
 		resp, err := lifecycle.Resume(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case waldurActionResize:
+	case "resize":
 		resizeReq := waldur.ResizeRequest{LifecycleRequest: req}
 		if v, ok := parseIntParam(event.Parameters, "cpu_cores"); ok {
 			resizeReq.CPUCores = &v
@@ -733,21 +711,21 @@ func filterResizeParameters(params map[string]interface{}) map[string]interface{
 func mapLifecycleActionToWaldur(action marketplace.LifecycleActionType) string {
 	switch action {
 	case marketplace.LifecycleActionStart:
-		return waldurActionStart
+		return "start"
 	case marketplace.LifecycleActionStop:
-		return waldurActionStop
+		return "stop"
 	case marketplace.LifecycleActionRestart:
-		return waldurActionRestart
+		return "restart"
 	case marketplace.LifecycleActionSuspend:
-		return waldurActionSuspend
+		return "suspend"
 	case marketplace.LifecycleActionResume:
-		return waldurActionResume
+		return "resume"
 	case marketplace.LifecycleActionResize:
-		return waldurActionResize
+		return "resize"
 	case marketplace.LifecycleActionTerminate:
-		return waldurActionTerminate
+		return "terminate"
 	case marketplace.LifecycleActionProvision:
-		return waldurActionProvision
+		return "provision"
 	default:
 		return ""
 	}

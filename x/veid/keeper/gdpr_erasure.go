@@ -256,7 +256,9 @@ func (k Keeper) executeErasure(ctx sdk.Context, request *types.ErasureRequest) (
 	report.OffChainDataDeleted = true
 
 	// Track erased categories
-	report.DataCategoriesErased = append(report.DataCategoriesErased, request.Categories...)
+	for _, cat := range request.Categories {
+		report.DataCategoriesErased = append(report.DataCategoriesErased, cat)
+	}
 
 	return report, nil
 }
@@ -675,9 +677,7 @@ func erasureRequestByAddressPrefixKey(address string) []byte {
 }
 
 func pendingErasureKey(deadlineUnix int64, requestID string) []byte {
-	key := make([]byte, 0, len(prefixPendingErasure)+8+1+len(requestID))
-	key = append(key, prefixPendingErasure...)
-	key = append(key, sdk.Uint64ToBigEndian(safeUint64FromInt64(deadlineUnix))...)
+	key := append(prefixPendingErasure, sdk.Uint64ToBigEndian(safeUint64FromInt64(deadlineUnix))...)
 	key = append(key, byte(0x00))
 	key = append(key, []byte(requestID)...)
 	return key
@@ -688,10 +688,7 @@ func pendingErasurePrefixKey() []byte {
 }
 
 func pendingErasureBeforeKey(beforeUnix int64) []byte {
-	key := make([]byte, 0, len(prefixPendingErasure)+8)
-	key = append(key, prefixPendingErasure...)
-	key = append(key, sdk.Uint64ToBigEndian(safeUint64FromInt64(beforeUnix))...)
-	return key
+	return append(prefixPendingErasure, sdk.Uint64ToBigEndian(safeUint64FromInt64(beforeUnix))...)
 }
 
 func keyDestructionRecordKey(recordID string) []byte {
@@ -929,4 +926,12 @@ func erasureReportFromStore(rs *erasureReportStore) *types.ErasureReport {
 	}
 
 	return r
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }
