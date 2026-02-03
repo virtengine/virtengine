@@ -383,123 +383,124 @@ function createBaseForwarderPortStatus(): ForwarderPortStatus {
   return { host: "", port: 0, externalPort: 0, proto: "", name: "" };
 }
 
-export const ForwarderPortStatus: MessageFns<ForwarderPortStatus, "virtengine.provider.lease.v1.ForwarderPortStatus"> = {
-  $type: "virtengine.provider.lease.v1.ForwarderPortStatus" as const,
+export const ForwarderPortStatus: MessageFns<ForwarderPortStatus, "virtengine.provider.lease.v1.ForwarderPortStatus"> =
+  {
+    $type: "virtengine.provider.lease.v1.ForwarderPortStatus" as const,
 
-  encode(message: ForwarderPortStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.host !== "") {
-      writer.uint32(10).string(message.host);
-    }
-    if (message.port !== 0) {
-      writer.uint32(16).uint32(message.port);
-    }
-    if (message.externalPort !== 0) {
-      writer.uint32(24).uint32(message.externalPort);
-    }
-    if (message.proto !== "") {
-      writer.uint32(34).string(message.proto);
-    }
-    if (message.name !== "") {
-      writer.uint32(42).string(message.name);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ForwarderPortStatus {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseForwarderPortStatus();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.host = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 16) {
-            break;
-          }
-
-          message.port = reader.uint32();
-          continue;
-        }
-        case 3: {
-          if (tag !== 24) {
-            break;
-          }
-
-          message.externalPort = reader.uint32();
-          continue;
-        }
-        case 4: {
-          if (tag !== 34) {
-            break;
-          }
-
-          message.proto = reader.string();
-          continue;
-        }
-        case 5: {
-          if (tag !== 42) {
-            break;
-          }
-
-          message.name = reader.string();
-          continue;
-        }
+    encode(message: ForwarderPortStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      if (message.host !== "") {
+        writer.uint32(10).string(message.host);
       }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
+      if (message.port !== 0) {
+        writer.uint32(16).uint32(message.port);
       }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+      if (message.externalPort !== 0) {
+        writer.uint32(24).uint32(message.externalPort);
+      }
+      if (message.proto !== "") {
+        writer.uint32(34).string(message.proto);
+      }
+      if (message.name !== "") {
+        writer.uint32(42).string(message.name);
+      }
+      return writer;
+    },
 
-  fromJSON(object: any): ForwarderPortStatus {
-    return {
-      host: isSet(object.host) ? globalThis.String(object.host) : "",
-      port: isSet(object.port) ? globalThis.Number(object.port) : 0,
-      externalPort: isSet(object.external_port) ? globalThis.Number(object.external_port) : 0,
-      proto: isSet(object.proto) ? globalThis.String(object.proto) : "",
-      name: isSet(object.name) ? globalThis.String(object.name) : "",
-    };
-  },
+    decode(input: BinaryReader | Uint8Array, length?: number): ForwarderPortStatus {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseForwarderPortStatus();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
 
-  toJSON(message: ForwarderPortStatus): unknown {
-    const obj: any = {};
-    if (message.host !== "") {
-      obj.host = message.host;
-    }
-    if (message.port !== 0) {
-      obj.port = Math.round(message.port);
-    }
-    if (message.externalPort !== 0) {
-      obj.external_port = Math.round(message.externalPort);
-    }
-    if (message.proto !== "") {
-      obj.proto = message.proto;
-    }
-    if (message.name !== "") {
-      obj.name = message.name;
-    }
-    return obj;
-  },
-  fromPartial(object: DeepPartial<ForwarderPortStatus>): ForwarderPortStatus {
-    const message = createBaseForwarderPortStatus();
-    message.host = object.host ?? "";
-    message.port = object.port ?? 0;
-    message.externalPort = object.externalPort ?? 0;
-    message.proto = object.proto ?? "";
-    message.name = object.name ?? "";
-    return message;
-  },
-};
+            message.host = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.port = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.externalPort = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.proto = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): ForwarderPortStatus {
+      return {
+        host: isSet(object.host) ? globalThis.String(object.host) : "",
+        port: isSet(object.port) ? globalThis.Number(object.port) : 0,
+        externalPort: isSet(object.external_port) ? globalThis.Number(object.external_port) : 0,
+        proto: isSet(object.proto) ? globalThis.String(object.proto) : "",
+        name: isSet(object.name) ? globalThis.String(object.name) : "",
+      };
+    },
+
+    toJSON(message: ForwarderPortStatus): unknown {
+      const obj: any = {};
+      if (message.host !== "") {
+        obj.host = message.host;
+      }
+      if (message.port !== 0) {
+        obj.port = Math.round(message.port);
+      }
+      if (message.externalPort !== 0) {
+        obj.external_port = Math.round(message.externalPort);
+      }
+      if (message.proto !== "") {
+        obj.proto = message.proto;
+      }
+      if (message.name !== "") {
+        obj.name = message.name;
+      }
+      return obj;
+    },
+    fromPartial(object: DeepPartial<ForwarderPortStatus>): ForwarderPortStatus {
+      const message = createBaseForwarderPortStatus();
+      message.host = object.host ?? "";
+      message.port = object.port ?? 0;
+      message.externalPort = object.externalPort ?? 0;
+      message.proto = object.proto ?? "";
+      message.name = object.name ?? "";
+      return message;
+    },
+  };
 
 function createBaseServiceStatus(): ServiceStatus {
   return { name: "", status: undefined, ports: [], ips: [] };
@@ -615,83 +616,87 @@ function createBaseSendManifestRequest(): SendManifestRequest {
   return { leaseId: undefined, manifest: [] };
 }
 
-export const SendManifestRequest: MessageFns<SendManifestRequest, "virtengine.provider.lease.v1.SendManifestRequest"> = {
-  $type: "virtengine.provider.lease.v1.SendManifestRequest" as const,
+export const SendManifestRequest: MessageFns<SendManifestRequest, "virtengine.provider.lease.v1.SendManifestRequest"> =
+  {
+    $type: "virtengine.provider.lease.v1.SendManifestRequest" as const,
 
-  encode(message: SendManifestRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.leaseId !== undefined) {
-      LeaseID.encode(message.leaseId, writer.uint32(10).fork()).join();
-    }
-    for (const v of message.manifest) {
-      Group.encode(v!, writer.uint32(18).fork()).join();
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): SendManifestRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseSendManifestRequest();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.leaseId = LeaseID.decode(reader, reader.uint32());
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.manifest.push(Group.decode(reader, reader.uint32()));
-          continue;
-        }
+    encode(message: SendManifestRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      if (message.leaseId !== undefined) {
+        LeaseID.encode(message.leaseId, writer.uint32(10).fork()).join();
       }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
+      for (const v of message.manifest) {
+        Group.encode(v!, writer.uint32(18).fork()).join();
       }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
+      return writer;
+    },
 
-  fromJSON(object: any): SendManifestRequest {
-    return {
-      leaseId: isSet(object.lease_id) ? LeaseID.fromJSON(object.lease_id) : undefined,
-      manifest: globalThis.Array.isArray(object?.manifest) ? object.manifest.map((e: any) => Group.fromJSON(e)) : [],
-    };
-  },
+    decode(input: BinaryReader | Uint8Array, length?: number): SendManifestRequest {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSendManifestRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
 
-  toJSON(message: SendManifestRequest): unknown {
-    const obj: any = {};
-    if (message.leaseId !== undefined) {
-      obj.lease_id = LeaseID.toJSON(message.leaseId);
-    }
-    if (message.manifest?.length) {
-      obj.manifest = message.manifest.map((e) => Group.toJSON(e));
-    }
-    return obj;
-  },
-  fromPartial(object: DeepPartial<SendManifestRequest>): SendManifestRequest {
-    const message = createBaseSendManifestRequest();
-    message.leaseId = (object.leaseId !== undefined && object.leaseId !== null)
-      ? LeaseID.fromPartial(object.leaseId)
-      : undefined;
-    message.manifest = object.manifest?.map((e) => Group.fromPartial(e)) || [];
-    return message;
-  },
-};
+            message.leaseId = LeaseID.decode(reader, reader.uint32());
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.manifest.push(Group.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): SendManifestRequest {
+      return {
+        leaseId: isSet(object.lease_id) ? LeaseID.fromJSON(object.lease_id) : undefined,
+        manifest: globalThis.Array.isArray(object?.manifest) ? object.manifest.map((e: any) => Group.fromJSON(e)) : [],
+      };
+    },
+
+    toJSON(message: SendManifestRequest): unknown {
+      const obj: any = {};
+      if (message.leaseId !== undefined) {
+        obj.lease_id = LeaseID.toJSON(message.leaseId);
+      }
+      if (message.manifest?.length) {
+        obj.manifest = message.manifest.map((e) => Group.toJSON(e));
+      }
+      return obj;
+    },
+    fromPartial(object: DeepPartial<SendManifestRequest>): SendManifestRequest {
+      const message = createBaseSendManifestRequest();
+      message.leaseId = (object.leaseId !== undefined && object.leaseId !== null)
+        ? LeaseID.fromPartial(object.leaseId)
+        : undefined;
+      message.manifest = object.manifest?.map((e) => Group.fromPartial(e)) || [];
+      return message;
+    },
+  };
 
 function createBaseSendManifestResponse(): SendManifestResponse {
   return {};
 }
 
-export const SendManifestResponse: MessageFns<SendManifestResponse, "virtengine.provider.lease.v1.SendManifestResponse"> = {
+export const SendManifestResponse: MessageFns<
+  SendManifestResponse,
+  "virtengine.provider.lease.v1.SendManifestResponse"
+> = {
   $type: "virtengine.provider.lease.v1.SendManifestResponse" as const,
 
   encode(_: SendManifestResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
@@ -882,61 +887,62 @@ function createBaseServiceLogsResponse(): ServiceLogsResponse {
   return { services: [] };
 }
 
-export const ServiceLogsResponse: MessageFns<ServiceLogsResponse, "virtengine.provider.lease.v1.ServiceLogsResponse"> = {
-  $type: "virtengine.provider.lease.v1.ServiceLogsResponse" as const,
+export const ServiceLogsResponse: MessageFns<ServiceLogsResponse, "virtengine.provider.lease.v1.ServiceLogsResponse"> =
+  {
+    $type: "virtengine.provider.lease.v1.ServiceLogsResponse" as const,
 
-  encode(message: ServiceLogsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    for (const v of message.services) {
-      ServiceLogs.encode(v!, writer.uint32(10).fork()).join();
-    }
-    return writer;
-  },
+    encode(message: ServiceLogsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      for (const v of message.services) {
+        ServiceLogs.encode(v!, writer.uint32(10).fork()).join();
+      }
+      return writer;
+    },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): ServiceLogsResponse {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseServiceLogsResponse();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
+    decode(input: BinaryReader | Uint8Array, length?: number): ServiceLogsResponse {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseServiceLogsResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.services.push(ServiceLogs.decode(reader, reader.uint32()));
+            continue;
           }
-
-          message.services.push(ServiceLogs.decode(reader, reader.uint32()));
-          continue;
         }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
       }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
+      return message;
+    },
+
+    fromJSON(object: any): ServiceLogsResponse {
+      return {
+        services: globalThis.Array.isArray(object?.services)
+          ? object.services.map((e: any) => ServiceLogs.fromJSON(e))
+          : [],
+      };
+    },
+
+    toJSON(message: ServiceLogsResponse): unknown {
+      const obj: any = {};
+      if (message.services?.length) {
+        obj.services = message.services.map((e) => ServiceLogs.toJSON(e));
       }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): ServiceLogsResponse {
-    return {
-      services: globalThis.Array.isArray(object?.services)
-        ? object.services.map((e: any) => ServiceLogs.fromJSON(e))
-        : [],
-    };
-  },
-
-  toJSON(message: ServiceLogsResponse): unknown {
-    const obj: any = {};
-    if (message.services?.length) {
-      obj.services = message.services.map((e) => ServiceLogs.toJSON(e));
-    }
-    return obj;
-  },
-  fromPartial(object: DeepPartial<ServiceLogsResponse>): ServiceLogsResponse {
-    const message = createBaseServiceLogsResponse();
-    message.services = object.services?.map((e) => ServiceLogs.fromPartial(e)) || [];
-    return message;
-  },
-};
+      return obj;
+    },
+    fromPartial(object: DeepPartial<ServiceLogsResponse>): ServiceLogsResponse {
+      const message = createBaseServiceLogsResponse();
+      message.services = object.services?.map((e) => ServiceLogs.fromPartial(e)) || [];
+      return message;
+    },
+  };
 
 function createBaseShellRequest(): ShellRequest {
   return { leaseId: undefined };
@@ -1000,7 +1006,10 @@ function createBaseServiceStatusRequest(): ServiceStatusRequest {
   return { leaseId: undefined, services: [] };
 }
 
-export const ServiceStatusRequest: MessageFns<ServiceStatusRequest, "virtengine.provider.lease.v1.ServiceStatusRequest"> = {
+export const ServiceStatusRequest: MessageFns<
+  ServiceStatusRequest,
+  "virtengine.provider.lease.v1.ServiceStatusRequest"
+> = {
   $type: "virtengine.provider.lease.v1.ServiceStatusRequest" as const,
 
   encode(message: ServiceStatusRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
@@ -1076,62 +1085,64 @@ function createBaseServiceStatusResponse(): ServiceStatusResponse {
   return { services: [] };
 }
 
-export const ServiceStatusResponse: MessageFns<ServiceStatusResponse, "virtengine.provider.lease.v1.ServiceStatusResponse"> =
-  {
-    $type: "virtengine.provider.lease.v1.ServiceStatusResponse" as const,
+export const ServiceStatusResponse: MessageFns<
+  ServiceStatusResponse,
+  "virtengine.provider.lease.v1.ServiceStatusResponse"
+> = {
+  $type: "virtengine.provider.lease.v1.ServiceStatusResponse" as const,
 
-    encode(message: ServiceStatusResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-      for (const v of message.services) {
-        ServiceStatus.encode(v!, writer.uint32(10).fork()).join();
-      }
-      return writer;
-    },
+  encode(message: ServiceStatusResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.services) {
+      ServiceStatus.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
 
-    decode(input: BinaryReader | Uint8Array, length?: number): ServiceStatusResponse {
-      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseServiceStatusResponse();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 10) {
-              break;
-            }
-
-            message.services.push(ServiceStatus.decode(reader, reader.uint32()));
-            continue;
+  decode(input: BinaryReader | Uint8Array, length?: number): ServiceStatusResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServiceStatusResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
           }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    },
 
-    fromJSON(object: any): ServiceStatusResponse {
-      return {
-        services: globalThis.Array.isArray(object?.services)
-          ? object.services.map((e: any) => ServiceStatus.fromJSON(e))
-          : [],
-      };
-    },
-
-    toJSON(message: ServiceStatusResponse): unknown {
-      const obj: any = {};
-      if (message.services?.length) {
-        obj.services = message.services.map((e) => ServiceStatus.toJSON(e));
+          message.services.push(ServiceStatus.decode(reader, reader.uint32()));
+          continue;
+        }
       }
-      return obj;
-    },
-    fromPartial(object: DeepPartial<ServiceStatusResponse>): ServiceStatusResponse {
-      const message = createBaseServiceStatusResponse();
-      message.services = object.services?.map((e) => ServiceStatus.fromPartial(e)) || [];
-      return message;
-    },
-  };
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServiceStatusResponse {
+    return {
+      services: globalThis.Array.isArray(object?.services)
+        ? object.services.map((e: any) => ServiceStatus.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: ServiceStatusResponse): unknown {
+    const obj: any = {};
+    if (message.services?.length) {
+      obj.services = message.services.map((e) => ServiceStatus.toJSON(e));
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<ServiceStatusResponse>): ServiceStatusResponse {
+    const message = createBaseServiceStatusResponse();
+    message.services = object.services?.map((e) => ServiceStatus.fromPartial(e)) || [];
+    return message;
+  },
+};
 
 function _unused_bytesFromBase64(b64: string): Uint8Array {
   if ((globalThis as any).Buffer) {

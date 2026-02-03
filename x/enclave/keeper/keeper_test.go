@@ -1,21 +1,19 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until sdk.NewContext API is stabilized.
-
 package keeper_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 	"time"
 
+	"cosmossdk.io/log"
 	sdkstore "cosmossdk.io/store"
 	storemetrics "cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -38,16 +36,17 @@ func setupTestEnv(t *testing.T) *testEnv {
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 
 	db := dbm.NewMemDB()
-	cms := sdkstore.NewCommitMultiStore(db, nil, storemetrics.NewNoOpMetrics())
+	cms := sdkstore.NewCommitMultiStore(db, log.NewNopLogger(), storemetrics.NewNoOpMetrics())
 	cms.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
 
 	if err := cms.LoadLatestVersion(); err != nil {
 		t.Fatalf("failed to load latest version: %v", err)
 	}
 
-	ctx := sdk.NewContext(cms, false, nil)
-	ctx = ctx.WithBlockHeight(100)
-	ctx = ctx.WithBlockTime(time.Now())
+	ctx := sdk.NewContext(cms, cmtproto.Header{
+		Height: 100,
+		Time:   time.Now().UTC(),
+	}, false, log.NewNopLogger())
 
 	interfaceRegistry := codectypes.NewInterfaceRegistry()
 	types.RegisterInterfaces(interfaceRegistry)
@@ -55,8 +54,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 
-	storeService := runtime.NewKVStoreService(storeKey)
-	k := keeper.NewKeeper(storeService, cdc, authority)
+	k := keeper.NewKeeper(cdc, storeKey, authority)
 
 	return &testEnv{
 		keeper:    k,
@@ -67,29 +65,72 @@ func setupTestEnv(t *testing.T) *testEnv {
 	}
 }
 
+func newTestAddress(seed string) string {
+	return sdk.AccAddress([]byte(seed)).String()
+}
+
+func storeEnclaveIdentity(t *testing.T, env *testEnv, identity types.EnclaveIdentity) {
+	t.Helper()
+
+	valAddr, err := sdk.AccAddressFromBech32(identity.ValidatorAddress)
+	if err != nil {
+		t.Fatalf("invalid validator address: %v", err)
+	}
+
+	bz, err := json.Marshal(&identity)
+	if err != nil {
+		t.Fatalf("marshal identity: %v", err)
+	}
+
+	store := env.ctx.KVStore(env.storeKey)
+	store.Set(types.EnclaveIdentityKey(valAddr), bz)
+}
+
+func deleteEnclaveIdentity(t *testing.T, env *testEnv, validatorAddr string) {
+	t.Helper()
+
+	valAddr, err := sdk.AccAddressFromBech32(validatorAddr)
+	if err != nil {
+		t.Fatalf("invalid validator address: %v", err)
+	}
+
+	store := env.ctx.KVStore(env.storeKey)
+	store.Delete(types.EnclaveIdentityKey(valAddr))
+}
+
+func storeAttestedResult(t *testing.T, env *testEnv, result types.AttestedScoringResult) {
+	t.Helper()
+
+	bz, err := json.Marshal(&result)
+	if err != nil {
+		t.Fatalf("marshal attested result: %v", err)
+	}
+
+	store := env.ctx.KVStore(env.storeKey)
+	store.Set(types.AttestedResultKey(result.BlockHeight, result.ScopeId), bz)
+}
+
 func TestKeeper_RegisterEnclaveIdentity(t *testing.T) {
 	env := setupTestEnv(t)
 
+	validatorAddr := newTestAddress("validator-register")
 	identity := types.EnclaveIdentity{
-		ValidatorAddress:        "virtengine1validator123",
-		TeeType:                 "sgx",
-		MeasurementHash:         []byte("measurement_hash_32_bytes_padded"),
-		EncryptionPubKey:        []byte("encryption_pubkey_32_bytes_pad00"),
-		SigningPubKey:           []byte("signing_pubkey_32_bytes_padded00"),
+		ValidatorAddress:        validatorAddr,
+		TeeType:                 types.TEETypeSGX,
+		MeasurementHash:         bytes.Repeat([]byte{0x01}, 32),
+		EncryptionPubKey:        bytes.Repeat([]byte{0x02}, 32),
+		SigningPubKey:           bytes.Repeat([]byte{0x03}, 32),
 		AttestationQuote:        []byte("attestation_quote_data"),
-		AttestationVerifiedAt:   time.Now().Unix(),
-		RegistrationBlockHeight: 100,
-		KeyEpoch:                1,
-		Status:                  "active",
+		ExpiryHeight:            200,
+		RegisteredAt:            env.ctx.BlockTime(),
+		UpdatedAt:               env.ctx.BlockTime(),
+		Status:                  types.EnclaveIdentityStatusActive,
 	}
 
-	err := env.keeper.SetEnclaveIdentity(env.ctx, identity)
-	if err != nil {
-		t.Fatalf("SetEnclaveIdentity() error: %v", err)
-	}
+	storeEnclaveIdentity(t, env, identity)
 
 	// Retrieve and verify
-	retrieved, found := env.keeper.GetEnclaveIdentity(env.ctx, identity.ValidatorAddress)
+	retrieved, found := env.keeper.GetEnclaveIdentity(env.ctx, sdk.MustAccAddressFromBech32(identity.ValidatorAddress))
 	if !found {
 		t.Fatal("expected to find enclave identity")
 	}
@@ -102,15 +143,12 @@ func TestKeeper_RegisterEnclaveIdentity(t *testing.T) {
 		t.Errorf("expected TEE type %s, got %s", identity.TeeType, retrieved.TeeType)
 	}
 
-	if retrieved.KeyEpoch != identity.KeyEpoch {
-		t.Errorf("expected key epoch %d, got %d", identity.KeyEpoch, retrieved.KeyEpoch)
-	}
 }
 
 func TestKeeper_EnclaveIdentityNotFound(t *testing.T) {
 	env := setupTestEnv(t)
 
-	_, found := env.keeper.GetEnclaveIdentity(env.ctx, "nonexistent_validator")
+	_, found := env.keeper.GetEnclaveIdentity(env.ctx, sdk.AccAddress([]byte("nonexistent-validator")))
 	if found {
 		t.Error("expected not to find nonexistent enclave identity")
 	}
@@ -119,28 +157,31 @@ func TestKeeper_EnclaveIdentityNotFound(t *testing.T) {
 func TestKeeper_DeleteEnclaveIdentity(t *testing.T) {
 	env := setupTestEnv(t)
 
+	validatorAddr := newTestAddress("validator-delete")
 	identity := types.EnclaveIdentity{
-		ValidatorAddress: "virtengine1validator_to_delete",
-		TeeType:          "nitro",
-		Status:           "active",
+		ValidatorAddress: validatorAddr,
+		TeeType:          types.TEETypeNitro,
+		MeasurementHash:  bytes.Repeat([]byte{0x04}, 32),
+		EncryptionPubKey: bytes.Repeat([]byte{0x05}, 32),
+		SigningPubKey:    bytes.Repeat([]byte{0x06}, 32),
+		AttestationQuote: []byte("attestation_quote_data"),
+		ExpiryHeight:     200,
+		Status:           types.EnclaveIdentityStatusActive,
 	}
 
-	err := env.keeper.SetEnclaveIdentity(env.ctx, identity)
-	if err != nil {
-		t.Fatalf("SetEnclaveIdentity() error: %v", err)
-	}
+	storeEnclaveIdentity(t, env, identity)
 
 	// Verify it exists
-	_, found := env.keeper.GetEnclaveIdentity(env.ctx, identity.ValidatorAddress)
+	_, found := env.keeper.GetEnclaveIdentity(env.ctx, sdk.MustAccAddressFromBech32(identity.ValidatorAddress))
 	if !found {
 		t.Fatal("expected to find identity before deletion")
 	}
 
 	// Delete
-	env.keeper.DeleteEnclaveIdentity(env.ctx, identity.ValidatorAddress)
+	deleteEnclaveIdentity(t, env, identity.ValidatorAddress)
 
 	// Verify it's gone
-	_, found = env.keeper.GetEnclaveIdentity(env.ctx, identity.ValidatorAddress)
+	_, found = env.keeper.GetEnclaveIdentity(env.ctx, sdk.MustAccAddressFromBech32(identity.ValidatorAddress))
 	if found {
 		t.Error("expected identity to be deleted")
 	}
@@ -150,28 +191,25 @@ func TestKeeper_MeasurementAllowlist(t *testing.T) {
 	env := setupTestEnv(t)
 
 	measurement := types.MeasurementRecord{
-		TeeType:         "sgx",
-		MeasurementHash: []byte("allowed_measurement_hash_32_byte"),
+		TeeType:         types.TEETypeSGX,
+		MeasurementHash: bytes.Repeat([]byte{0x10}, 32),
 		Description:     "Production VEID enclave v1.0",
-		ProposalID:      1,
-		EffectiveHeight: 100,
 		ExpiryHeight:    10000,
-		Status:          "active",
 	}
 
-	err := env.keeper.AddMeasurementToAllowlist(env.ctx, measurement)
+	err := env.keeper.AddMeasurement(env.ctx, &measurement)
 	if err != nil {
-		t.Fatalf("AddMeasurementToAllowlist() error: %v", err)
+		t.Fatalf("AddMeasurement() error: %v", err)
 	}
 
 	// Check if allowed
-	allowed := env.keeper.IsMeasurementAllowed(env.ctx, measurement.TeeType, measurement.MeasurementHash)
+	allowed := env.keeper.IsMeasurementAllowed(env.ctx, measurement.MeasurementHash, env.ctx.BlockHeight())
 	if !allowed {
 		t.Error("expected measurement to be allowed")
 	}
 
 	// Check non-existent measurement
-	allowed = env.keeper.IsMeasurementAllowed(env.ctx, "sgx", []byte("unknown_measurement_hash_32_byte"))
+	allowed = env.keeper.IsMeasurementAllowed(env.ctx, bytes.Repeat([]byte{0x11}, 32), env.ctx.BlockHeight())
 	if allowed {
 		t.Error("expected unknown measurement to not be allowed")
 	}
@@ -181,29 +219,29 @@ func TestKeeper_RevokeMeasurement(t *testing.T) {
 	env := setupTestEnv(t)
 
 	measurement := types.MeasurementRecord{
-		TeeType:         "sev-snp",
-		MeasurementHash: []byte("measurement_to_revoke_32_bytes00"),
-		Status:          "active",
+		TeeType:         types.TEETypeSEVSNP,
+		MeasurementHash: bytes.Repeat([]byte{0x12}, 32),
+		Description:     "SEV-SNP measurement",
 	}
 
-	err := env.keeper.AddMeasurementToAllowlist(env.ctx, measurement)
+	err := env.keeper.AddMeasurement(env.ctx, &measurement)
 	if err != nil {
-		t.Fatalf("AddMeasurementToAllowlist() error: %v", err)
+		t.Fatalf("AddMeasurement() error: %v", err)
 	}
 
 	// Verify allowed
-	if !env.keeper.IsMeasurementAllowed(env.ctx, measurement.TeeType, measurement.MeasurementHash) {
+	if !env.keeper.IsMeasurementAllowed(env.ctx, measurement.MeasurementHash, env.ctx.BlockHeight()) {
 		t.Fatal("expected measurement to be allowed before revocation")
 	}
 
 	// Revoke
-	err = env.keeper.RevokeMeasurement(env.ctx, measurement.TeeType, measurement.MeasurementHash, "security vulnerability")
+	err = env.keeper.RevokeMeasurement(env.ctx, measurement.MeasurementHash, "security vulnerability", 1)
 	if err != nil {
 		t.Fatalf("RevokeMeasurement() error: %v", err)
 	}
 
 	// Verify revoked
-	if env.keeper.IsMeasurementAllowed(env.ctx, measurement.TeeType, measurement.MeasurementHash) {
+	if env.keeper.IsMeasurementAllowed(env.ctx, measurement.MeasurementHash, env.ctx.BlockHeight()) {
 		t.Error("expected measurement to not be allowed after revocation")
 	}
 }
@@ -211,49 +249,45 @@ func TestKeeper_RevokeMeasurement(t *testing.T) {
 func TestKeeper_KeyRotation(t *testing.T) {
 	env := setupTestEnv(t)
 
-	validatorAddr := "virtengine1validator_key_rotation"
+	validatorAddr := newTestAddress("validator-rotation")
 
 	// First, register identity
 	identity := types.EnclaveIdentity{
 		ValidatorAddress: validatorAddr,
-		TeeType:          "sgx",
-		EncryptionPubKey: []byte("old_encryption_key_32_bytes_pad0"),
-		SigningPubKey:    []byte("old_signing_key_32_bytes_padded0"),
-		KeyEpoch:         1,
-		Status:           "active",
+		TeeType:          types.TEETypeSGX,
+		MeasurementHash:  bytes.Repeat([]byte{0x20}, 32),
+		EncryptionPubKey: bytes.Repeat([]byte{0x21}, 32),
+		SigningPubKey:    bytes.Repeat([]byte{0x22}, 32),
+		AttestationQuote: []byte("attestation_quote_data"),
+		ExpiryHeight:     200,
+		Status:           types.EnclaveIdentityStatusActive,
 	}
 
-	err := env.keeper.SetEnclaveIdentity(env.ctx, identity)
-	if err != nil {
-		t.Fatalf("SetEnclaveIdentity() error: %v", err)
-	}
+	storeEnclaveIdentity(t, env, identity)
 
 	// Record key rotation
 	rotation := types.KeyRotationRecord{
 		ValidatorAddress: validatorAddr,
-		OldKeyEpoch:      1,
-		NewKeyEpoch:      2,
-		OldEncryptionKey: []byte("old_encryption_key_32_bytes_pad0"),
-		NewEncryptionKey: []byte("new_encryption_key_32_bytes_pad0"),
-		OldSigningKey:    []byte("old_signing_key_32_bytes_padded0"),
-		NewSigningKey:    []byte("new_signing_key_32_bytes_padded0"),
-		RotatedAtHeight:  env.ctx.BlockHeight(),
-		AttestationQuote: []byte("new_attestation_quote"),
+		Epoch:            1,
+		OldKeyFingerprint: "old-fingerprint",
+		NewKeyFingerprint: "new-fingerprint",
+		OverlapStartHeight: env.ctx.BlockHeight(),
+		OverlapEndHeight:   env.ctx.BlockHeight() + 10,
 	}
 
-	err = env.keeper.RecordKeyRotation(env.ctx, rotation)
+	err := env.keeper.InitiateKeyRotation(env.ctx, &rotation)
 	if err != nil {
-		t.Fatalf("RecordKeyRotation() error: %v", err)
+		t.Fatalf("InitiateKeyRotation() error: %v", err)
 	}
 
-	// Retrieve rotation history
-	history := env.keeper.GetKeyRotationHistory(env.ctx, validatorAddr)
-	if len(history) != 1 {
-		t.Fatalf("expected 1 rotation record, got %d", len(history))
+	validatorAcc := sdk.MustAccAddressFromBech32(validatorAddr)
+	active, found := env.keeper.GetActiveKeyRotation(env.ctx, validatorAcc)
+	if !found {
+		t.Fatal("expected active key rotation")
 	}
 
-	if history[0].NewKeyEpoch != 2 {
-		t.Errorf("expected new epoch 2, got %d", history[0].NewKeyEpoch)
+	if active.Epoch != 1 {
+		t.Errorf("expected epoch 1, got %d", active.Epoch)
 	}
 }
 
@@ -261,26 +295,23 @@ func TestKeeper_AttestedResult(t *testing.T) {
 	env := setupTestEnv(t)
 
 	result := types.AttestedScoringResult{
-		ScopeID:          "scope-123",
-		AccountAddress:   "virtengine1user123",
+		ScopeId:          "scope-123",
+		AccountAddress:   newTestAddress("user-123"),
 		Score:            85,
 		Status:           "verified",
-		ValidatorAddress: "virtengine1validator123",
-		MeasurementHash:  []byte("measurement_hash_32_bytes_padded"),
-		ModelVersionHash: []byte("model_version_hash_32_bytes_pad0"),
-		InputHash:        []byte("input_hash_32_bytes_padded______"),
+		ValidatorAddress: newTestAddress("validator-attested"),
+		EnclaveMeasurementHash: bytes.Repeat([]byte{0x30}, 32),
+		ModelVersionHash:       bytes.Repeat([]byte{0x31}, 32),
+		InputHash:              bytes.Repeat([]byte{0x32}, 32),
 		EnclaveSignature: []byte("enclave_signature"),
 		BlockHeight:      100,
-		Timestamp:        time.Now().Unix(),
+		Timestamp:        time.Now().UTC(),
 	}
 
-	err := env.keeper.StoreAttestedResult(env.ctx, result)
-	if err != nil {
-		t.Fatalf("StoreAttestedResult() error: %v", err)
-	}
+	storeAttestedResult(t, env, result)
 
 	// Retrieve
-	retrieved, found := env.keeper.GetAttestedResult(env.ctx, result.AccountAddress, result.ScopeID)
+	retrieved, found := env.keeper.GetAttestedResult(env.ctx, result.BlockHeight, result.ScopeId)
 	if !found {
 		t.Fatal("expected to find attested result")
 	}
@@ -298,21 +329,28 @@ func TestKeeper_IterateEnclaveIdentities(t *testing.T) {
 	env := setupTestEnv(t)
 
 	// Add multiple identities
-	validators := []string{"validator1", "validator2", "validator3"}
+	validators := []string{
+		newTestAddress("validator-1"),
+		newTestAddress("validator-2"),
+		newTestAddress("validator-3"),
+	}
 	for _, v := range validators {
 		identity := types.EnclaveIdentity{
 			ValidatorAddress: v,
-			TeeType:          "sgx",
-			Status:           "active",
+			TeeType:          types.TEETypeSGX,
+			MeasurementHash:  bytes.Repeat([]byte{0x40}, 32),
+			EncryptionPubKey: bytes.Repeat([]byte{0x41}, 32),
+			SigningPubKey:    bytes.Repeat([]byte{0x42}, 32),
+			AttestationQuote: []byte("attestation_quote_data"),
+			ExpiryHeight:     200,
+			Status:           types.EnclaveIdentityStatusActive,
 		}
-		if err := env.keeper.SetEnclaveIdentity(env.ctx, identity); err != nil {
-			t.Fatalf("SetEnclaveIdentity() error: %v", err)
-		}
+		storeEnclaveIdentity(t, env, identity)
 	}
 
 	// Iterate
 	var foundValidators []string
-	env.keeper.IterateEnclaveIdentities(env.ctx, func(identity types.EnclaveIdentity) bool {
+	env.keeper.WithEnclaveIdentities(env.ctx, func(identity types.EnclaveIdentity) bool {
 		foundValidators = append(foundValidators, identity.ValidatorAddress)
 		return false // continue iteration
 	})
@@ -327,10 +365,19 @@ func TestKeeper_Params(t *testing.T) {
 
 	params := types.Params{
 		MaxEnclaveKeysPerValidator: 5,
-		KeyRotationGracePeriod:     1000,
-		AttestationValidityPeriod:  86400,
-		MinConsensusThreshold:      3,
+		DefaultExpiryBlocks:        2000,
+		KeyRotationOverlapBlocks:   100,
+		MinQuoteVersion:            3,
+		AllowedTeeTypes:            []types.TEEType{types.TEETypeSGX, types.TEETypeSEVSNP},
 		ScoreTolerance:             2,
+		RequireAttestationChain:    false,
+		MaxAttestationAge:          5000,
+		EnableCommitteeMode:        true,
+		CommitteeSize:              3,
+		CommitteeEpochBlocks:       50,
+		EnableMeasurementCleanup:   true,
+		MaxRegistrationsPerBlock:   2,
+		RegistrationCooldownBlocks: 5,
 	}
 
 	err := env.keeper.SetParams(env.ctx, params)
@@ -349,51 +396,45 @@ func TestKeeper_Params(t *testing.T) {
 		t.Errorf("expected ScoreTolerance %d, got %d",
 			params.ScoreTolerance, retrieved.ScoreTolerance)
 	}
+
+	if retrieved.KeyRotationOverlapBlocks != params.KeyRotationOverlapBlocks {
+		t.Errorf("expected KeyRotationOverlapBlocks %d, got %d",
+			params.KeyRotationOverlapBlocks, retrieved.KeyRotationOverlapBlocks)
+	}
 }
 
 func TestKeeper_ValidateEnclaveIdentity(t *testing.T) {
-	env := setupTestEnv(t)
-
-	// Add allowed measurement first
-	measurement := types.MeasurementRecord{
-		TeeType:         "sgx",
-		MeasurementHash: []byte("valid_measurement_hash_32_bytes0"),
-		Status:          "active",
-	}
-	err := env.keeper.AddMeasurementToAllowlist(env.ctx, measurement)
-	if err != nil {
-		t.Fatalf("AddMeasurementToAllowlist() error: %v", err)
-	}
-
 	// Valid identity
 	validIdentity := types.EnclaveIdentity{
-		ValidatorAddress: "virtengine1valid_validator",
-		TeeType:          "sgx",
-		MeasurementHash:  []byte("valid_measurement_hash_32_bytes0"),
-		EncryptionPubKey: []byte("encryption_key_32_bytes_padded00"),
-		SigningPubKey:    []byte("signing_key_32_bytes_padded00000"),
+		ValidatorAddress: newTestAddress("validator-valid"),
+		TeeType:          types.TEETypeSGX,
+		MeasurementHash:  bytes.Repeat([]byte{0x50}, 32),
+		EncryptionPubKey: bytes.Repeat([]byte{0x51}, 32),
+		SigningPubKey:    bytes.Repeat([]byte{0x52}, 32),
 		AttestationQuote: []byte("attestation_quote"),
-		Status:           "active",
+		ExpiryHeight:     200,
+		Status:           types.EnclaveIdentityStatusActive,
 	}
 
-	err = env.keeper.ValidateEnclaveIdentity(env.ctx, validIdentity)
+	err := types.ValidateEnclaveIdentity(&validIdentity)
 	if err != nil {
 		t.Errorf("ValidateEnclaveIdentity() should succeed for valid identity: %v", err)
 	}
 
-	// Invalid identity - unknown measurement
+	// Invalid identity - short measurement hash
 	invalidIdentity := types.EnclaveIdentity{
-		ValidatorAddress: "virtengine1invalid_validator",
-		TeeType:          "sgx",
-		MeasurementHash:  []byte("unknown_measurement_hash_32byte0"),
-		EncryptionPubKey: []byte("encryption_key_32_bytes_padded00"),
-		SigningPubKey:    []byte("signing_key_32_bytes_padded00000"),
+		ValidatorAddress: newTestAddress("validator-invalid"),
+		TeeType:          types.TEETypeSGX,
+		MeasurementHash:  []byte("short-hash"),
+		EncryptionPubKey: bytes.Repeat([]byte{0x53}, 32),
+		SigningPubKey:    bytes.Repeat([]byte{0x54}, 32),
 		AttestationQuote: []byte("attestation_quote"),
-		Status:           "active",
+		ExpiryHeight:     200,
+		Status:           types.EnclaveIdentityStatusActive,
 	}
 
-	err = env.keeper.ValidateEnclaveIdentity(env.ctx, invalidIdentity)
+	err = types.ValidateEnclaveIdentity(&invalidIdentity)
 	if err == nil {
-		t.Error("ValidateEnclaveIdentity() should fail for unknown measurement")
+		t.Error("ValidateEnclaveIdentity() should fail for short measurement hash")
 	}
 }
