@@ -152,11 +152,13 @@ check_mod_vendor() {
 # Check 4: golangci-lint
 # =========================================================================
 check_lint() {
-    # Run golangci-lint on changed Go files only for efficiency
+    # Run golangci-lint on all changed Go files (full package linting).
+    # If we cannot determine the base ref, fall back to linting the whole repo.
     local base_branch="origin/main"
+    local base_ref=""
     local changed_files=""
     local changed_packages=""
-    
+
     # Check if golangci-lint is available
     if ! command -v golangci-lint &>/dev/null; then
         # Try to find it in cache
@@ -167,34 +169,45 @@ check_lint() {
         fi
         alias golangci-lint="$lint_bin"
     fi
-    
-    # Get changed Go files
+
     if git rev-parse --verify "$base_branch" &>/dev/null; then
-        changed_files=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
+        base_ref="$base_branch"
+    elif git rev-parse --verify "HEAD~1" &>/dev/null; then
+        hook_warn "Base ref $base_branch not found; falling back to HEAD~1"
+        base_ref="HEAD~1"
+    fi
+
+    if [ -n "$base_ref" ]; then
+        changed_files=$(git diff --name-only "$base_ref"...HEAD -- '*.go' 2>/dev/null | \
             grep -v '^vendor/' | \
             grep -v '^tests/' || echo "")
     fi
-    
+
     if [ -z "${changed_files:-}" ]; then
+        if [ -z "$base_ref" ]; then
+            hook_warn "Unable to determine base ref; linting full repo"
+            golangci-lint run --timeout=5m ./... 2>&1
+            return $?
+        fi
         hook_step "No Go files changed, skipping lint"
         return 0
     fi
-    
+
     # Extract unique package directories from changed files
     changed_packages=$(echo "$changed_files" | \
         xargs -r dirname 2>/dev/null | sort -u | \
         while read -r dir; do [ -d "$dir" ] && echo "./$dir/..."; done | \
         paste -sd ' ' - 2>/dev/null || echo "")
-    
+
     if [ -z "${changed_packages:-}" ]; then
         hook_step "No valid packages to lint"
         return 0
     fi
-    
+
     local pkg_count
     pkg_count=$(echo "$changed_packages" | wc -w | tr -d ' ')
-    hook_step "Linting changed packages ($pkg_count packages)"
-    
+    hook_step "Linting packages with changed files ($pkg_count packages)"
+
     # Run golangci-lint with reasonable timeout
     # shellcheck disable=SC2086
     golangci-lint run --timeout=5m $changed_packages 2>&1
