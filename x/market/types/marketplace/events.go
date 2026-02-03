@@ -509,6 +509,174 @@ func NewOrderStateChangedEventAt(order *Order, oldState OrderState, reason strin
 	}
 }
 
+// OfferingCreatedEvent is emitted when a new offering is created
+type OfferingCreatedEvent struct {
+	BaseMarketplaceEvent
+
+	// OfferingID is the offering identifier
+	OfferingID string `json:"offering_id"`
+
+	// ProviderAddress is the provider's address
+	ProviderAddress string `json:"provider_address"`
+
+	// Category is the offering category
+	Category string `json:"category"`
+
+	// Name is the offering name
+	Name string `json:"name"`
+
+	// State is the offering state
+	State string `json:"state"`
+}
+
+// NewOfferingCreatedEvent creates a new OfferingCreatedEvent
+func NewOfferingCreatedEvent(offering *Offering, blockHeight int64, sequence uint64) *OfferingCreatedEvent {
+	return NewOfferingCreatedEventAt(offering, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewOfferingCreatedEventAt creates a new OfferingCreatedEvent at a specific time
+func NewOfferingCreatedEventAt(offering *Offering, blockHeight int64, sequence uint64, now time.Time) *OfferingCreatedEvent {
+	timestamp := now.UTC()
+	return &OfferingCreatedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventOfferingCreated,
+			EventID:     fmt.Sprintf("evt_offering_created_%s_%d", offering.ID.String(), sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		OfferingID:      offering.ID.String(),
+		ProviderAddress: offering.ID.ProviderAddress,
+		Category:        string(offering.Category),
+		Name:            offering.Name,
+		State:           offering.State.String(),
+	}
+}
+
+// OfferingUpdatedEvent is emitted when an offering is updated
+type OfferingUpdatedEvent struct {
+	BaseMarketplaceEvent
+
+	// OfferingID is the offering identifier
+	OfferingID string `json:"offering_id"`
+
+	// ProviderAddress is the provider's address
+	ProviderAddress string `json:"provider_address"`
+
+	// State is the offering state
+	State string `json:"state"`
+}
+
+// NewOfferingUpdatedEvent creates a new OfferingUpdatedEvent
+func NewOfferingUpdatedEvent(offering *Offering, blockHeight int64, sequence uint64) *OfferingUpdatedEvent {
+	return NewOfferingUpdatedEventAt(offering, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewOfferingUpdatedEventAt creates a new OfferingUpdatedEvent at a specific time
+func NewOfferingUpdatedEventAt(offering *Offering, blockHeight int64, sequence uint64, now time.Time) *OfferingUpdatedEvent {
+	timestamp := now.UTC()
+	return &OfferingUpdatedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventOfferingUpdated,
+			EventID:     fmt.Sprintf("evt_offering_updated_%s_%d", offering.ID.String(), sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		OfferingID:      offering.ID.String(),
+		ProviderAddress: offering.ID.ProviderAddress,
+		State:           offering.State.String(),
+	}
+}
+
+// OfferingTerminatedEvent is emitted when an offering is terminated
+type OfferingTerminatedEvent struct {
+	BaseMarketplaceEvent
+
+	// OfferingID is the offering identifier
+	OfferingID string `json:"offering_id"`
+
+	// ProviderAddress is the provider's address
+	ProviderAddress string `json:"provider_address"`
+
+	// Reason is the termination reason
+	Reason string `json:"reason,omitempty"`
+}
+
+// NewOfferingTerminatedEvent creates a new OfferingTerminatedEvent
+func NewOfferingTerminatedEvent(offering *Offering, reason string, blockHeight int64, sequence uint64) *OfferingTerminatedEvent {
+	return NewOfferingTerminatedEventAt(offering, reason, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewOfferingTerminatedEventAt creates a new OfferingTerminatedEvent at a specific time
+func NewOfferingTerminatedEventAt(offering *Offering, reason string, blockHeight int64, sequence uint64, now time.Time) *OfferingTerminatedEvent {
+	timestamp := now.UTC()
+	return &OfferingTerminatedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventOfferingTerminated,
+			EventID:     fmt.Sprintf("evt_offering_terminated_%s_%d", offering.ID.String(), sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		OfferingID:      offering.ID.String(),
+		ProviderAddress: offering.ID.ProviderAddress,
+		Reason:          reason,
+	}
+}
+
+// BidAcceptedEvent is emitted when a bid is accepted
+type BidAcceptedEvent struct {
+	BaseMarketplaceEvent
+
+	// BidID is the accepted bid identifier
+	BidID string `json:"bid_id"`
+
+	// OrderID is the order identifier
+	OrderID string `json:"order_id"`
+
+	// ProviderAddress is the provider's address
+	ProviderAddress string `json:"provider_address"`
+
+	// CustomerAddress is the customer's address
+	CustomerAddress string `json:"customer_address"`
+
+	// OfferingID is the offering identifier
+	OfferingID string `json:"offering_id"`
+
+	// AcceptedPrice is the accepted bid price
+	AcceptedPrice uint64 `json:"accepted_price"`
+
+	// AllocationID is the created allocation identifier
+	AllocationID string `json:"allocation_id"`
+}
+
+// NewBidAcceptedEvent creates a new BidAcceptedEvent
+func NewBidAcceptedEvent(bid *MarketplaceBid, order *Order, allocation *Allocation, blockHeight int64, sequence uint64) *BidAcceptedEvent {
+	return NewBidAcceptedEventAt(bid, order, allocation, blockHeight, sequence, time.Unix(0, 0))
+}
+
+// NewBidAcceptedEventAt creates a new BidAcceptedEvent at a specific time
+func NewBidAcceptedEventAt(bid *MarketplaceBid, order *Order, allocation *Allocation, blockHeight int64, sequence uint64, now time.Time) *BidAcceptedEvent {
+	timestamp := now.UTC()
+	return &BidAcceptedEvent{
+		BaseMarketplaceEvent: BaseMarketplaceEvent{
+			EventType:   EventBidAccepted,
+			EventID:     fmt.Sprintf("evt_bid_accepted_%s_%d", bid.ID.String(), sequence),
+			BlockHeight: blockHeight,
+			Timestamp:   timestamp,
+			Sequence:    sequence,
+		},
+		BidID:           bid.ID.String(),
+		OrderID:         order.ID.String(),
+		ProviderAddress: bid.ID.ProviderAddress,
+		CustomerAddress: order.ID.CustomerAddress,
+		OfferingID:      bid.OfferingID.String(),
+		AcceptedPrice:   bid.Price,
+		AllocationID:    allocation.ID.String(),
+	}
+}
+
 // EventCheckpoint tracks event consumption progress
 type EventCheckpoint struct {
 	// SubscriberID identifies the subscriber
