@@ -74,15 +74,16 @@ func (s *providerIntegrationTestSuite) TestProvider() {
 	s.Require().Equal(createdProvider, provider)
 
 	// test updating provider
+	updateFlags := cli.TestFlags().
+		WithFrom(addr.String()).
+		WithGasAutoFlags().
+		WithSkipConfirm().
+		WithBroadcastModeBlock()
+	updateArgs := append([]string{providerPath2}, []string(updateFlags)...)
 	_, err = clitestutil.TxUpdateProviderExec(
 		ctx,
 		cctx,
-		providerPath2,
-		cli.TestFlags().
-			WithFrom(addr.String()).
-			WithGasAutoFlags().
-			WithSkipConfirm().
-			WithBroadcastModeBlock()...,
+		updateArgs...,
 	)
 	s.Require().NoError(err)
 

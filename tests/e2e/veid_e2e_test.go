@@ -729,15 +729,6 @@ func (s *VEIDE2ETestSuite) TestInvalidClientSignatureRejection() {
 	envelope := EncryptedEnvelopeFixture(scopeFixture.ScopeID)
 	payloadHash := PayloadHash(envelope)
 
-	_ = veidtypes.NewUploadMetadata(
-		scopeFixture.Salt,
-		scopeFixture.DeviceFingerprint,
-		s.testClient.ClientID,
-		nil,
-		nil,
-		payloadHash,
-	)
-
 	// Use invalid signature (wrong data signed)
 	invalidClientSig := s.testClient.Sign([]byte("wrong-data"))
 	userSignature := bytes.Repeat([]byte{0x04}, keeper.Secp256k1SignatureSize)
