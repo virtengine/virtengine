@@ -211,15 +211,7 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.4.0
-          args: |
-            --timeout=5m
-            --enable=gosec
-            --enable=errcheck
-            --enable=govet
-            ./x/veid/...
-            ./x/mfa/...
-            ./x/encryption/...
-            ./pkg/inference/...
+          args: "--timeout=10m --enable=gosec --enable=errcheck --enable=govet ./x/veid/... ./x/mfa/... ./x/encryption/... ./pkg/inference/..."
 
   # ===========================================================================
   # Code Coverage Gate
