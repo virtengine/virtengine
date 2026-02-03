@@ -1,59 +1,55 @@
 import { BaseClient, type ClientOptions } from "./BaseClient.ts";
-import type { ClientTxResult, ListOptions } from "./types.ts";
-
-export type OrderState =
-  | "ORDER_STATE_OPEN"
-  | "ORDER_STATE_ACTIVE"
-  | "ORDER_STATE_CLOSED";
-
-export type BidState =
-  | "BID_STATE_OPEN"
-  | "BID_STATE_ACTIVE"
-  | "BID_STATE_CLOSED";
-
-export type LeaseState =
-  | "LEASE_STATE_ACTIVE"
-  | "LEASE_STATE_CLOSED"
-  | "LEASE_STATE_INSUFFICIENT_FUNDS";
-
-export interface Order {
-  orderId: string;
-  deploymentId: string;
-  groupId: string;
-  owner: string;
-  state: OrderState;
-  createdAt: number;
-}
-
-export interface Bid {
-  bidId: string;
-  orderId: string;
-  provider: string;
-  price: { denom: string; amount: string };
-  state: BidState;
-  createdAt: number;
-}
-
-export interface Lease {
-  leaseId: string;
-  orderId: string;
-  provider: string;
-  owner: string;
-  price: { denom: string; amount: string };
-  state: LeaseState;
-  createdAt: number;
-  closedAt?: number;
-}
+import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
+import { toPageRequest, withTxResult } from "./types.ts";
+import type { BidID } from "../generated/protos/virtengine/market/v1/bid.ts";
+import type { LeaseID } from "../generated/protos/virtengine/market/v1/lease.ts";
+import type { OrderID } from "../generated/protos/virtengine/market/v1/order.ts";
+import type { Bid } from "../generated/protos/virtengine/market/v1beta5/bid.ts";
+import type { Order } from "../generated/protos/virtengine/market/v1beta5/order.ts";
+import type { Lease } from "../generated/protos/virtengine/market/v1/lease.ts";
+import type {
+  MsgCloseBid,
+  MsgCreateBid,
+} from "../generated/protos/virtengine/market/v1beta5/bidmsg.ts";
+import type { MsgCloseLease } from "../generated/protos/virtengine/market/v1beta5/leasemsg.ts";
+import type { TxCallOptions } from "../sdk/transport/types.ts";
 
 export interface MarketClientDeps {
-  sdk: unknown;
+  sdk: ChainNodeSDK;
+}
+
+export interface OrderFilters {
+  owner?: string;
+  state?: string;
+  dseq?: string | number | bigint;
+  gseq?: number;
+  oseq?: number;
+}
+
+export interface BidFilters {
+  owner?: string;
+  provider?: string;
+  state?: string;
+  dseq?: string | number | bigint;
+  gseq?: number;
+  oseq?: number;
+  bseq?: number;
+}
+
+export interface LeaseFilters {
+  owner?: string;
+  provider?: string;
+  state?: string;
+  dseq?: string | number | bigint;
+  gseq?: number;
+  oseq?: number;
 }
 
 /**
  * Client for Market module (orders, bids, leases)
  */
 export class MarketClient extends BaseClient {
-  private sdk: unknown;
+  private sdk: ChainNodeSDK;
 
   constructor(deps: MarketClientDeps, options?: ClientOptions) {
     super(options);
@@ -65,11 +61,10 @@ export class MarketClient extends BaseClient {
   /**
    * Get order by ID
    */
-  async getOrder(_orderId: string): Promise<Order | null> {
+  async getOrder(orderId: OrderID): Promise<Order | null> {
     try {
-      // The market module already exists in the generated SDK
-      // const result = await this.sdk.virtengine.market.v1beta5.getOrder({ id: orderId });
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.market.v1beta5.getOrder({ id: orderId });
+      return result.order ?? null;
     } catch (error) {
       this.handleQueryError(error, "getOrder");
     }
@@ -78,9 +73,19 @@ export class MarketClient extends BaseClient {
   /**
    * List orders
    */
-  async listOrders(_options?: ListOptions & { owner?: string; state?: OrderState }): Promise<Order[]> {
+  async listOrders(options?: ListOptions & OrderFilters): Promise<Order[]> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.market.v1beta5.getOrders({
+        filters: {
+          owner: options?.owner ?? "",
+          state: options?.state ?? "",
+          dseq: options?.dseq ?? 0,
+          gseq: options?.gseq ?? 0,
+          oseq: options?.oseq ?? 0,
+        },
+        pagination: toPageRequest(options),
+      });
+      return result.orders;
     } catch (error) {
       this.handleQueryError(error, "listOrders");
     }
@@ -91,9 +96,10 @@ export class MarketClient extends BaseClient {
   /**
    * Get bid by ID
    */
-  async getBid(_bidId: string): Promise<Bid | null> {
+  async getBid(bidId: BidID): Promise<Bid | null> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.market.v1beta5.getBid({ id: bidId });
+      return result.bid ?? null;
     } catch (error) {
       this.handleQueryError(error, "getBid");
     }
@@ -102,9 +108,23 @@ export class MarketClient extends BaseClient {
   /**
    * List bids
    */
-  async listBids(_options?: ListOptions & { orderId?: string; provider?: string }): Promise<Bid[]> {
+  async listBids(options?: ListOptions & BidFilters): Promise<Bid[]> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.market.v1beta5.getBids({
+        filters: {
+          owner: options?.owner ?? "",
+          provider: options?.provider ?? "",
+          state: options?.state ?? "",
+          dseq: options?.dseq ?? 0,
+          gseq: options?.gseq ?? 0,
+          oseq: options?.oseq ?? 0,
+          bseq: options?.bseq ?? 0,
+        },
+        pagination: toPageRequest(options),
+      });
+      return result.bids
+        .map((entry: { bid?: Bid }) => entry.bid)
+        .filter((bid): bid is Bid => Boolean(bid));
     } catch (error) {
       this.handleQueryError(error, "listBids");
     }
@@ -115,9 +135,10 @@ export class MarketClient extends BaseClient {
   /**
    * Get lease by ID
    */
-  async getLease(_leaseId: string): Promise<Lease | null> {
+  async getLease(leaseId: LeaseID): Promise<Lease | null> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.market.v1beta5.getLease({ id: leaseId });
+      return result.lease ?? null;
     } catch (error) {
       this.handleQueryError(error, "getLease");
     }
@@ -126,9 +147,22 @@ export class MarketClient extends BaseClient {
   /**
    * List leases
    */
-  async listLeases(_options?: ListOptions & { owner?: string; provider?: string; state?: LeaseState }): Promise<Lease[]> {
+  async listLeases(options?: ListOptions & LeaseFilters): Promise<Lease[]> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const result = await this.sdk.virtengine.market.v1beta5.getLeases({
+        filters: {
+          owner: options?.owner ?? "",
+          provider: options?.provider ?? "",
+          state: options?.state ?? "",
+          dseq: options?.dseq ?? 0,
+          gseq: options?.gseq ?? 0,
+          oseq: options?.oseq ?? 0,
+        },
+        pagination: toPageRequest(options),
+      });
+      return result.leases
+        .map((entry: { lease?: Lease }) => entry.lease)
+        .filter((lease): lease is Lease => Boolean(lease));
     } catch (error) {
       this.handleQueryError(error, "listLeases");
     }
@@ -139,13 +173,11 @@ export class MarketClient extends BaseClient {
   /**
    * Create a bid on an order
    */
-  async createBid(_params: {
-    orderId: string;
-    price: { denom: string; amount: string };
-    deposit?: { denom: string; amount: string };
-  }): Promise<ClientTxResult> {
+  async createBid(params: MsgCreateBid, options?: TxCallOptions): Promise<ClientTxResult> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const { txResult } = await withTxResult((txOptions) =>
+        this.sdk.virtengine.market.v1beta5.createBid(params, txOptions), options);
+      return txResult;
     } catch (error) {
       this.handleQueryError(error, "createBid");
     }
@@ -154,9 +186,11 @@ export class MarketClient extends BaseClient {
   /**
    * Close an open bid
    */
-  async closeBid(_bidId: string): Promise<ClientTxResult> {
+  async closeBid(params: MsgCloseBid, options?: TxCallOptions): Promise<ClientTxResult> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const { txResult } = await withTxResult((txOptions) =>
+        this.sdk.virtengine.market.v1beta5.closeBid(params, txOptions), options);
+      return txResult;
     } catch (error) {
       this.handleQueryError(error, "closeBid");
     }
@@ -165,9 +199,11 @@ export class MarketClient extends BaseClient {
   /**
    * Close an active lease
    */
-  async closeLease(_leaseId: string): Promise<ClientTxResult> {
+  async closeLease(params: MsgCloseLease, options?: TxCallOptions): Promise<ClientTxResult> {
     try {
-      throw new Error("Implementation pending - SDK integration needed");
+      const { txResult } = await withTxResult((txOptions) =>
+        this.sdk.virtengine.market.v1beta5.closeLease(params, txOptions), options);
+      return txResult;
     } catch (error) {
       this.handleQueryError(error, "closeLease");
     }

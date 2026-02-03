@@ -11,6 +11,9 @@
   },
   "license": "Apache-2.0",
   "author": "VirtEngine Team",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
@@ -32,7 +35,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "npm run compile:validators && rm -rf dist && tsc -p tsconfig.build.json && node esbuild.config.mjs && ./script/validate-package-exports.ts",
+    "build": "npm run compile:validators && node ./script/clean-dist.mjs && tsc -p tsconfig.build.json && node esbuild.config.mjs && ./script/validate-package-exports.ts",
     "lint": "eslint src",
     "lint:fix": "npm run lint -- --fix",
     "test": "jest --selectProjects unit functional",
@@ -108,4 +111,3 @@
     "npm": "11.6.2"
   }
 }
-

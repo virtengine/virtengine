@@ -1,144 +1,138 @@
-import { beforeEach, describe, expect, it } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import Long from "long";
 
-import { HPCClient, type HPCClientDeps } from "./HPCClient.ts";
+import { HPCClient } from "./HPCClient.ts";
+import type { HPCClientDeps } from "./HPCClient.ts";
+
+const txResponse = () => ({
+  height: 1,
+  transactionHash: "ABC",
+  code: 0,
+  rawLog: "",
+  gasWanted: 100,
+  gasUsed: 90,
+  data: new Uint8Array(),
+  events: [],
+  eventsRaw: [],
+  msgResponses: [],
+});
 
 describe("HPCClient", () => {
   let client: HPCClient;
+  let deps: HPCClientDeps;
 
   beforeEach(() => {
-    const deps: HPCClientDeps = {
-      sdk: {},
+    deps = {
+      sdk: {
+        virtengine: {
+          hpc: {
+            v1: {
+              getCluster: jest.fn().mockResolvedValue({
+                cluster: { clusterId: "cluster-1" },
+              }),
+              getClusters: jest.fn().mockResolvedValue({
+                clusters: [{ clusterId: "cluster-1" }],
+              }),
+              getOffering: jest.fn().mockResolvedValue({
+                offering: { offeringId: "offering-1", requiredIdentityThreshold: 50, maxRuntimeSeconds: Long.ZERO },
+              }),
+              getOfferings: jest.fn().mockResolvedValue({
+                offerings: [{ offeringId: "offering-1" }],
+              }),
+              getOfferingsByCluster: jest.fn().mockResolvedValue({
+                offerings: [{ offeringId: "offering-2" }],
+              }),
+              getJob: jest.fn().mockResolvedValue({
+                job: { jobId: "job-1" },
+              }),
+              getJobs: jest.fn().mockResolvedValue({
+                jobs: [{ jobId: "job-1" }],
+              }),
+              getJobsByCustomer: jest.fn().mockResolvedValue({
+                jobs: [{ jobId: "job-2" }],
+              }),
+              getJobsByProvider: jest.fn().mockResolvedValue({
+                jobs: [{ jobId: "job-3" }],
+              }),
+              submitJob: jest.fn().mockImplementation((_input, options) => {
+                options?.afterBroadcast?.(txResponse());
+                return Promise.resolve({ jobId: "job-1", escrowId: "escrow-1" });
+              }),
+              cancelJob: jest.fn().mockImplementation((_input, options) => {
+                options?.afterBroadcast?.(txResponse());
+                return Promise.resolve({});
+              }),
+              registerCluster: jest.fn().mockImplementation((_input, options) => {
+                options?.afterBroadcast?.(txResponse());
+                return Promise.resolve({ clusterId: "cluster-99" });
+              }),
+            },
+          },
+        },
+      } as HPCClientDeps["sdk"],
     };
     client = new HPCClient(deps);
   });
 
-  describe("constructor", () => {
-    it("should create client instance", () => {
-      expect(client).toBeInstanceOf(HPCClient);
-    });
+  it("should create client instance", () => {
+    expect(client).toBeInstanceOf(HPCClient);
   });
 
-  describe("Cluster queries", () => {
-    describe("getCluster", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        await expect(client.getCluster("cluster-1")).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-    });
-
-    describe("listClusters", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        await expect(client.listClusters()).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-
-      it("should accept region filter", async () => {
-        await expect(client.listClusters({ region: "us-east" })).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-    });
+  it("fetches a cluster", async () => {
+    const result = await client.getCluster("cluster-1");
+    expect(result?.clusterId).toBe("cluster-1");
+    expect(deps.sdk.virtengine.hpc.v1.getCluster).toHaveBeenCalledWith({ clusterId: "cluster-1" });
   });
 
-  describe("Offering queries", () => {
-    describe("getOffering", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        await expect(client.getOffering("offering-1")).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-    });
-
-    describe("listOfferings", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        await expect(client.listOfferings()).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-
-      it("should accept filters", async () => {
-        await expect(
-          client.listOfferings({ clusterId: "cluster-1", activeOnly: true }),
-        ).rejects.toThrow("HPC module not yet generated");
-      });
-    });
+  it("lists clusters", async () => {
+    const result = await client.listClusters({ region: "us-east" });
+    expect(result).toHaveLength(1);
+    expect(deps.sdk.virtengine.hpc.v1.getClusters).toHaveBeenCalled();
   });
 
-  describe("Job queries", () => {
-    describe("getJob", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        await expect(client.getJob("job-1")).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-    });
-
-    describe("listJobs", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        await expect(client.listJobs()).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-
-      it("should accept state filter", async () => {
-        await expect(
-          client.listJobs({ state: "JOB_STATE_RUNNING" }),
-        ).rejects.toThrow("HPC module not yet generated");
-      });
-    });
+  it("lists offerings by cluster when filter present", async () => {
+    const result = await client.listOfferings({ clusterId: "cluster-1" });
+    expect(result[0].offeringId).toBe("offering-2");
   });
 
-  describe("Transaction methods", () => {
-    describe("submitJob", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        const params = {
-          offeringId: "offering-1",
-          queueName: "default",
-          workloadSpec: {
-            containerImage: "python:3.11",
-            command: ["python", "-c", "print('hello')"],
-          },
-          resources: {
-            cpuCores: 2,
-            memoryMb: 4096,
-          },
-          maxRuntimeSeconds: 3600,
-          maxPrice: [{ denom: "uvirt", amount: "1000000" }],
-        };
-        await expect(client.submitJob(params)).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-    });
+  it("lists jobs by customer when customer filter present", async () => {
+    const result = await client.listJobs({ customerAddress: "virt1abc" });
+    expect(result[0].jobId).toBe("job-2");
+  });
 
-    describe("cancelJob", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        await expect(client.cancelJob("job-1")).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
-
-      it("should accept optional reason", async () => {
-        await expect(
-          client.cancelJob("job-1", "User requested cancellation"),
-        ).rejects.toThrow("HPC module not yet generated");
-      });
+  it("submits job and returns tx metadata", async () => {
+    const result = await client.submitJob({
+      customerAddress: "virt1abc",
+      offeringId: "offering-1",
+      queueName: "default",
+      workloadSpec: undefined,
+      resources: undefined,
+      dataReferences: [],
+      encryptedInputsPointer: "",
+      encryptedOutputsPointer: "",
+      maxRuntimeSeconds: Long.ZERO,
+      maxPrice: [],
     });
+    expect(result.jobId).toBe("job-1");
+    expect(result.transactionHash).toBe("ABC");
+  });
 
-    describe("registerCluster", () => {
-      it("should throw error indicating proto generation needed", async () => {
-        const params = {
-          name: "Test Cluster",
-          region: "us-east",
-          totalNodes: 10,
-          slurmVersion: "23.02",
-        };
-        await expect(client.registerCluster(params)).rejects.toThrow(
-          "HPC module not yet generated",
-        );
-      });
+  it("cancels job and returns tx metadata", async () => {
+    const result = await client.cancelJob({ requesterAddress: "virt1abc", jobId: "job-1", reason: "" });
+    expect(result.transactionHash).toBe("ABC");
+  });
+
+  it("registers cluster and returns cluster id", async () => {
+    const result = await client.registerCluster({
+      providerAddress: "virt1provider",
+      name: "Test",
+      description: "",
+      region: "us-east",
+      partitions: [],
+      totalNodes: 1,
+      clusterMetadata: undefined,
+      slurmVersion: "23.02",
     });
+    expect(result.clusterId).toBe("cluster-99");
   });
 });

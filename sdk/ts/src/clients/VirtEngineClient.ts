@@ -10,17 +10,19 @@
  *
  * const client = await createVirtEngineClient({
  *   rpcEndpoint: 'https://rpc.virtengine.network',
- *   wallet: keplrAdapter,
  * });
  *
  * // Query VEID identity
  * const identity = await client.veid.getIdentity('virt1...');
  *
- * // Submit HPC job
+ * // Submit HPC job (when txSigner is provided)
  * const result = await client.hpc.submitJob({ ... });
  * ```
  */
 
+import { createChainNodeSDK } from "../sdk/chain/createChainNodeSDK.ts";
+import { createChainNodeWebSDK } from "../sdk/chain/createChainNodeWebSDK.ts";
+import type { TxClient } from "../sdk/transport/tx/TxClient.ts";
 import { MemoryCache } from "../utils/cache.ts";
 import type { ChainInfo, WalletAdapter } from "../wallet/types.ts";
 import { WalletManager, type WalletType } from "../wallet/WalletManager.ts";
@@ -31,6 +33,7 @@ import { HPCClient } from "./HPCClient.ts";
 import { MarketClient } from "./MarketClient.ts";
 import { MFAClient } from "./MFAClient.ts";
 import { RolesClient } from "./RolesClient.ts";
+import type { ChainNodeSDK } from "./types.ts";
 import { VEIDClient } from "./VEIDClient.ts";
 
 /**
@@ -46,6 +49,26 @@ export interface VirtEngineClientOptions {
    * REST API endpoint URL (optional, defaults to rpcEndpoint)
    */
   restEndpoint?: string;
+
+  /**
+   * Optional gRPC endpoint override for node SDK queries
+   */
+  grpcEndpoint?: string;
+
+  /**
+   * Provide an existing SDK instance (skips internal SDK creation)
+   */
+  sdk?: ChainNodeSDK;
+
+  /**
+   * Transaction signer to enable tx methods
+   */
+  txSigner?: TxClient;
+
+  /**
+   * Use gRPC-Gateway (web SDK) instead of gRPC (node SDK)
+   */
+  useWeb?: boolean;
 
   /**
    * Chain configuration
@@ -155,9 +178,11 @@ export class VirtEngineClient {
   /** Wallet manager for handling wallet connections */
   public readonly wallets: WalletManager;
 
+  /** Underlying chain SDK */
+  public readonly sdk: ChainNodeSDK;
+
   private readonly options: VirtEngineClientOptions;
   private readonly cache: MemoryCache;
-  private sdk: unknown = null; // Will be set when SDK is connected
 
   constructor(options: VirtEngineClientOptions) {
     this.options = options;
@@ -168,13 +193,24 @@ export class VirtEngineClient {
       maxSize: options.maxCacheSize ?? 1000,
     });
 
+    const queryEndpoint = options.grpcEndpoint ?? options.rpcEndpoint;
+    this.sdk = options.sdk ?? (options.useWeb
+      ? createChainNodeWebSDK({
+        query: { baseUrl: options.restEndpoint ?? options.rpcEndpoint },
+        tx: options.txSigner ? { signer: options.txSigner } : undefined,
+      })
+      : createChainNodeSDK({
+        query: { baseUrl: queryEndpoint },
+        tx: options.txSigner ? { signer: options.txSigner } : undefined,
+      }));
+
     // Client options with shared cache
     const clientOptions: ClientOptions = {
       cache: this.cache,
       enableCaching: options.enableCaching ?? true,
     };
 
-    // SDK deps (placeholder until SDK is connected)
+    // SDK deps
     const deps = { sdk: this.sdk };
 
     // Initialize module clients

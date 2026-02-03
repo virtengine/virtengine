@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types --no-warnings
 
 import { promises as fs } from "node:fs";
-import { dirname, relative as relativePath, resolve as resolvePath } from "node:path";
+import { dirname, posix, resolve as resolvePath } from "node:path";
 
 const helperNames = ["isSet", "bytesFromBase64", "base64FromBytes", "toTimestamp", "fromTimestamp", "fromJsonTimestamp", "numberToLong", "isObject"];
 const helperRegex = new RegExp(
@@ -42,11 +42,17 @@ function injectOwnHelpers(source: string, path: string) {
   });
 
   const importHelpers = foundHelperNames.size
-    ? `import { ${Array.from(foundHelperNames).join(", ")} } from "${relativePath(dirname(path), `${ROOT_DIR}/encoding/typeEncodingHelpers.ts`)}"\n`
+    ? `import { ${Array.from(foundHelperNames).join(", ")} } from "${relativeImportPath(dirname(path), `${ROOT_DIR}/encoding/typeEncodingHelpers.ts`)}"\n`
     : "";
   const importTypeHelpers = foundTypeHelperNames.size
-    ? `import type { ${Array.from(foundTypeHelperNames).join(", ")} } from "${relativePath(dirname(path), `${ROOT_DIR}/encoding/typeEncodingHelpers.ts`)}"\n`
+    ? `import type { ${Array.from(foundTypeHelperNames).join(", ")} } from "${relativeImportPath(dirname(path), `${ROOT_DIR}/encoding/typeEncodingHelpers.ts`)}"\n`
     : "";
 
   return importHelpers + importTypeHelpers + source;
+}
+
+function relativeImportPath(fromPath: string, toPath: string) {
+  const normalizedFrom = fromPath.replace(/\\/g, "/");
+  const normalizedTo = toPath.replace(/\\/g, "/");
+  return posix.relative(normalizedFrom, normalizedTo);
 }
