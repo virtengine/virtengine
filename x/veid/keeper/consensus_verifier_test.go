@@ -815,4 +815,3 @@ func TestInputHashHexEncoding(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(inputHash[:], decoded))
 }
-
