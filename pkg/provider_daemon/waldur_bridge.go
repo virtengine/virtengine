@@ -576,21 +576,28 @@ func (b *WaldurBridge) executeLifecycleAction(
 	action string,
 	event marketplace.LifecycleActionRequestedEvent,
 ) (string, error) {
+	if resourceUUID == "" {
+		return "", errors.New("resource UUID is empty")
+	}
+	if action == "" {
+		return "", errors.New("lifecycle action is empty")
+	}
+
 	idempotencyKey := marketplace.GenerateIdempotencyKey(
 		event.AllocationID, event.Action, event.Timestamp,
 	)
 
 	req := waldur.LifecycleRequest{
-		ResourceUUID:  resourceUUID,
+		ResourceUUID:   resourceUUID,
 		IdempotencyKey: idempotencyKey,
-		Parameters:    map[string]interface{}{},
+		Parameters:     map[string]interface{}{},
 	}
 
 	if b.cfg.OperationTimeout > 0 {
 		req.Timeout = int(b.cfg.OperationTimeout.Seconds())
 	}
 
-	if action == "resize" {
+	if action == waldurActionResize {
 		req.Parameters = filterResizeParameters(event.Parameters)
 	} else {
 		for k, v := range event.Parameters {
@@ -602,37 +609,37 @@ func (b *WaldurBridge) executeLifecycleAction(
 	log.Printf("[waldur-bridge] executing %s on resource %s", action, resourceUUID)
 
 	switch action {
-	case "start":
+	case waldurActionStart:
 		resp, err := lifecycle.Start(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case "stop":
+	case waldurActionStop:
 		resp, err := lifecycle.Stop(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case "restart":
+	case waldurActionRestart:
 		resp, err := lifecycle.Restart(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case "suspend":
+	case waldurActionSuspend:
 		resp, err := lifecycle.Suspend(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case "resume":
+	case waldurActionResume:
 		resp, err := lifecycle.Resume(ctx, req)
 		if err != nil {
 			return event.OperationID, err
 		}
 		return pickOperationID(resp, event.OperationID), nil
-	case "resize":
+	case waldurActionResize:
 		resizeReq := waldur.ResizeRequest{LifecycleRequest: req}
 		if v, ok := parseIntParam(event.Parameters, "cpu_cores"); ok {
 			resizeReq.CPUCores = &v
@@ -726,21 +733,21 @@ func filterResizeParameters(params map[string]interface{}) map[string]interface{
 func mapLifecycleActionToWaldur(action marketplace.LifecycleActionType) string {
 	switch action {
 	case marketplace.LifecycleActionStart:
-		return "start"
+		return waldurActionStart
 	case marketplace.LifecycleActionStop:
-		return "stop"
+		return waldurActionStop
 	case marketplace.LifecycleActionRestart:
-		return "restart"
+		return waldurActionRestart
 	case marketplace.LifecycleActionSuspend:
-		return "suspend"
+		return waldurActionSuspend
 	case marketplace.LifecycleActionResume:
-		return "resume"
+		return waldurActionResume
 	case marketplace.LifecycleActionResize:
-		return "resize"
+		return waldurActionResize
 	case marketplace.LifecycleActionTerminate:
-		return "terminate"
+		return waldurActionTerminate
 	case marketplace.LifecycleActionProvision:
-		return "provision"
+		return waldurActionProvision
 	default:
 		return ""
 	}

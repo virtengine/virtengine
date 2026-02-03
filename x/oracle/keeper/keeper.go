@@ -516,7 +516,6 @@ func (q Querier) Prices(ctx context.Context, req *types.QueryPricesRequest) (*ty
 var _ types.QueryServer = Querier{}
 
 // getDefaultPriceData returns default price data when not found
-//
 //nolint:unused // reserved for default price fallback during maintenance
 func getDefaultPriceData() types.PriceData {
 	return types.PriceData{
