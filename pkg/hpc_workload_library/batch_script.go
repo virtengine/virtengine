@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"text/template"
 
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
