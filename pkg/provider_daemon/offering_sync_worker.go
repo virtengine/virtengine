@@ -228,11 +228,11 @@ type OfferingSyncWorker struct {
 }
 
 const (
-	waldurStateActive   = "Active"
-	waldurStatePaused   = "Paused"
-	waldurStateArchived = "Archived"
-	waldurActionArchive = "archive"
-	waldurActionPause   = "pause"
+	waldurStateActive    = "Active"
+	waldurStatePaused    = "Paused"
+	waldurStateArchived  = "Archived"
+	waldurActionArchive  = "archive"
+	waldurActionPause    = "pause"
 	waldurActionActivate = "activate"
 )
 
