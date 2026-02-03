@@ -165,7 +165,7 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 	maxStaleness := params.MaxPriceStalenessBlocks
 
 	// Collect prices from all sources
-	var prices []sdkmath.LegacyDec
+	prices := make([]sdkmath.LegacyDec, 0, len(params.Sources))
 	var totalSources uint32
 	var healthySources uint32
 	var failureReasons []string
