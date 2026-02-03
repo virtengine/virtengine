@@ -571,7 +571,7 @@ func (b *WaldurBridge) handleLifecycleActionRequested(ctx context.Context, event
 
 // executeLifecycleAction executes a lifecycle action on a Waldur resource
 func (b *WaldurBridge) executeLifecycleAction(
-	_ context.Context,
+	ctx context.Context,
 	resourceUUID string,
 	action string,
 	event marketplace.LifecycleActionRequestedEvent,
