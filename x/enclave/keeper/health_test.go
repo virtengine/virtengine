@@ -394,6 +394,8 @@ func TestGetAllHealthStatuses(t *testing.T) {
 }
 
 // setupTestEnvironment creates a test context and keeper for testing
+//
+//nolint:unparam // placeholder test helper until keeper test utilities are wired
 func setupTestEnvironment(t *testing.T) (sdk.Context, Keeper) {
 	// This is a placeholder - in a real test environment, you would:
 	// 1. Create a test store

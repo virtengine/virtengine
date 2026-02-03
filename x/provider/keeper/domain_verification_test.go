@@ -144,6 +144,7 @@ type testSuite struct {
 	keeper keeper.IKeeper
 }
 
+//nolint:unparam // placeholder test helper until keeper test utilities are wired
 func setupTestSuite(t *testing.T) *testSuite {
 	// This would be implemented based on your test utilities
 	// For now, returning a mock to show structure

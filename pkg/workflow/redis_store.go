@@ -160,7 +160,7 @@ func (s *RedisWorkflowStore) ListStates(ctx context.Context, filter StateFilter)
 	}
 
 	// Parse results and apply filters
-	var results []*WorkflowState
+	results := make([]*WorkflowState, 0, len(cmds))
 	for _, cmd := range cmds {
 		data, err := cmd.Bytes()
 		if err == redis.Nil {
@@ -272,7 +272,7 @@ func (s *RedisWorkflowStore) ListCheckpoints(ctx context.Context, workflowID str
 		return nil, fmt.Errorf("failed to fetch checkpoints: %w", err)
 	}
 
-	var results []*Checkpoint
+	results := make([]*Checkpoint, 0, len(cmds))
 	for _, cmd := range cmds {
 		data, err := cmd.Bytes()
 		if err == redis.Nil {
