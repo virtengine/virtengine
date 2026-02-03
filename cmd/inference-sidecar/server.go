@@ -17,6 +17,7 @@ import (
 
 	"github.com/virtengine/virtengine/pkg/inference"
 	inferencepb "github.com/virtengine/virtengine/pkg/inference/proto"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // InferenceSidecarServer implements the InferenceService gRPC server.
@@ -25,9 +26,6 @@ type InferenceSidecarServer struct {
 
 	// config holds inference configuration
 	config inference.InferenceConfig
-
-	// scorer is the TensorFlow scorer
-	scorer inference.Scorer
 
 	// model holds loaded model metadata
 	model *inference.TFModel
@@ -40,6 +38,9 @@ type InferenceSidecarServer struct {
 
 	// extractor transforms inputs to features
 	extractor *inference.FeatureExtractor
+
+	// servingClient executes inference via TensorFlow Serving
+	servingClient *inference.TFServingClient
 
 	// log is the logger
 	log Logger
@@ -60,7 +61,7 @@ type InferenceSidecarServer struct {
 }
 
 // NewInferenceSidecarServer creates a new inference sidecar server.
-func NewInferenceSidecarServer(config inference.InferenceConfig, log Logger) (*InferenceSidecarServer, error) {
+func NewInferenceSidecarServer(config inference.InferenceConfig, servingConfig inference.TFServingConfig, log Logger) (*InferenceSidecarServer, error) {
 	// Set determinism environment variables
 	determinism := inference.NewDeterminismController(config.RandomSeed, config.ForceCPU)
 	for k, v := range determinism.GetTensorFlowEnvVars() {
@@ -107,12 +108,24 @@ func NewInferenceSidecarServer(config inference.InferenceConfig, log Logger) (*I
 		latencyHistogram: make(map[string]uint64),
 	}
 
-	// Create a minimal scorer wrapper
-	server.scorer = &modelScorer{
-		model:       model,
-		determinism: determinism,
-		config:      config,
+	inputName := ""
+	outputName := ""
+	if metadata := model.GetMetadata(); metadata != nil {
+		inputName = metadata.InputName
+		outputName = metadata.OutputName
 	}
+	if servingConfig.InputName == "" {
+		servingConfig.InputName = inputName
+	}
+	if servingConfig.OutputName == "" {
+		servingConfig.OutputName = outputName
+	}
+
+	servingClient, err := inference.NewTFServingClient(servingConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure tf serving client: %w", err)
+	}
+	server.servingClient = servingClient
 
 	return server, nil
 }
@@ -177,13 +190,10 @@ func (s *InferenceSidecarServer) ComputeScore(ctx context.Context, req *inferenc
 			inference.TotalFeatureDim, len(req.Features))
 	}
 
-	// Build ScoreInputs from features
-	// Note: Timeout configured in s.config.Timeout but not applied here as
-	// the underlying scorer doesn't support context-based cancellation yet
-	inputs := s.buildScoreInputs(req)
+	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
+	defer cancel()
 
-	// Run inference
-	result, err := s.scorer.ComputeScore(inputs)
+	result, err := s.scoreFeatures(ctx, req.Features, req.ReturnContributions)
 	if err != nil {
 		s.failedInferences.Add(1)
 		s.log.Error("Inference failed", "error", err)
@@ -196,30 +206,25 @@ func (s *InferenceSidecarServer) ComputeScore(ctx context.Context, req *inferenc
 	s.lastInferenceTime.Store(time.Now().UnixNano())
 	s.successfulInferences.Add(1)
 
-	// Build response
-	resp := &inferencepb.ComputeScoreResponse{
-		Score:         result.Score,
-		RawScore:      result.RawScore,
-		Confidence:    result.Confidence,
-		InputHash:     result.InputHash,
-		OutputHash:    result.OutputHash,
-		ModelVersion:  result.ModelVersion,
-		ModelHash:     result.ModelHash,
-		ReasonCodes:   result.ReasonCodes,
-		ComputeTimeMs: latencyMs,
-	}
-
-	if req.ReturnContributions && result.FeatureContributions != nil {
-		resp.FeatureContributions = result.FeatureContributions
-	}
-
 	s.log.Debug("ComputeScore completed",
 		"score", result.Score,
 		"confidence", result.Confidence,
 		"latency_ms", latencyMs,
 	)
 
-	return resp, nil
+	result.ComputeTimeMs = latencyMs
+	return &inferencepb.ComputeScoreResponse{
+		Score:                result.Score,
+		RawScore:             result.RawScore,
+		Confidence:           result.Confidence,
+		InputHash:            result.InputHash,
+		OutputHash:           result.OutputHash,
+		ModelVersion:         result.ModelVersion,
+		ModelHash:            result.ModelHash,
+		ReasonCodes:          result.ReasonCodes,
+		ComputeTimeMs:        latencyMs,
+		FeatureContributions: result.FeatureContributions,
+	}, nil
 }
 
 // HealthCheck implements InferenceServiceServer.HealthCheck.
@@ -232,9 +237,11 @@ func (s *InferenceSidecarServer) HealthCheck(ctx context.Context, req *inference
 	if s.model == nil || !s.model.IsLoaded() {
 		status = inferencepb.HealthStatus_HEALTH_STATUS_UNHEALTHY
 		errorMsg = "model not loaded"
-	} else if !s.scorer.IsHealthy() {
-		status = inferencepb.HealthStatus_HEALTH_STATUS_DEGRADED
-		errorMsg = "scorer not healthy"
+	} else if s.servingClient != nil {
+		if _, err := s.servingClient.CheckHealth(ctx); err != nil {
+			status = inferencepb.HealthStatus_HEALTH_STATUS_DEGRADED
+			errorMsg = err.Error()
+		}
 	}
 
 	lastInference := ""
@@ -329,15 +336,10 @@ func (s *InferenceSidecarServer) VerifyDeterminism(ctx context.Context, req *inf
 	}
 
 	// Run inference
-	inputs := &inference.ScoreInputs{
-		FaceEmbedding: features[:inference.FaceEmbeddingDim],
-		Metadata: inference.InferenceMetadata{
-			RequestID: "determinism-check",
-		},
-		ScopeCount: 1,
-	}
+	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
+	defer cancel()
 
-	result, err := s.scorer.ComputeScore(inputs)
+	result, err := s.scoreFeatures(ctx, features, false)
 	if err != nil {
 		return nil, fmt.Errorf("inference failed: %w", err)
 	}
@@ -362,47 +364,106 @@ func (s *InferenceSidecarServer) VerifyDeterminism(ctx context.Context, req *inf
 // Helper Methods
 // ============================================================================
 
-// buildScoreInputs creates ScoreInputs from a gRPC request.
-func (s *InferenceSidecarServer) buildScoreInputs(req *inferencepb.ComputeScoreRequest) *inference.ScoreInputs {
-	// Extract feature components from the flat vector
-	faceEnd := inference.FaceEmbeddingDim
-	docEnd := faceEnd + inference.DocQualityDim
-
-	// Handle nil metadata
-	var accountAddr string
-	var blockHeight int64
-	var requestID string
-	if req.Metadata != nil {
-		accountAddr = req.Metadata.AccountAddress
-		blockHeight = req.Metadata.BlockHeight
-		requestID = req.Metadata.RequestID
+func (s *InferenceSidecarServer) scoreFeatures(ctx context.Context, features []float32, includeContributions bool) (*inference.ScoreResult, error) {
+	output, endpoint, err := s.runInference(ctx, features)
+	if err != nil {
+		return nil, err
+	}
+	if len(output) == 0 {
+		return nil, fmt.Errorf("model returned empty output")
 	}
 
-	inputs := &inference.ScoreInputs{
-		FaceEmbedding:   req.Features[:faceEnd],
-		FaceConfidence:  0.9, // Default
-		DocQualityScore: 0.8, // Default
-		OCRConfidences:  make(map[string]float32),
-		Metadata: inference.InferenceMetadata{
-			AccountAddress: accountAddr,
-			BlockHeight:    blockHeight,
-			RequestID:      requestID,
-		},
-		ScopeCount: 1,
+	rawScore := output[0]
+	score := security.SafeFloat32ToUint32(rawScore, 0, 100)
+	confidence := computeConfidence(rawScore)
+	reasonCodes := s.reasonCodesFromFeatures(features, score, confidence)
+
+	result := &inference.ScoreResult{
+		Score:        score,
+		RawScore:     rawScore,
+		Confidence:   confidence,
+		InputHash:    s.determinism.ComputeFeatureHash(features),
+		OutputHash:   s.determinism.ComputeOutputHash(output),
+		ModelVersion: s.model.GetVersion(),
+		ModelHash:    s.model.GetModelHash(),
+		ReasonCodes:  reasonCodes,
 	}
 
-	// Extract document quality features
-	if len(req.Features) > docEnd {
-		inputs.DocQualityFeatures = inference.DocQualityFeatures{
-			Sharpness:  req.Features[faceEnd],
-			Brightness: req.Features[faceEnd+1],
-			Contrast:   req.Features[faceEnd+2],
-			NoiseLevel: req.Features[faceEnd+3],
-			BlurScore:  req.Features[faceEnd+4],
+	if includeContributions {
+		result.FeatureContributions = s.extractor.ComputeFeatureContributions(features)
+	}
+
+	if endpoint != "" {
+		s.log.Debug("Inference backend", "endpoint", endpoint)
+	}
+
+	return result, nil
+}
+
+func (s *InferenceSidecarServer) runInference(ctx context.Context, features []float32) ([]float32, string, error) {
+	if s.servingClient == nil {
+		if s.model == nil {
+			return nil, "", fmt.Errorf("no inference backend configured")
+		}
+		output, err := s.model.Run(features)
+		return output, "local_stub", err
+	}
+
+	output, endpoint, _, err := s.servingClient.Predict(ctx, features)
+	if err == nil {
+		return output, endpoint, nil
+	}
+
+	if s.config.AllowFallbackToStub && s.model != nil {
+		fallbackOutput, fallbackErr := s.model.Run(features)
+		if fallbackErr == nil {
+			return fallbackOutput, "local_stub", nil
 		}
 	}
 
-	return inputs
+	return nil, endpoint, err
+}
+
+func (s *InferenceSidecarServer) reasonCodesFromFeatures(features []float32, score uint32, confidence float32) []string {
+	reasons := make([]string, 0, 4)
+
+	if score >= 50 {
+		reasons = append(reasons, inference.ReasonCodeSuccess)
+	}
+	if confidence >= 0.8 {
+		reasons = append(reasons, inference.ReasonCodeHighConfidence)
+	} else if confidence < 0.5 {
+		reasons = append(reasons, inference.ReasonCodeLowConfidence)
+	}
+
+	docQualityScore := features[inference.FaceEmbeddingDim]
+	if docQualityScore < 0.6 {
+		reasons = append(reasons, inference.ReasonCodeLowDocQuality)
+	}
+
+	ocrOffset := inference.FaceEmbeddingDim + inference.DocQualityDim
+	var ocrSum float32
+	var ocrCount int
+	for i := 0; i < inference.OCRFieldsDim; i += 2 {
+		if ocrOffset+i >= len(features) {
+			break
+		}
+		ocrSum += features[ocrOffset+i]
+		ocrCount++
+	}
+	if ocrCount > 0 && (ocrSum/float32(ocrCount)) < 0.5 {
+		reasons = append(reasons, inference.ReasonCodeLowOCRConfidence)
+	}
+
+	metaOffset := inference.FaceEmbeddingDim + inference.DocQualityDim + inference.OCRFieldsDim
+	if metaOffset < len(features) {
+		scopeCount := int(features[metaOffset] * 10.0)
+		if scopeCount < 2 {
+			reasons = append(reasons, inference.ReasonCodeInsufficientScopes)
+		}
+	}
+
+	return reasons
 }
 
 // recordLatency records a latency sample.
@@ -450,108 +511,6 @@ func setEnvIfNotSet(key, value string) error {
 		return os.Setenv(key, value)
 	}
 	return nil
-}
-
-// ============================================================================
-// Model Scorer Wrapper
-// ============================================================================
-
-// modelScorer wraps TFModel to implement the Scorer interface.
-type modelScorer struct {
-	model       *inference.TFModel
-	determinism *inference.DeterminismController
-	config      inference.InferenceConfig
-}
-
-func (s *modelScorer) ComputeScore(inputs *inference.ScoreInputs) (*inference.ScoreResult, error) {
-	startTime := time.Now()
-
-	result := &inference.ScoreResult{
-		ModelVersion:         s.model.GetVersion(),
-		ModelHash:            s.model.GetModelHash(),
-		ReasonCodes:          make([]string, 0),
-		FeatureContributions: make(map[string]float32),
-	}
-
-	// Compute input hash
-	result.InputHash = s.determinism.ComputeInputHash(inputs)
-
-	// Build feature vector
-	features := buildFeatureVector(inputs)
-
-	// Run model inference
-	output, err := s.model.Run(features)
-	if err != nil {
-		result.ReasonCodes = append(result.ReasonCodes, inference.ReasonCodeInferenceError)
-		return result, fmt.Errorf("model inference failed: %w", err)
-	}
-
-	if len(output) == 0 {
-		result.ReasonCodes = append(result.ReasonCodes, inference.ReasonCodeInferenceError)
-		return result, fmt.Errorf("model returned empty output")
-	}
-
-	// Process output
-	rawScore := output[0]
-	result.RawScore = rawScore
-	result.OutputHash = s.determinism.ComputeOutputHash(output)
-
-	// Quantize to 0-100
-	score := uint32(rawScore)
-	if rawScore < 0 {
-		score = 0
-	} else if rawScore > 100 {
-		score = 100
-	}
-	result.Score = score
-
-	// Compute confidence
-	result.Confidence = computeConfidence(rawScore)
-
-	// Add reason codes
-	if score >= 50 {
-		result.ReasonCodes = append(result.ReasonCodes, inference.ReasonCodeSuccess)
-	}
-	if result.Confidence >= 0.8 {
-		result.ReasonCodes = append(result.ReasonCodes, inference.ReasonCodeHighConfidence)
-	}
-
-	result.ComputeTimeMs = time.Since(startTime).Milliseconds()
-	return result, nil
-}
-
-func (s *modelScorer) GetModelVersion() string {
-	return s.model.GetVersion()
-}
-
-func (s *modelScorer) GetModelHash() string {
-	return s.model.GetModelHash()
-}
-
-func (s *modelScorer) IsHealthy() bool {
-	return s.model != nil && s.model.IsLoaded()
-}
-
-func (s *modelScorer) Close() error {
-	return nil
-}
-
-// buildFeatureVector constructs the feature vector from ScoreInputs.
-func buildFeatureVector(inputs *inference.ScoreInputs) []float32 {
-	features := make([]float32, inference.TotalFeatureDim)
-
-	// Copy face embedding
-	copy(features[:inference.FaceEmbeddingDim], inputs.FaceEmbedding)
-
-	// Add document quality features
-	offset := inference.FaceEmbeddingDim
-	features[offset] = inputs.DocQualityFeatures.Sharpness
-	features[offset+1] = inputs.DocQualityFeatures.Brightness
-	features[offset+2] = inputs.DocQualityFeatures.Contrast
-	features[offset+3] = inputs.DocQualityFeatures.NoiseLevel
-	features[offset+4] = inputs.DocQualityFeatures.BlurScore
-
-	return features
 }
 
 // computeConfidence calculates confidence based on score distance from boundaries.

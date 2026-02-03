@@ -31,16 +31,13 @@ func (s *providerIntegrationTestSuite) TestProvider() {
 	ctx := context.Background()
 
 	// create provider
-	_, err = clitestutil.TxCreateProviderExec(
-		ctx,
-		cctx,
-		providerPath,
-		cli.TestFlags().
-			WithFrom(addr.String()).
-			WithGasAutoFlags().
-			WithSkipConfirm().
-			WithBroadcastModeBlock()...,
-	)
+	providerFlags := cli.TestFlags().
+		WithFrom(addr.String()).
+		WithGasAutoFlags().
+		WithSkipConfirm().
+		WithBroadcastModeBlock()
+	providerArgs := append([]string{providerPath}, []string(providerFlags)...)
+	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerArgs...)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -77,15 +74,16 @@ func (s *providerIntegrationTestSuite) TestProvider() {
 	s.Require().Equal(createdProvider, provider)
 
 	// test updating provider
+	updateFlags := cli.TestFlags().
+		WithFrom(addr.String()).
+		WithGasAutoFlags().
+		WithSkipConfirm().
+		WithBroadcastModeBlock()
+	updateArgs := append([]string{providerPath2}, []string(updateFlags)...)
 	_, err = clitestutil.TxUpdateProviderExec(
 		ctx,
 		cctx,
-		providerPath2,
-		cli.TestFlags().
-			WithFrom(addr.String()).
-			WithGasAutoFlags().
-			WithSkipConfirm().
-			WithBroadcastModeBlock()...,
+		updateArgs...,
 	)
 	s.Require().NoError(err)
 

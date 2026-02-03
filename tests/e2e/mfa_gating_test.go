@@ -4,9 +4,12 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
@@ -21,6 +24,8 @@ import (
 	rolesquery "github.com/virtengine/virtengine/sdk/go/node/roles/v1"
 
 	"github.com/virtengine/virtengine/testutil"
+	"github.com/virtengine/virtengine/testutil/network"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 )
 
 type mfaGatingE2ETestSuite struct {
@@ -28,8 +33,60 @@ type mfaGatingE2ETestSuite struct {
 }
 
 func TestIntegrationMFA(t *testing.T) {
+	cfg := network.DefaultConfig(testutil.NewTestNetworkFixture, network.WithInterceptState(func(cdc codec.Codec, key string, raw json.RawMessage) json.RawMessage {
+		if key != mfatypes.ModuleName {
+			return raw
+		}
+
+		_ = cdc
+
+		var state map[string]any
+		if err := json.Unmarshal(raw, &state); err != nil {
+			return raw
+		}
+
+		configs, ok := state["sensitive_tx_configs"].([]any)
+		if !ok {
+			configs, ok = state["sensitiveTxConfigs"].([]any)
+		}
+		if !ok {
+			return raw
+		}
+
+		for _, cfgEntry := range configs {
+			cfgMap, ok := cfgEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			txType := cfgMap["transaction_type"]
+			if txType == nil {
+				txType = cfgMap["transactionType"]
+			}
+
+			switch val := txType.(type) {
+			case string:
+				normalized := strings.ToLower(val)
+				if strings.Contains(normalized, "validator") {
+					cfgMap["enabled"] = false
+				}
+			case float64:
+				if int(val) == int(mfaquery.SensitiveTxValidatorRegistration) {
+					cfgMap["enabled"] = false
+				}
+			}
+		}
+
+		updated, err := json.Marshal(state)
+		if err != nil {
+			return raw
+		}
+		return updated
+	}))
+	cfg.NumValidators = 1
+
 	mg := &mfaGatingE2ETestSuite{}
-	mg.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, mg)
+	mg.NetworkTestSuite = testutil.NewNetworkTestSuite(&cfg, mg)
 	suite.Run(t, mg)
 }
 

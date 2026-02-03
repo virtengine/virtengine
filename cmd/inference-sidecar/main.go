@@ -50,6 +50,13 @@ var (
 	timeout       = flag.Duration("timeout", 2*time.Second, "Inference timeout")
 	logLevel      = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	enableReflect = flag.Bool("enable-reflection", false, "Enable gRPC reflection for debugging")
+	servingURL    = flag.String("serving-url", "http://localhost:8501", "TensorFlow Serving base URL")
+	servingModel  = flag.String("serving-model", "trust_score", "TensorFlow Serving model name")
+	servingSig    = flag.String("serving-signature", "", "TensorFlow Serving signature name")
+	servingTO     = flag.Duration("serving-timeout", 5*time.Second, "TensorFlow Serving request timeout")
+	servingHealth = flag.String("serving-health-path", "", "Optional TensorFlow Serving health path override")
+	servingFail   = flag.String("serving-fallback-url", "", "Fallback TensorFlow Serving base URL")
+	allowStub     = flag.Bool("allow-fallback-to-stub", false, "Allow fallback to local stub inference on serving failure")
 )
 
 func main() {
@@ -70,21 +77,31 @@ func run() int {
 
 	// Build inference configuration
 	config := inference.InferenceConfig{
-		ModelPath:          *modelPath,
-		ModelVersion:       *modelVersion,
-		ExpectedHash:       *expectedHash,
-		Timeout:            *timeout,
-		MaxMemoryMB:        *maxMemoryMB,
-		UseSidecar:         false, // We ARE the sidecar
-		Deterministic:      true,
-		ForceCPU:           *forceCPU,
-		RandomSeed:         *randomSeed,
-		ExpectedInputDim:   inference.TotalFeatureDim,
-		UseFallbackOnError: false, // Sidecar should report errors
+		ModelPath:           *modelPath,
+		ModelVersion:        *modelVersion,
+		ExpectedHash:        *expectedHash,
+		Timeout:             *timeout,
+		MaxMemoryMB:         *maxMemoryMB,
+		UseSidecar:          false, // We ARE the sidecar
+		Deterministic:       true,
+		ForceCPU:            *forceCPU,
+		RandomSeed:          *randomSeed,
+		ExpectedInputDim:    inference.TotalFeatureDim,
+		UseFallbackOnError:  false, // Sidecar should report errors
+		AllowFallbackToStub: *allowStub,
 	}
 
 	// Create the inference server
-	server, err := NewInferenceSidecarServer(config, log)
+	servingConfig := inference.TFServingConfig{
+		BaseURL:       *servingURL,
+		FallbackURL:   *servingFail,
+		ModelName:     *servingModel,
+		SignatureName: *servingSig,
+		Timeout:       *servingTO,
+		HealthPath:    *servingHealth,
+	}
+
+	server, err := NewInferenceSidecarServer(config, servingConfig, log)
 	if err != nil {
 		log.Error("Failed to create inference server", "error", err)
 		return 1

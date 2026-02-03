@@ -24,6 +24,11 @@ func ExecQueryProviders(ctx context.Context, cctx client.Context, args ...string
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryProvidersCmd(), args...)
 }
 
+// QueryProvidersExec is an alias for ExecQueryProviders.
+func QueryProvidersExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
+	return ExecQueryProviders(ctx, cctx, args...)
+}
+
 // ExecQueryProvider is used for testing provider query
 func ExecQueryProvider(ctx context.Context, cctx client.Context, extraArgs ...string) (sdktest.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryProviderCmd(), extraArgs...)
@@ -39,11 +44,6 @@ func TxCreateProviderExec(ctx context.Context, cctx client.Context, configPath s
 func TxUpdateProviderExec(ctx context.Context, cctx client.Context, configPath string, flags ...string) (sdktest.BufferWriter, error) {
 	allArgs := append([]string{configPath}, flags...)
 	return ExecTxUpdateProvider(ctx, cctx, allArgs...)
-}
-
-// QueryProvidersExec is an alias for ExecQueryProviders
-func QueryProvidersExec(ctx context.Context, cctx client.Context, args ...string) (sdktest.BufferWriter, error) {
-	return ExecQueryProviders(ctx, cctx, args...)
 }
 
 // QueryProviderExec is an alias for ExecQueryProvider

@@ -17,7 +17,6 @@ import (
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
 	clitestutil "github.com/virtengine/virtengine/sdk/go/cli/testutil"
-	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
 
 	"github.com/virtengine/virtengine/testutil"
 )
@@ -234,16 +233,13 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 	addr := s.addrProvider
 
 	// create provider
-	_, err = clitestutil.TxCreateProviderExec(
-		ctx,
-		cctx,
-		providerPath,
-		cli.TestFlags().
-			WithFrom(addr.String()).
-			WithSkipConfirm().
-			WithGasAutoFlags().
-			WithBroadcastModeBlock()...,
-	)
+	providerFlags := cli.TestFlags().
+		WithFrom(addr.String()).
+		WithSkipConfirm().
+		WithGasAutoFlags().
+		WithBroadcastModeBlock()
+	providerArgs := append([]string{providerPath}, []string(providerFlags)...)
+	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerArgs...)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -286,7 +282,7 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 			WithFrom(addr.String()).
 			WithOrderID(createdOrder.ID).
 			WithDeposit(sdk.NewCoin("uve", sdkmath.NewInt(5000000))).
-			WithPrice(sdk.NewDecCoinFromDec(sdktestutil.VEDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
+			WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
 			WithSkipConfirm().
 			WithGasAutoFlags().
 			WithBroadcastModeBlock()...,
