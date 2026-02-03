@@ -267,8 +267,8 @@ func (k Keeper) GenerateAgeRangeProofGroth16(
 	// For consensus safety, we use a deterministic representation
 	h := sha256.New()
 	h.Write([]byte("groth16_age_proof"))
-	h.Write([]byte(fmt.Sprintf("%d", ageThreshold)))
-	h.Write([]byte(fmt.Sprintf("%d", currentTimestamp)))
+	fmt.Fprintf(h, "%d", ageThreshold)
+	fmt.Fprintf(h, "%d", currentTimestamp)
 	h.Write(commitment.Bytes())
 	h.Write(nonce)
 	proofBytes := h.Sum(nil)
@@ -381,8 +381,8 @@ func (k Keeper) GenerateScoreRangeProofGroth16(
 	// For consensus safety, we use a deterministic representation
 	h := sha256.New()
 	h.Write([]byte("groth16_score_proof"))
-	h.Write([]byte(fmt.Sprintf("%d", scoreThreshold)))
-	h.Write([]byte(fmt.Sprintf("%d", actualScore)))
+	fmt.Fprintf(h, "%d", scoreThreshold)
+	fmt.Fprintf(h, "%d", actualScore)
 	h.Write(commitment.Bytes())
 	h.Write(nonce)
 	proofBytes := h.Sum(nil)
@@ -395,14 +395,15 @@ func (k Keeper) GenerateScoreRangeProofGroth16(
 // Deterministic Hash-Based Fallback for Consensus
 // ============================================================================
 
-//nolint:unused // reserved for deterministic proof hashing in future circuits
 // generateDeterministicProofHash generates a deterministic hash for consensus
 // when full ZK proof generation would introduce non-determinism.
 // This is used as a commitment scheme that can be verified deterministically.
+//
+//nolint:unused // reserved for deterministic proof hashing in future circuits
 func generateDeterministicProofHash(inputs ...interface{}) []byte {
 	h := sha256.New()
 	for _, input := range inputs {
-		h.Write([]byte(fmt.Sprintf("%v", input)))
+		fmt.Fprintf(h, "%v", input)
 	}
 	return h.Sum(nil)
 }

@@ -483,6 +483,7 @@ func (s *NoiseSession) Write(b []byte) (int, error) {
 		return 0, errors.New("ciphertext too large")
 	}
 	var lengthBuf [2]byte
+	//nolint:gosec // range checked above
 	binary.BigEndian.PutUint16(lengthBuf[:], uint16(len(ciphertext)))
 	if _, err := s.conn.Write(lengthBuf[:]); err != nil {
 		return 0, err

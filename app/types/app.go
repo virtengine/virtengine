@@ -689,7 +689,8 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 }
 
 func kvStoreKeys() []string {
-	keys := []string{
+	keys := make([]string, 0, 32)
+	keys = append(keys,
 		consensusparamtypes.StoreKey,
 		authtypes.StoreKey,
 		feegrant.StoreKey,
@@ -705,7 +706,7 @@ func kvStoreKeys() []string {
 		upgradetypes.StoreKey,
 		evidencetypes.StoreKey,
 		ibctransfertypes.StoreKey,
-	}
+	)
 
 	keys = append(keys, virtengineKVStoreKeys()...)
 

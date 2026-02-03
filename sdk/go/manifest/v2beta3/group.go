@@ -38,7 +38,14 @@ func (g Group) GetResourceUnits() dtypes.ResourceUnits {
 }
 
 func (g Group) AllHostnames() []string {
-	allHostnames := make([]string, 0)
+	// Count total hostnames for preallocation
+	totalHosts := 0
+	for _, service := range g.Services {
+		for _, expose := range service.Expose {
+			totalHosts += len(expose.Hosts)
+		}
+	}
+	allHostnames := make([]string, 0, totalHosts)
 	for _, service := range g.Services {
 		for _, expose := range service.Expose {
 			allHostnames = append(allHostnames, expose.Hosts...)

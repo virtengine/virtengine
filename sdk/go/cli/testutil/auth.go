@@ -74,13 +74,14 @@ func ExecQueryAccount(ctx context.Context, cctx client.Context, address fmt.Stri
 }
 
 func TxMultiSignBatchExec(ctx context.Context, cctx client.Context, filename string, from string, sigFile1 string, sigFile2 string, extraArgs ...string) (testutil.BufferWriter, error) {
-	args := []string{
+	args := make([]string, 0, 5+len(extraArgs))
+	args = append(args,
 		fmt.Sprintf("--%s=%s", cflags.FlagKeyringBackend, keyring.BackendTest),
 		filename,
 		from,
 		sigFile1,
 		sigFile2,
-	}
+	)
 
 	args = append(args, extraArgs...)
 

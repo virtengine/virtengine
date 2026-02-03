@@ -6,46 +6,46 @@ import (
 
 var (
 	// ErrNameDoesNotExist is the error when name does not exist
-	ErrNameDoesNotExist = errors.New("Name does not exist")
+	ErrNameDoesNotExist = errors.New("name does not exist")
 	// ErrInvalidRequest is the error for invalid request
-	ErrInvalidRequest = errors.New("Invalid request")
+	ErrInvalidRequest = errors.New("invalid request")
 	// ErrDeploymentExists is the error when already deployment exists
-	ErrDeploymentExists = errors.New("Deployment exists")
+	ErrDeploymentExists = errors.New("deployment exists")
 	// ErrDeploymentNotFound is the error when deployment not found
-	ErrDeploymentNotFound = errors.New("Deployment not found")
+	ErrDeploymentNotFound = errors.New("deployment not found")
 	// ErrDeploymentClosed is the error when deployment is closed
-	ErrDeploymentClosed = errors.New("Deployment closed")
+	ErrDeploymentClosed = errors.New("deployment closed")
 	// ErrOwnerAcctMissing is the error for owner account missing
-	ErrOwnerAcctMissing = errors.New("Owner account missing")
+	ErrOwnerAcctMissing = errors.New("owner account missing")
 	// ErrInvalidGroups is the error when groups are empty
-	ErrInvalidGroups = errors.New("Invalid groups")
+	ErrInvalidGroups = errors.New("invalid groups")
 	// ErrInvalidDeploymentID is the error for invalid deployment id
-	ErrInvalidDeploymentID = errors.New("Invalid: deployment id")
+	ErrInvalidDeploymentID = errors.New("invalid: deployment id")
 	// ErrEmptyVersion is the error when version is empty
-	ErrEmptyVersion = errors.New("Invalid: empty version")
+	ErrEmptyVersion = errors.New("invalid: empty version")
 	// ErrInvalidVersion is the error when version is invalid
-	ErrInvalidVersion = errors.New("Invalid: deployment version")
+	ErrInvalidVersion = errors.New("invalid: deployment version")
 	// ErrInternal is the error for internal error
 	ErrInternal = errors.New("internal error")
 	// ErrInvalidDeployment = is the error when deployment does not pass validation
-	ErrInvalidDeployment = errors.New("Invalid deployment")
+	ErrInvalidDeployment = errors.New("invalid deployment")
 	// ErrInvalidGroupID is the error when already deployment exists
-	ErrInvalidGroupID = errors.New("Deployment exists")
+	ErrInvalidGroupID = errors.New("deployment exists")
 	// ErrGroupNotFound is the keeper's error for not finding a group
-	ErrGroupNotFound = errors.New("Group not found")
+	ErrGroupNotFound = errors.New("group not found")
 	// ErrGroupClosed is the error when deployment is closed
-	ErrGroupClosed = errors.New("Group already closed")
+	ErrGroupClosed = errors.New("group already closed")
 	// ErrGroupOpen is the error when deployment is closed
-	ErrGroupOpen = errors.New("Group open")
+	ErrGroupOpen = errors.New("group open")
 	// ErrGroupPaused is the error when deployment is closed
-	ErrGroupPaused = errors.New("Group paused")
+	ErrGroupPaused = errors.New("group paused")
 	// ErrGroupNotOpen indicates the Group state has progressed beyond initial Open.
-	ErrGroupNotOpen = errors.New("Group not open")
+	ErrGroupNotOpen = errors.New("group not open")
 	// ErrGroupSpecInvalid indicates a GroupSpec has invalid configuration
-	ErrGroupSpecInvalid = errors.New("GroupSpec invalid")
+	ErrGroupSpecInvalid = errors.New("groupSpec invalid")
 
 	// ErrInvalidDeposit indicates an invalid deposit
-	ErrInvalidDeposit = errors.New("Deposit invalid")
+	ErrInvalidDeposit = errors.New("deposit invalid")
 	// ErrInvalidIDPath indicates an invalid ID path
 	ErrInvalidIDPath = errors.New("ID path invalid")
 	// ErrInvalidParam indicates an invalid chain parameter

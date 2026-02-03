@@ -279,7 +279,7 @@ func (m *msgServer) VerifyChallenge(goCtx context.Context, msg *types.MsgVerifyC
 		session.DeviceFingerprint = msg.Response.ClientInfo.DeviceFingerprint
 	}
 
-	if err := m.Keeper.CreateAuthorizationSession(ctx, session); err != nil {
+	if err := m.CreateAuthorizationSession(ctx, session); err != nil {
 		return nil, err
 	}
 
@@ -369,7 +369,7 @@ func (m *msgServer) UpdateSensitiveTxConfig(goCtx context.Context, msg *types.Ms
 		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", m.GetAuthority(), msg.Authority)
 	}
 
-	if err := m.Keeper.SetSensitiveTxConfig(ctx, &msg.Config); err != nil {
+	if err := m.SetSensitiveTxConfig(ctx, &msg.Config); err != nil {
 		return nil, err
 	}
 

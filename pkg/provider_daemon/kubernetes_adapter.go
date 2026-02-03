@@ -754,7 +754,8 @@ func (ka *KubernetesAdapter) GetStatus(ctx context.Context, workloadID string) (
 	// Update state based on pod status
 	if workload.State == WorkloadStateRunning && !allReady {
 		// Pods are not ready, might be deploying or failing
-		// Don't change state automatically, just report
+		// Don't change state automatically, just report via message
+		_ = allReady // intentionally empty - state tracking only
 	}
 
 	return &WorkloadStatusUpdate{

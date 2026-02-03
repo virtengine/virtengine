@@ -86,6 +86,7 @@ func (k Keeper) HandleBorderlineFallbackCompleted(
 	if minFactorsRequired == 0 {
 		minFactorsRequired = 1 // Default to at least 1 factor
 	}
+	//nolint:gosec // slice length is non-negative
 	if uint32(len(factorsSatisfied)) < minFactorsRequired {
 		return types.ErrMFAChallengeNotSatisfied.Wrapf(
 			"need at least %d factors, got %d",

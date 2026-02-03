@@ -8,7 +8,9 @@ import (
 	"sort"
 	"time"
 
-	"cosmossdk.io/math"
+	stdmath "math"
+
+	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -163,7 +165,7 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 	maxStaleness := params.MaxPriceStalenessBlocks
 
 	// Collect prices from all sources
-	var prices []math.LegacyDec
+	var prices []sdkmath.LegacyDec
 	var totalSources uint32
 	var healthySources uint32
 	var failureReasons []string
@@ -209,10 +211,10 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 		// Return empty aggregated price with unhealthy status
 		return &types.AggregatedPrice{
 			Denom:       denom,
-			TWAP:        math.LegacyZeroDec(),
-			MedianPrice: math.LegacyZeroDec(),
-			MinPrice:    math.LegacyZeroDec(),
-			MaxPrice:    math.LegacyZeroDec(),
+			TWAP:        sdkmath.LegacyZeroDec(),
+			MedianPrice: sdkmath.LegacyZeroDec(),
+			MinPrice:    sdkmath.LegacyZeroDec(),
+			MaxPrice:    sdkmath.LegacyZeroDec(),
 			Timestamp:   ctx.BlockTime(),
 			NumSources:  0,
 		}, health, nil
@@ -224,10 +226,10 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 	})
 
 	// Calculate median
-	var median math.LegacyDec
+	var median sdkmath.LegacyDec
 	n := len(prices)
 	if n%2 == 0 {
-		median = prices[n/2-1].Add(prices[n/2]).Quo(math.LegacyNewDec(2))
+		median = prices[n/2-1].Add(prices[n/2]).Quo(sdkmath.LegacyNewDec(2))
 	} else {
 		median = prices[n/2]
 	}
@@ -239,7 +241,7 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 	// Calculate deviation in basis points
 	var deviationBps uint64
 	if !minPrice.IsZero() {
-		deviation := maxPrice.Sub(minPrice).Quo(minPrice).Mul(math.LegacyNewDec(10000))
+		deviation := maxPrice.Sub(minPrice).Quo(minPrice).Mul(sdkmath.LegacyNewDec(10000))
 		deviationBps = deviation.TruncateInt().Uint64()
 	}
 
@@ -271,7 +273,7 @@ func (k *Keeper) GetAggregatedPrice(ctx sdk.Context, denom, baseDenom string) (*
 }
 
 // calculateTWAP calculates the time-weighted average price over a window.
-func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowBlocks int64) math.LegacyDec {
+func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowBlocks int64) sdkmath.LegacyDec {
 	store := ctx.KVStore(k.storeKey)
 	currentHeight := ctx.BlockHeight()
 	startHeight := currentHeight - windowBlocks
@@ -280,7 +282,7 @@ func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowB
 	}
 
 	params := k.GetParams(ctx)
-	totalWeightedPrice := math.LegacyZeroDec()
+	totalWeightedPrice := sdkmath.LegacyZeroDec()
 	var totalWeight int64
 
 	// Collect prices from all sources within the window
@@ -312,7 +314,7 @@ func (k *Keeper) calculateTWAP(ctx sdk.Context, denom, baseDenom string, windowB
 	}
 
 	if totalWeight == 0 {
-		return math.LegacyZeroDec()
+		return sdkmath.LegacyZeroDec()
 	}
 
 	return totalWeightedPrice.QuoInt64(totalWeight)
@@ -367,8 +369,8 @@ func safeUint32FromInt(value int) uint32 {
 	if value < 0 {
 		return 0
 	}
-	if value > math.MaxInt32 {
-		return math.MaxUint32
+	if value > stdmath.MaxInt32 {
+		return stdmath.MaxUint32
 	}
 	//nolint:gosec // range checked above
 	return uint32(value)
@@ -514,12 +516,13 @@ func (q Querier) Prices(ctx context.Context, req *types.QueryPricesRequest) (*ty
 var _ types.QueryServer = Querier{}
 
 // getDefaultPriceData returns default price data when not found
+//
 //nolint:unused // reserved for default price fallback during maintenance
 func getDefaultPriceData() types.PriceData {
 	return types.PriceData{
 		ID: types.PriceDataRecordID{},
 		State: types.PriceDataState{
-			Price:     math.LegacyZeroDec(),
+			Price:     sdkmath.LegacyZeroDec(),
 			Timestamp: time.Time{},
 		},
 	}

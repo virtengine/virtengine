@@ -300,7 +300,7 @@ func TestGetRollbackAction(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, marketplace.LifecycleActionStop, action)
 
-	action, ok = GetRollbackAction(marketplace.LifecycleActionTerminate)
+	_, ok = GetRollbackAction(marketplace.LifecycleActionTerminate)
 	assert.False(t, ok)
 }
 

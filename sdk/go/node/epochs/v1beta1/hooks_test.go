@@ -78,7 +78,7 @@ func (s *KeeperTestSuite) TestHooksPanicRecovery() {
 	for tcIndex, tc := range tests {
 		for epochActionSelector := range 2 {
 			s.SetupTest()
-			hookRefs := []types.EpochHooks{}
+			hookRefs := make([]types.EpochHooks, 0, len(tc.hooks))
 
 			for _, hook := range tc.hooks {
 				hookRefs = append(hookRefs, hook.Clone())

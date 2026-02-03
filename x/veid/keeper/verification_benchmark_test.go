@@ -89,7 +89,7 @@ func (s *MockMLScorer) Score(scopes []MockDecryptedScope) (int32, string, []byte
 	for _, scope := range scopes {
 		h.Write(scope.ContentHash)
 		for _, f := range scope.Features {
-			h.Write([]byte(fmt.Sprintf("%f", f)))
+			fmt.Fprintf(h, "%f", f)
 		}
 	}
 	inputHash := h.Sum(nil)
@@ -470,7 +470,7 @@ func BenchmarkScoreUpdate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		score := uint32(50 + (i % 50))
+		score := uint32(50 + (i % 50)) //nolint:gosec // G115: benchmark, i%50 is bounded 0-49
 		err := k.SetScore(ctx, addr.String(), score, "v1.0.0")
 		if err != nil {
 			b.Fatalf("failed to set score: %v", err)
@@ -538,7 +538,7 @@ func BenchmarkFeatureVectorHash(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		h := sha256.New()
 		for _, f := range features {
-			h.Write([]byte(fmt.Sprintf("%.6f", f)))
+			fmt.Fprintf(h, "%.6f", f)
 		}
 		_ = h.Sum(nil)
 	}

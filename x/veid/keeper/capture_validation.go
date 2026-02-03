@@ -151,10 +151,11 @@ func (k Keeper) validateSaltBasics(ctx sdk.Context, salt []byte) error {
 	}
 
 	params := k.GetParams(ctx)
-	if uint32(len(salt)) < params.SaltMinBytes {
+	saltLen := int64(len(salt))
+	if saltLen < int64(params.SaltMinBytes) {
 		return types.ErrInvalidSalt.Wrapf("salt must be at least %d bytes", params.SaltMinBytes)
 	}
-	if uint32(len(salt)) > params.SaltMaxBytes {
+	if saltLen > int64(params.SaltMaxBytes) {
 		return types.ErrInvalidSalt.Wrapf("salt cannot exceed %d bytes", params.SaltMaxBytes)
 	}
 

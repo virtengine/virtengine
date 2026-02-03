@@ -242,7 +242,7 @@ func FuzzPortSpecValidation(f *testing.F) {
 			}
 		}
 
-		if protocol != "" && protocol != "tcp" && protocol != "udp" {
+		if protocol != "" && protocol != protocolTCP && protocol != "udp" {
 			hasError := false
 			for _, err := range result.Errors {
 				if err.Code == errCodeInvalidValue && err.Field == "services[0].ports[0].protocol" {

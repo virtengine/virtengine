@@ -57,6 +57,7 @@ func (p Params) Validate() error {
 }
 
 // ParamKeyTable for astaking module
+//
 // Deprecated: now params can be accessed via cosmos-sdk staking store
 func ParamKeyTable() paramtypes.KeyTable {
 	return paramtypes.NewKeyTable().RegisterParamSet(&Params{})

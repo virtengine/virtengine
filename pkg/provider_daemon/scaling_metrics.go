@@ -12,6 +12,7 @@ import (
 
 var (
 	// metricsOnce ensures metrics are only registered once
+	//nolint:unused // reserved for future singleton initialization
 	metricsOnce sync.Once
 
 	// Provider daemon scaling metrics

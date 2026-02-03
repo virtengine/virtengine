@@ -1205,7 +1205,7 @@ func (va *VMwareAdapter) performVMDeployment(ctx context.Context, vm *VSphereDep
 
 	// Get VM info
 	if err := va.refreshVMInfo(ctx, vm); err != nil {
-		// Non-fatal, continue
+		_ = err // Non-fatal, continue
 	}
 
 	return nil
@@ -1315,7 +1315,7 @@ func (va *VMwareAdapter) applyDisks(spec *VSphereCloneSpec, volumes []VolumeSpec
 	}
 
 	for _, volSpec := range volumes {
-		if volSpec.Type == "persistent" {
+		if volSpec.Type == volumeTypePersistent {
 			sizeGB := volSpec.Size / (1024 * 1024 * 1024)
 			if sizeGB == 0 {
 				sizeGB = 10

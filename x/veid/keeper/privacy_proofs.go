@@ -739,11 +739,11 @@ func (k Keeper) verifyZKProof(
 		}
 		for key, value := range disclosedClaims {
 			h.Write([]byte(key))
-			h.Write([]byte(fmt.Sprintf("%v", value)))
+			fmt.Fprintf(h, "%v", value)
 		}
 		h.Write([]byte(scheme.String()))
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
 		expected := h.Sum(nil)
 
 		// Verify proof matches expected hash for determinism
@@ -766,11 +766,11 @@ func (k Keeper) verifyZKProof(
 	}
 	for key, value := range disclosedClaims {
 		h.Write([]byte(key))
-		h.Write([]byte(fmt.Sprintf("%v", value)))
+		fmt.Fprintf(h, "%v", value)
 	}
 	h.Write([]byte(scheme.String()))
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	expected := h.Sum(nil)
 
 	// Deterministic verification
@@ -880,20 +880,20 @@ func (k Keeper) generateAgeRangeProof(
 		h := sha256.New()
 		h.Write([]byte("age_proof_v1"))
 		h.Write([]byte(subjectAddress.String()))
-		h.Write([]byte(fmt.Sprintf("threshold_%d", ageThreshold)))
-		h.Write([]byte(fmt.Sprintf("satisfies_%t", satisfies)))
+		fmt.Fprintf(h, "threshold_%d", ageThreshold)
+		fmt.Fprintf(h, "satisfies_%t", satisfies)
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
 		return h.Sum(nil)
 	}
 
 	// Fallback to deterministic hash for consensus
 	h := sha256.New()
 	h.Write([]byte(subjectAddress.String()))
-	h.Write([]byte(fmt.Sprintf("age_threshold_%d", ageThreshold)))
-	h.Write([]byte(fmt.Sprintf("satisfies_%t", satisfies)))
+	fmt.Fprintf(h, "age_threshold_%d", ageThreshold)
+	fmt.Fprintf(h, "satisfies_%t", satisfies)
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	return h.Sum(nil)
 }
 
@@ -919,20 +919,20 @@ func (k Keeper) generateResidencyProof(
 		h := sha256.New()
 		h.Write([]byte("residency_proof_v1"))
 		h.Write([]byte(subjectAddress.String()))
-		h.Write([]byte(fmt.Sprintf("country_%s", countryCode)))
-		h.Write([]byte(fmt.Sprintf("resident_%t", isResident)))
+		fmt.Fprintf(h, "country_%s", countryCode)
+		fmt.Fprintf(h, "resident_%t", isResident)
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
 		return h.Sum(nil), nil
 	}
 
 	// Fallback to deterministic hash for consensus
 	h := sha256.New()
 	h.Write([]byte(subjectAddress.String()))
-	h.Write([]byte(fmt.Sprintf("country_%s", countryCode)))
-	h.Write([]byte(fmt.Sprintf("resident_%t", isResident)))
+	fmt.Fprintf(h, "country_%s", countryCode)
+	fmt.Fprintf(h, "resident_%t", isResident)
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	return h.Sum(nil), nil
 }
 
@@ -958,20 +958,20 @@ func (k Keeper) generateScoreRangeProof(
 		h := sha256.New()
 		h.Write([]byte("score_proof_v1"))
 		h.Write([]byte(subjectAddress.String()))
-		h.Write([]byte(fmt.Sprintf("threshold_%d", scoreThreshold)))
-		h.Write([]byte(fmt.Sprintf("actual_%d", score.Score)))
-		h.Write([]byte(fmt.Sprintf("exceeds_%t", exceeds)))
+		fmt.Fprintf(h, "threshold_%d", scoreThreshold)
+		fmt.Fprintf(h, "actual_%d", score.Score)
+		fmt.Fprintf(h, "exceeds_%t", exceeds)
 		h.Write(nonce)
-		h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+		fmt.Fprintf(h, "%d", ctx.BlockHeight())
 		return h.Sum(nil), nil
 	}
 
 	// Fallback to deterministic hash for consensus
 	h := sha256.New()
 	h.Write([]byte(subjectAddress.String()))
-	h.Write([]byte(fmt.Sprintf("score_threshold_%d", scoreThreshold)))
-	h.Write([]byte(fmt.Sprintf("exceeds_%t", exceeds)))
+	fmt.Fprintf(h, "score_threshold_%d", scoreThreshold)
+	fmt.Fprintf(h, "exceeds_%t", exceeds)
 	h.Write(nonce)
-	h.Write([]byte(fmt.Sprintf("%d", ctx.BlockHeight())))
+	fmt.Fprintf(h, "%d", ctx.BlockHeight())
 	return h.Sum(nil), nil
 }

@@ -1335,7 +1335,8 @@ func (oa *OpenStackAdapter) performVMDeployment(ctx context.Context, vm *Deploye
 	}
 
 	// Prepare security groups list
-	securityGroups := []string{sg.ID}
+	securityGroups := make([]string, 0, 1+len(opts.AdditionalSecurityGroups))
+	securityGroups = append(securityGroups, sg.ID)
 	securityGroups = append(securityGroups, opts.AdditionalSecurityGroups...)
 
 	// Create server
@@ -1608,10 +1609,10 @@ func (oa *OpenStackAdapter) DeleteVM(ctx context.Context, vmID string) error {
 	for _, fip := range vm.FloatingIPs {
 		// First disassociate, then delete
 		if err := oa.neutron.DisassociateFloatingIP(ctx, fip); err != nil {
-			// Log but continue
+			_ = err // log but continue with cleanup
 		}
 		if err := oa.neutron.DeleteFloatingIP(ctx, fip); err != nil {
-			// Log but continue
+			_ = err // log but continue with cleanup
 		}
 	}
 
@@ -1623,28 +1624,28 @@ func (oa *OpenStackAdapter) DeleteVM(ctx context.Context, vmID string) error {
 
 		// Wait for server to be deleted
 		if err := oa.waitForServerDeleted(ctx, vm.ServerID); err != nil {
-			// Log but continue with cleanup
+			_ = err // log but continue with cleanup
 		}
 	}
 
 	// Delete volumes (after server is deleted)
 	for _, vol := range vm.Volumes {
 		if err := oa.cinder.DeleteVolume(ctx, vol.VolumeID); err != nil {
-			// Log but continue
+			_ = err // log but continue
 		}
 	}
 
 	// Delete security groups
 	for _, sg := range vm.SecurityGroups {
 		if err := oa.neutron.DeleteSecurityGroup(ctx, sg); err != nil {
-			// Log but continue
+			_ = err // log but continue
 		}
 	}
 
 	// Delete private networks (and associated subnets/routers)
 	for _, net := range vm.Networks {
 		if err := oa.neutron.DeleteNetwork(ctx, net.NetworkID); err != nil {
-			// Log but continue - might fail if network is external/shared
+			_ = err // Log but continue - might fail if network is external/shared
 		}
 	}
 
@@ -1781,7 +1782,7 @@ func (oa *OpenStackAdapter) DeleteVolume(ctx context.Context, vmID, volumeID str
 	// Detach if attached
 	if vm.ServerID != "" {
 		if err := oa.nova.DetachVolume(ctx, vm.ServerID, volumeID); err != nil {
-			// Continue even if detach fails (might already be detached)
+			_ = err // Continue even if detach fails (might already be detached)
 		}
 	}
 
@@ -1938,14 +1939,14 @@ func (oa *OpenStackAdapter) configureSecurityGroupRules(ctx context.Context, sgI
 		Direction:       "egress",
 		EtherType:       "IPv4",
 	}); err != nil {
-		// Might already exist, continue
+		_ = err // Might already exist, continue
 	}
 
 	// Add rules for each port
 	for _, port := range ports {
 		protocol := strings.ToLower(port.Protocol)
 		if protocol == "" {
-			protocol = "tcp"
+			protocol = protocolTCP
 		}
 
 		rule := &SecurityGroupRuleSpec{
@@ -1970,7 +1971,7 @@ func (oa *OpenStackAdapter) configureSecurityGroupRules(ctx context.Context, sgI
 	for _, rule := range oa.defaultSecurityGroupRules {
 		rule.SecurityGroupID = sgID
 		if err := oa.neutron.AddSecurityGroupRule(ctx, &rule); err != nil {
-			// Log but continue
+			_ = err // Log but continue
 		}
 	}
 
@@ -2025,11 +2026,11 @@ func (oa *OpenStackAdapter) createPrivateNetwork(ctx context.Context, vmID strin
 			Description: fmt.Sprintf("Router for VM %s", vmID),
 		})
 		if err != nil {
-			// Log but continue - router is optional for external connectivity
+			_ = err // Log but continue - router is optional for external connectivity
 		} else {
 			// Add interface to router
 			if err := oa.neutron.AddRouterInterface(ctx, router.ID, subnet.ID); err != nil {
-				// Log but continue
+				_ = err // Log but continue
 			}
 		}
 	}

@@ -268,6 +268,7 @@ func setupKeeperForBenchmark(b *testing.B) (keeper.Keeper, sdk.Context) {
 	return k, ctx
 }
 
+//nolint:unparam // benchmark helper retains level for future variants
 func setupBenchmarkIdentity(b *testing.B, k keeper.Keeper, ctx sdk.Context, addr sdk.AccAddress, level int) {
 	now := ctx.BlockTime()
 	record := types.NewIdentityRecord(addr.String(), now)

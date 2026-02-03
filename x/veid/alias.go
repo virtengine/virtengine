@@ -39,8 +39,10 @@ const (
 	IdentityTierUnverified = types.IdentityTierUnverified
 	IdentityTierBasic      = types.IdentityTierBasic
 	IdentityTierStandard   = types.IdentityTierStandard
-	IdentityTierVerified   = types.IdentityTierVerified
-	IdentityTierTrusted    = types.IdentityTierTrusted
+	//nolint:staticcheck // SA1019: maintaining backwards compatibility alias
+	IdentityTierVerified = types.IdentityTierVerified
+	//nolint:staticcheck // SA1019: maintaining backwards compatibility alias
+	IdentityTierTrusted = types.IdentityTierTrusted
 )
 
 // Type aliases

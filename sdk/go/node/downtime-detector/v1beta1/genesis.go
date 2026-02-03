@@ -3,7 +3,7 @@ package v1beta1
 import "time"
 
 func DefaultGenesis() *GenesisState {
-	genDowntimes := []GenesisDowntimeEntry{}
+	genDowntimes := make([]GenesisDowntimeEntry, 0, len(DowntimeToDuration.Keys()))
 	for _, downtime := range DowntimeToDuration.Keys() {
 		genDowntimes = append(genDowntimes, GenesisDowntimeEntry{
 			Duration:     downtime,

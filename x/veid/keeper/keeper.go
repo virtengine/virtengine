@@ -431,7 +431,7 @@ func (k Keeper) UploadScope(ctx sdk.Context, address sdk.AccAddress, scope *type
 	}
 
 	// Check scope limits
-	if uint32(len(record.ScopeRefs)) >= params.MaxScopesPerAccount {
+	if safeUint32FromIntBiometric(len(record.ScopeRefs)) >= params.MaxScopesPerAccount {
 		return types.ErrMaxScopesExceeded.Wrapf("maximum %d scopes per account", params.MaxScopesPerAccount)
 	}
 
@@ -441,7 +441,7 @@ func (k Keeper) UploadScope(ctx sdk.Context, address sdk.AccAddress, scope *type
 			typeCount++
 		}
 	}
-	if uint32(typeCount) >= params.MaxScopesPerType {
+	if safeUint32FromIntBiometric(typeCount) >= params.MaxScopesPerType {
 		return types.ErrMaxScopesExceeded.Wrapf("maximum %d scopes of type %s", params.MaxScopesPerType, scope.ScopeType)
 	}
 

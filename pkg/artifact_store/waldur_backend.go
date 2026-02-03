@@ -890,6 +890,9 @@ func (w *WaldurStreamingBackend) PutStream(ctx context.Context, req *PutStreamRe
 	if w.useFallback {
 		data, err := io.ReadAll(req.Reader)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
 			return nil, ErrInvalidInput.Wrapf("failed to read stream: %v", err)
 		}
 
