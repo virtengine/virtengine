@@ -612,7 +612,6 @@ func TestVERewardsIntegration(t *testing.T) {
 
 	// Simulate job completion
 	err = mockClient.SimulateJobCompletion(job.MOABJobID, 0)
-	_ = job // used above
 	require.NoError(t, err)
 
 	// Wait for state to update
