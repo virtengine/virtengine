@@ -10,4 +10,3 @@
 // All simulations use integer arithmetic where possible to maintain
 // determinism for consensus-compatible calculations.
 package simulation
-

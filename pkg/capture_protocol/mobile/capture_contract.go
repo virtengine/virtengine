@@ -117,28 +117,28 @@ type DocumentCaptureSpec struct {
 	PreferredFormat ImageFormat   `json:"preferred_format"`
 
 	// Resolution requirements
-	MinWidth       int `json:"min_width"`        // Minimum width in pixels
-	MinHeight      int `json:"min_height"`       // Minimum height in pixels
-	MaxWidth       int `json:"max_width"`        // Maximum width in pixels
-	MaxHeight      int `json:"max_height"`       // Maximum height in pixels
-	MinMegapixels  float64 `json:"min_megapixels"` // Minimum megapixels
+	MinWidth      int     `json:"min_width"`      // Minimum width in pixels
+	MinHeight     int     `json:"min_height"`     // Minimum height in pixels
+	MaxWidth      int     `json:"max_width"`      // Maximum width in pixels
+	MaxHeight     int     `json:"max_height"`     // Maximum height in pixels
+	MinMegapixels float64 `json:"min_megapixels"` // Minimum megapixels
 
 	// File size limits
-	MaxFileSizeBytes   int64 `json:"max_file_size_bytes"`
+	MaxFileSizeBytes            int64 `json:"max_file_size_bytes"`
 	MaxFileSizeAfterCompression int64 `json:"max_file_size_after_compression"`
 
 	// Quality requirements
-	MinQualityScore    int     `json:"min_quality_score"`     // 0-100
-	MaxBlurScore       float64 `json:"max_blur_score"`        // Laplacian variance
-	MaxSkewDegrees     float64 `json:"max_skew_degrees"`
+	MinQualityScore     int     `json:"min_quality_score"` // 0-100
+	MaxBlurScore        float64 `json:"max_blur_score"`    // Laplacian variance
+	MaxSkewDegrees      float64 `json:"max_skew_degrees"`
 	MinDocumentCoverage float64 `json:"min_document_coverage"` // % of frame
 	MaxGlarePercentage  float64 `json:"max_glare_percentage"`  // % of document area
 
 	// Compression settings
-	JPEGQuality         int  `json:"jpeg_quality"`          // 0-100
-	StripEXIF           bool `json:"strip_exif"`
-	StripGPS            bool `json:"strip_gps"`
-	AllowCompression    bool `json:"allow_compression"`
+	JPEGQuality         int   `json:"jpeg_quality"` // 0-100
+	StripEXIF           bool  `json:"strip_exif"`
+	StripGPS            bool  `json:"strip_gps"`
+	AllowCompression    bool  `json:"allow_compression"`
 	TargetFileSizeBytes int64 `json:"target_file_size_bytes"`
 
 	// Document type restrictions
@@ -282,8 +282,8 @@ type LivenessCaptureSpec struct {
 	MaxBitrate int `json:"max_bitrate"` // kbps
 
 	// Liveness requirements
-	RequireActiveChallenge bool `json:"require_active_challenge"`
-	MinChallengesRequired  int  `json:"min_challenges_required"`
+	RequireActiveChallenge bool    `json:"require_active_challenge"`
+	MinChallengesRequired  int     `json:"min_challenges_required"`
 	MinConfidence          float64 `json:"min_confidence"`
 }
 
@@ -324,8 +324,8 @@ func DefaultLivenessCaptureSpec() LivenessCaptureSpec {
 // DeviceRequirements defines device requirements for capture
 type DeviceRequirements struct {
 	// Platform requirements
-	MinIOSVersion      string `json:"min_ios_version"`
-	MinAndroidAPI      int    `json:"min_android_api"`
+	MinIOSVersion string `json:"min_ios_version"`
+	MinAndroidAPI int    `json:"min_android_api"`
 
 	// Camera requirements
 	RequireBackCamera  bool    `json:"require_back_camera"`
@@ -372,8 +372,8 @@ func DefaultDeviceRequirements() DeviceRequirements {
 // EncryptionRequirements defines encryption requirements for captured data
 type EncryptionRequirements struct {
 	// Algorithm requirements
-	Algorithm         string `json:"algorithm"`         // e.g., "X25519-XSalsa20-Poly1305"
-	AlgorithmVersion  uint32 `json:"algorithm_version"`
+	Algorithm        string `json:"algorithm"` // e.g., "X25519-XSalsa20-Poly1305"
+	AlgorithmVersion uint32 `json:"algorithm_version"`
 
 	// Salt requirements
 	MinSaltLength int `json:"min_salt_length"`
@@ -459,8 +459,8 @@ type TimingConstraints struct {
 	MaxUploadDelaySeconds int64 `json:"max_upload_delay_seconds"` // Max delay between capture and upload
 
 	// Salt timing
-	SaltValiditySeconds   int64 `json:"salt_validity_seconds"`   // How long a salt is valid
-	ReplayWindowSeconds   int64 `json:"replay_window_seconds"`   // Window for replay detection
+	SaltValiditySeconds int64 `json:"salt_validity_seconds"` // How long a salt is valid
+	ReplayWindowSeconds int64 `json:"replay_window_seconds"` // Window for replay detection
 
 	// Session timing
 	SessionTimeoutSeconds int64 `json:"session_timeout_seconds"` // Capture session timeout
@@ -693,4 +693,3 @@ func (l *LivenessCaptureSpec) ValidateVideoSpec(
 
 	return nil
 }
-

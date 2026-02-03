@@ -418,7 +418,14 @@ func (s *DeliveryService) getProviders() []Provider {
 
 // calculateRetryDelay calculates the delay for a retry attempt using exponential backoff.
 func (s *DeliveryService) calculateRetryDelay(attempt int) time.Duration {
-	delay := s.config.RetryBaseDelay * time.Duration(1<<uint(attempt-1))
+	shift := attempt - 1
+	if shift < 0 {
+		shift = 0
+	}
+	if shift > 30 {
+		shift = 30
+	}
+	delay := s.config.RetryBaseDelay * time.Duration(1<<shift)
 	if delay > s.config.RetryMaxDelay {
 		delay = s.config.RetryMaxDelay
 	}

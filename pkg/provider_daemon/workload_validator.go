@@ -272,6 +272,7 @@ func ApplyResourceDefaults(job *hpctypes.HPCJob, template *hpctypes.WorkloadTemp
 	}
 
 	if job.Resources.MemoryGBPerNode == 0 {
+		//nolint:gosec // DefaultMemoryMBPerNode is always non-negative
 		job.Resources.MemoryGBPerNode = int32(r.DefaultMemoryMBPerNode / 1024)
 	}
 
@@ -283,4 +284,3 @@ func ApplyResourceDefaults(job *hpctypes.HPCJob, template *hpctypes.WorkloadTemp
 		job.MaxRuntimeSeconds = r.DefaultRuntimeMinutes * 60
 	}
 }
-

@@ -112,4 +112,3 @@
 //		ExcludeWeekends: true,
 //	}
 package jira
-

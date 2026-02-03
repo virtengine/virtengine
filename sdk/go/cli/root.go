@@ -114,4 +114,3 @@ func ExecuteWithCtx(ctx context.Context, rootCmd *cobra.Command, envPrefix strin
 	executor := cmtcli.PrepareBaseCmd(rootCmd, envPrefix, DefaultHome)
 	return executor.ExecuteContext(ctx)
 }
-

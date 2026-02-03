@@ -137,7 +137,7 @@ module "s3" {
   name_prefix         = local.name_prefix
   environment         = local.environment
   create_ml_bucket    = true
-  create_state_bucket = false  # Managed separately
+  create_state_bucket = false # Managed separately
 
   tags = local.common_tags
 }

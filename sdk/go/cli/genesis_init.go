@@ -256,4 +256,3 @@ func downloadGenesis(config *cmtcfg.Config, chainID string) error {
 
 	return nil
 }
-

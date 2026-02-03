@@ -487,7 +487,9 @@ func (rk *reconciliationKeeper) setReconciliationReportIndexes(store storetypes.
 }
 
 func (rk *reconciliationKeeper) buildReconciliationReportByProviderPrefix(provider string) []byte {
-	key := append(billing.ReconciliationReportByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(billing.ReconciliationReportByProviderPrefix)+len(provider)+1)
+	key = append(key, billing.ReconciliationReportByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	return append(key, byte('/'))
 }
 
@@ -772,8 +774,11 @@ func (rk *reconciliationKeeper) calculateSummary(
 	discrepancies []billing.ReconciliationDiscrepancy,
 ) billing.ReconciliationSummary {
 	summary := billing.ReconciliationSummary{
-		TotalUsageRecords:     uint32(len(usageRecords)),
-		TotalInvoices:         uint32(len(invoices)),
+		//nolint:gosec // slice lengths are non-negative
+		TotalUsageRecords: uint32(len(usageRecords)),
+		//nolint:gosec // slice lengths are non-negative
+		TotalInvoices: uint32(len(invoices)),
+		//nolint:gosec // slice lengths are non-negative
 		TotalSettlements:      uint32(len(payoutRecords)),
 		TotalInvoiceAmount:    sdk.NewCoins(),
 		TotalSettlementAmount: sdk.NewCoins(),
@@ -783,7 +788,8 @@ func (rk *reconciliationKeeper) calculateSummary(
 		DisputedAmount:        sdk.NewCoins(),
 		OverdueAmount:         sdk.NewCoins(),
 		DiscrepancyAmount:     sdk.NewCoins(),
-		DiscrepancyCount:      uint32(len(discrepancies)),
+		//nolint:gosec // slice length is non-negative
+		DiscrepancyCount: uint32(len(discrepancies)),
 	}
 
 	// Calculate usage totals

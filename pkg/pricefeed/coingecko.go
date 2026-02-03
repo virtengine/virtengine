@@ -21,15 +21,15 @@ import (
 
 // CoinGeckoProvider implements the Provider interface for CoinGecko API
 type CoinGeckoProvider struct {
-	name       string
-	config     CoinGeckoConfig
-	client     *http.Client
+	name        string
+	config      CoinGeckoConfig
+	client      *http.Client
 	rateLimiter *rateLimiter
-	health     SourceHealth
-	healthMu   sync.RWMutex
-	circuit    *CircuitBreaker
-	retryer    *Retryer
-	closed     atomic.Bool
+	health      SourceHealth
+	healthMu    sync.RWMutex
+	circuit     *CircuitBreaker
+	retryer     *Retryer
+	closed      atomic.Bool
 }
 
 // rateLimiter implements simple rate limiting
@@ -465,4 +465,3 @@ func unique(strs []string) []string {
 	}
 	return result
 }
-

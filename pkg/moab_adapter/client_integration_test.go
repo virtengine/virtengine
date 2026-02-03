@@ -201,7 +201,7 @@ func TestIntegrationJobSubmitAndCancel(t *testing.T) {
 
 	err = client.Connect(ctx)
 	require.NoError(t, err)
-	defer client.Disconnect()
+	defer func() { _ = client.Disconnect() }()
 
 	// Get test executable
 	executable := os.Getenv("MOAB_TEST_EXECUTABLE")
@@ -338,7 +338,7 @@ func TestIntegrationHoldRelease(t *testing.T) {
 
 	err = client.Connect(ctx)
 	require.NoError(t, err)
-	defer client.Disconnect()
+	defer func() { _ = client.Disconnect() }()
 
 	// Submit a test job
 	spec := &moab.MOABJobSpec{
@@ -405,7 +405,7 @@ func TestIntegrationReservations(t *testing.T) {
 
 	err = client.Connect(ctx)
 	require.NoError(t, err)
-	defer client.Disconnect()
+	defer func() { _ = client.Disconnect() }()
 
 	reservations, err := client.GetReservations(ctx)
 	require.NoError(t, err)
@@ -465,7 +465,7 @@ func BenchmarkIntegrationGetJobStatus(b *testing.B) {
 	if err := client.Connect(ctx); err != nil {
 		b.Fatalf("Failed to connect: %v", err)
 	}
-	defer client.Disconnect()
+	defer func() { _ = client.Disconnect() }()
 
 	// Submit a job for the benchmark
 	spec := &moab.MOABJobSpec{
@@ -492,4 +492,3 @@ func BenchmarkIntegrationGetJobStatus(b *testing.B) {
 		}
 	}
 }
-

@@ -299,4 +299,3 @@ func TestAccountFromV1beta3(t *testing.T) {
 		})
 	}
 }
-

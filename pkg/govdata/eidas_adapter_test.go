@@ -483,7 +483,7 @@ func TestEIDASAdapter_WithMockServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/ServiceProvider/authenticate" {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"requestId": "test-123",
 				"status": "SUCCESS",
 				"statusCode": "urn:oasis:names:tc:SAML:2.0:status:Success",
@@ -556,4 +556,3 @@ func TestEIDASMemberStates(t *testing.T) {
 	assert.Contains(t, EIDASMemberStates, "LI") // Liechtenstein
 	assert.Contains(t, EIDASMemberStates, "NO") // Norway
 }
-

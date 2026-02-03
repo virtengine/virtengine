@@ -153,6 +153,7 @@ const (
 // SAML AuthnContext constants
 const (
 	// AuthnContextPasswordProtected is the password protected transport context
+	//nolint:gosec // G101: This is a SAML URN constant, not a credential
 	AuthnContextPasswordProtected = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
 
 	// AuthnContextMFA is the REFEDS MFA profile context
@@ -830,4 +831,3 @@ type FederationStats struct {
 	// LastRefresh is when stats were last computed
 	LastRefresh time.Time `json:"last_refresh"`
 }
-

@@ -9,4 +9,3 @@ var (
 	ErrClientNotFound = errors.New("client not found")
 	ErrNodeNotSynced  = errors.New("rpc node is not catching up")
 )
-

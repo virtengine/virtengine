@@ -148,4 +148,3 @@ type testEvent []byte
 func newEvent(addr []byte) testEvent {
 	return testEvent(addr)
 }
-

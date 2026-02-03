@@ -17,20 +17,20 @@ type NetworkSecurityManager struct {
 	logger log.Logger
 
 	// Security components
-	noiseTransport      *NoiseTransport
-	peerAuthenticator   *PeerAuthenticator
-	peerAuthorizer      *PeerAuthorizer
-	peerScoreManager    *PeerScoreManager
-	networkRateLimiter  *NetworkRateLimiter
-	ddosProtector       *DDoSProtector
-	sybilProtector      *SybilProtector
-	eclipseProtector    *EclipseProtector
-	firewallGenerator   *FirewallRuleGenerator
-	idsIntegration      *IDSIntegration
+	noiseTransport     *NoiseTransport
+	peerAuthenticator  *PeerAuthenticator
+	peerAuthorizer     *PeerAuthorizer
+	peerScoreManager   *PeerScoreManager
+	networkRateLimiter *NetworkRateLimiter
+	ddosProtector      *DDoSProtector
+	sybilProtector     *SybilProtector
+	eclipseProtector   *EclipseProtector
+	firewallGenerator  *FirewallRuleGenerator
+	idsIntegration     *IDSIntegration
 
 	// State
 	started bool
-	
+
 	// Background workers
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -236,7 +236,7 @@ func (nsm *NetworkSecurityManager) SecureOutbound(conn net.Conn, remotePublicKey
 	session, err := nsm.noiseTransport.SecureOutbound(conn, remotePublicKey)
 	if err != nil {
 		telemetry.IncrCounter(1, "network", "noise", "handshake_failed", "outbound")
-		return nil, fmt.Errorf("Noise handshake failed: %w", err)
+		return nil, fmt.Errorf("noise handshake failed: %w", err)
 	}
 
 	telemetry.IncrCounter(1, "network", "noise", "handshake_success", "outbound")
@@ -252,7 +252,7 @@ func (nsm *NetworkSecurityManager) SecureInbound(conn net.Conn) (net.Conn, error
 	session, err := nsm.noiseTransport.SecureInbound(conn)
 	if err != nil {
 		telemetry.IncrCounter(1, "network", "noise", "handshake_failed", "inbound")
-		return nil, fmt.Errorf("Noise handshake failed: %w", err)
+		return nil, fmt.Errorf("noise handshake failed: %w", err)
 	}
 
 	telemetry.IncrCounter(1, "network", "noise", "handshake_success", "inbound")
@@ -509,19 +509,19 @@ func (nsm *NetworkSecurityManager) GetStats() NetworkSecurityStats {
 // NetworkSecurityStats contains comprehensive security statistics.
 type NetworkSecurityStats struct {
 	// Peer statistics
-	TotalPeers     int
-	InboundPeers   int
-	OutboundPeers  int
-	
+	TotalPeers    int
+	InboundPeers  int
+	OutboundPeers int
+
 	// Rate limiting
-	RateLimitActiveIPs  int
-	RateLimitBlocked    int
-	AdaptiveMultiplier  float64
-	
+	RateLimitActiveIPs int
+	RateLimitBlocked   int
+	AdaptiveMultiplier float64
+
 	// Attack prevention
 	DiversityScore    float64
 	AnchorConnections int
-	
+
 	// IDS
 	IDSAlertsSent    int64
 	IDSAlertsDropped int64

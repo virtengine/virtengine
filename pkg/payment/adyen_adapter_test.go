@@ -54,10 +54,10 @@ func TestRealAdyenAdapter_Creation(t *testing.T) {
 
 	t.Run("live environment with prefix", func(t *testing.T) {
 		adapter, err := NewRealAdyenAdapter(AdyenConfig{
-			APIKey:                 "live_api_key",
-			MerchantAccount:        "LiveMerchant",
-			Environment:            "live",
-			LiveEndpointURLPrefix:  "prefix123",
+			APIKey:                "live_api_key",
+			MerchantAccount:       "LiveMerchant",
+			Environment:           "live",
+			LiveEndpointURLPrefix: "prefix123",
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, adapter)
@@ -257,10 +257,10 @@ func TestRealAdyenAdapter_TestMode(t *testing.T) {
 
 	t.Run("live environment", func(t *testing.T) {
 		adapter, _ := NewRealAdyenAdapter(AdyenConfig{
-			APIKey:                 "live_api_key",
-			MerchantAccount:        "LiveMerchant",
-			Environment:            "live",
-			LiveEndpointURLPrefix:  "prefix",
+			APIKey:                "live_api_key",
+			MerchantAccount:       "LiveMerchant",
+			Environment:           "live",
+			LiveEndpointURLPrefix: "prefix",
 		})
 		realAdapter := adapter.(*RealAdyenAdapter)
 		assert.False(t, realAdapter.IsTestMode())
@@ -296,4 +296,3 @@ func TestMapAdyenCardBrand(t *testing.T) {
 		})
 	}
 }
-

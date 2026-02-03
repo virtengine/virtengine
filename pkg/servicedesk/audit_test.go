@@ -210,4 +210,3 @@ func TestAuditExport(t *testing.T) {
 		t.Error("expected JSON array")
 	}
 }
-

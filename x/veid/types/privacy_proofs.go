@@ -68,7 +68,7 @@ func (ct ClaimType) String() string {
 	case ClaimTypeBiometricVerified:
 		return "biometric_verified"
 	default:
-		return "unknown"
+		return string(AccountStatusUnknown)
 	}
 }
 
@@ -139,7 +139,7 @@ func (ps ProofScheme) String() string {
 	case ProofSchemeCommitmentScheme:
 		return "commitment_scheme"
 	default:
-		return "unknown"
+		return string(AccountStatusUnknown)
 	}
 }
 
@@ -771,6 +771,6 @@ func ComputeCommitmentHash(value interface{}, salt []byte) ([]byte, error) {
 	h.Write(salt)
 	// Use simple string representation for MVP
 	// In production, this would use a proper commitment scheme
-	h.Write([]byte(fmt.Sprintf("%v", value)))
+	fmt.Fprintf(h, "%v", value)
 	return h.Sum(nil), nil
 }

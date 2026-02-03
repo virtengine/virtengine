@@ -113,6 +113,8 @@ func (am AppModule) Name() string {
 }
 
 // RegisterInvariants registers the Review module invariants.
+//
+//nolint:staticcheck // sdk.InvariantRegistry is deprecated in upstream SDK
 func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {
 	// No invariants to register for the review module
 }
@@ -167,5 +169,3 @@ func (am AppModule) IsOnePerModuleType() {
 func (am AppModule) IsAppModule() {
 	// Required by the appmodule.AppModule interface
 }
-
-

@@ -318,7 +318,7 @@ func (k IBCKeeper) sendPacket(
 	// Convert timeout height to client types
 	height, ok := timeoutHeight.(clienttypes.Height)
 	if !ok {
-		height = clienttypes.NewHeight(0, uint64(ctx.BlockHeight())+1000)
+		height = clienttypes.NewHeight(0, safeUint64FromInt64(ctx.BlockHeight())+1000)
 	}
 
 	// Send the packet
@@ -594,4 +594,12 @@ func (k IBCKeeper) GetAppVersion(ctx sdk.Context, portID, channelID string) (str
 		return "", false
 	}
 	return channel.Version, true
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }

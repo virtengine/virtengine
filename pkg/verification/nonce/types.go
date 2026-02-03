@@ -211,4 +211,3 @@ func DefaultRedisConfig() RedisConfig {
 		PoolSize: 10,
 	}
 }
-

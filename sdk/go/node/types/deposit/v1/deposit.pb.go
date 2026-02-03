@@ -470,4 +470,3 @@ var (
 	ErrIntOverflowDeposit          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupDeposit = fmt.Errorf("proto: unexpected end of group")
 )
-

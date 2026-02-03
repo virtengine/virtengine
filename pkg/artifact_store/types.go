@@ -3,6 +3,7 @@ package artifact_store
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"math"
 	"time"
 )
 
@@ -260,7 +261,7 @@ func (m *ChunkManifest) Serialize() []byte {
 		buf = append(buf, chunk.Hash...)
 		buf = appendUint64(buf, chunk.Size)
 		buf = appendUint64(buf, chunk.Offset)
-		buf = appendUint32(buf, uint32(len(chunk.BackendRef)))
+		buf = appendUint32(buf, safeUint32FromInt(len(chunk.BackendRef)))
 		buf = append(buf, []byte(chunk.BackendRef)...)
 	}
 
@@ -276,6 +277,16 @@ func appendUint32(buf []byte, v uint32) []byte {
 func appendUint64(buf []byte, v uint64) []byte {
 	return append(buf, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
 		byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
 // Validate validates the chunk manifest
@@ -522,4 +533,3 @@ func (a *ArtifactReference) GetMetadata(key string) (string, bool) {
 func (a *ArtifactReference) IsChunked() bool {
 	return a.ChunkManifest != nil && a.ChunkManifest.ChunkCount > 1
 }
-

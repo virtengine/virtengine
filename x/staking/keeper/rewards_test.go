@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until staking rewards API is stabilized.
-
 // Package keeper implements the staking module keeper tests.
 //
 // VE-921: Reward calculation tests
@@ -83,7 +78,7 @@ func (s *RewardsTestSuite) TestCalculateRewards() {
 	perf.VEIDVerificationScore = 10000
 	perf.UptimeSeconds = 86400
 	perf.DowntimeSeconds = 0
-	perf.ComputeOverallScore()
+	types.ComputeOverallScore(perf)
 
 	input := types.RewardCalculationInput{
 		ValidatorAddress: "validator1",
@@ -127,13 +122,13 @@ func (s *RewardsTestSuite) TestCalculateRewardsProportional() {
 	perf1.BlocksProposed = 10
 	perf1.BlocksExpected = 10
 	perf1.UptimeSeconds = 86400
-	perf1.ComputeOverallScore()
+	types.ComputeOverallScore(perf1)
 
 	perf2 := types.NewValidatorPerformance("validator2", 1)
 	perf2.BlocksProposed = 10
 	perf2.BlocksExpected = 10
 	perf2.UptimeSeconds = 86400
-	perf2.ComputeOverallScore()
+	types.ComputeOverallScore(perf2)
 
 	totalStake := int64(1000000000)
 	epochRewardPool := int64(100000000)
@@ -182,7 +177,7 @@ func (s *RewardsTestSuite) TestCalculateRewardsPerformanceMultiplier() {
 	perfHigh.VEIDVerificationsExpected = 5
 	perfHigh.VEIDVerificationScore = 10000
 	perfHigh.UptimeSeconds = 86400
-	perfHigh.ComputeOverallScore()
+	types.ComputeOverallScore(perfHigh)
 
 	// Low performer
 	perfLow := types.NewValidatorPerformance("validator2", 1)
@@ -193,7 +188,7 @@ func (s *RewardsTestSuite) TestCalculateRewardsPerformanceMultiplier() {
 	perfLow.VEIDVerificationScore = 5000
 	perfLow.UptimeSeconds = 43200
 	perfLow.DowntimeSeconds = 43200
-	perfLow.ComputeOverallScore()
+	types.ComputeOverallScore(perfLow)
 
 	stake := int64(500000000)
 	totalStake := int64(1000000000)
@@ -278,11 +273,11 @@ func (s *RewardsTestSuite) TestCalculateEpochRewards() {
 		perf := types.NewValidatorPerformance(validatorAddr, epoch)
 		perf.BlocksProposed = int64(i * 10)
 		perf.BlocksExpected = 30
-		perf.VEIDVerificationsCompleted = int64(i * 2)
-		perf.VEIDVerificationsExpected = 6
-		perf.VEIDVerificationScore = 8000
-		perf.UptimeSeconds = 86400
-		perf.ComputeOverallScore()
+	perf.VEIDVerificationsCompleted = int64(i * 2)
+	perf.VEIDVerificationsExpected = 6
+	perf.VEIDVerificationScore = 8000
+	perf.UptimeSeconds = 86400
+	types.ComputeOverallScore(perf)
 		err := s.keeper.SetValidatorPerformance(s.ctx, *perf)
 		s.Require().NoError(err)
 	}
@@ -339,7 +334,7 @@ func (s *RewardsTestSuite) TestRewardDeterminism() {
 	perf.VEIDVerificationsExpected = 5
 	perf.VEIDVerificationScore = 9500
 	perf.UptimeSeconds = 86400
-	perf.ComputeOverallScore()
+	types.ComputeOverallScore(perf)
 
 	input := types.RewardCalculationInput{
 		ValidatorAddress: "validator1",
@@ -356,8 +351,8 @@ func (s *RewardsTestSuite) TestRewardDeterminism() {
 	reward3 := types.CalculateRewards(input, "uve")
 
 	// All results should be identical (deterministic)
-	s.Require().True(reward1.TotalReward.IsEqual(reward2.TotalReward))
-	s.Require().True(reward2.TotalReward.IsEqual(reward3.TotalReward))
+	s.Require().True(reward1.TotalReward.Equal(reward2.TotalReward))
+	s.Require().True(reward2.TotalReward.Equal(reward3.TotalReward))
 	s.Require().Equal(reward1.PerformanceScore, reward2.PerformanceScore)
 	s.Require().Equal(reward2.PerformanceScore, reward3.PerformanceScore)
 }
@@ -367,12 +362,12 @@ func (s *RewardsTestSuite) TestVEIDBonusForHighScore() {
 	// High VEID score (>= 9000)
 	perfHigh := types.NewValidatorPerformance("validator1", 1)
 	perfHigh.VEIDVerificationScore = 9500
-	perfHigh.ComputeOverallScore()
+	types.ComputeOverallScore(perfHigh)
 
 	// Medium VEID score (< 9000)
 	perfMed := types.NewValidatorPerformance("validator2", 1)
 	perfMed.VEIDVerificationScore = 8000
-	perfMed.ComputeOverallScore()
+	types.ComputeOverallScore(perfMed)
 
 	stake := int64(500000000)
 	totalStake := int64(1000000000)

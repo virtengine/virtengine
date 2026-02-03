@@ -272,18 +272,18 @@ func (r *DerivedFeatureVerificationRecord) AddFeatureReference(ref DerivedFeatur
 // ComputeCompositeHash computes the composite hash from all feature references
 func (r *DerivedFeatureVerificationRecord) ComputeCompositeHash() {
 	h := sha256.New()
-	
+
 	// Include all feature hashes in deterministic order
 	for _, ref := range r.FeatureReferences {
 		h.Write([]byte(ref.FeatureType))
 		h.Write(ref.FeatureHash)
 		h.Write([]byte(ref.SourceScopeID))
 	}
-	
+
 	// Include model version for reproducibility
 	h.Write([]byte(r.ModelVersion))
 	h.Write([]byte(r.ModelHash))
-	
+
 	r.CompositeHash = h.Sum(nil)
 }
 
@@ -351,10 +351,10 @@ func (r *DerivedFeatureVerificationRecord) HasConsensus(totalValidators int) boo
 	if totalValidators == 0 {
 		return false
 	}
-	
+
 	agreements := r.CountAgreements()
 	threshold := (totalValidators * 2) / 3
-	
+
 	return agreements > threshold
 }
 

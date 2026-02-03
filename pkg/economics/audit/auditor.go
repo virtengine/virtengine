@@ -10,16 +10,17 @@ import (
 )
 
 const severityHigh = "high"
+const severityCritical = "critical"
 
 // EconomicAuditor performs comprehensive economic security audits.
 type EconomicAuditor struct {
-	params             economics.TokenomicsParams
-	inflationSim       *simulation.InflationSimulator
-	stakingSim         *simulation.StakingSimulator
-	feeMarketSim       *simulation.FeeMarketSimulator
-	distributionAnal   *analysis.DistributionAnalyzer
-	attackAnal         *analysis.AttackAnalyzer
-	gameTheoryAnal     *analysis.GameTheoryAnalyzer
+	params           economics.TokenomicsParams
+	inflationSim     *simulation.InflationSimulator
+	stakingSim       *simulation.StakingSimulator
+	feeMarketSim     *simulation.FeeMarketSimulator
+	distributionAnal *analysis.DistributionAnalyzer
+	attackAnal       *analysis.AttackAnalyzer
+	gameTheoryAnal   *analysis.GameTheoryAnalyzer
 }
 
 // NewEconomicAuditor creates a new economic auditor.
@@ -37,19 +38,19 @@ func NewEconomicAuditor(params economics.TokenomicsParams) *EconomicAuditor {
 
 // AuditInput contains all data needed for a comprehensive audit.
 type AuditInput struct {
-	NetworkState      economics.NetworkState      `json:"network_state"`
-	Validators        []economics.ValidatorState  `json:"validators"`
-	Holdings          []analysis.Holding          `json:"holdings"`
-	HistoricalFees    []int64                     `json:"historical_fees"`
-	TokenPriceUSD     float64                     `json:"token_price_usd"`
-	SlashingEnabled   bool                        `json:"slashing_enabled"`
+	NetworkState       economics.NetworkState     `json:"network_state"`
+	Validators         []economics.ValidatorState `json:"validators"`
+	Holdings           []analysis.Holding         `json:"holdings"`
+	HistoricalFees     []int64                    `json:"historical_fees"`
+	TokenPriceUSD      float64                    `json:"token_price_usd"`
+	SlashingEnabled    bool                       `json:"slashing_enabled"`
 	SlashingPenaltyBPS int64                      `json:"slashing_penalty_bps"`
 }
 
 // PerformAudit performs a comprehensive economic security audit.
 func (a *EconomicAuditor) PerformAudit(input AuditInput) economics.EconomicSecurityAudit {
 	audit := economics.EconomicSecurityAudit{
-		Timestamp:    time.Now(),
+		Timestamp:       time.Now(),
 		Vulnerabilities: make([]economics.Vulnerability, 0),
 		Recommendations: make([]economics.Recommendation, 0),
 	}
@@ -184,7 +185,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.StakingAnalysis.CurrentRatioBPS < 5000 {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "critical",
+			Severity:    severityCritical,
 			Category:    "staking",
 			Title:       "Low Staking Ratio",
 			Description: "Staking ratio below 50% significantly increases attack vulnerability.",
@@ -195,7 +196,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 		vulnID++
 	}
 
-	if audit.StakingAnalysis.ConcentrationRisk == "high" {
+	if audit.StakingAnalysis.ConcentrationRisk == severityHigh {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
 			Severity:    severityHigh,
@@ -228,7 +229,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 	if audit.DistributionMetrics.NakamotoCoefficient < 10 {
 		vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 			ID:          formatVulnID(vulnID),
-			Severity:    "critical",
+			Severity:    severityCritical,
 			Category:    "distribution",
 			Title:       "Low Nakamoto Coefficient",
 			Description: "Fewer than 10 entities could control the network.",
@@ -255,10 +256,11 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 
 	// Attack vulnerabilities
 	for _, attack := range audit.AttackAnalyses {
-		if attack.RiskLevel == "critical" {
+		switch attack.RiskLevel {
+		case severityCritical:
 			vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 				ID:          formatVulnID(vulnID),
-				Severity:    "critical",
+				Severity:    severityCritical,
 				Category:    "attack",
 				Title:       attack.AttackType + " Vulnerability",
 				Description: "Attack cost: $" + formatFloat(attack.CostEstimateUSD),
@@ -267,7 +269,7 @@ func (a *EconomicAuditor) identifyVulnerabilities(audit economics.EconomicSecuri
 				Status:      "open",
 			})
 			vulnID++
-		} else if attack.RiskLevel == severityHigh {
+		case severityHigh:
 			vulnerabilities = append(vulnerabilities, economics.Vulnerability{
 				ID:          formatVulnID(vulnID),
 				Severity:    severityHigh,
@@ -370,9 +372,9 @@ func (a *EconomicAuditor) calculateOverallScore(audit economics.EconomicSecurity
 	// Attack vulnerability score (max -20)
 	for _, attack := range audit.AttackAnalyses {
 		switch attack.RiskLevel {
-		case "critical":
+		case severityCritical:
 			score -= 10
-		case "high":
+		case severityHigh:
 			score -= 5
 		case "medium":
 			score -= 2
@@ -393,57 +395,57 @@ func (a *EconomicAuditor) calculateOverallScore(audit economics.EconomicSecurity
 // GenerateAuditReport generates a formatted audit report.
 func (a *EconomicAuditor) GenerateAuditReport(audit economics.EconomicSecurityAudit) AuditReport {
 	report := AuditReport{
-		Title:       "VirtEngine Economic Security Audit",
-		Timestamp:   audit.Timestamp,
+		Title:        "VirtEngine Economic Security Audit",
+		Timestamp:    audit.Timestamp,
 		OverallScore: audit.OverallScore,
-		Summary:     a.generateSummary(audit),
-		Sections:    make([]AuditSection, 0),
+		Summary:      a.generateSummary(audit),
+		Sections:     make([]AuditSection, 0),
 	}
 
 	// Inflation section
 	report.Sections = append(report.Sections, AuditSection{
-		Title: "Inflation Analysis",
-		Score: audit.InflationAnalysis.SustainabilityScore,
+		Title:   "Inflation Analysis",
+		Score:   audit.InflationAnalysis.SustainabilityScore,
 		Content: formatInflationAnalysis(audit.InflationAnalysis),
 	})
 
 	// Staking section
 	report.Sections = append(report.Sections, AuditSection{
-		Title: "Staking Analysis",
-		Score: a.calculateStakingScore(audit.StakingAnalysis),
+		Title:   "Staking Analysis",
+		Score:   a.calculateStakingScore(audit.StakingAnalysis),
 		Content: formatStakingAnalysis(audit.StakingAnalysis),
 	})
 
 	// Fee Market section
 	report.Sections = append(report.Sections, AuditSection{
-		Title: "Fee Market Analysis",
-		Score: audit.FeeMarketAnalysis.SpamResistance,
+		Title:   "Fee Market Analysis",
+		Score:   audit.FeeMarketAnalysis.SpamResistance,
 		Content: formatFeeMarketAnalysis(audit.FeeMarketAnalysis),
 	})
 
 	// Distribution section
 	report.Sections = append(report.Sections, AuditSection{
-		Title: "Token Distribution Analysis",
-		Score: a.distributionAnal.CalculateDecentralizationScore(audit.DistributionMetrics),
+		Title:   "Token Distribution Analysis",
+		Score:   a.distributionAnal.CalculateDecentralizationScore(audit.DistributionMetrics),
 		Content: formatDistributionAnalysis(audit.DistributionMetrics),
 	})
 
 	// Security section
 	report.Sections = append(report.Sections, AuditSection{
-		Title: "Security Analysis",
-		Score: a.calculateSecurityScore(audit.AttackAnalyses),
+		Title:   "Security Analysis",
+		Score:   a.calculateSecurityScore(audit.AttackAnalyses),
 		Content: formatSecurityAnalysis(audit.AttackAnalyses),
 	})
 
 	// Vulnerabilities section
 	report.Sections = append(report.Sections, AuditSection{
-		Title: "Identified Vulnerabilities",
+		Title:   "Identified Vulnerabilities",
 		Content: formatVulnerabilities(audit.Vulnerabilities),
 	})
 
 	// Recommendations section
 	report.Sections = append(report.Sections, AuditSection{
-		Title: "Recommendations",
+		Title:   "Recommendations",
 		Content: formatRecommendations(audit.Recommendations),
 	})
 
@@ -480,9 +482,10 @@ func (a *EconomicAuditor) generateSummary(audit economics.EconomicSecurityAudit)
 	criticalVulns := 0
 	highVulns := 0
 	for _, v := range audit.Vulnerabilities {
-		if v.Severity == "critical" {
+		switch v.Severity {
+		case "critical":
 			criticalVulns++
-		} else if v.Severity == severityHigh {
+		case severityHigh:
 			highVulns++
 		}
 	}
@@ -578,7 +581,7 @@ func joinStrings(strs []string) string {
 func sortRecommendations(recommendations []economics.Recommendation) {
 	// Priority order: critical, high, medium, low
 	priorityOrder := map[string]int{"critical": 0, "high": 1, "medium": 2, "low": 3}
-	
+
 	for i := 0; i < len(recommendations)-1; i++ {
 		for j := i + 1; j < len(recommendations); j++ {
 			pi := priorityOrder[recommendations[i].Priority]
@@ -650,4 +653,3 @@ func formatRecommendations(recs []economics.Recommendation) string {
 	}
 	return result
 }
-

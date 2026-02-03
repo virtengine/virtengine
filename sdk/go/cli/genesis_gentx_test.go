@@ -95,4 +95,3 @@ func (s *GenesisCLITestSuite) TestGenTxCmd() {
 		})
 	}
 }
-

@@ -264,7 +264,6 @@ type RedisAntiFraudEngine struct {
 	config AntiFraudConfig
 	client *redis.Client
 	logger zerolog.Logger
-	mu     sync.RWMutex
 }
 
 // NewRedisAntiFraudEngine creates a new Redis-based anti-fraud engine
@@ -446,7 +445,7 @@ func (e *RedisAntiFraudEngine) BlockPhone(ctx context.Context, phoneHash string,
 		"blocked_at": time.Now().Unix(),
 		"expires_at": time.Now().Add(duration).Unix(),
 	}
-	jsonData, _ := json.Marshal(data)
+	jsonData, _ := json.Marshal(data) //nolint:errchkjson // interface{} map for simple JSON
 	return e.client.Set(ctx, key, jsonData, duration).Err()
 }
 
@@ -478,7 +477,7 @@ func (e *RedisAntiFraudEngine) BlockIP(ctx context.Context, ipHash string, reaso
 		"blocked_at": time.Now().Unix(),
 		"expires_at": time.Now().Add(duration).Unix(),
 	}
-	jsonData, _ := json.Marshal(data)
+	jsonData, _ := json.Marshal(data) //nolint:errchkjson // interface{} map for simple JSON
 	return e.client.Set(ctx, key, jsonData, duration).Err()
 }
 
@@ -539,9 +538,10 @@ func (e *RedisAntiFraudEngine) GetVelocityStats(ctx context.Context, entityType 
 	var isBlocked bool
 	var blockedUntil *time.Time
 	var blockReason string
-	if entityType == "phone" {
+	switch entityType {
+	case "phone":
 		isBlocked, blockReason, _ = e.IsPhoneBlocked(ctx, entityHash)
-	} else if entityType == "ip" {
+	case "ip":
 		isBlocked, blockReason, _ = e.IsIPBlocked(ctx, entityHash)
 	}
 
@@ -893,9 +893,10 @@ func (e *InMemoryAntiFraudEngine) GetVelocityStats(ctx context.Context, entityTy
 
 	isBlocked := false
 	blockReason := ""
-	if entityType == "phone" {
+	switch entityType {
+	case "phone":
 		isBlocked, blockReason, _ = e.IsPhoneBlocked(ctx, entityHash)
-	} else if entityType == "ip" {
+	case "ip":
 		isBlocked, blockReason, _ = e.IsIPBlocked(ctx, entityHash)
 	}
 
@@ -918,4 +919,3 @@ func (e *InMemoryAntiFraudEngine) Close() error {
 
 // Ensure InMemoryAntiFraudEngine implements AntiFraudEngine
 var _ AntiFraudEngine = (*InMemoryAntiFraudEngine)(nil)
-

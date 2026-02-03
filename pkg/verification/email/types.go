@@ -405,9 +405,10 @@ func (c *EmailChallenge) UpdateDeliveryStatus(status DeliveryStatus, messageID s
 	if messageID != "" {
 		c.ProviderMessageID = messageID
 	}
-	if status == DeliveryDelivered {
+	switch status {
+	case DeliveryDelivered:
 		c.Status = StatusDelivered
-	} else if status == DeliveryBounced || status == DeliveryFailed {
+	case DeliveryBounced, DeliveryFailed:
 		c.Status = StatusBounced
 	}
 }
@@ -514,15 +515,15 @@ func IsOrganizationalDomain(email string) bool {
 
 	// Check against common personal email domains
 	personalDomains := map[string]bool{
-		"gmail.com":   true,
-		"yahoo.com":   true,
-		"hotmail.com": true,
-		"outlook.com": true,
-		"aol.com":     true,
-		"icloud.com":  true,
-		"me.com":      true,
-		"mail.com":    true,
-		"proton.me":   true,
+		"gmail.com":      true,
+		"yahoo.com":      true,
+		"hotmail.com":    true,
+		"outlook.com":    true,
+		"aol.com":        true,
+		"icloud.com":     true,
+		"me.com":         true,
+		"mail.com":       true,
+		"proton.me":      true,
 		"protonmail.com": true,
 	}
 
@@ -910,4 +911,3 @@ func (c *EmailChallenge) String() string {
 	return fmt.Sprintf("EmailChallenge{ID: %s, Status: %s, Method: %s, Attempts: %d/%d}",
 		c.ChallengeID, c.Status, c.Method, c.Attempts, c.MaxAttempts)
 }
-

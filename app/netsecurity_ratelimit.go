@@ -12,27 +12,27 @@ import (
 
 // NetworkRateLimiter implements network-layer rate limiting.
 type NetworkRateLimiter struct {
-	config    NetworkRateLimitConfig
-	logger    log.Logger
-	
+	config NetworkRateLimitConfig
+	logger log.Logger
+
 	// Global rate limiting
 	globalConnBucket *TokenBucket
 	globalMsgBucket  *TokenBucket
-	
+
 	// Per-IP rate limiting
 	ipLimiters map[string]*IPLimiter
-	
+
 	// Bandwidth tracking
 	bytesSent     int64
 	bytesReceived int64
-	
+
 	// Adaptive rate limiting
 	adaptiveMultiplier float64
 	systemLoad         float64
-	
+
 	// Whitelist tracking
 	whitelistedIPs map[string]bool
-	
+
 	mu sync.RWMutex
 }
 
@@ -52,7 +52,7 @@ type TokenBucket struct {
 	maxTokens  float64
 	refillRate float64 // tokens per second
 	lastRefill time.Time
-	
+
 	mu sync.Mutex
 }
 
@@ -246,7 +246,7 @@ func (rl *NetworkRateLimiter) UpdateSystemLoad(cpuLoad, memoryLoad float64) {
 		// Reduce rate limits as load increases
 		excess := rl.systemLoad - rl.config.AdaptiveThreshold
 		reduction := excess / (1 - rl.config.AdaptiveThreshold) // 0 to 1
-		rl.adaptiveMultiplier = 1 - (reduction * 0.5)          // Reduce by up to 50%
+		rl.adaptiveMultiplier = 1 - (reduction * 0.5)           // Reduce by up to 50%
 		if rl.adaptiveMultiplier < 0.25 {
 			rl.adaptiveMultiplier = 0.25 // Never reduce by more than 75%
 		}

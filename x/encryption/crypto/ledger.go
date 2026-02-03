@@ -525,10 +525,10 @@ func IsCosmosHDPath(path string) bool {
 
 // RealLedgerDevice implements the LedgerDevice interface using actual HID communication
 type RealLedgerDevice struct {
-	config      *LedgerWalletConfig
-	connected   bool
-	deviceInfo  *LedgerDeviceInfo
-	mu          sync.RWMutex
+	config     *LedgerWalletConfig
+	connected  bool
+	deviceInfo *LedgerDeviceInfo
+	mu         sync.RWMutex
 }
 
 // NewRealLedgerDevice creates a new real Ledger device instance
@@ -785,20 +785,20 @@ func VerifySignature(pubKey, message, signature []byte) bool {
 
 // MockLedgerDevice is a mock implementation of LedgerDevice for testing
 type MockLedgerDevice struct {
-	config          *LedgerWalletConfig
-	connected       bool
-	deviceInfo      *LedgerDeviceInfo
-	shouldFail      bool
-	failError       error
-	userReject      bool
-	addresses       map[string]*LedgerAddress
-	signatures      map[string]*LedgerSignature
-	mu              sync.RWMutex
+	config     *LedgerWalletConfig
+	connected  bool
+	deviceInfo *LedgerDeviceInfo
+	shouldFail bool
+	failError  error
+	userReject bool
+	addresses  map[string]*LedgerAddress
+	signatures map[string]*LedgerSignature
+	mu         sync.RWMutex
 
 	// Callbacks for testing behavior
-	OnConnect       func() error
-	OnGetAddress    func(hdPath string, display bool) (*LedgerAddress, error)
-	OnSign          func(req *LedgerSignRequest) (*LedgerSignature, error)
+	OnConnect    func() error
+	OnGetAddress func(hdPath string, display bool) (*LedgerAddress, error)
+	OnSign       func(req *LedgerSignRequest) (*LedgerSignature, error)
 }
 
 // NewMockLedgerDevice creates a new mock Ledger device
@@ -1016,13 +1016,13 @@ func (m *MockLedgerDevice) generateMockSignature(req *LedgerSignRequest) (*Ledge
 	// Create mock DER signature (this is NOT a valid signature)
 	// Real signatures come from the device's secure element
 	mockSig := make([]byte, 71)
-	mockSig[0] = 0x30                 // DER sequence
-	mockSig[1] = 0x45                 // Length
-	mockSig[2] = 0x02                 // Integer type
-	mockSig[3] = 0x21                 // r length
-	copy(mockSig[4:36], msgHash[:])   // r value
-	mockSig[36] = 0x02                // Integer type
-	mockSig[37] = 0x20                // s length
+	mockSig[0] = 0x30               // DER sequence
+	mockSig[1] = 0x45               // Length
+	mockSig[2] = 0x02               // Integer type
+	mockSig[3] = 0x21               // r length
+	copy(mockSig[4:36], msgHash[:]) // r value
+	mockSig[36] = 0x02              // Integer type
+	mockSig[37] = 0x20              // s length
 	// Hash the HD path to get a deterministic 32-byte value for the s component
 	pathHash := sha256Hash([]byte(req.HDPath))
 	copy(mockSig[38:70], pathHash[:]) // s value (hash of path as placeholder)
@@ -1106,4 +1106,3 @@ func WaitForDevice(ctx context.Context, timeout time.Duration) (*LedgerDeviceInf
 
 	return nil, ErrLedgerNotConnected
 }
-

@@ -307,4 +307,3 @@ func (msg *MsgCloseLease) Route() string { return v1.RouterKey }
 //
 // Deprecated: Route is deprecated
 func (msg *MsgUpdateParams) Route() string { return v1.RouterKey }
-

@@ -27,6 +27,9 @@ const (
 
 	// SSOProviderOIDC represents generic OIDC providers
 	SSOProviderOIDC SSOProviderType = "oidc"
+
+	// SSOProviderEduGAIN represents EduGAIN SAML federation providers
+	SSOProviderEduGAIN SSOProviderType = "edugain"
 )
 
 // AllSSOProviderTypes returns all valid SSO provider types
@@ -36,6 +39,7 @@ func AllSSOProviderTypes() []SSOProviderType {
 		SSOProviderMicrosoft,
 		SSOProviderGitHub,
 		SSOProviderOIDC,
+		SSOProviderEduGAIN,
 	}
 }
 
@@ -323,10 +327,11 @@ type SSOScoringWeight struct {
 // DefaultSSOScoringWeights returns default scoring weights for SSO providers
 func DefaultSSOScoringWeights() []SSOScoringWeight {
 	return []SSOScoringWeight{
-		{Provider: SSOProviderGoogle, Weight: 250},     // 2.5% weight
-		{Provider: SSOProviderMicrosoft, Weight: 300},  // 3.0% weight (enterprise)
-		{Provider: SSOProviderGitHub, Weight: 200},     // 2.0% weight
-		{Provider: SSOProviderOIDC, Weight: 150},       // 1.5% weight (generic)
+		{Provider: SSOProviderGoogle, Weight: 250},    // 2.5% weight
+		{Provider: SSOProviderMicrosoft, Weight: 300}, // 3.0% weight (enterprise)
+		{Provider: SSOProviderGitHub, Weight: 200},    // 2.0% weight
+		{Provider: SSOProviderOIDC, Weight: 150},      // 1.5% weight (generic)
+		{Provider: SSOProviderEduGAIN, Weight: 350},   // 3.5% weight (SAML federation)
 	}
 }
 

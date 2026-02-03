@@ -54,11 +54,11 @@ func NewMsgRecordPerformance(
 	veidScore int64,
 ) *MsgRecordPerformance {
 	return &MsgRecordPerformance{
-		Authority:                   authority,
-		ValidatorAddress:            validatorAddr,
-		BlocksProposed:              blocksProposed,
-		BlocksSigned:                blocksSigned,
-		VEIDVerificationsCompleted:  veidCompleted,
-		VEIDVerificationScore:       veidScore,
+		Authority:                  authority,
+		ValidatorAddress:           validatorAddr,
+		BlocksProposed:             blocksProposed,
+		BlocksSigned:               blocksSigned,
+		VEIDVerificationsCompleted: veidCompleted,
+		VEIDVerificationScore:      veidScore,
 	}
 }

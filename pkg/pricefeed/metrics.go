@@ -99,8 +99,8 @@ type MetricsSummary struct {
 	Sources map[string]SourceMetrics `json:"sources"`
 
 	// Cache metrics
-	CacheHits   int64   `json:"cache_hits"`
-	CacheMisses int64   `json:"cache_misses"`
+	CacheHits    int64   `json:"cache_hits"`
+	CacheMisses  int64   `json:"cache_misses"`
 	CacheHitRate float64 `json:"cache_hit_rate"`
 
 	// Deviation metrics
@@ -183,9 +183,9 @@ func (m *PrometheusMetrics) Reset() {
 // NoOpMetrics is a no-op implementation of Metrics
 type NoOpMetrics struct{}
 
-func (m *NoOpMetrics) RecordFetch(source string, baseAsset, quoteAsset string, latency float64, success bool) {}
-func (m *NoOpMetrics) RecordCacheHit(baseAsset, quoteAsset string)                                           {}
-func (m *NoOpMetrics) RecordCacheMiss(baseAsset, quoteAsset string)                                          {}
-func (m *NoOpMetrics) RecordPriceDeviation(baseAsset, quoteAsset string, deviation float64)                  {}
-func (m *NoOpMetrics) RecordSourceHealth(source string, healthy bool, latency float64)                       {}
-
+func (m *NoOpMetrics) RecordFetch(source string, baseAsset, quoteAsset string, latency float64, success bool) {
+}
+func (m *NoOpMetrics) RecordCacheHit(baseAsset, quoteAsset string)                          {}
+func (m *NoOpMetrics) RecordCacheMiss(baseAsset, quoteAsset string)                         {}
+func (m *NoOpMetrics) RecordPriceDeviation(baseAsset, quoteAsset string, deviation float64) {}
+func (m *NoOpMetrics) RecordSourceHealth(source string, healthy bool, latency float64)      {}

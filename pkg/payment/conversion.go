@@ -304,9 +304,7 @@ func (e *conversionExecutor) handleExecutionError(
 	if errCode.IsRetryable() {
 		retried := entry.MarkForRetry(errCode, errMsg, e.config.BaseRetryDelay)
 		if retried {
-			if err := e.store.Save(ctx, entry); err != nil {
-				// Log but don't fail - entry state is still valid
-			}
+			_ = e.store.Save(ctx, entry)
 			return &ConversionExecutionResult{
 				LedgerEntry: entry,
 				Success:     false,
@@ -320,9 +318,7 @@ func (e *conversionExecutor) handleExecutionError(
 		entry.MarkFailed(errCode, errMsg)
 	}
 
-	if err := e.store.Save(ctx, entry); err != nil {
-		// Log but continue - the error state is what matters
-	}
+	_ = e.store.Save(ctx, entry)
 
 	return &ConversionExecutionResult{
 		LedgerEntry: entry,
@@ -513,9 +509,9 @@ func (e *conversionExecutor) releaseExecution(key string) {
 
 // inMemoryLedgerStore is an in-memory implementation of ConversionLedgerStore
 type inMemoryLedgerStore struct {
-	mu              sync.RWMutex
-	entries         map[string]*ConversionLedgerEntry
-	byIdempotency   map[string]string // idempotency key -> entry ID
+	mu            sync.RWMutex
+	entries       map[string]*ConversionLedgerEntry
+	byIdempotency map[string]string // idempotency key -> entry ID
 }
 
 // NewInMemoryLedgerStore creates a new in-memory ledger store
@@ -611,9 +607,9 @@ type mockTreasuryTransfer struct {
 	txSeq    int64
 
 	// For testing: simulate failures
-	SimulateFailure    bool
-	FailureError       error
-	SimulateNoBalance  bool
+	SimulateFailure   bool
+	FailureError      error
+	SimulateNoBalance bool
 }
 
 // NewMockTreasuryTransfer creates a new mock treasury transfer
@@ -738,4 +734,3 @@ func CreateTestQuote(fiatValue int64, cryptoAmount int64, destAddr string) Conve
 		ExpiresAt: time.Now().Add(15 * time.Minute),
 	}
 }
-

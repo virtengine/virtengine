@@ -675,4 +675,3 @@ func GetQueryWasmParamsCmd() *cobra.Command {
 
 	return cmd
 }
-

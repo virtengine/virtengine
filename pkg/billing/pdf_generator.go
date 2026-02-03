@@ -112,16 +112,16 @@ func (g *PDFGenerator) GenerateInvoicePDF(invoice *billing.Invoice) ([]byte, err
 
 // InvoicePDFDocument represents the structured PDF content
 type InvoicePDFDocument struct {
-	Header       PDFHeader         `json:"header"`
-	InvoiceInfo  PDFInvoiceInfo    `json:"invoice_info"`
-	Parties      PDFParties        `json:"parties"`
-	LineItems    []PDFLineItem     `json:"line_items"`
-	Summary      PDFSummary        `json:"summary"`
-	TaxDetails   *PDFTaxDetails    `json:"tax_details,omitempty"`
-	Notes        string            `json:"notes,omitempty"`
-	Terms        string            `json:"terms,omitempty"`
-	Footer       string            `json:"footer"`
-	GeneratedAt  time.Time         `json:"generated_at"`
+	Header      PDFHeader      `json:"header"`
+	InvoiceInfo PDFInvoiceInfo `json:"invoice_info"`
+	Parties     PDFParties     `json:"parties"`
+	LineItems   []PDFLineItem  `json:"line_items"`
+	Summary     PDFSummary     `json:"summary"`
+	TaxDetails  *PDFTaxDetails `json:"tax_details,omitempty"`
+	Notes       string         `json:"notes,omitempty"`
+	Terms       string         `json:"terms,omitempty"`
+	Footer      string         `json:"footer"`
+	GeneratedAt time.Time      `json:"generated_at"`
 }
 
 // PDFHeader contains header information
@@ -135,15 +135,15 @@ type PDFHeader struct {
 
 // PDFInvoiceInfo contains invoice metadata
 type PDFInvoiceInfo struct {
-	InvoiceNumber   string    `json:"invoice_number"`
-	InvoiceID       string    `json:"invoice_id"`
-	IssueDate       time.Time `json:"issue_date"`
-	DueDate         time.Time `json:"due_date"`
-	BillingPeriod   string    `json:"billing_period"`
-	Currency        string    `json:"currency"`
-	Status          string    `json:"status"`
-	EscrowID        string    `json:"escrow_id"`
-	OrderID         string    `json:"order_id"`
+	InvoiceNumber string    `json:"invoice_number"`
+	InvoiceID     string    `json:"invoice_id"`
+	IssueDate     time.Time `json:"issue_date"`
+	DueDate       time.Time `json:"due_date"`
+	BillingPeriod string    `json:"billing_period"`
+	Currency      string    `json:"currency"`
+	Status        string    `json:"status"`
+	EscrowID      string    `json:"escrow_id"`
+	OrderID       string    `json:"order_id"`
 }
 
 // PDFParties contains party information
@@ -171,13 +171,13 @@ type PDFLineItem struct {
 
 // PDFSummary contains invoice totals
 type PDFSummary struct {
-	Subtotal      string          `json:"subtotal"`
-	Discounts     []PDFDiscount   `json:"discounts,omitempty"`
-	DiscountTotal string          `json:"discount_total,omitempty"`
-	TaxTotal      string          `json:"tax_total,omitempty"`
-	Total         string          `json:"total"`
-	AmountPaid    string          `json:"amount_paid"`
-	AmountDue     string          `json:"amount_due"`
+	Subtotal      string        `json:"subtotal"`
+	Discounts     []PDFDiscount `json:"discounts,omitempty"`
+	DiscountTotal string        `json:"discount_total,omitempty"`
+	TaxTotal      string        `json:"tax_total,omitempty"`
+	Total         string        `json:"total"`
+	AmountPaid    string        `json:"amount_paid"`
+	AmountDue     string        `json:"amount_due"`
 }
 
 // PDFDiscount represents a discount in the PDF
@@ -188,10 +188,10 @@ type PDFDiscount struct {
 
 // PDFTaxDetails contains tax breakdown
 type PDFTaxDetails struct {
-	CustomerTaxID string        `json:"customer_tax_id,omitempty"`
-	ProviderTaxID string        `json:"provider_tax_id,omitempty"`
-	Jurisdiction  string        `json:"jurisdiction,omitempty"`
-	TaxLines      []PDFTaxLine  `json:"tax_lines,omitempty"`
+	CustomerTaxID string       `json:"customer_tax_id,omitempty"`
+	ProviderTaxID string       `json:"provider_tax_id,omitempty"`
+	Jurisdiction  string       `json:"jurisdiction,omitempty"`
+	TaxLines      []PDFTaxLine `json:"tax_lines,omitempty"`
 }
 
 // PDFTaxLine represents a tax line item
@@ -320,7 +320,7 @@ func (g *PDFGenerator) renderToPDF(doc *InvoicePDFDocument) ([]byte, error) {
 
 	// Write document content as structured text (simplified)
 	content := g.buildTextContent(doc)
-	
+
 	// Object 1: Catalog
 	buf.WriteString("1 0 obj\n")
 	buf.WriteString("<< /Type /Catalog /Pages 2 0 R >>\n")
@@ -444,7 +444,7 @@ func (g *PDFGenerator) GenerateReceiptPDF(
 ) ([]byte, error) {
 	// Receipt is a simplified version of the invoice PDF
 	doc := g.buildInvoiceDocument(invoice)
-	
+
 	// Modify for receipt
 	doc.InvoiceInfo.Status = "PAID"
 	doc.Notes = fmt.Sprintf("Payment received: %s on %s\\nTransaction: %s",
@@ -452,4 +452,3 @@ func (g *PDFGenerator) GenerateReceiptPDF(
 
 	return g.renderToPDF(doc)
 }
-

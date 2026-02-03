@@ -195,7 +195,11 @@ cmd_start() {
     wait_for_chain
 
     # Wait for Waldur (non-fatal if slow)
-    wait_for_waldur || true
+    if wait_for_waldur; then
+        # Initialize marketplace categories after Waldur is ready
+        log_info "Initializing Waldur marketplace categories..."
+        cmd_init_categories_internal || log_warn "Category initialization failed (can retry with 'init-categories')"
+    fi
 
     # Print status
     print_status
@@ -463,6 +467,107 @@ cmd_create_admin() {
     echo "  curl -k -X POST https://localhost/api-auth/password/ -d 'username=${username}&password=<your-password>'"
 }
 
+# VE-25A: Internal function to initialize categories (called from cmd_start)
+cmd_init_categories_internal() {
+    local max_attempts=3
+    local attempt=0
+
+    # Get admin token for API calls
+    local token=""
+    
+    # Try to get token from existing admin user
+    # First check if we can authenticate
+    token=$(curl -sf -k -X POST https://localhost/api-auth/password/ \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "username=admin&password=admin" 2>/dev/null | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+    
+    if [ -z "$token" ]; then
+        log_warn "Could not get admin token. Create admin user first with 'create-admin' command."
+        return 1
+    fi
+
+    log_info "Creating VirtEngine marketplace categories..."
+
+    # Define categories
+    local categories=(
+        "Compute|Virtual machines, containers, and general-purpose computing resources."
+        "HPC|High-performance computing resources including MPI clusters and batch processing."
+        "GPU|GPU-accelerated computing instances for machine learning and deep learning."
+        "Storage|Object storage, block storage, and file storage solutions."
+        "Network|Networking services including VPNs, load balancers, and firewalls."
+        "TEE|Trusted Execution Environment resources for confidential computing."
+        "AI/ML|Machine learning platforms, model training, and inference services."
+    )
+
+    local created=0
+    local existing=0
+    local failed=0
+
+    for cat_def in "${categories[@]}"; do
+        local title="${cat_def%%|*}"
+        local description="${cat_def#*|}"
+
+        # Check if category already exists
+        local exists
+        exists=$(curl -sf -k "https://localhost/api/marketplace-categories/?title=${title}" \
+            -H "Authorization: Token ${token}" 2>/dev/null | grep -c "\"title\":\"${title}\"" || echo "0")
+
+        if [ "$exists" -gt 0 ]; then
+            log_info "  Category '${title}' already exists"
+            existing=$((existing + 1))
+            continue
+        fi
+
+        # Create category
+        local result
+        result=$(curl -sf -k -X POST "https://localhost/api/marketplace-categories/" \
+            -H "Authorization: Token ${token}" \
+            -H "Content-Type: application/json" \
+            -d "{\"title\":\"${title}\",\"description\":\"${description}\"}" 2>/dev/null)
+
+        if echo "$result" | grep -q "\"uuid\""; then
+            log_success "  Created category: ${title}"
+            created=$((created + 1))
+        else
+            log_warn "  Failed to create category: ${title}"
+            failed=$((failed + 1))
+        fi
+    done
+
+    echo ""
+    log_info "Category initialization complete:"
+    log_info "  Created: ${created}"
+    log_info "  Existing: ${existing}"
+    [ $failed -gt 0 ] && log_warn "  Failed: ${failed}"
+
+    if [ $failed -gt 0 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# VE-25A: Public command to initialize categories
+cmd_init_categories() {
+    log_info "Initializing Waldur marketplace categories..."
+    check_docker
+
+    # Check if Waldur is running
+    if ! curl -sf -k https://localhost/health-check/ > /dev/null 2>&1; then
+        log_error "Waldur API is not responding. Start localnet first."
+        exit 1
+    fi
+
+    cmd_init_categories_internal
+    local result=$?
+
+    if [ $result -eq 0 ]; then
+        log_success "All categories initialized successfully!"
+    else
+        log_error "Some categories failed to initialize. Check logs above."
+        exit 1
+    fi
+}
+
 cmd_logs() {
     check_docker
     local service="${1:-}"
@@ -500,22 +605,28 @@ cmd_help() {
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
-    echo "  start         Start the localnet (default)"
-    echo "  stop          Stop all services"
-    echo "  restart       Restart all services (full restart)"
-    echo "  update        Smart rebuild: only rebuild changed services, preserve data"
-    echo "  reset         Stop, clean data, and restart (destructive)"
-    echo "  status        Show service status"
-    echo "  logs          Tail logs from all services"
-    echo "  test          Run integration tests"
-    echo "  shell         Open shell in test-runner container"
-    echo "  create-admin  Create Waldur admin user (interactive or with flags)"
-    echo "  help          Show this help message"
+    echo "  start            Start the localnet (default)"
+    echo "  stop             Stop all services"
+    echo "  restart          Restart all services (full restart)"
+    echo "  update           Smart rebuild: only rebuild changed services, preserve data"
+    echo "  reset            Stop, clean data, and restart (destructive)"
+    echo "  status           Show service status"
+    echo "  logs             Tail logs from all services"
+    echo "  test             Run integration tests"
+    echo "  shell            Open shell in test-runner container"
+    echo "  create-admin     Create Waldur admin user (interactive or with flags)"
+    echo "  init-categories  Initialize Waldur marketplace categories"
+    echo "  help             Show this help message"
     echo ""
     echo "Workflow:"
     echo "  First time:   $0 start                # Build and start everything"
     echo "  After edits:  $0 update               # Smart rebuild changed services only"
     echo "  Full reset:   $0 reset                # Wipe data and start fresh"
+    echo ""
+    echo "Waldur Setup:"
+    echo "  1. $0 start                           # Start localnet"
+    echo "  2. $0 create-admin -u admin -p admin  # Create admin user"
+    echo "  3. $0 init-categories                 # Create marketplace categories"
     echo ""
     echo "create-admin Options:"
     echo "  -u, --username  Admin username (default: admin, or prompted)"
@@ -526,6 +637,7 @@ cmd_help() {
     echo "  $0 update                              # Rebuild only changed services"
     echo "  $0 create-admin                        # Interactive admin creation"
     echo "  $0 create-admin -u myuser -p mypassword # Non-interactive"
+    echo "  $0 init-categories                     # Create VirtEngine categories"
     echo ""
     echo "Environment Variables:"
     echo "  CHAIN_ID      Chain ID (default: virtengine-localnet-1)"
@@ -569,6 +681,9 @@ main() {
         create-admin)
             shift
             cmd_create_admin "$@"
+            ;;
+        init-categories)
+            cmd_init_categories
             ;;
         help|--help|-h)
             cmd_help

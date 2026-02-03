@@ -68,4 +68,3 @@ func ExecTestCLICmd(ctx context.Context, cctx client.Context, cmd *cobra.Command
 func QueryBalancesExec(ctx context.Context, cctx client.Context, args ...string) (testutil.BufferWriter, error) {
 	return ExecTestCLICmd(ctx, cctx, cli.GetQueryBankBalancesCmd(), args...)
 }
-

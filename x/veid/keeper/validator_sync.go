@@ -748,7 +748,7 @@ func (k Keeper) updateSyncRequestProgress(ctx sdk.Context, validatorAddr string,
 					request.Status = types.SyncRequestStatusInProgress
 				}
 
-				k.setSyncRequest(ctx, request)
+				_ = k.setSyncRequest(ctx, request)
 				break
 			}
 		}
@@ -977,10 +977,10 @@ const (
 
 // Event attribute keys for validator sync
 const (
-	AttributeKeySyncRequestID     = "sync_request_id"
-	AttributeKeyConfirmationID    = "confirmation_id"
-	AttributeKeyBroadcastID       = "broadcast_id"
-	AttributeKeyModelsCount       = "models_count"
+	AttributeKeySyncRequestID      = "sync_request_id"
+	AttributeKeyConfirmationID     = "confirmation_id"
+	AttributeKeyBroadcastID        = "broadcast_id"
+	AttributeKeyModelsCount        = "models_count"
 	AttributeKeyValidatorsNotified = "validators_notified"
-	AttributeKeyDeadline          = "deadline"
+	AttributeKeyDeadline           = "deadline"
 )

@@ -186,4 +186,3 @@ func (msg *MsgClaimAllRewards) GetSigners() []sdk.AccAddress {
 	delegator, _ := sdk.AccAddressFromBech32(msg.Delegator)
 	return []sdk.AccAddress{delegator}
 }
-

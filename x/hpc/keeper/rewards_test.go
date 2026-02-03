@@ -1,13 +1,10 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until HPC rewards API is stabilized.
-
 package keeper_test
 
 import (
 	"testing"
+	"time"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
@@ -197,6 +194,12 @@ func TestNodeRewardProportionalDistribution(t *testing.T) {
 
 // TestRewardRecordValidation tests reward record validation
 func TestRewardRecordValidation(t *testing.T) {
+	validAddr := sdk.AccAddress(make([]byte, 20)).String()
+	testCoins := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(1000000)))
+	platformCoins := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(50000)))
+	providerCoins := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(700000)))
+	nodeCoins := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(250000)))
+
 	testCases := []struct {
 		name        string
 		record      types.HPCRewardRecord
@@ -206,64 +209,70 @@ func TestRewardRecordValidation(t *testing.T) {
 		{
 			name: "valid record",
 			record: types.HPCRewardRecord{
-				ID:          1,
-				JobID:       1,
-				TotalAmount: sdk.NewInt(1000000),
+				RewardID:    "reward-001",
+				JobID:       "job-001",
+				ClusterID:   "cluster-001",
+				Source:      types.HPCRewardSourceJobCompletion,
+				TotalReward: testCoins,
 				Recipients: []types.HPCRewardRecipient{
 					{
-						Address:       "cosmos1platform",
-						Amount:        sdk.NewInt(50000),
+						Address:       validAddr,
+						Amount:        platformCoins,
 						RecipientType: "platform",
 					},
 					{
-						Address:       "cosmos1provider",
-						Amount:        sdk.NewInt(700000),
+						Address:       validAddr,
+						Amount:        providerCoins,
 						RecipientType: "provider",
 					},
 					{
-						Address:       "cosmos1node1",
-						Amount:        sdk.NewInt(250000),
+						Address:       validAddr,
+						Amount:        nodeCoins,
 						RecipientType: "node",
 					},
 				},
-				DistributedAt: 1000000,
-				BlockHeight:   100,
+				JobCompletionStatus: types.JobStateCompleted,
+				IssuedAt:            time.Now(),
+				BlockHeight:         100,
 			},
 			expectError: false,
 		},
 		{
 			name: "missing job ID",
 			record: types.HPCRewardRecord{
-				ID:          1,
-				JobID:       0,
-				TotalAmount: sdk.NewInt(1000000),
+				RewardID:    "reward-001",
+				JobID:       "",
+				ClusterID:   "cluster-001",
+				Source:      types.HPCRewardSourceJobCompletion,
+				TotalReward: testCoins,
 			},
 			expectError: true,
-			errorMsg:    "job ID is required",
+			errorMsg:    "job_id",
 		},
 		{
-			name: "negative total amount",
+			name: "missing cluster ID",
 			record: types.HPCRewardRecord{
-				ID:          1,
-				JobID:       1,
-				TotalAmount: sdk.NewInt(-1),
+				RewardID:    "reward-001",
+				JobID:       "job-001",
+				ClusterID:   "",
+				Source:      types.HPCRewardSourceJobCompletion,
+				TotalReward: testCoins,
 			},
 			expectError: true,
-			errorMsg:    "total amount must be positive",
+			errorMsg:    "cluster_id",
 		},
 		{
-			name: "recipients exceed total",
+			name: "empty recipients",
 			record: types.HPCRewardRecord{
-				ID:          1,
-				JobID:       1,
-				TotalAmount: sdk.NewInt(1000),
-				Recipients: []types.HPCRewardRecipient{
-					{Address: "a", Amount: sdk.NewInt(600), RecipientType: "provider"},
-					{Address: "b", Amount: sdk.NewInt(600), RecipientType: "node"},
-				},
+				RewardID:    "reward-001",
+				JobID:       "job-001",
+				ClusterID:   "cluster-001",
+				Source:      types.HPCRewardSourceJobCompletion,
+				TotalReward: testCoins,
+				Recipients:  []types.HPCRewardRecipient{},
 			},
 			expectError: true,
-			errorMsg:    "recipients total exceeds",
+			errorMsg:    "recipients",
 		},
 	}
 
@@ -282,6 +291,8 @@ func TestRewardRecordValidation(t *testing.T) {
 
 // TestDisputeValidation tests HPC dispute validation
 func TestDisputeValidation(t *testing.T) {
+	validAddr := sdk.AccAddress(make([]byte, 20)).String()
+
 	testCases := []struct {
 		name        string
 		dispute     types.HPCDispute
@@ -291,53 +302,53 @@ func TestDisputeValidation(t *testing.T) {
 		{
 			name: "valid dispute",
 			dispute: types.HPCDispute{
-				ID:        1,
-				JobID:     1,
-				ClusterID: 1,
-				Disputer:  "cosmos1disputer",
-				Reason:    "job terminated early without completion",
-				Evidence:  "logs showing premature termination",
-				Status:    types.DisputeStatusOpen,
-				FiledAt:   1000000,
+				DisputeID:       "dispute-001",
+				JobID:           "job-001",
+				DisputerAddress: validAddr,
+				DisputeType:     "job_failure",
+				Reason:          "job terminated early without completion",
+				Evidence:        "logs showing premature termination",
+				Status:          types.DisputeStatusPending,
+				CreatedAt:       time.Now(),
 			},
 			expectError: false,
 		},
 		{
 			name: "missing disputer",
 			dispute: types.HPCDispute{
-				ID:        1,
-				JobID:     1,
-				ClusterID: 1,
-				Disputer:  "",
-				Reason:    "test",
+				DisputeID:       "dispute-001",
+				JobID:           "job-001",
+				DisputerAddress: "",
+				DisputeType:     "job_failure",
+				Reason:          "test",
 			},
 			expectError: true,
-			errorMsg:    "disputer is required",
+			errorMsg:    "disputer",
 		},
 		{
 			name: "missing reason",
 			dispute: types.HPCDispute{
-				ID:        1,
-				JobID:     1,
-				ClusterID: 1,
-				Disputer:  "cosmos1disputer",
-				Reason:    "",
+				DisputeID:       "dispute-001",
+				JobID:           "job-001",
+				DisputerAddress: validAddr,
+				DisputeType:     "job_failure",
+				Reason:          "",
 			},
 			expectError: true,
-			errorMsg:    "reason is required",
+			errorMsg:    "reason",
 		},
 		{
 			name: "invalid status",
 			dispute: types.HPCDispute{
-				ID:        1,
-				JobID:     1,
-				ClusterID: 1,
-				Disputer:  "cosmos1disputer",
-				Reason:    "test",
-				Status:    999,
+				DisputeID:       "dispute-001",
+				JobID:           "job-001",
+				DisputerAddress: validAddr,
+				DisputeType:     "job_failure",
+				Reason:          "test",
+				Status:          types.DisputeStatus("invalid"),
 			},
 			expectError: true,
-			errorMsg:    "invalid status",
+			errorMsg:    "status",
 		},
 	}
 
@@ -421,6 +432,9 @@ func TestRewardIdempotency(t *testing.T) {
 
 // TestJobAccountingMetrics tests job accounting metrics validation
 func TestJobAccountingMetrics(t *testing.T) {
+	validAddr := sdk.AccAddress(make([]byte, 20)).String()
+	testCoins := sdk.NewCoins(sdk.NewCoin("uvirt", sdkmath.NewInt(100000)))
+
 	testCases := []struct {
 		name        string
 		accounting  types.JobAccounting
@@ -430,42 +444,42 @@ func TestJobAccountingMetrics(t *testing.T) {
 		{
 			name: "valid accounting",
 			accounting: types.JobAccounting{
-				JobID:     1,
-				StartTime: 1000000,
-				EndTime:   2000000,
-				Usage: types.HPCUsageMetrics{
-					CPUSeconds:      3600,
-					MemoryMBHours:   1024,
-					GPUSeconds:      0,
-					WallTimeSeconds: 1000,
+				JobID:           "job-001",
+				ClusterID:       "cluster-001",
+				ProviderAddress: validAddr,
+				CustomerAddress: validAddr,
+				UsageMetrics: types.HPCUsageMetrics{
+					CPUCoreSeconds:   3600,
+					MemoryGBSeconds:  3600 * 1024,
+					GPUSeconds:       0,
+					WallClockSeconds: 1000,
 				},
-				TotalCost: sdk.NewInt(100000),
-				Status:    types.JobStateCompleted,
+				TotalCost:           testCoins,
+				JobCompletionStatus: types.JobStateCompleted,
 			},
 			expectError: false,
 		},
 		{
-			name: "end before start",
+			name: "missing job ID",
 			accounting: types.JobAccounting{
-				JobID:     1,
-				StartTime: 2000000,
-				EndTime:   1000000,
+				JobID:           "",
+				ClusterID:       "cluster-001",
+				ProviderAddress: validAddr,
+				CustomerAddress: validAddr,
 			},
 			expectError: true,
-			errorMsg:    "end time cannot be before start time",
+			errorMsg:    "job_id",
 		},
 		{
-			name: "zero wall time",
+			name: "missing cluster ID",
 			accounting: types.JobAccounting{
-				JobID:     1,
-				StartTime: 1000000,
-				EndTime:   2000000,
-				Usage: types.HPCUsageMetrics{
-					WallTimeSeconds: 0,
-				},
+				JobID:           "job-001",
+				ClusterID:       "",
+				ProviderAddress: validAddr,
+				CustomerAddress: validAddr,
 			},
 			expectError: true,
-			errorMsg:    "wall time must be positive",
+			errorMsg:    "cluster_id",
 		},
 	}
 

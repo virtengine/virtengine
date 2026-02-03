@@ -207,9 +207,9 @@ func (h *InventoryHost) toINILine() string {
 // writeGroupVars writes group variables to the buffer
 func (i *Inventory) writeGroupVars(buf *bytes.Buffer, group InventoryGroup) {
 	if len(group.Variables) > 0 {
-		buf.WriteString(fmt.Sprintf("[%s:vars]\n", group.Name))
+		fmt.Fprintf(buf, "[%s:vars]\n", group.Name)
 		for k, v := range group.Variables {
-			buf.WriteString(fmt.Sprintf("%s=%v\n", k, v))
+			fmt.Fprintf(buf, "%s=%v\n", k, v)
 		}
 		buf.WriteString("\n")
 	}
@@ -218,7 +218,7 @@ func (i *Inventory) writeGroupVars(buf *bytes.Buffer, group InventoryGroup) {
 // writeGroupChildren writes group children to the buffer
 func (i *Inventory) writeGroupChildren(buf *bytes.Buffer, group InventoryGroup) {
 	if len(group.Children) > 0 {
-		buf.WriteString(fmt.Sprintf("[%s:children]\n", group.Name))
+		fmt.Fprintf(buf, "[%s:children]\n", group.Name)
 		for _, child := range group.Children {
 			buf.WriteString(child + "\n")
 		}
@@ -463,11 +463,11 @@ func DefaultAnsibleAdapterConfig() AnsibleAdapterConfig {
 
 // AnsibleAdapter provides Ansible playbook execution capabilities
 type AnsibleAdapter struct {
-	config          AnsibleAdapterConfig
-	executions      map[string]*ExecutionResult
+	config           AnsibleAdapterConfig
+	executions       map[string]*ExecutionResult
 	activeExecutions map[string]context.CancelFunc
-	mu              sync.RWMutex
-	semaphore       chan struct{}
+	mu               sync.RWMutex
+	semaphore        chan struct{}
 }
 
 // NewAnsibleAdapter creates a new Ansible adapter
@@ -483,10 +483,10 @@ func NewAnsibleAdapter(config AnsibleAdapterConfig) *AnsibleAdapter {
 	}
 
 	return &AnsibleAdapter{
-		config:          config,
-		executions:      make(map[string]*ExecutionResult),
+		config:           config,
+		executions:       make(map[string]*ExecutionResult),
 		activeExecutions: make(map[string]context.CancelFunc),
-		semaphore:       make(chan struct{}, config.MaxConcurrentExecutions),
+		semaphore:        make(chan struct{}, config.MaxConcurrentExecutions),
 	}
 }
 
@@ -611,7 +611,7 @@ func (a *AnsibleAdapter) ExecutePlaybook(ctx context.Context, playbook *Playbook
 
 	// Execute the playbook
 	err := a.runPlaybook(execCtx, playbook, inventory, options, result)
-	
+
 	result.CompletedAt = time.Now()
 	result.Duration = result.CompletedAt.Sub(result.StartedAt)
 
@@ -676,7 +676,7 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 
 	// Create command
 	cmd := exec.CommandContext(ctx, ansiblePath, args...)
-	
+
 	// Set working directory
 	if options.WorkingDir != "" {
 		// Validate working directory path
@@ -849,7 +849,7 @@ func (a *AnsibleAdapter) writeTemporaryVaultPassword(password string) (string, e
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Set restrictive permissions
 	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
 		os.Remove(tmpFile.Name())
@@ -929,7 +929,7 @@ func (a *AnsibleAdapter) parseRecapLine(line string) *PlaySummary {
 			continue
 		}
 		var val int
-		fmt.Sscanf(kv[1], "%d", &val)
+		_, _ = fmt.Sscanf(kv[1], "%d", &val)
 		switch kv[0] {
 		case "ok":
 			summary.OK = val
@@ -937,7 +937,7 @@ func (a *AnsibleAdapter) parseRecapLine(line string) *PlaySummary {
 			summary.Changed = val
 		case "unreachable":
 			summary.Unreachable = val
-		case "failed":
+		case string(WorkloadStateFailed):
 			summary.Failed = val
 		case "skipped":
 			summary.Skipped = val
@@ -1067,4 +1067,3 @@ func (a *AnsibleAdapter) GetPlaybookPath(name string) string {
 func (a *AnsibleAdapter) RegisterPlaybook(playbook *Playbook) error {
 	return playbook.Validate()
 }
-

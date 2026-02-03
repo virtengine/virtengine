@@ -217,7 +217,7 @@ func TestManifestWithLongHostIsInvalid(t *testing.T) {
 	_, err := buf.WriteString(".com")
 	require.NoError(t, err)
 
-	hosts[0] = buf.String()
+	hosts[0] = buf.String() //nolint:gosec // G602: hosts is preallocated with size 1, index 0 is always valid
 	m[0].Services[0].Expose[0].Hosts = hosts
 	err = m.Validate()
 	require.Error(t, err)
@@ -467,4 +467,3 @@ func Test_ValidateManifest(t *testing.T) {
 		}
 	}
 }
-

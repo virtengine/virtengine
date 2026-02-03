@@ -227,49 +227,49 @@ type EventAuthorizationExpired struct {
 // ============================================================================
 
 // EventScopeUploaded proto stubs
-func (*EventScopeUploaded) ProtoMessage()            {}
-func (m *EventScopeUploaded) Reset()                 { *m = EventScopeUploaded{} }
-func (m *EventScopeUploaded) String() string         { return fmt.Sprintf("%+v", *m) }
+func (*EventScopeUploaded) ProtoMessage()    {}
+func (m *EventScopeUploaded) Reset()         { *m = EventScopeUploaded{} }
+func (m *EventScopeUploaded) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventScopeRevoked proto stubs
-func (*EventScopeRevoked) ProtoMessage()             {}
-func (m *EventScopeRevoked) Reset()                  { *m = EventScopeRevoked{} }
-func (m *EventScopeRevoked) String() string          { return fmt.Sprintf("%+v", *m) }
+func (*EventScopeRevoked) ProtoMessage()    {}
+func (m *EventScopeRevoked) Reset()         { *m = EventScopeRevoked{} }
+func (m *EventScopeRevoked) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventScopeVerified proto stubs
-func (*EventScopeVerified) ProtoMessage()            {}
-func (m *EventScopeVerified) Reset()                 { *m = EventScopeVerified{} }
-func (m *EventScopeVerified) String() string         { return fmt.Sprintf("%+v", *m) }
+func (*EventScopeVerified) ProtoMessage()    {}
+func (m *EventScopeVerified) Reset()         { *m = EventScopeVerified{} }
+func (m *EventScopeVerified) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventScopeRejected proto stubs
-func (*EventScopeRejected) ProtoMessage()            {}
-func (m *EventScopeRejected) Reset()                 { *m = EventScopeRejected{} }
-func (m *EventScopeRejected) String() string         { return fmt.Sprintf("%+v", *m) }
+func (*EventScopeRejected) ProtoMessage()    {}
+func (m *EventScopeRejected) Reset()         { *m = EventScopeRejected{} }
+func (m *EventScopeRejected) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventStatusUpdated proto stubs
-func (*EventStatusUpdated) ProtoMessage()            {}
-func (m *EventStatusUpdated) Reset()                 { *m = EventStatusUpdated{} }
-func (m *EventStatusUpdated) String() string         { return fmt.Sprintf("%+v", *m) }
+func (*EventStatusUpdated) ProtoMessage()    {}
+func (m *EventStatusUpdated) Reset()         { *m = EventStatusUpdated{} }
+func (m *EventStatusUpdated) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventScoreUpdated proto stubs
-func (*EventScoreUpdated) ProtoMessage()             {}
-func (m *EventScoreUpdated) Reset()                  { *m = EventScoreUpdated{} }
-func (m *EventScoreUpdated) String() string          { return fmt.Sprintf("%+v", *m) }
+func (*EventScoreUpdated) ProtoMessage()    {}
+func (m *EventScoreUpdated) Reset()         { *m = EventScoreUpdated{} }
+func (m *EventScoreUpdated) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventIdentityCreated proto stubs
-func (*EventIdentityCreated) ProtoMessage()          {}
-func (m *EventIdentityCreated) Reset()               { *m = EventIdentityCreated{} }
-func (m *EventIdentityCreated) String() string       { return fmt.Sprintf("%+v", *m) }
+func (*EventIdentityCreated) ProtoMessage()    {}
+func (m *EventIdentityCreated) Reset()         { *m = EventIdentityCreated{} }
+func (m *EventIdentityCreated) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventIdentityLocked proto stubs
-func (*EventIdentityLocked) ProtoMessage()           {}
-func (m *EventIdentityLocked) Reset()                { *m = EventIdentityLocked{} }
-func (m *EventIdentityLocked) String() string        { return fmt.Sprintf("%+v", *m) }
+func (*EventIdentityLocked) ProtoMessage()    {}
+func (m *EventIdentityLocked) Reset()         { *m = EventIdentityLocked{} }
+func (m *EventIdentityLocked) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventIdentityUnlocked proto stubs
-func (*EventIdentityUnlocked) ProtoMessage()         {}
-func (m *EventIdentityUnlocked) Reset()              { *m = EventIdentityUnlocked{} }
-func (m *EventIdentityUnlocked) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*EventIdentityUnlocked) ProtoMessage()    {}
+func (m *EventIdentityUnlocked) Reset()         { *m = EventIdentityUnlocked{} }
+func (m *EventIdentityUnlocked) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventVerificationRequested proto stubs
 func (*EventVerificationRequested) ProtoMessage()    {}
@@ -282,9 +282,9 @@ func (m *EventVerificationCompleted) Reset()         { *m = EventVerificationCom
 func (m *EventVerificationCompleted) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventVerificationFailed proto stubs
-func (*EventVerificationFailed) ProtoMessage()       {}
-func (m *EventVerificationFailed) Reset()            { *m = EventVerificationFailed{} }
-func (m *EventVerificationFailed) String() string    { return fmt.Sprintf("%+v", *m) }
+func (*EventVerificationFailed) ProtoMessage()    {}
+func (m *EventVerificationFailed) Reset()         { *m = EventVerificationFailed{} }
+func (m *EventVerificationFailed) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventVerificationSubmitted proto stubs
 func (*EventVerificationSubmitted) ProtoMessage()    {}
@@ -292,14 +292,14 @@ func (m *EventVerificationSubmitted) Reset()         { *m = EventVerificationSub
 func (m *EventVerificationSubmitted) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventTierChanged proto stubs
-func (*EventTierChanged) ProtoMessage()              {}
-func (m *EventTierChanged) Reset()                   { *m = EventTierChanged{} }
-func (m *EventTierChanged) String() string           { return fmt.Sprintf("%+v", *m) }
+func (*EventTierChanged) ProtoMessage()    {}
+func (m *EventTierChanged) Reset()         { *m = EventTierChanged{} }
+func (m *EventTierChanged) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventAuthorizationGranted proto stubs
-func (*EventAuthorizationGranted) ProtoMessage()     {}
-func (m *EventAuthorizationGranted) Reset()          { *m = EventAuthorizationGranted{} }
-func (m *EventAuthorizationGranted) String() string  { return fmt.Sprintf("%+v", *m) }
+func (*EventAuthorizationGranted) ProtoMessage()    {}
+func (m *EventAuthorizationGranted) Reset()         { *m = EventAuthorizationGranted{} }
+func (m *EventAuthorizationGranted) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventAuthorizationConsumed proto stubs
 func (*EventAuthorizationConsumed) ProtoMessage()    {}
@@ -307,9 +307,9 @@ func (m *EventAuthorizationConsumed) Reset()         { *m = EventAuthorizationCo
 func (m *EventAuthorizationConsumed) String() string { return fmt.Sprintf("%+v", *m) }
 
 // EventAuthorizationExpired proto stubs
-func (*EventAuthorizationExpired) ProtoMessage()     {}
-func (m *EventAuthorizationExpired) Reset()          { *m = EventAuthorizationExpired{} }
-func (m *EventAuthorizationExpired) String() string  { return fmt.Sprintf("%+v", *m) }
+func (*EventAuthorizationExpired) ProtoMessage()    {}
+func (m *EventAuthorizationExpired) Reset()         { *m = EventAuthorizationExpired{} }
+func (m *EventAuthorizationExpired) String() string { return fmt.Sprintf("%+v", *m) }
 
 // ============================================================================
 // Verification Attestation Events (VE-1B)
@@ -317,15 +317,15 @@ func (m *EventAuthorizationExpired) String() string  { return fmt.Sprintf("%+v",
 
 // Attestation event types
 const (
-	EventTypeAttestationCreated     = "attestation_created"
-	EventTypeAttestationRevoked     = "attestation_revoked"
-	EventTypeAttestationExpired     = "attestation_expired"
-	EventTypeSignerKeyRegistered    = "signer_key_registered"
-	EventTypeSignerKeyActivated     = "signer_key_activated"
-	EventTypeSignerKeyRevoked       = "signer_key_revoked"
-	EventTypeSignerKeyRotated       = "signer_key_rotated"
-	EventTypeNonceUsed              = "nonce_used"
-	EventTypeAttestationVerified    = "attestation_verified"
+	EventTypeAttestationCreated  = "attestation_created"
+	EventTypeAttestationRevoked  = "attestation_revoked"
+	EventTypeAttestationExpired  = "attestation_expired"
+	EventTypeSignerKeyRegistered = "signer_key_registered"
+	EventTypeSignerKeyActivated  = "signer_key_activated"
+	EventTypeSignerKeyRevoked    = "signer_key_revoked"
+	EventTypeSignerKeyRotated    = "signer_key_rotated"
+	EventTypeNonceUsed           = "nonce_used"
+	EventTypeAttestationVerified = "attestation_verified"
 )
 
 // Attestation event attribute keys
@@ -337,15 +337,15 @@ const (
 	AttributeKeySubjectAddress    = "subject_address"
 	AttributeKeyNonceHash         = "nonce_hash"
 	// Note: AttributeKeyExpiresAt already defined in borderline_events.go
-	AttributeKeyKeyID             = "key_id"
-	AttributeKeyKeyFingerprint    = "key_fingerprint"
-	AttributeKeyKeyState          = "key_state"
-	AttributeKeySignerID          = "signer_id"
-	AttributeKeyRotationID        = "rotation_id"
-	AttributeKeyOldKeyID          = "old_key_id"
-	AttributeKeyNewKeyID          = "new_key_id"
-	AttributeKeyRevocationReason  = "revocation_reason"
-	AttributeKeyConfidence        = "confidence"
+	AttributeKeyKeyID            = "key_id"
+	AttributeKeyKeyFingerprint   = "key_fingerprint"
+	AttributeKeyKeyState         = "key_state"
+	AttributeKeySignerID         = "signer_id"
+	AttributeKeyRotationID       = "rotation_id"
+	AttributeKeyOldKeyID         = "old_key_id"
+	AttributeKeyNewKeyID         = "new_key_id"
+	AttributeKeyRevocationReason = "revocation_reason"
+	AttributeKeyConfidence       = "confidence"
 )
 
 // EventAttestationCreated is emitted when a verification attestation is created
@@ -451,41 +451,41 @@ type EventAttestationVerified struct {
 
 // Proto stubs for attestation events
 
-func (*EventAttestationCreated) ProtoMessage()       {}
-func (m *EventAttestationCreated) Reset()            { *m = EventAttestationCreated{} }
-func (m *EventAttestationCreated) String() string    { return fmt.Sprintf("%+v", *m) }
+func (*EventAttestationCreated) ProtoMessage()    {}
+func (m *EventAttestationCreated) Reset()         { *m = EventAttestationCreated{} }
+func (m *EventAttestationCreated) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventAttestationRevoked) ProtoMessage()       {}
-func (m *EventAttestationRevoked) Reset()            { *m = EventAttestationRevoked{} }
-func (m *EventAttestationRevoked) String() string    { return fmt.Sprintf("%+v", *m) }
+func (*EventAttestationRevoked) ProtoMessage()    {}
+func (m *EventAttestationRevoked) Reset()         { *m = EventAttestationRevoked{} }
+func (m *EventAttestationRevoked) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventAttestationExpired) ProtoMessage()       {}
-func (m *EventAttestationExpired) Reset()            { *m = EventAttestationExpired{} }
-func (m *EventAttestationExpired) String() string    { return fmt.Sprintf("%+v", *m) }
+func (*EventAttestationExpired) ProtoMessage()    {}
+func (m *EventAttestationExpired) Reset()         { *m = EventAttestationExpired{} }
+func (m *EventAttestationExpired) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSignerKeyRegistered) ProtoMessage()      {}
-func (m *EventSignerKeyRegistered) Reset()           { *m = EventSignerKeyRegistered{} }
-func (m *EventSignerKeyRegistered) String() string   { return fmt.Sprintf("%+v", *m) }
+func (*EventSignerKeyRegistered) ProtoMessage()    {}
+func (m *EventSignerKeyRegistered) Reset()         { *m = EventSignerKeyRegistered{} }
+func (m *EventSignerKeyRegistered) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSignerKeyActivated) ProtoMessage()       {}
-func (m *EventSignerKeyActivated) Reset()            { *m = EventSignerKeyActivated{} }
-func (m *EventSignerKeyActivated) String() string    { return fmt.Sprintf("%+v", *m) }
+func (*EventSignerKeyActivated) ProtoMessage()    {}
+func (m *EventSignerKeyActivated) Reset()         { *m = EventSignerKeyActivated{} }
+func (m *EventSignerKeyActivated) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSignerKeyRevoked) ProtoMessage()         {}
-func (m *EventSignerKeyRevoked) Reset()              { *m = EventSignerKeyRevoked{} }
-func (m *EventSignerKeyRevoked) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*EventSignerKeyRevoked) ProtoMessage()    {}
+func (m *EventSignerKeyRevoked) Reset()         { *m = EventSignerKeyRevoked{} }
+func (m *EventSignerKeyRevoked) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSignerKeyRotated) ProtoMessage()         {}
-func (m *EventSignerKeyRotated) Reset()              { *m = EventSignerKeyRotated{} }
-func (m *EventSignerKeyRotated) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*EventSignerKeyRotated) ProtoMessage()    {}
+func (m *EventSignerKeyRotated) Reset()         { *m = EventSignerKeyRotated{} }
+func (m *EventSignerKeyRotated) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventNonceUsed) ProtoMessage()                {}
-func (m *EventNonceUsed) Reset()                     { *m = EventNonceUsed{} }
-func (m *EventNonceUsed) String() string             { return fmt.Sprintf("%+v", *m) }
+func (*EventNonceUsed) ProtoMessage()    {}
+func (m *EventNonceUsed) Reset()         { *m = EventNonceUsed{} }
+func (m *EventNonceUsed) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventAttestationVerified) ProtoMessage()      {}
-func (m *EventAttestationVerified) Reset()           { *m = EventAttestationVerified{} }
-func (m *EventAttestationVerified) String() string   { return fmt.Sprintf("%+v", *m) }
+func (*EventAttestationVerified) ProtoMessage()    {}
+func (m *EventAttestationVerified) Reset()         { *m = EventAttestationVerified{} }
+func (m *EventAttestationVerified) String() string { return fmt.Sprintf("%+v", *m) }
 
 // ============================================================================
 // SSO/OIDC Linkage Events (VE-4B)
@@ -505,26 +505,26 @@ const (
 
 // SSO linkage event attribute keys
 const (
-	AttributeKeyLinkageID     = "linkage_id"
-	AttributeKeyProvider      = "provider"
-	AttributeKeyIssuer        = "issuer"
+	AttributeKeyLinkageID      = "linkage_id"
+	AttributeKeyProvider       = "provider"
+	AttributeKeyIssuer         = "issuer"
 	AttributeKeySSOChallengeID = "sso_challenge_id"
-	AttributeKeySubjectHash   = "subject_hash"
-	AttributeKeyEmailDomain   = "email_domain"
-	AttributeKeyTenantID      = "tenant_id"
-	AttributeKeyFailureReason = "failure_reason"
+	AttributeKeySubjectHash    = "subject_hash"
+	AttributeKeyEmailDomain    = "email_domain"
+	AttributeKeyTenantID       = "tenant_id"
+	AttributeKeyFailureReason  = "failure_reason"
 )
 
 // EventSSOLinkageCreated is emitted when an SSO linkage is created
 type EventSSOLinkageCreated struct {
-	Account      string `json:"account"`
-	LinkageID    string `json:"linkage_id"`
-	Provider     string `json:"provider"`
-	Issuer       string `json:"issuer"`
-	SubjectHash  string `json:"subject_hash"`
-	EmailDomain  string `json:"email_domain,omitempty"`
-	BlockHeight  int64  `json:"block_height"`
-	Timestamp    int64  `json:"timestamp"`
+	Account     string `json:"account"`
+	LinkageID   string `json:"linkage_id"`
+	Provider    string `json:"provider"`
+	Issuer      string `json:"issuer"`
+	SubjectHash string `json:"subject_hash"`
+	EmailDomain string `json:"email_domain,omitempty"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
 }
 
 // EventSSOLinkageRevoked is emitted when an SSO linkage is revoked
@@ -540,12 +540,12 @@ type EventSSOLinkageRevoked struct {
 
 // EventSSOLinkageUpdated is emitted when an SSO linkage is updated
 type EventSSOLinkageUpdated struct {
-	Account      string `json:"account"`
-	LinkageID    string `json:"linkage_id"`
-	Provider     string `json:"provider"`
-	UpdateType   string `json:"update_type"`
-	BlockHeight  int64  `json:"block_height"`
-	Timestamp    int64  `json:"timestamp"`
+	Account     string `json:"account"`
+	LinkageID   string `json:"linkage_id"`
+	Provider    string `json:"provider"`
+	UpdateType  string `json:"update_type"`
+	BlockHeight int64  `json:"block_height"`
+	Timestamp   int64  `json:"timestamp"`
 }
 
 // EventSSOLinkageExpired is emitted when an SSO linkage expires
@@ -588,30 +588,30 @@ type EventSSOChallengeFailed struct {
 
 // Proto stubs for SSO linkage events
 
-func (*EventSSOLinkageCreated) ProtoMessage()         {}
-func (m *EventSSOLinkageCreated) Reset()              { *m = EventSSOLinkageCreated{} }
-func (m *EventSSOLinkageCreated) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*EventSSOLinkageCreated) ProtoMessage()    {}
+func (m *EventSSOLinkageCreated) Reset()         { *m = EventSSOLinkageCreated{} }
+func (m *EventSSOLinkageCreated) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSSOLinkageRevoked) ProtoMessage()         {}
-func (m *EventSSOLinkageRevoked) Reset()              { *m = EventSSOLinkageRevoked{} }
-func (m *EventSSOLinkageRevoked) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*EventSSOLinkageRevoked) ProtoMessage()    {}
+func (m *EventSSOLinkageRevoked) Reset()         { *m = EventSSOLinkageRevoked{} }
+func (m *EventSSOLinkageRevoked) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSSOLinkageUpdated) ProtoMessage()         {}
-func (m *EventSSOLinkageUpdated) Reset()              { *m = EventSSOLinkageUpdated{} }
-func (m *EventSSOLinkageUpdated) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*EventSSOLinkageUpdated) ProtoMessage()    {}
+func (m *EventSSOLinkageUpdated) Reset()         { *m = EventSSOLinkageUpdated{} }
+func (m *EventSSOLinkageUpdated) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSSOLinkageExpired) ProtoMessage()         {}
-func (m *EventSSOLinkageExpired) Reset()              { *m = EventSSOLinkageExpired{} }
-func (m *EventSSOLinkageExpired) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*EventSSOLinkageExpired) ProtoMessage()    {}
+func (m *EventSSOLinkageExpired) Reset()         { *m = EventSSOLinkageExpired{} }
+func (m *EventSSOLinkageExpired) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSSOChallengeCreated) ProtoMessage()       {}
-func (m *EventSSOChallengeCreated) Reset()            { *m = EventSSOChallengeCreated{} }
-func (m *EventSSOChallengeCreated) String() string    { return fmt.Sprintf("%+v", *m) }
+func (*EventSSOChallengeCreated) ProtoMessage()    {}
+func (m *EventSSOChallengeCreated) Reset()         { *m = EventSSOChallengeCreated{} }
+func (m *EventSSOChallengeCreated) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSSOChallengeCompleted) ProtoMessage()     {}
-func (m *EventSSOChallengeCompleted) Reset()          { *m = EventSSOChallengeCompleted{} }
-func (m *EventSSOChallengeCompleted) String() string  { return fmt.Sprintf("%+v", *m) }
+func (*EventSSOChallengeCompleted) ProtoMessage()    {}
+func (m *EventSSOChallengeCompleted) Reset()         { *m = EventSSOChallengeCompleted{} }
+func (m *EventSSOChallengeCompleted) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*EventSSOChallengeFailed) ProtoMessage()        {}
-func (m *EventSSOChallengeFailed) Reset()             { *m = EventSSOChallengeFailed{} }
-func (m *EventSSOChallengeFailed) String() string     { return fmt.Sprintf("%+v", *m) }
+func (*EventSSOChallengeFailed) ProtoMessage()    {}
+func (m *EventSSOChallengeFailed) Reset()         { *m = EventSSOChallengeFailed{} }
+func (m *EventSSOChallengeFailed) String() string { return fmt.Sprintf("%+v", *m) }

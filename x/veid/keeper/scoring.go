@@ -12,6 +12,8 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+const envTrueValue = "true"
+
 // ============================================================================
 // ML Scoring Configuration
 // ============================================================================
@@ -82,7 +84,7 @@ func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
 	return &TensorFlowScoringConfig{
 		ModelPath:      getEnvOrDefault("VEID_INFERENCE_MODEL_PATH", "models/trust_score"),
 		ExpectedHash:   os.Getenv("VEID_INFERENCE_MODEL_HASH"),
-		UseSidecar:     os.Getenv("VEID_INFERENCE_USE_SIDECAR") == "true",
+		UseSidecar:     os.Getenv("VEID_INFERENCE_USE_SIDECAR") == envTrueValue,
 		SidecarAddress: getEnvOrDefault("VEID_INFERENCE_SIDECAR_ADDR", "localhost:50051"),
 		Deterministic:  true,
 		ForceCPU:       true,
@@ -93,12 +95,12 @@ func DefaultTensorFlowScoringConfig() *TensorFlowScoringConfig {
 // VE-205: Real inference can be enabled via environment variable
 func isTensorFlowEnabled() bool {
 	// Check for explicit disable first
-	if os.Getenv("VEID_DISABLE_TENSORFLOW") == "true" {
+	if os.Getenv("VEID_DISABLE_TENSORFLOW") == envTrueValue {
 		return false
 	}
 	// Enable if explicitly set, or if VEID_INFERENCE_ENABLED is true
-	return os.Getenv("VEID_USE_TENSORFLOW") == "true" ||
-		os.Getenv("VEID_INFERENCE_ENABLED") == "true"
+	return os.Getenv("VEID_USE_TENSORFLOW") == envTrueValue ||
+		os.Getenv("VEID_INFERENCE_ENABLED") == envTrueValue
 }
 
 // isRealInferenceReady checks if real inference runtime is available and healthy
@@ -173,7 +175,7 @@ func (si *ScoringInput) ComputeInputHash() []byte {
 
 	// Include block height for determinism
 	heightBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(heightBytes, uint64(si.BlockHeight))
+	binary.BigEndian.PutUint64(heightBytes, safeUint64FromInt64(si.BlockHeight))
 	h.Write(heightBytes)
 
 	// Include content hashes of all decrypted scopes (in order)
@@ -567,9 +569,9 @@ func (k Keeper) createTensorFlowScorer(config MLScoringConfig) (MLScorer, error)
 
 // TensorFlowScorerAdapter adapts the inference.Scorer to MLScorer interface
 type TensorFlowScorerAdapter struct {
-	scorer             inference.Scorer
-	config             MLScoringConfig
-	featurePipeline    *FeatureExtractionPipeline
+	scorer          inference.Scorer
+	config          MLScoringConfig
+	featurePipeline *FeatureExtractionPipeline
 }
 
 // Score implements MLScorer.Score using TensorFlow inference
@@ -620,7 +622,7 @@ func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, er
 	// Add quality gate failure reason codes
 	if len(failedGates) > 0 {
 		output.ReasonCodes = append(output.ReasonCodes, qualityReasonCodes...)
-		
+
 		// Apply score penalty for quality gate failures
 		penaltyRatio := float32(len(failedGates)) / float32(len(features.QualityGateResults))
 		penalizedScore := float32(output.Score) * (1.0 - penaltyRatio*0.3)
@@ -632,11 +634,12 @@ func (a *TensorFlowScorerAdapter) Score(input *ScoringInput) (*ScoringOutput, er
 
 	// Include liveness information in output
 	if features.LivenessDecision != "" && features.LivenessDecision != "live" {
-		if features.LivenessDecision == "spoof" {
+		switch features.LivenessDecision {
+		case "spoof":
 			output.ReasonCodes = append(output.ReasonCodes, types.ReasonCodeLivenessCheckFailed)
 			// Significant penalty for spoof detection
 			output.Score = output.Score * 50 / 100
-		} else if features.LivenessDecision == "uncertain" {
+		case "uncertain":
 			output.ReasonCodes = append(output.ReasonCodes, types.ReasonCodeLowConfidence)
 		}
 	}

@@ -15,4 +15,3 @@ type LightClient interface {
 type QueryClient interface {
 	v1beta3.QueryClient
 }
-

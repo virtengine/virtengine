@@ -15,6 +15,8 @@ import (
 	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
 )
 
+const testClusterID = "cluster-test"
+
 // =============================================================================
 // Mock Implementations
 // =============================================================================
@@ -380,7 +382,7 @@ func TestHPCConfig_Validate(t *testing.T) {
 			config: func() HPCConfig {
 				c := DefaultHPCConfig()
 				c.Enabled = true
-				c.ClusterID = "test-cluster"
+				c.ClusterID = testClusterID
 				return c
 			}(),
 			wantErr: false,
@@ -449,7 +451,7 @@ func TestMockHPCScheduler_SubmitAndCancel(t *testing.T) {
 	if err := scheduler.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer scheduler.Stop()
+	defer func() { _ = scheduler.Stop() }()
 
 	job := createTestJob("test-job-1")
 
@@ -509,7 +511,7 @@ func TestMockHPCScheduler_LifecycleCallbacks(t *testing.T) {
 	if err := scheduler.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer scheduler.Stop()
+	defer func() { _ = scheduler.Stop() }()
 
 	job := createTestJob("lifecycle-test")
 
@@ -556,7 +558,7 @@ func TestHPCJobService_SubmitJob(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer service.Stop()
+	defer func() { _ = service.Stop() }()
 
 	job := createTestJob("service-test")
 
@@ -590,7 +592,7 @@ func TestHPCJobService_CancelJob(t *testing.T) {
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer service.Stop()
+	defer func() { _ = service.Stop() }()
 
 	job := createTestJob("cancel-test")
 

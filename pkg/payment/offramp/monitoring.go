@@ -19,43 +19,43 @@ type MetricsCollector struct {
 	mu sync.RWMutex
 
 	// Payout metrics
-	PayoutsTotal        int64            `json:"payouts_total"`
-	PayoutsSucceeded    int64            `json:"payouts_succeeded"`
-	PayoutsFailed       int64            `json:"payouts_failed"`
-	PayoutsCanceled     int64            `json:"payouts_canceled"`
-	PayoutsReversed     int64            `json:"payouts_reversed"`
-	PayoutsByProvider   map[ProviderType]int64 `json:"payouts_by_provider"`
-	PayoutsByCurrency   map[string]int64 `json:"payouts_by_currency"`
+	PayoutsTotal      int64                  `json:"payouts_total"`
+	PayoutsSucceeded  int64                  `json:"payouts_succeeded"`
+	PayoutsFailed     int64                  `json:"payouts_failed"`
+	PayoutsCanceled   int64                  `json:"payouts_canceled"`
+	PayoutsReversed   int64                  `json:"payouts_reversed"`
+	PayoutsByProvider map[ProviderType]int64 `json:"payouts_by_provider"`
+	PayoutsByCurrency map[string]int64       `json:"payouts_by_currency"`
 
 	// Amount metrics
-	TotalAmountPaidOut  int64            `json:"total_amount_paid_out"`
-	TotalFees           int64            `json:"total_fees"`
-	AmountByProvider    map[ProviderType]int64 `json:"amount_by_provider"`
+	TotalAmountPaidOut int64                  `json:"total_amount_paid_out"`
+	TotalFees          int64                  `json:"total_fees"`
+	AmountByProvider   map[ProviderType]int64 `json:"amount_by_provider"`
 
 	// Timing metrics
-	AvgProcessingTimeMs int64            `json:"avg_processing_time_ms"`
-	MaxProcessingTimeMs int64            `json:"max_processing_time_ms"`
-	MinProcessingTimeMs int64            `json:"min_processing_time_ms"`
+	AvgProcessingTimeMs int64 `json:"avg_processing_time_ms"`
+	MaxProcessingTimeMs int64 `json:"max_processing_time_ms"`
+	MinProcessingTimeMs int64 `json:"min_processing_time_ms"`
 
 	// Compliance metrics
-	KYCRejections       int64            `json:"kyc_rejections"`
-	AMLRejections       int64            `json:"aml_rejections"`
-	AMLFlagged          int64            `json:"aml_flagged"`
+	KYCRejections int64 `json:"kyc_rejections"`
+	AMLRejections int64 `json:"aml_rejections"`
+	AMLFlagged    int64 `json:"aml_flagged"`
 
 	// Webhook metrics
-	WebhooksReceived    int64            `json:"webhooks_received"`
-	WebhooksProcessed   int64            `json:"webhooks_processed"`
-	WebhooksFailed      int64            `json:"webhooks_failed"`
+	WebhooksReceived  int64 `json:"webhooks_received"`
+	WebhooksProcessed int64 `json:"webhooks_processed"`
+	WebhooksFailed    int64 `json:"webhooks_failed"`
 
 	// Reconciliation metrics
-	ReconciliationsRun  int64            `json:"reconciliations_run"`
-	ReconciliationMatches int64          `json:"reconciliation_matches"`
-	ReconciliationMismatches int64       `json:"reconciliation_mismatches"`
+	ReconciliationsRun       int64 `json:"reconciliations_run"`
+	ReconciliationMatches    int64 `json:"reconciliation_matches"`
+	ReconciliationMismatches int64 `json:"reconciliation_mismatches"`
 
 	// Error metrics
-	ProviderErrors      map[ProviderType]int64 `json:"provider_errors"`
-	LastError           string           `json:"last_error,omitempty"`
-	LastErrorTime       *time.Time       `json:"last_error_time,omitempty"`
+	ProviderErrors map[ProviderType]int64 `json:"provider_errors"`
+	LastError      string                 `json:"last_error,omitempty"`
+	LastErrorTime  *time.Time             `json:"last_error_time,omitempty"`
 }
 
 // NewMetricsCollector creates a new metrics collector.
@@ -174,31 +174,31 @@ func (m *MetricsCollector) GetSnapshot() *MetricsCollector {
 
 	// Create a copy
 	snapshot := &MetricsCollector{
-		PayoutsTotal:        m.PayoutsTotal,
-		PayoutsSucceeded:    m.PayoutsSucceeded,
-		PayoutsFailed:       m.PayoutsFailed,
-		PayoutsCanceled:     m.PayoutsCanceled,
-		PayoutsReversed:     m.PayoutsReversed,
-		PayoutsByProvider:   make(map[ProviderType]int64),
-		PayoutsByCurrency:   make(map[string]int64),
-		TotalAmountPaidOut:  m.TotalAmountPaidOut,
-		TotalFees:           m.TotalFees,
-		AmountByProvider:    make(map[ProviderType]int64),
-		AvgProcessingTimeMs: m.AvgProcessingTimeMs,
-		MaxProcessingTimeMs: m.MaxProcessingTimeMs,
-		MinProcessingTimeMs: m.MinProcessingTimeMs,
-		KYCRejections:       m.KYCRejections,
-		AMLRejections:       m.AMLRejections,
-		AMLFlagged:          m.AMLFlagged,
-		WebhooksReceived:    m.WebhooksReceived,
-		WebhooksProcessed:   m.WebhooksProcessed,
-		WebhooksFailed:      m.WebhooksFailed,
-		ReconciliationsRun:  m.ReconciliationsRun,
-		ReconciliationMatches: m.ReconciliationMatches,
+		PayoutsTotal:             m.PayoutsTotal,
+		PayoutsSucceeded:         m.PayoutsSucceeded,
+		PayoutsFailed:            m.PayoutsFailed,
+		PayoutsCanceled:          m.PayoutsCanceled,
+		PayoutsReversed:          m.PayoutsReversed,
+		PayoutsByProvider:        make(map[ProviderType]int64),
+		PayoutsByCurrency:        make(map[string]int64),
+		TotalAmountPaidOut:       m.TotalAmountPaidOut,
+		TotalFees:                m.TotalFees,
+		AmountByProvider:         make(map[ProviderType]int64),
+		AvgProcessingTimeMs:      m.AvgProcessingTimeMs,
+		MaxProcessingTimeMs:      m.MaxProcessingTimeMs,
+		MinProcessingTimeMs:      m.MinProcessingTimeMs,
+		KYCRejections:            m.KYCRejections,
+		AMLRejections:            m.AMLRejections,
+		AMLFlagged:               m.AMLFlagged,
+		WebhooksReceived:         m.WebhooksReceived,
+		WebhooksProcessed:        m.WebhooksProcessed,
+		WebhooksFailed:           m.WebhooksFailed,
+		ReconciliationsRun:       m.ReconciliationsRun,
+		ReconciliationMatches:    m.ReconciliationMatches,
 		ReconciliationMismatches: m.ReconciliationMismatches,
-		ProviderErrors:      make(map[ProviderType]int64),
-		LastError:           m.LastError,
-		LastErrorTime:       m.LastErrorTime,
+		ProviderErrors:           make(map[ProviderType]int64),
+		LastError:                m.LastError,
+		LastErrorTime:            m.LastErrorTime,
 	}
 
 	for k, v := range m.PayoutsByProvider {
@@ -290,18 +290,18 @@ type AlertConfig struct {
 	MaxAlerts int `json:"max_alerts"`
 
 	// Thresholds for automatic alerts
-	FailureRateThreshold float64 `json:"failure_rate_threshold"` // 0-1
-	ProviderErrorThreshold int64 `json:"provider_error_threshold"`
-	ReconciliationMismatchThreshold int64 `json:"reconciliation_mismatch_threshold"`
+	FailureRateThreshold            float64 `json:"failure_rate_threshold"` // 0-1
+	ProviderErrorThreshold          int64   `json:"provider_error_threshold"`
+	ReconciliationMismatchThreshold int64   `json:"reconciliation_mismatch_threshold"`
 }
 
 // DefaultAlertConfig returns the default alert configuration.
 func DefaultAlertConfig() AlertConfig {
 	return AlertConfig{
-		Enabled:                        true,
-		MaxAlerts:                      1000,
-		FailureRateThreshold:           0.1,  // 10% failure rate
-		ProviderErrorThreshold:         10,   // 10 provider errors
+		Enabled:                         true,
+		MaxAlerts:                       1000,
+		FailureRateThreshold:            0.1, // 10% failure rate
+		ProviderErrorThreshold:          10,  // 10 provider errors
 		ReconciliationMismatchThreshold: 5,   // 5 mismatches
 	}
 }
@@ -336,7 +336,7 @@ func (m *AlertManager) CreateAlert(ctx context.Context, level AlertLevel, alertT
 
 	m.mu.Lock()
 	m.alerts = append(m.alerts, alert)
-	
+
 	// Trim if over max
 	if len(m.alerts) > m.config.MaxAlerts {
 		m.alerts = m.alerts[len(m.alerts)-m.config.MaxAlerts:]
@@ -345,7 +345,9 @@ func (m *AlertManager) CreateAlert(ctx context.Context, level AlertLevel, alertT
 
 	// Call handlers
 	for _, handler := range m.handlers {
-		go handler(ctx, alert)
+		go func(h AlertHandler) {
+			_ = h(ctx, alert) // Ignore handler errors - they are for async notification
+		}(handler)
 	}
 
 	return alert
@@ -540,4 +542,3 @@ func (m *MonitoringService) GetMetrics() *MetricsCollector {
 func (m *MonitoringService) GetAlertManager() *AlertManager {
 	return m.alerts
 }
-

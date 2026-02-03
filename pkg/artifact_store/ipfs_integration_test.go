@@ -313,4 +313,3 @@ func TestIPFSIntegration_StreamingBackend(t *testing.T) {
 		RequestingAccount: "cosmos1streamtest",
 	})
 }
-

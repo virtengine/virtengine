@@ -23,7 +23,7 @@ func (q GRPCQuerier) Escrow(ctx sdk.Context, req *types.QueryEscrowRequest) (*ty
 		return nil, status.Error(codes.InvalidArgument, "escrow_id cannot be empty")
 	}
 
-	escrow, found := q.Keeper.GetEscrow(ctx, req.EscrowID)
+	escrow, found := q.GetEscrow(ctx, req.EscrowID)
 	if !found {
 		return &types.QueryEscrowResponse{
 			Escrow: nil,
@@ -45,7 +45,7 @@ func (q GRPCQuerier) EscrowsByOrder(ctx sdk.Context, req *types.QueryEscrowsByOr
 		return nil, status.Error(codes.InvalidArgument, "order_id cannot be empty")
 	}
 
-	escrow, found := q.Keeper.GetEscrowByOrder(ctx, req.OrderID)
+	escrow, found := q.GetEscrowByOrder(ctx, req.OrderID)
 	if !found {
 		return &types.QueryEscrowsByOrderResponse{
 			Escrows: []types.EscrowAccount{},
@@ -73,7 +73,7 @@ func (q GRPCQuerier) EscrowsByState(ctx sdk.Context, req *types.QueryEscrowsBySt
 	}
 
 	var escrows []types.EscrowAccount
-	q.Keeper.WithEscrowsByState(ctx, state, func(escrow types.EscrowAccount) bool {
+	q.WithEscrowsByState(ctx, state, func(escrow types.EscrowAccount) bool {
 		escrows = append(escrows, escrow)
 		return false
 	})
@@ -93,7 +93,7 @@ func (q GRPCQuerier) Settlement(ctx sdk.Context, req *types.QuerySettlementReque
 		return nil, status.Error(codes.InvalidArgument, "settlement_id cannot be empty")
 	}
 
-	settlement, found := q.Keeper.GetSettlement(ctx, req.SettlementID)
+	settlement, found := q.GetSettlement(ctx, req.SettlementID)
 	if !found {
 		return &types.QuerySettlementResponse{
 			Settlement: nil,
@@ -115,7 +115,7 @@ func (q GRPCQuerier) SettlementsByOrder(ctx sdk.Context, req *types.QuerySettlem
 		return nil, status.Error(codes.InvalidArgument, "order_id cannot be empty")
 	}
 
-	settlements := q.Keeper.GetSettlementsByOrder(ctx, req.OrderID)
+	settlements := q.GetSettlementsByOrder(ctx, req.OrderID)
 
 	return &types.QuerySettlementsByOrderResponse{
 		Settlements: settlements,
@@ -132,7 +132,7 @@ func (q GRPCQuerier) UsageRecord(ctx sdk.Context, req *types.QueryUsageRecordReq
 		return nil, status.Error(codes.InvalidArgument, "usage_id cannot be empty")
 	}
 
-	usage, found := q.Keeper.GetUsageRecord(ctx, req.UsageID)
+	usage, found := q.GetUsageRecord(ctx, req.UsageID)
 	if !found {
 		return &types.QueryUsageRecordResponse{
 			UsageRecord: nil,
@@ -154,7 +154,7 @@ func (q GRPCQuerier) UsageRecordsByOrder(ctx sdk.Context, req *types.QueryUsageR
 		return nil, status.Error(codes.InvalidArgument, "order_id cannot be empty")
 	}
 
-	usages := q.Keeper.GetUsageRecordsByOrder(ctx, req.OrderID)
+	usages := q.GetUsageRecordsByOrder(ctx, req.OrderID)
 
 	return &types.QueryUsageRecordsByOrderResponse{
 		UsageRecords: usages,
@@ -171,7 +171,7 @@ func (q GRPCQuerier) RewardDistribution(ctx sdk.Context, req *types.QueryRewardD
 		return nil, status.Error(codes.InvalidArgument, "distribution_id cannot be empty")
 	}
 
-	dist, found := q.Keeper.GetRewardDistribution(ctx, req.DistributionID)
+	dist, found := q.GetRewardDistribution(ctx, req.DistributionID)
 	if !found {
 		return &types.QueryRewardDistributionResponse{
 			Distribution: nil,
@@ -189,7 +189,7 @@ func (q GRPCQuerier) RewardsByEpoch(ctx sdk.Context, req *types.QueryRewardsByEp
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	distributions := q.Keeper.GetRewardsByEpoch(ctx, req.EpochNumber)
+	distributions := q.GetRewardsByEpoch(ctx, req.EpochNumber)
 
 	return &types.QueryRewardsByEpochResponse{
 		Distributions: distributions,
@@ -211,7 +211,7 @@ func (q GRPCQuerier) ClaimableRewards(ctx sdk.Context, req *types.QueryClaimable
 		return nil, status.Error(codes.InvalidArgument, "invalid address")
 	}
 
-	rewards, found := q.Keeper.GetClaimableRewards(ctx, address)
+	rewards, found := q.GetClaimableRewards(ctx, address)
 	if !found {
 		return &types.QueryClaimableRewardsResponse{
 			Rewards: nil,
@@ -229,7 +229,7 @@ func (q GRPCQuerier) Params(ctx sdk.Context, req *types.QueryParamsRequest) (*ty
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	params := q.Keeper.GetParams(ctx)
+	params := q.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
 		Params: params,

@@ -713,7 +713,9 @@ func (k Keeper) ProcessExpiredJobs(ctx sdk.Context) error {
 				job.State = types.JobStateTimeout
 				job.StatusMessage = "Job exceeded maximum runtime"
 				job.CompletedAt = &now
-				k.SetJob(ctx, job)
+				if err := k.SetJob(ctx, job); err != nil {
+					k.Logger(ctx).Error("failed to set job", "error", err)
+				}
 			}
 		}
 
@@ -737,7 +739,9 @@ func (k Keeper) CheckClusterHealth(ctx sdk.Context) error {
 		if ctx.BlockTime().Sub(cluster.UpdatedAt) > timeout {
 			if cluster.State == types.ClusterStateActive {
 				cluster.State = types.ClusterStateOffline
-				k.SetCluster(ctx, cluster)
+				if err := k.SetCluster(ctx, cluster); err != nil {
+					k.Logger(ctx).Error("failed to set cluster", "error", err)
+				}
 			}
 		}
 

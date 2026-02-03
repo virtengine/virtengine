@@ -17,14 +17,14 @@ const (
 type (
 	Keeper = keeper.Keeper
 
-	HPCCluster   = types.HPCCluster
-	HPCOffering  = types.HPCOffering
-	HPCJob       = types.HPCJob
-	JobAccounting = types.JobAccounting
-	NodeMetadata = types.NodeMetadata
+	HPCCluster         = types.HPCCluster
+	HPCOffering        = types.HPCOffering
+	HPCJob             = types.HPCJob
+	JobAccounting      = types.JobAccounting
+	NodeMetadata       = types.NodeMetadata
 	SchedulingDecision = types.SchedulingDecision
-	HPCRewardRecord = types.HPCRewardRecord
-	HPCDispute = types.HPCDispute
+	HPCRewardRecord    = types.HPCRewardRecord
+	HPCDispute         = types.HPCDispute
 
 	GenesisState = types.GenesisState
 	Params       = types.Params
@@ -32,7 +32,7 @@ type (
 
 // Function aliases
 var (
-	NewKeeper          = keeper.NewKeeper
+	NewKeeper           = keeper.NewKeeper
 	DefaultGenesisState = types.DefaultGenesisState
-	DefaultParams      = types.DefaultParams
+	DefaultParams       = types.DefaultParams
 )

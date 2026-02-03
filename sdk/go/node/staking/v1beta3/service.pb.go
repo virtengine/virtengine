@@ -136,4 +136,3 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "virtengine/staking/v1beta3/service.proto",
 }
-

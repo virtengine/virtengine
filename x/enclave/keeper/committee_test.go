@@ -99,10 +99,10 @@ func TestCryptoRandIndex_NoModuloBias(t *testing.T) {
 	seed := sha256.Sum256([]byte("bias-test"))
 
 	max := 7 // Use a value that doesn't divide 2^64 evenly
-	iterations := 70000
+	iterations := uint64(70000)
 	counts := make([]int, max)
 
-	for counter := uint64(0); counter < uint64(iterations); counter++ {
+	for counter := uint64(0); counter < iterations; counter++ {
 		result := cryptoRandIndex(seed[:], counter, max)
 		counts[result]++
 	}
@@ -124,10 +124,10 @@ func TestCryptoRandIndex_ChiSquareDistribution(t *testing.T) {
 	seed := sha256.Sum256([]byte("chi-square-test"))
 
 	max := 10
-	iterations := 100000
+	iterations := uint64(100000)
 	counts := make([]int, max)
 
-	for counter := uint64(0); counter < uint64(iterations); counter++ {
+	for counter := uint64(0); counter < iterations; counter++ {
 		result := cryptoRandIndex(seed[:], counter, max)
 		counts[result]++
 	}
@@ -161,7 +161,7 @@ func TestCryptoRandIndex_UsedInFisherYatesShuffle(t *testing.T) {
 		copy(shuffled, original)
 
 		for i := len(shuffled) - 1; i > 0; i-- {
-			j := cryptoRandIndex(seed[:], uint64(i), i+1)
+			j := cryptoRandIndex(seed[:], safeUint64FromInt(i), i+1)
 			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 		}
 
@@ -248,7 +248,7 @@ func BenchmarkCryptoRandIndex(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cryptoRandIndex(seed[:], uint64(i), 1000)
+		cryptoRandIndex(seed[:], safeUint64FromInt(i), 1000)
 	}
 }
 
@@ -266,8 +266,16 @@ func BenchmarkFisherYatesShuffle100(b *testing.B) {
 		copy(shuffled, elements)
 
 		for j := len(shuffled) - 1; j > 0; j-- {
-			k := cryptoRandIndex(seed[:], uint64(j), j+1)
+			k := cryptoRandIndex(seed[:], safeUint64FromInt(j), j+1)
 			shuffled[j], shuffled[k] = shuffled[k], shuffled[j]
 		}
 	}
+}
+
+func safeUint64FromInt(value int) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }

@@ -154,7 +154,7 @@ check_mod_vendor() {
 check_lint() {
     # Skip lint for now - requires golangci-lint v2 which isn't widely available yet
     # The project's .golangci.yml is configured for v2 but v1 is commonly installed
-    hook_warn "golangci-lint skipped (requires v2, not widely available yet)"
+    hook_info "golangci-lint skipped (requires v2, not widely available yet)"
     return 0
 }
 

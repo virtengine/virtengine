@@ -928,4 +928,3 @@ func CheckTendermintError(err error, tx cbtypes.Tx) *sdk.TxResponse {
 
 	return nil
 }
-

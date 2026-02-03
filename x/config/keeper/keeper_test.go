@@ -1,8 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: This test file is excluded until sdk.NewContext API is stabilized.
-
 package keeper
 
 import (
@@ -16,10 +11,10 @@ import (
 	"cosmossdk.io/store"
 	"cosmossdk.io/store/metrics"
 	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -28,10 +23,13 @@ import (
 )
 
 // Test constants
+var (
+	testAuthority = sdk.AccAddress([]byte("authority")).String()
+	testAdmin1    = sdk.AccAddress([]byte("admin1")).String()
+	testAdmin2    = sdk.AccAddress([]byte("admin2")).String()
+)
+
 const (
-	testAuthority  = "virtengine1authority"
-	testAdmin1     = "virtengine1admin1"
-	testAdmin2     = "virtengine1admin2"
 	testClientID   = "test-mobile-app"
 	testClientID2  = "test-web-portal"
 	testClientName = "Test Mobile App"
@@ -68,10 +66,13 @@ func (s *KeeperTestSuite) SetupTest() {
 	require.NoError(s.T(), stateStore.LoadLatestVersion())
 
 	// Create context
-	s.ctx = sdk.NewContext(stateStore, false, log.NewNopLogger()).WithBlockTime(time.Now())
+	s.ctx = sdk.NewContext(stateStore, cmtproto.Header{
+		Height: 1,
+		Time:   time.Now().UTC(),
+	}, false, log.NewNopLogger())
 
 	// Create keeper
-	s.keeper = NewKeeper(s.cdc, runtime.NewKVStoreService(storeKey), testAuthority)
+	s.keeper = NewKeeper(s.cdc, storeKey, testAuthority)
 
 	// Initialize with default params including admin
 	params := types.DefaultParams()
@@ -664,8 +665,6 @@ func (s *KeeperTestSuite) TestVerifyUploadSignatures() {
 	clientSignature := ed25519.Sign(s.testPrivateKey, signingPayload)
 
 	// Create user signing payload
-	userPayload := computeUserSigningPayload(clientSignature, payloadHash[:])
-
 	// Create mock user signature (in real scenario this would be validated differently)
 	userSignature := make([]byte, 64)
 	rand.Read(userSignature)
@@ -732,8 +731,11 @@ func (s *KeeperTestSuite) TestAuditHistory() {
 	s.Require().NoError(s.keeper.RegisterClient(s.ctx, *client))
 
 	// Perform some operations
+	s.ctx = s.ctx.WithBlockTime(s.ctx.BlockTime().Add(time.Second))
 	s.Require().NoError(s.keeper.UpdateClient(s.ctx, "audit-test-client", "Updated Name", "", "", "", nil, testAdmin1))
+	s.ctx = s.ctx.WithBlockTime(s.ctx.BlockTime().Add(time.Second))
 	s.Require().NoError(s.keeper.SuspendClient(s.ctx, "audit-test-client", "Testing audit", testAdmin2))
+	s.ctx = s.ctx.WithBlockTime(s.ctx.BlockTime().Add(time.Second))
 	s.Require().NoError(s.keeper.ReactivateClient(s.ctx, "audit-test-client", "Audit complete", testAdmin1))
 
 	// Check audit history

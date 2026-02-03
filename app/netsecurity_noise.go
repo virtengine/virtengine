@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -38,7 +39,7 @@ type NoiseHandshakeState struct {
 	remoteEphemeral []byte
 
 	// Symmetric state
-	chainingKey []byte
+	chainingKey   []byte
 	handshakeHash []byte
 
 	// Direction
@@ -59,11 +60,11 @@ type NoiseKeyPair struct {
 // NoiseSession represents an established encrypted session.
 type NoiseSession struct {
 	// Cipher states for sending and receiving
-	sendCipher   cipher.AEAD
-	recvCipher   cipher.AEAD
-	sendNonce    uint64
-	recvNonce    uint64
-	
+	sendCipher cipher.AEAD
+	recvCipher cipher.AEAD
+	sendNonce  uint64
+	recvNonce  uint64
+
 	// Session identification
 	remotePublicKey []byte
 	handshakeHash   []byte
@@ -80,10 +81,10 @@ type NoiseSession struct {
 
 // NoiseTransport wraps a connection with Noise Protocol encryption.
 type NoiseTransport struct {
-	config        NoiseConfig
-	localKeyPair  *NoiseKeyPair
-	trustedKeys   map[string]bool // Map of trusted remote public keys (hex encoded)
-	
+	config       NoiseConfig
+	localKeyPair *NoiseKeyPair
+	trustedKeys  map[string]bool // Map of trusted remote public keys (hex encoded)
+
 	mu sync.RWMutex
 }
 
@@ -176,7 +177,7 @@ func (t *NoiseTransport) SecureOutbound(conn net.Conn, remoteStaticKey []byte) (
 	// -> e, es
 	// Mix ephemeral public key
 	state.mixHash(state.localEphemeral.PublicKey)
-	
+
 	// Perform DH: es
 	sharedSecret, err := curve25519DH(state.localEphemeral.PrivateKey, remoteStaticKey)
 	if err != nil {
@@ -374,7 +375,7 @@ func (s *NoiseHandshakeState) split(conn net.Conn) (*NoiseSession, error) {
 
 	// Derive transport keys using HKDF
 	r := hkdf.New(sha3.New256, nil, s.chainingKey, []byte("noise-transport"))
-	
+
 	sendKey := make([]byte, 32)
 	recvKey := make([]byte, 32)
 
@@ -478,7 +479,11 @@ func (s *NoiseSession) Write(b []byte) (int, error) {
 	ciphertext := s.sendCipher.Seal(nil, nonce, b, nil)
 
 	// Write length prefix
+	if len(ciphertext) > math.MaxUint16 {
+		return 0, errors.New("ciphertext too large")
+	}
 	var lengthBuf [2]byte
+	//nolint:gosec // range checked above
 	binary.BigEndian.PutUint16(lengthBuf[:], uint16(len(ciphertext)))
 	if _, err := s.conn.Write(lengthBuf[:]); err != nil {
 		return 0, err
@@ -542,15 +547,17 @@ func curve25519DH(privateKey, publicKey []byte) ([]byte, error) {
 	copy(priv[:], privateKey)
 	copy(pub[:], publicKey)
 
-	var shared [32]byte
-	curve25519.ScalarMult(&shared, &priv, &pub)
+	shared, err := curve25519.X25519(priv[:], pub[:])
+	if err != nil {
+		return nil, fmt.Errorf("x25519 exchange failed: %w", err)
+	}
 
 	// Clear private key from memory
 	for i := range priv {
 		priv[i] = 0
 	}
 
-	return shared[:], nil
+	return shared, nil
 }
 
 // constantTimeCompare performs constant-time comparison of two byte slices.

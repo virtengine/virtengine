@@ -391,4 +391,3 @@ SUSPECTED PLAINTEXT LEAKAGE INCIDENT RESPONSE PROCEDURE
    - Enhance memory inspection coverage
    - Document lessons learned
 `
-

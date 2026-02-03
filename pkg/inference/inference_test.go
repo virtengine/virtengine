@@ -1078,4 +1078,3 @@ func BenchmarkInference(b *testing.B) {
 		_, _ = scorer.ComputeScore(inputs)
 	}
 }
-

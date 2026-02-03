@@ -443,7 +443,6 @@ type EclipseProtector struct {
 
 	// Peer rotation tracking
 	peerConnectTimes map[PeerID]time.Time
-	lastRotation     time.Time
 
 	mu sync.RWMutex
 }

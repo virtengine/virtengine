@@ -409,4 +409,3 @@ func TestDefaultBatchScriptOptions(t *testing.T) {
 	assert.False(t, opts.EnableTiming)
 	assert.True(t, opts.StrictMode)
 }
-

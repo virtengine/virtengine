@@ -390,9 +390,9 @@ resource "aws_iam_role_policy" "cleanup_lambda" {
         }
       },
       {
-        Sid    = "SNSPublish"
-        Effect = "Allow"
-        Action = ["sns:Publish"]
+        Sid      = "SNSPublish"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
         Resource = [aws_sns_topic.cost_alerts.arn]
       },
       {
@@ -444,13 +444,13 @@ resource "aws_lambda_function" "resource_cleanup" {
 
   environment {
     variables = {
-      ENVIRONMENT              = var.environment
-      SNS_TOPIC_ARN            = aws_sns_topic.cost_alerts.arn
-      DRY_RUN                  = var.cleanup_dry_run ? "true" : "false"
-      SNAPSHOT_RETENTION_DAYS  = local.cleanup_retention.snapshots
-      VOLUME_RETENTION_DAYS    = local.cleanup_retention.unattached_volumes
-      AMI_RETENTION_DAYS       = local.cleanup_retention.old_amis
-      EIP_RETENTION_DAYS       = local.cleanup_retention.unused_eips
+      ENVIRONMENT             = var.environment
+      SNS_TOPIC_ARN           = aws_sns_topic.cost_alerts.arn
+      DRY_RUN                 = var.cleanup_dry_run ? "true" : "false"
+      SNAPSHOT_RETENTION_DAYS = local.cleanup_retention.snapshots
+      VOLUME_RETENTION_DAYS   = local.cleanup_retention.unattached_volumes
+      AMI_RETENTION_DAYS      = local.cleanup_retention.old_amis
+      EIP_RETENTION_DAYS      = local.cleanup_retention.unused_eips
     }
   }
 
@@ -544,7 +544,7 @@ resource "aws_cloudwatch_event_rule" "recommendations_schedule" {
 
   name                = "virtengine-${var.environment}-cost-recommendations"
   description         = "Generate cost recommendations monthly"
-  schedule_expression = "cron(0 9 1 * ? *)"  # 1st of every month at 9 AM
+  schedule_expression = "cron(0 9 1 * ? *)" # 1st of every month at 9 AM
 
   tags = local.common_tags
 }

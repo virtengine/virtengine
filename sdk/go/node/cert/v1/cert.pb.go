@@ -689,4 +689,3 @@ var (
 	ErrIntOverflowCert          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupCert = fmt.Errorf("proto: unexpected end of group")
 )
-

@@ -57,4 +57,3 @@ func ServiceStatusPath(id mtypes.LeaseID, service string) string {
 func ServiceLogsPath(id mtypes.LeaseID) string {
 	return fmt.Sprintf("%s/logs", LeasePath(id))
 }
-

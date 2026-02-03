@@ -281,13 +281,13 @@ func (k Keeper) DeleteChunkManifest(ctx sdk.Context, manifestID string) {
 
 // PendingArtifactRetrieval represents a pending artifact retrieval request
 type PendingArtifactRetrieval struct {
-	RequestID        string `json:"request_id"`
-	ReferenceID      string `json:"reference_id"`
+	RequestID         string `json:"request_id"`
+	ReferenceID       string `json:"reference_id"`
 	RequestingAccount string `json:"requesting_account"`
-	Purpose          string `json:"purpose"`
-	RequestedAt      int64  `json:"requested_at"`
-	ExpiresAt        int64  `json:"expires_at"`
-	Status           string `json:"status"`
+	Purpose           string `json:"purpose"`
+	RequestedAt       int64  `json:"requested_at"`
+	ExpiresAt         int64  `json:"expires_at"`
+	Status            string `json:"status"`
 }
 
 // SetPendingArtifactRetrieval stores a pending retrieval request
@@ -355,7 +355,7 @@ func (k Keeper) IteratePendingArtifactRetrievals(ctx sdk.Context, fn func(retrie
 func (k Keeper) appendToIndex(ctx sdk.Context, key []byte, id string) {
 	store := ctx.KVStore(k.skey)
 
-	var ids []string
+	ids := make([]string, 0, 1)
 	bz := store.Get(key)
 	if bz != nil {
 		_ = json.Unmarshal(bz, &ids)
@@ -378,7 +378,7 @@ func (k Keeper) appendToIndex(ctx sdk.Context, key []byte, id string) {
 func (k Keeper) removeFromIndex(ctx sdk.Context, key []byte, id string) {
 	store := ctx.KVStore(k.skey)
 
-	var ids []string
+	ids := make([]string, 0, 1)
 	bz := store.Get(key)
 	if bz == nil {
 		return

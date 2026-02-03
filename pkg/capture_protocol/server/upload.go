@@ -50,9 +50,9 @@ const (
 // UploadConfig configures the upload handler
 type UploadConfig struct {
 	// Chunk settings
-	ChunkSize    int   `json:"chunk_size"`
-	MaxChunkSize int   `json:"max_chunk_size"`
-	MinChunkSize int   `json:"min_chunk_size"`
+	ChunkSize    int `json:"chunk_size"`
+	MaxChunkSize int `json:"max_chunk_size"`
+	MinChunkSize int `json:"min_chunk_size"`
 
 	// Retry settings
 	MaxRetries       int           `json:"max_retries"`
@@ -851,12 +851,12 @@ func ComputeProgress(session *UploadSession) *UploadProgress {
 
 // ChunkWriter provides a writer interface for chunked uploads
 type ChunkWriter struct {
-	handler       *UploadHandler
-	sessionID     string
-	chunkIndex    int
-	buffer        []byte
-	bufferOffset  int
-	chunkSize     int
+	handler      *UploadHandler
+	sessionID    string
+	chunkIndex   int
+	buffer       []byte
+	bufferOffset int
+	chunkSize    int
 }
 
 // NewChunkWriter creates a new chunk writer
@@ -867,12 +867,12 @@ func NewChunkWriter(handler *UploadHandler, sessionID string) (*ChunkWriter, err
 	}
 
 	return &ChunkWriter{
-		handler:    handler,
-		sessionID:  sessionID,
-		chunkIndex: 0,
-		buffer:     make([]byte, session.ChunkSize),
+		handler:      handler,
+		sessionID:    sessionID,
+		chunkIndex:   0,
+		buffer:       make([]byte, session.ChunkSize),
 		bufferOffset: 0,
-		chunkSize:  session.ChunkSize,
+		chunkSize:    session.ChunkSize,
 	}, nil
 }
 
@@ -968,4 +968,3 @@ func (a *StreamingAssembler) Assemble() (io.Reader, error) {
 
 	return bytes.NewReader(data), nil
 }
-

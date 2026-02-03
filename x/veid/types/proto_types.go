@@ -39,14 +39,14 @@ type VerificationStatusPB = veidv1.VerificationStatus
 
 // Proto enum constants for VerificationStatus
 const (
-	VerificationStatusPBUnknown                   = veidv1.VerificationStatusUnknown
-	VerificationStatusPBPending                   = veidv1.VerificationStatusPending
-	VerificationStatusPBInProgress                = veidv1.VerificationStatusInProgress
-	VerificationStatusPBVerified                  = veidv1.VerificationStatusVerified
-	VerificationStatusPBRejected                  = veidv1.VerificationStatusRejected
-	VerificationStatusPBExpired                   = veidv1.VerificationStatusExpired
-	VerificationStatusPBNeedsAdditionalFactor     = veidv1.VerificationStatusNeedsAdditionalFactor
-	VerificationStatusPBAdditionalFactorPending   = veidv1.VerificationStatusAdditionalFactorPending
+	VerificationStatusPBUnknown                 = veidv1.VerificationStatusUnknown
+	VerificationStatusPBPending                 = veidv1.VerificationStatusPending
+	VerificationStatusPBInProgress              = veidv1.VerificationStatusInProgress
+	VerificationStatusPBVerified                = veidv1.VerificationStatusVerified
+	VerificationStatusPBRejected                = veidv1.VerificationStatusRejected
+	VerificationStatusPBExpired                 = veidv1.VerificationStatusExpired
+	VerificationStatusPBNeedsAdditionalFactor   = veidv1.VerificationStatusNeedsAdditionalFactor
+	VerificationStatusPBAdditionalFactorPending = veidv1.VerificationStatusAdditionalFactorPending
 )
 
 // IdentityTierPB is the protobuf-generated enum for identity tier
@@ -65,13 +65,13 @@ type AccountStatusPB = veidv1.AccountStatus
 
 // Proto enum constants for AccountStatus
 const (
-	AccountStatusPBUnknown                 = veidv1.AccountStatusUnknown
-	AccountStatusPBPending                 = veidv1.AccountStatusPending
-	AccountStatusPBInProgress              = veidv1.AccountStatusInProgress
-	AccountStatusPBVerified                = veidv1.AccountStatusVerified
-	AccountStatusPBRejected                = veidv1.AccountStatusRejected
-	AccountStatusPBExpired                 = veidv1.AccountStatusExpired
-	AccountStatusPBNeedsAdditionalFactor   = veidv1.AccountStatusNeedsAdditionalFactor
+	AccountStatusPBUnknown               = veidv1.AccountStatusUnknown
+	AccountStatusPBPending               = veidv1.AccountStatusPending
+	AccountStatusPBInProgress            = veidv1.AccountStatusInProgress
+	AccountStatusPBVerified              = veidv1.AccountStatusVerified
+	AccountStatusPBRejected              = veidv1.AccountStatusRejected
+	AccountStatusPBExpired               = veidv1.AccountStatusExpired
+	AccountStatusPBNeedsAdditionalFactor = veidv1.AccountStatusNeedsAdditionalFactor
 )
 
 // WalletStatusPB is the protobuf-generated enum for wallet status

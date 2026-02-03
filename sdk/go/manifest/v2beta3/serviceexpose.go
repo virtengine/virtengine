@@ -106,4 +106,3 @@ func (s *ServiceExpose) GetExternalPort() uint32 {
 
 	return s.ExternalPort
 }
-

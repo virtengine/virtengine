@@ -22,9 +22,16 @@ import (
 	"github.com/virtengine/virtengine/x/delegation/types"
 )
 
+// Test address constants for rewards tests
+const (
+	testRewardValidatorAddr = "cosmos1validator123456789abcdef"
+	testRewardDelegator1    = "cosmos1delegator1111111111111111"
+	testRewardDelegator2    = "cosmos1delegator2222222222222222"
+	testRewardDelegatorAddr = "cosmos1delegator123456789abcdef"
+)
+
 // Valid bech32 test addresses (must be 20 bytes for proper encoding)
 var (
-	testValidatorAddr  = sdk.AccAddress([]byte("validator_address___")).String()
 	testDelegator1Addr = sdk.AccAddress([]byte("delegator1_address__")).String()
 	testValidator1Addr = sdk.AccAddress([]byte("validator1_address__")).String()
 	testValidator2Addr = sdk.AccAddress([]byte("validator2_address__")).String()
@@ -76,9 +83,9 @@ func TestRewardsTestSuite(t *testing.T) {
 
 // TestDistributeValidatorRewardsToDelegators tests reward distribution
 func (s *RewardsTestSuite) TestDistributeValidatorRewardsToDelegators() {
-	validatorAddr := "cosmos1validator123456789abcdef"
-	delegator1 := "cosmos1delegator1111111111111111"
-	delegator2 := "cosmos1delegator2222222222222222"
+	validatorAddr := testRewardValidatorAddr
+	delegator1 := testRewardDelegator1
+	delegator2 := testRewardDelegator2
 	epoch := uint64(10)
 	validatorReward := "10000000" // 10 tokens in reward
 
@@ -124,7 +131,7 @@ func (s *RewardsTestSuite) TestDistributeValidatorRewardsToDelegators() {
 
 // TestDistributeRewardsNoCommission tests distribution with zero commission
 func (s *RewardsTestSuite) TestDistributeRewardsNoCommission() {
-	validatorAddr := "cosmos1validator123456789abcdef"
+	validatorAddr := testRewardValidatorAddr
 	delegator := "cosmos1delegator1111111111111111"
 	epoch := uint64(10)
 	validatorReward := "10000000"
@@ -159,7 +166,7 @@ func (s *RewardsTestSuite) TestDistributeRewardsNoCommission() {
 
 // TestDistributeRewardsNoDelegations tests distribution with no delegations
 func (s *RewardsTestSuite) TestDistributeRewardsNoDelegations() {
-	validatorAddr := "cosmos1validator123456789abcdef"
+	validatorAddr := testRewardValidatorAddr
 	epoch := uint64(10)
 	validatorReward := "10000000"
 
@@ -226,8 +233,8 @@ func (s *RewardsTestSuite) TestClaimAllRewards() {
 
 // TestClaimRewardsNoRewards tests claiming when no rewards exist
 func (s *RewardsTestSuite) TestClaimRewardsNoRewards() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
+	delegatorAddr := testRewardDelegatorAddr
+	validatorAddr := testRewardValidatorAddr
 
 	// No rewards exist
 	claimedCoins, err := s.keeper.ClaimRewards(s.ctx, delegatorAddr, validatorAddr)
@@ -237,7 +244,7 @@ func (s *RewardsTestSuite) TestClaimRewardsNoRewards() {
 
 // TestGetDelegatorTotalRewards tests getting total unclaimed rewards
 func (s *RewardsTestSuite) TestGetDelegatorTotalRewards() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
+	delegatorAddr := testRewardDelegatorAddr
 	validator1 := "cosmos1validator1111111111111111"
 	validator2 := "cosmos1validator2222222222222222"
 
@@ -265,7 +272,7 @@ func (s *RewardsTestSuite) TestGetDelegatorTotalRewards() {
 
 // TestGetDelegatorValidatorTotalRewards tests getting total from specific validator
 func (s *RewardsTestSuite) TestGetDelegatorValidatorTotalRewards() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
+	delegatorAddr := testRewardDelegatorAddr
 	validator1 := "cosmos1validator1111111111111111"
 	validator2 := "cosmos1validator2222222222222222"
 
@@ -290,8 +297,8 @@ func (s *RewardsTestSuite) TestGetDelegatorValidatorTotalRewards() {
 
 // TestCalculateDelegatorRewardAmount tests reward amount calculation
 func (s *RewardsTestSuite) TestCalculateDelegatorRewardAmount() {
-	delegatorAddr := "cosmos1delegator123456789abcdef"
-	validatorAddr := "cosmos1validator123456789abcdef"
+	delegatorAddr := testRewardDelegatorAddr
+	validatorAddr := testRewardValidatorAddr
 	validatorReward := "10000000" // 10 tokens
 
 	// Create validator shares (total: 10 tokens)
@@ -317,7 +324,7 @@ func (s *RewardsTestSuite) TestCalculateDelegatorRewardAmount() {
 
 // TestRewardDistributionProportional tests that rewards are proportional to shares
 func (s *RewardsTestSuite) TestRewardDistributionProportional() {
-	validatorAddr := "cosmos1validator123456789abcdef"
+	validatorAddr := testRewardValidatorAddr
 	delegator1 := "cosmos1delegator1111111111111111"
 	delegator2 := "cosmos1delegator2222222222222222"
 	delegator3 := "cosmos1delegator3333333333333333"

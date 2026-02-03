@@ -88,4 +88,3 @@ func TxDepositDeploymentExec(ctx context.Context, cctx client.Context, amount in
 	allArgs := append([]string{"deployment", amount.(interface{ String() string }).String()}, args...)
 	return ExecTestCLICmd(ctx, cctx, cli.GetTxEscrowDeposit(), allArgs...)
 }
-

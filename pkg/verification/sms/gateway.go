@@ -71,18 +71,28 @@ const (
 	twilioLookupBaseURL = "https://lookups.twilio.com/v2"
 )
 
+// String constants for carrier and delivery status matching
+const (
+	carrierMobile   = "mobile"
+	carrierLandline = "landline"
+	carrierVoIP     = "voip"
+	statusDelivered = "delivered"
+	statusFailed    = "failed"
+	providerVonage  = "vonage"
+)
+
 // TwilioGateway implements SMSGateway using Twilio API
 type TwilioGateway struct {
-	config             ProviderConfig
-	logger             zerolog.Logger
-	httpClient         *http.Client
-	mu                 sync.RWMutex
-	requestCount       int64
-	lastRequestReset   time.Time
-	rateLimit          int
-	rateLimitBurst     int
-	deliveryRates      map[string]float64
-	regionalEndpoints  map[string]string
+	config            ProviderConfig
+	logger            zerolog.Logger
+	httpClient        *http.Client
+	mu                sync.RWMutex
+	requestCount      int64
+	lastRequestReset  time.Time
+	rateLimit         int
+	rateLimitBurst    int
+	deliveryRates     map[string]float64
+	regionalEndpoints map[string]string
 }
 
 // NewTwilioGateway creates a new Twilio gateway with full configuration
@@ -139,12 +149,12 @@ func validateTwilioConfig(config ProviderConfig) error {
 
 // Name returns the provider name
 func (g *TwilioGateway) Name() string {
-	return "twilio"
+	return providerTwilio
 }
 
 // GetProviderType returns the provider type
 func (g *TwilioGateway) GetProviderType() string {
-	return "twilio"
+	return providerTwilio
 }
 
 // IsConfigured returns true if properly configured
@@ -345,16 +355,16 @@ func (g *TwilioGateway) LookupCarrier(ctx context.Context, phoneNumber string) (
 
 	// Parse response
 	var lookupResp struct {
-		PhoneNumber        string `json:"phone_number"`
-		CountryCode        string `json:"country_code"`
-		Valid              bool   `json:"valid"`
-		LineTypeIntel      *struct {
-			Type            string `json:"type"`
-			CarrierName     string `json:"carrier_name"`
+		PhoneNumber   string `json:"phone_number"`
+		CountryCode   string `json:"country_code"`
+		Valid         bool   `json:"valid"`
+		LineTypeIntel *struct {
+			Type              string `json:"type"`
+			CarrierName       string `json:"carrier_name"`
 			MobileCountryCode string `json:"mobile_country_code"`
 			MobileNetworkCode string `json:"mobile_network_code"`
 		} `json:"line_type_intelligence,omitempty"`
-		CallerName         *struct {
+		CallerName *struct {
 			CallerName string `json:"caller_name"`
 			CallerType string `json:"caller_type"`
 		} `json:"caller_name,omitempty"`
@@ -384,12 +394,12 @@ func (g *TwilioGateway) LookupCarrier(ctx context.Context, phoneNumber string) (
 		result.NetworkCode = lookupResp.LineTypeIntel.MobileNetworkCode
 
 		switch strings.ToLower(lookupResp.LineTypeIntel.Type) {
-		case "mobile":
+		case carrierMobile:
 			result.CarrierType = CarrierTypeMobile
 			result.IsMobile = true
-		case "landline":
+		case carrierLandline:
 			result.CarrierType = CarrierTypeLandline
-		case "voip":
+		case carrierVoIP:
 			result.CarrierType = CarrierTypeVoIP
 			result.IsVoIP = true
 		case "toll_free", "toll-free":
@@ -452,11 +462,11 @@ func (g *TwilioGateway) GetDeliveryStatus(ctx context.Context, messageID string)
 	}
 
 	switch strings.ToLower(msgResp.Status) {
-	case "delivered":
+	case statusDelivered:
 		result.Status = DeliveryDelivered
 	case "sent", "queued", "accepted":
 		result.Status = DeliverySent
-	case "failed":
+	case statusFailed:
 		result.Status = DeliveryFailed
 	case "undelivered":
 		result.Status = DeliveryUndelivered
@@ -576,14 +586,14 @@ const (
 
 // VonageGateway implements SMSGateway using Vonage (Nexmo) API
 type VonageGateway struct {
-	config             ProviderConfig
-	logger             zerolog.Logger
-	httpClient         *http.Client
-	mu                 sync.RWMutex
-	requestCount       int64
-	lastRequestReset   time.Time
-	rateLimit          int
-	rateLimitBurst     int
+	config           ProviderConfig
+	logger           zerolog.Logger
+	httpClient       *http.Client
+	mu               sync.RWMutex
+	requestCount     int64
+	lastRequestReset time.Time
+	rateLimit        int
+	rateLimitBurst   int
 }
 
 // NewVonageGateway creates a new Vonage gateway
@@ -625,12 +635,12 @@ func validateVonageConfig(config ProviderConfig) error {
 
 // Name returns the provider name
 func (g *VonageGateway) Name() string {
-	return "vonage"
+	return providerVonage
 }
 
 // GetProviderType returns the provider type
 func (g *VonageGateway) GetProviderType() string {
-	return "vonage"
+	return providerVonage
 }
 
 // IsConfigured returns true if properly configured
@@ -785,32 +795,32 @@ func (g *VonageGateway) LookupCarrier(ctx context.Context, phoneNumber string) (
 	}
 
 	var lookupResp struct {
-		Status            int    `json:"status"`
-		StatusMessage     string `json:"status_message"`
+		Status                    int    `json:"status"`
+		StatusMessage             string `json:"status_message"`
 		InternationalFormatNumber string `json:"international_format_number"`
 		NationalFormatNumber      string `json:"national_format_number"`
-		CountryCode       string `json:"country_code"`
-		CountryCodeISO3   string `json:"country_code_iso3"`
-		CountryName       string `json:"country_name"`
-		CountryPrefix     string `json:"country_prefix"`
-		CurrentCarrier    *struct {
+		CountryCode               string `json:"country_code"`
+		CountryCodeISO3           string `json:"country_code_iso3"`
+		CountryName               string `json:"country_name"`
+		CountryPrefix             string `json:"country_prefix"`
+		CurrentCarrier            *struct {
 			NetworkCode string `json:"network_code"`
 			Name        string `json:"name"`
 			Country     string `json:"country"`
 			NetworkType string `json:"network_type"`
 		} `json:"current_carrier,omitempty"`
-		OriginalCarrier   *struct {
+		OriginalCarrier *struct {
 			NetworkCode string `json:"network_code"`
 			Name        string `json:"name"`
 			Country     string `json:"country"`
 			NetworkType string `json:"network_type"`
 		} `json:"original_carrier,omitempty"`
-		Ported            string `json:"ported"`
-		Roaming           *struct {
+		Ported  string `json:"ported"`
+		Roaming *struct {
 			Status string `json:"status"`
 		} `json:"roaming,omitempty"`
-		ValidNumber       string `json:"valid_number"`
-		Reachable         string `json:"reachable"`
+		ValidNumber string `json:"valid_number"`
+		Reachable   string `json:"reachable"`
 	}
 
 	if err := json.Unmarshal(body, &lookupResp); err != nil {

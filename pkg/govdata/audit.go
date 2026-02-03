@@ -601,12 +601,12 @@ type rateLimiter struct {
 }
 
 type rateBucket struct {
-	minuteCount  int
-	hourCount    int
-	dayCount     int
-	minuteReset  time.Time
-	hourReset    time.Time
-	dayReset     time.Time
+	minuteCount int
+	hourCount   int
+	dayCount    int
+	minuteReset time.Time
+	hourReset   time.Time
+	dayReset    time.Time
 }
 
 // newRateLimiter creates a new rate limiter
@@ -702,4 +702,3 @@ func (r *rateLimiter) Reset(ctx context.Context, walletAddress string) error {
 	delete(r.buckets, walletAddress)
 	return nil
 }
-

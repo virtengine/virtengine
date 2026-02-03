@@ -22,6 +22,9 @@ import (
 	"github.com/virtengine/virtengine/x/staking/types"
 )
 
+// testValidatorAddr is a test validator address constant
+const testValidatorAddr = "validator1qperwt9wrnkg39mvs5g6ys"
+
 // StakingKeeperTestSuite is the test suite for the staking keeper
 type StakingKeeperTestSuite struct {
 	suite.Suite
@@ -89,7 +92,7 @@ func (s *StakingKeeperTestSuite) TestParams() {
 
 // TestValidatorPerformance tests validator performance tracking
 func (s *StakingKeeperTestSuite) TestValidatorPerformance() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	// Initially no performance record
 	_, found := s.keeper.GetValidatorPerformance(s.ctx, validatorAddr, 1)
@@ -116,7 +119,7 @@ func (s *StakingKeeperTestSuite) TestValidatorPerformance() {
 
 // TestUpdateValidatorPerformance tests performance updates
 func (s *StakingKeeperTestSuite) TestUpdateValidatorPerformance() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	// Update performance
 	update := PerformanceUpdate{
@@ -202,7 +205,7 @@ func (s *StakingKeeperTestSuite) TestRewardEpoch() {
 
 // TestValidatorReward tests validator reward management
 func (s *StakingKeeperTestSuite) TestValidatorReward() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	reward := types.NewValidatorReward(validatorAddr, 1)
 	reward.PerformanceScore = 9000
@@ -244,7 +247,7 @@ func (s *StakingKeeperTestSuite) TestSlashRecord() {
 
 // TestValidatorSigningInfo tests signing info management
 func (s *StakingKeeperTestSuite) TestValidatorSigningInfo() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	signingInfo := types.NewValidatorSigningInfo(validatorAddr, 100)
 	signingInfo.MissedBlocksCounter = 5
@@ -260,7 +263,7 @@ func (s *StakingKeeperTestSuite) TestValidatorSigningInfo() {
 
 // TestIsValidatorJailed tests jailing checks
 func (s *StakingKeeperTestSuite) TestIsValidatorJailed() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	// Initially not jailed
 	jailed := s.keeper.IsValidatorJailed(s.ctx, validatorAddr)
@@ -277,7 +280,7 @@ func (s *StakingKeeperTestSuite) TestIsValidatorJailed() {
 
 // TestTombstone tests tombstoning
 func (s *StakingKeeperTestSuite) TestTombstone() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	// Tombstone validator
 	err := s.keeper.TombstoneValidator(s.ctx, validatorAddr)
@@ -295,7 +298,7 @@ func (s *StakingKeeperTestSuite) TestTombstone() {
 
 // TestHandleValidatorSignature tests signature handling
 func (s *StakingKeeperTestSuite) TestHandleValidatorSignature() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	// Sign block
 	err := s.keeper.HandleValidatorSignature(s.ctx, validatorAddr, true)
@@ -315,7 +318,7 @@ func (s *StakingKeeperTestSuite) TestHandleValidatorSignature() {
 
 // TestSlashValidator tests slashing
 func (s *StakingKeeperTestSuite) TestSlashValidator() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	slashRecord, err := s.keeper.SlashValidator(
 		s.ctx,
@@ -337,7 +340,7 @@ func (s *StakingKeeperTestSuite) TestSlashValidator() {
 
 // TestSlashEscalation tests slash escalation for repeat offenders
 func (s *StakingKeeperTestSuite) TestSlashEscalation() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	// First slash
 	slashRecord1, err := s.keeper.SlashValidator(
@@ -373,7 +376,7 @@ func (s *StakingKeeperTestSuite) TestSlashEscalation() {
 
 // TestSlashForDoubleSigning tests double signing slash
 func (s *StakingKeeperTestSuite) TestSlashForDoubleSigning() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	evidence := types.DoubleSignEvidence{
 		EvidenceID:       "ds-001",
@@ -395,7 +398,7 @@ func (s *StakingKeeperTestSuite) TestSlashForDoubleSigning() {
 
 // TestSlashForInvalidAttestation tests invalid attestation slash
 func (s *StakingKeeperTestSuite) TestSlashForInvalidAttestation() {
-	validatorAddr := "validator1qperwt9wrnkg39mvs5g6ys"
+	validatorAddr := testValidatorAddr
 
 	attestation := types.InvalidVEIDAttestation{
 		RecordID:         "ia-001",

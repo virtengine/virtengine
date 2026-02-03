@@ -23,6 +23,7 @@ func (p *PythContractParams) ValidateBasic() error {
 }
 
 // ParamKeyTable for oracle module
+//
 // Deprecated: now params can be accessed on key `0x01` on the oracle store.
 func ParamKeyTable() paramtypes.KeyTable {
 	return paramtypes.NewKeyTable().RegisterParamSet(&Params{})

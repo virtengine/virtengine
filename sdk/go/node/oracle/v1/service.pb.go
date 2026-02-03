@@ -176,4 +176,3 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "virtengine/oracle/v1/service.proto",
 }
-

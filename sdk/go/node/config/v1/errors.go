@@ -18,4 +18,3 @@ var (
 	ErrInvalidVersionConstraint = sdkerrors.Register(ModuleName, 4, "invalid version constraint")
 	ErrInvalidReason            = sdkerrors.Register(ModuleName, 5, "invalid reason")
 )
-

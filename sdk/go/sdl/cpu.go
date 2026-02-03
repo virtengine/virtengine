@@ -42,4 +42,3 @@ func (sdl *v2CPUAttributes) UnmarshalYAML(node *yaml.Node) error {
 
 	return nil
 }
-

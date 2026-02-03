@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -125,16 +126,12 @@ func (s *marketGRPCRestTestSuite) SetupSuite() {
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
 	// create provider
-	_, err = clitestutil.TxCreateProviderExec(
-		ctx,
-		s.cctx,
-		providerPath,
-		cli.TestFlags().
-			WithFrom(keyAddr.String()).
-			WithGasAutoFlags().
-			WithSkipConfirm().
-			WithBroadcastModeBlock()...,
-	)
+	providerFlags := cli.TestFlags().
+		WithFrom(keyAddr.String()).
+		WithGasAutoFlags().
+		WithSkipConfirm().
+		WithBroadcastModeBlock()
+	_, err = clitestutil.TxCreateProviderExec(ctx, s.cctx, providerPath, providerFlags...)
 	s.Require().NoError(err)
 
 	s.Require().NoError(s.Network().WaitForNextBlock())
@@ -145,7 +142,7 @@ func (s *marketGRPCRestTestSuite) SetupSuite() {
 		cli.TestFlags().
 			WithFrom(keyAddr.String()).
 			WithOrderID(s.order.ID).
-			WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdk.MustNewDecFromStr("1.1"))).
+			WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
 			WithDeposit(DefaultDeposit).
 			WithGasAutoFlags().
 			WithSkipConfirm().

@@ -29,7 +29,10 @@ export default tsLint.config(
           fixStyle: "separate-type-imports"
         }
       ],
-      '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^_$' }],
+      '@typescript-eslint/no-unused-vars': ['error', { 
+        varsIgnorePattern: '^_',
+        argsIgnorePattern: '^_',
+      }],
     }
   },
   {

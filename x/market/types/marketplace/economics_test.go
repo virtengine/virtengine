@@ -257,7 +257,7 @@ func TestProviderIncentiveCalculator(t *testing.T) {
 		}
 
 		rewards := calc.CalculateAllRewards(metrics, blockHeight, now)
-		
+
 		earlyAdopterFound := false
 		for _, r := range rewards {
 			if r != nil && r.Reason != "" && len(r.Reason) > 0 {
@@ -332,7 +332,7 @@ func TestPriceOracle(t *testing.T) {
 		// Add price points
 		for i := int64(0); i < 10; i++ {
 			history.AddPoint(PricePoint{
-				Price:       1000 + uint64(i*10),
+				Price:       1000 + safeUint64FromInt64(t, i*10),
 				Volume:      100,
 				BlockHeight: i,
 				Timestamp:   now.Add(time.Duration(i*6) * time.Second),
@@ -575,7 +575,7 @@ func TestMarketMetrics(t *testing.T) {
 
 	t.Run("efficiency score calculation", func(t *testing.T) {
 		// Set up some metrics
-		metrics.Spread.AverageSpreadBps = 100  // 1% spread
+		metrics.Spread.AverageSpreadBps = 100 // 1% spread
 		metrics.FillRate.TotalOrders = 100
 		metrics.FillRate.FilledOrders = 80
 		metrics.FillRate.FillRatePercentage = 80
@@ -625,7 +625,7 @@ func TestSimulateWashTradingAttack(t *testing.T) {
 		check := WashTradingCheck{
 			BuyerAddress:  "attacker",
 			SellerAddress: "attacker", // Self-dealing
-			Amount:        1000000 + uint64(i),
+			Amount:        1000000 + safeUint64FromInt(t, i),
 			Timestamp:     now,
 			BlockHeight:   int64(1000 + i),
 		}
@@ -718,7 +718,7 @@ func TestSimulatePriceManipulationAttack(t *testing.T) {
 	// Establish normal price range
 	for i := int64(0); i < 20; i++ {
 		history.AddPoint(PricePoint{
-			Price:       1000 + uint64(i%10), // 1000-1009 range
+			Price:       1000 + safeUint64FromInt64(t, i%10), // 1000-1009 range
 			Volume:      100,
 			BlockHeight: i,
 			Timestamp:   now.Add(time.Duration(i) * time.Minute),
@@ -880,7 +880,7 @@ func BenchmarkTWAPCalculation(b *testing.B) {
 	// Populate history
 	for i := int64(0); i < 100; i++ {
 		history.AddPoint(PricePoint{
-			Price:       1000 + uint64(i),
+			Price:       1000 + safeUint64FromInt64(b, i),
 			Volume:      100,
 			BlockHeight: i,
 			Timestamp:   now.Add(time.Duration(i) * time.Minute),
@@ -912,4 +912,20 @@ func BenchmarkWashTradingDetection(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = detector.DetectWashTrading(check, state)
 	}
+}
+
+func safeUint64FromInt(t *testing.T, value int) uint64 {
+	t.Helper()
+	if value < 0 {
+		t.Fatalf("invalid negative value: %d", value)
+	}
+	return uint64(value)
+}
+
+func safeUint64FromInt64(tb testing.TB, value int64) uint64 {
+	tb.Helper()
+	if value < 0 {
+		tb.Fatalf("invalid negative value: %d", value)
+	}
+	return uint64(value)
 }

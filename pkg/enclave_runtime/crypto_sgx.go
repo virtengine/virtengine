@@ -470,7 +470,7 @@ func (v *DCAPSignatureVerifier) extractAttestationKey(sigData *CryptoDCAPQuoteSi
 	}
 
 	// Verify the point is on the curve
-	if !pubKey.Curve.IsOnCurve(x, y) {
+	if !pubKey.IsOnCurve(x, y) {
 		return nil, errors.New("attestation key point not on curve")
 	}
 
@@ -655,7 +655,7 @@ type CryptoTCBInfoWrapper struct {
 type TCBInfoVerifier struct {
 	hashComputer *HashComputer
 	tcbInfoCache map[string]*CryptoTCBInfo
-	mu           sync.RWMutex
+	mu           sync.RWMutex //nolint:unused // Reserved for future concurrent access protection
 }
 
 // NewTCBInfoVerifier creates a new TCB Info verifier.
@@ -1038,4 +1038,3 @@ func GetIntelSGXRootCA() (*x509.Certificate, error) {
 	}
 	return x509.ParseCertificate(block.Bytes)
 }
-

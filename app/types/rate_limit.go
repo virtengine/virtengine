@@ -141,20 +141,20 @@ type RateLimitEvent struct {
 
 // TransientRateLimitStore provides transient storage for per-block rate limit counters
 type TransientRateLimitStore struct {
-	params          RateLimitParams
-	accountCounts   map[string]uint64
-	veidCount       uint64
-	totalCount      uint64
+	params             RateLimitParams
+	accountCounts      map[string]uint64
+	veidCount          uint64
+	totalCount         uint64
 	currentBlockHeight int64
 }
 
 // NewTransientRateLimitStore creates a new transient rate limit store
 func NewTransientRateLimitStore(params RateLimitParams) *TransientRateLimitStore {
 	return &TransientRateLimitStore{
-		params:        params,
-		accountCounts: make(map[string]uint64),
-		veidCount:     0,
-		totalCount:    0,
+		params:             params,
+		accountCounts:      make(map[string]uint64),
+		veidCount:          0,
+		totalCount:         0,
 		currentBlockHeight: 0,
 	}
 }

@@ -176,18 +176,18 @@ type DocumentQualityResult struct {
 // ============================================================================
 
 const (
-	OCRReasonCodeSuccess           = "OCR_EXTRACTION_SUCCESS"
-	OCRReasonCodeNoTextFound       = "NO_TEXT_FOUND"
-	OCRReasonCodeLowConfidence     = "LOW_OCR_CONFIDENCE"
-	OCRReasonCodeLowQuality        = "LOW_DOCUMENT_QUALITY"
-	OCRReasonCodeMissingFields     = "MISSING_REQUIRED_FIELDS"
-	OCRReasonCodeValidationFailed  = "FIELD_VALIDATION_FAILED"
-	OCRReasonCodeExtractionError   = "OCR_EXTRACTION_ERROR"
-	OCRReasonCodeSidecarUnavail    = "OCR_SIDECAR_UNAVAILABLE"
-	OCRReasonCodeTimeout           = "OCR_EXTRACTION_TIMEOUT"
-	OCRReasonCodeHighNoise         = "HIGH_DOCUMENT_NOISE"
-	OCRReasonCodeHighBlur          = "HIGH_DOCUMENT_BLUR"
-	OCRReasonCodeUnknownDocType    = "UNKNOWN_DOCUMENT_TYPE"
+	OCRReasonCodeSuccess          = "OCR_EXTRACTION_SUCCESS"
+	OCRReasonCodeNoTextFound      = "NO_TEXT_FOUND"
+	OCRReasonCodeLowConfidence    = "LOW_OCR_CONFIDENCE"
+	OCRReasonCodeLowQuality       = "LOW_DOCUMENT_QUALITY"
+	OCRReasonCodeMissingFields    = "MISSING_REQUIRED_FIELDS"
+	OCRReasonCodeValidationFailed = "FIELD_VALIDATION_FAILED"
+	OCRReasonCodeExtractionError  = "OCR_EXTRACTION_ERROR"
+	OCRReasonCodeSidecarUnavail   = "OCR_SIDECAR_UNAVAILABLE"
+	OCRReasonCodeTimeout          = "OCR_EXTRACTION_TIMEOUT"
+	OCRReasonCodeHighNoise        = "HIGH_DOCUMENT_NOISE"
+	OCRReasonCodeHighBlur         = "HIGH_DOCUMENT_BLUR"
+	OCRReasonCodeUnknownDocType   = "UNKNOWN_DOCUMENT_TYPE"
 )
 
 // ============================================================================
@@ -722,4 +722,3 @@ func (oe *OCRExtractor) Close() error {
 	}
 	return nil
 }
-

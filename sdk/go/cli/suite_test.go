@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 )
@@ -36,3 +38,10 @@ func TestCLITestSuite(t *testing.T) {
 	suite.Run(t, new(BMECLITestSuite))
 }
 
+func testAccAddress(seed byte) sdk.AccAddress {
+	return sdk.AccAddress(bytes.Repeat([]byte{seed}, 20))
+}
+
+func testAccAddressString(seed byte) string {
+	return testAccAddress(seed).String()
+}

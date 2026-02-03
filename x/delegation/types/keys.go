@@ -86,7 +86,10 @@ func GetDelegatorValidatorsKey(delegatorAddr string) []byte {
 
 // GetDelegatorRewardsKey returns the key for delegator rewards
 func GetDelegatorRewardsKey(delegatorAddr, validatorAddr string, epoch uint64) []byte {
-	key := append(DelegatorRewardsPrefix, []byte(delegatorAddr+":"+validatorAddr+":")...)
+	addrPart := delegatorAddr + ":" + validatorAddr + ":"
+	key := make([]byte, 0, len(DelegatorRewardsPrefix)+len(addrPart)+8)
+	key = append(key, DelegatorRewardsPrefix...)
+	key = append(key, []byte(addrPart)...)
 	return append(key, uint64ToBytes(epoch)...)
 }
 
@@ -121,5 +124,8 @@ func uint64ToBytes(n uint64) []byte {
 
 // int64ToBytes converts int64 to big-endian bytes
 func int64ToBytes(n int64) []byte {
+	if n < 0 {
+		return uint64ToBytes(0)
+	}
 	return uint64ToBytes(uint64(n))
 }

@@ -626,14 +626,16 @@ func (k Keeper) addToUnbondingQueue(ctx sdk.Context, completionTime time.Time, u
 	key := types.GetUnbondingQueueKey(completionTime.Unix())
 
 	// Get existing entries at this time
-	var entries []string
+	entries := make([]string, 0, 1)
 	if bz := store.Get(key); bz != nil {
 		_ = json.Unmarshal(bz, &entries)
 	}
 
 	entries = append(entries, unbondingID)
-	bz, _ := json.Marshal(entries)
-	store.Set(key, bz)
+	bz, err := json.Marshal(entries)
+	if err == nil {
+		store.Set(key, bz)
+	}
 }
 
 // GetMatureUnbondings returns unbonding delegations that are ready to complete
@@ -664,14 +666,16 @@ func (k Keeper) addToRedelegationQueue(ctx sdk.Context, completionTime time.Time
 	key := types.GetRedelegationQueueKey(completionTime.Unix())
 
 	// Get existing entries at this time
-	var entries []string
+	entries := make([]string, 0, 1)
 	if bz := store.Get(key); bz != nil {
 		_ = json.Unmarshal(bz, &entries)
 	}
 
 	entries = append(entries, redelegationID)
-	bz, _ := json.Marshal(entries)
-	store.Set(key, bz)
+	bz, err := json.Marshal(entries)
+	if err == nil {
+		store.Set(key, bz)
+	}
 }
 
 // GetMatureRedelegations returns redelegations that are ready to complete

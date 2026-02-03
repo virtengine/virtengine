@@ -5,14 +5,14 @@
 // VE-15C: E2E provider flow test (register → provision → payout)
 //
 // This file implements comprehensive E2E tests for the full provider lifecycle:
-//   1. Provider registers with VEID score ≥70
-//   2. Provider lists offering on marketplace
-//   3. Order created by customer
-//   4. Bid placed by provider daemon
-//   5. Allocation created
-//   6. Resource provisioned via Waldur
-//   7. Usage reported
-//   8. Settlement and payout
+//  1. Provider registers with VEID score ≥70
+//  2. Provider lists offering on marketplace
+//  3. Order created by customer
+//  4. Bid placed by provider daemon
+//  5. Allocation created
+//  6. Resource provisioned via Waldur
+//  7. Usage reported
+//  8. Settlement and payout
 package e2e
 
 import (
@@ -32,9 +32,9 @@ import (
 	v1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	v1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
 	provider "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
-	"github.com/virtengine/virtengine/testutil"
 	"github.com/virtengine/virtengine/tests/e2e/fixtures"
 	"github.com/virtengine/virtengine/tests/e2e/mocks"
+	"github.com/virtengine/virtengine/testutil"
 )
 
 // =============================================================================
@@ -59,13 +59,13 @@ type ProviderFlowE2ETestSuite struct {
 	waldurMock *mocks.WaldurMock
 
 	// Test state
-	offering       fixtures.TestOffering
-	order          fixtures.TestOrder
-	bid            fixtures.TestBid
-	allocation     fixtures.TestAllocation
-	lease          fixtures.TestLease
-	usageRecords   []fixtures.TestUsageRecord
-	settlement     fixtures.TestSettlement
+	offering     fixtures.TestOffering
+	order        fixtures.TestOrder
+	bid          fixtures.TestBid
+	allocation   fixtures.TestAllocation
+	lease        fixtures.TestLease
+	usageRecords []fixtures.TestUsageRecord
+	settlement   fixtures.TestSettlement
 
 	// On-chain state
 	onChainOrder v1beta5.Order
@@ -167,16 +167,12 @@ func (s *ProviderFlowE2ETestSuite) TestFullProviderFlow() {
 		s.T().Log("Step 1: Registering provider with VEID score ≥70")
 
 		// Create provider on-chain
-		_, err := clitestutil.TxCreateProviderExec(
-			ctx,
-			cctx,
-			s.providerPath,
-			cli.TestFlags().
-				WithFrom(s.providerAddr).
-				WithGasAutoFlags().
-				WithSkipConfirm().
-				WithBroadcastModeBlock()...,
-		)
+		providerFlags := cli.TestFlags().
+			WithFrom(s.providerAddr).
+			WithGasAutoFlags().
+			WithSkipConfirm().
+			WithBroadcastModeBlock()
+		_, err := clitestutil.TxCreateProviderExec(ctx, cctx, s.providerPath, providerFlags...)
 		s.Require().NoError(err)
 		s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -243,7 +239,7 @@ func (s *ProviderFlowE2ETestSuite) TestFullProviderFlow() {
 	// =========================================================================
 	// Step 4: Order Created by Customer
 	// =========================================================================
-	var orderID v1beta5.OrderID
+	var orderID v1.OrderID
 	s.Run("Step4_OrderCreation", func() {
 		s.T().Log("Step 4: Creating deployment/order")
 
@@ -295,7 +291,7 @@ func (s *ProviderFlowE2ETestSuite) TestFullProviderFlow() {
 			cli.TestFlags().
 				WithFrom(s.providerAddr).
 				WithOrderID(orderID).
-				WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
+				WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.5"))).
 				WithDeposit(DefaultDeposit).
 				WithGasAutoFlags().
 				WithSkipConfirm().
@@ -640,8 +636,8 @@ func (s *ProviderFlowE2ETestSuite) TestUsageReportingAndSettlement() {
 	// Set up expected metrics
 	workloadID := "workload-settlement-e2e"
 	collector.SetMetrics(workloadID, &pd.ResourceMetrics{
-		CPUMilliSeconds:    7200000,       // 2 CPU-hours
-		MemoryByteSeconds:  32 * 1024 * 1024 * 1024 * 3600, // 32 GB for 1 hour
+		CPUMilliSeconds:    7200000,                         // 2 CPU-hours
+		MemoryByteSeconds:  32 * 1024 * 1024 * 1024 * 3600,  // 32 GB for 1 hour
 		StorageByteSeconds: 100 * 1024 * 1024 * 1024 * 3600, // 100 GB for 1 hour
 		NetworkBytesIn:     50 * 1024 * 1024,
 		NetworkBytesOut:    25 * 1024 * 1024,

@@ -198,4 +198,3 @@ func (c *InMemoryCache) GetEntry(key string) (cacheEntry, bool) {
 	c.mu.RUnlock()
 	return entry, ok
 }
-

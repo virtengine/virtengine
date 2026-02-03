@@ -10,11 +10,11 @@ import (
 
 // Common error messages for path traversal detection
 var (
-	ErrPathTraversal     = fmt.Errorf("path traversal detected")
-	ErrPathNotAllowed    = fmt.Errorf("path not in allowed directories")
-	ErrInvalidPath       = fmt.Errorf("invalid path")
-	ErrPathNotAbsolute   = fmt.Errorf("path must be absolute")
-	ErrInvalidExtension  = fmt.Errorf("invalid file extension")
+	ErrPathTraversal    = fmt.Errorf("path traversal detected")
+	ErrPathNotAllowed   = fmt.Errorf("path not in allowed directories")
+	ErrInvalidPath      = fmt.Errorf("invalid path")
+	ErrPathNotAbsolute  = fmt.Errorf("path must be absolute")
+	ErrInvalidExtension = fmt.Errorf("invalid file extension")
 )
 
 // PathValidator provides path validation to prevent directory traversal attacks.
@@ -155,17 +155,17 @@ func (v *PathValidator) ValidateAndClean(path string) (string, error) {
 func ContainsTraversalSequence(path string) bool {
 	// Check for standard traversal patterns
 	patterns := []string{
-		"..",                   // Standard parent directory
-		"%2e%2e",               // URL encoded ..
-		"%2E%2E",               // URL encoded .. (uppercase)
-		"%252e%252e",           // Double URL encoded
-		"..%2f",                // Mixed encoding
-		"..%5c",                // Mixed encoding (Windows)
-		"%2e%2e%2f",            // URL encoded ../
-		"%2e%2e%5c",            // URL encoded ..\
-		"....//",               // Extended traversal
-		"....\\\\",             // Extended traversal (Windows)
-		"\x00",                 // Null byte injection
+		"..",         // Standard parent directory
+		"%2e%2e",     // URL encoded ..
+		"%2E%2E",     // URL encoded .. (uppercase)
+		"%252e%252e", // Double URL encoded
+		"..%2f",      // Mixed encoding
+		"..%5c",      // Mixed encoding (Windows)
+		"%2e%2e%2f",  // URL encoded ../
+		"%2e%2e%5c",  // URL encoded ..\
+		"....//",     // Extended traversal
+		"....\\\\",   // Extended traversal (Windows)
+		"\x00",       // Null byte injection
 	}
 
 	lowerPath := strings.ToLower(path)
@@ -251,4 +251,3 @@ func SafeOpenWithExtension(path string, allowedExtensions ...string) (*os.File, 
 	cleanPath := filepath.Clean(path)
 	return os.Open(cleanPath) // #nosec G304 -- path validated above
 }
-

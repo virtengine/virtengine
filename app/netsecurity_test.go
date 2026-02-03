@@ -581,7 +581,7 @@ func TestPeerAuthorizer(t *testing.T) {
 				ID:        PeerID("inbound-" + string(rune('A'+i))),
 				IsInbound: true,
 			}
-			auth.RegisterPeer(info)
+			_ = auth.RegisterPeer(info)
 		}
 
 		// Next inbound should be blocked

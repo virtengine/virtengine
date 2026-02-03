@@ -68,4 +68,3 @@ $ %s query %s --page=2 --limit=50
 
 	return cmd
 }
-

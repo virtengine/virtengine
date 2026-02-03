@@ -196,4 +196,3 @@ func TestCheckMultiplicationOverflow(t *testing.T) {
 		})
 	}
 }
-

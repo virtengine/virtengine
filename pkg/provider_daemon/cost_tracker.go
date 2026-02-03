@@ -684,13 +684,13 @@ func (ct *CostTracker) ExportCostReport() ([]byte, error) {
 	defer ct.mu.RUnlock()
 
 	report := struct {
-		GeneratedAt   time.Time                   `json:"generated_at"`
-		ProviderID    string                      `json:"provider_id"`
-		Summary       CostSummary                 `json:"summary"`
-		Workloads     []WorkloadCost              `json:"workloads"`
-		Alerts        []CostAlert                 `json:"alerts"`
-		Configuration ResourceCostConfig          `json:"configuration"`
-		Metrics       CostTrackerMetrics          `json:"metrics"`
+		GeneratedAt     time.Time                   `json:"generated_at"`
+		ProviderID      string                      `json:"provider_id"`
+		Summary         CostSummary                 `json:"summary"`
+		Workloads       []WorkloadCost              `json:"workloads"`
+		Alerts          []CostAlert                 `json:"alerts"`
+		Configuration   ResourceCostConfig          `json:"configuration"`
+		Metrics         CostTrackerMetrics          `json:"metrics"`
 		Recommendations []RightsizingRecommendation `json:"recommendations,omitempty"`
 	}{
 		GeneratedAt:   time.Now(),
@@ -806,4 +806,3 @@ func (ct *CostTracker) getMetricsLocked() CostTrackerMetrics {
 		CurrentTotalCost:   ct.getTotalCostLocked(),
 	}
 }
-

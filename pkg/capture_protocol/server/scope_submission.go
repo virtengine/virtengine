@@ -197,8 +197,7 @@ type ChainUploadMetadata struct {
 
 // ScopeSubmissionBuilder builds scope submission requests
 type ScopeSubmissionBuilder struct {
-	config     ScopeSubmissionConfig
-	validator  *ServerValidator
+	config ScopeSubmissionConfig
 }
 
 // ScopeSubmissionConfig configures scope submission
@@ -207,8 +206,8 @@ type ScopeSubmissionConfig struct {
 	ValidationConfig ServerValidationConfig `json:"validation_config"`
 
 	// Chain config
-	DefaultGasLimit    uint64 `json:"default_gas_limit"`
-	DefaultExpiryDays  int    `json:"default_expiry_days"`
+	DefaultGasLimit   uint64 `json:"default_gas_limit"`
+	DefaultExpiryDays int    `json:"default_expiry_days"`
 
 	// Audit config
 	EnableAuditLogging bool `json:"enable_audit_logging"`
@@ -245,7 +244,7 @@ func (b *ScopeSubmissionBuilder) BuildFromCaptureFlow(
 	deviceAttestation *mobile.DeviceAttestationResult,
 	recipientValidatorKeys []string,
 ) ([]*ScopeSubmissionRequest, error) {
-	requests := make([]*ScopeSubmissionRequest, 0)
+	requests := make([]*ScopeSubmissionRequest, 0, len(encryptedPayloads))
 
 	for i, payload := range encryptedPayloads {
 		// Determine scope type from capture type
@@ -385,7 +384,7 @@ func GenerateScopeID(
 	h.Write([]byte(accountAddress))
 	h.Write([]byte(scopeType))
 	h.Write(salt)
-	h.Write([]byte(fmt.Sprintf("%d", timestamp.UnixNano())))
+	_, _ = fmt.Fprintf(h, "%d", timestamp.UnixNano())
 	hash := h.Sum(nil)
 	return fmt.Sprintf("scope-%s-%s", scopeType, hex.EncodeToString(hash[:12]))
 }
@@ -586,7 +585,7 @@ func (p *ScopeSubmissionProcessor) ProcessSubmission(
 
 	// Log submission started
 	if p.auditLogger != nil {
-		p.auditLogger.Log(&AuditTrailEntry{
+		_ = p.auditLogger.Log(&AuditTrailEntry{
 			EventType:         AuditEventSubmissionStarted,
 			AccountAddress:    request.AccountAddress,
 			Metadata:          request.AuditMetadata,
@@ -606,7 +605,7 @@ func (p *ScopeSubmissionProcessor) ProcessSubmission(
 
 		// Log validation failure
 		if p.auditLogger != nil {
-			p.auditLogger.Log(&AuditTrailEntry{
+			_ = p.auditLogger.Log(&AuditTrailEntry{
 				EventType:        AuditEventValidationComplete,
 				AccountAddress:   request.AccountAddress,
 				Metadata:         request.AuditMetadata,
@@ -635,7 +634,7 @@ func (p *ScopeSubmissionProcessor) ProcessSubmission(
 
 	// Log successful submission
 	if p.auditLogger != nil {
-		p.auditLogger.Log(&AuditTrailEntry{
+		_ = p.auditLogger.Log(&AuditTrailEntry{
 			EventType:         AuditEventSubmissionComplete,
 			ScopeID:           scopeID,
 			AccountAddress:    request.AccountAddress,
@@ -706,4 +705,3 @@ func HashIPAddress(ip string) string {
 	hash := sha256.Sum256([]byte(ip))
 	return hex.EncodeToString(hash[:8])
 }
-

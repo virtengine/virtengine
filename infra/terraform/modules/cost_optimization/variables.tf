@@ -140,7 +140,7 @@ variable "cleanup_dry_run" {
 variable "cleanup_schedule" {
   description = "CloudWatch Events schedule expression for cleanup (cron or rate)"
   type        = string
-  default     = "cron(0 2 ? * SUN *)"  # Every Sunday at 2 AM
+  default     = "cron(0 2 ? * SUN *)" # Every Sunday at 2 AM
 }
 
 # -----------------------------------------------------------------------------

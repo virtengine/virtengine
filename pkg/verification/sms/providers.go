@@ -13,6 +13,11 @@ import (
 	"github.com/virtengine/virtengine/pkg/errors"
 )
 
+// Provider name constants
+const (
+	providerTwilio = "twilio"
+)
+
 // ============================================================================
 // SMS Provider Interface
 // ============================================================================
@@ -177,24 +182,23 @@ type DeliveryStatusResult struct {
 
 // FailoverProvider wraps multiple providers with automatic failover
 type FailoverProvider struct {
-	primary      Provider
-	secondary    Provider
-	logger       zerolog.Logger
-	metrics      *ProviderMetrics
-	mu           sync.RWMutex
-	primaryFails int64
+	primary         Provider
+	secondary       Provider
+	logger          zerolog.Logger
+	metrics         *ProviderMetrics
+	mu              sync.RWMutex
+	primaryFails    int64
 	lastPrimaryFail time.Time
 }
 
 // ProviderMetrics tracks provider metrics
 type ProviderMetrics struct {
-	mu               sync.RWMutex
-	totalSent        int64
-	primarySent      int64
-	secondarySent    int64
-	primaryFailures  int64
+	totalSent         int64
+	primarySent       int64
+	secondarySent     int64
+	primaryFailures   int64
 	secondaryFailures int64
-	totalFailures    int64
+	totalFailures     int64
 }
 
 // NewFailoverProvider creates a new failover provider
@@ -619,13 +623,13 @@ func NewTwilioProvider(config ProviderConfig, logger zerolog.Logger) (*TwilioPro
 
 	return &TwilioProvider{
 		config: config,
-		logger: logger.With().Str("provider", "twilio").Logger(),
+		logger: logger.With().Str("provider", providerTwilio).Logger(),
 	}, nil
 }
 
 // Name returns the provider name
 func (p *TwilioProvider) Name() string {
-	return "twilio"
+	return providerTwilio
 }
 
 // Send sends an SMS using Twilio
@@ -641,7 +645,7 @@ func (p *TwilioProvider) Send(ctx context.Context, msg *SMSMessage) (*SendResult
 		Success:      true,
 		MessageID:    messageID,
 		Timestamp:    time.Now(),
-		Provider:     "twilio",
+		Provider:     providerTwilio,
 		SegmentCount: (len(msg.Body) / 160) + 1,
 	}, nil
 }
@@ -798,7 +802,7 @@ var _ Provider = (*SNSProvider)(nil)
 // NewProvider creates a new SMS provider based on configuration
 func NewProvider(providerType string, config ProviderConfig, logger zerolog.Logger) (Provider, error) {
 	switch providerType {
-	case "twilio":
+	case providerTwilio:
 		return NewTwilioProvider(config, logger)
 	case "sns", "aws_sns":
 		return NewSNSProvider(config, logger)
@@ -808,4 +812,3 @@ func NewProvider(providerType string, config ProviderConfig, logger zerolog.Logg
 		return nil, errors.Wrapf(ErrInvalidConfig, "unsupported SMS provider: %s", providerType)
 	}
 }
-

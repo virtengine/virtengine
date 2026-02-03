@@ -6,6 +6,7 @@ import (
 	"context"
 	"path/filepath"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -232,16 +233,13 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 	addr := s.addrProvider
 
 	// create provider
-	_, err = clitestutil.TxCreateProviderExec(
-		ctx,
-		cctx,
-		providerPath,
-		cli.TestFlags().
-			WithFrom(addr.String()).
-			WithSkipConfirm().
-			WithGasAutoFlags().
-			WithBroadcastModeBlock()...,
-	)
+	providerFlags := cli.TestFlags().
+		WithFrom(addr.String()).
+		WithSkipConfirm().
+		WithGasAutoFlags().
+		WithBroadcastModeBlock()
+	providerArgs := append([]string{providerPath}, []string(providerFlags)...)
+	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerArgs...)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -283,8 +281,8 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 		cli.TestFlags().
 			WithFrom(addr.String()).
 			WithOrderID(createdOrder.ID).
-			WithDeposit(sdk.NewCoin("uve", sdk.NewInt(5000000))).
-			WithPrice(sdk.NewDecCoinFromDec(testutil.CoinDenom, sdk.MustNewDecFromStr("1.1"))).
+			WithDeposit(sdk.NewCoin("uve", sdkmath.NewInt(5000000))).
+			WithPrice(sdk.NewDecCoinFromDec(s.Config().BondDenom, sdkmath.LegacyMustNewDecFromStr("1.1"))).
 			WithSkipConfirm().
 			WithGasAutoFlags().
 			WithBroadcastModeBlock()...,

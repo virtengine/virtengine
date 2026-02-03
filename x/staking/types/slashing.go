@@ -175,8 +175,8 @@ func DefaultSlashConfigs() map[SlashReason]SlashConfig {
 		},
 		SlashReasonDowntime: {
 			Reason:               SlashReasonDowntime,
-			SlashPercent:         1000,  // 0.1%
-			JailDuration:         600,   // 10 minutes
+			SlashPercent:         1000, // 0.1%
+			JailDuration:         600,  // 10 minutes
 			IsTombstone:          false,
 			EscalationMultiplier: 2,
 		},
@@ -189,22 +189,22 @@ func DefaultSlashConfigs() map[SlashReason]SlashConfig {
 		},
 		SlashReasonMissedRecomputation: {
 			Reason:               SlashReasonMissedRecomputation,
-			SlashPercent:         10000,  // 1% per missed block
-			JailDuration:         3600,   // 1 hour
+			SlashPercent:         10000, // 1% per missed block
+			JailDuration:         3600,  // 1 hour
 			IsTombstone:          false,
 			EscalationMultiplier: 1,
 		},
 		SlashReasonInconsistentScore: {
 			Reason:               SlashReasonInconsistentScore,
-			SlashPercent:         20000,  // 2%
-			JailDuration:         86400,  // 1 day
+			SlashPercent:         20000, // 2%
+			JailDuration:         86400, // 1 day
 			IsTombstone:          false,
 			EscalationMultiplier: 2,
 		},
 		SlashReasonExpiredAttestation: {
 			Reason:               SlashReasonExpiredAttestation,
-			SlashPercent:         10000,  // 1%
-			JailDuration:         3600,   // 1 hour (first offense)
+			SlashPercent:         10000, // 1%
+			JailDuration:         3600,  // 1 hour (first offense)
 			IsTombstone:          false,
 			EscalationMultiplier: 2,
 		},

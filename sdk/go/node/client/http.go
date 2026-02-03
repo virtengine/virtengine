@@ -67,4 +67,3 @@ func NewHTTPClient(ctx context.Context, remoteAddr string) (*http.Client, error)
 
 	return client, nil
 }
-

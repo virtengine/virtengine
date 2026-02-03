@@ -44,7 +44,7 @@ func (k Keeper) EndBlocker(ctx sdk.Context) error {
 
 	// Check if current epoch should end
 	blocksInEpoch := ctx.BlockHeight() - epochInfo.StartHeight
-	if blocksInEpoch >= int64(params.EpochLength) && !epochInfo.Finalized {
+	if blocksInEpoch >= safeInt64FromUint64(params.EpochLength) && !epochInfo.Finalized {
 		// Finalize current epoch and distribute rewards
 		if err := k.DistributeRewards(ctx, currentEpoch); err != nil {
 			k.Logger(ctx).Error("failed to distribute rewards", "error", err)
@@ -72,4 +72,12 @@ func (k Keeper) EndBlocker(ctx sdk.Context) error {
 	}
 
 	return nil
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1)
+	}
+	//nolint:gosec // range checked above
+	return int64(value)
 }

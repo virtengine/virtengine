@@ -29,7 +29,6 @@ import (
 
 	"github.com/virtengine/virtengine/app"
 	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
-	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 	"github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
@@ -463,9 +462,9 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 	customer := sdktestutil.AccAddress(s.T())
 
 	// Create identity record
-	record, err := s.app.Keepers.VirtEngine.VEID.CreateIdentityRecord(ctx, customer)
+	createdRecord, err := s.app.Keepers.VirtEngine.VEID.CreateIdentityRecord(ctx, customer)
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), veidtypes.IdentityTierUnverified, record.Tier)
+	require.Equal(s.T(), veidtypes.IdentityTierUnverified, createdRecord.Tier)
 
 	// Test transition: Unverified -> Basic
 	transition1 := UnverifiedToBasic()
@@ -474,7 +473,7 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false).
-		WithBlockHeight(ctx.BlockHeight()+1).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(1))
 
 	record, found := s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -489,7 +488,7 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false).
-		WithBlockHeight(ctx.BlockHeight()+1).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(2))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -504,7 +503,7 @@ func (s *VEIDE2ETestSuite) TestMLScoringAndTierTransitions() {
 
 	s.app.Commit()
 	ctx = s.app.NewContext(false).
-		WithBlockHeight(ctx.BlockHeight()+1).
+		WithBlockHeight(ctx.BlockHeight() + 1).
 		WithBlockTime(FixedTimestampPlus(3))
 
 	record, found = s.app.Keepers.VirtEngine.VEID.GetIdentityRecord(ctx, customer)
@@ -568,9 +567,10 @@ func (s *VEIDE2ETestSuite) verifyAttestation(customer sdk.AccAddress, fixture At
 	attestation.ModelVersion = fixture.ModelVersion
 
 	// Add verification proofs
+	proofHash := sha256.Sum256([]byte("proof-content"))
 	proofDetail := veidtypes.NewVerificationProofDetail(
 		string(fixture.Type),
-		hex.EncodeToString(sha256.Sum256([]byte("proof-content"))[:]),
+		hex.EncodeToString(proofHash[:]),
 		fixture.Score,
 		70, // threshold
 		FixedTimestamp(),
@@ -728,15 +728,6 @@ func (s *VEIDE2ETestSuite) TestInvalidClientSignatureRejection() {
 	scopeFixture := SelfieScope()
 	envelope := EncryptedEnvelopeFixture(scopeFixture.ScopeID)
 	payloadHash := PayloadHash(envelope)
-
-	metadata := veidtypes.NewUploadMetadata(
-		scopeFixture.Salt,
-		scopeFixture.DeviceFingerprint,
-		s.testClient.ClientID,
-		nil,
-		nil,
-		payloadHash,
-	)
 
 	// Use invalid signature (wrong data signed)
 	invalidClientSig := s.testClient.Sign([]byte("wrong-data"))

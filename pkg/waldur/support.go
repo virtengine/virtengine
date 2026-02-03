@@ -82,6 +82,12 @@ const (
 	StateCanceled IssueState = "canceled"
 )
 
+// VirtEngine priority and status string constants
+const (
+	vePriorityNormal = "normal"
+	veStatusOpen     = "open"
+)
+
 // SupportIssue represents a Waldur support issue
 type SupportIssue struct {
 	// UUID is the Waldur issue UUID
@@ -631,7 +637,7 @@ func MapVirtEnginePriorityToWaldur(priority string) IssuePriority {
 	switch priority {
 	case "low":
 		return PriorityLow
-	case "normal", "medium":
+	case vePriorityNormal, "medium":
 		return PriorityNormal
 	case "high":
 		return PriorityHigh
@@ -648,20 +654,20 @@ func MapWaldurPriorityToVirtEngine(priority IssuePriority) string {
 	case PriorityLow:
 		return "low"
 	case PriorityNormal:
-		return "normal"
+		return vePriorityNormal
 	case PriorityHigh:
 		return "high"
 	case PriorityCritical:
 		return "urgent"
 	default:
-		return "normal"
+		return vePriorityNormal
 	}
 }
 
 // MapVirtEngineStatusToWaldur maps VirtEngine status to Waldur state
 func MapVirtEngineStatusToWaldur(status string) IssueState {
 	switch status {
-	case "open":
+	case veStatusOpen:
 		return StateNew
 	case "assigned":
 		return StateOpen
@@ -684,7 +690,7 @@ func MapVirtEngineStatusToWaldur(status string) IssueState {
 func MapWaldurStateToVirtEngine(state IssueState) string {
 	switch state {
 	case StateNew:
-		return "open"
+		return veStatusOpen
 	case StateOpen:
 		return "assigned"
 	case StateInProgress:
@@ -698,7 +704,7 @@ func MapWaldurStateToVirtEngine(state IssueState) string {
 	case StateCanceled:
 		return "canceled"
 	default:
-		return "open"
+		return veStatusOpen
 	}
 }
 
@@ -715,4 +721,3 @@ func MapVirtEngineCategoryToWaldurType(category string) IssueType {
 		return IssueTypeServiceRequest
 	}
 }
-

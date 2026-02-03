@@ -191,4 +191,3 @@ func (c *RedisConfig) Validate() error {
 
 	return nil
 }
-

@@ -16,22 +16,22 @@ import (
 
 // embeddingEnvelopeStore is the storage format for embedding envelope references
 type embeddingEnvelopeStore struct {
-	EnvelopeID      string            `json:"envelope_id"`
-	AccountAddress  string            `json:"account_address"`
-	EmbeddingType   types.EmbeddingType `json:"embedding_type"`
-	Version         uint32            `json:"version"`
-	EmbeddingHash   []byte            `json:"embedding_hash"`
-	ModelVersion    string            `json:"model_version"`
-	ModelHash       string            `json:"model_hash"`
-	Dimension       uint32            `json:"dimension"`
-	SourceScopeID   string            `json:"source_scope_id"`
-	CreatedAt       int64             `json:"created_at"`
-	BlockHeight     int64             `json:"block_height"`
-	ComputedBy      string            `json:"computed_by"`
+	EnvelopeID      string                `json:"envelope_id"`
+	AccountAddress  string                `json:"account_address"`
+	EmbeddingType   types.EmbeddingType   `json:"embedding_type"`
+	Version         uint32                `json:"version"`
+	EmbeddingHash   []byte                `json:"embedding_hash"`
+	ModelVersion    string                `json:"model_version"`
+	ModelHash       string                `json:"model_hash"`
+	Dimension       uint32                `json:"dimension"`
+	SourceScopeID   string                `json:"source_scope_id"`
+	CreatedAt       int64                 `json:"created_at"`
+	BlockHeight     int64                 `json:"block_height"`
+	ComputedBy      string                `json:"computed_by"`
 	RetentionPolicy *retentionPolicyStore `json:"retention_policy,omitempty"`
-	Revoked         bool              `json:"revoked"`
-	RevokedAt       *int64            `json:"revoked_at,omitempty"`
-	RevokedReason   string            `json:"revoked_reason,omitempty"`
+	Revoked         bool                  `json:"revoked"`
+	RevokedAt       *int64                `json:"revoked_at,omitempty"`
+	RevokedReason   string                `json:"revoked_reason,omitempty"`
 }
 
 // retentionPolicyStore is the storage format for retention policies
@@ -56,7 +56,7 @@ func retentionPolicyToStore(p *types.RetentionPolicy) *retentionPolicyStore {
 	if p == nil {
 		return nil
 	}
-	
+
 	store := &retentionPolicyStore{
 		Version:                   p.Version,
 		PolicyID:                  p.PolicyID,
@@ -71,7 +71,7 @@ func retentionPolicyToStore(p *types.RetentionPolicy) *retentionPolicyStore {
 		MaxExtensions:             p.MaxExtensions,
 		CurrentExtensions:         p.CurrentExtensions,
 	}
-	
+
 	if p.ExpiresAt != nil {
 		ts := p.ExpiresAt.Unix()
 		store.ExpiresAt = &ts
@@ -79,7 +79,7 @@ func retentionPolicyToStore(p *types.RetentionPolicy) *retentionPolicyStore {
 	if p.ExpiresAtBlock != nil {
 		store.ExpiresAtBlock = p.ExpiresAtBlock
 	}
-	
+
 	return store
 }
 
@@ -87,7 +87,7 @@ func retentionPolicyFromStore(s *retentionPolicyStore) *types.RetentionPolicy {
 	if s == nil {
 		return nil
 	}
-	
+
 	p := &types.RetentionPolicy{
 		Version:                   s.Version,
 		PolicyID:                  s.PolicyID,
@@ -102,7 +102,7 @@ func retentionPolicyFromStore(s *retentionPolicyStore) *types.RetentionPolicy {
 		MaxExtensions:             s.MaxExtensions,
 		CurrentExtensions:         s.CurrentExtensions,
 	}
-	
+
 	if s.ExpiresAt != nil {
 		t := time.Unix(*s.ExpiresAt, 0)
 		p.ExpiresAt = &t
@@ -110,7 +110,7 @@ func retentionPolicyFromStore(s *retentionPolicyStore) *types.RetentionPolicy {
 	if s.ExpiresAtBlock != nil {
 		p.ExpiresAtBlock = s.ExpiresAtBlock
 	}
-	
+
 	return p
 }
 
@@ -122,25 +122,25 @@ func (k Keeper) SetEmbeddingEnvelope(ctx sdk.Context, envelope types.EmbeddingEn
 	}
 
 	store := ctx.KVStore(k.skey)
-	
+
 	es := embeddingEnvelopeStore{
-		EnvelopeID:     envelope.EnvelopeID,
-		AccountAddress: envelope.AccountAddress,
-		EmbeddingType:  envelope.EmbeddingType,
-		Version:        envelope.Version,
-		EmbeddingHash:  envelope.EmbeddingHash,
-		ModelVersion:   envelope.ModelVersion,
-		ModelHash:      envelope.ModelHash,
-		Dimension:      envelope.Dimension,
-		SourceScopeID:  envelope.SourceScopeID,
-		CreatedAt:      envelope.CreatedAt.Unix(),
-		BlockHeight:    envelope.BlockHeight,
-		ComputedBy:     envelope.ComputedBy,
+		EnvelopeID:      envelope.EnvelopeID,
+		AccountAddress:  envelope.AccountAddress,
+		EmbeddingType:   envelope.EmbeddingType,
+		Version:         envelope.Version,
+		EmbeddingHash:   envelope.EmbeddingHash,
+		ModelVersion:    envelope.ModelVersion,
+		ModelHash:       envelope.ModelHash,
+		Dimension:       envelope.Dimension,
+		SourceScopeID:   envelope.SourceScopeID,
+		CreatedAt:       envelope.CreatedAt.Unix(),
+		BlockHeight:     envelope.BlockHeight,
+		ComputedBy:      envelope.ComputedBy,
 		RetentionPolicy: retentionPolicyToStore(envelope.RetentionPolicy),
-		Revoked:        envelope.Revoked,
-		RevokedReason:  envelope.RevokedReason,
+		Revoked:         envelope.Revoked,
+		RevokedReason:   envelope.RevokedReason,
 	}
-	
+
 	if envelope.RevokedAt != nil {
 		ts := envelope.RevokedAt.Unix()
 		es.RevokedAt = &ts
@@ -152,15 +152,15 @@ func (k Keeper) SetEmbeddingEnvelope(ctx sdk.Context, envelope types.EmbeddingEn
 	}
 
 	store.Set(types.EmbeddingEnvelopeKey(envelope.EnvelopeID), bz)
-	
+
 	// Also store lookup by account and type
 	addr, err := sdk.AccAddressFromBech32(envelope.AccountAddress)
 	if err != nil {
 		return types.ErrInvalidAddress.Wrap(err.Error())
 	}
-	
+
 	k.addEnvelopeToAccountIndex(ctx, addr.Bytes(), envelope.EmbeddingType, envelope.EnvelopeID)
-	
+
 	return nil
 }
 
@@ -194,7 +194,7 @@ func (k Keeper) GetEmbeddingEnvelope(ctx sdk.Context, envelopeID string) (types.
 		Revoked:         es.Revoked,
 		RevokedReason:   es.RevokedReason,
 	}
-	
+
 	if es.RevokedAt != nil {
 		t := time.Unix(*es.RevokedAt, 0)
 		envelope.RevokedAt = &t
@@ -206,28 +206,28 @@ func (k Keeper) GetEmbeddingEnvelope(ctx sdk.Context, envelopeID string) (types.
 // GetEmbeddingEnvelopesByAccount retrieves all envelope references for an account
 func (k Keeper) GetEmbeddingEnvelopesByAccount(ctx sdk.Context, address sdk.AccAddress) []types.EmbeddingEnvelopeReference {
 	var envelopes []types.EmbeddingEnvelopeReference
-	
+
 	ids := k.getEnvelopeIDsForAccount(ctx, address.Bytes())
 	for _, id := range ids {
 		if envelope, found := k.GetEmbeddingEnvelope(ctx, id); found {
 			envelopes = append(envelopes, envelope)
 		}
 	}
-	
+
 	return envelopes
 }
 
 // GetEmbeddingEnvelopesByType retrieves envelopes for an account filtered by type
 func (k Keeper) GetEmbeddingEnvelopesByType(ctx sdk.Context, address sdk.AccAddress, embeddingType types.EmbeddingType) []types.EmbeddingEnvelopeReference {
 	var envelopes []types.EmbeddingEnvelopeReference
-	
+
 	allEnvelopes := k.GetEmbeddingEnvelopesByAccount(ctx, address)
 	for _, env := range allEnvelopes {
 		if env.EmbeddingType == embeddingType {
 			envelopes = append(envelopes, env)
 		}
 	}
-	
+
 	return envelopes
 }
 
@@ -237,16 +237,16 @@ func (k Keeper) RevokeEmbeddingEnvelope(ctx sdk.Context, envelopeID string, reas
 	if !found {
 		return types.ErrScopeNotFound.Wrapf("envelope not found: %s", envelopeID)
 	}
-	
+
 	if envelope.Revoked {
 		return types.ErrScopeRevoked.Wrapf("envelope already revoked: %s", envelopeID)
 	}
-	
+
 	revokedAt := ctx.BlockTime()
 	envelope.Revoked = true
 	envelope.RevokedAt = &revokedAt
 	envelope.RevokedReason = reason
-	
+
 	return k.SetEmbeddingEnvelope(ctx, envelope)
 }
 
@@ -256,16 +256,16 @@ func (k Keeper) DeleteEmbeddingEnvelope(ctx sdk.Context, envelopeID string) erro
 	if !found {
 		return types.ErrScopeNotFound.Wrapf("envelope not found: %s", envelopeID)
 	}
-	
+
 	store := ctx.KVStore(k.skey)
 	store.Delete(types.EmbeddingEnvelopeKey(envelopeID))
-	
+
 	// Remove from account index
 	addr, err := sdk.AccAddressFromBech32(envelope.AccountAddress)
 	if err == nil {
 		k.removeEnvelopeFromAccountIndex(ctx, addr.Bytes(), envelope.EmbeddingType, envelopeID)
 	}
-	
+
 	return nil
 }
 
@@ -274,16 +274,16 @@ func (k Keeper) DeleteEmbeddingEnvelope(ctx sdk.Context, envelopeID string) erro
 func (k Keeper) addEnvelopeToAccountIndex(ctx sdk.Context, address []byte, embeddingType types.EmbeddingType, envelopeID string) {
 	store := ctx.KVStore(k.skey)
 	key := types.EmbeddingEnvelopeByAccountKey(address, embeddingType)
-	
+
 	ids := k.getEnvelopeIDsForKey(ctx, key)
-	
+
 	// Check if already exists
 	for _, id := range ids {
 		if id == envelopeID {
 			return
 		}
 	}
-	
+
 	ids = append(ids, envelopeID)
 	bz, _ := json.Marshal(ids) //nolint:errchkjson // string slice cannot fail to marshal
 	store.Set(key, bz)
@@ -292,16 +292,16 @@ func (k Keeper) addEnvelopeToAccountIndex(ctx sdk.Context, address []byte, embed
 func (k Keeper) removeEnvelopeFromAccountIndex(ctx sdk.Context, address []byte, embeddingType types.EmbeddingType, envelopeID string) {
 	store := ctx.KVStore(k.skey)
 	key := types.EmbeddingEnvelopeByAccountKey(address, embeddingType)
-	
+
 	ids := k.getEnvelopeIDsForKey(ctx, key)
-	
+
 	var newIDs []string
 	for _, id := range ids {
 		if id != envelopeID {
 			newIDs = append(newIDs, id)
 		}
 	}
-	
+
 	if len(newIDs) == 0 {
 		store.Delete(key)
 	} else {
@@ -316,7 +316,7 @@ func (k Keeper) getEnvelopeIDsForKey(ctx sdk.Context, key []byte) []string {
 	if bz == nil {
 		return nil
 	}
-	
+
 	var ids []string
 	if err := json.Unmarshal(bz, &ids); err != nil {
 		return nil
@@ -325,22 +325,22 @@ func (k Keeper) getEnvelopeIDsForKey(ctx sdk.Context, key []byte) []string {
 }
 
 func (k Keeper) getEnvelopeIDsForAccount(ctx sdk.Context, address []byte) []string {
-	var allIDs []string
-	
+	allIDs := make([]string, 0, len(types.AllEmbeddingTypes()))
+
 	// Get IDs for all embedding types
 	for _, embType := range types.AllEmbeddingTypes() {
 		key := types.EmbeddingEnvelopeByAccountKey(address, embType)
 		ids := k.getEnvelopeIDsForKey(ctx, key)
 		allIDs = append(allIDs, ids...)
 	}
-	
+
 	return allIDs
 }
 
 // GetActiveEmbeddingEnvelope returns the most recent active envelope for an account and type
 func (k Keeper) GetActiveEmbeddingEnvelope(ctx sdk.Context, address sdk.AccAddress, embeddingType types.EmbeddingType) (types.EmbeddingEnvelopeReference, bool) {
 	envelopes := k.GetEmbeddingEnvelopesByType(ctx, address, embeddingType)
-	
+
 	var latestActive *types.EmbeddingEnvelopeReference
 	for i := range envelopes {
 		env := &envelopes[i]
@@ -354,7 +354,7 @@ func (k Keeper) GetActiveEmbeddingEnvelope(ctx sdk.Context, address sdk.AccAddre
 			}
 		}
 	}
-	
+
 	if latestActive == nil {
 		return types.EmbeddingEnvelopeReference{}, false
 	}
@@ -365,21 +365,21 @@ func (k Keeper) GetActiveEmbeddingEnvelope(ctx sdk.Context, address sdk.AccAddre
 func (k Keeper) CleanupExpiredEnvelopes(ctx sdk.Context) int {
 	cleaned := 0
 	now := ctx.BlockTime()
-	
+
 	store := ctx.KVStore(k.skey)
-	
+
 	// Iterate over all envelopes and check expiry
 	iter := store.Iterator(types.PrefixEmbeddingEnvelope, storetypes.PrefixEndBytes(types.PrefixEmbeddingEnvelope))
 	defer iter.Close()
-	
+
 	var toDelete []string
-	
+
 	for ; iter.Valid(); iter.Next() {
 		var es embeddingEnvelopeStore
 		if err := json.Unmarshal(iter.Value(), &es); err != nil {
 			continue
 		}
-		
+
 		if es.RetentionPolicy != nil {
 			policy := retentionPolicyFromStore(es.RetentionPolicy)
 			if policy != nil && policy.IsExpired(now) && policy.DeleteOnExpiry {
@@ -387,13 +387,13 @@ func (k Keeper) CleanupExpiredEnvelopes(ctx sdk.Context) int {
 			}
 		}
 	}
-	
+
 	// Delete expired envelopes
 	for _, id := range toDelete {
 		if err := k.DeleteEmbeddingEnvelope(ctx, id); err == nil {
 			cleaned++
 		}
 	}
-	
+
 	return cleaned
 }

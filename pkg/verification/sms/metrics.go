@@ -38,12 +38,12 @@ type Metrics struct {
 	verificationLatency *prometheus.HistogramVec
 
 	// Anti-fraud metrics
-	voipDetected        *prometheus.CounterVec
-	phoneBlocked        *prometheus.CounterVec
-	ipBlocked           *prometheus.CounterVec
-	velocityExceeded    *prometheus.CounterVec
-	riskScoreHistogram  *prometheus.HistogramVec
-	fraudDetected       *prometheus.CounterVec
+	voipDetected       *prometheus.CounterVec
+	phoneBlocked       *prometheus.CounterVec
+	ipBlocked          *prometheus.CounterVec
+	velocityExceeded   *prometheus.CounterVec
+	riskScoreHistogram *prometheus.HistogramVec
+	fraudDetected      *prometheus.CounterVec
 
 	// Rate limiting metrics
 	rateLimitHit *prometheus.CounterVec
@@ -487,4 +487,3 @@ func (m *Metrics) RecordChainSubmission(countryCode string, success bool) {
 		m.attestationsFailed.WithLabelValues("chain_submission").Inc()
 	}
 }
-

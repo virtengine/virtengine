@@ -343,7 +343,7 @@ func TestConversionExecutor_ListPendingConversions(t *testing.T) {
 	treasury := NewMockTreasuryTransfer("virtengine1treasury", map[string]int64{"uve": 1000000000})
 	config := DefaultConversionExecutorConfig()
 	config.RequirePaymentVerification = false
-	config.MaxRetries = 5 // High retry count so entries stay pending after first failure
+	config.MaxRetries = 5     // High retry count so entries stay pending after first failure
 	config.BaseRetryDelay = 0 // No delay for test
 
 	// Simulate failure initially
@@ -777,4 +777,3 @@ func TestNewConversionLedgerEntry(t *testing.T) {
 		t.Error("DestinationAddress not set correctly")
 	}
 }
-

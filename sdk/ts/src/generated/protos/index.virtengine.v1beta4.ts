@@ -44,30 +44,8 @@ export const QueryDeploymentResponse = patched(_QueryDeploymentResponse);
 export type QueryDeploymentResponse = _QueryDeploymentResponse
 export const QueryGroupResponse = patched(_QueryGroupResponse);
 export type QueryGroupResponse = _QueryGroupResponse
-export { OrderID, Order_State, OrderFilters } from "./virtengine/market/v1beta4/order.ts";
-
-import { Order as _Order } from "./virtengine/market/v1beta4/order.ts";
-export const Order = patched(_Order);
-export type Order = _Order
-export { ResourceOffer, MsgCreateBidResponse, MsgCloseBid, MsgCloseBidResponse, BidID, Bid_State, BidFilters } from "./virtengine/market/v1beta4/bid.ts";
-
-import { MsgCreateBid as _MsgCreateBid, Bid as _Bid } from "./virtengine/market/v1beta4/bid.ts";
-export const MsgCreateBid = patched(_MsgCreateBid);
-export type MsgCreateBid = _MsgCreateBid
-export const Bid = patched(_Bid);
-export type Bid = _Bid
-export { LeaseID, Lease_State, LeaseFilters, MsgCreateLease, MsgCreateLeaseResponse, MsgWithdrawLease, MsgWithdrawLeaseResponse, MsgCloseLease, MsgCloseLeaseResponse } from "./virtengine/market/v1beta4/lease.ts";
-
-import { Lease as _Lease } from "./virtengine/market/v1beta4/lease.ts";
-export const Lease = patched(_Lease);
-export type Lease = _Lease
-export { Params as Market_Params } from "./virtengine/market/v1beta4/params.ts";
-
-import { GenesisState as _Market_GenesisState } from "./virtengine/market/v1beta4/genesis.ts";
-export const Market_GenesisState = patched(_Market_GenesisState);
-export type Market_GenesisState = _Market_GenesisState
-export { EventProviderCreated, EventProviderUpdated, EventProviderDeleted } from "./virtengine/provider/v1beta4/event.ts";
+export { EventProviderCreated, EventProviderUpdated, EventProviderDeleted, EventProviderDomainVerificationStarted, EventProviderDomainVerified } from "./virtengine/provider/v1beta4/event.ts";
 export { Info, Provider } from "./virtengine/provider/v1beta4/provider.ts";
 export { GenesisState as Provider_GenesisState } from "./virtengine/provider/v1beta4/genesis.ts";
-export { MsgCreateProvider, MsgCreateProviderResponse, MsgUpdateProvider, MsgUpdateProviderResponse, MsgDeleteProvider, MsgDeleteProviderResponse } from "./virtengine/provider/v1beta4/msg.ts";
+export { MsgCreateProvider, MsgCreateProviderResponse, MsgUpdateProvider, MsgUpdateProviderResponse, MsgDeleteProvider, MsgDeleteProviderResponse, MsgGenerateDomainVerificationToken, MsgGenerateDomainVerificationTokenResponse, MsgVerifyProviderDomain, MsgVerifyProviderDomainResponse } from "./virtengine/provider/v1beta4/msg.ts";
 export { QueryProvidersRequest, QueryProvidersResponse, QueryProviderRequest, QueryProviderResponse } from "./virtengine/provider/v1beta4/query.ts";

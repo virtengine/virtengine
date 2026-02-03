@@ -5,4 +5,3 @@ import (
 )
 
 type Storage map[string]*resource.Quantity
-

@@ -255,4 +255,3 @@ func SetGlobalManager(m *Manager) {
 	defer globalManagerMu.Unlock()
 	globalManager = m
 }
-

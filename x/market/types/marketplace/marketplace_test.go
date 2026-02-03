@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// testProviderAddr is a test provider address constant
+const testProviderAddr = "cosmos1provider"
+
 // ============================================================================
 // Offering Tests (VE-300)
 // ============================================================================
@@ -931,6 +934,105 @@ func TestNewOrderCreatedEvent(t *testing.T) {
 	}
 }
 
+func TestNewOfferingCreatedEvent(t *testing.T) {
+	offering := &Offering{
+		ID:       OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		State:    OfferingStateActive,
+		Category: OfferingCategoryCompute,
+		Name:     "Test Offering",
+	}
+
+	event := NewOfferingCreatedEvent(offering, 100, 2)
+
+	if event.EventType != EventOfferingCreated {
+		t.Errorf("OfferingCreatedEvent.EventType = %s, want %s", event.EventType, EventOfferingCreated)
+	}
+	if event.OfferingID != offering.ID.String() {
+		t.Errorf("OfferingCreatedEvent.OfferingID = %s, want %s", event.OfferingID, offering.ID.String())
+	}
+	if event.ProviderAddress != offering.ID.ProviderAddress {
+		t.Errorf("OfferingCreatedEvent.ProviderAddress = %s, want %s", event.ProviderAddress, offering.ID.ProviderAddress)
+	}
+	if event.State != offering.State.String() {
+		t.Errorf("OfferingCreatedEvent.State = %s, want %s", event.State, offering.State.String())
+	}
+}
+
+func TestNewOfferingUpdatedEvent(t *testing.T) {
+	offering := &Offering{
+		ID:    OfferingID{ProviderAddress: "cosmos1provider", Sequence: 2},
+		State: OfferingStatePaused,
+	}
+
+	event := NewOfferingUpdatedEvent(offering, 200, 3)
+
+	if event.EventType != EventOfferingUpdated {
+		t.Errorf("OfferingUpdatedEvent.EventType = %s, want %s", event.EventType, EventOfferingUpdated)
+	}
+	if event.OfferingID != offering.ID.String() {
+		t.Errorf("OfferingUpdatedEvent.OfferingID = %s, want %s", event.OfferingID, offering.ID.String())
+	}
+	if event.State != offering.State.String() {
+		t.Errorf("OfferingUpdatedEvent.State = %s, want %s", event.State, offering.State.String())
+	}
+}
+
+func TestNewOfferingTerminatedEvent(t *testing.T) {
+	offering := &Offering{
+		ID:    OfferingID{ProviderAddress: "cosmos1provider", Sequence: 3},
+		State: OfferingStateTerminated,
+	}
+
+	event := NewOfferingTerminatedEvent(offering, "requested", 300, 4)
+
+	if event.EventType != EventOfferingTerminated {
+		t.Errorf("OfferingTerminatedEvent.EventType = %s, want %s", event.EventType, EventOfferingTerminated)
+	}
+	if event.Reason != "requested" {
+		t.Errorf("OfferingTerminatedEvent.Reason = %s, want requested", event.Reason)
+	}
+}
+
+func TestNewBidAcceptedEvent(t *testing.T) {
+	order := NewOrder(
+		OrderID{CustomerAddress: "cosmos1customer", Sequence: 1},
+		OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		1000,
+		1,
+	)
+	order.State = OrderStateMatched
+
+	bid := &MarketplaceBid{
+		ID: BidID{
+			OrderID:         OrderID{CustomerAddress: "cosmos1customer", Sequence: 1},
+			ProviderAddress: "cosmos1provider",
+			Sequence:        1,
+		},
+		OfferingID: OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		Price:      900,
+	}
+
+	allocation := NewAllocation(
+		AllocationID{OrderID: order.ID, Sequence: 1},
+		OfferingID{ProviderAddress: "cosmos1provider", Sequence: 1},
+		"cosmos1provider",
+		bid.ID,
+		900,
+	)
+
+	event := NewBidAcceptedEvent(bid, order, allocation, 400, 5)
+
+	if event.EventType != EventBidAccepted {
+		t.Errorf("BidAcceptedEvent.EventType = %s, want %s", event.EventType, EventBidAccepted)
+	}
+	if event.AllocationID != allocation.ID.String() {
+		t.Errorf("BidAcceptedEvent.AllocationID = %s, want %s", event.AllocationID, allocation.ID.String())
+	}
+	if event.CustomerAddress != order.ID.CustomerAddress {
+		t.Errorf("BidAcceptedEvent.CustomerAddress = %s, want %s", event.CustomerAddress, order.ID.CustomerAddress)
+	}
+}
+
 func TestEventCheckpoint(t *testing.T) {
 	checkpoint := NewEventCheckpoint("subscriber1")
 
@@ -994,13 +1096,13 @@ func TestEventBatch(t *testing.T) {
 }
 
 func TestNewProviderDaemonSubscription(t *testing.T) {
-	sub := NewProviderDaemonSubscription("cosmos1provider")
+	sub := NewProviderDaemonSubscription(testProviderAddr)
 
-	if sub.ProviderAddress != "cosmos1provider" {
-		t.Errorf("EventSubscription.ProviderAddress = %s, want cosmos1provider", sub.ProviderAddress)
+	if sub.ProviderAddress != testProviderAddr {
+		t.Errorf("EventSubscription.ProviderAddress = %s, want %s", sub.ProviderAddress, testProviderAddr)
 	}
-	if sub.FilterByProvider != "cosmos1provider" {
-		t.Errorf("EventSubscription.FilterByProvider = %s, want cosmos1provider", sub.FilterByProvider)
+	if sub.FilterByProvider != testProviderAddr {
+		t.Errorf("EventSubscription.FilterByProvider = %s, want %s", sub.FilterByProvider, testProviderAddr)
 	}
 	if !sub.Active {
 		t.Error("EventSubscription.Active should be true")
@@ -1011,7 +1113,7 @@ func TestNewProviderDaemonSubscription(t *testing.T) {
 }
 
 func TestNewUsageUpdateRequestedEvent(t *testing.T) {
-	event := NewUsageUpdateRequestedEvent("alloc_123", "cosmos1provider", "periodic", 100, 5)
+	event := NewUsageUpdateRequestedEvent("alloc_123", testProviderAddr, "periodic", 100, 5)
 
 	if event.EventType != EventUsageUpdateRequested {
 		t.Errorf("UsageUpdateRequestedEvent.EventType = %s, want %s", event.EventType, EventUsageUpdateRequested)
@@ -1025,8 +1127,8 @@ func TestNewUsageUpdateRequestedEvent(t *testing.T) {
 	if event.AllocationID != "alloc_123" {
 		t.Errorf("UsageUpdateRequestedEvent.AllocationID = %s, want alloc_123", event.AllocationID)
 	}
-	if event.ProviderAddress != "cosmos1provider" {
-		t.Errorf("UsageUpdateRequestedEvent.ProviderAddress = %s, want cosmos1provider", event.ProviderAddress)
+	if event.ProviderAddress != testProviderAddr {
+		t.Errorf("UsageUpdateRequestedEvent.ProviderAddress = %s, want %s", event.ProviderAddress, testProviderAddr)
 	}
 	if event.RequestType != "periodic" {
 		t.Errorf("UsageUpdateRequestedEvent.RequestType = %s, want periodic", event.RequestType)
@@ -1081,7 +1183,7 @@ func TestNewTerminateRequestedEvent(t *testing.T) {
 	event := NewTerminateRequestedEvent(
 		"alloc_123",
 		"order_456",
-		"cosmos1provider",
+		testProviderAddr,
 		"cosmos1customer",
 		"user requested termination",
 		true,
@@ -1104,8 +1206,8 @@ func TestNewTerminateRequestedEvent(t *testing.T) {
 	if event.OrderID != "order_456" {
 		t.Errorf("TerminateRequestedEvent.OrderID = %s, want order_456", event.OrderID)
 	}
-	if event.ProviderAddress != "cosmos1provider" {
-		t.Errorf("TerminateRequestedEvent.ProviderAddress = %s, want cosmos1provider", event.ProviderAddress)
+	if event.ProviderAddress != testProviderAddr {
+		t.Errorf("TerminateRequestedEvent.ProviderAddress = %s, want %s", event.ProviderAddress, testProviderAddr)
 	}
 	if event.RequestedBy != "cosmos1customer" {
 		t.Errorf("TerminateRequestedEvent.RequestedBy = %s, want cosmos1customer", event.RequestedBy)

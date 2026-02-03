@@ -529,7 +529,7 @@ type reconciliationOptions struct {
 	provider        string
 	customer        string
 	includeVoided   bool
-	skipValidation  bool
+	skipValidation  bool //nolint:unused // Reserved for optional validation bypass
 	maxRecords      uint32
 	notifyOnSuccess bool
 }
@@ -859,20 +859,26 @@ func ParseUsageRecordKey(key []byte) (string, error) {
 
 // BuildUsageRecordByLeaseKey builds the index key for usage records by lease
 func BuildUsageRecordByLeaseKey(leaseID string, recordID string) []byte {
-	key := append(UsageRecordByLeasePrefix, []byte(leaseID)...)
+	key := make([]byte, 0, len(UsageRecordByLeasePrefix)+len(leaseID)+1+len(recordID))
+	key = append(key, UsageRecordByLeasePrefix...)
+	key = append(key, []byte(leaseID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(recordID)...)
 }
 
 // BuildUsageRecordByLeasePrefix builds the prefix for lease's usage records
 func BuildUsageRecordByLeasePrefix(leaseID string) []byte {
-	key := append(UsageRecordByLeasePrefix, []byte(leaseID)...)
+	key := make([]byte, 0, len(UsageRecordByLeasePrefix)+len(leaseID)+1)
+	key = append(key, UsageRecordByLeasePrefix...)
+	key = append(key, []byte(leaseID)...)
 	return append(key, byte('/'))
 }
 
 // BuildPayoutRecordKey builds the key for a payout record
 func BuildPayoutRecordKey(payoutID string) []byte {
-	return append(PayoutRecordPrefix, []byte(payoutID)...)
+	key := make([]byte, 0, len(PayoutRecordPrefix)+len(payoutID))
+	key = append(key, PayoutRecordPrefix...)
+	return append(key, []byte(payoutID)...)
 }
 
 // ParsePayoutRecordKey parses a payout record key
@@ -885,22 +891,32 @@ func ParsePayoutRecordKey(key []byte) (string, error) {
 
 // BuildPayoutRecordByProviderKey builds the index key for payout records by provider
 func BuildPayoutRecordByProviderKey(provider string, payoutID string) []byte {
-	key := append(PayoutRecordByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(PayoutRecordByProviderPrefix)+len(provider)+1+len(payoutID))
+	key = append(key, PayoutRecordByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(payoutID)...)
 }
 
 // BuildPayoutRecordByProviderPrefix builds the prefix for provider's payout records
 func BuildPayoutRecordByProviderPrefix(provider string) []byte {
-	key := append(PayoutRecordByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(PayoutRecordByProviderPrefix)+len(provider)+1)
+	key = append(key, PayoutRecordByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	return append(key, byte('/'))
 }
 
 // BuildPayoutRecordByDateKey builds the index key for payout records by date
 func BuildPayoutRecordByDateKey(timestamp int64, payoutID string) []byte {
-	key := append(PayoutRecordPrefix, byte('/'))
+	key := make([]byte, 0, len(PayoutRecordPrefix)+1+8+1+len(payoutID))
+	key = append(key, PayoutRecordPrefix...)
+	key = append(key, byte('/'))
 	// Append timestamp as big-endian uint64 for proper ordering
 	tsBytes := make([]byte, 8)
+	if timestamp < 0 {
+		timestamp = 0
+	}
+	//nolint:gosec // timestamp checked for negativity
 	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
 	key = append(key, tsBytes...)
 	key = append(key, byte('/'))
@@ -909,7 +925,9 @@ func BuildPayoutRecordByDateKey(timestamp int64, payoutID string) []byte {
 
 // BuildReconciliationJobKey builds the key for a reconciliation job
 func BuildReconciliationJobKey(jobID string) []byte {
-	return append(ReconciliationJobPrefix, []byte(jobID)...)
+	key := make([]byte, 0, len(ReconciliationJobPrefix)+len(jobID))
+	key = append(key, ReconciliationJobPrefix...)
+	return append(key, []byte(jobID)...)
 }
 
 // ParseReconciliationJobKey parses a reconciliation job key
@@ -922,27 +940,35 @@ func ParseReconciliationJobKey(key []byte) (string, error) {
 
 // BuildPayoutRecordByStatusKey builds the index key for payout records by status
 func BuildPayoutRecordByStatusKey(status PayoutStatus, payoutID string) []byte {
-	key := append(PayoutRecordByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(PayoutRecordByStatusPrefix)+2+len(payoutID))
+	key = append(key, PayoutRecordByStatusPrefix...)
+	key = append(key, byte(status))
 	key = append(key, byte('/'))
 	return append(key, []byte(payoutID)...)
 }
 
 // BuildPayoutRecordByStatusPrefix builds the prefix for payouts by status
 func BuildPayoutRecordByStatusPrefix(status PayoutStatus) []byte {
-	key := append(PayoutRecordByStatusPrefix, byte(status))
+	key := make([]byte, 0, len(PayoutRecordByStatusPrefix)+2)
+	key = append(key, PayoutRecordByStatusPrefix...)
+	key = append(key, byte(status))
 	return append(key, byte('/'))
 }
 
 // BuildPayoutRecordBySettlementKey builds the index key for payout records by settlement
 func BuildPayoutRecordBySettlementKey(settlementID string, payoutID string) []byte {
-	key := append(PayoutRecordBySettlementPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(PayoutRecordBySettlementPrefix)+len(settlementID)+1+len(payoutID))
+	key = append(key, PayoutRecordBySettlementPrefix...)
+	key = append(key, []byte(settlementID)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(payoutID)...)
 }
 
 // BuildPayoutRecordBySettlementPrefix builds the prefix for settlement's payout records
 func BuildPayoutRecordBySettlementPrefix(settlementID string) []byte {
-	key := append(PayoutRecordBySettlementPrefix, []byte(settlementID)...)
+	key := make([]byte, 0, len(PayoutRecordBySettlementPrefix)+len(settlementID)+1)
+	key = append(key, PayoutRecordBySettlementPrefix...)
+	key = append(key, []byte(settlementID)...)
 	return append(key, byte('/'))
 }
 

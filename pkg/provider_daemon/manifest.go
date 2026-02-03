@@ -331,6 +331,11 @@ type ManifestParser struct {
 	maxReplicaCount int32
 }
 
+const (
+	networkTypePrivate = "private"
+	networkTypePublic  = "public"
+)
+
 // NewManifestParser creates a new manifest parser with default settings
 func NewManifestParser() *ManifestParser {
 	return &ManifestParser{
@@ -510,7 +515,7 @@ func (mp *ManifestParser) validateService(result *ValidationResult, svc *Service
 		if port.ContainerPort <= 0 || port.ContainerPort > 65535 {
 			result.addError(portPrefix+".container_port", "invalid port number", "INVALID_VALUE")
 		}
-		if port.Protocol != "" && port.Protocol != "tcp" && port.Protocol != "udp" {
+		if port.Protocol != "" && port.Protocol != protocolTCP && port.Protocol != "udp" {
 			result.addError(portPrefix+".protocol", "protocol must be tcp or udp", "INVALID_VALUE")
 		}
 	}
@@ -539,7 +544,7 @@ func (mp *ManifestParser) validateNetwork(result *ValidationResult, net *Network
 		names[net.Name] = true
 	}
 
-	if net.Type != "private" && net.Type != "public" {
+	if net.Type != networkTypePrivate && net.Type != networkTypePublic {
 		result.addError(prefix+".type", "network type must be private or public", "INVALID_VALUE")
 	}
 }
@@ -703,4 +708,3 @@ func (m *Manifest) TotalResources() ResourceSpec {
 func (m *Manifest) ServiceCount() int {
 	return len(m.Services)
 }
-

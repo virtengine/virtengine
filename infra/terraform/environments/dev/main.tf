@@ -55,11 +55,11 @@ module "vpc" {
   name                    = local.name_prefix
   environment             = local.environment
   vpc_cidr                = var.vpc_cidr
-  az_count                = 2  # Reduced for dev cost savings
+  az_count                = 2 # Reduced for dev cost savings
   cluster_name            = local.cluster_name
   enable_nat_gateway      = true
-  create_database_subnets = false  # Not needed for dev
-  enable_flow_logs        = false  # Disabled for dev cost savings
+  create_database_subnets = false # Not needed for dev
+  enable_flow_logs        = false # Disabled for dev cost savings
   enable_vpc_endpoints    = true
 
   tags = local.common_tags
@@ -78,13 +78,13 @@ module "eks" {
   subnet_ids             = module.vpc.private_subnet_ids
   enable_public_endpoint = true
   public_access_cidrs    = var.allowed_cidr_blocks
-  log_retention_days     = 7  # Short retention for dev
-  enable_ssm_access      = true  # Enable for debugging
+  log_retention_days     = 7    # Short retention for dev
+  enable_ssm_access      = true # Enable for debugging
 
   node_groups = {
     system = {
       instance_types = ["t3.medium"]
-      capacity_type  = "SPOT"  # Use spot for dev cost savings
+      capacity_type  = "SPOT" # Use spot for dev cost savings
       disk_size      = 30
       desired_size   = 2
       max_size       = 4
@@ -119,8 +119,8 @@ module "s3" {
 
   name_prefix         = local.name_prefix
   environment         = local.environment
-  create_ml_bucket    = false  # Not needed for dev
-  create_state_bucket = false  # Use local state for dev
+  create_ml_bucket    = false # Not needed for dev
+  create_state_bucket = false # Use local state for dev
 
   tags = local.common_tags
 }
@@ -139,7 +139,7 @@ module "iam" {
   kms_key_arns               = [module.s3.kms_key_arn, module.eks.kms_key_arn]
   backup_bucket_arn          = module.s3.chain_backups_bucket_arn
   manifests_bucket_arn       = module.s3.manifests_bucket_arn
-  enable_github_actions_role = false  # Not needed for dev
+  enable_github_actions_role = false # Not needed for dev
 
   tags = local.common_tags
 }

@@ -646,4 +646,3 @@ func TestSGXEnclaveServiceImpl_SignatureVerification(t *testing.T) {
 	assert.NotEmpty(t, sigPubKey)
 	assert.Equal(t, 32, len(sigPubKey)) // Ed25519 public key is 32 bytes
 }
-

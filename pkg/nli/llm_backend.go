@@ -473,6 +473,8 @@ func (o *OpenAIBackend) SetHTTPClient(client *http.Client) {
 }
 
 // extractConfidenceFromText attempts to extract confidence score from text
+//
+//nolint:unused // Reserved for future LLM response parsing
 func extractConfidenceFromText(text string) float32 {
 	// Try to find patterns like "0.9", "0.85", "confidence: 0.7"
 	text = strings.ToLower(text)
@@ -516,13 +518,13 @@ func NewAnthropicBackend(config *AnthropicConfig) (*AnthropicBackend, error) {
 // Complete generates a completion using Anthropic Claude
 func (a *AnthropicBackend) Complete(ctx context.Context, prompt string, options *CompletionOptions) (*CompletionResult, error) {
 	// Stub implementation - would call Anthropic API in production
-	return nil, fmt.Errorf("Anthropic backend not implemented: use mock backend for testing")
+	return nil, fmt.Errorf("anthropic backend not implemented: use mock backend for testing")
 }
 
 // ClassifyIntent classifies intent using Anthropic Claude
 func (a *AnthropicBackend) ClassifyIntent(ctx context.Context, message string) (*ClassificationResult, error) {
 	// Stub implementation - would call Anthropic API in production
-	return nil, fmt.Errorf("Anthropic backend not implemented: use mock backend for testing")
+	return nil, fmt.Errorf("anthropic backend not implemented: use mock backend for testing")
 }
 
 // Close closes the Anthropic backend
@@ -550,13 +552,13 @@ func NewLocalBackend(config *LocalConfig) (*LocalBackend, error) {
 // Complete generates a completion using a local LLM
 func (l *LocalBackend) Complete(ctx context.Context, prompt string, options *CompletionOptions) (*CompletionResult, error) {
 	// Stub implementation - would use local LLM in production
-	return nil, fmt.Errorf("Local backend not implemented: use mock backend for testing")
+	return nil, fmt.Errorf("local backend not implemented: use mock backend for testing")
 }
 
 // ClassifyIntent classifies intent using a local LLM
 func (l *LocalBackend) ClassifyIntent(ctx context.Context, message string) (*ClassificationResult, error) {
 	// Stub implementation - would use local LLM in production
-	return nil, fmt.Errorf("Local backend not implemented: use mock backend for testing")
+	return nil, fmt.Errorf("local backend not implemented: use mock backend for testing")
 }
 
 // Close closes the local LLM backend
@@ -583,4 +585,3 @@ func CreateLLMBackend(config *Config) (LLMBackend, error) {
 		return nil, fmt.Errorf("unknown LLM backend: %s", config.LLMBackend)
 	}
 }
-

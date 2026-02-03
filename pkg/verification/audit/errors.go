@@ -19,4 +19,3 @@ var (
 	// ErrConnectionError indicates a connection error
 	ErrConnectionError = errors.Register("verification/audit", 4, "connection error")
 )
-

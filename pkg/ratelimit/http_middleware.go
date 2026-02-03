@@ -187,7 +187,8 @@ func (m *HTTPMiddleware) defaultOnRateLimited(w http.ResponseWriter, r *http.Req
 		"reset_at":    result.ResetAt,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	//nolint:errchkjson // HTTP response encoding
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // addRateLimitHeaders adds standard rate limit headers to the response
@@ -306,4 +307,3 @@ func HealthCheckMiddleware(healthCheckPaths ...string) func(http.Handler) http.H
 		})
 	}
 }
-

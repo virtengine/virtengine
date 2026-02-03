@@ -62,6 +62,9 @@ type InitiateRequest struct {
 	// OIDCIssuer is the specific OIDC issuer (for generic OIDC)
 	OIDCIssuer string `json:"oidc_issuer,omitempty"`
 
+	// SAMLInstitutionID is the EduGAIN institution entity ID (for SAML)
+	SAMLInstitutionID string `json:"saml_institution_id,omitempty"`
+
 	// RedirectURI is where to redirect after OIDC flow
 	RedirectURI string `json:"redirect_uri"`
 
@@ -92,6 +95,9 @@ func (r *InitiateRequest) Validate() error {
 	if r.ProviderType == veidtypes.SSOProviderOIDC && r.OIDCIssuer == "" {
 		return veidtypes.ErrInvalidSSO.Wrap("oidc_issuer required for generic OIDC provider")
 	}
+	if r.ProviderType == veidtypes.SSOProviderEduGAIN && r.SAMLInstitutionID == "" {
+		return veidtypes.ErrInvalidSSO.Wrap("saml_institution_id required for EduGAIN provider")
+	}
 	return nil
 }
 
@@ -114,6 +120,18 @@ type InitiateResponse struct {
 
 	// ExpiresAt is when this challenge expires
 	ExpiresAt time.Time `json:"expires_at"`
+
+	// SAMLRequest is the encoded SAML AuthnRequest (optional)
+	SAMLRequest string `json:"saml_request,omitempty"`
+
+	// RelayState is the SAML relay state (optional)
+	RelayState string `json:"relay_state,omitempty"`
+
+	// Binding is the SAML binding used (optional)
+	Binding string `json:"binding,omitempty"`
+
+	// PostFormHTML contains the POST form for SAML (optional)
+	PostFormHTML string `json:"post_form_html,omitempty"`
 }
 
 // CompleteRequest contains parameters for completing SSO verification.
@@ -123,6 +141,9 @@ type CompleteRequest struct {
 
 	// IDToken is the OIDC ID token received from the provider
 	IDToken string `json:"id_token"`
+
+	// SAMLResponse is the base64-encoded SAML response (EduGAIN)
+	SAMLResponse string `json:"saml_response,omitempty"`
 
 	// LinkageSignature is the user's signature of the linkage message
 	LinkageSignature []byte `json:"linkage_signature"`
@@ -139,8 +160,8 @@ func (r *CompleteRequest) Validate() error {
 	if r.ChallengeID == "" {
 		return veidtypes.ErrInvalidSSO.Wrap("challenge_id is required")
 	}
-	if r.IDToken == "" {
-		return veidtypes.ErrInvalidSSO.Wrap("id_token is required")
+	if r.IDToken == "" && r.SAMLResponse == "" {
+		return veidtypes.ErrInvalidSSO.Wrap("id_token or saml_response is required")
 	}
 	if len(r.LinkageSignature) == 0 {
 		return veidtypes.ErrInvalidBindingSignature.Wrap("linkage_signature is required")
@@ -159,6 +180,9 @@ type CodeExchangeCompleteRequest struct {
 	// AuthorizationCode is the code received from the provider
 	AuthorizationCode string `json:"authorization_code"`
 
+	// SAMLResponse is the base64-encoded SAML response (EduGAIN)
+	SAMLResponse string `json:"saml_response,omitempty"`
+
 	// LinkageSignature is the user's signature of the linkage message
 	LinkageSignature []byte `json:"linkage_signature"`
 
@@ -174,8 +198,8 @@ func (r *CodeExchangeCompleteRequest) Validate() error {
 	if r.ChallengeID == "" {
 		return veidtypes.ErrInvalidSSO.Wrap("challenge_id is required")
 	}
-	if r.AuthorizationCode == "" {
-		return veidtypes.ErrInvalidSSO.Wrap("authorization_code is required")
+	if r.AuthorizationCode == "" && r.SAMLResponse == "" {
+		return veidtypes.ErrInvalidSSO.Wrap("authorization_code or saml_response is required")
 	}
 	if len(r.LinkageSignature) == 0 {
 		return veidtypes.ErrInvalidBindingSignature.Wrap("linkage_signature is required")
@@ -317,6 +341,9 @@ type Challenge struct {
 
 	// OIDCIssuer is the OIDC issuer
 	OIDCIssuer string `json:"oidc_issuer"`
+
+	// SAMLInstitutionID is the EduGAIN institution entity ID (SAML)
+	SAMLInstitutionID string `json:"saml_institution_id,omitempty"`
 
 	// State is the OAuth2 state parameter
 	State string `json:"state"`
@@ -471,4 +498,3 @@ func DefaultConfig() Config {
 		RateLimitEnabled:        true,
 	}
 }
-

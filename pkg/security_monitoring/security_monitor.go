@@ -11,10 +11,10 @@ import (
 // SecurityMonitorConfig configures the security monitor
 type SecurityMonitorConfig struct {
 	// Enable/disable individual detectors
-	EnableTransactionDetector bool `json:"enable_transaction_detector"`
-	EnableFraudDetector       bool `json:"enable_fraud_detector"`
+	EnableTransactionDetector   bool `json:"enable_transaction_detector"`
+	EnableFraudDetector         bool `json:"enable_fraud_detector"`
 	EnableCryptoAnomalyDetector bool `json:"enable_crypto_anomaly_detector"`
-	EnableProviderSecurity    bool `json:"enable_provider_security"`
+	EnableProviderSecurity      bool `json:"enable_provider_security"`
 
 	// Alert configuration
 	AlertWebhookURL    string `json:"alert_webhook_url,omitempty"`
@@ -28,7 +28,7 @@ type SecurityMonitorConfig struct {
 	AuditLogCompression bool   `json:"audit_log_compression"`
 
 	// Incident response configuration
-	EnableAutoResponse bool `json:"enable_auto_response"`
+	EnableAutoResponse bool   `json:"enable_auto_response"`
 	PlaybookPath       string `json:"playbook_path,omitempty"`
 
 	// Thresholds
@@ -87,8 +87,8 @@ type SecurityMonitor struct {
 	lastAlertTimes    map[string]time.Time
 
 	// Channels
-	eventChan  chan *SecurityEvent
-	alertChan  chan *SecurityAlert
+	eventChan chan *SecurityEvent
+	alertChan chan *SecurityAlert
 
 	// Lifecycle
 	ctx    context.Context
@@ -99,17 +99,17 @@ type SecurityMonitor struct {
 
 // SecurityIncident represents an active security incident
 type SecurityIncident struct {
-	ID            string                `json:"id"`
-	Type          string                `json:"type"`
-	Severity      SecurityEventSeverity `json:"severity"`
-	StartedAt     time.Time             `json:"started_at"`
-	LastEventAt   time.Time             `json:"last_event_at"`
-	EventCount    int                   `json:"event_count"`
-	Description   string                `json:"description"`
-	AffectedAssets []string             `json:"affected_assets,omitempty"`
-	Status        string                `json:"status"` // open, investigating, mitigated, resolved
-	AssignedTo    string                `json:"assigned_to,omitempty"`
-	PlaybookID    string                `json:"playbook_id,omitempty"`
+	ID             string                `json:"id"`
+	Type           string                `json:"type"`
+	Severity       SecurityEventSeverity `json:"severity"`
+	StartedAt      time.Time             `json:"started_at"`
+	LastEventAt    time.Time             `json:"last_event_at"`
+	EventCount     int                   `json:"event_count"`
+	Description    string                `json:"description"`
+	AffectedAssets []string              `json:"affected_assets,omitempty"`
+	Status         string                `json:"status"` // open, investigating, mitigated, resolved
+	AssignedTo     string                `json:"assigned_to,omitempty"`
+	PlaybookID     string                `json:"playbook_id,omitempty"`
 }
 
 // NewSecurityMonitor creates a new security monitor
@@ -600,4 +600,3 @@ func (sm *SecurityMonitor) ResolveIncident(incidentID string) error {
 	}
 	return nil
 }
-

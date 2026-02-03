@@ -10,6 +10,9 @@ import (
 	"github.com/virtengine/virtengine/x/veid/types"
 )
 
+// authMethodInvalid is a test constant for invalid auth methods
+const authMethodInvalid = "invalid"
+
 // ============================================================================
 // AD SSO Tests (VE-907: Active Directory SSO)
 // ============================================================================
@@ -522,7 +525,7 @@ func TestADSSOLinkageMetadata_Validate(t *testing.T) {
 			name: "invalid auth_method",
 			metadata: func() *types.ADSSOLinkageMetadata {
 				m := createValidOIDC()
-				m.AuthMethod = "invalid"
+				m.AuthMethod = authMethodInvalid
 				return m
 			}(),
 			wantErr: true,
@@ -833,7 +836,7 @@ func TestADSSOChallenge_Validate(t *testing.T) {
 			name: "invalid auth_method",
 			challenge: func() *types.ADSSOChallenge {
 				c := createValid()
-				c.AuthMethod = "invalid"
+				c.AuthMethod = authMethodInvalid
 				return c
 			}(),
 			wantErr: true,
@@ -1033,7 +1036,7 @@ func TestADWalletBinding_Validate(t *testing.T) {
 			name: "invalid auth_method",
 			binding: func() *types.ADWalletBinding {
 				b := createValid()
-				b.AuthMethod = "invalid"
+				b.AuthMethod = authMethodInvalid
 				return b
 			}(),
 			wantErr: true,

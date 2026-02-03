@@ -570,9 +570,7 @@ func (s *paymentService) GetDispute(ctx context.Context, disputeID string) (Disp
 
 	// Store the fetched dispute
 	record := NewDisputeRecord(disp, s.config.Gateway, "system:gateway_fetch")
-	if saveErr := s.disputeStore.Save(record); saveErr != nil {
-		// Log but don't fail - the dispute was successfully fetched
-	}
+	_ = s.disputeStore.Save(record)
 
 	return disp, nil
 }
@@ -648,9 +646,7 @@ func (s *paymentService) SubmitEvidence(ctx context.Context, disputeID string, e
 			evidenceType = "receipt"
 		}
 		record.MarkEvidenceSubmitted("api:submit_evidence", evidenceType)
-		if saveErr := s.disputeStore.Save(record); saveErr != nil {
-			// Log but don't fail
-		}
+		_ = s.disputeStore.Save(record)
 	}
 
 	// Update metrics
@@ -682,9 +678,7 @@ func (s *paymentService) AcceptDispute(ctx context.Context, disputeID string) er
 	record, found := s.disputeStore.Get(disputeID)
 	if found {
 		record.MarkAccepted("api:accept_dispute", "merchant_accepted")
-		if saveErr := s.disputeStore.Save(record); saveErr != nil {
-			// Log but don't fail
-		}
+		_ = s.disputeStore.Save(record)
 	}
 
 	// Update metrics
@@ -906,7 +900,7 @@ func (s *paymentService) GetConversionRate(ctx context.Context, fromCurrency Cur
 		quoteAsset := strings.ToLower(string(fromCurrency))
 
 		price, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
-		if err == nil && price.PriceData.IsValid() {
+		if err == nil && price.IsValid() {
 			// Price is in "crypto per fiat unit", so we need to invert
 			// e.g., if 1 UVE = $0.50, then rate is 2 UVE per $1
 			var rate sdkmath.LegacyDec
@@ -1081,7 +1075,7 @@ func (r *rateLimiter) checkRefundLimit() error {
 		return ErrRateLimitExceeded
 	}
 
-	r.refundCount = append(recent, now)
+	recent = append(recent, now)
+	r.refundCount = recent
 	return nil
 }
-

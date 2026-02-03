@@ -86,7 +86,7 @@ func (AppModuleBasic) GetTxCmd() *cobra.Command {
 
 // GetQueryCmd returns the root query command for the HPC module.
 func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return nil // CLI commands to be implemented
+	return cli.GetQueryCmd()
 }
 
 // AppModule implements an application module for the HPC module.
@@ -109,6 +109,8 @@ func (am AppModule) Name() string {
 }
 
 // RegisterInvariants registers the HPC module invariants.
+//
+//nolint:staticcheck // sdk.InvariantRegistry is deprecated in upstream SDK
 func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // RegisterServices registers module services.
@@ -168,4 +170,3 @@ func (am AppModule) IsOnePerModuleType() {}
 
 // IsAppModule implements the appmodule.AppModule interface.
 func (am AppModule) IsAppModule() {}
-

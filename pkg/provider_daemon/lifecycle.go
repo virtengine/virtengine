@@ -347,7 +347,7 @@ func (lm *KeyLifecycleManager) TransitionState(keyID string, newState KeyLifecyc
 		record.DestroyedAt = &now
 		// Actually destroy the key if we have a key manager
 		if lm.keyManager != nil {
-			lm.keyManager.RevokeKey(keyID)
+			_ = lm.keyManager.RevokeKey(keyID)
 		}
 	}
 
@@ -681,4 +681,3 @@ func GenerateKeyID(keyType string) string {
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:16])
 }
-

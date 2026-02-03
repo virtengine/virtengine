@@ -19,4 +19,3 @@ func (u DenomTakeRates) Swap(i, j int) {
 func (u DenomTakeRates) Less(i, j int) bool {
 	return u[i].Denom < u[j].Denom
 }
-

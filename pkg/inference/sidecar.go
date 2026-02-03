@@ -83,6 +83,7 @@ func NewSidecarClient(config InferenceConfig) (*SidecarClient, error) {
 		extractor:   NewFeatureExtractor(DefaultFeatureExtractorConfig()),
 		determinism: NewDeterminismController(config.RandomSeed, config.ForceCPU),
 		isConnected: false,
+		useTLS:      config.SidecarTLS,
 	}
 
 	// Connect to sidecar
@@ -102,12 +103,8 @@ func (sc *SidecarClient) connect() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), sc.config.SidecarTimeout)
-	defer cancel()
-
 	// Build gRPC dial options
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithBlock())
 
 	if sc.useTLS {
 		// Use TLS with system root CAs
@@ -120,7 +117,7 @@ func (sc *SidecarClient) connect() error {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.DialContext(ctx, sc.config.SidecarAddress, opts...)
+	conn, err := grpc.NewClient(sc.config.SidecarAddress, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to dial sidecar at %s: %w", sc.config.SidecarAddress, err)
 	}
@@ -263,6 +260,9 @@ func (sc *SidecarClient) ComputeScoreWithContext(ctx context.Context, inputs *Sc
 	result.ReasonCodes = sidecarResult.ReasonCodes
 	result.FeatureContributions = sidecarResult.FeatureContributions
 	result.ComputeTimeMs = time.Since(startTime).Milliseconds()
+	if result.InputHash == "" {
+		result.InputHash = sidecarResult.InputHash
+	}
 
 	return result, nil
 }
@@ -576,4 +576,3 @@ type ModelInfoResponse struct {
 	// TensorFlowVersion is the TF version
 	TensorFlowVersion string
 }
-

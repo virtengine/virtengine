@@ -47,11 +47,11 @@ func setupPipelineTestKeeper(t *testing.T) (Keeper, sdk.Context) {
 }
 
 // createTestModelManifest creates a test model manifest
-func createTestModelManifest(t *testing.T) types.ModelManifest {
+func createTestModelManifest(_ *testing.T) types.ModelManifest {
 	models := []types.ModelInfo{
 		{
 			Name:        "deepface_facenet512",
-			Version:     "1.0.0",
+			Version:     versionOne,
 			WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			Framework:   "tensorflow",
 			Purpose:     string(types.ModelPurposeFaceRecognition),
@@ -60,21 +60,21 @@ func createTestModelManifest(t *testing.T) types.ModelManifest {
 		},
 		{
 			Name:        "craft_text_detection",
-			Version:     "1.0.0",
+			Version:     versionOne,
 			WeightsHash: "sha256:b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
 			Framework:   "pytorch",
 			Purpose:     string(types.ModelPurposeTextDetection),
 		},
 		{
 			Name:        "unet_face_extraction",
-			Version:     "1.0.0",
+			Version:     versionOne,
 			WeightsHash: "sha256:c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
 			Framework:   "tensorflow",
 			Purpose:     string(types.ModelPurposeFaceExtraction),
 		},
 	}
 
-	return *types.NewModelManifest("1.0.0", models, time.Now().UTC())
+	return *types.NewModelManifest(versionOne, models, time.Now().UTC())
 }
 
 // TestPipelineVersionRegistration tests registering a new pipeline version
@@ -86,7 +86,7 @@ func TestPipelineVersionRegistration(t *testing.T) {
 	// Register a new pipeline version
 	pv, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -95,7 +95,7 @@ func TestPipelineVersionRegistration(t *testing.T) {
 		t.Fatalf("failed to register pipeline version: %v", err)
 	}
 
-	if pv.Version != "1.0.0" {
+	if pv.Version != versionOne {
 		t.Errorf("expected version 1.0.0, got %s", pv.Version)
 	}
 
@@ -104,7 +104,7 @@ func TestPipelineVersionRegistration(t *testing.T) {
 	}
 
 	// Verify it can be retrieved
-	retrieved, found := keeper.GetPipelineVersion(ctx, "1.0.0")
+	retrieved, found := keeper.GetPipelineVersion(ctx, versionOne)
 	if !found {
 		t.Fatal("failed to retrieve registered pipeline version")
 	}
@@ -123,7 +123,7 @@ func TestPipelineVersionDuplicateRegistration(t *testing.T) {
 	// Register first version
 	_, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -135,7 +135,7 @@ func TestPipelineVersionDuplicateRegistration(t *testing.T) {
 	// Try to register same version again
 	_, err = keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:different0000000000000000000000000000000000000000000000000000000",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -154,7 +154,7 @@ func TestActivePipelineVersion(t *testing.T) {
 	// Register a pipeline version
 	_, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -170,7 +170,7 @@ func TestActivePipelineVersion(t *testing.T) {
 	}
 
 	// Activate the version
-	err = keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	err = keeper.ActivatePipelineVersion(ctx, versionOne)
 	if err != nil {
 		t.Fatalf("failed to activate pipeline version: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestActivePipelineVersion(t *testing.T) {
 		t.Fatalf("failed to get active version: %v", err)
 	}
 
-	if active.Version != "1.0.0" {
+	if active.Version != versionOne {
 		t.Errorf("expected active version 1.0.0, got %s", active.Version)
 	}
 
@@ -203,7 +203,7 @@ func TestPipelineVersionSuccession(t *testing.T) {
 	// Register and activate v1.0.0
 	_, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -212,7 +212,7 @@ func TestPipelineVersionSuccession(t *testing.T) {
 		t.Fatalf("failed to register v1.0.0: %v", err)
 	}
 
-	err = keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	err = keeper.ActivatePipelineVersion(ctx, versionOne)
 	if err != nil {
 		t.Fatalf("failed to activate v1.0.0: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestPipelineVersionSuccession(t *testing.T) {
 	}
 
 	// Check v1.0.0 is now deprecated
-	v1, found := keeper.GetPipelineVersion(ctx, "1.0.0")
+	v1, found := keeper.GetPipelineVersion(ctx, versionOne)
 	if !found {
 		t.Fatal("v1.0.0 should still exist")
 	}
@@ -269,7 +269,7 @@ func TestPipelineVersionVerification(t *testing.T) {
 	// Register and activate a version
 	pv, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -278,7 +278,7 @@ func TestPipelineVersionVerification(t *testing.T) {
 		t.Fatalf("failed to register: %v", err)
 	}
 
-	err = keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	err = keeper.ActivatePipelineVersion(ctx, versionOne)
 	if err != nil {
 		t.Fatalf("failed to activate: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestPipelineVersionVerification(t *testing.T) {
 	// Verify correct version should pass
 	err = keeper.VerifyPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		pv.ImageHash,
 		manifest.ManifestHash,
 	)
@@ -308,7 +308,7 @@ func TestPipelineVersionVerification(t *testing.T) {
 	// Verify wrong image hash should fail
 	err = keeper.VerifyPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:wrong00000000000000000000000000000000000000000000000000000000000",
 		manifest.ManifestHash,
 	)
@@ -319,7 +319,7 @@ func TestPipelineVersionVerification(t *testing.T) {
 	// Verify wrong manifest hash should fail
 	err = keeper.VerifyPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		pv.ImageHash,
 		"wrongmanifesthash",
 	)
@@ -337,7 +337,7 @@ func TestPipelineExecutionRecording(t *testing.T) {
 	// Register and activate a version
 	pv, err := keeper.RegisterPipelineVersion(
 		ctx,
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"ghcr.io/virtengine/veid-pipeline:v1.0.0",
 		manifest,
@@ -346,7 +346,7 @@ func TestPipelineExecutionRecording(t *testing.T) {
 		t.Fatalf("failed to register: %v", err)
 	}
 
-	err = keeper.ActivatePipelineVersion(ctx, "1.0.0")
+	err = keeper.ActivatePipelineVersion(ctx, versionOne)
 	if err != nil {
 		t.Fatalf("failed to activate: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestPipelineExecutionRecording(t *testing.T) {
 		PipelineExecutionParams{
 			RequestID:           "request-123",
 			ValidatorAddress:    validatorAddr,
-			PipelineVersion:     "1.0.0",
+			PipelineVersion:     versionOne,
 			ImageHash:           pv.ImageHash,
 			ModelManifestHash:   manifest.ManifestHash,
 			InputHash:           "inputhash123",
@@ -370,7 +370,7 @@ func TestPipelineExecutionRecording(t *testing.T) {
 		t.Fatalf("failed to record execution: %v", err)
 	}
 
-	if record.PipelineVersion != "1.0.0" {
+	if record.PipelineVersion != versionOne {
 		t.Errorf("expected version 1.0.0, got %s", record.PipelineVersion)
 	}
 
@@ -411,7 +411,7 @@ func TestPipelineExecutionComparison(t *testing.T) {
 
 	// Create two matching records
 	record1 := types.NewPipelineExecutionRecord(
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"manifesthash123",
 		now,
@@ -420,7 +420,7 @@ func TestPipelineExecutionComparison(t *testing.T) {
 	record1.OutputHash = "outputhash"
 
 	record2 := types.NewPipelineExecutionRecord(
-		"1.0.0",
+		versionOne,
 		"sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 		"manifesthash123",
 		now,
@@ -461,7 +461,7 @@ func TestListPipelineVersions(t *testing.T) {
 	manifest := createTestModelManifest(t)
 
 	// Register multiple versions
-	versions := []string{"1.0.0", "1.1.0", "2.0.0"}
+	versions := []string{versionOne, "1.1.0", "2.0.0"}
 	for _, v := range versions {
 		_, err := keeper.RegisterPipelineVersion(
 			ctx,
@@ -488,7 +488,7 @@ func TestConformanceTestResults(t *testing.T) {
 
 	result := &ConformanceTestResult{
 		TestID:             "test-001",
-		PipelineVersion:    "1.0.0",
+		PipelineVersion:    versionOne,
 		TestInputHash:      "inputhash",
 		ExpectedOutputHash: "expectedhash",
 		ActualOutputHash:   "expectedhash",
@@ -514,7 +514,7 @@ func TestConformanceTestResults(t *testing.T) {
 		t.Error("expected test to pass")
 	}
 
-	if retrieved.PipelineVersion != "1.0.0" {
+	if retrieved.PipelineVersion != versionOne {
 		t.Errorf("expected version 1.0.0, got %s", retrieved.PipelineVersion)
 	}
 

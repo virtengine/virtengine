@@ -615,4 +615,3 @@ func computeSummaryScore(metrics *BenchmarkMetrics) int64 {
 
 	return weightedSum / scale
 }
-

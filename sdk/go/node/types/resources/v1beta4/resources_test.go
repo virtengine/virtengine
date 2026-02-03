@@ -143,4 +143,3 @@ func TestResources_DupValid(t *testing.T) {
 	err := dup.Validate()
 	require.NoError(t, err)
 }
-

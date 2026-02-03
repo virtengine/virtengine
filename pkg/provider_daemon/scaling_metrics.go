@@ -12,6 +12,7 @@ import (
 
 var (
 	// metricsOnce ensures metrics are only registered once
+	//nolint:unused // reserved for future singleton initialization
 	metricsOnce sync.Once
 
 	// Provider daemon scaling metrics
@@ -328,4 +329,3 @@ func SetActiveLeaseCount(count float64) {
 func ObserveCrossRegionLatency(sourceRegion, targetRegion string, seconds float64) {
 	crossRegionRPCDuration.WithLabelValues(sourceRegion, targetRegion).Observe(seconds)
 }
-

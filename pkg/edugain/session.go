@@ -378,4 +378,3 @@ func CreateSessionToken(session *Session, manager SessionManager) (*SessionToken
 		WalletAddress: session.WalletAddress,
 	}, nil
 }
-

@@ -391,4 +391,3 @@ func (v *Verifier) calculateDeviation(expected interface{}, actual float64) floa
 
 	return ((actual - expectedFloat) / expectedFloat) * 100
 }
-

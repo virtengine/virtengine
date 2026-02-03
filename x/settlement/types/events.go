@@ -13,16 +13,16 @@ const (
 	EventTypeEscrowExpired   = "escrow_expired"
 
 	// Settlement events
-	EventTypeOrderSettled       = "order_settled"
-	EventTypeSettlementCreated  = "settlement_created"
-	EventTypeUsageRecorded      = "usage_recorded"
-	EventTypeUsageAcknowledged  = "usage_acknowledged"
+	EventTypeOrderSettled      = "order_settled"
+	EventTypeSettlementCreated = "settlement_created"
+	EventTypeUsageRecorded     = "usage_recorded"
+	EventTypeUsageAcknowledged = "usage_acknowledged"
 
 	// Reward events
-	EventTypeRewardsDistributed     = "rewards_distributed"
-	EventTypeRewardsClaimed         = "rewards_claimed"
-	EventTypeStakingRewardsDistributed = "staking_rewards_distributed"
-	EventTypeProviderRewardsDistributed = "provider_rewards_distributed"
+	EventTypeRewardsDistributed             = "rewards_distributed"
+	EventTypeRewardsClaimed                 = "rewards_claimed"
+	EventTypeStakingRewardsDistributed      = "staking_rewards_distributed"
+	EventTypeProviderRewardsDistributed     = "provider_rewards_distributed"
 	EventTypeVerificationRewardsDistributed = "verification_rewards_distributed"
 )
 
@@ -64,15 +64,15 @@ const (
 	AttributeKeyPeriodEnd   = "period_end"
 
 	// Other attributes
-	AttributeKeyReason           = "reason"
-	AttributeKeyEpochNumber      = "epoch_number"
-	AttributeKeyRewardSource     = "reward_source"
-	AttributeKeyRecipientCount   = "recipient_count"
-	AttributeKeyUsageUnits       = "usage_units"
-	AttributeKeyUsageType        = "usage_type"
-	AttributeKeySettlementType   = "settlement_type"
-	AttributeKeyIsFinal          = "is_final"
-	AttributeKeyBlockHeight      = "block_height"
+	AttributeKeyReason         = "reason"
+	AttributeKeyEpochNumber    = "epoch_number"
+	AttributeKeyRewardSource   = "reward_source"
+	AttributeKeyRecipientCount = "recipient_count"
+	AttributeKeyUsageUnits     = "usage_units"
+	AttributeKeyUsageType      = "usage_type"
+	AttributeKeySettlementType = "settlement_type"
+	AttributeKeyIsFinal        = "is_final"
+	AttributeKeyBlockHeight    = "block_height"
 )
 
 // EventEscrowCreated is emitted when an escrow is created
@@ -96,22 +96,22 @@ type EventEscrowActivated struct {
 
 // EventEscrowReleased is emitted when an escrow is released
 type EventEscrowReleased struct {
-	EscrowID    string `json:"escrow_id"`
-	OrderID     string `json:"order_id"`
-	Recipient   string `json:"recipient"`
-	Amount      string `json:"amount"`
-	Reason      string `json:"reason,omitempty"`
-	ReleasedAt  int64  `json:"released_at"`
+	EscrowID   string `json:"escrow_id"`
+	OrderID    string `json:"order_id"`
+	Recipient  string `json:"recipient"`
+	Amount     string `json:"amount"`
+	Reason     string `json:"reason,omitempty"`
+	ReleasedAt int64  `json:"released_at"`
 }
 
 // EventEscrowRefunded is emitted when an escrow is refunded
 type EventEscrowRefunded struct {
-	EscrowID    string `json:"escrow_id"`
-	OrderID     string `json:"order_id"`
-	Depositor   string `json:"depositor"`
-	Amount      string `json:"amount"`
-	Reason      string `json:"reason"`
-	RefundedAt  int64  `json:"refunded_at"`
+	EscrowID   string `json:"escrow_id"`
+	OrderID    string `json:"order_id"`
+	Depositor  string `json:"depositor"`
+	Amount     string `json:"amount"`
+	Reason     string `json:"reason"`
+	RefundedAt int64  `json:"refunded_at"`
 }
 
 // EventEscrowDisputed is emitted when an escrow is disputed
@@ -124,10 +124,10 @@ type EventEscrowDisputed struct {
 
 // EventEscrowExpired is emitted when an escrow expires
 type EventEscrowExpired struct {
-	EscrowID   string `json:"escrow_id"`
-	OrderID    string `json:"order_id"`
-	Balance    string `json:"balance"`
-	ExpiredAt  int64  `json:"expired_at"`
+	EscrowID  string `json:"escrow_id"`
+	OrderID   string `json:"order_id"`
+	Balance   string `json:"balance"`
+	ExpiredAt int64  `json:"expired_at"`
 }
 
 // EventOrderSettled is emitted when an order is settled
@@ -147,14 +147,14 @@ type EventOrderSettled struct {
 
 // EventUsageRecorded is emitted when usage is recorded
 type EventUsageRecorded struct {
-	UsageID     string `json:"usage_id"`
-	OrderID     string `json:"order_id"`
-	LeaseID     string `json:"lease_id"`
-	Provider    string `json:"provider"`
-	UsageUnits  uint64 `json:"usage_units"`
-	UsageType   string `json:"usage_type"`
-	TotalCost   string `json:"total_cost"`
-	RecordedAt  int64  `json:"recorded_at"`
+	UsageID    string `json:"usage_id"`
+	OrderID    string `json:"order_id"`
+	LeaseID    string `json:"lease_id"`
+	Provider   string `json:"provider"`
+	UsageUnits uint64 `json:"usage_units"`
+	UsageType  string `json:"usage_type"`
+	TotalCost  string `json:"total_cost"`
+	RecordedAt int64  `json:"recorded_at"`
 }
 
 // EventRewardsDistributed is emitted when rewards are distributed
@@ -176,40 +176,40 @@ type EventRewardsClaimed struct {
 }
 
 // ProtoMessage stubs for Event types
-func (*EventEscrowCreated) ProtoMessage()   {}
-func (*EventEscrowActivated) ProtoMessage() {}
-func (*EventEscrowReleased) ProtoMessage()  {}
-func (*EventEscrowRefunded) ProtoMessage()  {}
-func (*EventEscrowDisputed) ProtoMessage()  {}
-func (*EventEscrowExpired) ProtoMessage()   {}
+func (*EventEscrowCreated) ProtoMessage()      {}
+func (*EventEscrowActivated) ProtoMessage()    {}
+func (*EventEscrowReleased) ProtoMessage()     {}
+func (*EventEscrowRefunded) ProtoMessage()     {}
+func (*EventEscrowDisputed) ProtoMessage()     {}
+func (*EventEscrowExpired) ProtoMessage()      {}
 func (*EventRewardsDistributed) ProtoMessage() {}
-func (*EventRewardsClaimed) ProtoMessage()  {}
-func (*EventOrderSettled) ProtoMessage()    {}
-func (*EventUsageRecorded) ProtoMessage()   {}
+func (*EventRewardsClaimed) ProtoMessage()     {}
+func (*EventOrderSettled) ProtoMessage()       {}
+func (*EventUsageRecorded) ProtoMessage()      {}
 
 // Reset stubs for Event types
-func (e *EventEscrowCreated) Reset()   { *e = EventEscrowCreated{} }
-func (e *EventEscrowActivated) Reset() { *e = EventEscrowActivated{} }
-func (e *EventEscrowReleased) Reset()  { *e = EventEscrowReleased{} }
-func (e *EventEscrowRefunded) Reset()  { *e = EventEscrowRefunded{} }
-func (e *EventEscrowDisputed) Reset()  { *e = EventEscrowDisputed{} }
-func (e *EventEscrowExpired) Reset()   { *e = EventEscrowExpired{} }
+func (e *EventEscrowCreated) Reset()      { *e = EventEscrowCreated{} }
+func (e *EventEscrowActivated) Reset()    { *e = EventEscrowActivated{} }
+func (e *EventEscrowReleased) Reset()     { *e = EventEscrowReleased{} }
+func (e *EventEscrowRefunded) Reset()     { *e = EventEscrowRefunded{} }
+func (e *EventEscrowDisputed) Reset()     { *e = EventEscrowDisputed{} }
+func (e *EventEscrowExpired) Reset()      { *e = EventEscrowExpired{} }
 func (e *EventRewardsDistributed) Reset() { *e = EventRewardsDistributed{} }
-func (e *EventRewardsClaimed) Reset()  { *e = EventRewardsClaimed{} }
-func (e *EventOrderSettled) Reset()    { *e = EventOrderSettled{} }
-func (e *EventUsageRecorded) Reset()   { *e = EventUsageRecorded{} }
+func (e *EventRewardsClaimed) Reset()     { *e = EventRewardsClaimed{} }
+func (e *EventOrderSettled) Reset()       { *e = EventOrderSettled{} }
+func (e *EventUsageRecorded) Reset()      { *e = EventUsageRecorded{} }
 
 // String stubs for Event types
-func (e *EventEscrowCreated) String() string   { return fmt.Sprintf("%+v", *e) }
-func (e *EventEscrowActivated) String() string { return fmt.Sprintf("%+v", *e) }
-func (e *EventEscrowReleased) String() string  { return fmt.Sprintf("%+v", *e) }
-func (e *EventEscrowRefunded) String() string  { return fmt.Sprintf("%+v", *e) }
-func (e *EventEscrowDisputed) String() string  { return fmt.Sprintf("%+v", *e) }
-func (e *EventEscrowExpired) String() string   { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowCreated) String() string      { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowActivated) String() string    { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowReleased) String() string     { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowRefunded) String() string     { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowDisputed) String() string     { return fmt.Sprintf("%+v", *e) }
+func (e *EventEscrowExpired) String() string      { return fmt.Sprintf("%+v", *e) }
 func (e *EventRewardsDistributed) String() string { return fmt.Sprintf("%+v", *e) }
-func (e *EventRewardsClaimed) String() string  { return fmt.Sprintf("%+v", *e) }
-func (e *EventOrderSettled) String() string    { return fmt.Sprintf("%+v", *e) }
-func (e *EventUsageRecorded) String() string   { return fmt.Sprintf("%+v", *e) }
+func (e *EventRewardsClaimed) String() string     { return fmt.Sprintf("%+v", *e) }
+func (e *EventOrderSettled) String() string       { return fmt.Sprintf("%+v", *e) }
+func (e *EventUsageRecorded) String() string      { return fmt.Sprintf("%+v", *e) }
 
 // Payout events
 

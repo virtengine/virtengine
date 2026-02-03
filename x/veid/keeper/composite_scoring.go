@@ -18,11 +18,11 @@ import (
 // composite scoring algorithm per veid-flow-spec.md.
 //
 // This method:
-// 1. Uses the spec-defined weights (Doc Auth 25%, Face Match 25%, Liveness 20%,
-//    Data Consistency 15%, Historical 10%, Risk 5%)
-// 2. Stores the score version with each computed score
-// 3. Ensures deterministic computation for consensus
-// 4. Returns a score 0-100 with reason codes
+//  1. Uses the spec-defined weights (Doc Auth 25%, Face Match 25%, Liveness 20%,
+//     Data Consistency 15%, Historical 10%, Risk 5%)
+//  2. Stores the score version with each computed score
+//  3. Ensures deterministic computation for consensus
+//  4. Returns a score 0-100 with reason codes
 func (k Keeper) ComputeCompositeIdentityScore(
 	ctx sdk.Context,
 	inputs types.CompositeScoringInputs,
@@ -207,11 +207,11 @@ type ExtractedFeatures struct {
 	FaceQuality    uint32
 
 	// Liveness features
-	LivenessScore    uint32
-	BlinkDetected    bool
-	HeadMovement     bool
-	DepthCheck       bool
-	AntiSpoofScore   uint32
+	LivenessScore  uint32
+	BlinkDetected  bool
+	HeadMovement   bool
+	DepthCheck     bool
+	AntiSpoofScore uint32
 
 	// OCR features
 	NameMatchScore        uint32
@@ -349,7 +349,8 @@ func (k Keeper) buildHistoricalInput(ctx sdk.Context, accountAddr string) types.
 
 	// Get prior verification history
 	history := k.GetScoreHistory(ctx, accountAddr)
-	input.VerificationHistoryCount = uint32(len(history))
+	historyCount := safeUint32FromIntBiometric(len(history))
+	input.VerificationHistoryCount = historyCount
 
 	if len(history) > 0 {
 		// Calculate average prior score
@@ -363,18 +364,18 @@ func (k Keeper) buildHistoricalInput(ctx sdk.Context, accountAddr string) types.
 		}
 
 		// Prior verification score is the average (in basis points)
-		avgScore := totalScore / uint32(len(history))
+		avgScore := totalScore / historyCount
 		input.PriorVerificationScore = avgScore * 100 // Convert 0-100 to basis points
 
 		// Success rate in basis points
-		input.SuccessfulVerificationRate = (successCount * uint32(types.MaxBasisPoints)) / uint32(len(history))
+		input.SuccessfulVerificationRate = (successCount * uint32(types.MaxBasisPoints)) / historyCount
 	}
 
 	return input
 }
 
 // buildRiskInput builds risk indicators input from security signals
-func (k Keeper) buildRiskInput(scopes []DecryptedScope, features ExtractedFeatures) types.RiskIndicatorsInput {
+func (k Keeper) buildRiskInput(_ []DecryptedScope, features ExtractedFeatures) types.RiskIndicatorsInput {
 	input := types.RiskIndicatorsInput{
 		Present: true, // Risk indicators are always evaluated
 	}

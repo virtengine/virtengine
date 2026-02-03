@@ -138,11 +138,11 @@ type UptimeRewardConfig struct {
 // DefaultUptimeRewardConfig returns the default uptime reward configuration
 func DefaultUptimeRewardConfig() UptimeRewardConfig {
 	return UptimeRewardConfig{
-		MinUptimeForRewardPct:   95,      // 95% minimum
-		BaseRewardPerBlock:      1000,    // 1000 tokens per block
-		BonusPerPercentAboveMin: 100,     // 100 tokens per % above 95%
-		PerfectUptimeBonusBps:   500,     // 5% bonus for perfect uptime
-		MeasurementWindowBlocks: 100800,  // ~1 week at 6s blocks
+		MinUptimeForRewardPct:   95,     // 95% minimum
+		BaseRewardPerBlock:      1000,   // 1000 tokens per block
+		BonusPerPercentAboveMin: 100,    // 100 tokens per % above 95%
+		PerfectUptimeBonusBps:   500,    // 5% bonus for perfect uptime
+		MeasurementWindowBlocks: 100800, // ~1 week at 6s blocks
 	}
 }
 
@@ -167,7 +167,7 @@ type QualityRewardConfig struct {
 // DefaultQualityRewardConfig returns the default quality reward configuration
 func DefaultQualityRewardConfig() QualityRewardConfig {
 	return QualityRewardConfig{
-		MinQualityScoreForReward: 70,   // 70/100 minimum
+		MinQualityScoreForReward: 70, // 70/100 minimum
 		MaxQualityScore:          100,
 		BaseRewardPerOrder:       10000, // 10000 tokens per order
 		QualityMultiplierBps:     100,   // 1% multiplier per quality point
@@ -381,7 +381,11 @@ func (m *ProviderMetrics) CalculateSuccessRate() uint32 {
 	if m.TotalOrders == 0 {
 		return 0
 	}
-	return uint32((m.SuccessfulOrders * 100) / m.TotalOrders)
+	rate := (m.SuccessfulOrders * 100) / m.TotalOrders
+	if rate > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(rate)
 }
 
 // CalculateDisputeRate returns the dispute rate as a percentage
@@ -389,7 +393,11 @@ func (m *ProviderMetrics) CalculateDisputeRate() uint32 {
 	if m.TotalOrders == 0 {
 		return 0
 	}
-	return uint32((m.DisputedOrders * 100) / m.TotalOrders)
+	rate := (m.DisputedOrders * 100) / m.TotalOrders
+	if rate > uint64(^uint32(0)) {
+		return ^uint32(0)
+	}
+	return uint32(rate)
 }
 
 // TenureDays returns the provider's tenure in days
@@ -482,8 +490,8 @@ func (c *IncentiveCalculator) CalculateQualityReward(metrics *ProviderMetrics, o
 	baseAmount := c.Config.QualityConfig.BaseRewardPerOrder
 
 	// Quality score multiplier
-	qualityMultiplier := 100 + ((metrics.QualityScore - c.Config.QualityConfig.MinQualityScoreForReward) *
-		c.Config.QualityConfig.QualityMultiplierBps) / 100
+	qualityMultiplier := 100 + ((metrics.QualityScore-c.Config.QualityConfig.MinQualityScoreForReward)*
+		c.Config.QualityConfig.QualityMultiplierBps)/100
 
 	// Apply tier multiplier
 	tierMultiplier := metrics.Tier.Multiplier()

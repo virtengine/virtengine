@@ -23,7 +23,9 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/sdkutil"
 
 	"github.com/virtengine/virtengine/app"
+	"github.com/virtengine/virtengine/cmd/virtengine/cmd/hpc"
 	"github.com/virtengine/virtengine/cmd/virtengine/cmd/testnetify"
+	"github.com/virtengine/virtengine/cmd/virtengine/cmd/waldur"
 )
 
 // NewRootCmd creates a new root command for virtengine. It is called once in the
@@ -103,6 +105,9 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig sdkutil.EncodingConfig) 
 		testnetCmd(app.ModuleBasics(), banktypes.GenesisBalancesIterator{}),
 		PrepareGenesisCmd(app.DefaultHome, app.ModuleBasics()),
 		testnetify.GetCmd(ac.newTestnetApp),
+		waldur.GetCmd(),
+		hpc.GetCmd(),
+		hpc.GetTemplatesCmd(),
 	)
 
 	cli.ServerCmds(rootCmd, home, ac.newApp, ac.appExport, addModuleInitFlags)

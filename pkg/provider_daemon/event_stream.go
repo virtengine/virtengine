@@ -67,7 +67,7 @@ func NewCometEventSubscriber(cfg EventSubscriberConfig) (*CometEventSubscriber, 
 }
 
 // connect establishes the WebSocket connection.
-func (s *CometEventSubscriber) connect(ctx context.Context) error {
+func (s *CometEventSubscriber) connect(_ context.Context) error {
 	rpc, err := rpchttp.New(s.cfg.CometRPC, s.cfg.CometWS)
 	if err != nil {
 		return fmt.Errorf("create rpc client: %w", err)
@@ -312,7 +312,7 @@ func eventTypeFromString(s string) EventType {
 
 // SubscribeOrders subscribes to order-related events for the given provider.
 func (s *CometEventSubscriber) SubscribeOrders(ctx context.Context, providerAddress string) (<-chan OrderEvent, error) {
-	query := buildOrderQuery(providerAddress)
+	query := buildOrderQuery()
 	baseCh, err := s.Subscribe(ctx, s.cfg.SubscriberID+"-orders", query)
 	if err != nil {
 		return nil, err
@@ -335,7 +335,8 @@ func (s *CometEventSubscriber) SubscribeOrders(ctx context.Context, providerAddr
 			}
 
 			// Parse order from event data
-			if order, err := parseOrderFromEvent(event); err == nil {
+			order := parseOrderFromEvent(event)
+			if order.OrderID != "" {
 				orderEvent.Order = order
 			}
 
@@ -375,7 +376,7 @@ func (s *CometEventSubscriber) SubscribeConfig(ctx context.Context, providerAddr
 			}
 
 			// Parse config from event data
-			if config, err := parseConfigFromEvent(event); err == nil {
+			if config := parseConfigFromEvent(event); config != nil {
 				configEvent.Config = config
 			}
 
@@ -462,10 +463,8 @@ func (s *CometEventSubscriber) SetFallbackMode(fallback bool) {
 }
 
 // buildOrderQuery constructs a CometBFT query for order events.
-func buildOrderQuery(providerAddress string) string {
-	return fmt.Sprintf(
-		"tm.event='Tx' AND (marketplace_event.event_type='order_created' OR marketplace_event.event_type='order_closed')",
-	)
+func buildOrderQuery() string {
+	return "tm.event='Tx' AND (marketplace_event.event_type='order_created' OR marketplace_event.event_type='order_closed')"
 }
 
 // buildConfigQuery constructs a CometBFT query for config events.
@@ -477,7 +476,7 @@ func buildConfigQuery(providerAddress string) string {
 }
 
 // parseOrderFromEvent extracts an Order from event data.
-func parseOrderFromEvent(event MarketplaceEvent) (Order, error) {
+func parseOrderFromEvent(event MarketplaceEvent) Order {
 	order := Order{}
 
 	if id, ok := event.Data["order_id"].(string); ok {
@@ -518,11 +517,11 @@ func parseOrderFromEvent(event MarketplaceEvent) (Order, error) {
 		}
 	}
 
-	return order, nil
+	return order
 }
 
 // parseConfigFromEvent extracts a ProviderConfig from event data.
-func parseConfigFromEvent(event MarketplaceEvent) (*ProviderConfig, error) {
+func parseConfigFromEvent(event MarketplaceEvent) *ProviderConfig {
 	config := &ProviderConfig{}
 
 	if addr, ok := event.Data["provider_address"].(string); ok {
@@ -595,6 +594,5 @@ func parseConfigFromEvent(event MarketplaceEvent) (*ProviderConfig, error) {
 		}
 	}
 
-	return config, nil
+	return config
 }
-

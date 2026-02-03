@@ -224,9 +224,9 @@ func DefaultConfig() Config {
 			CurrencyGBP,
 		},
 		MinAmount: map[Currency]int64{
-			CurrencyUSD: 100,  // $1.00
-			CurrencyEUR: 100,  // €1.00
-			CurrencyGBP: 100,  // £1.00
+			CurrencyUSD: 100, // $1.00
+			CurrencyEUR: 100, // €1.00
+			CurrencyGBP: 100, // £1.00
 		},
 		MaxAmount: map[Currency]int64{
 			CurrencyUSD: 10000000, // $100,000.00
@@ -295,4 +295,3 @@ func (c Config) ValidateAmount(amount Amount) error {
 
 	return nil
 }
-

@@ -50,6 +50,9 @@ var (
 	// ErrOnChainSubmissionFailed indicates on-chain submission failed.
 	ErrOnChainSubmissionFailed = errors.New("failed to submit linkage on-chain")
 
+	// ErrChainClientNotConfigured indicates the chain client is missing.
+	ErrChainClientNotConfigured = errors.New("chain client not configured")
+
 	// ErrMaxChallengesExceeded indicates too many pending challenges.
 	ErrMaxChallengesExceeded = errors.New("maximum pending challenges exceeded")
 
@@ -65,4 +68,3 @@ var (
 	// ErrUnauthorizedRevocation indicates unauthorized revocation attempt.
 	ErrUnauthorizedRevocation = errors.New("unauthorized to revoke SSO linkage")
 )
-

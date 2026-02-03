@@ -314,7 +314,7 @@ func (s *ConformanceSuite) TestCrossRunConsistency(t *testing.T) {
 
 	for _, vec := range GoldenVectors[:2] { // Test with first 2 vectors for speed
 		t.Run(vec.ID, func(t *testing.T) {
-			var hashes []string
+			hashes := make([]string, 0, len(controllers))
 			for _, dc := range controllers {
 				hash := dc.ComputeInputHash(vec.Inputs)
 				hashes = append(hashes, hash)
@@ -447,7 +447,7 @@ func (s *ConformanceSuite) TestPlatformIndependence(t *testing.T) {
 
 			// Verify hash contains only hex characters
 			for _, c := range inputHash {
-				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 					t.Errorf("invalid character in hash: %c", c)
 				}
 			}
@@ -884,6 +884,8 @@ func TestRuntimeConfigHash(t *testing.T) {
 // ============================================================================
 
 // computeExpectedHashes computes and logs expected hashes for documentation
+//
+//nolint:unused // Reserved for documentation and debugging
 func computeExpectedHashes(t *testing.T) {
 	t.Helper()
 
@@ -899,4 +901,3 @@ func computeExpectedHashes(t *testing.T) {
 		t.Logf("  Platform:    %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 }
-

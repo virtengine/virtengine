@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,8 +41,8 @@ type StreamingConfig struct {
 // DefaultStreamingConfig returns default streaming configuration.
 func DefaultStreamingConfig() *StreamingConfig {
 	return &StreamingConfig{
-		ChunkSize:           8 * 1024 * 1024,  // 8MB
-		BufferSize:          64 * 1024,        // 64KB
+		ChunkSize:           8 * 1024 * 1024, // 8MB
+		BufferSize:          64 * 1024,       // 64KB
 		MaxConcurrentChunks: 4,
 		ProgressInterval:    time.Second,
 		VerifyOnStream:      true,
@@ -263,7 +264,7 @@ func (d *StreamingDownloader) Download(ctx context.Context, address *ContentAddr
 
 	d.started = time.Now()
 	d.progress.StartTime = d.started
-	d.progress.TotalBytes = int64(address.Size)
+	d.progress.TotalBytes = safeInt64FromUint64(address.Size)
 
 	// Get the stream from backend
 	stream, err := d.backend.GetStream(ctx, address)
@@ -326,6 +327,13 @@ func (d *StreamingDownloader) Download(ctx context.Context, address *ContentAddr
 	d.updateProgress(written)
 
 	return nil
+}
+
+func safeInt64FromUint64(value uint64) int64 {
+	if value > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(value)
 }
 
 // Cancel cancels an in-progress download.

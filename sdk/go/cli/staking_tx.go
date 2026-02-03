@@ -23,8 +23,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/version"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	cclient "github.com/virtengine/virtengine/sdk/go/node/client/v1beta3"
 )
 
@@ -784,4 +784,3 @@ func BuildCreateValidatorMsg(clientCtx client.Context, config TxCreateValidatorC
 
 	return txBldr, msg, nil
 }
-

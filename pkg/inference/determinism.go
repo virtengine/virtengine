@@ -205,6 +205,15 @@ func (dc *DeterminismController) ComputeOutputHash(rawOutput []float32) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// ComputeFeatureHash computes a deterministic hash of a feature vector.
+func (dc *DeterminismController) ComputeFeatureHash(features []float32) string {
+	h := sha256.New()
+	for _, val := range features {
+		dc.writeFloat32(h, val)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // ComputeResultHash computes a hash of the complete score result
 func (dc *DeterminismController) ComputeResultHash(result *ScoreResult) string {
 	h := sha256.New()
@@ -334,4 +343,3 @@ func (dc *DeterminismController) CheckModelDeterminism(opNames []string) (bool, 
 
 	return len(nonDetOps) == 0, nonDetOps
 }
-

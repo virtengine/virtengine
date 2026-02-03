@@ -74,10 +74,10 @@ profiles:
     virtengine:
       pricing:
         wordpress:
-          denom: uact
+          denom: uve
           amount: 10000
         db:
-          denom: uact
+          denom: uve
           amount: 10000
 deployment:
   wordpress:

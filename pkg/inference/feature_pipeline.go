@@ -25,9 +25,9 @@ import (
 type FeaturePipeline struct {
 	config PipelineConfig
 
-	faceExtractor   *FaceExtractor
-	ocrExtractor    *OCRExtractor
-	livenessScorer  *LivenessScorer
+	faceExtractor    *FaceExtractor
+	ocrExtractor     *OCRExtractor
+	livenessScorer   *LivenessScorer
 	featureExtractor *FeatureExtractor
 
 	mu               sync.RWMutex
@@ -213,12 +213,12 @@ func (p *FeaturePipeline) Extract(ctx context.Context, input *PipelineInput) (*P
 
 	// Initialize output
 	output := &PipelineOutput{
-		Features:     make([]float32, TotalFeatureDim),
-		FaceResults:  make(map[string]*FaceExtractionResult),
-		OCRResults:   make(map[string]*OCRExtractionResult),
-		ReasonCodes:  []string{},
-		Warnings:     []string{},
-		Success:      true,
+		Features:    make([]float32, TotalFeatureDim),
+		FaceResults: make(map[string]*FaceExtractionResult),
+		OCRResults:  make(map[string]*OCRExtractionResult),
+		ReasonCodes: []string{},
+		Warnings:    []string{},
+		Success:     true,
 	}
 
 	// Apply timeout
@@ -515,7 +515,7 @@ func (p *FeaturePipeline) extractLivenessFromScopes(
 	if len(scopes) == 0 {
 		return &LivenessResult{
 			IsLive:        false,
-			Decision:      "uncertain",
+			Decision:      DecisionUncertain,
 			LivenessScore: 0.0,
 			Confidence:    0.0,
 			ReasonCodes:   []string{LivenessReasonCodeInsufficientFrames},
@@ -530,7 +530,7 @@ func (p *FeaturePipeline) extractLivenessFromScopes(
 	if err != nil {
 		return &LivenessResult{
 			IsLive:        false,
-			Decision:      "uncertain",
+			Decision:      DecisionUncertain,
 			LivenessScore: 0.0,
 			Confidence:    0.0,
 			ReasonCodes:   []string{LivenessReasonCodeExtractionError},
@@ -664,7 +664,7 @@ func (p *FeaturePipeline) computeInputHash(input *PipelineInput) string {
 
 	// Hash account and metadata
 	h.Write([]byte(input.AccountAddress))
-	h.Write([]byte(fmt.Sprintf("|%d|%s|", input.BlockHeight, input.RequestID)))
+	fmt.Fprintf(h, "|%d|%s|", input.BlockHeight, input.RequestID)
 
 	// Hash scope data
 	for _, scope := range input.Scopes {
@@ -681,7 +681,7 @@ func (p *FeaturePipeline) computeFeatureHash(features []float32) string {
 	h := sha256.New()
 	for _, f := range features {
 		// Round to 6 decimal places for determinism
-		h.Write([]byte(fmt.Sprintf("%.6f|", f)))
+		fmt.Fprintf(h, "%.6f|", f)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -787,4 +787,3 @@ func NewProductionFeaturePipeline(
 
 	return NewFeaturePipeline(config)
 }
-

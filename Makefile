@@ -10,7 +10,11 @@ include make/init.mk
 
 .DEFAULT_GOAL         := bins
 
+ifeq ($(OS),Windows_NT)
+DOCKER_RUN            := docker run --rm -v $(CURDIR):/workspace -w /workspace
+else
 DOCKER_RUN            := docker run --rm -v $(shell pwd):/workspace -w /workspace
+endif
 GOLANGCI_LINT_RUN     := $(GOLANGCI_LINT) run
 LINT                   = $(GOLANGCI_LINT_RUN) ./... --disable-all --deadline=5m --enable
 
@@ -20,14 +24,29 @@ GIT_HEAD_COMMIT_LONG  := $(shell git log -1 --format='%H')
 GIT_HEAD_COMMIT_SHORT := $(shell git rev-parse --short HEAD)
 GIT_HEAD_ABBREV       := $(shell git rev-parse --abbrev-ref HEAD)
 
+ifeq ($(OS),Windows_NT)
+IS_PREREL             := false
+IS_MAINNET            := false
+else
 IS_PREREL             := $(shell $(ROOT_DIR)/script/is_prerelease.sh "$(RELEASE_TAG)" && echo "true" || echo "false")
 IS_MAINNET            := $(shell $(ROOT_DIR)/script/mainnet-from-tag.sh "$(RELEASE_TAG)" && echo "true" || echo "false")
+endif
 IS_STABLE             ?= false
 
 GO_LINKMODE            ?= external
+CGO_ENABLED            ?= $(shell go env CGO_ENABLED)
+ifeq ($(CGO_ENABLED),0)
+	ifeq ($(GO_LINKMODE),external)
+		GO_LINKMODE := internal
+	endif
+endif
 GOMOD                  ?= readonly
 BUILD_TAGS             ?= osusergo,netgo,hidraw,ledger
 GORELEASER_STRIP_FLAGS ?=
+
+ifeq ($(OS),Windows_NT)
+GO_LINKMODE            := internal
+endif
 
 ifeq ($(IS_MAINNET), true)
 	ifeq ($(IS_PREREL), false)
@@ -46,10 +65,16 @@ GORELEASER_BUILD_VARS := \
 -X github.com/cosmos/cosmos-sdk/version.Version=$(RELEASE_TAG) \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
+ifeq ($(OS),Windows_NT)
+GIT_VERSION := $(shell powershell -NoProfile -Command "try { (git describe --tags) -replace '^v','' } catch { '0.0.0' }")
+else
+GIT_VERSION := $(shell git describe --tags 2>/dev/null | sed 's/^v//' || echo "0.0.0")
+endif
+
 ldflags = -linkmode=$(GO_LINKMODE) -X github.com/cosmos/cosmos-sdk/version.Name=virtengine \
 -X github.com/cosmos/cosmos-sdk/version.AppName=virtengine \
 -X github.com/cosmos/cosmos-sdk/version.BuildTags="$(BUILD_TAGS)" \
--X github.com/cosmos/cosmos-sdk/version.Version=$(shell git describe --tags 2>/dev/null | sed 's/^v//' || echo "0.0.0") \
+-X github.com/cosmos/cosmos-sdk/version.Version=$(GIT_VERSION) \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
 # check for nostrip option

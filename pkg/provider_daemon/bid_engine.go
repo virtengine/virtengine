@@ -647,7 +647,7 @@ func (be *BidEngine) configStreamWatcher() {
 				}
 				be.configMu.Unlock()
 			}
-			
+
 			// Acknowledge config event
 			be.eventSubscriber.SetCheckpoint(event.Sequence)
 
@@ -715,7 +715,7 @@ func (be *BidEngine) orderStreamWatcher() {
 				// Attach sequence to order for acknowledgement
 				order := event.Order
 				order.Sequence = event.Sequence
-				
+
 				select {
 				case be.orderChan <- order:
 				default:
@@ -1002,4 +1002,3 @@ func (be *BidEngine) ManualBid(ctx context.Context, order Order) (*Bid, error) {
 
 	return bid, nil
 }
-

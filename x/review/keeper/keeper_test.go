@@ -20,6 +20,12 @@ import (
 	"github.com/virtengine/virtengine/x/review/types"
 )
 
+// Test address constants for review keeper tests
+const (
+	testReviewerAddr       = "cosmos1reviewer123456789012345678901234567890"
+	testReviewProviderAddr = "cosmos1provider123456789012345678901234567890"
+)
+
 // mockMarketKeeper is a mock implementation of MarketKeeper
 type mockMarketKeeper struct {
 	orders map[string]*mockOrder
@@ -199,8 +205,8 @@ func createTestReview(t *testing.T, reviewerAddr, providerAddr, orderID string, 
 func TestSubmitReview_Success(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 	orderID := "order-001"
 
 	// Add completed order to mock
@@ -237,8 +243,8 @@ func TestSubmitReview_Success(t *testing.T) {
 func TestSubmitReview_InvalidRating(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 	orderID := "order-002"
 
 	mockMarket.AddCompletedOrder(orderID, reviewerAddr, providerAddr)
@@ -288,8 +294,8 @@ func TestSubmitReview_InvalidRating(t *testing.T) {
 func TestSubmitReview_ValidRatings(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 
 	for rating := uint8(1); rating <= 5; rating++ {
 		orderID := "order-rating-" + string(rune('0'+rating))
@@ -308,8 +314,8 @@ func TestSubmitReview_ValidRatings(t *testing.T) {
 func TestSubmitReview_OrderNotCompleted(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 	orderID := "order-incomplete"
 
 	// Add incomplete order
@@ -331,8 +337,8 @@ func TestSubmitReview_OrderNotCompleted(t *testing.T) {
 func TestSubmitReview_OrderNotFound(t *testing.T) {
 	k, ctx, _, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 	orderID := "order-nonexistent"
 
 	// Don't add order to mock
@@ -355,7 +361,7 @@ func TestSubmitReview_UnauthorizedReviewer(t *testing.T) {
 
 	realCustomer := "cosmos1realcustomer12345678901234567890123456"
 	fakeReviewer := "cosmos1fakereviewer1234567890123456789012345"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	providerAddr := testReviewProviderAddr
 	orderID := "order-wrong-customer"
 
 	// Add order with different customer
@@ -378,8 +384,8 @@ func TestSubmitReview_UnauthorizedReviewer(t *testing.T) {
 func TestSubmitReview_DuplicateReview(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 	orderID := "order-dup"
 
 	mockMarket.AddCompletedOrder(orderID, reviewerAddr, providerAddr)
@@ -405,8 +411,8 @@ func TestSubmitReview_DuplicateReview(t *testing.T) {
 
 // Test: Content hash integrity
 func TestReview_ContentHashIntegrity(t *testing.T) {
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 
 	orderRef := types.OrderReference{
 		OrderID:         "order-hash-test",
@@ -458,8 +464,8 @@ func TestReview_ContentHashIntegrity(t *testing.T) {
 func TestProviderAggregation(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 
 	// Submit multiple reviews
 	ratings := []uint8{5, 4, 5, 3, 4}
@@ -572,8 +578,8 @@ func TestRatingDistribution(t *testing.T) {
 
 // Test: Review text validation
 func TestReviewTextValidation(t *testing.T) {
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 
 	orderRef := types.OrderReference{
 		OrderID:         "order-text-test",
@@ -619,7 +625,7 @@ func TestReviewTextValidation(t *testing.T) {
 func TestGetReviewsByProvider(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
 	provider1 := "cosmos1provider1234567890123456789012345678a"
 	provider2 := "cosmos1provider1234567890123456789012345678b"
 
@@ -660,8 +666,8 @@ func TestGetReviewsByProvider(t *testing.T) {
 func TestGetReviewByOrder(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 	orderID := "order-lookup"
 
 	mockMarket.AddCompletedOrder(orderID, reviewerAddr, providerAddr)
@@ -740,8 +746,8 @@ func TestDeleteReview(t *testing.T) {
 
 // Test: Review state transitions
 func TestReviewStateTransitions(t *testing.T) {
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 
 	orderRef := types.OrderReference{
 		OrderID:         "order-state",
@@ -1015,7 +1021,7 @@ func TestReviewsSliceMethods(t *testing.T) {
 func TestTopProvidersByRating(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
 
 	// Create providers with different ratings
 	providers := []struct {
@@ -1136,14 +1142,15 @@ func TestMsgSubmitReviewValidation(t *testing.T) {
 func TestIterators(t *testing.T) {
 	k, ctx, mockMarket, _ := setupKeeper(t)
 
-	reviewerAddr := "cosmos1reviewer123456789012345678901234567890"
-	providerAddr := "cosmos1provider123456789012345678901234567890"
+	reviewerAddr := testReviewerAddr
+	providerAddr := testReviewProviderAddr
 
 	// Add 5 reviews
 	for i := 0; i < 5; i++ {
 		orderID := "order-iter-" + string(rune('a'+i))
 		mockMarket.AddCompletedOrder(orderID, reviewerAddr, providerAddr)
-		review := createTestReview(t, reviewerAddr, providerAddr, orderID, uint8(i%5+1))
+		rating := safeUint8FromInt(i%5 + 1)
+		review := createTestReview(t, reviewerAddr, providerAddr, orderID, rating)
 		if err := k.SubmitReview(ctx, review); err != nil {
 			t.Fatalf("failed to submit review: %v", err)
 		}
@@ -1170,4 +1177,14 @@ func TestIterators(t *testing.T) {
 	if aggCount != 1 {
 		t.Errorf("expected 1 aggregation, got %d", aggCount)
 	}
+}
+
+func safeUint8FromInt(value int) uint8 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint8(0)) {
+		return ^uint8(0)
+	}
+	return uint8(value)
 }

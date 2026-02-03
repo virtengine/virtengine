@@ -48,7 +48,7 @@ func (q GRPCQuerier) IdentityRecord(goCtx context.Context, req *types.QueryIdent
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	record, found := q.Keeper.GetIdentityRecord(ctx, address)
+	record, found := q.GetIdentityRecord(ctx, address)
 	if !found {
 		return &types.QueryIdentityRecordResponse{
 			Record: nil,
@@ -81,7 +81,7 @@ func (q GRPCQuerier) Scope(goCtx context.Context, req *types.QueryScopeRequest) 
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	scope, found := q.Keeper.GetScope(ctx, address, req.ScopeID)
+	scope, found := q.GetScope(ctx, address, req.ScopeID)
 	if !found {
 		return &types.QueryScopeResponse{
 			Scope: nil,
@@ -114,7 +114,7 @@ func (q GRPCQuerier) ScopesByType(goCtx context.Context, req *types.QueryScopesB
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	scopes := q.Keeper.GetScopesByType(ctx, address, req.ScopeType)
+	scopes := q.GetScopesByType(ctx, address, req.ScopeType)
 
 	return &types.QueryScopesByTypeResponse{
 		Scopes: scopes,
@@ -138,7 +138,7 @@ func (q GRPCQuerier) VerificationHistory(goCtx context.Context, req *types.Query
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	wallet, found := q.Keeper.GetWallet(ctx, address)
+	wallet, found := q.GetWallet(ctx, address)
 	if !found {
 		return &types.QueryVerificationHistoryResponse{
 			Entries:    []types.PublicVerificationHistoryEntry{},
@@ -198,9 +198,10 @@ func (q GRPCQuerier) ApprovedClients(goCtx context.Context, req *types.QueryAppr
 	var allClients []types.ApprovedClient
 	totalCount := uint32(0)
 
-	q.Keeper.WithApprovedClients(ctx, func(client types.ApprovedClient) bool {
+	q.WithApprovedClients(ctx, func(client types.ApprovedClient) bool {
 		totalCount++
 		// Apply offset and limit
+		//nolint:gosec // slice length is non-negative
 		if totalCount > req.Offset && uint32(len(allClients)) < limit {
 			allClients = append(allClients, client)
 		}
@@ -221,7 +222,7 @@ func (q GRPCQuerier) Params(goCtx context.Context, req *types.QueryParamsRequest
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
-	params := q.Keeper.GetParams(ctx)
+	params := q.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
 		Params: params,
@@ -246,7 +247,7 @@ func (q GRPCQuerier) IdentityWallet(goCtx context.Context, req *types.QueryIdent
 	}
 
 	// Get public wallet info
-	publicInfo, found := q.Keeper.GetWalletPublicMetadata(ctx, address)
+	publicInfo, found := q.GetWalletPublicMetadata(ctx, address)
 	if !found {
 		return &types.QueryIdentityWalletResponse{
 			Wallet: nil,
@@ -277,7 +278,7 @@ func (q GRPCQuerier) WalletScopes(goCtx context.Context, req *types.QueryWalletS
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	wallet, found := q.Keeper.GetWallet(ctx, address)
+	wallet, found := q.GetWallet(ctx, address)
 	if !found {
 		return &types.QueryWalletScopesResponse{
 			Scopes:      []types.WalletScopeInfo{},
@@ -355,7 +356,7 @@ func (q GRPCQuerier) ConsentSettings(goCtx context.Context, req *types.QueryCons
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	wallet, found := q.Keeper.GetWallet(ctx, address)
+	wallet, found := q.GetWallet(ctx, address)
 	if !found {
 		return &types.QueryConsentSettingsResponse{
 			ScopeConsents:  []types.PublicConsentInfo{},
@@ -421,7 +422,7 @@ func (q GRPCQuerier) DerivedFeatures(goCtx context.Context, req *types.QueryDeri
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	wallet, found := q.Keeper.GetWallet(ctx, address)
+	wallet, found := q.GetWallet(ctx, address)
 	if !found {
 		return &types.QueryDerivedFeaturesResponse{Features: nil, Found: false}, nil
 	}
@@ -447,7 +448,7 @@ func (q GRPCQuerier) DerivedFeatureHashes(goCtx context.Context, req *types.Quer
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	wallet, found := q.Keeper.GetWallet(ctx, address)
+	wallet, found := q.GetWallet(ctx, address)
 	if !found {
 		return &types.QueryDerivedFeatureHashesResponse{
 			Allowed:      false,
@@ -501,7 +502,7 @@ func (q GRPCQuerier) Appeal(goCtx context.Context, req *types.QueryAppealRequest
 		return nil, status.Error(codes.InvalidArgument, "appeal_id cannot be empty")
 	}
 
-	appeal, found := q.Keeper.GetAppeal(ctx, req.AppealID)
+	appeal, found := q.GetAppeal(ctx, req.AppealID)
 	if !found {
 		return &types.QueryAppealResponse{Appeal: nil}, nil
 	}
@@ -526,8 +527,8 @@ func (q GRPCQuerier) AppealsByAccount(goCtx context.Context, req *types.QueryApp
 		return nil, status.Error(codes.InvalidArgument, errMsgInvalidAccountAddress)
 	}
 
-	appeals := q.Keeper.GetAppealsByAccount(ctx, req.AccountAddress)
-	summary := q.Keeper.GetAppealSummary(ctx, req.AccountAddress)
+	appeals := q.GetAppealsByAccount(ctx, req.AccountAddress)
+	summary := q.GetAppealSummary(ctx, req.AccountAddress)
 
 	return &types.QueryAppealsByAccountResponse{
 		Appeals: appeals,
@@ -543,8 +544,8 @@ func (q GRPCQuerier) PendingAppeals(goCtx context.Context, req *types.QueryPendi
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
-	allAppeals := q.Keeper.GetPendingAppeals(ctx)
-	total := uint32(len(allAppeals))
+	allAppeals := q.GetPendingAppeals(ctx)
+	total := safeUint32FromIntBiometric(len(allAppeals))
 
 	// Apply offset
 	offset := int(req.Offset)
@@ -579,7 +580,7 @@ func (q GRPCQuerier) AppealParams(goCtx context.Context, req *types.QueryAppealP
 		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
 	}
 
-	params := q.Keeper.GetAppealParams(ctx)
+	params := q.GetAppealParams(ctx)
 
 	return &types.QueryAppealParamsResponse{
 		Params: params,

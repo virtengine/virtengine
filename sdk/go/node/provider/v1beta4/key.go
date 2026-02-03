@@ -30,4 +30,3 @@ func ProviderPublicKeyPrefix() []byte {
 func DomainVerificationPrefix() []byte {
 	return []byte{0x03}
 }
-

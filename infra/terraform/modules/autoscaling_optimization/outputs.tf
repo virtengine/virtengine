@@ -18,10 +18,10 @@ output "scheduled_scaling_enabled" {
 output "scaling_schedule" {
   description = "Scheduled scaling configuration"
   value = local.scaling_config.enable_scheduled_scaling ? {
-    scale_down_time     = local.scaling_config.scale_down_time
-    scale_up_time       = local.scaling_config.scale_up_time
-    min_off_hours       = local.scaling_config.min_capacity_off_hours
-    weekend_shutdown    = var.enable_weekend_shutdown
+    scale_down_time  = local.scaling_config.scale_down_time
+    scale_up_time    = local.scaling_config.scale_up_time
+    min_off_hours    = local.scaling_config.min_capacity_off_hours
+    weekend_shutdown = var.enable_weekend_shutdown
   } : null
 }
 
@@ -29,9 +29,9 @@ output "cluster_autoscaler_config" {
   description = "Cluster Autoscaler configuration values"
   value = var.deploy_cluster_autoscaler_config ? {
     scale_down_utilization_threshold = var.environment == "prod" ? "0.5" : "0.6"
-    scale_down_unneeded_time        = var.environment == "prod" ? "10m" : "5m"
-    balance_similar_node_groups     = true
-    expander                        = "priority"
+    scale_down_unneeded_time         = var.environment == "prod" ? "10m" : "5m"
+    balance_similar_node_groups      = true
+    expander                         = "priority"
   } : null
 }
 

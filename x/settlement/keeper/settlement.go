@@ -348,7 +348,10 @@ func (k Keeper) calculateTotalUsage(ctx sdk.Context, orderID string) uint64 {
 // AutoSettle performs automatic settlement for orders due for settlement
 func (k Keeper) AutoSettle(ctx sdk.Context) error {
 	params := k.GetParams(ctx)
-	settlementPeriod := time.Duration(params.SettlementPeriod) * time.Second
+	settlementPeriod, err := durationFromSeconds(params.SettlementPeriod)
+	if err != nil {
+		return err
+	}
 
 	k.WithEscrowsByState(ctx, types.EscrowStateActive, func(escrow types.EscrowAccount) bool {
 		// Check if due for settlement

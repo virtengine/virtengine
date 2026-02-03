@@ -68,4 +68,3 @@ func (obj Certificates) Contains(cert Certificate) bool {
 
 	return false
 }
-

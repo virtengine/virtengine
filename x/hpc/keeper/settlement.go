@@ -255,9 +255,9 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 		JobCompletionStatus:    job.State,
 		FormulaVersion:         record.FormulaVersion,
 		CalculationDetails: types.RewardCalculationDetails{
-			TotalUsageValue:        record.BillableAmount.String(),
-			RewardPoolContribution: record.ProviderReward.String(),
-			PlatformFeeRate:        fmt.Sprintf("%d", k.GetParams(ctx).PlatformFeeRateBps),
+			TotalUsageValue:         record.BillableAmount.String(),
+			RewardPoolContribution:  record.ProviderReward.String(),
+			PlatformFeeRate:         fmt.Sprintf("%d", k.GetParams(ctx).PlatformFeeRateBps),
 			NodeContributionFormula: "proportional_time_weighted",
 			InputMetrics: map[string]string{
 				"wall_clock_seconds": fmt.Sprintf("%d", record.UsageMetrics.WallClockSeconds),
@@ -277,6 +277,8 @@ func (k Keeper) DistributeJobRewardsFromSettlement(ctx sdk.Context, jobID string
 }
 
 // calculateNodeRewards calculates rewards for each node based on contribution
+//
+//nolint:unused // reserved for future per-node reward distribution
 func (k Keeper) calculateNodeRewards(ctx sdk.Context, totalReward sdk.Coins, nodeIDs []string) []types.HPCRewardRecipient {
 	if len(nodeIDs) == 0 {
 		return nil

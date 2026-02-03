@@ -145,4 +145,3 @@ func (s *FeegrantCLITestSuite) TestCmdGetFeeGrantsByGranter() {
 		})
 	}
 }
-

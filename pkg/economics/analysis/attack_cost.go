@@ -176,7 +176,7 @@ func (a *AttackAnalyzer) AnalyzeCartellization(
 	if len(validators) == 0 {
 		return economics.AttackAnalysis{
 			AttackType: "cartel_formation",
-			RiskLevel:  "unknown",
+			RiskLevel:  alignmentUnknown,
 		}
 	}
 
@@ -320,7 +320,7 @@ func (a *AttackAnalyzer) GenerateSecurityRecommendations(
 
 func (a *AttackAnalyzer) estimateAcquisitionTime(tokensNeeded, totalSupply *big.Int) string {
 	if totalSupply == nil || totalSupply.Sign() == 0 {
-		return "unknown"
+		return alignmentUnknown
 	}
 
 	pct := new(big.Int).Mul(tokensNeeded, big.NewInt(100))
@@ -342,7 +342,7 @@ func (a *AttackAnalyzer) estimateAcquisitionTime(tokensNeeded, totalSupply *big.
 
 func (a *AttackAnalyzer) assessDetectionDifficulty(validators []economics.ValidatorState, tokensNeeded *big.Int) string {
 	if len(validators) == 0 {
-		return "unknown"
+		return alignmentUnknown
 	}
 
 	// If attacker needs to acquire significant stake, it's easier to detect
@@ -425,4 +425,3 @@ func formatCartelMitigation(minFor33, minFor67 int64) string {
 		big.NewInt(minFor67).String() + " validators for 67% (safety attack). " +
 		"Encourage stake distribution and implement validator caps."
 }
-

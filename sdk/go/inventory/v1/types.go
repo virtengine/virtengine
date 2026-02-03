@@ -24,4 +24,3 @@ type InventoryMetrics struct {
 	Available   uint64   `json:"available"`
 	Allocatable uint64   `json:"allocatable"`
 }
-

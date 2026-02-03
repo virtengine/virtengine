@@ -100,7 +100,7 @@ func TestMemoryCache_LRUEviction(t *testing.T) {
 	_, _ = cache.Get(ctx, "key1")
 
 	// Add new item, should evict key2 (least recently used)
-	cache.Set(ctx, "key4", "value4")
+	_ = cache.Set(ctx, "key4", "value4")
 
 	// key2 should be evicted
 	if cache.Exists(ctx, "key2") {
@@ -138,7 +138,7 @@ func TestMemoryCache_Stats(t *testing.T) {
 	_ = cache.Set(ctx, "key1", "value1")
 	_, _ = cache.Get(ctx, "key1") // hit
 	_, _ = cache.Get(ctx, "key1") // hit
-	cache.Get(ctx, "miss") // miss
+	_, _ = cache.Get(ctx, "miss") // miss
 
 	stats = cache.Stats()
 	if stats.Hits != 2 {
@@ -169,9 +169,9 @@ func TestMemoryCache_Clear(t *testing.T) {
 	ctx := context.Background()
 
 	// Add items
-	cache.Set(ctx, "key1", "value1")
-	cache.Set(ctx, "key2", "value2")
-	cache.Set(ctx, "key3", "value3")
+	_ = cache.Set(ctx, "key1", "value1")
+	_ = cache.Set(ctx, "key2", "value2")
+	_ = cache.Set(ctx, "key3", "value3")
 
 	if cache.Size(ctx) != 3 {
 		t.Errorf("expected size 3, got %d", cache.Size(ctx))
@@ -469,9 +469,9 @@ func TestMetrics_RegisterAndReport(t *testing.T) {
 
 	// Add some data
 	ctx := context.Background()
-	cache.Set(ctx, "key1", "value1")
-	cache.Get(ctx, "key1") // hit
-	cache.Get(ctx, "miss") // miss
+	_ = cache.Set(ctx, "key1", "value1")
+	_, _ = cache.Get(ctx, "key1") // hit
+	_, _ = cache.Get(ctx, "miss") // miss
 
 	// Get report
 	report := metrics.GetReport()
@@ -504,12 +504,12 @@ func BenchmarkMemoryCache_Get(b *testing.B) {
 
 	// Pre-populate
 	for i := 0; i < 1000; i++ {
-		cache.Set(ctx, "key"+string(rune(i)), "value")
+		_ = cache.Set(ctx, "key"+string(rune(i)), "value")
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cache.Get(ctx, "key"+string(rune(i%1000)))
+		_, _ = cache.Get(ctx, "key"+string(rune(i%1000)))
 	}
 }
 
@@ -524,7 +524,7 @@ func BenchmarkMemoryCache_Set(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cache.Set(ctx, "key"+string(rune(i%10000)), "value")
+		_ = cache.Set(ctx, "key"+string(rune(i%10000)), "value")
 	}
 }
 
@@ -539,7 +539,7 @@ func BenchmarkMemoryCache_ConcurrentAccess(b *testing.B) {
 
 	// Pre-populate
 	for i := 0; i < 1000; i++ {
-		cache.Set(ctx, "key"+string(rune(i)), "value")
+		_ = cache.Set(ctx, "key"+string(rune(i)), "value")
 	}
 
 	b.ResetTimer()
@@ -548,12 +548,11 @@ func BenchmarkMemoryCache_ConcurrentAccess(b *testing.B) {
 		for pb.Next() {
 			key := "key" + string(rune(i%1000))
 			if i%2 == 0 {
-				cache.Get(ctx, key)
+				_, _ = cache.Get(ctx, key)
 			} else {
-				cache.Set(ctx, key, "value")
+				_ = cache.Set(ctx, key, "value")
 			}
 			i++
 		}
 	})
 }
-

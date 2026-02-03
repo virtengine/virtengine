@@ -229,4 +229,3 @@ func BenchmarkScrubFixedSize32(b *testing.B) {
 		ScrubFixedSize(&key)
 	}
 }
-

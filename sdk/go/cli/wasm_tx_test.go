@@ -6,7 +6,6 @@ import (
 
 	"github.com/CosmWasm/wasmd/x/wasm/ioutils"
 	"github.com/CosmWasm/wasmd/x/wasm/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -16,7 +15,7 @@ import (
 )
 
 func TestParseVerificationFlags(t *testing.T) {
-	mySender := sdk.AccAddress([]byte("wasm_test_sender_1234567890"))
+	mySender := testAccAddress(1)
 
 	specs := map[string]struct {
 		srcPath     string
@@ -81,10 +80,9 @@ func TestParseVerificationFlags(t *testing.T) {
 }
 
 func TestParseAccessConfigFlags(t *testing.T) {
-	// Generate valid test addresses
-	addr1 := sdk.AccAddress([]byte("wasm_access_addr1_test"))
-	addr2 := sdk.AccAddress([]byte("wasm_access_addr2_test_long"))
-	
+	addr1 := testAccAddressString(2)
+	addr2 := testAccAddressString(3)
+
 	specs := map[string]struct {
 		args   []string
 		expCfg *types.AccessConfig
@@ -99,7 +97,7 @@ func TestParseAccessConfigFlags(t *testing.T) {
 			expCfg: &types.AccessConfig{Permission: types.AccessTypeEverybody},
 		},
 		"only address": {
-			args:   []string{"--instantiate-only-address=" + addr1.String()},
+			args:   []string{"--instantiate-only-address=" + addr1},
 			expErr: true,
 		},
 		"only address - invalid": {
@@ -107,11 +105,11 @@ func TestParseAccessConfigFlags(t *testing.T) {
 			expErr: true,
 		},
 		"any of address": {
-			args:   []string{"--instantiate-anyof-addresses=" + addr1.String() + "," + addr2.String()},
-			expCfg: &types.AccessConfig{Permission: types.AccessTypeAnyOfAddresses, Addresses: []string{addr1.String(), addr2.String()}},
+			args:   []string{"--instantiate-anyof-addresses=" + addr1 + "," + addr2},
+			expCfg: &types.AccessConfig{Permission: types.AccessTypeAnyOfAddresses, Addresses: []string{addr1, addr2}},
 		},
 		"any of address - invalid": {
-			args:   []string{"--instantiate-anyof-addresses=" + addr1.String() + ",foo"},
+			args:   []string{"--instantiate-anyof-addresses=" + addr1 + ",foo"},
 			expErr: true,
 		},
 		"not set": {
@@ -134,10 +132,9 @@ func TestParseAccessConfigFlags(t *testing.T) {
 }
 
 func TestParseStoreCodeGrants(t *testing.T) {
-	// Generate valid test addresses  
-	addr1 := sdk.AccAddress([]byte("wasm_grant_addr1_test"))
-	addr2 := sdk.AccAddress([]byte("wasm_grant_addr2_test_long"))
-	
+	addr1 := testAccAddressString(4)
+	addr2 := testAccAddressString(5)
+
 	specs := map[string]struct {
 		src    []string
 		exp    []types.CodeGrant
@@ -164,37 +161,37 @@ func TestParseStoreCodeGrants(t *testing.T) {
 			}},
 		},
 		"wildcard : any of addresses - single": {
-			src: []string{"*:" + addr1.String()},
+			src: []string{"*:" + addr1},
 			exp: []types.CodeGrant{
 				{
 					CodeHash: []byte("*"),
 					InstantiatePermission: &types.AccessConfig{
 						Permission: types.AccessTypeAnyOfAddresses,
-						Addresses:  []string{addr1.String()},
+						Addresses:  []string{addr1},
 					},
 				},
 			},
 		},
 		"wildcard : any of addresses - multiple": {
-			src: []string{"*:" + addr1.String() + "," + addr2.String()},
+			src: []string{"*:" + addr1 + "," + addr2},
 			exp: []types.CodeGrant{
 				{
 					CodeHash: []byte("*"),
 					InstantiatePermission: &types.AccessConfig{
 						Permission: types.AccessTypeAnyOfAddresses,
-						Addresses:  []string{addr1.String(), addr2.String()},
+						Addresses:  []string{addr1, addr2},
 					},
 				},
 			},
 		},
 		"multiple code hashes with different permissions": {
-			src: []string{"any_checksum_1:" + addr1.String() + "," + addr2.String(), "any_checksum_2:nobody"},
+			src: []string{"any_checksum_1:" + addr1 + "," + addr2, "any_checksum_2:nobody"},
 			exp: []types.CodeGrant{
 				{
 					CodeHash: []byte("any_checksum_1"),
 					InstantiatePermission: &types.AccessConfig{
 						Permission: types.AccessTypeAnyOfAddresses,
-						Addresses:  []string{addr1.String(), addr2.String()},
+						Addresses:  []string{addr1, addr2},
 					},
 				}, {
 					CodeHash: []byte("any_checksum_2"),
@@ -219,7 +216,7 @@ func TestParseStoreCodeGrants(t *testing.T) {
 			expErr: true,
 		},
 		"code hash : any of addresses - duplicate address": {
-			src:    []string{"any_checksum_1:" + addr1.String() + "," + addr1.String()},
+			src:    []string{"any_checksum_1:" + addr1 + "," + addr1},
 			expErr: true,
 		},
 		"empty code hash": {
@@ -239,4 +236,3 @@ func TestParseStoreCodeGrants(t *testing.T) {
 		})
 	}
 }
-

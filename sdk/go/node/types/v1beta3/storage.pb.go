@@ -88,7 +88,9 @@ func init() {
 	proto.RegisterType((*Storage)(nil), "virtengine.base.v1beta3.Storage")
 }
 
-func init() { proto.RegisterFile("virtengine/base/v1beta3/storage.proto", fileDescriptor_293fa891b98ded01) }
+func init() {
+	proto.RegisterFile("virtengine/base/v1beta3/storage.proto", fileDescriptor_293fa891b98ded01)
+}
 
 var fileDescriptor_293fa891b98ded01 = []byte{
 	// 336 bytes of a gzipped FileDescriptorProto
@@ -475,4 +477,3 @@ var (
 	ErrIntOverflowStorage          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupStorage = fmt.Errorf("proto: unexpected end of group")
 )
-

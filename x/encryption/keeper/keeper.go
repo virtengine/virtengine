@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"encoding/json"
+	"math"
 
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -154,7 +155,10 @@ func (k Keeper) RegisterRecipientKey(ctx sdk.Context, address sdk.AccAddress, pu
 
 	// Check max keys per account
 	existingKeys := k.GetRecipientKeys(ctx, address)
-	if uint32(len(existingKeys)) >= params.MaxKeysPerAccount {
+	if len(existingKeys) > int(^uint32(0)) {
+		return "", types.ErrInvalidPublicKey.Wrap("existing keys overflow")
+	}
+	if safeUint32FromInt(len(existingKeys)) >= params.MaxKeysPerAccount {
 		return "", types.ErrInvalidPublicKey.Wrapf("account has reached max keys limit: %d", params.MaxKeysPerAccount)
 	}
 
@@ -350,7 +354,10 @@ func (k Keeper) ValidateEnvelope(ctx sdk.Context, envelope *types.EncryptedPaylo
 	}
 
 	// Check max recipients
-	if uint32(len(envelope.RecipientKeyIDs)) > params.MaxRecipientsPerEnvelope {
+	if len(envelope.RecipientKeyIDs) > int(^uint32(0)) {
+		return types.ErrInvalidEnvelope.Wrap("recipient count overflow")
+	}
+	if safeUint32FromInt(len(envelope.RecipientKeyIDs)) > params.MaxRecipientsPerEnvelope {
 		return types.ErrMaxRecipientsExceeded.Wrapf("envelope has %d recipients, max is %d",
 			len(envelope.RecipientKeyIDs), params.MaxRecipientsPerEnvelope)
 	}
@@ -381,6 +388,16 @@ func (k Keeper) ValidateEnvelopeRecipients(ctx sdk.Context, envelope *types.Encr
 	}
 
 	return missingKeys, nil
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
 // WithRecipientKeys iterates all recipient keys

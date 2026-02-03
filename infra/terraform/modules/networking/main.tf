@@ -46,9 +46,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
-    Name                                           = "${var.project}-${var.environment}-public-${var.availability_zones[count.index]}"
-    "kubernetes.io/role/elb"                       = "1"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
+    Name                                        = "${var.project}-${var.environment}-public-${var.availability_zones[count.index]}"
+    "kubernetes.io/role/elb"                    = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   })
 }
 
@@ -62,9 +62,9 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = merge(var.tags, {
-    Name                                           = "${var.project}-${var.environment}-private-${var.availability_zones[count.index]}"
-    "kubernetes.io/role/internal-elb"              = "1"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
+    Name                                        = "${var.project}-${var.environment}-private-${var.availability_zones[count.index]}"
+    "kubernetes.io/role/internal-elb"           = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   })
 }
 
@@ -190,11 +190,11 @@ resource "aws_db_subnet_group" "main" {
 # VPC Flow Logs
 # -----------------------------------------------------------------------------
 resource "aws_flow_log" "main" {
-  count                = var.enable_flow_logs ? 1 : 0
-  iam_role_arn         = aws_iam_role.flow_logs[0].arn
-  log_destination      = aws_cloudwatch_log_group.flow_logs[0].arn
-  traffic_type         = "ALL"
-  vpc_id               = aws_vpc.main.id
+  count                    = var.enable_flow_logs ? 1 : 0
+  iam_role_arn             = aws_iam_role.flow_logs[0].arn
+  log_destination          = aws_cloudwatch_log_group.flow_logs[0].arn
+  traffic_type             = "ALL"
+  vpc_id                   = aws_vpc.main.id
   max_aggregation_interval = 60
 
   tags = merge(var.tags, {
@@ -291,8 +291,8 @@ resource "aws_security_group" "eks_nodes" {
   vpc_id      = aws_vpc.main.id
 
   tags = merge(var.tags, {
-    Name                                           = "${var.project}-${var.environment}-eks-nodes-sg"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "owned"
+    Name                                        = "${var.project}-${var.environment}-eks-nodes-sg"
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   })
 }
 

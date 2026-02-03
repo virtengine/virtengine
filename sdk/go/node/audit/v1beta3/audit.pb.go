@@ -7,11 +7,11 @@ import (
 	fmt "fmt"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
+	pkg_akt_dev_go_node_types_v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
+	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-	pkg_akt_dev_go_node_types_v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
-	v1beta3 "github.com/virtengine/virtengine/sdk/go/node/types/v1beta3"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -452,7 +452,9 @@ func init() {
 	proto.RegisterType((*MsgDeleteProviderAttributesResponse)(nil), "virtengine.audit.v1beta3.MsgDeleteProviderAttributesResponse")
 }
 
-func init() { proto.RegisterFile("virtengine/audit/v1beta3/audit.proto", fileDescriptor_56975f549b197e6e) }
+func init() {
+	proto.RegisterFile("virtengine/audit/v1beta3/audit.proto", fileDescriptor_56975f549b197e6e)
+}
 
 var fileDescriptor_56975f549b197e6e = []byte{
 	// 514 bytes of a gzipped FileDescriptorProto
@@ -1949,4 +1951,3 @@ var (
 	ErrIntOverflowAudit          = fmt.Errorf("proto: integer overflow")
 	ErrUnexpectedEndOfGroupAudit = fmt.Errorf("proto: unexpected end of group")
 )
-

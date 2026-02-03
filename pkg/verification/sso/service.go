@@ -6,12 +6,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
+	"github.com/virtengine/virtengine/pkg/edugain"
 	"github.com/virtengine/virtengine/pkg/verification/audit"
 	"github.com/virtengine/virtengine/pkg/verification/oidc"
 	"github.com/virtengine/virtengine/pkg/verification/ratelimit"
@@ -25,17 +27,19 @@ import (
 
 // DefaultService implements VerificationService.
 type DefaultService struct {
-	config      Config
+	config       Config
 	oidcVerifier oidc.OIDCVerifier
-	signer      signer.SignerService
-	rateLimiter ratelimit.VerificationLimiter
-	auditor     audit.AuditLogger
-	logger      zerolog.Logger
+	edugainSvc   edugain.Service
+	signer       signer.SignerService
+	rateLimiter  ratelimit.VerificationLimiter
+	auditor      audit.AuditLogger
+	logger       zerolog.Logger
+	chainClient  ChainClient
 
 	// Challenge storage (in-memory for now, should use Redis in production)
-	mu          sync.RWMutex
-	challenges  map[string]*Challenge
-	byAccount   map[string][]string // accountAddress -> challengeIDs
+	mu         sync.RWMutex
+	challenges map[string]*Challenge
+	byAccount  map[string][]string // accountAddress -> challengeIDs
 }
 
 // NewDefaultService creates a new DefaultService.
@@ -43,20 +47,24 @@ func NewDefaultService(
 	ctx context.Context,
 	config Config,
 	oidcVerifier oidc.OIDCVerifier,
+	edugainSvc edugain.Service,
 	signerSvc signer.SignerService,
+	chainClient ChainClient,
 	rateLimiter ratelimit.VerificationLimiter,
 	auditor audit.AuditLogger,
 	logger zerolog.Logger,
 ) (*DefaultService, error) {
 	s := &DefaultService{
-		config:      config,
+		config:       config,
 		oidcVerifier: oidcVerifier,
-		signer:      signerSvc,
-		rateLimiter: rateLimiter,
-		auditor:     auditor,
-		logger:      logger.With().Str("component", "sso_service").Logger(),
-		challenges:  make(map[string]*Challenge),
-		byAccount:   make(map[string][]string),
+		edugainSvc:   edugainSvc,
+		signer:       signerSvc,
+		chainClient:  chainClient,
+		rateLimiter:  rateLimiter,
+		auditor:      auditor,
+		logger:       logger.With().Str("component", "sso_service").Logger(),
+		challenges:   make(map[string]*Challenge),
+		byAccount:    make(map[string][]string),
 	}
 
 	// Start background cleanup
@@ -79,7 +87,7 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 			s.logger.Warn().Err(err).Msg("rate limit check failed")
 		} else if !allowed {
 			s.logAudit(ctx, audit.EventTypeRateLimitExceeded, req.AccountAddress, "initiate_verification", map[string]interface{}{
-				"reason":   result.Reason,
+				"reason":      result.Reason,
 				"retry_after": result.RetryAfter,
 			})
 			return nil, fmt.Errorf("%w: retry after %d seconds", ErrRateLimitExceeded, result.RetryAfter)
@@ -102,6 +110,65 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 	now := time.Now()
 	expiresAt := now.Add(time.Duration(s.config.ChallengeTTLSeconds) * time.Second)
 
+	// Generate linkage message
+	linkageMessage := req.LinkageMessage
+	if linkageMessage == "" {
+		linkageMessage = fmt.Sprintf(s.config.LinkageMessageTemplate, req.AccountAddress, now.UTC().Format(time.RFC3339), nonce)
+	}
+
+	if req.ProviderType == veidtypes.SSOProviderEduGAIN {
+		if s.edugainSvc == nil {
+			return nil, fmt.Errorf("%w: provider: %s", ErrProviderNotConfigured, req.ProviderType)
+		}
+
+		authnResult, err := s.edugainSvc.CreateAuthnRequest(ctx, edugain.AuthnRequestParams{
+			InstitutionID: req.SAMLInstitutionID,
+			RelayState:    state,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		challenge := &Challenge{
+			ChallengeID:       challengeID,
+			AccountAddress:    req.AccountAddress,
+			ProviderType:      req.ProviderType,
+			SAMLInstitutionID: req.SAMLInstitutionID,
+			State:             state,
+			Nonce:             nonce,
+			LinkageMessage:    linkageMessage,
+			RedirectURI:       req.RedirectURI,
+			Status:            ChallengeStatusPending,
+			CreatedAt:         now,
+			ExpiresAt:         expiresAt,
+			ClientIP:          req.ClientIP,
+		}
+
+		s.mu.Lock()
+		s.challenges[challengeID] = challenge
+		s.byAccount[req.AccountAddress] = append(s.byAccount[req.AccountAddress], challengeID)
+		s.mu.Unlock()
+
+		s.logAudit(ctx, audit.EventTypeVerificationInitiated, req.AccountAddress, "initiate_verification", map[string]interface{}{
+			"challenge_id":   challengeID,
+			"provider":       req.ProviderType,
+			"institution_id": req.SAMLInstitutionID,
+		})
+
+		return &InitiateResponse{
+			ChallengeID:      challengeID,
+			AuthorizationURL: authnResult.URL,
+			State:            state,
+			Nonce:            nonce,
+			LinkageMessage:   linkageMessage,
+			ExpiresAt:        expiresAt,
+			SAMLRequest:      authnResult.SAMLRequest,
+			RelayState:       authnResult.RelayState,
+			Binding:          authnResult.Binding,
+			PostFormHTML:     authnResult.PostFormHTML,
+		}, nil
+	}
+
 	// Determine OIDC issuer
 	oidcIssuer := req.OIDCIssuer
 	if oidcIssuer == "" {
@@ -110,12 +177,6 @@ func (s *DefaultService) InitiateVerification(ctx context.Context, req *Initiate
 		} else {
 			return nil, fmt.Errorf("%w: provider: %s", ErrProviderNotConfigured, req.ProviderType)
 		}
-	}
-
-	// Generate linkage message
-	linkageMessage := req.LinkageMessage
-	if linkageMessage == "" {
-		linkageMessage = fmt.Sprintf(s.config.LinkageMessageTemplate, req.AccountAddress, now.UTC().Format(time.RFC3339), nonce)
 	}
 
 	// Get authorization URL from OIDC verifier
@@ -210,6 +271,62 @@ func (s *DefaultService) CompleteVerification(ctx context.Context, req *Complete
 		return NewCompleteError("challenge_invalid", fmt.Sprintf("challenge status: %s", challenge.Status)), nil
 	}
 
+	if challenge.ProviderType == veidtypes.SSOProviderEduGAIN {
+		if s.edugainSvc == nil {
+			return NewCompleteError("config_error", ErrProviderNotConfigured.Error()), nil
+		}
+
+		if req.SAMLResponse == "" {
+			return NewCompleteError("validation_error", "saml_response is required"), nil
+		}
+
+		assertion, err := s.edugainSvc.VerifyResponse(ctx, req.SAMLResponse)
+		if err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			s.logAudit(ctx, audit.EventTypeVerificationFailed, challenge.AccountAddress, "saml_verification_failed", map[string]interface{}{
+				"challenge_id": req.ChallengeID,
+				"error":        err.Error(),
+			})
+			return NewCompleteError("saml_verification_failed", err.Error()), nil
+		}
+
+		attestation, err := s.createEduGAINAttestation(ctx, challenge, assertion, req.LinkageSignature)
+		if err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			return NewCompleteError("attestation_failed", err.Error()), nil
+		}
+
+		linkageID := fmt.Sprintf("sso:%s:%s", challenge.ProviderType, uuid.New().String()[:8])
+
+		if s.config.EnableOnChainSubmission {
+			if err := SignAndSubmitAttestation(ctx, attestation, s.signer, s.chainClient, linkageID, s.auditor); err != nil {
+				s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+				s.logAudit(ctx, audit.EventTypeVerificationFailed, challenge.AccountAddress, "onchain_submission_failed", map[string]interface{}{
+					"challenge_id": req.ChallengeID,
+					"error":        err.Error(),
+				})
+				return NewCompleteError("onchain_submission_failed", err.Error()), nil
+			}
+		} else {
+			if err := s.signer.SignAttestation(ctx, &attestation.VerificationAttestation); err != nil {
+				s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+				return NewCompleteError("signing_failed", err.Error()), nil
+			}
+		}
+
+		s.updateChallengeStatus(req.ChallengeID, ChallengeStatusCompleted)
+
+		s.logAudit(ctx, audit.EventTypeVerificationCompleted, challenge.AccountAddress, "complete_verification", map[string]interface{}{
+			"challenge_id": req.ChallengeID,
+			"linkage_id":   linkageID,
+			"provider":     challenge.ProviderType,
+			"subject_hash": attestation.SubjectHash,
+			"email_domain": assertion.Attributes.Email,
+		})
+
+		return NewCompleteSuccess(attestation, linkageID), nil
+	}
+
 	// Get issuer policy for verification
 	policy, err := s.oidcVerifier.GetIssuerPolicy(ctx, challenge.OIDCIssuer)
 	if err != nil {
@@ -246,24 +363,34 @@ func (s *DefaultService) CompleteVerification(ctx context.Context, req *Complete
 		return NewCompleteError("attestation_failed", err.Error()), nil
 	}
 
-	// Sign attestation
-	if err := s.signer.SignAttestation(ctx, &attestation.VerificationAttestation); err != nil {
-		s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
-		return NewCompleteError("signing_failed", err.Error()), nil
-	}
-
 	// Generate linkage ID
 	linkageID := fmt.Sprintf("sso:%s:%s", challenge.ProviderType, uuid.New().String()[:8])
+
+	if s.config.EnableOnChainSubmission {
+		if err := SignAndSubmitAttestation(ctx, attestation, s.signer, s.chainClient, linkageID, s.auditor); err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			s.logAudit(ctx, audit.EventTypeVerificationFailed, challenge.AccountAddress, "onchain_submission_failed", map[string]interface{}{
+				"challenge_id": req.ChallengeID,
+				"error":        err.Error(),
+			})
+			return NewCompleteError("onchain_submission_failed", err.Error()), nil
+		}
+	} else {
+		if err := s.signer.SignAttestation(ctx, &attestation.VerificationAttestation); err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			return NewCompleteError("signing_failed", err.Error()), nil
+		}
+	}
 
 	// Update challenge status
 	s.updateChallengeStatus(req.ChallengeID, ChallengeStatusCompleted)
 
 	s.logAudit(ctx, audit.EventTypeVerificationCompleted, challenge.AccountAddress, "complete_verification", map[string]interface{}{
-		"challenge_id":  req.ChallengeID,
-		"linkage_id":    linkageID,
-		"provider":      challenge.ProviderType,
-		"subject_hash":  attestation.SubjectHash,
-		"email_domain":  claims.GetEmailDomain(),
+		"challenge_id": req.ChallengeID,
+		"linkage_id":   linkageID,
+		"provider":     challenge.ProviderType,
+		"subject_hash": attestation.SubjectHash,
+		"email_domain": claims.GetEmailDomain(),
 	})
 
 	return NewCompleteSuccess(attestation, linkageID), nil
@@ -296,6 +423,59 @@ func (s *DefaultService) ExchangeCodeAndComplete(ctx context.Context, req *CodeE
 		return NewCompleteError("challenge_invalid", fmt.Sprintf("challenge status: %s", challenge.Status)), nil
 	}
 
+	if challenge.ProviderType == veidtypes.SSOProviderEduGAIN {
+		if s.edugainSvc == nil {
+			return NewCompleteError("config_error", ErrProviderNotConfigured.Error()), nil
+		}
+		if req.SAMLResponse == "" {
+			return NewCompleteError("validation_error", "saml_response is required"), nil
+		}
+
+		assertion, err := s.edugainSvc.VerifyResponse(ctx, req.SAMLResponse)
+		if err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			s.logAudit(ctx, audit.EventTypeVerificationFailed, challenge.AccountAddress, "saml_verification_failed", map[string]interface{}{
+				"challenge_id": req.ChallengeID,
+				"error":        err.Error(),
+			})
+			return NewCompleteError("saml_verification_failed", err.Error()), nil
+		}
+
+		attestation, err := s.createEduGAINAttestation(ctx, challenge, assertion, req.LinkageSignature)
+		if err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			return NewCompleteError("attestation_failed", err.Error()), nil
+		}
+
+		linkageID := fmt.Sprintf("sso:%s:%s", challenge.ProviderType, uuid.New().String()[:8])
+
+		if s.config.EnableOnChainSubmission {
+			if err := SignAndSubmitAttestation(ctx, attestation, s.signer, s.chainClient, linkageID, s.auditor); err != nil {
+				s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+				s.logAudit(ctx, audit.EventTypeVerificationFailed, challenge.AccountAddress, "onchain_submission_failed", map[string]interface{}{
+					"challenge_id": req.ChallengeID,
+					"error":        err.Error(),
+				})
+				return NewCompleteError("onchain_submission_failed", err.Error()), nil
+			}
+		} else {
+			if err := s.signer.SignAttestation(ctx, &attestation.VerificationAttestation); err != nil {
+				s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+				return NewCompleteError("signing_failed", err.Error()), nil
+			}
+		}
+
+		s.updateChallengeStatus(req.ChallengeID, ChallengeStatusCompleted)
+
+		s.logAudit(ctx, audit.EventTypeVerificationCompleted, challenge.AccountAddress, "complete_verification", map[string]interface{}{
+			"challenge_id": req.ChallengeID,
+			"linkage_id":   linkageID,
+			"provider":     challenge.ProviderType,
+		})
+
+		return NewCompleteSuccess(attestation, linkageID), nil
+	}
+
 	// Get issuer policy
 	policy, err := s.oidcVerifier.GetIssuerPolicy(ctx, challenge.OIDCIssuer)
 	if err != nil {
@@ -324,14 +504,24 @@ func (s *DefaultService) ExchangeCodeAndComplete(ctx context.Context, req *CodeE
 		return NewCompleteError("attestation_failed", err.Error()), nil
 	}
 
-	// Sign attestation
-	if err := s.signer.SignAttestation(ctx, &attestation.VerificationAttestation); err != nil {
-		s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
-		return NewCompleteError("signing_failed", err.Error()), nil
-	}
-
 	// Generate linkage ID
 	linkageID := fmt.Sprintf("sso:%s:%s", challenge.ProviderType, uuid.New().String()[:8])
+
+	if s.config.EnableOnChainSubmission {
+		if err := SignAndSubmitAttestation(ctx, attestation, s.signer, s.chainClient, linkageID, s.auditor); err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			s.logAudit(ctx, audit.EventTypeVerificationFailed, challenge.AccountAddress, "onchain_submission_failed", map[string]interface{}{
+				"challenge_id": req.ChallengeID,
+				"error":        err.Error(),
+			})
+			return NewCompleteError("onchain_submission_failed", err.Error()), nil
+		}
+	} else {
+		if err := s.signer.SignAttestation(ctx, &attestation.VerificationAttestation); err != nil {
+			s.updateChallengeStatus(req.ChallengeID, ChallengeStatusFailed)
+			return NewCompleteError("signing_failed", err.Error()), nil
+		}
+	}
 
 	// Update challenge status
 	s.updateChallengeStatus(req.ChallengeID, ChallengeStatusCompleted)
@@ -416,6 +606,85 @@ func (s *DefaultService) createAttestation(
 	}
 
 	return attestation, nil
+}
+
+func (s *DefaultService) createEduGAINAttestation(
+	ctx context.Context,
+	challenge *Challenge,
+	assertion *edugain.SAMLAssertion,
+	linkageSignature []byte,
+) (*veidtypes.SSOAttestation, error) {
+	nonceBytes := make([]byte, 32)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return nil, fmt.Errorf("%w: failed to generate nonce: %v", ErrAttestationFailed, err)
+	}
+
+	keyInfo, err := s.signer.GetActiveKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to get signing key: %v", ErrSigningFailed, err)
+	}
+
+	now := time.Now()
+	validityDuration := time.Duration(s.config.AttestationValidityDays) * 24 * time.Hour
+
+	issuer := veidtypes.NewAttestationIssuer(keyInfo.Fingerprint, "")
+	subject := veidtypes.NewAttestationSubject(challenge.AccountAddress)
+
+	attestation := veidtypes.NewSSOAttestation(
+		issuer,
+		subject,
+		assertion.IssuerEntityID,
+		assertion.SubjectNameID,
+		challenge.ProviderType,
+		challenge.Nonce,
+		nonceBytes,
+		now,
+		validityDuration,
+	)
+
+	email := assertion.Attributes.Email
+	if email == "" {
+		email = assertion.Attributes.EduPerson.PrincipalName
+	}
+	if email != "" {
+		attestation.SetEmail(email, extractDomain(email), true)
+	}
+
+	tenantID := assertion.Attributes.Schac.HomeOrganization
+	if tenantID != "" {
+		attestation.SetTenantID(tenantID)
+	}
+
+	authTime := assertion.AuthnInstant
+	attestation.SetAuthContext(&authTime, []string{assertion.AuthnContextClassRef}, nil)
+	attestation.SetLinkageSignature(linkageSignature)
+
+	proof := veidtypes.NewVerificationProofDetail(
+		"saml_assertion_verified",
+		veidtypes.HashSubjectID(assertion.SubjectNameID),
+		100,
+		100,
+		now,
+	)
+	attestation.AddVerificationProof(proof)
+
+	attestation.SetMetadata("provider_type", string(challenge.ProviderType))
+	if attestation.EmailDomainHash != "" {
+		attestation.SetMetadata("email_domain_hash", attestation.EmailDomainHash)
+	}
+	if attestation.TenantIDHash != "" {
+		attestation.SetMetadata("tenant_id_hash", attestation.TenantIDHash)
+	}
+
+	return attestation, nil
+}
+
+func extractDomain(email string) string {
+	at := strings.LastIndex(email, "@")
+	if at == -1 || at == len(email)-1 {
+		return ""
+	}
+	return email[at+1:]
 }
 
 // GetChallenge retrieves a pending verification challenge.
@@ -626,4 +895,3 @@ func generateSecureToken(length int) string {
 	}
 	return hex.EncodeToString(bytes)
 }
-

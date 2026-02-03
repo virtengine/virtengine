@@ -53,18 +53,18 @@ func FuzzIdentityScopeValidate(f *testing.F) {
 		Status:           VerificationStatusPending,
 		UploadedAt:       time.Now().UTC(),
 	}
-	validJSON, _ := json.Marshal(validScope)
+	validJSON, _ := json.Marshal(validScope) //nolint:errchkjson // Best-effort marshal for fuzz seeding
 	f.Add(validJSON)
 
 	// Edge cases
-	f.Add([]byte("{}"))                                   // Empty object
-	f.Add([]byte("null"))                                 // Null
-	f.Add([]byte(`{"scope_id": ""}`))                     // Empty scope ID
-	f.Add([]byte(`{"scope_type": "invalid_type"}`))       // Invalid scope type
-	f.Add([]byte(`{"version": 0}`))                       // Zero version
-	f.Add([]byte(`{"version": 999}`))                     // Future version
-	f.Add([]byte(`{"status": "invalid_status"}`))         // Invalid status
-	f.Add(bytes.Repeat([]byte{0xFF}, 1000))               // Random bytes
+	f.Add([]byte("{}"))                             // Empty object
+	f.Add([]byte("null"))                           // Null
+	f.Add([]byte(`{"scope_id": ""}`))               // Empty scope ID
+	f.Add([]byte(`{"scope_type": "invalid_type"}`)) // Invalid scope type
+	f.Add([]byte(`{"version": 0}`))                 // Zero version
+	f.Add([]byte(`{"version": 999}`))               // Future version
+	f.Add([]byte(`{"status": "invalid_status"}`))   // Invalid status
+	f.Add(bytes.Repeat([]byte{0xFF}, 1000))         // Random bytes
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var scope IdentityScope
@@ -99,8 +99,8 @@ func FuzzScopeTypeValidation(f *testing.F) {
 	// Invalid types
 	f.Add("")
 	f.Add("invalid")
-	f.Add("ID_DOCUMENT")      // Case sensitivity
-	f.Add("id-document")      // Wrong separator
+	f.Add("ID_DOCUMENT") // Case sensitivity
+	f.Add("id-document") // Wrong separator
 	f.Add("unknown_type")
 	f.Add("a")
 	f.Add(string(bytes.Repeat([]byte{0xFF}, 100)))
@@ -116,9 +116,7 @@ func FuzzScopeTypeValidation(f *testing.F) {
 		// Consistency checks
 		if isValid {
 			// Valid types should have non-zero weight (except unknown)
-			if weight == 0 && st != ScopeType("unknown") {
-				// Some valid types might have zero weight
-			}
+			// Some valid types might have zero weight.
 			// Description should not be "Unknown scope type"
 			if desc == "Unknown scope type" {
 				t.Errorf("valid scope type %q has unknown description", scopeType)
@@ -150,9 +148,9 @@ func FuzzVerificationStatusValidation(f *testing.F) {
 	// Invalid statuses
 	f.Add("")
 	f.Add("invalid")
-	f.Add("VERIFIED")         // Case sensitivity
-	f.Add("verified ")        // Trailing space
-	f.Add(" pending")         // Leading space
+	f.Add("VERIFIED")  // Case sensitivity
+	f.Add("verified ") // Trailing space
+	f.Add(" pending")  // Leading space
 
 	f.Fuzz(func(t *testing.T, status string) {
 		vs := VerificationStatus(status)
@@ -192,11 +190,8 @@ func FuzzVerificationStatusTransitions(f *testing.F) {
 		// If both are valid, check consistency
 		if IsValidVerificationStatus(fromStatus) && IsValidVerificationStatus(toStatus) {
 			// Final statuses can only transition to specific states
-			if IsFinalStatus(fromStatus) {
-				// Final statuses have limited transitions
-				if canTransition && toStatus != VerificationStatusPending && toStatus != VerificationStatusExpired {
-					// Only specific transitions allowed from final states
-				}
+			if IsFinalStatus(fromStatus) && canTransition && toStatus != VerificationStatusPending && toStatus != VerificationStatusExpired {
+				t.Errorf("final status %q should not transition to %q", from, to)
 			}
 		}
 	})
@@ -209,14 +204,14 @@ func FuzzUploadMetadataValidate(f *testing.F) {
 	f.Add(validSalt, "device-fp", "client-1", bytes.Repeat([]byte{0x02}, 64), bytes.Repeat([]byte{0x03}, 64), bytes.Repeat([]byte{0x04}, 32))
 
 	// Edge cases
-	f.Add([]byte{}, "", "", []byte{}, []byte{}, []byte{})                // All empty
+	f.Add([]byte{}, "", "", []byte{}, []byte{}, []byte{})                             // All empty
 	f.Add(bytes.Repeat([]byte{0x01}, 15), "fp", "c", []byte{1}, []byte{1}, []byte{1}) // Salt too short
 	f.Add(bytes.Repeat([]byte{0x01}, 65), "fp", "c", []byte{1}, []byte{1}, []byte{1}) // Salt too long
 	f.Add(validSalt, "", "c", []byte{1}, []byte{1}, bytes.Repeat([]byte{0x01}, 32))   // Empty device fp
 	f.Add(validSalt, "fp", "", []byte{1}, []byte{1}, bytes.Repeat([]byte{0x01}, 32))  // Empty client id
 	f.Add(validSalt, "fp", "c", []byte{}, []byte{1}, bytes.Repeat([]byte{0x01}, 32))  // Empty client sig
 	f.Add(validSalt, "fp", "c", []byte{1}, []byte{}, bytes.Repeat([]byte{0x01}, 32))  // Empty user sig
-	f.Add(validSalt, "fp", "c", []byte{1}, []byte{1}, []byte{1})                       // Wrong payload hash size
+	f.Add(validSalt, "fp", "c", []byte{1}, []byte{1}, []byte{1})                      // Wrong payload hash size
 
 	f.Fuzz(func(t *testing.T, salt []byte, deviceFp, clientID string, clientSig, userSig, payloadHash []byte) {
 		metadata := &UploadMetadata{

@@ -168,8 +168,7 @@ func TestQueryGenesisAccounts(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query genesis accounts
-	resp, err := querier.GenesisAccounts(ctx, &types.QueryGenesisAccountsRequest{
-	})
+	resp, err := querier.GenesisAccounts(ctx, &types.QueryGenesisAccountsRequest{})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Len(t, resp.Addresses, 2)

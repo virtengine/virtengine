@@ -45,4 +45,3 @@ func (m DepositDeploymentAuthorization) ValidateBasic() error {
 	}
 	return nil
 }
-

@@ -37,7 +37,9 @@ func ExportCmd(appExporter types.AppExporter, defaultNodeHome string) *cobra.Com
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func() {
+				_ = db.Close()
+			}()
 
 			if appExporter == nil {
 				if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "WARNING: App exporter not defined. Returning genesis file."); err != nil {
@@ -65,6 +67,11 @@ func ExportCmd(appExporter types.AppExporter, defaultNodeHome string) *cobra.Com
 			traceWriter, err := openTraceWriter(traceWriterFile)
 			if err != nil {
 				return err
+			}
+			if traceWriter != nil {
+				defer func() {
+					_ = traceWriter.Close()
+				}()
 			}
 
 			height, _ := cmd.Flags().GetInt64(cflags.FlagHeight)
@@ -119,4 +126,3 @@ func ExportCmd(appExporter types.AppExporter, defaultNodeHome string) *cobra.Com
 
 	return cmd
 }
-

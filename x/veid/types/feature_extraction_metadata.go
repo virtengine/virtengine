@@ -195,7 +195,7 @@ func (m *FeatureExtractionMetadata) ComputeFeatureHash(faceEmbedding []float32, 
 
 	// Include block height for temporal binding
 	blockBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(blockBytes, uint64(m.BlockHeight))
+	binary.BigEndian.PutUint64(blockBytes, safeUint64FromInt64(m.BlockHeight))
 	h.Write(blockBytes)
 
 	m.FeatureHash = hex.EncodeToString(h.Sum(nil))
@@ -227,6 +227,14 @@ func (m *FeatureExtractionMetadata) Validate() error {
 		return ErrInvalidParams.Wrap("block_height cannot be negative")
 	}
 	return nil
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
 }
 
 // ============================================================================

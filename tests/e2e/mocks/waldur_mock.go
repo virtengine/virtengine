@@ -281,6 +281,60 @@ func (m *WaldurMock) RegisterOffering(offering *MockWaldurOffering) {
 	m.Offerings[offering.UUID] = offering
 }
 
+// RegisterResource registers a new resource
+func (m *WaldurMock) RegisterResource(resource *MockWaldurResource) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if resource.UUID == "" {
+		resource.UUID = uuid.New().String()
+	}
+	if resource.State == "" {
+		resource.State = "creating"
+	}
+	if resource.CreatedAt.IsZero() {
+		resource.CreatedAt = time.Now().UTC()
+	}
+	m.Resources[resource.UUID] = resource
+}
+
+// RegisterOrder registers a new order
+func (m *WaldurMock) RegisterOrder(order *MockWaldurOrder) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if order.UUID == "" {
+		order.UUID = uuid.New().String()
+	}
+	if order.State == "" {
+		order.State = "pending"
+	}
+	if order.CreatedAt.IsZero() {
+		order.CreatedAt = time.Now().UTC()
+	}
+	m.Orders[order.UUID] = order
+}
+
+// RegisterInvoice registers a new invoice
+func (m *WaldurMock) RegisterInvoice(invoice *MockWaldurInvoice) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if invoice.UUID == "" {
+		invoice.UUID = uuid.New().String()
+	}
+	if invoice.State == "" {
+		invoice.State = "pending"
+	}
+	if invoice.CreatedAt.IsZero() {
+		invoice.CreatedAt = time.Now().UTC()
+	}
+	if invoice.Currency == "" {
+		invoice.Currency = "USD"
+	}
+	m.Invoices[invoice.UUID] = invoice
+}
+
 // GetResource returns a resource by UUID
 func (m *WaldurMock) GetResource(uuid string) *MockWaldurResource {
 	m.mu.RLock()

@@ -670,4 +670,3 @@ func UnmarshalAttestationResult(data []byte) (*DeviceAttestationResult, error) {
 	}
 	return &result, nil
 }
-

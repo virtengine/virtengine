@@ -115,4 +115,3 @@ func (m *MsgUpdateParams) Route() string {
 func (p MsgUpdateParams) UnpackInterfaces(unpacker cdctypes.AnyUnpacker) error {
 	return p.Params.UnpackInterfaces(unpacker)
 }
-

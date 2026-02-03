@@ -597,4 +597,3 @@ type OffRampResult struct {
 	// FailureReason is the reason for failure (if applicable)
 	FailureReason string `json:"failure_reason,omitempty"`
 }
-

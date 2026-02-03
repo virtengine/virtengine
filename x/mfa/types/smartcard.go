@@ -144,20 +144,20 @@ type PIVData struct {
 	CCC []byte `json:"ccc,omitempty"`
 
 	// AuthenticationCert is the PIV Authentication certificate (slot 9A)
-	AuthenticationCert *x509.Certificate `json:"-"`
-	AuthenticationCertPEM []byte `json:"authentication_cert_pem,omitempty"`
+	AuthenticationCert    *x509.Certificate `json:"-"`
+	AuthenticationCertPEM []byte            `json:"authentication_cert_pem,omitempty"`
 
 	// SignatureCert is the Digital Signature certificate (slot 9C)
-	SignatureCert *x509.Certificate `json:"-"`
-	SignatureCertPEM []byte `json:"signature_cert_pem,omitempty"`
+	SignatureCert    *x509.Certificate `json:"-"`
+	SignatureCertPEM []byte            `json:"signature_cert_pem,omitempty"`
 
 	// KeyManagementCert is the Key Management certificate (slot 9D)
-	KeyManagementCert *x509.Certificate `json:"-"`
-	KeyManagementCertPEM []byte `json:"key_management_cert_pem,omitempty"`
+	KeyManagementCert    *x509.Certificate `json:"-"`
+	KeyManagementCertPEM []byte            `json:"key_management_cert_pem,omitempty"`
 
 	// CardAuthCert is the Card Authentication certificate (slot 9E)
-	CardAuthCert *x509.Certificate `json:"-"`
-	CardAuthCertPEM []byte `json:"card_auth_cert_pem,omitempty"`
+	CardAuthCert    *x509.Certificate `json:"-"`
+	CardAuthCertPEM []byte            `json:"card_auth_cert_pem,omitempty"`
 
 	// CardSerialNumber is the serial number of the card
 	CardSerialNumber string `json:"card_serial_number"`
@@ -415,12 +415,12 @@ func ExtractPIVData(cardData map[string][]byte) (*PIVData, error) {
 			return nil, fmt.Errorf("failed to parse CHUID: %v", err)
 		}
 		pivData.CHUID = chuid
-		
+
 		// Extract serial number from CHUID GUID
 		if len(chuid.GUID) > 0 {
 			pivData.CardSerialNumber = hex.EncodeToString(chuid.GUID)
 		}
-		
+
 		// Parse expiration date
 		if chuid.ExpirationDate != "" {
 			// YYYYMMDD format

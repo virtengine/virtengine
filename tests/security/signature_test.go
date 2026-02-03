@@ -190,7 +190,7 @@ func (s *SignatureSecurityTestSuite) TestSignatureForgeryDetection() {
 		sig := signPayload(s.T(), payload, keyPair)
 
 		// Extend signature with extra bytes
-		extendedSig := append(sig, 0x00, 0x01)
+		extendedSig := append(append([]byte{}, sig...), 0x00, 0x01)
 
 		valid := verifySignature(payload, extendedSig, keyPair.PublicKey[:])
 		require.False(s.T(), valid, "extended signature should be rejected")

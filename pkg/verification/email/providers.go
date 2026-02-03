@@ -128,14 +128,14 @@ type DeliveryStatusResult struct {
 
 // MockProvider implements Provider for testing
 type MockProvider struct {
-	mu           sync.RWMutex
-	name         string
-	sentEmails   []*Email
-	results      map[string]*SendResult
-	deliveries   map[string]*DeliveryStatusResult
-	sendFunc     func(ctx context.Context, email *Email) (*SendResult, error)
-	healthErr    error
-	logger       zerolog.Logger
+	mu         sync.RWMutex
+	name       string
+	sentEmails []*Email
+	results    map[string]*SendResult
+	deliveries map[string]*DeliveryStatusResult
+	sendFunc   func(ctx context.Context, email *Email) (*SendResult, error)
+	healthErr  error
+	logger     zerolog.Logger
 }
 
 // MockProviderOption is a functional option for configuring MockProvider
@@ -553,4 +553,3 @@ func NewProvider(config Config, logger zerolog.Logger) (Provider, error) {
 		return nil, errors.Wrapf(ErrInvalidConfig, "unsupported provider: %s", config.Provider)
 	}
 }
-

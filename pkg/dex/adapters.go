@@ -134,7 +134,7 @@ func (a *UniswapV2Adapter) GetSwapQuote(ctx context.Context, request SwapRequest
 				FromToken: request.FromToken,
 				ToToken:   request.ToToken,
 				AmountIn:  request.Amount,
-				AmountOut: request.Amount, // Placeholder
+				AmountOut: request.Amount,                     // Placeholder
 				Fee:       sdkmath.LegacyNewDecWithPrec(3, 3), // 0.3%
 			},
 		},
@@ -427,4 +427,3 @@ func CreateAdapter(cfg AdapterConfig) (Adapter, error) {
 		return nil, fmt.Errorf("unsupported adapter type: %s", cfg.Type)
 	}
 }
-

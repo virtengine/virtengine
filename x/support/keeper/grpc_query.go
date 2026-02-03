@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/virtengine/virtengine/x/support/types"
+	types "github.com/virtengine/virtengine/x/support/types" //nolint:staticcheck // Deprecated types retained for compatibility.
 )
 
 // GRPCQuerier implements the gRPC query interface for external ticket refs
@@ -38,7 +38,7 @@ func (q GRPCQuerier) ExternalRef(c context.Context, req *types.QueryExternalRefR
 		return nil, types.ErrInvalidResourceType.Wrapf("invalid resource type: %s", req.ResourceType)
 	}
 
-	ref, found := q.Keeper.GetExternalRef(ctx, resourceType, req.ResourceID)
+	ref, found := q.GetExternalRef(ctx, resourceType, req.ResourceID)
 	if !found {
 		return nil, types.ErrRefNotFound.Wrapf("ref for %s/%s not found", req.ResourceType, req.ResourceID)
 	}
@@ -65,7 +65,7 @@ func (q GRPCQuerier) ExternalRefsByOwner(c context.Context, req *types.QueryExte
 		return nil, types.ErrInvalidAddress.Wrap(err.Error())
 	}
 
-	refs := q.Keeper.GetExternalRefsByOwner(ctx, ownerAddr)
+	refs := q.GetExternalRefsByOwner(ctx, ownerAddr)
 
 	// Filter by resource type if provided
 	if req.ResourceType != "" {
@@ -95,7 +95,7 @@ func (q GRPCQuerier) Params(c context.Context, req *types.QueryParamsRequest) (*
 	}
 
 	ctx := sdk.UnwrapSDKContext(c)
-	params := q.Keeper.GetParams(ctx)
+	params := q.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
 		Params: params,

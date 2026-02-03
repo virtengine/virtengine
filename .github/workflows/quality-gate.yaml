@@ -1,373 +1,110 @@
-# VirtEngine Quality Gate - Mirrors Pre-Push Hook
+# VirtEngine Quality Gate - Fast PR checks
 #
-# This workflow runs the same checks as the local pre-push hook (.githooks/pre-push).
-# It provides a fast feedback loop on core packages that are verified to pass.
-#
-# Jobs:
-#   1. vet        - go vet on core packages
-#   2. mod-sync   - Verify go.mod/go.sum and vendor are in sync
-#   3. build      - Build all cmd binaries
-#   4. test-core  - Run tests on core verified packages
-#
-# For full CI with all tests, see ci.yaml
+# Minimal, required checks for PRs (lint/build/test-go) to keep feedback fast.
+# Full CI runs on push to main/develop via ci.yaml.
 
 name: Quality Gate
 
 on:
-    push:
-        branches:
-            - main
-            - mainnet/main
-            - develop
-            - "release/**"
-            - "feature/**"
-    pull_request:
-        branches:
-            - main
-            - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - mainnet/main
+      - develop
+      - "release/**"
 
 concurrency:
-    group: quality-gate-${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-    GO_VERSION: "1.25.5"
-    GOWORK: "off" # Disable workspace mode for vendor operations
+  GO_VERSION: "1.25.5"
+  GOWORK: "off" # Disable workspace mode for vendor operations
 
 permissions:
-    contents: read
+  contents: read
 
 jobs:
-    # ===========================================================================
-    # Go Vet - Static Analysis on Core Packages
-    # ===========================================================================
-    vet:
-        name: Go Vet
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.GO_VERSION }}
-                  cache: true
+      - name: Fetch base ref for lint diff
+        run: |
+          git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
 
-            - name: Sync vendor directory
-              run: |
-                  # Sync vendor to ensure modules.txt matches go.mod
-                  go mod tidy
-                  go mod vendor
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-            - name: Run go vet on core packages
-              run: |
-                  # Run vet only on core packages (mirrors pre-push hook)
-                  # Excludes test files with known issues
-                  go vet -mod=vendor \
-                    ./app/... \
-                    ./cmd/... \
-                    ./pkg/benchmark/... \
-                    ./pkg/cache/... \
-                    ./pkg/compatibility/... \
-                    ./pkg/enclave_runtime/... \
-                    ./pkg/errors/... \
-                    ./pkg/inference/... \
-                    ./pkg/pruning/... \
-                    ./pkg/ratelimit/... \
-                    ./pkg/waldur/... \
-                    ./pkg/workflow/... \
-                    ./x/enclave/... \
-                    ./x/encryption/...
+      - name: Download dependencies
+        run: go mod download
 
-    # ===========================================================================
-    # Module Sync - Verify go.mod and vendor are in sync
-    # ===========================================================================
-    mod-sync:
-        name: Module Sync
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+      - name: Run golangci-lint (PR diff)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.4.0
+          args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
 
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.GO_VERSION }}
-                  cache: true
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Check go.mod tidy
-              run: |
-                  cp go.mod go.mod.bak
-                  cp go.sum go.sum.bak
-                  go mod tidy
-                  if ! diff -q go.mod go.mod.bak > /dev/null 2>&1; then
-                    echo "::error::go.mod is not tidy. Run 'go mod tidy' and commit the result."
-                    diff go.mod.bak go.mod || true
-                    exit 1
-                  fi
-                  if ! diff -q go.sum go.sum.bak > /dev/null 2>&1; then
-                    echo "::error::go.sum is not tidy. Run 'go mod tidy' and commit the result."
-                    diff go.sum.bak go.sum || true
-                    exit 1
-                  fi
-                  echo "✅ go.mod and go.sum are in sync"
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-            - name: Check vendor sync
-              run: |
-                  go mod vendor
-                  if ! git diff --quiet vendor/; then
-                    echo "::error::vendor/ is out of sync. Run 'go mod vendor' and commit the result."
-                    git diff --stat vendor/ | head -20
-                    exit 1
-                  fi
-                  echo "✅ vendor/ is in sync"
+      - name: Download dependencies
+        run: go mod download
 
-    # ===========================================================================
-    # Build Core - Build all binaries (internal job)
-    # ===========================================================================
-    build-core:
-        name: Build
-        runs-on: ubuntu-latest
-        needs: [vet, mod-sync]
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+      - name: Build binaries
+        run: |
+          go build -mod=readonly -v ./cmd/...
 
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.GO_VERSION }}
-                  cache: true
+  test-go:
+    name: test-go
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Sync vendor directory
-              run: |
-                  go mod tidy
-                  go mod vendor
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-            - name: Build binaries
-              run: |
-                  # Build all cmd binaries
-                  go build -mod=vendor -v ./cmd/...
-                  echo "✅ All binaries built successfully"
+      - name: Download dependencies
+        run: go mod download
 
-    # ===========================================================================
-    # Test Core - Run tests on verified packages
-    # ===========================================================================
-    test-core:
-        name: Test Core Packages
-        runs-on: ubuntu-latest
-        needs: [vet, mod-sync]
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.GO_VERSION }}
-                  cache: true
-
-            - name: Sync vendor directory
-              run: |
-                  go mod tidy
-                  go mod vendor
-
-            - name: Run tests on core packages
-              run: |
-                  # Run tests on core packages that are verified to pass
-                  # Mirrors the pre-push hook's test scope
-                  go test -mod=vendor -v -short -race \
-                    ./pkg/benchmark/... \
-                    ./pkg/cache/... \
-                    ./pkg/compatibility/... \
-                    ./pkg/enclave_runtime/... \
-                    ./pkg/errors/... \
-                    ./pkg/inference/... \
-                    ./pkg/pruning/... \
-                    ./pkg/ratelimit/... \
-                    ./pkg/waldur/... \
-                    ./pkg/workflow/... \
-                    ./x/enclave/... \
-                    ./x/encryption/...
-                  echo "✅ All core package tests passed"
-
-            - name: Generate coverage for core packages
-              run: |
-                  go test -mod=vendor -coverprofile=coverage-core.out -covermode=atomic \
-                    ./pkg/benchmark/... \
-                    ./pkg/cache/... \
-                    ./pkg/compatibility/... \
-                    ./pkg/enclave_runtime/... \
-                    ./pkg/errors/... \
-                    ./pkg/inference/... \
-                    ./pkg/pruning/... \
-                    ./pkg/ratelimit/... \
-                    ./pkg/waldur/... \
-                    ./pkg/workflow/... \
-                    ./x/enclave/... \
-                    ./x/encryption/...
-
-                  # Show coverage summary
-                  go tool cover -func=coverage-core.out | tail -1
-
-            - name: Upload coverage artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: core-coverage
-                  path: coverage-core.out
-                  retention-days: 7
-
-    # ===========================================================================
-    # Summary Job - Reports overall status
-    # ===========================================================================
-    quality-gate-status:
-        name: Quality Gate Status
-        runs-on: ubuntu-latest
-        needs: [vet, mod-sync, build-core, test-core]
-        if: always()
-        steps:
-            - name: Check job results
-              run: |
-                  echo "## Quality Gate Results" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-
-                  # Check each job result
-                  VET_RESULT="${{ needs.vet.result }}"
-                  MOD_RESULT="${{ needs.mod-sync.result }}"
-                  BUILD_RESULT="${{ needs.build-core.result }}"
-                  TEST_RESULT="${{ needs.test-core.result }}"
-
-                  echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-                  echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-
-                  # Handle success, skipped (treated as success), and failure
-                  if [ "$VET_RESULT" = "success" ] || [ "$VET_RESULT" = "skipped" ]; then
-                    echo "| Go Vet | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "| Go Vet | ❌ Failed ($VET_RESULT) |" >> $GITHUB_STEP_SUMMARY
-                  fi
-
-                  if [ "$MOD_RESULT" = "success" ] || [ "$MOD_RESULT" = "skipped" ]; then
-                    echo "| Module Sync | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "| Module Sync | ❌ Failed ($MOD_RESULT) |" >> $GITHUB_STEP_SUMMARY
-                  fi
-
-                  if [ "$BUILD_RESULT" = "success" ] || [ "$BUILD_RESULT" = "skipped" ]; then
-                    echo "| Build | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "| Build | ❌ Failed ($BUILD_RESULT) |" >> $GITHUB_STEP_SUMMARY
-                  fi
-
-                  if [ "$TEST_RESULT" = "success" ] || [ "$TEST_RESULT" = "skipped" ]; then
-                    echo "| Core Tests | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "| Core Tests | ❌ Failed ($TEST_RESULT) |" >> $GITHUB_STEP_SUMMARY
-                  fi
-
-                  echo "" >> $GITHUB_STEP_SUMMARY
-
-                  # Fail only on actual failures, not skipped jobs
-                  FAILED=0
-                  if [ "$VET_RESULT" = "failure" ] || [ "$VET_RESULT" = "cancelled" ]; then
-                    FAILED=1
-                  fi
-                  if [ "$MOD_RESULT" = "failure" ] || [ "$MOD_RESULT" = "cancelled" ]; then
-                    FAILED=1
-                  fi
-                  if [ "$BUILD_RESULT" = "failure" ] || [ "$BUILD_RESULT" = "cancelled" ]; then
-                    FAILED=1
-                  fi
-                  if [ "$TEST_RESULT" = "failure" ] || [ "$TEST_RESULT" = "cancelled" ]; then
-                    FAILED=1
-                  fi
-
-                  if [ "$FAILED" = "1" ]; then
-                    echo "❌ Quality gate failed" >> $GITHUB_STEP_SUMMARY
-                    exit 1
-                  fi
-
-                  echo "✅ All quality gate checks passed!" >> $GITHUB_STEP_SUMMARY
-
-    # ===========================================================================
-    # Status Check Aliases - Match branch protection required check names
-    # These jobs provide the exact status check names that branch protection expects
-    # ===========================================================================
-    lint:
-        name: lint
-        runs-on: ubuntu-latest
-        needs: [vet]
-        if: always()
-        steps:
-            - name: Report lint status
-              run: |
-                  if [ "${{ needs.vet.result }}" = "success" ]; then
-                    echo "✅ Lint check passed (alias for Go Vet)"
-                    exit 0
-                  else
-                    echo "❌ Lint check failed"
-                    exit 1
-                  fi
-
-    build:
-        name: build
-        runs-on: ubuntu-latest
-        needs: [vet, mod-sync]
-        if: always()
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.GO_VERSION }}
-                  cache: true
-
-            - name: Sync vendor directory
-              run: |
-                  go mod tidy
-                  go mod vendor
-
-            - name: Build binaries
-              run: |
-                  go build -mod=vendor -v ./cmd/...
-                  echo "✅ Build check passed"
-
-    test-go:
-        name: test-go
-        runs-on: ubuntu-latest
-        needs: [vet, mod-sync]
-        if: always()
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.GO_VERSION }}
-                  cache: true
-
-            - name: Sync vendor directory
-              run: |
-                  go mod tidy
-                  go mod vendor
-
-            - name: Run core tests
-              run: |
-                  go test -mod=vendor -v -short -race \
-                    ./pkg/benchmark/... \
-                    ./pkg/cache/... \
-                    ./pkg/compatibility/... \
-                    ./pkg/enclave_runtime/... \
-                    ./pkg/errors/... \
-                    ./pkg/inference/... \
-                    ./pkg/pruning/... \
-                    ./pkg/ratelimit/... \
-                    ./pkg/waldur/... \
-                    ./pkg/workflow/... \
-                    ./x/enclave/... \
-                    ./x/encryption/...
-                  echo "✅ Test-go check passed"
+      - name: Run core tests
+        run: |
+          go test -mod=readonly -v -short -race \
+            ./pkg/benchmark/... \
+            ./pkg/cache/... \
+            ./pkg/compatibility/... \
+            ./pkg/enclave_runtime/... \
+            ./pkg/errors/... \
+            ./pkg/inference/... \
+            ./pkg/pruning/... \
+            ./pkg/ratelimit/... \
+            ./pkg/waldur/... \
+            ./pkg/workflow/... \
+            ./x/enclave/... \
+            ./x/encryption/...

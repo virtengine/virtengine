@@ -353,6 +353,7 @@ func (dk *disputeKeeper) UploadEvidence(ctx sdk.Context, disputeID string, evide
 	}
 
 	// Check evidence count limit
+	//nolint:gosec // slice length is non-negative
 	if uint32(len(workflow.Evidence)) >= rules.MaxEvidenceCount {
 		return fmt.Errorf("evidence limit reached: max %d evidence items allowed", rules.MaxEvidenceCount)
 	}
@@ -804,6 +805,7 @@ func (dk *disputeKeeper) setCorrectionIndexes(store storetypes.KVStore, correcti
 
 func (dk *disputeKeeper) saveCorrectionLedgerEntry(store storetypes.KVStore, entry *billing.CorrectionLedgerEntry) {
 	entryKey := billing.BuildCorrectionLedgerEntryKey(entry.EntryID)
+	//nolint:errchkjson // entry contains sdk.Coins which is safe for Marshal
 	bz, _ := json.Marshal(entry)
 	store.Set(entryKey, bz)
 
@@ -888,7 +890,7 @@ func (dk *disputeKeeper) GetDisputeSequence(ctx sdk.Context) uint64 {
 // SetDisputeSequence sets the dispute sequence number
 func (dk *disputeKeeper) SetDisputeSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(dk.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 always serializes
 	store.Set(billing.DisputeWorkflowSequenceKey, bz)
 }
 
@@ -910,7 +912,7 @@ func (dk *disputeKeeper) GetCorrectionSequence(ctx sdk.Context) uint64 {
 // SetCorrectionSequence sets the correction sequence number
 func (dk *disputeKeeper) SetCorrectionSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(dk.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.CorrectionSequenceKey, bz)
 }
 
@@ -932,6 +934,6 @@ func (dk *disputeKeeper) GetEvidenceSequence(ctx sdk.Context) uint64 {
 // SetEvidenceSequence sets the evidence sequence number
 func (dk *disputeKeeper) SetEvidenceSequence(ctx sdk.Context, sequence uint64) {
 	store := ctx.KVStore(dk.k.skey)
-	bz, _ := json.Marshal(sequence)
+	bz, _ := json.Marshal(sequence) //nolint:errchkjson // uint64 marshalling doesn't fail
 	store.Set(billing.DisputeEvidenceSequenceKey, bz)
 }

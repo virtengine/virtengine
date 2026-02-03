@@ -80,4 +80,3 @@ func TestGetCommandDecode(t *testing.T) {
 	cmd.SetArgs([]string{base64Encoded})
 	require.NoError(t, cmd.ExecuteContext(ctx))
 }
-

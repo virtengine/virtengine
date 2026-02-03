@@ -43,9 +43,9 @@ const (
 	SaltSize = 32
 
 	// Error message constants to avoid duplication
-	errMsgTemplateEmpty    = "template cannot be empty"
-	errMsgStoredHashNil    = "stored hash cannot be nil"
-	errMsgHashIDEmpty      = "hash ID cannot be empty"
+	errMsgTemplateEmpty = "template cannot be empty"
+	errMsgStoredHashNil = "stored hash cannot be nil"
+	errMsgHashIDEmpty   = "hash ID cannot be empty"
 
 	// HashSize is the size of the final biometric hash in bytes
 	HashSize = 64
@@ -302,7 +302,7 @@ func generateLSHHashes(template, salt []byte) [][]byte {
 		// Create bucket-specific salt by combining salt with bucket index
 		bucketSalt := make([]byte, len(salt)+4)
 		copy(bucketSalt, salt)
-		binary.BigEndian.PutUint32(bucketSalt[len(salt):], uint32(i))
+		binary.BigEndian.PutUint32(bucketSalt[len(salt):], safeUint32FromIntBiometric(i))
 
 		// Hash the template with bucket-specific salt
 		hash := sha256.New()
@@ -745,7 +745,7 @@ func BiometricHashByTypeKey(address sdk.AccAddress, templateType TemplateType, h
 	key = append(key, address...)
 	key = append(key, byte('/'))
 	typeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(typeBytes, uint32(templateType))
+	binary.BigEndian.PutUint32(typeBytes, safeUint32FromIntBiometric(int(templateType)))
 	key = append(key, typeBytes...)
 	key = append(key, []byte(hashID)...)
 	return key
@@ -758,7 +758,7 @@ func BiometricHashByTypePrefixKey(address sdk.AccAddress, templateType TemplateT
 	key = append(key, address...)
 	key = append(key, byte('/'))
 	typeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(typeBytes, uint32(templateType))
+	binary.BigEndian.PutUint32(typeBytes, safeUint32FromIntBiometric(int(templateType)))
 	key = append(key, typeBytes...)
 	return key
 }
@@ -771,7 +771,7 @@ func BiometricAuditKey(address sdk.AccAddress, timestamp time.Time, hashID strin
 	key = append(key, address...)
 	key = append(key, byte('/'))
 	timeBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(timeBytes, uint64(timestamp.UnixNano()))
+	binary.BigEndian.PutUint64(timeBytes, safeUint64FromInt64(timestamp.UnixNano()))
 	key = append(key, timeBytes...)
 	key = append(key, []byte(hashID)...)
 	return key
@@ -797,7 +797,7 @@ func biometricHashToProto(hash *BiometricTemplateHash) *types.BiometricHashProto
 
 	return &types.BiometricHashProto{
 		HashId:          hash.HashID,
-		TemplateType:    int32(hash.TemplateType),
+		TemplateType:    safeInt32FromInt(int(hash.TemplateType)),
 		HashValue:       hash.HashValue,
 		Salt:            hash.Salt,
 		Version:         hash.Version,
@@ -831,7 +831,7 @@ func auditToProto(audit *BiometricHashAuditEntry) *types.BiometricAuditProto {
 	return &types.BiometricAuditProto{
 		Operation:    audit.Operation,
 		HashId:       audit.HashID,
-		TemplateType: int32(audit.TemplateType),
+		TemplateType: safeInt32FromInt(int(audit.TemplateType)),
 		Timestamp:    audit.Timestamp.UnixNano(),
 		BlockHeight:  audit.BlockHeight,
 		Address:      audit.Address,
@@ -854,6 +854,38 @@ func protoToAudit(proto *types.BiometricAuditProto) *BiometricHashAuditEntry {
 	}
 }
 
+func safeUint64FromInt64(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+	//nolint:gosec // range checked above
+	return uint64(value)
+}
+
+func safeInt32FromInt(value int) int32 {
+	const maxInt32 = int32(^uint32(0) >> 1)
+	const minInt32 = -maxInt32 - 1
+	if value > int(maxInt32) {
+		return maxInt32
+	}
+	if value < int(minInt32) {
+		return minInt32
+	}
+	//nolint:gosec // range checked above
+	return int32(value)
+}
+
+func safeUint32FromIntBiometric(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > int(^uint32(0)) {
+		return ^uint32(0)
+	}
+	//nolint:gosec // range checked above
+	return uint32(value)
+}
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -869,6 +901,8 @@ func clearBytes(b []byte) {
 // computeCosineSimilarity computes the cosine similarity between two vectors.
 // This is used for embedding comparison when LSH indicates a potential match.
 // Returns a value between -1.0 and 1.0.
+//
+//nolint:unused // reserved for future biometric similarity scoring
 func computeCosineSimilarity(a, b []float64) float64 {
 	if len(a) != len(b) || len(a) == 0 {
 		return 0.0

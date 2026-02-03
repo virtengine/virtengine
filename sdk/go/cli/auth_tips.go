@@ -6,8 +6,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/spf13/cobra"
 
-	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 	"github.com/virtengine/virtengine/pkg/security"
+	cflags "github.com/virtengine/virtengine/sdk/go/cli/flags"
 )
 
 func GetAuxToFeeCommand() *cobra.Command {
@@ -78,4 +78,3 @@ func GetAuxToFeeCommand() *cobra.Command {
 
 	return cmd
 }
-

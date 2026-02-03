@@ -499,4 +499,3 @@ func BenchmarkConformanceEmbeddingNormalization(b *testing.B) {
 		extractor.normalizeEmbedding(testEmbed)
 	}
 }
-

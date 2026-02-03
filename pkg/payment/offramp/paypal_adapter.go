@@ -153,11 +153,11 @@ func (a *PayPalAdapter) CreatePayout(ctx context.Context, intent *PayoutIntent) 
 		},
 		Items: []paypalPayoutItem{
 			{
-				RecipientType:  a.getRecipientType(intent.Destination),
-				Amount:         paypalAmount{Currency: string(intent.FiatAmount.Currency), Value: formatPayPalAmount(intent.FiatAmount.Value)},
-				Note:           intent.Description,
-				SenderItemID:   intent.ID,
-				Receiver:       a.getReceiver(intent.Destination),
+				RecipientType:        a.getRecipientType(intent.Destination),
+				Amount:               paypalAmount{Currency: string(intent.FiatAmount.Currency), Value: formatPayPalAmount(intent.FiatAmount.Value)},
+				Note:                 intent.Description,
+				SenderItemID:         intent.ID,
+				Receiver:             a.getReceiver(intent.Destination),
 				NotificationLanguage: "en-US",
 			},
 		},
@@ -306,10 +306,10 @@ func (a *PayPalAdapter) ValidateWebhook(payload []byte, signature string) error 
 	// PayPal webhooks use a complex verification process
 	// involving transmission ID, timestamp, webhook ID, and CRC32 checksum
 	// For sandbox, we'll do a simpler validation
-	
+
 	// In production, you would call the PayPal verify-webhook-signature API
 	// POST /v1/notifications/verify-webhook-signature
-	
+
 	if signature == "" {
 		return ErrWebhookSignatureInvalid
 	}
@@ -397,10 +397,10 @@ func (a *PayPalAdapter) GetSettlementReport(ctx context.Context, req SettlementR
 	// Query transaction history
 	// Note: PayPal has a Transaction Search API at /v1/reporting/transactions
 	// and a separate Settlement Reports API at /v1/reporting/balances
-	
+
 	searchURL := fmt.Sprintf("%s/v1/reporting/transactions?start_date=%s&end_date=%s&transaction_type=T0700&page_size=100",
 		a.config.GetBaseURL(), req.StartDate, req.EndDate)
-	
+
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create report request: %w", err)
@@ -443,21 +443,21 @@ func (a *PayPalAdapter) GetSettlementReport(ctx context.Context, req SettlementR
 			Status:        tx.TransactionInfo.TransactionStatus,
 			ProcessedAt:   tx.TransactionInfo.TransactionUpdatedDate,
 		}
-		
+
 		if tx.TransactionInfo.TransactionAmount != nil {
 			if amount, err := parsePayPalAmount(tx.TransactionInfo.TransactionAmount.Value); err == nil {
 				settleTx.Amount = amount
 				report.TotalAmount += amount
 			}
 		}
-		
+
 		if tx.TransactionInfo.FeeAmount != nil {
 			if fee, err := parsePayPalAmount(tx.TransactionInfo.FeeAmount.Value); err == nil {
 				settleTx.Fee = fee
 				report.TotalFees += fee
 			}
 		}
-		
+
 		report.Transactions = append(report.Transactions, settleTx)
 	}
 
@@ -588,15 +588,15 @@ type paypalBatchHeader struct {
 }
 
 type paypalPayoutItemResp struct {
-	PayoutItemID   string `json:"payout_item_id"`
+	PayoutItemID      string `json:"payout_item_id"`
 	TransactionStatus string `json:"transaction_status"`
 }
 
 type paypalPayoutItemDetails struct {
-	PayoutItemID      string        `json:"payout_item_id"`
-	TransactionStatus string        `json:"transaction_status"`
+	PayoutItemID      string           `json:"payout_item_id"`
+	TransactionStatus string           `json:"transaction_status"`
 	PayoutItem        paypalPayoutItem `json:"payout_item"`
-	Errors            *paypalError  `json:"errors,omitempty"`
+	Errors            *paypalError     `json:"errors,omitempty"`
 }
 
 type paypalError struct {
@@ -645,13 +645,13 @@ func verifyWebhookSignature(webhookID string, transmissionID string, timestamp s
 	// Construct the validation string
 	// PayPal uses: <transmissionId>|<timestamp>|<webhookId>|<CRC32 of payload>
 	// Then signs with SHA256
-	
+
 	message := fmt.Sprintf("%s|%s|%s|%x", transmissionID, timestamp, webhookID, crc32Checksum(payload))
-	
+
 	mac := hmac.New(sha256.New, []byte(webhookID))
 	mac.Write([]byte(message))
 	expectedMAC := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	
+
 	return hmac.Equal([]byte(expectedSignature), []byte(expectedMAC))
 }
 
@@ -672,4 +672,3 @@ func crc32Checksum(data []byte) uint32 {
 	}
 	return ^crc
 }
-

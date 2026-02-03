@@ -98,4 +98,3 @@ func (filters DeploymentFilters) Accept(obj Deployment, stateVal Deployment_Stat
 
 	return true
 }
-

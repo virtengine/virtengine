@@ -83,4 +83,3 @@ func ParseABCILogs(logs string) (res sdk.ABCIMessageLogs, err error) {
 	err = json.Unmarshal([]byte(logs), &res)
 	return res, err
 }
-

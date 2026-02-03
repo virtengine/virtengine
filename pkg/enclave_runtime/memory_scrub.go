@@ -214,4 +214,3 @@ func (k *FixedSizeKey64) Destroy() {
 func (k *FixedSizeKey64) Bytes() []byte {
 	return k[:]
 }
-

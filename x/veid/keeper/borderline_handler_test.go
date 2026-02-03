@@ -22,9 +22,9 @@ import (
 
 // Test addresses
 var (
-	testHandlerAddress       = sdk.AccAddress([]byte("handler_test_addr___")).String()
-	testHandlerAddress2      = sdk.AccAddress([]byte("handler_test_addr2__")).String()
-	testReviewerAddress      = sdk.AccAddress([]byte("reviewer_address____")).String()
+	testHandlerAddress  = sdk.AccAddress([]byte("handler_test_addr___")).String()
+	testHandlerAddress2 = sdk.AccAddress([]byte("handler_test_addr2__")).String()
+	testReviewerAddress = sdk.AccAddress([]byte("reviewer_address____")).String()
 )
 
 // BorderlineHandlerTestSuite is the test suite for borderline handler functionality
@@ -178,7 +178,7 @@ func (s *BorderlineHandlerTestSuite) TestDetectBorderlineCase_MarginCalculation(
 	)
 
 	s.Require().True(detected)
-	s.Require().Equal(uint32(1), borderlineCase.Margin)  // Margin from nearest threshold
+	s.Require().Equal(uint32(1), borderlineCase.Margin)     // Margin from nearest threshold
 	s.Require().Equal(uint32(90), borderlineCase.Threshold) // Nearest is upper
 }
 
@@ -192,7 +192,7 @@ func (s *BorderlineHandlerTestSuite) TestDetectBorderlineCase_MarginCalculation_
 	)
 
 	s.Require().True(detected)
-	s.Require().Equal(uint32(1), borderlineCase.Margin)    // Margin from nearest threshold
+	s.Require().Equal(uint32(1), borderlineCase.Margin)     // Margin from nearest threshold
 	s.Require().Equal(uint32(85), borderlineCase.Threshold) // Nearest is lower
 }
 

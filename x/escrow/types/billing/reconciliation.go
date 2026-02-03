@@ -484,14 +484,18 @@ func BuildReconciliationReportKey(reportID string) []byte {
 
 // BuildReconciliationReportByProviderKey builds the index key
 func BuildReconciliationReportByProviderKey(provider string, reportID string) []byte {
-	key := append(ReconciliationReportByProviderPrefix, []byte(provider)...)
+	key := make([]byte, 0, len(ReconciliationReportByProviderPrefix)+len(provider)+1+len(reportID))
+	key = append(key, ReconciliationReportByProviderPrefix...)
+	key = append(key, []byte(provider)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(reportID)...)
 }
 
 // BuildReconciliationReportByCustomerKey builds the index key
 func BuildReconciliationReportByCustomerKey(customer string, reportID string) []byte {
-	key := append(ReconciliationReportByCustomerPrefix, []byte(customer)...)
+	key := make([]byte, 0, len(ReconciliationReportByCustomerPrefix)+len(customer)+1+len(reportID))
+	key = append(key, ReconciliationReportByCustomerPrefix...)
+	key = append(key, []byte(customer)...)
 	key = append(key, byte('/'))
 	return append(key, []byte(reportID)...)
 }

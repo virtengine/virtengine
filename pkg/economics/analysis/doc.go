@@ -5,4 +5,3 @@
 //   - Attack cost analysis (51% attack, spam attacks, long-range attacks)
 //   - Game theory analysis of validator and delegator incentives
 package analysis
-

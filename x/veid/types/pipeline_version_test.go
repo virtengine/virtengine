@@ -184,7 +184,7 @@ func TestModelManifestValidation(t *testing.T) {
 						Version:     "1.0.0",
 						WeightsHash: "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 						Framework:   "tensorflow",
-					Purpose:     string(ModelPurposeFaceRecognition),
+						Purpose:     string(ModelPurposeFaceRecognition),
 					},
 				},
 			},

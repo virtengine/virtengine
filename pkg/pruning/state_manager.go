@@ -107,7 +107,8 @@ func (sm *StateManager) ShouldPruneHeight(currentHeight, targetHeight int64) boo
 
 	// Calculate the cutoff height
 	keepRecent, _ := sm.config.PruningOptions()
-	cutoffHeight := currentHeight - int64(keepRecent)
+	keepRecentHeight := safeInt64FromUint64(keepRecent)
+	cutoffHeight := currentHeight - keepRecentHeight
 
 	// Don't prune if within keep-recent window
 	if targetHeight > cutoffHeight {
@@ -127,17 +128,25 @@ func (sm *StateManager) shouldPruneTiered(currentHeight, targetHeight int64) boo
 	age := currentHeight - targetHeight
 
 	// Tier 1: Keep all (full resolution)
-	if age <= int64(sm.config.Tiered.Tier1Blocks) {
+	if age <= safeInt64FromUint64(sm.config.Tiered.Tier1Blocks) {
 		return false
 	}
 
 	// Tier 2: Sample every N blocks
-	if age <= int64(sm.config.Tiered.Tier2Blocks) {
-		return targetHeight%int64(sm.config.Tiered.Tier2SamplingRate) != 0
+	if age <= safeInt64FromUint64(sm.config.Tiered.Tier2Blocks) {
+		tier2Rate := safeInt64FromUint64(sm.config.Tiered.Tier2SamplingRate)
+		if tier2Rate == 0 {
+			tier2Rate = 1
+		}
+		return targetHeight%tier2Rate != 0
 	}
 
 	// Tier 3: Sample at lower rate
-	return targetHeight%int64(sm.config.Tiered.Tier3SamplingRate) != 0
+	tier3Rate := safeInt64FromUint64(sm.config.Tiered.Tier3SamplingRate)
+	if tier3Rate == 0 {
+		tier3Rate = 1
+	}
+	return targetHeight%tier3Rate != 0
 }
 
 // ShouldRetainForSnapshot determines if a height should be retained for snapshots.
@@ -150,7 +159,11 @@ func (sm *StateManager) ShouldRetainForSnapshot(height int64) bool {
 	}
 
 	// Retain heights that are snapshot boundaries
-	return height%int64(sm.config.Snapshot.Interval) == 0
+	interval := safeInt64FromUint64(sm.config.Snapshot.Interval)
+	if interval == 0 {
+		return false
+	}
+	return height%interval == 0
 }
 
 // CalculatePruneRange calculates the range of heights to prune.
@@ -164,12 +177,16 @@ func (sm *StateManager) CalculatePruneRange(currentHeight, lastPruned int64) (fr
 		return 0, 0, false
 	}
 
-	if currentHeight%int64(interval) != 0 {
+	intervalHeight := safeInt64FromUint64(interval)
+	if intervalHeight == 0 {
+		return 0, 0, false
+	}
+	if currentHeight%intervalHeight != 0 {
 		return 0, 0, false
 	}
 
 	keepRecent, _ := sm.config.PruningOptions()
-	toHeight = currentHeight - int64(keepRecent)
+	toHeight = currentHeight - safeInt64FromUint64(keepRecent)
 
 	// Start from last pruned height + 1
 	fromHeight = lastPruned + 1
@@ -219,17 +236,28 @@ func (sm *StateManager) GetHeightStatus(currentHeight, targetHeight int64) Heigh
 	}
 
 	keepRecent, _ := sm.config.PruningOptions()
-	cutoffHeight := currentHeight - int64(keepRecent)
+	keepRecentHeight := safeInt64FromUint64(keepRecent)
+	cutoffHeight := currentHeight - keepRecentHeight
 
 	// Determine if pruned
 	if targetHeight <= cutoffHeight && sm.config.Strategy != StrategyNothing {
 		// Check if it's a sampled height
 		if sm.config.Strategy == StrategyTiered && sm.config.Tiered.Enabled {
 			age := currentHeight - targetHeight
-			if age > int64(sm.config.Tiered.Tier2Blocks) {
-				info.IsSampled = targetHeight%int64(sm.config.Tiered.Tier3SamplingRate) == 0
-			} else if age > int64(sm.config.Tiered.Tier1Blocks) {
-				info.IsSampled = targetHeight%int64(sm.config.Tiered.Tier2SamplingRate) == 0
+			tier1Blocks := safeInt64FromUint64(sm.config.Tiered.Tier1Blocks)
+			tier2Blocks := safeInt64FromUint64(sm.config.Tiered.Tier2Blocks)
+			tier2Rate := safeInt64FromUint64(sm.config.Tiered.Tier2SamplingRate)
+			if tier2Rate == 0 {
+				tier2Rate = 1
+			}
+			tier3Rate := safeInt64FromUint64(sm.config.Tiered.Tier3SamplingRate)
+			if tier3Rate == 0 {
+				tier3Rate = 1
+			}
+			if age > tier2Blocks {
+				info.IsSampled = targetHeight%tier3Rate == 0
+			} else if age > tier1Blocks {
+				info.IsSampled = targetHeight%tier2Rate == 0
 			}
 			info.IsPruned = !info.IsSampled
 		} else {
@@ -238,7 +266,8 @@ func (sm *StateManager) GetHeightStatus(currentHeight, targetHeight int64) Heigh
 	}
 
 	// Check if snapshot
-	if sm.config.Snapshot.Enabled && targetHeight%int64(sm.config.Snapshot.Interval) == 0 {
+	interval := safeInt64FromUint64(sm.config.Snapshot.Interval)
+	if sm.config.Snapshot.Enabled && interval > 0 && targetHeight%interval == 0 {
 		info.IsSnapshot = true
 	}
 
@@ -290,7 +319,7 @@ func (sm *StateManager) EstimateStorageSavings(totalBlocks int64, avgBlockSize i
 	case StrategyEverything:
 		estimate.RetainedSize = 2 * avgBlockSize
 	case StrategyDefault, StrategyCustom:
-		retained := int64(keepRecent)
+		retained := safeInt64FromUint64(keepRecent)
 		if retained > totalBlocks {
 			retained = totalBlocks
 		}
@@ -312,7 +341,7 @@ func (sm *StateManager) estimateTieredRetention(totalBlocks, avgBlockSize int64)
 	var retained int64
 
 	// Tier 1: Full resolution
-	tier1 := int64(sm.config.Tiered.Tier1Blocks)
+	tier1 := safeInt64FromUint64(sm.config.Tiered.Tier1Blocks)
 	if tier1 > totalBlocks {
 		tier1 = totalBlocks
 	}
@@ -324,11 +353,15 @@ func (sm *StateManager) estimateTieredRetention(totalBlocks, avgBlockSize int64)
 	}
 
 	// Tier 2: Sampled
-	tier2 := int64(sm.config.Tiered.Tier2Blocks) - tier1
+	tier2 := safeInt64FromUint64(sm.config.Tiered.Tier2Blocks) - tier1
 	if tier2 > remaining {
 		tier2 = remaining
 	}
-	tier2Sampled := tier2 / int64(sm.config.Tiered.Tier2SamplingRate)
+	tier2SampleRate := safeInt64FromUint64(sm.config.Tiered.Tier2SamplingRate)
+	if tier2SampleRate == 0 {
+		tier2SampleRate = 1
+	}
+	tier2Sampled := tier2 / tier2SampleRate
 	retained += tier2Sampled * avgBlockSize
 
 	remaining -= tier2
@@ -337,7 +370,11 @@ func (sm *StateManager) estimateTieredRetention(totalBlocks, avgBlockSize int64)
 	}
 
 	// Tier 3: Lower sample rate
-	tier3Sampled := remaining / int64(sm.config.Tiered.Tier3SamplingRate)
+	tier3SampleRate := safeInt64FromUint64(sm.config.Tiered.Tier3SamplingRate)
+	if tier3SampleRate == 0 {
+		tier3SampleRate = 1
+	}
+	tier3Sampled := remaining / tier3SampleRate
 	retained += tier3Sampled * avgBlockSize
 
 	return retained
@@ -354,6 +391,8 @@ type StorageSavingsEstimate struct {
 }
 
 // notifyHooks notifies all registered hooks of a pruning event.
+//
+//nolint:unused // Reserved for hook-based extensibility
 func (sm *StateManager) notifyHooks(event string, ctx context.Context, fromHeight, toHeight int64, prunedCount int64, duration time.Duration, err error) {
 	sm.mu.RLock()
 	hooks := sm.hooks
@@ -375,4 +414,3 @@ func (sm *StateManager) notifyHooks(event string, ctx context.Context, fromHeigh
 func (sm *StateManager) Metrics() *Metrics {
 	return sm.metrics
 }
-

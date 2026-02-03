@@ -360,4 +360,3 @@ func NewHPCSchedulerError(code HPCErrorCode, message string, cause error) *HPCSc
 		Cause:     cause,
 	}
 }
-

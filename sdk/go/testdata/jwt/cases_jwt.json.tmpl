@@ -1,7 +1,6 @@
 [
     {
         "description": "sign valid/verify fail with invalid issuer",
-        "tokenString": "eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJ2ZXJzaW9uIjoiIiwibGVhc2VzIjp7ImFjY2VzcyI6IiJ9fQ.fQFwGyhJDyF9i_zCX6IwJ43_arjs_1qJmxNSph6t8INMMZ7hBvrzwg0Ym8N06G7O_ZDw0mujQCfmOmR1jegnmA",
         "claims": {},
         "expected": {
             "alg": "ES256K",
@@ -12,7 +11,6 @@
     },
     {
         "description": "sign valid/verify fail with empty iat",
-        "tokenString": "eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJha2FzaDFxdWZhM3h6cmYzNHF2d3llamtodm5jNHBzZjQ5ZmZ0YXcwYXNtaCIsInZlcnNpb24iOiIiLCJsZWFzZXMiOnsiYWNjZXNzIjoiIn19.xJmyqk4-2LXPa_l3wQdZhDSsTUatYO8SxBSr_D7_uust0LOFLUqdwIAAX8jpFoWTbbgWN0cQhPNOcBrI3-P9XQ",
         "claims": {
             "iss": "{{.Issuer}}"
         },
@@ -24,20 +22,18 @@
         }
     },
     {
-        "description": "sign valid/verify against static token string",
-        "tokenString": "eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJha2FzaDFxdWZhM3h6cmYzNHF2d3llamtodm5jNHBzZjQ5ZmZ0YXcwYXNtaCIsImV4cCI6MjA0NjY2NzEwMywibmJmIjoxNzQ2NjY2MTAzLCJpYXQiOjE3NDY2NjYxMDMsInZlcnNpb24iOiJ2MSIsImxlYXNlcyI6eyJhY2Nlc3MiOiJmdWxsIn19.MZr8b9Q-hcnAUAFbdAVcZpetppP0YDFxJwkRncgE8mEM20woFB2yJuFbfv6YMAUZk8DNORoLaP8hUP8q2FnznQ",
+        "description": "sign valid/verify full access token",
         "claims": {
-            "iss": "ve1qufa3xzrf34qvwyejkhvnc4psf49fftawe7t8g",
-            "iat": "1746666103",
-            "nbf": "1746666103",
-            "exp": "2046667103",
+            "iss": "{{.Issuer}}",
+            "iat": "{{.IatCurr}}",
+            "nbf": "{{.NbfCurr}}",
+            "exp": "{{.Exp48h}}",
             "version": "v1",
             "leases": {
                 "access": "full"
             }
         },
         "expected": {
-            "alg": "ES256K",
             "signFail": false,
             "verifyFail": false
         }

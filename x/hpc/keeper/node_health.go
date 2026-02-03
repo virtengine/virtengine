@@ -187,7 +187,7 @@ func (k Keeper) CheckStaleNodes(ctx sdk.Context) error {
 			node.Active = false
 			node.StateChangedAt = now
 
-			k.RecordNodeStateAudit(ctx, types.NodeStateAuditEntry{
+			_ = k.RecordNodeStateAudit(ctx, types.NodeStateAuditEntry{
 				NodeID:        node.NodeID,
 				ClusterID:     node.ClusterID,
 				PreviousState: previousState,
@@ -208,7 +208,7 @@ func (k Keeper) CheckStaleNodes(ctx sdk.Context) error {
 			node.TotalMissedHeartbeats++
 			node.StateChangedAt = now
 
-			k.RecordNodeStateAudit(ctx, types.NodeStateAuditEntry{
+			_ = k.RecordNodeStateAudit(ctx, types.NodeStateAuditEntry{
 				NodeID:        node.NodeID,
 				ClusterID:     node.ClusterID,
 				PreviousState: previousState,
@@ -228,7 +228,7 @@ func (k Keeper) CheckStaleNodes(ctx sdk.Context) error {
 			node.TotalMissedHeartbeats++
 			node.StateChangedAt = now
 
-			k.RecordNodeStateAudit(ctx, types.NodeStateAuditEntry{
+			_ = k.RecordNodeStateAudit(ctx, types.NodeStateAuditEntry{
 				NodeID:        node.NodeID,
 				ClusterID:     node.ClusterID,
 				PreviousState: previousState,
@@ -243,7 +243,7 @@ func (k Keeper) CheckStaleNodes(ctx sdk.Context) error {
 
 		if node.State != previousState {
 			node.UpdatedAt = now
-			k.SetNodeMetadata(ctx, node)
+			_ = k.SetNodeMetadata(ctx, node)
 		}
 
 		return false

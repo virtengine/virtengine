@@ -84,4 +84,3 @@ func TestPromptParseInteger(t *testing.T) {
 		})
 	}
 }
-

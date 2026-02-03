@@ -130,4 +130,3 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "virtengine/escrow/v1/service.proto",
 }
-

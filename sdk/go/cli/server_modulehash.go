@@ -100,4 +100,3 @@ func getModuleHashesAtHeight(svrCtx *sdkserver.Context, appCreator types.AppCrea
 
 	return commitInfoForHeight, nil
 }
-

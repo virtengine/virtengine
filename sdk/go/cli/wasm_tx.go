@@ -425,4 +425,3 @@ func GetTxWasmSetContractLabelCmd() *cobra.Command {
 	cflags.AddTxFlagsToCmd(cmd)
 	return cmd
 }
-

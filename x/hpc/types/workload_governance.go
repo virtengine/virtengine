@@ -263,12 +263,12 @@ type WorkloadGovernanceParams struct {
 // DefaultWorkloadGovernanceParams returns default governance parameters
 func DefaultWorkloadGovernanceParams() WorkloadGovernanceParams {
 	return WorkloadGovernanceParams{
-		VotingPeriod:              7 * 24 * time.Hour, // 7 days
+		VotingPeriod:              7 * 24 * time.Hour,                                  // 7 days
 		MinDeposit:                sdk.NewCoins(sdk.NewInt64Coin("uvirt", 1000000000)), // 1000 VIRT
-		Quorum:                    "0.334000", // 33.4%
-		Threshold:                 "0.500000", // 50%
-		VetoThreshold:             "0.334000", // 33.4%
-		AllowedProposers:          nil, // Anyone can propose
+		Quorum:                    "0.334000",                                          // 33.4%
+		Threshold:                 "0.500000",                                          // 50%
+		VetoThreshold:             "0.334000",                                          // 33.4%
+		AllowedProposers:          nil,                                                 // Anyone can propose
 		AutoApproveBuiltinUpdates: true,
 		SecurityRevokeQuorum:      "0.200000", // 20% for security revocations
 	}

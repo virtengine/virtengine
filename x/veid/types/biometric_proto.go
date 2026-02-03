@@ -31,12 +31,12 @@ type BiometricAuditProto struct {
 
 // Proto.Message interface stubs for BiometricHashProto.
 // ProtoMessage is a marker method required by the proto.Message interface.
-func (m *BiometricHashProto) ProtoMessage() { /* marker method - no implementation needed */ }
-func (m *BiometricHashProto) Reset()        { *m = BiometricHashProto{} }
+func (m *BiometricHashProto) ProtoMessage()  { /* marker method - no implementation needed */ }
+func (m *BiometricHashProto) Reset()         { *m = BiometricHashProto{} }
 func (m *BiometricHashProto) String() string { return fmt.Sprintf("%+v", *m) }
 
 // Proto.Message interface stubs for BiometricAuditProto.
 // ProtoMessage is a marker method required by the proto.Message interface.
-func (m *BiometricAuditProto) ProtoMessage() { /* marker method - no implementation needed */ }
-func (m *BiometricAuditProto) Reset()        { *m = BiometricAuditProto{} }
+func (m *BiometricAuditProto) ProtoMessage()  { /* marker method - no implementation needed */ }
+func (m *BiometricAuditProto) Reset()         { *m = BiometricAuditProto{} }
 func (m *BiometricAuditProto) String() string { return fmt.Sprintf("%+v", *m) }

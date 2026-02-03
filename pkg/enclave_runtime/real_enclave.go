@@ -374,7 +374,7 @@ var _ EnclaveService = (*NitroEnclaveService)(nil)
 
 // NewNitroEnclaveService creates a new Nitro enclave service
 func NewNitroEnclaveService(config NitroConfig) (*NitroEnclaveService, error) {
-	return nil, errors.New("Nitro enclave not yet implemented - see _docs/tee-integration-plan.md")
+	return nil, errors.New("nitro enclave not yet implemented - see _docs/tee-integration-plan.md")
 }
 
 // GetPlatformType returns PlatformNitro
@@ -389,37 +389,37 @@ func (s *NitroEnclaveService) IsPlatformSecure() bool {
 
 // Initialize initializes the Nitro enclave
 func (s *NitroEnclaveService) Initialize(_ RuntimeConfig) error {
-	return errors.New("Nitro enclave not yet implemented")
+	return errors.New("nitro enclave not yet implemented")
 }
 
 // Score performs scoring in the Nitro enclave
 func (s *NitroEnclaveService) Score(_ context.Context, _ *ScoringRequest) (*ScoringResult, error) {
-	return nil, errors.New("Nitro enclave not yet implemented")
+	return nil, errors.New("nitro enclave not yet implemented")
 }
 
 // GetMeasurement returns the enclave measurement
 func (s *NitroEnclaveService) GetMeasurement() ([]byte, error) {
-	return nil, errors.New("Nitro enclave not yet implemented")
+	return nil, errors.New("nitro enclave not yet implemented")
 }
 
 // GetEncryptionPubKey returns the encryption public key
 func (s *NitroEnclaveService) GetEncryptionPubKey() ([]byte, error) {
-	return nil, errors.New("Nitro enclave not yet implemented")
+	return nil, errors.New("nitro enclave not yet implemented")
 }
 
 // GetSigningPubKey returns the signing public key
 func (s *NitroEnclaveService) GetSigningPubKey() ([]byte, error) {
-	return nil, errors.New("Nitro enclave not yet implemented")
+	return nil, errors.New("nitro enclave not yet implemented")
 }
 
 // GenerateAttestation generates an attestation quote
 func (s *NitroEnclaveService) GenerateAttestation(_ []byte) ([]byte, error) {
-	return nil, errors.New("Nitro enclave not yet implemented")
+	return nil, errors.New("nitro enclave not yet implemented")
 }
 
 // RotateKeys rotates enclave keys
 func (s *NitroEnclaveService) RotateKeys() error {
-	return errors.New("Nitro enclave not yet implemented")
+	return errors.New("nitro enclave not yet implemented")
 }
 
 // GetStatus returns the enclave status
@@ -429,7 +429,7 @@ func (s *NitroEnclaveService) GetStatus() EnclaveStatus {
 
 // Shutdown shuts down the enclave
 func (s *NitroEnclaveService) Shutdown() error {
-	return errors.New("Nitro enclave not yet implemented")
+	return errors.New("nitro enclave not yet implemented")
 }
 
 // =============================================================================
@@ -479,7 +479,7 @@ func CreateEnclaveService(config EnclaveConfig) (EnclaveService, error) {
 
 	case PlatformNitro:
 		if config.NitroConfig == nil {
-			return nil, errors.New("Nitro configuration required")
+			return nil, errors.New("nitro configuration required")
 		}
 		return NewNitroEnclaveService(*config.NitroConfig)
 
@@ -537,8 +537,7 @@ func (v *SimpleAttestationVerifier) VerifyReport(ctx context.Context, report *At
 
 // IsMeasurementAllowed checks if a measurement is in the allowlist
 func (v *SimpleAttestationVerifier) IsMeasurementAllowed(measurement []byte) bool {
-	key := string(measurement)
-	return v.allowedMeasurements[key]
+	return v.allowedMeasurements[string(measurement)]
 }
 
 // AddAllowedMeasurement adds a measurement to the allowlist
@@ -546,4 +545,3 @@ func (v *SimpleAttestationVerifier) AddAllowedMeasurement(measurement []byte) {
 	key := string(measurement)
 	v.allowedMeasurements[key] = true
 }
-

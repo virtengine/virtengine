@@ -198,13 +198,13 @@ type HealthCheckParams struct {
 // DefaultHealthCheckParams returns default health check parameters
 func DefaultHealthCheckParams() HealthCheckParams {
 	return HealthCheckParams{
-		MaxMissedHeartbeats:      3,   // Allow 3 missed heartbeats before degraded
-		MaxAttestationFailures:   5,   // Allow 5 attestation failures before unhealthy
-		MaxSignatureFailures:     10,  // Allow 10 signature failures before unhealthy
-		HeartbeatTimeoutBlocks:   100, // 100 blocks (~10 minutes at 6s/block)
+		MaxMissedHeartbeats:      3,    // Allow 3 missed heartbeats before degraded
+		MaxAttestationFailures:   5,    // Allow 5 attestation failures before unhealthy
+		MaxSignatureFailures:     10,   // Allow 10 signature failures before unhealthy
+		HeartbeatTimeoutBlocks:   100,  // 100 blocks (~10 minutes at 6s/block)
 		AttestationTimeoutBlocks: 1000, // 1000 blocks (~100 minutes)
-		DegradedThreshold:        3,   // General threshold for degraded state
-		UnhealthyThreshold:       10,  // General threshold for unhealthy state
+		DegradedThreshold:        3,    // General threshold for degraded state
+		UnhealthyThreshold:       10,   // General threshold for unhealthy state
 	}
 }
 

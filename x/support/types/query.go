@@ -34,26 +34,26 @@ type QueryParamsResponse struct {
 
 // Proto message interface stubs
 
-func (*QueryExternalRefRequest) ProtoMessage()          {}
-func (m *QueryExternalRefRequest) Reset()               { *m = QueryExternalRefRequest{} }
-func (m *QueryExternalRefRequest) String() string       { return fmt.Sprintf("%+v", *m) }
+func (*QueryExternalRefRequest) ProtoMessage()    {}
+func (m *QueryExternalRefRequest) Reset()         { *m = QueryExternalRefRequest{} }
+func (m *QueryExternalRefRequest) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*QueryExternalRefResponse) ProtoMessage()         {}
-func (m *QueryExternalRefResponse) Reset()              { *m = QueryExternalRefResponse{} }
-func (m *QueryExternalRefResponse) String() string      { return fmt.Sprintf("%+v", *m) }
+func (*QueryExternalRefResponse) ProtoMessage()    {}
+func (m *QueryExternalRefResponse) Reset()         { *m = QueryExternalRefResponse{} }
+func (m *QueryExternalRefResponse) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*QueryExternalRefsByOwnerRequest) ProtoMessage()  {}
-func (m *QueryExternalRefsByOwnerRequest) Reset()       { *m = QueryExternalRefsByOwnerRequest{} }
+func (*QueryExternalRefsByOwnerRequest) ProtoMessage()    {}
+func (m *QueryExternalRefsByOwnerRequest) Reset()         { *m = QueryExternalRefsByOwnerRequest{} }
 func (m *QueryExternalRefsByOwnerRequest) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*QueryExternalRefsByOwnerResponse) ProtoMessage() {}
-func (m *QueryExternalRefsByOwnerResponse) Reset()      { *m = QueryExternalRefsByOwnerResponse{} }
+func (*QueryExternalRefsByOwnerResponse) ProtoMessage()    {}
+func (m *QueryExternalRefsByOwnerResponse) Reset()         { *m = QueryExternalRefsByOwnerResponse{} }
 func (m *QueryExternalRefsByOwnerResponse) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*QueryParamsRequest) ProtoMessage()               {}
-func (m *QueryParamsRequest) Reset()                    { *m = QueryParamsRequest{} }
-func (m *QueryParamsRequest) String() string            { return fmt.Sprintf("%+v", *m) }
+func (*QueryParamsRequest) ProtoMessage()    {}
+func (m *QueryParamsRequest) Reset()         { *m = QueryParamsRequest{} }
+func (m *QueryParamsRequest) String() string { return fmt.Sprintf("%+v", *m) }
 
-func (*QueryParamsResponse) ProtoMessage()              {}
-func (m *QueryParamsResponse) Reset()                   { *m = QueryParamsResponse{} }
-func (m *QueryParamsResponse) String() string           { return fmt.Sprintf("%+v", *m) }
+func (*QueryParamsResponse) ProtoMessage()    {}
+func (m *QueryParamsResponse) Reset()         { *m = QueryParamsResponse{} }
+func (m *QueryParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }
