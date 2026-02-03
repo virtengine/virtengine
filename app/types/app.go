@@ -625,12 +625,15 @@ func (app *App) InitNormalKeepers(
 		cdc,
 		app.keys[bmetypes.StoreKey],
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		app.Keepers.Cosmos.Bank,
+		nil, // OracleKeeper - will be set after Oracle keeper is created
 	)
 
 	app.Keepers.VirtEngine.Oracle = oraclekeeper.NewKeeper(
 		cdc,
 		app.keys[oracletypes.StoreKey],
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		app.Keepers.Cosmos.Bank,
 	)
 }
 

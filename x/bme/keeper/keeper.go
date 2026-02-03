@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"errors"
 
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
@@ -25,6 +26,21 @@ type IKeeper interface {
 	GetState(ctx sdk.Context) types.State
 	SetState(ctx sdk.Context, state types.State) error
 
+	// Escrow Operations
+	HoldEscrow(ctx sdk.Context, orderID string, depositor sdk.AccAddress, amount sdk.Coins) error
+	ReleaseEscrow(ctx sdk.Context, orderID string, recipient sdk.AccAddress) error
+	GetEscrowBalance(ctx sdk.Context, orderID string) sdk.Coins
+
+	// Settlement Operations
+	SettleBilling(ctx sdk.Context, leaseID string, provider sdk.AccAddress, usageAmount sdk.Coins) error
+
+	// Fee Collection
+	CollectFees(ctx sdk.Context, payer sdk.AccAddress, amount sdk.Coins) error
+
+	// Token Operations
+	MintTokens(ctx sdk.Context, recipient sdk.AccAddress, amount sdk.Coins) error
+	BurnTokens(ctx sdk.Context, from sdk.AccAddress, amount sdk.Coins) error
+
 	// Query server
 	NewQuerier() Querier
 }
@@ -36,6 +52,10 @@ type Keeper struct {
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
 	authority string
+
+	// External keepers
+	bankKeeper   BankKeeper
+	oracleKeeper OracleKeeper
 }
 
 // NewKeeper creates a new BME Keeper instance.
@@ -43,13 +63,38 @@ func NewKeeper(
 	cdc codec.BinaryCodec,
 	storeKey storetypes.StoreKey,
 	authority string,
+	bankKeeper BankKeeper,
+	oracleKeeper OracleKeeper,
 ) IKeeper {
 	return &Keeper{
-		cdc:       cdc,
-		storeKey:  storeKey,
-		authority: authority,
+		cdc:          cdc,
+		storeKey:     storeKey,
+		authority:    authority,
+		bankKeeper:   bankKeeper,
+		oracleKeeper: oracleKeeper,
 	}
 }
+
+// BankKeeper returns the bank keeper (for use in msg_server).
+func (k *Keeper) BankKeeper() BankKeeper {
+	return k.bankKeeper
+}
+
+// OracleKeeper returns the oracle keeper (for use in msg_server).
+func (k *Keeper) OracleKeeper() OracleKeeper {
+	return k.oracleKeeper
+}
+
+var (
+	// ErrEscrowNotFound is returned when an escrow record is not found.
+	ErrEscrowNotFound = errors.New("escrow not found")
+	// ErrInsufficientFunds is returned when there are not enough funds.
+	ErrInsufficientFunds = errors.New("insufficient funds")
+	// ErrInvalidAmount is returned when an amount is invalid.
+	ErrInvalidAmount = errors.New("invalid amount")
+	// ErrBankKeeperNotSet is returned when bank keeper is not configured.
+	ErrBankKeeperNotSet = errors.New("bank keeper not configured")
+)
 
 // Codec returns the keeper's codec.
 func (k *Keeper) Codec() codec.BinaryCodec {

@@ -37,7 +37,7 @@ func setupKeeper(t testing.TB) (keeper.IKeeper, sdk.Context) {
 
 	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 
-	k := keeper.NewKeeper(cdc, storeKey, authority)
+	k := keeper.NewKeeper(cdc, storeKey, authority, nil, nil)
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{}, false, log.NewNopLogger())
 
 	// Initialize with default params
