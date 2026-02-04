@@ -82,7 +82,11 @@ GO                           := GO111MODULE=$(GO111MODULE) go
 GO_BUILD                     := $(GO) build -mod=$(GOMOD)
 GO_TEST                      := $(GO) test -mod=$(GOMOD)
 GO_VET                       := $(GO) vet -mod=$(GOMOD)
+ifeq ($(OS),Windows_NT)
+GO_MOD_NAME                  := $(shell go list -m 2>nul)
+else
 GO_MOD_NAME                  := $(shell go list -m 2>/dev/null)
+endif
 
 ifeq ($(OS),Windows_NT)
 	DETECTED_OS := Windows
@@ -119,7 +123,7 @@ COSMOVISOR_DEBUG                 := $(VE_RUN_BIN)/cosmovisor
 
 
 ifeq ($(OS),Windows_NT)
-RELEASE_TAG           ?= $(shell powershell -NoProfile -Command "try { git describe --tags --abbrev=0 } catch { 'v0.0.0' }")
+RELEASE_TAG           ?= $(shell cmd /c "git describe --tags --abbrev=0 2>nul || echo v0.0.0")
 else
 RELEASE_TAG           ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 endif
