@@ -4,8 +4,8 @@
 # Prevents pushing code that doesn't pass critical quality gates.
 # Mirrors CI required checks: vet, lint, build, tests.
 #
-# NOTE: go mod tidy/vendor are handled by pre-commit hook (only when go.mod changes).
-# This keeps pre-push fast.
+# NOTE: gofmt auto-formatting and go mod tidy/vendor are handled by pre-commit hook.
+# This keeps pre-push fast and ensures formatted code is always committed.
 #
 # Bypass:       git push --no-verify
 # Quick mode:   $env:VE_HOOK_QUICK=1; git push     (vet + build only)
@@ -105,8 +105,8 @@ check_vet() {
         # shellcheck disable=SC2086
         go vet $changed_packages 2>&1
     else
-        # Exclude tests/ which may have build constraints
-        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | head -100) 2>&1
+        # Exclude tests/ and local temp/ scratch dirs which may have build constraints
+        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | grep -Ev '/temp($|/)' | head -100) 2>&1
     fi
 }
 
