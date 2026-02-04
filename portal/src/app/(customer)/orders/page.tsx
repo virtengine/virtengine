@@ -6,6 +6,14 @@ export const metadata: Metadata = {
   description: 'Manage your orders and deployments',
 };
 
+const orderPlaceholders = [
+  { id: 'order-1001', title: 'GPU Compute', ageDays: 1, status: 'Running', icon: '++' },
+  { id: 'order-1002', title: 'HPC Batch', ageDays: 2, status: 'Pending', icon: '++' },
+  { id: 'order-1003', title: 'AI Inference', ageDays: 3, status: 'Deploying', icon: '++' },
+  { id: 'order-1004', title: 'Data Pipeline', ageDays: 4, status: 'Running', icon: '++' },
+  { id: 'order-1005', title: 'Storage Snapshot', ageDays: 6, status: 'Running', icon: '++' },
+] as const;
+
 export default function OrdersPage() {
   return (
     <div className="container py-8">
@@ -44,8 +52,8 @@ export default function OrdersPage() {
 
       {/* Orders List */}
       <div className="space-y-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <OrderCard key={i} index={i} />
+        {orderPlaceholders.map((order) => (
+          <OrderCard key={order.id} order={order} />
         ))}
       </div>
 
@@ -53,7 +61,7 @@ export default function OrdersPage() {
       {false && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="rounded-full bg-muted p-4">
-            <span className="text-4xl">📋</span>
+            <span className="text-4xl">??</span>
           </div>
           <h2 className="mt-4 text-lg font-medium">No orders yet</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -71,9 +79,17 @@ export default function OrdersPage() {
   );
 }
 
-function OrderCard({ index }: { index: number }) {
-  const statuses = ['Running', 'Pending', 'Deploying', 'Running', 'Running'];
-  const status = statuses[index] || 'Running';
+function OrderCard({
+  order,
+}: {
+  order: {
+    id: string;
+    title: string;
+    ageDays: number;
+    status: 'Running' | 'Pending' | 'Deploying';
+    icon: string;
+  };
+}) {
   const statusColors: Record<string, string> = {
     Running: 'status-dot-success',
     Pending: 'status-dot-pending',
@@ -82,26 +98,26 @@ function OrderCard({ index }: { index: number }) {
 
   return (
     <Link
-      href={`/orders/${index}`}
+      href={`/orders/${order.id}`}
       className="flex items-center justify-between rounded-lg border border-border bg-card p-4 transition-all hover:shadow-md"
     >
       <div className="flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-          <span className="text-xl">🖥️</span>
+          <span className="text-xl">{order.icon}</span>
         </div>
         <div>
-          <h3 className="font-medium">Order #{1000 + index}</h3>
+          <h3 className="font-medium">Order {order.id.replace('order-', '#')}</h3>
           <p className="text-sm text-muted-foreground">
-            GPU Compute • Created {index + 1} day{index > 0 ? 's' : ''} ago
+            {order.title} - Created {order.ageDays} day{order.ageDays > 1 ? 's' : ''} ago
           </p>
         </div>
       </div>
       <div className="flex items-center gap-4">
         <span className="flex items-center gap-2 text-sm">
-          <span className={`status-dot ${statusColors[status]}`} />
-          {status}
+          <span className={`status-dot ${statusColors[order.status]}`} />
+          {order.status}
         </span>
-        <span className="text-muted-foreground">→</span>
+        <span className="text-muted-foreground">?</span>
       </div>
     </Link>
   );
