@@ -5,6 +5,7 @@ package keeper
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -17,6 +18,20 @@ import (
 
 	types "github.com/virtengine/virtengine/sdk/go/node/oracle/v1"
 	otypes "github.com/virtengine/virtengine/x/oracle/types"
+)
+
+// Error definitions
+var (
+	// ErrBankKeeperNotSet is returned when bank keeper is not configured.
+	ErrBankKeeperNotSet = errors.New("bank keeper not configured")
+	// ErrInsufficientFunds is returned when there are not enough funds.
+	ErrInsufficientFunds = errors.New("insufficient funds")
+	// ErrInvalidAmount is returned when an amount is invalid.
+	ErrInvalidAmount = errors.New("invalid amount")
+	// ErrOracleNotFound is returned when an oracle is not found.
+	ErrOracleNotFound = errors.New("oracle not found")
+	// ErrInvalidOracleAddress is returned when an oracle address is invalid.
+	ErrInvalidOracleAddress = errors.New("invalid oracle address")
 )
 
 // IKeeper defines the expected interface for the Oracle module keeper.
@@ -36,6 +51,13 @@ type IKeeper interface {
 	GetPrices(ctx sdk.Context, filters types.PricesFilter) ([]types.PriceData, error)
 	GetPriceFeedConfig(ctx sdk.Context, denom string) (*types.QueryPriceFeedConfigResponse, error)
 
+	// Oracle Reward/Staking Operations
+	DistributeRewards(ctx sdk.Context, epoch uint64) error
+	SlashDeposit(ctx sdk.Context, oracleAddr sdk.AccAddress, amount sdk.Coins, reason string) error
+	DelegateStake(ctx sdk.Context, delegator sdk.AccAddress, oracleAddr sdk.AccAddress, amount sdk.Coins) error
+	UndelegateStake(ctx sdk.Context, delegator sdk.AccAddress, oracleAddr sdk.AccAddress, amount sdk.Coins) error
+	GetOracleStake(ctx sdk.Context, oracleAddr sdk.AccAddress) sdk.Coins
+
 	// Query server
 	NewQuerier() Querier
 }
@@ -47,6 +69,9 @@ type Keeper struct {
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
 	authority string
+
+	// External keepers
+	bankKeeper BankKeeper
 }
 
 // NewKeeper creates a new Oracle Keeper instance.
@@ -54,12 +79,19 @@ func NewKeeper(
 	cdc codec.BinaryCodec,
 	storeKey storetypes.StoreKey,
 	authority string,
+	bankKeeper BankKeeper,
 ) IKeeper {
 	return &Keeper{
-		cdc:       cdc,
-		storeKey:  storeKey,
-		authority: authority,
+		cdc:        cdc,
+		storeKey:   storeKey,
+		authority:  authority,
+		bankKeeper: bankKeeper,
 	}
+}
+
+// BankKeeper returns the bank keeper (for use in other modules).
+func (k *Keeper) BankKeeper() BankKeeper {
+	return k.bankKeeper
 }
 
 // Codec returns the keeper's codec.

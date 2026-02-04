@@ -1,3 +1,3 @@
-// Package virtengine is a placeholder package for root-level tooling.
 // Production code lives in subpackages under this module.
+// Package virtengine exists to provide a buildable root package for tooling.
 package virtengine

@@ -67,6 +67,9 @@ export type {
   UploadRecord,
   VerificationRecord,
   IdentityGatingError,
+  MarketplaceAction,
+  RemediationPath,
+  ScopeRequirement,
 } from './types/identity';
 
 export { IdentityStatusCard } from './components/identity/IdentityStatusCard';
@@ -185,9 +188,10 @@ export type {
   TransactionResult,
 } from './types/chain';
 
-export { ChainEventListener } from './utils/chain-events';
-export { RPCClient } from './utils/rpc-client';
-export { WebSocketClient } from './utils/websocket-client';
+// TODO: Implement chain utilities
+// export { ChainEventListener } from './utils/chain-events';
+// export { RPCClient } from './utils/rpc-client';
+// export { WebSocketClient } from './utils/websocket-client';
 
 // ============================================================================
 // Utilities

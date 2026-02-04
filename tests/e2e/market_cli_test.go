@@ -238,8 +238,7 @@ func (s *marketIntegrationTestSuite) Test2CreateBid() {
 		WithSkipConfirm().
 		WithGasAutoFlags().
 		WithBroadcastModeBlock()
-	providerArgs := append([]string{providerPath}, []string(providerFlags)...)
-	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerArgs...)
+	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerPath, providerFlags...)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 

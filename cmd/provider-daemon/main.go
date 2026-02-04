@@ -11,7 +11,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -144,6 +146,15 @@ const (
 
 	// FlagWaldurOfferingSyncMaxRetries is max retries before dead-letter
 	FlagWaldurOfferingSyncMaxRetries = "waldur-offering-sync-max-retries"
+
+	// Portal API flags
+	FlagPortalAuthSecret      = "portal-auth-secret"
+	FlagPortalAllowInsecure   = "portal-allow-insecure"
+	FlagPortalRequireVEID     = "portal-require-veid"
+	FlagPortalMinVEIDScore    = "portal-min-veid-score"
+	FlagPortalShellSessionTTL = "portal-shell-session-ttl"
+	FlagPortalTokenTTL        = "portal-token-ttl"
+	FlagPortalAuditLogFile    = "portal-audit-log-file"
 )
 
 var (
@@ -212,6 +223,15 @@ func init() {
 	rootCmd.PersistentFlags().Int64(FlagWaldurOfferingSyncInterval, 300, "Offering sync reconciliation interval in seconds")
 	rootCmd.PersistentFlags().Int(FlagWaldurOfferingSyncMaxRetries, 5, "Max sync retries before dead-lettering")
 
+	// Portal API flags
+	rootCmd.PersistentFlags().String(FlagPortalAuthSecret, "", "Shared secret for portal signed requests")
+	rootCmd.PersistentFlags().Bool(FlagPortalAllowInsecure, true, "Allow portal requests without signature (dev only)")
+	rootCmd.PersistentFlags().Bool(FlagPortalRequireVEID, true, "Require VEID verification for shell access")
+	rootCmd.PersistentFlags().Int(FlagPortalMinVEIDScore, 80, "Minimum VEID score required for shell access")
+	rootCmd.PersistentFlags().Duration(FlagPortalShellSessionTTL, 10*time.Minute, "Shell session TTL for portal access")
+	rootCmd.PersistentFlags().Duration(FlagPortalTokenTTL, 5*time.Minute, "Portal session token TTL")
+	rootCmd.PersistentFlags().String(FlagPortalAuditLogFile, "data/portal_audit.log", "Portal audit log file path")
+
 	// Bind to viper
 	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
 	_ = viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
@@ -249,6 +269,15 @@ func init() {
 	_ = viper.BindPFlag(FlagWaldurCategoryMap, rootCmd.PersistentFlags().Lookup(FlagWaldurCategoryMap))
 	_ = viper.BindPFlag(FlagWaldurOfferingSyncInterval, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncInterval))
 	_ = viper.BindPFlag(FlagWaldurOfferingSyncMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurOfferingSyncMaxRetries))
+
+	// Portal API flags
+	_ = viper.BindPFlag(FlagPortalAuthSecret, rootCmd.PersistentFlags().Lookup(FlagPortalAuthSecret))
+	_ = viper.BindPFlag(FlagPortalAllowInsecure, rootCmd.PersistentFlags().Lookup(FlagPortalAllowInsecure))
+	_ = viper.BindPFlag(FlagPortalRequireVEID, rootCmd.PersistentFlags().Lookup(FlagPortalRequireVEID))
+	_ = viper.BindPFlag(FlagPortalMinVEIDScore, rootCmd.PersistentFlags().Lookup(FlagPortalMinVEIDScore))
+	_ = viper.BindPFlag(FlagPortalShellSessionTTL, rootCmd.PersistentFlags().Lookup(FlagPortalShellSessionTTL))
+	_ = viper.BindPFlag(FlagPortalTokenTTL, rootCmd.PersistentFlags().Lookup(FlagPortalTokenTTL))
+	_ = viper.BindPFlag(FlagPortalAuditLogFile, rootCmd.PersistentFlags().Lookup(FlagPortalAuditLogFile))
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())
@@ -515,6 +544,35 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start usage meter: %w", err)
 	}
 	fmt.Println("  Usage Meter: started")
+
+	portalAuditCfg := provider_daemon.DefaultAuditLogConfig()
+	portalAuditCfg.LogFile = viper.GetString(FlagPortalAuditLogFile)
+	portalAuditLogger, err := provider_daemon.NewAuditLogger(portalAuditCfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize portal audit logger: %w", err)
+	}
+	defer portalAuditLogger.Close()
+
+	portalCfg := provider_daemon.DefaultPortalAPIServerConfig()
+	portalCfg.ListenAddr = viper.GetString(FlagListenAddr)
+	portalCfg.AuthSecret = viper.GetString(FlagPortalAuthSecret)
+	portalCfg.AllowInsecure = viper.GetBool(FlagPortalAllowInsecure)
+	portalCfg.RequireVEID = viper.GetBool(FlagPortalRequireVEID)
+	portalCfg.MinVEIDScore = viper.GetInt(FlagPortalMinVEIDScore)
+	portalCfg.ShellSessionTTL = viper.GetDuration(FlagPortalShellSessionTTL)
+	portalCfg.TokenTTL = viper.GetDuration(FlagPortalTokenTTL)
+	portalCfg.AuditLogger = portalAuditLogger
+
+	portalAPI, err := provider_daemon.NewPortalAPIServer(portalCfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize portal API server: %w", err)
+	}
+	go func() {
+		if err := portalAPI.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Printf("[PORTAL] API server stopped: %v\n", err)
+		}
+	}()
+	fmt.Println("  Portal API: started")
 
 	// Initialize Waldur bridge (VE-2040+)
 	if viper.GetBool(FlagWaldurEnabled) {

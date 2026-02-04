@@ -36,8 +36,7 @@ func (s *providerIntegrationTestSuite) TestProvider() {
 		WithGasAutoFlags().
 		WithSkipConfirm().
 		WithBroadcastModeBlock()
-	providerArgs := append([]string{providerPath}, []string(providerFlags)...)
-	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerArgs...)
+	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerPath, providerFlags...)
 	s.Require().NoError(err)
 	s.Require().NoError(s.Network().WaitForNextBlock())
 
@@ -79,11 +78,11 @@ func (s *providerIntegrationTestSuite) TestProvider() {
 		WithGasAutoFlags().
 		WithSkipConfirm().
 		WithBroadcastModeBlock()
-	updateArgs := append([]string{providerPath2}, []string(updateFlags)...)
 	_, err = clitestutil.TxUpdateProviderExec(
 		ctx,
 		cctx,
-		updateArgs...,
+		providerPath2,
+		updateFlags...,
 	)
 	s.Require().NoError(err)
 

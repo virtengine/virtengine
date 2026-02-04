@@ -1,168 +1,100 @@
-import type { Metadata } from 'next';
-import Link from 'next/link';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Marketplace',
-  description: 'Browse compute offerings from providers',
-};
+import { useEffect, useState } from 'react';
+import { useOfferingStore } from '@/stores/offeringStore';
+import { OfferingFilters, OfferingFiltersMobile, OfferingGrid } from '@/components/marketplace';
 
 export default function MarketplacePage() {
+  const { fetchOfferings, filters, setFilters } = useOfferingStore();
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [searchValue, setSearchValue] = useState(filters.search);
+
+  useEffect(() => {
+    fetchOfferings();
+  }, [fetchOfferings, filters]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFilters({ search: searchValue });
+  };
+
   return (
     <div className="container py-8">
-      <div className="mb-8 flex items-center justify-between">
+      {/* Header */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Marketplace</h1>
           <p className="mt-1 text-muted-foreground">
             Browse and purchase compute resources from providers worldwide
           </p>
         </div>
+
+        {/* Search and mobile filter toggle */}
         <div className="flex gap-2">
+          <form onSubmit={handleSearch} className="relative flex-1 sm:w-64">
+            <input
+              type="search"
+              placeholder="Search offerings..."
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-4 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            />
+            <svg
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </form>
+
           <button
             type="button"
-            className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
+            onClick={() => setShowMobileFilters(true)}
+            className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent lg:hidden"
           >
-            Filters
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+              />
+            </svg>
           </button>
-          <select
-            className="rounded-lg border border-border bg-background px-4 py-2 text-sm"
-            aria-label="Sort offerings"
-          >
-            <option>Price: Low to High</option>
-            <option>Price: High to Low</option>
-            <option>Newest First</option>
-            <option>Rating</option>
-          </select>
         </div>
       </div>
 
-      {/* Filter sidebar would go here */}
+      {/* Main content */}
       <div className="grid gap-6 lg:grid-cols-4">
+        {/* Desktop Filters Sidebar */}
         <aside className="hidden lg:block">
-          <div className="sticky top-4 space-y-6 rounded-lg border border-border p-4">
-            <FilterSection title="Resource Type">
-              <FilterCheckbox label="CPU" count={42} />
-              <FilterCheckbox label="GPU" count={18} />
-              <FilterCheckbox label="Storage" count={24} />
-              <FilterCheckbox label="HPC Cluster" count={8} />
-            </FilterSection>
-
-            <FilterSection title="Region">
-              <FilterCheckbox label="North America" count={32} />
-              <FilterCheckbox label="Europe" count={28} />
-              <FilterCheckbox label="Asia Pacific" count={15} />
-            </FilterSection>
-
-            <FilterSection title="Provider Tier">
-              <FilterCheckbox label="Verified" count={45} />
-              <FilterCheckbox label="Standard" count={38} />
-            </FilterSection>
+          <div className="sticky top-4 rounded-lg border border-border p-4">
+            <OfferingFilters />
           </div>
         </aside>
 
         {/* Offerings Grid */}
         <div className="lg:col-span-3">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {/* Placeholder offering cards */}
-            {Array.from({ length: 9 }).map((_, i) => (
-              <OfferingCardPlaceholder key={i} index={i} />
-            ))}
-          </div>
-
-          {/* Pagination */}
-          <div className="mt-8 flex justify-center gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
-              disabled
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
-            >
-              1
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
-            >
-              2
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
-            >
-              3
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
-            >
-              Next
-            </button>
-          </div>
+          <OfferingGrid />
         </div>
       </div>
+
+      {/* Mobile Filters */}
+      {showMobileFilters && (
+        <OfferingFiltersMobile onClose={() => setShowMobileFilters(false)} />
+      )}
     </div>
-  );
-}
-
-function FilterSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <h3 className="mb-3 font-medium">{title}</h3>
-      <div className="space-y-2">{children}</div>
-    </div>
-  );
-}
-
-function FilterCheckbox({ label, count }: { label: string; count: number }) {
-  return (
-    <label className="flex cursor-pointer items-center justify-between text-sm">
-      <span className="flex items-center gap-2">
-        <input type="checkbox" className="rounded border-border" />
-        {label}
-      </span>
-      <span className="text-muted-foreground">{count}</span>
-    </label>
-  );
-}
-
-function OfferingCardPlaceholder({ index }: { index: number }) {
-  const offerings = [
-    { type: 'GPU', name: 'NVIDIA A100 Cluster', price: '2.50', provider: 'CloudCore' },
-    { type: 'CPU', name: 'AMD EPYC 7763', price: '0.45', provider: 'DataNexus' },
-    { type: 'HPC', name: 'HPC Compute Node', price: '8.00', provider: 'SuperCloud' },
-  ];
-  const offering = offerings[index % offerings.length]!;
-
-  return (
-    <Link
-      href={`/marketplace/${index}`}
-      className="group rounded-lg border border-border bg-card p-4 transition-all card-hover"
-    >
-      <div className="flex items-start justify-between">
-        <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-          {offering.type}
-        </span>
-        <span className="flex items-center gap-1 text-sm text-muted-foreground">
-          <span className="status-dot status-dot-success" />
-          Available
-        </span>
-      </div>
-      <h3 className="mt-4 font-semibold group-hover:text-primary">{offering.name}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">by {offering.provider}</p>
-      <div className="mt-4 flex items-baseline justify-between">
-        <span className="text-lg font-bold">${offering.price}</span>
-        <span className="text-sm text-muted-foreground">/hour</span>
-      </div>
-    </Link>
   );
 }

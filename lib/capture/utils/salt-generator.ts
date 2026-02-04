@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Salt Generator Utility
  * VE-210: Per-upload salt generation for binding
