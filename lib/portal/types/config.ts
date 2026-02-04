@@ -6,6 +6,8 @@
  */
 
 import type { ReactNode } from 'react';
+import type { ChainConfig } from './chain';
+import type { WalletProviderConfig } from '../src/wallet/context';
 
 /**
  * Portal configuration
@@ -248,6 +250,16 @@ export interface PortalProviderProps {
    * Portal configuration
    */
   config: PortalConfig;
+
+  /**
+   * Chain configuration
+   */
+  chainConfig: ChainConfig;
+
+  /**
+   * Wallet configuration
+   */
+  walletConfig?: WalletProviderConfig;
 
   /**
    * Child components

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useCallback } from 'react';
-import { useWalletStore } from '@/stores/walletStore';
+import { useWallet } from '@/lib/portal-adapter';
 import { useUIStore } from '@/stores/uiStore';
+import { SUPPORTED_WALLETS, isWalletInstalled, WALLET_CONNECT_PROJECT_ID, type WalletType } from '@/config';
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -10,12 +11,17 @@ interface WalletModalProps {
 }
 
 export function WalletModal({ isOpen, onClose }: WalletModalProps) {
-  const { connect, isConnecting } = useWalletStore();
+  const { state, actions } = useWallet();
 
-  const handleConnect = useCallback(async (walletType: 'keplr' | 'leap' | 'cosmostation') => {
-    await connect(walletType);
-    onClose();
-  }, [connect, onClose]);
+  const handleConnect = useCallback(async (walletType: WalletType) => {
+    await actions.connect(walletType);
+  }, [actions]);
+
+  useEffect(() => {
+    if (state.isConnected && isOpen) {
+      onClose();
+    }
+  }, [state.isConnected, isOpen, onClose]);
 
   // Close on escape key
   useEffect(() => {
@@ -36,11 +42,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
   if (!isOpen) return null;
 
-  const wallets = [
-    { id: 'keplr' as const, name: 'Keplr', description: 'The most popular Cosmos wallet', recommended: true },
-    { id: 'leap' as const, name: 'Leap', description: 'Multi-chain Cosmos wallet', recommended: false },
-    { id: 'cosmostation' as const, name: 'Cosmostation', description: 'Mobile and web wallet', recommended: false },
-  ];
+  const wallets = SUPPORTED_WALLETS;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -93,7 +95,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
               key={wallet.id}
               type="button"
               onClick={() => handleConnect(wallet.id)}
-              disabled={isConnecting}
+              disabled={state.isConnecting || (!isWalletInstalled(wallet.id) && wallet.extension) || (wallet.id === 'walletconnect' && !WALLET_CONNECT_PROJECT_ID)}
               className="flex w-full items-center gap-4 rounded-lg border border-border p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
@@ -109,11 +111,23 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground">{wallet.description}</p>
+                {!isWalletInstalled(wallet.id) && wallet.extension && (
+                  <p className="mt-1 text-xs text-muted-foreground">Extension not detected</p>
+                )}
+                {wallet.id === 'walletconnect' && !WALLET_CONNECT_PROJECT_ID && (
+                  <p className="mt-1 text-xs text-muted-foreground">WalletConnect not configured</p>
+                )}
               </div>
-              <span className="text-muted-foreground">→</span>
+              <span className="text-muted-foreground">&gt;</span>
             </button>
           ))}
         </div>
+
+        {state.error && (
+          <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {state.error.message}
+          </div>
+        )}
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Don&apos;t have a wallet?{' '}

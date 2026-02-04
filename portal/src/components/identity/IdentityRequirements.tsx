@@ -3,7 +3,7 @@
 import { useIdentity, ScopeRequirements, RemediationGuide } from '@/lib/portal-adapter';
 import type { MarketplaceAction } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
 interface IdentityRequirementsProps {
   action: string;

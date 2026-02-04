@@ -2,7 +2,7 @@
 
 import { useMFA, MFAEnrollmentWizard, type MFAFactorType } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
 interface MFASetupProps {
   className?: string;
@@ -37,8 +37,7 @@ export function MFASetup({ className, onComplete, onCancel, preferredFactorType 
       </CardHeader>
       <CardContent>
         <MFAEnrollmentWizard
-          availableFactorTypes={['totp', 'webauthn', 'sms']}
-          preferredType={preferredFactorType}
+          allowedFactors={preferredFactorType ? [preferredFactorType] : ['otp', 'fido2', 'sms']}
           onComplete={onComplete}
           onCancel={onCancel}
         />

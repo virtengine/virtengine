@@ -129,7 +129,7 @@ export async function runA11yTests(
       options.exclude = config.exclude.map((selector) => [selector]);
     }
 
-    const results = await axe.run(container, options);
+    const results = await axe.run(container, options) as unknown as AxeResults;
 
     if (!config.includeIncomplete) {
       results.incomplete = [];

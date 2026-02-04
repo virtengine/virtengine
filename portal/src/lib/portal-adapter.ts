@@ -33,6 +33,24 @@ export type {
 export { SessionManager } from '../../../lib/portal';
 export type { SessionConfig, SessionInfo } from '../../../lib/portal';
 
+export { WalletProvider, useWallet } from '../../../lib/portal';
+export type {
+  WalletProviderConfig,
+  ExtensionWalletType,
+  WalletChainConfig,
+  WalletAccount,
+  WalletState,
+  WalletActions,
+  FeeEstimate,
+} from '../../../lib/portal';
+
+export {
+  WalletButton,
+  WalletModal,
+  AccountDisplay,
+  NetworkBadge,
+} from '../../../lib/portal';
+
 export { WalletAdapter, MnemonicWallet, KeypairWallet } from '../../../lib/portal';
 export type { WalletConfig, SigningResult } from '../../../lib/portal';
 
