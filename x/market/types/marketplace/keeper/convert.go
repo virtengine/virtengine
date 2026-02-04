@@ -230,3 +230,44 @@ func cloneBytesSlice(input [][]byte) [][]byte {
 	}
 	return out
 }
+
+func allocationStateToProto(state marketplace.AllocationState) marketplacev1.AllocationState {
+	switch state {
+	case marketplace.AllocationStatePending:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_PENDING
+	case marketplace.AllocationStateAccepted:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_ACCEPTED
+	case marketplace.AllocationStateProvisioning:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_PROVISIONING
+	case marketplace.AllocationStateActive:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_ACTIVE
+	case marketplace.AllocationStateSuspended:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_SUSPENDED
+	case marketplace.AllocationStateTerminating:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_TERMINATING
+	case marketplace.AllocationStateTerminated:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_TERMINATED
+	case marketplace.AllocationStateRejected:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_REJECTED
+	case marketplace.AllocationStateFailed:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_FAILED
+	default:
+		return marketplacev1.AllocationState_ALLOCATION_STATE_UNSPECIFIED
+	}
+}
+
+func allocationToProto(allocation marketplace.Allocation) marketplacev1.Allocation {
+	return marketplacev1.Allocation{
+		AllocationId:    allocation.ID.String(),
+		OrderId:         allocation.ID.OrderID.String(),
+		OfferingId:      allocation.OfferingID.String(),
+		ProviderAddress: allocation.ProviderAddress,
+		CustomerAddress: allocation.ID.OrderID.CustomerAddress,
+		State:           allocationStateToProto(allocation.State),
+		AcceptedPrice:   allocation.AcceptedPrice,
+		CreatedAt:       allocation.CreatedAt,
+		UpdatedAt:       allocation.UpdatedAt,
+		TerminatedAt:    allocation.TerminatedAt,
+		StateReason:     allocation.StateReason,
+	}
+}

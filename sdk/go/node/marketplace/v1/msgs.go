@@ -128,6 +128,56 @@ func (msg *MsgTerminateAllocation) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{addr}
 }
 
+// sdk.Msg interface methods for MsgResizeAllocation
+
+func (msg *MsgResizeAllocation) ValidateBasic() error {
+	if msg.Customer == "" {
+		return ErrInvalidAddress.Wrap("customer address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Customer); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid customer address: %v", err)
+	}
+
+	if msg.AllocationId == "" {
+		return ErrInvalidAllocation.Wrap("allocation_id is required")
+	}
+
+	if len(msg.ResourceUnits) == 0 {
+		return ErrInvalidAllocation.Wrap("resource_units are required")
+	}
+
+	return nil
+}
+
+func (msg *MsgResizeAllocation) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Customer)
+	return []sdk.AccAddress{addr}
+}
+
+// sdk.Msg interface methods for MsgPauseAllocation
+
+func (msg *MsgPauseAllocation) ValidateBasic() error {
+	if msg.Customer == "" {
+		return ErrInvalidAddress.Wrap("customer address is required")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Customer); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid customer address: %v", err)
+	}
+
+	if msg.AllocationId == "" {
+		return ErrInvalidAllocation.Wrap("allocation_id is required")
+	}
+
+	return nil
+}
+
+func (msg *MsgPauseAllocation) GetSigners() []sdk.AccAddress {
+	addr, _ := sdk.AccAddressFromBech32(msg.Customer)
+	return []sdk.AccAddress{addr}
+}
+
 // sdk.Msg interface methods for MsgWaldurCallback
 
 func (msg *MsgWaldurCallback) ValidateBasic() error {
