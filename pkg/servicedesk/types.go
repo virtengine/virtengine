@@ -145,9 +145,11 @@ func DefaultMappingSchema() *MappingSchema {
 			{OnChainStatus: "open", JiraStatus: "Open", WaldurStatus: "new"},
 			{OnChainStatus: "assigned", JiraStatus: "In Progress", WaldurStatus: "in_progress"},
 			{OnChainStatus: "in_progress", JiraStatus: "In Progress", WaldurStatus: "in_progress"},
-			{OnChainStatus: "pending_customer", JiraStatus: "Waiting for Customer", WaldurStatus: "waiting"},
+			{OnChainStatus: "waiting_customer", JiraStatus: "Waiting for Customer", WaldurStatus: "waiting"},
+			{OnChainStatus: "waiting_support", JiraStatus: "Waiting for Support", WaldurStatus: "waiting"},
 			{OnChainStatus: "resolved", JiraStatus: "Resolved", WaldurStatus: "resolved"},
 			{OnChainStatus: "closed", JiraStatus: "Closed", WaldurStatus: "closed"},
+			{OnChainStatus: "archived", JiraStatus: "Closed", WaldurStatus: "closed"},
 		},
 		PriorityMappings: []PriorityMapping{
 			{OnChainPriority: "low", JiraPriority: "Low", WaldurPriority: "low"},

@@ -12,6 +12,10 @@ const (
 	TypeMsgUpdateExternalTicket   = "update_external_ticket"
 	TypeMsgRemoveExternalTicket   = "remove_external_ticket"
 	TypeMsgUpdateParams           = "update_params"
+	TypeMsgCreateSupportRequest   = "create_support_request"
+	TypeMsgUpdateSupportRequest   = "update_support_request"
+	TypeMsgAddSupportResponse     = "add_support_response"
+	TypeMsgArchiveSupportRequest  = "archive_support_request"
 )
 
 // MsgRegisterExternalTicket registers a new external ticket reference
@@ -194,6 +198,153 @@ func (msg MsgUpdateParams) ValidateBasic() error {
 // MsgUpdateParamsResponse is the response for MsgUpdateParams
 type MsgUpdateParamsResponse struct{}
 
+// MsgCreateSupportRequest creates a new support request
+type MsgCreateSupportRequest struct {
+	Sender         string                  `json:"sender"`
+	Category       string                  `json:"category"`
+	Priority       string                  `json:"priority"`
+	Payload        EncryptedSupportPayload `json:"payload"`
+	RelatedEntity  *RelatedEntity          `json:"related_entity,omitempty"`
+	PublicMetadata map[string]string       `json:"public_metadata,omitempty"`
+}
+
+func (msg MsgCreateSupportRequest) GetSigners() []sdk.AccAddress {
+	addr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return []sdk.AccAddress{}
+	}
+	return []sdk.AccAddress{addr}
+}
+
+func (msg MsgCreateSupportRequest) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap("invalid sender address")
+	}
+	if !SupportCategory(msg.Category).IsValid() {
+		return ErrInvalidSupportRequest.Wrapf("invalid category: %s", msg.Category)
+	}
+	if !SupportPriority(msg.Priority).IsValid() {
+		return ErrInvalidSupportRequest.Wrapf("invalid priority: %s", msg.Priority)
+	}
+	if err := msg.Payload.Validate(); err != nil {
+		return err
+	}
+	if err := msg.RelatedEntity.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+type MsgCreateSupportRequestResponse struct {
+	TicketID     string `json:"ticket_id"`
+	TicketNumber string `json:"ticket_number"`
+}
+
+// MsgUpdateSupportRequest updates a support request metadata or payload
+type MsgUpdateSupportRequest struct {
+	Sender         string                   `json:"sender"`
+	TicketID       string                   `json:"ticket_id"`
+	Category       string                   `json:"category,omitempty"`
+	Priority       string                   `json:"priority,omitempty"`
+	Status         string                   `json:"status,omitempty"`
+	AssignedAgent  string                   `json:"assigned_agent,omitempty"`
+	Payload        *EncryptedSupportPayload `json:"payload,omitempty"`
+	PublicMetadata map[string]string        `json:"public_metadata,omitempty"`
+}
+
+func (msg MsgUpdateSupportRequest) GetSigners() []sdk.AccAddress {
+	addr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return []sdk.AccAddress{}
+	}
+	return []sdk.AccAddress{addr}
+}
+
+func (msg MsgUpdateSupportRequest) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap("invalid sender address")
+	}
+	if msg.TicketID == "" {
+		return ErrInvalidSupportRequest.Wrap("ticket_id is required")
+	}
+	if msg.Category != "" && !SupportCategory(msg.Category).IsValid() {
+		return ErrInvalidSupportRequest.Wrapf("invalid category: %s", msg.Category)
+	}
+	if msg.Priority != "" && !SupportPriority(msg.Priority).IsValid() {
+		return ErrInvalidSupportRequest.Wrapf("invalid priority: %s", msg.Priority)
+	}
+	if msg.Status != "" && !SupportStatusFromString(msg.Status).IsValid() {
+		return ErrInvalidSupportRequest.Wrapf("invalid status: %s", msg.Status)
+	}
+	if msg.Payload != nil {
+		if err := msg.Payload.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type MsgUpdateSupportRequestResponse struct{}
+
+// MsgAddSupportResponse adds a response to a support request
+type MsgAddSupportResponse struct {
+	Sender   string                  `json:"sender"`
+	TicketID string                  `json:"ticket_id"`
+	Payload  EncryptedSupportPayload `json:"payload"`
+}
+
+func (msg MsgAddSupportResponse) GetSigners() []sdk.AccAddress {
+	addr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return []sdk.AccAddress{}
+	}
+	return []sdk.AccAddress{addr}
+}
+
+func (msg MsgAddSupportResponse) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap("invalid sender address")
+	}
+	if msg.TicketID == "" {
+		return ErrInvalidSupportRequest.Wrap("ticket_id is required")
+	}
+	if err := msg.Payload.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+type MsgAddSupportResponseResponse struct {
+	ResponseID string `json:"response_id"`
+}
+
+// MsgArchiveSupportRequest archives a support request
+type MsgArchiveSupportRequest struct {
+	Sender   string `json:"sender"`
+	TicketID string `json:"ticket_id"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+func (msg MsgArchiveSupportRequest) GetSigners() []sdk.AccAddress {
+	addr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return []sdk.AccAddress{}
+	}
+	return []sdk.AccAddress{addr}
+}
+
+func (msg MsgArchiveSupportRequest) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return ErrInvalidAddress.Wrap("invalid sender address")
+	}
+	if msg.TicketID == "" {
+		return ErrInvalidSupportRequest.Wrap("ticket_id is required")
+	}
+	return nil
+}
+
+type MsgArchiveSupportRequestResponse struct{}
+
 // Proto message interface stubs
 
 func (*MsgRegisterExternalTicket) ProtoMessage()    {}
@@ -235,3 +386,43 @@ func (m *MsgUpdateParams) Type() string   { return TypeMsgUpdateParams }
 func (*MsgUpdateParamsResponse) ProtoMessage()    {}
 func (m *MsgUpdateParamsResponse) Reset()         { *m = MsgUpdateParamsResponse{} }
 func (m *MsgUpdateParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*MsgCreateSupportRequest) ProtoMessage()    {}
+func (m *MsgCreateSupportRequest) Reset()         { *m = MsgCreateSupportRequest{} }
+func (m *MsgCreateSupportRequest) String() string { return fmt.Sprintf("%+v", *m) }
+func (m *MsgCreateSupportRequest) Route() string  { return RouterKey }
+func (m *MsgCreateSupportRequest) Type() string   { return TypeMsgCreateSupportRequest }
+
+func (*MsgCreateSupportRequestResponse) ProtoMessage()    {}
+func (m *MsgCreateSupportRequestResponse) Reset()         { *m = MsgCreateSupportRequestResponse{} }
+func (m *MsgCreateSupportRequestResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*MsgUpdateSupportRequest) ProtoMessage()    {}
+func (m *MsgUpdateSupportRequest) Reset()         { *m = MsgUpdateSupportRequest{} }
+func (m *MsgUpdateSupportRequest) String() string { return fmt.Sprintf("%+v", *m) }
+func (m *MsgUpdateSupportRequest) Route() string  { return RouterKey }
+func (m *MsgUpdateSupportRequest) Type() string   { return TypeMsgUpdateSupportRequest }
+
+func (*MsgUpdateSupportRequestResponse) ProtoMessage()    {}
+func (m *MsgUpdateSupportRequestResponse) Reset()         { *m = MsgUpdateSupportRequestResponse{} }
+func (m *MsgUpdateSupportRequestResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*MsgAddSupportResponse) ProtoMessage()    {}
+func (m *MsgAddSupportResponse) Reset()         { *m = MsgAddSupportResponse{} }
+func (m *MsgAddSupportResponse) String() string { return fmt.Sprintf("%+v", *m) }
+func (m *MsgAddSupportResponse) Route() string  { return RouterKey }
+func (m *MsgAddSupportResponse) Type() string   { return TypeMsgAddSupportResponse }
+
+func (*MsgAddSupportResponseResponse) ProtoMessage()    {}
+func (m *MsgAddSupportResponseResponse) Reset()         { *m = MsgAddSupportResponseResponse{} }
+func (m *MsgAddSupportResponseResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+func (*MsgArchiveSupportRequest) ProtoMessage()    {}
+func (m *MsgArchiveSupportRequest) Reset()         { *m = MsgArchiveSupportRequest{} }
+func (m *MsgArchiveSupportRequest) String() string { return fmt.Sprintf("%+v", *m) }
+func (m *MsgArchiveSupportRequest) Route() string  { return RouterKey }
+func (m *MsgArchiveSupportRequest) Type() string   { return TypeMsgArchiveSupportRequest }
+
+func (*MsgArchiveSupportRequestResponse) ProtoMessage()    {}
+func (m *MsgArchiveSupportRequestResponse) Reset()         { *m = MsgArchiveSupportRequestResponse{} }
+func (m *MsgArchiveSupportRequestResponse) String() string { return fmt.Sprintf("%+v", *m) }

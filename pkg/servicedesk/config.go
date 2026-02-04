@@ -32,6 +32,9 @@ type Config struct {
 
 	// AuditConfig is the audit configuration
 	AuditConfig AuditConfig `json:"audit"`
+
+	// Decryption config for encrypted payloads
+	Decryption *DecryptionConfig `json:"decryption,omitempty"`
 }
 
 // DefaultConfig returns a default configuration
@@ -43,6 +46,7 @@ func DefaultConfig() *Config {
 		RetryConfig:   DefaultRetryConfig(),
 		WebhookConfig: DefaultWebhookServerConfig(),
 		AuditConfig:   DefaultAuditConfig(),
+		Decryption:    nil,
 	}
 }
 
@@ -74,6 +78,12 @@ func (c *Config) Validate() error {
 
 	if err := c.RetryConfig.Validate(); err != nil {
 		return fmt.Errorf("retry config: %w", err)
+	}
+
+	if c.Decryption != nil {
+		if _, err := c.Decryption.LoadPrivateKey(); err != nil {
+			return fmt.Errorf("decryption config: %w", err)
+		}
 	}
 
 	return nil

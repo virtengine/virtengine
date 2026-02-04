@@ -8,6 +8,14 @@ import (
 // This minimal interface supports external ticket reference management.
 // Full ticket lifecycle is handled by Waldur/Jira.
 type MsgServer interface {
+	// CreateSupportRequest creates a new support request
+	CreateSupportRequest(context.Context, *MsgCreateSupportRequest) (*MsgCreateSupportRequestResponse, error)
+	// UpdateSupportRequest updates a support request
+	UpdateSupportRequest(context.Context, *MsgUpdateSupportRequest) (*MsgUpdateSupportRequestResponse, error)
+	// AddSupportResponse adds a response to a support request
+	AddSupportResponse(context.Context, *MsgAddSupportResponse) (*MsgAddSupportResponseResponse, error)
+	// ArchiveSupportRequest archives a support request
+	ArchiveSupportRequest(context.Context, *MsgArchiveSupportRequest) (*MsgArchiveSupportRequestResponse, error)
 	// RegisterExternalTicket registers an external ticket reference
 	RegisterExternalTicket(context.Context, *MsgRegisterExternalTicket) (*MsgRegisterExternalTicketResponse, error)
 	// UpdateExternalTicket updates an external ticket reference
@@ -21,6 +29,12 @@ type MsgServer interface {
 // QueryServer defines the support module's query service interface.
 // Queries are minimal - just retrieve external refs and params.
 type QueryServer interface {
+	// SupportRequest returns a support request by ID
+	SupportRequest(context.Context, *QuerySupportRequestRequest) (*QuerySupportRequestResponse, error)
+	// SupportRequestsBySubmitter returns support requests by submitter
+	SupportRequestsBySubmitter(context.Context, *QuerySupportRequestsBySubmitterRequest) (*QuerySupportRequestsBySubmitterResponse, error)
+	// SupportResponsesByRequest returns responses for a request
+	SupportResponsesByRequest(context.Context, *QuerySupportResponsesByRequestRequest) (*QuerySupportResponsesByRequestResponse, error)
 	// ExternalRef returns a single external ticket reference
 	ExternalRef(context.Context, *QueryExternalRefRequest) (*QueryExternalRefResponse, error)
 	// ExternalRefsByOwner returns all external refs for a given owner

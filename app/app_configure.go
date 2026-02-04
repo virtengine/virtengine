@@ -60,6 +60,8 @@ import (
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 	virtstaking "github.com/virtengine/virtengine/x/staking"
 	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
+	"github.com/virtengine/virtengine/x/support"
+	supporttypes "github.com/virtengine/virtengine/x/support/types"
 	"github.com/virtengine/virtengine/x/take"
 	"github.com/virtengine/virtengine/x/veid"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
@@ -78,6 +80,7 @@ func virtengineModuleBasics() []module.AppModuleBasic {
 		// VirtEngine patent modules (AU2024203136A1)
 		encryption.AppModuleBasic{},
 		roles.AppModuleBasic{},
+		support.AppModuleBasic{},
 		veid.AppModuleBasic{},
 		mfa.AppModuleBasic{},
 		config.AppModuleBasic{},
@@ -130,6 +133,7 @@ func OrderInitGenesis(_ []string) []string {
 		// VirtEngine patent modules (AU2024203136A1)
 		encryptiontypes.ModuleName,
 		rolestypes.ModuleName,
+		supporttypes.ModuleName,
 		veidtypes.ModuleName,
 		mfatypes.ModuleName,
 		configtypes.ModuleName,

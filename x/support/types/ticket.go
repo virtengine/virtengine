@@ -36,16 +36,17 @@ func (s ExternalSystem) String() string {
 type ResourceType string
 
 const (
-	ResourceTypeDeployment ResourceType = "deployment"
-	ResourceTypeLease      ResourceType = "lease"
-	ResourceTypeOrder      ResourceType = "order"
-	ResourceTypeProvider   ResourceType = "provider"
+	ResourceTypeDeployment     ResourceType = "deployment"
+	ResourceTypeLease          ResourceType = "lease"
+	ResourceTypeOrder          ResourceType = "order"
+	ResourceTypeProvider       ResourceType = "provider"
+	ResourceTypeSupportRequest ResourceType = "support_request"
 )
 
 // IsValid checks if the resource type is valid
 func (t ResourceType) IsValid() bool {
 	switch t {
-	case ResourceTypeDeployment, ResourceTypeLease, ResourceTypeOrder, ResourceTypeProvider:
+	case ResourceTypeDeployment, ResourceTypeLease, ResourceTypeOrder, ResourceTypeProvider, ResourceTypeSupportRequest:
 		return true
 	default:
 		return false
