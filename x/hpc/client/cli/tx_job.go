@@ -18,7 +18,6 @@ import (
 )
 
 type jobSubmitSpec struct {
-	SchemaVersion  string `json:"schema_version,omitempty" yaml:"schema_version,omitempty"`
 	OfferingID     string `json:"offering_id" yaml:"offering_id"`
 	RequestedNodes uint64 `json:"requested_nodes" yaml:"requested_nodes"`
 	RequestedGpus  uint64 `json:"requested_gpus" yaml:"requested_gpus"`
@@ -29,7 +28,6 @@ type jobSubmitSpec struct {
 }
 
 type templateSubmitSpec struct {
-	SchemaVersion  string                                 `json:"schema_version,omitempty" yaml:"schema_version,omitempty"`
 	OfferingID     string                                 `json:"offering_id" yaml:"offering_id"`
 	RequestedNodes uint64                                 `json:"requested_nodes" yaml:"requested_nodes"`
 	RequestedGpus  uint64                                 `json:"requested_gpus" yaml:"requested_gpus"`
@@ -207,18 +205,10 @@ $ %s tx hpc submit-from-template mpi-standard ./params.yaml --from customer
 
 			params := spec.JobParameters
 			if params.Nodes == 0 && spec.RequestedNodes > 0 {
-				nodes, err := uint64ToInt32(spec.RequestedNodes, "requested_nodes")
-				if err != nil {
-					return err
-				}
-				params.Nodes = nodes
+				params.Nodes = int32(spec.RequestedNodes)
 			}
 			if params.GPUs == 0 && spec.RequestedGpus > 0 {
-				gpus, err := uint64ToInt32(spec.RequestedGpus, "requested_gpus")
-				if err != nil {
-					return err
-				}
-				params.GPUs = gpus
+				params.GPUs = int32(spec.RequestedGpus)
 			}
 
 			generator := hpc_workload_library.NewBatchScriptGenerator(spec.BatchConfig)
@@ -250,9 +240,6 @@ func readJobSubmitSpec(path string) (*jobSubmitSpec, error) {
 	if err := unmarshalConfigFile(path, &spec); err != nil {
 		return nil, err
 	}
-	if err := validateSchemaVersion(spec.SchemaVersion); err != nil {
-		return nil, err
-	}
 	if strings.TrimSpace(spec.OfferingID) == "" {
 		return nil, fmt.Errorf("offering_id is required")
 	}
@@ -277,9 +264,6 @@ func readJobSubmitSpec(path string) (*jobSubmitSpec, error) {
 func readTemplateSubmitSpec(path string) (*templateSubmitSpec, error) {
 	spec := templateSubmitSpec{}
 	if err := unmarshalConfigFile(path, &spec); err != nil {
-		return nil, err
-	}
-	if err := validateSchemaVersion(spec.SchemaVersion); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(spec.OfferingID) == "" {
