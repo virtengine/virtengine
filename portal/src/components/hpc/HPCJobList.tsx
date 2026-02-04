@@ -2,7 +2,7 @@
 
 import { useHPC, JobTracker } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
 interface HPCJobListProps {
   className?: string;

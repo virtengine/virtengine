@@ -2,7 +2,7 @@
 
 import { useHPC, WorkloadLibrary } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
 interface HPCWorkloadBrowserProps {
   className?: string;
@@ -39,7 +39,7 @@ export function HPCWorkloadBrowser({ className, onTemplateSelect }: HPCWorkloadB
       </CardHeader>
       <CardContent>
         <WorkloadLibrary
-          templates={state.templates}
+          templates={state.workloadTemplates}
           onTemplateSelect={onTemplateSelect}
           showCategories={true}
           showSearch={true}

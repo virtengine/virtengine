@@ -2,7 +2,7 @@
 
 import { useMarketplace, OfferingDetail, type Offering } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 
 interface OfferingDetailsProps {
   offeringId: string;

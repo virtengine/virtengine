@@ -1,10 +1,10 @@
 'use client';
 
-import { useMarketplace, OrderTimeline, type Order } from '@/lib/portal-adapter';
+import { useMarketplace } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 
 interface OrderHistoryProps {
   className?: string;
@@ -40,7 +40,7 @@ export function OrderHistory({ className, onOrderSelect }: OrderHistoryProps) {
         </CardHeader>
         <CardContent>
           <p className="text-center text-muted-foreground py-8">
-            You haven't placed any orders yet
+            You haven&apos;t placed any orders yet
           </p>
         </CardContent>
       </Card>
@@ -72,7 +72,7 @@ export function OrderHistory({ className, onOrderSelect }: OrderHistoryProps) {
               className="flex items-center justify-between rounded-lg border p-4"
             >
               <div>
-                <p className="font-medium">{order.offeringName ?? order.offeringId}</p>
+                <p className="font-medium">{order.offeringId}</p>
                 <p className="text-sm text-muted-foreground">
                   {new Date(order.createdAt).toLocaleDateString()}
                 </p>

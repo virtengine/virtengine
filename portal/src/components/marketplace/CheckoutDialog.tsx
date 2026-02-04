@@ -1,6 +1,6 @@
 'use client';
 
-import { useMarketplace, CheckoutFlow, type Offering, type CheckoutRequest } from '@/lib/portal-adapter';
+import { CheckoutFlow, type Offering } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -8,7 +8,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/Modal';
 
 interface CheckoutDialogProps {
   offering: Offering | null;
@@ -23,8 +23,6 @@ interface CheckoutDialogProps {
  * Modal dialog for completing marketplace purchases
  */
 export function CheckoutDialog({ offering, open, onOpenChange, onSuccess, className }: CheckoutDialogProps) {
-  const { state } = useMarketplace();
-
   if (!offering) {
     return null;
   }
@@ -35,7 +33,7 @@ export function CheckoutDialog({ offering, open, onOpenChange, onSuccess, classN
         <DialogHeader>
           <DialogTitle>Complete Your Order</DialogTitle>
           <DialogDescription>
-            Review and confirm your order for {offering.name}
+            Review and confirm your order for {offering.title}
           </DialogDescription>
         </DialogHeader>
         <CheckoutFlow

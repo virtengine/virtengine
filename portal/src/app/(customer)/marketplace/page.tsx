@@ -87,7 +87,51 @@ export default function MarketplacePage() {
 
         {/* Offerings Grid */}
         <div className="lg:col-span-3">
+<<<<<<< HEAD
           <OfferingGrid />
+=======
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {/* Placeholder offering cards */}
+            {offeringPlaceholders.map((offering) => (
+              <OfferingCardPlaceholder key={offering.id} offering={offering} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          <div className="mt-8 flex justify-center gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
+              disabled
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
+            >
+              1
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
+            >
+              2
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
+            >
+              3
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
+            >
+              Next
+            </button>
+          </div>
+>>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
         </div>
       </div>
 

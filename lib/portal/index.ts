@@ -31,12 +31,29 @@
 // Core Exports
 // ============================================================================
 
-export { PortalProvider } from './components/PortalProvider';
+export { PortalProvider, usePortal } from './components/PortalProvider';
 export type { PortalProviderProps, PortalConfig } from './types/config';
 
 // ============================================================================
 // Authentication (VE-700)
 // ============================================================================
+
+export { WalletProvider, useWallet } from './src/wallet/context';
+export type { WalletProviderProps, WalletProviderConfig } from './src/wallet/context';
+export type {
+  ExtensionWalletType,
+  WalletChainConfig,
+  WalletAccount,
+  WalletState,
+  WalletActions,
+  FeeEstimate,
+} from './src/wallet/types';
+export {
+  WalletButton,
+  WalletModal,
+  AccountDisplay,
+  NetworkBadge,
+} from './src/components/wallet';
 
 export { useAuth, AuthProvider } from './hooks/useAuth';
 export type {

@@ -24,7 +24,18 @@ import {
   formatPercent,
   formatHash,
 } from '../utils/format';
-import { authReducer } from '../types/auth';
+import {
+  sanitizePlainText,
+  sanitizeDigits,
+  sanitizeJsonInput,
+} from '../utils/security';
+import {
+  createOAuthRequest,
+  persistOAuthRequest,
+  consumeOAuthRequest,
+  buildAuthorizationUrl,
+} from '../utils/oidc';
+import { authReducer, initialAuthState } from '../types/auth';
 import { identityReducer, SCOPE_REQUIREMENTS } from '../types/identity';
 import { SessionManager, defaultSessionConfig } from '../utils/session';
 
@@ -256,12 +267,6 @@ describe('Validation Utilities', () => {
 });
 
 describe('Security Utilities', () => {
-  const {
-    sanitizePlainText,
-    sanitizeDigits,
-    sanitizeJsonInput,
-  } = require('../utils/security');
-
   it('should sanitize plain text inputs', () => {
     const value = '<script>alert(1)</script>';
     const result = sanitizePlainText(value);
@@ -281,13 +286,6 @@ describe('Security Utilities', () => {
 });
 
 describe('OAuth Helpers', () => {
-  const {
-    createOAuthRequest,
-    persistOAuthRequest,
-    consumeOAuthRequest,
-    buildAuthorizationUrl,
-  } = require('../utils/oidc');
-
   it('should create and consume OAuth request', async () => {
     const request = await createOAuthRequest(60 * 1000);
     persistOAuthRequest(request, 'test_oauth');
@@ -394,8 +392,6 @@ describe('Format Utilities', () => {
 });
 
 describe('Auth Types', () => {
-  const { authReducer, initialAuthState } = require('../types/auth');
-
   describe('authReducer', () => {
     it('should handle AUTH_START', () => {
       const result = authReducer(initialAuthState, { type: 'AUTH_START' });
