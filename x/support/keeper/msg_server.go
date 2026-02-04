@@ -3,6 +3,7 @@ package keeper
 import (
 	"context"
 	"fmt"
+	"math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -389,7 +390,10 @@ func (ms msgServer) AddSupportResponse(goCtx context.Context, msg *types.MsgAddS
 
 func safeIntFromUint32(value uint32) int {
 	maxInt := int(^uint(0) >> 1)
-	if uint64(value) > uint64(maxInt) {
+	if maxInt >= math.MaxUint32 {
+		return int(value)
+	}
+	if value > uint32(maxInt) {
 		return maxInt
 	}
 	return int(value)
