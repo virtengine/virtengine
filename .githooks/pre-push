@@ -4,8 +4,8 @@
 # Prevents pushing code that doesn't pass critical quality gates.
 # Mirrors CI required checks: vet, lint, build, tests.
 #
-# NOTE: go mod tidy/vendor are handled by pre-commit hook (only when go.mod changes).
-# This keeps pre-push fast.
+# NOTE: gofmt auto-formatting and go mod tidy/vendor are handled by pre-commit hook.
+# This keeps pre-push fast and ensures formatted code is always committed.
 #
 # Bypass:       git push --no-verify
 # Quick mode:   $env:VE_HOOK_QUICK=1; git push     (vet + build only)
@@ -105,8 +105,8 @@ check_vet() {
         # shellcheck disable=SC2086
         go vet $changed_packages 2>&1
     else
-        # Exclude tests/ which may have build constraints
-        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | head -100) 2>&1
+        # Exclude tests/ and local temp/ scratch dirs which may have build constraints
+        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | grep -Ev '/temp($|/)' | head -100) 2>&1
     fi
 }
 
@@ -152,10 +152,39 @@ check_mod_vendor() {
 # Check 4: golangci-lint
 # =========================================================================
 check_lint() {
-    # Skip lint for now - requires golangci-lint v2 which isn't widely available yet
-    # The project's .golangci.yml is configured for v2 but v1 is commonly installed
-    hook_info "golangci-lint skipped (requires v2, not widely available yet)"
-    return 0
+    # Find golangci-lint binary
+    local lint_bin=""
+    
+    # Check common locations
+    if command -v golangci-lint &>/dev/null; then
+        lint_bin="golangci-lint"
+    elif [ -x "$REPO_ROOT/.cache/bin/golangci-lint" ]; then
+        lint_bin="$REPO_ROOT/.cache/bin/golangci-lint"
+    elif [ -x "$HOME/go/bin/golangci-lint" ]; then
+        lint_bin="$HOME/go/bin/golangci-lint"
+    fi
+    
+    if [ -z "$lint_bin" ]; then
+        hook_warn "golangci-lint not found - install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
+        hook_fail "golangci-lint is required for pre-push checks"
+        return 1
+    fi
+    
+    # Get version to check compatibility
+    local lint_version
+    lint_version=$($lint_bin version 2>&1 | head -1 || echo "unknown")
+    hook_step "Using: $lint_bin ($lint_version)"
+    
+    # Run lint on changed files only (faster) with origin/main as base
+    local base_branch="origin/main"
+    if git rev-parse --verify "$base_branch" &>/dev/null; then
+        hook_step "Linting changes since $base_branch"
+        $lint_bin run --timeout=10m --new-from-rev="$base_branch" 2>&1
+    else
+        # No base branch - lint all (slower but complete)
+        hook_step "Linting all packages (no base branch found)"
+        $lint_bin run --timeout=10m 2>&1
+    fi
 }
 
 # =========================================================================

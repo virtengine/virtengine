@@ -1,0 +1,104 @@
+syntax = "proto3";
+package virtengine.marketplace.v1;
+
+import "cosmos/base/v1beta1/coin.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "cosmos_proto/cosmos.proto";
+import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1";
+
+// Query defines the gRPC querier service for the marketplace module.
+service Query {
+  // OfferingPrice calculates pricing for a specific offering.
+  rpc OfferingPrice(QueryOfferingPriceRequest) returns (QueryOfferingPriceResponse) {
+    option (google.api.http).get = "/virtengine/marketplace/v1/offerings/{offering_id}/price";
+  }
+
+  // AllocationsByCustomer returns allocations for a customer.
+  rpc AllocationsByCustomer(QueryAllocationsByCustomerRequest) returns (QueryAllocationsResponse) {
+    option (google.api.http).get = "/virtengine/marketplace/v1/allocations/customer/{customer_address}";
+  }
+
+  // AllocationsByProvider returns allocations for a provider.
+  rpc AllocationsByProvider(QueryAllocationsByProviderRequest) returns (QueryAllocationsResponse) {
+    option (google.api.http).get = "/virtengine/marketplace/v1/allocations/provider/{provider_address}";
+  }
+}
+
+// QueryOfferingPriceRequest is request type for the Query/OfferingPrice RPC method.
+message QueryOfferingPriceRequest {
+  // On-chain offering ID string (provider/sequence).
+  string offering_id = 1;
+
+  // Resource units keyed by resource type (cpu, ram, storage, gpu, network).
+  map<string, uint64> resource_units = 2;
+
+  // Requested quantity (defaults to 1 if omitted).
+  uint32 quantity = 3;
+}
+
+// QueryOfferingPriceResponse is response type for the Query/OfferingPrice RPC method.
+message QueryOfferingPriceResponse {
+  // Total calculated price.
+  cosmos.base.v1beta1.Coin total = 1 [(gogoproto.nullable) = false];
+}
+
+// AllocationState represents the lifecycle state of an allocation.
+enum AllocationState {
+  // ALLOCATION_STATE_UNSPECIFIED represents an unspecified allocation state.
+  ALLOCATION_STATE_UNSPECIFIED = 0;
+  // ALLOCATION_STATE_PENDING indicates the allocation is pending provider acknowledgment.
+  ALLOCATION_STATE_PENDING = 1;
+  // ALLOCATION_STATE_ACCEPTED indicates the provider accepted the allocation.
+  ALLOCATION_STATE_ACCEPTED = 2;
+  // ALLOCATION_STATE_PROVISIONING indicates provisioning is in progress.
+  ALLOCATION_STATE_PROVISIONING = 3;
+  // ALLOCATION_STATE_ACTIVE indicates the allocation is active.
+  ALLOCATION_STATE_ACTIVE = 4;
+  // ALLOCATION_STATE_SUSPENDED indicates the allocation is suspended.
+  ALLOCATION_STATE_SUSPENDED = 5;
+  // ALLOCATION_STATE_TERMINATING indicates the allocation is terminating.
+  ALLOCATION_STATE_TERMINATING = 6;
+  // ALLOCATION_STATE_TERMINATED indicates the allocation is terminated.
+  ALLOCATION_STATE_TERMINATED = 7;
+  // ALLOCATION_STATE_REJECTED indicates the provider rejected the allocation.
+  ALLOCATION_STATE_REJECTED = 8;
+  // ALLOCATION_STATE_FAILED indicates the allocation failed.
+  ALLOCATION_STATE_FAILED = 9;
+}
+
+// Allocation represents a marketplace allocation summary.
+message Allocation {
+  string allocation_id = 1 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string order_id = 2 [(gogoproto.jsontag) = "order_id", (gogoproto.moretags) = "yaml:\"order_id\""];
+  string offering_id = 3 [(gogoproto.jsontag) = "offering_id", (gogoproto.moretags) = "yaml:\"offering_id\""];
+  string provider_address = 4 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  string customer_address = 5 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer_address", (gogoproto.moretags) = "yaml:\"customer_address\""];
+  AllocationState state = 6 [(gogoproto.jsontag) = "state", (gogoproto.moretags) = "yaml:\"state\""];
+  uint64 accepted_price = 7 [(gogoproto.jsontag) = "accepted_price", (gogoproto.moretags) = "yaml:\"accepted_price\""];
+  google.protobuf.Timestamp created_at = 8 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "created_at", (gogoproto.moretags) = "yaml:\"created_at\""];
+  google.protobuf.Timestamp updated_at = 9 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true, (gogoproto.jsontag) = "updated_at", (gogoproto.moretags) = "yaml:\"updated_at\""];
+  google.protobuf.Timestamp terminated_at = 10 [(gogoproto.stdtime) = true, (gogoproto.jsontag) = "terminated_at,omitempty", (gogoproto.moretags) = "yaml:\"terminated_at\""];
+  string state_reason = 11 [(gogoproto.jsontag) = "state_reason,omitempty", (gogoproto.moretags) = "yaml:\"state_reason\""];
+}
+
+// QueryAllocationsByCustomerRequest is the request for allocations by customer.
+message QueryAllocationsByCustomerRequest {
+  string customer_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer_address", (gogoproto.moretags) = "yaml:\"customer_address\""];
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+// QueryAllocationsByProviderRequest is the request for allocations by provider.
+message QueryAllocationsByProviderRequest {
+  string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "provider_address", (gogoproto.moretags) = "yaml:\"provider_address\""];
+  cosmos.base.query.v1beta1.PageRequest pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}
+
+// QueryAllocationsResponse is the response for allocations queries.
+message QueryAllocationsResponse {
+  repeated Allocation allocations = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "allocations", (gogoproto.moretags) = "yaml:\"allocations\""];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2 [(gogoproto.jsontag) = "pagination,omitempty", (gogoproto.moretags) = "yaml:\"pagination\""];
+}

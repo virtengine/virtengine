@@ -28,29 +28,35 @@ const (
 	// ActionTerminateAllocation represents terminating an allocation
 	ActionTerminateAllocation MarketplaceActionType = 4
 
+	// ActionPauseAllocation represents pausing an allocation
+	ActionPauseAllocation MarketplaceActionType = 5
+
+	// ActionResizeAllocation represents resizing an allocation
+	ActionResizeAllocation MarketplaceActionType = 6
+
 	// ActionWithdrawFunds represents withdrawing funds from marketplace
-	ActionWithdrawFunds MarketplaceActionType = 5
+	ActionWithdrawFunds MarketplaceActionType = 7
 
 	// ActionCreateOffering represents creating a new offering
-	ActionCreateOffering MarketplaceActionType = 6
+	ActionCreateOffering MarketplaceActionType = 8
 
 	// ActionModifyOffering represents modifying an offering
-	ActionModifyOffering MarketplaceActionType = 7
+	ActionModifyOffering MarketplaceActionType = 9
 
 	// ActionTerminateOffering represents terminating an offering
-	ActionTerminateOffering MarketplaceActionType = 8
+	ActionTerminateOffering MarketplaceActionType = 10
 
 	// ActionAcceptBid represents accepting a bid
-	ActionAcceptBid MarketplaceActionType = 9
+	ActionAcceptBid MarketplaceActionType = 11
 
 	// ActionPlaceBid represents placing a bid
-	ActionPlaceBid MarketplaceActionType = 10
+	ActionPlaceBid MarketplaceActionType = 12
 
 	// ActionSettlement represents settlement operations
-	ActionSettlement MarketplaceActionType = 11
+	ActionSettlement MarketplaceActionType = 13
 
 	// ActionKeyRotation represents key rotation for marketplace
-	ActionKeyRotation MarketplaceActionType = 12
+	ActionKeyRotation MarketplaceActionType = 14
 )
 
 // MarketplaceActionTypeNames maps action types to human-readable names
@@ -60,6 +66,8 @@ var MarketplaceActionTypeNames = map[MarketplaceActionType]string{
 	ActionModifyOrder:         "modify_order",
 	ActionCancelOrder:         "cancel_order",
 	ActionTerminateAllocation: "terminate_allocation",
+	ActionPauseAllocation:     "pause_allocation",
+	ActionResizeAllocation:    "resize_allocation",
 	ActionWithdrawFunds:       "withdraw_funds",
 	ActionCreateOffering:      "create_offering",
 	ActionModifyOffering:      "modify_offering",
@@ -168,6 +176,20 @@ func DefaultMFAActionConfigs() []MFAActionConfig {
 			TrustedDeviceReducesRequirement: true,
 			RecentMFASatisfies:              true,
 			SessionWindowSeconds:            1800, // 30 minutes
+		},
+		{
+			ActionType:                      ActionPauseAllocation,
+			RequirementLevel:                MFARequiredSingleFactor,
+			TrustedDeviceReducesRequirement: true,
+			RecentMFASatisfies:              true,
+			SessionWindowSeconds:            1800,
+		},
+		{
+			ActionType:                      ActionResizeAllocation,
+			RequirementLevel:                MFARequiredSingleFactor,
+			TrustedDeviceReducesRequirement: true,
+			RecentMFASatisfies:              true,
+			SessionWindowSeconds:            1800,
 		},
 		{
 			ActionType:                      ActionWithdrawFunds,

@@ -18,6 +18,7 @@ buf generate `
   --path proto/node/virtengine/deployment/v1beta4 `
   --path proto/node/virtengine/escrow/v1 `
   --path proto/node/virtengine/market/v1beta5 `
+  --path proto/node/virtengine/marketplace/v1 `
   --path proto/node/virtengine/provider/v1beta4
 
 # Generate provider protos  

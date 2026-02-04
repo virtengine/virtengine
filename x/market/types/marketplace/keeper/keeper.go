@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -86,6 +87,8 @@ type IKeeper interface {
 	GetAllocation(ctx sdk.Context, id marketplace.AllocationID) (*marketplace.Allocation, bool)
 	UpdateAllocation(ctx sdk.Context, allocation *marketplace.Allocation) error
 	WithAllocations(ctx sdk.Context, fn func(marketplace.Allocation) bool)
+	GetAllocationsByCustomer(ctx sdk.Context, customerAddress string) []marketplace.Allocation
+	GetAllocationsByProvider(ctx sdk.Context, providerAddress string) []marketplace.Allocation
 
 	// Identity Gating (VE-301)
 	CheckIdentityGating(ctx sdk.Context, offering *marketplace.Offering, customerAddress sdk.AccAddress) error
@@ -362,6 +365,26 @@ func (k Keeper) CreateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if params.EnableIdentityGating {
 		if err := k.CheckIdentityGating(ctx, offering, customerAddr); err != nil {
 			return err
+		}
+	}
+
+	// Validate order pricing against offering price components
+	quote, err := marketplace.CalculateOfferingPrice(offering, order.ResourceUnits, order.RequestedQuantity)
+	if err != nil {
+		return marketplace.ErrPricingInvalid.Wrap(err.Error())
+	}
+	if !quote.Total.Amount.IsUint64() {
+		return marketplace.ErrPricingInvalid.Wrap("calculated price overflow")
+	}
+	if quote.Total.Amount.Uint64() > order.MaxBidPrice {
+		return marketplace.ErrPricingInvalid.Wrapf("max bid price %d below required %d", order.MaxBidPrice, quote.Total.Amount.Uint64())
+	}
+	if offering.AllowBidding && offering.MinBid.IsValid() && offering.MinBid.Amount.IsPositive() {
+		if offering.MinBid.Denom != quote.Total.Denom {
+			return marketplace.ErrPricingInvalid.Wrap("min bid denom mismatch")
+		}
+		if offering.MinBid.Amount.GT(sdkmath.NewIntFromUint64(order.MaxBidPrice)) {
+			return marketplace.ErrPricingInvalid.Wrap("max bid price below offering minimum bid")
 		}
 	}
 
@@ -659,6 +682,14 @@ func (k Keeper) CreateAllocation(ctx sdk.Context, allocation *marketplace.Alloca
 		return err
 	}
 	store.Set(key, bz)
+
+	// Index by customer and provider for queries
+	customerKey := marketplace.AllocationByCustomerKey(allocation.ID.OrderID.CustomerAddress, allocation.ID.String())
+	store.Set(customerKey, []byte(allocation.ID.String()))
+	if allocation.ProviderAddress != "" {
+		providerKey := marketplace.AllocationByProviderKey(allocation.ProviderAddress, allocation.ID.String())
+		store.Set(providerKey, []byte(allocation.ID.String()))
+	}
 	return nil
 }
 
@@ -698,6 +729,14 @@ func (k Keeper) UpdateAllocation(ctx sdk.Context, allocation *marketplace.Alloca
 		return err
 	}
 	store.Set(key, bz)
+
+	// Ensure indexes exist (idempotent)
+	customerKey := marketplace.AllocationByCustomerKey(allocation.ID.OrderID.CustomerAddress, allocation.ID.String())
+	store.Set(customerKey, []byte(allocation.ID.String()))
+	if allocation.ProviderAddress != "" {
+		providerKey := marketplace.AllocationByProviderKey(allocation.ProviderAddress, allocation.ID.String())
+		store.Set(providerKey, []byte(allocation.ID.String()))
+	}
 	return nil
 }
 
@@ -716,6 +755,56 @@ func (k Keeper) WithAllocations(ctx sdk.Context, fn func(marketplace.Allocation)
 			break
 		}
 	}
+}
+
+// GetAllocationsByCustomer returns allocations for a customer
+func (k Keeper) GetAllocationsByCustomer(ctx sdk.Context, customerAddress string) []marketplace.Allocation {
+	store := ctx.KVStore(k.skey)
+	iter := storetypes.KVStorePrefixIterator(store, marketplace.AllocationByCustomerPrefixKey(customerAddress))
+	defer iter.Close()
+
+	var allocations []marketplace.Allocation
+	for ; iter.Valid(); iter.Next() {
+		allocationID := string(iter.Value())
+		if allocationID == "" {
+			continue
+		}
+		id, err := marketplace.ParseAllocationID(allocationID)
+		if err != nil {
+			continue
+		}
+		allocation, found := k.GetAllocation(ctx, id)
+		if !found {
+			continue
+		}
+		allocations = append(allocations, *allocation)
+	}
+	return allocations
+}
+
+// GetAllocationsByProvider returns allocations for a provider
+func (k Keeper) GetAllocationsByProvider(ctx sdk.Context, providerAddress string) []marketplace.Allocation {
+	store := ctx.KVStore(k.skey)
+	iter := storetypes.KVStorePrefixIterator(store, marketplace.AllocationByProviderPrefixKey(providerAddress))
+	defer iter.Close()
+
+	var allocations []marketplace.Allocation
+	for ; iter.Valid(); iter.Next() {
+		allocationID := string(iter.Value())
+		if allocationID == "" {
+			continue
+		}
+		id, err := marketplace.ParseAllocationID(allocationID)
+		if err != nil {
+			continue
+		}
+		allocation, found := k.GetAllocation(ctx, id)
+		if !found {
+			continue
+		}
+		allocations = append(allocations, *allocation)
+	}
+	return allocations
 }
 
 // ============================================================================

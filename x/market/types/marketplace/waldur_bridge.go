@@ -447,6 +447,9 @@ type WaldurOfferingExport struct {
 	// Currency is the currency
 	Currency string `json:"currency"`
 
+	// Prices contains component-based prices
+	Prices []PriceComponent `json:"prices,omitempty"`
+
 	// Regions are supported regions
 	Regions []string `json:"regions,omitempty"`
 
@@ -480,6 +483,7 @@ func (e *WaldurOfferingExport) FromOffering(o *Offering) {
 	e.PricingModel = string(o.Pricing.Model)
 	e.BasePrice = o.Pricing.BasePrice
 	e.Currency = o.Pricing.Currency
+	e.Prices = o.Prices
 	e.Regions = o.Regions
 	e.Tags = o.Tags
 	e.Specifications = o.Specifications

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
 
@@ -110,6 +112,26 @@ const (
 	PricingModelFixed PricingModel = "fixed"
 )
 
+// PriceComponentResourceType represents known resource types for component pricing.
+type PriceComponentResourceType string
+
+const (
+	// PriceComponentCPU represents CPU pricing.
+	PriceComponentCPU PriceComponentResourceType = "cpu"
+
+	// PriceComponentRAM represents memory pricing.
+	PriceComponentRAM PriceComponentResourceType = "ram"
+
+	// PriceComponentStorage represents storage pricing.
+	PriceComponentStorage PriceComponentResourceType = "storage"
+
+	// PriceComponentGPU represents GPU pricing.
+	PriceComponentGPU PriceComponentResourceType = "gpu"
+
+	// PriceComponentNetwork represents network pricing.
+	PriceComponentNetwork PriceComponentResourceType = "network"
+)
+
 // IdentityRequirement defines the identity verification requirements for an offering
 type IdentityRequirement struct {
 	// MinScore is the minimum VEID identity score required (0-100)
@@ -192,6 +214,41 @@ func (p *PricingInfo) Validate() error {
 	}
 	if p.Currency == "" {
 		return fmt.Errorf("currency is required")
+	}
+	return nil
+}
+
+// PriceComponent represents component-based pricing for an offering.
+type PriceComponent struct {
+	// ResourceType is the resource type (cpu, ram, storage, gpu, network).
+	ResourceType PriceComponentResourceType `json:"resource_type"`
+
+	// Unit is the unit of the component (vcpu, gb, hour, month).
+	Unit string `json:"unit"`
+
+	// Price is the unit price in chain currency.
+	Price sdk.Coin `json:"price"`
+
+	// USDReference is the USD price at time of creation (display only).
+	USDReference string `json:"usd_reference,omitempty"`
+}
+
+// Validate validates the price component.
+func (p *PriceComponent) Validate() error {
+	if p.ResourceType == "" {
+		return fmt.Errorf("price component resource_type is required")
+	}
+	if p.Unit == "" {
+		return fmt.Errorf("price component unit is required")
+	}
+	if !p.Price.IsValid() {
+		return fmt.Errorf("price component price is invalid")
+	}
+	if !p.Price.Amount.IsPositive() {
+		return fmt.Errorf("price component price must be positive")
+	}
+	if !p.Price.Amount.IsUint64() {
+		return fmt.Errorf("price component price exceeds uint64")
 	}
 	return nil
 }
@@ -279,6 +336,15 @@ type Offering struct {
 	// Pricing contains the pricing information
 	Pricing PricingInfo `json:"pricing"`
 
+	// Prices contains component-based pricing information (preferred).
+	Prices []PriceComponent `json:"prices,omitempty"`
+
+	// AllowBidding indicates if bidding is allowed for this offering.
+	AllowBidding bool `json:"allow_bidding"`
+
+	// MinBid is the minimum bid price when bidding is enabled.
+	MinBid sdk.Coin `json:"min_bid,omitempty"`
+
 	// IdentityRequirement defines identity verification requirements
 	IdentityRequirement IdentityRequirement `json:"identity_requirement"`
 
@@ -364,7 +430,11 @@ func (o *Offering) Validate() error {
 		return fmt.Errorf("offering category is required")
 	}
 
-	if err := o.Pricing.Validate(); err != nil {
+	if len(o.Prices) > 0 {
+		if err := validatePriceComponents(o.Prices); err != nil {
+			return fmt.Errorf("invalid price components: %w", err)
+		}
+	} else if err := o.Pricing.Validate(); err != nil {
 		return fmt.Errorf("invalid pricing: %w", err)
 	}
 
@@ -376,6 +446,41 @@ func (o *Offering) Validate() error {
 		if err := o.EncryptedSecrets.Validate(); err != nil {
 			return fmt.Errorf("invalid encrypted secrets: %w", err)
 		}
+	}
+
+	if o.AllowBidding {
+		if !o.MinBid.IsValid() {
+			return fmt.Errorf("min bid is invalid")
+		}
+		if !o.MinBid.Amount.IsPositive() {
+			return fmt.Errorf("min bid must be positive")
+		}
+	}
+
+	return nil
+}
+
+func validatePriceComponents(prices []PriceComponent) error {
+	if len(prices) == 0 {
+		return fmt.Errorf("price components are required")
+	}
+
+	var denom string
+	seen := make(map[string]struct{})
+	for _, component := range prices {
+		if err := component.Validate(); err != nil {
+			return err
+		}
+		if denom == "" {
+			denom = component.Price.Denom
+		} else if denom != component.Price.Denom {
+			return fmt.Errorf("price component denom mismatch: %s vs %s", denom, component.Price.Denom)
+		}
+		key := fmt.Sprintf("%s:%s", component.ResourceType, component.Unit)
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("duplicate price component: %s", key)
+		}
+		seen[key] = struct{}{}
 	}
 
 	return nil

@@ -26,6 +26,8 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &MsgDeactivateOffering{}, "marketplace/MsgDeactivateOffering")
 	legacy.RegisterAminoMsg(cdc, &MsgAcceptBid{}, "marketplace/MsgAcceptBid")
 	legacy.RegisterAminoMsg(cdc, &MsgTerminateAllocation{}, "marketplace/MsgTerminateAllocation")
+	legacy.RegisterAminoMsg(cdc, &MsgResizeAllocation{}, "marketplace/MsgResizeAllocation")
+	legacy.RegisterAminoMsg(cdc, &MsgPauseAllocation{}, "marketplace/MsgPauseAllocation")
 	legacy.RegisterAminoMsg(cdc, &MsgWaldurCallback{}, "marketplace/MsgWaldurCallback")
 }
 
@@ -38,6 +40,8 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgDeactivateOffering{},
 		&MsgAcceptBid{},
 		&MsgTerminateAllocation{},
+		&MsgResizeAllocation{},
+		&MsgPauseAllocation{},
 		&MsgWaldurCallback{},
 	)
 	msgservice.RegisterMsgServiceDesc(registry, &marketplacev1.Msg_serviceDesc)

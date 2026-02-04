@@ -2,10 +2,12 @@
 # VirtEngine Pre-Commit Hook
 #
 # Runs fast checks on staged files before commit.
-# Only runs go mod tidy/vendor when go.mod or go.sum are staged.
+# - Auto-formats Go files with gofmt (always runs on staged .go files)
+# - Runs go mod tidy/vendor when go.mod or go.sum are staged.
 #
 # Bypass: git commit --no-verify
-# Skip mod check: VE_HOOK_SKIP_MOD=1 git commit
+# Skip formatting: VE_HOOK_SKIP_FMT=1 git commit
+# Skip mod check:  VE_HOOK_SKIP_MOD=1 git commit
 
 set -euo pipefail
 
@@ -16,6 +18,46 @@ source "$HOOK_DIR/common.sh"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# =========================================================================
+# Auto-format staged Go files with gofmt
+# =========================================================================
+if [ "${VE_HOOK_SKIP_FMT:-}" != "1" ]; then
+    # Get staged Go files (excluding vendor and deleted files)
+    STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' | grep -v '^vendor/' || true)
+
+    if [ -n "$STAGED_GO_FILES" ]; then
+        hook_header "[pre-commit] Formatting staged Go files..."
+
+        # Track if any files were reformatted
+        FORMATTED_COUNT=0
+
+        for file in $STAGED_GO_FILES; do
+            # Skip if file doesn't exist (edge case)
+            [ -f "$file" ] || continue
+
+            # Check if file needs formatting
+            if ! gofmt -l "$file" | grep -q .; then
+                continue
+            fi
+
+            # Format the file in place
+            gofmt -w "$file"
+            git add "$file"
+            FORMATTED_COUNT=$((FORMATTED_COUNT + 1))
+            hook_step "Formatted: $file"
+        done
+
+        if [ "$FORMATTED_COUNT" -gt 0 ]; then
+            hook_pass "[pre-commit] Auto-formatted $FORMATTED_COUNT file(s)"
+        else
+            hook_pass "[pre-commit] All Go files already formatted"
+        fi
+    fi
+fi
+
+# =========================================================================
+# go mod tidy/vendor when go.mod or go.sum are staged
+# =========================================================================
 # Check if go.mod or go.sum are staged
 if git diff --cached --name-only | grep -qE '^go\.(mod|sum)$'; then
     if [ "${VE_HOOK_SKIP_MOD:-}" = "1" ]; then
