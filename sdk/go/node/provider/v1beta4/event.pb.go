@@ -176,10 +176,128 @@ func (m *EventProviderDeleted) GetOwner() string {
 	return ""
 }
 
+// EventProviderDomainVerificationStarted defines an SDK message for when domain verification begins
+type EventProviderDomainVerificationStarted struct {
+	Owner  string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
+	Domain string `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain" yaml:"domain"`
+	Token  string `protobuf:"bytes,3,opt,name=token,proto3" json:"token" yaml:"token"`
+}
+
+func (m *EventProviderDomainVerificationStarted) Reset() {
+	*m = EventProviderDomainVerificationStarted{}
+}
+func (m *EventProviderDomainVerificationStarted) String() string { return proto.CompactTextString(m) }
+func (*EventProviderDomainVerificationStarted) ProtoMessage()    {}
+func (*EventProviderDomainVerificationStarted) Descriptor() ([]byte, []int) {
+	return fileDescriptor_590ff55a4d14d117, []int{3}
+}
+func (m *EventProviderDomainVerificationStarted) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EventProviderDomainVerificationStarted) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EventProviderDomainVerificationStarted.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *EventProviderDomainVerificationStarted) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EventProviderDomainVerificationStarted.Merge(m, src)
+}
+func (m *EventProviderDomainVerificationStarted) XXX_Size() int {
+	return m.Size()
+}
+func (m *EventProviderDomainVerificationStarted) XXX_DiscardUnknown() {
+	xxx_messageInfo_EventProviderDomainVerificationStarted.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_EventProviderDomainVerificationStarted proto.InternalMessageInfo
+
+func (m *EventProviderDomainVerificationStarted) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *EventProviderDomainVerificationStarted) GetDomain() string {
+	if m != nil {
+		return m.Domain
+	}
+	return ""
+}
+
+func (m *EventProviderDomainVerificationStarted) GetToken() string {
+	if m != nil {
+		return m.Token
+	}
+	return ""
+}
+
+// EventProviderDomainVerified defines an SDK message for provider domain verified event
+type EventProviderDomainVerified struct {
+	Owner  string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
+	Domain string `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain" yaml:"domain"`
+}
+
+func (m *EventProviderDomainVerified) Reset()         { *m = EventProviderDomainVerified{} }
+func (m *EventProviderDomainVerified) String() string { return proto.CompactTextString(m) }
+func (*EventProviderDomainVerified) ProtoMessage()    {}
+func (*EventProviderDomainVerified) Descriptor() ([]byte, []int) {
+	return fileDescriptor_590ff55a4d14d117, []int{4}
+}
+func (m *EventProviderDomainVerified) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *EventProviderDomainVerified) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_EventProviderDomainVerified.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *EventProviderDomainVerified) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_EventProviderDomainVerified.Merge(m, src)
+}
+func (m *EventProviderDomainVerified) XXX_Size() int {
+	return m.Size()
+}
+func (m *EventProviderDomainVerified) XXX_DiscardUnknown() {
+	xxx_messageInfo_EventProviderDomainVerified.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_EventProviderDomainVerified proto.InternalMessageInfo
+
+func (m *EventProviderDomainVerified) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *EventProviderDomainVerified) GetDomain() string {
+	if m != nil {
+		return m.Domain
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*EventProviderCreated)(nil), "virtengine.provider.v1beta4.EventProviderCreated")
 	proto.RegisterType((*EventProviderUpdated)(nil), "virtengine.provider.v1beta4.EventProviderUpdated")
 	proto.RegisterType((*EventProviderDeleted)(nil), "virtengine.provider.v1beta4.EventProviderDeleted")
+	proto.RegisterType((*EventProviderDomainVerificationStarted)(nil), "virtengine.provider.v1beta4.EventProviderDomainVerificationStarted")
+	proto.RegisterType((*EventProviderDomainVerified)(nil), "virtengine.provider.v1beta4.EventProviderDomainVerified")
 }
 
 func init() {
@@ -187,7 +305,7 @@ func init() {
 }
 
 var fileDescriptor_590ff55a4d14d117 = []byte{
-	// 261 bytes of a gzipped FileDescriptorProto
+	// 360 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x52, 0x2f, 0xcb, 0x2c, 0x2a,
 	0x49, 0xcd, 0x4b, 0xcf, 0xcc, 0x4b, 0xd5, 0x2f, 0x28, 0xca, 0x2f, 0xcb, 0x4c, 0x49, 0x2d, 0xd2,
 	0x2f, 0x33, 0x4c, 0x4a, 0x2d, 0x49, 0x34, 0xd1, 0x4f, 0x2d, 0x4b, 0xcd, 0x2b, 0xd1, 0x2b, 0x28,
@@ -199,12 +317,18 @@ var fileDescriptor_590ff55a4d14d117 = []byte{
 	0x9f, 0xee, 0xc9, 0xf3, 0x54, 0x26, 0xe6, 0xe6, 0x58, 0x29, 0x81, 0xb9, 0x4a, 0x97, 0xb6, 0xe8,
 	0x8a, 0x40, 0x4d, 0x74, 0x4c, 0x49, 0x29, 0x4a, 0x2d, 0x2e, 0x0e, 0x2e, 0x29, 0xca, 0xcc, 0x4b,
 	0x0f, 0x82, 0x28, 0xb7, 0x62, 0x79, 0xb1, 0x40, 0x9e, 0x11, 0xc3, 0x9a, 0xd0, 0x82, 0x14, 0x7a,
-	0x58, 0xe3, 0x92, 0x9a, 0x93, 0x4a, 0x7d, 0x6b, 0x9c, 0xc2, 0x4f, 0x3c, 0x92, 0x63, 0xbc, 0xf0,
-	0x48, 0x8e, 0xf1, 0xc1, 0x23, 0x39, 0xc6, 0x09, 0x8f, 0xe5, 0x18, 0x2e, 0x3c, 0x96, 0x63, 0xb8,
-	0xf1, 0x58, 0x8e, 0x21, 0xca, 0x36, 0x3d, 0xb3, 0x24, 0xa3, 0x34, 0x49, 0x2f, 0x39, 0x3f, 0x57,
-	0x1f, 0x29, 0x42, 0x91, 0x98, 0xc5, 0x29, 0xd9, 0xfa, 0xe9, 0xf9, 0xfa, 0x79, 0xf9, 0x29, 0x98,
-	0xf1, 0x9c, 0xc4, 0x06, 0x8e, 0x14, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x75, 0xda, 0xd7,
-	0x43, 0x0d, 0x02, 0x00, 0x00,
+	0x58, 0xe3, 0x92, 0x9a, 0x93, 0x4a, 0x03, 0x6b, 0xee, 0x32, 0x72, 0xa9, 0xa1, 0xda, 0x93, 0x9f,
+	0x9b, 0x98, 0x99, 0x17, 0x96, 0x5a, 0x94, 0x99, 0x96, 0x99, 0x9c, 0x58, 0x92, 0x99, 0x9f, 0x17,
+	0x5c, 0x92, 0x58, 0x44, 0x4d, 0x9b, 0x85, 0x8c, 0xb9, 0xd8, 0x52, 0xc0, 0xb6, 0x48, 0x30, 0x81,
+	0x4d, 0x92, 0x7e, 0x75, 0x4f, 0x1e, 0x2a, 0xf2, 0xe9, 0x9e, 0x3c, 0x2f, 0xc4, 0x28, 0x08, 0x5f,
+	0x29, 0x08, 0x2a, 0x21, 0xa4, 0xcf, 0xc5, 0x5a, 0x92, 0x9f, 0x9d, 0x9a, 0x27, 0xc1, 0x0c, 0xd6,
+	0x23, 0x09, 0xb2, 0x1d, 0x2c, 0x80, 0xb0, 0x1d, 0xcc, 0x55, 0x0a, 0x82, 0x08, 0x43, 0xfd, 0xb7,
+	0x90, 0x91, 0x4b, 0x1a, 0xa7, 0xff, 0x06, 0xda, 0x53, 0x10, 0x37, 0x3a, 0x85, 0x9f, 0x78, 0x24,
+	0xc7, 0x78, 0xe1, 0x91, 0x1c, 0xe3, 0x83, 0x47, 0x72, 0x8c, 0x13, 0x1e, 0xcb, 0x31, 0x5c, 0x78,
+	0x2c, 0xc7, 0x70, 0xe3, 0xb1, 0x1c, 0x43, 0x94, 0x6d, 0x7a, 0x66, 0x49, 0x46, 0x69, 0x92, 0x5e,
+	0x72, 0x7e, 0xae, 0x3e, 0x52, 0xa6, 0x42, 0x62, 0x16, 0xa7, 0x64, 0xeb, 0xa7, 0xe7, 0xeb, 0xe7,
+	0xe5, 0xa7, 0x60, 0xe6, 0xb5, 0x24, 0x36, 0x70, 0xc6, 0x30, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff,
+	0x02, 0xc8, 0x03, 0x41, 0x91, 0x03, 0x00, 0x00,
 }
 
 func (this *EventProviderCreated) Equal(that interface{}) bool {
@@ -275,6 +399,63 @@ func (this *EventProviderDeleted) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Owner != that1.Owner {
+		return false
+	}
+	return true
+}
+func (this *EventProviderDomainVerificationStarted) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EventProviderDomainVerificationStarted)
+	if !ok {
+		that2, ok := that.(EventProviderDomainVerificationStarted)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Owner != that1.Owner {
+		return false
+	}
+	if this.Domain != that1.Domain {
+		return false
+	}
+	if this.Token != that1.Token {
+		return false
+	}
+	return true
+}
+func (this *EventProviderDomainVerified) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EventProviderDomainVerified)
+	if !ok {
+		that2, ok := that.(EventProviderDomainVerified)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Owner != that1.Owner {
+		return false
+	}
+	if this.Domain != that1.Domain {
 		return false
 	}
 	return true
@@ -369,6 +550,87 @@ func (m *EventProviderDeleted) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *EventProviderDomainVerificationStarted) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EventProviderDomainVerificationStarted) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventProviderDomainVerificationStarted) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Token) > 0 {
+		i -= len(m.Token)
+		copy(dAtA[i:], m.Token)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Token)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Domain) > 0 {
+		i -= len(m.Domain)
+		copy(dAtA[i:], m.Domain)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Domain)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *EventProviderDomainVerified) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EventProviderDomainVerified) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *EventProviderDomainVerified) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Domain) > 0 {
+		i -= len(m.Domain)
+		copy(dAtA[i:], m.Domain)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Domain)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Owner) > 0 {
+		i -= len(m.Owner)
+		copy(dAtA[i:], m.Owner)
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Owner)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintEvent(dAtA []byte, offset int, v uint64) int {
 	offset -= sovEvent(v)
 	base := offset
@@ -413,6 +675,44 @@ func (m *EventProviderDeleted) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	return n
+}
+
+func (m *EventProviderDomainVerificationStarted) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Domain)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Token)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	return n
+}
+
+func (m *EventProviderDomainVerified) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Owner)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	l = len(m.Domain)
 	if l > 0 {
 		n += 1 + l + sovEvent(uint64(l))
 	}
@@ -649,6 +949,266 @@ func (m *EventProviderDeleted) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipEvent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EventProviderDomainVerificationStarted) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowEvent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EventProviderDomainVerificationStarted: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EventProviderDomainVerificationStarted: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Domain", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Domain = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Token", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Token = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipEvent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EventProviderDomainVerified) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowEvent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EventProviderDomainVerified: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EventProviderDomainVerified: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Owner", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Owner = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Domain", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Domain = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

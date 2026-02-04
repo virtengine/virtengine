@@ -5,12 +5,11 @@ package client
 
 import (
 	fmt "fmt"
+	_ "github.com/cosmos/gogoproto/gogoproto"
+	proto "github.com/cosmos/gogoproto/proto"
 	io "io"
 	math "math"
 	math_bits "math/bits"
-
-	_ "github.com/cosmos/gogoproto/gogoproto"
-	proto "github.com/cosmos/gogoproto/proto"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -34,7 +33,7 @@ func (m *VirtEngine) Reset()         { *m = VirtEngine{} }
 func (m *VirtEngine) String() string { return proto.CompactTextString(m) }
 func (*VirtEngine) ProtoMessage()    {}
 func (*VirtEngine) Descriptor() ([]byte, []int) {
-	return fileDescriptor_virtengine_discovery, []int{0}
+	return fileDescriptor_a6bf386960e47f8f, []int{0}
 }
 func (m *VirtEngine) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -75,26 +74,26 @@ func init() {
 }
 
 func init() {
-	safeRegisterFile("virtengine/discovery/v1/virtengine.proto", fileDescriptor_virtengine_discovery)
+	proto.RegisterFile("virtengine/discovery/v1/virtengine.proto", fileDescriptor_a6bf386960e47f8f)
 }
 
-var fileDescriptor_virtengine_discovery = []byte{
-	// 240 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_a6bf386960e47f8f = []byte{
+	// 232 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xd2, 0x28, 0xcb, 0x2c, 0x2a,
 	0x49, 0xcd, 0x4b, 0xcf, 0xcc, 0x4b, 0xd5, 0x4f, 0xc9, 0x2c, 0x4e, 0xce, 0x2f, 0x4b, 0x2d, 0xaa,
-	0xd4, 0x2f, 0x33, 0xd4, 0x47, 0x28, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x12, 0x47, 0x28,
-	0xd2, 0x83, 0x2b, 0xd2, 0x2b, 0x33, 0x94, 0xd2, 0xc4, 0xa5, 0x3b, 0x39, 0x27, 0x33, 0x35, 0xaf,
-	0x24, 0x3e, 0x33, 0x2f, 0x2d, 0x1f, 0x62, 0x86, 0x94, 0x48, 0x7a, 0x7e, 0x7a, 0x3e, 0x98, 0xa9,
-	0x0f, 0x62, 0x41, 0x44, 0x95, 0x26, 0x33, 0x72, 0x71, 0x85, 0x65, 0x26, 0x95, 0xb8, 0x42, 0x15,
-	0x0a, 0xd5, 0x72, 0x71, 0x23, 0x69, 0x92, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x36, 0x52, 0xd6, 0xc3,
-	0x61, 0xb3, 0x9e, 0x33, 0x58, 0xad, 0x67, 0x5e, 0x5a, 0xbe, 0x93, 0xf9, 0x89, 0x7b, 0xf2, 0x0c,
-	0x8f, 0xee, 0xc9, 0x73, 0x21, 0xc4, 0x5e, 0xdd, 0x93, 0x47, 0x36, 0xed, 0xd3, 0x3d, 0x79, 0xa1,
-	0xca, 0xc4, 0xdc, 0x1c, 0x2b, 0x25, 0x24, 0x41, 0xa5, 0x20, 0xae, 0x64, 0x84, 0x21, 0xbe, 0x27,
-	0x1e, 0xc9, 0x31, 0x5e, 0x78, 0x24, 0xc7, 0xf8, 0xe0, 0x91, 0x1c, 0xe3, 0x84, 0xc7, 0x72, 0x0c,
-	0x17, 0x1e, 0xcb, 0x31, 0xdc, 0x78, 0x2c, 0xc7, 0x10, 0x65, 0x9c, 0x9e, 0x59, 0x92, 0x51, 0x9a,
-	0xa4, 0x97, 0x9c, 0x9f, 0xab, 0x8f, 0xe4, 0x5d, 0x24, 0x66, 0x71, 0x4a, 0xb6, 0x7e, 0x7a, 0xbe,
-	0x7e, 0x5e, 0x7e, 0x4a, 0x2a, 0xd4, 0xe3, 0x49, 0x6c, 0x60, 0xef, 0x19, 0x03, 0x02, 0x00, 0x00,
-	0xff, 0xff, 0xd4, 0x72, 0xde, 0x13, 0x6f, 0x01, 0x00, 0x00,
+	0xd4, 0x2f, 0x33, 0xd4, 0x47, 0x88, 0xeb, 0x15, 0x14, 0xe5, 0x97, 0xe4, 0x0b, 0x89, 0x23, 0x89,
+	0xc0, 0x55, 0xea, 0x95, 0x19, 0x4a, 0x69, 0xe2, 0x32, 0x22, 0x39, 0x27, 0x33, 0x35, 0xaf, 0x24,
+	0x3e, 0x33, 0x2f, 0x2d, 0x1f, 0x62, 0x86, 0x94, 0x48, 0x7a, 0x7e, 0x7a, 0x3e, 0x98, 0xa9, 0x0f,
+	0x62, 0x41, 0x44, 0x95, 0xba, 0x19, 0xb9, 0xb8, 0xc2, 0x32, 0x8b, 0x4a, 0x5c, 0xc1, 0x66, 0x08,
+	0xd5, 0x72, 0x71, 0x23, 0xe9, 0x94, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x36, 0x52, 0xd6, 0xc3, 0x61,
+	0xbd, 0x9e, 0x33, 0x58, 0xad, 0x67, 0x5e, 0x5a, 0xbe, 0x93, 0xf9, 0x89, 0x7b, 0xf2, 0x0c, 0x8f,
+	0xee, 0xc9, 0x73, 0x21, 0xc4, 0x5e, 0xdd, 0x93, 0x47, 0x36, 0xed, 0xd3, 0x3d, 0x79, 0xa1, 0xca,
+	0xc4, 0xdc, 0x1c, 0x2b, 0x25, 0x24, 0x41, 0xa5, 0x20, 0xae, 0x64, 0x84, 0x21, 0xbe, 0x27, 0x1e,
+	0xc9, 0x31, 0x5e, 0x78, 0x24, 0xc7, 0xf8, 0xe0, 0x91, 0x1c, 0xe3, 0x84, 0xc7, 0x72, 0x0c, 0x17,
+	0x1e, 0xcb, 0x31, 0xdc, 0x78, 0x2c, 0xc7, 0x10, 0x65, 0x9c, 0x9e, 0x59, 0x92, 0x51, 0x9a, 0xa4,
+	0x97, 0x9c, 0x9f, 0x8b, 0x14, 0x3c, 0xc8, 0xcc, 0xe2, 0x94, 0x6c, 0xfd, 0xf4, 0x7c, 0xfd, 0xbc,
+	0xfc, 0x94, 0x54, 0xa8, 0xef, 0x93, 0xd8, 0xc0, 0x7e, 0x34, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff,
+	0x95, 0x29, 0xdf, 0x9b, 0x69, 0x01, 0x00, 0x00,
 }
 
 func (m *VirtEngine) Marshal() (dAtA []byte, err error) {
@@ -123,15 +122,15 @@ func (m *VirtEngine) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
-		i = encodeVarintVirtEngine(dAtA, i, uint64(size))
+		i = encodeVarintVirtengine(dAtA, i, uint64(size))
 	}
 	i--
 	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
-func encodeVarintVirtEngine(dAtA []byte, offset int, v uint64) int {
-	offset -= sovVirtEngine(v)
+func encodeVarintVirtengine(dAtA []byte, offset int, v uint64) int {
+	offset -= sovVirtengine(v)
 	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
@@ -148,15 +147,15 @@ func (m *VirtEngine) Size() (n int) {
 	var l int
 	_ = l
 	l = m.ClientInfo.Size()
-	n += 1 + l + sovVirtEngine(uint64(l))
+	n += 1 + l + sovVirtengine(uint64(l))
 	return n
 }
 
-func sovVirtEngine(x uint64) (n int) {
+func sovVirtengine(x uint64) (n int) {
 	return (math_bits.Len64(x|1) + 6) / 7
 }
-func sozVirtEngine(x uint64) (n int) {
-	return sovVirtEngine(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+func sozVirtengine(x uint64) (n int) {
+	return sovVirtengine(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
 func (m *VirtEngine) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -166,7 +165,7 @@ func (m *VirtEngine) Unmarshal(dAtA []byte) error {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
 			if shift >= 64 {
-				return ErrIntOverflowVirtEngine
+				return ErrIntOverflowVirtengine
 			}
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
@@ -194,7 +193,7 @@ func (m *VirtEngine) Unmarshal(dAtA []byte) error {
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return ErrIntOverflowVirtEngine
+					return ErrIntOverflowVirtengine
 				}
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
@@ -207,11 +206,11 @@ func (m *VirtEngine) Unmarshal(dAtA []byte) error {
 				}
 			}
 			if msglen < 0 {
-				return ErrInvalidLengthVirtEngine
+				return ErrInvalidLengthVirtengine
 			}
 			postIndex := iNdEx + msglen
 			if postIndex < 0 {
-				return ErrInvalidLengthVirtEngine
+				return ErrInvalidLengthVirtengine
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
@@ -222,12 +221,12 @@ func (m *VirtEngine) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipVirtEngine(dAtA[iNdEx:])
+			skippy, err := skipVirtengine(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
 			if (skippy < 0) || (iNdEx+skippy) < 0 {
-				return ErrInvalidLengthVirtEngine
+				return ErrInvalidLengthVirtengine
 			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
@@ -241,7 +240,7 @@ func (m *VirtEngine) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func skipVirtEngine(dAtA []byte) (n int, err error) {
+func skipVirtengine(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
 	depth := 0
@@ -249,7 +248,7 @@ func skipVirtEngine(dAtA []byte) (n int, err error) {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
 			if shift >= 64 {
-				return 0, ErrIntOverflowVirtEngine
+				return 0, ErrIntOverflowVirtengine
 			}
 			if iNdEx >= l {
 				return 0, io.ErrUnexpectedEOF
@@ -266,7 +265,7 @@ func skipVirtEngine(dAtA []byte) (n int, err error) {
 		case 0:
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return 0, ErrIntOverflowVirtEngine
+					return 0, ErrIntOverflowVirtengine
 				}
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
@@ -282,7 +281,7 @@ func skipVirtEngine(dAtA []byte) (n int, err error) {
 			var length int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
-					return 0, ErrIntOverflowVirtEngine
+					return 0, ErrIntOverflowVirtengine
 				}
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
@@ -295,14 +294,14 @@ func skipVirtEngine(dAtA []byte) (n int, err error) {
 				}
 			}
 			if length < 0 {
-				return 0, ErrInvalidLengthVirtEngine
+				return 0, ErrInvalidLengthVirtengine
 			}
 			iNdEx += length
 		case 3:
 			depth++
 		case 4:
 			if depth == 0 {
-				return 0, ErrUnexpectedEndOfGroupVirtEngine
+				return 0, ErrUnexpectedEndOfGroupVirtengine
 			}
 			depth--
 		case 5:
@@ -311,7 +310,7 @@ func skipVirtEngine(dAtA []byte) (n int, err error) {
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
 		if iNdEx < 0 {
-			return 0, ErrInvalidLengthVirtEngine
+			return 0, ErrInvalidLengthVirtengine
 		}
 		if depth == 0 {
 			return iNdEx, nil
@@ -321,7 +320,7 @@ func skipVirtEngine(dAtA []byte) (n int, err error) {
 }
 
 var (
-	ErrInvalidLengthVirtEngine        = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowVirtEngine          = fmt.Errorf("proto: integer overflow")
-	ErrUnexpectedEndOfGroupVirtEngine = fmt.Errorf("proto: unexpected end of group")
+	ErrInvalidLengthVirtengine        = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowVirtengine          = fmt.Errorf("proto: integer overflow")
+	ErrUnexpectedEndOfGroupVirtengine = fmt.Errorf("proto: unexpected end of group")
 )

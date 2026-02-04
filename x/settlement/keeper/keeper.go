@@ -67,6 +67,7 @@ type IKeeper interface {
 	// Parameters
 	GetParams(ctx sdk.Context) types.Params
 	SetParams(ctx sdk.Context, params types.Params) error
+	GetAuthority() string
 
 	// Iterators
 	WithEscrows(ctx sdk.Context, fn func(types.EscrowAccount) bool)

@@ -269,6 +269,17 @@ func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 	record.SubmittedAt = ctx.BlockTime()
 	record.BlockHeight = ctx.BlockHeight()
 
+	// Populate total cost if missing, based on unit price and usage units.
+	if record.TotalCost.IsZero() && record.UnitPrice.Denom != "" && !record.UnitPrice.IsNegative() {
+		quantity := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(record.UsageUnits))
+		total := record.UnitPrice.Amount.Mul(quantity).TruncateInt()
+		if total.IsPositive() {
+			record.TotalCost = sdk.NewCoins(sdk.NewCoin(record.UnitPrice.Denom, total))
+		} else {
+			record.TotalCost = sdk.NewCoins()
+		}
+	}
+
 	// Validate the record
 	if err := record.Validate(); err != nil {
 		return err

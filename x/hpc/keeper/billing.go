@@ -276,7 +276,7 @@ func (k Keeper) generateEscrowInvoiceForJob(ctx sdk.Context, job *types.HPCJob, 
 
 	providerAddr, err := sdk.AccAddressFromBech32(record.ProviderAddress)
 	if err != nil {
-		return err
+		return "", err
 	}
 	rules := k.GetOrDefaultBillingRules(ctx, providerAddr)
 

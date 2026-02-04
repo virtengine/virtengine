@@ -2,6 +2,9 @@
 package types
 
 import (
+	"fmt"
+	"strings"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
@@ -64,123 +67,214 @@ var (
 
 // NewMsgRegisterCluster creates a new MsgRegisterCluster
 func NewMsgRegisterCluster(owner, name, clusterType, region, endpoint string, totalNodes, totalGpus uint64) *MsgRegisterCluster {
+	description := strings.TrimSpace(clusterType)
+	if endpoint != "" {
+		if description != "" {
+			description = fmt.Sprintf("%s (endpoint=%s)", description, endpoint)
+		} else {
+			description = fmt.Sprintf("endpoint=%s", endpoint)
+		}
+	}
+
 	return &MsgRegisterCluster{
-		Owner:       owner,
-		Name:        name,
-		ClusterType: clusterType,
-		Region:      region,
-		Endpoint:    endpoint,
-		TotalNodes:  totalNodes,
-		TotalGpus:   totalGpus,
+		ProviderAddress: owner,
+		Name:            name,
+		Description:     description,
+		Region:          region,
+		Partitions:      []hpcv1.Partition{},
+		TotalNodes:      clampUint64ToInt32(totalNodes),
+		ClusterMetadata: hpcv1.ClusterMetadata{TotalGpus: int64(totalGpus)},
 	}
 }
 
 // NewMsgUpdateCluster creates a new MsgUpdateCluster
 func NewMsgUpdateCluster(owner, clusterID, endpoint string, totalNodes, totalGpus uint64, active bool) *MsgUpdateCluster {
+	state := hpcv1.ClusterStateOffline
+	if active {
+		state = hpcv1.ClusterStateActive
+	}
+
+	description := strings.TrimSpace(endpoint)
+
 	return &MsgUpdateCluster{
-		Owner:      owner,
-		ClusterId:  clusterID,
-		Endpoint:   endpoint,
-		TotalNodes: totalNodes,
-		TotalGpus:  totalGpus,
-		Active:     active,
+		ProviderAddress: owner,
+		ClusterId:       clusterID,
+		Description:     description,
+		State:           state,
+		Partitions:      []hpcv1.Partition{},
+		TotalNodes:      clampUint64ToInt32(totalNodes),
+		ClusterMetadata: hpcv1.ClusterMetadata{TotalGpus: int64(totalGpus)},
 	}
 }
 
 // NewMsgDeregisterCluster creates a new MsgDeregisterCluster
 func NewMsgDeregisterCluster(owner, clusterID string) *MsgDeregisterCluster {
 	return &MsgDeregisterCluster{
-		Owner:     owner,
-		ClusterId: clusterID,
+		ProviderAddress: owner,
+		ClusterId:       clusterID,
 	}
 }
 
 // NewMsgCreateOffering creates a new MsgCreateOffering
 func NewMsgCreateOffering(provider, clusterID, name, resourceType, pricePerHour string, minDuration, maxDuration uint64) *MsgCreateOffering {
+	pricing := hpcv1.HPCPricing{
+		BaseNodeHourPrice: pricePerHour,
+		CpuCoreHourPrice:  pricePerHour,
+		MemoryGbHourPrice: pricePerHour,
+		StorageGbPrice:    pricePerHour,
+		NetworkGbPrice:    pricePerHour,
+	}
+
+	if decCoin, err := sdk.ParseDecCoin(pricePerHour); err == nil {
+		pricing.Currency = decCoin.Denom
+	}
+
 	return &MsgCreateOffering{
-		Provider:     provider,
-		ClusterId:    clusterID,
-		Name:         name,
-		ResourceType: resourceType,
-		PricePerHour: pricePerHour,
-		MinDuration:  minDuration,
-		MaxDuration:  maxDuration,
+		ProviderAddress:           provider,
+		ClusterId:                 clusterID,
+		Name:                      name,
+		Description:               resourceType,
+		QueueOptions:              []hpcv1.QueueOption{},
+		Pricing:                   pricing,
+		RequiredIdentityThreshold: 0,
+		MaxRuntimeSeconds:         int64(maxDuration),
+		PreconfiguredWorkloads:    []hpcv1.PreconfiguredWorkload{},
+		SupportsCustomWorkloads:   true,
 	}
 }
 
 // NewMsgUpdateOffering creates a new MsgUpdateOffering
 func NewMsgUpdateOffering(provider, offeringID, pricePerHour string, active bool) *MsgUpdateOffering {
+	pricing := hpcv1.HPCPricing{
+		BaseNodeHourPrice: pricePerHour,
+		CpuCoreHourPrice:  pricePerHour,
+		MemoryGbHourPrice: pricePerHour,
+		StorageGbPrice:    pricePerHour,
+		NetworkGbPrice:    pricePerHour,
+	}
+
+	if decCoin, err := sdk.ParseDecCoin(pricePerHour); err == nil {
+		pricing.Currency = decCoin.Denom
+	}
+
 	return &MsgUpdateOffering{
-		Provider:     provider,
-		OfferingId:   offeringID,
-		PricePerHour: pricePerHour,
-		Active:       active,
+		ProviderAddress:           provider,
+		OfferingId:                offeringID,
+		QueueOptions:              []hpcv1.QueueOption{},
+		Pricing:                   pricing,
+		RequiredIdentityThreshold: 0,
+		Active:                    active,
 	}
 }
 
 // NewMsgSubmitJob creates a new MsgSubmitJob
 func NewMsgSubmitJob(submitter, offeringID, jobScript string, requestedNodes, requestedGpus, maxDuration uint64, maxBudget string) *MsgSubmitJob {
+	maxPrice, err := sdk.ParseCoinsNormalized(maxBudget)
+	if err != nil {
+		maxPrice = sdk.NewCoins()
+	}
+
 	return &MsgSubmitJob{
-		Submitter:      submitter,
-		OfferingId:     offeringID,
-		JobScript:      jobScript,
-		RequestedNodes: requestedNodes,
-		RequestedGpus:  requestedGpus,
-		MaxDuration:    maxDuration,
-		MaxBudget:      maxBudget,
+		CustomerAddress: submitter,
+		OfferingId:      offeringID,
+		WorkloadSpec: hpcv1.JobWorkloadSpec{
+			Command: jobScript,
+		},
+		Resources: hpcv1.JobResources{
+			Nodes:       clampUint64ToInt32(requestedNodes),
+			GpusPerNode: clampUint64ToInt32(requestedGpus),
+		},
+		MaxRuntimeSeconds: int64(maxDuration),
+		MaxPrice:          maxPrice,
 	}
 }
 
 // NewMsgCancelJob creates a new MsgCancelJob
 func NewMsgCancelJob(sender, jobID, reason string) *MsgCancelJob {
 	return &MsgCancelJob{
-		Sender: sender,
-		JobId:  jobID,
-		Reason: reason,
+		RequesterAddress: sender,
+		JobId:            jobID,
+		Reason:           reason,
 	}
 }
 
 // NewMsgReportJobStatus creates a new MsgReportJobStatus
 func NewMsgReportJobStatus(reporter, jobID, status string, progressPercent uint64, outputLocation, errorMessage string) *MsgReportJobStatus {
+	message := strings.TrimSpace(status)
+	if outputLocation != "" {
+		message = fmt.Sprintf("%s output=%s", message, outputLocation)
+	}
+	if errorMessage != "" {
+		message = fmt.Sprintf("%s error=%s", message, errorMessage)
+	}
+
 	return &MsgReportJobStatus{
-		Reporter:        reporter,
+		ProviderAddress: reporter,
 		JobId:           jobID,
-		Status:          status,
-		ProgressPercent: progressPercent,
-		OutputLocation:  outputLocation,
-		ErrorMessage:    errorMessage,
+		State:           parseJobState(status),
+		StatusMessage:   strings.TrimSpace(message),
 	}
 }
 
 // NewMsgUpdateNodeMetadata creates a new MsgUpdateNodeMetadata
 func NewMsgUpdateNodeMetadata(owner, clusterID, nodeID, gpuModel string, gpuMemoryGb uint64, cpuModel string, memoryGb uint64) *MsgUpdateNodeMetadata {
 	return &MsgUpdateNodeMetadata{
-		Owner:       owner,
-		ClusterId:   clusterID,
-		NodeId:      nodeID,
-		GpuModel:    gpuModel,
-		GpuMemoryGb: gpuMemoryGb,
-		CpuModel:    cpuModel,
-		MemoryGb:    memoryGb,
+		ProviderAddress: owner,
+		NodeId:          nodeID,
+		ClusterId:       clusterID,
+		Resources: hpcv1.NodeResources{
+			CpuCores: 0,
+			MemoryGb: clampUint64ToInt32(memoryGb),
+			GpuType:  gpuModel,
+		},
 	}
 }
 
 // NewMsgFlagDispute creates a new MsgFlagDispute
 func NewMsgFlagDispute(sender, jobID, reason, evidence string) *MsgFlagDispute {
 	return &MsgFlagDispute{
-		Sender:   sender,
-		JobId:    jobID,
-		Reason:   reason,
-		Evidence: evidence,
+		DisputerAddress: sender,
+		JobId:           jobID,
+		DisputeType:     "usage",
+		Reason:          reason,
+		Evidence:        evidence,
 	}
 }
 
 // NewMsgResolveDispute creates a new MsgResolveDispute
 func NewMsgResolveDispute(authority, disputeID, resolution, refundAmount string) *MsgResolveDispute {
-	return &MsgResolveDispute{
-		Authority:    authority,
-		DisputeId:    disputeID,
-		Resolution:   resolution,
-		RefundAmount: refundAmount,
+	resolutionText := resolution
+	if refundAmount != "" {
+		resolutionText = fmt.Sprintf("%s (refund=%s)", resolution, refundAmount)
 	}
+
+	return &MsgResolveDispute{
+		ResolverAddress: authority,
+		DisputeId:       disputeID,
+		Status:          hpcv1.DisputeStatusResolved,
+		Resolution:      resolutionText,
+	}
+}
+
+const maxInt32 = int32(^uint32(0) >> 1)
+
+func clampUint64ToInt32(value uint64) int32 {
+	if value > uint64(maxInt32) {
+		return maxInt32
+	}
+	return int32(value)
+}
+
+func parseJobState(value string) hpcv1.JobState {
+	normalized := strings.ToUpper(strings.TrimSpace(value))
+	if normalized == "" {
+		return hpcv1.JobStateUnspecified
+	}
+	if !strings.HasPrefix(normalized, "JOB_STATE_") {
+		normalized = "JOB_STATE_" + normalized
+	}
+	if state, ok := hpcv1.JobState_value[normalized]; ok {
+		return hpcv1.JobState(state)
+	}
+	return hpcv1.JobStateUnspecified
 }
