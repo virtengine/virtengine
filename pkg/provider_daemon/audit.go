@@ -566,6 +566,26 @@ const (
 
 	// AuditEventWaldurCallbackFailed indicates a Waldur callback failed
 	AuditEventWaldurCallbackFailed AuditEventType = "waldur_callback_failed"
+
+	// Portal access audit events
+
+	// AuditEventLogStreamStarted indicates a deployment log stream was opened
+	AuditEventLogStreamStarted AuditEventType = "log_stream_started"
+
+	// AuditEventLogStreamEnded indicates a deployment log stream ended
+	AuditEventLogStreamEnded AuditEventType = "log_stream_ended"
+
+	// AuditEventShellSessionCreated indicates a shell session token was created
+	AuditEventShellSessionCreated AuditEventType = "shell_session_created"
+
+	// AuditEventShellSessionStarted indicates a shell session was opened
+	AuditEventShellSessionStarted AuditEventType = "shell_session_started"
+
+	// AuditEventShellSessionEnded indicates a shell session ended
+	AuditEventShellSessionEnded AuditEventType = "shell_session_ended"
+
+	// AuditEventShellAccessDenied indicates a shell session was denied
+	AuditEventShellAccessDenied AuditEventType = "shell_access_denied"
 )
 
 // AuditEvent represents an audit log entry
