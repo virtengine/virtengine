@@ -74,9 +74,11 @@ export default function HPCJobsPage() {
 
       {/* Jobs List */}
       <div className="space-y-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <JobCard key={i} index={i} />
-        ))}
+        {Array.from({ length: 8 }, (_, index) => ({ id: `job-${index + 1}`, index })).map(
+          (job) => (
+            <JobCard key={job.id} index={job.index} />
+          )
+        )}
       </div>
     </div>
   );

@@ -26,9 +26,11 @@ export default function ProviderOfferingsPage() {
 
       {/* Offerings Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <OfferingCard key={i} index={i} />
-        ))}
+        {Array.from({ length: 6 }, (_, index) => ({ id: `offering-${index + 1}`, index })).map(
+          (offering) => (
+            <OfferingCard key={offering.id} index={offering.index} />
+          )
+        )}
       </div>
 
       {/* Empty state */}
