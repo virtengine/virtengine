@@ -39,8 +39,7 @@ func (s *providerGRPCRestTestSuite) SetupSuite() {
 		WithGasAutoFlags().
 		WithSkipConfirm().
 		WithBroadcastModeBlock()
-	providerArgs := append([]string{providerPath}, []string(providerFlags)...)
-	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerArgs...)
+	_, err = clitestutil.TxCreateProviderExec(ctx, cctx, providerPath, providerFlags...)
 	s.Require().NoError(err)
 
 	s.Require().NoError(s.Network().WaitForNextBlock())

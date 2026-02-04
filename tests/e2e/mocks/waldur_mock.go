@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,8 +83,8 @@ func DefaultWaldurMockConfig() WaldurMockConfig {
 		AutoApproveOrders:    true,
 		AutoProvision:        true,
 		EnableUsageReporting: true,
-		ProjectUUID:          "e2e-project-" + uuid.New().String()[:8],
-		CustomerUUID:         "e2e-customer-" + uuid.New().String()[:8],
+		ProjectUUID:          uuid.New().String(),
+		CustomerUUID:         uuid.New().String(),
 	}
 }
 
@@ -342,6 +343,25 @@ func (m *WaldurMock) GetResource(uuid string) *MockWaldurResource {
 	return m.Resources[uuid]
 }
 
+// SetResourceState updates resource state for test control.
+func (m *WaldurMock) SetResourceState(resourceUUID, state string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	resource, ok := m.Resources[resourceUUID]
+	if !ok {
+		return fmt.Errorf("resource not found: %s", resourceUUID)
+	}
+	resource.State = state
+	now := time.Now().UTC()
+	switch state {
+	case "provisioned", "active":
+		resource.ProvisionedAt = &now
+	case "terminated":
+		resource.TerminatedAt = &now
+	}
+	return nil
+}
+
 // GetOrder returns an order by UUID
 func (m *WaldurMock) GetOrder(uuid string) *MockWaldurOrder {
 	m.mu.RLock()
@@ -424,13 +444,55 @@ func (m *WaldurMock) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Route based on path
 	switch {
+	case r.URL.Path == "/marketplace-provider-offerings/":
+		m.handleProviderOfferings(w, r)
+	case matchPath(r.URL.Path, "/marketplace-provider-offerings/*/activate/"):
+		m.handleProviderOfferingState(w, r, "active")
+	case matchPath(r.URL.Path, "/marketplace-provider-offerings/*/pause/"):
+		m.handleProviderOfferingState(w, r, "paused")
+	case matchPath(r.URL.Path, "/marketplace-provider-offerings/*/archive/"):
+		m.handleProviderOfferingState(w, r, "archived")
+	case matchPath(r.URL.Path, "/marketplace-provider-offerings/*/"):
+		m.handleProviderOfferingDetail(w, r)
+	case r.URL.Path == "/marketplace-public-offerings/":
+		m.handlePublicOfferings(w, r)
+	case r.URL.Path == "/api/marketplace-public-offerings/":
+		m.handlePublicOfferings(w, r)
+	case matchPath(r.URL.Path, "/api/marketplace-public-offerings/*/"):
+		m.handlePublicOfferingDetail(w, r)
+	case r.URL.Path == "/marketplace-resources/":
+		m.handleMarketplaceResources(w, r)
+	case matchPath(r.URL.Path, "/marketplace-resources/*/actions/*/"):
+		m.handleMarketplaceResourceActionStatus(w, r)
+	case matchPath(r.URL.Path, "/marketplace-resources/*/submit_usage/"):
+		m.handleMarketplaceResourceSubmitUsage(w, r)
+	case matchPath(r.URL.Path, "/marketplace-resources/*/usages/"):
+		m.handleMarketplaceResourceUsages(w, r)
+	case matchPath(r.URL.Path, "/marketplace-resources/*/update_limits/"):
+		m.handleMarketplaceResourceUpdateLimits(w, r)
+	case matchPath(r.URL.Path, "/marketplace-resources/*/"):
+		m.handleMarketplaceResourceDetail(w, r)
+	case matchPath(r.URL.Path, "/marketplace-resources/*/start/"):
+		m.handleMarketplaceResourceAction(w, r, "start")
+	case matchPath(r.URL.Path, "/marketplace-resources/*/stop/"):
+		m.handleMarketplaceResourceAction(w, r, "stop")
+	case matchPath(r.URL.Path, "/marketplace-resources/*/restart/"):
+		m.handleMarketplaceResourceAction(w, r, "restart")
+	case matchPath(r.URL.Path, "/marketplace-resources/*/resize/"):
+		m.handleMarketplaceResourceAction(w, r, "resize")
+	case matchPath(r.URL.Path, "/marketplace-resources/*/terminate/"):
+		m.handleMarketplaceResourceAction(w, r, "terminate")
 	case r.URL.Path == "/api/health/":
 		m.handleHealth(w, r)
 	case r.URL.Path == "/api/marketplace-orders/":
 		m.handleOrders(w, r)
 	case matchPath(r.URL.Path, "/api/marketplace-orders/*/approve/"):
-		m.handleApproveOrder(w, r)
+		m.handleApproveOrderByProvider(w, r)
+	case matchPath(r.URL.Path, "/api/marketplace-orders/*/approve_by_provider/"):
+		m.handleApproveOrderByProvider(w, r)
 	case matchPath(r.URL.Path, "/api/marketplace-orders/*/set-backend-id/"):
+		m.handleSetBackendID(w, r)
+	case matchPath(r.URL.Path, "/api/marketplace-orders/*/set_backend_id/"):
 		m.handleSetBackendID(w, r)
 	case matchPath(r.URL.Path, "/api/marketplace-orders/*"):
 		m.handleOrderDetail(w, r)
@@ -451,6 +513,133 @@ func (m *WaldurMock) handleRequest(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (m *WaldurMock) handleProviderOfferings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		m.handleOfferings(w, r)
+	case http.MethodPost:
+		m.handleCreateProviderOffering(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (m *WaldurMock) handleCreateProviderOffering(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var req struct {
+		Name        string                 `json:"name"`
+		Customer    string                 `json:"customer"`
+		Description string                 `json:"description,omitempty"`
+		Type        string                 `json:"type,omitempty"`
+		Shared      bool                   `json:"shared"`
+		Billable    bool                   `json:"billable"`
+		BackendID   string                 `json:"backend_id,omitempty"`
+		Attributes  map[string]interface{} `json:"attributes,omitempty"`
+		Components  []OfferingComponent    `json:"components,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	offering := &MockWaldurOffering{
+		UUID:         uuid.New().String(),
+		Name:         req.Name,
+		Category:     req.Type,
+		Description:  req.Description,
+		BackendID:    req.BackendID,
+		CustomerUUID: req.Customer,
+		State:        "active",
+		PricePerHour: "0",
+		Attributes:   req.Attributes,
+		Components:   req.Components,
+		CreatedAt:    time.Now().UTC(),
+	}
+	m.Offerings[offering.UUID] = offering
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(offering)
+}
+
+func (m *WaldurMock) handleProviderOfferingDetail(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	offeringUUID := extractUUID(r.URL.Path, "/marketplace-provider-offerings/", "")
+	offering, ok := m.Offerings[offeringUUID]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(offering)
+	case http.MethodPatch:
+		var req struct {
+			Name        string                 `json:"name,omitempty"`
+			Description string                 `json:"description,omitempty"`
+			Attributes  map[string]interface{} `json:"attributes,omitempty"`
+			Components  []OfferingComponent    `json:"components,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.Name != "" {
+			offering.Name = req.Name
+		}
+		if req.Description != "" {
+			offering.Description = req.Description
+		}
+		if req.Attributes != nil {
+			offering.Attributes = req.Attributes
+		}
+		if len(req.Components) > 0 {
+			offering.Components = req.Components
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(offering)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (m *WaldurMock) handleProviderOfferingState(w http.ResponseWriter, r *http.Request, state string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	offeringUUID := extractUUID(r.URL.Path, "/marketplace-provider-offerings/", "/"+state+"/")
+	offering, ok := m.Offerings[offeringUUID]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	offering.State = state
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (m *WaldurMock) handlePublicOfferings(w http.ResponseWriter, r *http.Request) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	backendID := r.URL.Query().Get("backend_id")
+	var offerings []*MockWaldurOffering
+	for _, o := range m.Offerings {
+		if backendID == "" || o.BackendID == backendID {
+			offerings = append(offerings, o)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(offerings)
 }
 
 func (m *WaldurMock) recordRequest(r *http.Request) {
@@ -511,17 +700,36 @@ func (m *WaldurMock) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		OfferingUUID   string                 `json:"offering"`
-		ProjectUUID    string                 `json:"project"`
-		Name           string                 `json:"name"`
-		Description    string                 `json:"description"`
-		Attributes     map[string]interface{} `json:"attributes"`
-		CallbackURL    string                 `json:"callback_url"`
-		RequestComment string                 `json:"request_comment"`
+		OfferingUUID    string                 `json:"offering"`
+		OfferingUUIDAlt string                 `json:"offering_uuid"`
+		ProjectUUID     string                 `json:"project"`
+		ProjectUUIDAlt  string                 `json:"project_uuid"`
+		Name            string                 `json:"name"`
+		Description     string                 `json:"description"`
+		Attributes      map[string]interface{} `json:"attributes"`
+		CallbackURL     string                 `json:"callback_url"`
+		RequestComment  string                 `json:"request_comment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	if req.OfferingUUID == "" {
+		req.OfferingUUID = req.OfferingUUIDAlt
+	}
+	if req.ProjectUUID == "" {
+		req.ProjectUUID = req.ProjectUUIDAlt
+	}
+	if req.OfferingUUID == "" {
+		http.Error(w, "offering UUID required", http.StatusBadRequest)
+		return
+	}
+	if m.Offerings[req.OfferingUUID] == nil {
+		if strings.HasPrefix(req.OfferingUUID, "00000000-0000-0000-0000-0000000000") {
+			http.Error(w, "offering not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	order := &MockWaldurOrder{
@@ -583,7 +791,7 @@ func (m *WaldurMock) autoProvision(orderUUID string) {
 	order.CompletedAt = &now
 }
 
-func (m *WaldurMock) handleApproveOrder(w http.ResponseWriter, r *http.Request) {
+func (m *WaldurMock) handleApproveOrderByProvider(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -592,7 +800,10 @@ func (m *WaldurMock) handleApproveOrder(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	orderUUID := extractUUID(r.URL.Path, "/api/marketplace-orders/", "/approve/")
+	orderUUID := extractUUID(r.URL.Path, "/api/marketplace-orders/", "/approve_by_provider/")
+	if orderUUID == "" || m.Orders[orderUUID] == nil {
+		orderUUID = extractUUID(r.URL.Path, "/api/marketplace-orders/", "/approve/")
+	}
 	order, ok := m.Orders[orderUUID]
 	if !ok {
 		http.NotFound(w, r)
@@ -605,14 +816,17 @@ func (m *WaldurMock) handleApproveOrder(w http.ResponseWriter, r *http.Request) 
 	order.ApprovedBy = "e2e-provider"
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(order)
+	_ = json.NewEncoder(w).Encode("approved")
 }
 
 func (m *WaldurMock) handleSetBackendID(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	orderUUID := extractUUID(r.URL.Path, "/api/marketplace-orders/", "/set-backend-id/")
+	orderUUID := extractUUID(r.URL.Path, "/api/marketplace-orders/", "/set_backend_id/")
+	if orderUUID == "" || m.Orders[orderUUID] == nil {
+		orderUUID = extractUUID(r.URL.Path, "/api/marketplace-orders/", "/set-backend-id/")
+	}
 	order, ok := m.Orders[orderUUID]
 	if !ok {
 		http.NotFound(w, r)
@@ -655,16 +869,38 @@ func (m *WaldurMock) handleOrderDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *WaldurMock) handleOfferings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		offerings := make([]*MockWaldurOffering, 0, len(m.Offerings))
+		for _, o := range m.Offerings {
+			offerings = append(offerings, o)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(offerings)
+	case http.MethodPost:
+		m.handleCreateProviderOffering(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (m *WaldurMock) handlePublicOfferingDetail(w http.ResponseWriter, r *http.Request) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	offerings := make([]*MockWaldurOffering, 0, len(m.Offerings))
-	for _, o := range m.Offerings {
-		offerings = append(offerings, o)
+	offeringUUID := extractUUID(r.URL.Path, "/api/marketplace-public-offerings/", "")
+	offering, ok := m.Offerings[offeringUUID]
+	if !ok {
+		http.NotFound(w, r)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(offerings)
+	_ = json.NewEncoder(w).Encode(offering)
 }
 
 func (m *WaldurMock) handleOfferingDetail(w http.ResponseWriter, r *http.Request) {
@@ -693,6 +929,162 @@ func (m *WaldurMock) handleResources(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resources)
+}
+
+func (m *WaldurMock) handleMarketplaceResources(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		m.handleResources(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (m *WaldurMock) handleMarketplaceResourceDetail(w http.ResponseWriter, r *http.Request) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	resourceUUID := extractUUID(r.URL.Path, "/marketplace-resources/", "")
+	resource, ok := m.Resources[resourceUUID]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resource)
+}
+
+func (m *WaldurMock) handleMarketplaceResourceAction(w http.ResponseWriter, r *http.Request, action string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	resourceUUID := extractUUID(r.URL.Path, "/marketplace-resources/", "/"+action+"/")
+	resource, ok := m.Resources[resourceUUID]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch action {
+	case "start", "restart":
+		resource.State = "OK"
+	case "stop":
+		resource.State = "Stopped"
+	case "resize":
+		resource.State = "OK"
+	case "terminate":
+		resource.State = "Terminated"
+	}
+
+	resp := map[string]interface{}{
+		"state":         "accepted",
+		"resource_uuid": resourceUUID,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (m *WaldurMock) handleMarketplaceResourceActionStatus(w http.ResponseWriter, r *http.Request) {
+	resourceUUID := extractUUID(r.URL.Path, "/marketplace-resources/", "/actions/")
+	if resourceUUID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	resp := map[string]interface{}{
+		"state":         "done",
+		"resource_uuid": resourceUUID,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (m *WaldurMock) handleMarketplaceResourceSubmitUsage(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	resourceUUID := extractUUID(r.URL.Path, "/marketplace-resources/", "/submit_usage/")
+	if _, ok := m.Resources[resourceUUID]; !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	record := &MockWaldurUsageRecord{
+		UUID:         uuid.New().String(),
+		ResourceUUID: resourceUUID,
+		CreatedAt:    time.Now().UTC(),
+		IsFinal:      true,
+	}
+	m.UsageRecords[resourceUUID] = append(m.UsageRecords[resourceUUID], record)
+
+	resp := map[string]interface{}{
+		"uuid":          record.UUID,
+		"state":         "submitted",
+		"resource_uuid": resourceUUID,
+		"created":       record.CreatedAt,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (m *WaldurMock) handleMarketplaceResourceUsages(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	resourceUUID := extractUUID(r.URL.Path, "/marketplace-resources/", "/usages/")
+	if _, ok := m.Resources[resourceUUID]; !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		var records []map[string]interface{}
+		for _, record := range m.UsageRecords[resourceUUID] {
+			records = append(records, map[string]interface{}{
+				"uuid":           record.UUID,
+				"resource_uuid":  record.ResourceUUID,
+				"component_type": "cpu_hours",
+				"usage":          1.0,
+				"date":           record.CreatedAt.Format("2006-01-02"),
+				"billing_period": "",
+				"created":        record.CreatedAt,
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(records)
+	case http.MethodPost:
+		record := &MockWaldurUsageRecord{
+			UUID:         uuid.New().String(),
+			ResourceUUID: resourceUUID,
+			CreatedAt:    time.Now().UTC(),
+		}
+		m.UsageRecords[resourceUUID] = append(m.UsageRecords[resourceUUID], record)
+		resp := map[string]interface{}{
+			"uuid":           record.UUID,
+			"resource_uuid":  record.ResourceUUID,
+			"component_type": "cpu_hours",
+			"usage":          1.0,
+			"date":           record.CreatedAt.Format("2006-01-02"),
+			"billing_period": "",
+			"created":        record.CreatedAt,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(resp)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (m *WaldurMock) handleMarketplaceResourceUpdateLimits(w http.ResponseWriter, r *http.Request) {
+	resourceUUID := extractUUID(r.URL.Path, "/marketplace-resources/", "/update_limits/")
+	if _, ok := m.Resources[resourceUUID]; !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (m *WaldurMock) handleResourceDetail(w http.ResponseWriter, r *http.Request) {

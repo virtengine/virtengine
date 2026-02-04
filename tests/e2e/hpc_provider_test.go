@@ -2184,9 +2184,10 @@ func (s *HPCProviderE2ETestSuite) TestC07_MultiNodeJobExecution() {
 // TestD01_LifecycleCallbackRegistration tests registering lifecycle callbacks.
 func (s *HPCProviderE2ETestSuite) TestD01_LifecycleCallbackRegistration() {
 	s.Run("RegisterCallback", func() {
-		callbackCalled := false
 		callback := func(job *pd.HPCSchedulerJob, event pd.HPCJobLifecycleEvent, prevState pd.HPCJobState) {
-			callbackCalled = true
+			_ = job
+			_ = event
+			_ = prevState
 		}
 
 		s.slurmMock.RegisterLifecycleCallback(callback)
