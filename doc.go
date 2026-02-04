@@ -1,3 +1,3 @@
-// Package node provides a placeholder root package to satisfy tooling that
-// expects buildable Go files in the module root.
-package node
+// Package virtengine is a placeholder package for root-level tooling.
+// Production code lives in subpackages under this module.
+package virtengine

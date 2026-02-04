@@ -2,8 +2,13 @@ APP_DIR               := ./app
 
 GOBIN                 ?= $(shell go env GOPATH)/bin
 
+ifneq (,$(wildcard _run/kube))
 KIND_APP_IP           ?= $(shell make -sC _run/kube kind-k8s-ip)
 KIND_APP_PORT         ?= $(shell make -sC _run/kube app-http-port)
+else
+KIND_APP_IP           ?=
+KIND_APP_PORT         ?=
+endif
 KIND_VARS             ?= KUBE_INGRESS_IP="$(KIND_APP_IP)" KUBE_INGRESS_PORT="$(KIND_APP_PORT)"
 
 include make/init.mk
@@ -66,7 +71,8 @@ GORELEASER_BUILD_VARS := \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
 ifeq ($(OS),Windows_NT)
-GIT_VERSION := $(shell powershell -NoProfile -Command "try { (git describe --tags) -replace '^v','' } catch { '0.0.0' }")
+GIT_VERSION_RAW := $(shell git describe --tags 2>NUL || echo 0.0.0)
+GIT_VERSION := $(patsubst v%,%,$(GIT_VERSION_RAW))
 else
 GIT_VERSION := $(shell git describe --tags 2>/dev/null | sed 's/^v//' || echo "0.0.0")
 endif

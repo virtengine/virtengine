@@ -434,7 +434,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create chain client for bid engine
-	chainClient, err := provider_daemon.NewRPCChainClient(ctx, provider_daemon.RPCChainClientConfig{
+	chainClient, err := provider_daemon.NewRPCChainClient(provider_daemon.RPCChainClientConfig{
 		NodeURI:        viper.GetString(FlagNode),
 		GRPCEndpoint:   viper.GetString(FlagWaldurChainGRPC),
 		ChainID:        viper.GetString(FlagChainID),
@@ -442,6 +442,46 @@ func runStart(cmd *cobra.Command, args []string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create chain client: %w", err)
+	}
+
+	// Initialize HPC provider (VE-21C/VE-14B)
+	var hpcProvider *provider_daemon.HPCProvider
+	hpcProviderConfig := provider_daemon.DefaultHPCProviderConfig()
+	if viper.IsSet("hpc_provider") {
+		if err := viper.UnmarshalKey("hpc_provider", &hpcProviderConfig); err != nil {
+			return fmt.Errorf("failed to load hpc_provider config: %w", err)
+		}
+	}
+	if viper.IsSet("hpc") {
+		if err := viper.UnmarshalKey("hpc", &hpcProviderConfig.HPC); err != nil {
+			return fmt.Errorf("failed to load hpc config: %w", err)
+		}
+	}
+
+	if hpcProviderConfig.HPC.ProviderAddress == "" {
+		hpcProviderConfig.HPC.ProviderAddress = providerAddress
+	}
+
+	if hpcProviderConfig.HPC.Enabled {
+		hpcChainClient, err := provider_daemon.NewHPCChainClient(provider_daemon.RPCChainClientConfig{
+			NodeURI:        viper.GetString(FlagNode),
+			GRPCEndpoint:   viper.GetString(FlagWaldurChainGRPC),
+			ChainID:        viper.GetString(FlagChainID),
+			RequestTimeout: time.Second * 30,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create hpc chain client: %w", err)
+		}
+
+		hpcProvider, err = provider_daemon.NewHPCProvider(hpcProviderConfig, hpcChainClient, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create hpc provider: %w", err)
+		}
+
+		if err := hpcProvider.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start hpc provider: %w", err)
+		}
+		fmt.Println("  HPC Provider: started")
 	}
 
 	// Initialize Event Stream (PROVIDER-STREAM-001)
@@ -591,6 +631,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	bidEngine.Stop()
 	fmt.Println("  Bid Engine: stopped")
+
+	if hpcProvider != nil {
+		if err := hpcProvider.Stop(); err != nil {
+			fmt.Printf("  HPC Provider: failed to stop cleanly: %v\n", err)
+		} else {
+			fmt.Println("  HPC Provider: stopped")
+		}
+	}
 
 	usageMeter.Stop()
 	fmt.Println("  Usage Meter: stopped")
