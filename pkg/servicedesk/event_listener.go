@@ -33,7 +33,7 @@ type ChainEventListener struct {
 	running  bool
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
-	eventSub ctypes.Subscription
+	eventSub <-chan ctypes.ResultEvent
 }
 
 // EventListenerConfig holds configuration for the chain event listener
