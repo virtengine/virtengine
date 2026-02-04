@@ -3,6 +3,7 @@ package keeper
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -14,6 +15,7 @@ import (
 	"github.com/virtengine/virtengine/sdk/go/node/escrow/v1"
 
 	"github.com/virtengine/virtengine/util/query"
+	"github.com/virtengine/virtengine/x/escrow/types/billing"
 )
 
 // Querier is used as Keeper will have duplicate methods if used directly, and gRPC names take precedence over keeper
@@ -246,6 +248,108 @@ func (k Querier) Payments(c context.Context, req *v1.QueryPaymentsRequest) (*v1.
 		Pagination: pageRes,
 	}, nil
 }
+
+func (k Querier) Invoice(c context.Context, req *v1.QueryInvoiceRequest) (*v1.QueryInvoiceResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	if req == nil || req.InvoiceId == "" {
+		return nil, status.Error(codes.InvalidArgument, "invoice_id cannot be empty")
+	}
+
+	record, err := k.NewInvoiceKeeper().GetInvoice(ctx, req.InvoiceId)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+
+	bz, err := json.Marshal(record)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &v1.QueryInvoiceResponse{InvoiceJson: string(bz)}, nil
+}
+
+func (k Querier) InvoicesByProvider(c context.Context, req *v1.QueryInvoicesByProviderRequest) (*v1.QueryInvoicesByProviderResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	if req == nil || req.Provider == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider cannot be empty")
+	}
+
+	records, pageRes, err := k.NewInvoiceKeeper().GetInvoicesByProvider(ctx, req.Provider, req.Pagination)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	response := &v1.QueryInvoicesByProviderResponse{
+		InvoicesJson: make([]string, 0, len(records)),
+		Pagination:   pageRes,
+	}
+
+	for _, record := range records {
+		bz, err := json.Marshal(record)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		response.InvoicesJson = append(response.InvoicesJson, string(bz))
+	}
+
+	return response, nil
+}
+
+func (k Querier) InvoicesByCustomer(c context.Context, req *v1.QueryInvoicesByCustomerRequest) (*v1.QueryInvoicesByCustomerResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	if req == nil || req.Customer == "" {
+		return nil, status.Error(codes.InvalidArgument, "customer cannot be empty")
+	}
+
+	records, pageRes, err := k.NewInvoiceKeeper().GetInvoicesByCustomer(ctx, req.Customer, req.Pagination)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	response := &v1.QueryInvoicesByCustomerResponse{
+		InvoicesJson: make([]string, 0, len(records)),
+		Pagination:   pageRes,
+	}
+
+	for _, record := range records {
+		bz, err := json.Marshal(record)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		response.InvoicesJson = append(response.InvoicesJson, string(bz))
+	}
+
+	return response, nil
+}
+
+func (k Querier) InvoiceLedger(c context.Context, req *v1.QueryInvoiceLedgerRequest) (*v1.QueryInvoiceLedgerResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	if req == nil || req.InvoiceId == "" {
+		return nil, status.Error(codes.InvalidArgument, "invoice_id cannot be empty")
+	}
+
+	entries, err := k.NewInvoiceKeeper().GetInvoiceLedgerEntries(ctx, req.InvoiceId)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	response := &v1.QueryInvoiceLedgerResponse{
+		EntriesJson: make([]string, 0, len(entries)),
+	}
+
+	for _, entry := range entries {
+		bz, err := json.Marshal(entry)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		response.EntriesJson = append(response.EntriesJson, string(bz))
+	}
+
+	return response, nil
+}
+
+// Ensure billing types are referenced for gogo/proto codegen.
+var _ = billing.Invoice{}
 
 func BuildSearchPrefix(prefix []byte, state string, xid string) []byte {
 	buf := &bytes.Buffer{}

@@ -646,6 +646,14 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 		app.Keepers.Cosmos.Bank,
 	)
+
+	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(settlementkeeper.BillingKeeper); ok {
+		app.Keepers.VirtEngine.Settlement.SetBillingKeeper(billingKeeper)
+	}
+
+	if billingKeeper, ok := app.Keepers.VirtEngine.Escrow.(hpckeeper.BillingKeeper); ok {
+		app.Keepers.VirtEngine.HPC.SetBillingKeeper(billingKeeper)
+	}
 }
 
 func (app *App) SetupHooks() {

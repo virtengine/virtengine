@@ -26,6 +26,34 @@ service Query {
   rpc Payments(QueryPaymentsRequest) returns (QueryPaymentsResponse) {
     option (google.api.http).get = "/virtengine/escrow/v1/types/payments";
   }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // Invoice queries an invoice ledger record by ID.
+  rpc Invoice(QueryInvoiceRequest) returns (QueryInvoiceResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/invoices/{invoice_id}";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // InvoicesByProvider queries invoices by provider.
+  rpc InvoicesByProvider(QueryInvoicesByProviderRequest) returns (QueryInvoicesByProviderResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/providers/{provider}/invoices";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // InvoicesByCustomer queries invoices by customer.
+  rpc InvoicesByCustomer(QueryInvoicesByCustomerRequest) returns (QueryInvoicesByCustomerResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/customers/{customer}/invoices";
+  }
+
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  // InvoiceLedger queries invoice ledger entries by invoice ID.
+  rpc InvoiceLedger(QueryInvoiceLedgerRequest) returns (QueryInvoiceLedgerResponse) {
+    option (google.api.http).get = "/virtengine/escrow/v1/billing/invoices/{invoice_id}/ledger";
+  }
 }
 
 // QueryAccountRequest is request type for the Query/Account RPC method.
@@ -78,4 +106,48 @@ message QueryPaymentsResponse {
 
   // Pagination contains the information about response pagination.
   cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryInvoiceRequest is request type for the Query/Invoice RPC method.
+message QueryInvoiceRequest {
+  string invoice_id = 1;
+}
+
+// QueryInvoiceResponse is response type for the Query/Invoice RPC method.
+message QueryInvoiceResponse {
+  string invoice_json = 1;
+}
+
+// QueryInvoicesByProviderRequest is request type for the Query/InvoicesByProvider RPC method.
+message QueryInvoicesByProviderRequest {
+  string provider = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryInvoicesByProviderResponse is response type for the Query/InvoicesByProvider RPC method.
+message QueryInvoicesByProviderResponse {
+  repeated string invoices_json = 1;
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryInvoicesByCustomerRequest is request type for the Query/InvoicesByCustomer RPC method.
+message QueryInvoicesByCustomerRequest {
+  string customer = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryInvoicesByCustomerResponse is response type for the Query/InvoicesByCustomer RPC method.
+message QueryInvoicesByCustomerResponse {
+  repeated string invoices_json = 1;
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryInvoiceLedgerRequest is request type for the Query/InvoiceLedger RPC method.
+message QueryInvoiceLedgerRequest {
+  string invoice_id = 1;
+}
+
+// QueryInvoiceLedgerResponse is response type for the Query/InvoiceLedger RPC method.
+message QueryInvoiceLedgerResponse {
+  repeated string entries_json = 1;
 }

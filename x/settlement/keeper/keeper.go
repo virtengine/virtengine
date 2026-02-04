@@ -110,9 +110,10 @@ type VerificationResult struct {
 
 // Keeper of the settlement store
 type Keeper struct {
-	skey       storetypes.StoreKey
-	cdc        codec.BinaryCodec
-	bankKeeper BankKeeper
+	skey          storetypes.StoreKey
+	cdc           codec.BinaryCodec
+	bankKeeper    BankKeeper
+	billingKeeper BillingKeeper
 
 	// The address capable of executing a MsgUpdateParams message.
 	// This should be the x/gov module account.
@@ -131,11 +132,17 @@ type BankKeeper interface {
 // NewKeeper creates and returns an instance for settlement keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, authority string) Keeper {
 	return Keeper{
-		cdc:        cdc,
-		skey:       skey,
-		bankKeeper: bankKeeper,
-		authority:  authority,
+		cdc:           cdc,
+		skey:          skey,
+		bankKeeper:    bankKeeper,
+		billingKeeper: nil,
+		authority:     authority,
 	}
+}
+
+// SetBillingKeeper configures the billing integration keeper.
+func (k *Keeper) SetBillingKeeper(billingKeeper BillingKeeper) {
+	k.billingKeeper = billingKeeper
 }
 
 // Codec returns keeper codec

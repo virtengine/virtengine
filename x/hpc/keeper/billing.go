@@ -10,6 +10,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/virtengine/virtengine/x/escrow/types/billing"
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -223,8 +224,16 @@ func (k Keeper) GenerateInvoiceForJob(ctx sdk.Context, accountingRecordID string
 	// Get job for additional context
 	job, _ := k.GetJob(ctx, record.JobID)
 
-	// Generate invoice ID
-	invoiceID := fmt.Sprintf("hpc-inv-%s", record.RecordID)
+	var invoiceID string
+	if k.billingEnabled() {
+		var err error
+		invoiceID, err = k.generateEscrowInvoiceForJob(ctx, &job, &record)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		invoiceID = fmt.Sprintf("hpc-inv-%s", record.RecordID)
+	}
 
 	// Update accounting record with invoice ID
 	record.InvoiceID = invoiceID
@@ -253,6 +262,363 @@ func (k Keeper) GenerateInvoiceForJob(ctx sdk.Context, accountingRecordID string
 	)
 
 	return invoiceID, nil
+}
+
+func (k Keeper) generateEscrowInvoiceForJob(ctx sdk.Context, job *types.HPCJob, record *types.HPCAccountingRecord) (string, error) {
+	if k.billingKeeper == nil {
+		return "", nil
+	}
+
+	escrowID := job.EscrowID
+	if escrowID == "" {
+		escrowID = fmt.Sprintf("hpc-%s", job.JobID)
+	}
+
+	providerAddr, err := sdk.AccAddressFromBech32(record.ProviderAddress)
+	if err != nil {
+		return err
+	}
+	rules := k.GetOrDefaultBillingRules(ctx, providerAddr)
+
+	config := billing.DefaultInvoiceGeneratorConfig()
+	config.RoundingMode = billing.RoundingModeDown
+	config.DefaultCurrency = rules.ResourceRates.CPUCoreHourRate.Denom
+
+	usageInputs := k.buildHPCUsageInputs(record, rules)
+	if len(usageInputs) == 0 {
+		return "", fmt.Errorf("no usage inputs for job %s", record.JobID)
+	}
+
+	seq := k.billingKeeper.GetInvoiceSequence(ctx)
+	invoiceNumber := billing.NextInvoiceNumber(seq, config.InvoiceNumberPrefix)
+
+	now := ctx.BlockTime()
+	req := billing.InvoiceGenerationRequest{
+		EscrowID:    escrowID,
+		OrderID:     record.JobID,
+		LeaseID:     record.JobID,
+		Provider:    record.ProviderAddress,
+		Customer:    record.CustomerAddress,
+		UsageInputs: usageInputs,
+		BillingPeriod: billing.BillingPeriod{
+			StartTime:       record.PeriodStart,
+			EndTime:         record.PeriodEnd,
+			DurationSeconds: int64(record.PeriodEnd.Sub(record.PeriodStart).Seconds()),
+			PeriodType:      billing.BillingPeriodTypeUsageBased,
+		},
+		Currency: config.DefaultCurrency,
+		Metadata: map[string]string{
+			"hpc_job_id":          record.JobID,
+			"hpc_cluster_id":      record.ClusterID,
+			"hpc_offering_id":     record.OfferingID,
+			"hpc_accounting_id":   record.RecordID,
+			"hpc_scheduler_type":  record.SchedulerType,
+			"hpc_formula_version": record.FormulaVersion,
+		},
+	}
+
+	generator := billing.NewInvoiceGenerator(config)
+	invoice, err := generator.GenerateInvoice(req, ctx.BlockHeight(), now)
+	if err != nil {
+		return "", err
+	}
+
+	applyHPCDiscounts(invoice, record.AppliedDiscounts, record.AppliedCaps)
+	recalculateInvoiceTotalsForBilling(invoice)
+	reconcileInvoiceTotalsForAmount(invoice, record.BillableAmount, "hpc billing adjustment")
+	recalculateInvoiceTotalsForBilling(invoice)
+
+	invoice.InvoiceNumber = invoiceNumber
+	invoice.SettlementID = record.SettlementID
+
+	ledgerRecord, err := k.billingKeeper.CreateInvoice(ctx, invoice, fmt.Sprintf("invoice-%s", invoice.InvoiceID))
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := k.billingKeeper.UpdateInvoiceStatus(ctx, ledgerRecord.InvoiceID, billing.InvoiceStatusPending, "hpc"); err != nil {
+		return "", err
+	}
+
+	if _, err := k.billingKeeper.RecordPayment(ctx, ledgerRecord.InvoiceID, ledgerRecord.Total, "hpc"); err != nil {
+		return "", err
+	}
+
+	if err := k.persistHPCUsageRecords(ctx, record, usageInputs, ledgerRecord.InvoiceID, escrowID); err != nil {
+		return "", err
+	}
+
+	return ledgerRecord.InvoiceID, nil
+}
+
+func (k Keeper) buildHPCUsageInputs(record *types.HPCAccountingRecord, rules types.HPCBillingRules) []billing.UsageInput {
+	metrics := record.UsageMetrics
+	usageInputs := make([]billing.UsageInput, 0, 6)
+
+	periodStart := record.PeriodStart
+	periodEnd := record.PeriodEnd
+
+	cpuHours := sdkmath.LegacyNewDec(metrics.CPUCoreSeconds).Quo(sdkmath.LegacyNewDec(3600))
+	if cpuHours.IsPositive() {
+		usageInputs = append(usageInputs, billing.UsageInput{
+			UsageRecordID: fmt.Sprintf("%s-cpu", record.RecordID),
+			UsageType:     billing.UsageTypeCPU,
+			Quantity:      cpuHours,
+			Unit:          billing.UnitForUsageType(billing.UsageTypeCPU),
+			UnitPrice:     rules.ResourceRates.CPUCoreHourRate,
+			Description:   fmt.Sprintf("CPU usage for job %s", record.JobID),
+			PeriodStart:   periodStart,
+			PeriodEnd:     periodEnd,
+		})
+	}
+
+	gpuHours := sdkmath.LegacyNewDec(metrics.GPUSeconds).Quo(sdkmath.LegacyNewDec(3600))
+	if gpuHours.IsPositive() {
+		rate := rules.ResourceRates.GPUHourRate
+		if metrics.GPUType != "" {
+			if gpuRate, ok := rules.ResourceRates.GPUTypeRates[metrics.GPUType]; ok {
+				rate = gpuRate
+			}
+		}
+
+		usageInputs = append(usageInputs, billing.UsageInput{
+			UsageRecordID: fmt.Sprintf("%s-gpu", record.RecordID),
+			UsageType:     billing.UsageTypeGPU,
+			Quantity:      gpuHours,
+			Unit:          billing.UnitForUsageType(billing.UsageTypeGPU),
+			UnitPrice:     rate,
+			Description:   fmt.Sprintf("GPU usage for job %s", record.JobID),
+			PeriodStart:   periodStart,
+			PeriodEnd:     periodEnd,
+			Metadata: map[string]string{
+				"gpu_type": metrics.GPUType,
+			},
+		})
+	}
+
+	memHours := sdkmath.LegacyNewDec(metrics.MemoryGBSeconds).Quo(sdkmath.LegacyNewDec(3600))
+	if memHours.IsPositive() {
+		usageInputs = append(usageInputs, billing.UsageInput{
+			UsageRecordID: fmt.Sprintf("%s-mem", record.RecordID),
+			UsageType:     billing.UsageTypeMemory,
+			Quantity:      memHours,
+			Unit:          billing.UnitForUsageType(billing.UsageTypeMemory),
+			UnitPrice:     rules.ResourceRates.MemoryGBHourRate,
+			Description:   fmt.Sprintf("Memory usage for job %s", record.JobID),
+			PeriodStart:   periodStart,
+			PeriodEnd:     periodEnd,
+		})
+	}
+
+	if metrics.StorageGBHours > 0 {
+		storageHours := sdkmath.LegacyNewDec(metrics.StorageGBHours)
+		usageInputs = append(usageInputs, billing.UsageInput{
+			UsageRecordID: fmt.Sprintf("%s-storage", record.RecordID),
+			UsageType:     billing.UsageTypeStorage,
+			Quantity:      storageHours,
+			Unit:          billing.UnitForUsageType(billing.UsageTypeStorage),
+			UnitPrice:     rules.ResourceRates.StorageGBHourRate,
+			Description:   fmt.Sprintf("Storage usage for job %s", record.JobID),
+			PeriodStart:   periodStart,
+			PeriodEnd:     periodEnd,
+		})
+	}
+
+	if metrics.NetworkBytesIn+metrics.NetworkBytesOut > 0 {
+		networkGB := sdkmath.LegacyNewDec(metrics.NetworkBytesIn + metrics.NetworkBytesOut).Quo(
+			sdkmath.LegacyNewDec(1024 * 1024 * 1024))
+		if networkGB.IsPositive() {
+			usageInputs = append(usageInputs, billing.UsageInput{
+				UsageRecordID: fmt.Sprintf("%s-net", record.RecordID),
+				UsageType:     billing.UsageTypeNetwork,
+				Quantity:      networkGB,
+				Unit:          billing.UnitForUsageType(billing.UsageTypeNetwork),
+				UnitPrice:     rules.ResourceRates.NetworkGBRate,
+				Description:   fmt.Sprintf("Network usage for job %s", record.JobID),
+				PeriodStart:   periodStart,
+				PeriodEnd:     periodEnd,
+			})
+		}
+	}
+
+	if metrics.NodeHours.IsPositive() {
+		usageInputs = append(usageInputs, billing.UsageInput{
+			UsageRecordID: fmt.Sprintf("%s-node", record.RecordID),
+			UsageType:     billing.UsageTypeOther,
+			Quantity:      metrics.NodeHours,
+			Unit:          "node-hour",
+			UnitPrice:     rules.ResourceRates.NodeHourRate,
+			Description:   fmt.Sprintf("Node usage for job %s", record.JobID),
+			PeriodStart:   periodStart,
+			PeriodEnd:     periodEnd,
+		})
+	}
+
+	return usageInputs
+}
+
+func (k Keeper) persistHPCUsageRecords(
+	ctx sdk.Context,
+	record *types.HPCAccountingRecord,
+	usageInputs []billing.UsageInput,
+	invoiceID string,
+	escrowID string,
+) error {
+	now := ctx.BlockTime()
+	for _, input := range usageInputs {
+		usageRecord := billing.UsageRecord{
+			RecordID:     input.UsageRecordID,
+			LeaseID:      record.JobID,
+			Provider:     record.ProviderAddress,
+			Customer:     record.CustomerAddress,
+			StartTime:    input.PeriodStart,
+			EndTime:      input.PeriodEnd,
+			ResourceType: input.UsageType,
+			UsageAmount:  input.Quantity,
+			UnitPrice:    input.UnitPrice,
+			TotalAmount:  sdk.NewCoins(sdk.NewCoin(input.UnitPrice.Denom, input.Quantity.Mul(input.UnitPrice.Amount).TruncateInt())),
+			InvoiceID:    invoiceID,
+			Status:       billing.UsageRecordStatusSettled,
+			BlockHeight:  ctx.BlockHeight(),
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+
+		if err := k.billingKeeper.SaveUsageRecord(ctx, &usageRecord); err != nil {
+			return err
+		}
+	}
+
+	_ = escrowID
+	return nil
+}
+
+func applyHPCDiscounts(inv *billing.Invoice, discounts []types.AppliedDiscount, caps []types.AppliedCap) {
+	now := time.Now().UTC()
+	for _, discount := range discounts {
+		applied := billing.AppliedDiscount{
+			DiscountID:  discount.DiscountID,
+			PolicyID:    discount.DiscountID,
+			Type:        mapHPCDiscountType(discount.DiscountType),
+			Description: discount.Description,
+			Amount:      discount.DiscountAmount,
+			AppliedAt:   now,
+			AppliedBy:   "hpc",
+		}
+		inv.Discounts = append(inv.Discounts, applied)
+	}
+
+	for _, cap := range caps {
+		if cap.CappedAmount.IsZero() {
+			continue
+		}
+		applied := billing.AppliedDiscount{
+			DiscountID:  fmt.Sprintf("cap-%s", cap.CapID),
+			PolicyID:    cap.CapID,
+			Type:        billing.DiscountTypeFixed,
+			Description: cap.Description,
+			Amount:      cap.CappedAmount,
+			AppliedAt:   now,
+			AppliedBy:   "hpc",
+		}
+		inv.Discounts = append(inv.Discounts, applied)
+	}
+}
+
+func mapHPCDiscountType(value string) billing.DiscountType {
+	switch value {
+	case string(types.HPCDiscountTypeVolume):
+		return billing.DiscountTypeVolume
+	case string(types.HPCDiscountTypeLoyalty):
+		return billing.DiscountTypeLoyalty
+	case string(types.HPCDiscountTypePromo):
+		return billing.DiscountTypeCoupon
+	case string(types.HPCDiscountTypeBundle):
+		return billing.DiscountTypeFixed
+	case string(types.HPCDiscountTypePartner):
+		return billing.DiscountTypeReferral
+	default:
+		return billing.DiscountTypeFixed
+	}
+}
+
+func reconcileInvoiceTotalsForAmount(inv *billing.Invoice, target sdk.Coins, reason string) {
+	targetDenoms := make(map[string]struct{}, len(target))
+	for _, coin := range target {
+		targetDenoms[coin.Denom] = struct{}{}
+		current := inv.Total.AmountOf(coin.Denom)
+		diff := coin.Amount.Sub(current)
+		if diff.IsZero() {
+			continue
+		}
+
+		if diff.IsPositive() {
+			inv.LineItems = append(inv.LineItems, billing.LineItem{
+				LineItemID:  fmt.Sprintf("adjustment-%s", coin.Denom),
+				Description: reason,
+				UsageType:   billing.UsageTypeFixed,
+				Quantity:    sdkmath.LegacyOneDec(),
+				Unit:        billing.UnitForUsageType(billing.UsageTypeFixed),
+				UnitPrice:   sdk.NewDecCoinFromCoin(sdk.NewCoin(coin.Denom, diff)),
+				Amount:      sdk.NewCoins(sdk.NewCoin(coin.Denom, diff)),
+			})
+			continue
+		}
+
+		inv.Discounts = append(inv.Discounts, billing.AppliedDiscount{
+			DiscountID:  fmt.Sprintf("disc-%s", coin.Denom),
+			PolicyID:    "hpc-adjustment",
+			Type:        billing.DiscountTypeFixed,
+			Description: reason,
+			Amount:      sdk.NewCoins(sdk.NewCoin(coin.Denom, diff.Neg())),
+			AppliedAt:   time.Now().UTC(),
+			AppliedBy:   "hpc",
+		})
+	}
+
+	for _, coin := range inv.Total {
+		if _, ok := targetDenoms[coin.Denom]; ok {
+			continue
+		}
+
+		if coin.Amount.IsZero() {
+			continue
+		}
+
+		inv.Discounts = append(inv.Discounts, billing.AppliedDiscount{
+			DiscountID:  fmt.Sprintf("disc-extra-%s", coin.Denom),
+			PolicyID:    "hpc-adjustment",
+			Type:        billing.DiscountTypeFixed,
+			Description: reason,
+			Amount:      sdk.NewCoins(coin),
+			AppliedAt:   time.Now().UTC(),
+			AppliedBy:   "hpc",
+		})
+	}
+}
+
+func recalculateInvoiceTotalsForBilling(inv *billing.Invoice) {
+	subtotal := sdk.NewCoins()
+	for _, item := range inv.LineItems {
+		subtotal = subtotal.Add(item.Amount...)
+	}
+	inv.Subtotal = subtotal
+
+	discountTotal := sdk.NewCoins()
+	for _, discount := range inv.Discounts {
+		discountTotal = discountTotal.Add(discount.Amount...)
+	}
+	inv.DiscountTotal = discountTotal
+
+	taxTotal := sdk.NewCoins()
+	if inv.TaxDetails != nil {
+		taxTotal = inv.TaxDetails.TotalTax
+	}
+	inv.TaxTotal = taxTotal
+
+	total := subtotal.Sub(discountTotal...).Add(taxTotal...)
+	inv.Total = total
+	inv.AmountDue = total.Sub(inv.AmountPaid...)
 }
 
 // ============================================================================
