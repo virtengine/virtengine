@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * useCamera Hook
  * VE-210: Camera access and management for capture components

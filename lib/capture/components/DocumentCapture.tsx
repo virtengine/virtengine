@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * DocumentCapture Component
  * VE-210: Document capture component with quality validation

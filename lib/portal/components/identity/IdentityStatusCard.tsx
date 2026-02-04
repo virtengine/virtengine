@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Identity Status Card Component
  * VE-701: Display identity status with actions

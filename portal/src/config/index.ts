@@ -6,3 +6,5 @@ export type { WalletInfo, WalletType } from './wallets';
 
 export { env, validateEnv } from './env';
 export type { Env } from './env';
+
+export { createPortalConfig, createChainConfig, portalConfig, chainConfig } from './portal';

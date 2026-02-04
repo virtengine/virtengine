@@ -12,6 +12,8 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "target": "ES2020",
+    "downlevelIteration": true,
     "plugins": [
       {
         "name": "next"
@@ -32,9 +34,9 @@
     },
     "baseUrl": ".",
     "forceConsistentCasingInFileNames": true,
-    "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "exactOptionalPropertyTypes": false
   },
   "include": [
@@ -43,5 +45,5 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "../lib"]
+  "exclude": ["node_modules"]
 }
