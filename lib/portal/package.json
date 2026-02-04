@@ -17,6 +17,10 @@
     "typescript": "^5.5.4",
     "vitest": "^1.6.0"
   },
+  "dependencies": {
+    "@walletconnect/modal": "^2.6.2",
+    "@walletconnect/sign-client": "^2.12.2"
+  },
   "peerDependencies": {
     "react": "^18.2.0"
   }

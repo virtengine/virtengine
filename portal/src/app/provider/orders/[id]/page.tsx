@@ -8,13 +8,15 @@ import {
   type DeploymentStatus,
   type DeploymentUpdatePayload,
 } from '@/stores';
-import { useWalletStore } from '@/stores/walletStore';
+import { useWallet } from '@/lib/portal-adapter';
 import { useWalletModal } from '@/components/wallet';
 import {
   DeploymentActionsMenu,
   DeploymentUpdateModal,
   TerminateConfirmDialog,
 } from '@/components/provider/deployments';
+import { LogViewer } from '@/components/deployments/LogViewer';
+import { ShellTerminal } from '@/components/deployments/ShellTerminal';
 import { formatCurrency, formatDate, formatRelativeTime, sleep, truncateAddress } from '@/lib/utils';
 
 interface DeploymentDetailPageProps {
@@ -61,7 +63,7 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     tickDeployment,
     isLoading,
   } = useDeploymentStore();
-  const { isConnected, walletType, address } = useWalletStore();
+  const { state: walletState } = useWallet();
   const { open: openWalletModal } = useWalletModal();
 
   const deployment = deployments.find((item) => item.id === id);
@@ -70,12 +72,19 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
   const [isTerminateOpen, setIsTerminateOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<'logs' | 'shell'>('logs');
+  const [activeContainer, setActiveContainer] = useState<string>('');
   const [lastTx, setLastTx] = useState<{
     id: string;
     type: 'MsgUpdateDeployment' | 'MsgCloseDeployment';
     memo: string;
     createdAt: Date;
   } | null>(null);
+
+  const containers = useMemo(() => deployment?.containers.map((container) => container.name) ?? [], [deployment]);
+  const minShellScore = 70;
+  const veidScore = 42;
+  const hasShellAccess = veidScore >= minShellScore;
 
   useEffect(() => {
     void fetchDeployment(id);
@@ -88,6 +97,13 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     }, 6000);
     return () => clearInterval(interval);
   }, [deployment, id, tickDeployment]);
+
+  useEffect(() => {
+    if (containers.length === 0) return;
+    if (!activeContainer || !containers.includes(activeContainer)) {
+      setActiveContainer(containers[0]);
+    }
+  }, [activeContainer, containers]);
 
   const resourceSummary = useMemo(() => {
     if (!deployment) return [];
@@ -124,7 +140,7 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     memo: string,
     actionFn: () => void
   ) => {
-    if (!isConnected) {
+    if (!walletState.isConnected) {
       setActionError('Connect your wallet to sign this transaction.');
       openWalletModal();
       return;
@@ -194,8 +210,8 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
           <div>
             <h2 className="text-sm font-semibold">Deployment actions</h2>
             <p className="text-xs text-muted-foreground">
-              {isConnected
-                ? `Signing with ${walletType ?? 'wallet'} (${truncateAddress(address ?? '')})`
+            {walletState.isConnected
+                ? `Signing with ${walletState.walletType ?? 'wallet'} (${truncateAddress(walletState.address ?? '')})`
                 : 'Connect wallet to sign actions'}
             </p>
           </div>

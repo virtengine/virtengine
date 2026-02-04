@@ -3,10 +3,9 @@
 import { useState, useCallback } from 'react';
 import { IdentityVerificationFlow } from '@/components/identity';
 import { IdentityCard } from '@/components/identity';
-import { CaptureProgress } from '@/components/capture';
 import { useIdentity } from '@/lib/portal-adapter';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ArrowLeft, Shield } from 'lucide-react';
 import Link from 'next/link';
 
@@ -56,7 +55,7 @@ export default function VerifyPage() {
         <div className="space-y-6">
           <IdentityCard showScore={true} />
 
-          {identityState.status === 'unverified' && (
+          {identityState.status === 'unknown' && (
             <Card>
               <CardHeader>
                 <CardTitle>Get Verified</CardTitle>
@@ -144,7 +143,7 @@ export default function VerifyPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p>
-              We'll notify you once your verification is complete. This typically takes a few minutes.
+              We will notify you once your verification is complete. This typically takes a few minutes.
             </p>
             <Link href="/dashboard">
               <Button>Return to Dashboard</Button>

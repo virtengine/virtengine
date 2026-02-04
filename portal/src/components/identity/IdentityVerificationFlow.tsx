@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useIdentity, RemediationGuide, ScopeRequirements } from '@/lib/portal-adapter';
+import { useIdentity, ScopeRequirements } from '@/lib/portal-adapter';
 import { DocumentCapture, SelfieCapture, type CaptureResult, type SelfieResult, type CaptureError } from '@/lib/capture-adapter';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
 type VerificationStep = 'requirements' | 'document-front' | 'document-back' | 'selfie' | 'complete';
 
@@ -21,43 +21,37 @@ interface IdentityVerificationFlowProps {
  * Multi-step flow for document and selfie capture
  */
 export function IdentityVerificationFlow({ className, onComplete, onCancel }: IdentityVerificationFlowProps) {
-  const { state, actions } = useIdentity();
+  const { state } = useIdentity();
   const [step, setStep] = useState<VerificationStep>('requirements');
   const [error, setError] = useState<string | null>(null);
-  const [documentFront, setDocumentFront] = useState<CaptureResult | null>(null);
-  const [documentBack, setDocumentBack] = useState<CaptureResult | null>(null);
-  const [selfie, setSelfie] = useState<SelfieResult | null>(null);
 
   // Mock key providers for development - in production these would come from wallet
   const mockClientKeyProvider = {
-    getClientId: async () => 'virtengine-portal-v1',
-    getClientVersion: async () => '1.0.0',
-    sign: async (data: Uint8Array) => new Uint8Array(64),
-    getPublicKey: async () => new Uint8Array(32),
-    getKeyType: async () => 'ed25519' as const,
+    getClientId: () => Promise.resolve('virtengine-portal-v1'),
+    getClientVersion: () => Promise.resolve('1.0.0'),
+    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
+    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
+    getKeyType: () => Promise.resolve('ed25519' as const),
   };
 
   const mockUserKeyProvider = {
-    getAccountAddress: async () => 'virtengine1...',
-    sign: async (data: Uint8Array) => new Uint8Array(64),
-    getPublicKey: async () => new Uint8Array(32),
-    getKeyType: async () => 'ed25519' as const,
+    getAccountAddress: () => Promise.resolve('virtengine1...'),
+    sign: (_data: Uint8Array) => Promise.resolve(new Uint8Array(64)),
+    getPublicKey: () => Promise.resolve(new Uint8Array(32)),
+    getKeyType: () => Promise.resolve('ed25519' as const),
   };
 
-  const handleDocumentFrontCapture = useCallback((result: CaptureResult) => {
-    setDocumentFront(result);
+  const handleDocumentFrontCapture = useCallback((_result: CaptureResult) => {
     setStep('document-back');
     setError(null);
   }, []);
 
-  const handleDocumentBackCapture = useCallback((result: CaptureResult) => {
-    setDocumentBack(result);
+  const handleDocumentBackCapture = useCallback((_result: CaptureResult) => {
     setStep('selfie');
     setError(null);
   }, []);
 
-  const handleSelfieCapture = useCallback((result: SelfieResult) => {
-    setSelfie(result);
+  const handleSelfieCapture = useCallback((_result: SelfieResult) => {
     setStep('complete');
     setError(null);
     onComplete?.();

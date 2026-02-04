@@ -2,9 +2,9 @@
 
 import { useHPC, JobOutputViewer, JobCancelDialog } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { useState } from 'react';
 
 interface HPCJobDetailsProps {
@@ -49,10 +49,13 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
 
   const statusColor = {
     pending: 'bg-yellow-500',
+    queued: 'bg-yellow-500',
     running: 'bg-blue-500',
+    completing: 'bg-blue-500',
     completed: 'bg-green-500',
     failed: 'bg-red-500',
     cancelled: 'bg-gray-500',
+    timeout: 'bg-red-500',
   }[job.status] ?? 'bg-gray-500';
 
   return (
@@ -105,7 +108,7 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
           <CardContent>
             <JobOutputViewer
               jobId={jobId}
-              outputs={job.outputs ?? []}
+              outputs={[]}
               isRunning={job.status === 'running'}
             />
           </CardContent>

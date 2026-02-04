@@ -2,8 +2,8 @@
 
 import { useMarketplace, OrderDetail, OrderTimeline } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 
 interface OrderDetailsProps {
   orderId: string;

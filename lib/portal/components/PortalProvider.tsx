@@ -11,9 +11,9 @@ import { MarketplaceProvider } from '../hooks/useMarketplace';
 import { ProviderProvider } from '../hooks/useProvider';
 import { HPCProvider } from '../hooks/useHPC';
 import { ChainProvider } from '../hooks/useChain';
+import { WalletProvider, type WalletProviderConfig } from '../src/wallet/context';
 import type { PortalConfig } from '../types/config';
 import type { ChainConfig } from '../types/chain';
-import type { WalletConfig } from '../types/wallet';
 
 /**
  * Portal provider props
@@ -32,7 +32,7 @@ export interface PortalProviderProps {
   /**
    * Wallet configuration
    */
-  walletConfig?: Partial<WalletConfig>;
+  walletConfig?: WalletProviderConfig;
 
   /**
    * Children
@@ -84,24 +84,58 @@ export function PortalProvider({
     isReady,
   };
 
+  const resolvedWalletConfig: WalletProviderConfig = walletConfig ?? {
+    chain: {
+      chainId: chainConfig.chainId ?? config.chainId ?? 'virtengine-1',
+      chainName: config.networkName ?? 'VirtEngine',
+      rpcEndpoint: config.chainEndpoint,
+      restEndpoint: config.chainRestEndpoint ?? chainConfig.restEndpoint,
+      bech32Prefix: 'virtengine',
+      stakeCurrency: {
+        coinDenom: 'VE',
+        coinMinimalDenom: 'uve',
+        coinDecimals: 6,
+      },
+      currencies: [
+        {
+          coinDenom: 'VE',
+          coinMinimalDenom: 'uve',
+          coinDecimals: 6,
+        },
+      ],
+      feeCurrencies: [
+        {
+          coinDenom: 'VE',
+          coinMinimalDenom: 'uve',
+          coinDecimals: 6,
+          gasPriceStep: { low: 0.01, average: 0.025, high: 0.04 },
+        },
+      ],
+      features: ['cosmwasm', 'ibc-transfer', 'ibc-go'],
+    },
+    autoConnect: true,
+  };
+
   // Providers are nested in dependency order:
   // Chain (base) -> Auth -> Identity -> MFA -> Marketplace, Provider, HPC
   return (
     <PortalContext.Provider value={value}>
       <ChainProvider config={chainConfig}>
-        <AuthProvider config={config}>
-          <IdentityProvider>
-            <MFAProvider>
-              <MarketplaceProvider>
-                <ProviderProvider>
-                  <HPCProvider>
-                    {children}
-                  </HPCProvider>
-                </ProviderProvider>
-              </MarketplaceProvider>
-            </MFAProvider>
-          </IdentityProvider>
-        </AuthProvider>
+        <WalletProvider config={resolvedWalletConfig}>
+          <AuthProvider config={config}>
+            <IdentityProvider>
+              <MFAProvider>
+                <MarketplaceProvider>
+                  <ProviderProvider>
+                    <HPCProvider>
+                      {children}
+                    </HPCProvider>
+                  </ProviderProvider>
+                </MarketplaceProvider>
+              </MFAProvider>
+            </IdentityProvider>
+          </AuthProvider>
+        </WalletProvider>
       </ChainProvider>
     </PortalContext.Provider>
   );

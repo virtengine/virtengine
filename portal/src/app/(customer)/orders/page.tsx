@@ -52,11 +52,9 @@ export default function OrdersPage() {
 
       {/* Orders List */}
       <div className="space-y-4">
-        {Array.from({ length: 5 }, (_, index) => ({ id: `order-${index + 1}`, index })).map(
-          (order) => (
-            <OrderCard key={order.id} index={order.index} />
-          )
-        )}
+        {orderPlaceholders.map((order) => (
+          <OrderCard key={order.id} order={order} />
+        ))}
       </div>
 
       {/* Empty state for when no orders */}

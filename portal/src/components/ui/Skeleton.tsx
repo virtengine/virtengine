@@ -36,11 +36,12 @@ function Skeleton({
 
 // Pre-built skeleton patterns
 function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
+  const lineKeys = Array.from({ length: lines }, (_, index) => `line-${index}`);
   return (
     <div className={cn('space-y-2', className)}>
-      {Array.from({ length: lines }).map((_, i) => (
+      {lineKeys.map((key, i) => (
         <Skeleton
-          key={i}
+          key={key}
           className={cn(
             'h-4',
             i === lines - 1 && 'w-3/4'
@@ -78,19 +79,21 @@ function SkeletonAvatar({ size = 'default' }: { size?: 'sm' | 'default' | 'lg' }
 }
 
 function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+  const columnKeys = Array.from({ length: columns }, (_, index) => `col-${index}`);
+  const rowKeys = Array.from({ length: rows }, (_, index) => `row-${index}`);
   return (
     <div className="w-full space-y-3">
       {/* Header */}
       <div className="flex gap-4">
-        {Array.from({ length: columns }).map((_, i) => (
-          <Skeleton key={i} className="h-4 flex-1" />
+        {columnKeys.map((key) => (
+          <Skeleton key={key} className="h-4 flex-1" />
         ))}
       </div>
       {/* Rows */}
-      {Array.from({ length: rows }).map((_, rowIndex) => (
-        <div key={rowIndex} className="flex gap-4">
-          {Array.from({ length: columns }).map((_, colIndex) => (
-            <Skeleton key={colIndex} className="h-10 flex-1" />
+      {rowKeys.map((rowKey) => (
+        <div key={rowKey} className="flex gap-4">
+          {columnKeys.map((colKey) => (
+            <Skeleton key={`${rowKey}-${colKey}`} className="h-10 flex-1" />
           ))}
         </div>
       ))}

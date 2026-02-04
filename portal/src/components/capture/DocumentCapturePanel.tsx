@@ -14,9 +14,9 @@ import {
   type UserKeyProvider,
 } from '@/lib/capture-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
+import { Button } from '@/components/ui/Button';
 
 interface DocumentCapturePanelProps {
   documentType: DocumentType;
@@ -49,20 +49,17 @@ export function DocumentCapturePanel({
 }: DocumentCapturePanelProps) {
   const [guidanceState, setGuidanceState] = useState<GuidanceState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isCapturing, setIsCapturing] = useState(false);
 
   const handleGuidanceChange = useCallback((state: GuidanceState) => {
     setGuidanceState(state);
   }, []);
 
   const handleCapture = useCallback((result: CaptureResult) => {
-    setIsCapturing(false);
     setError(null);
     onCapture(result);
   }, [onCapture]);
 
   const handleError = useCallback((captureError: CaptureError) => {
-    setIsCapturing(false);
     setError(captureError.message);
     onError?.(captureError);
   }, [onError]);
@@ -72,6 +69,22 @@ export function DocumentCapturePanel({
     passport: 'Passport',
     drivers_license: "Driver's License",
   };
+  const qualityResult = guidanceState
+    ? {
+        passed: guidanceState.currentIssues.length === 0,
+        score: guidanceState.currentIssues.length === 0 ? 100 : 60,
+        issues: guidanceState.currentIssues,
+        checks: {
+          resolution: { passed: true, value: 1, threshold: 1, description: 'Resolution' },
+          brightness: { passed: true, value: 1, threshold: 1, description: 'Brightness' },
+          blur: { passed: true, value: 1, threshold: 1, description: 'Blur' },
+          skew: { passed: true, value: 1, threshold: 1, description: 'Skew' },
+          glare: { passed: true, value: 1, threshold: 1, description: 'Glare' },
+          noise: { passed: true, value: 1, threshold: 1, description: 'Noise' },
+        },
+        analysisTimeMs: 0,
+      }
+    : null;
 
   const defaultTitle = `Capture ${documentTypeLabels[documentType]} (${documentSide === 'front' ? 'Front' : 'Back'})`;
   const defaultDescription = `Position the ${documentSide} of your ${documentTypeLabels[documentType].toLowerCase()} within the frame`;
@@ -92,8 +105,9 @@ export function DocumentCapturePanel({
 
         {guidanceState && (
           <CaptureGuidance
-            state={guidanceState}
-            documentType={documentType}
+            guidance={guidanceState}
+            captureType={documentType}
+            isBackSide={documentSide === 'back'}
           />
         )}
 
@@ -110,8 +124,8 @@ export function DocumentCapturePanel({
           />
         </div>
 
-        {guidanceState && guidanceState.currentIssues.length > 0 && (
-          <QualityFeedback issues={guidanceState.currentIssues} />
+        {qualityResult && qualityResult.issues.length > 0 && (
+          <QualityFeedback result={qualityResult} compact />
         )}
 
         {onCancel && (

@@ -1,9 +1,9 @@
 'use client';
 
-import { useMarketplace, OfferingList, OfferingCard, type Offering } from '@/lib/portal-adapter';
+import { useMarketplace, OfferingList, type Offering } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { useState } from 'react';
 
 interface MarketplaceBrowserProps {
@@ -33,7 +33,7 @@ export function MarketplaceBrowser({ className, onOfferingSelect }: MarketplaceB
   }
 
   const filteredOfferings = state.offerings.filter((offering) =>
-    offering.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    offering.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     offering.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

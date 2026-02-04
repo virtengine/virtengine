@@ -1,9 +1,9 @@
 'use client';
 
-import { useHPC, JobSubmissionForm, type JobSubmission } from '@/lib/portal-adapter';
+import { useHPC, JobSubmissionForm } from '@/lib/portal-adapter';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 
 interface HPCJobSubmitProps {
   className?: string;
@@ -18,6 +18,9 @@ interface HPCJobSubmitProps {
  */
 export function HPCJobSubmit({ className, templateId, onSubmitSuccess, onSubmitError }: HPCJobSubmitProps) {
   const { state } = useHPC();
+  const selectedTemplate = templateId
+    ? state.workloadTemplates.find((template) => template.id === templateId)
+    : undefined;
 
   if (state.isLoading) {
     return (
@@ -44,12 +47,10 @@ export function HPCJobSubmit({ className, templateId, onSubmitSuccess, onSubmitE
           </Alert>
         )}
         <JobSubmissionForm
-          templates={state.templates}
-          selectedTemplateId={templateId}
-          onSubmit={async (submission: JobSubmission) => {
+          template={selectedTemplate}
+          onSubmit={(jobId: string) => {
             try {
-              // Submit would be handled by the hook
-              onSubmitSuccess?.(submission.jobId ?? '');
+              onSubmitSuccess?.(jobId);
             } catch (error) {
               onSubmitError?.(error as Error);
             }

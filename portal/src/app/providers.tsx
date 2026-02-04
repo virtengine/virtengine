@@ -3,7 +3,7 @@
 import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
 import { PortalProvider } from '@/lib/portal-adapter';
-import { portalConfig, chainConfig } from '@/config';
+import { portalConfig, chainConfig, walletConfig } from '@/config';
 
 /**
  * Root Providers
@@ -20,7 +20,7 @@ export function Providers({ children }: { children: ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      <PortalProvider config={portalConfig} chainConfig={chainConfig}>
+      <PortalProvider config={portalConfig} chainConfig={chainConfig} walletConfig={walletConfig}>
         {children}
       </PortalProvider>
     </ThemeProvider>
