@@ -28,6 +28,12 @@ service Msg {
   // TerminateAllocation terminates an allocation
   rpc TerminateAllocation(MsgTerminateAllocation) returns (MsgTerminateAllocationResponse);
 
+  // ResizeAllocation resizes an existing allocation
+  rpc ResizeAllocation(MsgResizeAllocation) returns (MsgResizeAllocationResponse);
+
+  // PauseAllocation pauses an active allocation
+  rpc PauseAllocation(MsgPauseAllocation) returns (MsgPauseAllocationResponse);
+
   // WaldurCallback handles callbacks from Waldur integration
   rpc WaldurCallback(MsgWaldurCallback) returns (MsgWaldurCallbackResponse);
 }
@@ -103,6 +109,35 @@ message MsgTerminateAllocation {
 
 // MsgTerminateAllocationResponse is the response for MsgTerminateAllocation
 message MsgTerminateAllocationResponse {}
+
+// MsgResizeAllocation resizes an allocation
+message MsgResizeAllocation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer";
+  option (amino.name) = "marketplace/MsgResizeAllocation";
+
+  string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  map<string, uint64> resource_units = 3 [(gogoproto.jsontag) = "resource_units,omitempty", (gogoproto.moretags) = "yaml:\"resource_units\""];
+  string reason = 4 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+// MsgResizeAllocationResponse is the response for MsgResizeAllocation
+message MsgResizeAllocationResponse {}
+
+// MsgPauseAllocation pauses an allocation
+message MsgPauseAllocation {
+  option (gogoproto.equal) = false;
+  option (cosmos.msg.v1.signer) = "customer";
+  option (amino.name) = "marketplace/MsgPauseAllocation";
+
+  string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
+  string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
+  string reason = 3 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
+}
+
+// MsgPauseAllocationResponse is the response for MsgPauseAllocation
+message MsgPauseAllocationResponse {}
 
 // MsgWaldurCallback handles callbacks from Waldur integration
 message MsgWaldurCallback {
