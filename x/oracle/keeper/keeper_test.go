@@ -38,6 +38,7 @@ func setupTestKeeper(t *testing.T) (IKeeper, sdk.Context) {
 		cdc,
 		storeKey,
 		"test-authority",
+		nil, // BankKeeper - nil for basic tests
 	)
 
 	return keeper, testCtx
