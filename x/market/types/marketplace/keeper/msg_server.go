@@ -347,6 +347,183 @@ func (ms msgServer) TerminateAllocation(goCtx context.Context, msg *marketplace.
 	return &marketplace.MsgTerminateAllocationResponse{}, nil
 }
 
+func (ms msgServer) ResizeAllocation(goCtx context.Context, msg *marketplace.MsgResizeAllocation) (*marketplace.MsgResizeAllocationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Customer); err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid customer address")
+	}
+
+	if msg.AllocationId == "" {
+		return nil, marketplace.ErrAllocationNotFound.Wrap("allocation_id is required")
+	}
+
+	allocationID, err := marketplace.ParseAllocationID(msg.AllocationId)
+	if err != nil {
+		return nil, marketplace.ErrAllocationNotFound.Wrap(err.Error())
+	}
+
+	allocation, found := ms.keeper.GetAllocation(ctx, allocationID)
+	if !found {
+		return nil, marketplace.ErrAllocationNotFound
+	}
+
+	order, found := ms.keeper.GetOrder(ctx, allocationID.OrderID)
+	if !found {
+		return nil, marketplace.ErrOrderNotFound
+	}
+
+	if order.ID.CustomerAddress != msg.Customer {
+		return nil, marketplace.ErrNotCustomer
+	}
+
+	if allocation.State.IsTerminal() {
+		return nil, marketplace.ErrInvalidStateTransition.Wrap("allocation already terminal")
+	}
+
+	if len(msg.ResourceUnits) == 0 {
+		return nil, marketplace.ErrInvalidRequest.Wrap("resource_units must be provided")
+	}
+
+	targetState, err := marketplace.ValidateLifecycleTransition(allocation.State, marketplace.LifecycleActionResize)
+	if err != nil {
+		return nil, marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+	}
+
+	reason := msg.Reason
+	if reason == "" {
+		reason = "customer requested resize"
+	}
+
+	if targetState != allocation.State {
+		if err := allocation.SetStateAt(targetState, reason, ctx.BlockTime()); err != nil {
+			return nil, err
+		}
+		if err := ms.keeper.UpdateAllocation(ctx, allocation); err != nil {
+			return nil, err
+		}
+	}
+
+	operationID := marketplace.GenerateOperationID(allocation.ID.String(), marketplace.LifecycleActionResize, ctx.BlockTime())
+	resourceUnits := make(map[string]uint64, len(msg.ResourceUnits))
+	for _, unit := range msg.ResourceUnits {
+		if unit.ResourceType == "" {
+			return nil, marketplace.ErrInvalidRequest.Wrap("resource_type is required")
+		}
+		if unit.Units == 0 {
+			return nil, marketplace.ErrInvalidRequest.Wrap("resource unit quantity must be greater than 0")
+		}
+		resourceUnits[unit.ResourceType] = unit.Units
+	}
+	parameters := map[string]interface{}{
+		"resource_units": resourceUnits,
+	}
+	seq := ms.keeper.IncrementEventSequence(ctx)
+	event := marketplace.NewLifecycleActionRequestedEventAt(
+		allocation.ID.String(),
+		order.ID.String(),
+		allocation.ProviderAddress,
+		marketplace.LifecycleActionResize,
+		operationID,
+		msg.Customer,
+		targetState,
+		parameters,
+		marketplace.RollbackPolicyAutomatic,
+		ctx.BlockHeight(),
+		seq,
+		ctx.BlockTime(),
+	)
+	if err := ms.keeper.EmitMarketplaceEvent(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgResizeAllocationResponse{}, nil
+}
+
+func (ms msgServer) PauseAllocation(goCtx context.Context, msg *marketplace.MsgPauseAllocation) (*marketplace.MsgPauseAllocationResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg == nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("empty message")
+	}
+
+	if _, err := sdk.AccAddressFromBech32(msg.Customer); err != nil {
+		return nil, marketplace.ErrUnauthorized.Wrap("invalid customer address")
+	}
+
+	if msg.AllocationId == "" {
+		return nil, marketplace.ErrAllocationNotFound.Wrap("allocation_id is required")
+	}
+
+	allocationID, err := marketplace.ParseAllocationID(msg.AllocationId)
+	if err != nil {
+		return nil, marketplace.ErrAllocationNotFound.Wrap(err.Error())
+	}
+
+	allocation, found := ms.keeper.GetAllocation(ctx, allocationID)
+	if !found {
+		return nil, marketplace.ErrAllocationNotFound
+	}
+
+	order, found := ms.keeper.GetOrder(ctx, allocationID.OrderID)
+	if !found {
+		return nil, marketplace.ErrOrderNotFound
+	}
+
+	if order.ID.CustomerAddress != msg.Customer {
+		return nil, marketplace.ErrNotCustomer
+	}
+
+	if allocation.State.IsTerminal() {
+		return nil, marketplace.ErrInvalidStateTransition.Wrap("allocation already terminal")
+	}
+
+	targetState, err := marketplace.ValidateLifecycleTransition(allocation.State, marketplace.LifecycleActionSuspend)
+	if err != nil {
+		return nil, marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+	}
+
+	reason := msg.Reason
+	if reason == "" {
+		reason = "customer requested pause"
+	}
+
+	if targetState != allocation.State {
+		if err := allocation.SetStateAt(targetState, reason, ctx.BlockTime()); err != nil {
+			return nil, err
+		}
+		if err := ms.keeper.UpdateAllocation(ctx, allocation); err != nil {
+			return nil, err
+		}
+	}
+
+	operationID := marketplace.GenerateOperationID(allocation.ID.String(), marketplace.LifecycleActionSuspend, ctx.BlockTime())
+	seq := ms.keeper.IncrementEventSequence(ctx)
+	event := marketplace.NewLifecycleActionRequestedEventAt(
+		allocation.ID.String(),
+		order.ID.String(),
+		allocation.ProviderAddress,
+		marketplace.LifecycleActionSuspend,
+		operationID,
+		msg.Customer,
+		targetState,
+		nil,
+		marketplace.RollbackPolicyAutomatic,
+		ctx.BlockHeight(),
+		seq,
+		ctx.BlockTime(),
+	)
+	if err := ms.keeper.EmitMarketplaceEvent(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return &marketplace.MsgPauseAllocationResponse{}, nil
+}
+
 func (ms msgServer) WaldurCallback(goCtx context.Context, msg *marketplace.MsgWaldurCallback) (*marketplace.MsgWaldurCallbackResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 

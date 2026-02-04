@@ -118,7 +118,7 @@ message MsgResizeAllocation {
 
   string customer = 1 [(cosmos_proto.scalar) = "cosmos.AddressString", (gogoproto.jsontag) = "customer", (gogoproto.moretags) = "yaml:\"customer\""];
   string allocation_id = 2 [(gogoproto.jsontag) = "allocation_id", (gogoproto.moretags) = "yaml:\"allocation_id\""];
-  map<string, uint64> resource_units = 3 [(gogoproto.jsontag) = "resource_units,omitempty", (gogoproto.moretags) = "yaml:\"resource_units\""];
+  repeated ResourceUnit resource_units = 3 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "resource_units,omitempty", (gogoproto.moretags) = "yaml:\"resource_units\""];
   string reason = 4 [(gogoproto.jsontag) = "reason,omitempty", (gogoproto.moretags) = "yaml:\"reason\""];
 }
 
@@ -138,6 +138,12 @@ message MsgPauseAllocation {
 
 // MsgPauseAllocationResponse is the response for MsgPauseAllocation
 message MsgPauseAllocationResponse {}
+
+// ResourceUnit represents a resource type and its unit quantity for resizing
+message ResourceUnit {
+  string resource_type = 1 [(gogoproto.jsontag) = "resource_type", (gogoproto.moretags) = "yaml:\"resource_type\""];
+  uint64 units = 2 [(gogoproto.jsontag) = "units", (gogoproto.moretags) = "yaml:\"units\""];
+}
 
 // MsgWaldurCallback handles callbacks from Waldur integration
 message MsgWaldurCallback {

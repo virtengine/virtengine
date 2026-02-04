@@ -18,6 +18,10 @@ type (
 	MsgAcceptBidResponse           = marketplacev1.MsgAcceptBidResponse
 	MsgTerminateAllocation         = marketplacev1.MsgTerminateAllocation
 	MsgTerminateAllocationResponse = marketplacev1.MsgTerminateAllocationResponse
+	MsgResizeAllocation            = marketplacev1.MsgResizeAllocation
+	MsgResizeAllocationResponse    = marketplacev1.MsgResizeAllocationResponse
+	MsgPauseAllocation             = marketplacev1.MsgPauseAllocation
+	MsgPauseAllocationResponse     = marketplacev1.MsgPauseAllocationResponse
 	MsgWaldurCallback              = marketplacev1.MsgWaldurCallback
 	MsgWaldurCallbackResponse      = marketplacev1.MsgWaldurCallbackResponse
 	MsgServer                      = marketplacev1.MsgServer
@@ -31,6 +35,8 @@ const (
 	TypeMsgDeactivateOffering  = "deactivate_offering"
 	TypeMsgAcceptBid           = "accept_bid"
 	TypeMsgTerminateAllocation = "terminate_allocation"
+	TypeMsgResizeAllocation    = "resize_allocation"
+	TypeMsgPauseAllocation     = "pause_allocation"
 	TypeMsgWaldurCallback      = "waldur_callback"
 )
 
@@ -40,6 +46,8 @@ var (
 	_ sdk.Msg = &MsgDeactivateOffering{}
 	_ sdk.Msg = &MsgAcceptBid{}
 	_ sdk.Msg = &MsgTerminateAllocation{}
+	_ sdk.Msg = &MsgResizeAllocation{}
+	_ sdk.Msg = &MsgPauseAllocation{}
 	_ sdk.Msg = &MsgWaldurCallback{}
 
 	// RegisterMsgServer registers the MsgServer on a grpc server.
@@ -95,6 +103,25 @@ func NewMsgAcceptBid(customer string, orderID string, bidID string) *MsgAcceptBi
 // NewMsgTerminateAllocation creates a new MsgTerminateAllocation.
 func NewMsgTerminateAllocation(customer string, allocationID string, reason string) *MsgTerminateAllocation {
 	return &MsgTerminateAllocation{
+		Customer:     customer,
+		AllocationId: allocationID,
+		Reason:       reason,
+	}
+}
+
+// NewMsgResizeAllocation creates a new MsgResizeAllocation.
+func NewMsgResizeAllocation(customer string, allocationID string, resourceUnits []marketplacev1.ResourceUnit, reason string) *MsgResizeAllocation {
+	return &MsgResizeAllocation{
+		Customer:      customer,
+		AllocationId:  allocationID,
+		ResourceUnits: resourceUnits,
+		Reason:        reason,
+	}
+}
+
+// NewMsgPauseAllocation creates a new MsgPauseAllocation.
+func NewMsgPauseAllocation(customer string, allocationID string, reason string) *MsgPauseAllocation {
+	return &MsgPauseAllocation{
 		Customer:     customer,
 		AllocationId: allocationID,
 		Reason:       reason,

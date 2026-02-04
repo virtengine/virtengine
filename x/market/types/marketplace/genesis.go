@@ -28,6 +28,12 @@ var (
 	// AllocationKeyPrefix is the prefix for allocation storage
 	AllocationKeyPrefix = []byte{0x03}
 
+	// AllocationByCustomerPrefix indexes allocations by customer address
+	AllocationByCustomerPrefix = []byte{0x0F}
+
+	// AllocationByProviderPrefix indexes allocations by provider address
+	AllocationByProviderPrefix = []byte{0x10}
+
 	// BidKeyPrefix is the prefix for bid storage
 	BidKeyPrefix = []byte{0x04}
 
@@ -77,6 +83,26 @@ func OrderKey(id OrderID) []byte {
 // AllocationKey returns the key for an allocation
 func AllocationKey(id AllocationID) []byte {
 	return append(AllocationKeyPrefix, []byte(id.String())...)
+}
+
+// AllocationByCustomerKey returns the key for allocation indexed by customer
+func AllocationByCustomerKey(customerAddress, allocationID string) []byte {
+	return append(AllocationByCustomerPrefix, []byte(fmt.Sprintf("%s/%s", customerAddress, allocationID))...)
+}
+
+// AllocationByCustomerPrefixKey returns the prefix for allocations by customer
+func AllocationByCustomerPrefixKey(customerAddress string) []byte {
+	return append(AllocationByCustomerPrefix, []byte(customerAddress+"/")...)
+}
+
+// AllocationByProviderKey returns the key for allocation indexed by provider
+func AllocationByProviderKey(providerAddress, allocationID string) []byte {
+	return append(AllocationByProviderPrefix, []byte(fmt.Sprintf("%s/%s", providerAddress, allocationID))...)
+}
+
+// AllocationByProviderPrefixKey returns the prefix for allocations by provider
+func AllocationByProviderPrefixKey(providerAddress string) []byte {
+	return append(AllocationByProviderPrefix, []byte(providerAddress+"/")...)
 }
 
 // BidKey returns the key for a bid

@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	query "github.com/cosmos/cosmos-sdk/types/query"
 
 	marketplacev1 "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
@@ -59,4 +60,70 @@ func (qs queryServer) OfferingPrice(
 	return &marketplacev1.QueryOfferingPriceResponse{
 		Total: quote.Total,
 	}, nil
+}
+
+// AllocationsByCustomer returns allocations for a customer.
+func (qs queryServer) AllocationsByCustomer(
+	goCtx context.Context,
+	req *marketplacev1.QueryAllocationsByCustomerRequest,
+) (*marketplacev1.QueryAllocationsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.CustomerAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, "customer_address is required")
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	allocations := qs.keeper.GetAllocationsByCustomer(ctx, req.CustomerAddress)
+	return paginateAllocations(allocations, req.Pagination)
+}
+
+// AllocationsByProvider returns allocations for a provider.
+func (qs queryServer) AllocationsByProvider(
+	goCtx context.Context,
+	req *marketplacev1.QueryAllocationsByProviderRequest,
+) (*marketplacev1.QueryAllocationsResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ProviderAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, "provider_address is required")
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	allocations := qs.keeper.GetAllocationsByProvider(ctx, req.ProviderAddress)
+	return paginateAllocations(allocations, req.Pagination)
+}
+
+func paginateAllocations(allocations []marketplacetypes.Allocation, pageReq *query.PageRequest) (*marketplacev1.QueryAllocationsResponse, error) {
+	total := uint64(len(allocations))
+	start := uint64(0)
+	limit := uint64(len(allocations))
+	if pageReq != nil {
+		start = pageReq.Offset
+		if pageReq.Limit > 0 {
+			limit = pageReq.Limit
+		}
+	}
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+
+	result := make([]marketplacev1.Allocation, 0, end-start)
+	for _, allocation := range allocations[start:end] {
+		result = append(result, allocationToProto(allocation))
+	}
+
+	resp := &marketplacev1.QueryAllocationsResponse{
+		Allocations: result,
+		Pagination: &query.PageResponse{
+			Total: total,
+		},
+	}
+	return resp, nil
 }

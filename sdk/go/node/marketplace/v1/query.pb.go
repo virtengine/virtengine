@@ -6,6 +6,7 @@ package v1
 import (
 	context "context"
 	fmt "fmt"
+	query "github.com/cosmos/cosmos-sdk/types/query"
 	types "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	grpc1 "github.com/cosmos/gogoproto/grpc"
@@ -17,6 +18,7 @@ import (
 	io "io"
 	math "math"
 	math_bits "math/bits"
+	time "time"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -140,10 +142,313 @@ func (m *QueryOfferingPriceResponse) GetTotal() types.Coin {
 	return types.Coin{}
 }
 
+// AllocationState represents the lifecycle state of an allocation.
+type AllocationState int32
+
+const (
+	AllocationState_ALLOCATION_STATE_UNSPECIFIED  AllocationState = 0
+	AllocationState_ALLOCATION_STATE_PENDING      AllocationState = 1
+	AllocationState_ALLOCATION_STATE_ACCEPTED     AllocationState = 2
+	AllocationState_ALLOCATION_STATE_PROVISIONING AllocationState = 3
+	AllocationState_ALLOCATION_STATE_ACTIVE       AllocationState = 4
+	AllocationState_ALLOCATION_STATE_SUSPENDED    AllocationState = 5
+	AllocationState_ALLOCATION_STATE_TERMINATING  AllocationState = 6
+	AllocationState_ALLOCATION_STATE_TERMINATED   AllocationState = 7
+	AllocationState_ALLOCATION_STATE_REJECTED     AllocationState = 8
+	AllocationState_ALLOCATION_STATE_FAILED       AllocationState = 9
+)
+
+var AllocationState_name = map[int32]string{
+	0: "ALLOCATION_STATE_UNSPECIFIED",
+	1: "ALLOCATION_STATE_PENDING",
+	2: "ALLOCATION_STATE_ACCEPTED",
+	3: "ALLOCATION_STATE_PROVISIONING",
+	4: "ALLOCATION_STATE_ACTIVE",
+	5: "ALLOCATION_STATE_SUSPENDED",
+	6: "ALLOCATION_STATE_TERMINATING",
+	7: "ALLOCATION_STATE_TERMINATED",
+	8: "ALLOCATION_STATE_REJECTED",
+	9: "ALLOCATION_STATE_FAILED",
+}
+
+var AllocationState_value = map[string]int32{
+	"ALLOCATION_STATE_UNSPECIFIED":  0,
+	"ALLOCATION_STATE_PENDING":      1,
+	"ALLOCATION_STATE_ACCEPTED":     2,
+	"ALLOCATION_STATE_PROVISIONING": 3,
+	"ALLOCATION_STATE_ACTIVE":       4,
+	"ALLOCATION_STATE_SUSPENDED":    5,
+	"ALLOCATION_STATE_TERMINATING":  6,
+	"ALLOCATION_STATE_TERMINATED":   7,
+	"ALLOCATION_STATE_REJECTED":     8,
+	"ALLOCATION_STATE_FAILED":       9,
+}
+
+func (x AllocationState) String() string {
+	return proto.EnumName(AllocationState_name, int32(x))
+}
+
+func (AllocationState) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_707c8d318eaebd6f, []int{0}
+}
+
+// Allocation represents a marketplace allocation summary.
+type Allocation struct {
+	AllocationId   string          `protobuf:"bytes,1,opt,name=allocation_id,json=allocationId,proto3" json:"allocation_id" yaml:"allocation_id"`
+	OrderId        string          `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id" yaml:"order_id"`
+	OfferingId     string          `protobuf:"bytes,3,opt,name=offering_id,json=offeringId,proto3" json:"offering_id" yaml:"offering_id"`
+	ProviderAddress string         `protobuf:"bytes,4,opt,name=provider_address,json=providerAddress,proto3" json:"provider_address" yaml:"provider_address"`
+	CustomerAddress string         `protobuf:"bytes,5,opt,name=customer_address,json=customerAddress,proto3" json:"customer_address" yaml:"customer_address"`
+	State          AllocationState `protobuf:"varint,6,opt,name=state,proto3,enum=virtengine.marketplace.v1.AllocationState" json:"state" yaml:"state"`
+	AcceptedPrice  uint64          `protobuf:"varint,7,opt,name=accepted_price,json=acceptedPrice,proto3" json:"accepted_price" yaml:"accepted_price"`
+	CreatedAt      time.Time       `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3,stdtime" json:"created_at" yaml:"created_at"`
+	UpdatedAt      time.Time       `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3,stdtime" json:"updated_at" yaml:"updated_at"`
+	TerminatedAt   *time.Time      `protobuf:"bytes,10,opt,name=terminated_at,json=terminatedAt,proto3,stdtime" json:"terminated_at,omitempty" yaml:"terminated_at"`
+	StateReason    string          `protobuf:"bytes,11,opt,name=state_reason,json=stateReason,proto3" json:"state_reason,omitempty" yaml:"state_reason"`
+}
+
+func (m *Allocation) Reset()         { *m = Allocation{} }
+func (m *Allocation) String() string { return proto.CompactTextString(m) }
+func (*Allocation) ProtoMessage()    {}
+func (*Allocation) Descriptor() ([]byte, []int) {
+	return fileDescriptor_707c8d318eaebd6f, []int{1}
+}
+func (m *Allocation) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *Allocation) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *Allocation) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *Allocation) XXX_Size() int {
+	return m.Size()
+}
+func (m *Allocation) XXX_DiscardUnknown() {
+	xxx_messageInfo_Allocation.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Allocation proto.InternalMessageInfo
+
+func (m *Allocation) GetAllocationId() string {
+	if m != nil {
+		return m.AllocationId
+	}
+	return ""
+}
+
+func (m *Allocation) GetOrderId() string {
+	if m != nil {
+		return m.OrderId
+	}
+	return ""
+}
+
+func (m *Allocation) GetOfferingId() string {
+	if m != nil {
+		return m.OfferingId
+	}
+	return ""
+}
+
+func (m *Allocation) GetProviderAddress() string {
+	if m != nil {
+		return m.ProviderAddress
+	}
+	return ""
+}
+
+func (m *Allocation) GetCustomerAddress() string {
+	if m != nil {
+		return m.CustomerAddress
+	}
+	return ""
+}
+
+func (m *Allocation) GetState() AllocationState {
+	if m != nil {
+		return m.State
+	}
+	return AllocationState_ALLOCATION_STATE_UNSPECIFIED
+}
+
+func (m *Allocation) GetAcceptedPrice() uint64 {
+	if m != nil {
+		return m.AcceptedPrice
+	}
+	return 0
+}
+
+func (m *Allocation) GetCreatedAt() time.Time {
+	if m != nil {
+		return m.CreatedAt
+	}
+	return time.Time{}
+}
+
+func (m *Allocation) GetUpdatedAt() time.Time {
+	if m != nil {
+		return m.UpdatedAt
+	}
+	return time.Time{}
+}
+
+func (m *Allocation) GetTerminatedAt() *time.Time {
+	if m != nil {
+		return m.TerminatedAt
+	}
+	return nil
+}
+
+func (m *Allocation) GetStateReason() string {
+	if m != nil {
+		return m.StateReason
+	}
+	return ""
+}
+
+// QueryAllocationsByCustomerRequest is the request for allocations by customer.
+type QueryAllocationsByCustomerRequest struct {
+	CustomerAddress string           `protobuf:"bytes,1,opt,name=customer_address,json=customerAddress,proto3" json:"customer_address" yaml:"customer_address"`
+	Pagination      *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QueryAllocationsByCustomerRequest) Reset()         { *m = QueryAllocationsByCustomerRequest{} }
+func (m *QueryAllocationsByCustomerRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryAllocationsByCustomerRequest) ProtoMessage()    {}
+func (*QueryAllocationsByCustomerRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_707c8d318eaebd6f, []int{2}
+}
+func (m *QueryAllocationsByCustomerRequest) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *QueryAllocationsByCustomerRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *QueryAllocationsByCustomerRequest) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *QueryAllocationsByCustomerRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryAllocationsByCustomerRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryAllocationsByCustomerRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryAllocationsByCustomerRequest proto.InternalMessageInfo
+
+func (m *QueryAllocationsByCustomerRequest) GetCustomerAddress() string {
+	if m != nil {
+		return m.CustomerAddress
+	}
+	return ""
+}
+
+func (m *QueryAllocationsByCustomerRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+// QueryAllocationsByProviderRequest is the request for allocations by provider.
+type QueryAllocationsByProviderRequest struct {
+	ProviderAddress string           `protobuf:"bytes,1,opt,name=provider_address,json=providerAddress,proto3" json:"provider_address" yaml:"provider_address"`
+	Pagination      *query.PageRequest `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QueryAllocationsByProviderRequest) Reset()         { *m = QueryAllocationsByProviderRequest{} }
+func (m *QueryAllocationsByProviderRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryAllocationsByProviderRequest) ProtoMessage()    {}
+func (*QueryAllocationsByProviderRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_707c8d318eaebd6f, []int{3}
+}
+func (m *QueryAllocationsByProviderRequest) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *QueryAllocationsByProviderRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *QueryAllocationsByProviderRequest) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *QueryAllocationsByProviderRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryAllocationsByProviderRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryAllocationsByProviderRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryAllocationsByProviderRequest proto.InternalMessageInfo
+
+func (m *QueryAllocationsByProviderRequest) GetProviderAddress() string {
+	if m != nil {
+		return m.ProviderAddress
+	}
+	return ""
+}
+
+func (m *QueryAllocationsByProviderRequest) GetPagination() *query.PageRequest {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
+// QueryAllocationsResponse is the response for allocations queries.
+type QueryAllocationsResponse struct {
+	Allocations []Allocation        `protobuf:"bytes,1,rep,name=allocations,proto3" json:"allocations" yaml:"allocations"`
+	Pagination  *query.PageResponse `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty" yaml:"pagination"`
+}
+
+func (m *QueryAllocationsResponse) Reset()         { *m = QueryAllocationsResponse{} }
+func (m *QueryAllocationsResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryAllocationsResponse) ProtoMessage()    {}
+func (*QueryAllocationsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_707c8d318eaebd6f, []int{4}
+}
+func (m *QueryAllocationsResponse) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *QueryAllocationsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *QueryAllocationsResponse) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *QueryAllocationsResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryAllocationsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryAllocationsResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryAllocationsResponse proto.InternalMessageInfo
+
+func (m *QueryAllocationsResponse) GetAllocations() []Allocation {
+	if m != nil {
+		return m.Allocations
+	}
+	return nil
+}
+
+func (m *QueryAllocationsResponse) GetPagination() *query.PageResponse {
+	if m != nil {
+		return m.Pagination
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*QueryOfferingPriceRequest)(nil), "virtengine.marketplace.v1.QueryOfferingPriceRequest")
 	proto.RegisterMapType((map[string]uint64)(nil), "virtengine.marketplace.v1.QueryOfferingPriceRequest.ResourceUnitsEntry")
 	proto.RegisterType((*QueryOfferingPriceResponse)(nil), "virtengine.marketplace.v1.QueryOfferingPriceResponse")
+	proto.RegisterEnum("virtengine.marketplace.v1.AllocationState", AllocationState_name, AllocationState_value)
+	proto.RegisterType((*Allocation)(nil), "virtengine.marketplace.v1.Allocation")
+	proto.RegisterType((*QueryAllocationsByCustomerRequest)(nil), "virtengine.marketplace.v1.QueryAllocationsByCustomerRequest")
+	proto.RegisterType((*QueryAllocationsByProviderRequest)(nil), "virtengine.marketplace.v1.QueryAllocationsByProviderRequest")
+	proto.RegisterType((*QueryAllocationsResponse)(nil), "virtengine.marketplace.v1.QueryAllocationsResponse")
 }
 
 func init() {
@@ -196,6 +501,10 @@ const _ = grpc.SupportPackageIsVersion4
 type QueryClient interface {
 	// OfferingPrice calculates pricing for a specific offering.
 	OfferingPrice(ctx context.Context, in *QueryOfferingPriceRequest, opts ...grpc.CallOption) (*QueryOfferingPriceResponse, error)
+	// AllocationsByCustomer returns allocations for a customer.
+	AllocationsByCustomer(ctx context.Context, in *QueryAllocationsByCustomerRequest, opts ...grpc.CallOption) (*QueryAllocationsResponse, error)
+	// AllocationsByProvider returns allocations for a provider.
+	AllocationsByProvider(ctx context.Context, in *QueryAllocationsByProviderRequest, opts ...grpc.CallOption) (*QueryAllocationsResponse, error)
 }
 
 type queryClient struct {
@@ -215,10 +524,32 @@ func (c *queryClient) OfferingPrice(ctx context.Context, in *QueryOfferingPriceR
 	return out, nil
 }
 
+func (c *queryClient) AllocationsByCustomer(ctx context.Context, in *QueryAllocationsByCustomerRequest, opts ...grpc.CallOption) (*QueryAllocationsResponse, error) {
+	out := new(QueryAllocationsResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.marketplace.v1.Query/AllocationsByCustomer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryClient) AllocationsByProvider(ctx context.Context, in *QueryAllocationsByProviderRequest, opts ...grpc.CallOption) (*QueryAllocationsResponse, error) {
+	out := new(QueryAllocationsResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.marketplace.v1.Query/AllocationsByProvider", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 type QueryServer interface {
 	// OfferingPrice calculates pricing for a specific offering.
 	OfferingPrice(context.Context, *QueryOfferingPriceRequest) (*QueryOfferingPriceResponse, error)
+	// AllocationsByCustomer returns allocations for a customer.
+	AllocationsByCustomer(context.Context, *QueryAllocationsByCustomerRequest) (*QueryAllocationsResponse, error)
+	// AllocationsByProvider returns allocations for a provider.
+	AllocationsByProvider(context.Context, *QueryAllocationsByProviderRequest) (*QueryAllocationsResponse, error)
 }
 
 // UnimplementedQueryServer can be embedded to have forward compatible implementations.
@@ -227,6 +558,12 @@ type UnimplementedQueryServer struct {
 
 func (*UnimplementedQueryServer) OfferingPrice(ctx context.Context, req *QueryOfferingPriceRequest) (*QueryOfferingPriceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OfferingPrice not implemented")
+}
+func (*UnimplementedQueryServer) AllocationsByCustomer(ctx context.Context, req *QueryAllocationsByCustomerRequest) (*QueryAllocationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AllocationsByCustomer not implemented")
+}
+func (*UnimplementedQueryServer) AllocationsByProvider(ctx context.Context, req *QueryAllocationsByProviderRequest) (*QueryAllocationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AllocationsByProvider not implemented")
 }
 
 func RegisterQueryServer(s grpc1.Server, srv QueryServer) {
@@ -251,6 +588,42 @@ func _Query_OfferingPrice_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_AllocationsByCustomer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllocationsByCustomerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).AllocationsByCustomer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.marketplace.v1.Query/AllocationsByCustomer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).AllocationsByCustomer(ctx, req.(*QueryAllocationsByCustomerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Query_AllocationsByProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryAllocationsByProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).AllocationsByProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.marketplace.v1.Query/AllocationsByProvider",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).AllocationsByProvider(ctx, req.(*QueryAllocationsByProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var Query_serviceDesc = _Query_serviceDesc
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "virtengine.marketplace.v1.Query",
@@ -259,6 +632,14 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OfferingPrice",
 			Handler:    _Query_OfferingPrice_Handler,
+		},
+		{
+			MethodName: "AllocationsByCustomer",
+			Handler:    _Query_AllocationsByCustomer_Handler,
+		},
+		{
+			MethodName: "AllocationsByProvider",
+			Handler:    _Query_AllocationsByProvider_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -698,6 +1079,146 @@ func (m *QueryOfferingPriceResponse) Unmarshal(dAtA []byte) error {
 		return io.ErrUnexpectedEOF
 	}
 	return nil
+}
+
+func (m *Allocation) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *Allocation) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *Allocation) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *Allocation) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *Allocation) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
+}
+
+func (m *QueryAllocationsByCustomerRequest) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *QueryAllocationsByCustomerRequest) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *QueryAllocationsByCustomerRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *QueryAllocationsByCustomerRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *QueryAllocationsByCustomerRequest) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
+}
+
+func (m *QueryAllocationsByProviderRequest) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *QueryAllocationsByProviderRequest) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *QueryAllocationsByProviderRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *QueryAllocationsByProviderRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *QueryAllocationsByProviderRequest) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
+}
+
+func (m *QueryAllocationsResponse) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *QueryAllocationsResponse) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *QueryAllocationsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *QueryAllocationsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *QueryAllocationsResponse) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
 }
 func skipQuery(dAtA []byte) (n int, err error) {
 	l := len(dAtA)

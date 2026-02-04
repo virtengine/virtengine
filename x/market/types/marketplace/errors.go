@@ -129,6 +129,9 @@ var (
 
 	// ErrPricingInvalid indicates pricing validation failed
 	ErrPricingInvalid = errors.Register("marketplace", 2239, "pricing validation failed")
+
+	// ErrInvalidRequest indicates the request is invalid
+	ErrInvalidRequest = errors.Register("marketplace", 2240, "invalid request")
 )
 
 // WrapIdentityGatingError wraps an identity gating error with context

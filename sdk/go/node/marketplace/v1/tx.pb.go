@@ -521,6 +521,218 @@ func (m *MsgTerminateAllocationResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_MsgTerminateAllocationResponse proto.InternalMessageInfo
 
+// MsgResizeAllocation resizes an allocation
+type MsgResizeAllocation struct {
+	Customer      string         `protobuf:"bytes,1,opt,name=customer,proto3" json:"customer" yaml:"customer"`
+	AllocationId  string         `protobuf:"bytes,2,opt,name=allocation_id,json=allocationId,proto3" json:"allocation_id" yaml:"allocation_id"`
+	ResourceUnits []ResourceUnit `protobuf:"bytes,3,rep,name=resource_units,json=resourceUnits,proto3" json:"resource_units,omitempty" yaml:"resource_units"`
+	Reason        string         `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty" yaml:"reason"`
+}
+
+func (m *MsgResizeAllocation) Reset()         { *m = MsgResizeAllocation{} }
+func (m *MsgResizeAllocation) String() string { return proto.CompactTextString(m) }
+func (*MsgResizeAllocation) ProtoMessage()    {}
+func (*MsgResizeAllocation) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ee7ea37f7e534c, []int{10}
+}
+func (m *MsgResizeAllocation) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *MsgResizeAllocation) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *MsgResizeAllocation) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *MsgResizeAllocation) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgResizeAllocation) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgResizeAllocation.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgResizeAllocation proto.InternalMessageInfo
+
+func (m *MsgResizeAllocation) GetCustomer() string {
+	if m != nil {
+		return m.Customer
+	}
+	return ""
+}
+
+func (m *MsgResizeAllocation) GetAllocationId() string {
+	if m != nil {
+		return m.AllocationId
+	}
+	return ""
+}
+
+func (m *MsgResizeAllocation) GetResourceUnits() []ResourceUnit {
+	if m != nil {
+		return m.ResourceUnits
+	}
+	return nil
+}
+
+func (m *MsgResizeAllocation) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
+// MsgResizeAllocationResponse is the response for MsgResizeAllocation
+type MsgResizeAllocationResponse struct {
+}
+
+func (m *MsgResizeAllocationResponse) Reset()         { *m = MsgResizeAllocationResponse{} }
+func (m *MsgResizeAllocationResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgResizeAllocationResponse) ProtoMessage()    {}
+func (*MsgResizeAllocationResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ee7ea37f7e534c, []int{11}
+}
+func (m *MsgResizeAllocationResponse) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *MsgResizeAllocationResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *MsgResizeAllocationResponse) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *MsgResizeAllocationResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgResizeAllocationResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgResizeAllocationResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgResizeAllocationResponse proto.InternalMessageInfo
+
+// MsgPauseAllocation pauses an allocation
+type MsgPauseAllocation struct {
+	Customer     string `protobuf:"bytes,1,opt,name=customer,proto3" json:"customer" yaml:"customer"`
+	AllocationId string `protobuf:"bytes,2,opt,name=allocation_id,json=allocationId,proto3" json:"allocation_id" yaml:"allocation_id"`
+	Reason       string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty" yaml:"reason"`
+}
+
+func (m *MsgPauseAllocation) Reset()         { *m = MsgPauseAllocation{} }
+func (m *MsgPauseAllocation) String() string { return proto.CompactTextString(m) }
+func (*MsgPauseAllocation) ProtoMessage()    {}
+func (*MsgPauseAllocation) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ee7ea37f7e534c, []int{12}
+}
+func (m *MsgPauseAllocation) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *MsgPauseAllocation) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *MsgPauseAllocation) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *MsgPauseAllocation) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgPauseAllocation) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgPauseAllocation.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgPauseAllocation proto.InternalMessageInfo
+
+func (m *MsgPauseAllocation) GetCustomer() string {
+	if m != nil {
+		return m.Customer
+	}
+	return ""
+}
+
+func (m *MsgPauseAllocation) GetAllocationId() string {
+	if m != nil {
+		return m.AllocationId
+	}
+	return ""
+}
+
+func (m *MsgPauseAllocation) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
+// MsgPauseAllocationResponse is the response for MsgPauseAllocation
+type MsgPauseAllocationResponse struct {
+}
+
+func (m *MsgPauseAllocationResponse) Reset()         { *m = MsgPauseAllocationResponse{} }
+func (m *MsgPauseAllocationResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgPauseAllocationResponse) ProtoMessage()    {}
+func (*MsgPauseAllocationResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ee7ea37f7e534c, []int{13}
+}
+func (m *MsgPauseAllocationResponse) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *MsgPauseAllocationResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *MsgPauseAllocationResponse) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *MsgPauseAllocationResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgPauseAllocationResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgPauseAllocationResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgPauseAllocationResponse proto.InternalMessageInfo
+
+// ResourceUnit represents a resource type and its unit quantity for resizing
+type ResourceUnit struct {
+	ResourceType string `protobuf:"bytes,1,opt,name=resource_type,json=resourceType,proto3" json:"resource_type" yaml:"resource_type"`
+	Units        uint64 `protobuf:"varint,2,opt,name=units,proto3" json:"units" yaml:"units"`
+}
+
+func (m *ResourceUnit) Reset()         { *m = ResourceUnit{} }
+func (m *ResourceUnit) String() string { return proto.CompactTextString(m) }
+func (*ResourceUnit) ProtoMessage()    {}
+func (*ResourceUnit) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ee7ea37f7e534c, []int{14}
+}
+func (m *ResourceUnit) XXX_Unmarshal(b []byte) error {
+	return proto.Unmarshal(b, m)
+}
+func (m *ResourceUnit) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return proto.Marshal(m)
+}
+func (m *ResourceUnit) XXX_Merge(src proto.Message) {
+	proto.Merge(m, src)
+}
+func (m *ResourceUnit) XXX_Size() int {
+	return m.Size()
+}
+func (m *ResourceUnit) XXX_DiscardUnknown() {
+	xxx_messageInfo_ResourceUnit.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ResourceUnit proto.InternalMessageInfo
+
+func (m *ResourceUnit) GetResourceType() string {
+	if m != nil {
+		return m.ResourceType
+	}
+	return ""
+}
+
+func (m *ResourceUnit) GetUnits() uint64 {
+	if m != nil {
+		return m.Units
+	}
+	return 0
+}
+
 // MsgWaldurCallback handles callbacks from Waldur integration
 type MsgWaldurCallback struct {
 	Sender       string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
@@ -535,7 +747,7 @@ func (m *MsgWaldurCallback) Reset()         { *m = MsgWaldurCallback{} }
 func (m *MsgWaldurCallback) String() string { return proto.CompactTextString(m) }
 func (*MsgWaldurCallback) ProtoMessage()    {}
 func (*MsgWaldurCallback) Descriptor() ([]byte, []int) {
-	return fileDescriptor_56ee7ea37f7e534c, []int{10}
+	return fileDescriptor_56ee7ea37f7e534c, []int{15}
 }
 func (m *MsgWaldurCallback) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -614,7 +826,7 @@ func (m *MsgWaldurCallbackResponse) Reset()         { *m = MsgWaldurCallbackResp
 func (m *MsgWaldurCallbackResponse) String() string { return proto.CompactTextString(m) }
 func (*MsgWaldurCallbackResponse) ProtoMessage()    {}
 func (*MsgWaldurCallbackResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_56ee7ea37f7e534c, []int{11}
+	return fileDescriptor_56ee7ea37f7e534c, []int{16}
 }
 func (m *MsgWaldurCallbackResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -654,6 +866,11 @@ func init() {
 	proto.RegisterType((*MsgAcceptBidResponse)(nil), "virtengine.marketplace.v1.MsgAcceptBidResponse")
 	proto.RegisterType((*MsgTerminateAllocation)(nil), "virtengine.marketplace.v1.MsgTerminateAllocation")
 	proto.RegisterType((*MsgTerminateAllocationResponse)(nil), "virtengine.marketplace.v1.MsgTerminateAllocationResponse")
+	proto.RegisterType((*MsgResizeAllocation)(nil), "virtengine.marketplace.v1.MsgResizeAllocation")
+	proto.RegisterType((*MsgResizeAllocationResponse)(nil), "virtengine.marketplace.v1.MsgResizeAllocationResponse")
+	proto.RegisterType((*MsgPauseAllocation)(nil), "virtengine.marketplace.v1.MsgPauseAllocation")
+	proto.RegisterType((*MsgPauseAllocationResponse)(nil), "virtengine.marketplace.v1.MsgPauseAllocationResponse")
+	proto.RegisterType((*ResourceUnit)(nil), "virtengine.marketplace.v1.ResourceUnit")
 	proto.RegisterType((*MsgWaldurCallback)(nil), "virtengine.marketplace.v1.MsgWaldurCallback")
 	proto.RegisterType((*MsgWaldurCallbackResponse)(nil), "virtengine.marketplace.v1.MsgWaldurCallbackResponse")
 }
@@ -747,6 +964,10 @@ type MsgClient interface {
 	AcceptBid(ctx context.Context, in *MsgAcceptBid, opts ...grpc.CallOption) (*MsgAcceptBidResponse, error)
 	// TerminateAllocation terminates an allocation
 	TerminateAllocation(ctx context.Context, in *MsgTerminateAllocation, opts ...grpc.CallOption) (*MsgTerminateAllocationResponse, error)
+	// ResizeAllocation resizes an existing allocation
+	ResizeAllocation(ctx context.Context, in *MsgResizeAllocation, opts ...grpc.CallOption) (*MsgResizeAllocationResponse, error)
+	// PauseAllocation pauses an active allocation
+	PauseAllocation(ctx context.Context, in *MsgPauseAllocation, opts ...grpc.CallOption) (*MsgPauseAllocationResponse, error)
 	// WaldurCallback handles callbacks from Waldur integration
 	WaldurCallback(ctx context.Context, in *MsgWaldurCallback, opts ...grpc.CallOption) (*MsgWaldurCallbackResponse, error)
 }
@@ -804,6 +1025,24 @@ func (c *msgClient) TerminateAllocation(ctx context.Context, in *MsgTerminateAll
 	return out, nil
 }
 
+func (c *msgClient) ResizeAllocation(ctx context.Context, in *MsgResizeAllocation, opts ...grpc.CallOption) (*MsgResizeAllocationResponse, error) {
+	out := new(MsgResizeAllocationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.marketplace.v1.Msg/ResizeAllocation", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) PauseAllocation(ctx context.Context, in *MsgPauseAllocation, opts ...grpc.CallOption) (*MsgPauseAllocationResponse, error) {
+	out := new(MsgPauseAllocationResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.marketplace.v1.Msg/PauseAllocation", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *msgClient) WaldurCallback(ctx context.Context, in *MsgWaldurCallback, opts ...grpc.CallOption) (*MsgWaldurCallbackResponse, error) {
 	out := new(MsgWaldurCallbackResponse)
 	err := c.cc.Invoke(ctx, "/virtengine.marketplace.v1.Msg/WaldurCallback", in, out, opts...)
@@ -825,6 +1064,10 @@ type MsgServer interface {
 	AcceptBid(context.Context, *MsgAcceptBid) (*MsgAcceptBidResponse, error)
 	// TerminateAllocation terminates an allocation
 	TerminateAllocation(context.Context, *MsgTerminateAllocation) (*MsgTerminateAllocationResponse, error)
+	// ResizeAllocation resizes an existing allocation
+	ResizeAllocation(context.Context, *MsgResizeAllocation) (*MsgResizeAllocationResponse, error)
+	// PauseAllocation pauses an active allocation
+	PauseAllocation(context.Context, *MsgPauseAllocation) (*MsgPauseAllocationResponse, error)
 	// WaldurCallback handles callbacks from Waldur integration
 	WaldurCallback(context.Context, *MsgWaldurCallback) (*MsgWaldurCallbackResponse, error)
 }
@@ -847,6 +1090,12 @@ func (*UnimplementedMsgServer) AcceptBid(ctx context.Context, req *MsgAcceptBid)
 }
 func (*UnimplementedMsgServer) TerminateAllocation(ctx context.Context, req *MsgTerminateAllocation) (*MsgTerminateAllocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TerminateAllocation not implemented")
+}
+func (*UnimplementedMsgServer) ResizeAllocation(ctx context.Context, req *MsgResizeAllocation) (*MsgResizeAllocationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResizeAllocation not implemented")
+}
+func (*UnimplementedMsgServer) PauseAllocation(ctx context.Context, req *MsgPauseAllocation) (*MsgPauseAllocationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PauseAllocation not implemented")
 }
 func (*UnimplementedMsgServer) WaldurCallback(ctx context.Context, req *MsgWaldurCallback) (*MsgWaldurCallbackResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WaldurCallback not implemented")
@@ -946,6 +1195,42 @@ func _Msg_TerminateAllocation_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_ResizeAllocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgResizeAllocation)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).ResizeAllocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.marketplace.v1.Msg/ResizeAllocation",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).ResizeAllocation(ctx, req.(*MsgResizeAllocation))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_PauseAllocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgPauseAllocation)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).PauseAllocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/virtengine.marketplace.v1.Msg/PauseAllocation",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).PauseAllocation(ctx, req.(*MsgPauseAllocation))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Msg_WaldurCallback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MsgWaldurCallback)
 	if err := dec(in); err != nil {
@@ -988,6 +1273,14 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TerminateAllocation",
 			Handler:    _Msg_TerminateAllocation_Handler,
+		},
+		{
+			MethodName: "ResizeAllocation",
+			Handler:    _Msg_ResizeAllocation_Handler,
+		},
+		{
+			MethodName: "PauseAllocation",
+			Handler:    _Msg_PauseAllocation_Handler,
 		},
 		{
 			MethodName: "WaldurCallback",
@@ -2627,6 +2920,181 @@ func (m *MsgTerminateAllocationResponse) Unmarshal(dAtA []byte) error {
 		return io.ErrUnexpectedEOF
 	}
 	return nil
+}
+
+func (m *MsgResizeAllocation) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *MsgResizeAllocation) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *MsgResizeAllocation) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *MsgResizeAllocation) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *MsgResizeAllocation) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
+}
+
+func (m *MsgResizeAllocationResponse) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *MsgResizeAllocationResponse) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *MsgResizeAllocationResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *MsgResizeAllocationResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *MsgResizeAllocationResponse) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
+}
+
+func (m *MsgPauseAllocation) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *MsgPauseAllocation) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *MsgPauseAllocation) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *MsgPauseAllocation) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *MsgPauseAllocation) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
+}
+
+func (m *MsgPauseAllocationResponse) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *MsgPauseAllocationResponse) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *MsgPauseAllocationResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *MsgPauseAllocationResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *MsgPauseAllocationResponse) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
+}
+
+func (m *ResourceUnit) Marshal() (dAtA []byte, err error) {
+	return proto.Marshal(m)
+}
+
+func (m *ResourceUnit) MarshalTo(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	return copy(dAtA, b), nil
+}
+
+func (m *ResourceUnit) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	b, err := m.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	i := len(dAtA) - len(b)
+	if i < 0 {
+		return 0, io.ErrShortBuffer
+	}
+	return copy(dAtA[i:], b), nil
+}
+
+func (m *ResourceUnit) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	return proto.Size(m)
+}
+
+func (m *ResourceUnit) Unmarshal(dAtA []byte) error {
+	return proto.Unmarshal(dAtA, m)
 }
 func (m *MsgWaldurCallback) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
