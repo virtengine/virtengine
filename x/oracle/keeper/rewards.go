@@ -15,11 +15,11 @@ import (
 
 // Reward store key prefixes
 var (
-	RewardPoolPrefix       = []byte{0x10}
-	OracleRewardPrefix     = []byte{0x11}
-	EpochRewardPrefix      = []byte{0x12}
-	LastRewardEpochKey     = []byte{0x13}
-	OraclePerformanceKey   = []byte{0x14}
+	RewardPoolPrefix     = []byte{0x10}
+	OracleRewardPrefix   = []byte{0x11}
+	EpochRewardPrefix    = []byte{0x12}
+	LastRewardEpochKey   = []byte{0x13}
+	OraclePerformanceKey = []byte{0x14}
 )
 
 // RewardPoolKey returns the key for the reward pool.
@@ -52,17 +52,17 @@ type OraclePerformance struct {
 
 // OracleRewardRecord tracks accumulated rewards for an oracle.
 type OracleRewardRecord struct {
-	Address          string    `json:"address"`
+	Address            string    `json:"address"`
 	AccumulatedRewards sdk.Coins `json:"accumulated_rewards"`
-	LastClaimHeight  int64     `json:"last_claim_height"`
+	LastClaimHeight    int64     `json:"last_claim_height"`
 }
 
 // EpochRewardInfo stores information about rewards for an epoch.
 type EpochRewardInfo struct {
-	Epoch           uint64    `json:"epoch"`
-	TotalRewards    sdk.Coins `json:"total_rewards"`
-	DistributedAt   int64     `json:"distributed_at"`
-	NumOracles      uint32    `json:"num_oracles"`
+	Epoch         uint64    `json:"epoch"`
+	TotalRewards  sdk.Coins `json:"total_rewards"`
+	DistributedAt int64     `json:"distributed_at"`
+	NumOracles    uint32    `json:"num_oracles"`
 }
 
 // DistributeRewards distributes rewards to oracle operators for a given epoch.

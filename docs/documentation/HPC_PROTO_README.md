@@ -1,49 +1,49 @@
 # HPC Proto Generation Setup
 
-This directory contains HPC protobuf definition files ready to be moved to their correct location.
+Helper scripts and temporary HPC protobuf definition files live under `scripts/hpc`.
 
 ## Quick Start
 
 ### Windows (Command Prompt)
 ```cmd
-setup_hpc_proto.bat
+scripts\hpc\setup_hpc_proto.bat
 ```
 
 ### Unix/Linux/macOS/WSL2
 ```bash
-chmod +x setup_hpc_proto.sh
-./setup_hpc_proto.sh
+chmod +x scripts/hpc/setup_hpc_proto.sh
+./scripts/hpc/setup_hpc_proto.sh
 ```
 
 ### With Auto-Generation (Unix only)
 ```bash
-./setup_hpc_proto.sh --generate
+./scripts/hpc/setup_hpc_proto.sh --generate
 ```
 
 ## Files Created
 
 | Temporary File | Target Location |
 |---------------|-----------------|
-| `hpc_types.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/types.proto` |
-| `hpc_tx.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/tx.proto` |
-| `hpc_query.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/query.proto` |
-| `hpc_genesis.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/genesis.proto` |
+| `scripts/hpc/proto/hpc_types.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/types.proto` |
+| `scripts/hpc/proto/hpc_tx.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/tx.proto` |
+| `scripts/hpc/proto/hpc_query.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/query.proto` |
+| `scripts/hpc/proto/hpc_genesis.proto.txt` | `sdk/proto/node/virtengine/hpc/v1/genesis.proto` |
 
 ## Alternative Setup Methods
 
 ### Option 1: Python
 ```bash
-python create_network_security_dirs.py
+python scripts/hpc/create_network_security_dirs.py
 ```
 
 ### Option 2: Node.js
 ```bash
-node setup_hpc_dirs.js
+node scripts/hpc/setup_hpc_dirs.js
 ```
 
 ### Option 4: Go
 ```bash
-go run create_dirs.go
+go run scripts/hpc/create_dirs.go
 ```
 
 ### Option 5: Manual
@@ -52,10 +52,10 @@ go run create_dirs.go
 mkdir -p sdk/proto/node/virtengine/hpc/v1
 
 # Copy files (rename .proto.txt to .proto)
-cp hpc_types.proto.txt sdk/proto/node/virtengine/hpc/v1/types.proto
-cp hpc_tx.proto.txt sdk/proto/node/virtengine/hpc/v1/tx.proto
-cp hpc_query.proto.txt sdk/proto/node/virtengine/hpc/v1/query.proto
-cp hpc_genesis.proto.txt sdk/proto/node/virtengine/hpc/v1/genesis.proto
+cp scripts/hpc/proto/hpc_types.proto.txt sdk/proto/node/virtengine/hpc/v1/types.proto
+cp scripts/hpc/proto/hpc_tx.proto.txt sdk/proto/node/virtengine/hpc/v1/tx.proto
+cp scripts/hpc/proto/hpc_query.proto.txt sdk/proto/node/virtengine/hpc/v1/query.proto
+cp scripts/hpc/proto/hpc_genesis.proto.txt sdk/proto/node/virtengine/hpc/v1/genesis.proto
 ```
 
 ## Generate Go Files
@@ -123,8 +123,8 @@ Defines `GenesisState` including:
 
 ## Cleanup
 
-After successful proto generation, remove the temporary files:
+After successful proto generation, remove the temporary files if you no longer need them:
 
 ```bash
-rm hpc_*.proto.txt setup_hpc_proto.bat create_dirs.go create_network_security_dirs.py setup_hpc_dirs.js HPC_PROTO_README.md
+rm scripts/hpc/proto/hpc_*.proto.txt scripts/hpc/setup_hpc_proto.* scripts/hpc/create_dirs.go scripts/hpc/create_network_security_dirs.py scripts/hpc/setup_hpc_dirs.js
 ```
