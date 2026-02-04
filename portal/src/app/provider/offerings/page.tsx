@@ -6,6 +6,15 @@ export const metadata: Metadata = {
   description: 'Manage your compute offerings',
 };
 
+const offerings = [
+  { id: 'offer-201', type: 'GPU', name: 'NVIDIA A100 80GB', active: true, leases: 3 },
+  { id: 'offer-202', type: 'CPU', name: 'AMD EPYC 7763', active: true, leases: 8 },
+  { id: 'offer-203', type: 'HPC', name: 'HPC Compute Cluster', active: false, leases: 0 },
+  { id: 'offer-204', type: 'GPU', name: 'NVIDIA H100', active: true, leases: 2 },
+  { id: 'offer-205', type: 'Storage', name: 'NVMe Storage Pool', active: true, leases: 5 },
+  { id: 'offer-206', type: 'CPU', name: 'Intel Xeon Platinum', active: false, leases: 0 },
+] as const;
+
 export default function ProviderOfferingsPage() {
   return (
     <div className="container py-8">
@@ -26,8 +35,8 @@ export default function ProviderOfferingsPage() {
 
       {/* Offerings Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <OfferingCard key={i} index={i} />
+        {offerings.map((offering) => (
+          <OfferingCard key={offering.id} offering={offering} />
         ))}
       </div>
 
@@ -35,7 +44,7 @@ export default function ProviderOfferingsPage() {
       {false && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="rounded-full bg-muted p-4">
-            <span className="text-4xl">📦</span>
+            <span className="text-4xl">??</span>
           </div>
           <h2 className="mt-4 text-lg font-medium">No offerings yet</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -53,24 +62,26 @@ export default function ProviderOfferingsPage() {
   );
 }
 
-function OfferingCard({ index }: { index: number }) {
-  const offerings = [
-    { type: 'GPU', name: 'NVIDIA A100 80GB', active: true, leases: 3 },
-    { type: 'CPU', name: 'AMD EPYC 7763', active: true, leases: 8 },
-    { type: 'HPC', name: 'HPC Compute Cluster', active: false, leases: 0 },
-    { type: 'GPU', name: 'NVIDIA H100', active: true, leases: 2 },
-    { type: 'Storage', name: 'NVMe Storage Pool', active: true, leases: 5 },
-    { type: 'CPU', name: 'Intel Xeon Platinum', active: false, leases: 0 },
-  ];
-  const offering = offerings[index % offerings.length]!;
-
+function OfferingCard({
+  offering,
+}: {
+  offering: {
+    id: string;
+    type: string;
+    name: string;
+    active: boolean;
+    leases: number;
+  };
+}) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between">
         <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
           {offering.type}
         </span>
-        <span className={`flex items-center gap-1 text-sm ${offering.active ? 'text-success' : 'text-muted-foreground'}`}>
+        <span
+          className={`flex items-center gap-1 text-sm ${offering.active ? 'text-success' : 'text-muted-foreground'}`}
+        >
           <span className={`status-dot ${offering.active ? 'status-dot-success' : ''}`} />
           {offering.active ? 'Active' : 'Inactive'}
         </span>
