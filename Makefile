@@ -71,7 +71,7 @@ GORELEASER_BUILD_VARS := \
 -X github.com/cosmos/cosmos-sdk/version.Commit=$(GIT_HEAD_COMMIT_LONG)
 
 ifeq ($(OS),Windows_NT)
-GIT_VERSION_RAW := $(shell cmd /c "git describe --tags 2>nul || echo 0.0.0")
+GIT_VERSION_RAW := $(shell git describe --tags 2>NUL || echo 0.0.0)
 GIT_VERSION := $(patsubst v%,%,$(GIT_VERSION_RAW))
 else
 GIT_VERSION := $(shell git describe --tags 2>/dev/null | sed 's/^v//' || echo "0.0.0")
