@@ -48,7 +48,7 @@ export function HPCJobSubmit({ className, templateId, onSubmitSuccess, onSubmitE
         )}
         <JobSubmissionForm
           template={selectedTemplate}
-          onSubmit={(jobId: string) => {
+          onSubmit={(jobId) => {
             try {
               onSubmitSuccess?.(jobId);
             } catch (error) {
@@ -60,4 +60,3 @@ export function HPCJobSubmit({ className, templateId, onSubmitSuccess, onSubmitE
     </Card>
   );
 }
-

@@ -56,7 +56,6 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
     timeout: 'bg-orange-500',
     failed: 'bg-red-500',
     cancelled: 'bg-gray-500',
-    timeout: 'bg-red-500',
   }[job.status] ?? 'bg-gray-500';
 
   return (

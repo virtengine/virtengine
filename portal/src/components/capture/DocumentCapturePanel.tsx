@@ -68,22 +68,6 @@ export function DocumentCapturePanel({
     passport: 'Passport',
     drivers_license: "Driver's License",
   };
-  const qualityResult = guidanceState
-    ? {
-        passed: guidanceState.currentIssues.length === 0,
-        score: guidanceState.currentIssues.length === 0 ? 100 : 60,
-        issues: guidanceState.currentIssues,
-        checks: {
-          resolution: { passed: true, value: 1, threshold: 1, description: 'Resolution' },
-          brightness: { passed: true, value: 1, threshold: 1, description: 'Brightness' },
-          blur: { passed: true, value: 1, threshold: 1, description: 'Blur' },
-          skew: { passed: true, value: 1, threshold: 1, description: 'Skew' },
-          glare: { passed: true, value: 1, threshold: 1, description: 'Glare' },
-          noise: { passed: true, value: 1, threshold: 1, description: 'Noise' },
-        },
-        analysisTimeMs: 0,
-      }
-    : null;
 
   const defaultTitle = `Capture ${documentTypeLabels[documentType]} (${documentSide === 'front' ? 'Front' : 'Back'})`;
   const defaultDescription = `Position the ${documentSide} of your ${documentTypeLabels[documentType].toLowerCase()} within the frame`;

@@ -86,11 +86,6 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
   const veidScore = 42;
   const hasShellAccess = veidScore >= minShellScore;
 
-  const containers = useMemo(() => deployment?.containers.map((container) => container.name) ?? [], [deployment]);
-  const minShellScore = 70;
-  const veidScore = 42;
-  const hasShellAccess = veidScore >= minShellScore;
-
   useEffect(() => {
     void fetchDeployment(id);
   }, [fetchDeployment, id]);
