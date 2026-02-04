@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -121,6 +122,13 @@ func readActiveFlag(cmd *cobra.Command) (bool, error) {
 		return false, nil
 	}
 	return active, nil
+}
+
+func uint64ToInt32(value uint64, label string) (int32, error) {
+	if value > math.MaxInt32 {
+		return 0, fmt.Errorf("%s exceeds int32", label)
+	}
+	return int32(value), nil
 }
 
 func readConfigFlag(cmd *cobra.Command) (string, error) {

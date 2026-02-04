@@ -205,10 +205,18 @@ $ %s tx hpc submit-from-template mpi-standard ./params.yaml --from customer
 
 			params := spec.JobParameters
 			if params.Nodes == 0 && spec.RequestedNodes > 0 {
-				params.Nodes = int32(spec.RequestedNodes)
+				nodes, err := uint64ToInt32(spec.RequestedNodes, "requested_nodes")
+				if err != nil {
+					return err
+				}
+				params.Nodes = nodes
 			}
 			if params.GPUs == 0 && spec.RequestedGpus > 0 {
-				params.GPUs = int32(spec.RequestedGpus)
+				gpus, err := uint64ToInt32(spec.RequestedGpus, "requested_gpus")
+				if err != nil {
+					return err
+				}
+				params.GPUs = gpus
 			}
 
 			generator := hpc_workload_library.NewBatchScriptGenerator(spec.BatchConfig)
