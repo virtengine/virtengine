@@ -1,51 +1,45 @@
-'use client';
-
-import * as React from 'react';
-import { useWallet } from '../../wallet';
+import { useState } from 'react';
+import { useWallet } from '../../wallet/context';
+import { WalletModal } from './WalletModal';
 
 export interface WalletButtonProps {
-  onConnect?: () => void;
-  onDisconnect?: () => void;
-  connectLabel?: string;
-  disconnectLabel?: string;
+  className?: string;
+  showAddress?: boolean;
 }
 
-export function WalletButton({
-  onConnect,
-  onDisconnect,
-  connectLabel = 'Connect Wallet',
-  disconnectLabel = 'Disconnect',
-}: WalletButtonProps) {
-  const { status, accounts, activeAccountIndex, disconnect } = useWallet();
-  const account = accounts[activeAccountIndex];
+export function WalletButton({ className, showAddress = true }: WalletButtonProps) {
+  const { state, actions } = useWallet();
+  const [isOpen, setIsOpen] = useState(false);
 
-  if (status === 'connecting') {
+  if (state.isConnecting) {
     return (
-      <button type="button" disabled className="rounded-lg bg-muted px-4 py-2 text-sm">
+      <button type="button" disabled className={className}>
         Connecting...
       </button>
     );
   }
 
-  if (status === 'connected' && account) {
+  if (state.isConnected && state.address) {
     return (
-      <button
-        type="button"
-        className="rounded-lg border border-border px-3 py-2 text-sm"
-        onClick={onDisconnect ?? disconnect}
-      >
-        {disconnectLabel}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {showAddress && (
+          <span style={{ fontFamily: 'monospace', fontSize: 13 }}>
+            {state.address.slice(0, 10)}...{state.address.slice(-4)}
+          </span>
+        )}
+        <button type="button" onClick={() => actions.disconnect()} className={className}>
+          Disconnect
+        </button>
+      </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-      onClick={onConnect}
-    >
-      {connectLabel}
-    </button>
+    <>
+      <button type="button" onClick={() => setIsOpen(true)} className={className}>
+        Connect Wallet
+      </button>
+      <WalletModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
+    </>
   );
 }

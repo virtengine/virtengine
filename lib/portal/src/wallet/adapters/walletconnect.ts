@@ -1,200 +1,182 @@
-import SignClient from '@walletconnect/sign-client';
-import { WalletConnectModal } from '@walletconnect/modal';
-import type { AminoSignDoc, AminoSignResponse, DirectSignDoc, DirectSignResponse, WalletAccount, WalletChainInfo } from '../types';
-import { BaseWalletAdapter } from './base';
+import type {
+  WalletAdapter,
+  WalletAdapterContext,
+  WalletConnection,
+  WalletAccount,
+  AminoSignDoc,
+  AminoSignResponse,
+  DirectSignDoc,
+  DirectSignResponse,
+  ArbitrarySignResponse,
+} from '../types';
+import { toBase64 } from '../utils';
 
-const COSMOS_METHODS = ['cosmos_getAccounts', 'cosmos_signAmino', 'cosmos_signDirect'];
-const COSMOS_EVENTS = ['accountsChanged', 'chainChanged'];
+type WalletConnectClient = {
+  connect: (args: any) => Promise<{ uri?: string; approval: () => Promise<any> }>;
+  request: (args: any) => Promise<any>;
+  disconnect: (args: any) => Promise<void>;
+  session?: any;
+};
 
-export class WalletConnectAdapter extends BaseWalletAdapter {
-  readonly type = 'walletconnect' as const;
-  readonly name = 'WalletConnect';
-  readonly icon = 'https://walletconnect.com/favicon.ico';
+type WalletConnectModal = {
+  openModal: (args: { uri: string; standaloneChains?: string[] }) => void;
+  closeModal: () => void;
+};
 
-  private client: SignClient | null = null;
-  private modal: WalletConnectModal | null = null;
-  private sessionTopic: string | null = null;
-  private projectId: string;
-  private metadata: { name: string; description: string; url: string; icons: string[] };
+let wcClient: WalletConnectClient | null = null;
+let wcModal: WalletConnectModal | null = null;
+let wcSession: any | null = null;
 
-  constructor(projectId: string, metadata: { name: string; description: string; url: string; icons: string[] }) {
-    super();
-    this.projectId = projectId;
-    this.metadata = metadata;
+async function initClient(config: WalletAdapterContext['walletConnect']): Promise<WalletConnectClient> {
+  if (!config) {
+    throw new Error('WalletConnect configuration is missing');
   }
+  if (wcClient) return wcClient;
 
-  isAvailable(): boolean {
-    return !!this.projectId;
-  }
+  const [{ default: SignClient }, { WalletConnectModal }] = await Promise.all([
+    import('@walletconnect/sign-client'),
+    import('@walletconnect/modal'),
+  ]);
 
-  async connect(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
-    if (!this.projectId) {
-      throw new Error('WalletConnect project ID is not configured');
-    }
+  wcClient = await SignClient.init({
+    projectId: config.projectId,
+    relayUrl: config.relayUrl,
+    metadata: config.metadata,
+  });
 
-    await this.ensureClient(chainInfo);
-    if (!this.client || !this.modal) {
-      throw new Error('WalletConnect client initialization failed');
-    }
+  wcModal = new WalletConnectModal({
+    projectId: config.projectId,
+  });
 
-    const caipChainId = this.toCaipChainId(chainInfo.chainId);
+  return wcClient;
+}
 
-    const existingSession = this.client.session.getAll().find((session) =>
-      session.namespaces?.cosmos?.chains?.includes(caipChainId)
-    );
+function parseAccounts(accounts: string[]): WalletAccount[] {
+  return accounts.map((account) => {
+    const parts = account.split(':');
+    return {
+      address: parts[2] ?? account,
+    };
+  });
+}
 
-    if (existingSession) {
-      this.sessionTopic = existingSession.topic;
-      const accounts = await this.getAccounts(chainInfo);
-      this.setAccounts(accounts);
-      return accounts;
-    }
+export function createWalletConnectAdapter(): WalletAdapter {
+  return {
+    id: 'walletconnect',
+    name: 'WalletConnect',
+    supportsExtension: false,
+    supportsMobile: true,
+    isInstalled: () => true,
+    connect: async (context: WalletAdapterContext): Promise<WalletConnection> => {
+      if (!context.walletConnect?.projectId) {
+        throw new Error('WalletConnect projectId is not configured');
+      }
 
-    const { uri, approval } = await this.client.connect({
-      requiredNamespaces: {
-        cosmos: {
-          chains: [caipChainId],
-          methods: COSMOS_METHODS,
-          events: COSMOS_EVENTS,
+      const client = await initClient(context.walletConnect);
+      const chainId = `cosmos:${context.chain.chainId}`;
+
+      const { uri, approval } = await client.connect({
+        requiredNamespaces: {
+          cosmos: {
+            methods: ['cosmos_signAmino', 'cosmos_signDirect', 'cosmos_getAccounts'],
+            chains: [chainId],
+            events: ['accountsChanged', 'chainChanged'],
+          },
         },
-      },
-    });
+      });
 
-    if (uri) {
-      await this.modal.openModal({ uri, chains: [caipChainId] });
-    }
+      if (uri && wcModal) {
+        wcModal.openModal({ uri, standaloneChains: [chainId] });
+      }
 
-    const session = await approval();
-    this.sessionTopic = session.topic;
+      const session = await approval();
+      wcSession = session;
 
-    this.modal.closeModal();
+      if (wcModal) {
+        wcModal.closeModal();
+      }
 
-    const accounts = await this.getAccounts(chainInfo);
-    this.setAccounts(accounts);
-    return accounts;
-  }
+      const namespace = session.namespaces?.cosmos;
+      const accounts = namespace?.accounts ? parseAccounts(namespace.accounts) : [];
 
-  async disconnect(): Promise<void> {
-    if (this.client && this.sessionTopic) {
-      await this.client.disconnect({
-        topic: this.sessionTopic,
+      return { accounts, activeAccount: accounts[0] };
+    },
+    disconnect: async () => {
+      if (!wcClient || !wcSession) return;
+      await wcClient.disconnect({
+        topic: wcSession.topic,
         reason: {
           code: 6000,
           message: 'User disconnected',
         },
       });
-    }
-
-    this.sessionTopic = null;
-    this.accounts = [];
-  }
-
-  async getAccounts(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
-    if (!this.client || !this.sessionTopic) {
-      throw new Error('WalletConnect is not connected');
-    }
-
-    const caipChainId = this.toCaipChainId(chainInfo.chainId);
-
-    const response = await this.client.request({
-      topic: this.sessionTopic,
-      chainId: caipChainId,
-      request: {
-        method: 'cosmos_getAccounts',
-        params: {},
-      },
-    });
-
-    if (!Array.isArray(response)) {
-      throw new Error('Invalid WalletConnect account response');
-    }
-
-    return response.map((account: any) => ({
-      address: account.address,
-      algo: account.algo ?? 'secp256k1',
-      pubKey: this.base64ToBytes(account.pubkey ?? account.pubKey ?? ''),
-    }));
-  }
-
-  async signAmino(
-    chainId: string,
-    signerAddress: string,
-    signDoc: AminoSignDoc
-  ): Promise<AminoSignResponse> {
-    if (!this.client || !this.sessionTopic) {
-      throw new Error('WalletConnect is not connected');
-    }
-
-    const response = (await this.client.request({
-      topic: this.sessionTopic,
-      chainId: this.toCaipChainId(chainId),
-      request: {
-        method: 'cosmos_signAmino',
-        params: {
-          signerAddress,
-          signDoc,
-        },
-      },
-    })) as any;
-
-    if (!response?.signature) {
-      throw new Error('Invalid WalletConnect signAmino response');
-    }
-
-    return response as AminoSignResponse;
-  }
-
-  async signDirect(
-    chainId: string,
-    signerAddress: string,
-    signDoc: DirectSignDoc
-  ): Promise<DirectSignResponse> {
-    if (!this.client || !this.sessionTopic) {
-      throw new Error('WalletConnect is not connected');
-    }
-
-    const response = (await this.client.request({
-      topic: this.sessionTopic,
-      chainId: this.toCaipChainId(chainId),
-      request: {
-        method: 'cosmos_signDirect',
-        params: {
-          signerAddress,
-          signDoc: {
-            bodyBytes: this.bytesToBase64(signDoc.bodyBytes),
-            authInfoBytes: this.bytesToBase64(signDoc.authInfoBytes),
-            chainId: signDoc.chainId,
-            accountNumber: signDoc.accountNumber,
+      wcSession = null;
+    },
+    getAccounts: async () => {
+      if (!wcSession) return [];
+      const namespace = wcSession.namespaces?.cosmos;
+      if (!namespace?.accounts) return [];
+      return parseAccounts(namespace.accounts);
+    },
+    signAmino: async (chainId: string, signer: string, signDoc: AminoSignDoc) => {
+      if (!wcClient || !wcSession) {
+        throw new Error('WalletConnect session not established');
+      }
+      const wcChainId = `cosmos:${chainId}`;
+      const response = await wcClient.request({
+        topic: wcSession.topic,
+        chainId: wcChainId,
+        request: {
+          method: 'cosmos_signAmino',
+          params: {
+            signerAddress: signer,
+            signDoc,
           },
         },
-      },
-    })) as any;
-
-    if (!response?.signature) {
-      throw new Error('Invalid WalletConnect signDirect response');
-    }
-
-    return {
-      signed: signDoc,
-      signature: response.signature,
-    } as DirectSignResponse;
-  }
-
-  private async ensureClient(chainInfo: WalletChainInfo): Promise<void> {
-    if (this.client) return;
-
-    this.client = await SignClient.init({
-      projectId: this.projectId,
-      metadata: this.metadata,
-    });
-
-    this.modal = new WalletConnectModal({
-      projectId: this.projectId,
-      chains: [this.toCaipChainId(chainInfo.chainId)],
-    });
-  }
-
-  private toCaipChainId(chainId: string): string {
-    return `cosmos:${chainId}`;
-  }
+      });
+      return response as AminoSignResponse;
+    },
+    signDirect: async (chainId: string, signer: string, signDoc: DirectSignDoc) => {
+      if (!wcClient || !wcSession) {
+        throw new Error('WalletConnect session not established');
+      }
+      const wcChainId = `cosmos:${chainId}`;
+      const response = await wcClient.request({
+        topic: wcSession.topic,
+        chainId: wcChainId,
+        request: {
+          method: 'cosmos_signDirect',
+          params: {
+            signerAddress: signer,
+            signDoc: {
+              bodyBytes: toBase64(signDoc.bodyBytes),
+              authInfoBytes: toBase64(signDoc.authInfoBytes),
+              chainId: signDoc.chainId,
+              accountNumber: signDoc.accountNumber.toString(),
+            },
+          },
+        },
+      });
+      return response as DirectSignResponse;
+    },
+    signArbitrary: async (chainId: string, signer: string, data: string | Uint8Array) => {
+      if (!wcClient || !wcSession) {
+        throw new Error('WalletConnect session not established');
+      }
+      const wcChainId = `cosmos:${chainId}`;
+      const payload = typeof data === 'string' ? data : new TextDecoder().decode(data);
+      const response = await wcClient.request({
+        topic: wcSession.topic,
+        chainId: wcChainId,
+        request: {
+          method: 'cosmos_signArbitrary',
+          params: {
+            signerAddress: signer,
+            data: payload,
+          },
+        },
+      });
+      return response as ArbitrarySignResponse;
+    },
+  };
 }

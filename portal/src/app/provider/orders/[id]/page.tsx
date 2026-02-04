@@ -63,9 +63,7 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     tickDeployment,
     isLoading,
   } = useDeploymentStore();
-  const { status, walletType, accounts, activeAccountIndex } = useWallet();
-  const isConnected = status === 'connected';
-  const activeAccount = accounts[activeAccountIndex];
+  const { state: walletState } = useWallet();
   const { open: openWalletModal } = useWalletModal();
 
   const deployment = deployments.find((item) => item.id === id);
@@ -82,6 +80,11 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     memo: string;
     createdAt: Date;
   } | null>(null);
+  const containers = useMemo(() => deployment?.containers.map((container) => container.name) ?? [], [deployment]);
+  const minShellScore = 70;
+  const veidScore = 42;
+  const hasShellAccess = veidScore >= minShellScore;
+
   const containers = useMemo(() => deployment?.containers.map((container) => container.name) ?? [], [deployment]);
   const minShellScore = 70;
   const veidScore = 42;
@@ -141,7 +144,7 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     memo: string,
     actionFn: () => void
   ) => {
-    if (!isConnected) {
+    if (!walletState.isConnected) {
       setActionError('Connect your wallet to sign this transaction.');
       openWalletModal();
       return;
@@ -211,8 +214,8 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
           <div>
             <h2 className="text-sm font-semibold">Deployment actions</h2>
             <p className="text-xs text-muted-foreground">
-              {isConnected && activeAccount
-                ? `Signing with ${walletType ?? 'wallet'} (${truncateAddress(activeAccount.address)})`
+            {walletState.isConnected
+                ? `Signing with ${walletState.walletType ?? 'wallet'} (${truncateAddress(walletState.address ?? '')})`
                 : 'Connect wallet to sign actions'}
             </p>
           </div>
