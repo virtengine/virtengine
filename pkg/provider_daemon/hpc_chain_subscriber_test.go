@@ -16,6 +16,13 @@ import (
 // Mock Implementations for Chain Subscriber Tests
 // =============================================================================
 
+const (
+	chainSubscriberTestClusterID      = "test-cluster"
+	chainSubscriberTestProviderAddr   = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
+	chainSubscriberTestCustomerAddr   = "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8"
+	chainSubscriberTestClusterEventID = "test-cluster"
+)
+
 // MockHPCChainClient implements HPCChainClient for testing
 type MockHPCChainClient struct {
 	mu               sync.Mutex
@@ -178,13 +185,13 @@ func TestNewHPCChainSubscriberWithStats_Validation(t *testing.T) {
 	}{
 		{
 			name:      "valid config",
-			clusterID: "test-cluster",
+			clusterID: chainSubscriberTestClusterID,
 			service:   jobService,
 			wantError: false,
 		},
 		{
 			name:      "nil job service",
-			clusterID: "test-cluster",
+			clusterID: chainSubscriberTestClusterID,
 			service:   nil,
 			wantError: true,
 		},
@@ -217,7 +224,7 @@ func TestHPCChainSubscriberWithStats_StartStop(t *testing.T) {
 	jobService := NewHPCJobService(hpcConfig, scheduler, reporter, auditor)
 	chainClient := NewMockHPCChainClient()
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -270,7 +277,7 @@ func TestHPCChainSubscriberWithStats_GetStats(t *testing.T) {
 	jobService := NewHPCJobService(hpcConfig, scheduler, reporter, auditor)
 	chainClient := NewMockHPCChainClient()
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -324,7 +331,7 @@ func TestHPCChainSubscriberWithStats_InjectJobEvent(t *testing.T) {
 	}
 	defer func() { _ = jobService.Stop() }()
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -378,7 +385,7 @@ func TestHPCChainSubscriberWithStats_InjectCancelEvent(t *testing.T) {
 	}
 	defer func() { _ = jobService.Stop() }()
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -443,8 +450,8 @@ func TestHPCChainSubscriberWithStats_ProviderAddressFilter(t *testing.T) {
 	// Create subscriber with provider address filter
 	sub, err := NewHPCChainSubscriberWithStats(
 		config,
-		"test-cluster",
-		"ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr", // Filter for this address only
+		chainSubscriberTestClusterID,
+		chainSubscriberTestProviderAddr, // Filter for this address only
 		chainClient,
 		jobService,
 	)
@@ -459,14 +466,14 @@ func TestHPCChainSubscriberWithStats_ProviderAddressFilter(t *testing.T) {
 
 	// Inject job with matching provider address
 	job1 := createTestJob("filter-test-1")
-	job1.ProviderAddress = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
+	job1.ProviderAddress = chainSubscriberTestProviderAddr
 	if err := sub.InjectJobEvent(job1); err != nil {
 		t.Fatalf("InjectJobEvent() error = %v", err)
 	}
 
 	// Inject job with non-matching provider address
 	job2 := createTestJob("filter-test-2")
-	job2.ProviderAddress = "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8"
+	job2.ProviderAddress = chainSubscriberTestCustomerAddr
 	if err := sub.InjectJobEvent(job2); err != nil {
 		t.Fatalf("InjectJobEvent() error = %v", err)
 	}
@@ -496,7 +503,7 @@ func TestHPCChainSubscriberWithStats_BufferFull(t *testing.T) {
 	jobService := NewHPCJobService(hpcConfig, scheduler, reporter, auditor)
 	chainClient := NewMockHPCChainClient()
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -534,7 +541,7 @@ func TestHPCChainSubscriberWithStats_IsConnected(t *testing.T) {
 	jobService := NewHPCJobService(hpcConfig, scheduler, reporter, auditor)
 	chainClient := NewMockHPCChainClient()
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -582,7 +589,7 @@ func TestHPCChainSubscriberWithStats_GetHealth(t *testing.T) {
 	jobService := NewHPCJobService(hpcConfig, scheduler, reporter, auditor)
 	chainClient := NewMockHPCChainClient()
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -634,7 +641,7 @@ func TestHPCChainSubscriberWithStats_WithChainEvents(t *testing.T) {
 	chainClient := NewMockHPCChainClient()
 	chainClient.blockOnSubscribe = true
 
-	sub, err := NewHPCChainSubscriberWithStats(config, "test-cluster", "", chainClient, jobService)
+	sub, err := NewHPCChainSubscriberWithStats(config, chainSubscriberTestClusterID, "", chainClient, jobService)
 	if err != nil {
 		t.Fatalf("NewHPCChainSubscriberWithStats() error = %v", err)
 	}
@@ -736,7 +743,7 @@ func TestHPCChainEvent_Fields(t *testing.T) {
 	event := HPCChainEvent{
 		Type:        HPCEventTypeJobCreated,
 		JobID:       "test-job-1",
-		ClusterID:   "test-cluster",
+		ClusterID:   chainSubscriberTestClusterEventID,
 		BlockHeight: 12345,
 		Timestamp:   now,
 		Job:         job,
@@ -750,8 +757,8 @@ func TestHPCChainEvent_Fields(t *testing.T) {
 		t.Errorf("JobID = %s, want 'test-job-1'", event.JobID)
 	}
 
-	if event.ClusterID != "test-cluster" {
-		t.Errorf("ClusterID = %s, want 'test-cluster'", event.ClusterID)
+	if event.ClusterID != chainSubscriberTestClusterEventID {
+		t.Errorf("ClusterID = %s, want %s", event.ClusterID, chainSubscriberTestClusterEventID)
 	}
 
 	if event.BlockHeight != 12345 {

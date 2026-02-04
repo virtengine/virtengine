@@ -19,11 +19,16 @@ import (
 // Test Helpers
 // =============================================================================
 
+const (
+	backendManagerTestProviderAddress = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
+	backendManagerTestCustomerAddress = "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8"
+)
+
 func createTestHPCConfig(schedulerType HPCSchedulerType) HPCConfig {
 	config := DefaultHPCConfig()
 	config.Enabled = true
 	config.ClusterID = "test-cluster-001"
-	config.ProviderAddress = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr"
+	config.ProviderAddress = backendManagerTestProviderAddress
 	config.SchedulerType = schedulerType
 	config.JobService.JobPollInterval = time.Second
 	config.UsageReporting.ReportInterval = time.Minute
@@ -36,7 +41,7 @@ func createTestHPCConfig(schedulerType HPCSchedulerType) HPCConfig {
 
 func TestNewHPCBackendFactory_SLURM(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := NewHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -63,7 +68,7 @@ func TestNewHPCBackendFactory_SLURM(t *testing.T) {
 
 func TestNewHPCBackendFactory_MOAB(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeMOAB)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := NewHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -90,7 +95,7 @@ func TestNewHPCBackendFactory_MOAB(t *testing.T) {
 
 func TestNewHPCBackendFactory_OOD(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeOOD)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := NewHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -118,7 +123,7 @@ func TestNewHPCBackendFactory_OOD(t *testing.T) {
 func TestNewHPCBackendFactory_DisabledConfig(t *testing.T) {
 	config := DefaultHPCConfig()
 	config.Enabled = false
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	_, err := NewHPCBackendFactory(config, nil, signer)
 	if err == nil {
@@ -138,7 +143,7 @@ func TestNewHPCBackendFactory_NilSigner(t *testing.T) {
 func TestNewHPCBackendFactory_InvalidSchedulerType(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerType("invalid"))
 	config.SchedulerType = HPCSchedulerType("invalid")
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	_, err := NewHPCBackendFactory(config, nil, signer)
 	if err == nil {
@@ -148,7 +153,7 @@ func TestNewHPCBackendFactory_InvalidSchedulerType(t *testing.T) {
 
 func TestHPCBackendFactory_StartStop(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := NewHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -195,7 +200,7 @@ func TestHPCBackendFactory_StartStop(t *testing.T) {
 
 func TestHPCBackendFactory_GetHealth(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := NewHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -237,7 +242,7 @@ func TestHPCBackendFactory_GetHealth(t *testing.T) {
 
 func TestHPCBackendFactory_RegisterLifecycleCallback(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := NewHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -276,7 +281,7 @@ func TestHPCBackendFactory_RegisterLifecycleCallback(t *testing.T) {
 
 func TestHPCBackendFactory_GetConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := NewHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -300,7 +305,7 @@ func TestHPCBackendFactory_GetConfig(t *testing.T) {
 
 func TestHPCBackendFactory_WithCredentialManager(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	// Create credential manager
 	credConfig := HPCCredentialManagerConfig{
@@ -342,7 +347,7 @@ func TestHPCBackendFactory_WithCredentialManager(t *testing.T) {
 
 func TestCreateHPCBackendFactory(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	manager, err := CreateHPCBackendFactory(config, nil, signer)
 	if err != nil {
@@ -356,7 +361,7 @@ func TestCreateHPCBackendFactory(t *testing.T) {
 
 func TestCreateSchedulerFromConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	scheduler, err := CreateSchedulerFromConfig(config, signer)
 	if err != nil {
@@ -392,7 +397,7 @@ func TestCreateSLURMSchedulerFromConfig(t *testing.T) {
 
 func TestCreateSLURMSchedulerFromConfig_WrongType(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeMOAB)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	_, err := CreateSLURMSchedulerFromConfig(config, signer)
 	if err == nil {
@@ -420,7 +425,7 @@ func TestCreateMOABSchedulerFromConfig(t *testing.T) {
 
 func TestCreateMOABSchedulerFromConfig_WrongType(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(backendManagerTestProviderAddress)
 
 	_, err := CreateMOABSchedulerFromConfig(config, signer)
 	if err == nil {
@@ -430,7 +435,7 @@ func TestCreateMOABSchedulerFromConfig_WrongType(t *testing.T) {
 
 func TestCreateOODSchedulerFromConfig(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeOOD)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(testProviderAddress)
 
 	scheduler, err := CreateOODSchedulerFromConfig(config, signer)
 	if err != nil {
@@ -448,7 +453,7 @@ func TestCreateOODSchedulerFromConfig(t *testing.T) {
 
 func TestCreateOODSchedulerFromConfig_WrongType(t *testing.T) {
 	config := createTestHPCConfig(HPCSchedulerTypeSLURM)
-	signer := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	signer := NewMockSigner(testProviderAddress)
 
 	_, err := CreateOODSchedulerFromConfig(config, signer)
 	if err == nil {
@@ -466,7 +471,7 @@ func TestHPCBackendHealth_Fields(t *testing.T) {
 		SchedulerType:    HPCSchedulerTypeSLURM,
 		Running:          true,
 		LastHealthCheck:  time.Now(),
-		Message:          "healthy",
+		Message:          statusHealthy,
 		ErrorCount:       0,
 		ActiveJobs:       5,
 		CredentialsValid: true,
@@ -484,8 +489,8 @@ func TestHPCBackendHealth_Fields(t *testing.T) {
 		t.Error("Running should be true")
 	}
 
-	if health.Message != "healthy" {
-		t.Errorf("Message = %v, want 'healthy'", health.Message)
+	if health.Message != statusHealthy {
+		t.Errorf("Message = %v, want %v", health.Message, statusHealthy)
 	}
 
 	if health.ErrorCount != 0 {
@@ -506,13 +511,13 @@ func TestHPCBackendHealth_Fields(t *testing.T) {
 // =============================================================================
 
 func TestSlurmSignerAdapter(t *testing.T) {
-	mockSigner := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	mockSigner := NewMockSigner(backendManagerTestProviderAddress)
 	adapter := &slurmSignerAdapter{signer: mockSigner}
 
 	// Test GetProviderAddress
 	addr := adapter.GetProviderAddress()
-	if addr != "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr" {
-		t.Errorf("GetProviderAddress() = %v, want %v", addr, "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	if addr != backendManagerTestProviderAddress {
+		t.Errorf("GetProviderAddress() = %v, want %v", addr, backendManagerTestProviderAddress)
 	}
 
 	// Test Sign
@@ -532,13 +537,13 @@ func TestSlurmSignerAdapter(t *testing.T) {
 }
 
 func TestMoabSignerAdapter(t *testing.T) {
-	mockSigner := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	mockSigner := NewMockSigner(backendManagerTestProviderAddress)
 	adapter := &moabSignerAdapter{signer: mockSigner}
 
 	// Test GetProviderAddress
 	addr := adapter.GetProviderAddress()
-	if addr != "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr" {
-		t.Errorf("GetProviderAddress() = %v, want %v", addr, "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	if addr != backendManagerTestProviderAddress {
+		t.Errorf("GetProviderAddress() = %v, want %v", addr, backendManagerTestProviderAddress)
 	}
 
 	// Test Sign
@@ -558,13 +563,13 @@ func TestMoabSignerAdapter(t *testing.T) {
 }
 
 func TestOodSignerAdapter(t *testing.T) {
-	mockSigner := NewMockSigner("ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	mockSigner := NewMockSigner(backendManagerTestProviderAddress)
 	adapter := &oodSignerAdapter{signer: mockSigner}
 
 	// Test GetProviderAddress
 	addr := adapter.GetProviderAddress()
-	if addr != "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr" {
-		t.Errorf("GetProviderAddress() = %v, want %v", addr, "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr")
+	if addr != backendManagerTestProviderAddress {
+		t.Errorf("GetProviderAddress() = %v, want %v", addr, backendManagerTestProviderAddress)
 	}
 
 	// Test Sign
@@ -627,8 +632,8 @@ func TestHPCBackendFactory_FullLifecycle(t *testing.T) {
 		JobID:           "test-lifecycle-job",
 		OfferingID:      "offering-1",
 		ClusterID:       "test-cluster-001",
-		ProviderAddress: "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dzaf4vr",
-		CustomerAddress: "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuv92kx8",
+		ProviderAddress: backendManagerTestProviderAddress,
+		CustomerAddress: backendManagerTestCustomerAddress,
 		State:           hpctypes.JobStatePending,
 		QueueName:       "default",
 		WorkloadSpec: hpctypes.JobWorkloadSpec{

@@ -222,7 +222,7 @@ func (f *HPCBackendFactory) GetHealth() *HPCBackendHealth {
 	// Determine overall health
 	health.Healthy = health.Running && health.CredentialsValid
 	if health.Healthy {
-		health.Message = "healthy"
+		health.Message = statusHealthy
 	} else if !health.CredentialsValid {
 		health.Message = "credentials invalid or expired"
 	}
@@ -329,6 +329,8 @@ func (f *HPCBackendFactory) createOODScheduler() (HPCScheduler, error) {
 }
 
 // createSLURMClient creates a SLURM client based on configuration
+//
+//nolint:unparam // Keep error return for future client implementations.
 func (f *HPCBackendFactory) createSLURMClient() (slurm_adapter.SLURMClient, error) {
 	// Get credentials if credential manager is available
 	var username, password, sshKeyPath string
@@ -356,6 +358,8 @@ func (f *HPCBackendFactory) createSLURMClient() (slurm_adapter.SLURMClient, erro
 }
 
 // createMOABClient creates a MOAB client based on configuration
+//
+//nolint:unparam // Keep error return for future client implementations.
 func (f *HPCBackendFactory) createMOABClient() (moab_adapter.MOABClient, error) {
 	// Get credentials if available
 	var username, password string
@@ -379,6 +383,8 @@ func (f *HPCBackendFactory) createMOABClient() (moab_adapter.MOABClient, error) 
 }
 
 // createOODClient creates an OOD client and auth provider based on configuration
+//
+//nolint:unparam // Keep error return for future client implementations.
 func (f *HPCBackendFactory) createOODClient() (ood_adapter.OODClient, ood_adapter.VEIDAuthProvider, error) {
 	// Get credentials if available
 	var username, password string

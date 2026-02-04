@@ -28,7 +28,7 @@ type rpcChainClient struct {
 }
 
 // newRPCChainClient creates a new RPC-based chain client
-func newRPCChainClient(ctx context.Context, config RPCChainClientConfig) (*rpcChainClient, error) {
+func newRPCChainClient(config RPCChainClientConfig) (*rpcChainClient, error) {
 	if config.RequestTimeout == 0 {
 		config.RequestTimeout = 30 * time.Second
 	}
@@ -61,13 +61,13 @@ func newRPCChainClient(ctx context.Context, config RPCChainClientConfig) (*rpcCh
 }
 
 // NewRPCChainClient creates a new RPC-based chain client
-func NewRPCChainClient(ctx context.Context, config RPCChainClientConfig) (ChainClient, error) {
-	return newRPCChainClient(ctx, config)
+func NewRPCChainClient(config RPCChainClientConfig) (ChainClient, error) {
+	return newRPCChainClient(config)
 }
 
 // NewHPCChainClient creates a new chain client for HPC integrations.
-func NewHPCChainClient(ctx context.Context, config RPCChainClientConfig) (HPCChainClient, error) {
-	return newRPCChainClient(ctx, config)
+func NewHPCChainClient(config RPCChainClientConfig) (HPCChainClient, error) {
+	return newRPCChainClient(config)
 }
 
 // GetProviderConfig retrieves the provider's on-chain configuration

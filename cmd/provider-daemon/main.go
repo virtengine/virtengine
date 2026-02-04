@@ -434,7 +434,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create chain client for bid engine
-	chainClient, err := provider_daemon.NewRPCChainClient(ctx, provider_daemon.RPCChainClientConfig{
+	chainClient, err := provider_daemon.NewRPCChainClient(provider_daemon.RPCChainClientConfig{
 		NodeURI:        viper.GetString(FlagNode),
 		GRPCEndpoint:   viper.GetString(FlagWaldurChainGRPC),
 		ChainID:        viper.GetString(FlagChainID),
@@ -463,7 +463,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	if hpcProviderConfig.HPC.Enabled {
-		hpcChainClient, err := provider_daemon.NewHPCChainClient(ctx, provider_daemon.RPCChainClientConfig{
+		hpcChainClient, err := provider_daemon.NewHPCChainClient(provider_daemon.RPCChainClientConfig{
 			NodeURI:        viper.GetString(FlagNode),
 			GRPCEndpoint:   viper.GetString(FlagWaldurChainGRPC),
 			ChainID:        viper.GetString(FlagChainID),

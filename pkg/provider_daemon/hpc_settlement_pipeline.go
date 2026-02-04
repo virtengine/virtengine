@@ -643,8 +643,15 @@ func (p *HPCBatchSettlementPipeline) processRetries(_ context.Context) {
 			continue
 		}
 
-		// Calculate backoff: backoff * 2^attempts
-		backoff := p.config.RetryBackoff * time.Duration(1<<uint(record.Attempts))
+		// Calculate backoff: backoff * 2^attempts, with clamped exponent to avoid overflow.
+		attempts := record.Attempts
+		if attempts < 0 {
+			attempts = 0
+		}
+		if attempts > 30 {
+			attempts = 30
+		}
+		backoff := p.config.RetryBackoff * time.Duration(1<<attempts)
 		if now.Sub(record.LastAttempt) < backoff {
 			continue
 		}
