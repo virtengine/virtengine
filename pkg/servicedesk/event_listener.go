@@ -13,7 +13,7 @@ import (
 
 	"cosmossdk.io/log"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
-	ctypes "github.com/cometbft/cometbft/types"
+	rpctypes "github.com/cometbft/cometbft/rpc/core/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 
 	supporttypes "github.com/virtengine/virtengine/x/support/types"
@@ -33,7 +33,7 @@ type ChainEventListener struct {
 	running  bool
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
-	eventSub <-chan ctypes.ResultEvent
+	eventSub <-chan rpctypes.ResultEvent
 }
 
 // EventListenerConfig holds configuration for the chain event listener
@@ -229,7 +229,7 @@ func (l *ChainEventListener) connectAndListen(ctx context.Context) error {
 			if !ok {
 				continue
 			}
-			txHash := tmtypes.Tx(data.Tx).Hash().String()
+			txHash := fmt.Sprintf("%X", tmtypes.Tx(data.Tx).Hash())
 			envelopes, err := ExtractSupportEvents(data.Result.Events)
 			if err != nil {
 				l.logger.Error("failed to extract support events", "error", err)
@@ -304,7 +304,7 @@ func (l *ChainEventListener) handleSupportRequestCreated(ctx context.Context, en
 	}
 	if payload.RelatedEntity != nil {
 		event.RelatedEntity = &RelatedEntity{
-			Type: payload.RelatedEntity.Type.String(),
+			Type: string(payload.RelatedEntity.Type),
 			ID:   payload.RelatedEntity.ID,
 		}
 	}

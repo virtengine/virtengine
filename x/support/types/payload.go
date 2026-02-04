@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"math"
 
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
 )
@@ -87,7 +88,7 @@ func (p *EncryptedSupportPayload) EnsureEnvelopeHash() {
 		p.EnvelopeHash = p.Envelope.Hash()
 	}
 	if p.PayloadSize == 0 {
-		p.PayloadSize = uint32(len(p.Envelope.Ciphertext))
+		p.PayloadSize = safeUint32FromInt(len(p.Envelope.Ciphertext))
 	}
 }
 
@@ -124,4 +125,14 @@ func (p *EncryptedSupportPayload) String() string {
 	}
 	return fmt.Sprintf("EncryptedSupportPayload{hash=%s, ref=%s, size=%d}",
 		p.EnvelopeHashHex(), p.EnvelopeRef, p.PayloadSize)
+}
+
+func safeUint32FromInt(value int) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }

@@ -120,7 +120,7 @@ func (s SupportStatus) IsTerminal() bool {
 // CanTransitionTo checks if a status transition is allowed.
 func (s SupportStatus) CanTransitionTo(next SupportStatus) bool {
 	transitions := map[SupportStatus][]SupportStatus{
-		SupportStatusOpen:            {SupportStatusAssigned, SupportStatusInProgress, SupportStatusWaitingSupport, SupportStatusClosed},
+		SupportStatusOpen:            {SupportStatusAssigned, SupportStatusInProgress, SupportStatusWaitingSupport, SupportStatusWaitingCustomer, SupportStatusClosed},
 		SupportStatusAssigned:        {SupportStatusInProgress, SupportStatusWaitingCustomer, SupportStatusWaitingSupport, SupportStatusResolved, SupportStatusClosed},
 		SupportStatusInProgress:      {SupportStatusWaitingCustomer, SupportStatusWaitingSupport, SupportStatusResolved, SupportStatusClosed},
 		SupportStatusWaitingCustomer: {SupportStatusInProgress, SupportStatusResolved, SupportStatusClosed},
@@ -281,7 +281,7 @@ func (r *SupportRequest) Validate() error {
 		return ErrInvalidSupportRequest.Wrapf("invalid status: %s", r.Status)
 	}
 	if err := r.Payload.Validate(); err != nil {
-		if !(r.Purged && r.Payload.Envelope == nil) {
+		if !r.Purged || r.Payload.Envelope != nil {
 			return err
 		}
 	}
