@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	sdkmath "cosmossdk.io/math"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // WaldurOfferingImport represents a Waldur offering to be ingested on-chain.
@@ -250,6 +253,33 @@ func (w *WaldurOfferingImport) ResolvePricing(cfg IngestConfig) PricingInfo {
 	return pricing
 }
 
+// ResolvePriceComponents extracts component pricing information from Waldur components.
+func (w *WaldurOfferingImport) ResolvePriceComponents(cfg IngestConfig) []PriceComponent {
+	if len(w.Components) == 0 {
+		return nil
+	}
+
+	components := make([]PriceComponent, 0, len(w.Components))
+	for _, comp := range w.Components {
+		price := denormalizePrice(comp.Price, cfg.CurrencyDenominator)
+		if price == 0 {
+			continue
+		}
+		resourceType := resolveWaldurComponentResourceType(comp)
+		unit := comp.MeasuredUnit
+		if unit == "" {
+			unit = comp.Name
+		}
+		components = append(components, PriceComponent{
+			ResourceType: PriceComponentResourceType(resourceType),
+			Unit:         unit,
+			Price:        sdk.NewCoin(cfg.DefaultCurrency, sdkmath.NewIntFromUint64(price)),
+		})
+	}
+
+	return components
+}
+
 // ExtractRegions extracts region codes from Waldur attributes.
 func (w *WaldurOfferingImport) ExtractRegions(cfg IngestConfig) []string {
 	var regions []string
@@ -388,6 +418,7 @@ func (w *WaldurOfferingImport) ToOfferingAt(providerAddr string, sequence uint64
 	}
 
 	category := w.ResolveCategory(cfg)
+	prices := w.ResolvePriceComponents(cfg)
 	pricing := w.ResolvePricing(cfg)
 	createdAt := now.UTC()
 
@@ -399,6 +430,7 @@ func (w *WaldurOfferingImport) ToOfferingAt(providerAddr string, sequence uint64
 		Description:         w.Description,
 		Version:             "1.0.0",
 		Pricing:             pricing,
+		Prices:              prices,
 		IdentityRequirement: w.ExtractIdentityRequirements(),
 		PublicMetadata:      w.ExtractPublicMetadata(),
 		Specifications:      w.ExtractSpecifications(),
@@ -679,6 +711,26 @@ func resolvePricingModel(billingType string) PricingModel {
 		return PricingModelFixed
 	default:
 		return PricingModelHourly
+	}
+}
+
+func resolveWaldurComponentResourceType(component WaldurPricingComponent) string {
+	name := strings.ToLower(component.Name)
+	unit := strings.ToLower(component.MeasuredUnit)
+
+	switch {
+	case strings.Contains(name, "cpu") || strings.Contains(unit, "cpu"):
+		return string(PriceComponentCPU)
+	case strings.Contains(name, "ram") || strings.Contains(name, "memory") || strings.Contains(unit, "gb"):
+		return string(PriceComponentRAM)
+	case strings.Contains(name, "storage") || strings.Contains(name, "disk") || strings.Contains(unit, "gb"):
+		return string(PriceComponentStorage)
+	case strings.Contains(name, "gpu") || strings.Contains(unit, "gpu"):
+		return string(PriceComponentGPU)
+	case strings.Contains(name, "network") || strings.Contains(unit, "network") || strings.Contains(unit, "bandwidth"):
+		return string(PriceComponentNetwork)
+	default:
+		return component.Name
 	}
 }
 

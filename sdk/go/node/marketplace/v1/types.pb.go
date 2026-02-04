@@ -6,6 +6,7 @@ package v1
 import (
 	fmt "fmt"
 	_ "github.com/cosmos/cosmos-proto"
+	types "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	proto "github.com/cosmos/gogoproto/proto"
 	github_com_cosmos_gogoproto_types "github.com/cosmos/gogoproto/types"
@@ -323,6 +324,79 @@ func (m *PricingInfo) GetMinimumCommitment() int64 {
 	return 0
 }
 
+// PriceComponent represents component-based pricing for an offering.
+type PriceComponent struct {
+	// Resource type (cpu, ram, storage, gpu, network).
+	ResourceType string `protobuf:"bytes,1,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty" yaml:"resource_type"`
+	// Unit of the component (vcpu, gb, hour, month).
+	Unit string `protobuf:"bytes,2,opt,name=unit,proto3" json:"unit,omitempty" yaml:"unit"`
+	// Price per unit.
+	Price types.Coin `protobuf:"bytes,3,opt,name=price,proto3" json:"price" yaml:"price"`
+	// USD reference price at time of creation (display only).
+	UsdReference string `protobuf:"bytes,4,opt,name=usd_reference,json=usdReference,proto3" json:"usd_reference,omitempty" yaml:"usd_reference"`
+}
+
+func (m *PriceComponent) Reset()         { *m = PriceComponent{} }
+func (m *PriceComponent) String() string { return proto.CompactTextString(m) }
+func (*PriceComponent) ProtoMessage()    {}
+func (*PriceComponent) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e2d3f824b1680930, []int{2}
+}
+func (m *PriceComponent) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PriceComponent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_PriceComponent.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *PriceComponent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PriceComponent.Merge(m, src)
+}
+func (m *PriceComponent) XXX_Size() int {
+	return m.Size()
+}
+func (m *PriceComponent) XXX_DiscardUnknown() {
+	xxx_messageInfo_PriceComponent.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PriceComponent proto.InternalMessageInfo
+
+func (m *PriceComponent) GetResourceType() string {
+	if m != nil {
+		return m.ResourceType
+	}
+	return ""
+}
+
+func (m *PriceComponent) GetUnit() string {
+	if m != nil {
+		return m.Unit
+	}
+	return ""
+}
+
+func (m *PriceComponent) GetPrice() types.Coin {
+	if m != nil {
+		return m.Price
+	}
+	return types.Coin{}
+}
+
+func (m *PriceComponent) GetUsdReference() string {
+	if m != nil {
+		return m.UsdReference
+	}
+	return ""
+}
+
 // OfferingID is the unique identifier for an offering
 type OfferingID struct {
 	ProviderAddress string `protobuf:"bytes,1,opt,name=provider_address,json=providerAddress,proto3" json:"provider_address" yaml:"provider_address"`
@@ -333,7 +407,7 @@ func (m *OfferingID) Reset()         { *m = OfferingID{} }
 func (m *OfferingID) String() string { return proto.CompactTextString(m) }
 func (*OfferingID) ProtoMessage()    {}
 func (*OfferingID) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e2d3f824b1680930, []int{2}
+	return fileDescriptor_e2d3f824b1680930, []int{3}
 }
 func (m *OfferingID) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -387,7 +461,7 @@ func (m *EncryptedProviderSecrets) Reset()         { *m = EncryptedProviderSecre
 func (m *EncryptedProviderSecrets) String() string { return proto.CompactTextString(m) }
 func (*EncryptedProviderSecrets) ProtoMessage()    {}
 func (*EncryptedProviderSecrets) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e2d3f824b1680930, []int{3}
+	return fileDescriptor_e2d3f824b1680930, []int{4}
 }
 func (m *EncryptedProviderSecrets) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -460,13 +534,16 @@ type Offering struct {
 	MaxConcurrentOrders uint32                    `protobuf:"varint,19,opt,name=max_concurrent_orders,json=maxConcurrentOrders,proto3" json:"max_concurrent_orders,omitempty" yaml:"max_concurrent_orders"`
 	TotalOrderCount     uint64                    `protobuf:"varint,20,opt,name=total_order_count,json=totalOrderCount,proto3" json:"total_order_count" yaml:"total_order_count"`
 	ActiveOrderCount    uint64                    `protobuf:"varint,21,opt,name=active_order_count,json=activeOrderCount,proto3" json:"active_order_count" yaml:"active_order_count"`
+	Prices              []PriceComponent          `protobuf:"bytes,22,rep,name=prices,proto3" json:"prices,omitempty" yaml:"prices"`
+	AllowBidding        bool                      `protobuf:"varint,23,opt,name=allow_bidding,json=allowBidding,proto3" json:"allow_bidding,omitempty" yaml:"allow_bidding"`
+	MinBid              types.Coin                `protobuf:"bytes,24,opt,name=min_bid,json=minBid,proto3" json:"min_bid" yaml:"min_bid"`
 }
 
 func (m *Offering) Reset()         { *m = Offering{} }
 func (m *Offering) String() string { return proto.CompactTextString(m) }
 func (*Offering) ProtoMessage()    {}
 func (*Offering) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e2d3f824b1680930, []int{4}
+	return fileDescriptor_e2d3f824b1680930, []int{5}
 }
 func (m *Offering) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -642,6 +719,27 @@ func (m *Offering) GetActiveOrderCount() uint64 {
 	return 0
 }
 
+func (m *Offering) GetPrices() []PriceComponent {
+	if m != nil {
+		return m.Prices
+	}
+	return nil
+}
+
+func (m *Offering) GetAllowBidding() bool {
+	if m != nil {
+		return m.AllowBidding
+	}
+	return false
+}
+
+func (m *Offering) GetMinBid() types.Coin {
+	if m != nil {
+		return m.MinBid
+	}
+	return types.Coin{}
+}
+
 func init() {
 	proto.RegisterEnum("virtengine.marketplace.v1.OfferingState", OfferingState_name, OfferingState_value)
 	proto.RegisterEnum("virtengine.marketplace.v1.OfferingCategory", OfferingCategory_name, OfferingCategory_value)
@@ -649,6 +747,7 @@ func init() {
 	proto.RegisterType((*IdentityRequirement)(nil), "virtengine.marketplace.v1.IdentityRequirement")
 	proto.RegisterType((*PricingInfo)(nil), "virtengine.marketplace.v1.PricingInfo")
 	proto.RegisterMapType((map[string]uint64)(nil), "virtengine.marketplace.v1.PricingInfo.UsageRatesEntry")
+	proto.RegisterType((*PriceComponent)(nil), "virtengine.marketplace.v1.PriceComponent")
 	proto.RegisterType((*OfferingID)(nil), "virtengine.marketplace.v1.OfferingID")
 	proto.RegisterType((*EncryptedProviderSecrets)(nil), "virtengine.marketplace.v1.EncryptedProviderSecrets")
 	proto.RegisterType((*Offering)(nil), "virtengine.marketplace.v1.Offering")
@@ -908,6 +1007,60 @@ func (m *PricingInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *PriceComponent) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PriceComponent) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PriceComponent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.UsdReference) > 0 {
+		i -= len(m.UsdReference)
+		copy(dAtA[i:], m.UsdReference)
+		i = encodeVarintTypes(dAtA, i, uint64(len(m.UsdReference)))
+		i--
+		dAtA[i] = 0x22
+	}
+	{
+		size, err := m.Price.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintTypes(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x1a
+	if len(m.Unit) > 0 {
+		i -= len(m.Unit)
+		copy(dAtA[i:], m.Unit)
+		i = encodeVarintTypes(dAtA, i, uint64(len(m.Unit)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ResourceType) > 0 {
+		i -= len(m.ResourceType)
+		copy(dAtA[i:], m.ResourceType)
+		i = encodeVarintTypes(dAtA, i, uint64(len(m.ResourceType)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *OfferingID) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -1014,6 +1167,46 @@ func (m *Offering) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	{
+		size, err := m.MinBid.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintTypes(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x1
+	i--
+	dAtA[i] = 0xc2
+	if m.AllowBidding {
+		i--
+		if m.AllowBidding {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xb8
+	}
+	if len(m.Prices) > 0 {
+		for iNdEx := len(m.Prices) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Prices[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintTypes(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0xb2
+		}
+	}
 	if m.ActiveOrderCount != 0 {
 		i = encodeVarintTypes(dAtA, i, uint64(m.ActiveOrderCount))
 		i--
@@ -1291,6 +1484,29 @@ func (m *PricingInfo) Size() (n int) {
 	return n
 }
 
+func (m *PriceComponent) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ResourceType)
+	if l > 0 {
+		n += 1 + l + sovTypes(uint64(l))
+	}
+	l = len(m.Unit)
+	if l > 0 {
+		n += 1 + l + sovTypes(uint64(l))
+	}
+	l = m.Price.Size()
+	n += 1 + l + sovTypes(uint64(l))
+	l = len(m.UsdReference)
+	if l > 0 {
+		n += 1 + l + sovTypes(uint64(l))
+	}
+	return n
+}
+
 func (m *OfferingID) Size() (n int) {
 	if m == nil {
 		return 0
@@ -1422,6 +1638,17 @@ func (m *Offering) Size() (n int) {
 	if m.ActiveOrderCount != 0 {
 		n += 2 + sovTypes(uint64(m.ActiveOrderCount))
 	}
+	if len(m.Prices) > 0 {
+		for _, e := range m.Prices {
+			l = e.Size()
+			n += 2 + l + sovTypes(uint64(l))
+		}
+	}
+	if m.AllowBidding {
+		n += 3
+	}
+	l = m.MinBid.Size()
+	n += 2 + l + sovTypes(uint64(l))
 	return n
 }
 
@@ -1844,6 +2071,187 @@ func (m *PricingInfo) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+
+func (m *PriceComponent) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTypes
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PriceComponent: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PriceComponent: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ResourceType", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTypes
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ResourceType = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Unit", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTypes
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Unit = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Price", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTypes
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Price.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UsdReference", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTypes
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.UsdReference = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTypes(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+
 func (m *OfferingID) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2935,6 +3343,93 @@ func (m *Offering) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		case 22:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Prices", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTypes
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Prices = append(m.Prices, PriceComponent{})
+			if err := m.Prices[len(m.Prices)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 23:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllowBidding", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllowBidding = bool(v != 0)
+		case 24:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MinBid", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTypes
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.MinBid.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipTypes(dAtA[iNdEx:])

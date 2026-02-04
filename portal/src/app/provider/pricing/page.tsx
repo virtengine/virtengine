@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import ComponentPriceCalculator from '@/components/provider/ComponentPriceCalculator';
 
 export const metadata: Metadata = {
   title: 'Pricing Configuration',
@@ -30,6 +31,8 @@ export default function ProviderPricingPage() {
             <PricingInput label="Storage (per GB/month)" defaultValue="0.10" />
           </div>
         </div>
+
+        <ComponentPriceCalculator />
 
         {/* Bid Strategy */}
         <div className="rounded-lg border border-border bg-card p-6">

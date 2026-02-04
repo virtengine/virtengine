@@ -6,6 +6,18 @@ export const metadata: Metadata = {
   description: 'Browse compute offerings from providers',
 };
 
+const offeringPlaceholders = [
+  { id: 'offering-1001', type: 'GPU', name: 'NVIDIA A100 Cluster', price: '2.50', provider: 'CloudCore' },
+  { id: 'offering-1002', type: 'CPU', name: 'AMD EPYC 7763', price: '0.45', provider: 'DataNexus' },
+  { id: 'offering-1003', type: 'HPC', name: 'HPC Compute Node', price: '8.00', provider: 'SuperCloud' },
+  { id: 'offering-1004', type: 'GPU', name: 'NVIDIA H100 Pod', price: '3.10', provider: 'QuantumGrid' },
+  { id: 'offering-1005', type: 'Storage', name: 'NVMe Storage Pool', price: '0.18', provider: 'VaultDrive' },
+  { id: 'offering-1006', type: 'CPU', name: 'Intel Xeon Platinum', price: '0.52', provider: 'Northbridge' },
+  { id: 'offering-1007', type: 'GPU', name: 'RTX 6000 Ada', price: '1.85', provider: 'RenderWorks' },
+  { id: 'offering-1008', type: 'HPC', name: 'MPI Cluster', price: '6.40', provider: 'FlowCompute' },
+  { id: 'offering-1009', type: 'CPU', name: 'ARM Neoverse', price: '0.32', provider: 'SkyArc' },
+];
+
 export default function MarketplacePage() {
   return (
     <div className="container py-8">
@@ -63,8 +75,11 @@ export default function MarketplacePage() {
         <div className="lg:col-span-3">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {/* Placeholder offering cards */}
-            {Array.from({ length: 9 }).map((_, i) => (
-              <OfferingCardPlaceholder key={i} index={i} />
+            {Array.from({ length: 9 }, (_, index) => ({
+              id: `offering-${index + 1}`,
+              index,
+            })).map((offering) => (
+              <OfferingCardPlaceholder key={offering.id} index={offering.index} />
             ))}
           </div>
 
@@ -135,17 +150,20 @@ function FilterCheckbox({ label, count }: { label: string; count: number }) {
   );
 }
 
-function OfferingCardPlaceholder({ index }: { index: number }) {
-  const offerings = [
-    { type: 'GPU', name: 'NVIDIA A100 Cluster', price: '2.50', provider: 'CloudCore' },
-    { type: 'CPU', name: 'AMD EPYC 7763', price: '0.45', provider: 'DataNexus' },
-    { type: 'HPC', name: 'HPC Compute Node', price: '8.00', provider: 'SuperCloud' },
-  ];
-  const offering = offerings[index % offerings.length]!;
-
+function OfferingCardPlaceholder({
+  offering,
+}: {
+  offering: {
+    id: string;
+    type: string;
+    name: string;
+    price: string;
+    provider: string;
+  };
+}) {
   return (
     <Link
-      href={`/marketplace/${index}`}
+      href={`/marketplace/${offering.id}`}
       className="group rounded-lg border border-border bg-card p-4 transition-all card-hover"
     >
       <div className="flex items-start justify-between">

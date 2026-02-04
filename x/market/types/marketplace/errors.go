@@ -126,6 +126,9 @@ var (
 
 	// ErrInvalidEventSequence indicates invalid event sequence
 	ErrInvalidEventSequence = errors.Register("marketplace", 2238, "invalid event sequence")
+
+	// ErrPricingInvalid indicates pricing validation failed
+	ErrPricingInvalid = errors.Register("marketplace", 2239, "pricing validation failed")
 )
 
 // WrapIdentityGatingError wraps an identity gating error with context

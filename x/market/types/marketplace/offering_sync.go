@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -275,26 +276,7 @@ func (o *Offering) ToWaldurCreate(cfg OfferingSyncConfig) WaldurOfferingCreate {
 		attrs["ve_"+k] = v
 	}
 
-	// Build pricing components
-	components := make([]WaldurPricingComponent, 0, 1+len(o.Pricing.UsageRates))
-	components = append(components, WaldurPricingComponent{
-		Type:         "usage",
-		Name:         "base",
-		MeasuredUnit: string(o.Pricing.Model),
-		BillingType:  mapPricingModel(o.Pricing.Model),
-		Price:        normalizePrice(o.Pricing.BasePrice, cfg.CurrencyDenominator),
-	})
-
-	// Add usage rate components
-	for name, rate := range o.Pricing.UsageRates {
-		components = append(components, WaldurPricingComponent{
-			Type:         "usage",
-			Name:         name,
-			MeasuredUnit: name,
-			BillingType:  "usage",
-			Price:        normalizePrice(rate, cfg.CurrencyDenominator),
-		})
-	}
+	components := buildWaldurPricingComponents(o, cfg)
 
 	// Resolve category UUID
 	categoryUUID := cfg.WaldurCategoryMap[string(o.Category)]
@@ -351,24 +333,7 @@ func (o *Offering) ToWaldurUpdate(cfg OfferingSyncConfig) WaldurOfferingUpdate {
 		attrs["ve_"+k] = v
 	}
 
-	// Build pricing components
-	components := make([]WaldurPricingComponent, 0, 1+len(o.Pricing.UsageRates))
-	components = append(components, WaldurPricingComponent{
-		Type:         "usage",
-		Name:         "base",
-		MeasuredUnit: string(o.Pricing.Model),
-		BillingType:  mapPricingModel(o.Pricing.Model),
-		Price:        normalizePrice(o.Pricing.BasePrice, cfg.CurrencyDenominator),
-	})
-	for name, rate := range o.Pricing.UsageRates {
-		components = append(components, WaldurPricingComponent{
-			Type:         "usage",
-			Name:         name,
-			MeasuredUnit: name,
-			BillingType:  "usage",
-			Price:        normalizePrice(rate, cfg.CurrencyDenominator),
-		})
-	}
+	components := buildWaldurPricingComponents(o, cfg)
 
 	return WaldurOfferingUpdate{
 		Name:        name,
@@ -393,6 +358,13 @@ func (o *Offering) SyncChecksum() string {
 	h.Write([]byte(o.Pricing.Model))
 	fmt.Fprintf(h, "%d", o.Pricing.BasePrice)
 	h.Write([]byte(o.Pricing.Currency))
+	for _, component := range sortedPriceComponents(o.Prices) {
+		h.Write([]byte(component.ResourceType))
+		h.Write([]byte(component.Unit))
+		h.Write([]byte(component.Price.Denom))
+		fmt.Fprintf(h, "%s", component.Price.Amount.String())
+		h.Write([]byte(component.USDReference))
+	}
 	fmt.Fprintf(h, "%d", o.IdentityRequirement.MinScore)
 	fmt.Fprintf(h, "%t", o.RequireMFAForOrders)
 	fmt.Fprintf(h, "%d", o.MaxConcurrentOrders)
@@ -409,6 +381,66 @@ func (o *Offering) SyncChecksum() string {
 	}
 
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func buildWaldurPricingComponents(o *Offering, cfg OfferingSyncConfig) []WaldurPricingComponent {
+	if o == nil {
+		return nil
+	}
+
+	if len(o.Prices) > 0 {
+		components := make([]WaldurPricingComponent, 0, len(o.Prices))
+		for _, component := range o.Prices {
+			if !component.Price.Amount.IsUint64() {
+				continue
+			}
+			components = append(components, WaldurPricingComponent{
+				Type:         "usage",
+				Name:         string(component.ResourceType),
+				MeasuredUnit: component.Unit,
+				BillingType:  "usage",
+				Price:        normalizePrice(component.Price.Amount.Uint64(), cfg.CurrencyDenominator),
+			})
+		}
+		return components
+	}
+
+	components := make([]WaldurPricingComponent, 0, 1+len(o.Pricing.UsageRates))
+	components = append(components, WaldurPricingComponent{
+		Type:         "usage",
+		Name:         "base",
+		MeasuredUnit: string(o.Pricing.Model),
+		BillingType:  mapPricingModel(o.Pricing.Model),
+		Price:        normalizePrice(o.Pricing.BasePrice, cfg.CurrencyDenominator),
+	})
+
+	for name, rate := range o.Pricing.UsageRates {
+		components = append(components, WaldurPricingComponent{
+			Type:         "usage",
+			Name:         name,
+			MeasuredUnit: name,
+			BillingType:  "usage",
+			Price:        normalizePrice(rate, cfg.CurrencyDenominator),
+		})
+	}
+
+	return components
+}
+
+func sortedPriceComponents(components []PriceComponent) []PriceComponent {
+	if len(components) == 0 {
+		return nil
+	}
+
+	sorted := make([]PriceComponent, len(components))
+	copy(sorted, components)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].ResourceType == sorted[j].ResourceType {
+			return sorted[i].Unit < sorted[j].Unit
+		}
+		return sorted[i].ResourceType < sorted[j].ResourceType
+	})
+	return sorted
 }
 
 // mapPricingModel converts VirtEngine pricing model to Waldur billing type.
