@@ -388,8 +388,9 @@ func (ms msgServer) AddSupportResponse(goCtx context.Context, msg *types.MsgAddS
 }
 
 func safeIntFromUint32(value uint32) int {
-	if value > uint32(^uint(0)>>1) {
-		return int(^uint(0) >> 1)
+	maxInt := int(^uint(0) >> 1)
+	if uint64(value) > uint64(maxInt) {
+		return maxInt
 	}
 	return int(value)
 }
