@@ -91,12 +91,13 @@ check_vet() {
 
     # Check if we're on main or have no diverged commits
     if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Exclude vendor/ and tests/ as they have build constraints or separate modules
+        # Exclude vendor/, tests/, and scripts/ as they have build constraints or are tooling
         # NOTE: sdk/ is now included to catch SDK build errors early
         # Filter out directories that no longer exist (deleted packages)
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '^vendor/' | \
             grep -v '^tests/' | \
+            grep -v '^scripts/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
             paste -sd ' ' - 2>/dev/null || echo "")
@@ -107,8 +108,8 @@ check_vet() {
         # shellcheck disable=SC2086
         go vet $changed_packages 2>&1
     else
-        # Exclude tests/ and local temp/ scratch dirs which may have build constraints
-        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | grep -Ev '/temp($|/)' | head -100) 2>&1
+        # Exclude tests/, scripts/, and local temp/ scratch dirs which may have build constraints
+        go vet $(go list ./... 2>/dev/null | grep -v '/tests/' | grep -v '/scripts/' | grep -Ev '/temp($|/)' | head -100) 2>&1
     fi
 }
 
@@ -284,12 +285,13 @@ check_test() {
     local base_branch="origin/main"
 
     if git rev-parse --verify "$base_branch" &>/dev/null; then
-        # Get changed Go files, exclude vendor/tests, filter to existing dirs
+        # Get changed Go files, exclude vendor/tests/scripts, filter to existing dirs
         # NOTE: sdk/ is now included to catch SDK test failures early
         changed_packages=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
             grep -v '_test\.go$' | \
             grep -v '^vendor/' | \
             grep -v '^tests/' | \
+            grep -v '^scripts/' | \
             xargs -r dirname 2>/dev/null | sort -u | \
             while read -r dir; do [ -d "$dir" ] && echo "./$dir"; done | \
             paste -sd ' ' - 2>/dev/null || echo "")
@@ -315,6 +317,7 @@ check_test() {
         local test_packages
         test_packages=$(go list ./x/... ./pkg/... 2>/dev/null | \
             grep -v '/tests/' | \
+            grep -v '/scripts/' | \
             grep -v '/e2e' | \
             grep -v '/integration' | \
             grep -v '/chaos' | \
