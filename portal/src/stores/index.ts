@@ -15,3 +15,12 @@ export {
   type ResourceUsage,
   type ContainerSpec,
 } from './deploymentStore';
+export {
+  useOfferingStore,
+  formatPrice,
+  formatPriceUSD,
+  getOfferingDisplayPrice,
+  type OfferingStore,
+  type OfferingStoreState,
+  type OfferingStoreActions,
+} from './offeringStore';
