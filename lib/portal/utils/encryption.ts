@@ -83,19 +83,21 @@ async function deriveKey(
   // Import shared secret as raw key material
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    sharedSecret as BufferSource,
+    sharedSecret.buffer as ArrayBuffer,
     'HKDF',
     false,
     ['deriveKey']
   );
 
   // Derive AES key using HKDF
+  const infoBytes = new TextEncoder().encode(info);
+
   return crypto.subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: salt as BufferSource,
-      info: new TextEncoder().encode(info) as BufferSource,
+      salt: salt.buffer as ArrayBuffer,
+      info: infoBytes.buffer as ArrayBuffer,
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
@@ -126,7 +128,7 @@ export async function encryptPayload(
   // Import recipient's public key
   const recipientKey = await crypto.subtle.importKey(
     'raw',
-    recipientPublicKey as BufferSource,
+    recipientPublicKey.buffer as ArrayBuffer,
     { name: 'ECDH', namedCurve: 'P-256' },
     false,
     []
@@ -151,11 +153,11 @@ export async function encryptPayload(
   const ciphertext = await crypto.subtle.encrypt(
     {
       name: algorithm,
-      iv: iv as BufferSource,
-      additionalData: aad ? (aad as BufferSource) : undefined,
+      iv: iv.buffer as ArrayBuffer,
+      additionalData: aad ? (aad.buffer as ArrayBuffer) : undefined,
     },
     encryptionKey,
-    plaintext as BufferSource
+    plaintext.buffer as ArrayBuffer
   );
 
   // Export ephemeral public key
@@ -201,7 +203,7 @@ export async function decryptPayload(
     // Import ephemeral public key
     const ephemeralKey = await crypto.subtle.importKey(
       'raw',
-      ephemeralPublicKey as BufferSource,
+      ephemeralPublicKey.buffer as ArrayBuffer,
       { name: 'ECDH', namedCurve: 'P-256' },
       false,
       []
@@ -222,11 +224,11 @@ export async function decryptPayload(
     const plaintext = await crypto.subtle.decrypt(
       {
         name: encrypted.algorithm || 'AES-GCM',
-        iv: iv as BufferSource,
-        additionalData: aad ? (aad as BufferSource) : undefined,
+        iv: iv.buffer as ArrayBuffer,
+        additionalData: aad ? (aad.buffer as ArrayBuffer) : undefined,
       },
       decryptionKey,
-      ciphertext as BufferSource
+      ciphertext.buffer as ArrayBuffer
     );
 
     return {
@@ -251,9 +253,9 @@ export async function encryptWithKey(
   const iv = generateIV();
 
   const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
+    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
     key,
-    plaintext as BufferSource
+    plaintext.buffer as ArrayBuffer
   );
 
   return {
@@ -271,9 +273,9 @@ export async function decryptWithKey(
   key: CryptoKey
 ): Promise<Uint8Array> {
   const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
+    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
     key,
-    ciphertext as BufferSource
+    ciphertext.buffer as ArrayBuffer
   );
 
   return new Uint8Array(plaintext);

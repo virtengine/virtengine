@@ -267,6 +267,17 @@ describe('Validation Utilities', () => {
 });
 
 describe('Security Utilities', () => {
+  let sanitizePlainText: typeof import('../utils/security').sanitizePlainText;
+  let sanitizeDigits: typeof import('../utils/security').sanitizeDigits;
+  let sanitizeJsonInput: typeof import('../utils/security').sanitizeJsonInput;
+
+  beforeAll(async () => {
+    const security = await import('../utils/security');
+    sanitizePlainText = security.sanitizePlainText;
+    sanitizeDigits = security.sanitizeDigits;
+    sanitizeJsonInput = security.sanitizeJsonInput;
+  });
+
   it('should sanitize plain text inputs', () => {
     const value = '<script>alert(1)</script>';
     const result = sanitizePlainText(value);
@@ -286,6 +297,19 @@ describe('Security Utilities', () => {
 });
 
 describe('OAuth Helpers', () => {
+  let createOAuthRequest: typeof import('../utils/oidc').createOAuthRequest;
+  let persistOAuthRequest: typeof import('../utils/oidc').persistOAuthRequest;
+  let consumeOAuthRequest: typeof import('../utils/oidc').consumeOAuthRequest;
+  let buildAuthorizationUrl: typeof import('../utils/oidc').buildAuthorizationUrl;
+
+  beforeAll(async () => {
+    const oidc = await import('../utils/oidc');
+    createOAuthRequest = oidc.createOAuthRequest;
+    persistOAuthRequest = oidc.persistOAuthRequest;
+    consumeOAuthRequest = oidc.consumeOAuthRequest;
+    buildAuthorizationUrl = oidc.buildAuthorizationUrl;
+  });
+
   it('should create and consume OAuth request', async () => {
     const request = await createOAuthRequest(60 * 1000);
     persistOAuthRequest(request, 'test_oauth');
@@ -392,6 +416,15 @@ describe('Format Utilities', () => {
 });
 
 describe('Auth Types', () => {
+  let authReducer: typeof import('../types/auth').authReducer;
+  let initialAuthState: typeof import('../types/auth').initialAuthState;
+
+  beforeAll(async () => {
+    const auth = await import('../types/auth');
+    authReducer = auth.authReducer;
+    initialAuthState = auth.initialAuthState;
+  });
+
   describe('authReducer', () => {
     it('should handle AUTH_START', () => {
       const result = authReducer(initialAuthState, { type: 'AUTH_START' });

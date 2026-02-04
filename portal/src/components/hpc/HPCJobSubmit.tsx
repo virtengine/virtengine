@@ -60,3 +60,4 @@ export function HPCJobSubmit({ className, templateId, onSubmitSuccess, onSubmitE
     </Card>
   );
 }
+

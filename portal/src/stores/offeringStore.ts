@@ -365,11 +365,11 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
     }
   },
 
-  fetchProvider: async (address: string): Promise<Provider | null> => {
+  fetchProvider: (address: string): Promise<Provider | null> => {
     const { providers } = get();
 
     if (providers.has(address)) {
-      return providers.get(address)!;
+      return Promise.resolve(providers.get(address) ?? null);
     }
 
     try {
@@ -386,9 +386,9 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
         }));
       }
 
-      return provider || null;
+      return Promise.resolve(provider || null);
     } catch {
-      return null;
+      return Promise.resolve(null);
     }
   },
 
@@ -449,7 +449,7 @@ export function formatPriceUSD(usdReference: string | undefined): string {
 
 export function getOfferingDisplayPrice(offering: Offering): { amount: string; unit: string } {
   if (offering.prices && offering.prices.length > 0) {
-    const mainPrice = offering.prices[0]!;
+    const mainPrice = offering.prices[0];
     return {
       amount: formatPriceUSD(mainPrice.usdReference),
       unit: `/${mainPrice.unit.replace('-', ' ')}`,

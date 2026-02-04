@@ -15,6 +15,14 @@ export interface WalletInfo {
   extension: boolean;
 }
 
+type CosmostationWindow = Window & {
+  cosmostation?: {
+    cosmos?: {
+      request: (params: { method: string; params?: Record<string, unknown> }) => Promise<unknown>;
+    };
+  };
+};
+
 export const SUPPORTED_WALLETS: WalletInfo[] = [
   {
     id: 'keplr',
@@ -53,7 +61,7 @@ export const SUPPORTED_WALLETS: WalletInfo[] = [
     icon: '/wallets/walletconnect.svg',
     downloadUrl: 'https://walletconnect.com/',
     recommended: false,
-    mobile: false,
+    mobile: true,
     extension: false,
   },
 ];
@@ -71,7 +79,7 @@ export function isWalletInstalled(walletType: WalletType): boolean {
     case 'leap':
       return 'leap' in window;
     case 'cosmostation':
-      return 'cosmostation' in window;
+      return !!(window as CosmostationWindow).cosmostation?.cosmos;
     case 'walletconnect':
       return true; // WalletConnect doesn't require installation
     default:

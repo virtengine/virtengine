@@ -53,6 +53,7 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
     running: 'bg-blue-500',
     completing: 'bg-blue-500',
     completed: 'bg-green-500',
+    timeout: 'bg-orange-500',
     failed: 'bg-red-500',
     cancelled: 'bg-gray-500',
     timeout: 'bg-red-500',
@@ -124,3 +125,4 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
     </div>
   );
 }
+

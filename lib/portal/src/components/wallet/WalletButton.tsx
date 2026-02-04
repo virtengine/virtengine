@@ -1,45 +1,51 @@
-import { useState } from 'react';
-import { useWallet } from '../../wallet/context';
-import { WalletModal } from './WalletModal';
+'use client';
+
+import * as React from 'react';
+import { useWallet } from '../../wallet';
 
 export interface WalletButtonProps {
-  className?: string;
-  showAddress?: boolean;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+  connectLabel?: string;
+  disconnectLabel?: string;
 }
 
-export function WalletButton({ className, showAddress = true }: WalletButtonProps) {
-  const { state, actions } = useWallet();
-  const [isOpen, setIsOpen] = useState(false);
+export function WalletButton({
+  onConnect,
+  onDisconnect,
+  connectLabel = 'Connect Wallet',
+  disconnectLabel = 'Disconnect',
+}: WalletButtonProps) {
+  const { status, accounts, activeAccountIndex, disconnect } = useWallet();
+  const account = accounts[activeAccountIndex];
 
-  if (state.isConnecting) {
+  if (status === 'connecting') {
     return (
-      <button type="button" disabled className={className}>
+      <button type="button" disabled className="rounded-lg bg-muted px-4 py-2 text-sm">
         Connecting...
       </button>
     );
   }
 
-  if (state.isConnected && state.address) {
+  if (status === 'connected' && account) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {showAddress && (
-          <span style={{ fontFamily: 'monospace', fontSize: 13 }}>
-            {state.address.slice(0, 10)}...{state.address.slice(-4)}
-          </span>
-        )}
-        <button type="button" onClick={() => actions.disconnect()} className={className}>
-          Disconnect
-        </button>
-      </div>
+      <button
+        type="button"
+        className="rounded-lg border border-border px-3 py-2 text-sm"
+        onClick={onDisconnect ?? disconnect}
+      >
+        {disconnectLabel}
+      </button>
     );
   }
 
   return (
-    <>
-      <button type="button" onClick={() => setIsOpen(true)} className={className}>
-        Connect Wallet
-      </button>
-      <WalletModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
-    </>
+    <button
+      type="button"
+      className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+      onClick={onConnect}
+    >
+      {connectLabel}
+    </button>
   );
 }

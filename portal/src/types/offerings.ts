@@ -108,7 +108,7 @@ export interface Provider {
 
 export interface OfferingFilters {
   category: OfferingCategory | 'all';
-  region: string | 'all';
+  region: string;
   priceRange: {
     min: number;
     max: number;

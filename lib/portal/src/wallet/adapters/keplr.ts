@@ -1,141 +1,161 @@
-import type {
-  WalletAdapter,
-  WalletAdapterContext,
-  WalletConnection,
-  WalletAccount,
-  AminoSignDoc,
-  AminoSignResponse,
-  DirectSignDoc,
-  DirectSignResponse,
-  ArbitrarySignResponse,
-} from '../types';
-import { isBrowser, toKeplrChainInfo } from '../utils';
+import type { AminoSignDoc, AminoSignResponse, DirectSignDoc, DirectSignResponse, WalletAccount, WalletChainInfo, WalletSignOptions } from '../types';
+import { BaseWalletAdapter } from './base';
 
-interface KeplrProvider {
-  enable: (chainId: string) => Promise<void>;
-  getKey: (chainId: string) => Promise<{
-    name?: string;
-    algo?: string;
-    pubKey?: Uint8Array;
-    bech32Address: string;
-    isNanoLedger?: boolean;
-  }>;
-  signAmino: (
+interface KeplrLike {
+  enable(chainId: string | string[]): Promise<void>;
+  getKey(chainId: string): Promise<{ bech32Address: string; pubKey: Uint8Array; algo: string }>;
+  signAmino(
     chainId: string,
     signer: string,
-    signDoc: AminoSignDoc
-  ) => Promise<AminoSignResponse>;
-  signDirect: (
+    signDoc: AminoSignDoc,
+    signOptions?: WalletSignOptions
+  ): Promise<AminoSignResponse>;
+  signDirect(
     chainId: string,
     signer: string,
+    signDoc: DirectSignDoc,
+    signOptions?: WalletSignOptions
+  ): Promise<DirectSignResponse>;
+  signArbitrary?(
+    chainId: string,
+    signer: string,
+    data: string | Uint8Array
+  ): Promise<{ signature: string; pub_key: { value: string } }>;
+  experimentalSuggestChain?(chainInfo: Record<string, unknown>): Promise<void>;
+}
+
+interface OfflineSigner {
+  getAccounts(): Promise<Array<{ address: string; algo: string; pubkey: Uint8Array }>>;
+}
+
+declare global {
+  interface Window {
+    keplr?: KeplrLike;
+    getOfflineSigner?: (chainId: string, signOptions?: WalletSignOptions) => OfflineSigner;
+    getOfflineSignerAuto?: (chainId: string, signOptions?: WalletSignOptions) => Promise<OfflineSigner>;
+  }
+}
+
+export class KeplrAdapter extends BaseWalletAdapter {
+  readonly type = 'keplr' as const;
+  readonly name = 'Keplr';
+  readonly icon = 'https://wallet.keplr.app/keplr-logo.svg';
+
+  private get keplr(): KeplrLike | undefined {
+    if (typeof window === 'undefined') return undefined;
+    return window.keplr;
+  }
+
+  isAvailable(): boolean {
+    return !!this.keplr;
+  }
+
+  async connect(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
+    const keplr = this.keplr;
+    if (!keplr) {
+      throw new Error('Keplr wallet is not installed');
+    }
+
+    if (keplr.experimentalSuggestChain) {
+      await keplr.experimentalSuggestChain(this.toKeplrChainInfo(chainInfo));
+    }
+
+    await keplr.enable(chainInfo.chainId);
+
+    const accounts = await this.getAccounts(chainInfo);
+    if (accounts.length === 0) {
+      throw new Error('No Keplr accounts available');
+    }
+
+    this.setAccounts(accounts);
+    return accounts;
+  }
+
+  async getAccounts(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
+    const keplr = this.keplr;
+    if (!keplr) {
+      throw new Error('Keplr wallet is not installed');
+    }
+
+    const signer = window.getOfflineSignerAuto
+      ? await window.getOfflineSignerAuto(chainInfo.chainId)
+      : window.getOfflineSigner?.(chainInfo.chainId);
+
+    if (signer) {
+      const accounts = await signer.getAccounts();
+      return accounts.map((account) => ({
+        address: account.address,
+        pubKey: account.pubkey,
+        algo: account.algo,
+      }));
+    }
+
+    const key = await keplr.getKey(chainInfo.chainId);
+    return [
+      {
+        address: key.bech32Address,
+        pubKey: key.pubKey,
+        algo: key.algo,
+      },
+    ];
+  }
+
+  async signAmino(
+    chainId: string,
+    signerAddress: string,
+    signDoc: AminoSignDoc,
+    signOptions?: WalletSignOptions
+  ): Promise<AminoSignResponse> {
+    const keplr = this.keplr;
+    if (!keplr) {
+      throw new Error('Keplr wallet is not connected');
+    }
+
+    return keplr.signAmino(chainId, signerAddress, signDoc, signOptions);
+  }
+
+  async signDirect(
+    chainId: string,
+    signerAddress: string,
     signDoc: DirectSignDoc
-  ) => Promise<DirectSignResponse>;
-  signArbitrary?: (
+  ): Promise<DirectSignResponse> {
+    const keplr = this.keplr;
+    if (!keplr) {
+      throw new Error('Keplr wallet is not connected');
+    }
+
+    return keplr.signDirect(chainId, signerAddress, signDoc);
+  }
+
+  async signArbitrary(
     chainId: string,
-    signer: string,
-    data: string
-  ) => Promise<ArbitrarySignResponse>;
-  experimentalSuggestChain?: (chainInfo: ReturnType<typeof toKeplrChainInfo>) => Promise<void>;
-  getOfflineSignerAuto?: (chainId: string) => Promise<{ getAccounts: () => Promise<WalletAccount[]> }>;
-}
+    signerAddress: string,
+    data: string | Uint8Array
+  ): Promise<{ signature: string; pubKey: Uint8Array }> {
+    const keplr = this.keplr;
+    if (!keplr?.signArbitrary) {
+      throw new Error('Keplr signArbitrary not available');
+    }
 
-type KeplrWindow = typeof window & { keplr?: KeplrProvider };
+    const result = await keplr.signArbitrary(chainId, signerAddress, data);
+    return {
+      signature: result.signature,
+      pubKey: this.base64ToBytes(result.pub_key.value),
+    };
+  }
 
-function getKeplr(): KeplrProvider | null {
-  if (!isBrowser()) return null;
-  const keplr = (window as KeplrWindow).keplr;
-  return keplr ?? null;
-}
-
-async function getAccountsFromSigner(
-  keplr: KeplrProvider,
-  chainId: string
-): Promise<WalletAccount[]> {
-  if (!keplr.getOfflineSignerAuto) return [];
-  const signer = await keplr.getOfflineSignerAuto(chainId);
-  return signer.getAccounts();
-}
-
-export function createKeplrAdapter(): WalletAdapter {
-  return {
-    id: 'keplr',
-    name: 'Keplr',
-    supportsExtension: true,
-    supportsMobile: true,
-    isInstalled: () => !!getKeplr(),
-    connect: async (context: WalletAdapterContext): Promise<WalletConnection> => {
-      const keplr = getKeplr();
-      if (!keplr) {
-        throw new Error('Keplr extension not installed');
-      }
-
-      if (keplr.experimentalSuggestChain) {
-        await keplr.experimentalSuggestChain(toKeplrChainInfo(context.chain));
-      }
-
-      await keplr.enable(context.chain.chainId);
-
-      const accounts = await getAccountsFromSigner(keplr, context.chain.chainId);
-      if (accounts.length > 0) {
-        return { accounts, activeAccount: accounts[0] };
-      }
-
-      const key = await keplr.getKey(context.chain.chainId);
-      const account: WalletAccount = {
-        address: key.bech32Address,
-        algo: key.algo,
-        pubkey: key.pubKey,
-        isNanoLedger: key.isNanoLedger,
-        name: key.name,
-      };
-
-      return { accounts: [account], activeAccount: account };
-    },
-    disconnect: async () => {
-      return;
-    },
-    getAccounts: async (chainId: string) => {
-      const keplr = getKeplr();
-      if (!keplr) return [];
-      const accounts = await getAccountsFromSigner(keplr, chainId);
-      if (accounts.length > 0) return accounts;
-      const key = await keplr.getKey(chainId);
-      return [{
-        address: key.bech32Address,
-        algo: key.algo,
-        pubkey: key.pubKey,
-        isNanoLedger: key.isNanoLedger,
-        name: key.name,
-      }];
-    },
-    signAmino: async (chainId: string, signer: string, signDoc: AminoSignDoc) => {
-      const keplr = getKeplr();
-      if (!keplr) {
-        throw new Error('Keplr extension not installed');
-      }
-      return keplr.signAmino(chainId, signer, signDoc);
-    },
-    signDirect: async (chainId: string, signer: string, signDoc: DirectSignDoc) => {
-      const keplr = getKeplr();
-      if (!keplr) {
-        throw new Error('Keplr extension not installed');
-      }
-      return keplr.signDirect(chainId, signer, signDoc);
-    },
-    signArbitrary: async (chainId: string, signer: string, data: string | Uint8Array) => {
-      const keplr = getKeplr();
-      if (!keplr?.signArbitrary) {
-        throw new Error('Keplr does not support arbitrary signing');
-      }
-      const payload = typeof data === 'string' ? data : new TextDecoder().decode(data);
-      return keplr.signArbitrary(chainId, signer, payload);
-    },
-    suggestChain: async (chain) => {
-      const keplr = getKeplr();
-      if (!keplr?.experimentalSuggestChain) {
-        return;
-      }
-      await keplr.experimentalSuggestChain(toKeplrChainInfo(chain));
-    },
-  };
+  private toKeplrChainInfo(chainInfo: WalletChainInfo): Record<string, unknown> {
+    return {
+      chainId: chainInfo.chainId,
+      chainName: chainInfo.chainName,
+      rpc: chainInfo.rpcEndpoint,
+      rest: chainInfo.restEndpoint,
+      bip44: { coinType: chainInfo.bip44?.coinType ?? 118 },
+      bech32Config: chainInfo.bech32Config,
+      currencies: chainInfo.currencies,
+      feeCurrencies: chainInfo.feeCurrencies,
+      stakeCurrency: chainInfo.stakeCurrency,
+      features: chainInfo.features ?? [],
+    };
+  }
 }

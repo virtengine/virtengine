@@ -38,23 +38,6 @@ export type { PortalProviderProps, PortalConfig } from './types/config';
 // Authentication (VE-700)
 // ============================================================================
 
-export { WalletProvider, useWallet } from './src/wallet/context';
-export type { WalletProviderProps, WalletProviderConfig } from './src/wallet/context';
-export type {
-  ExtensionWalletType,
-  WalletChainConfig,
-  WalletAccount,
-  WalletState,
-  WalletActions,
-  FeeEstimate,
-} from './src/wallet/types';
-export {
-  WalletButton,
-  WalletModal,
-  AccountDisplay,
-  NetworkBadge,
-} from './src/components/wallet';
-
 export { useAuth, AuthProvider } from './hooks/useAuth';
 export type {
   AuthState,
@@ -70,6 +53,27 @@ export type { SessionConfig, SessionInfo } from './utils/session';
 
 export { WalletAdapter, MnemonicWallet, KeypairWallet } from './utils/wallet';
 export type { WalletConfig, SigningResult } from './types/wallet';
+
+// ============================================================================
+// Wallet Connections (Portal UI)
+// ============================================================================
+
+export { WalletProvider, useWallet } from './src/wallet';
+export type {
+  WalletType as PortalWalletType,
+  WalletConnectionStatus,
+  WalletChainInfo,
+  WalletAccount,
+  WalletError,
+  WalletState,
+  WalletSignOptions,
+  AminoSignDoc,
+  AminoSignResponse,
+  DirectSignDoc,
+  DirectSignResponse,
+  WalletContextValue,
+  WalletProviderConfig,
+} from './src/wallet';
 
 // ============================================================================
 // Identity / VEID (VE-701)
@@ -191,6 +195,19 @@ export { JobSubmissionForm } from './components/hpc/JobSubmissionForm';
 export { JobTracker } from './components/hpc/JobTracker';
 export { JobOutputViewer } from './components/hpc/JobOutputViewer';
 export { JobCancelDialog } from './components/hpc/JobCancelDialog';
+
+// ============================================================================
+// Wallet UI Components
+// ============================================================================
+
+export { WalletButton, WalletAccountDisplay, WalletNetworkBadge, WalletModal } from './src/components/wallet';
+export type {
+  WalletButtonProps,
+  WalletAccountDisplayProps,
+  WalletNetworkBadgeProps,
+  WalletModalProps,
+  WalletOption,
+} from './src/components/wallet';
 
 // ============================================================================
 // Chain Integration

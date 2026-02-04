@@ -92,7 +92,7 @@ export default function VerifyPage() {
             </Card>
           )}
 
-          {identityState.status === 'pending' && (
+          {(identityState.status === 'pending' || identityState.status === 'processing') && (
             <Card>
               <CardHeader>
                 <CardTitle>Verification In Progress</CardTitle>
@@ -154,3 +154,4 @@ export default function VerifyPage() {
     </div>
   );
 }
+

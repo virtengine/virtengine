@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react';
 import {
   DocumentCapture,
   CaptureGuidance,
-  QualityFeedback,
   type DocumentType,
   type DocumentSide,
   type CaptureResult,
@@ -139,3 +138,4 @@ export function DocumentCapturePanel({
     </Card>
   );
 }
+

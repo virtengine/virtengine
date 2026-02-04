@@ -1,150 +1,75 @@
-import { useMemo } from 'react';
-import type { ExtensionWalletType } from '../../wallet/types';
-import { useWallet } from '../../wallet/context';
+'use client';
+
+import * as React from 'react';
+import type { WalletType } from '../../wallet';
+import { useWallet } from '../../wallet';
+
+export interface WalletOption {
+  id: WalletType;
+  name: string;
+  description: string;
+  icon?: string;
+  recommended?: boolean;
+}
 
 export interface WalletModalProps {
   isOpen: boolean;
   onClose: () => void;
-  walletOrder?: ExtensionWalletType[];
+  wallets: WalletOption[];
 }
 
-const DEFAULT_WALLETS: Array<{
-  id: ExtensionWalletType;
-  name: string;
-  description: string;
-  downloadUrl: string;
-}> = [
-  {
-    id: 'keplr',
-    name: 'Keplr',
-    description: 'Popular Cosmos wallet extension and mobile app',
-    downloadUrl: 'https://www.keplr.app/download',
-  },
-  {
-    id: 'leap',
-    name: 'Leap',
-    description: 'Multi-chain Cosmos wallet extension and mobile app',
-    downloadUrl: 'https://www.leapwallet.io/download',
-  },
-  {
-    id: 'cosmostation',
-    name: 'Cosmostation',
-    description: 'Cosmos wallet for web and mobile',
-    downloadUrl: 'https://wallet.cosmostation.io/',
-  },
-  {
-    id: 'walletconnect',
-    name: 'WalletConnect',
-    description: 'Connect a mobile wallet via QR code',
-    downloadUrl: 'https://walletconnect.com/',
-  },
-];
+export function WalletModal({ isOpen, onClose, wallets }: WalletModalProps) {
+  const { connect, status } = useWallet();
 
-export function WalletModal({ isOpen, onClose, walletOrder }: WalletModalProps) {
-  const { state, actions } = useWallet();
-
-  const wallets = useMemo(() => {
-    if (!walletOrder || walletOrder.length === 0) return DEFAULT_WALLETS;
-    return walletOrder
-      .map((id) => DEFAULT_WALLETS.find((wallet) => wallet.id === id))
-      .filter(Boolean) as typeof DEFAULT_WALLETS;
-  }, [walletOrder]);
-
-  const handleConnect = async (walletType: ExtensionWalletType) => {
-    await actions.connect(walletType);
-    if (!state.error) {
-      onClose();
-    }
+  const handleConnect = async (walletType: WalletType) => {
+    await connect(walletType);
+    onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.45)',
-        zIndex: 50,
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 420,
-          background: '#fff',
-          borderRadius: 12,
-          padding: 24,
-          boxShadow: '0 12px 30px rgba(0,0,0,0.15)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>Connect Wallet</h2>
-            <p style={{ marginTop: 4, marginBottom: 0, fontSize: 14, color: '#5f6368' }}>
-              Select a wallet to connect to VirtEngine.
-            </p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close">
-            Close
-          </button>
-        </div>
-
-        <div style={{ marginTop: 20, display: 'grid', gap: 12 }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-1 text-muted-foreground hover:bg-accent"
+          aria-label="Close modal"
+        >
+          ✕
+        </button>
+        <h2 className="text-xl font-semibold">Connect Wallet</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Choose a wallet to connect</p>
+        <div className="mt-6 space-y-3">
           {wallets.map((wallet) => (
             <button
               key={wallet.id}
               type="button"
               onClick={() => handleConnect(wallet.id)}
-              disabled={state.isConnecting}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                borderRadius: 10,
-                border: '1px solid #e0e0e0',
-                background: '#f8f9fa',
-              }}
+              disabled={status === 'connecting'}
+              className="flex w-full items-center gap-4 rounded-lg border border-border p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <div>
-                <div style={{ fontWeight: 600 }}>{wallet.name}</div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>{wallet.description}</div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                {wallet.icon ? (
+                  <img src={wallet.icon} alt="" className="h-6 w-6" />
+                ) : (
+                  <span className="text-lg font-semibold">{wallet.name[0]}</span>
+                )}
               </div>
-              <span aria-hidden="true">→</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{wallet.name}</span>
+                  {wallet.recommended && (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      Recommended
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">{wallet.description}</p>
+              </div>
             </button>
-          ))}
-        </div>
-
-        {state.error && (
-          <div
-            role="alert"
-            style={{
-              marginTop: 16,
-              padding: 12,
-              borderRadius: 8,
-              background: '#fee2e2',
-              color: '#991b1b',
-              fontSize: 13,
-            }}
-          >
-            {state.error.message}
-          </div>
-        )}
-
-        <p style={{ marginTop: 20, fontSize: 12, color: '#6b7280' }}>
-          Need a wallet? Download one from the official site.
-        </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 6 }}>
-          {wallets.map((wallet) => (
-            <a key={wallet.id} href={wallet.downloadUrl} target="_blank" rel="noreferrer">
-              {wallet.name}
-            </a>
           ))}
         </div>
       </div>

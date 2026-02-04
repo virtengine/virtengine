@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { WalletButton } from '@/components/wallet/WalletButton';
+import { WalletButton, WalletModal, useWalletModal } from '@/components/wallet';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 
 export function Header() {
   const pathname = usePathname();
+  const { isOpen, close } = useWalletModal();
 
   const navigation = [
     { name: 'Marketplace', href: '/marketplace' },
@@ -48,6 +49,7 @@ export function Header() {
           <WalletButton />
         </div>
       </div>
+      <WalletModal isOpen={isOpen} onClose={close} />
     </header>
   );
 }

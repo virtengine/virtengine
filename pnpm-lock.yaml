@@ -47,10 +47,10 @@ importers:
   lib/portal:
     dependencies:
       '@walletconnect/modal':
-        specifier: ^2.6.2
+        specifier: ^2.7.0
         version: 2.7.0(@types/react@18.3.27)(react@18.3.1)
       '@walletconnect/sign-client':
-        specifier: ^2.12.2
+        specifier: ^2.7.0
         version: 2.23.4(typescript@5.9.3)
       react:
         specifier: ^18.2.0
@@ -125,6 +125,12 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.0.7
         version: 1.2.8(@types/react-dom@18.3.7(@types/react@18.3.27))(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@walletconnect/modal':
+        specifier: ^2.7.0
+        version: 2.7.0(@types/react@18.3.27)(react@18.3.1)
+      '@walletconnect/sign-client':
+        specifier: ^2.7.0
+        version: 2.23.4(typescript@5.9.3)
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -1150,7 +1156,6 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-<<<<<<< HEAD
 =======
   '@lit-labs/ssr-dom-shim@1.5.1':
     resolution: {integrity: sha512-Aou5UdlSpr5whQe8AA/bZG0jMj96CoJIWbGfZ91qieWu5AWUMKw8VR/pAkQkJYvBNhmCcWnZlyyk5oze8JIqYA==}
@@ -1158,14 +1163,12 @@ packages:
   '@lit/reactive-element@1.6.3':
     resolution: {integrity: sha512-QuTgnG52Poic7uM1AN5yJ09QMe0O28e10XzSvWDz02TJiiKee4stsiownEIadWm8nYzyDAyT+gKzUoZmiWQtsQ==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   '@mdx-js/react@3.1.1':
     resolution: {integrity: sha512-f++rKLQgUVYDAtECQ6fn/is15GkEH9+nZPM3MS0RcxVqoTfawHvDlSCH7JbMhAM6uJ32v3eXLvLmLvjGu7PTQw==}
     peerDependencies:
       '@types/react': '>=16'
       react: '>=16'
 
-<<<<<<< HEAD
 =======
   '@motionone/animation@10.18.0':
     resolution: {integrity: sha512-9z2p5GFGCm0gBsZbi8rVMOAJCtw1WqBTIPw3ozk06gDvZInBPIsQcHgYogEJ4yuHJ+akuW8g1SEIOpTOvYs8hw==}
@@ -1196,7 +1199,6 @@ packages:
     resolution: {integrity: sha512-47XIizs9XZXvuJgoaJUIE2lFoID8ugvc0jzSHP+Ptfk8nTbnR8g788wv48N03Kx0UkAv559HWRQ3yzOgzlRNUA==}
     engines: {node: '>= 18'}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   '@mswjs/interceptors@0.40.0':
     resolution: {integrity: sha512-EFd6cVbHsgLa6wa4RljGj6Wk75qoHxUSyc5asLyyPSyuhIcdS2Q3Phw6ImS1q+CkALthJRShiYfKANcQMuMqsQ==}
     engines: {node: '>=18'}
@@ -2326,12 +2328,14 @@ packages:
   '@types/statuses@2.0.6':
     resolution: {integrity: sha512-xMAgYwceFhRA2zY+XbEA7mxYbA093wdiW8Vu6gZPGWy9cmOyU9XesH1tNcEWsKFd5Vzrqx5T3D38PWx1FIIXkA==}
 
-<<<<<<< HEAD
+  '@types/trusted-types@2.0.7':
+    resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
+
 =======
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   '@types/uuid@9.0.8':
     resolution: {integrity: sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA==}
 
@@ -2581,7 +2585,6 @@ packages:
   '@vitest/utils@3.2.4':
     resolution: {integrity: sha512-fB2V0JFrQSMsCo9HiSq3Ezpdv4iYaXRG1Sx8edX3MwxfyNn83mKiGzOcH+Fkxt4MHxr3y42fQi1oeAInqgX2QA==}
 
-<<<<<<< HEAD
 =======
   '@walletconnect/core@2.23.4':
     resolution: {integrity: sha512-qkzNvRfibl+r2GoPqKl+2MJLYA7ApEWyCmECJoK6IExeWyjKawAUC6Eo4cN0geCBefk9VSFRFEIVQ17vYWp0jQ==}
@@ -2656,7 +2659,6 @@ packages:
   '@walletconnect/window-metadata@1.0.1':
     resolution: {integrity: sha512-9koTqyGrM2cqFRW517BPY/iEtUDx2r1+Pwwu5m7sJ7ka79wi3EyqhqcICk/yDmv6jAS1rjKgTKXlEhanYjijcA==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   '@webassemblyjs/ast@1.14.1':
     resolution: {integrity: sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==}
 
@@ -2708,7 +2710,6 @@ packages:
   '@xtuc/long@4.2.2':
     resolution: {integrity: sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ==}
 
-<<<<<<< HEAD
 =======
   abitype@1.2.3:
     resolution: {integrity: sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg==}
@@ -2721,7 +2722,6 @@ packages:
       zod:
         optional: true
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
     engines: {node: '>=6.5'}
@@ -2951,12 +2951,14 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
-<<<<<<< HEAD
+  base-x@5.0.1:
+    resolution: {integrity: sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==}
+
 =======
   base-x@5.0.1:
     resolution: {integrity: sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
@@ -2971,12 +2973,14 @@ packages:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
 
-<<<<<<< HEAD
+  blakejs@1.2.1:
+    resolution: {integrity: sha512-QXUSXI3QVc/gJME0dBpXrag1kbzOqCjCX8/b54ntNyW6sjtoqxqRk3LTmXzaJoh71zMsDCjM+47jS7XiwN/+fQ==}
+
 =======
   blakejs@1.2.1:
     resolution: {integrity: sha512-QXUSXI3QVc/gJME0dBpXrag1kbzOqCjCX8/b54ntNyW6sjtoqxqRk3LTmXzaJoh71zMsDCjM+47jS7XiwN/+fQ==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   bn.js@4.12.2:
     resolution: {integrity: sha512-n4DSx829VRTRByMRGdjQ9iqsN0Bh4OolPsFnaZBLcbi8iXcB+kJ9s7EnRt4wILZNV3kPLHkRVfOc/HvhC3ovDw==}
 
@@ -3024,12 +3028,14 @@ packages:
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
 
-<<<<<<< HEAD
+  bs58@6.0.0:
+    resolution: {integrity: sha512-PD0wEnEYg6ijszw/u8s+iI3H17cTymlrwkKhDhPZq+Sokl3AU4htyBFTjAeNAlCCmg0f53g6ih3jATyCKftTfw==}
+
 =======
   bs58@6.0.0:
     resolution: {integrity: sha512-PD0wEnEYg6ijszw/u8s+iI3H17cTymlrwkKhDhPZq+Sokl3AU4htyBFTjAeNAlCCmg0f53g6ih3jATyCKftTfw==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
 
@@ -3119,13 +3125,11 @@ packages:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
     engines: {node: '>= 14.16.0'}
 
-<<<<<<< HEAD
 =======
   chokidar@5.0.0:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
     engines: {node: '>= 20.19.0'}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   chrome-trace-event@1.0.4:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
     engines: {node: '>=6.0'}
@@ -3262,12 +3266,14 @@ packages:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
 
-<<<<<<< HEAD
+  crossws@0.3.5:
+    resolution: {integrity: sha512-ojKiDvcmByhwa8YYqbQI/hg7MEU0NC03+pSdEq4ZUnZR9xXpwk7E43SMNGkn+JxJGPFtNvQ48+vV2p+P1ml5PA==}
+
 =======
   crossws@0.3.5:
     resolution: {integrity: sha512-ojKiDvcmByhwa8YYqbQI/hg7MEU0NC03+pSdEq4ZUnZR9xXpwk7E43SMNGkn+JxJGPFtNvQ48+vV2p+P1ml5PA==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   crypto-browserify@3.12.1:
     resolution: {integrity: sha512-r4ESw/IlusD17lgQi1O20Fa3qNnsckR126TdUuBgAu7GBYSIPvdNyONd3Zrxh0xCwA4+6w/TDArBPsMvhur+KQ==}
     engines: {node: '>= 0.10'}
@@ -3420,7 +3426,6 @@ packages:
   des.js@1.1.0:
     resolution: {integrity: sha512-r17GxjhUCjSRy8aiJpr8/UadFIzMzJGexI3Nmz4ADi9LYSFx4gTBp80+NaX/YsXWWLhpZ7v/v/ubEc/bCNfKwg==}
 
-<<<<<<< HEAD
 =======
   destr@2.0.5:
     resolution: {integrity: sha512-ugFTXCtDZunbzasqBxrK93Ik/DRYsO6S/fedkWEMKqt04xZ4csmnmwGDBAb07QWNaGMAmnTIemsYZCksjATwsA==}
@@ -3428,7 +3433,6 @@ packages:
   detect-browser@5.3.0:
     resolution: {integrity: sha512-53rsFbGdwMwlF7qvCt0ypLM5V5/Mbl0szB7GPN8y9NCcbknYOeVVXdrXEq+90IwAfrrzt6Hd+u2E2ntakICU8w==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   detect-node-es@1.1.0:
     resolution: {integrity: sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ==}
 
@@ -3442,12 +3446,14 @@ packages:
   diffie-hellman@5.0.3:
     resolution: {integrity: sha512-kqag/Nl+f3GwyK25fhUMYj81BUOrZ9IuJsjIcDE5icNM9FJHAVm3VcUDxdLPoQtTuUylWm6ZIknYJwwaPxsUzg==}
 
-<<<<<<< HEAD
+  dijkstrajs@1.0.3:
+    resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
+
 =======
   dijkstrajs@1.0.3:
     resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
@@ -3518,12 +3524,14 @@ packages:
     resolution: {integrity: sha512-/kyM18EfinwXZbno9FyUGeFh87KC8HRQBQGildHZbEuRyWFOmv1U10o9BBp8XVZDVNNuQKyIGIu5ZYAAXJ0V2Q==}
     engines: {node: '>= 4'}
 
-<<<<<<< HEAD
+  encode-utf8@1.0.3:
+    resolution: {integrity: sha512-ucAnuBEhUK4boH2HjVYG5Q2mQyPorvv0u/ocS+zhdw0S8AlHYY+GOFhP1Gio5z4icpP2ivFSvhtFjQi8+T9ppw==}
+
 =======
   encode-utf8@1.0.3:
     resolution: {integrity: sha512-ucAnuBEhUK4boH2HjVYG5Q2mQyPorvv0u/ocS+zhdw0S8AlHYY+GOFhP1Gio5z4icpP2ivFSvhtFjQi8+T9ppw==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   endent@2.1.0:
     resolution: {integrity: sha512-r8VyPX7XL8U01Xgnb1CjZ3XV+z90cXIJ9JPE/R9SEC9vpw2P6CfsRPJmp20DppC5N7ZAMCmjYkJIa744Iyg96w==}
 
@@ -3739,12 +3747,14 @@ packages:
     resolution: {integrity: sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ==}
     engines: {node: '>=6'}
 
-<<<<<<< HEAD
+  eventemitter3@5.0.1:
+    resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
+
 =======
   eventemitter3@5.0.1:
     resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   events@3.3.0:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
@@ -4014,12 +4024,14 @@ packages:
   headers-polyfill@4.0.3:
     resolution: {integrity: sha512-IScLbePpkvO846sIwOtOTDjutRMWdXdJmXdMvk6gCBHxFO8d+QKOQedyZSxFTTFYRSmlgSTDtXqqq4pcenBXLQ==}
 
-<<<<<<< HEAD
+  hey-listen@1.0.8:
+    resolution: {integrity: sha512-COpmrF2NOg4TBWUJ5UVyaCU2A88wEMkUPK4hNqyCkqHbxT92BbvfjoSozkAIIm6XhicGlJHhFdullInrdhwU8Q==}
+
 =======
   hey-listen@1.0.8:
     resolution: {integrity: sha512-COpmrF2NOg4TBWUJ5UVyaCU2A88wEMkUPK4hNqyCkqHbxT92BbvfjoSozkAIIm6XhicGlJHhFdullInrdhwU8Q==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   hmac-drbg@1.0.1:
     resolution: {integrity: sha512-Tti3gMqLdZfhOQY1Mzf/AanLiqh1WTiJgEj26ZuYQ9fbkLomzGchCws4FyrSd4VkpBfiNhaE1On+lOz894jvXg==}
 
@@ -4078,12 +4090,14 @@ packages:
     peerDependencies:
       postcss: ^8.1.0
 
-<<<<<<< HEAD
+  idb-keyval@6.2.2:
+    resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
+
 =======
   idb-keyval@6.2.2:
     resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
@@ -4384,7 +4398,6 @@ packages:
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
-<<<<<<< HEAD
 =======
   lit-element@3.3.3:
     resolution: {integrity: sha512-XbeRxmTHubXENkV4h8RIPyr8lXc+Ff28rkcQzw3G6up2xg5E8Zu1IgOWIwBLEQsu3cOVFqdYwiVi0hv0SlpqUA==}
@@ -4395,7 +4408,6 @@ packages:
   lit@2.8.0:
     resolution: {integrity: sha512-4Sc3OFX9QHOJaHbmTMk28SYgVxLN3ePDjg7hofEft2zWlehFL3LiAuapWc4U/kYwMYJSh2hTCPZ6/LIC7ii0MA==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   loader-runner@4.3.1:
     resolution: {integrity: sha512-IWqP2SCPhyVFTBtRcgMHdzlf9ul25NwaFx4wCEH/KjAXuuHY4yNjvPXsBokp8jCB936PyWRaPKUNh8NvylLp2Q==}
     engines: {node: '>=6.11.5'}
@@ -4622,7 +4634,6 @@ packages:
   node-abort-controller@3.1.1:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
 
-<<<<<<< HEAD
 =======
   node-fetch-native@1.6.7:
     resolution: {integrity: sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q==}
@@ -4630,7 +4641,6 @@ packages:
   node-mock-http@1.0.4:
     resolution: {integrity: sha512-8DY+kFsDkNXy1sJglUfuODx1/opAGJGyrTuFqEoN90oRc2Vk0ZbD4K2qmKXBBEhZQzdKHIVfEJpDU8Ak2NJEvQ==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   node-polyfill-webpack-plugin@2.0.1:
     resolution: {integrity: sha512-ZUMiCnZkP1LF0Th2caY6J/eKKoA0TefpoVa68m/LQU1I/mE8rGt4fNYGgNuCcK+aG8P8P43nbeJ2RqJMOL/Y1A==}
     engines: {node: '>=12'}
@@ -4697,7 +4707,6 @@ packages:
   objectorarray@1.0.5:
     resolution: {integrity: sha512-eJJDYkhJFFbBBAxeh8xW+weHlkI28n2ZdQV/J/DNfWfSKlGEf2xcfAbZTv3riEXHAhL9SVOTs2pRmXiSTf78xg==}
 
-<<<<<<< HEAD
 =======
   ofetch@1.5.1:
     resolution: {integrity: sha512-2W4oUZlVaqAPAil6FUg/difl6YhqhUR7x2eZY4bQCko22UXg3hptq9KLQdqFClV+Wu85UX7hNtdGTngi/1BxcA==}
@@ -4706,7 +4715,6 @@ packages:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
     engines: {node: '>=14.0.0'}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
@@ -4736,7 +4744,6 @@ packages:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
     engines: {node: '>= 0.4'}
 
-<<<<<<< HEAD
 =======
   ox@0.9.3:
     resolution: {integrity: sha512-KzyJP+fPV4uhuuqrTZyok4DC7vFzi7HLUFiUNEmpbyh59htKWkOC98IONC1zgXJPbHAhQgqs6B0Z6StCGhmQvg==}
@@ -4746,7 +4753,6 @@ packages:
       typescript:
         optional: true
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   p-limit@2.3.0:
     resolution: {integrity: sha512-//88mFWSJx8lxCzwdAABTJL2MyWB12+eIY7MDL2SqLmAkeKU9qxRvWuSyTjm3FUmpBEMuFfckAIqEaVGUDxb6w==}
     engines: {node: '>=6'}
@@ -4907,13 +4913,11 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-<<<<<<< HEAD
 =======
   pngjs@5.0.0:
     resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
     engines: {node: '>=10.13.0'}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   polished@4.3.1:
     resolution: {integrity: sha512-OBatVyC/N7SCW/FaDHrSd+vn0o5cS855TOmYi4OkdWUMSJCET/xip//ch8xGUvtr3i44X9LVyWwQlRMTN3pwSA==}
     engines: {node: '>=10'}
@@ -5089,12 +5093,14 @@ packages:
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
 
-<<<<<<< HEAD
+  process-warning@5.0.0:
+    resolution: {integrity: sha512-a39t9ApHNx2L4+HBnQKqxxHNs1r7KF+Intd8Q/g1bUh6q0WIp9voPXJ/x0j+ZL45KF1pJd9+q2jLIRMfvEshkA==}
+
 =======
   process-warning@5.0.0:
     resolution: {integrity: sha512-a39t9ApHNx2L4+HBnQKqxxHNs1r7KF+Intd8Q/g1bUh6q0WIp9voPXJ/x0j+ZL45KF1pJd9+q2jLIRMfvEshkA==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   process@0.11.10:
     resolution: {integrity: sha512-cdGef/drWFoydD1JsMzuFf8100nZl+GT+yacc2bEced5f9Rjk4z+WtFUTBu9PhOi9j/jfmBPu0mMEY4wIdAF8A==}
     engines: {node: '>= 0.6.0'}
@@ -5118,14 +5124,12 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-<<<<<<< HEAD
 =======
   qrcode@1.5.3:
     resolution: {integrity: sha512-puyri6ApkEHYiVl4CFzo1tDkAZ+ATcnbJrJ6RiBM1Fhctdn/ix9MTE3hRph33omisEbC/2fcfemsseiKgBPKZg==}
     engines: {node: '>=10.13.0'}
     hasBin: true
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   qs@6.14.1:
     resolution: {integrity: sha512-4EK3+xJl8Ts67nLYNwqw/dsFVnCf+qR7RgXSK9jEEm9unao3njwMDdmsdvoKBKHzxd7tCYz5e5M+SnMjdtXGQQ==}
     engines: {node: '>=0.6'}
@@ -5140,7 +5144,6 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
-<<<<<<< HEAD
 =======
   quick-format-unescaped@4.0.4:
     resolution: {integrity: sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==}
@@ -5148,7 +5151,6 @@ packages:
   radix3@1.1.2:
     resolution: {integrity: sha512-b484I/7b8rDEdSDKckSSBA8knMpcdsXudlE/LNL639wFoHKwLbEkQFZHWEYwDC0wa0FKUcCY+GAF73Z7wxNVFA==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   randombytes@2.1.0:
     resolution: {integrity: sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==}
 
@@ -5250,7 +5252,6 @@ packages:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
 
-<<<<<<< HEAD
 =======
   readdirp@5.0.0:
     resolution: {integrity: sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==}
@@ -5260,7 +5261,6 @@ packages:
     resolution: {integrity: sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==}
     engines: {node: '>= 12.13.0'}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   recast@0.23.11:
     resolution: {integrity: sha512-YTUo+Flmw4ZXiWfQKGcwwc11KnoRAYgzAE2E7mXKCjSviTKShtxBsN6YUUBB2gtaBzKzeKunxhUwNHQuRryhWA==}
     engines: {node: '>= 4'}
@@ -5313,12 +5313,14 @@ packages:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
-<<<<<<< HEAD
+  require-main-filename@2.0.0:
+    resolution: {integrity: sha512-NKN5kMDylKuldxYLSUfrbo5Tuzh4hd+2E8NPPX02mZtn1VuREQToYe/ZdlJy+J3uCpfaiGF05e7B8W0iXbQHmg==}
+
 =======
   require-main-filename@2.0.0:
     resolution: {integrity: sha512-NKN5kMDylKuldxYLSUfrbo5Tuzh4hd+2E8NPPX02mZtn1VuREQToYe/ZdlJy+J3uCpfaiGF05e7B8W0iXbQHmg==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   requires-port@1.0.0:
     resolution: {integrity: sha512-KigOCHcocU3XODJxsu8i/j8T9tzT4adHiecwORRQ0ZZFcp7ahwXuRU1m+yuO90C5ZUyGeGfocHDI14M3L3yDAQ==}
 
@@ -5449,12 +5451,14 @@ packages:
   serialize-javascript@6.0.2:
     resolution: {integrity: sha512-Saa1xPByTTq2gdeFZYLLo+RFE35NHZkAbqZeWNd3BpzppeVisAqpDjcp8dyf6uIvEqJRd46jemmyA4iFIeVk8g==}
 
-<<<<<<< HEAD
+  set-blocking@2.0.0:
+    resolution: {integrity: sha512-KiKBS8AnWGEyLzofFfmvKwpdPzqiy16LvQfK3yv/fVH7Bj13/wl3JSR1J+rfgRE9q7xUJK4qvgS8raSOeLUehw==}
+
 =======
   set-blocking@2.0.0:
     resolution: {integrity: sha512-KiKBS8AnWGEyLzofFfmvKwpdPzqiy16LvQfK3yv/fVH7Bj13/wl3JSR1J+rfgRE9q7xUJK4qvgS8raSOeLUehw==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   set-function-length@1.2.2:
     resolution: {integrity: sha512-pgRc4hJ4/sNjWCSS9AmnS40x3bNMDTknHgL5UaMBTMyJnU90EgWh1Rz+MC9eFu4BuN/UwZjKQuY/1v3rM7HMfg==}
     engines: {node: '>= 0.4'}
@@ -5535,13 +5539,11 @@ packages:
     resolution: {integrity: sha512-i5uvt8C3ikiWeNZSVZNWcfZPItFQOsYTUAOkcUPGd8DqDy1uOUikjt5dG+uRlwyvR108Fb9DOd4GvXfT0N2/uQ==}
     engines: {node: '>= 12'}
 
-<<<<<<< HEAD
 =======
   split2@4.2.0:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   stable-hash@0.0.5:
     resolution: {integrity: sha512-+L3ccpzibovGXFK+Ap/f8LOS0ahMrHTf3xu7mMLSpEGU0EO9ucaysSylKo9eRDFNhWve/y275iPmIZ4z39a9iA==}
 
@@ -5762,12 +5764,14 @@ packages:
   thenify@3.3.1:
     resolution: {integrity: sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw==}
 
-<<<<<<< HEAD
+  thread-stream@3.1.0:
+    resolution: {integrity: sha512-OqyPZ9u96VohAyMfJykzmivOrY2wfMSf3C5TtFJVgN+Hm6aj+voFhlK+kZEIv2FBh1X6Xp3DlnCOfEQ3B2J86A==}
+
 =======
   thread-stream@3.1.0:
     resolution: {integrity: sha512-OqyPZ9u96VohAyMfJykzmivOrY2wfMSf3C5TtFJVgN+Hm6aj+voFhlK+kZEIv2FBh1X6Xp3DlnCOfEQ3B2J86A==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   timers-browserify@2.0.12:
     resolution: {integrity: sha512-9phl76Cqm6FhSX9Xe1ZUAMLtm1BLkKj2Qd5ApyWkXzsMRaA7dgr81kf4wJmQf/hAvg8EEyJxDo3du/0KlhPiKQ==}
     engines: {node: '>=0.6.0'}
@@ -5861,12 +5865,14 @@ packages:
     resolution: {integrity: sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==}
     engines: {node: '>=6'}
 
-<<<<<<< HEAD
+  tslib@1.14.1:
+    resolution: {integrity: sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg==}
+
 =======
   tslib@1.14.1:
     resolution: {integrity: sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg==}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -6085,7 +6091,6 @@ packages:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
     hasBin: true
 
-<<<<<<< HEAD
 =======
   valtio@1.11.2:
     resolution: {integrity: sha512-1XfIxnUXzyswPAPXo1P3Pdx2mq/pIqZICkWN60Hby0d9Iqb+MEIpqgYVlbflvHdrp2YR/q3jyKWRPJJ100yxaw==}
@@ -6099,7 +6104,6 @@ packages:
       react:
         optional: true
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   vite-node@1.6.1:
     resolution: {integrity: sha512-YAXkfvGtuTzwWbDSACdJSg4A4DZiAqckWe90Zapc/sEX3XvHcw1NdurM/6od8J207tSDqNbSsgdCacBgvJKFuA==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -7372,7 +7376,6 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-<<<<<<< HEAD
 =======
   '@lit-labs/ssr-dom-shim@1.5.1': {}
 
@@ -7380,14 +7383,12 @@ snapshots:
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.5.1
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   '@mdx-js/react@3.1.1(@types/react@18.3.27)(react@18.3.1)':
     dependencies:
       '@types/mdx': 2.0.13
       '@types/react': 18.3.27
       react: 18.3.1
 
-<<<<<<< HEAD
 =======
   '@motionone/animation@10.18.0':
     dependencies:
@@ -7436,7 +7437,6 @@ snapshots:
 
   '@msgpack/msgpack@3.1.3': {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   '@mswjs/interceptors@0.40.0':
     dependencies:
       '@open-draft/deferred-promise': 2.2.0
@@ -8628,11 +8628,12 @@ snapshots:
 
   '@types/statuses@2.0.6': {}
 
-<<<<<<< HEAD
+  '@types/trusted-types@2.0.7': {}
+
 =======
   '@types/trusted-types@2.0.7': {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   '@types/uuid@9.0.8': {}
 
   '@typescript-eslint/eslint-plugin@7.18.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)':
@@ -8912,7 +8913,6 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-<<<<<<< HEAD
 =======
   '@walletconnect/core@2.23.4(typescript@5.9.3)':
     dependencies:
@@ -9194,7 +9194,6 @@ snapshots:
       '@walletconnect/window-getters': 1.0.1
       tslib: 1.14.1
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   '@webassemblyjs/ast@1.14.1':
     dependencies:
       '@webassemblyjs/helper-numbers': 1.13.2
@@ -9275,13 +9274,11 @@ snapshots:
 
   '@xtuc/long@4.2.2': {}
 
-<<<<<<< HEAD
 =======
   abitype@1.2.3(typescript@5.9.3):
     optionalDependencies:
       typescript: 5.9.3
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   abort-controller@3.0.0:
     dependencies:
       event-target-shim: 5.0.1
@@ -9532,11 +9529,12 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
-<<<<<<< HEAD
+  base-x@5.0.1: {}
+
 =======
   base-x@5.0.1: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.9.19: {}
@@ -9545,11 +9543,12 @@ snapshots:
 
   binary-extensions@2.3.0: {}
 
-<<<<<<< HEAD
+  blakejs@1.2.1: {}
+
 =======
   blakejs@1.2.1: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   bn.js@4.12.2: {}
 
   bn.js@5.2.2: {}
@@ -9623,13 +9622,11 @@ snapshots:
       node-releases: 2.0.27
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
 
-<<<<<<< HEAD
 =======
   bs58@6.0.0:
     dependencies:
       base-x: 5.0.1
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   buffer-from@1.1.2: {}
 
   buffer-xor@1.0.3: {}
@@ -9733,13 +9730,11 @@ snapshots:
     dependencies:
       readdirp: 4.1.2
 
-<<<<<<< HEAD
 =======
   chokidar@5.0.0:
     dependencies:
       readdirp: 5.0.0
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   chrome-trace-event@1.0.4: {}
 
   cipher-base@1.0.7:
@@ -9870,13 +9865,11 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-<<<<<<< HEAD
 =======
   crossws@0.3.5:
     dependencies:
       uncrypto: 0.1.3
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   crypto-browserify@3.12.1:
     dependencies:
       browserify-cipher: 1.0.1
@@ -10043,13 +10036,11 @@ snapshots:
       inherits: 2.0.4
       minimalistic-assert: 1.0.1
 
-<<<<<<< HEAD
 =======
   destr@2.0.5: {}
 
   detect-browser@5.3.0: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   detect-node-es@1.1.0: {}
 
   didyoumean@1.2.2: {}
@@ -10062,11 +10053,12 @@ snapshots:
       miller-rabin: 4.0.1
       randombytes: 2.1.0
 
-<<<<<<< HEAD
+  dijkstrajs@1.0.3: {}
+
 =======
   dijkstrajs@1.0.3: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   dir-glob@3.0.1:
     dependencies:
       path-type: 4.0.0
@@ -10142,11 +10134,12 @@ snapshots:
 
   emojis-list@3.0.0: {}
 
-<<<<<<< HEAD
+  encode-utf8@1.0.3: {}
+
 =======
   encode-utf8@1.0.3: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   endent@2.1.0:
     dependencies:
       dedent: 0.7.0
@@ -10534,11 +10527,12 @@ snapshots:
 
   event-target-shim@5.0.1: {}
 
-<<<<<<< HEAD
+  eventemitter3@5.0.1: {}
+
 =======
   eventemitter3@5.0.1: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   events@3.3.0: {}
 
   evp_bytestokey@1.0.3:
@@ -10845,11 +10839,12 @@ snapshots:
 
   headers-polyfill@4.0.3: {}
 
-<<<<<<< HEAD
+  hey-listen@1.0.8: {}
+
 =======
   hey-listen@1.0.8: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   hmac-drbg@1.0.1:
     dependencies:
       hash.js: 1.1.7
@@ -10917,11 +10912,12 @@ snapshots:
     dependencies:
       postcss: 8.5.6
 
-<<<<<<< HEAD
+  idb-keyval@6.2.2: {}
+
 =======
   idb-keyval@6.2.2: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   ieee754@1.2.1: {}
 
   ignore@5.3.2: {}
@@ -11221,7 +11217,6 @@ snapshots:
 
   lines-and-columns@1.2.4: {}
 
-<<<<<<< HEAD
 =======
   lit-element@3.3.3:
     dependencies:
@@ -11239,7 +11234,6 @@ snapshots:
       lit-element: 3.3.3
       lit-html: 2.8.0
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   loader-runner@4.3.1: {}
 
   loader-utils@2.0.4:
@@ -11472,13 +11466,11 @@ snapshots:
 
   node-abort-controller@3.1.1: {}
 
-<<<<<<< HEAD
 =======
   node-fetch-native@1.6.7: {}
 
   node-mock-http@1.0.4: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   node-polyfill-webpack-plugin@2.0.1(webpack@5.105.0):
     dependencies:
       assert: 2.1.0
@@ -11573,7 +11565,6 @@ snapshots:
 
   objectorarray@1.0.5: {}
 
-<<<<<<< HEAD
 =======
   ofetch@1.5.1:
     dependencies:
@@ -11583,7 +11574,6 @@ snapshots:
 
   on-exit-leak-free@2.1.2: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
@@ -11620,7 +11610,6 @@ snapshots:
       object-keys: 1.1.1
       safe-push-apply: 1.0.0
 
-<<<<<<< HEAD
 =======
   ox@0.9.3(typescript@5.9.3):
     dependencies:
@@ -11637,7 +11626,6 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   p-limit@2.3.0:
     dependencies:
       p-try: 2.2.0
@@ -11795,11 +11783,12 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.2
 
-<<<<<<< HEAD
+  pngjs@5.0.0: {}
+
 =======
   pngjs@5.0.0: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   polished@4.3.1:
     dependencies:
       '@babel/runtime': 7.28.6
@@ -11913,11 +11902,12 @@ snapshots:
 
   process-nextick-args@2.0.1: {}
 
-<<<<<<< HEAD
+  process-warning@5.0.0: {}
+
 =======
   process-warning@5.0.0: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   process@0.11.10: {}
 
   prop-types@15.8.1:
@@ -11945,7 +11935,6 @@ snapshots:
 
   punycode@2.3.1: {}
 
-<<<<<<< HEAD
 =======
   qrcode@1.5.3:
     dependencies:
@@ -11954,7 +11943,6 @@ snapshots:
       pngjs: 5.0.0
       yargs: 15.4.1
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   qs@6.14.1:
     dependencies:
       side-channel: 1.1.0
@@ -11965,13 +11953,11 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
-<<<<<<< HEAD
 =======
   quick-format-unescaped@4.0.4: {}
 
   radix3@1.1.2: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   randombytes@2.1.0:
     dependencies:
       safe-buffer: 5.2.1
@@ -12098,13 +12084,11 @@ snapshots:
 
   readdirp@4.1.2: {}
 
-<<<<<<< HEAD
 =======
   readdirp@5.0.0: {}
 
   real-require@0.2.0: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   recast@0.23.11:
     dependencies:
       ast-types: 0.16.1
@@ -12175,11 +12159,12 @@ snapshots:
 
   require-from-string@2.0.2: {}
 
-<<<<<<< HEAD
+  require-main-filename@2.0.0: {}
+
 =======
   require-main-filename@2.0.0: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   requires-port@1.0.0: {}
 
   resolve-from@4.0.0: {}
@@ -12322,11 +12307,12 @@ snapshots:
     dependencies:
       randombytes: 2.1.0
 
-<<<<<<< HEAD
+  set-blocking@2.0.0: {}
+
 =======
   set-blocking@2.0.0: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   set-function-length@1.2.2:
     dependencies:
       define-data-property: 1.1.4
@@ -12420,11 +12406,12 @@ snapshots:
 
   source-map@0.7.6: {}
 
-<<<<<<< HEAD
+  split2@4.2.0: {}
+
 =======
   split2@4.2.0: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   stable-hash@0.0.5: {}
 
   stackback@0.0.2: {}
@@ -12681,13 +12668,11 @@ snapshots:
     dependencies:
       any-promise: 1.3.0
 
-<<<<<<< HEAD
 =======
   thread-stream@3.1.0:
     dependencies:
       real-require: 0.2.0
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   timers-browserify@2.0.12:
     dependencies:
       setimmediate: 1.0.5
@@ -12774,11 +12759,12 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-<<<<<<< HEAD
+  tslib@1.14.1: {}
+
 =======
   tslib@1.14.1: {}
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
+>>>>>>> d6e00df3 (feat(portal): add wallet adapters and portal integration)
   tslib@2.8.1: {}
 
   tty-browserify@0.0.1: {}
@@ -12965,7 +12951,6 @@ snapshots:
 
   uuid@9.0.1: {}
 
-<<<<<<< HEAD
 =======
   valtio@1.11.2(@types/react@18.3.27)(react@18.3.1):
     dependencies:
@@ -12975,7 +12960,6 @@ snapshots:
       '@types/react': 18.3.27
       react: 18.3.1
 
->>>>>>> 9f3c2889 (feat(portal): add wallet auth adapters and UI)
   vite-node@1.6.1(@types/node@20.19.31)(terser@5.46.0):
     dependencies:
       cac: 6.7.14

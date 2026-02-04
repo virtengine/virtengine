@@ -54,6 +54,36 @@ export {
 export { WalletAdapter, MnemonicWallet, KeypairWallet } from '../../../lib/portal';
 export type { WalletConfig, SigningResult } from '../../../lib/portal';
 
+export { WalletProvider, useWallet } from '../../../lib/portal';
+export type {
+  PortalWalletType as PortalWalletType,
+  WalletConnectionStatus,
+  WalletChainInfo,
+  WalletAccount,
+  WalletError,
+  WalletState,
+  WalletSignOptions,
+  AminoSignDoc,
+  AminoSignResponse,
+  DirectSignDoc,
+  DirectSignResponse,
+  WalletProviderConfig,
+} from '../../../lib/portal';
+
+export {
+  WalletButton,
+  WalletAccountDisplay,
+  WalletNetworkBadge,
+  WalletModal,
+} from '../../../lib/portal';
+export type {
+  WalletButtonProps,
+  WalletAccountDisplayProps,
+  WalletNetworkBadgeProps,
+  WalletModalProps,
+  WalletOption,
+} from '../../../lib/portal';
+
 // ============================================================================
 // Identity / VEID (VE-701)
 // ============================================================================

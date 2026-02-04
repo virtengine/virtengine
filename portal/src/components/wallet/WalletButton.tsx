@@ -1,13 +1,15 @@
 'use client';
 
 import { useWallet } from '@/lib/portal-adapter';
+import { truncateAddress } from '@/lib/utils';
 import { useWalletModal } from './WalletModal';
 
 export function WalletButton() {
-  const { state, actions } = useWallet();
-  const { open: openWalletModal } = useWalletModal();
+  const { status, accounts, activeAccountIndex, disconnect } = useWallet();
+  const { open } = useWalletModal();
+  const account = accounts[activeAccountIndex];
 
-  if (state.isConnecting) {
+  if (status === 'connecting') {
     return (
       <button
         type="button"
@@ -20,13 +22,13 @@ export function WalletButton() {
     );
   }
 
-  if (state.isConnected && state.address) {
+  if (status === 'connected' && account) {
     return (
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
           <span className="status-dot status-dot-success" />
           <span className="font-mono text-sm">
-            {state.address.slice(0, 10)}...{state.address.slice(-4)}
+            {truncateAddress(account.address)}
           </span>
         </div>
         <button
@@ -44,7 +46,7 @@ export function WalletButton() {
   return (
     <button
       type="button"
-      onClick={openWalletModal}
+      onClick={open}
       className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
     >
       Connect Wallet

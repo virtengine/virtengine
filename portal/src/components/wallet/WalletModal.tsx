@@ -1,9 +1,10 @@
+/* eslint-disable jsx-a11y/anchor-is-valid */
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useWallet } from '@/lib/portal-adapter';
 import { useUIStore } from '@/stores/uiStore';
-import { SUPPORTED_WALLETS, isWalletInstalled, WALLET_CONNECT_PROJECT_ID, type WalletType } from '@/config';
+import { SUPPORTED_WALLETS, isWalletInstalled, WALLET_CONNECT_PROJECT_ID } from '@/config';
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -11,17 +12,16 @@ interface WalletModalProps {
 }
 
 export function WalletModal({ isOpen, onClose }: WalletModalProps) {
-  const { state, actions } = useWallet();
+  const { connect, status, error } = useWallet();
 
-  const handleConnect = useCallback(async (walletType: WalletType) => {
-    await actions.connect(walletType);
-  }, [actions]);
+  const wallets = useMemo(() => {
+    return SUPPORTED_WALLETS.filter((wallet) => wallet.id !== 'walletconnect' || WALLET_CONNECT_PROJECT_ID);
+  }, []);
 
-  useEffect(() => {
-    if (state.isConnected && isOpen) {
-      onClose();
-    }
-  }, [state.isConnected, isOpen, onClose]);
+  const handleConnect = useCallback(async (walletType: 'keplr' | 'leap' | 'cosmostation' | 'walletconnect') => {
+    await connect(walletType);
+    onClose();
+  }, [connect, onClose]);
 
   // Close on escape key
   useEffect(() => {
@@ -41,8 +41,6 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
-
-  const wallets = SUPPORTED_WALLETS;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -89,13 +87,19 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
           Choose a wallet to connect to VirtEngine
         </p>
 
+        {error && (
+          <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error.message}
+          </div>
+        )}
+
         <div className="mt-6 space-y-3">
           {wallets.map((wallet) => (
             <button
               key={wallet.id}
               type="button"
               onClick={() => handleConnect(wallet.id)}
-              disabled={state.isConnecting || (!isWalletInstalled(wallet.id) && wallet.extension) || (wallet.id === 'walletconnect' && !WALLET_CONNECT_PROJECT_ID)}
+              disabled={status === 'connecting' || (!isWalletInstalled(wallet.id) && wallet.extension)}
               className="flex w-full items-center gap-4 rounded-lg border border-border p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
@@ -112,10 +116,9 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
                 </div>
                 <p className="text-sm text-muted-foreground">{wallet.description}</p>
                 {!isWalletInstalled(wallet.id) && wallet.extension && (
-                  <p className="mt-1 text-xs text-muted-foreground">Extension not detected</p>
-                )}
-                {wallet.id === 'walletconnect' && !WALLET_CONNECT_PROJECT_ID && (
-                  <p className="mt-1 text-xs text-muted-foreground">WalletConnect not configured</p>
+                  <span className="mt-1 inline-flex text-xs text-muted-foreground">
+                    Extension not installed
+                  </span>
                 )}
               </div>
               <span className="text-muted-foreground">&gt;</span>

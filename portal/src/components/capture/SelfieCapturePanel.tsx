@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react';
 import {
   SelfieCapture,
   CaptureGuidance,
-  QualityFeedback,
   type SelfieCaptureMode,
   type SelfieResult,
   type CaptureError,
@@ -136,3 +135,4 @@ export function SelfieCapturePanel({
     </Card>
   );
 }
+

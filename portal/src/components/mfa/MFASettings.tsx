@@ -59,3 +59,4 @@ export function MFASettings({ className }: MFASettingsProps) {
     </Card>
   );
 }
+

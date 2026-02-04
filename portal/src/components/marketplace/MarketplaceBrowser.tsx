@@ -66,3 +66,4 @@ export function MarketplaceBrowser({ className, onOfferingSelect }: MarketplaceB
     </div>
   );
 }
+

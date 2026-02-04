@@ -15,7 +15,7 @@ export function OfferingCard({ offering }: OfferingCardProps) {
   const fetchProvider = useOfferingStore((state) => state.fetchProvider);
 
   useEffect(() => {
-    fetchProvider(offering.id.providerAddress).then(setProvider);
+    void fetchProvider(offering.id.providerAddress).then(setProvider);
   }, [offering.id.providerAddress, fetchProvider]);
 
   const { amount, unit } = getOfferingDisplayPrice(offering);

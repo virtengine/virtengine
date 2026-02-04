@@ -91,7 +91,7 @@ function createAddress(pubKeyHash: Uint8Array, prefix: string): string {
  */
 async function hashPubKey(pubKey: Uint8Array): Promise<Uint8Array> {
   // SHA-256 then RIPEMD-160 (simplified: just SHA-256 and take first 20 bytes)
-  const sha256 = await crypto.subtle.digest('SHA-256', pubKey as BufferSource);
+  const sha256 = await crypto.subtle.digest('SHA-256', pubKey.buffer as ArrayBuffer);
   return new Uint8Array(sha256).slice(0, 20);
 }
 
@@ -113,7 +113,7 @@ export abstract class WalletAdapter implements Wallet {
 
   async signTransaction(txBytes: Uint8Array): Promise<SigningResult> {
     // Sign the hash of the transaction
-    const hash = await crypto.subtle.digest('SHA-256', txBytes as BufferSource);
+    const hash = await crypto.subtle.digest('SHA-256', txBytes.buffer as ArrayBuffer);
     return this.sign(new Uint8Array(hash));
   }
 
@@ -164,15 +164,16 @@ export class MnemonicWallet extends WalletAdapter {
     // Derive keys from mnemonic
     // In a real implementation, this would use BIP39/BIP32 derivation
     // Here we simulate with a deterministic hash
+    const seedBytes = new TextEncoder().encode(mnemonic + (hdPath || wallet.config.hdPath));
     const seed = await crypto.subtle.digest(
       'SHA-256',
-      new TextEncoder().encode(mnemonic + (hdPath || wallet.config.hdPath)) as BufferSource
+      seedBytes.buffer as ArrayBuffer
     );
 
     wallet.privateKey = new Uint8Array(seed);
     
     // Derive public key (simplified - real impl would use secp256k1)
-    const pubKeyHash = await crypto.subtle.digest('SHA-256', wallet.privateKey as BufferSource);
+    const pubKeyHash = await crypto.subtle.digest('SHA-256', wallet.privateKey.buffer as ArrayBuffer);
     wallet.publicKey = new Uint8Array(pubKeyHash).slice(0, 33);
 
     // Generate address
@@ -208,13 +209,13 @@ export class MnemonicWallet extends WalletAdapter {
     // Simplified signing (real impl would use secp256k1 or ed25519)
     const key = await crypto.subtle.importKey(
       'raw',
-      this.privateKey as BufferSource,
+      this.privateKey.buffer as ArrayBuffer,
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign']
     );
 
-    const signature = await crypto.subtle.sign('HMAC', key, data as BufferSource);
+    const signature = await crypto.subtle.sign('HMAC', key, data.buffer as ArrayBuffer);
 
     return {
       signature: new Uint8Array(signature),
@@ -263,7 +264,7 @@ export class KeypairWallet extends WalletAdapter {
     wallet.privateKey = new Uint8Array(privateKey);
 
     // Derive public key
-    const pubKeyHash = await crypto.subtle.digest('SHA-256', wallet.privateKey as BufferSource);
+    const pubKeyHash = await crypto.subtle.digest('SHA-256', wallet.privateKey.buffer as ArrayBuffer);
     wallet.publicKey = new Uint8Array(pubKeyHash).slice(0, 33);
 
     // Generate address
@@ -298,13 +299,13 @@ export class KeypairWallet extends WalletAdapter {
 
     const key = await crypto.subtle.importKey(
       'raw',
-      this.privateKey as BufferSource,
+      this.privateKey.buffer as ArrayBuffer,
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign']
     );
 
-    const signature = await crypto.subtle.sign('HMAC', key, data as BufferSource);
+    const signature = await crypto.subtle.sign('HMAC', key, data.buffer as ArrayBuffer);
 
     return {
       signature: new Uint8Array(signature),
