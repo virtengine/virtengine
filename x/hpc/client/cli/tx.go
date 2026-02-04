@@ -38,6 +38,7 @@ const (
 	flagRefundAmount    = "refund-amount"
 	flagAuthority       = "authority"
 	flagConfig          = "config"
+	specSchemaVersion   = "1.0"
 )
 
 // GetTxCmd returns the root tx command for the HPC module.
@@ -129,6 +130,16 @@ func uint64ToInt32(value uint64, label string) (int32, error) {
 		return 0, fmt.Errorf("%s exceeds int32", label)
 	}
 	return int32(value), nil
+}
+
+func validateSchemaVersion(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	if value != specSchemaVersion {
+		return fmt.Errorf("unsupported schema_version: %s (expected %s)", value, specSchemaVersion)
+	}
+	return nil
 }
 
 func readConfigFlag(cmd *cobra.Command) (string, error) {

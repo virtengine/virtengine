@@ -23,21 +23,23 @@ const (
 )
 
 type providerRegistrationConfig struct {
-	Name        string `json:"name" yaml:"name"`
-	ClusterType string `json:"cluster_type" yaml:"cluster_type"`
-	Region      string `json:"region" yaml:"region"`
-	Endpoint    string `json:"endpoint" yaml:"endpoint"`
-	TotalNodes  uint64 `json:"total_nodes" yaml:"total_nodes"`
-	TotalGpus   uint64 `json:"total_gpus" yaml:"total_gpus"`
+	SchemaVersion string `json:"schema_version,omitempty" yaml:"schema_version,omitempty"`
+	Name          string `json:"name" yaml:"name"`
+	ClusterType   string `json:"cluster_type" yaml:"cluster_type"`
+	Region        string `json:"region" yaml:"region"`
+	Endpoint      string `json:"endpoint" yaml:"endpoint"`
+	TotalNodes    uint64 `json:"total_nodes" yaml:"total_nodes"`
+	TotalGpus     uint64 `json:"total_gpus" yaml:"total_gpus"`
 }
 
 type queueConfig struct {
-	ClusterID    string `json:"cluster_id" yaml:"cluster_id"`
-	Name         string `json:"name" yaml:"name"`
-	ResourceType string `json:"resource_type" yaml:"resource_type"`
-	PricePerHour string `json:"price_per_hour" yaml:"price_per_hour"`
-	MinDuration  uint64 `json:"min_duration" yaml:"min_duration"`
-	MaxDuration  uint64 `json:"max_duration" yaml:"max_duration"`
+	SchemaVersion string `json:"schema_version,omitempty" yaml:"schema_version,omitempty"`
+	ClusterID     string `json:"cluster_id" yaml:"cluster_id"`
+	Name          string `json:"name" yaml:"name"`
+	ResourceType  string `json:"resource_type" yaml:"resource_type"`
+	PricePerHour  string `json:"price_per_hour" yaml:"price_per_hour"`
+	MinDuration   uint64 `json:"min_duration" yaml:"min_duration"`
+	MaxDuration   uint64 `json:"max_duration" yaml:"max_duration"`
 }
 
 // NewCmdRegisterProvider registers a provider (alias of register-cluster).
@@ -834,6 +836,9 @@ func validateProviderRegistrationConfig(cfg *providerRegistrationConfig) (*provi
 	if cfg == nil {
 		return nil, fmt.Errorf("provider config is required")
 	}
+	if err := validateSchemaVersion(cfg.SchemaVersion); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(cfg.Name) == "" {
 		return nil, fmt.Errorf("name is required")
 	}
@@ -909,6 +914,9 @@ func validateQueueConfig(cfg *queueConfig) (*queueConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("queue config is required")
 	}
+	if err := validateSchemaVersion(cfg.SchemaVersion); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(cfg.ClusterID) == "" {
 		return nil, fmt.Errorf("cluster_id is required")
 	}
@@ -926,6 +934,9 @@ func validateQueueConfig(cfg *queueConfig) (*queueConfig, error) {
 	}
 	if cfg.MaxDuration == 0 {
 		return nil, fmt.Errorf("max_duration must be greater than zero")
+	}
+	if cfg.MaxDuration < cfg.MinDuration {
+		return nil, fmt.Errorf("max_duration must be >= min_duration")
 	}
 	return cfg, nil
 }
