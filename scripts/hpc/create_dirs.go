@@ -28,10 +28,10 @@ func main() {
 
 	// Copy proto files to target location
 	protoFiles := map[string]string{
-		"hpc_types.proto.txt":   "sdk/proto/node/virtengine/hpc/v1/types.proto",
-		"hpc_tx.proto.txt":      "sdk/proto/node/virtengine/hpc/v1/tx.proto",
-		"hpc_query.proto.txt":   "sdk/proto/node/virtengine/hpc/v1/query.proto",
-		"hpc_genesis.proto.txt": "sdk/proto/node/virtengine/hpc/v1/genesis.proto",
+		"scripts/hpc/proto/hpc_types.proto.txt":   "sdk/proto/node/virtengine/hpc/v1/types.proto",
+		"scripts/hpc/proto/hpc_tx.proto.txt":      "sdk/proto/node/virtengine/hpc/v1/tx.proto",
+		"scripts/hpc/proto/hpc_query.proto.txt":   "sdk/proto/node/virtengine/hpc/v1/query.proto",
+		"scripts/hpc/proto/hpc_genesis.proto.txt": "sdk/proto/node/virtengine/hpc/v1/genesis.proto",
 	}
 
 	for src, dst := range protoFiles {

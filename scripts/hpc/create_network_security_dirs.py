@@ -4,11 +4,11 @@
 This script creates the HPC module proto directories and copies the proto files
 from the temporary .proto.txt files to their final locations.
 
-Usage:
-    python create_network_security_dirs.py
+Usage (from repo root):
+    python scripts/hpc/create_network_security_dirs.py
 
     Or on Windows:
-    python3 create_network_security_dirs.py
+    python3 scripts/hpc/create_network_security_dirs.py
 
 After running, you can generate the Go files by:
     cd sdk
@@ -31,10 +31,10 @@ def main():
 
     # Copy proto files
     proto_files = {
-        "hpc_types.proto.txt": "sdk/proto/node/virtengine/hpc/v1/types.proto",
-        "hpc_tx.proto.txt": "sdk/proto/node/virtengine/hpc/v1/tx.proto",
-        "hpc_query.proto.txt": "sdk/proto/node/virtengine/hpc/v1/query.proto",
-        "hpc_genesis.proto.txt": "sdk/proto/node/virtengine/hpc/v1/genesis.proto",
+        "scripts/hpc/proto/hpc_types.proto.txt": "sdk/proto/node/virtengine/hpc/v1/types.proto",
+        "scripts/hpc/proto/hpc_tx.proto.txt": "sdk/proto/node/virtengine/hpc/v1/tx.proto",
+        "scripts/hpc/proto/hpc_query.proto.txt": "sdk/proto/node/virtengine/hpc/v1/query.proto",
+        "scripts/hpc/proto/hpc_genesis.proto.txt": "sdk/proto/node/virtengine/hpc/v1/genesis.proto",
     }
 
     success = True
