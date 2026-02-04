@@ -2,10 +2,20 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useState } from 'react';
+
+import { LogViewer } from '@/components/deployments/LogViewer';
+import { ShellTerminal } from '@/components/deployments/ShellTerminal';
+import { useIdentityStore } from '@/stores';
 
 export default function ProviderOrderDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const containers = ['api', 'worker', 'db'] as const;
+  const [activePanel, setActivePanel] = useState<'logs' | 'shell'>('logs');
+  const [activeContainer, setActiveContainer] = useState<string>(containers[0]);
+  const { veidScore, minShellScore, isVerified } = useIdentityStore();
+  const hasShellAccess = isVerified || veidScore >= minShellScore;
 
   return (
     <div className="container py-8">
@@ -85,6 +95,83 @@ export default function ProviderOrderDetailPage() {
               </div>
             </div>
           </div>
+
+          <div className="rounded-lg border border-border bg-card p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Deployment Console</h2>
+                <p className="text-sm text-muted-foreground">
+                  Stream logs or open a shell session for active containers
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="container-select" className="text-xs text-muted-foreground">
+                  Container
+                </label>
+                <select
+                  id="container-select"
+                  value={activeContainer}
+                  onChange={(event) => setActiveContainer(event.target.value)}
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  {containers.map((container) => (
+                    <option key={container} value={container}>
+                      {container}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActivePanel('logs')}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${
+                  activePanel === 'logs'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border text-muted-foreground'
+                }`}
+              >
+                Logs
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanel('shell')}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${
+                  activePanel === 'shell'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border text-muted-foreground'
+                }`}
+              >
+                Shell
+              </button>
+            </div>
+
+            <div className="mt-6 h-[420px]">
+              {activePanel === 'logs' ? (
+                <LogViewer deploymentId={id} containerName={activeContainer} />
+              ) : hasShellAccess ? (
+                <ShellTerminal deploymentId={id} containerName={activeContainer} />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-border text-center">
+                  <h3 className="text-sm font-semibold">VEID verification required</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Shell access is available once your VEID score reaches {minShellScore}.
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Current score: {veidScore}
+                  </p>
+                  <Link
+                    href="/identity"
+                    className="mt-4 rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+                  >
+                    Continue verification
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -92,8 +179,19 @@ export default function ProviderOrderDetailPage() {
             <div className="rounded-lg border border-border bg-card p-6">
               <h3 className="font-semibold">Actions</h3>
               <div className="mt-4 space-y-2">
-                <button className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                <button
+                  className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  onClick={() => setActivePanel('logs')}
+                  type="button"
+                >
                   View Logs
+                </button>
+                <button
+                  className="w-full rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+                  onClick={() => setActivePanel('shell')}
+                  type="button"
+                >
+                  Open Shell
                 </button>
                 <button className="w-full rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted">
                   Send Message
