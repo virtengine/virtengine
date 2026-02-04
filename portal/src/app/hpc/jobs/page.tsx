@@ -6,6 +6,65 @@ export const metadata: Metadata = {
   description: 'Submit and manage HPC jobs',
 };
 
+const jobPlaceholders = [
+  {
+    id: 'job-401',
+    name: 'ML Training - ResNet50',
+    template: 'PyTorch Training',
+    status: 'Running' as const,
+    progress: 67,
+  },
+  {
+    id: 'job-402',
+    name: 'Genome Analysis',
+    template: 'Bioinformatics',
+    status: 'Running' as const,
+    progress: 23,
+  },
+  {
+    id: 'job-403',
+    name: 'CFD Simulation',
+    template: 'OpenFOAM',
+    status: 'Queued' as const,
+    progress: 0,
+  },
+  {
+    id: 'job-404',
+    name: 'Protein Folding',
+    template: 'AlphaFold',
+    status: 'Running' as const,
+    progress: 89,
+  },
+  {
+    id: 'job-405',
+    name: 'Weather Model',
+    template: 'WRF Model',
+    status: 'Completed' as const,
+    progress: 100,
+  },
+  {
+    id: 'job-406',
+    name: 'Render Job #42',
+    template: 'Blender Render',
+    status: 'Completed' as const,
+    progress: 100,
+  },
+  {
+    id: 'job-407',
+    name: 'Data Processing',
+    template: 'Spark Cluster',
+    status: 'Failed' as const,
+    progress: 45,
+  },
+  {
+    id: 'job-408',
+    name: 'Neural Network',
+    template: 'TensorFlow',
+    status: 'Queued' as const,
+    progress: 0,
+  },
+] as const;
+
 export default function HPCJobsPage() {
   return (
     <div className="container py-8">
@@ -74,27 +133,25 @@ export default function HPCJobsPage() {
 
       {/* Jobs List */}
       <div className="space-y-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <JobCard key={i} index={i} />
+        {jobPlaceholders.map((job) => (
+          <JobCard key={job.id} job={job} />
         ))}
       </div>
     </div>
   );
 }
 
-function JobCard({ index }: { index: number }) {
-  const jobs = [
-    { name: 'ML Training - ResNet50', template: 'PyTorch Training', status: 'Running' as const, progress: 67 },
-    { name: 'Genome Analysis', template: 'Bioinformatics', status: 'Running' as const, progress: 23 },
-    { name: 'CFD Simulation', template: 'OpenFOAM', status: 'Queued' as const, progress: 0 },
-    { name: 'Protein Folding', template: 'AlphaFold', status: 'Running' as const, progress: 89 },
-    { name: 'Weather Model', template: 'WRF Model', status: 'Completed' as const, progress: 100 },
-    { name: 'Render Job #42', template: 'Blender Render', status: 'Completed' as const, progress: 100 },
-    { name: 'Data Processing', template: 'Spark Cluster', status: 'Failed' as const, progress: 45 },
-    { name: 'Neural Network', template: 'TensorFlow', status: 'Queued' as const, progress: 0 },
-  ];
-  const job = jobs[index % jobs.length]!;
-
+function JobCard({
+  job,
+}: {
+  job: {
+    id: string;
+    name: string;
+    template: string;
+    status: 'Running' | 'Queued' | 'Completed' | 'Failed';
+    progress: number;
+  };
+}) {
   const statusConfig = {
     Running: { dot: 'status-dot-success', text: 'text-success' },
     Queued: { dot: 'status-dot-pending', text: 'text-muted-foreground' },
