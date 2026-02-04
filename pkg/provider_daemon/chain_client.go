@@ -22,8 +22,8 @@ type RPCChainClientConfig struct {
 
 // rpcChainClient implements ChainClient using gRPC
 type rpcChainClient struct {
-	config   RPCChainClientConfig
-	grpcConn *grpc.ClientConn
+	config    RPCChainClientConfig
+	grpcConn  *grpc.ClientConn
 	rpcClient *rpchttp.HTTP
 }
 

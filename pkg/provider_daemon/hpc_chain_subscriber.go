@@ -39,28 +39,28 @@ type HPCChainEvent struct {
 
 // SubscriberStats contains statistics for the subscriber
 type SubscriberStats struct {
-	JobsReceived      int64     `json:"jobs_received"`
-	JobsProcessed     int64     `json:"jobs_processed"`
-	CancelsReceived   int64     `json:"cancels_received"`
-	CancelsProcessed  int64     `json:"cancels_processed"`
-	ProcessingErrors  int64     `json:"processing_errors"`
-	ReconnectCount    int64     `json:"reconnect_count"`
-	LastEventTime     time.Time `json:"last_event_time"`
-	LastErrorTime     time.Time `json:"last_error_time,omitempty"`
-	LastError         string    `json:"last_error,omitempty"`
-	StartTime         time.Time `json:"start_time"`
-	Uptime            string    `json:"uptime"`
+	JobsReceived     int64     `json:"jobs_received"`
+	JobsProcessed    int64     `json:"jobs_processed"`
+	CancelsReceived  int64     `json:"cancels_received"`
+	CancelsProcessed int64     `json:"cancels_processed"`
+	ProcessingErrors int64     `json:"processing_errors"`
+	ReconnectCount   int64     `json:"reconnect_count"`
+	LastEventTime    time.Time `json:"last_event_time"`
+	LastErrorTime    time.Time `json:"last_error_time,omitempty"`
+	LastError        string    `json:"last_error,omitempty"`
+	StartTime        time.Time `json:"start_time"`
+	Uptime           string    `json:"uptime"`
 }
 
 // HPCChainSubscriberWithStats extends HPCChainSubscriber with statistics tracking
 // and enhanced error recovery capabilities
 type HPCChainSubscriberWithStats struct {
-	config        HPCChainSubscriberConfig
-	clusterID     string
-	providerAddr  string
-	chainClient   HPCChainClient
-	jobService    *HPCJobService
-	healthStatus  HPCComponentHealth
+	config       HPCChainSubscriberConfig
+	clusterID    string
+	providerAddr string
+	chainClient  HPCChainClient
+	jobService   *HPCJobService
+	healthStatus HPCComponentHealth
 
 	mu         sync.RWMutex
 	running    bool

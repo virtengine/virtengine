@@ -394,10 +394,10 @@ func (p *HPCProvider) GetHealth() *HPCProviderHealth {
 			Message:   "running",
 			LastCheck: time.Now(),
 			Details: map[string]interface{}{
-				"pending_count":    stats.PendingCount,
-				"submitted_count":  stats.SubmittedCount,
-				"total_confirmed":  stats.TotalConfirmed,
-				"total_failed":     stats.TotalFailed,
+				"pending_count":   stats.PendingCount,
+				"submitted_count": stats.SubmittedCount,
+				"total_confirmed": stats.TotalConfirmed,
+				"total_failed":    stats.TotalFailed,
 			},
 		})
 	}

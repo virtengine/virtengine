@@ -18,12 +18,12 @@ import (
 
 // MockHPCChainClient implements HPCChainClient for testing
 type MockHPCChainClient struct {
-	mu              sync.Mutex
-	jobHandler      func(*hpctypes.HPCJob) error
-	cancelHandler   func(string) error
-	subscribeError  error
+	mu               sync.Mutex
+	jobHandler       func(*hpctypes.HPCJob) error
+	cancelHandler    func(string) error
+	subscribeError   error
 	blockOnSubscribe bool
-	blockCh         chan struct{}
+	blockCh          chan struct{}
 
 	// Track calls
 	statusReports []*HPCStatusReport
@@ -171,10 +171,10 @@ func TestNewHPCChainSubscriberWithStats_Validation(t *testing.T) {
 	chainClient := NewMockHPCChainClient()
 
 	tests := []struct {
-		name       string
-		clusterID  string
-		service    *HPCJobService
-		wantError  bool
+		name      string
+		clusterID string
+		service   *HPCJobService
+		wantError bool
 	}{
 		{
 			name:      "valid config",
