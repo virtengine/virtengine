@@ -75,8 +75,11 @@ export default function MarketplacePage() {
         <div className="lg:col-span-3">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {/* Placeholder offering cards */}
-            {offeringPlaceholders.map((offering) => (
-              <OfferingCardPlaceholder key={offering.id} offering={offering} />
+            {Array.from({ length: 9 }, (_, index) => ({
+              id: `offering-${index + 1}`,
+              index,
+            })).map((offering) => (
+              <OfferingCardPlaceholder key={offering.id} index={offering.index} />
             ))}
           </div>
 
