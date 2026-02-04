@@ -18,6 +18,7 @@ import (
 )
 
 type jobSubmitSpec struct {
+	SchemaVersion  string `json:"schema_version,omitempty" yaml:"schema_version,omitempty"`
 	OfferingID     string `json:"offering_id" yaml:"offering_id"`
 	RequestedNodes uint64 `json:"requested_nodes" yaml:"requested_nodes"`
 	RequestedGpus  uint64 `json:"requested_gpus" yaml:"requested_gpus"`
@@ -28,6 +29,7 @@ type jobSubmitSpec struct {
 }
 
 type templateSubmitSpec struct {
+	SchemaVersion  string                                 `json:"schema_version,omitempty" yaml:"schema_version,omitempty"`
 	OfferingID     string                                 `json:"offering_id" yaml:"offering_id"`
 	RequestedNodes uint64                                 `json:"requested_nodes" yaml:"requested_nodes"`
 	RequestedGpus  uint64                                 `json:"requested_gpus" yaml:"requested_gpus"`
@@ -248,6 +250,9 @@ func readJobSubmitSpec(path string) (*jobSubmitSpec, error) {
 	if err := unmarshalConfigFile(path, &spec); err != nil {
 		return nil, err
 	}
+	if err := validateSchemaVersion(spec.SchemaVersion); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(spec.OfferingID) == "" {
 		return nil, fmt.Errorf("offering_id is required")
 	}
@@ -272,6 +277,9 @@ func readJobSubmitSpec(path string) (*jobSubmitSpec, error) {
 func readTemplateSubmitSpec(path string) (*templateSubmitSpec, error) {
 	spec := templateSubmitSpec{}
 	if err := unmarshalConfigFile(path, &spec); err != nil {
+		return nil, err
+	}
+	if err := validateSchemaVersion(spec.SchemaVersion); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(spec.OfferingID) == "" {
