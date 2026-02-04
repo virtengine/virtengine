@@ -26,7 +26,7 @@ func TestDefaultMappingSchema(t *testing.T) {
 		{testStatusOpen, "Open", "new"},
 		{"assigned", "In Progress", "in_progress"},
 		{"in_progress", "In Progress", "in_progress"},
-		{"pending_customer", "Waiting for Customer", "waiting"},
+		{"waiting_customer", "Waiting for Customer", "waiting"},
 		{"resolved", "Resolved", "resolved"},
 		{"closed", "Closed", "closed"},
 	}

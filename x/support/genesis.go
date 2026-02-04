@@ -98,7 +98,7 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 		return false
 	})
 
-	var responses []types.SupportResponse
+	responses := make([]types.SupportResponse, 0, len(requests))
 	for _, req := range requests {
 		responses = append(responses, k.GetSupportResponses(ctx, req.ID)...)
 	}
@@ -121,9 +121,7 @@ func parseTicketNumber(ticketNumber string) uint64 {
 	if ticketNumber == "" {
 		return 0
 	}
-	if strings.HasPrefix(ticketNumber, "SUP-") {
-		ticketNumber = strings.TrimPrefix(ticketNumber, "SUP-")
-	}
+	ticketNumber = strings.TrimPrefix(ticketNumber, "SUP-")
 	seq, err := strconv.ParseUint(ticketNumber, 10, 64)
 	if err != nil {
 		return 0

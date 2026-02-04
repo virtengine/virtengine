@@ -317,7 +317,8 @@ func (ms msgServer) AddSupportResponse(goCtx context.Context, msg *types.MsgAddS
 
 	params := ms.keeper.GetParams(ctx)
 	existingResponses := ms.keeper.GetSupportResponses(ctx, request.ID)
-	if uint32(len(existingResponses)) >= params.MaxResponsesPerRequest {
+	maxResponses := safeIntFromUint32(params.MaxResponsesPerRequest)
+	if len(existingResponses) >= maxResponses {
 		return nil, types.ErrMaxResponsesExceeded
 	}
 
@@ -331,14 +332,11 @@ func (ms msgServer) AddSupportResponse(goCtx context.Context, msg *types.MsgAddS
 	}
 
 	request.LastResponseAt = &response.CreatedAt
-	targetStatus := request.Status
-	switch {
-	case request.Status == types.SupportStatusResolved:
+	targetStatus := types.SupportStatusWaitingSupport
+	if request.Status == types.SupportStatusResolved {
 		targetStatus = types.SupportStatusInProgress
-	case isAgent:
+	} else if isAgent {
 		targetStatus = types.SupportStatusWaitingCustomer
-	default:
-		targetStatus = types.SupportStatusWaitingSupport
 	}
 
 	oldStatus := request.Status
@@ -387,6 +385,13 @@ func (ms msgServer) AddSupportResponse(goCtx context.Context, msg *types.MsgAddS
 	}
 
 	return &types.MsgAddSupportResponseResponse{ResponseID: response.ID.String()}, nil
+}
+
+func safeIntFromUint32(value uint32) int {
+	if value > uint32(^uint(0)>>1) {
+		return int(^uint(0) >> 1)
+	}
+	return int(value)
 }
 
 // ArchiveSupportRequest archives a support request
