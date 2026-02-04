@@ -15,10 +15,10 @@ import (
 
 // Delegation store key prefixes
 var (
-	OracleStakePrefix     = []byte{0x30}
-	DelegationPrefix      = []byte{0x31}
-	DelegatorIndexPrefix  = []byte{0x32}
-	TotalStakedKey        = []byte{0x33}
+	OracleStakePrefix    = []byte{0x30}
+	DelegationPrefix     = []byte{0x31}
+	DelegatorIndexPrefix = []byte{0x32}
+	TotalStakedKey       = []byte{0x33}
 )
 
 // OracleStakeKey returns the key for an oracle's total stake.
