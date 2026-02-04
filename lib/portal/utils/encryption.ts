@@ -90,6 +90,8 @@ async function deriveKey(
   );
 
   // Derive AES key using HKDF
+  const infoBytes = new TextEncoder().encode(info);
+
   return crypto.subtle.deriveKey(
     {
       name: 'HKDF',

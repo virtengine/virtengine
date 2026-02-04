@@ -1,4 +1,4 @@
-import { useWallet } from '../../wallet/context';
+import { useWallet } from '../../wallet';
 
 export interface AccountDisplayProps {
   className?: string;
@@ -6,16 +6,17 @@ export interface AccountDisplayProps {
 }
 
 export function AccountDisplay({ className, showStatus = true }: AccountDisplayProps) {
-  const { state } = useWallet();
+  const { status, accounts, activeAccountIndex } = useWallet();
+  const account = accounts[activeAccountIndex];
 
-  if (!state.isConnected || !state.address) {
+  if (status !== 'connected' || !account) {
     return <span className={className}>Not connected</span>;
   }
 
   return (
     <span className={className}>
       {showStatus ? 'Connected: ' : ''}
-      {state.address.slice(0, 10)}...{state.address.slice(-4)}
+      {account.address.slice(0, 10)}...{account.address.slice(-4)}
     </span>
   );
 }

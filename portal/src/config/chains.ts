@@ -9,6 +9,9 @@ export interface ChainInfo {
   restEndpoint: string;
   wsEndpoint: string;
   explorerUrl: string;
+  bip44: {
+    coinType: number;
+  };
   stakeCurrency: {
     coinDenom: string;
     coinMinimalDenom: string;
@@ -47,6 +50,9 @@ export const MAINNET_CHAIN: ChainInfo = {
   restEndpoint: 'https://api.virtengine.com',
   wsEndpoint: 'wss://ws.virtengine.com',
   explorerUrl: 'https://explorer.virtengine.io',
+  bip44: {
+    coinType: 118,
+  },
   stakeCurrency: {
     coinDenom: 'VE',
     coinMinimalDenom: 'uve',
@@ -89,6 +95,9 @@ export const TESTNET_CHAIN: ChainInfo = {
   restEndpoint: 'https://api.testnet.virtengine.com',
   wsEndpoint: 'wss://ws.testnet.virtengine.com',
   explorerUrl: 'https://testnet.explorer.virtengine.io',
+  bip44: {
+    coinType: 118,
+  },
   stakeCurrency: {
     coinDenom: 'VE',
     coinMinimalDenom: 'uve',

@@ -8,14 +8,13 @@ interface MFASetupProps {
   className?: string;
   onComplete?: () => void;
   onCancel?: () => void;
-  preferredFactorType?: MFAFactorType;
 }
 
 /**
  * MFA Setup Component
  * Guides users through MFA enrollment
  */
-export function MFASetup({ className, onComplete, onCancel, preferredFactorType }: MFASetupProps) {
+export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
   const { state } = useMFA();
 
   if (state.isLoading) {
@@ -37,7 +36,7 @@ export function MFASetup({ className, onComplete, onCancel, preferredFactorType 
       </CardHeader>
       <CardContent>
         <MFAEnrollmentWizard
-          allowedFactors={preferredFactorType ? [preferredFactorType] : ['otp', 'fido2', 'sms']}
+          allowedFactors={['totp', 'webauthn', 'sms'] as MFAFactorType[]}
           onComplete={onComplete}
           onCancel={onCancel}
         />
@@ -45,3 +44,4 @@ export function MFASetup({ className, onComplete, onCancel, preferredFactorType 
     </Card>
   );
 }
+

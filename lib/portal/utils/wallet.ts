@@ -164,6 +164,7 @@ export class MnemonicWallet extends WalletAdapter {
     // Derive keys from mnemonic
     // In a real implementation, this would use BIP39/BIP32 derivation
     // Here we simulate with a deterministic hash
+    const seedBytes = new TextEncoder().encode(mnemonic + (hdPath || wallet.config.hdPath));
     const seed = await crypto.subtle.digest(
       'SHA-256',
       new TextEncoder().encode(mnemonic + (hdPath || wallet.config.hdPath)) as BufferSource

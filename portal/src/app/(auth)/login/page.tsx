@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { WalletLoginButtons } from '@/components/wallet';
 
 export const metadata: Metadata = {
   title: 'Login',
@@ -22,32 +23,7 @@ export default function LoginPage() {
             {/* Wallet Connection Section */}
             <div className="space-y-4">
               <h2 className="text-sm font-medium">Connect with Wallet</h2>
-              <div className="grid gap-3">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition-colors hover:bg-accent"
-                  aria-label="Connect with Keplr wallet"
-                >
-                  <span className="h-5 w-5 rounded bg-primary/20" />
-                  Keplr
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition-colors hover:bg-accent"
-                  aria-label="Connect with Leap wallet"
-                >
-                  <span className="h-5 w-5 rounded bg-green-500/20" />
-                  Leap
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition-colors hover:bg-accent"
-                  aria-label="Connect with Cosmostation wallet"
-                >
-                  <span className="h-5 w-5 rounded bg-purple-500/20" />
-                  Cosmostation
-                </button>
-              </div>
+              <WalletLoginButtons />
             </div>
 
             <div className="relative">

@@ -6,8 +6,11 @@
  * hooks, and utilities within the Next.js application.
  */
 
-// Re-export from the workspace package
-// Note: These imports rely on the pnpm workspace setup with virtengine-portal-lib
+import {
+  WalletProvider as BaseWalletProvider,
+  useWallet as baseUseWallet,
+} from '../../../lib/portal';
+import type { WalletContextValue } from '../../../lib/portal';
 
 // ============================================================================
 // Core Exports
@@ -33,26 +36,43 @@ export type {
 export { SessionManager } from '../../../lib/portal';
 export type { SessionConfig, SessionInfo } from '../../../lib/portal';
 
-export { WalletProvider, useWallet } from '../../../lib/portal';
+export { WalletAdapter, MnemonicWallet, KeypairWallet } from '../../../lib/portal';
+export type { WalletConfig, SigningResult } from '../../../lib/portal';
+
+// ============================================================================
+// Wallet Connections
+// ============================================================================
+
+export const WalletProvider = BaseWalletProvider;
+export const useWallet = baseUseWallet as () => WalletContextValue;
 export type {
-  WalletProviderConfig,
-  ExtensionWalletType,
-  WalletChainConfig,
+  PortalWalletType as PortalWalletType,
+  WalletConnectionStatus,
+  WalletChainInfo,
   WalletAccount,
+  WalletError,
   WalletState,
-  WalletActions,
-  FeeEstimate,
+  WalletSignOptions,
+  AminoSignDoc,
+  AminoSignResponse,
+  DirectSignDoc,
+  DirectSignResponse,
+  WalletProviderConfig,
 } from '../../../lib/portal';
 
 export {
   WalletButton,
+  WalletAccountDisplay,
+  WalletNetworkBadge,
   WalletModal,
-  AccountDisplay,
-  NetworkBadge,
 } from '../../../lib/portal';
-
-export { WalletAdapter, MnemonicWallet, KeypairWallet } from '../../../lib/portal';
-export type { WalletConfig, SigningResult } from '../../../lib/portal';
+export type {
+  WalletButtonProps,
+  WalletAccountDisplayProps,
+  WalletNetworkBadgeProps,
+  WalletModalProps,
+  WalletOption,
+} from '../../../lib/portal';
 
 // ============================================================================
 // Identity / VEID (VE-701)

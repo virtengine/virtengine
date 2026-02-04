@@ -47,3 +47,4 @@ export function IdentityRequirements({ action, className, onStartVerification }:
     </Card>
   );
 }
+

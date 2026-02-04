@@ -3,7 +3,7 @@
  * Integrates lib/portal configuration with Next.js environment
  */
 
-import type { PortalConfig, ChainConfig, WalletProviderConfig, ExtensionWalletType } from '@/lib/portal-adapter';
+import type { PortalConfig, ChainConfig, WalletProviderConfig } from '@/lib/portal-adapter';
 import { env } from './env';
 import { getChainInfo } from './chains';
 
@@ -53,36 +53,28 @@ export function createChainConfig(): ChainConfig {
  */
 export function createWalletConfig(): WalletProviderConfig {
   const chainInfo = getChainInfo();
-  const walletOrder = env.supportedWallets
-    .map((wallet) => wallet.trim())
-    .filter(Boolean) as ExtensionWalletType[];
 
   return {
-    chain: {
+    chainInfo: {
       chainId: chainInfo.chainId,
       chainName: chainInfo.chainName,
       rpcEndpoint: chainInfo.rpcEndpoint,
       restEndpoint: chainInfo.restEndpoint,
-      wsEndpoint: chainInfo.wsEndpoint,
-      explorerUrl: chainInfo.explorerUrl,
-      bech32Prefix: chainInfo.bech32Config.bech32PrefixAccAddr,
+      bech32Config: chainInfo.bech32Config,
+      bip44: chainInfo.bip44,
       stakeCurrency: chainInfo.stakeCurrency,
       currencies: chainInfo.currencies,
       feeCurrencies: chainInfo.feeCurrencies,
       features: chainInfo.features,
-      slip44: 118,
     },
-    wallets: walletOrder.length > 0 ? walletOrder : ['keplr', 'leap', 'cosmostation'],
     autoConnect: true,
-    walletConnect: env.walletConnectProjectId
+    walletConnectProjectId: env.walletConnectProjectId || undefined,
+    metadata: env.walletConnectProjectId
       ? {
-          projectId: env.walletConnectProjectId,
-          metadata: {
-            name: 'VirtEngine Portal',
-            description: 'VirtEngine Portal WalletConnect',
-            url: env.appUrl,
-            icons: [`${env.appUrl}/favicon.ico`],
-          },
+          name: 'VirtEngine Portal',
+          description: 'VirtEngine Portal WalletConnect',
+          url: env.appUrl,
+          icons: [`${env.appUrl}/favicon.ico`],
         }
       : undefined,
   };

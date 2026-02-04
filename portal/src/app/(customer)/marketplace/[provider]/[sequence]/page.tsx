@@ -27,13 +27,13 @@ export default function OfferingDetailPage() {
 
   useEffect(() => {
     if (provider && !isNaN(sequence)) {
-      fetchOffering(provider, sequence);
+      void fetchOffering(provider, sequence);
     }
   }, [provider, sequence, fetchOffering]);
 
   useEffect(() => {
     if (offering) {
-      fetchProvider(offering.id.providerAddress).then(setProviderInfo);
+      void fetchProvider(offering.id.providerAddress).then(setProviderInfo);
     }
   }, [offering, fetchProvider]);
 
@@ -216,8 +216,11 @@ export default function OfferingDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {offering.prices.map((price, idx) => (
-                      <tr key={idx} className="border-b border-border last:border-0">
+                    {offering.prices.map((price) => (
+                      <tr
+                        key={`${price.resourceType}-${price.unit}`}
+                        className="border-b border-border last:border-0"
+                      >
                         <td className="py-3 capitalize">{price.resourceType}</td>
                         <td className="py-3 text-muted-foreground">{price.unit}</td>
                         <td className="py-3 text-right font-mono">

@@ -28,7 +28,9 @@ export function OfferingGrid() {
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
         <button
           type="button"
-          onClick={() => useOfferingStore.getState().fetchOfferings()}
+          onClick={() => {
+            void useOfferingStore.getState().fetchOfferings();
+          }}
           className="mt-4 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
         >
           Try Again
@@ -40,8 +42,8 @@ export function OfferingGrid() {
   if (isLoading) {
     return (
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <OfferingCardSkeleton key={i} />
+        {Array.from({ length: 6 }, (_, idx) => `skeleton-${idx}`).map((key) => (
+          <OfferingCardSkeleton key={key} />
         ))}
       </div>
     );

@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react';
 import {
   SelfieCapture,
   CaptureGuidance,
-  QualityFeedback,
   type SelfieCaptureMode,
   type SelfieResult,
   type CaptureError,
@@ -63,22 +62,6 @@ export function SelfieCapturePanel({
     setError(captureError.message);
     onError?.(captureError);
   }, [onError]);
-  const qualityResult = guidanceState
-    ? {
-        passed: guidanceState.currentIssues.length === 0,
-        score: guidanceState.currentIssues.length === 0 ? 100 : 60,
-        issues: guidanceState.currentIssues,
-        checks: {
-          resolution: { passed: true, value: 1, threshold: 1, description: 'Resolution' },
-          brightness: { passed: true, value: 1, threshold: 1, description: 'Brightness' },
-          blur: { passed: true, value: 1, threshold: 1, description: 'Blur' },
-          skew: { passed: true, value: 1, threshold: 1, description: 'Skew' },
-          glare: { passed: true, value: 1, threshold: 1, description: 'Glare' },
-          noise: { passed: true, value: 1, threshold: 1, description: 'Noise' },
-        },
-        analysisTimeMs: 0,
-      }
-    : null;
 
   return (
     <Card className={cn(className)}>
@@ -121,8 +104,15 @@ export function SelfieCapturePanel({
           />
         </div>
 
-        {qualityResult && qualityResult.issues.length > 0 && (
-          <QualityFeedback result={qualityResult} compact />
+        {guidanceState && guidanceState.currentIssues.length > 0 && (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+            <p className="font-medium">Capture tips</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+              {guidanceState.currentIssues.map((issue) => (
+                <li key={`${issue.type}-${issue.message}`}>{issue.message}</li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {onCancel && (

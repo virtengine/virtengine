@@ -11,7 +11,8 @@ import { MarketplaceProvider } from '../hooks/useMarketplace';
 import { ProviderProvider } from '../hooks/useProvider';
 import { HPCProvider } from '../hooks/useHPC';
 import { ChainProvider } from '../hooks/useChain';
-import { WalletProvider, type WalletProviderConfig } from '../src/wallet/context';
+import { WalletProvider } from '../src/wallet/context';
+import type { WalletProviderConfig, WalletChainInfo } from '../src/wallet/types';
 import type { PortalConfig } from '../types/config';
 import type { ChainConfig } from '../types/chain';
 
@@ -84,35 +85,45 @@ export function PortalProvider({
     isReady,
   };
 
-  const resolvedWalletConfig: WalletProviderConfig = walletConfig ?? {
-    chain: {
-      chainId: chainConfig.chainId ?? config.chainId ?? 'virtengine-1',
-      chainName: config.networkName ?? 'VirtEngine',
-      rpcEndpoint: config.chainEndpoint,
-      restEndpoint: config.chainRestEndpoint ?? chainConfig.restEndpoint,
-      bech32Prefix: 'virtengine',
-      stakeCurrency: {
+  const defaultChainInfo: WalletChainInfo = {
+    chainId: chainConfig.chainId ?? config.chainId ?? 'virtengine-1',
+    chainName: config.networkName ?? 'VirtEngine',
+    rpcEndpoint: config.chainEndpoint,
+    restEndpoint: config.chainRestEndpoint ?? chainConfig.restEndpoint,
+    bech32Config: {
+      bech32PrefixAccAddr: 'virtengine',
+      bech32PrefixAccPub: 'virtenginepub',
+      bech32PrefixValAddr: 'virtenginevaloper',
+      bech32PrefixValPub: 'virtenginevaloperpub',
+      bech32PrefixConsAddr: 'virtenginevalcons',
+      bech32PrefixConsPub: 'virtenginevalconspub',
+    },
+    bip44: { coinType: 118 },
+    stakeCurrency: {
+      coinDenom: 'VE',
+      coinMinimalDenom: 'uve',
+      coinDecimals: 6,
+    },
+    currencies: [
+      {
         coinDenom: 'VE',
         coinMinimalDenom: 'uve',
         coinDecimals: 6,
       },
-      currencies: [
-        {
-          coinDenom: 'VE',
-          coinMinimalDenom: 'uve',
-          coinDecimals: 6,
-        },
-      ],
-      feeCurrencies: [
-        {
-          coinDenom: 'VE',
-          coinMinimalDenom: 'uve',
-          coinDecimals: 6,
-          gasPriceStep: { low: 0.01, average: 0.025, high: 0.04 },
-        },
-      ],
-      features: ['cosmwasm', 'ibc-transfer', 'ibc-go'],
-    },
+    ],
+    feeCurrencies: [
+      {
+        coinDenom: 'VE',
+        coinMinimalDenom: 'uve',
+        coinDecimals: 6,
+        gasPriceStep: { low: 0.01, average: 0.025, high: 0.04 },
+      },
+    ],
+    features: ['cosmwasm', 'ibc-transfer', 'ibc-go'],
+  };
+
+  const resolvedWalletConfig: WalletProviderConfig = walletConfig ?? {
+    chainInfo: defaultChainInfo,
     autoConnect: true,
   };
 

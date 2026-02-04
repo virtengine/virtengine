@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "commonjs",
+  "dependencies": {
+    "@walletconnect/modal": "^2.7.0",
+    "@walletconnect/sign-client": "^2.7.0"
+  },
   "scripts": {
     "test": "vitest run",
     "test:a11y": "vitest run --grep 'Accessibility'",
@@ -16,10 +20,6 @@
     "jsdom": "^24.0.0",
     "typescript": "^5.5.4",
     "vitest": "^1.6.0"
-  },
-  "dependencies": {
-    "@walletconnect/modal": "^2.6.2",
-    "@walletconnect/sign-client": "^2.12.2"
   },
   "peerDependencies": {
     "react": "^18.2.0"

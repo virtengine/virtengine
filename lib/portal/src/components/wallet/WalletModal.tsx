@@ -1,19 +1,21 @@
-import { useMemo } from 'react';
-import type { ExtensionWalletType } from '../../wallet/types';
-import { useWallet } from '../../wallet/context';
+import { useEffect, useMemo } from 'react';
+import type { WalletType } from '../../wallet/types';
+import { useWallet } from '../../wallet';
+
+export interface WalletOption {
+  id: WalletType;
+  name: string;
+  description: string;
+  downloadUrl: string;
+}
 
 export interface WalletModalProps {
   isOpen: boolean;
   onClose: () => void;
-  walletOrder?: ExtensionWalletType[];
+  walletOrder?: WalletType[];
 }
 
-const DEFAULT_WALLETS: Array<{
-  id: ExtensionWalletType;
-  name: string;
-  description: string;
-  downloadUrl: string;
-}> = [
+const DEFAULT_WALLETS: WalletOption[] = [
   {
     id: 'keplr',
     name: 'Keplr',
@@ -41,7 +43,7 @@ const DEFAULT_WALLETS: Array<{
 ];
 
 export function WalletModal({ isOpen, onClose, walletOrder }: WalletModalProps) {
-  const { state, actions } = useWallet();
+  const { status, error, connect } = useWallet();
 
   const wallets = useMemo(() => {
     if (!walletOrder || walletOrder.length === 0) return DEFAULT_WALLETS;
@@ -50,12 +52,15 @@ export function WalletModal({ isOpen, onClose, walletOrder }: WalletModalProps) 
       .filter(Boolean) as typeof DEFAULT_WALLETS;
   }, [walletOrder]);
 
-  const handleConnect = async (walletType: ExtensionWalletType) => {
-    await actions.connect(walletType);
-    if (!state.error) {
+  const handleConnect = async (walletType: WalletType) => {
+    await connect(walletType);
+  };
+
+  useEffect(() => {
+    if (status === 'connected' && isOpen) {
       onClose();
     }
-  };
+  }, [isOpen, onClose, status]);
 
   if (!isOpen) return null;
 
@@ -101,7 +106,7 @@ export function WalletModal({ isOpen, onClose, walletOrder }: WalletModalProps) 
               key={wallet.id}
               type="button"
               onClick={() => handleConnect(wallet.id)}
-              disabled={state.isConnecting}
+              disabled={status === 'connecting'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -121,7 +126,7 @@ export function WalletModal({ isOpen, onClose, walletOrder }: WalletModalProps) 
           ))}
         </div>
 
-        {state.error && (
+        {error && (
           <div
             role="alert"
             style={{
@@ -133,7 +138,7 @@ export function WalletModal({ isOpen, onClose, walletOrder }: WalletModalProps) 
               fontSize: 13,
             }}
           >
-            {state.error.message}
+            {error.message}
           </div>
         )}
 

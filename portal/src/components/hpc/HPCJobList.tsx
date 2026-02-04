@@ -47,3 +47,4 @@ export function HPCJobList({ className, onJobSelect }: HPCJobListProps) {
     </Card>
   );
 }
+

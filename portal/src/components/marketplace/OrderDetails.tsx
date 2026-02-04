@@ -71,3 +71,4 @@ export function OrderDetails({ orderId, className, onBack }: OrderDetailsProps) 
     </div>
   );
 }
+

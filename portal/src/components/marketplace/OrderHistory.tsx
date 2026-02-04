@@ -96,3 +96,4 @@ export function OrderHistory({ className, onOrderSelect }: OrderHistoryProps) {
     </Card>
   );
 }
+

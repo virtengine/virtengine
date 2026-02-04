@@ -4,10 +4,11 @@ import { useWallet } from '@/lib/portal-adapter';
 import { useWalletModal } from './WalletModal';
 
 export function WalletButton() {
-  const { state, actions } = useWallet();
+  const { status, accounts, activeAccountIndex, disconnect } = useWallet();
   const { open: openWalletModal } = useWalletModal();
+  const account = accounts[activeAccountIndex];
 
-  if (state.isConnecting) {
+  if (status === 'connecting') {
     return (
       <button
         type="button"
@@ -20,18 +21,18 @@ export function WalletButton() {
     );
   }
 
-  if (state.isConnected && state.address) {
+  if (status === 'connected' && account) {
     return (
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
           <span className="status-dot status-dot-success" />
           <span className="font-mono text-sm">
-            {state.address.slice(0, 10)}...{state.address.slice(-4)}
+            {account.address.slice(0, 10)}...{account.address.slice(-4)}
           </span>
         </div>
         <button
           type="button"
-          onClick={() => actions.disconnect()}
+          onClick={() => void disconnect()}
           className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent"
           aria-label="Disconnect wallet"
         >

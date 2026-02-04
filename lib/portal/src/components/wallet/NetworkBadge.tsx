@@ -1,15 +1,15 @@
-import { useWallet } from '../../wallet/context';
+import { useWallet } from '../../wallet';
 
 export interface NetworkBadgeProps {
   className?: string;
 }
 
 export function NetworkBadge({ className }: NetworkBadgeProps) {
-  const { state } = useWallet();
+  const { chainId } = useWallet();
 
   return (
     <span className={className}>
-      {state.networkName || state.chainId || 'Unknown network'}
+      {chainId || 'Unknown network'}
     </span>
   );
 }

@@ -52,3 +52,4 @@ export function OfferingDetails({ offeringId, className, onCheckout, onBack }: O
     </div>
   );
 }
+
