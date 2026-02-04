@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -362,6 +363,26 @@ func (k Keeper) CreateOrder(ctx sdk.Context, order *marketplace.Order) error {
 	if params.EnableIdentityGating {
 		if err := k.CheckIdentityGating(ctx, offering, customerAddr); err != nil {
 			return err
+		}
+	}
+
+	// Validate order pricing against offering price components
+	quote, err := marketplace.CalculateOfferingPrice(offering, order.ResourceUnits, order.RequestedQuantity)
+	if err != nil {
+		return marketplace.ErrPricingInvalid.Wrap(err.Error())
+	}
+	if !quote.Total.Amount.IsUint64() {
+		return marketplace.ErrPricingInvalid.Wrap("calculated price overflow")
+	}
+	if quote.Total.Amount.Uint64() > order.MaxBidPrice {
+		return marketplace.ErrPricingInvalid.Wrapf("max bid price %d below required %d", order.MaxBidPrice, quote.Total.Amount.Uint64())
+	}
+	if offering.AllowBidding && offering.MinBid.IsValid() && offering.MinBid.Amount.IsPositive() {
+		if offering.MinBid.Denom != quote.Total.Denom {
+			return marketplace.ErrPricingInvalid.Wrap("min bid denom mismatch")
+		}
+		if offering.MinBid.Amount.GT(sdkmath.NewIntFromUint64(order.MaxBidPrice)) {
+			return marketplace.ErrPricingInvalid.Wrap("max bid price below offering minimum bid")
 		}
 	}
 

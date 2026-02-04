@@ -230,6 +230,9 @@ type Order struct {
 	// RequestedQuantity is the quantity requested
 	RequestedQuantity uint32 `json:"requested_quantity"`
 
+	// ResourceUnits contains requested resource units for component pricing.
+	ResourceUnits map[string]uint64 `json:"resource_units,omitempty"`
+
 	// AllocatedProviderAddress is set after allocation
 	AllocatedProviderAddress string `json:"allocated_provider_address,omitempty"`
 
@@ -300,6 +303,18 @@ func (o *Order) Validate() error {
 
 	if o.RequestedQuantity == 0 {
 		return fmt.Errorf("requested quantity must be positive")
+	}
+	if o.MaxBidPrice == 0 {
+		return fmt.Errorf("max bid price must be positive")
+	}
+
+	for resourceType, units := range o.ResourceUnits {
+		if resourceType == "" {
+			return fmt.Errorf("resource unit key cannot be empty")
+		}
+		if units == 0 {
+			return fmt.Errorf("resource unit %s must be positive", resourceType)
+		}
 	}
 
 	if o.EncryptedConfig != nil {

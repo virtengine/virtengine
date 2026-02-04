@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 
+	marketplacev1 "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1"
 	marketplacetypes "github.com/virtengine/virtengine/x/market/types/marketplace"
 	marketplacekeeper "github.com/virtengine/virtengine/x/market/types/marketplace/keeper"
 )
@@ -74,8 +75,9 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingCo
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	_ = clientCtx
-	_ = mux
+	if err := marketplacev1.RegisterQueryHandlerClient(context.Background(), mux, marketplacev1.NewQueryClient(clientCtx)); err != nil {
+		panic(fmt.Errorf("couldn't register marketplace grpc routes: %s", err.Error()))
+	}
 }
 
 // GetTxCmd returns the root tx command for the module.
@@ -115,6 +117,7 @@ func (am AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	marketplacetypes.RegisterMsgServer(cfg.MsgServer(), marketplacekeeper.NewMsgServerImpl(am.keeper))
+	marketplacev1.RegisterQueryServer(cfg.QueryServer(), marketplacekeeper.NewQueryServerImpl(am.keeper))
 }
 
 // InitGenesis performs genesis initialization.
