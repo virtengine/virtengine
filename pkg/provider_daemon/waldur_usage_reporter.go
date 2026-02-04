@@ -85,27 +85,27 @@ type WaldurUsageReporterState struct {
 
 // PendingUsageReport represents a report waiting to be submitted
 type PendingUsageReport struct {
-	ID             string                      `json:"id"`
-	AllocationID   string                      `json:"allocation_id"`
-	ResourceUUID   string                      `json:"resource_uuid"`
-	Report         *waldur.ResourceUsageReport `json:"report"`
-	CreatedAt      time.Time                   `json:"created_at"`
-	ScheduledAt    time.Time                   `json:"scheduled_at"`
-	AttemptCount   int                         `json:"attempt_count"`
-	LastAttemptAt  *time.Time                  `json:"last_attempt_at,omitempty"`
-	LastError      string                      `json:"last_error,omitempty"`
+	ID            string                      `json:"id"`
+	AllocationID  string                      `json:"allocation_id"`
+	ResourceUUID  string                      `json:"resource_uuid"`
+	Report        *waldur.ResourceUsageReport `json:"report"`
+	CreatedAt     time.Time                   `json:"created_at"`
+	ScheduledAt   time.Time                   `json:"scheduled_at"`
+	AttemptCount  int                         `json:"attempt_count"`
+	LastAttemptAt *time.Time                  `json:"last_attempt_at,omitempty"`
+	LastError     string                      `json:"last_error,omitempty"`
 }
 
 // FailedUsageReport represents a report that failed to submit
 type FailedUsageReport struct {
-	ID             string                      `json:"id"`
-	AllocationID   string                      `json:"allocation_id"`
-	ResourceUUID   string                      `json:"resource_uuid"`
-	Report         *waldur.ResourceUsageReport `json:"report"`
-	FailedAt       time.Time                   `json:"failed_at"`
-	TotalAttempts  int                         `json:"total_attempts"`
-	LastError      string                      `json:"last_error"`
-	DeadLettered   bool                        `json:"dead_lettered"`
+	ID            string                      `json:"id"`
+	AllocationID  string                      `json:"allocation_id"`
+	ResourceUUID  string                      `json:"resource_uuid"`
+	Report        *waldur.ResourceUsageReport `json:"report"`
+	FailedAt      time.Time                   `json:"failed_at"`
+	TotalAttempts int                         `json:"total_attempts"`
+	LastError     string                      `json:"last_error"`
+	DeadLettered  bool                        `json:"dead_lettered"`
 }
 
 // ReportedPeriod tracks a period that has been reported
@@ -118,14 +118,14 @@ type ReportedPeriod struct {
 
 // WaldurUsageReportingMetrics tracks usage reporting metrics for Waldur submissions
 type WaldurUsageReportingMetrics struct {
-	TotalReports       int64     `json:"total_reports"`
-	SuccessfulReports  int64     `json:"successful_reports"`
-	FailedReports      int64     `json:"failed_reports"`
-	RetryAttempts      int64     `json:"retry_attempts"`
-	DeadLetteredReports int64    `json:"dead_lettered_reports"`
-	LastSuccessTime    time.Time `json:"last_success_time"`
-	LastFailureTime    time.Time `json:"last_failure_time"`
-	AverageLatencyMs   int64     `json:"average_latency_ms"`
+	TotalReports        int64     `json:"total_reports"`
+	SuccessfulReports   int64     `json:"successful_reports"`
+	FailedReports       int64     `json:"failed_reports"`
+	RetryAttempts       int64     `json:"retry_attempts"`
+	DeadLetteredReports int64     `json:"dead_lettered_reports"`
+	LastSuccessTime     time.Time `json:"last_success_time"`
+	LastFailureTime     time.Time `json:"last_failure_time"`
+	AverageLatencyMs    int64     `json:"average_latency_ms"`
 }
 
 // WaldurUsageReporter submits usage data to Waldur
@@ -147,13 +147,13 @@ type WaldurUsageReporter struct {
 
 // UsageReporterPrometheusMetrics provides Prometheus-compatible metrics
 type UsageReporterPrometheusMetrics struct {
-	ReportsTotal       atomic.Int64
-	ReportsSuccessful  atomic.Int64
-	ReportsFailed      atomic.Int64
+	ReportsTotal        atomic.Int64
+	ReportsSuccessful   atomic.Int64
+	ReportsFailed       atomic.Int64
 	ReportsDeadLettered atomic.Int64
-	RetryAttempts      atomic.Int64
-	PendingReports     atomic.Int64
-	ReportDurationSum  atomic.Int64
+	RetryAttempts       atomic.Int64
+	PendingReports      atomic.Int64
+	ReportDurationSum   atomic.Int64
 	ReportDurationCount atomic.Int64
 }
 
@@ -477,12 +477,12 @@ func (r *WaldurUsageReporter) submitReport(ctx context.Context, pending *Pending
 			Operation: "submit_usage",
 			Success:   true,
 			Details: map[string]interface{}{
-				"allocation_id":  pending.AllocationID,
-				"resource_uuid":  pending.ResourceUUID,
-				"period_start":   pending.Report.PeriodStart,
-				"period_end":     pending.Report.PeriodEnd,
-				"waldur_uuid":    response.UUID,
-				"duration_ms":    duration.Milliseconds(),
+				"allocation_id": pending.AllocationID,
+				"resource_uuid": pending.ResourceUUID,
+				"period_start":  pending.Report.PeriodStart,
+				"period_end":    pending.Report.PeriodEnd,
+				"waldur_uuid":   response.UUID,
+				"duration_ms":   duration.Milliseconds(),
 			},
 		})
 	}
@@ -526,7 +526,15 @@ func (r *WaldurUsageReporter) handleSubmitError(pending *PendingUsageReport, err
 			pending.ID, pending.AttemptCount)
 	} else {
 		// Schedule retry with exponential backoff
-		backoff := time.Duration(r.cfg.RetryBackoffSeconds) * time.Second * time.Duration(1<<uint(pending.AttemptCount-1))
+		// Cap the shift amount to prevent overflow (max 10 retries = 1024x backoff)
+		shiftAmount := pending.AttemptCount - 1
+		if shiftAmount < 0 {
+			shiftAmount = 0
+		}
+		if shiftAmount > 10 {
+			shiftAmount = 10
+		}
+		backoff := time.Duration(r.cfg.RetryBackoffSeconds) * time.Second * time.Duration(1<<shiftAmount)
 		pending.ScheduledAt = time.Now().Add(backoff)
 		r.promMetrics.RetryAttempts.Add(1)
 		r.state.Metrics.RetryAttempts++
