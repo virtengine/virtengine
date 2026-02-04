@@ -104,8 +104,15 @@ export function SelfieCapturePanel({
           />
         </div>
 
-        {qualityResult && qualityResult.issues.length > 0 && (
-          <QualityFeedback result={qualityResult} compact />
+        {guidanceState && guidanceState.currentIssues.length > 0 && (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+            <p className="font-medium">Capture tips</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+              {guidanceState.currentIssues.map((issue) => (
+                <li key={`${issue.type}-${issue.message}`}>{issue.message}</li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {onCancel && (
@@ -119,4 +126,3 @@ export function SelfieCapturePanel({
     </Card>
   );
 }
-

@@ -36,7 +36,7 @@ export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
       </CardHeader>
       <CardContent>
         <MFAEnrollmentWizard
-          allowedFactors={preferredFactorType ? [preferredFactorType] : ['otp', 'fido2', 'sms']}
+          allowedFactors={['totp', 'webauthn', 'sms'] as MFAFactorType[]}
           onComplete={onComplete}
           onCancel={onCancel}
         />
