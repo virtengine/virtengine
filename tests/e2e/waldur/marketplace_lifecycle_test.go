@@ -447,8 +447,8 @@ func (s *MarketplaceLifecycleTestSuite) TestPhase5_UsageReporting() {
 		periodEnd := time.Now().Add(-2 * time.Hour)
 
 		metrics := &provider_daemon.ResourceMetrics{
-			CPUMilliSeconds:    3600000, // 1 hour
-			MemoryByteSeconds:  1073741824 * 3600, // 1GB for 1 hour
+			CPUMilliSeconds:    3600000,            // 1 hour
+			MemoryByteSeconds:  1073741824 * 3600,  // 1GB for 1 hour
 			StorageByteSeconds: 10737418240 * 3600, // 10GB for 1 hour
 		}
 
@@ -573,7 +573,7 @@ func (s *MarketplaceLifecycleTestSuite) TestMarketplaceTypeIntegration() {
 	})
 
 	s.Run("IdempotencyKeyGeneration", func() {
-		now := time.Now()
+		now := time.Date(2025, 1, 1, 10, 15, 0, 0, time.UTC)
 
 		key1 := marketplace.GenerateIdempotencyKey(
 			s.testAllocationID,
