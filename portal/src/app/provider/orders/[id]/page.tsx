@@ -63,8 +63,9 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     tickDeployment,
     isLoading,
   } = useDeploymentStore();
-  const { state: walletState } = useWallet();
+  const wallet = useWallet();
   const { open: openWalletModal } = useWalletModal();
+  const activeAccount = wallet.accounts[wallet.activeAccountIndex];
 
   const deployment = deployments.find((item) => item.id === id);
 
@@ -144,7 +145,7 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     memo: string,
     actionFn: () => void
   ) => {
-    if (!walletState.isConnected) {
+    if (wallet.status !== 'connected') {
       setActionError('Connect your wallet to sign this transaction.');
       openWalletModal();
       return;
@@ -214,8 +215,8 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
           <div>
             <h2 className="text-sm font-semibold">Deployment actions</h2>
             <p className="text-xs text-muted-foreground">
-            {walletState.isConnected
-                ? `Signing with ${walletState.walletType ?? 'wallet'} (${truncateAddress(walletState.address ?? '')})`
+            {wallet.status === 'connected'
+                ? `Signing with ${wallet.walletType ?? 'wallet'} (${truncateAddress(activeAccount?.address ?? '')})`
                 : 'Connect wallet to sign actions'}
             </p>
           </div>

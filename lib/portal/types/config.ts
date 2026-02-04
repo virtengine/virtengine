@@ -7,7 +7,7 @@
 
 import type { ReactNode } from 'react';
 import type { ChainConfig } from './chain';
-import type { WalletProviderConfig } from '../src/wallet/context';
+import type { WalletProviderConfig } from '../src/wallet/types';
 
 /**
  * Portal configuration

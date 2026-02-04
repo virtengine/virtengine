@@ -40,7 +40,6 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
 };
 
 beforeEach(() => {
-  // @ts-expect-error mock keplr
   window.keplr = {
     enable: vi.fn(),
     getKey: vi.fn().mockResolvedValue({
@@ -52,7 +51,6 @@ beforeEach(() => {
     signDirect: vi.fn(),
   };
 
-  // @ts-expect-error mock offline signer
   window.getOfflineSignerAuto = vi.fn().mockResolvedValue({
     getAccounts: vi.fn().mockResolvedValue([
       { address: 'virtengine1testaddress', algo: 'secp256k1', pubkey: new Uint8Array([1, 2, 3]) },

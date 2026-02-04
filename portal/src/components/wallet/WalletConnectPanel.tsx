@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call */
+
 import { useMemo } from 'react';
 import { useWallet } from '@/lib/portal-adapter';
 import { SUPPORTED_WALLETS, WALLET_CONNECT_PROJECT_ID, isWalletInstalled } from '@/config';

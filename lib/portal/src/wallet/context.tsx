@@ -1,349 +1,392 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import * as React from 'react';
 import type {
-  ExtensionWalletType,
-  WalletActions,
-  WalletAdapter,
-  WalletAdapterContext,
-  WalletChainConfig,
-  WalletConnectConfig,
   WalletContextValue,
-  WalletError,
+  WalletProviderConfig,
   WalletState,
-  FeeEstimate,
+  WalletType,
+  WalletError,
+  WalletChainInfo,
+  WalletAccount,
   AminoSignDoc,
-  DirectSignDoc,
-  ArbitrarySignResponse,
   AminoSignResponse,
+  DirectSignDoc,
   DirectSignResponse,
+  WalletSignOptions,
 } from './types';
-import { createKeplrAdapter, createLeapAdapter, createCosmostationAdapter, createWalletConnectAdapter } from './adapters';
-import { toBase64 } from './utils';
+import { KeplrAdapter } from './adapters/keplr';
+import { LeapAdapter } from './adapters/leap';
+import { CosmostationAdapter } from './adapters/cosmostation';
+import { WalletConnectAdapter } from './adapters/walletconnect';
+import type { WalletAdapter } from './types';
 
-export interface WalletProviderConfig {
-  chain: WalletChainConfig;
-  wallets?: ExtensionWalletType[];
-  autoConnect?: boolean;
-  persistKey?: string;
-  walletConnect?: WalletConnectConfig;
-  onError?: (error: WalletError) => void;
-}
+const DEFAULT_PERSIST_KEY = 've_wallet_session';
+
+const initialState: WalletState = {
+  status: 'idle',
+  walletType: null,
+  chainId: null,
+  accounts: [],
+  activeAccountIndex: 0,
+  balance: null,
+  error: null,
+  lastConnectedAt: null,
+  autoConnect: true,
+};
+
+const WalletContext = React.createContext<WalletContextValue | null>(null);
 
 export interface WalletProviderProps {
-  children: ReactNode;
+  children: React.ReactNode;
   config: WalletProviderConfig;
 }
 
-const WalletContext = createContext<WalletContextValue | null>(null);
-
-const DEFAULT_STORAGE_KEY = 've_portal_wallet_session';
-
-interface PersistedSession {
-  walletType: ExtensionWalletType;
-  address?: string;
-}
-
-function getPersistedSession(storageKey: string): PersistedSession | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return null;
-    return JSON.parse(raw) as PersistedSession;
-  } catch {
-    return null;
-  }
-}
-
-function persistSession(storageKey: string, session: PersistedSession | null) {
-  if (typeof window === 'undefined') return;
-  if (!session) {
-    window.localStorage.removeItem(storageKey);
-    return;
-  }
-  window.localStorage.setItem(storageKey, JSON.stringify(session));
-}
-
-function createInitialState(chain: WalletChainConfig): WalletState {
-  return {
-    isConnecting: false,
-    isConnected: false,
-    walletType: null,
-    address: null,
-    accounts: [],
-    chainId: chain.chainId,
-    networkName: chain.chainName,
-    lastConnectedAt: null,
-    error: null,
-  };
-}
-
-function mapError(error: unknown, fallbackCode: WalletError['code']): WalletError {
-  if (error instanceof Error) {
-    return { code: fallbackCode, message: error.message };
-  }
-  return { code: fallbackCode, message: 'Wallet operation failed' };
-}
-
 export function WalletProvider({ children, config }: WalletProviderProps): JSX.Element {
-  const storageKey = config.persistKey ?? DEFAULT_STORAGE_KEY;
-  const [state, setState] = useState<WalletState>(() => createInitialState(config.chain));
-  const adapterRef = useRef<WalletAdapter | null>(null);
+  const [state, setState] = React.useState<WalletState>(() => ({
+    ...initialState,
+    autoConnect: config.autoConnect ?? true,
+  }));
 
-  const adapters = useMemo<Record<ExtensionWalletType, WalletAdapter>>(() => ({
-    keplr: createKeplrAdapter(),
-    leap: createLeapAdapter(),
-    cosmostation: createCosmostationAdapter(),
-    walletconnect: createWalletConnectAdapter(),
-  }), []);
+  const adaptersRef = React.useRef<Map<WalletType, WalletAdapter> | null>(null);
 
-  const walletAdapterContext = useMemo<WalletAdapterContext>(() => ({
-    chain: config.chain,
-    walletConnect: config.walletConnect,
-  }), [config.chain, config.walletConnect]);
+  if (!adaptersRef.current) {
+    const adapters = new Map<WalletType, WalletAdapter>();
+    adapters.set('keplr', new KeplrAdapter());
+    adapters.set('leap', new LeapAdapter());
+    adapters.set('cosmostation', new CosmostationAdapter());
 
-  const setError = useCallback((error: WalletError | null) => {
-    setState(prev => ({ ...prev, error }));
-    if (error) {
-      config.onError?.(error);
-    }
-  }, [config]);
+    if (config.walletConnectProjectId) {
+      const metadata = config.metadata ?? {
+        name: 'VirtEngine Portal',
+        description: 'VirtEngine wallet connection',
+        url: 'https://portal.virtengine.io',
+        icons: ['https://portal.virtengine.io/favicon.ico'],
+      };
 
-  const connect = useCallback(async (walletType: ExtensionWalletType) => {
-    if (config.wallets && !config.wallets.includes(walletType)) {
-      setError({ code: 'unknown', message: 'Wallet type not enabled' });
-      return;
-    }
-    const adapter = adapters[walletType];
-    if (!adapter) {
-      setError({ code: 'unknown', message: 'Unsupported wallet type' });
-      return;
+      adapters.set(
+        'walletconnect',
+        new WalletConnectAdapter(
+          config.walletConnectProjectId,
+          metadata
+        )
+      );
     }
 
-    if (!adapter.isInstalled()) {
-      setError({ code: 'wallet_not_installed', message: `${adapter.name} is not installed` });
-      return;
-    }
+    adaptersRef.current = adapters;
+  }
 
-    setState(prev => ({ ...prev, isConnecting: true, error: null }));
+  const chainInfo = config.chainInfo;
+  const persistKey = config.persistKey ?? DEFAULT_PERSIST_KEY;
 
-    try {
-      if (adapter.suggestChain) {
-        await adapter.suggestChain(config.chain);
-      }
-
-      const connection = await adapter.connect(walletAdapterContext);
-      const accounts = connection.accounts ?? [];
-      const activeAccount = connection.activeAccount ?? accounts[0];
-
-      if (!activeAccount?.address) {
-        throw new Error('No account returned by wallet');
-      }
-
-      adapterRef.current = adapter;
-
-      setState(prev => ({
+  const setError = React.useCallback(
+    (error: WalletError | null) => {
+      setState((prev) => ({
         ...prev,
-        isConnecting: false,
-        isConnected: true,
-        walletType,
-        address: activeAccount.address,
-        accounts,
-        lastConnectedAt: Date.now(),
-        error: null,
+        status: error ? 'error' : prev.status,
+        error,
       }));
+      if (error && config.onError) {
+        config.onError(error);
+      }
+    },
+    [config]
+  );
 
-      persistSession(storageKey, { walletType, address: activeAccount.address });
-    } catch (error) {
-      adapterRef.current = null;
-      setState(prev => ({ ...prev, isConnecting: false }));
-      setError(mapError(error, 'connection_failed'));
-    }
-  }, [adapters, config.chain, setError, storageKey, walletAdapterContext]);
+  const getAdapter = React.useCallback(
+    (walletType: WalletType | null): WalletAdapter | null => {
+      if (!walletType || !adaptersRef.current) return null;
+      return adaptersRef.current.get(walletType) ?? null;
+    },
+    []
+  );
 
-  const reconnect = useCallback(async () => {
-    const session = getPersistedSession(storageKey);
-    if (!session?.walletType) {
-      return;
-    }
+  const persistSession = React.useCallback(
+    (nextState: WalletState) => {
+      if (typeof window === 'undefined') return;
+      const payload = {
+        walletType: nextState.walletType,
+        activeAccountIndex: nextState.activeAccountIndex,
+        chainId: nextState.chainId,
+        autoConnect: nextState.autoConnect,
+        lastConnectedAt: nextState.lastConnectedAt,
+      };
+      window.localStorage.setItem(persistKey, JSON.stringify(payload));
+    },
+    [persistKey]
+  );
 
-    await connect(session.walletType);
+  const clearSession = React.useCallback(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem(persistKey);
+  }, [persistKey]);
 
-    if (session.address) {
-      setState(prev => ({ ...prev, address: session.address ?? null }));
-    }
-  }, [connect, storageKey]);
-
-  const disconnect = useCallback(async () => {
-    try {
-      await adapterRef.current?.disconnect();
-    } finally {
-      adapterRef.current = null;
-      setState(createInitialState(config.chain));
-      persistSession(storageKey, null);
-    }
-  }, [config.chain, storageKey]);
-
-  const refreshAccounts = useCallback(async () => {
-    if (!state.walletType) return;
-    const adapter = adapters[state.walletType];
-    if (!adapter) return;
-
-    try {
-      const accounts = await adapter.getAccounts(config.chain.chainId);
-      if (accounts.length === 0) {
-        setError({ code: 'account_not_found', message: 'No accounts found' });
+  const connect = React.useCallback(
+    async (walletType: WalletType) => {
+      const adapter = getAdapter(walletType);
+      if (!adapter) {
+        setError({ code: 'wallet_unavailable', message: 'Unsupported wallet type' });
         return;
       }
 
-      const active = accounts.find(account => account.address === state.address) ?? accounts[0];
+      if (!adapter.isAvailable()) {
+        setError({ code: 'wallet_not_installed', message: `${adapter.name} wallet is not available` });
+        return;
+      }
 
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
-        accounts,
-        address: active?.address ?? prev.address,
+        status: 'connecting',
+        walletType,
+        error: null,
+      }));
+
+      try {
+        const accounts = await adapter.connect(chainInfo);
+        setState((prev) => {
+          const nextState: WalletState = {
+            ...prev,
+            status: 'connected',
+            walletType,
+            chainId: chainInfo.chainId,
+            accounts,
+            activeAccountIndex: 0,
+            error: null,
+            lastConnectedAt: Date.now(),
+          };
+          persistSession(nextState);
+          return nextState;
+        });
+      } catch (error) {
+        setError({
+          code: 'connect_failed',
+          message: error instanceof Error ? error.message : 'Failed to connect wallet',
+          cause: error,
+        });
+        setState((prev) => ({
+          ...prev,
+          status: 'error',
+        }));
+      }
+    },
+    [chainInfo, getAdapter, persistSession, setError]
+  );
+
+  const disconnect = React.useCallback(async () => {
+    const adapter = getAdapter(state.walletType);
+    if (adapter) {
+      await adapter.disconnect();
+    }
+
+    setState((prev) => ({
+      ...initialState,
+      autoConnect: prev.autoConnect,
+    }));
+    clearSession();
+  }, [clearSession, getAdapter, state.walletType]);
+
+  const refreshAccounts = React.useCallback(async () => {
+    const adapter = getAdapter(state.walletType);
+    if (!adapter) return;
+
+    try {
+      const accounts = await adapter.getAccounts(chainInfo);
+      setState((prev) => {
+        const nextState = {
+          ...prev,
+          accounts,
+          activeAccountIndex: Math.min(prev.activeAccountIndex, Math.max(accounts.length - 1, 0)),
+        };
+        persistSession(nextState);
+        return nextState;
+      });
+    } catch (error) {
+      setError({
+        code: 'account_refresh_failed',
+        message: error instanceof Error ? error.message : 'Failed to refresh accounts',
+        cause: error,
+      });
+    }
+  }, [chainInfo, getAdapter, persistSession, setError, state.walletType]);
+
+  const selectAccount = React.useCallback((index: number) => {
+    setState((prev) => {
+      const nextState = { ...prev, activeAccountIndex: index };
+      persistSession(nextState);
+      return nextState;
+    });
+  }, [persistSession]);
+
+  const getActiveAccount = React.useCallback(
+    (accounts: WalletAccount[], index: number): WalletAccount => {
+      if (accounts.length === 0) {
+        throw new Error('No wallet account available');
+      }
+      return accounts[index] ?? accounts[0];
+    },
+    []
+  );
+
+  const signAmino = React.useCallback(
+    async (signDoc: AminoSignDoc, options?: WalletSignOptions): Promise<AminoSignResponse> => {
+      const adapter = getAdapter(state.walletType);
+      if (!adapter) {
+        throw new Error('No wallet connected');
+      }
+
+      const account = getActiveAccount(state.accounts, state.activeAccountIndex);
+      return adapter.signAmino(chainInfo.chainId, account.address, signDoc, options);
+    },
+    [chainInfo.chainId, getActiveAccount, getAdapter, state.accounts, state.activeAccountIndex, state.walletType]
+  );
+
+  const signDirect = React.useCallback(
+    async (signDoc: DirectSignDoc): Promise<DirectSignResponse> => {
+      const adapter = getAdapter(state.walletType);
+      if (!adapter) {
+        throw new Error('No wallet connected');
+      }
+
+      const account = getActiveAccount(state.accounts, state.activeAccountIndex);
+      return adapter.signDirect(chainInfo.chainId, account.address, signDoc);
+    },
+    [chainInfo.chainId, getActiveAccount, getAdapter, state.accounts, state.activeAccountIndex, state.walletType]
+  );
+
+  const signArbitrary = React.useCallback(
+    async (data: string | Uint8Array): Promise<{ signature: string; pubKey: Uint8Array }> => {
+      const adapter = getAdapter(state.walletType);
+      if (!adapter?.signArbitrary) {
+        throw new Error('Wallet does not support arbitrary signing');
+      }
+
+      const account = getActiveAccount(state.accounts, state.activeAccountIndex);
+      return adapter.signArbitrary(chainInfo.chainId, account.address, data);
+    },
+    [chainInfo.chainId, getActiveAccount, getAdapter, state.accounts, state.activeAccountIndex, state.walletType]
+  );
+
+  const estimateFee = React.useCallback(
+    (gasLimit: number, denom?: string) => {
+      const feeCurrency = denom
+        ? chainInfo.feeCurrencies.find((currency) => currency.coinMinimalDenom === denom)
+        : chainInfo.feeCurrencies[0];
+
+      if (!feeCurrency) {
+        return { amount: [], gas: String(gasLimit) };
+      }
+
+      const gasPrice = feeCurrency.gasPriceStep?.average ?? 0.025;
+      const feeAmount = Math.ceil(gasLimit * gasPrice);
+
+      return {
+        amount: [{ denom: feeCurrency.coinMinimalDenom, amount: String(feeAmount) }],
+        gas: String(gasLimit),
+      };
+    },
+    [chainInfo.feeCurrencies]
+  );
+
+  const refreshBalance = React.useCallback(async () => {
+    try {
+      if (state.accounts.length === 0) return;
+      const account = getActiveAccount(state.accounts, state.activeAccountIndex);
+      const response = await fetch(
+        `${chainInfo.restEndpoint}/cosmos/bank/v1beta1/balances/${account.address}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch balance');
+      }
+
+      const data = await response.json();
+      const denom = chainInfo.stakeCurrency.coinMinimalDenom;
+      const balance = (data.balances as Array<{ denom: string; amount: string }>).find(
+        (item) => item.denom === denom
+      );
+
+      const formatted = balance
+        ? formatBalance(balance.amount, chainInfo.stakeCurrency.coinDecimals)
+        : '0';
+
+      setState((prev) => ({
+        ...prev,
+        balance: formatted,
       }));
     } catch (error) {
-      setError(mapError(error, 'connection_failed'));
+      setError({
+        code: 'balance_fetch_failed',
+        message: error instanceof Error ? error.message : 'Failed to refresh balance',
+        cause: error,
+      });
     }
-  }, [adapters, config.chain.chainId, setError, state.address, state.walletType]);
+  }, [chainInfo.restEndpoint, chainInfo.stakeCurrency.coinDecimals, chainInfo.stakeCurrency.coinMinimalDenom, getActiveAccount, setError, state.accounts, state.activeAccountIndex]);
 
-  const switchAccount = useCallback((address: string) => {
-    setState(prev => ({
-      ...prev,
-      address,
-    }));
-    if (state.walletType) {
-      persistSession(storageKey, { walletType: state.walletType, address });
-    }
-  }, [state.walletType, storageKey]);
-
-  const signAmino = useCallback(async (
-    signDoc: AminoSignDoc,
-    signerAddress?: string
-  ): Promise<AminoSignResponse> => {
-    if (!state.walletType || !adapterRef.current) {
-      throw new Error('No wallet connected');
-    }
-    const signer = signerAddress ?? state.address;
-    if (!signer) {
-      throw new Error('No signer address available');
-    }
-    return adapterRef.current.signAmino(config.chain.chainId, signer, signDoc);
-  }, [config.chain.chainId, state.address, state.walletType]);
-
-  const signDirect = useCallback(async (
-    signDoc: DirectSignDoc,
-    signerAddress?: string
-  ): Promise<DirectSignResponse> => {
-    if (!state.walletType || !adapterRef.current) {
-      throw new Error('No wallet connected');
-    }
-    const signer = signerAddress ?? state.address;
-    if (!signer) {
-      throw new Error('No signer address available');
-    }
-    return adapterRef.current.signDirect(config.chain.chainId, signer, signDoc);
-  }, [config.chain.chainId, state.address, state.walletType]);
-
-  const signArbitrary = useCallback(async (
-    data: string | Uint8Array,
-    signerAddress?: string
-  ): Promise<ArbitrarySignResponse> => {
-    if (!state.walletType || !adapterRef.current?.signArbitrary) {
-      throw new Error('Wallet does not support arbitrary signing');
-    }
-    const signer = signerAddress ?? state.address;
-    if (!signer) {
-      throw new Error('No signer address available');
-    }
-    return adapterRef.current.signArbitrary(config.chain.chainId, signer, data);
-  }, [config.chain.chainId, state.address, state.walletType]);
-
-  const estimateFee = useCallback(async (
-    txBytes: Uint8Array,
-    gasAdjustment = 1.2
-  ): Promise<FeeEstimate> => {
-    if (!config.chain.restEndpoint) {
-      throw new Error('REST endpoint not configured');
-    }
-
-    const response = await fetch(`${config.chain.restEndpoint}/cosmos/tx/v1beta1/simulate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tx_bytes: toBase64(txBytes) }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to simulate transaction');
-    }
-
-    const data = await response.json();
-    const gasUsed = parseInt(data.gas_info?.gas_used ?? '0', 10);
-    const gasWanted = Math.ceil(gasUsed * gasAdjustment);
-
-    const feeCurrency = config.chain.feeCurrencies[0];
-    const gasPrice = feeCurrency?.gasPriceStep?.average ?? 0.025;
-    const feeAmount = Math.ceil(gasWanted * gasPrice).toString();
-
-    return {
-      gasUsed,
-      gasWanted,
-      feeAmount,
-      denom: feeCurrency?.coinMinimalDenom ?? config.chain.stakeCurrency.coinMinimalDenom,
-    };
-  }, [config.chain]);
-
-  const clearError = useCallback(() => setError(null), [setError]);
-
-  useEffect(() => {
-    if (!config.autoConnect) return;
-    void reconnect();
-  }, [config.autoConnect, reconnect]);
-
-  useEffect(() => {
+  React.useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!state.autoConnect) return;
 
-    const handleKeystoreChange = () => {
-      void refreshAccounts();
+    const stored = window.localStorage.getItem(persistKey);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<WalletState>;
+      if (parsed.walletType) {
+        connect(parsed.walletType as WalletType);
+      }
+    } catch (error) {
+      clearSession();
+    }
+  }, [clearSession, connect, persistKey, state.autoConnect]);
+
+  React.useEffect(() => {
+    if (state.status !== 'connected') return;
+
+    const handler = () => {
+      refreshAccounts();
     };
 
-    window.addEventListener('keplr_keystorechange', handleKeystoreChange);
-    window.addEventListener('leap_keystorechange', handleKeystoreChange);
-    window.addEventListener('cosmostation_keystorechange', handleKeystoreChange);
+    if (state.walletType === 'keplr') {
+      window.addEventListener('keplr_keystorechange', handler);
+      return () => window.removeEventListener('keplr_keystorechange', handler);
+    }
 
-    return () => {
-      window.removeEventListener('keplr_keystorechange', handleKeystoreChange);
-      window.removeEventListener('leap_keystorechange', handleKeystoreChange);
-      window.removeEventListener('cosmostation_keystorechange', handleKeystoreChange);
-    };
-  }, [refreshAccounts]);
+    if (state.walletType === 'leap') {
+      window.addEventListener('leap_keystorechange', handler);
+      return () => window.removeEventListener('leap_keystorechange', handler);
+    }
 
-  const actions: WalletActions = {
+    return undefined;
+  }, [refreshAccounts, state.status, state.walletType]);
+
+  const value: WalletContextValue = {
+    ...state,
     connect,
-    reconnect,
     disconnect,
     refreshAccounts,
-    switchAccount,
+    selectAccount,
     signAmino,
     signDirect,
     signArbitrary,
     estimateFee,
-    clearError,
+    refreshBalance,
   };
 
-  return (
-    <WalletContext.Provider value={{ state, actions }}>
-      {children}
-    </WalletContext.Provider>
-  );
+  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
 export function useWallet(): WalletContextValue {
-  const context = useContext(WalletContext);
+  const context = React.useContext(WalletContext);
   if (!context) {
     throw new Error('useWallet must be used within a WalletProvider');
   }
   return context;
+}
+
+function formatBalance(amount: string, decimals: number): string {
+  if (!amount) return '0';
+  const padded = amount.padStart(decimals + 1, '0');
+  const integer = padded.slice(0, -decimals);
+  const fraction = padded.slice(-decimals).replace(/0+$/, '');
+  return fraction ? `${integer}.${fraction}` : integer;
 }

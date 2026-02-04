@@ -1,141 +1,167 @@
-import type {
-  WalletAdapter,
-  WalletAdapterContext,
-  WalletConnection,
-  WalletAccount,
-  AminoSignDoc,
-  AminoSignResponse,
-  DirectSignDoc,
-  DirectSignResponse,
-  ArbitrarySignResponse,
-} from '../types';
-import { isBrowser, toKeplrChainInfo } from '../utils';
+import type { AminoSignDoc, AminoSignResponse, DirectSignDoc, DirectSignResponse, WalletAccount, WalletChainInfo, WalletSignOptions } from '../types';
+import { BaseWalletAdapter } from './base';
 
-interface LeapProvider {
-  enable: (chainId: string) => Promise<void>;
-  getKey: (chainId: string) => Promise<{
-    name?: string;
-    algo?: string;
-    pubKey?: Uint8Array;
-    bech32Address: string;
-    isNanoLedger?: boolean;
-  }>;
-  signAmino: (
+interface LeapLike {
+  enable(chainId: string | string[]): Promise<void>;
+  getKey(chainId: string): Promise<{ bech32Address: string; pubKey: Uint8Array; algo: string }>;
+  signAmino(
     chainId: string,
     signer: string,
-    signDoc: AminoSignDoc
-  ) => Promise<AminoSignResponse>;
-  signDirect: (
+    signDoc: AminoSignDoc,
+    signOptions?: WalletSignOptions
+  ): Promise<AminoSignResponse>;
+  signDirect(
     chainId: string,
     signer: string,
+    signDoc: DirectSignDoc,
+    signOptions?: WalletSignOptions
+  ): Promise<DirectSignResponse>;
+  signArbitrary?(
+    chainId: string,
+    signer: string,
+    data: string | Uint8Array
+  ): Promise<{ signature: string; pub_key: { value: string } }>;
+  experimentalSuggestChain?(chainInfo: Record<string, unknown>): Promise<void>;
+  getOfflineSigner?: (chainId: string, signOptions?: WalletSignOptions) => OfflineSigner;
+  getOfflineSignerAuto?: (chainId: string, signOptions?: WalletSignOptions) => Promise<OfflineSigner>;
+}
+
+interface OfflineSigner {
+  getAccounts(): Promise<Array<{ address: string; algo: string; pubkey: Uint8Array }>>;
+}
+
+declare global {
+  interface Window {
+    leap?: LeapLike;
+    getOfflineSigner?: (chainId: string, signOptions?: WalletSignOptions) => OfflineSigner;
+    getOfflineSignerAuto?: (chainId: string, signOptions?: WalletSignOptions) => Promise<OfflineSigner>;
+  }
+}
+
+export class LeapAdapter extends BaseWalletAdapter {
+  readonly type = 'leap' as const;
+  readonly name = 'Leap';
+  readonly icon = 'https://assets.leapwallet.io/logos/leap-cosmos-logo.svg';
+
+  private get leap(): LeapLike | undefined {
+    if (typeof window === 'undefined') return undefined;
+    return window.leap;
+  }
+
+  isAvailable(): boolean {
+    return !!this.leap;
+  }
+
+  async connect(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
+    const leap = this.leap;
+    if (!leap) {
+      throw new Error('Leap wallet is not installed');
+    }
+
+    if (leap.experimentalSuggestChain) {
+      await leap.experimentalSuggestChain(this.toKeplrChainInfo(chainInfo));
+    }
+
+    await leap.enable(chainInfo.chainId);
+
+    const accounts = await this.getAccounts(chainInfo);
+    if (accounts.length === 0) {
+      throw new Error('No Leap accounts available');
+    }
+
+    this.setAccounts(accounts);
+    return accounts;
+  }
+
+  async getAccounts(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
+    const leap = this.leap;
+    if (!leap) {
+      throw new Error('Leap wallet is not installed');
+    }
+
+    const signer = leap.getOfflineSignerAuto
+      ? await leap.getOfflineSignerAuto(chainInfo.chainId)
+      : leap.getOfflineSigner
+        ? leap.getOfflineSigner(chainInfo.chainId)
+        : window.getOfflineSignerAuto
+          ? await window.getOfflineSignerAuto(chainInfo.chainId)
+          : window.getOfflineSigner?.(chainInfo.chainId);
+
+    if (signer) {
+      const accounts = await signer.getAccounts();
+      return accounts.map((account) => ({
+        address: account.address,
+        pubKey: account.pubkey,
+        algo: account.algo,
+      }));
+    }
+
+    const key = await leap.getKey(chainInfo.chainId);
+    return [
+      {
+        address: key.bech32Address,
+        pubKey: key.pubKey,
+        algo: key.algo,
+      },
+    ];
+  }
+
+  async signAmino(
+    chainId: string,
+    signerAddress: string,
+    signDoc: AminoSignDoc,
+    signOptions?: WalletSignOptions
+  ): Promise<AminoSignResponse> {
+    const leap = this.leap;
+    if (!leap) {
+      throw new Error('Leap wallet is not connected');
+    }
+
+    return leap.signAmino(chainId, signerAddress, signDoc, signOptions);
+  }
+
+  async signDirect(
+    chainId: string,
+    signerAddress: string,
     signDoc: DirectSignDoc
-  ) => Promise<DirectSignResponse>;
-  signArbitrary?: (
+  ): Promise<DirectSignResponse> {
+    const leap = this.leap;
+    if (!leap) {
+      throw new Error('Leap wallet is not connected');
+    }
+
+    return leap.signDirect(chainId, signerAddress, signDoc);
+  }
+
+  async signArbitrary(
     chainId: string,
-    signer: string,
-    data: string
-  ) => Promise<ArbitrarySignResponse>;
-  experimentalSuggestChain?: (chainInfo: ReturnType<typeof toKeplrChainInfo>) => Promise<void>;
-  getOfflineSignerAuto?: (chainId: string) => Promise<{ getAccounts: () => Promise<WalletAccount[]> }>;
-}
+    signerAddress: string,
+    data: string | Uint8Array
+  ): Promise<{ signature: string; pubKey: Uint8Array }> {
+    const leap = this.leap;
+    if (!leap?.signArbitrary) {
+      throw new Error('Leap signArbitrary not available');
+    }
 
-type LeapWindow = typeof window & { leap?: LeapProvider };
+    const result = await leap.signArbitrary(chainId, signerAddress, data);
+    return {
+      signature: result.signature,
+      pubKey: this.base64ToBytes(result.pub_key.value),
+    };
+  }
 
-function getLeap(): LeapProvider | null {
-  if (!isBrowser()) return null;
-  const leap = (window as LeapWindow).leap;
-  return leap ?? null;
-}
-
-async function getAccountsFromSigner(
-  leap: LeapProvider,
-  chainId: string
-): Promise<WalletAccount[]> {
-  if (!leap.getOfflineSignerAuto) return [];
-  const signer = await leap.getOfflineSignerAuto(chainId);
-  return signer.getAccounts();
-}
-
-export function createLeapAdapter(): WalletAdapter {
-  return {
-    id: 'leap',
-    name: 'Leap',
-    supportsExtension: true,
-    supportsMobile: true,
-    isInstalled: () => !!getLeap(),
-    connect: async (context: WalletAdapterContext): Promise<WalletConnection> => {
-      const leap = getLeap();
-      if (!leap) {
-        throw new Error('Leap extension not installed');
-      }
-
-      if (leap.experimentalSuggestChain) {
-        await leap.experimentalSuggestChain(toKeplrChainInfo(context.chain));
-      }
-
-      await leap.enable(context.chain.chainId);
-
-      const accounts = await getAccountsFromSigner(leap, context.chain.chainId);
-      if (accounts.length > 0) {
-        return { accounts, activeAccount: accounts[0] };
-      }
-
-      const key = await leap.getKey(context.chain.chainId);
-      const account: WalletAccount = {
-        address: key.bech32Address,
-        algo: key.algo,
-        pubkey: key.pubKey,
-        isNanoLedger: key.isNanoLedger,
-        name: key.name,
-      };
-
-      return { accounts: [account], activeAccount: account };
-    },
-    disconnect: async () => {
-      return;
-    },
-    getAccounts: async (chainId: string) => {
-      const leap = getLeap();
-      if (!leap) return [];
-      const accounts = await getAccountsFromSigner(leap, chainId);
-      if (accounts.length > 0) return accounts;
-      const key = await leap.getKey(chainId);
-      return [{
-        address: key.bech32Address,
-        algo: key.algo,
-        pubkey: key.pubKey,
-        isNanoLedger: key.isNanoLedger,
-        name: key.name,
-      }];
-    },
-    signAmino: async (chainId: string, signer: string, signDoc: AminoSignDoc) => {
-      const leap = getLeap();
-      if (!leap) {
-        throw new Error('Leap extension not installed');
-      }
-      return leap.signAmino(chainId, signer, signDoc);
-    },
-    signDirect: async (chainId: string, signer: string, signDoc: DirectSignDoc) => {
-      const leap = getLeap();
-      if (!leap) {
-        throw new Error('Leap extension not installed');
-      }
-      return leap.signDirect(chainId, signer, signDoc);
-    },
-    signArbitrary: async (chainId: string, signer: string, data: string | Uint8Array) => {
-      const leap = getLeap();
-      if (!leap?.signArbitrary) {
-        throw new Error('Leap does not support arbitrary signing');
-      }
-      const payload = typeof data === 'string' ? data : new TextDecoder().decode(data);
-      return leap.signArbitrary(chainId, signer, payload);
-    },
-    suggestChain: async (chain) => {
-      const leap = getLeap();
-      if (!leap?.experimentalSuggestChain) {
-        return;
-      }
-      await leap.experimentalSuggestChain(toKeplrChainInfo(chain));
-    },
-  };
+  private toKeplrChainInfo(chainInfo: WalletChainInfo): Record<string, unknown> {
+    return {
+      chainId: chainInfo.chainId,
+      chainName: chainInfo.chainName,
+      rpc: chainInfo.rpcEndpoint,
+      rest: chainInfo.restEndpoint,
+      bip44: { coinType: chainInfo.bip44?.coinType ?? 118 },
+      bech32Config: chainInfo.bech32Config,
+      currencies: chainInfo.currencies,
+      feeCurrencies: chainInfo.feeCurrencies,
+      stakeCurrency: chainInfo.stakeCurrency,
+      features: chainInfo.features ?? [],
+    };
+  }
 }

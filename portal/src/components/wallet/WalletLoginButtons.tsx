@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call */
+
 import { useWallet } from '@/lib/portal-adapter';
 import { isWalletInstalled } from '@/config';
 

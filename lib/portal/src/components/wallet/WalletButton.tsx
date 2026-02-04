@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useWallet } from '../../wallet/context';
+import { useWallet } from '../../wallet';
 import { WalletModal } from './WalletModal';
 
 export interface WalletButtonProps {
@@ -8,10 +8,11 @@ export interface WalletButtonProps {
 }
 
 export function WalletButton({ className, showAddress = true }: WalletButtonProps) {
-  const { state, actions } = useWallet();
+  const { status, accounts, activeAccountIndex, disconnect } = useWallet();
   const [isOpen, setIsOpen] = useState(false);
+  const account = accounts[activeAccountIndex];
 
-  if (state.isConnecting) {
+  if (status === 'connecting') {
     return (
       <button type="button" disabled className={className}>
         Connecting...
@@ -19,15 +20,15 @@ export function WalletButton({ className, showAddress = true }: WalletButtonProp
     );
   }
 
-  if (state.isConnected && state.address) {
+  if (status === 'connected' && account) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {showAddress && (
           <span style={{ fontFamily: 'monospace', fontSize: 13 }}>
-            {state.address.slice(0, 10)}...{state.address.slice(-4)}
+            {account.address.slice(0, 10)}...{account.address.slice(-4)}
           </span>
         )}
-        <button type="button" onClick={() => actions.disconnect()} className={className}>
+        <button type="button" onClick={() => void disconnect()} className={className}>
           Disconnect
         </button>
       </div>

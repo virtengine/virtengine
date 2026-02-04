@@ -12,17 +12,17 @@ interface WalletModalProps {
 }
 
 export function WalletModal({ isOpen, onClose }: WalletModalProps) {
-  const { state, actions } = useWallet();
+  const { status, error, connect } = useWallet();
 
   const handleConnect = useCallback(async (walletType: WalletType) => {
-    await actions.connect(walletType);
-  }, [actions]);
+    await connect(walletType);
+  }, [connect]);
 
   useEffect(() => {
-    if (state.isConnected && isOpen) {
+    if (status === 'connected' && isOpen) {
       onClose();
     }
-  }, [state.isConnected, isOpen, onClose]);
+  }, [status, isOpen, onClose]);
 
   // Close on escape key
   useEffect(() => {
@@ -102,7 +102,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
               key={wallet.id}
               type="button"
               onClick={() => handleConnect(wallet.id)}
-              disabled={state.isConnecting || (!isWalletInstalled(wallet.id) && wallet.extension) || (wallet.id === 'walletconnect' && !WALLET_CONNECT_PROJECT_ID)}
+              disabled={status === 'connecting' || (!isWalletInstalled(wallet.id) && wallet.extension) || (wallet.id === 'walletconnect' && !WALLET_CONNECT_PROJECT_ID)}
               className="flex w-full items-center gap-4 rounded-lg border border-border p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
@@ -130,9 +130,9 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
           ))}
         </div>
 
-        {state.error && (
+        {error && (
           <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {state.error.message}
+            {error.message}
           </div>
         )}
 
