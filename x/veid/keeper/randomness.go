@@ -32,13 +32,21 @@ func (DeterministicRandomSource) Bytes(ctx sdk.Context, purpose string, size int
 	seedHasher.Write([]byte(ctx.ChainID()))
 
 	// Block height (consensus deterministic)
+	height := ctx.BlockHeight()
+	if height < 0 {
+		height = 0
+	}
 	var heightBuf [8]byte
-	binary.BigEndian.PutUint64(heightBuf[:], uint64(ctx.BlockHeight()))
+	binary.BigEndian.PutUint64(heightBuf[:], uint64(height))
 	seedHasher.Write(heightBuf[:])
 
 	// Block time (consensus deterministic)
+	blockTime := ctx.BlockTime().UTC().UnixNano()
+	if blockTime < 0 {
+		blockTime = 0
+	}
 	var timeBuf [8]byte
-	binary.BigEndian.PutUint64(timeBuf[:], uint64(ctx.BlockTime().UTC().UnixNano()))
+	binary.BigEndian.PutUint64(timeBuf[:], uint64(blockTime))
 	seedHasher.Write(timeBuf[:])
 
 	// Transaction bytes (deterministic within the block)
