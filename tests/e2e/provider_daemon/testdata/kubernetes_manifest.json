@@ -1,0 +1,26 @@
+{
+  "version": "v1",
+  "name": "k8s-e2e",
+  "services": [
+    {
+      "name": "api",
+      "type": "container",
+      "image": "nginx",
+      "tag": "latest",
+      "resources": {
+        "cpu": 500,
+        "memory": 536870912,
+        "gpu": 1
+      },
+      "ports": [
+        {"name": "http", "container_port": 8080, "expose": true}
+      ],
+      "volumes": [
+        {"name": "data", "mount_path": "/data"}
+      ]
+    }
+  ],
+  "volumes": [
+    {"name": "data", "type": "persistent", "size": 10737418240}
+  ]
+}

@@ -225,13 +225,13 @@ ASSERT commitmentHash == hash(actualScore, salt)
 **Note:** Proof generation happens off-chain on user's client device. Uses randomness and is non-deterministic by design.
 
 ### Proof Verification (On-Chain)
-
+| Selective Disclosure | 2-6ms             | ~220
 | Proof Type           | Verification Time | Gas Cost (Est.) | Deterministic       |
 | -------------------- | ----------------- | --------------- | ------------------- |
 | Age Range            | 2-5ms             | ~200k gas       | ✅ (consensus-safe) |
 | Residency            | 2-5ms             | ~180k gas       | ✅ (consensus-safe) |
 | Score Range          | 2-4ms             | ~150k gas       | ✅ (consensus-safe) |
-| Selective Disclosure | 2-6ms             | ~220k gas       | ✅ (consensus-safe) |
+k gas       | ✅ (consensus-safe) |
 
 **Note:** Verification happens on-chain during consensus. Fully deterministic - all validators compute identical results.
 

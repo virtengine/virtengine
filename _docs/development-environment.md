@@ -26,6 +26,26 @@ sudo apt update
 sudo apt install -y jq curl wget build-essentials ca-certificates npm direnv gcc
 ```
 
+### Node.js + pnpm (frontend tooling)
+
+VirtEngine uses pnpm for frontend workspaces. Ensure pnpm is available:
+
+```shell
+corepack enable
+corepack prepare pnpm@latest --activate
+pnpm --version
+```
+
+Install workspace dependencies when you plan to touch frontend files:
+
+```shell
+# Portal app
+pnpm -C portal install
+
+# TypeScript SDK
+pnpm -C sdk/ts install
+```
+
 ## Direnv
 
 Both [virtengine](https://github.com/virtengine/virtengine) [provider-services](https://github.com/virtengine/provider) are extensively using `direnv` to set up and seamlessly update environment

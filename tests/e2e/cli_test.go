@@ -27,8 +27,12 @@ func TestIntegrationCLI(t *testing.T) {
 	pi := &providerIntegrationTestSuite{}
 	pi.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, pi)
 
+	ei := &enclaveIntegrationTestSuite{}
+	ei.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, ei)
+
 	suite.Run(t, di)
 	suite.Run(t, ci)
 	suite.Run(t, mi)
 	suite.Run(t, pi)
+	suite.Run(t, ei)
 }

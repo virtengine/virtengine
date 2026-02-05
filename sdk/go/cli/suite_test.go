@@ -36,6 +36,7 @@ func TestCLITestSuite(t *testing.T) {
 	suite.Run(t, new(StakingCLITestSuite))
 	suite.Run(t, new(OracleCLITestSuite))
 	suite.Run(t, new(BMECLITestSuite))
+	suite.Run(t, new(EnclaveCLITestSuite))
 }
 
 func testAccAddress(seed byte) sdk.AccAddress {

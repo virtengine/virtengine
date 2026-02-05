@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "name": "aws-e2e",
+  "services": [
+    {
+      "name": "vm",
+      "type": "vm",
+      "image": "ami-123",
+      "resources": {"cpu": 1000, "memory": 1073741824},
+      "ports": [{"name": "ssh", "container_port": 22, "expose": true}]
+    }
+  ],
+  "volumes": [
+    {"name": "data", "type": "persistent", "size": 5368709120}
+  ]
+}
