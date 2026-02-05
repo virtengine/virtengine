@@ -12,6 +12,7 @@ export function Header() {
   const navigation = [
     { name: 'Marketplace', href: '/marketplace' },
     { name: 'HPC', href: '/hpc/jobs' },
+    { name: 'Support', href: '/support' },
     { name: 'Governance', href: '/governance/proposals' },
   ];
 
