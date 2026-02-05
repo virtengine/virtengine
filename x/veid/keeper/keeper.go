@@ -97,6 +97,10 @@ type Keeper struct {
 	// zkSystem is the ZK proof system for privacy-preserving proofs
 	// Initialized during keeper setup with compiled circuits
 	zkSystem *ZKProofSystem
+
+	// randSource provides deterministic randomness derived from tx context.
+	// It must never be nil during state transitions to preserve consensus safety.
+	randSource RandomSource
 }
 
 // NewKeeper creates and returns an instance for veid keeper
@@ -112,10 +116,11 @@ func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, authority string
 	}
 
 	return Keeper{
-		cdc:       cdc,
-		skey:      skey,
-		authority: authority,
-		zkSystem:  zkSystem,
+		cdc:        cdc,
+		skey:       skey,
+		authority:  authority,
+		zkSystem:   zkSystem,
+		randSource: DeterministicRandomSource{},
 	}
 }
 
@@ -142,6 +147,16 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 // SetStakingKeeper sets the staking keeper reference for validator authorization
 func (k *Keeper) SetStakingKeeper(stakingKeeper StakingKeeper) {
 	k.stakingKeeper = stakingKeeper
+}
+
+// SetRandomSource overrides the default deterministic random source.
+// Passing nil resets to the default DeterministicRandomSource implementation.
+func (k *Keeper) SetRandomSource(src RandomSource) {
+	if src == nil {
+		k.randSource = DeterministicRandomSource{}
+		return
+	}
+	k.randSource = src
 }
 
 // IsValidator checks if the given account address is a bonded validator
