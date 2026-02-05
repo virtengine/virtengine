@@ -65,16 +65,26 @@ if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
     PORTAL_STAGED_FILES="$(echo "$STAGED_FILES" | grep -E '^(portal|lib/portal)/.*\.(ts|tsx|js|jsx|json|css|md)$' || true)"
     if [ -n "$PORTAL_STAGED_FILES" ]; then
         PRETTIER_BIN="$REPO_ROOT/portal/node_modules/.bin/prettier"
-        if [ -x "$PRETTIER_BIN" ]; then
+        if command -v pnpm >/dev/null 2>&1 && [ -x "$PRETTIER_BIN" ]; then
             hook_header "[pre-commit] Formatting staged portal files with prettier..."
-            PORTAL_FILES="$(echo "$PORTAL_STAGED_FILES" | grep -E '^portal/' | sed 's#^portal/##' || true)"
-            LIB_PORTAL_FILES="$(echo "$PORTAL_STAGED_FILES" | grep -E '^lib/portal/' | sed 's#^lib/portal/#../lib/portal/#' || true)"
+            PORTAL_PRETTIER_FILES=()
+            for file in $PORTAL_STAGED_FILES; do
+                case "$file" in
+                    portal/*)
+                        PORTAL_PRETTIER_FILES+=("${file#portal/}")
+                        ;;
+                    lib/portal/*)
+                        PORTAL_PRETTIER_FILES+=("../$file")
+                        ;;
+                esac
+            done
 
-            (
-                cd "$REPO_ROOT/portal"
-                [ -n "$PORTAL_FILES" ] && echo "$PORTAL_FILES" | xargs "$PRETTIER_BIN" --write
-                [ -n "$LIB_PORTAL_FILES" ] && echo "$LIB_PORTAL_FILES" | xargs "$PRETTIER_BIN" --write
-            )
+            if [ "${#PORTAL_PRETTIER_FILES[@]}" -gt 0 ]; then
+                (
+                    cd "$REPO_ROOT/portal"
+                    pnpm exec prettier --write "${PORTAL_PRETTIER_FILES[@]}"
+                )
+            fi
             echo "$PORTAL_STAGED_FILES" | xargs git add
             hook_pass "[pre-commit] Prettier formatted staged portal files"
         else
