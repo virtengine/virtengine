@@ -217,7 +217,7 @@ func (l *OrderListener) replayMissed(ctx context.Context) error {
 			return nil
 		}
 		for _, tx := range result.Txs {
-			if err := l.replayTx(ctx, tx); err != nil {
+			if err := l.replayTx(tx); err != nil {
 				log.Printf("[order-listener] replay tx failed: %v", err)
 			}
 		}
@@ -229,7 +229,7 @@ func (l *OrderListener) replayMissed(ctx context.Context) error {
 	return nil
 }
 
-func (l *OrderListener) replayTx(ctx context.Context, tx *ctypes.ResultTx) error {
+func (l *OrderListener) replayTx(tx *ctypes.ResultTx) error {
 	if tx == nil {
 		return nil
 	}
