@@ -145,7 +145,10 @@ export default function SupportPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={category} onValueChange={(value) => setCategory(value as SupportCategory)}>
+                <Select
+                  value={category}
+                  onValueChange={(value) => setCategory(value as SupportCategory)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -160,7 +163,10 @@ export default function SupportPage() {
               </div>
               <div className="space-y-2">
                 <Label>Priority</Label>
-                <Select value={priority} onValueChange={(value) => setPriority(value as SupportPriority)}>
+                <Select
+                  value={priority}
+                  onValueChange={(value) => setPriority(value as SupportPriority)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
@@ -190,7 +196,8 @@ export default function SupportPage() {
                 <Badge className="bg-foreground text-background">{slaTarget}h</Badge>
               </div>
               <p className="mt-2 text-muted-foreground">
-                Priority {priority} tickets should receive an initial response within {slaTarget} hours.
+                Priority {priority} tickets should receive an initial response within {slaTarget}{' '}
+                hours.
               </p>
             </div>
             <Button className="w-full" onClick={handleSubmit} disabled={!subject || !description}>
@@ -216,7 +223,9 @@ export default function SupportPage() {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <Badge className={priorityStyles[ticket.priority]}>{ticket.priority}</Badge>
-                        <Badge className={statusStyles[ticket.status]}>{ticket.status.replace('_', ' ')}</Badge>
+                        <Badge className={statusStyles[ticket.status]}>
+                          {ticket.status.replace('_', ' ')}
+                        </Badge>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

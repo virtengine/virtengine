@@ -67,8 +67,14 @@ if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
         PRETTIER_BIN="$REPO_ROOT/portal/node_modules/.bin/prettier"
         if [ -x "$PRETTIER_BIN" ]; then
             hook_header "[pre-commit] Formatting staged portal files with prettier..."
-            # Prettier needs paths relative to repo root.
-            echo "$PORTAL_STAGED_FILES" | xargs "$PRETTIER_BIN" --write
+            PORTAL_FILES="$(echo "$PORTAL_STAGED_FILES" | grep -E '^portal/' | sed 's#^portal/##' || true)"
+            LIB_PORTAL_FILES="$(echo "$PORTAL_STAGED_FILES" | grep -E '^lib/portal/' | sed 's#^lib/portal/#../lib/portal/#' || true)"
+
+            (
+                cd "$REPO_ROOT/portal"
+                [ -n "$PORTAL_FILES" ] && echo "$PORTAL_FILES" | xargs "$PRETTIER_BIN" --write
+                [ -n "$LIB_PORTAL_FILES" ] && echo "$LIB_PORTAL_FILES" | xargs "$PRETTIER_BIN" --write
+            )
             echo "$PORTAL_STAGED_FILES" | xargs git add
             hook_pass "[pre-commit] Prettier formatted staged portal files"
         else

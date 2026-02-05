@@ -10,7 +10,7 @@ const OfferingDetailClient = dynamic(() => import('./OfferingDetailClient'), {
   ),
 });
 
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [{ provider: '_', sequence: '_' }];
 }
 

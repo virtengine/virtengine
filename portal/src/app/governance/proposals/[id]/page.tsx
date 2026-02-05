@@ -10,7 +10,7 @@ const ProposalDetailClient = dynamic(() => import('./ProposalDetailClient'), {
   ),
 });
 
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [{ id: '_' }];
 }
 

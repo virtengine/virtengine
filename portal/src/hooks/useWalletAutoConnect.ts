@@ -64,8 +64,7 @@ const MAX_SESSION_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  */
 function isValidWalletType(type: unknown): type is PortalWalletType {
   return (
-    typeof type === 'string' &&
-    ['keplr', 'leap', 'cosmostation', 'walletconnect'].includes(type)
+    typeof type === 'string' && ['keplr', 'leap', 'cosmostation', 'walletconnect'].includes(type)
   );
 }
 
@@ -167,9 +166,7 @@ function delay(ms: number): Promise<void> {
  * }
  * ```
  */
-export function useWalletAutoConnect(
-  config?: WalletAutoConnectConfig
-): UseWalletAutoConnectResult {
+export function useWalletAutoConnect(config?: WalletAutoConnectConfig): UseWalletAutoConnectResult {
   const wallet = useWallet();
   const [isAutoConnecting, setIsAutoConnecting] = useState(false);
   const [hasAttemptedAutoConnect, setHasAttemptedAutoConnect] = useState(false);
