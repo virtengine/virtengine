@@ -10,6 +10,12 @@ When working on a task, do not stop until it is COMPLETELY done. Continue workin
 
 Before finishing a task - ensure that you create a commit based on following convention & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
 
+## Pre-commit automation (do this every time)
+
+- Go formatting and linting are enforced before commit. The pre-commit hook auto-runs `gofmt` on staged `.go` files and runs `golangci-lint` on the staged Go packages.
+- Portal frontend formatting is enforced before commit. If you modify `portal/` TypeScript/JS/CSS/JSON/MD files, ensure `portal/node_modules` exists (run `pnpm -C portal install` once) so the pre-commit hook can run Prettier and auto-add formatted files to the commit.
+- If you need to bypass a check for an emergency, use the documented `VE_HOOK_SKIP_*` env vars, but do not bypass for normal work.
+
 Commit files:
 
 📝 Conventional Commits Format:
