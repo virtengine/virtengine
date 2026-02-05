@@ -78,6 +78,24 @@ if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
 fi
 
 # =========================================================================
+# Auto-format staged sdk/ts files with lint-staged (if available)
+# =========================================================================
+if [ "${VE_HOOK_SKIP_JS:-}" != "1" ]; then
+    SDK_TS_STAGED_FILES="$(echo "$STAGED_FILES" | grep -E '^sdk/ts/.*\.(ts|tsx|js|jsx|json)$' || true)"
+    if [ -n "$SDK_TS_STAGED_FILES" ]; then
+        SDK_LINT_STAGED_BIN="$REPO_ROOT/sdk/ts/node_modules/.bin/lint-staged"
+        if [ -x "$SDK_LINT_STAGED_BIN" ]; then
+            hook_header "[pre-commit] Formatting staged sdk/ts files with lint-staged..."
+            (cd "$REPO_ROOT/sdk/ts" && "$SDK_LINT_STAGED_BIN")
+            hook_pass "[pre-commit] lint-staged applied for sdk/ts"
+        else
+            hook_warn "[pre-commit] lint-staged not available in sdk/ts/node_modules. Skipping sdk/ts formatting."
+            hook_warn "            Run 'pnpm -C sdk/ts install' to enable auto-formatting."
+        fi
+    fi
+fi
+
+# =========================================================================
 # Lint staged Go packages with golangci-lint
 # =========================================================================
 if [ "${VE_HOOK_SKIP_LINT:-}" != "1" ]; then

@@ -117,6 +117,25 @@ else
     exit 1
 fi
 
+# pnpm (via corepack)
+if command_exists pnpm; then
+    PNPM_VERSION=$(pnpm --version)
+    print_status "ok" "pnpm installed: $PNPM_VERSION"
+else
+    if command_exists corepack; then
+        print_status "warn" "pnpm not found, enabling via corepack"
+        corepack enable || true
+        corepack prepare pnpm@latest --activate || true
+    fi
+    if command_exists pnpm; then
+        PNPM_VERSION=$(pnpm --version)
+        print_status "ok" "pnpm installed: $PNPM_VERSION"
+    else
+        print_status "warn" "pnpm not available (frontend installs will be skipped)"
+        echo "  Install with: corepack enable && corepack prepare pnpm@latest --activate"
+    fi
+fi
+
 # direnv
 if command_exists direnv; then
     DIRENV_VERSION=$(direnv version)
@@ -255,6 +274,22 @@ if [ ! -f "go.mod" ] || ! grep -q "github.com/virtengine/virtengine" go.mod 2>/d
 fi
 
 print_status "ok" "In VirtEngine project directory"
+
+# Frontend workspace installs (optional)
+if command_exists pnpm; then
+    if [ ! -d "portal/node_modules" ] && [ -f "portal/package.json" ]; then
+        echo ""
+        echo "Installing portal dependencies (pnpm -C portal install)..."
+        pnpm -C portal install
+    fi
+    if [ ! -d "sdk/ts/node_modules" ] && [ -f "sdk/ts/package.json" ]; then
+        echo ""
+        echo "Installing TypeScript SDK dependencies (pnpm -C sdk/ts install)..."
+        pnpm -C sdk/ts install
+    fi
+else
+    print_status "warn" "pnpm not available; skipping portal/sdk installs"
+fi
 
 # Check git tags (needed for cache setup)
 if git describe --tags >/dev/null 2>&1; then
