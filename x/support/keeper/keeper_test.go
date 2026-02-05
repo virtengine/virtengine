@@ -15,11 +15,17 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 
+	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
+	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	types "github.com/virtengine/virtengine/x/support/types" //nolint:staticcheck // Deprecated types retained for compatibility.
 )
 
 // setupKeeper creates a test keeper
 func setupKeeper(t *testing.T) (Keeper, sdk.Context) {
+	return setupKeeperWithDeps(t, nil, nil)
+}
+
+func setupKeeperWithDeps(t *testing.T, enc EncryptionKeeper, roles RolesKeeper) (Keeper, sdk.Context) {
 	storeKey := storetypes.NewKVStoreKey(types.StoreKey)
 
 	db := dbm.NewMemDB()
@@ -30,7 +36,7 @@ func setupKeeper(t *testing.T) (Keeper, sdk.Context) {
 	registry := codectypes.NewInterfaceRegistry()
 	cdc := codec.NewProtoCodec(registry)
 
-	keeper := NewKeeper(cdc, storeKey, "authority")
+	keeper := NewKeeper(cdc, storeKey, "authority", enc, roles)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now(),
@@ -41,6 +47,52 @@ func setupKeeper(t *testing.T) (Keeper, sdk.Context) {
 	require.NoError(t, keeper.SetParams(ctx, types.DefaultParams()))
 
 	return keeper, ctx
+}
+
+type mockEncryptionKeeper struct {
+	activeByKeyID   map[string]encryptiontypes.RecipientKeyRecord
+	activeByAddress map[string]encryptiontypes.RecipientKeyRecord
+}
+
+func (m mockEncryptionKeeper) ValidateEnvelope(_ sdk.Context, envelope *encryptiontypes.EncryptedPayloadEnvelope) error {
+	if envelope == nil {
+		return types.ErrInvalidPayload.Wrap("envelope is nil")
+	}
+	return envelope.Validate()
+}
+
+func (m mockEncryptionKeeper) ValidateEnvelopeRecipients(_ sdk.Context, envelope *encryptiontypes.EncryptedPayloadEnvelope) ([]string, error) {
+	if envelope == nil {
+		return nil, types.ErrInvalidPayload.Wrap("envelope is nil")
+	}
+	var missing []string
+	for _, keyID := range envelope.RecipientKeyIDs {
+		if _, ok := m.activeByKeyID[keyID]; !ok {
+			missing = append(missing, keyID)
+		}
+	}
+	return missing, nil
+}
+
+func (m mockEncryptionKeeper) GetActiveRecipientKey(_ sdk.Context, address sdk.AccAddress) (encryptiontypes.RecipientKeyRecord, bool) {
+	key, ok := m.activeByAddress[address.String()]
+	return key, ok
+}
+
+type mockRolesKeeper struct {
+	admins        map[string]bool
+	supportAgents map[string]bool
+}
+
+func (m mockRolesKeeper) HasRole(_ sdk.Context, address sdk.AccAddress, role rolestypes.Role) bool {
+	if role == rolestypes.RoleSupportAgent {
+		return m.supportAgents[address.String()]
+	}
+	return false
+}
+
+func (m mockRolesKeeper) IsAdmin(_ sdk.Context, addr sdk.AccAddress) bool {
+	return m.admins[addr.String()]
 }
 
 func TestRegisterExternalRef(t *testing.T) {
@@ -260,6 +312,8 @@ func TestParams(t *testing.T) {
 	newParams := types.Params{
 		AllowedExternalSystems: []string{"waldur"},
 		AllowedExternalDomains: []string{"custom.example.com"},
+		MaxResponsesPerRequest: 50,
+		DefaultRetentionPolicy: types.DefaultParams().DefaultRetentionPolicy,
 	}
 	require.NoError(t, keeper.SetParams(ctx, newParams))
 

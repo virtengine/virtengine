@@ -106,6 +106,8 @@ import (
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 	virtstakingkeeper "github.com/virtengine/virtengine/x/staking/keeper"
 	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
+	supportkeeper "github.com/virtengine/virtengine/x/support/keeper"
+	supporttypes "github.com/virtengine/virtengine/x/support/types"
 	tkeeper "github.com/virtengine/virtengine/x/take/keeper"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
@@ -158,6 +160,7 @@ type AppKeepers struct {
 		Settlement  settlementkeeper.Keeper
 		Fraud       fraudkeeper.Keeper
 		Review      reviewkeeper.Keeper
+		Support     supportkeeper.Keeper
 		Delegation  delegationkeeper.Keeper
 		VirtStaking virtstakingkeeper.Keeper
 		BME         bmekeeper.IKeeper
@@ -519,6 +522,14 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	app.Keepers.VirtEngine.Support = supportkeeper.NewKeeper(
+		cdc,
+		app.keys[supporttypes.StoreKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		app.Keepers.VirtEngine.Encryption,
+		app.Keepers.VirtEngine.Roles,
+	)
+
 	app.Keepers.VirtEngine.VEID = veidkeeper.NewKeeper(
 		cdc,
 		app.keys[veidtypes.StoreKey],
@@ -729,6 +740,7 @@ func virtengineKVStoreKeys() []string {
 		// VirtEngine patent-specific modules (AU2024203136A1)
 		encryptiontypes.StoreKey,
 		rolestypes.StoreKey,
+		supporttypes.StoreKey,
 		veidtypes.StoreKey,
 		mfatypes.StoreKey,
 		configtypes.StoreKey,

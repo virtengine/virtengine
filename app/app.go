@@ -83,6 +83,7 @@ import (
 	rolestypes "github.com/virtengine/virtengine/x/roles/types"
 	settlementtypes "github.com/virtengine/virtengine/x/settlement/types"
 	virtstakingtypes "github.com/virtengine/virtengine/x/staking/types"
+	supporttypes "github.com/virtengine/virtengine/x/support/types"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
 
 	apptypes "github.com/virtengine/virtengine/app/types"
@@ -316,6 +317,7 @@ func orderBeginBlockers(_ []string) []string {
 		mfatypes.ModuleName,
 		encryptiontypes.ModuleName,
 		rolestypes.ModuleName,
+		supporttypes.ModuleName,
 		configtypes.ModuleName,
 		hpctypes.ModuleName,
 		benchmarktypes.ModuleName,
@@ -364,6 +366,7 @@ func OrderEndBlockers(_ []string) []string {
 		mfatypes.ModuleName,
 		encryptiontypes.ModuleName,
 		rolestypes.ModuleName,
+		supporttypes.ModuleName,
 		configtypes.ModuleName,
 		hpctypes.ModuleName,
 		benchmarktypes.ModuleName,

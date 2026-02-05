@@ -17,6 +17,81 @@ type GRPCQuerier struct {
 
 var _ types.QueryServer = GRPCQuerier{}
 
+// SupportRequest returns a support request by ID
+func (q GRPCQuerier) SupportRequest(c context.Context, req *types.QuerySupportRequestRequest) (*types.QuerySupportRequestResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.TicketID == "" {
+		return nil, status.Error(codes.InvalidArgument, "ticket_id is required")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	id, err := types.ParseSupportRequestID(req.TicketID)
+	if err != nil {
+		return nil, types.ErrInvalidSupportRequest.Wrap(err.Error())
+	}
+
+	request, found := q.GetSupportRequest(ctx, id)
+	if !found {
+		return nil, types.ErrSupportRequestNotFound
+	}
+
+	return &types.QuerySupportRequestResponse{Request: request}, nil
+}
+
+// SupportRequestsBySubmitter returns support requests by submitter
+func (q GRPCQuerier) SupportRequestsBySubmitter(c context.Context, req *types.QuerySupportRequestsBySubmitterRequest) (*types.QuerySupportRequestsBySubmitterResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.SubmitterAddress == "" {
+		return nil, status.Error(codes.InvalidArgument, "submitter_address is required")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	addr, err := sdk.AccAddressFromBech32(req.SubmitterAddress)
+	if err != nil {
+		return nil, types.ErrInvalidAddress.Wrap(err.Error())
+	}
+
+	requests := q.GetSupportRequestsBySubmitter(ctx, addr)
+	if req.Status != "" {
+		statusFilter := types.SupportStatusFromString(req.Status)
+		if !statusFilter.IsValid() {
+			return nil, types.ErrInvalidSupportRequest.Wrapf("invalid status: %s", req.Status)
+		}
+		filtered := make([]types.SupportRequest, 0, len(requests))
+		for _, r := range requests {
+			if r.Status == statusFilter {
+				filtered = append(filtered, r)
+			}
+		}
+		requests = filtered
+	}
+
+	return &types.QuerySupportRequestsBySubmitterResponse{Requests: requests}, nil
+}
+
+// SupportResponsesByRequest returns responses for a request
+func (q GRPCQuerier) SupportResponsesByRequest(c context.Context, req *types.QuerySupportResponsesByRequestRequest) (*types.QuerySupportResponsesByRequestResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.TicketID == "" {
+		return nil, status.Error(codes.InvalidArgument, "ticket_id is required")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	id, err := types.ParseSupportRequestID(req.TicketID)
+	if err != nil {
+		return nil, types.ErrInvalidSupportRequest.Wrap(err.Error())
+	}
+
+	responses := q.GetSupportResponses(ctx, id)
+	return &types.QuerySupportResponsesByRequestResponse{Responses: responses}, nil
+}
+
 // ExternalRef returns a single external ticket reference by resource type and ID
 func (q GRPCQuerier) ExternalRef(c context.Context, req *types.QueryExternalRefRequest) (*types.QueryExternalRefResponse, error) {
 	if req == nil {

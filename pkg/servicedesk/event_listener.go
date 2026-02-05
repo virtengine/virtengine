@@ -5,30 +5,35 @@ package servicedesk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"cosmossdk.io/log"
-	abci "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/rpc/client"
-	ctypes "github.com/cometbft/cometbft/types"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	rpctypes "github.com/cometbft/cometbft/rpc/core/types"
+	tmtypes "github.com/cometbft/cometbft/types"
+
+	supporttypes "github.com/virtengine/virtengine/x/support/types"
 )
 
 // ChainEventListener listens for support-related events from the chain
 // and forwards them to the service desk bridge for external sync.
 type ChainEventListener struct {
 	bridge     IBridge
-	client     client.Client
+	client     *rpchttp.HTTP
 	logger     log.Logger
 	config     *EventListenerConfig
 	wsEndpoint string
+	decryptor  PayloadDecryptor
 
 	mu       sync.RWMutex
 	running  bool
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
-	eventSub ctypes.Subscription
+	eventSub <-chan rpctypes.ResultEvent
 }
 
 // EventListenerConfig holds configuration for the chain event listener
@@ -42,6 +47,15 @@ type EventListenerConfig struct {
 	// MaxReconnectAttempts is the maximum reconnection attempts
 	MaxReconnectAttempts int `json:"max_reconnect_attempts"`
 
+	// SubscriberID is the subscription ID
+	SubscriberID string `json:"subscriber_id"`
+
+	// CometWS is the websocket endpoint path
+	CometWS string `json:"comet_ws"`
+
+	// EventQuery is the CometBFT query for events
+	EventQuery string `json:"event_query"`
+
 	// EventTypes are the specific event types to listen for
 	EventTypes []string `json:"event_types"`
 }
@@ -52,13 +66,16 @@ func DefaultEventListenerConfig() *EventListenerConfig {
 		BufferSize:           1000,
 		ReconnectDelay:       5 * time.Second,
 		MaxReconnectAttempts: 10,
+		SubscriberID:         "servicedesk",
+		CometWS:              "/websocket",
 		EventTypes: []string{
-			"external_ticket_registered",
-			"external_ticket_updated",
-			"external_ticket_removed",
-			"support.ticket.created",
-			"support.ticket.updated",
-			"support.ticket.closed",
+			string(supporttypes.SupportEventTypeRequestCreated),
+			string(supporttypes.SupportEventTypeRequestUpdated),
+			string(supporttypes.SupportEventTypeStatusChanged),
+			string(supporttypes.SupportEventTypeResponseAdded),
+			string(supporttypes.SupportEventTypeRequestArchived),
+			string(supporttypes.SupportEventTypeRequestPurged),
+			string(supporttypes.SupportEventTypeExternalTicketLinked),
 		},
 	}
 }
@@ -68,12 +85,22 @@ func NewChainEventListener(bridge IBridge, wsEndpoint string, logger log.Logger,
 	if config == nil {
 		config = DefaultEventListenerConfig()
 	}
+	if config.CometWS == "" {
+		config.CometWS = "/websocket"
+	}
+	if config.SubscriberID == "" {
+		config.SubscriberID = "servicedesk"
+	}
+	if config.EventQuery == "" {
+		config.EventQuery = defaultSupportEventQuery(config.EventTypes)
+	}
 
 	return &ChainEventListener{
 		bridge:     bridge,
 		wsEndpoint: wsEndpoint,
 		logger:     logger.With("component", "chain_event_listener"),
 		config:     config,
+		decryptor:  bridge.Decryptor(),
 		stopCh:     make(chan struct{}),
 	}
 }
@@ -114,7 +141,8 @@ func (l *ChainEventListener) Stop(ctx context.Context) error {
 
 	// Unsubscribe from events
 	if l.eventSub != nil && l.client != nil {
-		_ = l.client.Unsubscribe(ctx, "servicedesk", "tm.event = 'Tx'")
+		_ = l.client.Unsubscribe(ctx, l.config.SubscriberID, l.config.EventQuery)
+		_ = l.client.Stop()
 	}
 
 	// Wait for goroutines
@@ -169,68 +197,57 @@ func (l *ChainEventListener) eventLoop(ctx context.Context) {
 
 // connectAndListen connects to the chain and listens for events
 func (l *ChainEventListener) connectAndListen(ctx context.Context) error {
-	// In a real implementation, this would:
-	// 1. Connect to CometBFT WebSocket
-	// 2. Subscribe to transaction events
-	// 3. Filter for support module events
-	// 4. Parse and forward to bridge
-
 	l.logger.Debug("connecting to chain websocket", "endpoint", l.wsEndpoint)
 
-	// For now, this is a placeholder that would be implemented
-	// with actual CometBFT client connection
+	rpc, err := rpchttp.New(l.wsEndpoint, l.config.CometWS)
+	if err != nil {
+		return fmt.Errorf("create comet rpc client: %w", err)
+	}
+	if err := rpc.Start(); err != nil {
+		return fmt.Errorf("start comet rpc client: %w", err)
+	}
 
-	// Simulate waiting for events
+	l.client = rpc
+
+	sub, err := rpc.Subscribe(ctx, l.config.SubscriberID, l.config.EventQuery, l.config.BufferSize)
+	if err != nil {
+		return fmt.Errorf("subscribe to support events: %w", err)
+	}
+	l.eventSub = sub
+
 	for {
 		select {
 		case <-l.stopCh:
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
+		case msg, ok := <-sub:
+			if !ok {
+				return fmt.Errorf("event subscription closed")
+			}
+			data, ok := msg.Data.(tmtypes.EventDataTx)
+			if !ok {
+				continue
+			}
+			txHash := fmt.Sprintf("%X", tmtypes.Tx(data.Tx).Hash())
+			envelopes, err := ExtractSupportEvents(data.Result.Events)
+			if err != nil {
+				l.logger.Error("failed to extract support events", "error", err)
+				continue
+			}
+			for _, env := range envelopes {
+				if !l.isSupportEvent(env.EventType) {
+					continue
+				}
+				if err := l.handleSupportEnvelope(ctx, env, data.Height, txHash); err != nil {
+					l.logger.Error("failed to process support event", "error", err)
+				}
+			}
 		}
 	}
 }
 
-// processEvent processes a single chain event
-//
-//nolint:unused // Reserved for chain event processing integration
-func (l *ChainEventListener) processEvent(ctx context.Context, event abci.Event, blockHeight int64, txHash string) error {
-	eventType := event.Type
-
-	// Check if this is a support module event
-	if !l.isSupportEvent(eventType) {
-		return nil
-	}
-
-	l.logger.Debug("processing support event",
-		"type", eventType,
-		"block_height", blockHeight,
-		"tx_hash", txHash,
-	)
-
-	// Parse event attributes
-	attrs := make(map[string]string)
-	for _, attr := range event.Attributes {
-		attrs[attr.Key] = attr.Value
-	}
-
-	// Route to appropriate handler
-	switch eventType {
-	case "external_ticket_registered", "support.ticket.created":
-		return l.handleTicketCreated(ctx, attrs, blockHeight, txHash)
-	case "external_ticket_updated", "support.ticket.updated":
-		return l.handleTicketUpdated(ctx, attrs, blockHeight, txHash)
-	case "external_ticket_removed", "support.ticket.closed":
-		return l.handleTicketClosed(ctx, attrs, blockHeight, txHash)
-	default:
-		l.logger.Debug("unhandled event type", "type", eventType)
-		return nil
-	}
-}
-
 // isSupportEvent checks if an event type is a support module event
-//
-//nolint:unused // Used by processEvent for event filtering
 func (l *ChainEventListener) isSupportEvent(eventType string) bool {
 	for _, et := range l.config.EventTypes {
 		if et == eventType {
@@ -240,89 +257,152 @@ func (l *ChainEventListener) isSupportEvent(eventType string) bool {
 	return false
 }
 
-// handleTicketCreated handles a ticket created event
-//
-//nolint:unused // Used by processEvent for ticket creation handling
-func (l *ChainEventListener) handleTicketCreated(ctx context.Context, attrs map[string]string, blockHeight int64, txHash string) error {
-	event := &TicketCreatedEvent{
-		TicketID:        attrs["ticket_id"],
-		CustomerAddress: attrs["customer_address"],
-		ProviderAddress: attrs["provider_address"],
-		Category:        attrs["category"],
-		Priority:        attrs["priority"],
-		Subject:         attrs["subject"],
-		Description:     attrs["description"],
-		BlockHeight:     blockHeight,
-		Timestamp:       time.Now(),
-		TxHash:          txHash,
+func (l *ChainEventListener) handleSupportEnvelope(ctx context.Context, env SupportEventEnvelope, blockHeight int64, txHash string) error {
+	switch env.EventType {
+	case string(supporttypes.SupportEventTypeRequestCreated):
+		return l.handleSupportRequestCreated(ctx, env, blockHeight, txHash)
+	case string(supporttypes.SupportEventTypeRequestUpdated):
+		return l.handleSupportRequestUpdated(ctx, env, blockHeight, txHash)
+	case string(supporttypes.SupportEventTypeStatusChanged):
+		return l.handleSupportStatusChanged(ctx, env, blockHeight, txHash)
+	case string(supporttypes.SupportEventTypeResponseAdded):
+		return l.handleSupportResponseAdded(ctx, env, blockHeight, txHash)
+	default:
+		return nil
+	}
+}
+
+func (l *ChainEventListener) handleSupportRequestCreated(ctx context.Context, env SupportEventEnvelope, blockHeight int64, txHash string) error {
+	var payload supporttypes.SupportRequestCreatedEvent
+	if err := json.Unmarshal([]byte(env.PayloadJSON), &payload); err != nil {
+		return fmt.Errorf("decode request created payload: %w", err)
 	}
 
-	// Validate required fields
-	if event.TicketID == "" {
-		event.TicketID = attrs["resource_id"]
+	subject := ""
+	description := ""
+	if l.decryptor != nil && payload.Payload != nil {
+		decoded, err := l.decryptor.DecryptSupportRequestPayload(ctx, payload.Payload)
+		if err != nil {
+			l.logger.Error("failed to decrypt support payload", "error", err)
+		} else if decoded != nil {
+			subject = decoded.Subject
+			description = decoded.Description
+		}
 	}
-	if event.TicketID == "" {
-		return fmt.Errorf("ticket_id not found in event attributes")
+
+	event := &TicketCreatedEvent{
+		TicketID:        payload.TicketID,
+		TicketNumber:    payload.TicketNumber,
+		CustomerAddress: payload.Submitter,
+		Category:        payload.Category,
+		Priority:        payload.Priority,
+		Subject:         subject,
+		Description:     description,
+		BlockHeight:     blockHeight,
+		Timestamp:       time.Unix(payload.Timestamp, 0).UTC(),
+		TxHash:          txHash,
+	}
+	if payload.RelatedEntity != nil {
+		event.RelatedEntity = &RelatedEntity{
+			Type: string(payload.RelatedEntity.Type),
+			ID:   payload.RelatedEntity.ID,
+		}
 	}
 
 	return l.bridge.HandleTicketCreated(ctx, event)
 }
 
-// handleTicketUpdated handles a ticket updated event
-//
-//nolint:unused // Used by processEvent for ticket update handling
-func (l *ChainEventListener) handleTicketUpdated(ctx context.Context, attrs map[string]string, blockHeight int64, txHash string) error {
+func (l *ChainEventListener) handleSupportRequestUpdated(ctx context.Context, env SupportEventEnvelope, blockHeight int64, txHash string) error {
+	var payload supporttypes.SupportRequestUpdatedEvent
+	if err := json.Unmarshal([]byte(env.PayloadJSON), &payload); err != nil {
+		return fmt.Errorf("decode request updated payload: %w", err)
+	}
+
+	changes := map[string]interface{}{}
+	if payload.Status != "" {
+		changes["status"] = payload.Status
+	}
+	if payload.Priority != "" {
+		changes["priority"] = payload.Priority
+	}
+	if payload.AssignedAgent != "" {
+		changes["assignee"] = payload.AssignedAgent
+	}
+	if l.decryptor != nil && payload.Payload != nil {
+		decoded, err := l.decryptor.DecryptSupportRequestPayload(ctx, payload.Payload)
+		if err != nil {
+			l.logger.Error("failed to decrypt updated payload", "error", err)
+		} else if decoded != nil {
+			changes["subject"] = decoded.Subject
+			changes["description"] = decoded.Description
+		}
+	}
+
 	event := &TicketUpdatedEvent{
-		TicketID:    attrs["ticket_id"],
-		UpdatedBy:   attrs["updated_by"],
+		TicketID:    payload.TicketID,
+		UpdatedBy:   payload.UpdatedBy,
+		Changes:     changes,
 		BlockHeight: blockHeight,
-		Timestamp:   time.Now(),
+		Timestamp:   time.Unix(payload.Timestamp, 0).UTC(),
 		TxHash:      txHash,
-	}
-
-	// Parse changes
-	event.Changes = make(map[string]interface{})
-	if status := attrs["status"]; status != "" {
-		event.Changes["status"] = status
-	}
-	if priority := attrs["priority"]; priority != "" {
-		event.Changes["priority"] = priority
-	}
-	if assignee := attrs["assignee"]; assignee != "" {
-		event.Changes["assignee"] = assignee
-	}
-
-	if event.TicketID == "" {
-		event.TicketID = attrs["resource_id"]
-	}
-	if event.TicketID == "" {
-		return fmt.Errorf("ticket_id not found in event attributes")
 	}
 
 	return l.bridge.HandleTicketUpdated(ctx, event)
 }
 
-// handleTicketClosed handles a ticket closed event
-//
-//nolint:unused // Used by processEvent for ticket closure handling
-func (l *ChainEventListener) handleTicketClosed(ctx context.Context, attrs map[string]string, blockHeight int64, txHash string) error {
-	event := &TicketClosedEvent{
-		TicketID:    attrs["ticket_id"],
-		ClosedBy:    attrs["closed_by"],
-		Resolution:  attrs["resolution"],
+func (l *ChainEventListener) handleSupportStatusChanged(ctx context.Context, env SupportEventEnvelope, blockHeight int64, txHash string) error {
+	var payload supporttypes.SupportStatusChangedEvent
+	if err := json.Unmarshal([]byte(env.PayloadJSON), &payload); err != nil {
+		return fmt.Errorf("decode status payload: %w", err)
+	}
+	event := &TicketUpdatedEvent{
+		TicketID:    payload.TicketID,
+		UpdatedBy:   payload.UpdatedBy,
+		Changes:     map[string]interface{}{"status": payload.NewStatus},
 		BlockHeight: blockHeight,
-		Timestamp:   time.Now(),
+		Timestamp:   time.Unix(payload.Timestamp, 0).UTC(),
 		TxHash:      txHash,
 	}
+	return l.bridge.HandleTicketUpdated(ctx, event)
+}
 
-	if event.TicketID == "" {
-		event.TicketID = attrs["resource_id"]
-	}
-	if event.TicketID == "" {
-		return fmt.Errorf("ticket_id not found in event attributes")
+func (l *ChainEventListener) handleSupportResponseAdded(ctx context.Context, env SupportEventEnvelope, blockHeight int64, txHash string) error {
+	var payload supporttypes.SupportResponseAddedEvent
+	if err := json.Unmarshal([]byte(env.PayloadJSON), &payload); err != nil {
+		return fmt.Errorf("decode response payload: %w", err)
 	}
 
-	return l.bridge.HandleTicketClosed(ctx, event)
+	message := ""
+	if l.decryptor != nil && payload.Payload != nil {
+		decoded, err := l.decryptor.DecryptSupportResponsePayload(ctx, payload.Payload)
+		if err != nil {
+			l.logger.Error("failed to decrypt response payload", "error", err)
+		} else if decoded != nil {
+			message = decoded.Message
+		}
+	}
+
+	event := &TicketResponseAddedEvent{
+		TicketID:    payload.TicketID,
+		Author:      payload.Author,
+		IsAgent:     payload.IsAgent,
+		Message:     message,
+		BlockHeight: blockHeight,
+		Timestamp:   time.Unix(payload.Timestamp, 0).UTC(),
+		TxHash:      txHash,
+	}
+	return l.bridge.HandleTicketResponseAdded(ctx, event)
+}
+
+func defaultSupportEventQuery(eventTypes []string) string {
+	if len(eventTypes) == 0 {
+		return "tm.event='Tx' AND support_event.event_type='support_request_created'"
+	}
+	clauses := make([]string, 0, len(eventTypes))
+	for _, eventType := range eventTypes {
+		clauses = append(clauses, fmt.Sprintf("support_event.event_type='%s'", eventType))
+	}
+	return fmt.Sprintf("tm.event='Tx' AND (%s)", strings.Join(clauses, " OR "))
 }
 
 // IChainEventListener is the interface for chain event listeners

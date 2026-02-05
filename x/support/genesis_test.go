@@ -30,7 +30,7 @@ func setupTestKeeper(t *testing.T) (keeper.Keeper, sdk.Context) {
 	registry := codectypes.NewInterfaceRegistry()
 	cdc := codec.NewProtoCodec(registry)
 
-	k := keeper.NewKeeper(cdc, storeKey, "authority")
+	k := keeper.NewKeeper(cdc, storeKey, "authority", nil, nil)
 
 	ctx := sdk.NewContext(stateStore, cmtproto.Header{
 		Time:   time.Now(),
@@ -109,6 +109,8 @@ func TestGenesisValidation(t *testing.T) {
 		Params: types.Params{
 			AllowedExternalSystems: []string{"waldur", "jira"},
 			AllowedExternalDomains: []string{"example.com"},
+			MaxResponsesPerRequest: 10,
+			DefaultRetentionPolicy: types.DefaultParams().DefaultRetentionPolicy,
 		},
 		ExternalRefs: []types.ExternalTicketRef{
 			{

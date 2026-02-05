@@ -29,6 +29,7 @@ type Bridge struct {
 	auditLogger    *AuditLogger
 	callbackServer *CallbackServer
 	retryQueue     *RetryQueue
+	decryptor      PayloadDecryptor
 
 	// State
 	mu      sync.RWMutex
@@ -57,6 +58,9 @@ type IBridge interface {
 	// HandleTicketClosed handles a ticket closed event
 	HandleTicketClosed(ctx context.Context, event *TicketClosedEvent) error
 
+	// HandleTicketResponseAdded handles a ticket response event
+	HandleTicketResponseAdded(ctx context.Context, event *TicketResponseAddedEvent) error
+
 	// HandleExternalCallback handles a callback from external service desk
 	HandleExternalCallback(ctx context.Context, payload *CallbackPayload) error
 
@@ -68,6 +72,9 @@ type IBridge interface {
 
 	// Health returns the health status
 	Health(ctx context.Context) (*HealthStatus, error)
+
+	// Decryptor returns the payload decryptor
+	Decryptor() PayloadDecryptor
 }
 
 // Ensure Bridge implements IBridge
@@ -76,6 +83,7 @@ var _ IBridge = (*Bridge)(nil)
 // TicketCreatedEvent represents an on-chain ticket creation event
 type TicketCreatedEvent struct {
 	TicketID        string         `json:"ticket_id"`
+	TicketNumber    string         `json:"ticket_number,omitempty"`
 	CustomerAddress string         `json:"customer_address"`
 	ProviderAddress string         `json:"provider_address,omitempty"`
 	Category        string         `json:"category"`
@@ -114,6 +122,17 @@ type TicketClosedEvent struct {
 	TxHash      string    `json:"tx_hash"`
 }
 
+// TicketResponseAddedEvent represents a response added to a ticket.
+type TicketResponseAddedEvent struct {
+	TicketID    string    `json:"ticket_id"`
+	Author      string    `json:"author"`
+	IsAgent     bool      `json:"is_agent"`
+	Message     string    `json:"message"`
+	BlockHeight int64     `json:"block_height"`
+	Timestamp   time.Time `json:"timestamp"`
+	TxHash      string    `json:"tx_hash"`
+}
+
 // HealthStatus represents the bridge health status
 type HealthStatus struct {
 	Healthy       bool      `json:"healthy"`
@@ -136,6 +155,12 @@ func NewBridge(config *Config, logger log.Logger) (*Bridge, error) {
 		stopCh:  make(chan struct{}),
 		eventCh: make(chan *SyncEvent, 1000),
 	}
+
+	decryptor, err := NewPayloadDecryptor(config.Decryption)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init decryptor: %w", err)
+	}
+	bridge.decryptor = decryptor
 
 	// Initialize Jira client if configured
 	if config.JiraConfig != nil {
@@ -293,6 +318,7 @@ func (b *Bridge) HandleTicketCreated(ctx context.Context, event *TicketCreatedEv
 			"priority":         event.Priority,
 			"subject":          event.Subject,
 			"description":      event.Description,
+			"ticket_number":    event.TicketNumber,
 			"related_entity":   event.RelatedEntity,
 			"tx_hash":          event.TxHash,
 		},
@@ -382,6 +408,45 @@ func (b *Bridge) HandleTicketClosed(ctx context.Context, event *TicketClosedEven
 	}
 
 	// Queue for processing
+	select {
+	case b.eventCh <- syncEvent:
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		b.retryQueue.Add(syncEvent)
+	}
+
+	return nil
+}
+
+// HandleTicketResponseAdded handles a ticket response event.
+func (b *Bridge) HandleTicketResponseAdded(ctx context.Context, event *TicketResponseAddedEvent) error {
+	b.logger.Debug("handling ticket response event", "ticket_id", event.TicketID)
+
+	b.auditLogger.LogEvent(ctx, AuditEventTicketUpdate, map[string]interface{}{
+		"ticket_id":    event.TicketID,
+		"author":       event.Author,
+		"is_agent":     event.IsAgent,
+		"block_height": event.BlockHeight,
+	})
+
+	syncEvent := &SyncEvent{
+		ID:        fmt.Sprintf("response-%s-%d", event.TicketID, event.BlockHeight),
+		Type:      "ticket_response_added",
+		TicketID:  event.TicketID,
+		Direction: SyncDirectionOutbound,
+		Payload: map[string]interface{}{
+			"author":   event.Author,
+			"is_agent": event.IsAgent,
+			"message":  event.Message,
+			"tx_hash":  event.TxHash,
+		},
+		Timestamp:   event.Timestamp,
+		BlockHeight: event.BlockHeight,
+		MaxRetries:  b.config.RetryConfig.MaxRetries,
+		Status:      SyncStatusPending,
+	}
+
 	select {
 	case b.eventCh <- syncEvent:
 	case <-ctx.Done():
@@ -489,6 +554,11 @@ func (b *Bridge) Health(ctx context.Context) (*HealthStatus, error) {
 	return status, nil
 }
 
+// Decryptor returns the configured payload decryptor.
+func (b *Bridge) Decryptor() PayloadDecryptor {
+	return b.decryptor
+}
+
 // eventProcessor processes sync events from the queue
 func (b *Bridge) eventProcessor(ctx context.Context) {
 	defer b.wg.Done()
@@ -548,6 +618,8 @@ func (b *Bridge) processOutboundEvent(ctx context.Context, event *SyncEvent) err
 		return b.syncTicketUpdated(ctx, event)
 	case "ticket_closed":
 		return b.syncTicketClosed(ctx, event)
+	case "ticket_response_added":
+		return b.syncTicketResponseAdded(ctx, event)
 	default:
 		b.logger.Warn("unknown outbound event type", "type", event.Type)
 		return nil
@@ -577,9 +649,13 @@ func (b *Bridge) processInboundEvent(ctx context.Context, event *SyncEvent) erro
 func (b *Bridge) syncTicketCreated(ctx context.Context, event *SyncEvent) error {
 	// Create in Jira
 	if b.jiraBridge != nil {
+		ticketNumber, _ := event.Payload["ticket_number"].(string)
+		if ticketNumber == "" {
+			ticketNumber = event.TicketID
+		}
 		req := &jira.VirtEngineSupportRequest{
 			TicketID:         event.TicketID,
-			TicketNumber:     event.TicketID,
+			TicketNumber:     ticketNumber,
 			SubmitterAddress: event.Payload["customer_address"].(string),
 			Category:         event.Payload["category"].(string),
 			Priority:         event.Payload["priority"].(string),
@@ -793,6 +869,38 @@ func (b *Bridge) syncTicketClosed(ctx context.Context, event *SyncEvent) error {
 				"service":     "waldur",
 				"action":      "close",
 			})
+		}
+	}
+
+	return nil
+}
+
+// syncTicketResponseAdded syncs a response as a comment in external systems
+func (b *Bridge) syncTicketResponseAdded(ctx context.Context, event *SyncEvent) error {
+	record, err := b.syncManager.GetSyncRecord(ctx, event.TicketID)
+	if err != nil {
+		return err
+	}
+	if record == nil {
+		return nil
+	}
+
+	message, _ := event.Payload["message"].(string)
+	isAgent, _ := event.Payload["is_agent"].(bool)
+
+	if jiraRef := record.GetExternalRef(ServiceDeskJira); jiraRef != nil && b.jiraBridge != nil {
+		if _, err := b.jiraBridge.AddReplyToTicket(ctx, jiraRef.ExternalID, message, isAgent); err != nil {
+			return ErrExternalAPIError.Wrapf("jira comment failed: %v", err)
+		}
+	}
+
+	if waldurRef := record.GetExternalRef(ServiceDeskWaldur); waldurRef != nil && b.waldurSupport != nil {
+		_, err := b.waldurSupport.AddComment(ctx, waldurRef.ExternalID, waldur.AddCommentRequest{
+			Description: message,
+			IsPublic:    true,
+		})
+		if err != nil {
+			b.logger.Error("waldur comment failed", "error", err, "ticket_id", event.TicketID)
 		}
 	}
 

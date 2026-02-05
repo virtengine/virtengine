@@ -211,6 +211,8 @@ func TestMsgServer_UpdateParams(t *testing.T) {
 		Params: types.Params{
 			AllowedExternalSystems: []string{"waldur"},
 			AllowedExternalDomains: []string{"custom.example.com"},
+			MaxResponsesPerRequest: 10,
+			DefaultRetentionPolicy: types.DefaultParams().DefaultRetentionPolicy,
 		},
 	}
 

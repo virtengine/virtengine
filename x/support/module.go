@@ -150,7 +150,9 @@ func (am AppModule) BeginBlock(_ context.Context) error {
 }
 
 // EndBlock returns the end blocker for the support module.
-func (am AppModule) EndBlock(_ context.Context) error {
+func (am AppModule) EndBlock(goCtx context.Context) error {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	am.keeper.ProcessRetentionPolicies(ctx)
 	return nil
 }
 
@@ -177,7 +179,7 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 
 // ConsensusVersion returns the consensus version for the support module.
 func (AppModule) ConsensusVersion() uint64 {
-	return 1
+	return 2
 }
 
 // AppModuleSimulation functions

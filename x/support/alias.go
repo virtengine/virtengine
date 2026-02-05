@@ -41,6 +41,21 @@ type (
 	// ExternalTicketRef represents a reference to an external support ticket
 	ExternalTicketRef = types.ExternalTicketRef
 
+	// SupportRequest represents an on-chain support request
+	SupportRequest = types.SupportRequest
+
+	// SupportResponse represents an on-chain support response
+	SupportResponse = types.SupportResponse
+
+	// SupportCategory is the request category
+	SupportCategory = types.SupportCategory
+
+	// SupportPriority is the request priority
+	SupportPriority = types.SupportPriority
+
+	// SupportStatus is the request status
+	SupportStatus = types.SupportStatus
+
 	// ResourceType represents the type of on-chain resource
 	ResourceType = types.ResourceType
 
@@ -59,16 +74,29 @@ type (
 	// MsgUpdateParams updates params
 	MsgUpdateParams = types.MsgUpdateParams
 
+	// MsgCreateSupportRequest creates a support request
+	MsgCreateSupportRequest = types.MsgCreateSupportRequest
+
+	// MsgUpdateSupportRequest updates a support request
+	MsgUpdateSupportRequest = types.MsgUpdateSupportRequest
+
+	// MsgAddSupportResponse adds a support response
+	MsgAddSupportResponse = types.MsgAddSupportResponse
+
+	// MsgArchiveSupportRequest archives a support request
+	MsgArchiveSupportRequest = types.MsgArchiveSupportRequest
+
 	// Keeper is the support keeper
 	Keeper = keeper.Keeper
 )
 
 // Resource type constants
 const (
-	ResourceTypeDeployment = types.ResourceTypeDeployment
-	ResourceTypeLease      = types.ResourceTypeLease
-	ResourceTypeOrder      = types.ResourceTypeOrder
-	ResourceTypeProvider   = types.ResourceTypeProvider
+	ResourceTypeDeployment     = types.ResourceTypeDeployment
+	ResourceTypeLease          = types.ResourceTypeLease
+	ResourceTypeOrder          = types.ResourceTypeOrder
+	ResourceTypeProvider       = types.ResourceTypeProvider
+	ResourceTypeSupportRequest = types.ResourceTypeSupportRequest
 )
 
 // External system constants

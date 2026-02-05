@@ -53,6 +53,7 @@ import (
 	"github.com/virtengine/virtengine/x/roles"
 	"github.com/virtengine/virtengine/x/settlement"
 	virtstaking "github.com/virtengine/virtengine/x/staking"
+	"github.com/virtengine/virtengine/x/support"
 	"github.com/virtengine/virtengine/x/take"
 	"github.com/virtengine/virtengine/x/veid"
 )
@@ -220,6 +221,10 @@ func appModules(
 		roles.NewAppModule(
 			app.cdc,
 			app.Keepers.VirtEngine.Roles,
+		),
+		support.NewAppModule(
+			app.cdc,
+			app.Keepers.VirtEngine.Support,
 		),
 		veid.NewAppModule(
 			app.cdc,

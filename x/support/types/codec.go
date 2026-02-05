@@ -23,6 +23,10 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &MsgUpdateExternalTicket{}, "support/MsgUpdateExternalTicket")
 	legacy.RegisterAminoMsg(cdc, &MsgRemoveExternalTicket{}, "support/MsgRemoveExternalTicket")
 	legacy.RegisterAminoMsg(cdc, &MsgUpdateParams{}, "support/MsgUpdateParams")
+	legacy.RegisterAminoMsg(cdc, &MsgCreateSupportRequest{}, "support/MsgCreateSupportRequest")
+	legacy.RegisterAminoMsg(cdc, &MsgUpdateSupportRequest{}, "support/MsgUpdateSupportRequest")
+	legacy.RegisterAminoMsg(cdc, &MsgAddSupportResponse{}, "support/MsgAddSupportResponse")
+	legacy.RegisterAminoMsg(cdc, &MsgArchiveSupportRequest{}, "support/MsgArchiveSupportRequest")
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
@@ -32,5 +36,9 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgUpdateExternalTicket{},
 		&MsgRemoveExternalTicket{},
 		&MsgUpdateParams{},
+		&MsgCreateSupportRequest{},
+		&MsgUpdateSupportRequest{},
+		&MsgAddSupportResponse{},
+		&MsgArchiveSupportRequest{},
 	)
 }
