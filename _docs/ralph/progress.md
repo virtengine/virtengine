@@ -1,6 +1,258 @@
-## STATUS: 🔴 IN PROGRESS - Production Readiness Phase
+## STATUS: 🟡 IN PROGRESS - Production Readiness Phase (~70% Complete)
 
-**77 core tasks completed | 28 patent gap tasks completed | 12 health check fixes completed | 14 CI/CD fix tasks | 24 Production Tasks (VE-2000 series) | 4 TEE Hardware Integration Tasks COMPLETED | 23 VEID Gap Resolution Tasks COMPLETED | 17 NEW Gap Tasks Added (VE-3050-3063) | 8 Gap Tasks COMPLETED | 28 Spec-Driven Tasks Identified | 70+ vibe-kanban TODO tasks | 1 P0 Blocker | 14 NEW Waldur Integration Tasks (25A-25N)**
+**Last Analysis:** 2026-02-07 UTC
+
+**Summary:** 77 core tasks | 28 patent gap tasks | 12 health fixes | 14 CI/CD fixes | 24 VE-2000 series | 4 TEE HW tasks | 23 VEID gap tasks | 8 gap fixes | 28 spec-driven tasks | 100+ vibe-kanban tasks | **18 Tasks (28A-28R)** | **12 NEW Tasks Added (29A-29L)**
+
+---
+
+## 🔄 ANALYSIS UPDATE (2026-02-07)
+
+### Health Check
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Build (`go build ./...`) | ✅ PASSING | No errors |
+| Tests (`go test ./x/...`) | ✅ PASSING | All x/ module tests pass |
+| Tests (`go test ./pkg/...`) | ✅ PASSING | All pkg/ tests pass (including edugain) |
+| Lint | ✅ PASSING | golangci-lint clean |
+| Recent Commits | ✅ Active | Waldur E2E, enclave CLI, portal fixes, VEID refactor |
+
+### Key Improvements Since Last Analysis (Feb 5-7, 2026)
+
+1. **XML-DSig Test Fixed** - `pkg/edugain/security_test.go` now passes
+2. **Waldur E2E Tests Merged** - PR #275 merged with comprehensive adapter tests
+3. **Enclave CLI Tests** - PR #277 merged with unit and e2e coverage
+4. **VEID Refactor** - PR #274 merged with score helper streamlining
+
+### Recent Completions (Feb 5-7, 2026)
+
+| Task | Title | Status |
+|------|-------|--------|
+| 25B | Waldur customer order routing | ✅ DONE |
+| 25C | Waldur support ticket routing | ✅ DONE |
+| 26A | Waldur E2E adapter tests | ✅ MERGED (PR #275) |
+| 25J | Portal wallet auth (Keplr/Leap) | ✅ DONE |
+| 20B | Privacy proofs deterministic | ✅ DONE |
+| 24B | Portal shell/log streaming | ✅ DONE |
+| 24C | Portal deployment management | ✅ DONE |
+| 26L | HPC CLI commands | ✅ DONE |
+| 26H | HPC E2E job lifecycle | ✅ DONE |
+| - | Enclave CLI tests | ✅ MERGED (PR #277) |
+
+### Production Readiness Assessment
+
+| Component | Status | Completion |
+|-----------|--------|------------|
+| Portal Next.js Scaffold | ✅ Implemented | 80% |
+| Portal lib/portal Library | ❌ Missing | 0% |
+| Portal TypeScript SDK | ❌ Missing | 0% |
+| Provider Daemon Portal API | ✅ Complete | 95% |
+| ProviderAPIClient (Frontend) | ❌ Missing | 0% |
+| Escrow Invoice System | ✅ Complete | 100% |
+| Escrow Settlement Pipeline | ✅ Complete | 100% |
+| E2E Golden Path Tests | ✅ Implemented | 90% |
+| ML Training Pipeline | ✅ Implemented | 80% |
+| ML Model Artifacts | ❌ Missing | 0% |
+| Waldur Integration | ✅ Complete | 95% |
+| HPC SLURM Integration | ⚠️ Partial | 70% |
+
+### Critical Blockers Remaining
+
+| Blocker | Description | New Tasks |
+|---------|-------------|-----------|
+| **ML Model Artifacts** | Training pipeline exists but no SavedModel artifacts | 29A, 29B |
+| **Portal lib/portal** | Frontend imports non-existent shared library | 29C, 29D |
+| **ProviderAPIClient** | No TypeScript client for hybrid portal API | 29E |
+| **Model Hash Pinning** | Registry has empty MODEL_HASH fields | 29F |
+| **Production Deployment** | No Docker/K8s deployment configs for portal | 29G |
+
+### NEW Tasks Added (Series 29: Hybrid Portal Architecture)
+
+Based on the hybrid decentralized portal architecture documented in:
+- `_docs/architecture/ADR-002-hybrid-decentralized-portal-architecture.md`
+- `_docs/architecture/hybrid-portal-implementation-plan.md`
+
+| ID | Title | Priority | Depends On | Est. LOC |
+|----|-------|----------|------------|----------|
+| 29A | feat(ml): Execute ML training pipeline + export SavedModel | P0 | - | 500 |
+| 29B | feat(veid): Model hash computation + governance registration | P0 | 29A | 1000 |
+| 29C | feat(portal): Create lib/portal shared component library | P0 | - | 3000-5000 |
+| 29D | feat(portal): Provider API TypeScript client | P0 | 29C | 2000-3000 |
+| 29E | feat(portal): Wallet-signed request authentication | P0 | 29D | 1500 |
+| 29F | feat(provider): Enhanced portal_api.go endpoints | P1 | - | 2000 |
+| 29G | feat(portal): Aggregated multi-provider client | P1 | 29D, 29E | 2500 |
+| 29H | feat(portal): Organization management (x/group) | P1 | 29D | 2000 |
+| 29I | feat(portal): Support ticket hybrid flow | P1 | 29D, 29F | 2000 |
+| 29J | feat(portal): Billing/invoice dashboard | P1 | 29D | 2000 |
+| 29K | feat(portal): Metrics/dashboard aggregation | P2 | 29G | 2500 |
+| 29L | docs(portal): OpenAPI spec for provider API | P2 | 29F | 500 |
+
+### Execution Priority Matrix
+
+**Wave 1 (Parallel - Immediate P0):**
+- 29A: ML training execution (model artifacts)
+- 29C: lib/portal shared library (foundation)
+
+**Wave 2 (Sequential - After Wave 1):**
+- 29B: Model hash + governance (depends on 29A)
+- 29D: Provider API TypeScript client (depends on 29C)
+- 29E: Wallet-signed auth (depends on 29D)
+- 29F: Enhanced provider API endpoints (parallel with 29D)
+
+**Wave 3 (Portal Features - After Wave 2):**
+- 29G: Multi-provider aggregation (depends on 29D, 29E)
+- 29H: Organization management (depends on 29D)
+- 29I: Support ticket flow (depends on 29D, 29F)
+- 29J: Billing dashboard (depends on 29D)
+
+**Wave 4 (Polish - After Wave 3):**
+- 29K: Metrics aggregation (depends on 29G)
+- 29L: OpenAPI documentation (depends on 29F)
+
+### Module Completion Matrix (Updated)
+
+| Module | Previous | Current | Notes |
+|--------|----------|---------|-------|
+| x/veid | 75% | 75% | ML scoring still stubbed (needs 29A, 29B) |
+| x/mfa | 90% | 90% | Portal UI needed (28J) |
+| x/market | 80% | 85% | Waldur integration complete |
+| x/hpc | 60% | 70% | CLI complete, SLURM K8s pending (28F) |
+| x/escrow | 75% | **100%** | ✅ Invoice + Settlement complete |
+| x/support | 95% | 95% | Portal UI needed |
+| portal/ | 40% | **50%** | Scaffold complete, lib/portal missing |
+| pkg/inference | 50% | 50% | Real ML models needed (29A) |
+| pkg/waldur | 90% | **95%** | E2E tests merged |
+| pkg/provider_daemon | 85% | **95%** | Portal API complete |
+
+### Estimated Time to Production
+
+| Phase | Tasks | Duration | Status |
+|-------|-------|----------|--------|
+| Wave 1 | 29A, 29C | 2 weeks | TODO |
+| Wave 2 | 29B, 29D, 29E, 29F | 3-4 weeks | TODO |
+| Wave 3 | 29G, 29H, 29I, 29J | 3-4 weeks | TODO |
+| Wave 4 | 29K, 29L | 1-2 weeks | TODO |
+| Existing 28 series | 28D, 28E, 28F, etc. | 4-6 weeks | TODO |
+| **Total** | **~30 tasks** | **12-16 weeks** | 70% complete |
+
+---
+
+## Previous Analysis (2026-02-06)
+
+
+
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Build (`go build ./...`) | ✅ PASSING | No errors |
+| Tests (`go test ./x/... ./pkg/...`) | ❌ 1 FAILING | `pkg/edugain/security_test.go` |
+| Lint | ✅ PASSING | golangci-lint clean |
+| Recent Commits | ✅ Active | Waldur E2E, enclave CLI, portal fixes |
+
+### Failing Test Identified
+
+```
+--- FAIL: TestSignatureForge_TamperedSignatureValue (0.07s)
+    security_test.go:62: Error: An error is expected but got nil.
+    security_test.go:63: Error: Should be false
+```
+
+**Root Cause:** XML-DSig signature verification not catching tampered signatures in `pkg/edugain/xmldsig.go`. Security-critical bug requiring immediate fix.
+
+### Recent Completions (Feb 5-6, 2026)
+
+| Task | Title | Status |
+|------|-------|--------|
+| 25B | Waldur customer order routing | ✅ DONE |
+| 25C | Waldur support ticket routing | ✅ DONE |
+| 26A | Waldur E2E adapter tests | ✅ MERGED |
+| 25J | Portal wallet auth (Keplr/Leap) | ✅ DONE |
+| 20B | Privacy proofs deterministic | ✅ DONE |
+| 24B | Portal shell/log streaming | ✅ DONE |
+| 24C | Portal deployment management | ✅ DONE |
+| 26L | HPC CLI commands | ✅ DONE |
+| 26H | HPC E2E job lifecycle | ✅ DONE |
+
+### Critical Blockers Remaining
+
+| Blocker | Description | Tasks |
+|---------|-------------|-------|
+| VEID ML Pipeline | Scoring is stubbed - no production SavedModel | 28B, 28C |
+| HPC SLURM Production | No K8s deployment automation | 27B, 28F |
+| Escrow/Billing | Usage→Invoice→Settlement incomplete | 27A, 28G |
+| Portal Foundation | Scaffold (23A) and SDK (23B) still TODO | 28D, 28E |
+| E2E Golden Path | No full lifecycle test | 27D, 28H |
+
+### New Tasks Added (Series 28)
+
+| ID | Title | Priority | Depends On |
+|----|-------|----------|------------|
+| 28A | fix(edugain): XML-DSig signature tampering regression | P0 | - |
+| 28B | feat(veid): ML SavedModel training + export | P0 | - |
+| 28C | feat(veid): Real face/OCR/liveness extraction | P0 | 28B |
+| 28D | feat(portal): Next.js scaffold verification | P1 | - |
+| 28E | feat(portal): TypeScript chain SDK | P1 | 28D |
+| 28F | feat(hpc): SLURM K8s deployment | P0 | - |
+| 28G | feat(escrow): Usage→Invoice→Settlement | P0 | - |
+| 28H | test(e2e): Golden path test | P1 | 28G |
+| 28I | feat(portal): VEID verification wizard | P1 | 28D, 28E |
+| 28J | feat(portal): MFA enrollment UI | P1 | 28D, 28E |
+| 28K | feat(portal): Marketplace browser | P1 | 28D, 28E |
+| 28L | feat(portal): Order creation wizard | P1 | 28D, 28E, 28K |
+| 28M | feat(portal): Customer dashboard | P1 | 28D, 28E |
+| 28N | feat(portal): Provider dashboard | P1 | 28D, 28E |
+| 28O | feat(portal): HPC job submission | P1 | 28D, 28E, 28F |
+| 28P | fix(security): Pre-mainnet audit | P2 | - |
+| 28Q | docs(mainnet): Genesis + validator docs | P2 | - |
+| 28R | perf(scale): 1M node load testing | P2 | - |
+
+### Execution Priority Matrix
+
+**Wave 1 (Parallel - Immediate):**
+- 28A: XML-DSig fix (security, 4-8h)
+- 28D: Portal scaffold verification (foundation, 1-2w)
+
+**Wave 2 (After Wave 1):**
+- 28B: ML SavedModel training (VEID foundation)
+- 28E: TypeScript SDK (portal dependency)
+- 28F: SLURM K8s deployment (HPC foundation)
+- 28G: Escrow/Billing completion (revenue path)
+
+**Wave 3 (After Wave 2):**
+- 28C: Feature extraction (depends on 28B)
+- 28H: E2E golden path (depends on 28G)
+- 28I-28O: Portal features (depends on 28D, 28E)
+
+**Wave 4 (Launch Prep):**
+- 28P: Security audit
+- 28Q: Mainnet documentation
+- 28R: Load testing
+
+### Module Completion Matrix (Updated)
+
+| Module | Completion | Blockers |
+|--------|------------|----------|
+| x/veid | 75% | ML scoring stubbed (28B, 28C) |
+| x/mfa | 90% | Portal UI needed (28J) |
+| x/market | 80% | E2E test (28H) |
+| x/hpc | 60% | SLURM deployment (28F) |
+| x/escrow | 75% | Billing pipeline (28G) |
+| x/support | 95% | Portal UI needed |
+| portal/ | 40% | SDK (28E), features (28I-28O) |
+| pkg/inference | 50% | Real ML (28B, 28C) |
+| pkg/waldur | 90% | E2E verified |
+| pkg/enclave_runtime | 85% | Hardware TEE pending |
+
+### Estimated Time to Production
+
+| Phase | Tasks | Duration |
+|-------|-------|----------|
+| Wave 1 | 28A, 28D | 1-2 weeks |
+| Wave 2 | 28B, 28E, 28F, 28G | 4-6 weeks |
+| Wave 3 | 28C, 28H, 28I-28O | 4-6 weeks |
+| Wave 4 | 28P, 28Q, 28R | 3-4 weeks |
+| **Total** | **18 tasks** | **12-18 weeks** |
 
 ---
 
@@ -2716,3 +2968,4 @@ VE-2000-A (Audit)
 - **Testing & observability**
   - End-to-end tests: order -> allocation -> provision -> usage -> terminate -> settlement.
   - Chaos tests: callback drop, duplicate callbacks, partial provisioning.
+
