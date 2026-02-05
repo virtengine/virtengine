@@ -1,9 +1,9 @@
 import Link from 'next/link';
+import { MarketingLayout } from '@/layouts';
 
 export default function HomePage() {
   return (
-    <main id="main-content" className="flex min-h-screen flex-col">
-      {/* Hero Section */}
+    <MarketingLayout>
       <section className="relative flex flex-1 flex-col items-center justify-center px-4 py-20">
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
 
@@ -32,7 +32,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Feature Cards */}
         <div className="mt-20 grid max-w-5xl gap-6 px-4 sm:grid-cols-2 lg:grid-cols-3">
           <FeatureCard
             title="Marketplace"
@@ -72,40 +71,7 @@ export default function HomePage() {
           />
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border px-4 py-8">
-        <div className="mx-auto max-w-7xl text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} VirtEngine. All rights reserved.</p>
-          <div className="mt-4 flex justify-center gap-6">
-            <a
-              href="https://docs.virtengine.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-foreground"
-            >
-              Documentation
-            </a>
-            <a
-              href="https://support.virtengine.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-foreground"
-            >
-              Support
-            </a>
-            <a
-              href="https://github.com/virtengine"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-foreground"
-            >
-              GitHub
-            </a>
-          </div>
-        </div>
-      </footer>
-    </main>
+    </MarketingLayout>
   );
 }
 

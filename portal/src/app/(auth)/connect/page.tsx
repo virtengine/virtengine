@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function ConnectPage() {
   return (
-    <main id="main-content" className="flex min-h-screen items-center justify-center px-4">
+    <div className="w-full">
       <div className="w-full max-w-lg space-y-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight">Connect Your Wallet</h1>
@@ -35,6 +35,6 @@ export default function ConnectPage() {
           </p>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
