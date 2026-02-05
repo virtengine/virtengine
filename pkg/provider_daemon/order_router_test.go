@@ -59,13 +59,18 @@ func (m *mockWaldurOrderClient) GetOfferingByBackendID(_ context.Context, _ stri
 }
 
 func TestOrderRouter_ProcessOrderCreated(t *testing.T) {
+	const (
+		testBaseURL   = "http://waldur.local"
+		testToken     = "token"
+		testProjectID = "proj-1"
+	)
 	tmp := t.TempDir()
 	cfg := DefaultOrderRouterConfig()
 	cfg.Enabled = true
 	cfg.ProviderAddress = "provider1"
-	cfg.WaldurBaseURL = "http://waldur.local"
-	cfg.WaldurToken = "token"
-	cfg.WaldurProjectUUID = "proj-1"
+	cfg.WaldurBaseURL = testBaseURL
+	cfg.WaldurToken = testToken
+	cfg.WaldurProjectUUID = testProjectID
 	cfg.StateFile = filepath.Join(tmp, "state.json")
 
 	router, err := NewOrderRouterWithClient(cfg, &mockWaldurOrderClient{}, nil, nil)
@@ -105,13 +110,18 @@ func TestOrderRouter_ProcessOrderCreated(t *testing.T) {
 }
 
 func TestOrderRouter_RetryableFailure(t *testing.T) {
+	const (
+		testBaseURL   = "http://waldur.local"
+		testToken     = "token"
+		testProjectID = "proj-1"
+	)
 	tmp := t.TempDir()
 	cfg := DefaultOrderRouterConfig()
 	cfg.Enabled = true
 	cfg.ProviderAddress = "provider1"
-	cfg.WaldurBaseURL = "http://waldur.local"
-	cfg.WaldurToken = "token"
-	cfg.WaldurProjectUUID = "proj-1"
+	cfg.WaldurBaseURL = testBaseURL
+	cfg.WaldurToken = testToken
+	cfg.WaldurProjectUUID = testProjectID
 	cfg.StateFile = filepath.Join(tmp, "state.json")
 
 	mockClient := &mockWaldurOrderClient{createErr: waldur.ErrRateLimited}
@@ -151,13 +161,18 @@ func TestOrderRouter_RetryableFailure(t *testing.T) {
 }
 
 func TestOrderRouter_FatalFailure(t *testing.T) {
+	const (
+		testBaseURL   = "http://waldur.local"
+		testToken     = "token"
+		testProjectID = "proj-1"
+	)
 	tmp := t.TempDir()
 	cfg := DefaultOrderRouterConfig()
 	cfg.Enabled = true
 	cfg.ProviderAddress = "provider1"
-	cfg.WaldurBaseURL = "http://waldur.local"
-	cfg.WaldurToken = "token"
-	cfg.WaldurProjectUUID = "proj-1"
+	cfg.WaldurBaseURL = testBaseURL
+	cfg.WaldurToken = testToken
+	cfg.WaldurProjectUUID = testProjectID
 	cfg.StateFile = filepath.Join(tmp, "state.json")
 
 	mockClient := &mockWaldurOrderClient{createErr: waldur.ErrUnauthorized}

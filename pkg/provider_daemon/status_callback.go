@@ -301,7 +301,7 @@ func mapWaldurOrderState(state string) string {
 		return marketplace.OrderStatePendingTermination.String()
 	case "terminated":
 		return marketplace.OrderStateTerminated.String()
-	case "erred", "error", "failed":
+	case "erred", "error", string(HPCJobStateFailed):
 		return marketplace.OrderStateFailed.String()
 	case "canceled", "cancelled":
 		return marketplace.OrderStateCancelled.String()

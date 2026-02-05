@@ -2,10 +2,11 @@ package provider_daemon
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -521,11 +522,21 @@ func retryDelay(base, max time.Duration, attempts int) time.Duration {
 	if attempts <= 0 {
 		return base
 	}
-	delay := base * time.Duration(1<<uint(attempts-1))
+	shift := attempts - 1
+	if shift > 30 {
+		shift = 30
+	}
+	delay := base * time.Duration(1<<shift)
 	if delay > max {
 		delay = max
 	}
-	jitter := time.Duration(rand.Int63n(int64(delay/10 + 1)))
+	jitterRange := delay/10 + 1
+	jitter := time.Duration(0)
+	if jitterRange > 0 {
+		if n, err := rand.Int(rand.Reader, big.NewInt(int64(jitterRange))); err == nil {
+			jitter = time.Duration(n.Int64())
+		}
+	}
 	return delay + jitter
 }
 

@@ -1114,31 +1114,33 @@ func applyOrderStateTransition(order *marketplace.Order, target marketplace.Orde
 	case marketplace.OrderStateMatched:
 		transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched}
 	case marketplace.OrderStateProvisioning:
-		if order.State == marketplace.OrderStateOpen {
+		switch order.State {
+		case marketplace.OrderStateOpen:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateProvisioning}
-		} else {
+		default:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateProvisioning}
 		}
 	case marketplace.OrderStateActive:
-		if order.State == marketplace.OrderStateOpen {
+		switch order.State {
+		case marketplace.OrderStateOpen:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateProvisioning, marketplace.OrderStateActive}
-		} else if order.State == marketplace.OrderStateMatched {
+		case marketplace.OrderStateMatched:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateProvisioning, marketplace.OrderStateActive}
-		} else {
+		default:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateActive}
 		}
 	case marketplace.OrderStateFailed:
-		if order.State == marketplace.OrderStateOpen {
+		switch order.State {
+		case marketplace.OrderStateOpen:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateFailed}
-		} else if order.State == marketplace.OrderStateMatched {
-			transitionPath = []marketplace.OrderState{marketplace.OrderStateFailed}
-		} else if order.State == marketplace.OrderStateProvisioning || order.State == marketplace.OrderStatePendingTermination {
+		case marketplace.OrderStateMatched, marketplace.OrderStateProvisioning, marketplace.OrderStatePendingTermination:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateFailed}
 		}
 	case marketplace.OrderStateTerminated:
-		if order.State == marketplace.OrderStateActive || order.State == marketplace.OrderStateSuspended {
+		switch order.State {
+		case marketplace.OrderStateActive, marketplace.OrderStateSuspended:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStatePendingTermination, marketplace.OrderStateTerminated}
-		} else if order.State == marketplace.OrderStatePendingTermination {
+		case marketplace.OrderStatePendingTermination:
 			transitionPath = []marketplace.OrderState{marketplace.OrderStateTerminated}
 		}
 	case marketplace.OrderStatePendingTermination:
