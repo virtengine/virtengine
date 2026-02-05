@@ -268,6 +268,7 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	//nolint:errchkjson // HTTP response - error is logged server-side if encoding fails
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
@@ -597,11 +598,10 @@ type ShellSession struct {
 }
 
 type ShellSessionManager struct {
-	mu          sync.RWMutex
-	ttl         time.Duration
-	sessions    map[string]*ShellSession
-	principal   map[string]map[string]struct{}
-	cleanupOnce sync.Once
+	mu        sync.RWMutex
+	ttl       time.Duration
+	sessions  map[string]*ShellSession
+	principal map[string]map[string]struct{}
 }
 
 func NewShellSessionManager(ttl time.Duration) *ShellSessionManager {
