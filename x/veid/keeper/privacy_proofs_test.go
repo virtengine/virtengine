@@ -1,6 +1,10 @@
 package keeper_test
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -115,6 +119,25 @@ func (s *PrivacyProofsTestSuite) setupVerifiedIdentityWithScore(level int, score
 	s.Require().NoError(err)
 }
 
+// commitmentHashForTest replicates the keeper's deterministic commitment hashing
+// with sorted claim keys so we can assert on specific salts/claims.
+func commitmentHashForTest(claims map[string]interface{}, salt []byte) []byte {
+	h := sha256.New()
+	h.Write(salt)
+
+	keys := make([]string, 0, len(claims))
+	for k := range claims {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		h.Write([]byte(key))
+		fmt.Fprintf(h, "%v", claims[key])
+	}
+
+	return h.Sum(nil)
+}
+
 // ============================================================================
 // Selective Disclosure Request Tests
 // ============================================================================
@@ -134,6 +157,7 @@ func (s *PrivacyProofsTestSuite) TestCreateSelectiveDisclosureRequest_Success() 
 		"age verification for marketplace",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 
 	s.Require().NoError(err)
@@ -157,6 +181,7 @@ func (s *PrivacyProofsTestSuite) TestCreateSelectiveDisclosureRequest_EmptyClaim
 		"test purpose",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -175,6 +200,7 @@ func (s *PrivacyProofsTestSuite) TestCreateSelectiveDisclosureRequest_EmptyPurpo
 		"",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -193,6 +219,7 @@ func (s *PrivacyProofsTestSuite) TestCreateSelectiveDisclosureRequest_InvalidVal
 		"test purpose",
 		-1*time.Hour, // negative duration
 		1*time.Hour,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -214,6 +241,7 @@ func (s *PrivacyProofsTestSuite) TestCreateSelectiveDisclosureRequest_WithParame
 		"trust score verification",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 
 	s.Require().NoError(err)
@@ -240,6 +268,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_Success() 
 		"human verification",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -253,6 +282,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_Success() 
 		request,
 		disclosedClaims,
 		types.ProofSchemeSNARK,
+		nil,
 	)
 
 	s.Require().NoError(err)
@@ -280,6 +310,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_NoIdentity
 		"human verification",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -289,6 +320,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_NoIdentity
 		request,
 		nil,
 		types.ProofSchemeSNARK,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -309,6 +341,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_Insufficie
 		"age verification",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -318,6 +351,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_Insufficie
 		request,
 		nil,
 		types.ProofSchemeSNARK,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -340,6 +374,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_SubjectMis
 		"human verification",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -350,6 +385,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_SubjectMis
 		request,
 		nil,
 		types.ProofSchemeSNARK,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -370,6 +406,7 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_InvalidSch
 		"human verification",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -379,10 +416,95 @@ func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_InvalidSch
 		request,
 		nil,
 		types.ProofScheme(999), // Invalid scheme
+		nil,
 	)
 
 	s.Require().Error(err)
 	s.Assert().Contains(err.Error(), "invalid proof scheme")
+}
+
+func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_UsesInjectedRandomness() {
+	s.setupVerifiedIdentity(2)
+	requestedClaims := []types.ClaimType{types.ClaimTypeHumanVerified}
+	requestNonce := bytes.Repeat([]byte{0xAA}, 32)
+	request, err := s.keeper.CreateSelectiveDisclosureRequest(
+		s.ctx,
+		s.requesterAddr,
+		s.subjectAddr,
+		requestedClaims,
+		nil,
+		"human verification",
+		24*time.Hour,
+		1*time.Hour,
+		&keeper.RandomnessInputs{Nonce: requestNonce},
+	)
+	s.Require().NoError(err)
+	s.Assert().Equal(requestNonce, request.Nonce)
+
+	disclosedClaims := map[string]interface{}{
+		"human_verified": true,
+	}
+	proofNonce := bytes.Repeat([]byte{0xBB}, 32)
+	commitmentSalt := bytes.Repeat([]byte{0xCC}, 32)
+	proof, err := s.keeper.GenerateSelectiveDisclosureProof(
+		s.ctx,
+		s.subjectAddr,
+		request,
+		disclosedClaims,
+		types.ProofSchemeSNARK,
+		&keeper.RandomnessInputs{
+			Nonce:          proofNonce,
+			CommitmentSalt: commitmentSalt,
+		},
+	)
+
+	s.Require().NoError(err)
+	s.Assert().Equal(proofNonce, proof.Nonce)
+	s.Assert().Equal(types.GenerateProofID(s.subjectAddr.String(), requestedClaims, proofNonce), proof.ProofID)
+	expectedCommitment := commitmentHashForTest(disclosedClaims, commitmentSalt)
+	s.Assert().Equal(expectedCommitment, proof.CommitmentHash)
+}
+
+func (s *PrivacyProofsTestSuite) TestGenerateSelectiveDisclosureProof_DeterministicFromContext() {
+	s.setupVerifiedIdentity(2)
+	requestedClaims := []types.ClaimType{types.ClaimTypeHumanVerified}
+	request, err := s.keeper.CreateSelectiveDisclosureRequest(
+		s.ctx,
+		s.requesterAddr,
+		s.subjectAddr,
+		requestedClaims,
+		nil,
+		"human verification",
+		24*time.Hour,
+		1*time.Hour,
+		nil,
+	)
+	s.Require().NoError(err)
+
+	disclosedClaims := map[string]interface{}{"human_verified": true}
+	proof1, err := s.keeper.GenerateSelectiveDisclosureProof(
+		s.ctx,
+		s.subjectAddr,
+		request,
+		disclosedClaims,
+		types.ProofSchemeSNARK,
+		nil,
+	)
+	s.Require().NoError(err)
+	proof2, err := s.keeper.GenerateSelectiveDisclosureProof(
+		s.ctx,
+		s.subjectAddr,
+		request,
+		disclosedClaims,
+		types.ProofSchemeSNARK,
+		nil,
+	)
+	s.Require().NoError(err)
+
+	s.Assert().Equal(proof1.ProofID, proof2.ProofID)
+	s.Assert().Equal(proof1.Nonce, proof2.Nonce)
+	s.Assert().Equal(proof1.CommitmentHash, proof2.CommitmentHash)
+	s.Assert().Equal(proof1.ProofValue, proof2.ProofValue)
 }
 
 // ============================================================================
@@ -404,6 +526,7 @@ func (s *PrivacyProofsTestSuite) TestVerifySelectiveDisclosureProof_Success() {
 		"human verification",
 		24*time.Hour,
 		1*time.Hour,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -414,6 +537,7 @@ func (s *PrivacyProofsTestSuite) TestVerifySelectiveDisclosureProof_Success() {
 		request,
 		disclosedClaims,
 		types.ProofSchemeSNARK,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -448,6 +572,7 @@ func (s *PrivacyProofsTestSuite) TestVerifySelectiveDisclosureProof_ExpiredProof
 		"human verification",
 		1*time.Millisecond, // Very short validity
 		1*time.Hour,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -458,6 +583,7 @@ func (s *PrivacyProofsTestSuite) TestVerifySelectiveDisclosureProof_ExpiredProof
 		request,
 		disclosedClaims,
 		types.ProofSchemeSNARK,
+		nil,
 	)
 	s.Require().NoError(err)
 
@@ -509,6 +635,7 @@ func (s *PrivacyProofsTestSuite) TestCreateAgeProof_Success() {
 		s.subjectAddr,
 		18,
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().NoError(err)
@@ -531,6 +658,7 @@ func (s *PrivacyProofsTestSuite) TestCreateAgeProof_InsufficientVerification() {
 		s.subjectAddr,
 		18,
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -543,6 +671,7 @@ func (s *PrivacyProofsTestSuite) TestCreateAgeProof_NoIdentityRecord() {
 		s.subjectAddr,
 		18,
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -558,6 +687,7 @@ func (s *PrivacyProofsTestSuite) TestCreateAgeProof_InvalidThreshold() {
 		s.subjectAddr,
 		0,
 		24*time.Hour,
+		nil,
 	)
 	s.Require().Error(err)
 
@@ -567,6 +697,7 @@ func (s *PrivacyProofsTestSuite) TestCreateAgeProof_InvalidThreshold() {
 		s.subjectAddr,
 		151,
 		24*time.Hour,
+		nil,
 	)
 	s.Require().Error(err)
 }
@@ -584,6 +715,7 @@ func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_Success() {
 		s.subjectAddr,
 		"US",
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().NoError(err)
@@ -606,6 +738,7 @@ func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_InvalidCountryCode() {
 		s.subjectAddr,
 		"USA",
 		24*time.Hour,
+		nil,
 	)
 	s.Require().Error(err)
 	s.Assert().Contains(err.Error(), "ISO 3166-1 alpha-2")
@@ -616,6 +749,7 @@ func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_InvalidCountryCode() {
 		s.subjectAddr,
 		"U",
 		24*time.Hour,
+		nil,
 	)
 	s.Require().Error(err)
 }
@@ -628,6 +762,7 @@ func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_InsufficientVerificati
 		s.subjectAddr,
 		"US",
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -647,6 +782,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_Success() {
 		s.subjectAddr,
 		75,
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().NoError(err)
@@ -661,6 +797,31 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_Success() {
 	s.Assert().Equal("v1.0.0", proof.ScoreVersion)
 }
 
+func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_UsesInjectedRandomness() {
+	s.setupVerifiedIdentityWithScore(2, 85)
+	scoreSalt := bytes.Repeat([]byte{0x11}, 32)
+	nonce := bytes.Repeat([]byte{0x22}, 32)
+	randomness := &keeper.RandomnessInputs{
+		ScoreSalt: scoreSalt,
+		Nonce:     nonce,
+	}
+
+	proof, err := s.keeper.CreateScoreThresholdProof(
+		s.ctx,
+		s.subjectAddr,
+		75,
+		24*time.Hour,
+		randomness,
+	)
+
+	s.Require().NoError(err)
+	s.Assert().Equal(nonce, proof.Nonce)
+	expectedCommitment, commitErr := types.ComputeCommitmentHash(uint32(85), scoreSalt)
+	s.Require().NoError(commitErr)
+	s.Assert().Equal(expectedCommitment, proof.CommitmentHash)
+	s.Assert().Equal(types.GenerateProofID(s.subjectAddr.String(), []types.ClaimType{types.ClaimTypeTrustScoreAbove}, nonce), proof.ProofID)
+}
+
 func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_BelowThreshold() {
 	// Setup verified identity with lower score
 	s.setupVerifiedIdentityWithScore(2, 50)
@@ -670,6 +831,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_BelowThreshold() 
 		s.subjectAddr,
 		75,
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().NoError(err)
@@ -686,6 +848,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_NoScore() {
 		s.subjectAddr,
 		75,
 		24*time.Hour,
+		nil,
 	)
 
 	s.Require().Error(err)
@@ -701,6 +864,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_InvalidThreshold(
 		s.subjectAddr,
 		0,
 		24*time.Hour,
+		nil,
 	)
 	s.Require().Error(err)
 
@@ -710,6 +874,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_InvalidThreshold(
 		s.subjectAddr,
 		101,
 		24*time.Hour,
+		nil,
 	)
 	s.Require().Error(err)
 }
