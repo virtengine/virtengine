@@ -153,29 +153,46 @@ func mapWaldurOrderStateToChain(state string) string {
 		chainStatePendingPayment     = "pending_payment"
 		chainStateOpen               = "open"
 		chainStateProvisioning       = "provisioning"
-		chainStateActive             = "active"
+		chainStateActive             = keyStatusActive
 		chainStatePendingTermination = "pending_termination"
-		chainStateTerminated         = "terminated"
-		chainStateFailed             = "failed"
+		chainStateTerminated         = WorkloadStateTerminated
+		chainStateFailed             = HPCJobStateFailed
 		chainStateCancelled          = "cancelled"
+
+		waldurStatePendingConsumer    = "pending-consumer"
+		waldurStatePendingPayment     = chainStatePendingPayment
+		waldurStatePendingProvider    = "pending-provider"
+		waldurStatePendingProviderAlt = "pending_provider"
+		waldurStateExecuting          = "executing"
+		waldurStateProvisioning       = chainStateProvisioning
+		waldurStateDone               = "done"
+		waldurStateActive             = chainStateActive
+		waldurStateTerminating        = "terminating"
+		waldurStatePendingTermination = chainStatePendingTermination
+		waldurStateTerminated         = chainStateTerminated
+		waldurStateErred              = "erred"
+		waldurStateFailed             = chainStateFailed
+		waldurStateError              = "error"
+		waldurStateCanceled           = "canceled"
+		waldurStateCancelled          = chainStateCancelled
 	)
 
 	switch strings.ToLower(state) {
-	case "pending-consumer", "pending_payment":
+	case waldurStatePendingConsumer, waldurStatePendingPayment:
 		return chainStatePendingPayment
-	case "pending-provider", "pending_provider":
+	case waldurStatePendingProvider, waldurStatePendingProviderAlt:
 		return chainStateOpen
-	case "executing", "provisioning":
+	case waldurStateExecuting, waldurStateProvisioning:
 		return chainStateProvisioning
-	case "done", "active":
+	case waldurStateDone, waldurStateActive:
 		return chainStateActive
-	case "terminating", "pending_termination":
+	case waldurStateTerminating, waldurStatePendingTermination:
 		return chainStatePendingTermination
-	case "terminated":
+	case waldurStateTerminated:
 		return chainStateTerminated
-	case "erred", "failed", "error":
+	case waldurStateErred, waldurStateFailed, waldurStateError:
 		return chainStateFailed
-	case "canceled", "cancelled":
+	case waldurStateCanceled, waldurStateCancelled:
 		return chainStateCancelled
 	default:
 		return ""
