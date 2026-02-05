@@ -149,23 +149,34 @@ func (h *OrderStatusCallbackHandler) updateState(orderID, waldurID, waldurState,
 }
 
 func mapWaldurOrderStateToChain(state string) string {
+	const (
+		chainStatePendingPayment     = "pending_payment"
+		chainStateOpen               = "open"
+		chainStateProvisioning       = "provisioning"
+		chainStateActive             = "active"
+		chainStatePendingTermination = "pending_termination"
+		chainStateTerminated         = "terminated"
+		chainStateFailed             = "failed"
+		chainStateCancelled          = "cancelled"
+	)
+
 	switch strings.ToLower(state) {
 	case "pending-consumer", "pending_payment":
-		return "pending_payment"
+		return chainStatePendingPayment
 	case "pending-provider", "pending_provider":
-		return "open"
+		return chainStateOpen
 	case "executing", "provisioning":
-		return "provisioning"
+		return chainStateProvisioning
 	case "done", "active":
-		return "active"
+		return chainStateActive
 	case "terminating", "pending_termination":
-		return "pending_termination"
+		return chainStatePendingTermination
 	case "terminated":
-		return "terminated"
+		return chainStateTerminated
 	case "erred", "failed", "error":
-		return "failed"
+		return chainStateFailed
 	case "canceled", "cancelled":
-		return "cancelled"
+		return chainStateCancelled
 	default:
 		return ""
 	}

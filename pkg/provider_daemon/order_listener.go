@@ -129,7 +129,7 @@ func (l *OrderListener) Start(ctx context.Context) error {
 			if event.Sequence <= l.checkpoint.LastSequence {
 				continue
 			}
-			if err := l.handleMarketplaceEvent(ctx, event); err != nil {
+			if err := l.handleMarketplaceEvent(event); err != nil {
 				log.Printf("[order-listener] event %s failed: %v", event.ID, err)
 				continue
 			}
@@ -139,7 +139,7 @@ func (l *OrderListener) Start(ctx context.Context) error {
 	}
 }
 
-func (l *OrderListener) handleMarketplaceEvent(ctx context.Context, event MarketplaceEvent) error {
+func (l *OrderListener) handleMarketplaceEvent(event MarketplaceEvent) error {
 	switch event.Type {
 	case EventTypeOrderCreated:
 		req, ok := parseOrderRoutingRequest(event.Data, event.ID, event.Sequence)
@@ -183,7 +183,11 @@ func (l *OrderListener) replayMissed(ctx context.Context) error {
 	if err := rpc.Start(); err != nil {
 		return err
 	}
-	defer rpc.Stop()
+	defer func() {
+		if err := rpc.Stop(); err != nil {
+			log.Printf("[order-listener] replay stop failed: %v", err)
+		}
+	}()
 
 	page := 1
 	perPage := 100
@@ -252,7 +256,7 @@ func (l *OrderListener) replayTx(ctx context.Context, tx *ctypes.ResultTx) error
 			Sequence: envelope.Sequence,
 			Data:     payload,
 		}
-		if err := l.handleMarketplaceEvent(ctx, event); err != nil {
+		if err := l.handleMarketplaceEvent(event); err != nil {
 			log.Printf("[order-listener] replay event %s failed: %v", envelope.EventID, err)
 			continue
 		}
