@@ -268,7 +268,9 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
@@ -597,11 +599,10 @@ type ShellSession struct {
 }
 
 type ShellSessionManager struct {
-	mu          sync.RWMutex
-	ttl         time.Duration
-	sessions    map[string]*ShellSession
-	principal   map[string]map[string]struct{}
-	cleanupOnce sync.Once
+	mu        sync.RWMutex
+	ttl       time.Duration
+	sessions  map[string]*ShellSession
+	principal map[string]map[string]struct{}
 }
 
 func NewShellSessionManager(ttl time.Duration) *ShellSessionManager {

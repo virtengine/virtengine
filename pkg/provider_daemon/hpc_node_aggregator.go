@@ -68,6 +68,8 @@ type HPCNodeAggregator struct {
 	wg     sync.WaitGroup
 }
 
+const healthStatusDegraded = "degraded"
+
 // aggregatedNodeState tracks state for a node
 type aggregatedNodeState struct {
 	NodeID             string
@@ -409,7 +411,7 @@ func (a *HPCNodeAggregator) processHeartbeat(hb *HPCNodeHeartbeat, auth *HPCHear
 
 	// Determine next interval
 	nextInterval := int32(30)
-	if hb.Health.Status == "degraded" {
+	if hb.Health.Status == healthStatusDegraded {
 		nextInterval = 15
 	}
 
@@ -488,7 +490,7 @@ func (a *HPCNodeAggregator) buildNodeMetadataUpdate(hb *HPCNodeHeartbeat) map[st
 			"gpu_type":   hb.Capacity.GPUType,
 			"storage_gb": hb.Capacity.StorageGBTotal,
 		},
-		"active": hb.Health.Status == "healthy" || hb.Health.Status == "degraded",
+		"active": hb.Health.Status == "healthy" || hb.Health.Status == healthStatusDegraded,
 	}
 }
 
