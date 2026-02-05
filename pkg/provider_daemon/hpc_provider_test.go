@@ -87,6 +87,7 @@ func TestDefaultHPCProviderConfigs(t *testing.T) {
 func TestProviderCredentialSigner(t *testing.T) {
 	credConfig := DefaultHPCCredentialManagerConfig()
 	credConfig.AllowUnencrypted = true
+	credConfig.StorageDir = t.TempDir()
 
 	credManager, err := NewHPCCredentialManager(credConfig)
 	if err != nil {

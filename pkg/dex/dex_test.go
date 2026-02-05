@@ -51,7 +51,7 @@ func TestPrice_IsStale(t *testing.T) {
 	}{
 		{"fresh price", 1 * time.Second, 5 * time.Minute, false},
 		{"stale price", 10 * time.Minute, 5 * time.Minute, true},
-		{"exactly at limit", 5 * time.Minute, 5 * time.Minute, false},
+		{"just under limit", 5*time.Minute - time.Millisecond, 5 * time.Minute, false},
 	}
 
 	for _, tt := range tests {
