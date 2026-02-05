@@ -37,7 +37,7 @@ func (DeterministicRandomSource) Bytes(ctx sdk.Context, purpose string, size int
 		height = 0
 	}
 	var heightBuf [8]byte
-	binary.BigEndian.PutUint64(heightBuf[:], uint64(height))
+	binary.BigEndian.PutUint64(heightBuf[:], uint64(height)) //nolint:gosec // height is bounded by consensus
 	seedHasher.Write(heightBuf[:])
 
 	// Block time (consensus deterministic)
@@ -46,7 +46,7 @@ func (DeterministicRandomSource) Bytes(ctx sdk.Context, purpose string, size int
 		blockTime = 0
 	}
 	var timeBuf [8]byte
-	binary.BigEndian.PutUint64(timeBuf[:], uint64(blockTime))
+	binary.BigEndian.PutUint64(timeBuf[:], uint64(blockTime)) //nolint:gosec // time is non-negative
 	seedHasher.Write(timeBuf[:])
 
 	// Transaction bytes (deterministic within the block)
