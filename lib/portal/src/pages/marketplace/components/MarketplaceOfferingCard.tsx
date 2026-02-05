@@ -2,9 +2,9 @@
  * Marketplace Offering Card Component
  * VE-703: Display marketplace offering in browse grid
  */
-import * as React from 'react';
-import { formatTokenAmount } from '../../../../utils/format';
-import type { Offering } from '../../../../types/marketplace';
+import * as React from "react";
+import { formatTokenAmount } from "../../../../utils/format";
+import type { Offering } from "../../../../types/marketplace";
 
 export interface MarketplaceOfferingCardProps {
   offering: Offering;
@@ -13,23 +13,28 @@ export interface MarketplaceOfferingCardProps {
   className?: string;
 }
 
-function getOfferingTypeConfig(type: string): { label: string; color: string; bg: string } {
-  const configs: Record<string, { label: string; color: string; bg: string }> = {
-    compute: { label: 'Compute', color: '#7c3aed', bg: '#ede9fe' },
-    storage: { label: 'Storage', color: '#0891b2', bg: '#cffafe' },
-    gpu: { label: 'GPU', color: '#dc2626', bg: '#fee2e2' },
-    kubernetes: { label: 'Kubernetes', color: '#2563eb', bg: '#dbeafe' },
-    slurm: { label: 'SLURM', color: '#4f46e5', bg: '#e0e7ff' },
-    custom: { label: 'Custom', color: '#6b7280', bg: '#f3f4f6' },
-  };
-  return configs[type] || { label: type, color: '#6b7280', bg: '#f3f4f6' };
+function getOfferingTypeConfig(type: string): {
+  label: string;
+  color: string;
+  bg: string;
+} {
+  const configs: Record<string, { label: string; color: string; bg: string }> =
+    {
+      compute: { label: "Compute", color: "#7c3aed", bg: "#ede9fe" },
+      storage: { label: "Storage", color: "#0891b2", bg: "#cffafe" },
+      gpu: { label: "GPU", color: "#dc2626", bg: "#fee2e2" },
+      kubernetes: { label: "Kubernetes", color: "#2563eb", bg: "#dbeafe" },
+      slurm: { label: "SLURM", color: "#4f46e5", bg: "#e0e7ff" },
+      custom: { label: "Custom", color: "#6b7280", bg: "#f3f4f6" },
+    };
+  return configs[type] || { label: type, color: "#6b7280", bg: "#f3f4f6" };
 }
 
 export function MarketplaceOfferingCard({
   offering,
   onSelect,
   isSelected = false,
-  className = '',
+  className = "",
 }: MarketplaceOfferingCardProps): JSX.Element {
   const typeConfig = getOfferingTypeConfig(offering.type);
 
@@ -40,7 +45,7 @@ export function MarketplaceOfferingCard({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (onSelect && (event.key === 'Enter' || event.key === ' ')) {
+    if (onSelect && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       onSelect(offering);
     }
@@ -52,25 +57,25 @@ export function MarketplaceOfferingCard({
   const priceId = `${cardId}-price`;
 
   const availabilityText =
-    offering.status === 'active'
-      ? 'Available'
-      : offering.status === 'paused'
-      ? 'Limited availability'
-      : 'Unavailable';
+    offering.status === "active"
+      ? "Available"
+      : offering.status === "paused"
+        ? "Limited availability"
+        : "Unavailable";
 
   const availabilityClass =
-    offering.status === 'active'
-      ? 'available'
-      : offering.status === 'paused'
-      ? 'limited'
-      : 'unavailable';
+    offering.status === "active"
+      ? "available"
+      : offering.status === "paused"
+        ? "limited"
+        : "unavailable";
 
   return (
     <div
-      className={`mkt-offering-card ${isSelected ? 'mkt-offering-card--selected' : ''} ${className}`}
+      className={`mkt-offering-card ${isSelected ? "mkt-offering-card--selected" : ""} ${className}`}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      role={onSelect ? 'button' : 'article'}
+      role={onSelect ? "button" : "article"}
       tabIndex={onSelect ? 0 : undefined}
       aria-pressed={onSelect ? isSelected : undefined}
       aria-labelledby={titleId}
@@ -86,14 +91,26 @@ export function MarketplaceOfferingCard({
           {typeConfig.label}
         </span>
         {offering.hasEncryptedDetails && (
-          <span className="mkt-offering-card__tee" aria-label="Trusted Execution Environment enabled">
+          <span
+            className="mkt-offering-card__tee"
+            aria-label="Trusted Execution Environment enabled"
+          >
             <span aria-hidden="true">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-            </span>
-            {' '}TEE
+            </span>{" "}
+            TEE
           </span>
         )}
       </div>
@@ -113,21 +130,28 @@ export function MarketplaceOfferingCard({
       <dl className="mkt-offering-card__specs" aria-label="Specifications">
         <div className="mkt-offering-card__spec">
           <dt className="mkt-offering-card__spec-label">CPU</dt>
-          <dd className="mkt-offering-card__spec-value">{offering.resources.cpuCores} cores</dd>
+          <dd className="mkt-offering-card__spec-value">
+            {offering.resources.cpuCores} cores
+          </dd>
         </div>
         <div className="mkt-offering-card__spec">
           <dt className="mkt-offering-card__spec-label">Memory</dt>
-          <dd className="mkt-offering-card__spec-value">{offering.resources.memoryGB} GB</dd>
+          <dd className="mkt-offering-card__spec-value">
+            {offering.resources.memoryGB} GB
+          </dd>
         </div>
         <div className="mkt-offering-card__spec">
           <dt className="mkt-offering-card__spec-label">Storage</dt>
-          <dd className="mkt-offering-card__spec-value">{offering.resources.storageGB} GB</dd>
+          <dd className="mkt-offering-card__spec-value">
+            {offering.resources.storageGB} GB
+          </dd>
         </div>
         {offering.resources.gpuCount && (
           <div className="mkt-offering-card__spec">
             <dt className="mkt-offering-card__spec-label">GPU</dt>
             <dd className="mkt-offering-card__spec-value">
-              {offering.resources.gpuCount}x {offering.resources.gpuModel || 'GPU'}
+              {offering.resources.gpuCount}x{" "}
+              {offering.resources.gpuModel || "GPU"}
             </dd>
           </div>
         )}
@@ -136,7 +160,11 @@ export function MarketplaceOfferingCard({
       {/* Price */}
       <div className="mkt-offering-card__price" id={priceId}>
         <span className="mkt-offering-card__price-amount">
-          {formatTokenAmount(offering.pricing.basePrice || '0', 6, offering.pricing.denom)}
+          {formatTokenAmount(
+            offering.pricing.basePrice || "0",
+            6,
+            offering.pricing.denom,
+          )}
         </span>
         <span className="mkt-offering-card__price-unit">
           / {formatPriceUnit(offering.pricing.unit)}
@@ -151,11 +179,18 @@ export function MarketplaceOfferingCard({
           aria-label={availabilityText}
         >
           <span aria-hidden="true">
-            {offering.status === 'active' ? '●' : offering.status === 'paused' ? '◐' : '○'}
-          </span>
-          {' '}{availabilityText}
+            {offering.status === "active"
+              ? "●"
+              : offering.status === "paused"
+                ? "◐"
+                : "○"}
+          </span>{" "}
+          {availabilityText}
         </span>
-        <span className="mkt-offering-card__reliability" title="Reliability score">
+        <span
+          className="mkt-offering-card__reliability"
+          title="Reliability score"
+        >
           <span aria-hidden="true">★</span> {offering.reliabilityScore}%
         </span>
       </div>
@@ -167,20 +202,20 @@ export function MarketplaceOfferingCard({
 
 function formatPriceUnit(unit?: string): string {
   switch (unit) {
-    case 'per_hour':
-      return 'hour';
-    case 'per_day':
-      return 'day';
-    case 'per_month':
-      return 'month';
-    case 'per_cpu_hour':
-      return 'CPU-hour';
-    case 'per_gpu_hour':
-      return 'GPU-hour';
-    case 'per_gb_hour':
-      return 'GB-hour';
+    case "per_hour":
+      return "hour";
+    case "per_day":
+      return "day";
+    case "per_month":
+      return "month";
+    case "per_cpu_hour":
+      return "CPU-hour";
+    case "per_gpu_hour":
+      return "GPU-hour";
+    case "per_gb_hour":
+      return "GB-hour";
     default:
-      return 'hour';
+      return "hour";
   }
 }
 

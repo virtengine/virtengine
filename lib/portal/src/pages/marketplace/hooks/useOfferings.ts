@@ -6,14 +6,14 @@
  * optimized for the customer marketplace browse experience.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from "react";
 import type {
   Offering,
   OfferingFilter,
   OfferingSort,
   OfferingType,
-} from '../../../../types/marketplace';
-import type { QueryClient } from '../../../../types/chain';
+} from "../../../../types/marketplace";
+import type { QueryClient } from "../../../../types/chain";
 
 /**
  * Cache entry for offerings
@@ -42,7 +42,11 @@ export interface OfferingsState {
  * Offerings query actions
  */
 export interface OfferingsActions {
-  search: (filter: OfferingFilter, sort?: OfferingSort, page?: number) => Promise<void>;
+  search: (
+    filter: OfferingFilter,
+    sort?: OfferingSort,
+    page?: number,
+  ) => Promise<void>;
   loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
   clearCache: () => void;
@@ -64,8 +68,8 @@ export interface UseOfferingsOptions {
  * Default sort configuration
  */
 const DEFAULT_SORT: OfferingSort = {
-  field: 'reliability_score',
-  direction: 'desc',
+  field: "reliability_score",
+  direction: "desc",
 };
 
 /**
@@ -75,7 +79,7 @@ function generateCacheKey(
   filter: OfferingFilter,
   sort: OfferingSort,
   page: number,
-  pageSize: number
+  pageSize: number,
 ): string {
   return JSON.stringify({ filter, sort, page, pageSize });
 }
@@ -125,7 +129,7 @@ export function useOfferings(options: UseOfferingsOptions): {
       if (!entry) return false;
       return Date.now() - entry.timestamp < cacheTimeMs;
     },
-    [cacheTimeMs]
+    [cacheTimeMs],
   );
 
   /**
@@ -136,7 +140,7 @@ export function useOfferings(options: UseOfferingsOptions): {
       queryFilter: OfferingFilter,
       querySort: OfferingSort,
       page: number,
-      pageSizeParam: number
+      pageSizeParam: number,
     ): Record<string, string> => {
       const params: Record<string, string> = {
         page: String(page),
@@ -146,22 +150,27 @@ export function useOfferings(options: UseOfferingsOptions): {
       };
 
       if (queryFilter.query) params.query = queryFilter.query;
-      if (queryFilter.types?.length) params.types = queryFilter.types.join(',');
-      if (queryFilter.regions?.length) params.regions = queryFilter.regions.join(',');
-      if (queryFilter.minCpuCores) params.min_cpu = String(queryFilter.minCpuCores);
-      if (queryFilter.minMemoryGB) params.min_memory = String(queryFilter.minMemoryGB);
-      if (queryFilter.minStorageGB) params.min_storage = String(queryFilter.minStorageGB);
-      if (queryFilter.requireGpu) params.require_gpu = 'true';
+      if (queryFilter.types?.length) params.types = queryFilter.types.join(",");
+      if (queryFilter.regions?.length)
+        params.regions = queryFilter.regions.join(",");
+      if (queryFilter.minCpuCores)
+        params.min_cpu = String(queryFilter.minCpuCores);
+      if (queryFilter.minMemoryGB)
+        params.min_memory = String(queryFilter.minMemoryGB);
+      if (queryFilter.minStorageGB)
+        params.min_storage = String(queryFilter.minStorageGB);
+      if (queryFilter.requireGpu) params.require_gpu = "true";
       if (queryFilter.minReliabilityScore)
         params.min_reliability = String(queryFilter.minReliabilityScore);
-      if (queryFilter.maxPricePerHour) params.max_price = queryFilter.maxPricePerHour;
+      if (queryFilter.maxPricePerHour)
+        params.max_price = queryFilter.maxPricePerHour;
       if (queryFilter.providerAddresses?.length)
-        params.providers = queryFilter.providerAddresses.join(',');
-      if (queryFilter.onlyEligible) params.only_eligible = 'true';
+        params.providers = queryFilter.providerAddresses.join(",");
+      if (queryFilter.onlyEligible) params.only_eligible = "true";
 
       return params;
     },
-    []
+    [],
   );
 
   /**
@@ -172,21 +181,26 @@ export function useOfferings(options: UseOfferingsOptions): {
       queryFilter: OfferingFilter,
       querySort: OfferingSort,
       page: number,
-      pageSizeParam: number
+      pageSizeParam: number,
     ): Promise<{ offerings: Offering[]; total: number }> => {
-      const params = buildQueryParams(queryFilter, querySort, page, pageSizeParam);
+      const params = buildQueryParams(
+        queryFilter,
+        querySort,
+        page,
+        pageSizeParam,
+      );
 
       const result = await queryClient.query<{
         offerings: Offering[];
         total: number;
-      }>('/marketplace/offerings', params);
+      }>("/marketplace/offerings", params);
 
       return {
         offerings: result.offerings || [],
         total: result.total || 0,
       };
     },
-    [queryClient, buildQueryParams]
+    [queryClient, buildQueryParams],
   );
 
   /**
@@ -196,7 +210,7 @@ export function useOfferings(options: UseOfferingsOptions): {
     async (
       newFilter: OfferingFilter,
       newSort: OfferingSort = sort,
-      page: number = 1
+      page: number = 1,
     ): Promise<void> => {
       // Cancel any in-flight request
       if (abortControllerRef.current) {
@@ -204,7 +218,12 @@ export function useOfferings(options: UseOfferingsOptions): {
       }
       abortControllerRef.current = new AbortController();
 
-      const cacheKey = generateCacheKey(newFilter, newSort, page, state.pageSize);
+      const cacheKey = generateCacheKey(
+        newFilter,
+        newSort,
+        page,
+        state.pageSize,
+      );
 
       // Check cache
       const cachedEntry = cacheRef.current.get(cacheKey);
@@ -238,7 +257,7 @@ export function useOfferings(options: UseOfferingsOptions): {
           newFilter,
           newSort,
           page,
-          state.pageSize
+          state.pageSize,
         );
 
         // Cache result
@@ -260,18 +279,21 @@ export function useOfferings(options: UseOfferingsOptions): {
         }));
       } catch (error) {
         // Ignore abort errors
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof Error && error.name === "AbortError") {
           return;
         }
 
         setState((prev) => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Failed to fetch offerings',
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to fetch offerings",
         }));
       }
     },
-    [sort, state.pageSize, isCacheValid, fetchOfferings]
+    [sort, state.pageSize, isCacheValid, fetchOfferings],
   );
 
   /**
@@ -298,7 +320,12 @@ export function useOfferings(options: UseOfferingsOptions): {
     setState((prev) => ({ ...prev, isLoading: true }));
 
     try {
-      const { offerings, total } = await fetchOfferings(filter, sort, nextPage, state.pageSize);
+      const { offerings, total } = await fetchOfferings(
+        filter,
+        sort,
+        nextPage,
+        state.pageSize,
+      );
 
       // Cache result
       cacheRef.current.set(cacheKey, {
@@ -320,10 +347,22 @@ export function useOfferings(options: UseOfferingsOptions): {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to load more offerings',
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load more offerings",
       }));
     }
-  }, [state.isLoading, state.hasMore, state.page, state.pageSize, filter, sort, isCacheValid, fetchOfferings]);
+  }, [
+    state.isLoading,
+    state.hasMore,
+    state.page,
+    state.pageSize,
+    filter,
+    sort,
+    isCacheValid,
+    fetchOfferings,
+  ]);
 
   /**
    * Refresh current results (bypass cache)
@@ -392,56 +431,56 @@ export interface OfferingCategory {
  */
 export const OFFERING_CATEGORIES: OfferingCategory[] = [
   {
-    id: 'all',
-    name: 'All Offerings',
-    description: 'Browse all available offerings',
-    icon: 'grid',
+    id: "all",
+    name: "All Offerings",
+    description: "Browse all available offerings",
+    icon: "grid",
     types: [],
   },
   {
-    id: 'compute',
-    name: 'Compute',
-    description: 'General purpose virtual machines',
-    icon: 'cpu',
-    types: ['compute'],
+    id: "compute",
+    name: "Compute",
+    description: "General purpose virtual machines",
+    icon: "cpu",
+    types: ["compute"],
     featured: true,
   },
   {
-    id: 'gpu',
-    name: 'GPU Compute',
-    description: 'GPU-accelerated instances for AI/ML',
-    icon: 'gpu',
-    types: ['gpu'],
+    id: "gpu",
+    name: "GPU Compute",
+    description: "GPU-accelerated instances for AI/ML",
+    icon: "gpu",
+    types: ["gpu"],
     featured: true,
   },
   {
-    id: 'storage',
-    name: 'Storage',
-    description: 'Block and object storage solutions',
-    icon: 'database',
-    types: ['storage'],
+    id: "storage",
+    name: "Storage",
+    description: "Block and object storage solutions",
+    icon: "database",
+    types: ["storage"],
   },
   {
-    id: 'kubernetes',
-    name: 'Kubernetes',
-    description: 'Managed Kubernetes clusters',
-    icon: 'kubernetes',
-    types: ['kubernetes'],
+    id: "kubernetes",
+    name: "Kubernetes",
+    description: "Managed Kubernetes clusters",
+    icon: "kubernetes",
+    types: ["kubernetes"],
     featured: true,
   },
   {
-    id: 'hpc',
-    name: 'HPC / SLURM',
-    description: 'High-performance computing clusters',
-    icon: 'server',
-    types: ['slurm'],
+    id: "hpc",
+    name: "HPC / SLURM",
+    description: "High-performance computing clusters",
+    icon: "server",
+    types: ["slurm"],
   },
   {
-    id: 'custom',
-    name: 'Custom',
-    description: 'Specialized and custom offerings',
-    icon: 'settings',
-    types: ['custom'],
+    id: "custom",
+    name: "Custom",
+    description: "Specialized and custom offerings",
+    icon: "settings",
+    types: ["custom"],
   },
 ];
 
@@ -458,10 +497,10 @@ export interface Region {
  * Available regions
  */
 export const REGIONS: Region[] = [
-  { id: 'us-east', name: 'US East', flag: '🇺🇸' },
-  { id: 'us-west', name: 'US West', flag: '🇺🇸' },
-  { id: 'eu-west', name: 'EU West', flag: '🇪🇺' },
-  { id: 'eu-central', name: 'EU Central', flag: '🇪🇺' },
-  { id: 'asia-east', name: 'Asia East', flag: '🇯🇵' },
-  { id: 'asia-south', name: 'Asia South', flag: '🇸🇬' },
+  { id: "us-east", name: "US East", flag: "🇺🇸" },
+  { id: "us-west", name: "US West", flag: "🇺🇸" },
+  { id: "eu-west", name: "EU West", flag: "🇪🇺" },
+  { id: "eu-central", name: "EU Central", flag: "🇪🇺" },
+  { id: "asia-east", name: "Asia East", flag: "🇯🇵" },
+  { id: "asia-south", name: "Asia South", flag: "🇸🇬" },
 ];

@@ -2,8 +2,8 @@
  * Provider Info Component
  * VE-703: Display provider information and ratings
  */
-import * as React from 'react';
-import { formatAddress } from '../../../../utils/format';
+import * as React from "react";
+import { formatAddress } from "../../../../utils/format";
 
 export interface ProviderInfoProps {
   providerAddress: string;
@@ -32,7 +32,7 @@ export function ProviderInfo({
   totalOfferings,
   totalOrders,
   isVerified = false,
-  className = '',
+  className = "",
 }: ProviderInfoProps): JSX.Element {
   const reliabilityColor = getScoreColor(reliabilityScore);
 
@@ -64,8 +64,18 @@ export function ProviderInfo({
           </div>
         </div>
 
-        <div className="provider-info__reliability" role="meter" aria-valuenow={reliabilityScore} aria-valuemin={0} aria-valuemax={100} aria-label="Reliability score">
-          <div className="provider-info__score" style={{ color: reliabilityColor }}>
+        <div
+          className="provider-info__reliability"
+          role="meter"
+          aria-valuenow={reliabilityScore}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Reliability score"
+        >
+          <div
+            className="provider-info__score"
+            style={{ color: reliabilityColor }}
+          >
             {reliabilityScore}
           </div>
           <div className="provider-info__score-label">Reliability</div>
@@ -77,7 +87,9 @@ export function ProviderInfo({
         <div className="provider-info__stats">
           {totalOfferings !== undefined && (
             <div className="provider-info__stat">
-              <span className="provider-info__stat-value">{totalOfferings}</span>
+              <span className="provider-info__stat-value">
+                {totalOfferings}
+              </span>
               <span className="provider-info__stat-label">Offerings</span>
             </div>
           )}
@@ -93,19 +105,35 @@ export function ProviderInfo({
       {/* Benchmark Summary */}
       {benchmarkSummary && (
         <div className="provider-info__benchmarks">
-          <h4 className="provider-info__benchmarks-title">Performance Benchmarks</h4>
+          <h4 className="provider-info__benchmarks-title">
+            Performance Benchmarks
+          </h4>
           <div className="provider-info__benchmark-grid">
             <BenchmarkItem label="CPU" score={benchmarkSummary.cpuScore} />
-            <BenchmarkItem label="Memory" score={benchmarkSummary.memoryScore} />
-            <BenchmarkItem label="Storage" score={benchmarkSummary.storageScore} />
-            <BenchmarkItem label="Network" score={benchmarkSummary.networkScore} />
+            <BenchmarkItem
+              label="Memory"
+              score={benchmarkSummary.memoryScore}
+            />
+            <BenchmarkItem
+              label="Storage"
+              score={benchmarkSummary.storageScore}
+            />
+            <BenchmarkItem
+              label="Network"
+              score={benchmarkSummary.networkScore}
+            />
             {benchmarkSummary.gpuScore !== undefined && (
               <BenchmarkItem label="GPU" score={benchmarkSummary.gpuScore} />
             )}
           </div>
           <div className="provider-info__benchmark-overall">
-            <span className="provider-info__benchmark-overall-label">Overall Score</span>
-            <span className="provider-info__benchmark-overall-value" style={{ color: getScoreColor(benchmarkSummary.overallScore) }}>
+            <span className="provider-info__benchmark-overall-label">
+              Overall Score
+            </span>
+            <span
+              className="provider-info__benchmark-overall-value"
+              style={{ color: getScoreColor(benchmarkSummary.overallScore) }}
+            >
               {benchmarkSummary.overallScore}
             </span>
           </div>
@@ -124,9 +152,9 @@ interface ProviderAvatarProps {
 
 function ProviderAvatar({ name, address }: ProviderAvatarProps): JSX.Element {
   const initials = name
-    .split(' ')
+    .split(" ")
     .map((n) => n[0])
-    .join('')
+    .join("")
     .slice(0, 2)
     .toUpperCase();
 
@@ -168,9 +196,18 @@ function BenchmarkItem({ label, score }: BenchmarkItemProps): JSX.Element {
     <div className="benchmark-item">
       <div className="benchmark-item__header">
         <span className="benchmark-item__label">{label}</span>
-        <span className="benchmark-item__score" style={{ color }}>{score}</span>
+        <span className="benchmark-item__score" style={{ color }}>
+          {score}
+        </span>
       </div>
-      <div className="benchmark-item__bar" role="progressbar" aria-valuenow={score} aria-valuemin={0} aria-valuemax={100} aria-label={`${label} score`}>
+      <div
+        className="benchmark-item__bar"
+        role="progressbar"
+        aria-valuenow={score}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label} score`}
+      >
         <div
           className="benchmark-item__fill"
           style={{ width: `${percentage}%`, backgroundColor: color }}
@@ -181,10 +218,10 @@ function BenchmarkItem({ label, score }: BenchmarkItemProps): JSX.Element {
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 80) return '#16a34a'; // Green
-  if (score >= 60) return '#ca8a04'; // Yellow
-  if (score >= 40) return '#ea580c'; // Orange
-  return '#dc2626'; // Red
+  if (score >= 80) return "#16a34a"; // Green
+  if (score >= 60) return "#ca8a04"; // Yellow
+  if (score >= 40) return "#ea580c"; // Orange
+  return "#dc2626"; // Red
 }
 
 function VerifiedBadge(): JSX.Element {
@@ -217,7 +254,7 @@ export function ProviderBadge({
   providerAddress,
   reliabilityScore,
   isVerified = false,
-  className = '',
+  className = "",
 }: ProviderBadgeProps): JSX.Element {
   const reliabilityColor = getScoreColor(reliabilityScore);
 
@@ -233,7 +270,10 @@ export function ProviderBadge({
             </span>
           )}
         </span>
-        <span className="provider-badge__score" style={{ color: reliabilityColor }}>
+        <span
+          className="provider-badge__score"
+          style={{ color: reliabilityColor }}
+        >
           {reliabilityScore}% reliability
         </span>
       </div>

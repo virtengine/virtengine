@@ -6,37 +6,44 @@
  */
 
 // Main page
-export { MarketplacePage } from './MarketplacePage';
-export type { MarketplacePageProps } from './MarketplacePage';
+export { MarketplacePage } from "./MarketplacePage";
+export type { MarketplacePageProps } from "./MarketplacePage";
 
 // Hooks
-export { useOfferings, OFFERING_CATEGORIES, REGIONS } from './hooks/useOfferings';
+export {
+  useOfferings,
+  OFFERING_CATEGORIES,
+  REGIONS,
+} from "./hooks/useOfferings";
 export type {
   UseOfferingsOptions,
   OfferingsState,
   OfferingsActions,
   OfferingCategory,
   Region,
-} from './hooks/useOfferings';
+} from "./hooks/useOfferings";
 
 // Components
-export { SearchBar } from './components/SearchBar';
-export type { SearchBarProps } from './components/SearchBar';
+export { SearchBar } from "./components/SearchBar";
+export type { SearchBarProps } from "./components/SearchBar";
 
-export { FilterPanel } from './components/FilterPanel';
-export type { FilterPanelProps } from './components/FilterPanel';
+export { FilterPanel } from "./components/FilterPanel";
+export type { FilterPanelProps } from "./components/FilterPanel";
 
-export { CategoryNav } from './components/CategoryNav';
-export type { CategoryNavProps } from './components/CategoryNav';
+export { CategoryNav } from "./components/CategoryNav";
+export type { CategoryNavProps } from "./components/CategoryNav";
 
-export { OfferingGrid } from './components/OfferingGrid';
-export type { OfferingGridProps } from './components/OfferingGrid';
+export { OfferingGrid } from "./components/OfferingGrid";
+export type { OfferingGridProps } from "./components/OfferingGrid";
 
-export { OfferingDetailPage } from './components/OfferingDetailPage';
-export type { OfferingDetailPageProps } from './components/OfferingDetailPage';
+export { OfferingDetailPage } from "./components/OfferingDetailPage";
+export type { OfferingDetailPageProps } from "./components/OfferingDetailPage";
 
-export { ProviderInfo, ProviderBadge } from './components/ProviderInfo';
-export type { ProviderInfoProps, ProviderBadgeProps } from './components/ProviderInfo';
+export { ProviderInfo, ProviderBadge } from "./components/ProviderInfo";
+export type {
+  ProviderInfoProps,
+  ProviderBadgeProps,
+} from "./components/ProviderInfo";
 
-export { MarketplaceOfferingCard } from './components/MarketplaceOfferingCard';
-export type { MarketplaceOfferingCardProps } from './components/MarketplaceOfferingCard';
+export { MarketplaceOfferingCard } from "./components/MarketplaceOfferingCard";
+export type { MarketplaceOfferingCardProps } from "./components/MarketplaceOfferingCard";

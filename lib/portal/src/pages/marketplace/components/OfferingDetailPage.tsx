@@ -2,11 +2,11 @@
  * Offering Detail Page Component
  * VE-703: Full offering detail view with pricing calculator
  */
-import * as React from 'react';
-import { useState, useCallback, useMemo } from 'react';
-import type { Offering, PriceComponent } from '../../../../types/marketplace';
-import { formatTokenAmount, formatDuration } from '../../../../utils/format';
-import { ProviderInfo } from './ProviderInfo';
+import * as React from "react";
+import { useState, useCallback, useMemo } from "react";
+import type { Offering, PriceComponent } from "../../../../types/marketplace";
+import { formatTokenAmount, formatDuration } from "../../../../utils/format";
+import { ProviderInfo } from "./ProviderInfo";
 
 export interface OfferingDetailPageProps {
   offering: Offering;
@@ -21,18 +21,20 @@ export function OfferingDetailPage({
   onBack,
   onCheckout,
   isLoading = false,
-  className = '',
+  className = "",
 }: OfferingDetailPageProps): JSX.Element {
   const [durationHours, setDurationHours] = useState(24);
-  const [durationUnit, setDurationUnit] = useState<'hours' | 'days' | 'months'>('hours');
+  const [durationUnit, setDurationUnit] = useState<"hours" | "days" | "months">(
+    "hours",
+  );
 
   const durationInSeconds = useMemo(() => {
     switch (durationUnit) {
-      case 'hours':
+      case "hours":
         return durationHours * 3600;
-      case 'days':
+      case "days":
         return durationHours * 86400;
-      case 'months':
+      case "months":
         return durationHours * 30 * 86400;
       default:
         return durationHours * 3600;
@@ -56,7 +58,8 @@ export function OfferingDetailPage({
 
   const isWithinDurationLimits =
     durationInSeconds >= offering.pricing.minDurationSeconds &&
-    (!offering.pricing.maxDurationSeconds || durationInSeconds <= offering.pricing.maxDurationSeconds);
+    (!offering.pricing.maxDurationSeconds ||
+      durationInSeconds <= offering.pricing.maxDurationSeconds);
 
   const typeConfig = getOfferingTypeConfig(offering.type);
 
@@ -69,7 +72,16 @@ export function OfferingDetailPage({
         onClick={onBack}
         aria-label="Back to offerings"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
         Back to Marketplace
@@ -83,13 +95,25 @@ export function OfferingDetailPage({
             <div className="offering-detail-page__badges">
               <span
                 className="offering-detail-page__type"
-                style={{ color: typeConfig.color, backgroundColor: typeConfig.bg }}
+                style={{
+                  color: typeConfig.color,
+                  backgroundColor: typeConfig.bg,
+                }}
               >
                 {typeConfig.label}
               </span>
               {offering.hasEncryptedDetails && (
                 <span className="offering-detail-page__tee">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
@@ -100,12 +124,16 @@ export function OfferingDetailPage({
             </div>
 
             <h1 className="offering-detail-page__title">{offering.title}</h1>
-            <p className="offering-detail-page__description">{offering.description}</p>
+            <p className="offering-detail-page__description">
+              {offering.description}
+            </p>
           </header>
 
           {/* Specifications */}
           <section className="offering-detail-page__section">
-            <h2 className="offering-detail-page__section-title">Resource Specifications</h2>
+            <h2 className="offering-detail-page__section-title">
+              Resource Specifications
+            </h2>
             <div className="offering-detail-page__specs">
               <SpecItem
                 icon={<CpuIcon />}
@@ -126,7 +154,7 @@ export function OfferingDetailPage({
                 <SpecItem
                   icon={<GpuIcon />}
                   label="GPU"
-                  value={`${offering.resources.gpuCount}x ${offering.resources.gpuModel || 'GPU'}`}
+                  value={`${offering.resources.gpuCount}x ${offering.resources.gpuModel || "GPU"}`}
                 />
               )}
               {offering.resources.bandwidthGbps && (
@@ -146,57 +174,86 @@ export function OfferingDetailPage({
             {/* Additional Attributes */}
             {Object.keys(offering.resources.attributes).length > 0 && (
               <div className="offering-detail-page__attributes">
-                <h3 className="offering-detail-page__attributes-title">Additional Attributes</h3>
+                <h3 className="offering-detail-page__attributes-title">
+                  Additional Attributes
+                </h3>
                 <dl className="offering-detail-page__attributes-list">
-                  {Object.entries(offering.resources.attributes).map(([key, value]) => (
-                    <div key={key} className="offering-detail-page__attribute">
-                      <dt>{formatAttributeKey(key)}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
+                  {Object.entries(offering.resources.attributes).map(
+                    ([key, value]) => (
+                      <div
+                        key={key}
+                        className="offering-detail-page__attribute"
+                      >
+                        <dt>{formatAttributeKey(key)}</dt>
+                        <dd>{value}</dd>
+                      </div>
+                    ),
+                  )}
                 </dl>
               </div>
             )}
           </section>
 
           {/* Pricing Breakdown */}
-          {offering.pricing.components && offering.pricing.components.length > 0 && (
-            <section className="offering-detail-page__section">
-              <h2 className="offering-detail-page__section-title">Component Pricing</h2>
-              <div className="offering-detail-page__pricing-components">
-                {offering.pricing.components.map((component, index) => (
-                  <PricingComponentRow key={index} component={component} denom={offering.pricing.denom} />
-                ))}
-              </div>
-            </section>
-          )}
+          {offering.pricing.components &&
+            offering.pricing.components.length > 0 && (
+              <section className="offering-detail-page__section">
+                <h2 className="offering-detail-page__section-title">
+                  Component Pricing
+                </h2>
+                <div className="offering-detail-page__pricing-components">
+                  {offering.pricing.components.map((component, index) => (
+                    <PricingComponentRow
+                      key={index}
+                      component={component}
+                      denom={offering.pricing.denom}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
           {/* Identity Requirements */}
           <section className="offering-detail-page__section">
-            <h2 className="offering-detail-page__section-title">Requirements</h2>
+            <h2 className="offering-detail-page__section-title">
+              Requirements
+            </h2>
             <div className="offering-detail-page__requirements">
               <div className="offering-detail-page__requirement">
-                <span className="offering-detail-page__requirement-label">Identity Score</span>
+                <span className="offering-detail-page__requirement-label">
+                  Identity Score
+                </span>
                 <span className="offering-detail-page__requirement-value">
                   {offering.identityRequirements.minScore > 0
                     ? `Min. ${offering.identityRequirements.minScore} required`
-                    : 'No minimum'}
+                    : "No minimum"}
                 </span>
               </div>
               {offering.identityRequirements.requiredScopes.length > 0 && (
                 <div className="offering-detail-page__requirement">
-                  <span className="offering-detail-page__requirement-label">Verification Scopes</span>
+                  <span className="offering-detail-page__requirement-label">
+                    Verification Scopes
+                  </span>
                   <div className="offering-detail-page__scopes">
-                    {offering.identityRequirements.requiredScopes.map((scope) => (
-                      <span key={scope} className="offering-detail-page__scope">{scope}</span>
-                    ))}
+                    {offering.identityRequirements.requiredScopes.map(
+                      (scope) => (
+                        <span
+                          key={scope}
+                          className="offering-detail-page__scope"
+                        >
+                          {scope}
+                        </span>
+                      ),
+                    )}
                   </div>
                 </div>
               )}
               <div className="offering-detail-page__requirement">
-                <span className="offering-detail-page__requirement-label">MFA Required</span>
+                <span className="offering-detail-page__requirement-label">
+                  MFA Required
+                </span>
                 <span className="offering-detail-page__requirement-value">
-                  {offering.identityRequirements.mfaRequired ? 'Yes' : 'No'}
+                  {offering.identityRequirements.mfaRequired ? "Yes" : "No"}
                 </span>
               </div>
             </div>
@@ -233,7 +290,11 @@ export function OfferingDetailPage({
                 <select
                   className="pricing-calculator__select"
                   value={durationUnit}
-                  onChange={(e) => setDurationUnit(e.target.value as 'hours' | 'days' | 'months')}
+                  onChange={(e) =>
+                    setDurationUnit(
+                      e.target.value as "hours" | "days" | "months",
+                    )
+                  }
                   aria-label="Duration unit"
                 >
                   <option value="hours">Hours</option>
@@ -253,8 +314,10 @@ export function OfferingDetailPage({
               </div>
               {!isWithinDurationLimits && (
                 <div className="pricing-calculator__error" role="alert">
-                  Duration must be between {formatDuration(offering.pricing.minDurationSeconds)}
-                  {offering.pricing.maxDurationSeconds && ` and ${formatDuration(offering.pricing.maxDurationSeconds)}`}
+                  Duration must be between{" "}
+                  {formatDuration(offering.pricing.minDurationSeconds)}
+                  {offering.pricing.maxDurationSeconds &&
+                    ` and ${formatDuration(offering.pricing.maxDurationSeconds)}`}
                 </div>
               )}
             </div>
@@ -263,15 +326,29 @@ export function OfferingDetailPage({
             <div className="pricing-calculator__breakdown">
               <div className="pricing-calculator__row">
                 <span>Base Price</span>
-                <span>{formatTokenAmount(pricing.baseAmount, 6, offering.pricing.denom)}</span>
+                <span>
+                  {formatTokenAmount(
+                    pricing.baseAmount,
+                    6,
+                    offering.pricing.denom,
+                  )}
+                </span>
               </div>
               <div className="pricing-calculator__row">
                 <span>Deposit</span>
-                <span>{formatTokenAmount(pricing.deposit, 6, offering.pricing.denom)}</span>
+                <span>
+                  {formatTokenAmount(
+                    pricing.deposit,
+                    6,
+                    offering.pricing.denom,
+                  )}
+                </span>
               </div>
               <div className="pricing-calculator__row pricing-calculator__row--total">
                 <span>Total</span>
-                <span>{formatTokenAmount(pricing.total, 6, offering.pricing.denom)}</span>
+                <span>
+                  {formatTokenAmount(pricing.total, 6, offering.pricing.denom)}
+                </span>
               </div>
             </div>
 
@@ -280,18 +357,22 @@ export function OfferingDetailPage({
               type="button"
               className="pricing-calculator__checkout"
               onClick={handleCheckout}
-              disabled={isLoading || !isWithinDurationLimits || offering.status !== 'active'}
+              disabled={
+                isLoading ||
+                !isWithinDurationLimits ||
+                offering.status !== "active"
+              }
             >
               {isLoading ? (
                 <>
                   <LoadingSpinner /> Processing...
                 </>
               ) : (
-                'Proceed to Checkout'
+                "Proceed to Checkout"
               )}
             </button>
 
-            {offering.status !== 'active' && (
+            {offering.status !== "active" && (
               <p className="pricing-calculator__notice">
                 This offering is not currently available for ordering.
               </p>
@@ -314,7 +395,9 @@ interface SpecItemProps {
 function SpecItem({ icon, label, value }: SpecItemProps): JSX.Element {
   return (
     <div className="spec-item">
-      <span className="spec-item__icon" aria-hidden="true">{icon}</span>
+      <span className="spec-item__icon" aria-hidden="true">
+        {icon}
+      </span>
       <div className="spec-item__content">
         <span className="spec-item__label">{label}</span>
         <span className="spec-item__value">{value}</span>
@@ -328,10 +411,15 @@ interface PricingComponentRowProps {
   denom: string;
 }
 
-function PricingComponentRow({ component, denom }: PricingComponentRowProps): JSX.Element {
+function PricingComponentRow({
+  component,
+  denom,
+}: PricingComponentRowProps): JSX.Element {
   return (
     <div className="pricing-component">
-      <span className="pricing-component__type">{formatResourceType(component.resourceType)}</span>
+      <span className="pricing-component__type">
+        {formatResourceType(component.resourceType)}
+      </span>
       <span className="pricing-component__price">
         {formatTokenAmount(component.price, 6, denom)} / {component.unit}
       </span>
@@ -345,26 +433,35 @@ interface StatusBadgeProps {
 
 function StatusBadge({ status }: StatusBadgeProps): JSX.Element {
   const statusConfig: Record<string, { label: string; className: string }> = {
-    active: { label: 'Active', className: 'status-badge--active' },
-    paused: { label: 'Paused', className: 'status-badge--paused' },
-    suspended: { label: 'Suspended', className: 'status-badge--suspended' },
-    draft: { label: 'Draft', className: 'status-badge--draft' },
-    pending_review: { label: 'Pending Review', className: 'status-badge--pending' },
-    unlisted: { label: 'Unlisted', className: 'status-badge--unlisted' },
+    active: { label: "Active", className: "status-badge--active" },
+    paused: { label: "Paused", className: "status-badge--paused" },
+    suspended: { label: "Suspended", className: "status-badge--suspended" },
+    draft: { label: "Draft", className: "status-badge--draft" },
+    pending_review: {
+      label: "Pending Review",
+      className: "status-badge--pending",
+    },
+    unlisted: { label: "Unlisted", className: "status-badge--unlisted" },
   };
 
-  const config = statusConfig[status] || { label: status, className: '' };
+  const config = statusConfig[status] || { label: status, className: "" };
 
   return (
-    <span className={`status-badge ${config.className}`}>
-      {config.label}
-    </span>
+    <span className={`status-badge ${config.className}`}>{config.label}</span>
   );
 }
 
 function LoadingSpinner(): JSX.Element {
   return (
-    <svg className="loading-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg
+      className="loading-spinner"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <circle cx="12" cy="12" r="10" opacity="0.25" />
       <path d="M12 2a10 10 0 0 1 10 10" />
     </svg>
@@ -374,7 +471,16 @@ function LoadingSpinner(): JSX.Element {
 // Icons
 function CpuIcon(): JSX.Element {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="4" y="4" width="16" height="16" rx="2" />
       <rect x="9" y="9" width="6" height="6" />
       <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
@@ -384,7 +490,16 @@ function CpuIcon(): JSX.Element {
 
 function MemoryIcon(): JSX.Element {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M6 19v-2M10 19v-2M14 19v-2M18 19v-2M6 5v2M10 5v2M14 5v2M18 5v2" />
       <rect x="2" y="7" width="20" height="10" rx="1" />
     </svg>
@@ -393,7 +508,16 @@ function MemoryIcon(): JSX.Element {
 
 function StorageIcon(): JSX.Element {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <ellipse cx="12" cy="5" rx="9" ry="3" />
       <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
       <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
@@ -403,7 +527,16 @@ function StorageIcon(): JSX.Element {
 
 function GpuIcon(): JSX.Element {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="2" y="6" width="20" height="12" rx="2" />
       <path d="M6 10v4M10 10v4M14 10v4M18 10v4" />
     </svg>
@@ -412,7 +545,16 @@ function GpuIcon(): JSX.Element {
 
 function NetworkIcon(): JSX.Element {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M4 10h16M4 14h16M9 4L5 20M19 4l-4 16" />
     </svg>
   );
@@ -420,38 +562,50 @@ function NetworkIcon(): JSX.Element {
 
 function LocationIcon(): JSX.Element {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
       <circle cx="12" cy="10" r="3" />
     </svg>
   );
 }
 
-function getOfferingTypeConfig(type: string): { label: string; color: string; bg: string } {
-  const configs: Record<string, { label: string; color: string; bg: string }> = {
-    compute: { label: 'Compute', color: '#7c3aed', bg: '#ede9fe' },
-    storage: { label: 'Storage', color: '#0891b2', bg: '#cffafe' },
-    gpu: { label: 'GPU', color: '#dc2626', bg: '#fee2e2' },
-    kubernetes: { label: 'Kubernetes', color: '#2563eb', bg: '#dbeafe' },
-    slurm: { label: 'SLURM', color: '#4f46e5', bg: '#e0e7ff' },
-    custom: { label: 'Custom', color: '#6b7280', bg: '#f3f4f6' },
-  };
-  return configs[type] || { label: type, color: '#6b7280', bg: '#f3f4f6' };
+function getOfferingTypeConfig(type: string): {
+  label: string;
+  color: string;
+  bg: string;
+} {
+  const configs: Record<string, { label: string; color: string; bg: string }> =
+    {
+      compute: { label: "Compute", color: "#7c3aed", bg: "#ede9fe" },
+      storage: { label: "Storage", color: "#0891b2", bg: "#cffafe" },
+      gpu: { label: "GPU", color: "#dc2626", bg: "#fee2e2" },
+      kubernetes: { label: "Kubernetes", color: "#2563eb", bg: "#dbeafe" },
+      slurm: { label: "SLURM", color: "#4f46e5", bg: "#e0e7ff" },
+      custom: { label: "Custom", color: "#6b7280", bg: "#f3f4f6" },
+    };
+  return configs[type] || { label: type, color: "#6b7280", bg: "#f3f4f6" };
 }
 
 function formatAttributeKey(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (l) => l.toUpperCase());
+  return key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 function formatResourceType(type: string): string {
   const types: Record<string, string> = {
-    cpu: 'CPU',
-    ram: 'Memory',
-    storage: 'Storage',
-    gpu: 'GPU',
-    network: 'Network',
+    cpu: "CPU",
+    ram: "Memory",
+    storage: "Storage",
+    gpu: "GPU",
+    network: "Network",
   };
   return types[type] || type;
 }
@@ -462,22 +616,25 @@ interface PricingResult {
   total: string;
 }
 
-function calculatePricing(offering: Offering, durationSeconds: number): PricingResult {
-  const basePrice = parseInt(offering.pricing.basePrice || '0', 10);
-  const deposit = parseInt(offering.pricing.depositRequired || '0', 10);
+function calculatePricing(
+  offering: Offering,
+  durationSeconds: number,
+): PricingResult {
+  const basePrice = parseInt(offering.pricing.basePrice || "0", 10);
+  const deposit = parseInt(offering.pricing.depositRequired || "0", 10);
 
   // Calculate based on duration and price unit
   let baseAmount = 0;
   const hours = durationSeconds / 3600;
 
   switch (offering.pricing.unit) {
-    case 'per_hour':
+    case "per_hour":
       baseAmount = basePrice * hours;
       break;
-    case 'per_day':
+    case "per_day":
       baseAmount = basePrice * (hours / 24);
       break;
-    case 'per_month':
+    case "per_month":
       baseAmount = basePrice * (hours / (24 * 30));
       break;
     default:

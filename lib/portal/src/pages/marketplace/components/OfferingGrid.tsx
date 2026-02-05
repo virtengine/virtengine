@@ -2,10 +2,14 @@
  * Offering Grid Component
  * VE-703: Enhanced marketplace offering display with layout toggle and pagination
  */
-import * as React from 'react';
-import { useState, useCallback } from 'react';
-import type { Offering, OfferingSort, OfferingSortField } from '../../../../types/marketplace';
-import { MarketplaceOfferingCard } from './MarketplaceOfferingCard';
+import * as React from "react";
+import { useState, useCallback } from "react";
+import type {
+  Offering,
+  OfferingSort,
+  OfferingSortField,
+} from "../../../../types/marketplace";
+import { MarketplaceOfferingCard } from "./MarketplaceOfferingCard";
 
 export interface OfferingGridProps {
   offerings: Offering[];
@@ -22,7 +26,7 @@ export interface OfferingGridProps {
   className?: string;
 }
 
-type LayoutMode = 'grid' | 'list';
+type LayoutMode = "grid" | "list";
 
 export function OfferingGrid({
   offerings,
@@ -36,9 +40,9 @@ export function OfferingGrid({
   onSortChange,
   onPageChange,
   onLoadMore,
-  className = '',
+  className = "",
 }: OfferingGridProps): JSX.Element {
-  const [layout, setLayout] = useState<LayoutMode>('grid');
+  const [layout, setLayout] = useState<LayoutMode>("grid");
 
   const handleSortFieldChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -47,13 +51,13 @@ export function OfferingGrid({
         direction: sort.direction,
       });
     },
-    [sort.direction, onSortChange]
+    [sort.direction, onSortChange],
   );
 
   const handleSortDirectionToggle = useCallback(() => {
     onSortChange({
       field: sort.field,
-      direction: sort.direction === 'asc' ? 'desc' : 'asc',
+      direction: sort.direction === "asc" ? "desc" : "asc",
     });
   }, [sort, onSortChange]);
 
@@ -68,7 +72,11 @@ export function OfferingGrid({
         <div className="offering-grid__info">
           {totalCount > 0 ? (
             <span>
-              Showing <strong>{startItem}-{endItem}</strong> of <strong>{totalCount}</strong> offerings
+              Showing{" "}
+              <strong>
+                {startItem}-{endItem}
+              </strong>{" "}
+              of <strong>{totalCount}</strong> offerings
             </span>
           ) : (
             <span>No offerings found</span>
@@ -78,7 +86,9 @@ export function OfferingGrid({
         <div className="offering-grid__controls">
           {/* Sort */}
           <div className="offering-grid__sort">
-            <label htmlFor="sort-field" className="sr-only">Sort by</label>
+            <label htmlFor="sort-field" className="sr-only">
+              Sort by
+            </label>
             <select
               id="sort-field"
               className="offering-grid__sort-select"
@@ -96,15 +106,33 @@ export function OfferingGrid({
               type="button"
               className="offering-grid__sort-direction"
               onClick={handleSortDirectionToggle}
-              aria-label={`Sort ${sort.direction === 'asc' ? 'ascending' : 'descending'}`}
-              title={sort.direction === 'asc' ? 'Ascending' : 'Descending'}
+              aria-label={`Sort ${sort.direction === "asc" ? "ascending" : "descending"}`}
+              title={sort.direction === "asc" ? "Ascending" : "Descending"}
             >
-              {sort.direction === 'asc' ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {sort.direction === "asc" ? (
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M12 19V5M5 12l7-7 7 7" />
                 </svg>
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M12 5v14M19 12l-7 7-7-7" />
                 </svg>
               )}
@@ -112,15 +140,28 @@ export function OfferingGrid({
           </div>
 
           {/* Layout Toggle */}
-          <div className="offering-grid__layout" role="group" aria-label="Layout">
+          <div
+            className="offering-grid__layout"
+            role="group"
+            aria-label="Layout"
+          >
             <button
               type="button"
-              className={`offering-grid__layout-btn ${layout === 'grid' ? 'offering-grid__layout-btn--active' : ''}`}
-              onClick={() => setLayout('grid')}
-              aria-pressed={layout === 'grid'}
+              className={`offering-grid__layout-btn ${layout === "grid" ? "offering-grid__layout-btn--active" : ""}`}
+              onClick={() => setLayout("grid")}
+              aria-pressed={layout === "grid"}
               title="Grid view"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <rect x="3" y="3" width="7" height="7" />
                 <rect x="14" y="3" width="7" height="7" />
                 <rect x="14" y="14" width="7" height="7" />
@@ -129,12 +170,21 @@ export function OfferingGrid({
             </button>
             <button
               type="button"
-              className={`offering-grid__layout-btn ${layout === 'list' ? 'offering-grid__layout-btn--active' : ''}`}
-              onClick={() => setLayout('list')}
-              aria-pressed={layout === 'list'}
+              className={`offering-grid__layout-btn ${layout === "list" ? "offering-grid__layout-btn--active" : ""}`}
+              onClick={() => setLayout("list")}
+              aria-pressed={layout === "list"}
               title="List view"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <line x1="8" y1="6" x2="21" y2="6" />
                 <line x1="8" y1="12" x2="21" y2="12" />
                 <line x1="8" y1="18" x2="21" y2="18" />
@@ -149,7 +199,11 @@ export function OfferingGrid({
 
       {/* Grid/List Content */}
       {isLoading && offerings.length === 0 ? (
-        <div className="offering-grid__loading" role="status" aria-live="polite">
+        <div
+          className="offering-grid__loading"
+          role="status"
+          aria-live="polite"
+        >
           <LoadingSpinner />
           <span>Loading offerings...</span>
         </div>
@@ -189,9 +243,9 @@ export function OfferingGrid({
                       <LoadingSpinner size={16} /> Loading...
                     </>
                   ) : hasMore ? (
-                    'Load More'
+                    "Load More"
                   ) : (
-                    'No more offerings'
+                    "No more offerings"
                   )}
                 </button>
               ) : (
@@ -217,7 +271,11 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
 }
 
-function Pagination({ page, totalPages, onPageChange }: PaginationProps): JSX.Element {
+function Pagination({
+  page,
+  totalPages,
+  onPageChange,
+}: PaginationProps): JSX.Element {
   const pages = getPageNumbers(page, totalPages);
 
   return (
@@ -229,26 +287,37 @@ function Pagination({ page, totalPages, onPageChange }: PaginationProps): JSX.El
         disabled={page === 1}
         aria-label="Previous page"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M15 18l-6-6 6-6" />
         </svg>
       </button>
 
       {pages.map((p, i) =>
-        p === '...' ? (
-          <span key={`ellipsis-${i}`} className="pagination__ellipsis">...</span>
+        p === "..." ? (
+          <span key={`ellipsis-${i}`} className="pagination__ellipsis">
+            ...
+          </span>
         ) : (
           <button
             key={p}
             type="button"
-            className={`pagination__btn pagination__btn--page ${page === p ? 'pagination__btn--active' : ''}`}
+            className={`pagination__btn pagination__btn--page ${page === p ? "pagination__btn--active" : ""}`}
             onClick={() => onPageChange(p as number)}
             aria-label={`Page ${p}`}
-            aria-current={page === p ? 'page' : undefined}
+            aria-current={page === p ? "page" : undefined}
           >
             {p}
           </button>
-        )
+        ),
       )}
 
       <button
@@ -258,7 +327,16 @@ function Pagination({ page, totalPages, onPageChange }: PaginationProps): JSX.El
         disabled={page === totalPages}
         aria-label="Next page"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M9 18l6-6-6-6" />
         </svg>
       </button>
@@ -277,8 +355,8 @@ function getPageNumbers(current: number, total: number): (number | string)[] {
       (i >= current - delta && i <= current + delta)
     ) {
       pages.push(i);
-    } else if (pages[pages.length - 1] !== '...') {
-      pages.push('...');
+    } else if (pages[pages.length - 1] !== "...") {
+      pages.push("...");
     }
   }
 
@@ -306,14 +384,24 @@ function EmptyState(): JSX.Element {
   return (
     <div className="empty-state">
       <div className="empty-state__icon" aria-hidden="true">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="64"
+          height="64"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <circle cx="11" cy="11" r="8" />
           <path d="M21 21l-4.35-4.35" />
         </svg>
       </div>
       <h3 className="empty-state__title">No offerings found</h3>
       <p className="empty-state__description">
-        Try adjusting your filters or search query to find what you're looking for.
+        Try adjusting your filters or search query to find what you're looking
+        for.
       </p>
     </div>
   );

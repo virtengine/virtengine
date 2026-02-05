@@ -2,16 +2,21 @@
  * Marketplace Page Component
  * VE-703: Main customer marketplace browse page
  */
-import * as React from 'react';
-import { useState, useCallback, useEffect } from 'react';
-import type { Offering, OfferingFilter, OfferingSort, OfferingType } from '../../../types/marketplace';
-import type { QueryClient } from '../../../types/chain';
-import { useOfferings, OFFERING_CATEGORIES } from './hooks/useOfferings';
-import { SearchBar } from './components/SearchBar';
-import { FilterPanel } from './components/FilterPanel';
-import { CategoryNav } from './components/CategoryNav';
-import { OfferingGrid } from './components/OfferingGrid';
-import { OfferingDetailPage } from './components/OfferingDetailPage';
+import * as React from "react";
+import { useState, useCallback, useEffect } from "react";
+import type {
+  Offering,
+  OfferingFilter,
+  OfferingSort,
+  OfferingType,
+} from "../../../types/marketplace";
+import type { QueryClient } from "../../../types/chain";
+import { useOfferings, OFFERING_CATEGORIES } from "./hooks/useOfferings";
+import { SearchBar } from "./components/SearchBar";
+import { FilterPanel } from "./components/FilterPanel";
+import { CategoryNav } from "./components/CategoryNav";
+import { OfferingGrid } from "./components/OfferingGrid";
+import { OfferingDetailPage } from "./components/OfferingDetailPage";
 
 export interface MarketplacePageProps {
   queryClient: QueryClient;
@@ -21,18 +26,20 @@ export interface MarketplacePageProps {
   className?: string;
 }
 
-type ViewMode = 'browse' | 'detail';
+type ViewMode = "browse" | "detail";
 
 export function MarketplacePage({
   queryClient,
   onCheckout,
-  initialCategory = 'all',
-  initialQuery = '',
-  className = '',
+  initialCategory = "all",
+  initialQuery = "",
+  className = "",
 }: MarketplacePageProps): JSX.Element {
   // View state
-  const [viewMode, setViewMode] = useState<ViewMode>('browse');
-  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("browse");
+  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(
+    null,
+  );
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState(initialQuery);
@@ -45,7 +52,7 @@ export function MarketplacePage({
     queryClient,
     pageSize: 20,
     initialFilter: {},
-    initialSort: { field: 'reliability_score', direction: 'desc' },
+    initialSort: { field: "reliability_score", direction: "desc" },
   });
 
   // Initial load
@@ -68,7 +75,7 @@ export function MarketplacePage({
       setFilter(newFilter);
       actions.search(newFilter, sort);
     },
-    [filter, sort, actions]
+    [filter, sort, actions],
   );
 
   // Handle category change
@@ -82,7 +89,7 @@ export function MarketplacePage({
       setFilter(newFilter);
       actions.search(newFilter, sort);
     },
-    [filter, sort, actions]
+    [filter, sort, actions],
   );
 
   // Handle filter change
@@ -102,7 +109,7 @@ export function MarketplacePage({
       query: filter.query,
     };
     setFilter(newFilter);
-    setSelectedCategory('all');
+    setSelectedCategory("all");
     actions.search(newFilter, sort);
   }, [filter.query, sort, actions]);
 
@@ -111,7 +118,7 @@ export function MarketplacePage({
     (newSort: OfferingSort) => {
       actions.search(filter, newSort);
     },
-    [filter, actions]
+    [filter, actions],
   );
 
   // Handle page change
@@ -119,19 +126,19 @@ export function MarketplacePage({
     (page: number) => {
       actions.search(filter, sort, page);
     },
-    [filter, sort, actions]
+    [filter, sort, actions],
   );
 
   // Handle offering select
   const handleOfferingSelect = useCallback((offering: Offering) => {
     setSelectedOffering(offering);
-    setViewMode('detail');
+    setViewMode("detail");
   }, []);
 
   // Handle back to browse
   const handleBackToBrowse = useCallback(() => {
     setSelectedOffering(null);
-    setViewMode('browse');
+    setViewMode("browse");
   }, []);
 
   // Handle checkout
@@ -141,11 +148,11 @@ export function MarketplacePage({
         onCheckout(selectedOffering.id, durationSeconds);
       }
     },
-    [selectedOffering, onCheckout]
+    [selectedOffering, onCheckout],
   );
 
   // Render detail view
-  if (viewMode === 'detail' && selectedOffering) {
+  if (viewMode === "detail" && selectedOffering) {
     return (
       <OfferingDetailPage
         offering={selectedOffering}
@@ -164,7 +171,8 @@ export function MarketplacePage({
         <div className="marketplace-page__title-row">
           <h1 className="marketplace-page__title">Marketplace</h1>
           <p className="marketplace-page__subtitle">
-            Discover and deploy compute, storage, and AI resources from verified providers
+            Discover and deploy compute, storage, and AI resources from verified
+            providers
           </p>
         </div>
 
@@ -185,7 +193,16 @@ export function MarketplacePage({
             aria-expanded={showMobileFilters}
             aria-controls="marketplace-filters"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <line x1="4" y1="21" x2="4" y2="14" />
               <line x1="4" y1="10" x2="4" y2="3" />
               <line x1="12" y1="21" x2="12" y2="12" />
@@ -206,7 +223,7 @@ export function MarketplacePage({
         {/* Sidebar */}
         <aside
           id="marketplace-filters"
-          className={`marketplace-page__sidebar ${showMobileFilters ? 'marketplace-page__sidebar--open' : ''}`}
+          className={`marketplace-page__sidebar ${showMobileFilters ? "marketplace-page__sidebar--open" : ""}`}
         >
           {/* Mobile close button */}
           <button
@@ -215,7 +232,16 @@ export function MarketplacePage({
             onClick={() => setShowMobileFilters(false)}
             aria-label="Close filters"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -248,10 +274,7 @@ export function MarketplacePage({
           {state.error ? (
             <div className="marketplace-page__error" role="alert">
               <p>Failed to load offerings: {state.error}</p>
-              <button
-                type="button"
-                onClick={() => actions.refresh()}
-              >
+              <button type="button" onClick={() => actions.refresh()}>
                 Try Again
               </button>
             </div>

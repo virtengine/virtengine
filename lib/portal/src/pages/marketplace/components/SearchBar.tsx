@@ -2,8 +2,8 @@
  * Search Bar Component
  * VE-703: Marketplace search input with suggestions
  */
-import * as React from 'react';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import * as React from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export interface SearchBarProps {
   value: string;
@@ -19,17 +19,18 @@ export function SearchBar({
   value,
   onChange,
   onSearch,
-  placeholder = 'Search offerings...',
+  placeholder = "Search offerings...",
   suggestions = [],
   isLoading = false,
-  className = '',
+  className = "",
 }: SearchBarProps): JSX.Element {
   const [isFocused, setIsFocused] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLUListElement>(null);
 
-  const showSuggestions = isFocused && suggestions.length > 0 && value.length > 0;
+  const showSuggestions =
+    isFocused && suggestions.length > 0 && value.length > 0;
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -38,7 +39,7 @@ export function SearchBar({
       setIsFocused(false);
       inputRef.current?.blur();
     },
-    [value, onSearch]
+    [value, onSearch],
   );
 
   const handleKeyDown = useCallback(
@@ -46,17 +47,17 @@ export function SearchBar({
       if (!showSuggestions) return;
 
       switch (e.key) {
-        case 'ArrowDown':
+        case "ArrowDown":
           e.preventDefault();
           setSelectedSuggestion((prev) =>
-            prev < suggestions.length - 1 ? prev + 1 : prev
+            prev < suggestions.length - 1 ? prev + 1 : prev,
           );
           break;
-        case 'ArrowUp':
+        case "ArrowUp":
           e.preventDefault();
           setSelectedSuggestion((prev) => (prev > 0 ? prev - 1 : -1));
           break;
-        case 'Enter':
+        case "Enter":
           if (selectedSuggestion >= 0) {
             e.preventDefault();
             onChange(suggestions[selectedSuggestion]);
@@ -64,13 +65,13 @@ export function SearchBar({
             setIsFocused(false);
           }
           break;
-        case 'Escape':
+        case "Escape":
           setIsFocused(false);
           inputRef.current?.blur();
           break;
       }
     },
-    [showSuggestions, suggestions, selectedSuggestion, onChange, onSearch]
+    [showSuggestions, suggestions, selectedSuggestion, onChange, onSearch],
   );
 
   const handleSuggestionClick = useCallback(
@@ -79,7 +80,7 @@ export function SearchBar({
       onSearch(suggestion);
       setIsFocused(false);
     },
-    [onChange, onSearch]
+    [onChange, onSearch],
   );
 
   // Reset selection when suggestions change
@@ -87,7 +88,7 @@ export function SearchBar({
     setSelectedSuggestion(-1);
   }, [suggestions]);
 
-  const searchId = 'marketplace-search';
+  const searchId = "marketplace-search";
   const suggestionsId = `${searchId}-suggestions`;
 
   return (
@@ -159,7 +160,7 @@ export function SearchBar({
             type="button"
             className="search-bar__clear"
             onClick={() => {
-              onChange('');
+              onChange("");
               inputRef.current?.focus();
             }}
             aria-label="Clear search"
@@ -179,7 +180,11 @@ export function SearchBar({
           </button>
         )}
 
-        <button type="submit" className="search-bar__submit" aria-label="Search">
+        <button
+          type="submit"
+          className="search-bar__submit"
+          aria-label="Search"
+        >
           Search
         </button>
       </div>
@@ -197,7 +202,9 @@ export function SearchBar({
               key={suggestion}
               id={`${suggestionsId}-${index}`}
               className={`search-bar__suggestion ${
-                index === selectedSuggestion ? 'search-bar__suggestion--selected' : ''
+                index === selectedSuggestion
+                  ? "search-bar__suggestion--selected"
+                  : ""
               }`}
               role="option"
               aria-selected={index === selectedSuggestion}

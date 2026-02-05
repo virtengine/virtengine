@@ -2,10 +2,13 @@
  * Filter Panel Component
  * VE-703: Marketplace offering filter controls
  */
-import * as React from 'react';
-import { useState, useCallback } from 'react';
-import type { OfferingFilter, OfferingType } from '../../../../types/marketplace';
-import { OFFERING_CATEGORIES, REGIONS } from '../hooks/useOfferings';
+import * as React from "react";
+import { useState, useCallback } from "react";
+import type {
+  OfferingFilter,
+  OfferingType,
+} from "../../../../types/marketplace";
+import { OFFERING_CATEGORIES, REGIONS } from "../hooks/useOfferings";
 
 export interface FilterPanelProps {
   filter: OfferingFilter;
@@ -22,10 +25,10 @@ export function FilterPanel({
   onApply,
   onReset,
   isCollapsible = true,
-  className = '',
+  className = "",
 }: FilterPanelProps): JSX.Element {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['type', 'region', 'resources'])
+    new Set(["type", "region", "resources"]),
   );
 
   const toggleSection = useCallback((section: string) => {
@@ -46,9 +49,12 @@ export function FilterPanel({
       const newTypes = checked
         ? [...types, type]
         : types.filter((t) => t !== type);
-      onChange({ ...filter, types: newTypes.length > 0 ? newTypes : undefined });
+      onChange({
+        ...filter,
+        types: newTypes.length > 0 ? newTypes : undefined,
+      });
     },
-    [filter, onChange]
+    [filter, onChange],
   );
 
   const handleRegionChange = useCallback(
@@ -57,9 +63,12 @@ export function FilterPanel({
       const newRegions = checked
         ? [...regions, region]
         : regions.filter((r) => r !== region);
-      onChange({ ...filter, regions: newRegions.length > 0 ? newRegions : undefined });
+      onChange({
+        ...filter,
+        regions: newRegions.length > 0 ? newRegions : undefined,
+      });
     },
-    [filter, onChange]
+    [filter, onChange],
   );
 
   const handleResourceChange = useCallback(
@@ -67,14 +76,14 @@ export function FilterPanel({
       const numValue = value ? parseInt(value, 10) : undefined;
       onChange({ ...filter, [field]: numValue });
     },
-    [filter, onChange]
+    [filter, onChange],
   );
 
   const handlePriceChange = useCallback(
     (value: string) => {
       onChange({ ...filter, maxPricePerHour: value || undefined });
     },
-    [filter, onChange]
+    [filter, onChange],
   );
 
   const handleReliabilityChange = useCallback(
@@ -82,21 +91,21 @@ export function FilterPanel({
       const numValue = value ? parseInt(value, 10) : undefined;
       onChange({ ...filter, minReliabilityScore: numValue });
     },
-    [filter, onChange]
+    [filter, onChange],
   );
 
   const handleGpuToggle = useCallback(
     (checked: boolean) => {
       onChange({ ...filter, requireGpu: checked || undefined });
     },
-    [filter, onChange]
+    [filter, onChange],
   );
 
   const handleEligibleToggle = useCallback(
     (checked: boolean) => {
       onChange({ ...filter, onlyEligible: checked || undefined });
     },
-    [filter, onChange]
+    [filter, onChange],
   );
 
   const activeFilterCount = [
@@ -112,12 +121,12 @@ export function FilterPanel({
   ].filter(Boolean).length;
 
   const offeringTypes: { type: OfferingType; label: string }[] = [
-    { type: 'compute', label: 'Compute' },
-    { type: 'gpu', label: 'GPU' },
-    { type: 'storage', label: 'Storage' },
-    { type: 'kubernetes', label: 'Kubernetes' },
-    { type: 'slurm', label: 'SLURM/HPC' },
-    { type: 'custom', label: 'Custom' },
+    { type: "compute", label: "Compute" },
+    { type: "gpu", label: "GPU" },
+    { type: "storage", label: "Storage" },
+    { type: "kubernetes", label: "Kubernetes" },
+    { type: "slurm", label: "SLURM/HPC" },
+    { type: "custom", label: "Custom" },
   ];
 
   return (
@@ -129,7 +138,10 @@ export function FilterPanel({
         <h2 className="filter-panel__title">
           Filters
           {activeFilterCount > 0 && (
-            <span className="filter-panel__count" aria-label={`${activeFilterCount} active filters`}>
+            <span
+              className="filter-panel__count"
+              aria-label={`${activeFilterCount} active filters`}
+            >
               {activeFilterCount}
             </span>
           )}
@@ -150,8 +162,8 @@ export function FilterPanel({
       <FilterSection
         id="type"
         title="Offering Type"
-        isExpanded={expandedSections.has('type')}
-        onToggle={() => toggleSection('type')}
+        isExpanded={expandedSections.has("type")}
+        onToggle={() => toggleSection("type")}
         isCollapsible={isCollapsible}
       >
         <div className="filter-panel__checkboxes">
@@ -172,8 +184,8 @@ export function FilterPanel({
       <FilterSection
         id="region"
         title="Region"
-        isExpanded={expandedSections.has('region')}
-        onToggle={() => toggleSection('region')}
+        isExpanded={expandedSections.has("region")}
+        onToggle={() => toggleSection("region")}
         isCollapsible={isCollapsible}
       >
         <div className="filter-panel__checkboxes">
@@ -182,7 +194,9 @@ export function FilterPanel({
               <input
                 type="checkbox"
                 checked={filter.regions?.includes(region.id) || false}
-                onChange={(e) => handleRegionChange(region.id, e.target.checked)}
+                onChange={(e) =>
+                  handleRegionChange(region.id, e.target.checked)
+                }
               />
               <span className="filter-panel__checkbox-label">
                 <span aria-hidden="true">{region.flag}</span> {region.name}
@@ -196,8 +210,8 @@ export function FilterPanel({
       <FilterSection
         id="resources"
         title="Resource Requirements"
-        isExpanded={expandedSections.has('resources')}
-        onToggle={() => toggleSection('resources')}
+        isExpanded={expandedSections.has("resources")}
+        onToggle={() => toggleSection("resources")}
         isCollapsible={isCollapsible}
       >
         <div className="filter-panel__fields">
@@ -211,8 +225,10 @@ export function FilterPanel({
               min="0"
               step="1"
               className="filter-panel__input"
-              value={filter.minCpuCores || ''}
-              onChange={(e) => handleResourceChange('minCpuCores', e.target.value)}
+              value={filter.minCpuCores || ""}
+              onChange={(e) =>
+                handleResourceChange("minCpuCores", e.target.value)
+              }
               placeholder="Any"
             />
           </div>
@@ -227,8 +243,10 @@ export function FilterPanel({
               min="0"
               step="1"
               className="filter-panel__input"
-              value={filter.minMemoryGB || ''}
-              onChange={(e) => handleResourceChange('minMemoryGB', e.target.value)}
+              value={filter.minMemoryGB || ""}
+              onChange={(e) =>
+                handleResourceChange("minMemoryGB", e.target.value)
+              }
               placeholder="Any"
             />
           </div>
@@ -243,8 +261,10 @@ export function FilterPanel({
               min="0"
               step="1"
               className="filter-panel__input"
-              value={filter.minStorageGB || ''}
-              onChange={(e) => handleResourceChange('minStorageGB', e.target.value)}
+              value={filter.minStorageGB || ""}
+              onChange={(e) =>
+                handleResourceChange("minStorageGB", e.target.value)
+              }
               placeholder="Any"
             />
           </div>
@@ -264,8 +284,8 @@ export function FilterPanel({
       <FilterSection
         id="price"
         title="Price"
-        isExpanded={expandedSections.has('price')}
-        onToggle={() => toggleSection('price')}
+        isExpanded={expandedSections.has("price")}
+        onToggle={() => toggleSection("price")}
         isCollapsible={isCollapsible}
       >
         <div className="filter-panel__fields">
@@ -277,7 +297,7 @@ export function FilterPanel({
               id="filter-max-price"
               type="text"
               className="filter-panel__input"
-              value={filter.maxPricePerHour || ''}
+              value={filter.maxPricePerHour || ""}
               onChange={(e) => handlePriceChange(e.target.value)}
               placeholder="No limit"
             />
@@ -289,8 +309,8 @@ export function FilterPanel({
       <FilterSection
         id="reliability"
         title="Provider Quality"
-        isExpanded={expandedSections.has('reliability')}
-        onToggle={() => toggleSection('reliability')}
+        isExpanded={expandedSections.has("reliability")}
+        onToggle={() => toggleSection("reliability")}
         isCollapsible={isCollapsible}
       >
         <div className="filter-panel__fields">
@@ -329,11 +349,7 @@ export function FilterPanel({
 
       {/* Apply Button */}
       <div className="filter-panel__actions">
-        <button
-          type="button"
-          className="filter-panel__apply"
-          onClick={onApply}
-        >
+        <button type="button" className="filter-panel__apply" onClick={onApply}>
           Apply Filters
         </button>
       </div>
@@ -374,7 +390,7 @@ function FilterSection({
         >
           <span className="filter-section__title">{title}</span>
           <span className="filter-section__icon" aria-hidden="true">
-            {isExpanded ? '−' : '+'}
+            {isExpanded ? "−" : "+"}
           </span>
         </button>
       ) : (
