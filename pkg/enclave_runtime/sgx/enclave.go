@@ -1,6 +1,3 @@
-//go:build sgx_hardware
-//go:build sgx_hardware
-
 // Package sgx provides Intel SGX enclave management and DCAP attestation.
 //
 // This package implements comprehensive Intel SGX support for VirtEngine TEE,

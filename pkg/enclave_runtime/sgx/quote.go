@@ -1,5 +1,3 @@
-//go:build sgx_hardware
-
 // Package sgx provides Intel SGX enclave management and DCAP attestation.
 //
 // This file implements SGX DCAP quote generation and parsing for remote
