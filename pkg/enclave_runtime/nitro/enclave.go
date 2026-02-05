@@ -842,13 +842,13 @@ func sanitizePath(path string) (string, error) {
 		return "", errors.New("path is required")
 	}
 
-	// Clean and normalize the path
-	cleanPath := filepath.Clean(path)
-
-	// Check for path traversal
-	if strings.Contains(cleanPath, "..") {
+	// Check for path traversal BEFORE cleaning (to catch /tmp/../etc/passwd)
+	if strings.Contains(path, "..") {
 		return "", errors.New("path traversal not allowed")
 	}
+
+	// Clean and normalize the path
+	cleanPath := filepath.Clean(path)
 
 	// Check for shell metacharacters
 	shellChars := []string{";", "&", "|", "$", "`", "(", ")", "{", "}", "[", "]", "<", ">", "!", "~", "*", "?", "\n", "\r"}
