@@ -85,7 +85,9 @@ if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
                     pnpm exec prettier --write "${PORTAL_PRETTIER_FILES[@]}"
                 )
             fi
-            echo "$PORTAL_STAGED_FILES" | xargs git add
+            while IFS= read -r file; do
+                [ -n "$file" ] && git add -- "$file"
+            done <<< "$PORTAL_STAGED_FILES"
             hook_pass "[pre-commit] Prettier formatted staged portal files"
         else
             hook_warn "[pre-commit] Prettier not available in portal/node_modules. Skipping portal formatting."
