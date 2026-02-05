@@ -155,8 +155,8 @@ func mapWaldurOrderStateToChain(state string) string {
 		chainStateProvisioning       = "provisioning"
 		chainStateActive             = keyStatusActive
 		chainStatePendingTermination = "pending_termination"
-		chainStateTerminated         = WorkloadStateTerminated
-		chainStateFailed             = HPCJobStateFailed
+		chainStateTerminated         = string(WorkloadStateTerminated)
+		chainStateFailed             = string(HPCJobStateFailed)
 		chainStateCancelled          = "cancelled"
 
 		waldurStatePendingConsumer    = "pending-consumer"
