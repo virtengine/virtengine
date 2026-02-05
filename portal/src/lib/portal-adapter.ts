@@ -222,9 +222,19 @@ export type {
 // Utilities
 // ============================================================================
 
-export { formatScore, formatTokenAmount, formatDuration, formatTimestamp } from '../../../lib/portal';
+export {
+  formatScore,
+  formatTokenAmount,
+  formatDuration,
+  formatTimestamp,
+} from '../../../lib/portal';
 export { validateAddress, validateMnemonic, isValidScore } from '../../../lib/portal';
-export { sanitizePlainText, sanitizeDigits, sanitizeJsonInput, sanitizeObject } from '../../../lib/portal';
+export {
+  sanitizePlainText,
+  sanitizeDigits,
+  sanitizeJsonInput,
+  sanitizeObject,
+} from '../../../lib/portal';
 export { encryptPayload, decryptPayload } from '../../../lib/portal';
 export type { EncryptionResult, DecryptionResult } from '../../../lib/portal';
 

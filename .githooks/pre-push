@@ -50,7 +50,7 @@ TOTAL_START=$(hook_time_start)
 FAILED=0
 PASSED=0
 SKIPPED=0
-TOTAL_CHECKS=7  # gofmt + pnpm lockfile checks added
+TOTAL_CHECKS=8  # gofmt + prettier + pnpm lockfile checks
 
 # Helper to run a check
 run_check() {
@@ -152,6 +152,67 @@ check_gofmt() {
         git commit --amend --no-edit --no-verify
         
         hook_pass "Auto-formatted and amended commit"
+    fi
+    return 0
+}
+
+# =========================================================================
+# Check 2b: prettier (auto-format changed portal files)
+# =========================================================================
+check_prettier() {
+    local base_branch="origin/main"
+    local changed_files=""
+
+    if git rev-parse --verify "$base_branch" &>/dev/null; then
+        # Get changed portal files
+        changed_files=$(git diff --name-only "$base_branch" -- \
+            'portal/src/**/*.ts' 'portal/src/**/*.tsx' 'portal/src/**/*.js' 'portal/src/**/*.jsx' \
+            'portal/src/**/*.css' 'portal/src/**/*.json' 'portal/src/**/*.md' \
+            'lib/portal/src/**/*.ts' 'lib/portal/src/**/*.tsx' 2>/dev/null | \
+            while read -r f; do [ -f "$f" ] && echo "$f"; done || true)
+    fi
+
+    if [ -z "${changed_files:-}" ]; then
+        hook_step "No Portal files changed"
+        return 0
+    fi
+
+    # Check if pnpm and prettier are available
+    if ! command -v pnpm >/dev/null 2>&1; then
+        hook_warn "pnpm not available, skipping prettier check"
+        return 0
+    fi
+
+    if [ ! -f "$REPO_ROOT/portal/node_modules/.bin/prettier" ]; then
+        hook_warn "prettier not installed, run 'pnpm install' in portal/"
+        return 0
+    fi
+
+    local unformatted
+    unformatted=""
+    for file in $changed_files; do
+        [ -f "$file" ] || continue
+        if ! pnpm -C portal exec prettier --check "$REPO_ROOT/$file" >/dev/null 2>&1; then
+            unformatted="$unformatted $file"
+        fi
+    done
+    unformatted=$(echo "$unformatted" | xargs)  # trim whitespace
+    
+    if [ -n "$unformatted" ]; then
+        hook_step "Auto-formatting $(echo "$unformatted" | wc -w | tr -d ' ') Portal file(s)..."
+        
+        for file in $unformatted; do
+            [ -f "$file" ] || continue
+            pnpm -C portal exec prettier --write "$REPO_ROOT/$file" >/dev/null 2>&1
+            hook_step "Formatted: $file"
+        done
+        
+        # Stage and amend the commit with formatted files
+        # shellcheck disable=SC2086
+        git add $unformatted
+        git commit --amend --no-edit --no-verify
+        
+        hook_pass "Auto-formatted Portal files and amended commit"
     fi
     return 0
 }
@@ -366,11 +427,12 @@ if [ "${VE_HOOK_QUICK:-}" = "1" ]; then
 else
     run_check 1 "go vet" VE_HOOK_SKIP_VET check_vet || true
     run_check 2 "gofmt" VE_HOOK_SKIP_FMT check_gofmt || true
-    run_check 3 "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true
-    run_check 4 "go mod vendor (sync)" VE_HOOK_SKIP_MOD check_mod_vendor || true
-    run_check 5 "golangci-lint" VE_HOOK_SKIP_LINT check_lint || true
-    run_check 6 "Build binaries" VE_HOOK_SKIP_BUILD check_build || true
-    run_check 7 "Unit tests" VE_HOOK_SKIP_TEST check_test || true
+    run_check 3 "prettier" VE_HOOK_SKIP_FMT check_prettier || true
+    run_check 4 "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true
+    run_check 5 "go mod vendor (sync)" VE_HOOK_SKIP_MOD check_mod_vendor || true
+    run_check 6 "golangci-lint" VE_HOOK_SKIP_LINT check_lint || true
+    run_check 7 "Build binaries" VE_HOOK_SKIP_BUILD check_build || true
+    run_check 8 "Unit tests" VE_HOOK_SKIP_TEST check_test || true
 fi
 
 # =========================================================================

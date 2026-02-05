@@ -264,10 +264,10 @@ export const useDeploymentStore = create<DeploymentStore>()((set, get) => ({
               ...deployment,
               status: 'paused',
               updatedAt: new Date(),
-              events: [createEvent('warning', 'Deployment paused by provider.'), ...deployment.events].slice(
-                0,
-                maxEvents
-              ),
+              events: [
+                createEvent('warning', 'Deployment paused by provider.'),
+                ...deployment.events,
+              ].slice(0, maxEvents),
             }
           : deployment
       ),
@@ -425,17 +425,17 @@ export const useDeploymentStore = create<DeploymentStore>()((set, get) => ({
           deployment.status === 'running' && nextUsage.cpu / deployment.resources.cpu > 0.85
             ? 'degraded'
             : deployment.status === 'paused'
-            ? 'warning'
-            : deployment.status === 'terminated'
-            ? 'critical'
-            : 'healthy';
+              ? 'warning'
+              : deployment.status === 'terminated'
+                ? 'critical'
+                : 'healthy';
 
         const nextLogs =
           deployment.status === 'running' && Math.random() > 0.6
-            ? [createLog('info', 'Auto-tuner adjusted batch size for throughput.'), ...deployment.logs].slice(
-                0,
-                maxLogs
-              )
+            ? [
+                createLog('info', 'Auto-tuner adjusted batch size for throughput.'),
+                ...deployment.logs,
+              ].slice(0, maxLogs)
             : deployment.logs;
 
         return {

@@ -132,10 +132,7 @@ export function OfferingGrid() {
             }
 
             // Show ellipsis
-            if (
-              pageNum === pagination.page - 2 ||
-              pageNum === pagination.page + 2
-            ) {
+            if (pageNum === pagination.page - 2 || pageNum === pagination.page + 2) {
               return (
                 <span key={pageNum} className="px-2 text-muted-foreground">
                   ...

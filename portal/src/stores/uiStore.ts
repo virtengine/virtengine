@@ -96,9 +96,7 @@ export const useUIStore = create<UIStore>()((set, get) => ({
 
   markNotificationRead: (id: string) => {
     set((state) => ({
-      notifications: state.notifications.map((n) =>
-        n.id === id ? { ...n, read: true } : n
-      ),
+      notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
     }));
   },
 

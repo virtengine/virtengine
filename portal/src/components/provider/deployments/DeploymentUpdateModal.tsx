@@ -189,9 +189,7 @@ export function DeploymentUpdateModal({
                     onChange={(event) =>
                       setContainerState((prev) =>
                         prev.map((item, idx) =>
-                          idx === index
-                            ? { ...item, replicas: Number(event.target.value) }
-                            : item
+                          idx === index ? { ...item, replicas: Number(event.target.value) } : item
                         )
                       )
                     }
@@ -279,7 +277,9 @@ export function DeploymentUpdateModal({
                     </select>
                     <button
                       type="button"
-                      onClick={() => setEnvState((prev) => prev.filter((item) => item.id !== envVar.id))}
+                      onClick={() =>
+                        setEnvState((prev) => prev.filter((item) => item.id !== envVar.id))
+                      }
                       className="rounded-full border border-border px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
                     >
                       Remove

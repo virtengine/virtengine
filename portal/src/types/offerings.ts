@@ -10,28 +10,11 @@ export type OfferingState =
   | 'deprecated'
   | 'terminated';
 
-export type OfferingCategory =
-  | 'compute'
-  | 'storage'
-  | 'network'
-  | 'hpc'
-  | 'gpu'
-  | 'ml'
-  | 'other';
+export type OfferingCategory = 'compute' | 'storage' | 'network' | 'hpc' | 'gpu' | 'ml' | 'other';
 
-export type PricingModel =
-  | 'hourly'
-  | 'daily'
-  | 'monthly'
-  | 'usage_based'
-  | 'fixed';
+export type PricingModel = 'hourly' | 'daily' | 'monthly' | 'usage_based' | 'fixed';
 
-export type PriceComponentResourceType =
-  | 'cpu'
-  | 'ram'
-  | 'storage'
-  | 'gpu'
-  | 'network';
+export type PriceComponentResourceType = 'cpu' | 'ram' | 'storage' | 'gpu' | 'network';
 
 export interface IdentityRequirement {
   minScore: number;

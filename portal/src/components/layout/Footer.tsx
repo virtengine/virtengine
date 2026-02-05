@@ -7,7 +7,7 @@ export function Footer() {
         <div className="grid gap-8 md:grid-cols-4">
           <div>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground">
                 V
               </div>
               <span className="font-semibold">VirtEngine</span>
@@ -36,7 +36,10 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/provider/dashboard" className="text-muted-foreground hover:text-foreground">
+                <Link
+                  href="/provider/dashboard"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Become a Provider
                 </Link>
               </li>
@@ -47,22 +50,34 @@ export function Footer() {
             <h3 className="font-semibold">Resources</h3>
             <ul className="mt-4 space-y-2 text-sm">
               <li>
-                <a href="https://docs.virtengine.io" className="text-muted-foreground hover:text-foreground">
+                <a
+                  href="https://docs.virtengine.io"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Documentation
                 </a>
               </li>
               <li>
-                <a href="https://github.com/virtengine" className="text-muted-foreground hover:text-foreground">
+                <a
+                  href="https://github.com/virtengine"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   GitHub
                 </a>
               </li>
               <li>
-                <Link href="/governance/proposals" className="text-muted-foreground hover:text-foreground">
+                <Link
+                  href="/governance/proposals"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Governance
                 </Link>
               </li>
               <li>
-                <a href="https://status.virtengine.com" className="text-muted-foreground hover:text-foreground">
+                <a
+                  href="https://status.virtengine.com"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Status
                 </a>
               </li>
@@ -73,22 +88,34 @@ export function Footer() {
             <h3 className="font-semibold">Community</h3>
             <ul className="mt-4 space-y-2 text-sm">
               <li>
-                <a href="https://discord.gg/virtengine" className="text-muted-foreground hover:text-foreground">
+                <a
+                  href="https://discord.gg/virtengine"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Discord
                 </a>
               </li>
               <li>
-                <a href="https://twitter.com/virtengine" className="text-muted-foreground hover:text-foreground">
+                <a
+                  href="https://twitter.com/virtengine"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Twitter
                 </a>
               </li>
               <li>
-                <a href="https://forum.virtengine.com" className="text-muted-foreground hover:text-foreground">
+                <a
+                  href="https://forum.virtengine.com"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Forum
                 </a>
               </li>
               <li>
-                <a href="https://blog.virtengine.com" className="text-muted-foreground hover:text-foreground">
+                <a
+                  href="https://blog.virtengine.com"
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   Blog
                 </a>
               </li>

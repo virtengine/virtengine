@@ -25,7 +25,8 @@ function Skeleton({
         variant === 'circular' && 'rounded-full',
         variant === 'rectangular' && 'rounded-none',
         animation === 'pulse' && 'animate-pulse',
-        animation === 'shimmer' && 'animate-shimmer bg-gradient-to-r from-muted via-muted-foreground/10 to-muted bg-[length:200%_100%]',
+        animation === 'shimmer' &&
+          'animate-shimmer bg-gradient-to-r from-muted via-muted-foreground/10 to-muted bg-[length:200%_100%]',
         className
       )}
       aria-hidden="true"
@@ -40,13 +41,7 @@ function SkeletonText({ lines = 3, className }: { lines?: number; className?: st
   return (
     <div className={cn('space-y-2', className)}>
       {lineKeys.map((key, i) => (
-        <Skeleton
-          key={key}
-          className={cn(
-            'h-4',
-            i === lines - 1 && 'w-3/4'
-          )}
-        />
+        <Skeleton key={key} className={cn('h-4', i === lines - 1 && 'w-3/4')} />
       ))}
     </div>
   );
@@ -54,7 +49,7 @@ function SkeletonText({ lines = 3, className }: { lines?: number; className?: st
 
 function SkeletonCard({ className }: { className?: string }) {
   return (
-    <div className={cn('rounded-lg border p-4 space-y-3', className)}>
+    <div className={cn('space-y-3 rounded-lg border p-4', className)}>
       <Skeleton className="h-5 w-1/3" />
       <SkeletonText lines={2} />
       <div className="flex gap-2 pt-2">

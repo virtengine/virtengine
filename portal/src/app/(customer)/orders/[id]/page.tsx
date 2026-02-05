@@ -19,17 +19,14 @@ export default async function OrderDetailPage({ params }: Props) {
   return (
     <div className="container py-8">
       <div className="mb-6">
-        <Link
-          href="/orders"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
+        <Link href="/orders" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back to Orders
         </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2">
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="flex items-start justify-between">
               <div>
@@ -66,26 +63,10 @@ export default async function OrderDetailPage({ params }: Props) {
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="text-lg font-semibold">Timeline</h2>
             <div className="mt-4 space-y-4">
-              <TimelineEvent
-                title="Deployment Running"
-                time="2 hours ago"
-                status="current"
-              />
-              <TimelineEvent
-                title="Deployment Created"
-                time="3 days ago"
-                status="completed"
-              />
-              <TimelineEvent
-                title="Order Matched"
-                time="3 days ago"
-                status="completed"
-              />
-              <TimelineEvent
-                title="Order Created"
-                time="3 days ago"
-                status="completed"
-              />
+              <TimelineEvent title="Deployment Running" time="2 hours ago" status="current" />
+              <TimelineEvent title="Deployment Created" time="3 days ago" status="completed" />
+              <TimelineEvent title="Order Matched" time="3 days ago" status="completed" />
+              <TimelineEvent title="Order Created" time="3 days ago" status="completed" />
             </div>
           </div>
         </div>
@@ -173,14 +154,10 @@ function TimelineEvent({
       <div className="relative flex flex-col items-center">
         <div
           className={`h-3 w-3 rounded-full ${
-            status === 'current'
-              ? 'bg-primary'
-              : status === 'completed'
-              ? 'bg-success'
-              : 'bg-muted'
+            status === 'current' ? 'bg-primary' : status === 'completed' ? 'bg-success' : 'bg-muted'
           }`}
         />
-        <div className="flex-1 w-px bg-border" />
+        <div className="w-px flex-1 bg-border" />
       </div>
       <div className="pb-4">
         <div className="font-medium">{title}</div>

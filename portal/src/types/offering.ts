@@ -15,32 +15,15 @@ export type OfferingPublicationStatus =
   | 'deprecated'
   | 'draft';
 
-export type OfferingState =
-  | 'active'
-  | 'paused'
-  | 'suspended'
-  | 'deprecated'
-  | 'terminated';
+export type OfferingState = 'active' | 'paused' | 'suspended' | 'deprecated' | 'terminated';
 
-export type OfferingCategory =
-  | 'compute'
-  | 'storage'
-  | 'network'
-  | 'hpc'
-  | 'gpu'
-  | 'ml'
-  | 'other';
+export type OfferingCategory = 'compute' | 'storage' | 'network' | 'hpc' | 'gpu' | 'ml' | 'other';
 
 // =============================================================================
 // Pricing
 // =============================================================================
 
-export type PricingModel =
-  | 'hourly'
-  | 'daily'
-  | 'monthly'
-  | 'usage_based'
-  | 'fixed';
+export type PricingModel = 'hourly' | 'daily' | 'monthly' | 'usage_based' | 'fixed';
 
 export interface PricingInfo {
   model: PricingModel;

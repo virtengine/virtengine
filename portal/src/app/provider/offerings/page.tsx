@@ -124,9 +124,7 @@ export default function ProviderOfferingsPage() {
                   Syncing...
                 </span>
               ) : (
-                <span>
-                  Last sync: {new Date(syncStatus.lastSyncAt).toLocaleTimeString()}
-                </span>
+                <span>Last sync: {new Date(syncStatus.lastSyncAt).toLocaleTimeString()}</span>
               )}
             </div>
           )}

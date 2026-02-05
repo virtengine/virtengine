@@ -17,7 +17,13 @@ import {
 } from '@/components/provider/deployments';
 import { LogViewer } from '@/components/deployments/LogViewer';
 import { ShellTerminal } from '@/components/deployments/ShellTerminal';
-import { formatCurrency, formatDate, formatRelativeTime, sleep, truncateAddress } from '@/lib/utils';
+import {
+  formatCurrency,
+  formatDate,
+  formatRelativeTime,
+  sleep,
+  truncateAddress,
+} from '@/lib/utils';
 
 interface DeploymentDetailPageProps {
   params: {
@@ -81,7 +87,10 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
     memo: string;
     createdAt: Date;
   } | null>(null);
-  const containers = useMemo(() => deployment?.containers.map((container) => container.name) ?? [], [deployment]);
+  const containers = useMemo(
+    () => deployment?.containers.map((container) => container.name) ?? [],
+    [deployment]
+  );
   const minShellScore = 70;
   const veidScore = 42;
   const hasShellAccess = veidScore >= minShellScore;
@@ -196,10 +205,14 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusStyles[deployment.status]}`}>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-medium ${statusStyles[deployment.status]}`}
+          >
             {deployment.status}
           </span>
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${healthStyles[deployment.health]}`}>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-medium ${healthStyles[deployment.health]}`}
+          >
             {deployment.health}
           </span>
         </div>
@@ -210,7 +223,7 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
           <div>
             <h2 className="text-sm font-semibold">Deployment actions</h2>
             <p className="text-xs text-muted-foreground">
-            {wallet.status === 'connected'
+              {wallet.status === 'connected'
                 ? `Signing with ${wallet.walletType ?? 'wallet'} (${truncateAddress(activeAccount?.address ?? '')})`
                 : 'Connect wallet to sign actions'}
             </p>
@@ -253,7 +266,9 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-xs text-muted-foreground">Status</p>
           <p className="mt-2 text-lg font-semibold">{deployment.status}</p>
-          <p className="mt-2 text-sm text-muted-foreground">Updated {formatRelativeTime(deployment.updatedAt)}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Updated {formatRelativeTime(deployment.updatedAt)}
+          </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="text-xs text-muted-foreground">Uptime</p>
@@ -415,9 +430,7 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
                   <p className="mt-2 text-sm text-muted-foreground">
                     Shell access is available once your VEID score reaches {minShellScore}.
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Current score: {veidScore}
-                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Current score: {veidScore}</p>
                   <Link
                     href="/identity"
                     className="mt-4 rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary"
@@ -474,11 +487,8 @@ export default function DeploymentDetailPage({ params }: DeploymentDetailPagePro
         ports={deployment.ports}
         onSubmit={(payload: DeploymentUpdatePayload) => {
           setIsUpdateOpen(false);
-          void runSignedAction(
-            'update',
-            'MsgUpdateDeployment',
-            'Update deployment resources',
-            () => updateDeployment(id, payload)
+          void runSignedAction('update', 'MsgUpdateDeployment', 'Update deployment resources', () =>
+            updateDeployment(id, payload)
           );
         }}
       />

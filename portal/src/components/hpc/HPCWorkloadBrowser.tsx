@@ -48,4 +48,3 @@ export function HPCWorkloadBrowser({ className, onTemplateSelect }: HPCWorkloadB
     </Card>
   );
 }
-

@@ -23,15 +23,12 @@ export const Default: Story = {
     <Accordion type="single" collapsible className="w-[400px]">
       <AccordionItem value="item-1">
         <AccordionTrigger>Is it accessible?</AccordionTrigger>
-        <AccordionContent>
-          Yes. It adheres to the WAI-ARIA design pattern.
-        </AccordionContent>
+        <AccordionContent>Yes. It adheres to the WAI-ARIA design pattern.</AccordionContent>
       </AccordionItem>
       <AccordionItem value="item-2">
         <AccordionTrigger>Is it styled?</AccordionTrigger>
         <AccordionContent>
-          Yes. It comes with default styles that matches the other components&apos;
-          aesthetic.
+          Yes. It comes with default styles that matches the other components&apos; aesthetic.
         </AccordionContent>
       </AccordionItem>
       <AccordionItem value="item-3">
@@ -55,15 +52,11 @@ export const Multiple: Story = {
       </AccordionItem>
       <AccordionItem value="item-2">
         <AccordionTrigger>Second Section</AccordionTrigger>
-        <AccordionContent>
-          You can expand this while keeping the first one open.
-        </AccordionContent>
+        <AccordionContent>You can expand this while keeping the first one open.</AccordionContent>
       </AccordionItem>
       <AccordionItem value="item-3">
         <AccordionTrigger>Third Section</AccordionTrigger>
-        <AccordionContent>
-          All three sections can be open simultaneously.
-        </AccordionContent>
+        <AccordionContent>All three sections can be open simultaneously.</AccordionContent>
       </AccordionItem>
     </Accordion>
   ),
@@ -78,9 +71,7 @@ export const DefaultOpen: Story = {
       </AccordionItem>
       <AccordionItem value="item-2">
         <AccordionTrigger>Section 2 (Default Open)</AccordionTrigger>
-        <AccordionContent>
-          This section is open by default.
-        </AccordionContent>
+        <AccordionContent>This section is open by default.</AccordionContent>
       </AccordionItem>
       <AccordionItem value="item-3">
         <AccordionTrigger>Section 3</AccordionTrigger>
@@ -93,34 +84,33 @@ export const DefaultOpen: Story = {
 export const FAQ: Story = {
   render: () => (
     <div className="w-[500px]">
-      <h2 className="text-xl font-semibold mb-4">Frequently Asked Questions</h2>
+      <h2 className="mb-4 text-xl font-semibold">Frequently Asked Questions</h2>
       <Accordion type="single" collapsible>
         <AccordionItem value="item-1">
           <AccordionTrigger>What payment methods do you accept?</AccordionTrigger>
           <AccordionContent>
-            We accept all major credit cards (Visa, MasterCard, American Express),
-            PayPal, and cryptocurrency payments.
+            We accept all major credit cards (Visa, MasterCard, American Express), PayPal, and
+            cryptocurrency payments.
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="item-2">
           <AccordionTrigger>How long does deployment take?</AccordionTrigger>
           <AccordionContent>
-            Most deployments complete within 2-5 minutes. Complex configurations
-            may take up to 15 minutes.
+            Most deployments complete within 2-5 minutes. Complex configurations may take up to 15
+            minutes.
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="item-3">
           <AccordionTrigger>Is there a free tier?</AccordionTrigger>
           <AccordionContent>
-            Yes! We offer a free tier with limited resources for testing and
-            development purposes.
+            Yes! We offer a free tier with limited resources for testing and development purposes.
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="item-4">
           <AccordionTrigger>How do I get support?</AccordionTrigger>
           <AccordionContent>
-            You can reach our support team through the in-app chat, email at
-            support@virtengine.com, or through our Discord community.
+            You can reach our support team through the in-app chat, email at support@virtengine.com,
+            or through our Discord community.
           </AccordionContent>
         </AccordionItem>
       </Accordion>

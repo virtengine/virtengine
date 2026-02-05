@@ -60,7 +60,8 @@ export default function VerifyPage() {
               <CardHeader>
                 <CardTitle>Get Verified</CardTitle>
                 <CardDescription>
-                  Complete identity verification to access marketplace features, submit HPC jobs, and more.
+                  Complete identity verification to access marketplace features, submit HPC jobs,
+                  and more.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -125,10 +126,7 @@ export default function VerifyPage() {
       )}
 
       {step === 'verifying' && (
-        <IdentityVerificationFlow
-          onComplete={handleVerificationComplete}
-          onCancel={handleCancel}
-        />
+        <IdentityVerificationFlow onComplete={handleVerificationComplete} onCancel={handleCancel} />
       )}
 
       {step === 'complete' && (
@@ -137,13 +135,12 @@ export default function VerifyPage() {
             <CardTitle className="text-green-600 dark:text-green-400">
               Verification Submitted
             </CardTitle>
-            <CardDescription>
-              Your documents have been submitted for verification.
-            </CardDescription>
+            <CardDescription>Your documents have been submitted for verification.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p>
-              We will notify you once your verification is complete. This typically takes a few minutes.
+              We will notify you once your verification is complete. This typically takes a few
+              minutes.
             </p>
             <Link href="/dashboard">
               <Button>Return to Dashboard</Button>
@@ -154,4 +151,3 @@ export default function VerifyPage() {
     </div>
   );
 }
-

@@ -1,6 +1,6 @@
 /**
  * Environment configuration for VirtEngine Portal
- * 
+ *
  * All environment variables should be accessed through this module
  * to ensure type safety and provide defaults.
  */
@@ -31,7 +31,9 @@ export const env = {
 
   // Wallet Configuration
   walletConnectProjectId: getEnvVar('NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID', ''),
-  supportedWallets: getEnvVar('NEXT_PUBLIC_SUPPORTED_WALLETS', 'keplr,leap,cosmostation').split(','),
+  supportedWallets: getEnvVar('NEXT_PUBLIC_SUPPORTED_WALLETS', 'keplr,leap,cosmostation').split(
+    ','
+  ),
 
   // Feature Flags
   enableTestnet: getBoolEnvVar('NEXT_PUBLIC_ENABLE_TESTNET', false),
@@ -61,7 +63,7 @@ export function validateEnv(): void {
   if (env.isProd) {
     const required = ['NEXT_PUBLIC_CHAIN_ID', 'NEXT_PUBLIC_CHAIN_RPC'];
     const missing = required.filter((key) => !getEnvVar(key));
-    
+
     if (missing.length > 0) {
       console.error(`Missing required environment variables: ${missing.join(', ')}`);
     }

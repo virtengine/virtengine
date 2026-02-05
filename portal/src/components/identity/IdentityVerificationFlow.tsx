@@ -2,7 +2,13 @@
 
 import { useState, useCallback } from 'react';
 import { useIdentity, ScopeRequirements } from '@/lib/portal-adapter';
-import { DocumentCapture, SelfieCapture, type CaptureResult, type SelfieResult, type CaptureError } from '@/lib/capture-adapter';
+import {
+  DocumentCapture,
+  SelfieCapture,
+  type CaptureResult,
+  type SelfieResult,
+  type CaptureError,
+} from '@/lib/capture-adapter';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -20,7 +26,11 @@ interface IdentityVerificationFlowProps {
  * Identity Verification Flow
  * Multi-step flow for document and selfie capture
  */
-export function IdentityVerificationFlow({ className, onComplete, onCancel }: IdentityVerificationFlowProps) {
+export function IdentityVerificationFlow({
+  className,
+  onComplete,
+  onCancel,
+}: IdentityVerificationFlowProps) {
   const { state } = useIdentity();
   const [step, setStep] = useState<VerificationStep>('requirements');
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +61,14 @@ export function IdentityVerificationFlow({ className, onComplete, onCancel }: Id
     setError(null);
   }, []);
 
-  const handleSelfieCapture = useCallback((_result: SelfieResult) => {
-    setStep('complete');
-    setError(null);
-    onComplete?.();
-  }, [onComplete]);
+  const handleSelfieCapture = useCallback(
+    (_result: SelfieResult) => {
+      setStep('complete');
+      setError(null);
+      onComplete?.();
+    },
+    [onComplete]
+  );
 
   const handleCaptureError = useCallback((captureError: CaptureError) => {
     setError(captureError.message);
@@ -79,19 +92,12 @@ export function IdentityVerificationFlow({ className, onComplete, onCancel }: Id
         <Card>
           <CardHeader>
             <CardTitle>Identity Verification</CardTitle>
-            <CardDescription>
-              Complete the following steps to verify your identity
-            </CardDescription>
+            <CardDescription>Complete the following steps to verify your identity</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ScopeRequirements
-              action="place_order"
-              completedScopes={state.completedScopes}
-            />
+            <ScopeRequirements action="place_order" completedScopes={state.completedScopes} />
             <div className="flex gap-2">
-              <Button onClick={handleStartVerification}>
-                Start Verification
-              </Button>
+              <Button onClick={handleStartVerification}>Start Verification</Button>
               {onCancel && (
                 <Button variant="outline" onClick={onCancel}>
                   Cancel
@@ -127,9 +133,7 @@ export function IdentityVerificationFlow({ className, onComplete, onCancel }: Id
         <Card>
           <CardHeader>
             <CardTitle>Capture Document (Back)</CardTitle>
-            <CardDescription>
-              Now capture the back of your ID document
-            </CardDescription>
+            <CardDescription>Now capture the back of your ID document</CardDescription>
           </CardHeader>
           <CardContent>
             <DocumentCapture
@@ -148,9 +152,7 @@ export function IdentityVerificationFlow({ className, onComplete, onCancel }: Id
         <Card>
           <CardHeader>
             <CardTitle>Capture Selfie</CardTitle>
-            <CardDescription>
-              Take a clear photo of your face
-            </CardDescription>
+            <CardDescription>Take a clear photo of your face</CardDescription>
           </CardHeader>
           <CardContent>
             <SelfieCapture
@@ -169,9 +171,7 @@ export function IdentityVerificationFlow({ className, onComplete, onCancel }: Id
         <Card>
           <CardHeader>
             <CardTitle>Verification Complete</CardTitle>
-            <CardDescription>
-              Your documents have been submitted for verification
-            </CardDescription>
+            <CardDescription>Your documents have been submitted for verification</CardDescription>
           </CardHeader>
           <CardContent>
             <Alert>
@@ -186,4 +186,3 @@ export function IdentityVerificationFlow({ className, onComplete, onCancel }: Id
     </div>
   );
 }
-

@@ -55,10 +55,4 @@ function SimpleTooltip({
   );
 }
 
-export {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-  SimpleTooltip,
-};
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, SimpleTooltip };

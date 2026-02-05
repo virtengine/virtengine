@@ -41,10 +41,7 @@ export default function OfferingDetailPage() {
     return (
       <div className="container py-8">
         <nav className="mb-6">
-          <Link
-            href="/marketplace"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground">
             ← Back to Marketplace
           </Link>
         </nav>
@@ -66,10 +63,7 @@ export default function OfferingDetailPage() {
     return (
       <div className="container py-8">
         <nav className="mb-6">
-          <Link
-            href="/marketplace"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground">
             ← Back to Marketplace
           </Link>
         </nav>
@@ -118,10 +112,7 @@ export default function OfferingDetailPage() {
   return (
     <div className="container py-8">
       <nav className="mb-6">
-        <Link
-          href="/marketplace"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
+        <Link href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back to Marketplace
         </Link>
       </nav>
@@ -138,9 +129,7 @@ export default function OfferingDetailPage() {
                     <span>{categoryIcon}</span>
                     {categoryLabel}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    v{offering.version}
-                  </span>
+                  <span className="text-xs text-muted-foreground">v{offering.version}</span>
                 </div>
                 <h1 className="mt-4 text-2xl font-bold">{offering.name}</h1>
                 <p className="mt-2 text-muted-foreground">{offering.description}</p>
@@ -177,9 +166,7 @@ export default function OfferingDetailPage() {
             {offering.regions && offering.regions.length > 0 && (
               <div className="mt-4">
                 <span className="text-sm font-medium">Regions: </span>
-                <span className="text-sm text-muted-foreground">
-                  {offering.regions.join(', ')}
-                </span>
+                <span className="text-sm text-muted-foreground">{offering.regions.join(', ')}</span>
               </div>
             )}
           </div>

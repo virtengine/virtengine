@@ -80,9 +80,7 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
                 type="button"
                 onClick={() => handleCategoryChange(category)}
                 className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-accent'
+                  isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
                 }`}
               >
                 <span>{icon}</span>
@@ -153,17 +151,8 @@ export function OfferingFiltersMobile({ onClose }: { onClose: () => void }) {
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-border p-4">
             <h2 className="text-lg font-semibold">Filters</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-2 hover:bg-accent"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+            <button type="button" onClick={onClose} className="rounded-md p-2 hover:bg-accent">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"

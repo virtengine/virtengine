@@ -116,9 +116,7 @@ export function useOfferingSync(initialFilters: OfferingFilters = {}): UseOfferi
       if (filters.page) queryParams.set('page', filters.page.toString());
       if (filters.pageSize) queryParams.set('pageSize', filters.pageSize.toString());
 
-      const response = await apiCall<OfferingListResponse>(
-        `/offerings?${queryParams.toString()}`
-      );
+      const response = await apiCall<OfferingListResponse>(`/offerings?${queryParams.toString()}`);
 
       setState((prev) => ({
         ...prev,
@@ -178,83 +176,98 @@ export function useOfferingSync(initialFilters: OfferingFilters = {}): UseOfferi
   }, [state.syncStatus?.isRunning, refresh]);
 
   // Actions
-  const publishOffering = useCallback(async (waldurUuid: string) => {
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      await apiCall(`/offerings/${waldurUuid}/publish`, { method: 'POST' });
-      await refresh();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err instanceof Error ? err.message : 'Failed to publish offering',
-        isLoading: false,
-      }));
-      throw err;
-    }
-  }, [refresh]);
+  const publishOffering = useCallback(
+    async (waldurUuid: string) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        await apiCall(`/offerings/${waldurUuid}/publish`, { method: 'POST' });
+        await refresh();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          error: err instanceof Error ? err.message : 'Failed to publish offering',
+          isLoading: false,
+        }));
+        throw err;
+      }
+    },
+    [refresh]
+  );
 
-  const pauseOffering = useCallback(async (offeringId: string) => {
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      await apiCall(`/offerings/${offeringId}/pause`, { method: 'POST' });
-      await refresh();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err instanceof Error ? err.message : 'Failed to pause offering',
-        isLoading: false,
-      }));
-      throw err;
-    }
-  }, [refresh]);
+  const pauseOffering = useCallback(
+    async (offeringId: string) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        await apiCall(`/offerings/${offeringId}/pause`, { method: 'POST' });
+        await refresh();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          error: err instanceof Error ? err.message : 'Failed to pause offering',
+          isLoading: false,
+        }));
+        throw err;
+      }
+    },
+    [refresh]
+  );
 
-  const activateOffering = useCallback(async (offeringId: string) => {
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      await apiCall(`/offerings/${offeringId}/activate`, { method: 'POST' });
-      await refresh();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err instanceof Error ? err.message : 'Failed to activate offering',
-        isLoading: false,
-      }));
-      throw err;
-    }
-  }, [refresh]);
+  const activateOffering = useCallback(
+    async (offeringId: string) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        await apiCall(`/offerings/${offeringId}/activate`, { method: 'POST' });
+        await refresh();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          error: err instanceof Error ? err.message : 'Failed to activate offering',
+          isLoading: false,
+        }));
+        throw err;
+      }
+    },
+    [refresh]
+  );
 
-  const deprecateOffering = useCallback(async (offeringId: string) => {
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      await apiCall(`/offerings/${offeringId}/deprecate`, { method: 'POST' });
-      await refresh();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err instanceof Error ? err.message : 'Failed to deprecate offering',
-        isLoading: false,
-      }));
-      throw err;
-    }
-  }, [refresh]);
+  const deprecateOffering = useCallback(
+    async (offeringId: string) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        await apiCall(`/offerings/${offeringId}/deprecate`, { method: 'POST' });
+        await refresh();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          error: err instanceof Error ? err.message : 'Failed to deprecate offering',
+          isLoading: false,
+        }));
+        throw err;
+      }
+    },
+    [refresh]
+  );
 
-  const updatePricing = useCallback(async (offeringId: string, pricing: UpdatePricingRequest) => {
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      await apiCall(`/offerings/${offeringId}/pricing`, {
-        method: 'PUT',
-        body: pricing,
-      });
-      await refresh();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err instanceof Error ? err.message : 'Failed to update pricing',
-        isLoading: false,
-      }));
-      throw err;
-    }
-  }, [refresh]);
+  const updatePricing = useCallback(
+    async (offeringId: string, pricing: UpdatePricingRequest) => {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      try {
+        await apiCall(`/offerings/${offeringId}/pricing`, {
+          method: 'PUT',
+          body: pricing,
+        });
+        await refresh();
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          error: err instanceof Error ? err.message : 'Failed to update pricing',
+          isLoading: false,
+        }));
+        throw err;
+      }
+    },
+    [refresh]
+  );
 
   const getOffering = useCallback(async (offeringId: string): Promise<OfferingPublication> => {
     return apiCall<OfferingPublication>(`/offerings/${offeringId}`);

@@ -29,10 +29,7 @@ export function IdentityCard({ className, showScore = true, compact = false }: I
     <div className={cn('space-y-4', className)}>
       <IdentityStatusCard />
       {showScore && state.score && (
-        <IdentityScoreDisplay
-          score={state.score}
-          showComponents={!compact}
-        />
+        <IdentityScoreDisplay score={state.score} showComponents={!compact} />
       )}
     </div>
   );

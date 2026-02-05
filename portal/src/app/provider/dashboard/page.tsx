@@ -141,7 +141,8 @@ function UtilizationBar({
   unit: string;
 }) {
   const percentage = Math.round((used / total) * 100);
-  const barColor = percentage > 80 ? 'bg-destructive' : percentage > 60 ? 'bg-warning' : 'bg-success';
+  const barColor =
+    percentage > 80 ? 'bg-destructive' : percentage > 60 ? 'bg-warning' : 'bg-success';
 
   return (
     <div>
@@ -201,7 +202,7 @@ function QuickActionCard({
   return (
     <Link
       href={href}
-      className="group rounded-lg border border-border bg-card p-4 transition-all card-hover"
+      className="card-hover group rounded-lg border border-border bg-card p-4 transition-all"
     >
       <div className="text-2xl">{icon}</div>
       <h3 className="mt-2 font-medium group-hover:text-primary">{title}</h3>

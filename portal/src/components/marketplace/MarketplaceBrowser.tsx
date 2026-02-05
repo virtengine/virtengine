@@ -32,9 +32,10 @@ export function MarketplaceBrowser({ className, onOfferingSelect }: MarketplaceB
     );
   }
 
-  const filteredOfferings = state.offerings.filter((offering) =>
-    offering.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    offering.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredOfferings = state.offerings.filter(
+    (offering) =>
+      offering.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      offering.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -66,4 +67,3 @@ export function MarketplaceBrowser({ className, onOfferingSelect }: MarketplaceB
     </div>
   );
 }
-

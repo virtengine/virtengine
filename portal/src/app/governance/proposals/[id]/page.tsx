@@ -29,7 +29,7 @@ export default async function ProposalDetailPage({ params }: Props) {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2">
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="flex items-center gap-3">
               <span className="font-mono text-muted-foreground">#{id}</span>
@@ -39,7 +39,7 @@ export default async function ProposalDetailPage({ params }: Props) {
             </div>
 
             <h1 className="mt-4 text-2xl font-bold">Increase Provider Commission Cap</h1>
-            
+
             <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
               <span>Proposed by: virtengine1abc...xyz</span>
               <span>•</span>
@@ -48,12 +48,12 @@ export default async function ProposalDetailPage({ params }: Props) {
               <span>Ends: Jan 22, 2024</span>
             </div>
 
-            <div className="mt-6 prose prose-sm dark:prose-invert max-w-none">
+            <div className="prose prose-sm dark:prose-invert mt-6 max-w-none">
               <h2>Summary</h2>
               <p>
-                This proposal seeks to increase the maximum provider commission rate from 20% to 25%.
-                This change aims to attract more infrastructure providers to the network by offering
-                more competitive revenue sharing.
+                This proposal seeks to increase the maximum provider commission rate from 20% to
+                25%. This change aims to attract more infrastructure providers to the network by
+                offering more competitive revenue sharing.
               </p>
 
               <h2>Motivation</h2>
@@ -69,14 +69,14 @@ export default async function ProposalDetailPage({ params }: Props) {
 
               <h2>Specification</h2>
               <p>
-                The change involves updating the <code>MaxProviderCommission</code> parameter
-                in the market module from <code>0.20</code> to <code>0.25</code>.
+                The change involves updating the <code>MaxProviderCommission</code> parameter in the
+                market module from <code>0.20</code> to <code>0.25</code>.
               </p>
 
               <h2>Impact</h2>
               <p>
-                This change may result in slightly higher prices for consumers, but is expected
-                to be offset by increased supply and competition among providers.
+                This change may result in slightly higher prices for consumers, but is expected to
+                be offset by increased supply and competition among providers.
               </p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export default async function ProposalDetailPage({ params }: Props) {
           {/* Voting */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="text-lg font-semibold">Cast Your Vote</h2>
-            
+
             <div className="mt-4 space-y-3">
               <button
                 type="button"
@@ -133,7 +133,7 @@ export default async function ProposalDetailPage({ params }: Props) {
           {/* Results */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="text-lg font-semibold">Current Results</h2>
-            
+
             <div className="mt-4 space-y-4">
               <VoteBar label="Yes" votes="2,450,000" percentage={68} color="bg-success" />
               <VoteBar label="No" votes="1,150,000" percentage={32} color="bg-destructive" />
@@ -158,28 +158,12 @@ export default async function ProposalDetailPage({ params }: Props) {
           {/* Timeline */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="text-lg font-semibold">Timeline</h2>
-            
+
             <div className="mt-4 space-y-4">
-              <TimelineItem
-                title="Voting Ends"
-                date="Jan 22, 2024"
-                status="upcoming"
-              />
-              <TimelineItem
-                title="Voting Started"
-                date="Jan 15, 2024"
-                status="completed"
-              />
-              <TimelineItem
-                title="Deposit Period Ended"
-                date="Jan 14, 2024"
-                status="completed"
-              />
-              <TimelineItem
-                title="Proposal Created"
-                date="Jan 8, 2024"
-                status="completed"
-              />
+              <TimelineItem title="Voting Ends" date="Jan 22, 2024" status="upcoming" />
+              <TimelineItem title="Voting Started" date="Jan 15, 2024" status="completed" />
+              <TimelineItem title="Deposit Period Ended" date="Jan 14, 2024" status="completed" />
+              <TimelineItem title="Proposal Created" date="Jan 8, 2024" status="completed" />
             </div>
           </div>
         </div>
@@ -203,7 +187,9 @@ function VoteBar({
     <div>
       <div className="flex justify-between text-sm">
         <span>{label}</span>
-        <span className="text-muted-foreground">{votes} ({percentage}%)</span>
+        <span className="text-muted-foreground">
+          {votes} ({percentage}%)
+        </span>
       </div>
       <div className="mt-1 h-2 rounded-full bg-muted">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${percentage}%` }} />
@@ -225,11 +211,9 @@ function TimelineItem({
     <div className="flex gap-3">
       <div className="relative flex flex-col items-center">
         <div
-          className={`h-3 w-3 rounded-full ${
-            status === 'completed' ? 'bg-success' : 'bg-muted'
-          }`}
+          className={`h-3 w-3 rounded-full ${status === 'completed' ? 'bg-success' : 'bg-muted'}`}
         />
-        <div className="flex-1 w-px bg-border" />
+        <div className="w-px flex-1 bg-border" />
       </div>
       <div className="pb-4">
         <div className="text-sm font-medium">{title}</div>
