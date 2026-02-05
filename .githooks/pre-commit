@@ -67,6 +67,7 @@ if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
         PRETTIER_BIN="$REPO_ROOT/portal/node_modules/.bin/prettier"
         if command -v pnpm >/dev/null 2>&1 && [ -x "$PRETTIER_BIN" ]; then
             hook_header "[pre-commit] Formatting staged portal files with prettier..."
+<<<<<<< HEAD
             PORTAL_PRETTIER_FILES=()
             for file in $PORTAL_STAGED_FILES; do
                 case "$file" in
@@ -88,6 +89,17 @@ if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
             while IFS= read -r file; do
                 [ -n "$file" ] && git add -- "$file"
             done <<< "$PORTAL_STAGED_FILES"
+=======
+            PORTAL_FILES="$(echo "$PORTAL_STAGED_FILES" | grep -E '^portal/' | sed 's#^portal/##' || true)"
+            LIB_PORTAL_FILES="$(echo "$PORTAL_STAGED_FILES" | grep -E '^lib/portal/' | sed 's#^lib/portal/#../lib/portal/#' || true)"
+
+            (
+                cd "$REPO_ROOT/portal"
+                [ -n "$PORTAL_FILES" ] && echo "$PORTAL_FILES" | xargs "$PRETTIER_BIN" --write
+                [ -n "$LIB_PORTAL_FILES" ] && echo "$LIB_PORTAL_FILES" | xargs "$PRETTIER_BIN" --write
+            )
+            echo "$PORTAL_STAGED_FILES" | xargs git add
+>>>>>>> b4f80ab1 (fix(portal): satisfy static export)
             hook_pass "[pre-commit] Prettier formatted staged portal files"
         else
             hook_warn "[pre-commit] Prettier not available in portal/node_modules. Skipping portal formatting."
