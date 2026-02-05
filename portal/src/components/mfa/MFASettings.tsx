@@ -29,9 +29,7 @@ export function MFASettings({ className }: MFASettingsProps) {
     <Card className={cn(className)}>
       <CardHeader>
         <CardTitle>Two-Factor Authentication Settings</CardTitle>
-        <CardDescription>
-          Manage your security settings and trusted devices
-        </CardDescription>
+        <CardDescription>Manage your security settings and trusted devices</CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="factors">
@@ -41,15 +39,10 @@ export function MFASettings({ className }: MFASettingsProps) {
             <TabsTrigger value="audit">Audit Log</TabsTrigger>
           </TabsList>
           <TabsContent value="factors" className="mt-4">
-            <MFAPolicyConfig
-              currentPolicy={state.policy}
-              enrolledFactors={state.enrolledFactors}
-            />
+            <MFAPolicyConfig currentPolicy={state.policy} enrolledFactors={state.enrolledFactors} />
           </TabsContent>
           <TabsContent value="browsers" className="mt-4">
-            <TrustedBrowserManager
-              trustedBrowsers={state.trustedBrowsers}
-            />
+            <TrustedBrowserManager trustedBrowsers={state.trustedBrowsers} />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <MFAAuditLog />
@@ -59,4 +52,3 @@ export function MFASettings({ className }: MFASettingsProps) {
     </Card>
   );
 }
-

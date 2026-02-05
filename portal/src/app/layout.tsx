@@ -38,9 +38,7 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || 'https://portal.virtengine.io'
-  ),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://portal.virtengine.io'),
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -106,9 +104,7 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
-        <Providers>
-          {children}
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

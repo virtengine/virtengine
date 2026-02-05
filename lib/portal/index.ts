@@ -64,7 +64,7 @@ export type {
   WalletConnectionStatus,
   WalletChainInfo,
   WalletAccount,
-  WalletError,
+  WalletError as WalletErrorType,
   WalletState,
   WalletSignOptions,
   AminoSignDoc,
@@ -73,6 +73,56 @@ export type {
   DirectSignResponse,
   WalletContextValue,
   WalletProviderConfig,
+} from './src/wallet';
+
+// ============================================================================
+// Wallet Utilities (Enhanced - VE-700)
+// ============================================================================
+
+export {
+  // Error handling
+  WalletError as WalletErrorClass,
+  WalletErrorCode,
+  WALLET_ERROR_MESSAGES,
+  createWalletError,
+  isWalletError,
+  getErrorMessage,
+  getSuggestedAction,
+  parseWalletError,
+  isRetryableError,
+  withWalletTimeout,
+  wrapWithWalletError,
+  // Session management
+  WalletSessionManager,
+  walletSessionManager,
+  createSessionManager,
+  // Wallet detection
+  WalletDetector,
+  walletDetector,
+  WalletPriority,
+  // Transaction utilities
+  GAS_TIERS,
+  DEFAULT_GAS_ADJUSTMENT,
+  DEFAULT_GAS_LIMIT,
+  estimateGas,
+  calculateFee,
+  adjustGas,
+  formatFeeAmount,
+  createTransactionPreview,
+  validateTransaction,
+  createDefaultGasSettings,
+} from './src/wallet';
+
+export type {
+  WalletSession,
+  SessionConfig as WalletSessionConfig,
+  WalletDetectionResult,
+  GasTier,
+  GasSettings,
+  FeeEstimate,
+  TransactionPreview,
+  TransactionOptions,
+  TransactionValidationResult,
 } from './src/wallet';
 
 // ============================================================================
@@ -200,13 +250,30 @@ export { JobCancelDialog } from './components/hpc/JobCancelDialog';
 // Wallet UI Components
 // ============================================================================
 
-export { WalletButton, WalletAccountDisplay, WalletNetworkBadge, WalletModal } from './src/components/wallet';
+export {
+  WalletButton,
+  WalletAccountDisplay,
+  WalletNetworkBadge,
+  WalletModal,
+  WalletIcon,
+  WalletSkeleton,
+  AccountSelector,
+  TransactionModal,
+  KEPLR_ICON_SVG,
+  LEAP_ICON_SVG,
+  COSMOSTATION_ICON_SVG,
+  WALLETCONNECT_ICON_SVG,
+} from './src/components/wallet';
 export type {
   WalletButtonProps,
   WalletAccountDisplayProps,
   WalletNetworkBadgeProps,
   WalletModalProps,
   WalletOption,
+  WalletIconProps,
+  WalletSkeletonProps,
+  AccountSelectorProps,
+  TransactionModalProps,
 } from './src/components/wallet';
 
 // ============================================================================

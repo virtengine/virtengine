@@ -98,7 +98,7 @@ export const ProfileCardSkeleton: Story = {
 
 export const FormSkeleton: Story = {
   render: () => (
-    <div className="space-y-4 w-[300px]">
+    <div className="w-[300px] space-y-4">
       <div className="space-y-2">
         <Skeleton className="h-4 w-[80px]" />
         <Skeleton className="h-10 w-full" />

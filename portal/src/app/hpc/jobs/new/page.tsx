@@ -10,10 +10,7 @@ export default function NewHPCJobPage() {
   return (
     <div className="container py-8">
       <div className="mb-6">
-        <Link
-          href="/hpc/jobs"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
+        <Link href="/hpc/jobs" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back to Jobs
         </Link>
       </div>
@@ -21,9 +18,7 @@ export default function NewHPCJobPage() {
       <div className="mx-auto max-w-3xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Submit New Job</h1>
-          <p className="mt-1 text-muted-foreground">
-            Configure and submit a new HPC workload
-          </p>
+          <p className="mt-1 text-muted-foreground">Configure and submit a new HPC workload</p>
         </div>
 
         <form className="space-y-8">
@@ -40,18 +35,9 @@ export default function NewHPCJobPage() {
                 description="ML model training with PyTorch"
                 selected
               />
-              <TemplateOption
-                name="TensorFlow"
-                description="TensorFlow training pipeline"
-              />
-              <TemplateOption
-                name="OpenFOAM"
-                description="CFD simulation"
-              />
-              <TemplateOption
-                name="Custom"
-                description="Build from scratch"
-              />
+              <TemplateOption name="TensorFlow" description="TensorFlow training pipeline" />
+              <TemplateOption name="OpenFOAM" description="CFD simulation" />
+              <TemplateOption name="Custom" description="Build from scratch" />
             </div>
 
             <Link
@@ -65,7 +51,7 @@ export default function NewHPCJobPage() {
           {/* Job Configuration */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="text-lg font-semibold">2. Job Configuration</h2>
-            
+
             <div className="mt-4 space-y-4">
               <div>
                 <label htmlFor="job-name" className="text-sm font-medium">
@@ -96,7 +82,7 @@ export default function NewHPCJobPage() {
           {/* Resource Requirements */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="text-lg font-semibold">3. Resource Requirements</h2>
-            
+
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="gpus" className="text-sm font-medium">
@@ -164,7 +150,7 @@ export default function NewHPCJobPage() {
           {/* Execution */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h2 className="text-lg font-semibold">4. Execution</h2>
-            
+
             <div className="mt-4 space-y-4">
               <div>
                 <label htmlFor="container" className="text-sm font-medium">

@@ -15,3 +15,15 @@ export type { AccountDisplayProps } from './AccountDisplay';
 
 export { NetworkBadge } from './NetworkBadge';
 export type { NetworkBadgeProps } from './NetworkBadge';
+
+export { WalletIcon, KEPLR_ICON_SVG, LEAP_ICON_SVG, COSMOSTATION_ICON_SVG, WALLETCONNECT_ICON_SVG } from './WalletIcon';
+export type { WalletIconProps } from './WalletIcon';
+
+export { WalletSkeleton } from './WalletSkeleton';
+export type { WalletSkeletonProps } from './WalletSkeleton';
+
+export { AccountSelector } from './AccountSelector';
+export type { AccountSelectorProps } from './AccountSelector';
+
+export { TransactionModal } from './TransactionModal';
+export type { TransactionModalProps, TransactionPreview, TransactionFee } from './TransactionModal';

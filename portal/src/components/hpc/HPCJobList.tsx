@@ -33,18 +33,11 @@ export function HPCJobList({ className, onJobSelect }: HPCJobListProps) {
     <Card className={cn(className)}>
       <CardHeader>
         <CardTitle>Your HPC Jobs</CardTitle>
-        <CardDescription>
-          Monitor and manage your computing jobs
-        </CardDescription>
+        <CardDescription>Monitor and manage your computing jobs</CardDescription>
       </CardHeader>
       <CardContent>
-        <JobTracker
-          jobs={state.jobs}
-          onJobClick={onJobSelect}
-          showFilters={true}
-        />
+        <JobTracker jobs={state.jobs} onJobClick={onJobSelect} showFilters={true} />
       </CardContent>
     </Card>
   );
 }
-

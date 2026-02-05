@@ -2,23 +2,38 @@
 const nextConfig = {
   reactStrictMode: true,
   
+  // Enable static export for GitHub Pages deployment
+  output: process.env.GITHUB_PAGES === 'true' ? 'export' : undefined,
+  
+  // Use trailing slashes for better GitHub Pages compatibility
+  trailingSlash: process.env.GITHUB_PAGES === 'true' ? true : false,
+  
+  // Base path for GitHub Pages (repo name)
+  basePath: process.env.GITHUB_PAGES === 'true' ? '/virtengine' : '',
+  
+  // Asset prefix for GitHub Pages
+  assetPrefix: process.env.GITHUB_PAGES === 'true' ? '/virtengine/' : '',
+  
+  // Disable image optimization for static export
+  images: process.env.GITHUB_PAGES === 'true' 
+    ? { unoptimized: true }
+    : {
+        remotePatterns: [
+          {
+            protocol: 'https',
+            hostname: 'rpc.virtengine.com',
+          },
+          {
+            protocol: 'https',
+            hostname: '*.virtengine.io',
+          },
+        ],
+      },
+  
   transpilePackages: [
     'virtengine-portal-lib',
     'virtengine-capture-lib',
   ],
-
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'rpc.virtengine.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.virtengine.io',
-      },
-    ],
-  },
 
   experimental: {
     // typedRoutes: true, // Re-enable when all routes are complete

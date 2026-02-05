@@ -23,7 +23,7 @@ export default function ProviderPricingPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Set your base rates for different resource types
           </p>
-          
+
           <div className="mt-6 space-y-4">
             <PricingInput label="CPU (per core/hour)" defaultValue="0.05" />
             <PricingInput label="Memory (per GB/hour)" defaultValue="0.02" />
@@ -37,9 +37,7 @@ export default function ProviderPricingPage() {
         {/* Bid Strategy */}
         <div className="rounded-lg border border-border bg-card p-6">
           <h2 className="text-lg font-semibold">Bid Strategy</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Configure automatic bidding behavior
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Configure automatic bidding behavior</p>
 
           <div className="mt-6 space-y-4">
             <div>
@@ -97,10 +95,7 @@ export default function ProviderPricingPage() {
             <DiscountRow duration="1 year" discount="25%" />
           </div>
 
-          <button
-            type="button"
-            className="mt-4 text-sm text-primary hover:underline"
-          >
+          <button type="button" className="mt-4 text-sm text-primary hover:underline">
             + Add custom discount tier
           </button>
         </div>

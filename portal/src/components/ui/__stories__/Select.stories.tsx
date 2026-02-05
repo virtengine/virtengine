@@ -128,9 +128,13 @@ export const WithDisabledItems: Story = {
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="option1">Option 1</SelectItem>
-        <SelectItem value="option2" disabled>Option 2 (disabled)</SelectItem>
+        <SelectItem value="option2" disabled>
+          Option 2 (disabled)
+        </SelectItem>
         <SelectItem value="option3">Option 3</SelectItem>
-        <SelectItem value="option4" disabled>Option 4 (disabled)</SelectItem>
+        <SelectItem value="option4" disabled>
+          Option 4 (disabled)
+        </SelectItem>
         <SelectItem value="option5">Option 5</SelectItem>
       </SelectContent>
     </Select>

@@ -11,7 +11,12 @@ const connectedWallets = [
 ];
 
 const activeSessions = [
-  { device: 'MacBook Pro', location: 'San Francisco, CA', lastActive: '2 minutes ago', current: true },
+  {
+    device: 'MacBook Pro',
+    location: 'San Francisco, CA',
+    lastActive: '2 minutes ago',
+    current: true,
+  },
   { device: 'Windows Desktop', location: 'Austin, TX', lastActive: '3 days ago', current: false },
   { device: 'iPhone 15 Pro', location: 'Chicago, IL', lastActive: '8 days ago', current: false },
 ];
@@ -23,8 +28,18 @@ const apiKeys = [
 ];
 
 const delegates = [
-  { name: 'Ops Lead', address: 've1q8n...4k9l', scope: 'Marketplace + Orders', limit: '$5,000 / mo' },
-  { name: 'Billing Partner', address: 've1d3h...8s1w', scope: 'Invoices only', limit: '$1,000 / mo' },
+  {
+    name: 'Ops Lead',
+    address: 've1q8n...4k9l',
+    scope: 'Marketplace + Orders',
+    limit: '$5,000 / mo',
+  },
+  {
+    name: 'Billing Partner',
+    address: 've1d3h...8s1w',
+    scope: 'Invoices only',
+    limit: '$1,000 / mo',
+  },
 ];
 
 export default function AccountSettingsPage() {
@@ -55,7 +70,10 @@ export default function AccountSettingsPage() {
         </aside>
 
         <div className="space-y-8">
-          <section id="profile" className="scroll-mt-24 rounded-xl border border-border bg-card p-6">
+          <section
+            id="profile"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-6"
+          >
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-semibold">Profile</h2>
@@ -113,7 +131,9 @@ export default function AccountSettingsPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium">Upload a PNG or JPG</p>
-                        <p className="text-xs text-muted-foreground">Up to 2MB. Square crop recommended.</p>
+                        <p className="text-xs text-muted-foreground">
+                          Up to 2MB. Square crop recommended.
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -132,8 +152,8 @@ export default function AccountSettingsPage() {
                   Profile storage
                 </h3>
                 <p className="mt-3 text-muted-foreground">
-                  Minimal identity metadata (VEID + role proofs) is stored on-chain. Extended profile data is
-                  encrypted and stored off-chain for faster updates.
+                  Minimal identity metadata (VEID + role proofs) is stored on-chain. Extended
+                  profile data is encrypted and stored off-chain for faster updates.
                 </p>
                 <div className="mt-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -155,7 +175,10 @@ export default function AccountSettingsPage() {
             </div>
           </section>
 
-          <section id="wallets" className="scroll-mt-24 rounded-xl border border-border bg-card p-6">
+          <section
+            id="wallets"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-6"
+          >
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-semibold">Wallet</h2>
@@ -210,7 +233,10 @@ export default function AccountSettingsPage() {
             </div>
           </section>
 
-          <section id="security" className="scroll-mt-24 rounded-xl border border-border bg-card p-6">
+          <section
+            id="security"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-6"
+          >
             <div className="mb-6">
               <h2 className="text-xl font-semibold">Security</h2>
               <p className="text-sm text-muted-foreground">
@@ -220,7 +246,9 @@ export default function AccountSettingsPage() {
 
             <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
               <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">MFA</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  MFA
+                </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Multi-factor authentication is currently enabled for this account.
                 </p>
@@ -236,7 +264,9 @@ export default function AccountSettingsPage() {
               </div>
 
               <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Password</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Password
+                </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Custodial accounts can update their sign-in password at any time.
                 </p>
@@ -283,7 +313,10 @@ export default function AccountSettingsPage() {
             </div>
           </section>
 
-          <section id="notifications" className="scroll-mt-24 rounded-xl border border-border bg-card p-6">
+          <section
+            id="notifications"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-6"
+          >
             <div className="mb-6">
               <h2 className="text-xl font-semibold">Notifications</h2>
               <p className="text-sm text-muted-foreground">
@@ -322,7 +355,10 @@ export default function AccountSettingsPage() {
             </div>
           </section>
 
-          <section id="api-keys" className="scroll-mt-24 rounded-xl border border-border bg-card p-6">
+          <section
+            id="api-keys"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-6"
+          >
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-semibold">API Keys</h2>
@@ -426,7 +462,10 @@ export default function AccountSettingsPage() {
             </div>
           </section>
 
-          <section id="delegation" className="scroll-mt-24 rounded-xl border border-border bg-card p-6">
+          <section
+            id="delegation"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-6"
+          >
             <div className="mb-6">
               <h2 className="text-xl font-semibold">Delegation</h2>
               <p className="text-sm text-muted-foreground">
@@ -530,7 +569,9 @@ function NotificationGroup({
 }) {
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
       <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       <div className="mt-4 space-y-2 text-sm">
         {options.map((option) => (

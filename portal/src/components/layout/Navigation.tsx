@@ -24,14 +24,14 @@ export function Navigation({ className }: NavigationProps) {
       <ul className="flex items-center gap-1">
         {links.map((link) => {
           const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
-          
+
           return (
             <li key={link.name}>
               <Link
                 href={link.href}
                 className={`rounded-lg px-3 py-2 text-sm transition-colors ${
                   isActive
-                    ? 'bg-primary/10 text-primary font-medium'
+                    ? 'bg-primary/10 font-medium text-primary'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >

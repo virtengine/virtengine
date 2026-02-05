@@ -22,7 +22,13 @@ interface MFAChallengeProps {
  * MFA Challenge Component
  * Modal dialog for MFA verification during sensitive actions
  */
-export function MFAChallenge({ open, onOpenChange, onSuccess, onFailure: _onFailure, className }: MFAChallengeProps) {
+export function MFAChallenge({
+  open,
+  onOpenChange,
+  onSuccess,
+  onFailure: _onFailure,
+  className,
+}: MFAChallengeProps) {
   const { state } = useMFA();
 
   const handleVerify = () => {

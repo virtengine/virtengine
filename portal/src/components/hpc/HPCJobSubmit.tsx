@@ -16,7 +16,12 @@ interface HPCJobSubmitProps {
  * HPC Job Submit Component
  * Form for submitting new HPC jobs
  */
-export function HPCJobSubmit({ className, templateId, onSubmitSuccess, onSubmitError }: HPCJobSubmitProps) {
+export function HPCJobSubmit({
+  className,
+  templateId,
+  onSubmitSuccess,
+  onSubmitError,
+}: HPCJobSubmitProps) {
   const { state } = useHPC();
   const selectedTemplate = templateId
     ? state.workloadTemplates.find((template) => template.id === templateId)
@@ -35,9 +40,7 @@ export function HPCJobSubmit({ className, templateId, onSubmitSuccess, onSubmitE
     <Card className={cn(className)}>
       <CardHeader>
         <CardTitle>Submit HPC Job</CardTitle>
-        <CardDescription>
-          Configure and submit a new high-performance computing job
-        </CardDescription>
+        <CardDescription>Configure and submit a new high-performance computing job</CardDescription>
       </CardHeader>
       <CardContent>
         {state.error && (

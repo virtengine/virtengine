@@ -53,15 +53,21 @@ export function DocumentCapturePanel({
     setGuidanceState(state);
   }, []);
 
-  const handleCapture = useCallback((result: CaptureResult) => {
-    setError(null);
-    onCapture(result);
-  }, [onCapture]);
+  const handleCapture = useCallback(
+    (result: CaptureResult) => {
+      setError(null);
+      onCapture(result);
+    },
+    [onCapture]
+  );
 
-  const handleError = useCallback((captureError: CaptureError) => {
-    setError(captureError.message);
-    onError?.(captureError);
-  }, [onError]);
+  const handleError = useCallback(
+    (captureError: CaptureError) => {
+      setError(captureError.message);
+      onError?.(captureError);
+    },
+    [onError]
+  );
 
   const documentTypeLabels: Record<DocumentType, string> = {
     id_card: 'ID Card',

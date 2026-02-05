@@ -118,10 +118,18 @@ export const AllVariants: Story = {
 export const StatusBadges: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2">
-      <Badge variant="success" dot>Active</Badge>
-      <Badge variant="warning" dot>Pending</Badge>
-      <Badge variant="destructive" dot>Failed</Badge>
-      <Badge variant="secondary" dot>Inactive</Badge>
+      <Badge variant="success" dot>
+        Active
+      </Badge>
+      <Badge variant="warning" dot>
+        Pending
+      </Badge>
+      <Badge variant="destructive" dot>
+        Failed
+      </Badge>
+      <Badge variant="secondary" dot>
+        Inactive
+      </Badge>
     </div>
   ),
 };

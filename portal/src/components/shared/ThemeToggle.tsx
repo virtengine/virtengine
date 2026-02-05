@@ -13,11 +13,7 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <button
-        type="button"
-        className="rounded-lg p-2 hover:bg-accent"
-        aria-label="Toggle theme"
-      >
+      <button type="button" className="rounded-lg p-2 hover:bg-accent" aria-label="Toggle theme">
         <div className="h-5 w-5" />
       </button>
     );

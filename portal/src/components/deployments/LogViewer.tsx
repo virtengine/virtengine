@@ -71,11 +71,8 @@ function parseLogLine(raw: string): LogLine {
   const trimmed = raw.replace(/\r?\n$/, '');
   const levelMatch = trimmed.match(/\b(ERROR|WARN|WARNING|INFO|DEBUG)\b/i);
   const levelRaw = levelMatch?.[1]?.toLowerCase() ?? 'info';
-  const level: LogLevel =
-    levelRaw === 'warning' ? 'warn' : (levelRaw as LogLevel) ?? 'info';
-  const timestampMatch = trimmed.match(
-    /^(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+/
-  );
+  const level: LogLevel = levelRaw === 'warning' ? 'warn' : ((levelRaw as LogLevel) ?? 'info');
+  const timestampMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+/);
   const timestamp = timestampMatch?.[1];
   const message = timestamp ? trimmed.slice(timestamp.length).trim() : trimmed;
 
@@ -95,15 +92,11 @@ export function LogViewer({
   follow = true,
 }: LogViewerProps) {
   const [logLines, setLogLines] = useState<LogLine[]>([]);
-  const [selectedLevels, setSelectedLevels] = useState<Set<LogLevel>>(
-    new Set(LOG_LEVELS)
-  );
+  const [selectedLevels, setSelectedLevels] = useState<Set<LogLevel>>(new Set(LOG_LEVELS));
   const [searchTerm, setSearchTerm] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [isLive, setIsLive] = useState(follow);
-  const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>(
-    'idle'
-  );
+  const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -194,21 +187,13 @@ export function LogViewer({
       if (!shouldReconnectRef.current || !isLive) return;
       setStatus('error');
       setErrorMessage('Disconnected. Reconnecting...');
-      const delay =
-        WS_BACKOFF_MS[Math.min(reconnectAttemptRef.current, WS_BACKOFF_MS.length - 1)];
+      const delay = WS_BACKOFF_MS[Math.min(reconnectAttemptRef.current, WS_BACKOFF_MS.length - 1)];
       reconnectTimerRef.current = setTimeout(() => {
         reconnectAttemptRef.current += 1;
         connectSocket();
       }, delay);
     };
-  }, [
-    containerName,
-    deploymentId,
-    disconnectSocket,
-    handleSocketMessage,
-    isLive,
-    tail,
-  ]);
+  }, [containerName, deploymentId, disconnectSocket, handleSocketMessage, isLive, tail]);
 
   const fetchLogs = useCallback(async () => {
     if (!deploymentId) return;
@@ -315,7 +300,11 @@ export function LogViewer({
                   status === 'connected' ? 'bg-success' : 'bg-muted-foreground'
                 )}
               />
-              {status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting' : 'Offline'}
+              {status === 'connected'
+                ? 'Connected'
+                : status === 'connecting'
+                  ? 'Connecting'
+                  : 'Offline'}
             </span>
             {errorMessage && <span>{errorMessage}</span>}
           </div>
@@ -390,12 +379,8 @@ export function LogViewer({
         ) : (
           displayedLines.map((line) => (
             <div key={line.id} className="flex flex-wrap gap-2">
-              {line.timestamp && (
-                <span className="text-muted-foreground">{line.timestamp}</span>
-              )}
-              <span className={cn('uppercase', LEVEL_STYLES[line.level])}>
-                {line.level}
-              </span>
+              {line.timestamp && <span className="text-muted-foreground">{line.timestamp}</span>}
+              <span className={cn('uppercase', LEVEL_STYLES[line.level])}>{line.level}</span>
               <span className="text-foreground">{line.message}</span>
             </div>
           ))

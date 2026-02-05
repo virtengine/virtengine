@@ -73,15 +73,9 @@ export const WithCheckboxItems: Story = {
       <DropdownMenuContent className="w-56">
         <DropdownMenuLabel>Appearance</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem checked>
-          Show Status Bar
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem checked>
-          Show Activity Bar
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem>
-          Show Panel
-        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked>Show Status Bar</DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked>Show Activity Bar</DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem>Show Panel</DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   ),

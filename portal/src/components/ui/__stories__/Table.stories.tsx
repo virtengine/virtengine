@@ -89,8 +89,8 @@ export const WithBadges: Story = {
                   invoice.status === 'Paid'
                     ? 'success'
                     : invoice.status === 'Pending'
-                    ? 'warning'
-                    : 'destructive'
+                      ? 'warning'
+                      : 'destructive'
                 }
               >
                 {invoice.status}

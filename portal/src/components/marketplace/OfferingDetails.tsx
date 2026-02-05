@@ -15,7 +15,12 @@ interface OfferingDetailsProps {
  * Offering Details Component
  * Shows detailed information about a marketplace offering
  */
-export function OfferingDetails({ offeringId, className, onCheckout, onBack }: OfferingDetailsProps) {
+export function OfferingDetails({
+  offeringId,
+  className,
+  onCheckout,
+  onBack,
+}: OfferingDetailsProps) {
   const { state } = useMarketplace();
 
   const offering = state.offerings.find((o) => o.id === offeringId);
@@ -52,4 +57,3 @@ export function OfferingDetails({ offeringId, className, onCheckout, onBack }: O
     </div>
   );
 }
-

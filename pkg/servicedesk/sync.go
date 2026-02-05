@@ -18,6 +18,13 @@ type SyncManager struct {
 	mu          sync.RWMutex
 	syncRecords map[string]*TicketSyncRecord
 	lastSync    time.Time
+	// Optional handler for inbound updates (external -> on-chain).
+	inboundHandler InboundUpdateHandler
+}
+
+// InboundUpdateHandler handles inbound sync updates.
+type InboundUpdateHandler interface {
+	HandleInboundUpdate(ctx context.Context, event *SyncEvent) error
 }
 
 // Conflict represents a detected sync conflict
@@ -49,6 +56,13 @@ func NewSyncManager(bridge *Bridge, config SyncConfig) *SyncManager {
 		logger:      bridge.logger.With("component", "sync_manager"),
 		syncRecords: make(map[string]*TicketSyncRecord),
 	}
+}
+
+// SetInboundHandler sets the handler for inbound updates.
+func (m *SyncManager) SetInboundHandler(handler InboundUpdateHandler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.inboundHandler = handler
 }
 
 // GetSyncRecord returns the sync record for a ticket
@@ -92,6 +106,38 @@ func (m *SyncManager) UpdateExternalRef(ctx context.Context, ticketID string, re
 	}
 }
 
+// SetTicketRecipients stores encryption recipient key IDs for a ticket.
+func (m *SyncManager) SetTicketRecipients(ticketID string, recipients []string) {
+	if ticketID == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	record, ok := m.syncRecords[ticketID]
+	if !ok {
+		record = &TicketSyncRecord{
+			TicketID:           ticketID,
+			ExternalRefs:       []ExternalTicketRef{},
+			ConflictResolution: m.config.ConflictResolution,
+		}
+		m.syncRecords[ticketID] = record
+	}
+	record.Recipients = append([]string(nil), recipients...)
+}
+
+// GetTicketRecipients returns the recipients for a ticket.
+func (m *SyncManager) GetTicketRecipients(ticketID string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	record, ok := m.syncRecords[ticketID]
+	if !ok {
+		return nil
+	}
+	return append([]string(nil), record.Recipients...)
+}
+
 // CheckConflict checks for sync conflicts
 func (m *SyncManager) CheckConflict(ctx context.Context, event *SyncEvent) (*Conflict, error) {
 	m.mu.RLock()
@@ -121,11 +167,15 @@ func (m *SyncManager) ProcessInboundUpdate(ctx context.Context, event *SyncEvent
 		"event_type", event.Type,
 	)
 
-	// In a full implementation, this would:
-	// 1. Validate the update against on-chain state
-	// 2. Create a transaction to update on-chain state
-	// 3. Wait for confirmation
-	// 4. Update sync record
+	m.mu.RLock()
+	handler := m.inboundHandler
+	m.mu.RUnlock()
+
+	if handler != nil {
+		if err := handler.HandleInboundUpdate(ctx, event); err != nil {
+			return err
+		}
+	}
 
 	// For now, just update the sync record
 	m.mu.Lock()

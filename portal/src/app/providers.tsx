@@ -14,12 +14,7 @@ import { portalConfig, chainConfig, walletConfig } from '@/config';
  */
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <PortalProvider config={portalConfig} chainConfig={chainConfig} walletConfig={walletConfig}>
         {children}
       </PortalProvider>
