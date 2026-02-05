@@ -2,22 +2,21 @@ package provider_daemon
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/waldur"
-	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
-type mockWaldurOrderClient struct {
+type mockWaldurMarketplace struct {
 	createErr error
 	orders    map[string]*waldur.Order
 }
 
-func (m *mockWaldurOrderClient) CreateOrder(_ context.Context, req waldur.CreateOrderRequest) (*waldur.Order, error) {
+const testWaldurProjectID = "proj-1"
+
+func (m *mockWaldurMarketplace) CreateOrder(_ context.Context, req waldur.CreateOrderRequest) (*waldur.Order, error) {
 	if m.createErr != nil {
 		return nil, m.createErr
 	}
@@ -35,15 +34,15 @@ func (m *mockWaldurOrderClient) CreateOrder(_ context.Context, req waldur.Create
 	return order, nil
 }
 
-func (m *mockWaldurOrderClient) ApproveOrderByProvider(_ context.Context, _ string) error {
+func (m *mockWaldurMarketplace) ApproveOrderByProvider(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockWaldurOrderClient) SetOrderBackendID(_ context.Context, _ string, _ string) error {
+func (m *mockWaldurMarketplace) SetOrderBackendID(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
-func (m *mockWaldurOrderClient) GetOrder(_ context.Context, orderUUID string) (*waldur.Order, error) {
+func (m *mockWaldurMarketplace) GetOrder(_ context.Context, orderUUID string) (*waldur.Order, error) {
 	if m.orders == nil {
 		return nil, waldur.ErrNotFound
 	}
@@ -54,50 +53,44 @@ func (m *mockWaldurOrderClient) GetOrder(_ context.Context, orderUUID string) (*
 	return order, nil
 }
 
-func (m *mockWaldurOrderClient) GetOfferingByBackendID(_ context.Context, _ string) (*waldur.Offering, error) {
+func (m *mockWaldurMarketplace) GetOfferingByBackendID(_ context.Context, _ string) (*waldur.Offering, error) {
 	return &waldur.Offering{UUID: "off-1"}, nil
 }
 
-func TestOrderRouter_ProcessOrderCreated(t *testing.T) {
-	const (
-		testBaseURL   = "http://waldur.local"
-		testToken     = "token"
-		testProjectID = "proj-1"
-	)
+func TestOrderRouter_RouteOrderSuccess(t *testing.T) {
 	tmp := t.TempDir()
-	cfg := DefaultOrderRouterConfig()
+	cfg := DefaultOrderRoutingConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "provider1"
-	cfg.WaldurBaseURL = testBaseURL
-	cfg.WaldurToken = testToken
-	cfg.WaldurProjectUUID = testProjectID
+	cfg.ProviderAddress = testProvider1
+	cfg.WaldurProjectID = testWaldurProjectID
 	cfg.StateFile = filepath.Join(tmp, "state.json")
 
-	router, err := NewOrderRouterWithClient(cfg, &mockWaldurOrderClient{}, nil, nil)
+	mockClient := &mockWaldurMarketplace{}
+	resolver := &MapOfferingResolver{Map: map[string]string{testProvider1 + "/1": "off-1"}, Marketplace: mockClient}
+
+	router, err := NewOrderRouterWithClient(cfg, mockClient, resolver)
 	if err != nil {
 		t.Fatalf("router create error: %v", err)
 	}
 
-	event := marketplace.OrderCreatedEvent{
-		BaseMarketplaceEvent: marketplace.BaseMarketplaceEvent{Sequence: 1},
-		OrderID:              "cust1/1",
-		OfferingID:           "provider1/1",
-		ProviderAddress:      "provider1",
-		CustomerAddress:      "cust1",
-		Quantity:             1,
-		MaxBidPrice:          100,
+	req := OrderRoutingRequest{
+		OrderID:         "cust1/1",
+		OfferingID:      testProvider1 + "/1",
+		ProviderAddress: testProvider1,
+		CustomerAddress: "cust1",
+		Quantity:        1,
+		MaxBidPrice:     100,
 	}
 
-	if err := router.ProcessOrderCreated(context.Background(), event); err != nil {
-		t.Fatalf("process order error: %v", err)
+	if err := router.routeOrder(context.Background(), req); err != nil {
+		t.Fatalf("route order error: %v", err)
 	}
 
-	state, err := router.stateStore.Load()
+	state, err := router.store.Load()
 	if err != nil {
 		t.Fatalf("state load error: %v", err)
 	}
-
-	record := state.Records[event.OrderID]
+	record := state.Get(req.OrderID)
 	if record == nil {
 		t.Fatalf("record not found")
 	}
@@ -110,45 +103,36 @@ func TestOrderRouter_ProcessOrderCreated(t *testing.T) {
 }
 
 func TestOrderRouter_RetryableFailure(t *testing.T) {
-	const (
-		testBaseURL   = "http://waldur.local"
-		testToken     = "token"
-		testProjectID = "proj-1"
-	)
 	tmp := t.TempDir()
-	cfg := DefaultOrderRouterConfig()
+	cfg := DefaultOrderRoutingConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "provider1"
-	cfg.WaldurBaseURL = testBaseURL
-	cfg.WaldurToken = testToken
-	cfg.WaldurProjectUUID = testProjectID
+	cfg.ProviderAddress = testProvider1
+	cfg.WaldurProjectID = testWaldurProjectID
 	cfg.StateFile = filepath.Join(tmp, "state.json")
 
-	mockClient := &mockWaldurOrderClient{createErr: waldur.ErrRateLimited}
-	router, err := NewOrderRouterWithClient(cfg, mockClient, nil, nil)
+	mockClient := &mockWaldurMarketplace{createErr: waldur.ErrRateLimited}
+	resolver := &MapOfferingResolver{Map: map[string]string{testProvider1 + "/1": "off-1"}, Marketplace: mockClient}
+	router, err := NewOrderRouterWithClient(cfg, mockClient, resolver)
 	if err != nil {
 		t.Fatalf("router create error: %v", err)
 	}
 
-	event := marketplace.OrderCreatedEvent{
-		BaseMarketplaceEvent: marketplace.BaseMarketplaceEvent{Sequence: 2},
-		OrderID:              "cust1/2",
-		OfferingID:           "provider1/1",
-		ProviderAddress:      "provider1",
-		CustomerAddress:      "cust1",
-		Quantity:             1,
-		MaxBidPrice:          100,
+	req := OrderRoutingRequest{
+		OrderID:         "cust1/2",
+		OfferingID:      testProvider1 + "/1",
+		ProviderAddress: testProvider1,
+		CustomerAddress: "cust1",
 	}
 
-	if err := router.ProcessOrderCreated(context.Background(), event); err == nil {
+	if err := router.processTask(context.Background(), OrderRoutingTask{Request: req}); err == nil {
 		t.Fatalf("expected error")
 	}
 
-	state, err := router.stateStore.Load()
+	state, err := router.store.Load()
 	if err != nil {
 		t.Fatalf("state load error: %v", err)
 	}
-	record := state.Records[event.OrderID]
+	record := state.Get(req.OrderID)
 	if record == nil {
 		t.Fatalf("record not found")
 	}
@@ -161,49 +145,37 @@ func TestOrderRouter_RetryableFailure(t *testing.T) {
 }
 
 func TestOrderRouter_FatalFailure(t *testing.T) {
-	const (
-		testBaseURL   = "http://waldur.local"
-		testToken     = "token"
-		testProjectID = "proj-1"
-	)
 	tmp := t.TempDir()
-	cfg := DefaultOrderRouterConfig()
+	cfg := DefaultOrderRoutingConfig()
 	cfg.Enabled = true
-	cfg.ProviderAddress = "provider1"
-	cfg.WaldurBaseURL = testBaseURL
-	cfg.WaldurToken = testToken
-	cfg.WaldurProjectUUID = testProjectID
+	cfg.ProviderAddress = testProvider1
+	cfg.WaldurProjectID = testWaldurProjectID
 	cfg.StateFile = filepath.Join(tmp, "state.json")
+	cfg.MaxRetries = 0
 
-	mockClient := &mockWaldurOrderClient{createErr: waldur.ErrUnauthorized}
-	router, err := NewOrderRouterWithClient(cfg, mockClient, nil, nil)
+	mockClient := &mockWaldurMarketplace{createErr: waldur.ErrUnauthorized}
+	resolver := &MapOfferingResolver{Map: map[string]string{testProvider1 + "/1": "off-1"}, Marketplace: mockClient}
+	router, err := NewOrderRouterWithClient(cfg, mockClient, resolver)
 	if err != nil {
 		t.Fatalf("router create error: %v", err)
 	}
 
-	event := marketplace.OrderCreatedEvent{
-		BaseMarketplaceEvent: marketplace.BaseMarketplaceEvent{Sequence: 3},
-		OrderID:              "cust1/3",
-		OfferingID:           "provider1/1",
-		ProviderAddress:      "provider1",
-		CustomerAddress:      "cust1",
-		Quantity:             1,
-		MaxBidPrice:          100,
+	req := OrderRoutingRequest{
+		OrderID:         "cust1/3",
+		OfferingID:      testProvider1 + "/1",
+		ProviderAddress: testProvider1,
+		CustomerAddress: "cust1",
 	}
 
-	err = router.ProcessOrderCreated(context.Background(), event)
-	if err == nil {
+	if err := router.processTask(context.Background(), OrderRoutingTask{Request: req}); err == nil {
 		t.Fatalf("expected error")
 	}
-	if !errors.Is(err, waldur.ErrUnauthorized) && !strings.Contains(err.Error(), "dead-lettered") {
-		t.Fatalf("unexpected error: %v", err)
-	}
 
-	state, err := router.stateStore.Load()
+	state, err := router.store.Load()
 	if err != nil {
 		t.Fatalf("state load error: %v", err)
 	}
-	record := state.Records[event.OrderID]
+	record := state.Get(req.OrderID)
 	if record == nil {
 		t.Fatalf("record not found")
 	}

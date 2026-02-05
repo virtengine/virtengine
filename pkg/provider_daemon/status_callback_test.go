@@ -1,48 +1,85 @@
 package provider_daemon
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
-func TestParseOrderStatusPayload(t *testing.T) {
-	body := []byte(`{
-		"order_uuid": "ord-1",
-		"state": "executing",
-		"attributes": {
-			"order_id": "cust/1",
-			"backend_id": "cust/1"
-		}
-	}`)
-
-	payload, err := parseOrderStatusPayload(body)
-	if err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	if payload.OrderUUID != "ord-1" {
-		t.Fatalf("unexpected order uuid: %s", payload.OrderUUID)
-	}
-	if payload.OrderID != "cust/1" {
-		t.Fatalf("unexpected order id: %s", payload.OrderID)
-	}
-	if payload.State != "executing" {
-		t.Fatalf("unexpected state: %s", payload.State)
-	}
+type mockCallbackSink struct {
+	mu        sync.Mutex
+	callbacks []*marketplace.WaldurCallback
 }
 
-func TestMapWaldurOrderState(t *testing.T) {
-	tests := map[string]string{
-		"pending-consumer": "pending_payment",
-		"pending-provider": "open",
-		"executing":        "provisioning",
-		"done":             "active",
-		"terminating":      "pending_termination",
-		"terminated":       "terminated",
-		"erred":            "failed",
-		"canceled":         "cancelled",
+func (m *mockCallbackSink) Submit(_ context.Context, callback *marketplace.WaldurCallback) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.callbacks = append(m.callbacks, callback)
+	return nil
+}
+
+func (m *mockCallbackSink) last() *marketplace.WaldurCallback {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.callbacks) == 0 {
+		return nil
 	}
-	for input, expected := range tests {
-		if got := mapWaldurOrderState(input); got != expected {
-			t.Fatalf("state %s -> %s, want %s", input, got, expected)
-		}
+	return m.callbacks[len(m.callbacks)-1]
+}
+
+func TestOrderStatusCallbackHandler_MapsState(t *testing.T) {
+	kmCfg := DefaultKeyManagerConfig()
+	kmCfg.StorageType = KeyStorageTypeMemory
+	keyManager, err := NewKeyManager(kmCfg)
+	if err != nil {
+		t.Fatalf("NewKeyManager: %v", err)
+	}
+	if err := keyManager.Unlock(""); err != nil {
+		t.Fatalf("Unlock: %v", err)
+	}
+	if _, err := keyManager.GenerateKey("cosmos1provider"); err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	statePath := filepath.Join(t.TempDir(), "order_state.json")
+	_ = os.WriteFile(statePath, []byte("{}"), 0o600)
+	store, err := NewWaldurOrderStore(statePath)
+	if err != nil {
+		t.Fatalf("NewWaldurOrderStore: %v", err)
+	}
+
+	sink := &mockCallbackSink{}
+	handler, err := NewOrderStatusCallbackHandler(keyManager, sink, store)
+	if err != nil {
+		t.Fatalf("NewOrderStatusCallbackHandler: %v", err)
+	}
+
+	cb := marketplace.NewWaldurCallbackAt(
+		marketplace.ActionTypeStatusUpdate,
+		"waldur-order-1",
+		marketplace.SyncTypeOrder,
+		"customer1/1",
+		time.Now().UTC(),
+	)
+	cb.Payload["state"] = "done"
+
+	if err := handler.ProcessWaldurCallback(context.Background(), cb); err != nil {
+		t.Fatalf("ProcessWaldurCallback: %v", err)
+	}
+
+	last := sink.last()
+	if last == nil {
+		t.Fatal("expected callback to be submitted")
+	}
+	if got := last.Payload["state"]; got != "active" {
+		t.Fatalf("payload state = %s, want active", got)
+	}
+	if last.ChainEntityType != marketplace.SyncTypeOrder {
+		t.Fatalf("chain entity type = %s, want order", last.ChainEntityType)
 	}
 }

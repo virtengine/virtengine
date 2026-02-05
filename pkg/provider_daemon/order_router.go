@@ -2,78 +2,85 @@ package provider_daemon
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
-	"math/big"
-	"strings"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/waldur"
-	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
-// OrderRouterConfig configures order routing from chain to Waldur.
-type OrderRouterConfig struct {
-	Enabled            bool
-	ProviderAddress    string
-	WaldurBaseURL      string
-	WaldurToken        string
-	WaldurProjectUUID  string
-	WaldurOfferingMap  map[string]string
-	OrderCallbackURL   string
-	StateFile          string
-	OperationTimeout   time.Duration
-	RetryInterval      time.Duration
-	MaxRetries         int
-	RetryBackoff       time.Duration
-	MaxRetryBackoff    time.Duration
-	ReplayOnStartup    bool
-	DeadLetterAlerting bool
+// OrderRoutingConfig configures order routing to Waldur.
+type OrderRoutingConfig struct {
+	Enabled          bool
+	ProviderAddress  string
+	WaldurBaseURL    string
+	WaldurToken      string
+	WaldurProjectID  string
+	OrderCallbackURL string
+	OfferingMap      map[string]string
+
+	MaxRetries   int
+	RetryBackoff time.Duration
+	MaxBackoff   time.Duration
+	QueueSize    int
+	WorkerCount  int
+
+	StateFile string
+
+	OperationTimeout time.Duration
+
+	AlertSink OrderRoutingAlertSink
 }
 
-// DefaultOrderRouterConfig returns defaults for order routing.
-func DefaultOrderRouterConfig() OrderRouterConfig {
-	return OrderRouterConfig{
-		OperationTimeout:   45 * time.Second,
-		RetryInterval:      30 * time.Second,
-		MaxRetries:         5,
-		RetryBackoff:       5 * time.Second,
-		MaxRetryBackoff:    5 * time.Minute,
-		DeadLetterAlerting: true,
+// DefaultOrderRoutingConfig returns default routing configuration.
+func DefaultOrderRoutingConfig() OrderRoutingConfig {
+	return OrderRoutingConfig{
+		Enabled:          false,
+		MaxRetries:       5,
+		RetryBackoff:     5 * time.Second,
+		MaxBackoff:       5 * time.Minute,
+		QueueSize:        256,
+		WorkerCount:      4,
+		StateFile:        "data/waldur_order_state.json",
+		OperationTimeout: 45 * time.Second,
 	}
 }
 
-// OrderRoutingAlert contains manual intervention alert data.
-type OrderRoutingAlert struct {
-	OrderID      string
-	OfferingID   string
-	Provider     string
-	Attempts     int
-	LastError    string
-	DeadLettered bool
-	RecordedAt   time.Time
+// OrderRoutingAlertSink provides alerting for order routing failures.
+type OrderRoutingAlertSink interface {
+	CreateAlert(ctx context.Context, alertType AlertType, severity AlertSeverity, message string, allocationID, orderID string, details map[string]string) (*Alert, error)
 }
 
-// OrderRoutingAlertManager handles manual intervention alerts.
-type OrderRoutingAlertManager interface {
-	Alert(ctx context.Context, alert OrderRoutingAlert) error
+// OrderRoutingRequest captures order data needed for routing.
+type OrderRoutingRequest struct {
+	OrderID         string
+	CustomerAddress string
+	OfferingID      string
+	ProviderAddress string
+	Region          string
+	Quantity        uint32
+	MaxBidPrice     uint64
+	ExpiresAt       *time.Time
+	EventID         string
+	Sequence        uint64
 }
 
-// DefaultOrderRoutingAlertManager logs alerts.
-type DefaultOrderRoutingAlertManager struct{}
-
-// Alert logs the alert for manual intervention.
-func (m *DefaultOrderRoutingAlertManager) Alert(_ context.Context, alert OrderRoutingAlert) error {
-	log.Printf("[order-router] ALERT order=%s offering=%s provider=%s attempts=%d dead_lettered=%t error=%s",
-		alert.OrderID, alert.OfferingID, alert.Provider, alert.Attempts, alert.DeadLettered, alert.LastError)
-	return nil
+// OrderRoutingTask wraps an order routing request for processing.
+type OrderRoutingTask struct {
+	Request    OrderRoutingRequest
+	ReceivedAt time.Time
 }
 
-// WaldurOrderAPI captures Waldur order operations.
-type WaldurOrderAPI interface {
+// WaldurOfferingResolver resolves a chain offering ID into a Waldur offering UUID.
+type WaldurOfferingResolver interface {
+	ResolveOfferingUUID(ctx context.Context, offeringID string) (string, error)
+}
+
+// WaldurMarketplace captures the marketplace operations needed by the router.
+type WaldurMarketplace interface {
 	CreateOrder(ctx context.Context, req waldur.CreateOrderRequest) (*waldur.Order, error)
 	ApproveOrderByProvider(ctx context.Context, orderUUID string) error
 	SetOrderBackendID(ctx context.Context, orderUUID string, backendID string) error
@@ -81,115 +88,139 @@ type WaldurOrderAPI interface {
 	GetOfferingByBackendID(ctx context.Context, backendID string) (*waldur.Offering, error)
 }
 
-// OrderRouter routes chain orders to Waldur.
-type OrderRouter struct {
-	cfg        OrderRouterConfig
-	client     WaldurOrderAPI
-	stateStore *OrderRoutingStateStore
-	state      *OrderRoutingState
-	alerts     OrderRoutingAlertManager
-
-	mu     sync.RWMutex
-	stopCh chan struct{}
-	wg     sync.WaitGroup
+// MapOfferingResolver resolves offerings using a static map and backend lookup fallback.
+type MapOfferingResolver struct {
+	Map         map[string]string
+	Marketplace WaldurMarketplace
 }
 
-// NewOrderRouter creates an order router with Waldur client and state store.
-func NewOrderRouter(cfg OrderRouterConfig) (*OrderRouter, error) {
-	if !cfg.Enabled {
-		return nil, nil
+// ResolveOfferingUUID resolves offering UUID from map or backend lookup.
+func (r *MapOfferingResolver) ResolveOfferingUUID(ctx context.Context, offeringID string) (string, error) {
+	if offeringID == "" {
+		return "", fmt.Errorf("offering ID is required")
 	}
-	if cfg.ProviderAddress == "" {
-		return nil, fmt.Errorf("provider address is required")
+	if r != nil && r.Map != nil {
+		if uuid := r.Map[offeringID]; uuid != "" {
+			return uuid, nil
+		}
 	}
-	if cfg.WaldurBaseURL == "" {
-		return nil, fmt.Errorf("waldur base URL is required")
+	if r != nil && r.Marketplace != nil {
+		offering, err := r.Marketplace.GetOfferingByBackendID(ctx, offeringID)
+		if err == nil && offering != nil {
+			return offering.UUID, nil
+		}
+		return "", err
 	}
-	if cfg.WaldurToken == "" {
-		return nil, fmt.Errorf("waldur token is required")
+	return "", fmt.Errorf("no offering mapping for %s", offeringID)
+}
+
+// OrderRouter routes on-chain orders to Waldur.
+type OrderRouter struct {
+	cfg         OrderRoutingConfig
+	store       *WaldurOrderStore
+	state       *WaldurOrderState
+	marketplace WaldurMarketplace
+	resolver    WaldurOfferingResolver
+	tasks       chan OrderRoutingTask
+	stopCh      chan struct{}
+	wg          sync.WaitGroup
+	mu          sync.Mutex
+}
+
+// NewOrderRouter creates a new order router.
+func NewOrderRouter(cfg OrderRoutingConfig, resolver WaldurOfferingResolver) (*OrderRouter, error) {
+	if cfg.WaldurBaseURL == "" || cfg.WaldurToken == "" {
+		return nil, fmt.Errorf("waldur base URL and token are required")
 	}
-	if cfg.WaldurProjectUUID == "" {
-		return nil, fmt.Errorf("waldur project UUID is required")
+	if cfg.WaldurProjectID == "" {
+		return nil, fmt.Errorf("waldur project ID is required")
+	}
+	if cfg.QueueSize <= 0 {
+		cfg.QueueSize = 256
+	}
+	if cfg.WorkerCount <= 0 {
+		cfg.WorkerCount = 4
+	}
+	if cfg.RetryBackoff <= 0 {
+		cfg.RetryBackoff = 5 * time.Second
+	}
+	if cfg.MaxBackoff <= 0 {
+		cfg.MaxBackoff = 5 * time.Minute
+	}
+
+	wcfg := waldur.DefaultConfig()
+	wcfg.BaseURL = cfg.WaldurBaseURL
+	wcfg.Token = cfg.WaldurToken
+	client, err := waldur.NewClient(wcfg)
+	if err != nil {
+		return nil, err
+	}
+	marketplace := waldur.NewMarketplaceClient(client)
+	return NewOrderRouterWithClient(cfg, marketplace, resolver)
+}
+
+// NewOrderRouterWithClient creates a router with an injected marketplace client.
+func NewOrderRouterWithClient(cfg OrderRoutingConfig, marketplace WaldurMarketplace, resolver WaldurOfferingResolver) (*OrderRouter, error) {
+	if cfg.WaldurProjectID == "" {
+		return nil, fmt.Errorf("waldur project ID is required")
+	}
+	if cfg.QueueSize <= 0 {
+		cfg.QueueSize = 256
+	}
+	if cfg.WorkerCount <= 0 {
+		cfg.WorkerCount = 4
+	}
+	if cfg.RetryBackoff <= 0 {
+		cfg.RetryBackoff = 5 * time.Second
+	}
+	if cfg.MaxBackoff <= 0 {
+		cfg.MaxBackoff = 5 * time.Minute
 	}
 	if cfg.StateFile == "" {
 		cfg.StateFile = "data/waldur_order_state.json"
 	}
-	if cfg.OperationTimeout == 0 {
-		cfg.OperationTimeout = 45 * time.Second
-	}
-	if cfg.RetryInterval == 0 {
-		cfg.RetryInterval = 30 * time.Second
-	}
-	if cfg.MaxRetries <= 0 {
-		cfg.MaxRetries = 5
-	}
-	if cfg.RetryBackoff == 0 {
-		cfg.RetryBackoff = 5 * time.Second
-	}
-	if cfg.MaxRetryBackoff == 0 {
-		cfg.MaxRetryBackoff = 5 * time.Minute
+	if marketplace == nil {
+		return nil, fmt.Errorf("waldur marketplace client is required")
 	}
 
-	waldurCfg := waldur.DefaultConfig()
-	waldurCfg.BaseURL = cfg.WaldurBaseURL
-	waldurCfg.Token = cfg.WaldurToken
-	waldurClient, err := waldur.NewClient(waldurCfg)
+	store, err := NewWaldurOrderStore(cfg.StateFile)
 	if err != nil {
 		return nil, err
-	}
-	marketplaceClient := waldur.NewMarketplaceClient(waldurClient)
-	return NewOrderRouterWithClient(cfg, marketplaceClient, nil, nil)
-}
-
-// NewOrderRouterWithClient allows injecting a Waldur client and state store (for tests).
-func NewOrderRouterWithClient(
-	cfg OrderRouterConfig,
-	client WaldurOrderAPI,
-	store *OrderRoutingStateStore,
-	alerts OrderRoutingAlertManager,
-) (*OrderRouter, error) {
-	if !cfg.Enabled {
-		return nil, nil
-	}
-	if client == nil {
-		return nil, fmt.Errorf("waldur client is required")
-	}
-	if store == nil {
-		store = NewOrderRoutingStateStore(cfg.StateFile)
 	}
 	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
-	if alerts == nil {
-		alerts = &DefaultOrderRoutingAlertManager{}
+
+	if resolver == nil {
+		resolver = &MapOfferingResolver{Map: cfg.OfferingMap, Marketplace: marketplace}
 	}
+
 	return &OrderRouter{
-		cfg:        cfg,
-		client:     client,
-		stateStore: store,
-		state:      state,
-		alerts:     alerts,
-		stopCh:     make(chan struct{}),
+		cfg:         cfg,
+		store:       store,
+		state:       state,
+		marketplace: marketplace,
+		resolver:    resolver,
+		tasks:       make(chan OrderRoutingTask, cfg.QueueSize),
+		stopCh:      make(chan struct{}),
 	}, nil
 }
 
-// Start launches background retry processing.
-func (r *OrderRouter) Start(ctx context.Context) error {
-	if r == nil || !r.cfg.Enabled {
-		return nil
+// Start begins processing routing tasks.
+func (r *OrderRouter) Start(ctx context.Context) {
+	if r == nil {
+		return
 	}
-
+	for i := 0; i < r.cfg.WorkerCount; i++ {
+		r.wg.Add(1)
+		go r.worker(ctx, i)
+	}
 	r.wg.Add(1)
-	go func() {
-		defer r.wg.Done()
-		r.retryLoop(ctx)
-	}()
-	log.Printf("[order-router] started")
-	return nil
+	go r.retryLoop(ctx)
 }
 
-// Stop stops background processing.
+// Stop stops workers and waits for completion.
 func (r *OrderRouter) Stop() {
 	if r == nil {
 		return
@@ -198,123 +229,269 @@ func (r *OrderRouter) Stop() {
 	r.wg.Wait()
 }
 
-// ProcessOrderCreated routes a chain order to Waldur.
-func (r *OrderRouter) ProcessOrderCreated(ctx context.Context, event marketplace.OrderCreatedEvent) error {
-	if !r.cfg.Enabled {
+// Enqueue schedules an order routing request.
+func (r *OrderRouter) Enqueue(req OrderRoutingRequest) error {
+	if r == nil {
+		return fmt.Errorf("order router not configured")
+	}
+	if req.OrderID == "" {
+		return fmt.Errorf("order ID is required")
+	}
+	select {
+	case r.tasks <- OrderRoutingTask{Request: req, ReceivedAt: time.Now().UTC()}:
 		return nil
+	default:
+		return fmt.Errorf("order routing queue full")
 	}
-	if !strings.EqualFold(event.ProviderAddress, r.cfg.ProviderAddress) {
-		r.markSkipped(event.OrderID)
-		return nil
-	}
-	if event.OrderID == "" || event.OfferingID == "" {
-		return fmt.Errorf("invalid order event: missing order or offering id")
-	}
-
-	record := r.getOrCreateRecord(event)
-	if record.DeadLettered {
-		return fmt.Errorf("order %s is dead-lettered", event.OrderID)
-	}
-	if record.LastSequence >= event.Sequence && record.WaldurOrderUUID != "" {
-		r.markSkipped(event.OrderID)
-		return nil
-	}
-
-	err := r.createOrUpdateWaldurOrder(ctx, &record, event)
-	if err != nil {
-		return r.handleFailure(ctx, &record, err)
-	}
-
-	r.markProcessed(&record, event)
-	return nil
 }
 
-func (r *OrderRouter) createOrUpdateWaldurOrder(ctx context.Context, record *OrderRoutingRecord, event marketplace.OrderCreatedEvent) error {
+func (r *OrderRouter) worker(ctx context.Context, idx int) {
+	defer r.wg.Done()
+	for {
+		select {
+		case <-r.stopCh:
+			return
+		case <-ctx.Done():
+			return
+		case task := <-r.tasks:
+			if err := r.processTask(ctx, task); err != nil {
+				log.Printf("[order-router] worker=%d order=%s error=%v", idx, task.Request.OrderID, err)
+			}
+		}
+	}
+}
+
+func (r *OrderRouter) retryLoop(ctx context.Context) {
+	defer r.wg.Done()
+	ticker := time.NewTicker(r.cfg.RetryBackoff)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-r.stopCh:
+			return
+		case <-ticker.C:
+			now := time.Now().UTC()
+			r.mu.Lock()
+			for _, record := range r.state.Orders {
+				if record == nil || record.DeadLettered || record.OrderID == "" {
+					continue
+				}
+				if record.NextAttemptAt == nil || record.NextAttemptAt.After(now) {
+					continue
+				}
+				req := OrderRoutingRequest{
+					OrderID:         record.OrderID,
+					CustomerAddress: record.CustomerAddress,
+					OfferingID:      record.OfferingID,
+					ProviderAddress: record.ProviderAddress,
+					Region:          record.Attributes["region"],
+				}
+				_ = r.Enqueue(req)
+			}
+			r.mu.Unlock()
+		}
+	}
+}
+
+func (r *OrderRouter) processTask(ctx context.Context, task OrderRoutingTask) error {
+	req := task.Request
+	if req.ProviderAddress != "" && r.cfg.ProviderAddress != "" &&
+		!equalAddresses(req.ProviderAddress, r.cfg.ProviderAddress) {
+		return nil
+	}
+
+	r.mu.Lock()
+	record := r.state.Get(req.OrderID)
+	if record != nil && record.DeadLettered {
+		r.mu.Unlock()
+		return nil
+	}
+	r.mu.Unlock()
+
 	opCtx, cancel := r.operationContext(ctx)
 	defer cancel()
 
-	waldurOfferingUUID, err := r.resolveOfferingUUID(opCtx, event.OfferingID)
-	if err != nil {
+	if err := r.routeOrder(opCtx, req); err != nil {
+		r.handleFailure(req, err)
 		return err
-	}
-
-	record.WaldurOfferingUUID = waldurOfferingUUID
-
-	if record.WaldurOrderUUID != "" {
-		order, err := r.client.GetOrder(opCtx, record.WaldurOrderUUID)
-		if err == nil && order != nil {
-			if order.ResourceUUID != "" && record.WaldurResourceUUID == "" {
-				record.WaldurResourceUUID = order.ResourceUUID
-			}
-			return nil
-		}
-	}
-
-	attributes := map[string]interface{}{
-		"order_id":         event.OrderID,
-		"provider_address": event.ProviderAddress,
-		"customer_address": event.CustomerAddress,
-		"offering_id":      event.OfferingID,
-		"requested_qty":    event.Quantity,
-		"max_bid_price":    event.MaxBidPrice,
-	}
-	if event.Region != "" {
-		attributes["region"] = event.Region
-	}
-	if event.ExpiresAt != nil {
-		attributes["expires_at"] = event.ExpiresAt.UTC().Format(time.RFC3339)
-	}
-
-	orderName := fmt.Sprintf("ve-order-%s", sanitizeOrderID(event.OrderID))
-	req := waldur.CreateOrderRequest{
-		OfferingUUID:   waldurOfferingUUID,
-		ProjectUUID:    r.cfg.WaldurProjectUUID,
-		CallbackURL:    r.cfg.OrderCallbackURL,
-		RequestComment: fmt.Sprintf("virtengine order %s", event.OrderID),
-		Attributes:     attributes,
-		Name:           orderName,
-		Description:    fmt.Sprintf("VirtEngine order %s", event.OrderID),
-	}
-
-	order, err := r.client.CreateOrder(opCtx, req)
-	if err != nil {
-		return err
-	}
-	record.WaldurOrderUUID = order.UUID
-	record.WaldurResourceUUID = order.ResourceUUID
-
-	if err := r.client.ApproveOrderByProvider(opCtx, order.UUID); err != nil {
-		if !errors.Is(err, waldur.ErrConflict) {
-			return err
-		}
-	}
-
-	if err := r.client.SetOrderBackendID(opCtx, order.UUID, event.OrderID); err != nil {
-		if !errors.Is(err, waldur.ErrConflict) {
-			return err
-		}
 	}
 
 	return nil
 }
 
-func (r *OrderRouter) resolveOfferingUUID(ctx context.Context, offeringID string) (string, error) {
-	if offeringID == "" {
-		return "", fmt.Errorf("offering ID is required")
-	}
-	if r.cfg.WaldurOfferingMap != nil {
-		if mapped := r.cfg.WaldurOfferingMap[offeringID]; mapped != "" {
-			return mapped, nil
+func (r *OrderRouter) routeOrder(ctx context.Context, req OrderRoutingRequest) error {
+	r.mu.Lock()
+	record := r.state.Get(req.OrderID)
+	if record == nil {
+		record = &WaldurOrderRecord{
+			OrderID:         req.OrderID,
+			CustomerAddress: req.CustomerAddress,
+			OfferingID:      req.OfferingID,
+			ProviderAddress: req.ProviderAddress,
+			Attributes:      map[string]string{},
 		}
 	}
-	offering, err := r.client.GetOfferingByBackendID(ctx, offeringID)
+	if record.Attributes == nil {
+		record.Attributes = map[string]string{}
+	}
+	if req.Region != "" {
+		record.Attributes["region"] = req.Region
+	}
+	r.state.Upsert(record)
+	_ = r.store.Save(r.state)
+	r.mu.Unlock()
+
+	if record.WaldurOrderUUID != "" {
+		return r.refreshExisting(ctx, req, record)
+	}
+
+	offeringUUID, err := r.resolver.ResolveOfferingUUID(ctx, req.OfferingID)
 	if err != nil {
-		return "", fmt.Errorf("resolve waldur offering for %s: %w", offeringID, err)
+		return err
 	}
-	if offering == nil || offering.UUID == "" {
-		return "", fmt.Errorf("waldur offering not found for %s", offeringID)
+
+	attrs := map[string]interface{}{
+		"ve_order_id":         req.OrderID,
+		"ve_customer_address": req.CustomerAddress,
+		"ve_offering_id":      req.OfferingID,
+		"ve_provider_address": req.ProviderAddress,
 	}
-	return offering.UUID, nil
+	if req.Region != "" {
+		attrs["region"] = req.Region
+	}
+	if req.MaxBidPrice > 0 {
+		attrs["max_bid_price"] = fmt.Sprintf("%d", req.MaxBidPrice)
+	}
+
+	name := fmt.Sprintf("ve-order-%s", req.OrderID)
+	description := fmt.Sprintf("VirtEngine order %s", req.OrderID)
+
+	limits := map[string]int{}
+	if req.Quantity > 0 {
+		limits["instances"] = int(req.Quantity)
+	}
+
+	order, err := r.marketplace.CreateOrder(ctx, waldur.CreateOrderRequest{
+		OfferingUUID:   offeringUUID,
+		ProjectUUID:    r.cfg.WaldurProjectID,
+		CallbackURL:    r.cfg.OrderCallbackURL,
+		RequestComment: fmt.Sprintf("virtengine order %s", req.OrderID),
+		Attributes:     attrs,
+		Limits:         limits,
+		Type:           "Create",
+		Name:           name,
+		Description:    description,
+	})
+	if err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	record = r.state.Get(req.OrderID)
+	if record == nil {
+		record = &WaldurOrderRecord{OrderID: req.OrderID}
+	}
+	record.WaldurOrderUUID = order.UUID
+	record.WaldurResource = order.ResourceUUID
+	record.WaldurState = order.State
+	record.OfferingUUID = offeringUUID
+	record.ProjectUUID = r.cfg.WaldurProjectID
+	r.state.Upsert(record)
+	_ = r.store.Save(r.state)
+	r.mu.Unlock()
+
+	if err := r.marketplace.ApproveOrderByProvider(ctx, order.UUID); err != nil {
+		return err
+	}
+	if err := r.marketplace.SetOrderBackendID(ctx, order.UUID, req.OrderID); err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	record = r.state.Get(req.OrderID)
+	if record != nil {
+		record.LastError = ""
+		record.NextAttemptAt = nil
+		record.RetryCount = 0
+		record.UpdatedAt = time.Now().UTC()
+		r.state.Upsert(record)
+		_ = r.store.Save(r.state)
+	}
+	r.mu.Unlock()
+
+	return nil
+}
+
+func (r *OrderRouter) refreshExisting(ctx context.Context, req OrderRoutingRequest, record *WaldurOrderRecord) error {
+	if record == nil || record.WaldurOrderUUID == "" {
+		return errors.New("missing waldur order UUID")
+	}
+
+	order, err := r.marketplace.GetOrder(ctx, record.WaldurOrderUUID)
+	if err != nil {
+		return err
+	}
+
+	if err := r.marketplace.ApproveOrderByProvider(ctx, record.WaldurOrderUUID); err != nil && !errors.Is(err, waldur.ErrConflict) {
+		return err
+	}
+	if err := r.marketplace.SetOrderBackendID(ctx, record.WaldurOrderUUID, req.OrderID); err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	record.WaldurState = order.State
+	record.WaldurResource = order.ResourceUUID
+	record.LastError = ""
+	record.RetryCount = 0
+	record.NextAttemptAt = nil
+	record.UpdatedAt = time.Now().UTC()
+	r.state.Upsert(record)
+	_ = r.store.Save(r.state)
+	r.mu.Unlock()
+	return nil
+}
+
+func (r *OrderRouter) handleFailure(req OrderRoutingRequest, err error) {
+	r.mu.Lock()
+	record := r.state.MarkFailed(req.OrderID, err.Error())
+	backoff := r.retryDelay(record.RetryCount)
+	next := time.Now().UTC().Add(backoff)
+	record.NextAttemptAt = &next
+	r.state.Upsert(record)
+	_ = r.store.Save(r.state)
+	r.mu.Unlock()
+
+	if record.RetryCount > r.cfg.MaxRetries {
+		r.mu.Lock()
+		r.state.DeadLetter(record, "max retries exceeded")
+		_ = r.store.Save(r.state)
+		r.mu.Unlock()
+
+		if r.cfg.AlertSink != nil {
+			details := map[string]string{
+				"error":       err.Error(),
+				"offering_id": req.OfferingID,
+				"provider":    req.ProviderAddress,
+			}
+			_, _ = r.cfg.AlertSink.CreateAlert(context.Background(), AlertTypeServiceDegraded, AlertSeverityError,
+				"order routing dead-lettered", "", req.OrderID, details)
+		}
+	}
+}
+
+func (r *OrderRouter) retryDelay(retryCount int) time.Duration {
+	if retryCount <= 0 {
+		return r.cfg.RetryBackoff
+	}
+	backoff := float64(r.cfg.RetryBackoff) * math.Pow(2, float64(retryCount-1))
+	if max := float64(r.cfg.MaxBackoff); backoff > max {
+		backoff = max
+	}
+	return time.Duration(backoff)
 }
 
 func (r *OrderRouter) operationContext(parent context.Context) (context.Context, context.CancelFunc) {
@@ -325,238 +502,32 @@ func (r *OrderRouter) operationContext(parent context.Context) (context.Context,
 	return context.WithTimeout(parent, timeout)
 }
 
-func (r *OrderRouter) getOrCreateRecord(event marketplace.OrderCreatedEvent) OrderRoutingRecord {
+func equalAddresses(a, b string) bool {
+	return a == b || (a != "" && b != "" && a == b)
+}
+
+// UpdateChainState records the latest chain-side order state.
+func (r *OrderRouter) UpdateChainState(orderID, state string) {
+	if r == nil || orderID == "" {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	record := r.state.Records[event.OrderID]
+	record := r.state.Get(orderID)
 	if record == nil {
-		record = &OrderRoutingRecord{
-			OrderID:         event.OrderID,
-			OfferingID:      event.OfferingID,
-			ProviderAddress: event.ProviderAddress,
-			CustomerAddress: event.CustomerAddress,
-			CreatedAt:       time.Now().UTC(),
-		}
-		r.state.Records[event.OrderID] = record
+		record = &WaldurOrderRecord{OrderID: orderID}
 	}
-	return *record
+	record.ChainState = state
+	record.UpdatedAt = time.Now().UTC()
+	r.state.Upsert(record)
+	_ = r.store.Save(r.state)
 }
 
-func (r *OrderRouter) markProcessed(record *OrderRoutingRecord, event marketplace.OrderCreatedEvent) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	now := time.Now().UTC()
-	record.LastSequence = event.Sequence
-	record.LastState = "created"
-	record.RetryCount = 0
-	record.LastError = ""
-	record.UpdatedAt = now
-	record.LastAttemptAt = now
-
-	r.state.Metrics.Processed++
-	r.state.Metrics.LastSequence = event.Sequence
-	r.state.Metrics.LastProcessed = event.OrderID
-
-	r.state.Records[record.OrderID] = record
-	if err := r.stateStore.Save(r.state); err != nil {
-		log.Printf("[order-router] failed to save state: %v", err)
-	}
-}
-
-func (r *OrderRouter) markSkipped(orderID string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.state.Metrics.Skipped++
-	r.state.Metrics.LastProcessed = orderID
-	_ = r.stateStore.Save(r.state)
-}
-
-func (r *OrderRouter) handleFailure(ctx context.Context, record *OrderRoutingRecord, err error) error {
-	if err == nil {
+// Store returns the underlying order store.
+func (r *OrderRouter) Store() *WaldurOrderStore {
+	if r == nil {
 		return nil
 	}
-
-	retryable := isRetryableOrderError(err)
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	now := time.Now().UTC()
-	record.LastError = err.Error()
-	record.UpdatedAt = now
-	record.LastAttemptAt = now
-	if retryable {
-		record.RetryCount++
-		r.state.Metrics.Retried++
-	} else {
-		record.DeadLettered = true
-		record.RetryCount++
-		r.state.Metrics.DeadLettered++
-		r.state.DeadLetterQueue = append(r.state.DeadLetterQueue, &OrderDeadLetterItem{
-			OrderID:         record.OrderID,
-			OfferingID:      record.OfferingID,
-			ProviderAddress: record.ProviderAddress,
-			Reason:          "fatal_error",
-			Attempts:        record.RetryCount,
-			DeadLetteredAt:  now,
-			LastError:       record.LastError,
-		})
-		if r.cfg.DeadLetterAlerting && r.alerts != nil {
-			_ = r.alerts.Alert(ctx, OrderRoutingAlert{
-				OrderID:      record.OrderID,
-				OfferingID:   record.OfferingID,
-				Provider:     record.ProviderAddress,
-				Attempts:     record.RetryCount,
-				LastError:    record.LastError,
-				DeadLettered: true,
-				RecordedAt:   now,
-			})
-		}
-	}
-	r.state.Metrics.Failed++
-	r.state.Records[record.OrderID] = record
-	_ = r.stateStore.Save(r.state)
-
-	if retryable {
-		return err
-	}
-	return fmt.Errorf("order %s dead-lettered: %w", record.OrderID, err)
-}
-
-func (r *OrderRouter) retryLoop(ctx context.Context) {
-	ticker := time.NewTicker(r.cfg.RetryInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-r.stopCh:
-			return
-		case <-ticker.C:
-			r.retryPending(ctx)
-		}
-	}
-}
-
-func (r *OrderRouter) retryPending(ctx context.Context) {
-	r.mu.RLock()
-	records := make([]OrderRoutingRecord, 0, len(r.state.Records))
-	for _, record := range r.state.Records {
-		if record.DeadLettered || record.RetryCount == 0 {
-			continue
-		}
-		records = append(records, *record)
-	}
-	r.mu.RUnlock()
-
-	for _, record := range records {
-		if r.shouldRetry(record) {
-			event := marketplace.OrderCreatedEvent{
-				BaseMarketplaceEvent: marketplace.BaseMarketplaceEvent{
-					Sequence: record.LastSequence,
-				},
-				OrderID:         record.OrderID,
-				OfferingID:      record.OfferingID,
-				ProviderAddress: record.ProviderAddress,
-				CustomerAddress: record.CustomerAddress,
-			}
-			if err := r.createOrUpdateWaldurOrder(ctx, &record, event); err != nil {
-				_ = r.handleFailure(ctx, &record, err)
-				continue
-			}
-			r.mu.Lock()
-			record.LastError = ""
-			record.RetryCount = 0
-			record.UpdatedAt = time.Now().UTC()
-			r.state.Records[record.OrderID] = &record
-			r.state.Metrics.Recovered++
-			_ = r.stateStore.Save(r.state)
-			r.mu.Unlock()
-			log.Printf("[order-router] recovered order %s", record.OrderID)
-		}
-	}
-}
-
-func (r *OrderRouter) shouldRetry(record OrderRoutingRecord) bool {
-	if record.RetryCount <= 0 || record.DeadLettered {
-		return false
-	}
-	if record.RetryCount >= r.cfg.MaxRetries {
-		r.mu.Lock()
-		record.DeadLettered = true
-		r.state.Metrics.DeadLettered++
-		r.state.Records[record.OrderID] = &record
-		r.state.DeadLetterQueue = append(r.state.DeadLetterQueue, &OrderDeadLetterItem{
-			OrderID:         record.OrderID,
-			OfferingID:      record.OfferingID,
-			ProviderAddress: record.ProviderAddress,
-			Reason:          "max_retries",
-			Attempts:        record.RetryCount,
-			DeadLetteredAt:  time.Now().UTC(),
-			LastError:       record.LastError,
-		})
-		_ = r.stateStore.Save(r.state)
-		r.mu.Unlock()
-		if r.cfg.DeadLetterAlerting && r.alerts != nil {
-			_ = r.alerts.Alert(context.Background(), OrderRoutingAlert{
-				OrderID:      record.OrderID,
-				OfferingID:   record.OfferingID,
-				Provider:     record.ProviderAddress,
-				Attempts:     record.RetryCount,
-				LastError:    record.LastError,
-				DeadLettered: true,
-				RecordedAt:   time.Now().UTC(),
-			})
-		}
-		return false
-	}
-
-	delay := retryDelay(r.cfg.RetryBackoff, r.cfg.MaxRetryBackoff, record.RetryCount)
-	return time.Since(record.LastAttemptAt) >= delay
-}
-
-func retryDelay(base, max time.Duration, attempts int) time.Duration {
-	if attempts <= 0 {
-		return base
-	}
-	shift := attempts - 1
-	if shift > 30 {
-		shift = 30
-	}
-	delay := base * time.Duration(1<<shift)
-	if delay > max {
-		delay = max
-	}
-	jitterRange := delay/10 + 1
-	jitter := time.Duration(0)
-	if jitterRange > 0 {
-		if n, err := rand.Int(rand.Reader, big.NewInt(int64(jitterRange))); err == nil {
-			jitter = time.Duration(n.Int64())
-		}
-	}
-	return delay + jitter
-}
-
-func sanitizeOrderID(orderID string) string {
-	replacer := strings.NewReplacer("/", "-", ":", "-", " ", "-")
-	return replacer.Replace(orderID)
-}
-
-func isRetryableOrderError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, waldur.ErrRateLimited) || errors.Is(err, waldur.ErrServerError) || errors.Is(err, waldur.ErrTimeout) {
-		return true
-	}
-	if errors.Is(err, waldur.ErrUnauthorized) || errors.Is(err, waldur.ErrForbidden) {
-		return false
-	}
-	if errors.Is(err, waldur.ErrNotFound) {
-		return false
-	}
-	return true
+	return r.store
 }

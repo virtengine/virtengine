@@ -8,10 +8,7 @@ import (
 )
 
 func TestParseOrderState(t *testing.T) {
-	state, ok := parseOrderState("active")
-	if !ok {
-		t.Fatalf("expected parse to succeed")
-	}
+	state := marketplace.ParseOrderState("active")
 	if state != marketplace.OrderStateActive {
 		t.Fatalf("unexpected state: %v", state)
 	}
