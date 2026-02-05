@@ -5,10 +5,6 @@ export const metadata: Metadata = {
   description: 'Verify your identity to unlock full platform features',
 };
 
-export default function VerifyLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function VerifyLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

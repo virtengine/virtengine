@@ -36,7 +36,7 @@ export function Sidebar({ variant }: SidebarProps) {
             href={link.href}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
               pathname === link.href || pathname.startsWith(link.href + '/')
-                ? 'bg-primary/10 text-primary font-medium'
+                ? 'bg-primary/10 font-medium text-primary'
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
           >

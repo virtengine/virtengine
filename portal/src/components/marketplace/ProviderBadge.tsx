@@ -36,9 +36,7 @@ export function ProviderBadge({
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <span className={`font-medium ${textSizeClasses[size]}`}>
-            {provider.name}
-          </span>
+          <span className={`font-medium ${textSizeClasses[size]}`}>{provider.name}</span>
           {provider.verified && (
             <span
               className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
@@ -61,7 +59,7 @@ export function ProviderBadge({
 
 function ReputationStars({ rating }: { rating: number }) {
   const fullStars = Math.floor(rating / 20);
-  const hasHalfStar = (rating % 20) >= 10;
+  const hasHalfStar = rating % 20 >= 10;
   const starSlots = [0, 1, 2, 3, 4];
 
   return (
@@ -155,10 +153,7 @@ export function ProviderInfoCard({ provider }: ProviderInfoCardProps) {
             <dt className="mb-1 text-muted-foreground">Regions</dt>
             <dd className="flex flex-wrap gap-1">
               {provider.regions.map((region) => (
-                <span
-                  key={region}
-                  className="rounded-full bg-muted px-2 py-0.5 text-xs"
-                >
+                <span key={region} className="rounded-full bg-muted px-2 py-0.5 text-xs">
                   {region}
                 </span>
               ))}

@@ -1,0 +1,146 @@
+name: Portal Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'portal/**'
+      - 'lib/portal/**'
+      - 'lib/capture/**'
+  pull_request:
+    paths:
+      - 'portal/**'
+      - 'lib/portal/**'
+      - 'lib/capture/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '10.28.2'
+
+jobs:
+  build:
+    name: Build for GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build portal for GitHub Pages
+        run: pnpm -C portal build
+        env:
+          GITHUB_PAGES: 'true'
+          NEXT_PUBLIC_CHAIN_ID: virtengine-testnet-1
+          NEXT_PUBLIC_CHAIN_RPC: https://rpc.testnet.virtengine.com
+          NEXT_PUBLIC_CHAIN_REST: https://api.testnet.virtengine.com
+          NEXT_PUBLIC_DEV_MODE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: portal/out
+
+  # Deploy to GitHub Pages (main branch only)
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Preview deployment comment for PRs
+  preview-comment:
+    name: Comment Preview Info
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## 🚀 Portal Build Complete
+
+            The portal has been built successfully for this PR.
+
+            ### Preview Options
+            
+            Since we use GitHub Pages, previews are available after merge to main.
+            
+            **To test locally:**
+            \`\`\`bash
+            pnpm install
+            pnpm -C portal dev
+            \`\`\`
+
+            **Build Artifacts:**
+            - Static export available in workflow artifacts
+            - Download and serve with any static file server
+
+            <details>
+            <summary>Build Details</summary>
+
+            - **Commit**: \`${{ github.sha }}\`
+            - **Branch**: \`${{ github.head_ref }}\`
+            - **Workflow**: [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            </details>
+            `;
+
+            // Check if comment already exists
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('Portal Build Complete')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

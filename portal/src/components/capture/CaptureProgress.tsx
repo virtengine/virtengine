@@ -30,7 +30,7 @@ export function CaptureProgress({ currentStep, className }: CaptureProgressProps
   return (
     <div className={cn('space-y-4', className)}>
       <Progress value={progressPercent} className="h-2" />
-      
+
       <div className="flex justify-between">
         {steps.map((step, index) => {
           const isComplete = index < currentIndex;

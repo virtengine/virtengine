@@ -21,16 +21,14 @@ export default function IdentityPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">Your Identity Score</h2>
-              <p className="text-sm text-muted-foreground">
-                Based on completed verifications
-              </p>
+              <p className="text-sm text-muted-foreground">Based on completed verifications</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <div className="text-4xl font-bold text-primary">72</div>
                 <div className="text-sm text-muted-foreground">/ 100</div>
               </div>
-              <div className="h-20 w-20 rounded-full border-4 border-primary/20 relative">
+              <div className="relative h-20 w-20 rounded-full border-4 border-primary/20">
                 <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
                   <circle
                     cx="50"
@@ -181,9 +179,7 @@ function VerificationStep({ title, description, status, points }: VerificationSt
             Continue
           </button>
         )}
-        {status === 'completed' && (
-          <span className={`text-sm ${config.text}`}>{config.label}</span>
-        )}
+        {status === 'completed' && <span className={`text-sm ${config.text}`}>{config.label}</span>}
       </div>
     </div>
   );

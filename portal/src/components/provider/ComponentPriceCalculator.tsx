@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
+import { useMemo, useState } from 'react';
 
-type ResourceKey = "cpu" | "ram" | "storage" | "gpu";
+type ResourceKey = 'cpu' | 'ram' | 'storage' | 'gpu';
 
 const resourceLabels: Record<ResourceKey, string> = {
-  cpu: "vCPU",
-  ram: "RAM (GB)",
-  storage: "Storage (GB)",
-  gpu: "GPU",
+  cpu: 'vCPU',
+  ram: 'RAM (GB)',
+  storage: 'Storage (GB)',
+  gpu: 'GPU',
 };
 
 export default function ComponentPriceCalculator() {
@@ -24,7 +24,7 @@ export default function ComponentPriceCalculator() {
     storage: 0.1,
     gpu: 10,
   });
-  const [denom, setDenom] = useState("uve");
+  const [denom, setDenom] = useState('uve');
 
   const totalPerHour = useMemo(() => {
     return (Object.keys(units) as ResourceKey[]).reduce((sum, key) => {
@@ -50,11 +50,9 @@ export default function ComponentPriceCalculator() {
             <input
               type="number"
               min={0}
-              step={key === "storage" ? 1 : 0.5}
+              step={key === 'storage' ? 1 : 0.5}
               value={units[key]}
-              onChange={(event) =>
-                setUnits({ ...units, [key]: Number(event.target.value) })
-              }
+              onChange={(event) => setUnits({ ...units, [key]: Number(event.target.value) })}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
             <div className="flex items-center gap-2">
@@ -63,9 +61,7 @@ export default function ComponentPriceCalculator() {
                 min={0}
                 step={0.01}
                 value={prices[key]}
-                onChange={(event) =>
-                  setPrices({ ...prices, [key]: Number(event.target.value) })
-                }
+                onChange={(event) => setPrices({ ...prices, [key]: Number(event.target.value) })}
                 className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
               />
               <span className="text-xs text-muted-foreground">/hr</span>

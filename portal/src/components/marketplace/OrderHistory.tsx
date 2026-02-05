@@ -39,7 +39,7 @@ export function OrderHistory({ className, onOrderSelect }: OrderHistoryProps) {
           <CardDescription>Your past orders will appear here</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-center text-muted-foreground py-8">
+          <p className="py-8 text-center text-muted-foreground">
             You haven&apos;t placed any orders yet
           </p>
         </CardContent>
@@ -67,10 +67,7 @@ export function OrderHistory({ className, onOrderSelect }: OrderHistoryProps) {
       <CardContent>
         <div className="space-y-4">
           {state.orders.map((order) => (
-            <div
-              key={order.id}
-              className="flex items-center justify-between rounded-lg border p-4"
-            >
+            <div key={order.id} className="flex items-center justify-between rounded-lg border p-4">
               <div>
                 <p className="font-medium">{order.offeringId}</p>
                 <p className="text-sm text-muted-foreground">
@@ -81,11 +78,7 @@ export function OrderHistory({ className, onOrderSelect }: OrderHistoryProps) {
                 <Badge className={cn(getStatusColor(order.state), 'text-white')}>
                   {order.state}
                 </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onOrderSelect?.(order.id)}
-                >
+                <Button variant="outline" size="sm" onClick={() => onOrderSelect?.(order.id)}>
                   View
                 </Button>
               </div>
@@ -96,4 +89,3 @@ export function OrderHistory({ className, onOrderSelect }: OrderHistoryProps) {
     </Card>
   );
 }
-

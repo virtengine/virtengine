@@ -53,15 +53,21 @@ export function SelfieCapturePanel({
     setGuidanceState(state);
   }, []);
 
-  const handleCapture = useCallback((result: SelfieResult) => {
-    setError(null);
-    onCapture(result);
-  }, [onCapture]);
+  const handleCapture = useCallback(
+    (result: SelfieResult) => {
+      setError(null);
+      onCapture(result);
+    },
+    [onCapture]
+  );
 
-  const handleError = useCallback((captureError: CaptureError) => {
-    setError(captureError.message);
-    onError?.(captureError);
-  }, [onError]);
+  const handleError = useCallback(
+    (captureError: CaptureError) => {
+      setError(captureError.message);
+      onError?.(captureError);
+    },
+    [onError]
+  );
 
   return (
     <Card className={cn(className)}>
@@ -71,9 +77,7 @@ export function SelfieCapturePanel({
             <CardTitle>{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          {livenessCheck && (
-            <Badge variant="secondary">Liveness Check</Badge>
-          )}
+          {livenessCheck && <Badge variant="secondary">Liveness Check</Badge>}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -84,12 +88,7 @@ export function SelfieCapturePanel({
           </Alert>
         )}
 
-        {guidanceState && (
-          <CaptureGuidance
-            guidance={guidanceState}
-            captureType="selfie"
-          />
-        )}
+        {guidanceState && <CaptureGuidance guidance={guidanceState} captureType="selfie" />}
 
         <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-full bg-black">
           <SelfieCapture

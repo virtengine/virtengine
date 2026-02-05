@@ -4,14 +4,7 @@
  */
 
 import type { Meta, StoryObj } from '@storybook/react';
-import {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from '../Card';
+import { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from '../Card';
 import { Button } from '../Button';
 import { Input } from '../Input';
 import { Label } from '../Label';
@@ -80,7 +73,7 @@ export const Simple: Story = {
 
 export const HoverEffect: Story = {
   render: () => (
-    <Card className="w-[350px] card-hover cursor-pointer">
+    <Card className="card-hover w-[350px] cursor-pointer">
       <CardHeader>
         <CardTitle>Hover me</CardTitle>
         <CardDescription>This card has a hover effect</CardDescription>

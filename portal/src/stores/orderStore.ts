@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 
-export type OrderStatus = 'pending' | 'matched' | 'deploying' | 'running' | 'paused' | 'stopped' | 'completed' | 'failed';
+export type OrderStatus =
+  | 'pending'
+  | 'matched'
+  | 'deploying'
+  | 'running'
+  | 'paused'
+  | 'stopped'
+  | 'completed'
+  | 'failed';
 
 export interface Order {
   id: string;
@@ -141,7 +149,7 @@ export const useOrderStore = create<OrderStore>()((set, get) => ({
     try {
       // In production, this would call the API
       await new Promise((resolve) => setTimeout(resolve, 500));
-      
+
       const { orders } = get();
       set({
         orders: orders.map((order) =>
@@ -161,15 +169,14 @@ export const useOrderStore = create<OrderStore>()((set, get) => ({
 // Selectors
 export const selectFilteredOrders = (state: OrderStore) => {
   const { orders, filters } = state;
-  
-  const filtered = filters.status === 'all' 
-    ? [...orders]
-    : orders.filter((o) => o.status === filters.status);
-  
+
+  const filtered =
+    filters.status === 'all' ? [...orders] : orders.filter((o) => o.status === filters.status);
+
   filtered.sort((a, b) => {
     const aValue = filters.sortBy === 'cost' ? a.cost.totalCost : a[filters.sortBy];
     const bValue = filters.sortBy === 'cost' ? b.cost.totalCost : b[filters.sortBy];
-    
+
     if (aValue < bValue) return filters.sortOrder === 'asc' ? -1 : 1;
     if (aValue > bValue) return filters.sortOrder === 'asc' ? 1 : -1;
     return 0;

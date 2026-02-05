@@ -57,18 +57,15 @@ function getStatusColor(status: Order['status']) {
 export default function ProviderOrdersPage() {
   const [filter, setFilter] = useState<Order['status'] | 'all'>('all');
 
-  const filteredOrders = filter === 'all' 
-    ? mockOrders 
-    : mockOrders.filter(order => order.status === filter);
+  const filteredOrders =
+    filter === 'all' ? mockOrders : mockOrders.filter((order) => order.status === filter);
 
   return (
     <div className="container py-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Provider Orders</h1>
-          <p className="mt-1 text-muted-foreground">
-            Manage customer orders and deployments
-          </p>
+          <p className="mt-1 text-muted-foreground">Manage customer orders and deployments</p>
         </div>
       </div>
 
@@ -129,7 +126,9 @@ export default function ProviderOrdersPage() {
                     <span className="text-sm">{order.offering}</span>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(order.status)}`}>
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(order.status)}`}
+                    >
                       {order.status}
                     </span>
                   </td>

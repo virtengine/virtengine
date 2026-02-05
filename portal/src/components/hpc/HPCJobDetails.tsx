@@ -47,16 +47,17 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
     );
   }
 
-  const statusColor = {
-    pending: 'bg-yellow-500',
-    queued: 'bg-yellow-500',
-    running: 'bg-blue-500',
-    completing: 'bg-blue-500',
-    completed: 'bg-green-500',
-    timeout: 'bg-orange-500',
-    failed: 'bg-red-500',
-    cancelled: 'bg-gray-500',
-  }[job.status] ?? 'bg-gray-500';
+  const statusColor =
+    {
+      pending: 'bg-yellow-500',
+      queued: 'bg-yellow-500',
+      running: 'bg-blue-500',
+      completing: 'bg-blue-500',
+      completed: 'bg-green-500',
+      timeout: 'bg-orange-500',
+      failed: 'bg-red-500',
+      cancelled: 'bg-gray-500',
+    }[job.status] ?? 'bg-gray-500';
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -69,9 +70,7 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
                 Submitted {new Date(job.createdAt).toLocaleString()}
               </CardDescription>
             </div>
-            <Badge className={cn(statusColor, 'text-white')}>
-              {job.status}
-            </Badge>
+            <Badge className={cn(statusColor, 'text-white')}>{job.status}</Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -106,11 +105,7 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
             <CardTitle>Job Output</CardTitle>
           </CardHeader>
           <CardContent>
-            <JobOutputViewer
-              jobId={jobId}
-              outputs={[]}
-              isRunning={job.status === 'running'}
-            />
+            <JobOutputViewer jobId={jobId} outputs={[]} isRunning={job.status === 'running'} />
           </CardContent>
         </Card>
       )}
@@ -124,4 +119,3 @@ export function HPCJobDetails({ jobId, className, onBack }: HPCJobDetailsProps) 
     </div>
   );
 }
-
