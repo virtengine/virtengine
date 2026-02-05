@@ -269,6 +269,7 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		fmt.Printf("[portal-api] shell session encode error: %v\n", err)
 	}
 }
