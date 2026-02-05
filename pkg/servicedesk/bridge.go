@@ -39,6 +39,9 @@ type Bridge struct {
 
 	// Event channel for on-chain events
 	eventCh chan *SyncEvent
+
+	// Optional handler for external reference updates
+	externalRefHandler ExternalRefHandler
 }
 
 // IBridge defines the bridge service interface
@@ -75,6 +78,20 @@ type IBridge interface {
 
 	// Decryptor returns the payload decryptor
 	Decryptor() PayloadDecryptor
+
+	// SetInboundHandler sets a handler for inbound updates
+	SetInboundHandler(handler InboundUpdateHandler)
+
+	// GetTicketRecipients returns recipient key IDs for a ticket
+	GetTicketRecipients(ticketID string) []string
+
+	// SetExternalRefHandler sets the handler for external reference updates
+	SetExternalRefHandler(handler ExternalRefHandler)
+}
+
+// ExternalRefHandler handles external ticket references created by the bridge.
+type ExternalRefHandler interface {
+	HandleExternalRef(ctx context.Context, ticketID string, ref ExternalTicketRef) error
 }
 
 // Ensure Bridge implements IBridge
@@ -90,6 +107,7 @@ type TicketCreatedEvent struct {
 	Priority        string         `json:"priority"`
 	Subject         string         `json:"subject"`
 	Description     string         `json:"description"`
+	Recipients      []string       `json:"recipients,omitempty"`
 	RelatedEntity   *RelatedEntity `json:"related_entity,omitempty"`
 	BlockHeight     int64          `json:"block_height"`
 	Timestamp       time.Time      `json:"timestamp"`
@@ -328,6 +346,10 @@ func (b *Bridge) HandleTicketCreated(ctx context.Context, event *TicketCreatedEv
 		Status:      SyncStatusPending,
 	}
 
+	if len(event.Recipients) > 0 {
+		b.syncManager.SetTicketRecipients(event.TicketID, event.Recipients)
+	}
+
 	// Queue for processing
 	select {
 	case b.eventCh <- syncEvent:
@@ -559,6 +581,26 @@ func (b *Bridge) Decryptor() PayloadDecryptor {
 	return b.decryptor
 }
 
+// SetInboundHandler sets the handler used for inbound sync updates.
+func (b *Bridge) SetInboundHandler(handler InboundUpdateHandler) {
+	if b.syncManager != nil {
+		b.syncManager.SetInboundHandler(handler)
+	}
+}
+
+// GetTicketRecipients returns cached recipients for a ticket.
+func (b *Bridge) GetTicketRecipients(ticketID string) []string {
+	if b.syncManager == nil {
+		return nil
+	}
+	return b.syncManager.GetTicketRecipients(ticketID)
+}
+
+// SetExternalRefHandler registers a handler for external ticket references.
+func (b *Bridge) SetExternalRefHandler(handler ExternalRefHandler) {
+	b.externalRefHandler = handler
+}
+
 // eventProcessor processes sync events from the queue
 func (b *Bridge) eventProcessor(ctx context.Context) {
 	defer b.wg.Done()
@@ -676,14 +718,20 @@ func (b *Bridge) syncTicketCreated(ctx context.Context, event *SyncEvent) error 
 			return ErrExternalAPIError.Wrapf("jira create failed: %v", err)
 		}
 
-		// Update sync record
-		b.syncManager.UpdateExternalRef(ctx, event.TicketID, ExternalTicketRef{
+		ref := ExternalTicketRef{
 			Type:        ServiceDeskJira,
 			ExternalID:  issue.Key,
 			ExternalURL: issue.Self,
 			SyncStatus:  SyncStatusSynced,
 			CreatedAt:   time.Now(),
-		})
+		}
+		// Update sync record
+		b.syncManager.UpdateExternalRef(ctx, event.TicketID, ref)
+		if b.externalRefHandler != nil {
+			if err := b.externalRefHandler.HandleExternalRef(ctx, event.TicketID, ref); err != nil {
+				b.logger.Error("external ref handler failed", "error", err, "ticket_id", event.TicketID, "service", "jira")
+			}
+		}
 
 		b.auditLogger.LogEvent(ctx, AuditEventSyncSuccess, map[string]interface{}{
 			"ticket_id":   event.TicketID,
@@ -732,14 +780,20 @@ func (b *Bridge) syncTicketCreated(ctx context.Context, event *SyncEvent) error 
 			// Build external URL for the Waldur issue
 			externalURL := fmt.Sprintf("%s/support/%s/", b.config.WaldurConfig.BaseURL, issue.UUID)
 
-			// Update sync record
-			b.syncManager.UpdateExternalRef(ctx, event.TicketID, ExternalTicketRef{
+			ref := ExternalTicketRef{
 				Type:        ServiceDeskWaldur,
 				ExternalID:  issue.UUID,
 				ExternalURL: externalURL,
 				SyncStatus:  SyncStatusSynced,
 				CreatedAt:   time.Now(),
-			})
+			}
+			// Update sync record
+			b.syncManager.UpdateExternalRef(ctx, event.TicketID, ref)
+			if b.externalRefHandler != nil {
+				if err := b.externalRefHandler.HandleExternalRef(ctx, event.TicketID, ref); err != nil {
+					b.logger.Error("external ref handler failed", "error", err, "ticket_id", event.TicketID, "service", "waldur")
+				}
+			}
 
 			b.auditLogger.LogEvent(ctx, AuditEventSyncSuccess, map[string]interface{}{
 				"ticket_id":   event.TicketID,

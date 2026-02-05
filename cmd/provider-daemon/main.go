@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/viper"
 
 	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
+	"github.com/virtengine/virtengine/pkg/servicedesk"
 )
 
 const (
@@ -155,6 +156,23 @@ const (
 	FlagPortalShellSessionTTL = "portal-shell-session-ttl"
 	FlagPortalTokenTTL        = "portal-token-ttl"
 	FlagPortalAuditLogFile    = "portal-audit-log-file"
+
+	// Support service desk flags
+	FlagSupportEnabled             = "support-enabled"
+	FlagSupportWaldurBaseURL       = "support-waldur-base-url"
+	FlagSupportWaldurToken         = "support-waldur-token" //nolint:gosec
+	FlagSupportWaldurOrgUUID       = "support-waldur-org-uuid"
+	FlagSupportWaldurProjectUUID   = "support-waldur-project-uuid"
+	FlagSupportWebhookSecret       = "support-webhook-secret" //nolint:gosec
+	FlagSupportWebhookListen       = "support-webhook-listen"
+	FlagSupportWebhookRequireSig   = "support-webhook-require-signature"
+	FlagSupportDecryptionKeyPath   = "support-decryption-key-path"
+	FlagSupportDecryptionKeyBase64 = "support-decryption-key-base64"
+	FlagSupportEncryptionKeyPath   = "support-encryption-key-path"
+	FlagSupportEncryptionKeyBase64 = "support-encryption-key-base64"
+	FlagSupportSyncInbound         = "support-sync-inbound"
+	FlagSupportSyncOutbound        = "support-sync-outbound"
+	FlagSupportSyncInterval        = "support-sync-interval"
 )
 
 var (
@@ -232,6 +250,23 @@ func init() {
 	rootCmd.PersistentFlags().Duration(FlagPortalTokenTTL, 5*time.Minute, "Portal session token TTL")
 	rootCmd.PersistentFlags().String(FlagPortalAuditLogFile, "data/portal_audit.log", "Portal audit log file path")
 
+	// Support service desk flags
+	rootCmd.PersistentFlags().Bool(FlagSupportEnabled, false, "Enable support service desk bridge")
+	rootCmd.PersistentFlags().String(FlagSupportWaldurBaseURL, "", "Support Waldur API base URL")
+	rootCmd.PersistentFlags().String(FlagSupportWaldurToken, "", "Support Waldur API token")
+	rootCmd.PersistentFlags().String(FlagSupportWaldurOrgUUID, "", "Support Waldur organization UUID")
+	rootCmd.PersistentFlags().String(FlagSupportWaldurProjectUUID, "", "Support Waldur project UUID")
+	rootCmd.PersistentFlags().String(FlagSupportWebhookSecret, "", "Support webhook secret")
+	rootCmd.PersistentFlags().String(FlagSupportWebhookListen, ":8480", "Support webhook listen address")
+	rootCmd.PersistentFlags().Bool(FlagSupportWebhookRequireSig, true, "Require signatures for support webhooks")
+	rootCmd.PersistentFlags().String(FlagSupportDecryptionKeyPath, "", "Support payload decryption key path")
+	rootCmd.PersistentFlags().String(FlagSupportDecryptionKeyBase64, "", "Support payload decryption key (base64)")
+	rootCmd.PersistentFlags().String(FlagSupportEncryptionKeyPath, "", "Support payload encryption key path")
+	rootCmd.PersistentFlags().String(FlagSupportEncryptionKeyBase64, "", "Support payload encryption key (base64)")
+	rootCmd.PersistentFlags().Bool(FlagSupportSyncInbound, true, "Enable inbound support sync from service desk")
+	rootCmd.PersistentFlags().Bool(FlagSupportSyncOutbound, true, "Enable outbound support sync to service desk")
+	rootCmd.PersistentFlags().Duration(FlagSupportSyncInterval, 30*time.Second, "Support sync interval")
+
 	// Bind to viper
 	_ = viper.BindPFlag(FlagChainID, rootCmd.PersistentFlags().Lookup(FlagChainID))
 	_ = viper.BindPFlag(FlagNode, rootCmd.PersistentFlags().Lookup(FlagNode))
@@ -278,6 +313,23 @@ func init() {
 	_ = viper.BindPFlag(FlagPortalShellSessionTTL, rootCmd.PersistentFlags().Lookup(FlagPortalShellSessionTTL))
 	_ = viper.BindPFlag(FlagPortalTokenTTL, rootCmd.PersistentFlags().Lookup(FlagPortalTokenTTL))
 	_ = viper.BindPFlag(FlagPortalAuditLogFile, rootCmd.PersistentFlags().Lookup(FlagPortalAuditLogFile))
+
+	// Support service desk flags
+	_ = viper.BindPFlag(FlagSupportEnabled, rootCmd.PersistentFlags().Lookup(FlagSupportEnabled))
+	_ = viper.BindPFlag(FlagSupportWaldurBaseURL, rootCmd.PersistentFlags().Lookup(FlagSupportWaldurBaseURL))
+	_ = viper.BindPFlag(FlagSupportWaldurToken, rootCmd.PersistentFlags().Lookup(FlagSupportWaldurToken))
+	_ = viper.BindPFlag(FlagSupportWaldurOrgUUID, rootCmd.PersistentFlags().Lookup(FlagSupportWaldurOrgUUID))
+	_ = viper.BindPFlag(FlagSupportWaldurProjectUUID, rootCmd.PersistentFlags().Lookup(FlagSupportWaldurProjectUUID))
+	_ = viper.BindPFlag(FlagSupportWebhookSecret, rootCmd.PersistentFlags().Lookup(FlagSupportWebhookSecret))
+	_ = viper.BindPFlag(FlagSupportWebhookListen, rootCmd.PersistentFlags().Lookup(FlagSupportWebhookListen))
+	_ = viper.BindPFlag(FlagSupportWebhookRequireSig, rootCmd.PersistentFlags().Lookup(FlagSupportWebhookRequireSig))
+	_ = viper.BindPFlag(FlagSupportDecryptionKeyPath, rootCmd.PersistentFlags().Lookup(FlagSupportDecryptionKeyPath))
+	_ = viper.BindPFlag(FlagSupportDecryptionKeyBase64, rootCmd.PersistentFlags().Lookup(FlagSupportDecryptionKeyBase64))
+	_ = viper.BindPFlag(FlagSupportEncryptionKeyPath, rootCmd.PersistentFlags().Lookup(FlagSupportEncryptionKeyPath))
+	_ = viper.BindPFlag(FlagSupportEncryptionKeyBase64, rootCmd.PersistentFlags().Lookup(FlagSupportEncryptionKeyBase64))
+	_ = viper.BindPFlag(FlagSupportSyncInbound, rootCmd.PersistentFlags().Lookup(FlagSupportSyncInbound))
+	_ = viper.BindPFlag(FlagSupportSyncOutbound, rootCmd.PersistentFlags().Lookup(FlagSupportSyncOutbound))
+	_ = viper.BindPFlag(FlagSupportSyncInterval, rootCmd.PersistentFlags().Lookup(FlagSupportSyncInterval))
 
 	// Add commands
 	rootCmd.AddCommand(startCmd())
@@ -380,6 +432,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	var callbackSink provider_daemon.CallbackSink
 	var usageReporter provider_daemon.UsageReporter
+	var supportService *provider_daemon.SupportService
 
 	if viper.GetBool(FlagWaldurEnabled) && viper.GetBool(FlagWaldurChainSubmit) {
 		chainKeyName := viper.GetString(FlagWaldurChainKey)
@@ -610,6 +663,53 @@ func runStart(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Waldur Bridge: started")
 	}
 
+	// Initialize support service desk bridge (VE-25C)
+	if viper.GetBool(FlagSupportEnabled) {
+		supportCfg := provider_daemon.DefaultSupportServiceConfig()
+		supportCfg.Enabled = true
+		supportCfg.ProviderAddress = providerAddress
+		supportCfg.ChainID = viper.GetString(FlagChainID)
+		supportCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
+		supportCfg.CometWS = viper.GetString(FlagCometWS)
+		supportCfg.GRPCEndpoint = viper.GetString(FlagWaldurChainGRPC)
+		supportCfg.Encryption.SenderPrivateKeyPath = viper.GetString(FlagSupportEncryptionKeyPath)
+		supportCfg.Encryption.SenderPrivateKeyBase64 = viper.GetString(FlagSupportEncryptionKeyBase64)
+
+		if supportCfg.ServiceDeskConfig != nil {
+			supportCfg.ServiceDeskConfig.Enabled = true
+			supportCfg.ServiceDeskConfig.SyncConfig.EnableInbound = viper.GetBool(FlagSupportSyncInbound)
+			supportCfg.ServiceDeskConfig.SyncConfig.EnableOutbound = viper.GetBool(FlagSupportSyncOutbound)
+			supportCfg.ServiceDeskConfig.SyncConfig.SyncInterval = viper.GetDuration(FlagSupportSyncInterval)
+			supportCfg.ServiceDeskConfig.WebhookConfig.ListenAddr = viper.GetString(FlagSupportWebhookListen)
+			supportCfg.ServiceDeskConfig.WebhookConfig.RequireSignature = viper.GetBool(FlagSupportWebhookRequireSig)
+			if supportCfg.ServiceDeskConfig.Decryption == nil {
+				supportCfg.ServiceDeskConfig.Decryption = &servicedesk.DecryptionConfig{}
+			}
+			supportCfg.ServiceDeskConfig.Decryption.PrivateKeyPath = viper.GetString(FlagSupportDecryptionKeyPath)
+			supportCfg.ServiceDeskConfig.Decryption.PrivateKeyBase64 = viper.GetString(FlagSupportDecryptionKeyBase64)
+			supportCfg.ServiceDeskConfig.WaldurConfig = &servicedesk.WaldurConfig{
+				BaseURL:          viper.GetString(FlagSupportWaldurBaseURL),
+				Token:            viper.GetString(FlagSupportWaldurToken),
+				OrganizationUUID: viper.GetString(FlagSupportWaldurOrgUUID),
+				ProjectUUID:      viper.GetString(FlagSupportWaldurProjectUUID),
+				WebhookSecret:    viper.GetString(FlagSupportWebhookSecret),
+				Timeout:          30 * time.Second,
+			}
+		}
+
+		svc, err := provider_daemon.NewSupportService(supportCfg, keyManager, provider_daemon.NewSupportLogger())
+		if err != nil {
+			return fmt.Errorf("failed to create support service: %w", err)
+		}
+		supportService = svc
+		if supportService != nil {
+			if err := supportService.Start(ctx); err != nil {
+				return fmt.Errorf("failed to start support service: %w", err)
+			}
+			fmt.Println("  Support Service: started")
+		}
+	}
+
 	// Start background workers
 	bidResultChan := bidEngine.GetBidResults()
 	go handleBidResults(ctx, bidResultChan)
@@ -642,6 +742,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	usageMeter.Stop()
 	fmt.Println("  Usage Meter: stopped")
+
+	if supportService != nil {
+		_ = supportService.Stop(ctx)
+		fmt.Println("  Support Service: stopped")
+	}
 
 	keyManager.Lock()
 	fmt.Println("  Key Manager: locked")

@@ -296,6 +296,9 @@ type TicketSyncRecord struct {
 	// ExternalRefs are references to external tickets
 	ExternalRefs []ExternalTicketRef `json:"external_refs"`
 
+	// Recipients are the encryption recipient key IDs for this ticket
+	Recipients []string `json:"recipients,omitempty"`
+
 	// LastOnChainUpdate is the last on-chain update timestamp
 	LastOnChainUpdate time.Time `json:"last_on_chain_update"`
 
