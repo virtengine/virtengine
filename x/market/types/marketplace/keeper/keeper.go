@@ -1014,6 +1014,8 @@ func (k Keeper) ProcessWaldurCallback(ctx sdk.Context, callback *marketplace.Wal
 		return k.processProvisionCallback(ctx, callback)
 	case marketplace.ActionTypeTerminate:
 		return k.processTerminateCallback(ctx, callback)
+	case marketplace.ActionTypeStatusUpdate:
+		return k.processOrderStatusCallback(ctx, callback)
 	default:
 		// Other action types can be added here
 		return nil
@@ -1154,6 +1156,59 @@ func (k Keeper) processTerminateCallback(ctx sdk.Context, callback *marketplace.
 		seq,
 		ctx.BlockTime(),
 	)
+	return k.EmitMarketplaceEvent(ctx, event)
+}
+
+// processOrderStatusCallback handles order status update callbacks.
+func (k Keeper) processOrderStatusCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
+	if callback.ChainEntityType != marketplace.SyncTypeOrder {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("unexpected entity type: %s", callback.ChainEntityType)
+	}
+	if callback.ChainEntityID == "" {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap("order id is required")
+	}
+
+	orderID, err := marketplace.ParseOrderID(callback.ChainEntityID)
+	if err != nil {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
+	}
+
+	order, found := k.GetOrder(ctx, orderID)
+	if !found {
+		return marketplace.ErrOrderNotFound.Wrapf("order %s not found", callback.ChainEntityID)
+	}
+
+	newStateValue := callback.Payload["state"]
+	if newStateValue == "" {
+		newStateValue = callback.Payload["chain_state"]
+	}
+	if newStateValue == "" {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap("missing order state")
+	}
+
+	newState := marketplace.ParseOrderState(newStateValue)
+	if newState == marketplace.OrderStateUnspecified {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("invalid order state: %s", newStateValue)
+	}
+
+	if order.State == newState {
+		return nil
+	}
+
+	reason := callback.Payload["reason"]
+	if reason == "" {
+		reason = "status update from waldur"
+	}
+	oldState := order.State
+	if err := order.SetStateAt(newState, reason, ctx.BlockTime()); err != nil {
+		return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+	}
+	if err := k.UpdateOrder(ctx, order); err != nil {
+		return err
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewOrderStateChangedEventAt(order, oldState, reason, ctx.BlockHeight(), seq, ctx.BlockTime())
 	return k.EmitMarketplaceEvent(ctx, event)
 }
 
