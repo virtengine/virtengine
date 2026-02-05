@@ -530,7 +530,9 @@ func (g *QuoteGenerator) generateSimulatedSignature(quote *Quote) error {
 	}
 
 	// Store public key (x || y)
+	//nolint:staticcheck // QF1008: using PublicKey explicitly for clarity
 	xBytes := privateKey.PublicKey.X.Bytes()
+	//nolint:staticcheck // QF1008: using PublicKey explicitly for clarity
 	yBytes := privateKey.PublicKey.Y.Bytes()
 	copy(quote.SignatureData.ECDSAAttestationKey[32-len(xBytes):32], xBytes)
 	copy(quote.SignatureData.ECDSAAttestationKey[64-len(yBytes):64], yBytes)
@@ -572,7 +574,7 @@ func (g *QuoteGenerator) generateSimulatedSignature(quote *Quote) error {
 
 	// Calculate signature length
 	// 64 (ISV sig) + 64 (att key) + 384 (QE report) + 64 (QE sig) + 2 (auth size) + len(auth) + 2 (cert type) + 4 (cert size) + len(cert)
-	quote.SignatureLength = uint32(64 + 64 + 384 + 64 + 2 + len(quote.SignatureData.QEAuthenticationData) + 2 + 4 + len(quote.SignatureData.CertificationData))
+	quote.SignatureLength = uint32(64 + 64 + 384 + 64 + 2 + len(quote.SignatureData.QEAuthenticationData) + 2 + 4 + len(quote.SignatureData.CertificationData)) //nolint:gosec // length won't exceed uint32
 
 	return nil
 }
@@ -750,7 +752,7 @@ func serializeSignatureData(sig *QuoteSignatureData) []byte {
 
 	// QE authentication data size and data
 	authSizeBytes := make([]byte, 2)
-	binary.LittleEndian.PutUint16(authSizeBytes, uint16(len(sig.QEAuthenticationData)))
+	binary.LittleEndian.PutUint16(authSizeBytes, uint16(len(sig.QEAuthenticationData))) //nolint:gosec // auth data length won't exceed uint16
 	buf.Write(authSizeBytes)
 	buf.Write(sig.QEAuthenticationData)
 
@@ -761,7 +763,7 @@ func serializeSignatureData(sig *QuoteSignatureData) []byte {
 
 	// Certification data size and data
 	certSizeBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(certSizeBytes, uint32(len(sig.CertificationData)))
+	binary.LittleEndian.PutUint32(certSizeBytes, uint32(len(sig.CertificationData))) //nolint:gosec // cert data length won't exceed uint32
 	buf.Write(certSizeBytes)
 	buf.Write(sig.CertificationData)
 
@@ -785,6 +787,7 @@ func VerifyQuoteSignature(quote *Quote) error {
 	}
 
 	// Verify the public key is on the curve
+	//nolint:staticcheck // QF1008: using Curve explicitly for clarity
 	if !pubKey.Curve.IsOnCurve(x, y) {
 		return errors.New("public key not on curve")
 	}

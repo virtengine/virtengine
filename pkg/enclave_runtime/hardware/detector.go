@@ -456,7 +456,7 @@ func (d *NitroDetector) getNitroCLIVersion(cliPath string) string {
 	// In a real implementation, we'd exec nitro-cli --version
 	// For now, return a placeholder
 	_ = cliPath
-	return "unknown"
+	return versionUnknown
 }
 
 // =============================================================================

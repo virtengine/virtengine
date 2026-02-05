@@ -31,7 +31,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -199,8 +198,6 @@ type PCKTCBInfo struct {
 
 // PCKCertParser provides methods for parsing and validating PCK certificates.
 type PCKCertParser struct {
-	mu sync.RWMutex
-
 	// Cache for parsed certificates
 	certCache map[string]*PCKCertificate
 }
@@ -268,6 +265,8 @@ func (p *PCKCertParser) parsePCKFromX509(cert *x509.Certificate) (*PCKCertificat
 }
 
 // parseSGXExtension parses a single SGX extension.
+//
+//nolint:unparam // error return kept for future extension validation
 func (p *PCKCertParser) parseSGXExtension(oid asn1.ObjectIdentifier, value []byte, pck *PCKCertificate) error {
 	switch {
 	case oid.Equal(OIDPPID):

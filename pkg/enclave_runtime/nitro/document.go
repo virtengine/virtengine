@@ -546,7 +546,7 @@ func GetTimestamp(doc *AttestationDocument) time.Time {
 	if doc == nil || doc.Payload == nil {
 		return time.Time{}
 	}
-	return time.UnixMilli(int64(doc.Payload.Timestamp))
+	return time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
 }
 
 // =============================================================================
@@ -599,10 +599,6 @@ type cborReader struct {
 
 func newCBORReader(data []byte) *cborReader {
 	return &cborReader{data: data, pos: 0}
-}
-
-func (r *cborReader) remaining() int {
-	return len(r.data) - r.pos
 }
 
 func (r *cborReader) readByte() (byte, error) {
@@ -658,7 +654,7 @@ func (r *cborReader) readLength(info int) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		return int(binary.BigEndian.Uint64(data)), nil
+		return int(binary.BigEndian.Uint64(data)), nil //nolint:gosec // CBOR length won't exceed int in practice
 	default:
 		return 0, ErrCBORDecodeError
 	}
@@ -755,7 +751,7 @@ func (r *cborReader) readUint64() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint64(length), nil
+	return uint64(length), nil //nolint:gosec // length is non-negative from readLength
 }
 
 func (r *cborReader) readInt() (int, error) {

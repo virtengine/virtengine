@@ -658,6 +658,8 @@ func (c *DCAPClient) fetchCollateral(ctx context.Context, fmspc string) (*Collat
 }
 
 // fetchTCBInfo fetches TCB info from PCS.
+//
+//nolint:unparam // error return kept for interface consistency
 func (c *DCAPClient) fetchTCBInfo(ctx context.Context, baseURL, fmspc string) ([]byte, []byte, []byte, error) {
 	endpoint := fmt.Sprintf("%s/tcb?fmspc=%s", baseURL, fmspc)
 
@@ -682,6 +684,8 @@ func (c *DCAPClient) fetchTCBInfo(ctx context.Context, baseURL, fmspc string) ([
 }
 
 // fetchQEIdentity fetches QE identity from PCS.
+//
+//nolint:unparam // error return kept for interface consistency
 func (c *DCAPClient) fetchQEIdentity(ctx context.Context, baseURL string) ([]byte, []byte, []byte, error) {
 	endpoint := fmt.Sprintf("%s/qe/identity", baseURL)
 
@@ -809,6 +813,8 @@ func (c *DCAPClient) verifyCertificateChain(collateral *Collateral) error {
 }
 
 // checkCRL checks if any certificates have been revoked.
+//
+//nolint:unparam // error return kept for production CRL implementation
 func (c *DCAPClient) checkCRL(collateral *Collateral) error {
 	// For simulation or when no CRL data, skip
 	if len(collateral.RootCACRL) == 0 && len(collateral.PCKProcessorCRL) == 0 {
@@ -820,6 +826,8 @@ func (c *DCAPClient) checkCRL(collateral *Collateral) error {
 }
 
 // verifyTCBStatus verifies the TCB status from collateral.
+//
+//nolint:unparam // error return kept for interface consistency
 func (c *DCAPClient) verifyTCBStatus(quote *Quote, collateral *Collateral) (string, *TCBLevel, error) {
 	if len(collateral.TCBInfo) == 0 {
 		// Simulated - return UpToDate
@@ -966,7 +974,7 @@ func (c *DCAPClient) simulatedTCBInfo(fmspc string) []byte {
 		},
 	}
 
-	data, _ := json.Marshal(tcbInfo)
+	data, _ := json.Marshal(tcbInfo) //nolint:errchkjson // simulated data for testing
 	return data
 }
 
@@ -998,7 +1006,7 @@ func (c *DCAPClient) simulatedQEIdentity() []byte {
 		},
 	}
 
-	data, _ := json.Marshal(qeIdentity)
+	data, _ := json.Marshal(qeIdentity) //nolint:errchkjson // simulated data for testing
 	return data
 }
 

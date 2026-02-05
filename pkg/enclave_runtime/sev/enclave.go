@@ -643,7 +643,7 @@ func (g *SEVGuest) deriveSimulatedKey(request *KeyRequest) ([]byte, error) {
 	var input bytes.Buffer
 	input.Write(g.simVCEKSeed)
 	input.Write(g.simLaunchDigest[:])
-	_ = binary.Write(&input, binary.LittleEndian, uint32(request.RootKeySelect))
+	_ = binary.Write(&input, binary.LittleEndian, uint32(request.RootKeySelect)) //nolint:gosec // RootKeySelect is a small enum
 	_ = binary.Write(&input, binary.LittleEndian, request.GuestFieldSelect)
 	_ = binary.Write(&input, binary.LittleEndian, request.VMPL)
 	_ = binary.Write(&input, binary.LittleEndian, request.GuestSVN)

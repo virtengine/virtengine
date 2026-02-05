@@ -5,6 +5,7 @@ package nitro
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"strings"
 	"testing"
@@ -136,8 +137,8 @@ func TestNitroEnclaveListSimulated(t *testing.T) {
 	}
 
 	// Clean up
-	ne.TerminateEnclave(info1.EnclaveID)
-	ne.TerminateEnclave(info2.EnclaveID)
+	_ = ne.TerminateEnclave(info1.EnclaveID)
+	_ = ne.TerminateEnclave(info2.EnclaveID)
 }
 
 func TestNitroEnclaveBuildSimulated(t *testing.T) {
@@ -250,7 +251,7 @@ func TestDocumentPayloadValidation(t *testing.T) {
 		Payload: &DocumentPayload{
 			ModuleID:    "test-module",
 			Digest:      DigestAlgorithmSHA384,
-			Timestamp:   uint64(time.Now().UnixMilli()),
+			Timestamp:   uint64(time.Now().UnixMilli()), //nolint:gosec // G115: timestamp won't overflow
 			PCRs:        map[int][]byte{0: make([]byte, PCRDigestSize)},
 			Certificate: []byte("test-cert"),
 		},
@@ -396,7 +397,7 @@ func TestNSMGetAttestationSimulated(t *testing.T) {
 
 	userData := []byte("test user data")
 	nonce := make([]byte, 32)
-	rand.Read(nonce)
+	_, _ = rand.Read(nonce)
 	pubKey := []byte("test public key")
 
 	attestation, err := device.GetAttestation(userData, nonce, pubKey)
@@ -729,7 +730,7 @@ func TestCBORRoundTrip(t *testing.T) {
 	payload := &DocumentPayload{
 		ModuleID:  "test-module",
 		Digest:    DigestAlgorithmSHA384,
-		Timestamp: uint64(time.Now().UnixMilli()),
+		Timestamp: uint64(time.Now().UnixMilli()), //nolint:gosec // G115: timestamp won't overflow
 		PCRs: map[int][]byte{
 			0: make([]byte, PCRDigestSize),
 			1: make([]byte, PCRDigestSize),
@@ -785,7 +786,7 @@ func TestVsockConnection(t *testing.T) {
 	}
 
 	// Connect (will fall back to simulation)
-	if err := vc.Connect(nil); err != nil {
+	if err := vc.Connect(context.TODO()); err != nil {
 		t.Fatalf("Connect failed: %v", err)
 	}
 

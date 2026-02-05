@@ -365,7 +365,7 @@ func (d *NSMDevice) simulateAttestation(userData, nonce, publicKey []byte) ([]by
 	payload := &DocumentPayload{
 		ModuleID:  d.simulatedModuleID,
 		Digest:    DigestAlgorithmSHA384,
-		Timestamp: uint64(time.Now().UnixMilli()),
+		Timestamp: uint64(time.Now().UnixMilli()), //nolint:gosec // timestamp is always positive
 		PCRs:      make(map[int][]byte),
 		UserData:  userData,
 		Nonce:     nonce,

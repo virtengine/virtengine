@@ -43,12 +43,6 @@ import (
 // AMD SEV OID base: 1.3.6.1.4.1.3704
 // SEV extension OIDs: 1.3.6.1.4.1.3704.1.*
 var (
-	// OID base for AMD
-	oidAMD = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 3704}
-
-	// OID for SEV extensions
-	oidSEV = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 3704, 1}
-
 	// TCB component OIDs
 	oidBootLoaderSVN = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 3704, 1, 3, 1}
 	oidTEESVN        = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 3704, 1, 3, 2}

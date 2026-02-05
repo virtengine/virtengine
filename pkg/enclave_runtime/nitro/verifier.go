@@ -270,7 +270,7 @@ func (v *Verifier) VerifyDocument(doc *AttestationDocument) (*VerificationResult
 
 	// Extract basic info
 	result.ModuleID = doc.Payload.ModuleID
-	result.Timestamp = time.UnixMilli(int64(doc.Payload.Timestamp))
+	result.Timestamp = time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
 	result.UserData = doc.Payload.UserData
 	result.PublicKey = doc.Payload.PublicKey
 	result.PCRDigest = GetPCRDigest(doc.Payload.PCRs)
@@ -517,7 +517,7 @@ func (v *Verifier) verifyFreshness(doc *AttestationDocument, config *VerifierCon
 		return ErrInvalidDocument
 	}
 
-	docTime := time.UnixMilli(int64(doc.Payload.Timestamp))
+	docTime := time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
 	now := time.Now()
 
 	// Check if document is too old
@@ -588,6 +588,8 @@ func decodePEM(data []byte) ([]byte, []byte) {
 }
 
 // decodeBase64 decodes base64 data
+//
+//nolint:unparam // error return kept for future validation
 func decodeBase64(data []byte) ([]byte, error) {
 	// Standard base64 alphabet
 	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"

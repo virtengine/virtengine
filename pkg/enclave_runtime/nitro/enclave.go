@@ -439,6 +439,8 @@ func (ne *NitroEnclave) hardwareRunEnclave(ctx context.Context, eifPath string, 
 }
 
 // simulateRunEnclave simulates enclave start for testing
+//
+//nolint:unparam // eifPath is unused in simulation but kept for interface compatibility
 func (ne *NitroEnclave) simulateRunEnclave(eifPath string, cpuCount int, memoryMB int64) (*EnclaveInfo, error) {
 	// Generate simulated enclave ID (matches i-(?:sim-)?[a-f0-9-]{8,64} pattern)
 	idBytes := make([]byte, 8)

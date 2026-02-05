@@ -155,7 +155,9 @@ func (p GuestPolicy) ToUint64() uint64 {
 // ParseGuestPolicy parses a 64-bit policy value into a GuestPolicy struct
 func ParseGuestPolicy(raw uint64) GuestPolicy {
 	return GuestPolicy{
-		ABIMinor:     uint8(raw & policyABIMinorMask),
+		//nolint:gosec // G115: intentional narrowing for policy field
+		ABIMinor: uint8(raw & policyABIMinorMask),
+		//nolint:gosec // G115: intentional narrowing for policy field
 		ABIMajor:     uint8((raw & policyABIMajorMask) >> policyABIMajorShift),
 		SMT:          raw&policySMTMask != 0,
 		Migration:    raw&policyMigrationMAMask != 0,
@@ -220,6 +222,7 @@ func (t TCBVersion) ToUint64() uint64 {
 
 // ParseTCBVersion parses a 64-bit TCB version value
 func ParseTCBVersion(raw uint64) TCBVersion {
+	//nolint:gosec // intentional narrowing: extracting individual bytes from 64-bit value
 	return TCBVersion{
 		BootLoader: uint8(raw),
 		TEE:        uint8(raw >> 8),
