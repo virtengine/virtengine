@@ -61,7 +61,7 @@ func (DepositAuthorization_Scope) EnumDescriptor() ([]byte, []int) {
 }
 
 // DepositAuthorization allows the grantee to deposit up to spend_limit coins from
-// the granter's account for Akash deployments and bids. This authorization is used
+// the granter's account for VirtEngine deployments and bids. This authorization is used
 // within the Cosmos SDK authz module to grant scoped permissions for deposit operations.
 // The authorization can be restricted to specific scopes (deployment or bid) to limit
 // what types of deposits the grantee is authorized to make on behalf of the granter.

@@ -132,7 +132,7 @@ var xxx_messageInfo_MsgAddPriceEntryResponse proto.InternalMessageInfo
 
 // MsgUpdateParams is the Msg/UpdateParams request type.
 //
-// Since: virtengine v2.0.0
+// Since: akash v2.0.0
 type MsgUpdateParams struct {
 	// authority is the address of the governance account.
 	Authority string `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
@@ -192,7 +192,7 @@ func (m *MsgUpdateParams) GetParams() Params {
 // MsgUpdateParamsResponse defines the response structure for executing a
 // MsgUpdateParams message.
 //
-// Since: virtengine v2.0.0
+// Since: akash v2.0.0
 type MsgUpdateParamsResponse struct {
 }
 

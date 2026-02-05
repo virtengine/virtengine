@@ -123,19 +123,21 @@ type BankKeeper interface {
 
 // Keeper implements the HPC module keeper
 type Keeper struct {
-	skey       storetypes.StoreKey
-	cdc        codec.BinaryCodec
-	bankKeeper BankKeeper
-	authority  string
+	skey          storetypes.StoreKey
+	cdc           codec.BinaryCodec
+	bankKeeper    BankKeeper
+	billingKeeper BillingKeeper
+	authority     string
 }
 
 // NewKeeper creates and returns an instance for HPC keeper
 func NewKeeper(cdc codec.BinaryCodec, skey storetypes.StoreKey, bankKeeper BankKeeper, authority string) Keeper {
 	return Keeper{
-		cdc:        cdc,
-		skey:       skey,
-		bankKeeper: bankKeeper,
-		authority:  authority,
+		cdc:           cdc,
+		skey:          skey,
+		bankKeeper:    bankKeeper,
+		billingKeeper: nil,
+		authority:     authority,
 	}
 }
 

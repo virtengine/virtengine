@@ -133,8 +133,8 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 		return nil, types.ErrInvalidAddress.Wrap("invalid customer address")
 	}
 
-	// Transfer provider share
-	if !providerShare.IsZero() {
+	// Transfer provider share when billing pipeline is disabled (legacy path).
+	if !k.billingEnabled() && !providerShare.IsZero() {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleAccountName, provider, providerShare); err != nil {
 			return nil, types.ErrInsufficientFunds.Wrap(err.Error())
 		}
@@ -215,6 +215,21 @@ func (k Keeper) SettleOrder(ctx sdk.Context, orderID string, usageRecordIDs []st
 		return nil, err
 	}
 
+	if k.billingEnabled() {
+		invoiceID, err := k.generateInvoiceForSettlement(ctx, settlement, usageRecords)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := k.updateBillingUsageRecordsForSettlement(ctx, settlement, usageRecords, invoiceID); err != nil {
+			return nil, err
+		}
+
+		if _, err := k.ExecutePayout(ctx, invoiceID, settlement.SettlementID); err != nil {
+			return nil, err
+		}
+	}
+
 	// Emit event
 	err = ctx.EventManager().EmitTypedEvent(&types.EventOrderSettled{
 		SettlementID:   settlementID,
@@ -254,6 +269,17 @@ func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 	record.SubmittedAt = ctx.BlockTime()
 	record.BlockHeight = ctx.BlockHeight()
 
+	// Populate total cost if missing, based on unit price and usage units.
+	if record.TotalCost.IsZero() && record.UnitPrice.Denom != "" && !record.UnitPrice.IsNegative() {
+		quantity := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(record.UsageUnits))
+		total := record.UnitPrice.Amount.Mul(quantity).TruncateInt()
+		if total.IsPositive() {
+			record.TotalCost = sdk.NewCoins(sdk.NewCoin(record.UnitPrice.Denom, total))
+		} else {
+			record.TotalCost = sdk.NewCoins()
+		}
+	}
+
 	// Validate the record
 	if err := record.Validate(); err != nil {
 		return err
@@ -276,6 +302,10 @@ func (k Keeper) RecordUsage(ctx sdk.Context, record *types.UsageRecord) error {
 
 	// Save usage record
 	if err := k.SetUsageRecord(ctx, *record); err != nil {
+		return err
+	}
+
+	if err := k.recordBillingUsage(ctx, *record); err != nil {
 		return err
 	}
 

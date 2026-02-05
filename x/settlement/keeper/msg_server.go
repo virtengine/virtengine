@@ -13,11 +13,11 @@ import (
 )
 
 type msgServer struct {
-	keeper Keeper
+	keeper IKeeper
 }
 
 // NewMsgServerImpl returns an implementation of the settlement MsgServer interface
-func NewMsgServerImpl(k Keeper) settlementv1.MsgServer {
+func NewMsgServerImpl(k IKeeper) settlementv1.MsgServer {
 	return &msgServer{keeper: k}
 }
 

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -63,14 +65,28 @@ func GetTxHPCRegisterClusterCmd() *cobra.Command {
 			totalNodes, _ := cmd.Flags().GetUint64(flagTotalNodes)
 			totalGpus, _ := cmd.Flags().GetUint64(flagTotalGpus)
 
+			totalNodesInt32, err := uint64ToInt32(totalNodes)
+			if err != nil {
+				return err
+			}
+
+			description := strings.TrimSpace(args[1])
+			if endpoint != "" {
+				if description != "" {
+					description = fmt.Sprintf("%s (endpoint=%s)", description, endpoint)
+				} else {
+					description = fmt.Sprintf("endpoint=%s", endpoint)
+				}
+			}
+
 			msg := &types.MsgRegisterCluster{
-				Owner:       cctx.GetFromAddress().String(),
-				Name:        args[0],
-				ClusterType: args[1],
-				Region:      args[2],
-				Endpoint:    endpoint,
-				TotalNodes:  totalNodes,
-				TotalGpus:   totalGpus,
+				ProviderAddress: cctx.GetFromAddress().String(),
+				Name:            args[0],
+				Description:     description,
+				Region:          args[2],
+				Partitions:      []types.Partition{},
+				TotalNodes:      totalNodesInt32,
+				ClusterMetadata: types.ClusterMetadata{TotalGpus: int64(totalGpus)},
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -110,13 +126,24 @@ func GetTxHPCUpdateClusterCmd() *cobra.Command {
 			totalGpus, _ := cmd.Flags().GetUint64(flagTotalGpus)
 			active, _ := cmd.Flags().GetBool("active")
 
+			totalNodesInt32, err := uint64ToInt32(totalNodes)
+			if err != nil {
+				return err
+			}
+
+			state := types.ClusterStateOffline
+			if active {
+				state = types.ClusterStateActive
+			}
+
 			msg := &types.MsgUpdateCluster{
-				Owner:      cctx.GetFromAddress().String(),
-				ClusterId:  args[0],
-				Endpoint:   endpoint,
-				TotalNodes: totalNodes,
-				TotalGpus:  totalGpus,
-				Active:     active,
+				ProviderAddress: cctx.GetFromAddress().String(),
+				ClusterId:       args[0],
+				Description:     strings.TrimSpace(endpoint),
+				State:           state,
+				Partitions:      []types.Partition{},
+				TotalNodes:      totalNodesInt32,
+				ClusterMetadata: &types.ClusterMetadata{TotalGpus: int64(totalGpus)},
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -153,8 +180,8 @@ func GetTxHPCDeregisterClusterCmd() *cobra.Command {
 			}
 
 			msg := &types.MsgDeregisterCluster{
-				Owner:     cctx.GetFromAddress().String(),
-				ClusterId: args[0],
+				ProviderAddress: cctx.GetFromAddress().String(),
+				ClusterId:       args[0],
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -189,14 +216,30 @@ func GetTxHPCCreateOfferingCmd() *cobra.Command {
 			minDuration, _ := cmd.Flags().GetUint64(flagMinDuration)
 			maxDuration, _ := cmd.Flags().GetUint64(flagMaxDuration)
 
+			pricing := types.HPCPricing{
+				BaseNodeHourPrice: args[3],
+				CpuCoreHourPrice:  args[3],
+				MemoryGbHourPrice: args[3],
+				StorageGbPrice:    args[3],
+				NetworkGbPrice:    args[3],
+			}
+			if decCoin, err := sdk.ParseDecCoin(args[3]); err == nil {
+				pricing.Currency = decCoin.Denom
+			}
+
+			_ = minDuration
+
 			msg := &types.MsgCreateOffering{
-				Provider:     cctx.GetFromAddress().String(),
-				ClusterId:    args[0],
-				Name:         args[1],
-				ResourceType: args[2],
-				PricePerHour: args[3],
-				MinDuration:  minDuration,
-				MaxDuration:  maxDuration,
+				ProviderAddress:           cctx.GetFromAddress().String(),
+				ClusterId:                 args[0],
+				Name:                      args[1],
+				Description:               args[2],
+				QueueOptions:              []types.QueueOption{},
+				Pricing:                   pricing,
+				RequiredIdentityThreshold: 0,
+				MaxRuntimeSeconds:         int64(maxDuration),
+				PreconfiguredWorkloads:    []types.PreconfiguredWorkload{},
+				SupportsCustomWorkloads:   true,
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -236,14 +279,32 @@ func GetTxHPCSubmitJobCmd() *cobra.Command {
 			maxDuration, _ := cmd.Flags().GetUint64(flagMaxDuration)
 			maxBudget, _ := cmd.Flags().GetString(flagMaxBudget)
 
+			requestedNodesInt32, err := uint64ToInt32(requestedNodes)
+			if err != nil {
+				return err
+			}
+			requestedGpusInt32, err := uint64ToInt32(requestedGpus)
+			if err != nil {
+				return err
+			}
+
+			maxPrice, err := sdk.ParseCoinsNormalized(maxBudget)
+			if err != nil {
+				maxPrice = sdk.NewCoins()
+			}
+
 			msg := &types.MsgSubmitJob{
-				Submitter:      cctx.GetFromAddress().String(),
-				OfferingId:     args[0],
-				JobScript:      args[1],
-				RequestedNodes: requestedNodes,
-				RequestedGpus:  requestedGpus,
-				MaxDuration:    maxDuration,
-				MaxBudget:      maxBudget,
+				CustomerAddress: cctx.GetFromAddress().String(),
+				OfferingId:      args[0],
+				WorkloadSpec: types.JobWorkloadSpec{
+					Command: args[1],
+				},
+				Resources: types.JobResources{
+					Nodes:       requestedNodesInt32,
+					GpusPerNode: requestedGpusInt32,
+				},
+				MaxRuntimeSeconds: int64(maxDuration),
+				MaxPrice:          maxPrice,
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -282,9 +343,9 @@ func GetTxHPCCancelJobCmd() *cobra.Command {
 			reason, _ := cmd.Flags().GetString("reason")
 
 			msg := &types.MsgCancelJob{
-				Sender: cctx.GetFromAddress().String(),
-				JobId:  args[0],
-				Reason: reason,
+				RequesterAddress: cctx.GetFromAddress().String(),
+				JobId:            args[0],
+				Reason:           reason,
 			}
 
 			resp, err := cl.Tx().BroadcastMsgs(ctx, []sdk.Msg{msg})
@@ -304,3 +365,12 @@ func GetTxHPCCancelJobCmd() *cobra.Command {
 
 // unused but kept for compile consistency
 var _ = strconv.Itoa
+
+const maxInt32 = int32(^uint32(0) >> 1)
+
+func uint64ToInt32(value uint64) (int32, error) {
+	if value > uint64(maxInt32) {
+		return 0, fmt.Errorf("value %d exceeds max int32", value)
+	}
+	return int32(value), nil
+}

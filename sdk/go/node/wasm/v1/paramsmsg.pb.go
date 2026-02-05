@@ -27,7 +27,7 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 // MsgUpdateParams is the Msg/UpdateParams request type.
 //
-// Since: virtengine v1.0.0
+// Since: akash v1.0.0
 type MsgUpdateParams struct {
 	// authority is the address of the governance account.
 	Authority string `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
@@ -87,7 +87,7 @@ func (m *MsgUpdateParams) GetParams() Params {
 // MsgUpdateParamsResponse defines the response structure for executing a
 // MsgUpdateParams message.
 //
-// Since: virtengine v1.0.0
+// Since: akash v1.0.0
 type MsgUpdateParamsResponse struct {
 }
 

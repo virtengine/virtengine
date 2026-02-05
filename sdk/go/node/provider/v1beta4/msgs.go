@@ -1,9 +1,11 @@
 package v1beta4
 
 import (
+	"fmt"
 	"net/url"
 	"reflect"
 	"regexp"
+	"strings"
 
 	cerrors "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -13,15 +15,19 @@ import (
 )
 
 var (
-	msgTypeCreateProvider = ""
-	msgTypeUpdateProvider = ""
-	msgTypeDeleteProvider = ""
+	msgTypeCreateProvider                  = ""
+	msgTypeUpdateProvider                  = ""
+	msgTypeDeleteProvider                  = ""
+	msgTypeGenerateDomainVerificationToken = ""
+	msgTypeVerifyProviderDomain            = ""
 )
 
 var (
 	_ sdk.Msg = &MsgCreateProvider{}
 	_ sdk.Msg = &MsgUpdateProvider{}
 	_ sdk.Msg = &MsgDeleteProvider{}
+	_ sdk.Msg = &MsgGenerateDomainVerificationToken{}
+	_ sdk.Msg = &MsgVerifyProviderDomain{}
 )
 
 var (
@@ -32,6 +38,8 @@ func init() {
 	msgTypeCreateProvider = reflect.TypeOf(&MsgCreateProvider{}).Elem().Name()
 	msgTypeUpdateProvider = reflect.TypeOf(&MsgUpdateProvider{}).Elem().Name()
 	msgTypeDeleteProvider = reflect.TypeOf(&MsgDeleteProvider{}).Elem().Name()
+	msgTypeGenerateDomainVerificationToken = reflect.TypeOf(&MsgGenerateDomainVerificationToken{}).Elem().Name()
+	msgTypeVerifyProviderDomain = reflect.TypeOf(&MsgVerifyProviderDomain{}).Elem().Name()
 }
 
 // NewMsgCreateProvider creates a new MsgCreateProvider instance
@@ -140,6 +148,68 @@ func (msg *MsgDeleteProvider) GetSigners() []sdk.AccAddress {
 	return []sdk.AccAddress{owner}
 }
 
+// NewMsgGenerateDomainVerificationToken creates a new MsgGenerateDomainVerificationToken instance
+func NewMsgGenerateDomainVerificationToken(owner sdk.AccAddress, domain string) *MsgGenerateDomainVerificationToken {
+	return &MsgGenerateDomainVerificationToken{
+		Owner:  owner.String(),
+		Domain: domain,
+	}
+}
+
+// Type implements the sdk.Msg interface
+func (msg *MsgGenerateDomainVerificationToken) Type() string {
+	return msgTypeGenerateDomainVerificationToken
+}
+
+// ValidateBasic does basic validation for domain verification token requests
+func (msg *MsgGenerateDomainVerificationToken) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
+		return cerrors.Wrap(sdkerrors.ErrInvalidAddress, "MsgGenerateDomainVerificationToken: Invalid Provider Address")
+	}
+	if err := validateDomain(msg.Domain); err != nil {
+		return ErrInvalidDomain.Wrapf("invalid domain: %v", err)
+	}
+	return nil
+}
+
+// GetSigners defines whose signature is required
+func (msg *MsgGenerateDomainVerificationToken) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+
+	return []sdk.AccAddress{owner}
+}
+
+// NewMsgVerifyProviderDomain creates a new MsgVerifyProviderDomain instance
+func NewMsgVerifyProviderDomain(owner sdk.AccAddress) *MsgVerifyProviderDomain {
+	return &MsgVerifyProviderDomain{
+		Owner: owner.String(),
+	}
+}
+
+// Type implements the sdk.Msg interface
+func (msg *MsgVerifyProviderDomain) Type() string { return msgTypeVerifyProviderDomain }
+
+// ValidateBasic does basic validation for domain verification
+func (msg *MsgVerifyProviderDomain) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
+		return cerrors.Wrap(sdkerrors.ErrInvalidAddress, "MsgVerifyProviderDomain: Invalid Provider Address")
+	}
+	return nil
+}
+
+// GetSigners defines whose signature is required
+func (msg *MsgVerifyProviderDomain) GetSigners() []sdk.AccAddress {
+	owner, err := sdk.AccAddressFromBech32(msg.Owner)
+	if err != nil {
+		panic(err)
+	}
+
+	return []sdk.AccAddress{owner}
+}
+
 func validateProviderURI(val string) error {
 	u, err := url.Parse(val)
 	if err != nil {
@@ -162,6 +232,37 @@ func validateProviderURI(val string) error {
 	}
 
 	return nil
+}
+
+func validateDomain(domain string) error {
+	if domain == "" {
+		return fmt.Errorf("domain cannot be empty")
+	}
+
+	if len(domain) > 253 {
+		return fmt.Errorf("domain too long")
+	}
+
+	parts := strings.Split(domain, ".")
+	if len(parts) < 2 {
+		return fmt.Errorf("domain must have at least two parts")
+	}
+
+	for _, part := range parts {
+		if len(part) == 0 || len(part) > 63 {
+			return fmt.Errorf("invalid domain part length")
+		}
+
+		if !isAlphanumeric(part[0]) || !isAlphanumeric(part[len(part)-1]) {
+			return fmt.Errorf("domain parts must start and end with alphanumeric characters")
+		}
+	}
+
+	return nil
+}
+
+func isAlphanumeric(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 // ============= GetSignBytes =============

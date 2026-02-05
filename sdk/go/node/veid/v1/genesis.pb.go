@@ -37,6 +37,28 @@ type GenesisState struct {
 	Scores []IdentityScore `protobuf:"bytes,5,rep,name=scores,proto3" json:"scores" yaml:"scores"`
 	// BorderlineParams are the borderline fallback parameters
 	BorderlineParams BorderlineParams `protobuf:"bytes,6,opt,name=borderline_params,json=borderlineParams,proto3" json:"borderline_params" yaml:"borderline_params"`
+	// AppealRecords are the initial appeal records
+	AppealRecords []AppealRecord `protobuf:"bytes,7,rep,name=appeal_records,json=appealRecords,proto3" json:"appeal_records" yaml:"appeal_records"`
+	// AppealParams are the appeal system parameters
+	AppealParams AppealParams `protobuf:"bytes,8,opt,name=appeal_params,json=appealParams,proto3" json:"appeal_params" yaml:"appeal_params"`
+	// ComplianceRecords are the initial compliance records
+	ComplianceRecords []ComplianceRecord `protobuf:"bytes,9,rep,name=compliance_records,json=complianceRecords,proto3" json:"compliance_records" yaml:"compliance_records"`
+	// ComplianceProviders are the registered compliance providers
+	ComplianceProviders []ComplianceProvider `protobuf:"bytes,10,rep,name=compliance_providers,json=complianceProviders,proto3" json:"compliance_providers" yaml:"compliance_providers"`
+	// ComplianceParams are the compliance configuration parameters
+	ComplianceParams ComplianceParams `protobuf:"bytes,11,opt,name=compliance_params,json=complianceParams,proto3" json:"compliance_params" yaml:"compliance_params"`
+	// MLModels are the registered ML models
+	MlModels []MLModelInfo `protobuf:"bytes,12,rep,name=ml_models,json=mlModels,proto3" json:"ml_models" yaml:"ml_models"`
+	// ModelVersionState is the current active model versions
+	ModelVersionState ModelVersionState `protobuf:"bytes,13,opt,name=model_version_state,json=modelVersionState,proto3" json:"model_version_state" yaml:"model_version_state"`
+	// ModelVersionHistory is the model version change history
+	ModelVersionHistory []ModelVersionHistory `protobuf:"bytes,14,rep,name=model_version_history,json=modelVersionHistory,proto3" json:"model_version_history" yaml:"model_version_history"`
+	// ModelParams are the model management parameters
+	ModelParams ModelParams `protobuf:"bytes,15,opt,name=model_params,json=modelParams,proto3" json:"model_params" yaml:"model_params"`
+	// PendingModelProposals are the pending model update proposals
+	PendingModelProposals []ModelUpdateProposal `protobuf:"bytes,16,rep,name=pending_model_proposals,json=pendingModelProposals,proto3" json:"pending_model_proposals" yaml:"pending_model_proposals"`
+	// ValidatorModelReports are the validator model version reports
+	ValidatorModelReports []ValidatorModelReport `protobuf:"bytes,17,rep,name=validator_model_reports,json=validatorModelReports,proto3" json:"validator_model_reports" yaml:"validator_model_reports"`
 }
 
 func (m *GenesisState) Reset()         { *m = GenesisState{} }
@@ -114,6 +136,83 @@ func (m *GenesisState) GetBorderlineParams() BorderlineParams {
 	return BorderlineParams{}
 }
 
+func (m *GenesisState) GetAppealRecords() []AppealRecord {
+	if m != nil {
+		return m.AppealRecords
+	}
+	return nil
+}
+
+func (m *GenesisState) GetAppealParams() AppealParams {
+	if m != nil {
+		return m.AppealParams
+	}
+	return AppealParams{}
+}
+
+func (m *GenesisState) GetComplianceRecords() []ComplianceRecord {
+	if m != nil {
+		return m.ComplianceRecords
+	}
+	return nil
+}
+
+func (m *GenesisState) GetComplianceProviders() []ComplianceProvider {
+	if m != nil {
+		return m.ComplianceProviders
+	}
+	return nil
+}
+
+func (m *GenesisState) GetComplianceParams() ComplianceParams {
+	if m != nil {
+		return m.ComplianceParams
+	}
+	return ComplianceParams{}
+}
+
+func (m *GenesisState) GetMlModels() []MLModelInfo {
+	if m != nil {
+		return m.MlModels
+	}
+	return nil
+}
+
+func (m *GenesisState) GetModelVersionState() ModelVersionState {
+	if m != nil {
+		return m.ModelVersionState
+	}
+	return ModelVersionState{}
+}
+
+func (m *GenesisState) GetModelVersionHistory() []ModelVersionHistory {
+	if m != nil {
+		return m.ModelVersionHistory
+	}
+	return nil
+}
+
+func (m *GenesisState) GetModelParams() ModelParams {
+	if m != nil {
+		return m.ModelParams
+	}
+	return ModelParams{}
+}
+
+func (m *GenesisState) GetPendingModelProposals() []ModelUpdateProposal {
+	if m != nil {
+		return m.PendingModelProposals
+	}
+	return nil
+}
+
+func (m *GenesisState) GetValidatorModelReports() []ValidatorModelReport {
+	if m != nil {
+		return m.ValidatorModelReports
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*GenesisState)(nil), "virtengine.veid.v1.GenesisState")
 }
@@ -121,33 +220,62 @@ func init() {
 func init() { proto.RegisterFile("virtengine/veid/v1/genesis.proto", fileDescriptor_2fa752ba69a60700) }
 
 var fileDescriptor_2fa752ba69a60700 = []byte{
-	// 418 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x93, 0x3f, 0x6f, 0xda, 0x40,
-	0x18, 0xc6, 0xed, 0x52, 0x3c, 0x98, 0x56, 0x50, 0xab, 0x52, 0x2d, 0x06, 0x9b, 0x9e, 0x3a, 0x30,
-	0xd9, 0x02, 0xda, 0xa5, 0x5b, 0xe9, 0x50, 0x75, 0x89, 0x22, 0xb3, 0xb1, 0x20, 0xff, 0x79, 0xe5,
-	0x9c, 0x02, 0x3e, 0xeb, 0xee, 0x62, 0x89, 0x35, 0x53, 0xc6, 0x7c, 0x94, 0x7c, 0x0c, 0x46, 0xc6,
-	0x4c, 0x56, 0x04, 0x5b, 0x46, 0x3e, 0x41, 0xc4, 0xf9, 0x82, 0x83, 0x4d, 0xa2, 0x6c, 0x77, 0x7a,
-	0x7e, 0xf7, 0x3c, 0xf7, 0xbc, 0xba, 0xd3, 0x7b, 0x19, 0xa6, 0x1c, 0x92, 0x18, 0x27, 0xe0, 0x66,
-	0x80, 0x23, 0x37, 0x1b, 0xb8, 0x31, 0x24, 0xc0, 0x30, 0x73, 0x52, 0x4a, 0x38, 0x31, 0x8c, 0x92,
-	0x70, 0xf6, 0x84, 0x93, 0x0d, 0xba, 0x5f, 0x63, 0x12, 0x13, 0x21, 0xbb, 0xfb, 0x55, 0x41, 0x76,
-	0xad, 0x13, 0x5e, 0x7c, 0x99, 0x82, 0x74, 0x42, 0x77, 0x4d, 0xfd, 0xd3, 0xbf, 0xc2, 0x7b, 0xc2,
-	0x7d, 0x0e, 0xc6, 0xb5, 0xaa, 0x77, 0x70, 0x04, 0x09, 0xc7, 0x7c, 0x39, 0xa3, 0x10, 0x12, 0x1a,
-	0x31, 0x53, 0xed, 0x35, 0xfa, 0xad, 0x21, 0x72, 0xea, 0xb1, 0xce, 0x7f, 0xc9, 0x7a, 0x02, 0x1d,
-	0x8f, 0x56, 0xb9, 0xad, 0x3c, 0xe6, 0x76, 0xcd, 0x63, 0x97, 0xdb, 0xdf, 0x96, 0xfe, 0x62, 0xfe,
-	0x1b, 0x55, 0x15, 0xe4, 0xb5, 0xf1, 0x91, 0x09, 0x33, 0xa6, 0xba, 0xc6, 0x42, 0x92, 0x02, 0x33,
-	0x3f, 0x88, 0xe4, 0xef, 0x6f, 0x25, 0x4f, 0xf6, 0xe4, 0xd8, 0x96, 0xc1, 0xf2, 0xe0, 0x2e, 0xb7,
-	0x3f, 0x17, 0x71, 0xc5, 0x1e, 0x79, 0x52, 0x10, 0x05, 0xfd, 0x34, 0xa5, 0x24, 0x83, 0x68, 0x16,
-	0xce, 0x31, 0x24, 0x9c, 0x99, 0x8d, 0xd7, 0x0b, 0xfe, 0x91, 0xec, 0x5f, 0x81, 0x96, 0x05, 0xab,
-	0x1e, 0x65, 0xc1, 0xaa, 0x82, 0xbc, 0xb6, 0x7f, 0x64, 0xc2, 0x8c, 0x89, 0xae, 0xa5, 0x3e, 0xf5,
-	0x17, 0xcc, 0xfc, 0xd8, 0x53, 0xfb, 0xad, 0x61, 0xf7, 0x54, 0xf2, 0xb9, 0x20, 0xca, 0x66, 0xc5,
-	0x89, 0xb2, 0x59, 0xb1, 0x47, 0x9e, 0x14, 0xe4, 0xd4, 0x28, 0x30, 0xb3, 0xf9, 0xae, 0xa9, 0xd1,
-	0xe3, 0xa9, 0xd1, 0xca, 0xd4, 0xe8, 0xf3, 0xd4, 0x28, 0x30, 0xe3, 0x46, 0xd5, 0xbf, 0x04, 0x84,
-	0x46, 0x40, 0xe7, 0x38, 0x81, 0x99, 0xbc, 0xbc, 0x26, 0x2e, 0xff, 0xe3, 0x54, 0xce, 0xf8, 0x00,
-	0xcb, 0x1a, 0xbf, 0x64, 0x54, 0xdd, 0x66, 0x97, 0xdb, 0x66, 0x91, 0x5a, 0x93, 0x90, 0xd7, 0x09,
-	0xaa, 0x46, 0x67, 0xab, 0x8d, 0xa5, 0xae, 0x37, 0x96, 0xfa, 0xb0, 0xb1, 0xd4, 0xdb, 0xad, 0xa5,
-	0xac, 0xb7, 0x96, 0x72, 0xbf, 0xb5, 0x94, 0xe9, 0xcf, 0x18, 0xf3, 0x8b, 0xab, 0xc0, 0x09, 0xc9,
-	0xc2, 0x7d, 0xf9, 0xee, 0xcb, 0x25, 0x8b, 0x2e, 0xdd, 0x98, 0xb8, 0x09, 0x89, 0x0e, 0xdf, 0x21,
-	0xd0, 0xc4, 0x4f, 0x18, 0x3d, 0x05, 0x00, 0x00, 0xff, 0xff, 0x5d, 0xd3, 0x72, 0x27, 0x77, 0x03,
+	// 882 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x56, 0x3f, 0x8f, 0xdc, 0x44,
+	0x14, 0x3f, 0x13, 0x38, 0x92, 0xb9, 0xbb, 0xdc, 0xee, 0xdc, 0x9d, 0xce, 0x2c, 0x68, 0xe7, 0x18,
+	0x08, 0x9c, 0x84, 0xd8, 0x55, 0x12, 0x10, 0x02, 0x44, 0x11, 0xa7, 0x80, 0x48, 0x04, 0x45, 0x3e,
+	0x91, 0x22, 0xcd, 0x6a, 0xce, 0x1e, 0x36, 0x23, 0x6c, 0x8f, 0x35, 0x63, 0x56, 0x5c, 0x4b, 0x45,
+	0x41, 0x91, 0x8a, 0x82, 0x12, 0xf8, 0x30, 0x29, 0x53, 0x52, 0x59, 0xe8, 0xae, 0xa3, 0xf4, 0x27,
+	0x40, 0x3b, 0xf3, 0x76, 0xed, 0xb5, 0x67, 0x37, 0xe9, 0xd6, 0xf3, 0x7e, 0xef, 0xf7, 0xe7, 0xf9,
+	0xd9, 0x6b, 0x74, 0x32, 0x13, 0xaa, 0xe0, 0xd9, 0x54, 0x64, 0x7c, 0x3c, 0xe3, 0x22, 0x1e, 0xcf,
+	0x6e, 0x8f, 0xa7, 0x3c, 0xe3, 0x5a, 0xe8, 0x51, 0xae, 0x64, 0x21, 0x31, 0xae, 0x11, 0xa3, 0x39,
+	0x62, 0x34, 0xbb, 0x3d, 0x38, 0x9c, 0xca, 0xa9, 0x34, 0xe5, 0xf1, 0xfc, 0x97, 0x45, 0x0e, 0x86,
+	0x0e, 0xae, 0xe2, 0x22, 0xe7, 0xc0, 0x34, 0x20, 0x8e, 0x3a, 0xcb, 0x73, 0xce, 0x12, 0x00, 0xbc,
+	0xe7, 0x00, 0x44, 0x32, 0xcd, 0x13, 0xc1, 0xb2, 0x88, 0x6f, 0x50, 0x49, 0x65, 0xcc, 0x81, 0x84,
+	0xfe, 0xdd, 0x47, 0xbb, 0x5f, 0xdb, 0x04, 0x67, 0x05, 0x2b, 0x38, 0xfe, 0xc5, 0x43, 0x3d, 0x11,
+	0xf3, 0xac, 0x10, 0xc5, 0xc5, 0x44, 0xf1, 0x48, 0xaa, 0x58, 0xfb, 0xde, 0xc9, 0xb5, 0xd3, 0x9d,
+	0x3b, 0x74, 0xd4, 0x0d, 0x37, 0x7a, 0x00, 0xd8, 0xd0, 0x40, 0x83, 0xbb, 0xcf, 0x4b, 0xb2, 0xf5,
+	0x5f, 0x49, 0x3a, 0x1c, 0x55, 0x49, 0x8e, 0x2f, 0x58, 0x9a, 0x7c, 0x41, 0xdb, 0x15, 0x1a, 0xee,
+	0x8b, 0x15, 0x12, 0x8d, 0x9f, 0xa0, 0x6d, 0x1d, 0xc9, 0x9c, 0x6b, 0xff, 0x35, 0xa3, 0xfc, 0xee,
+	0x26, 0xe5, 0xb3, 0x39, 0x32, 0x20, 0x20, 0x0c, 0x8d, 0x55, 0x49, 0xf6, 0xac, 0x9c, 0xbd, 0xa6,
+	0x21, 0x14, 0x4c, 0x40, 0x96, 0xe7, 0x4a, 0xce, 0x78, 0x3c, 0x89, 0x12, 0xc1, 0xb3, 0x42, 0xfb,
+	0xd7, 0xd6, 0x07, 0xbc, 0x07, 0xd8, 0xfb, 0x06, 0x5a, 0x07, 0x6c, 0x73, 0xd4, 0x01, 0xdb, 0x15,
+	0x1a, 0xee, 0xb3, 0x15, 0x12, 0x8d, 0xcf, 0xd0, 0x76, 0xce, 0x14, 0x4b, 0xb5, 0xff, 0xfa, 0x89,
+	0x77, 0xba, 0x73, 0x67, 0xe0, 0x52, 0x7e, 0x64, 0x10, 0x75, 0x32, 0xdb, 0x51, 0x27, 0xb3, 0xd7,
+	0x34, 0x84, 0x02, 0x4c, 0x4d, 0x71, 0xed, 0xbf, 0xf1, 0x4a, 0x53, 0x53, 0xab, 0x53, 0x53, 0xad,
+	0xa9, 0xa9, 0xc5, 0xd4, 0x14, 0xd7, 0xf8, 0x57, 0x0f, 0xf5, 0xcf, 0xa5, 0x8a, 0xb9, 0x4a, 0x44,
+	0xc6, 0x27, 0x60, 0x7e, 0xdb, 0x98, 0x7f, 0xdf, 0xa5, 0x13, 0x2c, 0xc1, 0x10, 0xe3, 0x53, 0x90,
+	0xea, 0xd2, 0x54, 0x25, 0xf1, 0xad, 0x6a, 0xa7, 0x44, 0xc3, 0xde, 0x79, 0x8b, 0x08, 0xff, 0x8c,
+	0x6e, 0xda, 0xe7, 0x60, 0xb9, 0x9e, 0x6f, 0x9a, 0xb8, 0x27, 0x6b, 0xee, 0x1e, 0x67, 0x09, 0x2c,
+	0xe7, 0x18, 0x2c, 0xb4, 0xfa, 0xab, 0x92, 0x1c, 0x2d, 0xef, 0x5c, 0xe3, 0x9c, 0x86, 0x7b, 0xac,
+	0xd1, 0xae, 0x71, 0x81, 0xe0, 0x60, 0x91, 0xff, 0xba, 0xc9, 0xbf, 0x41, 0x18, 0xb2, 0x7f, 0x0c,
+	0xc2, 0xab, 0xed, 0x55, 0x49, 0x0e, 0x57, 0x74, 0x17, 0x99, 0x77, 0x59, 0xa3, 0x19, 0xff, 0xe6,
+	0x21, 0x5c, 0x3f, 0xd7, 0xcb, 0xd0, 0x37, 0x4c, 0x68, 0xe7, 0xec, 0xef, 0x2f, 0xd1, 0x10, 0xfc,
+	0x33, 0xd0, 0x77, 0xf0, 0x54, 0x25, 0x79, 0xcb, 0x9a, 0xe8, 0xd6, 0x68, 0xd8, 0x8f, 0x5a, 0x54,
+	0x1a, 0xff, 0xee, 0xa1, 0xc3, 0x06, 0x74, 0xbe, 0xd7, 0x22, 0xe6, 0x4a, 0xfb, 0xc8, 0x18, 0xfa,
+	0x60, 0xb3, 0xa1, 0x47, 0x00, 0x0f, 0xbe, 0x04, 0x4b, 0x4e, 0xae, 0xaa, 0x24, 0x6f, 0x77, 0x4c,
+	0x2d, 0xab, 0x34, 0x3c, 0x88, 0x3a, 0x84, 0x76, 0x45, 0x9b, 0x70, 0x7b, 0x8b, 0x76, 0xd6, 0xaf,
+	0x68, 0xc3, 0x55, 0x6b, 0x45, 0x3b, 0x34, 0xf5, 0x8a, 0x76, 0x4a, 0x34, 0xec, 0x45, 0x2d, 0x22,
+	0x1c, 0xa1, 0x1b, 0x69, 0x32, 0x31, 0xef, 0x59, 0xed, 0xef, 0x9a, 0xb9, 0x10, 0x97, 0x83, 0x87,
+	0xdf, 0x3e, 0x9c, 0x63, 0x1e, 0x64, 0x3f, 0xc8, 0xe0, 0x16, 0x88, 0xd7, 0x9d, 0x55, 0x49, 0x7a,
+	0x56, 0x74, 0x79, 0x44, 0xc3, 0xeb, 0x69, 0x62, 0x7a, 0x34, 0x7e, 0xe6, 0xa1, 0x03, 0x73, 0x3a,
+	0x99, 0x71, 0xa5, 0x85, 0xcc, 0x26, 0x7a, 0xfe, 0x06, 0xf7, 0xf7, 0x4c, 0xe2, 0x5b, 0x4e, 0xbd,
+	0x39, 0xfc, 0xb1, 0x45, 0x9b, 0xd7, 0x7d, 0xf0, 0x39, 0xa8, 0xba, 0x98, 0xaa, 0x92, 0x0c, 0x40,
+	0xbf, 0x5b, 0xa4, 0x61, 0x3f, 0x6d, 0xb3, 0xe1, 0x3f, 0x3c, 0x74, 0xb4, 0x8a, 0x7d, 0x2a, 0x74,
+	0x21, 0xd5, 0x85, 0x7f, 0xd3, 0x0c, 0xe1, 0xc3, 0x97, 0x99, 0xfa, 0xc6, 0xc2, 0x83, 0xaf, 0xc0,
+	0x96, 0x9b, 0xad, 0x2a, 0xc9, 0x3b, 0x2e, 0x63, 0x50, 0xa6, 0xe1, 0x41, 0xda, 0xe5, 0xc4, 0x12,
+	0xed, 0x5a, 0x38, 0x6c, 0xc6, 0xbe, 0x99, 0x13, 0x59, 0x6b, 0x09, 0x96, 0xe2, 0x23, 0xb0, 0xb2,
+	0xd2, 0x5c, 0x95, 0xe4, 0xa0, 0xe9, 0x60, 0xb1, 0x0a, 0x3b, 0x69, 0xdd, 0x89, 0xff, 0xf4, 0xd0,
+	0x71, 0xce, 0xb3, 0x58, 0x64, 0xd3, 0x09, 0xc0, 0x94, 0xcc, 0xa5, 0x66, 0x89, 0xf6, 0x7b, 0x2f,
+	0x99, 0xc7, 0xf7, 0x79, 0xcc, 0x8a, 0xf9, 0x72, 0x1b, 0x7c, 0x70, 0x0f, 0x4c, 0xac, 0xe3, 0xab,
+	0x4a, 0x32, 0x84, 0x3f, 0x05, 0x37, 0x80, 0x86, 0x47, 0x50, 0xb1, 0xd9, 0x16, 0xe7, 0xf8, 0x2f,
+	0x0f, 0x1d, 0xcf, 0x58, 0x22, 0x62, 0x56, 0x48, 0x05, 0x5d, 0x8a, 0xe7, 0x52, 0x15, 0xda, 0xef,
+	0x1b, 0x93, 0xa7, 0x2e, 0x93, 0x8f, 0x17, 0x2d, 0x86, 0x2e, 0x34, 0x0d, 0xb5, 0xcb, 0x35, 0x84,
+	0xb5, 0xcb, 0x35, 0x00, 0x1a, 0x1e, 0xcd, 0x1c, 0xc4, 0x3a, 0xf8, 0xee, 0xf9, 0xe5, 0xd0, 0x7b,
+	0x71, 0x39, 0xf4, 0xfe, 0xbd, 0x1c, 0x7a, 0xcf, 0xae, 0x86, 0x5b, 0x2f, 0xae, 0x86, 0x5b, 0xff,
+	0x5c, 0x0d, 0xb7, 0x9e, 0x7c, 0x32, 0x15, 0xc5, 0xd3, 0x9f, 0xce, 0x47, 0x91, 0x4c, 0xc7, 0xcd,
+	0x6f, 0x9d, 0xfa, 0xa7, 0x8e, 0x7f, 0x1c, 0x4f, 0xe5, 0x38, 0x93, 0xf1, 0xf2, 0x13, 0xe8, 0x7c,
+	0xdb, 0x7c, 0xfd, 0xdc, 0xfd, 0x3f, 0x00, 0x00, 0xff, 0xff, 0xd6, 0xf6, 0x62, 0x5c, 0xd1, 0x09,
 	0x00, 0x00,
 }
 
@@ -171,6 +299,148 @@ func (m *GenesisState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.ValidatorModelReports) > 0 {
+		for iNdEx := len(m.ValidatorModelReports) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.ValidatorModelReports[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0x8a
+		}
+	}
+	if len(m.PendingModelProposals) > 0 {
+		for iNdEx := len(m.PendingModelProposals) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.PendingModelProposals[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x1
+			i--
+			dAtA[i] = 0x82
+		}
+	}
+	{
+		size, err := m.ModelParams.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenesis(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x7a
+	if len(m.ModelVersionHistory) > 0 {
+		for iNdEx := len(m.ModelVersionHistory) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.ModelVersionHistory[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x72
+		}
+	}
+	{
+		size, err := m.ModelVersionState.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenesis(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x6a
+	if len(m.MlModels) > 0 {
+		for iNdEx := len(m.MlModels) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.MlModels[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x62
+		}
+	}
+	{
+		size, err := m.ComplianceParams.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenesis(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x5a
+	if len(m.ComplianceProviders) > 0 {
+		for iNdEx := len(m.ComplianceProviders) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.ComplianceProviders[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x52
+		}
+	}
+	if len(m.ComplianceRecords) > 0 {
+		for iNdEx := len(m.ComplianceRecords) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.ComplianceRecords[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x4a
+		}
+	}
+	{
+		size, err := m.AppealParams.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenesis(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x42
+	if len(m.AppealRecords) > 0 {
+		for iNdEx := len(m.AppealRecords) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.AppealRecords[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x3a
+		}
+	}
 	{
 		size, err := m.BorderlineParams.MarshalToSizedBuffer(dAtA[:i])
 		if err != nil {
@@ -295,6 +565,56 @@ func (m *GenesisState) Size() (n int) {
 	}
 	l = m.BorderlineParams.Size()
 	n += 1 + l + sovGenesis(uint64(l))
+	if len(m.AppealRecords) > 0 {
+		for _, e := range m.AppealRecords {
+			l = e.Size()
+			n += 1 + l + sovGenesis(uint64(l))
+		}
+	}
+	l = m.AppealParams.Size()
+	n += 1 + l + sovGenesis(uint64(l))
+	if len(m.ComplianceRecords) > 0 {
+		for _, e := range m.ComplianceRecords {
+			l = e.Size()
+			n += 1 + l + sovGenesis(uint64(l))
+		}
+	}
+	if len(m.ComplianceProviders) > 0 {
+		for _, e := range m.ComplianceProviders {
+			l = e.Size()
+			n += 1 + l + sovGenesis(uint64(l))
+		}
+	}
+	l = m.ComplianceParams.Size()
+	n += 1 + l + sovGenesis(uint64(l))
+	if len(m.MlModels) > 0 {
+		for _, e := range m.MlModels {
+			l = e.Size()
+			n += 1 + l + sovGenesis(uint64(l))
+		}
+	}
+	l = m.ModelVersionState.Size()
+	n += 1 + l + sovGenesis(uint64(l))
+	if len(m.ModelVersionHistory) > 0 {
+		for _, e := range m.ModelVersionHistory {
+			l = e.Size()
+			n += 1 + l + sovGenesis(uint64(l))
+		}
+	}
+	l = m.ModelParams.Size()
+	n += 1 + l + sovGenesis(uint64(l))
+	if len(m.PendingModelProposals) > 0 {
+		for _, e := range m.PendingModelProposals {
+			l = e.Size()
+			n += 2 + l + sovGenesis(uint64(l))
+		}
+	}
+	if len(m.ValidatorModelReports) > 0 {
+		for _, e := range m.ValidatorModelReports {
+			l = e.Size()
+			n += 2 + l + sovGenesis(uint64(l))
+		}
+	}
 	return n
 }
 
@@ -532,6 +852,376 @@ func (m *GenesisState) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if err := m.BorderlineParams.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AppealRecords", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AppealRecords = append(m.AppealRecords, AppealRecord{})
+			if err := m.AppealRecords[len(m.AppealRecords)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AppealParams", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.AppealParams.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ComplianceRecords", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ComplianceRecords = append(m.ComplianceRecords, ComplianceRecord{})
+			if err := m.ComplianceRecords[len(m.ComplianceRecords)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ComplianceProviders", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ComplianceProviders = append(m.ComplianceProviders, ComplianceProvider{})
+			if err := m.ComplianceProviders[len(m.ComplianceProviders)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ComplianceParams", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.ComplianceParams.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MlModels", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MlModels = append(m.MlModels, MLModelInfo{})
+			if err := m.MlModels[len(m.MlModels)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 13:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ModelVersionState", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.ModelVersionState.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 14:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ModelVersionHistory", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ModelVersionHistory = append(m.ModelVersionHistory, ModelVersionHistory{})
+			if err := m.ModelVersionHistory[len(m.ModelVersionHistory)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 15:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ModelParams", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.ModelParams.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 16:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PendingModelProposals", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PendingModelProposals = append(m.PendingModelProposals, ModelUpdateProposal{})
+			if err := m.PendingModelProposals[len(m.PendingModelProposals)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 17:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ValidatorModelReports", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ValidatorModelReports = append(m.ValidatorModelReports, ValidatorModelReport{})
+			if err := m.ValidatorModelReports[len(m.ValidatorModelReports)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

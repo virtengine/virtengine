@@ -61,7 +61,7 @@ type MsgClient interface {
 	// UpdateParams defines a governance operation for updating the x/market module
 	// parameters. The authority is hard-coded to the x/gov module account.
 	//
-	// Since: virtengine v1.0.0
+	// Since: akash v1.0.0
 	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
 }
 
@@ -87,7 +87,7 @@ type MsgServer interface {
 	// UpdateParams defines a governance operation for updating the x/market module
 	// parameters. The authority is hard-coded to the x/gov module account.
 	//
-	// Since: virtengine v1.0.0
+	// Since: akash v1.0.0
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 }
 

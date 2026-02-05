@@ -6,10 +6,10 @@ package keeper
 import (
 	"context"
 	"fmt"
-	"math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	"github.com/virtengine/virtengine/x/hpc/types"
 )
 
@@ -29,7 +29,7 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate owner address
-	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
 		return nil, types.ErrInvalidCluster.Wrap("invalid owner address")
 	}
@@ -37,20 +37,19 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 	// Generate cluster ID
 	seq := ms.keeper.GetNextClusterSequence(ctx)
 	clusterID := fmt.Sprintf("HPC-%d", seq)
-	totalNodes, err := safeInt32FromUint64(msg.TotalNodes)
-	if err != nil {
-		return nil, types.ErrInvalidCluster.Wrap(err.Error())
-	}
-
 	// Create the cluster
 	cluster := &types.HPCCluster{
 		ClusterID:       clusterID,
 		ProviderAddress: ownerAddr.String(),
 		Name:            msg.Name,
+		Description:     msg.Description,
 		Region:          msg.Region,
-		TotalNodes:      totalNodes,
-		AvailableNodes:  totalNodes,
+		Partitions:      partitionsFromProto(msg.Partitions),
+		TotalNodes:      msg.TotalNodes,
+		AvailableNodes:  msg.TotalNodes,
 		State:           types.ClusterStateActive,
+		ClusterMetadata: clusterMetadataFromProto(msg.ClusterMetadata),
+		SLURMVersion:    msg.SlurmVersion,
 	}
 
 	// Register the cluster
@@ -60,7 +59,7 @@ func (ms msgServer) RegisterCluster(goCtx context.Context, msg *types.MsgRegiste
 
 	ms.keeper.Logger(ctx).Info("HPC cluster registered",
 		"cluster_id", clusterID,
-		"owner", msg.Owner,
+		"provider", msg.ProviderAddress,
 		"name", msg.Name,
 	)
 
@@ -72,7 +71,7 @@ func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateClu
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate owner address
-	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
 		return nil, types.ErrInvalidCluster.Wrap("invalid owner address")
 	}
@@ -89,12 +88,26 @@ func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateClu
 	}
 
 	// Apply updates
+	if msg.Name != "" {
+		cluster.Name = msg.Name
+	}
+	if msg.Description != "" {
+		cluster.Description = msg.Description
+	}
+	if msg.State != hpcv1.ClusterStateUnspecified {
+		cluster.State = clusterStateFromProto(msg.State)
+	}
+	if len(msg.Partitions) > 0 {
+		cluster.Partitions = partitionsFromProto(msg.Partitions)
+	}
 	if msg.TotalNodes > 0 {
-		totalNodes, err := safeInt32FromUint64(msg.TotalNodes)
-		if err != nil {
-			return nil, types.ErrInvalidCluster.Wrap(err.Error())
-		}
-		cluster.TotalNodes = totalNodes
+		cluster.TotalNodes = msg.TotalNodes
+	}
+	if msg.AvailableNodes != 0 {
+		cluster.AvailableNodes = msg.AvailableNodes
+	}
+	if msg.ClusterMetadata != nil {
+		cluster.ClusterMetadata = clusterMetadataFromProto(*msg.ClusterMetadata)
 	}
 
 	// Update the cluster
@@ -104,7 +117,7 @@ func (ms msgServer) UpdateCluster(goCtx context.Context, msg *types.MsgUpdateClu
 
 	ms.keeper.Logger(ctx).Info("HPC cluster updated",
 		"cluster_id", msg.ClusterId,
-		"owner", msg.Owner,
+		"provider", msg.ProviderAddress,
 	)
 
 	return &types.MsgUpdateClusterResponse{}, nil
@@ -115,7 +128,7 @@ func (ms msgServer) DeregisterCluster(goCtx context.Context, msg *types.MsgDereg
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate owner address
-	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
 		return nil, types.ErrInvalidCluster.Wrap("invalid owner address")
 	}
@@ -127,7 +140,7 @@ func (ms msgServer) DeregisterCluster(goCtx context.Context, msg *types.MsgDereg
 
 	ms.keeper.Logger(ctx).Info("HPC cluster deregistered",
 		"cluster_id", msg.ClusterId,
-		"owner", msg.Owner,
+		"provider", msg.ProviderAddress,
 	)
 
 	return &types.MsgDeregisterClusterResponse{}, nil
@@ -138,7 +151,7 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *types.MsgCreateOf
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.Provider)
+	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
 		return nil, types.ErrInvalidOffering.Wrap("invalid provider address")
 	}
@@ -158,12 +171,19 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *types.MsgCreateOf
 
 	// Create the offering
 	offering := &types.HPCOffering{
-		OfferingID:      offeringID,
-		ClusterID:       msg.ClusterId,
-		ProviderAddress: msg.Provider,
-		Name:            msg.Name,
-		Active:          true,
-		CreatedAt:       ctx.BlockTime(),
+		OfferingID:                offeringID,
+		ClusterID:                 msg.ClusterId,
+		ProviderAddress:           msg.ProviderAddress,
+		Name:                      msg.Name,
+		Description:               msg.Description,
+		QueueOptions:              queueOptionsFromProto(msg.QueueOptions),
+		Pricing:                   pricingFromProto(msg.Pricing),
+		RequiredIdentityThreshold: msg.RequiredIdentityThreshold,
+		MaxRuntimeSeconds:         msg.MaxRuntimeSeconds,
+		PreconfiguredWorkloads:    preconfiguredWorkloadsFromProto(msg.PreconfiguredWorkloads),
+		SupportsCustomWorkloads:   msg.SupportsCustomWorkloads,
+		Active:                    true,
+		CreatedAt:                 ctx.BlockTime(),
 	}
 
 	// Create the offering
@@ -174,18 +194,10 @@ func (ms msgServer) CreateOffering(goCtx context.Context, msg *types.MsgCreateOf
 	ms.keeper.Logger(ctx).Info("HPC offering created",
 		"offering_id", offeringID,
 		"cluster_id", msg.ClusterId,
-		"provider", msg.Provider,
+		"provider", msg.ProviderAddress,
 	)
 
 	return &types.MsgCreateOfferingResponse{OfferingId: offeringID}, nil
-}
-
-func safeInt32FromUint64(value uint64) (int32, error) {
-	maxInt32 := uint64(^uint32(0) >> 1)
-	if value > maxInt32 {
-		return 0, fmt.Errorf("value exceeds int32: %d", value)
-	}
-	return int32(value), nil
 }
 
 // UpdateOffering handles updating an HPC offering
@@ -193,7 +205,7 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate provider address
-	providerAddr, err := sdk.AccAddressFromBech32(msg.Provider)
+	providerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
 		return nil, types.ErrInvalidOffering.Wrap("invalid provider address")
 	}
@@ -210,6 +222,30 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 	}
 
 	// Apply updates
+	if msg.Name != "" {
+		offering.Name = msg.Name
+	}
+	if msg.Description != "" {
+		offering.Description = msg.Description
+	}
+	if len(msg.QueueOptions) > 0 {
+		offering.QueueOptions = queueOptionsFromProto(msg.QueueOptions)
+	}
+	if msg.Pricing != nil {
+		offering.Pricing = pricingFromProto(*msg.Pricing)
+	}
+	if msg.RequiredIdentityThreshold != 0 {
+		offering.RequiredIdentityThreshold = msg.RequiredIdentityThreshold
+	}
+	if msg.MaxRuntimeSeconds != 0 {
+		offering.MaxRuntimeSeconds = msg.MaxRuntimeSeconds
+	}
+	if len(msg.PreconfiguredWorkloads) > 0 {
+		offering.PreconfiguredWorkloads = preconfiguredWorkloadsFromProto(msg.PreconfiguredWorkloads)
+	}
+	if msg.SupportsCustomWorkloads {
+		offering.SupportsCustomWorkloads = true
+	}
 	offering.Active = msg.Active
 	offering.UpdatedAt = ctx.BlockTime()
 
@@ -220,7 +256,7 @@ func (ms msgServer) UpdateOffering(goCtx context.Context, msg *types.MsgUpdateOf
 
 	ms.keeper.Logger(ctx).Info("HPC offering updated",
 		"offering_id", msg.OfferingId,
-		"provider", msg.Provider,
+		"provider", msg.ProviderAddress,
 	)
 
 	return &types.MsgUpdateOfferingResponse{}, nil
@@ -231,7 +267,7 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate submitter address
-	submitterAddr, err := sdk.AccAddressFromBech32(msg.Submitter)
+	submitterAddr, err := sdk.AccAddressFromBech32(msg.CustomerAddress)
 	if err != nil {
 		return nil, types.ErrInvalidJob.Wrap("invalid submitter address")
 	}
@@ -248,28 +284,22 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 	// Generate job ID
 	seq := ms.keeper.GetNextJobSequence(ctx)
 	jobID := fmt.Sprintf("JOB-%d", seq)
-	maxInt32 := uint64(math.MaxInt32)
-	if msg.RequestedNodes > maxInt32 {
-		return nil, types.ErrInvalidJob.Wrap("requested_nodes exceeds int32")
-	}
-	maxInt64 := uint64(math.MaxInt64)
-	if msg.MaxDuration > maxInt64 {
-		return nil, types.ErrInvalidJob.Wrap("max_duration exceeds int64")
-	}
-
 	// Create the job
 	job := &types.HPCJob{
-		JobID:           jobID,
-		CustomerAddress: submitterAddr.String(),
-		OfferingID:      msg.OfferingId,
-		ClusterID:       offering.ClusterID,
-		ProviderAddress: offering.ProviderAddress,
-		Resources: types.JobResources{
-			//nolint:gosec // bounds checked above
-			Nodes: int32(msg.RequestedNodes),
-		},
-		MaxRuntimeSeconds: safeInt64FromUint64(msg.MaxDuration),
-		State:             types.JobStatePending,
+		JobID:                   jobID,
+		CustomerAddress:         submitterAddr.String(),
+		OfferingID:              msg.OfferingId,
+		ClusterID:               offering.ClusterID,
+		ProviderAddress:         offering.ProviderAddress,
+		QueueName:               msg.QueueName,
+		WorkloadSpec:            workloadSpecFromProto(msg.WorkloadSpec),
+		Resources:               jobResourcesFromProto(msg.Resources),
+		DataReferences:          dataReferencesFromProto(msg.DataReferences),
+		EncryptedInputsPointer:  msg.EncryptedInputsPointer,
+		EncryptedOutputsPointer: msg.EncryptedOutputsPointer,
+		MaxRuntimeSeconds:       msg.MaxRuntimeSeconds,
+		AgreedPrice:             msg.MaxPrice,
+		State:                   types.JobStatePending,
 	}
 
 	// Submit the job
@@ -284,7 +314,7 @@ func (ms msgServer) SubmitJob(goCtx context.Context, msg *types.MsgSubmitJob) (*
 
 	ms.keeper.Logger(ctx).Info("HPC job submitted",
 		"job_id", jobID,
-		"submitter", msg.Submitter,
+		"submitter", msg.CustomerAddress,
 		"offering_id", msg.OfferingId,
 	)
 
@@ -296,7 +326,7 @@ func (ms msgServer) CancelJob(goCtx context.Context, msg *types.MsgCancelJob) (*
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate sender address
-	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	senderAddr, err := sdk.AccAddressFromBech32(msg.RequesterAddress)
 	if err != nil {
 		return nil, types.ErrInvalidJob.Wrap("invalid sender address")
 	}
@@ -308,17 +338,10 @@ func (ms msgServer) CancelJob(goCtx context.Context, msg *types.MsgCancelJob) (*
 
 	ms.keeper.Logger(ctx).Info("HPC job cancelled",
 		"job_id", msg.JobId,
-		"sender", msg.Sender,
+		"sender", msg.RequesterAddress,
 	)
 
 	return &types.MsgCancelJobResponse{}, nil
-}
-
-func safeInt64FromUint64(value uint64) int64 {
-	if value > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(value)
 }
 
 // ReportJobStatus handles provider reporting job status
@@ -326,7 +349,7 @@ func (ms msgServer) ReportJobStatus(goCtx context.Context, msg *types.MsgReportJ
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate reporter address
-	reporterAddr, err := sdk.AccAddressFromBech32(msg.Reporter)
+	reporterAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
 		return nil, types.ErrInvalidJob.Wrap("invalid reporter address")
 	}
@@ -343,22 +366,9 @@ func (ms msgServer) ReportJobStatus(goCtx context.Context, msg *types.MsgReportJ
 	}
 
 	// Map status string to JobState
-	var jobState types.JobState
-	switch msg.Status {
-	case "running":
-		jobState = types.JobStateRunning
-	case "completed":
-		jobState = types.JobStateCompleted
-	case "failed":
-		jobState = types.JobStateFailed
-	case "cancelled":
-		jobState = types.JobStateCancelled
-	default:
-		jobState = types.JobState(msg.Status)
-	}
-
 	// Update job status
-	if err := ms.keeper.UpdateJobStatus(ctx, msg.JobId, jobState, msg.ErrorMessage, 0, nil); err != nil {
+	jobState := jobStateFromProto(msg.State)
+	if err := ms.keeper.UpdateJobStatus(ctx, msg.JobId, jobState, msg.StatusMessage, msg.ExitCode, usageMetricsFromProto(msg.UsageMetrics)); err != nil {
 		return nil, err
 	}
 
@@ -371,8 +381,8 @@ func (ms msgServer) ReportJobStatus(goCtx context.Context, msg *types.MsgReportJ
 
 	ms.keeper.Logger(ctx).Info("HPC job status reported",
 		"job_id", msg.JobId,
-		"status", msg.Status,
-		"reporter", msg.Reporter,
+		"status", msg.State,
+		"reporter", msg.ProviderAddress,
 	)
 
 	return &types.MsgReportJobStatusResponse{}, nil
@@ -383,7 +393,7 @@ func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpda
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate owner address
-	ownerAddr, err := sdk.AccAddressFromBech32(msg.Owner)
+	ownerAddr, err := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	if err != nil {
 		return nil, types.ErrInvalidNodeMetadata.Wrap("invalid owner address")
 	}
@@ -399,12 +409,17 @@ func (ms msgServer) UpdateNodeMetadata(goCtx context.Context, msg *types.MsgUpda
 
 	// Create/update node metadata
 	node := &types.NodeMetadata{
-		NodeID:          msg.NodeId,
-		ClusterID:       msg.ClusterId,
-		ProviderAddress: ownerAddr.String(),
-		LastHeartbeat:   ctx.BlockTime(),
-		UpdatedAt:       ctx.BlockTime(),
-		Active:          true,
+		NodeID:               msg.NodeId,
+		ClusterID:            msg.ClusterId,
+		ProviderAddress:      ownerAddr.String(),
+		Region:               msg.Region,
+		Datacenter:           msg.Datacenter,
+		LatencyMeasurements:  latencyMeasurementsFromProto(msg.LatencyMeasurements),
+		NetworkBandwidthMbps: msg.NetworkBandwidthMbps,
+		Resources:            nodeResourcesFromProto(msg.Resources),
+		LastHeartbeat:        ctx.BlockTime(),
+		UpdatedAt:            ctx.BlockTime(),
+		Active:               msg.Active,
 	}
 
 	if err := ms.keeper.UpdateNodeMetadata(ctx, node); err != nil {
@@ -424,7 +439,7 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// Validate sender address
-	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	senderAddr, err := sdk.AccAddressFromBech32(msg.DisputerAddress)
 	if err != nil {
 		return nil, types.ErrInvalidDispute.Wrap("invalid sender address")
 	}
@@ -449,7 +464,7 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 		DisputeID:       disputeID,
 		JobID:           msg.JobId,
 		DisputerAddress: senderAddr.String(),
-		DisputeType:     "general",
+		DisputeType:     msg.DisputeType,
 		Reason:          msg.Reason,
 		Evidence:        msg.Evidence,
 		Status:          types.DisputeStatusPending,
@@ -463,7 +478,7 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 	ms.keeper.Logger(ctx).Info("HPC dispute flagged",
 		"dispute_id", disputeID,
 		"job_id", msg.JobId,
-		"sender", msg.Sender,
+		"sender", msg.DisputerAddress,
 	)
 
 	return &types.MsgFlagDisputeResponse{DisputeId: disputeID}, nil
@@ -473,32 +488,277 @@ func (ms msgServer) FlagDispute(goCtx context.Context, msg *types.MsgFlagDispute
 func (ms msgServer) ResolveDispute(goCtx context.Context, msg *types.MsgResolveDispute) (*types.MsgResolveDisputeResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Validate authority address (must be module authority)
-	if msg.Authority != ms.keeper.GetAuthority() {
-		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
-	}
-
-	// Determine dispute status from resolution
-	var disputeStatus types.DisputeStatus
-	switch msg.Resolution {
-	case "resolved":
-		disputeStatus = types.DisputeStatusResolved
-	case "rejected":
-		disputeStatus = types.DisputeStatusRejected
-	default:
-		disputeStatus = types.DisputeStatusResolved
+	// Validate resolver address (must be module authority)
+	if msg.ResolverAddress != ms.keeper.GetAuthority() {
+		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", ms.keeper.GetAuthority(), msg.ResolverAddress)
 	}
 
 	// Resolve the dispute
-	if err := ms.keeper.ResolveDispute(ctx, msg.DisputeId, disputeStatus, msg.Resolution, sdk.MustAccAddressFromBech32(msg.Authority)); err != nil {
+	resolverAddr, err := sdk.AccAddressFromBech32(msg.ResolverAddress)
+	if err != nil {
+		return nil, types.ErrUnauthorized.Wrap("invalid resolver address")
+	}
+	if err := ms.keeper.ResolveDispute(ctx, msg.DisputeId, disputeStatusFromProto(msg.Status), msg.Resolution, resolverAddr); err != nil {
 		return nil, err
 	}
 
 	ms.keeper.Logger(ctx).Info("HPC dispute resolved",
 		"dispute_id", msg.DisputeId,
 		"resolution", msg.Resolution,
-		"authority", msg.Authority,
+		"resolver", msg.ResolverAddress,
 	)
 
 	return &types.MsgResolveDisputeResponse{}, nil
+}
+
+// UpdateParams updates module parameters (governance only)
+func (ms msgServer) UpdateParams(goCtx context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	if msg.Authority != ms.keeper.GetAuthority() {
+		return nil, types.ErrUnauthorized.Wrapf("expected %s, got %s", ms.keeper.GetAuthority(), msg.Authority)
+	}
+
+	current := ms.keeper.GetParams(ctx)
+	params := current
+	params.PlatformFeeRate = msg.Params.PlatformFeeRate
+	params.ProviderRewardRate = msg.Params.ProviderRewardRate
+	params.NodeRewardRate = msg.Params.NodeRewardRate
+	params.MinJobDurationSeconds = msg.Params.MinJobDurationSeconds
+	params.MaxJobDurationSeconds = msg.Params.MaxJobDurationSeconds
+	params.DefaultIdentityThreshold = msg.Params.DefaultIdentityThreshold
+	params.ClusterHeartbeatTimeout = msg.Params.ClusterHeartbeatTimeout
+	params.NodeHeartbeatTimeout = msg.Params.NodeHeartbeatTimeout
+	params.LatencyWeightFactor = msg.Params.LatencyWeightFactor
+	params.CapacityWeightFactor = msg.Params.CapacityWeightFactor
+	params.MaxLatencyMs = msg.Params.MaxLatencyMs
+	params.DisputeResolutionPeriod = msg.Params.DisputeResolutionPeriod
+	params.RewardFormulaVersion = msg.Params.RewardFormulaVersion
+	params.EnableProximityClustering = msg.Params.EnableProximityClustering
+
+	if err := ms.keeper.SetParams(ctx, params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+func clusterStateFromProto(state hpcv1.ClusterState) types.ClusterState {
+	switch state {
+	case hpcv1.ClusterStatePending:
+		return types.ClusterStatePending
+	case hpcv1.ClusterStateActive:
+		return types.ClusterStateActive
+	case hpcv1.ClusterStateDraining:
+		return types.ClusterStateDraining
+	case hpcv1.ClusterStateOffline:
+		return types.ClusterStateOffline
+	case hpcv1.ClusterStateDeregistered:
+		return types.ClusterStateDeregistered
+	default:
+		return types.ClusterStatePending
+	}
+}
+
+func jobStateFromProto(state hpcv1.JobState) types.JobState {
+	switch state {
+	case hpcv1.JobStatePending:
+		return types.JobStatePending
+	case hpcv1.JobStateQueued:
+		return types.JobStateQueued
+	case hpcv1.JobStateRunning:
+		return types.JobStateRunning
+	case hpcv1.JobStateCompleted:
+		return types.JobStateCompleted
+	case hpcv1.JobStateFailed:
+		return types.JobStateFailed
+	case hpcv1.JobStateCancelled:
+		return types.JobStateCancelled
+	case hpcv1.JobStateTimeout:
+		return types.JobStateTimeout
+	default:
+		return types.JobStatePending
+	}
+}
+
+func disputeStatusFromProto(status hpcv1.DisputeStatus) types.DisputeStatus {
+	switch status {
+	case hpcv1.DisputeStatusUnderReview:
+		return types.DisputeStatusUnderReview
+	case hpcv1.DisputeStatusResolved:
+		return types.DisputeStatusResolved
+	case hpcv1.DisputeStatusRejected:
+		return types.DisputeStatusRejected
+	default:
+		return types.DisputeStatusPending
+	}
+}
+
+func clusterMetadataFromProto(meta hpcv1.ClusterMetadata) types.ClusterMetadata {
+	return types.ClusterMetadata{
+		TotalCPUCores:    meta.TotalCpuCores,
+		TotalMemoryGB:    meta.TotalMemoryGb,
+		TotalGPUs:        meta.TotalGpus,
+		GPUTypes:         meta.GpuTypes,
+		InterconnectType: meta.InterconnectType,
+		StorageType:      meta.StorageType,
+		TotalStorageGB:   meta.TotalStorageGb,
+	}
+}
+
+func partitionsFromProto(partitions []hpcv1.Partition) []types.Partition {
+	if len(partitions) == 0 {
+		return nil
+	}
+	out := make([]types.Partition, 0, len(partitions))
+	for _, partition := range partitions {
+		out = append(out, types.Partition{
+			Name:           partition.Name,
+			Nodes:          partition.Nodes,
+			MaxRuntime:     partition.MaxRuntime,
+			DefaultRuntime: partition.DefaultRuntime,
+			MaxNodes:       partition.MaxNodes,
+			Features:       partition.Features,
+			Priority:       partition.Priority,
+			State:          partition.State,
+		})
+	}
+	return out
+}
+
+func queueOptionsFromProto(options []hpcv1.QueueOption) []types.QueueOption {
+	if len(options) == 0 {
+		return nil
+	}
+	out := make([]types.QueueOption, 0, len(options))
+	for _, option := range options {
+		out = append(out, types.QueueOption{
+			PartitionName:   option.PartitionName,
+			DisplayName:     option.DisplayName,
+			MaxNodes:        option.MaxNodes,
+			MaxRuntime:      option.MaxRuntime,
+			Features:        option.Features,
+			PriceMultiplier: option.PriceMultiplier,
+		})
+	}
+	return out
+}
+
+func pricingFromProto(pricing hpcv1.HPCPricing) types.HPCPricing {
+	return types.HPCPricing{
+		BaseNodeHourPrice: pricing.BaseNodeHourPrice,
+		CPUCoreHourPrice:  pricing.CpuCoreHourPrice,
+		GPUHourPrice:      pricing.GpuHourPrice,
+		MemoryGBHourPrice: pricing.MemoryGbHourPrice,
+		StorageGBPrice:    pricing.StorageGbPrice,
+		NetworkGBPrice:    pricing.NetworkGbPrice,
+		Currency:          pricing.Currency,
+		MinimumCharge:     pricing.MinimumCharge,
+	}
+}
+
+func preconfiguredWorkloadsFromProto(workloads []hpcv1.PreconfiguredWorkload) []types.PreconfiguredWorkload {
+	if len(workloads) == 0 {
+		return nil
+	}
+	out := make([]types.PreconfiguredWorkload, 0, len(workloads))
+	for _, workload := range workloads {
+		out = append(out, types.PreconfiguredWorkload{
+			WorkloadID:        workload.WorkloadId,
+			Name:              workload.Name,
+			Description:       workload.Description,
+			ContainerImage:    workload.ContainerImage,
+			DefaultCommand:    workload.DefaultCommand,
+			RequiredResources: jobResourcesFromProto(workload.RequiredResources),
+			Category:          workload.Category,
+			Version:           workload.Version,
+		})
+	}
+	return out
+}
+
+func workloadSpecFromProto(spec hpcv1.JobWorkloadSpec) types.JobWorkloadSpec {
+	return types.JobWorkloadSpec{
+		ContainerImage:          spec.ContainerImage,
+		Command:                 spec.Command,
+		Arguments:               spec.Arguments,
+		Environment:             spec.Environment,
+		WorkingDirectory:        spec.WorkingDirectory,
+		PreconfiguredWorkloadID: spec.PreconfiguredWorkloadId,
+		IsPreconfigured:         spec.IsPreconfigured,
+	}
+}
+
+func jobResourcesFromProto(resources hpcv1.JobResources) types.JobResources {
+	return types.JobResources{
+		Nodes:           resources.Nodes,
+		CPUCoresPerNode: resources.CpuCoresPerNode,
+		MemoryGBPerNode: resources.MemoryGbPerNode,
+		GPUsPerNode:     resources.GpusPerNode,
+		StorageGB:       resources.StorageGb,
+		GPUType:         resources.GpuType,
+	}
+}
+
+func dataReferencesFromProto(references []hpcv1.DataReference) []types.DataReference {
+	if len(references) == 0 {
+		return nil
+	}
+	out := make([]types.DataReference, 0, len(references))
+	for _, reference := range references {
+		out = append(out, types.DataReference{
+			ReferenceID: reference.ReferenceId,
+			Type:        reference.Type,
+			URI:         reference.Uri,
+			Encrypted:   reference.Encrypted,
+			Checksum:    reference.Checksum,
+			SizeBytes:   reference.SizeBytes,
+		})
+	}
+	return out
+}
+
+func usageMetricsFromProto(metrics *hpcv1.HPCUsageMetrics) *types.HPCUsageMetrics {
+	if metrics == nil {
+		return nil
+	}
+	return &types.HPCUsageMetrics{
+		WallClockSeconds: metrics.WallClockSeconds,
+		CPUCoreSeconds:   metrics.CpuCoreSeconds,
+		MemoryGBSeconds:  metrics.MemoryGbSeconds,
+		GPUSeconds:       metrics.GpuSeconds,
+		StorageGBHours:   metrics.StorageGbHours,
+		NetworkBytesIn:   metrics.NetworkBytesIn,
+		NetworkBytesOut:  metrics.NetworkBytesOut,
+		NodeHours:        metrics.NodeHours,
+		NodesUsed:        metrics.NodesUsed,
+	}
+}
+
+func nodeResourcesFromProto(resources *hpcv1.NodeResources) types.NodeResources {
+	if resources == nil {
+		return types.NodeResources{}
+	}
+	return types.NodeResources{
+		CPUCores:  resources.CpuCores,
+		MemoryGB:  resources.MemoryGb,
+		GPUs:      resources.Gpus,
+		GPUType:   resources.GpuType,
+		StorageGB: resources.StorageGb,
+	}
+}
+
+func latencyMeasurementsFromProto(measurements []hpcv1.LatencyMeasurement) []types.LatencyMeasurement {
+	if len(measurements) == 0 {
+		return nil
+	}
+	out := make([]types.LatencyMeasurement, 0, len(measurements))
+	for _, measurement := range measurements {
+		out = append(out, types.LatencyMeasurement{
+			TargetNodeID: measurement.TargetNodeId,
+			LatencyMs:    measurement.LatencyMs,
+			MeasuredAt:   measurement.MeasuredAt,
+		})
+	}
+	return out
 }

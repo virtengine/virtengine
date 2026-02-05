@@ -8,12 +8,12 @@ import (
 // sdk.Msg interface methods for MsgRegisterCluster
 
 func (msg *MsgRegisterCluster) ValidateBasic() error {
-	if msg.Owner == "" {
-		return ErrInvalidAddress.Wrap("owner address is required")
+	if msg.ProviderAddress == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid owner address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
 	}
 
 	if msg.Name == "" {
@@ -32,19 +32,19 @@ func (msg *MsgRegisterCluster) ValidateBasic() error {
 }
 
 func (msg *MsgRegisterCluster) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Owner)
+	addr, _ := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgUpdateCluster
 
 func (msg *MsgUpdateCluster) ValidateBasic() error {
-	if msg.Owner == "" {
-		return ErrInvalidAddress.Wrap("owner address is required")
+	if msg.ProviderAddress == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid owner address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
 	}
 
 	if msg.ClusterId == "" {
@@ -55,19 +55,19 @@ func (msg *MsgUpdateCluster) ValidateBasic() error {
 }
 
 func (msg *MsgUpdateCluster) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Owner)
+	addr, _ := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgDeregisterCluster
 
 func (msg *MsgDeregisterCluster) ValidateBasic() error {
-	if msg.Owner == "" {
-		return ErrInvalidAddress.Wrap("owner address is required")
+	if msg.ProviderAddress == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid owner address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
 	}
 
 	if msg.ClusterId == "" {
@@ -78,18 +78,18 @@ func (msg *MsgDeregisterCluster) ValidateBasic() error {
 }
 
 func (msg *MsgDeregisterCluster) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Owner)
+	addr, _ := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgCreateOffering
 
 func (msg *MsgCreateOffering) ValidateBasic() error {
-	if msg.Provider == "" {
+	if msg.ProviderAddress == "" {
 		return ErrInvalidAddress.Wrap("provider address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Provider); err != nil {
+	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
 		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
 	}
 
@@ -105,18 +105,18 @@ func (msg *MsgCreateOffering) ValidateBasic() error {
 }
 
 func (msg *MsgCreateOffering) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Provider)
+	addr, _ := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgUpdateOffering
 
 func (msg *MsgUpdateOffering) ValidateBasic() error {
-	if msg.Provider == "" {
+	if msg.ProviderAddress == "" {
 		return ErrInvalidAddress.Wrap("provider address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Provider); err != nil {
+	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
 		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
 	}
 
@@ -128,46 +128,46 @@ func (msg *MsgUpdateOffering) ValidateBasic() error {
 }
 
 func (msg *MsgUpdateOffering) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Provider)
+	addr, _ := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgSubmitJob
 
 func (msg *MsgSubmitJob) ValidateBasic() error {
-	if msg.Submitter == "" {
-		return ErrInvalidAddress.Wrap("submitter address is required")
+	if msg.CustomerAddress == "" {
+		return ErrInvalidAddress.Wrap("customer address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Submitter); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid submitter address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.CustomerAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid customer address: %v", err)
 	}
 
 	if msg.OfferingId == "" {
 		return ErrInvalidJob.Wrap("offering_id cannot be empty")
 	}
 
-	if msg.RequestedNodes == 0 {
-		return ErrInvalidJob.Wrap("requested_nodes must be greater than zero")
+	if msg.Resources.Nodes == 0 {
+		return ErrInvalidJob.Wrap("resources.nodes must be greater than zero")
 	}
 
 	return nil
 }
 
 func (msg *MsgSubmitJob) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Submitter)
+	addr, _ := sdk.AccAddressFromBech32(msg.CustomerAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgCancelJob
 
 func (msg *MsgCancelJob) ValidateBasic() error {
-	if msg.Sender == "" {
-		return ErrInvalidAddress.Wrap("sender address is required")
+	if msg.RequesterAddress == "" {
+		return ErrInvalidAddress.Wrap("requester address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.RequesterAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid requester address: %v", err)
 	}
 
 	if msg.JobId == "" {
@@ -178,77 +178,81 @@ func (msg *MsgCancelJob) ValidateBasic() error {
 }
 
 func (msg *MsgCancelJob) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	addr, _ := sdk.AccAddressFromBech32(msg.RequesterAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgReportJobStatus
 
 func (msg *MsgReportJobStatus) ValidateBasic() error {
-	if msg.Reporter == "" {
-		return ErrInvalidAddress.Wrap("reporter address is required")
+	if msg.ProviderAddress == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Reporter); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid reporter address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
 	}
 
 	if msg.JobId == "" {
 		return ErrInvalidJob.Wrap("job_id cannot be empty")
 	}
 
-	if msg.Status == "" {
-		return ErrInvalidStatus.Wrap("status cannot be empty")
+	if msg.State == JobStateUnspecified {
+		return ErrInvalidStatus.Wrap("state cannot be unspecified")
 	}
 
 	return nil
 }
 
 func (msg *MsgReportJobStatus) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Reporter)
+	addr, _ := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgUpdateNodeMetadata
 
 func (msg *MsgUpdateNodeMetadata) ValidateBasic() error {
-	if msg.Owner == "" {
-		return ErrInvalidAddress.Wrap("owner address is required")
+	if msg.ProviderAddress == "" {
+		return ErrInvalidAddress.Wrap("provider address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Owner); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid owner address: %v", err)
-	}
-
-	if msg.ClusterId == "" {
-		return ErrInvalidNode.Wrap("cluster_id cannot be empty")
+	if _, err := sdk.AccAddressFromBech32(msg.ProviderAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid provider address: %v", err)
 	}
 
 	if msg.NodeId == "" {
 		return ErrInvalidNode.Wrap("node_id cannot be empty")
 	}
 
+	if msg.ClusterId == "" {
+		return ErrInvalidNode.Wrap("cluster_id cannot be empty")
+	}
+
 	return nil
 }
 
 func (msg *MsgUpdateNodeMetadata) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Owner)
+	addr, _ := sdk.AccAddressFromBech32(msg.ProviderAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgFlagDispute
 
 func (msg *MsgFlagDispute) ValidateBasic() error {
-	if msg.Sender == "" {
-		return ErrInvalidAddress.Wrap("sender address is required")
+	if msg.DisputerAddress == "" {
+		return ErrInvalidAddress.Wrap("disputer address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid sender address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.DisputerAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid disputer address: %v", err)
 	}
 
 	if msg.JobId == "" {
 		return ErrInvalidDispute.Wrap("job_id cannot be empty")
+	}
+
+	if msg.DisputeType == "" {
+		return ErrInvalidDispute.Wrap("dispute_type cannot be empty")
 	}
 
 	if msg.Reason == "" {
@@ -259,19 +263,19 @@ func (msg *MsgFlagDispute) ValidateBasic() error {
 }
 
 func (msg *MsgFlagDispute) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Sender)
+	addr, _ := sdk.AccAddressFromBech32(msg.DisputerAddress)
 	return []sdk.AccAddress{addr}
 }
 
 // sdk.Msg interface methods for MsgResolveDispute
 
 func (msg *MsgResolveDispute) ValidateBasic() error {
-	if msg.Authority == "" {
-		return ErrInvalidAddress.Wrap("authority address is required")
+	if msg.ResolverAddress == "" {
+		return ErrInvalidAddress.Wrap("resolver address is required")
 	}
 
-	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
-		return ErrInvalidAddress.Wrapf("invalid authority address: %v", err)
+	if _, err := sdk.AccAddressFromBech32(msg.ResolverAddress); err != nil {
+		return ErrInvalidAddress.Wrapf("invalid resolver address: %v", err)
 	}
 
 	if msg.DisputeId == "" {
@@ -286,6 +290,6 @@ func (msg *MsgResolveDispute) ValidateBasic() error {
 }
 
 func (msg *MsgResolveDispute) GetSigners() []sdk.AccAddress {
-	addr, _ := sdk.AccAddressFromBech32(msg.Authority)
+	addr, _ := sdk.AccAddressFromBech32(msg.ResolverAddress)
 	return []sdk.AccAddress{addr}
 }

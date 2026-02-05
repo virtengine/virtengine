@@ -141,6 +141,12 @@ func (k Keeper) ProcessJobSettlement(ctx sdk.Context, jobID string) (*Settlement
 		return nil, err
 	}
 
+	if k.billingEnabled() {
+		if _, err := k.GenerateInvoiceForJob(ctx, record.RecordID); err != nil {
+			return nil, err
+		}
+	}
+
 	// Distribute rewards
 	if _, err := k.DistributeJobRewardsFromSettlement(ctx, jobID, record); err != nil {
 		k.Logger(ctx).Error("failed to distribute rewards", "job_id", jobID, "error", err)

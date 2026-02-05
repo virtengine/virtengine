@@ -1366,9 +1366,8 @@ type Params struct {
 	VerificationExpiryDays uint32 `protobuf:"varint,7,opt,name=verification_expiry_days,json=verificationExpiryDays,proto3" json:"verification_expiry_days" yaml:"verification_expiry_days"`
 }
 
-func (m *Params) Reset()         { *m = Params{} }
-func (m *Params) String() string { return proto.CompactTextString(m) }
-func (*Params) ProtoMessage()    {}
+func (m *Params) Reset()      { *m = Params{} }
+func (*Params) ProtoMessage() {}
 func (*Params) Descriptor() ([]byte, []int) {
 	return fileDescriptor_7c30559501e7c7cb, []int{10}
 }
