@@ -114,15 +114,17 @@ check_vet() {
 }
 
 # =========================================================================
-# Check 2: gofmt (changed files only)
+# Check 2: gofmt (auto-format changed files)
 # =========================================================================
 check_gofmt() {
     local base_branch="origin/main"
     local changed_files=""
 
     if git rev-parse --verify "$base_branch" &>/dev/null; then
+        # Get changed Go files, filter existing files only
         changed_files=$(git diff --name-only "$base_branch" -- '*.go' 2>/dev/null | \
-            grep -v '^vendor/' | grep -v '^tests/' || true)
+            grep -v '^vendor/' | grep -v '^tests/' | \
+            while read -r f; do [ -f "$f" ] && echo "$f"; done || true)
     fi
 
     if [ -z "${changed_files:-}" ]; then
@@ -132,11 +134,24 @@ check_gofmt() {
 
     local unformatted
     # shellcheck disable=SC2086
-    unformatted=$(gofmt -l $changed_files)
+    unformatted=$(gofmt -l $changed_files 2>/dev/null || true)
+    
     if [ -n "$unformatted" ]; then
-        hook_fail "gofmt needed on:"
-        echo "$unformatted" | sed 's/^/  - /'
-        return 1
+        hook_step "Auto-formatting $(echo "$unformatted" | wc -l | tr -d ' ') file(s)..."
+        
+        # Auto-format the files
+        for file in $unformatted; do
+            [ -f "$file" ] || continue
+            gofmt -w "$file"
+            hook_step "Formatted: $file"
+        done
+        
+        # Stage and amend the commit with formatted files
+        # shellcheck disable=SC2086
+        git add $unformatted
+        git commit --amend --no-edit --no-verify
+        
+        hook_pass "Auto-formatted and amended commit"
     fi
     return 0
 }
