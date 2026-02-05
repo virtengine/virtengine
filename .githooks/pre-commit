@@ -108,7 +108,10 @@ if [ "${VE_HOOK_SKIP_LINT:-}" != "1" ]; then
             exit 1
         fi
         hook_pass "[pre-commit] golangci-lint passed"
-        
+    fi
+fi
+
+# =========================================================================
 # Auto-format staged Portal files with prettier
 # =========================================================================
 if [ "${VE_HOOK_SKIP_FMT:-}" != "1" ]; then

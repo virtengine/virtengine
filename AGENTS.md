@@ -12,7 +12,7 @@ Before finishing a task - ensure that you create a commit based on following con
 
 Ensure that there are no CI/CD errors after pushing, if needed continue monitoring your push for errors and fix them if identified.
 
-You should have all commands as needed available in shell, for example go, pip, npm, git, etc.
+You should have all commands as needed available in shell, for example go, pip, npm, git, etc. Consider increasing time outs when runninig long running commands such as git push, go test when running large test packages, etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks..
 
 ## Pre-commit automation (do this every time)
 
