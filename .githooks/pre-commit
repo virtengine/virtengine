@@ -18,14 +18,16 @@ source "$HOOK_DIR/common.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
+ensure_direnv_env
+
+STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACM)"
+STAGED_GO_FILES="$(echo "$STAGED_FILES" | grep -E '\.go$' | grep -v '^vendor/' || true)"
 
 # =========================================================================
 # Auto-format staged Go files with gofmt
 # =========================================================================
 if [ "${VE_HOOK_SKIP_FMT:-}" != "1" ]; then
     # Get staged Go files (excluding vendor and deleted files)
-    STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' | grep -v '^vendor/' || true)
-
     if [ -n "$STAGED_GO_FILES" ]; then
         hook_header "[pre-commit] Formatting staged Go files..."
 
@@ -57,6 +59,56 @@ if [ "${VE_HOOK_SKIP_FMT:-}" != "1" ]; then
 fi
 
 # =========================================================================
+# Auto-format staged portal files with prettier (if available)
+# =========================================================================
+if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
+    PORTAL_STAGED_FILES="$(echo "$STAGED_FILES" | grep -E '^portal/.*\.(ts|tsx|js|jsx|json|css|md)$' || true)"
+    if [ -n "$PORTAL_STAGED_FILES" ]; then
+        PRETTIER_BIN="$REPO_ROOT/portal/node_modules/.bin/prettier"
+        if [ -x "$PRETTIER_BIN" ]; then
+            hook_header "[pre-commit] Formatting staged portal files with prettier..."
+            # Prettier needs paths relative to repo root.
+            echo "$PORTAL_STAGED_FILES" | xargs "$PRETTIER_BIN" --write
+            echo "$PORTAL_STAGED_FILES" | xargs git add
+            hook_pass "[pre-commit] Prettier formatted staged portal files"
+        else
+            hook_warn "[pre-commit] Prettier not available in portal/node_modules. Skipping portal formatting."
+            hook_warn "            Run 'pnpm -C portal install' to enable auto-formatting."
+        fi
+    fi
+fi
+
+# =========================================================================
+# Auto-format staged sdk/ts files with lint-staged (if available)
+# =========================================================================
+if [ "${VE_HOOK_SKIP_JS:-}" != "1" ]; then
+    SDK_TS_STAGED_FILES="$(echo "$STAGED_FILES" | grep -E '^sdk/ts/.*\.(ts|tsx|js|jsx|json)$' || true)"
+    if [ -n "$SDK_TS_STAGED_FILES" ]; then
+        SDK_LINT_STAGED_BIN="$REPO_ROOT/sdk/ts/node_modules/.bin/lint-staged"
+        if [ -x "$SDK_LINT_STAGED_BIN" ]; then
+            hook_header "[pre-commit] Formatting staged sdk/ts files with lint-staged..."
+            (cd "$REPO_ROOT/sdk/ts" && "$SDK_LINT_STAGED_BIN")
+            hook_pass "[pre-commit] lint-staged applied for sdk/ts"
+        else
+            hook_warn "[pre-commit] lint-staged not available in sdk/ts/node_modules. Skipping sdk/ts formatting."
+            hook_warn "            Run 'pnpm -C sdk/ts install' to enable auto-formatting."
+        fi
+    fi
+fi
+
+# =========================================================================
+# Lint staged Go packages with golangci-lint
+# =========================================================================
+if [ "${VE_HOOK_SKIP_LINT:-}" != "1" ]; then
+    if [ -n "$STAGED_GO_FILES" ]; then
+        hook_header "[pre-commit] Linting staged Go packages (golangci-lint)..."
+        GO_DIRS="$(echo "$STAGED_GO_FILES" | xargs -n1 dirname | sort -u | sed 's#^#./#')"
+        if ! golangci-lint run $GO_DIRS; then
+            hook_fail "golangci-lint failed. Fix issues or set VE_HOOK_SKIP_LINT=1 to bypass."
+            exit 1
+        fi
+        hook_pass "[pre-commit] golangci-lint passed"
+        
 # Auto-format staged Portal files with prettier
 # =========================================================================
 if [ "${VE_HOOK_SKIP_FMT:-}" != "1" ]; then

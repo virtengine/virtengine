@@ -90,6 +90,27 @@ const (
 	// FlagWaldurOrderCallbackURL is optional callback URL for Waldur order
 	FlagWaldurOrderCallbackURL = "waldur-order-callback-url"
 
+	// FlagWaldurOrderRoutingEnabled enables chain->Waldur order routing
+	FlagWaldurOrderRoutingEnabled = "waldur-order-routing-enabled"
+
+	// FlagWaldurOrderStateFile is the order routing state file path
+	FlagWaldurOrderStateFile = "waldur-order-state-file"
+
+	// FlagWaldurOrderCheckpointFile is the order routing checkpoint file path
+	FlagWaldurOrderCheckpointFile = "waldur-order-checkpoint-file"
+
+	// FlagWaldurOrderCallbackListen is the listen address for order status callbacks
+	FlagWaldurOrderCallbackListen = "waldur-order-callback-listen"
+
+	// FlagWaldurOrderCallbackPath is the callback path for order status callbacks
+	FlagWaldurOrderCallbackPath = "waldur-order-callback-path"
+
+	// FlagWaldurOrderRoutingMaxRetries is max retries for order routing
+	FlagWaldurOrderRoutingMaxRetries = "waldur-order-routing-max-retries"
+
+	// FlagWaldurOrderRoutingWorkers is worker count for order routing
+	FlagWaldurOrderRoutingWorkers = "waldur-order-routing-workers"
+
 	// FlagWaldurChainSubmit enables on-chain Waldur callback submission
 	FlagWaldurChainSubmit = "waldur-chain-submit"
 
@@ -219,6 +240,13 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagWaldurStateFile, "data/waldur_bridge_state.json", "Waldur bridge state file path")
 	rootCmd.PersistentFlags().String(FlagWaldurCheckpointFile, "data/marketplace_checkpoint.json", "Marketplace checkpoint file path")
 	rootCmd.PersistentFlags().String(FlagWaldurOrderCallbackURL, "", "Callback URL to include in Waldur order")
+	rootCmd.PersistentFlags().Bool(FlagWaldurOrderRoutingEnabled, true, "Enable routing customer orders to Waldur")
+	rootCmd.PersistentFlags().String(FlagWaldurOrderStateFile, "data/waldur_order_state.json", "Waldur order routing state file path")
+	rootCmd.PersistentFlags().String(FlagWaldurOrderCheckpointFile, "data/waldur_order_checkpoint.json", "Order routing checkpoint file path")
+	rootCmd.PersistentFlags().String(FlagWaldurOrderCallbackListen, ":8444", "Listen address for Waldur order status callbacks")
+	rootCmd.PersistentFlags().String(FlagWaldurOrderCallbackPath, "/v1/callbacks/waldur/orders", "HTTP path for Waldur order status callbacks")
+	rootCmd.PersistentFlags().Int(FlagWaldurOrderRoutingMaxRetries, 5, "Max retries for Waldur order routing")
+	rootCmd.PersistentFlags().Int(FlagWaldurOrderRoutingWorkers, 4, "Number of Waldur order routing workers")
 	rootCmd.PersistentFlags().Bool(FlagWaldurChainSubmit, false, "Submit Waldur callbacks on-chain via MsgWaldurCallback")
 	rootCmd.PersistentFlags().String(FlagWaldurChainKey, "", "Key name for on-chain Waldur callback submissions")
 	rootCmd.PersistentFlags().String(FlagWaldurChainKeyringBackend, "test", "Keyring backend for on-chain callback submissions")
@@ -283,6 +311,13 @@ func init() {
 	_ = viper.BindPFlag(FlagWaldurStateFile, rootCmd.PersistentFlags().Lookup(FlagWaldurStateFile))
 	_ = viper.BindPFlag(FlagWaldurCheckpointFile, rootCmd.PersistentFlags().Lookup(FlagWaldurCheckpointFile))
 	_ = viper.BindPFlag(FlagWaldurOrderCallbackURL, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCallbackURL))
+	_ = viper.BindPFlag(FlagWaldurOrderRoutingEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderRoutingEnabled))
+	_ = viper.BindPFlag(FlagWaldurOrderStateFile, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderStateFile))
+	_ = viper.BindPFlag(FlagWaldurOrderCheckpointFile, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCheckpointFile))
+	_ = viper.BindPFlag(FlagWaldurOrderCallbackListen, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCallbackListen))
+	_ = viper.BindPFlag(FlagWaldurOrderCallbackPath, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderCallbackPath))
+	_ = viper.BindPFlag(FlagWaldurOrderRoutingMaxRetries, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderRoutingMaxRetries))
+	_ = viper.BindPFlag(FlagWaldurOrderRoutingWorkers, rootCmd.PersistentFlags().Lookup(FlagWaldurOrderRoutingWorkers))
 	_ = viper.BindPFlag(FlagWaldurChainSubmit, rootCmd.PersistentFlags().Lookup(FlagWaldurChainSubmit))
 	_ = viper.BindPFlag(FlagWaldurChainKey, rootCmd.PersistentFlags().Lookup(FlagWaldurChainKey))
 	_ = viper.BindPFlag(FlagWaldurChainKeyringBackend, rootCmd.PersistentFlags().Lookup(FlagWaldurChainKeyringBackend))
@@ -632,6 +667,71 @@ func runStart(cmd *cobra.Command, args []string) error {
 		offeringMap, err := loadOfferingMap(viper.GetString(FlagWaldurOfferingMap))
 		if err != nil {
 			return fmt.Errorf("failed to load waldur offering map: %w", err)
+		}
+
+		orderRoutingCfg := provider_daemon.DefaultOrderRoutingConfig()
+		orderRoutingCfg.Enabled = viper.GetBool(FlagWaldurOrderRoutingEnabled)
+		orderRoutingCfg.ProviderAddress = providerAddress
+		orderRoutingCfg.WaldurBaseURL = viper.GetString(FlagWaldurBaseURL)
+		orderRoutingCfg.WaldurToken = viper.GetString(FlagWaldurToken)
+		orderRoutingCfg.WaldurProjectID = viper.GetString(FlagWaldurProjectUUID)
+		orderRoutingCfg.OrderCallbackURL = viper.GetString(FlagWaldurOrderCallbackURL)
+		orderRoutingCfg.OfferingMap = offeringMap
+		orderRoutingCfg.StateFile = viper.GetString(FlagWaldurOrderStateFile)
+		orderRoutingCfg.MaxRetries = viper.GetInt(FlagWaldurOrderRoutingMaxRetries)
+		orderRoutingCfg.WorkerCount = viper.GetInt(FlagWaldurOrderRoutingWorkers)
+
+		var orderRouter *provider_daemon.OrderRouter
+		if orderRoutingCfg.Enabled {
+			router, err := provider_daemon.NewOrderRouter(orderRoutingCfg, nil)
+			if err != nil {
+				return fmt.Errorf("failed to create order router: %w", err)
+			}
+			orderRouter = router
+			orderRouter.Start(ctx)
+			fmt.Println("  Waldur Order Router: started")
+
+			listenerCfg := provider_daemon.DefaultOrderListenerConfig()
+			listenerCfg.Enabled = true
+			listenerCfg.ProviderAddress = providerAddress
+			listenerCfg.CometRPC = normalizeCometRPC(viper.GetString(FlagNode))
+			listenerCfg.CometWS = viper.GetString(FlagCometWS)
+			listenerCfg.EventQuery = ""
+			listenerCfg.CheckpointFile = viper.GetString(FlagWaldurOrderCheckpointFile)
+			listenerCfg.SubscriberID = fmt.Sprintf("order-router-%s", providerID[:8])
+
+			orderListener, err := provider_daemon.NewOrderListener(listenerCfg, orderRouter)
+			if err != nil {
+				return fmt.Errorf("failed to create order listener: %w", err)
+			}
+			go func() {
+				if err := orderListener.Start(ctx); err != nil {
+					fmt.Printf("[WALDUR] order listener stopped: %v\n", err)
+				}
+			}()
+			fmt.Println("  Waldur Order Listener: started")
+
+			statusHandler, err := provider_daemon.NewOrderStatusCallbackHandler(
+				keyManager,
+				callbackSink,
+				orderRouter.Store(),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create order status handler: %w", err)
+			}
+			webhookCfg := provider_daemon.DefaultOrderStatusWebhookConfig()
+			webhookCfg.ListenAddr = viper.GetString(FlagWaldurOrderCallbackListen)
+			webhookCfg.CallbackPath = viper.GetString(FlagWaldurOrderCallbackPath)
+			webhookServer, err := provider_daemon.NewOrderStatusWebhookServer(webhookCfg, statusHandler)
+			if err != nil {
+				return fmt.Errorf("failed to create order status webhook: %w", err)
+			}
+			go func() {
+				if err := webhookServer.Start(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					fmt.Printf("[WALDUR] order status webhook stopped: %v\n", err)
+				}
+			}()
+			fmt.Println("  Waldur Order Status Webhook: started")
 		}
 
 		bridgeCfg := provider_daemon.DefaultWaldurBridgeConfig()
