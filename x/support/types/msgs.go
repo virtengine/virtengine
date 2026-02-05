@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	proto "github.com/cosmos/gogoproto/proto"
 )
 
 // Message type constants
@@ -17,6 +18,25 @@ const (
 	TypeMsgAddSupportResponse     = "add_support_response"
 	TypeMsgArchiveSupportRequest  = "archive_support_request"
 )
+
+func init() {
+	proto.RegisterType((*MsgRegisterExternalTicket)(nil), "virtengine.support.v1.MsgRegisterExternalTicket")
+	proto.RegisterType((*MsgRegisterExternalTicketResponse)(nil), "virtengine.support.v1.MsgRegisterExternalTicketResponse")
+	proto.RegisterType((*MsgUpdateExternalTicket)(nil), "virtengine.support.v1.MsgUpdateExternalTicket")
+	proto.RegisterType((*MsgUpdateExternalTicketResponse)(nil), "virtengine.support.v1.MsgUpdateExternalTicketResponse")
+	proto.RegisterType((*MsgRemoveExternalTicket)(nil), "virtengine.support.v1.MsgRemoveExternalTicket")
+	proto.RegisterType((*MsgRemoveExternalTicketResponse)(nil), "virtengine.support.v1.MsgRemoveExternalTicketResponse")
+	proto.RegisterType((*MsgUpdateParams)(nil), "virtengine.support.v1.MsgUpdateParams")
+	proto.RegisterType((*MsgUpdateParamsResponse)(nil), "virtengine.support.v1.MsgUpdateParamsResponse")
+	proto.RegisterType((*MsgCreateSupportRequest)(nil), "virtengine.support.v1.MsgCreateSupportRequest")
+	proto.RegisterType((*MsgCreateSupportRequestResponse)(nil), "virtengine.support.v1.MsgCreateSupportRequestResponse")
+	proto.RegisterType((*MsgUpdateSupportRequest)(nil), "virtengine.support.v1.MsgUpdateSupportRequest")
+	proto.RegisterType((*MsgUpdateSupportRequestResponse)(nil), "virtengine.support.v1.MsgUpdateSupportRequestResponse")
+	proto.RegisterType((*MsgAddSupportResponse)(nil), "virtengine.support.v1.MsgAddSupportResponse")
+	proto.RegisterType((*MsgAddSupportResponseResponse)(nil), "virtengine.support.v1.MsgAddSupportResponseResponse")
+	proto.RegisterType((*MsgArchiveSupportRequest)(nil), "virtengine.support.v1.MsgArchiveSupportRequest")
+	proto.RegisterType((*MsgArchiveSupportRequestResponse)(nil), "virtengine.support.v1.MsgArchiveSupportRequestResponse")
+}
 
 // MsgRegisterExternalTicket registers a new external ticket reference
 type MsgRegisterExternalTicket struct {
