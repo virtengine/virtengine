@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const hpcHealthDegraded = "degraded"
+
 // HPCNodeAggregatorConfig contains configuration for the HPC node aggregator
 type HPCNodeAggregatorConfig struct {
 	// ProviderAddress is the provider's blockchain address
@@ -411,7 +413,7 @@ func (a *HPCNodeAggregator) processHeartbeat(hb *HPCNodeHeartbeat, auth *HPCHear
 
 	// Determine next interval
 	nextInterval := int32(30)
-	if hb.Health.Status == healthStatusDegraded {
+	if hb.Health.Status == hpcHealthDegraded {
 		nextInterval = 15
 	}
 
@@ -490,7 +492,7 @@ func (a *HPCNodeAggregator) buildNodeMetadataUpdate(hb *HPCNodeHeartbeat) map[st
 			"gpu_type":   hb.Capacity.GPUType,
 			"storage_gb": hb.Capacity.StorageGBTotal,
 		},
-		"active": hb.Health.Status == "healthy" || hb.Health.Status == healthStatusDegraded,
+		"active": hb.Health.Status == "healthy" || hb.Health.Status == hpcHealthDegraded,
 	}
 }
 

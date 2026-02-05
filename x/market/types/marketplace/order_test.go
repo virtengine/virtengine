@@ -455,6 +455,30 @@ func TestOrder_Hash(t *testing.T) {
 	assert.NotEqual(t, hash1, hash3)
 }
 
+func TestParseOrderState(t *testing.T) {
+	cases := map[string]OrderState{
+		"pending_payment":     OrderStatePendingPayment,
+		"open":                OrderStateOpen,
+		"matched":             OrderStateMatched,
+		"provisioning":        OrderStateProvisioning,
+		"active":              OrderStateActive,
+		"suspended":           OrderStateSuspended,
+		"pending_termination": OrderStatePendingTermination,
+		"terminated":          OrderStateTerminated,
+		"failed":              OrderStateFailed,
+		"cancelled":           OrderStateCancelled,
+	}
+
+	for input, expected := range cases {
+		if got := ParseOrderState(input); got != expected {
+			t.Errorf("ParseOrderState(%q) = %v, want %v", input, got, expected)
+		}
+	}
+	if got := ParseOrderState("unknown"); got != OrderStateUnspecified {
+		t.Errorf("ParseOrderState(unknown) = %v, want unspecified", got)
+	}
+}
+
 // ============================================================================
 // Orders Collection Tests
 // ============================================================================
