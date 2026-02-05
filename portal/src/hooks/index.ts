@@ -19,7 +19,4 @@ export type {
 } from './useWalletTransaction';
 
 export { useWalletAutoConnect } from './useWalletAutoConnect';
-export type {
-  WalletAutoConnectConfig,
-  UseWalletAutoConnectResult,
-} from './useWalletAutoConnect';
+export type { WalletAutoConnectConfig, UseWalletAutoConnectResult } from './useWalletAutoConnect';

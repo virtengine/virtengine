@@ -10,7 +10,7 @@ const DeploymentDetailClient = dynamic(() => import('./DeploymentDetailClient'),
   ),
 });
 
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [{ id: '_' }];
 }
 

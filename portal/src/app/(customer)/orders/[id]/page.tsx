@@ -10,7 +10,7 @@ const OrderDetailClient = dynamic(() => import('./OrderDetailClient'), {
   ),
 });
 
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [{ id: '_' }];
 }
 

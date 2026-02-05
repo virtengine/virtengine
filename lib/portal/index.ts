@@ -195,6 +195,38 @@ export { CheckoutFlow } from './components/marketplace/CheckoutFlow';
 export { OrderDetail } from './components/marketplace/OrderDetail';
 export { OrderTimeline } from './components/marketplace/OrderTimeline';
 
+// Marketplace Pages (Customer Browse Experience)
+export {
+  MarketplacePage,
+  useOfferings,
+  OFFERING_CATEGORIES,
+  REGIONS,
+  SearchBar,
+  FilterPanel,
+  CategoryNav,
+  OfferingGrid,
+  OfferingDetailPage,
+  ProviderInfo,
+  ProviderBadge,
+  MarketplaceOfferingCard,
+} from './src/pages/marketplace';
+export type {
+  MarketplacePageProps,
+  UseOfferingsOptions,
+  OfferingsState,
+  OfferingsActions,
+  OfferingCategory,
+  Region,
+  SearchBarProps,
+  FilterPanelProps,
+  CategoryNavProps,
+  OfferingGridProps,
+  OfferingDetailPageProps,
+  ProviderInfoProps,
+  ProviderBadgeProps,
+  MarketplaceOfferingCardProps,
+} from './src/pages/marketplace';
+
 // ============================================================================
 // Provider Console (VE-704)
 // ============================================================================

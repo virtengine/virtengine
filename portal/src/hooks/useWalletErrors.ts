@@ -101,12 +101,7 @@ const SUGGESTED_ACTIONS: Record<string, string> = {
  */
 function parseError(error: unknown): WalletError {
   // Already a WalletError-like object
-  if (
-    error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    'message' in error
-  ) {
+  if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
     const walletErr = error as WalletErrorType;
     return {
       code: walletErr.code,

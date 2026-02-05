@@ -1,5 +1,5 @@
 // Layout for nested dynamic route
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [{ provider: '_' }];
 }
 
