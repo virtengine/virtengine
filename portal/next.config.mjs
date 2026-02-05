@@ -5,6 +5,9 @@ const nextConfig = {
   // Enable static export for GitHub Pages deployment
   output: process.env.GITHUB_PAGES === 'true' ? 'export' : undefined,
   
+  // Use trailing slashes for better GitHub Pages compatibility
+  trailingSlash: process.env.GITHUB_PAGES === 'true' ? true : false,
+  
   // Base path for GitHub Pages (repo name)
   basePath: process.env.GITHUB_PAGES === 'true' ? '/virtengine' : '',
   
