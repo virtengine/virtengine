@@ -2,13 +2,17 @@
 
 ## CRITICAL
 
-ALWAYS Take down a task and break it down into parallel chunks, use SUBAGENTS to implement these chunks and work on tasks longer than you think are needed to accomodate edge case scenarios, testing, ensuring it works, implementing connecting logic and ensuring high quality of standards.
+Always work on tasks longer than you think are needed to accomodate edge case scenarios, testing, ensuring it works, implementing connecting logic and ensuring high quality of standards.
 
 ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task is fully completed and ready for merge. This is non negotiable.
 
 When working on a task, do not stop until it is COMPLETELY done. Continue working on this task until it is 100% DONE END-TO-END with no questions asked.
 
-Before finishing a task - ensure that you create a commit based on following convention & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
+Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
+
+Ensure that there are no CI/CD errors after pushing, if needed continue monitoring your push for errors and fix them if identified.
+
+You should have all commands as needed available in shell, for example go, pip, npm, git, etc.
 
 Commit files:
 

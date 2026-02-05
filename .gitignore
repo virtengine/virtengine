@@ -69,3 +69,5 @@ node_modules/
 
 
 nul
+.playwright-mcp/*
+*/nul
