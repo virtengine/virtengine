@@ -440,7 +440,7 @@ func (ne *NitroEnclave) hardwareRunEnclave(ctx context.Context, eifPath string, 
 
 // simulateRunEnclave simulates enclave start for testing
 func (ne *NitroEnclave) simulateRunEnclave(eifPath string, cpuCount int, memoryMB int64) (*EnclaveInfo, error) {
-	// Generate simulated enclave ID
+	// Generate simulated enclave ID (matches i-(?:sim-)?[a-f0-9-]{8,64} pattern)
 	idBytes := make([]byte, 8)
 	_, _ = rand.Read(idBytes)
 	enclaveID := fmt.Sprintf("i-sim-%x", idBytes)
@@ -805,7 +805,8 @@ func ParsePCRFromHex(hexStr string) (PCRValue, error) {
 // =============================================================================
 
 // enclaveIDPattern matches valid Nitro enclave IDs
-var enclaveIDPattern = regexp.MustCompile(`^i-[a-f0-9-]{8,64}$`)
+// Accepts real AWS format (i-<hex>) and simulated format (i-sim-<hex>)
+var enclaveIDPattern = regexp.MustCompile(`^i-(?:sim-)?[a-f0-9-]{8,64}$`)
 
 // dockerImagePattern matches valid Docker image names
 var dockerImagePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*[a-z0-9]?(:[a-zA-Z0-9._-]+)?$`)

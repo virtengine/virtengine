@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+// Version string constants
+const (
+	versionUnknown = "unknown"
+)
+
 // =============================================================================
 // CPUID Constants for SGX Detection
 // =============================================================================
@@ -75,7 +80,7 @@ func (d *UnifiedDetector) Detect() (*HardwareCapabilities, error) {
 		return d.capabilities, nil
 	}
 
-	return d.detectInternal()
+	return d.detectInternal(), nil
 }
 
 // ForceDetect forces a re-detection of hardware capabilities.
@@ -83,12 +88,12 @@ func (d *UnifiedDetector) Detect() (*HardwareCapabilities, error) {
 func (d *UnifiedDetector) ForceDetect() (*HardwareCapabilities, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.detectInternal()
+	return d.detectInternal(), nil
 }
 
 // detectInternal performs the actual hardware detection.
 // Must be called with mu held.
-func (d *UnifiedDetector) detectInternal() (*HardwareCapabilities, error) {
+func (d *UnifiedDetector) detectInternal() *HardwareCapabilities {
 	caps := &HardwareCapabilities{
 		DetectedAt:      time.Now(),
 		DetectionErrors: make([]string, 0),
@@ -102,7 +107,7 @@ func (d *UnifiedDetector) detectInternal() (*HardwareCapabilities, error) {
 		d.capabilities = caps
 		d.detected = true
 		d.lastDetection = time.Now()
-		return caps, nil
+		return caps
 	}
 
 	// Detect each platform
@@ -161,7 +166,7 @@ func (d *UnifiedDetector) detectInternal() (*HardwareCapabilities, error) {
 	d.lastDetection = time.Now()
 	d.detectionErrors = caps.DetectionErrors
 
-	return caps, nil
+	return caps
 }
 
 // aggregateTCBStatus determines the overall TCB status from individual platforms.
@@ -368,7 +373,7 @@ func (d *SEVDetector) Detect() (SEVSNPCapabilities, error) {
 	if status, err := readSysFile(SEVPlatformStatus); err == nil {
 		caps.Version = status
 	} else {
-		caps.Version = "unknown"
+		caps.Version = versionUnknown
 	}
 
 	// Detect API version
@@ -421,7 +426,7 @@ func (d *NitroDetector) Detect() (NitroCapabilities, error) {
 	}
 
 	if !exists {
-		return caps, fmt.Errorf("Nitro device not found at %s", NitroDevice)
+		return caps, fmt.Errorf("nitro device not found at %s", NitroDevice)
 	}
 
 	caps.Available = true

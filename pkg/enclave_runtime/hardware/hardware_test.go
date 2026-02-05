@@ -583,7 +583,7 @@ func TestMockBackend_CallRecording(t *testing.T) {
 
 	// Check last call
 	lastCall := mock.GetLastCall()
-	if lastCall == nil || lastCall.Method != "HealthCheck" {
+	if lastCall == nil || lastCall.Method != MethodHealthCheck {
 		t.Error("GetLastCall() should return HealthCheck")
 	}
 
@@ -601,7 +601,7 @@ func TestMockBackend_Reset(t *testing.T) {
 	}
 
 	_, _ = mock.GetAttestation([]byte("nonce"))
-	mock.ConfigureFailure("HealthCheck", errors.New("fail"))
+	mock.ConfigureFailure(MethodHealthCheck, errors.New("fail"))
 
 	mock.Reset()
 

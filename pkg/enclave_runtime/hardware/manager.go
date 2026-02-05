@@ -173,7 +173,7 @@ func (m *HardwareManager) initializeBackends(ctx context.Context, caps *Hardware
 	if caps.Nitro.Available {
 		backend := NewNitroBackend(m.config.NitroConfig)
 		if err := backend.Initialize(); err != nil {
-			errors = append(errors, fmt.Errorf("Nitro initialization failed: %w", err))
+			errors = append(errors, fmt.Errorf("nitro initialization failed: %w", err))
 		} else {
 			m.backends[PlatformNitro] = backend
 		}

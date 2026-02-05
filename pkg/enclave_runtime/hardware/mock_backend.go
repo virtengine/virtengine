@@ -16,6 +16,17 @@ import (
 	"time"
 )
 
+// Method name constants for ConfigureFailure/ClearFailure
+const (
+	MethodInitialize     = "Initialize"
+	MethodShutdown       = "Shutdown"
+	MethodGetAttestation = "GetAttestation"
+	MethodDeriveKey      = "DeriveKey"
+	MethodSeal           = "Seal"
+	MethodUnseal         = "Unseal"
+	MethodHealthCheck    = "HealthCheck"
+)
+
 // =============================================================================
 // Mock Backend
 // =============================================================================
@@ -237,6 +248,7 @@ func (b *MockBackend) generateMockAttestation(nonce []byte) []byte {
 
 	// Timestamp (8 bytes)
 	ts := make([]byte, 8)
+	//nolint:gosec // G115: time.Now().UnixNano() is always positive
 	binary.BigEndian.PutUint64(ts, uint64(time.Now().UnixNano()))
 	attestation = append(attestation, ts...)
 
@@ -263,8 +275,10 @@ func (b *MockBackend) generateMockAttestation(nonce []byte) []byte {
 	key := b.sealingKey
 	b.mu.RUnlock()
 
-	signatureData := append(attestation, key...)
-	signature := sha256.Sum256(signatureData)
+	signatureInput := make([]byte, len(attestation)+len(key))
+	copy(signatureInput, attestation)
+	copy(signatureInput[len(attestation):], key)
+	signature := sha256.Sum256(signatureInput)
 	attestation = append(attestation, signature[:]...)
 	attestation = append(attestation, signature[:]...) // 64 bytes total
 
@@ -589,25 +603,25 @@ func (b *MockBackend) ConfigureFailure(operation string, err error) {
 	defer b.mu.Unlock()
 
 	switch operation {
-	case "Initialize":
+	case MethodInitialize:
 		b.config.FailInitialize = true
 		b.config.InitializeError = err
-	case "Shutdown":
+	case MethodShutdown:
 		b.config.FailShutdown = true
 		b.config.ShutdownError = err
-	case "GetAttestation":
+	case MethodGetAttestation:
 		b.config.FailAttestation = true
 		b.config.AttestationError = err
-	case "DeriveKey":
+	case MethodDeriveKey:
 		b.config.FailKeyDerivation = true
 		b.config.KeyDerivationError = err
-	case "Seal":
+	case MethodSeal:
 		b.config.FailSeal = true
 		b.config.SealError = err
-	case "Unseal":
+	case MethodUnseal:
 		b.config.FailUnseal = true
 		b.config.UnsealError = err
-	case "HealthCheck":
+	case MethodHealthCheck:
 		b.config.FailHealthCheck = true
 		b.config.HealthCheckError = err
 	}
@@ -619,25 +633,25 @@ func (b *MockBackend) ClearFailure(operation string) {
 	defer b.mu.Unlock()
 
 	switch operation {
-	case "Initialize":
+	case MethodInitialize:
 		b.config.FailInitialize = false
 		b.config.InitializeError = nil
-	case "Shutdown":
+	case MethodShutdown:
 		b.config.FailShutdown = false
 		b.config.ShutdownError = nil
-	case "GetAttestation":
+	case MethodGetAttestation:
 		b.config.FailAttestation = false
 		b.config.AttestationError = nil
-	case "DeriveKey":
+	case MethodDeriveKey:
 		b.config.FailKeyDerivation = false
 		b.config.KeyDerivationError = nil
-	case "Seal":
+	case MethodSeal:
 		b.config.FailSeal = false
 		b.config.SealError = nil
-	case "Unseal":
+	case MethodUnseal:
 		b.config.FailUnseal = false
 		b.config.UnsealError = nil
-	case "HealthCheck":
+	case MethodHealthCheck:
 		b.config.FailHealthCheck = false
 		b.config.HealthCheckError = nil
 	}
@@ -671,17 +685,17 @@ func (b *MockBackend) ConfigureDelay(operation string, delay time.Duration) {
 	defer b.mu.Unlock()
 
 	switch operation {
-	case "Initialize":
+	case MethodInitialize:
 		b.config.InitializeDelay = delay
-	case "GetAttestation":
+	case MethodGetAttestation:
 		b.config.AttestationDelay = delay
-	case "DeriveKey":
+	case MethodDeriveKey:
 		b.config.KeyDerivationDelay = delay
-	case "Seal":
+	case MethodSeal:
 		b.config.SealDelay = delay
-	case "Unseal":
+	case MethodUnseal:
 		b.config.UnsealDelay = delay
-	case "HealthCheck":
+	case MethodHealthCheck:
 		b.config.HealthCheckDelay = delay
 	}
 }
