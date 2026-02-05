@@ -1,0 +1,12 @@
+{
+  "version": "v1",
+  "name": "vmware-e2e",
+  "services": [
+    {
+      "name": "vm",
+      "type": "vm",
+      "image": "ubuntu",
+      "resources": {"cpu": 2000, "memory": 2147483648}
+    }
+  ]
+}
