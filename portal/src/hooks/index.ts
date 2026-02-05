@@ -4,3 +4,22 @@
  */
 
 export { useToast, toast } from './use-toast';
+
+// Wallet hooks
+export { useWalletErrors } from './useWalletErrors';
+export type { WalletError, UseWalletErrorsResult } from './useWalletErrors';
+
+export { useWalletTransaction, createTransactionPreview } from './useWalletTransaction';
+export type {
+  FeeEstimate,
+  TransactionOptions,
+  TransactionResult,
+  TransactionPreview,
+  UseWalletTransactionResult,
+} from './useWalletTransaction';
+
+export { useWalletAutoConnect } from './useWalletAutoConnect';
+export type {
+  WalletAutoConnectConfig,
+  UseWalletAutoConnectResult,
+} from './useWalletAutoConnect';

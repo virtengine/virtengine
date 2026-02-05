@@ -145,15 +145,15 @@ export const DEVNET_CHAIN: ChainInfo = {
 
 export function getChainInfo(): ChainInfo {
   const chainId = process.env.NEXT_PUBLIC_CHAIN_ID ?? 'virtengine-1';
-  
+
   if (chainId.includes('testnet')) {
     return TESTNET_CHAIN;
   }
-  
+
   if (chainId.includes('devnet')) {
     return DEVNET_CHAIN;
   }
-  
+
   return MAINNET_CHAIN;
 }
 

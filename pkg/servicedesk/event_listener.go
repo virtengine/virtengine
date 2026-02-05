@@ -298,6 +298,7 @@ func (l *ChainEventListener) handleSupportRequestCreated(ctx context.Context, en
 		Priority:        payload.Priority,
 		Subject:         subject,
 		Description:     description,
+		Recipients:      append([]string(nil), payload.Recipients...),
 		BlockHeight:     blockHeight,
 		Timestamp:       time.Unix(payload.Timestamp, 0).UTC(),
 		TxHash:          txHash,

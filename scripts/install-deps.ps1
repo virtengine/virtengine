@@ -203,6 +203,14 @@ Write-Host "   ./setup-env-gitbash.sh" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "5. " -NoNewline
+Write-Host "Enable pnpm and install frontend deps:" -ForegroundColor Yellow
+Write-Host "   corepack enable" -ForegroundColor Cyan
+Write-Host "   corepack prepare pnpm@latest --activate" -ForegroundColor Cyan
+Write-Host "   pnpm -C portal install" -ForegroundColor Cyan
+Write-Host "   pnpm -C sdk/ts install" -ForegroundColor Cyan
+Write-Host ""
+
+Write-Host "6. " -NoNewline
 Write-Host "Build VirtEngine:" -ForegroundColor Yellow
 Write-Host "   make virtengine" -ForegroundColor Cyan
 Write-Host ""

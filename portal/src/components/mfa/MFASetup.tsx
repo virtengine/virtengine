@@ -30,9 +30,7 @@ export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
     <Card className={cn(className)}>
       <CardHeader>
         <CardTitle>Set Up Two-Factor Authentication</CardTitle>
-        <CardDescription>
-          Add an extra layer of security to your account
-        </CardDescription>
+        <CardDescription>Add an extra layer of security to your account</CardDescription>
       </CardHeader>
       <CardContent>
         <MFAEnrollmentWizard
@@ -44,4 +42,3 @@ export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
     </Card>
   );
 }
-

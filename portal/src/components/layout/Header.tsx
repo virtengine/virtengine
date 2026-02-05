@@ -12,6 +12,7 @@ export function Header() {
   const navigation = [
     { name: 'Marketplace', href: '/marketplace' },
     { name: 'HPC', href: '/hpc/jobs' },
+    { name: 'Support', href: '/support' },
     { name: 'Governance', href: '/governance/proposals' },
   ];
 
@@ -19,7 +20,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
         <Link href="/" className="mr-8 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground">
             V
           </div>
           <span className="font-semibold">VirtEngine</span>
@@ -33,7 +34,7 @@ export function Header() {
                   href={item.href}
                   className={`text-sm transition-colors hover:text-foreground ${
                     pathname.startsWith(item.href)
-                      ? 'text-foreground font-medium'
+                      ? 'font-medium text-foreground'
                       : 'text-muted-foreground'
                   }`}
                 >

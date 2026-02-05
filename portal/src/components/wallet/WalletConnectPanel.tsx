@@ -10,7 +10,9 @@ export function WalletConnectPanel() {
   const { connect, status } = useWallet();
 
   const wallets = useMemo(() => {
-    return SUPPORTED_WALLETS.filter((wallet) => wallet.id !== 'walletconnect' || WALLET_CONNECT_PROJECT_ID);
+    return SUPPORTED_WALLETS.filter(
+      (wallet) => wallet.id !== 'walletconnect' || WALLET_CONNECT_PROJECT_ID
+    );
   }, []);
 
   return (
@@ -18,30 +20,38 @@ export function WalletConnectPanel() {
       <h2 className="text-sm font-medium text-muted-foreground">Recommended</h2>
 
       <div className="grid gap-3">
-        {wallets.filter((wallet) => wallet.recommended).map((wallet) => (
-          <WalletOption
-            key={wallet.id}
-            name={wallet.name}
-            description={wallet.description}
-            recommended={wallet.recommended}
-            disabled={status === 'connecting' || (!isWalletInstalled(wallet.id) && wallet.extension)}
-            onClick={() => void connect(wallet.id)}
-          />
-        ))}
+        {wallets
+          .filter((wallet) => wallet.recommended)
+          .map((wallet) => (
+            <WalletOption
+              key={wallet.id}
+              name={wallet.name}
+              description={wallet.description}
+              recommended={wallet.recommended}
+              disabled={
+                status === 'connecting' || (!isWalletInstalled(wallet.id) && wallet.extension)
+              }
+              onClick={() => void connect(wallet.id)}
+            />
+          ))}
       </div>
 
       <div className="pt-4">
         <h2 className="text-sm font-medium text-muted-foreground">Other Options</h2>
         <div className="mt-3 grid gap-3">
-          {wallets.filter((wallet) => !wallet.recommended).map((wallet) => (
-            <WalletOption
-              key={wallet.id}
-              name={wallet.name}
-              description={wallet.description}
-              disabled={status === 'connecting' || (!isWalletInstalled(wallet.id) && wallet.extension)}
-              onClick={() => void connect(wallet.id)}
-            />
-          ))}
+          {wallets
+            .filter((wallet) => !wallet.recommended)
+            .map((wallet) => (
+              <WalletOption
+                key={wallet.id}
+                name={wallet.name}
+                description={wallet.description}
+                disabled={
+                  status === 'connecting' || (!isWalletInstalled(wallet.id) && wallet.extension)
+                }
+                onClick={() => void connect(wallet.id)}
+              />
+            ))}
         </div>
       </div>
     </div>

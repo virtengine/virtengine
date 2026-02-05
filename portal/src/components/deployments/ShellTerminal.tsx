@@ -154,7 +154,8 @@ export function ShellTerminal({ deploymentId, containerName, onDisconnect }: She
 
     const terminal = new Terminal({
       cursorBlink: true,
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      fontFamily:
+        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
       fontSize: 13,
       theme: {
         background: '#0c0f12',

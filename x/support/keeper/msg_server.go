@@ -87,26 +87,7 @@ func (ms msgServer) CreateSupportRequest(goCtx context.Context, msg *types.MsgCr
 		return nil, err
 	}
 
-	seqEvent := ms.keeper.IncrementEventSequence(ctx)
-	event := types.SupportRequestCreatedEvent{
-		EventType:     string(types.SupportEventTypeRequestCreated),
-		EventID:       fmt.Sprintf("%s/%d", request.ID.String(), seqEvent),
-		BlockHeight:   ctx.BlockHeight(),
-		Sequence:      seqEvent,
-		TicketID:      request.ID.String(),
-		TicketNumber:  request.TicketNumber,
-		Submitter:     request.SubmitterAddress,
-		Category:      string(request.Category),
-		Priority:      string(request.Priority),
-		Status:        request.Status.String(),
-		PayloadHash:   request.Payload.EnvelopeHashHex(),
-		EnvelopeRef:   request.Payload.EnvelopeRef,
-		Payload:       &request.Payload,
-		Recipients:    request.Recipients,
-		RelatedEntity: request.RelatedEntity,
-		Timestamp:     ctx.BlockTime().Unix(),
-	}
-	if err := ms.keeper.EmitSupportEvent(ctx, event); err != nil {
+	if _, err := ms.keeper.EmitSupportRequestCreated(ctx, request); err != nil {
 		return nil, err
 	}
 
@@ -228,40 +209,13 @@ func (ms msgServer) UpdateSupportRequest(goCtx context.Context, msg *types.MsgUp
 		return nil, err
 	}
 
-	seqEvent := ms.keeper.IncrementEventSequence(ctx)
-	event := types.SupportRequestUpdatedEvent{
-		EventType:     string(types.SupportEventTypeRequestUpdated),
-		EventID:       fmt.Sprintf("%s/%d", request.ID.String(), seqEvent),
-		BlockHeight:   ctx.BlockHeight(),
-		Sequence:      seqEvent,
-		TicketID:      request.ID.String(),
-		UpdatedBy:     msg.Sender,
-		Priority:      string(request.Priority),
-		Category:      string(request.Category),
-		AssignedAgent: request.AssignedAgent,
-		Status:        request.Status.String(),
-		PayloadHash:   request.Payload.EnvelopeHashHex(),
-		EnvelopeRef:   request.Payload.EnvelopeRef,
-		Payload:       msg.Payload,
-		Timestamp:     ctx.BlockTime().Unix(),
-	}
-	if err := ms.keeper.EmitSupportEvent(ctx, event); err != nil {
+	seqEvent, err := ms.keeper.EmitSupportRequestUpdated(ctx, &request, msg.Sender, msg.Payload)
+	if err != nil {
 		return nil, err
 	}
 
 	if oldStatus != request.Status {
-		statusEvent := types.SupportStatusChangedEvent{
-			EventType:   string(types.SupportEventTypeStatusChanged),
-			EventID:     fmt.Sprintf("%s/%d/status", request.ID.String(), seqEvent),
-			BlockHeight: ctx.BlockHeight(),
-			Sequence:    seqEvent,
-			TicketID:    request.ID.String(),
-			OldStatus:   oldStatus.String(),
-			NewStatus:   request.Status.String(),
-			UpdatedBy:   msg.Sender,
-			Timestamp:   ctx.BlockTime().Unix(),
-		}
-		if err := ms.keeper.EmitSupportEvent(ctx, statusEvent); err != nil {
+		if err := ms.keeper.EmitSupportStatusChanged(ctx, request.ID.String(), seqEvent, oldStatus, request.Status, msg.Sender); err != nil {
 			return nil, err
 		}
 	}
@@ -348,38 +302,13 @@ func (ms msgServer) AddSupportResponse(goCtx context.Context, msg *types.MsgAddS
 		return nil, err
 	}
 
-	seqEvent := ms.keeper.IncrementEventSequence(ctx)
-	event := types.SupportResponseAddedEvent{
-		EventType:   string(types.SupportEventTypeResponseAdded),
-		EventID:     fmt.Sprintf("%s/%d", request.ID.String(), seqEvent),
-		BlockHeight: ctx.BlockHeight(),
-		Sequence:    seqEvent,
-		TicketID:    request.ID.String(),
-		ResponseID:  response.ID.String(),
-		Author:      response.AuthorAddress,
-		IsAgent:     response.IsAgent,
-		PayloadHash: response.Payload.EnvelopeHashHex(),
-		EnvelopeRef: response.Payload.EnvelopeRef,
-		Payload:     &response.Payload,
-		Timestamp:   ctx.BlockTime().Unix(),
-	}
-	if err := ms.keeper.EmitSupportEvent(ctx, event); err != nil {
+	seqEvent, err := ms.keeper.EmitSupportResponseAdded(ctx, &request, response)
+	if err != nil {
 		return nil, err
 	}
 
 	if oldStatus != request.Status {
-		statusEvent := types.SupportStatusChangedEvent{
-			EventType:   string(types.SupportEventTypeStatusChanged),
-			EventID:     fmt.Sprintf("%s/%d/status", request.ID.String(), seqEvent),
-			BlockHeight: ctx.BlockHeight(),
-			Sequence:    seqEvent,
-			TicketID:    request.ID.String(),
-			OldStatus:   oldStatus.String(),
-			NewStatus:   request.Status.String(),
-			UpdatedBy:   msg.Sender,
-			Timestamp:   ctx.BlockTime().Unix(),
-		}
-		if err := ms.keeper.EmitSupportEvent(ctx, statusEvent); err != nil {
+		if err := ms.keeper.EmitSupportStatusChanged(ctx, request.ID.String(), seqEvent, oldStatus, request.Status, msg.Sender); err != nil {
 			return nil, err
 		}
 	}

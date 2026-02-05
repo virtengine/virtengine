@@ -8,7 +8,11 @@ interface TerminateConfirmDialogProps {
   onConfirm: () => void;
 }
 
-export function TerminateConfirmDialog({ isOpen, onClose, onConfirm }: TerminateConfirmDialogProps) {
+export function TerminateConfirmDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+}: TerminateConfirmDialogProps) {
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();

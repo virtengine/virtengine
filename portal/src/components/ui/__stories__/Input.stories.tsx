@@ -97,7 +97,7 @@ export const File: Story = {
 
 export const AllTypes: Story = {
   render: () => (
-    <div className="grid gap-4 w-80">
+    <div className="grid w-80 gap-4">
       <Input type="text" placeholder="Text input" />
       <Input type="email" placeholder="Email input" />
       <Input type="password" placeholder="Password input" />

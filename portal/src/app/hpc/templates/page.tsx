@@ -17,19 +17,34 @@ export default function HPCTemplatesPage() {
 
       {/* Categories */}
       <div className="mb-6 flex flex-wrap gap-2">
-        <button type="button" className="rounded-full bg-primary px-4 py-1 text-sm text-primary-foreground">
+        <button
+          type="button"
+          className="rounded-full bg-primary px-4 py-1 text-sm text-primary-foreground"
+        >
           All
         </button>
-        <button type="button" className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent">
+        <button
+          type="button"
+          className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent"
+        >
           Machine Learning
         </button>
-        <button type="button" className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent">
+        <button
+          type="button"
+          className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent"
+        >
           Scientific Computing
         </button>
-        <button type="button" className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent">
+        <button
+          type="button"
+          className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent"
+        >
           Data Processing
         </button>
-        <button type="button" className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent">
+        <button
+          type="button"
+          className="rounded-full border border-border px-4 py-1 text-sm hover:bg-accent"
+        >
           Rendering
         </button>
       </div>
@@ -107,9 +122,7 @@ function TemplateCard({ name, category, description, gpuRequired }: TemplateCard
           {category}
         </span>
         {gpuRequired && (
-          <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">
-            GPU
-          </span>
+          <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">GPU</span>
         )}
       </div>
       <h3 className="mt-4 text-lg font-semibold">{name}</h3>

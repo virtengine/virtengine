@@ -49,21 +49,15 @@ export const ThreeTabs: Story = {
       </TabsList>
       <TabsContent value="overview" className="p-4">
         <h3 className="font-medium">Overview Content</h3>
-        <p className="text-sm text-muted-foreground mt-2">
-          This is the overview tab content.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">This is the overview tab content.</p>
       </TabsContent>
       <TabsContent value="analytics" className="p-4">
         <h3 className="font-medium">Analytics Content</h3>
-        <p className="text-sm text-muted-foreground mt-2">
-          This is the analytics tab content.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">This is the analytics tab content.</p>
       </TabsContent>
       <TabsContent value="reports" className="p-4">
         <h3 className="font-medium">Reports Content</h3>
-        <p className="text-sm text-muted-foreground mt-2">
-          This is the reports tab content.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">This is the reports tab content.</p>
       </TabsContent>
     </Tabs>
   ),
@@ -74,7 +68,9 @@ export const DisabledTab: Story = {
     <Tabs defaultValue="account" className="w-[400px]">
       <TabsList>
         <TabsTrigger value="account">Account</TabsTrigger>
-        <TabsTrigger value="password" disabled>Password</TabsTrigger>
+        <TabsTrigger value="password" disabled>
+          Password
+        </TabsTrigger>
         <TabsTrigger value="settings">Settings</TabsTrigger>
       </TabsList>
       <TabsContent value="account">Account content</TabsContent>

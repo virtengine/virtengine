@@ -2,6 +2,9 @@ package keeper
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -527,15 +530,45 @@ func (ms msgServer) PauseAllocation(goCtx context.Context, msg *marketplace.MsgP
 func (ms msgServer) WaldurCallback(goCtx context.Context, msg *marketplace.MsgWaldurCallback) (*marketplace.MsgWaldurCallbackResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
-	// Create a WaldurCallback from the message fields
-	callback := &marketplace.WaldurCallback{
-		ChainEntityID: msg.ResourceId,
-		SignerID:      msg.Sender,
-		Payload:       map[string]string{"status": msg.Status, "payload": msg.Payload},
-		Signature:     msg.Signature,
+	var callback marketplace.WaldurCallback
+	if msg.Payload != "" {
+		if err := json.Unmarshal([]byte(msg.Payload), &callback); err != nil {
+			return nil, marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
+		}
 	}
 
-	if err := ms.keeper.ProcessWaldurCallback(ctx, callback); err != nil {
+	if callback.ActionType == "" {
+		callback.ActionType = marketplace.WaldurActionType(msg.CallbackType)
+	}
+	if callback.ChainEntityID == "" {
+		callback.ChainEntityID = msg.ResourceId
+	}
+	if callback.ChainEntityType == "" && msg.Status != "" {
+		callback.ChainEntityType = marketplace.WaldurSyncType(msg.Status)
+	}
+	if callback.SignerID == "" {
+		callback.SignerID = msg.Sender
+	}
+	if len(callback.Signature) == 0 {
+		callback.Signature = msg.Signature
+	}
+	if callback.Payload == nil {
+		callback.Payload = map[string]string{}
+	}
+	if msg.Payload != "" && len(callback.Payload) == 0 {
+		callback.Payload["payload"] = msg.Payload
+	}
+	if callback.Nonce == "" {
+		callback.Nonce = fmt.Sprintf("nonce_%d", ctx.BlockTime().UnixNano())
+	}
+	if callback.Timestamp.IsZero() {
+		callback.Timestamp = ctx.BlockTime().UTC()
+	}
+	if callback.ExpiresAt.IsZero() {
+		callback.ExpiresAt = ctx.BlockTime().Add(time.Hour).UTC()
+	}
+
+	if err := ms.keeper.ProcessWaldurCallback(ctx, &callback); err != nil {
 		return nil, err
 	}
 

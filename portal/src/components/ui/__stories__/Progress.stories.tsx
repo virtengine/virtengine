@@ -91,7 +91,7 @@ export const Destructive: Story = {
 
 export const AllVariants: Story = {
   render: () => (
-    <div className="space-y-4 w-[300px]">
+    <div className="w-[300px] space-y-4">
       <div>
         <span className="text-sm text-muted-foreground">Default</span>
         <Progress value={60} />
@@ -114,7 +114,7 @@ export const AllVariants: Story = {
 
 export const Circular: Story = {
   render: () => (
-    <div className="flex gap-4 items-center">
+    <div className="flex items-center gap-4">
       <CircularProgress value={25} />
       <CircularProgress value={50} size={60} />
       <CircularProgress value={75} size={80} showValue />
@@ -125,7 +125,7 @@ export const Circular: Story = {
 
 export const CircularVariants: Story = {
   render: () => (
-    <div className="flex gap-4 items-center">
+    <div className="flex items-center gap-4">
       <CircularProgress value={60} showValue />
       <CircularProgress value={60} variant="success" showValue />
       <CircularProgress value={60} variant="warning" showValue />

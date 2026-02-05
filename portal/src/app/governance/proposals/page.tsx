@@ -11,9 +11,7 @@ export default function GovernanceProposalsPage() {
     <div className="container py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Governance</h1>
-        <p className="mt-1 text-muted-foreground">
-          View and vote on protocol governance proposals
-        </p>
+        <p className="mt-1 text-muted-foreground">View and vote on protocol governance proposals</p>
       </div>
 
       {/* Stats */}
@@ -114,7 +112,14 @@ interface ProposalCardProps {
   endTime?: string;
 }
 
-function ProposalCard({ id, title, description, status, yesPercentage, endTime }: ProposalCardProps) {
+function ProposalCard({
+  id,
+  title,
+  description,
+  status,
+  yesPercentage,
+  endTime,
+}: ProposalCardProps) {
   const statusConfig = {
     active: { bg: 'bg-primary/10', text: 'text-primary', label: 'Voting' },
     passed: { bg: 'bg-success/10', text: 'text-success', label: 'Passed' },
@@ -125,22 +130,22 @@ function ProposalCard({ id, title, description, status, yesPercentage, endTime }
   return (
     <Link
       href={`/governance/proposals/${id}`}
-      className="block rounded-lg border border-border bg-card p-6 transition-all card-hover"
+      className="card-hover block rounded-lg border border-border bg-card p-6 transition-all"
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <span className="font-mono text-sm text-muted-foreground">#{id}</span>
-          <span className={`rounded-full ${config.bg} ${config.text} px-2 py-1 text-xs font-medium`}>
+          <span
+            className={`rounded-full ${config.bg} ${config.text} px-2 py-1 text-xs font-medium`}
+          >
             {config.label}
           </span>
         </div>
-        {endTime && (
-          <span className="text-sm text-muted-foreground">Ends in {endTime}</span>
-        )}
+        {endTime && <span className="text-sm text-muted-foreground">Ends in {endTime}</span>}
       </div>
 
       <h3 className="mt-3 text-lg font-semibold">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{description}</p>
+      <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{description}</p>
 
       <div className="mt-4">
         <div className="flex justify-between text-sm">
@@ -148,14 +153,8 @@ function ProposalCard({ id, title, description, status, yesPercentage, endTime }
           <span>No: {100 - yesPercentage}%</span>
         </div>
         <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="bg-success"
-            style={{ width: `${yesPercentage}%` }}
-          />
-          <div
-            className="bg-destructive"
-            style={{ width: `${100 - yesPercentage}%` }}
-          />
+          <div className="bg-success" style={{ width: `${yesPercentage}%` }} />
+          <div className="bg-destructive" style={{ width: `${100 - yesPercentage}%` }} />
         </div>
       </div>
 

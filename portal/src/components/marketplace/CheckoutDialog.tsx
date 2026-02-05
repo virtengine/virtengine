@@ -22,7 +22,13 @@ interface CheckoutDialogProps {
  * Checkout Dialog Component
  * Modal dialog for completing marketplace purchases
  */
-export function CheckoutDialog({ offering, open, onOpenChange, onSuccess, className }: CheckoutDialogProps) {
+export function CheckoutDialog({
+  offering,
+  open,
+  onOpenChange,
+  onSuccess,
+  className,
+}: CheckoutDialogProps) {
   if (!offering) {
     return null;
   }
@@ -32,9 +38,7 @@ export function CheckoutDialog({ offering, open, onOpenChange, onSuccess, classN
       <DialogContent className={cn('sm:max-w-lg', className)}>
         <DialogHeader>
           <DialogTitle>Complete Your Order</DialogTitle>
-          <DialogDescription>
-            Review and confirm your order for {offering.title}
-          </DialogDescription>
+          <DialogDescription>Review and confirm your order for {offering.title}</DialogDescription>
         </DialogHeader>
         <CheckoutFlow
           offering={offering}

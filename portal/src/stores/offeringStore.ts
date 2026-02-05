@@ -1,9 +1,5 @@
 import { create } from 'zustand';
-import type {
-  Offering,
-  OfferingFilters,
-  Provider,
-} from '@/types/offerings';
+import type { Offering, OfferingFilters, Provider } from '@/types/offerings';
 
 export interface OfferingStoreState {
   offerings: Offering[];
@@ -66,18 +62,46 @@ const MOCK_OFFERINGS: Offering[] = [
     state: 'active',
     category: 'gpu',
     name: 'NVIDIA A100 Cluster',
-    description: 'High-performance GPU cluster with NVIDIA A100 80GB GPUs, ideal for ML training and inference workloads.',
+    description:
+      'High-performance GPU cluster with NVIDIA A100 80GB GPUs, ideal for ML training and inference workloads.',
     version: '1.0.0',
     pricing: { model: 'hourly', basePrice: '2500000', currency: 'uve' },
     prices: [
-      { resourceType: 'gpu', unit: 'hour', price: { denom: 'uve', amount: '2500000' }, usdReference: '2.50' },
-      { resourceType: 'cpu', unit: 'vcpu-hour', price: { denom: 'uve', amount: '10000' }, usdReference: '0.01' },
-      { resourceType: 'ram', unit: 'gb-hour', price: { denom: 'uve', amount: '5000' }, usdReference: '0.005' },
+      {
+        resourceType: 'gpu',
+        unit: 'hour',
+        price: { denom: 'uve', amount: '2500000' },
+        usdReference: '2.50',
+      },
+      {
+        resourceType: 'cpu',
+        unit: 'vcpu-hour',
+        price: { denom: 'uve', amount: '10000' },
+        usdReference: '0.01',
+      },
+      {
+        resourceType: 'ram',
+        unit: 'gb-hour',
+        price: { denom: 'uve', amount: '5000' },
+        usdReference: '0.005',
+      },
     ],
     allowBidding: false,
-    identityRequirement: { minScore: 50, requiredStatus: '', requireVerifiedEmail: true, requireVerifiedDomain: false, requireMFA: false },
+    identityRequirement: {
+      minScore: 50,
+      requiredStatus: '',
+      requireVerifiedEmail: true,
+      requireVerifiedDomain: false,
+      requireMFA: false,
+    },
     requireMFAForOrders: false,
-    specifications: { gpu: 'NVIDIA A100 80GB', vram: '80 GB', cpu: '32 vCPU', memory: '128 GB', storage: '1 TB NVMe' },
+    specifications: {
+      gpu: 'NVIDIA A100 80GB',
+      vram: '80 GB',
+      cpu: '32 vCPU',
+      memory: '128 GB',
+      storage: '1 TB NVMe',
+    },
     tags: ['gpu', 'ml', 'training', 'a100'],
     regions: ['us-west', 'us-east', 'eu-west'],
     createdAt: '2024-01-15T10:00:00Z',
@@ -90,19 +114,45 @@ const MOCK_OFFERINGS: Offering[] = [
     state: 'active',
     category: 'compute',
     name: 'AMD EPYC 7763 Instance',
-    description: 'High-core-count CPU instances powered by AMD EPYC 7763 processors, perfect for parallel workloads.',
+    description:
+      'High-core-count CPU instances powered by AMD EPYC 7763 processors, perfect for parallel workloads.',
     version: '1.2.0',
     pricing: { model: 'hourly', basePrice: '450000', currency: 'uve' },
     prices: [
-      { resourceType: 'cpu', unit: 'vcpu-hour', price: { denom: 'uve', amount: '15000' }, usdReference: '0.015' },
-      { resourceType: 'ram', unit: 'gb-hour', price: { denom: 'uve', amount: '3000' }, usdReference: '0.003' },
-      { resourceType: 'storage', unit: 'gb-month', price: { denom: 'uve', amount: '100000' }, usdReference: '0.10' },
+      {
+        resourceType: 'cpu',
+        unit: 'vcpu-hour',
+        price: { denom: 'uve', amount: '15000' },
+        usdReference: '0.015',
+      },
+      {
+        resourceType: 'ram',
+        unit: 'gb-hour',
+        price: { denom: 'uve', amount: '3000' },
+        usdReference: '0.003',
+      },
+      {
+        resourceType: 'storage',
+        unit: 'gb-month',
+        price: { denom: 'uve', amount: '100000' },
+        usdReference: '0.10',
+      },
     ],
     allowBidding: true,
     minBid: { denom: 'uve', amount: '350000' },
-    identityRequirement: { minScore: 0, requiredStatus: '', requireVerifiedEmail: false, requireVerifiedDomain: false, requireMFA: false },
+    identityRequirement: {
+      minScore: 0,
+      requiredStatus: '',
+      requireVerifiedEmail: false,
+      requireVerifiedDomain: false,
+      requireMFA: false,
+    },
     requireMFAForOrders: false,
-    specifications: { cpu: 'AMD EPYC 7763 (64 cores)', memory: '256 GB DDR4', storage: '2 TB NVMe' },
+    specifications: {
+      cpu: 'AMD EPYC 7763 (64 cores)',
+      memory: '256 GB DDR4',
+      storage: '2 TB NVMe',
+    },
     tags: ['cpu', 'amd', 'epyc', 'compute'],
     regions: ['us-east', 'eu-central'],
     createdAt: '2024-01-20T08:00:00Z',
@@ -115,16 +165,33 @@ const MOCK_OFFERINGS: Offering[] = [
     state: 'active',
     category: 'hpc',
     name: 'HPC Compute Node',
-    description: 'Enterprise HPC node with InfiniBand networking for scientific computing and simulations.',
+    description:
+      'Enterprise HPC node with InfiniBand networking for scientific computing and simulations.',
     version: '2.0.0',
     pricing: { model: 'hourly', basePrice: '8000000', currency: 'uve' },
     prices: [
-      { resourceType: 'cpu', unit: 'node-hour', price: { denom: 'uve', amount: '8000000' }, usdReference: '8.00' },
+      {
+        resourceType: 'cpu',
+        unit: 'node-hour',
+        price: { denom: 'uve', amount: '8000000' },
+        usdReference: '8.00',
+      },
     ],
     allowBidding: false,
-    identityRequirement: { minScore: 75, requiredStatus: 'verified', requireVerifiedEmail: true, requireVerifiedDomain: true, requireMFA: true },
+    identityRequirement: {
+      minScore: 75,
+      requiredStatus: 'verified',
+      requireVerifiedEmail: true,
+      requireVerifiedDomain: true,
+      requireMFA: true,
+    },
     requireMFAForOrders: true,
-    specifications: { cpu: 'Intel Xeon Platinum 8380 (40 cores x 2)', memory: '512 GB', storage: '4 TB NVMe', network: 'InfiniBand HDR 200Gbps' },
+    specifications: {
+      cpu: 'Intel Xeon Platinum 8380 (40 cores x 2)',
+      memory: '512 GB',
+      storage: '4 TB NVMe',
+      network: 'InfiniBand HDR 200Gbps',
+    },
     tags: ['hpc', 'scientific', 'simulation', 'infiniband'],
     regions: ['us-central'],
     createdAt: '2024-02-01T00:00:00Z',
@@ -141,10 +208,21 @@ const MOCK_OFFERINGS: Offering[] = [
     version: '1.1.0',
     pricing: { model: 'monthly', basePrice: '100000', currency: 'uve' },
     prices: [
-      { resourceType: 'storage', unit: 'gb-month', price: { denom: 'uve', amount: '100000' }, usdReference: '0.10' },
+      {
+        resourceType: 'storage',
+        unit: 'gb-month',
+        price: { denom: 'uve', amount: '100000' },
+        usdReference: '0.10',
+      },
     ],
     allowBidding: false,
-    identityRequirement: { minScore: 0, requiredStatus: '', requireVerifiedEmail: false, requireVerifiedDomain: false, requireMFA: false },
+    identityRequirement: {
+      minScore: 0,
+      requiredStatus: '',
+      requireVerifiedEmail: false,
+      requireVerifiedDomain: false,
+      requireMFA: false,
+    },
     requireMFAForOrders: false,
     specifications: { type: 'NVMe SSD', iops: '100,000+', latency: '<1ms' },
     tags: ['storage', 'nvme', 'block'],
@@ -159,17 +237,39 @@ const MOCK_OFFERINGS: Offering[] = [
     state: 'active',
     category: 'gpu',
     name: 'RTX 4090 Gaming/AI',
-    description: 'Consumer-grade GPU instances ideal for smaller ML workloads, rendering, and gaming.',
+    description:
+      'Consumer-grade GPU instances ideal for smaller ML workloads, rendering, and gaming.',
     version: '1.0.0',
     pricing: { model: 'hourly', basePrice: '500000', currency: 'uve' },
     prices: [
-      { resourceType: 'gpu', unit: 'hour', price: { denom: 'uve', amount: '500000' }, usdReference: '0.50' },
-      { resourceType: 'cpu', unit: 'vcpu-hour', price: { denom: 'uve', amount: '8000' }, usdReference: '0.008' },
-      { resourceType: 'ram', unit: 'gb-hour', price: { denom: 'uve', amount: '4000' }, usdReference: '0.004' },
+      {
+        resourceType: 'gpu',
+        unit: 'hour',
+        price: { denom: 'uve', amount: '500000' },
+        usdReference: '0.50',
+      },
+      {
+        resourceType: 'cpu',
+        unit: 'vcpu-hour',
+        price: { denom: 'uve', amount: '8000' },
+        usdReference: '0.008',
+      },
+      {
+        resourceType: 'ram',
+        unit: 'gb-hour',
+        price: { denom: 'uve', amount: '4000' },
+        usdReference: '0.004',
+      },
     ],
     allowBidding: true,
     minBid: { denom: 'uve', amount: '400000' },
-    identityRequirement: { minScore: 25, requiredStatus: '', requireVerifiedEmail: true, requireVerifiedDomain: false, requireMFA: false },
+    identityRequirement: {
+      minScore: 25,
+      requiredStatus: '',
+      requireVerifiedEmail: true,
+      requireVerifiedDomain: false,
+      requireMFA: false,
+    },
     requireMFAForOrders: false,
     specifications: { gpu: 'NVIDIA RTX 4090', vram: '24 GB', cpu: '16 vCPU', memory: '64 GB' },
     tags: ['gpu', 'rtx4090', 'gaming', 'inference'],
@@ -184,18 +284,44 @@ const MOCK_OFFERINGS: Offering[] = [
     state: 'active',
     category: 'ml',
     name: 'ML Training Platform',
-    description: 'Managed ML training platform with auto-scaling, experiment tracking, and model registry.',
+    description:
+      'Managed ML training platform with auto-scaling, experiment tracking, and model registry.',
     version: '3.0.0',
     pricing: { model: 'usage_based', basePrice: '0', currency: 'uve' },
     prices: [
-      { resourceType: 'gpu', unit: 'gpu-second', price: { denom: 'uve', amount: '700' }, usdReference: '0.0007' },
-      { resourceType: 'cpu', unit: 'cpu-second', price: { denom: 'uve', amount: '3' }, usdReference: '0.000003' },
-      { resourceType: 'storage', unit: 'gb-hour', price: { denom: 'uve', amount: '50' }, usdReference: '0.00005' },
+      {
+        resourceType: 'gpu',
+        unit: 'gpu-second',
+        price: { denom: 'uve', amount: '700' },
+        usdReference: '0.0007',
+      },
+      {
+        resourceType: 'cpu',
+        unit: 'cpu-second',
+        price: { denom: 'uve', amount: '3' },
+        usdReference: '0.000003',
+      },
+      {
+        resourceType: 'storage',
+        unit: 'gb-hour',
+        price: { denom: 'uve', amount: '50' },
+        usdReference: '0.00005',
+      },
     ],
     allowBidding: false,
-    identityRequirement: { minScore: 50, requiredStatus: '', requireVerifiedEmail: true, requireVerifiedDomain: false, requireMFA: false },
+    identityRequirement: {
+      minScore: 50,
+      requiredStatus: '',
+      requireVerifiedEmail: true,
+      requireVerifiedDomain: false,
+      requireMFA: false,
+    },
     requireMFAForOrders: false,
-    specifications: { gpuTypes: 'A100, V100, T4', framework: 'PyTorch, TensorFlow, JAX', features: 'Auto-scaling, Distributed Training' },
+    specifications: {
+      gpuTypes: 'A100, V100, T4',
+      framework: 'PyTorch, TensorFlow, JAX',
+      features: 'Auto-scaling, Distributed Training',
+    },
     tags: ['ml', 'training', 'platform', 'managed'],
     regions: ['us-west', 'us-east', 'eu-west', 'asia-pacific'],
     createdAt: '2024-01-10T00:00:00Z',
@@ -206,7 +332,7 @@ const MOCK_OFFERINGS: Offering[] = [
 ];
 
 const MOCK_PROVIDERS: Record<string, Provider> = {
-  'virtengine1provider1abc': {
+  virtengine1provider1abc: {
     address: 'virtengine1provider1abc',
     name: 'CloudCore',
     description: 'Enterprise cloud provider specializing in GPU and storage solutions.',
@@ -218,7 +344,7 @@ const MOCK_PROVIDERS: Record<string, Provider> = {
     website: 'https://cloudcore.example',
     createdAt: '2023-06-15T00:00:00Z',
   },
-  'virtengine1provider2xyz': {
+  virtengine1provider2xyz: {
     address: 'virtengine1provider2xyz',
     name: 'DataNexus',
     description: 'High-performance computing infrastructure for demanding workloads.',
@@ -230,7 +356,7 @@ const MOCK_PROVIDERS: Record<string, Provider> = {
     website: 'https://datanexus.example',
     createdAt: '2023-09-01T00:00:00Z',
   },
-  'virtengine1provider3def': {
+  virtengine1provider3def: {
     address: 'virtengine1provider3def',
     name: 'SuperCloud HPC',
     description: 'Specialized HPC infrastructure for scientific research and simulations.',
@@ -242,7 +368,7 @@ const MOCK_PROVIDERS: Record<string, Provider> = {
     website: 'https://supercloud-hpc.example',
     createdAt: '2023-11-20T00:00:00Z',
   },
-  'virtengine1provider4ghi': {
+  virtengine1provider4ghi: {
     address: 'virtengine1provider4ghi',
     name: 'GPU Labs',
     description: 'Affordable GPU compute for developers and small teams.',
@@ -253,7 +379,7 @@ const MOCK_PROVIDERS: Record<string, Provider> = {
     regions: ['us-west', 'eu-west'],
     createdAt: '2024-01-05T00:00:00Z',
   },
-  'virtengine1provider5jkl': {
+  virtengine1provider5jkl: {
     address: 'virtengine1provider5jkl',
     name: 'AI Platform Co',
     description: 'Managed ML/AI platforms for enterprise and research.',

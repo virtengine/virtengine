@@ -70,11 +70,7 @@ const AvatarGroup = React.forwardRef<HTMLDivElement, AvatarGroupProps>(
     const remainingCount = childrenArray.length - max;
 
     return (
-      <div
-        ref={ref}
-        className={cn('flex -space-x-2', className)}
-        {...props}
-      >
+      <div ref={ref} className={cn('flex -space-x-2', className)} {...props}>
         {visibleChildren}
         {remainingCount > 0 && (
           <Avatar>

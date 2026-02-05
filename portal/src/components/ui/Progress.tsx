@@ -9,18 +9,16 @@ import * as React from 'react';
 import * as ProgressPrimitive from '@radix-ui/react-progress';
 import { cn } from '@/lib/utils';
 
-export interface ProgressProps
-  extends React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> {
+export interface ProgressProps extends React.ComponentPropsWithoutRef<
+  typeof ProgressPrimitive.Root
+> {
   indicatorClassName?: string;
   showValue?: boolean;
   size?: 'sm' | 'default' | 'lg';
   variant?: 'default' | 'success' | 'warning' | 'destructive';
 }
 
-const Progress = React.forwardRef<
-  React.ElementRef<typeof ProgressPrimitive.Root>,
-  ProgressProps
->(
+const Progress = React.forwardRef<React.ElementRef<typeof ProgressPrimitive.Root>, ProgressProps>(
   (
     {
       className,

@@ -6,16 +6,16 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="relative flex flex-1 flex-col items-center justify-center px-4 py-20">
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-        
+
         <div className="text-center">
           <h1 className="text-balance text-4xl font-bold tracking-tight sm:text-6xl">
             <span className="gradient-text">VirtEngine</span> Portal
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
-            Decentralized cloud computing marketplace with ML-powered identity verification.
-            Deploy workloads, manage HPC jobs, and access compute resources securely.
+            Decentralized cloud computing marketplace with ML-powered identity verification. Deploy
+            workloads, manage HPC jobs, and access compute resources securely.
           </p>
-          
+
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/connect"
@@ -78,10 +78,20 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl text-center text-sm text-muted-foreground">
           <p>© {new Date().getFullYear()} VirtEngine. All rights reserved.</p>
           <div className="mt-4 flex justify-center gap-6">
-            <a href="https://docs.virtengine.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
+            <a
+              href="https://docs.virtengine.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground"
+            >
               Documentation
             </a>
-            <a href="https://support.virtengine.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
+            <a
+              href="https://support.virtengine.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground"
+            >
               Support
             </a>
             <a
@@ -110,7 +120,7 @@ function FeatureCard({ title, description, href, icon }: FeatureCardProps) {
   return (
     <Link
       href={href}
-      className="group rounded-xl border border-border bg-card p-6 shadow-sm transition-all card-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="card-hover group rounded-xl border border-border bg-card p-6 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <div className="mb-4 text-3xl">{icon}</div>
       <h2 className="text-lg font-semibold group-hover:text-primary">{title}</h2>

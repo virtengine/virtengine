@@ -59,12 +59,7 @@ export default function MarketplacePage() {
             onClick={() => setShowMobileFilters(true)}
             className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent lg:hidden"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -92,9 +87,7 @@ export default function MarketplacePage() {
       </div>
 
       {/* Mobile Filters */}
-      {showMobileFilters && (
-        <OfferingFiltersMobile onClose={() => setShowMobileFilters(false)} />
-      )}
+      {showMobileFilters && <OfferingFiltersMobile onClose={() => setShowMobileFilters(false)} />}
     </div>
   );
 }

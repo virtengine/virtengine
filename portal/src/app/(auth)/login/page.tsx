@@ -13,9 +13,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Sign in to your VirtEngine account
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">Sign in to your VirtEngine account</p>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-8 shadow-sm">
