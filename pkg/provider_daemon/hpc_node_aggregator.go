@@ -74,8 +74,6 @@ type HPCNodeAggregator struct {
 	wg     sync.WaitGroup
 }
 
-const healthStatusDegraded = "degraded"
-
 // aggregatedNodeState tracks state for a node
 type aggregatedNodeState struct {
 	NodeID             string
