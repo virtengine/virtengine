@@ -18,7 +18,6 @@ source "$HOOK_DIR/common.sh"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
-ensure_direnv_env
 
 STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACM)"
 STAGED_GO_FILES="$(echo "$STAGED_FILES" | grep -E '\.go$' | grep -v '^vendor/' || true)"
@@ -108,6 +107,47 @@ if [ "${VE_HOOK_SKIP_LINT:-}" != "1" ]; then
             exit 1
         fi
         hook_pass "[pre-commit] golangci-lint passed"
+    fi
+fi
+
+# =========================================================================
+# Auto-format staged Portal files with prettier
+# =========================================================================
+if [ "${VE_HOOK_SKIP_FMT:-}" != "1" ]; then
+    # Get staged portal files (TypeScript, JavaScript, CSS, JSON)
+    STAGED_PORTAL_FILES=$(git diff --cached --name-only --diff-filter=ACM -- \
+        'portal/src/**/*.ts' 'portal/src/**/*.tsx' 'portal/src/**/*.js' 'portal/src/**/*.jsx' \
+        'portal/src/**/*.css' 'portal/src/**/*.json' 'portal/src/**/*.md' \
+        'lib/portal/src/**/*.ts' 'lib/portal/src/**/*.tsx' || true)
+
+    if [ -n "$STAGED_PORTAL_FILES" ]; then
+        hook_header "[pre-commit] Formatting staged Portal files..."
+
+        # Check if pnpm and prettier are available
+        if command -v pnpm >/dev/null 2>&1 && [ -f "$REPO_ROOT/portal/node_modules/.bin/prettier" ]; then
+            # Format all staged portal files at once (more efficient)
+            FORMATTED_COUNT=0
+            for file in $STAGED_PORTAL_FILES; do
+                [ -f "$file" ] || continue
+                
+                # Check if file needs formatting
+                if ! pnpm -C portal exec prettier --check "$REPO_ROOT/$file" >/dev/null 2>&1; then
+                    pnpm -C portal exec prettier --write "$REPO_ROOT/$file" >/dev/null 2>&1
+                    git add "$file"
+                    FORMATTED_COUNT=$((FORMATTED_COUNT + 1))
+                    hook_step "Formatted: $file"
+                fi
+            done
+
+            if [ "$FORMATTED_COUNT" -gt 0 ]; then
+                hook_pass "[pre-commit] Auto-formatted $FORMATTED_COUNT Portal file(s)"
+            else
+                hook_pass "[pre-commit] All Portal files already formatted"
+            fi
+        else
+            hook_warn "[pre-commit] pnpm or prettier not available, skipping Portal formatting"
+            hook_step "Run 'pnpm install' in portal/ to enable auto-formatting"
+        fi
     fi
 fi
 

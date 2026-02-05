@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -16,31 +15,13 @@ import (
 // SECURITY NOTE - CONSENSUS SAFETY
 // ============================================================================
 //
-// Several functions in this file use crypto/rand.Read() for generating random
-// values (nonces, salts) within keeper functions. This pattern is CONSENSUS-UNSAFE
-// because different validators will generate different random values, leading to
-// different state transitions and consensus failure.
+// Historical audit note: generating nonces/salts inside keeper with crypto/rand
+// is CONSENSUS-UNSAFE because validators would diverge on state. Randomness
+// must be injected or derived deterministically from shared context.
 //
-// REMEDIATION REQUIRED (See SECURITY-001-CRYPTOGRAPHIC-AUDIT.md):
-//
-// For functions that STORE state on-chain:
-// - Move random generation to client-side (off-chain)
-// - Accept pre-generated random values as parameters
-// - Only perform verification on-chain
-//
-// For functions that are QUERY-ONLY or create ephemeral requests:
-// - These may be acceptable if the random value is only used locally
-// - However, consider refactoring for consistency
-//
-// TODO: Refactor the following functions to accept pre-generated random values:
-// - CreateSelectiveDisclosureRequest (line 56)
-// - GenerateSelectiveDisclosureProof (lines 144, 158)
-// - CreateAgeProof (line 325)
-// - CreateResidencyProof (line 401)
-// - CreateScoreThresholdProof (lines 479, 489)
-// - evaluateAgeThreshold (line 780)
-// - evaluateResidency (line 820)
-//
+// REMEDIATION (SECURITY-001): All randomness is now injected via RandomnessInputs
+// or deterministically derived from tx context (DeterministicRandomSource). This
+// guarantees identical outputs across validators for the same transaction data.
 // ============================================================================
 
 // ============================================================================
@@ -58,6 +39,7 @@ func (k Keeper) CreateSelectiveDisclosureRequest(
 	purpose string,
 	validityDuration time.Duration,
 	requestExpiry time.Duration,
+	randomness *RandomnessInputs,
 ) (*types.SelectiveDisclosureRequest, error) {
 	// Validate input parameters
 	if len(requestedClaims) == 0 {
@@ -82,10 +64,20 @@ func (k Keeper) CreateSelectiveDisclosureRequest(
 		requestExpiry = 24 * time.Hour // Default 24 hour request expiry
 	}
 
-	// Generate nonce
-	nonce := make([]byte, 32)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate nonce")
+	// Resolve nonce (caller-supplied or deterministic from context)
+	var providedNonce []byte
+	if randomness != nil {
+		providedNonce = randomness.Nonce
+	}
+	nonce, err := k.resolveRandomBytes(
+		ctx,
+		providedNonce,
+		"veid:sdr:nonce",
+		requesterAddress.Bytes(),
+		subjectAddress.Bytes(),
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate request ID
@@ -140,6 +132,7 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 	request *types.SelectiveDisclosureRequest,
 	disclosedClaims map[string]interface{},
 	scheme types.ProofScheme,
+	randomness *RandomnessInputs,
 ) (*types.SelectiveDisclosureProof, error) {
 	// Validate request is still valid
 	blockTime := ctx.BlockTime()
@@ -170,10 +163,22 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 		}
 	}
 
-	// Generate nonce for the proof
-	proofNonce := make([]byte, 32)
-	if _, err := rand.Read(proofNonce); err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate proof nonce")
+	// Resolve nonce for the proof
+	var providedNonce []byte
+	var providedCommitmentSalt []byte
+	if randomness != nil {
+		providedNonce = randomness.Nonce
+		providedCommitmentSalt = randomness.CommitmentSalt
+	}
+	proofNonce, err := k.resolveRandomBytes(
+		ctx,
+		providedNonce,
+		"veid:sdp:nonce",
+		subjectAddress.Bytes(),
+		[]byte(request.RequestID),
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate proof ID
@@ -185,9 +190,14 @@ func (k Keeper) GenerateSelectiveDisclosureProof(
 
 	// Create commitment hash for full claims
 	// In MVP, this is a simple hash of disclosed claims + salt
-	commitmentSalt := make([]byte, 32)
-	if _, err := rand.Read(commitmentSalt); err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate commitment salt")
+	commitmentSalt, err := k.resolveRandomBytes(
+		ctx,
+		providedCommitmentSalt,
+		"veid:sdp:commitment_salt",
+		[]byte(proofID),
+	)
+	if err != nil {
+		return nil, err
 	}
 	commitmentHash := k.generateCommitmentHash(disclosedClaims, commitmentSalt)
 
@@ -325,6 +335,7 @@ func (k Keeper) CreateAgeProof(
 	subjectAddress sdk.AccAddress,
 	ageThreshold uint32,
 	validDuration time.Duration,
+	randomness *RandomnessInputs,
 ) (*types.AgeProof, error) {
 	// Validate age threshold
 	if ageThreshold == 0 || ageThreshold > 150 {
@@ -340,15 +351,24 @@ func (k Keeper) CreateAgeProof(
 	// Check for verified DOB scope
 	// NOTE: In production, this would decrypt and verify actual DOB
 	// For MVP, we check for verification level indicating DOB was verified
-	satisfiesThreshold, dobCommitment, err := k.evaluateAgeThreshold(ctx, record, ageThreshold)
+	satisfiesThreshold, dobCommitment, err := k.evaluateAgeThreshold(ctx, record, ageThreshold, randomness)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate nonce
-	nonce := make([]byte, 32)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate nonce")
+	// Resolve nonce
+	var providedNonce []byte
+	if randomness != nil {
+		providedNonce = randomness.Nonce
+	}
+	nonce, err := k.resolveRandomBytes(
+		ctx,
+		providedNonce,
+		"veid:age:nonce",
+		subjectAddress.Bytes(),
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate proof ID
@@ -400,6 +420,7 @@ func (k Keeper) CreateResidencyProof(
 	subjectAddress sdk.AccAddress,
 	countryCode string,
 	validDuration time.Duration,
+	randomness *RandomnessInputs,
 ) (*types.ResidencyProof, error) {
 	// Validate country code
 	if len(countryCode) != 2 {
@@ -413,15 +434,25 @@ func (k Keeper) CreateResidencyProof(
 	}
 
 	// Check for verified address/residency scope
-	isResident, addressCommitment, err := k.evaluateResidency(ctx, record, countryCode)
+	isResident, addressCommitment, err := k.evaluateResidency(ctx, record, countryCode, randomness)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate nonce
-	nonce := make([]byte, 32)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate nonce")
+	// Resolve nonce
+	var providedNonce []byte
+	if randomness != nil {
+		providedNonce = randomness.Nonce
+	}
+	nonce, err := k.resolveRandomBytes(
+		ctx,
+		providedNonce,
+		"veid:residency:nonce",
+		subjectAddress.Bytes(),
+		[]byte(countryCode),
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate proof ID
@@ -476,6 +507,7 @@ func (k Keeper) CreateScoreThresholdProof(
 	subjectAddress sdk.AccAddress,
 	scoreThreshold uint32,
 	validDuration time.Duration,
+	randomness *RandomnessInputs,
 ) (*types.ScoreThresholdProof, error) {
 	// Validate score threshold
 	if scoreThreshold == 0 || scoreThreshold > 100 {
@@ -497,9 +529,20 @@ func (k Keeper) CreateScoreThresholdProof(
 	exceedsThreshold := score.Score >= scoreThreshold
 
 	// Create commitment to actual score
-	scoreSalt := make([]byte, 32)
-	if _, err := rand.Read(scoreSalt); err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate score salt")
+	var providedScoreSalt []byte
+	var providedNonce []byte
+	if randomness != nil {
+		providedScoreSalt = randomness.ScoreSalt
+		providedNonce = randomness.Nonce
+	}
+	scoreSalt, err := k.resolveRandomBytes(
+		ctx,
+		providedScoreSalt,
+		"veid:score:commitment_salt",
+		subjectAddress.Bytes(),
+	)
+	if err != nil {
+		return nil, err
 	}
 	scoreCommitment, err := types.ComputeCommitmentHash(score.Score, scoreSalt)
 	if err != nil {
@@ -507,9 +550,14 @@ func (k Keeper) CreateScoreThresholdProof(
 	}
 
 	// Generate nonce
-	nonce := make([]byte, 32)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, types.ErrProofGenerationFailed.Wrap("failed to generate nonce")
+	nonce, err := k.resolveRandomBytes(
+		ctx,
+		providedNonce,
+		"veid:score:nonce",
+		subjectAddress.Bytes(),
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate proof ID
@@ -637,10 +685,7 @@ func (k Keeper) generateCommitmentHash(claims map[string]interface{}, salt []byt
 	h.Write(salt)
 
 	// Sort claims by key for deterministic hashing
-	for key, value := range claims {
-		h.Write([]byte(key))
-		fmt.Fprintf(h, "%v", value)
-	}
+	appendClaimsDeterministically(h, claims)
 
 	return h.Sum(nil)
 }
@@ -666,10 +711,7 @@ func (k Keeper) generateZKProof(
 		for _, ct := range claimTypes {
 			h.Write([]byte(ct.String()))
 		}
-		for key, value := range disclosedClaims {
-			h.Write([]byte(key))
-			fmt.Fprintf(h, "%v", value)
-		}
+		appendClaimsDeterministically(h, disclosedClaims)
 		h.Write([]byte(scheme.String()))
 		h.Write(nonce)
 		// Use block height for determinism, not block time
@@ -684,10 +726,7 @@ func (k Keeper) generateZKProof(
 	for _, ct := range claimTypes {
 		h.Write([]byte(ct.String()))
 	}
-	for key, value := range disclosedClaims {
-		h.Write([]byte(key))
-		fmt.Fprintf(h, "%v", value)
-	}
+	appendClaimsDeterministically(h, disclosedClaims)
 	h.Write([]byte(scheme.String()))
 	h.Write(nonce)
 	fmt.Fprintf(h, "%d", ctx.BlockHeight())
@@ -737,10 +776,7 @@ func (k Keeper) verifyZKProof(
 		for _, ct := range claimTypes {
 			h.Write([]byte(ct.String()))
 		}
-		for key, value := range disclosedClaims {
-			h.Write([]byte(key))
-			fmt.Fprintf(h, "%v", value)
-		}
+		appendClaimsDeterministically(h, disclosedClaims)
 		h.Write([]byte(scheme.String()))
 		h.Write(nonce)
 		fmt.Fprintf(h, "%d", ctx.BlockHeight())
@@ -764,10 +800,7 @@ func (k Keeper) verifyZKProof(
 	for _, ct := range claimTypes {
 		h.Write([]byte(ct.String()))
 	}
-	for key, value := range disclosedClaims {
-		h.Write([]byte(key))
-		fmt.Fprintf(h, "%v", value)
-	}
+	appendClaimsDeterministically(h, disclosedClaims)
 	h.Write([]byte(scheme.String()))
 	h.Write(nonce)
 	fmt.Fprintf(h, "%d", ctx.BlockHeight())
@@ -788,9 +821,10 @@ func (k Keeper) verifyZKProof(
 // evaluateAgeThreshold evaluates if the subject meets an age threshold
 // Generates real cryptographic commitment to DOB for privacy-preserving proofs
 func (k Keeper) evaluateAgeThreshold(
-	_ sdk.Context,
+	ctx sdk.Context,
 	record types.IdentityRecord,
 	ageThreshold uint32,
+	randomness *RandomnessInputs,
 ) (bool, []byte, error) {
 	// Check verification level for DOB verification
 	if !hasVerificationLevel(record, 2) {
@@ -798,9 +832,18 @@ func (k Keeper) evaluateAgeThreshold(
 	}
 
 	// Generate cryptographic salt for DOB commitment
-	salt := make([]byte, 32)
-	if _, err := rand.Read(salt); err != nil {
-		return false, nil, types.ErrProofGenerationFailed.Wrap("failed to generate salt")
+	var providedSalt []byte
+	if randomness != nil {
+		providedSalt = randomness.CommitmentSalt
+	}
+	salt, err := k.resolveRandomBytes(
+		ctx,
+		providedSalt,
+		"veid:age:commitment_salt",
+		[]byte(record.AccountAddress),
+	)
+	if err != nil {
+		return false, nil, err
 	}
 
 	// Create Pedersen-style commitment to DOB
@@ -828,9 +871,10 @@ func (k Keeper) evaluateAgeThreshold(
 // evaluateResidency evaluates if the subject is a resident of a country
 // Generates real cryptographic commitment to address for privacy-preserving proofs
 func (k Keeper) evaluateResidency(
-	_ sdk.Context,
+	ctx sdk.Context,
 	record types.IdentityRecord,
 	countryCode string,
+	randomness *RandomnessInputs,
 ) (bool, []byte, error) {
 	// Check verification level for address verification
 	if !hasVerificationLevel(record, 2) {
@@ -838,9 +882,19 @@ func (k Keeper) evaluateResidency(
 	}
 
 	// Generate cryptographic salt for address commitment
-	salt := make([]byte, 32)
-	if _, err := rand.Read(salt); err != nil {
-		return false, nil, types.ErrProofGenerationFailed.Wrap("failed to generate salt")
+	var providedSalt []byte
+	if randomness != nil {
+		providedSalt = randomness.CommitmentSalt
+	}
+	salt, err := k.resolveRandomBytes(
+		ctx,
+		providedSalt,
+		"veid:residency:commitment_salt",
+		[]byte(record.AccountAddress),
+		[]byte(countryCode),
+	)
+	if err != nil {
+		return false, nil, err
 	}
 
 	// Create Pedersen-style commitment to full address

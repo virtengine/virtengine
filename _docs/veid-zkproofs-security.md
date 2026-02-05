@@ -225,13 +225,13 @@ ASSERT commitmentHash == hash(actualScore, salt)
 **Note:** Proof generation happens off-chain on user's client device. Uses randomness and is non-deterministic by design.
 
 ### Proof Verification (On-Chain)
-
+| Selective Disclosure | 2-6ms             | ~220
 | Proof Type           | Verification Time | Gas Cost (Est.) | Deterministic       |
 | -------------------- | ----------------- | --------------- | ------------------- |
 | Age Range            | 2-5ms             | ~200k gas       | ✅ (consensus-safe) |
 | Residency            | 2-5ms             | ~180k gas       | ✅ (consensus-safe) |
 | Score Range          | 2-4ms             | ~150k gas       | ✅ (consensus-safe) |
-| Selective Disclosure | 2-6ms             | ~220k gas       | ✅ (consensus-safe) |
+k gas       | ✅ (consensus-safe) |
 
 **Note:** Verification happens on-chain during consensus. Fully deterministic - all validators compute identical results.
 
@@ -265,16 +265,18 @@ In blockchain consensus, all validators must compute identical state transitions
 
 ✅ **Safe for consensus:**
 
-- Proof verification (always produces same result)
-- Commitment verification (hash-based, deterministic)
+- Proof verification (pure function)
+- Commitment verification (hash-based, deterministic, claim keys sorted)
 - Public input validation (pure computation)
-- Nonce checking (deterministic equality)
+- Nonces and salts:
+  - Client-provided via `RandomnessInputs` (stored verbatim)
+  - Or derived from tx context via `DeterministicRandomSource` (chain-id, block height/time, tx bytes, purpose labels)
 
 ### Non-Deterministic Operations
 
-❌ **Unsafe for consensus:**
+⚠️ **Unsafe for consensus (kept off-chain):**
 
-- Proof generation (uses randomness, client-side only)
+- Full proof generation using secret witnesses
 - Trusted setup (one-time, off-chain ceremony)
 - Witness computation (private, client-side only)
 
@@ -294,6 +296,10 @@ In blockchain consensus, all validators must compute identical state transitions
    - Hash-based commitments for test environments
    - Deterministic proof structure validation
    - Maintains same API and security properties
+4. **Deterministic randomness pipeline:**
+   - Clients MAY pass 32-byte nonces/salts through `RandomnessInputs`
+   - If omitted, validators derive deterministic bytes from transaction context with domain separation
+   - Prevents divergent randomness across validators while keeping proofs reproducible
 
 ## Trusted Setup Requirements
 
