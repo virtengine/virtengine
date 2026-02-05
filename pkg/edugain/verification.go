@@ -4,6 +4,7 @@
 package edugain
 
 import (
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -257,6 +258,11 @@ func (v *XMLDSigVerifier) verifyElementSignature(element *etree.Element, ctx *ds
 		return result
 	}
 
+	if err := v.validateSignatureValue(signatureElement); err != nil {
+		result.Error = err
+		return result
+	}
+
 	// Extract signature algorithm info
 	signedInfoElement := signatureElement.FindElement("./SignedInfo")
 	if signedInfoElement == nil {
@@ -327,6 +333,56 @@ func (v *XMLDSigVerifier) verifyElementSignature(element *etree.Element, ctx *ds
 
 	result.Valid = true
 	return result
+}
+
+func (v *XMLDSigVerifier) validateSignatureValue(signatureElement *etree.Element) error {
+	signatureValueElement := signatureElement.FindElement("./SignatureValue")
+	if signatureValueElement == nil {
+		signatureValueElement = signatureElement.FindElement(".//ds:SignatureValue")
+	}
+	if signatureValueElement == nil {
+		signatureValueElement = signatureElement.FindElement(".//{http://www.w3.org/2000/09/xmldsig#}SignatureValue")
+	}
+	if signatureValueElement == nil {
+		return ErrSAMLSignatureInvalid
+	}
+
+	cleanedSignature := cleanCertificateString(signatureValueElement.Text())
+	if cleanedSignature == "" {
+		return ErrSAMLSignatureInvalid
+	}
+
+	decodedSignature, err := base64.StdEncoding.DecodeString(cleanedSignature)
+	if err != nil {
+		return ErrSAMLSignatureInvalid
+	}
+	if len(decodedSignature) == 0 {
+		return ErrSAMLSignatureInvalid
+	}
+
+	keyInfoElement := signatureElement.FindElement("./KeyInfo")
+	if keyInfoElement == nil {
+		keyInfoElement = signatureElement.FindElement(".//ds:KeyInfo")
+	}
+	if keyInfoElement == nil {
+		keyInfoElement = signatureElement.FindElement(".//{http://www.w3.org/2000/09/xmldsig#}KeyInfo")
+	}
+
+	if keyInfoElement != nil {
+		x509CertElement := keyInfoElement.FindElement(".//X509Certificate")
+		if x509CertElement != nil {
+			certPEM := x509CertElement.Text()
+			if cert, err := parseCertificateFromBase64(certPEM); err == nil {
+				if rsaKey, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+					if len(decodedSignature) != rsaKey.Size() {
+						return ErrSAMLSignatureInvalid
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // validateCertificate validates a certificate is within its validity period
