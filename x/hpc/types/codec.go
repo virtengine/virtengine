@@ -37,6 +37,7 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &MsgUpdateNodeMetadata{}, "hpc/MsgUpdateNodeMetadata")
 	legacy.RegisterAminoMsg(cdc, &MsgFlagDispute{}, "hpc/MsgFlagDispute")
 	legacy.RegisterAminoMsg(cdc, &MsgResolveDispute{}, "hpc/MsgResolveDispute")
+	legacy.RegisterAminoMsg(cdc, &MsgUpdateParams{}, "hpc/MsgUpdateParams")
 }
 
 // RegisterInterfaces registers the x/hpc interfaces types with the interface registry
@@ -53,6 +54,7 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&MsgUpdateNodeMetadata{},
 		&MsgFlagDispute{},
 		&MsgResolveDispute{},
+		&MsgUpdateParams{},
 	)
 
 	msgservice.RegisterMsgServiceDesc(registry, &hpcv1.Msg_serviceDesc)

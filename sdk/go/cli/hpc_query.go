@@ -22,13 +22,13 @@ func GetQueryHPCCmd() *cobra.Command {
 		GetHPCParamsCmd(),
 		GetHPCClusterCmd(),
 		GetHPCClustersCmd(),
-		GetHPCClustersByOwnerCmd(),
+		GetHPCClustersByProviderCmd(),
 		GetHPCOfferingCmd(),
 		GetHPCOfferingsCmd(),
 		GetHPCOfferingsByClusterCmd(),
 		GetHPCJobCmd(),
 		GetHPCJobsCmd(),
-		GetHPCJobsBySubmitterCmd(),
+		GetHPCJobsByCustomerCmd(),
 	)
 
 	return cmd
@@ -113,10 +113,10 @@ func GetHPCClustersCmd() *cobra.Command {
 	return cmd
 }
 
-func GetHPCClustersByOwnerCmd() *cobra.Command {
+func GetHPCClustersByProviderCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "clusters-by-owner [owner]",
-		Short:             "Query HPC clusters by owner address",
+		Use:               "clusters-by-provider [provider]",
+		Short:             "Query HPC clusters by provider address",
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -128,9 +128,9 @@ func GetHPCClustersByOwnerCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := cl.Query().HPC().ClustersByOwner(ctx, &types.QueryClustersByOwnerRequest{
-				Owner:      args[0],
-				Pagination: pageReq,
+			resp, err := cl.Query().HPC().ClustersByProvider(ctx, &types.QueryClustersByProviderRequest{
+				ProviderAddress: args[0],
+				Pagination:      pageReq,
 			})
 			if err != nil {
 				return err
@@ -289,10 +289,10 @@ func GetHPCJobsCmd() *cobra.Command {
 	return cmd
 }
 
-func GetHPCJobsBySubmitterCmd() *cobra.Command {
+func GetHPCJobsByCustomerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "jobs-by-submitter [submitter]",
-		Short:             "Query HPC jobs by submitter address",
+		Use:               "jobs-by-customer [customer]",
+		Short:             "Query HPC jobs by customer address",
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: QueryPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -304,9 +304,9 @@ func GetHPCJobsBySubmitterCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := cl.Query().HPC().JobsBySubmitter(ctx, &types.QueryJobsBySubmitterRequest{
-				Submitter:  args[0],
-				Pagination: pageReq,
+			resp, err := cl.Query().HPC().JobsByCustomer(ctx, &types.QueryJobsByCustomerRequest{
+				CustomerAddress: args[0],
+				Pagination:      pageReq,
 			})
 			if err != nil {
 				return err

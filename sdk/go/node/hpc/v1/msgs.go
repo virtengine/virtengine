@@ -197,7 +197,7 @@ func (msg *MsgReportJobStatus) ValidateBasic() error {
 		return ErrInvalidJob.Wrap("job_id cannot be empty")
 	}
 
-	if msg.State == JobState_JOB_STATE_UNSPECIFIED {
+	if msg.State == JobStateUnspecified {
 		return ErrInvalidStatus.Wrap("state cannot be unspecified")
 	}
 

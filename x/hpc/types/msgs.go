@@ -34,6 +34,8 @@ type (
 	MsgFlagDisputeResponse        = hpcv1.MsgFlagDisputeResponse
 	MsgResolveDispute             = hpcv1.MsgResolveDispute
 	MsgResolveDisputeResponse     = hpcv1.MsgResolveDisputeResponse
+	MsgUpdateParams               = hpcv1.MsgUpdateParams
+	MsgUpdateParamsResponse       = hpcv1.MsgUpdateParamsResponse
 )
 
 // Message type constants
@@ -63,6 +65,7 @@ var (
 	_ sdk.Msg = &MsgUpdateNodeMetadata{}
 	_ sdk.Msg = &MsgFlagDispute{}
 	_ sdk.Msg = &MsgResolveDispute{}
+	_ sdk.Msg = &MsgUpdateParams{}
 )
 
 // NewMsgRegisterCluster creates a new MsgRegisterCluster
@@ -83,7 +86,7 @@ func NewMsgRegisterCluster(owner, name, clusterType, region, endpoint string, to
 		Region:          region,
 		Partitions:      []hpcv1.Partition{},
 		TotalNodes:      clampUint64ToInt32(totalNodes),
-		ClusterMetadata: hpcv1.ClusterMetadata{TotalGpus: int64(totalGpus)},
+		ClusterMetadata: hpcv1.ClusterMetadata{TotalGpus: clampUint64ToInt64(totalGpus)},
 	}
 }
 
@@ -103,7 +106,7 @@ func NewMsgUpdateCluster(owner, clusterID, endpoint string, totalNodes, totalGpu
 		State:           state,
 		Partitions:      []hpcv1.Partition{},
 		TotalNodes:      clampUint64ToInt32(totalNodes),
-		ClusterMetadata: hpcv1.ClusterMetadata{TotalGpus: int64(totalGpus)},
+		ClusterMetadata: &hpcv1.ClusterMetadata{TotalGpus: clampUint64ToInt64(totalGpus)},
 	}
 }
 
@@ -137,7 +140,7 @@ func NewMsgCreateOffering(provider, clusterID, name, resourceType, pricePerHour 
 		QueueOptions:              []hpcv1.QueueOption{},
 		Pricing:                   pricing,
 		RequiredIdentityThreshold: 0,
-		MaxRuntimeSeconds:         int64(maxDuration),
+		MaxRuntimeSeconds:         clampUint64ToInt64(maxDuration),
 		PreconfiguredWorkloads:    []hpcv1.PreconfiguredWorkload{},
 		SupportsCustomWorkloads:   true,
 	}
@@ -161,7 +164,7 @@ func NewMsgUpdateOffering(provider, offeringID, pricePerHour string, active bool
 		ProviderAddress:           provider,
 		OfferingId:                offeringID,
 		QueueOptions:              []hpcv1.QueueOption{},
-		Pricing:                   pricing,
+		Pricing:                   &pricing,
 		RequiredIdentityThreshold: 0,
 		Active:                    active,
 	}
@@ -184,7 +187,7 @@ func NewMsgSubmitJob(submitter, offeringID, jobScript string, requestedNodes, re
 			Nodes:       clampUint64ToInt32(requestedNodes),
 			GpusPerNode: clampUint64ToInt32(requestedGpus),
 		},
-		MaxRuntimeSeconds: int64(maxDuration),
+		MaxRuntimeSeconds: clampUint64ToInt64(maxDuration),
 		MaxPrice:          maxPrice,
 	}
 }
@@ -222,7 +225,7 @@ func NewMsgUpdateNodeMetadata(owner, clusterID, nodeID, gpuModel string, gpuMemo
 		ProviderAddress: owner,
 		NodeId:          nodeID,
 		ClusterId:       clusterID,
-		Resources: hpcv1.NodeResources{
+		Resources: &hpcv1.NodeResources{
 			CpuCores: 0,
 			MemoryGb: clampUint64ToInt32(memoryGb),
 			GpuType:  gpuModel,
@@ -257,12 +260,20 @@ func NewMsgResolveDispute(authority, disputeID, resolution, refundAmount string)
 }
 
 const maxInt32 = int32(^uint32(0) >> 1)
+const maxInt64 = int64(^uint64(0) >> 1)
 
 func clampUint64ToInt32(value uint64) int32 {
 	if value > uint64(maxInt32) {
 		return maxInt32
 	}
 	return int32(value)
+}
+
+func clampUint64ToInt64(value uint64) int64 {
+	if value > uint64(maxInt64) {
+		return maxInt64
+	}
+	return int64(value)
 }
 
 func parseJobState(value string) hpcv1.JobState {

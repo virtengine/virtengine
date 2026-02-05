@@ -39,7 +39,7 @@ func (k Keeper) recordBillingUsage(ctx sdk.Context, usage types.UsageRecord) err
 		StartTime:    usage.PeriodStart,
 		EndTime:      usage.PeriodEnd,
 		ResourceType: mapSettlementUsageType(usage.UsageType),
-		UsageAmount:  sdkmath.LegacyNewDec(int64(usage.UsageUnits)),
+		UsageAmount:  sdkmath.LegacyNewDec(usageUnitsToInt64(usage.UsageUnits)),
 		UnitPrice:    usage.UnitPrice,
 		TotalAmount:  usage.TotalCost,
 		Status:       billing.UsageRecordStatusPending,
@@ -68,7 +68,7 @@ func (k Keeper) updateBillingUsageRecordsForSettlement(
 			StartTime:    usage.PeriodStart,
 			EndTime:      usage.PeriodEnd,
 			ResourceType: mapSettlementUsageType(usage.UsageType),
-			UsageAmount:  sdkmath.LegacyNewDec(int64(usage.UsageUnits)),
+			UsageAmount:  sdkmath.LegacyNewDec(usageUnitsToInt64(usage.UsageUnits)),
 			UnitPrice:    usage.UnitPrice,
 			TotalAmount:  usage.TotalCost,
 			InvoiceID:    invoiceID,
@@ -127,7 +127,7 @@ func (k Keeper) generateInvoiceForSettlement(
 		usageInputs = append(usageInputs, billing.UsageInput{
 			UsageRecordID: usage.UsageID,
 			UsageType:     usageType,
-			Quantity:      sdkmath.LegacyNewDec(int64(usage.UsageUnits)),
+			Quantity:      sdkmath.LegacyNewDec(usageUnitsToInt64(usage.UsageUnits)),
 			Unit:          billing.UnitForUsageType(usageType),
 			UnitPrice:     usage.UnitPrice,
 			Description:   fmt.Sprintf("%s usage", usage.UsageType),
@@ -238,6 +238,15 @@ func mapSettlementUsageType(value string) billing.UsageType {
 	default:
 		return billing.UsageTypeOther
 	}
+}
+
+const maxInt64 = int64(^uint64(0) >> 1)
+
+func usageUnitsToInt64(units uint64) int64 {
+	if units > uint64(maxInt64) {
+		return maxInt64
+	}
+	return int64(units)
 }
 
 func reconcileInvoiceTotals(inv *billing.Invoice, target sdk.Coins, reason string) {

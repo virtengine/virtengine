@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	flagOwner     = "owner"
+	flagOwner     = "provider"
 	flagRegion    = "region"
 	flagStatus    = "status"
-	flagSubmitter = "submitter"
+	flagSubmitter = "customer"
 	flagClusterID = "cluster-id"
 	flagProvider  = "provider"
 )
@@ -119,7 +119,7 @@ func NewCmdQueryClusters() *cobra.Command {
 				return err
 			}
 
-			owner, err := cmd.Flags().GetString(flagOwner)
+			provider, err := cmd.Flags().GetString(flagOwner)
 			if err != nil {
 				return err
 			}
@@ -134,7 +134,7 @@ func NewCmdQueryClusters() *cobra.Command {
 
 			queryClient := hpctypes.NewQueryClient(clientCtx)
 
-			if owner == "" && region == "" && activeFilter == nil {
+			if provider == "" && region == "" && activeFilter == nil {
 				resp, err := queryClient.Clusters(cmd.Context(), &hpctypes.QueryClustersRequest{
 					Pagination: pageReq,
 				})
@@ -148,11 +148,11 @@ func NewCmdQueryClusters() *cobra.Command {
 				return fmt.Errorf("page-key pagination is not supported with filters")
 			}
 
-			var clusters []hpctypes.Cluster
-			if owner != "" {
-				resp, err := queryClient.ClustersByOwner(cmd.Context(), &hpctypes.QueryClustersByOwnerRequest{
-					Owner:      owner,
-					Pagination: pageReq,
+			var clusters []hpctypes.HPCCluster
+			if provider != "" {
+				resp, err := queryClient.ClustersByProvider(cmd.Context(), &hpctypes.QueryClustersByProviderRequest{
+					ProviderAddress: provider,
+					Pagination:      pageReq,
 				})
 				if err != nil {
 					return err
@@ -178,7 +178,7 @@ func NewCmdQueryClusters() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String(flagOwner, "", "Filter clusters by owner address")
+	cmd.Flags().String(flagOwner, "", "Filter clusters by provider address")
 	cmd.Flags().String(flagRegion, "", "Filter clusters by region")
 	cmd.Flags().Bool(flagActive, false, "Filter for active clusters")
 	cmd.Flags().Bool(flagInactive, false, "Filter for inactive clusters")
@@ -232,7 +232,7 @@ func NewCmdQueryJobs() *cobra.Command {
 				return err
 			}
 
-			submitter, err := cmd.Flags().GetString(flagSubmitter)
+			customer, err := cmd.Flags().GetString(flagSubmitter)
 			if err != nil {
 				return err
 			}
@@ -243,7 +243,16 @@ func NewCmdQueryJobs() *cobra.Command {
 
 			queryClient := hpctypes.NewQueryClient(clientCtx)
 
-			if submitter == "" && status == "" {
+			var stateFilter *hpctypes.JobState
+			if status != "" {
+				parsedState, ok := parseJobStateFilter(status)
+				if !ok {
+					return fmt.Errorf("invalid job status: %s", status)
+				}
+				stateFilter = &parsedState
+			}
+
+			if customer == "" && status == "" {
 				resp, err := queryClient.Jobs(cmd.Context(), &hpctypes.QueryJobsRequest{
 					Pagination: pageReq,
 				})
@@ -257,11 +266,11 @@ func NewCmdQueryJobs() *cobra.Command {
 				return fmt.Errorf("page-key pagination is not supported with filters")
 			}
 
-			var jobs []hpctypes.Job
-			if submitter != "" {
-				resp, err := queryClient.JobsBySubmitter(cmd.Context(), &hpctypes.QueryJobsBySubmitterRequest{
-					Submitter:  submitter,
-					Pagination: pageReq,
+			var jobs []hpctypes.HPCJob
+			if customer != "" {
+				resp, err := queryClient.JobsByCustomer(cmd.Context(), &hpctypes.QueryJobsByCustomerRequest{
+					CustomerAddress: customer,
+					Pagination:      pageReq,
 				})
 				if err != nil {
 					return err
@@ -277,7 +286,7 @@ func NewCmdQueryJobs() *cobra.Command {
 				jobs = resp.Jobs
 			}
 
-			filtered := filterJobs(jobs, status)
+			filtered := filterJobs(jobs, stateFilter)
 			pageJobs, pageResp := paginateSlice(filtered, pageReq)
 
 			return clientCtx.PrintProto(&hpctypes.QueryJobsResponse{
@@ -287,7 +296,7 @@ func NewCmdQueryJobs() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String(flagSubmitter, "", "Filter jobs by submitter address")
+	cmd.Flags().String(flagSubmitter, "", "Filter jobs by customer address")
 	cmd.Flags().String(flagStatus, "", "Filter jobs by status")
 	flags.AddPaginationFlagsToCmd(cmd, "jobs")
 	flags.AddQueryFlagsToCmd(cmd)
@@ -368,7 +377,7 @@ func NewCmdQueryPools() *cobra.Command {
 				return fmt.Errorf("page-key pagination is not supported with filters")
 			}
 
-			var offerings []hpctypes.Offering
+			var offerings []hpctypes.HPCOffering
 			if clusterID != "" {
 				resp, err := queryClient.OfferingsByCluster(cmd.Context(), &hpctypes.QueryOfferingsByClusterRequest{
 					ClusterId:  clusterID,
@@ -454,30 +463,33 @@ func NewCmdQueryRewards() *cobra.Command {
 	return cmd
 }
 
-func filterClusters(clusters []hpctypes.Cluster, region string, activeFilter *bool) []hpctypes.Cluster {
+func filterClusters(clusters []hpctypes.HPCCluster, region string, activeFilter *bool) []hpctypes.HPCCluster {
 	if region == "" && activeFilter == nil {
 		return clusters
 	}
-	filtered := make([]hpctypes.Cluster, 0, len(clusters))
+	filtered := make([]hpctypes.HPCCluster, 0, len(clusters))
 	for _, cluster := range clusters {
 		if region != "" && !strings.EqualFold(cluster.Region, region) {
 			continue
 		}
-		if activeFilter != nil && cluster.Active != *activeFilter {
-			continue
+		if activeFilter != nil {
+			isActive := cluster.State == hpctypes.ClusterStateActive
+			if isActive != *activeFilter {
+				continue
+			}
 		}
 		filtered = append(filtered, cluster)
 	}
 	return filtered
 }
 
-func filterJobs(jobs []hpctypes.Job, status string) []hpctypes.Job {
-	if status == "" {
+func filterJobs(jobs []hpctypes.HPCJob, stateFilter *hpctypes.JobState) []hpctypes.HPCJob {
+	if stateFilter == nil {
 		return jobs
 	}
-	filtered := make([]hpctypes.Job, 0, len(jobs))
+	filtered := make([]hpctypes.HPCJob, 0, len(jobs))
 	for _, job := range jobs {
-		if !strings.EqualFold(job.Status, status) {
+		if job.State != *stateFilter {
 			continue
 		}
 		filtered = append(filtered, job)
@@ -485,16 +497,16 @@ func filterJobs(jobs []hpctypes.Job, status string) []hpctypes.Job {
 	return filtered
 }
 
-func filterOfferings(offerings []hpctypes.Offering, clusterID, provider string, activeFilter *bool) []hpctypes.Offering {
+func filterOfferings(offerings []hpctypes.HPCOffering, clusterID, provider string, activeFilter *bool) []hpctypes.HPCOffering {
 	if clusterID == "" && provider == "" && activeFilter == nil {
 		return offerings
 	}
-	filtered := make([]hpctypes.Offering, 0, len(offerings))
+	filtered := make([]hpctypes.HPCOffering, 0, len(offerings))
 	for _, offering := range offerings {
 		if clusterID != "" && offering.ClusterId != clusterID {
 			continue
 		}
-		if provider != "" && offering.Provider != provider {
+		if provider != "" && offering.ProviderAddress != provider {
 			continue
 		}
 		if activeFilter != nil && offering.Active != *activeFilter {
@@ -503,6 +515,20 @@ func filterOfferings(offerings []hpctypes.Offering, clusterID, provider string, 
 		filtered = append(filtered, offering)
 	}
 	return filtered
+}
+
+func parseJobStateFilter(value string) (hpctypes.JobState, bool) {
+	normalized := strings.ToUpper(strings.TrimSpace(value))
+	if normalized == "" {
+		return hpctypes.JobStateUnspecified, false
+	}
+	if !strings.HasPrefix(normalized, "JOB_STATE_") {
+		normalized = "JOB_STATE_" + normalized
+	}
+	if state, ok := hpctypes.JobState_value[normalized]; ok {
+		return hpctypes.JobState(state), true
+	}
+	return hpctypes.JobStateUnspecified, false
 }
 
 func paginateSlice[T any](items []T, pageReq *query.PageRequest) ([]T, *query.PageResponse) {

@@ -143,10 +143,15 @@ func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusR
 
 	msgClient := hpcv1.NewMsgClient(c.grpcConn)
 	_, err := msgClient.ReportJobStatus(ctx, &hpcv1.MsgReportJobStatus{
-		Reporter:     report.ProviderAddress,
-		JobId:        report.VirtEngineJobID,
-		Status:       string(report.State),
-		ErrorMessage: report.StateMessage,
+		ProviderAddress: report.ProviderAddress,
+		JobId:           report.VirtEngineJobID,
+		SlurmJobId:      report.SchedulerJobID,
+		State:           hpcJobStateToProto(report.State),
+		StatusMessage:   report.StateMessage,
+		ExitCode:        report.ExitCode,
+		UsageMetrics:    metricsToProto(report.Metrics),
+		Signature:       report.Signature,
+		SignedTimestamp: report.Timestamp.Unix(),
 	})
 	return err
 }
@@ -184,4 +189,42 @@ func (c *rpcChainClient) GetCurrentBlockHeight(ctx context.Context) (int64, erro
 	}
 
 	return status.SyncInfo.LatestBlockHeight, nil
+}
+
+func hpcJobStateToProto(state HPCJobState) hpcv1.JobState {
+	switch state {
+	case HPCJobStatePending:
+		return hpcv1.JobStatePending
+	case HPCJobStateQueued:
+		return hpcv1.JobStateQueued
+	case HPCJobStateRunning:
+		return hpcv1.JobStateRunning
+	case HPCJobStateCompleted:
+		return hpcv1.JobStateCompleted
+	case HPCJobStateFailed:
+		return hpcv1.JobStateFailed
+	case HPCJobStateCancelled:
+		return hpcv1.JobStateCancelled
+	case HPCJobStateTimeout:
+		return hpcv1.JobStateTimeout
+	default:
+		return hpcv1.JobStateUnspecified
+	}
+}
+
+func metricsToProto(metrics *HPCSchedulerMetrics) *hpcv1.HPCUsageMetrics {
+	if metrics == nil {
+		return nil
+	}
+	return &hpcv1.HPCUsageMetrics{
+		WallClockSeconds: metrics.WallClockSeconds,
+		CpuCoreSeconds:   metrics.CPUCoreSeconds,
+		MemoryGbSeconds:  metrics.MemoryGBSeconds,
+		GpuSeconds:       metrics.GPUSeconds,
+		StorageGbHours:   metrics.StorageGBHours,
+		NetworkBytesIn:   metrics.NetworkBytesIn,
+		NetworkBytesOut:  metrics.NetworkBytesOut,
+		NodeHours:        int64(metrics.NodeHours),
+		NodesUsed:        metrics.NodesUsed,
+	}
 }
