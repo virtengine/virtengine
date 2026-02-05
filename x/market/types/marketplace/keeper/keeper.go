@@ -1200,7 +1200,7 @@ func (k Keeper) processOrderStatusCallback(ctx sdk.Context, callback *marketplac
 		reason = "status update from waldur"
 	}
 	oldState := order.State
-	if err := order.SetStateAt(newState, reason, ctx.BlockTime()); err != nil {
+	if err := applyOrderStateTransition(order, newState, reason, ctx.BlockTime()); err != nil {
 		return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
 	}
 	if err := k.UpdateOrder(ctx, order); err != nil {
@@ -1210,6 +1210,73 @@ func (k Keeper) processOrderStatusCallback(ctx sdk.Context, callback *marketplac
 	seq := k.IncrementEventSequence(ctx)
 	event := marketplace.NewOrderStateChangedEventAt(order, oldState, reason, ctx.BlockHeight(), seq, ctx.BlockTime())
 	return k.EmitMarketplaceEvent(ctx, event)
+}
+
+// applyOrderStateTransition moves an order to the target state using valid transitions.
+func applyOrderStateTransition(order *marketplace.Order, target marketplace.OrderState, reason string, now time.Time) error {
+	if order == nil {
+		return fmt.Errorf("order is nil")
+	}
+	if order.State == target {
+		return nil
+	}
+
+	transitionPath := []marketplace.OrderState{}
+	switch target {
+	case marketplace.OrderStateMatched:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched}
+	case marketplace.OrderStateProvisioning:
+		switch order.State {
+		case marketplace.OrderStateOpen:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateProvisioning}
+		default:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateProvisioning}
+		}
+	case marketplace.OrderStateActive:
+		switch order.State {
+		case marketplace.OrderStateOpen:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateProvisioning, marketplace.OrderStateActive}
+		case marketplace.OrderStateMatched:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateProvisioning, marketplace.OrderStateActive}
+		default:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateActive}
+		}
+	case marketplace.OrderStateFailed:
+		switch order.State {
+		case marketplace.OrderStateOpen:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateFailed}
+		case marketplace.OrderStateMatched, marketplace.OrderStateProvisioning, marketplace.OrderStatePendingTermination:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateFailed}
+		}
+	case marketplace.OrderStateTerminated:
+		switch order.State {
+		case marketplace.OrderStateActive, marketplace.OrderStateSuspended:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStatePendingTermination, marketplace.OrderStateTerminated}
+		case marketplace.OrderStatePendingTermination:
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateTerminated}
+		}
+	case marketplace.OrderStatePendingTermination:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStatePendingTermination}
+	case marketplace.OrderStateSuspended:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStateSuspended}
+	case marketplace.OrderStateCancelled:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStateCancelled}
+	default:
+		transitionPath = []marketplace.OrderState{target}
+	}
+
+	for _, next := range transitionPath {
+		if order.State == next {
+			continue
+		}
+		if !order.State.CanTransitionTo(next) {
+			return fmt.Errorf("invalid transition %s -> %s", order.State.String(), next.String())
+		}
+		if err := order.SetStateAt(next, reason, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // IsNonceProcessed checks if a nonce has been processed

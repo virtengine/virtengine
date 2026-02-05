@@ -79,10 +79,19 @@ type WaldurOfferingResolver interface {
 	ResolveOfferingUUID(ctx context.Context, offeringID string) (string, error)
 }
 
+// WaldurMarketplace captures the marketplace operations needed by the router.
+type WaldurMarketplace interface {
+	CreateOrder(ctx context.Context, req waldur.CreateOrderRequest) (*waldur.Order, error)
+	ApproveOrderByProvider(ctx context.Context, orderUUID string) error
+	SetOrderBackendID(ctx context.Context, orderUUID string, backendID string) error
+	GetOrder(ctx context.Context, orderUUID string) (*waldur.Order, error)
+	GetOfferingByBackendID(ctx context.Context, backendID string) (*waldur.Offering, error)
+}
+
 // MapOfferingResolver resolves offerings using a static map and backend lookup fallback.
 type MapOfferingResolver struct {
 	Map         map[string]string
-	Marketplace *waldur.MarketplaceClient
+	Marketplace WaldurMarketplace
 }
 
 // ResolveOfferingUUID resolves offering UUID from map or backend lookup.
@@ -110,7 +119,7 @@ type OrderRouter struct {
 	cfg         OrderRoutingConfig
 	store       *WaldurOrderStore
 	state       *WaldurOrderState
-	marketplace *waldur.MarketplaceClient
+	marketplace WaldurMarketplace
 	resolver    WaldurOfferingResolver
 	tasks       chan OrderRoutingTask
 	stopCh      chan struct{}
@@ -139,15 +148,6 @@ func NewOrderRouter(cfg OrderRoutingConfig, resolver WaldurOfferingResolver) (*O
 		cfg.MaxBackoff = 5 * time.Minute
 	}
 
-	store, err := NewWaldurOrderStore(cfg.StateFile)
-	if err != nil {
-		return nil, err
-	}
-	state, err := store.Load()
-	if err != nil {
-		return nil, err
-	}
-
 	wcfg := waldur.DefaultConfig()
 	wcfg.BaseURL = cfg.WaldurBaseURL
 	wcfg.Token = cfg.WaldurToken
@@ -156,6 +156,41 @@ func NewOrderRouter(cfg OrderRoutingConfig, resolver WaldurOfferingResolver) (*O
 		return nil, err
 	}
 	marketplace := waldur.NewMarketplaceClient(client)
+	return NewOrderRouterWithClient(cfg, marketplace, resolver)
+}
+
+// NewOrderRouterWithClient creates a router with an injected marketplace client.
+func NewOrderRouterWithClient(cfg OrderRoutingConfig, marketplace WaldurMarketplace, resolver WaldurOfferingResolver) (*OrderRouter, error) {
+	if cfg.WaldurProjectID == "" {
+		return nil, fmt.Errorf("waldur project ID is required")
+	}
+	if cfg.QueueSize <= 0 {
+		cfg.QueueSize = 256
+	}
+	if cfg.WorkerCount <= 0 {
+		cfg.WorkerCount = 4
+	}
+	if cfg.RetryBackoff <= 0 {
+		cfg.RetryBackoff = 5 * time.Second
+	}
+	if cfg.MaxBackoff <= 0 {
+		cfg.MaxBackoff = 5 * time.Minute
+	}
+	if cfg.StateFile == "" {
+		cfg.StateFile = "data/waldur_order_state.json"
+	}
+	if marketplace == nil {
+		return nil, fmt.Errorf("waldur marketplace client is required")
+	}
+
+	store, err := NewWaldurOrderStore(cfg.StateFile)
+	if err != nil {
+		return nil, err
+	}
+	state, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
 
 	if resolver == nil {
 		resolver = &MapOfferingResolver{Map: cfg.OfferingMap, Marketplace: marketplace}
