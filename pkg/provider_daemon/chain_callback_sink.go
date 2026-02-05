@@ -179,10 +179,10 @@ func (s *ChainCallbackSink) Submit(ctx context.Context, callback *marketplacetyp
 		return fmt.Errorf("callback signer mismatch: %s != %s", callback.SignerID, s.sender)
 	}
 
-	// Serialize payload to JSON string
-	payloadBytes, err := json.Marshal(callback.Payload)
+	// Serialize full callback to JSON so the chain can validate fields.
+	payloadBytes, err := json.Marshal(callback)
 	if err != nil {
-		return fmt.Errorf("marshal callback payload: %w", err)
+		return fmt.Errorf("marshal callback: %w", err)
 	}
 
 	msg := marketplacetypes.NewMsgWaldurCallback(

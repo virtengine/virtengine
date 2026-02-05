@@ -270,6 +270,10 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Content-Type", "application/json")
 	//nolint:errchkjson // HTTP response - error is logged server-side if encoding fails
 	_ = json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Printf("[portal-api] shell session encode error: %v\n", err)
+	}
 }
 
 func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {

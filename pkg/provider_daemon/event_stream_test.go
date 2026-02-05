@@ -97,7 +97,7 @@ func (m *MockEventSubscriber) SendConfigEvent(event ConfigEvent) {
 
 func TestNewBidEngineWithStreaming(t *testing.T) {
 	config := DefaultBidEngineConfig()
-	config.ProviderAddress = "provider1"
+	config.ProviderAddress = testProvider1
 
 	km := createUnlockedKeyManager(t)
 	mockClient := NewMockChainClient()
@@ -111,7 +111,7 @@ func TestNewBidEngineWithStreaming(t *testing.T) {
 
 func TestBidEngineStreamingModeNilSubscriber(t *testing.T) {
 	config := DefaultBidEngineConfig()
-	config.ProviderAddress = "provider1"
+	config.ProviderAddress = testProvider1
 
 	km := createUnlockedKeyManager(t)
 	mockClient := NewMockChainClient()
@@ -232,7 +232,7 @@ func TestParseConfigFromEvent(t *testing.T) {
 	event := MarketplaceEvent{
 		Type: EventTypeConfigUpdated,
 		Data: map[string]interface{}{
-			"provider_address": "provider1",
+			"provider_address": testProvider1,
 			"active":           true,
 			"version":          float64(5),
 			"pricing": map[string]interface{}{
@@ -255,7 +255,7 @@ func TestParseConfigFromEvent(t *testing.T) {
 	}
 
 	config := parseConfigFromEvent(event)
-	assert.Equal(t, "provider1", config.ProviderAddress)
+	assert.Equal(t, testProvider1, config.ProviderAddress)
 	assert.True(t, config.Active)
 	assert.Equal(t, uint64(5), config.Version)
 	assert.Equal(t, "2.5", config.Pricing.CPUPricePerCore)
@@ -282,9 +282,9 @@ func TestBuildOrderQuery(t *testing.T) {
 }
 
 func TestBuildConfigQuery(t *testing.T) {
-	query := buildConfigQuery("provider1")
+	query := buildConfigQuery(testProvider1)
 	assert.Contains(t, query, "tm.event='Tx'")
-	assert.Contains(t, query, "provider1")
+	assert.Contains(t, query, testProvider1)
 	assert.Contains(t, query, "provider_config")
 }
 

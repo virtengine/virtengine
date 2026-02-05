@@ -2,13 +2,24 @@
 
 ## CRITICAL
 
-ALWAYS Take down a task and break it down into parallel chunks, use SUBAGENTS to implement these chunks and work on tasks longer than you think are needed to accomodate edge case scenarios, testing, ensuring it works, implementing connecting logic and ensuring high quality of standards.
+Always work on tasks longer than you think are needed to accomodate edge case scenarios, testing, ensuring it works, implementing connecting logic and ensuring high quality of standards.
 
 ALWAYS Ensure tests pass, build is clear with 0 warnings before deciding a task is fully completed and ready for merge. This is non negotiable.
 
 When working on a task, do not stop until it is COMPLETELY done. Continue working on this task until it is 100% DONE END-TO-END with no questions asked.
 
-Before finishing a task - ensure that you create a commit based on following convention & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
+Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
+
+Ensure that there are no CI/CD errors after pushing, if needed continue monitoring your push for errors and fix them if identified.
+
+You should have all commands as needed available in shell, for example go, pip, npm, git, etc. Consider increasing time outs when runninig long running commands such as git push, go test when running large test packages, etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks..
+
+## Pre-commit automation (do this every time)
+
+- Go formatting and linting are enforced before commit. The pre-commit hook auto-runs `gofmt` on staged `.go` files and runs `golangci-lint` on the staged Go packages.
+- Portal frontend formatting is enforced before commit. If you modify `portal/` TypeScript/JS/CSS/JSON/MD files, ensure `portal/node_modules` exists (run `pnpm -C portal install` once) so the pre-commit hook can run Prettier and auto-add formatted files to the commit.
+- SDK TypeScript formatting/linting is enforced before commit. If you modify `sdk/ts` files, ensure `sdk/ts/node_modules` exists (run `pnpm -C sdk/ts install` once) so `lint-staged` can auto-fix and stage changes.
+- If you need to bypass a check for an emergency, use the documented `VE_HOOK_SKIP_*` env vars, but do not bypass for normal work.
 
 Commit files:
 

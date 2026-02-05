@@ -18,8 +18,10 @@ const (
 	flagRegion    = "region"
 	flagStatus    = "status"
 	flagSubmitter = "customer"
+	flagOwnerAddr = "owner"
 	flagClusterID = "cluster-id"
 	flagProvider  = "provider"
+	flagQueueName = "queue"
 )
 
 // GetQueryCmd returns the root query command for the HPC module.
@@ -38,8 +40,18 @@ func GetQueryCmd() *cobra.Command {
 		NewCmdQueryClusters(),
 		NewCmdQueryJob(),
 		NewCmdQueryJobs(),
+		NewCmdQueryJobLogs(),
+		NewCmdQueryJobResult(),
 		NewCmdQueryPool(),
 		NewCmdQueryPools(),
+		NewCmdQueryQueues(),
+		NewCmdQueryQueue(),
+		NewCmdQueryQueuePosition(),
+		NewCmdQueryProviders(),
+		NewCmdQueryResources(),
+		NewCmdQueryPricing(),
+		NewCmdQueryStats(),
+		NewCmdQueryUsage(),
 		NewCmdQueryNode(),
 		NewCmdQueryNodes(),
 		NewCmdQueryRewards(),
@@ -183,122 +195,6 @@ func NewCmdQueryClusters() *cobra.Command {
 	cmd.Flags().Bool(flagActive, false, "Filter for active clusters")
 	cmd.Flags().Bool(flagInactive, false, "Filter for inactive clusters")
 	flags.AddPaginationFlagsToCmd(cmd, "clusters")
-	flags.AddQueryFlagsToCmd(cmd)
-	return cmd
-}
-
-// NewCmdQueryJob queries a job by ID.
-func NewCmdQueryJob() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "job [job-id]",
-		Args:  cobra.ExactArgs(1),
-		Short: "Query an HPC job by ID",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			clientCtx, err := client.GetClientQueryContext(cmd)
-			if err != nil {
-				return err
-			}
-
-			queryClient := hpctypes.NewQueryClient(clientCtx)
-			resp, err := queryClient.Job(cmd.Context(), &hpctypes.QueryJobRequest{
-				JobId: args[0],
-			})
-			if err != nil {
-				return err
-			}
-
-			return clientCtx.PrintProto(resp)
-		},
-	}
-
-	flags.AddQueryFlagsToCmd(cmd)
-	return cmd
-}
-
-// NewCmdQueryJobs lists jobs with optional filters.
-func NewCmdQueryJobs() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "jobs",
-		Args:  cobra.NoArgs,
-		Short: "List HPC jobs",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			clientCtx, err := client.GetClientQueryContext(cmd)
-			if err != nil {
-				return err
-			}
-
-			pageReq, err := client.ReadPageRequest(cmd.Flags())
-			if err != nil {
-				return err
-			}
-
-			customer, err := cmd.Flags().GetString(flagSubmitter)
-			if err != nil {
-				return err
-			}
-			status, err := cmd.Flags().GetString(flagStatus)
-			if err != nil {
-				return err
-			}
-
-			queryClient := hpctypes.NewQueryClient(clientCtx)
-
-			var stateFilter *hpctypes.JobState
-			if status != "" {
-				parsedState, ok := parseJobStateFilter(status)
-				if !ok {
-					return fmt.Errorf("invalid job status: %s", status)
-				}
-				stateFilter = &parsedState
-			}
-
-			if customer == "" && status == "" {
-				resp, err := queryClient.Jobs(cmd.Context(), &hpctypes.QueryJobsRequest{
-					Pagination: pageReq,
-				})
-				if err != nil {
-					return err
-				}
-				return clientCtx.PrintProto(resp)
-			}
-
-			if len(pageReq.Key) > 0 {
-				return fmt.Errorf("page-key pagination is not supported with filters")
-			}
-
-			var jobs []hpctypes.HPCJob
-			if customer != "" {
-				resp, err := queryClient.JobsByCustomer(cmd.Context(), &hpctypes.QueryJobsByCustomerRequest{
-					CustomerAddress: customer,
-					Pagination:      pageReq,
-				})
-				if err != nil {
-					return err
-				}
-				jobs = resp.Jobs
-			} else {
-				resp, err := queryClient.Jobs(cmd.Context(), &hpctypes.QueryJobsRequest{
-					Pagination: nil,
-				})
-				if err != nil {
-					return err
-				}
-				jobs = resp.Jobs
-			}
-
-			filtered := filterJobs(jobs, stateFilter)
-			pageJobs, pageResp := paginateSlice(filtered, pageReq)
-
-			return clientCtx.PrintProto(&hpctypes.QueryJobsResponse{
-				Jobs:       pageJobs,
-				Pagination: pageResp,
-			})
-		},
-	}
-
-	cmd.Flags().String(flagSubmitter, "", "Filter jobs by customer address")
-	cmd.Flags().String(flagStatus, "", "Filter jobs by status")
-	flags.AddPaginationFlagsToCmd(cmd, "jobs")
 	flags.AddQueryFlagsToCmd(cmd)
 	return cmd
 }

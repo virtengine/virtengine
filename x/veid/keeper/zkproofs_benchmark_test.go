@@ -33,7 +33,7 @@ func BenchmarkAgeProofGeneration(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := k.CreateAgeProof(ctx, subjectAddr, 18, 24*time.Hour)
+		_, err := k.CreateAgeProof(ctx, subjectAddr, 18, 24*time.Hour, nil)
 		if err != nil {
 			b.Fatalf("failed to create age proof: %v", err)
 		}
@@ -50,7 +50,7 @@ func BenchmarkResidencyProofGeneration(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := k.CreateResidencyProof(ctx, subjectAddr, "US", 24*time.Hour)
+		_, err := k.CreateResidencyProof(ctx, subjectAddr, "US", 24*time.Hour, nil)
 		if err != nil {
 			b.Fatalf("failed to create residency proof: %v", err)
 		}
@@ -71,7 +71,7 @@ func BenchmarkScoreThresholdProofGeneration(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := k.CreateScoreThresholdProof(ctx, subjectAddr, 50, 24*time.Hour)
+		_, err := k.CreateScoreThresholdProof(ctx, subjectAddr, 50, 24*time.Hour, nil)
 		if err != nil {
 			b.Fatalf("failed to create score threshold proof: %v", err)
 		}
@@ -97,6 +97,7 @@ func BenchmarkSelectiveDisclosureProofGeneration(b *testing.B) {
 		"benchmark test",
 		24*time.Hour,
 		24*time.Hour,
+		nil,
 	)
 	if err != nil {
 		b.Fatalf("failed to create request: %v", err)
@@ -115,6 +116,7 @@ func BenchmarkSelectiveDisclosureProofGeneration(b *testing.B) {
 			request,
 			disclosedClaims,
 			types.ProofSchemeSNARK,
+			nil,
 		)
 		if err != nil {
 			b.Fatalf("failed to generate selective disclosure proof: %v", err)
@@ -142,6 +144,7 @@ func BenchmarkProofVerification(b *testing.B) {
 		"benchmark test",
 		24*time.Hour,
 		24*time.Hour,
+		nil,
 	)
 	if err != nil {
 		b.Fatalf("failed to create request: %v", err)
@@ -157,6 +160,7 @@ func BenchmarkProofVerification(b *testing.B) {
 		request,
 		disclosedClaims,
 		types.ProofSchemeSNARK,
+		nil,
 	)
 	if err != nil {
 		b.Fatalf("failed to generate proof: %v", err)

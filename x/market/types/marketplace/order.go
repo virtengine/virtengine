@@ -8,6 +8,7 @@ package marketplace
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
 	"time"
 
 	encryptiontypes "github.com/virtengine/virtengine/x/encryption/types"
@@ -72,6 +73,34 @@ func (s OrderState) String() string {
 		return name
 	}
 	return fmt.Sprintf("unknown(%d)", s)
+}
+
+// ParseOrderState parses an order state from string value.
+func ParseOrderState(value string) OrderState {
+	switch strings.ToLower(value) {
+	case "pending_payment":
+		return OrderStatePendingPayment
+	case "open":
+		return OrderStateOpen
+	case "matched":
+		return OrderStateMatched
+	case "provisioning":
+		return OrderStateProvisioning
+	case "active":
+		return OrderStateActive
+	case "suspended":
+		return OrderStateSuspended
+	case "pending_termination":
+		return OrderStatePendingTermination
+	case "terminated":
+		return OrderStateTerminated
+	case "failed":
+		return OrderStateFailed
+	case "cancelled", "canceled":
+		return OrderStateCancelled
+	default:
+		return OrderStateUnspecified
+	}
 }
 
 // IsValid returns true if the order state is valid
