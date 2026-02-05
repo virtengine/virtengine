@@ -112,8 +112,9 @@ func (s *PrivacyProofsTestSuite) setupVerifiedIdentity(level int) {
 	s.Require().NoError(err)
 }
 
-func (s *PrivacyProofsTestSuite) setupVerifiedIdentityWithScore(level int, score uint32) {
-	s.setupVerifiedIdentity(level)
+func (s *PrivacyProofsTestSuite) setupVerifiedIdentityWithScore(score uint32) {
+	// All score-based proofs require the highest verification tier; set it directly.
+	s.setupVerifiedIdentity(2)
 	// Use SetScore to store score in the score store (separate from IdentityRecord)
 	err := s.keeper.SetScore(s.ctx, s.subjectAddr.String(), score, "v1.0.0")
 	s.Require().NoError(err)
@@ -775,7 +776,7 @@ func (s *PrivacyProofsTestSuite) TestCreateResidencyProof_InsufficientVerificati
 
 func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_Success() {
 	// Setup verified identity with score
-	s.setupVerifiedIdentityWithScore(2, 85)
+	s.setupVerifiedIdentityWithScore(85)
 
 	proof, err := s.keeper.CreateScoreThresholdProof(
 		s.ctx,
@@ -798,7 +799,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_Success() {
 }
 
 func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_UsesInjectedRandomness() {
-	s.setupVerifiedIdentityWithScore(2, 85)
+	s.setupVerifiedIdentityWithScore(85)
 	scoreSalt := bytes.Repeat([]byte{0x11}, 32)
 	nonce := bytes.Repeat([]byte{0x22}, 32)
 	randomness := &keeper.RandomnessInputs{
@@ -824,7 +825,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_UsesInjectedRando
 
 func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_BelowThreshold() {
 	// Setup verified identity with lower score
-	s.setupVerifiedIdentityWithScore(2, 50)
+	s.setupVerifiedIdentityWithScore(50)
 
 	proof, err := s.keeper.CreateScoreThresholdProof(
 		s.ctx,
@@ -856,7 +857,7 @@ func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_NoScore() {
 }
 
 func (s *PrivacyProofsTestSuite) TestCreateScoreThresholdProof_InvalidThreshold() {
-	s.setupVerifiedIdentityWithScore(2, 85)
+	s.setupVerifiedIdentityWithScore(85)
 
 	// Test zero threshold
 	_, err := s.keeper.CreateScoreThresholdProof(
