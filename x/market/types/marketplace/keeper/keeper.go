@@ -8,6 +8,7 @@ package keeper
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	sdkmath "cosmossdk.io/math"
@@ -1014,10 +1015,154 @@ func (k Keeper) ProcessWaldurCallback(ctx sdk.Context, callback *marketplace.Wal
 		return k.processProvisionCallback(ctx, callback)
 	case marketplace.ActionTypeTerminate:
 		return k.processTerminateCallback(ctx, callback)
+	case marketplace.ActionTypeStatusUpdate:
+		return k.processOrderStatusCallback(ctx, callback)
 	default:
 		// Other action types can be added here
 		return nil
 	}
+}
+
+// processOrderStatusCallback updates order state based on Waldur order status.
+func (k Keeper) processOrderStatusCallback(ctx sdk.Context, callback *marketplace.WaldurCallback) error {
+	if callback.ChainEntityType != marketplace.SyncTypeOrder {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("unexpected entity type: %s", callback.ChainEntityType)
+	}
+
+	orderID, err := marketplace.ParseOrderID(callback.ChainEntityID)
+	if err != nil {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap(err.Error())
+	}
+
+	order, found := k.GetOrder(ctx, orderID)
+	if !found {
+		return marketplace.ErrOrderNotFound.Wrapf("order %s not found", callback.ChainEntityID)
+	}
+
+	stateStr := callback.Payload["state"]
+	if stateStr == "" {
+		return marketplace.ErrWaldurCallbackInvalid.Wrap("missing state in callback payload")
+	}
+
+	targetState, ok := parseOrderState(stateStr)
+	if !ok {
+		return marketplace.ErrWaldurCallbackInvalid.Wrapf("unknown order state: %s", stateStr)
+	}
+
+	oldState := order.State
+	if oldState == targetState {
+		return nil
+	}
+
+	reason := callback.Payload["reason"]
+	if reason == "" {
+		reason = "waldur status update"
+	}
+
+	if err := applyOrderStateTransition(order, targetState, reason, ctx.BlockTime()); err != nil {
+		return marketplace.ErrInvalidStateTransition.Wrap(err.Error())
+	}
+
+	if err := k.UpdateOrder(ctx, order); err != nil {
+		return err
+	}
+
+	seq := k.IncrementEventSequence(ctx)
+	event := marketplace.NewOrderStateChangedEventAt(order, oldState, reason, ctx.BlockHeight(), seq, ctx.BlockTime())
+	return k.EmitMarketplaceEvent(ctx, event)
+}
+
+func parseOrderState(state string) (marketplace.OrderState, bool) {
+	switch strings.ToLower(state) {
+	case "pending_payment", "pending-payment", "pendingpayment":
+		return marketplace.OrderStatePendingPayment, true
+	case "open":
+		return marketplace.OrderStateOpen, true
+	case "matched":
+		return marketplace.OrderStateMatched, true
+	case "provisioning":
+		return marketplace.OrderStateProvisioning, true
+	case "active":
+		return marketplace.OrderStateActive, true
+	case "suspended":
+		return marketplace.OrderStateSuspended, true
+	case "pending_termination", "pending-termination":
+		return marketplace.OrderStatePendingTermination, true
+	case "terminated":
+		return marketplace.OrderStateTerminated, true
+	case "failed":
+		return marketplace.OrderStateFailed, true
+	case "cancelled", "canceled":
+		return marketplace.OrderStateCancelled, true
+	default:
+		return marketplace.OrderStateUnspecified, false
+	}
+}
+
+// applyOrderStateTransition moves an order to the target state using valid transitions.
+func applyOrderStateTransition(order *marketplace.Order, target marketplace.OrderState, reason string, now time.Time) error {
+	if order == nil {
+		return fmt.Errorf("order is nil")
+	}
+
+	if order.State == target {
+		return nil
+	}
+
+	transitionPath := []marketplace.OrderState{}
+	switch target {
+	case marketplace.OrderStateMatched:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched}
+	case marketplace.OrderStateProvisioning:
+		if order.State == marketplace.OrderStateOpen {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateProvisioning}
+		} else {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateProvisioning}
+		}
+	case marketplace.OrderStateActive:
+		if order.State == marketplace.OrderStateOpen {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateProvisioning, marketplace.OrderStateActive}
+		} else if order.State == marketplace.OrderStateMatched {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateProvisioning, marketplace.OrderStateActive}
+		} else {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateActive}
+		}
+	case marketplace.OrderStateFailed:
+		if order.State == marketplace.OrderStateOpen {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateMatched, marketplace.OrderStateFailed}
+		} else if order.State == marketplace.OrderStateMatched {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateFailed}
+		} else if order.State == marketplace.OrderStateProvisioning || order.State == marketplace.OrderStatePendingTermination {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateFailed}
+		}
+	case marketplace.OrderStateTerminated:
+		if order.State == marketplace.OrderStateActive || order.State == marketplace.OrderStateSuspended {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStatePendingTermination, marketplace.OrderStateTerminated}
+		} else if order.State == marketplace.OrderStatePendingTermination {
+			transitionPath = []marketplace.OrderState{marketplace.OrderStateTerminated}
+		}
+	case marketplace.OrderStatePendingTermination:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStatePendingTermination}
+	case marketplace.OrderStateSuspended:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStateSuspended}
+	case marketplace.OrderStateCancelled:
+		transitionPath = []marketplace.OrderState{marketplace.OrderStateCancelled}
+	default:
+		transitionPath = []marketplace.OrderState{target}
+	}
+
+	for _, next := range transitionPath {
+		if order.State == next {
+			continue
+		}
+		if !order.State.CanTransitionTo(next) {
+			return fmt.Errorf("invalid transition %s -> %s", order.State.String(), next.String())
+		}
+		if err := order.SetStateAt(next, reason, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // processProvisionCallback handles provision callbacks
