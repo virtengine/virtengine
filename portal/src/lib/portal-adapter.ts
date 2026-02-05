@@ -50,7 +50,7 @@ export type {
   WalletConnectionStatus,
   WalletChainInfo,
   WalletAccount,
-  WalletError,
+  WalletErrorType as WalletError,
   WalletState,
   WalletSignOptions,
   AminoSignDoc,
@@ -65,6 +65,10 @@ export {
   WalletAccountDisplay,
   WalletNetworkBadge,
   WalletModal,
+  WalletIcon,
+  WalletSkeleton,
+  AccountSelector,
+  TransactionModal,
 } from '../../../lib/portal';
 export type {
   WalletButtonProps,
@@ -72,6 +76,59 @@ export type {
   WalletNetworkBadgeProps,
   WalletModalProps,
   WalletOption,
+  WalletIconProps,
+  WalletSkeletonProps,
+  AccountSelectorProps,
+  TransactionModalProps,
+} from '../../../lib/portal';
+
+// ============================================================================
+// Wallet Utilities (Enhanced)
+// ============================================================================
+
+export {
+  // Error handling
+  WalletErrorClass,
+  WalletErrorCode,
+  WALLET_ERROR_MESSAGES,
+  createWalletError,
+  isWalletError,
+  getErrorMessage,
+  getSuggestedAction,
+  parseWalletError,
+  isRetryableError,
+  withWalletTimeout,
+  wrapWithWalletError,
+  // Session management
+  WalletSessionManager,
+  walletSessionManager,
+  createSessionManager,
+  // Wallet detection
+  WalletDetector,
+  walletDetector,
+  WalletPriority,
+  // Transaction utilities
+  GAS_TIERS,
+  DEFAULT_GAS_ADJUSTMENT,
+  DEFAULT_GAS_LIMIT,
+  estimateGas,
+  calculateFee,
+  adjustGas,
+  formatFeeAmount,
+  createTransactionPreview,
+  validateTransaction,
+  createDefaultGasSettings,
+} from '../../../lib/portal';
+export type {
+  WalletSession,
+  WalletSessionConfig,
+  WalletDetectionResult,
+  GasTier,
+  GasSettings,
+  FeeEstimate,
+  TransactionPreview,
+  TransactionOptions,
+  TransactionValidationResult,
 } from '../../../lib/portal';
 
 // ============================================================================
