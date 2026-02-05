@@ -92,9 +92,9 @@ func TestQueuePositionForJob(t *testing.T) {
 
 	resp, err := queuePositionForJob(job2, []hpctypes.HPCJob{job4, job3, job2, job1})
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), resp.Position)
-	require.Equal(t, uint64(1), resp.Ahead)
-	require.Equal(t, uint64(3), resp.TotalInQueue)
+	require.Equal(t, int64(2), resp.Position)
+	require.Equal(t, int64(1), resp.Ahead)
+	require.Equal(t, int64(3), resp.TotalInQueue)
 	require.Equal(t, "main", resp.QueueName)
 }
 

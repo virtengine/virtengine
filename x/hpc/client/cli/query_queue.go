@@ -374,9 +374,9 @@ type QueuePositionResponse struct {
 	QueueName    string            `json:"queue_name" yaml:"queue_name"`
 	ClusterId    string            `json:"cluster_id" yaml:"cluster_id"`
 	State        hpctypes.JobState `json:"state" yaml:"state"`
-	Position     uint64            `json:"position" yaml:"position"`
-	Ahead        uint64            `json:"ahead" yaml:"ahead"`
-	TotalInQueue uint64            `json:"total_in_queue" yaml:"total_in_queue"`
+	Position     int64             `json:"position" yaml:"position"`
+	Ahead        int64             `json:"ahead" yaml:"ahead"`
+	TotalInQueue int64             `json:"total_in_queue" yaml:"total_in_queue"`
 	QueuedAt     *time.Time        `json:"queued_at,omitempty" yaml:"queued_at,omitempty"`
 }
 
@@ -487,7 +487,11 @@ func fetchClustersForResources(cmd *cobra.Command, queryClient hpctypes.QueryCli
 }
 
 func buildQueueInfos(offerings []hpctypes.HPCOffering) []QueueInfo {
-	queues := make([]QueueInfo, 0)
+	queueCount := 0
+	for _, offering := range offerings {
+		queueCount += len(offering.QueueOptions)
+	}
+	queues := make([]QueueInfo, 0, queueCount)
 	for _, offering := range offerings {
 		for _, queue := range offering.QueueOptions {
 			queues = append(queues, QueueInfo{
@@ -552,9 +556,9 @@ func queuePositionForJob(job hpctypes.HPCJob, jobs []hpctypes.HPCJob) (QueuePosi
 		QueueName:    job.QueueName,
 		ClusterId:    job.ClusterId,
 		State:        job.State,
-		Position:     uint64(position + 1),
-		Ahead:        uint64(position),
-		TotalInQueue: uint64(len(candidates)),
+		Position:     int64(position + 1),
+		Ahead:        int64(position),
+		TotalInQueue: int64(len(candidates)),
 		QueuedAt:     job.QueuedAt,
 	}, nil
 }
