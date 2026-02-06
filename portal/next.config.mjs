@@ -4,23 +4,25 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
+const isPages = process.env.GITHUB_PAGES === 'true';
+
 const nextConfig = {
   reactStrictMode: true,
-  
+
   // Enable static export for GitHub Pages deployment
-  output: process.env.GITHUB_PAGES === 'true' ? 'export' : undefined,
-  
+  output: isPages ? 'export' : undefined,
+
   // Use trailing slashes for better GitHub Pages compatibility
-  trailingSlash: process.env.GITHUB_PAGES === 'true' ? true : false,
-  
+  trailingSlash: isPages,
+
   // Base path for GitHub Pages (repo name)
-  basePath: process.env.GITHUB_PAGES === 'true' ? '/virtengine' : '',
-  
+  basePath: isPages ? '/virtengine' : '',
+
   // Asset prefix for GitHub Pages (same as basePath, no trailing slash)
-  assetPrefix: process.env.GITHUB_PAGES === 'true' ? '/virtengine' : '',
-  
+  assetPrefix: isPages ? '/virtengine' : '',
+
   // Disable image optimization for static export
-  images: process.env.GITHUB_PAGES === 'true' 
+  images: isPages
     ? { unoptimized: true }
     : {
         remotePatterns: [
@@ -34,11 +36,8 @@ const nextConfig = {
           },
         ],
       },
-  
-  transpilePackages: [
-    'virtengine-portal-lib',
-    'virtengine-capture-lib',
-  ],
+
+  transpilePackages: ['virtengine-portal-lib', 'virtengine-capture-lib'],
 
   experimental: {
     // typedRoutes: true, // Re-enable when all routes are complete
@@ -61,6 +60,9 @@ const nextConfig = {
   },
 
   headers: async () => {
+    if (isPages) {
+      return [];
+    }
     return [
       {
         source: '/:path*',

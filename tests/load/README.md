@@ -15,6 +15,9 @@ This directory contains load testing scenarios for the VirtEngine blockchain pla
 ```
 tests/load/
 ├── k6/                    # k6 JavaScript load tests
+│   ├── identity_burst.js
+│   ├── marketplace_burst.js
+│   └── hpc_burst.js
 ├── scale/                 # SCALE-001: Production scale tests (1M validators)
 │   ├── validator_scale_test.go
 │   ├── marketplace_scale_test.go
