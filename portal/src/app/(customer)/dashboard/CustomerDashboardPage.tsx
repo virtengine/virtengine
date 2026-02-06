@@ -82,7 +82,7 @@ export function CustomerDashboardPage() {
   const unreadCount = useCustomerDashboardStore(selectUnreadNotificationCount);
 
   useEffect(() => {
-    fetchDashboard();
+    void fetchDashboard();
   }, [fetchDashboard]);
 
   if (error) {
