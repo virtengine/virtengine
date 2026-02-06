@@ -185,10 +185,10 @@ resource "helm_release" "prometheus_stack" {
               ]
             },
             {
-              name            = "pagerduty"
+              name = "pagerduty"
               pagerduty_configs = var.pagerduty_service_key != "" ? [
                 {
-                  service_key = var.pagerduty_service_key
+                  service_key   = var.pagerduty_service_key
                   send_resolved = true
                 }
               ] : []
