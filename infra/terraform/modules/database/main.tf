@@ -200,10 +200,10 @@ resource "helm_release" "cockroachdb" {
       }
 
       conf = {
-        locality    = "region=${var.region}"
-        single-node = false
-        join        = var.join_addresses
-        cache       = var.cache_size
+        locality       = "region=${var.region}"
+        single-node    = false
+        join           = var.join_addresses
+        cache          = var.cache_size
         max-sql-memory = var.max_sql_memory
       }
 

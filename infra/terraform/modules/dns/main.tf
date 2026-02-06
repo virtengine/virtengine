@@ -46,12 +46,12 @@ resource "aws_route53_health_check" "regional" {
   for_each = var.regional_endpoints
 
   fqdn              = each.value.health_check_fqdn
-  port               = each.value.health_check_port
-  type               = "HTTPS"
-  resource_path      = each.value.health_check_path
-  failure_threshold  = 3
-  request_interval   = 10
-  measure_latency    = true
+  port              = each.value.health_check_port
+  type              = "HTTPS"
+  resource_path     = each.value.health_check_path
+  failure_threshold = 3
+  request_interval  = 10
+  measure_latency   = true
 
   tags = merge(local.tags, {
     Name   = "virtengine-${each.key}-health"
