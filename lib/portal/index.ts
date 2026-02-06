@@ -171,6 +171,10 @@ export type {
   MFAChallenge,
   MFAChallengeType,
   MFAChallengeResponse,
+  MFAAuditEntry,
+  MFAError,
+  MFAErrorCode,
+  SensitiveTransactionType,
 } from "./types/mfa";
 
 export { MFAEnrollmentWizard } from "./components/mfa/MFAEnrollmentWizard";

@@ -23,6 +23,8 @@ export function Sidebar({ variant }: SidebarProps) {
     { name: 'Offerings', href: '/provider/offerings', icon: '📦' },
     { name: 'Orders', href: '/provider/orders', icon: '📋' },
     { name: 'Pricing', href: '/provider/pricing', icon: '💰' },
+    { name: 'Allocations', href: '/provider/dashboard?tab=allocations', icon: '🖥️' },
+    { name: 'Revenue', href: '/provider/dashboard?tab=revenue', icon: '📈' },
   ];
 
   const links = variant === 'provider' ? providerLinks : customerLinks;

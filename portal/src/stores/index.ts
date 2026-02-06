@@ -29,3 +29,12 @@ export {
   type OfferingStoreState,
   type OfferingStoreActions,
 } from './offeringStore';
+export {
+  useProviderStore,
+  selectFilteredAllocations,
+  selectActiveAllocations,
+  selectTotalMonthlyRevenue,
+  type ProviderStore,
+  type ProviderStoreState,
+  type ProviderStoreActions,
+} from './providerStore';
