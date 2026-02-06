@@ -1071,7 +1071,15 @@ func NewMockAuditLoggerE2E() *MockAuditLoggerE2E {
 	}
 }
 
-func (m *MockAuditLoggerE2E) LogEvent(event pd.HPCAuditEvent) {
+func (m *MockAuditLoggerE2E) LogJobEvent(event pd.HPCAuditEvent) {
+	m.events = append(m.events, event)
+}
+
+func (m *MockAuditLoggerE2E) LogSecurityEvent(event pd.HPCAuditEvent) {
+	m.events = append(m.events, event)
+}
+
+func (m *MockAuditLoggerE2E) LogUsageReport(event pd.HPCAuditEvent) {
 	m.events = append(m.events, event)
 }
 

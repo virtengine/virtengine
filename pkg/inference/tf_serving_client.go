@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // TFServingConfig configures the TensorFlow Serving client.
@@ -63,9 +65,7 @@ func NewTFServingClient(config TFServingConfig) (*TFServingClient, error) {
 		outputName:    strings.TrimSpace(config.OutputName),
 		signatureName: strings.TrimSpace(config.SignatureName),
 		healthPath:    strings.TrimSpace(config.HealthPath),
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		httpClient:    security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 	}, nil
 }
 

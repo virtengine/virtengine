@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -176,11 +178,9 @@ func NewOpenAIBackend(config *OpenAIConfig) (*OpenAIBackend, error) {
 	timeout := defaultOpenAITimeout
 
 	return &OpenAIBackend{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
-		baseURL: baseURL,
+		config:     config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(timeout)),
+		baseURL:    baseURL,
 	}, nil
 }
 

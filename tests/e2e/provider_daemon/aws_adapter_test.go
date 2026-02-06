@@ -91,21 +91,21 @@ func (m *mockEC2Client) DescribeKeyPairs(_ context.Context, _ []string) ([]pd.EC
 	return []pd.EC2KeyPairInfo{}, nil
 }
 func (m *mockEC2Client) CreateKeyPair(_ context.Context, keyName string) (*pd.EC2KeyPairInfo, error) {
-	return &pd.EC2KeyPairInfo{Name: keyName}, nil
+	return &pd.EC2KeyPairInfo{KeyName: keyName}, nil
 }
 func (m *mockEC2Client) DeleteKeyPair(_ context.Context, _ string) error { return nil }
 func (m *mockEC2Client) ImportKeyPair(_ context.Context, keyName, _ string) (*pd.EC2KeyPairInfo, error) {
-	return &pd.EC2KeyPairInfo{Name: keyName}, nil
+	return &pd.EC2KeyPairInfo{KeyName: keyName}, nil
 }
 func (m *mockEC2Client) CreateTags(_ context.Context, _ []string, _ map[string]string) error {
 	return nil
 }
 func (m *mockEC2Client) DeleteTags(_ context.Context, _ []string, _ []string) error { return nil }
 func (m *mockEC2Client) DescribeRegions(_ context.Context) ([]pd.EC2RegionInfo, error) {
-	return []pd.EC2RegionInfo{{Name: string(pd.RegionUSEast1)}}, nil
+	return []pd.EC2RegionInfo{{RegionName: string(pd.RegionUSEast1)}}, nil
 }
 func (m *mockEC2Client) DescribeAvailabilityZones(_ context.Context) ([]pd.EC2AvailabilityZoneInfo, error) {
-	return []pd.EC2AvailabilityZoneInfo{{Name: "us-east-1a"}}, nil
+	return []pd.EC2AvailabilityZoneInfo{{ZoneName: "us-east-1a"}}, nil
 }
 
 type mockVPCClient struct{}
@@ -187,7 +187,7 @@ func (m *mockVPCClient) DescribeAddresses(_ context.Context, _ []string) ([]pd.E
 type mockEBSClient struct{}
 
 func (m *mockEBSClient) CreateVolume(_ context.Context, spec *pd.EBSVolumeCreateSpec) (*pd.EBSVolumeInfo, error) {
-	return &pd.EBSVolumeInfo{VolumeID: "vol-1", SizeGB: spec.Size}, nil
+	return &pd.EBSVolumeInfo{VolumeID: "vol-1", Size: spec.Size}, nil
 }
 func (m *mockEBSClient) GetVolume(_ context.Context, _ string) (*pd.EBSVolumeInfo, error) {
 	return &pd.EBSVolumeInfo{VolumeID: "vol-1", State: pd.EBSStateAvailable}, nil

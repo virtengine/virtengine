@@ -14,6 +14,7 @@ import (
 	"time"
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -37,10 +38,8 @@ type metadataService struct {
 // newMetadataService creates a new metadata service
 func newMetadataService(config Config) MetadataService {
 	return &metadataService{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		config:     config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 	}
 }
 

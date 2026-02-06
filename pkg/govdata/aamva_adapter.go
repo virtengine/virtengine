@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -302,9 +304,7 @@ func NewAAMVADMVAdapter(baseConfig AdapterConfig, aamvaConfig AAMVAConfig) (*AAM
 	adapter := &AAMVADMVAdapter{
 		baseAdapter: newBaseAdapter(baseConfig),
 		config:      aamvaConfig,
-		httpClient: &http.Client{
-			Timeout: aamvaConfig.Timeout,
-		},
+		httpClient:  security.NewSecureHTTPClient(security.WithTimeout(aamvaConfig.Timeout)),
 		windowStart: time.Now(),
 	}
 

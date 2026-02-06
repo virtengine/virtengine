@@ -38,6 +38,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // =============================================================================
@@ -270,9 +272,7 @@ func NewKDSClient(config *Config) *KDSClient {
 
 	client := config.HTTPClient
 	if client == nil {
-		client = &http.Client{
-			Timeout: config.RequestTimeout,
-		}
+		client = security.NewSecureHTTPClient(security.WithTimeout(config.RequestTimeout))
 	}
 
 	return &KDSClient{

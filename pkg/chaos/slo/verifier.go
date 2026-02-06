@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/chaos"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // Verifier implements the chaos.SLOVerifier interface for verifying
@@ -59,9 +60,7 @@ func WithTolerance(tolerance float64) VerifierOption {
 // NewVerifier creates a new SLO verifier with the given options.
 func NewVerifier(opts ...VerifierOption) *Verifier {
 	v := &Verifier{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		httpClient:    security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		prometheusURL: "http://localhost:9090",
 		tolerance:     0.05, // 5% default tolerance
 	}

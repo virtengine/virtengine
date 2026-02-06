@@ -19,6 +19,7 @@ import (
 	"github.com/stripe/stripe-go/v80/paymentmethod"
 	"github.com/stripe/stripe-go/v80/refund"
 	"github.com/stripe/stripe-go/v80/webhook"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -64,7 +65,7 @@ func NewRealStripeAdapter(config StripeConfig) (Gateway, error) {
 
 	return &StripeAdapter{
 		config:     config,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		testMode:   testMode,
 	}, nil
 }
