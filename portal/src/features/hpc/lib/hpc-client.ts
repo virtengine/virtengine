@@ -10,12 +10,7 @@
  * - Provider network is live
  */
 
-import type {
-  Job,
-  JobStatus,
-  SDKOffering,
-  WorkloadTemplate,
-} from '../types';
+import type { Job, JobStatus, SDKOffering, WorkloadTemplate } from '../types';
 
 /**
  * HPC Client Configuration
