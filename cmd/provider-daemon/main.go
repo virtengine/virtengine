@@ -170,12 +170,12 @@ const (
 	FlagWaldurOfferingSyncMaxRetries = "waldur-offering-sync-max-retries"
 
 	// Portal API flags
-	FlagPortalAuthSecret      = "portal-auth-secret"
+	FlagPortalAuthSecret      = "portal-auth-secret" // #nosec G101 -- flag name, not a credential
 	FlagPortalAllowInsecure   = "portal-allow-insecure"
 	FlagPortalRequireVEID     = "portal-require-veid"
 	FlagPortalMinVEIDScore    = "portal-min-veid-score"
 	FlagPortalShellSessionTTL = "portal-shell-session-ttl"
-	FlagPortalTokenTTL        = "portal-token-ttl"
+	FlagPortalTokenTTL        = "portal-token-ttl" // #nosec G101 -- flag name, not a credential
 	FlagPortalAuditLogFile    = "portal-audit-log-file"
 
 	// Support service desk flags
@@ -548,6 +548,15 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	if hpcProviderConfig.HPC.ProviderAddress == "" {
 		hpcProviderConfig.HPC.ProviderAddress = providerAddress
+	}
+	if hpcProviderConfig.HPC.NodeAggregator.ProviderAddress == "" {
+		hpcProviderConfig.HPC.NodeAggregator.ProviderAddress = hpcProviderConfig.HPC.ProviderAddress
+	}
+	if hpcProviderConfig.HPC.NodeAggregator.ClusterID == "" {
+		hpcProviderConfig.HPC.NodeAggregator.ClusterID = hpcProviderConfig.HPC.ClusterID
+	}
+	if hpcProviderConfig.HPC.SlurmK8s.ClusterName == "" {
+		hpcProviderConfig.HPC.SlurmK8s.ClusterName = hpcProviderConfig.HPC.ClusterID
 	}
 
 	if hpcProviderConfig.HPC.Enabled {

@@ -156,6 +156,20 @@ func (c *rpcChainClient) ReportJobStatus(ctx context.Context, report *HPCStatusR
 	return err
 }
 
+// SubmitNodeMetadata submits node metadata updates to chain (best-effort).
+func (c *rpcChainClient) SubmitNodeMetadata(ctx context.Context, msg *hpcv1.MsgUpdateNodeMetadata) error {
+	if msg == nil {
+		return nil
+	}
+	if c.grpcConn == nil {
+		return nil
+	}
+
+	msgClient := hpcv1.NewMsgClient(c.grpcConn)
+	_, err := msgClient.UpdateNodeMetadata(ctx, msg)
+	return err
+}
+
 // ReportJobAccounting reports job accounting to chain (placeholder).
 func (c *rpcChainClient) ReportJobAccounting(_ context.Context, _ string, _ *HPCSchedulerMetrics) error {
 	return nil
