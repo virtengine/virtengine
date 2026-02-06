@@ -1,21 +1,21 @@
-import Long from "long";
+import type Long from "long";
 
-import { BaseClient, type ClientOptions } from "./BaseClient.ts";
-import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
-import { toPageRequest, withTxResult } from "./types.ts";
 import type {
   Challenge,
   ChallengeResponse,
+  ClientInfo,
   FactorEnrollment,
   FactorEnrollmentStatus,
   FactorMetadata,
   FactorType,
   MFAPolicy,
   MFAProof,
-  ClientInfo,
   SensitiveTransactionType,
 } from "../generated/protos/virtengine/mfa/v1/types.ts";
 import type { TxCallOptions } from "../sdk/transport/types.ts";
+import { BaseClient, type ClientOptions } from "./BaseClient.ts";
+import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
+import { toPageRequest, withTxResult } from "./types.ts";
 
 export interface MFAClientDeps {
   sdk: ChainNodeSDK;
@@ -48,8 +48,9 @@ export class MFAClient extends BaseClient {
     try {
       const result = await this.sdk.virtengine.mfa.v1.getMFAPolicy({ address });
       if (!result.found) return null;
-      this.setCached(cacheKey, result.policy);
-      return result.policy;
+      const policy = result.policy ?? null;
+      if (policy) this.setCached(cacheKey, policy);
+      return policy;
     } catch (error) {
       this.handleQueryError(error, "getPolicy");
     }
@@ -195,7 +196,7 @@ export class MFAClient extends BaseClient {
   async getChallenge(challengeId: string): Promise<Challenge | null> {
     try {
       const result = await this.sdk.virtengine.mfa.v1.getChallenge({ challengeId });
-      return result.found ? result.challenge : null;
+      return result.found ? (result.challenge ?? null) : null;
     } catch (error) {
       this.handleQueryError(error, "getChallenge");
     }

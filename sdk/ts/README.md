@@ -156,6 +156,57 @@ const identity = await client.veid.getIdentity("virt1...");
 const clusters = await client.hpc.listClusters();
 ```
 
+### Connection Manager
+
+The `ConnectionManager` provides multi-endpoint management with health checks, automatic failover, and latency-based endpoint selection:
+
+```ts
+import { ConnectionManager } from "@virtengine/chain-sdk";
+
+const manager = new ConnectionManager({
+  endpoints: [
+    { url: "https://rpc-1.virtengine.com:443", type: "rpc", priority: 1 },
+    { url: "https://rpc-2.virtengine.com:443", type: "rpc", priority: 2 },
+    { url: "https://api-1.virtengine.com:443", type: "rest", priority: 1 },
+  ],
+  healthCheckIntervalMs: 30_000,
+  requestTimeoutMs: 5_000,
+});
+
+// Start periodic health checks
+manager.start();
+
+// Get the best available endpoint for a given type
+const rpc = manager.getEndpoint("rpc");  // returns URL string or null
+const rest = manager.getEndpoint("rest");
+
+// Report request-level success/failure for adaptive routing
+manager.reportSuccess("https://rpc-1.virtengine.com:443");
+manager.reportFailure("https://rpc-2.virtengine.com:443");
+
+// Stop health checks when done
+manager.stop();
+```
+
+The `VirtEngineClient` integrates the connection manager automatically when multiple endpoints are provided:
+
+```ts
+const client = await createVirtEngineClient({
+  rpcEndpoint: "https://grpc.sandbox-2.aksh.pw:9090",
+  restEndpoint: "https://api.sandbox-2.aksh.pw:443",
+  endpoints: [
+    { url: "https://rpc-1.virtengine.com:443", type: "rpc", priority: 1 },
+    { url: "https://rpc-2.virtengine.com:443", type: "rpc", priority: 2 },
+  ],
+  connectionManagerOptions: {
+    healthCheckIntervalMs: 30_000,
+  },
+});
+
+// Access connection manager directly
+const bestRpc = client.connections?.getEndpoint("rpc");
+```
+
 ### Provider SDK
 
 Currently provider SDK supports only `getStatus` and `streamStatus` methods over gRPC protocol.

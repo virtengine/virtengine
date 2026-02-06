@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import Long from "long";
 
-import { HPCClient } from "./HPCClient.ts";
 import type { HPCClientDeps } from "./HPCClient.ts";
+import { HPCClient } from "./HPCClient.ts";
+
+type MockFn = (...args: unknown[]) => Promise<unknown>;
 
 const txResponse = () => ({
   height: 1,
@@ -27,49 +29,52 @@ describe("HPCClient", () => {
         virtengine: {
           hpc: {
             v1: {
-              getCluster: jest.fn().mockResolvedValue({
+              getCluster: jest.fn<MockFn>().mockResolvedValue({
                 cluster: { clusterId: "cluster-1" },
               }),
-              getClusters: jest.fn().mockResolvedValue({
+              getClusters: jest.fn<MockFn>().mockResolvedValue({
                 clusters: [{ clusterId: "cluster-1" }],
               }),
-              getOffering: jest.fn().mockResolvedValue({
+              getOffering: jest.fn<MockFn>().mockResolvedValue({
                 offering: { offeringId: "offering-1", requiredIdentityThreshold: 50, maxRuntimeSeconds: Long.ZERO },
               }),
-              getOfferings: jest.fn().mockResolvedValue({
+              getOfferings: jest.fn<MockFn>().mockResolvedValue({
                 offerings: [{ offeringId: "offering-1" }],
               }),
-              getOfferingsByCluster: jest.fn().mockResolvedValue({
+              getOfferingsByCluster: jest.fn<MockFn>().mockResolvedValue({
                 offerings: [{ offeringId: "offering-2" }],
               }),
-              getJob: jest.fn().mockResolvedValue({
+              getJob: jest.fn<MockFn>().mockResolvedValue({
                 job: { jobId: "job-1" },
               }),
-              getJobs: jest.fn().mockResolvedValue({
+              getJobs: jest.fn<MockFn>().mockResolvedValue({
                 jobs: [{ jobId: "job-1" }],
               }),
-              getJobsByCustomer: jest.fn().mockResolvedValue({
+              getJobsByCustomer: jest.fn<MockFn>().mockResolvedValue({
                 jobs: [{ jobId: "job-2" }],
               }),
-              getJobsByProvider: jest.fn().mockResolvedValue({
+              getJobsByProvider: jest.fn<MockFn>().mockResolvedValue({
                 jobs: [{ jobId: "job-3" }],
               }),
-              submitJob: jest.fn().mockImplementation((_input, options) => {
+              submitJob: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({ jobId: "job-1", escrowId: "escrow-1" });
               }),
-              cancelJob: jest.fn().mockImplementation((_input, options) => {
+              cancelJob: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({});
               }),
-              registerCluster: jest.fn().mockImplementation((_input, options) => {
+              registerCluster: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({ clusterId: "cluster-99" });
               }),
             },
           },
         },
-      } as HPCClientDeps["sdk"],
+      } as unknown as HPCClientDeps["sdk"],
     };
     client = new HPCClient(deps);
   });

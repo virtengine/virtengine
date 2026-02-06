@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import Long from "long";
 
-import { VEIDClient } from "./VEIDClient.ts";
-import type { VEIDClientDeps } from "./VEIDClient.ts";
-import { IdentityTier, VerificationStatus } from "../generated/protos/virtengine/veid/v1/types.ts";
 import type {
   MsgCreateIdentityWallet,
   MsgRequestVerification,
   MsgUploadScope,
 } from "../generated/protos/virtengine/veid/v1/tx.ts";
+import { IdentityTier, VerificationStatus } from "../generated/protos/virtengine/veid/v1/types.ts";
+import type { VEIDClientDeps } from "./VEIDClient.ts";
+import { VEIDClient } from "./VEIDClient.ts";
+
+type MockFn = (...args: unknown[]) => Promise<unknown>;
 
 const txResponse = () => ({
   height: 1,
@@ -33,18 +35,19 @@ describe("VEIDClient", () => {
         virtengine: {
           veid: {
             v1: {
-              getIdentity: jest.fn().mockResolvedValue({
+              getIdentity: jest.fn<MockFn>().mockResolvedValue({
                 found: true,
                 identity: { accountAddress: "virt1", tier: IdentityTier.IDENTITY_TIER_STANDARD },
               }),
-              getIdentityScore: jest.fn().mockResolvedValue({
+              getIdentityScore: jest.fn<MockFn>().mockResolvedValue({
                 found: true,
                 score: { score: 75, tier: IdentityTier.IDENTITY_TIER_STANDARD },
               }),
-              getScopes: jest.fn().mockResolvedValue({
+              getScopes: jest.fn<MockFn>().mockResolvedValue({
                 scopes: [{ scopeId: "scope-1" }],
               }),
-              uploadScope: jest.fn().mockImplementation((_input, options) => {
+              uploadScope: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({
                   scopeId: "scope-1",
@@ -52,7 +55,8 @@ describe("VEIDClient", () => {
                   uploadedAt: Long.ZERO,
                 });
               }),
-              requestVerification: jest.fn().mockImplementation((_input, options) => {
+              requestVerification: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({
                   scopeId: "scope-1",
@@ -60,7 +64,8 @@ describe("VEIDClient", () => {
                   requestedAt: Long.ZERO,
                 });
               }),
-              createIdentityWallet: jest.fn().mockImplementation((_input, options) => {
+              createIdentityWallet: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({ walletId: "wallet-1" });
               }),
@@ -68,13 +73,13 @@ describe("VEIDClient", () => {
           },
           hpc: {
             v1: {
-              getOffering: jest.fn().mockResolvedValue({
+              getOffering: jest.fn<MockFn>().mockResolvedValue({
                 offering: { offeringId: "offering-1", requiredIdentityThreshold: 60 },
               }),
             },
           },
         },
-      } as VEIDClientDeps["sdk"],
+      } as unknown as VEIDClientDeps["sdk"],
     };
 
     client = new VEIDClient(deps);

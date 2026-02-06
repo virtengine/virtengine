@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
-import { MarketClient } from "./MarketClient.ts";
-import type { MarketClientDeps } from "./MarketClient.ts";
 import type { BidID } from "../generated/protos/virtengine/market/v1/bid.ts";
 import type { LeaseID } from "../generated/protos/virtengine/market/v1/lease.ts";
 import type { OrderID } from "../generated/protos/virtengine/market/v1/order.ts";
 import type { MsgCloseBid, MsgCreateBid } from "../generated/protos/virtengine/market/v1beta5/bidmsg.ts";
 import type { MsgCloseLease } from "../generated/protos/virtengine/market/v1beta5/leasemsg.ts";
+import type { MarketClientDeps } from "./MarketClient.ts";
+import { MarketClient } from "./MarketClient.ts";
+
+type MockFn = (...args: unknown[]) => Promise<unknown>;
 
 const txResponse = () => ({
   height: 1,
@@ -31,28 +33,31 @@ describe("MarketClient", () => {
         virtengine: {
           market: {
             v1beta5: {
-              getOrder: jest.fn().mockResolvedValue({ order: { id: "order-1" } }),
-              getOrders: jest.fn().mockResolvedValue({ orders: [{ id: "order-1" }] }),
-              getBid: jest.fn().mockResolvedValue({ bid: { id: "bid-1" } }),
-              getBids: jest.fn().mockResolvedValue({ bids: [{ bid: { id: "bid-1" } }] }),
-              getLease: jest.fn().mockResolvedValue({ lease: { id: "lease-1" } }),
-              getLeases: jest.fn().mockResolvedValue({ leases: [{ lease: { id: "lease-1" } }] }),
-              createBid: jest.fn().mockImplementation((_input, options) => {
+              getOrder: jest.fn<MockFn>().mockResolvedValue({ order: { id: "order-1" } }),
+              getOrders: jest.fn<MockFn>().mockResolvedValue({ orders: [{ id: "order-1" }] }),
+              getBid: jest.fn<MockFn>().mockResolvedValue({ bid: { id: "bid-1" } }),
+              getBids: jest.fn<MockFn>().mockResolvedValue({ bids: [{ bid: { id: "bid-1" } }] }),
+              getLease: jest.fn<MockFn>().mockResolvedValue({ lease: { id: "lease-1" } }),
+              getLeases: jest.fn<MockFn>().mockResolvedValue({ leases: [{ lease: { id: "lease-1" } }] }),
+              createBid: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({});
               }),
-              closeBid: jest.fn().mockImplementation((_input, options) => {
+              closeBid: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({});
               }),
-              closeLease: jest.fn().mockImplementation((_input, options) => {
+              closeLease: jest.fn<MockFn>().mockImplementation((...args: unknown[]) => {
+                const options = args[1] as Record<string, (...a: unknown[]) => void> | undefined;
                 options?.afterBroadcast?.(txResponse());
                 return Promise.resolve({});
               }),
             },
           },
         },
-      } as MarketClientDeps["sdk"],
+      } as unknown as MarketClientDeps["sdk"],
     };
     client = new MarketClient(deps);
   });
