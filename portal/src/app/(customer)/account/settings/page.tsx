@@ -254,12 +254,12 @@ export default function AccountSettingsPage() {
                 </p>
                 <div className="mt-4 flex items-center justify-between">
                   <span className="text-sm font-medium text-success">Authenticator app</span>
-                  <button
-                    type="button"
+                  <a
+                    href="/account/settings/security"
                     className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-accent"
                   >
                     Manage MFA
-                  </button>
+                  </a>
                 </div>
               </div>
 
