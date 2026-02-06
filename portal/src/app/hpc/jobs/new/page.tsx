@@ -24,7 +24,7 @@ export default function NewHPCJobPage() {
         <p className="mt-1 text-muted-foreground">Configure and submit a new HPC workload</p>
       </div>
 
-      <Suspense fallback={<div className="text-center text-muted-foreground">Loading...</div>}>
+      <Suspense fallback={<div className="text-sm text-muted-foreground">Loading job form...</div>}>
         <JobWizard />
       </Suspense>
     </div>
