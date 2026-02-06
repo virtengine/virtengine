@@ -1,0 +1,88 @@
+# Jekyll configuration for GitHub Pages
+# This file tells Jekyll to exclude directories that contain
+# Jinja2/Ansible templating syntax incompatible with Liquid
+
+title: VirtEngine
+description: Decentralized cloud computing platform
+
+# Exclude directories containing Ansible playbooks, vendor code,
+# build artifacts, and other non-documentation files
+exclude:
+  # Ansible playbooks with Jinja2 templates
+  - pkg/provider_daemon/playbooks/
+  - pkg/
+  
+  # Build and generated files
+  - _build/
+  - .cache/
+  - vendor/
+  - node_modules/
+  
+  # SDK and code directories (not documentation)
+  - sdk/
+  - x/
+  - app/
+  - cmd/
+  - client/
+  - config/
+  - deploy/
+  - dev/
+  - docgen/
+  - fuzz/
+  - infra/
+  - lib/
+  - make/
+  - ml/
+  - models/
+  - portal/
+  - pubsub/
+  - rs/
+  - script/
+  - scripts/
+  - temp/
+  - tests/
+  - testutil/
+  - tools/
+  - upgrades/
+  - util/
+  
+  # Other files
+  - Makefile
+  - "*.go"
+  - "*.mod"
+  - "*.sum"
+  - "*.work"
+  - go.work
+  - go.mod
+  - go.sum
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - docker-compose*.yaml
+  - codecov.yml
+  - commitlint.config.js
+  - coverage.txt
+  - results.txt
+  - tools.go
+  - doc.go
+  - cgo_trace.go
+  - install.sh
+  - meta.json
+  - nul
+
+# Include only documentation directories
+include:
+  - docs/
+  - _docs/
+
+# Markdown settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+# Plugins (if using GitHub Pages supported plugins)
+plugins:
+  - jekyll-relative-links
+  - jekyll-readme-index
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
