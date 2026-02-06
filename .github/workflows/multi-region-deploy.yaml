@@ -1,0 +1,330 @@
+name: Multi-Region Deploy
+
+on:
+  push:
+    branches: [main, mainnet/main]
+    paths:
+      - "infra/terraform/**"
+      - "deploy/**"
+      - ".github/workflows/multi-region-deploy.yaml"
+      - ".github/actions/deploy-region/**"
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "Deploy to specific region (or 'all')"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - us-east-1
+          - eu-west-1
+          - ap-southeast-1
+      dry_run:
+        description: "Dry run (plan only, no apply)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.6.0"
+  AWS_REGION: us-east-1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Stage 1: Validate
+  # ---------------------------------------------------------------------------
+  validate:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive infra/terraform/
+
+      - name: Validate Modules
+        run: |
+          for module in infra/terraform/modules/*/; do
+            echo "=== Validating ${module} ==="
+            cd "$module"
+            terraform init -backend=false
+            terraform validate
+            cd -
+          done
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: Plan (per-region)
+  # ---------------------------------------------------------------------------
+  plan-primary:
+    name: "Plan: us-east-1 (primary)"
+    needs: validate
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'us-east-1' || github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Plan
+        working-directory: infra/terraform/regions/us-east-1
+        run: |
+          terraform init
+          terraform plan -out=tfplan -input=false
+          terraform show -json tfplan > plan.json
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-us-east-1
+          path: infra/terraform/regions/us-east-1/plan.json
+
+  plan-secondary:
+    name: "Plan: eu-west-1 (secondary)"
+    needs: validate
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'eu-west-1' || github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Plan
+        working-directory: infra/terraform/regions/eu-west-1
+        run: |
+          terraform init
+          terraform plan -out=tfplan -input=false
+          terraform show -json tfplan > plan.json
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-eu-west-1
+          path: infra/terraform/regions/eu-west-1/plan.json
+
+  plan-tertiary:
+    name: "Plan: ap-southeast-1 (tertiary)"
+    needs: validate
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.region == 'all' || github.event.inputs.region == 'ap-southeast-1' || github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Plan
+        working-directory: infra/terraform/regions/ap-southeast-1
+        run: |
+          terraform init
+          terraform plan -out=tfplan -input=false
+          terraform show -json tfplan > plan.json
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-ap-southeast-1
+          path: infra/terraform/regions/ap-southeast-1/plan.json
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: Deploy Primary Region
+  # ---------------------------------------------------------------------------
+  deploy-primary:
+    name: "Deploy: us-east-1 (primary)"
+    needs: plan-primary
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    environment: production-us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Apply
+        working-directory: infra/terraform/regions/us-east-1
+        run: |
+          terraform init
+          terraform apply -auto-approve -input=false
+
+      - name: Smoke Test
+        run: |
+          chmod +x scripts/smoke-test.sh
+          scripts/smoke-test.sh us-east-1
+
+  # ---------------------------------------------------------------------------
+  # Stage 4: Deploy Secondary Regions (after primary succeeds)
+  # ---------------------------------------------------------------------------
+  deploy-secondary:
+    name: "Deploy: eu-west-1 (secondary)"
+    needs: deploy-primary
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    environment: production-eu-west-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Apply
+        working-directory: infra/terraform/regions/eu-west-1
+        run: |
+          terraform init
+          terraform apply -auto-approve -input=false
+
+      - name: Smoke Test
+        run: |
+          chmod +x scripts/smoke-test.sh
+          scripts/smoke-test.sh eu-west-1
+
+  deploy-tertiary:
+    name: "Deploy: ap-southeast-1 (tertiary)"
+    needs: deploy-primary
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    environment: production-ap-southeast-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Apply
+        working-directory: infra/terraform/regions/ap-southeast-1
+        run: |
+          terraform init
+          terraform apply -auto-approve -input=false
+
+      - name: Smoke Test
+        run: |
+          chmod +x scripts/smoke-test.sh
+          scripts/smoke-test.sh ap-southeast-1
+
+  # ---------------------------------------------------------------------------
+  # Stage 5: Deploy Global Resources + Cross-Region Verification
+  # ---------------------------------------------------------------------------
+  deploy-global:
+    name: "Deploy: Global Resources"
+    needs: [deploy-secondary, deploy-tertiary]
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    environment: production-global
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Apply Global
+        working-directory: infra/terraform/global
+        run: |
+          terraform init
+          terraform apply -auto-approve -input=false
+
+      - name: Cross-Region Verification
+        run: |
+          chmod +x scripts/verify-cross-region.sh
+          scripts/verify-cross-region.sh
+
+      - name: DB Replication Verification
+        run: |
+          chmod +x scripts/verify-db-replication.sh
+          scripts/verify-db-replication.sh
+
+  # ---------------------------------------------------------------------------
+  # Stage 6: Update Global LB + Final Validation
+  # ---------------------------------------------------------------------------
+  finalize:
+    name: "Finalize: Global LB + Validation"
+    needs: deploy-global
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.dry_run != 'true' && github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Update Global Load Balancer
+        run: |
+          chmod +x scripts/update-global-lb.sh
+          scripts/update-global-lb.sh
+
+      - name: Final Smoke Test (all regions)
+        run: |
+          chmod +x scripts/smoke-test.sh
+          for region in us-east-1 eu-west-1 ap-southeast-1; do
+            echo "=== Smoke testing ${region} ==="
+            scripts/smoke-test.sh "${region}"
+          done
