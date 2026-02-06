@@ -407,71 +407,14 @@ func (a *SLURMKubernetesAdapter) Stop() error {
 	return nil
 }
 
-// Deploy deploys a new SLURM cluster
+// Deploy deploys a new SLURM cluster.
 func (a *SLURMKubernetesAdapter) Deploy(ctx context.Context, config DeploymentConfig) (*DeployedCluster, error) {
-	if !a.IsRunning() {
-		return nil, fmt.Errorf("adapter not running")
-	}
-
-	if config.ClusterID == "" {
-		return nil, fmt.Errorf("cluster_id required")
-	}
-
-	// Check if cluster already exists
-	a.mu.RLock()
-	_, exists := a.clusters[config.ClusterID]
-	a.mu.RUnlock()
-	if exists {
-		return nil, fmt.Errorf("cluster %s already exists", config.ClusterID)
-	}
-
-	// Create cluster record
-	cluster := &DeployedCluster{
-		Config:     config,
-		State:      ClusterStatePending,
-		DeployedAt: time.Now(),
-		UpdatedAt:  time.Now(),
-	}
-
-	a.mu.Lock()
-	a.clusters[config.ClusterID] = cluster
-	a.mu.Unlock()
-
-	// Build Helm values
-	values := a.buildHelmValues(config)
-
-	// Update state to deploying
-	a.updateClusterState(config.ClusterID, ClusterStateDeploying, "Installing Helm chart")
-
-	// Install Helm chart
-	chartPath := config.HelmChartPath
-	if chartPath == "" {
-		chartPath = a.chartPath
-	}
-	releaseName := config.HelmReleaseName
-	if releaseName == "" {
-		releaseName = fmt.Sprintf("slurm-%s", config.ClusterID)
-	}
-
-	if err := a.helm.Install(ctx, releaseName, chartPath, config.Namespace, values); err != nil {
-		a.updateClusterState(config.ClusterID, ClusterStateFailed, fmt.Sprintf("Helm install failed: %v", err))
-		return cluster, fmt.Errorf("failed to install Helm chart: %w", err)
-	}
-
-	// Wait for deployment to be ready
-	if err := a.waitForReady(ctx, config.ClusterID, 10*time.Minute); err != nil {
-		a.updateClusterState(config.ClusterID, ClusterStateDegraded, fmt.Sprintf("Deployment not ready: %v", err))
-		return cluster, nil // Return cluster even if not fully ready
-	}
-
-	a.updateClusterState(config.ClusterID, ClusterStateRunning, "Cluster deployed successfully")
-
-	// Report to on-chain
-	if a.reporter != nil {
-		a.reportStatus(ctx, config.ClusterID)
-	}
-
-	return a.GetCluster(config.ClusterID)
+	return a.DeployWithOptions(ctx, config, DeployOptions{
+		ReadyTimeout:      10 * time.Minute,
+		AllowDegraded:     true,
+		RollbackOnFailure: false,
+		MinComputeReady:   1,
+	})
 }
 
 // Upgrade upgrades an existing SLURM cluster
@@ -514,7 +457,7 @@ func (a *SLURMKubernetesAdapter) Upgrade(ctx context.Context, clusterID string, 
 	if req.DrainTimeout > 0 {
 		timeout = req.DrainTimeout + 5*time.Minute
 	}
-	if err := a.waitForReady(ctx, clusterID, timeout); err != nil {
+	if err := a.waitForReady(ctx, clusterID, timeout, 1); err != nil {
 		a.updateClusterState(clusterID, ClusterStateDegraded, fmt.Sprintf("Upgrade not ready: %v", err))
 		return nil
 	}
@@ -567,7 +510,11 @@ func (a *SLURMKubernetesAdapter) Scale(ctx context.Context, clusterID string, re
 	if timeout == 0 {
 		timeout = 10 * time.Minute
 	}
-	if err := a.waitForReady(ctx, clusterID, timeout); err != nil {
+	minCompute := req.TargetNodes
+	if minCompute < 1 {
+		minCompute = 1
+	}
+	if err := a.waitForReady(ctx, clusterID, timeout, minCompute); err != nil {
 		a.updateClusterState(clusterID, ClusterStateDegraded, fmt.Sprintf("Scale not ready: %v", err))
 		return nil
 	}
@@ -659,6 +606,9 @@ func (a *SLURMKubernetesAdapter) GetClusterHealth(ctx context.Context, clusterID
 		health.Errors = append(health.Errors, fmt.Sprintf("controller check failed: %v", err))
 	} else {
 		health.ControllerReady = ctrlStatus.ReadyReplicas >= 1
+		if !health.ControllerReady {
+			health.Errors = append(health.Errors, fmt.Sprintf("controller ready %d/%d", ctrlStatus.ReadyReplicas, ctrlStatus.Replicas))
+		}
 	}
 
 	// Check database
@@ -667,6 +617,9 @@ func (a *SLURMKubernetesAdapter) GetClusterHealth(ctx context.Context, clusterID
 		health.Errors = append(health.Errors, fmt.Sprintf("database check failed: %v", err))
 	} else {
 		health.DatabaseReady = dbStatus.ReadyReplicas >= 1
+		if !health.DatabaseReady {
+			health.Errors = append(health.Errors, fmt.Sprintf("database ready %d/%d", dbStatus.ReadyReplicas, dbStatus.Replicas))
+		}
 	}
 
 	// Check compute nodes
@@ -676,6 +629,9 @@ func (a *SLURMKubernetesAdapter) GetClusterHealth(ctx context.Context, clusterID
 	} else {
 		health.ComputeNodesReady = computeStatus.ReadyReplicas
 		health.ComputeNodesTotal = computeStatus.Replicas
+		if computeStatus.Replicas > 0 && computeStatus.ReadyReplicas < computeStatus.Replicas {
+			health.Errors = append(health.Errors, fmt.Sprintf("compute ready %d/%d", computeStatus.ReadyReplicas, computeStatus.Replicas))
+		}
 	}
 
 	// Check munge (via scontrol ping on controller)
@@ -683,6 +639,8 @@ func (a *SLURMKubernetesAdapter) GetClusterHealth(ctx context.Context, clusterID
 		output, err := a.k8s.ExecInPod(ctx, cluster.Config.Namespace, fullname+"-controller-0", "slurmctld", []string{"scontrol", "ping"})
 		if err == nil && output != "" {
 			health.MungeHealthy = true
+		} else if err != nil {
+			health.Errors = append(health.Errors, fmt.Sprintf("munge check failed: %v", err))
 		}
 	}
 
@@ -969,10 +927,19 @@ func (a *SLURMKubernetesAdapter) updateClusterState(clusterID string, state Clus
 }
 
 // waitForReady waits for cluster to be ready
-func (a *SLURMKubernetesAdapter) waitForReady(ctx context.Context, clusterID string, timeout time.Duration) error {
+func (a *SLURMKubernetesAdapter) waitForReady(ctx context.Context, clusterID string, timeout time.Duration, minComputeReady int32) error {
 	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(10 * time.Second)
+	interval := 10 * time.Second
+	if timeout > 0 && timeout < interval {
+		interval = timeout / 3
+		if interval < 200*time.Millisecond {
+			interval = 200 * time.Millisecond
+		}
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	var lastHealth *ClusterHealthStatus
 
 	for {
 		select {
@@ -980,15 +947,34 @@ func (a *SLURMKubernetesAdapter) waitForReady(ctx context.Context, clusterID str
 			return ctx.Err()
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				return fmt.Errorf("timeout waiting for cluster to be ready")
+				if lastHealth == nil {
+					return fmt.Errorf("timeout waiting for cluster to be ready")
+				}
+				return fmt.Errorf(
+					"timeout waiting for readiness (controller=%t db=%t compute=%d/%d)",
+					lastHealth.ControllerReady,
+					lastHealth.DatabaseReady,
+					lastHealth.ComputeNodesReady,
+					lastHealth.ComputeNodesTotal,
+				)
 			}
 
 			health, err := a.GetClusterHealth(ctx, clusterID)
 			if err != nil {
 				continue
 			}
+			lastHealth = health
 
-			if health.ControllerReady && health.DatabaseReady && health.ComputeNodesReady > 0 {
+			minReady := minComputeReady
+			if minReady <= 0 {
+				if health.ComputeNodesTotal > 0 {
+					minReady = health.ComputeNodesTotal
+				} else {
+					minReady = 1
+				}
+			}
+
+			if health.ControllerReady && health.DatabaseReady && health.ComputeNodesReady >= minReady {
 				return nil
 			}
 		}
@@ -1031,12 +1017,14 @@ func (a *SLURMKubernetesAdapter) checkAllClustersHealth() {
 		a.mu.Lock()
 		cluster, exists := a.clusters[id]
 		if exists && cluster.State == ClusterStateRunning {
-			if len(health.Errors) > 0 || !health.ControllerReady || !health.DatabaseReady {
+			if len(health.Errors) > 0 || !health.ControllerReady || !health.DatabaseReady ||
+				(health.ComputeNodesTotal > 0 && health.ComputeNodesReady < health.ComputeNodesTotal) {
 				cluster.State = ClusterStateDegraded
 				cluster.StatusMessage = "Health check detected issues"
 			}
 		} else if exists && cluster.State == ClusterStateDegraded {
-			if len(health.Errors) == 0 && health.ControllerReady && health.DatabaseReady {
+			if len(health.Errors) == 0 && health.ControllerReady && health.DatabaseReady &&
+				(health.ComputeNodesTotal == 0 || health.ComputeNodesReady >= health.ComputeNodesTotal) {
 				cluster.State = ClusterStateRunning
 				cluster.StatusMessage = "Cluster recovered"
 			}
