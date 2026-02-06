@@ -35,10 +35,10 @@ type HPCSLURMIntegrationE2ETestSuite struct {
 	customerAddr string
 
 	// Mock components
-	slurmClient    *mocks.MockSLURMClient
-	chainReporter  *MockChainReporter
-	auditLogger    *MockAuditLoggerE2E
-	credManager    *MockCredentialManager
+	slurmClient   *mocks.MockSLURMIntegration
+	chainReporter *MockChainReporter
+	auditLogger   *MockAuditLoggerE2E
+	credManager   *MockCredentialManager
 
 	// HPC Provider under test
 	hpcProvider *pd.HPCProvider
@@ -48,7 +48,7 @@ type HPCSLURMIntegrationE2ETestSuite struct {
 	testOffering *hpctypes.HPCOffering
 
 	// Tracking
-	submittedJobs  []string
+	submittedJobs   []string
 	lifecycleEvents []pd.HPCJobLifecycleEvent
 }
 
@@ -66,7 +66,7 @@ func (s *HPCSLURMIntegrationE2ETestSuite) SetupSuite() {
 	s.customerAddr = val.Address.String()
 
 	// Initialize mock components
-	s.slurmClient = mocks.NewMockSLURMClient()
+	s.slurmClient = mocks.NewMockSLURMIntegration()
 	s.chainReporter = NewMockChainReporter()
 	s.auditLogger = NewMockAuditLoggerE2E()
 	s.credManager = NewMockCredentialManager()
@@ -130,7 +130,7 @@ func (s *HPCSLURMIntegrationE2ETestSuite) Test01_HPCProviderInitialization() {
 
 		health := s.hpcProvider.GetHealth()
 		s.NotNil(health)
-		s.Equal(pd.HPCHealthStatusHealthy, health.Status)
+		s.True(health.Overall)
 	})
 }
 
@@ -303,7 +303,7 @@ func (s *HPCSLURMIntegrationE2ETestSuite) Test06_HealthChecks() {
 
 		health := s.hpcProvider.GetHealth()
 		s.NotNil(health)
-		s.NotEmpty(health.Status)
+		s.NotEmpty(health.Message)
 		s.NotZero(health.LastCheck)
 	})
 
@@ -313,10 +313,8 @@ func (s *HPCSLURMIntegrationE2ETestSuite) Test06_HealthChecks() {
 		health := s.hpcProvider.GetHealth()
 		s.NotNil(health)
 
-		// All components should report health
-		s.NotNil(health.BackendHealth)
-		s.NotNil(health.SubscriberHealth)
-		s.NotNil(health.SettlementHealth)
+		// All components should report health via the Components slice
+		s.NotEmpty(health.Components)
 	})
 }
 
@@ -428,19 +426,24 @@ func (s *HPCSLURMIntegrationE2ETestSuite) createTestJobWithGPU(jobID string) *hp
 // Mock Components
 // =============================================================================
 
-// MockChainReporter implements HPCOnChainReporter for testing.
+// MockChainReporter implements HPCChainClient for testing.
 type MockChainReporter struct {
-	statusReports    []*pd.HPCStatusReport
+	statusReports     []*pd.HPCStatusReport
 	accountingReports map[string]*pd.HPCSchedulerMetrics
+	billingRules      *hpctypes.HPCBillingRules
+	blockHeight       int64
 }
 
 func NewMockChainReporter() *MockChainReporter {
 	return &MockChainReporter{
-		statusReports:    make([]*pd.HPCStatusReport, 0),
+		statusReports:     make([]*pd.HPCStatusReport, 0),
 		accountingReports: make(map[string]*pd.HPCSchedulerMetrics),
+		billingRules:      &hpctypes.HPCBillingRules{},
+		blockHeight:       1000,
 	}
 }
 
+// HPCOnChainReporter methods
 func (m *MockChainReporter) ReportJobStatus(ctx context.Context, report *pd.HPCStatusReport) error {
 	m.statusReports = append(m.statusReports, report)
 	return nil
@@ -451,12 +454,69 @@ func (m *MockChainReporter) ReportJobAccounting(ctx context.Context, jobID strin
 	return nil
 }
 
+// HPCJobEventSubscriber methods
+func (m *MockChainReporter) SubscribeToJobRequests(ctx context.Context, clusterID string, handler func(*hpctypes.HPCJob) error) error {
+	// No-op for testing - jobs are submitted directly
+	return nil
+}
+
+func (m *MockChainReporter) SubscribeToJobCancellations(ctx context.Context, clusterID string, handler func(jobID string) error) error {
+	// No-op for testing
+	return nil
+}
+
+// HPCAccountingSubmitter methods
+func (m *MockChainReporter) SubmitAccountingRecord(ctx context.Context, record *hpctypes.HPCAccountingRecord) error {
+	return nil
+}
+
+func (m *MockChainReporter) SubmitUsageSnapshot(ctx context.Context, snapshot *hpctypes.HPCUsageSnapshot) error {
+	return nil
+}
+
+func (m *MockChainReporter) GetBillingRules(ctx context.Context, providerAddr string) (*hpctypes.HPCBillingRules, error) {
+	return m.billingRules, nil
+}
+
+// GetCurrentBlockHeight implements HPCChainClient
+func (m *MockChainReporter) GetCurrentBlockHeight(ctx context.Context) (int64, error) {
+	return m.blockHeight, nil
+}
+
+// Test helper methods
 func (m *MockChainReporter) GetStatusReports() []*pd.HPCStatusReport {
 	return m.statusReports
 }
 
 func (m *MockChainReporter) GetAccountingReports() map[string]*pd.HPCSchedulerMetrics {
 	return m.accountingReports
+}
+
+// MockAuditLoggerE2E implements HPCAuditLogger for testing.
+type MockAuditLoggerE2E struct {
+	jobEvents      []pd.HPCAuditEvent
+	securityEvents []pd.HPCAuditEvent
+	usageReports   []pd.HPCAuditEvent
+}
+
+func NewMockAuditLoggerE2E() *MockAuditLoggerE2E {
+	return &MockAuditLoggerE2E{
+		jobEvents:      make([]pd.HPCAuditEvent, 0),
+		securityEvents: make([]pd.HPCAuditEvent, 0),
+		usageReports:   make([]pd.HPCAuditEvent, 0),
+	}
+}
+
+func (m *MockAuditLoggerE2E) LogJobEvent(event pd.HPCAuditEvent) {
+	m.jobEvents = append(m.jobEvents, event)
+}
+
+func (m *MockAuditLoggerE2E) LogSecurityEvent(event pd.HPCAuditEvent) {
+	m.securityEvents = append(m.securityEvents, event)
+}
+
+func (m *MockAuditLoggerE2E) LogUsageReport(event pd.HPCAuditEvent) {
+	m.usageReports = append(m.usageReports, event)
 }
 
 // MockCredentialManager implements HPCCredentialManager for testing.

@@ -26,7 +26,7 @@ func (m *mockAzureCompute) CreateVM(_ context.Context, spec *pd.AzureVMCreateSpe
 	if m.fail {
 		return nil, errors.New("create vm failed")
 	}
-	vm := &pd.AzureVMInfo{Name: spec.Name, ResourceGroup: spec.ResourceGroup, Location: string(spec.Region), PowerState: pd.AzurePowerStateRunning}
+	vm := &pd.AzureVMInfo{Name: spec.Name, ResourceGroup: spec.ResourceGroup, Region: spec.Region, PowerState: pd.AzureVMStateRunning}
 	m.vms[spec.Name] = vm
 	return vm, nil
 }
@@ -42,20 +42,20 @@ func (m *mockAzureCompute) DeleteVM(_ context.Context, _, vmName string) error {
 }
 func (m *mockAzureCompute) StartVM(_ context.Context, _, vmName string) error {
 	if vm, ok := m.vms[vmName]; ok {
-		vm.PowerState = pd.AzurePowerStateRunning
+		vm.PowerState = pd.AzureVMStateRunning
 	}
 	return nil
 }
 func (m *mockAzureCompute) StopVM(_ context.Context, _, vmName string) error {
 	if vm, ok := m.vms[vmName]; ok {
-		vm.PowerState = pd.AzurePowerStateStopped
+		vm.PowerState = pd.AzureVMStateStopped
 	}
 	return nil
 }
 func (m *mockAzureCompute) RestartVM(_ context.Context, _, _ string) error { return nil }
 func (m *mockAzureCompute) DeallocateVM(_ context.Context, _, vmName string) error {
 	if vm, ok := m.vms[vmName]; ok {
-		vm.PowerState = pd.AzurePowerStateDeallocated
+		vm.PowerState = pd.AzureVMStateDeallocated
 	}
 	return nil
 }
@@ -208,7 +208,7 @@ func TestAzureAdapterE2E(t *testing.T) {
 
 	vm, err := adapter.DeployInstance(ctx, manifest, "deploy-az", "lease-az", pd.AzureDeploymentOptions{AssignPublicIP: true})
 	require.NoError(t, err)
-	require.Equal(t, pd.AzurePowerStateRunning, vm.PowerState)
+	require.Equal(t, pd.AzureVMStateRunning, vm.PowerState)
 
 	err = adapter.StopInstance(ctx, vm.ID)
 	require.NoError(t, err)
