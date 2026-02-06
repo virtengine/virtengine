@@ -74,3 +74,4 @@ nul
 
 # Task planning files (agent-generated)
 _docs/ralph/tasks/
+.localnet*

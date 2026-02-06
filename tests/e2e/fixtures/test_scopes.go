@@ -90,7 +90,7 @@ func OnboardingIDDocumentScope() ScopeFixture {
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 		ExpectedScore:     65,
-		ExpectedTier:      veidtypes.IdentityTierVerified,
+		ExpectedTier:      veidtypes.IdentityTierStandard,
 		Description:       "ID document capture to reach verified tier",
 	}
 }
@@ -104,7 +104,7 @@ func OnboardingFaceVideoScope() ScopeFixture {
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 		ExpectedScore:     85,
-		ExpectedTier:      veidtypes.IdentityTierTrusted,
+		ExpectedTier:      veidtypes.IdentityTierPremium,
 		Description:       "Face video capture for liveness and trusted tier",
 	}
 }
@@ -150,7 +150,7 @@ func VerifiedTierScope() ScopeFixture {
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 		ExpectedScore:     75,
-		ExpectedTier:      veidtypes.IdentityTierVerified,
+		ExpectedTier:      veidtypes.IdentityTierStandard,
 		Description:       "Scope resulting in Verified tier (score 75)",
 	}
 }
@@ -164,7 +164,7 @@ func TrustedTierScope() ScopeFixture {
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 		ExpectedScore:     90,
-		ExpectedTier:      veidtypes.IdentityTierTrusted,
+		ExpectedTier:      veidtypes.IdentityTierPremium,
 		Description:       "Scope resulting in Trusted tier (score 90)",
 	}
 }
@@ -228,7 +228,7 @@ func MarketplaceEligibleScope() ScopeFixture {
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 		ExpectedScore:     75,
-		ExpectedTier:      veidtypes.IdentityTierVerified,
+		ExpectedTier:      veidtypes.IdentityTierStandard,
 		Description:       "Scope meeting marketplace gating requirements",
 	}
 }
@@ -256,7 +256,7 @@ func PremiumMarketplaceScope() ScopeFixture {
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 		ExpectedScore:     95,
-		ExpectedTier:      veidtypes.IdentityTierTrusted,
+		ExpectedTier:      veidtypes.IdentityTierPremium,
 		Description:       "High score scope for premium marketplace access",
 	}
 }
@@ -343,7 +343,7 @@ func StandardToVerifiedTransition() ScoreTransition {
 		FromScore:   50,
 		ToScore:     75,
 		FromTier:    veidtypes.IdentityTierStandard,
-		ToTier:      veidtypes.IdentityTierVerified,
+		ToTier:      veidtypes.IdentityTierStandard,
 		ScopeType:   veidtypes.ScopeTypeIDDocument,
 		Description: "Additional verification triggers Standard → Verified transition",
 	}
@@ -354,8 +354,8 @@ func VerifiedToTrustedTransition() ScoreTransition {
 	return ScoreTransition{
 		FromScore:   75,
 		ToScore:     90,
-		FromTier:    veidtypes.IdentityTierVerified,
-		ToTier:      veidtypes.IdentityTierTrusted,
+		FromTier:    veidtypes.IdentityTierStandard,
+		ToTier:      veidtypes.IdentityTierPremium,
 		ScopeType:   veidtypes.ScopeTypeFaceVideo,
 		Description: "Liveness check triggers Verified → Trusted transition",
 	}

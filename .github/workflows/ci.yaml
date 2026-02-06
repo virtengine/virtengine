@@ -250,7 +250,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: "lib/portal/package-lock.json"
+          cache-dependency-path: "package-lock.json"
 
       - name: Install dependencies
         if: steps.detect.outputs.run == 'true'

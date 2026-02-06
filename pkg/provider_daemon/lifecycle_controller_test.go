@@ -6,6 +6,7 @@ package provider_daemon
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -759,4 +760,136 @@ func TestLifecycleController_Integration(t *testing.T) {
 	assert.Equal(t, "alloc-integration-123", reloadedOp.AllocationID)
 
 	_ = ctx // Used to ensure context is available for future async tests
+}
+
+func TestLifecycleController_ProcessCallback_Idempotent(t *testing.T) {
+	cfg := DefaultLifecycleControllerConfig()
+	cfg.ProviderAddress = "provider-test"
+
+	lc := &LifecycleController{
+		cfg:    cfg,
+		state:  NewLifecycleControllerState(),
+		stopCh: make(chan struct{}),
+	}
+
+	op, err := marketplace.NewLifecycleOperation(
+		"alloc-123",
+		marketplace.LifecycleActionRestart,
+		"requester-1",
+		cfg.ProviderAddress,
+		marketplace.AllocationStateActive,
+	)
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	op.State = marketplace.LifecycleOpStateAwaitingCallback
+	op.StartedAt = &now
+	op.CallbackID = fmt.Sprintf("lcb_%s", op.ID)
+
+	lc.state.Operations[op.ID] = op
+	lc.state.IdempotencyIndex[op.IdempotencyKey] = op.ID
+	lc.state.Metrics.ExecutingOperations = 1
+
+	callback := &marketplace.LifecycleCallback{
+		ID:              op.CallbackID,
+		OperationID:     op.ID,
+		AllocationID:    op.AllocationID,
+		Action:          op.Action,
+		Success:         true,
+		ResultState:     marketplace.AllocationStateActive,
+		ProviderAddress: cfg.ProviderAddress,
+		SignerID:        cfg.ProviderAddress,
+		Nonce:           "nonce-1",
+		Timestamp:       now,
+		ExpiresAt:       now.Add(time.Hour),
+		Signature:       []byte("sig"),
+	}
+
+	err = lc.ProcessCallback(context.Background(), callback)
+	require.NoError(t, err)
+
+	err = lc.ProcessCallback(context.Background(), &marketplace.LifecycleCallback{
+		ID:              "lcb_dup",
+		OperationID:     op.ID,
+		AllocationID:    op.AllocationID,
+		Action:          op.Action,
+		Success:         true,
+		ResultState:     marketplace.AllocationStateActive,
+		ProviderAddress: cfg.ProviderAddress,
+		SignerID:        cfg.ProviderAddress,
+		Nonce:           "nonce-2",
+		Timestamp:       now,
+		ExpiresAt:       now.Add(time.Hour),
+		Signature:       []byte("sig"),
+	})
+	require.NoError(t, err)
+
+	lc.mu.RLock()
+	defer lc.mu.RUnlock()
+	assert.Equal(t, marketplace.LifecycleOpStateCompleted, lc.state.Operations[op.ID].State)
+	assert.Equal(t, int64(1), lc.state.Metrics.CompletedOperations)
+	assert.Equal(t, int64(0), lc.state.Metrics.ExecutingOperations)
+}
+
+func TestLifecycleController_ProcessCallback_IdempotentAfterRestart(t *testing.T) {
+	tempDir := t.TempDir()
+	stateFile := filepath.Join(tempDir, "lifecycle_state.json")
+
+	cfg := DefaultLifecycleControllerConfig()
+	cfg.ProviderAddress = "provider-test"
+	cfg.StateFilePath = stateFile
+
+	lc := &LifecycleController{
+		cfg:    cfg,
+		state:  NewLifecycleControllerState(),
+		stopCh: make(chan struct{}),
+	}
+
+	op, err := marketplace.NewLifecycleOperation(
+		"alloc-999",
+		marketplace.LifecycleActionStop,
+		"requester-2",
+		cfg.ProviderAddress,
+		marketplace.AllocationStateActive,
+	)
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	op.State = marketplace.LifecycleOpStateAwaitingCallback
+	op.StartedAt = &now
+	op.CallbackID = fmt.Sprintf("lcb_%s", op.ID)
+
+	lc.state.Operations[op.ID] = op
+	lc.state.IdempotencyIndex[op.IdempotencyKey] = op.ID
+
+	callback := &marketplace.LifecycleCallback{
+		ID:              op.CallbackID,
+		OperationID:     op.ID,
+		AllocationID:    op.AllocationID,
+		Action:          op.Action,
+		Success:         true,
+		ResultState:     marketplace.AllocationStateSuspended,
+		ProviderAddress: cfg.ProviderAddress,
+		SignerID:        cfg.ProviderAddress,
+		Nonce:           "nonce-restart",
+		Timestamp:       now,
+		ExpiresAt:       now.Add(time.Hour),
+		Signature:       []byte("sig"),
+	}
+
+	err = lc.ProcessCallback(context.Background(), callback)
+	require.NoError(t, err)
+
+	lc2 := &LifecycleController{
+		cfg:    cfg,
+		state:  NewLifecycleControllerState(),
+		stopCh: make(chan struct{}),
+	}
+	require.NoError(t, lc2.loadState())
+
+	err = lc2.ProcessCallback(context.Background(), callback)
+	require.NoError(t, err)
+
+	lc2.mu.RLock()
+	defer lc2.mu.RUnlock()
+	assert.Equal(t, marketplace.LifecycleOpStateCompleted, lc2.state.Operations[op.ID].State)
+	assert.Equal(t, int64(1), lc2.state.Metrics.CompletedOperations)
 }

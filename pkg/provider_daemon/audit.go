@@ -567,6 +567,9 @@ const (
 	// AuditEventWaldurCallbackFailed indicates a Waldur callback failed
 	AuditEventWaldurCallbackFailed AuditEventType = "waldur_callback_failed"
 
+	// AuditEventLifecycleDriftReconciled indicates lifecycle drift reconciliation
+	AuditEventLifecycleDriftReconciled AuditEventType = "lifecycle_drift_reconciled"
+
 	// Portal access audit events
 
 	// AuditEventLogStreamStarted indicates a deployment log stream was opened

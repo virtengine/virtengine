@@ -38,3 +38,13 @@ export {
   type ProviderStoreState,
   type ProviderStoreActions,
 } from './providerStore';
+export {
+  useCustomerDashboardStore,
+  selectFilteredCustomerAllocations,
+  selectActiveCustomerAllocations,
+  selectTotalMonthlySpend,
+  selectUnreadNotificationCount as selectUnreadDashboardNotificationCount,
+  type CustomerDashboardStore,
+  type CustomerDashboardState,
+  type CustomerDashboardActions,
+} from './customerDashboardStore';

@@ -10,11 +10,25 @@ When working on a task, do not stop until it is COMPLETELY done. Continue workin
 
 Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
 
-You have access to gh commands, ENSURE you create a PR Describing the changes once you are done - ENSURE you monitor CI/CD after creating a github PR (sleep for 10 minutes and check PR CI/CD status to see if ANYTHING failed) - if anything fails, resolve it promptly.
+You might notice that your task instructions might have already been implemented by another agent previously - if this is the case, your goal switches to analyzing if the previous agent has completed the task END TO END sufficiently - and if not, fix any issues or problems the previous agent might have missed.
 
-Ensure that there are no CI/CD errors after pushing, if needed continue monitoring your push for errors and fix them if identified.
+### PR Creation & Merge (vibe-kanban automation)
 
-You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages, etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks..
+If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), you are responsible for **creating the PR** after your push. The **orchestrator handles merges** when CI passes. In this case:
+
+- Focus on code quality, tests, and a clean commit
+- Run `gh pr create` after your push to open the PR
+- Ensure you consistently merge upstream changes before any git push, and fix conflicts if they exist
+- Do NOT manually run `gh pr merge` (orchestrator merges after CI)
+
+If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you are responsible for creating the PR and monitoring CI/CD yourself — use `gh` CLI to create PRs and merge after CI passes.
+
+You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages (running test on all packages could need more than 20minute timeout, only run tests on modules you actually changed instead), etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks.
+
+## Agent-Specific Instructions
+
+- **Codex agents:** See `.codex/instructions.md` for Codex-specific tooling, sandbox constraints, and workflow.
+- **Copilot agents:** See `.github/copilot-instructions.md` for VS Code integration, MCP servers, and module patterns.
 
 ## Pre-commit automation (do this every time)
 
@@ -22,6 +36,41 @@ You should have all commands as needed available in shell, for example go, gh, p
 - Portal frontend formatting is enforced before commit. If you modify `portal/` TypeScript/JS/CSS/JSON/MD files, ensure `portal/node_modules` exists (run `pnpm -C portal install` once) so the pre-commit hook can run Prettier and auto-add formatted files to the commit.
 - SDK TypeScript formatting/linting is enforced before commit. If you modify `sdk/ts` files, ensure `sdk/ts/node_modules` exists (run `pnpm -C sdk/ts install` once) so `lint-staged` can auto-fix and stage changes.
 - If you need to bypass a check for an emergency, use the documented `VE_HOOK_SKIP_*` env vars, but do not bypass for normal work.
+
+## Pre-push quality gate (smart — runs only relevant checks)
+
+The pre-push hook detects which files changed and only runs checks for the affected categories:
+
+**Go changes** (`.go` files or `go.mod`/`go.sum`):
+
+- `go vet` on changed packages
+- `gofmt` auto-format
+- `golangci-lint` (diff-only)
+- `go mod vendor` sync
+- Build binaries (`make bins`)
+- Go unit tests (changed packages only)
+
+**Portal/Frontend changes** (`portal/`, `lib/portal/`, `lib/capture/`, `lib/admin/`):
+
+- Prettier auto-format
+- ESLint (`pnpm -C portal lint`) — mirrors **Portal CI / Lint & Type Check**
+- TypeScript type-check (`pnpm -C portal type-check`) — mirrors **Portal CI / Lint & Type Check**
+- Portal unit tests (`pnpm -C portal test` + `pnpm -C lib/portal test`) — mirrors **Portal CI / Unit Tests**
+
+**JS dependency changes** (`pnpm-lock.yaml`, `package.json`):
+
+- pnpm lockfile validation (`pnpm install --frozen-lockfile`)
+- All portal checks above (lint, type-check, tests)
+
+**Docs-only changes** (`.md`, `_docs/`, `docs/`, `.github/`):
+
+- No checks — push proceeds immediately
+
+**Skip env vars:**
+
+- `VE_HOOK_SKIP_PORTAL=1` — skip all portal checks (ESLint, TypeScript, tests)
+- `VE_HOOK_SKIP_VET=1`, `VE_HOOK_SKIP_FMT=1`, `VE_HOOK_SKIP_LINT=1`, `VE_HOOK_SKIP_BUILD=1`, `VE_HOOK_SKIP_TEST=1`, `VE_HOOK_SKIP_MOD=1`, `VE_HOOK_SKIP_PNPM=1`
+- `VE_HOOK_QUICK=1` — vet + build only (Go)
 
 Commit files:
 
@@ -148,17 +197,18 @@ feat(api)!: change response format
 
 ## GSD Framework & Orchestration
 
-This repo uses the GSD (Get Stuff Done) framework for autonomous development.
+This repo uses the GSD (Get Stuff Done) framework for autonomous development with dual-agent orchestration.
 
-**Orchestrator Workflow:**
+**Orchestrator Workflow (`scripts/ve-orchestrator.ps1`):**
 
-1.  **Planner:** Ingests tasks from `_docs/ralph/tasks` and Vibe-Kanban.
-2.  **Executor:**
-    - Acts as **Lead Engineer**.
-    - Delegates implementation to `codex-cli` agents.
-    - **MUST** run pre-push hooks (`make test`, `pnpm lint`, etc.) before completing tasks.
-    - Updates Vibe-Kanban status.
-3.  **Synchronization:** `PLAN.md` is the source of truth for the current phase, synced with Kanban tickets.
+1.  **Task Source:** Vibe-Kanban board (auto-detected by project name "virtengine").
+2.  **Agent Cycling:** Alternates 50/50 between Codex (DEFAULT profile) and Copilot (CLAUDE_OPUS_4_6 profile) to avoid rate-limiting.
+3.  **Merge Gate:** New tasks only start after previous task PRs are merged and confirmed.
+4.  **Executor:**
+    - Codex agents: Use shell + codex-cli MCP for subtasks. See `.codex/instructions.md`.
+    - Copilot agents: Use VS Code tools + `runSubagent`. See `.github/copilot-instructions.md`.
+    - Both: **MUST** pass pre-push hooks (go vet, lint, build, tests) before task completion.
+5.  **Cleanup:** Vibe-kanban cleanup script handles PR creation + auto-merge.
 
 ## MCP Servers & Tool Usage
 

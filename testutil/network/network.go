@@ -609,7 +609,10 @@ func DefaultConfig(factory TestFixtureFactory, opts ...ConfigOption) Config {
 	}
 
 	cdc := fixture.EncodingConfig.Codec
-	genesisState := app.NewDefaultGenesisState(cdc)
+	genesisState := fixture.GenesisState
+	if genesisState == nil {
+		genesisState = app.NewDefaultGenesisState(cdc)
+	}
 
 	if cfg.interceptState != nil {
 		for k, v := range genesisState {

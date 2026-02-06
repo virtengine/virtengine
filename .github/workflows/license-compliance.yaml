@@ -42,7 +42,6 @@ env:
   NODE_VERSION: "20"
   GOWORK: "off"  # Disable workspace mode for vendor operations
   PYTHON_VERSION: "3.11"
-  GOWORK: "off"
 
 jobs:
   # ===========================================================================

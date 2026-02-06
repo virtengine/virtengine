@@ -24,6 +24,7 @@ import (
 
 	"github.com/virtengine/virtengine/app"
 	"github.com/virtengine/virtengine/cmd/virtengine/cmd/hpc"
+	hsmcmd "github.com/virtengine/virtengine/cmd/virtengine/cmd/hsm"
 	"github.com/virtengine/virtengine/cmd/virtengine/cmd/testnetify"
 	"github.com/virtengine/virtengine/cmd/virtengine/cmd/waldur"
 )
@@ -108,6 +109,7 @@ func initRootCmd(rootCmd *cobra.Command, encodingConfig sdkutil.EncodingConfig) 
 		waldur.GetCmd(),
 		hpc.GetCmd(),
 		hpc.GetTemplatesCmd(),
+		hsmcmd.GetCmd(),
 	)
 
 	cli.ServerCmds(rootCmd, home, ac.newApp, ac.appExport, addModuleInitFlags)

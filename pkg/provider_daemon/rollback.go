@@ -275,7 +275,7 @@ func (m *RollbackManager) executeRollback(ctx context.Context, record *RollbackR
 	// Handle resize rollback specially
 	if op.Action == marketplace.LifecycleActionResize && op.ResizeSpec != nil {
 		// Would restore original resize spec
-		params["restore_spec"] = "true"
+		params["restore_spec"] = paramValueTrue
 	}
 
 	// Get resource UUID from operation

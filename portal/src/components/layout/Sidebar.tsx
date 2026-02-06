@@ -11,6 +11,7 @@ export function Sidebar({ variant }: SidebarProps) {
   const pathname = usePathname();
 
   const customerLinks = [
+    { name: 'Dashboard', href: '/dashboard', icon: '📊' },
     { name: 'Marketplace', href: '/marketplace', icon: '🛒' },
     { name: 'My Orders', href: '/orders', icon: '📋' },
     { name: 'Identity', href: '/identity', icon: '🔐' },

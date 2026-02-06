@@ -15,6 +15,7 @@ This document defines the billing schema, pricing rules, tax handling, and settl
 9. [For Customers](#for-customers)
 10. [Export Formats](#export-formats)
 11. [Immutable Ledger](#immutable-ledger)
+12. [Usage→Invoice→Settlement Pipeline](#usageinvoicesettlement-pipeline)
 
 ---
 
@@ -469,6 +470,114 @@ virtengine tx escrow resolve-dispute [dispute-id] \
   --refund-amount 50000uvirt \
   --from provider
 ```
+
+---
+
+## Usage→Invoice→Settlement Pipeline
+
+### Overview
+
+The usage→invoice→settlement pipeline automates the flow from provider usage reports to customer invoices and final escrow settlement. This end-to-end pipeline ensures providers are paid for consumed resources and customers are billed accurately.
+
+```
+Provider Daemon → UsageReport → Invoice Generation → Approval/Dispute → Settlement → Payout
+```
+
+### Pipeline Stages
+
+#### 1. Usage Report Submission
+
+Providers submit usage reports via the `UsagePipelineKeeper.SubmitUsageReport` interface. Each report contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `provider` | bech32 address | Provider submitting the report |
+| `customer` | bech32 address | Customer being billed |
+| `lease_id` | string | Active lease identifier |
+| `escrow_id` | string | Linked escrow account |
+| `resources` | array | Resource usage breakdown |
+| `period_start` | timestamp | Usage period start |
+| `period_end` | timestamp | Usage period end |
+
+**Validation rules:**
+- Provider and customer must be valid bech32 addresses
+- Period end must be strictly after period start
+- At least one resource must be reported
+- Resource quantities must be non-negative
+- Resource units must be non-empty
+
+#### 2. Invoice Generation
+
+`GenerateInvoiceFromUsage` converts validated usage reports into invoices:
+
+1. Each `ResourceUsage` entry becomes a `LineItem`
+2. Line item amounts are calculated as `quantity × unit_price`
+3. All line items are summed into the invoice subtotal
+4. The invoice is created in `Pending` status with a 30-day due date
+5. A resource breakdown is stored on-chain for audit
+
+**Resource types supported:**
+- CPU (milli-seconds)
+- Memory (byte-seconds)
+- Storage (byte-seconds)
+- Network (bytes)
+- GPU (seconds)
+
+#### 3. Invoice Approval and Dispute
+
+Invoices follow the standard lifecycle:
+
+- **Approve**: Customer or automated process moves invoice to `Paid` status
+- **Dispute**: Customer can dispute within the dispute window, which places a holdback on escrow funds
+
+#### 4. Settlement
+
+`ProcessUsageSettlement` handles the full settlement flow:
+
+1. Generates invoice from usage report
+2. Settles the invoice through escrow (fees deducted)
+3. Calculates holdback amounts for disputed invoices
+4. Tracks payout records for provider reconciliation
+
+**Fee breakdown (default):**
+- Platform fee: 2.5%
+- Network fee: 0.5%
+- Community fee: 1.0%
+- Take fee: 4.0%
+- **Total fees: 8.0%**
+
+#### 5. Off-Chain Reconciliation
+
+The `ReconciliationService` in `pkg/billing/` provides usage↔invoice↔payout comparison:
+
+- Detects missing invoices for submitted usage
+- Identifies missing payouts for settled invoices
+- Flags amount mismatches and overpayments
+- Reports provider address mismatches
+- Configurable variance threshold for rounding tolerance
+
+**Discrepancy severity levels:**
+- `low`: Within acceptable variance
+- `medium`: Requires review
+- `high`: Likely error, needs immediate attention
+- `critical`: System integrity concern
+
+### Reconciliation Reporting
+
+Reconciliation reports include:
+- Total usage records processed
+- Total invoices matched
+- Total payouts verified
+- Discrepancy count by type and severity
+- Summary totals (usage amount, invoiced amount, paid out amount)
+
+### Export Formats
+
+All billing data supports export in CSV, JSON, and PDF formats via the `ExportService`:
+- **Invoice CSV**: Per-line-item export with all pricing details
+- **Invoice JSON**: Full invoice document with schema versioning
+- **Invoice PDF**: Formatted document with company branding
+- **Settlement CSV**: Settlement summary with fee breakdowns
 
 ---
 
