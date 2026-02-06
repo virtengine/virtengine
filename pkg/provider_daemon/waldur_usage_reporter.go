@@ -15,6 +15,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	sdkmath "cosmossdk.io/math"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/virtengine/virtengine/pkg/usage"
 	"github.com/virtengine/virtengine/pkg/waldur"
 )
 
@@ -127,6 +130,8 @@ type WaldurUsageReportingMetrics struct {
 	LastFailureTime     time.Time `json:"last_failure_time"`
 	AverageLatencyMs    int64     `json:"average_latency_ms"`
 }
+
+const defaultWaldurCurrency = "uvirt"
 
 // WaldurUsageReporter submits usage data to Waldur
 type WaldurUsageReporter struct {
@@ -304,66 +309,99 @@ func (r *WaldurUsageReporter) buildUsageReport(
 	backendID string,
 	metrics *ResourceMetrics,
 ) *waldur.ResourceUsageReport {
-	components := make([]waldur.ComponentUsage, 0)
+	lineItems := r.buildUsageLineItems(resourceUUID, periodStart, periodEnd, backendID, metrics)
+	metadata := map[string]string{
+		"provider":        r.cfg.ProviderAddress,
+		"allocation_id":   backendID,
+		"collection_time": time.Now().UTC().Format(time.RFC3339),
+	}
 
-	// Convert metrics to Waldur component usages
+	report, err := waldur.UsageReportFromLineItems(resourceUUID, periodStart, periodEnd, lineItems, backendID, metadata)
+	if err != nil {
+		log.Printf("[waldur-usage-reporter] failed to build report from line items: %v", err)
+		return &waldur.ResourceUsageReport{
+			ResourceUUID: resourceUUID,
+			PeriodStart:  periodStart,
+			PeriodEnd:    periodEnd,
+			Components:   []waldur.ComponentUsage{},
+			BackendID:    backendID,
+			Metadata:     metadata,
+			SubmittedAt:  time.Now().UTC(),
+		}
+	}
+
+	return report
+}
+
+func (r *WaldurUsageReporter) buildUsageLineItems(
+	resourceUUID string,
+	periodStart, periodEnd time.Time,
+	backendID string,
+	metrics *ResourceMetrics,
+) []*usage.LineItem {
+	items := make([]*usage.LineItem, 0)
+	metadata := map[string]string{
+		"allocation_id": backendID,
+		"resource_uuid": resourceUUID,
+	}
+	now := time.Now().UTC()
+
 	cpuHours := hoursFromMilliSeconds(metrics.CPUMilliSeconds)
 	if cpuHours > 0 {
-		components = append(components, waldur.ComponentUsage{
-			Type:        "cpu_hours",
-			Amount:      cpuHours,
-			Description: "CPU usage in core-hours",
-		})
+		items = append(items, r.buildLineItem(usage.ResourceCPU, "cpu-hour", cpuHours, backendID, periodStart, periodEnd, metadata, now))
 	}
 
 	gpuHours := hoursFromSeconds(metrics.GPUSeconds)
 	if gpuHours > 0 {
-		components = append(components, waldur.ComponentUsage{
-			Type:        "gpu_hours",
-			Amount:      gpuHours,
-			Description: "GPU usage in GPU-hours",
-		})
+		items = append(items, r.buildLineItem(usage.ResourceGPU, "gpu-hour", gpuHours, backendID, periodStart, periodEnd, metadata, now))
 	}
 
 	ramGBHours := gbHoursFromByteSeconds(metrics.MemoryByteSeconds)
 	if ramGBHours > 0 {
-		components = append(components, waldur.ComponentUsage{
-			Type:        "ram_gb_hours",
-			Amount:      ramGBHours,
-			Description: "Memory usage in GB-hours",
-		})
+		items = append(items, r.buildLineItem(usage.ResourceMemory, "gb-hour", ramGBHours, backendID, periodStart, periodEnd, metadata, now))
 	}
 
 	storageGBHours := gbHoursFromByteSeconds(metrics.StorageByteSeconds)
 	if storageGBHours > 0 {
-		components = append(components, waldur.ComponentUsage{
-			Type:        "storage_gb_hours",
-			Amount:      storageGBHours,
-			Description: "Storage usage in GB-hours",
-		})
+		items = append(items, r.buildLineItem(usage.ResourceStorage, "gb-hour", storageGBHours, backendID, periodStart, periodEnd, metadata, now))
 	}
 
 	networkGB := gbFromBytes(metrics.NetworkBytesIn + metrics.NetworkBytesOut)
 	if networkGB > 0 {
-		components = append(components, waldur.ComponentUsage{
-			Type:        "network_gb",
-			Amount:      networkGB,
-			Description: "Network transfer in GB",
-		})
+		items = append(items, r.buildLineItem(usage.ResourceNetwork, "gb", networkGB, backendID, periodStart, periodEnd, metadata, now))
 	}
 
-	return &waldur.ResourceUsageReport{
-		ResourceUUID: resourceUUID,
-		PeriodStart:  periodStart,
-		PeriodEnd:    periodEnd,
-		Components:   components,
-		BackendID:    backendID,
-		Metadata: map[string]string{
-			"provider":        r.cfg.ProviderAddress,
-			"allocation_id":   backendID,
-			"collection_time": time.Now().UTC().Format(time.RFC3339),
-		},
+	return usage.NormalizeLineItems(items)
+}
+
+func (r *WaldurUsageReporter) buildLineItem(
+	resource usage.ResourceType,
+	unit string,
+	amount float64,
+	backendID string,
+	periodStart, periodEnd time.Time,
+	metadata map[string]string,
+	now time.Time,
+) *usage.LineItem {
+	currency := defaultWaldurCurrency
+	quantity := sdkmath.LegacyNewDecWithPrec(int64(amount*1000000), 6)
+	item := &usage.LineItem{
+		Source:        usage.SourceWaldur,
+		OrderID:       "",
+		LeaseID:       "",
+		UsageRecordID: fmt.Sprintf("%s-%s-%d", backendID, resource, periodStart.Unix()),
+		ResourceType:  resource,
+		Quantity:      quantity,
+		Unit:          unit,
+		UnitPrice:     sdk.NewDecCoinFromDec(currency, sdkmath.LegacyZeroDec()),
+		TotalCost:     sdk.NewCoin(currency, sdkmath.NewInt(0)),
+		PeriodStart:   periodStart,
+		PeriodEnd:     periodEnd,
+		CreatedAt:     now,
+		Metadata:      metadata,
 	}
+	item.LineItemID = item.CanonicalID("waldur")
+	return item
 }
 
 // reportLoop periodically submits pending usage reports
