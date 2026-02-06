@@ -533,26 +533,30 @@ func (m *noopMetrics) Summary(name, help string, objectives map[float64]float64,
 	return &noopSummary{}
 }
 
+// noopCounter is a no-op counter implementation that discards all metrics.
 type noopCounter struct{}
 
-func (c *noopCounter) Inc(labels ...string)                {}
-func (c *noopCounter) Add(value float64, labels ...string) {}
+func (c *noopCounter) Inc(labels ...string)                {} // no-op: intentionally empty
+func (c *noopCounter) Add(value float64, labels ...string) {} // no-op: intentionally empty
 
+// noopGauge is a no-op gauge implementation that discards all metrics.
 type noopGauge struct{}
 
-func (g *noopGauge) Set(value float64, labels ...string) {}
-func (g *noopGauge) Inc(labels ...string)                {}
-func (g *noopGauge) Dec(labels ...string)                {}
-func (g *noopGauge) Add(value float64, labels ...string) {}
-func (g *noopGauge) Sub(value float64, labels ...string) {}
+func (g *noopGauge) Set(value float64, labels ...string) {} // no-op: intentionally empty
+func (g *noopGauge) Inc(labels ...string)                {} // no-op: intentionally empty
+func (g *noopGauge) Dec(labels ...string)                {} // no-op: intentionally empty
+func (g *noopGauge) Add(value float64, labels ...string) {} // no-op: intentionally empty
+func (g *noopGauge) Sub(value float64, labels ...string) {} // no-op: intentionally empty
 
+// noopHistogram is a no-op histogram implementation that discards all metrics.
 type noopHistogram struct{}
 
-func (h *noopHistogram) Observe(value float64, labels ...string) {}
+func (h *noopHistogram) Observe(value float64, labels ...string) {} // no-op: intentionally empty
 
+// noopSummary is a no-op summary implementation that discards all metrics.
 type noopSummary struct{}
 
-func (s *noopSummary) Observe(value float64, labels ...string) {}
+func (s *noopSummary) Observe(value float64, labels ...string) {} // no-op: intentionally empty
 
 // noopTracer is a no-op tracer implementation
 type noopTracer struct{}
@@ -560,16 +564,17 @@ type noopTracer struct{}
 func (t *noopTracer) Start(ctx context.Context, name string, opts ...SpanOption) (context.Context, Span) {
 	return ctx, &noopSpan{}
 }
-func (t *noopTracer) Extract(ctx context.Context, carrier Carrier) context.Context { return ctx }
-func (t *noopTracer) Inject(ctx context.Context, carrier Carrier) error            { return nil }
+func (t *noopTracer) Extract(ctx context.Context, carrier Carrier) context.Context { return ctx } // no-op: returns context unchanged
+func (t *noopTracer) Inject(ctx context.Context, carrier Carrier) error            { return nil } // no-op: injection is a no-op
 
+// noopSpan is a no-op span implementation that discards all tracing data.
 type noopSpan struct{}
 
-func (s *noopSpan) End()                                          {}
-func (s *noopSpan) SetStatus(code StatusCode, description string) {}
-func (s *noopSpan) SetAttribute(key string, value interface{})    {}
-func (s *noopSpan) RecordError(err error)                         {}
-func (s *noopSpan) AddEvent(name string, attrs ...Field)          {}
+func (s *noopSpan) End()                                          {} // no-op: intentionally empty
+func (s *noopSpan) SetStatus(code StatusCode, description string) {} // no-op: intentionally empty
+func (s *noopSpan) SetAttribute(key string, value interface{})    {} // no-op: intentionally empty
+func (s *noopSpan) RecordError(err error)                         {} // no-op: intentionally empty
+func (s *noopSpan) AddEvent(name string, attrs ...Field)          {} // no-op: intentionally empty
 func (s *noopSpan) SpanContext() SpanContext                      { return SpanContext{} }
 
 // ============================================================================
@@ -712,13 +717,17 @@ func kvToFields(keysAndValues ...interface{}) []Field {
 // noopObservability is a no-op implementation of Observability
 type noopObservability struct{}
 
-func (o *noopObservability) LogInfo(ctx context.Context, msg string, keysAndValues ...interface{})  {}
-func (o *noopObservability) LogWarn(ctx context.Context, msg string, keysAndValues ...interface{})  {}
-func (o *noopObservability) LogError(ctx context.Context, msg string, keysAndValues ...interface{}) {}
-func (o *noopObservability) LogDebug(ctx context.Context, msg string, keysAndValues ...interface{}) {}
+func (o *noopObservability) LogInfo(ctx context.Context, msg string, keysAndValues ...interface{}) {
+} // no-op: intentionally empty
+func (o *noopObservability) LogWarn(ctx context.Context, msg string, keysAndValues ...interface{}) {
+} // no-op: intentionally empty
+func (o *noopObservability) LogError(ctx context.Context, msg string, keysAndValues ...interface{}) {
+} // no-op: intentionally empty
+func (o *noopObservability) LogDebug(ctx context.Context, msg string, keysAndValues ...interface{}) {
+} // no-op: intentionally empty
 func (o *noopObservability) RecordGauge(ctx context.Context, name string, value float64, labels map[string]string) {
-}
+} // no-op: intentionally empty
 func (o *noopObservability) RecordHistogram(ctx context.Context, name string, value float64, labels map[string]string) {
-}
+} // no-op: intentionally empty
 func (o *noopObservability) RecordCounter(ctx context.Context, name string, value float64, labels map[string]string) {
-}
+} // no-op: intentionally empty
