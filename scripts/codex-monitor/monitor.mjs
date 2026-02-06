@@ -1,6 +1,13 @@
 import { spawn, spawnSync } from "node:child_process";
 import { watch } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,6 +38,11 @@ const watchEnabled = !getFlag("--no-watch");
 const watchPath = resolve(getArg("--watch-path", scriptPath));
 const codexEnabled =
   !getFlag("--no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
+const repoRoot = resolve(__dirname, "..", "..");
+const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
+const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+const telegramChatId = process.env.TELEGRAM_CHAT_ID;
+const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "30");
 
 let CodexClient = null;
 
@@ -50,8 +62,114 @@ const contextPatterns = [
   "ran out of room",
 ];
 
+async function readStatusSummary() {
+  try {
+    const raw = await readFile(statusPath, "utf8");
+    const status = JSON.parse(raw);
+    const counts = status.counts || {};
+    const completed = Array.isArray(status.completed_tasks)
+      ? status.completed_tasks
+      : [];
+    const recent = completed
+      .slice(-5)
+      .map((item) => (item.pr_number ? `#${item.pr_number}` : null))
+      .filter(Boolean)
+      .join(", ");
+
+    const updatedAt = status.updated_at || "unknown";
+    const running = counts.running ?? 0;
+    const review = counts.review ?? 0;
+    const error = counts.error ?? 0;
+    const tasksCompleted = status.tasks_completed ?? 0;
+    const tasksSubmitted = status.tasks_submitted ?? 0;
+    const backlogRemaining = status.backlog_remaining ?? 0;
+
+    const now = Date.now();
+    const cutoffMs = 4 * 60 * 60 * 1000;
+    const recentWindow = completed.filter((item) => {
+      if (!item.completed_at) {
+        return false;
+      }
+      const ts = Date.parse(item.completed_at);
+      return Number.isFinite(ts) && now - ts <= cutoffMs;
+    });
+    const ratePerHour = recentWindow.length / 4;
+    const etaHours = ratePerHour > 0 ? backlogRemaining / ratePerHour : null;
+    const etaText =
+      etaHours && Number.isFinite(etaHours) ? `${etaHours.toFixed(1)}h` : "n/a";
+
+    return [
+      "VirtEngine Orchestrator Update",
+      `Updated: ${updatedAt}`,
+      `Counts: running=${running}, review=${review}, error=${error}`,
+      `Tasks: completed=${tasksCompleted}, submitted=${tasksSubmitted}`,
+      `Backlog remaining: ${backlogRemaining} (ETA ${etaText})`,
+      recent ? `Recent merged PRs: ${recent}` : "Recent merged PRs: none",
+    ].join("\n");
+  } catch (err) {
+    return "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)";
+  }
+}
+
+async function sendTelegramMessage(text) {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+  const payload = {
+    chat_id: telegramChatId,
+    text,
+  };
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[monitor] telegram send failed: ${res.status} ${body}`);
+    }
+  } catch (err) {
+    console.warn(`[monitor] telegram send failed: ${err.message || err}`);
+  }
+}
+
+function startTelegramNotifier() {
+  if (!telegramToken || !telegramChatId) {
+    console.warn(
+      "[monitor] telegram notifier disabled (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)",
+    );
+    return;
+  }
+  if (!Number.isFinite(telegramIntervalMin) || telegramIntervalMin <= 0) {
+    console.warn("[monitor] telegram notifier disabled (invalid interval)");
+    return;
+  }
+  const intervalMs = telegramIntervalMin * 60 * 1000;
+  const sendUpdate = async () => {
+    const message = await readStatusSummary();
+    await sendTelegramMessage(message);
+  };
+  sendUpdate();
+  setInterval(sendUpdate, intervalMs);
+}
+
 async function ensureLogDir() {
   await mkdir(logDir, { recursive: true });
+}
+
+async function finalizeActiveLog(activePath, archivePath) {
+  try {
+    await rename(activePath, archivePath);
+  } catch {
+    try {
+      await copyFile(activePath, archivePath);
+      await unlink(activePath);
+    } catch {
+      // Best effort only.
+    }
+  }
 }
 
 function nowStamp() {
@@ -175,8 +293,9 @@ async function handleExit(code, signal, logPath) {
 
 async function startProcess() {
   await ensureLogDir();
-  const logPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
-  const logStream = await writeFile(logPath, "", "utf8").then(() => null);
+  const activeLogPath = resolve(logDir, "orchestrator-active.log");
+  const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
+  const logStream = await writeFile(activeLogPath, "", "utf8").then(() => null);
 
   const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -184,7 +303,7 @@ async function startProcess() {
   currentChild = child;
 
   const append = async (chunk) => {
-    await writeFile(logPath, chunk, { flag: "a" });
+    await writeFile(activeLogPath, chunk, { flag: "a" });
   };
 
   child.stdout.on("data", (data) => append(data));
@@ -194,7 +313,9 @@ async function startProcess() {
     if (currentChild === child) {
       currentChild = null;
     }
-    handleExit(code, signal, logPath);
+    finalizeActiveLog(activeLogPath, archiveLogPath).finally(() => {
+      handleExit(code, signal, archiveLogPath);
+    });
   });
 }
 
@@ -278,3 +399,4 @@ process.on("SIGTERM", () => {
 
 startWatcher();
 startProcess();
+startTelegramNotifier();

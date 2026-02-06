@@ -52,7 +52,8 @@ param(
     [switch]$UseAdminMerge,
     [switch]$DryRun,
     [switch]$OneShot,
-    [switch]$RunMergeStrategy
+    [switch]$RunMergeStrategy,
+    [switch]$SyncCopilotState
 )
 
 # ─── Load ve-kanban library ──────────────────────────────────────────────────
@@ -118,16 +119,17 @@ function Write-CycleSummary {
 
 function Get-OrchestratorState {
     if (-not (Test-Path $script:StatePath)) {
-        return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null }
+        return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null; last_ci_sweep_completed = 0 }
     }
     try {
         $raw = Get-Content -Path $script:StatePath -Raw
-        if (-not $raw) { return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null } }
+        if (-not $raw) { return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null; last_ci_sweep_completed = 0 } }
         $state = $raw | ConvertFrom-Json -Depth 5
-        return @{ last_sequence_value = $state.last_sequence_value; last_task_id = $state.last_task_id; last_submitted_at = $state.last_submitted_at }
+        $lastSweep = if ($state.last_ci_sweep_completed) { [int]$state.last_ci_sweep_completed } else { 0 }
+        return @{ last_sequence_value = $state.last_sequence_value; last_task_id = $state.last_task_id; last_submitted_at = $state.last_submitted_at; last_ci_sweep_completed = $lastSweep }
     }
     catch {
-        return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null }
+        return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null; last_ci_sweep_completed = 0 }
     }
 }
 
@@ -151,7 +153,14 @@ function Get-CopilotState {
         if (-not $raw) { return @{ prs = @{} } }
         $state = $raw | ConvertFrom-Json -Depth 6
         if (-not $state.prs) { return @{ prs = @{} } }
-        return @{ prs = $state.prs }
+        if ($state.prs -is [hashtable]) {
+            return @{ prs = $state.prs }
+        }
+        $prs = @{}
+        foreach ($prop in $state.prs.PSObject.Properties) {
+            $prs[$prop.Name] = $prop.Value
+        }
+        return @{ prs = $prs }
     }
     catch {
         return @{ prs = @{} }
@@ -173,7 +182,7 @@ function Get-CopilotPRState {
     param([Parameter(Mandatory)][int]$PRNumber)
     $state = Get-CopilotState
     $key = $PRNumber.ToString()
-    if ($state.prs.$key) { return $state.prs.$key }
+    if ($state.prs.ContainsKey($key)) { return $state.prs[$key] }
     return $null
 }
 
@@ -184,7 +193,7 @@ function Set-CopilotPRState {
     )
     $state = Get-CopilotState
     $key = $PRNumber.ToString()
-    $state.prs.$key = $Value
+    $state.prs[$key] = $Value
     Save-CopilotState -State $state
 }
 
@@ -192,8 +201,8 @@ function Remove-CopilotPRState {
     param([Parameter(Mandatory)][int]$PRNumber)
     $state = Get-CopilotState
     $key = $PRNumber.ToString()
-    if ($state.prs.$key) {
-        $state.prs.PSObject.Properties.Remove($key)
+    if ($state.prs.ContainsKey($key)) {
+        $state.prs.Remove($key)
         Save-CopilotState -State $state
     }
 }
@@ -205,10 +214,13 @@ function Upsert-CopilotPRState {
     )
     $state = Get-CopilotState
     $key = $PRNumber.ToString()
-    $existing = $state.prs.$key
+    $existing = $null
+    if ($state.prs.ContainsKey($key)) {
+        $existing = $state.prs[$key]
+    }
     $requestedAt = if ($existing -and $existing.requested_at) { $existing.requested_at } else { $Update.requested_at }
     $mergedAt = if ($Update.merged_at) { $Update.merged_at } else { $existing.merged_at }
-    $state.prs.$key = @{
+    $state.prs[$key] = @{
         requested_at = $requestedAt
         completed    = $Update.completed
         copilot_pr   = $Update.copilot_pr
@@ -236,6 +248,67 @@ function Apply-CopilotStateToInfo {
     return $copilotState
 }
 
+function Get-ReferencedPRNumbers {
+    param([string[]]$Texts)
+    $refs = New-Object System.Collections.Generic.HashSet[int]
+    if (-not $Texts) { return @() }
+    $pattern = '(?i)(?:PR\s*#?\s*|#)(\d{1,6})'
+    foreach ($text in $Texts) {
+        if (-not $text) { continue }
+        foreach ($match in [regex]::Matches($text, $pattern)) {
+            $value = $match.Groups[1].Value
+            if ($value) { [void]$refs.Add([int]$value) }
+        }
+    }
+    return @($refs | ForEach-Object { $_ })
+}
+
+function Sync-CopilotPRState {
+    <#
+    .SYNOPSIS Seed Copilot state from existing open Copilot PRs.
+    #>
+    $openPrs = Get-OpenPullRequests -Limit 200
+    if (Test-GithubRateLimit) { return }
+    if (-not $openPrs -or @($openPrs).Count -eq 0) { return }
+
+    foreach ($pr in $openPrs) {
+        if (-not $pr.author -or -not (Test-IsCopilotAuthor -Author $pr.author)) { continue }
+        $details = Get-PRDetails -PRNumber $pr.number
+        if (Test-GithubRateLimit) { return }
+        $refs = Get-ReferencedPRNumbers -Texts @(
+            $pr.title,
+            $details.body,
+            $details.headRefName,
+            $pr.headRefName
+        )
+        $isComplete = if ($pr.title -match '^\[WIP\]') { $false } else { $true }
+        $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
+        if (-not $refs -or @($refs).Count -eq 0) {
+            if (-not (Get-CopilotPRState -PRNumber $pr.number)) {
+                Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                    requested_at = $requestedAt
+                    completed    = $isComplete
+                    copilot_pr   = $pr.number
+                    merged_at    = $null
+                }
+                Write-Log "Synced Copilot PR #$($pr.number) (no reference)" -Level "INFO"
+            }
+            continue
+        }
+
+        foreach ($ref in $refs) {
+            if (Get-CopilotPRState -PRNumber $ref) { continue }
+            Upsert-CopilotPRState -PRNumber $ref -Update @{
+                requested_at = $requestedAt
+                completed    = $isComplete
+                copilot_pr   = $pr.number
+                merged_at    = $null
+            }
+            Write-Log "Synced Copilot PR #$($pr.number) for PR #$ref" -Level "INFO"
+        }
+    }
+}
+
 function Save-StatusSnapshot {
     $dir = Split-Path -Parent $script:StatusStatePath
     if (-not (Test-Path $dir)) {
@@ -246,29 +319,32 @@ function Save-StatusSnapshot {
         $attemptId = $entry.Key
         $info = $entry.Value
         $attempts.$attemptId = @{
-            task_id   = $info.task_id
-            branch    = $info.branch
-            pr_number = $info.pr_number
-            status    = $info.status
-            updated_at = (Get-Date).ToString("o")
-            last_process_status = $info.last_process_status
+            task_id               = $info.task_id
+            branch                = $info.branch
+            pr_number             = $info.pr_number
+            status                = $info.status
+            updated_at            = (Get-Date).ToString("o")
+            last_process_status   = $info.last_process_status
             copilot_fix_requested = $info.copilot_fix_requested
             copilot_fix_pr_number = $info.copilot_fix_pr_number
-            copilot_fix_merged = $info.copilot_fix_merged
+            copilot_fix_merged    = $info.copilot_fix_merged
         }
     }
     $counts = Get-TrackedStatusCounts
     $reviewTasks = @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.status -eq "review" } | ForEach-Object { $_.Value.task_id })
     $errorTasks = @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.status -eq "error" } | ForEach-Object { $_.Value.task_id })
+    $todoTasks = Get-VKTasks -Status "todo"
+    $backlogRemaining = if ($todoTasks) { @($todoTasks).Count } else { 0 }
     $snapshot = @{
-        updated_at = (Get-Date).ToString("o")
-        counts = $counts
-        tasks_submitted = $script:TasksSubmitted
-        tasks_completed = $script:TasksCompleted
-        completed_tasks = $script:CompletedTasks
-        review_tasks = $reviewTasks
-        error_tasks = $errorTasks
-        attempts = $attempts
+        updated_at        = (Get-Date).ToString("o")
+        counts            = $counts
+        tasks_submitted   = $script:TasksSubmitted
+        tasks_completed   = $script:TasksCompleted
+        backlog_remaining = $backlogRemaining
+        completed_tasks   = $script:CompletedTasks
+        review_tasks      = $reviewTasks
+        error_tasks       = $errorTasks
+        attempts          = $attempts
     }
     $snapshot | ConvertTo-Json -Depth 6 | Set-Content -Path $script:StatusStatePath -Encoding UTF8
 }
@@ -578,6 +654,7 @@ function Get-MergeCandidates {
     .SYNOPSIS Collect PRs eligible for merge (idle agent, CI passing, age >= CiWaitMin).
     #>
     $candidates = @()
+    $candidateNumbers = @{}
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
         $attemptId = $entry.Key
         $info = $entry.Value
@@ -595,18 +672,14 @@ function Get-MergeCandidates {
             continue
         }
 
-        if ($pr.createdAt) {
-            $createdAt = [datetime]$pr.createdAt
-            $ageMinutes = ((Get-Date) - $createdAt).TotalMinutes
-            if ($ageMinutes -lt $CiWaitMin) { continue }
-        }
-
         $prDetails = Get-PRDetails -PRNumber $pr.number
         if (Test-GithubRateLimit) { return @() }
         $mergeState = if ($prDetails -and $prDetails.mergeStateStatus) { $prDetails.mergeStateStatus } else { "UNKNOWN" }
         if ($mergeState -in @("DIRTY", "CONFLICTING")) { continue }
 
-        $checkStatus = Get-PRCheckStatus -PRNumber $pr.number
+        $baseBranch = if ($prDetails -and $prDetails.baseRefName) { $prDetails.baseRefName } else { $script:VK_TARGET_BRANCH }
+        if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
+        $checkStatus = Get-PRRequiredCheckStatus -PRNumber $pr.number -BaseBranch $baseBranch
         if (Test-GithubRateLimit) { return @() }
         if ($checkStatus -ne "passing") { continue }
 
@@ -617,6 +690,38 @@ function Get-MergeCandidates {
             pr_number  = $pr.number
             created_at = $pr.createdAt
         }
+        $candidateNumbers[$pr.number] = $true
+    }
+
+    $openPrs = Get-OpenPullRequests
+    if (Test-GithubRateLimit) { return @() }
+    foreach ($pr in $openPrs) {
+        if (-not $pr.author -or -not (Test-IsCopilotAuthor -Author $pr.author)) { continue }
+        if ($candidateNumbers.ContainsKey($pr.number)) { continue }
+
+        $prDetails = Get-PRDetails -PRNumber $pr.number
+        if (Test-GithubRateLimit) { return @() }
+        $mergeState = if ($prDetails -and $prDetails.mergeStateStatus) { $prDetails.mergeStateStatus } else { "UNKNOWN" }
+        if ($mergeState -in @("DIRTY", "CONFLICTING")) { continue }
+
+        $baseBranch = if ($pr.baseRefName) { $pr.baseRefName } else { $script:VK_TARGET_BRANCH }
+        if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
+        $checkStatus = Get-PRRequiredCheckStatus -PRNumber $pr.number -BaseBranch $baseBranch
+        if (Test-GithubRateLimit) { return @() }
+        if ($checkStatus -ne "passing") { continue }
+
+        if ($pr.isDraft) {
+            $null = Mark-PRReady -PRNumber $pr.number
+        }
+
+        $candidates += [pscustomobject]@{
+            attempt_id = $null
+            task_id    = $null
+            branch     = $pr.headRefName
+            pr_number  = $pr.number
+            created_at = $pr.createdAt
+        }
+        $candidateNumbers[$pr.number] = $true
     }
     return $candidates
 }
@@ -718,6 +823,44 @@ function Sync-TrackedAttempts {
                         $null = Try-RecoverContextWindow -AttemptId $a.id -Info $tracked
                     }
                 }
+            }
+        }
+    }
+
+    # De-duplicate active attempts for the same task (keep most recent)
+    $attemptsByTask = @{}
+    foreach ($a in $apiAttempts) {
+        if (-not $a.task_id) { continue }
+        if (-not $attemptsByTask.ContainsKey($a.task_id)) {
+            $attemptsByTask[$a.task_id] = @()
+        }
+        $attemptsByTask[$a.task_id] += $a
+    }
+
+    foreach ($taskId in $attemptsByTask.Keys) {
+        $group = @($attemptsByTask[$taskId])
+        if ($group.Count -le 1) { continue }
+
+        $ordered = $group | Sort-Object -Property @{
+            Expression = {
+                try { [datetime]::Parse($_.updated_at) } catch { Get-Date 0 }
+            }
+            Descending = $true
+        }
+        $keeper = $ordered[0]
+        $duplicates = $ordered | Select-Object -Skip 1
+
+        foreach ($dup in $duplicates) {
+            Write-Log "Duplicate attempt for task $($taskId.Substring(0,8)) — archiving $($dup.id.Substring(0,8)) (keeping $($keeper.id.Substring(0,8)))" -Level "WARN"
+            if (-not $DryRun) {
+                Archive-VKAttempt -AttemptId $dup.id | Out-Null
+            }
+            if ($script:TrackedAttempts.ContainsKey($dup.id)) {
+                $tracked = $script:TrackedAttempts[$dup.id]
+                if ($tracked) {
+                    Clear-PendingFollowUp -Info $tracked -Reason "duplicate_attempt"
+                }
+                $script:TrackedAttempts.Remove($dup.id)
             }
         }
     }
@@ -864,17 +1007,6 @@ function Process-CompletedAttempts {
             continue
         }
 
-        $isYoung = $false
-        $ageMinutes = 0
-        # PR exists but not merged — enforce minimum wait before merge
-        if ($pr.createdAt) {
-            $createdAt = [datetime]$pr.createdAt
-            $ageMinutes = ((Get-Date) - $createdAt).TotalMinutes
-            if ($ageMinutes -lt $CiWaitMin) {
-                $isYoung = $true
-            }
-        }
-
         $copilotState = Get-CopilotPRState -PRNumber $pr.number
         if ($copilotState -and -not $copilotState.completed) {
             Write-Log "PR #$($pr.number) has Copilot fix pending — deferring agent follow-ups" -Level "INFO"
@@ -903,17 +1035,14 @@ Please rebase or resolve conflicts on branch `$branch`, then push updated change
             continue
         }
 
-        $checkStatus = Get-PRCheckStatus -PRNumber $pr.number
+        $baseBranch = if ($prDetails -and $prDetails.baseRefName) { $prDetails.baseRefName } else { $script:VK_TARGET_BRANCH }
+        if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
+        $checkStatus = Get-PRRequiredCheckStatus -PRNumber $pr.number -BaseBranch $baseBranch
         if (Test-GithubRateLimit) { return }
         Write-Log "PR #$($pr.number) ($branch): CI=$checkStatus" -Level "INFO"
 
         switch ($checkStatus) {
             "passing" {
-                if ($isYoung) {
-                    $remaining = [math]::Ceiling($CiWaitMin - $ageMinutes)
-                    Write-Log "PR #$($pr.number) created ${ageMinutes:N1}m ago — waiting ${remaining}m before merge" -Level "INFO"
-                    continue
-                }
                 Write-Log "CI passing for PR #$($pr.number) — merging..." -Level "ACTION"
                 if (-not $DryRun) {
                     $mergeResult = Merge-PRWithFallback -PRNumber $pr.number -ForceAdmin:$UseAdminMerge
@@ -984,6 +1113,9 @@ Please rebase or resolve conflicts on branch `$branch`, then push updated change
                 $info.status = "review"
                 $checks = Get-PRChecksDetail -PRNumber $pr.number
                 if (Test-GithubRateLimit) { return }
+                if (-not $checks) {
+                    $checks = @()
+                }
                 $summary = Format-PRCheckFailures -Checks $checks
                 $body = @"
 CI is failing for PR #$($pr.number).
@@ -1067,9 +1199,7 @@ $summary
                             }
                         }
 
-                        $copilotStatus = Get-PRCheckStatus -PRNumber $info.copilot_fix_pr_number
-                        if (Test-GithubRateLimit) { return }
-                        if ($copilotStatus -eq "passing" -and $copilotDetails -and $isCopilotComplete) {
+                        if ($copilotDetails -and $isCopilotComplete) {
                             Write-Log "Merging Copilot PR #$($info.copilot_fix_pr_number) into $branch" -Level "ACTION"
                             if (-not $DryRun) {
                                 $mergedFix = Merge-BranchFromPR -BaseBranch $branch -HeadBranch $copilotDetails.headRefName
@@ -1112,6 +1242,113 @@ $summary
     Save-StatusSnapshot
 }
 
+function Process-StandaloneCopilotPRs {
+    <#
+    .SYNOPSIS Merge completed Copilot-authored PRs (non-[WIP]) even without checks.
+    #>
+    if (Test-GithubCooldown) { return }
+    $openPrs = Get-OpenPullRequests -Limit 200
+    if (Test-GithubRateLimit) { return }
+    if (-not $openPrs -or @($openPrs).Count -eq 0) { return }
+
+    $copilotCandidates = @($openPrs | Where-Object {
+            $_.author -and (Test-IsCopilotAuthor -Author $_.author)
+        })
+    if ($copilotCandidates.Count -gt 0) {
+        Write-Log "Copilot PRs found: $($copilotCandidates.Count)" -Level "INFO"
+    }
+
+    foreach ($pr in $copilotCandidates) {
+        if (-not $pr.author -or -not (Test-IsCopilotAuthor -Author $pr.author)) { continue }
+        if ($pr.title -match '^\[WIP\]') { continue }
+
+        $details = Get-PRDetails -PRNumber $pr.number
+        if (Test-GithubRateLimit) { return }
+        if (-not $details) { continue }
+        $mergeState = if ($details.mergeStateStatus) { $details.mergeStateStatus } else { "UNKNOWN" }
+        $mergeableState = if ($details.mergeable) { $details.mergeable } else { "UNKNOWN" }
+        if ($mergeState -eq "CONFLICTING" -or $mergeableState -eq "CONFLICTING") {
+            Write-Log "Closing Copilot PR #$($pr.number) due to conflicts ($mergeState)" -Level "WARN"
+            if (-not $DryRun) {
+                $null = Close-PRDeleteBranch -PRNumber $pr.number
+                $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
+                $refs = Get-ReferencedPRNumbers -Texts @(
+                    $pr.title,
+                    $details.body,
+                    $details.headRefName,
+                    $pr.headRefName
+                )
+                if (-not $refs -or @($refs).Count -eq 0) {
+                    Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = $null
+                    }
+                }
+                foreach ($ref in $refs) {
+                    Upsert-CopilotPRState -PRNumber $ref -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = $null
+                    }
+                }
+            }
+            continue
+        }
+        if ($mergeState -eq "DIRTY" -and $mergeableState -ne "CONFLICTING") {
+            Write-Log "Skipping Copilot PR #$($pr.number) due to DIRTY merge state" -Level "WARN"
+            continue
+        }
+
+        if ($details.isDraft) {
+            Write-Log "Marking Copilot PR #$($pr.number) ready" -Level "ACTION"
+            if (-not $DryRun) {
+                $null = Mark-PRReady -PRNumber $pr.number
+            }
+            # Re-fetch once after marking ready to attempt same-cycle merge.
+            $details = Get-PRDetails -PRNumber $pr.number
+            if (Test-GithubRateLimit) { return }
+            if (-not $details -or $details.isDraft) { continue }
+        }
+
+        Write-Log "Merging Copilot PR #$($pr.number)" -Level "ACTION"
+        if (-not $DryRun) {
+            $mergeResult = Merge-PRWithFallback -PRNumber $pr.number -ForceAdmin:$UseAdminMerge
+            if ($mergeResult.merged) {
+                $requestedAt = if ($pr.createdAt) { $pr.createdAt } else { (Get-Date).ToString("o") }
+                $refs = Get-ReferencedPRNumbers -Texts @(
+                    $pr.title,
+                    $details.body,
+                    $details.headRefName,
+                    $pr.headRefName
+                )
+                if (-not $refs -or @($refs).Count -eq 0) {
+                    Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = (Get-Date).ToString("o")
+                    }
+                }
+                foreach ($ref in $refs) {
+                    Upsert-CopilotPRState -PRNumber $ref -Update @{
+                        requested_at = $requestedAt
+                        completed    = $true
+                        copilot_pr   = $pr.number
+                        merged_at    = (Get-Date).ToString("o")
+                    }
+                }
+            }
+            else {
+                $reason = if ($mergeResult.reason) { $mergeResult.reason } else { "Unknown merge error" }
+                Write-Log "Merge failed for Copilot PR #$($pr.number): $reason" -Level "WARN"
+            }
+        }
+    }
+}
+
 function Complete-Task {
     <#
     .SYNOPSIS Mark a task as done after its PR is merged.
@@ -1128,11 +1365,47 @@ function Complete-Task {
         Update-VKTaskStatus -TaskId $TaskId -Status "done"
     }
     $script:CompletedTasks += @{
-        task_id = $TaskId
-        pr_number = $PRNumber
+        task_id      = $TaskId
+        pr_number    = $PRNumber
         completed_at = (Get-Date).ToString("o")
     }
     $script:TasksCompleted++
+    Maybe-TriggerCISweep
+}
+
+function Maybe-TriggerCISweep {
+    <#
+    .SYNOPSIS Trigger a Copilot CI sweep every 20 completed tasks.
+    #>
+    if ($script:TasksCompleted -lt 20) { return }
+    if (($script:TasksCompleted % 20) -ne 0) { return }
+
+    $state = Get-OrchestratorState
+    if ($state.last_ci_sweep_completed -eq $script:TasksCompleted) { return }
+
+    Trigger-CISweep
+    $state.last_ci_sweep_completed = $script:TasksCompleted
+    Save-OrchestratorState -State $state
+}
+
+function Trigger-CISweep {
+    <#
+    .SYNOPSIS Create a Copilot-driven CI sweep issue.
+    #>
+    $title = "ci sweep: resolve failing workflows"
+    $body = @"
+@copilot Please review GitHub Actions failures across the repository and resolve them.
+
+Scope:
+- Identify failing workflows on main.
+- Prioritize required checks and security scans.
+- Apply minimal fixes and open PRs as needed.
+"@
+
+    Write-Log "Triggering CI sweep (every 20 tasks)" -Level "ACTION"
+    if (-not $DryRun) {
+        $null = Create-GithubIssue -Title $title -Body $body
+    }
 }
 
 function Fill-ParallelSlots {
@@ -1238,6 +1511,9 @@ function Start-Orchestrator {
     $initialCounts = Get-TrackedStatusCounts
     Write-Log "Initial sync: $($script:TrackedAttempts.Count) tracked (running=$($initialCounts.running), review=$($initialCounts.review), error=$($initialCounts.error))" -Level "INFO"
 
+    Write-Log "SyncCopilotState: seeding Copilot PR state" -Level "INFO"
+    Sync-CopilotPRState
+
     if ($RunMergeStrategy) {
         Write-Log "RunMergeStrategy: merge-only mode" -Level "INFO"
         $candidates = Get-MergeCandidates
@@ -1258,8 +1534,13 @@ function Start-Orchestrator {
             if (-not $DryRun) {
                 $mergeResult = Merge-PRWithFallback -PRNumber $candidate.pr_number -ForceAdmin:$forceAdmin
                 if ($mergeResult.merged) {
-                    Complete-Task -AttemptId $candidate.attempt_id -TaskId $candidate.task_id -PRNumber $candidate.pr_number
-                    $script:TrackedAttempts.Remove($candidate.attempt_id)
+                    if ($candidate.attempt_id -and $candidate.task_id) {
+                        Complete-Task -AttemptId $candidate.attempt_id -TaskId $candidate.task_id -PRNumber $candidate.pr_number
+                        $script:TrackedAttempts.Remove($candidate.attempt_id)
+                    }
+                    else {
+                        Write-Log "Merged PR #$($candidate.pr_number) (no tracked attempt)" -Level "OK"
+                    }
                 }
                 else {
                     Write-Log "Merge failed for PR #$($candidate.pr_number)" -Level "WARN"
@@ -1283,18 +1564,21 @@ function Start-Orchestrator {
         # Step 1: Sync attempt state from API
         Sync-TrackedAttempts
 
-        # Step 2: Process completed attempts (check PRs, merge, mark done)
+        # Step 2: Merge standalone Copilot PRs
+        Process-StandaloneCopilotPRs
+
+        # Step 3: Process completed attempts (check PRs, merge, mark done)
         Process-CompletedAttempts
 
-        # Step 2b: Send queued follow-ups before starting new tasks
+        # Step 3b: Send queued follow-ups before starting new tasks
         Process-PendingFollowUps
 
-        # Step 3: Fill empty parallel slots with new task submissions
+        # Step 4: Fill empty parallel slots with new task submissions
         if (@(Get-PendingFollowUpAttempts).Count -eq 0) {
             Fill-ParallelSlots
         }
 
-        # Step 4: Check if we're done
+        # Step 5: Check if we're done
         if (Test-BacklogEmpty) {
             Write-Log "All tasks completed! Backlog empty, no active attempts." -Level "OK"
             Write-Host ""
@@ -1313,7 +1597,7 @@ function Start-Orchestrator {
             break
         }
 
-        # Step 5: Wait before next cycle
+        # Step 6: Wait before next cycle
         Write-Log "Sleeping ${PollIntervalSec}s until next cycle... (Ctrl+C to stop)" -Level "INFO"
         Start-Sleep -Seconds $PollIntervalSec
 

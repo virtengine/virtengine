@@ -420,6 +420,55 @@ function Get-PRCheckStatus {
     return "passing"
 }
 
+function Get-PRLatestCheckTimestamp {
+    <#
+    .SYNOPSIS Get the most recent check started/completed time for a PR.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $checksJson = Invoke-VKGithub -Args @(
+        "pr", "checks", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--json", "name,state,startedAt,completedAt"
+    )
+    if (-not $checksJson) { return $null }
+    $checks = $checksJson | ConvertFrom-Json
+    if (-not $checks -or $checks.Count -eq 0) { return $null }
+
+    $timestamps = @()
+    foreach ($check in $checks) {
+        if ($check.startedAt) { $timestamps += [datetime]$check.startedAt }
+        if ($check.completedAt) { $timestamps += [datetime]$check.completedAt }
+    }
+    if ($timestamps.Count -eq 0) { return $null }
+    return ($timestamps | Sort-Object -Descending | Select-Object -First 1)
+}
+
+function Get-OpenPullRequests {
+    <#
+    .SYNOPSIS List open PRs with metadata.
+    #>
+    [CmdletBinding()]
+    param([int]$Limit = 100)
+    $prJson = Invoke-VKGithub -Args @(
+        "pr", "list", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--state", "open", "--limit", $Limit.ToString(),
+        "--json", "number,title,author,isDraft,createdAt,headRefName,baseRefName,mergeStateStatus,url,body"
+    )
+    if (-not $prJson -or $prJson -eq "[]") { return @() }
+    return $prJson | ConvertFrom-Json
+}
+
+function Test-IsCopilotAuthor {
+    <#
+    .SYNOPSIS Determine whether a PR author is Copilot.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Author)
+    $login = $Author.login
+    if (-not $login) { return $false }
+    return ($login -match "copilot")
+}
+
 function Get-PRDetails {
     <#
     .SYNOPSIS Get mergeability details for a PR.
@@ -446,6 +495,91 @@ function Get-PRChecksDetail {
     )
     if (-not $checksJson) { return @() }
     return $checksJson | ConvertFrom-Json
+}
+
+function Get-RequiredChecksForBranch {
+    <#
+    .SYNOPSIS Get required status check names for a branch.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Branch)
+    $result = Invoke-VKGithub -Args @(
+        "api",
+        "repos/$script:GH_OWNER/$script:GH_REPO/branches/$Branch/protection/required_status_checks"
+    )
+    if (-not $result) { return @() }
+    $payload = $result | ConvertFrom-Json
+    if (-not $payload) { return @() }
+
+    $names = @()
+    if ($payload.contexts) {
+        $names += @($payload.contexts | Where-Object { $_ })
+    }
+    if ($payload.checks) {
+        $names += @($payload.checks | ForEach-Object {
+                if ($_.context) { $_.context } else { $_.name }
+            } | Where-Object { $_ })
+    }
+
+    return @($names | Sort-Object -Unique)
+}
+
+function Get-PRRequiredCheckStatus {
+    <#
+    .SYNOPSIS Evaluate only required checks for a PR.
+    .OUTPUTS "passing", "failing", "pending", or "unknown"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$PRNumber,
+        [Parameter(Mandatory)][string]$BaseBranch
+    )
+    $required = Get-RequiredChecksForBranch -Branch $BaseBranch
+    if (-not $required -or @($required).Count -eq 0) {
+        return "passing"
+    }
+
+    $checks = Get-PRChecksDetail -PRNumber $PRNumber
+    if (-not $checks) { return "unknown" }
+
+    $requiredLower = $required | ForEach-Object { $_.ToLowerInvariant() }
+    $checksByName = @{}
+    foreach ($check in $checks) {
+        if (-not $check.name) { continue }
+        $checksByName[$check.name.ToLowerInvariant()] = $check.state
+    }
+
+    $hasPending = $false
+    foreach ($name in $requiredLower) {
+        if (-not $checksByName.ContainsKey($name)) {
+            $hasPending = $true
+            continue
+        }
+        $state = $checksByName[$name]
+        if ($state -in @("FAILURE", "ERROR")) { return "failing" }
+        if ($state -in @("PENDING", "IN_PROGRESS", "QUEUED")) { $hasPending = $true }
+    }
+
+    if ($hasPending) { return "pending" }
+    return "passing"
+}
+
+function Create-GithubIssue {
+    <#
+    .SYNOPSIS Create a GitHub issue.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Body
+    )
+    $result = Invoke-VKGithub -Args @(
+        "api",
+        "repos/$script:GH_OWNER/$script:GH_REPO/issues",
+        "-f", "title=$Title",
+        "-f", "body=$Body"
+    )
+    return ($null -ne $result)
 }
 
 function Format-PRCheckFailures {
