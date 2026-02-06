@@ -16,6 +16,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // API path constants
@@ -128,12 +130,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}
 
 	return &Client{
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
-		auth:      cfg.Auth,
-		userAgent: userAgent,
+		baseURL:    baseURL,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(timeout)),
+		auth:       cfg.Auth,
+		userAgent:  userAgent,
 	}, nil
 }
 

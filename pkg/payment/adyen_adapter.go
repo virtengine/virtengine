@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -59,7 +61,7 @@ func NewRealAdyenAdapter(config AdyenConfig) (Gateway, error) {
 
 	return &RealAdyenAdapter{
 		config:     config,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(30 * time.Second)),
 		baseURL:    baseURL,
 	}, nil
 }

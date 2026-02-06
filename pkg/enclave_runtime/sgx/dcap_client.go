@@ -36,6 +36,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // =============================================================================
@@ -382,10 +384,8 @@ func NewDCAPClient(config DCAPClientConfig) *DCAPClient {
 	}
 
 	return &DCAPClient{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: config.Timeout,
-		},
+		config:          config,
+		httpClient:      security.NewSecureHTTPClient(security.WithTimeout(config.Timeout)),
 		collateralCache: make(map[string]*Collateral),
 	}
 }

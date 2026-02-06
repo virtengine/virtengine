@@ -13,6 +13,7 @@ import (
 
 	"cosmossdk.io/log"
 	"github.com/cosmos/cosmos-sdk/telemetry"
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // IDSIntegration provides integration with Intrusion Detection Systems.
@@ -125,7 +126,7 @@ func NewIDSIntegration(config IDSConfig, logger log.Logger) (*IDSIntegration, er
 		config:     config,
 		logger:     logger.With("module", "ids"),
 		alertChan:  make(chan IDSAlert, 1000),
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(10 * time.Second)),
 		ctx:        ctx,
 		cancel:     cancel,
 	}

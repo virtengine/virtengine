@@ -16,6 +16,7 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+	"github.com/virtengine/virtengine/pkg/security"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -227,10 +228,8 @@ func NewRealOsmosisAdapter(cfg AdapterConfig, osmosisConfig OsmosisConfig) (*Rea
 	adapter := &RealOsmosisAdapter{
 		BaseAdapter: NewBaseAdapter(cfg),
 		config:      osmosisConfig,
-		httpClient: &http.Client{
-			Timeout: osmosisConfig.Timeout,
-		},
-		pools: make(map[string]LiquidityPool),
+		httpClient:  security.NewSecureHTTPClient(security.WithTimeout(osmosisConfig.Timeout)),
+		pools:       make(map[string]LiquidityPool),
 	}
 
 	// Override chain ID from config
