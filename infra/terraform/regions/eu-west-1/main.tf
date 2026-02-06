@@ -88,8 +88,8 @@ module "eks" {
       max_size       = 6
       min_size       = 3
       labels = {
-        role                       = "system"
-        "virtengine.io/region"     = local.region
+        role                   = "system"
+        "virtengine.io/region" = local.region
       }
       taints = []
     }
@@ -101,9 +101,9 @@ module "eks" {
       max_size       = var.validator_count + 2
       min_size       = var.validator_count
       labels = {
-        role                       = "validator"
-        "virtengine.io/chain"      = "true"
-        "virtengine.io/region"     = local.region
+        role                   = "validator"
+        "virtengine.io/chain"  = "true"
+        "virtengine.io/region" = local.region
       }
       taints = [{
         key    = "dedicated"
@@ -119,8 +119,8 @@ module "eks" {
       max_size       = 10
       min_size       = 2
       labels = {
-        role                       = "workload"
-        "virtengine.io/region"     = local.region
+        role                   = "workload"
+        "virtengine.io/region" = local.region
       }
       taints = []
     }
@@ -132,9 +132,9 @@ module "eks" {
       max_size       = 2
       min_size       = 1
       labels = {
-        role                       = "archive"
-        "virtengine.io/chain"      = "true"
-        "virtengine.io/region"     = local.region
+        role                   = "archive"
+        "virtengine.io/chain"  = "true"
+        "virtengine.io/region" = local.region
       }
       taints = [{
         key    = "dedicated"
