@@ -303,19 +303,20 @@ func (dm *DiskMonitor) CalculateGrowthProjection() GrowthProjection {
 	if len(history) >= 2 {
 		// Find samples from ~24 hours ago
 		dayAgo := time.Now().Add(-24 * time.Hour)
-		var oldestRelevant *DiskUsageSample
+		oldestRelevantIndex := -1
 		for i := range history {
-			if history[i].Timestamp.After(dayAgo) && oldestRelevant == nil {
+			if history[i].Timestamp.After(dayAgo) {
 				if i > 0 {
-					oldestRelevant = &history[i-1]
+					oldestRelevantIndex = i - 1
 				} else {
-					oldestRelevant = &history[i]
+					oldestRelevantIndex = i
 				}
 				break
 			}
 		}
 
-		if oldestRelevant != nil {
+		if oldestRelevantIndex >= 0 {
+			oldestRelevant := history[oldestRelevantIndex]
 			elapsed := latest.Timestamp.Sub(oldestRelevant.Timestamp)
 			if elapsed > 0 {
 				//nolint:gosec // G115: conversion is safe for disk usage values in practice

@@ -37,7 +37,8 @@ type paymentService struct {
 	metrics *serviceMetrics
 
 	// Price feed aggregator for real conversion rates
-	priceFeed pricefeed.Aggregator
+	priceFeed        pricefeed.Aggregator
+	priceFeedMetrics *pricefeed.PrometheusMetrics
 }
 
 // serviceMetrics tracks service-level metrics
@@ -98,12 +99,17 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 
 	// Initialize price feed aggregator if conversion is enabled
 	if cfg.ConversionConfig.Enabled {
-		priceFeedCfg := buildPriceFeedConfig(cfg.ConversionConfig)
+		priceFeedCfg := buildPriceFeedConfig(cfg)
 		agg, err := pricefeed.NewAggregator(priceFeedCfg)
 		if err != nil {
 			// Log warning but don't fail service creation
 			// Conversion will fall back to error when no price feed available
 		} else {
+			if priceFeedCfg.EnableMetrics {
+				metrics := pricefeed.NewPrometheusMetrics()
+				agg.SetMetrics(metrics)
+				svc.priceFeedMetrics = metrics
+			}
 			svc.priceFeed = agg
 		}
 	}
@@ -145,44 +151,6 @@ func (s *paymentService) registerDisputeWebhookHandlers() {
 	s.RegisterHandler(WebhookEventChargeDisputeFundsReinstated, func(ctx context.Context, event WebhookEvent) error {
 		return s.handleDisputeFundsReinstated(ctx, event)
 	})
-}
-
-// buildPriceFeedConfig creates price feed config from conversion config
-func buildPriceFeedConfig(convCfg ConversionConfig) pricefeed.Config {
-	cfg := pricefeed.DefaultConfig()
-
-	// Configure providers based on price feed source
-	switch convCfg.PriceFeedSource {
-	case "coingecko":
-		cfg.Strategy = pricefeed.StrategyPrimary
-		// CoinGecko is already first priority in default config
-	case "chainlink":
-		cfg.Strategy = pricefeed.StrategyPrimary
-		// Move Chainlink to first priority
-		for i := range cfg.Providers {
-			if cfg.Providers[i].Type == pricefeed.SourceTypeChainlink {
-				cfg.Providers[i].Priority = 1
-			} else {
-				cfg.Providers[i].Priority++
-			}
-		}
-	case "pyth":
-		cfg.Strategy = pricefeed.StrategyPrimary
-		// Move Pyth to first priority
-		for i := range cfg.Providers {
-			if cfg.Providers[i].Type == pricefeed.SourceTypePyth {
-				cfg.Providers[i].Priority = 1
-			} else {
-				cfg.Providers[i].Priority++
-			}
-		}
-	case "median":
-		cfg.Strategy = pricefeed.StrategyMedian
-	case "weighted":
-		cfg.Strategy = pricefeed.StrategyWeighted
-	}
-
-	return cfg
 }
 
 // ============================================================================
@@ -548,21 +516,16 @@ func (s *paymentService) GetDispute(ctx context.Context, disputeID string) (Disp
 	}
 
 	// If not in store, fetch from gateway
-	var disp Dispute
-	var err error
-
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		disp, err = adapter.GetDispute(ctx, disputeID)
-	case *RealAdyenAdapter:
-		disp, err = adapter.GetDispute(ctx, disputeID)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return Dispute{
 			ID:      disputeID,
 			Gateway: s.config.Gateway,
 			Status:  DisputeStatusNeedsResponse,
 		}, nil
 	}
+
+	disp, err := adapter.GetDispute(ctx, disputeID)
 
 	if err != nil {
 		return Dispute{}, err
@@ -588,17 +551,12 @@ func (s *paymentService) ListDisputes(ctx context.Context, paymentIntentID strin
 	}
 
 	// If not in store, fetch from gateway
-	var disputes []Dispute
-	var err error
-
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		disputes, err = adapter.ListDisputes(ctx, paymentIntentID)
-	case *RealAdyenAdapter:
-		disputes, err = adapter.ListDisputes(ctx, paymentIntentID)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return []Dispute{}, nil
 	}
+
+	disputes, err := adapter.ListDisputes(ctx, paymentIntentID)
 
 	if err != nil {
 		return nil, err
@@ -622,15 +580,12 @@ func (s *paymentService) SubmitEvidence(ctx context.Context, disputeID string, e
 	}
 
 	// Submit to gateway
-	var err error
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
-	case *RealAdyenAdapter:
-		err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return ErrGatewayNotConfigured
 	}
+
+	err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
 
 	if err != nil {
 		return err
@@ -660,15 +615,12 @@ func (s *paymentService) SubmitEvidence(ctx context.Context, disputeID string, e
 // AcceptDispute accepts (concedes) a dispute
 func (s *paymentService) AcceptDispute(ctx context.Context, disputeID string) error {
 	// Submit to gateway
-	var err error
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		err = adapter.AcceptDispute(ctx, disputeID)
-	case *RealAdyenAdapter:
-		err = adapter.AcceptDispute(ctx, disputeID)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return ErrGatewayNotConfigured
 	}
+
+	err = adapter.AcceptDispute(ctx, disputeID)
 
 	if err != nil {
 		return err
@@ -694,6 +646,16 @@ func (s *paymentService) GetDisputeStore() DisputeStore {
 	return s.disputeStore
 }
 
+// ResolveDispute executes a resolution workflow and persists the record.
+func (s *paymentService) ResolveDispute(ctx context.Context, req DisputeResolutionRequest) (*DisputeResolutionResult, error) {
+	return ResolveDispute(ctx, s, s.disputeStore, DefaultDisputeLifecycle(), req)
+}
+
+// GenerateDisputeReport generates a finance report from stored dispute data.
+func (s *paymentService) GenerateDisputeReport(opts DisputeReportOptions) (*DisputeReport, error) {
+	return GenerateDisputeReport(s.disputeStore, opts)
+}
+
 // ============================================================================
 // Dispute Webhook Handlers - PAY-003
 // ============================================================================
@@ -702,7 +664,7 @@ func (s *paymentService) GetDisputeStore() DisputeStore {
 //
 //nolint:unparam // ctx kept for future async dispute processing
 func (s *paymentService) handleDisputeCreated(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
@@ -725,20 +687,33 @@ func (s *paymentService) handleDisputeCreated(_ context.Context, event WebhookEv
 //
 //nolint:unparam // ctx kept for future async dispute processing
 func (s *paymentService) handleDisputeUpdated(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
 
 	record, found := s.disputeStore.Get(dispute.ID)
+	lifecycle := DefaultDisputeLifecycle()
 	if !found {
 		// Create new record if not found
 		record = NewDisputeRecord(*dispute, event.Gateway, "webhook:"+string(event.Type))
 	} else {
 		// Update existing record
-		record.UpdateStatus(dispute.Status, "webhook:"+string(event.Type), map[string]string{
+		transitionErr := lifecycle.Transition(record, dispute.Status, "webhook:"+string(event.Type), map[string]string{
 			"event_id": event.ID,
 		})
+		if transitionErr != nil {
+			record.AddAuditEntry(DisputeAuditEntry{
+				Timestamp: time.Now(),
+				Action:    "status_update_rejected",
+				Actor:     "webhook:" + string(event.Type),
+				Details: map[string]string{
+					"event_id": event.ID,
+					"error":    transitionErr.Error(),
+				},
+			})
+			dispute.Status = record.Status
+		}
 		record.Dispute = *dispute
 	}
 
@@ -749,19 +724,32 @@ func (s *paymentService) handleDisputeUpdated(_ context.Context, event WebhookEv
 //
 //nolint:unparam // ctx kept for future async dispute processing
 func (s *paymentService) handleDisputeClosed(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
 
 	record, found := s.disputeStore.Get(dispute.ID)
+	lifecycle := DefaultDisputeLifecycle()
 	if !found {
 		record = NewDisputeRecord(*dispute, event.Gateway, "webhook:"+string(event.Type))
 	} else {
-		record.UpdateStatus(dispute.Status, "webhook:"+string(event.Type), map[string]string{
+		transitionErr := lifecycle.Transition(record, dispute.Status, "webhook:"+string(event.Type), map[string]string{
 			"event_id": event.ID,
 			"outcome":  string(dispute.Status),
 		})
+		if transitionErr != nil {
+			record.AddAuditEntry(DisputeAuditEntry{
+				Timestamp: time.Now(),
+				Action:    "status_update_rejected",
+				Actor:     "webhook:" + string(event.Type),
+				Details: map[string]string{
+					"event_id": event.ID,
+					"error":    transitionErr.Error(),
+				},
+			})
+			dispute.Status = record.Status
+		}
 		record.Dispute = *dispute
 	}
 
@@ -782,7 +770,7 @@ func (s *paymentService) handleDisputeClosed(_ context.Context, event WebhookEve
 //
 //nolint:unparam // ctx kept for future async funds tracking
 func (s *paymentService) handleDisputeFundsWithdrawn(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
@@ -808,7 +796,7 @@ func (s *paymentService) handleDisputeFundsWithdrawn(_ context.Context, event We
 //
 //nolint:unparam // ctx kept for future async funds tracking
 func (s *paymentService) handleDisputeFundsReinstated(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
@@ -830,59 +818,6 @@ func (s *paymentService) handleDisputeFundsReinstated(_ context.Context, event W
 	return nil
 }
 
-// extractDisputeFromEvent extracts dispute data from a webhook event
-func (s *paymentService) extractDisputeFromEvent(event WebhookEvent) *Dispute {
-	data, ok := event.Data.(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	obj, ok := data["object"].(map[string]interface{})
-	if !ok {
-		// Try direct access for Adyen-style events
-		obj = data
-	}
-
-	dispute := &Dispute{
-		Gateway:   event.Gateway,
-		CreatedAt: event.Timestamp,
-		UpdatedAt: time.Now(),
-	}
-
-	if id, ok := obj["id"].(string); ok {
-		dispute.ID = id
-	}
-	if id, ok := obj["pspReference"].(string); ok && dispute.ID == "" {
-		dispute.ID = id
-	}
-	if status, ok := obj["status"].(string); ok {
-		dispute.Status = DisputeStatus(status)
-	}
-	if reason, ok := obj["reason"].(string); ok {
-		dispute.Reason = DisputeReason(reason)
-	}
-	if piID, ok := obj["payment_intent"].(string); ok {
-		dispute.PaymentIntentID = piID
-	}
-	if chargeID, ok := obj["charge"].(string); ok {
-		dispute.ChargeID = chargeID
-	}
-
-	// Parse amount if present
-	if amountVal, ok := obj["amount"].(float64); ok {
-		dispute.Amount.Value = int64(amountVal)
-	}
-	if currency, ok := obj["currency"].(string); ok {
-		dispute.Amount.Currency = Currency(currency)
-	}
-
-	if dispute.ID == "" {
-		return nil
-	}
-
-	return dispute
-}
-
 // ============================================================================
 // Conversion Service Implementation
 // ============================================================================
@@ -899,23 +834,25 @@ func (s *paymentService) GetConversionRate(ctx context.Context, fromCurrency Cur
 		baseAsset := strings.ToLower(toCrypto)
 		quoteAsset := strings.ToLower(string(fromCurrency))
 
-		price, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
-		if err == nil && price.IsValid() {
+		aggPrice, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
+		if err == nil && aggPrice.IsValid() {
 			// Price is in "crypto per fiat unit", so we need to invert
 			// e.g., if 1 UVE = $0.50, then rate is 2 UVE per $1
 			var rate sdkmath.LegacyDec
-			if !price.Price.IsZero() {
-				rate = sdkmath.LegacyOneDec().Quo(price.Price)
+			if !aggPrice.Price.IsZero() {
+				rate = sdkmath.LegacyOneDec().Quo(aggPrice.Price)
 			} else {
 				rate = sdkmath.LegacyZeroDec()
 			}
 
 			return ConversionRate{
-				FromCurrency: fromCurrency,
-				ToCrypto:     toCrypto,
-				Rate:         rate,
-				Timestamp:    price.Timestamp,
-				Source:       price.Source,
+				FromCurrency:      fromCurrency,
+				ToCrypto:          toCrypto,
+				Rate:              rate,
+				Timestamp:         aggPrice.Timestamp,
+				Source:            aggPrice.Source,
+				Strategy:          string(aggPrice.Strategy),
+				SourceAttribution: buildRateAttribution(aggPrice),
 			}, nil
 		}
 
@@ -946,16 +883,18 @@ func (s *paymentService) CreateConversionQuote(ctx context.Context, req Conversi
 
 	// Calculate crypto amount (after fee)
 	netFiat := req.FiatAmount.Value - feeAmount
-	cryptoAmount := sdkmath.NewInt(netFiat).Mul(rate.Rate.TruncateInt())
+	cryptoAmount := rate.Rate.MulInt(sdkmath.NewInt(netFiat)).TruncateInt()
+	expiresAt := conversionQuoteExpiry(rate.Timestamp, s.config.ConversionConfig.QuoteValiditySeconds)
+	quoteID := deterministicQuoteID(req, rate, fee, cryptoAmount, expiresAt)
 
 	return ConversionQuote{
-		ID:                 fmt.Sprintf("quote_%d", time.Now().UnixNano()),
+		ID:                 quoteID,
 		FiatAmount:         req.FiatAmount,
 		CryptoAmount:       cryptoAmount,
 		CryptoDenom:        req.CryptoDenom,
 		Rate:               rate,
 		Fee:                fee,
-		ExpiresAt:          time.Now().Add(time.Duration(s.config.ConversionConfig.QuoteValiditySeconds) * time.Second),
+		ExpiresAt:          expiresAt,
 		DestinationAddress: req.DestinationAddress,
 	}, nil
 }

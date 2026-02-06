@@ -1,11 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: VE-1007 - Fix test API mismatches with implementation
-// This file is temporarily excluded from build due to extensive API mismatches
-// between tests and implementation. The tests use old field names and method
-// signatures that no longer match the actual types.
-
 package types_test
 
 import (
@@ -18,14 +10,6 @@ import (
 
 	"github.com/virtengine/virtengine/x/veid/types"
 )
-
-// Suppress unused import warnings
-var _ = strings.ToLower
-var _ = testing.T{}
-var _ = time.Now
-var _ = assert.True
-var _ = require.NoError
-var _ = types.DomainVerificationVersion
 
 // ============================================================================
 // Domain Verification Tests (VE-223: Domain Verification Scope)
@@ -77,68 +61,130 @@ func TestDomainVerificationRecord_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid - empty domain ID",
-			record: &types.DomainVerificationRecord{
-				Version:        types.DomainVerificationVersion,
-				VerificationID: "",
-				AccountAddress: "cosmos1abc...",
-				Domain:         "example.com",
-				Method:         types.DomainVerifyDNSTXT,
-			},
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.VerificationID = ""
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
 			name: "invalid - empty owner",
-			record: &types.DomainVerificationRecord{
-				Version:        types.DomainVerificationVersion,
-				VerificationID: "domain-1",
-				AccountAddress: "",
-				Domain:         "example.com",
-				Method:         types.DomainVerifyDNSTXT,
-			},
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.AccountAddress = ""
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
 			name: "invalid - empty domain",
-			record: &types.DomainVerificationRecord{
-				Version:        types.DomainVerificationVersion,
-				VerificationID: "domain-1",
-				AccountAddress: "cosmos1abc...",
-				Domain:         "",
-				Method:         types.DomainVerifyDNSTXT,
-			},
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.Domain = ""
+				return record
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid - empty domain hash",
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.DomainHash = ""
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
 			name: "invalid - invalid method",
-			record: &types.DomainVerificationRecord{
-				Version:        types.DomainVerificationVersion,
-				VerificationID: "domain-1",
-				AccountAddress: "cosmos1abc...",
-				Domain:         "example.com",
-				Method:         "invalid_method",
-			},
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.Method = types.DomainVerificationMethod("invalid_method")
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
-			name: "invalid - domain with protocol",
-			record: &types.DomainVerificationRecord{
-				Version:        types.DomainVerificationVersion,
-				VerificationID: "domain-1",
-				AccountAddress: "cosmos1abc...",
-				Domain:         "https://example.com",
-				Method:         types.DomainVerifyDNSTXT,
-			},
+			name: "invalid - empty challenge token",
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.ChallengeToken = ""
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
-			name: "invalid - domain with path",
-			record: &types.DomainVerificationRecord{
-				Version:        types.DomainVerificationVersion,
-				VerificationID: "domain-1",
-				AccountAddress: "cosmos1abc...",
-				Domain:         "example.com/path",
-				Method:         types.DomainVerifyDNSTXT,
-			},
+			name: "invalid - invalid status",
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.Status = types.DomainVerificationStatus("invalid")
+				return record
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid - zero created_at",
+			record: func() *types.DomainVerificationRecord {
+				record := types.NewDomainVerificationRecord(
+					"domain-1",
+					"cosmos1abc...",
+					"example.com",
+					types.DomainVerifyDNSTXT,
+					"challenge-token-1",
+					now,
+				)
+				record.CreatedAt = time.Time{}
+				return record
+			}(),
 			wantErr: true,
 		},
 	}
@@ -257,6 +303,48 @@ func TestDomainVerificationChallenge_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "invalid - empty account address",
+			challenge: &types.DomainVerificationChallenge{
+				ChallengeID:    "challenge-1",
+				AccountAddress: "",
+				Domain:         "example.com",
+				Method:         types.DomainVerifyDNSTXT,
+				Token:          "abc123",
+				ExpectedValue:  "virtengine-verification=abc123",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(24 * time.Hour),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - empty domain",
+			challenge: &types.DomainVerificationChallenge{
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				Domain:         "",
+				Method:         types.DomainVerifyDNSTXT,
+				Token:          "abc123",
+				ExpectedValue:  "virtengine-verification=abc123",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(24 * time.Hour),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - invalid method",
+			challenge: &types.DomainVerificationChallenge{
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				Domain:         "example.com",
+				Method:         types.DomainVerificationMethod("invalid_method"),
+				Token:          "abc123",
+				ExpectedValue:  "virtengine-verification=abc123",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(24 * time.Hour),
+			},
+			wantErr: true,
+		},
+		{
 			name: "invalid - empty token",
 			challenge: &types.DomainVerificationChallenge{
 				ChallengeID:    "challenge-1",
@@ -271,21 +359,7 @@ func TestDomainVerificationChallenge_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty expected value",
-			challenge: &types.DomainVerificationChallenge{
-				ChallengeID:    "challenge-1",
-				AccountAddress: "cosmos1abc...",
-				Domain:         "example.com",
-				Method:         types.DomainVerifyDNSTXT,
-				Token:          "abc123",
-				ExpectedValue:  "",
-				CreatedAt:      now,
-				ExpiresAt:      now.Add(24 * time.Hour),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - expired challenge",
+			name: "invalid - zero created_at",
 			challenge: &types.DomainVerificationChallenge{
 				ChallengeID:    "challenge-1",
 				AccountAddress: "cosmos1abc...",
@@ -293,8 +367,22 @@ func TestDomainVerificationChallenge_Validate(t *testing.T) {
 				Method:         types.DomainVerifyDNSTXT,
 				Token:          "abc123",
 				ExpectedValue:  "virtengine-verification=abc123",
-				CreatedAt:      now.Add(-48 * time.Hour),
-				ExpiresAt:      now.Add(-24 * time.Hour),
+				CreatedAt:      time.Time{},
+				ExpiresAt:      now.Add(24 * time.Hour),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - zero expires_at",
+			challenge: &types.DomainVerificationChallenge{
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				Domain:         "example.com",
+				Method:         types.DomainVerifyDNSTXT,
+				Token:          "abc123",
+				ExpectedValue:  "virtengine-verification=abc123",
+				CreatedAt:      now,
+				ExpiresAt:      time.Time{},
 			},
 			wantErr: true,
 		},
@@ -322,24 +410,25 @@ func TestDomainVerificationChallenge_IsExpired(t *testing.T) {
 	assert.True(t, expired.IsExpired(now), "Challenge should be expired")
 }
 
-// TODO: These tests reference methods that don't exist yet in the implementation.
-// When these methods are added to DomainVerificationRecord, uncomment these tests.
-/*
-func TestDomainVerificationRecord_IsVerified(t *testing.T) {
+func TestDomainVerificationChallenge_Paths(t *testing.T) {
 	now := time.Now()
+	challenge := types.NewDomainVerificationChallenge(
+		"challenge-1",
+		"cosmos1abc...",
+		"example.com",
+		types.DomainVerifyDNSTXT,
+		"abc123",
+		now,
+		3600,
+	)
 
-	verified := &types.DomainVerificationRecord{Status: types.DomainStatusVerified, VerifiedAt: &now}
-	assert.True(t, verified.IsVerified(), "Record should be verified")
-
-	pending := &types.DomainVerificationRecord{Status: types.DomainStatusPending}
-	assert.False(t, pending.IsVerified(), "Pending record should not be verified")
-
-	expired := &types.DomainVerificationRecord{Status: types.DomainStatusExpired}
-	assert.False(t, expired.IsVerified(), "Expired record should not be verified")
+	assert.Equal(t, "_virtengine-verification.example.com", challenge.GetDNSRecordName(), "GetDNSRecordName should return expected name")
+	assert.Equal(t, "/.well-known/virtengine-verification/abc123", challenge.GetHTTPWellKnownPath(), "GetHTTPWellKnownPath should return expected path")
 }
 
-func TestDomainVerificationRecord_GetHashedDomain(t *testing.T) {
+func TestDomainVerificationRecord_StatusTransitions(t *testing.T) {
 	now := time.Now()
+	expiresAt := now.Add(24 * time.Hour)
 
 	record := types.NewDomainVerificationRecord(
 		"domain-1",
@@ -350,29 +439,10 @@ func TestDomainVerificationRecord_GetHashedDomain(t *testing.T) {
 		now,
 	)
 
-	hashed := record.GetHashedDomain()
+	record.MarkVerified(now, &expiresAt)
+	assert.True(t, record.IsActive(), "Verified record should be active")
 
-	// Should be 64 hex characters
-	assert.Len(t, hashed, 64, "GetHashedDomain() length should be 64")
-
-	// Should be lowercase hex
-	assert.Equal(t, strings.ToLower(hashed), hashed, "GetHashedDomain() should return lowercase hex")
+	record.MarkRevoked(now.Add(1*time.Hour), "test")
+	assert.False(t, record.IsActive(), "Revoked record should not be active")
+	assert.Equal(t, types.DomainStatusRevoked, record.Status, "Status should be revoked")
 }
-
-func TestDomainVerificationRecord_CanBeReverified(t *testing.T) {
-	now := time.Now()
-	reverifyAt := now.Add(30 * 24 * time.Hour)
-
-	canReverify := &types.DomainVerificationRecord{
-		Status:               types.DomainStatusVerified,
-		NextReverificationAt: &reverifyAt,
-	}
-
-	assert.True(t, canReverify.CanBeReverified(reverifyAt.Add(time.Hour)), "Record should be eligible for reverification after the reverification date")
-	assert.False(t, canReverify.CanBeReverified(reverifyAt.Add(-time.Hour)), "Record should not be eligible for reverification before the reverification date")
-
-	// Pending records cannot be reverified
-	pending := &types.DomainVerificationRecord{Status: types.DomainStatusPending}
-	assert.False(t, pending.CanBeReverified(now), "Pending records should not be eligible for reverification")
-}
-*/
