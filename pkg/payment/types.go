@@ -1121,3 +1121,64 @@ type TreasuryTransferResult struct {
 	// Error is any error that occurred
 	Error error `json:"-"`
 }
+
+// ============================================================================
+// Reconciliation Report Types (PAY-002)
+// ============================================================================
+
+// ReconciliationReport is a structured reconciliation report for a time range
+type ReconciliationReport struct {
+	// GeneratedAt is when the report was generated
+	GeneratedAt time.Time `json:"generated_at"`
+
+	// PeriodStart is the start of the reporting period
+	PeriodStart time.Time `json:"period_start"`
+
+	// PeriodEnd is the end of the reporting period
+	PeriodEnd time.Time `json:"period_end"`
+
+	// Summary contains aggregate statistics
+	Summary ReconciliationSummary `json:"summary"`
+
+	// Entries needing reconciliation
+	NeedsReconciliation []*ConversionLedgerEntry `json:"needs_reconciliation,omitempty"`
+
+	// Failed entries in the period
+	FailedEntries []*ConversionLedgerEntry `json:"failed_entries,omitempty"`
+
+	// Completed entries in the period
+	CompletedEntries []*ConversionLedgerEntry `json:"completed_entries,omitempty"`
+}
+
+// ReconciliationSummary provides aggregate statistics for the report
+type ReconciliationSummary struct {
+	// TotalConversions is the total number of conversions in the period
+	TotalConversions int `json:"total_conversions"`
+
+	// CompletedCount is the number of successfully completed conversions
+	CompletedCount int `json:"completed_count"`
+
+	// FailedCount is the number of failed conversions
+	FailedCount int `json:"failed_count"`
+
+	// PendingCount is the number of pending conversions
+	PendingCount int `json:"pending_count"`
+
+	// ReconcilingCount is the number of entries needing reconciliation
+	ReconcilingCount int `json:"reconciling_count"`
+
+	// RefundedCount is the number of refunded conversions
+	RefundedCount int `json:"refunded_count"`
+
+	// TotalFiatConverted is the total fiat amount across completed conversions
+	TotalFiatConverted Amount `json:"total_fiat_converted"`
+
+	// TotalCryptoTransferred is the total crypto amount transferred
+	TotalCryptoTransferred sdkmath.Int `json:"total_crypto_transferred"`
+
+	// TotalFeesCollected is the total fees collected
+	TotalFeesCollected Amount `json:"total_fees_collected"`
+
+	// SuccessRate is the percentage of successful conversions
+	SuccessRate float64 `json:"success_rate"`
+}

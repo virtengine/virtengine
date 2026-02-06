@@ -5,6 +5,7 @@ package payment
 
 import (
 	"context"
+	"time"
 )
 
 // ============================================================================
@@ -326,6 +327,9 @@ type ConversionExecutor interface {
 
 	// ListConversionsForReconciliation lists conversions needing manual reconciliation
 	ListConversionsForReconciliation(ctx context.Context) ([]*ConversionLedgerEntry, error)
+
+	// GenerateReconciliationReport generates a structured reconciliation report for a time range
+	GenerateReconciliationReport(ctx context.Context, start, end time.Time) (*ReconciliationReport, error)
 }
 
 // ConversionLedgerStore persists conversion ledger entries
@@ -344,6 +348,9 @@ type ConversionLedgerStore interface {
 
 	// ListPendingReadyForExecution lists pending entries ready for execution
 	ListPendingReadyForExecution(ctx context.Context) ([]*ConversionLedgerEntry, error)
+
+	// ListByDateRange lists entries created within a time range
+	ListByDateRange(ctx context.Context, start, end time.Time) ([]*ConversionLedgerEntry, error)
 }
 
 // ============================================================================
