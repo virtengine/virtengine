@@ -518,3 +518,53 @@ export type {
   A11yReport,
   KeyboardNavTestResult,
 } from "./utils/a11y-testing";
+
+// ============================================================================
+// Organization Management (VE-29H)
+// ============================================================================
+
+export { useOrganization, OrganizationProvider } from "./hooks/useOrganization";
+export type {
+  OrganizationState,
+  OrganizationDetailState,
+  OrganizationActions,
+  OrganizationContextValue,
+  OrganizationProviderProps,
+} from "./hooks/useOrganization";
+
+export type {
+  Organization,
+  OrganizationMetadata,
+  OrganizationRole,
+  OrganizationMember,
+  MemberMetadata,
+  OrganizationInvite,
+  InviteStatus,
+  CreateOrganizationRequest,
+  InviteMemberRequest,
+  OrganizationBillingPeriod,
+  OrganizationBillingSummary,
+} from "./types/organization";
+export {
+  ROLE_PERMISSIONS,
+  hasPermission,
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+} from "./types/organization";
+
+export { OrganizationList } from "./components/organization/OrganizationList";
+export type { OrganizationListProps } from "./components/organization/OrganizationList";
+export { OrganizationCard } from "./components/organization/OrganizationCard";
+export type { OrganizationCardProps } from "./components/organization/OrganizationCard";
+export { OrganizationDetail } from "./components/organization/OrganizationDetail";
+export type { OrganizationDetailProps } from "./components/organization/OrganizationDetail";
+export { MemberList } from "./components/organization/MemberList";
+export type { MemberListProps } from "./components/organization/MemberList";
+export { InviteMemberDialog } from "./components/organization/InviteMemberDialog";
+export type { InviteMemberDialogProps } from "./components/organization/InviteMemberDialog";
+export { CreateOrganizationDialog } from "./components/organization/CreateOrganizationDialog";
+export type { CreateOrganizationDialogProps } from "./components/organization/CreateOrganizationDialog";
+export { OrganizationSwitcher } from "./components/organization/OrganizationSwitcher";
+export type { OrganizationSwitcherProps } from "./components/organization/OrganizationSwitcher";
+export { OrganizationBilling } from "./components/organization/OrganizationBilling";
+export type { OrganizationBillingProps } from "./components/organization/OrganizationBilling";
