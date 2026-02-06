@@ -133,9 +133,9 @@ export function BackupCodes({ onComplete, onCancel, className }: BackupCodesProp
 
         <div className="rounded-lg border bg-muted/30 p-4">
           <div className="grid grid-cols-2 gap-2">
-            {backupCodes.codes.map((code, index) => (
+            {backupCodes.codes.map((code) => (
               <div
-                key={index}
+                key={code}
                 className="rounded border bg-background px-3 py-2 text-center font-mono text-sm"
               >
                 {code}
