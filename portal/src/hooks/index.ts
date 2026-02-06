@@ -20,3 +20,5 @@ export type {
 
 export { useWalletAutoConnect } from './useWalletAutoConnect';
 export type { WalletAutoConnectConfig, UseWalletAutoConnectResult } from './useWalletAutoConnect';
+
+export { usePriceConversion } from './usePriceConversion';
