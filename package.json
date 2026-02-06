@@ -1,0 +1,11 @@
+{
+  "name": "virtengine-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "pnpm": {
+    "overrides": {
+      "@react-native-community/cli": ">=20.0.0",
+      "@react-native-community/cli-server-api": ">=20.0.0"
+    }
+  }
+}
