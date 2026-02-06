@@ -1,5 +1,11 @@
 name: Portal Deploy to GitHub Pages
 
+# IMPORTANT: Before using this workflow, ensure GitHub Pages is enabled:
+# 1. Go to Settings > Pages in your repository
+# 2. Under "Build and deployment", select "GitHub Actions" as the source
+# 3. Save the settings
+# See: https://docs.github.com/en/pages/getting-started-with-github-pages
+
 on:
   push:
     branches: [main]
@@ -58,12 +64,23 @@ jobs:
           NEXT_PUBLIC_CHAIN_REST: https://api.testnet.virtengine.com
           NEXT_PUBLIC_DEV_MODE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
+      - name: Verify static export
+        run: |
+          if [ ! -d "portal/out" ]; then
+            echo "::error::Static export failed. Check if GITHUB_PAGES=true is set correctly."
+            exit 1
+          fi
+          echo "Static export contents:"
+          ls -la portal/out
+          echo "Total files: $(find portal/out -type f | wc -l)"
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: portal/out
 
   # Deploy to GitHub Pages (main branch only)
+  # NOTE: Requires GitHub Pages enabled with "GitHub Actions" source in repo settings
   deploy:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
@@ -76,6 +93,13 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "## 🚀 Portal Deployed Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
 
   # Preview deployment comment for PRs
   preview-comment:
