@@ -42,15 +42,9 @@ interface OfflineSigner {
 
 declare global {
   interface Window {
-    keplr?: KeplrLike;
-    getOfflineSigner?: (
-      chainId: string,
-      signOptions?: WalletSignOptions,
-    ) => OfflineSigner;
-    getOfflineSignerAuto?: (
-      chainId: string,
-      signOptions?: WalletSignOptions,
-    ) => Promise<OfflineSigner>;
+    keplr?: unknown;
+    getOfflineSigner?: unknown;
+    getOfflineSignerAuto?: unknown;
   }
 }
 
@@ -61,7 +55,7 @@ export class KeplrAdapter extends BaseWalletAdapter {
 
   private get keplr(): KeplrLike | undefined {
     if (typeof window === "undefined") return undefined;
-    return window.keplr;
+    return window.keplr as KeplrLike | undefined;
   }
 
   isAvailable(): boolean {
@@ -95,9 +89,18 @@ export class KeplrAdapter extends BaseWalletAdapter {
       throw new Error("Keplr wallet is not installed");
     }
 
-    const signer = window.getOfflineSignerAuto
-      ? await window.getOfflineSignerAuto(chainInfo.chainId)
-      : window.getOfflineSigner?.(chainInfo.chainId);
+    const getOfflineSignerAuto = window.getOfflineSignerAuto as
+      | ((
+          chainId: string,
+          signOptions?: WalletSignOptions,
+        ) => Promise<OfflineSigner>)
+      | undefined;
+    const getOfflineSigner = window.getOfflineSigner as
+      | ((chainId: string, signOptions?: WalletSignOptions) => OfflineSigner)
+      | undefined;
+    const signer = getOfflineSignerAuto
+      ? await getOfflineSignerAuto(chainInfo.chainId)
+      : getOfflineSigner?.(chainInfo.chainId);
 
     if (signer) {
       const accounts = await signer.getAccounts();

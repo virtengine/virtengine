@@ -50,15 +50,9 @@ interface OfflineSigner {
 
 declare global {
   interface Window {
-    leap?: LeapLike;
-    getOfflineSigner?: (
-      chainId: string,
-      signOptions?: WalletSignOptions,
-    ) => OfflineSigner;
-    getOfflineSignerAuto?: (
-      chainId: string,
-      signOptions?: WalletSignOptions,
-    ) => Promise<OfflineSigner>;
+    leap?: unknown;
+    getOfflineSigner?: unknown;
+    getOfflineSignerAuto?: unknown;
   }
 }
 
@@ -69,7 +63,7 @@ export class LeapAdapter extends BaseWalletAdapter {
 
   private get leap(): LeapLike | undefined {
     if (typeof window === "undefined") return undefined;
-    return window.leap;
+    return window.leap as LeapLike | undefined;
   }
 
   isAvailable(): boolean {
@@ -103,13 +97,22 @@ export class LeapAdapter extends BaseWalletAdapter {
       throw new Error("Leap wallet is not installed");
     }
 
+    const getOfflineSignerAuto = window.getOfflineSignerAuto as
+      | ((
+          chainId: string,
+          signOptions?: WalletSignOptions,
+        ) => Promise<OfflineSigner>)
+      | undefined;
+    const getOfflineSigner = window.getOfflineSigner as
+      | ((chainId: string, signOptions?: WalletSignOptions) => OfflineSigner)
+      | undefined;
     const signer = leap.getOfflineSignerAuto
       ? await leap.getOfflineSignerAuto(chainInfo.chainId)
       : leap.getOfflineSigner
         ? leap.getOfflineSigner(chainInfo.chainId)
-        : window.getOfflineSignerAuto
-          ? await window.getOfflineSignerAuto(chainInfo.chainId)
-          : window.getOfflineSigner?.(chainInfo.chainId);
+        : getOfflineSignerAuto
+          ? await getOfflineSignerAuto(chainInfo.chainId)
+          : getOfflineSigner?.(chainInfo.chainId);
 
     if (signer) {
       const accounts = await signer.getAccounts();
