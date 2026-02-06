@@ -11,6 +11,9 @@
 //   - Webhook handlers for asynchronous payment events
 //   - Refund processing and dispute handling
 //   - Multi-currency support with automatic conversion
+//   - Real-time price feed aggregation (CoinGecko/Chainlink/Pyth)
+//   - Cached conversion rates with retry/fallback strategies
+//   - Price feed health monitoring and source attribution
 //
 // Architecture:
 //
@@ -48,6 +51,11 @@
 //   - Rate limiting protects against abuse
 //   - Webhook secrets are stored securely and rotated regularly
 //   - All monetary amounts use decimal precision to avoid floating-point errors
+//
+// Price Feed Fallback Strategy:
+//   - The price feed layer uses prioritized sources, cache, and stale cache
+//   - See pkg/pricefeed/FALLBACK.md for detailed fallback behavior
+//   - If all sources fail, conversion requests are rejected for safety
 //
 // Usage:
 //

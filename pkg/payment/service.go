@@ -37,7 +37,8 @@ type paymentService struct {
 	metrics *serviceMetrics
 
 	// Price feed aggregator for real conversion rates
-	priceFeed pricefeed.Aggregator
+	priceFeed        pricefeed.Aggregator
+	priceFeedMetrics *pricefeed.PrometheusMetrics
 }
 
 // serviceMetrics tracks service-level metrics
@@ -98,12 +99,17 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 
 	// Initialize price feed aggregator if conversion is enabled
 	if cfg.ConversionConfig.Enabled {
-		priceFeedCfg := buildPriceFeedConfig(cfg.ConversionConfig)
+		priceFeedCfg := buildPriceFeedConfig(cfg)
 		agg, err := pricefeed.NewAggregator(priceFeedCfg)
 		if err != nil {
 			// Log warning but don't fail service creation
 			// Conversion will fall back to error when no price feed available
 		} else {
+			if priceFeedCfg.EnableMetrics {
+				metrics := pricefeed.NewPrometheusMetrics()
+				agg.SetMetrics(metrics)
+				svc.priceFeedMetrics = metrics
+			}
 			svc.priceFeed = agg
 		}
 	}
@@ -145,44 +151,6 @@ func (s *paymentService) registerDisputeWebhookHandlers() {
 	s.RegisterHandler(WebhookEventChargeDisputeFundsReinstated, func(ctx context.Context, event WebhookEvent) error {
 		return s.handleDisputeFundsReinstated(ctx, event)
 	})
-}
-
-// buildPriceFeedConfig creates price feed config from conversion config
-func buildPriceFeedConfig(convCfg ConversionConfig) pricefeed.Config {
-	cfg := pricefeed.DefaultConfig()
-
-	// Configure providers based on price feed source
-	switch convCfg.PriceFeedSource {
-	case "coingecko":
-		cfg.Strategy = pricefeed.StrategyPrimary
-		// CoinGecko is already first priority in default config
-	case "chainlink":
-		cfg.Strategy = pricefeed.StrategyPrimary
-		// Move Chainlink to first priority
-		for i := range cfg.Providers {
-			if cfg.Providers[i].Type == pricefeed.SourceTypeChainlink {
-				cfg.Providers[i].Priority = 1
-			} else {
-				cfg.Providers[i].Priority++
-			}
-		}
-	case "pyth":
-		cfg.Strategy = pricefeed.StrategyPrimary
-		// Move Pyth to first priority
-		for i := range cfg.Providers {
-			if cfg.Providers[i].Type == pricefeed.SourceTypePyth {
-				cfg.Providers[i].Priority = 1
-			} else {
-				cfg.Providers[i].Priority++
-			}
-		}
-	case "median":
-		cfg.Strategy = pricefeed.StrategyMedian
-	case "weighted":
-		cfg.Strategy = pricefeed.StrategyWeighted
-	}
-
-	return cfg
 }
 
 // ============================================================================
@@ -899,23 +867,25 @@ func (s *paymentService) GetConversionRate(ctx context.Context, fromCurrency Cur
 		baseAsset := strings.ToLower(toCrypto)
 		quoteAsset := strings.ToLower(string(fromCurrency))
 
-		price, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
-		if err == nil && price.IsValid() {
+		aggPrice, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
+		if err == nil && aggPrice.IsValid() {
 			// Price is in "crypto per fiat unit", so we need to invert
 			// e.g., if 1 UVE = $0.50, then rate is 2 UVE per $1
 			var rate sdkmath.LegacyDec
-			if !price.Price.IsZero() {
-				rate = sdkmath.LegacyOneDec().Quo(price.Price)
+			if !aggPrice.Price.IsZero() {
+				rate = sdkmath.LegacyOneDec().Quo(aggPrice.Price)
 			} else {
 				rate = sdkmath.LegacyZeroDec()
 			}
 
 			return ConversionRate{
-				FromCurrency: fromCurrency,
-				ToCrypto:     toCrypto,
-				Rate:         rate,
-				Timestamp:    price.Timestamp,
-				Source:       price.Source,
+				FromCurrency:      fromCurrency,
+				ToCrypto:          toCrypto,
+				Rate:              rate,
+				Timestamp:         aggPrice.Timestamp,
+				Source:            aggPrice.Source,
+				Strategy:          string(aggPrice.Strategy),
+				SourceAttribution: buildRateAttribution(aggPrice),
 			}, nil
 		}
 
@@ -946,16 +916,18 @@ func (s *paymentService) CreateConversionQuote(ctx context.Context, req Conversi
 
 	// Calculate crypto amount (after fee)
 	netFiat := req.FiatAmount.Value - feeAmount
-	cryptoAmount := sdkmath.NewInt(netFiat).Mul(rate.Rate.TruncateInt())
+	cryptoAmount := rate.Rate.MulInt(sdkmath.NewInt(netFiat)).TruncateInt()
+	expiresAt := conversionQuoteExpiry(rate.Timestamp, s.config.ConversionConfig.QuoteValiditySeconds)
+	quoteID := deterministicQuoteID(req, rate, fee, cryptoAmount, expiresAt)
 
 	return ConversionQuote{
-		ID:                 fmt.Sprintf("quote_%d", time.Now().UnixNano()),
+		ID:                 quoteID,
 		FiatAmount:         req.FiatAmount,
 		CryptoAmount:       cryptoAmount,
 		CryptoDenom:        req.CryptoDenom,
 		Rate:               rate,
 		Fee:                fee,
-		ExpiresAt:          time.Now().Add(time.Duration(s.config.ConversionConfig.QuoteValiditySeconds) * time.Second),
+		ExpiresAt:          expiresAt,
 		DestinationAddress: req.DestinationAddress,
 	}, nil
 }
