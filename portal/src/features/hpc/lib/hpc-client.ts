@@ -225,7 +225,8 @@ const MOCK_TEMPLATES: WorkloadTemplate[] = [
   {
     id: 'tensorflow',
     name: 'TensorFlow',
-    description: 'TensorFlow training pipeline with Keras integration and TensorBoard support.',
+    description:
+      'TensorFlow training pipeline with Keras integration and TensorBoard support.',
     category: 'ml_training',
     defaultResources: {
       nodes: 1,
