@@ -26,14 +26,21 @@
 #>
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-$script:VK_BASE_URL   = $env:VK_BASE_URL   ?? "http://127.0.0.1:54089"
-$script:VK_PROJECT_ID = $env:VK_PROJECT_ID ?? "b2ab449d-07a8-4025-9945-e73096c2ea2e"
-$script:VK_REPO_ID    = $env:VK_REPO_ID    ?? "2d51823f-c9ff-4e2d-8eac-d9c3a2a8b225"
-$script:GH_OWNER      = $env:GH_OWNER      ?? "virtengine-gh"
-$script:GH_REPO       = $env:GH_REPO       ?? "virtengine"
-$script:VK_EXECUTOR   = $env:VK_EXECUTOR   ?? "CODEX"
-$script:VK_VARIANT    = $env:VK_VARIANT    ?? "DEFAULT"
-$script:VK_TARGET_BRANCH = $env:VK_TARGET_BRANCH ?? "origin/main"
+$script:VK_BASE_URL        = $env:VK_BASE_URL        ?? "http://127.0.0.1:54089"
+$script:VK_PROJECT_NAME    = $env:VK_PROJECT_NAME    ?? "virtengine"
+$script:VK_PROJECT_ID      = $env:VK_PROJECT_ID      ?? ""   # Auto-detected if empty
+$script:VK_REPO_ID         = $env:VK_REPO_ID         ?? ""   # Auto-detected if empty
+$script:GH_OWNER           = $env:GH_OWNER           ?? "virtengine-gh"
+$script:GH_REPO            = $env:GH_REPO            ?? "virtengine"
+$script:VK_TARGET_BRANCH   = $env:VK_TARGET_BRANCH   ?? "origin/main"
+$script:VK_INITIALIZED     = $false
+
+# Executor profiles (used for 50/50 cycling between Codex and Copilot)
+$script:VK_EXECUTORS = @(
+    @{ executor = "CODEX";   variant = "DEFAULT" }
+    @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6" }
+)
+$script:VK_EXECUTOR_INDEX = 0   # Tracks cycling state
 
 # ─── HTTP Helpers ─────────────────────────────────────────────────────────────
 
@@ -64,6 +71,86 @@ function Invoke-VKApi {
     }
 }
 
+# ─── Auto-Detection & Initialization ─────────────────────────────────────────
+
+function Initialize-VKConfig {
+    <#
+    .SYNOPSIS Auto-detect project ID and repo ID from vibe-kanban by project name.
+              Works for any user with their own vibe-kanban setup.
+    #>
+    if ($script:VK_INITIALIZED) { return $true }
+
+    # If project ID already set (via env), skip auto-detection for project
+    if ($script:VK_PROJECT_ID) {
+        Write-Verbose "Using configured project ID: $script:VK_PROJECT_ID"
+    } else {
+        Write-Host "  Auto-detecting project '$script:VK_PROJECT_NAME'..." -ForegroundColor DarkGray
+        $projects = Invoke-VKApi -Path "/api/projects"
+        if (-not $projects) {
+            Write-Error "Cannot connect to vibe-kanban at $script:VK_BASE_URL"
+            return $false
+        }
+        $projectList = if ($projects -is [System.Array]) { $projects } elseif ($projects.projects) { $projects.projects } else { @($projects) }
+
+        # Find project by name (case-insensitive)
+        $match = $projectList | Where-Object {
+            $_.name -ieq $script:VK_PROJECT_NAME -or
+            $_.display_name -ieq $script:VK_PROJECT_NAME -or
+            $_.title -ieq $script:VK_PROJECT_NAME
+        } | Select-Object -First 1
+
+        if (-not $match) {
+            Write-Error "No project named '$script:VK_PROJECT_NAME' found. Available: $($projectList | ForEach-Object { $_.name ?? $_.display_name ?? $_.title } | Join-String -Separator ', ')"
+            return $false
+        }
+        $script:VK_PROJECT_ID = $match.id
+        Write-Host "  ✓ Project: $($match.name ?? $match.display_name ?? $match.title) ($($script:VK_PROJECT_ID.Substring(0,8))...)" -ForegroundColor Green
+    }
+
+    # Auto-detect repo ID if not set
+    if (-not $script:VK_REPO_ID) {
+        Write-Host "  Auto-detecting repository..." -ForegroundColor DarkGray
+        $repos = Invoke-VKApi -Path "/api/repos?project_id=$script:VK_PROJECT_ID"
+        if (-not $repos) {
+            # Try alternate endpoint
+            $repos = Invoke-VKApi -Path "/api/projects/$script:VK_PROJECT_ID/repos"
+        }
+        $repoList = if ($repos -is [System.Array]) { $repos } elseif ($repos.repos) { $repos.repos } else { @($repos) }
+
+        if ($repoList -and @($repoList).Count -gt 0) {
+            # Prefer repo matching GH_REPO name, otherwise take first
+            $repoMatch = $repoList | Where-Object { $_.name -ieq $script:GH_REPO } | Select-Object -First 1
+            if (-not $repoMatch) { $repoMatch = $repoList | Select-Object -First 1 }
+            $script:VK_REPO_ID = $repoMatch.id
+            Write-Host "  ✓ Repo: $($repoMatch.name ?? 'default') ($($script:VK_REPO_ID.Substring(0,8))...)" -ForegroundColor Green
+        } else {
+            Write-Warning "No repos found for project. Repo ID must be set via VK_REPO_ID env var."
+            return $false
+        }
+    }
+
+    $script:VK_INITIALIZED = $true
+    return $true
+}
+
+# ─── Executor Cycling ─────────────────────────────────────────────────────────
+
+function Get-NextExecutorProfile {
+    <#
+    .SYNOPSIS Get the next executor profile in the 50/50 Codex/Copilot rotation.
+    #>
+    $profile = $script:VK_EXECUTORS[$script:VK_EXECUTOR_INDEX]
+    $script:VK_EXECUTOR_INDEX = ($script:VK_EXECUTOR_INDEX + 1) % $script:VK_EXECUTORS.Count
+    return $profile
+}
+
+function Get-CurrentExecutorProfile {
+    <#
+    .SYNOPSIS Peek at the next executor profile without advancing the cycle.
+    #>
+    return $script:VK_EXECUTORS[$script:VK_EXECUTOR_INDEX]
+}
+
 # ─── Task Functions ───────────────────────────────────────────────────────────
 
 function Get-VKTasks {
@@ -76,6 +163,7 @@ function Get-VKTasks {
         [string]$Status,
         [int]$Limit = 500
     )
+    if (-not (Initialize-VKConfig)) { return @() }
     $result = Invoke-VKApi -Path "/api/tasks?project_id=$script:VK_PROJECT_ID"
     if (-not $result) { return @() }
     # Result is either the tasks array directly, or an object with .tasks
@@ -143,12 +231,19 @@ function Get-VKAttempts {
 function Submit-VKTaskAttempt {
     <#
     .SYNOPSIS Submit a task as a new attempt (creates worktree + starts agent).
+              Uses the next executor in the Codex/Copilot rotation cycle.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$TaskId,
-        [string]$TargetBranch = $script:VK_TARGET_BRANCH
+        [string]$TargetBranch = $script:VK_TARGET_BRANCH,
+        [hashtable]$ExecutorOverride
     )
+    if (-not (Initialize-VKConfig)) { return $null }
+
+    # Use override if provided, otherwise cycle to next executor
+    $execProfile = if ($ExecutorOverride) { $ExecutorOverride } else { Get-NextExecutorProfile }
+
     $body = @{
         task_id = $TaskId
         repos = @(
@@ -158,11 +253,11 @@ function Submit-VKTaskAttempt {
             }
         )
         executor_profile_id = @{
-            executor = $script:VK_EXECUTOR
-            variant  = $script:VK_VARIANT
+            executor = $execProfile.executor
+            variant  = $execProfile.variant
         }
     }
-    Write-Host "  Submitting attempt for task $TaskId ..." -ForegroundColor Cyan
+    Write-Host "  Submitting attempt for task $TaskId ($($execProfile.executor)/$($execProfile.variant)) ..." -ForegroundColor Cyan
     $result = Invoke-VKApi -Path "/api/task-attempts" -Method "POST" -Body $body
     if ($result) {
         Write-Host "  ✓ Attempt created: $($result.id) → branch $($result.branch)" -ForegroundColor Green
@@ -312,6 +407,7 @@ function Show-Tasks {
 }
 
 function Show-Status {
+    if (-not (Initialize-VKConfig)) { return }
     $active = Get-VKAttempts -ActiveOnly
     $todoTasks = Get-VKTasks -Status "todo"
     $inProgressTasks = Get-VKTasks -Status "inprogress"
@@ -448,10 +544,15 @@ function Show-Usage {
 
   ENVIRONMENT:
     VK_BASE_URL       Vibe-kanban API (default: http://127.0.0.1:54089)
-    VK_PROJECT_ID     Project UUID
-    VK_REPO_ID        Repository UUID
+    VK_PROJECT_NAME   Project name to auto-detect (default: virtengine)
+    VK_PROJECT_ID     Project UUID (auto-detected if empty)
+    VK_REPO_ID        Repository UUID (auto-detected if empty)
     GH_OWNER          GitHub owner (default: virtengine-gh)
     GH_REPO           GitHub repo (default: virtengine)
+
+  EXECUTOR CYCLING:
+    Alternates between CODEX/DEFAULT and COPILOT/CLAUDE_OPUS_4_6
+    at 50/50 rate to avoid rate-limiting on either agent.
 "@ -ForegroundColor White
 }
 

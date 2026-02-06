@@ -6,17 +6,19 @@
 .DESCRIPTION
     Long-running orchestration loop that:
     1. Maintains a target number of parallel task attempts
-    2. Monitors agent completion (PR creation) and CI status
-    3. Auto-merges PRs when CI passes
-    4. Marks completed tasks as done
-    5. Submits the next todo task to fill the slot
-    6. Repeats until the backlog is empty
+    2. Cycles agents 50/50 between Codex and Copilot to avoid rate-limiting
+    3. Monitors agent completion (PR creation) and CI status
+    4. Auto-merges PRs when CI passes
+    5. Ensures previous tasks are merged before starting new ones
+    6. Marks completed tasks as done
+    7. Submits the next todo task to fill the slot
+    8. Repeats until the backlog is empty
 
 .PARAMETER MaxParallel
     Maximum number of concurrent task attempts (default: 2).
 
 .PARAMETER PollIntervalSec
-    Seconds between orchestration cycles (default: 90).
+    Seconds between orchestration cycles (default: 300 = 5 minutes).
 
 .PARAMETER DryRun
     If set, logs what would happen without making changes.
@@ -25,8 +27,11 @@
     Run a single orchestration cycle and exit (useful for testing).
 
 .EXAMPLE
-    # Run with 3 parallel agents, polling every 2 minutes
-    ./ve-orchestrator.ps1 -MaxParallel 3 -PollIntervalSec 120
+    # Run with 2 parallel agents, polling every 5 minutes
+    ./ve-orchestrator.ps1
+
+    # Run with 3 parallel agents, polling every 3 minutes
+    ./ve-orchestrator.ps1 -MaxParallel 3 -PollIntervalSec 180
 
     # Dry-run to see what would happen
     ./ve-orchestrator.ps1 -DryRun
@@ -37,7 +42,7 @@
 [CmdletBinding()]
 param(
     [int]$MaxParallel = 2,
-    [int]$PollIntervalSec = 90,
+    [int]$PollIntervalSec = 300,
     [switch]$DryRun,
     [switch]$OneShot
 )
@@ -51,8 +56,12 @@ $script:TasksCompleted = 0
 $script:TasksSubmitted = 0
 $script:StartTime = Get-Date
 
-# Track attempts we're monitoring: attempt_id → { task_id, branch, pr_number, status }
+# Track attempts we're monitoring: attempt_id → { task_id, branch, pr_number, status, executor }
 $script:TrackedAttempts = @{}
+
+# Merge gate: track tasks that completed their PR but haven't been merged yet
+# This ensures we don't start new tasks until previous ones are merged & confirmed
+$script:PendingMerges = @{}
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 function Write-Log {
@@ -70,11 +79,15 @@ function Write-Log {
 }
 
 function Write-Banner {
+    $nextExec = Get-CurrentExecutorProfile
+    $nextStr = "$($nextExec.executor)/$($nextExec.variant)"
     Write-Host ""
     Write-Host "  ╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║          VirtEngine Task Orchestrator                    ║" -ForegroundColor Cyan
     Write-Host "  ║                                                         ║" -ForegroundColor Cyan
-    Write-Host "  ║   Parallel: $($MaxParallel.ToString().PadRight(4))  Poll: ${PollIntervalSec}s  $(if($DryRun){'DRY-RUN'}else{'LIVE'})                  ║" -ForegroundColor Cyan
+    Write-Host "  ║   Parallel: $($MaxParallel.ToString().PadRight(4))  Poll: ${PollIntervalSec}s  $(if($DryRun){'DRY-RUN'}else{'LIVE'})                ║" -ForegroundColor Cyan
+    Write-Host "  ║   Cycling:  CODEX ⇄ COPILOT (50/50)                    ║" -ForegroundColor Cyan
+    Write-Host "  ║   Next:     $($nextStr.PadRight(44))║" -ForegroundColor Cyan
     Write-Host "  ╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -225,6 +238,8 @@ function Complete-Task {
 function Fill-ParallelSlots {
     <#
     .SYNOPSIS Submit new task attempts to reach the target parallelism.
+              Enforces merge gate: won't start new tasks if previous ones have unmerged PRs.
+              Uses 50/50 Codex/Copilot executor cycling.
     #>
     # Count truly active slots: running + pending CI + agent_done (waiting for PR eval)
     $activeStatuses = @("running", "agent_done", "ci_failing")
@@ -233,6 +248,27 @@ function Fill-ParallelSlots {
     $slotsAvailable = $MaxParallel - $activeCount
     if ($slotsAvailable -le 0) {
         Write-Log "All $MaxParallel slots occupied ($activeCount active)" -Level "INFO"
+        return
+    }
+
+    # ─── MERGE GATE ───────────────────────────────────────────────────────
+    # Don't start new tasks if there are unmerged PRs from previous tasks.
+    # This ensures sequential task confirmation before moving on.
+    $unmatchedPRs = @($script:TrackedAttempts.Values | Where-Object {
+        $_.status -in @("agent_done", "ci_failing") -and $_.pr_number
+    })
+    if ($unmatchedPRs.Count -gt 0) {
+        $prNums = ($unmatchedPRs | ForEach-Object { "#$($_.pr_number)" }) -join ", "
+        Write-Log "MERGE GATE: $($unmatchedPRs.Count) unmerged PR(s) ($prNums) — waiting before new submissions" -Level "WARN"
+        return
+    }
+
+    # Also check for agent_done attempts without PRs yet (cleanup script may not have run)
+    $waitingForPR = @($script:TrackedAttempts.Values | Where-Object {
+        $_.status -eq "agent_done" -and -not $_.pr_number
+    })
+    if ($waitingForPR.Count -gt 0) {
+        Write-Log "MERGE GATE: $($waitingForPR.Count) attempt(s) finished but no PR yet — waiting" -Level "WARN"
         return
     }
 
@@ -254,7 +290,8 @@ function Fill-ParallelSlots {
         }
 
         $shortTitle = $task.title.Substring(0, [Math]::Min(70, $task.title.Length))
-        Write-Log "Submitting: $shortTitle" -Level "ACTION"
+        $nextExec = Get-CurrentExecutorProfile
+        Write-Log "Submitting: $shortTitle [$($nextExec.executor)]" -Level "ACTION"
 
         if (-not $DryRun) {
             $attempt = Submit-VKTaskAttempt -TaskId $task.id
@@ -265,11 +302,14 @@ function Fill-ParallelSlots {
                     pr_number = $null
                     status    = "running"
                     name      = $task.title
+                    executor  = $nextExec.executor
                 }
                 $script:TasksSubmitted++
             }
         } else {
-            Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8))" -Level "ACTION"
+            Write-Log "[DRY-RUN] Would submit task $($task.id.Substring(0,8)) via $($nextExec.executor)" -Level "ACTION"
+            # Still advance the cycling index in dry-run for accurate preview
+            $null = Get-NextExecutorProfile
         }
     }
 }
@@ -296,13 +336,15 @@ function Start-Orchestrator {
     }
     Write-Log "GitHub CLI: $($ghVersion | Select-Object -First 1)" -Level "INFO"
 
-    # Test vibe-kanban API connectivity
-    $projects = Invoke-VKApi -Path "/api/projects"
-    if (-not $projects) {
-        Write-Log "Cannot connect to vibe-kanban at $script:VK_BASE_URL" -Level "ERROR"
+    # Auto-detect project and repo IDs
+    if (-not (Initialize-VKConfig)) {
+        Write-Log "Failed to initialize vibe-kanban configuration" -Level "ERROR"
         return
     }
-    Write-Log "Connected to vibe-kanban ($(@($projects).Count) projects)" -Level "OK"
+    Write-Log "Project: $($script:VK_PROJECT_ID.Substring(0,8))...  Repo: $($script:VK_REPO_ID.Substring(0,8))..." -Level "OK"
+
+    # Log executor cycling setup
+    Write-Log "Executors: $(($script:VK_EXECUTORS | ForEach-Object { "$($_.executor)/$($_.variant)" }) -join ' ⇄ ')" -Level "INFO"
 
     # Initial sync
     Sync-TrackedAttempts
