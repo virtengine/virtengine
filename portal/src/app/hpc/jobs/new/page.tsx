@@ -7,6 +7,7 @@
  */
 
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { JobWizard } from '@/features/hpc';
 
 export default function NewHPCJobPage() {
@@ -23,7 +24,9 @@ export default function NewHPCJobPage() {
         <p className="mt-1 text-muted-foreground">Configure and submit a new HPC workload</p>
       </div>
 
-      <JobWizard />
+      <Suspense fallback={<div className="text-center text-muted-foreground">Loading...</div>}>
+        <JobWizard />
+      </Suspense>
     </div>
   );
 }
