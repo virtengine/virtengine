@@ -10,8 +10,8 @@ When working on a task, do not stop until it is COMPLETELY done. Continue workin
 
 Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
 
-You might notice that your task instructions might have already been implemented by anoth
-ge
+You might notice that your task instructions might have already been implemented by another agent previously - if this is the case, your goal switches to analyzing if the previous agent has completed the task END TO END sufficiently - and if not, fix any issues or problems the previous agent might have missed.
+
 ### PR Creation & Merge (vibe-kanban automation)
 
 If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), the **cleanup script handles PR creation and auto-merge automatically**. In this case:

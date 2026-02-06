@@ -43,6 +43,7 @@
 param(
     [int]$MaxParallel = 2,
     [int]$PollIntervalSec = 300,
+    [int]$GitHubCooldownSec = 300,
     [switch]$DryRun,
     [switch]$OneShot
 )
@@ -55,6 +56,7 @@ $script:CycleCount = 0
 $script:TasksCompleted = 0
 $script:TasksSubmitted = 0
 $script:StartTime = Get-Date
+$script:GitHubCooldownUntil = $null
 
 # Track attempts we're monitoring: attempt_id → { task_id, branch, pr_number, status, executor }
 $script:TrackedAttempts = @{}
@@ -102,6 +104,33 @@ function Write-CycleSummary {
     Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkCyan
 }
 
+function Test-GithubCooldown {
+    if ($script:GitHubCooldownUntil -and (Get-Date) -lt $script:GitHubCooldownUntil) {
+        $remaining = [math]::Ceiling(($script:GitHubCooldownUntil - (Get-Date)).TotalSeconds)
+        Write-Log "GitHub cooldown active ($remaining s remaining) — skipping GitHub calls" -Level "WARN"
+        return $true
+    }
+    return $false
+}
+
+function Set-GithubCooldown {
+    param([string]$Reason)
+    $script:GitHubCooldownUntil = (Get-Date).AddSeconds($GitHubCooldownSec)
+    Write-Log "GitHub rate limit detected — cooling down for ${GitHubCooldownSec}s" -Level "WARN"
+    if ($Reason) {
+        Write-Log "Reason: $Reason" -Level "WARN"
+    }
+}
+
+function Test-GithubRateLimit {
+    $err = Get-VKLastGithubError
+    if ($err -and $err.type -eq "rate_limit") {
+        Set-GithubCooldown -Reason $err.message
+        return $true
+    }
+    return $false
+}
+
 # ─── Core Orchestration ──────────────────────────────────────────────────────
 
 function Sync-TrackedAttempts {
@@ -141,6 +170,7 @@ function Process-CompletedAttempts {
     <#
     .SYNOPSIS Check tracked attempts for PR status and handle merging.
     #>
+    if (Test-GithubCooldown) { return }
     $processed = @()
 
     foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
@@ -155,6 +185,7 @@ function Process-CompletedAttempts {
 
         # Check for PR
         $pr = Get-PRForBranch -Branch $branch
+        if (Test-GithubRateLimit) { return }
         if (-not $pr) {
             # No PR yet — agent might still be working, or cleanup script hasn't run
             continue
@@ -173,6 +204,7 @@ function Process-CompletedAttempts {
 
         # PR exists but not merged — check CI
         $checkStatus = Get-PRCheckStatus -PRNumber $pr.number
+        if (Test-GithubRateLimit) { return }
         Write-Log "PR #$($pr.number) ($branch): CI=$checkStatus" -Level "INFO"
 
         switch ($checkStatus) {
@@ -180,6 +212,7 @@ function Process-CompletedAttempts {
                 Write-Log "CI passing for PR #$($pr.number) — merging..." -Level "ACTION"
                 if (-not $DryRun) {
                     $merged = Merge-PR -PRNumber $pr.number
+                    if (Test-GithubRateLimit) { return }
                     if ($merged) {
                         $info.status = "merged"
                         Complete-Task -AttemptId $attemptId -TaskId $info.task_id -PRNumber $pr.number
@@ -188,6 +221,7 @@ function Process-CompletedAttempts {
                         Write-Log "Merge failed for PR #$($pr.number), will retry" -Level "WARN"
                         # Try enabling auto-merge as fallback
                         Enable-AutoMerge -PRNumber $pr.number
+                        if (Test-GithubRateLimit) { return }
                     }
                 } else {
                     Write-Log "[DRY-RUN] Would merge PR #$($pr.number)" -Level "ACTION"
@@ -198,6 +232,7 @@ function Process-CompletedAttempts {
                 Write-Log "CI pending for PR #$($pr.number) — enabling auto-merge" -Level "INFO"
                 if (-not $DryRun) {
                     Enable-AutoMerge -PRNumber $pr.number
+                    if (Test-GithubRateLimit) { return }
                 }
             }
             "failing" {
