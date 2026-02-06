@@ -8,5 +8,3 @@ declare module 'redis' {
   const redis: any;
   export = redis;
 }
-
-export {};
