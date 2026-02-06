@@ -10,8 +10,6 @@ import type { Offering } from '@/types/offerings';
 import {
   type WizardStep,
   type ResourceConfig,
-  type PriceBreakdown,
-  type EscrowInfo,
   type OrderCreateResult,
   type OrderWizardState,
   WIZARD_STEPS,
