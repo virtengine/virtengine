@@ -11,6 +11,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Separator } from '@/components/ui/Separator';
 import type { EscrowInfo, PriceBreakdown } from '@/features/orders';
 import { formatTokenAmount } from '@/features/orders';
+import { usePriceConversion } from '@/hooks/usePriceConversion';
 
 interface EscrowDepositProps {
   escrowInfo: EscrowInfo;
@@ -18,6 +19,11 @@ interface EscrowDepositProps {
   isSubmitting: boolean;
   error: string | null;
   onSubmit: () => void;
+}
+
+function formatUsd(value: number): string {
+  const precision = value < 0.01 ? 4 : 2;
+  return `$${value.toFixed(precision)}`;
 }
 
 /**
@@ -31,6 +37,8 @@ export function EscrowDeposit({
   error,
   onSubmit,
 }: EscrowDepositProps) {
+  const { uveToUsd, isLoading: rateLoading } = usePriceConversion();
+
   return (
     <div className="space-y-6">
       {/* Wallet Balance */}
@@ -46,12 +54,22 @@ export function EscrowDeposit({
               <p className="text-2xl font-bold">
                 {formatTokenAmount(escrowInfo.walletBalanceUsd)} {priceBreakdown.currency}
               </p>
+              {!rateLoading && uveToUsd(escrowInfo.walletBalanceUsd) !== null && (
+                <p className="text-sm text-muted-foreground">
+                  ~{formatUsd(uveToUsd(escrowInfo.walletBalanceUsd)!)} USD
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Required Deposit</p>
               <p className="text-2xl font-bold text-primary">
                 {formatTokenAmount(escrowInfo.depositUsd)} {priceBreakdown.currency}
               </p>
+              {!rateLoading && uveToUsd(escrowInfo.depositUsd) !== null && (
+                <p className="text-sm text-muted-foreground">
+                  ~{formatUsd(uveToUsd(escrowInfo.depositUsd)!)} USD
+                </p>
+              )}
             </div>
           </div>
 
@@ -85,6 +103,11 @@ export function EscrowDeposit({
               <span className="text-muted-foreground">Escrow Deposit</span>
               <span className="font-medium">
                 {formatTokenAmount(escrowInfo.depositUsd)} {priceBreakdown.currency}
+                {!rateLoading && uveToUsd(escrowInfo.depositUsd) !== null && (
+                  <span className="ml-1 text-muted-foreground">
+                    (~{formatUsd(uveToUsd(escrowInfo.depositUsd)!)})
+                  </span>
+                )}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -96,9 +119,16 @@ export function EscrowDeposit({
 
             <div className="flex items-center justify-between">
               <span className="font-semibold">Total Debit</span>
-              <span className="text-lg font-bold text-primary">
-                {formatTokenAmount(escrowInfo.depositUsd + 0.01)} {priceBreakdown.currency}
-              </span>
+              <div className="text-right">
+                <span className="text-lg font-bold text-primary">
+                  {formatTokenAmount(escrowInfo.depositUsd + 0.01)} {priceBreakdown.currency}
+                </span>
+                {!rateLoading && uveToUsd(escrowInfo.depositUsd + 0.01) !== null && (
+                  <p className="text-sm text-muted-foreground">
+                    ~{formatUsd(uveToUsd(escrowInfo.depositUsd + 0.01)!)} USD
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
