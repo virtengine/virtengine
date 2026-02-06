@@ -1,48 +1,66 @@
-import type { AminoSignDoc, AminoSignResponse, DirectSignDoc, DirectSignResponse, WalletAccount, WalletChainInfo, WalletSignOptions } from '../types';
-import { BaseWalletAdapter } from './base';
+import type {
+  AminoSignDoc,
+  AminoSignResponse,
+  DirectSignDoc,
+  DirectSignResponse,
+  WalletAccount,
+  WalletChainInfo,
+  WalletSignOptions,
+} from "../types";
+import { BaseWalletAdapter } from "./base";
 
 interface KeplrLike {
   enable(chainId: string | string[]): Promise<void>;
-  getKey(chainId: string): Promise<{ bech32Address: string; pubKey: Uint8Array; algo: string }>;
+  getKey(
+    chainId: string,
+  ): Promise<{ bech32Address: string; pubKey: Uint8Array; algo: string }>;
   signAmino(
     chainId: string,
     signer: string,
     signDoc: AminoSignDoc,
-    signOptions?: WalletSignOptions
+    signOptions?: WalletSignOptions,
   ): Promise<AminoSignResponse>;
   signDirect(
     chainId: string,
     signer: string,
     signDoc: DirectSignDoc,
-    signOptions?: WalletSignOptions
+    signOptions?: WalletSignOptions,
   ): Promise<DirectSignResponse>;
   signArbitrary?(
     chainId: string,
     signer: string,
-    data: string | Uint8Array
+    data: string | Uint8Array,
   ): Promise<{ signature: string; pub_key: { value: string } }>;
   experimentalSuggestChain?(chainInfo: Record<string, unknown>): Promise<void>;
 }
 
 interface OfflineSigner {
-  getAccounts(): Promise<Array<{ address: string; algo: string; pubkey: Uint8Array }>>;
+  getAccounts(): Promise<
+    Array<{ address: string; algo: string; pubkey: Uint8Array }>
+  >;
 }
 
 declare global {
   interface Window {
     keplr?: KeplrLike;
-    getOfflineSigner?: (chainId: string, signOptions?: WalletSignOptions) => OfflineSigner;
-    getOfflineSignerAuto?: (chainId: string, signOptions?: WalletSignOptions) => Promise<OfflineSigner>;
+    getOfflineSigner?: (
+      chainId: string,
+      signOptions?: WalletSignOptions,
+    ) => OfflineSigner;
+    getOfflineSignerAuto?: (
+      chainId: string,
+      signOptions?: WalletSignOptions,
+    ) => Promise<OfflineSigner>;
   }
 }
 
 export class KeplrAdapter extends BaseWalletAdapter {
-  readonly type = 'keplr' as const;
-  readonly name = 'Keplr';
-  readonly icon = 'https://wallet.keplr.app/keplr-logo.svg';
+  readonly type = "keplr" as const;
+  readonly name = "Keplr";
+  readonly icon = "https://wallet.keplr.app/keplr-logo.svg";
 
   private get keplr(): KeplrLike | undefined {
-    if (typeof window === 'undefined') return undefined;
+    if (typeof window === "undefined") return undefined;
     return window.keplr;
   }
 
@@ -53,7 +71,7 @@ export class KeplrAdapter extends BaseWalletAdapter {
   async connect(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
     const keplr = this.keplr;
     if (!keplr) {
-      throw new Error('Keplr wallet is not installed');
+      throw new Error("Keplr wallet is not installed");
     }
 
     if (keplr.experimentalSuggestChain) {
@@ -64,7 +82,7 @@ export class KeplrAdapter extends BaseWalletAdapter {
 
     const accounts = await this.getAccounts(chainInfo);
     if (accounts.length === 0) {
-      throw new Error('No Keplr accounts available');
+      throw new Error("No Keplr accounts available");
     }
 
     this.setAccounts(accounts);
@@ -74,7 +92,7 @@ export class KeplrAdapter extends BaseWalletAdapter {
   async getAccounts(chainInfo: WalletChainInfo): Promise<WalletAccount[]> {
     const keplr = this.keplr;
     if (!keplr) {
-      throw new Error('Keplr wallet is not installed');
+      throw new Error("Keplr wallet is not installed");
     }
 
     const signer = window.getOfflineSignerAuto
@@ -104,11 +122,11 @@ export class KeplrAdapter extends BaseWalletAdapter {
     chainId: string,
     signerAddress: string,
     signDoc: AminoSignDoc,
-    signOptions?: WalletSignOptions
+    signOptions?: WalletSignOptions,
   ): Promise<AminoSignResponse> {
     const keplr = this.keplr;
     if (!keplr) {
-      throw new Error('Keplr wallet is not connected');
+      throw new Error("Keplr wallet is not connected");
     }
 
     return keplr.signAmino(chainId, signerAddress, signDoc, signOptions);
@@ -117,11 +135,11 @@ export class KeplrAdapter extends BaseWalletAdapter {
   async signDirect(
     chainId: string,
     signerAddress: string,
-    signDoc: DirectSignDoc
+    signDoc: DirectSignDoc,
   ): Promise<DirectSignResponse> {
     const keplr = this.keplr;
     if (!keplr) {
-      throw new Error('Keplr wallet is not connected');
+      throw new Error("Keplr wallet is not connected");
     }
 
     return keplr.signDirect(chainId, signerAddress, signDoc);
@@ -130,11 +148,11 @@ export class KeplrAdapter extends BaseWalletAdapter {
   async signArbitrary(
     chainId: string,
     signerAddress: string,
-    data: string | Uint8Array
+    data: string | Uint8Array,
   ): Promise<{ signature: string; pubKey: Uint8Array }> {
     const keplr = this.keplr;
     if (!keplr?.signArbitrary) {
-      throw new Error('Keplr signArbitrary not available');
+      throw new Error("Keplr signArbitrary not available");
     }
 
     const result = await keplr.signArbitrary(chainId, signerAddress, data);
@@ -144,7 +162,9 @@ export class KeplrAdapter extends BaseWalletAdapter {
     };
   }
 
-  private toKeplrChainInfo(chainInfo: WalletChainInfo): Record<string, unknown> {
+  private toKeplrChainInfo(
+    chainInfo: WalletChainInfo,
+  ): Record<string, unknown> {
     return {
       chainId: chainInfo.chainId,
       chainName: chainInfo.chainName,
