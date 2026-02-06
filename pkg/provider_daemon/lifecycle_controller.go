@@ -81,8 +81,17 @@ type LifecycleControllerState struct {
 	// IdempotencyIndex maps idempotency key to operation ID
 	IdempotencyIndex map[string]string `json:"idempotency_index"`
 
+	// WaldurOperationIndex maps Waldur operation ID to operation ID
+	WaldurOperationIndex map[string]string `json:"waldur_operation_index,omitempty"`
+
+	// OperationResources maps operation ID to Waldur resource UUID
+	OperationResources map[string]string `json:"operation_resources,omitempty"`
+
 	// ProcessedCallbacks tracks processed callback nonces
 	ProcessedCallbacks map[string]time.Time `json:"processed_callbacks"`
+
+	// ProcessedCallbackIDs tracks processed callback IDs
+	ProcessedCallbackIDs map[string]time.Time `json:"processed_callback_ids,omitempty"`
 
 	// Metrics contains lifecycle metrics
 	Metrics *marketplace.LifecycleMetrics `json:"metrics"`
@@ -94,11 +103,14 @@ type LifecycleControllerState struct {
 // NewLifecycleControllerState creates new state
 func NewLifecycleControllerState() *LifecycleControllerState {
 	return &LifecycleControllerState{
-		Operations:         make(map[string]*marketplace.LifecycleOperation),
-		IdempotencyIndex:   make(map[string]string),
-		ProcessedCallbacks: make(map[string]time.Time),
-		Metrics:            marketplace.NewLifecycleMetrics(),
-		LastUpdated:        time.Now().UTC(),
+		Operations:           make(map[string]*marketplace.LifecycleOperation),
+		IdempotencyIndex:     make(map[string]string),
+		WaldurOperationIndex: make(map[string]string),
+		OperationResources:   make(map[string]string),
+		ProcessedCallbacks:   make(map[string]time.Time),
+		ProcessedCallbackIDs: make(map[string]time.Time),
+		Metrics:              marketplace.NewLifecycleMetrics(),
+		LastUpdated:          time.Now().UTC(),
 	}
 }
 
@@ -209,8 +221,8 @@ func (lc *LifecycleController) ExecuteLifecycleAction(
 	if existingOpID, ok := lc.state.IdempotencyIndex[op.IdempotencyKey]; ok {
 		existingOp := lc.state.Operations[existingOpID]
 		lc.mu.Unlock()
-		if existingOp != nil && !existingOp.State.IsTerminal() {
-			return existingOp, nil // Return existing operation
+		if existingOp != nil {
+			return existingOp, nil // Return existing operation for idempotency
 		}
 	}
 
@@ -229,6 +241,9 @@ func (lc *LifecycleController) ExecuteLifecycleAction(
 	// Save operation
 	lc.state.Operations[op.ID] = op
 	lc.state.IdempotencyIndex[op.IdempotencyKey] = op.ID
+	if waldurResourceUUID != "" {
+		lc.state.OperationResources[op.ID] = waldurResourceUUID
+	}
 	lc.state.Metrics.TotalOperations++
 	lc.state.Metrics.PendingOperations++
 	lc.state.Metrics.OperationsByAction[action]++
@@ -241,10 +256,11 @@ func (lc *LifecycleController) ExecuteLifecycleAction(
 			Operation: string(action),
 			Success:   true,
 			Details: map[string]interface{}{
-				"operation_id":  op.ID,
-				"allocation_id": allocationID,
-				"action":        action,
-				"requested_by":  requestedBy,
+				"operation_id":   op.ID,
+				"allocation_id":  allocationID,
+				"action":         action,
+				"requested_by":   requestedBy,
+				"correlation_id": op.IdempotencyKey,
 			},
 		})
 	}
@@ -322,6 +338,12 @@ func (lc *LifecycleController) executeOperation(ctx context.Context, op *marketp
 	if op.WaldurOperationID == "" {
 		op.WaldurOperationID = response.UUID
 	}
+	if op.WaldurOperationID != "" {
+		lc.state.WaldurOperationIndex[op.WaldurOperationID] = op.ID
+	}
+	if waldurResourceUUID != "" {
+		lc.state.OperationResources[op.ID] = waldurResourceUUID
+	}
 
 	// Generate callback ID and transition to awaiting callback
 	callbackID := fmt.Sprintf("lcb_%s", op.ID)
@@ -333,8 +355,8 @@ func (lc *LifecycleController) executeOperation(ctx context.Context, op *marketp
 	// Save state
 	_ = lc.saveState()
 
-	log.Printf("[lifecycle-controller] operation %s awaiting callback for allocation %s action %s",
-		op.ID, op.AllocationID, op.Action)
+	log.Printf("[lifecycle-controller] operation %s awaiting callback for allocation %s action %s correlation_id=%s",
+		op.ID, op.AllocationID, op.Action, op.IdempotencyKey)
 }
 
 // handleOperationFailure handles a failed operation
@@ -345,11 +367,16 @@ func (lc *LifecycleController) handleOperationFailure(op *marketplace.LifecycleO
 	op.Error = err.Error()
 
 	// Check if should retry
-	if op.ShouldRetry() && op.IncrementRetry() {
+	if shouldRetryLifecycleError(op, err) {
+		op.IncrementRetry()
 		op.State = marketplace.LifecycleOpStatePending
 		op.UpdatedAt = time.Now().UTC()
-		log.Printf("[lifecycle-controller] operation %s will retry (attempt %d/%d): %v",
-			op.ID, op.RetryCount, op.MaxRetries, err)
+		if lc.state.Metrics.ExecutingOperations > 0 {
+			lc.state.Metrics.ExecutingOperations--
+		}
+		lc.state.Metrics.PendingOperations++
+		log.Printf("[lifecycle-controller] operation %s will retry (attempt %d/%d, correlation_id=%s): %v",
+			op.ID, op.RetryCount, op.MaxRetries, op.IdempotencyKey, err)
 	} else {
 		// Handle rollback
 		switch op.RollbackPolicy {
@@ -368,7 +395,7 @@ func (lc *LifecycleController) handleOperationFailure(op *marketplace.LifecycleO
 		lc.state.Metrics.ExecutingOperations--
 		op.UpdatedAt = time.Now().UTC()
 
-		log.Printf("[lifecycle-controller] operation %s failed: %v", op.ID, err)
+		log.Printf("[lifecycle-controller] operation %s failed (correlation_id=%s): %v", op.ID, op.IdempotencyKey, err)
 	}
 
 	// Audit log
@@ -379,10 +406,11 @@ func (lc *LifecycleController) handleOperationFailure(op *marketplace.LifecycleO
 			Success:      false,
 			ErrorMessage: err.Error(),
 			Details: map[string]interface{}{
-				"operation_id":  op.ID,
-				"allocation_id": op.AllocationID,
-				"action":        op.Action,
-				"retry_count":   op.RetryCount,
+				"operation_id":   op.ID,
+				"allocation_id":  op.AllocationID,
+				"action":         op.Action,
+				"retry_count":    op.RetryCount,
+				"correlation_id": op.IdempotencyKey,
 			},
 		})
 	}
@@ -399,7 +427,8 @@ func (lc *LifecycleController) handleOperationFailure(op *marketplace.LifecycleO
 // ProcessCallback processes a lifecycle callback
 func (lc *LifecycleController) ProcessCallback(ctx context.Context, callback *marketplace.LifecycleCallback) error {
 	// Validate callback
-	if err := callback.ValidateAt(time.Now()); err != nil {
+	now := time.Now().UTC()
+	if err := callback.ValidateAt(now); err != nil {
 		return fmt.Errorf("invalid callback: %w", err)
 	}
 
@@ -410,20 +439,44 @@ func (lc *LifecycleController) ProcessCallback(ctx context.Context, callback *ma
 	if _, processed := lc.state.ProcessedCallbacks[callback.Nonce]; processed {
 		return nil // Already processed
 	}
+	if callback.ID != "" {
+		if _, processed := lc.state.ProcessedCallbackIDs[callback.ID]; processed {
+			return nil
+		}
+	}
 
 	// Find operation
 	op, ok := lc.state.Operations[callback.OperationID]
 	if !ok {
-		return fmt.Errorf("operation not found: %s", callback.OperationID)
+		if opID, found := lc.state.WaldurOperationIndex[callback.OperationID]; found {
+			op, ok = lc.state.Operations[opID]
+		}
+		if !ok && callback.Nonce != "" {
+			if opID, found := lc.state.IdempotencyIndex[callback.Nonce]; found {
+				op, ok = lc.state.Operations[opID]
+			}
+		}
+		if !ok {
+			return fmt.Errorf("operation not found: %s", callback.OperationID)
+		}
 	}
 
 	// Verify callback matches expected
 	if op.CallbackID != "" && op.CallbackID != callback.ID {
-		return fmt.Errorf("callback ID mismatch: expected %s, got %s", op.CallbackID, callback.ID)
+		log.Printf("[lifecycle-controller] warning: callback ID mismatch for op %s (expected %s got %s)",
+			op.ID, op.CallbackID, callback.ID)
+	}
+
+	if op.State.IsTerminal() {
+		lc.state.ProcessedCallbacks[callback.Nonce] = now.Add(2 * time.Hour)
+		if callback.ID != "" {
+			lc.state.ProcessedCallbackIDs[callback.ID] = now.Add(2 * time.Hour)
+		}
+		return lc.saveState()
 	}
 
 	// Update operation state
-	completedAt := time.Now().UTC()
+	completedAt := now
 	op.CompletedAt = &completedAt
 	op.UpdatedAt = completedAt
 
@@ -435,7 +488,9 @@ func (lc *LifecycleController) ProcessCallback(ctx context.Context, callback *ma
 		op.Error = callback.Error
 		lc.state.Metrics.FailedOperations++
 	}
-	lc.state.Metrics.ExecutingOperations--
+	if lc.state.Metrics.ExecutingOperations > 0 {
+		lc.state.Metrics.ExecutingOperations--
+	}
 
 	// Calculate completion time
 	if op.StartedAt != nil {
@@ -451,6 +506,9 @@ func (lc *LifecycleController) ProcessCallback(ctx context.Context, callback *ma
 
 	// Mark callback as processed
 	lc.state.ProcessedCallbacks[callback.Nonce] = completedAt.Add(2 * time.Hour)
+	if callback.ID != "" {
+		lc.state.ProcessedCallbackIDs[callback.ID] = completedAt.Add(2 * time.Hour)
+	}
 
 	// Audit log
 	if lc.auditLogger != nil && lc.cfg.EnableAuditLogging {
@@ -459,16 +517,17 @@ func (lc *LifecycleController) ProcessCallback(ctx context.Context, callback *ma
 			Operation: string(op.Action),
 			Success:   callback.Success,
 			Details: map[string]interface{}{
-				"operation_id":  op.ID,
-				"allocation_id": op.AllocationID,
-				"callback_id":   callback.ID,
-				"result_state":  callback.ResultState,
+				"operation_id":   op.ID,
+				"allocation_id":  op.AllocationID,
+				"callback_id":    callback.ID,
+				"result_state":   callback.ResultState,
+				"correlation_id": op.IdempotencyKey,
 			},
 		})
 	}
 
-	log.Printf("[lifecycle-controller] operation %s completed with callback %s (success=%t)",
-		op.ID, callback.ID, callback.Success)
+	log.Printf("[lifecycle-controller] operation %s completed with callback %s (success=%t, correlation_id=%s)",
+		op.ID, callback.ID, callback.Success, op.IdempotencyKey)
 
 	return lc.saveState()
 }
@@ -486,6 +545,18 @@ func (lc *LifecycleController) GetOperationByIdempotencyKey(key string) (*market
 	lc.mu.RLock()
 	defer lc.mu.RUnlock()
 	opID, ok := lc.state.IdempotencyIndex[key]
+	if !ok {
+		return nil, false
+	}
+	op, ok := lc.state.Operations[opID]
+	return op, ok
+}
+
+// GetOperationByWaldurOperationID retrieves an operation by Waldur operation ID.
+func (lc *LifecycleController) GetOperationByWaldurOperationID(waldurOpID string) (*marketplace.LifecycleOperation, bool) {
+	lc.mu.RLock()
+	defer lc.mu.RUnlock()
+	opID, ok := lc.state.WaldurOperationIndex[waldurOpID]
 	if !ok {
 		return nil, false
 	}
@@ -571,20 +642,28 @@ func (lc *LifecycleController) retryWorker(ctx context.Context) {
 }
 
 // processRetries processes operations needing retry
-func (lc *LifecycleController) processRetries(_ context.Context) {
+func (lc *LifecycleController) processRetries(ctx context.Context) {
 	lc.mu.RLock()
 	var toRetry []*marketplace.LifecycleOperation
 	for _, op := range lc.state.Operations {
-		if op.State == marketplace.LifecycleOpStatePending && op.RetryCount > 0 {
+		if op.State == marketplace.LifecycleOpStatePending && op.RetryCount > 0 && !op.IsExpired(time.Now().UTC()) {
 			toRetry = append(toRetry, op)
 		}
 	}
 	lc.mu.RUnlock()
 
 	for _, op := range toRetry {
-		log.Printf("[lifecycle-controller] retrying operation %s (attempt %d)", op.ID, op.RetryCount)
-		// Re-execute would need resource UUID from allocation mapping
-		// For now, just log
+		resourceUUID := ""
+		lc.mu.RLock()
+		resourceUUID = lc.state.OperationResources[op.ID]
+		lc.mu.RUnlock()
+		if resourceUUID == "" {
+			log.Printf("[lifecycle-controller] retry skipped for operation %s: missing resource UUID", op.ID)
+			continue
+		}
+		log.Printf("[lifecycle-controller] retrying operation %s (attempt %d/%d, correlation_id=%s)",
+			op.ID, op.RetryCount, op.MaxRetries, op.IdempotencyKey)
+		go lc.executeOperation(ctx, op, resourceUUID)
 	}
 }
 
@@ -621,6 +700,10 @@ func (lc *LifecycleController) cleanup() {
 		if op.State.IsTerminal() && op.CompletedAt != nil && op.CompletedAt.Before(cutoff) {
 			delete(lc.state.Operations, id)
 			delete(lc.state.IdempotencyIndex, op.IdempotencyKey)
+			delete(lc.state.OperationResources, id)
+			if op.WaldurOperationID != "" {
+				delete(lc.state.WaldurOperationIndex, op.WaldurOperationID)
+			}
 			cleanedOps++
 		}
 	}
@@ -630,6 +713,12 @@ func (lc *LifecycleController) cleanup() {
 	for nonce, expiry := range lc.state.ProcessedCallbacks {
 		if now.After(expiry) {
 			delete(lc.state.ProcessedCallbacks, nonce)
+			cleanedCallbacks++
+		}
+	}
+	for callbackID, expiry := range lc.state.ProcessedCallbackIDs {
+		if now.After(expiry) {
+			delete(lc.state.ProcessedCallbackIDs, callbackID)
 			cleanedCallbacks++
 		}
 	}
@@ -659,7 +748,7 @@ func (lc *LifecycleController) loadState() error {
 		return err
 	}
 
-	lc.state = &state
+	lc.state = ensureLifecycleControllerState(&state)
 	return nil
 }
 
@@ -687,6 +776,60 @@ func (lc *LifecycleController) saveState() error {
 	}
 
 	return os.Rename(tmp, lc.cfg.StateFilePath)
+}
+
+func ensureLifecycleControllerState(state *LifecycleControllerState) *LifecycleControllerState {
+	if state == nil {
+		return NewLifecycleControllerState()
+	}
+	if state.Operations == nil {
+		state.Operations = make(map[string]*marketplace.LifecycleOperation)
+	}
+	if state.IdempotencyIndex == nil {
+		state.IdempotencyIndex = make(map[string]string)
+	}
+	if state.WaldurOperationIndex == nil {
+		state.WaldurOperationIndex = make(map[string]string)
+	}
+	if state.OperationResources == nil {
+		state.OperationResources = make(map[string]string)
+	}
+	if state.ProcessedCallbacks == nil {
+		state.ProcessedCallbacks = make(map[string]time.Time)
+	}
+	if state.ProcessedCallbackIDs == nil {
+		state.ProcessedCallbackIDs = make(map[string]time.Time)
+	}
+	if state.Metrics == nil {
+		state.Metrics = marketplace.NewLifecycleMetrics()
+	}
+	if state.LastUpdated.IsZero() {
+		state.LastUpdated = time.Now().UTC()
+	}
+	if len(state.WaldurOperationIndex) == 0 {
+		for id, op := range state.Operations {
+			if op != nil && op.WaldurOperationID != "" {
+				state.WaldurOperationIndex[op.WaldurOperationID] = id
+			}
+		}
+	}
+	return state
+}
+
+func shouldRetryLifecycleError(op *marketplace.LifecycleOperation, err error) bool {
+	if op == nil || err == nil {
+		return false
+	}
+	if op.RetryCount >= op.MaxRetries {
+		return false
+	}
+	if op.RollbackPolicy == marketplace.RollbackPolicyRetry {
+		return true
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, waldur.ErrRateLimited) || errors.Is(err, waldur.ErrServerError) || errors.Is(err, waldur.ErrConflict) {
+		return true
+	}
+	return false
 }
 
 // mapToWaldurAction maps marketplace action to Waldur action
