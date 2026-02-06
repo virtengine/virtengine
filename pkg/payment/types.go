@@ -744,6 +744,33 @@ type ConversionRate struct {
 
 	// Source of the rate data
 	Source string `json:"source"`
+
+	// Strategy is the aggregation strategy used by the price feed
+	Strategy string `json:"strategy,omitempty"`
+
+	// SourceAttribution provides per-source details for auditing
+	SourceAttribution []RateSourceAttribution `json:"source_attribution,omitempty"`
+}
+
+// RateSourceAttribution contains source data for auditability
+type RateSourceAttribution struct {
+	// Source is the provider name
+	Source string `json:"source"`
+
+	// BaseAsset is the priced asset (crypto)
+	BaseAsset string `json:"base_asset"`
+
+	// QuoteAsset is the quote currency (fiat)
+	QuoteAsset string `json:"quote_asset"`
+
+	// Price is the quoted price from this source
+	Price sdkmath.LegacyDec `json:"price"`
+
+	// Timestamp is when this source updated the price
+	Timestamp time.Time `json:"timestamp"`
+
+	// Confidence is the optional confidence score
+	Confidence float64 `json:"confidence,omitempty"`
 }
 
 // ConversionQuote represents a fiat-to-crypto conversion quote
