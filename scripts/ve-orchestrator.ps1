@@ -44,6 +44,8 @@ param(
     [int]$MaxParallel = 2,
     [int]$PollIntervalSec = 300,
     [int]$GitHubCooldownSec = 300,
+    [int]$IdleTimeoutMin = 60,
+    [int]$MaxRetries = 2,
     [switch]$DryRun,
     [switch]$OneShot
 )
@@ -57,6 +59,7 @@ $script:TasksCompleted = 0
 $script:TasksSubmitted = 0
 $script:StartTime = Get-Date
 $script:GitHubCooldownUntil = $null
+$script:TaskRetryCounts = @{}
 
 # Track attempts we're monitoring: attempt_id → { task_id, branch, pr_number, status, executor }
 $script:TrackedAttempts = @{}
@@ -150,8 +153,11 @@ function Sync-TrackedAttempts {
                 pr_number = $null
                 status    = "running"
                 name      = $a.name
+                updated_at = $a.updated_at
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
+        } else {
+            $script:TrackedAttempts[$a.id].updated_at = $a.updated_at
         }
     }
 
@@ -163,6 +169,49 @@ function Sync-TrackedAttempts {
             $script:TrackedAttempts[$id].status = "agent_done"
             Write-Log "Attempt $($id.Substring(0,8)) agent finished (no longer active)" -Level "INFO"
         }
+    }
+
+    # Handle stale/idle attempts (no PR, idle beyond threshold)
+    foreach ($a in $apiAttempts) {
+        $tracked = $script:TrackedAttempts[$a.id]
+        if (-not $tracked) { continue }
+        if ($tracked.status -ne "running") { continue }
+
+        $lastUpdate = if ($a.updated_at) { [datetime]$a.updated_at } elseif ($a.created_at) { [datetime]$a.created_at } else { $null }
+        if (-not $lastUpdate) { continue }
+
+        $idleMinutes = ((Get-Date) - $lastUpdate).TotalMinutes
+        if ($idleMinutes -lt $IdleTimeoutMin) { continue }
+
+        # Avoid archiving during GitHub cooldown (no PR check possible)
+        if (Test-GithubCooldown) { continue }
+
+        # If a PR exists, do not archive
+        $pr = Get-PRForBranch -Branch $a.branch
+        if (Test-GithubRateLimit) { return }
+        if ($pr) { continue }
+
+        $taskId = $a.task_id
+        $retries = $script:TaskRetryCounts[$taskId]
+        if ($null -eq $retries) { $retries = 0 }
+
+        if ($retries -ge $MaxRetries) {
+            Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+; max retries reached — flagging task" -Level "WARN"
+            if (-not $DryRun) {
+                Archive-VKAttempt -AttemptId $a.id | Out-Null
+                Update-VKTaskStatus -TaskId $taskId -Status "inreview" | Out-Null
+            }
+            $script:TrackedAttempts.Remove($a.id)
+            continue
+        }
+
+        Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — archiving and re-queueing" -Level "WARN"
+        if (-not $DryRun) {
+            Archive-VKAttempt -AttemptId $a.id | Out-Null
+            Update-VKTaskStatus -TaskId $taskId -Status "todo" | Out-Null
+        }
+        $script:TaskRetryCounts[$taskId] = $retries + 1
+        $script:TrackedAttempts.Remove($a.id)
     }
 }
 

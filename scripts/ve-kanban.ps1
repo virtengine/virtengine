@@ -286,6 +286,16 @@ function Invoke-VKRebase {
     return Invoke-VKApi -Path "/api/task-attempts/$AttemptId/rebase" -Method "POST" -Body $body
 }
 
+function Archive-VKAttempt {
+    <#
+    .SYNOPSIS Archive a task attempt so it no longer counts as active.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$AttemptId)
+    $body = @{ archived = $true }
+    return Invoke-VKApi -Path "/api/task-attempts/$AttemptId" -Method "PATCH" -Body $body
+}
+
 # ─── GitHub PR Functions ─────────────────────────────────────────────────────
 
 function Set-VKLastGithubError {
