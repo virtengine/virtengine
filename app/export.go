@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: simulation uses weak random for reproducibility, not security
 
 	errorsmod "cosmossdk.io/errors"
 	storetypes "cosmossdk.io/store/types"

@@ -3,7 +3,7 @@ package simulation
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
+	"math/rand" //nolint:gosec // G404: simulation uses weak random for reproducibility, not security
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
