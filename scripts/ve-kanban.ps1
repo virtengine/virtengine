@@ -199,7 +199,7 @@ function Update-VKTaskStatus {
         [ValidateSet("todo", "inprogress", "inreview", "done", "cancelled")]
         [string]$Status
     )
-    return Invoke-VKApi -Path "/api/tasks/$TaskId" -Method "PATCH" -Body @{ status = $Status }
+    return Invoke-VKApi -Path "/api/tasks/$TaskId" -Method "PUT" -Body @{ status = $Status }
 }
 
 function Get-VKNextTodoTasks {
@@ -293,7 +293,7 @@ function Archive-VKAttempt {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$AttemptId)
     $body = @{ archived = $true }
-    return Invoke-VKApi -Path "/api/task-attempts/$AttemptId" -Method "PATCH" -Body $body
+    return Invoke-VKApi -Path "/api/task-attempts/$AttemptId" -Method "PUT" -Body $body
 }
 
 # ─── GitHub PR Functions ─────────────────────────────────────────────────────
