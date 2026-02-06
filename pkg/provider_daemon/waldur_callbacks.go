@@ -351,7 +351,8 @@ func (h *WaldurCallbackHandler) ProcessWaldurCallback(ctx context.Context, callb
 
 	// Check nonce replay
 	if h.nonceTracker.IsProcessed(callback.Nonce) {
-		return ErrCallbackNonceReplay
+		log.Printf("[waldur-callbacks] duplicate callback nonce=%s ignored", callback.Nonce)
+		return nil
 	}
 
 	// Verify signature if required
@@ -387,37 +388,51 @@ func (h *WaldurCallbackHandler) ProcessWaldurCallback(ctx context.Context, callb
 
 // processLifecyclePayload processes a lifecycle callback payload from Waldur
 func (h *WaldurCallbackHandler) processLifecyclePayload(ctx context.Context, payload *waldur.LifecycleCallbackPayload) error {
+	var op *marketplace.LifecycleOperation
+
+	if h.controller != nil {
+		if payload.IdempotencyKey != "" {
+			if resolved, ok := h.controller.GetOperationByIdempotencyKey(payload.IdempotencyKey); ok {
+				op = resolved
+			}
+		}
+		if op == nil && payload.OperationID != "" {
+			if resolved, ok := h.controller.GetOperationByWaldurOperationID(payload.OperationID); ok {
+				op = resolved
+			}
+		}
+	}
+
 	// Find the operation by backend ID
 	allocationID := payload.BackendID
 	if allocationID == "" {
-		// Try to look up by Waldur operation ID
-		allocationID = h.lookupAllocationByWaldurOp(payload.OperationID)
+		if op != nil {
+			allocationID = op.AllocationID
+		} else {
+			// Try to look up by Waldur operation ID
+			allocationID = h.lookupAllocationByWaldurOp(payload.OperationID)
+		}
 	}
 
 	if allocationID == "" {
 		return fmt.Errorf("%w: cannot determine allocation for callback", ErrCallbackOperationNotFound)
 	}
-
-	// Create lifecycle callback
-	lcCallback := &marketplace.LifecycleCallback{
-		ID:               fmt.Sprintf("lcb_waldur_%s", payload.OperationID),
-		OperationID:      payload.OperationID,
-		AllocationID:     allocationID,
-		Action:           marketplace.LifecycleActionType(payload.Action),
-		Success:          payload.Success,
-		ResultState:      mapWaldurStateToAllocationState(payload.State),
-		WaldurResourceID: payload.ResourceUUID,
-		ProviderAddress:  h.controller.cfg.ProviderAddress,
-		Payload:          payload.Metadata,
-		Error:            payload.Error,
-		ErrorCode:        payload.ErrorCode,
-		SignerID:         h.controller.cfg.ProviderAddress,
-		Nonce:            payload.IdempotencyKey,
-		Timestamp:        payload.Timestamp,
-		ExpiresAt:        payload.Timestamp.Add(time.Hour),
+	if op == nil && h.controller != nil {
+		if resolved, ok := h.controller.GetOperationByIdempotencyKey(payload.IdempotencyKey); ok {
+			op = resolved
+		}
+	}
+	if op == nil {
+		return fmt.Errorf("%w: operation not found for callback", ErrCallbackOperationNotFound)
 	}
 
+	// Create lifecycle callback
+	lcCallback := h.buildLifecycleCallback(op, allocationID, payload)
+
 	// Process via controller
+	if err := h.signLifecycleCallback(lcCallback); err != nil {
+		return err
+	}
 	if err := h.controller.ProcessCallback(ctx, lcCallback); err != nil {
 		return err
 	}
@@ -426,7 +441,7 @@ func (h *WaldurCallbackHandler) processLifecyclePayload(ctx context.Context, pay
 	if h.lifecycleMgr != nil {
 		h.lifecycleMgr.HandleOperationComplete(
 			allocationID,
-			payload.OperationID,
+			op.ID,
 			payload.Success,
 			lcCallback.ResultState,
 			payload.Error,
@@ -444,6 +459,81 @@ func (h *WaldurCallbackHandler) processLifecyclePayload(ctx context.Context, pay
 	return nil
 }
 
+func (h *WaldurCallbackHandler) buildLifecycleCallback(op *marketplace.LifecycleOperation, allocationID string, payload *waldur.LifecycleCallbackPayload) *marketplace.LifecycleCallback {
+	now := payload.Timestamp
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	nonce := payload.IdempotencyKey
+	if nonce == "" {
+		nonce = op.IdempotencyKey
+	}
+	if nonce == "" {
+		nonce = fmt.Sprintf("nonce-%s-%d", op.ID, now.UnixNano())
+	}
+	callbackID := fmt.Sprintf("lcb_%s_%s", op.ID, truncateCallbackNonce(nonce))
+
+	providerAddress := op.ProviderAddress
+	if providerAddress == "" && h.controller != nil {
+		providerAddress = h.controller.cfg.ProviderAddress
+	}
+
+	cb := &marketplace.LifecycleCallback{
+		ID:               callbackID,
+		OperationID:      op.ID,
+		AllocationID:     allocationID,
+		Action:           op.Action,
+		Success:          payload.Success,
+		ResultState:      mapWaldurStateToAllocationState(payload.State),
+		WaldurResourceID: payload.ResourceUUID,
+		ProviderAddress:  providerAddress,
+		Payload:          make(map[string]string),
+		Error:            payload.Error,
+		ErrorCode:        payload.ErrorCode,
+		SignerID:         providerAddress,
+		Nonce:            nonce,
+		Timestamp:        now,
+		ExpiresAt:        now.Add(time.Hour),
+	}
+
+	for k, v := range payload.Metadata {
+		cb.Payload[k] = v
+	}
+	cb.Payload["correlation_id"] = op.IdempotencyKey
+	cb.Payload["waldur_operation_id"] = payload.OperationID
+	cb.Payload["waldur_state"] = payload.State
+	return cb
+}
+
+func (h *WaldurCallbackHandler) signLifecycleCallback(callback *marketplace.LifecycleCallback) error {
+	if callback == nil {
+		return errors.New("callback is nil")
+	}
+	if h.keyManager == nil {
+		return errors.New("key manager not available")
+	}
+
+	sig, err := h.keyManager.Sign(callback.SigningPayload())
+	if err != nil {
+		return fmt.Errorf("sign callback: %w", err)
+	}
+
+	sigBytes, err := hex.DecodeString(sig.Signature)
+	if err != nil {
+		return fmt.Errorf("decode signature: %w", err)
+	}
+
+	callback.Signature = sigBytes
+	return nil
+}
+
+func truncateCallbackNonce(nonce string) string {
+	if len(nonce) <= 8 {
+		return nonce
+	}
+	return nonce[:8]
+}
+
 // processStatusUpdate processes a status update callback
 func (h *WaldurCallbackHandler) processStatusUpdate(ctx context.Context, callback *marketplace.WaldurCallback) error {
 	// Extract operation info from payload
@@ -453,6 +543,9 @@ func (h *WaldurCallbackHandler) processStatusUpdate(ctx context.Context, callbac
 	if opID != "" {
 		// Find operation
 		op, found := h.controller.GetOperation(opID)
+		if !found && callback.Payload["idempotency_key"] != "" {
+			op, found = h.controller.GetOperationByIdempotencyKey(callback.Payload["idempotency_key"])
+		}
 		if !found {
 			return fmt.Errorf("%w: %s", ErrCallbackOperationNotFound, opID)
 		}
@@ -460,23 +553,44 @@ func (h *WaldurCallbackHandler) processStatusUpdate(ctx context.Context, callbac
 		// Create lifecycle callback from Waldur callback
 		state := callback.Payload["state"]
 		success := state == "completed" || state == "OK"
+		if payloadSuccess, ok := callback.Payload["success"]; ok {
+			success = payloadSuccess == "true"
+		}
 		resultState := marketplace.AllocationStateActive
 		if rs := callback.Payload["result_state"]; rs != "" {
 			resultState = parseAllocationState(rs)
+		} else if state != "" {
+			resultState = mapWaldurStateToAllocationState(state)
 		}
 
 		errMsg := callback.Payload["error"]
 
-		lcCallback := marketplace.NewLifecycleCallback(
-			opID,
-			op.AllocationID,
-			op.Action,
-			success,
-			resultState,
-			op.ProviderAddress,
-		)
-		lcCallback.Error = errMsg
-
+		nonce := callback.Payload["idempotency_key"]
+		if nonce == "" {
+			nonce = op.IdempotencyKey
+		}
+		cbID := fmt.Sprintf("lcb_%s_%s", op.ID, truncateCallbackNonce(nonce))
+		now := time.Now().UTC()
+		lcCallback := &marketplace.LifecycleCallback{
+			ID:              cbID,
+			OperationID:     op.ID,
+			AllocationID:    op.AllocationID,
+			Action:          op.Action,
+			Success:         success,
+			ResultState:     resultState,
+			ProviderAddress: op.ProviderAddress,
+			Payload:         make(map[string]string),
+			Error:           errMsg,
+			SignerID:        op.ProviderAddress,
+			Nonce:           nonce,
+			Timestamp:       now,
+			ExpiresAt:       now.Add(time.Hour),
+		}
+		lcCallback.Payload["correlation_id"] = op.IdempotencyKey
+		lcCallback.Payload["waldur_state"] = state
+		if err := h.signLifecycleCallback(lcCallback); err != nil {
+			return err
+		}
 		return h.controller.ProcessCallback(ctx, lcCallback)
 	}
 

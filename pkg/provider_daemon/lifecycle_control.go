@@ -311,6 +311,21 @@ func (m *ResourceLifecycleManager) executeAction(ctx context.Context, req *Lifec
 
 	// Check for active operation
 	if activeOpID != "" {
+		if m.controller != nil {
+			if op, found := m.controller.GetOperation(activeOpID); found {
+				if op.AllocationID == req.AllocationID && op.Action == req.Action {
+					return &LifecycleActionResult{
+						OperationID:       op.ID,
+						Success:           true,
+						State:             op.State,
+						NewResourceState:  info.CurrentState,
+						WaldurOperationID: op.WaldurOperationID,
+						Message:           "idempotent request: returning existing operation",
+						StartedAt:         op.CreatedAt,
+					}, nil
+				}
+			}
+		}
 		return nil, ErrResourceBusy
 	}
 
