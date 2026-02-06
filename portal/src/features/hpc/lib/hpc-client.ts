@@ -13,9 +13,7 @@
 import type {
   Job,
   JobStatus,
-  SDKJob,
   SDKOffering,
-  SDKWorkloadTemplate,
   WorkloadTemplate,
 } from '../types';
 
@@ -132,7 +130,7 @@ export class HPCClient {
   /**
    * Submit a new job
    */
-  async submitJob(params: SubmitJobParams): Promise<{ jobId: string; txHash: string }> {
+  async submitJob(_params: SubmitJobParams): Promise<{ jobId: string; txHash: string }> {
     await this.delay(1000); // Simulate blockchain transaction time
 
     // Mock response
@@ -145,7 +143,7 @@ export class HPCClient {
   /**
    * Cancel a job
    */
-  async cancelJob(jobId: string): Promise<{ txHash: string }> {
+  async cancelJob(_jobId: string): Promise<{ txHash: string }> {
     await this.delay(800);
 
     const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;

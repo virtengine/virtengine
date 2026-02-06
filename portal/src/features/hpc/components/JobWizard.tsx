@@ -7,7 +7,7 @@
  */
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   useCostEstimation,
   useJobSubmission,
@@ -27,11 +27,9 @@ export function JobWizard() {
     selectedTemplate,
     manifest,
     estimatedCost,
-    errors,
     nextStep,
     prevStep,
     selectTemplate,
-    updateManifest,
     setEstimatedCost,
     reset,
   } = useWizardStore();
@@ -50,7 +48,7 @@ export function JobWizard() {
   // Estimate cost when resources change
   useEffect(() => {
     if (manifest.resources && currentStep === 'review') {
-      estimateCost('offering-1', manifest.resources as JobResources)
+      estimateCost('offering-1', manifest.resources)
         .then((cost) => {
           setEstimatedCost({
             total: cost.estimatedTotal,
@@ -74,7 +72,7 @@ export function JobWizard() {
         name: manifest.name,
         description: manifest.description,
         templateId: manifest.templateId,
-        resources: manifest.resources as JobResources,
+        resources: manifest.resources,
         command: manifest.command,
         containerImage: manifest.image,
         environment: manifest.environment,
@@ -224,19 +222,27 @@ function TemplateOption({
   onSelect: () => void;
 }) {
   return (
-    <label
-      className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors ${
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border p-4 text-left transition-colors ${
         selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent'
       }`}
     >
-      <input type="radio" checked={selected} onChange={onSelect} className="h-4 w-4 text-primary" />
+      <input
+        type="radio"
+        checked={selected}
+        onChange={() => {}}
+        className="h-4 w-4 text-primary"
+        aria-label={template ? template.name : 'Custom Workload'}
+      />
       <div className="flex-1">
         <div className="font-medium">{template ? template.name : 'Custom Workload'}</div>
         <div className="text-sm text-muted-foreground">
           {template ? template.description : 'Build from scratch with custom parameters'}
         </div>
       </div>
-    </label>
+    </button>
   );
 }
 
@@ -382,7 +388,17 @@ function ReviewStep({
   estimatedCost,
   isEstimating,
 }: {
-  estimatedCost: ReturnType<typeof useWizardStore>['estimatedCost'];
+  estimatedCost: {
+    total: string;
+    perHour: string;
+    breakdown: {
+      compute: string;
+      storage: string;
+      network: string;
+      gpu?: string;
+    };
+    denom: string;
+  } | null;
   isEstimating: boolean;
 }) {
   const { manifest, selectedTemplate } = useWizardStore();
@@ -465,7 +481,16 @@ function ReviewStep({
   );
 }
 
-function canProceed(step: string, manifest: any, template: any): boolean {
+interface ManifestData {
+  name?: string;
+  resources?: JobResources;
+}
+
+interface TemplateData {
+  name?: string;
+}
+
+function canProceed(step: string, manifest: ManifestData, _template: TemplateData | null): boolean {
   switch (step) {
     case 'template':
       return true; // Can always proceed from template selection
