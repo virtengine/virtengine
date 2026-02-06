@@ -36,6 +36,25 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
 
+	// Security hardening: input size validation (22A-AC4)
+	limits := DefaultMsgInputLimits()
+	if err := ValidateMsgInputLimits(limits, map[string]int{
+		"scope_id":           len(msg.ScopeId),
+		"client_id":          len(msg.ClientId),
+		"device_fingerprint": len(msg.DeviceFingerprint),
+		"salt":               len(msg.Salt),
+		"signature":          len(msg.ClientSignature),
+		"payload_hash":       len(msg.PayloadHash),
+		"geo_hint":           len(msg.GeoHint),
+	}); err != nil {
+		return nil, err
+	}
+
+	// Security hardening: rate limiting (22A-AC5)
+	if err := ms.keeper.CheckUploadRateLimit(ctx, sender); err != nil {
+		return nil, err
+	}
+
 	params := ms.keeper.GetParams(ctx)
 
 	// Validate client is approved
@@ -76,6 +95,9 @@ func (ms msgServer) UploadScope(goCtx context.Context, msg *types.MsgUploadScope
 	if err := ms.keeper.UploadScope(ctx, sender, scope); err != nil {
 		return nil, err
 	}
+
+	// Security hardening: record upload for rate limiting (22A-AC5)
+	ms.keeper.RecordUpload(ctx, sender)
 
 	// Emit event
 	err = ctx.EventManager().EmitTypedEvent(&types.EventScopeUploaded{
@@ -224,6 +246,15 @@ func (ms msgServer) UpdateVerificationStatus(goCtx context.Context, msg *types.M
 		return nil, types.ErrUnauthorized.Wrap("only validators can submit verification updates")
 	}
 
+	// Security hardening: input size validation (22A-AC4)
+	limits := DefaultMsgInputLimits()
+	if err := ValidateMsgInputLimits(limits, map[string]int{
+		"scope_id": len(msg.ScopeId),
+		"reason":   len(msg.Reason),
+	}); err != nil {
+		return nil, err
+	}
+
 	// Get current scope for previous status
 	scope, found := ms.keeper.GetScope(ctx, accountAddr, msg.ScopeId)
 	if !found {
@@ -297,6 +328,18 @@ func (ms msgServer) UpdateScore(goCtx context.Context, msg *types.MsgUpdateScore
 	// Only validators can submit ML score updates
 	if !ms.keeper.IsValidator(ctx, sender) {
 		return nil, types.ErrUnauthorized.Wrap("only validators can submit ML score updates")
+	}
+
+	// Security hardening: score bounds validation (22A-AC4)
+	if msg.NewScore > 1000 {
+		return nil, types.ErrScoreOutOfRange.Wrapf(
+			"score must be 0-1000, got %d", msg.NewScore,
+		)
+	}
+
+	// Security hardening: rate limiting for score updates (22A-AC5)
+	if err := ms.keeper.CheckScoreUpdateRateLimit(ctx); err != nil {
+		return nil, err
 	}
 
 	// Get current record for previous values
