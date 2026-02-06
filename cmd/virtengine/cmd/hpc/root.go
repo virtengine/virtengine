@@ -3,16 +3,17 @@ package hpc
 
 import "github.com/spf13/cobra"
 
-// GetCmd returns the legacy "hpc" command group that maps to "hpc-templates".
+// GetCmd returns the HPC command group.
 func GetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:        "hpc",
-		Short:      "HPC utilities (legacy)",
-		Long:       `Legacy HPC command group. Use "virtengine hpc-templates" instead.`,
-		Deprecated: "use \"virtengine hpc-templates\"",
+		Use:   "hpc",
+		Short: "HPC commands",
+		Long: `Commands for managing HPC workloads and templates.
+
+Use the subcommands to list, validate, and manage workload templates.`,
 	}
 
-	cmd.AddCommand(GetTemplatesCmd())
+	cmd.AddCommand(GetTemplateCmd())
 
 	return cmd
 }

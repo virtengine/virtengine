@@ -9,6 +9,11 @@ import (
 
 func TestSecureKeyStorage(t *testing.T) {
 	tmpDir := t.TempDir()
+	if runtime.GOOS != osWindows {
+		if err := os.Chmod(tmpDir, KeyDirPerm); err != nil {
+			t.Fatalf("Failed to set temp dir permissions: %v", err)
+		}
+	}
 
 	storage, err := NewSecureKeyStorage(tmpDir)
 	if err != nil {
@@ -188,6 +193,9 @@ func TestEnsureSecurePermissions(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
+	if err := os.Chmod(tmpDir, KeyDirPerm); err != nil {
+		t.Fatalf("Failed to set temp dir permissions: %v", err)
+	}
 	storage, err := NewSecureKeyStorage(tmpDir)
 	if err != nil {
 		t.Fatalf("NewSecureKeyStorage failed: %v", err)
