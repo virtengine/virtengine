@@ -292,6 +292,56 @@ export {
 } from '../../../lib/portal';
 
 // ============================================================================
+// Provider API + Multi-Provider (VE-29D/29E/29G)
+// ============================================================================
+
+export {
+  ProviderAPIClient,
+  ProviderAPIError,
+  LogStream,
+  ShellConnection,
+  signRequest,
+  MultiProviderClient,
+  MultiProviderProvider,
+  useMultiProvider,
+  useAggregatedDeployments,
+  useAggregatedMetrics,
+  useDeploymentWithProvider,
+} from '../../../lib/portal';
+export type {
+  ProviderAPIClientOptions,
+  ProviderHealthStatus,
+  ProviderHealth,
+  LogOptions,
+  DeploymentState,
+  UsageMetric,
+  ResourceMetrics,
+  Deployment,
+  DeploymentStatus,
+  ServiceStatus,
+  DeploymentListResponse,
+  DeploymentAction,
+  ShellSessionResponse,
+  ProviderAPIErrorDetails,
+  SignedRequestHeaders,
+  SignRequestOptions,
+  ProviderRecord,
+  ProviderStatus,
+  DeploymentWithProvider,
+  AggregatedMetrics,
+  MultiProviderWallet,
+  MultiProviderClientOptions,
+  MultiProviderProviderProps,
+  AggregatedDeploymentsState,
+  AggregatedDeploymentsActions,
+  UseAggregatedDeploymentsOptions,
+  AggregatedMetricsState,
+  AggregatedMetricsActions,
+  UseAggregatedMetricsOptions,
+  DeploymentWithProviderState,
+} from '../../../lib/portal';
+
+// ============================================================================
 // HPC / Supercomputer (VE-705)
 // ============================================================================
 
