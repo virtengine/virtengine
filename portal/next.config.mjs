@@ -11,8 +11,8 @@ const nextConfig = {
   // Base path for GitHub Pages (repo name)
   basePath: process.env.GITHUB_PAGES === 'true' ? '/virtengine' : '',
   
-  // Asset prefix for GitHub Pages
-  assetPrefix: process.env.GITHUB_PAGES === 'true' ? '/virtengine/' : '',
+  // Asset prefix for GitHub Pages (same as basePath, no trailing slash)
+  assetPrefix: process.env.GITHUB_PAGES === 'true' ? '/virtengine' : '',
   
   // Disable image optimization for static export
   images: process.env.GITHUB_PAGES === 'true' 
