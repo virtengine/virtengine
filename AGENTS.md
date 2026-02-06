@@ -13,6 +13,7 @@ Before finishing a task - ensure that you create a commit based on following con
 ### PR Creation & Merge (vibe-kanban automation)
 
 If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), the **cleanup script handles PR creation and auto-merge automatically**. In this case:
+
 - Focus on code quality, tests, and a clean commit
 - Just `git push` — the cleanup script creates the PR and enables auto-merge
 - Do NOT manually run `gh pr create` or `gh pr merge`
@@ -32,6 +33,36 @@ You should have all commands as needed available in shell, for example go, gh, p
 - Portal frontend formatting is enforced before commit. If you modify `portal/` TypeScript/JS/CSS/JSON/MD files, ensure `portal/node_modules` exists (run `pnpm -C portal install` once) so the pre-commit hook can run Prettier and auto-add formatted files to the commit.
 - SDK TypeScript formatting/linting is enforced before commit. If you modify `sdk/ts` files, ensure `sdk/ts/node_modules` exists (run `pnpm -C sdk/ts install` once) so `lint-staged` can auto-fix and stage changes.
 - If you need to bypass a check for an emergency, use the documented `VE_HOOK_SKIP_*` env vars, but do not bypass for normal work.
+
+## Pre-push quality gate (smart — runs only relevant checks)
+
+The pre-push hook detects which files changed and only runs checks for the affected categories:
+
+**Go changes** (`.go` files or `go.mod`/`go.sum`):
+- `go vet` on changed packages
+- `gofmt` auto-format
+- `golangci-lint` (diff-only)
+- `go mod vendor` sync
+- Build binaries (`make bins`)
+- Go unit tests (changed packages only)
+
+**Portal/Frontend changes** (`portal/`, `lib/portal/`, `lib/capture/`, `lib/admin/`):
+- Prettier auto-format
+- ESLint (`pnpm -C portal lint`) — mirrors **Portal CI / Lint & Type Check**
+- TypeScript type-check (`pnpm -C portal type-check`) — mirrors **Portal CI / Lint & Type Check**
+- Portal unit tests (`pnpm -C portal test` + `pnpm -C lib/portal test`) — mirrors **Portal CI / Unit Tests**
+
+**JS dependency changes** (`pnpm-lock.yaml`, `package.json`):
+- pnpm lockfile validation (`pnpm install --frozen-lockfile`)
+- All portal checks above (lint, type-check, tests)
+
+**Docs-only changes** (`.md`, `_docs/`, `docs/`, `.github/`):
+- No checks — push proceeds immediately
+
+**Skip env vars:**
+- `VE_HOOK_SKIP_PORTAL=1` — skip all portal checks (ESLint, TypeScript, tests)
+- `VE_HOOK_SKIP_VET=1`, `VE_HOOK_SKIP_FMT=1`, `VE_HOOK_SKIP_LINT=1`, `VE_HOOK_SKIP_BUILD=1`, `VE_HOOK_SKIP_TEST=1`, `VE_HOOK_SKIP_MOD=1`, `VE_HOOK_SKIP_PNPM=1`
+- `VE_HOOK_QUICK=1` — vet + build only (Go)
 
 Commit files:
 

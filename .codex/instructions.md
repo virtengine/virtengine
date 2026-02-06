@@ -83,7 +83,10 @@ Use this when a task has clearly separable, independent pieces. Do NOT use for s
 - **Go 1.21+** required, CGO enabled (C compiler available)
 - **Sandbox:** You can read/write files in the workspace. Shell commands are available.
 - **Pre-commit hooks** run automatically: `gofmt` + `golangci-lint` on staged Go files
-- **Pre-push hooks** run automatically: `go vet`, `go build`, `golangci-lint`, unit tests
+- **Pre-push hooks are smart** — they detect which files changed and only run relevant checks:
+  - Go changes → `go vet`, `gofmt`, `golangci-lint`, `go mod vendor`, build, Go tests
+  - Portal changes → prettier, ESLint (`pnpm -C portal lint`), TypeScript (`pnpm -C portal type-check`), portal tests
+  - Docs-only → no checks, push proceeds immediately
 - **Build outputs** go to `.cache/bin/`
 - **`direnv`** may not be active — if environment looks wrong, check `.envrc`
 
@@ -124,5 +127,5 @@ type Keeper struct {
 3. **Don't skip pre-push hooks** — fix the errors instead.
 4. **Don't modify `go.mod` replace directives** unless you know what you're doing — many forks are intentional.
 5. **Portal `node_modules`** — run `pnpm -C portal install` before committing portal changes, or the pre-commit hook fails.
-6. **Long-running commands** — increase timeouts for `git push` (pre-push hooks take ~90s), `go test` on large packages.
+6. **Long-running commands** — increase timeouts for `git push` (pre-push hooks take ~2-3 min for Go, add ~1 min for portal), `go test` on large packages.
 7. **CRLF warnings** — safe to ignore on Windows, Git handles line endings.
