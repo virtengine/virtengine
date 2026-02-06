@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSL-1.1
  */
 
-import client from 'prom-client';
+import * as client from 'prom-client';
 
 type PriceMetrics = {
   registry: client.Registry;
