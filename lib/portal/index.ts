@@ -240,6 +240,50 @@ export type {
 } from "./src/pages/marketplace";
 
 // ============================================================================
+// Order Tracking (VE-707)
+// ============================================================================
+
+export {
+  OrderTrackingProvider,
+  useOrderTracking,
+} from "./src/hooks/useOrderTracking";
+export type {
+  OrderTrackingState,
+  OrderConnectionStatus,
+  OrderResourceConnection,
+  OrderCredential,
+  OrderApiEndpoint,
+  OrderResourceAccess,
+  OrderUsageMetric,
+  OrderUsageSample,
+  OrderUsageAlert,
+  OrderUsageSnapshot,
+  OrderArtifact,
+  OrderTrackingOrder,
+  OrderTrackingStateValue,
+  OrderTrackingActions,
+  OrderTrackingContextValue,
+  OrderTrackingProviderProps,
+} from "./src/hooks/useOrderTracking";
+
+export {
+  OrderList,
+  OrderStatus,
+  ResourceAccess,
+  UsageMonitor,
+} from "./src/components/orders";
+export type {
+  OrderListProps,
+  OrderListFilter,
+  OrderStatusProps,
+  ResourceAccessProps,
+  UsageMonitorProps,
+} from "./src/components/orders";
+
+export { OrderTrackingPage } from "./src/pages/orders";
+export type { OrderTrackingPageProps } from "./src/pages/orders";
+
+// ============================================================================
 // Provider Console (VE-704)
 // ============================================================================
 
