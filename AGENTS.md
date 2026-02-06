@@ -10,9 +10,11 @@ When working on a task, do not stop until it is COMPLETELY done. Continue workin
 
 Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
 
+You have access to gh commands, ENSURE you create a PR Describing the changes once you are done - ENSURE you monitor CI/CD after creating a github PR (sleep for 10 minutes and check PR CI/CD status to see if ANYTHING failed) - if anything fails, resolve it promptly.
+
 Ensure that there are no CI/CD errors after pushing, if needed continue monitoring your push for errors and fix them if identified.
 
-You should have all commands as needed available in shell, for example go, pip, npm, git, etc. Consider increasing time outs when runninig long running commands such as git push, go test when running large test packages, etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks..
+You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages, etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks..
 
 ## Pre-commit automation (do this every time)
 
@@ -143,6 +145,20 @@ feat(api)!: change response format
 
 - Do not commit generated caches or large binaries (ML weights live under `ml/*/weights/` and should stay out of git).
 - Prefer existing make targets/scripts; avoid reimplementing workflows.
+
+## GSD Framework & Orchestration
+
+This repo uses the GSD (Get Stuff Done) framework for autonomous development.
+
+**Orchestrator Workflow:**
+
+1.  **Planner:** Ingests tasks from `_docs/ralph/tasks` and Vibe-Kanban.
+2.  **Executor:**
+    - Acts as **Lead Engineer**.
+    - Delegates implementation to `codex-cli` agents.
+    - **MUST** run pre-push hooks (`make test`, `pnpm lint`, etc.) before completing tasks.
+    - Updates Vibe-Kanban status.
+3.  **Synchronization:** `PLAN.md` is the source of truth for the current phase, synced with Kanban tickets.
 
 ## MCP Servers & Tool Usage
 

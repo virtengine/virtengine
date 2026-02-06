@@ -2,10 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useOfferingStore } from '@/stores/offeringStore';
-import { OfferingFilters, OfferingFiltersMobile, OfferingGrid } from '@/components/marketplace';
+import {
+  OfferingFilters,
+  OfferingFiltersMobile,
+  OfferingGrid,
+  CompareBar,
+} from '@/components/marketplace';
+import type { OfferingSortField } from '@/types/offerings';
+
+const SORT_OPTIONS: Array<{ value: OfferingSortField; label: string }> = [
+  { value: 'name', label: 'Name' },
+  { value: 'price', label: 'Price' },
+  { value: 'reputation', label: 'Reputation' },
+  { value: 'orders', label: 'Popularity' },
+  { value: 'created', label: 'Newest' },
+];
 
 export default function MarketplacePage() {
-  const { fetchOfferings, filters, setFilters } = useOfferingStore();
+  const { fetchOfferings, filters, setFilters, viewMode, setViewMode } = useOfferingStore();
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [searchValue, setSearchValue] = useState(filters.search);
 
@@ -16,6 +30,14 @@ export default function MarketplacePage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setFilters({ search: searchValue });
+  };
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilters({ sortBy: e.target.value as OfferingSortField });
+  };
+
+  const handleSortOrderToggle = () => {
+    setFilters({ sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc' });
   };
 
   return (
@@ -71,6 +93,85 @@ export default function MarketplacePage() {
         </div>
       </div>
 
+      {/* Sort + View controls */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <label htmlFor="sort-select" className="text-sm text-muted-foreground">
+            Sort by:
+          </label>
+          <select
+            id="sort-select"
+            value={filters.sortBy}
+            onChange={handleSortChange}
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleSortOrderToggle}
+            className="rounded-md border border-border p-1.5 hover:bg-accent"
+            title={filters.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+          >
+            <svg
+              className={`h-4 w-4 transition-transform ${filters.sortOrder === 'desc' ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 15l7-7 7 7"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* View mode toggle */}
+        <div className="flex rounded-lg border border-border">
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            className={`rounded-l-md px-3 py-1.5 text-sm ${
+              viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
+            }`}
+            title="Grid view"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`rounded-r-md px-3 py-1.5 text-sm ${
+              viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
+            }`}
+            title="List view"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       {/* Main content */}
       <div className="grid gap-6 lg:grid-cols-4">
         {/* Desktop Filters Sidebar */}
@@ -88,6 +189,9 @@ export default function MarketplacePage() {
 
       {/* Mobile Filters */}
       {showMobileFilters && <OfferingFiltersMobile onClose={() => setShowMobileFilters(false)} />}
+
+      {/* Compare Bar */}
+      <CompareBar />
     </div>
   );
 }

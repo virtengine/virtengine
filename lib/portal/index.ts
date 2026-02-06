@@ -146,7 +146,6 @@ export type {
 } from "./types/identity";
 
 export { getTierFromScore } from "./types/identity";
-
 export { IdentityStatusCard } from "./components/identity/IdentityStatusCard";
 export { IdentityScoreDisplay } from "./components/identity/IdentityScoreDisplay";
 export { ScopeRequirements } from "./components/identity/ScopeRequirements";
@@ -162,10 +161,15 @@ export type {
   MFAState,
   MFAFactor,
   MFAFactorType,
+  MFAFactorStatus,
+  MFAFactorMetadata,
   MFAPolicy,
   MFAEnrollment,
+  MFAEnrollmentStep,
+  MFAEnrollmentChallengeData,
   TrustedBrowser,
   MFAChallenge,
+  MFAChallengeType,
   MFAChallengeResponse,
 } from "./types/mfa";
 

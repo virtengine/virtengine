@@ -170,11 +170,20 @@ export type {
   MFAState,
   MFAFactor,
   MFAFactorType,
+  MFAFactorStatus,
+  MFAFactorMetadata,
   MFAPolicy,
   MFAEnrollment,
+  MFAEnrollmentStep,
+  MFAEnrollmentChallengeData,
   TrustedBrowser,
   MFAChallenge,
+  MFAChallengeType,
   MFAChallengeResponse,
+  MFAAuditEntry,
+  MFAError,
+  MFAErrorCode,
+  SensitiveTransactionType,
 } from '../../../lib/portal';
 
 export {

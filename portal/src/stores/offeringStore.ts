@@ -9,6 +9,8 @@ export interface OfferingStoreState {
   isLoadingDetail: boolean;
   error: string | null;
   filters: OfferingFilters;
+  viewMode: 'grid' | 'list';
+  compareIds: string[];
   pagination: {
     page: number;
     pageSize: number;
@@ -24,6 +26,9 @@ export interface OfferingStoreActions {
   setFilters: (filters: Partial<OfferingFilters>) => void;
   resetFilters: () => void;
   setPage: (page: number) => void;
+  setViewMode: (mode: 'grid' | 'list') => void;
+  toggleCompare: (offeringKey: string) => void;
+  clearCompare: () => void;
   clearError: () => void;
 }
 
@@ -37,6 +42,9 @@ const DEFAULT_FILTERS: OfferingFilters = {
   tags: [],
   search: '',
   state: 'active',
+  providerSearch: '',
+  sortBy: 'name',
+  sortOrder: 'asc',
 };
 
 const initialState: OfferingStoreState = {
@@ -47,6 +55,8 @@ const initialState: OfferingStoreState = {
   isLoadingDetail: false,
   error: null,
   filters: DEFAULT_FILTERS,
+  viewMode: 'grid',
+  compareIds: [],
   pagination: {
     page: 1,
     pageSize: 12,
@@ -393,6 +403,9 @@ const MOCK_PROVIDERS: Record<string, Provider> = {
   },
 };
 
+// Exported for use in comparison views and tests
+export { MOCK_PROVIDERS };
+
 export const useOfferingStore = create<OfferingStore>()((set, get) => ({
   ...initialState,
 
@@ -441,6 +454,44 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
           return provider && provider.reputation >= filters.minReputation;
         });
       }
+
+      if (filters.providerSearch) {
+        const providerLower = filters.providerSearch.toLowerCase();
+        filtered = filtered.filter((o) => {
+          const provider = MOCK_PROVIDERS[o.id.providerAddress];
+          return provider && provider.name.toLowerCase().includes(providerLower);
+        });
+      }
+
+      if (filters.priceRange) {
+        filtered = filtered.filter((o) => {
+          const basePrice = parseInt(o.pricing.basePrice, 10) / 1000000;
+          return basePrice >= filters.priceRange!.min && basePrice <= filters.priceRange!.max;
+        });
+      }
+
+      // Sort
+      filtered.sort((a, b) => {
+        const dir = filters.sortOrder === 'asc' ? 1 : -1;
+        switch (filters.sortBy) {
+          case 'price': {
+            const priceA = parseInt(a.pricing.basePrice, 10);
+            const priceB = parseInt(b.pricing.basePrice, 10);
+            return (priceA - priceB) * dir;
+          }
+          case 'reputation': {
+            const repA = MOCK_PROVIDERS[a.id.providerAddress]?.reputation ?? 0;
+            const repB = MOCK_PROVIDERS[b.id.providerAddress]?.reputation ?? 0;
+            return (repA - repB) * dir;
+          }
+          case 'orders':
+            return (a.totalOrderCount - b.totalOrderCount) * dir;
+          case 'created':
+            return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * dir;
+          default:
+            return a.name.localeCompare(b.name) * dir;
+        }
+      });
 
       // Pagination
       const startIdx = (pagination.page - 1) * pagination.pageSize;
@@ -541,6 +592,25 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
   clearError: () => {
     set({ error: null });
   },
+
+  setViewMode: (mode: 'grid' | 'list') => {
+    set({ viewMode: mode });
+  },
+
+  toggleCompare: (offeringKey: string) => {
+    set((state) => {
+      const exists = state.compareIds.includes(offeringKey);
+      if (exists) {
+        return { compareIds: state.compareIds.filter((id) => id !== offeringKey) };
+      }
+      if (state.compareIds.length >= 4) return state;
+      return { compareIds: [...state.compareIds, offeringKey] };
+    });
+  },
+
+  clearCompare: () => {
+    set({ compareIds: [] });
+  },
 }));
 
 // Selectors
@@ -559,6 +629,10 @@ export const selectProviderByAddress = (state: OfferingStore, address: string) =
 };
 
 // Utility functions
+export function offeringKey(offering: Offering): string {
+  return `${offering.id.providerAddress}-${offering.id.sequence}`;
+}
+
 export function formatPrice(amount: string, decimals: number = 6): string {
   const value = parseInt(amount, 10) / Math.pow(10, decimals);
   return value.toLocaleString('en-US', {

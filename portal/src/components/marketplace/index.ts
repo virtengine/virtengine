@@ -13,4 +13,6 @@ export { OrderDetails } from './OrderDetails';
 export { OfferingCard, OfferingCardSkeleton } from './OfferingCard';
 export { OfferingFilters, OfferingFiltersMobile } from './OfferingFilters';
 export { OfferingGrid } from './OfferingGrid';
+export { OfferingListItem, OfferingListItemSkeleton } from './OfferingListView';
 export { ProviderBadge, ProviderInfoCard } from './ProviderBadge';
+export { CompareBar } from './CompareBar';
