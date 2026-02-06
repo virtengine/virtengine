@@ -320,12 +320,25 @@ export { useHPC, HPCProvider } from "./hooks/useHPC";
 export type {
   HPCState,
   WorkloadTemplate,
+  WorkloadCategory,
+  JobResources,
+  JobParameter,
   JobManifest,
   JobSubmission,
+  JobSubmissionState,
+  JobSubmissionStep,
+  JobPriceQuote,
+  JobValidationError,
+  Job,
   JobStatus,
+  JobStatusChange,
   JobEvent,
-  JobOutput,
+  JobEventType,
   JobOutputReference,
+  JobOutputType,
+  JobOutput,
+  HPCError,
+  HPCErrorCode,
 } from "./types/hpc";
 
 export { WorkloadLibrary } from "./components/hpc/WorkloadLibrary";

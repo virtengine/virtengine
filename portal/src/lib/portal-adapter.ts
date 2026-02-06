@@ -299,12 +299,25 @@ export { useHPC, HPCProvider } from '../../../lib/portal';
 export type {
   HPCState,
   WorkloadTemplate,
+  WorkloadCategory,
+  JobResources,
+  JobParameter,
   JobManifest,
   JobSubmission,
+  JobSubmissionState,
+  JobSubmissionStep,
+  JobPriceQuote,
+  JobValidationError,
+  Job,
   JobStatus,
+  JobStatusChange,
   JobEvent,
-  JobOutput,
+  JobEventType,
   JobOutputReference,
+  JobOutputType,
+  JobOutput,
+  HPCError,
+  HPCErrorCode,
 } from '../../../lib/portal';
 
 export {
