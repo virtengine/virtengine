@@ -1,8 +1,16 @@
 /**
+ * Copyright (c) VirtEngine, Inc.
+ * SPDX-License-Identifier: BSL-1.1
+ *
  * MFA Components
- * Integrated from lib/portal for use in the Next.js portal app
+ * Portal MFA enrollment, challenge, and management UI.
  */
 
 export { MFASetup } from './MFASetup';
 export { MFAChallenge } from './MFAChallenge';
 export { MFASettings } from './MFASettings';
+export { TOTPSetup } from './TOTPSetup';
+export { WebAuthnSetup } from './WebAuthnSetup';
+export { BackupCodes } from './BackupCodes';
+export { FactorList } from './FactorList';
+export { RecoveryFlow } from './RecoveryFlow';

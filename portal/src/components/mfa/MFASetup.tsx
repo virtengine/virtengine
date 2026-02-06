@@ -1,8 +1,12 @@
 'use client';
 
-import { useMFA, MFAEnrollmentWizard, type MFAFactorType } from '@/lib/portal-adapter';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { TOTPSetup } from './TOTPSetup';
+import { WebAuthnSetup } from './WebAuthnSetup';
+import { BackupCodes } from './BackupCodes';
 
 interface MFASetupProps {
   className?: string;
@@ -10,19 +14,36 @@ interface MFASetupProps {
   onCancel?: () => void;
 }
 
+type FactorChoice = 'none' | 'totp' | 'webauthn' | 'backup';
+
 /**
  * MFA Setup Component
- * Guides users through MFA enrollment
+ * Guides users through MFA enrollment with factor type selection.
  */
 export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
-  const { state } = useMFA();
+  const [choice, setChoice] = useState<FactorChoice>('none');
 
-  if (state.isLoading) {
+  const handleComplete = () => {
+    setChoice('none');
+    onComplete?.();
+  };
+
+  const handleCancel = () => {
+    setChoice('none');
+    onCancel?.();
+  };
+
+  if (choice === 'totp') {
+    return <TOTPSetup onComplete={handleComplete} onCancel={handleCancel} className={className} />;
+  }
+  if (choice === 'webauthn') {
     return (
-      <div className={cn('animate-pulse rounded-lg bg-muted p-6', className)}>
-        <div className="h-6 w-48 rounded bg-muted-foreground/20" />
-        <div className="mt-4 h-32 w-full rounded bg-muted-foreground/20" />
-      </div>
+      <WebAuthnSetup onComplete={handleComplete} onCancel={handleCancel} className={className} />
+    );
+  }
+  if (choice === 'backup') {
+    return (
+      <BackupCodes onComplete={handleComplete} onCancel={handleCancel} className={className} />
     );
   }
 
@@ -32,13 +53,64 @@ export function MFASetup({ className, onComplete, onCancel }: MFASetupProps) {
         <CardTitle>Set Up Two-Factor Authentication</CardTitle>
         <CardDescription>Add an extra layer of security to your account</CardDescription>
       </CardHeader>
-      <CardContent>
-        <MFAEnrollmentWizard
-          allowedFactors={['totp', 'webauthn', 'sms'] as MFAFactorType[]}
-          onComplete={onComplete}
-          onCancel={onCancel}
+      <CardContent className="space-y-3">
+        <FactorOption
+          icon="📱"
+          title="Authenticator App"
+          description="Use Google Authenticator, Authy, or similar"
+          badge="Recommended"
+          onClick={() => setChoice('totp')}
+        />
+        <FactorOption
+          icon="🔐"
+          title="Security Key"
+          description="FIDO2/WebAuthn hardware key or biometrics"
+          badge="Strongest"
+          onClick={() => setChoice('webauthn')}
+        />
+        <FactorOption
+          icon="📋"
+          title="Backup Codes"
+          description="Generate one-time recovery codes"
+          badge="Recovery"
+          onClick={() => setChoice('backup')}
         />
       </CardContent>
     </Card>
+  );
+}
+
+function FactorOption({
+  icon,
+  title,
+  description,
+  badge,
+  onClick,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  badge: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-4 rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-accent"
+    >
+      <span className="text-2xl" aria-hidden="true">
+        {icon}
+      </span>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{title}</span>
+          <Badge variant="outline" size="sm">
+            {badge}
+          </Badge>
+        </div>
+        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+      </div>
+    </button>
   );
 }
