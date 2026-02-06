@@ -88,6 +88,8 @@ module.exports = {
     },
     {
       files: [
+        'src/lib/**/*.{ts,tsx}',
+        'src/stores/**/*.{ts,tsx}',
         'src/components/billing/**/*.{ts,tsx}',
         'src/components/capture/**/*.{ts,tsx}',
         'src/components/identity/**/*.{ts,tsx}',
