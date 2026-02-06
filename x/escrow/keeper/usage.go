@@ -261,7 +261,7 @@ func (uk *usagePipelineKeeper) GenerateInvoiceFromUsage(ctx sdk.Context, leaseID
 	}
 
 	// Build usage inputs from records
-	var usageInputs []billing.UsageInput
+	usageInputs := make([]billing.UsageInput, 0, len(pendingRecords))
 	totalAmount := sdk.NewCoins()
 
 	for _, r := range pendingRecords {
