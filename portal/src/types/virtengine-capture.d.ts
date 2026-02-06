@@ -19,3 +19,5 @@ declare module '@virtengine/capture/*' {
   const captureModule: Record<string, unknown>;
   export default captureModule;
 }
+
+export {};

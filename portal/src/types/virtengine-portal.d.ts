@@ -74,3 +74,5 @@ declare module '@virtengine/portal/*' {
   const portalModule: Record<string, unknown>;
   export default portalModule;
 }
+
+export {};
