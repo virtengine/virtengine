@@ -1,0 +1,213 @@
+# Regional Failover Runbook
+# Automated procedure for failing over from one region to another
+#
+# RTO Target: < 15 minutes
+# RPO Target: < 5 minutes
+
+name: Regional Failover Runbook
+version: "1.0"
+rto: 15m
+rpo: 5m
+
+triggers:
+  - name: region_health_check_failed
+    description: "Route53 health checks report region as unhealthy"
+    threshold: 3
+    window: 5m
+    metric: "AWS/Route53 HealthCheckStatus"
+
+  - name: database_replication_stalled
+    description: "CockroachDB replication lag exceeds RPO threshold"
+    threshold: 300s
+    metric: "cockroachdb_replication_lag_seconds"
+
+  - name: manual_trigger
+    description: "Manual failover initiated by authorized personnel"
+    authorized_roles:
+      - sre-lead
+      - platform-engineer
+      - cto
+
+pre_checks:
+  - name: verify_backup_freshness
+    description: "Ensure latest backup is within RPO window"
+    command: |
+      kubectl --context=${TARGET_REGION_CONTEXT} exec -n cockroachdb cockroachdb-0 -- \
+        cockroach sql --certs-dir=/cockroach/cockroach-certs \
+        -e "SELECT now() - max(end_time) AS age FROM [SHOW BACKUP LATEST IN 's3://virtengine-cockroachdb-backup-${TARGET_REGION}/backups?AUTH=implicit'];"
+    threshold: "age < interval '5 minutes'"
+    timeout: 30s
+
+  - name: verify_target_region_health
+    description: "Confirm target region cluster is healthy"
+    command: |
+      kubectl --context=${TARGET_REGION_CONTEXT} get nodes --no-headers | \
+        awk '{print $2}' | grep -c "Ready"
+    expect: ">= 6"
+    timeout: 15s
+
+  - name: verify_target_database_health
+    description: "Confirm target CockroachDB nodes are healthy"
+    command: |
+      kubectl --context=${TARGET_REGION_CONTEXT} -n cockroachdb exec cockroachdb-0 -- \
+        cockroach node status --certs-dir=/cockroach/cockroach-certs | grep -c "is_live.*true"
+    expect: ">= 3"
+    timeout: 15s
+
+steps:
+  - name: record_failover_start
+    description: "Record failover start time for RTO measurement"
+    action: custom_metric
+    params:
+      namespace: VirtEngine/DR
+      metric: FailoverStartTime
+      value: "${EPOCH_SECONDS}"
+    timeout: 5s
+
+  - name: pause_traffic
+    description: "Remove failing region from global load balancer"
+    action: route53_health_check_disable
+    params:
+      region: ${FAILING_REGION}
+      health_check_id: ${FAILING_REGION_HEALTH_CHECK_ID}
+    timeout: 30s
+    verify: |
+      dig +short api.virtengine.io | grep -v "${FAILING_REGION_IP}"
+
+  - name: verify_replication_caught_up
+    description: "Ensure database replication is current in target"
+    action: cockroachdb_check_replication
+    params:
+      context: ${TARGET_REGION_CONTEXT}
+      namespace: cockroachdb
+      max_lag: 5m
+    timeout: 2m
+    retry:
+      max_attempts: 3
+      delay: 10s
+
+  - name: promote_database
+    description: "Set target region as CockroachDB primary"
+    action: cockroachdb_set_primary
+    params:
+      context: ${TARGET_REGION_CONTEXT}
+      namespace: cockroachdb
+      region: ${TARGET_REGION}
+    timeout: 1m
+    rollback:
+      action: cockroachdb_set_primary
+      params:
+        region: ${ORIGINAL_PRIMARY_REGION}
+
+  - name: scale_validators
+    description: "Ensure full validator count in target region"
+    action: kubernetes_scale
+    params:
+      context: ${TARGET_REGION_CONTEXT}
+      namespace: virtengine
+      deployment: virtengine-validator
+      replicas: ${VALIDATOR_COUNT}
+    timeout: 5m
+    verify: |
+      kubectl --context=${TARGET_REGION_CONTEXT} -n virtengine get pods -l role=validator \
+        --field-selector=status.phase=Running --no-headers | wc -l
+
+  - name: scale_workloads
+    description: "Scale up workload nodes in target region"
+    action: kubernetes_scale
+    params:
+      context: ${TARGET_REGION_CONTEXT}
+      namespace: virtengine
+      deployment: provider-daemon
+      replicas: ${PROVIDER_COUNT}
+    timeout: 3m
+
+  - name: update_dns
+    description: "Update DNS to point to target region"
+    action: route53_weighted_update
+    params:
+      zone_id: ${ZONE_ID}
+      record: api.virtengine.io
+      target_region: ${TARGET_REGION}
+      weight: 100
+    timeout: 30s
+
+  - name: enable_traffic
+    description: "Enable health check for target region"
+    action: route53_health_check_enable
+    params:
+      region: ${TARGET_REGION}
+      health_check_id: ${TARGET_REGION_HEALTH_CHECK_ID}
+    timeout: 30s
+
+  - name: record_failover_end
+    description: "Record failover completion for RTO measurement"
+    action: custom_metric
+    params:
+      namespace: VirtEngine/DR
+      metric: FailoverDurationSeconds
+      value: "${ELAPSED_SECONDS}"
+    timeout: 5s
+
+post_checks:
+  - name: verify_api_health
+    description: "Confirm API is responding correctly"
+    command: |
+      curl -sf https://api.virtengine.io/cosmos/base/tendermint/v1beta1/node_info | \
+        jq -e '.default_node_info.network'
+    retries: 10
+    interval: 10s
+    timeout: 120s
+
+  - name: verify_block_production
+    description: "Confirm blockchain is producing blocks"
+    command: |
+      HEIGHT1=$(curl -sf https://rpc.virtengine.io/status | jq -r '.result.sync_info.latest_block_height')
+      sleep 10
+      HEIGHT2=$(curl -sf https://rpc.virtengine.io/status | jq -r '.result.sync_info.latest_block_height')
+      [ "$HEIGHT2" -gt "$HEIGHT1" ] && echo "PASS" || echo "FAIL"
+    expect: "PASS"
+    timeout: 30s
+
+  - name: verify_database_writes
+    description: "Confirm database accepts writes in target region"
+    command: |
+      kubectl --context=${TARGET_REGION_CONTEXT} -n cockroachdb exec cockroachdb-0 -- \
+        cockroach sql --certs-dir=/cockroach/cockroach-certs \
+        -e "CREATE TABLE IF NOT EXISTS system.dr_test (id INT PRIMARY KEY, ts TIMESTAMP DEFAULT now()); INSERT INTO system.dr_test VALUES (1) ON CONFLICT (id) DO UPDATE SET ts = now(); SELECT ts FROM system.dr_test WHERE id = 1;"
+    timeout: 15s
+
+  - name: notify_team
+    description: "Send notification about failover completion"
+    action: notification
+    params:
+      channels:
+        - pagerduty
+        - slack
+      message: "Regional failover complete: ${FAILING_REGION} → ${TARGET_REGION}. RTO: ${ELAPSED_SECONDS}s. All post-checks passed."
+      severity: resolved
+
+rollback:
+  trigger: any_step_failed_after_promote_database
+  steps:
+    - name: revert_dns
+      action: route53_weighted_update
+      params:
+        zone_id: ${ZONE_ID}
+        record: api.virtengine.io
+        target_region: ${ORIGINAL_PRIMARY_REGION}
+        weight: 100
+
+    - name: demote_target
+      action: cockroachdb_set_primary
+      params:
+        region: ${ORIGINAL_PRIMARY_REGION}
+
+    - name: notify_rollback
+      action: notification
+      params:
+        channels:
+          - pagerduty
+          - slack
+        message: "Failover ROLLED BACK: ${TARGET_REGION} → ${ORIGINAL_PRIMARY_REGION}. Manual investigation required."
+        severity: critical

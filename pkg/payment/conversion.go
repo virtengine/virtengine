@@ -445,6 +445,63 @@ func (e *conversionExecutor) ListConversionsForReconciliation(ctx context.Contex
 	return e.store.ListByStatus(ctx, ConversionStatusReconciling)
 }
 
+// GenerateReconciliationReport generates a structured report for a time range
+func (e *conversionExecutor) GenerateReconciliationReport(ctx context.Context, start, end time.Time) (*ReconciliationReport, error) {
+	entries, err := e.store.ListByDateRange(ctx, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list entries for report: %w", err)
+	}
+
+	report := &ReconciliationReport{
+		GeneratedAt: time.Now(),
+		PeriodStart: start,
+		PeriodEnd:   end,
+		Summary: ReconciliationSummary{
+			TotalFiatConverted:     Amount{Currency: CurrencyUSD},
+			TotalCryptoTransferred: sdkmath.ZeroInt(),
+			TotalFeesCollected:     Amount{Currency: CurrencyUSD},
+		},
+	}
+
+	for _, entry := range entries {
+		report.Summary.TotalConversions++
+
+		switch entry.Status {
+		case ConversionStatusCompleted:
+			report.Summary.CompletedCount++
+			report.Summary.TotalFiatConverted.Value += entry.FiatAmount.Value
+			if report.Summary.TotalFiatConverted.Currency == "" {
+				report.Summary.TotalFiatConverted.Currency = entry.FiatAmount.Currency
+			}
+			report.Summary.TotalCryptoTransferred = report.Summary.TotalCryptoTransferred.Add(entry.CryptoAmount)
+			report.Summary.TotalFeesCollected.Value += entry.Fee.Value
+			if report.Summary.TotalFeesCollected.Currency == "" {
+				report.Summary.TotalFeesCollected.Currency = entry.Fee.Currency
+			}
+			entryCopy := *entry
+			report.CompletedEntries = append(report.CompletedEntries, &entryCopy)
+		case ConversionStatusFailed:
+			report.Summary.FailedCount++
+			entryCopy := *entry
+			report.FailedEntries = append(report.FailedEntries, &entryCopy)
+		case ConversionStatusPending, ConversionStatusExecuting:
+			report.Summary.PendingCount++
+		case ConversionStatusReconciling:
+			report.Summary.ReconcilingCount++
+			entryCopy := *entry
+			report.NeedsReconciliation = append(report.NeedsReconciliation, &entryCopy)
+		case ConversionStatusRefunded:
+			report.Summary.RefundedCount++
+		}
+	}
+
+	if report.Summary.TotalConversions > 0 {
+		report.Summary.SuccessRate = float64(report.Summary.CompletedCount) / float64(report.Summary.TotalConversions) * 100
+	}
+
+	return report, nil
+}
+
 // validateRequest validates a conversion execution request
 func (e *conversionExecutor) validateRequest(ctx context.Context, req ConversionExecutionRequest) error {
 	if req.IdempotencyKey == "" {
@@ -590,6 +647,20 @@ func (s *inMemoryLedgerStore) ListPendingReadyForExecution(ctx context.Context) 
 				entryCopy := *entry
 				result = append(result, &entryCopy)
 			}
+		}
+	}
+	return result, nil
+}
+
+func (s *inMemoryLedgerStore) ListByDateRange(ctx context.Context, start, end time.Time) ([]*ConversionLedgerEntry, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*ConversionLedgerEntry
+	for _, entry := range s.entries {
+		if !entry.CreatedAt.Before(start) && !entry.CreatedAt.After(end) {
+			entryCopy := *entry
+			result = append(result, &entryCopy)
 		}
 	}
 	return result, nil

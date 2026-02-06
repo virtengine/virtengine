@@ -1,0 +1,75 @@
+# DR Validation Runbook
+# Weekly/monthly DR exercise procedures
+
+name: DR Validation Exercise
+version: "1.0"
+
+schedule:
+  tabletop: "monthly"
+  automated_test: "weekly"
+  full_exercise: "quarterly"
+
+automated_tests:
+  - name: backup_freshness
+    description: "Verify all region backups are within RPO"
+    schedule: "0 */4 * * *"
+    regions:
+      - us-east-1
+      - eu-west-1
+      - ap-southeast-1
+    steps:
+      - command: |
+          for REGION in us-east-1 eu-west-1 ap-southeast-1; do
+            AGE=$(kubectl --context=virtengine-prod-${REGION} -n cockroachdb exec cockroachdb-0 -- \
+              cockroach sql --certs-dir=/cockroach/cockroach-certs --format=csv \
+              -e "SELECT extract(epoch from (now() - max(end_time)))::int AS age_seconds FROM [SHOW BACKUP LATEST IN 's3://virtengine-cockroachdb-backup-${REGION}/backups?AUTH=implicit'];" \
+              2>/dev/null | tail -1)
+            echo "${REGION}: ${AGE}s"
+            [ "${AGE}" -lt 21600 ] || exit 1
+          done
+    threshold: "all regions < 21600s (6h)"
+
+  - name: cross_region_connectivity
+    description: "Verify all regions can communicate"
+    schedule: "*/30 * * * *"
+    steps:
+      - command: |
+          for REGION in us-east-1 eu-west-1 ap-southeast-1; do
+            curl -sf --connect-timeout 10 "https://rpc-${REGION}.virtengine.io/status" | \
+              jq -r '.result.sync_info.catching_up' | grep -q "false" && \
+              echo "${REGION}: OK" || echo "${REGION}: FAIL"
+          done
+
+  - name: dns_failover_simulation
+    description: "Test DNS failover without impacting production"
+    schedule: "0 3 * * 0"
+    steps:
+      - command: |
+          # Query failover DNS record
+          dig +short api-failover.virtengine.io
+          # Verify both primary and secondary resolve
+          dig +short api-failover.virtengine.io @ns-1.awsdns.co.uk
+          dig +short api-failover.virtengine.io @ns-1.awsdns.com
+
+  - name: validator_distribution
+    description: "Verify validators are distributed across regions"
+    schedule: "0 */6 * * *"
+    steps:
+      - command: |
+          for REGION in us-east-1 eu-west-1 ap-southeast-1; do
+            COUNT=$(kubectl --context=virtengine-prod-${REGION} -n virtengine \
+              get pods -l role=validator --field-selector=status.phase=Running --no-headers | wc -l)
+            echo "${REGION}: ${COUNT} validators"
+          done
+    threshold: "each region >= 3 validators"
+
+reporting:
+  format: json
+  destination: s3://virtengine-dr-test-results/reports/
+  notifications:
+    - channel: slack
+      webhook: ${SLACK_WEBHOOK}
+    - channel: email
+      recipients:
+        - sre-team@virtengine.io
+        - platform@virtengine.io
