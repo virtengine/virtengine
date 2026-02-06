@@ -17,10 +17,6 @@ import (
 	"github.com/virtengine/virtengine/testutil/state"
 )
 
-type kTestSuite struct {
-	*state.TestSuite
-}
-
 func Test_AccountSettlement(t *testing.T) {
 	ssuite := state.SetupTestSuite(t)
 	ctx := ssuite.Context()
