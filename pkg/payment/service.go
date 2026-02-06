@@ -548,21 +548,16 @@ func (s *paymentService) GetDispute(ctx context.Context, disputeID string) (Disp
 	}
 
 	// If not in store, fetch from gateway
-	var disp Dispute
-	var err error
-
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		disp, err = adapter.GetDispute(ctx, disputeID)
-	case *RealAdyenAdapter:
-		disp, err = adapter.GetDispute(ctx, disputeID)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return Dispute{
 			ID:      disputeID,
 			Gateway: s.config.Gateway,
 			Status:  DisputeStatusNeedsResponse,
 		}, nil
 	}
+
+	disp, err := adapter.GetDispute(ctx, disputeID)
 
 	if err != nil {
 		return Dispute{}, err
@@ -588,17 +583,12 @@ func (s *paymentService) ListDisputes(ctx context.Context, paymentIntentID strin
 	}
 
 	// If not in store, fetch from gateway
-	var disputes []Dispute
-	var err error
-
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		disputes, err = adapter.ListDisputes(ctx, paymentIntentID)
-	case *RealAdyenAdapter:
-		disputes, err = adapter.ListDisputes(ctx, paymentIntentID)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return []Dispute{}, nil
 	}
+
+	disputes, err := adapter.ListDisputes(ctx, paymentIntentID)
 
 	if err != nil {
 		return nil, err
@@ -622,15 +612,12 @@ func (s *paymentService) SubmitEvidence(ctx context.Context, disputeID string, e
 	}
 
 	// Submit to gateway
-	var err error
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
-	case *RealAdyenAdapter:
-		err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return ErrGatewayNotConfigured
 	}
+
+	err = adapter.SubmitDisputeEvidence(ctx, disputeID, evidence)
 
 	if err != nil {
 		return err
@@ -660,15 +647,12 @@ func (s *paymentService) SubmitEvidence(ctx context.Context, disputeID string, e
 // AcceptDispute accepts (concedes) a dispute
 func (s *paymentService) AcceptDispute(ctx context.Context, disputeID string) error {
 	// Submit to gateway
-	var err error
-	switch adapter := s.gateway.(type) {
-	case *StripeAdapter:
-		err = adapter.AcceptDispute(ctx, disputeID)
-	case *RealAdyenAdapter:
-		err = adapter.AcceptDispute(ctx, disputeID)
-	default:
+	adapter, err := resolveDisputeGateway(s.gateway)
+	if err != nil {
 		return ErrGatewayNotConfigured
 	}
+
+	err = adapter.AcceptDispute(ctx, disputeID)
 
 	if err != nil {
 		return err
@@ -694,6 +678,16 @@ func (s *paymentService) GetDisputeStore() DisputeStore {
 	return s.disputeStore
 }
 
+// ResolveDispute executes a resolution workflow and persists the record.
+func (s *paymentService) ResolveDispute(ctx context.Context, req DisputeResolutionRequest) (*DisputeResolutionResult, error) {
+	return ResolveDispute(ctx, s, s.disputeStore, DefaultDisputeLifecycle(), req)
+}
+
+// GenerateDisputeReport generates a finance report from stored dispute data.
+func (s *paymentService) GenerateDisputeReport(opts DisputeReportOptions) (*DisputeReport, error) {
+	return GenerateDisputeReport(s.disputeStore, opts)
+}
+
 // ============================================================================
 // Dispute Webhook Handlers - PAY-003
 // ============================================================================
@@ -702,7 +696,7 @@ func (s *paymentService) GetDisputeStore() DisputeStore {
 //
 //nolint:unparam // ctx kept for future async dispute processing
 func (s *paymentService) handleDisputeCreated(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
@@ -725,20 +719,33 @@ func (s *paymentService) handleDisputeCreated(_ context.Context, event WebhookEv
 //
 //nolint:unparam // ctx kept for future async dispute processing
 func (s *paymentService) handleDisputeUpdated(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
 
 	record, found := s.disputeStore.Get(dispute.ID)
+	lifecycle := DefaultDisputeLifecycle()
 	if !found {
 		// Create new record if not found
 		record = NewDisputeRecord(*dispute, event.Gateway, "webhook:"+string(event.Type))
 	} else {
 		// Update existing record
-		record.UpdateStatus(dispute.Status, "webhook:"+string(event.Type), map[string]string{
+		transitionErr := lifecycle.Transition(record, dispute.Status, "webhook:"+string(event.Type), map[string]string{
 			"event_id": event.ID,
 		})
+		if transitionErr != nil {
+			record.AddAuditEntry(DisputeAuditEntry{
+				Timestamp: time.Now(),
+				Action:    "status_update_rejected",
+				Actor:     "webhook:" + string(event.Type),
+				Details: map[string]string{
+					"event_id": event.ID,
+					"error":    transitionErr.Error(),
+				},
+			})
+			dispute.Status = record.Status
+		}
 		record.Dispute = *dispute
 	}
 
@@ -749,19 +756,32 @@ func (s *paymentService) handleDisputeUpdated(_ context.Context, event WebhookEv
 //
 //nolint:unparam // ctx kept for future async dispute processing
 func (s *paymentService) handleDisputeClosed(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
 
 	record, found := s.disputeStore.Get(dispute.ID)
+	lifecycle := DefaultDisputeLifecycle()
 	if !found {
 		record = NewDisputeRecord(*dispute, event.Gateway, "webhook:"+string(event.Type))
 	} else {
-		record.UpdateStatus(dispute.Status, "webhook:"+string(event.Type), map[string]string{
+		transitionErr := lifecycle.Transition(record, dispute.Status, "webhook:"+string(event.Type), map[string]string{
 			"event_id": event.ID,
 			"outcome":  string(dispute.Status),
 		})
+		if transitionErr != nil {
+			record.AddAuditEntry(DisputeAuditEntry{
+				Timestamp: time.Now(),
+				Action:    "status_update_rejected",
+				Actor:     "webhook:" + string(event.Type),
+				Details: map[string]string{
+					"event_id": event.ID,
+					"error":    transitionErr.Error(),
+				},
+			})
+			dispute.Status = record.Status
+		}
 		record.Dispute = *dispute
 	}
 
@@ -782,7 +802,7 @@ func (s *paymentService) handleDisputeClosed(_ context.Context, event WebhookEve
 //
 //nolint:unparam // ctx kept for future async funds tracking
 func (s *paymentService) handleDisputeFundsWithdrawn(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
@@ -808,7 +828,7 @@ func (s *paymentService) handleDisputeFundsWithdrawn(_ context.Context, event We
 //
 //nolint:unparam // ctx kept for future async funds tracking
 func (s *paymentService) handleDisputeFundsReinstated(_ context.Context, event WebhookEvent) error {
-	dispute := s.extractDisputeFromEvent(event)
+	dispute := extractDisputeFromWebhookEvent(event)
 	if dispute == nil {
 		return nil
 	}
@@ -828,59 +848,6 @@ func (s *paymentService) handleDisputeFundsReinstated(_ context.Context, event W
 	}
 
 	return nil
-}
-
-// extractDisputeFromEvent extracts dispute data from a webhook event
-func (s *paymentService) extractDisputeFromEvent(event WebhookEvent) *Dispute {
-	data, ok := event.Data.(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	obj, ok := data["object"].(map[string]interface{})
-	if !ok {
-		// Try direct access for Adyen-style events
-		obj = data
-	}
-
-	dispute := &Dispute{
-		Gateway:   event.Gateway,
-		CreatedAt: event.Timestamp,
-		UpdatedAt: time.Now(),
-	}
-
-	if id, ok := obj["id"].(string); ok {
-		dispute.ID = id
-	}
-	if id, ok := obj["pspReference"].(string); ok && dispute.ID == "" {
-		dispute.ID = id
-	}
-	if status, ok := obj["status"].(string); ok {
-		dispute.Status = DisputeStatus(status)
-	}
-	if reason, ok := obj["reason"].(string); ok {
-		dispute.Reason = DisputeReason(reason)
-	}
-	if piID, ok := obj["payment_intent"].(string); ok {
-		dispute.PaymentIntentID = piID
-	}
-	if chargeID, ok := obj["charge"].(string); ok {
-		dispute.ChargeID = chargeID
-	}
-
-	// Parse amount if present
-	if amountVal, ok := obj["amount"].(float64); ok {
-		dispute.Amount.Value = int64(amountVal)
-	}
-	if currency, ok := obj["currency"].(string); ok {
-		dispute.Amount.Currency = Currency(currency)
-	}
-
-	if dispute.ID == "" {
-		return nil
-	}
-
-	return dispute
 }
 
 // ============================================================================
