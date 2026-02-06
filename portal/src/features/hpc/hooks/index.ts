@@ -148,7 +148,9 @@ export function useJobSubmission() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const submitJob = async (params: Parameters<ReturnType<typeof createHPCClient>['submitJob']>[0]) => {
+  const submitJob = async (
+    params: Parameters<ReturnType<typeof createHPCClient>['submitJob']>[0]
+  ) => {
     setIsSubmitting(true);
     setError(null);
 
@@ -202,7 +204,7 @@ export function useCostEstimation() {
 
   const estimateCost = async (
     offeringId: string,
-    resources: Parameters<ReturnType<typeof createHPCClient>['estimateJobCost']>[1],
+    resources: Parameters<ReturnType<typeof createHPCClient>['estimateJobCost']>[1]
   ) => {
     setIsEstimating(true);
     setError(null);
@@ -231,9 +233,12 @@ export function useJobStatistics() {
   const stats = {
     running: jobs.filter((j) => j.status === 'running').length,
     queued: jobs.filter((j) => j.status === 'queued').length,
-    completed: jobs.filter((j) => j.status === 'completed' && j.completedAt && j.completedAt > Date.now() - 86400000)
-      .length,
-    failed: jobs.filter((j) => j.status === 'failed' && j.completedAt && j.completedAt > Date.now() - 86400000).length,
+    completed: jobs.filter(
+      (j) => j.status === 'completed' && j.completedAt && j.completedAt > Date.now() - 86400000
+    ).length,
+    failed: jobs.filter(
+      (j) => j.status === 'failed' && j.completedAt && j.completedAt > Date.now() - 86400000
+    ).length,
   };
 
   return { stats, isLoading, error };

@@ -158,7 +158,7 @@ export class HPCClient {
    */
   async estimateJobCost(
     offeringId: string,
-    resources: SubmitJobParams['resources'],
+    resources: SubmitJobParams['resources']
   ): Promise<{
     estimatedTotal: string;
     pricePerHour: string;
@@ -206,7 +206,8 @@ const MOCK_TEMPLATES: WorkloadTemplate[] = [
   {
     id: 'pytorch-training',
     name: 'PyTorch Training',
-    description: 'Train deep learning models with PyTorch. Supports distributed training across multiple GPUs.',
+    description:
+      'Train deep learning models with PyTorch. Supports distributed training across multiple GPUs.',
     category: 'ml_training',
     defaultResources: {
       nodes: 1,
