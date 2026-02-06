@@ -178,8 +178,21 @@ fi
 if [ "${VE_HOOK_SKIP_LINT:-}" != "1" ]; then
     if [ -n "$STAGED_GO_FILES" ]; then
         hook_header "[pre-commit] Linting staged Go packages (golangci-lint)..."
+        export GOLANGCI_LINT_CACHE="$REPO_ROOT/.cache/golangci-lint"
+        mkdir -p "$GOLANGCI_LINT_CACHE"
         GO_DIRS="$(echo "$STAGED_GO_FILES" | xargs -n1 dirname | sort -u | sed 's#^#./#')"
-        if ! golangci-lint run $GO_DIRS; then
+        VALID_DIRS=()
+        while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            if go list "$dir" >/dev/null 2>&1; then
+                VALID_DIRS+=("$dir")
+            else
+                hook_warn "[pre-commit] Skipping non-package dir: $dir"
+            fi
+        done <<< "$GO_DIRS"
+        if [ "${#VALID_DIRS[@]}" -eq 0 ]; then
+            hook_warn "[pre-commit] No valid Go packages to lint"
+        elif ! golangci-lint run --allow-parallel-runners "${VALID_DIRS[@]}"; then
             hook_fail "golangci-lint failed. Fix issues or set VE_HOOK_SKIP_LINT=1 to bypass."
             exit 1
         fi
