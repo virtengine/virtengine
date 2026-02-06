@@ -10,11 +10,21 @@ When working on a task, do not stop until it is COMPLETELY done. Continue workin
 
 Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
 
-You have access to gh commands, ENSURE you create a PR Describing the changes once you are done - ENSURE you monitor CI/CD after creating a github PR (sleep for 10 minutes and check PR CI/CD status to see if ANYTHING failed) - if anything fails, resolve it promptly.
+### PR Creation & Merge (vibe-kanban automation)
 
-Ensure that there are no CI/CD errors after pushing, if needed continue monitoring your push for errors and fix them if identified.
+If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), the **cleanup script handles PR creation and auto-merge automatically**. In this case:
+- Focus on code quality, tests, and a clean commit
+- Just `git push` — the cleanup script creates the PR and enables auto-merge
+- Do NOT manually run `gh pr create` or `gh pr merge`
 
-You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages, etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks..
+If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you are responsible for creating the PR and monitoring CI/CD yourself — use `gh` CLI to create PRs and merge after CI passes.
+
+You should have all commands as needed available in shell, for example go, gh, pip, npm, git, etc. Consider increasing time outs when running long running commands such as git push, go test when running large test packages (running test on all packages could need more than 20minute timeout, only run tests on modules you actually changed instead), etc. Avoid running long CLI tasks when unnecessary, do not bypass verifications for git commit & git push - resolve any lint or unit test errors that you may encounter with these hooks.
+
+## Agent-Specific Instructions
+
+- **Codex agents:** See `.codex/instructions.md` for Codex-specific tooling, sandbox constraints, and workflow.
+- **Copilot agents:** See `.github/copilot-instructions.md` for VS Code integration, MCP servers, and module patterns.
 
 ## Pre-commit automation (do this every time)
 
@@ -148,17 +158,18 @@ feat(api)!: change response format
 
 ## GSD Framework & Orchestration
 
-This repo uses the GSD (Get Stuff Done) framework for autonomous development.
+This repo uses the GSD (Get Stuff Done) framework for autonomous development with dual-agent orchestration.
 
-**Orchestrator Workflow:**
+**Orchestrator Workflow (`scripts/ve-orchestrator.ps1`):**
 
-1.  **Planner:** Ingests tasks from `_docs/ralph/tasks` and Vibe-Kanban.
-2.  **Executor:**
-    - Acts as **Lead Engineer**.
-    - Delegates implementation to `codex-cli` agents.
-    - **MUST** run pre-push hooks (`make test`, `pnpm lint`, etc.) before completing tasks.
-    - Updates Vibe-Kanban status.
-3.  **Synchronization:** `PLAN.md` is the source of truth for the current phase, synced with Kanban tickets.
+1.  **Task Source:** Vibe-Kanban board (auto-detected by project name "virtengine").
+2.  **Agent Cycling:** Alternates 50/50 between Codex (DEFAULT profile) and Copilot (CLAUDE_OPUS_4_6 profile) to avoid rate-limiting.
+3.  **Merge Gate:** New tasks only start after previous task PRs are merged and confirmed.
+4.  **Executor:**
+    - Codex agents: Use shell + codex-cli MCP for subtasks. See `.codex/instructions.md`.
+    - Copilot agents: Use VS Code tools + `runSubagent`. See `.github/copilot-instructions.md`.
+    - Both: **MUST** pass pre-push hooks (go vet, lint, build, tests) before task completion.
+5.  **Cleanup:** Vibe-kanban cleanup script handles PR creation + auto-merge.
 
 ## MCP Servers & Tool Usage
 
