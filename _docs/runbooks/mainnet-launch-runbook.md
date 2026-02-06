@@ -11,6 +11,8 @@ Operational runbook for executing the mainnet launch, including readiness checks
 - Dress rehearsal report: _docs/operations/mainnet-dress-rehearsal-report.md
 - Go/No-Go decision record: _docs/operations/mainnet-go-no-go-decision.md
 - Launch evidence packet: _docs/operations/mainnet-launch-packet.md
+- Genesis ceremony runbook: _docs/runbooks/mainnet-genesis-ceremony.md
+- Validator onboarding runbook: _docs/runbooks/validator-onboarding.md
 - DR and continuity: _docs/disaster-recovery.md, _docs/business-continuity.md
 
 ## Roles and contact points
@@ -47,4 +49,3 @@ Operational runbook for executing the mainnet launch, including readiness checks
 - Monitor stability window (minimum 24h)
 - Capture final metrics and SLO compliance
 - Close out go/no-go record and publish retrospective
-
