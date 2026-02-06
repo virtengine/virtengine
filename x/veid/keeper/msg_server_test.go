@@ -1,7 +1,9 @@
 package keeper_test
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"testing"
 	"time"
 
@@ -334,28 +336,249 @@ func (s *MsgServerTestSuite) TestMsgCreateIdentityWallet_InvalidSender() {
 	s.Require().Contains(err.Error(), "invalid")
 }
 
+// testKeyPair holds an Ed25519 key pair for test signing
+type testKeyPair struct {
+	pub  ed25519.PublicKey
+	priv ed25519.PrivateKey
+}
+
+// generateTestKeyPair creates a deterministic Ed25519 key pair for testing
+func generateTestKeyPair() testKeyPair {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		panic("failed to generate ed25519 key pair: " + err.Error())
+	}
+	return testKeyPair{pub: pub, priv: priv}
+}
+
+// signMessage signs a message using the same logic as verifySignature in wallet.go:
+// if message is not 32 bytes, SHA256-hash it first, then sign with Ed25519.
+func (kp testKeyPair) signMessage(message []byte) []byte {
+	var msgToSign []byte
+	if len(message) == 32 {
+		msgToSign = message
+	} else {
+		hash := sha256.Sum256(message)
+		msgToSign = hash[:]
+	}
+	return ed25519.Sign(kp.priv, msgToSign)
+}
+
+// signWalletBinding signs the wallet binding message: SHA256("VEID_WALLET_BINDING:" + walletID + ":" + accountAddress)
+func (kp testKeyPair) signWalletBinding(walletID, accountAddress string) []byte {
+	msg := types.GetWalletBindingMessage(walletID, accountAddress)
+	return kp.signMessage(msg)
+}
+
+// signAddScope signs the add-scope message: "VEID_ADD_SCOPE:" + sender + ":" + scopeID
+func (kp testKeyPair) signAddScope(sender, scopeID string) []byte {
+	msg := types.GetAddScopeSigningMessage(sender, scopeID)
+	return kp.signMessage(msg)
+}
+
+// signRevokeScope signs the revoke-scope message: "VEID_REVOKE_SCOPE:" + sender + ":" + scopeID
+func (kp testKeyPair) signRevokeScope(sender, scopeID string) []byte {
+	msg := types.GetRevokeScopeSigningMessage(sender, scopeID)
+	return kp.signMessage(msg)
+}
+
+// signConsentUpdate signs the consent update message: "VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grant/revoke
+func (kp testKeyPair) signConsentUpdate(sender, scopeID string, grant bool) []byte {
+	grantStr := "revoke"
+	if grant {
+		grantStr = "grant"
+	}
+	msg := []byte("VEID_CONSENT_UPDATE:" + sender + ":" + scopeID + ":" + grantStr)
+	return kp.signMessage(msg)
+}
+
+// signRebind signs the new public key with the old private key to authorize a rebind.
+// The rebind verification expects verifySignature(oldPubKey, newPubKey, signature),
+// where newPubKey is 32 bytes (used directly, no hashing).
+func (kp testKeyPair) signRebind(newPubKey []byte) []byte {
+	return kp.signMessage(newPubKey)
+}
+
+// createWalletWithKey creates an identity wallet bound to the given Ed25519 key pair
+func (s *MsgServerTestSuite) createWalletWithKey(address sdk.AccAddress, kp testKeyPair) {
+	walletID := keeper.GenerateWalletID(address.String())
+	bindingSig := kp.signWalletBinding(walletID, address.String())
+
+	msg := &types.MsgCreateIdentityWallet{
+		Sender:           address.String(),
+		BindingPubKey:    kp.pub,
+		BindingSignature: bindingSig,
+	}
+
+	resp, err := s.msgServer.CreateIdentityWallet(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotEmpty(resp.WalletId)
+}
+
 // Test: MsgAddScopeToWallet - success
-// TODO: This test requires proper signature generation, skipping for proto migration
 func (s *MsgServerTestSuite) TestMsgAddScopeToWallet_Success() {
-	s.T().Skip("Requires valid signature generation; skipping for proto migration")
+	address := sdk.AccAddress([]byte("test-addr-add-scope1"))
+	kp := generateTestKeyPair()
+
+	// Disable upload signature requirements for testing
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	err := s.keeper.SetParams(s.ctx, params)
+	s.Require().NoError(err)
+
+	// Create wallet with valid binding signature
+	s.createWalletWithKey(address, kp)
+
+	scopeID := "scope-wallet-add"
+	envelopeHash := sha256.Sum256([]byte("test-envelope"))
+	userSig := kp.signAddScope(address.String(), scopeID)
+
+	msg := &types.MsgAddScopeToWallet{
+		Sender:        address.String(),
+		ScopeId:       scopeID,
+		ScopeType:     veidv1.ScopeTypeIDDocument,
+		EnvelopeHash:  envelopeHash[:],
+		UserSignature: userSig,
+	}
+
+	resp, err := s.msgServer.AddScopeToWallet(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().Equal(scopeID, resp.ScopeId)
+
+	// Verify scope was added to wallet
+	wallet, found := s.keeper.GetWallet(s.ctx, address)
+	s.Require().True(found)
+	_, exists := wallet.GetScopeReference(scopeID)
+	s.Require().True(exists)
 }
 
 // Test: MsgRevokeScopeFromWallet - success
-// TODO: This test requires proper signature generation, skipping for proto migration
 func (s *MsgServerTestSuite) TestMsgRevokeScopeFromWallet_Success() {
-	s.T().Skip("Requires valid signature generation; skipping for proto migration")
+	address := sdk.AccAddress([]byte("test-addr-rev-scope"))
+	kp := generateTestKeyPair()
+
+	// Disable upload signature requirements for testing
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	err := s.keeper.SetParams(s.ctx, params)
+	s.Require().NoError(err)
+
+	// Create wallet and add a scope
+	s.createWalletWithKey(address, kp)
+
+	scopeID := "scope-wallet-revoke"
+	envelopeHash := sha256.Sum256([]byte("test-envelope-revoke"))
+	addSig := kp.signAddScope(address.String(), scopeID)
+
+	addMsg := &types.MsgAddScopeToWallet{
+		Sender:        address.String(),
+		ScopeId:       scopeID,
+		ScopeType:     veidv1.ScopeTypeSelfie,
+		EnvelopeHash:  envelopeHash[:],
+		UserSignature: addSig,
+	}
+
+	_, err = s.msgServer.AddScopeToWallet(s.ctx, addMsg)
+	s.Require().NoError(err)
+
+	// Revoke the scope from wallet
+	revokeSig := kp.signRevokeScope(address.String(), scopeID)
+
+	revokeMsg := &types.MsgRevokeScopeFromWallet{
+		Sender:        address.String(),
+		ScopeId:       scopeID,
+		Reason:        "user requested removal",
+		UserSignature: revokeSig,
+	}
+
+	resp, err := s.msgServer.RevokeScopeFromWallet(s.ctx, revokeMsg)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().Equal(scopeID, resp.ScopeId)
+
+	// Verify scope was revoked in wallet
+	wallet, found := s.keeper.GetWallet(s.ctx, address)
+	s.Require().True(found)
+	ref, exists := wallet.GetScopeReference(scopeID)
+	s.Require().True(exists)
+	s.Require().Equal(types.ScopeRefStatusRevoked, ref.Status)
 }
 
 // Test: MsgUpdateConsentSettings - success
-// TODO: This test requires proper signature generation, skipping for proto migration
 func (s *MsgServerTestSuite) TestMsgUpdateConsentSettings_Success() {
-	s.T().Skip("Requires valid signature generation; skipping for proto migration")
+	address := sdk.AccAddress([]byte("test-addr-consent01"))
+	kp := generateTestKeyPair()
+
+	// Disable upload signature requirements for testing
+	params := types.DefaultParams()
+	params.RequireClientSignature = false
+	params.RequireUserSignature = false
+	err := s.keeper.SetParams(s.ctx, params)
+	s.Require().NoError(err)
+
+	// Create wallet
+	s.createWalletWithKey(address, kp)
+
+	scopeID := "scope-consent-update"
+	consentSig := kp.signConsentUpdate(address.String(), scopeID, true)
+
+	msg := &types.MsgUpdateConsentSettings{
+		Sender:        address.String(),
+		ScopeId:       scopeID,
+		GrantConsent:  true,
+		Purpose:       "identity verification",
+		UserSignature: consentSig,
+	}
+
+	resp, err := s.msgServer.UpdateConsentSettings(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().True(resp.ConsentVersion > 0)
+
+	// Verify consent was updated in wallet
+	wallet, found := s.keeper.GetWallet(s.ctx, address)
+	s.Require().True(found)
+	consent, hasConsent := wallet.ConsentSettings.GetScopeConsent(scopeID)
+	s.Require().True(hasConsent)
+	s.Require().True(consent.Granted)
 }
 
 // Test: MsgRebindWallet - success
-// TODO: This test requires proper signature generation, skipping for proto migration
 func (s *MsgServerTestSuite) TestMsgRebindWallet_Success() {
-	s.T().Skip("Requires valid signature generation; skipping for proto migration")
+	address := sdk.AccAddress([]byte("test-addr-rebind001"))
+	oldKP := generateTestKeyPair()
+	newKP := generateTestKeyPair()
+
+	// Create wallet with old key pair
+	s.createWalletWithKey(address, oldKP)
+
+	// Old key signs the new public key to authorize the rebind
+	oldSig := oldKP.signRebind(newKP.pub)
+
+	// New key signs the wallet binding message
+	walletID := keeper.GenerateWalletID(address.String())
+	newBindingSig := newKP.signWalletBinding(walletID, address.String())
+
+	msg := &types.MsgRebindWallet{
+		Sender:              address.String(),
+		NewBindingPubKey:    newKP.pub,
+		NewBindingSignature: newBindingSig,
+		OldSignature:        oldSig,
+	}
+
+	resp, err := s.msgServer.RebindWallet(s.ctx, msg)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().True(resp.ReboundAt > 0)
+
+	// Verify wallet was rebound with the new key
+	wallet, found := s.keeper.GetWallet(s.ctx, address)
+	s.Require().True(found)
+	s.Require().Equal([]byte(newKP.pub), wallet.BindingPubKey)
 }
 
 // Test: MsgUpdateBorderlineParams - unauthorized
