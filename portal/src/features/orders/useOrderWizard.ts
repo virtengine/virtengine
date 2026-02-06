@@ -124,39 +124,13 @@ export function useOrderWizard({
     }));
   }, []);
 
-  const computePriceBreakdown = useCallback((): PriceBreakdown | null => {
-    if (!state.offering?.prices || state.offering.prices.length === 0) {
-      return null;
-    }
-    return calculatePriceBreakdown(state.offering.prices, state.resources);
-  }, [state.offering, state.resources]);
-
-  const computeEscrowInfo = useCallback(
-    (priceBreakdown: PriceBreakdown): EscrowInfo => {
-      const balanceMicro = parseInt(walletBalance, 10) || 0;
-      const balanceVe = balanceMicro / 1_000_000;
-      const depositUsd = priceBreakdown.escrowDeposit;
-
-      return {
-        depositAmount: Math.ceil(priceBreakdown.escrowDeposit * 1_000_000).toString(),
-        depositDenom: priceBreakdown.denom,
-        depositUsd,
-        walletBalance,
-        walletDenom,
-        walletBalanceUsd: balanceVe,
-        hasSufficientFunds: balanceVe >= priceBreakdown.escrowDeposit,
-      };
-    },
-    [walletBalance, walletDenom]
-  );
-
   const nextStep = useCallback(() => {
     setState((prev) => {
       const currentIdx = WIZARD_STEPS.indexOf(prev.currentStep);
       if (currentIdx >= WIZARD_STEPS.length - 1) return prev;
 
       const nextStepName = WIZARD_STEPS[currentIdx + 1];
-      let updates: Partial<OrderWizardState> = { currentStep: nextStepName };
+      const updates: Partial<OrderWizardState> = { currentStep: nextStepName };
 
       // Compute pricing when moving from resources to pricing
       if (prev.currentStep === 'resources' && nextStepName === 'pricing') {

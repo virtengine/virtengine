@@ -40,7 +40,7 @@ export function OrderWizard({
   onCancel,
 }: OrderWizardProps) {
   const handleSubmit = useCallback(
-    async (state: OrderWizardState): Promise<OrderCreateResult> => {
+    async (_state: OrderWizardState): Promise<OrderCreateResult> => {
       // In production, this would send MsgCreateOrder to the chain via wallet
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
