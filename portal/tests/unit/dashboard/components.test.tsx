@@ -53,6 +53,13 @@ const mockBilling: BillingSummaryData = {
   ],
 };
 
+const normalizeCurrency = (value: string) => value.replace(/\u00a0/g, ' ').trim();
+
+const currencyMatcher = (amount: number) => {
+  const expected = normalizeCurrency(formatCurrency(amount));
+  return (content: string) => normalizeCurrency(content) === expected;
+};
+
 const mockNotifications: DashboardNotification[] = [
   {
     id: 'notif-001',
@@ -132,9 +139,7 @@ describe('UsageSummary', () => {
 describe('BillingSummary', () => {
   it('renders current period cost', () => {
     render(<BillingSummary billing={mockBilling} />);
-    const matches = screen.getAllByText((_, element) =>
-      Boolean(element?.textContent?.includes('4,250.00'))
-    );
+    const matches = screen.getAllByText(currencyMatcher(mockBilling.currentPeriodCost));
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -146,12 +151,7 @@ describe('BillingSummary', () => {
   it('renders outstanding balance when present', () => {
     render(<BillingSummary billing={mockBilling} />);
     expect(screen.getByText('Outstanding')).toBeInTheDocument();
-    expect(
-      screen.getByText((_, element) => {
-        const normalizedText = element?.textContent?.replace(/\s+/g, ' ').trim();
-        return normalizedText === 'USD 1,250.00';
-      })
-    ).toBeInTheDocument();
+    expect(screen.getByText(currencyMatcher(mockBilling.outstandingBalance))).toBeInTheDocument();
   });
 
   it('renders provider breakdown', () => {

@@ -1,0 +1,205 @@
+# CockroachDB Multi-Region Helm Values
+# Used by the database Terraform module for multi-region CockroachDB deployment
+
+statefulset:
+  replicas: 3
+  budget:
+    maxUnavailable: 1
+
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+
+  args:
+    - "--locality=region=$(REGION),zone=$(ZONE)"
+    - "--max-sql-memory=25%"
+    - "--cache=25%"
+    - "--log-file-verbosity=INFO"
+
+storage:
+  persistentVolume:
+    enabled: true
+    size: 100Gi
+    storageClass: "gp3-encrypted"
+
+tls:
+  enabled: true
+  certs:
+    provided: true
+    tlsSecret: true
+
+conf:
+  cluster-name: "virtengine-cockroachdb"
+  single-node: false
+  join: []
+
+  attrs:
+    - "virtengine"
+
+  locality: "region=$(REGION),zone=$(ZONE)"
+
+  cache: "25%"
+  max-sql-memory: "25%"
+
+  # Replication settings
+  default-zone-config: |
+    num_replicas: 3
+    constraints:
+      "+region=us-east-1": 1
+      "+region=eu-west-1": 1
+      "+region=ap-southeast-1": 1
+    lease_preferences:
+      - constraints:
+          - "+region=us-east-1"
+
+  # Cluster settings applied after initialization
+  cluster-settings:
+    kv.rangefeed.enabled: "true"
+    kv.closed_timestamp.target_duration: "3s"
+    server.time_until_store_dead: "5m0s"
+    enterprise.license: ""
+
+# Multi-region specific configuration
+multiRegion:
+  enabled: true
+  regions:
+    - name: us-east-1
+      zones:
+        - us-east-1a
+        - us-east-1b
+        - us-east-1c
+      primary: true
+
+    - name: eu-west-1
+      zones:
+        - eu-west-1a
+        - eu-west-1b
+        - eu-west-1c
+      primary: false
+
+    - name: ap-southeast-1
+      zones:
+        - ap-southeast-1a
+        - ap-southeast-1b
+        - ap-southeast-1c
+      primary: false
+
+  # Survival goal: survive region failure
+  survivalGoal: region
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule:
+    full: "0 0 * * *"
+    incremental: "0 */6 * * *"
+
+  destinations:
+    - type: s3
+      region: us-east-1
+      bucket: virtengine-cockroachdb-backup-us-east-1
+      path: backups
+      auth: implicit
+
+    - type: s3
+      region: eu-west-1
+      bucket: virtengine-cockroachdb-backup-eu-west-1
+      path: backups
+      auth: implicit
+
+    - type: s3
+      region: ap-southeast-1
+      bucket: virtengine-cockroachdb-backup-ap-southeast-1
+      path: backups
+      auth: implicit
+
+  retention:
+    full: "30d"
+    incremental: "7d"
+
+  encryption:
+    enabled: true
+    kmsProvider: aws
+
+# Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 8080
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8080"
+      prometheus.io/path: "/_status/vars"
+
+  alerts:
+    enabled: true
+    rules:
+      - alert: CockroachDBNodeDown
+        expr: up{job="cockroachdb"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CockroachDB node is down"
+          description: "CockroachDB node {{ $labels.instance }} has been down for 5 minutes"
+
+      - alert: CockroachDBHighReplicationLag
+        expr: cockroachdb_replication_lag_seconds > 300
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CockroachDB replication lag is high"
+          description: "Replication lag on {{ $labels.instance }} is {{ $value }}s (RPO threshold: 300s)"
+
+      - alert: CockroachDBLowDiskSpace
+        expr: cockroachdb_capacity_available_bytes / cockroachdb_capacity_bytes < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CockroachDB disk space is critically low"
+          description: "Available disk space on {{ $labels.instance }} is below 10%"
+
+      - alert: CockroachDBHighMemoryUsage
+        expr: cockroachdb_sys_rss_bytes / cockroachdb_sys_mem_bytes > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CockroachDB memory usage is high"
+          description: "Memory usage on {{ $labels.instance }} is above 85%"
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+# Topology spread constraints for cross-AZ distribution
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: cockroachdb
+
+# Node affinity for dedicated database nodes
+nodeSelector:
+  role: archive
+
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "cockroachdb"
+    effect: "NoSchedule"
+
+# Service account for IRSA
+serviceAccount:
+  create: false
+  name: cockroachdb-sa
