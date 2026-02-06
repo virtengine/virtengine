@@ -55,10 +55,10 @@ jobs:
     if: needs.triage.result == 'success'
     steps:
       - name: Notify security team
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v2.1.1
         with:
-          channel-id: 'C0XXXXXX' # #security-alerts
-          slack-message: |
-            🚨 New audit finding: ${{ github.event.issue.title }}
-            Severity: ${{ needs.triage.outputs.severity }}
-            Link: ${{ github.event.issue.html_url }}
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: ${{ secrets.SLACK_CHANNEL_ID }}
+            text: "🚨 New audit finding: ${{ github.event.issue.title }}\nSeverity: ${{ needs.triage.outputs.severity }}\nLink: ${{ github.event.issue.html_url }}"
