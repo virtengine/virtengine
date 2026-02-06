@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -263,9 +265,7 @@ func NewDVSDMVAdapter(config AdapterConfig, dvsConfig DVSConfig) (*dvsDMVAdapter
 		baseAdapter: newBaseAdapter(config),
 		dvsConfig:   dvsConfig,
 		windowStart: time.Now(),
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		httpClient:  security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 	}, nil
 }
 

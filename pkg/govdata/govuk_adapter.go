@@ -18,6 +18,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -270,9 +272,7 @@ func NewGovUKAdapter(config AdapterConfig, govUKConfig GovUKConfig) (*govUKAdapt
 		baseAdapter: newBaseAdapter(config),
 		govUKConfig: govUKConfig,
 		windowStart: time.Now(),
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		httpClient:  security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 	}, nil
 }
 

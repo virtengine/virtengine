@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -321,9 +323,7 @@ func NewPCTFAdapter(config AdapterConfig, pctfConfig PCTFConfig) (*pctfAdapter, 
 		baseAdapter: newBaseAdapter(config),
 		pctfConfig:  pctfConfig,
 		windowStart: time.Now(),
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		httpClient:  security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 	}, nil
 }
 

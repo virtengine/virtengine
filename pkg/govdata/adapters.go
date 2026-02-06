@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -104,11 +106,9 @@ type baseAdapter struct {
 // newBaseAdapter creates a new base adapter
 func newBaseAdapter(config AdapterConfig) *baseAdapter {
 	return &baseAdapter{
-		config:    config,
-		available: true,
-		httpClient: &http.Client{
-			Timeout: config.Timeout,
-		},
+		config:     config,
+		available:  true,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(config.Timeout)),
 	}
 }
 

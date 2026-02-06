@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // ============================================================================
@@ -303,9 +305,7 @@ func NewEIDASAdapter(config AdapterConfig, eidasConfig EIDASConfig) (*eidasAdapt
 		baseAdapter: newBaseAdapter(config),
 		eidasConfig: eidasConfig,
 		windowStart: time.Now(),
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		httpClient:  security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 	}, nil
 }
 
