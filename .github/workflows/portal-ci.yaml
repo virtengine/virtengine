@@ -125,6 +125,7 @@ jobs:
         with:
           name: portal-build
           path: portal/.next
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
 
