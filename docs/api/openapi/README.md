@@ -7,6 +7,7 @@ This directory contains OpenAPI/Swagger documentation for the VirtEngine API.
 | File | Description |
 |------|-------------|
 | `virtengine-api.yaml` | Main OpenAPI 3.0 specification |
+| `api/openapi/portal_api.yaml` | Provider portal OpenAPI 3.0 specification |
 | `redoc.html` | Interactive documentation viewer |
 | `swagger-config.json` | Swagger UI configuration |
 
@@ -26,6 +27,20 @@ cat .cache/tmp/swagger-gen/*.swagger.json | jq -s 'reduce .[] as $item ({}; . * 
 The generated specification is available at:
 - **Swagger UI**: `http://localhost:8000/portal` (via Kong gateway)
 - **Static File**: `sdk/docs/swagger-ui/swagger.yaml`
+
+## Provider Portal API
+
+The provider portal OpenAPI spec lives at `api/openapi/portal_api.yaml`. Generated artifacts are:
+
+- **TypeScript types**: `lib/portal/src/provider-api/generated/types.ts`
+- **Go types**: `pkg/provider_daemon/api/generated/types.go`
+- **Redoc HTML**: `docs/api/openapi/provider-portal.html`
+
+Generate and validate with:
+
+```bash
+./scripts/generate-api-types.sh
+```
 
 ## API Versioning in OpenAPI
 

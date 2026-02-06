@@ -51,6 +51,7 @@ Welcome to the VirtEngine API documentation. This comprehensive guide covers all
 
 - **Swagger UI**: Available at `/portal` when running the API gateway
 - **Redoc**: See [redoc.html](./openapi/redoc.html) for rendered documentation
+- **Provider Portal Redoc**: See [provider-portal.html](./openapi/provider-portal.html) for provider API docs
 
 ## Base URLs
 
