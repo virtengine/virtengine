@@ -54,3 +54,23 @@ export {
   type OrganizationStoreState,
   type OrganizationStoreActions,
 } from './organizationStore';
+export {
+  useMetricsStore,
+  selectFiringAlerts,
+  selectActiveAlerts,
+  selectRecentAlertEvents,
+  selectSelectedDeploymentMetrics,
+  selectCPUTrend,
+  selectMemoryTrend,
+  type MetricsStore,
+  type MetricsState,
+  type MetricsActions,
+} from './metricsStore';
+export {
+  useDashboardConfigStore,
+  selectActiveDashboard,
+  selectDashboardNames,
+  type DashboardConfigStore,
+  type DashboardConfigState,
+  type DashboardConfigActions,
+} from './dashboardConfigStore';

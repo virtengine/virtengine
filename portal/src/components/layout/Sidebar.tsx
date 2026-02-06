@@ -15,6 +15,7 @@ export function Sidebar({ variant }: SidebarProps) {
     { name: 'Marketplace', href: '/marketplace', icon: '🛒' },
     { name: 'My Orders', href: '/orders', icon: '📋' },
     { name: 'Identity', href: '/identity', icon: '🔐' },
+    { name: 'Metrics', href: '/metrics', icon: '📈' },
     { name: 'HPC Jobs', href: '/hpc/jobs', icon: '⚡' },
     { name: 'Governance', href: '/governance/proposals', icon: '🗳️' },
   ];
