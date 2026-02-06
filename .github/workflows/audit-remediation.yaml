@@ -1,5 +1,9 @@
 name: Audit Finding Remediation
 
+permissions:
+  contents: read
+  issues: write
+
 on:
   issues:
     types: [opened, edited, labeled]
