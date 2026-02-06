@@ -1,10 +1,12 @@
 'use client';
 
-import { useOfferingStore } from '@/stores/offeringStore';
+import { useOfferingStore, offeringKey } from '@/stores/offeringStore';
 import { OfferingCard, OfferingCardSkeleton } from './OfferingCard';
+import { OfferingListItem, OfferingListItemSkeleton } from './OfferingListView';
 
 export function OfferingGrid() {
-  const { offerings, isLoading, error, pagination, setPage } = useOfferingStore();
+  const { offerings, isLoading, error, pagination, setPage, viewMode, compareIds, toggleCompare } =
+    useOfferingStore();
 
   if (error) {
     return (
@@ -40,7 +42,13 @@ export function OfferingGrid() {
   }
 
   if (isLoading) {
-    return (
+    return viewMode === 'list' ? (
+      <div className="space-y-3">
+        {Array.from({ length: 6 }, (_, idx) => `skeleton-${idx}`).map((key) => (
+          <OfferingListItemSkeleton key={key} />
+        ))}
+      </div>
+    ) : (
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }, (_, idx) => `skeleton-${idx}`).map((key) => (
           <OfferingCardSkeleton key={key} />
@@ -84,14 +92,27 @@ export function OfferingGrid() {
 
   return (
     <div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {offerings.map((offering) => (
-          <OfferingCard
-            key={`${offering.id.providerAddress}-${offering.id.sequence}`}
-            offering={offering}
-          />
-        ))}
-      </div>
+      {viewMode === 'list' ? (
+        <div className="space-y-3">
+          {offerings.map((offering) => (
+            <OfferingListItem
+              key={`${offering.id.providerAddress}-${offering.id.sequence}`}
+              offering={offering}
+              isComparing={compareIds.includes(offeringKey(offering))}
+              onToggleCompare={toggleCompare}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {offerings.map((offering) => (
+            <OfferingCard
+              key={`${offering.id.providerAddress}-${offering.id.sequence}`}
+              offering={offering}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

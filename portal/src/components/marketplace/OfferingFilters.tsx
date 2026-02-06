@@ -1,7 +1,7 @@
 'use client';
 
 import { useOfferingStore } from '@/stores/offeringStore';
-import type { OfferingCategory } from '@/types/offerings';
+import type { OfferingCategory, OfferingState } from '@/types/offerings';
 import { CATEGORY_LABELS, CATEGORY_ICONS } from '@/types/offerings';
 
 const REGIONS = [
@@ -20,6 +20,21 @@ const REPUTATION_OPTIONS = [
   { value: 70, label: '70+' },
   { value: 85, label: '85+' },
   { value: 95, label: '95+' },
+];
+
+const STATE_OPTIONS: Array<{ value: OfferingState | 'all'; label: string }> = [
+  { value: 'all', label: 'All States' },
+  { value: 'active', label: 'Active' },
+  { value: 'paused', label: 'Paused' },
+  { value: 'suspended', label: 'Suspended' },
+  { value: 'deprecated', label: 'Deprecated' },
+];
+
+const PRICE_PRESETS = [
+  { label: 'Any', min: 0, max: Infinity },
+  { label: 'Under $1/hr', min: 0, max: 1 },
+  { label: '$1 – $5/hr', min: 1, max: 5 },
+  { label: '$5+/hr', min: 5, max: Infinity },
 ];
 
 interface OfferingFiltersProps {
@@ -41,6 +56,22 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
     setFilters({ minReputation: parseInt(e.target.value, 10) });
   };
 
+  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilters({ state: e.target.value as OfferingState | 'all' });
+  };
+
+  const handleProviderSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters({ providerSearch: e.target.value });
+  };
+
+  const handlePricePreset = (min: number, max: number) => {
+    if (min === 0 && max === Infinity) {
+      setFilters({ priceRange: null });
+    } else {
+      setFilters({ priceRange: { min, max: max === Infinity ? 999999 : max } });
+    }
+  };
+
   const handleReset = () => {
     resetFilters();
   };
@@ -60,14 +91,17 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
     filters.category !== 'all' ||
     filters.region !== 'all' ||
     filters.minReputation > 0 ||
-    filters.search !== '';
+    filters.search !== '' ||
+    filters.state !== 'active' ||
+    filters.providerSearch !== '' ||
+    filters.priceRange !== null;
 
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Category Filter */}
       <div>
         <h3 className="mb-3 font-medium">Resource Type</h3>
-        <div className="space-y-2">
+        <div className="space-y-1">
           {categories.map((category) => {
             const isAll = category === 'all';
             const icon = isAll ? '🔍' : CATEGORY_ICONS[category];
@@ -91,6 +125,22 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
         </div>
       </div>
 
+      {/* State Filter */}
+      <div>
+        <h3 className="mb-3 font-medium">Status</h3>
+        <select
+          value={filters.state}
+          onChange={handleStateChange}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        >
+          {STATE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Region Filter */}
       <div>
         <h3 className="mb-3 font-medium">Region</h3>
@@ -105,6 +155,46 @@ export function OfferingFilters({ className = '' }: OfferingFiltersProps) {
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Price Range */}
+      <div>
+        <h3 className="mb-3 font-medium">Price Range</h3>
+        <div className="space-y-1">
+          {PRICE_PRESETS.map((preset) => {
+            const isActive =
+              (preset.min === 0 && preset.max === Infinity && filters.priceRange === null) ||
+              (filters.priceRange?.min === preset.min &&
+                (preset.max === Infinity
+                  ? filters.priceRange?.max === 999999
+                  : filters.priceRange?.max === preset.max));
+
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => handlePricePreset(preset.min, preset.max)}
+                className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                  isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
+                }`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Provider Search */}
+      <div>
+        <h3 className="mb-3 font-medium">Provider</h3>
+        <input
+          type="text"
+          placeholder="Search providers..."
+          value={filters.providerSearch}
+          onChange={handleProviderSearch}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
+        />
       </div>
 
       {/* Provider Reputation */}

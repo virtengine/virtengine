@@ -89,6 +89,8 @@ export interface Provider {
   createdAt: string;
 }
 
+export type OfferingSortField = 'name' | 'price' | 'reputation' | 'orders' | 'created';
+
 export interface OfferingFilters {
   category: OfferingCategory | 'all';
   region: string;
@@ -100,6 +102,9 @@ export interface OfferingFilters {
   tags: string[];
   search: string;
   state: OfferingState | 'all';
+  providerSearch: string;
+  sortBy: OfferingSortField;
+  sortOrder: 'asc' | 'desc';
 }
 
 export interface OfferingListResponse {
