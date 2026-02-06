@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/Separator';
 import type { ResourceConfig, PriceBreakdown } from '@/features/orders';
 import { formatTokenAmount, durationToHours } from '@/features/orders';
+import { usePriceConversion } from '@/hooks/usePriceConversion';
 
 interface PriceCalculatorProps {
   resources: ResourceConfig;
@@ -19,8 +20,14 @@ interface PriceCalculatorProps {
  * Step 2: Price Calculator
  * Shows real-time price calculation with line-item breakdown.
  */
+function formatUsd(value: number): string {
+  const precision = value < 0.01 ? 4 : 2;
+  return `$${value.toFixed(precision)}`;
+}
+
 export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorProps) {
   const totalHours = durationToHours(resources.duration, resources.durationUnit);
+  const { uveToUsd, isLoading: rateLoading } = usePriceConversion();
 
   return (
     <div className="space-y-6">
@@ -64,6 +71,11 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
                 </div>
                 <span className="font-medium">
                   {formatTokenAmount(item.total)} {priceBreakdown.currency}
+                  {!rateLoading && uveToUsd(item.total) !== null && (
+                    <span className="ml-1 text-muted-foreground">
+                      (~{formatUsd(uveToUsd(item.total)!)})
+                    </span>
+                  )}
                 </span>
               </div>
             ))}
@@ -74,6 +86,11 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
               <span className="text-muted-foreground">Subtotal</span>
               <span className="font-medium">
                 {formatTokenAmount(priceBreakdown.subtotal)} {priceBreakdown.currency}
+                {!rateLoading && uveToUsd(priceBreakdown.subtotal) !== null && (
+                  <span className="ml-1 text-muted-foreground">
+                    (~{formatUsd(uveToUsd(priceBreakdown.subtotal)!)})
+                  </span>
+                )}
               </span>
             </div>
 
@@ -84,6 +101,11 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
               </div>
               <span className="font-medium text-primary">
                 {formatTokenAmount(priceBreakdown.escrowDeposit)} {priceBreakdown.currency}
+                {!rateLoading && uveToUsd(priceBreakdown.escrowDeposit) !== null && (
+                  <span className="ml-1 text-muted-foreground">
+                    (~{formatUsd(uveToUsd(priceBreakdown.escrowDeposit)!)})
+                  </span>
+                )}
               </span>
             </div>
 
@@ -91,9 +113,16 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
 
             <div className="flex items-center justify-between">
               <span className="text-base font-semibold">Estimated Total</span>
-              <span className="text-lg font-bold text-primary">
-                {formatTokenAmount(priceBreakdown.estimatedTotal)} {priceBreakdown.currency}
-              </span>
+              <div className="text-right">
+                <span className="text-lg font-bold text-primary">
+                  {formatTokenAmount(priceBreakdown.estimatedTotal)} {priceBreakdown.currency}
+                </span>
+                {!rateLoading && uveToUsd(priceBreakdown.estimatedTotal) !== null && (
+                  <p className="text-sm text-muted-foreground">
+                    ~{formatUsd(uveToUsd(priceBreakdown.estimatedTotal)!)} USD
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -109,11 +138,20 @@ export function PriceCalculator({ resources, priceBreakdown }: PriceCalculatorPr
         <CardContent className="py-4">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Effective Hourly Rate</span>
-            <span className="text-lg font-semibold">
-              {totalHours > 0
-                ? `${formatTokenAmount(priceBreakdown.subtotal / totalHours, 4)} ${priceBreakdown.currency}/hr`
-                : '—'}
-            </span>
+            <div className="text-right">
+              <span className="text-lg font-semibold">
+                {totalHours > 0
+                  ? `${formatTokenAmount(priceBreakdown.subtotal / totalHours, 4)} ${priceBreakdown.currency}/hr`
+                  : '—'}
+              </span>
+              {totalHours > 0 &&
+                !rateLoading &&
+                uveToUsd(priceBreakdown.subtotal / totalHours) !== null && (
+                  <p className="text-sm text-muted-foreground">
+                    ~{formatUsd(uveToUsd(priceBreakdown.subtotal / totalHours)!)}/hr
+                  </p>
+                )}
+            </div>
           </div>
         </CardContent>
       </Card>
