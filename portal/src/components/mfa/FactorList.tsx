@@ -151,7 +151,8 @@ export function FactorList({ className, onAddFactor }: FactorListProps) {
               </div>
               <p className="text-xs text-muted-foreground">
                 {FACTOR_LABELS[factor.type] ?? factor.type} · Enrolled{' '}
-                {formatDate(factor.enrolledAt)} · Last used {formatDate(factor.lastUsedAt)}
+                {formatDate(factor.enrolledAt ?? null)} · Last used{' '}
+                {formatDate(factor.lastUsedAt ?? null)}
               </p>
             </div>
           </div>
