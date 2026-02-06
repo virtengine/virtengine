@@ -4,7 +4,32 @@
  * Re-exports from portal-lib with additional portal-specific types
  */
 
-// Re-export all types from portal-lib
+// Import types for local use
+import type {
+  HPCState,
+  WorkloadTemplate,
+  WorkloadCategory,
+  JobResources,
+  JobParameter,
+  JobManifest,
+  JobSubmission,
+  JobSubmissionState,
+  JobSubmissionStep,
+  JobPriceQuote,
+  JobValidationError,
+  Job,
+  JobStatus,
+  JobStatusChange,
+  JobEvent,
+  JobEventType,
+  JobOutputReference,
+  JobOutputType,
+  JobOutput,
+  HPCError,
+  HPCErrorCode,
+} from '@/lib/portal-adapter';
+
+// Re-export all types from portal-lib (via portal-adapter)
 export type {
   HPCState,
   WorkloadTemplate,
@@ -27,7 +52,7 @@ export type {
   JobOutput,
   HPCError,
   HPCErrorCode,
-} from 'virtengine-portal-lib/types/hpc';
+} from '@/lib/portal-adapter';
 
 /**
  * HPC SDK types (these will come from @virtengine/chain-sdk when integrated)
