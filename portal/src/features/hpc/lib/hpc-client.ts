@@ -205,7 +205,7 @@ const MOCK_TEMPLATES: WorkloadTemplate[] = [
     id: 'pytorch-training',
     name: 'PyTorch Training',
     description:
-      'Train deep learning models with PyTorch. Supports distributed training across multiple GPUs.',
+      'Train deep learning models with PyTorch. Supports distributed training across GPUs.',
     category: 'ml_training',
     defaultResources: {
       nodes: 1,
