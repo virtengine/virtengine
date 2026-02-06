@@ -1,11 +1,3 @@
-//go:build ignore
-// +build ignore
-
-// TODO: VE-1007 - Fix test API mismatches with implementation
-// This file is temporarily excluded from build due to extensive API mismatches
-// between tests and implementation. The tests use old field names and method
-// signatures that no longer match the actual types.
-
 package types_test
 
 import (
@@ -18,14 +10,6 @@ import (
 
 	"github.com/virtengine/virtengine/x/veid/types"
 )
-
-// Suppress unused import warnings
-var _ = strings.ToLower
-var _ = testing.T{}
-var _ = time.Now
-var _ = assert.True
-var _ = require.NoError
-var _ = types.EmailVerificationVersion
 
 // ============================================================================
 // Email Verification Tests (VE-224: Email Verification Scope)
@@ -63,62 +47,99 @@ func TestEmailVerificationRecord_Validate(t *testing.T) {
 		},
 		{
 			name: "invalid - empty verification ID",
-			record: &types.EmailVerificationRecord{
-				Version:        types.EmailVerificationVersion,
-				VerificationID: "",
-				AccountAddress: "cosmos1abc...",
-				EmailHash:      "abc123...",
-			},
+			record: types.NewEmailVerificationRecord(
+				"",
+				"cosmos1abc...",
+				"user@example.com",
+				"nonce-12345",
+				now,
+			),
 			wantErr: true,
 		},
 		{
 			name: "invalid - empty account address",
-			record: &types.EmailVerificationRecord{
-				Version:        types.EmailVerificationVersion,
-				VerificationID: "email-1",
-				AccountAddress: "",
-				EmailHash:      "abc123def456789012345678901234567890123456789012345678901234",
-			},
+			record: types.NewEmailVerificationRecord(
+				"email-1",
+				"",
+				"user@example.com",
+				"nonce-12345",
+				now,
+			),
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty email",
-			record: &types.EmailVerificationRecord{
-				Version:        types.EmailVerificationVersion,
-				VerificationID: "email-1",
-				AccountAddress: "cosmos1abc...",
-				EmailHash:      "",
-			},
+			name: "invalid - empty email hash",
+			record: func() *types.EmailVerificationRecord {
+				record := types.NewEmailVerificationRecord(
+					"email-1",
+					"cosmos1abc...",
+					"user@example.com",
+					"nonce-12345",
+					now,
+				)
+				record.EmailHash = ""
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
-			name: "invalid - email without @",
-			record: &types.EmailVerificationRecord{
-				Version:        types.EmailVerificationVersion,
-				VerificationID: "email-1",
-				AccountAddress: "cosmos1abc...",
-				EmailHash:      "abc123def456789012345678901234567890123456789012345678901234",
-			},
+			name: "invalid - email hash wrong length",
+			record: func() *types.EmailVerificationRecord {
+				record := types.NewEmailVerificationRecord(
+					"email-1",
+					"cosmos1abc...",
+					"user@example.com",
+					"nonce-12345",
+					now,
+				)
+				record.EmailHash = "abc123"
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
-			name: "invalid - email without domain",
-			record: &types.EmailVerificationRecord{
-				Version:        types.EmailVerificationVersion,
-				VerificationID: "email-1",
-				AccountAddress: "cosmos1abc...",
-				EmailHash:      "abc123def456789012345678901234567890123456789012345678901234",
-			},
+			name: "invalid - empty nonce",
+			record: func() *types.EmailVerificationRecord {
+				record := types.NewEmailVerificationRecord(
+					"email-1",
+					"cosmos1abc...",
+					"user@example.com",
+					"nonce-12345",
+					now,
+				)
+				record.Nonce = ""
+				return record
+			}(),
 			wantErr: true,
 		},
 		{
-			name: "invalid - email without local part",
-			record: &types.EmailVerificationRecord{
-				Version:        types.EmailVerificationVersion,
-				VerificationID: "email-1",
-				AccountAddress: "cosmos1abc...",
-				EmailHash:      "abc123def456789012345678901234567890123456789012345678901234",
-			},
+			name: "invalid - invalid status",
+			record: func() *types.EmailVerificationRecord {
+				record := types.NewEmailVerificationRecord(
+					"email-1",
+					"cosmos1abc...",
+					"user@example.com",
+					"nonce-12345",
+					now,
+				)
+				record.Status = types.EmailVerificationStatus("invalid")
+				return record
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "invalid - zero created_at",
+			record: func() *types.EmailVerificationRecord {
+				record := types.NewEmailVerificationRecord(
+					"email-1",
+					"cosmos1abc...",
+					"user@example.com",
+					"nonce-12345",
+					now,
+				)
+				record.CreatedAt = time.Time{}
+				return record
+			}(),
 			wantErr: true,
 		},
 	}
@@ -147,22 +168,26 @@ func TestHashEmail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hash := types.HashEmail(tt.email)
+			emailHash, domainHash := types.HashEmail(tt.email)
 
 			// Hash should be 64 hex characters (SHA256)
-			assert.Len(t, hash, 64, "HashEmail() length should be 64")
+			assert.Len(t, emailHash, 64, "HashEmail() length should be 64")
+			assert.Len(t, domainHash, 64, "HashEmail() domain hash length should be 64")
 
 			// Hash should be deterministic
-			hash2 := types.HashEmail(tt.email)
-			assert.Equal(t, hash, hash2, "HashEmail() should be deterministic")
+			emailHash2, domainHash2 := types.HashEmail(tt.email)
+			assert.Equal(t, emailHash, emailHash2, "HashEmail() should be deterministic")
+			assert.Equal(t, domainHash, domainHash2, "HashEmail() domain hash should be deterministic")
 
 			// Case insensitive (email domain part is case insensitive)
-			hash3 := types.HashEmail(strings.ToLower(tt.email))
-			assert.Equal(t, hash, hash3, "HashEmail() should be case insensitive")
+			emailHash3, domainHash3 := types.HashEmail(strings.ToLower(tt.email))
+			assert.Equal(t, emailHash, emailHash3, "HashEmail() should be case insensitive")
+			assert.Equal(t, domainHash, domainHash3, "HashEmail() domain hash should be case insensitive")
 
 			// Different emails should produce different hashes
-			hash4 := types.HashEmail(tt.email + "x")
-			assert.NotEqual(t, hash, hash4, "HashEmail() should produce different hashes for different emails")
+			emailHash4, domainHash4 := types.HashEmail(tt.email + "x")
+			assert.NotEqual(t, emailHash, emailHash4, "HashEmail() should produce different hashes for different emails")
+			assert.NotEqual(t, domainHash, domainHash4, "HashEmail() should produce different hashes for different emails")
 		})
 	}
 }
@@ -179,7 +204,9 @@ func TestEmailVerificationStatuses(t *testing.T) {
 
 func TestEmailVerificationChallenge_Validate(t *testing.T) {
 	now := time.Now()
-	future := now.Add(types.EmailChallengeValidDuration)
+	emailHash, _ := types.HashEmail("user@example.com")
+	ttlSeconds := int64(3600)
+	maxAttempts := uint32(3)
 
 	tests := []struct {
 		name      string
@@ -190,76 +217,103 @@ func TestEmailVerificationChallenge_Validate(t *testing.T) {
 			name: "valid challenge",
 			challenge: types.NewEmailVerificationChallenge(
 				"challenge-1",
-				"email-1",
-				"verification-code-123456",
+				"cosmos1abc...",
+				emailHash,
 				"random-nonce-abc123",
 				now,
-				future,
+				ttlSeconds,
+				maxAttempts,
 			),
 			wantErr: false,
 		},
 		{
 			name: "invalid - empty challenge ID",
 			challenge: &types.EmailVerificationChallenge{
-				Version:          types.EmailChallengeVersion,
-				ChallengeID:      "",
-				EmailID:          "email-1",
-				VerificationCode: "code123",
-				Nonce:            "nonce123",
-				CreatedAt:        now,
-				ExpiresAt:        future,
+				ChallengeID:    "",
+				AccountAddress: "cosmos1abc...",
+				EmailHash:      emailHash,
+				Nonce:          "nonce123",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(time.Duration(ttlSeconds) * time.Second),
+				MaxAttempts:    maxAttempts,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty email ID",
+			name: "invalid - empty account address",
 			challenge: &types.EmailVerificationChallenge{
-				Version:          types.EmailChallengeVersion,
-				ChallengeID:      "challenge-1",
-				EmailID:          "",
-				VerificationCode: "code123",
-				Nonce:            "nonce123",
-				CreatedAt:        now,
-				ExpiresAt:        future,
+				ChallengeID:    "challenge-1",
+				AccountAddress: "",
+				EmailHash:      emailHash,
+				Nonce:          "nonce123",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(time.Duration(ttlSeconds) * time.Second),
+				MaxAttempts:    maxAttempts,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - empty verification code",
+			name: "invalid - empty email hash",
 			challenge: &types.EmailVerificationChallenge{
-				Version:          types.EmailChallengeVersion,
-				ChallengeID:      "challenge-1",
-				EmailID:          "email-1",
-				VerificationCode: "",
-				Nonce:            "nonce123",
-				CreatedAt:        now,
-				ExpiresAt:        future,
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				EmailHash:      "",
+				Nonce:          "nonce123",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(time.Duration(ttlSeconds) * time.Second),
+				MaxAttempts:    maxAttempts,
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid - empty nonce",
 			challenge: &types.EmailVerificationChallenge{
-				Version:          types.EmailChallengeVersion,
-				ChallengeID:      "challenge-1",
-				EmailID:          "email-1",
-				VerificationCode: "code123",
-				Nonce:            "",
-				CreatedAt:        now,
-				ExpiresAt:        future,
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				EmailHash:      emailHash,
+				Nonce:          "",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(time.Duration(ttlSeconds) * time.Second),
+				MaxAttempts:    maxAttempts,
 			},
 			wantErr: true,
 		},
 		{
-			name: "invalid - expired challenge",
+			name: "invalid - zero created_at",
 			challenge: &types.EmailVerificationChallenge{
-				Version:          types.EmailChallengeVersion,
-				ChallengeID:      "challenge-1",
-				EmailID:          "email-1",
-				VerificationCode: "code123",
-				Nonce:            "nonce123",
-				CreatedAt:        now.Add(-2 * time.Hour),
-				ExpiresAt:        now.Add(-1 * time.Hour),
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				EmailHash:      emailHash,
+				Nonce:          "nonce123",
+				CreatedAt:      time.Time{},
+				ExpiresAt:      now.Add(time.Duration(ttlSeconds) * time.Second),
+				MaxAttempts:    maxAttempts,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - zero expires_at",
+			challenge: &types.EmailVerificationChallenge{
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				EmailHash:      emailHash,
+				Nonce:          "nonce123",
+				CreatedAt:      now,
+				ExpiresAt:      time.Time{},
+				MaxAttempts:    maxAttempts,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - zero max attempts",
+			challenge: &types.EmailVerificationChallenge{
+				ChallengeID:    "challenge-1",
+				AccountAddress: "cosmos1abc...",
+				EmailHash:      emailHash,
+				Nonce:          "nonce123",
+				CreatedAt:      now,
+				ExpiresAt:      now.Add(time.Duration(ttlSeconds) * time.Second),
+				MaxAttempts:    0,
 			},
 			wantErr: true,
 		},
@@ -287,164 +341,93 @@ func TestEmailVerificationChallenge_IsExpired(t *testing.T) {
 	assert.True(t, expired.IsExpired(now), "Challenge should be expired")
 }
 
-func TestEmailVerificationChallenge_IncrementAttempts(t *testing.T) {
+func TestEmailVerificationChallenge_RecordAttempt(t *testing.T) {
 	now := time.Now()
-	future := now.Add(types.EmailChallengeValidDuration)
+	emailHash, _ := types.HashEmail("user@example.com")
+	maxAttempts := uint32(2)
 
 	challenge := types.NewEmailVerificationChallenge(
 		"challenge-1",
 		"email-1",
-		"code123",
+		emailHash,
 		"nonce123",
 		now,
-		future,
+		3600,
+		maxAttempts,
 	)
 
-	assert.Equal(t, uint8(0), challenge.Attempts, "Initial attempts should be 0")
+	assert.Equal(t, uint32(0), challenge.Attempts, "Initial attempts should be 0")
+	assert.True(t, challenge.CanAttempt(), "Challenge should allow attempts initially")
 
-	challenge.IncrementAttempts()
-	assert.Equal(t, uint8(1), challenge.Attempts, "After increment, attempts should be 1")
+	challenge.RecordAttempt(now.Add(1*time.Minute), false)
+	assert.Equal(t, uint32(1), challenge.Attempts, "After attempt, attempts should be 1")
+	assert.Equal(t, types.EmailStatusPending, challenge.Status, "Status should remain pending before max attempts")
+	assert.True(t, challenge.CanAttempt(), "Challenge should allow attempts before max attempts")
 
-	// Test max attempts
-	for i := 0; i < types.MaxEmailVerificationAttempts; i++ {
-		challenge.IncrementAttempts()
-	}
-
-	assert.True(t, challenge.HasExceededMaxAttempts(), "Challenge should have exceeded max attempts")
+	challenge.RecordAttempt(now.Add(2*time.Minute), false)
+	assert.Equal(t, uint32(2), challenge.Attempts, "After second attempt, attempts should be 2")
+	assert.Equal(t, types.EmailStatusFailed, challenge.Status, "Status should be failed after max attempts")
+	assert.False(t, challenge.CanAttempt(), "Challenge should not allow attempts after max attempts")
 }
 
-func TestUsedNonceRecord_Validate(t *testing.T) {
+func TestEmailVerificationChallenge_VerifyNonce(t *testing.T) {
 	now := time.Now()
-	future := now.Add(24 * time.Hour)
+	emailHash, _ := types.HashEmail("user@example.com")
+	challenge := types.NewEmailVerificationChallenge(
+		"challenge-1",
+		"cosmos1abc...",
+		emailHash,
+		"nonce123",
+		now,
+		3600,
+		3,
+	)
 
-	tests := []struct {
-		name    string
-		record  *types.UsedNonceRecord
-		wantErr bool
-	}{
-		{
-			name: "valid nonce record",
-			record: types.NewUsedNonceRecord(
-				"nonce-hash-abc123",
-				"email",
-				now,
-				future,
-			),
-			wantErr: false,
-		},
-		{
-			name: "invalid - empty nonce hash",
-			record: &types.UsedNonceRecord{
-				Version:   types.UsedNonceVersion,
-				NonceHash: "",
-				Context:   "email",
-				UsedAt:    now,
-				ExpiresAt: future,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid - empty context",
-			record: &types.UsedNonceRecord{
-				Version:   types.UsedNonceVersion,
-				NonceHash: "abc123",
-				Context:   "",
-				UsedAt:    now,
-				ExpiresAt: future,
-			},
-			wantErr: true,
-		},
-	}
+	assert.True(t, challenge.VerifyNonce("nonce123"), "VerifyNonce should accept matching nonce")
+	assert.False(t, challenge.VerifyNonce("wrong"), "VerifyNonce should reject non-matching nonce")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.record.Validate()
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
+	challenge.RecordAttempt(now.Add(1*time.Minute), true)
+	assert.False(t, challenge.VerifyNonce("nonce123"), "VerifyNonce should reject consumed nonce")
 }
 
-func TestUsedNonceRecord_CanBeCleanedUp(t *testing.T) {
+func TestUsedNonceRecord_NewAndIsNonceUsed(t *testing.T) {
 	now := time.Now()
+	record := types.NewUsedNonceRecord(
+		"nonce-abc123",
+		now,
+		"cosmos1abc...",
+		"verification-1",
+		7,
+	)
 
-	canCleanUp := &types.UsedNonceRecord{ExpiresAt: now.Add(-1 * time.Hour)}
-	assert.True(t, canCleanUp.CanBeCleanedUp(now), "Expired nonce should be eligible for cleanup")
+	assert.NotEmpty(t, record.NonceHash, "NonceHash should be set")
+	assert.Equal(t, "cosmos1abc...", record.AccountAddress, "AccountAddress should be set")
+	assert.Equal(t, "verification-1", record.VerificationID, "VerificationID should be set")
+	assert.True(t, record.ExpiresAt.After(now), "ExpiresAt should be in the future")
 
-	cannotCleanUp := &types.UsedNonceRecord{ExpiresAt: now.Add(1 * time.Hour)}
-	assert.False(t, cannotCleanUp.CanBeCleanedUp(now), "Non-expired nonce should not be eligible for cleanup")
+	used := []types.UsedNonceRecord{*record}
+	assert.True(t, types.IsNonceUsed(record.NonceHash, used), "Nonce should be recognized as used")
+	assert.False(t, types.IsNonceUsed("missing", used), "Unknown nonce should not be marked used")
 }
 
-func TestEmailVerificationRecord_IsVerified(t *testing.T) {
+func TestEmailVerificationRecord_IsActive(t *testing.T) {
 	now := time.Now()
-
-	verified := &types.EmailVerificationRecord{Status: types.EmailStatusVerified, VerifiedAt: &now}
-	assert.True(t, verified.IsVerified(), "Record should be verified")
-
-	pending := &types.EmailVerificationRecord{Status: types.EmailStatusPending}
-	assert.False(t, pending.IsVerified(), "Pending record should not be verified")
-}
-
-func TestEmailVerificationRecord_GetHashedEmail(t *testing.T) {
-	now := time.Now()
+	expiresAt := now.Add(24 * time.Hour)
 
 	record := types.NewEmailVerificationRecord(
 		"email-1",
 		"cosmos1abc...",
 		"user@example.com",
+		"nonce-12345",
 		now,
 	)
+	record.MarkVerified(now, &expiresAt)
+	assert.True(t, record.IsActive(), "Verified record should be active")
 
-	hashed := record.GetHashedEmail()
+	expiredAt := now.Add(-1 * time.Hour)
+	record.MarkVerified(now, &expiredAt)
+	assert.False(t, record.IsActive(), "Expired record should not be active")
 
-	// Should be 64 hex characters
-	assert.Len(t, hashed, 64, "GetHashedEmail() length should be 64")
-
-	// Should be lowercase hex
-	assert.Equal(t, strings.ToLower(hashed), hashed, "GetHashedEmail() should return lowercase hex")
-}
-
-func TestEmailVerificationRecord_GetDomain(t *testing.T) {
-	now := time.Now()
-
-	record := types.NewEmailVerificationRecord(
-		"email-1",
-		"cosmos1abc...",
-		"user@example.com",
-		now,
-	)
-
-	domain := record.GetDomain()
-	assert.Equal(t, "example.com", domain, "GetDomain() should return correct domain")
-
-	// Test with subdomain
-	record2 := types.NewEmailVerificationRecord(
-		"email-2",
-		"cosmos1abc...",
-		"user@mail.subdomain.example.org",
-		now,
-	)
-
-	domain2 := record2.GetDomain()
-	assert.Equal(t, "mail.subdomain.example.org", domain2, "GetDomain() should return full domain")
-}
-
-func TestEmailVerificationRecord_BelongsToDomain(t *testing.T) {
-	now := time.Now()
-
-	record := types.NewEmailVerificationRecord(
-		"email-1",
-		"cosmos1abc...",
-		"user@example.com",
-		now,
-	)
-
-	assert.True(t, record.BelongsToDomain("example.com"), "Email should belong to example.com")
-	assert.False(t, record.BelongsToDomain("other.com"), "Email should not belong to other.com")
-
-	// Test case insensitivity
-	assert.True(t, record.BelongsToDomain("EXAMPLE.COM"), "BelongsToDomain should be case insensitive")
+	record.Status = types.EmailStatusPending
+	assert.False(t, record.IsActive(), "Pending record should not be active")
 }
