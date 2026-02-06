@@ -134,7 +134,9 @@ export type {
   IdentityState,
   IdentityStatus,
   IdentityScore,
+  IdentityTier,
   VerificationScope,
+  VerificationScopeType,
   UploadRecord,
   VerificationRecord,
   IdentityGatingError,
@@ -143,6 +145,7 @@ export type {
   ScopeRequirement,
 } from "./types/identity";
 
+export { getTierFromScore } from "./types/identity";
 export { IdentityStatusCard } from "./components/identity/IdentityStatusCard";
 export { IdentityScoreDisplay } from "./components/identity/IdentityScoreDisplay";
 export { ScopeRequirements } from "./components/identity/ScopeRequirements";
@@ -168,10 +171,6 @@ export type {
   MFAChallenge,
   MFAChallengeType,
   MFAChallengeResponse,
-  MFAAuditEntry,
-  MFAError,
-  MFAErrorCode,
-  SensitiveTransactionType,
 } from "./types/mfa";
 
 export { MFAEnrollmentWizard } from "./components/mfa/MFAEnrollmentWizard";

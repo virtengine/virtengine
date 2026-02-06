@@ -140,7 +140,9 @@ export type {
   IdentityState,
   IdentityStatus,
   IdentityScore,
+  IdentityTier,
   VerificationScope,
+  VerificationScopeType,
   UploadRecord,
   VerificationRecord,
   IdentityGatingError,
@@ -148,6 +150,8 @@ export type {
   RemediationPath,
   ScopeRequirement,
 } from '../../../lib/portal';
+
+export { getTierFromScore } from '../../../lib/portal';
 
 export {
   IdentityStatusCard,
