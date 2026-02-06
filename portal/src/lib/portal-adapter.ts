@@ -221,6 +221,46 @@ export {
 } from '../../../lib/portal';
 
 // ============================================================================
+// Order Tracking (VE-707)
+// ============================================================================
+
+export { OrderTrackingProvider, useOrderTracking } from '../../../lib/portal';
+export type {
+  OrderTrackingState,
+  OrderConnectionStatus,
+  OrderResourceConnection,
+  OrderCredential,
+  OrderApiEndpoint,
+  OrderResourceAccess,
+  OrderUsageMetric,
+  OrderUsageSample,
+  OrderUsageAlert,
+  OrderUsageSnapshot,
+  OrderArtifact,
+  OrderTrackingOrder,
+  OrderTrackingStateValue,
+  OrderTrackingActions,
+  OrderTrackingContextValue,
+  OrderTrackingProviderProps,
+} from '../../../lib/portal';
+
+export {
+  OrderList,
+  OrderStatus,
+  ResourceAccess,
+  UsageMonitor,
+  OrderTrackingPage,
+} from '../../../lib/portal';
+export type {
+  OrderListProps,
+  OrderListFilter,
+  OrderStatusProps,
+  ResourceAccessProps,
+  UsageMonitorProps,
+  OrderTrackingPageProps,
+} from '../../../lib/portal';
+
+// ============================================================================
 // Provider Console (VE-704)
 // ============================================================================
 
