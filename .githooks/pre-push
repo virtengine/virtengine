@@ -10,6 +10,7 @@
 #   DEPS     — go.mod, go.sum, pnpm-lock.yaml, package.json
 #   WORKFLOW — .github/workflows/ YAML files
 #   DOCS     — .md files, _docs/, docs/ (skip all checks)
+#   TERRAFORM — infra/terraform .tf files
 #
 # Bypass:      git push --no-verify
 # Quick mode:  VE_HOOK_QUICK=1 git push     (vet + build only for Go)
@@ -17,6 +18,7 @@
 # Skip individual checks:
 #   VE_HOOK_SKIP_VET=1       Skip go vet
 #   VE_HOOK_SKIP_FMT=1       Skip gofmt + prettier auto-format
+#   VE_HOOK_SKIP_TF=1        Skip terraform fmt
 #   VE_HOOK_SKIP_PNPM=1      Skip pnpm lockfile check
 #   VE_HOOK_SKIP_MOD=1       Skip go mod tidy/vendor checks
 #   VE_HOOK_SKIP_LINT=1      Skip golangci-lint
@@ -65,6 +67,7 @@ HAS_SDK_TS=false
 HAS_DEPS_JS=false
 HAS_DEPS_GO=false
 HAS_ONLY_DOCS=false
+HAS_TERRAFORM=false
 
 CHANGED_FILES=""
 if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
@@ -87,6 +90,7 @@ else
     SDK_TS_FILES=$(echo "$CHANGED_FILES" | grep -E '^sdk/ts/' || true)
     JS_DEP_FILES=$(echo "$CHANGED_FILES" | grep -E '(pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|package-lock\.json)' || true)
     GO_DEP_FILES=$(echo "$CHANGED_FILES" | grep -E '^go\.(mod|sum|work)$' || true)
+    TF_FILES=$(echo "$CHANGED_FILES" | grep -E '^infra/terraform/.*\.tf$' || true)
     NON_DOC_FILES=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|^_docs/|^docs/|^\.github/)' || true)
 
     [ -n "$GO_FILES" ]     && HAS_GO=true
@@ -94,6 +98,7 @@ else
     [ -n "$SDK_TS_FILES" ] && HAS_SDK_TS=true
     [ -n "$JS_DEP_FILES" ] && HAS_DEPS_JS=true
     [ -n "$GO_DEP_FILES" ] && HAS_DEPS_GO=true
+    [ -n "$TF_FILES" ] && HAS_TERRAFORM=true
     [ -z "$NON_DOC_FILES" ] && HAS_ONLY_DOCS=true
 
     hook_info "Changed file categories:"
@@ -102,6 +107,7 @@ else
     $HAS_SDK_TS   && hook_step "SDK TypeScript: $(echo "$SDK_TS_FILES" | wc -l | tr -d ' ') files"
     $HAS_DEPS_JS  && hook_step "JS dependencies changed"
     $HAS_DEPS_GO  && hook_step "Go dependencies changed"
+    $HAS_TERRAFORM && hook_step "Terraform: $(echo "$TF_FILES" | wc -l | tr -d ' ') files"
     $HAS_ONLY_DOCS && hook_step "Docs/workflows only — skipping code checks"
     echo ""
 fi
@@ -120,6 +126,7 @@ RUN_GO_VET=false; RUN_GOFMT=false; RUN_GO_LINT=false
 RUN_GO_BUILD=false; RUN_GO_TEST=false; RUN_MOD_VENDOR=false
 RUN_PRETTIER=false; RUN_PORTAL_LINT=false
 RUN_PORTAL_TYPECHECK=false; RUN_PORTAL_TEST=false; RUN_PNPM_LOCK=false
+RUN_TERRAFORM_FMT=false
 
 if $HAS_GO || $HAS_DEPS_GO; then
     RUN_GO_VET=true; RUN_GOFMT=true; RUN_GO_LINT=true
@@ -132,10 +139,11 @@ if $HAS_PORTAL || $HAS_DEPS_JS; then
     RUN_PORTAL_TYPECHECK=true; RUN_PORTAL_TEST=true
 fi
 $HAS_DEPS_JS && RUN_PNPM_LOCK=true
+$HAS_TERRAFORM && RUN_TERRAFORM_FMT=true
 
 for flag in $RUN_GO_VET $RUN_GOFMT $RUN_GO_LINT $RUN_GO_BUILD $RUN_GO_TEST \
             $RUN_MOD_VENDOR $RUN_PRETTIER $RUN_PORTAL_LINT $RUN_PORTAL_TYPECHECK \
-            $RUN_PORTAL_TEST $RUN_PNPM_LOCK; do
+            $RUN_PORTAL_TEST $RUN_PNPM_LOCK $RUN_TERRAFORM_FMT; do
     $flag && TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 done
 
@@ -429,6 +437,40 @@ check_pnpm_lock() {
 }
 
 # =========================================================================
+# TERRAFORM CHECKS
+# =========================================================================
+check_terraform_fmt() {
+    local changed_files=""
+    if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+        changed_files=$(git diff --name-only "$BASE_BRANCH" -- 'infra/terraform/**/*.tf' 2>/dev/null || true)
+    fi
+    if [ -z "${changed_files:-}" ]; then
+        hook_step "No Terraform files to format"
+        return 0
+    fi
+    if ! command -v terraform >/dev/null 2>&1; then
+        hook_fail "terraform not found — install Terraform to auto-format"
+        return 1
+    fi
+
+    local fmt_dirs
+    fmt_dirs=$(echo "$changed_files" | xargs -n1 dirname | sort -u | tr '\n' ' ')
+    hook_step "Formatting Terraform files..."
+    for dir in $fmt_dirs; do
+        [ -d "$dir" ] || continue
+        terraform fmt -recursive "$dir" >/dev/null 2>&1
+    done
+
+    if ! git diff --quiet -- $changed_files 2>/dev/null; then
+        # shellcheck disable=SC2086
+        git add $changed_files
+        git commit --amend --no-edit --no-verify
+        hook_pass "Auto-formatted Terraform files and amended commit"
+    fi
+    return 0
+}
+
+# =========================================================================
 # RUN CHECKS
 # =========================================================================
 if [ "${VE_HOOK_QUICK:-}" = "1" ]; then
@@ -453,6 +495,8 @@ else
     $RUN_PORTAL_TEST    && { run_check "Portal tests" VE_HOOK_SKIP_PORTAL check_portal_test || true; }
     # === JS dependency checks ===
     $RUN_PNPM_LOCK  && { run_check "pnpm lockfile" VE_HOOK_SKIP_PNPM check_pnpm_lock || true; }
+    # === Terraform formatting ===
+    $RUN_TERRAFORM_FMT && { run_check "terraform fmt" VE_HOOK_SKIP_TF check_terraform_fmt || true; }
 fi
 
 # =========================================================================

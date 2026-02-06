@@ -65,6 +65,10 @@ $script:TasksSubmitted = 0
 $script:StartTime = Get-Date
 $script:GitHubCooldownUntil = $null
 $script:TaskRetryCounts = @{}
+$script:StatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-state.json"
+$script:CopilotStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-copilot.json"
+$script:StatusStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-status.json"
+$script:CompletedTasks = @()
 
 # Track attempts we're monitoring: attempt_id → { task_id, branch, pr_number, status, executor }
 $script:TrackedAttempts = @{}
@@ -110,6 +114,225 @@ function Write-CycleSummary {
     Write-Host "  │ Submitted: $($script:TasksSubmitted)  Completed: $($script:TasksCompleted)" -ForegroundColor DarkGray
     Write-Host "  │ Tracked:   $($script:TrackedAttempts.Count) attempts" -ForegroundColor DarkGray
     Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkCyan
+}
+
+function Get-OrchestratorState {
+    if (-not (Test-Path $script:StatePath)) {
+        return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null }
+    }
+    try {
+        $raw = Get-Content -Path $script:StatePath -Raw
+        if (-not $raw) { return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null } }
+        $state = $raw | ConvertFrom-Json -Depth 5
+        return @{ last_sequence_value = $state.last_sequence_value; last_task_id = $state.last_task_id; last_submitted_at = $state.last_submitted_at }
+    }
+    catch {
+        return @{ last_sequence_value = $null; last_task_id = $null; last_submitted_at = $null }
+    }
+}
+
+function Save-OrchestratorState {
+    param(
+        [Parameter(Mandatory)][hashtable]$State
+    )
+    $dir = Split-Path -Parent $script:StatePath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir | Out-Null
+    }
+    $State | ConvertTo-Json -Depth 5 | Set-Content -Path $script:StatePath -Encoding UTF8
+}
+
+function Get-CopilotState {
+    if (-not (Test-Path $script:CopilotStatePath)) {
+        return @{ prs = @{} }
+    }
+    try {
+        $raw = Get-Content -Path $script:CopilotStatePath -Raw
+        if (-not $raw) { return @{ prs = @{} } }
+        $state = $raw | ConvertFrom-Json -Depth 6
+        if (-not $state.prs) { return @{ prs = @{} } }
+        return @{ prs = $state.prs }
+    }
+    catch {
+        return @{ prs = @{} }
+    }
+}
+
+function Save-CopilotState {
+    param(
+        [Parameter(Mandatory)][hashtable]$State
+    )
+    $dir = Split-Path -Parent $script:CopilotStatePath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir | Out-Null
+    }
+    $State | ConvertTo-Json -Depth 6 | Set-Content -Path $script:CopilotStatePath -Encoding UTF8
+}
+
+function Get-CopilotPRState {
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $state = Get-CopilotState
+    $key = $PRNumber.ToString()
+    if ($state.prs.$key) { return $state.prs.$key }
+    return $null
+}
+
+function Set-CopilotPRState {
+    param(
+        [Parameter(Mandatory)][int]$PRNumber,
+        [Parameter(Mandatory)][hashtable]$Value
+    )
+    $state = Get-CopilotState
+    $key = $PRNumber.ToString()
+    $state.prs.$key = $Value
+    Save-CopilotState -State $state
+}
+
+function Remove-CopilotPRState {
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $state = Get-CopilotState
+    $key = $PRNumber.ToString()
+    if ($state.prs.$key) {
+        $state.prs.PSObject.Properties.Remove($key)
+        Save-CopilotState -State $state
+    }
+}
+
+function Upsert-CopilotPRState {
+    param(
+        [Parameter(Mandatory)][int]$PRNumber,
+        [Parameter(Mandatory)][hashtable]$Update
+    )
+    $state = Get-CopilotState
+    $key = $PRNumber.ToString()
+    $existing = $state.prs.$key
+    $requestedAt = if ($existing -and $existing.requested_at) { $existing.requested_at } else { $Update.requested_at }
+    $mergedAt = if ($Update.merged_at) { $Update.merged_at } else { $existing.merged_at }
+    $state.prs.$key = @{
+        requested_at = $requestedAt
+        completed    = $Update.completed
+        copilot_pr   = $Update.copilot_pr
+        merged_at    = $mergedAt
+    }
+    Save-CopilotState -State $state
+}
+
+function Apply-CopilotStateToInfo {
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [Parameter(Mandatory)][int]$PRNumber
+    )
+    $copilotState = Get-CopilotPRState -PRNumber $PRNumber
+    if (-not $copilotState) { return $null }
+    $Info.copilot_fix_requested = $true
+    $Info.copilot_fix_pr_number = $copilotState.copilot_pr
+    $Info.copilot_fix_merged = [bool]$copilotState.completed
+    if ($copilotState.requested_at) {
+        try { $Info.copilot_fix_requested_at = [datetime]::Parse($copilotState.requested_at) } catch { }
+    }
+    if ($copilotState.merged_at) {
+        try { $Info.copilot_fix_merged_at = [datetime]::Parse($copilotState.merged_at) } catch { }
+    }
+    return $copilotState
+}
+
+function Save-StatusSnapshot {
+    $dir = Split-Path -Parent $script:StatusStatePath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir | Out-Null
+    }
+    $attempts = @{}
+    foreach ($entry in $script:TrackedAttempts.GetEnumerator()) {
+        $attemptId = $entry.Key
+        $info = $entry.Value
+        $attempts.$attemptId = @{
+            task_id   = $info.task_id
+            branch    = $info.branch
+            pr_number = $info.pr_number
+            status    = $info.status
+            updated_at = (Get-Date).ToString("o")
+            last_process_status = $info.last_process_status
+            copilot_fix_requested = $info.copilot_fix_requested
+            copilot_fix_pr_number = $info.copilot_fix_pr_number
+            copilot_fix_merged = $info.copilot_fix_merged
+        }
+    }
+    $counts = Get-TrackedStatusCounts
+    $reviewTasks = @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.status -eq "review" } | ForEach-Object { $_.Value.task_id })
+    $errorTasks = @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.status -eq "error" } | ForEach-Object { $_.Value.task_id })
+    $snapshot = @{
+        updated_at = (Get-Date).ToString("o")
+        counts = $counts
+        tasks_submitted = $script:TasksSubmitted
+        tasks_completed = $script:TasksCompleted
+        completed_tasks = $script:CompletedTasks
+        review_tasks = $reviewTasks
+        error_tasks = $errorTasks
+        attempts = $attempts
+    }
+    $snapshot | ConvertTo-Json -Depth 6 | Set-Content -Path $script:StatusStatePath -Encoding UTF8
+}
+
+function Get-SequenceValue {
+    <#
+    .SYNOPSIS Extract sequence value from a task title like 29A/30B (numeric * 100 + letter index).
+    #>
+    param([Parameter(Mandatory)][string]$Title)
+    $match = [regex]::Match($Title, "\b(\d{2,3})([A-Z])\b")
+    if (-not $match.Success) { return $null }
+    $num = [int]$match.Groups[1].Value
+    $letter = $match.Groups[2].Value
+    $letterIndex = ([int][char]$letter) - ([int][char]'A') + 1
+    return ($num * 100) + $letterIndex
+}
+
+function Get-OrderedTodoTasks {
+    <#
+    .SYNOPSIS Return todo tasks ordered by sequence (29A..29Z, 30A..), then by created_at.
+    #>
+    [CmdletBinding()]
+    param([int]$Count = 1)
+
+    $tasks = Get-VKTasks -Status "todo"
+    if (-not $tasks) { return @() }
+
+    $seqTasks = @()
+    $otherTasks = @()
+    foreach ($task in $tasks) {
+        $seqValue = Get-SequenceValue -Title $task.title
+        if ($seqValue) {
+            $seqTasks += [pscustomobject]@{ task = $task; seq = $seqValue }
+        }
+        else {
+            $otherTasks += $task
+        }
+    }
+
+    $seqTasks = $seqTasks | Sort-Object -Property seq
+    $otherTasks = $otherTasks | Sort-Object -Property created_at
+
+    if (-not $seqTasks -or @($seqTasks).Count -eq 0) {
+        return @($otherTasks | Select-Object -First $Count)
+    }
+
+    $state = Get-OrchestratorState
+    $lastSeq = $state.last_sequence_value
+
+    $ordered = @()
+    if ($lastSeq) {
+        $after = $seqTasks | Where-Object { $_.seq -gt $lastSeq }
+        $before = $seqTasks | Where-Object { $_.seq -le $lastSeq }
+        $ordered = @($after + $before | ForEach-Object { $_.task })
+    }
+    else {
+        $ordered = @($seqTasks | ForEach-Object { $_.task })
+    }
+
+    if ($otherTasks -and @($otherTasks).Count -gt 0) {
+        $ordered += $otherTasks
+    }
+
+    return @($ordered | Select-Object -First $Count)
 }
 
 function Test-GithubCooldown {
@@ -169,6 +392,17 @@ function Get-TrackedStatusCounts {
     return $counts
 }
 
+function Clear-PendingFollowUp {
+    param(
+        [Parameter(Mandatory)][hashtable]$Info,
+        [string]$Reason
+    )
+    if ($Info.pending_followup) {
+        $Info.pending_followup = $null
+        $Info.last_followup_reason = $Reason
+    }
+}
+
 function Get-ActiveAgentCount {
     return @($script:TrackedAttempts.Values | Where-Object { $_.status -eq "running" }).Count
 }
@@ -213,7 +447,34 @@ function Try-SendFollowUp {
         }
     }
     $Info.pending_followup = $null
+    $Info.status = "running"
     return $true
+}
+
+function Get-PendingFollowUpAttempts {
+    return @($script:TrackedAttempts.GetEnumerator() | Where-Object { $_.Value.pending_followup })
+}
+
+function Process-PendingFollowUps {
+    <#
+    .SYNOPSIS Send queued follow-ups before starting new tasks.
+    #>
+    $slots = Get-AvailableSlots
+    if ($slots -le 0) { return }
+
+    $pending = Get-PendingFollowUpAttempts
+    if (-not $pending -or @($pending).Count -eq 0) { return }
+
+    foreach ($entry in $pending) {
+        if ($slots -le 0) { break }
+        $attemptId = $entry.Key
+        $info = $entry.Value
+        $message = $info.pending_followup.message
+        $reason = $info.pending_followup.reason
+        if (Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $message -Reason $reason) {
+            $slots -= 1
+        }
+    }
 }
 
 function Test-ContextWindowError {
@@ -403,6 +664,11 @@ function Sync-TrackedAttempts {
                 last_followup_at              = $null
                 context_recovery_pending      = $false
                 context_recovery_attempted_at = $null
+                copilot_fix_requested         = $false
+                copilot_fix_requested_at      = $null
+                copilot_fix_pr_number         = $null
+                copilot_fix_merged            = $false
+                copilot_fix_merged_at         = $null
             }
             Write-Log "Tracking new attempt: $($a.id.Substring(0,8)) → $($a.branch)" -Level "INFO"
         }
@@ -460,6 +726,10 @@ function Sync-TrackedAttempts {
     $activeIds = @($apiAttempts | ForEach-Object { $_.id })
     $toCheck = @($script:TrackedAttempts.Keys | Where-Object { $_ -notin $activeIds })
     foreach ($id in $toCheck) {
+        $tracked = $script:TrackedAttempts[$id]
+        if ($tracked) {
+            Clear-PendingFollowUp -Info $tracked -Reason "attempt_archived"
+        }
         Write-Log "Attempt $($id.Substring(0,8)) archived — removing from tracking" -Level "INFO"
         $script:TrackedAttempts.Remove($id)
     }
@@ -484,13 +754,16 @@ function Sync-TrackedAttempts {
         }
 
         if (-not $tracked.idle_detected_at) {
-            $tracked.idle_detected_at = Get-Date
-            Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — will confirm in ${IdleConfirmMin}m" -Level "WARN"
-            continue
+            # Anchor confirm timing to when the attempt crossed IdleTimeoutMin.
+            $tracked.idle_detected_at = $lastUpdate.AddMinutes($IdleTimeoutMin)
         }
 
         $confirmMinutes = ((Get-Date) - $tracked.idle_detected_at).TotalMinutes
-        if ($confirmMinutes -lt $IdleConfirmMin) { continue }
+        if ($confirmMinutes -lt $IdleConfirmMin) {
+            $remaining = [math]::Ceiling($IdleConfirmMin - $confirmMinutes)
+            Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — will confirm in ${remaining}m" -Level "WARN"
+            continue
+        }
 
         # Do not archive idle attempts; they are already in review
         Write-Log "Attempt $($a.id.Substring(0,8)) idle ${IdleTimeoutMin}m+ — awaiting PR" -Level "WARN"
@@ -570,12 +843,24 @@ function Process-CompletedAttempts {
 
         $info.pr_number = $pr.number
 
+        $copilotState = Apply-CopilotStateToInfo -Info $info -PRNumber $pr.number
+
         # Check if already merged
         if ($pr.state -eq "MERGED" -or $pr.mergedAt) {
             Write-Log "PR #$($pr.number) for $branch is MERGED" -Level "OK"
+            Clear-PendingFollowUp -Info $info -Reason "pr_merged"
+            Remove-CopilotPRState -PRNumber $pr.number
             $info.status = "merged"
             Complete-Task -AttemptId $attemptId -TaskId $info.task_id -PRNumber $pr.number
             $processed += $attemptId
+            continue
+        }
+
+        if ($pr.state -eq "CLOSED") {
+            Write-Log "PR #$($pr.number) for $branch is CLOSED — clearing queued follow-ups" -Level "WARN"
+            Clear-PendingFollowUp -Info $info -Reason "pr_closed"
+            Remove-CopilotPRState -PRNumber $pr.number
+            $info.status = "review"
             continue
         }
 
@@ -588,6 +873,11 @@ function Process-CompletedAttempts {
             if ($ageMinutes -lt $CiWaitMin) {
                 $isYoung = $true
             }
+        }
+
+        $copilotState = Get-CopilotPRState -PRNumber $pr.number
+        if ($copilotState -and -not $copilotState.completed) {
+            Write-Log "PR #$($pr.number) has Copilot fix pending — deferring agent follow-ups" -Level "INFO"
         }
 
         # PR exists but not merged — check CI
@@ -637,6 +927,20 @@ Please rebase or resolve conflicts on branch `$branch`, then push updated change
                         $reason = if ($mergeResult.reason) { $mergeResult.reason } else { "Unknown merge error" }
                         Write-Log "Merge failed for PR #$($pr.number), will retry" -Level "WARN"
                         Write-Log "Merge failure reason: $reason" -Level "WARN"
+                        if ($reason -match "not up to date|not mergeable" -or $reason -eq "Unknown merge error") {
+                            Start-Sleep -Seconds 3
+                            $retryResult = Merge-PRWithFallback -PRNumber $pr.number -ForceAdmin:$true
+                            if (Test-GithubRateLimit) { return }
+                            if ($retryResult.merged) {
+                                $info.status = "merged"
+                                Complete-Task -AttemptId $attemptId -TaskId $info.task_id -PRNumber $pr.number
+                                $processed += $attemptId
+                                break
+                            }
+                            $reason = if ($retryResult.reason) { $retryResult.reason } else { $reason }
+                            Write-Log "Retry merge failed for PR #$($pr.number)" -Level "WARN"
+                            Write-Log "Retry failure reason: $reason" -Level "WARN"
+                        }
                         if ($UseAutoMerge) {
                             $enabled = Merge-PR -PRNumber $pr.number -AutoMerge
                             if (Test-GithubRateLimit) { return }
@@ -678,22 +982,121 @@ Please rebase or resolve conflicts on branch `$branch`, then push updated change
                 # Don't block the slot — the agent or a human needs to fix this
                 # We mark it so we don't keep retrying every cycle
                 $info.status = "review"
-                if (-not $info.ci_notified) {
-                    $checks = Get-PRChecksDetail -PRNumber $pr.number
-                    if (Test-GithubRateLimit) { return }
-                    $summary = Format-PRCheckFailures -Checks $checks
-                    $body = @"
+                $checks = Get-PRChecksDetail -PRNumber $pr.number
+                if (Test-GithubRateLimit) { return }
+                $summary = Format-PRCheckFailures -Checks $checks
+                $body = @"
 CI is failing for PR #$($pr.number).
 
 $summary
 "@
+
+                if ($copilotState) {
+                    $info.copilot_fix_requested = $true
+                    break
+                }
+
+                if (-not $info.copilot_fix_pr_number) {
+                    $existingCopilot = Find-CopilotFixPR -OriginalPRNumber $pr.number
+                    if ($existingCopilot) {
+                        $info.copilot_fix_requested = $true
+                        $info.copilot_fix_pr_number = $existingCopilot.number
+                        Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                            requested_at = (Get-Date).ToString("o")
+                            completed    = $false
+                            copilot_pr   = $existingCopilot.number
+                            merged_at    = $null
+                        }
+                        break
+                    }
+                }
+
+                if (-not $info.copilot_fix_requested) {
+                    $copilotBody = @"
+@copilot CI is failing for PR #$($pr.number).
+
+$summary
+"@
+                    Write-Log "Requesting Copilot fix for PR #$($pr.number)" -Level "ACTION"
                     if (-not $DryRun) {
-                        Add-PRComment -PRNumber $pr.number -Body $body | Out-Null
+                        Add-PRComment -PRNumber $pr.number -Body $copilotBody.Trim() | Out-Null
                     }
-                    if ($isYoung) {
-                        $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $body.Trim() -Reason "ci_failing_early"
+                    $info.copilot_fix_requested = $true
+                    $info.copilot_fix_requested_at = Get-Date
+                    $info.ci_notified = $false
+                    Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                        requested_at = (Get-Date).ToString("o")
+                        completed    = $false
+                        copilot_pr   = $null
+                        merged_at    = $null
                     }
-                    $info.ci_notified = $true
+                    break
+                }
+
+                if (-not $info.copilot_fix_merged) {
+                    if (-not $info.copilot_fix_pr_number) {
+                        $copilotPr = Find-CopilotFixPR -OriginalPRNumber $pr.number
+                        if ($copilotPr) {
+                            $info.copilot_fix_pr_number = $copilotPr.number
+                            Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                                requested_at = (Get-Date).ToString("o")
+                                completed    = $false
+                                copilot_pr   = $copilotPr.number
+                                merged_at    = $null
+                            }
+                        }
+                    }
+
+                    if ($info.copilot_fix_pr_number) {
+                        $copilotDetails = Get-PRDetails -PRNumber $info.copilot_fix_pr_number
+                        if (Test-GithubRateLimit) { return }
+                        if ($copilotDetails -and $copilotDetails.isDraft) {
+                            Write-Log "Marking Copilot PR #$($info.copilot_fix_pr_number) ready" -Level "ACTION"
+                            if (-not $DryRun) {
+                                $null = Mark-PRReady -PRNumber $info.copilot_fix_pr_number
+                            }
+                        }
+
+                        $isCopilotComplete = if ($copilotDetails) { Test-CopilotPRComplete -PRDetails $copilotDetails } else { $false }
+                        if ($isCopilotComplete) {
+                            Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                                requested_at = (Get-Date).ToString("o")
+                                completed    = $false
+                                copilot_pr   = $info.copilot_fix_pr_number
+                                merged_at    = $null
+                            }
+                        }
+
+                        $copilotStatus = Get-PRCheckStatus -PRNumber $info.copilot_fix_pr_number
+                        if (Test-GithubRateLimit) { return }
+                        if ($copilotStatus -eq "passing" -and $copilotDetails -and $isCopilotComplete) {
+                            Write-Log "Merging Copilot PR #$($info.copilot_fix_pr_number) into $branch" -Level "ACTION"
+                            if (-not $DryRun) {
+                                $mergedFix = Merge-BranchFromPR -BaseBranch $branch -HeadBranch $copilotDetails.headRefName
+                                if ($mergedFix) {
+                                    $info.copilot_fix_merged = $true
+                                    $info.copilot_fix_merged_at = Get-Date
+                                    Upsert-CopilotPRState -PRNumber $pr.number -Update @{
+                                        requested_at = (Get-Date).ToString("o")
+                                        completed    = $true
+                                        copilot_pr   = $info.copilot_fix_pr_number
+                                        merged_at    = (Get-Date).ToString("o")
+                                    }
+                                    $null = Close-PRDeleteBranch -PRNumber $info.copilot_fix_pr_number
+                                }
+                            }
+                        }
+                    }
+
+                    break
+                }
+
+                if ($info.copilot_fix_merged -and -not $info.ci_notified) {
+                    $sinceMerge = if ($info.copilot_fix_merged_at) { ((Get-Date) - $info.copilot_fix_merged_at).TotalMinutes } else { 0 }
+                    if ($sinceMerge -ge $CiWaitMin) {
+                        $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $body.Trim() -Reason "ci_failing_after_copilot_merge"
+                        $info.ci_notified = $true
+                    }
                 }
             }
             default {
@@ -706,6 +1109,7 @@ $summary
     foreach ($id in $processed) {
         $script:TrackedAttempts.Remove($id)
     }
+    Save-StatusSnapshot
 }
 
 function Complete-Task {
@@ -722,6 +1126,11 @@ function Complete-Task {
     if (-not $DryRun) {
         Archive-VKAttempt -AttemptId $AttemptId | Out-Null
         Update-VKTaskStatus -TaskId $TaskId -Status "done"
+    }
+    $script:CompletedTasks += @{
+        task_id = $TaskId
+        pr_number = $PRNumber
+        completed_at = (Get-Date).ToString("o")
     }
     $script:TasksCompleted++
 }
@@ -744,7 +1153,7 @@ function Fill-ParallelSlots {
     Write-Log "$slotsAvailable slots available (target: $MaxParallel, active: $activeCount)" -Level "ACTION"
 
     # Get next todo tasks
-    $nextTasks = Get-VKNextTodoTasks -Count $slotsAvailable
+    $nextTasks = Get-OrderedTodoTasks -Count $slotsAvailable
     if (-not $nextTasks -or @($nextTasks).Count -eq 0) {
         Write-Log "No more todo tasks in backlog" -Level "WARN"
         return
@@ -773,6 +1182,14 @@ function Fill-ParallelSlots {
                     name      = $task.title
                     executor  = $nextExec.executor
                 }
+                $seqValue = Get-SequenceValue -Title $task.title
+                $state = Get-OrchestratorState
+                if ($seqValue) {
+                    $state.last_sequence_value = $seqValue
+                }
+                $state.last_task_id = $task.id
+                $state.last_submitted_at = (Get-Date).ToString("o")
+                Save-OrchestratorState -State $state
                 $script:TasksSubmitted++
             }
         }
@@ -869,8 +1286,13 @@ function Start-Orchestrator {
         # Step 2: Process completed attempts (check PRs, merge, mark done)
         Process-CompletedAttempts
 
+        # Step 2b: Send queued follow-ups before starting new tasks
+        Process-PendingFollowUps
+
         # Step 3: Fill empty parallel slots with new task submissions
-        Fill-ParallelSlots
+        if (@(Get-PendingFollowUpAttempts).Count -eq 0) {
+            Fill-ParallelSlots
+        }
 
         # Step 4: Check if we're done
         if (Test-BacklogEmpty) {
@@ -894,6 +1316,8 @@ function Start-Orchestrator {
         # Step 5: Wait before next cycle
         Write-Log "Sleeping ${PollIntervalSec}s until next cycle... (Ctrl+C to stop)" -Level "INFO"
         Start-Sleep -Seconds $PollIntervalSec
+
+        Save-StatusSnapshot
 
     } while ($true)
 }

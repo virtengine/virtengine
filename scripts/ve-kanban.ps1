@@ -428,7 +428,7 @@ function Get-PRDetails {
     param([Parameter(Mandatory)][int]$PRNumber)
     $prJson = Invoke-VKGithub -Args @(
         "pr", "view", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
-        "--json", "number,state,mergeable,mergeStateStatus,isDraft,reviewDecision,url"
+        "--json", "number,state,mergeable,mergeStateStatus,isDraft,reviewDecision,url,headRefName,baseRefName,title,body"
     )
     if (-not $prJson) { return $null }
     return $prJson | ConvertFrom-Json
@@ -475,6 +475,83 @@ function Add-PRComment {
     $result = Invoke-VKGithub -Args @(
         "pr", "comment", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
         "--body", $Body
+    )
+    return ($null -ne $result)
+}
+
+function Mark-PRReady {
+    <#
+    .SYNOPSIS Mark a PR as ready for review (exit draft).
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $result = Invoke-VKGithub -Args @(
+        "pr", "ready", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO"
+    )
+    return ($null -ne $result)
+}
+
+function Find-CopilotFixPR {
+    <#
+    .SYNOPSIS Find a Copilot fix PR referencing an original PR number.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$OriginalPRNumber)
+    $search = "$OriginalPRNumber in:title,body"
+    $prJson = Invoke-VKGithub -Args @(
+        "pr", "list", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--state", "open", "--search", $search,
+        "--json", "number,title,body,headRefName,baseRefName,isDraft,url,createdAt",
+        "--limit", "20"
+    )
+    if (-not $prJson) { return $null }
+    $prs = $prJson | ConvertFrom-Json
+    if (-not $prs) { return $null }
+    $pattern = "(?i)(PR\s*#?$OriginalPRNumber|#$OriginalPRNumber)"
+    $match = $prs | Where-Object {
+        ($_.title -match $pattern) -or ($_.body -match $pattern)
+    } | Sort-Object -Property createdAt -Descending | Select-Object -First 1
+    return $match
+}
+
+function Test-CopilotPRComplete {
+    <#
+    .SYNOPSIS Determine whether a Copilot PR is complete (not WIP and not draft).
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$PRDetails)
+    if (-not $PRDetails) { return $false }
+    if ($PRDetails.isDraft) { return $false }
+    if ($PRDetails.title -match "^\[WIP\]") { return $false }
+    return $true
+}
+
+function Close-PRDeleteBranch {
+    <#
+    .SYNOPSIS Close a PR and delete its branch.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $result = Invoke-VKGithub -Args @(
+        "pr", "close", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--delete-branch"
+    )
+    return ($null -ne $result)
+}
+
+function Merge-BranchFromPR {
+    <#
+    .SYNOPSIS Merge a PR head branch into a target base branch.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$BaseBranch,
+        [Parameter(Mandatory)][string]$HeadBranch
+    )
+    $result = Invoke-VKGithub -Args @(
+        "api", "repos/$script:GH_OWNER/$script:GH_REPO/merges",
+        "-f", "base=$BaseBranch",
+        "-f", "head=$HeadBranch"
     )
     return ($null -ne $result)
 }
