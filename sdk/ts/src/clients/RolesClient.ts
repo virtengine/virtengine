@@ -1,7 +1,7 @@
+import type { AccountStateRecord, RoleAssignment } from "../generated/protos/virtengine/roles/v1/types.ts";
 import { BaseClient, type ClientOptions } from "./BaseClient.ts";
 import type { ChainNodeSDK, ListOptions } from "./types.ts";
 import { toPageRequest } from "./types.ts";
-import type { AccountStateRecord, RoleAssignment } from "../generated/protos/virtengine/roles/v1/types.ts";
 
 export interface RolesClientDeps {
   sdk: ChainNodeSDK;
@@ -77,10 +77,10 @@ export class RolesClient extends BaseClient {
 
     try {
       const result = await this.sdk.virtengine.roles.v1.getAccountState({ address });
-      if (result.state) {
-        this.setCached(cacheKey, result.state);
+      if (result.accountState) {
+        this.setCached(cacheKey, result.accountState);
       }
-      return result.state ?? null;
+      return result.accountState ?? null;
     } catch (error) {
       this.handleQueryError(error, "getAccountState");
     }

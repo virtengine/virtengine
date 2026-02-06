@@ -20,6 +20,7 @@
  * ```
  */
 
+import { ConnectionManager, type ConnectionManagerOptions } from "../network/ConnectionManager.ts";
 import { createChainNodeSDK } from "../sdk/chain/createChainNodeSDK.ts";
 import { createChainNodeWebSDK } from "../sdk/chain/createChainNodeWebSDK.ts";
 import type { TxClient } from "../sdk/transport/tx/TxClient.ts";
@@ -94,6 +95,23 @@ export interface VirtEngineClientOptions {
    * Maximum cache size (default: 1000)
    */
   maxCacheSize?: number;
+
+  /**
+   * Connection manager options for multi-endpoint health checking.
+   * When provided, the client will use the connection manager for endpoint
+   * health monitoring and automatic failover.
+   */
+  connectionManager?: ConnectionManagerOptions;
+
+  /**
+   * Additional RPC endpoint URLs for failover
+   */
+  rpcEndpoints?: string[];
+
+  /**
+   * Additional REST endpoint URLs for failover
+   */
+  restEndpoints?: string[];
 }
 
 /**
@@ -178,6 +196,9 @@ export class VirtEngineClient {
   /** Wallet manager for handling wallet connections */
   public readonly wallets: WalletManager;
 
+  /** Connection manager for endpoint health monitoring */
+  public readonly connections: ConnectionManager;
+
   /** Underlying chain SDK */
   public readonly sdk: ChainNodeSDK;
 
@@ -196,13 +217,13 @@ export class VirtEngineClient {
     const queryEndpoint = options.grpcEndpoint ?? options.rpcEndpoint;
     this.sdk = options.sdk ?? (options.useWeb
       ? createChainNodeWebSDK({
-        query: { baseUrl: options.restEndpoint ?? options.rpcEndpoint },
-        tx: options.txSigner ? { signer: options.txSigner } : undefined,
-      })
+          query: { baseUrl: options.restEndpoint ?? options.rpcEndpoint },
+          tx: options.txSigner ? { signer: options.txSigner } : undefined,
+        })
       : createChainNodeSDK({
-        query: { baseUrl: queryEndpoint },
-        tx: options.txSigner ? { signer: options.txSigner } : undefined,
-      }));
+          query: { baseUrl: queryEndpoint },
+          tx: options.txSigner ? { signer: options.txSigner } : undefined,
+        }));
 
     // Client options with shared cache
     const clientOptions: ClientOptions = {
@@ -224,6 +245,36 @@ export class VirtEngineClient {
 
     // Initialize wallet manager
     this.wallets = new WalletManager();
+
+    // Initialize connection manager
+    this.connections = new ConnectionManager(options.connectionManager);
+
+    // Register primary endpoints
+    this.connections.addEndpoint({
+      url: options.rpcEndpoint,
+      type: options.useWeb ? "rest" : "rpc",
+    });
+
+    if (options.restEndpoint) {
+      this.connections.addEndpoint({ url: options.restEndpoint, type: "rest" });
+    }
+
+    if (options.grpcEndpoint) {
+      this.connections.addEndpoint({ url: options.grpcEndpoint, type: "grpc" });
+    }
+
+    // Register additional failover endpoints
+    if (options.rpcEndpoints) {
+      for (const [i, url] of options.rpcEndpoints.entries()) {
+        this.connections.addEndpoint({ url, type: "rpc", priority: i + 1 });
+      }
+    }
+
+    if (options.restEndpoints) {
+      for (const [i, url] of options.restEndpoints.entries()) {
+        this.connections.addEndpoint({ url, type: "rest", priority: i + 1 });
+      }
+    }
   }
 
   /**

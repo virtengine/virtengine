@@ -1,22 +1,22 @@
-import Long from "long";
+import type Long from "long";
 
-import { BaseClient, type ClientOptions } from "./BaseClient.ts";
-import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
-import { toPageRequest, withTxResult } from "./types.ts";
-import { IdentityTier } from "../generated/protos/virtengine/veid/v1/types.ts";
-import type {
-  IdentityRecord,
-  IdentityScore,
-  IdentityScope,
-  ScopeType,
-  VerificationStatus,
-} from "../generated/protos/virtengine/veid/v1/types.ts";
 import type {
   MsgCreateIdentityWallet,
   MsgRequestVerification,
   MsgUploadScope,
 } from "../generated/protos/virtengine/veid/v1/tx.ts";
+import type {
+  IdentityRecord,
+  IdentityScope,
+  IdentityScore,
+  ScopeType,
+  VerificationStatus,
+} from "../generated/protos/virtengine/veid/v1/types.ts";
+import { IdentityTier } from "../generated/protos/virtengine/veid/v1/types.ts";
 import type { TxCallOptions } from "../sdk/transport/types.ts";
+import { BaseClient, type ClientOptions } from "./BaseClient.ts";
+import type { ChainNodeSDK, ClientTxResult, ListOptions } from "./types.ts";
+import { toPageRequest, withTxResult } from "./types.ts";
 
 export interface VEIDClientDeps {
   sdk: ChainNodeSDK;
@@ -58,8 +58,9 @@ export class VEIDClient extends BaseClient {
     try {
       const result = await this.sdk.virtengine.veid.v1.getIdentity({ accountAddress: address });
       if (!result.found) return null;
-      this.setCached(cacheKey, result.identity);
-      return result.identity;
+      const identity = result.identity ?? null;
+      if (identity) this.setCached(cacheKey, identity);
+      return identity;
     } catch (error) {
       this.handleQueryError(error, "getIdentity");
     }
@@ -76,8 +77,9 @@ export class VEIDClient extends BaseClient {
     try {
       const result = await this.sdk.virtengine.veid.v1.getIdentityScore({ accountAddress: address });
       if (!result.found) return null;
-      this.setCached(cacheKey, result.score);
-      return result.score;
+      const score = result.score ?? null;
+      if (score) this.setCached(cacheKey, score);
+      return score;
     } catch (error) {
       this.handleQueryError(error, "getScore");
     }
@@ -93,8 +95,8 @@ export class VEIDClient extends BaseClient {
         this.sdk.virtengine.hpc.v1.getOffering({ offeringId }),
       ]);
 
-      const currentScore = scoreResult.found ? scoreResult.score.score : 0;
-      const currentTier = scoreResult.found ? scoreResult.score.tier : IdentityTier.IDENTITY_TIER_UNVERIFIED;
+      const currentScore = scoreResult.found && scoreResult.score ? scoreResult.score.score : 0;
+      const currentTier = scoreResult.found && scoreResult.score ? scoreResult.score.tier : IdentityTier.IDENTITY_TIER_UNVERIFIED;
       const requiredScore = offeringResult.offering?.requiredIdentityThreshold ?? 0;
 
       return {
