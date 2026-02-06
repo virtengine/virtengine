@@ -291,6 +291,56 @@ module load singularity
 singularity exec {{.Container}} {{.Command}}
 ```
 
+### SLURM-on-Kubernetes Bootstrap (Provider Daemon)
+
+For SLURM clusters deployed on Kubernetes, the provider daemon can bootstrap a minimal SLURM stack and wire node agents
+to the on-chain node lifecycle. This flow uses `helm` and `kubectl` CLIs on the provider host.
+
+#### Configuration
+
+```yaml
+hpc:
+  enabled: true
+  scheduler_type: "slurm"
+  cluster_id: "HPC-1"
+  provider_address: "virtengine1provider..."
+  slurm_k8s:
+    enabled: true
+    bootstrap_on_start: true
+    namespace: "slurm-system"
+    helm_chart_path: "/opt/virtengine/charts/slurm"
+    helm_release_name: "slurm-hpc-1"
+    ready_timeout: "15m"
+    rollback_on_failure: true
+    min_compute_ready: 1
+    provider_endpoint: "http://provider-daemon:8081"
+    helm:
+      binary: "helm"
+      kubeconfig: "/home/provider/.kube/config"
+    kube:
+      binary: "kubectl"
+      kubeconfig: "/home/provider/.kube/config"
+  node_aggregator:
+    enabled: true
+    listen_addr: ":8081"
+    provider_address: "virtengine1provider..."
+    cluster_id: "HPC-1"
+    heartbeat_timeout: "2m"
+    checkpoint_file: "/var/lib/virtengine/hpc-node-checkpoint.json"
+    chain_submit_enabled: true
+    max_submit_retries: 5
+    retry_backoff: "5s"
+    stale_miss_threshold: 5
+    default_region: "us-west-1"
+    default_datacenter: "pdx-1"
+```
+
+#### Operational Notes
+
+- `slurm_k8s.provider_endpoint` must be reachable from the SLURM node agents (often the provider daemon service).
+- The node aggregator persists checkpoints so restarts do not lose heartbeat sequences or pending chain updates.
+- If bootstrap readiness fails and `rollback_on_failure` is enabled, the Helm release is uninstalled.
+
 ## Key Management
 
 ### Key Types

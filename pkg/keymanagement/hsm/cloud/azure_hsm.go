@@ -1,0 +1,157 @@
+package cloud
+
+import (
+	"context"
+	"crypto"
+	"fmt"
+	"io"
+	"log/slog"
+	"sync"
+
+	"github.com/virtengine/virtengine/pkg/keymanagement/hsm"
+)
+
+// AzureHSMProvider implements hsm.HSMProvider for Azure Dedicated HSM /
+// Azure Managed HSM. In production this would use the Azure Key Vault SDK.
+type AzureHSMProvider struct {
+	config    hsm.CloudConfig
+	logger    *slog.Logger
+	mu        sync.Mutex
+	connected bool
+	keys      map[string]*cloudKey
+}
+
+// NewAzureHSMProvider creates a new Azure HSM provider.
+func NewAzureHSMProvider(config hsm.CloudConfig, logger *slog.Logger) (*AzureHSMProvider, error) {
+	if config.KeyVaultName == "" {
+		return nil, fmt.Errorf("azure hsm: key_vault_name is required")
+	}
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	return &AzureHSMProvider{
+		config: config,
+		logger: logger,
+		keys:   make(map[string]*cloudKey),
+	}, nil
+}
+
+func (p *AzureHSMProvider) Connect(_ context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.connected = true
+	p.logger.Info("Azure HSM connected",
+		slog.String("vault", p.config.KeyVaultName),
+	)
+	return nil
+}
+
+func (p *AzureHSMProvider) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, k := range p.keys {
+		scrub(k.privateKey)
+	}
+	p.keys = make(map[string]*cloudKey)
+	p.connected = false
+	return nil
+}
+
+func (p *AzureHSMProvider) GenerateKey(_ context.Context, keyType hsm.KeyType, label string) (*hsm.KeyInfo, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.connected {
+		return nil, hsm.ErrNotConnected
+	}
+	if _, ok := p.keys[label]; ok {
+		return nil, hsm.ErrKeyExists
+	}
+	pub, priv, err := generateKey(keyType)
+	if err != nil {
+		return nil, err
+	}
+	info := makeKeyInfo(label, keyType, pub)
+	p.keys[label] = &cloudKey{info: info, privateKey: priv, publicKey: pub}
+	return info, nil
+}
+
+func (p *AzureHSMProvider) ImportKey(_ context.Context, keyType hsm.KeyType, label string, key []byte) (*hsm.KeyInfo, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.connected {
+		return nil, hsm.ErrNotConnected
+	}
+	if _, ok := p.keys[label]; ok {
+		return nil, hsm.ErrKeyExists
+	}
+	pub, err := extractPublicKey(keyType, key)
+	if err != nil {
+		return nil, err
+	}
+	keyCopy := make([]byte, len(key))
+	copy(keyCopy, key)
+	info := makeKeyInfo(label, keyType, pub)
+	p.keys[label] = &cloudKey{info: info, privateKey: keyCopy, publicKey: pub}
+	return info, nil
+}
+
+func (p *AzureHSMProvider) GetKey(_ context.Context, label string) (*hsm.KeyInfo, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.connected {
+		return nil, hsm.ErrNotConnected
+	}
+	k, ok := p.keys[label]
+	if !ok {
+		return nil, hsm.ErrKeyNotFound
+	}
+	return k.info, nil
+}
+
+func (p *AzureHSMProvider) ListKeys(_ context.Context) ([]*hsm.KeyInfo, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.connected {
+		return nil, hsm.ErrNotConnected
+	}
+	out := make([]*hsm.KeyInfo, 0, len(p.keys))
+	for _, k := range p.keys {
+		out = append(out, k.info)
+	}
+	return out, nil
+}
+
+func (p *AzureHSMProvider) DeleteKey(_ context.Context, label string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.connected {
+		return hsm.ErrNotConnected
+	}
+	k, ok := p.keys[label]
+	if !ok {
+		return hsm.ErrKeyNotFound
+	}
+	scrub(k.privateKey)
+	delete(p.keys, label)
+	return nil
+}
+
+func (p *AzureHSMProvider) Sign(_ context.Context, label string, data []byte) ([]byte, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.connected {
+		return nil, hsm.ErrNotConnected
+	}
+	return signWithKey(p.keys, label, data)
+}
+
+func (p *AzureHSMProvider) GetPublicKey(_ context.Context, label string) (crypto.PublicKey, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.connected {
+		return nil, hsm.ErrNotConnected
+	}
+	return getPublicKey(p.keys, label)
+}
+
+var _ hsm.HSMProvider = (*AzureHSMProvider)(nil)
