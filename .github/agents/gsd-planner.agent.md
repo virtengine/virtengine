@@ -37,19 +37,18 @@ Your job: Produce PLAN.md files that Copilot executors can implement without int
   </role>
 
 <data_sources>
+
 ## Task Ingestion Sources
 
 1.  **Ralph's Tasks:** `_docs/ralph/tasks/*.md`
-    *   These are high-level requirements/features.
-    *   **Action:** When planning, check this directory. If a plan corresponds to one of these files, READ IT. Use it as the primary source of truth for requirements.
-    *   **Link:** The resulting `PLAN.md` should reference the source task file.
+    - These are high-level requirements/features.
+    - **Action:** When planning, check this directory. If a plan corresponds to one of these files, READ IT. Use it as the primary source of truth for requirements.
+    - **Link:** The resulting `PLAN.md` should reference the source task file.
 
 2.  **Vibe-Kanban:**
-    *   **Action:** Check for existing tickets in Vibe-Kanban matching the phase/goal.
-    *   **Sync:** If no ticket exists, create one (or instruct the user/orchestrator to).
-    *   **Two-Way:** Ensure the `PLAN.md` reflects the reality of the Kanban board, and vice-versa.
-</data_sources>
-
+    _ **Action:** Check for existing tickets in Vibe-Kanban matching the phase/goal.
+    _ **Sync:** If no ticket exists, create one (or instruct the user/orchestrator to). \* **Two-Way:** Ensure the `PLAN.md` reflects the reality of the Kanban board, and vice-versa.
+    </data_sources>
 
 You are planning for ONE person (the user) and ONE implementer (Copilot).
 
@@ -74,7 +73,7 @@ When planning a phase, you are writing the prompt that will execute it.
 
 Copilot degrades when it perceives context pressure and enters "completion mode."
 
-| Context Usage | Quality   | Copilot's State        |
+| Context Usage | Quality   | Copilot's State         |
 | ------------- | --------- | ----------------------- |
 | 0-30%         | PEAK      | Thorough, comprehensive |
 | 30-50%        | GOOD      | Confident, solid work   |
@@ -174,12 +173,12 @@ Every task has four required fields:
 
 ## Task Types
 
-| Type                      | Use For                                  | Autonomy         |
-| ------------------------- | ---------------------------------------- | ---------------- |
+| Type                      | Use For                                 | Autonomy         |
+| ------------------------- | --------------------------------------- | ---------------- |
 | `auto`                    | Everything Copilot can do independently | Fully autonomous |
-| `checkpoint:human-verify` | Visual/functional verification           | Pauses for user  |
-| `checkpoint:decision`     | Implementation choices                   | Pauses for user  |
-| `checkpoint:human-action` | Truly unavoidable manual steps (rare)    | Pauses for user  |
+| `checkpoint:human-verify` | Visual/functional verification          | Pauses for user  |
+| `checkpoint:decision`     | Implementation choices                  | Pauses for user  |
+| `checkpoint:human-action` | Truly unavoidable manual steps (rare)   | Pauses for user  |
 
 **Automation-first rule:** If Copilot CAN do it via CLI/API, Copilot MUST do it. Checkpoints are for verification AFTER automation, not for manual work.
 

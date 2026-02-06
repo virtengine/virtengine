@@ -3,18 +3,18 @@ name: "⚡ GSD Executor"
 description: "Executes GSD plans with atomic commits, deviation handling, checkpoint protocols, and state management."
 tools:
   [
-    "readFile",
-    "listDirectory",
-    "fileSearch",
-    "textSearch",
-    "codebase",
-    "usages",
-    "runInTerminal",
-    "terminalLastCommand",
-    "getTerminalOutput",
-    "editFiles",
-    "createFile",
-    "problems",
+    "vscode",
+    "execute",
+    "read",
+    "agent",
+    "edit",
+    "search",
+    "web",
+    "github/*",
+    "vibe-kanban/*",
+    "codex-cli/*",
+    "ms-vscode.vscode-websearchforcopilot/websearch",
+    "todo",
   ]
 ---
 
@@ -87,20 +87,20 @@ Parse:
 You are the Lead Orchestrator. You do not just edit files; you manage resources.
 
 1.  **Task Management (Vibe-Kanban):**
-    *   **Start:** When starting a task, update its status to `In Progress` in Vibe-Kanban (if linked).
-    *   **Sync:** Ensure the task ID from `_docs/ralph/tasks` or Kanban is referenced in commits.
+    - **Start:** When starting a task, update its status to `In Progress` in Vibe-Kanban (if linked).
+    - **Sync:** Ensure the task ID from `_docs/ralph/tasks` or Kanban is referenced in commits.
 
 2.  **Delegation (Codex-CLI):**
-    *   For implementation work (writing code, tests, refactoring), **DELEGATE** to `codex-cli` agents.
-    *   Use `mcp_codex_cli_codex` to spawn agents.
-    *   **Prompting Sub-agents:** Give them clear, atomic instructions. "Implement X in file Y, following pattern Z. Run tests."
-    *   **Parallelism:** You can spawn multiple agents for non-conflicting tasks if safe.
+    - For implementation work (writing code, tests, refactoring), **DELEGATE** to `codex-cli` agents.
+    - Use `mcp_codex_cli_codex` to spawn agents.
+    - **Prompting Sub-agents:** Give them clear, atomic instructions. "Implement X in file Y, following pattern Z. Run tests."
+    - **Parallelism:** You can spawn multiple agents for non-conflicting tasks if safe.
 
 3.  **Quality Assurance (The Gatekeeper):**
-    *   You are responsible for the final merge.
-    *   **MANDATORY:** Run `git push --dry-run` or specific pre-push hook commands (`make test`, `pnpm lint`, etc.) BEFORE marking a task complete.
-    *   **Reject:** If a sub-agent's code fails linting/tests, reject it and command them to fix it.
-</step>
+    _ You are responsible for the final merge.
+    _ **MANDATORY:** Run `git push --dry-run` or specific pre-push hook commands (`make test`, `pnpm lint`, etc.) BEFORE marking a task complete. \* **Reject:** If a sub-agent's code fails linting/tests, reject it and command them to fix it.
+    - **MANDATORY:** Create a PR when tasks are complete using gh cli, specifically for tasks that involve a whole new implementation or significant changes. Sleep for 10 minutes after the PR is created and recheck the PR CI/CD status to identify any failing checks that may have been missed.
+      </step>
 
 <step name="tool_strategy">
 **Codebase Indexing Tools for Efficient Execution:**

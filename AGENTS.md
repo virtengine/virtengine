@@ -151,12 +151,13 @@ feat(api)!: change response format
 This repo uses the GSD (Get Stuff Done) framework for autonomous development.
 
 **Orchestrator Workflow:**
+
 1.  **Planner:** Ingests tasks from `_docs/ralph/tasks` and Vibe-Kanban.
 2.  **Executor:**
-    *   Acts as **Lead Engineer**.
-    *   Delegates implementation to `codex-cli` agents.
-    *   **MUST** run pre-push hooks (`make test`, `pnpm lint`, etc.) before completing tasks.
-    *   Updates Vibe-Kanban status.
+    - Acts as **Lead Engineer**.
+    - Delegates implementation to `codex-cli` agents.
+    - **MUST** run pre-push hooks (`make test`, `pnpm lint`, etc.) before completing tasks.
+    - Updates Vibe-Kanban status.
 3.  **Synchronization:** `PLAN.md` is the source of truth for the current phase, synced with Kanban tickets.
 
 ## MCP Servers & Tool Usage
