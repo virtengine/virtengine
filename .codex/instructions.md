@@ -20,14 +20,14 @@ Your task title is in the `VE_TASK_TITLE` environment variable. Focus **only** o
 
 You have access to:
 
-| Tool | What it does |
-|------|-------------|
-| **Shell** (bash/pwsh) | Run commands: `go test`, `go build`, `git`, `make`, `gh` |
-| **File read/write** | Read, create, and edit files in the workspace |
-| **codex-cli MCP** | Spawn sub-agents for parallel subtasks (use instead of `runSubagent`) |
-| **GitHub MCP** | Search code, create issues, list PRs — but NOT for creating this task's PR |
-| **Context7 MCP** | Look up library documentation (Cosmos SDK, TensorFlow, gRPC, etc.) |
-| **Exa MCP** | Web search for up-to-date code examples and documentation |
+| Tool                  | What it does                                                               |
+| --------------------- | -------------------------------------------------------------------------- |
+| **Shell** (bash/pwsh) | Run commands: `go test`, `go build`, `git`, `make`, `gh`                   |
+| **File read/write**   | Read, create, and edit files in the workspace                              |
+| **codex-cli MCP**     | Spawn sub-agents for parallel subtasks (use instead of `runSubagent`)      |
+| **GitHub MCP**        | Search code, create issues, list PRs — but NOT for creating this task's PR |
+| **Context7 MCP**      | Look up library documentation (Cosmos SDK, TensorFlow, gRPC, etc.)         |
+| **Exa MCP**           | Web search for up-to-date code examples and documentation                  |
 
 **You do NOT have:** Playwright, Chrome DevTools, VS Code extension APIs, or `runSubagent`.
 
@@ -93,6 +93,7 @@ Use this when a task has clearly separable, independent pieces. Do NOT use for s
 ## Cosmos SDK Patterns (Quick Reference)
 
 ### Module Structure
+
 ```
 x/<module>/
   keeper/       # Business logic (IKeeper interface + Keeper struct)
@@ -102,6 +103,7 @@ x/<module>/
 ```
 
 ### Keeper Pattern
+
 ```go
 type IKeeper interface {
     MethodName(ctx sdk.Context, ...) (Result, error)
@@ -114,6 +116,7 @@ type Keeper struct {
 ```
 
 ### Key Rules
+
 - Module authority must be `x/gov` account — never hardcode addresses
 - Use `storetypes.StoreKey` not deprecated `sdk.StoreKey`
 - All ML scoring must be deterministic (CPU-only, fixed seed 42, TF deterministic ops)

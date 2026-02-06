@@ -10,12 +10,15 @@ When working on a task, do not stop until it is COMPLETELY done. Continue workin
 
 Before finishing a task - ensure that you create a commit based on following convention (Ensuring Linting and Formatting are done precommit if possible) & trigger a git push --set-upstream origin ve/branch-name & git push passess all prepush hooks!
 
+You might notice that your task instructions might have already been implemented by anoth
+ge
 ### PR Creation & Merge (vibe-kanban automation)
 
 If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), the **cleanup script handles PR creation and auto-merge automatically**. In this case:
 
 - Focus on code quality, tests, and a clean commit
 - Just `git push` — the cleanup script creates the PR and enables auto-merge
+- ensure you consistently merge upstream changes before any git push, and fix conflicts if they exist!
 - Do NOT manually run `gh pr create` or `gh pr merge`
 
 If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you are responsible for creating the PR and monitoring CI/CD yourself — use `gh` CLI to create PRs and merge after CI passes.
@@ -39,6 +42,7 @@ You should have all commands as needed available in shell, for example go, gh, p
 The pre-push hook detects which files changed and only runs checks for the affected categories:
 
 **Go changes** (`.go` files or `go.mod`/`go.sum`):
+
 - `go vet` on changed packages
 - `gofmt` auto-format
 - `golangci-lint` (diff-only)
@@ -47,19 +51,23 @@ The pre-push hook detects which files changed and only runs checks for the affec
 - Go unit tests (changed packages only)
 
 **Portal/Frontend changes** (`portal/`, `lib/portal/`, `lib/capture/`, `lib/admin/`):
+
 - Prettier auto-format
 - ESLint (`pnpm -C portal lint`) — mirrors **Portal CI / Lint & Type Check**
 - TypeScript type-check (`pnpm -C portal type-check`) — mirrors **Portal CI / Lint & Type Check**
 - Portal unit tests (`pnpm -C portal test` + `pnpm -C lib/portal test`) — mirrors **Portal CI / Unit Tests**
 
 **JS dependency changes** (`pnpm-lock.yaml`, `package.json`):
+
 - pnpm lockfile validation (`pnpm install --frozen-lockfile`)
 - All portal checks above (lint, type-check, tests)
 
 **Docs-only changes** (`.md`, `_docs/`, `docs/`, `.github/`):
+
 - No checks — push proceeds immediately
 
 **Skip env vars:**
+
 - `VE_HOOK_SKIP_PORTAL=1` — skip all portal checks (ESLint, TypeScript, tests)
 - `VE_HOOK_SKIP_VET=1`, `VE_HOOK_SKIP_FMT=1`, `VE_HOOK_SKIP_LINT=1`, `VE_HOOK_SKIP_BUILD=1`, `VE_HOOK_SKIP_TEST=1`, `VE_HOOK_SKIP_MOD=1`, `VE_HOOK_SKIP_PNPM=1`
 - `VE_HOOK_QUICK=1` — vet + build only (Go)
