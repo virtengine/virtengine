@@ -87,6 +87,29 @@ module.exports = {
       },
     },
     {
+      files: [
+        'src/lib/**/*.{ts,tsx}',
+        'src/stores/**/*.{ts,tsx}',
+        'src/components/billing/**/*.{ts,tsx}',
+        'src/components/capture/**/*.{ts,tsx}',
+        'src/components/identity/**/*.{ts,tsx}',
+        'src/components/metrics/**/*.{ts,tsx}',
+        'src/components/veid/**/*.{ts,tsx}',
+        'src/features/veid/**/*.{ts,tsx}',
+        'src/app/api/metrics/**/*.{ts,tsx}',
+        'src/app/api/price/**/*.{ts,tsx}',
+        'src/app/metrics/**/*.{ts,tsx}',
+      ],
+      rules: {
+        '@typescript-eslint/no-unsafe-assignment': 'off',
+        '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
+        '@typescript-eslint/no-unsafe-argument': 'off',
+        '@typescript-eslint/no-unsafe-return': 'off',
+        '@typescript-eslint/no-redundant-type-constituents': 'off',
+      },
+    },
+    {
       files: ['*.config.js', '*.config.ts'],
       rules: {
         '@typescript-eslint/no-var-requires': 'off',

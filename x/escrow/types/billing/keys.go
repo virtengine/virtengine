@@ -305,6 +305,19 @@ func NextInvoiceNumber(currentSequence uint64, prefix string) string {
 	return fmt.Sprintf("%s-%08d", prefix, currentSequence+1)
 }
 
+// InvoiceNumberFromID generates a deterministic invoice number from an invoice ID.
+func InvoiceNumberFromID(invoiceID string, prefix string) string {
+	if invoiceID == "" {
+		return NextInvoiceNumber(0, prefix)
+	}
+
+	if len(invoiceID) > 12 {
+		invoiceID = invoiceID[:12]
+	}
+
+	return fmt.Sprintf("%s-%s", prefix, invoiceID)
+}
+
 // Settlement and treasury key prefixes
 var (
 	// SettlementRecordPrefix is the prefix for settlement records

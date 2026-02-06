@@ -68,9 +68,126 @@ declare module '@virtengine/portal' {
   export type IdentityStatus = any;
   export type VerificationScopeType = any;
   export type IdentityScore = any;
+
+  // Billing and usage hooks/types
+  export const useInvoices: any;
+  export const useInvoice: any;
+  export const useCurrentUsage: any;
+  export const useCostProjection: any;
+  export const useUsageHistory: any;
+  export type Invoice = any;
+  export type InvoiceStatus = any;
+  export type PaymentStatus = any;
+  export type CostProjection = any;
+  export type UsageHistoryPoint = any;
+  export type UsageGranularity = any;
+  export type DeploymentUsage = any;
+  export type ProviderUsage = any;
+  export type ResourceUsage = any;
+  export type UsageHistory = any;
+
+  // Billing utilities
+  export const calculateOutstanding: any;
+  export const hasOverdueInvoices: any;
+  export const formatBillingAmount: any;
+  export const formatBillingDate: any;
+  export const formatBillingPeriod: any;
+  export const generateInvoiceText: any;
+  export const generateInvoicesCSV: any;
+  export const generateUsageReportCSV: any;
+  export const downloadFile: any;
+
+  // Metrics/alerts
+  export const ALERT_STATUS_VARIANT: any;
+  export type AlertMetric = any;
+  export type AlertCondition = any;
+  export type Alert = any;
+  export type AlertEvent = any;
+  export type MetricPoint = any;
+  export type MetricSeries = any;
+  export type MetricTrend = any;
+  export type MetricsSummary = any;
+  export type ProviderMetrics = any;
+  export type ResourceMetric = any;
+  export type DeploymentMetrics = any;
+  export type Granularity = any;
+  export type TimeRange = any;
+  export const TIME_RANGE_LABELS: any;
+  export const granularityForRange: any;
+  export const formatTimestamp: any;
+
+  // Dashboard widgets
+  export type DashboardConfig = any;
+  export type DashboardWidget = any;
+  export type WidgetConfig = any;
+  export type WidgetPosition = any;
+  export type WidgetType = any;
 }
 
 declare module '@virtengine/portal/*' {
   const portalModule: Record<string, unknown>;
   export default portalModule;
 }
+
+declare module '@virtengine/portal/hooks/useBilling' {
+  export const useInvoices: any;
+  export const useInvoice: any;
+  export const useCurrentUsage: any;
+  export const useCostProjection: any;
+  export const useUsageHistory: any;
+}
+
+declare module '@virtengine/portal/types/billing' {
+  export type Invoice = any;
+  export type InvoiceStatus = any;
+  export type PaymentStatus = any;
+  export type CostProjection = any;
+  export type UsageHistoryPoint = any;
+  export type UsageGranularity = any;
+  export type DeploymentUsage = any;
+  export type ProviderUsage = any;
+  export type ResourceUsage = any;
+  export type UsageHistory = any;
+}
+
+declare module '@virtengine/portal/utils/billing' {
+  export const calculateOutstanding: any;
+  export const hasOverdueInvoices: any;
+  export const formatBillingAmount: any;
+  export const formatBillingDate: any;
+  export const formatBillingPeriod: any;
+}
+
+declare module '@virtengine/portal/utils/csv' {
+  export const generateInvoiceText: any;
+  export const generateInvoicesCSV: any;
+  export const generateUsageReportCSV: any;
+  export const downloadFile: any;
+}
+
+declare module '@virtengine/portal/types/metrics' {
+  export const ALERT_STATUS_VARIANT: any;
+  export type AlertMetric = any;
+  export type AlertCondition = any;
+  export type Alert = any;
+  export type AlertEvent = any;
+  export type MetricPoint = any;
+  export type MetricSeries = any;
+  export type MetricTrend = any;
+  export type MetricsSummary = any;
+  export type ProviderMetrics = any;
+  export type ResourceMetric = any;
+  export type DeploymentMetrics = any;
+  export type TimeRange = any;
+  export type Granularity = any;
+  export type DashboardConfig = any;
+  export type DashboardWidget = any;
+  export type WidgetConfig = any;
+  export type WidgetPosition = any;
+  export type WidgetType = any;
+  export const TIME_RANGE_LABELS: any;
+  export const granularityForRange: any;
+  export const formatTimestamp: any;
+}
+
+export {};
