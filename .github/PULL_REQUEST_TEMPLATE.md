@@ -1,33 +1,24 @@
-<!--
-The default pull request template is for types feat, fix, or refactor.
-For other templates, add one of the following parameters to the url:
-- template=docs.md
-- template=other.md
--->
+## What
 
-## Description
+<!-- One sentence: what does this PR do? -->
 
-Closes: #XXXX
+## Why
 
-<!-- Add a description of the changes that this PR introduces and the files that
-are the most critical to review. -->
+<!-- One sentence: why is this change needed? -->
 
----
+## Testing
 
-### Author Checklist
+- [ ] Tested on macOS
+- [ ] Tested on Windows
+- [ ] Tested on Linux
 
-_All items are required. Please add a note to the item if the item is not applicable and
-please add links to any relevant follow-up issues._
+## Checklist
 
-I have...
+- [ ] Follows GSD style (no enterprise patterns, no filler)
+- [ ] Updates CHANGELOG.md for user-facing changes
+- [ ] No unnecessary dependencies added
+- [ ] Works on Windows (backslash paths tested)
 
-- [ ] included the correct [type prefix](https://github.com/commitizen/conventional-commit-types/blob/v3.0.0/index.json) in the PR title
-- [ ] added `!` to the type prefix if API or client breaking change
-- [ ] targeted the correct branch (see [PR Targeting](https://github.com/virtengine/virtengine/blob/main/CONTRIBUTING.md#paperwork-for-pull-requests))
-- [ ] provided a link to the relevant issue or specification
-- [ ] included the necessary unit and integration [tests](https://github.com/virtengine/blob/main/CONTRIBUTING.md#testing)
-- [ ] added a changelog entry to `CHANGELOG.md`
-- [ ] included comments for [documenting Go code](https://blog.golang.org/godoc)
-- [ ] updated the relevant documentation or specification
-- [ ] reviewed "Files changed" and left comments if necessary
-- [ ] confirmed all CI checks have passed
+## Breaking Changes
+
+None
