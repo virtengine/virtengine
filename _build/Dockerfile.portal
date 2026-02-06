@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+WORKDIR /workspace
+
+RUN corepack enable
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY portal/package.json portal/package.json
+COPY lib/portal/package.json lib/portal/package.json
+COPY lib/capture/package.json lib/capture/package.json
+COPY lib/admin/package.json lib/admin/package.json
+
+RUN pnpm -C portal install
+
+COPY portal ./portal
+COPY lib ./lib
+
+WORKDIR /workspace/portal
+
+EXPOSE 3000
+
+CMD ["pnpm", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]

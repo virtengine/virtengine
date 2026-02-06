@@ -7,24 +7,24 @@ on:
   push:
     branches: [main, mainnet/main]
     paths:
-      - 'portal/**'
-      - 'lib/portal/**'
-      - 'lib/capture/**'
-      - 'pnpm-workspace.yaml'
+      - "portal/**"
+      - "lib/portal/**"
+      - "lib/capture/**"
+      - "pnpm-workspace.yaml"
   pull_request:
     paths:
-      - 'portal/**'
-      - 'lib/portal/**'
-      - 'lib/capture/**'
-      - 'pnpm-workspace.yaml'
+      - "portal/**"
+      - "lib/portal/**"
+      - "lib/capture/**"
+      - "pnpm-workspace.yaml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '10.28.2'
+  NODE_VERSION: "20"
+  PNPM_VERSION: "10.28.2"
 
 jobs:
   lint:
@@ -43,7 +43,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -73,7 +73,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -108,7 +108,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -147,7 +147,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -201,7 +201,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

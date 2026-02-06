@@ -143,8 +143,17 @@ export const DEVNET_CHAIN: ChainInfo = {
   explorerUrl: 'http://localhost:5173',
 };
 
+export const LOCALNET_CHAIN: ChainInfo = {
+  ...DEVNET_CHAIN,
+  chainId: 'virtengine-localnet-1',
+  chainName: 'VirtEngine Localnet',
+  explorerUrl: 'http://localhost:5173',
+};
+
 export function getChainInfo(): ChainInfo {
-  const chainId = process.env.NEXT_PUBLIC_CHAIN_ID ?? 'virtengine-1';
+  const chainId =
+    process.env.NEXT_PUBLIC_CHAIN_ID ??
+    (process.env.NODE_ENV === 'development' ? 'virtengine-localnet-1' : 'virtengine-1');
 
   if (chainId.includes('testnet')) {
     return TESTNET_CHAIN;
@@ -154,10 +163,14 @@ export function getChainInfo(): ChainInfo {
     return DEVNET_CHAIN;
   }
 
+  if (chainId.includes('localnet')) {
+    return LOCALNET_CHAIN;
+  }
+
   return MAINNET_CHAIN;
 }
 
 export function isTestnet(): boolean {
   const chainId = process.env.NEXT_PUBLIC_CHAIN_ID ?? '';
-  return chainId.includes('testnet') || chainId.includes('devnet');
+  return chainId.includes('testnet') || chainId.includes('devnet') || chainId.includes('localnet');
 }

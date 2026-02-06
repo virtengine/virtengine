@@ -3,6 +3,7 @@
 ## Overview
 
 This document details **how** to implement the hybrid architecture where:
+
 - **Blockchain** handles trust-critical operations (orders, payments, identity)
 - **Provider APIs** handle operational features (logs, metrics, dashboards)
 - **Portal** seamlessly integrates both, appearing as a unified Web 3.0 application
@@ -50,14 +51,14 @@ package provider_daemon
 // PortalAPIServerConfig - expanded configuration
 type PortalAPIServerConfig struct {
     // Existing fields...
-    
+
     // NEW: Feature flags
     EnableMetrics       bool
     EnableFileDownload  bool
     EnableOrganizations bool
     EnableSupportTickets bool
     EnableBilling       bool
-    
+
     // NEW: Backend integrations
     MetricsStore     MetricsStore     // InfluxDB, Prometheus, etc.
     FileStore        FileStore        // Local, S3, IPFS
@@ -69,14 +70,14 @@ func (s *PortalAPIServer) RegisterRoutes(router *mux.Router) {
     // Health & Discovery
     router.HandleFunc("/health", s.handleHealth).Methods("GET")
     router.HandleFunc("/.well-known/provider-info", s.handleProviderInfo).Methods("GET")
-    
+
     // Deployment Operations (existing + enhanced)
     router.HandleFunc("/deployments", s.handleListDeployments).Methods("GET")
     router.HandleFunc("/deployments/{id}", s.handleGetDeployment).Methods("GET")
     router.HandleFunc("/deployments/{id}/logs", s.handleLogs).Methods("GET")
     router.HandleFunc("/deployments/{id}/shell/session", s.handleShellSession).Methods("POST")
     router.HandleFunc("/deployments/{id}/shell", s.handleShell).Methods("GET") // WebSocket
-    
+
     // NEW: Metrics & Monitoring
     router.HandleFunc("/deployments/{id}/metrics", s.handleMetrics).Methods("GET")
     router.HandleFunc("/deployments/{id}/metrics/cpu", s.handleCPUMetrics).Methods("GET")
@@ -84,31 +85,31 @@ func (s *PortalAPIServer) RegisterRoutes(router *mux.Router) {
     router.HandleFunc("/deployments/{id}/metrics/network", s.handleNetworkMetrics).Methods("GET")
     router.HandleFunc("/deployments/{id}/metrics/storage", s.handleStorageMetrics).Methods("GET")
     router.HandleFunc("/deployments/{id}/events", s.handleEvents).Methods("GET")
-    
+
     // NEW: File Operations
     router.HandleFunc("/deployments/{id}/files", s.handleListFiles).Methods("GET")
     router.HandleFunc("/deployments/{id}/files/{path:.*}", s.handleDownloadFile).Methods("GET")
     router.HandleFunc("/deployments/{id}/files/{path:.*}", s.handleUploadFile).Methods("PUT")
-    
+
     // NEW: Organization Management (for multi-tenant)
     router.HandleFunc("/organizations", s.handleListOrganizations).Methods("GET")
     router.HandleFunc("/organizations/{id}", s.handleGetOrganization).Methods("GET")
     router.HandleFunc("/organizations/{id}/members", s.handleOrgMembers).Methods("GET", "POST", "DELETE")
     router.HandleFunc("/organizations/{id}/invitations", s.handleOrgInvitations).Methods("GET", "POST")
-    
+
     // NEW: Support Tickets (hybrid with chain)
     router.HandleFunc("/support/tickets", s.handleListTickets).Methods("GET")
     router.HandleFunc("/support/tickets", s.handleCreateTicket).Methods("POST")
     router.HandleFunc("/support/tickets/{id}", s.handleGetTicket).Methods("GET")
     router.HandleFunc("/support/tickets/{id}/messages", s.handleTicketMessages).Methods("GET", "POST")
     router.HandleFunc("/support/tickets/{id}/attachments", s.handleTicketAttachments).Methods("POST")
-    
+
     // NEW: Billing & Usage (synced from chain)
     router.HandleFunc("/billing/usage", s.handleUsageSummary).Methods("GET")
     router.HandleFunc("/billing/invoices", s.handleListInvoices).Methods("GET")
     router.HandleFunc("/billing/invoices/{id}", s.handleGetInvoice).Methods("GET")
     router.HandleFunc("/billing/invoices/{id}/pdf", s.handleInvoicePDF).Methods("GET")
-    
+
     // NEW: Provider Dashboard (for provider admins)
     router.HandleFunc("/admin/dashboard", s.handleAdminDashboard).Methods("GET")
     router.HandleFunc("/admin/orders", s.handleAdminOrders).Methods("GET")
@@ -132,10 +133,10 @@ import (
 type MetricsStore interface {
     // Write metrics
     WritePoint(ctx context.Context, measurement string, tags map[string]string, fields map[string]interface{}, timestamp time.Time) error
-    
+
     // Query metrics
     Query(ctx context.Context, query MetricsQuery) ([]MetricsSeries, error)
-    
+
     // Get aggregations
     Aggregate(ctx context.Context, deploymentID string, metric string, period time.Duration, fn AggregateFunc) (float64, error)
 }
@@ -180,14 +181,14 @@ type ProviderInfo struct {
     Name            string `json:"name"`
     Description     string `json:"description"`
     Website         string `json:"website,omitempty"`
-    
+
     // API Capabilities
     APIVersion      string   `json:"api_version"`
     Features        []string `json:"features"` // ["logs", "metrics", "shell", "files", "support"]
-    
+
     // Connection Info
     Endpoints       ProviderEndpoints `json:"endpoints"`
-    
+
     // Trust Info
     ChainID         string `json:"chain_id"`
     RegistrationTx  string `json:"registration_tx"`
@@ -212,7 +213,7 @@ func (s *PortalAPIServer) handleProviderInfo(w http.ResponseWriter, r *http.Requ
         },
         ChainID: s.cfg.ChainID,
     }
-    
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(info)
 }
@@ -235,13 +236,13 @@ export class ProviderAPIClient {
   private baseURL: string;
   private wallet: WalletClient;
   private chainId: string;
-  
+
   constructor(baseURL: string, wallet: WalletClient, chainId: string) {
-    this.baseURL = baseURL.replace(/\/$/, '');
+    this.baseURL = baseURL.replace(/\/$/, "");
     this.wallet = wallet;
     this.chainId = chainId;
   }
-  
+
   /**
    * Create authenticated request headers using wallet signature
    */
@@ -249,24 +250,24 @@ export class ProviderAPIClient {
     const timestamp = Date.now().toString();
     const nonce = crypto.randomUUID();
     const message = `${path}:${timestamp}:${nonce}`;
-    
+
     // Sign with wallet (Keplr/Leap/etc)
     const signature = await this.wallet.signArbitrary(
       this.chainId,
       this.wallet.address,
-      message
+      message,
     );
-    
+
     return new Headers({
-      'X-VE-Address': this.wallet.address,
-      'X-VE-Timestamp': timestamp,
-      'X-VE-Nonce': nonce,
-      'X-VE-Signature': signature.signature,
-      'X-VE-PubKey': signature.pub_key.value,
-      'Content-Type': 'application/json',
+      "X-VE-Address": this.wallet.address,
+      "X-VE-Timestamp": timestamp,
+      "X-VE-Nonce": nonce,
+      "X-VE-Signature": signature.signature,
+      "X-VE-PubKey": signature.pub_key.value,
+      "Content-Type": "application/json",
     });
   }
-  
+
   /**
    * Make authenticated GET request
    */
@@ -275,35 +276,35 @@ export class ProviderAPIClient {
     if (params) {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
     }
-    
+
     const headers = await this.createAuthHeaders(path);
     const response = await fetch(url.toString(), { headers });
-    
+
     if (!response.ok) {
       throw new ProviderAPIError(response.status, await response.text());
     }
-    
+
     return response.json();
   }
-  
+
   /**
    * Make authenticated POST request
    */
   async post<T>(path: string, body: unknown): Promise<T> {
     const headers = await this.createAuthHeaders(path);
     const response = await fetch(`${this.baseURL}${path}`, {
-      method: 'POST',
+      method: "POST",
       headers,
       body: JSON.stringify(body),
     });
-    
+
     if (!response.ok) {
       throw new ProviderAPIError(response.status, await response.text());
     }
-    
+
     return response.json();
   }
-  
+
   /**
    * Open authenticated WebSocket connection
    */
@@ -311,83 +312,94 @@ export class ProviderAPIClient {
     // First, get a short-lived session token
     const session = await this.post<{ token: string; expires: number }>(
       `${path}/session`,
-      {}
+      {},
     );
-    
+
     // Connect WebSocket with token
-    const wsURL = this.baseURL.replace('https://', 'wss://').replace('http://', 'ws://');
+    const wsURL = this.baseURL
+      .replace("https://", "wss://")
+      .replace("http://", "ws://");
     const ws = new WebSocket(`${wsURL}${path}?token=${session.token}`);
-    
+
     return new AuthenticatedWebSocket(ws, session);
   }
-  
+
   // ============ Deployment Operations ============
-  
+
   async listDeployments(): Promise<Deployment[]> {
-    return this.get('/deployments');
+    return this.get("/deployments");
   }
-  
+
   async getDeployment(id: string): Promise<DeploymentDetail> {
     return this.get(`/deployments/${id}`);
   }
-  
+
   async getLogs(deploymentId: string, opts?: LogOptions): Promise<LogEntry[]> {
     return this.get(`/deployments/${deploymentId}/logs`, {
-      tail: opts?.tail?.toString() ?? '200',
-      level: opts?.level ?? '',
-      search: opts?.search ?? '',
+      tail: opts?.tail?.toString() ?? "200",
+      level: opts?.level ?? "",
+      search: opts?.search ?? "",
     });
   }
-  
-  async streamLogs(deploymentId: string, opts?: LogStreamOptions): Promise<LogStream> {
+
+  async streamLogs(
+    deploymentId: string,
+    opts?: LogStreamOptions,
+  ): Promise<LogStream> {
     const ws = await this.openWebSocket(`/deployments/${deploymentId}/logs`);
     return new LogStream(ws, opts);
   }
-  
+
   async openShell(deploymentId: string): Promise<ShellSession> {
     const ws = await this.openWebSocket(`/deployments/${deploymentId}/shell`);
     return new ShellSession(ws);
   }
-  
+
   // ============ Metrics ============
-  
-  async getMetrics(deploymentId: string, opts: MetricsOptions): Promise<MetricsData> {
+
+  async getMetrics(
+    deploymentId: string,
+    opts: MetricsOptions,
+  ): Promise<MetricsData> {
     return this.get(`/deployments/${deploymentId}/metrics`, {
       start: opts.start.toISOString(),
       end: opts.end.toISOString(),
-      interval: opts.interval ?? '1m',
-      metrics: opts.metrics?.join(',') ?? 'cpu,memory,network',
+      interval: opts.interval ?? "1m",
+      metrics: opts.metrics?.join(",") ?? "cpu,memory,network",
     });
   }
-  
+
   async getDashboardSummary(deploymentId: string): Promise<DashboardSummary> {
     return this.get(`/deployments/${deploymentId}/metrics/summary`);
   }
-  
+
   // ============ Support Tickets ============
-  
+
   async listTickets(status?: TicketStatus): Promise<SupportTicket[]> {
-    return this.get('/support/tickets', status ? { status } : undefined);
+    return this.get("/support/tickets", status ? { status } : undefined);
   }
-  
+
   async createTicket(ticket: CreateTicketRequest): Promise<SupportTicket> {
-    return this.post('/support/tickets', ticket);
+    return this.post("/support/tickets", ticket);
   }
-  
+
   async getTicketMessages(ticketId: string): Promise<TicketMessage[]> {
     return this.get(`/support/tickets/${ticketId}/messages`);
   }
-  
-  async addTicketMessage(ticketId: string, message: string): Promise<TicketMessage> {
+
+  async addTicketMessage(
+    ticketId: string,
+    message: string,
+  ): Promise<TicketMessage> {
     return this.post(`/support/tickets/${ticketId}/messages`, { message });
   }
-  
+
   // ============ Organizations ============
-  
+
   async listOrganizations(): Promise<Organization[]> {
-    return this.get('/organizations');
+    return this.get("/organizations");
   }
-  
+
   async getOrganizationMembers(orgId: string): Promise<OrgMember[]> {
     return this.get(`/organizations/${orgId}/members`);
   }
@@ -407,36 +419,38 @@ export class AggregatedProviderClient {
   private chainClient: ChainQueryClient;
   private wallet: WalletClient;
   private providerClients: Map<string, ProviderAPIClient> = new Map();
-  
+
   constructor(chainClient: ChainQueryClient, wallet: WalletClient) {
     this.chainClient = chainClient;
     this.wallet = wallet;
   }
-  
+
   /**
    * Get or create a provider API client
    */
-  private async getProviderClient(providerAddress: string): Promise<ProviderAPIClient> {
+  private async getProviderClient(
+    providerAddress: string,
+  ): Promise<ProviderAPIClient> {
     if (this.providerClients.has(providerAddress)) {
       return this.providerClients.get(providerAddress)!;
     }
-    
+
     // Discover provider endpoint from chain
     const provider = await this.chainClient.provider.get(providerAddress);
     if (!provider?.hostUri) {
       throw new Error(`Provider ${providerAddress} has no hostUri registered`);
     }
-    
+
     const client = new ProviderAPIClient(
       provider.hostUri,
       this.wallet,
-      this.chainClient.chainId
+      this.chainClient.chainId,
     );
-    
+
     this.providerClients.set(providerAddress, client);
     return client;
   }
-  
+
   /**
    * Get all allocations for the current user across all providers
    */
@@ -445,7 +459,7 @@ export class AggregatedProviderClient {
     const allocations = await this.chainClient.market.listAllocations({
       owner: this.wallet.address,
     });
-    
+
     // Enrich with provider details
     return Promise.all(
       allocations.map(async (alloc) => {
@@ -455,16 +469,16 @@ export class AggregatedProviderClient {
           providerName: provider.info?.name ?? provider.owner,
           providerEndpoint: provider.hostUri,
         };
-      })
+      }),
     );
   }
-  
+
   /**
    * Get aggregated dashboard data across all providers
    */
   async getDashboard(): Promise<AggregatedDashboard> {
     const allocations = await this.getAllAllocations();
-    
+
     // Fetch metrics from each provider in parallel
     const metricsPromises = allocations.map(async (alloc) => {
       try {
@@ -475,37 +489,40 @@ export class AggregatedProviderClient {
         return { allocation: alloc, metrics: null, error: error.message };
       }
     });
-    
+
     const results = await Promise.all(metricsPromises);
-    
+
     // Aggregate
     return {
       totalAllocations: allocations.length,
-      activeAllocations: allocations.filter(a => a.status === 'active').length,
+      activeAllocations: allocations.filter((a) => a.status === "active")
+        .length,
       totalSpend: this.sumSpend(allocations),
       aggregatedMetrics: this.aggregateMetrics(results),
       byProvider: this.groupByProvider(results),
-      errors: results.filter(r => r.error).map(r => ({
-        provider: r.allocation.providerId,
-        error: r.error!,
-      })),
+      errors: results
+        .filter((r) => r.error)
+        .map((r) => ({
+          provider: r.allocation.providerId,
+          error: r.error!,
+        })),
     };
   }
-  
+
   /**
    * Search logs across all providers
    */
   async searchLogsAcrossProviders(
     query: string,
-    opts?: { limit?: number; providers?: string[] }
+    opts?: { limit?: number; providers?: string[] },
   ): Promise<AggregatedLogResult[]> {
     const allocations = await this.getAllAllocations();
-    
+
     // Filter by providers if specified
     const targetAllocations = opts?.providers
-      ? allocations.filter(a => opts.providers!.includes(a.providerId))
+      ? allocations.filter((a) => opts.providers!.includes(a.providerId))
       : allocations;
-    
+
     // Search each provider
     const results = await Promise.all(
       targetAllocations.map(async (alloc) => {
@@ -523,17 +540,22 @@ export class AggregatedProviderClient {
         } catch (error) {
           return { allocation: alloc, logs: [], error: error.message };
         }
-      })
+      }),
     );
-    
+
     // Merge and sort by timestamp
     return results
-      .flatMap(r => r.logs.map(log => ({
-        ...log,
-        provider: r.allocation.providerId,
-        deployment: r.allocation.deploymentId,
-      })))
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .flatMap((r) =>
+        r.logs.map((log) => ({
+          ...log,
+          provider: r.allocation.providerId,
+          deployment: r.allocation.deploymentId,
+        })),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      )
       .slice(0, opts?.limit ?? 100);
   }
 }
@@ -544,9 +566,9 @@ export class AggregatedProviderClient {
 ```typescript
 // lib/portal/src/hooks/useProviderAPI.ts
 
-import { useQuery, useMutation, useInfiniteQuery } from '@tanstack/react-query';
-import { useWallet } from './useWallet';
-import { useChainClient } from './useChainClient';
+import { useQuery, useMutation, useInfiniteQuery } from "@tanstack/react-query";
+import { useWallet } from "./useWallet";
+import { useChainClient } from "./useChainClient";
 
 /**
  * Hook to get a provider API client for a specific provider
@@ -554,18 +576,18 @@ import { useChainClient } from './useChainClient';
 export function useProviderAPI(providerAddress: string) {
   const { wallet, isConnected } = useWallet();
   const chainClient = useChainClient();
-  
+
   const { data: provider, isLoading: isLoadingProvider } = useQuery(
-    ['provider', providerAddress],
+    ["provider", providerAddress],
     () => chainClient.provider.get(providerAddress),
-    { enabled: !!providerAddress }
+    { enabled: !!providerAddress },
   );
-  
+
   const client = useMemo(() => {
     if (!provider?.hostUri || !wallet || !isConnected) return null;
     return new ProviderAPIClient(provider.hostUri, wallet, chainClient.chainId);
   }, [provider?.hostUri, wallet, isConnected, chainClient.chainId]);
-  
+
   return {
     client,
     isReady: !!client,
@@ -581,19 +603,19 @@ export function useProviderAPI(providerAddress: string) {
 export function useAggregatedDashboard() {
   const { wallet, isConnected } = useWallet();
   const chainClient = useChainClient();
-  
+
   const aggregatedClient = useMemo(() => {
     if (!wallet || !isConnected) return null;
     return new AggregatedProviderClient(chainClient, wallet);
   }, [wallet, isConnected, chainClient]);
-  
+
   return useQuery(
-    ['aggregated-dashboard', wallet?.address],
+    ["aggregated-dashboard", wallet?.address],
     () => aggregatedClient!.getDashboard(),
     {
       enabled: !!aggregatedClient,
       refetchInterval: 30000, // Refresh every 30s
-    }
+    },
   );
 }
 
@@ -603,36 +625,36 @@ export function useAggregatedDashboard() {
 export function useDeploymentLogs(
   providerAddress: string,
   deploymentId: string,
-  opts?: { follow?: boolean; level?: string }
+  opts?: { follow?: boolean; level?: string },
 ) {
   const { client } = useProviderAPI(providerAddress);
   const [streamedLogs, setStreamedLogs] = useState<LogEntry[]>([]);
-  
+
   // Initial load
   const { data: initialLogs, isLoading } = useQuery(
-    ['logs', providerAddress, deploymentId],
+    ["logs", providerAddress, deploymentId],
     () => client!.getLogs(deploymentId, { tail: 500, level: opts?.level }),
-    { enabled: !!client }
+    { enabled: !!client },
   );
-  
+
   // Real-time streaming
   useEffect(() => {
     if (!client || !opts?.follow) return;
-    
+
     let stream: LogStream | null = null;
-    
+
     (async () => {
       stream = await client.streamLogs(deploymentId, { level: opts.level });
-      stream.on('log', (entry) => {
-        setStreamedLogs(prev => [...prev, entry].slice(-1000)); // Keep last 1000
+      stream.on("log", (entry) => {
+        setStreamedLogs((prev) => [...prev, entry].slice(-1000)); // Keep last 1000
       });
     })();
-    
+
     return () => {
       stream?.close();
     };
   }, [client, deploymentId, opts?.follow, opts?.level]);
-  
+
   return {
     logs: [...(initialLogs ?? []), ...streamedLogs],
     isLoading,
@@ -643,36 +665,41 @@ export function useDeploymentLogs(
 /**
  * Hook for deployment shell access
  */
-export function useDeploymentShell(providerAddress: string, deploymentId: string) {
+export function useDeploymentShell(
+  providerAddress: string,
+  deploymentId: string,
+) {
   const { client } = useProviderAPI(providerAddress);
   const [session, setSession] = useState<ShellSession | null>(null);
-  const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  
+  const [status, setStatus] = useState<
+    "disconnected" | "connecting" | "connected"
+  >("disconnected");
+
   const connect = useCallback(async () => {
     if (!client) return;
-    
-    setStatus('connecting');
+
+    setStatus("connecting");
     try {
       const shell = await client.openShell(deploymentId);
       setSession(shell);
-      setStatus('connected');
-      
-      shell.on('close', () => {
+      setStatus("connected");
+
+      shell.on("close", () => {
         setSession(null);
-        setStatus('disconnected');
+        setStatus("disconnected");
       });
     } catch (error) {
-      setStatus('disconnected');
+      setStatus("disconnected");
       throw error;
     }
   }, [client, deploymentId]);
-  
+
   const disconnect = useCallback(() => {
     session?.close();
     setSession(null);
-    setStatus('disconnected');
+    setStatus("disconnected");
   }, [session]);
-  
+
   return {
     session,
     status,
@@ -688,22 +715,23 @@ export function useDeploymentShell(providerAddress: string, deploymentId: string
 export function useDeploymentMetrics(
   providerAddress: string,
   deploymentId: string,
-  opts?: { interval?: string; metrics?: string[] }
+  opts?: { interval?: string; metrics?: string[] },
 ) {
   const { client } = useProviderAPI(providerAddress);
-  
+
   return useQuery(
-    ['metrics', providerAddress, deploymentId, opts],
-    () => client!.getMetrics(deploymentId, {
-      start: new Date(Date.now() - 3600000), // Last hour
-      end: new Date(),
-      interval: opts?.interval ?? '1m',
-      metrics: opts?.metrics,
-    }),
+    ["metrics", providerAddress, deploymentId, opts],
+    () =>
+      client!.getMetrics(deploymentId, {
+        start: new Date(Date.now() - 3600000), // Last hour
+        end: new Date(),
+        interval: opts?.interval ?? "1m",
+        metrics: opts?.metrics,
+      }),
     {
       enabled: !!client,
       refetchInterval: 60000, // Refresh every minute
-    }
+    },
   );
 }
 ```
@@ -728,13 +756,13 @@ import (
 type OrgPolicy struct {
     // Maximum spend per day (in uve)
     DailySpendLimit sdk.Coins `json:"daily_spend_limit"`
-    
+
     // Who can create orders
     OrderCreators OrgRole `json:"order_creators"`
-    
+
     // Who can terminate allocations
     TerminationApprovers OrgRole `json:"termination_approvers"`
-    
+
     // Who can manage members
     MemberManagers OrgRole `json:"member_managers"`
 }
@@ -776,13 +804,13 @@ type Organization struct {
     Admin       string   `json:"admin"`
     Members     []Member `json:"members"`
     PolicyType  string   `json:"policy_type"`
-    
+
     // Local enrichment
     Name        string   `json:"name"`
     Description string   `json:"description"`
     Logo        string   `json:"logo,omitempty"`
     CreatedAt   time.Time `json:"created_at"`
-    
+
     // Computed
     TotalSpend  sdk.Coins `json:"total_spend"`
     ActiveAllocs int      `json:"active_allocations"`
@@ -800,14 +828,14 @@ func (s *PortalAPIServer) handleListOrganizations(w http.ResponseWriter, r *http
         http.Error(w, err.Error(), http.StatusUnauthorized)
         return
     }
-    
+
     // Get organizations where this address is a member
     orgs, err := s.orgStore.GetOrganizationsForMember(r.Context(), address)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    
+
     json.NewEncoder(w).Encode(orgs)
 }
 ```
@@ -860,17 +888,17 @@ type SupportTicket struct {
     Customer        string         `json:"customer"`
     Provider        string         `json:"provider"`
     AllocationID    string         `json:"allocation_id,omitempty"`
-    
+
     // Reference to encrypted content (NOT stored on-chain)
     ContentRef      string         `json:"content_ref"` // e.g., "provider://tickets/{id}"
-    
+
     // Status tracking (on-chain for auditability)
     Status          TicketStatus   `json:"status"`
     Priority        TicketPriority `json:"priority"`
     CreatedAt       time.Time      `json:"created_at"`
     UpdatedAt       time.Time      `json:"updated_at"`
     ResolvedAt      *time.Time     `json:"resolved_at,omitempty"`
-    
+
     // For SLA tracking
     ResponseDeadline time.Time     `json:"response_deadline"`
 }
@@ -882,7 +910,7 @@ type TicketContent struct {
     Category    string            `json:"category"`
     Messages    []TicketMessage   `json:"messages"`
     Attachments []TicketAttachment `json:"attachments"`
-    
+
     // External integrations
     JiraKey     string            `json:"jira_key,omitempty"`
     WaldurUUID  string            `json:"waldur_uuid,omitempty"`

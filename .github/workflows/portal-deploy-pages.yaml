@@ -10,14 +10,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'portal/**'
-      - 'lib/portal/**'
-      - 'lib/capture/**'
-  pull_request:
-    paths:
-      - 'portal/**'
-      - 'lib/portal/**'
-      - 'lib/capture/**'
+      - "portal/**"
+      - "lib/portal/**"
+      - "lib/capture/**"
   workflow_dispatch:
 
 permissions:
@@ -25,13 +20,15 @@ permissions:
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  group: "pages"
+  cancel-in-progress: false
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '10.28.2'
+  NODE_VERSION: "20"
+  PNPM_VERSION: "10.28.2"
 
 jobs:
   build:
@@ -50,7 +47,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: "pnpm"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          static_site_generator: next
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: portal/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('portal/**/*.[jt]s', 'portal/**/*.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -58,46 +68,27 @@ jobs:
       - name: Build portal for GitHub Pages
         run: pnpm -C portal build
         env:
-          GITHUB_PAGES: 'true'
+          GITHUB_PAGES: "true"
           NEXT_PUBLIC_CHAIN_ID: virtengine-testnet-1
           NEXT_PUBLIC_CHAIN_RPC: https://rpc.testnet.virtengine.com
           NEXT_PUBLIC_CHAIN_REST: https://api.testnet.virtengine.com
-          NEXT_PUBLIC_DEV_MODE: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-
-      - name: Verify static export
-        run: |
-          if [ ! -d "portal/out" ]; then
-            echo "::error::Static export failed. Check if GITHUB_PAGES=true is set correctly."
-            exit 1
-          fi
-          echo "Static export contents:"
-          ls -la portal/out
-          echo "Total files: $(find portal/out -type f | wc -l)"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: portal/out
 
-  # Deploy to GitHub Pages (main branch only)
-  # NOTE: Requires GitHub Pages enabled with "GitHub Actions" source in repo settings
   deploy:
     name: Deploy to GitHub Pages
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-      
-      - name: Deployment Summary
-        if: success()
-        run: |
-          echo "## 🚀 Portal Deployed Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
 
@@ -119,9 +110,9 @@ jobs:
             The portal has been built successfully for this PR.
 
             ### Preview Options
-            
+
             Since we use GitHub Pages, previews are available after merge to main.
-            
+
             **To test locally:**
             \`\`\`bash
             pnpm install

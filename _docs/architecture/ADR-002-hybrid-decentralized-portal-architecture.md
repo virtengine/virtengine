@@ -14,16 +14,16 @@ This ADR defines a **hybrid architecture** that delivers rich Web 2.0 functional
 
 Building a purely blockchain-based portal faces fundamental constraints:
 
-| Feature | Blockchain Suitability | Reason |
-|---------|----------------------|--------|
-| Orders, payments, settlements | ✅ Excellent | Consensus-critical, immutable |
-| Identity verification | ✅ Excellent | Trust anchors, attestations |
-| Escrow, billing | ✅ Excellent | Financial integrity |
-| Real-time logs | ❌ Poor | Too frequent, ephemeral data |
-| Metrics dashboards | ❌ Poor | Time-series data, high volume |
-| Shell access | ❌ Impossible | WebSocket sessions |
-| File uploads | ❌ Poor | Storage costs, latency |
-| Organization management | ⚠️ Mixed | Auth is Web2, permissions could be on-chain |
+| Feature                       | Blockchain Suitability | Reason                                      |
+| ----------------------------- | ---------------------- | ------------------------------------------- |
+| Orders, payments, settlements | ✅ Excellent           | Consensus-critical, immutable               |
+| Identity verification         | ✅ Excellent           | Trust anchors, attestations                 |
+| Escrow, billing               | ✅ Excellent           | Financial integrity                         |
+| Real-time logs                | ❌ Poor                | Too frequent, ephemeral data                |
+| Metrics dashboards            | ❌ Poor                | Time-series data, high volume               |
+| Shell access                  | ❌ Impossible          | WebSocket sessions                          |
+| File uploads                  | ❌ Poor                | Storage costs, latency                      |
+| Organization management       | ⚠️ Mixed               | Auth is Web2, permissions could be on-chain |
 
 Waldur provides all the "❌ Poor" features via its REST API. But we don't want a centralized Waldur - we want **decentralized Waldur instances** run by each provider.
 
@@ -89,24 +89,26 @@ const providerAPI = provider.hostUri; // "https://api.provider-a.com"
 
 // Now call provider's operational APIs
 const logs = await fetch(`${providerAPI}/deployments/${deploymentId}/logs`);
-const metrics = await fetch(`${providerAPI}/deployments/${deploymentId}/metrics`);
+const metrics = await fetch(
+  `${providerAPI}/deployments/${deploymentId}/metrics`,
+);
 ```
 
 ### Data Flow Matrix
 
-| Data Type | Source | Why |
-|-----------|--------|-----|
-| **Offerings** | Chain | Consensus on what's available |
-| **Orders/Bids** | Chain | Financial transactions |
-| **Allocations** | Chain | Escrow-backed resource grants |
-| **Provider List** | Chain | Decentralized registry |
-| **VEID Status** | Chain | Identity attestations |
-| **Usage Reports** | Chain (via provider) | Settlement-critical |
-| **Logs** | Provider API | Ephemeral, high-volume |
-| **Metrics/Graphs** | Provider API | Time-series data |
-| **Shell Access** | Provider API | Real-time WebSocket |
-| **File Downloads** | Provider API | Large data |
-| **Support Tickets** | Chain (metadata) + Provider (content) | Hybrid for auditability |
+| Data Type           | Source                                | Why                           |
+| ------------------- | ------------------------------------- | ----------------------------- |
+| **Offerings**       | Chain                                 | Consensus on what's available |
+| **Orders/Bids**     | Chain                                 | Financial transactions        |
+| **Allocations**     | Chain                                 | Escrow-backed resource grants |
+| **Provider List**   | Chain                                 | Decentralized registry        |
+| **VEID Status**     | Chain                                 | Identity attestations         |
+| **Usage Reports**   | Chain (via provider)                  | Settlement-critical           |
+| **Logs**            | Provider API                          | Ephemeral, high-volume        |
+| **Metrics/Graphs**  | Provider API                          | Time-series data              |
+| **Shell Access**    | Provider API                          | Real-time WebSocket           |
+| **File Downloads**  | Provider API                          | Large data                    |
+| **Support Tickets** | Chain (metadata) + Provider (content) | Hybrid for auditability       |
 
 ## Detailed Component Design
 
@@ -136,25 +138,29 @@ Customers authenticate to provider APIs using **wallet signatures**, not central
 
 ```typescript
 // Portal signs request with customer's wallet
-async function signedProviderRequest(providerAPI: string, path: string, wallet: Wallet) {
+async function signedProviderRequest(
+  providerAPI: string,
+  path: string,
+  wallet: Wallet,
+) {
   const timestamp = Date.now();
   const nonce = crypto.randomUUID();
   const message = `${path}:${timestamp}:${nonce}`;
-  
+
   const signature = await wallet.signArbitrary(
     CHAIN_ID,
     wallet.address,
-    message
+    message,
   );
-  
+
   return fetch(`${providerAPI}${path}`, {
     headers: {
-      'X-VE-Address': wallet.address,
-      'X-VE-Timestamp': timestamp.toString(),
-      'X-VE-Nonce': nonce,
-      'X-VE-Signature': signature.signature,
-      'X-VE-PubKey': signature.pub_key.value,
-    }
+      "X-VE-Address": wallet.address,
+      "X-VE-Timestamp": timestamp.toString(),
+      "X-VE-Nonce": nonce,
+      "X-VE-Signature": signature.signature,
+      "X-VE-PubKey": signature.pub_key.value,
+    },
   });
 }
 ```
@@ -168,24 +174,24 @@ func (s *PortalAPIServer) authenticateRequest(r *http.Request) (string, error) {
     nonce := r.Header.Get("X-VE-Nonce")
     signature := r.Header.Get("X-VE-Signature")
     pubKey := r.Header.Get("X-VE-PubKey")
-    
+
     // Verify timestamp is recent (prevent replay)
     ts, _ := strconv.ParseInt(timestamp, 10, 64)
     if time.Now().Unix() - ts > 300 { // 5 minute window
         return "", errors.New("request expired")
     }
-    
+
     // Verify signature matches claimed address
     message := fmt.Sprintf("%s:%s:%s", r.URL.Path, timestamp, nonce)
     if !verifySignature(address, pubKey, message, signature) {
         return "", errors.New("invalid signature")
     }
-    
+
     // Verify caller has access to requested resource
     if !s.hasAccess(address, mux.Vars(r)["id"]) {
         return "", errors.New("access denied")
     }
-    
+
     return address, nil
 }
 ```
@@ -251,13 +257,13 @@ async function getCustomerDashboard(wallet: string, allocations: Allocation[]) {
     allocations.map(async (alloc) => {
       const provider = await getProvider(alloc.providerId);
       return signedProviderRequest(
-        provider.hostUri, 
+        provider.hostUri,
         `/deployments/${alloc.deploymentId}/metrics`,
-        wallet
+        wallet,
       );
-    })
+    }),
   );
-  
+
   return aggregateMetrics(metrics);
 }
 ```
@@ -352,13 +358,13 @@ type ProviderBackend interface {
     // Resource lifecycle
     Provision(ctx context.Context, order Order) (Allocation, error)
     Terminate(ctx context.Context, allocationID string) error
-    
+
     // Operational APIs (for portal)
     GetLogs(ctx context.Context, deploymentID string, opts LogOptions) ([]LogEntry, error)
     GetMetrics(ctx context.Context, deploymentID string, opts MetricsOptions) (Metrics, error)
     StreamLogs(ctx context.Context, deploymentID string) (<-chan LogEntry, error)
     OpenShell(ctx context.Context, deploymentID string) (ShellSession, error)
-    
+
     // Usage reporting
     GetUsage(ctx context.Context, allocationID string, period Period) (Usage, error)
 }
@@ -417,19 +423,18 @@ type ProviderBackend interface {
 export function useProviderAPI(providerAddress: string) {
   const { wallet } = useWallet();
   const chainClient = useChainClient();
-  
+
   // Discover provider endpoint from chain
-  const { data: provider } = useQuery(
-    ['provider', providerAddress],
-    () => chainClient.provider.get(providerAddress)
+  const { data: provider } = useQuery(["provider", providerAddress], () =>
+    chainClient.provider.get(providerAddress),
   );
-  
+
   // Create authenticated API client
   const api = useMemo(() => {
     if (!provider?.hostUri || !wallet) return null;
     return new ProviderAPIClient(provider.hostUri, wallet);
   }, [provider?.hostUri, wallet]);
-  
+
   return {
     api,
     isReady: !!api,
@@ -441,11 +446,11 @@ export function useProviderAPI(providerAddress: string) {
 
 export function useDeploymentLogs(providerId: string, deploymentId: string) {
   const { api } = useProviderAPI(providerId);
-  
+
   return useInfiniteQuery(
-    ['logs', providerId, deploymentId],
+    ["logs", providerId, deploymentId],
     ({ pageParam }) => api?.getLogs(deploymentId, { cursor: pageParam }),
-    { enabled: !!api }
+    { enabled: !!api },
   );
 }
 
@@ -454,28 +459,28 @@ export function useDeploymentLogs(providerId: string, deploymentId: string) {
 export function useDeploymentShell(providerId: string, deploymentId: string) {
   const { api } = useProviderAPI(providerId);
   const [session, setSession] = useState<ShellSession | null>(null);
-  
+
   const connect = useCallback(async () => {
     if (!api) return;
     const ws = await api.openShell(deploymentId);
     setSession(ws);
   }, [api, deploymentId]);
-  
+
   return { session, connect, disconnect: () => session?.close() };
 }
 ```
 
 ## Comparison: Pure Web3 vs Hybrid
 
-| Aspect | Pure Web3 | Hybrid (Proposed) | Winner |
-|--------|-----------|-------------------|--------|
-| **Logs/Metrics** | IPFS pinning (slow, expensive) | Provider API (fast, free) | Hybrid |
-| **Shell Access** | Libp2p streams (complex) | WebSocket (proven) | Hybrid |
-| **Dashboard UX** | Subgraph queries | Direct API | Hybrid |
-| **Decentralization** | Maximum | High (providers are decentralized) | Tie |
-| **Trust Model** | Blockchain consensus | Wallet-signed requests + chain anchors | Hybrid |
-| **Development Cost** | Very high | Moderate | Hybrid |
-| **User Experience** | Slow, limited | Web2-like speed | Hybrid |
+| Aspect               | Pure Web3                      | Hybrid (Proposed)                      | Winner |
+| -------------------- | ------------------------------ | -------------------------------------- | ------ |
+| **Logs/Metrics**     | IPFS pinning (slow, expensive) | Provider API (fast, free)              | Hybrid |
+| **Shell Access**     | Libp2p streams (complex)       | WebSocket (proven)                     | Hybrid |
+| **Dashboard UX**     | Subgraph queries               | Direct API                             | Hybrid |
+| **Decentralization** | Maximum                        | High (providers are decentralized)     | Tie    |
+| **Trust Model**      | Blockchain consensus           | Wallet-signed requests + chain anchors | Hybrid |
+| **Development Cost** | Very high                      | Moderate                               | Hybrid |
+| **User Experience**  | Slow, limited                  | Web2-like speed                        | Hybrid |
 
 ## Security Model
 

@@ -10,105 +10,105 @@
 
 ### Health Check
 
-| Check                       | Status     | Notes                                           |
-| --------------------------- | ---------- | ----------------------------------------------- |
-| Build (`go build ./...`)    | ✅ PASSING | No errors                                       |
+| Check                       | Status     | Notes                                                     |
+| --------------------------- | ---------- | --------------------------------------------------------- |
+| Build (`go build ./...`)    | ✅ PASSING | No errors                                                 |
 | Tests (`go test ./x/...`)   | ✅ PASSING | All x/ module tests pass (VEID, MFA, escrow, market, HPC) |
-| Tests (`go test ./pkg/...`) | ✅ PASSING | All pkg/ tests pass                             |
-| Lint                        | ✅ PASSING | golangci-lint clean                             |
-| Portal CI/CD                | ✅ FIXED   | PostCSS/Tailwind CSS compilation fixed          |
-| GitHub Pages                | ✅ FIXED   | Deploy workflow working with .nojekyll          |
+| Tests (`go test ./pkg/...`) | ✅ PASSING | All pkg/ tests pass                                       |
+| Lint                        | ✅ PASSING | golangci-lint clean                                       |
+| Portal CI/CD                | ✅ FIXED   | PostCSS/Tailwind CSS compilation fixed                    |
+| GitHub Pages                | ✅ FIXED   | Deploy workflow working with .nojekyll                    |
 
 ### Recent Completions (Feb 9-12, 2026)
 
-| Commit   | Title                                                  | Task    | Status   |
-| -------- | ------------------------------------------------------ | ------- | -------- |
-| 1c33b211 | fix(portal): CommonJS postcss config for Tailwind      | -       | ✅ DONE  |
-| b4f4dfd5 | fix(portal): remove trailing slash from assetPrefix    | -       | ✅ DONE  |
-| 8dcda48c | chore(portal): bump version to trigger deployment      | -       | ✅ DONE  |
-| ba92128d | fix(ci): disable Jekyll with .nojekyll file            | -       | ✅ DONE  |
-| 7c2ae259 | fix(ci): add _config.yml to standardize-yaml skip list | -       | ✅ DONE  |
-| 5a21c7a7 | fix(ci): exclude Ansible playbooks from Jekyll         | -       | ✅ DONE  |
-| 2901f20b | fix(ci): improve portal CI/CD artifact handling        | -       | ✅ DONE  |
-| 3d4f79da | Merge PR #281: Portal order creation flow              | 23D     | ✅ MERGED|
-| 03e48f9c | Merge PR #280: Portal scaffold foundation              | 28D     | ✅ MERGED|
-| 8ffb461b | Merge PR #282: HPC CLI templates wiring                | 26J     | ✅ MERGED|
-| 73f86df1 | Merge PR #279: EdugainXML-DSig fixes                   | 28A     | ✅ MERGED|
-| 2d28dba3 | Merge PR #276: TEE hardware attestation tests          | 16A     | ✅ MERGED|
-| 7baa636c | Merge PR #278: Portal customer dashboard fixes         | -       | ✅ MERGED|
+| Commit   | Title                                                   | Task | Status    |
+| -------- | ------------------------------------------------------- | ---- | --------- |
+| 1c33b211 | fix(portal): CommonJS postcss config for Tailwind       | -    | ✅ DONE   |
+| b4f4dfd5 | fix(portal): remove trailing slash from assetPrefix     | -    | ✅ DONE   |
+| 8dcda48c | chore(portal): bump version to trigger deployment       | -    | ✅ DONE   |
+| ba92128d | fix(ci): disable Jekyll with .nojekyll file             | -    | ✅ DONE   |
+| 7c2ae259 | fix(ci): add \_config.yml to standardize-yaml skip list | -    | ✅ DONE   |
+| 5a21c7a7 | fix(ci): exclude Ansible playbooks from Jekyll          | -    | ✅ DONE   |
+| 2901f20b | fix(ci): improve portal CI/CD artifact handling         | -    | ✅ DONE   |
+| 3d4f79da | Merge PR #281: Portal order creation flow               | 23D  | ✅ MERGED |
+| 03e48f9c | Merge PR #280: Portal scaffold foundation               | 28D  | ✅ MERGED |
+| 8ffb461b | Merge PR #282: HPC CLI templates wiring                 | 26J  | ✅ MERGED |
+| 73f86df1 | Merge PR #279: EdugainXML-DSig fixes                    | 28A  | ✅ MERGED |
+| 2d28dba3 | Merge PR #276: TEE hardware attestation tests           | 16A  | ✅ MERGED |
+| 7baa636c | Merge PR #278: Portal customer dashboard fixes          | -    | ✅ MERGED |
 
 ### New Tasks Added: Series 31 (Operational Readiness & Compliance)
 
 Gap analysis identified 15 new areas for production operational readiness:
 
-| ID  | Title                                       | Priority     | Status | Est. LOC  |
-| --- | ------------------------------------------- | ------------ | ------ | --------- |
-| 31A | IBC Cross-Chain Settlement Integration      | P2           | TODO   | 3000      |
-| 31B | Distributed Tracing Instrumentation         | P1           | TODO   | 2000      |
-| 31C | Push Notification System                    | P1           | TODO   | 4000      |
-| 31D | Governance Voting UI Completion             | P2           | TODO   | 2500      |
-| 31E | Operator Admin Dashboard                    | P1           | TODO   | 5000      |
-| 31F | International ID Verifier Adapters          | P1           | TODO   | 6000      |
-| 31G | Adyen Payment Adapter                       | P2           | TODO   | 2500      |
-| 31H | Jira Ticketing Backend Integration          | P2           | TODO   | 2000      |
-| 31I | Load & Chaos Testing Infrastructure         | P1           | TODO   | 2000      |
-| 31J | Real-time Metrics Dashboards                | P1           | TODO   | 1500      |
-| 31K | Python & Rust SDK Implementations           | P2           | TODO   | 8000      |
-| 31L | GDPR Consent Tracking System                | P1           | TODO   | 3000      |
-| 31M | Automated Invoice PDF Generation            | P2           | TODO   | 1500      |
-| 31N | Provider SLA Monitoring & Compensation      | P1           | TODO   | 2500      |
-| 31O | ZK Trusted Setup Ceremony Coordination      | **P0**       | TODO   | 1500      |
+| ID  | Title                                  | Priority | Status | Est. LOC |
+| --- | -------------------------------------- | -------- | ------ | -------- |
+| 31A | IBC Cross-Chain Settlement Integration | P2       | TODO   | 3000     |
+| 31B | Distributed Tracing Instrumentation    | P1       | TODO   | 2000     |
+| 31C | Push Notification System               | P1       | TODO   | 4000     |
+| 31D | Governance Voting UI Completion        | P2       | TODO   | 2500     |
+| 31E | Operator Admin Dashboard               | P1       | TODO   | 5000     |
+| 31F | International ID Verifier Adapters     | P1       | TODO   | 6000     |
+| 31G | Adyen Payment Adapter                  | P2       | TODO   | 2500     |
+| 31H | Jira Ticketing Backend Integration     | P2       | TODO   | 2000     |
+| 31I | Load & Chaos Testing Infrastructure    | P1       | TODO   | 2000     |
+| 31J | Real-time Metrics Dashboards           | P1       | TODO   | 1500     |
+| 31K | Python & Rust SDK Implementations      | P2       | TODO   | 8000     |
+| 31L | GDPR Consent Tracking System           | P1       | TODO   | 3000     |
+| 31M | Automated Invoice PDF Generation       | P2       | TODO   | 1500     |
+| 31N | Provider SLA Monitoring & Compensation | P1       | TODO   | 2500     |
+| 31O | ZK Trusted Setup Ceremony Coordination | **P0**   | TODO   | 1500     |
 
 **Total Series 31:** 47,000 LOC | 40-50 weeks development
 
 ### vibe-kanban Task IDs (Series 31)
 
-| ID  | vibe-kanban UUID                       |
-| --- | -------------------------------------- |
-| 31A | 2d2e0f1e-5e96-4529-8f7d-320d257101c8   |
-| 31B | 6386f6fb-dbc0-4919-8b3c-9d70b5305a8c   |
-| 31C | 656bf189-e285-4a6f-935e-7cea42af65b4   |
-| 31D | de2c8899-e52a-43a5-84fc-4ad939120a52   |
-| 31E | 589870dd-6524-4500-bc4a-0bfbd70b8faa   |
-| 31F | d6e1a615-1b4d-44db-bd1e-7d0e7d684b94   |
-| 31G | 86bc7118-8d61-406f-94ff-02b0dfdb60f7   |
-| 31H | 8a1ced5f-c5f8-4d69-ac2a-c5fe0682704b   |
-| 31I | 929254a9-7105-48dd-af05-f3c9c3d7d0c0   |
-| 31J | a461045b-db69-482d-9cbe-5cd64b5f45a8   |
-| 31K | 19724e01-22a8-4e65-9e70-ac92e04076c0   |
-| 31L | d514a869-d47d-4bf6-ab5d-28484fda5c58   |
-| 31M | 982cab6a-bbdd-48a7-9839-2fa05b1f638f   |
-| 31N | e69e42c6-342a-4366-af21-f61041dc724d   |
-| 31O | 76ee57b1-bafa-4af8-994b-ded29df0e28e   |
+| ID  | vibe-kanban UUID                     |
+| --- | ------------------------------------ |
+| 31A | 2d2e0f1e-5e96-4529-8f7d-320d257101c8 |
+| 31B | 6386f6fb-dbc0-4919-8b3c-9d70b5305a8c |
+| 31C | 656bf189-e285-4a6f-935e-7cea42af65b4 |
+| 31D | de2c8899-e52a-43a5-84fc-4ad939120a52 |
+| 31E | 589870dd-6524-4500-bc4a-0bfbd70b8faa |
+| 31F | d6e1a615-1b4d-44db-bd1e-7d0e7d684b94 |
+| 31G | 86bc7118-8d61-406f-94ff-02b0dfdb60f7 |
+| 31H | 8a1ced5f-c5f8-4d69-ac2a-c5fe0682704b |
+| 31I | 929254a9-7105-48dd-af05-f3c9c3d7d0c0 |
+| 31J | a461045b-db69-482d-9cbe-5cd64b5f45a8 |
+| 31K | 19724e01-22a8-4e65-9e70-ac92e04076c0 |
+| 31L | d514a869-d47d-4bf6-ab5d-28484fda5c58 |
+| 31M | 982cab6a-bbdd-48a7-9839-2fa05b1f638f |
+| 31N | e69e42c6-342a-4366-af21-f61041dc724d |
+| 31O | 76ee57b1-bafa-4af8-994b-ded29df0e28e |
 
 ### Critical Pre-Mainnet Blockers (Updated Feb 12)
 
-| Blocker                        | Description                                           | Task(s)   | Priority     |
-| ------------------------------ | ----------------------------------------------------- | --------- | ------------ |
-| **ZK Trusted Setup**           | Groth16 requires MPC ceremony for production proofs   | 31O       | **P0**       |
-| **Security Audit**             | No third-party audit = no mainnet                     | 30E       | **BLOCKER**  |
-| **HSM Integration**            | Production validators MUST use hardware key mgmt      | 30B       | P0           |
-| **ML Model Artifacts**         | Training pipeline exists but no SavedModel files      | 29A       | P0           |
-| **Model Hash Pinning**         | Registry has empty MODEL_HASH - needs trained model   | 29B       | P0           |
-| **ProviderAPIClient**          | No TypeScript SDK for hybrid portal provider API      | 29D       | P0           |
-| **Wallet-Signed Auth**         | Provider API uses HMAC, need ADR-036 wallet auth      | 29E       | P0           |
+| Blocker                | Description                                         | Task(s) | Priority    |
+| ---------------------- | --------------------------------------------------- | ------- | ----------- |
+| **ZK Trusted Setup**   | Groth16 requires MPC ceremony for production proofs | 31O     | **P0**      |
+| **Security Audit**     | No third-party audit = no mainnet                   | 30E     | **BLOCKER** |
+| **HSM Integration**    | Production validators MUST use hardware key mgmt    | 30B     | P0          |
+| **ML Model Artifacts** | Training pipeline exists but no SavedModel files    | 29A     | P0          |
+| **Model Hash Pinning** | Registry has empty MODEL_HASH - needs trained model | 29B     | P0          |
+| **ProviderAPIClient**  | No TypeScript SDK for hybrid portal provider API    | 29D     | P0          |
+| **Wallet-Signed Auth** | Provider API uses HMAC, need ADR-036 wallet auth    | 29E     | P0          |
 
 ### Updated Production Readiness Timeline
 
-| Phase                          | Tasks                                                      | Duration     | Status       |
-| ------------------------------ | ---------------------------------------------------------- | ------------ | ------------ |
-| **Wave 1 (Series 29 P0)**      | 29A (ML), 29D (ProviderAPI)                                | 1-2 weeks    | TODO         |
-| **Wave 2 (Series 29)**         | 29B, 29E, 29F                                              | 2-3 weeks    | TODO         |
-| **Wave 3 (Series 29)**         | 29G, 29H, 29I, 29J                                         | 3-4 weeks    | TODO         |
-| **Wave 4 (Series 29)**         | 29K, 29L                                                   | 1 week       | TODO         |
-| **Series 30 Parallel**         | 30A (Mobile), 30B (HSM), 30D (Tokenomics)                  | 4-6 weeks    | TODO         |
-| **Series 31 Wave 1**           | 31O (ZK Setup), 31I (Load Testing), 31J (Dashboards)       | 2-3 weeks    | TODO         |
-| **Series 31 Wave 2**           | 31B (Tracing), 31E (Admin), 31N (SLA), 31L (GDPR)          | 4-5 weeks    | TODO         |
-| **Series 31 Wave 3**           | 31C (Notifications), 31F (Int'l ID)                        | 4-5 weeks    | TODO         |
-| **Multi-Region (30C)**         | After 30B (regional HSM)                                   | 2-3 weeks    | TODO         |
-| **Audit Execution (30E)**      | After feature complete                                     | 6-8 weeks    | TODO         |
-| **Series 31 Wave 4**           | 31A, 31D, 31G, 31H, 31K, 31M (Post-Launch)                 | 6-8 weeks    | TODO         |
-| **TOTAL**                      | **~45 remaining tasks**                                    | **22-30 weeks** | **~78% done** |
+| Phase                     | Tasks                                                | Duration        | Status        |
+| ------------------------- | ---------------------------------------------------- | --------------- | ------------- |
+| **Wave 1 (Series 29 P0)** | 29A (ML), 29D (ProviderAPI)                          | 1-2 weeks       | TODO          |
+| **Wave 2 (Series 29)**    | 29B, 29E, 29F                                        | 2-3 weeks       | TODO          |
+| **Wave 3 (Series 29)**    | 29G, 29H, 29I, 29J                                   | 3-4 weeks       | TODO          |
+| **Wave 4 (Series 29)**    | 29K, 29L                                             | 1 week          | TODO          |
+| **Series 30 Parallel**    | 30A (Mobile), 30B (HSM), 30D (Tokenomics)            | 4-6 weeks       | TODO          |
+| **Series 31 Wave 1**      | 31O (ZK Setup), 31I (Load Testing), 31J (Dashboards) | 2-3 weeks       | TODO          |
+| **Series 31 Wave 2**      | 31B (Tracing), 31E (Admin), 31N (SLA), 31L (GDPR)    | 4-5 weeks       | TODO          |
+| **Series 31 Wave 3**      | 31C (Notifications), 31F (Int'l ID)                  | 4-5 weeks       | TODO          |
+| **Multi-Region (30C)**    | After 30B (regional HSM)                             | 2-3 weeks       | TODO          |
+| **Audit Execution (30E)** | After feature complete                               | 6-8 weeks       | TODO          |
+| **Series 31 Wave 4**      | 31A, 31D, 31G, 31H, 31K, 31M (Post-Launch)           | 6-8 weeks       | TODO          |
+| **TOTAL**                 | **~45 remaining tasks**                              | **22-30 weeks** | **~78% done** |
 
 ### Key Findings (Feb 12, 2026)
 
@@ -125,20 +125,20 @@ Gap analysis identified 15 new areas for production operational readiness:
 
 ### Module Completion Matrix (Updated)
 
-| Module              | Previous | Current | Notes                              |
-| ------------------- | -------- | ------- | ---------------------------------- |
-| x/veid              | 75%      | 78%     | ZK proofs done, needs trusted setup|
-| x/mfa               | 90%      | 90%     | Stable                             |
-| x/market            | 80%      | 82%     | Order flow merged                  |
-| x/hpc               | 60%      | 65%     | CLI wired, needs SLURM production  |
-| x/escrow            | 75%      | 78%     | Invoice generation pending         |
-| x/support           | 95%      | 95%     | Jira backend needed                |
-| portal/             | 40%      | 55%     | Scaffold + order flow complete     |
-| pkg/inference       | 50%      | 50%     | Waiting on ML training             |
-| pkg/waldur          | 90%      | 90%     | Stable                             |
-| pkg/enclave_runtime | 85%      | 90%     | TEE tests merged                   |
-| pkg/govdata         | 25%      | 25%     | International adapters needed      |
-| pkg/observability   | 30%      | 30%     | Dashboards + tracing needed        |
+| Module              | Previous | Current | Notes                               |
+| ------------------- | -------- | ------- | ----------------------------------- |
+| x/veid              | 75%      | 78%     | ZK proofs done, needs trusted setup |
+| x/mfa               | 90%      | 90%     | Stable                              |
+| x/market            | 80%      | 82%     | Order flow merged                   |
+| x/hpc               | 60%      | 65%     | CLI wired, needs SLURM production   |
+| x/escrow            | 75%      | 78%     | Invoice generation pending          |
+| x/support           | 95%      | 95%     | Jira backend needed                 |
+| portal/             | 40%      | 55%     | Scaffold + order flow complete      |
+| pkg/inference       | 50%      | 50%     | Waiting on ML training              |
+| pkg/waldur          | 90%      | 90%     | Stable                              |
+| pkg/enclave_runtime | 85%      | 90%     | TEE tests merged                    |
+| pkg/govdata         | 25%      | 25%     | International adapters needed       |
+| pkg/observability   | 30%      | 30%     | Dashboards + tracing needed         |
 
 ---
 
@@ -158,23 +158,23 @@ Gap analysis identified 15 new areas for production operational readiness:
 
 Gap analysis against patent specification AU2024203136A1 identified 5 additional areas not covered by Series 28/29:
 
-| ID  | Title                                       | Priority     | Status | Est. LOC  |
-| --- | ------------------------------------------- | ------------ | ------ | --------- |
-| 30A | React Native VEID Capture Mobile App        | P1           | TODO   | 8000-12000|
-| 30B | HSM Integration for Production Key Mgmt     | **P0**       | TODO   | 4400      |
-| 30C | Multi-Region Deployment + Disaster Recovery | P1           | TODO   | 4050      |
-| 30D | Tokenomics Simulation & Economic Validation | P1           | TODO   | 6300      |
-| 30E | Third-Party Security Audit Coordination     | **BLOCKER**  | TODO   | 2200      |
+| ID  | Title                                       | Priority    | Status | Est. LOC   |
+| --- | ------------------------------------------- | ----------- | ------ | ---------- |
+| 30A | React Native VEID Capture Mobile App        | P1          | TODO   | 8000-12000 |
+| 30B | HSM Integration for Production Key Mgmt     | **P0**      | TODO   | 4400       |
+| 30C | Multi-Region Deployment + Disaster Recovery | P1          | TODO   | 4050       |
+| 30D | Tokenomics Simulation & Economic Validation | P1          | TODO   | 6300       |
+| 30E | Third-Party Security Audit Coordination     | **BLOCKER** | TODO   | 2200       |
 
 ### vibe-kanban Task IDs (Series 30)
 
-| ID  | vibe-kanban UUID                       |
-| --- | -------------------------------------- |
-| 30A | 4106db7d-8d00-4f29-98d0-9d164e4cbb72   |
-| 30B | 4e4ff48d-7cd9-440d-b7e1-e993ffeea276   |
-| 30C | 2de509ce-096a-4493-b6cb-374d023b2c80   |
-| 30D | 21cc7d01-e500-48cb-9914-42dc83f626de   |
-| 30E | 11c1a10a-feca-47de-8bf2-51fab1061af2   |
+| ID  | vibe-kanban UUID                     |
+| --- | ------------------------------------ |
+| 30A | 4106db7d-8d00-4f29-98d0-9d164e4cbb72 |
+| 30B | 4e4ff48d-7cd9-440d-b7e1-e993ffeea276 |
+| 30C | 2de509ce-096a-4493-b6cb-374d023b2c80 |
+| 30D | 21cc7d01-e500-48cb-9914-42dc83f626de |
+| 30E | 11c1a10a-feca-47de-8bf2-51fab1061af2 |
 
 ### Series 30 Detailed Spec Files Created
 
@@ -186,27 +186,27 @@ Gap analysis against patent specification AU2024203136A1 identified 5 additional
 
 ### Critical Pre-Mainnet Blockers (Updated Feb 9)
 
-| Blocker                        | Description                                           | Task(s)   | Priority     |
-| ------------------------------ | ----------------------------------------------------- | --------- | ------------ |
-| **Security Audit**             | No third-party audit = no mainnet                     | 30E       | **BLOCKER**  |
-| **HSM Integration**            | Production validators MUST use hardware key mgmt      | 30B       | P0           |
-| **ML Model Artifacts**         | Training pipeline exists but no SavedModel files      | 29A       | P0           |
-| **Model Hash Pinning**         | Registry has empty MODEL_HASH - needs trained model   | 29B       | P0           |
-| **ProviderAPIClient**          | No TypeScript SDK for hybrid portal provider API      | 29D       | P0           |
-| **Wallet-Signed Auth**         | Provider API uses HMAC, need ADR-036 wallet auth      | 29E       | P0           |
+| Blocker                | Description                                         | Task(s) | Priority    |
+| ---------------------- | --------------------------------------------------- | ------- | ----------- |
+| **Security Audit**     | No third-party audit = no mainnet                   | 30E     | **BLOCKER** |
+| **HSM Integration**    | Production validators MUST use hardware key mgmt    | 30B     | P0          |
+| **ML Model Artifacts** | Training pipeline exists but no SavedModel files    | 29A     | P0          |
+| **Model Hash Pinning** | Registry has empty MODEL_HASH - needs trained model | 29B     | P0          |
+| **ProviderAPIClient**  | No TypeScript SDK for hybrid portal provider API    | 29D     | P0          |
+| **Wallet-Signed Auth** | Provider API uses HMAC, need ADR-036 wallet auth    | 29E     | P0          |
 
 ### Updated Production Readiness Timeline
 
-| Phase                          | Tasks                                    | Duration        | Status       |
-| ------------------------------ | ---------------------------------------- | --------------- | ------------ |
-| **Wave 1 (Series 29 P0)**      | 29A (ML), 29D (ProviderAPI)              | 1-2 weeks       | TODO         |
-| **Wave 2 (Series 29)**         | 29B, 29E, 29F                            | 2-3 weeks       | TODO         |
-| **Wave 3 (Series 29)**         | 29G, 29H, 29I, 29J                       | 3-4 weeks       | TODO         |
-| **Wave 4 (Series 29)**         | 29K, 29L                                 | 1 week          | TODO         |
-| **Series 30 Parallel**         | 30A (Mobile), 30B (HSM), 30D (Tokenomics)| 4-6 weeks       | TODO         |
-| **Multi-Region (30C)**         | After 30B (regional HSM)                 | 2-3 weeks       | TODO         |
-| **Audit Execution (30E)**      | After feature complete                   | 6-8 weeks       | TODO         |
-| **TOTAL**                      | **~30 remaining tasks**                  | **14-20 weeks** | **~75% done**|
+| Phase                     | Tasks                                     | Duration        | Status        |
+| ------------------------- | ----------------------------------------- | --------------- | ------------- |
+| **Wave 1 (Series 29 P0)** | 29A (ML), 29D (ProviderAPI)               | 1-2 weeks       | TODO          |
+| **Wave 2 (Series 29)**    | 29B, 29E, 29F                             | 2-3 weeks       | TODO          |
+| **Wave 3 (Series 29)**    | 29G, 29H, 29I, 29J                        | 3-4 weeks       | TODO          |
+| **Wave 4 (Series 29)**    | 29K, 29L                                  | 1 week          | TODO          |
+| **Series 30 Parallel**    | 30A (Mobile), 30B (HSM), 30D (Tokenomics) | 4-6 weeks       | TODO          |
+| **Multi-Region (30C)**    | After 30B (regional HSM)                  | 2-3 weeks       | TODO          |
+| **Audit Execution (30E)** | After feature complete                    | 6-8 weeks       | TODO          |
+| **TOTAL**                 | **~30 remaining tasks**                   | **14-20 weeks** | **~75% done** |
 
 ### Key Findings (Feb 9, 2026)
 
@@ -225,13 +225,13 @@ Gap analysis against patent specification AU2024203136A1 identified 5 additional
 
 ### Recent Commits (Feb 7-8, 2026)
 
-| Commit   | Title                                                    | Status   |
-| -------- | -------------------------------------------------------- | -------- |
-| c2dccc9e | docs(portal): Add hybrid portal architecture + 29A-29L   | ✅ HEAD  |
-| 48194bbb | Merge PR #274: VEID refactor score helper streamlining   | ✅ Main  |
-| 8bffc6bb | fix: remove unnecessary ensure_direnv_env pre-commit     | ✅ Main  |
-| 2d6c7c7e | Merge PR #277: Enclave CLI tests                         | ✅ Main  |
-| d62e4eb6 | Merge PR #275: Waldur adapter E2E tests                  | ✅ Main  |
+| Commit   | Title                                                  | Status  |
+| -------- | ------------------------------------------------------ | ------- |
+| c2dccc9e | docs(portal): Add hybrid portal architecture + 29A-29L | ✅ HEAD |
+| 48194bbb | Merge PR #274: VEID refactor score helper streamlining | ✅ Main |
+| 8bffc6bb | fix: remove unnecessary ensure_direnv_env pre-commit   | ✅ Main |
+| 2d6c7c7e | Merge PR #277: Enclave CLI tests                       | ✅ Main |
+| d62e4eb6 | Merge PR #275: Waldur adapter E2E tests                | ✅ Main |
 
 ---
 
