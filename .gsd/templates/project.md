@@ -49,6 +49,27 @@ One sentence that drives prioritization when tradeoffs arise.]
 - User research or feedback themes
 - Known issues to address]
 
+## Workflow & Tooling
+
+### Orchestration
+- **Task Source:** `_docs/ralph/tasks/*.md` (Ralph's Tasks) & Vibe-Kanban
+- **Task Management:** Vibe-Kanban (Two-way sync with GSD)
+- **Execution:** `gsd-executor` orchestrates parallel `codex-cli` agents.
+
+### Quality Gates (Strict)
+- **Pre-Push Hooks:** MUST pass before any task completion.
+  - `gofmt`, `golangci-lint`
+  - `pnpm format`, `pnpm lint`
+  - Unit tests (`go test`, `vitest`)
+- **CI/CD:** PRs must be prepared with clean builds.
+
+### Agent Protocol
+1. **Plan:** Sync tasks from Ralph's docs + Vibe-Kanban.
+2. **Execute:** 
+   - Orchestrator spawns `codex-cli` for implementation.
+   - Orchestrator runs verifications (hooks).
+   - Orchestrator commits & syncs status to Kanban.
+
 ## Constraints
 
 - **[Type]**: [What] — [Why]

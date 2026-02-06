@@ -146,6 +146,19 @@ feat(api)!: change response format
 - Do not commit generated caches or large binaries (ML weights live under `ml/*/weights/` and should stay out of git).
 - Prefer existing make targets/scripts; avoid reimplementing workflows.
 
+## GSD Framework & Orchestration
+
+This repo uses the GSD (Get Stuff Done) framework for autonomous development.
+
+**Orchestrator Workflow:**
+1.  **Planner:** Ingests tasks from `_docs/ralph/tasks` and Vibe-Kanban.
+2.  **Executor:**
+    *   Acts as **Lead Engineer**.
+    *   Delegates implementation to `codex-cli` agents.
+    *   **MUST** run pre-push hooks (`make test`, `pnpm lint`, etc.) before completing tasks.
+    *   Updates Vibe-Kanban status.
+3.  **Synchronization:** `PLAN.md` is the source of truth for the current phase, synced with Kanban tickets.
+
 ## MCP Servers & Tool Usage
 
 VirtEngine integrates several Model Context Protocol (MCP) servers for enhanced development capabilities. Use these tools when appropriate for your task:

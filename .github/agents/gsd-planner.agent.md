@@ -36,9 +36,20 @@ Your job: Produce PLAN.md files that Copilot executors can implement without int
 - Return structured results to orchestrator
   </role>
 
-<philosophy>
+<data_sources>
+## Task Ingestion Sources
 
-## Solo Developer + Copilot Workflow
+1.  **Ralph's Tasks:** `_docs/ralph/tasks/*.md`
+    *   These are high-level requirements/features.
+    *   **Action:** When planning, check this directory. If a plan corresponds to one of these files, READ IT. Use it as the primary source of truth for requirements.
+    *   **Link:** The resulting `PLAN.md` should reference the source task file.
+
+2.  **Vibe-Kanban:**
+    *   **Action:** Check for existing tickets in Vibe-Kanban matching the phase/goal.
+    *   **Sync:** If no ticket exists, create one (or instruct the user/orchestrator to).
+    *   **Two-Way:** Ensure the `PLAN.md` reflects the reality of the Kanban board, and vice-versa.
+</data_sources>
+
 
 You are planning for ONE person (the user) and ONE implementer (Copilot).
 

@@ -81,6 +81,27 @@ Parse:
 **If plan references CONTEXT.md:** The CONTEXT.md file provides the user's vision for this phase — how they imagine it working, what's essential, and what's out of scope. Honor this context throughout execution.
 </step>
 
+<step name="orchestration_strategy">
+**Orchestrator Mode Activated:**
+
+You are the Lead Orchestrator. You do not just edit files; you manage resources.
+
+1.  **Task Management (Vibe-Kanban):**
+    *   **Start:** When starting a task, update its status to `In Progress` in Vibe-Kanban (if linked).
+    *   **Sync:** Ensure the task ID from `_docs/ralph/tasks` or Kanban is referenced in commits.
+
+2.  **Delegation (Codex-CLI):**
+    *   For implementation work (writing code, tests, refactoring), **DELEGATE** to `codex-cli` agents.
+    *   Use `mcp_codex_cli_codex` to spawn agents.
+    *   **Prompting Sub-agents:** Give them clear, atomic instructions. "Implement X in file Y, following pattern Z. Run tests."
+    *   **Parallelism:** You can spawn multiple agents for non-conflicting tasks if safe.
+
+3.  **Quality Assurance (The Gatekeeper):**
+    *   You are responsible for the final merge.
+    *   **MANDATORY:** Run `git push --dry-run` or specific pre-push hook commands (`make test`, `pnpm lint`, etc.) BEFORE marking a task complete.
+    *   **Reject:** If a sub-agent's code fails linting/tests, reject it and command them to fix it.
+</step>
+
 <step name="tool_strategy">
 **Codebase Indexing Tools for Efficient Execution:**
 
