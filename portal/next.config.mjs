@@ -1,3 +1,8 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -40,6 +45,12 @@ const nextConfig = {
   },
 
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      '@virtengine/portal': path.resolve(__dirname, '../lib/portal'),
+      '@virtengine/capture': path.resolve(__dirname, '../lib/capture'),
+    };
+
     // Handle SVG imports
     config.module.rules.push({
       test: /\.svg$/,

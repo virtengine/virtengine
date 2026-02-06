@@ -5,6 +5,7 @@ import { UsageSummary } from '@/components/dashboard/UsageSummary';
 import { BillingSummary } from '@/components/dashboard/BillingSummary';
 import { NotificationsFeed } from '@/components/dashboard/NotificationsFeed';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { formatCurrency } from '@/lib/utils';
 import type {
   CustomerAllocation,
   UsageSummaryData,
@@ -131,7 +132,9 @@ describe('UsageSummary', () => {
 describe('BillingSummary', () => {
   it('renders current period cost', () => {
     render(<BillingSummary billing={mockBilling} />);
-    const matches = screen.getAllByText(/USD 4,250\.00/);
+    const matches = screen.getAllByText((_, element) =>
+      Boolean(element?.textContent?.includes('4,250.00'))
+    );
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -143,7 +146,12 @@ describe('BillingSummary', () => {
   it('renders outstanding balance when present', () => {
     render(<BillingSummary billing={mockBilling} />);
     expect(screen.getByText('Outstanding')).toBeInTheDocument();
-    expect(screen.getByText(/USD 1,250\.00/)).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => {
+        const normalizedText = element?.textContent?.replace(/\s+/g, ' ').trim();
+        return normalizedText === 'USD 1,250.00';
+      })
+    ).toBeInTheDocument();
   });
 
   it('renders provider breakdown', () => {
