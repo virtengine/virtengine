@@ -815,7 +815,11 @@ func (a *HPCNodeAggregator) dequeueUpdates(now time.Time) []*nodeUpdate {
 		return nil
 	}
 
-	var batch []*nodeUpdate
+	batchCap := len(a.pending)
+	if a.config.MaxBatchSize > 0 && a.config.MaxBatchSize < batchCap {
+		batchCap = a.config.MaxBatchSize
+	}
+	batch := make([]*nodeUpdate, 0, batchCap)
 	remaining := make([]*nodeUpdate, 0, len(a.pending))
 
 	for i, update := range a.pending {
