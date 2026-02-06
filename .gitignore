@@ -71,3 +71,6 @@ node_modules/
 nul
 .playwright-mcp/*
 */nul
+
+# Task planning files (agent-generated)
+_docs/ralph/tasks/

@@ -149,6 +149,7 @@ print_status() {
     echo ""
     echo "  Infrastructure:"
     echo "    • API Gateway:      http://localhost:8000"
+    echo "    • Local Portal UI:  http://localhost:3000"
     echo "    • Dev Portal:       http://localhost:3001/portal"
     echo "    • Prometheus:       http://localhost:9095"
     echo "    • Grafana:          http://localhost:3002  (admin/admin)"
@@ -178,8 +179,8 @@ cmd_start() {
     check_docker
 
     # Build images that need building
-    log_info "Building Docker images (virtengine-node, provider-daemon)..."
-    compose_cmd build virtengine-node provider-daemon
+    log_info "Building Docker images (virtengine-node, provider-daemon, portal)..."
+    compose_cmd build virtengine-node provider-daemon portal
 
     # Start services
     if [ "${DETACH}" = "true" ]; then
@@ -240,6 +241,14 @@ get_service_source_hash() {
                 -type f \( -name "*.go" -o -name "Dockerfile*" \) 2>/dev/null | \
                 xargs cat 2>/dev/null | md5sum | cut -d' ' -f1
             ;;
+        portal)
+            # Hash key source files for the local portal UI
+            find "${PROJECT_ROOT}/portal" "${PROJECT_ROOT}/lib/portal" "${PROJECT_ROOT}/lib/capture" \
+                "${PROJECT_ROOT}/lib/admin" "${PROJECT_ROOT}/_build/Dockerfile.portal" \
+                "${PROJECT_ROOT}/pnpm-workspace.yaml" "${PROJECT_ROOT}/pnpm-lock.yaml" \
+                -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.json" -o -name "*.css" -o -name "*.md" -o -name "Dockerfile*" \) 2>/dev/null | \
+                xargs cat 2>/dev/null | md5sum | cut -d' ' -f1
+            ;;
         *)
             echo "upstream"  # Upstream images don't need rebuilding
             ;;
@@ -261,7 +270,7 @@ cmd_update() {
     fi
 
     # Services we build from source
-    local build_services=("virtengine-node" "provider-daemon")
+    local build_services=("virtengine-node" "provider-daemon" "portal")
 
     # Check each build service for changes
     for service in "${build_services[@]}"; do

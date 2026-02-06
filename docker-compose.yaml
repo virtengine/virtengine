@@ -20,6 +20,7 @@
 #   Infrastructure:
 #     - kong: API gateway
 #     - api-portal: Swagger UI
+#     - portal: Local Next.js portal UI
 #     - prometheus: Metrics
 #     - grafana: Dashboards
 
@@ -454,6 +455,41 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # =============================================================================
+  # Local Portal UI (Next.js)
+  # =============================================================================
+  portal:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.portal
+    container_name: portal
+    hostname: portal
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.55
+    ports:
+      - "3000:3000" # Local Portal UI
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_CHAIN_ID: ${CHAIN_ID:-virtengine-localnet-1}
+      NEXT_PUBLIC_CHAIN_RPC: http://localhost:26657
+      NEXT_PUBLIC_CHAIN_REST: http://localhost:1317
+      NEXT_PUBLIC_CHAIN_WS: ws://localhost:26657/websocket
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_INDEXER_URL: http://localhost:8000
+      NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID:-}
+      NEXT_PUBLIC_SUPPORTED_WALLETS: ${NEXT_PUBLIC_SUPPORTED_WALLETS:-keplr,leap,cosmostation}
+      NEXT_PUBLIC_ENABLE_TESTNET: ${NEXT_PUBLIC_ENABLE_TESTNET:-false}
+      NEXT_PUBLIC_ENABLE_MFA: ${NEXT_PUBLIC_ENABLE_MFA:-true}
+      NEXT_PUBLIC_ENABLE_HPC: ${NEXT_PUBLIC_ENABLE_HPC:-true}
+      NEXT_PUBLIC_ENABLE_IDENTITY: ${NEXT_PUBLIC_ENABLE_IDENTITY:-true}
+      NEXT_PUBLIC_DEV_MODE: ${NEXT_PUBLIC_DEV_MODE:-true}
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    depends_on:
+      - virtengine-node
+      - kong
     restart: unless-stopped
 
   # =============================================================================
