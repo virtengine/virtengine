@@ -11,12 +11,14 @@ on:
       - "lib/portal/**"
       - "lib/capture/**"
       - "pnpm-workspace.yaml"
+      - ".github/workflows/portal-ci.yaml"
   pull_request:
     paths:
       - "portal/**"
       - "lib/portal/**"
       - "lib/capture/**"
       - "pnpm-workspace.yaml"
+      - ".github/workflows/portal-ci.yaml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
