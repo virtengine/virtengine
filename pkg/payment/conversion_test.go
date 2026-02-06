@@ -777,3 +777,175 @@ func TestNewConversionLedgerEntry(t *testing.T) {
 		t.Error("DestinationAddress not set correctly")
 	}
 }
+
+// ============================================================================
+// Reconciliation Report Tests
+// ============================================================================
+
+func TestConversionExecutor_GenerateReconciliationReport(t *testing.T) {
+	ctx := context.Background()
+	store := NewInMemoryLedgerStore()
+	treasury := NewMockTreasuryTransfer("virtengine1treasury", map[string]int64{"uve": 1000000000})
+	config := DefaultConversionExecutorConfig()
+	config.RequirePaymentVerification = false
+
+	executor := NewConversionExecutor(config, store, treasury, nil)
+
+	now := time.Now()
+
+	// Create a completed conversion
+	quote1 := CreateTestQuote(10000, 10000000, "virtengine1abc123def456ghi789")
+	req1 := ConversionExecutionRequest{
+		Quote:           quote1,
+		PaymentIntentID: "pi_test_report1",
+		IdempotencyKey:  "report-key-001",
+	}
+	result1, err := executor.ExecuteConversion(ctx, req1)
+	if err != nil {
+		t.Fatalf("First conversion failed: %v", err)
+	}
+	if !result1.Success {
+		t.Fatalf("First conversion should succeed: %v", result1.ErrorCode)
+	}
+
+	// Create a failed conversion
+	treasury.SimulateFailure = true
+	quote2 := CreateTestQuote(5000, 5000000, "virtengine1abc123def456ghi789")
+	req2 := ConversionExecutionRequest{
+		Quote:           quote2,
+		PaymentIntentID: "pi_test_report2",
+		IdempotencyKey:  "report-key-002",
+	}
+	result2, _ := executor.ExecuteConversion(ctx, req2)
+	if result2.Success {
+		t.Fatal("Second conversion should fail")
+	}
+	treasury.SimulateFailure = false
+
+	// Generate report spanning all entries
+	report, err := executor.GenerateReconciliationReport(ctx, now.Add(-1*time.Minute), now.Add(1*time.Minute))
+	if err != nil {
+		t.Fatalf("GenerateReconciliationReport failed: %v", err)
+	}
+
+	if report.Summary.TotalConversions != 2 {
+		t.Errorf("Expected 2 total conversions, got %d", report.Summary.TotalConversions)
+	}
+	if report.Summary.CompletedCount != 1 {
+		t.Errorf("Expected 1 completed, got %d", report.Summary.CompletedCount)
+	}
+	if report.Summary.TotalFiatConverted.Value != 10000 {
+		t.Errorf("Expected total fiat 10000, got %d", report.Summary.TotalFiatConverted.Value)
+	}
+	if report.Summary.TotalCryptoTransferred.Int64() != 10000000 {
+		t.Errorf("Expected total crypto 10000000, got %d", report.Summary.TotalCryptoTransferred.Int64())
+	}
+	if report.Summary.SuccessRate != 50 {
+		t.Errorf("Expected 50%% success rate, got %f", report.Summary.SuccessRate)
+	}
+	if len(report.CompletedEntries) != 1 {
+		t.Errorf("Expected 1 completed entry, got %d", len(report.CompletedEntries))
+	}
+}
+
+func TestConversionExecutor_GenerateReconciliationReport_Empty(t *testing.T) {
+	ctx := context.Background()
+	store := NewInMemoryLedgerStore()
+	treasury := NewMockTreasuryTransfer("virtengine1treasury", map[string]int64{"uve": 1000000000})
+	config := DefaultConversionExecutorConfig()
+
+	executor := NewConversionExecutor(config, store, treasury, nil)
+
+	now := time.Now()
+	report, err := executor.GenerateReconciliationReport(ctx, now.Add(-1*time.Hour), now)
+	if err != nil {
+		t.Fatalf("GenerateReconciliationReport failed: %v", err)
+	}
+
+	if report.Summary.TotalConversions != 0 {
+		t.Errorf("Expected 0 total conversions, got %d", report.Summary.TotalConversions)
+	}
+	if report.Summary.SuccessRate != 0 {
+		t.Errorf("Expected 0 success rate, got %f", report.Summary.SuccessRate)
+	}
+}
+
+func TestConversionExecutor_GenerateReconciliationReport_DateFiltering(t *testing.T) {
+	ctx := context.Background()
+	store := NewInMemoryLedgerStore()
+	treasury := NewMockTreasuryTransfer("virtengine1treasury", map[string]int64{"uve": 1000000000})
+	config := DefaultConversionExecutorConfig()
+	config.RequirePaymentVerification = false
+
+	executor := NewConversionExecutor(config, store, treasury, nil)
+
+	// Create a conversion
+	quote := CreateTestQuote(10000, 10000000, "virtengine1abc123def456ghi789")
+	req := ConversionExecutionRequest{
+		Quote:           quote,
+		PaymentIntentID: "pi_test_date",
+		IdempotencyKey:  "date-filter-001",
+	}
+	_, err := executor.ExecuteConversion(ctx, req)
+	if err != nil {
+		t.Fatalf("Conversion failed: %v", err)
+	}
+
+	// Report with future range should not include the entry
+	futureStart := time.Now().Add(1 * time.Hour)
+	futureEnd := time.Now().Add(2 * time.Hour)
+	report, err := executor.GenerateReconciliationReport(ctx, futureStart, futureEnd)
+	if err != nil {
+		t.Fatalf("GenerateReconciliationReport failed: %v", err)
+	}
+
+	if report.Summary.TotalConversions != 0 {
+		t.Errorf("Expected 0 conversions in future range, got %d", report.Summary.TotalConversions)
+	}
+}
+
+func TestInMemoryLedgerStore_ListByDateRange(t *testing.T) {
+	ctx := context.Background()
+	store := NewInMemoryLedgerStore()
+
+	now := time.Now()
+
+	entry1 := NewConversionLedgerEntry("id-range-1", "key-range-1", CreateTestQuote(10000, 10000000, "virtengine1abc"), "pi1", 3)
+	entry1.CreatedAt = now.Add(-30 * time.Minute)
+	_ = store.Save(ctx, entry1)
+
+	entry2 := NewConversionLedgerEntry("id-range-2", "key-range-2", CreateTestQuote(20000, 20000000, "virtengine1def"), "pi2", 3)
+	entry2.CreatedAt = now.Add(-10 * time.Minute)
+	_ = store.Save(ctx, entry2)
+
+	entry3 := NewConversionLedgerEntry("id-range-3", "key-range-3", CreateTestQuote(30000, 30000000, "virtengine1ghi"), "pi3", 3)
+	entry3.CreatedAt = now.Add(10 * time.Minute)
+	_ = store.Save(ctx, entry3)
+
+	// Range that includes entry1 and entry2 but not entry3
+	entries, err := store.ListByDateRange(ctx, now.Add(-1*time.Hour), now)
+	if err != nil {
+		t.Fatalf("ListByDateRange failed: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries in range, got %d", len(entries))
+	}
+
+	// Range that includes all
+	entries, err = store.ListByDateRange(ctx, now.Add(-1*time.Hour), now.Add(1*time.Hour))
+	if err != nil {
+		t.Fatalf("ListByDateRange failed: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("Expected 3 entries in full range, got %d", len(entries))
+	}
+
+	// Empty range
+	entries, err = store.ListByDateRange(ctx, now.Add(1*time.Hour), now.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("ListByDateRange failed: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("Expected 0 entries in empty range, got %d", len(entries))
+	}
+}
