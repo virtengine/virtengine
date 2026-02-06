@@ -387,3 +387,57 @@ export {
   srOnlyStyles,
   focusVisibleStyles,
 } from '../../../lib/portal';
+
+// ============================================================================
+// Organization Management (VE-29H)
+// ============================================================================
+
+export { useOrganization, OrganizationProvider } from '../../../lib/portal';
+export type {
+  OrganizationState,
+  OrganizationDetailState,
+  OrganizationActions,
+  OrganizationContextValue,
+  OrganizationProviderProps,
+} from '../../../lib/portal';
+
+export type {
+  Organization,
+  OrganizationMetadata,
+  OrganizationRole,
+  OrganizationMember,
+  MemberMetadata,
+  OrganizationInvite,
+  InviteStatus,
+  CreateOrganizationRequest,
+  InviteMemberRequest,
+  OrganizationBillingPeriod,
+  OrganizationBillingSummary,
+} from '../../../lib/portal';
+export {
+  ROLE_PERMISSIONS,
+  hasPermission,
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+} from '../../../lib/portal';
+
+export {
+  OrganizationList,
+  OrganizationCard,
+  OrganizationDetail,
+  MemberList,
+  InviteMemberDialog,
+  CreateOrganizationDialog,
+  OrganizationSwitcher,
+  OrganizationBilling,
+} from '../../../lib/portal';
+export type {
+  OrganizationListProps,
+  OrganizationCardProps,
+  OrganizationDetailProps,
+  MemberListProps,
+  InviteMemberDialogProps,
+  CreateOrganizationDialogProps,
+  OrganizationSwitcherProps,
+  OrganizationBillingProps,
+} from '../../../lib/portal';
