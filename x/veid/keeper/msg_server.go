@@ -390,6 +390,7 @@ func (ms msgServer) AddScopeToWallet(goCtx context.Context, msg *types.MsgAddSco
 		ScopeType:    types.ScopeTypeFromProto(msg.ScopeType),
 		EnvelopeHash: msg.EnvelopeHash,
 		AddedAt:      ctx.BlockTime(),
+		Status:       types.ScopeRefStatusPending,
 	}
 
 	if err := ms.keeper.AddScopeToWallet(ctx, sender, scopeRef, msg.UserSignature); err != nil {
@@ -485,7 +486,7 @@ func (ms msgServer) RebindWallet(goCtx context.Context, msg *types.MsgRebindWall
 		return nil, types.ErrInvalidAddress.Wrap(errMsgInvalidSenderAddr)
 	}
 
-	if err := ms.keeper.RebindWallet(ctx, sender, msg.NewBindingPubKey, msg.NewBindingSignature, msg.OldSignature); err != nil {
+	if err := ms.keeper.RebindWallet(ctx, sender, msg.NewBindingSignature, msg.NewBindingPubKey, msg.OldSignature); err != nil {
 		return nil, err
 	}
 
