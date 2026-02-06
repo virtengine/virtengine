@@ -333,6 +333,75 @@ export { SettlementView } from "./components/provider/SettlementView";
 export { DomainVerificationPanel } from "./components/provider/DomainVerificationPanel";
 
 // ============================================================================
+// Provider API (VE-29D/29E)
+// ============================================================================
+
+export {
+  ProviderAPIClient,
+  ProviderAPIError,
+  LogStream,
+  ShellConnection,
+} from "./src/provider-api";
+export type {
+  ProviderAPIClientOptions,
+  ProviderHealthStatus,
+  ProviderHealth,
+  LogOptions,
+  DeploymentState,
+  UsageMetric,
+  ResourceMetrics,
+  Deployment,
+  DeploymentStatus,
+  ServiceStatus,
+  DeploymentListResponse,
+  DeploymentAction,
+  ShellSessionResponse,
+  ProviderAPIErrorDetails,
+} from "./src/provider-api";
+
+export { signRequest } from "./src/auth/wallet-sign";
+export type {
+  SignedRequestHeaders,
+  SignRequestOptions,
+} from "./src/auth/wallet-sign";
+
+// ============================================================================
+// Multi-Provider Aggregation (VE-29G)
+// ============================================================================
+
+export {
+  MultiProviderClient,
+  MultiProviderProvider,
+  useMultiProvider,
+} from "./src/multi-provider";
+export type {
+  ProviderRecord,
+  ProviderStatus,
+  DeploymentWithProvider,
+  AggregatedMetrics,
+  MultiProviderWallet,
+  MultiProviderClientOptions,
+  MultiProviderProviderProps,
+} from "./src/multi-provider";
+
+export { useAggregatedDeployments } from "./src/hooks/useAggregatedDeployments";
+export type {
+  AggregatedDeploymentsState,
+  AggregatedDeploymentsActions,
+  UseAggregatedDeploymentsOptions,
+} from "./src/hooks/useAggregatedDeployments";
+
+export { useAggregatedMetrics } from "./src/hooks/useAggregatedMetrics";
+export type {
+  AggregatedMetricsState,
+  AggregatedMetricsActions,
+  UseAggregatedMetricsOptions,
+} from "./src/hooks/useAggregatedMetrics";
+
+export { useDeploymentWithProvider } from "./src/hooks/useDeploymentWithProvider";
+export type { DeploymentWithProviderState } from "./src/hooks/useDeploymentWithProvider";
+
+// ============================================================================
 // HPC / Supercomputer (VE-705)
 // ============================================================================
 
