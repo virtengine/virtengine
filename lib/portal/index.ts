@@ -240,6 +240,28 @@ export type {
 } from "./src/pages/marketplace";
 
 // ============================================================================
+// Landing Page (Portal Entry)
+// ============================================================================
+
+export { LandingPage } from "./src/pages";
+export type { LandingPageProps } from "./src/pages";
+
+export { HeroSection } from "./src/components/hero";
+export type { HeroSectionProps, HeroCTA } from "./src/components/hero";
+
+export { StatsSection } from "./src/components/stats";
+export type { StatsSectionProps } from "./src/components/stats";
+
+export { FeaturedOfferings } from "./src/components/offerings";
+export type { FeaturedOfferingsProps } from "./src/components/offerings";
+
+export { LandingFooter } from "./src/components/footer";
+export type {
+  LandingFooterProps,
+  FooterLinkGroup,
+} from "./src/components/footer";
+
+// ============================================================================
 // Provider Console (VE-704)
 // ============================================================================
 
