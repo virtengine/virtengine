@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/virtengine/virtengine/pkg/security"
 )
 
 // OODProductionClient implements the OODClient interface with real Open OnDemand API calls.
@@ -43,10 +45,8 @@ func NewOODProductionClient(config OODConfig) (*OODProductionClient, error) {
 	}
 
 	return &OODProductionClient{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		config:     config,
+		httpClient: security.NewSecureHTTPClient(security.WithTimeout(timeout)),
 		baseURL:    baseURL,
 		userTokens: make(map[string]*VEIDToken),
 	}, nil
