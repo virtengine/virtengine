@@ -48,3 +48,9 @@ export {
   type CustomerDashboardState,
   type CustomerDashboardActions,
 } from './customerDashboardStore';
+export {
+  useOrganizationStore,
+  type OrganizationStore,
+  type OrganizationStoreState,
+  type OrganizationStoreActions,
+} from './organizationStore';
