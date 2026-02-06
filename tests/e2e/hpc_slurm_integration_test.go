@@ -504,9 +504,9 @@ func NewMockCredentialManager() *MockCredentialManager {
 
 func (m *MockCredentialManager) GetCredentials(ctx context.Context, clusterID string, credType pd.CredentialType) (*pd.HPCCredentials, error) {
 	return &pd.HPCCredentials{
-		ClusterID:      clusterID,
-		CredentialType: credType,
-		SSHPrivateKey:  "mock-private-key",
+		ClusterID:     clusterID,
+		Type:          credType,
+		SSHPrivateKey: "mock-private-key",
 	}, nil
 }
 

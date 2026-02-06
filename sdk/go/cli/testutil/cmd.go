@@ -8,8 +8,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/cosmos-sdk/client"
+	codecaddress "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/testutil"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/virtengine/virtengine/sdk/go/cli"
 )
@@ -22,6 +24,8 @@ func execSetContext(ctx context.Context, cctx client.Context, cmd *cobra.Command
 
 	ctx = context.WithValue(ctx, cli.ClientContextKey, &client.Context{})
 	ctx = context.WithValue(ctx, server.ServerContextKey, server.NewDefaultContext())
+	ctx = context.WithValue(ctx, cli.ContextTypeAddressCodec, codecaddress.NewBech32Codec(sdk.GetConfig().GetBech32AccountAddrPrefix()))
+	ctx = context.WithValue(ctx, cli.ContextTypeValidatorCodec, codecaddress.NewBech32Codec(sdk.GetConfig().GetBech32ValidatorAddrPrefix()))
 
 	cmd.SetContext(ctx)
 	cctx.CmdContext = ctx
