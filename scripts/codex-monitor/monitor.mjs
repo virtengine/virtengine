@@ -43,6 +43,9 @@ const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "30");
+const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
+const repoUrlBase =
+  process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
 
 let CodexClient = null;
 
@@ -56,16 +59,127 @@ let watcher = null;
 let watcherDebounce = null;
 let watchFileName = null;
 
+let logRemainder = "";
+const mergeNotified = new Set();
+const pendingMerges = new Set();
+const errorNotified = new Map();
+let allCompleteNotified = false;
+let backlogLowNotified = false;
+let plannerTriggered = false;
+
 const contextPatterns = [
   "ContextWindowExceeded",
   "context window",
   "ran out of room",
 ];
 
-async function readStatusSummary() {
+const errorPatterns = [
+  /\bERROR\b/i,
+  /Exception/i,
+  /Traceback/i,
+  /SetValueInvocationException/i,
+  /Cannot bind argument/i,
+  /Unhandled/i,
+  /\bFailed\b/i,
+];
+
+const errorNoisePatterns = [
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Status:/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Initial sync:/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+SyncCopilotState:/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+CI (pending|failing)/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+PR #\d+ .*CI=/i,
+];
+
+function isErrorLine(line) {
+  if (errorNoisePatterns.some((pattern) => pattern.test(line))) {
+    return false;
+  }
+  return errorPatterns.some((pattern) => pattern.test(line));
+}
+
+function notifyErrorLine(line) {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  const key = line.trim();
+  if (!key) {
+    return;
+  }
+  const now = Date.now();
+  const last = errorNotified.get(key) || 0;
+  if (now - last < 5 * 60 * 1000) {
+    return;
+  }
+  errorNotified.set(key, now);
+  queueErrorMessage(line.trim());
+}
+
+const errorQueue = [];
+
+function queueErrorMessage(line) {
+  errorQueue.push(line);
+  if (errorQueue.length >= 3) {
+    void flushErrorQueue();
+  }
+}
+
+async function flushErrorQueue() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (errorQueue.length === 0) {
+    return;
+  }
+  const lines = errorQueue.splice(0, errorQueue.length);
+  const message = ["VirtEngine Orchestrator Error", ...lines].join("\n");
+  await sendTelegramMessage(message);
+}
+
+function notifyMerge(line) {
+  const match = line.match(/PR\s+#(\d+)/i);
+  if (!match) {
+    return;
+  }
+  const pr = match[1];
+  if (mergeNotified.has(pr)) {
+    return;
+  }
+  mergeNotified.add(pr);
+  pendingMerges.add(pr);
+}
+
+async function flushMergeNotifications() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (pendingMerges.size === 0) {
+    return;
+  }
+  const merged = Array.from(pendingMerges);
+  pendingMerges.clear();
+  const formatted = merged
+    .map((pr) => `#${pr} ${repoUrlBase}/pull/${pr}`)
+    .join(", ");
+  const message = `Merged PRs: ${formatted}`;
+  await sendTelegramMessage(message);
+}
+
+async function readStatusData() {
   try {
     const raw = await readFile(statusPath, "utf8");
-    const status = JSON.parse(raw);
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function readStatusSummary() {
+  try {
+    const status = await readStatusData();
+    if (!status) {
+      return "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)";
+    }
     const counts = status.counts || {};
     const completed = Array.isArray(status.completed_tasks)
       ? status.completed_tasks
@@ -97,6 +211,9 @@ async function readStatusSummary() {
     const etaHours = ratePerHour > 0 ? backlogRemaining / ratePerHour : null;
     const etaText =
       etaHours && Number.isFinite(etaHours) ? `${etaHours.toFixed(1)}h` : "n/a";
+    const rateText = Number.isFinite(ratePerHour)
+      ? `${ratePerHour.toFixed(2)}`
+      : "0.00";
 
     return [
       "VirtEngine Orchestrator Update",
@@ -104,6 +221,7 @@ async function readStatusSummary() {
       `Counts: running=${running}, review=${review}, error=${error}`,
       `Tasks: completed=${tasksCompleted}, submitted=${tasksSubmitted}`,
       `Backlog remaining: ${backlogRemaining} (ETA ${etaText})`,
+      `Completion rate: ${rateText} tasks/hr`,
       recent ? `Recent merged PRs: ${recent}` : "Recent merged PRs: none",
     ].join("\n");
   } catch (err) {
@@ -150,9 +268,80 @@ function startTelegramNotifier() {
   const sendUpdate = async () => {
     const message = await readStatusSummary();
     await sendTelegramMessage(message);
+    await flushMergeNotifications();
+    await checkStatusMilestones();
   };
+  void sendTelegramMessage("VirtEngine Orchestrator Notifier started.");
   sendUpdate();
   setInterval(sendUpdate, intervalMs);
+}
+
+async function checkStatusMilestones() {
+  const status = await readStatusData();
+  if (!status) {
+    return;
+  }
+  const counts = status.counts || {};
+  const backlogRemaining = status.backlog_remaining ?? 0;
+  const running = counts.running ?? 0;
+  const review = counts.review ?? 0;
+  const error = counts.error ?? 0;
+
+  if (
+    !allCompleteNotified &&
+    backlogRemaining === 0 &&
+    running === 0 &&
+    review === 0 &&
+    error === 0
+  ) {
+    allCompleteNotified = true;
+    await sendTelegramMessage(
+      "All tasks completed. Orchestrator backlog is empty.",
+    );
+    await triggerTaskPlanner();
+  }
+
+  if (!backlogLowNotified && backlogRemaining > 0 && backlogRemaining < 5) {
+    backlogLowNotified = true;
+    await sendTelegramMessage(
+      `Backlog low: ${backlogRemaining} tasks remaining. Triggering task planner.`,
+    );
+    await triggerTaskPlanner();
+  }
+}
+
+async function triggerTaskPlanner() {
+  if (plannerTriggered || !codexEnabled) {
+    return;
+  }
+  plannerTriggered = true;
+  try {
+    if (!CodexClient) {
+      CodexClient = await loadCodexSdk();
+    }
+    if (!CodexClient) {
+      throw new Error("Codex SDK not available");
+    }
+    const agentPath = resolve(
+      repoRoot,
+      ".github",
+      "agents",
+      "Task Planner.agent.md",
+    );
+    const agentPrompt = await readFile(agentPath, "utf8");
+    const codex = new CodexClient();
+    const thread = codex.startThread();
+    const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
+    const result = await thread.run(prompt);
+    const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
+    await writeFile(outPath, String(result), "utf8");
+    await sendTelegramMessage(
+      "Task planner run completed. Output saved to logs.",
+    );
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    await sendTelegramMessage(`Task planner run failed: ${message}`);
+  }
 }
 
 async function ensureLogDir() {
@@ -303,7 +492,28 @@ async function startProcess() {
   currentChild = child;
 
   const append = async (chunk) => {
-    await writeFile(activeLogPath, chunk, { flag: "a" });
+    const text = chunk.toString();
+    await writeFile(activeLogPath, text, { flag: "a" });
+    logRemainder += text;
+    const lines = logRemainder.split(/\r?\n/);
+    logRemainder = lines.pop() || "";
+    for (const line of lines) {
+      if (isErrorLine(line)) {
+        notifyErrorLine(line);
+      }
+      if (line.includes("Merged PR") || line.includes("Marking task")) {
+        notifyMerge(line);
+      }
+      if (line.includes("ALL TASKS COMPLETE")) {
+        if (!allCompleteNotified) {
+          allCompleteNotified = true;
+          void sendTelegramMessage(
+            "All tasks completed. Orchestrator backlog is empty.",
+          );
+          void triggerTaskPlanner();
+        }
+      }
+    }
   };
 
   child.stdout.on("data", (data) => append(data));
@@ -396,6 +606,10 @@ process.on("SIGTERM", () => {
   }
   process.exit(0);
 });
+
+setInterval(() => {
+  void flushErrorQueue();
+}, 60 * 1000);
 
 startWatcher();
 startProcess();

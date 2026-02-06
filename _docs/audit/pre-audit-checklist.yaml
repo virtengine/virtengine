@@ -1,0 +1,72 @@
+documentation:
+  - item: Architecture documentation updated
+    status: pending
+    owner: engineering
+
+  - item: Module README files complete
+    status: pending
+    owner: engineering
+
+  - item: API documentation generated
+    status: pending
+    owner: engineering
+
+  - item: Threat model documented
+    status: complete
+    file: _docs/threat-model.md
+
+  - item: Known issues list
+    status: pending
+    owner: security
+
+code_quality:
+  - item: Test coverage > 80%
+    status: pending
+    current: 72%
+    target: 80%
+
+  - item: Static analysis clean
+    status: pending
+    tools:
+      - golangci-lint
+      - gosec
+
+  - item: Dependency audit
+    status: pending
+    tool: govulncheck
+
+  - item: Fuzzing results reviewed
+    status: pending
+    coverage: fuzz/
+
+access_provisioning:
+  - item: GitHub repo access
+    status: pending
+    level: read-only
+
+  - item: Documentation access
+    status: pending
+    platform: Notion/Confluence
+
+  - item: Slack channel created
+    status: pending
+    name: '#audit-virtengine'
+
+  - item: Video call scheduled
+    status: pending
+    purpose: kickoff
+
+environment:
+  - item: Test network deployed
+    status: pending
+    network: testnet-audit
+
+  - item: Test accounts funded
+    status: pending
+
+  - item: Sample transactions prepared
+    status: pending
+
+  - item: Monitoring access
+    status: pending
+    tool: Grafana read-only
