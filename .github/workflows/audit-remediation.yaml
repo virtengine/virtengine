@@ -12,6 +12,9 @@ jobs:
   triage:
     if: contains(github.event.issue.labels.*.name, 'audit-finding')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     outputs:
       severity: ${{ steps.severity.outputs.severity }}
     steps:
@@ -52,6 +55,8 @@ jobs:
   notify:
     needs: triage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: needs.triage.result == 'success'
     steps:
       - name: Notify security team
@@ -60,5 +65,7 @@ jobs:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
-            channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            text: "🚨 New audit finding: ${{ github.event.issue.title }}\nSeverity: ${{ needs.triage.outputs.severity }}\nLink: ${{ github.event.issue.html_url }}"
+            {
+              "channel": "${{ secrets.SLACK_CHANNEL_ID }}",
+              "text": "🚨 New audit finding: ${{ github.event.issue.title }}\nSeverity: ${{ needs.triage.outputs.severity }}\nLink: ${{ github.event.issue.html_url }}"
+            }
