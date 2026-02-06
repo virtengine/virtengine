@@ -114,6 +114,28 @@ Before declaring plan complete:
 - [Plan-specific criteria]
   </success_criteria>
 
+<orchestration>
+## Delegation & Quality Gates
+
+**Task Execution:** Delegate implementation tasks to `codex-cli` agents via MCP.
+```
+
+mcp_codex-cli_codex --prompt "[task instructions]" --sandbox workspace-write
+
+```
+
+**Quality Gates (MANDATORY before task completion):**
+1. Run pre-push hooks: `git push --dry-run` (triggers: gofmt, golangci-lint, tests)
+2. If hooks fail, instruct codex-cli to fix issues
+3. Only mark task complete after clean build
+
+**PR Workflow:**
+- Create branch: `ve/[phase]-[plan]-[brief-desc]`
+- Create PR with conventional commit title
+- Monitor CI for 10 minutes after PR creation
+- Link to Kanban ticket if synced
+</orchestration>
+
 <output>
 After completion, create `.gsd/phases/XX-name/{phase}-{plan}-SUMMARY.md`
 </output>
@@ -284,12 +306,12 @@ See `~/.Copilot/rules/tdd.md` for TDD plan structure.
 
 ## Task Types
 
-| Type                      | Use For                                  | Autonomy                        |
-| ------------------------- | ---------------------------------------- | ------------------------------- |
+| Type                      | Use For                                 | Autonomy                        |
+| ------------------------- | --------------------------------------- | ------------------------------- |
 | `auto`                    | Everything Copilot can do independently | Fully autonomous                |
-| `checkpoint:human-verify` | Visual/functional verification           | Pauses, returns to orchestrator |
-| `checkpoint:decision`     | Implementation choices                   | Pauses, returns to orchestrator |
-| `checkpoint:human-action` | Truly unavoidable manual steps (rare)    | Pauses, returns to orchestrator |
+| `checkpoint:human-verify` | Visual/functional verification          | Pauses, returns to orchestrator |
+| `checkpoint:decision`     | Implementation choices                  | Pauses, returns to orchestrator |
+| `checkpoint:human-action` | Truly unavoidable manual steps (rare)   | Pauses, returns to orchestrator |
 
 **Checkpoint behavior in parallel execution:**
 

@@ -72,6 +72,15 @@ score: N/M must-haves verified
 
 **Anti-patterns:** {N} found ({blockers} blockers, {warnings} warnings)
 
+## Quality Gate Verification
+
+| Gate             | Status      | Details                            |
+| ---------------- | ----------- | ---------------------------------- |
+| Pre-push hooks   | ✓ PASSED    | gofmt, golangci-lint, tests passed |
+| PR Created       | ✓ YES       | #[number]                          |
+| CI Pipeline      | ✓ PASSED    | All checks green                   |
+| Kanban Synced    | ✓ YES       | Ticket [id] updated to Done        |
+
 ## Human Verification Required
 
 {If no human verification needed:}

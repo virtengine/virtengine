@@ -10,6 +10,11 @@ Template for `.gsd/REQUIREMENTS.md` — checkable requirements that define "done
 **Defined:** [date]
 **Core Value:** [from PROJECT.md]
 
+## Task Sources
+
+**Ralph's Tasks:** `_docs/ralph/tasks/*.md`
+**Vibe-Kanban:** [project-id]
+
 ## v1 Requirements
 
 Requirements for initial release. Each maps to roadmap phases.

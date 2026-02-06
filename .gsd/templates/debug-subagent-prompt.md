@@ -29,6 +29,18 @@ goal: {find_root_cause_only | find_and_fix}
 <debug_file>
 Create: .gsd/debug/{slug}.md
 </debug_file>
+
+<delegation>
+**Codex-CLI for investigation:**
+If deep code analysis needed, delegate to codex-cli:
+```
+
+mcp_codex-cli_codex --prompt "Investigate [issue] in [files]. Find root cause."
+
+```
+
+**Quality gates apply:** Any fix must pass pre-push hooks before commit.
+</delegation>
 ```
 
 ---

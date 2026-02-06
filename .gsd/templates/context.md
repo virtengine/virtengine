@@ -21,6 +21,15 @@ Template for `.gsd/phases/XX-name/{phase}-CONTEXT.md` - captures implementation 
 **Gathered:** [date]
 **Status:** Ready for planning
 
+<task_source>
+
+## Task Origin
+
+**Ralph's Task:** `_docs/ralph/tasks/[XX-task-name].md` (if applicable)
+**Kanban Ticket:** [ticket-id] (if synced from Vibe-Kanban)
+**Ad-hoc:** [describe origin if not from above sources]
+</task_source>
+
 <domain>
 ## Phase Boundary
 

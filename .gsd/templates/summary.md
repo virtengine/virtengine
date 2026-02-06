@@ -74,6 +74,24 @@ Each task was committed atomically:
 
 _Note: TDD tasks may have multiple commits (test → feat → refactor)_
 
+## Orchestration
+
+### Task Source
+
+- **Ralph Task:** `_docs/ralph/tasks/[XX-task-name].md` (if applicable)
+- **Kanban Ticket:** [ticket-id] (if synced)
+
+### Delegation
+
+- **Codex-CLI sessions spawned:** [count]
+- **Session IDs:** [list]
+
+### Quality Gates
+
+- **Pre-push hooks:** PASS
+- **PR Created:** #[number]
+- **CI Status:** [passing after merge]
+
 ## Files Created/Modified
 
 - `path/to/file.ts` - What it does

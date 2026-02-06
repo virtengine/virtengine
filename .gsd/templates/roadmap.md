@@ -20,6 +20,12 @@ Template for `.gsd/ROADMAP.md`.
 
 Decimal phases appear between their surrounding integers in numeric order.
 
+**Task Sources:**
+
+- Ralph's Tasks: `_docs/ralph/tasks/*.md`
+- Vibe-Kanban: Synced tickets
+- Ad-hoc: User-initiated during session
+
 - [ ] **Phase 1: [Name]** - [One-line description]
 - [ ] **Phase 2: [Name]** - [One-line description]
 - [ ] **Phase 3: [Name]** - [One-line description]

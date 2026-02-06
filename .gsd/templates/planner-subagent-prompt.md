@@ -27,6 +27,12 @@ Template for spawning gsd-planner agent. The agent contains all planning experti
 **Research (if exists):**
 @.gsd/phases/{phase_dir}/{phase}-RESEARCH.md
 
+**Ralph's Tasks (scan for matching requirements):**
+@\_docs/ralph/tasks/
+
+**Vibe-Kanban:**
+Query `mcp_vibe-kanban_list_tasks` for matching tickets. Link plan to ticket ID.
+
 **Gap Closure (if --gaps mode):**
 @.gsd/phases/{phase_dir}/{phase}-VERIFICATION.md
 @.gsd/phases/{phase_dir}/{phase}-UAT.md

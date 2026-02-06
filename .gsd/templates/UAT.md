@@ -60,6 +60,13 @@ issues: [N]
 pending: [N]
 skipped: [N]
 
+## Quality Gate Status
+
+**Pre-push hooks:** [PASS/FAIL]
+**PR:** #[number] - [status]
+**CI Status:** [passing/failing/pending]
+**Kanban Ticket:** [ticket-id] (if synced)
+
 ## Gaps
 
 <!-- YAML format for plan-phase --gaps consumption -->

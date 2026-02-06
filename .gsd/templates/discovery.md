@@ -51,9 +51,10 @@ Output: DISCOVERY.md with recommendation
 
 **Source Priority:**
 
-1. **Context7 MCP** - use_mcp_tool(context7, ...) for library/framework documentation (current, authoritative)
-2. **Web Search MCP** - use_mcp_tool(web-search, ...) for comparisons, trends, broader search
-3. **browser_action** - Fallback for direct URL access or when MCPs unavailable
+1. **Context7 MCP** - `mcp_context7_resolve-library-id` + `mcp_context7_query-docs` for library/framework documentation
+2. **Exa MCP** - `mcp_exa_web_search_exa` for comparisons, trends, broader search
+3. **GitHub MCP** - `mcp_github_github_search_code` for real-world usage patterns
+4. **browser_action** - Fallback for direct URL access or when MCPs unavailable
 
 **Quality Checklist:**
 Before completing discovery, verify:

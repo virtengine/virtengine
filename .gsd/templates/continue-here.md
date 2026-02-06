@@ -46,6 +46,25 @@ last_updated: 2025-01-15T14:30:00Z
 - [Blocker 1]: [status/workaround]
   </blockers>
 
+<orchestration_state>
+[Track delegation and sync status]
+
+**Codex-CLI Sessions:**
+
+- Active: [session-ids or "none"]
+- Pending output: [yes/no]
+
+**Kanban Sync:**
+
+- Ticket: [ticket-id]
+- Status synced: [yes/no]
+
+**Quality Gates:**
+
+- Last hook run: [pass/fail]
+- PR: #[number] or "not created"
+  </orchestration_state>
+
 <context>
 [Mental state, "vibe", anything that helps resume smoothly]
 

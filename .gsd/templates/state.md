@@ -73,6 +73,27 @@ None yet.
 Last session: [YYYY-MM-DD HH:MM]
 Stopped at: [Description of last completed action]
 Resume file: [Path to .continue-here*.md if exists, otherwise "None"]
+
+## Orchestration Status
+
+### Vibe-Kanban Sync
+
+- **Last sync:** [YYYY-MM-DD HH:MM]
+- **Project ID:** [kanban-project-id]
+- **Pending tickets:** [count]
+- **In-progress tickets:** [count]
+
+### Codex-CLI Sessions
+
+- **Active agents:** [count]
+- **Last delegation:** [task-name] @ [timestamp]
+- **Session IDs:** [list of active session IDs if any]
+
+### Quality Gate Status
+
+- **Pre-push hooks:** [PASS/FAIL]
+- **Last PR:** #[number] - [status]
+- **CI Status:** [passing/failing/pending]
 ```
 
 <purpose>
