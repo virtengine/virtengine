@@ -4,30 +4,8 @@
  * Re-exports from portal-lib with additional portal-specific types
  */
 
-// Import types for local use
-import type {
-  HPCState,
-  WorkloadTemplate,
-  WorkloadCategory,
-  JobResources,
-  JobParameter,
-  JobManifest,
-  JobSubmission,
-  JobSubmissionState,
-  JobSubmissionStep,
-  JobPriceQuote,
-  JobValidationError,
-  Job,
-  JobStatus,
-  JobStatusChange,
-  JobEvent,
-  JobEventType,
-  JobOutputReference,
-  JobOutputType,
-  JobOutput,
-  HPCError,
-  HPCErrorCode,
-} from '@/lib/portal-adapter';
+// Import only types needed for local interface definitions
+import type { JobStatus, WorkloadCategory } from '@/lib/portal-adapter';
 
 // Re-export all types from portal-lib (via portal-adapter)
 export type {
