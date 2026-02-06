@@ -31,7 +31,11 @@ func TestAnsibleAdapterE2E(t *testing.T) {
 	require.NoError(t, os.WriteFile(playbookPath, []byte("- hosts: all\n  tasks:\n    - debug: msg=\"ok\"\n"), 0o644))
 
 	inventory := &pd.Inventory{
-		Hosts: []pd.InventoryHost{{Name: "localhost", Address: "127.0.0.1"}},
+		Name: "test-inventory",
+		Groups: []pd.InventoryGroup{{
+			Name:  "all",
+			Hosts: []pd.InventoryHost{{Name: "127.0.0.1"}},
+		}},
 	}
 
 	ansibleCmd := filepath.Join(tmpDir, "ansible.cmd")

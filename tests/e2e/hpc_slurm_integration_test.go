@@ -373,11 +373,10 @@ func (s *HPCSLURMIntegrationE2ETestSuite) createTestProviderConfig() pd.HPCProvi
 			},
 		},
 		Chain: pd.HPCChainSubscriberConfig{
-			Enabled:           true,
-			ClusterID:         "e2e-test-cluster",
-			ProviderAddress:   s.providerAddr,
-			ReconnectInterval: 5 * time.Second,
-			EventBufferSize:   100,
+			Enabled:                true,
+			SubscriptionBufferSize: 100,
+			ReconnectInterval:      5 * time.Second,
+			MaxReconnectAttempts:   0,
 		},
 		Settlement: pd.HPCSettlementConfig{
 			Enabled:           true,
@@ -490,33 +489,6 @@ func (m *MockChainReporter) GetStatusReports() []*pd.HPCStatusReport {
 
 func (m *MockChainReporter) GetAccountingReports() map[string]*pd.HPCSchedulerMetrics {
 	return m.accountingReports
-}
-
-// MockAuditLoggerE2E implements HPCAuditLogger for testing.
-type MockAuditLoggerE2E struct {
-	jobEvents      []pd.HPCAuditEvent
-	securityEvents []pd.HPCAuditEvent
-	usageReports   []pd.HPCAuditEvent
-}
-
-func NewMockAuditLoggerE2E() *MockAuditLoggerE2E {
-	return &MockAuditLoggerE2E{
-		jobEvents:      make([]pd.HPCAuditEvent, 0),
-		securityEvents: make([]pd.HPCAuditEvent, 0),
-		usageReports:   make([]pd.HPCAuditEvent, 0),
-	}
-}
-
-func (m *MockAuditLoggerE2E) LogJobEvent(event pd.HPCAuditEvent) {
-	m.jobEvents = append(m.jobEvents, event)
-}
-
-func (m *MockAuditLoggerE2E) LogSecurityEvent(event pd.HPCAuditEvent) {
-	m.securityEvents = append(m.securityEvents, event)
-}
-
-func (m *MockAuditLoggerE2E) LogUsageReport(event pd.HPCAuditEvent) {
-	m.usageReports = append(m.usageReports, event)
 }
 
 // MockCredentialManager implements HPCCredentialManager for testing.

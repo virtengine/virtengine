@@ -67,7 +67,7 @@ func (m *mockAzureCompute) GetVMInstanceView(_ context.Context, _, vmName string
 	return &pd.AzureVMInstanceView{PowerState: vm.PowerState}, nil
 }
 func (m *mockAzureCompute) ListVMSizes(_ context.Context, _ pd.AzureRegion) ([]pd.AzureVMSizeInfo, error) {
-	return []pd.AzureVMSizeInfo{{Name: "Standard_B2s", CPU: 2, MemoryMB: 4096}}, nil
+	return []pd.AzureVMSizeInfo{{Name: "Standard_B2s", NumberOfCores: 2, MemoryMB: 4096}}, nil
 }
 func (m *mockAzureCompute) ListVMImages(_ context.Context, _ pd.AzureRegion, _, _, _ string) ([]pd.AzureVMImageInfo, error) {
 	return []pd.AzureVMImageInfo{{Publisher: "Canonical", Offer: "UbuntuServer", SKU: "18.04"}}, nil
@@ -106,7 +106,7 @@ func (m *mockAzureNetwork) ListVNets(_ context.Context, _ string) ([]pd.AzureVNe
 	return []pd.AzureVNetInfo{}, nil
 }
 func (m *mockAzureNetwork) CreateSubnet(_ context.Context, _, _ string, spec *pd.AzureSubnetCreateSpec) (*pd.AzureSubnetInfo, error) {
-	return &pd.AzureSubnetInfo{Name: spec.Name, CIDR: spec.CIDR}, nil
+	return &pd.AzureSubnetInfo{Name: spec.Name, AddressPrefix: spec.AddressPrefix}, nil
 }
 func (m *mockAzureNetwork) GetSubnet(_ context.Context, _, _, subnetName string) (*pd.AzureSubnetInfo, error) {
 	return &pd.AzureSubnetInfo{Name: subnetName}, nil
