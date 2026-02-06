@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:a11y": "vitest run --grep 'Accessibility'",
+    "test:a11y": "vitest run -t 'Accessibility'",
     "test:watch": "vitest",
     "lint:a11y": "node scripts/a11y-lint.js"
   },
