@@ -183,7 +183,6 @@ export function MFAChallenge({
                 placeholder="000000"
                 className="text-center font-mono text-lg tracking-[0.3em]"
                 error={!!localError}
-                autoFocus
               />
             </div>
           )}
