@@ -4,11 +4,13 @@
 # Runs fast checks on staged files before commit.
 # - Auto-formats Go files with gofmt (always runs on staged .go files)
 # - Auto-formats Portal files with prettier (always runs on staged portal files)
+# - Lints staged Portal files with ESLint (errors only, staged .ts/.tsx/.js/.jsx)
 # - Runs go mod tidy/vendor when go.mod or go.sum are staged.
 #
 # Bypass: git commit --no-verify
-# Skip formatting: VE_HOOK_SKIP_FMT=1 git commit
-# Skip mod check:  VE_HOOK_SKIP_MOD=1 git commit
+# Skip formatting:    VE_HOOK_SKIP_FMT=1 git commit
+# Skip portal lint:   VE_HOOK_SKIP_PORTAL_LINT=1 git commit
+# Skip mod check:     VE_HOOK_SKIP_MOD=1 git commit
 
 set -euo pipefail
 
@@ -92,6 +94,37 @@ if [ "${VE_HOOK_SKIP_PRETTIER:-}" != "1" ]; then
         else
             hook_warn "[pre-commit] Prettier not available in portal/node_modules. Skipping portal formatting."
             hook_warn "            Run 'pnpm -C portal install' to enable auto-formatting."
+        fi
+    fi
+fi
+
+# =========================================================================
+# Lint staged portal files with ESLint (errors only)
+# =========================================================================
+if [ "${VE_HOOK_SKIP_PORTAL_LINT:-}" != "1" ]; then
+    PORTAL_LINT_FILES="$(echo "$STAGED_FILES" | grep -E '^portal/src/.*\.(ts|tsx|js|jsx)$' || true)"
+    if [ -n "$PORTAL_LINT_FILES" ]; then
+        ESLINT_BIN="$REPO_ROOT/portal/node_modules/.bin/eslint"
+        if [ -x "$ESLINT_BIN" ]; then
+            hook_header "[pre-commit] Linting staged portal files with ESLint..."
+            # Build relative paths from portal/ dir
+            ESLINT_TARGETS=()
+            while IFS= read -r file; do
+                [ -n "$file" ] && [ -f "$file" ] && ESLINT_TARGETS+=("${file#portal/}")
+            done <<< "$PORTAL_LINT_FILES"
+
+            if [ "${#ESLINT_TARGETS[@]}" -gt 0 ]; then
+                if (cd "$REPO_ROOT/portal" && "$ESLINT_BIN" --quiet "${ESLINT_TARGETS[@]}"); then
+                    hook_pass "[pre-commit] ESLint passed for portal files"
+                else
+                    hook_fail "[pre-commit] ESLint found errors in staged portal files."
+                    hook_fail "            Fix errors or set VE_HOOK_SKIP_PORTAL_LINT=1 to bypass."
+                    exit 1
+                fi
+            fi
+        else
+            hook_warn "[pre-commit] ESLint not available in portal/node_modules. Skipping portal lint."
+            hook_warn "            Run 'pnpm -C portal install' to enable linting."
         fi
     fi
 fi
