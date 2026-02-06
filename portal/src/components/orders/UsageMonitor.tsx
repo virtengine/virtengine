@@ -95,12 +95,12 @@ function ResourceMetricCard({ metric }: { metric: ResourceUsageMetric }) {
       {/* Mini sparkline using bar chart */}
       {metric.history.length > 0 && (
         <div className="mt-3 flex h-8 items-end gap-px">
-          {metric.history.slice(-12).map((point, i) => {
+          {metric.history.slice(-12).map((point) => {
             const maxVal = Math.max(...metric.history.slice(-12).map((p) => p.value), 1);
             const height = Math.max(2, (point.value / maxVal) * 100);
             return (
               <div
-                key={`${metric.resourceType}-${i}`}
+                key={`${metric.resourceType}-${point.timestamp}`}
                 className="flex-1 rounded-t-sm bg-primary/30 transition-all hover:bg-primary/60"
                 style={{ height: `${height}%` }}
                 title={`${formatMetricValue(point.value, metric.unit)} ${metric.unit}`}
@@ -173,12 +173,12 @@ function CostTracking({ cost }: { cost: CostAccumulation }) {
           <div>
             <div className="mb-1 text-xs text-muted-foreground">Cost Rate (24h)</div>
             <div className="flex h-12 items-end gap-px">
-              {cost.costHistory.slice(-24).map((point, i) => {
+              {cost.costHistory.slice(-24).map((point) => {
                 const maxVal = Math.max(...cost.costHistory.slice(-24).map((p) => p.value), 1);
                 const height = Math.max(2, (point.value / maxVal) * 100);
                 return (
                   <div
-                    key={`cost-${i}`}
+                    key={`cost-${point.timestamp}`}
                     className="flex-1 rounded-t-sm bg-success/40 transition-all hover:bg-success/70"
                     style={{ height: `${height}%` }}
                   />
