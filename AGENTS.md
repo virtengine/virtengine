@@ -14,12 +14,12 @@ You might notice that your task instructions might have already been implemented
 
 ### PR Creation & Merge (vibe-kanban automation)
 
-If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), the **cleanup script handles PR creation and auto-merge automatically**. In this case:
+If you are running as a vibe-kanban task agent (you'll have `VE_TASK_TITLE` and `VE_BRANCH_NAME` env vars set), you are responsible for **creating the PR** after your push. The **orchestrator handles merges** when CI passes. In this case:
 
 - Focus on code quality, tests, and a clean commit
-- Just `git push` — the cleanup script creates the PR and enables auto-merge
-- ensure you consistently merge upstream changes before any git push, and fix conflicts if they exist!
-- Do NOT manually run `gh pr create` or `gh pr merge`
+- Run `gh pr create` after your push to open the PR
+- Ensure you consistently merge upstream changes before any git push, and fix conflicts if they exist
+- Do NOT manually run `gh pr merge` (orchestrator merges after CI)
 
 If you are running **outside** vibe-kanban (no `VE_TASK_TITLE` env var), you are responsible for creating the PR and monitoring CI/CD yourself — use `gh` CLI to create PRs and merge after CI passes.
 

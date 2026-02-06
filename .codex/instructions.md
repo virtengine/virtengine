@@ -12,7 +12,7 @@ Your task title is in the `VE_TASK_TITLE` environment variable. Focus **only** o
 
 1. **Work until 100% done.** Do not stop at "good enough." Every task must compile, pass tests, and be production-quality.
 2. **Test what you change.** Run `go test ./x/<module>/...` or `go test ./pkg/<package>/...` for the specific packages you modified. Do NOT run `go test ./...` on the entire repo — it takes 20+ minutes.
-3. **The cleanup script handles PR creation and merging.** When you finish, just commit and push. The vibe-kanban cleanup script will create the PR and enable auto-merge automatically. Do NOT manually run `gh pr create` or `gh pr merge` — the cleanup script does this for you.
+3. **Create the PR after pushing.** When you finish, commit and push, then run `gh pr create`. The orchestrator will handle merging after CI passes. Do NOT manually run `gh pr merge`.
 4. **Never bypass quality gates.** Do not use `--no-verify` on git push. Fix lint/test/build errors instead.
 5. **Conventional Commits required.** Format: `type(scope): description` (e.g., `feat(veid): add identity verification flow`).
 
@@ -43,7 +43,7 @@ You have access to:
 7. Commit with conventional commit format: git add -A && git commit -s -m "type(scope): description"
 8. Push: git push --set-upstream origin <branch-name>
 9. If push fails (pre-push hook), fix the issues and retry
-10. DONE — cleanup script handles PR creation and auto-merge
+10. DONE — orchestrator handles PR merge after CI
 ```
 
 ## Testing Strategy

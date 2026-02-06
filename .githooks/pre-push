@@ -339,13 +339,9 @@ check_prettier() {
         hook_step "No Portal files to format"
         return 0
     fi
-    if ! command -v pnpm >/dev/null 2>&1; then
-        hook_warn "pnpm not available, skipping prettier"
-        return 0
-    fi
-    if [ ! -f "$REPO_ROOT/portal/node_modules/.bin/prettier" ]; then
-        hook_warn "prettier not installed — run 'pnpm install' in portal/"
-        return 0
+    if ! ensure_portal_deps; then
+        hook_fail "Portal dependencies not available — cannot run prettier"
+        return 1
     fi
     local unformatted=""
     for file in $changed_files; do

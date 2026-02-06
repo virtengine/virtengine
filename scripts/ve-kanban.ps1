@@ -26,21 +26,21 @@
 #>
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-$script:VK_BASE_URL        = $env:VK_BASE_URL        ?? "http://127.0.0.1:54089"
-$script:VK_PROJECT_NAME    = $env:VK_PROJECT_NAME    ?? "virtengine"
-$script:VK_PROJECT_ID      = $env:VK_PROJECT_ID      ?? ""   # Auto-detected if empty
-$script:VK_REPO_ID         = $env:VK_REPO_ID         ?? ""   # Auto-detected if empty
-$script:GH_OWNER           = $env:GH_OWNER           ?? "virtengine-gh"
-$script:GH_REPO            = $env:GH_REPO            ?? "virtengine"
-$script:VK_TARGET_BRANCH   = $env:VK_TARGET_BRANCH   ?? "origin/main"
-$script:VK_INITIALIZED     = $false
-$script:VK_LAST_GH_ERROR   = $null
+$script:VK_BASE_URL = $env:VK_BASE_URL ?? "http://127.0.0.1:54089"
+$script:VK_PROJECT_NAME = $env:VK_PROJECT_NAME ?? "virtengine"
+$script:VK_PROJECT_ID = $env:VK_PROJECT_ID ?? ""   # Auto-detected if empty
+$script:VK_REPO_ID = $env:VK_REPO_ID ?? ""   # Auto-detected if empty
+$script:GH_OWNER = $env:GH_OWNER ?? "virtengine"
+$script:GH_REPO = $env:GH_REPO ?? "virtengine"
+$script:VK_TARGET_BRANCH = $env:VK_TARGET_BRANCH ?? "origin/main"
+$script:VK_INITIALIZED = $false
+$script:VK_LAST_GH_ERROR = $null
 $script:VK_LAST_GH_ERROR_AT = $null
-$script:VK_CLI_RAW_LINE    = $null
+$script:VK_CLI_RAW_LINE = $null
 
 # Executor profiles (used for 50/50 cycling between Codex and Copilot)
 $script:VK_EXECUTORS = @(
-    @{ executor = "CODEX";   variant = "DEFAULT" }
+    @{ executor = "CODEX"; variant = "DEFAULT" }
     @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6" }
 )
 $script:VK_EXECUTOR_INDEX = 0   # Tracks cycling state
@@ -87,7 +87,8 @@ function Initialize-VKConfig {
     # If project ID already set (via env), skip auto-detection for project
     if ($script:VK_PROJECT_ID) {
         Write-Verbose "Using configured project ID: $script:VK_PROJECT_ID"
-    } else {
+    }
+    else {
         Write-Host "  Auto-detecting project '$script:VK_PROJECT_NAME'..." -ForegroundColor DarkGray
         $projects = Invoke-VKApi -Path "/api/projects"
         if (-not $projects) {
@@ -127,7 +128,8 @@ function Initialize-VKConfig {
             if (-not $repoMatch) { $repoMatch = $repoList | Select-Object -First 1 }
             $script:VK_REPO_ID = $repoMatch.id
             Write-Host "  ✓ Repo: $($repoMatch.name ?? 'default') ($($script:VK_REPO_ID.Substring(0,8))...)" -ForegroundColor Green
-        } else {
+        }
+        else {
             Write-Warning "No repos found for project. Repo ID must be set via VK_REPO_ID env var."
             return $false
         }
@@ -232,6 +234,29 @@ function Get-VKAttempts {
     return $attempts
 }
 
+function Get-VKAttemptSummaries {
+    <#
+    .SYNOPSIS Get attempt summaries for workspace status (idle/running/failed).
+    #>
+    [CmdletBinding()]
+    param([bool]$Archived = $false)
+    $body = @{ archived = $Archived }
+    $result = Invoke-VKApi -Path "/api/task-attempts/summary" -Method "POST" -Body $body
+    if (-not $result) { return @() }
+    $summaries = if ($result.summaries) { $result.summaries } else { $result }
+    return @($summaries)
+}
+
+function Get-VKArchivedAttempts {
+    <#
+    .SYNOPSIS List archived task attempts.
+    #>
+    [CmdletBinding()]
+    $attempts = Get-VKAttempts
+    if (-not $attempts) { return @() }
+    return @($attempts | Where-Object { $_.archived })
+}
+
 function Submit-VKTaskAttempt {
     <#
     .SYNOPSIS Submit a task as a new attempt (creates worktree + starts agent).
@@ -296,6 +321,16 @@ function Archive-VKAttempt {
     return Invoke-VKApi -Path "/api/task-attempts/$AttemptId" -Method "PUT" -Body $body
 }
 
+function Unarchive-VKAttempt {
+    <#
+    .SYNOPSIS Unarchive a task attempt so it counts as active again.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$AttemptId)
+    $body = @{ archived = $false }
+    return Invoke-VKApi -Path "/api/task-attempts/$AttemptId" -Method "PUT" -Body $body
+}
+
 # ─── GitHub PR Functions ─────────────────────────────────────────────────────
 
 function Set-VKLastGithubError {
@@ -329,7 +364,8 @@ function Invoke-VKGithub {
     if ($exitCode -ne 0) {
         if ($output -match "rate limit|API rate limit exceeded|secondary rate limit|abuse detection") {
             Set-VKLastGithubError -Type "rate_limit" -Message $output
-        } else {
+        }
+        else {
             Set-VKLastGithubError -Type "error" -Message $output
         }
         return $null
@@ -345,16 +381,16 @@ function Get-PRForBranch {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Branch)
     $prJson = Invoke-VKGithub -Args @(
-        "pr","list","--head",$Branch,"--repo","$script:GH_OWNER/$script:GH_REPO",
-        "--json","number,state,title,mergeable,statusCheckRollup,mergedAt,url",
-        "--limit","1"
+        "pr", "list", "--head", $Branch, "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--json", "number,state,title,mergeable,statusCheckRollup,mergedAt,createdAt,url",
+        "--limit", "1"
     )
     if (-not $prJson -or $prJson -eq "[]") {
         # Also check merged/closed
         $prJson = Invoke-VKGithub -Args @(
-            "pr","list","--head",$Branch,"--repo","$script:GH_OWNER/$script:GH_REPO",
-            "--state","merged","--json","number,state,title,mergedAt,url",
-            "--limit","1"
+            "pr", "list", "--head", $Branch, "--repo", "$script:GH_OWNER/$script:GH_REPO",
+            "--state", "merged", "--json", "number,state,title,mergedAt,createdAt,url",
+            "--limit", "1"
         )
     }
     if (-not $prJson -or $prJson -eq "[]") { return $null }
@@ -369,19 +405,197 @@ function Get-PRCheckStatus {
     [CmdletBinding()]
     param([Parameter(Mandatory)][int]$PRNumber)
     $checksJson = Invoke-VKGithub -Args @(
-        "pr","checks",$PRNumber.ToString(),"--repo","$script:GH_OWNER/$script:GH_REPO",
-        "--json","name,state,status"
+        "pr", "checks", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--json", "name,state"
     )
     if (-not $checksJson) { return "unknown" }
     $checks = $checksJson | ConvertFrom-Json
     if (-not $checks -or $checks.Count -eq 0) { return "unknown" }
 
-    $failing = $checks | Where-Object { $_.state -eq "FAILURE" -or $_.state -eq "ERROR" }
-    $pending = $checks | Where-Object { $_.state -eq "PENDING" -or $_.status -eq "IN_PROGRESS" -or $_.status -eq "QUEUED" }
+    $failing = $checks | Where-Object { $_.state -in @("FAILURE", "ERROR") }
+    $pending = $checks | Where-Object { $_.state -in @("PENDING", "IN_PROGRESS", "QUEUED") }
 
     if ($failing.Count -gt 0) { return "failing" }
     if ($pending.Count -gt 0) { return "pending" }
     return "passing"
+}
+
+function Get-PRDetails {
+    <#
+    .SYNOPSIS Get mergeability details for a PR.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $prJson = Invoke-VKGithub -Args @(
+        "pr", "view", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--json", "number,state,mergeable,mergeStateStatus,isDraft,reviewDecision,url"
+    )
+    if (-not $prJson) { return $null }
+    return $prJson | ConvertFrom-Json
+}
+
+function Get-PRChecksDetail {
+    <#
+    .SYNOPSIS Get detailed check info for a PR.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$PRNumber)
+    $checksJson = Invoke-VKGithub -Args @(
+        "pr", "checks", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--json", "name,state,link,startedAt,completedAt"
+    )
+    if (-not $checksJson) { return @() }
+    return $checksJson | ConvertFrom-Json
+}
+
+function Format-PRCheckFailures {
+    <#
+    .SYNOPSIS Format failing checks into a short markdown list.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object[]]$Checks)
+    $failed = $Checks | Where-Object { $_.state -eq "FAILURE" -or $_.state -eq "ERROR" }
+    if (-not $failed -or $failed.Count -eq 0) { return "- No failing checks found" }
+    $lines = $failed | ForEach-Object {
+        $link = if ($_.link) { " ($($_.link))" } else { "" }
+        "- $($_.name): $($_.state)$link"
+    }
+    return ($lines -join "`n")
+}
+
+function Add-PRComment {
+    <#
+    .SYNOPSIS Add a comment to a PR.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$PRNumber,
+        [Parameter(Mandatory)][string]$Body
+    )
+    $result = Invoke-VKGithub -Args @(
+        "pr", "comment", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--body", $Body
+    )
+    return ($null -ne $result)
+}
+
+function Create-PRForBranch {
+    <#
+    .SYNOPSIS Create a PR for a branch when the agent did not open one.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Branch,
+        [Parameter(Mandatory)][string]$Title,
+        [string]$Body = "Automated PR created by ve-orchestrator"
+    )
+    $baseBranch = $script:VK_TARGET_BRANCH
+    if ($baseBranch -like "origin/*") { $baseBranch = $baseBranch.Substring(7) }
+    $result = Invoke-VKGithub -Args @(
+        "pr", "create", "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--head", $Branch,
+        "--base", $baseBranch,
+        "--title", $Title,
+        "--body", $Body
+    )
+    return ($null -ne $result)
+}
+
+function Test-RemoteBranchExists {
+    <#
+    .SYNOPSIS Check if a branch exists on the remote GitHub repo.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Branch)
+    $result = Invoke-VKGithub -Args @(
+        "api",
+        "repos/$script:GH_OWNER/$script:GH_REPO/branches/$Branch"
+    )
+    return ($null -ne $result)
+}
+
+function Get-VKSessions {
+    <#
+    .SYNOPSIS List sessions for a workspace.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$WorkspaceId)
+    $result = Invoke-VKApi -Path "/api/sessions?workspace_id=$WorkspaceId"
+    if (-not $result) { return @() }
+    return @($result)
+}
+
+function New-VKSession {
+    <#
+    .SYNOPSIS Create a new session for a workspace.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$WorkspaceId)
+    $body = @{ workspace_id = $WorkspaceId }
+    return Invoke-VKApi -Path "/api/sessions" -Method "POST" -Body $body
+}
+
+function Get-ExecutorProfileForSession {
+    <#
+    .SYNOPSIS Map a session executor to an executor profile.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Executor)
+    switch ($Executor) {
+        "COPILOT" { return @{ executor = "COPILOT"; variant = "CLAUDE_OPUS_4_6" } }
+        "CODEX" { return @{ executor = "CODEX"; variant = "DEFAULT" } }
+        default { return @{ executor = "CODEX"; variant = "DEFAULT" } }
+    }
+}
+
+function Send-VKWorkspaceFollowUp {
+    <#
+    .SYNOPSIS Send a direct follow-up message to the latest session for a workspace.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$WorkspaceId,
+        [Parameter(Mandatory)][string]$Message,
+        [hashtable]$ExecutorOverride
+    )
+    $sessions = Get-VKSessions -WorkspaceId $WorkspaceId
+    if (-not $sessions -or @($sessions).Count -eq 0) { return $false }
+    $session = $sessions | Sort-Object -Property updated_at -Descending | Select-Object -First 1
+    $profile = if ($ExecutorOverride) { $ExecutorOverride } else { Get-ExecutorProfileForSession -Executor $session.executor }
+    return Send-VKSessionFollowUp -SessionId $session.id -Message $Message -ExecutorProfile $profile
+}
+
+function Send-VKSessionFollowUp {
+    <#
+    .SYNOPSIS Send a follow-up message to a specific session.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$SessionId,
+        [Parameter(Mandatory)][string]$Message,
+        [Parameter(Mandatory)][hashtable]$ExecutorProfile
+    )
+    $body = @{ prompt = $Message; executor_profile_id = $ExecutorProfile }
+    $result = Invoke-VKApi -Path "/api/sessions/$SessionId/follow-up" -Method "POST" -Body $body
+    return ($null -ne $result)
+}
+
+function Queue-VKWorkspaceMessage {
+    <#
+    .SYNOPSIS Enqueue a message to the latest session for a workspace.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$WorkspaceId,
+        [Parameter(Mandatory)][string]$Message
+    )
+    $sessions = Get-VKSessions -WorkspaceId $WorkspaceId
+    if (-not $sessions -or @($sessions).Count -eq 0) { return $false }
+    $session = $sessions | Sort-Object -Property updated_at -Descending | Select-Object -First 1
+    $profile = Get-ExecutorProfileForSession -Executor $session.executor
+    $body = @{ executor_profile_id = $profile; message = $Message }
+    $result = Invoke-VKApi -Path "/api/sessions/$($session.id)/queue" -Method "POST" -Body $body
+    return ($null -ne $result)
 }
 
 function Merge-PR {
@@ -391,24 +605,26 @@ function Merge-PR {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][int]$PRNumber,
-        [switch]$AutoMerge
+        [switch]$AutoMerge,
+        [switch]$Admin
     )
+    $args = @(
+        "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--merge", "--delete-branch"
+    )
+    if ($AutoMerge) { $args += "--auto" }
+    if ($Admin) { $args += "--admin" }
     if ($AutoMerge) {
         Write-Host "  Enabling auto-merge for PR #$PRNumber ..." -ForegroundColor Yellow
-        $result = Invoke-VKGithub -Args @(
-            "pr","merge",$PRNumber.ToString(),"--repo","$script:GH_OWNER/$script:GH_REPO",
-            "--auto","--merge","--delete-branch"
-        )
-        return ($null -ne $result)
+    }
+    elseif ($Admin) {
+        Write-Host "  Admin merging PR #$PRNumber ..." -ForegroundColor Yellow
     }
     else {
         Write-Host "  Merging PR #$PRNumber ..." -ForegroundColor Yellow
-        $result = Invoke-VKGithub -Args @(
-            "pr","merge",$PRNumber.ToString(),"--repo","$script:GH_OWNER/$script:GH_REPO",
-            "--merge","--delete-branch"
-        )
-        return ($null -ne $result)
     }
+    $result = Invoke-VKGithub -Args $args
+    return ($null -ne $result)
 }
 
 function Enable-AutoMerge {
@@ -418,8 +634,8 @@ function Enable-AutoMerge {
     [CmdletBinding()]
     param([Parameter(Mandatory)][int]$PRNumber)
     $result = Invoke-VKGithub -Args @(
-        "pr","merge",$PRNumber.ToString(),"--repo","$script:GH_OWNER/$script:GH_REPO",
-        "--auto","--merge","--delete-branch"
+        "pr", "merge", $PRNumber.ToString(), "--repo", "$script:GH_OWNER/$script:GH_REPO",
+        "--auto", "--merge", "--delete-branch"
     )
     return ($null -ne $result)
 }
@@ -529,7 +745,8 @@ function Invoke-CLI {
 
     if ($null -eq $Arguments) {
         $Arguments = @()
-    } else {
+    }
+    else {
         $Arguments = @($Arguments)
     }
 
@@ -557,6 +774,27 @@ function Invoke-CLI {
             if ($VerbosePreference -eq "Continue") { $showIdle = $true }
             if (Test-CLIFlagPresent -Flags @("--verbose", "-v") -Arguments $rest) { $showIdle = $true }
             Show-Status -ShowIdle:$showIdle
+        }
+        "archived" {
+            $archived = Get-VKArchivedAttempts
+            if (-not $archived -or @($archived).Count -eq 0) {
+                Write-Host "  No archived attempts." -ForegroundColor Yellow
+                return
+            }
+            Write-Host "";
+            Write-Host "  ┌─ Archived Attempts ─────────────────────────" -ForegroundColor DarkGray
+            foreach ($a in $archived) {
+                $name = if ($a.name) { $a.name.Substring(0, [Math]::Min(60, $a.name.Length)) } else { "(unnamed)" }
+                Write-Host "  │ $($a.id.Substring(0,8))  $($a.branch)" -ForegroundColor White
+                Write-Host "  │   $name" -ForegroundColor DarkGray
+            }
+            Write-Host "  └────────────────────────────────────────────" -ForegroundColor DarkGray
+            Write-Host ""
+        }
+        "unarchive" {
+            if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban unarchive <attempt-id>"; return }
+            Unarchive-VKAttempt -AttemptId $rest[0] | Out-Null
+            Write-Host "  ✓ Attempt $($rest[0]) unarchived" -ForegroundColor Green
         }
         "submit" {
             if ($rest.Count -eq 0) { Write-Error "Usage: ve-kanban submit <task-id>"; return }
@@ -633,6 +871,8 @@ function Show-Usage {
     list [--status <status>]        List tasks (default: todo)
     status                          Show dashboard (active attempts + queues)
     status --verbose | -v            Show dashboard with idle minutes
+    archived                        List archived attempts
+    unarchive <attempt-id>          Unarchive an attempt
     submit <task-id>                Submit a single task as an attempt
     submit-next [--count N]         Submit next N todo tasks as attempts
     rebase <attempt-id>             Rebase an attempt branch onto latest main
