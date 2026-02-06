@@ -294,22 +294,26 @@ export default function OfferingDetailClient() {
 
             {offering.allowBidding && (
               <div className="mt-4 rounded-md bg-blue-50 p-3 text-center text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                💰 This offering accepts bids
-                {offering.minBid && (
-                  <div className="mt-1 text-xs">
-                    Min bid: {parseInt(offering.minBid.amount, 10) / 1000000} VE
-                  </div>
-                )}
+                💰 Bidding support is coming in Phase 3. Fixed price orders are available now.
               </div>
             )}
 
-            <button
-              type="button"
-              disabled={!isAvailable}
-              className="mt-6 w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isAvailable ? 'Create Order' : 'Not Available'}
-            </button>
+            {isAvailable ? (
+              <Link
+                href={`/marketplace/${provider}/${sequence}/order`}
+                className="mt-6 block w-full rounded-lg bg-primary px-4 py-3 text-center font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Create Order
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="mt-6 w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground opacity-50"
+              >
+                Not Available
+              </button>
+            )}
 
             <p className="mt-4 text-center text-xs text-muted-foreground">
               Funds will be held in escrow until deployment is complete
