@@ -380,7 +380,7 @@ check_portal_lint() {
         return 1
     fi
     hook_step "Running ESLint on portal (next lint)..."
-    (cd "$REPO_ROOT/portal" && pnpm lint 2>&1)
+    (cd "$REPO_ROOT/portal" && pnpm lint -- --max-warnings=0 2>&1)
 }
 
 check_portal_typecheck() {
