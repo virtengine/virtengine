@@ -723,4 +723,26 @@ var (
 
 	// ErrInvalidChallengeState is returned when challenge state is invalid
 	ErrInvalidChallengeState = errorsmod.Register(ModuleName, 1268, "invalid challenge state")
+
+	// ============================================================================
+	// Security Hardening Errors (codes 1280-1299) — Task 22A
+	// ============================================================================
+
+	// ErrInputTooLarge is returned when a message field exceeds size limits
+	ErrInputTooLarge = errorsmod.Register(ModuleName, 1281, "input exceeds maximum size")
+
+	// ErrInvalidCeremony is returned when a trusted setup ceremony is invalid
+	ErrInvalidCeremony = errorsmod.Register(ModuleName, 1282, "invalid trusted setup ceremony")
+
+	// ErrCeremonyNotFound is returned when a trusted setup ceremony is not found
+	ErrCeremonyNotFound = errorsmod.Register(ModuleName, 1283, "trusted setup ceremony not found")
+
+	// ErrInvalidCeremonyContribution is returned when a ceremony contribution is invalid
+	ErrInvalidCeremonyContribution = errorsmod.Register(ModuleName, 1284, "invalid ceremony contribution")
+
+	// ErrInvalidKeyRotation is returned when a key rotation request is invalid
+	ErrInvalidKeyRotation = errorsmod.Register(ModuleName, 1285, "invalid key rotation")
+
+	// ErrScoreOutOfRange is returned when a score is outside valid bounds
+	ErrScoreOutOfRange = errorsmod.Register(ModuleName, 1286, "score out of valid range")
 )
