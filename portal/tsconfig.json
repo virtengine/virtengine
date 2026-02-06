@@ -14,6 +14,7 @@
     "incremental": true,
     "target": "ES2020",
     "downlevelIteration": true,
+    "typeRoots": ["./src/types", "./node_modules/@types"],
     "plugins": [
       {
         "name": "next"
