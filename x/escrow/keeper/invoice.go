@@ -126,7 +126,21 @@ func (ik *invoiceKeeper) CreateInvoice(
 	// Check if invoice already exists
 	key := billing.BuildInvoiceLedgerRecordKey(invoice.InvoiceID)
 	if store.Has(key) {
-		return nil, fmt.Errorf("invoice already exists: %s", invoice.InvoiceID)
+		existing, err := ik.GetInvoice(ctx, invoice.InvoiceID)
+		if err != nil {
+			return nil, err
+		}
+
+		match, err := existing.VerifyContentHash(invoice)
+		if err != nil {
+			return nil, err
+		}
+
+		if match {
+			return existing, nil
+		}
+
+		return nil, fmt.Errorf("invoice already exists with different content: %s", invoice.InvoiceID)
 	}
 
 	// Create ledger record
@@ -551,10 +565,6 @@ func (ik *invoiceKeeper) GetReconciliationReport(ctx sdk.Context, reportID strin
 
 // CreateInvoiceFromPayment creates an invoice from a payment that is being closed/settled
 func (ik *invoiceKeeper) CreateInvoiceFromPayment(ctx sdk.Context, payment PaymentSummary) (*billing.InvoiceLedgerRecord, error) {
-	// Get next sequence number for invoice
-	seq := ik.GetInvoiceSequence(ctx)
-	invoiceNumber := fmt.Sprintf("VE-INV-%d", seq+1)
-
 	// Create billing period from payment heights
 	// Use approximate 6-second block times
 	now := ctx.BlockTime()
@@ -604,9 +614,6 @@ func (ik *invoiceKeeper) CreateInvoiceFromPayment(ctx sdk.Context, payment Payme
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate invoice: %w", err)
 	}
-
-	// Override invoice number with our sequence-based number
-	invoice.InvoiceNumber = invoiceNumber
 
 	// Mark as paid since this is generated from a settled payment
 	invoice.Status = billing.InvoiceStatusPaid

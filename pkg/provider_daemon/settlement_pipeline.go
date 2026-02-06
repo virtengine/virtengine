@@ -4,10 +4,10 @@
 package provider_daemon
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -17,6 +17,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	verrors "github.com/virtengine/virtengine/pkg/errors"
+	"github.com/virtengine/virtengine/pkg/usage"
 )
 
 // SettlementConfig configures the settlement pipeline.
@@ -86,76 +87,6 @@ func DefaultAnomalyThresholds() AnomalyThresholds {
 		MinRecordDuration: time.Minute,
 		MaxRecordDuration: 25 * time.Hour,
 	}
-}
-
-// BillableLineItem represents a line item for invoicing.
-type BillableLineItem struct {
-	// LineItemID is the unique identifier for this line item.
-	LineItemID string `json:"line_item_id"`
-
-	// OrderID is the linked marketplace order.
-	OrderID string `json:"order_id"`
-
-	// LeaseID is the linked lease.
-	LeaseID string `json:"lease_id"`
-
-	// UsageRecordID is the linked usage record.
-	UsageRecordID string `json:"usage_record_id"`
-
-	// ResourceType is the type of resource (cpu, memory, storage, gpu, network).
-	ResourceType string `json:"resource_type"`
-
-	// Quantity is the quantity of resource consumed.
-	Quantity sdkmath.LegacyDec `json:"quantity"`
-
-	// Unit is the unit of measurement.
-	Unit string `json:"unit"`
-
-	// UnitPrice is the price per unit.
-	UnitPrice sdk.DecCoin `json:"unit_price"`
-
-	// TotalCost is the total cost for this line item.
-	TotalCost sdk.Coin `json:"total_cost"`
-
-	// PeriodStart is the start of the billing period.
-	PeriodStart time.Time `json:"period_start"`
-
-	// PeriodEnd is the end of the billing period.
-	PeriodEnd time.Time `json:"period_end"`
-
-	// CreatedAt is when the line item was created.
-	CreatedAt time.Time `json:"created_at"`
-
-	// Disputed indicates if this line item is disputed.
-	Disputed bool `json:"disputed"`
-
-	// DisputeReason is the reason for the dispute.
-	DisputeReason string `json:"dispute_reason,omitempty"`
-}
-
-// Hash generates a hash of the billable line item.
-func (b *BillableLineItem) Hash() []byte {
-	data := struct {
-		OrderID      string `json:"order_id"`
-		LeaseID      string `json:"lease_id"`
-		ResourceType string `json:"resource_type"`
-		Quantity     string `json:"quantity"`
-		PeriodStart  int64  `json:"period_start"`
-		PeriodEnd    int64  `json:"period_end"`
-	}{
-		OrderID:      b.OrderID,
-		LeaseID:      b.LeaseID,
-		ResourceType: b.ResourceType,
-		Quantity:     b.Quantity.String(),
-		PeriodStart:  b.PeriodStart.Unix(),
-		PeriodEnd:    b.PeriodEnd.Unix(),
-	}
-	bytes, err := json.Marshal(data)
-	if err != nil {
-		return nil
-	}
-	hash := sha256.Sum256(bytes)
-	return hash[:]
 }
 
 // UsageDispute represents a dispute on a usage record.
@@ -375,7 +306,7 @@ type SettlementPipeline struct {
 	reconciliations map[string]*ReconciliationResult
 
 	// lineItems contains generated line items.
-	lineItems map[string]*BillableLineItem
+	lineItems map[string]*usage.LineItem
 
 	// running indicates if the pipeline is running.
 	running bool
@@ -406,7 +337,7 @@ func NewSettlementPipeline(
 		corrections:     make(map[string]*UsageCorrection),
 		anomalies:       make(map[string]*UsageAnomaly),
 		reconciliations: make(map[string]*ReconciliationResult),
-		lineItems:       make(map[string]*BillableLineItem),
+		lineItems:       make(map[string]*usage.LineItem),
 		stopChan:        make(chan struct{}),
 	}
 }
@@ -454,6 +385,14 @@ func (p *SettlementPipeline) AddPendingUsage(record *UsageRecord) {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if existing, ok := p.pending[record.ID]; ok {
+		if bytes.Equal(existing.Hash(), record.Hash()) {
+			return
+		}
+		p.recordDuplicateConflict(record)
+		return
+	}
 
 	p.pending[record.ID] = record
 	p.usageStore.Track(record)
@@ -576,13 +515,13 @@ func (p *SettlementPipeline) applyCorrection(dispute *UsageDispute) error {
 }
 
 // ProcessUsageToLineItems converts usage records to billable line items.
-func (p *SettlementPipeline) ProcessUsageToLineItems(record *UsageRecord) ([]*BillableLineItem, error) {
+func (p *SettlementPipeline) ProcessUsageToLineItems(record *UsageRecord) ([]*usage.LineItem, error) {
 	if record == nil {
 		return nil, fmt.Errorf("usage record is nil")
 	}
 
 	now := time.Now()
-	items := make([]*BillableLineItem, 0)
+	items := make([]*usage.LineItem, 0)
 
 	// Convert CPU usage
 	if record.Metrics.CPUMilliSeconds > 0 {
@@ -648,7 +587,7 @@ func (p *SettlementPipeline) createLineItem(
 	unit string,
 	rateStr string,
 	now time.Time,
-) *BillableLineItem {
+) *usage.LineItem {
 	if rateStr == "" {
 		return nil
 	}
@@ -658,18 +597,17 @@ func (p *SettlementPipeline) createLineItem(
 		return nil
 	}
 
-	lineItemID := p.generateID("line-"+resourceType, now)
 	quantityDec := sdkmath.LegacyNewDecFromInt(sdkmath.NewInt(int64(quantity * 1000000))).QuoInt64(1000000)
 	// Rate is in virt per unit, convert to uvirt (1 virt = 1,000,000 uvirt)
 	uvirtMultiplier := sdkmath.LegacyNewDec(1000000)
 	totalAmount := rate.Mul(quantityDec).Mul(uvirtMultiplier).TruncateInt()
 
-	return &BillableLineItem{
-		LineItemID:    lineItemID,
+	item := &usage.LineItem{
+		Source:        usage.SourceSettlement,
 		OrderID:       record.DeploymentID,
 		LeaseID:       record.LeaseID,
 		UsageRecordID: record.ID,
-		ResourceType:  resourceType,
+		ResourceType:  usage.ResourceType(resourceType),
 		Quantity:      quantityDec,
 		Unit:          unit,
 		UnitPrice:     sdk.NewDecCoinFromDec("uvirt", rate),
@@ -678,6 +616,9 @@ func (p *SettlementPipeline) createLineItem(
 		PeriodEnd:     record.EndTime,
 		CreatedAt:     now,
 	}
+
+	item.LineItemID = item.CanonicalID("line")
+	return item
 }
 
 // DetectAnomalies detects anomalies in a usage record.
@@ -880,7 +821,9 @@ func (p *SettlementPipeline) SubmitUsageToChain(ctx context.Context, record *Usa
 		}
 	}
 
-	return p.chainSubmit.SubmitUsageReport(ctx, report)
+	return p.withRetry(ctx, func() error {
+		return p.chainSubmit.SubmitUsageReport(ctx, report)
+	})
 }
 
 // calculateUsageUnits calculates usage units from a record.
@@ -1034,7 +977,9 @@ func (p *SettlementPipeline) processSettlements(ctx context.Context) {
 		}
 
 		if p.chainSubmit != nil {
-			if err := p.chainSubmit.SubmitSettlementRequest(ctx, orderID, usageIDs, false); err != nil {
+			if err := p.withRetry(ctx, func() error {
+				return p.chainSubmit.SubmitSettlementRequest(ctx, orderID, usageIDs, false)
+			}); err != nil {
 				log.Printf("[settlement-pipeline] failed to submit settlement for order %s: %v", orderID, err)
 				continue
 			}
@@ -1069,4 +1014,51 @@ func (p *SettlementPipeline) generateID(prefix string, timestamp time.Time) stri
 	data := prefix + ":" + timestamp.Format(time.RFC3339Nano)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
+}
+
+func (p *SettlementPipeline) recordDuplicateConflict(record *UsageRecord) {
+	now := time.Now()
+	anomaly := &UsageAnomaly{
+		AnomalyID:     p.generateID("anomaly", now),
+		UsageRecordID: record.ID,
+		OrderID:       record.DeploymentID,
+		AnomalyType:   "duplicate_conflict",
+		Description:   fmt.Sprintf("duplicate usage record %s differs from existing record", record.ID),
+		Severity:      "high",
+		DetectedAt:    now,
+	}
+
+	p.anomalies[anomaly.AnomalyID] = anomaly
+}
+
+func (p *SettlementPipeline) withRetry(ctx context.Context, fn func() error) error {
+	attempts := p.cfg.RetryAttempts
+	if attempts <= 0 {
+		attempts = 1
+	}
+	backoff := p.cfg.RetryBackoff
+	if backoff <= 0 {
+		backoff = time.Second
+	}
+
+	var err error
+	for attempt := 0; attempt < attempts; attempt++ {
+		err = fn()
+		if err == nil {
+			return nil
+		}
+
+		if attempt == attempts-1 {
+			break
+		}
+
+		wait := backoff * time.Duration(1<<attempt)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+
+	return err
 }
