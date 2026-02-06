@@ -234,6 +234,149 @@ func TestBuildHelmValues(t *testing.T) {
 	}
 }
 
+func TestBootstrapRollbackOnPartialDeploy(t *testing.T) {
+	uninstallCalled := false
+	helmClient := &MockHelmClient{
+		InstallFunc: func(ctx context.Context, releaseName, chartPath, namespace string, values map[string]interface{}) error {
+			return nil
+		},
+		UninstallFunc: func(ctx context.Context, releaseName, namespace string) error {
+			uninstallCalled = true
+			return nil
+		},
+	}
+
+	k8s := &MockK8sChecker{
+		StatefulSetStatus: map[string]*StatefulSetStatus{
+			"slurm-ns/slurm-test-cluster-controller": {ReadyReplicas: 1, Replicas: 1},
+			"slurm-ns/slurm-test-cluster-slurmdbd":   {ReadyReplicas: 1, Replicas: 1},
+			"slurm-ns/slurm-test-cluster-compute":    {ReadyReplicas: 0, Replicas: 2},
+		},
+	}
+
+	adapter := NewSLURMKubernetesAdapter(AdapterConfig{
+		Helm:      helmClient,
+		K8s:       k8s,
+		ChartPath: "/charts/slurm",
+	})
+
+	ctx := context.Background()
+	if err := adapter.Start(ctx); err != nil {
+		t.Fatalf("failed to start adapter: %v", err)
+	}
+	defer func() { _ = adapter.Stop() }()
+
+	config := DeploymentConfig{
+		ClusterID:   "test-cluster",
+		ClusterName: "Test Cluster",
+		Namespace:   "slurm-ns",
+	}
+
+	_, err := adapter.Bootstrap(ctx, config, BootstrapOptions{
+		DeployOptions: DeployOptions{
+			ReadyTimeout:      250 * time.Millisecond,
+			AllowDegraded:     false,
+			RollbackOnFailure: true,
+			MinComputeReady:   2,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected bootstrap to fail for partial deploy")
+	}
+	if !uninstallCalled {
+		t.Fatal("expected rollback to uninstall release")
+	}
+}
+
+func TestHealthDetectsNodeLoss(t *testing.T) {
+	adapter := NewSLURMKubernetesAdapter(AdapterConfig{
+		Helm: &MockHelmClient{},
+		K8s: &MockK8sChecker{
+			StatefulSetStatus: map[string]*StatefulSetStatus{
+				"slurm-ns/slurm-test-cluster-controller": {ReadyReplicas: 1, Replicas: 1},
+				"slurm-ns/slurm-test-cluster-slurmdbd":   {ReadyReplicas: 1, Replicas: 1},
+				"slurm-ns/slurm-test-cluster-compute":    {ReadyReplicas: 1, Replicas: 3},
+			},
+		},
+	})
+
+	adapter.clusters["test-cluster"] = &DeployedCluster{
+		Config: DeploymentConfig{
+			ClusterID: "test-cluster",
+			Namespace: "slurm-ns",
+		},
+		State: ClusterStateRunning,
+	}
+
+	adapter.checkAllClustersHealth()
+
+	cluster, _ := adapter.GetCluster("test-cluster")
+	if cluster.State != ClusterStateDegraded {
+		t.Fatalf("expected degraded state after node loss, got %s", cluster.State)
+	}
+}
+
+func TestRedeployReinstallsRelease(t *testing.T) {
+	installCalled := false
+	uninstallCalled := false
+
+	helmClient := &MockHelmClient{
+		InstallFunc: func(ctx context.Context, releaseName, chartPath, namespace string, values map[string]interface{}) error {
+			installCalled = true
+			return nil
+		},
+		UninstallFunc: func(ctx context.Context, releaseName, namespace string) error {
+			uninstallCalled = true
+			return nil
+		},
+	}
+
+	k8s := &MockK8sChecker{
+		StatefulSetStatus: map[string]*StatefulSetStatus{
+			"slurm-ns/slurm-test-cluster-controller": {ReadyReplicas: 1, Replicas: 1},
+			"slurm-ns/slurm-test-cluster-slurmdbd":   {ReadyReplicas: 1, Replicas: 1},
+			"slurm-ns/slurm-test-cluster-compute":    {ReadyReplicas: 1, Replicas: 1},
+		},
+	}
+
+	adapter := NewSLURMKubernetesAdapter(AdapterConfig{
+		Helm:      helmClient,
+		K8s:       k8s,
+		ChartPath: "/charts/slurm",
+	})
+
+	adapter.clusters["test-cluster"] = &DeployedCluster{
+		Config: DeploymentConfig{
+			ClusterID:   "test-cluster",
+			ClusterName: "Test Cluster",
+			Namespace:   "slurm-ns",
+		},
+		State: ClusterStateFailed,
+	}
+
+	ctx := context.Background()
+	if err := adapter.Start(ctx); err != nil {
+		t.Fatalf("failed to start adapter: %v", err)
+	}
+	defer func() { _ = adapter.Stop() }()
+
+	_, err := adapter.Redeploy(ctx, "test-cluster", DeployOptions{
+		ReadyTimeout:      500 * time.Millisecond,
+		AllowDegraded:     false,
+		RollbackOnFailure: true,
+		MinComputeReady:   1,
+	})
+	if err != nil {
+		t.Fatalf("redeploy failed: %v", err)
+	}
+	if !installCalled {
+		t.Fatal("expected helm install on redeploy")
+	}
+	if !uninstallCalled {
+		t.Fatal("expected helm uninstall on redeploy")
+	}
+}
+
 func TestParseSinfoOutput(t *testing.T) {
 	adapter := NewSLURMKubernetesAdapter(AdapterConfig{
 		Helm: &MockHelmClient{},

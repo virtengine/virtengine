@@ -158,6 +158,8 @@ type HPCProvider struct {
 	usageReporter      *HPCUsageReporter
 	credManager        *HPCCredentialManager
 	routingEnforcer    *RoutingEnforcer
+	nodeAggregator     *HPCNodeAggregator
+	slurmK8sManager    *HPCSlurmK8sManager
 	auditor            HPCAuditLogger
 
 	mu      sync.RWMutex
@@ -232,6 +234,38 @@ func NewHPCProvider(
 		jobService.SetRoutingEnforcer(routingEnforcer)
 	}
 
+	var nodeAggregator *HPCNodeAggregator
+	if config.HPC.NodeAggregator.Enabled {
+		nodeCfg := config.HPC.NodeAggregator
+		if nodeCfg.ProviderAddress == "" {
+			nodeCfg.ProviderAddress = config.HPC.ProviderAddress
+		}
+		if nodeCfg.ClusterID == "" {
+			nodeCfg.ClusterID = config.HPC.ClusterID
+		}
+		if nodeCfg.ChainReporter == nil {
+			if reporter, ok := chainClient.(HPCNodeChainReporter); ok {
+				nodeCfg.ChainReporter = reporter
+			}
+		}
+
+		aggregator, err := NewHPCNodeAggregator(nodeCfg, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create node aggregator: %w", err)
+		}
+		nodeAggregator = aggregator
+	}
+
+	slurmManager, err := NewHPCSlurmK8sManager(
+		config.HPC.SlurmK8s,
+		config.HPC.ClusterID,
+		config.HPC.ProviderAddress,
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create slurm_k8s manager: %w", err)
+	}
+
 	return &HPCProvider{
 		config:             config,
 		backendFactory:     backendFactory,
@@ -241,6 +275,8 @@ func NewHPCProvider(
 		usageReporter:      usageReporter,
 		credManager:        credManager,
 		routingEnforcer:    routingEnforcer,
+		nodeAggregator:     nodeAggregator,
+		slurmK8sManager:    slurmManager,
 		auditor:            auditor,
 	}, nil
 }
@@ -256,16 +292,49 @@ func (p *HPCProvider) Start(ctx context.Context) error {
 	p.mu.Unlock()
 
 	// Start components in order
+	if p.slurmK8sManager != nil {
+		if err := p.slurmK8sManager.Start(p.ctx); err != nil {
+			return fmt.Errorf("failed to start slurm_k8s manager: %w", err)
+		}
+	}
+
+	if p.nodeAggregator != nil {
+		if err := p.nodeAggregator.Start(p.ctx); err != nil {
+			if p.slurmK8sManager != nil {
+				_ = p.slurmK8sManager.Stop()
+			}
+			return fmt.Errorf("failed to start node aggregator: %w", err)
+		}
+	}
+
 	if err := p.backendFactory.Start(p.ctx); err != nil {
+		if p.nodeAggregator != nil {
+			p.nodeAggregator.Stop()
+		}
+		if p.slurmK8sManager != nil {
+			_ = p.slurmK8sManager.Stop()
+		}
 		return fmt.Errorf("failed to start backend factory: %w", err)
 	}
 
 	if err := p.usageReporter.Start(); err != nil {
+		if p.nodeAggregator != nil {
+			p.nodeAggregator.Stop()
+		}
+		if p.slurmK8sManager != nil {
+			_ = p.slurmK8sManager.Stop()
+		}
 		_ = p.backendFactory.Stop()
 		return fmt.Errorf("failed to start usage reporter: %w", err)
 	}
 
 	if err := p.jobService.Start(p.ctx); err != nil {
+		if p.nodeAggregator != nil {
+			p.nodeAggregator.Stop()
+		}
+		if p.slurmK8sManager != nil {
+			_ = p.slurmK8sManager.Stop()
+		}
 		_ = p.usageReporter.Stop()
 		_ = p.backendFactory.Stop()
 		return fmt.Errorf("failed to start job service: %w", err)
@@ -273,6 +342,12 @@ func (p *HPCProvider) Start(ctx context.Context) error {
 
 	if p.config.Chain.Enabled {
 		if err := p.chainSubscriber.Start(p.ctx); err != nil {
+			if p.nodeAggregator != nil {
+				p.nodeAggregator.Stop()
+			}
+			if p.slurmK8sManager != nil {
+				_ = p.slurmK8sManager.Stop()
+			}
 			_ = p.jobService.Stop()
 			_ = p.usageReporter.Stop()
 			_ = p.backendFactory.Stop()
@@ -282,6 +357,12 @@ func (p *HPCProvider) Start(ctx context.Context) error {
 
 	if p.config.Settlement.Enabled {
 		if err := p.settlementPipeline.Start(p.ctx); err != nil {
+			if p.nodeAggregator != nil {
+				p.nodeAggregator.Stop()
+			}
+			if p.slurmK8sManager != nil {
+				_ = p.slurmK8sManager.Stop()
+			}
 			_ = p.chainSubscriber.Stop()
 			_ = p.jobService.Stop()
 			_ = p.usageReporter.Stop()
@@ -343,6 +424,16 @@ func (p *HPCProvider) Stop() error {
 		errs = append(errs, fmt.Errorf("backend factory: %w", err))
 	}
 
+	if p.nodeAggregator != nil {
+		p.nodeAggregator.Stop()
+	}
+
+	if p.slurmK8sManager != nil {
+		if err := p.slurmK8sManager.Stop(); err != nil {
+			errs = append(errs, fmt.Errorf("slurm_k8s manager: %w", err))
+		}
+	}
+
 	// Lock credential manager
 	p.credManager.Lock()
 
@@ -399,6 +490,28 @@ func (p *HPCProvider) GetHealth() *HPCProviderHealth {
 				"total_confirmed": stats.TotalConfirmed,
 				"total_failed":    stats.TotalFailed,
 			},
+		})
+	}
+
+	if p.nodeAggregator != nil {
+		components = append(components, HPCComponentHealth{
+			Name:      "node_aggregator",
+			Healthy:   true,
+			Message:   "running",
+			LastCheck: time.Now(),
+			Details: map[string]interface{}{
+				"node_count":      p.nodeAggregator.GetNodeCount(),
+				"pending_updates": p.nodeAggregator.GetPendingUpdateCount(),
+			},
+		})
+	}
+
+	if p.slurmK8sManager != nil {
+		components = append(components, HPCComponentHealth{
+			Name:      "slurm_k8s_bootstrap",
+			Healthy:   p.slurmK8sManager.IsRunning(),
+			Message:   "running",
+			LastCheck: time.Now(),
 		})
 	}
 
