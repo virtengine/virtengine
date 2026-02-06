@@ -27,11 +27,11 @@ func (m *mockNovaClient) CreateServer(_ context.Context, spec *pd.ServerCreateSp
 		return nil, errors.New("create server failed")
 	}
 	server := &pd.ServerInfo{
-		ID:     "srv-1",
-		Name:   spec.Name,
-		Status: pd.VMStateActive,
-		Flavor: spec.FlavorID,
-		Image:  spec.ImageID,
+		ID:       "srv-1",
+		Name:     spec.Name,
+		Status:   pd.VMStateActive,
+		FlavorID: spec.FlavorID,
+		ImageID:  spec.ImageID,
 	}
 	m.servers[server.ID] = server
 	return server, nil
@@ -41,7 +41,7 @@ func (m *mockNovaClient) GetServer(_ context.Context, serverID string) (*pd.Serv
 	if server, ok := m.servers[serverID]; ok {
 		return server, nil
 	}
-	return nil, pd.ErrServerNotFound
+	return nil, pd.ErrVMNotFound
 }
 
 func (m *mockNovaClient) DeleteServer(_ context.Context, serverID string) error {
@@ -104,10 +104,10 @@ func (m *mockNovaClient) GetConsoleURL(_ context.Context, _ string, _ string) (s
 	return "https://console", nil
 }
 func (m *mockNovaClient) ListFlavors(_ context.Context) ([]pd.FlavorInfo, error) {
-	return []pd.FlavorInfo{{ID: "flavor-1", VCPUs: 2, RAM: 1024}}, nil
+	return []pd.FlavorInfo{{ID: "flavor-1", VCPUs: 2, RAM: 4096}}, nil
 }
 func (m *mockNovaClient) GetFlavor(_ context.Context, _ string) (*pd.FlavorInfo, error) {
-	return &pd.FlavorInfo{ID: "flavor-1", VCPUs: 2, RAM: 1024}, nil
+	return &pd.FlavorInfo{ID: "flavor-1", VCPUs: 2, RAM: 4096}, nil
 }
 func (m *mockNovaClient) ListImages(_ context.Context) ([]pd.ImageInfo, error) {
 	return []pd.ImageInfo{{ID: "img-1", Name: "ubuntu"}}, nil
@@ -252,7 +252,12 @@ func TestOpenStackAdapterE2E(t *testing.T) {
 	t.Run("QuotaExceeded", func(t *testing.T) {
 		failingNova := newMockNovaClient()
 		failingNova.fail = true
-		failAdapter := pd.NewOpenStackAdapter(pd.OpenStackAdapterConfig{Nova: failingNova, Neutron: &mockNeutronClient{}, ProviderID: "provider-e2e"})
+		failAdapter := pd.NewOpenStackAdapter(pd.OpenStackAdapterConfig{
+			Nova:       failingNova,
+			Neutron:    &mockNeutronClient{},
+			Cinder:     &mockCinderClient{},
+			ProviderID: "provider-e2e",
+		})
 		_, err := failAdapter.DeployVM(ctx, manifest, "deploy-fail", "lease-fail", pd.VMDeploymentOptions{})
 		require.Error(t, err)
 	})

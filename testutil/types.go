@@ -75,10 +75,10 @@ func NewTestNetworkFixture(opts ...network.TestnetFixtureOption) network.TestFix
 			panic(fmt.Sprintf("failed to unmarshal mfa genesis: %v", err))
 		}
 		for i, config := range mfaGenesis.SensitiveTxConfigs {
-			if config.TransactionType == mfatypes.SensitiveTxValidatorRegistration {
+			if config.TransactionType != mfatypes.SensitiveTxAccountRecovery {
 				config.Enabled = false
-				mfaGenesis.SensitiveTxConfigs[i] = config
 			}
+			mfaGenesis.SensitiveTxConfigs[i] = config
 		}
 		mfaGenesisBz, err := json.Marshal(&mfaGenesis)
 		if err != nil {

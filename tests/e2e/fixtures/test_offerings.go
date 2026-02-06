@@ -11,6 +11,7 @@ import (
 
 	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/google/uuid"
 )
 
 // =============================================================================
@@ -57,7 +58,7 @@ func DefaultTestOffering(providerAddr string) TestOffering {
 		Description:      "Standard compute offering for E2E tests",
 		Category:         "compute",
 		ProviderAddress:  providerAddr,
-		WaldurUUID:       fmt.Sprintf("waldur-offering-e2e-%d", time.Now().UnixNano()%10000),
+		WaldurUUID:       uuid.NewString(),
 		PricePerHour:     sdkmath.LegacyNewDec(10),
 		Currency:         "uve",
 		MinimumDeposit:   sdk.NewCoin("uve", sdkmath.NewInt(1000000)),
@@ -81,7 +82,7 @@ func ComputeSmallOffering(providerAddr string) TestOffering {
 		Description:      "Small compute instance with 4 cores",
 		Category:         "compute",
 		ProviderAddress:  providerAddr,
-		WaldurUUID:       "waldur-compute-small",
+		WaldurUUID:       uuid.NewString(),
 		PricePerHour:     sdkmath.LegacyNewDec(5),
 		Currency:         "uve",
 		MinimumDeposit:   sdk.NewCoin("uve", sdkmath.NewInt(500000)),
@@ -105,7 +106,7 @@ func ComputeMediumOffering(providerAddr string) TestOffering {
 		Description:      "Medium compute instance with 16 cores",
 		Category:         "compute",
 		ProviderAddress:  providerAddr,
-		WaldurUUID:       "waldur-compute-medium",
+		WaldurUUID:       uuid.NewString(),
 		PricePerHour:     sdkmath.LegacyNewDec(20),
 		Currency:         "uve",
 		MinimumDeposit:   sdk.NewCoin("uve", sdkmath.NewInt(2000000)),
@@ -129,7 +130,7 @@ func GPUOffering(providerAddr string) TestOffering {
 		Description:      "GPU compute instance with 2 NVIDIA A100s",
 		Category:         "gpu",
 		ProviderAddress:  providerAddr,
-		WaldurUUID:       "waldur-gpu-standard",
+		WaldurUUID:       uuid.NewString(),
 		PricePerHour:     sdkmath.LegacyNewDec(100),
 		Currency:         "uve",
 		MinimumDeposit:   sdk.NewCoin("uve", sdkmath.NewInt(10000000)),
@@ -154,7 +155,7 @@ func StorageOffering(providerAddr string) TestOffering {
 		Description:      "High-performance block storage",
 		Category:         "storage",
 		ProviderAddress:  providerAddr,
-		WaldurUUID:       "waldur-storage-block",
+		WaldurUUID:       uuid.NewString(),
 		PricePerHour:     sdkmath.LegacyMustNewDecFromStr("0.5"),
 		Currency:         "uve",
 		MinimumDeposit:   sdk.NewCoin("uve", sdkmath.NewInt(100000)),

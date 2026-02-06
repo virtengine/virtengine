@@ -376,16 +376,14 @@ jobs:
   # ===========================================================================
   # SLSA Provenance Generation
   # ===========================================================================
-  provenance:
-    name: Generate SLSA Provenance
+  provenance-build:
+    name: Prepare SLSA Subjects
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - dependency-verification
-    permissions:
-      id-token: write
-      contents: write
-      attestations: write
+    outputs:
+      base64-subjects: ${{ steps.subjects.outputs.base64-subjects }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -402,11 +400,23 @@ jobs:
           CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/virtengine ./cmd/virtengine
           sha256sum dist/virtengine > dist/virtengine.sha256
 
-      - name: Generate SLSA provenance
-        uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
-        with:
-          base64-subjects: |
-            $(sha256sum dist/virtengine | base64 -w0)
+      - name: Prepare base64 subjects
+        id: subjects
+        run: |
+          echo "base64-subjects=$(sha256sum dist/virtengine | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+  provenance:
+    name: Generate SLSA Provenance
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - provenance-build
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.provenance-build.outputs.base64-subjects }}
 
   # ===========================================================================
   # Reproducible Build Verification
