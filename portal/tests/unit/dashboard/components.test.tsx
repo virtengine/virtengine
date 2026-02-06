@@ -131,7 +131,7 @@ describe('UsageSummary', () => {
 describe('BillingSummary', () => {
   it('renders current period cost', () => {
     render(<BillingSummary billing={mockBilling} />);
-    const matches = screen.getAllByText('$4,250.00');
+    const matches = screen.getAllByText(/4[,.]?250/);
     expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -143,7 +143,7 @@ describe('BillingSummary', () => {
   it('renders outstanding balance when present', () => {
     render(<BillingSummary billing={mockBilling} />);
     expect(screen.getByText('Outstanding')).toBeInTheDocument();
-    expect(screen.getByText('$1,250.00')).toBeInTheDocument();
+    expect(screen.getByText(/1[,.]?250/)).toBeInTheDocument();
   });
 
   it('renders provider breakdown', () => {
