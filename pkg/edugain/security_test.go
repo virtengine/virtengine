@@ -28,6 +28,30 @@ import (
 // Signature Forgery Tests
 // ============================================================================
 
+func tamperSignatureValueBytes(t *testing.T, xml []byte, mutate func([]byte) []byte) []byte {
+	t.Helper()
+
+	doc := etree.NewDocument()
+	require.NoError(t, doc.ReadFromBytes(xml))
+
+	sigValue := doc.FindElement("//SignatureValue")
+	require.NotNil(t, sigValue, "SignatureValue element should exist")
+
+	original := strings.Join(strings.Fields(sigValue.Text()), "")
+	decoded, err := base64.StdEncoding.DecodeString(original)
+	require.NoError(t, err, "signature value should be valid base64 before tampering")
+
+	tampered := mutate(decoded)
+	require.NotEmpty(t, tampered, "tampered signature value should not be empty")
+
+	sigValue.SetText(base64.StdEncoding.EncodeToString(tampered))
+
+	tamperedXML, err := doc.WriteToBytes()
+	require.NoError(t, err)
+
+	return tamperedXML
+}
+
 // TestSignatureForge_TamperedSignatureValue tests that a tampered signature value is rejected
 func TestSignatureForge_TamperedSignatureValue(t *testing.T) {
 	cert, key, err := generateValidTestCertificate()
@@ -38,22 +62,10 @@ func TestSignatureForge_TamperedSignatureValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tamper with the signature value
-	doc := etree.NewDocument()
-	require.NoError(t, doc.ReadFromBytes(assertionXML))
-
-	sigValue := doc.FindElement("//SignatureValue")
-	require.NotNil(t, sigValue, "SignatureValue element should exist")
-
-	// Change a byte in the signature
-	original := sigValue.Text()
-	if len(original) > 10 {
-		// Flip a character
-		tampered := original[:10] + "X" + original[11:]
-		sigValue.SetText(tampered)
-	}
-
-	tamperedXML, err := doc.WriteToBytes()
-	require.NoError(t, err)
+	tamperedXML := tamperSignatureValueBytes(t, assertionXML, func(signature []byte) []byte {
+		signature[0] ^= 0xFF
+		return signature
+	})
 
 	// Verify should fail
 	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
@@ -61,6 +73,79 @@ func TestSignatureForge_TamperedSignatureValue(t *testing.T) {
 
 	assert.Error(t, err, "tampered signature should be rejected")
 	assert.False(t, result.Valid, "tampered signature should not be valid")
+}
+
+// TestSignatureForge_TruncatedSignatureValue tests that truncated signatures are rejected
+func TestSignatureForge_TruncatedSignatureValue(t *testing.T) {
+	cert, key, err := generateValidTestCertificate()
+	require.NoError(t, err)
+
+	assertionXML, err := createSignedSAMLAssertion(cert, key)
+	require.NoError(t, err)
+
+	tamperedXML := tamperSignatureValueBytes(t, assertionXML, func(signature []byte) []byte {
+		if len(signature) <= 4 {
+			return signature[:1]
+		}
+		return signature[:len(signature)/2]
+	})
+
+	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
+	result, err := verifier.VerifyAssertion(tamperedXML, []*x509.Certificate{cert})
+
+	assert.Error(t, err, "truncated signature should be rejected")
+	assert.False(t, result.Valid, "truncated signature should not be valid")
+}
+
+// TestSignatureForge_InvalidBase64SignatureValue tests that invalid base64 signatures are rejected
+func TestSignatureForge_InvalidBase64SignatureValue(t *testing.T) {
+	cert, key, err := generateValidTestCertificate()
+	require.NoError(t, err)
+
+	assertionXML, err := createSignedSAMLAssertion(cert, key)
+	require.NoError(t, err)
+
+	doc := etree.NewDocument()
+	require.NoError(t, doc.ReadFromBytes(assertionXML))
+
+	sigValue := doc.FindElement("//SignatureValue")
+	require.NotNil(t, sigValue, "SignatureValue element should exist")
+	sigValue.SetText("!!!not-base64!!!")
+
+	tamperedXML, err := doc.WriteToBytes()
+	require.NoError(t, err)
+
+	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
+	result, err := verifier.VerifyAssertion(tamperedXML, []*x509.Certificate{cert})
+
+	assert.Error(t, err, "invalid base64 signature should be rejected")
+	assert.False(t, result.Valid, "invalid base64 signature should not be valid")
+}
+
+// TestSignatureForge_WrongSignatureAlgorithm tests that mismatched signature algorithms are rejected
+func TestSignatureForge_WrongSignatureAlgorithm(t *testing.T) {
+	cert, key, err := generateValidTestCertificate()
+	require.NoError(t, err)
+
+	assertionXML, err := createSignedSAMLAssertion(cert, key)
+	require.NoError(t, err)
+
+	doc := etree.NewDocument()
+	require.NoError(t, doc.ReadFromBytes(assertionXML))
+
+	sigMethod := doc.FindElement("//SignatureMethod")
+	require.NotNil(t, sigMethod, "SignatureMethod element should exist")
+	sigMethod.RemoveAttr("Algorithm")
+	sigMethod.CreateAttr("Algorithm", SignatureAlgorithmECDSASHA256)
+
+	tamperedXML, err := doc.WriteToBytes()
+	require.NoError(t, err)
+
+	verifier := NewXMLDSigVerifier(DefaultXMLDSigVerifierConfig())
+	result, err := verifier.VerifyAssertion(tamperedXML, []*x509.Certificate{cert})
+
+	assert.Error(t, err, "wrong signature algorithm should be rejected")
+	assert.False(t, result.Valid, "wrong signature algorithm should not be valid")
 }
 
 // TestSignatureForge_TamperedAssertionContent tests that modified assertion content is rejected
