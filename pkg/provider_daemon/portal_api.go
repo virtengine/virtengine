@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/virtengine/virtengine/pkg/observability"
+	portalauth "github.com/virtengine/virtengine/pkg/provider_daemon/auth"
 )
 
 const (
@@ -30,22 +31,28 @@ const (
 )
 
 type PortalAPIServerConfig struct {
-	ListenAddr           string
-	AuthSecret           string
-	AllowInsecure        bool
-	RequireVEID          bool
-	MinVEIDScore         int
-	ShellSessionTTL      time.Duration
-	TokenTTL             time.Duration
-	AuditLogger          *AuditLogger
-	LogStore             *DeploymentLogStore
-	ChainQuery           ChainQuery
-	ProviderInfo         ProviderInfo
-	ProviderPricing      ProviderPricing
-	ProviderCapacity     ProviderCapacity
-	ProviderAttributes   ProviderAttributes
-	ProviderInfoProvider ProviderInfoProvider
-	RateLimit            RateLimitConfig
+	ListenAddr            string
+	AuthSecret            string
+	AllowInsecure         bool
+	RequireVEID           bool
+	MinVEIDScore          int
+	ShellSessionTTL       time.Duration
+	TokenTTL              time.Duration
+	AuditLogger           *AuditLogger
+	LogStore              *DeploymentLogStore
+	ChainQuery            ChainQuery
+	WalletAuthChainID     string
+	WalletAuthNonceStore  portalauth.NonceStore
+	WalletAuthChainQuery  portalauth.ChainQuerier
+	WalletAuthMaxAge      time.Duration
+	WalletAuthFutureDrift time.Duration
+	WalletAuthCacheTTL    time.Duration
+	ProviderInfo          ProviderInfo
+	ProviderPricing       ProviderPricing
+	ProviderCapacity      ProviderCapacity
+	ProviderAttributes    ProviderAttributes
+	ProviderInfoProvider  ProviderInfoProvider
+	RateLimit             RateLimitConfig
 }
 
 func DefaultPortalAPIServerConfig() PortalAPIServerConfig {
@@ -71,6 +78,7 @@ type PortalAPIServer struct {
 	chainQuery    ChainQuery
 	providerInfo  ProviderInfoProvider
 	rateLimiter   *PortalRateLimiter
+	authVerifier  *portalauth.Verifier
 }
 
 func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
@@ -96,6 +104,12 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 	if cfg.ChainQuery == nil {
 		cfg.ChainQuery = NoopChainQuery{}
 	}
+	if cfg.WalletAuthNonceStore == nil {
+		cfg.WalletAuthNonceStore = portalauth.NewInMemoryNonceStore()
+	}
+	if cfg.WalletAuthChainQuery == nil {
+		cfg.WalletAuthChainQuery = portalauth.NoopChainQuerier{}
+	}
 
 	srv := &PortalAPIServer{
 		cfg:           cfg,
@@ -105,6 +119,14 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
 		chainQuery: cfg.ChainQuery,
+		authVerifier: portalauth.NewVerifier(portalauth.VerifierConfig{
+			ChainID:           cfg.WalletAuthChainID,
+			NonceStore:        cfg.WalletAuthNonceStore,
+			ChainQuerier:      cfg.WalletAuthChainQuery,
+			MaxTimestampAge:   cfg.WalletAuthMaxAge,
+			FutureTimeDrift:   cfg.WalletAuthFutureDrift,
+			OwnershipCacheTTL: cfg.WalletAuthCacheTTL,
+		}),
 	}
 
 	if cfg.ProviderInfoProvider != nil {
@@ -150,32 +172,32 @@ func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	api.HandleFunc("/deployments/{deploymentId}/shell/session", s.handleShellSession).Methods(http.MethodPost)
 	api.HandleFunc("/deployments/{deploymentId}/shell", s.handleShell).Methods(http.MethodGet)
 
-	api.Handle("/organizations", s.authMiddleware()(http.HandlerFunc(s.handleListOrganizations))).Methods(http.MethodGet)
-	api.Handle("/organizations/{orgId}", s.authMiddleware()(http.HandlerFunc(s.handleGetOrganization))).Methods(http.MethodGet)
-	api.Handle("/organizations/{orgId}/members", s.authMiddleware()(http.HandlerFunc(s.handleOrganizationMembers))).Methods(http.MethodGet)
-	api.Handle("/organizations/{orgId}/invite", s.authMiddleware()(http.HandlerFunc(s.handleInviteOrganizationMember))).Methods(http.MethodPost)
-	api.Handle("/organizations/{orgId}/members/{address}", s.authMiddleware()(http.HandlerFunc(s.handleRemoveOrganizationMember))).Methods(http.MethodDelete)
+	api.Handle("/organizations", s.authMiddleware(true)(http.HandlerFunc(s.handleListOrganizations))).Methods(http.MethodGet)
+	api.Handle("/organizations/{orgId}", s.authMiddleware(true)(http.HandlerFunc(s.handleGetOrganization))).Methods(http.MethodGet)
+	api.Handle("/organizations/{orgId}/members", s.authMiddleware(true)(http.HandlerFunc(s.handleOrganizationMembers))).Methods(http.MethodGet)
+	api.Handle("/organizations/{orgId}/invite", s.authMiddleware(true)(http.HandlerFunc(s.handleInviteOrganizationMember))).Methods(http.MethodPost)
+	api.Handle("/organizations/{orgId}/members/{address}", s.authMiddleware(true)(http.HandlerFunc(s.handleRemoveOrganizationMember))).Methods(http.MethodDelete)
 
-	api.Handle("/tickets", s.authMiddleware()(http.HandlerFunc(s.handleListTickets))).Methods(http.MethodGet)
-	api.Handle("/tickets", s.authMiddleware()(http.HandlerFunc(s.handleCreateTicket))).Methods(http.MethodPost)
-	api.Handle("/tickets/{ticketId}", s.authMiddleware()(http.HandlerFunc(s.handleGetTicket))).Methods(http.MethodGet)
-	api.Handle("/tickets/{ticketId}/comments", s.authMiddleware()(http.HandlerFunc(s.handleAddTicketComment))).Methods(http.MethodPost)
-	api.Handle("/tickets/{ticketId}", s.authMiddleware()(http.HandlerFunc(s.handleUpdateTicket))).Methods(http.MethodPatch)
+	api.Handle("/tickets", s.authMiddleware(true)(http.HandlerFunc(s.handleListTickets))).Methods(http.MethodGet)
+	api.Handle("/tickets", s.authMiddleware(true)(http.HandlerFunc(s.handleCreateTicket))).Methods(http.MethodPost)
+	api.Handle("/tickets/{ticketId}", s.authMiddleware(true)(http.HandlerFunc(s.handleGetTicket))).Methods(http.MethodGet)
+	api.Handle("/tickets/{ticketId}/comments", s.authMiddleware(true)(http.HandlerFunc(s.handleAddTicketComment))).Methods(http.MethodPost)
+	api.Handle("/tickets/{ticketId}", s.authMiddleware(true)(http.HandlerFunc(s.handleUpdateTicket))).Methods(http.MethodPatch)
 
-	api.Handle("/invoices", s.authMiddleware()(http.HandlerFunc(s.handleListInvoices))).Methods(http.MethodGet)
-	api.Handle("/invoices/{invoiceId}", s.authMiddleware()(http.HandlerFunc(s.handleGetInvoice))).Methods(http.MethodGet)
-	api.Handle("/usage", s.authMiddleware()(http.HandlerFunc(s.handleGetUsage))).Methods(http.MethodGet)
-	api.Handle("/usage/history", s.authMiddleware()(http.HandlerFunc(s.handleGetUsageHistory))).Methods(http.MethodGet)
+	api.Handle("/invoices", s.authMiddleware(true)(http.HandlerFunc(s.handleListInvoices))).Methods(http.MethodGet)
+	api.Handle("/invoices/{invoiceId}", s.authMiddleware(true)(http.HandlerFunc(s.handleGetInvoice))).Methods(http.MethodGet)
+	api.Handle("/usage", s.authMiddleware(true)(http.HandlerFunc(s.handleGetUsage))).Methods(http.MethodGet)
+	api.Handle("/usage/history", s.authMiddleware(true)(http.HandlerFunc(s.handleGetUsageHistory))).Methods(http.MethodGet)
 
-	api.Handle("/deployments/{deploymentId}/metrics", s.authMiddleware()(http.HandlerFunc(s.handleDeploymentMetrics))).Methods(http.MethodGet)
-	api.Handle("/deployments/{deploymentId}/metrics/history", s.authMiddleware()(http.HandlerFunc(s.handleDeploymentMetricsHistory))).Methods(http.MethodGet)
-	api.Handle("/deployments/{deploymentId}/events", s.authMiddleware()(http.HandlerFunc(s.handleDeploymentEvents))).Methods(http.MethodGet)
-	api.Handle("/metrics/aggregate", s.authMiddleware()(http.HandlerFunc(s.handleAggregatedMetrics))).Methods(http.MethodGet)
+	api.Handle("/deployments/{deploymentId}/metrics", s.authMiddleware(true)(s.leaseOwnerMiddleware()(http.HandlerFunc(s.handleDeploymentMetrics)))).Methods(http.MethodGet)
+	api.Handle("/deployments/{deploymentId}/metrics/history", s.authMiddleware(true)(s.leaseOwnerMiddleware()(http.HandlerFunc(s.handleDeploymentMetricsHistory)))).Methods(http.MethodGet)
+	api.Handle("/deployments/{deploymentId}/events", s.authMiddleware(true)(s.leaseOwnerMiddleware()(http.HandlerFunc(s.handleDeploymentEvents)))).Methods(http.MethodGet)
+	api.Handle("/metrics/aggregate", s.authMiddleware(true)(http.HandlerFunc(s.handleAggregatedMetrics))).Methods(http.MethodGet)
 
-	api.HandleFunc("/provider/info", s.handleProviderInfo).Methods(http.MethodGet)
-	api.HandleFunc("/provider/pricing", s.handleProviderPricing).Methods(http.MethodGet)
-	api.HandleFunc("/provider/capacity", s.handleProviderCapacity).Methods(http.MethodGet)
-	api.HandleFunc("/provider/attributes", s.handleProviderAttributes).Methods(http.MethodGet)
+	api.Handle("/provider/info", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderInfo))).Methods(http.MethodGet)
+	api.Handle("/provider/pricing", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderPricing))).Methods(http.MethodGet)
+	api.Handle("/provider/capacity", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderCapacity))).Methods(http.MethodGet)
+	api.Handle("/provider/attributes", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderAttributes))).Methods(http.MethodGet)
 }
 
 func (s *PortalAPIServer) Shutdown(ctx context.Context) error {
@@ -193,15 +215,20 @@ func (s *PortalAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 func (s *PortalAPIServer) handleLogs(w http.ResponseWriter, r *http.Request) {
 	deploymentID := deploymentIDFromVars(r)
 
-	principal, authErr := s.authenticateRequest(r)
+	authCtx, authErr := s.authenticateRequest(r)
 	if authErr != nil {
-		s.auditDenied(principal, deploymentID, "logs", authErr)
+		s.auditDenied(authCtx.Address, deploymentID, "logs", authErr)
 		http.Error(w, authErr.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := s.verifyLeaseOwnership(r.Context(), authCtx, deploymentID); err != nil {
+		s.auditDenied(authCtx.Address, deploymentID, "logs", err)
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	if websocket.IsWebSocketUpgrade(r) {
-		s.handleLogStreamWS(w, r, deploymentID, principal)
+		s.handleLogStreamWS(w, r, deploymentID, authCtx.Address)
 		return
 	}
 
@@ -287,16 +314,21 @@ func (s *PortalAPIServer) handleLogStreamWS(w http.ResponseWriter, r *http.Reque
 
 func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Request) {
 	deploymentID := deploymentIDFromVars(r)
-	principal, authErr := s.authenticateRequest(r)
+	authCtx, authErr := s.authenticateRequest(r)
 	if authErr != nil {
-		s.auditDenied(principal, deploymentID, "shell_session", authErr)
+		s.auditDenied(authCtx.Address, deploymentID, "shell_session", authErr)
 		http.Error(w, authErr.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := s.verifyLeaseOwnership(r.Context(), authCtx, deploymentID); err != nil {
+		s.auditDenied(authCtx.Address, deploymentID, "shell_session", err)
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	if s.cfg.RequireVEID {
 		if err := s.verifyVEID(r); err != nil {
-			s.auditDenied(principal, deploymentID, "shell_session", err)
+			s.auditDenied(authCtx.Address, deploymentID, "shell_session", err)
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -307,7 +339,7 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	session, err := s.shellSessions.Issue(deploymentID, principal, req.Container, s.cfg.ShellSessionTTL)
+	session, err := s.shellSessions.Issue(deploymentID, authCtx.Address, req.Container, s.cfg.ShellSessionTTL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -317,7 +349,7 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 		Type:        AuditEventShellSessionCreated,
 		Operation:   "shell_session",
 		Success:     true,
-		PrincipalID: principal,
+		PrincipalID: authCtx.Address,
 		Details: map[string]interface{}{
 			"deployment_id": deploymentID,
 			"container":     req.Container,
@@ -341,16 +373,21 @@ func (s *PortalAPIServer) handleShellSession(w http.ResponseWriter, r *http.Requ
 
 func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 	deploymentID := deploymentIDFromVars(r)
-	principal, authErr := s.authenticateRequest(r)
+	authCtx, authErr := s.authenticateRequest(r)
 	if authErr != nil {
-		s.auditDenied(principal, deploymentID, "shell", authErr)
+		s.auditDenied(authCtx.Address, deploymentID, "shell", authErr)
 		http.Error(w, authErr.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := s.verifyLeaseOwnership(r.Context(), authCtx, deploymentID); err != nil {
+		s.auditDenied(authCtx.Address, deploymentID, "shell", err)
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	if s.cfg.RequireVEID {
 		if err := s.verifyVEID(r); err != nil {
-			s.auditDenied(principal, deploymentID, "shell", err)
+			s.auditDenied(authCtx.Address, deploymentID, "shell", err)
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -358,7 +395,7 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 
 	sessionToken := r.URL.Query().Get("token")
 	if sessionToken == "" && !s.cfg.AllowInsecure {
-		s.auditDenied(principal, deploymentID, "shell", errors.New("missing session token"))
+		s.auditDenied(authCtx.Address, deploymentID, "shell", errors.New("missing session token"))
 		http.Error(w, "missing session token", http.StatusUnauthorized)
 		return
 	}
@@ -366,9 +403,9 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 	var session *ShellSession
 	if sessionToken != "" {
 		var err error
-		session, err = s.shellSessions.Validate(sessionToken, deploymentID, principal)
+		session, err = s.shellSessions.Validate(sessionToken, deploymentID, authCtx.Address)
 		if err != nil {
-			s.auditDenied(principal, deploymentID, "shell", err)
+			s.auditDenied(authCtx.Address, deploymentID, "shell", err)
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -384,7 +421,7 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 		Type:        AuditEventShellSessionStarted,
 		Operation:   "shell",
 		Success:     true,
-		PrincipalID: principal,
+		PrincipalID: authCtx.Address,
 		Details: map[string]interface{}{
 			"deployment_id": deploymentID,
 			"container":     r.URL.Query().Get("container"),
@@ -403,7 +440,7 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 			Type:        AuditEventShellSessionEnded,
 			Operation:   "shell",
 			Success:     true,
-			PrincipalID: principal,
+			PrincipalID: authCtx.Address,
 			Details: map[string]interface{}{
 				"deployment_id": deploymentID,
 			},
@@ -459,9 +496,20 @@ func (s *PortalAPIServer) handleShell(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *PortalAPIServer) authenticateRequest(r *http.Request) (string, error) {
-	if s.cfg.AllowInsecure || s.cfg.AuthSecret == "" {
-		return "dev", nil
+func (s *PortalAPIServer) authenticateRequest(r *http.Request) (portalauth.AuthContext, error) {
+	if portalauth.HasWalletAuth(r) {
+		if s.authVerifier == nil {
+			return portalauth.AuthContext{}, errors.New("wallet auth not configured")
+		}
+		signed, err := s.authVerifier.Verify(r)
+		if err != nil {
+			return portalauth.AuthContext{}, err
+		}
+		return portalauth.AuthContext{Address: signed.Address, Kind: portalauth.AuthKindWallet}, nil
+	}
+
+	if s.cfg.AllowInsecure && s.cfg.AuthSecret == "" {
+		return portalauth.AuthContext{Address: "dev", Kind: portalauth.AuthKindInsecure}, nil
 	}
 
 	signature := r.Header.Get("X-VE-Signature")
@@ -478,17 +526,24 @@ func (s *PortalAPIServer) authenticateRequest(r *http.Request) (string, error) {
 	}
 
 	if signature == "" || timestamp == "" || principal == "" {
-		return principal, errors.New("missing signed request headers")
+		if s.cfg.AllowInsecure {
+			return portalauth.AuthContext{Address: "dev", Kind: portalauth.AuthKindInsecure}, nil
+		}
+		return portalauth.AuthContext{}, errors.New("missing signed request headers")
 	}
 
 	ts, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
-		return principal, errors.New("invalid timestamp")
+		return portalauth.AuthContext{}, errors.New("invalid timestamp")
 	}
 
 	now := time.Now().Unix()
 	if ts < now-300 || ts > now+300 {
-		return principal, errors.New("request timestamp out of range")
+		return portalauth.AuthContext{}, errors.New("request timestamp out of range")
+	}
+
+	if s.cfg.AuthSecret == "" {
+		return portalauth.AuthContext{}, errors.New("hmac secret not configured")
 	}
 
 	payload := fmt.Sprintf("%s\n%s\n%s\n%s\n%s",
@@ -500,25 +555,68 @@ func (s *PortalAPIServer) authenticateRequest(r *http.Request) (string, error) {
 	)
 	expected := computeHMAC(payload, s.cfg.AuthSecret)
 	if !strings.EqualFold(expected, signature) {
-		return principal, errors.New("invalid signature")
+		return portalauth.AuthContext{}, errors.New("invalid signature")
 	}
 
-	return principal, nil
+	return portalauth.AuthContext{Address: principal, Kind: portalauth.AuthKindHMAC}, nil
 }
 
-func (s *PortalAPIServer) authMiddleware() func(http.Handler) http.Handler {
+func (s *PortalAPIServer) authMiddleware(required bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			principal, err := s.authenticateRequest(r)
+			if !required && !portalauth.HasWalletAuth(r) && r.Header.Get("X-VE-Principal") == "" && r.URL.Query().Get("principal") == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			authCtx, err := s.authenticateRequest(r)
 			if err != nil {
 				writeJSONError(w, http.StatusUnauthorized, err.Error())
 				return
 			}
 
-			ctx := withPrincipal(r.Context(), principal)
+			ctx := withAuth(r.Context(), authCtx)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func (s *PortalAPIServer) leaseOwnerMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authCtx := authFromContext(r.Context())
+			if authCtx.Address == "" {
+				writeJSONError(w, http.StatusUnauthorized, "authentication required")
+				return
+			}
+
+			leaseID := deploymentIDFromVars(r)
+			if leaseID == "" {
+				writeJSONError(w, http.StatusBadRequest, "deployment id required")
+				return
+			}
+
+			if err := s.verifyLeaseOwnership(r.Context(), authCtx, leaseID); err != nil {
+				writeJSONError(w, http.StatusForbidden, err.Error())
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func (s *PortalAPIServer) verifyLeaseOwnership(ctx context.Context, authCtx portalauth.AuthContext, leaseID string) error {
+	if authCtx.Kind == portalauth.AuthKindInsecure {
+		return nil
+	}
+	if authCtx.Address == "" {
+		return errors.New("authentication required")
+	}
+	if s.authVerifier == nil {
+		return errors.New("lease ownership verification unavailable")
+	}
+	return s.authVerifier.VerifyLeaseOwnership(ctx, authCtx.Address, leaseID)
 }
 
 func (s *PortalAPIServer) verifyVEID(r *http.Request) error {
