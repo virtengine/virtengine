@@ -404,7 +404,7 @@ func (km *KeyManager) ListKeys(scope Scope) ([]*KeyInfo, error) {
 		return nil, nil
 	}
 
-	var keys []*KeyInfo
+	keys := make([]*KeyInfo, 0, len(scopeKeys))
 	for _, keyInfo := range scopeKeys {
 		keyCopy := *keyInfo
 		keys = append(keys, &keyCopy)
