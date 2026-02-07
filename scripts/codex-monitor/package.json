@@ -1,6 +1,6 @@
 {
   "name": "@virtengine/codex-monitor",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
   "license": "MIT",
@@ -57,6 +57,7 @@
     "setup": "node setup.mjs",
     "monitor": "node monitor.mjs",
     "shared-workspaces": "node shared-workspace-cli.mjs",
+    "test": "vitest run --config vitest.config.mjs",
     "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
   },
@@ -92,6 +93,9 @@
     "@github/copilot-sdk": "0.1.19",
     "@openai/codex-sdk": "0.99.0-alpha.6",
     "vibe-kanban": "0.1.6"
+  },
+  "devDependencies": {
+    "vitest": "2.1.8"
   },
   "engines": {
     "node": ">=18"
