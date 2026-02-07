@@ -307,6 +307,7 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `CODEX_MONITOR_PREFLIGHT_RETRY_MS`    | `300000`                       | Preflight retry interval (ms)                                                                                          |
 | `LOG_MAX_SIZE_MB`                     | `500`                          | Max total log folder size in MB (0 = unlimited)                                                                        |
 | `LOG_CLEANUP_INTERVAL_MIN`            | `30`                           | How often to check log folder size (0 = startup only)                                                                  |
+| `TELEGRAM_VERBOSITY`                  | `summary`                      | Notification verbosity: `minimal`, `summary`, or `detailed`                                                            |
 
 ### Shared Cloud Workspaces
 
@@ -554,6 +555,12 @@ TELEGRAM_BATCH_MAX_SIZE=50
 # 1 = only critical messages bypass the digest
 # 2 = critical + errors bypass the digest
 TELEGRAM_IMMEDIATE_PRIORITY=1
+
+# Verbosity level (default: summary)
+# minimal  = critical + errors only (priority 1-2)
+# summary  = everything except debug (priority 1-4) — DEFAULT
+# detailed = everything including debug (priority 1-5)
+TELEGRAM_VERBOSITY=summary
 ```
 
 **Priority levels:**
@@ -565,6 +572,14 @@ TELEGRAM_IMMEDIATE_PRIORITY=1
 | 3        | ⚠️    | Warning — rebase conflicts, missing branches | Live digest        |
 | 4        | ℹ️    | Info — PR created, task completed (default)  | Live digest        |
 | 5        | 🔹    | Debug — verbose logging                      | Live digest        |
+
+**Verbosity modes:**
+
+| Mode       | Priorities sent | Use case                                              |
+| ---------- | --------------- | ----------------------------------------------------- |
+| `minimal`  | 1-2             | Only critical errors — for low-noise monitoring       |
+| `summary`  | 1-4             | All actionable events (default) — recommended         |
+| `detailed` | 1-5             | Full debug output — useful during initial setup/debug |
 
 **Example live digest message:**
 
@@ -781,6 +796,7 @@ When AI agents work autonomously — committing, pushing, and creating PRs witho
 
 ### 1. Required Status Checks in GitHub
 
+Configure **base branch in codex-monitor or github** to a testing/development branch, don't have codex-monitor just work directly on your main branch (unless it's still a test project) - and apply protections to it if necessary for CI quality.
 Configure **branch protection rules** on your `main` branch so PRs cannot merge unless CI passes:
 
 ```
@@ -798,7 +814,7 @@ This is your last line of defense. Even if an agent pushes garbage, it cannot me
 
 ### 2. Pre-push and Pre-commit Hooks
 
-Git hooks catch problems *before* code leaves the machine:
+Git hooks catch problems _before_ code leaves the machine:
 
 ```bash
 # .githooks/pre-commit — auto-format + lint staged files
@@ -858,16 +874,16 @@ Only one codex-monitor instance runs per project. The maintenance module acquire
 
 ### Recommended Stack
 
-| Layer                | Tool                          | Purpose                             |
-| -------------------- | ----------------------------- | ----------------------------------- |
-| Merge gate           | GitHub branch protection      | PRs can't merge without green CI    |
-| Push gate            | Pre-push hooks (`.githooks/`) | Lint, typecheck, test before push   |
-| Commit gate          | Pre-commit hooks              | Auto-format, lint staged files      |
-| Runtime guard        | codex-monitor autofix         | Detect + fix error loops            |
-| Syntax guard         | `node --check` in pre-push    | Catch parse errors in <3s           |
-| Disk guard           | Log rotation                  | Auto-prune oldest logs by size cap  |
-| Process guard        | Singleton lock                | One monitor per project             |
-| Staleness guard      | Maintenance sweep             | Archive dead worktrees/branches     |
+| Layer           | Tool                          | Purpose                            |
+| --------------- | ----------------------------- | ---------------------------------- |
+| Merge gate      | GitHub branch protection      | PRs can't merge without green CI   |
+| Push gate       | Pre-push hooks (`.githooks/`) | Lint, typecheck, test before push  |
+| Commit gate     | Pre-commit hooks              | Auto-format, lint staged files     |
+| Runtime guard   | codex-monitor autofix         | Detect + fix error loops           |
+| Syntax guard    | `node --check` in pre-push    | Catch parse errors in <3s          |
+| Disk guard      | Log rotation                  | Auto-prune oldest logs by size cap |
+| Process guard   | Singleton lock                | One monitor per project            |
+| Staleness guard | Maintenance sweep             | Archive dead worktrees/branches    |
 
 ## License
 

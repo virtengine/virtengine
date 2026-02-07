@@ -1,5 +1,5 @@
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, watch } from "node:fs";
+import { existsSync, watch, writeFileSync } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -151,6 +151,7 @@ let {
   dependabotAutoMergeIntervalMin,
   dependabotMergeMethod,
   dependabotAuthors,
+  telegramVerbosity,
 } = config;
 
 void initPrimaryAgent(config);
@@ -213,6 +214,28 @@ const SELF_RESTART_EXIT_CODE = 75;
 let selfWatcher = null;
 let selfWatcherDebounce = null;
 let pendingSelfRestart = null; // filename that triggered a deferred restart
+
+// ── Self-restart marker: detect if this process was spawned by a code-change restart
+const selfRestartMarkerPath = resolve(
+  config.cacheDir || resolve(config.repoRoot, ".cache"),
+  "ve-self-restart.marker",
+);
+let isSelfRestart = false;
+try {
+  if (existsSync(selfRestartMarkerPath)) {
+    const ts = Number(
+      (await import("node:fs")).readFileSync(selfRestartMarkerPath, "utf8"),
+    );
+    // Marker is valid if written within the last 30 seconds
+    if (Date.now() - ts < 30_000) {
+      isSelfRestart = true;
+      console.log("[monitor] detected self-restart marker — suppressing startup notifications");
+    }
+    // Clean up marker regardless
+    try { (await import("node:fs")).unlinkSync(selfRestartMarkerPath); } catch { /* best effort */ }
+  }
+} catch { /* first start or missing file */ }
+
 let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
@@ -3211,7 +3234,15 @@ async function sendTelegramMessage(text, options = {}) {
     }
   }
 
-  // Route through batching system
+  // Route through batching system — apply verbosity filter first.
+  // minimal: only priority 1-2 (critical + error)
+  // summary: priority 1-4 (everything except debug) — DEFAULT
+  // detailed: priority 1-5 (everything)
+  const maxPriority =
+    telegramVerbosity === "minimal" ? 2 :
+    telegramVerbosity === "detailed" ? 5 : 4;
+  if (priority > maxPriority) return; // filtered out by verbosity setting
+
   return notify(text, priority, {
     category,
     silent: options.silent,
@@ -3656,13 +3687,15 @@ async function startTelegramNotifier() {
     ".cache",
     "ve-last-notifier-start.txt",
   );
-  let suppressStartup = false;
-  try {
-    const prev = await readFile(lastStartPath, "utf8");
-    const elapsed = Date.now() - Number(prev);
-    if (elapsed < 60_000) suppressStartup = true;
-  } catch {
-    /* first start or missing file */
+  let suppressStartup = isSelfRestart;
+  if (!suppressStartup) {
+    try {
+      const prev = await readFile(lastStartPath, "utf8");
+      const elapsed = Date.now() - Number(prev);
+      if (elapsed < 60_000) suppressStartup = true;
+    } catch {
+      /* first start or missing file */
+    }
   }
   await writeFile(lastStartPath, String(Date.now())).catch(() => {});
 
@@ -4722,6 +4755,13 @@ function selfRestartForSourceChange(filename) {
   }
   void releaseTelegramPollLock();
   stopTelegramBot({ preserveDigest: true });
+  // Write self-restart marker so the new process suppresses startup notifications
+  try {
+    writeFileSync(
+      resolve(repoRoot, ".cache", "ve-self-restart.marker"),
+      String(Date.now()),
+    );
+  } catch { /* best effort */ }
   // Exit with special code — cli.mjs re-forks with fresh module cache
   setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
 }

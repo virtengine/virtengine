@@ -989,6 +989,13 @@ export function loadConfig(argv = process.argv, options = {}) {
   const telegramCommandEnabled = flags.has("telegram-commands")
     ? !telegramBotEnabled
     : false;
+  // Verbosity: minimal (critical+error only), summary (default — up to warnings
+  // + key info), detailed (everything including debug).
+  const telegramVerbosity = (
+    process.env.TELEGRAM_VERBOSITY ||
+    configData.telegramVerbosity ||
+    "summary"
+  ).toLowerCase();
 
   // ── Task Planner ─────────────────────────────────────────
   // Mode: "codex-sdk" (default) runs Codex directly, "kanban" creates a VK
@@ -1129,6 +1136,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     telegramCommandMaxBatch,
     telegramBotEnabled,
     telegramCommandEnabled,
+    telegramVerbosity,
 
     // Task Planner
     plannerMode,
