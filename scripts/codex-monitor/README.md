@@ -61,6 +61,7 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Error loop detection** — 4+ repeating errors in 10 minutes triggers AI autofix
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
 - **Telegram chatbot** — Real-time notifications + interactive commands
+- **Preflight checks** — Validate git/gh auth, disk space, clean worktree, and toolchain versions before starting
 - **Auto-setup** — First-run wizard configures everything; generates agent templates, wires Vibe-Kanban
 - **Multi-repo support** — Manage separate backend/frontend repos from one monitor instance
 - **Works with any orchestrator** — Wraps PowerShell, Bash, or any long-running CLI script
@@ -264,6 +265,8 @@ See [.env.example](.env.example) for the full reference. Key variables:
 | `CODEX_MONITOR_REPO`    | —                              | Selected repo name (multi-repo)                                                                                        |
 | `CODEX_MONITOR_PROFILE` | —                              | Environment profile name                                                                                               |
 | `CODEX_MONITOR_MODE`    | `virtengine`/`generic`         | Mode override                                                                                                          |
+| `CODEX_MONITOR_PREFLIGHT_DISABLED` | `0`                    | Disable preflight checks                                                                                               |
+| `CODEX_MONITOR_PREFLIGHT_RETRY_MS` | `300000`               | Preflight retry interval (ms)                                                                                          |
 
 ### Shared Cloud Workspaces
 
@@ -314,10 +317,12 @@ codex-monitor [options]
 | `--log-dir <path>`      | Log directory (default: `./logs`)         |
 | `--no-codex`            | Disable Codex SDK analysis                |
 | `--no-autofix`          | Disable automatic error fixing            |
+| `--no-preflight`        | Disable preflight checks                  |
 | `--no-telegram-bot`     | Disable the interactive Telegram bot      |
 | `--no-vk-spawn`         | Don't auto-spawn Vibe-Kanban              |
 | `--no-watch`            | Disable file watching for auto-restart    |
 | `--no-echo-logs`        | Don't echo orchestrator output to console |
+| `--preflight-retry <ms>` | Retry interval after preflight failure   |
 | `--config-dir <path>`   | Directory containing config files         |
 | `--repo-root <path>`    | Repository root (auto-detected)           |
 | `--project-name <name>` | Project name for display                  |

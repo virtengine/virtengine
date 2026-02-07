@@ -909,6 +909,19 @@ export function loadConfig(argv = process.argv, options = {}) {
     : configData.autoFixEnabled !== undefined
       ? configData.autoFixEnabled
       : true;
+  const preflightEnabled = flags.has("no-preflight")
+    ? false
+    : configData.preflightEnabled !== undefined
+      ? configData.preflightEnabled
+      : process.env.CODEX_MONITOR_PREFLIGHT_DISABLED === "1"
+        ? false
+        : true;
+  const preflightRetryMs = Number(
+    cli["preflight-retry"] ||
+      process.env.CODEX_MONITOR_PREFLIGHT_RETRY_MS ||
+      configData.preflightRetryMs ||
+      "300000",
+  );
   const codexEnabled =
     !flags.has("no-codex") &&
     (configData.codexEnabled !== undefined ? configData.codexEnabled : true) &&
@@ -1047,6 +1060,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     watchPath,
     echoLogs,
     autoFixEnabled,
+    preflightEnabled,
+    preflightRetryMs,
     codexEnabled,
     primaryAgent,
     primaryAgentEnabled,
