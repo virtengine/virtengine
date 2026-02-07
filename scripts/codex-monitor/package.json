@@ -5,13 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "VirtEngine <dev@virtengine.com>",
-  "homepage": "https://github.com/virtengine/codex-monitor",
+  "homepage": "https://github.com/virtengine/virtengine/tree/main/scripts/codex-monitor",
   "repository": {
     "type": "git",
-    "url": "https://github.com/virtengine/codex-monitor.git"
+    "url": "https://github.com/virtengine/virtengine.git",
+    "directory": "scripts/codex-monitor"
   },
   "bugs": {
-    "url": "https://github.com/virtengine/codex-monitor/issues"
+    "url": "https://github.com/virtengine/virtengine/issues"
   },
   "keywords": [
     "codex",

@@ -109,7 +109,7 @@ function showHelp() {
     codex-monitor --no-codex --no-autofix                  # minimal mode
 
   DOCS
-    https://github.com/virtengine/codex-monitor
+    https://github.com/virtengine/virtengine/tree/main/scripts/codex-monitor
 `);
 }
 
