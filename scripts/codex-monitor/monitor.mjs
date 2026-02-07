@@ -151,6 +151,8 @@ let vkRecoveryLastAt = 0;
 let vkNonJsonNotifiedAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
+const smartPrAllowRecreateClosed =
+  process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 let monitorFailureHandling = false;
 const monitorFailureTimestamps = [];
 const monitorFailureWindowMs = 10 * 60 * 1000;
@@ -193,7 +195,9 @@ function normalizeDedupKey(text) {
 // as garbage in Telegram messages.
 function stripAnsi(text) {
   // eslint-disable-next-line no-control-regex
-  return String(text || "").replace(/\x1b\[[0-9;]*m/g, "").replace(/\[\d+;?\d*m/g, "");
+  return String(text || "")
+    .replace(/\x1b\[[0-9;]*m/g, "")
+    .replace(/\[\d+;?\d*m/g, "");
 }
 
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
@@ -1300,7 +1304,11 @@ async function findVkProjectId() {
   if (cachedProjectId) return cachedProjectId;
 
   const projectsRes = await fetchVk("/api/projects");
-  if (!projectsRes?.success || !Array.isArray(projectsRes.data) || projectsRes.data.length === 0) {
+  if (
+    !projectsRes?.success ||
+    !Array.isArray(projectsRes.data) ||
+    projectsRes.data.length === 0
+  ) {
     console.warn("[monitor] Failed to fetch projects from VK API");
     return null;
   }
@@ -1320,7 +1328,9 @@ async function findVkProjectId() {
     );
   }
   cachedProjectId = project.id;
-  console.log(`[monitor] Cached project_id: ${cachedProjectId.substring(0, 8)}... (${project.name})`);
+  console.log(
+    `[monitor] Cached project_id: ${cachedProjectId.substring(0, 8)}... (${project.name})`,
+  );
   return cachedProjectId;
 }
 
@@ -1338,13 +1348,18 @@ async function getRepoId() {
   try {
     // Use the flat /api/repos endpoint (not nested under projects)
     const reposRes = await fetchVk("/api/repos");
-    if (!reposRes?.success || !Array.isArray(reposRes.data) || reposRes.data.length === 0) {
+    if (
+      !reposRes?.success ||
+      !Array.isArray(reposRes.data) ||
+      reposRes.data.length === 0
+    ) {
       console.warn("[monitor] Failed to fetch repos from VK API");
       return null;
     }
 
     // Match by repo path (normalized for comparison)
-    const normalPath = (p) => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    const normalPath = (p) =>
+      (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
     const targetPath = normalPath(repoRoot);
 
     let repo = reposRes.data.find((r) => normalPath(r.path) === targetPath);
@@ -1352,20 +1367,24 @@ async function getRepoId() {
     // Fallback: match by name / display_name
     if (!repo) {
       repo = reposRes.data.find(
-        (r) => (r.name || r.display_name || "").toLowerCase() === projectName?.toLowerCase(),
+        (r) =>
+          (r.name || r.display_name || "").toLowerCase() ===
+          projectName?.toLowerCase(),
       );
     }
 
     if (!repo) {
       console.warn(
         `[monitor] No VK repo matching path "${repoRoot}" or name "${projectName}" — ` +
-        `available: ${reposRes.data.map((r) => r.name).join(", ")}`,
+          `available: ${reposRes.data.map((r) => r.name).join(", ")}`,
       );
       return null;
     }
 
     cachedRepoId = repo.id;
-    console.log(`[monitor] Cached repo_id: ${cachedRepoId.substring(0, 8)}... (${repo.name})`);
+    console.log(
+      `[monitor] Cached repo_id: ${cachedRepoId.substring(0, 8)}... (${repo.name})`,
+    );
     return cachedRepoId;
   } catch (err) {
     console.warn(`[monitor] Error fetching repo_id: ${err.message}`);
@@ -1381,7 +1400,7 @@ async function rebaseAttempt(attemptId) {
   const repoId = await getRepoId();
   if (!repoId) {
     console.warn("[monitor] Cannot rebase: repo_id not available");
-    return { success: false, message: "repo_id not available" };
+    return { success: false, error: "repo_id_missing", message: "repo_id not available" };
   }
   const res = await fetchVk(`/api/task-attempts/${attemptId}/rebase`, {
     method: "POST",
@@ -1403,7 +1422,7 @@ async function createPRViaVK(attemptId, prOpts = {}) {
   const repoId = await getRepoId();
   if (!repoId) {
     console.error("[monitor] Cannot create PR: repo_id not available");
-    return { success: false, _elapsedMs: 0 };
+    return { success: false, error: "repo_id_missing", _elapsedMs: 0 };
   }
 
   const body = {
@@ -1556,9 +1575,7 @@ async function startFreshSession(workspaceId, prompt, taskId) {
     const waitSec = Math.round(
       (FRESH_SESSION_COOLDOWN_MS - (now - lastFreshSessionAt)) / 1000,
     );
-    console.warn(
-      `[monitor] fresh session rate-limited, ${waitSec}s remaining`,
-    );
+    console.warn(`[monitor] fresh session rate-limited, ${waitSec}s remaining`);
     return { success: false, reason: `rate-limited (${waitSec}s)` };
   }
 
@@ -1611,9 +1628,7 @@ async function startFreshSession(workspaceId, prompt, taskId) {
 
     return { success: true, sessionId: session.id };
   } catch (err) {
-    console.warn(
-      `[monitor] fresh session error: ${err.message || err}`,
-    );
+    console.warn(`[monitor] fresh session error: ${err.message || err}`);
     return { success: false, reason: err.message || String(err) };
   }
 }
@@ -1647,7 +1662,8 @@ async function attemptFreshSessionRetry(reason, logTail) {
 
   if (result.success) {
     if (telegramToken && telegramChatId) {
-      const taskLabel = attemptInfo.task_title || attemptInfo.branch || "unknown";
+      const taskLabel =
+        attemptInfo.task_title || attemptInfo.branch || "unknown";
       void sendTelegramMessage(
         `🔄 Fresh session started for "${taskLabel}" (${reason}).\nNew session: ${result.sessionId}`,
       );
@@ -1655,9 +1671,7 @@ async function attemptFreshSessionRetry(reason, logTail) {
     return true;
   }
 
-  console.warn(
-    `[monitor] fresh session retry failed: ${result.reason}`,
-  );
+  console.warn(`[monitor] fresh session retry failed: ${result.reason}`);
   if (telegramToken && telegramChatId) {
     void sendTelegramMessage(
       `⚠️ Fresh session retry failed (${reason}): ${result.reason}`,
@@ -1754,7 +1768,10 @@ async function isBranchMerged(branch) {
     }
 
     // Branch still exists - check if it's merged into main
-    execSync("git fetch origin main --quiet", { cwd: repoRoot, stdio: "ignore" });
+    execSync("git fetch origin main --quiet", {
+      cwd: repoRoot,
+      stdio: "ignore",
+    });
 
     // Check if the branch is fully merged into origin/main
     // Returns non-zero exit code if not merged
@@ -1834,9 +1851,7 @@ async function checkMergedPRsAndUpdateTasks() {
       console.log(`[monitor] Moved ${movedCount} merged tasks to done status`);
     }
   } catch (err) {
-    console.warn(
-      `[monitor] Error checking merged PRs: ${err.message || err}`,
-    );
+    console.warn(`[monitor] Error checking merged PRs: ${err.message || err}`);
   }
 }
 
@@ -1993,6 +2008,18 @@ async function smartPRFlow(attemptId, shortId, status) {
     // ── Step 6: Handle PR creation failure ──────────────────────
     const elapsed = prResult._elapsedMs || 0;
     const isFastFail = elapsed < 2000; // < 2s = instant (worktree/config issue)
+
+    if (prResult.error === "repo_id_missing") {
+      console.warn(
+        `[monitor] ${tag}: PR creation failed — repo_id missing (VK config/API issue)`,
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `⚠️ Auto-PR for ${shortId} failed: repo_id missing. Check VK_BASE_URL/VK_REPO_ID.`,
+        );
+      }
+      return;
+    }
 
     if (isFastFail) {
       // Instant failure — worktree issue, ask agent to handle everything
@@ -2414,7 +2441,9 @@ async function maybeTriggerTaskPlanner(reason, details) {
     await triggerTaskPlanner(reason, details);
   } catch (err) {
     // Auto-triggered planner failures are non-fatal — already logged/notified by triggerTaskPlanner
-    console.warn(`[monitor] auto-triggered planner failed: ${err.message || err}`);
+    console.warn(
+      `[monitor] auto-triggered planner failed: ${err.message || err}`,
+    );
   }
 }
 
@@ -2984,7 +3013,9 @@ async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
     }
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
-    await sendTelegramMessage(`Task planner run failed (${plannerMode}): ${message}`);
+    await sendTelegramMessage(
+      `Task planner run failed (${plannerMode}): ${message}`,
+    );
     throw err; // re-throw so callers (e.g. /plan command) know it failed
   } finally {
     plannerTriggered = false;
@@ -2996,7 +3027,8 @@ async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
  * pick it up and plan the next phase of work.
  */
 async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
-  const numTasks = taskCount && Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 5;
+  const numTasks =
+    taskCount && Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 5;
   // Get project ID using the name-matched helper
   const projectId = await findVkProjectId();
   if (!projectId) {
@@ -3007,12 +3039,17 @@ async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
   const existingTasks = await fetchVk(
     `/api/tasks?project_id=${projectId}&status=todo`,
   );
-  if (existingTasks?.data?.some((t) =>
-    t.title?.toLowerCase().includes("task planner") ||
-    t.title?.toLowerCase().includes("plan next phase") ||
-    t.title?.toLowerCase().includes("plan next tasks")
-  )) {
-    console.log("[monitor] task planner VK task already exists in backlog — skipping");
+  if (
+    existingTasks?.data?.some(
+      (t) =>
+        t.title?.toLowerCase().includes("task planner") ||
+        t.title?.toLowerCase().includes("plan next phase") ||
+        t.title?.toLowerCase().includes("plan next tasks"),
+    )
+  ) {
+    console.log(
+      "[monitor] task planner VK task already exists in backlog — skipping",
+    );
     await sendTelegramMessage(
       "📋 Task planner skipped — a planning task already exists in the backlog.",
     );
@@ -3050,7 +3087,9 @@ async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
   });
 
   if (result?.success) {
-    console.log(`[monitor] task planner VK task created: ${result.data?.id || "ok"}`);
+    console.log(
+      `[monitor] task planner VK task created: ${result.data?.id || "ok"}`,
+    );
     await updatePlannerState({
       last_success_at: new Date().toISOString(),
       last_success_reason: reason || "manual",
@@ -3069,7 +3108,9 @@ async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
  */
 async function triggerTaskPlannerViaCodex(reason) {
   if (!codexEnabled) {
-    throw new Error("Codex SDK disabled — use TASK_PLANNER_MODE=kanban instead");
+    throw new Error(
+      "Codex SDK disabled — use TASK_PLANNER_MODE=kanban instead",
+    );
   }
   notifyCodexTrigger("task planner run");
   if (!CodexClient) {
@@ -3319,20 +3360,26 @@ async function handleExit(code, signal, logPath) {
       logText.includes("All tasks completed");
 
     if (isEmptyBacklog) {
-      console.log("[monitor] clean exit with empty backlog — triggering task planner");
+      console.log(
+        "[monitor] clean exit with empty backlog — triggering task planner",
+      );
       // Trigger task planner to create more tasks
       await maybeTriggerTaskPlanner("backlog-empty-exit", {
         reason: "Orchestrator exited cleanly with empty backlog",
       });
       // Wait before restarting so the planner has time to create tasks
       const plannerWaitMs = 2 * 60 * 1000; // 2 minutes
-      console.log(`[monitor] waiting ${plannerWaitMs / 1000}s for planner before restart`);
+      console.log(
+        `[monitor] waiting ${plannerWaitMs / 1000}s for planner before restart`,
+      );
       setTimeout(startProcess, plannerWaitMs);
       return;
     }
 
     // Other clean exits (e.g., Stop-Requested) — just restart normally
-    console.log(`[monitor] clean exit (${reason}) — restarting without analysis`);
+    console.log(
+      `[monitor] clean exit (${reason}) — restarting without analysis`,
+    );
     restartCount += 1;
     setTimeout(startProcess, restartDelayMs);
     return;
@@ -3395,7 +3442,9 @@ async function handleExit(code, signal, logPath) {
   await analyzeWithCodex(logPath, logText.slice(-15000), reason);
 
   if (hasContextWindowError(logText)) {
-    console.log("[monitor] context window exhaustion detected — attempting fresh session");
+    console.log(
+      "[monitor] context window exhaustion detected — attempting fresh session",
+    );
     const freshStarted = await attemptFreshSessionRetry(
       "context_window_exhausted",
       logText.slice(-3000),
@@ -3452,7 +3501,9 @@ async function handleExit(code, signal, logPath) {
             }
           } else {
             // Crash loop fix failed — try a fresh session as last resort
-            console.log("[monitor] crash loop fix failed — attempting fresh session");
+            console.log(
+              "[monitor] crash loop fix failed — attempting fresh session",
+            );
             const freshStarted = await attemptFreshSessionRetry(
               "crash_loop_unresolvable",
               logText.slice(-3000),
@@ -3813,7 +3864,9 @@ async function reloadConfig(reason) {
           `🔄 .env reloaded (${reason}). Runtime config updated.`,
           { dedupKey: "env-reload" },
         );
-      } catch { /* best effort */ }
+      } catch {
+        /* best effort */
+      }
     }
   } catch (err) {
     const message = err && err.message ? err.message : String(err);

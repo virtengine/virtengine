@@ -810,11 +810,44 @@ const COMMANDS = {
 };
 
 /**
+ * Delete all existing bot commands from every scope to clear stale/old entries.
+ * Telegram stores commands per-scope, so we must clear each one explicitly.
+ */
+async function clearAllBotCommands() {
+  const scopes = [
+    { scope: { type: "default" } },
+    { scope: { type: "all_private_chats" } },
+    { scope: { type: "all_group_chats" } },
+    { scope: { type: "all_chat_administrators" } },
+  ];
+
+  for (const body of scopes) {
+    try {
+      await fetch(
+        `https://api.telegram.org/bot${telegramToken}/deleteMyCommands`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+    } catch {
+      /* best effort — scope may not have had commands */
+    }
+  }
+}
+
+/**
  * Sync the COMMANDS object to Telegram's bot command menu via setMyCommands.
- * This makes commands appear when users type "/" in the chat.
- * Aliases and duplicate entries are deduplicated by key.
+ * First clears ALL existing commands from every scope to remove stale entries
+ * (e.g. leftover commands from a previous project or bot configuration).
+ * Then sets the current command list.
  */
 async function registerBotCommands() {
+  // Step 1: Clear all old commands from every scope
+  await clearAllBotCommands();
+
+  // Step 2: Build and register current commands
   const seen = new Set();
   const commands = [];
   for (const [cmd, entry] of Object.entries(COMMANDS)) {
