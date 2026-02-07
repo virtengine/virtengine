@@ -820,9 +820,15 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
 
       set({ selectedOffering: offering, isLoadingDetail: false });
     } catch (error) {
+      const message =
+        error instanceof ChainRequestError && error.status === 404
+          ? 'Offering not found'
+          : error instanceof Error
+            ? error.message
+            : 'Failed to fetch offering';
       set({
         isLoadingDetail: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch offering',
+        error: message,
       });
     }
   },
