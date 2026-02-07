@@ -587,7 +587,8 @@ function Format-PRCheckFailures {
     .SYNOPSIS Format failing checks into a short markdown list.
     #>
     [CmdletBinding()]
-    param([Parameter(Mandatory)][object[]]$Checks)
+    param([object[]]$Checks = @())
+    if (-not $Checks -or $Checks.Count -eq 0) { return "- No failing checks found" }
     $failed = $Checks | Where-Object { $_.state -eq "FAILURE" -or $_.state -eq "ERROR" }
     if (-not $failed -or $failed.Count -eq 0) { return "- No failing checks found" }
     $lines = $failed | ForEach-Object {

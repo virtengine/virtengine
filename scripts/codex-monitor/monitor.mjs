@@ -36,18 +36,32 @@ const maxRestarts = Number(getArg("--max-restarts", "0"));
 const logDir = resolve(getArg("--log-dir", resolve(__dirname, "logs")));
 const watchEnabled = !getFlag("--no-watch");
 const watchPath = resolve(getArg("--watch-path", scriptPath));
-const codexEnabled =
+let codexEnabled =
   !getFlag("--no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
 const repoRoot = resolve(__dirname, "..", "..");
 const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
-const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "30");
+const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
 const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
 const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
+const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
+const vkRecoveryHost = process.env.VK_RECOVERY_HOST || "0.0.0.0";
+const vkPublicUrl = process.env.VK_PUBLIC_URL || process.env.VK_WEB_URL || "";
+const vkRecoveryCooldownMin = Number(
+  process.env.VK_RECOVERY_COOLDOWN_MIN || "10",
+);
 
 let CodexClient = null;
+let codexDisabledReason = "";
+
+if (!codexEnabled) {
+  codexDisabledReason =
+    process.env.CODEX_SDK_DISABLED === "1"
+      ? "disabled via CODEX_SDK_DISABLED"
+      : "disabled via --no-codex";
+}
 
 let restartCount = 0;
 let shuttingDown = false;
@@ -58,11 +72,15 @@ let skipNextRestartCount = false;
 let watcher = null;
 let watcherDebounce = null;
 let watchFileName = null;
+let vkRecoveryLastAt = 0;
+let vibeKanbanProcess = null;
 
 let logRemainder = "";
 const mergeNotified = new Set();
 const pendingMerges = new Set();
 const errorNotified = new Map();
+const mergeFailureNotified = new Map();
+const vkErrorNotified = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
 let plannerTriggered = false;
@@ -89,7 +107,32 @@ const errorNoisePatterns = [
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+SyncCopilotState:/i,
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+CI (pending|failing)/i,
   /^\s*\[\d{2}:\d{2}:\d{2}\]\s+PR #\d+ .*CI=/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Merge failed for PR/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Merge failure reason:/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Retry merge failed for PR/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Auto-merge enable failed:/i,
+  /^\s*\[\d{2}:\d{2}:\d{2}\]\s+Failed to initialize vibe-kanban configuration/i,
+  /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
 ];
+
+const vkErrorPatterns = [
+  /Failed to initialize vibe-kanban configuration/i,
+  /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
+];
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function formatHtmlLink(url, label) {
+  if (!url) {
+    return escapeHtml(label);
+  }
+  return `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
+}
 
 function isErrorLine(line) {
   if (errorNoisePatterns.some((pattern) => pattern.test(line))) {
@@ -100,6 +143,10 @@ function isErrorLine(line) {
 
 function notifyErrorLine(line) {
   if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (vkErrorPatterns.some((pattern) => pattern.test(line))) {
+    notifyVkError(line);
     return;
   }
   const key = line.trim();
@@ -113,6 +160,125 @@ function notifyErrorLine(line) {
   }
   errorNotified.set(key, now);
   queueErrorMessage(line.trim());
+}
+
+function notifyVkError(line) {
+  const key = "vibe-kanban-unavailable";
+  const now = Date.now();
+  const last = vkErrorNotified.get(key) || 0;
+  if (now - last < 10 * 60 * 1000) {
+    return;
+  }
+  vkErrorNotified.set(key, now);
+  const message = [
+    "VirtEngine Orchestrator Warning",
+    "Vibe-Kanban API unreachable.",
+    "Check VK_BASE_URL and ensure the service is running.",
+    vkPublicUrl ? `Public URL: ${vkPublicUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  void sendTelegramMessage(message);
+  triggerVibeKanbanRecovery(line);
+}
+
+function notifyCodexTrigger(context) {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  void sendTelegramMessage(`Codex triggered: ${context}`);
+}
+
+async function runCodexRecovery(reason) {
+  if (!codexEnabled) {
+    return null;
+  }
+  try {
+    if (!CodexClient) {
+      const ready = await ensureCodexSdkReady();
+      if (!ready) {
+        throw new Error(codexDisabledReason || "Codex SDK not available");
+      }
+    }
+    const codex = new CodexClient();
+    const thread = codex.startThread();
+    const prompt = `You are monitoring a Node.js orchestrator.
+A local service (vibe-kanban) is unreachable.
+Provide a short recovery plan and validate environment assumptions.
+Reason: ${reason}`;
+    const result = await thread.run(prompt);
+    const outPath = resolve(logDir, `codex-recovery-${nowStamp()}.txt`);
+    await writeFile(outPath, String(result), "utf8");
+    return outPath;
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    const outPath = resolve(logDir, `codex-recovery-${nowStamp()}.txt`);
+    await writeFile(outPath, `Codex recovery failed: ${message}\n`, "utf8");
+    return null;
+  }
+}
+
+function startVibeKanbanProcess() {
+  if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
+    return;
+  }
+  const env = {
+    ...process.env,
+    PORT: vkRecoveryPort,
+    HOST: vkRecoveryHost,
+  };
+  vibeKanbanProcess = spawn("npx", ["vibe-kanban"], {
+    env,
+    cwd: repoRoot,
+    stdio: "ignore",
+  });
+  vibeKanbanProcess.on("exit", () => {
+    vibeKanbanProcess = null;
+  });
+}
+
+function restartVibeKanbanProcess() {
+  if (vibeKanbanProcess && !vibeKanbanProcess.killed) {
+    const existing = vibeKanbanProcess;
+    try {
+      existing.kill("SIGTERM");
+    } catch {
+      // Best effort.
+    }
+    const killTimer = setTimeout(() => {
+      if (existing && !existing.killed) {
+        try {
+          existing.kill("SIGKILL");
+        } catch {
+          // Best effort.
+        }
+      }
+    }, 5000);
+    existing.once("exit", () => {
+      clearTimeout(killTimer);
+      startVibeKanbanProcess();
+    });
+    return;
+  }
+  startVibeKanbanProcess();
+}
+
+async function triggerVibeKanbanRecovery(reason) {
+  const now = Date.now();
+  const cooldownMs = vkRecoveryCooldownMin * 60 * 1000;
+  if (now - vkRecoveryLastAt < cooldownMs) {
+    return;
+  }
+  vkRecoveryLastAt = now;
+
+  if (telegramToken && telegramChatId) {
+    const notice = codexEnabled
+      ? "Codex recovery triggered: vibe-kanban unreachable. Attempting restart."
+      : "Vibe-kanban recovery triggered (Codex disabled). Attempting restart.";
+    void sendTelegramMessage(notice);
+  }
+  await runCodexRecovery(reason || "vibe-kanban unreachable");
+  restartVibeKanbanProcess();
 }
 
 const errorQueue = [];
@@ -149,6 +315,38 @@ function notifyMerge(line) {
   pendingMerges.add(pr);
 }
 
+function notifyMergeFailure(line) {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  const match = line.match(
+    /Merge notify: PR #(\d+)\s+stage=([^\s]+)\s+category=([^\s]+)\s+action=([^\s]+)\s+reason=(.+)$/i,
+  );
+  if (!match) {
+    return;
+  }
+  const pr = match[1];
+  const stage = match[2];
+  const category = match[3];
+  const action = match[4];
+  const reason = match[5];
+  if (stage !== "manual_review") {
+    return;
+  }
+  if (mergeFailureNotified.has(pr)) {
+    return;
+  }
+  mergeFailureNotified.set(pr, Date.now());
+  const message = [
+    `Merge failed for PR #${pr} (${stage})`,
+    `Category: ${category}`,
+    `Action: ${action}`,
+    `Reason: ${reason}`,
+    `${repoUrlBase}/pull/${pr}`,
+  ].join("\n");
+  void sendTelegramMessage(message);
+}
+
 async function flushMergeNotifications() {
   if (!telegramToken || !telegramChatId) {
     return;
@@ -178,58 +376,157 @@ async function readStatusSummary() {
   try {
     const status = await readStatusData();
     if (!status) {
-      return "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)";
+      return {
+        text: "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)",
+        parseMode: null,
+      };
     }
+
     const counts = status.counts || {};
+    const submitted = Array.isArray(status.submitted_tasks)
+      ? status.submitted_tasks
+      : [];
     const completed = Array.isArray(status.completed_tasks)
       ? status.completed_tasks
       : [];
-    const recent = completed
-      .slice(-5)
-      .map((item) => (item.pr_number ? `#${item.pr_number}` : null))
-      .filter(Boolean)
-      .join(", ");
-
-    const updatedAt = status.updated_at || "unknown";
-    const running = counts.running ?? 0;
-    const review = counts.review ?? 0;
-    const error = counts.error ?? 0;
-    const tasksCompleted = status.tasks_completed ?? 0;
-    const tasksSubmitted = status.tasks_submitted ?? 0;
-    const backlogRemaining = status.backlog_remaining ?? 0;
+    const followups = Array.isArray(status.followup_events)
+      ? status.followup_events
+      : [];
+    const copilotRequests = Array.isArray(status.copilot_requests)
+      ? status.copilot_requests
+      : [];
+    const attempts = status.attempts || {};
+    const manualReviewTasks = Array.isArray(status.manual_review_tasks)
+      ? status.manual_review_tasks
+      : [];
 
     const now = Date.now();
-    const cutoffMs = 4 * 60 * 60 * 1000;
-    const recentWindow = completed.filter((item) => {
+    const intervalMs = telegramIntervalMin * 60 * 1000;
+    const cutoff = now - intervalMs;
+
+    const recentSubmitted = submitted.filter((item) => {
+      if (!item.submitted_at) {
+        return false;
+      }
+      const ts = Date.parse(item.submitted_at);
+      return Number.isFinite(ts) && ts >= cutoff;
+    });
+
+    const recentCompleted = completed.filter((item) => {
       if (!item.completed_at) {
         return false;
       }
       const ts = Date.parse(item.completed_at);
-      return Number.isFinite(ts) && now - ts <= cutoffMs;
+      return Number.isFinite(ts) && ts >= cutoff;
     });
-    const ratePerHour = recentWindow.length / 4;
-    const etaHours = ratePerHour > 0 ? backlogRemaining / ratePerHour : null;
-    const etaText =
-      etaHours && Number.isFinite(etaHours) ? `${etaHours.toFixed(1)}h` : "n/a";
-    const rateText = Number.isFinite(ratePerHour)
-      ? `${ratePerHour.toFixed(2)}`
-      : "0.00";
 
-    return [
-      "VirtEngine Orchestrator Update",
-      `Updated: ${updatedAt}`,
-      `Counts: running=${running}, review=${review}, error=${error}`,
-      `Tasks: completed=${tasksCompleted}, submitted=${tasksSubmitted}`,
-      `Backlog remaining: ${backlogRemaining} (ETA ${etaText})`,
-      `Completion rate: ${rateText} tasks/hr`,
-      recent ? `Recent merged PRs: ${recent}` : "Recent merged PRs: none",
+    const recentFollowups = followups.filter((item) => {
+      if (!item.occurred_at) {
+        return false;
+      }
+      const ts = Date.parse(item.occurred_at);
+      return Number.isFinite(ts) && ts >= cutoff;
+    });
+
+    const recentCopilot = copilotRequests.filter((item) => {
+      if (!item.occurred_at) {
+        return false;
+      }
+      const ts = Date.parse(item.occurred_at);
+      return Number.isFinite(ts) && ts >= cutoff;
+    });
+
+    const manualReviewLines = manualReviewTasks.length
+      ? manualReviewTasks.map((taskId) => {
+          const attempt = Object.values(attempts).find(
+            (item) => item && item.task_id === taskId && item.status === "manual_review",
+          );
+          if (attempt && attempt.pr_number) {
+            const prNumber = `#${attempt.pr_number}`;
+            return `- ${formatHtmlLink(
+              `${repoUrlBase}/pull/${attempt.pr_number}`,
+              prNumber,
+            )}`;
+          }
+          return `- ${escapeHtml(taskId)}`;
+        })
+      : ["- none"];
+
+    const createdLines = recentSubmitted.length
+      ? recentSubmitted.map((item) => {
+          const title = item.task_title || item.task_id || "(task)";
+          const link = item.task_url
+            ? formatHtmlLink(item.task_url, title)
+            : escapeHtml(title);
+          return `- ${link}`;
+        })
+      : ["- none"];
+
+    const mergedLines = recentCompleted.length
+      ? recentCompleted.map((item) => {
+          const prNumber = item.pr_number ? `#${item.pr_number}` : "";
+          const title = item.pr_title || prNumber || "(PR)";
+          const link = item.pr_url
+            ? formatHtmlLink(item.pr_url, title)
+            : escapeHtml(title);
+          const suffix = prNumber && !title.includes(prNumber) ? ` (${prNumber})` : "";
+          return `- ${link}${suffix}`;
+        })
+      : ["- none"];
+
+    const followupLines = recentFollowups.length
+      ? recentFollowups.map((item) => {
+          const title = item.task_title || item.task_id || "(task)";
+          const link = item.task_url
+            ? formatHtmlLink(item.task_url, title)
+            : escapeHtml(title);
+          const reason = item.reason ? `: ${escapeHtml(item.reason)}` : "";
+          return `- ${link}${reason}`;
+        })
+      : ["- none"];
+
+    const copilotLines = recentCopilot.length
+      ? recentCopilot.map((item) => {
+          const prNumber = item.pr_number ? `#${item.pr_number}` : "";
+          const title = item.pr_title || prNumber || "(PR)";
+          const link = item.pr_url
+            ? formatHtmlLink(item.pr_url, title)
+            : escapeHtml(title);
+          const reason = item.reason ? `: ${escapeHtml(item.reason)}` : "";
+          return `- ${link}${reason}`;
+        })
+      : ["- none"];
+
+    const running = counts.running ?? 0;
+    const review = counts.review ?? 0;
+    const error = counts.error ?? 0;
+    const manualReview = counts.manual_review ?? 0;
+
+    const message = [
+      "VirtEngine Orchestrator 10-min Update",
+      `New tasks created (${recentSubmitted.length}):`,
+      ...createdLines,
+      `Merged tasks (${recentCompleted.length}):`,
+      ...mergedLines,
+      `Task follow-ups (${recentFollowups.length}):`,
+      ...followupLines,
+      `Copilot triggered (${recentCopilot.length}):`,
+      ...copilotLines,
+      `Manual review (${manualReviewTasks.length}):`,
+      ...manualReviewLines,
+      `Counts: running=${running}, review=${review}, error=${error}, manual_review=${manualReview}`,
     ].join("\n");
+
+    return { text: message, parseMode: "HTML" };
   } catch (err) {
-    return "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)";
+    return {
+      text: "VirtEngine Orchestrator Update\nStatus: unavailable (missing status file)",
+      parseMode: null,
+    };
   }
 }
 
-async function sendTelegramMessage(text) {
+async function sendTelegramMessage(text, options = {}) {
   if (!telegramToken || !telegramChatId) {
     return;
   }
@@ -238,6 +535,12 @@ async function sendTelegramMessage(text) {
     chat_id: telegramChatId,
     text,
   };
+  if (options.parseMode) {
+    payload.parse_mode = options.parseMode;
+  }
+  if (options.disablePreview) {
+    payload.disable_web_page_preview = true;
+  }
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -266,8 +569,13 @@ function startTelegramNotifier() {
   }
   const intervalMs = telegramIntervalMin * 60 * 1000;
   const sendUpdate = async () => {
-    const message = await readStatusSummary();
-    await sendTelegramMessage(message);
+    const summary = await readStatusSummary();
+    if (summary && summary.text) {
+      await sendTelegramMessage(summary.text, {
+        parseMode: summary.parseMode,
+        disablePreview: true,
+      });
+    }
     await flushMergeNotifications();
     await checkStatusMilestones();
   };
@@ -316,6 +624,7 @@ async function triggerTaskPlanner() {
   }
   plannerTriggered = true;
   try {
+    notifyCodexTrigger("task planner run");
     if (!CodexClient) {
       CodexClient = await loadCodexSdk();
     }
@@ -374,11 +683,12 @@ async function analyzeWithCodex(logPath, logText, reason) {
     return;
   }
   try {
+    notifyCodexTrigger(`orchestrator analysis (${reason})`);
     if (!CodexClient) {
-      CodexClient = await loadCodexSdk();
-    }
-    if (!CodexClient) {
-      throw new Error("Codex SDK not available");
+      const ready = await ensureCodexSdkReady();
+      if (!ready) {
+        throw new Error(codexDisabledReason || "Codex SDK not available");
+      }
     }
     const codex = new CodexClient();
     const thread = codex.startThread();
@@ -425,12 +735,38 @@ async function tryImportCodex() {
 
 function installDependencies() {
   const cwd = __dirname;
-  const pnpm = spawnSync("pnpm", ["install"], { cwd, stdio: "inherit" });
+  const pnpm = spawnSync("pnpm", ["--version"], { stdio: "ignore" });
   if (pnpm.status === 0) {
-    return true;
+    const res = spawnSync("pnpm", ["install"], { cwd, stdio: "inherit" });
+    return res.status === 0;
   }
+
+  const corepack = spawnSync("corepack", ["--version"], { stdio: "ignore" });
+  if (corepack.status === 0) {
+    const res = spawnSync("corepack", ["pnpm", "install"], {
+      cwd,
+      stdio: "inherit",
+    });
+    return res.status === 0;
+  }
+
   const npm = spawnSync("npm", ["install"], { cwd, stdio: "inherit" });
   return npm.status === 0;
+}
+
+async function ensureCodexSdkReady() {
+  if (!codexEnabled) {
+    return false;
+  }
+  const client = await loadCodexSdk();
+  if (!client) {
+    codexEnabled = false;
+    codexDisabledReason = "Codex SDK not available (install failed or module missing)";
+    console.warn(`[monitor] ${codexDisabledReason}`);
+    return false;
+  }
+  CodexClient = client;
+  return true;
 }
 
 function hasContextWindowError(text) {
@@ -503,6 +839,9 @@ async function startProcess() {
       }
       if (line.includes("Merged PR") || line.includes("Marking task")) {
         notifyMerge(line);
+      }
+      if (line.includes("Merge notify: PR #")) {
+        notifyMergeFailure(line);
       }
       if (line.includes("ALL TASKS COMPLETE")) {
         if (!allCompleteNotified) {
@@ -612,5 +951,13 @@ setInterval(() => {
 }, 60 * 1000);
 
 startWatcher();
+void ensureCodexSdkReady().then(() => {
+  if (!codexEnabled) {
+    const reason = codexDisabledReason || "disabled";
+    console.warn(`[monitor] Codex disabled: ${reason}`);
+  } else {
+    console.log("[monitor] Codex enabled.");
+  }
+});
 startProcess();
 startTelegramNotifier();
