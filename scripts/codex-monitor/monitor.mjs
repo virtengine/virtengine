@@ -20,6 +20,7 @@ import {
 } from "./telegram-bot.mjs";
 import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
 import { loadConfig } from "./config.mjs";
+import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -155,7 +156,10 @@ let vibeKanbanStartedAt = 0;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
 const githubToken =
-  process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_PAT || "";
+  process.env.GITHUB_TOKEN ||
+  process.env.GH_TOKEN ||
+  process.env.GITHUB_PAT ||
+  "";
 let monitorFailureHandling = false;
 const monitorFailureTimestamps = [];
 const monitorFailureWindowMs = 10 * 60 * 1000;
@@ -1074,7 +1078,11 @@ async function startVibeKanbanProcess() {
   // fall back to npx for global/remote installs.
   const vkBin = resolve(__dirname, "node_modules", ".bin", "vibe-kanban");
   const useLocal = existsSync(vkBin) || existsSync(vkBin + ".cmd");
-  const spawnCmd = useLocal ? (process.platform === "win32" ? vkBin + ".cmd" : vkBin) : "npx";
+  const spawnCmd = useLocal
+    ? process.platform === "win32"
+      ? vkBin + ".cmd"
+      : vkBin
+    : "npx";
   const spawnArgs = useLocal ? [] : ["--yes", "vibe-kanban"];
 
   console.log(
@@ -1494,7 +1502,11 @@ async function rebaseAttempt(attemptId) {
   const repoId = await getRepoId();
   if (!repoId) {
     console.warn("[monitor] Cannot rebase: repo_id not available");
-    return { success: false, error: "repo_id_missing", message: "repo_id not available" };
+    return {
+      success: false,
+      error: "repo_id_missing",
+      message: "repo_id not available",
+    };
   }
   const res = await fetchVk(`/api/task-attempts/${attemptId}/rebase`, {
     method: "POST",
@@ -4077,6 +4089,7 @@ async function reloadConfig(reason) {
 
 process.on("SIGINT", () => {
   shuttingDown = true;
+  stopAutoUpdateLoop();
   stopEnvWatchers();
   if (watcher) {
     watcher.close();
@@ -4096,6 +4109,7 @@ process.on("exit", () => {
 
 process.on("SIGTERM", () => {
   shuttingDown = true;
+  stopAutoUpdateLoop();
   stopEnvWatchers();
   if (watcher) {
     watcher.close();
@@ -4185,6 +4199,18 @@ setInterval(() => {
 setTimeout(() => {
   void checkMergedPRsAndUpdateTasks();
 }, 30 * 1000);
+
+// ── Self-updating: poll npm every 10 min, auto-install + restart ────────────
+startAutoUpdateLoop({
+  onRestart: (reason) => restartSelf(reason),
+  onNotify: (msg) => {
+    try {
+      void sendTelegramMessage(msg);
+    } catch {
+      /* best-effort */
+    }
+  },
+});
 
 startWatcher();
 startEnvWatchers();

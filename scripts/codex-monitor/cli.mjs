@@ -44,6 +44,7 @@ function showHelp() {
     --version                   Show version
     --update                    Check for and install latest version
     --no-update-check           Skip automatic update check on startup
+    --no-auto-update            Disable background auto-update polling
 
   ORCHESTRATOR
     --script <path>             Path to the orchestrator script
@@ -84,6 +85,11 @@ function showHelp() {
     3. .env file
     4. codex-monitor.config.json
     5. Built-in defaults
+
+    Auto-update environment variables:
+      CODEX_MONITOR_SKIP_UPDATE_CHECK=1     Disable startup version check
+      CODEX_MONITOR_SKIP_AUTO_UPDATE=1      Disable background polling
+      CODEX_MONITOR_UPDATE_INTERVAL_MS=N    Override poll interval (default: 600000)
 
     See .env.example for all environment variables.
 
@@ -143,14 +149,21 @@ async function main() {
   // ── Startup banner with update check ──────────────────────────────────────
   console.log("");
   console.log("  ╭──────────────────────────────────────────────────────────╮");
-  console.log(`  │ >_ codex-monitor (v${VERSION})${" ".repeat(Math.max(0, 39 - VERSION.length))}│`);
+  console.log(
+    `  │ >_ codex-monitor (v${VERSION})${" ".repeat(Math.max(0, 39 - VERSION.length))}│`,
+  );
   console.log("  ╰──────────────────────────────────────────────────────────╯");
 
   // Non-blocking update check (don't delay startup)
   if (!args.includes("--no-update-check")) {
     import("./update-check.mjs")
       .then(({ checkForUpdate }) => checkForUpdate(VERSION))
-      .catch(() => {});  // silent — never block startup
+      .catch(() => {}); // silent — never block startup
+  }
+
+  // Propagate --no-auto-update to env for monitor.mjs to pick up
+  if (args.includes("--no-auto-update")) {
+    process.env.CODEX_MONITOR_SKIP_AUTO_UPDATE = "1";
   }
 
   // Handle --setup
