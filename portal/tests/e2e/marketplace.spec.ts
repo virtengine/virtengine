@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { mockChainResponses, mockKeplr, seedWalletSession, mockIdentity } from './utils';
 
 test.describe('Marketplace @smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockChainResponses(page);
+  });
+
   test('should display marketplace page', async ({ page }) => {
     await page.goto('/marketplace');
 
@@ -11,73 +16,66 @@ test.describe('Marketplace @smoke', () => {
   test('should display filter options', async ({ page }) => {
     await page.goto('/marketplace');
 
-    // Check sort select exists (has label "Sort by:")
     await expect(page.getByLabel('Sort by:')).toBeVisible();
 
-    // Check for filter sidebar on desktop or filter toggle on mobile
     const filterSidebar = page.locator('aside');
     const isSidebarVisible = await filterSidebar.isVisible().catch(() => false);
     expect(isSidebarVisible || (await page.locator('button svg').first().isVisible())).toBe(true);
   });
 
-  test('should display offering cards', async ({ page }) => {
+  test('should browse offerings and apply filters', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/marketplace');
 
-    // Should have multiple offering cards
-    const cards = page.locator('[href^="/marketplace/"]');
-    await expect(cards.first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'NVIDIA A100 Cluster' })).toBeVisible();
 
-    const count = await cards.count();
-    expect(count).toBeGreaterThan(0);
+    await page.getByRole('button', { name: /GPU Compute/i }).click();
+
+    await expect(page.getByRole('heading', { name: 'NVIDIA A100 Cluster' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'NVMe Storage Vault' })).toBeHidden();
+  });
+
+  test('should search offerings', async ({ page }) => {
+    await page.goto('/marketplace');
+
+    const searchInput = page.getByPlaceholder('Search offerings...');
+    await searchInput.fill('storage');
+    await searchInput.press('Enter');
+
+    await expect(page.getByRole('heading', { name: 'NVMe Storage Vault' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'NVIDIA A100 Cluster' })).toBeHidden();
   });
 
   test('should navigate to offering detail', async ({ page }) => {
     await page.goto('/marketplace');
 
-    // Click first offering
-    await page.locator('[href^="/marketplace/"]').first().click();
+    await page.locator('a[href^=\"/marketplace/\"]').first().click();
 
-    // Should be on detail page - URL format is /marketplace/{provider}/{sequence}
-    await expect(page).toHaveURL(/\/marketplace\/[a-zA-Z0-9]+\/\d+/);
-  });
-});
-
-test.describe('Marketplace Filters', () => {
-  test('should display sidebar filters on desktop', async ({ page }) => {
-    // Set viewport to desktop size
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('/marketplace');
-
-    // Check filter sections exist
-    await expect(page.getByRole('heading', { name: /resource type/i })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /region/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'NVIDIA A100 Cluster' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Create Order/i })).toBeVisible();
   });
 
-  test('should have filter controls', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('/marketplace');
+  test('should complete create order flow', async ({ page }) => {
+    await mockKeplr(page);
+    await seedWalletSession(page);
+    await mockIdentity(page);
 
-    // Check filter buttons exist (categories are button-based, not checkboxes)
-    const filterButtons = page.locator('aside button');
-    const count = await filterButtons.count();
-    expect(count).toBeGreaterThan(0);
-  });
-});
+    await page.goto('/marketplace/virtengine1provider1xyz/101/order');
 
-test.describe('Marketplace Pagination', () => {
-  test('should display pagination controls when multiple pages exist', async ({ page }) => {
-    await page.goto('/marketplace');
+    await expect(page.getByRole('heading', { name: /Create Order/i })).toBeVisible();
+    await expect(page.getByLabel('Order name')).toBeVisible();
 
-    // Pagination buttons only appear when there are multiple pages
-    // Check for either pagination buttons OR the total count indicating single page
-    const paginationArea = page.locator('.mt-8');
-    const previousButton = page.getByRole('button', { name: /previous/i });
-    const resultsCount = page.getByText(/offering.*found/i);
+    await expect(page.getByRole('button', { name: /Disconnect/i })).toBeVisible();
 
-    // Either pagination exists OR we see the results count
-    const hasPagination = await previousButton.isVisible().catch(() => false);
-    const hasResults = await resultsCount.isVisible().catch(() => false);
+    await page.getByLabel('Order name').fill('A100 Training Run');
+    await page.getByLabel('Notes for provider').fill('Schedule for midnight UTC.');
 
-    expect(hasPagination || hasResults).toBe(true);
+    await page.getByRole('button', { name: /Review & Sign/i }).click();
+
+    await expect(page.getByRole('heading', { name: /Escrow Deposit/i })).toBeVisible();
+
+    await page.getByRole('button', { name: /Sign & Submit/i }).click();
+
+    await expect(page.getByRole('heading', { name: /Order confirmed/i })).toBeVisible();
   });
 });
