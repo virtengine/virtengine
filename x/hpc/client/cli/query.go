@@ -379,20 +379,6 @@ func filterClusters(clusters []hpctypes.HPCCluster, region string, activeFilter 
 	return filtered
 }
 
-func filterJobs(jobs []hpctypes.HPCJob, stateFilter *hpctypes.JobState) []hpctypes.HPCJob {
-	if stateFilter == nil {
-		return jobs
-	}
-	filtered := make([]hpctypes.HPCJob, 0, len(jobs))
-	for _, job := range jobs {
-		if job.State != *stateFilter {
-			continue
-		}
-		filtered = append(filtered, job)
-	}
-	return filtered
-}
-
 func filterOfferings(offerings []hpctypes.HPCOffering, clusterID, provider string, activeFilter *bool) []hpctypes.HPCOffering {
 	if clusterID == "" && provider == "" && activeFilter == nil {
 		return offerings
