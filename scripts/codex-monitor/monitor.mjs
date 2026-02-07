@@ -30,6 +30,7 @@ import {
   initPrimaryAgent,
 } from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
+import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
 import {
@@ -112,6 +113,8 @@ let {
   watchPath: configWatchPath,
   echoLogs,
   autoFixEnabled,
+  preflightEnabled: configPreflightEnabled,
+  preflightRetryMs: configPreflightRetryMs,
   repoRoot,
   statusPath,
   telegramPollLockPath,
@@ -152,6 +155,8 @@ let codexDisabledReason = codexEnabled
   : process.env.CODEX_SDK_DISABLED === "1"
     ? "disabled via CODEX_SDK_DISABLED"
     : "disabled via --no-codex";
+let preflightEnabled = configPreflightEnabled;
+let preflightRetryMs = configPreflightRetryMs;
 
 // Merge strategy: Codex-powered merge decision analysis
 // Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false
@@ -169,6 +174,10 @@ const conflictResolutionTimeoutMs = Number(
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;
+let preflightInProgress = false;
+let preflightLastResult = null;
+let preflightLastRunAt = 0;
+let preflightRetryTimer = null;
 
 let CodexClient = null;
 
@@ -357,6 +366,46 @@ function shouldRestartMonitor() {
     return false;
   }
   return monitorFailureTimestamps.length >= 3;
+}
+
+function schedulePreflightRetry(waitMs) {
+  if (preflightRetryTimer) return;
+  const delay = Math.max(30000, waitMs || preflightRetryMs);
+  preflightRetryTimer = setTimeout(() => {
+    preflightRetryTimer = null;
+    startProcess();
+  }, delay);
+}
+
+async function ensurePreflightReady(reason) {
+  if (!preflightEnabled) return true;
+  if (preflightInProgress) return false;
+  const now = Date.now();
+  if (preflightLastResult && !preflightLastResult.ok) {
+    const elapsed = now - preflightLastRunAt;
+    if (elapsed < preflightRetryMs) {
+      schedulePreflightRetry(preflightRetryMs - elapsed);
+      return false;
+    }
+  }
+  preflightInProgress = true;
+  const result = runPreflightChecks({ repoRoot });
+  preflightInProgress = false;
+  preflightLastResult = result;
+  preflightLastRunAt = Date.now();
+  const report = formatPreflightReport(result, {
+    retryMs: result.ok ? 0 : preflightRetryMs,
+  });
+  if (!result.ok) {
+    console.error(report);
+    console.warn(
+      `[monitor] preflight failed (${reason || "startup"}); blocking orchestrator start.`,
+    );
+    schedulePreflightRetry(preflightRetryMs);
+    return false;
+  }
+  console.log(report);
+  return true;
 }
 
 function restartSelf(reason) {
@@ -4198,6 +4247,9 @@ async function startProcess() {
     setTimeout(startProcess, waitSec * 1000);
     return;
   }
+  if (!(await ensurePreflightReady("start"))) {
+    return;
+  }
   await ensureLogDir();
   const activeLogPath = resolve(logDir, "orchestrator-active.log");
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
@@ -4495,6 +4547,7 @@ function applyConfig(nextConfig, options = {}) {
   const prevCodexEnabled = codexEnabled;
   const prevTelegramCommandEnabled = telegramCommandEnabled;
   const prevTelegramBotEnabled = telegramBotEnabled;
+  const prevPreflightEnabled = preflightEnabled;
 
   config = nextConfig;
   projectName = nextConfig.projectName;
@@ -4507,6 +4560,8 @@ function applyConfig(nextConfig, options = {}) {
   watchPath = resolve(nextConfig.watchPath);
   echoLogs = nextConfig.echoLogs;
   autoFixEnabled = nextConfig.autoFixEnabled;
+  preflightEnabled = nextConfig.preflightEnabled;
+  preflightRetryMs = nextConfig.preflightRetryMs;
   repoRoot = nextConfig.repoRoot;
   statusPath = nextConfig.statusPath;
   telegramPollLockPath = nextConfig.telegramPollLockPath;
@@ -4570,6 +4625,10 @@ function applyConfig(nextConfig, options = {}) {
   }
   if (!prevCodexEnabled && codexEnabled) {
     void ensureCodexSdkReady();
+  }
+  if (prevPreflightEnabled && !preflightEnabled && preflightRetryTimer) {
+    clearTimeout(preflightRetryTimer);
+    preflightRetryTimer = null;
   }
 
   const nextArgs = scriptArgs?.join(" ") || "";
@@ -4795,3 +4854,5 @@ injectMonitorFunctions({
 if (telegramBotEnabled) {
   void startTelegramBot();
 }
+
+
