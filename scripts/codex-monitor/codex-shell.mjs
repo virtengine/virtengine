@@ -32,6 +32,8 @@ let activeThread = null; // Current persistent Thread
 let activeThreadId = null; // Thread ID for resume
 let activeTurn = null; // Whether a turn is in-flight
 let turnCount = 0; // Number of turns in this thread
+const workspaceTurns = new Map(); // workspacePath -> boolean (in-flight)
+const workspaceThreads = new Map(); // workspacePath -> Thread
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +144,14 @@ const THREAD_OPTIONS = {
   approvalPolicy: "never",
 };
 
+function buildUserPrompt(userMessage, statusData) {
+  if (statusData) {
+    const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
+    return `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with \"Ready\" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+  }
+  return `# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with \"Ready\" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
+}
+
 /**
  * Get or create the persistent thread.
  * Resumes an existing thread if we have a saved threadId.
@@ -187,6 +197,33 @@ async function getThread() {
   }
 
   return activeThread;
+}
+
+async function getWorkspaceThread(workspacePath) {
+  const cached = workspaceThreads.get(workspacePath);
+  if (cached) return cached;
+
+  if (!codexInstance) {
+    const Cls = await loadCodexSdk();
+    if (!Cls) throw new Error("Codex SDK not available");
+    codexInstance = new Cls();
+  }
+
+  const thread = codexInstance.startThread({
+    ...THREAD_OPTIONS,
+    workingDirectory: workspacePath,
+  });
+
+  try {
+    await thread.run(SYSTEM_PROMPT);
+  } catch (err) {
+    console.warn(
+      `[codex-shell] workspace prime failed (${workspacePath}): ${err.message}`,
+    );
+  }
+
+  workspaceThreads.set(workspacePath, thread);
+  return thread;
 }
 
 // ── Event Formatting ─────────────────────────────────────────────────────────
@@ -330,13 +367,7 @@ export async function execCodexPrompt(userMessage, options = {}) {
     const thread = await getThread();
 
     // Build the user prompt with optional status context
-    let prompt = userMessage;
-    if (statusData) {
-      const statusSnippet = JSON.stringify(statusData, null, 2).slice(0, 2000);
-      prompt = `[Orchestrator Status]\n\`\`\`json\n${statusSnippet}\n\`\`\`\n\n# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-    } else {
-      prompt = `# YOUR TASK — EXECUTE NOW\n\n${userMessage}\n\n---\nDo NOT respond with "Ready" or ask what to do. EXECUTE this task. Read files, run commands, produce detailed output.`;
-    }
+    const prompt = buildUserPrompt(userMessage, statusData);
 
     // Set up timeout
     const controller = abortController || new AbortController();
@@ -412,6 +443,107 @@ export async function execCodexPrompt(userMessage, options = {}) {
     }
   } finally {
     activeTurn = false;
+  }
+}
+
+/**
+ * Send a message to a workspace-scoped Codex agent.
+ *
+ * @param {string} userMessage
+ * @param {object} options
+ * @param {string} options.workspacePath - Workspace repo root to run in
+ * @param {function} options.onEvent
+ * @param {object} options.statusData
+ * @param {number} options.timeoutMs
+ * @param {boolean} options.sendRawEvents
+ * @returns {Promise<{finalResponse: string, items: Array, usage: object|null}>}
+ */
+export async function execCodexPromptInWorkspace(userMessage, options = {}) {
+  const {
+    workspacePath,
+    onEvent = null,
+    statusData = null,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    sendRawEvents = false,
+    abortController = null,
+  } = options;
+
+  if (!workspacePath) {
+    throw new Error("workspacePath is required");
+  }
+
+  if (workspaceTurns.get(workspacePath)) {
+    return {
+      finalResponse:
+        "⏳ Workspace agent is still executing a previous task. Please wait.",
+      items: [],
+      usage: null,
+    };
+  }
+
+  workspaceTurns.set(workspacePath, true);
+
+  try {
+    const thread = await getWorkspaceThread(workspacePath);
+    const prompt = buildUserPrompt(userMessage, statusData);
+
+    const controller = abortController || new AbortController();
+    const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+
+    try {
+      const streamedTurn = await thread.runStreamed(prompt, {
+        signal: controller.signal,
+      });
+
+      let finalResponse = "";
+      const allItems = [];
+
+      for await (const event of streamedTurn.events) {
+        if (onEvent) {
+          const formatted = formatEvent(event);
+          if (formatted || sendRawEvents) {
+            try {
+              if (sendRawEvents) {
+                await onEvent(formatted, event);
+              } else {
+                await onEvent(formatted);
+              }
+            } catch {
+              /* best effort */
+            }
+          }
+        }
+
+        if (event.type === "item.completed") {
+          allItems.push(event.item);
+          if (event.item.type === "agent_message" && event.item.text) {
+            finalResponse += event.item.text + "\n";
+          }
+        }
+      }
+
+      clearTimeout(timer);
+
+      return {
+        finalResponse:
+          finalResponse.trim() || "(Agent completed with no text output)",
+        items: allItems,
+        usage: null,
+      };
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === "AbortError") {
+        const reason = controller.signal.reason;
+        const msg =
+          reason === "user_stop"
+            ? "🛑 Agent stopped by user."
+            : `⏱️ Agent timed out after ${timeoutMs / 1000}s`;
+        return { finalResponse: msg, items: [], usage: null };
+      }
+      throw err;
+    }
+  } finally {
+    workspaceTurns.delete(workspacePath);
   }
 }
 

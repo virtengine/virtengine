@@ -19,6 +19,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   execCodexPrompt,
+  execCodexPromptInWorkspace,
   isCodexBusy,
   getThreadInfo,
   resetThread,
@@ -691,6 +692,10 @@ const COMMANDS = {
     handler: cmdBackground,
     desc: "Run a task in background or background the active agent",
   },
+  "/agent": {
+    handler: cmdAgent,
+    desc: "Dispatch a task to a workspace: /agent --workspace <id> --task <prompt>",
+  },
   "/region": {
     handler: cmdRegion,
     desc: "View/switch Codex region: /region [us|sweden|auto]",
@@ -740,6 +745,147 @@ async function handleCommand(text, chatId) {
 }
 
 // ── Built-in Command Handlers ────────────────────────────────────────────────
+
+function splitArgs(input) {
+  if (!input) return [];
+  const tokens = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+  while ((match = re.exec(input)) !== null) {
+    tokens.push(match[1] ?? match[2] ?? match[3]);
+  }
+  return tokens;
+}
+
+function parseAgentArgs(args) {
+  const tokens = splitArgs(args);
+  let workspaceId = null;
+  let taskTokens = [];
+  const remaining = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === "--workspace" || token === "-w") {
+      workspaceId = tokens[i + 1] || null;
+      i++;
+      continue;
+    }
+    if (token.startsWith("--workspace=")) {
+      workspaceId = token.slice("--workspace=".length) || null;
+      continue;
+    }
+    if (token === "--task" || token === "-t") {
+      taskTokens = tokens.slice(i + 1);
+      break;
+    }
+    if (token.startsWith("--task=")) {
+      taskTokens = [token.slice("--task=".length)];
+      break;
+    }
+    remaining.push(token);
+  }
+
+  if (taskTokens.length === 0) {
+    taskTokens = remaining;
+  }
+
+  return {
+    workspaceId: workspaceId ? workspaceId.trim() : null,
+    task: taskTokens.join(" ").trim(),
+  };
+}
+
+function isPathLike(value) {
+  return /[\\/]|^[A-Za-z]:/.test(value);
+}
+
+function findRepoPath(basePath) {
+  if (!basePath) return null;
+  const resolved = resolve(basePath);
+  if (existsSync(resolve(resolved, "go.mod"))) {
+    return resolved;
+  }
+  const nested = resolve(resolved, "virtengine");
+  if (existsSync(resolve(nested, "go.mod"))) {
+    return nested;
+  }
+  return null;
+}
+
+async function listWorkspaceIds(worktreesRoot) {
+  const entries = await readdir(worktreesRoot, { withFileTypes: true }).catch(
+    () => [],
+  );
+  const ids = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const repoPath = findRepoPath(resolve(worktreesRoot, entry.name));
+    if (repoPath) ids.push(entry.name);
+  }
+  return ids;
+}
+
+async function resolveWorkspaceRepo(workspaceId) {
+  const trimmed = (workspaceId || "").trim();
+  if (!trimmed) {
+    return {
+      repoPath: repoRoot,
+      label: "primary coordinator",
+      isPrimary: true,
+    };
+  }
+
+  const lower = trimmed.toLowerCase();
+  if (["primary", "coordinator", "default"].includes(lower)) {
+    return {
+      repoPath: repoRoot,
+      label: "primary coordinator",
+      isPrimary: true,
+    };
+  }
+
+  const worktreesRoot = resolve(repoRoot, "..", "..");
+  const candidates = [];
+
+  if (isPathLike(trimmed)) {
+    candidates.push(trimmed);
+    candidates.push(resolve(worktreesRoot, trimmed));
+  } else {
+    candidates.push(resolve(worktreesRoot, trimmed));
+  }
+
+  for (const candidate of candidates) {
+    const repoPath = findRepoPath(candidate);
+    if (repoPath) {
+      return {
+        repoPath,
+        label: trimmed,
+        isPrimary: repoPath === repoRoot,
+      };
+    }
+  }
+
+  const suggestions = await listWorkspaceIds(worktreesRoot);
+  return {
+    error: `Workspace "${trimmed}" not found.`,
+    suggestions,
+    worktreesRoot,
+  };
+}
+
+async function loadWorkspaceStatusData(workspacePath) {
+  try {
+    const workspaceStatusPath = resolve(
+      workspacePath,
+      ".cache",
+      "ve-orchestrator-status.json",
+    );
+    const raw = await readFile(workspaceStatusPath, "utf8").catch(() => null);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 async function cmdHelp(chatId) {
   const lines = ["🤖 VirtEngine Codex Shell Commands:\n"];
@@ -1387,6 +1533,63 @@ async function cmdBackground(chatId, args) {
     chatId,
     "🛰️ Background mode enabled for the active agent. I will post a final summary when it completes. Use /stop to cancel or /steer to adjust context.",
   );
+}
+
+// ── /agent — dispatch task to a workspace ───────────────────────────────────
+
+async function cmdAgent(chatId, args) {
+  const { workspaceId, task } = parseAgentArgs(args);
+  if (!task) {
+    await sendReply(
+      chatId,
+      "Usage:\n/agent --workspace <id> --task <prompt>\nExample: /agent --workspace 6f54-feat-slopes-tele --task \"Run tests\"",
+    );
+    return;
+  }
+
+  const resolved = await resolveWorkspaceRepo(workspaceId);
+  if (!resolved.repoPath) {
+    const suggestions = resolved.suggestions?.length
+      ? `Available workspaces: ${resolved.suggestions.slice(0, 8).join(", ")}`
+      : `Check worktrees under: ${resolved.worktreesRoot || "(unknown)"}`;
+    await sendReply(chatId, `❌ ${resolved.error}\n${suggestions}`);
+    return;
+  }
+
+  if (resolved.isPrimary) {
+    await sendReply(chatId, "🧭 Routing to primary coordinator...");
+    await handleFreeText(task, chatId);
+    return;
+  }
+
+  await sendReply(
+    chatId,
+    `🛰️ Dispatching to workspace "${resolved.label}"...`,
+  );
+
+  try {
+    const statusData = await loadWorkspaceStatusData(resolved.repoPath);
+    const result = await execCodexPromptInWorkspace(task, {
+      workspacePath: resolved.repoPath,
+      statusData,
+      timeoutMs: CODEX_TIMEOUT_MS,
+    });
+
+    const response = result.finalResponse || "(no response)";
+    await sendReply(
+      chatId,
+      `✅ Workspace "${resolved.label}" completed:\n\n${response.slice(0, 3500)}`,
+    );
+  } catch (err) {
+    const message = err?.message || String(err);
+    const hint = message.toLowerCase().includes("codex sdk")
+      ? "Ensure @openai/codex-sdk is installed: pnpm -C scripts/codex-monitor install"
+      : "Verify the workspace path and that the repo is available.";
+    await sendReply(
+      chatId,
+      `❌ Workspace "${resolved.label}" failed: ${message}\n${hint}`,
+    );
+  }
 }
 
 // ── /stop — Stop Running Agent ───────────────────────────────────────────────
