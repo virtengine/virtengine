@@ -377,7 +377,25 @@ Only one process can poll a Telegram bot at a time. This happens if:
 | `/stop`               | Gracefully stop the orchestrator              |
 | `/reattempt <id>`     | Re-queue a failed task                        |
 | `/plan <description>` | Trigger the AI task planner                   |
+| `/presence`           | List active codex-monitor instances           |
+| `/coordinator`        | Show current coordinator selection            |
 | Free text             | Chat with Codex AI about the project          |
+
+### Presence & Coordinator (multi-workstation)
+
+codex-monitor can broadcast lightweight presence heartbeats so you can
+discover multiple instances running on different machines.
+
+Environment overrides:
+
+- `TELEGRAM_PRESENCE_INTERVAL_SEC` — presence heartbeat cadence in seconds (default: 60).
+- `TELEGRAM_PRESENCE_TTL_SEC` — consider instances offline after this many seconds (default: 3x interval).
+- `TELEGRAM_PRESENCE_DISABLED` — set to `1`/`true` to disable presence heartbeats.
+- `TELEGRAM_PRESENCE_CHAT_ID` — optional chat/channel to post presence updates (defaults to `TELEGRAM_CHAT_ID`).
+- `VE_INSTANCE_ID` — override the auto-generated instance id (stable across restarts).
+- `VE_INSTANCE_LABEL` — human-friendly instance label shown in `/presence`.
+- `VE_COORDINATOR_PRIORITY` — lower numbers win coordinator election (default: 10 for role=coordinator, otherwise 100).
+- `VE_COORDINATOR_ELIGIBLE` — set to `0`/`false` to opt-out of coordinator election.
 
 ## Smart PR Flow
 
