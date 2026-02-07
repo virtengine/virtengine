@@ -26,6 +26,11 @@ import {
   initCodexShell,
   steerCodexPrompt,
 } from "./codex-shell.mjs";
+import {
+  loadWorkspaceRegistry,
+  formatRegistryDiagnostics,
+  getDefaultModelPriority,
+} from "./workspace-registry.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const repoRoot = resolve(__dirname, "..", "..");
@@ -707,6 +712,10 @@ const COMMANDS = {
   "/model": {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
+  },
+  "/agent": {
+    handler: cmdAgent,
+    desc: "Route a task to a workspace: /agent --workspace <id> <task>",
   },
   "/stop": {
     handler: cmdStop,
@@ -1492,6 +1501,459 @@ async function cmdModel(chatId, modelArg) {
     );
   } catch (err) {
     await sendReply(chatId, `❌ Error: ${err.message}`);
+  }
+}
+
+// ── /agent — route to workspace registry ────────────────────────────────────
+
+const MODEL_PROFILE_MAP = {
+  "gpt-5.2-codex": { executor: "CODEX", variant: "DEFAULT", model: "gpt-5.2-codex" },
+  "gpt-5.1-codex-max": { executor: "CODEX", variant: "DEFAULT", model: "gpt-5.1-codex-max" },
+  "gpt-5.1-codex-mini": { executor: "CODEX", variant: "DEFAULT", model: "gpt-5.1-codex-mini" },
+  "claude-opus-4.6": { executor: "COPILOT", variant: "CLAUDE_OPUS_4_6", model: "claude-opus-4.6" },
+  "claude-code": { executor: "COPILOT", variant: "CLAUDE_CODE", model: "claude-code" },
+};
+
+function splitArgs(input) {
+  const args = [];
+  let current = "";
+  let quote = null;
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (quote) {
+      if (ch === quote) {
+        quote = null;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+    if (ch === "\"" || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += ch;
+  }
+  if (current) args.push(current);
+  return args;
+}
+
+function parseAgentArgs(rawArgs) {
+  const args = splitArgs(rawArgs || "");
+  const messageParts = [];
+  const opts = {
+    workspaceId: null,
+    role: null,
+    model: null,
+    queue: false,
+    newSession: false,
+    dryRun: false,
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--workspace" || arg === "-w") {
+      opts.workspaceId = args[i + 1] || null;
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--workspace=")) {
+      opts.workspaceId = arg.split("=")[1] || null;
+      continue;
+    }
+    if (arg === "--role" || arg === "-r") {
+      opts.role = args[i + 1] || null;
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--role=")) {
+      opts.role = arg.split("=")[1] || null;
+      continue;
+    }
+    if (arg === "--model" || arg === "-m") {
+      opts.model = args[i + 1] || null;
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--model=")) {
+      opts.model = arg.split("=")[1] || null;
+      continue;
+    }
+    if (arg === "--queue") {
+      opts.queue = true;
+      continue;
+    }
+    if (arg === "--new-session") {
+      opts.newSession = true;
+      continue;
+    }
+    if (arg === "--dry-run") {
+      opts.dryRun = true;
+      continue;
+    }
+    messageParts.push(arg);
+  }
+
+  return { ...opts, message: messageParts.join(" ").trim() };
+}
+
+function normalizeHost(host) {
+  if (!host) return null;
+  const trimmed = String(host).trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `http://${trimmed}`;
+}
+
+function buildExecutorProfile(model, customProfile) {
+  if (customProfile && typeof customProfile === "object") {
+    const profile = { ...customProfile };
+    if (model && !profile.model) profile.model = model;
+    return profile;
+  }
+  if (!model) return null;
+  return MODEL_PROFILE_MAP[model] || { model };
+}
+
+function resolveModelSelection(workspace, preferredModel) {
+  const priorities = Array.isArray(workspace.model_priority)
+    ? workspace.model_priority
+    : getDefaultModelPriority();
+  const candidates = [];
+  if (preferredModel) candidates.push(preferredModel);
+  candidates.push(...priorities);
+
+  for (const entry of candidates) {
+    if (!entry) continue;
+    if (typeof entry === "string") {
+      const model = entry.trim();
+      if (!model) continue;
+      return { model, profile: buildExecutorProfile(model) };
+    }
+    if (typeof entry === "object") {
+      const model = entry.model || entry.name || null;
+      const profile = buildExecutorProfile(model, entry);
+      if (profile) {
+        return { model: model || profile.model || null, profile };
+      }
+    }
+  }
+  return { model: null, profile: null };
+}
+
+async function vkRequest(host, path, options = {}) {
+  const { method = "GET", body, timeoutMs = 15000 } = options;
+  const base = normalizeHost(host);
+  if (!base) {
+    throw new Error("Workspace host missing");
+  }
+  const url = new URL(path, base);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  try {
+    const res = await fetch(url.toString(), {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`VK ${res.status}: ${text.slice(0, 200) || res.statusText}`);
+    }
+    let data = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        throw new Error(`VK response parse error: ${err.message}`);
+      }
+    }
+    if (data && data.success === false) {
+      throw new Error(data.message || "VK API error");
+    }
+    return data?.data ?? data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getWorkspaceSummaries(host) {
+  const data = await vkRequest(host, "/api/task-attempts/summary", {
+    method: "POST",
+    body: { archived: false },
+  });
+  if (!data) return [];
+  if (Array.isArray(data.summaries)) return data.summaries;
+  return Array.isArray(data) ? data : [data];
+}
+
+function scoreWorkspace(summary) {
+  const status = String(
+    summary?.latest_process_status ??
+      summary?.status ??
+      summary?.state ??
+      "",
+  ).toLowerCase();
+  const busy = ["running", "queued", "in_progress", "active"];
+  const idle = ["completed", "idle", "success", "done"];
+  const failed = ["failed", "error", "crashed", "killed", "aborted"];
+  if (busy.includes(status)) {
+    return { available: false, score: 0, status: "busy" };
+  }
+  if (idle.includes(status)) {
+    return { available: true, score: 3, status: "healthy" };
+  }
+  if (failed.includes(status)) {
+    return { available: true, score: 1, status: "degraded" };
+  }
+  return { available: true, score: 2, status: status || "unknown" };
+}
+
+async function getWorkspaceHealth(workspaces) {
+  const health = new Map();
+  const hostMap = new Map();
+  for (const ws of workspaces) {
+    const host = normalizeHost(ws.host);
+    if (!host) {
+      health.set(ws.id, { available: true, score: 1, status: "unknown" });
+      continue;
+    }
+    if (!hostMap.has(host)) hostMap.set(host, []);
+    hostMap.get(host).push(ws);
+  }
+
+  for (const [host, wsList] of hostMap.entries()) {
+    let summaries = [];
+    try {
+      summaries = await getWorkspaceSummaries(host);
+    } catch {
+      for (const ws of wsList) {
+        health.set(ws.id, { available: true, score: 1, status: "unknown" });
+      }
+      continue;
+    }
+
+    const summaryMap = new Map();
+    for (const summary of summaries) {
+      if (summary?.workspace_id) {
+        summaryMap.set(summary.workspace_id, summary);
+      }
+    }
+    for (const ws of wsList) {
+      const summary = summaryMap.get(ws.id);
+      if (summary) {
+        const scored = scoreWorkspace(summary);
+        const last = Date.parse(
+          summary.latest_process_completed_at ||
+            summary.latest_process_started_at ||
+            summary.updated_at ||
+            "",
+        );
+        health.set(ws.id, {
+          ...scored,
+          lastCompletedAt: Number.isFinite(last) ? last : null,
+        });
+      } else {
+        health.set(ws.id, { available: true, score: 1, status: "unknown" });
+      }
+    }
+  }
+
+  return health;
+}
+
+function selectWorkspace(candidates, healthMap, options = {}) {
+  const { preferredId } = options;
+  const scored = candidates.map((ws) => {
+    const h = healthMap.get(ws.id) || { available: true, score: 1, status: "unknown" };
+    return { ws, health: h };
+  });
+
+  const sortFn = (a, b) => {
+    const scoreDiff = (b.health.score ?? 0) - (a.health.score ?? 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    const lastA = a.health.lastCompletedAt || 0;
+    const lastB = b.health.lastCompletedAt || 0;
+    return lastB - lastA;
+  };
+
+  if (preferredId) {
+    const target = scored.find((item) => item.ws.id === preferredId);
+    if (target && target.health.available) {
+      return { workspace: target.ws, health: target.health };
+    }
+    const fallback = scored.sort(sortFn)[0];
+    return {
+      workspace: fallback?.ws || null,
+      health: fallback?.health || null,
+      fallbackFrom: target?.ws || null,
+    };
+  }
+
+  const best = scored.sort(sortFn)[0];
+  return { workspace: best?.ws || null, health: best?.health || null };
+}
+
+function pickLatestSession(sessions) {
+  if (!Array.isArray(sessions) || sessions.length === 0) return null;
+  return [...sessions].sort((a, b) => {
+    const ta = Date.parse(a.updated_at || a.created_at || 0) || 0;
+    const tb = Date.parse(b.updated_at || b.created_at || 0) || 0;
+    return tb - ta;
+  })[0];
+}
+
+async function dispatchAgentMessage(workspace, message, options = {}) {
+  const host = normalizeHost(workspace.host);
+  const executorProfile = options.executorProfile || null;
+  const sessions = await vkRequest(
+    host,
+    `/api/sessions?workspace_id=${encodeURIComponent(workspace.id)}`,
+  );
+  let session = pickLatestSession(sessions);
+  let created = false;
+
+  if (!session || options.newSession) {
+    session = await vkRequest(host, "/api/sessions", {
+      method: "POST",
+      body: { workspace_id: workspace.id },
+    });
+    created = true;
+  }
+  if (!session?.id) {
+    throw new Error("Failed to acquire workspace session.");
+  }
+
+  if (options.queue) {
+    await vkRequest(host, `/api/sessions/${session.id}/queue`, {
+      method: "POST",
+      body: {
+        message,
+        executor_profile_id: executorProfile || undefined,
+      },
+    });
+    return { sessionId: session.id, created, action: "queued" };
+  }
+
+  await vkRequest(host, `/api/sessions/${session.id}/follow-up`, {
+    method: "POST",
+    body: {
+      prompt: message,
+      executor_profile_id: executorProfile || undefined,
+    },
+  });
+  return { sessionId: session.id, created, action: "follow-up" };
+}
+
+async function cmdAgent(chatId, rawArgs) {
+  const parsed = parseAgentArgs(rawArgs || "");
+  const { message, workspaceId, role, model, queue, newSession, dryRun } = parsed;
+
+  const { registry, errors, warnings } = await loadWorkspaceRegistry();
+  const diagnostics = formatRegistryDiagnostics(errors, warnings);
+  if (diagnostics) {
+    await sendReply(chatId, diagnostics);
+  }
+
+  if (!message) {
+    const list = registry.workspaces.map((ws) => `  - ${ws.id} (${ws.role})`).join("\n");
+    const usage = [
+      "Usage: /agent --workspace <id> <task>",
+      "       /agent --role <role> <task>",
+      "Options: --model <name> --queue --new-session --dry-run",
+      "",
+      "Available workspaces:",
+      list || "  (none)",
+    ];
+    await sendReply(chatId, usage.join("\n"));
+    return;
+  }
+
+  if (!registry.workspaces.length) {
+    await sendReply(chatId, "No workspaces available to route.");
+    return;
+  }
+
+  let candidates = registry.workspaces;
+  let preferredId = null;
+
+  if (workspaceId) {
+    const match = registry.workspaces.find(
+      (ws) => ws.id.toLowerCase() === workspaceId.toLowerCase(),
+    );
+    if (!match) {
+      const ids = registry.workspaces.map((ws) => ws.id).join(", ");
+      await sendReply(chatId, `Unknown workspace: ${workspaceId}\nAvailable: ${ids}`);
+      return;
+    }
+    candidates = [match];
+    preferredId = match.id;
+  } else if (role) {
+    const roleLower = role.toLowerCase();
+    candidates = registry.workspaces.filter(
+      (ws) => ws.role && ws.role.toLowerCase() === roleLower,
+    );
+    if (candidates.length === 0) {
+      await sendReply(chatId, `No workspaces found with role: ${role}`);
+      return;
+    }
+  } else {
+    const primary = registry.workspaces.filter(
+      (ws) => (ws.role || \"\").toLowerCase() === \"primary\",
+    );
+    if (primary.length > 0) {
+      candidates = primary;
+    }
+  }
+
+  const healthMap = await getWorkspaceHealth(candidates);
+  const selection = selectWorkspace(candidates, healthMap, { preferredId });
+  if (!selection.workspace) {
+    await sendReply(chatId, \"No available workspace found for routing.\");
+    return;
+  }
+
+  const modelSelection = resolveModelSelection(selection.workspace, model);
+  const selectedModel = modelSelection.model || model || \"auto\";
+
+  const infoLines = [
+    `Routing → ${selection.workspace.name} (${selection.workspace.id})`,
+    `Role: ${selection.workspace.role || \"n/a\"}`,
+    `Host: ${normalizeHost(selection.workspace.host) || \"n/a\"}`,
+    `Model: ${selectedModel}`,
+  ];
+  if (selection.fallbackFrom) {
+    infoLines.push(`Fallback: ${selection.fallbackFrom.id} unavailable`);
+  }
+
+  if (dryRun) {
+    infoLines.push(\"Dry-run only. No message sent.\");
+    await sendReply(chatId, infoLines.join(\"\\n\"));
+    return;
+  }
+
+  try {
+    const result = await dispatchAgentMessage(selection.workspace, message, {
+      executorProfile: modelSelection.profile,
+      queue,
+      newSession,
+    });
+    infoLines.push(`Action: ${result.action}`);
+    infoLines.push(`Session: ${result.sessionId}${result.created ? \" (new)\" : \"\"}`);
+    await sendReply(chatId, infoLines.join(\"\\n\"));
+  } catch (err) {
+    await sendReply(
+      chatId,
+      `❌ /agent failed: ${err.message || err}\n${infoLines.join(\"\\n\")}`,
+    );
   }
 }
 
