@@ -45,6 +45,8 @@ Environment highlights:
 - `--watch-path <path>`: File or directory to watch for restarts. Default: `scripts/ve-orchestrator.ps1`.
 - `--no-codex`: Disable Codex SDK analysis.
 - `--no-watch`: Disable file watching.
+- `--no-preflight`: Disable preflight checks (git config, gh auth, disk space, clean worktree, toolchain versions).
+- `--preflight-retry <ms>`: Retry interval after preflight failure (default: 300000).
 
 ### Telegram heartbeat
 
@@ -61,6 +63,7 @@ Environment overrides:
 
 - The Codex SDK uses environment configuration from your Codex setup (API key, base URL).
 - If Codex analysis fails, the error is written next to the log file.
+- On startup, codex-monitor runs preflight checks and blocks the orchestrator until the issues are resolved.
 - Task planner automation env vars:
   - `TASK_PLANNER_PER_CAPITA_THRESHOLD` (default: 1) triggers when backlog-per-slot falls below threshold.
   - `TASK_PLANNER_IDLE_SLOT_THRESHOLD` (default: 1) triggers when idle slots meet/exceed threshold.

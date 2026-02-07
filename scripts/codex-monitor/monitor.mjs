@@ -17,6 +17,7 @@ import {
   getLocalWorkspace,
   loadWorkspaceRegistry,
 } from "./workspace-registry.mjs";
+import { formatPreflightReport, runPreflightChecks } from "./preflight.mjs";
 import {
   startTelegramBot,
   stopTelegramBot,
@@ -51,6 +52,10 @@ const watchPath = resolve(getArg("--watch-path", scriptPath));
 const echoLogs = !getFlag("--no-echo-logs");
 const autoFixEnabled = !getFlag("--no-autofix");
 const vkEnsureIntervalMs = Number(getArg("--vk-ensure-interval", "60000"));
+const preflightEnabled =
+  !getFlag("--no-preflight") &&
+  process.env.CODEX_MONITOR_PREFLIGHT_DISABLED !== "1";
+const preflightRetryMs = Number(getArg("--preflight-retry", "300000"));
 let codexEnabled =
   !getFlag("--no-codex") && process.env.CODEX_SDK_DISABLED !== "1";
 const repoRoot = resolve(__dirname, "..", "..");
@@ -151,6 +156,10 @@ let backlogLowNotified = false;
 let plannerTriggered = false;
 const plannerStatePath = resolve(logDir, "task-planner-state.json");
 let idleDetectedAt = null;
+let preflightInProgress = false;
+let preflightLastResult = null;
+let preflightLastRunAt = 0;
+let preflightRetryTimer = null;
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -211,6 +220,46 @@ function shouldRestartMonitor() {
     return false;
   }
   return monitorFailureTimestamps.length >= 3;
+}
+
+function schedulePreflightRetry(waitMs) {
+  if (preflightRetryTimer) return;
+  const delay = Math.max(30000, waitMs || preflightRetryMs);
+  preflightRetryTimer = setTimeout(() => {
+    preflightRetryTimer = null;
+    startProcess();
+  }, delay);
+}
+
+async function ensurePreflightReady(reason) {
+  if (!preflightEnabled) return true;
+  if (preflightInProgress) return false;
+  const now = Date.now();
+  if (preflightLastResult && !preflightLastResult.ok) {
+    const elapsed = now - preflightLastRunAt;
+    if (elapsed < preflightRetryMs) {
+      schedulePreflightRetry(preflightRetryMs - elapsed);
+      return false;
+    }
+  }
+  preflightInProgress = true;
+  const result = runPreflightChecks({ repoRoot });
+  preflightInProgress = false;
+  preflightLastResult = result;
+  preflightLastRunAt = Date.now();
+  const report = formatPreflightReport(result, {
+    retryMs: result.ok ? 0 : preflightRetryMs,
+  });
+  if (!result.ok) {
+    console.error(report);
+    console.warn(
+      `[monitor] preflight failed (${reason || "startup"}); blocking orchestrator start.`,
+    );
+    schedulePreflightRetry(preflightRetryMs);
+    return false;
+  }
+  console.log(report);
+  return true;
 }
 
 function restartSelf(reason) {
@@ -2228,6 +2277,9 @@ async function startProcess() {
     const waitSec = Math.max(5, Math.round(waitMs / 1000));
     console.warn(`[monitor] orchestrator start blocked; retrying in ${waitSec}s`);
     setTimeout(startProcess, waitSec * 1000);
+    return;
+  }
+  if (!(await ensurePreflightReady("start"))) {
     return;
   }
   await ensureLogDir();
