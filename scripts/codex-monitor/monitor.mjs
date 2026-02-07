@@ -2970,27 +2970,41 @@ async function sendTelegramMessage(text, options = {}) {
   let priority = 4; // default: info
   let category = "general";
 
+  // Positive signals override negative keyword matches — a "✅ Task completed"
+  // message should never be classified as an error even when the task title
+  // happens to contain words like "error" or "failed".
+  const isPositive =
+    textLower.includes("✅") ||
+    textLower.includes("task completed") ||
+    textLower.includes("branch merged") ||
+    textLower.includes("pr merged");
+
   // Priority 1: Critical/Fatal
   if (
-    textLower.includes("fatal") ||
+    !isPositive &&
+    (textLower.includes("fatal") ||
     textLower.includes("critical") ||
-    textLower.includes("🔥")
+    textLower.includes("🔥"))
   ) {
     priority = 1;
     category = "critical";
   }
   // Priority 2: Errors
   else if (
-    textLower.includes("error") ||
+    !isPositive &&
+    (textLower.includes("error") ||
     textLower.includes("failed") ||
     textLower.includes("❌") ||
-    textLower.includes("auto-fix gave up")
+    textLower.includes("auto-fix gave up"))
   ) {
     priority = 2;
     category = "error";
   }
   // Priority 3: Warnings
-  else if (textLower.includes("warning") || textLower.includes("⚠️")) {
+  else if (
+    !isPositive &&
+    (textLower.includes("warning") || textLower.includes("⚠️"))
+  ) {
     priority = 3;
     category = "warning";
   }

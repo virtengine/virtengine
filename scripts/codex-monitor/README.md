@@ -67,6 +67,16 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Works with any orchestrator** — Wraps PowerShell, Bash, or any long-running CLI script
 - **Hot .env reload** — Changes to `.env` files are detected and applied without restart
 
+### Screenshots
+
+**Live Telegram Digest** — Events stream into a single continuously-edited message per digest window. Critical items get ❌, warnings get ⚠️, and info gets ℹ️. When the window expires, the message is sealed and the next event starts a fresh one.
+
+![Live Telegram Digest](docs/telegram-live-digest.png)
+
+**Kanban Board** — Vibe-Kanban task board showing the full pipeline: To Do → In Progress → In Review → Done. Tasks are auto-claimed by agents, PRs are auto-created, and merged PRs auto-move tasks to Done.
+
+![Kanban Board](docs/kanban-board.png)
+
 See [docs/operations/slopdev-workshop.md](../../docs/operations/slopdev-workshop.md) for detailed setup walkthrough and workshop guide.
 
 ## Configuration
