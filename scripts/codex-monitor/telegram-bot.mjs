@@ -24,6 +24,7 @@ import {
   resetPrimaryAgent,
   initPrimaryAgent,
   steerPrimaryPrompt,
+  getPrimaryAgentName,
 } from "./primary-agent.mjs";
 import {
   loadWorkspaceRegistry,
@@ -1845,12 +1846,11 @@ async function cmdCleanupMerged(chatId) {
 
 async function cmdHistory(chatId) {
   const info = getPrimaryAgentInfo();
-  const providerLabel = info.provider === "COPILOT" ? "Copilot" : "Codex";
-  const idLabel = info.sessionId ? "Session ID" : "Thread ID";
+  const sessionLabel = info.sessionId || info.threadId || "(none)";
   const lines = [
-    `🧠 Primary Agent Session (${providerLabel})`,
+    `🧠 Primary Agent (${info.adapter || getPrimaryAgentName()})`,
     "",
-    `${idLabel}: ${info.sessionId || info.threadId || "(none)"}`,
+    `Session: ${sessionLabel}`,
     `Turns: ${info.turnCount}`,
     `Active: ${info.isActive ? "yes" : "no"}`,
     `Busy: ${info.isBusy ? "yes" : "no"}`,
@@ -4036,7 +4036,7 @@ export async function startTelegramBot() {
   } else {
     await sendDirect(
       telegramChatId,
-      "🤖 VirtEngine primary agent online.\n\nType /help for commands or send any message to chat.",
+      `🤖 VirtEngine primary agent online (${getPrimaryAgentName()}).\n\nType /help for commands or send any message to chat with the agent.`,
     );
   }
 

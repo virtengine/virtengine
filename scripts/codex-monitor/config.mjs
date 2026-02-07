@@ -276,6 +276,15 @@ function parseExecutorsFromEnv() {
   return executors.length ? executors : null;
 }
 
+function normalizePrimaryAgent(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "codex-sdk";
+  if (["codex", "codex-sdk"].includes(raw)) return "codex-sdk";
+  if (["claude", "claude-sdk", "claude_code", "claude-code"].includes(raw))
+    return "claude-sdk";
+  return raw;
+}
+
 function loadExecutorConfig(configDir, configData) {
   // 1. Try env var
   const fromEnv = parseExecutorsFromEnv();
@@ -935,6 +944,20 @@ export function loadConfig(argv = process.argv, options = {}) {
     (configData.codexEnabled !== undefined ? configData.codexEnabled : true) &&
     process.env.CODEX_SDK_DISABLED !== "1" &&
     agentSdk.primary === "codex";
+  const primaryAgent = normalizePrimaryAgent(
+    process.env.PRIMARY_AGENT ||
+      process.env.PRIMARY_AGENT_SDK ||
+      configData.primaryAgent ||
+      "codex-sdk",
+  );
+  const primaryAgentEnabled =
+    process.env.PRIMARY_AGENT_DISABLED === "1"
+      ? false
+      : primaryAgent === "codex-sdk"
+        ? codexEnabled
+        : primaryAgent === "copilot-sdk"
+          ? process.env.COPILOT_SDK_DISABLED !== "1"
+          : process.env.CLAUDE_SDK_DISABLED !== "1";
 
   // ── Vibe-Kanban ──────────────────────────────────────────
   const vkRecoveryPort = process.env.VK_RECOVERY_PORT || "54089";
@@ -1097,6 +1120,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     preflightEnabled,
     preflightRetryMs,
     codexEnabled,
+    primaryAgent,
+    primaryAgentEnabled,
 
     // Merge Strategy
     codexAnalyzeMergeStrategy:
