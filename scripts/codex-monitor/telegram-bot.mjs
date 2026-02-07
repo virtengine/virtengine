@@ -150,6 +150,7 @@ let _attemptFreshSessionRetry = null;
 let _buildRetryPrompt = null;
 let _getActiveAttemptInfo = null;
 let _triggerTaskPlanner = null;
+let _reconcileTaskStatuses = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -169,6 +170,7 @@ export function injectMonitorFunctions({
   buildRetryPrompt,
   getActiveAttemptInfo,
   triggerTaskPlanner,
+  reconcileTaskStatuses,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -183,6 +185,7 @@ export function injectMonitorFunctions({
   _buildRetryPrompt = buildRetryPrompt;
   _getActiveAttemptInfo = getActiveAttemptInfo;
   _triggerTaskPlanner = triggerTaskPlanner;
+  _reconcileTaskStatuses = reconcileTaskStatuses;
 }
 
 /**
@@ -775,6 +778,14 @@ const COMMANDS = {
   "/plan": {
     handler: cmdPlan,
     desc: "Trigger task planner: /plan [count] (default 5)",
+  },
+  "/cleanup": {
+    handler: cmdCleanupMerged,
+    desc: "Reconcile VK tasks with merged PRs/branches",
+  },
+  "/reconcile": {
+    handler: cmdCleanupMerged,
+    desc: "Alias for /cleanup",
   },
   "/history": { handler: cmdHistory, desc: "Codex conversation history" },
   "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
@@ -1439,6 +1450,29 @@ async function cmdPlan(chatId, args) {
     );
   } catch (err) {
     await sendReply(chatId, `❌ Task planner error: ${err.message || err}`);
+  }
+}
+
+async function cmdCleanupMerged(chatId) {
+  if (!_reconcileTaskStatuses) {
+    await sendReply(
+      chatId,
+      "❌ Cleanup not available (not injected from monitor).",
+    );
+    return;
+  }
+  await sendReply(chatId, "🧹 Reconciling VK task statuses with PR/branch state…");
+  try {
+    const result = await _reconcileTaskStatuses("manual-telegram");
+    const lines = [
+      "✅ Cleanup complete.",
+      `Checked: ${result?.checked ?? 0}`,
+      `Moved to done: ${result?.movedDone ?? 0}`,
+      `Moved to inreview: ${result?.movedReview ?? 0}`,
+    ];
+    await sendReply(chatId, lines.join("\n"));
+  } catch (err) {
+    await sendReply(chatId, `❌ Cleanup error: ${err.message || err}`);
   }
 }
 
