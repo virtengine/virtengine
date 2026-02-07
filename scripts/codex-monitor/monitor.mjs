@@ -1401,6 +1401,65 @@ async function findExistingPrForBranchApi(branch) {
   }
 }
 
+function parsePrNumberFromUrl(url) {
+  if (!url) return null;
+  const match = String(url).match(/\/pull\/(\d+)/i);
+  if (!match) return null;
+  const num = Number(match[1]);
+  return Number.isFinite(num) ? num : null;
+}
+
+async function getPullRequestByNumber(prNumber) {
+  if (!Number.isFinite(prNumber) || prNumber <= 0) return null;
+  if (ghAvailable()) {
+    const res = spawnSync(
+      "gh",
+      [
+        "pr",
+        "view",
+        String(prNumber),
+        "--json",
+        "number,state,title,url,mergedAt,closedAt",
+      ],
+      { encoding: "utf8" },
+    );
+    if (res.status === 0) {
+      try {
+        return JSON.parse(res.stdout || "{}");
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+  if (!githubToken || !repoSlug) return null;
+  const [owner, repo] = repoSlug.split("/");
+  if (!owner || !repo) return null;
+  const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "codex-monitor",
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn(
+        `[monitor] GitHub API PR ${prNumber} lookup failed (${res.status}): ${text.slice(0, 120)}`,
+      );
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn(
+      `[monitor] GitHub API PR ${prNumber} lookup error: ${err?.message || err}`,
+    );
+    return null;
+  }
+}
+
 /**
  * Find the matching VK project by projectName, with caching.
  * Falls back to the first project if no name match.
@@ -1921,7 +1980,7 @@ async function checkMergedPRsAndUpdateTasks() {
     const reviewTasks = Array.from(taskMap.values());
     if (reviewTasks.length === 0) {
       console.log("[monitor] No tasks in review/inprogress status");
-      return;
+      return { checked: 0, movedDone: 0, movedReview: 0 };
     }
 
     console.log(
@@ -1935,6 +1994,7 @@ async function checkMergedPRsAndUpdateTasks() {
       : Object.values(statusData?.attempts || {});
 
     let movedCount = 0;
+    let movedReviewCount = 0;
 
     for (const entry of reviewTasks) {
       const task = entry.task;
@@ -1946,13 +2006,21 @@ async function checkMergedPRsAndUpdateTasks() {
         task?.branch ||
         task?.workspace_branch ||
         task?.git_branch;
-      if (!branch) {
-        continue;
+      const prNumber =
+        attempt?.pr_number ||
+        task?.pr_number ||
+        parsePrNumberFromUrl(attempt?.pr_url) ||
+        parsePrNumberFromUrl(task?.pr_url);
+      let prInfo = null;
+      if (prNumber) {
+        prInfo = await getPullRequestByNumber(prNumber);
       }
+      const isMerged =
+        !!prInfo?.mergedAt || (!!prInfo?.merged_at && prInfo.merged_at !== null);
+      const prState = prInfo?.state ? String(prInfo.state).toUpperCase() : "";
 
-      // Check if the branch has been merged
-      const merged = await isBranchMerged(branch);
-      if (merged) {
+      // Prefer PR status when available.
+      if (isMerged) {
         console.log(
           `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged PR, updating to done`,
         );
@@ -1975,15 +2043,73 @@ async function checkMergedPRsAndUpdateTasks() {
             `[monitor] Failed to update status for task ${task.id.substring(0, 8)}...`,
           );
         }
+        continue;
+      }
+
+      if (prState === "OPEN" && taskStatus !== "inreview") {
+        const success = await updateTaskStatus(task.id, "inreview");
+        if (success) {
+          movedReviewCount++;
+          console.log(
+            `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → inreview`,
+          );
+        }
+      }
+
+      if (!branch) {
+        continue;
+      }
+
+      // Check if the branch has been merged
+      const merged = await isBranchMerged(branch);
+      if (merged) {
+        console.log(
+          `[monitor] Task "${task.title}" (${task.id.substring(0, 8)}...) has merged branch, updating to done`,
+        );
+
+        const success = await updateTaskStatus(task.id, "done");
+        if (success) {
+          movedCount++;
+          console.log(
+            `[monitor] ✅ Moved task "${task.title}" from ${taskStatus} → done`,
+          );
+
+          // Send Telegram notification
+          if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              `✅ Task completed: "${task.title}" (branch merged)`,
+            );
+          }
+        } else {
+          console.warn(
+            `[monitor] Failed to update status for task ${task.id.substring(0, 8)}...`,
+          );
+        }
       }
     }
 
     if (movedCount > 0) {
       console.log(`[monitor] Moved ${movedCount} merged tasks to done status`);
     }
+    if (movedReviewCount > 0) {
+      console.log(
+        `[monitor] Moved ${movedReviewCount} tasks to inreview (PR open)`,
+      );
+    }
+    return {
+      checked: reviewTasks.length,
+      movedDone: movedCount,
+      movedReview: movedReviewCount,
+    };
   } catch (err) {
     console.warn(`[monitor] Error checking merged PRs: ${err.message || err}`);
+    return { checked: 0, movedDone: 0, movedReview: 0, error: err };
   }
+}
+
+async function reconcileTaskStatuses(reason = "manual") {
+  console.log(`[monitor] Reconciling VK tasks (${reason})...`);
+  return await checkMergedPRsAndUpdateTasks();
 }
 
 // ── Smart PR creation flow ──────────────────────────────────────────────────
@@ -1992,7 +2118,7 @@ async function checkMergedPRsAndUpdateTasks() {
  * Intelligent multi-step PR creation using the VK API:
  *
  *   1. Check branch-status → decide action
- *   2. Stale detection: 0 commits AND far behind → archive + reattempt
+ *   2. Stale detection: 0 commits AND far behind → rebase first, archive on error
  *   3. Rebase onto main (resolve conflicts automatically if possible)
  *   4. Create PR via /pr endpoint
  *   5. Distinguish fast-fail (<2s = worktree issue) vs slow-fail (>30s = prepush)
@@ -2016,32 +2142,13 @@ async function smartPRFlow(attemptId, shortId, status) {
       branchStatus;
 
     // ── Step 2: Stale attempt detection ─────────────────────────
-    // 0 commits ahead, 0 uncommitted changes, many behind → dead attempt
-    if (
-      commits_ahead === 0 &&
-      !has_uncommitted_changes &&
-      commits_behind > 10
-    ) {
+    // 0 commits ahead, 0 uncommitted changes, many behind → stale
+    const isStale =
+      commits_ahead === 0 && !has_uncommitted_changes && commits_behind > 10;
+    if (isStale) {
       console.warn(
-        `[monitor] ${tag}: stale attempt — 0 commits, ${commits_behind} behind. Archiving.`,
+        `[monitor] ${tag}: stale attempt — 0 commits, ${commits_behind} behind. Trying rebase first.`,
       );
-      await archiveAttempt(attemptId);
-
-      // Start fresh session to actually reattempt the task
-      const freshStarted = await attemptFreshSessionRetry(
-        "stale_attempt_archived",
-        `Attempt ${shortId} was stale: 0 commits, ${commits_behind} behind main.`,
-      );
-
-      if (telegramToken && telegramChatId) {
-        const action = freshStarted
-          ? "Fresh session started for reattempt."
-          : "Will reattempt on next cycle.";
-        void sendTelegramMessage(
-          `🗑️ Archived stale attempt ${shortId} (0 commits, ${commits_behind} behind main). ${action}`,
-        );
-      }
-      return;
     }
 
     // No commits and no changes → nothing to push
@@ -2074,6 +2181,25 @@ async function smartPRFlow(attemptId, shortId, status) {
     const rebaseResult = await rebaseAttempt(attemptId);
 
     if (rebaseResult && !rebaseResult.success) {
+      if (isStale) {
+        console.warn(
+          `[monitor] ${tag}: stale attempt rebase failed — archiving and reattempting next cycle.`,
+        );
+        await archiveAttempt(attemptId);
+        const freshStarted = await attemptFreshSessionRetry(
+          "stale_attempt_rebase_failed",
+          `Attempt ${shortId} was stale and rebase failed.`,
+        );
+        if (telegramToken && telegramChatId) {
+          const action = freshStarted
+            ? "Fresh session started for reattempt."
+            : "Will reattempt on next cycle.";
+          void sendTelegramMessage(
+            `🗑️ Archived stale attempt ${shortId} after failed rebase. ${action}`,
+          );
+        }
+        return;
+      }
       const errorData = rebaseResult.error_data;
       // Rebase has conflicts → try auto-resolve
       if (errorData?.type === "merge_conflicts") {
@@ -4277,6 +4403,7 @@ injectMonitorFunctions({
   buildRetryPrompt,
   getActiveAttemptInfo,
   triggerTaskPlanner,
+  reconcileTaskStatuses,
 });
 if (telegramBotEnabled) {
   void startTelegramBot();
