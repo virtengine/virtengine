@@ -160,6 +160,7 @@ const githubToken =
   process.env.GITHUB_TOKEN ||
   process.env.GH_TOKEN ||
   process.env.GITHUB_PAT ||
+  process.env.GITHUB_PAT_TOKEN ||
   "";
 let monitorFailureHandling = false;
 const monitorFailureTimestamps = [];
@@ -2016,7 +2017,8 @@ async function checkMergedPRsAndUpdateTasks() {
         prInfo = await getPullRequestByNumber(prNumber);
       }
       const isMerged =
-        !!prInfo?.mergedAt || (!!prInfo?.merged_at && prInfo.merged_at !== null);
+        !!prInfo?.mergedAt ||
+        (!!prInfo?.merged_at && prInfo.merged_at !== null);
       const prState = prInfo?.state ? String(prInfo.state).toUpperCase() : "";
 
       // Prefer PR status when available.
@@ -2232,10 +2234,35 @@ async function smartPRFlow(attemptId, shortId, status) {
       }
     }
 
-    // ── Step 4: Build PR title ──────────────────────────────────
+    // ── Step 4: Build PR title & description from VK task ─────
     const attempt = await getAttemptInfo(attemptId);
+
+    // Enrich attempt with task title & description from VK if available
+    if (attempt?.task_id && !attempt.task_description) {
+      try {
+        const taskRes = await fetchVk(`/api/tasks/${attempt.task_id}`);
+        if (taskRes?.success && taskRes.data) {
+          attempt.task_title = attempt.task_title || taskRes.data.title;
+          attempt.task_description =
+            taskRes.data.description || taskRes.data.body || "";
+        }
+      } catch {
+        /* best effort — fall back to branch/shortId */
+      }
+    }
+
     let prTitle = attempt?.task_title || attempt?.branch || shortId;
     prTitle = prTitle.replace(/\s*\(vibe-kanban\)$/i, "");
+
+    // Build PR description from task description + auto-created footer
+    let prDescription = "";
+    if (attempt?.task_description) {
+      prDescription = attempt.task_description.trim();
+      prDescription += `\n\n---\n_Auto-created by codex-monitor (${status})_`;
+    } else {
+      prDescription = `Auto-created by codex-monitor after ${status} status.`;
+    }
+
     const branchName = attempt?.branch || branchStatus?.branch || null;
     if (attempt?.pr_number || attempt?.pr_url) {
       console.log(
@@ -2275,7 +2302,7 @@ async function smartPRFlow(attemptId, shortId, status) {
     console.log(`[monitor] ${tag}: creating PR "${prTitle}"...`);
     const prResult = await createPRViaVK(attemptId, {
       title: prTitle,
-      description: `Auto-created by codex-monitor after ${status} status.`,
+      description: prDescription,
       draft: false,
     });
 
