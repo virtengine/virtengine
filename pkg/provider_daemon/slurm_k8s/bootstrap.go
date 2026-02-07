@@ -74,21 +74,27 @@ func (a *SLURMKubernetesAdapter) DeployWithOptions(
 
 	// Create cluster record
 	cluster := &DeployedCluster{
-		Config:     config,
-		State:      ClusterStatePending,
-		DeployedAt: time.Now(),
-		UpdatedAt:  time.Now(),
+		Config:          config,
+		State:           ClusterStatePending,
+		Phase:           DeploymentPhasePending,
+		PhaseTimestamps: make(map[DeploymentPhase]time.Time),
+		DeployedAt:      time.Now(),
+		UpdatedAt:       time.Now(),
 	}
+	cluster.PhaseTimestamps[DeploymentPhasePending] = time.Now()
 
 	a.mu.Lock()
 	a.clusters[config.ClusterID] = cluster
 	a.mu.Unlock()
 
+	// Emit initial phase transition
+	a.transitionPhase(config.ClusterID, DeploymentPhasePending, "Cluster record created, preparing deployment", nil)
+
 	// Build Helm values
 	values := a.buildHelmValues(config)
 
-	// Update state to deploying
-	a.updateClusterState(config.ClusterID, ClusterStateDeploying, "Installing Helm chart")
+	// Update state to deploying and transition to helm installation phase
+	a.updateClusterPhaseAndState(config.ClusterID, DeploymentPhaseHelmInstalling, ClusterStateDeploying, "Installing Helm chart")
 
 	chartPath := config.HelmChartPath
 	if chartPath == "" {
@@ -100,23 +106,28 @@ func (a *SLURMKubernetesAdapter) DeployWithOptions(
 	}
 
 	if err := a.helm.Install(ctx, releaseName, chartPath, config.Namespace, values); err != nil {
-		a.updateClusterState(config.ClusterID, ClusterStateFailed, fmt.Sprintf("Helm install failed: %v", err))
+		a.updateClusterPhaseAndState(config.ClusterID, DeploymentPhaseFailed, ClusterStateFailed, fmt.Sprintf("Helm install failed: %v", err))
+		a.transitionPhase(config.ClusterID, DeploymentPhaseFailed, "Helm installation failed", []string{err.Error()})
 		return cluster, fmt.Errorf("failed to install Helm chart: %w", err)
 	}
 
 	readyErr := a.waitForReady(ctx, config.ClusterID, options.ReadyTimeout, options.MinComputeReady)
 	if readyErr != nil {
 		a.updateClusterState(config.ClusterID, ClusterStateDegraded, fmt.Sprintf("Deployment not ready: %v", readyErr))
+		a.transitionPhase(config.ClusterID, DeploymentPhaseFailed, "Readiness checks failed", []string{readyErr.Error()})
 		if options.RollbackOnFailure {
 			_ = a.rollbackDeployment(ctx, cluster, releaseName)
 		}
 		if options.AllowDegraded {
+			// Update to registration ready phase even if degraded (allows partial clusters)
+			a.transitionPhase(config.ClusterID, DeploymentPhaseRegistrationReady, "Degraded cluster ready for registration", []string{readyErr.Error()})
 			return cluster, nil
 		}
 		return cluster, readyErr
 	}
 
-	a.updateClusterState(config.ClusterID, ClusterStateRunning, "Cluster deployed successfully")
+	// All components ready - transition to complete
+	a.updateClusterPhaseAndState(config.ClusterID, DeploymentPhaseComplete, ClusterStateRunning, "Cluster deployed successfully")
 
 	if a.reporter != nil {
 		a.reportStatus(ctx, config.ClusterID)

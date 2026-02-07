@@ -41,6 +41,45 @@ const (
 	ClusterStateFailed ClusterState = "failed"
 )
 
+// DeploymentPhase represents the fine-grained phase of cluster deployment
+type DeploymentPhase string
+
+const (
+	// DeploymentPhasePending indicates deployment hasn't started
+	DeploymentPhasePending DeploymentPhase = "pending"
+
+	// DeploymentPhaseHelmInstalling indicates Helm chart is being installed
+	DeploymentPhaseHelmInstalling DeploymentPhase = "helm_installing"
+
+	// DeploymentPhaseControllerReady indicates slurmctld is ready
+	DeploymentPhaseControllerReady DeploymentPhase = "controller_ready"
+
+	// DeploymentPhaseDatabaseReady indicates slurmdbd is ready
+	DeploymentPhaseDatabaseReady DeploymentPhase = "db_ready"
+
+	// DeploymentPhaseComputeReady indicates compute nodes are ready
+	DeploymentPhaseComputeReady DeploymentPhase = "compute_ready"
+
+	// DeploymentPhaseRegistrationReady indicates nodes are registered on-chain
+	DeploymentPhaseRegistrationReady DeploymentPhase = "registration_ready"
+
+	// DeploymentPhaseComplete indicates deployment is fully complete
+	DeploymentPhaseComplete DeploymentPhase = "complete"
+
+	// DeploymentPhaseFailed indicates deployment failed
+	DeploymentPhaseFailed DeploymentPhase = "failed"
+)
+
+// PhaseTransitionEvent represents a deployment phase transition for observability
+type PhaseTransitionEvent struct {
+	ClusterID   string
+	FromPhase   DeploymentPhase
+	ToPhase     DeploymentPhase
+	Timestamp   time.Time
+	Message     string
+	PhaseErrors []string
+}
+
 // DeploymentConfig contains configuration for SLURM cluster deployment
 type DeploymentConfig struct {
 	// ClusterID is the unique identifier for the cluster
@@ -103,6 +142,9 @@ type DeployedCluster struct {
 	// State is the current state
 	State ClusterState `json:"state"`
 
+	// Phase is the current deployment phase (fine-grained progress tracking)
+	Phase DeploymentPhase `json:"phase"`
+
 	// StatusMessage contains additional status information
 	StatusMessage string `json:"status_message"`
 
@@ -111,6 +153,9 @@ type DeployedCluster struct {
 
 	// UpdatedAt is when the cluster was last updated
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// PhaseTimestamps tracks when each phase was entered
+	PhaseTimestamps map[DeploymentPhase]time.Time `json:"phase_timestamps,omitempty"`
 
 	// HealthStatus contains component health status
 	HealthStatus *ClusterHealthStatus `json:"health_status,omitempty"`
@@ -324,6 +369,9 @@ type SLURMKubernetesAdapter struct {
 	// statusChan receives status updates
 	statusChan chan<- ClusterStatusUpdate
 
+	// phaseEventChan receives phase transition events
+	phaseEventChan chan<- PhaseTransitionEvent
+
 	// stopCh is used to stop background workers
 	stopCh chan struct{}
 
@@ -351,6 +399,9 @@ type AdapterConfig struct {
 	// StatusChan receives status updates
 	StatusChan chan<- ClusterStatusUpdate
 
+	// PhaseEventChan receives phase transition events for observability
+	PhaseEventChan chan<- PhaseTransitionEvent
+
 	// ChartPath is the default Helm chart path
 	ChartPath string
 
@@ -371,6 +422,7 @@ func NewSLURMKubernetesAdapter(cfg AdapterConfig) *SLURMKubernetesAdapter {
 		reporter:            cfg.Reporter,
 		clusters:            make(map[string]*DeployedCluster),
 		statusChan:          cfg.StatusChan,
+		phaseEventChan:      cfg.PhaseEventChan,
 		stopCh:              make(chan struct{}),
 		chartPath:           cfg.ChartPath,
 		healthCheckInterval: interval,
@@ -912,17 +964,99 @@ func (a *SLURMKubernetesAdapter) updateClusterState(clusterID string, state Clus
 	}
 	a.mu.Unlock()
 
-	if a.statusChan != nil && exists {
+	if exists && a.statusChan != nil {
 		select {
 		case a.statusChan <- ClusterStatusUpdate{
-			ClusterID:     clusterID,
-			State:         state,
-			StatusMessage: message,
-			Timestamp:     time.Now(),
+			ClusterID: clusterID,
+			State:     state,
+			Timestamp: time.Now(),
 		}:
 		default:
-			// Channel full, drop update
 		}
+	}
+}
+
+// transitionPhase transitions the cluster to a new deployment phase
+func (a *SLURMKubernetesAdapter) transitionPhase(clusterID string, toPhase DeploymentPhase, message string, errors []string) {
+	a.mu.Lock()
+	cluster, exists := a.clusters[clusterID]
+	if !exists {
+		a.mu.Unlock()
+		return
+	}
+
+	fromPhase := cluster.Phase
+	cluster.Phase = toPhase
+	cluster.UpdatedAt = time.Now()
+
+	if cluster.PhaseTimestamps == nil {
+		cluster.PhaseTimestamps = make(map[DeploymentPhase]time.Time)
+	}
+	cluster.PhaseTimestamps[toPhase] = time.Now()
+
+	a.mu.Unlock()
+
+	// Emit phase transition event for observability
+	if a.phaseEventChan != nil {
+		select {
+		case a.phaseEventChan <- PhaseTransitionEvent{
+			ClusterID:   clusterID,
+			FromPhase:   fromPhase,
+			ToPhase:     toPhase,
+			Timestamp:   time.Now(),
+			Message:     message,
+			PhaseErrors: errors,
+		}:
+		default:
+		}
+	}
+}
+
+// updateClusterPhaseAndState updates both phase and state simultaneously
+func (a *SLURMKubernetesAdapter) updateClusterPhaseAndState(clusterID string, phase DeploymentPhase, state ClusterState, message string) {
+	a.mu.Lock()
+	cluster, exists := a.clusters[clusterID]
+	if exists {
+		fromPhase := cluster.Phase
+		cluster.Phase = phase
+		cluster.State = state
+		cluster.StatusMessage = message
+		cluster.UpdatedAt = time.Now()
+
+		if cluster.PhaseTimestamps == nil {
+			cluster.PhaseTimestamps = make(map[DeploymentPhase]time.Time)
+		}
+		cluster.PhaseTimestamps[phase] = time.Now()
+
+		a.mu.Unlock()
+
+		// Emit events
+		if a.phaseEventChan != nil {
+			select {
+			case a.phaseEventChan <- PhaseTransitionEvent{
+				ClusterID:   clusterID,
+				FromPhase:   fromPhase,
+				ToPhase:     phase,
+				Timestamp:   time.Now(),
+				Message:     message,
+				PhaseErrors: nil,
+			}:
+			default:
+			}
+		}
+
+		if a.statusChan != nil {
+			select {
+			case a.statusChan <- ClusterStatusUpdate{
+				ClusterID: clusterID,
+				State:     state,
+				Timestamp: time.Now(),
+			}:
+			default:
+			}
+		}
+	} else {
+		a.mu.Unlock()
 	}
 }
 
@@ -940,6 +1074,9 @@ func (a *SLURMKubernetesAdapter) waitForReady(ctx context.Context, clusterID str
 	defer ticker.Stop()
 
 	var lastHealth *ClusterHealthStatus
+	controllerReadyEmitted := false
+	databaseReadyEmitted := false
+	computeReadyEmitted := false
 
 	for {
 		select {
@@ -965,6 +1102,17 @@ func (a *SLURMKubernetesAdapter) waitForReady(ctx context.Context, clusterID str
 			}
 			lastHealth = health
 
+			// Emit phase transitions as components become ready
+			if health.ControllerReady && !controllerReadyEmitted {
+				a.transitionPhase(clusterID, DeploymentPhaseControllerReady, "SLURM controller pod is ready", nil)
+				controllerReadyEmitted = true
+			}
+
+			if health.DatabaseReady && !databaseReadyEmitted {
+				a.transitionPhase(clusterID, DeploymentPhaseDatabaseReady, "Database is ready and accessible", nil)
+				databaseReadyEmitted = true
+			}
+
 			minReady := minComputeReady
 			if minReady <= 0 {
 				if health.ComputeNodesTotal > 0 {
@@ -974,7 +1122,15 @@ func (a *SLURMKubernetesAdapter) waitForReady(ctx context.Context, clusterID str
 				}
 			}
 
+			if health.ComputeNodesReady >= minReady && !computeReadyEmitted {
+				a.transitionPhase(clusterID, DeploymentPhaseComputeReady,
+					fmt.Sprintf("Compute nodes ready (%d/%d)", health.ComputeNodesReady, health.ComputeNodesTotal), nil)
+				computeReadyEmitted = true
+			}
+
+			// Once all components are ready, transition to registration ready phase
 			if health.ControllerReady && health.DatabaseReady && health.ComputeNodesReady >= minReady {
+				a.transitionPhase(clusterID, DeploymentPhaseRegistrationReady, "All components ready, cluster can accept node registrations", nil)
 				return nil
 			}
 		}
