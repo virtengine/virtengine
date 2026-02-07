@@ -25,3 +25,22 @@ export { usePriceConversion } from './usePriceConversion';
 
 export { useChainEvents } from './useChainEvents';
 export type { UseChainEventsOptions } from './useChainEvents';
+
+// Mobile / responsive hooks
+export {
+  useMediaQuery,
+  useIsMobile,
+  useIsTablet,
+  useIsDesktop,
+  useIsTouchDevice,
+} from './useMediaQuery';
+export { useSwipeGesture } from './useSwipeGesture';
+export type { SwipeDirection } from './useSwipeGesture';
+
+// WalletConnect
+export { useWalletConnect } from './useWalletConnect';
+export type {
+  WalletConnectStatus,
+  WalletConnectSession,
+  UseWalletConnectResult,
+} from './useWalletConnect';
