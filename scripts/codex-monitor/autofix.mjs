@@ -292,6 +292,19 @@ const fixAttempts = new Map();
 const MAX_FIX_ATTEMPTS = 3;
 const FIX_COOLDOWN_MS = 60_000;
 
+let devModeCache;
+
+export function resetDevModeCache() {
+  devModeCache = undefined;
+}
+
+export function isDevMode() {
+  if (devModeCache !== undefined) return devModeCache;
+  const mode = (process.env.AUTOFIX_MODE || "").trim().toLowerCase();
+  devModeCache = mode === "dev" || mode === "npm";
+  return devModeCache;
+}
+
 function canAttemptFix(signature) {
   const record = fixAttempts.get(signature);
   if (!record) return true;
