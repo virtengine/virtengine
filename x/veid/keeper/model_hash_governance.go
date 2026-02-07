@@ -133,6 +133,12 @@ func ComputeLocalModelHash(modelPath string) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
+// ComputeLocalModelHash is a Keeper method wrapper for the standalone ComputeLocalModelHash function.
+// It computes SHA-256 hash of model files at a given path with the context available.
+func (k Keeper) ComputeLocalModelHash(ctx sdk.Context, modelPath string) (string, error) {
+	return ComputeLocalModelHash(modelPath)
+}
+
 // EnsureModelGovernanceCompliance checks that the validator's local model
 // setup is compliant with on-chain governance requirements. This should
 // be called during node startup or BeginBlock to detect stale models.

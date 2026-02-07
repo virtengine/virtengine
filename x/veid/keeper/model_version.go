@@ -942,6 +942,41 @@ func (k Keeper) ReportValidatorModelVersions(ctx sdk.Context, validatorAddr stri
 	return nil
 }
 
+// SetValidatorModelReport stores a validator's model report
+func (k Keeper) SetValidatorModelReport(ctx sdk.Context, report *types.ValidatorModelReport) error {
+	if report == nil {
+		return fmt.Errorf("validator model report cannot be nil")
+	}
+
+	reportStore := validatorModelReportStore{
+		ValidatorAddress: report.ValidatorAddress,
+		ModelVersions:    report.ModelVersions,
+		ReportedAt:       report.ReportedAt,
+		LastVerified:     report.LastVerified,
+		IsSynced:         report.IsSynced,
+		MismatchedModels: report.MismatchedModels,
+	}
+
+	bz, err := json.Marshal(&reportStore)
+	if err != nil {
+		return fmt.Errorf("failed to marshal validator report: %w", err)
+	}
+
+	store := ctx.KVStore(k.skey)
+	store.Set(types.ValidatorModelReportKey(report.ValidatorAddress), bz)
+
+	// Emit event
+	ctx.EventManager().EmitEvents(sdk.Events{
+		sdk.NewEvent(
+			types.EventTypeValidatorModelReport,
+			sdk.NewAttribute(types.AttributeKeyValidatorAddress, report.ValidatorAddress),
+			sdk.NewAttribute(types.AttributeKeyIsSynced, fmt.Sprintf("%t", report.IsSynced)),
+		),
+	})
+
+	return nil
+}
+
 // GetValidatorModelReport retrieves a validator's model report
 func (k Keeper) GetValidatorModelReport(ctx sdk.Context, validatorAddr string) (*types.ValidatorModelReport, bool) {
 	store := ctx.KVStore(k.skey)
