@@ -183,8 +183,13 @@ func parseInterval(r *http.Request, fallback time.Duration) (time.Duration, erro
 
 func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	body, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+	_, _ = w.Write(body)
 }
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {

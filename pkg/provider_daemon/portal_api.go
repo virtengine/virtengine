@@ -150,27 +150,27 @@ func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	api.HandleFunc("/deployments/{deploymentId}/shell/session", s.handleShellSession).Methods(http.MethodPost)
 	api.HandleFunc("/deployments/{deploymentId}/shell", s.handleShell).Methods(http.MethodGet)
 
-	api.Handle("/organizations", s.authMiddleware(true)(http.HandlerFunc(s.handleListOrganizations))).Methods(http.MethodGet)
-	api.Handle("/organizations/{orgId}", s.authMiddleware(true)(http.HandlerFunc(s.handleGetOrganization))).Methods(http.MethodGet)
-	api.Handle("/organizations/{orgId}/members", s.authMiddleware(true)(http.HandlerFunc(s.handleOrganizationMembers))).Methods(http.MethodGet)
-	api.Handle("/organizations/{orgId}/invite", s.authMiddleware(true)(http.HandlerFunc(s.handleInviteOrganizationMember))).Methods(http.MethodPost)
-	api.Handle("/organizations/{orgId}/members/{address}", s.authMiddleware(true)(http.HandlerFunc(s.handleRemoveOrganizationMember))).Methods(http.MethodDelete)
+	api.Handle("/organizations", s.authMiddleware()(http.HandlerFunc(s.handleListOrganizations))).Methods(http.MethodGet)
+	api.Handle("/organizations/{orgId}", s.authMiddleware()(http.HandlerFunc(s.handleGetOrganization))).Methods(http.MethodGet)
+	api.Handle("/organizations/{orgId}/members", s.authMiddleware()(http.HandlerFunc(s.handleOrganizationMembers))).Methods(http.MethodGet)
+	api.Handle("/organizations/{orgId}/invite", s.authMiddleware()(http.HandlerFunc(s.handleInviteOrganizationMember))).Methods(http.MethodPost)
+	api.Handle("/organizations/{orgId}/members/{address}", s.authMiddleware()(http.HandlerFunc(s.handleRemoveOrganizationMember))).Methods(http.MethodDelete)
 
-	api.Handle("/tickets", s.authMiddleware(true)(http.HandlerFunc(s.handleListTickets))).Methods(http.MethodGet)
-	api.Handle("/tickets", s.authMiddleware(true)(http.HandlerFunc(s.handleCreateTicket))).Methods(http.MethodPost)
-	api.Handle("/tickets/{ticketId}", s.authMiddleware(true)(http.HandlerFunc(s.handleGetTicket))).Methods(http.MethodGet)
-	api.Handle("/tickets/{ticketId}/comments", s.authMiddleware(true)(http.HandlerFunc(s.handleAddTicketComment))).Methods(http.MethodPost)
-	api.Handle("/tickets/{ticketId}", s.authMiddleware(true)(http.HandlerFunc(s.handleUpdateTicket))).Methods(http.MethodPatch)
+	api.Handle("/tickets", s.authMiddleware()(http.HandlerFunc(s.handleListTickets))).Methods(http.MethodGet)
+	api.Handle("/tickets", s.authMiddleware()(http.HandlerFunc(s.handleCreateTicket))).Methods(http.MethodPost)
+	api.Handle("/tickets/{ticketId}", s.authMiddleware()(http.HandlerFunc(s.handleGetTicket))).Methods(http.MethodGet)
+	api.Handle("/tickets/{ticketId}/comments", s.authMiddleware()(http.HandlerFunc(s.handleAddTicketComment))).Methods(http.MethodPost)
+	api.Handle("/tickets/{ticketId}", s.authMiddleware()(http.HandlerFunc(s.handleUpdateTicket))).Methods(http.MethodPatch)
 
-	api.Handle("/invoices", s.authMiddleware(true)(http.HandlerFunc(s.handleListInvoices))).Methods(http.MethodGet)
-	api.Handle("/invoices/{invoiceId}", s.authMiddleware(true)(http.HandlerFunc(s.handleGetInvoice))).Methods(http.MethodGet)
-	api.Handle("/usage", s.authMiddleware(true)(http.HandlerFunc(s.handleGetUsage))).Methods(http.MethodGet)
-	api.Handle("/usage/history", s.authMiddleware(true)(http.HandlerFunc(s.handleGetUsageHistory))).Methods(http.MethodGet)
+	api.Handle("/invoices", s.authMiddleware()(http.HandlerFunc(s.handleListInvoices))).Methods(http.MethodGet)
+	api.Handle("/invoices/{invoiceId}", s.authMiddleware()(http.HandlerFunc(s.handleGetInvoice))).Methods(http.MethodGet)
+	api.Handle("/usage", s.authMiddleware()(http.HandlerFunc(s.handleGetUsage))).Methods(http.MethodGet)
+	api.Handle("/usage/history", s.authMiddleware()(http.HandlerFunc(s.handleGetUsageHistory))).Methods(http.MethodGet)
 
-	api.Handle("/deployments/{deploymentId}/metrics", s.authMiddleware(true)(http.HandlerFunc(s.handleDeploymentMetrics))).Methods(http.MethodGet)
-	api.Handle("/deployments/{deploymentId}/metrics/history", s.authMiddleware(true)(http.HandlerFunc(s.handleDeploymentMetricsHistory))).Methods(http.MethodGet)
-	api.Handle("/deployments/{deploymentId}/events", s.authMiddleware(true)(http.HandlerFunc(s.handleDeploymentEvents))).Methods(http.MethodGet)
-	api.Handle("/metrics/aggregate", s.authMiddleware(true)(http.HandlerFunc(s.handleAggregatedMetrics))).Methods(http.MethodGet)
+	api.Handle("/deployments/{deploymentId}/metrics", s.authMiddleware()(http.HandlerFunc(s.handleDeploymentMetrics))).Methods(http.MethodGet)
+	api.Handle("/deployments/{deploymentId}/metrics/history", s.authMiddleware()(http.HandlerFunc(s.handleDeploymentMetricsHistory))).Methods(http.MethodGet)
+	api.Handle("/deployments/{deploymentId}/events", s.authMiddleware()(http.HandlerFunc(s.handleDeploymentEvents))).Methods(http.MethodGet)
+	api.Handle("/metrics/aggregate", s.authMiddleware()(http.HandlerFunc(s.handleAggregatedMetrics))).Methods(http.MethodGet)
 
 	api.HandleFunc("/provider/info", s.handleProviderInfo).Methods(http.MethodGet)
 	api.HandleFunc("/provider/pricing", s.handleProviderPricing).Methods(http.MethodGet)
@@ -506,16 +506,12 @@ func (s *PortalAPIServer) authenticateRequest(r *http.Request) (string, error) {
 	return principal, nil
 }
 
-func (s *PortalAPIServer) authMiddleware(required bool) func(http.Handler) http.Handler {
+func (s *PortalAPIServer) authMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			principal, err := s.authenticateRequest(r)
 			if err != nil {
-				if required {
-					writeJSONError(w, http.StatusUnauthorized, err.Error())
-					return
-				}
-				next.ServeHTTP(w, r)
+				writeJSONError(w, http.StatusUnauthorized, err.Error())
 				return
 			}
 
