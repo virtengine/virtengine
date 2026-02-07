@@ -1127,7 +1127,8 @@ export function loadConfig(argv = process.argv, options = {}) {
     // Merge Strategy
     codexAnalyzeMergeStrategy:
       codexEnabled &&
-      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false",
+      (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !==
+        "false",
     mergeStrategyTimeoutMs:
       parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
 
