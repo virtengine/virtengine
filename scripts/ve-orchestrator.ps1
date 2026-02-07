@@ -568,6 +568,10 @@ function Get-OrchestratorState {
             total_tasks_completed   = 0
             vk_project_id           = $null
             vk_repo_id              = $null
+            cycle_count             = 0
+            tasks_submitted         = 0
+            tasks_completed         = 0
+            start_time              = $null
         }
     }
     try {
@@ -582,6 +586,10 @@ function Get-OrchestratorState {
                 total_tasks_completed   = 0
                 vk_project_id           = $null
                 vk_repo_id              = $null
+                cycle_count             = 0
+                tasks_submitted         = 0
+                tasks_completed         = 0
+                start_time              = $null
             }
         }
         $state = $raw | ConvertFrom-Json -Depth 5
@@ -596,6 +604,10 @@ function Get-OrchestratorState {
             total_tasks_completed   = $totalCompleted
             vk_project_id           = $state.vk_project_id
             vk_repo_id              = $state.vk_repo_id
+            cycle_count             = if ($state.cycle_count) { [int]$state.cycle_count } else { 0 }
+            tasks_submitted         = if ($state.tasks_submitted) { [int]$state.tasks_submitted } else { 0 }
+            tasks_completed         = if ($state.tasks_completed) { [int]$state.tasks_completed } else { 0 }
+            start_time              = $state.start_time
         }
     }
     catch {
@@ -608,6 +620,10 @@ function Get-OrchestratorState {
             total_tasks_completed   = 0
             vk_project_id           = $null
             vk_repo_id              = $null
+            cycle_count             = 0
+            tasks_submitted         = 0
+            tasks_completed         = 0
+            start_time              = $null
         }
     }
 }
@@ -636,6 +652,39 @@ function Initialize-CISweepState {
         $script:TotalTasksCompleted = [int]$state.last_ci_sweep_completed
     }
     $script:LastCISweepAt = $state.last_ci_sweep_at
+}
+
+function Restore-CycleState {
+    <#
+    .SYNOPSIS Restore cycle counter and statistics from persisted state.
+    #>
+    $state = Get-OrchestratorState
+    $script:CycleCount = [int]($state.cycle_count ?? 0)
+    $script:TasksSubmitted = [int]($state.tasks_submitted ?? 0)
+    $script:TasksCompleted = [int]($state.tasks_completed ?? 0)
+    if ($state.start_time) {
+        try {
+            $script:StartTime = [datetime]$state.start_time
+        }
+        catch {
+            $script:StartTime = Get-Date
+        }
+    }
+    if ($script:CycleCount -gt 0) {
+        Write-Log "Restored state: cycle $script:CycleCount, submitted $script:TasksSubmitted, completed $script:TasksCompleted" -Level "INFO"
+    }
+}
+
+function Save-CycleState {
+    <#
+    .SYNOPSIS Persist current cycle counter and statistics.
+    #>
+    $state = Get-OrchestratorState
+    $state.cycle_count = $script:CycleCount
+    $state.tasks_submitted = $script:TasksSubmitted
+    $state.tasks_completed = $script:TasksCompleted
+    $state.start_time = $script:StartTime.ToString("o")
+    Save-OrchestratorState -State $state
 }
 
 function Update-CISweepState {
@@ -2777,6 +2826,7 @@ function Complete-Task {
     $script:TasksCompleted++
     $script:TotalTasksCompleted++
     Update-CISweepState -TotalTasksCompleted $script:TotalTasksCompleted
+    Save-CycleState
 
     # ─── Success rate classification ─────────────────────────────────────────
     $neededFix = $false
@@ -3158,6 +3208,7 @@ function Fill-ParallelSlots {
                 }
                 $state.last_task_id = $task.id
                 $state.last_submitted_at = (Get-Date).ToString("o")
+                $state.tasks_submitted = $script:TasksSubmitted + 1
                 Save-OrchestratorState -State $state
                 $script:TasksSubmitted++
             }
@@ -3218,6 +3269,7 @@ function Start-Orchestrator {
     Ensure-GitIdentity
     Initialize-CISweepConfig
     Initialize-CISweepState
+    Restore-CycleState
 
     # Validate prerequisites
     $ghVersion = gh --version 2>$null
@@ -3396,12 +3448,15 @@ function Start-Orchestrator {
             # Step 6: Wait before next cycle
             Write-Log "Sleeping ${PollIntervalSec}s until next cycle... (Ctrl+C to stop)" -Level "INFO"
             if (-not (Start-InterruptibleSleep -Seconds $PollIntervalSec -Reason "cycle-wait")) { break }
- 
+
+            Save-CycleState
             Save-StatusSnapshot
 
         } while ($true)
     }
     finally {
+        # Save final cycle state before exit
+        try { Save-CycleState } catch { }
         if ($script:OrchestratorMutex -and
             $script:OrchestratorMutex -is [System.Threading.Mutex]) {
             try { $script:OrchestratorMutex.ReleaseMutex() } catch { }
