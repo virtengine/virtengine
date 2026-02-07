@@ -83,6 +83,7 @@ That's it. On first run, the setup wizard walks you through everything: executor
 - **Crash analysis** — Codex SDK reads logs and diagnoses root causes automatically
 - **Error loop detection** — 4+ repeating errors in 10 minutes triggers AI autofix
 - **Live Telegram digest** — One continuously-edited message per time window shows events as they happen, like a real-time log
+- **Telegram chatbot** — Real-time notifications + interactive commands
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
 - **Preflight checks** — Validates git/gh auth, disk space, clean worktree, and toolchain versions before starting
 - **Task planner** — Detects empty backlog and auto-generates new tasks via AI
