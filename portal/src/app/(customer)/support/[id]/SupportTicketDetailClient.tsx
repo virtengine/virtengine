@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Textarea';
 import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { blockLink, txLink } from '@/lib/explorer';
 import {
   getSlaTargetHours,
   useSupportStore,
@@ -238,7 +239,37 @@ export default function SupportTicketDetailClient() {
                 </Badge>
               </div>
               <div className="pt-2 text-xs text-muted-foreground">
-                <p>Chain tx {ticket.chain.txHash ?? 'pending'}</p>
+                <p className="flex flex-wrap items-center gap-2">
+                  <span>Chain tx</span>
+                  {ticket.chain.txHash ? (
+                    <a
+                      className="font-medium text-primary hover:underline"
+                      href={txLink(ticket.chain.txHash)}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {ticket.chain.txHash}
+                    </a>
+                  ) : (
+                    <span>pending</span>
+                  )}
+                </p>
+                {typeof ticket.chain.blockHeight === 'number' && (
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span>Block</span>
+                    <a
+                      className="font-medium text-primary hover:underline"
+                      href={blockLink(ticket.chain.blockHeight)}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {ticket.chain.blockHeight}
+                    </a>
+                    {ticket.chain.confirmations ? (
+                      <span>· {ticket.chain.confirmations} confs</span>
+                    ) : null}
+                  </p>
+                )}
                 <p>Content ref {ticket.chain.contentRef}</p>
               </div>
             </CardContent>

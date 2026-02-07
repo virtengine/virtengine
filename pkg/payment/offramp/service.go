@@ -12,7 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/virtengine/virtengine/pkg/payment"
+	"github.com/virtengine/virtengine/pkg/pricefeed"
 )
 
 // ============================================================================
@@ -47,6 +49,9 @@ type offRampService struct {
 
 	// Metrics
 	metrics *serviceMetrics
+
+	// Price feed aggregator for conversion rates
+	priceFeed pricefeed.Aggregator
 
 	// Close handling
 	closeMu sync.Mutex
@@ -197,6 +202,15 @@ func NewService(cfg Config, opts ...ServiceOption) (Service, error) {
 		svc.reconcileJob.Start(context.Background())
 	}
 
+	// Initialize price feed aggregator for conversion if configured
+	if cfg.ConversionConfig.PriceFeedSource != "" {
+		pfCfg := buildOffRampPriceFeedConfig(cfg.ConversionConfig)
+		agg, err := pricefeed.NewAggregator(pfCfg)
+		if err == nil {
+			svc.priceFeed = agg
+		}
+	}
+
 	return svc, nil
 }
 
@@ -230,11 +244,23 @@ func (s *offRampService) CreatePayoutQuote(ctx context.Context, req CreatePayout
 		return nil, ErrKYCNotVerified
 	}
 
-	// Get conversion rate (simplified - would use price feed in production)
-	conversionRate := "0.10" // Example: 1 crypto = $0.10
+	// Get conversion rate using price feed
+	var conversionRate string
+	var fiatValue int64
+	if s.priceFeed != nil {
+		baseAsset := strings.ToLower(req.CryptoDenom)
+		quoteAsset := strings.ToLower(string(req.FiatCurrency))
 
-	// Calculate fiat amount
-	fiatValue := req.CryptoAmount * 10 // Simplified calculation
+		aggPrice, err := s.priceFeed.GetPrice(ctx, baseAsset, quoteAsset)
+		if err != nil || !aggPrice.IsValid() {
+			return nil, fmt.Errorf("price feed unavailable: unable to get real-time rate for %s/%s", req.CryptoDenom, req.FiatCurrency)
+		}
+
+		conversionRate = aggPrice.Price.String()
+		fiatValue = aggPrice.Price.MulInt(sdkmath.NewInt(req.CryptoAmount)).TruncateInt().Int64()
+	} else {
+		return nil, fmt.Errorf("price feed unavailable: conversion not configured")
+	}
 
 	// Calculate fee
 	feeAmount := int64(float64(fiatValue) * s.config.ConversionConfig.FeePercent / 100)
@@ -704,7 +730,45 @@ func (s *offRampService) Close() error {
 		provider.Close()
 	}
 
+	if s.priceFeed != nil {
+		_ = s.priceFeed.Close()
+	}
+
 	return nil
+}
+
+func buildOffRampPriceFeedConfig(convCfg ConversionConfig) pricefeed.Config {
+	cfg := pricefeed.DefaultConfig()
+
+	switch convCfg.PriceFeedSource {
+	case "coingecko":
+		cfg.Strategy = pricefeed.StrategyPrimary
+	case "chainlink":
+		cfg.Strategy = pricefeed.StrategyPrimary
+		for i := range cfg.Providers {
+			if cfg.Providers[i].Type == pricefeed.SourceTypeChainlink {
+				cfg.Providers[i].Priority = 1
+			} else {
+				cfg.Providers[i].Priority++
+			}
+		}
+	case "pyth":
+		cfg.Strategy = pricefeed.StrategyPrimary
+		for i := range cfg.Providers {
+			if cfg.Providers[i].Type == pricefeed.SourceTypePyth {
+				cfg.Providers[i].Priority = 1
+			} else {
+				cfg.Providers[i].Priority++
+			}
+		}
+	case "median":
+		cfg.Strategy = pricefeed.StrategyMedian
+	case "weighted":
+		cfg.Strategy = pricefeed.StrategyWeighted
+	}
+
+	cfg.EnableMetrics = true
+	return cfg
 }
 
 // Ensure implementation satisfies interface

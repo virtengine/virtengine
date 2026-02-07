@@ -79,6 +79,9 @@ type ReconciliationReport struct {
 	// UsageRecordIDs are the usage records included in this report
 	UsageRecordIDs []string `json:"usage_record_ids"`
 
+	// UsageInvoicePayoutLinks tie raw usage to invoices and payouts
+	UsageInvoicePayoutLinks []ReconciliationLink `json:"usage_invoice_payout_links,omitempty"`
+
 	// GeneratedAt is when the report was generated
 	GeneratedAt time.Time `json:"generated_at"`
 
@@ -90,6 +93,30 @@ type ReconciliationReport struct {
 
 	// Notes contains any additional notes
 	Notes string `json:"notes,omitempty"`
+}
+
+// ReconciliationLink ties usage records to invoices and payouts.
+type ReconciliationLink struct {
+	// UsageRecordID is the usage record identifier
+	UsageRecordID string `json:"usage_record_id"`
+
+	// InvoiceID is the linked invoice ID (if any)
+	InvoiceID string `json:"invoice_id,omitempty"`
+
+	// PayoutID is the linked payout ID (if any)
+	PayoutID string `json:"payout_id,omitempty"`
+
+	// SettlementID is the linked settlement ID (if any)
+	SettlementID string `json:"settlement_id,omitempty"`
+
+	// Provider is the provider address
+	Provider string `json:"provider,omitempty"`
+
+	// Customer is the customer address
+	Customer string `json:"customer,omitempty"`
+
+	// LeaseID is the lease identifier
+	LeaseID string `json:"lease_id,omitempty"`
 }
 
 // ReconciliationReportType defines types of reconciliation reports

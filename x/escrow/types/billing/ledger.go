@@ -4,7 +4,6 @@ package billing
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -99,14 +98,11 @@ type InvoiceLedgerRecord struct {
 
 // NewInvoiceLedgerRecord creates a ledger record from a full invoice
 func NewInvoiceLedgerRecord(inv *Invoice, artifactCID string, blockHeight int64, now time.Time) (*InvoiceLedgerRecord, error) {
-	// Compute content hash from invoice JSON
-	invJSON, err := json.Marshal(inv)
+	// Compute deterministic content hash from invoice
+	contentHash, err := ComputeInvoiceHash(inv)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal invoice for hashing: %w", err)
+		return nil, fmt.Errorf("failed to compute invoice hash: %w", err)
 	}
-
-	hash := sha256.Sum256(invJSON)
-	contentHash := hex.EncodeToString(hash[:])
 
 	return &InvoiceLedgerRecord{
 		InvoiceID:     inv.InvoiceID,
@@ -187,13 +183,10 @@ func (r *InvoiceLedgerRecord) Validate() error {
 
 // VerifyContentHash verifies the content hash against a full invoice
 func (r *InvoiceLedgerRecord) VerifyContentHash(inv *Invoice) (bool, error) {
-	invJSON, err := json.Marshal(inv)
+	expectedHash, err := ComputeInvoiceHash(inv)
 	if err != nil {
-		return false, fmt.Errorf("failed to marshal invoice for verification: %w", err)
+		return false, fmt.Errorf("failed to compute invoice hash for verification: %w", err)
 	}
-
-	hash := sha256.Sum256(invJSON)
-	expectedHash := hex.EncodeToString(hash[:])
 
 	return r.ContentHash == expectedHash, nil
 }

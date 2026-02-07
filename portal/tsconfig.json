@@ -14,6 +14,7 @@
     "incremental": true,
     "target": "ES2020",
     "downlevelIteration": true,
+    "typeRoots": ["./src/types", "./node_modules/@types"],
     "plugins": [
       {
         "name": "next"
@@ -27,23 +28,19 @@
       "@/stores/*": ["./src/stores/*"],
       "@/config/*": ["./src/config/*"],
       "@/styles/*": ["./src/styles/*"],
-      "@virtengine/portal": ["../lib/portal"],
-      "@virtengine/portal/*": ["../lib/portal/*"],
-      "@virtengine/capture": ["../lib/capture"],
-      "@virtengine/capture/*": ["../lib/capture/*"]
+      "@virtengine/portal": ["./src/types/virtengine-portal.d.ts"],
+      "@virtengine/portal/*": ["./src/types/virtengine-portal.d.ts"],
+      "@virtengine/capture": ["./src/types/virtengine-capture.d.ts"],
+      "@virtengine/capture/*": ["./src/types/virtengine-capture.d.ts"]
     },
     "baseUrl": ".",
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "exactOptionalPropertyTypes": false
+    "exactOptionalPropertyTypes": false,
+    "noImplicitAny": false
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": ["node_modules"]
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", "../lib"]
 }

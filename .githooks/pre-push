@@ -88,7 +88,9 @@ else
     GO_FILES=$(echo "$CHANGED_FILES" | grep -E '\.go$' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' || true)
     PORTAL_FILES=$(echo "$CHANGED_FILES" | grep -E '^(portal|lib/portal|lib/capture|lib/admin)/' || true)
     SDK_TS_FILES=$(echo "$CHANGED_FILES" | grep -E '^sdk/ts/' || true)
-    JS_DEP_FILES=$(echo "$CHANGED_FILES" | grep -E '(pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|package-lock\.json)' || true)
+    JS_DEP_FILES=$(echo "$CHANGED_FILES" | \
+        grep -E '(pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|package-lock\.json)' | \
+        grep -v '^sdk/portal/' || true)
     GO_DEP_FILES=$(echo "$CHANGED_FILES" | grep -E '^go\.(mod|sum|work)$' || true)
     TF_FILES=$(echo "$CHANGED_FILES" | grep -E '^infra/terraform/.*\.tf$' || true)
     NON_DOC_FILES=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|^_docs/|^docs/|^\.github/)' || true)

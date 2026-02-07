@@ -693,6 +693,38 @@ var (
 	// PrefixSSONonceExpiry is the prefix for SSO nonce expiry index
 	// Key: PrefixSSONonceExpiry | expires_at | nonce_hash -> bool
 	PrefixSSONonceExpiry = []byte{0x8E}
+
+	// ============================================================================
+	// Security Hardening Prefixes (0x8F-0x96) — Task 22A
+	// ============================================================================
+
+	// PrefixTrustedSetupCeremony stores trusted setup ceremony records
+	// Key: PrefixTrustedSetupCeremony | ceremony_id -> TrustedSetupCeremony
+	PrefixTrustedSetupCeremony = []byte{0x8F}
+
+	// PrefixVerificationKeyRecord stores verification key records from ceremonies
+	// Key: PrefixVerificationKeyRecord | circuit_type -> VerificationKeyRecord
+	PrefixVerificationKeyRecord = []byte{0x90}
+
+	// PrefixClientKeyRotation stores client key rotation records
+	// Key: PrefixClientKeyRotation | client_id -> ClientKeyRotation
+	PrefixClientKeyRotation = []byte{0x91}
+
+	// PrefixMsgRateLimit stores per-account per-block message rate limits
+	// Key: PrefixMsgRateLimit | address | '/' | height -> count
+	PrefixMsgRateLimit = []byte{0x92}
+
+	// PrefixMsgRateLimitBlock stores per-block global message rate limits
+	// Key: PrefixMsgRateLimitBlock | height -> count
+	PrefixMsgRateLimitBlock = []byte{0x93}
+
+	// PrefixMsgRateLimitCooldown stores per-account last-operation block height
+	// Key: PrefixMsgRateLimitCooldown | address -> height
+	PrefixMsgRateLimitCooldown = []byte{0x94}
+
+	// PrefixPrivilegeAudit stores privilege escalation audit records
+	// Key: PrefixPrivilegeAudit | height | operation -> PrivilegeAuditRecord
+	PrefixPrivilegeAudit = []byte{0x95}
 )
 
 // IdentityRecordKey returns the store key for an identity record
@@ -2253,5 +2285,36 @@ func ValidatorStatsHistoryPrefixKey(validatorAddress string) []byte {
 	key = append(key, PrefixValidatorStatsHistory...)
 	key = append(key, addrBytes...)
 	key = append(key, byte('/'))
+	return key
+}
+
+// ============================================================================
+// Security Hardening Key Helpers — Task 22A
+// ============================================================================
+
+// TrustedSetupCeremonyKey returns the store key for a ceremony record
+func TrustedSetupCeremonyKey(ceremonyID string) []byte {
+	idBytes := []byte(ceremonyID)
+	key := make([]byte, 0, len(PrefixTrustedSetupCeremony)+len(idBytes))
+	key = append(key, PrefixTrustedSetupCeremony...)
+	key = append(key, idBytes...)
+	return key
+}
+
+// VerificationKeyRecordKey returns the store key for a verification key record
+func VerificationKeyRecordKey(circuitType string) []byte {
+	typeBytes := []byte(circuitType)
+	key := make([]byte, 0, len(PrefixVerificationKeyRecord)+len(typeBytes))
+	key = append(key, PrefixVerificationKeyRecord...)
+	key = append(key, typeBytes...)
+	return key
+}
+
+// ClientKeyRotationKey returns the store key for a client key rotation record
+func ClientKeyRotationKey(clientID string) []byte {
+	idBytes := []byte(clientID)
+	key := make([]byte, 0, len(PrefixClientKeyRotation)+len(idBytes))
+	key = append(key, PrefixClientKeyRotation...)
+	key = append(key, idBytes...)
 	return key
 }

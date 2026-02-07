@@ -10,12 +10,7 @@
  * - Provider network is live
  */
 
-import type {
-  Job,
-  JobStatus,
-  SDKOffering,
-  WorkloadTemplate,
-} from '../types';
+import type { Job, JobOutput, JobStatus, SDKOffering, WorkloadTemplate } from '../types';
 
 /**
  * HPC Client Configuration
@@ -149,6 +144,60 @@ export class HPCClient {
     const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
 
     return { txHash };
+  }
+
+  /**
+   * Get job logs
+   */
+  async getJobLogs(
+    jobId: string,
+    options?: { tail?: number; since?: number }
+  ): Promise<{ lines: string[]; hasMore: boolean }> {
+    await this.delay(300);
+
+    const tail = options?.tail ?? 100;
+    const lines = MOCK_LOG_LINES.slice(-tail);
+
+    return { lines, hasMore: MOCK_LOG_LINES.length > tail };
+  }
+
+  /**
+   * Get job outputs
+   */
+  async getJobOutputs(jobId: string): Promise<JobOutput[]> {
+    await this.delay(200);
+
+    const job = MOCK_JOBS.find((j) => j.id === jobId);
+    if (!job || job.status !== 'completed') return [];
+
+    return MOCK_OUTPUTS;
+  }
+
+  /**
+   * Get job resource usage
+   */
+  async getJobUsage(jobId: string): Promise<{
+    cpuPercent: number;
+    memoryPercent: number;
+    gpuPercent?: number;
+    elapsedSeconds: number;
+    estimatedRemainingSeconds?: number;
+  }> {
+    await this.delay(200);
+
+    const job = MOCK_JOBS.find((j) => j.id === jobId);
+    if (!job || job.status !== 'running') {
+      return { cpuPercent: 0, memoryPercent: 0, elapsedSeconds: 0 };
+    }
+
+    const elapsed = Math.floor((Date.now() - (job.startedAt ?? job.createdAt)) / 1000);
+    return {
+      cpuPercent: 72,
+      memoryPercent: 58,
+      gpuPercent: job.resources.gpusPerNode ? 85 : undefined,
+      elapsedSeconds: elapsed,
+      estimatedRemainingSeconds: Math.max(0, job.resources.maxRuntimeSeconds - elapsed),
+    };
   }
 
   /**
@@ -388,6 +437,63 @@ const MOCK_JOBS: Job[] = [
     depositAmount: '42.00',
     depositStatus: 'released',
     txHash: '0xghi789...',
+  },
+];
+
+/**
+ * Mock Log Lines
+ */
+const MOCK_LOG_LINES: string[] = [
+  '[2026-02-06T22:00:01Z] INFO  Starting job initialization...',
+  '[2026-02-06T22:00:02Z] INFO  Loading container image: pytorch/pytorch:2.1-cuda12',
+  '[2026-02-06T22:00:05Z] INFO  Image loaded successfully',
+  '[2026-02-06T22:00:06Z] INFO  Mounting storage volumes...',
+  '[2026-02-06T22:00:07Z] INFO  Volume /data mounted (100GB)',
+  '[2026-02-06T22:00:08Z] INFO  Setting up environment variables',
+  '[2026-02-06T22:00:09Z] INFO  GPU devices detected: 2x NVIDIA A100',
+  '[2026-02-06T22:00:10Z] INFO  CUDA version: 12.1',
+  '[2026-02-06T22:00:11Z] INFO  Starting training script...',
+  '[2026-02-06T22:01:00Z] INFO  Epoch 1/100 - loss: 2.3456 - acc: 0.1234',
+  '[2026-02-06T22:02:00Z] INFO  Epoch 2/100 - loss: 1.8901 - acc: 0.2567',
+  '[2026-02-06T22:03:00Z] INFO  Epoch 3/100 - loss: 1.5432 - acc: 0.3891',
+  '[2026-02-06T22:04:00Z] INFO  Epoch 4/100 - loss: 1.2100 - acc: 0.4890',
+  '[2026-02-06T22:05:00Z] INFO  Epoch 5/100 - loss: 0.9876 - acc: 0.5678',
+  '[2026-02-06T22:05:30Z] INFO  Checkpoint saved: epoch_5.pt',
+  '[2026-02-06T22:06:00Z] INFO  Epoch 6/100 - loss: 0.8123 - acc: 0.6234',
+  '[2026-02-06T22:07:00Z] INFO  Epoch 7/100 - loss: 0.6890 - acc: 0.6891',
+  '[2026-02-06T22:08:00Z] INFO  Epoch 8/100 - loss: 0.5432 - acc: 0.7456',
+];
+
+/**
+ * Mock Outputs
+ */
+const MOCK_OUTPUTS: JobOutput[] = [
+  {
+    refId: 'out-1',
+    name: 'model_final.pt',
+    type: 'model',
+    accessUrl: '#',
+    urlExpiresAt: Date.now() + 86400000,
+    sizeBytes: 1048576000,
+    mimeType: 'application/octet-stream',
+  },
+  {
+    refId: 'out-2',
+    name: 'training.log',
+    type: 'logs',
+    accessUrl: '#',
+    urlExpiresAt: Date.now() + 86400000,
+    sizeBytes: 524288,
+    mimeType: 'text/plain',
+  },
+  {
+    refId: 'out-3',
+    name: 'metrics.json',
+    type: 'metrics',
+    accessUrl: '#',
+    urlExpiresAt: Date.now() + 86400000,
+    sizeBytes: 8192,
+    mimeType: 'application/json',
   },
 ];
 

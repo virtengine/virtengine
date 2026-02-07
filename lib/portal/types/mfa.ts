@@ -54,11 +54,11 @@ export interface MFAState {
  * MFA factor types
  */
 export type MFAFactorType =
-  | 'otp'       // Time-based OTP (TOTP) app
-  | 'fido2'     // FIDO2/WebAuthn security key
-  | 'sms'       // SMS verification (less secure)
-  | 'biometric' // VEID biometric verification
-  | 'email';    // Email verification (backup only)
+  | "otp" // Time-based OTP (TOTP) app
+  | "fido2" // FIDO2/WebAuthn security key
+  | "sms" // SMS verification (less secure)
+  | "biometric" // VEID biometric verification
+  | "email"; // Email verification (backup only)
 
 /**
  * MFA factor enrollment
@@ -108,10 +108,7 @@ export interface MFAFactor {
 /**
  * MFA factor status
  */
-export type MFAFactorStatus =
-  | 'active'
-  | 'suspended'
-  | 'expired';
+export type MFAFactorStatus = "active" | "suspended" | "expired";
 
 /**
  * MFA factor metadata (non-sensitive)
@@ -125,7 +122,7 @@ export interface MFAFactorMetadata {
   /**
    * For FIDO2: credential type
    */
-  credentialType?: 'platform' | 'cross-platform';
+  credentialType?: "platform" | "cross-platform";
 
   /**
    * For FIDO2: authenticator AAGUID
@@ -140,7 +137,7 @@ export interface MFAFactorMetadata {
   /**
    * For biometric: biometric type
    */
-  biometricType?: 'face' | 'fingerprint';
+  biometricType?: "face" | "fingerprint";
 }
 
 /**
@@ -172,11 +169,11 @@ export interface MFAEnrollment {
  * MFA enrollment steps
  */
 export type MFAEnrollmentStep =
-  | 'select_type'
-  | 'configure'
-  | 'verify'
-  | 'confirm'
-  | 'complete';
+  | "select_type"
+  | "configure"
+  | "verify"
+  | "confirm"
+  | "complete";
 
 /**
  * MFA enrollment challenge data
@@ -262,14 +259,14 @@ export interface MFAPolicy {
  * Sensitive transaction types
  */
 export type SensitiveTransactionType =
-  | 'account_recovery'
-  | 'key_rotation'
-  | 'high_value_order'
-  | 'provider_registration'
-  | 'offering_creation'
-  | 'hpc_job_submission'
-  | 'withdrawal'
-  | 'delegation_change';
+  | "account_recovery"
+  | "key_rotation"
+  | "high_value_order"
+  | "provider_registration"
+  | "offering_creation"
+  | "hpc_job_submission"
+  | "withdrawal"
+  | "delegation_change";
 
 /**
  * Trusted browser registration
@@ -359,17 +356,22 @@ export interface MFAChallenge {
    * Transaction summary (non-sensitive)
    */
   transactionSummary: string;
+
+  /**
+   * Optional WebAuthn assertion options for FIDO2 challenges
+   */
+  fido2Options?: PublicKeyCredentialRequestOptions;
 }
 
 /**
  * MFA challenge types
  */
 export type MFAChallengeType =
-  | 'otp_verify'
-  | 'fido2_assert'
-  | 'sms_verify'
-  | 'biometric_verify'
-  | 'email_verify';
+  | "otp_verify"
+  | "fido2_assert"
+  | "sms_verify"
+  | "biometric_verify"
+  | "email_verify";
 
 /**
  * MFA challenge response
@@ -471,17 +473,17 @@ export interface MFAError {
  * MFA error codes
  */
 export type MFAErrorCode =
-  | 'invalid_code'
-  | 'expired_challenge'
-  | 'factor_not_found'
-  | 'factor_suspended'
-  | 'too_many_attempts'
-  | 'lockout'
-  | 'enrollment_failed'
-  | 'verification_failed'
-  | 'fido2_error'
-  | 'network_error'
-  | 'unknown';
+  | "invalid_code"
+  | "expired_challenge"
+  | "factor_not_found"
+  | "factor_suspended"
+  | "too_many_attempts"
+  | "lockout"
+  | "enrollment_failed"
+  | "verification_failed"
+  | "fido2_error"
+  | "network_error"
+  | "unknown";
 
 /**
  * Initial MFA state
@@ -502,35 +504,37 @@ export const initialMFAState: MFAState = {
  */
 export function getFactorDisplayName(type: MFAFactorType): string {
   switch (type) {
-    case 'otp':
-      return 'Authenticator App (TOTP)';
-    case 'fido2':
-      return 'Security Key (FIDO2)';
-    case 'sms':
-      return 'SMS Verification';
-    case 'biometric':
-      return 'Biometric (VEID)';
-    case 'email':
-      return 'Email Verification';
+    case "otp":
+      return "Authenticator App (TOTP)";
+    case "fido2":
+      return "Security Key (FIDO2)";
+    case "sms":
+      return "SMS Verification";
+    case "biometric":
+      return "Biometric (VEID)";
+    case "email":
+      return "Email Verification";
     default:
-      return 'Unknown Factor';
+      return "Unknown Factor";
   }
 }
 
 /**
  * Get factor security level
  */
-export function getFactorSecurityLevel(type: MFAFactorType): 'high' | 'medium' | 'low' {
+export function getFactorSecurityLevel(
+  type: MFAFactorType,
+): "high" | "medium" | "low" {
   switch (type) {
-    case 'fido2':
-      return 'high';
-    case 'otp':
-    case 'biometric':
-      return 'medium';
-    case 'sms':
-    case 'email':
-      return 'low';
+    case "fido2":
+      return "high";
+    case "otp":
+    case "biometric":
+      return "medium";
+    case "sms":
+    case "email":
+      return "low";
     default:
-      return 'low';
+      return "low";
   }
 }

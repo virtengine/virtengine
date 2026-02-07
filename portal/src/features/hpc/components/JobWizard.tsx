@@ -7,7 +7,7 @@
  */
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   useCostEstimation,
   useJobSubmission,
@@ -247,41 +247,199 @@ function TemplateOption({
 }
 
 function ConfigureStep() {
-  const { manifest, updateManifest } = useWizardStore();
+  const { manifest, selectedTemplate, updateManifest } = useWizardStore();
 
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <h2 className="text-lg font-semibold">Job Configuration</h2>
+    <div className="space-y-6">
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold">Job Configuration</h2>
 
-      <div className="mt-6 space-y-4">
-        <div>
-          <label htmlFor="job-name" className="block text-sm font-medium">
-            Job Name *
-          </label>
-          <input
-            type="text"
-            id="job-name"
-            value={manifest.name ?? ''}
-            onChange={(e) => updateManifest({ name: e.target.value })}
-            placeholder="my-training-job"
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          />
+        <div className="mt-6 space-y-4">
+          <div>
+            <label htmlFor="job-name" className="block text-sm font-medium">
+              Job Name *
+            </label>
+            <input
+              type="text"
+              id="job-name"
+              value={manifest.name ?? ''}
+              onChange={(e) => updateManifest({ name: e.target.value })}
+              placeholder="my-training-job"
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium">
+              Description (optional)
+            </label>
+            <textarea
+              id="description"
+              value={manifest.description ?? ''}
+              onChange={(e) => updateManifest({ description: e.target.value })}
+              rows={3}
+              placeholder="Brief description of the job..."
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="container-image" className="block text-sm font-medium">
+              Container Image (optional)
+            </label>
+            <input
+              type="text"
+              id="container-image"
+              value={manifest.image ?? ''}
+              onChange={(e) => updateManifest({ image: e.target.value })}
+              placeholder="pytorch/pytorch:2.1-cuda12"
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm"
+            />
+            {selectedTemplate && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Leave blank to use the template default image
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Script Editor */}
+      <div className="rounded-lg border border-border bg-card p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Job Script</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Enter the command or script to execute on the cluster
+            </p>
+          </div>
         </div>
 
-        <div>
-          <label htmlFor="description" className="block text-sm font-medium">
-            Description (optional)
-          </label>
-          <textarea
-            id="description"
-            value={manifest.description ?? ''}
-            onChange={(e) => updateManifest({ description: e.target.value })}
-            rows={3}
-            placeholder="Brief description of the job..."
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+        <div className="mt-4">
+          <ScriptEditor
+            value={manifest.command ?? ''}
+            onChange={(value) => updateManifest({ command: value })}
           />
         </div>
       </div>
+
+      {/* Environment Variables */}
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold">Environment Variables</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Key-value pairs available to the job at runtime
+        </p>
+        <EnvironmentEditor
+          value={manifest.environment ?? {}}
+          onChange={(env) => updateManifest({ environment: env })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ScriptEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lineNumbers = (value || '').split('\n').length;
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-gray-950">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 border-b border-gray-800 bg-gray-900 px-3 py-2 text-xs text-gray-400">
+        <span>bash</span>
+        <span className="text-gray-600">•</span>
+        <span>
+          {lineNumbers} line{lineNumbers !== 1 ? 's' : ''}
+        </span>
+      </div>
+      {/* Editor */}
+      <div className="flex">
+        {/* Line numbers */}
+        <div className="select-none border-r border-gray-800 px-3 py-3 text-right font-mono text-xs leading-6 text-gray-600">
+          {Array.from({ length: Math.max(lineNumbers, 10) }, (_, i) => (
+            <div key={i}>{i + 1}</div>
+          ))}
+        </div>
+        {/* Textarea */}
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={`#!/bin/bash\n\n# Example: Run a training script\npython train.py --epochs 100 --lr 0.001`}
+          spellCheck={false}
+          className="min-h-[240px] w-full resize-y bg-transparent p-3 font-mono text-sm leading-6 text-green-400 placeholder:text-gray-600 focus:outline-none"
+        />
+      </div>
+    </div>
+  );
+}
+
+function EnvironmentEditor({
+  value,
+  onChange,
+}: {
+  value: Record<string, string>;
+  onChange: (env: Record<string, string>) => void;
+}) {
+  const entries = Object.entries(value);
+
+  const addEntry = () => {
+    onChange({ ...value, '': '' });
+  };
+
+  const updateKey = (oldKey: string, newKey: string) => {
+    const newEnv: Record<string, string> = {};
+    for (const [k, v] of Object.entries(value)) {
+      newEnv[k === oldKey ? newKey : k] = v;
+    }
+    onChange(newEnv);
+  };
+
+  const updateValue = (key: string, newValue: string) => {
+    onChange({ ...value, [key]: newValue });
+  };
+
+  const removeEntry = (key: string) => {
+    const newEnv = { ...value };
+    delete newEnv[key];
+    onChange(newEnv);
+  };
+
+  return (
+    <div className="mt-4 space-y-2">
+      {entries.map(([key, val], idx) => (
+        <div key={key || `env-${idx}`} className="flex gap-2">
+          <input
+            type="text"
+            value={key}
+            onChange={(e) => updateKey(key, e.target.value)}
+            placeholder="KEY"
+            className="w-1/3 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm"
+          />
+          <input
+            type="text"
+            value={val}
+            onChange={(e) => updateValue(key, e.target.value)}
+            placeholder="value"
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => removeEntry(key)}
+            className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-destructive"
+            aria-label="Remove environment variable"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addEntry}
+        className="rounded-lg border border-dashed border-border px-4 py-2 text-sm text-muted-foreground hover:bg-accent"
+      >
+        + Add Variable
+      </button>
     </div>
   );
 }

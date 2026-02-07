@@ -36,6 +36,7 @@ export interface CustomerDashboardActions {
   setAllocationFilter: (filter: CustomerAllocationStatus | 'all') => void;
   markNotificationRead: (id: string) => void;
   dismissNotification: (id: string) => void;
+  terminateAllocation: (id: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -296,6 +297,26 @@ export const useCustomerDashboardStore = create<CustomerDashboardStore>()((set, 
     });
   },
 
+  terminateAllocation: async (id) => {
+    try {
+      // In production: MsgTerminateAllocation broadcast via wallet
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const { allocations } = get();
+      set({
+        allocations: allocations.map((a) =>
+          a.id === id
+            ? { ...a, status: 'terminated' as const, updatedAt: new Date().toISOString() }
+            : a
+        ),
+      });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to terminate allocation',
+      });
+    }
+  },
+
   clearError: () => {
     set({ error: null });
   },
@@ -328,4 +349,11 @@ export const selectTotalMonthlySpend = (state: CustomerDashboardStore): number =
 
 export const selectUnreadNotificationCount = (state: CustomerDashboardStore): number => {
   return state.notifications.filter((n) => !n.read).length;
+};
+
+export const selectAllocationById = (
+  state: CustomerDashboardStore,
+  id: string
+): CustomerAllocation | undefined => {
+  return state.allocations.find((a) => a.id === id);
 };

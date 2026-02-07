@@ -5,6 +5,7 @@ import {
   selectActiveCustomerAllocations,
   selectTotalMonthlySpend,
   selectUnreadNotificationCount,
+  selectAllocationById,
 } from '@/stores/customerDashboardStore';
 
 describe('customerDashboardStore', () => {
@@ -236,6 +237,66 @@ describe('customerDashboardStore', () => {
         expect(r.label).toBeTruthy();
         expect(r.unit).toBeTruthy();
       });
+    });
+  });
+
+  describe('terminateAllocation', () => {
+    it('sets allocation status to terminated', async () => {
+      await runWithTimers(() => useCustomerDashboardStore.getState().fetchDashboard());
+
+      const { allocations } = useCustomerDashboardStore.getState();
+      const running = allocations.find((a) => a.status === 'running');
+      expect(running).toBeDefined();
+
+      await runWithTimers(() =>
+        useCustomerDashboardStore.getState().terminateAllocation(running!.id)
+      );
+
+      const updated = useCustomerDashboardStore
+        .getState()
+        .allocations.find((a) => a.id === running!.id);
+      expect(updated!.status).toBe('terminated');
+    });
+
+    it('does not affect other allocations', async () => {
+      await runWithTimers(() => useCustomerDashboardStore.getState().fetchDashboard());
+
+      const { allocations } = useCustomerDashboardStore.getState();
+      const running = allocations.filter((a) => a.status === 'running');
+      expect(running.length).toBeGreaterThan(1);
+
+      await runWithTimers(() =>
+        useCustomerDashboardStore.getState().terminateAllocation(running[0].id)
+      );
+
+      const others = useCustomerDashboardStore
+        .getState()
+        .allocations.filter((a) => a.id !== running[0].id);
+      const originalOthers = allocations.filter((a) => a.id !== running[0].id);
+      expect(others.length).toBe(originalOthers.length);
+      others.forEach((a, i) => {
+        expect(a.status).toBe(originalOthers[i].status);
+      });
+    });
+  });
+
+  describe('selectAllocationById', () => {
+    it('returns the allocation with matching id', async () => {
+      await runWithTimers(() => useCustomerDashboardStore.getState().fetchDashboard());
+
+      const state = useCustomerDashboardStore.getState();
+      const first = state.allocations[0];
+      const found = selectAllocationById(state, first.id);
+      expect(found).toBeDefined();
+      expect(found!.id).toBe(first.id);
+    });
+
+    it('returns undefined for non-existent id', async () => {
+      await runWithTimers(() => useCustomerDashboardStore.getState().fetchDashboard());
+
+      const state = useCustomerDashboardStore.getState();
+      const found = selectAllocationById(state, 'non-existent-id');
+      expect(found).toBeUndefined();
     });
   });
 });

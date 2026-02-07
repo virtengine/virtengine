@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { FactorList } from './FactorList';
 import { TOTPSetup } from './TOTPSetup';
 import { WebAuthnSetup } from './WebAuthnSetup';
+import { SMSSetup } from './SMSSetup';
+import { EmailSetup } from './EmailSetup';
 import { BackupCodes } from './BackupCodes';
 import { RecoveryFlow } from './RecoveryFlow';
 import { Button } from '@/components/ui/Button';
@@ -18,7 +20,7 @@ interface MFASettingsProps {
   className?: string;
 }
 
-type SetupView = 'none' | 'totp' | 'webauthn' | 'backup' | 'recovery';
+type SetupView = 'none' | 'totp' | 'webauthn' | 'sms' | 'email' | 'backup' | 'recovery';
 
 /**
  * MFA Settings Component
@@ -55,6 +57,14 @@ export function MFASettings({ className }: MFASettingsProps) {
             onCancel={handleCancel}
             className={className}
           />
+        );
+      case 'sms':
+        return (
+          <SMSSetup onComplete={handleComplete} onCancel={handleCancel} className={className} />
+        );
+      case 'email':
+        return (
+          <EmailSetup onComplete={handleComplete} onCancel={handleCancel} className={className} />
         );
       case 'backup':
         return (
@@ -123,6 +133,20 @@ export function MFASettings({ className }: MFASettingsProps) {
                 description="Use a hardware security key or device biometrics (Touch ID, Face ID, Windows Hello)"
                 security="Strongest"
                 onClick={() => setSetupView('webauthn')}
+              />
+              <FactorOption
+                icon="💬"
+                title="SMS Verification"
+                description="Receive a one-time code via text message"
+                security="Backup"
+                onClick={() => setSetupView('sms')}
+              />
+              <FactorOption
+                icon="📧"
+                title="Email Verification"
+                description="Use your email address to receive verification codes"
+                security="Backup"
+                onClick={() => setSetupView('email')}
               />
               <FactorOption
                 icon="📋"

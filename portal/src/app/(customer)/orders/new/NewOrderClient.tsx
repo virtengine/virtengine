@@ -9,6 +9,8 @@ import { useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useOfferingStore } from '@/stores/offeringStore';
+import { useIdentity } from '@/lib/portal-adapter';
+import { IdentityRequirements } from '@/components/identity';
 import { OrderWizard } from '@/components/orders';
 import type { OrderCreateResult } from '@/features/orders';
 
@@ -19,6 +21,8 @@ export default function NewOrderClient() {
   const sequence = parseInt(searchParams.get('seq') ?? '1', 10);
 
   const { selectedOffering, isLoadingDetail, error, fetchOffering } = useOfferingStore();
+  const { actions } = useIdentity();
+  const gatingError = actions.checkRequirements('place_order');
 
   useEffect(() => {
     if (providerAddress) {
@@ -135,11 +139,18 @@ export default function NewOrderClient() {
         </p>
       </div>
 
-      <OrderWizard
-        offering={selectedOffering}
-        onComplete={handleComplete}
-        onCancel={handleCancel}
-      />
+      {gatingError ? (
+        <IdentityRequirements
+          action="place_order"
+          onStartVerification={() => router.push('/verify')}
+        />
+      ) : (
+        <OrderWizard
+          offering={selectedOffering}
+          onComplete={handleComplete}
+          onCancel={handleCancel}
+        />
+      )}
     </div>
   );
 }

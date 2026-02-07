@@ -21,6 +21,7 @@
 #     - kong: API gateway
 #     - api-portal: Swagger UI
 #     - portal: Local Next.js portal UI
+#     - ve-portal: Local Vite React portal UI
 #     - prometheus: Metrics
 #     - grafana: Dashboards
 
@@ -464,6 +465,7 @@ services:
     build:
       context: .
       dockerfile: _build/Dockerfile.portal
+      target: dev
     container_name: portal
     hostname: portal
     networks:
@@ -471,6 +473,10 @@ services:
         ipv4_address: 172.28.0.55
     ports:
       - "3000:3000" # Local Portal UI
+    volumes:
+      - ./portal/src:/workspace/portal/src
+      - ./portal/public:/workspace/portal/public
+      - ./lib:/workspace/lib
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_CHAIN_ID: ${CHAIN_ID:-virtengine-localnet-1}
@@ -487,9 +493,37 @@ services:
       NEXT_PUBLIC_ENABLE_IDENTITY: ${NEXT_PUBLIC_ENABLE_IDENTITY:-true}
       NEXT_PUBLIC_DEV_MODE: ${NEXT_PUBLIC_DEV_MODE:-true}
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       - virtengine-node
       - kong
+    restart: unless-stopped
+
+  # =============================================================================
+  # VE Portal UI (Vite React)
+  # =============================================================================
+  ve-portal:
+    build:
+      context: .
+      dockerfile: _build/Dockerfile.ve-portal
+    container_name: ve-portal
+    hostname: ve-portal
+    networks:
+      virtengine-net:
+        ipv4_address: 172.28.0.56
+    ports:
+      - "5173:5173" # Vite dev server
+    environment:
+      VITE_CHAIN_ID: ${CHAIN_ID:-virtengine-localnet-1}
+      VITE_CHAIN_RPC: http://localhost:26657
+      VITE_CHAIN_REST: http://localhost:1317
+    depends_on:
+      - virtengine-node
     restart: unless-stopped
 
   # =============================================================================

@@ -11,6 +11,7 @@ import { PortalProvider } from '@/lib/portal-adapter';
 import { portalConfig, chainConfig, walletConfig } from '@/config';
 import { Toaster } from '@/components/ui/Toaster';
 import { CosmosKitProvider } from './CosmosKitProvider';
+import { ChainEventProvider } from './ChainEventProvider';
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -27,7 +28,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <CosmosKitProvider>
         <PortalProvider config={portalConfig} chainConfig={chainConfig} walletConfig={walletConfig}>
-          {children}
+          <ChainEventProvider>{children}</ChainEventProvider>
           <Toaster />
         </PortalProvider>
       </CosmosKitProvider>

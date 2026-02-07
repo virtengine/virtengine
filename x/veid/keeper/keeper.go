@@ -68,6 +68,27 @@ type IKeeper interface {
 	// Codec and store
 	Codec() codec.BinaryCodec
 	StoreKey() storetypes.StoreKey
+
+	// Security hardening — Task 22A
+	// Rate limiting
+	CheckUploadRateLimit(ctx sdk.Context, address sdk.AccAddress) error
+	CheckVerificationRequestRateLimit(ctx sdk.Context, address sdk.AccAddress) error
+	CheckScoreUpdateRateLimit(ctx sdk.Context) error
+	RecordUpload(ctx sdk.Context, address sdk.AccAddress)
+
+	// Key rotation
+	InitiateClientKeyRotation(ctx sdk.Context, authority string, clientID string, newPublicKey []byte, newAlgorithm string, overlapBlocks int64) (*ClientKeyRotation, error)
+	CompleteClientKeyRotation(ctx sdk.Context, clientID string) error
+	IsKeyValidDuringRotation(ctx sdk.Context, clientID string, keyBytes []byte) bool
+
+	// Trusted setup ceremonies
+	InitiateTrustedSetupCeremony(ctx sdk.Context, authority string, circuitType string, minParticipants uint32, expiryDuration time.Duration) (*TrustedSetupCeremony, error)
+	AddCeremonyContribution(ctx sdk.Context, ceremonyID string, participant sdk.AccAddress, contributionHash string, verificationProofHash string) error
+	CompleteCeremony(ctx sdk.Context, authority string, ceremonyID string, verificationKeyHash string) error
+	GetCeremony(ctx sdk.Context, ceremonyID string) (*TrustedSetupCeremony, bool)
+
+	// Privilege validation
+	ValidatePrivilegedOperation(ctx sdk.Context, sender sdk.AccAddress, operation string, requireValidator bool, requireAuthority bool) error
 }
 
 // StakingKeeper defines the interface for the cosmos staking keeper that veid needs

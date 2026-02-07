@@ -54,6 +54,9 @@ export const env = {
 
   // App Info
   appUrl: getEnvVar('NEXT_PUBLIC_APP_URL', 'https://portal.virtengine.io'),
+
+  // Fiat Off-ramp
+  fiatOffRampUrl: getEnvVar('NEXT_PUBLIC_FIAT_OFFRAMP_URL', ''),
 } as const;
 
 export type Env = typeof env;

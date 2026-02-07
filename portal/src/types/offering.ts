@@ -111,6 +111,17 @@ export interface UpdatePricingRequest {
   prices?: PriceComponent[];
 }
 
+export interface CreateOfferingRequest {
+  name: string;
+  description: string;
+  category: OfferingCategory;
+  pricing: PricingInfo;
+  tags?: string[];
+  regions?: string[];
+  specifications?: Record<string, string>;
+  identityRequirement?: IdentityRequirement;
+}
+
 export interface OfferingFilters {
   status?: OfferingPublicationStatus;
   category?: OfferingCategory;

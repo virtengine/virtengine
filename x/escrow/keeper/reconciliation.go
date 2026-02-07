@@ -175,6 +175,26 @@ func (rk *reconciliationKeeper) SaveUsageRecord(ctx sdk.Context, record *billing
 		return fmt.Errorf("invalid usage record: %w", err)
 	}
 
+	// Idempotent handling for duplicate records
+	if existing, err := rk.GetUsageRecord(ctx, record.RecordID); err == nil {
+		if !usageRecordCompatible(existing, record) {
+			return fmt.Errorf("usage record conflict for %s", record.RecordID)
+		}
+
+		// Preserve immutable fields from existing record
+		record.CreatedAt = existing.CreatedAt
+		if record.BlockHeight == 0 {
+			record.BlockHeight = existing.BlockHeight
+		}
+
+		// If no state changes, treat as idempotent replay
+		if existing.Status == record.Status &&
+			existing.InvoiceID == record.InvoiceID &&
+			existing.TotalAmount.String() == record.TotalAmount.String() {
+			return nil
+		}
+	}
+
 	// Set timestamps if not set
 	if record.CreatedAt.IsZero() {
 		record.CreatedAt = ctx.BlockTime()
@@ -382,23 +402,34 @@ func (rk *reconciliationKeeper) RunReconciliationJob(
 		usageRecordIDs = append(usageRecordIDs, rec.RecordID)
 	}
 
+	settlementIDs := make([]string, 0, len(payoutRecords))
+	for _, payout := range payoutRecords {
+		if payout.SettlementID != "" {
+			settlementIDs = append(settlementIDs, payout.SettlementID)
+		}
+	}
+
+	links := rk.buildUsageInvoicePayoutLinks(usageRecords, payoutRecords)
+
 	// Generate report ID
 	reportID := fmt.Sprintf("reconciliation-%d-%d", periodStart.Unix(), ctx.BlockHeight())
 
 	// Create and save report
 	report := &billing.ReconciliationReport{
-		ReportID:       reportID,
-		ReportType:     billing.ReconciliationReportTypeOnDemand,
-		PeriodStart:    periodStart,
-		PeriodEnd:      periodEnd,
-		Status:         status,
-		Summary:        summary,
-		Discrepancies:  discrepancies,
-		InvoiceIDs:     invoiceIDs,
-		UsageRecordIDs: usageRecordIDs,
-		GeneratedAt:    ctx.BlockTime(),
-		GeneratedBy:    "system",
-		BlockHeight:    ctx.BlockHeight(),
+		ReportID:                reportID,
+		ReportType:              billing.ReconciliationReportTypeOnDemand,
+		PeriodStart:             periodStart,
+		PeriodEnd:               periodEnd,
+		Status:                  status,
+		Summary:                 summary,
+		Discrepancies:           discrepancies,
+		InvoiceIDs:              invoiceIDs,
+		SettlementIDs:           settlementIDs,
+		UsageRecordIDs:          usageRecordIDs,
+		UsageInvoicePayoutLinks: links,
+		GeneratedAt:             ctx.BlockTime(),
+		GeneratedBy:             "system",
+		BlockHeight:             ctx.BlockHeight(),
 	}
 
 	if err := rk.CreateReconciliationReport(ctx, report); err != nil {
@@ -589,6 +620,22 @@ func (rk *reconciliationKeeper) getUsageRecordsForPeriod(
 	return records
 }
 
+func usageRecordCompatible(existing *billing.UsageRecord, incoming *billing.UsageRecord) bool {
+	if existing == nil || incoming == nil {
+		return false
+	}
+
+	return existing.LeaseID == incoming.LeaseID &&
+		existing.Provider == incoming.Provider &&
+		existing.Customer == incoming.Customer &&
+		existing.StartTime.Equal(incoming.StartTime) &&
+		existing.EndTime.Equal(incoming.EndTime) &&
+		existing.ResourceType == incoming.ResourceType &&
+		existing.UsageAmount.Equal(incoming.UsageAmount) &&
+		existing.UnitPrice.String() == incoming.UnitPrice.String() &&
+		existing.TotalAmount.String() == incoming.TotalAmount.String()
+}
+
 func (rk *reconciliationKeeper) getInvoicesForPeriod(
 	ctx sdk.Context,
 	periodStart, periodEnd time.Time,
@@ -764,6 +811,38 @@ func (rk *reconciliationKeeper) findDiscrepancies(
 		}
 	}
 
+	// Check for paid invoices missing payouts
+	payoutByInvoice := make(map[string]*billing.PayoutRecord)
+	for _, payout := range payoutRecords {
+		for _, invoiceID := range payout.InvoiceIDs {
+			if invoiceID == "" {
+				continue
+			}
+			if _, exists := payoutByInvoice[invoiceID]; !exists {
+				payoutByInvoice[invoiceID] = payout
+			}
+		}
+	}
+
+	for _, inv := range invoices {
+		if inv.Status != billing.InvoiceStatusPaid {
+			continue
+		}
+		if _, exists := payoutByInvoice[inv.InvoiceID]; !exists {
+			discrepancyCount++
+			discrepancies = append(discrepancies, billing.ReconciliationDiscrepancy{
+				DiscrepancyID:  fmt.Sprintf("disc-%d", discrepancyCount),
+				Type:           billing.DiscrepancyTypeMissingSettlement,
+				InvoiceID:      inv.InvoiceID,
+				ExpectedAmount: inv.AmountPaid,
+				ActualAmount:   sdk.NewCoins(),
+				Difference:     inv.AmountPaid,
+				Description:    fmt.Sprintf("invoice %s is paid but has no payout record", inv.InvoiceID),
+				Severity:       billing.DiscrepancySeverityHigh,
+			})
+		}
+	}
+
 	return discrepancies
 }
 
@@ -832,4 +911,43 @@ func (rk *reconciliationKeeper) calculateSummary(
 	}
 
 	return summary
+}
+
+func (rk *reconciliationKeeper) buildUsageInvoicePayoutLinks(
+	usageRecords []*billing.UsageRecord,
+	payoutRecords []*billing.PayoutRecord,
+) []billing.ReconciliationLink {
+	if len(usageRecords) == 0 {
+		return nil
+	}
+
+	payoutByInvoice := make(map[string]*billing.PayoutRecord)
+	for _, payout := range payoutRecords {
+		for _, invoiceID := range payout.InvoiceIDs {
+			if invoiceID == "" {
+				continue
+			}
+			if _, exists := payoutByInvoice[invoiceID]; !exists {
+				payoutByInvoice[invoiceID] = payout
+			}
+		}
+	}
+
+	links := make([]billing.ReconciliationLink, 0, len(usageRecords))
+	for _, record := range usageRecords {
+		link := billing.ReconciliationLink{
+			UsageRecordID: record.RecordID,
+			InvoiceID:     record.InvoiceID,
+			Provider:      record.Provider,
+			Customer:      record.Customer,
+			LeaseID:       record.LeaseID,
+		}
+		if payout, ok := payoutByInvoice[record.InvoiceID]; ok {
+			link.PayoutID = payout.PayoutID
+			link.SettlementID = payout.SettlementID
+		}
+		links = append(links, link)
+	}
+
+	return links
 }

@@ -86,7 +86,9 @@ func (p Params) Validate() error {
 }
 
 // ProtoMessage implements proto.Message for Params
-func (*Params) ProtoMessage() {}
+func (*Params) ProtoMessage() {
+	// Intentionally empty: required to satisfy proto.Message.
+}
 
 // Reset implements proto.Message for Params
 func (p *Params) Reset() { *p = Params{} }
@@ -97,7 +99,9 @@ func (p *Params) String() string {
 }
 
 // ProtoMessage implements proto.Message
-func (*GenesisState) ProtoMessage() {}
+func (*GenesisState) ProtoMessage() {
+	// Intentionally empty: required to satisfy proto.Message.
+}
 
 // Reset implements proto.Message
 func (gs *GenesisState) Reset() { *gs = GenesisState{} }

@@ -1,0 +1,180 @@
+{
+  "chain_id": "virtengine-1",
+  "genesis_time": "2026-06-01T00:00:00Z",
+  "denom_metadata": [
+    {
+      "description": "The native token of VirtEngine",
+      "denom_units": [
+        {
+          "denom": "uve",
+          "exponent": 0,
+          "aliases": [
+            "microve"
+          ]
+        },
+        {
+          "denom": "mve",
+          "exponent": 3,
+          "aliases": [
+            "millive"
+          ]
+        },
+        {
+          "denom": "virtengine",
+          "exponent": 6,
+          "aliases": [
+            "ve"
+          ]
+        }
+      ],
+      "base": "uve",
+      "display": "virtengine",
+      "name": "VirtEngine",
+      "symbol": "VE"
+    }
+  ],
+  "staking_params": {
+    "unbonding_time": "1209600s",
+    "max_validators": 100,
+    "max_entries": 7,
+    "historical_entries": 10000,
+    "bond_denom": "uve",
+    "min_commission_rate": "0.050000000000000000"
+  },
+  "mint_params": {
+    "mint_denom": "uve",
+    "inflation_rate_change": "0.130000000000000000",
+    "inflation_max": "0.200000000000000000",
+    "inflation_min": "0.070000000000000000",
+    "goal_bonded": "0.670000000000000000",
+    "blocks_per_year": "6311520"
+  },
+  "distribution_params": {
+    "community_tax": "0.000000000000000000",
+    "base_proposer_reward": "0.000000000000000000",
+    "bonus_proposer_reward": "0.000000000000000000",
+    "withdraw_addr_enabled": true
+  },
+  "gov_params": {
+    "min_deposit": [
+      {
+        "denom": "uve",
+        "amount": "2500000000"
+      }
+    ],
+    "max_deposit_period": "1209600s",
+    "voting_period": "259200s",
+    "quorum": "0.200000000000000000",
+    "threshold": "0.500000000000000000",
+    "veto_threshold": "0.334000000000000000",
+    "min_initial_deposit_ratio": "0.000000000000000000",
+    "expedited_min_deposit": [
+      {
+        "denom": "uve",
+        "amount": "12500000000"
+      }
+    ],
+    "expedited_voting_period": "86400s",
+    "expedited_threshold": "0.667000000000000000",
+    "proposal_cancel_ratio": "0.500000000000000000",
+    "proposal_cancel_dest": ""
+  },
+  "gov_deposit_params": {
+    "min_deposit": [
+      {
+        "denom": "uve",
+        "amount": "2500000000"
+      }
+    ],
+    "max_deposit_period": "1209600s"
+  },
+  "gov_voting_params": {
+    "voting_period": "259200s"
+  },
+  "gov_tally_params": {
+    "quorum": "0.200000000000000000",
+    "threshold": "0.500000000000000000",
+    "veto_threshold": "0.334000000000000000"
+  },
+  "crisis_constant_fee": {
+    "denom": "uve",
+    "amount": "500000000000"
+  },
+  "slashing_params": {
+    "signed_blocks_window": "30000",
+    "min_signed_per_window": "0.050000000000000000",
+    "downtime_jail_duration": "60s",
+    "slash_fraction_double_sign": "0.050000000000000000",
+    "slash_fraction_downtime": "0.000000000000000000"
+  },
+  "veid_params": {
+    "max_scopes_per_account": 50,
+    "max_scopes_per_type": 5,
+    "salt_min_bytes": 16,
+    "salt_max_bytes": 64,
+    "require_client_signature": true,
+    "require_user_signature": true,
+    "verification_expiry_days": 365,
+    "min_score_for_tier": {
+      "unverified": 0,
+      "basic": 1,
+      "standard": 30,
+      "verified": 60,
+      "trusted": 85
+    }
+  },
+  "mfa_params": {
+    "default_session_duration": 900,
+    "max_factors_per_account": 10,
+    "max_challenge_attempts": 3,
+    "challenge_ttl": 300,
+    "max_trusted_devices": 5,
+    "trusted_device_ttl": 2592000,
+    "min_veid_score_for_mfa": 50,
+    "require_at_least_one_factor": true,
+    "allowed_factor_types": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]
+  },
+  "encryption_params": {
+    "max_recipients_per_envelope": 100,
+    "max_keys_per_account": 10,
+    "allowed_algorithms": [
+      "X25519-XSalsa20-Poly1305"
+    ],
+    "require_signature": true
+  },
+  "hpc_params": {
+    "platform_fee_rate": "50000",
+    "provider_reward_rate": "800000",
+    "node_reward_rate": "150000",
+    "min_job_duration_seconds": 60,
+    "max_job_duration_seconds": 604800,
+    "default_identity_threshold": 50,
+    "cluster_heartbeat_timeout": 300,
+    "node_heartbeat_timeout": 120,
+    "latency_weight_factor": "600000",
+    "capacity_weight_factor": "400000",
+    "max_latency_ms": 50,
+    "dispute_resolution_period": 604800,
+    "reward_formula_version": "v1.0.0",
+    "enable_proximity_clustering": true,
+    "default_denom": "uve",
+    "accounting_finalization_delay_sec": 3600,
+    "settlement_delay_sec": 86400,
+    "platform_fee_rate_bps": 250,
+    "usage_snapshot_interval_sec": 300,
+    "enable_auto_settlement": true,
+    "reconciliation_enabled": true,
+    "routing_enforcement_enabled": true,
+    "routing_enforcement_mode": "strict",
+    "max_scheduling_decision_age_blocks": 100,
+    "max_scheduling_decision_age_seconds": 600,
+    "allow_automatic_fallback": true
+  }
+}

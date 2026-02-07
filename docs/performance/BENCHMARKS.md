@@ -15,6 +15,9 @@ The performance benchmarking suite provides comprehensive coverage for all criti
 | Provider Daemon Bidding | <50ms | `pkg/provider_daemon/bid_engine_benchmark_test.go` |
 | ZK Proof Generation | Documented | `x/veid/keeper/zkproofs_benchmark_test.go` |
 | Memory Profiling | See budgets | `pkg/benchmark/memory_profile.go` |
+| Scale Testing (1M validators) | See baselines | `tests/load/scale/` |
+
+For scaling recommendations and hardware sizing, see [SCALING_RECOMMENDATIONS.md](SCALING_RECOMMENDATIONS.md).
 
 ## Baseline Metrics
 

@@ -34,50 +34,15 @@ export default function ProviderPricingPage() {
 
         <ComponentPriceCalculator />
 
-        {/* Bid Strategy */}
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold">Bid Strategy</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Configure automatic bidding behavior</p>
+        {/* Bid Strategy (Phase 3) */}
+        <div className="rounded-lg border border-dashed border-border bg-card p-6">
+          <h2 className="text-lg font-semibold">Bid Strategy (Phase 3)</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Optional bidding is deferred. Configure fixed pricing for now.
+          </p>
 
-          <div className="mt-6 space-y-4">
-            <div>
-              <label className="text-sm font-medium" htmlFor="bid-strategy">
-                Strategy
-              </label>
-              <select
-                id="bid-strategy"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              >
-                <option>Aggressive - Maximize utilization</option>
-                <option>Balanced - Balance price and utilization</option>
-                <option>Conservative - Maximize revenue per lease</option>
-                <option>Manual - Review all bids manually</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium" htmlFor="min-margin">
-                Minimum Margin (%)
-              </label>
-              <input
-                type="number"
-                id="min-margin"
-                defaultValue="15"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium" htmlFor="auto-accept">
-                Auto-accept threshold ($)
-              </label>
-              <input
-                type="number"
-                id="auto-accept"
-                defaultValue="100"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              />
-            </div>
+          <div className="mt-4 rounded-md bg-muted/40 p-4 text-sm text-muted-foreground">
+            Bidding strategies, auto-accept thresholds, and manual bid review unlock in Phase 3.
           </div>
         </div>
 

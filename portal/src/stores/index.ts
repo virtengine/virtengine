@@ -44,6 +44,7 @@ export {
   selectActiveCustomerAllocations,
   selectTotalMonthlySpend,
   selectUnreadNotificationCount as selectUnreadDashboardNotificationCount,
+  selectAllocationById,
   type CustomerDashboardStore,
   type CustomerDashboardState,
   type CustomerDashboardActions,
@@ -54,3 +55,43 @@ export {
   type OrganizationStoreState,
   type OrganizationStoreActions,
 } from './organizationStore';
+export {
+  useMetricsStore,
+  selectFiringAlerts,
+  selectActiveAlerts,
+  selectRecentAlertEvents,
+  selectSelectedDeploymentMetrics,
+  selectCPUTrend,
+  selectMemoryTrend,
+  type MetricsStore,
+  type MetricsState,
+  type MetricsActions,
+} from './metricsStore';
+export {
+  useDashboardConfigStore,
+  selectActiveDashboard,
+  selectDashboardNames,
+  type DashboardConfigStore,
+  type DashboardConfigState,
+  type DashboardConfigActions,
+} from './dashboardConfigStore';
+export {
+  useAdminStore,
+  selectActiveProposals,
+  selectActiveValidators,
+  selectOpenTickets,
+  selectUrgentTickets,
+  type AdminStore,
+  type AdminState,
+  type AdminActions,
+} from './adminStore';
+export {
+  useChainEventStore,
+  selectIsConnected,
+  selectRecentEvents,
+  selectEventsByType,
+  getChainEventClient,
+  type ChainEventStore,
+  type ChainEventState,
+  type ChainEventActions,
+} from './chainEventStore';

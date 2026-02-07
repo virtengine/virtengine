@@ -108,6 +108,23 @@ const formatSyncLabel = (status: SupportSyncStatus) => {
   }
 };
 
+const statusFilterOptions: { value: SupportStatus | 'all'; label: string }[] = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'open', label: 'Open' },
+  { value: 'assigned', label: 'Assigned' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'waiting_customer', label: 'Waiting Customer' },
+  { value: 'waiting_support', label: 'Waiting Support' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'archived', label: 'Archived' },
+];
+
+const categoryFilterOptions: { value: SupportCategory | 'all'; label: string }[] = [
+  { value: 'all', label: 'All categories' },
+  ...categoryOptions,
+];
+
 export default function SupportPage() {
   const { tickets, createTicket, providers } = useSupportStore();
   const [subject, setSubject] = useState('');
@@ -116,11 +133,22 @@ export default function SupportPage() {
   const [category, setCategory] = useState<SupportCategory>('technical');
   const [priority, setPriority] = useState<SupportPriority>('normal');
   const [relatedEntity, setRelatedEntity] = useState('');
+  const [filterStatus, setFilterStatus] = useState<SupportStatus | 'all'>('all');
+  const [filterCategory, setFilterCategory] = useState<SupportCategory | 'all'>('all');
 
   const slaTarget = useMemo(() => getSlaTargetHours(priority), [priority]);
   const selectedProvider = useMemo(
     () => providers.find((provider) => provider.id === providerId) ?? providers[0],
     [providerId, providers]
+  );
+  const filteredTickets = useMemo(
+    () =>
+      tickets.filter((ticket) => {
+        if (filterStatus !== 'all' && ticket.status !== filterStatus) return false;
+        if (filterCategory !== 'all' && ticket.category !== filterCategory) return false;
+        return true;
+      }),
+    [tickets, filterStatus, filterCategory]
   );
   const pendingChain = useMemo(
     () =>
@@ -365,10 +393,49 @@ export default function SupportPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Active tickets</CardTitle>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>Active tickets</CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select
+                    value={filterStatus}
+                    onValueChange={(value) => setFilterStatus(value as SupportStatus | 'all')}
+                  >
+                    <SelectTrigger className="h-8 w-[150px] text-xs">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusFilterOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={filterCategory}
+                    onValueChange={(value) => setFilterCategory(value as SupportCategory | 'all')}
+                  >
+                    <SelectTrigger className="h-8 w-[150px] text-xs">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryFilterOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {tickets.map((ticket) => {
+              {filteredTickets.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No tickets match the current filters.
+                </p>
+              )}
+              {filteredTickets.map((ticket) => {
                 const sla = slaLabel(ticket.createdAt, ticket.priority);
                 return (
                   <Link key={ticket.id} href={`/support/${encodeURIComponent(ticket.id)}`}>
