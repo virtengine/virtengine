@@ -1,13 +1,13 @@
 /**
- * telegram-bot.mjs — Two-way Telegram ↔ Codex shell for VirtEngine monitor.
+ * telegram-bot.mjs — Two-way Telegram ↔ primary agent for VirtEngine monitor.
  *
  * Polls Telegram Bot API for incoming messages, routes slash commands to
- * built-in handlers, and forwards free-text to the persistent Codex shell.
+ * built-in handlers, and forwards free-text to the persistent primary agent.
  *
  * Architecture:
  *   Telegram → getUpdates long-poll → handleUpdate()
- *     ├─ /command → built-in handler (fast, no Codex)
- *     └─ free-text → CodexShell.exec() → response back to Telegram
+ *     ├─ /command → built-in handler (fast, no agent)
+ *     └─ free-text → PrimaryAgent.exec() → response back to Telegram
  *
  * Security: Only accepts messages from the configured TELEGRAM_CHAT_ID.
  */
@@ -18,13 +18,13 @@ import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  execCodexPrompt,
-  isCodexBusy,
-  getThreadInfo,
-  resetThread,
-  initCodexShell,
-  steerCodexPrompt,
-} from "./codex-shell.mjs";
+  execPrimaryPrompt,
+  isPrimaryBusy,
+  getPrimaryAgentInfo,
+  resetPrimaryAgent,
+  initPrimaryAgent,
+  steerPrimaryPrompt,
+} from "./primary-agent.mjs";
 import {
   loadWorkspaceRegistry,
   formatRegistryDiagnostics,
@@ -57,7 +57,7 @@ const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const POLL_TIMEOUT_S = 30; // long-poll timeout
 const MAX_MESSAGE_LEN = 4000; // Telegram max is 4096, leave margin
 const POLL_ERROR_BACKOFF_MS = 5000;
-const CODEX_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
+const AGENT_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
 let telegramPollLockHeld = false;
 const presenceIntervalSec = Number(
   process.env.TELEGRAM_PRESENCE_INTERVAL_SEC || "60",
@@ -432,8 +432,106 @@ function extractTarget(cmd) {
   return "";
 }
 
+function normalizeToolName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function getCopilotToolInfo(event) {
+  const data = event?.data || {};
+  const toolName =
+    data.toolName ||
+    data.name ||
+    data.tool?.name ||
+    event?.toolName ||
+    event?.tool ||
+    "";
+  const input =
+    data.input ||
+    data.args ||
+    data.parameters ||
+    data.toolInput ||
+    data.payload ||
+    null;
+  const output = data.output || data.result || data.toolOutput || null;
+  const status = data.status || event?.status || "";
+  return { toolName: String(toolName || ""), input, output, status };
+}
+
+function extractCopilotCommand(input) {
+  if (!input) return null;
+  if (typeof input === "string") return input;
+  return (
+    input.command ||
+    input.cmd ||
+    input.shell ||
+    input.script ||
+    input.execute ||
+    null
+  );
+}
+
+function extractCopilotPath(input) {
+  if (!input) return null;
+  if (typeof input === "string") return input;
+  const candidates = [
+    "path",
+    "file",
+    "filename",
+    "filepath",
+    "filePath",
+    "fullPath",
+    "target",
+  ];
+  for (const key of candidates) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function isCopilotReadTool(name) {
+  const tool = normalizeToolName(name);
+  return /read|open|view|get_file|read_file/.test(tool);
+}
+
+function isCopilotWriteTool(name) {
+  const tool = normalizeToolName(name);
+  return /write|edit|apply|patch|create|update|save/.test(tool);
+}
+
+function isCopilotSearchTool(name) {
+  const tool = normalizeToolName(name);
+  return /search|grep|rg|find|query/.test(tool);
+}
+
+function summarizeCopilotTool(toolName, input) {
+  const tool = normalizeToolName(toolName);
+  const command = extractCopilotCommand(input);
+  const target = extractCopilotPath(input);
+  if (!toolName) return "running tool";
+  if (/command|shell|execute|run/.test(tool)) {
+    return command ? `running ${shortSnippet(command, 80)}` : "running command";
+  }
+  if (isCopilotReadTool(tool)) {
+    return target ? `reading ${shortPath(target)}` : "reading file";
+  }
+  if (isCopilotWriteTool(tool)) {
+    return target ? `updating ${shortPath(target)}` : "updating files";
+  }
+  if (isCopilotSearchTool(tool)) {
+    return target ? `searching ${shortPath(target)}` : "searching";
+  }
+  if (/mcp/.test(tool)) return `MCP tool: ${toolName}`;
+  return `tool: ${toolName}`;
+}
+
 /**
- * Convert a raw Codex event into a concise human-readable action description.
+ * Convert a raw agent event into a concise human-readable action description.
  * Shows which files are being read/written, line counts for changes, and
  * concise command summaries with targets.
  */
@@ -537,6 +635,44 @@ function summarizeAction(event) {
           return null;
       }
     }
+
+    case "assistant.reasoning":
+    case "assistant.reasoning_delta": {
+      const text = event.data?.content || event.data?.deltaContent || "";
+      return text
+        ? { icon: "💭", text: text.slice(0, 200), phase: "thinking" }
+        : null;
+    }
+
+    case "tool.execution_start": {
+      const { toolName, input } = getCopilotToolInfo(event);
+      return {
+        icon: "🛠️",
+        text: summarizeCopilotTool(toolName, input),
+        phase: "running",
+      };
+    }
+
+    case "tool.execution_complete": {
+      const { toolName, input, status } = getCopilotToolInfo(event);
+      const ok =
+        !status ||
+        ["ok", "success", "completed", "done"].includes(
+          String(status).toLowerCase(),
+        );
+      return {
+        icon: ok ? "✅" : "❌",
+        text: summarizeCopilotTool(toolName, input) + (ok ? "" : " (failed)"),
+        phase: "done",
+      };
+    }
+
+    case "session.error":
+      return {
+        icon: "❌",
+        text: `Failed: ${event.data?.message || "unknown"}`,
+        phase: "error",
+      };
 
     case "item.updated": {
       const item = event.item;
@@ -807,8 +943,8 @@ async function handleUpdate(update) {
   }
 
   // Free-text agent task runs in a separate queue so polling isn't blocked.
-  // If Codex is already busy, handle immediately so follow-ups can be queued.
-  if (isCodexBusy()) {
+  // If agent is already busy, handle immediately so follow-ups can be queued.
+  if (isPrimaryBusy()) {
     void handleFreeText(text, chatId);
     return;
   }
@@ -845,8 +981,8 @@ const COMMANDS = {
     handler: cmdCleanupMerged,
     desc: "Alias for /cleanup",
   },
-  "/history": { handler: cmdHistory, desc: "Codex conversation history" },
-  "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
+  "/history": { handler: cmdHistory, desc: "Primary agent conversation history" },
+  "/clear": { handler: cmdClear, desc: "Clear primary agent conversation context" },
   "/reset_thread": {
     handler: cmdClear,
     desc: "Alias for /clear (reset thread)",
@@ -1143,11 +1279,14 @@ async function loadWorkspaceStatusData(workspacePath) {
 }
 
 async function cmdHelp(chatId) {
-  const lines = ["🤖 VirtEngine Codex Shell Commands:\n"];
+  const lines = ["🤖 VirtEngine Primary Agent Commands:\n"];
   for (const [cmd, { desc }] of Object.entries(COMMANDS)) {
     lines.push(`${cmd} — ${desc}`);
   }
-  lines.push("", "Any other text → sent to Codex AI (full repo + MCP access)");
+  lines.push(
+    "",
+    "Any other text → sent to the primary agent (full repo + MCP access)",
+  );
   await sendReply(chatId, lines.join("\n"));
 }
 
@@ -1547,26 +1686,31 @@ async function cmdCleanupMerged(chatId) {
 }
 
 async function cmdHistory(chatId) {
-  const info = getThreadInfo();
+  const info = getPrimaryAgentInfo();
+  const providerLabel =
+    info.provider === "COPILOT" ? "Copilot" : "Codex";
+  const idLabel = info.sessionId ? "Session ID" : "Thread ID";
   const lines = [
-    `🧠 Codex Agent Thread`,
+    `🧠 Primary Agent Session (${providerLabel})`,
     "",
-    `Thread ID: ${info.threadId || "(none)"}`,
+    `${idLabel}: ${info.sessionId || info.threadId || "(none)"}`,
     `Turns: ${info.turnCount}`,
     `Active: ${info.isActive ? "yes" : "no"}`,
     `Busy: ${info.isBusy ? "yes" : "no"}`,
+    info.workspacePath ? `Workspace: ${info.workspacePath}` : "",
+    info.fallbackReason ? `Fallback: ${info.fallbackReason}` : "",
     "",
-    "The thread persists across messages.",
-    "Use /clear to start a fresh thread.",
+    "The session persists across messages.",
+    "Use /clear to start a fresh session.",
   ];
-  await sendReply(chatId, lines.join("\n"));
+  await sendReply(chatId, lines.filter(Boolean).join("\n"));
 }
 
 async function cmdClear(chatId) {
-  await resetThread();
+  await resetPrimaryAgent();
   await sendReply(
     chatId,
-    "🧹 Agent thread reset. Next message starts a fresh conversation.",
+    "🧹 Agent session reset. Next message starts a fresh conversation.",
   );
 }
 
@@ -1585,7 +1729,7 @@ async function cmdGit(chatId, gitArgs) {
   if (dangerous.some((d) => lower.startsWith(d))) {
     await sendReply(
       chatId,
-      `⚠️ Blocked: 'git ${gitArgs}' is a destructive command. Use Codex shell for that.`,
+      `⚠️ Blocked: 'git ${gitArgs}' is a destructive command. Use the agent shell for that.`,
     );
     return;
   }
@@ -2387,13 +2531,13 @@ async function cmdSteer(chatId, steerArgs) {
   }
   const message = steerArgs.trim();
 
-  if (!activeAgentSession || !isCodexBusy()) {
+  if (!activeAgentSession || !isPrimaryBusy()) {
     await sendReply(chatId, "No active agent. Sending as a new task.");
     await handleFreeText(message, chatId);
     return;
   }
 
-  const result = await steerCodexPrompt(message);
+  const result = await steerPrimaryPrompt(message);
   if (result.ok) {
     if (activeAgentSession.actionLog) {
       activeAgentSession.actionLog.push({
@@ -2428,7 +2572,7 @@ async function cmdSteer(chatId, steerArgs) {
   await sendReply(chatId, `🧭 Steering queued (#${qLen}).`);
 }
 
-// ── Free-text → Codex Agent Dispatch ──────────────────────────────────────────
+// ── Free-text → Primary Agent Dispatch ───────────────────────────────────────
 
 /**
  * Build the rolling summary message text from accumulated action log.
@@ -2547,7 +2691,7 @@ function buildStreamMessage({
 async function handleFreeText(text, chatId, options = {}) {
   const backgroundMode = !!options.background;
   // ── Follow-up steering: if agent is busy, queue message as follow-up ──
-  if (isCodexBusy() && activeAgentSession) {
+  if (isPrimaryBusy() && activeAgentSession) {
     if (!activeAgentSession.followUpQueue) {
       activeAgentSession.followUpQueue = [];
     }
@@ -2555,7 +2699,7 @@ async function handleFreeText(text, chatId, options = {}) {
     const qLen = activeAgentSession.followUpQueue.length;
 
     // Try immediate steering so the in-flight run can adapt ASAP.
-    const steerResult = await steerCodexPrompt(text);
+    const steerResult = await steerPrimaryPrompt(text);
     const steerStatus = steerResult.ok ? "ok" : steerResult.reason || "failed";
     const steerNote = steerResult.ok
       ? `Steer ${steerResult.mode}.`
@@ -2583,8 +2727,8 @@ async function handleFreeText(text, chatId, options = {}) {
     return;
   }
 
-  // ── Block if Codex is busy but no session (shouldn't happen normally) ──
-  if (isCodexBusy()) {
+  // ── Block if agent is busy but no session (shouldn't happen normally) ──
+  if (isPrimaryBusy()) {
     await sendReply(
       chatId,
       "⏳ Agent is executing a task. Please wait for it to finish...",
@@ -2731,6 +2875,46 @@ async function handleFreeText(text, chatId, options = {}) {
       }
     }
 
+    if (
+      rawEvent.type === "tool.execution_start" ||
+      rawEvent.type === "tool.execution_complete"
+    ) {
+      const { toolName, input } = getCopilotToolInfo(rawEvent);
+      const command = extractCopilotCommand(input);
+      const target = extractCopilotPath(input);
+
+      if (command) {
+        const cmdTarget = extractTarget(command);
+        if (
+          cmdTarget &&
+          (/^(cat|head|tail|type|Get-Content)/i.test(command.trim()) ||
+            /pwsh.*Get-Content/i.test(command))
+        ) {
+          filesRead.add(cmdTarget);
+        }
+        if (
+          /^(grep|findstr|rg|Select-String)/i.test(command.trim()) ||
+          /pwsh.*Select-String/i.test(command)
+        ) {
+          searchCount++;
+        }
+      }
+
+      if (isCopilotReadTool(toolName) && target) {
+        filesRead.add(target);
+      }
+      if (isCopilotSearchTool(toolName)) {
+        searchCount++;
+      }
+      if (isCopilotWriteTool(toolName) && target) {
+        filesWritten.set(target, {
+          kind: "modify",
+          adds: 0,
+          dels: 0,
+        });
+      }
+    }
+
     // ── Track file changes from action detail ─────────────────────
     if (action.detail === "file_change" && action.files) {
       for (const f of action.files) {
@@ -2772,9 +2956,9 @@ async function handleFreeText(text, chatId, options = {}) {
   };
 
   try {
-    const result = await execCodexPrompt(text, {
+    const result = await execPrimaryPrompt(text, {
       statusData,
-      timeoutMs: CODEX_TIMEOUT_MS,
+      timeoutMs: AGENT_TIMEOUT_MS,
       onEvent,
       sendRawEvents: true, // request raw events alongside formatted ones
       abortController,
@@ -2795,9 +2979,9 @@ async function handleFreeText(text, chatId, options = {}) {
         scheduleEdit();
 
         try {
-          const followUpResult = await execCodexPrompt(followUp, {
+          const followUpResult = await execPrimaryPrompt(followUp, {
             statusData,
-            timeoutMs: CODEX_TIMEOUT_MS,
+            timeoutMs: AGENT_TIMEOUT_MS,
             onEvent,
             sendRawEvents: true,
           });
@@ -2974,8 +3158,8 @@ export async function startTelegramBot() {
     return;
   }
 
-  // Initialize the Codex shell context
-  await initCodexShell();
+  // Initialize the primary agent context
+  await initPrimaryAgent();
 
   // Register bot commands with Telegram (updates the / menu)
   await registerBotCommands();
@@ -3001,7 +3185,7 @@ export async function startTelegramBot() {
   // Send startup notification
   await sendDirect(
     telegramChatId,
-    "🤖 VirtEngine Codex Shell online.\n\nType /help for commands or send any message to chat with Codex.",
+    "🤖 VirtEngine primary agent online.\n\nType /help for commands or send any message to chat.",
   );
 
   console.log("[telegram-bot] started — listening for messages");

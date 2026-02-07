@@ -71,6 +71,18 @@ const RECOMMENDED = [
     why: "Required for PR creation, branch management, and GitHub operations",
   },
   {
+    name: "GitHub Copilot CLI (copilot)",
+    cmd: "copilot",
+    required: false,
+    install: {
+      win32: "npm install -g @github/copilot",
+      darwin: "npm install -g @github/copilot",
+      linux: "npm install -g @github/copilot",
+    },
+    url: "https://github.com/github/copilot-cli",
+    why: "Required for Copilot SDK primary agent sessions",
+  },
+  {
     name: "PowerShell (pwsh)",
     cmd: "pwsh",
     required: false,
@@ -143,6 +155,7 @@ function main() {
   // npm-installed tools (bundled with this package)
   console.log(`  ✅ vibe-kanban (bundled)`);
   console.log(`  ✅ @openai/codex-sdk (bundled)`);
+  console.log(`  ✅ @github/copilot-sdk (bundled)`);
 
   // Summary
   console.log("");
