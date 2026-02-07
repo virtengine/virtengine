@@ -740,6 +740,7 @@ const COMMANDS = {
   "/restart": { handler: cmdRestart, desc: "Restart orchestrator process" },
   "/history": { handler: cmdHistory, desc: "Codex conversation history" },
   "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
+  "/reset_thread": { handler: cmdClear, desc: "Alias for /clear (reset thread)" },
   "/git": { handler: cmdGit, desc: "Run a git command: /git log --oneline -5" },
   "/shell": { handler: cmdShell, desc: "Run a shell command: /shell ls -la" },
   "/background": {
@@ -1606,14 +1607,23 @@ async function handleFreeText(text, chatId, options = {}) {
     activeAgentSession.followUpQueue.push(text);
     const qLen = activeAgentSession.followUpQueue.length;
 
+    // Try immediate steering so the in-flight run can adapt ASAP.
+    const steerResult = await steerCodexPrompt(text);
+    const steerNote = steerResult.ok
+      ? `Steer ${steerResult.mode}.`
+      : `Steer failed (${steerResult.reason}).`;
+
     // Acknowledge the follow-up in both the user's chat and update the agent message
-    await sendDirect(chatId, `📌 Follow-up queued (#${qLen}). Agent will process it after current action.`);
+    await sendDirect(
+      chatId,
+      `📌 Follow-up queued (#${qLen}). Agent will process it after current action. ${steerNote}`,
+    );
 
     // Add follow-up indicator to the streaming message
     if (activeAgentSession.actionLog) {
       activeAgentSession.actionLog.push({
         icon: "📌",
-        text: `Follow-up: "${text.length > 60 ? text.slice(0, 60) + "…" : text}"`,
+        text: `Follow-up: "${text.length > 60 ? text.slice(0, 60) + "…" : text}" (${steerNote})`,
       });
       // Trigger an edit to show the follow-up in the streaming message
       if (activeAgentSession.scheduleEdit) {

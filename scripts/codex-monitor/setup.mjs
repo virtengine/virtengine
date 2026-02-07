@@ -32,9 +32,7 @@ function printBanner() {
   console.log(
     "  ╔═══════════════════════════════════════════════════════════╗",
   );
-  console.log(
-    "  ║               Codex Monitor — Setup Wizard               ║",
-  );
+  console.log("  ║               Codex Monitor — Setup Wizard               ║");
   console.log(
     "  ╚═══════════════════════════════════════════════════════════╝",
   );
@@ -124,7 +122,10 @@ async function main() {
 
   // ── Prerequisites check ─────────────────────────────────
   console.log("  Checking prerequisites...\n");
-  const hasNode = check("Node.js ≥ 18", Number(process.versions.node.split(".")[0]) >= 18);
+  const hasNode = check(
+    "Node.js ≥ 18",
+    Number(process.versions.node.split(".")[0]) >= 18,
+  );
   const hasGit = check("git", commandExists("git"));
   const hasPwsh = check(
     "PowerShell (pwsh)",

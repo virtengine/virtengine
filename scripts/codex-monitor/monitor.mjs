@@ -1338,8 +1338,7 @@ async function smartPRFlow(attemptId, shortId, status) {
     });
 
     if (prResult?.success) {
-      const prUrl =
-        prResult.data?.url || prResult.data?.html_url || "";
+      const prUrl = prResult.data?.url || prResult.data?.html_url || "";
       console.log(
         `[monitor] ${tag}: PR created successfully${prUrl ? " — " + prUrl : ""}`,
       );
@@ -1427,7 +1426,9 @@ async function resolveAndTriggerSmartPR(shortId, status) {
     const match = attempts.find((a) => a.id?.startsWith(shortId));
     if (!match) {
       // Try the full list via VK API
-      const allAttempts = await fetchVk("/api/task-attempts?status=review,error");
+      const allAttempts = await fetchVk(
+        "/api/task-attempts?status=review,error",
+      );
       const vkMatch =
         allAttempts?.data?.find((a) => a.id?.startsWith(shortId)) || null;
       if (!vkMatch) {
