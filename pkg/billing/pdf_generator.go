@@ -8,8 +8,14 @@ package billing
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/jung-kurt/gofpdf"
 
 	"github.com/virtengine/virtengine/x/escrow/types/billing"
 )
@@ -94,9 +100,7 @@ func NewPDFGenerator(config PDFConfig) *PDFGenerator {
 	return &PDFGenerator{config: config}
 }
 
-// GenerateInvoicePDF generates a PDF for the given invoice
-// This generates a simple text-based PDF representation.
-// For production use, this would integrate with a proper PDF library.
+// GenerateInvoicePDF generates a PDF for the given invoice.
 func (g *PDFGenerator) GenerateInvoicePDF(invoice *billing.Invoice) ([]byte, error) {
 	if invoice == nil {
 		return nil, fmt.Errorf("invoice is nil")
@@ -105,8 +109,6 @@ func (g *PDFGenerator) GenerateInvoicePDF(invoice *billing.Invoice) ([]byte, err
 	// Build the PDF content as a structured document
 	doc := g.buildInvoiceDocument(invoice)
 
-	// For now, generate a simple PDF representation
-	// In production, this would use a library like go-pdf or similar
 	return g.renderToPDF(doc)
 }
 
@@ -246,17 +248,17 @@ func (g *PDFGenerator) buildInvoiceDocument(invoice *billing.Invoice) *InvoicePD
 			UsageType:   item.UsageType.String(),
 			Quantity:    item.Quantity.String(),
 			Unit:        item.Unit,
-			UnitPrice:   item.UnitPrice.String(),
-			Amount:      item.Amount.String(),
+			UnitPrice:   formatDecCoin(item.UnitPrice),
+			Amount:      formatCoins(item.Amount),
 		})
 	}
 
 	// Build summary
 	doc.Summary = PDFSummary{
-		Subtotal:   invoice.Subtotal.String(),
-		Total:      invoice.Total.String(),
-		AmountPaid: invoice.AmountPaid.String(),
-		AmountDue:  invoice.AmountDue.String(),
+		Subtotal:   formatCoins(invoice.Subtotal),
+		Total:      formatCoins(invoice.Total),
+		AmountPaid: formatCoins(invoice.AmountPaid),
+		AmountDue:  formatCoins(invoice.AmountDue),
 	}
 
 	// Add discounts
@@ -264,10 +266,10 @@ func (g *PDFGenerator) buildInvoiceDocument(invoice *billing.Invoice) *InvoicePD
 		for _, d := range invoice.Discounts {
 			doc.Summary.Discounts = append(doc.Summary.Discounts, PDFDiscount{
 				Description: d.Description,
-				Amount:      d.Amount.String(),
+				Amount:      formatCoins(d.Amount),
 			})
 		}
-		doc.Summary.DiscountTotal = invoice.DiscountTotal.String()
+		doc.Summary.DiscountTotal = formatCoins(invoice.DiscountTotal)
 	}
 
 	// Add tax if present
@@ -282,10 +284,10 @@ func (g *PDFGenerator) buildInvoiceDocument(invoice *billing.Invoice) *InvoicePD
 			doc.TaxDetails.TaxLines = append(doc.TaxDetails.TaxLines, PDFTaxLine{
 				Description: taxLine.Name,
 				Rate:        fmt.Sprintf("%.2f%%", float64(taxLine.RateBps)/100),
-				Amount:      taxLine.TaxAmount.String(),
+				Amount:      formatCoins(taxLine.TaxAmount),
 			})
 		}
-		doc.Summary.TaxTotal = invoice.TaxTotal.String()
+		doc.Summary.TaxTotal = formatCoins(invoice.TaxTotal)
 	}
 
 	// Add terms if configured
@@ -301,138 +303,318 @@ func (g *PDFGenerator) buildInvoiceDocument(invoice *billing.Invoice) *InvoicePD
 	return doc
 }
 
-// renderToPDF renders the document to PDF format
-// This is a simplified text-based PDF representation.
-// For production, integrate with a proper PDF library like go-pdf, gofpdf, or pdfcpu.
+// renderToPDF renders the document to PDF format.
 func (g *PDFGenerator) renderToPDF(doc *InvoicePDFDocument) ([]byte, error) {
+	pdf := gofpdf.New("P", "mm", g.pageSize(), "")
+	pdf.SetMargins(15, 20, 15)
+	pdf.SetAutoPageBreak(true, 20)
+	pdf.AddPage()
+
+	fontFamily := sanitizeFontFamily(g.config.FontFamily)
+	primary := parseHexColorOrDefault(g.config.PrimaryColor, 37, 99, 235)
+	secondary := parseHexColorOrDefault(g.config.SecondaryColor, 30, 64, 175)
+
+	// Header with optional logo
+	headerX := 15.0
+	headerY := 15.0
+	if g.config.LogoPath != "" {
+		if logoPath, ok := resolveLogoPath(g.config.LogoPath); ok {
+			pdf.ImageOptions(logoPath, headerX, headerY, 28, 0, false, imageOptionsForPath(logoPath), 0, "")
+			headerX = 50
+		}
+	}
+
+	pdf.SetFont(fontFamily, "B", 14)
+	pdf.SetXY(headerX, headerY)
+	pdf.SetTextColor(primary.r, primary.g, primary.b)
+	pdf.CellFormat(80, 6, doc.Header.CompanyName, "", 1, "L", false, 0, "")
+
+	pdf.SetFont(fontFamily, "", 9)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetX(headerX)
+	for _, line := range doc.Header.CompanyAddress {
+		pdf.CellFormat(80, 4.5, line, "", 1, "L", false, 0, "")
+		pdf.SetX(headerX)
+	}
+	if doc.Header.CompanyEmail != "" {
+		pdf.CellFormat(80, 4.5, doc.Header.CompanyEmail, "", 1, "L", false, 0, "")
+	}
+	if doc.Header.CompanyPhone != "" {
+		pdf.CellFormat(80, 4.5, doc.Header.CompanyPhone, "", 1, "L", false, 0, "")
+	}
+
+	// Invoice title and metadata
+	rightColX := 120.0
+	pdf.SetXY(rightColX, headerY)
+	pdf.SetFont(fontFamily, "B", 20)
+	pdf.SetTextColor(secondary.r, secondary.g, secondary.b)
+	pdf.CellFormat(70, 10, "INVOICE", "", 1, "R", false, 0, "")
+
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetFont(fontFamily, "", 9)
+	pdf.SetX(rightColX)
+	pdf.CellFormat(70, 4.5, fmt.Sprintf("Invoice Number: %s", doc.InvoiceInfo.InvoiceNumber), "", 1, "R", false, 0, "")
+	pdf.SetX(rightColX)
+	pdf.CellFormat(70, 4.5, fmt.Sprintf("Issue Date: %s", doc.InvoiceInfo.IssueDate.Format("2006-01-02")), "", 1, "R", false, 0, "")
+	pdf.SetX(rightColX)
+	pdf.CellFormat(70, 4.5, fmt.Sprintf("Due Date: %s", doc.InvoiceInfo.DueDate.Format("2006-01-02")), "", 1, "R", false, 0, "")
+	pdf.SetX(rightColX)
+	pdf.CellFormat(70, 4.5, fmt.Sprintf("Status: %s", strings.ToUpper(doc.InvoiceInfo.Status)), "", 1, "R", false, 0, "")
+	if doc.InvoiceInfo.EscrowID != "" {
+		pdf.SetX(rightColX)
+		pdf.CellFormat(70, 4.5, fmt.Sprintf("Escrow: %s", doc.InvoiceInfo.EscrowID), "", 1, "R", false, 0, "")
+	}
+	if doc.InvoiceInfo.OrderID != "" {
+		pdf.SetX(rightColX)
+		pdf.CellFormat(70, 4.5, fmt.Sprintf("Order: %s", doc.InvoiceInfo.OrderID), "", 1, "R", false, 0, "")
+	}
+
+	pdf.SetDrawColor(230, 230, 230)
+	pdf.Line(15, 55, 195, 55)
+	pdf.SetY(60)
+
+	// Parties section
+	pdf.SetFont(fontFamily, "B", 10)
+	pdf.CellFormat(90, 5, "Bill To", "", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 5, "Provider", "", 1, "L", false, 0, "")
+
+	pdf.SetFont(fontFamily, "", 9)
+	startY := pdf.GetY()
+	pdf.MultiCell(90, 4.5, doc.Parties.Customer.Address, "", "L", false)
+	leftEndY := pdf.GetY()
+	pdf.SetXY(105, startY)
+	pdf.MultiCell(90, 4.5, doc.Parties.Provider.Address, "", "L", false)
+	rightEndY := pdf.GetY()
+	if rightEndY < leftEndY {
+		rightEndY = leftEndY
+	}
+	pdf.SetY(rightEndY + 4)
+
+	// Line items table header
+	pdf.SetFont(fontFamily, "B", 9)
+	pdf.SetFillColor(primary.r, primary.g, primary.b)
+	pdf.SetTextColor(255, 255, 255)
+	tableHeaders := []string{"Description", "Usage", "Qty", "Unit", "Unit Price", "Amount"}
+	colWidths := []float64{60, 22, 20, 18, 30, 30}
+	for i, header := range tableHeaders {
+		pdf.CellFormat(colWidths[i], 7, header, "1", 0, "C", true, 0, "")
+	}
+	pdf.Ln(-1)
+
+	// Line items table body
+	pdf.SetFont(fontFamily, "", 9)
+	pdf.SetTextColor(0, 0, 0)
+	for _, item := range doc.LineItems {
+		row := []string{
+			item.Description,
+			item.UsageType,
+			item.Quantity,
+			item.Unit,
+			item.UnitPrice,
+			item.Amount,
+		}
+		drawTableRow(pdf, colWidths, row)
+	}
+
+	pdf.Ln(2)
+
+	// Summary section
+	pdf.SetFont(fontFamily, "B", 10)
+	summaryX := 110.0
+	pdf.SetXY(summaryX, pdf.GetY())
+	pdf.CellFormat(50, 6, "Subtotal", "", 0, "L", false, 0, "")
+	pdf.SetFont(fontFamily, "", 10)
+	pdf.CellFormat(35, 6, doc.Summary.Subtotal, "", 1, "R", false, 0, "")
+
+	if doc.Summary.DiscountTotal != "" {
+		pdf.SetX(summaryX)
+		pdf.SetFont(fontFamily, "B", 10)
+		pdf.CellFormat(50, 6, "Discounts", "", 0, "L", false, 0, "")
+		pdf.SetFont(fontFamily, "", 10)
+		pdf.CellFormat(35, 6, doc.Summary.DiscountTotal, "", 1, "R", false, 0, "")
+	}
+
+	if doc.Summary.TaxTotal != "" {
+		pdf.SetX(summaryX)
+		pdf.SetFont(fontFamily, "B", 10)
+		pdf.CellFormat(50, 6, "Tax", "", 0, "L", false, 0, "")
+		pdf.SetFont(fontFamily, "", 10)
+		pdf.CellFormat(35, 6, doc.Summary.TaxTotal, "", 1, "R", false, 0, "")
+	}
+
+	pdf.SetX(summaryX)
+	pdf.SetFont(fontFamily, "B", 11)
+	pdf.CellFormat(50, 7, "Total", "T", 0, "L", false, 0, "")
+	pdf.SetFont(fontFamily, "B", 11)
+	pdf.CellFormat(35, 7, doc.Summary.Total, "T", 1, "R", false, 0, "")
+
+	pdf.SetX(summaryX)
+	pdf.SetFont(fontFamily, "", 9)
+	pdf.CellFormat(50, 5, "Amount Paid", "", 0, "L", false, 0, "")
+	pdf.CellFormat(35, 5, doc.Summary.AmountPaid, "", 1, "R", false, 0, "")
+	pdf.SetX(summaryX)
+	pdf.CellFormat(50, 5, "Amount Due", "", 0, "L", false, 0, "")
+	pdf.CellFormat(35, 5, doc.Summary.AmountDue, "", 1, "R", false, 0, "")
+
+	// Tax details
+	if doc.TaxDetails != nil && len(doc.TaxDetails.TaxLines) > 0 {
+		pdf.Ln(4)
+		pdf.SetFont(fontFamily, "B", 10)
+		pdf.CellFormat(0, 5, "Tax Details", "", 1, "L", false, 0, "")
+		pdf.SetFont(fontFamily, "", 9)
+		for _, tax := range doc.TaxDetails.TaxLines {
+			line := fmt.Sprintf("%s (%s): %s", tax.Description, tax.Rate, tax.Amount)
+			pdf.CellFormat(0, 4.5, line, "", 1, "L", false, 0, "")
+		}
+	}
+
+	// Notes and terms
+	if doc.Notes != "" {
+		pdf.Ln(6)
+		pdf.SetFont(fontFamily, "B", 9)
+		pdf.CellFormat(0, 5, "Payment Instructions", "", 1, "L", false, 0, "")
+		pdf.SetFont(fontFamily, "", 8)
+		pdf.MultiCell(0, 4, doc.Notes, "", "L", false)
+	}
+	if doc.Terms != "" {
+		pdf.Ln(4)
+		pdf.SetFont(fontFamily, "B", 9)
+		pdf.CellFormat(0, 5, "Terms", "", 1, "L", false, 0, "")
+		pdf.SetFont(fontFamily, "", 8)
+		pdf.MultiCell(0, 4, doc.Terms, "", "L", false)
+	}
+
+	// Footer
+	if doc.Footer != "" {
+		pdf.SetY(-15)
+		pdf.SetFont(fontFamily, "", 8)
+		pdf.SetTextColor(120, 120, 120)
+		pdf.CellFormat(0, 10, doc.Footer, "", 0, "C", false, 0, "")
+	}
+
 	var buf bytes.Buffer
-
-	// Write PDF header
-	buf.WriteString("%PDF-1.7\n")
-	buf.WriteString("% VirtEngine Invoice PDF\n\n")
-
-	// For a real implementation, this would use a proper PDF library.
-	// Here we generate a simple text-based structure that represents the invoice data.
-	// The actual PDF rendering would be handled by a library like:
-	// - github.com/jung-kurt/gofpdf
-	// - github.com/pdfcpu/pdfcpu
-	// - github.com/signintech/gopdf
-
-	// Write document content as structured text (simplified)
-	content := g.buildTextContent(doc)
-
-	// Object 1: Catalog
-	buf.WriteString("1 0 obj\n")
-	buf.WriteString("<< /Type /Catalog /Pages 2 0 R >>\n")
-	buf.WriteString("endobj\n\n")
-
-	// Object 2: Pages
-	buf.WriteString("2 0 obj\n")
-	buf.WriteString("<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n")
-	buf.WriteString("endobj\n\n")
-
-	// Object 3: Page
-	buf.WriteString("3 0 obj\n")
-	buf.WriteString("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ")
-	buf.WriteString("/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\n")
-	buf.WriteString("endobj\n\n")
-
-	// Object 4: Content stream
-	stream := fmt.Sprintf("BT\n/F1 10 Tf\n50 742 Td\n(%s)Tj\nET", escapeForPDF(content))
-	buf.WriteString("4 0 obj\n")
-	buf.WriteString(fmt.Sprintf("<< /Length %d >>\n", len(stream)))
-	buf.WriteString("stream\n")
-	buf.WriteString(stream)
-	buf.WriteString("\nendstream\n")
-	buf.WriteString("endobj\n\n")
-
-	// Object 5: Font
-	buf.WriteString("5 0 obj\n")
-	buf.WriteString("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n")
-	buf.WriteString("endobj\n\n")
-
-	// xref table
-	xrefOffset := buf.Len()
-	buf.WriteString("xref\n")
-	buf.WriteString("0 6\n")
-	buf.WriteString("0000000000 65535 f \n")
-	buf.WriteString("0000000009 00000 n \n")
-	buf.WriteString("0000000058 00000 n \n")
-	buf.WriteString("0000000115 00000 n \n")
-	buf.WriteString("0000000266 00000 n \n")
-	buf.WriteString("0000000400 00000 n \n")
-
-	// Trailer
-	buf.WriteString("trailer\n")
-	buf.WriteString("<< /Size 6 /Root 1 0 R >>\n")
-	buf.WriteString("startxref\n")
-	buf.WriteString(fmt.Sprintf("%d\n", xrefOffset))
-	buf.WriteString("%%EOF\n")
-
+	if err := pdf.Output(&buf); err != nil {
+		return nil, err
+	}
+	if pdf.Error() != nil {
+		return nil, pdf.Error()
+	}
 	return buf.Bytes(), nil
 }
 
-// buildTextContent builds a text representation of the invoice
-func (g *PDFGenerator) buildTextContent(doc *InvoicePDFDocument) string {
-	var sb strings.Builder
-
-	// Header
-	sb.WriteString(fmt.Sprintf("%s\\n", doc.Header.CompanyName))
-	for _, line := range doc.Header.CompanyAddress {
-		sb.WriteString(fmt.Sprintf("%s\\n", line))
+func (g *PDFGenerator) pageSize() string {
+	if g.config.PageSize == "" {
+		return "A4"
 	}
-	sb.WriteString("\\n")
-
-	// Invoice Info
-	sb.WriteString(fmt.Sprintf("INVOICE %s\\n", doc.InvoiceInfo.InvoiceNumber))
-	sb.WriteString(fmt.Sprintf("Date: %s\\n", doc.InvoiceInfo.IssueDate.Format("2006-01-02")))
-	sb.WriteString(fmt.Sprintf("Due: %s\\n", doc.InvoiceInfo.DueDate.Format("2006-01-02")))
-	sb.WriteString(fmt.Sprintf("Status: %s\\n", doc.InvoiceInfo.Status))
-	sb.WriteString("\\n")
-
-	// Parties
-	sb.WriteString(fmt.Sprintf("Provider: %s\\n", truncateAddress(doc.Parties.Provider.Address)))
-	sb.WriteString(fmt.Sprintf("Customer: %s\\n", truncateAddress(doc.Parties.Customer.Address)))
-	sb.WriteString("\\n")
-
-	// Line Items
-	sb.WriteString("Line Items:\\n")
-	for _, item := range doc.LineItems {
-		sb.WriteString(fmt.Sprintf("%d. %s - %s %s @ %s = %s\\n",
-			item.Number, item.Description, item.Quantity, item.Unit,
-			item.UnitPrice, item.Amount))
-	}
-	sb.WriteString("\\n")
-
-	// Summary
-	sb.WriteString(fmt.Sprintf("Subtotal: %s\\n", doc.Summary.Subtotal))
-	if len(doc.Summary.Discounts) > 0 {
-		sb.WriteString(fmt.Sprintf("Discounts: -%s\\n", doc.Summary.DiscountTotal))
-	}
-	if doc.Summary.TaxTotal != "" {
-		sb.WriteString(fmt.Sprintf("Tax: %s\\n", doc.Summary.TaxTotal))
-	}
-	sb.WriteString(fmt.Sprintf("Total: %s\\n", doc.Summary.Total))
-	sb.WriteString(fmt.Sprintf("Paid: %s\\n", doc.Summary.AmountPaid))
-	sb.WriteString(fmt.Sprintf("Due: %s\\n", doc.Summary.AmountDue))
-
-	return sb.String()
+	return g.config.PageSize
 }
 
-// escapeForPDF escapes special characters for PDF text
-func escapeForPDF(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "(", "\\(")
-	s = strings.ReplaceAll(s, ")", "\\)")
-	return s
+type rgbColor struct {
+	r int
+	g int
+	b int
 }
 
-// truncateAddress truncates a bech32 address for display
-func truncateAddress(addr string) string {
-	if len(addr) <= 20 {
-		return addr
+func parseHexColorOrDefault(hex string, r, g, b int) rgbColor {
+	if parsed, ok := parseHexColor(hex); ok {
+		return parsed
 	}
-	return addr[:10] + "..." + addr[len(addr)-8:]
+	return rgbColor{r: r, g: g, b: b}
+}
+
+func parseHexColor(hex string) (rgbColor, bool) {
+	if hex == "" {
+		return rgbColor{}, false
+	}
+	value := strings.TrimPrefix(strings.TrimSpace(hex), "#")
+	if len(value) != 6 {
+		return rgbColor{}, false
+	}
+	parsed, err := strconv.ParseInt(value, 16, 32)
+	if err != nil {
+		return rgbColor{}, false
+	}
+	return rgbColor{
+		r: int((parsed >> 16) & 0xff),
+		g: int((parsed >> 8) & 0xff),
+		b: int(parsed & 0xff),
+	}, true
+}
+
+func sanitizeFontFamily(font string) string {
+	if font == "" {
+		return "Helvetica"
+	}
+	normalized := strings.ToLower(strings.TrimSpace(font))
+	allowed := map[string]string{
+		"arial":        "Arial",
+		"helvetica":    "Helvetica",
+		"times":        "Times",
+		"courier":      "Courier",
+		"symbol":       "Symbol",
+		"zapfdingbats": "ZapfDingbats",
+	}
+	if mapped, ok := allowed[normalized]; ok {
+		return mapped
+	}
+	return "Helvetica"
+}
+
+func resolveLogoPath(path string) (string, bool) {
+	clean := filepath.Clean(path)
+	if _, err := os.Stat(clean); err == nil {
+		return clean, true
+	}
+	return "", false
+}
+
+func imageOptionsForPath(path string) gofpdf.ImageOptions {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
+	return gofpdf.ImageOptions{ImageType: ext}
+}
+
+func formatCoins(coins sdk.Coins) string {
+	if len(coins) == 0 {
+		return "0"
+	}
+	parts := make([]string, 0, len(coins))
+	for _, coin := range coins {
+		parts = append(parts, fmt.Sprintf("%s %s", coin.Amount.String(), coin.Denom))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatDecCoin(coin sdk.DecCoin) string {
+	if coin.Denom == "" {
+		return coin.String()
+	}
+	return fmt.Sprintf("%s %s", coin.Amount.String(), coin.Denom)
+}
+
+func drawTableRow(pdf *gofpdf.Fpdf, widths []float64, columns []string) {
+	if len(widths) != len(columns) {
+		return
+	}
+	lineHeight := 5.0
+	maxLines := 1
+	for i, col := range columns {
+		lines := pdf.SplitLines([]byte(col), widths[i])
+		if len(lines) > maxLines {
+			maxLines = len(lines)
+		}
+	}
+	rowHeight := float64(maxLines) * lineHeight
+
+	startX, startY := pdf.GetX(), pdf.GetY()
+	x := startX
+	for i, col := range columns {
+		pdf.Rect(x, startY, widths[i], rowHeight, "D")
+		pdf.SetXY(x, startY)
+		pdf.MultiCell(widths[i], lineHeight, col, "", "L", false)
+		x += widths[i]
+		pdf.SetXY(x, startY)
+	}
+	pdf.SetXY(startX, startY+rowHeight)
 }
 
 // GenerateReceiptPDF generates a payment receipt PDF
