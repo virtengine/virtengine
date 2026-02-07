@@ -57,6 +57,8 @@
     "setup": "node setup.mjs",
     "monitor": "node monitor.mjs",
     "shared-workspaces": "node shared-workspace-cli.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
   },
@@ -93,7 +95,11 @@
     "@openai/codex-sdk": "0.99.0-alpha.6",
     "vibe-kanban": "0.1.6"
   },
+  "devDependencies": {
+    "vitest": "^1.4.0"
+  },
   "engines": {
     "node": ">=18"
   }
 }
+
