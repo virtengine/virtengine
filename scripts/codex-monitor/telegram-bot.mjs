@@ -948,38 +948,38 @@ async function handleUpdate(update) {
   const chatId = String(msg.chat?.id);
   const text = (msg.text || "").trim();
 
-    const presencePayload = text ? parsePresenceMessage(text) : null;
-    if (presencePayload) {
-      if (!presenceChatId || chatId !== String(presenceChatId)) {
-        console.warn(
-          `[telegram-bot] ignored presence from chat ${chatId} (expected ${presenceChatId || "unset"})`,
-        );
-        return;
-      }
-      await ensurePresenceReady();
-      const receivedAt = Number.isFinite(msg.date)
-        ? new Date(msg.date * 1000).toISOString()
-        : new Date().toISOString();
-      await notePresence(presencePayload, {
-        source: "telegram",
-        receivedAt,
-      });
-      return;
-    }
-
-    // Security: only accept from configured chat
-    if (telegramChatId && chatId !== String(telegramChatId)) {
+  const presencePayload = text ? parsePresenceMessage(text) : null;
+  if (presencePayload) {
+    if (!presenceChatId || chatId !== String(presenceChatId)) {
       console.warn(
-        `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
+        `[telegram-bot] ignored presence from chat ${chatId} (expected ${presenceChatId || "unset"})`,
       );
       return;
     }
+    await ensurePresenceReady();
+    const receivedAt = Number.isFinite(msg.date)
+      ? new Date(msg.date * 1000).toISOString()
+      : new Date().toISOString();
+    await notePresence(presencePayload, {
+      source: "telegram",
+      receivedAt,
+    });
+    return;
+  }
 
-    if (!text) return;
-
-    console.log(
-      `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
+  // Security: only accept from configured chat
+  if (telegramChatId && chatId !== String(telegramChatId)) {
+    console.warn(
+      `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
     );
+    return;
+  }
+
+  if (!text) return;
+
+  console.log(
+    `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
+  );
 
   // Route: slash command or free-text
   if (text.startsWith("/")) {
@@ -1031,8 +1031,14 @@ const COMMANDS = {
     handler: cmdCleanupMerged,
     desc: "Alias for /cleanup",
   },
-  "/history": { handler: cmdHistory, desc: "Primary agent conversation history" },
-  "/clear": { handler: cmdClear, desc: "Clear primary agent conversation context" },
+  "/history": {
+    handler: cmdHistory,
+    desc: "Primary agent conversation history",
+  },
+  "/clear": {
+    handler: cmdClear,
+    desc: "Clear primary agent conversation context",
+  },
   "/reset_thread": {
     handler: cmdClear,
     desc: "Alias for /clear (reset thread)",
@@ -1059,7 +1065,7 @@ const COMMANDS = {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
   },
-  "/shared-workspaces": {
+  "/shared_workspaces": {
     handler: cmdSharedWorkspaces,
     desc: "List shared cloud workspace availability",
   },
@@ -1145,6 +1151,11 @@ async function registerBotCommands() {
   for (const [cmd, entry] of Object.entries(COMMANDS)) {
     const command = cmd.replace(/^\//, ""); // strip leading /
     if (seen.has(command)) continue; // skip duplicate keys (e.g. /agent appears twice)
+    // Telegram only allows lowercase letters, digits, underscores (1-32 chars)
+    if (!/^[a-z0-9_]{1,32}$/.test(command)) {
+      console.warn(`[telegram-bot] skipping invalid command name: /${command}`);
+      continue;
+    }
     seen.add(command);
     // Telegram limits description to 256 chars
     const description = (entry.desc || command).slice(0, 256);
@@ -1182,7 +1193,7 @@ async function handleCommand(text, chatId) {
   const cmd = parts[0].toLowerCase().replace(/@\w+/, ""); // strip @botname
   const cmdArgs = parts.slice(1).join(" ");
 
-  const entry = COMMANDS[cmd];
+  const entry = COMMANDS[cmd] || COMMANDS[cmd.replace(/-/g, "_")];
   if (entry) {
     try {
       await entry.handler(chatId, cmdArgs);
@@ -1773,7 +1784,10 @@ async function cmdCleanupMerged(chatId) {
     );
     return;
   }
-  await sendReply(chatId, "🧹 Reconciling VK task statuses with PR/branch state…");
+  await sendReply(
+    chatId,
+    "🧹 Reconciling VK task statuses with PR/branch state…",
+  );
   try {
     const result = await _reconcileTaskStatuses("manual-telegram");
     const lines = [
@@ -1790,8 +1804,7 @@ async function cmdCleanupMerged(chatId) {
 
 async function cmdHistory(chatId) {
   const info = getPrimaryAgentInfo();
-  const providerLabel =
-    info.provider === "COPILOT" ? "Copilot" : "Codex";
+  const providerLabel = info.provider === "COPILOT" ? "Copilot" : "Codex";
   const idLabel = info.sessionId ? "Session ID" : "Thread ID";
   const lines = [
     `🧠 Primary Agent Session (${providerLabel})`,
@@ -3300,7 +3313,10 @@ function startPresenceLoop() {
       });
 
       // Check if state changed significantly (ignore updated_at for comparison)
-      const shouldSend = !presenceOnlyOnChange || !lastSentPayload || hasPresenceChanged(lastSentPayload, payload);
+      const shouldSend =
+        !presenceOnlyOnChange ||
+        !lastSentPayload ||
+        hasPresenceChanged(lastSentPayload, payload);
 
       // Always update local registry
       await notePresence(payload, {
@@ -3364,14 +3380,14 @@ let batchFlushTimer = null;
 // When the digest window expires, the message is sealed and the next event
 // starts a fresh one.
 let liveDigest = {
-  messageId: null,  // Telegram message_id of the current live digest
-  chatId: null,     // chat_id it was sent to
-  startedAt: 0,     // timestamp when this digest window started
-  entries: [],      // { emoji, text, time } — events in this digest window
-  sealTimer: null,  // timer to seal the digest after the window expires
-  editTimer: null,  // debounce timer for edits
+  messageId: null, // Telegram message_id of the current live digest
+  chatId: null, // chat_id it was sent to
+  startedAt: 0, // timestamp when this digest window started
+  entries: [], // { emoji, text, time } — events in this digest window
+  sealTimer: null, // timer to seal the digest after the window expires
+  editTimer: null, // debounce timer for edits
   editPending: false, // whether an edit is pending
-  sealed: false,    // true once the window has expired and message is finalized
+  sealed: false, // true once the window has expired and message is finalized
 };
 
 const PRIORITY_EMOJI = {
@@ -3402,8 +3418,13 @@ function buildLiveDigestText() {
   if (counts[3] > 0) countParts.push(`⚠️ ${counts[3]}`);
   if (counts[4] > 0) countParts.push(`ℹ️ ${counts[4]}`);
 
-  const statusLine = d.sealed ? `📊 Digest (${startTime} → ${now}) — sealed` : `📊 Live Digest (since ${startTime}) — updating...`;
-  const headerLine = countParts.length > 0 ? `${statusLine}\n${countParts.join(" • ")}` : statusLine;
+  const statusLine = d.sealed
+    ? `📊 Digest (${startTime} → ${now}) — sealed`
+    : `📊 Live Digest (since ${startTime}) — updating...`;
+  const headerLine =
+    countParts.length > 0
+      ? `${statusLine}\n${countParts.join(" • ")}`
+      : statusLine;
 
   // Build event lines (most recent at bottom, like a log)
   // Telegram 4096 char limit — keep recent events, trim old ones
@@ -3536,7 +3557,9 @@ async function restoreLiveDigest() {
     // Re-schedule the seal timer for remaining window time
     const remaining = windowMs - (now - state.startedAt);
     liveDigest.sealTimer = setTimeout(() => sealLiveDigest(), remaining);
-    console.log(`[telegram-bot] restored live digest (${liveDigest.entries.length} entries, ${Math.round(remaining / 1000)}s remaining)`);
+    console.log(
+      `[telegram-bot] restored live digest (${liveDigest.entries.length} entries, ${Math.round(remaining / 1000)}s remaining)`,
+    );
     return true;
   } catch {
     return false;
@@ -3555,7 +3578,7 @@ async function addToLiveDigest(text, priority, category) {
 
   // Check if we need a new digest window
   const windowMs = liveDigestWindowSec * 1000;
-  const windowExpired = d.startedAt > 0 && (now - d.startedAt) >= windowMs;
+  const windowExpired = d.startedAt > 0 && now - d.startedAt >= windowMs;
 
   if (windowExpired || !d.startedAt) {
     // Seal old digest if it had entries
@@ -3575,7 +3598,9 @@ async function addToLiveDigest(text, priority, category) {
     liveDigest.chatId = telegramChatId;
 
     const messageText = buildLiveDigestText();
-    const msgId = await sendDirect(telegramChatId, messageText, { silent: true });
+    const msgId = await sendDirect(telegramChatId, messageText, {
+      silent: true,
+    });
     if (msgId) {
       liveDigest.messageId = msgId;
     }
@@ -3662,7 +3687,11 @@ async function flushNotificationQueue() {
   };
 
   const totalMessages =
-    counts.critical + counts.errors + counts.warnings + counts.info + counts.debug;
+    counts.critical +
+    counts.errors +
+    counts.warnings +
+    counts.info +
+    counts.debug;
 
   if (totalMessages === 0) return; // Nothing to send
 
@@ -3687,7 +3716,9 @@ async function flushNotificationQueue() {
 
   // Errors (show up to 5, then summarize)
   if (counts.errors > 0) {
-    const errorTexts = messageQueue.errors.slice(0, 5).map((m) => `  • ${m.text}`);
+    const errorTexts = messageQueue.errors
+      .slice(0, 5)
+      .map((m) => `  • ${m.text}`);
     if (counts.errors > 5) {
       errorTexts.push(`  • ... and ${counts.errors - 5} more errors`);
     }
@@ -3696,7 +3727,9 @@ async function flushNotificationQueue() {
 
   // Warnings (show up to 3, then summarize)
   if (counts.warnings > 0) {
-    const warnTexts = messageQueue.warnings.slice(0, 3).map((m) => `  • ${m.text}`);
+    const warnTexts = messageQueue.warnings
+      .slice(0, 3)
+      .map((m) => `  • ${m.text}`);
     if (counts.warnings > 3) {
       warnTexts.push(`  • ... and ${counts.warnings - 3} more warnings`);
     }
@@ -3821,11 +3854,15 @@ export async function startTelegramBot() {
     const prev = await readFile(botStartPath, "utf8");
     const elapsed = Date.now() - Number(prev);
     if (elapsed < 60_000) suppressOnline = true;
-  } catch { /* first start or missing file */ }
+  } catch {
+    /* first start or missing file */
+  }
   await writeFile(botStartPath, String(Date.now())).catch(() => {});
 
   if (suppressOnline) {
-    console.log("[telegram-bot] restarted (suppressed online notification — rapid restart)");
+    console.log(
+      "[telegram-bot] restarted (suppressed online notification — rapid restart)",
+    );
   } else {
     await sendDirect(
       telegramChatId,
