@@ -44,3 +44,11 @@ export type {
   WalletConnectSession,
   UseWalletConnectResult,
 } from './useWalletConnect';
+
+// Governance
+export {
+  useGovernanceProposals,
+  useGovernanceProposalDetail,
+  useGovernanceDelegations,
+  useValidatorVoteHistory,
+} from './useGovernance';
