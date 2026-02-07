@@ -746,16 +746,15 @@ async function main() {
     // ── Orchestrator ──────────────────────────────────────
     heading("Orchestrator Script");
 
-    // Check for scripts in sibling directory (scripts/ve-orchestrator.ps1)
-    const scriptsDir = resolve(__dirname, "..");
-    const defaultOrchestrator = resolve(scriptsDir, "ve-orchestrator.ps1");
-    const defaultKanban = resolve(scriptsDir, "ve-kanban.ps1");
-    const hasDefaultScripts = existsSync(defaultOrchestrator);
+    // Check for default scripts in codex-monitor directory
+    const defaultOrchestrator = resolve(__dirname, "ve-orchestrator.ps1");
+    const defaultKanban = resolve(__dirname, "ve-kanban.ps1");
+    const hasDefaultScripts = existsSync(defaultOrchestrator) && existsSync(defaultKanban);
 
     if (hasDefaultScripts) {
-      info(`Found default orchestrator scripts:`);
-      info(`  - ${relative(repoRoot, defaultOrchestrator)}`);
-      info(`  - ${relative(repoRoot, defaultKanban)}`);
+      info(`Found default orchestrator scripts in codex-monitor:`);
+      info(`  - ve-orchestrator.ps1`);
+      info(`  - ve-kanban.ps1`);
 
       const useDefault = await prompt.confirm(
         "Use the default ve-orchestrator.ps1 script?",
@@ -1065,7 +1064,11 @@ export async function runSetup() {
 
 // ── Entry Point ──────────────────────────────────────────────────────────────
 
-main().catch((err) => {
-  console.error(`\n  Setup failed: ${err.message}\n`);
-  process.exit(1);
-});
+// Only run the wizard when executed directly (not when imported by cli.mjs)
+const __filename_setup = fileURLToPath(import.meta.url);
+if (process.argv[1] && resolve(process.argv[1]) === resolve(__filename_setup)) {
+  main().catch((err) => {
+    console.error(`\n  Setup failed: ${err.message}\n`);
+    process.exit(1);
+  });
+}

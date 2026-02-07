@@ -1873,7 +1873,7 @@ async function cmdAgent(chatId, rawArgs) {
     }
   } else {
     const primary = registry.workspaces.filter(
-      (ws) => (ws.role || \"\").toLowerCase() === \"primary\",
+      (ws) => (ws.role || "").toLowerCase() === "primary",
     );
     if (primary.length > 0) {
       candidates = primary;
@@ -1883,17 +1883,17 @@ async function cmdAgent(chatId, rawArgs) {
   const healthMap = await getWorkspaceHealth(candidates);
   const selection = selectWorkspace(candidates, healthMap, { preferredId });
   if (!selection.workspace) {
-    await sendReply(chatId, \"No available workspace found for routing.\");
+    await sendReply(chatId, "No available workspace found for routing.");
     return;
   }
 
   const modelSelection = resolveModelSelection(selection.workspace, model);
-  const selectedModel = modelSelection.model || model || \"auto\";
+  const selectedModel = modelSelection.model || model || "auto";
 
   const infoLines = [
     `Routing → ${selection.workspace.name} (${selection.workspace.id})`,
-    `Role: ${selection.workspace.role || \"n/a\"}`,
-    `Host: ${normalizeHost(selection.workspace.host) || \"n/a\"}`,
+    `Role: ${selection.workspace.role || "n/a"}`,
+    `Host: ${normalizeHost(selection.workspace.host) || "n/a"}`,
     `Model: ${selectedModel}`,
   ];
   if (selection.fallbackFrom) {
@@ -1901,8 +1901,8 @@ async function cmdAgent(chatId, rawArgs) {
   }
 
   if (dryRun) {
-    infoLines.push(\"Dry-run only. No message sent.\");
-    await sendReply(chatId, infoLines.join(\"\\n\"));
+    infoLines.push("Dry-run only. No message sent.");
+    await sendReply(chatId, infoLines.join("\\n"));
     return;
   }
 
@@ -1913,12 +1913,12 @@ async function cmdAgent(chatId, rawArgs) {
       newSession,
     });
     infoLines.push(`Action: ${result.action}`);
-    infoLines.push(`Session: ${result.sessionId}${result.created ? \" (new)\" : \"\"}`);
-    await sendReply(chatId, infoLines.join(\"\\n\"));
+    infoLines.push(`Session: ${result.sessionId}${result.created ? " (new)" : ""}`);
+    await sendReply(chatId, infoLines.join("\\n"));
   } catch (err) {
     await sendReply(
       chatId,
-      `❌ /agent failed: ${err.message || err}\n${infoLines.join(\"\\n\")}`,
+      `❌ /agent failed: ${err.message || err}\n${infoLines.join("\\n")}`,
     );
   }
 }
@@ -1961,63 +1961,6 @@ async function cmdBackground(chatId, args) {
     chatId,
     "🛰️ Background mode enabled for the active agent. I will post a final summary when it completes. Use /stop to cancel or /steer to adjust context.",
   );
-}
-
-// ── /agent — dispatch task to a workspace ───────────────────────────────────
-
-async function cmdAgent(chatId, args) {
-  const { workspaceId, task } = parseAgentArgs(args);
-  if (!task) {
-    await sendReply(
-      chatId,
-      "Usage:\n/agent --workspace <id> --task <prompt>\nExample: /agent --workspace 6f54-feat-slopes-tele --task \"Run tests\"",
-    );
-    return;
-  }
-
-  const resolved = await resolveWorkspaceRepo(workspaceId);
-  if (!resolved.repoPath) {
-    const suggestions = resolved.suggestions?.length
-      ? `Available workspaces: ${resolved.suggestions.slice(0, 8).join(", ")}`
-      : `Check worktrees under: ${resolved.worktreesRoot || "(unknown)"}`;
-    await sendReply(chatId, `❌ ${resolved.error}\n${suggestions}`);
-    return;
-  }
-
-  if (resolved.isPrimary) {
-    await sendReply(chatId, "🧭 Routing to primary coordinator...");
-    await handleFreeText(task, chatId);
-    return;
-  }
-
-  await sendReply(
-    chatId,
-    `🛰️ Dispatching to workspace "${resolved.label}"...`,
-  );
-
-  try {
-    const statusData = await loadWorkspaceStatusData(resolved.repoPath);
-    const result = await execCodexPromptInWorkspace(task, {
-      workspacePath: resolved.repoPath,
-      statusData,
-      timeoutMs: CODEX_TIMEOUT_MS,
-    });
-
-    const response = result.finalResponse || "(no response)";
-    await sendReply(
-      chatId,
-      `✅ Workspace "${resolved.label}" completed:\n\n${response.slice(0, 3500)}`,
-    );
-  } catch (err) {
-    const message = err?.message || String(err);
-    const hint = message.toLowerCase().includes("codex sdk")
-      ? "Ensure @openai/codex-sdk is installed: pnpm -C scripts/codex-monitor install"
-      : "Verify the workspace path and that the repo is available.";
-    await sendReply(
-      chatId,
-      `❌ Workspace "${resolved.label}" failed: ${message}\n${hint}`,
-    );
-  }
 }
 
 // ── /stop — Stop Running Agent ───────────────────────────────────────────────
