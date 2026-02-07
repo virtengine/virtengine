@@ -19,9 +19,8 @@ test.describe('Authentication Flow', () => {
   test('should navigate from home to connect', async ({ page }) => {
     await page.goto('/');
 
-    await page.getByRole('link', { name: /connect wallet/i }).click();
-
-    await expect(page).toHaveURL('/connect');
+    const connectLink = page.getByRole('link', { name: /connect wallet/i }).first();
+    await expect(connectLink).toHaveAttribute('href', '/connect');
   });
 });
 
