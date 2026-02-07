@@ -153,6 +153,8 @@ let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
 const smartPrAllowRecreateClosed =
   process.env.VE_SMARTPR_ALLOW_RECREATE_CLOSED === "1";
+const githubToken =
+  process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_PAT || "";
 let monitorFailureHandling = false;
 const monitorFailureTimestamps = [];
 const monitorFailureWindowMs = 10 * 60 * 1000;
@@ -1296,6 +1298,90 @@ async function fetchBranchStatus(attemptId) {
   return res.data[0] || null;
 }
 
+async function getAttemptInfo(attemptId) {
+  try {
+    const statusData = await readStatusData();
+    const attempts = statusData?.active_attempts || [];
+    const match = attempts.find((a) => a.id === attemptId);
+    if (match) return match;
+  } catch {
+    /* best effort */
+  }
+  const res = await fetchVk(`/api/task-attempts/${attemptId}`);
+  if (res?.success && res.data) {
+    return res.data;
+  }
+  return null;
+}
+
+function ghAvailable() {
+  const res = spawnSync("gh", ["--version"], { stdio: "ignore" });
+  return res.status === 0;
+}
+
+async function findExistingPrForBranch(branch) {
+  if (!branch || !ghAvailable()) return null;
+  const res = spawnSync(
+    "gh",
+    [
+      "pr",
+      "list",
+      "--head",
+      branch,
+      "--state",
+      "all",
+      "--limit",
+      "5",
+      "--json",
+      "number,state,title,url,mergedAt,closedAt",
+    ],
+    { encoding: "utf8" },
+  );
+  if (res.status !== 0) {
+    return null;
+  }
+  try {
+    const items = JSON.parse(res.stdout || "[]");
+    return Array.isArray(items) && items.length > 0 ? items[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function findExistingPrForBranchApi(branch) {
+  if (!branch || !githubToken || !repoSlug) return null;
+  const [owner, repo] = repoSlug.split("/");
+  if (!owner || !repo) return null;
+  const head = `${owner}:${branch}`;
+  const url = `https://api.github.com/repos/${owner}/${repo}/pulls?state=all&head=${encodeURIComponent(
+    head,
+  )}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "codex-monitor",
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn(
+        `[monitor] GitHub API PR lookup failed (${res.status}): ${text.slice(0, 120)}`,
+      );
+      return null;
+    }
+    const items = await res.json();
+    return Array.isArray(items) && items.length > 0 ? items[0] : null;
+  } catch (err) {
+    console.warn(
+      `[monitor] GitHub API PR lookup error: ${err?.message || err}`,
+    );
+    return null;
+  }
+}
+
 /**
  * Find the matching VK project by projectName, with caching.
  * Falls back to the first project if no name match.
@@ -1976,13 +2062,43 @@ async function smartPRFlow(attemptId, shortId, status) {
     }
 
     // ── Step 4: Build PR title ──────────────────────────────────
-    const statusData = await readStatusData();
-    const attempts = statusData?.active_attempts || [];
-    const attempt = attempts.find(
-      (a) => a.id === attemptId || a.id?.startsWith(shortId),
-    );
+    const attempt = await getAttemptInfo(attemptId);
     let prTitle = attempt?.task_title || attempt?.branch || shortId;
     prTitle = prTitle.replace(/\s*\(vibe-kanban\)$/i, "");
+    const branchName = attempt?.branch || branchStatus?.branch || null;
+    if (attempt?.pr_number || attempt?.pr_url) {
+      console.log(
+        `[monitor] ${tag}: attempt already linked to PR (${attempt.pr_number || attempt.pr_url}) — skipping`,
+      );
+      return;
+    }
+    if (branchName) {
+      let existingPr = null;
+      if (ghAvailable()) {
+        existingPr = await findExistingPrForBranch(branchName);
+      }
+      if (!existingPr) {
+        existingPr = await findExistingPrForBranchApi(branchName);
+      }
+      if (existingPr) {
+        const state = (existingPr.state || "").toUpperCase();
+        if (state === "CLOSED" && smartPrAllowRecreateClosed) {
+          console.log(
+            `[monitor] ${tag}: existing CLOSED PR #${existingPr.number} found, recreating allowed by VE_SMARTPR_ALLOW_RECREATE_CLOSED`,
+          );
+        } else {
+          console.log(
+            `[monitor] ${tag}: existing PR #${existingPr.number} (${state}) for ${branchName} — skipping auto-PR`,
+          );
+          if (telegramToken && telegramChatId) {
+            void sendTelegramMessage(
+              `⚠️ Auto-PR skipped for ${shortId}: existing PR #${existingPr.number} (${state}) already linked to ${branchName}.`,
+            );
+          }
+          return;
+        }
+      }
+    }
 
     // ── Step 5: Create PR via VK API ────────────────────────────
     console.log(`[monitor] ${tag}: creating PR "${prTitle}"...`);
@@ -3125,13 +3241,15 @@ async function triggerTaskPlannerViaCodex(reason) {
   const prompt = `${agentPrompt}\n\nPlease execute the task planning instructions above.`;
   const result = await thread.run(prompt);
   const outPath = resolve(logDir, `task-planner-${nowStamp()}.md`);
-  await writeFile(outPath, formatCodexResult(result), "utf8");
+  const output = formatCodexResult(result);
+  await writeFile(outPath, output, "utf8");
+  console.log(`[monitor] task planner output saved: ${outPath}`);
   await updatePlannerState({
     last_success_at: new Date().toISOString(),
     last_success_reason: reason || "manual",
   });
   await sendTelegramMessage(
-    "Task planner run completed. Output saved to logs.",
+    `📋 Task planner run completed (${reason || "manual"}). Output saved: ${outPath}`,
   );
 }
 
