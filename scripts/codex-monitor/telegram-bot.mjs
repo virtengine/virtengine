@@ -83,8 +83,7 @@ const presenceSilent = ["1", "true", "yes"].includes(
 const presenceOnlyOnChange = ["1", "true", "yes"].includes(
   String(process.env.TELEGRAM_PRESENCE_ONLY_ON_CHANGE || "true").toLowerCase(),
 );
-const presenceChatId =
-  process.env.TELEGRAM_PRESENCE_CHAT_ID || telegramChatId;
+const presenceChatId = process.env.TELEGRAM_PRESENCE_CHAT_ID;
 const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
@@ -101,6 +100,19 @@ const batchMaxSize = Number(process.env.TELEGRAM_BATCH_MAX_SIZE || "50");
 const immediateThreshold = Number(
   process.env.TELEGRAM_IMMEDIATE_PRIORITY || "1",
 );
+
+// ── Live Digest Configuration ──────────────────────────────────────────────
+// Instead of batching and flushing, we maintain a single "live" Telegram message
+// per digest window that gets continuously edited as new events arrive.
+const liveDigestEnabled = !["0", "false", "no"].includes(
+  String(process.env.TELEGRAM_LIVE_DIGEST || "true").toLowerCase(),
+);
+const liveDigestWindowSec = Number(
+  process.env.TELEGRAM_LIVE_DIGEST_WINDOW_SEC || "600",
+); // 10 minutes default
+const liveDigestEditDebounceMs = Number(
+  process.env.TELEGRAM_LIVE_DIGEST_DEBOUNCE_MS || "3000",
+); // 3 second debounce on edits
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
