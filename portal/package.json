@@ -55,6 +55,7 @@
     "redis": "^5.10.0",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
+    "vibe-kanban-web-companion": "^0.0.5",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "zustand": "^4.5.2"

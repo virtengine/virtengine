@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // defaultObserver is the default observer implementation
@@ -17,7 +19,7 @@ type defaultObserver struct {
 	config  Config
 	logger  *defaultLogger
 	metrics *defaultMetrics
-	tracer  *defaultTracer
+	tracer  Tracer
 	closers []func() error
 }
 
@@ -37,7 +39,14 @@ func New(cfg Config) (Observer, error) {
 
 	// Initialize tracer
 	if cfg.TracingEnabled {
-		obs.tracer = newDefaultTracer(cfg)
+		tracer, shutdown, err := newOTelTracer(cfg)
+		if err != nil {
+			return nil, err
+		}
+		obs.tracer = tracer
+		if shutdown != nil {
+			obs.closers = append(obs.closers, func() error { return shutdown(context.Background()) })
+		}
 	}
 
 	return obs, nil
@@ -218,7 +227,15 @@ func SpanFromContext(ctx context.Context) Span {
 	if span, ok := ctx.Value(spanContextKey{}).(Span); ok {
 		return span
 	}
-	return nil
+	otelSpan := trace.SpanFromContext(ctx)
+	if otelSpan == nil {
+		return nil
+	}
+	sc := otelSpan.SpanContext()
+	if !sc.IsValid() {
+		return nil
+	}
+	return &otelSpanWrapper{span: otelSpan}
 }
 
 type spanContextKey struct{}

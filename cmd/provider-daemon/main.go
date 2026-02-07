@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/virtengine/virtengine/pkg/observability"
 	provider_daemon "github.com/virtengine/virtengine/pkg/provider_daemon"
 	"github.com/virtengine/virtengine/pkg/servicedesk"
 )
@@ -62,6 +63,18 @@ const (
 
 	// FlagMetricsAddr is the metrics listen address
 	FlagMetricsAddr = "metrics"
+
+	// FlagTracingEnabled enables distributed tracing
+	FlagTracingEnabled = "tracing-enabled"
+
+	// FlagTracingEndpoint is the OTLP endpoint for tracing
+	FlagTracingEndpoint = "tracing-endpoint"
+
+	// FlagTracingSampleRate is the trace sampling rate
+	FlagTracingSampleRate = "tracing-sample-rate"
+
+	// FlagTracingEnvironment sets the deployment environment
+	FlagTracingEnvironment = "tracing-environment"
 
 	// FlagWaldurEnabled toggles Waldur bridge
 	FlagWaldurEnabled = "waldur-enabled"
@@ -231,6 +244,10 @@ func init() {
 	rootCmd.PersistentFlags().String(FlagProviderKeyDir, "", "Directory containing provider keys")
 	rootCmd.PersistentFlags().String(FlagListenAddr, ":8080", "API listen address")
 	rootCmd.PersistentFlags().String(FlagMetricsAddr, ":9090", "Metrics listen address")
+	rootCmd.PersistentFlags().Bool(FlagTracingEnabled, false, "Enable distributed tracing")
+	rootCmd.PersistentFlags().String(FlagTracingEndpoint, "localhost:4317", "OTLP gRPC endpoint for traces")
+	rootCmd.PersistentFlags().Float64(FlagTracingSampleRate, 0.1, "Trace sampling rate (0.0-1.0)")
+	rootCmd.PersistentFlags().String(FlagTracingEnvironment, "development", "Deployment environment for tracing")
 	rootCmd.PersistentFlags().Bool(FlagWaldurEnabled, false, "Enable Waldur provider bridge")
 	rootCmd.PersistentFlags().String(FlagWaldurBaseURL, "", "Waldur API base URL")
 	rootCmd.PersistentFlags().String(FlagWaldurToken, "", "Waldur API token")
@@ -302,6 +319,10 @@ func init() {
 	_ = viper.BindPFlag(FlagProviderKeyDir, rootCmd.PersistentFlags().Lookup(FlagProviderKeyDir))
 	_ = viper.BindPFlag(FlagListenAddr, rootCmd.PersistentFlags().Lookup(FlagListenAddr))
 	_ = viper.BindPFlag(FlagMetricsAddr, rootCmd.PersistentFlags().Lookup(FlagMetricsAddr))
+	_ = viper.BindPFlag(FlagTracingEnabled, rootCmd.PersistentFlags().Lookup(FlagTracingEnabled))
+	_ = viper.BindPFlag(FlagTracingEndpoint, rootCmd.PersistentFlags().Lookup(FlagTracingEndpoint))
+	_ = viper.BindPFlag(FlagTracingSampleRate, rootCmd.PersistentFlags().Lookup(FlagTracingSampleRate))
+	_ = viper.BindPFlag(FlagTracingEnvironment, rootCmd.PersistentFlags().Lookup(FlagTracingEnvironment))
 	_ = viper.BindPFlag(FlagWaldurEnabled, rootCmd.PersistentFlags().Lookup(FlagWaldurEnabled))
 	_ = viper.BindPFlag(FlagWaldurBaseURL, rootCmd.PersistentFlags().Lookup(FlagWaldurBaseURL))
 	_ = viper.BindPFlag(FlagWaldurToken, rootCmd.PersistentFlags().Lookup(FlagWaldurToken))
@@ -434,6 +455,21 @@ func runStart(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Node: %s\n", viper.GetString(FlagNode))
 	fmt.Printf("  API Address: %s\n", viper.GetString(FlagListenAddr))
 	fmt.Printf("  Metrics Address: %s\n", viper.GetString(FlagMetricsAddr))
+	fmt.Printf("  Tracing Enabled: %t\n", viper.GetBool(FlagTracingEnabled))
+
+	obsCfg := observability.DefaultConfig()
+	obsCfg.ServiceName = "virtengine-provider-daemon"
+	obsCfg.Environment = viper.GetString(FlagTracingEnvironment)
+	obsCfg.TracingEnabled = viper.GetBool(FlagTracingEnabled)
+	obsCfg.TracingEndpoint = viper.GetString(FlagTracingEndpoint)
+	obsCfg.TracingSampleRate = viper.GetFloat64(FlagTracingSampleRate)
+	observer, err := observability.New(obsCfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize tracing: %w", err)
+	}
+	defer func() {
+		_ = observer.Shutdown(context.Background())
+	}()
 
 	// Initialize key manager (VE-400)
 	keyDir := viper.GetString(FlagProviderKeyDir)

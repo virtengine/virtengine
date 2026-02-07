@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/virtengine/virtengine/pkg/observability"
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 )
 
@@ -323,7 +324,7 @@ func (a *HPCNodeAggregator) Start(ctx context.Context) error {
 
 	a.server = &http.Server{
 		Addr:         a.config.ListenAddr,
-		Handler:      mux,
+		Handler:      observability.HTTPTracingHandler(mux, "provider.hpc_node_aggregator"),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
