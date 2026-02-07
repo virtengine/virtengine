@@ -62,6 +62,10 @@ const stableStringify = (value: unknown): string => {
     .join(",")}}`;
 };
 
+export const serializeRequestBody = (body: unknown): string => {
+  return stableStringify(body);
+};
+
 const toBase64 = (value: string): string => {
   if (typeof btoa === "function") {
     return btoa(value);
@@ -103,7 +107,7 @@ export async function signRequest(
 ): Promise<SignedRequestHeaders> {
   const timestamp = Date.now();
   const nonce = randomNonce();
-  const bodyPayload = options.body ? stableStringify(options.body) : "";
+  const bodyPayload = options.body ? serializeRequestBody(options.body) : "";
   const bodyHash = bodyPayload ? await sha256Hex(bodyPayload) : "";
 
   const requestData: RequestData = {
