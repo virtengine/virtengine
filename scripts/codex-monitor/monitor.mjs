@@ -48,6 +48,18 @@ const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
+const telegramHeartbeatIntervalMin = Number(
+  process.env.TELEGRAM_HEARTBEAT_INTERVAL_MIN || "5",
+);
+const telegramHeartbeatEnabledEnv = process.env.TELEGRAM_HEARTBEAT_ENABLED;
+const telegramQuietHoursEnv = process.env.TELEGRAM_QUIET_HOURS;
+const telegramQuietHoursStartEnv = process.env.TELEGRAM_QUIET_HOURS_START;
+const telegramQuietHoursEndEnv = process.env.TELEGRAM_QUIET_HOURS_END;
+const telegramQuietHoursTzEnv =
+  process.env.TELEGRAM_QUIET_HOURS_TZ ||
+  process.env.TELEGRAM_QUIET_HOURS_TIMEZONE;
+const telegramSettingsPath = resolve(repoRoot, ".cache", "ve-telegram-settings.json");
+const telegramOffsetPath = resolve(repoRoot, ".cache", "ve-telegram-offset.json");
 const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
 const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
@@ -114,6 +126,16 @@ let plannerTriggered = false;
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
 const TELEGRAM_HISTORY_MAX = 25;
 const telegramHistory = [];
+const TELEGRAM_INBOUND_HISTORY_MAX = 25;
+const telegramInboundHistory = [];
+
+function pushTelegramInboundHistory(text) {
+  const stamp = new Date().toISOString().slice(11, 19);
+  telegramInboundHistory.push(`[${stamp}] ${text.slice(0, 300)}`);
+  if (telegramInboundHistory.length > TELEGRAM_INBOUND_HISTORY_MAX) {
+    telegramInboundHistory.shift();
+  }
+}
 
 function pushTelegramHistory(text) {
   const stamp = new Date().toISOString().slice(11, 19);
@@ -121,6 +143,129 @@ function pushTelegramHistory(text) {
   if (telegramHistory.length > TELEGRAM_HISTORY_MAX) {
     telegramHistory.shift();
   }
+}
+
+function parseBoolean(value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function parseHour(value) {
+  if (value === undefined || value === null) return null;
+  const num = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(num) || num < 0 || num > 23) return null;
+  return num;
+}
+
+function parseQuietHoursRange(value) {
+  if (!value) return null;
+  const parts = String(value).trim().split(/\s+/);
+  if (parts.length === 0) return null;
+  const rangePart = parts[0];
+  const match = rangePart.match(
+    /(\d{1,2})(?::\d{2})?\s*[-–]\s*(\d{1,2})(?::\d{2})?/,
+  );
+  if (!match) return null;
+  const start = parseHour(match[1]);
+  const end = parseHour(match[2]);
+  if (start === null || end === null) return null;
+  const timezone = parts.slice(1).join(" ").trim() || null;
+  return { start, end, timezone };
+}
+
+function buildTelegramSettingsFromEnv() {
+  const heartbeatEnabled = parseBoolean(telegramHeartbeatEnabledEnv, true);
+  const range =
+    parseQuietHoursRange(telegramQuietHoursEnv) ||
+    (telegramQuietHoursStartEnv && telegramQuietHoursEndEnv
+      ? {
+          start: parseHour(telegramQuietHoursStartEnv),
+          end: parseHour(telegramQuietHoursEndEnv),
+          timezone: telegramQuietHoursTzEnv || null,
+        }
+      : null);
+
+  const quietHoursEnabled =
+    range && range.start !== null && range.end !== null;
+  return {
+    heartbeat_enabled: heartbeatEnabled,
+    quiet_hours: {
+      enabled: Boolean(quietHoursEnabled),
+      start_hour: quietHoursEnabled ? range.start : null,
+      end_hour: quietHoursEnabled ? range.end : null,
+      timezone: range?.timezone || telegramQuietHoursTzEnv || "UTC",
+    },
+  };
+}
+
+function mergeTelegramSettings(base, override) {
+  if (!override) return base;
+  const merged = { ...base, ...override };
+  if (override.quiet_hours) {
+    merged.quiet_hours = { ...base.quiet_hours, ...override.quiet_hours };
+  }
+  return merged;
+}
+
+async function readTelegramSettings() {
+  try {
+    const raw = await readFile(telegramSettingsPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeTelegramSettings(settings) {
+  const dir = resolve(repoRoot, ".cache");
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    telegramSettingsPath,
+    JSON.stringify(settings, null, 2),
+    "utf8",
+  );
+}
+
+async function getTelegramSettings() {
+  const envSettings = buildTelegramSettingsFromEnv();
+  const fileSettings = await readTelegramSettings();
+  return mergeTelegramSettings(envSettings, fileSettings);
+}
+
+function getHourInTimeZone(date, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "numeric",
+      hour12: false,
+    }).formatToParts(date);
+    const hourPart = parts.find((part) => part.type === "hour");
+    if (!hourPart) return date.getHours();
+    const hour = Number.parseInt(hourPart.value, 10);
+    return Number.isFinite(hour) ? hour : date.getHours();
+  } catch {
+    return date.getHours();
+  }
+}
+
+function isQuietHoursActive(settings, now = new Date()) {
+  const quiet = settings?.quiet_hours;
+  if (!quiet || !quiet.enabled) return false;
+  const start = parseHour(quiet.start_hour);
+  const end = parseHour(quiet.end_hour);
+  if (start === null || end === null) return false;
+  if (start === end) return true;
+  const hour = getHourInTimeZone(now, quiet.timezone || "UTC");
+  if (start < end) {
+    return hour >= start && hour < end;
+  }
+  return hour >= start || hour < end;
 }
 
 function recordMonitorFailure() {
@@ -1180,6 +1325,297 @@ async function sendTelegramMessage(text, options = {}) {
   }
 }
 
+async function readTelegramOffset() {
+  try {
+    const raw = await readFile(telegramOffsetPath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && Number.isFinite(parsed.last_update_id)) {
+      return parsed.last_update_id;
+    }
+  } catch {
+    // ignore
+  }
+  return 0;
+}
+
+async function writeTelegramOffset(lastUpdateId) {
+  const dir = resolve(repoRoot, ".cache");
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    telegramOffsetPath,
+    JSON.stringify({ last_update_id: lastUpdateId }, null, 2),
+    "utf8",
+  );
+}
+
+function extractTelegramMessage(update) {
+  if (!update || typeof update !== "object") return null;
+  return (
+    update.message ||
+    update.edited_message ||
+    update.channel_post ||
+    update.edited_channel_post ||
+    null
+  );
+}
+
+function getTelegramChatId(update) {
+  const message = extractTelegramMessage(update);
+  if (!message || !message.chat) return null;
+  return message.chat.id;
+}
+
+function getTelegramText(update) {
+  const message = extractTelegramMessage(update);
+  if (!message) return "";
+  return String(message.text || message.caption || "").trim();
+}
+
+function tokenizeCommand(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+  const parts = normalized.split(/\s+/);
+  const cmd = parts[0] ? parts[0].toLowerCase() : "";
+  if (!cmd) return null;
+  return { cmd, args: parts.slice(1), raw: trimmed };
+}
+
+function formatQuietHours(settings) {
+  const quiet = settings?.quiet_hours;
+  if (!quiet || !quiet.enabled) return "quiet hours: off";
+  const start = parseHour(quiet.start_hour);
+  const end = parseHour(quiet.end_hour);
+  if (start === null || end === null) return "quiet hours: off";
+  const tz = quiet.timezone || "UTC";
+  return `quiet hours: ${start}:00-${end}:00 ${tz}`;
+}
+
+async function updateTelegramSettings(updateFn) {
+  const current = await getTelegramSettings();
+  const next = updateFn({
+    ...current,
+    quiet_hours: { ...current.quiet_hours },
+  });
+  await writeTelegramSettings(next);
+  return next;
+}
+
+async function handleTelegramCommand(command) {
+  switch (command.cmd) {
+    case "status": {
+      const heartbeat = await buildHeartbeatMessage();
+      await sendTelegramMessage(heartbeat);
+      return true;
+    }
+    case "ping": {
+      await sendTelegramMessage("pong");
+      return true;
+    }
+    case "heartbeat": {
+      const arg = (command.args[0] || "").toLowerCase();
+      if (arg === "on" || arg === "enable") {
+        const updated = await updateTelegramSettings((settings) => ({
+          ...settings,
+          heartbeat_enabled: true,
+        }));
+        await sendTelegramMessage(
+          `Heartbeat enabled. ${formatQuietHours(updated)}`,
+        );
+        return true;
+      }
+      if (arg === "off" || arg === "disable") {
+        const updated = await updateTelegramSettings((settings) => ({
+          ...settings,
+          heartbeat_enabled: false,
+        }));
+        await sendTelegramMessage(
+          `Heartbeat disabled. ${formatQuietHours(updated)}`,
+        );
+        return true;
+      }
+      await sendTelegramMessage(
+        "Usage: heartbeat on|off (or /heartbeat on|off)",
+      );
+      return true;
+    }
+    case "quiet": {
+      const args = command.args.map((arg) => arg.toLowerCase());
+      if (args.length === 0) {
+        const settings = await getTelegramSettings();
+        await sendTelegramMessage(`Quiet hours status: ${formatQuietHours(settings)}`);
+        return true;
+      }
+      if (["off", "disable", "stop"].includes(args[0])) {
+        const updated = await updateTelegramSettings((settings) => ({
+          ...settings,
+          quiet_hours: {
+            ...settings.quiet_hours,
+            enabled: false,
+          },
+        }));
+        await sendTelegramMessage(`Quiet hours disabled. ${formatQuietHours(updated)}`);
+        return true;
+      }
+      const joined = command.args.join(" ");
+      const range = parseQuietHoursRange(joined);
+      if (!range) {
+        await sendTelegramMessage(
+          "Usage: quiet 22-7 [Timezone] or quiet off",
+        );
+        return true;
+      }
+      const tz =
+        range.timezone ||
+        telegramQuietHoursTzEnv ||
+        (await getTelegramSettings())?.quiet_hours?.timezone ||
+        "UTC";
+      const updated = await updateTelegramSettings((settings) => ({
+        ...settings,
+        quiet_hours: {
+          enabled: true,
+          start_hour: range.start,
+          end_hour: range.end,
+          timezone: tz,
+        },
+      }));
+      await sendTelegramMessage(`Quiet hours enabled. ${formatQuietHours(updated)}`);
+      return true;
+    }
+    case "help": {
+      await sendTelegramMessage(
+        [
+          "Commands:",
+          "- /status",
+          "- /heartbeat on|off",
+          "- /quiet 22-7 [Timezone] | /quiet off",
+          "- /ping",
+        ].join("\n"),
+      );
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+let telegramPollInFlight = false;
+
+async function pollTelegramUpdates() {
+  if (!telegramToken || !telegramChatId) return;
+  if (telegramPollInFlight) return;
+  telegramPollInFlight = true;
+  try {
+    const offset = await readTelegramOffset();
+    const url = new URL(
+      `https://api.telegram.org/bot${telegramToken}/getUpdates`,
+    );
+    url.searchParams.set("offset", String(offset + 1));
+    url.searchParams.set("timeout", "0");
+    url.searchParams.set("limit", "50");
+    const res = await fetch(url.toString(), { method: "GET" });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[monitor] telegram getUpdates failed: ${res.status} ${body}`);
+      return;
+    }
+    const payload = await res.json();
+    if (!payload || !payload.ok || !Array.isArray(payload.result)) {
+      return;
+    }
+    let maxUpdateId = offset;
+    for (const update of payload.result) {
+      if (typeof update.update_id === "number") {
+        maxUpdateId = Math.max(maxUpdateId, update.update_id);
+      }
+      const chatId = getTelegramChatId(update);
+      if (!chatId) continue;
+      if (String(chatId) !== String(telegramChatId)) continue;
+      const text = getTelegramText(update);
+      if (!text) continue;
+      pushTelegramInboundHistory(text);
+      const command = tokenizeCommand(text);
+      if (command) {
+        const handled = await handleTelegramCommand(command);
+        if (handled) {
+          continue;
+        }
+      }
+    }
+    if (maxUpdateId !== offset) {
+      await writeTelegramOffset(maxUpdateId);
+    }
+  } catch (err) {
+    console.warn(`[monitor] telegram update poll failed: ${err.message || err}`);
+  } finally {
+    telegramPollInFlight = false;
+  }
+}
+
+function getWorkspaceLabel() {
+  const envLabel =
+    process.env.VE_WORKSPACE_NAME ||
+    process.env.VE_BRANCH_NAME ||
+    process.env.GIT_BRANCH ||
+    process.env.WORKSPACE_NAME;
+  if (envLabel) return envLabel;
+  try {
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      cwd: repoRoot,
+      encoding: "utf8",
+      timeout: 2000,
+    });
+    const label = String(branch || "").trim();
+    return label && label !== "HEAD" ? label : null;
+  } catch {
+    return null;
+  }
+}
+
+function getModelAvailability() {
+  if (codexEnabled) return "codex=ok";
+  if (codexDisabledReason) return `codex=disabled (${codexDisabledReason})`;
+  return "codex=disabled";
+}
+
+async function buildHeartbeatMessage() {
+  const status = await readStatusData();
+  const counts = status?.counts || {};
+  const backlog = status?.backlog_remaining ?? 0;
+  const running = counts.running ?? 0;
+  const review = counts.review ?? 0;
+  const error = counts.error ?? 0;
+  const manualReview = counts.manual_review ?? 0;
+  const workspace = getWorkspaceLabel();
+  const modelHealth = getModelAvailability();
+  const updatedAt = status?.updated_at || new Date().toISOString();
+
+  return [
+    "VirtEngine Workspace Heartbeat",
+    workspace ? `Workspace: ${workspace}` : null,
+    `Queue: ${backlog} | Active: ${running} | Review: ${review} | Error: ${error} | Manual: ${manualReview}`,
+    `Models: ${modelHealth}`,
+    `Status updated: ${updatedAt}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function maybeSendHeartbeat() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  const settings = await getTelegramSettings();
+  if (!settings?.heartbeat_enabled) {
+    return;
+  }
+  if (isQuietHoursActive(settings)) {
+    return;
+  }
+  const heartbeat = await buildHeartbeatMessage();
+  await sendTelegramMessage(heartbeat);
+}
+
 function startTelegramNotifier() {
   if (!telegramToken || !telegramChatId) {
     console.warn(
@@ -1206,6 +1642,29 @@ function startTelegramNotifier() {
   void sendTelegramMessage("VirtEngine Orchestrator Notifier started.");
   setTimeout(sendUpdate, intervalMs);
   setInterval(sendUpdate, intervalMs);
+}
+
+function startHeartbeatLoop() {
+  if (!telegramToken || !telegramChatId) {
+    console.warn(
+      "[monitor] heartbeat loop disabled (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)",
+    );
+    return;
+  }
+  if (
+    !Number.isFinite(telegramHeartbeatIntervalMin) ||
+    telegramHeartbeatIntervalMin <= 0
+  ) {
+    console.warn("[monitor] heartbeat loop disabled (invalid interval)");
+    return;
+  }
+  const intervalMs = telegramHeartbeatIntervalMin * 60 * 1000;
+  const runHeartbeat = async () => {
+    await pollTelegramUpdates();
+    await maybeSendHeartbeat();
+  };
+  void runHeartbeat();
+  setInterval(runHeartbeat, intervalMs);
 }
 
 async function checkStatusMilestones() {
@@ -1754,3 +2213,4 @@ void ensureCodexSdkReady().then(() => {
 });
 startProcess();
 startTelegramNotifier();
+startHeartbeatLoop();
