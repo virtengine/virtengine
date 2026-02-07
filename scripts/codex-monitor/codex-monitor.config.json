@@ -1,0 +1,36 @@
+{
+  "$schema": "./codex-monitor.schema.json",
+  "projectName": "virtengine",
+  "executors": [
+    {
+      "name": "copilot-claude",
+      "executor": "COPILOT",
+      "variant": "CLAUDE_OPUS_4_6",
+      "weight": 50,
+      "role": "primary"
+    },
+    {
+      "name": "codex-default",
+      "executor": "CODEX",
+      "variant": "DEFAULT",
+      "weight": 50,
+      "role": "backup"
+    }
+  ],
+  "failover": {
+    "strategy": "weighted-random",
+    "maxRetries": 3,
+    "cooldownMinutes": 5,
+    "disableOnConsecutiveFailures": 3
+  },
+  "distribution": "weighted",
+  "repositories": [
+    {
+      "name": "virtengine",
+      "path": "C:/Users/jON/Documents/source/repos/virtengine-gh/virtengine",
+      "slug": "virtengine/virtengine",
+      "primary": true
+    }
+  ],
+  "agentPrompts": {}
+}

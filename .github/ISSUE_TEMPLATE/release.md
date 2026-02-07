@@ -1,32 +1,35 @@
 ---
 name: Release
 about: Track a new release through the release process
-title: 'Release vX.Y.Z'
-labels: 'release'
-assignees: ''
+title: "Release vX.Y.Z"
+labels: "release"
+assignees: ""
 ---
 
 ## Release Information
 
-| Field | Value |
-|-------|-------|
-| **Version** | vX.Y.Z |
-| **Target Network** | Mainnet / Testnet |
-| **Release Type** | Major / Minor / Patch / Emergency |
-| **Release Manager** | @username |
-| **Target Date** | YYYY-MM-DD |
+| Field               | Value                             |
+| ------------------- | --------------------------------- |
+| **Version**         | vX.Y.Z                            |
+| **Target Network**  | Mainnet / Testnet                 |
+| **Release Type**    | Major / Minor / Patch / Emergency |
+| **Release Manager** | @username                         |
+| **Target Date**     | YYYY-MM-DD                        |
 
 ## Included Changes
 
 List major changes and PRs included in this release:
 
 ### Features
+
 - [ ] #PR_NUMBER - Feature description
 
 ### Bug Fixes
+
 - [ ] #PR_NUMBER - Bug fix description
 
 ### Breaking Changes
+
 - [ ] #PR_NUMBER - Breaking change description
 
 ## Pre-Release Checklist (T-7 days)
@@ -88,6 +91,7 @@ In case of critical issues:
 **Rollback Height:** N/A (or specific height if needed)
 
 Rollback procedure:
+
 1. Announce halt on Discord/Telegram
 2. Validators stop nodes
 3. Replace binary with previous version
@@ -101,6 +105,7 @@ Rollback procedure:
 ---
 
 **Reference Documentation:**
+
 - [RELEASE.md](../RELEASE.md) - Complete release process
-- [ADR-001: Network Upgrades](../_docs/adr/adr-001-network-upgrades.md) - Upgrade implementation
+- [ADR-001: Network Upgrades](../../_docs/adr/adr-001-network-upgrades.md) - Upgrade implementation
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Commit message format

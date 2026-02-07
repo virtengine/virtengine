@@ -1,13 +1,94 @@
 {
-  "name": "codex-monitor",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@virtengine/codex-monitor",
+  "version": "0.6.0",
+  "description": "AI-powered orchestrator supervisor — manages AI agent executors with failover, auto-restarts on failure, analyzes crashes with Codex SDK, creates PRs via Vibe-Kanban API, and sends Telegram notifications. Supports N executors with weighted distribution, multi-repo projects, and auto-setup.",
   "type": "module",
-  "scripts": {
-    "start": "node monitor.mjs"
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "author": "VirtEngine <dev@virtengine.com>",
+  "homepage": "https://github.com/virtengine/virtengine/tree/main/scripts/codex-monitor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/virtengine/virtengine.git",
+    "directory": "scripts/codex-monitor"
   },
+  "bugs": {
+    "url": "https://github.com/virtengine/virtengine/issues"
+  },
+  "keywords": [
+    "codex",
+    "orchestrator",
+    "monitor",
+    "ai",
+    "automation",
+    "vibe-kanban",
+    "telegram",
+    "devops",
+    "executor",
+    "failover",
+    "copilot",
+    "agent",
+    "openai",
+    "cli"
+  ],
+  "exports": {
+    ".": "./monitor.mjs",
+    "./config": "./config.mjs",
+    "./codex-config": "./codex-config.mjs",
+    "./setup": "./setup.mjs",
+    "./autofix": "./autofix.mjs",
+    "./codex-shell": "./codex-shell.mjs",
+    "./maintenance": "./maintenance.mjs",
+    "./telegram-bot": "./telegram-bot.mjs",
+    "./workspace-registry": "./workspace-registry.mjs",
+    "./shared-workspace-registry": "./shared-workspace-registry.mjs",
+    "./merge-strategy": "./merge-strategy.mjs"
+  },
+  "bin": {
+    "codex-monitor": "cli.mjs",
+    "codex-monitor-setup": "setup.mjs",
+    "codex-monitor-chat-id": "get-telegram-chat-id.mjs",
+    "codex-monitor-shared-workspaces": "shared-workspace-cli.mjs",
+    "vibe-kanban": "vibe-kanban-wrapper.mjs"
+  },
+  "scripts": {
+    "start": "node cli.mjs",
+    "setup": "node setup.mjs",
+    "monitor": "node monitor.mjs",
+    "shared-workspaces": "node shared-workspace-cli.mjs",
+    "postinstall": "node postinstall.mjs",
+    "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""
+  },
+  "files": [
+    "cli.mjs",
+    "config.mjs",
+    "monitor.mjs",
+    "autofix.mjs",
+    "codex-shell.mjs",
+    "maintenance.mjs",
+    "telegram-bot.mjs",
+    "get-telegram-chat-id.mjs",
+    "setup.mjs",
+    "workspace-registry.mjs",
+    "shared-workspace-registry.mjs",
+    "shared-workspace-cli.mjs",
+    "shared-workspaces.json",
+    "codex-config.mjs",
+    "vibe-kanban-wrapper.mjs",
+    "ve-orchestrator.ps1",
+    "ve-kanban.ps1",
+    "postinstall.mjs",
+    "update-check.mjs",
+    "merge-strategy.mjs",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
-    "@openai/codex-sdk": "0.99.0-alpha.6"
+    "@openai/codex-sdk": "0.99.0-alpha.6",
+    "vibe-kanban": "0.1.6"
   },
   "engines": {
     "node": ">=18"

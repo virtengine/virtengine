@@ -12,12 +12,12 @@ The VirtEngine Operator Training Program is a comprehensive curriculum designed 
 
 ## Target Audience
 
-| Role | Training Path | Duration |
-|------|--------------|----------|
-| Validator Operator | Validator Curriculum | 40 hours |
-| Provider Operator | Provider Curriculum | 32 hours |
-| Full Stack Operator | Combined Curriculum | 60 hours |
-| Security Specialist | Security Focus | 24 hours |
+| Role                | Training Path        | Duration |
+| ------------------- | -------------------- | -------- |
+| Validator Operator  | Validator Curriculum | 40 hours |
+| Provider Operator   | Provider Curriculum  | 32 hours |
+| Full Stack Operator | Combined Curriculum  | 60 hours |
+| Security Specialist | Security Focus       | 24 hours |
 
 ## Program Structure
 
@@ -58,81 +58,81 @@ Training Program
 
 ### Core Modules
 
-| Module | Document | Duration |
-|--------|----------|----------|
-| VirtEngine Architecture | [architecture-overview.md](modules/architecture-overview.md) | 4 hours |
-| Security Fundamentals | [security-fundamentals.md](modules/security-fundamentals.md) | 4 hours |
-| Incident Response Basics | [incident-response-basics.md](modules/incident-response-basics.md) | 4 hours |
+| Module                   | Document                                                           | Duration |
+| ------------------------ | ------------------------------------------------------------------ | -------- |
+| VirtEngine Architecture  | [architecture-overview.md](modules/architecture-overview.md)       | 4 hours  |
+| Security Fundamentals    | [security-fundamentals.md](modules/security-fundamentals.md)       | 4 hours  |
+| Incident Response Basics | [incident-response-basics.md](modules/incident-response-basics.md) | 4 hours  |
 
 ### Validator Track
 
-| Module | Document | Duration |
-|--------|----------|----------|
+| Module                      | Document                                                                   | Duration |
+| --------------------------- | -------------------------------------------------------------------------- | -------- |
 | Validator Operator Training | [validator-operator-training.md](validator/validator-operator-training.md) | 16 hours |
-| VEID Operations | [veid-operations.md](validator/veid-operations.md) | 8 hours |
-| Key Management | [validator-key-management.md](validator/validator-key-management.md) | 4 hours |
+| VEID Operations             | [veid-operations.md](validator/veid-operations.md)                         | 8 hours  |
+| Key Management              | [validator-key-management.md](validator/validator-key-management.md)       | 4 hours  |
 
 ### Provider Track
 
-| Module | Document | Duration |
-|--------|----------|----------|
+| Module                   | Document                                                            | Duration |
+| ------------------------ | ------------------------------------------------------------------- | -------- |
 | Provider Daemon Training | [provider-daemon-training.md](provider/provider-daemon-training.md) | 16 hours |
-| Infrastructure Adapters | [infrastructure-adapters.md](provider/infrastructure-adapters.md) | 8 hours |
-| Marketplace Operations | [marketplace-operations.md](provider/marketplace-operations.md) | 4 hours |
+| Infrastructure Adapters  | [infrastructure-adapters.md](provider/infrastructure-adapters.md)   | 8 hours  |
+| Marketplace Operations   | [marketplace-operations.md](provider/marketplace-operations.md)     | 4 hours  |
 
 ### Security Track
 
-| Module | Document | Duration |
-|--------|----------|----------|
-| Security Best Practices | [security-best-practices.md](security/security-best-practices.md) | 8 hours |
-| Threat Modeling | [threat-modeling.md](security/threat-modeling.md) | 4 hours |
-| Security Incident Response | [security-incident-response.md](security/security-incident-response.md) | 4 hours |
+| Module                     | Document                                                                | Duration |
+| -------------------------- | ----------------------------------------------------------------------- | -------- |
+| Security Best Practices    | [security-best-practices.md](security/security-best-practices.md)       | 8 hours  |
+| Threat Modeling            | [threat-modeling.md](security/threat-modeling.md)                       | 4 hours  |
+| Security Incident Response | [security-incident-response.md](security/security-incident-response.md) | 4 hours  |
 
 ### Incident Response Track
 
-| Module | Document | Duration |
-|--------|----------|----------|
-| Incident Response Training | [incident-response-training.md](incident-response/incident-response-training.md) | 8 hours |
-| Runbook Procedures | [runbook-procedures.md](incident-response/runbook-procedures.md) | 4 hours |
-| Post-Incident Analysis | [post-incident-analysis.md](incident-response/post-incident-analysis.md) | 4 hours |
+| Module                     | Document                                                                         | Duration |
+| -------------------------- | -------------------------------------------------------------------------------- | -------- |
+| Incident Response Training | [incident-response-training.md](incident-response/incident-response-training.md) | 8 hours  |
+| Runbook Procedures         | [runbook-procedures.md](incident-response/runbook-procedures.md)                 | 4 hours  |
+| Post-Incident Analysis     | [post-incident-analysis.md](incident-response/post-incident-analysis.md)         | 4 hours  |
 
 ## Hands-On Labs
 
-| Lab | Document | Duration |
-|-----|----------|----------|
-| Lab Environment Setup | [lab-environment.md](labs/lab-environment.md) | 2 hours |
-| Validator Operations Lab | [validator-ops-lab.md](labs/validator-ops-lab.md) | 4 hours |
-| Provider Operations Lab | [provider-ops-lab.md](labs/provider-ops-lab.md) | 4 hours |
-| Incident Simulation Lab | [incident-simulation-lab.md](labs/incident-simulation-lab.md) | 4 hours |
-| Security Assessment Lab | [security-assessment-lab.md](labs/security-assessment-lab.md) | 4 hours |
+| Lab                      | Document                                                      | Duration |
+| ------------------------ | ------------------------------------------------------------- | -------- |
+| Lab Environment Setup    | [lab-environment.md](labs/lab-environment.md)                 | 2 hours  |
+| Validator Operations Lab | [validator-ops-lab.md](labs/validator-ops-lab.md)             | 4 hours  |
+| Provider Operations Lab  | [provider-ops-lab.md](labs/provider-ops-lab.md)               | 4 hours  |
+| Incident Simulation Lab  | [incident-simulation-lab.md](labs/incident-simulation-lab.md) | 4 hours  |
+| Security Assessment Lab  | [security-assessment-lab.md](labs/security-assessment-lab.md) | 4 hours  |
 
 ## Certification Program
 
-| Certification | Document | Requirements |
-|---------------|----------|--------------|
-| Certified Validator Operator | [certification-program.md](certification/certification-program.md) | Validator Track + Exam |
-| Certified Provider Operator | [certification-program.md](certification/certification-program.md) | Provider Track + Exam |
-| Certified Security Specialist | [certification-program.md](certification/certification-program.md) | Security Track + Exam |
-| Master Operator | [certification-program.md](certification/certification-program.md) | All Tracks + Exam |
+| Certification                 | Document                                                           | Requirements           |
+| ----------------------------- | ------------------------------------------------------------------ | ---------------------- |
+| Certified Validator Operator  | [certification-program.md](certification/certification-program.md) | Validator Track + Exam |
+| Certified Provider Operator   | [certification-program.md](certification/certification-program.md) | Provider Track + Exam  |
+| Certified Security Specialist | [certification-program.md](certification/certification-program.md) | Security Track + Exam  |
+| Master Operator               | [certification-program.md](certification/certification-program.md) | All Tracks + Exam      |
 
 ## Quarterly Refresher Training
 
-| Quarter | Focus Area | Document |
-|---------|------------|----------|
-| Q1 | Security Updates & New Threats | [refresher-schedule.md](refresher/refresher-schedule.md) |
-| Q2 | Performance & Optimization | [refresher-schedule.md](refresher/refresher-schedule.md) |
-| Q3 | Incident Response Drills | [refresher-schedule.md](refresher/refresher-schedule.md) |
-| Q4 | New Features & Upgrades | [refresher-schedule.md](refresher/refresher-schedule.md) |
+| Quarter | Focus Area                     | Document                                                 |
+| ------- | ------------------------------ | -------------------------------------------------------- |
+| Q1      | Security Updates & New Threats | [refresher-schedule.md](refresher/refresher-schedule.md) |
+| Q2      | Performance & Optimization     | [refresher-schedule.md](refresher/refresher-schedule.md) |
+| Q3      | Incident Response Drills       | [refresher-schedule.md](refresher/refresher-schedule.md) |
+| Q4      | New Features & Upgrades        | [refresher-schedule.md](refresher/refresher-schedule.md) |
 
 ## Training Materials Index
 
-| Type | Location | Description |
-|------|----------|-------------|
-| Documentation | [materials/](materials/) | Written guides and references |
-| Video Library | [materials/videos.md](materials/videos.md) | Training video catalog |
-| Exercises | [materials/exercises.md](materials/exercises.md) | Practice exercises |
-| Cheat Sheets | [materials/cheat-sheets/](materials/cheat-sheets/) | Quick reference guides |
-| Assessment Materials | [certification/](certification/) | Exams and practical assessments |
+| Type                 | Location                                           | Description                     |
+| -------------------- | -------------------------------------------------- | ------------------------------- |
+| Documentation        | [materials/](materials/)                           | Written guides and references   |
+| Video Library        | [materials/videos.md](materials/videos.md)         | Training video catalog          |
+| Exercises            | [materials/exercises.md](materials/exercises.md)   | Practice exercises              |
+| Cheat Sheets         | [materials/cheat-sheets/](materials/cheat-sheets/) | Quick reference guides          |
+| Assessment Materials | [certification/](certification/)                   | Exams and practical assessments |
 
 ## Getting Started
 
@@ -159,13 +159,13 @@ Training Program
 
 All training modules can be completed self-paced with the following recommended timeline:
 
-| Week | Focus |
-|------|-------|
-| Week 1 | Core Modules (Architecture, Security, Incident Response) |
-| Week 2-3 | Track-Specific Modules |
-| Week 3-4 | Hands-On Labs |
-| Week 4-5 | Review and Certification Prep |
-| Week 5 | Certification Examination |
+| Week     | Focus                                                    |
+| -------- | -------------------------------------------------------- |
+| Week 1   | Core Modules (Architecture, Security, Incident Response) |
+| Week 2-3 | Track-Specific Modules                                   |
+| Week 3-4 | Hands-On Labs                                            |
+| Week 4-5 | Review and Certification Prep                            |
+| Week 5   | Certification Examination                                |
 
 ### Instructor-Led Training
 
@@ -186,7 +186,7 @@ Instructor-led sessions are available quarterly:
 
 ### Additional Resources
 
-- [VirtEngine Documentation](_docs/)
+- [VirtEngine Documentation](../)
 - [Runbooks](../runbooks/)
 - [SRE Documentation](../../docs/sre/)
 - [Security Guidelines](../security-guidelines.md)

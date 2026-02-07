@@ -149,7 +149,6 @@ $script:TasksSubmitted = 0
 $script:StartTime = Get-Date
 $script:GitHubCooldownUntil = $null
 $script:TaskRetryCounts = @{}
-$script:TaskRetryState = @{}
 $script:AttemptSummaries = @{}
 $script:StatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-state.json"
 $script:CopilotStatePath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")) ".cache\ve-orchestrator-copilot.json"
@@ -916,7 +915,6 @@ function Save-StatusSnapshot {
             status                = $info.status
             updated_at            = (Get-Date).ToString("o")
             last_process_status   = $info.last_process_status
-            last_process_completed_at = $info.last_process_completed_at
             copilot_fix_requested = $info.copilot_fix_requested
             copilot_fix_pr_number = $info.copilot_fix_pr_number
             copilot_fix_merged    = $info.copilot_fix_merged
@@ -1338,6 +1336,7 @@ function Get-AttemptFailureCategory {
         $textValues = Get-SummaryTextValues -Value $Summary
     }
     $combined = ($textValues | Where-Object { $_ -is [string] -and $_.Trim() }) -join "`n"
+    $lower = $combined.ToLowerInvariant()
 
     $apiKeyPatterns = @(
         "api key",
@@ -1351,109 +1350,13 @@ function Get-AttemptFailureCategory {
         "403"
     )
     foreach ($pattern in $apiKeyPatterns) {
-        if ($combined -match $pattern) {
+        if ($lower -match [regex]::Escape($pattern)) {
             return @{ category = "api_key"; status = $latestStatus; detail = $pattern }
         }
     }
 
-    if ($combined -match "context window" -or $combined -match "contextwindowexceeded" -or $combined -match "ran out of room") {
+    if ($lower -match "context window" -or $lower -match "contextwindowexceeded" -or $lower -match "ran out of room") {
         return @{ category = "context_window"; status = $latestStatus; detail = "context window exceeded" }
-    }
-
-    $vkPatterns = @(
-        'vibe-kanban',
-        'vibe kanban',
-        'vk_endpoint_url',
-        'task-attempts',
-        'vk api',
-        '/api/projects',
-        '/api/task-attempts',
-        'failed to initialize vibe-kanban'
-    )
-    foreach ($pattern in $vkPatterns) {
-        if ($combined -match $pattern) {
-            return @{ category = "vk"; status = $latestStatus; detail = $pattern }
-        }
-    }
-
-    $ghPatterns = @(
-        '\bgh:\b',
-        'github api',
-        'api.github.com',
-        'graphql',
-        'rate limit',
-        'secondary rate limit',
-        'abuse detection',
-        'resource not accessible',
-        'x-ratelimit',
-        'HTTP 5\d\d',
-        'HTTP 4\d\d'
-    )
-    foreach ($pattern in $ghPatterns) {
-        if ($combined -match $pattern) {
-            return @{ category = "gh"; status = $latestStatus; detail = $pattern }
-        }
-    }
-
-    $gitPatterns = @(
-        'fatal:\s+not a git repository',
-        'fatal:\s+unable to access',
-        'fatal:\s+could not read from remote repository',
-        'non-fast-forward',
-        'rejected',
-        'cannot lock ref',
-        'merge conflict',
-        'unmerged files',
-        'refspec',
-        'detached HEAD',
-        'pathspec',
-        'git push',
-        'git pull',
-        'git fetch'
-    )
-    foreach ($pattern in $gitPatterns) {
-        if ($combined -match $pattern) {
-            return @{ category = "git"; status = $latestStatus; detail = $pattern }
-        }
-    }
-
-    $networkPatterns = @(
-        'econnreset',
-        'econnrefused',
-        'etimedout',
-        'enotfound',
-        'network is unreachable',
-        'connection timed out',
-        'timeout',
-        'timed out',
-        'socket hang up',
-        'tls',
-        'ssl',
-        'certificate',
-        'failed to connect'
-    )
-    foreach ($pattern in $networkPatterns) {
-        if ($combined -match $pattern) {
-            return @{ category = "network"; status = $latestStatus; detail = $pattern }
-        }
-    }
-
-    $testPatterns = @(
-        'go test',
-        'pnpm .* test',
-        'npm test',
-        'yarn test',
-        'pytest',
-        'jest',
-        'vitest',
-        'tests failed',
-        'test failed',
-        '\bFAIL\b'
-    )
-    foreach ($pattern in $testPatterns) {
-        if ($combined -match $pattern) {
-            return @{ category = "test"; status = $latestStatus; detail = $pattern }
-        }
     }
 
     if ($latestStatus -in @("failed", "killed", "crashed", "error", "aborted")) {
@@ -1485,135 +1388,6 @@ function Increment-TaskRetryCount {
     $current += 1
     $script:TaskRetryCounts[$key] = $current
     return $current
-}
-
-function Get-TaskRetryState {
-    param(
-        [string]$TaskId,
-        [string]$Category
-    )
-    $key = Get-TaskRetryKey -TaskId $TaskId -Category $Category
-    if ($script:TaskRetryState.ContainsKey($key)) {
-        return $script:TaskRetryState[$key]
-    }
-    return @{ count = 0; last_at = $null; next_at = $null }
-}
-
-function Set-TaskRetryState {
-    param(
-        [string]$TaskId,
-        [string]$Category,
-        [hashtable]$State
-    )
-    $key = Get-TaskRetryKey -TaskId $TaskId -Category $Category
-    $script:TaskRetryState[$key] = $State
-}
-
-function Get-RetryPolicyForCategory {
-    param([string]$Category)
-    switch ($Category) {
-        "api_key" { return @{ max_attempts = 2; base_delay_sec = 300; max_delay_sec = 1800; new_session_after = 2; message = "Detected an API key/auth failure. Please update credentials and retry the task." } }
-        "context_window" { return @{ max_attempts = 2; base_delay_sec = 300; max_delay_sec = 1800; new_session_after = 1; message = "Context window exceeded. Starting a fresh session so you can retry cleanly." } }
-        "agent_failed" { return @{ max_attempts = 2; base_delay_sec = 180; max_delay_sec = 1200; new_session_after = 2; message = "Agent crashed or exited unexpectedly. Please retry the task." } }
-        "git" { return @{ max_attempts = 3; base_delay_sec = 120; max_delay_sec = 900; new_session_after = 3; message = "Git failure detected. Please fix git status/push and retry the task." } }
-        "gh" { return @{ max_attempts = 3; base_delay_sec = 120; max_delay_sec = 900; new_session_after = 3; message = "GitHub CLI/API failure detected. Please retry once the GH issue clears." } }
-        "vk" { return @{ max_attempts = 4; base_delay_sec = 60; max_delay_sec = 600; new_session_after = 0; message = "Vibe-kanban appears unavailable. Please retry after the service recovers." } }
-        "network" { return @{ max_attempts = 4; base_delay_sec = 60; max_delay_sec = 600; new_session_after = 0; message = "Network connectivity issue detected. Please retry after connectivity stabilizes." } }
-        "test" { return @{ max_attempts = 2; base_delay_sec = 300; max_delay_sec = 1800; new_session_after = 2; message = "Tests failed. Please fix the failures and retry the task." } }
-        "missing_branch" { return @{ max_attempts = 2; base_delay_sec = 120; max_delay_sec = 900; new_session_after = 2; message = "Remote branch is missing. Please check 'git status' and push your commits, then retry." } }
-        default { return $null }
-    }
-}
-
-function Get-RetryDelaySec {
-    param(
-        [int]$BaseDelaySec,
-        [int]$Attempt,
-        [int]$MaxDelaySec
-    )
-    if ($Attempt -lt 1) { return $BaseDelaySec }
-    $delay = [int][math]::Round($BaseDelaySec * [math]::Pow(2, ($Attempt - 1)))
-    if ($MaxDelaySec -gt 0 -and $delay -gt $MaxDelaySec) { return $MaxDelaySec }
-    return $delay
-}
-
-function Test-TaskRetryBackoff {
-    param(
-        [string]$TaskId,
-        [string]$Category
-    )
-    $record = Get-TaskRetryState -TaskId $TaskId -Category $Category
-    if ($record.next_at -and (Get-Date) -lt $record.next_at) {
-        $remaining = [math]::Ceiling(($record.next_at - (Get-Date)).TotalSeconds)
-        return @{ should_wait = $true; remaining = $remaining; record = $record }
-    }
-    return @{ should_wait = $false; remaining = 0; record = $record }
-}
-
-function Register-TaskRetryAttempt {
-    param(
-        [string]$TaskId,
-        [string]$Category,
-        [hashtable]$Policy
-    )
-    $record = Get-TaskRetryState -TaskId $TaskId -Category $Category
-    $record.count = [int]($record.count ?? 0) + 1
-    $record.last_at = Get-Date
-    $delay = Get-RetryDelaySec -BaseDelaySec $Policy.base_delay_sec -Attempt $record.count -MaxDelaySec $Policy.max_delay_sec
-    $record.next_at = (Get-Date).AddSeconds($delay)
-    Set-TaskRetryState -TaskId $TaskId -Category $Category -State $record
-    $null = Increment-TaskRetryCount -TaskId $TaskId -Category $Category
-    return @{ record = $record; delay_sec = $delay }
-}
-
-function Invoke-AutoRetryPolicy {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$AttemptId,
-        [Parameter(Mandatory)][hashtable]$Info,
-        [Parameter(Mandatory)][string]$Category,
-        [string]$ReasonPrefix = "retry",
-        [string]$FallbackMessage
-    )
-    $policy = Get-RetryPolicyForCategory -Category $Category
-    if (-not $policy) { return $false }
-
-    $state = Get-TaskRetryState -TaskId $Info.task_id -Category $Category
-    if ($state.count -ge $policy.max_attempts) {
-        if (-not $Info.retry_exhausted_notified) {
-            $msg = "Repeated ${Category} failures hit the max retry limit. Please review manually or reply NO_CHANGES if nothing to merge."
-            $null = Try-SendFollowUp -AttemptId $AttemptId -Info $Info -Message $msg -Reason "${ReasonPrefix}_exhausted"
-            $Info.retry_exhausted_notified = $true
-        }
-        Write-Log "Retry limit reached for $($Info.branch) category=$Category" -Level "WARN"
-        return $true
-    }
-
-    $backoff = Test-TaskRetryBackoff -TaskId $Info.task_id -Category $Category
-    if ($backoff.should_wait) {
-        Write-Log "Retry backoff active for $($Info.branch) category=$Category (wait ${($backoff.remaining)}s)" -Level "WARN"
-        return $true
-    }
-
-    $retryInfo = Register-TaskRetryAttempt -TaskId $Info.task_id -Category $Category -Policy $policy
-    $count = $retryInfo.record.count
-    $message = if ($FallbackMessage) { $FallbackMessage } elseif ($policy.message) { $policy.message } else { $null }
-    if (-not $message) {
-        $message = "Detected a failure (${Category}). Please retry the task."
-    }
-    $message = "$message (attempt $count/$($policy.max_attempts))"
-    $useNewSession = $false
-    if ($policy.new_session_after -and $policy.new_session_after -gt 0 -and $count -ge $policy.new_session_after) {
-        $useNewSession = $true
-    }
-
-    if ($useNewSession) {
-        $null = Try-SendFollowUpNewSession -AttemptId $AttemptId -Info $Info -Message $message -Reason "${ReasonPrefix}_${Category}_new_session"
-    }
-    else {
-        $null = Try-SendFollowUp -AttemptId $AttemptId -Info $Info -Message $message -Reason "${ReasonPrefix}_${Category}"
-    }
-    return $true
 }
 
 function Try-SendFollowUpNewSession {
@@ -2007,7 +1781,6 @@ function Sync-TrackedAttempts {
                 last_merge_failure_category   = $null
                 last_merge_failure_at         = $null
                 manual_review_notified        = $false
-                retry_exhausted_notified      = $false
                 last_process_status           = $null
                 last_process_completed_at     = $null
                 pending_followup              = $null
@@ -2228,17 +2001,30 @@ function Process-CompletedAttempts {
                     }
 
                     if (-not $recentFollowup) {
-                        $handled = $false
-                        if ($failure.category -and $failure.category -ne "unknown") {
-                            $handled = Invoke-AutoRetryPolicy -AttemptId $attemptId -Info $info -Category $failure.category -ReasonPrefix "retry"
-                        }
-                        if (-not $handled) {
-                            $fallback = "Remote branch $branch is missing. Please check 'git status' and push your commits. If there are no changes, reply NO_CHANGES so we can mark this for manual review."
-                            $handled = Invoke-AutoRetryPolicy -AttemptId $attemptId -Info $info -Category "missing_branch" -ReasonPrefix "missing_branch" -FallbackMessage $fallback
-                        }
-                        if ($handled) {
+                        if ($failure.category -in @("api_key", "agent_failed")) {
+                            $count = Increment-TaskRetryCount -TaskId $info.task_id -Category $failure.category
+                            if ($count -ge 2) {
+                                $msg = "Detected a failure (${failure.category}). Starting a fresh session now. Please retry your task. If it fails again or there are no changes, reply NO_CHANGES so we can mark it for manual review."
+                                $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "retry_new_session"
+                            }
+                            else {
+                                $msg = "Detected a failure (${failure.category}). Please retry your task. If it fails again, I will start a fresh session."
+                                $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "retry_task"
+                            }
                             $info.push_notified = $true
+                            continue
                         }
+
+                        $count = Increment-TaskRetryCount -TaskId $info.task_id -Category "missing_branch"
+                        if ($count -ge 2) {
+                            $msg = "Remote branch $branch is missing. Starting a fresh session to retry. Please check 'git status'; push if there are commits. If there are no changes, reply NO_CHANGES."
+                            $null = Try-SendFollowUpNewSession -AttemptId $attemptId -Info $info -Message $msg -Reason "missing_branch_new_session"
+                        }
+                        else {
+                            $msg = "Remote branch $branch is missing. Please check 'git status' and push if there are commits. If there are no changes, reply NO_CHANGES so we can mark this for manual review."
+                            $null = Try-SendFollowUp -AttemptId $attemptId -Info $info -Message $msg -Reason "missing_branch"
+                        }
+                        $info.push_notified = $true
                     }
                     continue
                 }
@@ -2909,7 +2695,8 @@ function Maybe-TriggerCISweep {
     if (Test-GithubCooldown) { return }
 
     $baseBranch = Get-BaseBranchName
-    $mergedCount = Get-MergedPRCountSince -Since $script:LastCISweepAt -BaseBranch $baseBranch -Limit 50
+    $limit = [math]::Max(50, $prThreshold * 2)
+    $mergedCount = Get-MergedPRCountSince -Since $script:LastCISweepAt -BaseBranch $baseBranch -Limit $limit
     if ($mergedCount -lt $prThreshold) { return }
 
     $reason = "pr-backup"
