@@ -11,7 +11,7 @@ import json
 import hashlib
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 from datetime import datetime
 
@@ -38,6 +38,9 @@ class ExportResult:
     model_path: str = ""
     model_hash: str = ""
     version: str = ""
+    frozen_graph_path: str = ""
+    frozen_graph_hash: str = ""
+    frozen_graph_size_bytes: int = 0
     
     # Signatures
     input_signature: Dict[str, Any] = field(default_factory=dict)
@@ -61,6 +64,9 @@ class ExportResult:
             "model_path": self.model_path,
             "model_hash": self.model_hash,
             "version": self.version,
+            "frozen_graph_path": self.frozen_graph_path,
+            "frozen_graph_hash": self.frozen_graph_hash,
+            "frozen_graph_size_bytes": self.frozen_graph_size_bytes,
             "input_signature": self.input_signature,
             "output_signature": self.output_signature,
             "export_timestamp": self.export_timestamp,
@@ -159,8 +165,18 @@ class ModelExporter:
                 signatures=signatures,
             )
             
-            # Compute model hash
-            model_hash = self.compute_model_hash(model_path)
+            # Export frozen graph for deterministic hashing
+            frozen_graph_path = ""
+            frozen_graph_hash = ""
+            frozen_graph_size = 0
+            if getattr(self.config, "export_frozen_graph", True):
+                frozen_graph_path, frozen_graph_hash, frozen_graph_size = self._export_frozen_graph(
+                    model_path,
+                    versioned_path,
+                )
+            
+            # Compute model hash (prefer frozen graph hash)
+            model_hash = self.compute_model_hash(model_path, frozen_graph_path)
             
             # Get model size
             model_size = self._get_directory_size(model_path)
@@ -173,6 +189,9 @@ class ModelExporter:
                 model_path=model_path,
                 model_hash=model_hash,
                 version=version,
+                frozen_graph_path=frozen_graph_path,
+                frozen_graph_hash=frozen_graph_hash,
+                frozen_graph_size_bytes=frozen_graph_size,
                 input_signature={
                     "name": self.config.input_name,
                     "shape": [None, input_dim],
@@ -220,12 +239,13 @@ class ModelExporter:
         else:
             return f"{prefix}1.0.0"
     
-    def compute_model_hash(self, model_path: str) -> str:
+    def compute_model_hash(self, model_path: str, frozen_graph_path: Optional[str] = None) -> str:
         """
         Compute SHA256 hash of model weights.
         
         Args:
             model_path: Path to SavedModel directory
+            frozen_graph_path: Optional frozen graph path for deterministic hashing
             
         Returns:
             SHA256 hash string
@@ -234,18 +254,13 @@ class ModelExporter:
             return ""
         
         try:
-            # Load the saved model
+            if frozen_graph_path and os.path.exists(frozen_graph_path):
+                return self._hash_file(frozen_graph_path)
+            
+            # Load the saved model and hash variable weights
             loaded_model = tf.saved_model.load(model_path)
-            
-            # Get all variables
             variables = loaded_model.variables
-            
-            # Concatenate all weights
-            all_weights = []
-            for var in variables:
-                all_weights.append(var.numpy().tobytes())
-            
-            # Compute hash
+            all_weights = [var.numpy().tobytes() for var in variables]
             combined = b"".join(all_weights)
             return hashlib.sha256(combined).hexdigest()
             
@@ -277,6 +292,56 @@ class ModelExporter:
                 filepath = os.path.join(root, filename)
                 total_size += os.path.getsize(filepath)
         return total_size
+
+    def _hash_file(self, file_path: str) -> str:
+        """Hash a single file."""
+        hasher = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            hasher.update(f.read())
+        return hasher.hexdigest()
+
+    def _export_frozen_graph(
+        self,
+        model_path: str,
+        export_dir: str,
+    ) -> Tuple[str, str, int]:
+        """
+        Export a frozen graph for deterministic hashing.
+        
+        Returns:
+            Tuple of (frozen_graph_path, hash, size_bytes)
+        """
+        if not TF_AVAILABLE:
+            return "", "", 0
+        
+        try:
+            from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
+            
+            loaded_model = tf.saved_model.load(model_path)
+            serving_fn = loaded_model.signatures[self.config.signature_name]
+            concrete_fn = serving_fn.get_concrete_function()
+            frozen_fn = convert_variables_to_constants_v2(concrete_fn)
+            graph_def = frozen_fn.graph.as_graph_def(add_shapes=True)
+            
+            frozen_filename = getattr(self.config, "frozen_graph_filename", "model_frozen.pb")
+            tf.io.write_graph(
+                graph_def,
+                export_dir,
+                frozen_filename,
+                as_text=False,
+            )
+            
+            frozen_graph_path = os.path.join(export_dir, frozen_filename)
+            frozen_hash = self._hash_file(frozen_graph_path)
+            frozen_size = os.path.getsize(frozen_graph_path)
+            
+            logger.info(f"Frozen graph exported to {frozen_graph_path}")
+            
+            return frozen_graph_path, frozen_hash, frozen_size
+            
+        except Exception as e:
+            logger.warning(f"Frozen graph export failed: {e}")
+            return "", "", 0
     
     def _extract_operations(self, model_path: str) -> list:
         """

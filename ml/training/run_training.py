@@ -32,7 +32,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def setup_deterministic_environment(seed: int = 42, force_cpu: bool = True) -> Dict[str, str]:
+def setup_deterministic_environment(
+    seed: int = 42,
+    force_cpu: bool = True,
+    inter_op_threads: int = 1,
+    intra_op_threads: int = 1,
+) -> Dict[str, str]:
     """
     Configure environment for deterministic execution.
     
@@ -51,22 +56,64 @@ def setup_deterministic_environment(seed: int = 42, force_cpu: bool = True) -> D
         "CUDA_VISIBLE_DEVICES": "" if force_cpu else os.environ.get("CUDA_VISIBLE_DEVICES", ""),
         
         # TensorFlow threading
-        "TF_NUM_INTEROP_THREADS": "1",
-        "TF_NUM_INTRAOP_THREADS": "1",
+        "TF_NUM_INTEROP_THREADS": str(inter_op_threads),
+        "TF_NUM_INTRAOP_THREADS": str(intra_op_threads),
         
         # Disable TensorFlow warnings
         "TF_CPP_MIN_LOG_LEVEL": "2",
         
         # NumPy threading
-        "OMP_NUM_THREADS": "1",
-        "MKL_NUM_THREADS": "1",
-        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": str(intra_op_threads),
+        "MKL_NUM_THREADS": str(intra_op_threads),
+        "OPENBLAS_NUM_THREADS": str(intra_op_threads),
     }
     
     for key, value in env_vars.items():
         os.environ[key] = value
         
     return env_vars
+
+
+def build_metrics_report(
+    model_version: str,
+    metrics,
+    latency: Dict[str, float],
+    training_config,
+    dataset_counts: Dict[str, int],
+    system_info: Dict[str, Any],
+    cpu_only: bool,
+) -> Dict[str, Any]:
+    """Build a training metrics report for reproducibility."""
+    return {
+        "model_name": "trust_score",
+        "version": model_version,
+        "training_date": datetime.utcnow().isoformat() + "Z",
+        "framework": "tensorflow",
+        "framework_version": system_info.get("tensorflow_version", "unknown"),
+        "metrics": {
+            "mae": metrics.mae,
+            "rmse": metrics.rmse,
+            "r2": metrics.r2,
+            "accuracy_5": metrics.accuracy_5,
+            "accuracy_10": metrics.accuracy_10,
+            "accuracy_20": metrics.accuracy_20,
+            "p95_error": metrics.p95_error,
+        },
+        "inference_latency_ms": latency,
+        "training_config": {
+            "epochs": training_config.model.epochs,
+            "batch_size": training_config.model.batch_size,
+            "learning_rate": training_config.model.learning_rate,
+            "optimizer": training_config.model.optimizer,
+            "seed": training_config.random_seed,
+        },
+        "dataset": dataset_counts,
+        "determinism": {
+            "tf_deterministic_ops": training_config.deterministic,
+            "random_seed": training_config.random_seed,
+            "cpu_only": cpu_only,
+        },
+    }
 
 
 def get_system_info() -> Dict[str, Any]:
@@ -210,8 +257,16 @@ def run_training(
     
     # Setup deterministic environment
     seed = config.get('random_seed', 42)
-    force_cpu = config.get('determinism', {}).get('force_cpu', True)
-    env_vars = setup_deterministic_environment(seed, force_cpu)
+    determinism_cfg = config.get('determinism', {})
+    force_cpu = determinism_cfg.get('force_cpu', True)
+    inter_op_threads = determinism_cfg.get('inter_op_parallelism', 1)
+    intra_op_threads = determinism_cfg.get('intra_op_parallelism', 1)
+    env_vars = setup_deterministic_environment(
+        seed=seed,
+        force_cpu=force_cpu,
+        inter_op_threads=inter_op_threads,
+        intra_op_threads=intra_op_threads,
+    )
     logger.info(f"Deterministic environment configured (seed={seed}, cpu_only={force_cpu})")
     
     # Collect system info
@@ -239,6 +294,12 @@ def run_training(
     # TensorFlow setup
     import tensorflow as tf
     tf.random.set_seed(seed)
+    
+    try:
+        tf.config.threading.set_inter_op_parallelism_threads(inter_op_threads)
+        tf.config.threading.set_intra_op_parallelism_threads(intra_op_threads)
+    except Exception as e:
+        logger.warning(f"Could not set TensorFlow threading config: {e}")
     
     # Enable deterministic ops
     if config.get('determinism', {}).get('tf_deterministic_ops', True):
@@ -338,6 +399,11 @@ def run_training(
         test_y = np.array([f.trust_score for f in test_features])
         
         logger.info(f"Features: {train_X.shape[0]} train, {val_X.shape[0]} val, {test_X.shape[0]} test")
+        dataset_counts = {
+            "train_samples": int(train_X.shape[0]),
+            "validation_samples": int(val_X.shape[0]),
+            "test_samples": int(test_X.shape[0]),
+        }
         
         # Step 5: Training
         logger.info("")
@@ -389,6 +455,16 @@ def run_training(
         
         logger.info("Model PASSED all evaluation thresholds")
         
+        # Benchmark latency for reporting
+        latency = evaluator.benchmark_latency(
+            training_result.model,
+            input_dim=training_config.model.input_dim,
+            batch_size=1,
+            warmup_runs=10,
+            timed_runs=50,
+            seed=training_config.random_seed,
+        )
+        
         # Step 7: Export
         logger.info("")
         logger.info("STEP 7: Model Export")
@@ -427,6 +503,26 @@ def run_training(
         manifest_generator.save(manifest, str(manifest_path))
         logger.info(f"Manifest saved to: {manifest_path}")
         
+        # Step 9: Metrics report
+        logger.info("")
+        logger.info("STEP 9: Metrics Report")
+        logger.info("-" * 50)
+        
+        metrics_report = build_metrics_report(
+            model_version=model_version,
+            metrics=metrics,
+            latency=latency,
+            training_config=training_config,
+            dataset_counts=dataset_counts,
+            system_info=system_info,
+            cpu_only=force_cpu,
+        )
+        
+        metrics_path = Path(export_result.model_path).parent / "metrics.json"
+        with open(metrics_path, "w") as f:
+            json.dump(metrics_report, f, indent=2)
+        logger.info(f"Metrics report saved to: {metrics_path}")
+        
         # Summary
         total_time = time.time() - start_time
         logger.info("")
@@ -451,6 +547,7 @@ def run_training(
             "model_version": model_version,
             "metrics": metrics.to_dict(),
             "manifest_path": str(manifest_path),
+            "metrics_path": str(metrics_path),
             "training_time_seconds": total_time,
         }
         

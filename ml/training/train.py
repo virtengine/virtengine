@@ -11,7 +11,10 @@ Usage:
 """
 
 import argparse
+import json
 import logging
+import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -19,16 +22,7 @@ from typing import Optional
 
 import numpy as np
 
-from ml.training.config import TrainingConfig, DatasetConfig
-from ml.training.dataset.ingestion import DatasetIngestion
-from ml.training.dataset.preprocessing import DatasetPreprocessor
-from ml.training.dataset.augmentation import DataAugmentation
-from ml.training.dataset.anonymization import PIIAnonymizer
-from ml.training.features.feature_combiner import FeatureExtractor
-from ml.training.model.architecture import TrustScoreModel
-from ml.training.model.training import ModelTrainer
-from ml.training.model.evaluation import ModelEvaluator
-from ml.training.model.export import ModelExporter
+from ml.training.config import TrainingConfig
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +31,44 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def configure_determinism(
+    seed: int,
+    force_cpu: bool = True,
+    inter_op_threads: int = 1,
+    intra_op_threads: int = 1,
+) -> None:
+    """Configure deterministic environment and random seeds."""
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["TF_DETERMINISTIC_OPS"] = "1"
+    os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
+    os.environ["TF_NUM_INTEROP_THREADS"] = str(inter_op_threads)
+    os.environ["TF_NUM_INTRAOP_THREADS"] = str(intra_op_threads)
+    os.environ["OMP_NUM_THREADS"] = str(intra_op_threads)
+    os.environ["MKL_NUM_THREADS"] = str(intra_op_threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(intra_op_threads)
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+    if force_cpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    
+    random.seed(seed)
+    np.random.seed(seed)
+    
+    try:
+        import tensorflow as tf
+        tf.random.set_seed(seed)
+        try:
+            tf.config.experimental.enable_op_determinism()
+        except Exception:
+            logger.warning("Could not enable TensorFlow determinism")
+        try:
+            tf.config.threading.set_inter_op_parallelism_threads(inter_op_threads)
+            tf.config.threading.set_intra_op_parallelism_threads(intra_op_threads)
+        except Exception:
+            logger.warning("Could not set TensorFlow threading config")
+    except ImportError:
+        logger.warning("TensorFlow not available, determinism setup skipped")
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,6 +161,19 @@ def parse_args() -> argparse.Namespace:
     )
     
     parser.add_argument(
+        "--cpu-only",
+        action="store_true",
+        default=True,
+        help="Force CPU-only execution for determinism (default)"
+    )
+    
+    parser.add_argument(
+        "--allow-gpu",
+        action="store_true",
+        help="Allow GPU execution (may reduce determinism)"
+    )
+    
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose output"
@@ -139,6 +184,7 @@ def parse_args() -> argparse.Namespace:
 
 def load_config(args: argparse.Namespace) -> TrainingConfig:
     """Load and merge configuration from file and CLI args."""
+    from ml.training.config import TrainingConfig
     # Start with defaults
     config = TrainingConfig()
     
@@ -201,6 +247,24 @@ def main():
     # Load configuration
     config = load_config(args)
     logger.info(f"Configuration loaded: {config.experiment_name}")
+    
+    # Determinism configuration
+    force_cpu = args.cpu_only and not args.allow_gpu
+    configure_determinism(
+        seed=config.random_seed,
+        force_cpu=force_cpu,
+        inter_op_threads=1,
+        intra_op_threads=1,
+    )
+    
+    # Import training components after determinism is configured
+    from ml.training.dataset.ingestion import DatasetIngestion
+    from ml.training.dataset.preprocessing import DatasetPreprocessor
+    from ml.training.dataset.augmentation import DataAugmentation
+    from ml.training.features.feature_combiner import FeatureExtractor
+    from ml.training.model.training import ModelTrainer
+    from ml.training.model.evaluation import ModelEvaluator
+    from ml.training.model.export import ModelExporter
     
     # Create output directory
     output_dir = Path(args.output_dir)
@@ -307,6 +371,14 @@ def main():
         
         evaluator = ModelEvaluator(config.model)
         metrics = evaluator.evaluate(training_result.model, test_X, test_y)
+        latency = evaluator.benchmark_latency(
+            training_result.model,
+            input_dim=config.model.input_dim,
+            batch_size=1,
+            warmup_runs=10,
+            timed_runs=50,
+            seed=config.random_seed,
+        )
         
         report_path = str(output_dir / "evaluation_report.txt")
         report = evaluator.generate_report(metrics, report_path)
@@ -342,6 +414,46 @@ def main():
             go_example_path = str(output_dir / "go_inference_example.go")
             with open(go_example_path, 'w') as f:
                 f.write(exporter.get_go_inference_example(export_result))
+            
+            # Save metrics report alongside export
+            metrics_report = {
+                "model_name": "trust_score",
+                "version": export_result.version,
+                "training_date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "framework": "tensorflow",
+                "framework_version": export_result.tensorflow_version,
+                "metrics": {
+                    "mae": metrics.mae,
+                    "rmse": metrics.rmse,
+                    "r2": metrics.r2,
+                    "accuracy_5": metrics.accuracy_5,
+                    "accuracy_10": metrics.accuracy_10,
+                    "accuracy_20": metrics.accuracy_20,
+                    "p95_error": metrics.p95_error,
+                },
+                "inference_latency_ms": latency,
+                "training_config": {
+                    "epochs": config.model.epochs,
+                    "batch_size": config.model.batch_size,
+                    "learning_rate": config.model.learning_rate,
+                    "optimizer": config.model.optimizer,
+                    "seed": config.random_seed,
+                },
+                "dataset": {
+                    "train_samples": int(train_X.shape[0]),
+                    "validation_samples": int(val_X.shape[0]),
+                    "test_samples": int(test_X.shape[0]),
+                },
+                "determinism": {
+                    "tf_deterministic_ops": config.deterministic,
+                    "random_seed": config.random_seed,
+                    "cpu_only": force_cpu,
+                },
+            }
+            
+            metrics_path = Path(export_result.model_path).parent / "metrics.json"
+            with open(metrics_path, "w") as f:
+                json.dump(metrics_report, f, indent=2)
         else:
             logger.error(f"Export failed: {export_result.error_message}")
         
@@ -374,9 +486,10 @@ def export_from_checkpoint(
 ) -> None:
     """Export model from a checkpoint."""
     logger.info(f"Loading model from checkpoint: {checkpoint_path}")
+    from ml.training.model.architecture import TrustScoreModel
+    from ml.training.model.export import ModelExporter
     
     model = TrustScoreModel.load(checkpoint_path, config.model)
-    
     exporter = ModelExporter(config.export)
     export_result = exporter.export_savedmodel(
         model,
