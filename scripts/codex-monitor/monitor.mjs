@@ -2231,6 +2231,47 @@ async function checkMergedPRsAndUpdateTasks() {
     for (const entry of batch) {
       const task = entry.task;
       const taskStatus = entry.status;
+      // Find the attempt associated with this task — first in local status,
+      // then fall back to the VK API (which includes archived attempts)
+      let attempt = attempts.find((a) => a?.task_id === task.id);
+      if (!attempt) {
+        // VK API fallback: find the most recent attempt for this task
+        const vkMatch = vkAttempts
+          .filter((a) => a?.task_id === task.id)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          );
+        if (vkMatch.length > 0) {
+          attempt = vkMatch[0];
+          console.log(
+            `[monitor] Found VK attempt for task "${task.title}" via API fallback (branch: ${attempt.branch})`,
+          );
+        } else {
+          console.log(
+            `[monitor] No attempt found for task "${task.title}" (${task.id.substring(0, 8)}...) — cannot resolve branch/PR`,
+          );
+        }
+      }
+      const branch =
+        attempt?.branch ||
+        task?.branch ||
+        task?.workspace_branch ||
+        task?.git_branch;
+      const prNumber =
+        attempt?.pr_number ||
+        task?.pr_number ||
+        parsePrNumberFromUrl(attempt?.pr_url) ||
+        parsePrNumberFromUrl(task?.pr_url);
+      let prInfo = null;
+      if (prNumber) {
+        prInfo = await getPullRequestByNumber(prNumber);
+      }
+      const isMerged =
+        !!prInfo?.mergedAt ||
+        (!!prInfo?.merged_at && prInfo.merged_at !== null);
+      const prState = prInfo?.state ? String(prInfo.state).toUpperCase() : "";
 
       // ── Skip cancelled/done tasks — they should never be recovered ──
       if (taskStatus === "cancelled" || taskStatus === "done") {
