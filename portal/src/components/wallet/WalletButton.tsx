@@ -2,11 +2,13 @@
 
 import { useWallet } from '@/lib/portal-adapter';
 import { useWalletModal } from './WalletModal';
+import { useTranslation } from 'react-i18next';
 
 export function WalletButton() {
   const { status, accounts, activeAccountIndex, disconnect } = useWallet();
   const { open: openWalletModal } = useWalletModal();
   const account = accounts[activeAccountIndex];
+  const { t } = useTranslation();
 
   if (status === 'connecting') {
     return (
@@ -16,7 +18,8 @@ export function WalletButton() {
         className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground opacity-50 sm:px-4"
       >
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-        <span className="hidden sm:inline">Connecting...</span>
+        <span className="hidden sm:inline">{t('Connecting...')}</span>
+        <span className="sm:hidden">{t('Connecting...')}</span>
       </button>
     );
   }
@@ -25,7 +28,8 @@ export function WalletButton() {
     return (
       <div className="flex items-center gap-1 sm:gap-2">
         <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 sm:gap-2 sm:px-3 sm:py-2">
-          <span className="status-dot status-dot-success" />
+          <span className="status-dot status-dot-success" aria-hidden="true" />
+          <span className="sr-only">{t('Wallet connected')}</span>
           <span className="font-mono text-xs sm:text-sm">
             {account.address.slice(0, 6)}...{account.address.slice(-4)}
           </span>
@@ -34,9 +38,9 @@ export function WalletButton() {
           type="button"
           onClick={() => void disconnect()}
           className="rounded-lg border border-border px-2 py-1.5 text-xs hover:bg-accent sm:px-3 sm:py-2 sm:text-sm"
-          aria-label="Disconnect wallet"
+          aria-label={t('Disconnect wallet')}
         >
-          <span className="hidden sm:inline">Disconnect</span>
+          <span className="hidden sm:inline">{t('Disconnect')}</span>
           <svg
             className="h-4 w-4 sm:hidden"
             fill="none"
@@ -62,8 +66,8 @@ export function WalletButton() {
       onClick={openWalletModal}
       className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:px-4"
     >
-      <span className="hidden sm:inline">Connect Wallet</span>
-      <span className="sm:hidden">Connect</span>
+      <span className="hidden sm:inline">{t('Connect Wallet')}</span>
+      <span className="sm:hidden">{t('Connect')}</span>
     </button>
   );
 }

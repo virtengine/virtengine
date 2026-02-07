@@ -2,10 +2,12 @@
 
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     setMounted(true);
@@ -13,7 +15,11 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <button type="button" className="rounded-lg p-2 hover:bg-accent" aria-label="Toggle theme">
+      <button
+        type="button"
+        className="rounded-lg p-2 hover:bg-accent"
+        aria-label={t('Toggle theme')}
+      >
         <div className="h-5 w-5" />
       </button>
     );
@@ -26,7 +32,9 @@ export function ThemeToggle() {
       type="button"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       className="rounded-lg p-2 hover:bg-accent"
-      aria-label={`Switch to ${isDark ? 'light' : 'dark'} theme`}
+      aria-label={t('Switch to {{theme}} theme', {
+        theme: isDark ? t('light') : t('dark'),
+      })}
     >
       {isDark ? (
         <svg

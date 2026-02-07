@@ -24,14 +24,7 @@ import {
 } from '@/stores/customerDashboardStore';
 import { formatCurrency } from '@/lib/utils';
 import type { CustomerAllocationStatus } from '@/types/customer';
-
-const ALLOCATION_TABS: { label: string; value: CustomerAllocationStatus | 'all' }[] = [
-  { label: 'All', value: 'all' },
-  { label: 'Running', value: 'running' },
-  { label: 'Deploying', value: 'deploying' },
-  { label: 'Failed', value: 'failed' },
-  { label: 'Terminated', value: 'terminated' },
-];
+import { useTranslation } from 'react-i18next';
 
 function StatCard({
   title,
@@ -64,6 +57,7 @@ function StatCard({
 }
 
 export function CustomerDashboardPage() {
+  const { t } = useTranslation();
   const {
     stats,
     usage,
@@ -80,6 +74,13 @@ export function CustomerDashboardPage() {
 
   const filteredAllocations = useCustomerDashboardStore(selectFilteredCustomerAllocations);
   const unreadCount = useCustomerDashboardStore(selectUnreadNotificationCount);
+  const allocationTabs: { label: string; value: CustomerAllocationStatus | 'all' }[] = [
+    { label: t('All'), value: 'all' },
+    { label: t('Running'), value: 'running' },
+    { label: t('Deploying'), value: 'deploying' },
+    { label: t('Failed'), value: 'failed' },
+    { label: t('Terminated'), value: 'terminated' },
+  ];
 
   useEffect(() => {
     void fetchDashboard();
@@ -88,7 +89,7 @@ export function CustomerDashboardPage() {
   if (error) {
     return (
       <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
-        <p className="font-medium text-destructive">Error loading dashboard</p>
+        <p className="font-medium text-destructive">{t('Error loading dashboard')}</p>
         <p className="text-sm text-muted-foreground">{error}</p>
       </div>
     );
@@ -98,8 +99,8 @@ export function CustomerDashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="mt-1 text-muted-foreground">Loading your dashboard…</p>
+          <h1 className="text-3xl font-bold">{t('Dashboard')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('Loading your dashboard…')}</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => `skel-${i}`).map((key) => (
@@ -114,33 +115,33 @@ export function CustomerDashboardPage() {
     <div className="space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">{t('Dashboard')}</h1>
         <p className="mt-1 text-muted-foreground">
-          Overview of your allocations, usage, and billing
+          {t('Overview of your allocations, usage, and billing')}
         </p>
       </div>
 
       {/* Summary stat cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Active Allocations"
+          title={t('Active Allocations')}
           value={String(stats.activeAllocations)}
-          subtitle={`${stats.totalOrders} total orders`}
+          subtitle={t('{{count}} total orders', { count: stats.totalOrders })}
         />
         <StatCard
-          title="Monthly Spend"
+          title={t('Monthly Spend')}
           value={formatCurrency(stats.monthlySpend)}
           change={stats.spendChange}
         />
         <StatCard
-          title="Pending Orders"
+          title={t('Pending Orders')}
           value={String(stats.pendingOrders)}
-          subtitle="Awaiting deployment"
+          subtitle={t('Awaiting deployment')}
         />
         <StatCard
-          title="Notifications"
+          title={t('Notifications')}
           value={String(unreadCount)}
-          subtitle={`${notifications.length} total`}
+          subtitle={t('{{count}} total', { count: notifications.length })}
         />
       </div>
 
@@ -150,19 +151,19 @@ export function CustomerDashboardPage() {
         <div className="space-y-6 lg:col-span-2">
           {/* Allocations */}
           <div>
-            <h2 className="mb-4 text-xl font-semibold">Allocations</h2>
+            <h2 className="mb-4 text-xl font-semibold">{t('Allocations')}</h2>
             <Tabs
               value={allocationFilter}
               onValueChange={(v) => setAllocationFilter(v as CustomerAllocationStatus | 'all')}
             >
               <TabsList>
-                {ALLOCATION_TABS.map((tab) => (
+                {allocationTabs.map((tab) => (
                   <TabsTrigger key={tab.value} value={tab.value}>
                     {tab.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
-              {ALLOCATION_TABS.map((tab) => (
+              {allocationTabs.map((tab) => (
                 <TabsContent key={tab.value} value={tab.value}>
                   <AllocationList allocations={filteredAllocations} />
                 </TabsContent>

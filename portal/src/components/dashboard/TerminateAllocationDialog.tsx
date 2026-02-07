@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { CustomerAllocation } from '@/types/customer';
+import { useTranslation } from 'react-i18next';
 
 interface TerminateAllocationDialogProps {
   allocation: CustomerAllocation;
@@ -30,6 +31,7 @@ export function TerminateAllocationDialog({
   onOpenChange,
   onConfirm,
 }: TerminateAllocationDialogProps) {
+  const { t } = useTranslation();
   const [isTerminating, setIsTerminating] = useState(false);
 
   const handleConfirm = async () => {
@@ -46,27 +48,29 @@ export function TerminateAllocationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Terminate Allocation</DialogTitle>
+          <DialogTitle>{t('Terminate Allocation')}</DialogTitle>
           <DialogDescription>
-            Are you sure you want to terminate{' '}
-            <span className="font-medium text-foreground">{allocation.offeringName}</span> on{' '}
-            <span className="font-medium text-foreground">{allocation.providerName}</span>? This
-            action cannot be undone and all provisioned resources will be released.
+            {t('Are you sure you want to terminate {{offering}} on {{provider}}?', {
+              offering: allocation.offeringName,
+              provider: allocation.providerName,
+            })}{' '}
+            {t('This action cannot be undone and all provisioned resources will be released.')}
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          <p className="font-medium">Warning</p>
+          <p className="font-medium">{t('Warning')}</p>
           <p>
-            Terminating this allocation will immediately stop all running workloads and release
-            associated resources. Any unsaved data may be lost.
+            {t(
+              'Terminating this allocation will immediately stop all running workloads and release associated resources. Any unsaved data may be lost.'
+            )}
           </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isTerminating}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isTerminating}>
-            {isTerminating ? 'Terminating…' : 'Terminate Allocation'}
+            {isTerminating ? t('Terminating…') : t('Terminate Allocation')}
           </Button>
         </DialogFooter>
       </DialogContent>

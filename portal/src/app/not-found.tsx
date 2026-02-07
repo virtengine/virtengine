@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Custom 404 page that handles client-side routing for GitHub Pages.
@@ -14,6 +15,7 @@ import Link from 'next/link';
 export default function NotFound() {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   useEffect(() => {
     // Check if this looks like a valid dynamic route
@@ -36,22 +38,22 @@ export default function NotFound() {
   return (
     <div className="container flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
       <h1 className="text-6xl font-bold text-primary">404</h1>
-      <h2 className="mt-4 text-2xl font-semibold">Page Not Found</h2>
+      <h2 className="mt-4 text-2xl font-semibold">{t('Page Not Found')}</h2>
       <p className="mt-2 text-muted-foreground">
-        The page you&apos;re looking for doesn&apos;t exist or has been moved.
+        {t("The page you're looking for doesn't exist or has been moved.")}
       </p>
       <div className="mt-8 flex gap-4">
         <Link
           href="/"
           className="rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:bg-primary/90"
         >
-          Go Home
+          {t('Go Home')}
         </Link>
         <Link
           href="/marketplace"
           className="rounded-lg border border-border px-6 py-3 font-medium hover:bg-accent"
         >
-          Browse Marketplace
+          {t('Browse Marketplace')}
         </Link>
       </div>
     </div>
