@@ -844,6 +844,7 @@ export function loadConfig(argv = process.argv, options = {}) {
     selectedRepository?.orchestratorScript ||
     configData.orchestratorScript ||
     findOrchestratorScript(configDir, repoRoot);
+  const defaultArgs = mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const rawScript =
     cli.script || process.env.ORCHESTRATOR_SCRIPT || defaultScript;
   // Resolve relative paths against configDir (not cwd) so that
@@ -862,8 +863,6 @@ export function loadConfig(argv = process.argv, options = {}) {
       scriptPath = autoDetected;
     }
   }
-  const defaultArgs =
-    mode === "virtengine" ? "-MaxParallel 6 -WaitForMutex" : "";
   const scriptArgsRaw =
     cli.args ||
     process.env.ORCHESTRATOR_ARGS ||
