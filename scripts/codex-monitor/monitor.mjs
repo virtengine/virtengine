@@ -12,6 +12,11 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
 import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
+import {
+  startTelegramBot,
+  stopTelegramBot,
+  injectMonitorFunctions,
+} from "./telegram-bot.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -1704,6 +1709,7 @@ process.on("SIGTERM", () => {
   if (currentChild) {
     currentChild.kill("SIGTERM");
   }
+  stopTelegramBot();
   process.exit(0);
 });
 
@@ -1754,3 +1760,16 @@ void ensureCodexSdkReady().then(() => {
 });
 startProcess();
 startTelegramNotifier();
+
+// ── Two-way Telegram ↔ Codex shell ──────────────────────────────────────────
+injectMonitorFunctions({
+  sendTelegramMessage,
+  readStatusData,
+  readStatusSummary,
+  getCurrentChild: () => currentChild,
+  startProcess,
+  getVibeKanbanUrl: () => vkPublicUrl || vkEndpointUrl,
+  fetchVk,
+  getRepoRoot: () => repoRoot,
+});
+void startTelegramBot();
