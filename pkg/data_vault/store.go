@@ -114,6 +114,13 @@ func (s *EncryptedBlobStore) Store(ctx context.Context, req *UploadRequest) (*En
 		return nil, NewVaultError("Store", ErrStorageBackend, fmt.Sprintf("backend store failed: %v", err))
 	}
 
+	backendRef := ""
+	backendName := ""
+	if putResp.ContentAddress != nil {
+		backendRef = putResp.ContentAddress.BackendRef
+		backendName = string(putResp.ContentAddress.Backend)
+	}
+
 	// Create blob metadata
 	metadata := &BlobMetadata{
 		ID:              blobID,
@@ -129,6 +136,15 @@ func (s *EncryptedBlobStore) Store(ctx context.Context, req *UploadRequest) (*En
 		ExpiresAt:       req.ExpiresAt,
 		RetentionPolicy: req.RetentionPolicy,
 		Tags:            req.Tags,
+		Backend:         backendName,
+		BackendRef:      backendRef,
+	}
+
+	if putResp.ContentAddress != nil {
+		metadata.ContentAddressHash = putResp.ContentAddress.Hash
+		metadata.ContentAddressSize = putResp.ContentAddress.Size
+		metadata.ContentAddressAlgorithm = putResp.ContentAddress.Algorithm
+		metadata.ContentAddressVersion = putResp.ContentAddress.Version
 	}
 
 	// Store metadata
@@ -139,7 +155,7 @@ func (s *EncryptedBlobStore) Store(ctx context.Context, req *UploadRequest) (*En
 	return &EncryptedBlob{
 		Metadata:    *metadata,
 		Envelope:    envelope,
-		BackendPath: putResp.ContentAddress.BackendRef,
+		BackendPath: backendRef,
 	}, nil
 }
 
@@ -169,11 +185,35 @@ func (s *EncryptedBlobStore) Retrieve(ctx context.Context, blobID BlobID) ([]byt
 	// Note: We need to reverse lookup by blob ID to content address
 	// For now, we'll need to enhance this with a mapping
 	// This is a simplified implementation
+	backendRef := metadata.BackendRef
+	if backendRef == "" {
+		backendRef = string(blobID)
+	}
+	backendName := s.backend.Backend()
+	if metadata.Backend != "" {
+		backendName = artifact_store.BackendType(metadata.Backend)
+	}
+	contentAddress := &artifact_store.ContentAddress{
+		Version:    metadata.ContentAddressVersion,
+		Hash:       metadata.ContentAddressHash,
+		Algorithm:  metadata.ContentAddressAlgorithm,
+		Size:       metadata.ContentAddressSize,
+		Backend:    backendName,
+		BackendRef: backendRef,
+	}
+	if len(contentAddress.Hash) == 0 || contentAddress.BackendRef == "" {
+		contentAddress = &artifact_store.ContentAddress{
+			Version:    artifact_store.ContentAddressVersion,
+			Hash:       metadata.ContentHash,
+			Algorithm:  "sha256",
+			Size:       safeUint64FromInt64(metadata.EncryptedSize),
+			Backend:    backendName,
+			BackendRef: backendRef,
+		}
+	}
+
 	getReq := &artifact_store.GetRequest{
-		ContentAddress: &artifact_store.ContentAddress{
-			Backend:    s.backend.Backend(),
-			BackendRef: string(blobID), // Simplified - would need proper mapping
-		},
+		ContentAddress: contentAddress,
 	}
 
 	getResp, err := s.backend.Get(ctx, getReq)
@@ -229,11 +269,35 @@ func (s *EncryptedBlobStore) Delete(ctx context.Context, blobID BlobID) error {
 	}
 
 	// Delete from backend
+	backendRef := metadata.BackendRef
+	if backendRef == "" {
+		backendRef = string(blobID)
+	}
+	backendName := s.backend.Backend()
+	if metadata.Backend != "" {
+		backendName = artifact_store.BackendType(metadata.Backend)
+	}
+	deleteAddress := &artifact_store.ContentAddress{
+		Version:    metadata.ContentAddressVersion,
+		Hash:       metadata.ContentAddressHash,
+		Algorithm:  metadata.ContentAddressAlgorithm,
+		Size:       metadata.ContentAddressSize,
+		Backend:    backendName,
+		BackendRef: backendRef,
+	}
+	if len(deleteAddress.Hash) == 0 || deleteAddress.BackendRef == "" {
+		deleteAddress = &artifact_store.ContentAddress{
+			Version:    artifact_store.ContentAddressVersion,
+			Hash:       metadata.ContentHash,
+			Algorithm:  "sha256",
+			Size:       safeUint64FromInt64(metadata.EncryptedSize),
+			Backend:    backendName,
+			BackendRef: backendRef,
+		}
+	}
+
 	deleteReq := &artifact_store.DeleteRequest{
-		ContentAddress: &artifact_store.ContentAddress{
-			Backend:    s.backend.Backend(),
-			BackendRef: string(blobID), // Simplified mapping
-		},
+		ContentAddress:    deleteAddress,
 		RequestingAccount: metadata.Owner,
 		Force:             true,
 	}
@@ -270,4 +334,16 @@ func (s *EncryptedBlobStore) ListByScope(scope Scope) ([]*BlobMetadata, error) {
 func (s *EncryptedBlobStore) Close() error {
 	// Nothing to clean up for now
 	return nil
+}
+
+// KeyManager returns the key manager used by the store.
+func (s *EncryptedBlobStore) KeyManager() *keys.KeyManager {
+	return s.keyMgr
+}
+
+func safeUint64FromInt64(value int64) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	return uint64(value)
 }

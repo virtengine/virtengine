@@ -736,6 +736,147 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
+  /vault/blobs:
+    post:
+      tags:
+        - Vault
+      summary: Upload a vault blob
+      operationId: uploadVaultBlob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultUploadRequest"
+      responses:
+        "201":
+          description: Vault blob created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultUploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /vault/blobs/{blobId}:
+    get:
+      tags:
+        - Vault
+      summary: Retrieve and decrypt a vault blob
+      operationId: getVaultBlob
+      parameters:
+        - $ref: "#/components/parameters/VaultBlobId"
+        - name: org_id
+          in: query
+          schema:
+            type: string
+        - name: purpose
+          in: query
+          schema:
+            type: string
+        - name: reason
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vault blob data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultRetrieveResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - Vault
+      summary: Delete a vault blob
+      operationId: deleteVaultBlob
+      parameters:
+        - $ref: "#/components/parameters/VaultBlobId"
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vault/blobs/{blobId}/metadata:
+    get:
+      tags:
+        - Vault
+      summary: Get vault blob metadata
+      operationId: getVaultBlobMetadata
+      parameters:
+        - $ref: "#/components/parameters/VaultBlobId"
+        - name: org_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vault blob metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultMetadataResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /vault/audit:
+    get:
+      tags:
+        - Vault
+      summary: Search vault audit events
+      operationId: listVaultAuditEvents
+      parameters:
+        - name: blob_id
+          in: query
+          schema:
+            type: string
+        - name: scope
+          in: query
+          schema:
+            type: string
+        - name: requester
+          in: query
+          schema:
+            type: string
+        - name: org_id
+          in: query
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: end
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vault audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultAuditResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
 components:
   securitySchemes:
     walletAuth:
@@ -781,6 +922,12 @@ components:
         type: string
     invoiceId:
       name: invoiceId
+      in: path
+      required: true
+      schema:
+        type: string
+    VaultBlobId:
+      name: blobId
       in: path
       required: true
       schema:
@@ -852,6 +999,126 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    VaultUploadRequest:
+      type: object
+      required:
+        - scope
+        - payload_base64
+      properties:
+        scope:
+          type: string
+        org_id:
+          type: string
+        retention_policy:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        payload_base64:
+          type: string
+          format: byte
+    VaultUploadResponse:
+      type: object
+      properties:
+        blob_id:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+    VaultRetrieveResponse:
+      type: object
+      properties:
+        blob_id:
+          type: string
+        data_base64:
+          type: string
+          format: byte
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+    VaultMetadataResponse:
+      type: object
+      properties:
+        blob_id:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/VaultBlobMetadata"
+    VaultAuditResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaultAuditEvent"
+    VaultBlobMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+        key_id:
+          type: string
+        key_version:
+          type: integer
+        content_hash:
+          type: string
+        size:
+          type: integer
+        encrypted_size:
+          type: integer
+        owner:
+          type: string
+        org_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        retention_policy:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        backend:
+          type: string
+        backend_ref:
+          type: string
+    VaultAuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        event_type:
+          type: string
+        blob_id:
+          type: string
+        scope:
+          type: string
+        requester:
+          type: string
+        org_id:
+          type: string
+        success:
+          type: boolean
+        error:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        previous_hash:
+          type: string
+        hash:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
     ErrorResponse:
       type: object
       required:

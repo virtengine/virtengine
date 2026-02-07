@@ -19,7 +19,8 @@ type VaultService interface {
 	RetrieveStream(ctx context.Context, req *RetrieveRequest) (io.ReadCloser, *BlobMetadata, error)
 
 	// GetMetadata retrieves blob metadata without decrypting content
-	GetMetadata(ctx context.Context, id BlobID) (*BlobMetadata, error)
+	// Access control is enforced based on requester identity.
+	GetMetadata(ctx context.Context, id BlobID, requester string, orgID string) (*BlobMetadata, error)
 
 	// Delete marks a blob for deletion
 	// Actual deletion may be delayed based on retention policy

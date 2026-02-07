@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/virtengine/virtengine/pkg/data_vault"
 	"github.com/virtengine/virtengine/pkg/observability"
 	portalauth "github.com/virtengine/virtengine/pkg/provider_daemon/auth"
 )
@@ -53,16 +54,19 @@ type PortalAPIServerConfig struct {
 	ProviderAttributes    ProviderAttributes
 	ProviderInfoProvider  ProviderInfoProvider
 	RateLimit             RateLimitConfig
+	VaultService          data_vault.VaultService
+	VaultMaxPayloadBytes  int64
 }
 
 func DefaultPortalAPIServerConfig() PortalAPIServerConfig {
 	return PortalAPIServerConfig{
-		ListenAddr:      ":8080",
-		AllowInsecure:   true,
-		RequireVEID:     true,
-		MinVEIDScore:    80,
-		ShellSessionTTL: 10 * time.Minute,
-		TokenTTL:        5 * time.Minute,
+		ListenAddr:           ":8080",
+		AllowInsecure:        true,
+		RequireVEID:          true,
+		MinVEIDScore:         80,
+		ShellSessionTTL:      10 * time.Minute,
+		TokenTTL:             5 * time.Minute,
+		VaultMaxPayloadBytes: 10 * 1024 * 1024,
 		RateLimit: RateLimitConfig{
 			RequestsPerMinute: 120,
 		},
@@ -79,6 +83,7 @@ type PortalAPIServer struct {
 	providerInfo  ProviderInfoProvider
 	rateLimiter   *PortalRateLimiter
 	authVerifier  *portalauth.Verifier
+	vault         data_vault.VaultService
 }
 
 func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
@@ -90,6 +95,9 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 	}
 	if cfg.TokenTTL == 0 {
 		cfg.TokenTTL = 5 * time.Minute
+	}
+	if cfg.VaultMaxPayloadBytes == 0 {
+		cfg.VaultMaxPayloadBytes = 10 * 1024 * 1024
 	}
 	if cfg.AuditLogger == nil {
 		logger, err := NewAuditLogger(DefaultAuditLogConfig())
@@ -135,6 +143,7 @@ func NewPortalAPIServer(cfg PortalAPIServerConfig) (*PortalAPIServer, error) {
 		srv.providerInfo = NewStaticProviderInfoProvider(cfg.ProviderInfo, cfg.ProviderPricing, cfg.ProviderCapacity, cfg.ProviderAttributes)
 	}
 
+	srv.vault = cfg.VaultService
 	srv.rateLimiter = NewPortalRateLimiter(cfg.RateLimit.RequestsPerMinute, time.Minute)
 
 	return srv, nil
@@ -198,6 +207,14 @@ func (s *PortalAPIServer) setupRoutes(router *mux.Router) {
 	api.Handle("/provider/pricing", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderPricing))).Methods(http.MethodGet)
 	api.Handle("/provider/capacity", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderCapacity))).Methods(http.MethodGet)
 	api.Handle("/provider/attributes", s.authMiddleware(false)(http.HandlerFunc(s.handleProviderAttributes))).Methods(http.MethodGet)
+
+	if s.vault != nil {
+		api.Handle("/vault/blobs", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultUpload))).Methods(http.MethodPost)
+		api.Handle("/vault/blobs/{blobId}", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultRetrieve))).Methods(http.MethodGet)
+		api.Handle("/vault/blobs/{blobId}/metadata", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultMetadata))).Methods(http.MethodGet)
+		api.Handle("/vault/blobs/{blobId}", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultDelete))).Methods(http.MethodDelete)
+		api.Handle("/vault/audit", s.authMiddleware(true)(http.HandlerFunc(s.handleVaultAuditSearch))).Methods(http.MethodGet)
+	}
 }
 
 func (s *PortalAPIServer) Shutdown(ctx context.Context) error {

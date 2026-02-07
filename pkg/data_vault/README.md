@@ -17,8 +17,8 @@ The data vault implements secure storage for all sensitive payloads referenced b
 - **VaultService**: Main service interface for encrypted blob CRUD operations
 - **EncryptedBlobStore**: Storage layer wrapping `artifact_store` with encryption
 - **KeyManager**: DEK/KEK hierarchy with rotation support
-- **AccessControl**: Wallet-scoped auth + role/org permissions (TBD)
-- **AuditLogger**: Immutable audit trail for compliance (TBD)
+- **AccessControl**: Wallet-scoped auth + role/org permissions
+- **AuditLogger**: Immutable audit trail for compliance
 
 ### Security Properties
 
@@ -82,6 +82,11 @@ if err != nil {
 
 // Verify content hash matches on-chain reference
 ```
+
+### Portal API (Provider Daemon)
+
+The provider daemon exposes HTTP endpoints under `/api/v1/vault/*` for upload, retrieve,
+metadata, deletion, and audit search. All requests require wallet-signed or HMAC auth.
 
 ### Key Rotation
 
@@ -159,17 +164,17 @@ go test -run TestEncryptedBlobStore
 - [x] EncryptedBlobStore basic implementation
 - [x] Key manager tests (8 tests passing)
 
-### TODO (Phase 2-6)
+### TODO (Remaining)
 
-- [ ] Access control integration (wallet auth, org isolation)
-- [ ] Audit logging for all decrypt operations
-- [ ] Migration scripts for existing plaintext storage
+- [x] Access control integration (wallet auth, org isolation)
+- [x] Audit logging for all decrypt operations
+- [x] Migration helpers for existing plaintext storage
 - [ ] Streaming support for large blobs (>10MB)
-- [ ] API endpoints (gRPC + HTTP)
-- [ ] Provider daemon integration
+- [x] API endpoints (HTTP)
+- [x] Provider daemon integration
 - [ ] HSM integration for KEK storage (task 30B)
 - [ ] E2E tests
-- [ ] Documentation and runbooks
+- [x] Documentation and runbooks
 
 ## Related
 
