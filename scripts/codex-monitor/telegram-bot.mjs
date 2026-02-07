@@ -59,6 +59,7 @@ const telegramPollLockPath = resolve(
   ".cache",
   "telegram-getupdates.lock",
 );
+const liveDigestStatePath = resolve(repoRoot, ".cache", "ve-live-digest.json");
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -3477,6 +3478,54 @@ function resetLiveDigest() {
     editPending: false,
     sealed: false,
   };
+  // Clear persisted state
+  writeFile(liveDigestStatePath, "{}").catch(() => {});
+}
+
+/**
+ * Persist live digest state to disk so restarts can resume the same message.
+ */
+function persistLiveDigest() {
+  const d = liveDigest;
+  if (!d.messageId) return;
+  const state = {
+    messageId: d.messageId,
+    chatId: d.chatId,
+    startedAt: d.startedAt,
+    entries: d.entries,
+  };
+  writeFile(liveDigestStatePath, JSON.stringify(state)).catch(() => {});
+}
+
+/**
+ * Restore live digest state from disk after a restart.
+ * Returns true if a valid digest was restored (still within window).
+ */
+async function restoreLiveDigest() {
+  try {
+    const raw = await readFile(liveDigestStatePath, "utf8");
+    const state = JSON.parse(raw);
+    if (!state.messageId || !state.startedAt) return false;
+    const now = Date.now();
+    const windowMs = liveDigestWindowSec * 1000;
+    // Only restore if the window hasn't expired
+    if (now - state.startedAt >= windowMs) {
+      await writeFile(liveDigestStatePath, "{}").catch(() => {});
+      return false;
+    }
+    liveDigest.messageId = state.messageId;
+    liveDigest.chatId = state.chatId || telegramChatId;
+    liveDigest.startedAt = state.startedAt;
+    liveDigest.entries = state.entries || [];
+    liveDigest.sealed = false;
+    // Re-schedule the seal timer for remaining window time
+    const remaining = windowMs - (now - state.startedAt);
+    liveDigest.sealTimer = setTimeout(() => sealLiveDigest(), remaining);
+    console.log(`[telegram-bot] restored live digest (${liveDigest.entries.length} entries, ${Math.round(remaining / 1000)}s remaining)`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -3515,12 +3564,14 @@ async function addToLiveDigest(text, priority, category) {
     if (msgId) {
       liveDigest.messageId = msgId;
     }
+    persistLiveDigest();
 
     // Schedule seal
     liveDigest.sealTimer = setTimeout(() => sealLiveDigest(), windowMs);
   } else {
     // Subsequent event — debounced edit
     scheduleLiveDigestEdit();
+    persistLiveDigest();
   }
 }
 
@@ -3668,10 +3719,13 @@ async function flushNotificationQueue() {
  * Start periodic flushing of the notification queue.
  * In live-digest mode, the flush loop is only used as a fallback seal timer.
  */
-function startBatchFlushLoop() {
+async function startBatchFlushLoop() {
   if (!batchingEnabled || batchFlushTimer) return;
-  // In live digest mode, the digest window handles timing — no need for flush loop
-  if (liveDigestEnabled) return;
+  // In live digest mode, restore persisted state and skip flush loop
+  if (liveDigestEnabled) {
+    await restoreLiveDigest();
+    return;
+  }
   const intervalMs = batchIntervalSec * 1000;
   batchFlushTimer = setInterval(() => {
     flushNotificationQueue().catch((err) =>
@@ -3727,8 +3781,8 @@ export async function startTelegramBot() {
   // Start presence announcements for multi-workstation discovery
   startPresenceLoop();
 
-  // Start batched notification system
-  startBatchFlushLoop();
+  // Start batched notification / live digest system
+  await startBatchFlushLoop();
 
   // Clear any pending updates that arrived while we were offline
   try {
