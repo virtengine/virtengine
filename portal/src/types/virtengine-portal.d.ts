@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
 declare module '@virtengine/portal' {
   export const PortalProvider: any;
   export const WalletProvider: any;
@@ -68,6 +69,76 @@ declare module '@virtengine/portal' {
   export type IdentityStatus = any;
   export type VerificationScopeType = any;
   export type IdentityScore = any;
+}
+
+declare module '@virtengine/portal/types/billing' {
+  export type InvoiceStatus = string;
+  export type PaymentStatus = string;
+  export type UsageGranularity = string;
+  export type Invoice = any;
+  export type CostProjection = any;
+  export type UsageHistoryPoint = any;
+  export type UsageSummary = any;
+  export type ResourceUsage = any;
+  export type DeploymentUsage = any;
+  export type ProviderUsage = any;
+}
+
+declare module '@virtengine/portal/hooks/useBilling' {
+  export const useInvoices: any;
+  export const useInvoice: any;
+  export const useCurrentUsage: any;
+  export const useCostProjection: any;
+  export const useUsageHistory: any;
+}
+
+declare module '@virtengine/portal/utils/billing' {
+  export const calculateOutstanding: any;
+  export const hasOverdueInvoices: any;
+  export const formatBillingAmount: any;
+  export const formatBillingPeriod: any;
+  export const formatBillingDate: any;
+  export const generateInvoiceText: any;
+}
+
+declare module '@virtengine/portal/utils/csv' {
+  export const generateInvoicesCSV: any;
+  export const generateUsageReportCSV: any;
+  export const downloadFile: any;
+}
+
+declare module '@virtengine/portal/types/metrics' {
+  export type Alert = any;
+  export type AlertEvent = any;
+  export type AlertMetric = string;
+  export type AlertCondition = string;
+  export type MetricPoint = any;
+  export type MetricSeries = any;
+  export type ResourceMetric = any;
+  export type NetworkMetric = any;
+  export type GpuMetric = any;
+  export type DeploymentSnapshot = any;
+  export type ServiceMetrics = any;
+  export type DeploymentHistory = any;
+  export type DeploymentMetrics = any;
+  export type ProviderMetrics = any;
+  export type MetricTrend = any;
+  export type MetricsSummary = any;
+  export type TimeRange = string;
+  export type Granularity = string;
+  export type WidgetType = string;
+  export type DashboardWidget = any;
+  export type DashboardConfig = any;
+  export type WidgetConfig = any;
+  export type WidgetPosition = any;
+
+  export const ALERT_STATUS_VARIANT: Record<
+    string,
+    'destructive' | 'success' | 'secondary' | 'default' | 'warning' | 'info' | 'outline'
+  >;
+  export const TIME_RANGE_LABELS: Record<string, string>;
+  export const granularityForRange: (range: string) => string;
+  export const formatTimestamp: (timestamp: Date | number, granularity?: string) => string;
 }
 
 declare module '@virtengine/portal/*' {
