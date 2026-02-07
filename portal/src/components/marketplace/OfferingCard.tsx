@@ -122,7 +122,7 @@ export function OfferingCard({ offering }: OfferingCardProps) {
 
         {/* Bidding indicator */}
         {offering.allowBidding && (
-          <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">💰 Accepts bids</div>
+          <div className="mt-2 text-xs text-muted-foreground">💰 Bidding available in Phase 3</div>
         )}
       </Link>
     </div>
