@@ -16,6 +16,8 @@ const (
 	NotificationTypeEscrowDeposit NotificationType = "escrow_deposit"
 	NotificationTypeSecurityAlert NotificationType = "security_alert"
 	NotificationTypeProviderAlert NotificationType = "provider_alert"
+	NotificationTypeSLABreach     NotificationType = "sla_breach"
+	NotificationTypeSLAWarning    NotificationType = "sla_warning"
 )
 
 // Channel defines delivery channels.
