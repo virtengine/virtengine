@@ -12,6 +12,14 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
 import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
+import {
+  getDefaultExecutorProfile,
+  getExecutorProfileForModel,
+  loadWorkspaceRegistry,
+  normalizeModelToken,
+  normalizeRole,
+  workspaceSupportsModel,
+} from "../shared/workspace-registry.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -48,6 +56,14 @@ const statusPath = resolve(repoRoot, ".cache", "ve-orchestrator-status.json");
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const telegramIntervalMin = Number(process.env.TELEGRAM_INTERVAL_MIN || "10");
+const telegramPollIntervalSec = Number(
+  process.env.TELEGRAM_POLL_INTERVAL_SEC ||
+    process.env.TELEGRAM_POLL_INTERVAL ||
+    "8",
+);
+const telegramPollTimeoutSec = Number(
+  process.env.TELEGRAM_POLL_TIMEOUT_SEC || "8",
+);
 const repoSlug = process.env.GITHUB_REPO || "virtengine/virtengine";
 const repoUrlBase =
   process.env.GITHUB_REPO_URL || `https://github.com/${repoSlug}`;
@@ -109,6 +125,12 @@ const telegramDedup = new Map();
 let allCompleteNotified = false;
 let backlogLowNotified = false;
 let plannerTriggered = false;
+let workspaceRegistry = null;
+let workspaceRegistryErrors = [];
+let workspaceRegistrySource = "unknown";
+let workspaceRegistryNotified = "";
+let telegramUpdateOffset = 0;
+let telegramPolling = false;
 
 // ── Telegram history ring buffer ────────────────────────────────────────────
 // Stores the last N sent messages for context enrichment (fed to autofix prompts)
@@ -505,6 +527,501 @@ Constraints:
 
 export function getTelegramHistory() {
   return [...telegramHistory];
+}
+
+const AGENT_COMMAND_USAGE =
+  "/agent [--workspace <id>] [--role <role>] [--model <name>] [--queue] <message>";
+
+async function loadWorkspaceRegistryConfig() {
+  const { registry, errors, source } = await loadWorkspaceRegistry({
+    env: process.env,
+    baseDir: repoRoot,
+  });
+  workspaceRegistry = registry;
+  workspaceRegistryErrors = errors;
+  workspaceRegistrySource = source;
+  reportWorkspaceRegistryErrors(errors);
+  return registry;
+}
+
+function reportWorkspaceRegistryErrors(errors) {
+  if (!errors || !errors.length) return;
+  const signature = errors.join("|");
+  if (signature === workspaceRegistryNotified) return;
+  workspaceRegistryNotified = signature;
+  const summary = errors.map((err) => `- ${err}`).join("\n");
+  console.warn(
+    `[monitor] workspace registry validation errors (source=${workspaceRegistrySource}):\n${summary}`,
+  );
+  if (telegramToken && telegramChatId) {
+    void sendTelegramMessage(
+      `⚠️ Workspace registry validation errors (${workspaceRegistrySource}):\n${summary}`,
+    );
+  }
+}
+
+function tokenizeCommand(text) {
+  const tokens = [];
+  const regex = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+  while ((match = regex.exec(text))) {
+    tokens.push(match[1] ?? match[2] ?? match[3]);
+  }
+  return tokens;
+}
+
+function parseAgentCommand(text) {
+  if (!text) return null;
+  const match = String(text).trim().match(/^\/agent(?:@\w+)?\s*(.*)$/i);
+  if (!match) return null;
+  const remainder = match[1] || "";
+  const tokens = tokenizeCommand(remainder);
+  const result = { queue: false, errors: [] };
+  const messageParts = [];
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (!token) continue;
+    if (token === "--help" || token === "-h") {
+      result.help = true;
+      continue;
+    }
+    if (token === "--queue") {
+      result.queue = true;
+      continue;
+    }
+    if (token.startsWith("--workspace=")) {
+      result.workspaceId = token.split("=").slice(1).join("=");
+      continue;
+    }
+    if (token === "--workspace" || token === "-w") {
+      const next = tokens[i + 1];
+      if (!next) {
+        result.errors.push("Missing value for --workspace");
+      } else {
+        result.workspaceId = next;
+        i += 1;
+      }
+      continue;
+    }
+    if (token.startsWith("--role=")) {
+      result.role = token.split("=").slice(1).join("=");
+      continue;
+    }
+    if (token === "--role" || token === "-r") {
+      const next = tokens[i + 1];
+      if (!next) {
+        result.errors.push("Missing value for --role");
+      } else {
+        result.role = next;
+        i += 1;
+      }
+      continue;
+    }
+    if (token.startsWith("--model=")) {
+      result.model = token.split("=").slice(1).join("=");
+      continue;
+    }
+    if (token === "--model" || token === "-m") {
+      const next = tokens[i + 1];
+      if (!next) {
+        result.errors.push("Missing value for --model");
+      } else {
+        result.model = next;
+        i += 1;
+      }
+      continue;
+    }
+    messageParts.push(token);
+  }
+
+  result.message = messageParts.join(" ").trim();
+  return result;
+}
+
+async function fetchJson(url, options = {}) {
+  const { method = "GET", body, signal } = options;
+  const headers = { ...(options.headers || {}) };
+  const payload = body ? JSON.stringify(body) : undefined;
+  if (payload) {
+    headers["content-type"] = "application/json";
+  }
+  const res = await fetch(url, { method, body: payload, headers, signal });
+  const text = await res.text();
+  let json = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  return { ok: res.ok, status: res.status, json, text };
+}
+
+function unwrapVkResponse(payload) {
+  if (!payload) return null;
+  if (payload.success === false) {
+    return { error: payload.message || "VK API error", raw: payload };
+  }
+  return payload.data ?? payload;
+}
+
+async function probeWorkspaceHealth(workspace) {
+  const host = workspace?.host;
+  if (!host) {
+    return { ok: false, score: 0, reason: "missing-host" };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+  const started = Date.now();
+  try {
+    const res = await fetch(`${host}/api/projects`, {
+      signal: controller.signal,
+    });
+    const latencyMs = Date.now() - started;
+    if (!res.ok) {
+      return {
+        ok: false,
+        score: 0,
+        reason: `http-${res.status}`,
+        latencyMs,
+      };
+    }
+    let score = 70;
+    let running = 0;
+    let failed = 0;
+    let summaryOk = false;
+    try {
+      const summaryRes = await fetchJson(`${host}/api/task-attempts/summary`, {
+        method: "POST",
+        body: { archived: false },
+        signal: controller.signal,
+      });
+      if (summaryRes.ok && summaryRes.json) {
+        const payload = unwrapVkResponse(summaryRes.json) ?? summaryRes.json;
+        const summaries = payload?.summaries || payload;
+        if (Array.isArray(summaries)) {
+          summaries.forEach((summary) => {
+            const status = summary?.latest_process_status;
+            if (status === "running") running += 1;
+            if (status === "failed") failed += 1;
+          });
+          summaryOk = true;
+        }
+      }
+    } catch {
+      summaryOk = false;
+    }
+    if (summaryOk) {
+      score = 100 - running * 5 - failed * 12;
+      if (score < 10) score = 10;
+    }
+    return {
+      ok: true,
+      score,
+      latencyMs,
+      running,
+      failed,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      score: 0,
+      reason: err?.message || String(err),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function probeWorkspaces(workspaces) {
+  const entries = await Promise.all(
+    workspaces.map(async (workspace) => ({
+      workspace,
+      health: await probeWorkspaceHealth(workspace),
+    })),
+  );
+  const map = new Map();
+  entries.forEach((entry) => {
+    if (entry.workspace?.id) {
+      map.set(entry.workspace.id, entry.health);
+    }
+  });
+  return map;
+}
+
+function pickBestWorkspace(candidates, healthMap) {
+  const scored = candidates
+    .map((workspace) => ({
+      workspace,
+      health: healthMap.get(workspace.id),
+    }))
+    .filter((entry) => entry.health && entry.health.ok);
+  if (!scored.length) return null;
+  scored.sort((a, b) => (b.health.score || 0) - (a.health.score || 0));
+  return scored[0];
+}
+
+async function resolveWorkspaceTarget({ workspaceId, role, model }) {
+  if (!workspaceRegistry || !workspaceRegistry.workspaces?.length) {
+    return { error: "No workspace registry configured." };
+  }
+  const workspaces = workspaceRegistry.workspaces;
+  const normalizedRole = normalizeRole(role || "primary");
+  const normalizedModel = normalizeModelToken(model);
+
+  let candidates = workspaces;
+  let reason = "fallback";
+  let explicitMissing = false;
+
+  if (workspaceId) {
+    const idToken = normalizeModelToken(workspaceId);
+    const match = workspaces.find(
+      (workspace) => normalizeModelToken(workspace.id) === idToken,
+    );
+    if (match) {
+      candidates = [match];
+      reason = "explicit";
+    } else {
+      explicitMissing = true;
+    }
+  } else if (normalizedRole) {
+    const roleMatches = workspaces.filter(
+      (workspace) => normalizeRole(workspace.role) === normalizedRole,
+    );
+    if (roleMatches.length) {
+      candidates = roleMatches;
+      reason = "role";
+    }
+  }
+
+  if (normalizedModel) {
+    const modelMatches = candidates.filter((workspace) =>
+      workspaceSupportsModel(workspace, normalizedModel),
+    );
+    if (modelMatches.length) {
+      candidates = modelMatches;
+    }
+  }
+
+  const healthMap = await probeWorkspaces(workspaces);
+  let selected = pickBestWorkspace(candidates, healthMap);
+  let fallbackUsed = false;
+
+  if (!selected) {
+    const fallback = pickBestWorkspace(workspaces, healthMap);
+    if (fallback) {
+      selected = fallback;
+      fallbackUsed = true;
+    }
+  }
+
+  if (!selected) {
+    return {
+      error: "No available workspaces (all targets unreachable).",
+      reason: explicitMissing ? "explicit-missing" : reason,
+    };
+  }
+
+  return {
+    workspace: selected.workspace,
+    health: selected.health,
+    reason,
+    fallbackUsed,
+    explicitMissing,
+  };
+}
+
+function getVkBaseUrl(host) {
+  return host.replace(/\/+$/, "");
+}
+
+async function getWorkspaceSessions(host, workspaceId) {
+  const url = `${getVkBaseUrl(host)}/api/sessions?workspace_id=${encodeURIComponent(
+    workspaceId,
+  )}`;
+  const res = await fetchJson(url);
+  if (!res.ok || !res.json) return [];
+  const payload = unwrapVkResponse(res.json) ?? res.json;
+  return Array.isArray(payload) ? payload : [];
+}
+
+async function createWorkspaceSession(host, workspaceId) {
+  const url = `${getVkBaseUrl(host)}/api/sessions`;
+  const res = await fetchJson(url, {
+    method: "POST",
+    body: { workspace_id: workspaceId },
+  });
+  if (!res.ok || !res.json) return null;
+  const payload = unwrapVkResponse(res.json) ?? res.json;
+  return payload?.id ? payload : null;
+}
+
+function pickLatestSession(sessions) {
+  if (!Array.isArray(sessions) || sessions.length === 0) return null;
+  return sessions
+    .slice()
+    .sort((a, b) => {
+      const aStamp = Date.parse(a.updated_at || a.created_at || 0) || 0;
+      const bStamp = Date.parse(b.updated_at || b.created_at || 0) || 0;
+      return bStamp - aStamp;
+    })[0];
+}
+
+async function sendAgentMessage({
+  workspace,
+  message,
+  model,
+  queue = false,
+}) {
+  const host = workspace.host;
+  const workspaceId = workspace.id;
+  const sessions = await getWorkspaceSessions(host, workspaceId);
+  let session = pickLatestSession(sessions);
+  if (!session) {
+    session = await createWorkspaceSession(host, workspaceId);
+  }
+  if (!session) {
+    throw new Error("Failed to create or resolve a workspace session.");
+  }
+
+  const profileFromModel = getExecutorProfileForModel(workspace, model);
+  const profileFromSession = session.executor
+    ? getDefaultExecutorProfile(session.executor)
+    : null;
+  const executorProfile =
+    profileFromModel || profileFromSession || getDefaultExecutorProfile("CODEX");
+
+  const path = queue
+    ? `/api/sessions/${session.id}/queue`
+    : `/api/sessions/${session.id}/follow-up`;
+  const body = queue
+    ? { executor_profile_id: executorProfile, message }
+    : { executor_profile_id: executorProfile, prompt: message };
+  const res = await fetchJson(`${getVkBaseUrl(host)}${path}`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) {
+    throw new Error(`VK API error (${res.status || "unknown"})`);
+  }
+  const payload = unwrapVkResponse(res.json);
+  if (payload && payload.error) {
+    throw new Error(payload.error);
+  }
+  return {
+    sessionId: session.id,
+    executorProfile,
+  };
+}
+
+async function handleAgentCommand(command, messageMeta) {
+  await loadWorkspaceRegistryConfig();
+  const chatId = String(messageMeta?.chat?.id || "");
+  if (telegramChatId && chatId && chatId !== String(telegramChatId)) {
+    return;
+  }
+  if (command.help || command.errors?.length) {
+    const errors = command.errors?.length
+      ? `Errors: ${command.errors.join("; ")}\n`
+      : "";
+    await sendTelegramMessage(`${errors}Usage: ${AGENT_COMMAND_USAGE}`);
+    return;
+  }
+  if (!command.message) {
+    await sendTelegramMessage(`Usage: ${AGENT_COMMAND_USAGE}`);
+    return;
+  }
+
+  const resolution = await resolveWorkspaceTarget({
+    workspaceId: command.workspaceId,
+    role: command.role,
+    model: command.model,
+  });
+
+  if (resolution.error) {
+    await sendTelegramMessage(`⚠️ /agent failed: ${resolution.error}`);
+    return;
+  }
+
+  const fallbackNote = resolution.fallbackUsed
+    ? " (fallback)"
+    : resolution.explicitMissing
+      ? " (workspace not found, fallback)"
+      : "";
+  const workspace = resolution.workspace;
+  try {
+    const result = await sendAgentMessage({
+      workspace,
+      message: command.message,
+      model: command.model,
+      queue: command.queue,
+    });
+    const modelNote = command.model ? ` model=${command.model}` : "";
+    await sendTelegramMessage(
+      `✅ Routed /agent to ${workspace.name} (${workspace.id})${fallbackNote}. Session ${result.sessionId}.${modelNote}`,
+    );
+  } catch (err) {
+    await sendTelegramMessage(
+      `⚠️ /agent failed to send message: ${err?.message || err}`,
+    );
+  }
+}
+
+async function pollTelegramUpdates() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (telegramPolling) return;
+  telegramPolling = true;
+  try {
+    const offset = telegramUpdateOffset
+      ? `&offset=${telegramUpdateOffset}`
+      : "";
+    const timeout = Number.isFinite(telegramPollTimeoutSec)
+      ? telegramPollTimeoutSec
+      : 8;
+    const url = `https://api.telegram.org/bot${telegramToken}/getUpdates?timeout=${timeout}${offset}`;
+    const res = await fetchJson(url);
+    if (!res.ok || !res.json || res.json.ok === false) {
+      return;
+    }
+    const updates = res.json.result || [];
+    for (const update of updates) {
+      if (typeof update.update_id === "number") {
+        telegramUpdateOffset = update.update_id + 1;
+      }
+      const message = update.message || update.edited_message;
+      if (!message?.text) continue;
+      if (String(message.chat?.id || "") !== String(telegramChatId)) {
+        continue;
+      }
+      const command = parseAgentCommand(message.text);
+      if (command) {
+        await handleAgentCommand(command, message);
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[monitor] telegram polling error: ${err?.message || err}`,
+    );
+  } finally {
+    telegramPolling = false;
+  }
+}
+
+function startTelegramCommandListener() {
+  if (!telegramToken || !telegramChatId) {
+    return;
+  }
+  if (!Number.isFinite(telegramPollIntervalSec) || telegramPollIntervalSec <= 0) {
+    return;
+  }
+  setInterval(() => {
+    void pollTelegramUpdates();
+  }, telegramPollIntervalSec * 1000);
+  void pollTelegramUpdates();
 }
 
 // ── Repeating error detection (loop detector) ───────────────────────────────────
@@ -1752,5 +2269,7 @@ void ensureCodexSdkReady().then(() => {
     console.log("[monitor] Codex enabled.");
   }
 });
+void loadWorkspaceRegistryConfig();
 startProcess();
 startTelegramNotifier();
+startTelegramCommandListener();
