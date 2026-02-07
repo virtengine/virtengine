@@ -57,6 +57,8 @@
     "setup": "node setup.mjs",
     "monitor": "node monitor.mjs",
     "shared-workspaces": "node shared-workspace-cli.mjs",
+    "syntax:check": "node -e \"const fs=require('fs'),path=require('path');const files=fs.readdirSync('.').filter(f=>f.endsWith('.mjs'));let fail=0;for(const f of files){try{require('child_process').execSync('node --check '+f,{stdio:'pipe'});}catch(e){console.error('Syntax error: '+f);console.error(e.stderr.toString());fail=1;}}if(fail)process.exit(1);console.log('Syntax OK: '+files.length+' files checked');\"",
+    "pretest": "npm run syntax:check",
     "test": "vitest run --config vitest.config.mjs",
     "postinstall": "node postinstall.mjs",
     "prepublishOnly": "node -e \"const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));if(!p.version)throw new Error('Missing version');console.log('Publishing '+p.name+'@'+p.version)\""

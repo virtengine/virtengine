@@ -23,6 +23,7 @@ import {
   stopTelegramBot,
   injectMonitorFunctions,
   notify,
+  restoreLiveDigest,
 } from "./telegram-bot.mjs";
 import {
   execPrimaryPrompt,
@@ -162,7 +163,6 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
-    : "disabled via --no-codex";
 let preflightEnabled = configPreflightEnabled;
 let preflightRetryMs = configPreflightRetryMs;
 
@@ -4660,7 +4660,7 @@ function selfRestartForSourceChange(filename) {
     }, 3000);
   }
   void releaseTelegramPollLock();
-  stopTelegramBot();
+  stopTelegramBot({ preserveDigest: true });
   // Exit with special code — cli.mjs re-forks with fresh module cache
   setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
 }
@@ -5098,7 +5098,12 @@ startProcess();
 if (telegramCommandEnabled) {
   startTelegramCommandListener();
 }
-void startTelegramNotifier();
+// Restore live digest state BEFORE any messages flow — so restarts continue the
+// existing digest message instead of creating a new one.
+// Chain notifier start after restore to prevent race conditions.
+void restoreLiveDigest()
+  .catch(() => {})
+  .then(() => startTelegramNotifier());
 
 // ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({

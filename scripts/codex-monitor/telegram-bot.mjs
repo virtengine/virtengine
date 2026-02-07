@@ -3691,7 +3691,9 @@ function persistLiveDigest() {
  * Restore live digest state from disk after a restart.
  * Returns true if a valid digest was restored (still within window).
  */
-async function restoreLiveDigest() {
+export async function restoreLiveDigest() {
+  // Already restored or active — skip
+  if (liveDigest.messageId) return true;
   try {
     const raw = await readFile(liveDigestStatePath, "utf8");
     const state = JSON.parse(raw);
@@ -3923,9 +3925,9 @@ async function flushNotificationQueue() {
  */
 async function startBatchFlushLoop() {
   if (!batchingEnabled || batchFlushTimer) return;
-  // In live digest mode, restore persisted state and skip flush loop
+  // In live digest mode, restore persisted state (if not already restored) and skip flush loop
   if (liveDigestEnabled) {
-    await restoreLiveDigest();
+    if (!liveDigest.messageId) await restoreLiveDigest();
     return;
   }
   const intervalMs = batchIntervalSec * 1000;
@@ -4036,7 +4038,7 @@ export async function startTelegramBot() {
 /**
  * Stop the Telegram bot polling.
  */
-export function stopTelegramBot() {
+export function stopTelegramBot(options = {}) {
   polling = false;
   if (pollAbort) {
     try {
@@ -4045,13 +4047,25 @@ export function stopTelegramBot() {
       /* best effort */
     }
   }
-  // Seal any active live digest and flush legacy queues before stopping
-  if (liveDigestEnabled && liveDigest.entries.length > 0) {
-    sealLiveDigest();
+  if (options.preserveDigest) {
+    // Self-restart: persist live digest state for the next process to resume.
+    // Don't seal or reset — the new process will pick up where we left off.
+    persistLiveDigest();
+    if (liveDigest.sealTimer) clearTimeout(liveDigest.sealTimer);
+    if (liveDigest.editTimer) clearTimeout(liveDigest.editTimer);
+    if (batchFlushTimer) {
+      clearInterval(batchFlushTimer);
+      batchFlushTimer = null;
+    }
   } else {
-    flushNotificationQueue().catch(() => {});
+    // Normal shutdown: seal any active live digest and flush legacy queues
+    if (liveDigestEnabled && liveDigest.entries.length > 0) {
+      sealLiveDigest();
+    } else {
+      flushNotificationQueue().catch(() => {});
+    }
+    stopBatchFlushLoop();
   }
-  stopBatchFlushLoop();
   void releaseTelegramPollLock();
   console.log("[telegram-bot] stopped");
 }
