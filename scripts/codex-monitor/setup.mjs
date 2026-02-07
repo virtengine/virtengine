@@ -123,14 +123,13 @@ function detectProjectName(repoRoot) {
 // ── Prompt System ────────────────────────────────────────────────────────────
 
 function createPrompt() {
-  // Fix for Windows PowerShell double-echo issue
-  // On Windows, readline can echo twice if terminal is set incorrectly
-  const isWindows = process.platform === "win32";
-
+  // Fix for Windows PowerShell readline issues
+  // Only use terminal mode if stdin is actually a TTY
+  // This prevents both double-echo and output duplication
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
-    terminal: !isWindows, // Disable terminal mode on Windows to prevent double echo
+    terminal: process.stdin.isTTY && process.stdout.isTTY,
   });
 
   return {
@@ -483,11 +482,17 @@ async function main() {
     commandExists("gh"),
     "Recommended: https://cli.github.com/",
   );
-  check(
+  const hasVk = check(
     "Vibe-Kanban CLI",
     commandExists("vibe-kanban"),
-    "Optional: npm i -g vibe-kanban",
+    "Required for task management: npm i -g vibe-kanban",
   );
+
+  if (!hasVk) {
+    console.error("\n  Vibe-Kanban is required for codex-monitor operations. Please install it:");
+    console.error("    npm install -g vibe-kanban\n");
+    process.exit(1);
+  }
 
   if (!hasNode) {
     console.error("\n  Node.js 18+ is required. Aborting.\n");
@@ -740,19 +745,52 @@ async function main() {
 
     // ── Orchestrator ──────────────────────────────────────
     heading("Orchestrator Script");
-    const hasOrcScript = await prompt.confirm(
-      "Do you have an existing orchestrator script?",
-      false,
-    );
-    if (hasOrcScript) {
-      env.ORCHESTRATOR_SCRIPT = await prompt.ask(
-        "Path to orchestrator script",
-        "",
+
+    // Check for scripts in sibling directory (scripts/ve-orchestrator.ps1)
+    const scriptsDir = resolve(__dirname, "..");
+    const defaultOrchestrator = resolve(scriptsDir, "ve-orchestrator.ps1");
+    const defaultKanban = resolve(scriptsDir, "ve-kanban.ps1");
+    const hasDefaultScripts = existsSync(defaultOrchestrator);
+
+    if (hasDefaultScripts) {
+      info(`Found default orchestrator scripts:`);
+      info(`  - ${relative(repoRoot, defaultOrchestrator)}`);
+      info(`  - ${relative(repoRoot, defaultKanban)}`);
+
+      const useDefault = await prompt.confirm(
+        "Use the default ve-orchestrator.ps1 script?",
+        true,
       );
+
+      if (useDefault) {
+        env.ORCHESTRATOR_SCRIPT = defaultOrchestrator;
+        success("Using default ve-orchestrator.ps1");
+      } else {
+        const customPath = await prompt.ask(
+          "Path to your custom orchestrator script (or leave blank for Vibe-Kanban direct mode)",
+          "",
+        );
+        if (customPath) {
+          env.ORCHESTRATOR_SCRIPT = customPath;
+        } else {
+          info("No orchestrator script configured. Codex-monitor will manage tasks directly via Vibe-Kanban.");
+        }
+      }
     } else {
-      info(
-        "No orchestrator script configured. Codex-monitor will manage tasks directly via Vibe-Kanban.",
+      const hasOrcScript = await prompt.confirm(
+        "Do you have an existing orchestrator script?",
+        false,
       );
+      if (hasOrcScript) {
+        env.ORCHESTRATOR_SCRIPT = await prompt.ask(
+          "Path to orchestrator script",
+          "",
+        );
+      } else {
+        info(
+          "No orchestrator script configured. Codex-monitor will manage tasks directly via Vibe-Kanban.",
+        );
+      }
     }
 
     env.MAX_PARALLEL = await prompt.ask("Max parallel agent slots", "6");

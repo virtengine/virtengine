@@ -8,6 +8,20 @@
 You are an autonomous coding agent executing a single task from the VirtEngine backlog.
 Your task title is in the `VE_TASK_TITLE` environment variable. Focus **only** on that task.
 
+## Vibe-Kanban Context Recovery (When Env Vars Are Missing)
+
+If `VE_TASK_TITLE` / `VE_TASK_DESCRIPTION` are missing, you are **still** running a Vibe-Kanban task when two of the following are true:
+
+- Your repo path is under `.git/worktrees/` (worktree-based task checkout)
+- The current branch matches `ve/<id>-<slug>` or `VE_BRANCH_NAME` is set
+- The orchestrator follow-up message includes a Task URL and description
+
+In that case:
+
+1. Treat the follow-up message as the authoritative task context.
+2. Continue work on the same branch, then commit, push, and open a PR.
+3. Do **not** wait for env vars to reappear; proceed with the provided task context.
+
 ## Critical Rules
 
 1. **Work until 100% done.** Do not stop at "good enough." Every task must compile, pass tests, and be production-quality.

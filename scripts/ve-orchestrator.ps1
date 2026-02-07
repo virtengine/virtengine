@@ -932,6 +932,7 @@ function Save-StatusSnapshot {
         counts              = $counts
         tasks_submitted     = $script:TasksSubmitted
         tasks_completed     = $script:TasksCompleted
+        total_tasks_completed = $script:TotalTasksCompleted
         backlog_remaining   = $backlogRemaining
         completed_tasks     = $script:CompletedTasks
         submitted_tasks     = $script:SubmittedTasks
@@ -1762,7 +1763,7 @@ function Sync-TrackedAttempts {
                 pr_number                     = $null
                 status                        = "running"
                 name                          = $a.name
-                task_title_cached             = $null
+                task_title_cached             = $a.name
                 task_description_cached       = $null
                 updated_at                    = $a.updated_at
                 container_ref                 = $a.container_ref
@@ -2674,10 +2675,8 @@ function Maybe-TriggerCISweep {
     .SYNOPSIS Trigger a Copilot CI sweep based on completed tasks and PR backup thresholds.
     #>
     $threshold = [int]($script:CiSweepEvery ?? 0)
-    if ($threshold -le 0) { return }
-
     $totalCompleted = [int]($script:TotalTasksCompleted ?? 0)
-    if ($totalCompleted -ge $threshold -and ($totalCompleted % $threshold) -eq 0) {
+    if ($threshold -gt 0 -and $totalCompleted -ge $threshold -and ($totalCompleted % $threshold) -eq 0) {
         $state = Get-OrchestratorState
         if ($state.last_ci_sweep_completed -eq $totalCompleted) { return }
 

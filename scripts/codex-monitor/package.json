@@ -43,6 +43,7 @@
     "telegram-bot.mjs",
     "get-telegram-chat-id.mjs",
     "setup.mjs",
+    "workspace-registry.mjs",
     ".env.example",
     "README.md"
   ],

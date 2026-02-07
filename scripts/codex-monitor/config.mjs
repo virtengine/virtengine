@@ -596,7 +596,7 @@ export function loadConfig(argv = process.argv) {
     cli.script || process.env.ORCHESTRATOR_SCRIPT || defaultScript,
   );
   const scriptArgsRaw =
-    cli.args || process.env.ORCHESTRATOR_ARGS || "-MaxParallel 6";
+    cli.args || process.env.ORCHESTRATOR_ARGS || "-MaxParallel 6 -WaitForMutex";
   const scriptArgs = scriptArgsRaw.split(" ").filter(Boolean);
 
   // ── Timing ───────────────────────────────────────────────
@@ -787,17 +787,29 @@ function detectProjectName(configDir, repoRoot) {
 function findOrchestratorScript(configDir, repoRoot) {
   // Search for orchestrator scripts in common locations
   const candidates = [
+    // Sibling to codex-monitor dir (scripts/ve-orchestrator.ps1)
+    resolve(configDir, "..", "ve-orchestrator.ps1"),
+    resolve(configDir, "..", "orchestrator.ps1"),
+    resolve(configDir, "..", "orchestrator.sh"),
+    // Inside codex-monitor dir
     resolve(configDir, "orchestrator.ps1"),
     resolve(configDir, "orchestrator.sh"),
-    resolve(repoRoot, "scripts", "orchestrator.ps1"),
+    // Repo root scripts dir
     resolve(repoRoot, "scripts", "ve-orchestrator.ps1"),
+    resolve(repoRoot, "scripts", "orchestrator.ps1"),
+    resolve(repoRoot, "scripts", "orchestrator.sh"),
+    // Repo root
     resolve(repoRoot, "orchestrator.ps1"),
-    resolve(configDir, "..", "ve-orchestrator.ps1"),
+    resolve(repoRoot, "orchestrator.sh"),
+    // CWD
+    resolve(process.cwd(), "ve-orchestrator.ps1"),
+    resolve(process.cwd(), "orchestrator.ps1"),
+    resolve(process.cwd(), "scripts", "ve-orchestrator.ps1"),
   ];
   for (const p of candidates) {
     if (existsSync(p)) return p;
   }
-  // Default — user will need to configure
+  // Default — user will need to configure via --script or ORCHESTRATOR_SCRIPT
   return resolve(configDir, "orchestrator.ps1");
 }
 
