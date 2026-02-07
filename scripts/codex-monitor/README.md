@@ -1,6 +1,29 @@
 # @virtengine/codex-monitor
 
-> AI-powered orchestrator supervisor with multi-executor failover, smart PR flow, and Telegram notifications. Install globally, point at any repo, and let AI agents ship code autonomously.
+> **Ship code while you sleep.** An autonomous AI orchestrator that manages multiple coding agents, handles PRs, detects and fixes errors, and reports everything to Telegram — all from a single `npm install`.
+
+<p align="center">
+  <img src="docs/telegram-live-digest.png" alt="Live Telegram Digest" width="380" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/kanban-board.png" alt="Kanban Board" width="520" />
+</p>
+
+## Why codex-monitor?
+
+You have AI coding agents. They can write code, fix bugs, create PRs. But left unsupervised, they crash, loop on the same error forever, create conflicting PRs, and go silent. You check back hours later to find nothing shipped.
+
+**codex-monitor is the supervisor layer.** It watches your agents, detects when they're stuck, auto-fixes error loops, manages the full PR lifecycle, and keeps you informed through Telegram — so your agents actually deliver while you focus on other work.
+
+**What changes when you add it:**
+
+| Without codex-monitor | With codex-monitor |
+|---|---|
+| Agent crashes → you notice hours later | Agent crashes → auto-restart + root cause analysis + Telegram alert |
+| Agent loops on same error → burns tokens | Error loop detected in <10 min → AI autofix triggered |
+| PR needs rebase → agent doesn't know how | Auto-rebase, conflict resolution, PR creation — zero human touch |
+| "Is anything happening?" → check terminal | Live Telegram digest updates every few seconds |
+| One agent at a time | N agents with weighted distribution and automatic failover |
+| Manually create tasks | Empty backlog detected → AI task planner auto-generates work |
 
 ## Install
 
@@ -17,7 +40,7 @@ codex-monitor          # auto-detects first run → launches setup wizard
 
 That's it. On first run, the setup wizard walks you through everything: executors, AI provider, Telegram, Vibe-Kanban, and agent templates.
 
-## What It Does
+## How It Works
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -57,23 +80,26 @@ That's it. On first run, the setup wizard walks you through everything: executor
 
 - **Multi-executor scheduling** — Configure N AI agents (Copilot, Codex, custom) with weighted distribution and automatic failover
 - **Smart PR flow** — Auto-rebase, resolve merge conflicts, create PRs via Vibe-Kanban API
-- **Crash analysis** — Codex SDK reads logs and diagnoses root causes
+- **Crash analysis** — Codex SDK reads logs and diagnoses root causes automatically
 - **Error loop detection** — 4+ repeating errors in 10 minutes triggers AI autofix
+- **Live Telegram digest** — One continuously-edited message per time window shows events as they happen, like a real-time log
 - **Stale attempt cleanup** — Detects dead attempts (0 commits, far behind main) and archives them
-- **Telegram chatbot** — Real-time notifications + interactive commands
-- **Preflight checks** — Validate git/gh auth, disk space, clean worktree, and toolchain versions before starting
+- **Preflight checks** — Validates git/gh auth, disk space, clean worktree, and toolchain versions before starting
+- **Task planner** — Detects empty backlog and auto-generates new tasks via AI
 - **Auto-setup** — First-run wizard configures everything; generates agent templates, wires Vibe-Kanban
 - **Multi-repo support** — Manage separate backend/frontend repos from one monitor instance
+- **Multi-workstation presence** — Discover and coordinate multiple codex-monitor instances via Telegram
 - **Works with any orchestrator** — Wraps PowerShell, Bash, or any long-running CLI script
 - **Hot .env reload** — Changes to `.env` files are detected and applied without restart
+- **Self-restart on code changes** — Monitor detects changes to its own source files and reloads with fresh ESM modules
 
 ### Screenshots
 
-**Live Telegram Digest** — Events stream into a single continuously-edited message per digest window. Critical items get ❌, warnings get ⚠️, and info gets ℹ️. When the window expires, the message is sealed and the next event starts a fresh one.
+**Live Telegram Digest** — Events stream into a single continuously-edited message per digest window (default 10 min). Critical items get ❌, warnings get ⚠️, and info gets ℹ️. When the window expires, the message is sealed and the next event starts a fresh one. Digest state persists across restarts — no duplicate messages.
 
 ![Live Telegram Digest](docs/telegram-live-digest.png)
 
-**Kanban Board** — Vibe-Kanban task board showing the full pipeline: To Do → In Progress → In Review → Done. Tasks are auto-claimed by agents, PRs are auto-created, and merged PRs auto-move tasks to Done.
+**Kanban Board** — Vibe-Kanban task board showing the full pipeline: To Do → In Progress → In Review → Done. Agents auto-claim tasks, create PRs, and merged PRs auto-move tasks to Done — fully autonomous.
 
 ![Kanban Board](docs/kanban-board.png)
 
@@ -255,27 +281,27 @@ Select a profile via `--profile` or `CODEX_MONITOR_PROFILE`.
 
 See [.env.example](.env.example) for the full reference. Key variables:
 
-| Variable                | Default                        | Description                                                                                                            |
-| ----------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `PROJECT_NAME`          | auto-detected                  | Project name for display                                                                                               |
-| `GITHUB_REPO`           | auto-detected                  | GitHub repo slug (`org/repo`)                                                                                          |
-| `ORCHESTRATOR_SCRIPT`   | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
-| `ORCHESTRATOR_ARGS`     | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
-| `OPENAI_API_KEY`        | —                              | API key for Codex analysis                                                                                             |
-| `COPILOT_MODEL`         | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
-| `COPILOT_SDK_DISABLED`  | `0`                            | Disable Copilot SDK primary agent                                                                                      |
-| `TELEGRAM_BOT_TOKEN`    | —                              | Telegram bot token from @BotFather                                                                                     |
-| `TELEGRAM_CHAT_ID`      | —                              | Telegram chat ID                                                                                                       |
-| `VK_BASE_URL`           | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
-| `EXECUTORS`             | Copilot+Codex 50/50            | Executor shorthand (see above)                                                                                         |
-| `EXECUTOR_DISTRIBUTION` | `weighted`                     | Distribution mode                                                                                                      |
-| `FAILOVER_STRATEGY`     | `next-in-line`                 | Failover behavior                                                                                                      |
-| `MAX_PARALLEL`          | `6`                            | Max concurrent agent slots                                                                                             |
-| `CODEX_MONITOR_REPO`    | —                              | Selected repo name (multi-repo)                                                                                        |
-| `CODEX_MONITOR_PROFILE` | —                              | Environment profile name                                                                                               |
-| `CODEX_MONITOR_MODE`    | `virtengine`/`generic`         | Mode override                                                                                                          |
-| `CODEX_MONITOR_PREFLIGHT_DISABLED` | `0`                    | Disable preflight checks                                                                                               |
-| `CODEX_MONITOR_PREFLIGHT_RETRY_MS` | `300000`               | Preflight retry interval (ms)                                                                                          |
+| Variable                           | Default                        | Description                                                                                                            |
+| ---------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `PROJECT_NAME`                     | auto-detected                  | Project name for display                                                                                               |
+| `GITHUB_REPO`                      | auto-detected                  | GitHub repo slug (`org/repo`)                                                                                          |
+| `ORCHESTRATOR_SCRIPT`              | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
+| `ORCHESTRATOR_ARGS`                | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
+| `OPENAI_API_KEY`                   | —                              | API key for Codex analysis                                                                                             |
+| `COPILOT_MODEL`                    | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
+| `COPILOT_SDK_DISABLED`             | `0`                            | Disable Copilot SDK primary agent                                                                                      |
+| `TELEGRAM_BOT_TOKEN`               | —                              | Telegram bot token from @BotFather                                                                                     |
+| `TELEGRAM_CHAT_ID`                 | —                              | Telegram chat ID                                                                                                       |
+| `VK_BASE_URL`                      | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
+| `EXECUTORS`                        | Copilot+Codex 50/50            | Executor shorthand (see above)                                                                                         |
+| `EXECUTOR_DISTRIBUTION`            | `weighted`                     | Distribution mode                                                                                                      |
+| `FAILOVER_STRATEGY`                | `next-in-line`                 | Failover behavior                                                                                                      |
+| `MAX_PARALLEL`                     | `6`                            | Max concurrent agent slots                                                                                             |
+| `CODEX_MONITOR_REPO`               | —                              | Selected repo name (multi-repo)                                                                                        |
+| `CODEX_MONITOR_PROFILE`            | —                              | Environment profile name                                                                                               |
+| `CODEX_MONITOR_MODE`               | `virtengine`/`generic`         | Mode override                                                                                                          |
+| `CODEX_MONITOR_PREFLIGHT_DISABLED` | `0`                            | Disable preflight checks                                                                                               |
+| `CODEX_MONITOR_PREFLIGHT_RETRY_MS` | `300000`                       | Preflight retry interval (ms)                                                                                          |
 
 ### Shared Cloud Workspaces
 
@@ -314,31 +340,31 @@ Telegram commands:
 codex-monitor [options]
 ```
 
-| Option                  | Description                               |
-| ----------------------- | ----------------------------------------- |
-| `--setup`               | Run the interactive setup wizard          |
-| `--help`                | Show help                                 |
-| `--version`             | Show version                              |
-| `--script <path>`       | Path to the orchestrator script           |
-| `--args "<args>"`       | Arguments passed to the script            |
-| `--restart-delay <ms>`  | Delay before restart (default: `10000`)   |
-| `--max-restarts <n>`    | Max restarts, 0 = unlimited               |
-| `--log-dir <path>`      | Log directory (default: `./logs`)         |
-| `--no-codex`            | Disable Codex SDK analysis                |
-| `--no-autofix`          | Disable automatic error fixing            |
-| `--no-preflight`        | Disable preflight checks                  |
-| `--no-telegram-bot`     | Disable the interactive Telegram bot      |
-| `--no-vk-spawn`         | Don't auto-spawn Vibe-Kanban              |
-| `--no-watch`            | Disable file watching for auto-restart    |
-| `--no-echo-logs`        | Don't echo orchestrator output to console |
-| `--preflight-retry <ms>` | Retry interval after preflight failure   |
-| `--config-dir <path>`   | Directory containing config files         |
-| `--repo-root <path>`    | Repository root (auto-detected)           |
-| `--project-name <name>` | Project name for display                  |
-| `--repo <org/repo>`     | GitHub repo slug                          |
-| `--repo-name <name>`    | Repository selection (multi-repo)         |
-| `--profile <name>`      | Environment profile selection             |
-| `--mode <name>`         | Mode override (`virtengine`/`generic`)    |
+| Option                   | Description                               |
+| ------------------------ | ----------------------------------------- |
+| `--setup`                | Run the interactive setup wizard          |
+| `--help`                 | Show help                                 |
+| `--version`              | Show version                              |
+| `--script <path>`        | Path to the orchestrator script           |
+| `--args "<args>"`        | Arguments passed to the script            |
+| `--restart-delay <ms>`   | Delay before restart (default: `10000`)   |
+| `--max-restarts <n>`     | Max restarts, 0 = unlimited               |
+| `--log-dir <path>`       | Log directory (default: `./logs`)         |
+| `--no-codex`             | Disable Codex SDK analysis                |
+| `--no-autofix`           | Disable automatic error fixing            |
+| `--no-preflight`         | Disable preflight checks                  |
+| `--no-telegram-bot`      | Disable the interactive Telegram bot      |
+| `--no-vk-spawn`          | Don't auto-spawn Vibe-Kanban              |
+| `--no-watch`             | Disable file watching for auto-restart    |
+| `--no-echo-logs`         | Don't echo orchestrator output to console |
+| `--preflight-retry <ms>` | Retry interval after preflight failure    |
+| `--config-dir <path>`    | Directory containing config files         |
+| `--repo-root <path>`     | Repository root (auto-detected)           |
+| `--project-name <name>`  | Project name for display                  |
+| `--repo <org/repo>`      | GitHub repo slug                          |
+| `--repo-name <name>`     | Repository selection (multi-repo)         |
+| `--profile <name>`       | Environment profile selection             |
+| `--mode <name>`          | Mode override (`virtengine`/`generic`)    |
 
 ## Telegram Bot
 
@@ -475,55 +501,58 @@ Only one process can poll a Telegram bot at a time. This happens if:
 2. Ensure the orchestrator is actually running (check with `/status`)
 3. Verify the monitor process is alive: `ps aux | grep codex-monitor`
 
-### Notification Batching (Reducing Spam)
+### Notification System
 
-By default, codex-monitor batches notifications into periodic summaries to prevent flooding your Telegram channel:
+codex-monitor uses a **live digest** system by default — instead of batching events and sending a summary every N minutes, it creates a single Telegram message per time window and continuously edits it as new events arrive. This gives you a real-time view of what's happening without flooding your chat.
 
-**How it works:**
-- Messages are categorized by priority (critical, error, warning, info)
-- Critical messages (priority 1) are sent immediately
-- All other messages are batched and sent as summaries every 5 minutes
-- Summaries aggregate similar messages (e.g., "15 info messages: pr: 5, task: 8, analysis: 2")
+**How the live digest works:**
+
+1. First event in a window → creates a new message ("📊 Live Digest (since HH:MM:SS) — updating...")
+2. Each subsequent event → appends a line and edits the message in-place (debounced at 3s)
+3. Window expires (default 10 min) → message is sealed ("📊 Digest (HH:MM → HH:MM) — sealed")
+4. Next event starts a fresh message
+5. Critical messages (priority 1) always send immediately as separate messages
+
+Digest state persists to disk, so restarts resume editing the same message instead of creating duplicates.
 
 **Configuration:**
 
 ```env
-# Enable/disable batching (default: true)
+# Live digest (default: enabled)
+TELEGRAM_LIVE_DIGEST=true
+TELEGRAM_LIVE_DIGEST_WINDOW_SEC=600       # 10-minute windows
+TELEGRAM_LIVE_DIGEST_DEBOUNCE_MS=3000     # 3s edit debounce
+
+# Legacy batch mode (set TELEGRAM_LIVE_DIGEST=false to use)
 TELEGRAM_BATCH_NOTIFICATIONS=true
-
-# Batch interval in seconds (default: 300 = 5 minutes)
 TELEGRAM_BATCH_INTERVAL_SEC=300
-
-# Max messages before forcing a flush (default: 50)
 TELEGRAM_BATCH_MAX_SIZE=50
 
 # Priority threshold for immediate delivery (default: 1)
-# 1 = only critical messages bypass batching
-# 2 = critical + errors bypass batching
+# 1 = only critical messages bypass the digest
+# 2 = critical + errors bypass the digest
 TELEGRAM_IMMEDIATE_PRIORITY=1
 ```
 
 **Priority levels:**
-- **1 - Critical**: Fatal errors, system crashes (immediate)
-- **2 - Error**: Failed operations, auto-fix failures
-- **3 - Warning**: Rebase conflicts, missing branches
-- **4 - Info**: PR created, task completed, analysis results (default)
-- **5 - Debug**: Verbose logging
 
-**Example summary message:**
+| Priority | Emoji | Category | Delivery |
+|----------|-------|----------|----------|
+| 1 | 🔴 | Critical — fatal errors, system crashes | Immediate (always) |
+| 2 | ❌ | Error — failed operations, auto-fix failures | Live digest |
+| 3 | ⚠️ | Warning — rebase conflicts, missing branches | Live digest |
+| 4 | ℹ️ | Info — PR created, task completed (default) | Live digest |
+| 5 | 🔹 | Debug — verbose logging | Live digest |
+
+**Example live digest message:**
+
 ```
-📊 Update Summary (14:30:15)
-🔴 1 • ❌ 3 • ⚠️ 2 • ℹ️ 12
+📊 Live Digest (since 22:29:33) — updating...
+❌ 1 • ℹ️ 2
 
-❌ Errors:
-  • Auto-fix gave up on raw crash (exit 64) after 3 attempts
-  • PR creation failed for ve/abc-branch
-  • Rebase conflict on scripts/monitor.mjs
-
-ℹ️ Info:
-  • pr: 5
-  • task: 4
-  • analysis: 3
+22:29:33 ℹ️ virtengine Orchestrator Notifier started.
+22:30:07 ℹ️ ✅ Task completed: "preflight health checks" (PR merged)
+22:30:15 ℹ️ ✅ Task completed: "unit tests for config.mjs" (branch merged)
 ```
 
 ### Commands
