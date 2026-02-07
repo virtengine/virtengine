@@ -26,6 +26,16 @@ import {
 import { loadConfig } from "./config.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
+import {
+  normalizeDedupKey,
+  stripAnsi,
+  isErrorLine,
+  escapeHtml,
+  formatHtmlLink,
+  getErrorFingerprint,
+  getMaxParallelFromArgs,
+  parsePrNumberFromUrl,
+} from "./utils.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -190,30 +200,8 @@ const mergeFailureNotified = new Map();
 const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 
-// ── Fuzzy dedup: normalize messages so structural duplicates match ───────────
-// "recovery (count=1)" and "recovery (count=29)" both become "recovery (count=N)"
-function normalizeDedupKey(text) {
-  return (
-    String(text || "")
-      .trim()
-      // Replace numbers (integers and decimals) with N, preserving surrounding text
-      .replaceAll(/\d+(\.\d+)?/g, "N")
-      // Collapse any resulting multi-N sequences (e.g., "N.N" → "N")
-      .replaceAll(/N[.\-/:]N/g, "N")
-      // Collapse whitespace
-      .replaceAll(/\s+/g, " ")
-  );
-}
+// ── Deduplication tracking (utilities imported from utils.mjs) ───────────────
 
-// ── Strip ANSI escape codes from log lines before sending to Telegram ────────
-// PowerShell and colored CLI output includes \x1b[...m sequences that show
-// as garbage in Telegram messages.
-function stripAnsi(text) {
-  // eslint-disable-next-line no-control-regex
-  return String(text || "")
-    .replace(/\x1b\[[0-9;]*m/g, "")
-    .replace(/\[\d+;?\d*m/g, "");
-}
 
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
 // Detects rapid failure bursts independently of Telegram dedup.
@@ -400,41 +388,6 @@ function getChangeSummary(repoRootPath, files) {
   }
 }
 
-function getMaxParallelFromArgs(argsList) {
-  if (!Array.isArray(argsList)) {
-    return null;
-  }
-  for (let i = 0; i < argsList.length; i += 1) {
-    const arg = String(argsList[i] ?? "");
-    const directMatch =
-      arg.match(/^-{1,2}maxparallel(?:=|:)?(\d+)$/i) ||
-      arg.match(/^--max-parallel(?:=|:)?(\d+)$/i);
-    if (directMatch) {
-      const value = Number(directMatch[1]);
-      if (Number.isFinite(value) && value > 0) {
-        return value;
-      }
-    }
-    const normalized = arg.toLowerCase();
-    if (
-      normalized === "-maxparallel" ||
-      normalized === "--maxparallel" ||
-      normalized === "--max-parallel"
-    ) {
-      const next = Number(argsList[i + 1]);
-      if (Number.isFinite(next) && next > 0) {
-        return next;
-      }
-    }
-  }
-  const envValue = Number(
-    process.env.VK_MAX_PARALLEL || process.env.MAX_PARALLEL,
-  );
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return envValue;
-  }
-  return null;
-}
 
 function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
   return new Promise((resolve) => {
@@ -800,14 +753,6 @@ const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
 const errorFrequency = new Map();
 let loopFixInProgress = false;
 
-function getErrorFingerprint(line) {
-  // Normalize: strip timestamps, attempt IDs, branch-specific parts
-  return line
-    .replace(/\[\d{2}:\d{2}:\d{2}\]\s*/g, "")
-    .replace(/\b[0-9a-f]{8}\b/gi, "<ID>") // attempt IDs
-    .replace(/ve\/[\w.-]+/g, "ve/<BRANCH>") // branch names
-    .trim();
-}
 
 function trackErrorFrequency(line) {
   const fingerprint = getErrorFingerprint(line);
@@ -919,29 +864,6 @@ const vkErrorPatterns = [
   /Failed to initialize vibe-kanban configuration/i,
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
 ];
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function formatHtmlLink(url, label) {
-  if (!url) {
-    return escapeHtml(label);
-  }
-  return `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
-}
-
-function isErrorLine(line) {
-  if (errorNoisePatterns.some((pattern) => pattern.test(line))) {
-    return false;
-  }
-  return errorPatterns.some((pattern) => pattern.test(line));
-}
 
 function notifyErrorLine(line) {
   if (!telegramToken || !telegramChatId) {
@@ -3962,7 +3884,7 @@ async function startProcess() {
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
     for (const line of lines) {
-      if (isErrorLine(line)) {
+      if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
         notifyErrorLine(line);
       }
       if (line.includes("Merged PR") || line.includes("Marking task")) {
