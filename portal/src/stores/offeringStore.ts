@@ -758,7 +758,7 @@ export const useOfferingStore = create<OfferingStore>()((set, get) => ({
         );
       }
 
-      let filtered = offerings.filter((offering) => matchesFilters(offering, filters, providers));
+      const filtered = offerings.filter((offering) => matchesFilters(offering, filters, providers));
 
       filtered.sort((a, b) => {
         const dir = filters.sortOrder === 'asc' ? 1 : -1;
