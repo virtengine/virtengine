@@ -75,15 +75,20 @@ export async function loadWorkspaceRegistry(options = {}) {
     ? resolve(options.registryPath)
     : resolve(__dirname, "workspaces.json");
   let registry = null;
+  const errors = [];
+  const warnings = [];
   if (existsSync(registryPath)) {
     try {
       const raw = await readFile(registryPath, "utf8");
       registry = JSON.parse(raw);
     } catch (err) {
+      errors.push(`Failed to read ${registryPath}: ${err.message || err}`);
       console.warn(
         `[workspace-registry] failed to read ${registryPath}: ${err.message || err}`,
       );
     }
+  } else {
+    warnings.push(`Registry file not found: ${registryPath} — using defaults`);
   }
   if (!registry) {
     registry = { ...DEFAULT_REGISTRY };
@@ -95,11 +100,24 @@ export async function loadWorkspaceRegistry(options = {}) {
   const defaultWorkspace =
     normalizeId(registry.default_workspace) || DEFAULT_REGISTRY.default_workspace;
 
+  if (workspaces.length === 0) {
+    warnings.push("No workspaces configured — using built-in defaults");
+  }
+
   return {
+    registry: {
+      version: registry.version || DEFAULT_REGISTRY.version,
+      default_workspace: defaultWorkspace,
+      workspaces,
+      registry_path: registryPath,
+    },
+    // Also spread top-level for backward compat
     version: registry.version || DEFAULT_REGISTRY.version,
     default_workspace: defaultWorkspace,
     workspaces,
     registry_path: registryPath,
+    errors,
+    warnings,
   };
 }
 
@@ -197,5 +215,20 @@ export function formatBusMessage({ workspaceId, type, text }) {
   }
   lines[0] = `${prefix} ${lines[0]}`.trim();
   return lines.join("\n");
+}
+
+export function formatRegistryDiagnostics(errors, warnings) {
+  const parts = [];
+  if (errors && errors.length > 0) {
+    parts.push(`❌ Registry errors:\n${errors.map((e) => `  • ${e}`).join("\n")}`);
+  }
+  if (warnings && warnings.length > 0) {
+    parts.push(`⚠️ ${warnings.map((w) => w).join("\n⚠️ ")}`);
+  }
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+export function getDefaultModelPriority() {
+  return ["CODEX:DEFAULT", "COPILOT:CLAUDE_OPUS_4_6"];
 }
 

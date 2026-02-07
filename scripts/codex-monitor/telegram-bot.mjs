@@ -19,7 +19,6 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   execCodexPrompt,
-  execCodexPromptInWorkspace,
   isCodexBusy,
   getThreadInfo,
   resetThread,
