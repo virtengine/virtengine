@@ -38,7 +38,7 @@ ingester:
 # Compactor configuration
 compactor:
   compaction:
-    block_retention: 72h  # Keep traces for 3 days
+    block_retention: 720h  # Keep traces for 30 days
 
 # Storage configuration
 storage:

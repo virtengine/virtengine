@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/virtengine/virtengine/pkg/observability"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 )
 
@@ -261,7 +262,7 @@ func (s *OrderStatusWebhookServer) Start(ctx context.Context) error {
 
 	s.server = &http.Server{
 		Addr:         s.cfg.ListenAddr,
-		Handler:      mux,
+		Handler:      observability.HTTPTracingHandler(mux, "provider.order_status_webhook"),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

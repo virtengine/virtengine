@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/virtengine/virtengine/pkg/observability"
 )
 
 const (
@@ -101,7 +102,7 @@ func (s *PortalAPIServer) Start(ctx context.Context) error {
 
 	s.server = &http.Server{
 		Addr:              s.cfg.ListenAddr,
-		Handler:           router,
+		Handler:           observability.HTTPTracingHandler(router, "provider.portal_api"),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

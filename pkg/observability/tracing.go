@@ -71,9 +71,11 @@ func DefaultTracingConfig() TracingConfig {
 
 // TracerProvider provides tracers
 type TracerProvider struct {
-	config  TracingConfig
-	tracers map[string]Tracer
-	mu      sync.RWMutex
+	config   TracingConfig
+	tracers  map[string]Tracer
+	factory  func(name string) Tracer
+	shutdown func(context.Context) error
+	mu       sync.RWMutex
 }
 
 var (
@@ -83,13 +85,33 @@ var (
 
 // InitTracing initializes the global tracer provider
 func InitTracing(cfg TracingConfig) (*TracerProvider, error) {
+	var initErr error
 	tracerProviderOnce.Do(func() {
+		factory := func(name string) Tracer { return &noopTracer{} }
+		var shutdown func(context.Context) error
+		if cfg.Enabled {
+			tracer, tracerShutdown, err := newOTelTracerFromTracingConfig(cfg)
+			if err != nil {
+				initErr = err
+			}
+			if err == nil && tracer != nil {
+				factory = func(name string) Tracer {
+					if name == "" {
+						name = cfg.ServiceName
+					}
+					return tracer.withName(name)
+				}
+				shutdown = tracerShutdown
+			}
+		}
 		globalTracerProvider = &TracerProvider{
-			config:  cfg,
-			tracers: make(map[string]Tracer),
+			config:   cfg,
+			tracers:  make(map[string]Tracer),
+			factory:  factory,
+			shutdown: shutdown,
 		}
 	})
-	return globalTracerProvider, nil
+	return globalTracerProvider, initErr
 }
 
 // GetTracerProvider returns the global tracer provider
@@ -99,6 +121,7 @@ func GetTracerProvider() *TracerProvider {
 		globalTracerProvider = &TracerProvider{
 			config:  DefaultTracingConfig(),
 			tracers: make(map[string]Tracer),
+			factory: func(name string) Tracer { return &noopTracer{} },
 		}
 	}
 	return globalTracerProvider
@@ -121,14 +144,21 @@ func (tp *TracerProvider) Tracer(name string) Tracer {
 		return t
 	}
 
-	t := &noopTracer{}
+	factory := tp.factory
+	if factory == nil {
+		factory = func(name string) Tracer { return &noopTracer{} }
+	}
+	t := factory(name)
 	tp.tracers[name] = t
 	return t
 }
 
 // Shutdown shuts down the tracer provider
 func (tp *TracerProvider) Shutdown(ctx context.Context) error {
-	return nil
+	if tp.shutdown == nil {
+		return nil
+	}
+	return tp.shutdown(ctx)
 }
 
 // ============================================================================
@@ -389,11 +419,17 @@ func ExtractTraceContext(ctx context.Context, headers map[string]string) context
 // TraceIDFromContext returns the trace ID from context
 // This is a placeholder - full implementation requires real tracing provider
 func TraceIDFromContext(ctx context.Context) string {
+	if span := SpanFromContext(ctx); span != nil {
+		return span.SpanContext().TraceID
+	}
 	return ""
 }
 
 // SpanIDFromContext returns the span ID from context
 // This is a placeholder - full implementation requires real tracing provider
 func SpanIDFromContext(ctx context.Context) string {
+	if span := SpanFromContext(ctx); span != nil {
+		return span.SpanContext().SpanID
+	}
 	return ""
 }
