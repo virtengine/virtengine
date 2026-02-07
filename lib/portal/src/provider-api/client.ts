@@ -1,4 +1,4 @@
-import { signRequest } from "../auth/wallet-sign";
+import { serializeRequestBody, signRequest } from "../auth/wallet-sign";
 import type { WalletRequestSigner } from "../auth/wallet-sign";
 import type {
   Deployment,
@@ -445,6 +445,11 @@ export class ProviderAPIClient {
 
     let lastError: Error | null = null;
 
+    const bodyPayload =
+      options.body === undefined
+        ? undefined
+        : serializeRequestBody(options.body);
+
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
       try {
         const headers: Record<string, string> = {
@@ -485,7 +490,7 @@ export class ProviderAPIClient {
         const response = await this.fetcher(url.toString(), {
           method,
           headers,
-          body: options.body ? JSON.stringify(options.body) : undefined,
+          body: bodyPayload,
           signal: controller.signal,
         });
 
