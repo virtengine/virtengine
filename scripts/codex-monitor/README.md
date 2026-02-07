@@ -483,11 +483,35 @@ Environment overrides:
 - `TELEGRAM_PRESENCE_INTERVAL_SEC` — presence heartbeat cadence in seconds (default: 60).
 - `TELEGRAM_PRESENCE_TTL_SEC` — consider instances offline after this many seconds (default: 3x interval).
 - `TELEGRAM_PRESENCE_DISABLED` — set to `1`/`true` to disable presence heartbeats.
-- `TELEGRAM_PRESENCE_CHAT_ID` — optional chat/channel to post presence updates (defaults to `TELEGRAM_CHAT_ID`).
+- `TELEGRAM_PRESENCE_SILENT` — set to `1`/`true` to send presence messages without notification sound (reduces noise).
+- `TELEGRAM_PRESENCE_ONLY_ON_CHANGE` — set to `1`/`true` to only send when state changes (default: `true`). Significantly reduces traffic.
+- `TELEGRAM_PRESENCE_CHAT_ID` — optional chat/channel to post presence updates (defaults to `TELEGRAM_CHAT_ID`). Use a separate channel to isolate presence traffic.
 - `VE_INSTANCE_ID` — override the auto-generated instance id (stable across restarts).
 - `VE_INSTANCE_LABEL` — human-friendly instance label shown in `/presence`.
 - `VE_COORDINATOR_PRIORITY` — lower numbers win coordinator election (default: 10 for role=coordinator, otherwise 100).
 - `VE_COORDINATOR_ELIGIBLE` — set to `0`/`false` to opt-out of coordinator election.
+
+**Reducing presence traffic:**
+
+To minimize Telegram noise from presence heartbeats:
+
+1. **Best:** Use a separate channel for presence messages:
+   ```env
+   TELEGRAM_PRESENCE_CHAT_ID=<separate-channel-id>
+   ```
+
+2. **Alternative:** Enable silent notifications (messages arrive without sound):
+   ```env
+   TELEGRAM_PRESENCE_SILENT=true
+   ```
+
+3. **Default behavior:** Only send when state changes (`TELEGRAM_PRESENCE_ONLY_ON_CHANGE=true` is the default).
+   This prevents repeated identical heartbeats from flooding the channel.
+
+4. **Complete disable:** Turn off presence if not using multi-instance coordination:
+   ```env
+   TELEGRAM_PRESENCE_DISABLED=true
+   ```
 
 ## Smart PR Flow
 
