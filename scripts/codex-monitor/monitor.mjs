@@ -2901,7 +2901,7 @@ async function checkStatusMilestones() {
   }
 }
 
-async function triggerTaskPlanner(reason, details) {
+async function triggerTaskPlanner(reason, details, { taskCount } = {}) {
   if (plannerTriggered || plannerMode === "disabled") {
     return;
   }
@@ -2915,7 +2915,7 @@ async function triggerTaskPlanner(reason, details) {
 
   try {
     if (plannerMode === "kanban") {
-      await triggerTaskPlannerViaKanban(reason);
+      await triggerTaskPlannerViaKanban(reason, { taskCount });
     } else {
       await triggerTaskPlannerViaCodex(reason);
     }
@@ -2931,7 +2931,8 @@ async function triggerTaskPlanner(reason, details) {
  * Trigger the task planner by creating a VK task — a real agent will
  * pick it up and plan the next phase of work.
  */
-async function triggerTaskPlannerViaKanban(reason) {
+async function triggerTaskPlannerViaKanban(reason, { taskCount } = {}) {
+  const numTasks = taskCount && Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 5;
   // Get project ID
   const projectsRes = await fetchVk("/api/projects");
   if (!projectsRes?.success || !projectsRes.data?.[0]?.id) {
@@ -2972,7 +2973,7 @@ async function triggerTaskPlannerViaKanban(reason) {
       "- Review recently merged PRs on GitHub to understand what was completed",
       "- Check `git log --oneline -20` for the latest changes",
       "- Look at open issues for inspiration",
-      "- Create 3-5 well-scoped tasks in vibe-kanban",
+      `- Create ${numTasks} well-scoped tasks in vibe-kanban`,
       "- Each task should be completable by a single agent in 1-4 hours",
     ].join("\n"),
     status: "todo",
@@ -3906,6 +3907,7 @@ injectMonitorFunctions({
   attemptFreshSessionRetry,
   buildRetryPrompt,
   getActiveAttemptInfo,
+  triggerTaskPlanner,
 });
 if (telegramBotEnabled) {
   void startTelegramBot();

@@ -145,6 +145,7 @@ let _startFreshSession = null;
 let _attemptFreshSessionRetry = null;
 let _buildRetryPrompt = null;
 let _getActiveAttemptInfo = null;
+let _triggerTaskPlanner = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -163,6 +164,7 @@ export function injectMonitorFunctions({
   attemptFreshSessionRetry,
   buildRetryPrompt,
   getActiveAttemptInfo,
+  triggerTaskPlanner,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -176,6 +178,7 @@ export function injectMonitorFunctions({
   _attemptFreshSessionRetry = attemptFreshSessionRetry;
   _buildRetryPrompt = buildRetryPrompt;
   _getActiveAttemptInfo = getActiveAttemptInfo;
+  _triggerTaskPlanner = triggerTaskPlanner;
 }
 
 /**
@@ -759,6 +762,10 @@ const COMMANDS = {
     handler: cmdRetry,
     desc: "Start fresh session for stuck task: /retry [reason]",
   },
+  "/plan": {
+    handler: cmdPlan,
+    desc: "Trigger task planner: /plan [count] (default 5)",
+  },
   "/history": { handler: cmdHistory, desc: "Codex conversation history" },
   "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
   "/reset_thread": { handler: cmdClear, desc: "Alias for /clear (reset thread)" },
@@ -1248,6 +1255,26 @@ async function cmdRetry(chatId, args) {
     }
   } catch (err) {
     await sendReply(chatId, `❌ Retry error: ${err.message || err}`);
+  }
+}
+
+async function cmdPlan(chatId, args) {
+  if (!_triggerTaskPlanner) {
+    await sendReply(chatId, "❌ Task planner not available (not injected from monitor).");
+    return;
+  }
+
+  // Parse optional task count: /plan 5 or /plan 10
+  const parsed = parseInt(args?.trim(), 10);
+  const taskCount = Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+
+  await sendReply(chatId, `📋 Triggering task planner (${taskCount} tasks)...`);
+
+  try {
+    await _triggerTaskPlanner("manual-telegram", { source: "telegram /plan command" }, { taskCount });
+    await sendReply(chatId, `✅ Task planner triggered for ${taskCount} tasks. Check backlog shortly.`);
+  } catch (err) {
+    await sendReply(chatId, `❌ Task planner error: ${err.message || err}`);
   }
 }
 
