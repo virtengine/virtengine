@@ -10,9 +10,12 @@ export type { MFAStoreState, MFAStoreActions } from './store';
 export type {
   TOTPEnrollmentData,
   WebAuthnEnrollmentData,
+  SMSEnrollmentData,
+  EmailEnrollmentData,
   BackupCodesData,
   FactorRemovalState,
   RecoveryStep,
   RecoveryState,
 } from './types';
+export { useMFAGate } from './useMFAGate';
 export * as mfaApi from './api';

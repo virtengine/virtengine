@@ -75,3 +75,23 @@ export {
   type DashboardConfigState,
   type DashboardConfigActions,
 } from './dashboardConfigStore';
+export {
+  useAdminStore,
+  selectActiveProposals,
+  selectActiveValidators,
+  selectOpenTickets,
+  selectUrgentTickets,
+  type AdminStore,
+  type AdminState,
+  type AdminActions,
+} from './adminStore';
+export {
+  useChainEventStore,
+  selectIsConnected,
+  selectRecentEvents,
+  selectEventsByType,
+  getChainEventClient,
+  type ChainEventStore,
+  type ChainEventState,
+  type ChainEventActions,
+} from './chainEventStore';

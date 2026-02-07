@@ -22,3 +22,6 @@ export { useWalletAutoConnect } from './useWalletAutoConnect';
 export type { WalletAutoConnectConfig, UseWalletAutoConnectResult } from './useWalletAutoConnect';
 
 export { usePriceConversion } from './usePriceConversion';
+
+export { useChainEvents } from './useChainEvents';
+export type { UseChainEventsOptions } from './useChainEvents';

@@ -27,7 +27,6 @@ import {
   generateInvoiceText,
 } from '@virtengine/portal/utils/billing';
 import { downloadFile } from '@virtengine/portal/utils/csv';
-import { txLink } from '@/lib/explorer';
 
 interface InvoiceDetailProps {
   invoiceId: string;
@@ -256,7 +255,7 @@ export function InvoiceDetail({ invoiceId, onBack }: InvoiceDetailProps) {
                   </Badge>
                   {payment.txHash && (
                     <a
-                      href={txLink(payment.txHash)}
+                      href={`https://explorer.virtengine.io/tx/${payment.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline"

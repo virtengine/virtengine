@@ -17,7 +17,6 @@ import {
   TableRow,
 } from '@/components/ui/Table';
 import { formatCurrency, formatDate, truncateAddress } from '@/lib/utils';
-import { accountLink } from '@/lib/explorer';
 import { ALLOCATION_STATUS_VARIANT } from '@/types/provider';
 import type { AllocationStatus } from '@/types/provider';
 
@@ -81,14 +80,7 @@ export default function AllocationTable() {
                     <div>
                       <div className="font-medium">{alloc.customerName}</div>
                       <div className="text-xs text-muted-foreground">
-                        <a
-                          className="font-medium text-primary hover:underline"
-                          href={accountLink(alloc.customerAddress)}
-                          rel="noopener noreferrer"
-                          target="_blank"
-                        >
-                          {truncateAddress(alloc.customerAddress, 14, 4)}
-                        </a>
+                        {truncateAddress(alloc.customerAddress, 14, 4)}
                       </div>
                     </div>
                   </TableCell>

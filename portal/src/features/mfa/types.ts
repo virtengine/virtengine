@@ -37,6 +37,18 @@ export interface WebAuthnEnrollmentData {
   challengeId: string;
 }
 
+/** SMS enrollment data returned from the API */
+export interface SMSEnrollmentData {
+  challengeId: string;
+  maskedPhone: string;
+}
+
+/** Email enrollment data returned from the API */
+export interface EmailEnrollmentData {
+  challengeId: string;
+  maskedEmail: string;
+}
+
 /** Backup codes data returned from the API */
 export interface BackupCodesData {
   codes: string[];

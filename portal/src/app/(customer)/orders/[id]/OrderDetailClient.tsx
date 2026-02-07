@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, type ReactNode } from 'react';
+import { useCallback } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -29,7 +29,6 @@ import type {
   OrderActionResult,
 } from '@/features/orders/tracking-types';
 import { formatCurrency, formatDate, truncateAddress } from '@/lib/utils';
-import { accountLink, txLink } from '@/lib/explorer';
 
 export default function OrderDetailClient() {
   const params = useParams();
@@ -161,31 +160,10 @@ export default function OrderDetailClient() {
                       <InfoItem label="Duration" value={formatDuration(order.createdAt)} />
                       <InfoItem
                         label="Provider Address"
-                        value={
-                          <a
-                            className="font-medium text-primary hover:underline"
-                            href={accountLink(order.providerAddress)}
-                            rel="noopener noreferrer"
-                            target="_blank"
-                          >
-                            {truncateAddress(order.providerAddress)}
-                          </a>
-                        }
+                        value={truncateAddress(order.providerAddress)}
                       />
                       {order.txHash && (
-                        <InfoItem
-                          label="Tx Hash"
-                          value={
-                            <a
-                              className="font-medium text-primary hover:underline"
-                              href={txLink(order.txHash)}
-                              rel="noopener noreferrer"
-                              target="_blank"
-                            >
-                              {truncateAddress(order.txHash)}
-                            </a>
-                          }
-                        />
+                        <InfoItem label="Tx Hash" value={truncateAddress(order.txHash)} />
                       )}
                     </div>
                   </CardContent>
@@ -289,11 +267,11 @@ export default function OrderDetailClient() {
 // Helper Components
 // =============================================================================
 
-function InfoItem({ label, value }: { label: string; value: ReactNode }) {
+function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="mt-1">{value}</dd>
+      <dd className="mt-1 font-medium">{value}</dd>
     </div>
   );
 }

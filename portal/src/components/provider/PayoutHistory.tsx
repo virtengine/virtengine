@@ -18,7 +18,6 @@ import {
   TableRow,
 } from '@/components/ui/Table';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { txLink } from '@/lib/explorer';
 import { PAYOUT_STATUS_VARIANT } from '@/types/provider';
 
 export default function PayoutHistory() {
@@ -71,18 +70,7 @@ export default function PayoutHistory() {
                     </Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {payout.txHash ? (
-                      <a
-                        className="font-medium text-primary hover:underline"
-                        href={txLink(payout.txHash)}
-                        rel="noopener noreferrer"
-                        target="_blank"
-                      >
-                        {payout.txHash}
-                      </a>
-                    ) : (
-                      '—'
-                    )}
+                    {payout.txHash ? payout.txHash : '—'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {payout.completedAt

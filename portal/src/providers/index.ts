@@ -6,3 +6,4 @@
 export { AppProviders } from './AppProviders';
 export { CosmosKitProvider, useCosmosKitWallets } from './CosmosKitProvider';
 export type { CosmosKitWallet } from './CosmosKitProvider';
+export { ChainEventProvider } from './ChainEventProvider';

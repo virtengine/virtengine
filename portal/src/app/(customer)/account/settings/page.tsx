@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { accountLink, validatorLink } from '@/lib/explorer';
+import { DelegationSection } from '@/components/account/DelegationSection';
 
 export const metadata: Metadata = {
   title: 'Account Settings',
@@ -31,13 +31,13 @@ const apiKeys = [
 const delegates = [
   {
     name: 'Ops Lead',
-    address: 'virtenginevaloper1q8n...4k9l',
+    address: 've1q8n...4k9l',
     scope: 'Marketplace + Orders',
     limit: '$5,000 / mo',
   },
   {
     name: 'Billing Partner',
-    address: 'virtenginevaloper1d3h...8s1w',
+    address: 've1d3h...8s1w',
     scope: 'Invoices only',
     limit: '$1,000 / mo',
   },
@@ -210,14 +210,7 @@ export default function AccountSettingsPage() {
                         </span>
                       )}
                     </div>
-                    <a
-                      className="text-xs font-medium text-primary hover:underline"
-                      href={accountLink(wallet.address)}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      {wallet.address}
-                    </a>
+                    <p className="text-xs text-muted-foreground">{wallet.address}</p>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-success">{wallet.status}</span>
@@ -470,91 +463,7 @@ export default function AccountSettingsPage() {
             </div>
           </section>
 
-          <section
-            id="delegation"
-            className="scroll-mt-24 rounded-xl border border-border bg-card p-6"
-          >
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold">Delegation</h2>
-              <p className="text-sm text-muted-foreground">
-                Delegate limited access to teammates or partners with scoped permissions.
-              </p>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-4">
-                {delegates.map((delegate) => (
-                  <div
-                    key={delegate.address}
-                    className="rounded-lg border border-border bg-muted/30 p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{delegate.name}</p>
-                        <a
-                          className="text-xs font-medium text-primary hover:underline"
-                          href={validatorLink(delegate.address)}
-                          rel="noopener noreferrer"
-                          target="_blank"
-                        >
-                          {delegate.address}
-                        </a>
-                      </div>
-                      <button
-                        type="button"
-                        className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-accent"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <span>Scope: {delegate.scope}</span>
-                      <span>Spend limit: {delegate.limit}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Add delegate
-                </h3>
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <label className="text-sm font-medium" htmlFor="delegate-address">
-                      Wallet address
-                    </label>
-                    <input
-                      id="delegate-address"
-                      type="text"
-                      placeholder="ve1..."
-                      className="mt-2 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium" htmlFor="delegate-scope">
-                      Permission scope
-                    </label>
-                    <select
-                      id="delegate-scope"
-                      className="mt-2 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm"
-                    >
-                      <option>Marketplace + Orders</option>
-                      <option>Billing only</option>
-                      <option>Read-only analytics</option>
-                      <option>Provider management</option>
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    className="w-full rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-                  >
-                    Send delegation invite
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
+          <DelegationSection delegates={delegates} />
         </div>
       </div>
     </div>

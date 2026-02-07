@@ -10,7 +10,6 @@ import { useProviderStore } from '@/stores/providerStore';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { formatDate, truncateAddress } from '@/lib/utils';
-import { accountLink } from '@/lib/explorer';
 import type { QueuedAllocation } from '@/types/provider';
 
 function QueueItem({ item }: { item: QueuedAllocation }) {
@@ -24,15 +23,7 @@ function QueueItem({ item }: { item: QueuedAllocation }) {
           </Badge>
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          Customer:{' '}
-          <a
-            className="font-medium text-primary hover:underline"
-            href={accountLink(item.customerAddress)}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            {truncateAddress(item.customerAddress, 14, 4)}
-          </a>
+          Customer: {truncateAddress(item.customerAddress, 14, 4)}
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           {item.resources.cpu > 0 && <span>{item.resources.cpu} CPU · </span>}

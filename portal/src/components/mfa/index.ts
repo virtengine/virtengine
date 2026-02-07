@@ -11,6 +11,8 @@ export { MFAChallenge } from './MFAChallenge';
 export { MFASettings } from './MFASettings';
 export { TOTPSetup } from './TOTPSetup';
 export { WebAuthnSetup } from './WebAuthnSetup';
+export { SMSSetup } from './SMSSetup';
+export { EmailSetup } from './EmailSetup';
 export { BackupCodes } from './BackupCodes';
 export { FactorList } from './FactorList';
 export { RecoveryFlow } from './RecoveryFlow';
