@@ -209,7 +209,8 @@ describe('TemplateBrowser', () => {
 
   it('renders category filters', async () => {
     render(<TemplateBrowser />);
-    expect(await screen.findByText('All')).toBeInTheDocument();
+    await screen.findByText('PyTorch Training');
+    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Machine Learning' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Scientific Computing' })).toBeInTheDocument();
   });

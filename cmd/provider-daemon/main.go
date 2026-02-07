@@ -659,6 +659,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 	portalCfg.ShellSessionTTL = viper.GetDuration(FlagPortalShellSessionTTL)
 	portalCfg.TokenTTL = viper.GetDuration(FlagPortalTokenTTL)
 	portalCfg.AuditLogger = portalAuditLogger
+	portalCfg.AuthChainID = viper.GetString(FlagChainID)
+	portalCfg.AuthChainGRPC = viper.GetString(FlagWaldurChainGRPC)
 
 	portalAPI, err := provider_daemon.NewPortalAPIServer(portalCfg)
 	if err != nil {
