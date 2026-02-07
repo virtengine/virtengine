@@ -12,16 +12,40 @@ import net from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireMonitorLock, runMaintenanceSweep } from "./maintenance.mjs";
-import { attemptAutoFix, fixLoopingError } from "./autofix.mjs";
+import {
+  attemptAutoFix,
+  fixLoopingError,
+  isDevMode,
+  runCodexExec,
+} from "./autofix.mjs";
 import {
   startTelegramBot,
   stopTelegramBot,
   injectMonitorFunctions,
+  notify,
 } from "./telegram-bot.mjs";
-import { execCodexPrompt, isCodexBusy } from "./codex-shell.mjs";
+import {
+  execPrimaryPrompt,
+  isPrimaryBusy,
+  initPrimaryAgent,
+} from "./primary-agent.mjs";
 import { loadConfig } from "./config.mjs";
 import { startAutoUpdateLoop, stopAutoUpdateLoop } from "./update-check.mjs";
 import { ensureCodexConfig, printConfigSummary } from "./codex-config.mjs";
+import {
+  analyzeMergeStrategy,
+  resetMergeStrategyDedup,
+} from "./merge-strategy.mjs";
+import {
+  normalizeDedupKey,
+  stripAnsi,
+  isErrorLine,
+  escapeHtml,
+  formatHtmlLink,
+  getErrorFingerprint,
+  getMaxParallelFromArgs,
+  parsePrNumberFromUrl,
+} from "./utils.mjs";
 
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
@@ -119,6 +143,8 @@ let {
   envPaths,
 } = config;
 
+void initPrimaryAgent(config);
+
 let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let plannerMode = configPlannerMode; // "codex-sdk" | "kanban" | "disabled"
@@ -129,6 +155,21 @@ let codexDisabledReason = codexEnabled
     : agentSdk?.primary && agentSdk.primary !== "codex"
       ? `disabled via agent_sdk.primary=${agentSdk.primary}`
       : "disabled via --no-codex";
+    : "disabled via --no-codex";
+
+// Merge strategy: Codex-powered merge decision analysis
+// Enabled by default unless CODEX_ANALYZE_MERGE_STRATEGY=false
+const codexAnalyzeMergeStrategy =
+  codexEnabled &&
+  (process.env.CODEX_ANALYZE_MERGE_STRATEGY || "").toLowerCase() !== "false";
+const mergeStrategyMode = String(
+  process.env.MERGE_STRATEGY_MODE || "smart",
+).toLowerCase();
+const codexResolveConflictsEnabled =
+  codexEnabled && mergeStrategyMode.includes("codexsdk");
+const conflictResolutionTimeoutMs = Number(
+  process.env.MERGE_CONFLICT_RESOLUTION_TIMEOUT_MS || "600000",
+);
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
 let telegramPollLockHeld = false;
@@ -151,6 +192,11 @@ let watcherDebounce = null;
 let watchFileName = null;
 let envWatchers = [];
 let envWatcherDebounce = null;
+
+// ── Self-restart: exit code 75 signals cli.mjs to re-fork with fresh ESM cache
+const SELF_RESTART_EXIT_CODE = 75;
+let selfWatcher = null;
+let selfWatcherDebounce = null;
 let telegramNotifierInterval = null;
 let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
@@ -179,6 +225,19 @@ let orchestratorLoopFixInProgress = false;
 let monitorSafeModeUntil = 0;
 let orchestratorResumeTimer = null;
 
+// ── Mutex / restart-loop prevention ─────────────────────────────────────────
+// When the orchestrator exits because "Another orchestrator instance is already
+// running" (mutex held), the monitor must NOT restart immediately — the old
+// instance still has the mutex and a tight restart loop will form.
+let mutexHeldDetected = false; // set true when we see the mutex message in stdout
+let mutexBackoffMs = 0; // current backoff delay (escalates 30→60→90s)
+const MUTEX_BACKOFF_STEP_MS = 30_000; // 30s per step
+const MUTEX_BACKOFF_MAX_MS = 90_000; // cap at 90s
+let lastProcessStartAt = 0; // timestamp of most recent startProcess call
+const MIN_RESTART_INTERVAL_MS = 15_000; // never restart faster than 15s
+let consecutiveQuickExits = 0; // count exits that happen within 20s of start
+const QUICK_EXIT_THRESHOLD_MS = 20_000; // exit within 20s = "quick exit"
+
 let logRemainder = "";
 const mergeNotified = new Set();
 const pendingMerges = new Set();
@@ -187,30 +246,8 @@ const mergeFailureNotified = new Map();
 const vkErrorNotified = new Map();
 const telegramDedup = new Map();
 
-// ── Fuzzy dedup: normalize messages so structural duplicates match ───────────
-// "recovery (count=1)" and "recovery (count=29)" both become "recovery (count=N)"
-function normalizeDedupKey(text) {
-  return (
-    String(text || "")
-      .trim()
-      // Replace numbers (integers and decimals) with N, preserving surrounding text
-      .replaceAll(/\d+(\.\d+)?/g, "N")
-      // Collapse any resulting multi-N sequences (e.g., "N.N" → "N")
-      .replaceAll(/N[.\-/:]N/g, "N")
-      // Collapse whitespace
-      .replaceAll(/\s+/g, " ")
-  );
-}
+// ── Deduplication tracking (utilities imported from utils.mjs) ───────────────
 
-// ── Strip ANSI escape codes from log lines before sending to Telegram ────────
-// PowerShell and colored CLI output includes \x1b[...m sequences that show
-// as garbage in Telegram messages.
-function stripAnsi(text) {
-  // eslint-disable-next-line no-control-regex
-  return String(text || "")
-    .replace(/\x1b\[[0-9;]*m/g, "")
-    .replace(/\[\d+;?\d*m/g, "");
-}
 
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
 // Detects rapid failure bursts independently of Telegram dedup.
@@ -397,95 +434,6 @@ function getChangeSummary(repoRootPath, files) {
   }
 }
 
-function getMaxParallelFromArgs(argsList) {
-  if (!Array.isArray(argsList)) {
-    return null;
-  }
-  for (let i = 0; i < argsList.length; i += 1) {
-    const arg = String(argsList[i] ?? "");
-    const directMatch =
-      arg.match(/^-{1,2}maxparallel(?:=|:)?(\d+)$/i) ||
-      arg.match(/^--max-parallel(?:=|:)?(\d+)$/i);
-    if (directMatch) {
-      const value = Number(directMatch[1]);
-      if (Number.isFinite(value) && value > 0) {
-        return value;
-      }
-    }
-    const normalized = arg.toLowerCase();
-    if (
-      normalized === "-maxparallel" ||
-      normalized === "--maxparallel" ||
-      normalized === "--max-parallel"
-    ) {
-      const next = Number(argsList[i + 1]);
-      if (Number.isFinite(next) && next > 0) {
-        return next;
-      }
-    }
-  }
-  const envValue = Number(
-    process.env.VK_MAX_PARALLEL || process.env.MAX_PARALLEL,
-  );
-  if (Number.isFinite(envValue) && envValue > 0) {
-    return envValue;
-  }
-  return null;
-}
-
-function runCodexExec(prompt, cwd, timeoutMs = 120_000) {
-  return new Promise((resolve) => {
-    const args = ["exec", "--full-auto", "-C", cwd, prompt];
-    const child = spawn("codex", args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
-      timeout: timeoutMs,
-      env: { ...process.env },
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    const timer = setTimeout(() => {
-      try {
-        child.kill("SIGTERM");
-      } catch {
-        /* best effort */
-      }
-      resolve({
-        success: false,
-        output: stdout,
-        error: `timeout after ${timeoutMs}ms`,
-      });
-    }, timeoutMs);
-
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      resolve({
-        success: false,
-        output: stdout,
-        error: err.message,
-      });
-    });
-
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      resolve({
-        success: code === 0,
-        output: stdout + (stderr ? `\n${stderr}` : ""),
-        error: code !== 0 ? `exit code ${code}` : null,
-      });
-    });
-  });
-}
 
 const monitorFixAttempts = new Map();
 const monitorFixMaxAttempts = 2;
@@ -797,14 +745,6 @@ const LOOP_COOLDOWN_MS = 15 * 60 * 1000; // 15 min cooldown per fingerprint
 const errorFrequency = new Map();
 let loopFixInProgress = false;
 
-function getErrorFingerprint(line) {
-  // Normalize: strip timestamps, attempt IDs, branch-specific parts
-  return line
-    .replace(/\[\d{2}:\d{2}:\d{2}\]\s*/g, "")
-    .replace(/\b[0-9a-f]{8}\b/gi, "<ID>") // attempt IDs
-    .replace(/ve\/[\w.-]+/g, "ve/<BRANCH>") // branch names
-    .trim();
-}
 
 function trackErrorFrequency(line) {
   const fingerprint = getErrorFingerprint(line);
@@ -916,29 +856,6 @@ const vkErrorPatterns = [
   /Failed to initialize vibe-kanban configuration/i,
   /HTTP GET http:\/\/127\.0\.0\.1:54089\/api\/projects failed/i,
 ];
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function formatHtmlLink(url, label) {
-  if (!url) {
-    return escapeHtml(label);
-  }
-  return `<a href="${escapeHtml(url)}">${escapeHtml(label)}</a>`;
-}
-
-function isErrorLine(line) {
-  if (errorNoisePatterns.some((pattern) => pattern.test(line))) {
-    return false;
-  }
-  return errorPatterns.some((pattern) => pattern.test(line));
-}
 
 function notifyErrorLine(line) {
   if (!telegramToken || !telegramChatId) {
@@ -1403,14 +1320,6 @@ async function findExistingPrForBranchApi(branch) {
     );
     return null;
   }
-}
-
-function parsePrNumberFromUrl(url) {
-  if (!url) return null;
-  const match = String(url).match(/\/pull\/(\d+)/i);
-  if (!match) return null;
-  const num = Number(match[1]);
-  return Number.isFinite(num) ? num : null;
 }
 
 async function getPullRequestByNumber(prNumber) {
@@ -1886,7 +1795,7 @@ async function fetchTasksByStatus(status) {
 }
 
 /**
- * PATCH /api/tasks/:task_id
+ * PUT /api/tasks/:task_id
  * Updates task status via VK API.
  * @param {string} taskId - Task UUID
  * @param {string} newStatus - New status ("todo", "inprogress", "inreview", "done", "cancelled")
@@ -1894,7 +1803,7 @@ async function fetchTasksByStatus(status) {
  */
 async function updateTaskStatus(taskId, newStatus) {
   const res = await fetchVk(`/api/tasks/${taskId}`, {
-    method: "PATCH",
+    method: "PUT",
     body: { status: newStatus },
     timeoutMs: 10000,
   });
@@ -1903,17 +1812,45 @@ async function updateTaskStatus(taskId, newStatus) {
 
 /**
  * Checks if a git branch has been merged into the main branch.
- * Uses git commands to determine if the branch exists and is merged.
+ * Uses GitHub CLI + git commands to determine merge status.
+ *
+ * IMPORTANT: "branch not on remote" does NOT mean merged. The agent may
+ * never have pushed, the PR may have been closed without merging, or the
+ * branch was manually deleted. We must verify via GitHub PR state.
+ *
  * @param {string} branch - Branch name (e.g., "ve/1234-feat-auth")
- * @returns {Promise<boolean>} true if merged, false otherwise
+ * @returns {Promise<boolean>} true if definitively merged, false otherwise
  */
 async function isBranchMerged(branch) {
   if (!branch) return false;
 
   try {
-    const { execSync } = await import("child_process");
+    // ── Strategy 1: Check GitHub for a merged PR with this head branch ──
+    // This is the most reliable signal — if GitHub says merged, it's merged.
+    if (ghAvailable()) {
+      try {
+        const ghResult = execSync(
+          `gh pr list --head "${branch}" --state merged --json number,mergedAt --limit 1`,
+          {
+            cwd: repoRoot,
+            encoding: "utf8",
+            stdio: ["pipe", "pipe", "ignore"],
+            timeout: 15000,
+          },
+        ).trim();
+        const mergedPRs = JSON.parse(ghResult || "[]");
+        if (mergedPRs.length > 0) {
+          console.log(
+            `[monitor] Branch ${branch} has merged PR #${mergedPRs[0].number}`,
+          );
+          return true;
+        }
+      } catch {
+        // gh failed — fall through to git-based checks
+      }
+    }
 
-    // Check if branch exists in origin
+    // ── Strategy 2: Check if branch exists on remote ────────────────────
     const branchExistsCmd = `git ls-remote --heads origin ${branch}`;
     const branchExists = execSync(branchExistsCmd, {
       cwd: repoRoot,
@@ -1921,28 +1858,20 @@ async function isBranchMerged(branch) {
       stdio: ["pipe", "pipe", "ignore"],
     }).trim();
 
-    // If branch doesn't exist on remote, it might have been deleted after merge
-    // Check if it was merged into main
+    // Branch NOT on remote — this does NOT prove it was merged.
+    // Without a confirmed merged PR (strategy 1), we must assume NOT merged.
     if (!branchExists) {
-      // Fetch latest refs
-      execSync("git fetch origin main --quiet", {
-        cwd: repoRoot,
-        stdio: "ignore",
-      });
-
-      // Check if any commits from the branch are in main
-      // This is a heuristic: if the branch was deleted, it's likely merged
-      // We can't be 100% certain, but deleted branches are usually merged
       console.log(
-        `[monitor] Branch ${branch} not found on remote (likely merged and deleted)`,
+        `[monitor] Branch ${branch} not found on remote — no merged PR found, treating as NOT merged`,
       );
-      return true;
+      return false;
     }
 
-    // Branch still exists - check if it's merged into main
+    // ── Strategy 3: Branch exists on remote — check if ancestor of main ─
     execSync("git fetch origin main --quiet", {
       cwd: repoRoot,
       stdio: "ignore",
+      timeout: 15000,
     });
 
     // Check if the branch is fully merged into origin/main
@@ -1951,9 +1880,11 @@ async function isBranchMerged(branch) {
     execSync(mergeCheckCmd, {
       cwd: repoRoot,
       stdio: "ignore",
+      timeout: 10000,
     });
 
     // If we get here, the branch is merged
+    console.log(`[monitor] Branch ${branch} is ancestor of main (merged)`);
     return true;
   } catch (err) {
     // Non-zero exit code means not merged, or other error
@@ -2117,6 +2048,126 @@ async function reconcileTaskStatuses(reason = "manual") {
   return await checkMergedPRsAndUpdateTasks();
 }
 
+// ── Merge Strategy Analysis ─────────────────────────────────────────────────
+
+/**
+ * Run the Codex-powered merge strategy analysis for a completed task.
+ * This is fire-and-forget (void) — it runs async in the background and
+ * handles its own errors/notifications.
+ *
+ * @param {import("./merge-strategy.mjs").MergeContext} ctx
+ */
+async function runMergeStrategyAnalysis(ctx) {
+  const tag = `merge-strategy(${ctx.shortId})`;
+  try {
+    if (isPrimaryBusy()) {
+      console.log(`[${tag}] Codex busy — deferring analysis`);
+      // Retry after 60 seconds if Codex frees up
+      setTimeout(() => {
+        if (!isPrimaryBusy()) void runMergeStrategyAnalysis(ctx);
+      }, 60_000);
+      return;
+    }
+
+    const telegramFn =
+      telegramToken && telegramChatId
+        ? (msg) => void sendTelegramMessage(msg)
+        : null;
+
+    const decision = await analyzeMergeStrategy(ctx, {
+      execCodex: execPrimaryPrompt,
+      timeoutMs:
+        parseInt(process.env.MERGE_STRATEGY_TIMEOUT_MS, 10) || 10 * 60 * 1000,
+      logDir,
+      onTelegram: telegramFn,
+    });
+
+    if (!decision || !decision.success) {
+      console.warn(`[${tag}] analysis failed — falling back to manual review`);
+      return;
+    }
+
+    // ── Act on the decision ──────────────────────────────────────
+    switch (decision.action) {
+      case "merge_after_ci_pass":
+        console.log(`[${tag}] → merge_after_ci_pass`);
+        // Nothing extra — the VK cleanup script handles auto-merge after CI
+        break;
+
+      case "prompt":
+        console.log(
+          `[${tag}] → prompt agent: ${(decision.message || "").slice(0, 100)}`,
+        );
+        if (codexEnabled && !isPrimaryBusy() && decision.message) {
+          void execPrimaryPrompt(
+            `The merge strategy reviewer has feedback on your work for task "${ctx.taskTitle || ctx.shortId}":\n\n` +
+              decision.message +
+              `\n\nPlease address this feedback, commit, and push.`,
+            { timeoutMs: 15 * 60 * 1000 },
+          );
+        }
+        break;
+
+      case "close_pr":
+        console.log(`[${tag}] → close_pr: ${decision.reason || "no reason"}`);
+        if (telegramFn) {
+          telegramFn(
+            `🚫 Merge strategy recommends closing PR for ${ctx.shortId}: ${decision.reason || "no reason given"}`,
+          );
+        }
+        // Don't auto-close — just flag for human. Closing could lose work.
+        break;
+
+      case "re_attempt":
+        console.log(`[${tag}] → re_attempt: ${decision.reason || "no reason"}`);
+        // Trigger a fresh session retry
+        if (typeof attemptFreshSessionRetry === "function") {
+          const freshStarted = await attemptFreshSessionRetry(
+            "merge_strategy_re_attempt",
+            decision.reason || "Merge strategy recommended re-attempt",
+          );
+          if (freshStarted && telegramFn) {
+            telegramFn(
+              `🔄 Merge strategy recommended re-attempt for ${ctx.shortId}. Fresh session started.`,
+            );
+          }
+        }
+        break;
+
+      case "manual_review":
+        console.log(
+          `[${tag}] → manual_review: ${decision.reason || "no reason"}`,
+        );
+        // Already notified via Telegram by analyzeMergeStrategy
+        break;
+
+      case "wait": {
+        const waitSec = decision.seconds || 300;
+        console.log(`[${tag}] → wait ${waitSec}s: ${decision.reason || ""}`);
+        // Re-run analysis after the wait period
+        setTimeout(() => {
+          void runMergeStrategyAnalysis({
+            ...ctx,
+            ciStatus: "re-check",
+          });
+        }, waitSec * 1000);
+        break;
+      }
+
+      case "noop":
+        console.log(`[${tag}] → noop`);
+        break;
+
+      default:
+        console.warn(`[${tag}] unknown action: ${decision.action}`);
+    }
+  } catch (err) {
+    console.warn(
+      `[${tag}] merge strategy analysis error: ${err.message || err}`,
+    );
+  }
+}
+
 // ── Smart PR creation flow ──────────────────────────────────────────────────
 
 /**
@@ -2156,9 +2207,17 @@ async function smartPRFlow(attemptId, shortId, status) {
       );
     }
 
-    // No commits and no changes → nothing to push
+    // No commits and no changes → archive stale attempt instead of silently skipping
     if (commits_ahead === 0 && !has_uncommitted_changes) {
-      console.log(`[monitor] ${tag}: no commits ahead, no changes — skipping`);
+      console.warn(
+        `[monitor] ${tag}: no commits ahead, no changes — archiving stale attempt`,
+      );
+      await archiveAttempt(attemptId);
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(
+          `🗑️ Archived attempt ${shortId}: no commits, no changes (status=${status}). Task will be reattempted.`,
+        );
+      }
       return;
     }
 
@@ -2167,9 +2226,9 @@ async function smartPRFlow(attemptId, shortId, status) {
       console.log(
         `[monitor] ${tag}: uncommitted changes but no commits — agent needs to commit first`,
       );
-      // Ask the agent to commit via Codex shell
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      // Ask the agent to commit via primary agent
+      if (!isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId} has uncommitted changes but no commits.\n` +
             `Please navigate to the worktree for this attempt and:\n` +
             `1. Stage all changes: git add -A\n` +
@@ -2216,6 +2275,60 @@ async function smartPRFlow(attemptId, shortId, status) {
         if (resolveResult?.success) {
           console.log(`[monitor] ${tag}: conflicts resolved automatically`);
         } else {
+          const attemptInfo = await getAttemptInfo(attemptId);
+          const worktreeDir =
+            attemptInfo?.worktree_dir || attemptInfo?.worktree || null;
+          if (codexResolveConflictsEnabled) {
+            console.warn(
+              `[monitor] ${tag}: auto-resolve failed — running Codex SDK conflict resolution`,
+            );
+            const prompt = `You are fixing a git rebase conflict in a Vibe-Kanban worktree.
+Worktree: ${worktreeDir || "(unknown)"}
+Attempt: ${shortId}
+Conflicted files: ${files.join(", ") || "(unknown)"}
+
+Instructions:
+1) cd into the worktree directory.
+2) Inspect git status and conflicted files.
+3) Resolve conflicts, then run: git add -A
+4) Continue the rebase (git rebase --continue) if needed.
+5) Ensure the branch builds/tests if necessary.
+6) Commit if prompted and push the branch.
+Return a short summary of what you did.`;
+            const codexResult = await runCodexExec(
+              prompt,
+              worktreeDir || repoRoot,
+              conflictResolutionTimeoutMs,
+            );
+            const logPath = resolve(
+              logDir,
+              `codex-conflict-${shortId}-${nowStamp()}.log`,
+            );
+            await writeFile(
+              logPath,
+              codexResult.output || codexResult.error || "(no output)",
+              "utf8",
+            );
+            if (codexResult.success) {
+              console.log(
+                `[monitor] ${tag}: Codex conflict resolution succeeded`,
+              );
+              if (telegramToken && telegramChatId) {
+                void sendTelegramMessage(
+                  `✅ Codex resolved rebase conflicts for ${shortId}. Log: ${logPath}`,
+                );
+              }
+              return;
+            }
+            console.warn(
+              `[monitor] ${tag}: Codex conflict resolution failed — prompting agent`,
+            );
+            if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `⚠️ Codex failed to resolve conflicts for ${shortId}. Log: ${logPath}`,
+              );
+            }
+          }
           // Auto-resolve failed — ask agent to fix
           console.warn(
             `[monitor] ${tag}: auto-resolve failed — prompting agent`,
@@ -2225,8 +2338,8 @@ async function smartPRFlow(attemptId, shortId, status) {
               `⚠️ Attempt ${shortId} has unresolvable rebase conflicts: ${files.join(", ")}`,
             );
           }
-          if (codexEnabled && !isCodexBusy()) {
-            void execCodexPrompt(
+          if (!isPrimaryBusy()) {
+            void execPrimaryPrompt(
               `Task attempt ${shortId} has rebase conflicts in: ${files.join(", ")}.\n` +
                 `Please resolve the conflicts, commit, push, and create a PR.`,
               { timeoutMs: 15 * 60 * 1000 },
@@ -2311,6 +2424,7 @@ async function smartPRFlow(attemptId, shortId, status) {
 
     if (prResult?.success) {
       const prUrl = prResult.data?.url || prResult.data?.html_url || "";
+      const prNum = prResult.data?.number || null;
       console.log(
         `[monitor] ${tag}: PR created successfully${prUrl ? " — " + prUrl : ""}`,
       );
@@ -2319,6 +2433,26 @@ async function smartPRFlow(attemptId, shortId, status) {
           `✅ Auto-created PR for ${shortId}${prUrl ? ": " + prUrl : ""}`,
         );
       }
+
+      // ── Step 5b: Merge strategy analysis (Codex-powered) ─────
+      if (codexAnalyzeMergeStrategy && !isPrimaryBusy()) {
+        void runMergeStrategyAnalysis({
+          attemptId,
+          shortId,
+          status,
+          prTitle,
+          prNumber: prNum,
+          prUrl,
+          prState: "open",
+          branch: branchName,
+          commitsAhead: branchStatus.commits_ahead,
+          commitsBehind: branchStatus.commits_behind,
+          taskTitle: attempt?.task_title,
+          taskDescription: attempt?.task_description,
+          worktreeDir: attempt?.worktree_dir || attempt?.worktree || null,
+        });
+      }
+
       return;
     }
 
@@ -2348,8 +2482,8 @@ async function smartPRFlow(attemptId, shortId, status) {
           `⚠️ Auto-PR for ${shortId} fast-failed (${elapsed}ms) — likely worktree issue. Prompting agent.`,
         );
       }
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      if (!isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId} needs to create a PR but the automated PR creation ` +
             `failed instantly (worktree or config issue).\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -2371,8 +2505,8 @@ async function smartPRFlow(attemptId, shortId, status) {
           `⚠️ Auto-PR for ${shortId} failed after ${Math.round(elapsed / 1000)}s (prepush hooks). Prompting agent to fix.`,
         );
       }
-      if (codexEnabled && !isCodexBusy()) {
-        void execCodexPrompt(
+      if (!isPrimaryBusy()) {
+        void execPrimaryPrompt(
           `Task attempt ${shortId}: the prepush hooks (lint/test/build) failed ` +
             `when trying to create a PR.\n` +
             `Branch: ${attempt?.branch || shortId}\n\n` +
@@ -2786,30 +2920,58 @@ async function sendTelegramMessage(text, options = {}) {
   // Always record to history ring buffer (even deduped messages are useful context)
   pushTelegramHistory(String(text || ""));
 
-  const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
-  const payload = {
-    chat_id: targetChatId,
-    text,
-  };
-  if (options.parseMode) {
-    payload.parse_mode = options.parseMode;
+  // Determine priority based on message content
+  const textLower = String(text || "").toLowerCase();
+  let priority = 4; // default: info
+  let category = "general";
+
+  // Priority 1: Critical/Fatal
+  if (
+    textLower.includes("fatal") ||
+    textLower.includes("critical") ||
+    textLower.includes("🔥")
+  ) {
+    priority = 1;
+    category = "critical";
   }
-  if (options.disablePreview) {
-    payload.disable_web_page_preview = true;
+  // Priority 2: Errors
+  else if (
+    textLower.includes("error") ||
+    textLower.includes("failed") ||
+    textLower.includes("❌") ||
+    textLower.includes("auto-fix gave up")
+  ) {
+    priority = 2;
+    category = "error";
   }
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[monitor] telegram send failed: ${res.status} ${body}`);
+  // Priority 3: Warnings
+  else if (textLower.includes("warning") || textLower.includes("⚠️")) {
+    priority = 3;
+    category = "warning";
+  }
+  // Priority 4: Info (default)
+  else {
+    // Categorize info messages
+    if (textLower.includes("pr") || textLower.includes("pull request")) {
+      category = "pr";
+    } else if (textLower.includes("task") || textLower.includes("completed")) {
+      category = "task";
+    } else if (textLower.includes("codex") || textLower.includes("analysis")) {
+      category = "analysis";
+    } else if (
+      textLower.includes("auto-created") ||
+      textLower.includes("merged")
+    ) {
+      category = "git";
     }
-  } catch (err) {
-    console.warn(`[monitor] telegram send failed: ${err.message || err}`);
   }
+
+  // Route through batching system
+  return notify(text, priority, {
+    category,
+    silent: options.silent,
+    data: { parseMode: options.parseMode, chatId: targetChatId },
+  });
 }
 
 function enqueueTelegramCommand(handler) {
@@ -3589,44 +3751,98 @@ async function analyzeWithCodex(logPath, logText, reason) {
   if (!codexEnabled) {
     return;
   }
-  try {
-    notifyCodexTrigger(`orchestrator analysis (${reason})`);
-    if (!CodexClient) {
-      const ready = await ensureCodexSdkReady();
-      if (!ready) {
-        throw new Error(codexDisabledReason || "Codex SDK not available");
-      }
+  notifyCodexTrigger(`orchestrator analysis (${reason})`);
+
+  // ── Build a workspace-aware prompt ────────────────────────────────────
+  // The old approach used CodexClient SDK (chat-only, no file access).
+  // The new approach uses `codex exec` with --full-auto so the agent can
+  // actually read files, inspect git status, and give a real diagnosis.
+  const logTail = logText.slice(-12000);
+  const prompt = `You are diagnosing why the VirtEngine orchestrator exited.
+You have FULL READ ACCESS to the workspace. Use it.
+
+## Context
+- Exit reason: ${reason}
+- Orchestrator script: ${scriptPath}
+- Repository root: ${repoRoot}
+- Active log file: ${logPath}
+- Monitor script: scripts/codex-monitor/monitor.mjs
+- VK endpoint: ${vkEndpointUrl || "(not set)"}
+- Git branch: ${(() => {
+    try {
+      return execSync("git branch --show-current", {
+        cwd: repoRoot,
+        encoding: "utf8",
+      }).trim();
+    } catch {
+      return "unknown";
     }
-    const codex = new CodexClient();
-    const thread = codex.startThread();
-    const prompt = `You are monitoring a long-running PowerShell orchestration script.
-The script just exited with an error. Analyze the log excerpt and diagnose the root cause.
-Do NOT edit or modify any files. Only provide a diagnosis.
+  })()}
 
-Reason: ${reason}
+## Log tail (last ~12k chars)
+\`\`\`
+${logTail}
+\`\`\`
 
-Log excerpt:\n${logText}\n
-Return a short diagnosis and what the concrete fix would be (but do not apply it).`;
+## Instructions
+1. READ the orchestrator script (${scriptPath}) to understand the code flow
+2. READ any relevant source files referenced in the log
+3. Check git status/diff if relevant
+4. Diagnose the ROOT CAUSE — not surface symptoms
+5. Do NOT edit or create any files. Analysis only.
+6. Common issues:
+   - Path errors: worktree paths don't contain the orchestrator script
+   - Mutex contention: multiple instances fighting over named mutex
+   - VK API failures: wrong HTTP method, endpoint down, auth issues
+   - Git rebase conflicts: agent branches conflict with main
+   - Exit 64: pwsh can't find the -File target
+   - SIGKILL: OOM or external termination
+7. Return a SHORT, ACTIONABLE diagnosis with the concrete fix.`;
 
-    const result = await thread.run(prompt);
+  try {
+    // Use runCodexExec from autofix.mjs — gives Codex workspace access
+    const result = await runCodexExec(prompt, repoRoot, 90_000);
+
     const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
-    const analysisText = formatCodexResult(result);
+    const analysisText = result.output || result.error || "(no output)";
     await writeFile(analysisPath, analysisText, "utf8");
 
-    // Notify user with Codex analysis outcome
     if (telegramToken && telegramChatId) {
-      // Extract first 500 chars of diagnosis for telegram
       const summary = analysisText.slice(0, 500).replace(/\n{3,}/g, "\n\n");
       void sendTelegramMessage(
         `🔍 Codex Analysis Result (${reason}):\n${summary}${analysisText.length > 500 ? "\n...(truncated)" : ""}`,
       );
     }
   } catch (err) {
-    const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
-    const message = err && err.message ? err.message : String(err);
-    await writeFile(analysisPath, `Codex SDK failed: ${message}\n`, "utf8");
-    if (telegramToken && telegramChatId) {
-      void sendTelegramMessage(`🔍 Codex Analysis Failed: ${message}`);
+    // Fallback: try the SDK chat approach if exec is unavailable
+    try {
+      if (!CodexClient) {
+        const ready = await ensureCodexSdkReady();
+        if (!ready) throw new Error(codexDisabledReason || "Codex SDK N/A");
+      }
+      const codex = new CodexClient();
+      const thread = codex.startThread();
+      const result = await thread.run(prompt);
+      const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
+      const analysisText = formatCodexResult(result);
+      await writeFile(analysisPath, analysisText, "utf8");
+      if (telegramToken && telegramChatId) {
+        const summary = analysisText.slice(0, 500).replace(/\n{3,}/g, "\n\n");
+        void sendTelegramMessage(
+          `🔍 Codex Analysis Result (${reason}):\n${summary}${analysisText.length > 500 ? "\n...(truncated)" : ""}`,
+        );
+      }
+    } catch (fallbackErr) {
+      const analysisPath = logPath.replace(/\.log$/, "-analysis.txt");
+      const message = fallbackErr?.message || String(fallbackErr);
+      await writeFile(
+        analysisPath,
+        `Codex analysis failed: ${message}\n`,
+        "utf8",
+      );
+      if (telegramToken && telegramChatId) {
+        void sendTelegramMessage(`🔍 Codex Analysis Failed: ${message}`);
+      }
     }
   }
 }
@@ -3721,6 +3937,47 @@ async function handleExit(code, signal, logPath) {
       startProcess();
       return;
     }
+  }
+
+  // ── Track quick exits for crash-loop detection ──────────────────────
+  const runDurationMs = lastProcessStartAt
+    ? Date.now() - lastProcessStartAt
+    : Infinity;
+  if (runDurationMs < QUICK_EXIT_THRESHOLD_MS) {
+    consecutiveQuickExits += 1;
+  } else {
+    // Orchestrator ran long enough — healthy; reset backoff state
+    consecutiveQuickExits = 0;
+    if (mutexBackoffMs > 0) {
+      console.log("[monitor] orchestrator ran >20s — resetting mutex backoff");
+      mutexBackoffMs = 0;
+    }
+  }
+
+  // ── Mutex-held: orchestrator found another instance holding the mutex ──
+  const isMutexHeld =
+    mutexHeldDetected ||
+    logText.includes("Another orchestrator instance is already running") ||
+    logText.includes("mutex held");
+
+  if (isMutexHeld) {
+    mutexHeldDetected = false; // reset flag for next cycle
+    mutexBackoffMs = Math.min(
+      mutexBackoffMs + MUTEX_BACKOFF_STEP_MS,
+      MUTEX_BACKOFF_MAX_MS,
+    );
+    console.warn(
+      `[monitor] mutex held detected — backing off ${mutexBackoffMs / 1000}s ` +
+        `(consecutive quick exits: ${consecutiveQuickExits})`,
+    );
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `⏳ Mutex held — backing off ${mutexBackoffMs / 1000}s before retry`,
+      );
+    }
+    restartCount += 1;
+    setTimeout(startProcess, mutexBackoffMs);
+    return;
   }
 
   // ── Clean exit: skip autofix/analysis, handle backlog-empty gracefully ──
@@ -3919,6 +4176,20 @@ async function handleExit(code, signal, logPath) {
 
 async function startProcess() {
   const now = Date.now();
+
+  // ── Minimum restart interval — never restart faster than 15s ──────
+  if (lastProcessStartAt > 0) {
+    const sinceLast = now - lastProcessStartAt;
+    if (sinceLast < MIN_RESTART_INTERVAL_MS) {
+      const waitMs = MIN_RESTART_INTERVAL_MS - sinceLast;
+      console.log(
+        `[monitor] throttling restart — only ${Math.round(sinceLast / 1000)}s since last start, waiting ${Math.round(waitMs / 1000)}s`,
+      );
+      setTimeout(startProcess, waitMs);
+      return;
+    }
+  }
+
   if (now < orchestratorHaltedUntil || now < monitorSafeModeUntil) {
     const waitMs = Math.max(
       orchestratorHaltedUntil - now,
@@ -3935,6 +4206,24 @@ async function startProcess() {
   const activeLogPath = resolve(logDir, "orchestrator-active.log");
   const archiveLogPath = resolve(logDir, `orchestrator-${nowStamp()}.log`);
   const logStream = await writeFile(activeLogPath, "", "utf8").then(() => null);
+
+  // Guard: verify script exists before spawning to avoid cryptic exit 64
+  if (!existsSync(scriptPath)) {
+    console.error(
+      `[monitor] orchestrator script not found: ${scriptPath}\n` +
+        `  Set ORCHESTRATOR_SCRIPT to an absolute path or fix the relative path in .env`,
+    );
+    if (telegramToken && telegramChatId) {
+      void sendTelegramMessage(
+        `❌ Orchestrator script not found: ${scriptPath}\nSet ORCHESTRATOR_SCRIPT to a valid path.`,
+      );
+    }
+    return;
+  }
+
+  // Reset mutex flag before spawn — will be re-set if this instance hits mutex
+  mutexHeldDetected = false;
+  lastProcessStartAt = Date.now();
 
   const child = spawn("pwsh", ["-File", scriptPath, ...scriptArgs], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -3959,7 +4248,7 @@ async function startProcess() {
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
     for (const line of lines) {
-      if (isErrorLine(line)) {
+      if (isErrorLine(line, errorPatterns, errorNoisePatterns)) {
         notifyErrorLine(line);
       }
       if (line.includes("Merged PR") || line.includes("Marking task")) {
@@ -3967,6 +4256,13 @@ async function startProcess() {
       }
       if (line.includes("Merge notify: PR #")) {
         notifyMergeFailure(line);
+      }
+      // ── Mutex-held detection ─────────────────────────────────────
+      if (
+        line.includes("Another orchestrator instance is already running") ||
+        line.includes("mutex held")
+      ) {
+        mutexHeldDetected = true;
       }
       // ── Smart PR creation: detect completed/failed attempts ──────
       const prFlowMatch = line.match(
@@ -4020,6 +4316,13 @@ function requestRestart(reason) {
   if (pendingRestart) {
     return;
   }
+  // ── Suppress file-change restarts during mutex backoff ──────────
+  if (reason === "file-change" && mutexBackoffMs > 0) {
+    console.log(
+      `[monitor] suppressing file-change restart — mutex backoff active (${mutexBackoffMs / 1000}s)`,
+    );
+    return;
+  }
   pendingRestart = true;
   skipNextAnalyze = true;
   skipNextRestartCount = true;
@@ -4045,6 +4348,61 @@ function stopWatcher() {
   }
   watcherDebounce = null;
   watchFileName = null;
+}
+
+// ── Self-monitor watcher: restart when own .mjs files change ─────────────────
+function stopSelfWatcher() {
+  if (selfWatcher) {
+    selfWatcher.close();
+    selfWatcher = null;
+  }
+  if (selfWatcherDebounce) {
+    clearTimeout(selfWatcherDebounce);
+    selfWatcherDebounce = null;
+  }
+}
+
+function selfRestartForSourceChange(filename) {
+  console.log(`\n[monitor] source file changed: ${filename}`);
+  console.log("[monitor] exiting for self-restart (fresh ESM modules)...");
+  shuttingDown = true;
+  stopAutoUpdateLoop();
+  stopSelfWatcher();
+  stopWatcher();
+  stopEnvWatchers();
+  if (currentChild) {
+    currentChild.kill("SIGTERM");
+    setTimeout(() => {
+      if (currentChild && !currentChild.killed) {
+        currentChild.kill("SIGKILL");
+      }
+    }, 3000);
+  }
+  void releaseTelegramPollLock();
+  stopTelegramBot();
+  // Exit with special code — cli.mjs re-forks with fresh module cache
+  setTimeout(() => process.exit(SELF_RESTART_EXIT_CODE), 500);
+}
+
+function startSelfWatcher() {
+  stopSelfWatcher();
+  try {
+    selfWatcher = watch(__dirname, { persistent: true }, (_event, filename) => {
+      // Only react to .mjs source files
+      if (!filename || !filename.endsWith(".mjs")) return;
+      // Ignore node_modules and log artifacts
+      if (filename.includes("node_modules")) return;
+      if (selfWatcherDebounce) {
+        clearTimeout(selfWatcherDebounce);
+      }
+      selfWatcherDebounce = setTimeout(() => {
+        selfRestartForSourceChange(filename);
+      }, 3000);
+    });
+    console.log("[monitor] watching own source files for self-restart");
+  } catch (err) {
+    console.warn(`[monitor] self-watcher failed: ${err.message}`);
+  }
 }
 
 async function startWatcher(force = false) {
@@ -4252,6 +4610,7 @@ async function reloadConfig(reason) {
 process.on("SIGINT", () => {
   shuttingDown = true;
   stopAutoUpdateLoop();
+  stopSelfWatcher();
   stopEnvWatchers();
   if (watcher) {
     watcher.close();
@@ -4272,6 +4631,7 @@ process.on("exit", () => {
 process.on("SIGTERM", () => {
   shuttingDown = true;
   stopAutoUpdateLoop();
+  stopSelfWatcher();
   stopEnvWatchers();
   if (watcher) {
     watcher.close();
@@ -4395,6 +4755,7 @@ startAutoUpdateLoop({
 
 startWatcher();
 startEnvWatchers();
+startSelfWatcher();
 if (vkSpawnEnabled) {
   void ensureVibeKanbanRunning();
 }
@@ -4421,7 +4782,7 @@ if (telegramCommandEnabled) {
 }
 startTelegramNotifier();
 
-// ── Two-way Telegram ↔ Codex shell ──────────────────────────────────────────
+// ── Two-way Telegram ↔ primary agent ────────────────────────────────────────
 injectMonitorFunctions({
   sendTelegramMessage,
   readStatusData,

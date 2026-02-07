@@ -46,6 +46,7 @@ That's it. On first run, the setup wizard walks you through everything: executor
 │                                                                  │
 │  Integrations:                                                   │
 │    • Vibe-Kanban API (task management, PR creation)              │
+│    • Copilot SDK (primary agent shell)                           │
 │    • Codex SDK (AI analysis, autofix)                            │
 │    • Telegram Bot API (notifications, commands)                  │
 │    • GitHub CLI (PR operations fallback)                         │
@@ -243,21 +244,56 @@ Select a profile via `--profile` or `CODEX_MONITOR_PROFILE`.
 
 See [.env.example](.env.example) for the full reference. Key variables:
 
-| Variable                | Default                  | Description                        |
-| ----------------------- | ------------------------ | ---------------------------------- |
-| `PROJECT_NAME`          | auto-detected            | Project name for display           |
-| `GITHUB_REPO`           | auto-detected            | GitHub repo slug (`org/repo`)      |
-| `OPENAI_API_KEY`        | —                        | API key for Codex analysis         |
-| `TELEGRAM_BOT_TOKEN`    | —                        | Telegram bot token from @BotFather |
-| `TELEGRAM_CHAT_ID`      | —                        | Telegram chat ID                   |
-| `VK_BASE_URL`           | `http://127.0.0.1:54089` | Vibe-Kanban API endpoint           |
-| `EXECUTORS`             | Copilot+Codex 50/50      | Executor shorthand (see above)     |
-| `EXECUTOR_DISTRIBUTION` | `weighted`               | Distribution mode                  |
-| `FAILOVER_STRATEGY`     | `next-in-line`           | Failover behavior                  |
-| `MAX_PARALLEL`          | `6`                      | Max concurrent agent slots         |
-| `CODEX_MONITOR_REPO`    | —                        | Selected repo name (multi-repo)    |
-| `CODEX_MONITOR_PROFILE` | —                        | Environment profile name           |
-| `CODEX_MONITOR_MODE`    | `virtengine`/`generic`   | Mode override                      |
+| Variable                | Default                        | Description                                                                                                            |
+| ----------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `PROJECT_NAME`          | auto-detected                  | Project name for display                                                                                               |
+| `GITHUB_REPO`           | auto-detected                  | GitHub repo slug (`org/repo`)                                                                                          |
+| `ORCHESTRATOR_SCRIPT`   | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
+| `ORCHESTRATOR_ARGS`     | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
+| `OPENAI_API_KEY`        | —                              | API key for Codex analysis                                                                                             |
+| `COPILOT_MODEL`         | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
+| `COPILOT_SDK_DISABLED`  | `0`                            | Disable Copilot SDK primary agent                                                                                      |
+| `TELEGRAM_BOT_TOKEN`    | —                              | Telegram bot token from @BotFather                                                                                     |
+| `TELEGRAM_CHAT_ID`      | —                              | Telegram chat ID                                                                                                       |
+| `VK_BASE_URL`           | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
+| `EXECUTORS`             | Copilot+Codex 50/50            | Executor shorthand (see above)                                                                                         |
+| `EXECUTOR_DISTRIBUTION` | `weighted`                     | Distribution mode                                                                                                      |
+| `FAILOVER_STRATEGY`     | `next-in-line`                 | Failover behavior                                                                                                      |
+| `MAX_PARALLEL`          | `6`                            | Max concurrent agent slots                                                                                             |
+| `CODEX_MONITOR_REPO`    | —                              | Selected repo name (multi-repo)                                                                                        |
+| `CODEX_MONITOR_PROFILE` | —                              | Environment profile name                                                                                               |
+| `CODEX_MONITOR_MODE`    | `virtengine`/`generic`         | Mode override                                                                                                          |
+
+### Shared Cloud Workspaces
+
+Codex-monitor can track pooled cloud workspaces with lease-based ownership and
+availability state. The registry lives in JSON and is updated by claim/release
+operations with audit logging.
+
+Defaults:
+
+- Registry: `.cache/codex-monitor/shared-workspaces.json`
+- Audit log: `.cache/codex-monitor/shared-workspace-audit.jsonl`
+- Seed template: `scripts/codex-monitor/shared-workspaces.json`
+
+Overrides:
+
+- `VE_SHARED_WORKSPACE_REGISTRY` — registry file path
+- `VE_SHARED_WORKSPACE_AUDIT_LOG` — audit log file path
+
+CLI examples:
+
+```
+pnpm -C scripts/codex-monitor shared-workspaces list
+pnpm -C scripts/codex-monitor shared-workspaces claim cloud-01 --owner jon --ttl 120
+pnpm -C scripts/codex-monitor shared-workspaces release cloud-01 --owner jon
+```
+
+Telegram commands:
+
+- `/shared-workspaces` — list shared workspace availability
+- `/claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]`
+- `/release <id> [--owner <id>] [--reason <text>] [--force]`
 
 ### Agent SDK Selection (config.toml)
 
@@ -441,6 +477,57 @@ Only one process can poll a Telegram bot at a time. This happens if:
 2. Ensure the orchestrator is actually running (check with `/status`)
 3. Verify the monitor process is alive: `ps aux | grep codex-monitor`
 
+### Notification Batching (Reducing Spam)
+
+By default, codex-monitor batches notifications into periodic summaries to prevent flooding your Telegram channel:
+
+**How it works:**
+- Messages are categorized by priority (critical, error, warning, info)
+- Critical messages (priority 1) are sent immediately
+- All other messages are batched and sent as summaries every 5 minutes
+- Summaries aggregate similar messages (e.g., "15 info messages: pr: 5, task: 8, analysis: 2")
+
+**Configuration:**
+
+```env
+# Enable/disable batching (default: true)
+TELEGRAM_BATCH_NOTIFICATIONS=true
+
+# Batch interval in seconds (default: 300 = 5 minutes)
+TELEGRAM_BATCH_INTERVAL_SEC=300
+
+# Max messages before forcing a flush (default: 50)
+TELEGRAM_BATCH_MAX_SIZE=50
+
+# Priority threshold for immediate delivery (default: 1)
+# 1 = only critical messages bypass batching
+# 2 = critical + errors bypass batching
+TELEGRAM_IMMEDIATE_PRIORITY=1
+```
+
+**Priority levels:**
+- **1 - Critical**: Fatal errors, system crashes (immediate)
+- **2 - Error**: Failed operations, auto-fix failures
+- **3 - Warning**: Rebase conflicts, missing branches
+- **4 - Info**: PR created, task completed, analysis results (default)
+- **5 - Debug**: Verbose logging
+
+**Example summary message:**
+```
+📊 Update Summary (14:30:15)
+🔴 1 • ❌ 3 • ⚠️ 2 • ℹ️ 12
+
+❌ Errors:
+  • Auto-fix gave up on raw crash (exit 64) after 3 attempts
+  • PR creation failed for ve/abc-branch
+  • Rebase conflict on scripts/monitor.mjs
+
+ℹ️ Info:
+  • pr: 5
+  • task: 4
+  • analysis: 3
+```
+
 ### Commands
 
 | Command               | Description                                   |
@@ -467,11 +554,37 @@ Environment overrides:
 - `TELEGRAM_PRESENCE_INTERVAL_SEC` — presence heartbeat cadence in seconds (default: 60).
 - `TELEGRAM_PRESENCE_TTL_SEC` — consider instances offline after this many seconds (default: 3x interval).
 - `TELEGRAM_PRESENCE_DISABLED` — set to `1`/`true` to disable presence heartbeats.
-- `TELEGRAM_PRESENCE_CHAT_ID` — optional chat/channel to post presence updates (defaults to `TELEGRAM_CHAT_ID`).
+- `TELEGRAM_PRESENCE_SILENT` — set to `1`/`true` to send presence messages without notification sound (reduces noise).
+- `TELEGRAM_PRESENCE_ONLY_ON_CHANGE` — set to `1`/`true` to only send when state changes (default: `true`). Significantly reduces traffic.
+- `TELEGRAM_PRESENCE_CHAT_ID` — optional chat/channel to post presence updates (defaults to `TELEGRAM_CHAT_ID`). Use a separate channel to isolate presence traffic.
 - `VE_INSTANCE_ID` — override the auto-generated instance id (stable across restarts).
 - `VE_INSTANCE_LABEL` — human-friendly instance label shown in `/presence`.
 - `VE_COORDINATOR_PRIORITY` — lower numbers win coordinator election (default: 10 for role=coordinator, otherwise 100).
 - `VE_COORDINATOR_ELIGIBLE` — set to `0`/`false` to opt-out of coordinator election.
+
+**Reducing presence traffic:**
+
+To minimize Telegram noise from presence heartbeats:
+
+1. **Best:** Use a separate channel for presence messages:
+
+   ```env
+   TELEGRAM_PRESENCE_CHAT_ID=<separate-channel-id>
+   ```
+
+2. **Alternative:** Enable silent notifications (messages arrive without sound):
+
+   ```env
+   TELEGRAM_PRESENCE_SILENT=true
+   ```
+
+3. **Default behavior:** Only send when state changes (`TELEGRAM_PRESENCE_ONLY_ON_CHANGE=true` is the default).
+   This prevents repeated identical heartbeats from flooding the channel.
+
+4. **Complete disable:** Turn off presence if not using multi-instance coordination:
+   ```env
+   TELEGRAM_PRESENCE_DISABLED=true
+   ```
 
 ## Smart PR Flow
 
@@ -546,6 +659,8 @@ codex-monitor/
 ├── monitor.mjs                  # Main supervisor (log analysis, PR flow)
 ├── telegram-bot.mjs             # Interactive Telegram chatbot
 ├── codex-shell.mjs              # Persistent Codex SDK session
+├── copilot-shell.mjs            # Persistent Copilot SDK session
+├── primary-agent.mjs            # Primary agent adapter (Copilot/Codex)
 ├── autofix.mjs                  # Error loop detection + auto-fix
 ├── maintenance.mjs              # Singleton lock, process cleanup
 ├── setup.mjs                    # Interactive setup wizard
@@ -613,4 +728,4 @@ The monitor auto-spawns VK if not running. Set `VK_NO_SPAWN=1` to manage VK sepa
 
 ## License
 
-MIT
+Apache 2.0

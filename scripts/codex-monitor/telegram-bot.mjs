@@ -1,13 +1,13 @@
 /**
- * telegram-bot.mjs — Two-way Telegram ↔ Codex shell for VirtEngine monitor.
+ * telegram-bot.mjs — Two-way Telegram ↔ primary agent for VirtEngine monitor.
  *
  * Polls Telegram Bot API for incoming messages, routes slash commands to
- * built-in handlers, and forwards free-text to the persistent Codex shell.
+ * built-in handlers, and forwards free-text to the persistent primary agent.
  *
  * Architecture:
  *   Telegram → getUpdates long-poll → handleUpdate()
- *     ├─ /command → built-in handler (fast, no Codex)
- *     └─ free-text → CodexShell.exec() → response back to Telegram
+ *     ├─ /command → built-in handler (fast, no agent)
+ *     └─ free-text → PrimaryAgent.exec() → response back to Telegram
  *
  * Security: Only accepts messages from the configured TELEGRAM_CHAT_ID.
  */
@@ -18,19 +18,28 @@ import { readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  execCodexPrompt,
-  isCodexBusy,
-  getThreadInfo,
-  resetThread,
-  initCodexShell,
-  steerCodexPrompt,
-} from "./codex-shell.mjs";
+  execPrimaryPrompt,
+  isPrimaryBusy,
+  getPrimaryAgentInfo,
+  resetPrimaryAgent,
+  initPrimaryAgent,
+  steerPrimaryPrompt,
+} from "./primary-agent.mjs";
 import {
   loadWorkspaceRegistry,
   formatRegistryDiagnostics,
   getDefaultModelPriority,
   getLocalWorkspace,
 } from "./workspace-registry.mjs";
+import {
+  claimSharedWorkspace,
+  formatSharedWorkspaceDetail,
+  formatSharedWorkspaceSummary,
+  loadSharedWorkspaceRegistry as loadSharedRegistry,
+  releaseSharedWorkspace,
+  resolveSharedWorkspace,
+  sweepExpiredLeases as sweepSharedLeases,
+} from "./shared-workspace-registry.mjs";
 import {
   buildLocalPresence,
   formatCoordinatorSummary,
@@ -57,7 +66,7 @@ const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 const POLL_TIMEOUT_S = 30; // long-poll timeout
 const MAX_MESSAGE_LEN = 4000; // Telegram max is 4096, leave margin
 const POLL_ERROR_BACKOFF_MS = 5000;
-const CODEX_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
+const AGENT_TIMEOUT_MS = 15 * 60 * 1000; // 15 min for agentic tasks
 let telegramPollLockHeld = false;
 const presenceIntervalSec = Number(
   process.env.TELEGRAM_PRESENCE_INTERVAL_SEC || "60",
@@ -68,11 +77,30 @@ const presenceTtlSec = Number(
 const presenceDisabled = ["1", "true", "yes"].includes(
   String(process.env.TELEGRAM_PRESENCE_DISABLED || "").toLowerCase(),
 );
+const presenceSilent = ["1", "true", "yes"].includes(
+  String(process.env.TELEGRAM_PRESENCE_SILENT || "").toLowerCase(),
+);
+const presenceOnlyOnChange = ["1", "true", "yes"].includes(
+  String(process.env.TELEGRAM_PRESENCE_ONLY_ON_CHANGE || "true").toLowerCase(),
+);
 const presenceChatId =
   process.env.TELEGRAM_PRESENCE_CHAT_ID || telegramChatId;
 const presenceTtlMs = Number.isFinite(presenceTtlSec)
   ? Math.max(0, presenceTtlSec * 1000)
   : 0;
+
+// ── Message Batching Configuration ──────────────────────────────────────────
+const batchingEnabled = !["0", "false", "no"].includes(
+  String(process.env.TELEGRAM_BATCH_NOTIFICATIONS || "true").toLowerCase(),
+);
+const batchIntervalSec = Number(
+  process.env.TELEGRAM_BATCH_INTERVAL_SEC || "300",
+); // 5 minutes default
+const batchMaxSize = Number(process.env.TELEGRAM_BATCH_MAX_SIZE || "50");
+// Priority threshold: only messages >= this priority bypass batching (1=critical, 2=error, 3=warning, 4=info, 5=debug)
+const immediateThreshold = Number(
+  process.env.TELEGRAM_IMMEDIATE_PRIORITY || "1",
+);
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -297,6 +325,9 @@ async function sendDirect(chatId, text, options = {}) {
     if (options.parseMode) {
       payload.parse_mode = options.parseMode;
     }
+    if (options.silent) {
+      payload.disable_notification = true;
+    }
     payload.disable_web_page_preview = true;
 
     try {
@@ -432,8 +463,106 @@ function extractTarget(cmd) {
   return "";
 }
 
+function normalizeToolName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function getCopilotToolInfo(event) {
+  const data = event?.data || {};
+  const toolName =
+    data.toolName ||
+    data.name ||
+    data.tool?.name ||
+    event?.toolName ||
+    event?.tool ||
+    "";
+  const input =
+    data.input ||
+    data.args ||
+    data.parameters ||
+    data.toolInput ||
+    data.payload ||
+    null;
+  const output = data.output || data.result || data.toolOutput || null;
+  const status = data.status || event?.status || "";
+  return { toolName: String(toolName || ""), input, output, status };
+}
+
+function extractCopilotCommand(input) {
+  if (!input) return null;
+  if (typeof input === "string") return input;
+  return (
+    input.command ||
+    input.cmd ||
+    input.shell ||
+    input.script ||
+    input.execute ||
+    null
+  );
+}
+
+function extractCopilotPath(input) {
+  if (!input) return null;
+  if (typeof input === "string") return input;
+  const candidates = [
+    "path",
+    "file",
+    "filename",
+    "filepath",
+    "filePath",
+    "fullPath",
+    "target",
+  ];
+  for (const key of candidates) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function isCopilotReadTool(name) {
+  const tool = normalizeToolName(name);
+  return /read|open|view|get_file|read_file/.test(tool);
+}
+
+function isCopilotWriteTool(name) {
+  const tool = normalizeToolName(name);
+  return /write|edit|apply|patch|create|update|save/.test(tool);
+}
+
+function isCopilotSearchTool(name) {
+  const tool = normalizeToolName(name);
+  return /search|grep|rg|find|query/.test(tool);
+}
+
+function summarizeCopilotTool(toolName, input) {
+  const tool = normalizeToolName(toolName);
+  const command = extractCopilotCommand(input);
+  const target = extractCopilotPath(input);
+  if (!toolName) return "running tool";
+  if (/command|shell|execute|run/.test(tool)) {
+    return command ? `running ${shortSnippet(command, 80)}` : "running command";
+  }
+  if (isCopilotReadTool(tool)) {
+    return target ? `reading ${shortPath(target)}` : "reading file";
+  }
+  if (isCopilotWriteTool(tool)) {
+    return target ? `updating ${shortPath(target)}` : "updating files";
+  }
+  if (isCopilotSearchTool(tool)) {
+    return target ? `searching ${shortPath(target)}` : "searching";
+  }
+  if (/mcp/.test(tool)) return `MCP tool: ${toolName}`;
+  return `tool: ${toolName}`;
+}
+
 /**
- * Convert a raw Codex event into a concise human-readable action description.
+ * Convert a raw agent event into a concise human-readable action description.
  * Shows which files are being read/written, line counts for changes, and
  * concise command summaries with targets.
  */
@@ -537,6 +666,44 @@ function summarizeAction(event) {
           return null;
       }
     }
+
+    case "assistant.reasoning":
+    case "assistant.reasoning_delta": {
+      const text = event.data?.content || event.data?.deltaContent || "";
+      return text
+        ? { icon: "💭", text: text.slice(0, 200), phase: "thinking" }
+        : null;
+    }
+
+    case "tool.execution_start": {
+      const { toolName, input } = getCopilotToolInfo(event);
+      return {
+        icon: "🛠️",
+        text: summarizeCopilotTool(toolName, input),
+        phase: "running",
+      };
+    }
+
+    case "tool.execution_complete": {
+      const { toolName, input, status } = getCopilotToolInfo(event);
+      const ok =
+        !status ||
+        ["ok", "success", "completed", "done"].includes(
+          String(status).toLowerCase(),
+        );
+      return {
+        icon: ok ? "✅" : "❌",
+        text: summarizeCopilotTool(toolName, input) + (ok ? "" : " (failed)"),
+        phase: "done",
+      };
+    }
+
+    case "session.error":
+      return {
+        icon: "❌",
+        text: `Failed: ${event.data?.message || "unknown"}`,
+        phase: "error",
+      };
 
     case "item.updated": {
       const item = event.item;
@@ -768,32 +935,38 @@ async function handleUpdate(update) {
   const chatId = String(msg.chat?.id);
   const text = (msg.text || "").trim();
 
-  // Security: only accept from configured chat
-  if (telegramChatId && chatId !== String(telegramChatId)) {
-    console.warn(
-      `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
+    const presencePayload = text ? parsePresenceMessage(text) : null;
+    if (presencePayload) {
+      if (!presenceChatId || chatId !== String(presenceChatId)) {
+        console.warn(
+          `[telegram-bot] ignored presence from chat ${chatId} (expected ${presenceChatId || "unset"})`,
+        );
+        return;
+      }
+      await ensurePresenceReady();
+      const receivedAt = Number.isFinite(msg.date)
+        ? new Date(msg.date * 1000).toISOString()
+        : new Date().toISOString();
+      await notePresence(presencePayload, {
+        source: "telegram",
+        receivedAt,
+      });
+      return;
+    }
+
+    // Security: only accept from configured chat
+    if (telegramChatId && chatId !== String(telegramChatId)) {
+      console.warn(
+        `[telegram-bot] rejected message from chat ${chatId} (expected ${telegramChatId})`,
+      );
+      return;
+    }
+
+    if (!text) return;
+
+    console.log(
+      `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
     );
-    return;
-  }
-
-  if (!text) return;
-
-  console.log(
-    `[telegram-bot] received: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}" from chat ${chatId}`,
-  );
-
-  const presencePayload = parsePresenceMessage(text);
-  if (presencePayload) {
-    await ensurePresenceReady();
-    const receivedAt = Number.isFinite(msg.date)
-      ? new Date(msg.date * 1000).toISOString()
-      : new Date().toISOString();
-    await notePresence(presencePayload, {
-      source: "telegram",
-      receivedAt,
-    });
-    return;
-  }
 
   // Route: slash command or free-text
   if (text.startsWith("/")) {
@@ -807,8 +980,8 @@ async function handleUpdate(update) {
   }
 
   // Free-text agent task runs in a separate queue so polling isn't blocked.
-  // If Codex is already busy, handle immediately so follow-ups can be queued.
-  if (isCodexBusy()) {
+  // If agent is already busy, handle immediately so follow-ups can be queued.
+  if (isPrimaryBusy()) {
     void handleFreeText(text, chatId);
     return;
   }
@@ -845,8 +1018,8 @@ const COMMANDS = {
     handler: cmdCleanupMerged,
     desc: "Alias for /cleanup",
   },
-  "/history": { handler: cmdHistory, desc: "Codex conversation history" },
-  "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
+  "/history": { handler: cmdHistory, desc: "Primary agent conversation history" },
+  "/clear": { handler: cmdClear, desc: "Clear primary agent conversation context" },
   "/reset_thread": {
     handler: cmdClear,
     desc: "Alias for /clear (reset thread)",
@@ -872,6 +1045,18 @@ const COMMANDS = {
   "/model": {
     handler: cmdModel,
     desc: "Override executor for next task: /model gpt-5.2-codex",
+  },
+  "/shared-workspaces": {
+    handler: cmdSharedWorkspaces,
+    desc: "List shared cloud workspace availability",
+  },
+  "/claim": {
+    handler: cmdSharedWorkspaceClaim,
+    desc: "Claim a shared workspace: /claim <id> [--owner <id>] [--ttl <minutes>]",
+  },
+  "/release": {
+    handler: cmdSharedWorkspaceRelease,
+    desc: "Release a shared workspace: /release <id> [--owner <id>] [--force]",
   },
   "/agent": {
     handler: cmdAgent,
@@ -1012,6 +1197,47 @@ function splitArgs(input) {
   return tokens;
 }
 
+function parseSharedWorkspaceArgs(args) {
+  const tokens = splitArgs(args);
+  const parsed = {
+    workspaceId: null,
+    owner: null,
+    ttlMinutes: null,
+    note: "",
+    reason: "",
+    force: false,
+  };
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === "--owner") {
+      parsed.owner = tokens[i + 1];
+      i++;
+      continue;
+    }
+    if (token === "--ttl") {
+      parsed.ttlMinutes = Number(tokens[i + 1]);
+      i++;
+      continue;
+    }
+    if (token === "--note") {
+      parsed.note = tokens.slice(i + 1).join(" ");
+      break;
+    }
+    if (token === "--reason") {
+      parsed.reason = tokens.slice(i + 1).join(" ");
+      break;
+    }
+    if (token === "--force") {
+      parsed.force = true;
+      continue;
+    }
+    if (!parsed.workspaceId) {
+      parsed.workspaceId = token;
+    }
+  }
+  return parsed;
+}
+
 function parseAgentArgs(args) {
   const tokens = splitArgs(args);
   let workspaceId = null;
@@ -1143,11 +1369,14 @@ async function loadWorkspaceStatusData(workspacePath) {
 }
 
 async function cmdHelp(chatId) {
-  const lines = ["🤖 VirtEngine Codex Shell Commands:\n"];
+  const lines = ["🤖 VirtEngine Primary Agent Commands:\n"];
   for (const [cmd, { desc }] of Object.entries(COMMANDS)) {
     lines.push(`${cmd} — ${desc}`);
   }
-  lines.push("", "Any other text → sent to Codex AI (full repo + MCP access)");
+  lines.push(
+    "",
+    "Any other text → sent to the primary agent (full repo + MCP access)",
+  );
   await sendReply(chatId, lines.join("\n"));
 }
 
@@ -1547,26 +1776,31 @@ async function cmdCleanupMerged(chatId) {
 }
 
 async function cmdHistory(chatId) {
-  const info = getThreadInfo();
+  const info = getPrimaryAgentInfo();
+  const providerLabel =
+    info.provider === "COPILOT" ? "Copilot" : "Codex";
+  const idLabel = info.sessionId ? "Session ID" : "Thread ID";
   const lines = [
-    `🧠 Codex Agent Thread`,
+    `🧠 Primary Agent Session (${providerLabel})`,
     "",
-    `Thread ID: ${info.threadId || "(none)"}`,
+    `${idLabel}: ${info.sessionId || info.threadId || "(none)"}`,
     `Turns: ${info.turnCount}`,
     `Active: ${info.isActive ? "yes" : "no"}`,
     `Busy: ${info.isBusy ? "yes" : "no"}`,
+    info.workspacePath ? `Workspace: ${info.workspacePath}` : "",
+    info.fallbackReason ? `Fallback: ${info.fallbackReason}` : "",
     "",
-    "The thread persists across messages.",
-    "Use /clear to start a fresh thread.",
+    "The session persists across messages.",
+    "Use /clear to start a fresh session.",
   ];
-  await sendReply(chatId, lines.join("\n"));
+  await sendReply(chatId, lines.filter(Boolean).join("\n"));
 }
 
 async function cmdClear(chatId) {
-  await resetThread();
+  await resetPrimaryAgent();
   await sendReply(
     chatId,
-    "🧹 Agent thread reset. Next message starts a fresh conversation.",
+    "🧹 Agent session reset. Next message starts a fresh conversation.",
   );
 }
 
@@ -1585,7 +1819,7 @@ async function cmdGit(chatId, gitArgs) {
   if (dangerous.some((d) => lower.startsWith(d))) {
     await sendReply(
       chatId,
-      `⚠️ Blocked: 'git ${gitArgs}' is a destructive command. Use Codex shell for that.`,
+      `⚠️ Blocked: 'git ${gitArgs}' is a destructive command. Use the agent shell for that.`,
     );
     return;
   }
@@ -1913,6 +2147,78 @@ async function cmdModel(chatId, modelArg) {
   } catch (err) {
     await sendReply(chatId, `❌ Error: ${err.message}`);
   }
+}
+
+async function cmdSharedWorkspaces(chatId, rawArgs) {
+  const registry = await loadSharedRegistry();
+  const sweep = await sweepSharedLeases({
+    registry,
+    actor: `telegram:${chatId}`,
+  });
+  const tokens = splitArgs(rawArgs);
+  if (tokens.length > 0) {
+    const workspace = resolveSharedWorkspace(sweep.registry, tokens[0]);
+    if (!workspace) {
+      await sendReply(chatId, `Unknown shared workspace '${tokens[0]}'.`);
+      return;
+    }
+    await sendReply(chatId, formatSharedWorkspaceDetail(workspace));
+    return;
+  }
+  await sendReply(chatId, formatSharedWorkspaceSummary(sweep.registry));
+}
+
+async function cmdSharedWorkspaceClaim(chatId, rawArgs) {
+  const parsed = parseSharedWorkspaceArgs(rawArgs);
+  if (!parsed.workspaceId) {
+    await sendReply(
+      chatId,
+      "Usage: /claim <id> [--owner <id>] [--ttl <minutes>] [--note <text>]",
+    );
+    return;
+  }
+  const actor = `telegram:${chatId}`;
+  const owner = parsed.owner || actor;
+  const result = await claimSharedWorkspace({
+    workspaceId: parsed.workspaceId,
+    owner,
+    ttlMinutes: parsed.ttlMinutes,
+    note: parsed.note,
+    force: parsed.force,
+    actor,
+  });
+  if (result.error) {
+    await sendReply(chatId, `❌ ${result.error}`);
+    return;
+  }
+  await sendReply(
+    chatId,
+    `✅ Claimed ${result.workspace.id} for ${result.lease.owner} (expires ${result.lease.lease_expires_at})`,
+  );
+}
+
+async function cmdSharedWorkspaceRelease(chatId, rawArgs) {
+  const parsed = parseSharedWorkspaceArgs(rawArgs);
+  if (!parsed.workspaceId) {
+    await sendReply(
+      chatId,
+      "Usage: /release <id> [--owner <id>] [--reason <text>] [--force]",
+    );
+    return;
+  }
+  const actor = `telegram:${chatId}`;
+  const result = await releaseSharedWorkspace({
+    workspaceId: parsed.workspaceId,
+    owner: parsed.owner,
+    reason: parsed.reason,
+    force: parsed.force,
+    actor,
+  });
+  if (result.error) {
+    await sendReply(chatId, `❌ ${result.error}`);
+    return;
+  }
+  await sendReply(chatId, `✅ Released ${result.workspace.id}`);
 }
 
 // ── /agent — route to workspace registry ────────────────────────────────────
@@ -2387,13 +2693,13 @@ async function cmdSteer(chatId, steerArgs) {
   }
   const message = steerArgs.trim();
 
-  if (!activeAgentSession || !isCodexBusy()) {
+  if (!activeAgentSession || !isPrimaryBusy()) {
     await sendReply(chatId, "No active agent. Sending as a new task.");
     await handleFreeText(message, chatId);
     return;
   }
 
-  const result = await steerCodexPrompt(message);
+  const result = await steerPrimaryPrompt(message);
   if (result.ok) {
     if (activeAgentSession.actionLog) {
       activeAgentSession.actionLog.push({
@@ -2428,7 +2734,7 @@ async function cmdSteer(chatId, steerArgs) {
   await sendReply(chatId, `🧭 Steering queued (#${qLen}).`);
 }
 
-// ── Free-text → Codex Agent Dispatch ──────────────────────────────────────────
+// ── Free-text → Primary Agent Dispatch ───────────────────────────────────────
 
 /**
  * Build the rolling summary message text from accumulated action log.
@@ -2547,7 +2853,7 @@ function buildStreamMessage({
 async function handleFreeText(text, chatId, options = {}) {
   const backgroundMode = !!options.background;
   // ── Follow-up steering: if agent is busy, queue message as follow-up ──
-  if (isCodexBusy() && activeAgentSession) {
+  if (isPrimaryBusy() && activeAgentSession) {
     if (!activeAgentSession.followUpQueue) {
       activeAgentSession.followUpQueue = [];
     }
@@ -2555,7 +2861,7 @@ async function handleFreeText(text, chatId, options = {}) {
     const qLen = activeAgentSession.followUpQueue.length;
 
     // Try immediate steering so the in-flight run can adapt ASAP.
-    const steerResult = await steerCodexPrompt(text);
+    const steerResult = await steerPrimaryPrompt(text);
     const steerStatus = steerResult.ok ? "ok" : steerResult.reason || "failed";
     const steerNote = steerResult.ok
       ? `Steer ${steerResult.mode}.`
@@ -2583,8 +2889,8 @@ async function handleFreeText(text, chatId, options = {}) {
     return;
   }
 
-  // ── Block if Codex is busy but no session (shouldn't happen normally) ──
-  if (isCodexBusy()) {
+  // ── Block if agent is busy but no session (shouldn't happen normally) ──
+  if (isPrimaryBusy()) {
     await sendReply(
       chatId,
       "⏳ Agent is executing a task. Please wait for it to finish...",
@@ -2731,6 +3037,46 @@ async function handleFreeText(text, chatId, options = {}) {
       }
     }
 
+    if (
+      rawEvent.type === "tool.execution_start" ||
+      rawEvent.type === "tool.execution_complete"
+    ) {
+      const { toolName, input } = getCopilotToolInfo(rawEvent);
+      const command = extractCopilotCommand(input);
+      const target = extractCopilotPath(input);
+
+      if (command) {
+        const cmdTarget = extractTarget(command);
+        if (
+          cmdTarget &&
+          (/^(cat|head|tail|type|Get-Content)/i.test(command.trim()) ||
+            /pwsh.*Get-Content/i.test(command))
+        ) {
+          filesRead.add(cmdTarget);
+        }
+        if (
+          /^(grep|findstr|rg|Select-String)/i.test(command.trim()) ||
+          /pwsh.*Select-String/i.test(command)
+        ) {
+          searchCount++;
+        }
+      }
+
+      if (isCopilotReadTool(toolName) && target) {
+        filesRead.add(target);
+      }
+      if (isCopilotSearchTool(toolName)) {
+        searchCount++;
+      }
+      if (isCopilotWriteTool(toolName) && target) {
+        filesWritten.set(target, {
+          kind: "modify",
+          adds: 0,
+          dels: 0,
+        });
+      }
+    }
+
     // ── Track file changes from action detail ─────────────────────
     if (action.detail === "file_change" && action.files) {
       for (const f of action.files) {
@@ -2772,9 +3118,9 @@ async function handleFreeText(text, chatId, options = {}) {
   };
 
   try {
-    const result = await execCodexPrompt(text, {
+    const result = await execPrimaryPrompt(text, {
       statusData,
-      timeoutMs: CODEX_TIMEOUT_MS,
+      timeoutMs: AGENT_TIMEOUT_MS,
       onEvent,
       sendRawEvents: true, // request raw events alongside formatted ones
       abortController,
@@ -2795,9 +3141,9 @@ async function handleFreeText(text, chatId, options = {}) {
         scheduleEdit();
 
         try {
-          const followUpResult = await execCodexPrompt(followUp, {
+          const followUpResult = await execPrimaryPrompt(followUp, {
             statusData,
-            timeoutMs: CODEX_TIMEOUT_MS,
+            timeoutMs: AGENT_TIMEOUT_MS,
             onEvent,
             sendRawEvents: true,
           });
@@ -2928,6 +3274,8 @@ function startPresenceLoop() {
     return;
   }
   const intervalMs = presenceIntervalSec * 1000;
+  let lastSentPayload = null;
+
   const sendPresence = async () => {
     try {
       await ensurePresenceReady();
@@ -2937,11 +3285,23 @@ function startPresenceLoop() {
         orchestrator_pid: child?.pid ?? null,
         vk_url: _getVibeKanbanUrl ? _getVibeKanbanUrl() : null,
       });
+
+      // Check if state changed significantly (ignore updated_at for comparison)
+      const shouldSend = !presenceOnlyOnChange || !lastSentPayload || hasPresenceChanged(lastSentPayload, payload);
+
+      // Always update local registry
       await notePresence(payload, {
         source: "local",
         receivedAt: payload.updated_at,
       });
-      await sendDirect(presenceChatId, formatPresenceMessage(payload));
+
+      // Only send to Telegram if state changed or not configured to only-on-change
+      if (shouldSend) {
+        await sendDirect(presenceChatId, formatPresenceMessage(payload), {
+          silent: presenceSilent,
+        });
+        lastSentPayload = payload;
+      }
     } catch (err) {
       console.warn(
         `[telegram-bot] presence heartbeat error: ${err.message || err}`,
@@ -2950,6 +3310,192 @@ function startPresenceLoop() {
   };
   setTimeout(() => void sendPresence(), intervalMs);
   setInterval(() => void sendPresence(), intervalMs);
+}
+
+function hasPresenceChanged(prev, curr) {
+  if (!prev || !curr) return true;
+  // Compare meaningful fields (ignore timestamps)
+  const significantFields = [
+    "instance_id",
+    "workspace_id",
+    "workspace_role",
+    "orchestrator_running",
+    "orchestrator_pid",
+    "git_branch",
+    "git_sha",
+    "coordinator_priority",
+    "coordinator_eligible",
+  ];
+  for (const field of significantFields) {
+    if (prev[field] !== curr[field]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ── Notification Batching System ─────────────────────────────────────────────
+
+const messageQueue = {
+  critical: [], // priority 1 - immediate
+  errors: [], // priority 2
+  warnings: [], // priority 3
+  info: [], // priority 4
+  debug: [], // priority 5
+};
+
+let batchFlushTimer = null;
+
+/**
+ * Queue a notification for batched delivery.
+ * @param {string} text - Message text
+ * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
+ * @param {object} options - { category, data, silent }
+ */
+function queueNotification(text, priority = 4, options = {}) {
+  if (!batchingEnabled || priority <= immediateThreshold) {
+    // Send immediately for critical messages or when batching disabled
+    return sendDirect(telegramChatId, text, { silent: options.silent });
+  }
+
+  const category = options.category || "info";
+  const entry = {
+    text,
+    priority,
+    category,
+    timestamp: new Date().toISOString(),
+    data: options.data || {},
+  };
+
+  // Route to appropriate queue
+  if (priority === 1) {
+    messageQueue.critical.push(entry);
+  } else if (priority === 2) {
+    messageQueue.errors.push(entry);
+  } else if (priority === 3) {
+    messageQueue.warnings.push(entry);
+  } else if (priority === 5) {
+    messageQueue.debug.push(entry);
+  } else {
+    messageQueue.info.push(entry);
+  }
+
+  // Flush if queue is getting too large
+  const totalSize =
+    messageQueue.critical.length +
+    messageQueue.errors.length +
+    messageQueue.warnings.length +
+    messageQueue.info.length +
+    messageQueue.debug.length;
+
+  if (totalSize >= batchMaxSize) {
+    flushNotificationQueue();
+  }
+}
+
+/**
+ * Format and send batched notifications as a summary.
+ */
+async function flushNotificationQueue() {
+  const sections = [];
+  const counts = {
+    critical: messageQueue.critical.length,
+    errors: messageQueue.errors.length,
+    warnings: messageQueue.warnings.length,
+    info: messageQueue.info.length,
+    debug: messageQueue.debug.length,
+  };
+
+  const totalMessages =
+    counts.critical + counts.errors + counts.warnings + counts.info + counts.debug;
+
+  if (totalMessages === 0) return; // Nothing to send
+
+  // Build summary header
+  const timestamp = new Date().toISOString().slice(11, 19);
+  let header = `📊 Update Summary (${timestamp})`;
+  if (totalMessages > 0) {
+    const parts = [];
+    if (counts.critical > 0) parts.push(`🔴 ${counts.critical}`);
+    if (counts.errors > 0) parts.push(`❌ ${counts.errors}`);
+    if (counts.warnings > 0) parts.push(`⚠️ ${counts.warnings}`);
+    if (counts.info > 0) parts.push(`ℹ️ ${counts.info}`);
+    header += `\n${parts.join(" • ")}`;
+  }
+
+  // Critical messages (show all)
+  if (counts.critical > 0) {
+    sections.push(
+      `🔴 Critical:\n${messageQueue.critical.map((m) => `  • ${m.text}`).join("\n")}`,
+    );
+  }
+
+  // Errors (show up to 5, then summarize)
+  if (counts.errors > 0) {
+    const errorTexts = messageQueue.errors.slice(0, 5).map((m) => `  • ${m.text}`);
+    if (counts.errors > 5) {
+      errorTexts.push(`  • ... and ${counts.errors - 5} more errors`);
+    }
+    sections.push(`❌ Errors:\n${errorTexts.join("\n")}`);
+  }
+
+  // Warnings (show up to 3, then summarize)
+  if (counts.warnings > 0) {
+    const warnTexts = messageQueue.warnings.slice(0, 3).map((m) => `  • ${m.text}`);
+    if (counts.warnings > 3) {
+      warnTexts.push(`  • ... and ${counts.warnings - 3} more warnings`);
+    }
+    sections.push(`⚠️ Warnings:\n${warnTexts.join("\n")}`);
+  }
+
+  // Info messages (aggregate by category)
+  if (counts.info > 0) {
+    const categories = {};
+    for (const msg of messageQueue.info) {
+      const cat = msg.category || "general";
+      categories[cat] = (categories[cat] || 0) + 1;
+    }
+    const summary = Object.entries(categories)
+      .map(([cat, count]) => `  • ${cat}: ${count}`)
+      .join("\n");
+    sections.push(`ℹ️ Info:\n${summary}`);
+  }
+
+  // Build final message
+  const message = [header, ...sections].join("\n\n");
+
+  // Send the summary
+  await sendDirect(telegramChatId, message, { silent: true });
+
+  // Clear queues
+  messageQueue.critical.length = 0;
+  messageQueue.errors.length = 0;
+  messageQueue.warnings.length = 0;
+  messageQueue.info.length = 0;
+  messageQueue.debug.length = 0;
+}
+
+/**
+ * Start periodic flushing of the notification queue.
+ */
+function startBatchFlushLoop() {
+  if (!batchingEnabled || batchFlushTimer) return;
+  const intervalMs = batchIntervalSec * 1000;
+  batchFlushTimer = setInterval(() => {
+    flushNotificationQueue().catch((err) =>
+      console.warn(`[telegram-bot] batch flush error: ${err.message}`),
+    );
+  }, intervalMs);
+}
+
+/**
+ * Stop the batch flush loop.
+ */
+function stopBatchFlushLoop() {
+  if (batchFlushTimer) {
+    clearInterval(batchFlushTimer);
+    batchFlushTimer = null;
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -2974,14 +3520,17 @@ export async function startTelegramBot() {
     return;
   }
 
-  // Initialize the Codex shell context
-  await initCodexShell();
+  // Initialize the primary agent context
+  await initPrimaryAgent();
 
   // Register bot commands with Telegram (updates the / menu)
   await registerBotCommands();
 
   // Start presence announcements for multi-workstation discovery
   startPresenceLoop();
+
+  // Start batched notification system
+  startBatchFlushLoop();
 
   // Clear any pending updates that arrived while we were offline
   try {
@@ -3001,7 +3550,7 @@ export async function startTelegramBot() {
   // Send startup notification
   await sendDirect(
     telegramChatId,
-    "🤖 VirtEngine Codex Shell online.\n\nType /help for commands or send any message to chat with Codex.",
+    "🤖 VirtEngine primary agent online.\n\nType /help for commands or send any message to chat.",
   );
 
   console.log("[telegram-bot] started — listening for messages");
@@ -3025,6 +3574,19 @@ export function stopTelegramBot() {
       /* best effort */
     }
   }
+  // Flush any remaining notifications before stopping
+  flushNotificationQueue().catch(() => {});
+  stopBatchFlushLoop();
   void releaseTelegramPollLock();
   console.log("[telegram-bot] stopped");
+}
+
+/**
+ * Queue a notification for batched delivery (exported for monitor.mjs).
+ * @param {string} text - Message text
+ * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
+ * @param {object} options - { category, data, silent }
+ */
+export function notify(text, priority = 4, options = {}) {
+  return queueNotification(text, priority, options);
 }

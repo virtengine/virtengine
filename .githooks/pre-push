@@ -33,10 +33,14 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HOOK_DIR/common.sh"
 
 # --- Parse push info from stdin ---
-while read -r _local_ref local_sha _remote_ref _remote_sha; do
+PUSH_LOCAL_SHA=""
+PUSH_REMOTE_SHA=""
+while read -r _local_ref local_sha _remote_ref remote_sha; do
     if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
         exit 0
     fi
+    PUSH_LOCAL_SHA="$local_sha"
+    PUSH_REMOTE_SHA="$remote_sha"
 done
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -61,6 +65,11 @@ TOTAL_CHECKS=0
 # =========================================================================
 # FILE CHANGE DETECTION
 # =========================================================================
+# Determine which files are actually being pushed (not the entire branch).
+# Priority:
+#   1. Diff between remote SHA and local SHA (exact push range)
+#   2. Diff between remote tracking branch and HEAD (new branch or fallback)
+#   3. Full branch diff vs origin/main (last resort)
 BASE_BRANCH="origin/main"
 HAS_GO=false
 HAS_PORTAL=false
@@ -71,11 +80,33 @@ HAS_ONLY_DOCS=false
 HAS_TERRAFORM=false
 
 CHANGED_FILES=""
-if git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
-    CHANGED_FILES=$(git diff --name-only "$BASE_BRANCH" 2>/dev/null || echo "")
+DIFF_SOURCE=""
+
+# Option 1: Use the exact push range (remote_sha..local_sha)
+if [ -n "$PUSH_REMOTE_SHA" ] && [ "$PUSH_REMOTE_SHA" != "0000000000000000000000000000000000000000" ] && [ -n "$PUSH_LOCAL_SHA" ]; then
+    CHANGED_FILES=$(git diff --name-only "$PUSH_REMOTE_SHA" "$PUSH_LOCAL_SHA" 2>/dev/null || echo "")
+    [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="push-range"
 fi
+
+# Option 2: New branch push — diff vs remote tracking branch
+if [ -z "$CHANGED_FILES" ]; then
+    TRACKING_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo "")
+    if [ -n "$TRACKING_BRANCH" ]; then
+        CHANGED_FILES=$(git diff --name-only "$TRACKING_BRANCH" HEAD 2>/dev/null || echo "")
+        [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="tracking-branch"
+    fi
+fi
+
+# Option 3: Fallback — full branch diff vs origin/main
+if [ -z "$CHANGED_FILES" ] && git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
+    CHANGED_FILES=$(git diff --name-only "$BASE_BRANCH" 2>/dev/null || echo "")
+    [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="base-branch"
+fi
+
+# Option 4: Last resort — diff vs previous commit
 if [ -z "$CHANGED_FILES" ]; then
     CHANGED_FILES=$(git diff --name-only HEAD~1 2>/dev/null || echo "")
+    [ -n "$CHANGED_FILES" ] && DIFF_SOURCE="head~1"
 fi
 
 if [ -z "$CHANGED_FILES" ]; then
@@ -109,7 +140,7 @@ else
     [ -n "$TF_FILES" ] && HAS_TERRAFORM=true
     [ -z "$NON_DOC_FILES" ] && HAS_ONLY_DOCS=true
 
-    hook_info "Changed file categories:"
+    hook_info "Changed file categories (diff: ${DIFF_SOURCE}):"
     $HAS_GO       && hook_step "Go files: $(echo "$GO_FILES" | wc -l | tr -d ' ') files"
     $HAS_PORTAL   && hook_step "Portal/Frontend: $(echo "$PORTAL_FILES" | wc -l | tr -d ' ') files"
     $HAS_SDK_TS   && hook_step "SDK TypeScript: $(echo "$SDK_TS_FILES" | wc -l | tr -d ' ') files"
