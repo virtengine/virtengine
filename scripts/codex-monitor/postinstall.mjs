@@ -32,7 +32,9 @@ function getVersion(cmd, flag = "--version") {
       encoding: "utf8",
       timeout: 10000,
       stdio: ["pipe", "pipe", "ignore"],
-    }).trim().split("\n")[0];
+    })
+      .trim()
+      .split("\n")[0];
   } catch {
     return null;
   }
@@ -62,7 +64,8 @@ const RECOMMENDED = [
     install: {
       win32: "winget install --id GitHub.cli -e --source winget",
       darwin: "brew install gh",
-      linux: "sudo apt install gh  # or: https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
+      linux:
+        "sudo apt install gh  # or: https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
     },
     url: "https://cli.github.com/",
     why: "Required for PR creation, branch management, and GitHub operations",
@@ -74,7 +77,8 @@ const RECOMMENDED = [
     install: {
       win32: "winget install --id Microsoft.PowerShell -e --source winget",
       darwin: "brew install powershell/tap/powershell",
-      linux: "sudo apt install powershell  # or: https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-linux",
+      linux:
+        "sudo apt install powershell  # or: https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-linux",
     },
     url: "https://github.com/PowerShell/PowerShell",
     why: "Required for the orchestrator script (ve-orchestrator.ps1)",
@@ -143,9 +147,13 @@ function main() {
   // Summary
   console.log("");
   if (hasErrors) {
-    console.log("  ⛔ Missing required dependencies. Install them before running codex-monitor.");
+    console.log(
+      "  ⛔ Missing required dependencies. Install them before running codex-monitor.",
+    );
   } else if (hasWarnings) {
-    console.log("  ✅ Core dependencies satisfied. Install optional tools above for full functionality.");
+    console.log(
+      "  ✅ Core dependencies satisfied. Install optional tools above for full functionality.",
+    );
   } else {
     console.log("  ✅ All dependencies satisfied. Run: codex-monitor --setup");
   }
