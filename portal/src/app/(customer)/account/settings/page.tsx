@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { accountLink, validatorLink } from '@/lib/explorer';
 
 export const metadata: Metadata = {
   title: 'Account Settings',
@@ -30,13 +31,13 @@ const apiKeys = [
 const delegates = [
   {
     name: 'Ops Lead',
-    address: 've1q8n...4k9l',
+    address: 'virtenginevaloper1q8n...4k9l',
     scope: 'Marketplace + Orders',
     limit: '$5,000 / mo',
   },
   {
     name: 'Billing Partner',
-    address: 've1d3h...8s1w',
+    address: 'virtenginevaloper1d3h...8s1w',
     scope: 'Invoices only',
     limit: '$1,000 / mo',
   },
@@ -209,7 +210,14 @@ export default function AccountSettingsPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{wallet.address}</p>
+                    <a
+                      className="text-xs font-medium text-primary hover:underline"
+                      href={accountLink(wallet.address)}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {wallet.address}
+                    </a>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-success">{wallet.status}</span>
@@ -483,7 +491,14 @@ export default function AccountSettingsPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium">{delegate.name}</p>
-                        <p className="text-xs text-muted-foreground">{delegate.address}</p>
+                        <a
+                          className="text-xs font-medium text-primary hover:underline"
+                          href={validatorLink(delegate.address)}
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          {delegate.address}
+                        </a>
                       </div>
                       <button
                         type="button"

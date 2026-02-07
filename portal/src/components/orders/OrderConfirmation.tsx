@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import type { OrderCreateResult, PriceBreakdown, ResourceConfig } from '@/features/orders';
 import { formatTokenAmount, durationToHours } from '@/features/orders';
+import { txLink } from '@/lib/explorer';
 
 interface OrderConfirmationProps {
   orderResult: OrderCreateResult;
@@ -75,9 +76,19 @@ export function OrderConfirmation({
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Transaction Hash</span>
-              <code className="max-w-[200px] truncate rounded bg-muted px-2 py-0.5 font-mono text-xs">
-                {orderResult.txHash}
-              </code>
+              <div className="flex items-center gap-2">
+                <code className="max-w-[200px] truncate rounded bg-muted px-2 py-0.5 font-mono text-xs">
+                  {orderResult.txHash}
+                </code>
+                <a
+                  className="text-xs font-medium text-primary hover:underline"
+                  href={txLink(orderResult.txHash)}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  View
+                </a>
+              </div>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Status</span>
@@ -96,6 +107,23 @@ export function OrderConfirmation({
           </div>
         </CardContent>
       </Card>
+
+      {orderResult.txHash && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Explorer Preview</CardTitle>
+            <CardDescription>View the transaction directly in Ping.pub</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <iframe
+              title="Transaction explorer preview"
+              src={txLink(orderResult.txHash)}
+              className="h-[420px] w-full rounded-lg border border-border"
+              loading="lazy"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resource & Cost Summary */}
       <Card>
