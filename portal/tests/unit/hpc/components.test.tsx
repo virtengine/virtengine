@@ -209,9 +209,11 @@ describe('TemplateBrowser', () => {
 
   it('renders category filters', async () => {
     render(<TemplateBrowser />);
-    expect(screen.getByText('All')).toBeInTheDocument();
-    expect(screen.getByText('Machine Learning')).toBeInTheDocument();
-    expect(screen.getByText('Scientific Computing')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('All')).toBeInTheDocument();
+      expect(screen.getByText('Machine Learning')).toBeInTheDocument();
+      expect(screen.getByText('Scientific Computing')).toBeInTheDocument();
+    });
   });
 
   it('filters templates by category', async () => {
