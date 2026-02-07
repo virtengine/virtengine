@@ -1376,6 +1376,222 @@ async function archiveAttempt(attemptId) {
   return res;
 }
 
+// ── Fresh session retry system ──────────────────────────────────────────────
+// When an agent gets stuck (context window exhausted, crash loop, repeated
+// failures), starting a fresh session in the SAME workspace is often the
+// most effective recovery — the new agent gets clean context but inherits
+// the existing worktree and file changes.
+
+/**
+ * Build a retry prompt that gives the fresh agent full task context.
+ * Mirrors the format the user showed: failure notice + task context block.
+ *
+ * @param {object} attemptInfo - { task_id, task_title, task_description, branch, id }
+ * @param {string} reason      - Why we're retrying (e.g., "context_window_exhausted")
+ * @param {string} [logTail]   - Last N chars of log for diagnosis
+ * @returns {string} The follow-up prompt
+ */
+function buildRetryPrompt(attemptInfo, reason, logTail) {
+  const parts = [
+    `Detected a failure (${reason}). Please retry your task. If it fails again, I will start a fresh session.`,
+    "",
+    "Task context (vibe-kanban):",
+    `Branch: ${attemptInfo.branch || "unknown"}`,
+    `Title: ${attemptInfo.task_title || attemptInfo.name || "unknown"}`,
+  ];
+
+  if (attemptInfo.task_description) {
+    parts.push(`Description:\n${attemptInfo.task_description}`);
+  }
+
+  parts.push(
+    "",
+    "If VE_TASK_TITLE/VE_TASK_DESCRIPTION are missing, treat this as a VK task:",
+    "Worktree paths often include .git/worktrees/ or vibe-kanban.",
+    "VK tasks always map to a ve/<id>-<slug> branch.",
+    "Resume with the context above, then commit/push/PR as usual.",
+  );
+
+  if (logTail) {
+    const trimmed = logTail.slice(-2000).trim();
+    if (trimmed) {
+      parts.push("", "Recent log output:", "```", trimmed, "```");
+    }
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Get the currently active attempt info from VK status data.
+ * @returns {Promise<object|null>} Attempt info with task context, or null
+ */
+async function getActiveAttemptInfo() {
+  try {
+    const statusData = await readStatusData();
+    const attempts = statusData?.active_attempts || [];
+    // Find the running/most recent attempt
+    const running =
+      attempts.find((a) => a.status === "running") ||
+      attempts.find((a) => a.status === "error") ||
+      attempts[0];
+
+    if (!running) return null;
+
+    // Enrich with task description if available
+    if (running.task_id && !running.task_description) {
+      try {
+        const taskRes = await fetchVk(`/api/tasks/${running.task_id}`);
+        if (taskRes?.success && taskRes.data) {
+          running.task_title = running.task_title || taskRes.data.title;
+          running.task_description =
+            taskRes.data.description || taskRes.data.body || "";
+        }
+      } catch {
+        /* best effort */
+      }
+    }
+
+    return running;
+  } catch {
+    return null;
+  }
+}
+
+// Rate-limit fresh session creation to avoid spam
+const FRESH_SESSION_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+let lastFreshSessionAt = 0;
+let freshSessionCount = 0;
+const FRESH_SESSION_MAX_PER_TASK = 3; // max retries per task before giving up
+const freshSessionTaskRetries = new Map();
+
+/**
+ * Start a fresh VK session in the same workspace and send a retry prompt.
+ * This is the nuclear option when an agent is irrecoverably stuck.
+ *
+ * @param {string} workspaceId - The workspace/attempt UUID
+ * @param {string} prompt      - The follow-up prompt with task context
+ * @param {string} taskId      - Task ID for retry tracking
+ * @returns {Promise<{success: boolean, sessionId?: string, reason?: string}>}
+ */
+async function startFreshSession(workspaceId, prompt, taskId) {
+  const now = Date.now();
+
+  // Rate limit
+  if (now - lastFreshSessionAt < FRESH_SESSION_COOLDOWN_MS) {
+    const waitSec = Math.round(
+      (FRESH_SESSION_COOLDOWN_MS - (now - lastFreshSessionAt)) / 1000,
+    );
+    console.warn(
+      `[monitor] fresh session rate-limited, ${waitSec}s remaining`,
+    );
+    return { success: false, reason: `rate-limited (${waitSec}s)` };
+  }
+
+  // Per-task retry limit
+  if (taskId) {
+    const retries = freshSessionTaskRetries.get(taskId) || 0;
+    if (retries >= FRESH_SESSION_MAX_PER_TASK) {
+      console.warn(
+        `[monitor] fresh session limit reached for task ${taskId.slice(0, 8)} (${retries}/${FRESH_SESSION_MAX_PER_TASK})`,
+      );
+      return {
+        success: false,
+        reason: `max retries (${FRESH_SESSION_MAX_PER_TASK}) reached for task`,
+      };
+    }
+    freshSessionTaskRetries.set(taskId, retries + 1);
+  }
+
+  lastFreshSessionAt = now;
+  freshSessionCount += 1;
+
+  try {
+    // Step 1: Create a new session for the workspace
+    const session = await fetchVk("/api/sessions", {
+      method: "POST",
+      body: { workspace_id: workspaceId },
+      timeoutMs: 15000,
+    });
+
+    if (!session?.id) {
+      console.warn("[monitor] failed to create fresh VK session");
+      return { success: false, reason: "session creation failed" };
+    }
+
+    // Step 2: Send the retry prompt as a follow-up
+    const followUp = await fetchVk(`/api/sessions/${session.id}/follow-up`, {
+      method: "POST",
+      body: { prompt },
+      timeoutMs: 15000,
+    });
+
+    if (!followUp) {
+      console.warn("[monitor] failed to send follow-up to fresh session");
+      return { success: false, reason: "follow-up send failed" };
+    }
+
+    console.log(
+      `[monitor] ✅ Fresh session started: ${session.id} (retry #${freshSessionCount})`,
+    );
+
+    return { success: true, sessionId: session.id };
+  } catch (err) {
+    console.warn(
+      `[monitor] fresh session error: ${err.message || err}`,
+    );
+    return { success: false, reason: err.message || String(err) };
+  }
+}
+
+/**
+ * High-level: detect a stuck agent, build retry prompt, start fresh session.
+ * Call this from handleExit, crash loop detection, or smartPRFlow stale detection.
+ *
+ * @param {string} reason  - Why we're retrying
+ * @param {string} [logTail] - Recent log output for context
+ * @returns {Promise<boolean>} true if fresh session started
+ */
+async function attemptFreshSessionRetry(reason, logTail) {
+  if (!vkEndpointUrl) {
+    console.log("[monitor] fresh session retry skipped — no VK endpoint");
+    return false;
+  }
+
+  const attemptInfo = await getActiveAttemptInfo();
+  if (!attemptInfo?.id) {
+    console.log("[monitor] fresh session retry skipped — no active attempt");
+    return false;
+  }
+
+  const prompt = buildRetryPrompt(attemptInfo, reason, logTail);
+  const result = await startFreshSession(
+    attemptInfo.id,
+    prompt,
+    attemptInfo.task_id,
+  );
+
+  if (result.success) {
+    if (telegramToken && telegramChatId) {
+      const taskLabel = attemptInfo.task_title || attemptInfo.branch || "unknown";
+      void sendTelegramMessage(
+        `🔄 Fresh session started for "${taskLabel}" (${reason}).\nNew session: ${result.sessionId}`,
+      );
+    }
+    return true;
+  }
+
+  console.warn(
+    `[monitor] fresh session retry failed: ${result.reason}`,
+  );
+  if (telegramToken && telegramChatId) {
+    void sendTelegramMessage(
+      `⚠️ Fresh session retry failed (${reason}): ${result.reason}`,
+    );
+  }
+  return false;
+}
+
 /**
  * GET /api/projects/:project_id/tasks?status=<status>
  * Fetches tasks by status from VK API.
@@ -1596,9 +1812,19 @@ async function smartPRFlow(attemptId, shortId, status) {
         `[monitor] ${tag}: stale attempt — 0 commits, ${commits_behind} behind. Archiving.`,
       );
       await archiveAttempt(attemptId);
+
+      // Start fresh session to actually reattempt the task
+      const freshStarted = await attemptFreshSessionRetry(
+        "stale_attempt_archived",
+        `Attempt ${shortId} was stale: 0 commits, ${commits_behind} behind main.`,
+      );
+
       if (telegramToken && telegramChatId) {
+        const action = freshStarted
+          ? "Fresh session started for reattempt."
+          : "Will reattempt on next cycle.";
         void sendTelegramMessage(
-          `🗑️ Archived stale attempt ${shortId} (0 commits, ${commits_behind} behind main). Will reattempt.`,
+          `🗑️ Archived stale attempt ${shortId} (0 commits, ${commits_behind} behind main). ${action}`,
         );
       }
       return;
@@ -2957,9 +3183,21 @@ async function handleExit(code, signal, logPath) {
   await analyzeWithCodex(logPath, logText.slice(-15000), reason);
 
   if (hasContextWindowError(logText)) {
+    console.log("[monitor] context window exhaustion detected — attempting fresh session");
+    const freshStarted = await attemptFreshSessionRetry(
+      "context_window_exhausted",
+      logText.slice(-3000),
+    );
+    if (freshStarted) {
+      // Fresh session created — do NOT restart the current process.
+      // The new session will handle the task in the same workspace.
+      console.log("[monitor] fresh session handles task — skipping restart");
+      return;
+    }
+    // Fallback: leave the hint file for manual recovery
     await writeFile(
       logPath.replace(/\.log$/, "-context.txt"),
-      "Detected context window error. Consider creating a new workspace session and re-sending follow-up.\n",
+      "Detected context window error. Fresh session retry failed — consider manual recovery.\n",
       "utf8",
     );
   }
@@ -3000,10 +3238,24 @@ async function handleExit(code, signal, logPath) {
                 `🛠️ Crash-loop fix applied. Orchestrator will retry after cooldown.\n${fixResult.outcome}`,
               );
             }
-          } else if (telegramToken && telegramChatId) {
-            void sendTelegramMessage(
-              `⚠️ Crash-loop fix attempt failed: ${fixResult.outcome}. Orchestrator remains paused.`,
+          } else {
+            // Crash loop fix failed — try a fresh session as last resort
+            console.log("[monitor] crash loop fix failed — attempting fresh session");
+            const freshStarted = await attemptFreshSessionRetry(
+              "crash_loop_unresolvable",
+              logText.slice(-3000),
             );
+            if (freshStarted) {
+              if (telegramToken && telegramChatId) {
+                void sendTelegramMessage(
+                  `🔄 Crash-loop fix failed but fresh session started. New agent will retry.`,
+                );
+              }
+            } else if (telegramToken && telegramChatId) {
+              void sendTelegramMessage(
+                `⚠️ Crash-loop fix attempt failed: ${fixResult.outcome}. Fresh session also failed. Orchestrator remains paused.`,
+              );
+            }
           }
         }
       }
@@ -3253,6 +3505,8 @@ function applyConfig(nextConfig, options = {}) {
   const prevWatchPath = watchPath;
   const prevTelegramInterval = telegramIntervalMin;
   const prevCodexEnabled = codexEnabled;
+  const prevTelegramCommandEnabled = telegramCommandEnabled;
+  const prevTelegramBotEnabled = telegramBotEnabled;
 
   config = nextConfig;
   projectName = nextConfig.projectName;
@@ -3305,6 +3559,16 @@ function applyConfig(nextConfig, options = {}) {
 
   if (prevTelegramInterval !== telegramIntervalMin) {
     startTelegramNotifier();
+  }
+  if (!prevTelegramCommandEnabled && telegramCommandEnabled) {
+    startTelegramCommandListener();
+  }
+  if (prevTelegramBotEnabled !== telegramBotEnabled) {
+    if (telegramBotEnabled) {
+      void startTelegramBot();
+    } else {
+      stopTelegramBot();
+    }
   }
   if (prevCodexEnabled && !codexEnabled) {
     console.warn(
@@ -3490,6 +3754,10 @@ injectMonitorFunctions({
   getVibeKanbanUrl: () => vkPublicUrl || vkEndpointUrl,
   fetchVk,
   getRepoRoot: () => repoRoot,
+  startFreshSession,
+  attemptFreshSessionRetry,
+  buildRetryPrompt,
+  getActiveAttemptInfo,
 });
 if (telegramBotEnabled) {
   void startTelegramBot();

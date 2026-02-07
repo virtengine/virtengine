@@ -141,6 +141,10 @@ let _startProcess = null;
 let _getVibeKanbanUrl = null;
 let _fetchVk = null;
 let _getRepoRoot = null;
+let _startFreshSession = null;
+let _attemptFreshSessionRetry = null;
+let _buildRetryPrompt = null;
+let _getActiveAttemptInfo = null;
 
 /**
  * Inject monitor.mjs functions so the bot can send messages and read status.
@@ -155,6 +159,10 @@ export function injectMonitorFunctions({
   getVibeKanbanUrl,
   fetchVk,
   getRepoRoot,
+  startFreshSession,
+  attemptFreshSessionRetry,
+  buildRetryPrompt,
+  getActiveAttemptInfo,
 }) {
   _sendTelegramMessage = sendTelegramMessage;
   _readStatusData = readStatusData;
@@ -164,6 +172,10 @@ export function injectMonitorFunctions({
   _getVibeKanbanUrl = getVibeKanbanUrl;
   _fetchVk = fetchVk;
   _getRepoRoot = getRepoRoot;
+  _startFreshSession = startFreshSession;
+  _attemptFreshSessionRetry = attemptFreshSessionRetry;
+  _buildRetryPrompt = buildRetryPrompt;
+  _getActiveAttemptInfo = getActiveAttemptInfo;
 }
 
 /**
@@ -743,6 +755,10 @@ const COMMANDS = {
   "/branches": { handler: cmdBranches, desc: "Recent git branches" },
   "/diff": { handler: cmdDiff, desc: "Git diff summary (staged)" },
   "/restart": { handler: cmdRestart, desc: "Restart orchestrator process" },
+  "/retry": {
+    handler: cmdRetry,
+    desc: "Start fresh session for stuck task: /retry [reason]",
+  },
   "/history": { handler: cmdHistory, desc: "Codex conversation history" },
   "/clear": { handler: cmdClear, desc: "Clear Codex conversation context" },
   "/reset_thread": { handler: cmdClear, desc: "Alias for /clear (reset thread)" },
@@ -1211,6 +1227,27 @@ async function cmdRestart(chatId) {
     );
   } catch (err) {
     await sendReply(chatId, `❌ Restart failed: ${err.message}`);
+  }
+}
+
+async function cmdRetry(chatId, args) {
+  if (!_attemptFreshSessionRetry) {
+    await sendReply(chatId, "❌ Fresh session retry not available (not injected from monitor).");
+    return;
+  }
+
+  const reason = args?.trim() || "manual_retry_via_telegram";
+  await sendReply(chatId, `🔄 Attempting fresh session retry (${reason})...`);
+
+  try {
+    const started = await _attemptFreshSessionRetry(reason);
+    if (started) {
+      await sendReply(chatId, "✅ Fresh session started. New agent will pick up the task.");
+    } else {
+      await sendReply(chatId, "⚠️ Fresh session retry failed. Check logs for details (rate limit, no active attempt, or VK endpoint unavailable).");
+    }
+  } catch (err) {
+    await sendReply(chatId, `❌ Retry error: ${err.message || err}`);
   }
 }
 
