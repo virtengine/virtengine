@@ -63,7 +63,7 @@ func (s *MemoryAuditStore) Query(_ context.Context, filter AuditFilter) ([]*Audi
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var result []*AuditEvent
+	result := make([]*AuditEvent, 0, len(s.events))
 	for _, event := range s.events {
 		if filter.BlobID != "" && event.BlobID != filter.BlobID {
 			continue
