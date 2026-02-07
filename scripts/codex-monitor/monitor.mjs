@@ -24,7 +24,7 @@ import { loadConfig } from "./config.mjs";
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 
 // ── Load unified configuration ──────────────────────────────────────────────
-const config = loadConfig();
+let config = loadConfig();
 
 function canSignalProcess(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -75,7 +75,7 @@ async function releaseTelegramPollLock() {
   }
 }
 
-const {
+let {
   projectName,
   scriptPath,
   scriptArgs,
@@ -96,6 +96,7 @@ const {
   telegramCommandConcurrency,
   telegramCommandMaxBatch,
   telegramBotEnabled,
+  telegramCommandEnabled,
   repoSlug,
   repoUrlBase,
   vkRecoveryPort,
@@ -110,9 +111,10 @@ const {
   plannerDedupMs,
   agentPrompts,
   scheduler: executorScheduler,
+  envPaths,
 } = config;
 
-const watchPath = resolve(configWatchPath);
+let watchPath = resolve(configWatchPath);
 let codexEnabled = config.codexEnabled;
 let codexDisabledReason = codexEnabled
   ? ""
@@ -121,7 +123,6 @@ let codexDisabledReason = codexEnabled
     : "disabled via --no-codex";
 // When telegram-bot.mjs is active it owns getUpdates — monitor must NOT poll
 // to avoid HTTP 409 "Conflict: terminated by other getUpdates request".
-let telegramCommandEnabled = config.telegramCommandEnabled;
 let telegramPollLockHeld = false;
 
 let CodexClient = null;
@@ -132,9 +133,16 @@ let currentChild = null;
 let pendingRestart = false;
 let skipNextAnalyze = false;
 let skipNextRestartCount = false;
+
+// Cached VK repo ID (lazy loaded on first PR/rebase call)
+let cachedRepoId = null;
 let watcher = null;
 let watcherDebounce = null;
 let watchFileName = null;
+let envWatchers = [];
+let envWatcherDebounce = null;
+let telegramNotifierInterval = null;
+let telegramNotifierTimeout = null;
 let vkRecoveryLastAt = 0;
 let vibeKanbanProcess = null;
 let vibeKanbanStartedAt = 0;
@@ -163,21 +171,23 @@ const telegramDedup = new Map();
 // ── Fuzzy dedup: normalize messages so structural duplicates match ───────────
 // "recovery (count=1)" and "recovery (count=29)" both become "recovery (count=N)"
 function normalizeDedupKey(text) {
-  return String(text || "")
-    .trim()
-    // Replace numbers (integers and decimals) with N, preserving surrounding text
-    .replaceAll(/\d+(\.\d+)?/g, "N")
-    // Collapse any resulting multi-N sequences (e.g., "N.N" → "N")
-    .replaceAll(/N[.\-/:]N/g, "N")
-    // Collapse whitespace
-    .replaceAll(/\s+/g, " ");
+  return (
+    String(text || "")
+      .trim()
+      // Replace numbers (integers and decimals) with N, preserving surrounding text
+      .replaceAll(/\d+(\.\d+)?/g, "N")
+      // Collapse any resulting multi-N sequences (e.g., "N.N" → "N")
+      .replaceAll(/N[.\-/:]N/g, "N")
+      // Collapse whitespace
+      .replaceAll(/\s+/g, " ")
+  );
 }
 
 // ── Internal crash loop circuit breaker ──────────────────────────────────────
 // Detects rapid failure bursts independently of Telegram dedup.
 // When tripped, kills the orchestrator child and pauses everything.
 const CIRCUIT_BREAKER_WINDOW_MS = 60_000; // 1 minute
-const CIRCUIT_BREAKER_THRESHOLD = 5;      // 5 failures in window = circuit trips
+const CIRCUIT_BREAKER_THRESHOLD = 5; // 5 failures in window = circuit trips
 const CIRCUIT_BREAKER_PAUSE_MS = 5 * 60_000; // 5-minute hard pause
 let circuitBreakerTripped = false;
 let circuitBreakerResetAt = 0;
@@ -217,14 +227,16 @@ function tripCircuitBreaker(failureCount) {
   const pauseMin = Math.round(CIRCUIT_BREAKER_PAUSE_MS / 60_000);
   console.error(
     `[monitor] 🔌 CIRCUIT BREAKER TRIPPED: ${failureCount} failures in ${Math.round(CIRCUIT_BREAKER_WINDOW_MS / 1000)}s. ` +
-    `Killing orchestrator and pausing all restarts for ${pauseMin} minutes.`
+      `Killing orchestrator and pausing all restarts for ${pauseMin} minutes.`,
   );
 
   // Kill the orchestrator child if running
   if (currentChild) {
     try {
       currentChild.kill("SIGTERM");
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   }
 
   // Block orchestrator restarts via safe mode
@@ -571,7 +583,11 @@ async function handleMonitorFailure(reason, err) {
     const msg = `🛑 codex-monitor hit hard failure cap (${failureCount}). Exiting to break crash loop.`;
     console.error(`[monitor] ${msg}`);
     if (telegramToken && telegramChatId) {
-      try { await sendTelegramMessage(msg); } catch { /* best effort */ }
+      try {
+        await sendTelegramMessage(msg);
+      } catch {
+        /* best effort */
+      }
     }
     process.exit(1);
     return;
@@ -597,7 +613,9 @@ async function handleMonitorFailure(reason, err) {
         await sendTelegramMessage(
           `⚠️ codex-monitor exception (${reason}). Attempting recovery (count=${failureCount}).`,
         );
-      } catch { /* suppress Telegram errors during failure handling */ }
+      } catch {
+        /* suppress Telegram errors during failure handling */
+      }
     }
 
     const fixResult = await attemptMonitorFix({
@@ -611,7 +629,9 @@ async function handleMonitorFailure(reason, err) {
           await sendTelegramMessage(
             `🛠️ codex-monitor auto-fix applied. Restarting monitor.\n${fixResult.outcome}`,
           );
-        } catch { /* best effort */ }
+        } catch {
+          /* best effort */
+        }
       }
       restartSelf("monitor-fix-applied");
       return;
@@ -625,7 +645,9 @@ async function handleMonitorFailure(reason, err) {
           await sendTelegramMessage(
             `🛑 codex-monitor entering safe mode after repeated failures (${failureCount} in 10m). Pausing restarts for ${pauseMin} minutes.`,
           );
-        } catch { /* best effort */ }
+        } catch {
+          /* best effort */
+        }
       }
       return;
     }
@@ -635,7 +657,9 @@ async function handleMonitorFailure(reason, err) {
       process.stderr.write(
         `[monitor] failure handler crashed: ${fatal.message || fatal}\n`,
       );
-    } catch { /* completely give up */ }
+    } catch {
+      /* completely give up */
+    }
   } finally {
     monitorFailureHandling = false;
   }
@@ -1236,12 +1260,58 @@ async function fetchBranchStatus(attemptId) {
 }
 
 /**
+ * Fetches and caches the repo_id from VK API.
+ * VK API requires repo_id for PR creation and other operations.
+ */
+async function getRepoId() {
+  if (cachedRepoId) return cachedRepoId;
+
+  try {
+    // Fetch projects to find matching repo
+    const projectsRes = await fetchVk("/api/projects");
+    if (!projectsRes?.success || !Array.isArray(projectsRes.data)) {
+      console.warn("[monitor] Failed to fetch projects from VK API");
+      return null;
+    }
+
+    // Find the project (assumes first project or matches repoSlug)
+    const project = projectsRes.data[0];
+    if (!project?.id) {
+      console.warn("[monitor] No projects found in VK API");
+      return null;
+    }
+
+    // Fetch repos for the project
+    const reposRes = await fetchVk(`/api/projects/${project.id}/repos`);
+    if (!reposRes?.success || !Array.isArray(reposRes.data)) {
+      console.warn("[monitor] Failed to fetch repos for project");
+      return null;
+    }
+
+    // Find the repo (assumes first repo or matches repoSlug)
+    const repo = reposRes.data[0];
+    if (!repo?.id) {
+      console.warn("[monitor] No repos found for project");
+      return null;
+    }
+
+    cachedRepoId = repo.id;
+    console.log(`[monitor] Cached repo_id: ${cachedRepoId.substring(0, 8)}...`);
+    return cachedRepoId;
+  } catch (err) {
+    console.warn(`[monitor] Error fetching repo_id: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * POST /api/task-attempts/:id/rebase
  * Rebases the attempt's worktree onto target branch.
  */
 async function rebaseAttempt(attemptId) {
   const res = await fetchVk(`/api/task-attempts/${attemptId}/rebase`, {
     method: "POST",
+    body: {}, // VK API requires at least empty JSON body
     timeoutMs: 60000,
   });
   return res;
@@ -1255,7 +1325,15 @@ async function rebaseAttempt(attemptId) {
  * @param {object} prOpts - { title, description, draft }
  */
 async function createPRViaVK(attemptId, prOpts = {}) {
+  // Fetch repo_id if not cached
+  const repoId = await getRepoId();
+  if (!repoId) {
+    console.error("[monitor] Cannot create PR: repo_id not available");
+    return { success: false, _elapsedMs: 0 };
+  }
+
   const body = {
+    repo_id: repoId,
     title: prOpts.title || "",
     description: prOpts.description || "",
     draft: prOpts.draft ?? true,
@@ -1280,7 +1358,7 @@ async function createPRViaVK(attemptId, prOpts = {}) {
 async function resolveConflicts(attemptId) {
   const res = await fetchVk(
     `/api/task-attempts/${attemptId}/resolve-conflicts`,
-    { method: "POST", timeoutMs: 60000 },
+    { method: "POST", body: {}, timeoutMs: 60000 },
   );
   return res;
 }
@@ -1292,6 +1370,7 @@ async function resolveConflicts(attemptId) {
 async function archiveAttempt(attemptId) {
   const res = await fetchVk(`/api/task-attempts/${attemptId}/archive`, {
     method: "POST",
+    body: {},
     timeoutMs: 30000,
   });
   return res;
@@ -1846,7 +1925,9 @@ async function sendTelegramMessage(text, options = {}) {
   }
   const rawDedupKey = options.dedupKey ?? String(text || "").trim();
   // Use fuzzy normalization so structural duplicates with different numbers match
-  const dedupKey = options.exactDedup ? rawDedupKey : normalizeDedupKey(rawDedupKey);
+  const dedupKey = options.exactDedup
+    ? rawDedupKey
+    : normalizeDedupKey(rawDedupKey);
   if (dedupKey && !options.skipDedup) {
     const now = Date.now();
     const last = telegramDedup.get(dedupKey) || 0;
@@ -2788,12 +2869,18 @@ async function startProcess() {
 
   const append = async (chunk) => {
     if (echoLogs) {
-      try { process.stdout.write(chunk); } catch { /* EPIPE — ignore */ }
+      try {
+        process.stdout.write(chunk);
+      } catch {
+        /* EPIPE — ignore */
+      }
     }
     const text = chunk.toString();
     try {
       await writeFile(activeLogPath, text, { flag: "a" });
-    } catch { /* log file write failed — ignore */ }
+    } catch {
+      /* log file write failed — ignore */
+    }
     logRemainder += text;
     const lines = logRemainder.split(/\r?\n/);
     logRemainder = lines.pop() || "";
@@ -2961,7 +3048,9 @@ process.on("uncaughtException", (err) => {
   if (isStreamNoise(msg)) {
     try {
       process.stderr.write(`[monitor] suppressed stream noise: ${msg}\n`);
-    } catch { /* even stderr might be broken */ }
+    } catch {
+      /* even stderr might be broken */
+    }
     return;
   }
   if (shuttingDown) return;
@@ -2974,7 +3063,9 @@ process.on("unhandledRejection", (reason) => {
   if (isStreamNoise(msg)) {
     try {
       process.stderr.write(`[monitor] suppressed stream noise: ${msg}\n`);
-    } catch { /* even stderr might be broken */ }
+    } catch {
+      /* even stderr might be broken */
+    }
     return;
   }
   if (shuttingDown) return;
