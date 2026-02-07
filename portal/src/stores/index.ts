@@ -75,3 +75,13 @@ export {
   type DashboardConfigState,
   type DashboardConfigActions,
 } from './dashboardConfigStore';
+export {
+  useChainEventStore,
+  selectIsConnected,
+  selectRecentEvents,
+  selectEventsByType,
+  getChainEventClient,
+  type ChainEventStore,
+  type ChainEventState,
+  type ChainEventActions,
+} from './chainEventStore';
