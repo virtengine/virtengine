@@ -3343,15 +3343,207 @@ const messageQueue = {
 
 let batchFlushTimer = null;
 
+// ── Live Digest State ───────────────────────────────────────────────────────
+// A single Telegram message that gets continuously edited as events happen.
+// When the digest window expires, the message is sealed and the next event
+// starts a fresh one.
+let liveDigest = {
+  messageId: null,  // Telegram message_id of the current live digest
+  chatId: null,     // chat_id it was sent to
+  startedAt: 0,     // timestamp when this digest window started
+  entries: [],      // { emoji, text, time } — events in this digest window
+  sealTimer: null,  // timer to seal the digest after the window expires
+  editTimer: null,  // debounce timer for edits
+  editPending: false, // whether an edit is pending
+  sealed: false,    // true once the window has expired and message is finalized
+};
+
+const PRIORITY_EMOJI = {
+  1: "🔴",
+  2: "❌",
+  3: "⚠️",
+  4: "ℹ️",
+  5: "🔹",
+};
+
+/**
+ * Build the live digest message text from accumulated entries.
+ */
+function buildLiveDigestText() {
+  const d = liveDigest;
+  const startTime = new Date(d.startedAt).toISOString().slice(11, 19);
+  const now = new Date().toISOString().slice(11, 19);
+
+  // Count by severity
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const e of d.entries) {
+    counts[e.priority] = (counts[e.priority] || 0) + 1;
+  }
+
+  const countParts = [];
+  if (counts[1] > 0) countParts.push(`🔴 ${counts[1]}`);
+  if (counts[2] > 0) countParts.push(`❌ ${counts[2]}`);
+  if (counts[3] > 0) countParts.push(`⚠️ ${counts[3]}`);
+  if (counts[4] > 0) countParts.push(`ℹ️ ${counts[4]}`);
+
+  const statusLine = d.sealed ? `📊 Digest (${startTime} → ${now}) — sealed` : `📊 Live Digest (since ${startTime}) — updating...`;
+  const headerLine = countParts.length > 0 ? `${statusLine}\n${countParts.join(" • ")}` : statusLine;
+
+  // Build event lines (most recent at bottom, like a log)
+  // Telegram 4096 char limit — keep recent events, trim old ones
+  const MAX_LEN = 3800; // leave room for header
+  const lines = [];
+  let totalLen = headerLine.length + 2; // +2 for \n\n separator
+
+  // Add entries from newest to oldest, then reverse for chronological order
+  for (let i = d.entries.length - 1; i >= 0; i--) {
+    const e = d.entries[i];
+    const line = `${e.time} ${e.emoji} ${e.text}`;
+    if (totalLen + line.length + 1 > MAX_LEN) {
+      const trimmed = d.entries.length - lines.length;
+      if (trimmed > 0) {
+        lines.push(`  …${trimmed} earlier event(s) trimmed`);
+      }
+      break;
+    }
+    lines.push(line);
+    totalLen += line.length + 1;
+  }
+
+  lines.reverse(); // chronological order
+
+  return [headerLine, "", ...lines].join("\n");
+}
+
+/**
+ * Schedule a debounced edit of the live digest message.
+ */
+function scheduleLiveDigestEdit() {
+  const d = liveDigest;
+  if (d.editTimer) {
+    clearTimeout(d.editTimer);
+  }
+  d.editPending = true;
+  d.editTimer = setTimeout(async () => {
+    d.editPending = false;
+    d.editTimer = null;
+    if (!d.messageId || !d.chatId) return;
+    const text = buildLiveDigestText();
+    try {
+      const newId = await editDirect(d.chatId, d.messageId, text);
+      if (newId && newId !== d.messageId) {
+        d.messageId = newId; // editDirect fell back to sendDirect
+      }
+    } catch (err) {
+      console.warn(`[telegram-bot] live digest edit failed: ${err.message}`);
+    }
+  }, liveDigestEditDebounceMs);
+}
+
+/**
+ * Seal the current live digest window — mark final, clear state for next window.
+ */
+function sealLiveDigest() {
+  const d = liveDigest;
+  if (d.entries.length === 0) {
+    // Nothing happened in this window — just reset
+    resetLiveDigest();
+    return;
+  }
+  d.sealed = true;
+  // Flush one last edit to mark it sealed
+  if (d.editTimer) clearTimeout(d.editTimer);
+  const text = buildLiveDigestText();
+  if (d.messageId && d.chatId) {
+    editDirect(d.chatId, d.messageId, text).catch(() => {});
+  }
+  // Reset for next window
+  resetLiveDigest();
+}
+
+/**
+ * Reset live digest state for a new window.
+ */
+function resetLiveDigest() {
+  if (liveDigest.sealTimer) clearTimeout(liveDigest.sealTimer);
+  if (liveDigest.editTimer) clearTimeout(liveDigest.editTimer);
+  liveDigest = {
+    messageId: null,
+    chatId: null,
+    startedAt: 0,
+    entries: [],
+    sealTimer: null,
+    editTimer: null,
+    editPending: false,
+    sealed: false,
+  };
+}
+
+/**
+ * Add an event to the live digest. Creates the message on first event,
+ * then edits it for subsequent events in the same window.
+ */
+async function addToLiveDigest(text, priority, category) {
+  const d = liveDigest;
+  const now = Date.now();
+  const timeStr = new Date(now).toISOString().slice(11, 19);
+  const emoji = PRIORITY_EMOJI[priority] || "ℹ️";
+
+  // Check if we need a new digest window
+  const windowMs = liveDigestWindowSec * 1000;
+  const windowExpired = d.startedAt > 0 && (now - d.startedAt) >= windowMs;
+
+  if (windowExpired || !d.startedAt) {
+    // Seal old digest if it had entries
+    if (d.entries.length > 0) {
+      sealLiveDigest();
+    } else {
+      resetLiveDigest();
+    }
+  }
+
+  // Add entry
+  liveDigest.entries.push({ emoji, text, time: timeStr, priority, category });
+
+  if (!liveDigest.startedAt) {
+    // First event — create the digest message
+    liveDigest.startedAt = now;
+    liveDigest.chatId = telegramChatId;
+
+    const messageText = buildLiveDigestText();
+    const msgId = await sendDirect(telegramChatId, messageText, { silent: true });
+    if (msgId) {
+      liveDigest.messageId = msgId;
+    }
+
+    // Schedule seal
+    liveDigest.sealTimer = setTimeout(() => sealLiveDigest(), windowMs);
+  } else {
+    // Subsequent event — debounced edit
+    scheduleLiveDigestEdit();
+  }
+}
+
 /**
  * Queue a notification for batched delivery.
+ * Routes through Live Digest when enabled, falls back to batch queues.
  * @param {string} text - Message text
  * @param {number} priority - 1=critical(immediate), 2=error, 3=warning, 4=info, 5=debug
  * @param {object} options - { category, data, silent }
  */
 function queueNotification(text, priority = 4, options = {}) {
-  if (!batchingEnabled || priority <= immediateThreshold) {
-    // Send immediately for critical messages or when batching disabled
+  // Critical messages always go immediately
+  if (priority <= immediateThreshold) {
+    return sendDirect(telegramChatId, text, { silent: options.silent });
+  }
+
+  // Live Digest mode: append to the continuously-edited message
+  if (liveDigestEnabled && batchingEnabled) {
+    return addToLiveDigest(text, priority, options.category || "general");
+  }
+
+  // Legacy batch mode fallback
+  if (!batchingEnabled) {
     return sendDirect(telegramChatId, text, { silent: options.silent });
   }
 
@@ -3391,7 +3583,7 @@ function queueNotification(text, priority = 4, options = {}) {
 }
 
 /**
- * Format and send batched notifications as a summary.
+ * Format and send batched notifications as a summary (legacy fallback).
  */
 async function flushNotificationQueue() {
   const sections = [];
@@ -3474,9 +3666,12 @@ async function flushNotificationQueue() {
 
 /**
  * Start periodic flushing of the notification queue.
+ * In live-digest mode, the flush loop is only used as a fallback seal timer.
  */
 function startBatchFlushLoop() {
   if (!batchingEnabled || batchFlushTimer) return;
+  // In live digest mode, the digest window handles timing — no need for flush loop
+  if (liveDigestEnabled) return;
   const intervalMs = batchIntervalSec * 1000;
   batchFlushTimer = setInterval(() => {
     flushNotificationQueue().catch((err) =>
@@ -3486,12 +3681,18 @@ function startBatchFlushLoop() {
 }
 
 /**
- * Stop the batch flush loop.
+ * Stop the batch flush loop and seal any active live digest.
  */
 function stopBatchFlushLoop() {
   if (batchFlushTimer) {
     clearInterval(batchFlushTimer);
     batchFlushTimer = null;
+  }
+  // Seal any active live digest
+  if (liveDigest.entries.length > 0) {
+    sealLiveDigest();
+  } else {
+    resetLiveDigest();
   }
 }
 
@@ -3571,8 +3772,12 @@ export function stopTelegramBot() {
       /* best effort */
     }
   }
-  // Flush any remaining notifications before stopping
-  flushNotificationQueue().catch(() => {});
+  // Seal any active live digest and flush legacy queues before stopping
+  if (liveDigestEnabled && liveDigest.entries.length > 0) {
+    sealLiveDigest();
+  } else {
+    flushNotificationQueue().catch(() => {});
+  }
   stopBatchFlushLoop();
   void releaseTelegramPollLock();
   console.log("[telegram-bot] stopped");
