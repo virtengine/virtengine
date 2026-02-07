@@ -244,25 +244,30 @@ Select a profile via `--profile` or `CODEX_MONITOR_PROFILE`.
 
 See [.env.example](.env.example) for the full reference. Key variables:
 
-| Variable                | Default                        | Description                                                                                                            |
-| ----------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `PROJECT_NAME`          | auto-detected                  | Project name for display                                                                                               |
-| `GITHUB_REPO`           | auto-detected                  | GitHub repo slug (`org/repo`)                                                                                          |
-| `ORCHESTRATOR_SCRIPT`   | auto-detected                  | Path to orchestrator script (use `../ve-orchestrator.ps1` for relative paths from codex-monitor dir, or absolute path) |
-| `ORCHESTRATOR_ARGS`     | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator                                                                                       |
-| `OPENAI_API_KEY`        | —                              | API key for Codex analysis                                                                                             |
-| `COPILOT_MODEL`         | Copilot CLI default            | Model override for Copilot SDK                                                                                         |
-| `COPILOT_SDK_DISABLED`  | `0`                            | Disable Copilot SDK primary agent                                                                                      |
-| `TELEGRAM_BOT_TOKEN`    | —                              | Telegram bot token from @BotFather                                                                                     |
-| `TELEGRAM_CHAT_ID`      | —                              | Telegram chat ID                                                                                                       |
-| `VK_BASE_URL`           | `http://127.0.0.1:54089`       | Vibe-Kanban API endpoint                                                                                               |
-| `EXECUTORS`             | Copilot+Codex 50/50            | Executor shorthand (see above)                                                                                         |
-| `EXECUTOR_DISTRIBUTION` | `weighted`                     | Distribution mode                                                                                                      |
-| `FAILOVER_STRATEGY`     | `next-in-line`                 | Failover behavior                                                                                                      |
-| `MAX_PARALLEL`          | `6`                            | Max concurrent agent slots                                                                                             |
-| `CODEX_MONITOR_REPO`    | —                              | Selected repo name (multi-repo)                                                                                        |
-| `CODEX_MONITOR_PROFILE` | —                              | Environment profile name                                                                                               |
-| `CODEX_MONITOR_MODE`    | `virtengine`/`generic`         | Mode override                                                                                                          |
+| Variable                | Default                  | Description                        |
+| ----------------------- | ------------------------ | ---------------------------------- |
+| `PROJECT_NAME`          | auto-detected            | Project name for display           |
+| `GITHUB_REPO`           | auto-detected            | GitHub repo slug (`org/repo`)      |
+| `ORCHESTRATOR_SCRIPT`   | auto-detected            | Path to orchestrator script        |
+| `ORCHESTRATOR_ARGS`     | `-MaxParallel 6 -WaitForMutex` | Arguments passed to orchestrator |
+| `OPENAI_API_KEY`        | —                        | API key for Codex analysis         |
+| `COPILOT_MODEL`         | Copilot CLI default       | Model override for Copilot SDK     |
+| `COPILOT_SDK_DISABLED`  | `0`                      | Disable Copilot SDK primary agent  |
+| `TELEGRAM_BOT_TOKEN`    | —                        | Telegram bot token from @BotFather |
+| `TELEGRAM_CHAT_ID`      | —                        | Telegram chat ID                   |
+| `VK_BASE_URL`           | `http://127.0.0.1:54089` | Vibe-Kanban API endpoint           |
+| `EXECUTORS`             | Copilot+Codex 50/50      | Executor shorthand (see above)     |
+| `EXECUTOR_DISTRIBUTION` | `weighted`               | Distribution mode                  |
+| `FAILOVER_STRATEGY`     | `next-in-line`           | Failover behavior                  |
+| `MAX_PARALLEL`          | `6`                      | Max concurrent agent slots         |
+| `CODEX_MONITOR_REPO`    | —                        | Selected repo name (multi-repo)    |
+| `CODEX_MONITOR_PROFILE` | —                        | Environment profile name           |
+| `CODEX_MONITOR_MODE`    | `virtengine`/`generic`   | Mode override                      |
+| `VE_SHARED_WORKSPACE_REGISTRY` | `.cache/codex-monitor/shared-workspaces.json` | Shared workspace registry path |
+| `VE_SHARED_WORKSPACE_AUDIT_LOG` | `.cache/codex-monitor/shared-workspace-audit.jsonl` | Shared workspace audit log |
+| `VE_WORKSPACE_OWNER` | — | Default lease owner for Telegram claims |
+| `VE_WORKSPACE_LEASE_TTL_MIN` | `120` | Lease TTL override (minutes) for Telegram claims |
+| `VE_WORKSPACE_LEASE_TTL_SEC` | — | Lease TTL override (seconds, converted to minutes) |
 
 ### Shared Cloud Workspaces
 

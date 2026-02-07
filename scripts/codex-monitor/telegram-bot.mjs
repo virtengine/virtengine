@@ -35,6 +35,7 @@ import {
   claimSharedWorkspace,
   formatSharedWorkspaceDetail,
   formatSharedWorkspaceSummary,
+  getSharedAvailabilityMap,
   loadSharedWorkspaceRegistry as loadSharedRegistry,
   releaseSharedWorkspace,
   resolveSharedWorkspace,
@@ -1241,6 +1242,11 @@ function parseSharedWorkspaceArgs(args) {
 function parseAgentArgs(args) {
   const tokens = splitArgs(args);
   let workspaceId = null;
+  let role = null;
+  let model = null;
+  let queue = false;
+  let newSession = false;
+  let dryRun = false;
   let taskTokens = [];
   const remaining = [];
 
@@ -1253,6 +1259,36 @@ function parseAgentArgs(args) {
     }
     if (token.startsWith("--workspace=")) {
       workspaceId = token.slice("--workspace=".length) || null;
+      continue;
+    }
+    if (token === "--role" || token === "-r") {
+      role = tokens[i + 1] || null;
+      i++;
+      continue;
+    }
+    if (token.startsWith("--role=")) {
+      role = token.slice("--role=".length) || null;
+      continue;
+    }
+    if (token === "--model" || token === "-m") {
+      model = tokens[i + 1] || null;
+      i++;
+      continue;
+    }
+    if (token.startsWith("--model=")) {
+      model = token.slice("--model=".length) || null;
+      continue;
+    }
+    if (token === "--queue") {
+      queue = true;
+      continue;
+    }
+    if (token === "--new-session") {
+      newSession = true;
+      continue;
+    }
+    if (token === "--dry-run") {
+      dryRun = true;
       continue;
     }
     if (token === "--task" || token === "-t") {
@@ -1272,7 +1308,12 @@ function parseAgentArgs(args) {
 
   return {
     workspaceId: workspaceId ? workspaceId.trim() : null,
-    task: taskTokens.join(" ").trim(),
+    role: role ? role.trim() : null,
+    model: model ? model.trim() : null,
+    queue,
+    newSession,
+    dryRun,
+    message: taskTokens.join(" ").trim(),
   };
 }
 
@@ -2452,6 +2493,35 @@ function selectWorkspace(candidates, healthMap, options = {}) {
   return { workspace: best?.ws || null, health: best?.health || null };
 }
 
+function rankWorkspaceCandidates(candidates, healthMap, options = {}) {
+  const { preferredId } = options;
+  const scored = candidates.map((ws) => {
+    const h = healthMap.get(ws.id) || {
+      available: true,
+      score: 1,
+      status: "unknown",
+    };
+    return { ws, health: h };
+  });
+
+  const sortFn = (a, b) => {
+    const scoreDiff = (b.health.score ?? 0) - (a.health.score ?? 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    const lastA = a.health.lastCompletedAt || 0;
+    const lastB = b.health.lastCompletedAt || 0;
+    return lastB - lastA;
+  };
+
+  const sorted = scored.sort(sortFn).map((item) => item.ws);
+  if (!preferredId) return sorted;
+  const preferred = scored.find((item) => item.ws.id === preferredId);
+  if (!preferred) return sorted;
+  return [
+    preferred.ws,
+    ...sorted.filter((candidate) => candidate.id !== preferred.ws.id),
+  ];
+}
+
 function pickLatestSession(sessions) {
   if (!Array.isArray(sessions) || sessions.length === 0) return null;
   return [...sessions].sort((a, b) => {
@@ -2570,12 +2640,96 @@ async function cmdAgent(chatId, rawArgs) {
     }
   }
 
+  const leaseOwner =
+    process.env.VE_WORKSPACE_OWNER ||
+    process.env.USER ||
+    process.env.USERNAME ||
+    `telegram:${chatId}`;
+  const leaseTtlSecRaw = Number(process.env.VE_WORKSPACE_LEASE_TTL_SEC || "");
+  const leaseTtlMinRaw = Number(process.env.VE_WORKSPACE_LEASE_TTL_MIN || "");
+  const leaseTtlMinutes = Number.isFinite(leaseTtlMinRaw)
+    ? leaseTtlMinRaw
+    : Number.isFinite(leaseTtlSecRaw)
+      ? Math.ceil(leaseTtlSecRaw / 60)
+      : null;
+
+  let availabilityMap = new Map();
+  try {
+    const registry = await loadSharedRegistry();
+    const sweep = await sweepSharedLeases({ registry, actor: leaseOwner });
+    availabilityMap = getSharedAvailabilityMap(sweep.registry);
+  } catch {
+    availabilityMap = new Map();
+  }
+
+  if (availabilityMap.size > 0) {
+    const filtered = candidates.filter((ws) => {
+      const entry = availabilityMap.get(ws.id);
+      if (!entry) return true;
+      const state = String(entry.state || "available").toLowerCase();
+      return state === "available";
+    });
+    if (filtered.length === 0) {
+      await sendReply(
+        chatId,
+        "No available workspaces found (all leased or unavailable).",
+      );
+      return;
+    }
+    candidates = filtered;
+  }
+
   const healthMap = await getWorkspaceHealth(candidates);
-  const selection = selectWorkspace(candidates, healthMap, { preferredId });
-  if (!selection.workspace) {
-    await sendReply(chatId, "No available workspace found for routing.");
+  const ranked = rankWorkspaceCandidates(candidates, healthMap, { preferredId });
+  const preferredMatch = preferredId
+    ? candidates.find((ws) => ws.id === preferredId)
+    : null;
+
+  let selectedWorkspace = null;
+  let selectedHealth = null;
+  let leaseError = null;
+
+  for (const candidate of ranked) {
+    if (dryRun) {
+      selectedWorkspace = candidate;
+      selectedHealth = healthMap.get(candidate.id) || null;
+      break;
+    }
+    try {
+      const claimResult = await claimSharedWorkspace({
+        workspaceId: candidate.id,
+        owner: leaseOwner,
+        ttlMinutes: leaseTtlMinutes,
+        note: `telegram:${chatId}`,
+        actor: leaseOwner,
+      });
+      if (claimResult?.error) {
+        throw new Error(claimResult.error);
+      }
+      selectedWorkspace = candidate;
+      selectedHealth = healthMap.get(candidate.id) || null;
+      break;
+    } catch (err) {
+      leaseError = err;
+    }
+  }
+
+  if (!selectedWorkspace) {
+    await sendReply(
+      chatId,
+      leaseError?.message || "No available workspace found for routing.",
+    );
     return;
   }
+
+  const selection = {
+    workspace: selectedWorkspace,
+    health: selectedHealth,
+    fallbackFrom:
+      preferredMatch && preferredMatch.id !== selectedWorkspace.id
+        ? preferredMatch
+        : null,
+  };
 
   const modelSelection = resolveModelSelection(selection.workspace, model);
   const selectedModel = modelSelection.model || model || "auto";
